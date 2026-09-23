@@ -7,58 +7,25 @@
 
 import { z } from "zod";
 import { workspaceContext } from "@dopl/client";
-import type { DoplClient, OntologySummary } from "@dopl/client";
+import type { DoplClient } from "@dopl/client";
 import type { ChargeCredit } from "../registrar.js";
 import type { WorkspaceDirectory } from "../workspace-directory.js";
+import { resolveHomeChannelContainer } from "./container-destination";
 import { inlineOr, NO_NAME } from "./narration";
-import { clippedNote } from "./ontology-clipped";
-import { partialRead } from "./partial-read";
 import { isConcise, RESPONSE_FORMAT_FIELD } from "./response-size";
+import {
+  entryAddress,
+  more,
+  ONTOLOGY_CLIPPED_NOTE,
+  searchScope,
+  snippet,
+  termMatcher,
+} from "./search-scope";
 import { SEARCH_ERRORS } from "./tool-errors";
 import { composeDescription, READ_DESCRIPTION_MAX_CHARS } from "./tool-style";
 import { searchLegs } from "../workspace-directory";
 import { fanOut, MAX_SCOPES } from "./search-everywhere";
 import { ok, type RegisterTool, type ToolResponse } from "./respond";
-
-const EMPTY_ONTOLOGY: OntologySummary = { clusters: [], objects: {} };
-
-/**
- * A knowledge-entry search snippet, as a VALUE. ⚠ Do not turn the backend's
- * `<b>` highlight tags into `**` — that adds our own markdown to text we do not
- * control, on an unframed bullet line. A snippet is an EXCERPT OF A BODY
- * spliced into narration; drop the tags and neutralize.
- */
-function snippet(raw: string): string {
-  return inlineOr(raw.replace(/<\/?b>/g, ""), "`(no snippet)`");
-}
-
-/**
- * 🔒 **THE HANDLE A FOLLOW-UP READ ACTUALLY TAKES** (2026-09-18). An `entryId`
- * is not an address `dopl_kb(op="read_file")` accepts, so a hit used to end one
- * lookup short of useful. ⚠ §8 STALE-CACHE, SPELLED INLINE — `baseSlug` and
- * `path` are absent from an older server's payload, and the id stays on the row
- * either way.
- */
-function entryAddress(h: {
-  entryId: string;
-  baseSlug?: string;
-  path?: string;
-}): string {
-  const where = h.path
-    ? `${h.baseSlug ? `base \`${h.baseSlug}\` · ` : ""}path ${inlineOr(h.path, "`(unreadable path)`")} · `
-    : "";
-  return `${where}entry id: \`${h.entryId}\``;
-}
-
-/**
- * ⚠ THE GROUP COUNT IS A CONSTANT, NOT A LITERAL IN THREE PLACES. It is the
- * DENOMINATOR `partialRead`'s notice reports against ("2 of 4 groups could not
- * be read"), and it must move with the reads below and with the description's
- * opening word — never independently of either. Named when the identities group
- * landed (2026-08-28), because the previous shape had the number inline and the
- * word "THREE" spelled out in prose that nothing tied to it.
- */
-const SEARCH_GROUP_COUNT = 4;
 
 /**
  * ⚠ THE ONE SHAPE OBJECT — handed to `composeDescription` for its bounds AND to
@@ -114,17 +81,6 @@ const SEARCH_DESCRIPTION = composeDescription({
   ],
   cap: READ_DESCRIPTION_MAX_CHARS,
 });
-
-/**
- * "Showing N of M" for one group, or nothing when untruncated. ⚠ Both numbers
- * come from a list already in memory (the cap is applied HERE), so it is free —
- * the test a result-side scope line has to pass.
- */
-function more(matched: number, shown: number, noun: string): string[] {
-  return matched > shown
-    ? [`_Showing ${shown} of ${matched} matching ${noun}. Raise \`limit\` or narrow the query._`]
-    : [];
-}
 
 /**
  * ⚠ "No matches" IS THE WEAKEST LINE IN THIS RESULT. Two of the three groups
@@ -189,19 +145,7 @@ export function registerSearchTool(
     SEARCH_SHAPE,
     async (args): Promise<ToolResponse> => {
       const limit = args.limit ?? 8;
-      // Tokenize + punctuation-fold query AND haystack so "duplicate name"
-      // matches "duplicate-name", word order is free, and every term must
-      // appear (AND). ⚠ A whitespace- or punctuation-only query yields zero
-      // terms → matches NOTHING; a whole-query `.includes()` instead misses
-      // near-verbatim multi-word queries and dumps everything for a lone space.
-      // Governs skills/objects only — knowledge uses the backend hybrid search.
-      const fold = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
-      const terms = fold(args.query).split(" ").filter(Boolean);
-      const matches = (...fields: Array<string | null | undefined>) => {
-        if (terms.length === 0) return false;
-        const hay = ` ${fields.map((f) => fold(f ?? "")).join(" ")} `;
-        return terms.every((t) => hay.includes(t));
-      };
+      const matches = termMatcher(args.query);
 
       // ── scope="everywhere": N ordinary fenced searches, one per scope ──
       if (args.scope === "everywhere" && directory && charge) {
@@ -235,115 +179,53 @@ export function registerSearchTool(
       }
 
       const terse = isConcise(args.response_format);
-      // ⚠ Fail-soft (one broken domain must not fail the search) but RECORD the
-      // failure. Labels must match the group headings below.
-      const reads = partialRead();
-      const [entryHits, skills, ontology, identities] = await Promise.all([
-        reads.soft("Knowledge entries", client.searchKb(args.query, { limit }), []),
-        reads.soft("Skills", client.listSkills(), []),
-        // ⚠ SUMMARY PROJECTION, NOT THE GRAPH. This group uses four fields
-        // (`name`, `subtitle`, `id`, `childIds`), all in the cheap view; a bare
-        // `getOntology()` ships every `attributes`, `methods`, `template` and
-        // cluster `layout` — 634 KB vs 82 KB on a 366-object workspace, on a
-        // tool agents call speculatively and often.
-        reads.soft(
-          "Ontology objects",
-          client.getOntology({ view: "summary" }),
-          EMPTY_ONTOLOGY,
-        ),
-        // ⚠ NO `shelf` FILTER — absent means BOTH shelves, which is the whole
-        // point of a FIND surface: a user naming "my research agent" does not
-        // know or care which shelf it is on. The server has already applied
-        // `canSeeIdentity`, so this is that caller's own view.
-        reads.soft("Agent identities", client.listAgentIdentities(), []),
-      ]);
+      const found = await searchScope(client, {
+        query: args.query,
+        limit,
+        matches,
+        inHomeChannel: (await resolveHomeChannelContainer(client, directory)) !== null,
+      });
 
       // ⚠ Caller's own argument, but a backtick still escapes this span and
       // puts the tail back into the heading.
       const lines: string[] = [`# Search: ${inlineOr(args.query, "`(unreadable query)`")}`];
 
       lines.push("", "## Knowledge entries");
-      if (entryHits.length === 0) lines.push("_No matches._");
-      for (const h of entryHits.slice(0, limit)) {
-        lines.push(
-          `- ${inlineOr(h.title, NO_NAME)} (${entryAddress(h)}) — ${snippet(h.snippet)}`,
-        );
+      if (found.entries.length === 0) lines.push("_No matches._");
+      for (const h of found.entries) {
+        lines.push(`- ${inlineOr(h.title, NO_NAME)} (${entryAddress(h)}) — ${snippet(h.snippet)}`);
       }
 
-      // ⚠ Without this line a capped group and an exhausted one render
-      // identically. Free: `.slice(limit)` discards matches already counted.
-      const skillMatches = skills.filter(
-        (s) => s.status === "active" && matches(s.name, s.description, s.whenToUse),
-      );
-      const skillHits = skillMatches.slice(0, limit);
       lines.push("", "## Skills");
-      if (skillHits.length === 0) lines.push("_No matches._");
-      for (const s of skillHits) {
+      if (found.skills.hits.length === 0) lines.push("_No matches._");
+      for (const s of found.skills.hits) {
         const trigger = inlineOr(s.whenToUse || s.description, "`(no trigger described)`");
         lines.push(`- ${inlineOr(s.name, NO_NAME)} \`${s.slug}\` — ${trigger}`);
       }
-      lines.push(...more(skillMatches.length, skillHits.length, "skills"));
+      lines.push(...more(found.skills, "skills"));
 
-      const objectMatches = Object.values(ontology.objects).filter((o) =>
-        matches(o.name, o.subtitle),
-      );
-      const objectHits = objectMatches.slice(0, limit);
       lines.push("", "## Ontology objects");
-      if (objectHits.length === 0) lines.push("_No matches._");
-      const containerOf = (id: string) => {
-        const name = Object.values(ontology.objects).find((c) =>
-          c.childIds.includes(id),
-        )?.name;
-        // ⚠ Container name is another object's member-typed name — only the
-        // "object" fallback is ours.
-        return name ? inlineOr(name, NO_NAME) : "object";
-      };
-      for (const o of objectHits) {
+      if (found.objects.hits.length === 0) lines.push("_No matches._");
+      for (const o of found.objects.hits) {
         const subtitle = o.subtitle ? ` — ${inlineOr(o.subtitle, "")}` : "";
         lines.push(
-          `- ${inlineOr(o.name, NO_NAME)} (${containerOf(o.id)} · id: \`${o.id}\`)${subtitle}`
+          `- ${inlineOr(o.name, NO_NAME)} (${found.containerOf(o.id)} · id: \`${o.id}\`)${subtitle}`,
         );
       }
-      lines.push(...more(objectMatches.length, objectHits.length, "ontology objects"));
-      // ⚠ A CLIPPED read differs from a capped GROUP: `more()` reports what the
-      // cap hid from a set we scanned, while a clip means the scanned set was
-      // itself a prefix — so "No matches" would claim something about objects
-      // this call never saw. Sits WITH the group it qualifies, not the footer.
-      if (ontology.truncated) {
-        lines.push(
-          clippedNote(
-            "the ontology group searched a prefix of the graph and a match outside it could not appear",
-          ),
-        );
-      }
+      lines.push(...more(found.objects, "ontology objects"));
+      if (found.ontologyTruncated) lines.push(ONTOLOGY_CLIPPED_NOTE);
 
-      // ⚠ AGENT IDENTITIES ARE MATCHED ON NAME + DESCRIPTION ONLY, never on
-      // `instructions`. That is a deliberate omission, not an oversight: the
-      // instructions block is a system prompt another member wrote, and folding
-      // it into the haystack would let one member's prose decide which identity
-      // a stranger's agent surfaces. `visibility` rides the row because it is
-      // what makes two same-named hits distinguishable — the same reason the
-      // ambiguity refusal carries it.
-      const identityMatches = identities.filter((t) =>
-        matches(t.name, t.description),
-      );
-      const identityHits = identityMatches.slice(0, limit);
       lines.push("", "## Agent identities");
-      if (identityHits.length === 0) lines.push("_No matches._");
-      for (const t of identityHits) {
+      if (found.identities.hits.length === 0) lines.push("_No matches._");
+      for (const t of found.identities.hits) {
         const summary = inlineOr(t.description, "`(no description)`");
         lines.push(
-          `- ${inlineOr(t.name, NO_NAME)} (id: \`${t.id}\` · ${t.visibility}) — ${summary}`,
+          `- ${inlineOr(t.name, NO_NAME)} (id: \`${t.id}\` · seen by ${found.audienceOf(t)}) — ${summary}`,
         );
       }
-      lines.push(...more(identityMatches.length, identityHits.length, "agent identities"));
+      lines.push(...more(found.identities, "agent identities"));
 
-      // ⚠ GROUPS, not domains — the denominator must move with the reads above,
-      // never independently of them.
-      lines.push(
-        "",
-        scopeNote(limit, reads.notice(SEARCH_GROUP_COUNT, "groups"), terse),
-      );
+      lines.push("", scopeNote(limit, found.notice, terse));
       return ok(lines.join("\n"));
     }
   );

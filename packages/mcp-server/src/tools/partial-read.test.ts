@@ -54,7 +54,7 @@ const healthySearch = (over: Record<string, unknown> = {}) =>
     getOntology: vi.fn(async () => ({ clusters: [], objects: {} })),
     // FOURTH group since 2026-08-28 — a new domain is a new read the stub has
     // to model, or the group renders as a failure nobody meant to test.
-    listAgentIdentities: vi.fn(async () => []),
+    listAgentIdentitiesPayload: vi.fn(async () => ({ identities: [] })),
     ...over,
   });
 

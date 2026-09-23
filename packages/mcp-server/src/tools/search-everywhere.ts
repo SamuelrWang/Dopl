@@ -37,12 +37,19 @@
  */
 
 import { workspaceContext } from "@dopl/client";
-import type { DoplClient, OntologySummary } from "@dopl/client";
+import type { DoplClient } from "@dopl/client";
 import type { ChargeCredit } from "../registrar.js";
 import { inlineOr, NO_NAME } from "./narration.js";
-import { partialRead } from "./partial-read.js";
 import type { SearchLeg } from "../workspace-directory.js";
 import type { ToolResponse } from "./respond.js";
+import {
+  entryAddress,
+  more,
+  ONTOLOGY_CLIPPED_NOTE,
+  searchScope,
+  snippet,
+  type Matcher,
+} from "./search-scope.js";
 
 /**
  * The hard cap on scopes one call fans out over.
@@ -55,8 +62,6 @@ import type { ToolResponse } from "./respond.js";
  * lie about coverage.
  */
 export const MAX_SCOPES = 6;
-
-const EMPTY_ONTOLOGY: OntologySummary = { clusters: [], objects: {} };
 
 /** One leg's hits, already capped. */
 interface LegResult {
@@ -93,81 +98,64 @@ async function searchOneLeg(
   leg: SearchLeg,
   query: string,
   limit: number,
-  matches: (...fields: Array<string | null | undefined>) => boolean,
+  matches: Matcher,
 ): Promise<LegResult> {
   return workspaceContext.run(leg.id, async () => {
-    const reads = partialRead();
-    const [entryHits, skills, ontology, identities] = await Promise.all([
-      reads.soft("Knowledge entries", client.searchKb(query, { limit }), []),
-      reads.soft("Skills", client.listSkills(), []),
-      reads.soft(
-        "Ontology objects",
-        client.getOntology({ view: "summary" }),
-        EMPTY_ONTOLOGY,
-      ),
-      reads.soft("Agent identities", client.listAgentIdentities(), []),
-    ]);
+    const found = await searchScope(client, {
+      query,
+      limit,
+      matches,
+      inHomeChannel: leg.kind === "home_channel",
+    });
 
     const lines: string[] = [heading(leg)];
     let hits = 0;
 
-    const entries = entryHits.slice(0, limit);
-    if (entries.length > 0) {
-      hits += entries.length;
+    if (found.entries.length > 0) {
+      hits += found.entries.length;
       lines.push("", "### Knowledge entries");
-      for (const h of entries) {
-        lines.push(
-          `- ${inlineOr(h.title, NO_NAME)} (entry id: \`${h.entryId}\`) — ${inlineOr(
-            h.snippet.replace(/<\/?b>/g, ""),
-            "`(no snippet)`",
-          )}`,
-        );
+      for (const h of found.entries) {
+        lines.push(`- ${inlineOr(h.title, NO_NAME)} (${entryAddress(h)}) — ${snippet(h.snippet)}`);
       }
     }
 
-    const skillHits = skills
-      .filter((s) => s.status === "active" && matches(s.name, s.description, s.whenToUse))
-      .slice(0, limit);
-    if (skillHits.length > 0) {
-      hits += skillHits.length;
+    if (found.skills.hits.length > 0) {
+      hits += found.skills.hits.length;
       lines.push("", "### Skills");
-      for (const s of skillHits) {
+      for (const s of found.skills.hits) {
         lines.push(
           `- ${inlineOr(s.name, NO_NAME)} \`${s.slug}\` — ${inlineOr(s.whenToUse || s.description, "`(no trigger described)`")}`,
         );
       }
+      lines.push(...more(found.skills, "skills"));
     }
 
-    const objectHits = Object.values(ontology.objects)
-      .filter((o) => matches(o.name, o.subtitle))
-      .slice(0, limit);
-    if (objectHits.length > 0) {
-      hits += objectHits.length;
+    if (found.objects.hits.length > 0) {
+      hits += found.objects.hits.length;
       lines.push("", "### Ontology objects");
-      for (const o of objectHits) {
+      for (const o of found.objects.hits) {
         lines.push(`- ${inlineOr(o.name, NO_NAME)} (id: \`${o.id}\`)`);
       }
+      lines.push(...more(found.objects, "ontology objects"));
     }
+    if (found.ontologyTruncated) lines.push(ONTOLOGY_CLIPPED_NOTE);
 
-    const identityHits = identities
-      .filter((t) => matches(t.name, t.description))
-      .slice(0, limit);
-    if (identityHits.length > 0) {
-      hits += identityHits.length;
+    if (found.identities.hits.length > 0) {
+      hits += found.identities.hits.length;
       lines.push("", "### Agent identities");
-      for (const t of identityHits) {
+      for (const t of found.identities.hits) {
         lines.push(
-          `- ${inlineOr(t.name, NO_NAME)} (id: \`${t.id}\` · ${t.visibility})`,
+          `- ${inlineOr(t.name, NO_NAME)} (id: \`${t.id}\` · seen by ${found.audienceOf(t)})`,
         );
       }
+      lines.push(...more(found.identities, "agent identities"));
     }
 
     // ⚠ AN EMPTY SCOPE STILL GETS ITS HEADING. Dropping it would make "searched,
     // nothing here" and "not searched" the same picture, which is the exact
     // failure `partialRead` exists to prevent, one level up.
-    const notice = reads.notice(4, "groups");
     if (hits === 0) lines.push("", "_No matches in this scope._");
-    if (notice) lines.push("", `_${notice}_`);
+    if (found.notice) lines.push("", `_${found.notice}_`);
     return { leg, lines };
   });
 }
@@ -188,7 +176,7 @@ export async function fanOut(
     query: string;
     limit: number;
     alreadyCharged: string | null;
-    matches: (...fields: Array<string | null | undefined>) => boolean;
+    matches: Matcher;
   },
 ): Promise<{ lines: string[]; coverage: string; refusal: ToolResponse | null }> {
   const total = opts.legs.length;

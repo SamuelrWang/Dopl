@@ -14,6 +14,7 @@ import {
   IDENTITY_VISIBILITY_VALUES,
   type OfferedIdentityVisibility,
   IDENTITIES_SCOPE_NOTE,
+  identityAudience,
   identityRow,
 } from "./agent-shared.js";
 import { isErr } from "./channel-shared.js";
@@ -21,7 +22,6 @@ import {
   DESTINATION_HEADINGS,
   resolveHomeChannelContainer,
 } from "./container-destination.js";
-import { AUDIENCE_LABELS, type AudienceLabel } from "./audience-label.js";
 import type { WorkspaceDirectory } from "../workspace-directory.js";
 
 /** One heading per OFFERED visibility, in the order `op="list"` prints them.
@@ -31,14 +31,6 @@ import type { WorkspaceDirectory } from "../workspace-directory.js";
 const VISIBILITY_HEADINGS: Record<OfferedIdentityVisibility, string> = {
   private: "Private to you",
   workspace: "Shared with the whole workspace",
-};
-
-/** ⚠ **THE ROW LABEL, PAIRED WITH THE HEADING ABOVE IT AND NOT WITH THE COLUMN**
- *  (S21/S23) — see `audience-label.ts`. A workspace heading and a home-channel
- *  heading answer "who can see this" differently for the SAME stored value. */
-const WORKSPACE_AUDIENCES: Record<OfferedIdentityVisibility, AudienceLabel> = {
-  private: AUDIENCE_LABELS.you,
-  workspace: AUDIENCE_LABELS.workspace,
 };
 
 const OFFERED_VISIBILITIES = new Set<string>(IDENTITY_VISIBILITY_VALUES);
@@ -106,50 +98,35 @@ export async function opList(
   // Unoffered values fall through to one trailing bucket that names no axis.
   // ⚠ THE SAME RULE HOLDS IN A CHANNEL, where the trailing bucket is the LEGACY
   // one: everything that is not `workspace` there is reachable from no surface.
-  const hereGroups: Array<readonly [string, AgentIdentity[], AudienceLabel]> =
-    inHomeChannel
-      ? [
-          [
-            DESTINATION_HEADINGS.shared,
-            here.filter((t) => t.visibility === "workspace"),
-            AUDIENCE_LABELS.channel,
-          ],
-          [
-            DESTINATION_HEADINGS.legacy,
-            here.filter((t) => t.visibility !== "workspace"),
-            AUDIENCE_LABELS.nobody,
-          ],
-        ]
-      : [
-          ...IDENTITY_VISIBILITY_VALUES.map(
-            (v) =>
-              [
-                VISIBILITY_HEADINGS[v],
-                here.filter((t) => t.visibility === v),
-                WORKSPACE_AUDIENCES[v],
-              ] as const,
-          ),
-          // ⚠ A visibility this surface does not offer (`team`) is a row we
-          // cannot answer the audience question for — `not stated` rather than
-          // a guess, on `channel-facts.ts › postureFacts`'s rule.
-          [
-            OTHER_HEADING,
-            here.filter((t) => !OFFERED_VISIBILITIES.has(t.visibility)),
-            "an audience this surface cannot state" as AudienceLabel,
-          ],
-        ];
+  const hereGroups: Array<readonly [string, AgentIdentity[]]> = inHomeChannel
+    ? [
+        [DESTINATION_HEADINGS.shared, here.filter((t) => t.visibility === "workspace")],
+        [DESTINATION_HEADINGS.legacy, here.filter((t) => t.visibility !== "workspace")],
+      ]
+    : [
+        ...IDENTITY_VISIBILITY_VALUES.map(
+          (v) => [VISIBILITY_HEADINGS[v], here.filter((t) => t.visibility === v)] as const,
+        ),
+        [OTHER_HEADING, here.filter((t) => !OFFERED_VISIBILITIES.has(t.visibility))],
+      ];
   // ⚠ THE CHANNEL'S OWN ROWS FIRST, the personal shelf under them: the call
   // named a container, and a heading order that led with rows from somewhere
   // else would read as that container's roster.
-  const groups: Array<readonly [string, AgentIdentity[], AudienceLabel]> = [
+  const groups: Array<readonly [string, AgentIdentity[]]> = [
     ...hereGroups,
-    [DESTINATION_HEADINGS.personal, personal, AUDIENCE_LABELS.you],
+    [DESTINATION_HEADINGS.personal, personal],
   ];
   const lines = ["## Agent identities\n"];
-  for (const [heading, rows, audience] of groups) {
+  for (const [heading, rows] of groups) {
     if (rows.length === 0) continue;
     lines.push(`### ${heading}`);
-    for (const t of rows) lines.push(identityRow(t, audience));
+    for (const t of rows) {
+      const audience = identityAudience(t, {
+        personal: personalIds.has(t.id),
+        inHomeChannel: inHomeChannel !== null,
+      });
+      lines.push(identityRow(t, audience));
+    }
     lines.push("");
   }
   lines.push(IDENTITIES_SCOPE_NOTE);

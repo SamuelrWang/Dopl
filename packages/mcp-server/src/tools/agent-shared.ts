@@ -26,7 +26,7 @@
  */
 
 import type { AgentIdentity, DoplClient } from "@dopl/client";
-import type { AudienceLabel } from "./audience-label.js";
+import { AUDIENCE_LABELS, type AudienceLabel } from "./audience-label.js";
 import { inlineOr, NO_NAME } from "./narration.js";
 import { apiMessage, err, isApiError, type ToolResponse } from "./respond.js";
 import { AGENT_ERRORS, refusal } from "./tool-errors.js";
@@ -268,6 +268,26 @@ export function sharedCredentialPrivateDenied(e: unknown): ToolResponse | null {
   return err(
     `${apiMessage(e) ?? "This credential cannot own a private agent identity."} Nothing was created. A credential that may be shared between humans has no "private to me" to write to — create it with visibility="workspace", or reconnect with a personal credential.`,
   );
+}
+
+/** A stored visibility this surface does not offer (`team`): the audience is not stated, never guessed. */
+const UNSTATED_AUDIENCE = "an audience this surface cannot state" as AudienceLabel;
+
+/**
+ * "Who can see this" for one identity: the container decides, the column only splits within it
+ * (S21/S23). Inside a home channel `workspace` means the room, and anything else is unreachable.
+ */
+export function identityAudience(
+  t: Pick<AgentIdentity, "visibility">,
+  where: { personal: boolean; inHomeChannel: boolean },
+): AudienceLabel {
+  if (where.personal) return AUDIENCE_LABELS.you;
+  if (where.inHomeChannel) {
+    return t.visibility === "workspace" ? AUDIENCE_LABELS.channel : AUDIENCE_LABELS.nobody;
+  }
+  if (t.visibility === "private") return AUDIENCE_LABELS.you;
+  if (t.visibility === "workspace") return AUDIENCE_LABELS.workspace;
+  return UNSTATED_AUDIENCE;
 }
 
 /** One identity rendered as a list row. ⚠ Every displayed field is a VALUE

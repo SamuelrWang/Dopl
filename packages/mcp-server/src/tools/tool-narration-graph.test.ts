@@ -203,7 +203,7 @@ describe("dopl_search — hits from every domain at once", () => {
         ]),
         listSkills: vi.fn(async () => []),
         getOntology: vi.fn(async () => ({ clusters: [], objects: {} })),
-        listAgentIdentities: vi.fn(async () => []),
+        listAgentIdentitiesPayload: vi.fn(async () => ({ identities: [] })),
       }),
       "dopl_search",
       { query: "x" },
