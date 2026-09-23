@@ -1,36 +1,12 @@
 import { readMigrations, statementAt } from "./migration-files";
 
 /**
- * THE MIGRATION REPLAY, AS A SCANNER — the shared half of every RLS redteam
- * suite (Wave B B7's `knowledge/server/rls-redteam.test.ts`, B12's three more).
- *
- * 🔒 WHY A SCANNER AT ALL. These are DATABASE facts no application test can
- * reach while every repository reads as the service role, and the tree has no
- * database: Docker is down, so `supabase start` cannot run and Wave A's and
- * Wave B's migrations are all unapplied. The SQL half of each suite therefore
- * replays `supabase/migrations/*.sql` in filename order — which IS apply order
- * — and asserts on the FINAL policy and function bodies. `knowledge/
- * schema-sql.test.ts` and `channels/schema-sql.test.ts` use the same technique
- * for the same reason.
- *
- * ⚠ A STRUCTURAL ASSERTION IS NOT A BEHAVIOURAL ONE (F-523). This proves a rule
- * is WRITTEN once and names every arm; only the LIVE half of a suite proves
- * Postgres agrees. Say it that way in any doc that cites one.
- *
- * ⚠ REPLAY, NOT "THE NEWEST FILE". A `DROP POLICY` in a later migration is as
- * load-bearing as the `CREATE` — a scan that read only the newest file would
- * pass while a wider policy sat underneath it, which is precisely the
- * `chats_member_select` history (`20260716150000` → `20260720211005` →
- * `20260916120000` → `20260921120000`).
- *
- * ⚠ COMMENTS ARE STRIPPED LINE-WISE before matching, because these migrations'
- * headers QUOTE the policy bodies they replace and a scan that did not strip
- * them would pin a paragraph. Take the hand scanner from
- * `channels/schema-sql.test.ts` if a migration touching these tables ever puts a
- * `--` inside a string literal.
+ * The migration replay as a scanner, shared by the RLS redteam suites: replays
+ * `supabase/migrations/*.sql` in apply order and answers with the FINAL policy and function bodies.
+ * ⚠ A structural assertion, not a behavioural one (F-523): only a suite's live half proves Postgres
+ * agrees. A later `DROP POLICY` matters as much as the `CREATE`, hence replay, not the newest file.
  */
 
-/** Every migration, filename-sorted (= apply order), comments removed, forward-renamed. */
 const FILES = readMigrations();
 
 const squash = (s: string) => s.replace(/\s+/g, " ").trim();
@@ -43,20 +19,9 @@ const DROP_TABLE =
   /DROP\s+TABLE\s+(?:IF\s+EXISTS\s+)?(?:public\.)?"?([a-z0-9_]+)"?/gi;
 
 /**
- * The policy bodies alive after the replay, keyed `<table>.<policy>`.
- * ⚠ Events inside ONE file are applied in TEXT ORDER, so the `DROP … ; CREATE …`
- * idiom this repo uses for a policy edit lands as a replacement rather than as a
- * deletion.
- *
- * 🔒 **A `DROP TABLE` TAKES ITS POLICIES WITH IT, SILENTLY, AND THIS SCANNER DID
- * NOT KNOW THAT UNTIL 2026-09-02 (F-586).** A policy is a dependency of its
- * table; Postgres removes it without a `DROP POLICY` line for anyone to replay.
- * So `skill_files`, dropped CASCADE in July 2026, went on answering as a fenced
- * table to every reader of this function — four redteam suites, the pair gate
- * and two findings — and phase 2 wrote it a NEW policy that would have aborted
- * the apply with `relation "skill_files" does not exist`. **A scanner that
- * cannot tell a fence from an epitaph is worse than no scanner: it reports the
- * dead one as armed.**
+ * Policy bodies alive after the replay, keyed `<table>.<policy>`. Events within one file apply in
+ * text order, so `DROP …; CREATE …` is a replacement. ⚠ A `DROP TABLE` silently takes its
+ * policies with it (F-586).
  */
 export function livePolicies(): Map<string, string> {
   const live = new Map<string, string>();
@@ -110,9 +75,8 @@ export function liveRlsEnabled(): Set<string> {
 }
 
 /**
- * The LAST `CREATE OR REPLACE FUNCTION <name>` body across the replay.
- * ⚠ Not `statementAt`: a function body is a `$tag$ … $tag$` literal whose own
- * semicolons sit at paren depth 0, so the whole dollar-quoted body is taken.
+ * The last `CREATE OR REPLACE FUNCTION <name>` body. Not `statementAt`: the `$tag$` body's own
+ * semicolons sit at paren depth 0.
  */
 export function liveFunction(name: string): string {
   let found: string | null = null;
