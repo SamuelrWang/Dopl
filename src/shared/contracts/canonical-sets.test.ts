@@ -55,6 +55,7 @@ const CANONICAL = [
   "DirectionRefusalReason",
   "LaunchRefusalReason",
   "LaunchDirectiveKind",
+  "LaunchDirectiveStatus",
   "LaunchToolMode",
   "LaunchMessageMode",
   "WorkspaceRole",
