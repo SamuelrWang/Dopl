@@ -8,19 +8,14 @@
  * recipe and every string below is the one that file rendered, byte for byte. It
  * moved because that file had reached the 500-line cap (INVARIANTS §1 — "a file
  * at 500 cannot absorb a comment") and the posture warning had to land in it; the
- * three presentational helpers and the one heading string are the part with the
- * fewest reasons to change, so they are the part that leaves.
+ * three presentational helpers are the part with the fewest reasons to change, so
+ * they are the part that leaves.
  *
  * ⚠ THE MINIMAL-COPY RULING LIVES IN `settings-agent.tsx`'s DOCBLOCK AND STILL
  * GOVERNS EVERY ROW BUILT FROM THESE (Samuel, 2026-08-19; INVARIANTS §5): a row
  * on this tab is a NAME and a CONTROL, plus at most a few-word secondary line,
  * and no paragraph-style `text-caption` block anywhere. There is deliberately no
  * recipe here for a third line — see the `Note` tombstone below.
- *
- * ⚠ `settings-desktop-rows.tsx` STILL TAKES `SettingName` / `GroupLabel` AS
- * PROPS, unchanged. They were props because these lived in the host; they could
- * be imports now, but rewiring that is a second change with its own review, and
- * this move is deliberately behaviour-free.
  */
 
 import type { ReactNode } from "react";
@@ -92,35 +87,6 @@ export const TOOL_PROFILE_OPTIONS: ReadonlyArray<{
   { value: "dopl_only", description: "Files, web, and Dopl" },
   { value: "read_only", description: "Local files only" },
 ];
-
-/**
- * The heading over the launch posture. ⚠ IT NAMES THE ACT, NOT A TIME WINDOW.
- * The deleted arm's heading ("For the next request you allow") was doing the whole
- * job of saying "this is single-use" and could not carry it; this pair really is
- * durable, so the honest sentence is the one that says WHICH launches it governs
- * — the ones the operator starts. It must never read "for every session": an
- * inbound request a peer triggered carries no tool posture and starts at manual/ask.
- */
-export const LAUNCH_POSTURE_HEADING = "When you launch an agent";
-
-/** The sub-heading that separates each group. ⚠ Every group on this tab is
- *  DURABLE — nothing single-use is left anywhere in the product — so the headings
- *  say what each one GOVERNS rather than how long it lasts. A heading naming a
- *  time window is the regression (`use-channel-launch-posture.ts`).
- *
- *  ⚠ **NOTHING CALLS IT SINCE 2026-09-13** (Samuel: *"also remove the header line
- *  Agents"*) — `settings-channel-agents.tsx` was the last caller, and 2026-09-06
- *  (item 2) had already deleted the other three. The recipe stays exported on
- *  {@link SettingName}'s terms: what separates groups on this tab now is
- *  {@link SettingDivider}, and a group heading put back here would be re-opening a
- *  ruling rather than reusing a helper. */
-export function GroupLabel({ children }: { children: ReactNode }) {
-  return (
-    <p className="pt-1.5 text-label font-semibold uppercase tracking-wide text-text-secondary">
-      {children}
-    </p>
-  );
-}
 
 /**
  * THE HAIRLINE BETWEEN TWO SETTING ROWS (Samuel, 2026-09-13): *"in the settings tab
@@ -205,8 +171,7 @@ export function SettingRow({
               agents In every channel." The NAME and the VALUE are one vocabulary, so
               the weight left both halves on the same clock — `select-menu.tsx ›
               TRIGGER_FACE.text` is the value half. The heading over the block
-              (`PanelHeading`) and the `GroupLabel`s are NOT in that list and keep
-              theirs. */}
+              (`PanelHeading`) is NOT in that list and keeps its own. */}
           <span className="text-body text-text-primary">{name}</span>
           {/* ⚠ BESIDE THE NAME, NOT FLOATED OVER THE ROW. Samuel asked for "a little
               eye in the top right of it" — of the ITEM. These rows are ONE LINE

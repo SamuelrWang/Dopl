@@ -8,9 +8,8 @@
  * THAT IS. Every other desktop-only setting beside it — the working folder,
  * auto-send, the launch posture — is `(channel, this Mac)`. This one is `(this
  * Mac)` alone: flipping it in one channel flips it in all of them, because there
- * is one store key and one answer. The Settings tab carries it under its own
- * GROUP LABEL saying so (`settings-desktop-rows.tsx › OrchestratorLaunchRows`);
- * the label is the whole disambiguation and it is load-bearing, not decoration.
+ * is one store key and one answer. The Settings tab states that scope as the
+ * "In every channel" pick of `settings-desktop-rows.tsx › LaunchAgentsRow`.
  *
  * ⚠ DEFAULT OFF, AND THE DEFAULT IS A CONTAINMENT DECISION. The capability lets
  * a session outside this app spawn agents that run with real tool profiles on the
