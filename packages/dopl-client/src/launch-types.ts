@@ -170,15 +170,6 @@ export interface LaunchDirective {
   appliedToolMode: LaunchToolMode | null;
   appliedMessageMode: LaunchMessageMode | null;
   appliedChain: boolean | null;
-  /**
-   * ⚠ **RETIRED GROUP: `null` on every row filed now.** The server clamps nothing and resolves
-   * no model, so these only ever carried a copy of the request (and a Claude-table model id on
-   * every runtime). Read `start*` for the ask and `applied*` for what the machine ran.
-   */
-  resolvedToolMode?: LaunchToolMode | null;
-  resolvedMessageMode?: LaunchMessageMode | null;
-  resolvedChain?: boolean | null;
-  resolvedModel?: string | null;
   /** The agent instance started. Set iff `status` is `launched` — it is what a
    *  requester types as `@<agentId>` to direct it. */
   agentId: string | null;
