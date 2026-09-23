@@ -200,16 +200,6 @@ const UNIVERSAL_HARD_DENY = [...DOPL_ADMIN_TOOLS, ...RETIRED_DOPL_TOOLS];
 // between them that anyone may read off this file is the shell group.
 const CHANNEL_AGENT_HARD_DENY = [...UNIVERSAL_HARD_DENY, ...SHELL_BUILTINS];
 
-const TOOL_PROFILES = {
-  read_only: [...READ_BUILTINS],
-  dopl_only: [...READ_BUILTINS, ...WEB_TOOLS, ...DOPL_SAFE_TOOLS],
-  // ⚠ EMPTY, EXACTLY LIKE `full` — the fourth profile narrows by DENY, never by a narrower
-  // allow list. Pre-approving a subset here would shadow those names past the gate, which is a
-  // widening dressed as a restriction.
-  channel_agent: [],
-  full: [], // empty => no --allowedTools bound at all
-};
-
 // ⚠ NARROWEST FIRST, AND `channel_agent` SITS BELOW `full` BECAUSE IT IS STRICTLY NARROWER THAN
 // IT. Nothing indexes this array today (`normalizeProfile` is a membership test), so the order is
 // documentation — but it is the order every other posture vocabulary in this tree is written in
@@ -237,14 +227,6 @@ function normalizeProfile(p) {
   return 'read_only';
 }
 
-// The two profiles that carry NO positive bound and NO scoped settings — `full` and the fourth
-// profile derived from it. ⚠ A PREDICATE RATHER THAN `p === 'full' || p === 'channel_agent'`
-// REPEATED IN THREE BUILDERS: the three must never disagree about which shape a profile takes,
-// and three copies of a disjunction is how two of them come to.
-function isUnboundedProfile(p) {
-  return p === 'full' || p === 'channel_agent';
-}
-
 /**
  * THE PROFILE A LAUNCH INTO THIS ROOM RESOLVES TO (2026-09-02, Samuel's ruling B7).
  *
@@ -269,67 +251,6 @@ function isUnboundedProfile(p) {
 function profileForChannel(profile, shared) {
   const p = normalizeProfile(profile);
   return shared === true && p === 'full' ? 'channel_agent' : p;
-}
-
-// The --allowedTools list for a profile (empty array => omit the flag).
-function buildAllowedTools(profile) {
-  return TOOL_PROFILES[normalizeProfile(profile)] || [];
-}
-
-// The deny list for a profile — used BOTH as `permissions.deny` in the scoped
-// settings file and as --disallowedTools. Empty for `full`.
-function buildDeniedTools(profile) {
-  const p = normalizeProfile(profile);
-  // `full` is the UNIVERSAL FLOOR and nothing else; `channel_agent` is that floor plus the shell.
-  if (p === 'full') return [...UNIVERSAL_HARD_DENY];
-  if (p === 'channel_agent') return [...CHANNEL_AGENT_HARD_DENY];
-  const denied = [...DENIED_BUILTINS, ...DOPL_ADMIN_TOOLS, ...RETIRED_DOPL_TOOLS];
-  // read_only: no Dopl MCP at all AND no web. Admins repeated by name so containment survives
-  // a CLI that stops honoring the bare-prefix form.
-  if (p === 'read_only') {
-    denied.unshift(DOPL_SERVER_PREFIX);
-    denied.push(...WEB_TOOLS);
-  } else if (p === 'dopl_only') {
-    // Deny dopl_channel by name so the reply routes through stdout + approve-out.
-    // WEB_TOOLS deliberately NOT denied here.
-    denied.push(DOPL_CHANNEL_TOOL);
-  }
-  return denied;
-}
-
-// L0: the --tools positive bound on BUILT-INs (empty => omit the flag). A tool not named here
-// is not offered to the model at all.
-function buildBuiltinTools(profile) {
-  const p = normalizeProfile(profile);
-  // ⚠ `channel_agent` TAKES `full`'S SHAPE HERE — no positive bound — and its shell is removed by
-  // the DENY instead. Naming a bound would mean restating the CLI's whole built-in surface minus
-  // three names in this file, which is the fourth hand-list the ruling's derivation forbids.
-  if (isUnboundedProfile(p)) return [];
-  return p === 'dopl_only' ? [...READ_BUILTINS, ...WEB_TOOLS] : [...READ_BUILTINS];
-}
-
-// ⚠ Every restriction flag for a spawn, shared verbatim by headless and terminal mode so the
-// two can never drift. `settingsPath` null => scoped settings unwritable; the other three
-// layers still hold.
-function buildRestrictionArgs(profile, settingsPath) {
-  const p = normalizeProfile(profile);
-  // ⚠ `full` gets the deny floor and EXACTLY ONE FLAG: no `--tools`, no `--allowedTools`, no
-  // `--settings`, and NO `--strict-mcp-config` — the operator's global MCP servers are the
-  // point of `full`. ⚠ `channel_agent` takes the same ONE FLAG over a longer list: the ruling
-  // removes the shell, not the operator's MCP servers, so the other three layers stay off here
-  // exactly as they are for `full`.
-  if (isUnboundedProfile(p)) return ['--disallowedTools', buildDeniedTools(p).join(',')];
-  const args = [];
-  const builtins = buildBuiltinTools(p);
-  if (builtins.length) args.push('--tools', builtins.join(','));
-  const allowed = buildAllowedTools(p);
-  if (allowed.length) args.push('--allowedTools', allowed.join(','));
-  const denied = buildDeniedTools(p);
-  if (denied.length) args.push('--disallowedTools', denied.join(','));
-  if (settingsPath) args.push('--settings', settingsPath);
-  // Only the Dopl server from --mcp-config; never the operator's global ones.
-  args.push('--strict-mcp-config');
-  return args;
 }
 
 // ─── END TOOL-PROFILE TABLE ───
@@ -368,7 +289,7 @@ const PROFILE_HINTS = {
   read_only: 'Reads your local files only — no web, Dopl, shell, or file writes.',
   dopl_only: 'Reads your files, the Dopl archive/KB, and the web — no shell or writes.',
   channel_agent: 'Full access minus the shell, because other people are in this channel.',
-  full: 'Limited headless (no shell or writes). Run it in a session window to approve each tool live.',
+  full: 'Full access: your files, the shell, the web and Dopl.',
 };
 function profileHint(profile) {
   return PROFILE_HINTS[normalizeProfile(profile)] || PROFILE_HINTS.read_only;
@@ -390,10 +311,6 @@ module.exports = {
   DENIED_BUILTINS,
   normalizeProfile,
   profileForChannel, // B7: `full` -> `channel_agent` in a SHARED room, and never wider
-  buildAllowedTools,
-  buildDeniedTools,
-  buildBuiltinTools,
-  buildRestrictionArgs,
   profileLabel,
   profileHint,
 };

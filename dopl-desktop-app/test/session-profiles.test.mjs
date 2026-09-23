@@ -244,14 +244,10 @@ test("F-177: the delegation / outbound / persistence / escalation built-ins live
   }
 });
 
-test("F-177: the two lanes give the SAME answer for `full` — same names, same constant", () => {
-  // session-profiles' SESSION_HARD_DENY is literally tool-profiles' UNIVERSAL_HARD_DENY, and the
-  // headless lane's buildDeniedTools('full') returns it too, so neither lane can move alone.
-  const headless = require(join(HERE, "..", "main", "tool-profiles.js")).buildDeniedTools("full");
-  assert.deepEqual(buildSessionToolConfig("full").disallowedTools.slice().sort(),
-    headless.slice().sort(), "SDK `full` and headless `full` must deny exactly the same set");
+test("F-177: `full` denies exactly tool-profiles' universal floor — same names, same constant", () => {
+  const floor = require(join(HERE, "..", "main", "tool-profiles.js")).UNIVERSAL_HARD_DENY;
+  assert.deepEqual(buildSessionToolConfig("full").disallowedTools.slice().sort(), floor.slice().sort());
 });
-
 // C-11 (2026-08-08): unknown profiles used to normalize to FULL, so a profile that could not be
 // resolved silently became the widest one. The SDK lane inherits the fix for free, because it
 // reads the SAME `normalizeProfile`.

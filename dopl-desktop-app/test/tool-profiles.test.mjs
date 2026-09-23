@@ -33,10 +33,7 @@ assert.ok(to > from, "tool-profile sentinels out of order");
 const BLOCK = SRC.slice(from, to);
 
 const {
-  buildAllowedTools,
-  buildDeniedTools,
-  buildBuiltinTools,
-  buildRestrictionArgs,
+  DENIED_BUILTINS,
   DOPL_ADMIN_TOOLS,
   DOPL_CHANNEL_TOOL,
   DOPL_SAFE_TOOLS,
@@ -45,12 +42,10 @@ const {
   WEB_TOOLS,
 } = new Function(
   `${BLOCK}
-   return { buildAllowedTools, buildDeniedTools, buildBuiltinTools,
-            buildRestrictionArgs, DOPL_ADMIN_TOOLS, DOPL_CHANNEL_TOOL,
+   return { DENIED_BUILTINS, DOPL_ADMIN_TOOLS, DOPL_CHANNEL_TOOL,
             DOPL_SAFE_TOOLS, RETIRED_DOPL_TOOLS, UNIVERSAL_HARD_DENY, WEB_TOOLS };`
 )();
 
-const RESTRICTED = ["read_only", "dopl_only"];
 const WRITE_TOOLS = ["Write", "Edit", "MultiEdit", "NotebookEdit", "Bash", "Task"];
 // Web reads are governed PER-PROFILE now (denied for read_only, ALLOWED for
 // dopl_only so it is functional headless), so they are NOT in the shared
@@ -66,177 +61,21 @@ test("WEB_TOOLS is exactly WebFetch + WebSearch", () => {
 });
 // ── read_only ────────────────────────────────────────────────────────────────
 
-test("read_only -> local read tools only, no web, no MCP", () => {
-  const set = buildAllowedTools("read_only");
-  for (const t of ["Read", "Grep", "Glob", "LS"]) {
-    assert.ok(set.includes(t), `read_only should include ${t}`);
-  }
-  for (const t of WRITE_TOOLS) assert.ok(!set.includes(t), `read_only must NOT allow ${t}`);
-  // H-1: WebFetch/WebSearch were in the v1.2 read_only allow list. They are an
-  // outbound channel that bypasses the approve-out gate entirely.
-  for (const t of ["WebFetch", "WebSearch"]) {
-    assert.ok(!set.includes(t), `read_only must NOT allow ${t} (exfiltration channel)`);
-  }
-  assert.ok(
-    !set.some((t) => t.startsWith("mcp__")),
-    "read_only must not allow any MCP tool"
-  );
-});
-
-test("read_only denies the whole dopl MCP server, the hard-deny floor, and web", () => {
-  const denied = buildDeniedTools("read_only");
-  assert.ok(denied.includes("mcp__dopl"), "read_only must deny the bare dopl server prefix");
-  for (const t of UNIVERSAL_HARD_DENY) {
-    assert.ok(denied.includes(t), `read_only must also deny ${t} by name`);
-  }
-  // read_only is the zero-outbound profile: web is an exfil channel and must be
-  // explicitly denied (and it is not in the allow list — asserted above).
-  for (const t of WEB_TOOLS) {
-    assert.ok(denied.includes(t), `read_only must deny ${t} (zero-outbound profile)`);
-  }
-});
-
 // ── dopl_only (H-2) ──────────────────────────────────────────────────────────
 
-test("H-2: dopl_only must NEVER grant the bare mcp__dopl server prefix", () => {
-  // INVERTED from v1.2, which asserted the opposite. `mcp__dopl` matches every
-  // tool on the server INCLUDING the six destructive *_admin tools, which made
-  // dopl_only strictly more dangerous than full.
-  const set = buildAllowedTools("dopl_only");
-  assert.ok(
-    !set.includes("mcp__dopl"),
-    "dopl_only must not use the bare server prefix — it matches the admin tools"
-  );
+test("the safe list names each tool in full, never the bare server prefix or the posting tool", () => {
+  for (const t of DOPL_SAFE_TOOLS) assert.match(t, /^mcp__dopl__dopl_[a-z_]+$/, t);
+  assert.ok(!DOPL_SAFE_TOOLS.includes("mcp__dopl"));
+  assert.ok(!DOPL_SAFE_TOOLS.includes(DOPL_CHANNEL_TOOL), "posting is the exfil surface");
 });
 
-test("H-2: no admin MCP tool is grantable under any restricted profile", () => {
-  // ⚠ DRIVEN OVER THE HARD-DENY FLOOR, NOT `DOPL_ADMIN_TOOLS`, SINCE 2026-09-02, when the
-  // last five `*_admin` tools were deleted server-side and their names moved to
-  // RETIRED_DOPL_TOOLS. Iterating the now-empty admin list would make every assertion below
-  // a vacuous pass on the very names this test exists to keep denied. The floor is 9: five
-  // deleted admins + the four from the 2026-08-07 retirement. "The admin list is exactly the
-  // live *_admin tools" (below) is what stops a NEW one landing in the safe list instead.
-  assert.equal(UNIVERSAL_HARD_DENY.length, 9, "the universal hard-deny floor is 9 names");
-  for (const profile of RESTRICTED) {
-    const allowed = buildAllowedTools(profile);
-    const denied = buildDeniedTools(profile);
-    const args = buildRestrictionArgs(profile, "/tmp/s.json").join(" ");
-    for (const admin of UNIVERSAL_HARD_DENY) {
-      assert.ok(!allowed.includes(admin), `${profile} must not allow ${admin}`);
-      assert.ok(denied.includes(admin), `${profile} must deny ${admin}`);
-      // The emitted --allowedTools flag must not name an admin, and must not
-      // use the bare server prefix. VERIFIED against the CLI: an MCP allow entry
-      // matches either the exact tool name or the whole server (`mcp__<server>`)
-      // — it is NOT a string prefix, so `mcp__dopl__dopl_kb` does not grant
-      // `mcp__dopl__dopl_kb_admin`. The server prefix is the only dangerous form.
-      const allowFlag = args.split("--allowedTools ")[1] || "";
-      const allowList = (allowFlag.split(" ")[0] || "").split(",");
-      assert.ok(!allowList.includes(admin), `${profile} allow list names ${admin}`);
-      assert.ok(
-        !allowList.includes("mcp__dopl"),
-        `${profile} allow list uses the bare server prefix, which covers ${admin}`
-      );
-    }
-  }
+test("the universal floor denies every retired and admin tool", () => {
+  for (const t of [...RETIRED_DOPL_TOOLS, ...DOPL_ADMIN_TOOLS]) assert.ok(UNIVERSAL_HARD_DENY.includes(t), t);
 });
 
-test("dopl_only -> read tools + explicitly named non-admin dopl tools", () => {
-  const set = buildAllowedTools("dopl_only");
-  for (const t of ["Read", "Grep", "Glob", "LS"]) {
-    assert.ok(set.includes(t), `dopl_only should include ${t}`);
-  }
-  // These eight names are pinned against the server's real registration sites
-  // by the drift alarm at the bottom of this file — this list is the readable
-  // copy, that one is the check. NOTE: dopl_channel is intentionally NOT here
-  // (see the exfiltration test below) — it is the one non-admin tool a
-  // dopl_only spawn must not reach.
-  for (const t of [
-    "mcp__dopl__dopl_kb",
-    "mcp__dopl__dopl_search",
-    "mcp__dopl__dopl_map",
-    "mcp__dopl__dopl_members",
-    "mcp__dopl__dopl_skill",
-    "mcp__dopl__dopl_ontology",
-    "mcp__dopl__dopl_chats",
-    "mcp__dopl__dopl_workspaces",
-  ]) {
-    assert.ok(set.includes(t), `dopl_only should include ${t}`);
-  }
-  for (const t of WRITE_TOOLS) assert.ok(!set.includes(t), `dopl_only must NOT allow ${t}`);
-  // dopl_only IS granted web reads — this is the "read your files + Dopl + web"
-  // profile — pre-approved via --allowedTools so they work headless with no prompt.
-  for (const t of WEB_TOOLS) {
-    assert.ok(set.includes(t), `dopl_only should include ${t} (web reads)`);
-  }
-});
-
-// dopl_only must be FUNCTIONAL headless for web reads: allowed, offered by --tools,
-// pre-approved in the emitted --allowedTools flag, and NOT denied anywhere.
-test("dopl_only grants web reads across every layer and denies them nowhere", () => {
-  const allowed = buildAllowedTools("dopl_only");
-  const denied = buildDeniedTools("dopl_only");
-  const builtins = buildBuiltinTools("dopl_only");
-  for (const t of WEB_TOOLS) {
-    assert.ok(allowed.includes(t), `dopl_only must allow ${t}`);
-    assert.ok(builtins.includes(t), `dopl_only --tools must offer ${t}`);
-    assert.ok(!denied.includes(t), `dopl_only must NOT deny ${t}`);
-  }
-  const args = buildRestrictionArgs("dopl_only", "/tmp/s.json").join(" ");
-  const allowFlag = args.split("--allowedTools ")[1] || "";
-  const allowList = (allowFlag.split(" ")[0] || "").split(",");
-  for (const t of WEB_TOOLS) {
-    assert.ok(allowList.includes(t), `dopl_only --allowedTools must name ${t}`);
-  }
-});
-
-// D1: dopl_only could otherwise post/exfiltrate directly via dopl_channel,
-// bypassing the desktop's approve-out review. It is now excluded from the allow
-// set AND denied by name, so a dopl_only reply routes through stdout +
-// approve-out exactly like read_only.
-test("dopl_only must NOT grant dopl_channel, and must deny it by name", () => {
-  const allowed = buildAllowedTools("dopl_only");
-  assert.ok(
-    !allowed.includes("mcp__dopl__dopl_channel"),
-    "dopl_only must not allow dopl_channel (direct-post exfiltration channel)"
-  );
-  const denied = buildDeniedTools("dopl_only");
-  assert.ok(
-    denied.includes("mcp__dopl__dopl_channel"),
-    "dopl_only must deny dopl_channel by name"
-  );
-  // And the emitted flag set must carry it in --disallowedTools.
-  const args = buildRestrictionArgs("dopl_only", "/tmp/s.json").join(" ");
-  const denyFlag = args.split("--disallowedTools ")[1] || "";
-  const denyList = (denyFlag.split(" ")[0] || "").split(",");
-  assert.ok(
-    denyList.includes("mcp__dopl__dopl_channel"),
-    "dopl_only --disallowedTools must name dopl_channel"
-  );
-});
-
-// RETIREMENT (2026-08-07). Unregistering a tool must TIGHTEN what a spawn can do, never
-// loosen it. Dropping dopl_cluster_admin / dopl_workflow_admin from DOPL_ADMIN_TOOLS alone
-// would have left them UNCLASSIFIED, which resolves to `gate` — a button, in the profiles
-// that have one, for tools the table says can never be opened. They are denied by their own
-// list instead, so the hard-deny outlives the tool.
-//
-// WIDENED TO EVERY PROFILE (2026-08-08, C-10). It was scoped to RESTRICTED, and that scoping
-// is precisely why the `full` gap survived an audit: the SDK lane denied these under `full`
-// and this lane did not, and no assertion crossed the two. `full` is in the loop now.
-test("retired dopl tools stay denied under EVERY profile, full included", () => {
-  assert.ok(RETIRED_DOPL_TOOLS.length > 0, "the retired list must not be empty");
-  for (const t of RETIRED_DOPL_TOOLS) {
-    assert.ok(!DOPL_SAFE_TOOLS.includes(t), `${t} is retired but still in the safe list`);
-    assert.ok(!DOPL_ADMIN_TOOLS.includes(t), `${t} is retired but still in the admin list`);
-    for (const profile of [...RESTRICTED, "full"]) {
-      assert.ok(!buildAllowedTools(profile).includes(t), `${profile} must not allow ${t}`);
-      assert.ok(buildDeniedTools(profile).includes(t), `${profile} must deny ${t}`);
-      const args = buildRestrictionArgs(profile, "/tmp/s.json").join(" ");
-      const denyFlag = args.split("--disallowedTools ")[1] || "";
-      assert.ok((denyFlag.split(" ")[0] || "").split(",").includes(t),
-        `${profile} --disallowedTools must name ${t}`);
-    }
-  }
+test("DENIED_BUILTINS covers write, exec, delegation and escape tools, never the web reads", () => {
+  for (const t of [...WRITE_TOOLS, ...ESCAPE_TOOLS]) assert.ok(DENIED_BUILTINS.includes(t), t);
+  for (const t of WEB_TOOLS) assert.ok(!DENIED_BUILTINS.includes(t), `${t} is governed per profile`);
 });
 
 test("the safe-tool list and the admin list are disjoint", () => {
@@ -248,99 +87,7 @@ test("the safe-tool list and the admin list are disjoint", () => {
 
 // ── H-1: the deny list is what actually bounds a spawn ───────────────────────
 
-test("both restricted profiles deny write, exec, delegation, and escape tools", () => {
-  for (const profile of RESTRICTED) {
-    const denied = buildDeniedTools(profile);
-    for (const t of [...WRITE_TOOLS, ...ESCAPE_TOOLS]) {
-      assert.ok(denied.includes(t), `${profile} must deny ${t}`);
-    }
-  }
-  // Web is the ONE outbound tool that diverges by profile: read_only denies it
-  // (zero-outbound), dopl_only allows it (read files + Dopl + web).
-  for (const t of WEB_TOOLS) {
-    assert.ok(buildDeniedTools("read_only").includes(t), `read_only must deny ${t}`);
-    assert.ok(!buildDeniedTools("dopl_only").includes(t), `dopl_only must NOT deny ${t}`);
-  }
-});
-
-test("no tool is both allowed and denied under a restricted profile", () => {
-  for (const profile of RESTRICTED) {
-    const allowed = new Set(buildAllowedTools(profile));
-    for (const t of buildDeniedTools(profile)) {
-      assert.ok(!allowed.has(t), `${profile} both allows and denies ${t}`);
-    }
-  }
-});
-
 // ── The emitted flag set ─────────────────────────────────────────────────────
-
-test("restricted profiles emit all four containment layers", () => {
-  for (const profile of RESTRICTED) {
-    const args = buildRestrictionArgs(profile, "/tmp/spawn-settings.json");
-    assert.ok(args.includes("--tools"), `${profile} must bound built-ins with --tools`);
-    assert.ok(args.includes("--allowedTools"), `${profile} must pre-approve its tools`);
-    assert.ok(args.includes("--disallowedTools"), `${profile} must pass a CLI deny list`);
-    assert.ok(args.includes("--settings"), `${profile} must load scoped settings`);
-    assert.ok(args.includes("/tmp/spawn-settings.json"), `${profile} must pass the settings path`);
-    assert.ok(
-      args.includes("--strict-mcp-config"),
-      `${profile} must not inherit the operator's other MCP servers`
-    );
-  }
-});
-
-test("a failed settings write still emits the other three layers", () => {
-  for (const profile of RESTRICTED) {
-    const args = buildRestrictionArgs(profile, null);
-    assert.ok(!args.includes("--settings"), "no --settings without a path");
-    assert.ok(args.includes("--tools"));
-    assert.ok(args.includes("--disallowedTools"));
-    assert.ok(args.includes("--strict-mcp-config"));
-  }
-});
-
-test("every flag value is a single comma-joined argv element", () => {
-  // The CLI declares --tools/--allowedTools/--disallowedTools/--mcp-config as
-  // variadic, so a value must never be split across argv elements or it would
-  // swallow the following flag's value.
-  for (const profile of RESTRICTED) {
-    const args = buildRestrictionArgs(profile, "/tmp/s.json");
-    for (let i = 0; i < args.length; i++) {
-      if (!args[i].startsWith("--")) continue;
-      const next = args[i + 1];
-      if (next === undefined || next.startsWith("--")) continue;
-      assert.ok(!/\s/.test(next), `${args[i]} value must not contain whitespace`);
-      assert.equal(args[i + 2] === undefined || args[i + 2].startsWith("--"), true,
-        `${args[i]} must take exactly one argv element`);
-      i++;
-    }
-  }
-});
-
-test("--tools bounds built-ins to the read set (+ web for dopl_only) only", () => {
-  for (const profile of RESTRICTED) {
-    const builtins = buildBuiltinTools(profile);
-    assert.ok(builtins.includes("Read") && builtins.includes("Grep") && builtins.includes("Glob"));
-    for (const t of [...WRITE_TOOLS, ...ESCAPE_TOOLS]) {
-      assert.ok(!builtins.includes(t), `${profile} --tools must not offer ${t}`);
-    }
-    assert.ok(
-      !builtins.some((t) => t.startsWith("mcp__")),
-      "--tools only names built-ins; MCP tools are governed separately"
-    );
-  }
-  // read_only --tools must NOT offer web; dopl_only --tools MUST (so it is offered
-  // to the model at all — L0 is a positive bound).
-  for (const t of WEB_TOOLS) {
-    assert.ok(!buildBuiltinTools("read_only").includes(t), `read_only --tools must not offer ${t}`);
-    assert.ok(buildBuiltinTools("dopl_only").includes(t), `dopl_only --tools must offer ${t}`);
-  }
-});
-
-test("restricted profiles return a non-empty allow list (a flag IS emitted)", () => {
-  assert.ok(buildAllowedTools("read_only").length > 0);
-  assert.ok(buildAllowedTools("dopl_only").length > 0);
-});
 
 // ── THE 14-TOOL AGREEMENT, AS A DRIFT ALARM ──────────────────────────────────
 //
