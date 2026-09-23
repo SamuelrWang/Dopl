@@ -113,7 +113,7 @@ export function colorTaken(wanted: string, free: string[]): ToolResponse {
       `No agent was requested — ${named} is already held by a live agent in this channel, and **nothing was filed**. Colours are unique per channel across ALL members, so another member's agent may be wearing the one you asked for.`,
       `Re-issue with one of these, keeping the SAME \`client_msg_id\` so a retry cannot file twice:`,
       free.map((c) => `\`${c}\``).join(", "),
-      `⚠ Or omit \`color\` entirely and the first free one is assigned — which is what you want unless the operator asked for a specific colour. A colour is only ever an identity, never a status.`,
+      `⚠ Or omit \`color\` entirely and the first free one is assigned — which is what you want unless the operator asked for a specific colour. A colour is only ever a marker, never a status.`,
     ].join("\n"),
   );
 }
@@ -154,5 +154,5 @@ export const AGENT_COLOR_FIELD = z
   .enum(AGENT_COLOR_KEYS)
   .optional()
   .describe(
-    'op="manage" action="launch" (optional): the agent\'s COLOUR — an identity, never a status. Omit for the first free key; a taken one is a 409.',
+    'op="manage" action="launch" (optional): the agent\'s COLOUR — a marker, never a status. Omit for the first free key; a taken one is a 409.',
   );

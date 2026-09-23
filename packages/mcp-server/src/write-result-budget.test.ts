@@ -222,6 +222,7 @@ describe(`every write result is one line and fits ${WRITE_RESULT_MAX_CHARS} char
             status: "launched",
             agentId: "x2sz1ztt",
             threadId: THREAD_ID,
+            goal: "Audit the migration and post a milestone.",
             identityName: "Code Auditor",
             model: "claude-opus-5",
             refusalReason: null,

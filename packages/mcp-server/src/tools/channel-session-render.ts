@@ -174,9 +174,8 @@ const MODEL_LABEL_EDGE = /^[`*_#>[\]{}|\s]+|[`*_#>[\]{}|\s]+$/g;
 /**
  * A model id, shortened for a glance.
  *
- * ⚠ COSMETIC ONLY, and it never invents a name: it drops a leading vendor
- * prefix and a trailing dated build stamp, both of which are noise in a line an
- * orchestrator skims. If the strip would leave nothing, the ORIGINAL is
+ * ⚠ COSMETIC ONLY, and it never invents a name: it drops a trailing dated build
+ * stamp, which is noise in a line an orchestrator skims. If the strip would leave nothing, the ORIGINAL is
  * rendered — an id this build has never seen renders AS ITSELF rather than as a
  * blank, which is the same rule the web's model chip follows (a newer desktop
  * may run a model this build has not heard of, and a blank would report that as
@@ -198,10 +197,9 @@ const MODEL_LABEL_EDGE = /^[`*_#>[\]{}|\s]+|[`*_#>[\]{}|\s]+$/g;
  * into two bare names.
  */
 export function shortModelLabel(model: string): string {
-  const stripped = model
-    .replace(/^claude-/i, "")
-    .replace(/-\d{8}$/, "")
-    .trim();
+  // Only a trailing dated build stamp is dropped; the id is otherwise the runtime's own, for every
+  // vendor (no `claude-` strip — P8-20).
+  const stripped = model.replace(/-\d{8}$/, "").trim();
   const base = stripped.length > 0 ? stripped : model;
   // ⚠ EDGES FIRST, so `opus-5[1m]` becomes `opus-5-1m` and not `opus-5-1m-`. A
   // label that is ALL breakers survives as itself and fails the ordinary way, in

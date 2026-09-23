@@ -205,7 +205,7 @@ describe("the operator-only telemetry, compactly", () => {
     // tool name. ⚠ THE PROMISE MOVED, NOT THE RULE (T13): `SESSION_TELEMETRY_NOTE`
     // used to state it under every page and is deleted; the doctrine states it
     // once, so the words are pinned there and the RENDER is pinned here.
-    expect(line).toContain("`Code Auditor` · `opus-5`");
+    expect(line).toContain("`Code Auditor` · `claude-opus-5`");
     // ⚠ THE PROMISE MOVED, NOT THE RULE — and the doctrine's clause now says
     // what this ORDER is for: a two-token span is an identity beside a model.
     expect(CHANNEL_DOCTRINE).toContain(
@@ -246,8 +246,9 @@ describe("the operator-only telemetry, compactly", () => {
   });
 
   it("shortModelLabel never invents a name, and renders an unknown id as itself", () => {
-    expect(shortModelLabel("claude-opus-5")).toBe("opus-5");
-    expect(shortModelLabel("claude-opus-4-5-20251101")).toBe("opus-4-5");
+    expect(shortModelLabel("claude-opus-5")).toBe("claude-opus-5");
+    expect(shortModelLabel("claude-opus-4-5-20251101")).toBe("claude-opus-4-5");
+    expect(shortModelLabel("gpt-5.5-codex")).toBe("gpt-5.5-codex");
     expect(shortModelLabel("some-future-model")).toBe("some-future-model");
     // ⚠ A strip that would empty the label falls back to the original — a blank
     // chip reports "no model", which is a different claim.
@@ -332,7 +333,7 @@ describe("the await session block", () => {
     // ⚠ THE WHOLE ROW, so a column that moves or disappears fails here rather
     // than passing on a substring found somewhere else on the page.
     expect(out).toContain(
-      "| `@agent-abcd1234` | working | `Deploy check` | `General` | `Code Auditor` | `opus-5` | `Bash` | 5s |"
+      "| `@agent-abcd1234` | working | `Deploy check` | `General` | `Code Auditor` | `claude-opus-5` | `Bash` | 5s |"
     );
     expect(out).not.toContain("900");
     expect(out).toContain("efgh5678");

@@ -325,7 +325,7 @@ const AGENT_DESCRIPTION = composeDescription({
   examples: [
     { op: "list" },
     { op: "create", name: "Researcher", instructions: "…" },
-    { op: "grant", identity: "t1", scope: "channel", to: "…" },
+    { op: "grant", identity: "<id>", scope: "channel", to: "…" },
   ],
   cap: AGENT_PROSE_BUDGET,
 });

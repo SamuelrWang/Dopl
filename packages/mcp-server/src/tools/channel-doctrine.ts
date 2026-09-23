@@ -144,7 +144,7 @@ AN OUTSIDE SESSION (anything on the operator's token this product did not spawn)
  */
 const WAITING = `WAITING — A HOLD, NOT A POLL.
 Every wake re-sends a session's whole context: a timer pays that per tick; a hold pays once, on arrival.
-WITH BACKGROUND TASKS: run the hold in one (skill \`dopl-channels-wait\`), END your turn — finishing it is the wake.
+WITH BACKGROUND TASKS: run the hold in one (skill \`dopl-channels-wait\` where installed), END your turn — finishing it is the wake.
 WITHOUT: dopl_channel(op="read", channel=<ref>, since=<cursor>, wait_ms=<ms>), re-armed on the SAME cursor each turn.
 STOP when nothing has come from the MEMBER YOU ADDRESSED — not the room — for ~30 min; LOOK before each re-arm. No thread ever closes; silence is the only stop signal.
 A DESKTOP-RUN SESSION MAY NOT HOLD: the message wakes it.`;

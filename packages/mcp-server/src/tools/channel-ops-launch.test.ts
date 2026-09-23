@@ -83,7 +83,7 @@ describe("OFFLINE — nothing is filed, and the caveat is honest about presence"
     // ⚠ `filed=no` IS THE LOAD-BEARING HALF AND MAY NEVER BE TRADED FOR BREVITY:
     // nothing was written, so nothing is pending and nothing can be cancelled —
     // the OPPOSITE of PENDING, where re-issuing starts a second agent.
-    expect(await text(offline)).toBe("not launched reason=offline filed=no");
+    expect(await text(offline)).toBe("not launched reason=offline filed=no retry=no");
   });
 
   /**
@@ -244,7 +244,9 @@ describe("LAUNCHED — the id, and how to direct it", () => {
     // it" vs "parked and running nothing" are different outcomes, and one field
     // covering both must be the weaker claim — which leaves a caller waiting
     // forever on an agent that was never going to move.
-    expect(await text(launched)).toContain("idle=yes");
+    expect(await text(created({ status: "launched", agentId: "abcd1234", goal: null }))).toContain(
+      "idle=yes",
+    );
     expect(await text(launched, { goal: "Draft the notes" })).toContain("idle=no");
     // ⚠ RE-POINTED: `goal` became `body` at the seam, so the doctrine states the
     // same two outcomes about `body`.
@@ -253,6 +255,19 @@ describe("LAUNCHED — the id, and how to direct it", () => {
       // unchanged and is still what this case is about.
       '`name` it (never an id; nameless is refused) and its `body` is its FIRST INSTRUCTION',
     );
+  });
+
+  it("reads `idle=` off the DIRECTIVE, so a converged retry with no body reports the first goal (P8-13)", async () => {
+    const converged = client({
+      createLaunchDirective: vi.fn(async () => ({
+        offline: false,
+        existing: true,
+        directive: directive({ status: "launched", agentId: "abcd1234", goal: "ship the parser" }),
+      })),
+    });
+    const out = await text(converged);
+    expect(out).toContain("idle=no");
+    expect(out).toContain("retry=existing");
   });
 
   it("carries the identity fields, quoted where a value could forge a field", async () => {

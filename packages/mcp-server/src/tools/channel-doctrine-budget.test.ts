@@ -56,7 +56,7 @@ import {
 // threaded into an exchange you are a party to is yours", which the LAW block
 // already says as "ACT ON ... messages in a THREAD you are a party to".
 // **A rule that had two homes now has one, and the second was the expensive one.**
-const DOCTRINE_MAX_CHARS = 13_492; // +312: the home-channel addressing paragraph moved here off the pushed description (P8-23). Re-derive, never quote.
+const DOCTRINE_MAX_CHARS = 13_508; // +312 home-channel addressing moved here off the pushed description (P8-23); +16 the wait skill is "where installed" (P8-20). Re-derive, never quote.
 // ⚠ **2,870 → 2,879 (2026-09-03): +9 ON EVERY SECTION, AND NOT ONE OF THEM
 // GREW.** `SECTION_INDEX` names every section and rides every pull, so adding
 // `waiting` to the table lengthened what a caller receives for `send`, `law`

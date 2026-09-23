@@ -215,7 +215,7 @@ export async function opLaunchAgent(
     // VERDICT: the check is a per-(user, workspace) heartbeat, so it cannot say
     // WHICH machine is up or whether launching is enabled there. `op="rooms" action="help"`
     // carries that; the fact is that no listener has checked in.
-    return ok(factsLine("not launched", { reason: "offline", filed: false }));
+    return ok(factsLine("not launched", { reason: "offline", filed: false, retry: "no" }));
   }
 
   let directive = created.directive;
@@ -279,7 +279,8 @@ export async function opLaunchAgent(
         // disagreement, because on the ordinary launch it would be a `-` on every line.
         ...runtimeFacts(directive),
         // ⚠ `idle=yes` means STANDING BY AND RUNNING NOTHING.
-        idle: !(typeof opts.goal === "string" && opts.goal.trim() !== ""),
+        // From the ROW, not this call: a converged retry returns the first request's directive.
+        idle: !directive.goal?.trim(),
         // ⚠ ALWAYS PRINTED, INCLUDING WHEN NOTHING WAS ASKED FOR (T24). A caller
         // that sent no posture still ran at SOME posture, and `not reported` is
         // the only thing standing between an orchestrator and the assumption

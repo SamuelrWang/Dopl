@@ -95,8 +95,10 @@ type WorkspaceArgShape = typeof WORKSPACE_ARG_SHAPE;
  *
  * Applied at BOTH registration helpers below. Pinned in `server.test.ts`.
  */
-function strictInput<S extends ZodRawShape>(shape: S): z.ZodObject<S> {
-  return z.strictObject(shape, { error: renamedArgMessage }) as unknown as z.ZodObject<S>;
+function strictInput<S extends ZodRawShape>(shape: S, tool: string): z.ZodObject<S> {
+  return z.strictObject(shape, {
+    error: (issue) => renamedArgMessage(tool, issue),
+  }) as unknown as z.ZodObject<S>;
 }
 
 /**
@@ -106,16 +108,25 @@ function strictInput<S extends ZodRawShape>(shape: S): z.ZodObject<S> {
  * caller what is wrong but not what is right, and the caller most likely to send it learned it
  * from this server. Every other unknown key keeps the SDK's own message.
  */
-const RENAMED_ARGS: Readonly<Record<string, string>> = { template: "identity" };
+const RENAMED_ARGS: Readonly<Record<string, Readonly<Record<string, string>>>> = {
+  // Keyed by tool: only the tools that accept the successor may name it (P8-17).
+  dopl_agent: { template: "identity" },
+  dopl_channel: { template: "identity" },
+};
 
-function renamedArgMessage(issue: { code?: string; keys?: readonly string[] }): string | undefined {
+function renamedArgMessage(
+  tool: string,
+  issue: { code?: string; keys?: readonly string[] },
+): string | undefined {
   if (issue.code !== "unrecognized_keys" || !issue.keys) return undefined;
-  const renamed = issue.keys.filter((k) => Object.prototype.hasOwnProperty.call(RENAMED_ARGS, k));
+  const map = RENAMED_ARGS[tool];
+  if (!map) return undefined;
+  const renamed = issue.keys.filter((k) => Object.prototype.hasOwnProperty.call(map, k));
   if (renamed.length === 0) return undefined;
   const keys = issue.keys.map((k) => `"${k}"`).join(", ");
   // ⚠ The hint carries NO quotes: the SDK serializes the issue as JSON, so a quoted hint
   // arrives backslash-escaped and reads worse than the bare words.
-  const hints = renamed.map((k) => `renamed: send ${RENAMED_ARGS[k]}, not ${k}`).join("; ");
+  const hints = renamed.map((k) => `renamed: send ${map[k]}, not ${k}`).join("; ");
   return `Unrecognized key${issue.keys.length === 1 ? "" : "s"}: ${keys} — ${hints}`;
 }
 
@@ -395,7 +406,7 @@ export function createToolRegistrars(deps: RegistrarDeps): ToolRegistrars {
 
     server.registerTool(
       name,
-      { description, inputSchema: strictInput(enhancedSchema) },
+      { description, inputSchema: strictInput(enhancedSchema, name) },
       // ⚠ THE SCOPE ENCLOSES THE HANDLER **AND** THE FOOTER, which is what makes
       // `dopl_search`'s PER-LEG charge reportable: it fires deep inside a handler
       // and its return value never reaches `appendDoplStatus`.
@@ -454,7 +465,7 @@ export function createToolRegistrars(deps: RegistrarDeps): ToolRegistrars {
     const framed = withDoplStatus(gated as any, sessionEffective, caller, unmeteredNote);
     server.registerTool(
       name,
-      { description, inputSchema: strictInput(schema) },
+      { description, inputSchema: strictInput(schema, name) },
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       ((args: any) => withUnmeteredScope(() => framed(args))) as any,
     );
