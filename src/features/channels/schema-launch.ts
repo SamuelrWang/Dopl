@@ -1,5 +1,10 @@
 import { z } from "zod";
-import { safeLabel } from "@/shared/lib/safe-label";
+import {
+  SAFE_LABEL_RE,
+  safeLabel,
+  safeLabelMessage,
+  safeOptionalLabel,
+} from "@/shared/lib/safe-label";
 import { closedEnum } from "@/shared/lib/closed-enum";
 import { AGENT_COLOR_KEYS } from "./lib/agent-colors";
 import type {
@@ -283,10 +288,7 @@ export const LaunchCreateSchema = z.object({
     .trim()
     .min(1, "An agent you launch needs a name")
     .max(60)
-    .refine(
-      (v) => !/[\u0000-\u001f\u007f\u200b-\u200f\u2028\u2029\u202a-\u202e\u2066-\u2069\ufeff]/.test(v),
-      "Control, zero-width and bidi characters are refused, not stripped",
-    ),
+    .regex(SAFE_LABEL_RE, safeLabelMessage("Agent name")),
 });
 export type LaunchCreateInput = z.infer<typeof LaunchCreateSchema>;
 
@@ -390,19 +392,11 @@ export const AgentDirectiveCreateSchema = z.discriminatedUnion("kind", [
      * refuses is a 200 followed by a refusal the orchestrator cannot explain.
      * Empty CLEARS, back to `Agent #<id>`; a separate `unname` verb would be a
      * second way to say one thing.
-     * ⚠ NOT `safeLabel`, which has a `min(1)` — this is the one display string
-     * in the feature whose empty value is meaningful. The charset rule it would
-     * have applied is applied here instead, and the desktop's own `sanitizeName`
-     * is the authority either way.
+     * ⚠ `safeOptionalLabel`, not `safeLabel` — this is the one display string in the
+     * feature whose empty value is meaningful. The desktop's own `sanitizeName` is
+     * the authority either way.
      */
-    name: z
-      .string()
-      .trim()
-      .max(60)
-      .refine(
-        (v) => !/[\u0000-\u001f\u007f\u200b-\u200f\u2028\u2029\u202a-\u202e\u2066-\u2069\ufeff]/.test(v),
-        "Control, zero-width and bidi characters are refused, not stripped",
-      ),
+    name: safeOptionalLabel("Name", 60),
   }),
   /**
    * **RE-POSTURE A RUNNING AGENT** (2026-09-01, the agent-efficiency wave).
