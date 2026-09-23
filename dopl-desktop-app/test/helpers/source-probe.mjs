@@ -17,7 +17,12 @@
 //       `declaredProps()` answer "does the stylesheet actually declare this?" over parsed
 //       rules rather than over the file's raw text.
 //
-// Everything here is string/offset work: no DOM, no dependency, no CSS engine.
+// String/offset work: no DOM, no CSS engine. JavaScript is tokenized with espree (eslint's
+// parser, already installed) so regex literals are lexed correctly.
+
+import { createRequire } from "node:module";
+
+const espree = createRequire(import.meta.url)("espree");
 
 // ── generic guarded slice ────────────────────────────────────────────────────
 // The audit's fail-open pattern, closed: both markers must exist AND be in order.
@@ -163,40 +168,60 @@ export function declaredProps(css) {
 }
 
 // ── javascript ───────────────────────────────────────────────────────────────
-// Strings / identities / comments blanked, so brace matching cannot be thrown off by a
-// `{` inside a literal. (The renderer files carry no regex literals.)
-function maskJs(src) {
-  let out = "";
-  let i = 0;
-  while (i < src.length) {
-    const c = src[i];
-    const d = src[i + 1];
-    if (c === "/" && d === "/") {
-      const nl = src.indexOf("\n", i);
-      const stop = nl === -1 ? src.length : nl;
-      out += blank(src.slice(i, stop));
-      i = stop;
-      continue;
-    }
-    if (c === "/" && d === "*") {
-      const end = src.indexOf("*/", i + 2);
-      const stop = end === -1 ? src.length : end + 2;
-      out += blank(src.slice(i, stop));
-      i = stop;
-      continue;
-    }
-    if (c === '"' || c === "'" || c === "`") {
-      let j = i + 1;
-      while (j < src.length && src[j] !== c) j += src[j] === "\\" ? 2 : 1;
-      const stop = Math.min(j + 1, src.length);
-      out += c + blank(src.slice(i + 1, stop));
-      i = stop;
-      continue;
-    }
-    out += c;
-    i++;
+// Built from espree's tokens, so string, template and REGEX literals are all known and a
+// quote inside `/"/g` cannot desynchronise the scan (T1-10). Offsets are preserved.
+const TOKENIZE = { ecmaVersion: "latest", comment: true, range: true };
+
+function tokensOf(src) {
+  for (const sourceType of ["script", "module"]) {
+    try { return espree.tokenize(src, { ...TOKENIZE, sourceType }); } catch { /* next */ }
   }
-  return out;
+  return null;
+}
+
+function maskRanges(src, ranges) {
+  let out = "";
+  let last = 0;
+  for (const [a, b, keep] of ranges) {
+    out += src.slice(last, a + keep) + blank(src.slice(a + keep, b));
+    last = b;
+  }
+  return out + src.slice(last);
+}
+
+// Comments and literals blanked, so brace matching cannot be thrown off by a `{` inside a
+// literal and a marker inside a comment is never mistaken for code. Throws on unparseable input.
+function maskJs(src) {
+  const tokens = tokensOf(src);
+  if (!tokens) throw new Error("source-probe: not parseable as JavaScript");
+  const ranges = tokens.comments.map((c) => [c.range[0], c.range[1], 0]);
+  for (const t of tokens) {
+    if (t.type === "String") ranges.push([t.range[0], t.range[1], 1]);
+    else if (t.type === "Template" || t.type === "RegularExpression") ranges.push([t.range[0], t.range[1], 0]);
+  }
+  return maskRanges(src, ranges.sort((x, y) => x[0] - y[0]));
+}
+
+// The source with every comment blanked (offsets and line numbers preserved); strings and
+// code untouched. For assertions about what the code DOES, which a comment must never satisfy.
+export function codeOf(src) {
+  const tokens = tokensOf(src);
+  if (!tokens) throw new Error("source-probe: not parseable as JavaScript");
+  return maskRanges(src, tokens.comments.map((c) => [c.range[0], c.range[1], 0]));
+}
+
+// The code between `// ─── BEGIN <name>` and `// ─── END <name>` (the BEGIN line included).
+// Fails CLOSED: a missing, repeated or inverted sentinel throws.
+export function sentinelBlock(src, name) {
+  const begin = `// ─── BEGIN ${name}`;
+  const end = `// ─── END ${name}`;
+  const i = src.indexOf(begin);
+  const j = src.indexOf(end);
+  if (i === -1) throw new Error(`BEGIN ${name} sentinel missing`);
+  if (j === -1) throw new Error(`END ${name} sentinel missing`);
+  if (j <= i) throw new Error(`${name} sentinels out of order`);
+  if (src.indexOf(begin, i + 1) !== -1) throw new Error(`BEGIN ${name} sentinel repeated`);
+  return src.slice(i, j);
 }
 
 function matchPair(src, open, o, c) {

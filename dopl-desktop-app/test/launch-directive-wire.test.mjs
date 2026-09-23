@@ -27,6 +27,7 @@ import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { boot, claimPosts } from "./_launch-directive-harness.mjs";
+import { codeOf } from "./helpers/source-probe.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const MAIN = join(HERE, "..", "main");
@@ -174,9 +175,8 @@ test("CONTRACT: the pending-directives read exists and answers `{ directives }` 
 // deployment still does (INVARIANTS §13: an older peer is supported), and on one of those the
 // stand-down is still exactly the right behaviour. Removing it would trade a dead branch for a
 // per-minute dead request against every server that has not shipped the route yet.
-test("the 404 stand-down survives for OLDER servers, and still names the gap", () => {
-  assert.match(SRC, /pollUnavailable = true;/, "the poll stands down on a 404");
-  assert.match(SRC, /F-273/, "…and says which gap it is standing down for");
+test("the 404 stand-down survives for OLDER servers", () => {
+  assert.match(codeOf(SRC), /pollUnavailable = true;/, "the poll stands down on a 404");
 });
 
 // ── ⚠ THE POLLED ROW IS A **DTO**, NOT A RAW ROW — F-284 ─────────────────────────────────

@@ -19,6 +19,7 @@ import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
+import { between } from "./helpers/source-probe.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const MAIN = join(HERE, "..", "main");
@@ -173,7 +174,7 @@ test("the module names no vendor and branches on no runtime id", () => {
 
 test("the closed code set is what the table declares — no orphan body, no unbodied code", () => {
   const bodies = Object.keys(
-    new Function(`${SRC.slice(SRC.indexOf("const ERROR_BODIES"), SRC.indexOf("/** Is this one of the codes above?"))}
+    new Function(`${between(SRC, "const ERROR_BODIES", "const isRuntimeErrorCode", "ERROR_BODIES")}
        return ERROR_BODIES;`)()
   );
   assert.deepEqual(bodies.slice().sort(), copy.RUNTIME_ERROR_CODES.slice().sort());

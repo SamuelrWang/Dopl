@@ -71,10 +71,10 @@ const EXIT_GIVE_UP_MS = 3500;
  * that says the operator ASKED and the machine could not — `liveOrThrow()` turns that into a
  * failure, because a release command that asked for live must never be told nothing ran.
  */
-export function liveGate(env) {
+export function liveGate(env, resolve = resolveBin.resolveCodexBin) {
   const e = env || process.env;
   const requested = String(e[LIVE_ENV] || '') === '1';
-  const bin = resolveBin.resolveCodexBin();
+  const bin = resolve();
   if (!requested) {
     return {
       armed: false,
@@ -125,9 +125,22 @@ export function skipLive(t, gate) {
   return true;
 }
 
+/**
+ * Skip a REAL-model turn arm unless `CODEX_LIVE_TURN=1`: every such arm spends OpenAI quota, on top
+ * of the live flag. Returns `true` when the caller should return. `test:codex-compat` sets it.
+ */
+export const TURN_ENV = 'CODEX_LIVE_TURN';
+export function skipTurn(t) {
+  if (String(process.env[TURN_ENV] || '') === '1') return false;
+  const why = `${TURN_ENV} is not 1 — this arm spends OpenAI quota on a real model turn`;
+  t.diagnostic(`SKIPPED, NOT PASSED — ${why}`);
+  t.skip(why);
+  return true;
+}
+
 /** For the release command: arming without a machine that can answer is an ERROR. */
-export function liveOrThrow(env) {
-  const gate = liveGate(env);
+export function liveOrThrow(env, resolve) {
+  const gate = liveGate(env, resolve);
   if (gate.requested && !gate.armed) throw new Error(gate.reason);
   return gate;
 }
@@ -138,10 +151,6 @@ export function readFixture() {
   return JSON.parse(readFileSync(FIXTURE_PATH, 'utf8'));
 }
 
-/** ⚠ `true` only for a fixture a real CLI produced. A placeholder is never measured truth. */
-export function fixtureIsMeasured(fixture) {
-  return (fixture || {}).status === 'MEASURED';
-}
 
 // ── CHILD-PROCESS DISCIPLINE ─────────────────────────────────────────────────────────────────
 

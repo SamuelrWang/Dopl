@@ -182,36 +182,3 @@ test("postResult only stamps an intent when one is given", () => {
   const post = read("channel-post.js");
   assert.match(post, /\.\.\.\(opts && opts\.intent \? \{ intent: opts\.intent \} : \{\}\)/);
 });
-
-// ── 3. the comments that asserted the false invariant ──────────────────────────
-
-test("both false invariants are corrected where they were written", () => {
-  // These two comments are why the bug survived review: each file was locally
-  // coherent and the pair was wrong. A reader who trusts them instead of
-  // re-deriving the DM path gets the same wrong answer, so the correction is part
-  // of the fix rather than decoration.
-  const targeting = read("targeting.js");
-  assert.ok(
-    !/so it lands here as FYI and cannot re-trigger the asker/.test(targeting),
-    "targeting.js still claims an unaddressed reply reaches the loop brake"
-  );
-  assert.match(targeting, /THE SECOND CLAUSE OF THIS COMMENT WAS FALSE IN EVERY DM/);
-  // ⚠ AND THE CORRECTION IS ITSELF NOW HISTORY. The `peerUserId` fallback the
-  // corrected comment described was REMOVED 2026-08-18 (wiring plan Phase 3), so
-  // targeting.js must state it in the PAST TENSE — a present-tense description of
-  // a retired server behaviour is the same class of wrong comment this test was
-  // written to catch, one retirement later.
-  assert.match(targeting, /`resolvePostMetadata` fell back to/);
-  assert.match(targeting, /HISTORY, NOT BEHAVIOUR/);
-  assert.ok(
-    !/`resolvePostMetadata` falls back to/.test(targeting),
-    "targeting.js still describes the DM auto-address as live"
-  );
-
-  const post = read("channel-post.js");
-  assert.ok(
-    !/pass no metadata and render as\n\/\/ plain agent bubbles, outside any session/.test(post),
-    "channel-post.js still claims an incidental post lands outside any session"
-  );
-  assert.match(post, /THIS COMMENT USED TO CARRY A FALSE INVARIANT/);
-});

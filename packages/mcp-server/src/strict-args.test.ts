@@ -14,7 +14,7 @@
  * and plain invention are others.
  */
 
-import { describe, it, expect, vi, beforeAll, afterAll } from "vitest";
+import { describe, it, expect, vi, beforeAll, beforeEach, afterAll } from "vitest";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import type { DoplClient, WorkspaceListItem } from "@dopl/client";
@@ -79,6 +79,8 @@ beforeAll(async () => {
   ]);
   listed = await client.listTools();
 });
+
+beforeEach(() => posted.mockClear());
 
 afterAll(async () => {
   await client?.close();
@@ -162,7 +164,7 @@ describe("a removed param is REFUSED, and the refusal names the field", () => {
       expect(text, name).toContain("-32602");
       expect(text, name).toContain("renamed: send identity, not template");
     }
-    expect(posted).toHaveBeenCalledTimes(1); // only the legitimate send above
+    expect(posted).not.toHaveBeenCalled();
   });
 
   it("an INVENTED param is refused on the same rule (this is not a denylist)", async () => {

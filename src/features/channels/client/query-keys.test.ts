@@ -42,7 +42,7 @@ describe("channel paths", () => {
   });
 
   it("agrees with the read hooks that hold their path as a literal", () => {
-    expect(source("../hooks/use-channels.ts")).toContain(`"${channelsPath()}"`);
+    expect(source("../hooks/use-channels.ts")).toContain("channelsPath()");
     expect(source("../hooks/use-consent-inbox.ts")).toContain(
       `"${CHANNEL_CONSENT_PATH}"`
     );

@@ -34,28 +34,23 @@ function reachable(ontologies) {
       id: idToken(o && o.id),
       name: sanitizeName(o && o.name),
       level: LEVELS[o && o.level],
-      workspaceId: idToken(o && o.workspaceId),
     }))
     .filter((o) => o.id && o.name && o.level);
 }
 
 // One ontology's line: what it is called, what this session may do with it, and
-// the EXACT call. ⚠ The `workspace` clause is printed only when the id is known
-// — `dopl_ontology` takes `workspace=` on every op (INVARIANTS §10), and a call
-// shape with a blank argument in it is a call the agent cannot make.
+// the EXACT call. No `workspace` argument: `dopl_ontology` refuses it (strictInput);
+// the cluster id resolves its own container.
 // ⚠ `cluster "<id>"` IS THE ARGUMENT NAME, NOT THE READER'S WORD. The 2026-09-11
 // vocabulary ruling (INVARIANTS §4A) respells every string a person or an agent
 // READS — but this one is a CALL SHAPE, and `dopl_ontology`'s parameter is
 // `cluster`. Respelling it hands the agent a call it cannot make.
 function ontologyLine(o) {
-  const at = o.workspaceId
-    ? `cluster "${o.id}", workspace "${o.workspaceId}"`
-    : `cluster "${o.id}"`;
   const verb =
     o.level === 'EDIT'
       ? 'you may also write to it with the write ops.'
       : 'READ ONLY — a write to it is refused, and that refusal is the fence working.';
-  return `- "${o.name}" (${o.level}) — read it with mcp__dopl__dopl_ontology op "map", ${at}; ${verb}`;
+  return `- "${o.name}" (${o.level}) — read it with mcp__dopl__dopl_ontology op "map", cluster "${o.id}"; ${verb}`;
 }
 
 /**

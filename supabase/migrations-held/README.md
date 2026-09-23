@@ -7,7 +7,7 @@ that directory. A held file therefore **cannot be applied by accident** — not 
 a push, not by the CI replay, not by a `db reset` on a laptop. The hold is
 enforced by the filesystem, not by a comment asking people to be careful.
 
-`migrations-held.test.ts` pins the three properties that make this safe:
+`migrations-held.test.ts` pins the four properties that make this safe:
 
 1. **No held file is also in `supabase/migrations/`.** A file in both places is
    not held at all; it is applied with a note beside it saying otherwise.
@@ -19,6 +19,9 @@ enforced by the filesystem, not by a comment asking people to be careful.
    count: `--` lines *and* string literals are stripped before matching, because
    these headers quote each other's versions constantly and a `COMMENT ON …
    IS '… dropped in 20260923120000'` is a reference, not a dependency.
+4. **A held file is order-proof.** Every `ALTER TABLE` in it is `IF EXISTS`, and
+   a table an applied file renames after the held version is named under both
+   names — the held file replays before that rename.
 
 ## ⚠ A held file may sort BEFORE applied ones — releasing it is OUT OF ORDER
 
@@ -31,13 +34,15 @@ and reconciled by migration NAME (see `docs/RELEASE-MCP-V2-2026-09-02.md` §0).
 Releasing a held file means applying it per-file like every other, at which
 point its filename version is not consulted. What the ordering *does* affect is
 the **local/CI replay**, where `db reset` applies in filename order: this file
-will replay before the two that follow it, which is correct, since neither
-depends on it (assertion 3 above is what proves that).
+replays before every applied file stamped after it, including `20261019`'s
+`agent_templates` → `agent_identities` rename. That works because the file is
+order-proof (assertion 4): it drops `home_scoped` from both table names with
+`IF EXISTS`, and `20261019` touches `home_scoped` only behind an existence guard.
 
 Do **not** fix this by re-stamping the file to a newer version. The stamp is
-when it was written, the two files after it do not depend on it (assertion 3
-above is what proves that), and re-stamping to dodge a flag is how a history
-stops matching the order things actually ran in.
+when it was written, no applied file depends on it (assertion 3), and
+re-stamping to dodge a flag is how a history stops matching the order things
+actually ran in.
 
 ## Releasing a held file
 

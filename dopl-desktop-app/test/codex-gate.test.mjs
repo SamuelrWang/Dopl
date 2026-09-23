@@ -305,11 +305,9 @@ test("…and it rewrites NOTHING it is not entitled to rewrite", () => {
   assert.ok(s.ownPostIds.has("agent-abcd1234-1"), "the first STAMPED post is #1");
 });
 
-test("Axis B declares a real enforcement point and an UNVERIFIED op scope", () => {
+test("Axis B declares a real enforcement point and a MEASURED op scope", () => {
   assert.equal(capability.axisBEnforcement(D), "held-callback");
-  // ⚠ `capability.axisBOpScoped` reads anything but `true` as NOT op-scoped — the fail-closed
-  // direction, and the one that is true today (§5 item C1). Declaring `true` would assume the
-  // answer to the item that changes step 7's design rather than one field.
+  // `capability.axisBOpScoped` reads anything but `true` as NOT op-scoped (fail-closed).
   assert.equal(D.axisB.opScoped, true, "measured 2026-09-22 (CXP-3A): op + args reach the gate");
   assert.equal(capability.axisBOpScoped(D), true);
   assert.equal(capability.inputRewrite(D), "hook-updatedInput");

@@ -8,8 +8,7 @@
 // than at the moment a lint failed (F-226). Same precedent as `_auth-hold-harness.mjs` and
 // `_session-boot-harness.mjs`: the extraction machinery is shared, the cases are split by subject.
 //
-// ⚠ NOT A `*.test.mjs` NAME ON PURPOSE — the runner collects `test/**/*.mjs`, and a leading
-// underscore is this tree's convention for a harness that is imported and never collected.
+// Not a `*.test.mjs` name: the runner collects `test/**/*.test.mjs` only.
 //
 // Tests for the RESUME machinery (main/session-park.js) — P1: the in-place resume of a session
 // whose SDK query was torn down at park, plus startResume's check-then-act guard.

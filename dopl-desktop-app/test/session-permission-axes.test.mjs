@@ -33,7 +33,7 @@ import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { createRequire } from "node:module";
 import { createHash } from "node:crypto";
-import { fnOf } from "./helpers/source-probe.mjs";
+import { fnOf, between } from "./helpers/source-probe.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
@@ -192,7 +192,7 @@ test("INVARIANT (2): AXIS B can NEVER auto-approve a work tool, auto_both includ
 
 test("INVARIANT: the channel branch returns BEFORE Axis A is consulted (source pin)", () => {
   const src = readFileSync(M("session-profiles.js"), "utf8");
-  const fn = src.slice(src.indexOf("function grantDecision(args) {"), src.indexOf("// ─── END SESSION-PROFILE TABLE"));
+  const fn = between(src, "function grantDecision(args) {", "// ─── END SESSION-PROFILE TABLE", "grantDecision");
   const channelBranch = fn.indexOf("isChannelTool(a.toolName)");
   // ⚠ AXIS A IS ASKED OF THE RUNTIME SINCE 2026-08-31 (`rt.axisAAllows`) — the modes and the lists it resolves against are one runtime's vocabulary. The ORDER pinned here is untouched, and so is the invariant under it.
   const axisA = fn.indexOf("rt.axisAAllows(a.toolMode");

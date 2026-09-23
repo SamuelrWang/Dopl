@@ -25,6 +25,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { createRequire } from "node:module";
+import { codeOf, fnOf } from "./helpers/source-probe.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const M = (p) => readFileSync(join(HERE, "..", "main", p), "utf8");
@@ -278,17 +279,17 @@ test("targeting.js is STILL slice-able: nothing the truth tables evaluate has a 
   // "the FILE has no imports", it was "the SLICED REGIONS reach for nothing a bare
   // `new Function` scope lacks", so that is what is asserted, plus the bound that keeps the
   // first sentence true: named requires, and none of them reachable from classify.
-  const requires = [...SRC.matchAll(/require\('([^']+)'\)/g)].map((x) => x[1]);
+  const requires = [...codeOf(SRC).matchAll(/require\('([^']+)'\)/g)].map((x) => x[1]);
   assert.deepEqual(requires, ["./targeting-window", "./legacy-threads"], "the two §2 splits");
   // …and the registry's own file is slice-able for the same reason: it requires NOTHING.
-  assert.deepEqual([...LEGACY_SRC.matchAll(/require\('([^']+)'\)/g)].map((x) => x[1]), []);
-  const classifyBody = SRC.slice(SRC.indexOf("function classify("), SRC.indexOf("function firstClassTaskId("));
-  const metaStrBody = SRC.slice(SRC.indexOf("function metaStr("), SRC.indexOf("// ── Targeting classification"));
+  assert.deepEqual([...codeOf(LEGACY_SRC).matchAll(/require\('([^']+)'\)/g)].map((x) => x[1]), []);
+  const classifyBody = codeOf(fnOf(SRC, "classify"));
+  const metaStrBody = codeOf(fnOf(SRC, "metaStr"));
   // The block is evaluated in a BARE `new Function` scope by five harnesses, so
   // it may reach for nothing a plain scope does not have — the whole reason the
   // store is injected instead of constructed here.
   for (const forbidden of [/require\(/, /\bmodule\./, /\bprocess\./, /\b__dirname\b/, /\bwin\./]) {
-    assert.equal(forbidden.test(LEGACY), false, `LEGACY-THREADS reaches for ${forbidden}`);
+    assert.equal(forbidden.test(codeOf(LEGACY)), false, `LEGACY-THREADS reaches for ${forbidden}`);
     assert.equal(forbidden.test(classifyBody), false, `classify reaches for ${forbidden}`);
     assert.equal(forbidden.test(metaStrBody), false, `metaStr reaches for ${forbidden}`);
   }

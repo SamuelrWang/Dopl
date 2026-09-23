@@ -47,6 +47,7 @@ import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
+import { fnOf } from "./helpers/source-probe.mjs";
 
 const require = createRequire(import.meta.url);
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -105,8 +106,7 @@ function gate(session) {
   // ⚠ `autoInbound` IS SLICED WITH IT. `enqueue` calls it to decide hold-vs-dispatch, so a slice
   // that started at `enqueue` would evaluate to a ReferenceError — and stubbing it would test a
   // hold rule this file does not ship.
-  const body = GATE.slice(GATE.indexOf("function autoInbound(s) {"), GATE.indexOf("// ⚠ THE SURFACING HALF IS DELETED"))
-    + GATE.slice(GATE.indexOf("function enqueue(s, a) {"), GATE.indexOf("// ⚠ FOUR MORE WENT IN THE SAME SWEEP"));
+  const body = ["autoInbound", "enqueue", "feedInbound"].map((n) => fnOf(GATE, n)).join("\n");
   const queued = [];
   const dispatched = [];
   const sessions = new Map([["k", session]]);

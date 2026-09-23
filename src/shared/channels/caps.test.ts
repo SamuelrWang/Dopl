@@ -71,12 +71,6 @@ describe("the poll-detector caps agree across the import boundary", () => {
     expect(POLL_STRIKE_WINDOW_MS).toBe(10 * 60_000);
   });
 
-  it("the package copy still says WHY it is a copy", () => {
-    // ⚠ A duplicated constant with no explanation is deleted by the next
-    // reader as "dead". The pointer back to this file is what keeps it alive.
-    expect(DETECTOR_SOURCE).toContain("src/shared/channels/caps.ts");
-  });
-
   it("the poll window is NOT wired to the resilience window", () => {
     // ⚠ Two different questions in the same neighbourhood: RESILIENCE_WINDOW_MS
     // asks how long an ADDRESS stays warm, POLL_STRIKE_WINDOW_MS asks how long

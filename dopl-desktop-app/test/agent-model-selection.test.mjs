@@ -24,6 +24,7 @@ import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { prefs, CH_A } from "./_channel-prefs-block.mjs";
+import { fnOf } from "./helpers/source-probe.mjs";
 
 const require = createRequire(import.meta.url);
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -166,11 +167,8 @@ test("LAUNCH: an unknown stored model degrades to the PRODUCT FALLBACK, never to
 /** `setModelByTask`, sliced from the shipped op and driven against a fake registry + query. */
 function live({ query, settled = false, runtimeId = "claude" } = {}) {
   const src = read("session-reopen.js");
-  const resolver = src.slice(src.indexOf("function resolveSession("), src.indexOf("// PURE READ —"));
-  const body = resolver + src.slice(
-    src.indexOf("async function setModelByTask("),
-    src.indexOf("// ── THE DIRECT 1:1 LANE")
-  );
+  // fnOf starts at `function`, so the `async` modifier is restored here.
+  const body = fnOf(src, "resolveSession") + "\nasync " + fnOf(src, "setModelByTask");
   const s = { key: "c:t:a1b2c3d4", agentId: "a1b2c3d4", settled, model: "", query, runtimeId };
   const sessions = new Map([[s.key, s]]);
   // ⚠ `runtimeRegistry` / `runtimeCopy` JOINED THE INJECTED SET ON 2026-09-21 (U10) AND ARE REAL.
@@ -273,7 +271,7 @@ test("LIVE: the SDK really supports this — it is a switch, not a deferral", ()
 test("REPORT: the summary reports the SDK's own model over the operator's pick", () => {
   const SUMMARY = read("session-summary.js");
   assert.match(SUMMARY, /model: \(s && s\.liveModel\) \|\| modelPick\(s\),/);
-  const pick = SUMMARY.slice(SUMMARY.indexOf("function modelPick(s) {"), SUMMARY.indexOf("/** One LIVE session"));
+  const pick = fnOf(SUMMARY, "modelPick");
   assert.match(pick, /return pickOf\(s && s\.model\) \|\| null;/, "the ONE spelling of 'no pick' (RC-15)");
   const { pickOf } = require(join(MAIN, "runtime", "selection-vocabulary.js"));
   for (const none of ["default", " default ", "", "  ", null, undefined, 7]) {

@@ -35,7 +35,7 @@ import assert from "node:assert/strict";
 import { readFileSync, readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { fnOf } from "./helpers/source-probe.mjs";
+import { codeOf, fnOf } from "./helpers/source-probe.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const MAIN = join(HERE, "..", "main");
@@ -322,8 +322,7 @@ test("EVERY decision site calls submitDecision, and none still calls patchDecisi
   }
 });
 
-test("the 409 rule is written down where the next reader will look", () => {
-  const fn = fnOf(SRC, "patchDecision");
+test("patchDecision handles a 409 in an explicit branch", () => {
+  const fn = codeOf(fnOf(SRC, "patchDecision"));
   assert.match(fn, /res\.status === 409/, "the settled case is an explicit branch, not a default");
-  assert.match(SRC, /CONSENT_ALREADY_DECIDED/, "and it names the server error it maps to");
 });

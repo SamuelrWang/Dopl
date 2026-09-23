@@ -17,7 +17,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { dirname, join } from "node:path";
-import { between, fnOf } from "./helpers/source-probe.mjs";
+import { between, codeOf, fnOf } from "./helpers/source-probe.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const M = (p) => readFileSync(join(HERE, "..", "main", p), "utf8");
@@ -242,19 +242,19 @@ test("sync-watch REJECTS a non-UUID instead of resolving {ok:false}", () => {
 
 // ── the 401 repair may not report a sign-out it did not observe ──────────────
 
-test("'signed-out' is emitted only after a retry with a FRESH token still 401s", () => {
+test("a sign-out is recorded only after a retry with a FRESH token still 401s", () => {
   // auth-tokens classifies 5xx/429/timeouts as TRANSIENT: forceRefresh() answers null
   // while KEEPING the session (it just emitted 'signed-in'). Emitting off the original
   // 401 flipped the renderer to the login screen and tore the sync feed down on a
   // network blip, then flapped back on the next successful refresh.
-  const fn = fnOf(BRIDGE, "performApiRequest");
-  const repair = fn.slice(fn.indexOf("shouldRepairAuth"));
-  const emit = repair.indexOf("emitAuthState('signed-out')");
-  const retry = repair.indexOf("sendApiRequest(href, opts, fresh.access_token)");
-  assert.ok(retry !== -1 && emit !== -1, "the repair must still retry once and be able to emit");
-  assert.ok(retry < emit, "the emit must come after the retry, inside the fresh-token branch");
-  const guard = repair.slice(repair.indexOf("if (fresh && fresh.access_token)"), emit);
-  assert.ok(guard.length > 0, "the emit must sit INSIDE the `fresh` branch");
+  const fn = codeOf(fnOf(BRIDGE, "performApiRequest"));
+  const repair = between(fn, "shouldRepairAuth", "noteSessionRejected(", "401 repair");
+  const branch = repair.indexOf("if (fresh && fresh.access_token) {");
+  const retry = repair.indexOf("res = await sendApiRequest(href, opts, fresh.access_token);");
+  assert.ok(branch !== -1 && retry > branch, "the repair must still retry once, inside the fresh-token branch");
+  assert.match(repair.slice(retry), /^[^}]*if \(res\.status === 401\)\s*authTokens\.$/,
+    "the rejection is recorded only when the fresh-token retry still 401s");
+  assert.ok(!/emitAuthState\(/.test(fn), "nothing emits off the original 401");
 });
 
 // ── the SPA auth entry points kick the same services the deep link does ──────

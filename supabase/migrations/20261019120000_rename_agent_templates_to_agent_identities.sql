@@ -3,9 +3,8 @@
 -- ═══════════════════════════════════════════════════════════════════════════════════════════
 --
 -- ⚠ WRITTEN, NOT APPLIED — §12's standing gate. Apply BY NAME
--- (`rename_agent_templates_to_agent_identities`), after `channel_launch_directives_no_model`
--- (`20261018120000`), which is the highest filename version at write time — §7 restates the
--- refusal CHECK that file wrote, and applied BEFORE it this file would lose `no-model`.
+-- (`rename_agent_templates_to_agent_identities`). §7 restates the whole refusal CHECK and adds
+-- `no-model`; no separate migration carries that word.
 --
 -- ── WHAT SAMUEL ASKED FOR ───────────────────────────────────────────────────────────────────
 --
@@ -78,12 +77,6 @@ ALTER TABLE public.agent_identity_knowledge_bases RENAME COLUMN template_id TO i
 ALTER TABLE public.channel_launch_directives RENAME COLUMN template_id TO identity_id;
 ALTER TABLE public.channel_launch_directives RENAME COLUMN template_name TO identity_name;
 ALTER TABLE public.channel_sessions RENAME COLUMN template_name TO identity_name;
-
--- Restated, not changed: RLS was on before the rename and a rename cannot turn it off. Said
--- again under the NEW names so the migration-replay gates (`check-rls-pair-gate.ts`) read the
--- table's own statement rather than inferring it through a rename.
-ALTER TABLE public.agent_identities               ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.agent_identity_knowledge_bases ENABLE ROW LEVEL SECURITY;
 
 -- ===========================================================================
 -- 2. Constraints (an index-backed constraint's rename renames its index too)
@@ -427,7 +420,8 @@ CREATE TRIGGER resource_grants_cleanup AFTER DELETE ON public.agent_identities
 -- ===========================================================================
 -- 7. The refusal word: 'no-template' → 'no-identity'
 -- ===========================================================================
--- Restated WHOLE from `20261018120000_channel_launch_directives_no_model.sql`, one word moved.
+-- Restated WHOLE from `20260910120000` §3A: `no-template` becomes `no-identity`, and `no-model`
+-- is added (a launch naming a model the machine's live roster does not offer is refused).
 
 ALTER TABLE public.channel_launch_directives
   DROP CONSTRAINT IF EXISTS channel_launch_directives_refusal_reason_check;
@@ -448,8 +442,17 @@ ALTER TABLE public.channel_launch_directives
 -- 8. Column comments, in the new words
 -- ===========================================================================
 
-COMMENT ON COLUMN public.agent_identities.home_scoped IS
-  'TRUE = this identity belongs to the /home "Personal" shelf: created from the home surface, private to its creator, living in the creator''s default standard workspace. FALSE = an ordinary workspace identity. The workspace Identities page excludes TRUE rows; the /home Personal list shows ONLY TRUE rows. Enforced in the service (resolveIdentityHomeScope), not by trigger.';
+-- Guarded: the held drop (migrations-held/20260923120000) sorts before this file, so on a
+-- replay after its release the column is already gone.
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.columns
+              WHERE table_schema = 'public' AND table_name = 'agent_identities'
+                AND column_name = 'home_scoped') THEN
+    COMMENT ON COLUMN public.agent_identities.home_scoped IS
+      'Unused: read and written by nothing. The personal shelf is the caller''s kind=personal container. Dropped by migrations-held/20260923120000_drop_home_scoped.sql.';
+  END IF;
+END $$;
 
 COMMENT ON COLUMN public.channel_sessions.identity_name IS
   'OPERATOR-ONLY. Name of the agent identity this session (agent) was launched from, SNAPSHOTTED AT SPAWN — deliberately not an FK, so a session keeps reporting what it RAN AS after the identity is renamed or deleted. NULL = launched blank, or a desktop older than the field.';
@@ -469,6 +472,8 @@ COMMENT ON COLUMN public.channel_launch_directives.target_name IS
 DO $$
 DECLARE
   n INT;
+  def TEXT;
+  word TEXT;
 BEGIN
   IF to_regclass('public.agent_templates') IS NOT NULL
      OR to_regclass('public.agent_template_knowledge_bases') IS NOT NULL THEN
@@ -542,15 +547,21 @@ BEGIN
     RAISE EXCEPTION 'ABORT: authenticated gained DML on an identity table — the service is the fence';
   END IF;
 
-  SELECT count(*) INTO n FROM pg_constraint
+  -- Every word, not only the two that moved: re-creating a CHECK whole is how a word is dropped
+  -- by accident. The `%template%` constraint sweep above keeps `template-approval` out.
+  SELECT pg_get_constraintdef(oid) INTO def FROM pg_constraint
    WHERE conrelid = 'public.channel_launch_directives'::regclass
      AND conname = 'channel_launch_directives_refusal_reason_check'
-     AND convalidated
-     AND pg_get_constraintdef(oid) LIKE '%''no-identity''%'
-     AND pg_get_constraintdef(oid) LIKE '%''no-model''%';
-  IF n <> 1 THEN
-    RAISE EXCEPTION 'ABORT: the refusal CHECK does not admit no-identity AND no-model';
+     AND convalidated;
+  IF def IS NULL THEN
+    RAISE EXCEPTION 'ABORT: the refusal CHECK is missing or NOT VALIDATED';
   END IF;
+  FOREACH word IN ARRAY ARRAY['cap', 'busy', 'no-sdk', 'auth-hold', 'no-bridge', 'no-counterparty',
+                              'no-identity', 'no-session', 'bad-name', 'no-chain', 'no-model'] LOOP
+    IF position(quote_literal(word) IN def) = 0 THEN
+      RAISE EXCEPTION 'ABORT: the refusal CHECK lost %', word;
+    END IF;
+  END LOOP;
 
   IF has_function_privilege('anon', 'public.can_current_user_read_agent_identity(uuid)', 'EXECUTE') THEN
     RAISE EXCEPTION 'ABORT: anon can execute can_current_user_read_agent_identity';

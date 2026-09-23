@@ -37,6 +37,7 @@ import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
+import { fnOf } from "./helpers/source-probe.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
@@ -276,8 +277,7 @@ test("LEAK: a torn-down query closes the window outright — it owes no results"
 // state, so the second call reads the activity the first call produced.
 function composer() {
   const src = readFileSync(join(MAIN, "session-reopen.js"), "utf8");
-  const resolver = src.slice(src.indexOf("function resolveSession("), src.indexOf("// PURE READ —"));
-  const body = resolver + src.slice(src.indexOf("function messageByTask("), src.indexOf("// ── C-8: THE SESSIONS A QUIT WOULD ORPHAN"));
+  const body = fnOf(src, "resolveSession") + "\n" + fnOf(src, "messageByTask");
   const { loadReducer } = require("./_reducer-block.mjs");
   const RED = loadReducer();
   const s = {

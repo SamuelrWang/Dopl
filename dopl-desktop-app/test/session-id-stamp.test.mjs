@@ -27,7 +27,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { fnOf, orderOf } from "./helpers/source-probe.mjs";
+import { fnOf, orderOf, codeOf } from "./helpers/source-probe.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const M = (p) => readFileSync(join(HERE, "..", "main", p), "utf8");
@@ -294,7 +294,7 @@ test("the launch spec stamps the assembled mcpServers with store.slotKey(s)", ()
   );
   // …and the two modules are really joined: the import and the export.
   assert.match(SPEC, /^const loader = require\('\.\/loader'\);$/m);
-  assert.match(LOADER, /^\s*withSessionStamp, \/\/ F2/m, "exported from the one platform-facing module");
+  assert.match(codeOf(LOADER), /^module\.exports = \{[^}]*\bwithSessionStamp,/m, "exported from the one platform-facing module");
 });
 
 test("the per-session stamp NEVER reaches the shared, on-disk spawn config", () => {

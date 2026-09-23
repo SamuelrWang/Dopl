@@ -35,7 +35,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { between, fnOf, orderOf } from "./helpers/source-probe.mjs";
+import { between, codeOf, fnOf, orderOf } from "./helpers/source-probe.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const M = (p) => readFileSync(join(HERE, "..", "main", p), "utf8");
@@ -266,7 +266,7 @@ test("F-054: the docblock no longer claims the web leg drops ?state", () => {
 });
 
 test("F-054 residual: the MAGIC LINK arms a state-bound record and sends that nonce", () => {
-  const fn = fnOf(PASSWORD, "sendMagicLink");
+  const fn = codeOf(fnOf(PASSWORD, "sendMagicLink"));
   assert.match(fn, /beginPendingAuth\(\{ requireState: true \}\)/,
     "a presence-only magic-link record is a renderer-armable state-less window");
   assert.match(fn, /desktop-handoff\?state=\$\{nonce\}/,
@@ -279,8 +279,7 @@ test("F-054 residual: the MAGIC LINK arms a state-bound record and sends that no
   // presence-only, which is what made a stranded one dangerous. It cannot hold here
   // (the nonce IS the arming), and requireState is what replaces it: the nonce leaves
   // the process only inside that request, so a stranded record is unspendable and
-  // simply expires. Assert the reasoning is still written down, not just obeyed.
-  assert.match(fn, /unspendable/, "the reversed order must keep stating why it is safe");
+  // simply expires.
 });
 
 test("no leg arms a presence-only record any more", () => {

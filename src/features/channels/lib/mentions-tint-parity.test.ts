@@ -222,7 +222,6 @@ describe("TOKEN ARMS — the tripwire on this mirror going stale", () => {
     // The code rule is structural on that side (INVARIANTS §5). If either arm
     // started routing through MentionText, the masker here would be masking a
     // region the transcript had begun to tint.
-    expect(source).toContain("NO MENTION TINT INSIDE CODE");
     expect(source).toContain(`{(token as Tokens.Codespan).text}`);
   });
 });

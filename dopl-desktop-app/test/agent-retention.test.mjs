@@ -25,16 +25,14 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
+import { sentinelBlock } from "./helpers/source-probe.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const MAIN = join(HERE, "..", "main");
 const read = (f) => readFileSync(join(MAIN, f), "utf8");
 
 const HISTORY_SRC = read("agent-history.js");
-const BLOCK = HISTORY_SRC.slice(
-  HISTORY_SRC.indexOf("// ─── BEGIN AGENT-HISTORY-PURE"),
-  HISTORY_SRC.indexOf("// ─── END AGENT-HISTORY-PURE")
-);
+const BLOCK = sentinelBlock(HISTORY_SRC, "AGENT-HISTORY-PURE");
 
 // The purity assertion IS a test: this block decides what reaches the disk, and a require here
 // would end the extraction that lets these cases drive the real code.

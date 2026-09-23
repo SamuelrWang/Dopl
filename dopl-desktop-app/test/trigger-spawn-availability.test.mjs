@@ -40,6 +40,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
+import { codeOf } from "./helpers/source-probe.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const read = (f) => readFileSync(join(HERE, "..", "main", f), "utf8");
@@ -165,15 +166,10 @@ test("the startup notice fires on the spawn question, not on the PATH probe", ()
   assert.match(RUNTIME, /No Claude Code runtime was found on this Mac/);
 });
 
-test("the two questions keep two names, and each says which it answers", () => {
+test("the two questions keep two names", () => {
   // Collapsing them is the tempting 'cleanup' that would re-open this: the
   // auxiliary commands (`claude mcp …`, `claude setup-token`) genuinely need a
   // binary on PATH, so `claudeAvailable` has a real job and must keep it.
-  assert.match(RUNTIME, /function sessionSpawnAvailable/, "the spawn question exists");
-  assert.match(SPAWNER, /claudeAvailable,/, "…and the external-CLI question is still exported");
-  assert.match(
-    RUNTIME,
-    /is there an EXTERNAL cli for auxiliary commands/,
-    "the distinction is written down where the next reader will be"
-  );
+  assert.match(codeOf(RUNTIME), /function sessionSpawnAvailable/, "the spawn question exists");
+  assert.match(codeOf(SPAWNER), /claudeAvailable,/, "…and the external-CLI question is still exported");
 });

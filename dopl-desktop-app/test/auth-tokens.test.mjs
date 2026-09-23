@@ -30,7 +30,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { between, fnOf } from "./helpers/source-probe.mjs";
+import { between, codeOf, fnOf } from "./helpers/source-probe.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const M = (p) => readFileSync(join(HERE, "..", "main", p), "utf8");
@@ -375,7 +375,7 @@ test("the cookie transports repair a 401 exactly once — from ONE shared implem
   // Phase-2 repair, listener-io.js — the transport under listWorkspaces, the
   // `/await` long-polls, channel-post, roster, threads and consent — did not, and
   // the whole subsystem died on a stale cookie jar.
-  const fn = fnOf(REPAIR, "fetchWithAuthRepair");
+  const fn = codeOf(fnOf(REPAIR, "fetchWithAuthRepair"));
   assert.match(fn, /shouldRepairAuth\(res\.status, false\)/);
   assert.match(fn, /forceRefresh\(\)/);
   assert.match(fn, /writeSessionCookies\(fresh\)/, "the retry must carry a DIFFERENT credential");
@@ -384,7 +384,9 @@ test("the cookie transports repair a 401 exactly once — from ONE shared implem
     2,
     "exactly one original attempt and one retry — never a loop"
   );
-  assert.match(fn, /emitAuthState\('signed-out'\)/, "a surviving 401 is surfaced, not swallowed");
+  assert.match(fn, /if \(retried\.status === 401\) \{[\s\S]*authTokens\.noteSessionRejected\([^;]*\);\s*\}\s*return retried;/,
+    "a surviving 401 is surfaced, not swallowed");
+  assert.match(fnOf(TOKENS, "noteSessionRejected"), /emitAuthState\('signed-out'\)/, "…as a sign-out");
   // …and BOTH transports actually route through it. This is the regression guard:
   // a new bare `fetch` seam that forgets the repair is the bug class, not a nit.
   for (const [name, src] of [["api.js", API], ["listener-io.js", IO]]) {
@@ -395,7 +397,7 @@ test("the cookie transports repair a 401 exactly once — from ONE shared implem
       `${name}'s apiFetch does not go through the shared repair`
     );
     assert.ok(
-      !/shouldRepairAuth|forceRefresh/.test(src),
+      !/shouldRepairAuth|forceRefresh/.test(codeOf(src)),
       `${name} has grown its own copy of the repair again`
     );
   }

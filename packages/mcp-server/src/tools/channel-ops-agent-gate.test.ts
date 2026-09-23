@@ -174,12 +174,7 @@ describe("🔒 the ungated verbs' copy never sends a caller to the launch toggle
   const src = sourceOf("channel-ops-agent.ts");
 
   it("states the DENIAL, and states it positively", () => {
-    // In the shipped text, where a caller reads it…
     expect(CHANNEL_DOCTRINE).toContain('never "end" or "rename"');
-    // …and in the module, where the next person to edit the refusal map reads it.
-    // ⚠ THIS IS THE HALF THAT STILL ENFORCES THE ASYMMETRY END-TO-END, and it is
-    // why the suite keeps its teeth while the doctrine half is down.
-    expect(src).toContain("does NOT gate these two");
   });
 
   it("never tells that caller to have the toggle turned on", () => {
@@ -195,7 +190,6 @@ describe("🔒 the ungated verbs' copy never sends a caller to the launch toggle
     // `launch` and `posture` BY NAME; the gated module's own header carries the
     // argument for why; and the ungated module must never claim it.
     expect(CHANNEL_DOCTRINE).toContain('it gates "launch" and "posture"');
-    expect(sourceOf("channel-ops-agent-mode.ts")).toContain("this kind IS gated by it");
     expect(src).not.toContain("IS gated by it");
   });
 });

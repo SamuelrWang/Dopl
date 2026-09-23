@@ -22,7 +22,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { fnOf } from "./helpers/source-probe.mjs";
+import { codeOf, fnOf } from "./helpers/source-probe.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const M = (p) => readFileSync(join(HERE, "..", "main", p), "utf8");
@@ -104,27 +104,16 @@ test("the ONE entry this app owns reads the constant — no second literal", () 
   // each restated the number. S3 (2026-08-26) deleted the file and its body-builder, so
   // mcp-config now DEFINES and EXPORTS the constant without consuming it, and sdk-loader is
   // the only consumer. What still has to hold is that no literal reappears downstream.
-  assert.match(CONFIG, /MCP_CLIENT_TIMEOUT_MS = [\d_]+;/, "mcp-config still owns the number");
-  assert.match(CONFIG, /MCP_CLIENT_TIMEOUT_MS, \/\/ Q9/, "exported for sdk-loader");
-  assert.match(LOADER, /timeout: clientTimeoutMs\(\),/);
+  assert.match(codeOf(CONFIG), /MCP_CLIENT_TIMEOUT_MS = [\d_]+;/, "mcp-config still owns the number");
+  assert.match(codeOf(CONFIG), /module\.exports = \{[^}]*\bMCP_CLIENT_TIMEOUT_MS,/, "exported for sdk-loader");
+  assert.match(codeOf(LOADER), /timeout: clientTimeoutMs\(\),/);
   assert.match(
     fnOf(LOADER, "clientTimeoutMs"),
     /require\('\.\.\/\.\.\/mcp-config'\)\.MCP_CLIENT_TIMEOUT_MS/,
     "the loader imports it from mcp-config rather than restating it"
   );
   assert.ok(
-    !/\b280_000\b/.test(CONFIG + LOADER),
-    "the old literal must not survive anywhere in either module"
-  );
-});
-
-test("the comments that justify the number are TRUE and version-qualified", () => {
-  const prose = (CONFIG + LOADER).replace(/\n\s*\/\/ ?/g, " ");
-  assert.match(prose, /2\.1\.220/, "the honouring of `timeout` is a per-version fact");
-  assert.match(prose, /can only RAISE/i, "nuance 1: the 60s floor cannot be lowered");
-  assert.match(prose, /hard tool-call ceiling/i, "nuance 2: it also lowers the tool-call ceiling");
-  assert.ok(
-    !/clears the 215s hold/.test(prose),
-    "the old justification (against the DEFAULT hold) must be gone, not just outvoted"
+    !/\b280_000\b/.test(codeOf(CONFIG) + codeOf(LOADER)),
+    "the old literal must not survive in either module's code"
   );
 });

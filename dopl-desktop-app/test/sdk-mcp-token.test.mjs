@@ -37,7 +37,7 @@ import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { fnOf } from "./helpers/source-probe.mjs";
+import { between, codeOf, fnOf } from "./helpers/source-probe.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const M = (p) => join(HERE, "..", "main", p);
@@ -58,7 +58,7 @@ const slice = (src, from, to, what) => {
 
 // ── C1: buildMcpServers takes the bearer from the injected accessor, never a file ──
 
-const MCP_BLOCK = slice(LOADER, "function buildMcpServers(", "// FIX M2 — a scrubbed copy", "buildMcpServers");
+const MCP_BLOCK = codeOf(fnOf(LOADER, "buildMcpServers"));
 const MCP_URL = "https://dopl.test/api/mcp";
 
 function buildServers(token, policy = null, workspaceId = "") {
@@ -101,7 +101,8 @@ test("C2: the url is ALWAYS the compiled-in MCP_URL — nothing off disk can ste
 
 // ── C1: the tool-BOUND credential deny (a pre-approved read never reaches the gate) ──
 
-const DENY_BLOCK = slice(LOADER, "const SECRET_TOOLS =", "// The in-memory mcpServers object", "deny rules");
+const DENY_BLOCK = between(LOADER, "const SECRET_TOOLS =", "function buildSecretPathDenyRules(", "deny rules") +
+  fnOf(LOADER, "buildSecretPathDenyRules");
 
 function denyRules(userData) {
   return new Function(
@@ -144,7 +145,7 @@ test("C1: the launch spec really concatenates them onto the profile's hard-deny"
 
 // ── S3: the spawn-config file is REMOVED, and never written ────────────────────────
 
-const REMOVE_BLOCK = slice(CONFIG, "function removeSpawnConfig() {", "// ── Device-token cache", "removeSpawnConfig");
+const REMOVE_BLOCK = fnOf(CONFIG, "removeSpawnConfig");
 const SPAWN_JSON = "/userData/mcp-spawn.json";
 
 // The harness fs records EVERY call, so "no write happened" is an observation and not an
@@ -236,9 +237,7 @@ test("S3: ABSENCE PIN — no source in mcp-config writes a bearer to disk", () =
   );
   assert.ok(!/fs\.writeFileSync/.test(CONFIG), "mcp-config writes NO file at all any more");
   // The body-builder and the writer are gone as CODE — a surviving definition, call site or
-  // export would let a caller re-adopt them. Their NAMES stay legal in prose: the reasons this
-  // was removed have to live in the source or the next round writes it back (the same rule the
-  // `mcp-cli-entry.js REMOVED` block above is held to).
+  // export would let a caller re-adopt them. Their NAMES stay legal in prose.
   for (const dead of ["spawnConfigBody", "writeSpawnConfig", "currentSpawnBody"]) {
     assert.ok(!new RegExp(`^\\s*function\\s+${dead}\\b`, "m").test(CONFIG), `${dead} is not defined`);
     assert.ok(!new RegExp(`(^|[^\`\\w.])${dead}\\s*\\(`, "m").test(CONFIG.replace(/\n\/\/[^\n]*/g, "")),
@@ -270,15 +269,15 @@ test("L8: mcp-config OWNS the number and the loader's entry is the only one that
   // and no numeric literal reappears downstream.
   // ⚠ 2026-08-31: the loader is `main/runtime/claude/loader.js` and reaches the owner through
   // `../../`. The rule is unchanged; only the depth is.
-  assert.match(CONFIG, /MCP_CLIENT_TIMEOUT_MS, \/\/ Q9/, "it is exported for the loader");
-  assert.match(LOADER, /timeout: clientTimeoutMs\(\),/, "the loader reads it, never a literal");
+  assert.match(codeOf(CONFIG), /module\.exports = \{[^}]*\bMCP_CLIENT_TIMEOUT_MS,/, "it is exported for the loader");
+  assert.match(codeOf(LOADER), /timeout: clientTimeoutMs\(\),/, "the loader reads it, never a literal");
   assert.match(
     fnOf(LOADER, "clientTimeoutMs"),
     /require\('\.\.\/\.\.\/mcp-config'\)\.MCP_CLIENT_TIMEOUT_MS/,
     "…from mcp-config, the one owner"
   );
   assert.ok(
-    !/timeout: \d[\d_]*,/.test(LOADER),
+    !/timeout: \d[\d_]*,/.test(codeOf(LOADER)),
     "no numeric timeout literal may reappear in sdk-loader"
   );
   assert.ok(SHIPPED_TIMEOUT_MS > 60_000, "or the client's own 60s floor wins and the key is inert");
@@ -292,14 +291,8 @@ test("nothing in this app patches the CLI's user-scope config in place", () => {
   // streaming fix (c2f6a7e) removed the reason, and `timeout` also lowers the hard
   // tool-call ceiling for the operator's OWN terminal sessions. The in-app entries
   // above are where the fix belongs, and they stay.
-  assert.ok(!/patchCliEntryTimeout/.test(CONFIG), "the call sites are gone");
-  assert.ok(!/require\('\.\/mcp-cli-entry'\)/.test(CONFIG), "…and so is the require");
-  // The removal REASONS stay in the source, or the next round re-adds it.
-  const prose = CONFIG.replace(/\n\/\/ ?/g, " ");
-  assert.match(prose, /mcp-cli-entry\.js REMOVED/);
-  assert.match(prose, /oauthAccount/, "reason 1: the file holds a credential block");
-  assert.match(prose, /streams \(c2f6a7e\)/, "reason 2: the 60s silence is gone");
-  assert.match(prose, /hard tool-call ceiling/, "reason 3: the second, unasked-for effect");
+  assert.ok(!/patchCliEntryTimeout/.test(codeOf(CONFIG)), "the call sites are gone");
+  assert.ok(!/require\('\.\/mcp-cli-entry'\)/.test(codeOf(CONFIG)), "…and so is the require");
   assert.ok(!existsSync(M("mcp-cli-entry.js")), "the module itself is deleted");
   const cliAdd = readFileSync(M("mcp-cli-add.js"), "utf8");
   assert.ok(

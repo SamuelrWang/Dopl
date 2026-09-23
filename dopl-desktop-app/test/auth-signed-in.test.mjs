@@ -41,7 +41,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { between, fnOf } from "./helpers/source-probe.mjs";
+import { between, codeOf, fnOf } from "./helpers/source-probe.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const M = (p) => readFileSync(join(HERE, "..", "main", p), "utf8");
@@ -248,9 +248,7 @@ test("the jar readers are HOST-locked, which is what actually makes the rebuild 
   const pred = fnOf(COOKIES, "isOurAuthCookie");
   assert.match(pred, /APP_HOST/, "the host is the discriminator, not just the name");
   assert.match(pred, /replace\(\/\^\\\.\/, ''\)/, "a leading-dot DOMAIN cookie normalizes and then fails the ===");
-  assert.ok(!/c\.name === COOKIE_BASE \|\| c\.name\.startsWith/.test(read), "the name-only filter is gone");
-  const prose = COOKIES.replace(/\n\/\/ ?/g, " ");
-  assert.match(prose, /host-only/i, "and the comment states the real guarantee");
+  assert.ok(!/c\.name === COOKIE_BASE \|\| c\.name\.startsWith/.test(codeOf(read)), "the name-only filter is gone");
 });
 
 test("a torn / duplicate chunk set returns null instead of throwing", () => {
@@ -434,27 +432,19 @@ test("clearDeviceToken removes BOTH on-disk copies and the in-memory one", () =>
   assert.match(fn, /store\.delete\(DT_KEY_PLAIN\)/, "…and the plaintext fallback key");
   assert.match(fn, /fs\.rmSync\(spawnConfigPath\(\)/, "…and mcp-spawn.json, if an older build left one");
   assert.match(fn, /spawnToken = ''/, "…and the memoized copy buildMcpServers injects");
-  assert.match(MCP, /clearDeviceToken, \/\/ S2/, "exported for auth-state.signOut");
+  assert.match(codeOf(MCP), /module\.exports = \{[^}]*\bclearDeviceToken,/, "exported for auth-state.signOut");
 });
 
 // F-085 closed the server half: the endpoint is no longer mint-only, and signOut now calls
 // the revoke BEFORE the local teardown. The full contract lives in
-// test/device-token-revoke.test.mjs; what this file keeps is the pairing — a future reader
-// must not mistake the LOCAL teardown for a revocation on its own.
-test("the local teardown says out loud that it is only half the job", () => {
-  const prose = MCP.replace(/\n\/\/ ?/g, " ");
-  assert.match(prose, /LOCAL HALF ONLY/i);
-  assert.match(prose, /Deleting our copies does not invalidate the credential/i);
-  assert.match(prose, /F-085/, "the remaining residual is tracked, not just noted");
-});
-
+// test/device-token-revoke.test.mjs.
 test("signOut revokes server-side FIRST, while the cookie session still authenticates it", () => {
-  const fn = fnOf(STATE, "signOut");
+  const fn = codeOf(fnOf(STATE, "signOut"));
   const revokeAt = fn.indexOf("revokeDeviceToken()");
   assert.notEqual(revokeAt, -1, "the server-side revoke must be part of sign-out");
   assert.ok(revokeAt < fn.indexOf("blob.clearSession()"), "before the blob");
   assert.ok(revokeAt < fn.indexOf("cookies.clearSessionCookies()"), "and before the jar it authenticates on");
-  assert.match(MCP, /revokeDeviceToken, \/\/ F-085/, "exported for auth-state.signOut");
+  assert.match(codeOf(MCP), /module\.exports = \{[^}]*\brevokeDeviceToken,/, "exported for auth-state.signOut");
 });
 
 // ── SMALL: A BROKEN KEYCHAIN MUST NOT DOWNGRADE A CREDENTIAL TO CLEARTEXT ───

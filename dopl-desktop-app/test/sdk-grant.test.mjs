@@ -15,6 +15,7 @@ import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { createRequire } from "node:module";
 import { createHash } from "node:crypto";
+import { codeOf, fnOf } from "./helpers/source-probe.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
@@ -231,10 +232,7 @@ test("grantDecision tolerates missing args and unknown profiles (fail closed to 
 // MCP_URL; the credential-path story itself is pinned in test/sdk-mcp-token.test.mjs.
 
 const LOADER = readFileSync(join(HERE, "..", "main", "runtime", "claude", "loader.js"), "utf8");
-const MCP_BLOCK = LOADER.slice(
-  LOADER.indexOf("function buildMcpServers("),
-  LOADER.indexOf("// FIX M2 — a scrubbed copy")
-);
+const MCP_BLOCK = codeOf(fnOf(LOADER, "buildMcpServers"));
 assert.ok(MCP_BLOCK.includes("return { dopl: server };"), "buildMcpServers slice missing/incomplete");
 
 const MCP_URL = "https://dopl.test/api/mcp";

@@ -284,45 +284,34 @@ export function withSharingSet(
 // ─── Knowledge-base access (the attach gate's predicate) ────────────────
 
 /**
- * `canSeeBase` MIRRORED, not imported — `@/features/knowledge` is another
- * feature and §1 forbids the import, so the rule is restated over rows this
- * feature reads for itself. Kept deliberately identical in shape to
- * `knowledge/server/service-shared.ts › canSeeBase` + `assertBaseVisible`:
- *   public + workspace mode  → any member
- *   public + teams mode      → creator, workspace admin, or a granted team
- *   private                  → creator only, and NEVER via a SHARED credential
- *                              (`isSharedCredential`, moved with `canSeeBase`
- *                              on 2026-08-27 — F-336)
- *
- * ⚠ IF THAT FILE'S RULE CHANGES, THIS ONE IS THE COPY THAT WILL NOT NOTICE.
- * The failure direction is over-permissive (attaching a KB the caller lost
- * access to), so the drift is worth a test rather than a comment alone —
- * `service-writes.test.ts › KB attach validation` pins each arm.
- *
- * ⚠ THAT FILENAME WAS `service.test.ts` UNTIL 2026-08-23 AND NO SUCH FILE HAS
- * EVER EXISTED (F-290, the F-280 class repeated). A reviewer checking whether
- * the tripwire was really written grepped a path that resolves to nothing and
- * would reasonably have concluded it was not. ⚠ NOTHING CHECKS THIS: the file
- * refs `scripts/check-doc-refs.mjs` resolves are the ones inside `docs/` — its
- * one pass over `src/` matches `F-NNN` ids only — so a `.test.ts` cited from a
- * SOURCE docblock is verified by no gate. Cite carefully; it is a hand-check.
+ * `canSeeBase` + `assertBaseVisible` MIRRORED over this feature's own rows (§1 forbids importing
+ * `@/features/knowledge`); the SQL twin is `dopl_knowledge_base_readable()`:
+ *   public                   → any member
+ *   private                  → creator, or a grant into a scope the caller is in (F-604);
+ *                              never via a SHARED credential (F-336)
+ *   teams mode (after above) → creator, workspace admin, or a granted team
+ * Over-permissive if it drifts; `service-writes.test.ts` and
+ * `service-knowledge-grant.test.ts` pin the arms.
  */
 export function canSeeBaseRow(
   ctx: AgentIdentityContext,
   base: KnowledgeBaseAccessRow,
   grantedTeamsByBase: Map<string, string[]>,
-  myTeamIds: Set<string>
+  myTeamIds: Set<string>,
+  granted: GrantedResourceIds
 ): boolean {
+  const mine = base.createdBy !== null && base.createdBy === ctx.userId;
   if (base.visibility === "private") {
     if (isSharedCredential(ctx)) return false;
-    return base.createdBy !== null && base.createdBy === ctx.userId;
+    if (mine) return true;
+    if (!granted.has(base.id)) return false;
   }
   if (base.accessMode !== "teams") return true;
-  if (base.createdBy !== null && base.createdBy === ctx.userId) return true;
+  if (mine) return true;
   if (isWorkspaceAdmin(ctx)) return true;
   if (isSharedCredential(ctx)) return false;
-  const granted = grantedTeamsByBase.get(base.id) ?? [];
-  return granted.some((teamId) => myTeamIds.has(teamId));
+  const teams = grantedTeamsByBase.get(base.id) ?? [];
+  return teams.some((teamId) => myTeamIds.has(teamId));
 }
 
 /**
@@ -344,9 +333,10 @@ export interface VisibleKnowledgeBase extends IdentityKnowledgeBaseRef {
  * error) and the read path (where it is simply omitted) — one predicate, two
  * consumers, so an attach can never permit what a read would hide.
  *
- * Fixed query count: at most three, regardless of how many bases. ⚠ **AND THE
- * CARD FACTS ADDED NONE** — `slug` and `description` ride the access row this
- * already reads for the predicate.
+ * Fixed query count regardless of how many bases: the access rows, two team
+ * reads, and `grantedResourceIds`' bounded fan-out (none when no base is
+ * grantable). ⚠ **THE CARD FACTS ADDED NONE** — `slug` and `description` ride
+ * the access row this already reads for the predicate.
  */
 export async function resolveVisibleKnowledgeBases(
   ctx: AgentIdentityContext,
@@ -356,15 +346,25 @@ export async function resolveVisibleKnowledgeBases(
   const unique = [...new Set(ids)];
   const bases = await repo.listKnowledgeBaseAccessRows(ctx.workspaceId, unique);
   if (bases.length === 0) return [];
+  // Only a private base the caller did not create can still be admitted by a grant.
+  const grantable = bases.filter(
+    (b) =>
+      b.visibility === "private" &&
+      !isSharedCredential(ctx) &&
+      b.createdBy !== ctx.userId
+  );
+  const grantableIds = new Set(grantable.map((b) => b.id));
   const teamScoped = bases.filter(
-    (b) => b.visibility !== "private" && b.accessMode === "teams"
+    (b) =>
+      b.accessMode === "teams" &&
+      (b.visibility !== "private" || grantableIds.has(b.id))
   );
   const needsTeams =
     teamScoped.length > 0 &&
     !isSharedCredential(ctx) &&
     !isWorkspaceAdmin(ctx) &&
     teamScoped.some((b) => b.createdBy !== ctx.userId);
-  const [grants, myTeams] = await Promise.all([
+  const [grants, myTeams, granted] = await Promise.all([
     needsTeams
       ? repo.listKnowledgeBaseTeamGrants(
           ctx.workspaceId,
@@ -374,6 +374,7 @@ export async function resolveVisibleKnowledgeBases(
     needsTeams
       ? repo.listTeamIdsForUser(ctx.workspaceId, ctx.userId)
       : Promise.resolve([]),
+    grantedResourceIds(ctx.userId, "knowledge_base", [...grantableIds]),
   ]);
   const grantedTeamsByBase = new Map<string, string[]>();
   for (const g of grants) {
@@ -384,7 +385,7 @@ export async function resolveVisibleKnowledgeBases(
   }
   const myTeamIds = new Set(myTeams);
   return bases
-    .filter((b) => canSeeBaseRow(ctx, b, grantedTeamsByBase, myTeamIds))
+    .filter((b) => canSeeBaseRow(ctx, b, grantedTeamsByBase, myTeamIds, granted))
     // ⚠ `?? ""` / `?? null` PER KEY: the access row's two card fields are
     // optional (a stale PostgREST schema cache, and every fixture built before
     // 2026-09-18), and an `undefined` reaching the wire is a key a consumer

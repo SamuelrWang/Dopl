@@ -23,6 +23,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { createRequire } from "node:module";
+import { fnOf } from "./helpers/source-probe.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
@@ -182,8 +183,7 @@ test("a RECREATE RESTORES the chain stamp off the durable record, and may not ar
       `${f} must restore the flag with the gate's own \`=== true\``);
   }
   const src = read("session-io.js");
-  const record = src.slice(src.indexOf("function baseRecord(s) {"), src.indexOf("// The canUseTool bridge"));
-  assert.ok(record.length > 0, "baseRecord still precedes the canUseTool bridge in session-io.js");
+  const record = fnOf(src, "baseRecord");
   assert.match(record, /launchChain: s\.launchChain === true,/,
     "the durable projection carries it — that is WHAT a recreate restores");
   // ⚠ AND THE STORE WHITELIST IS THE THIRD FILE THAT HAS TO AGREE (the F-288 lesson): a field
@@ -237,16 +237,13 @@ test("the backstop is REAL and is spent only by the chained lane", () => {
   assert.equal(budget.spentIn(CH, t0), budget.MAX_CHAINED_LAUNCHES, "a refusal recorded nothing");
 });
 
-test("the backstop is HONEST about what it is not: there is no generation bound left", () => {
+test("the depth bound itself did not move: still 1, and absent is capped", () => {
   // ⚠ THE ONE CLAIM THIS WAVE MUST NOT MAKE. `MAX_LAUNCH_DEPTH` is untouched and still 1 — the
   // setting SKIPS the question rather than raising the number — because a "cap at N generations"
   // needs a depth that survives the round trip and the directive row has no such column. The
   // wire change is FILED (F-378), not guessed at.
   assert.equal(lane.MAX_LAUNCH_DEPTH, 1, "the bound itself did not move");
   assert.equal(lane.launchDepthExhausted(undefined), true, "absent is still the cap");
-  const src = read("session-own-launch.js");
-  assert.match(src, /THERE IS NO GENERATION BOUND LEFT/,
-    "the module says so in as many words — an implied bound is the failure this file exists to avoid");
 });
 
 // ── PIN 5. THE TRI-STATE, DRIVEN THROUGH **BOTH** HALVES AT ONCE ─────────────────

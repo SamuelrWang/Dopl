@@ -53,6 +53,7 @@ import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
+import { sentinelBlock } from "./helpers/source-probe.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const MAIN = join(HERE, "..", "main");
@@ -61,11 +62,7 @@ const req = createRequire(import.meta.url);
 
 // ⚠ SLICED BY THE FENCE, NOT BY LINE NUMBERS — a comment added above the block must not move
 // this suite onto a different program.
-const block = SRC.slice(
-  SRC.indexOf("// ─── BEGIN AGENT-DEFAULTS-VALIDATE"),
-  SRC.indexOf("// ─── END AGENT-DEFAULTS-VALIDATE")
-);
-assert.ok(block.length > 0, "the pure block's fence is intact");
+const block = sentinelBlock(SRC, "AGENT-DEFAULTS-VALIDATE");
 const { MESSAGE_MODES, FACTORY_DEFAULTS, normalizeDefaults, effectiveDefaults } = new Function(
   `${block}\n return { MESSAGE_MODES, FACTORY_DEFAULTS, normalizeDefaults, effectiveDefaults };`
 )();

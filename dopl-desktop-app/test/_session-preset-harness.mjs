@@ -17,8 +17,7 @@
 // it — `channel-runtime.js` left on U5, `agent-defaults.js` joined 2026-09-18 — which is why it
 // had grown to a third of the file on its own.
 //
-// ⚠ NOT A `*.test.mjs` NAME ON PURPOSE — the runner collects `test/**/*.mjs`, and a leading
-// underscore is this tree's convention for a harness that is imported and never collected.
+// Not a `*.test.mjs` name: the runner collects `test/**/*.test.mjs` only.
 //
 // ⚠ NOTHING HERE ASSERTS ANYTHING. It reads the shipped sources ONCE and hands them to both
 // suites, so the two cannot drift onto different copies of `main/` — and `stripComments` is

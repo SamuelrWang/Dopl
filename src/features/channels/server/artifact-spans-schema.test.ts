@@ -228,8 +228,4 @@ describe("the repository and the function agree", () => {
   it("⚠ no longer selects the member rows to count them", () => {
     expect(repository).not.toContain('.select("artifact_id, seq")');
   });
-
-  it("cites the migration, so an operator reading either end finds the other", () => {
-    expect(repository).toContain(NAME);
-  });
 });

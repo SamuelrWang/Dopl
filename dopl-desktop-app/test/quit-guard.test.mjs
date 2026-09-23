@@ -31,6 +31,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
+import { codeOf, fnOf } from "./helpers/source-probe.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const M = (p) => readFileSync(join(HERE, "..", "main", p), "utf8");
@@ -130,7 +131,7 @@ test("Cancel is wired to its OWN branch, and that branch is checked before the o
 });
 
 test("cancelQuit tears NOTHING down and does NOT latch — the next quit re-prompts", () => {
-  const cancel = SRC.slice(SRC.indexOf("function cancelQuit("), SRC.indexOf("// \"Wait for them to finish\""));
+  const cancel = codeOf(fnOf(SRC, "cancelQuit"));
   assert.ok(!/teardown\(|endLiveSessions|flushSessionState|app\.quit\(\)/.test(cancel),
     "an aborted quit must not kill a session, flush the rows, or close the app");
   assert.ok(!/disarmed = true/.test(cancel),
@@ -138,7 +139,7 @@ test("cancelQuit tears NOTHING down and does NOT latch — the next quit re-prom
 });
 
 test("Cancel also kills a pending WAIT — the quit is off, not rescheduled", () => {
-  const cancel = SRC.slice(SRC.indexOf("function cancelQuit("), SRC.indexOf("// \"Wait for them to finish\""));
+  const cancel = codeOf(fnOf(SRC, "cancelQuit"));
   assert.match(cancel, /stopWaiting\(\);/,
     "an auto-quit still ticking after Cancel is the bug this button exists to prevent");
   assert.match(cancel, /prompting = false;/, "…and the dialog is no longer on screen");
@@ -147,7 +148,7 @@ test("Cancel also kills a pending WAIT — the quit is off, not rescheduled", ()
 test("Cancel puts app.isQuitting BACK, so an aborted quit leaves no trace of itself", () => {
   // `onBeforeQuit` sets the flag on the way IN, before it knows the answer. Five modules write
   // it; leaving it true after an abort means the app permanently believes it is on its way out.
-  const cancel = SRC.slice(SRC.indexOf("function cancelQuit("), SRC.indexOf("// \"Wait for them to finish\""));
+  const cancel = codeOf(fnOf(SRC, "cancelQuit"));
   assert.match(cancel, /app\.isQuitting = false;/);
   assert.match(cancel, /try \{ app\.isQuitting = false; \} catch/, "even this is survivable");
 });

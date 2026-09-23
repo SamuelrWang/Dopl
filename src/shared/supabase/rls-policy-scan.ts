@@ -1,8 +1,4 @@
-import { readFileSync, readdirSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
-
-import { forwardRenamed } from "./migration-renames";
+import { readMigrations, statementAt } from "./migration-files";
 
 /**
  * THE MIGRATION REPLAY, AS A SCANNER — the shared half of every RLS redteam
@@ -34,46 +30,8 @@ import { forwardRenamed } from "./migration-renames";
  * `--` inside a string literal.
  */
 
-const MIGRATIONS = join(
-  dirname(fileURLToPath(import.meta.url)),
-  "..",
-  "..",
-  "..",
-  "supabase",
-  "migrations"
-);
-
-function stripLineComments(sql: string): string {
-  return sql
-    .split("\n")
-    .map((line) => {
-      const at = line.indexOf("--");
-      return at === -1 ? line : line.slice(0, at);
-    })
-    .join("\n");
-}
-
 /** Every migration, filename-sorted (= apply order), comments removed, forward-renamed. */
-const FILES = forwardRenamed(
-  readdirSync(MIGRATIONS)
-    .filter((f) => f.endsWith(".sql"))
-    .sort()
-    .map((name) => ({
-      name,
-      sql: stripLineComments(readFileSync(join(MIGRATIONS, name), "utf8")),
-    }))
-);
-
-/** The statement starting at `from`, up to the first `;` at paren depth 0. */
-function statementAt(sql: string, from: number): string {
-  let depth = 0;
-  for (let i = from; i < sql.length; i++) {
-    if (sql[i] === "(") depth++;
-    else if (sql[i] === ")") depth--;
-    else if (sql[i] === ";" && depth === 0) return sql.slice(from, i + 1);
-  }
-  return sql.slice(from);
-}
+const FILES = readMigrations();
 
 const squash = (s: string) => s.replace(/\s+/g, " ").trim();
 
@@ -125,6 +83,30 @@ export function livePolicies(): Map<string, string> {
     for (const e of events.sort((a, b) => a.at - b.at)) e.run();
   }
   return live;
+}
+
+const RLS_TOGGLE =
+  /ALTER\s+TABLE\s+(?:IF\s+EXISTS\s+)?(?:ONLY\s+)?(?:public\.)?"?([a-z0-9_]+)"?\s+(ENABLE|DISABLE)\s+ROW\s+LEVEL\s+SECURITY/gi;
+
+/** Tables whose last `… ROW LEVEL SECURITY` statement is `ENABLE`; a `DROP TABLE` clears it. */
+export function liveRlsEnabled(): Set<string> {
+  const enabled = new Set<string>();
+  for (const file of FILES) {
+    const events: Array<{ at: number; run: () => void }> = [];
+    for (const m of file.sql.matchAll(RLS_TOGGLE)) {
+      const [, table, verb] = m;
+      events.push({
+        at: m.index,
+        run: () => (verb.toUpperCase() === "ENABLE" ? enabled.add(table) : enabled.delete(table)),
+      });
+    }
+    for (const m of file.sql.matchAll(DROP_TABLE)) {
+      const table = m[1];
+      events.push({ at: m.index, run: () => enabled.delete(table) });
+    }
+    for (const e of events.sort((a, b) => a.at - b.at)) e.run();
+  }
+  return enabled;
 }
 
 /**

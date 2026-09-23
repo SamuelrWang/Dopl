@@ -37,7 +37,7 @@ import { join, dirname } from 'node:path';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 
-import { client, liveGate, announceGate, skipLive, withAppServer, leakedPids, LIVE_THREAD, LIVE_TURN } from './_codex-app-server.mjs';
+import { client, liveGate, announceGate, skipLive, skipTurn, withAppServer, leakedPids, LIVE_THREAD, LIVE_TURN } from './_codex-app-server.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
@@ -51,20 +51,12 @@ const framing = require(join(HERE, '..', 'main', 'prompt-framing.js'));
 const profiles = require(join(HERE, '..', 'main', 'session-profiles.js'));
 
 const GATE = announceGate(liveGate());
-const TURN_ENV = 'CODEX_LIVE_TURN';
 const BUDGET_MS = 45000;
 const TURN_BUDGET_MS = 180000;
 const VERB = runtime.capability.toolSearchVerb(runtime.descriptorFor('codex'));
 const DISCOVERY = runtime.capability.mcpDiscovery(runtime.descriptorFor('codex'));
 
-function skipTurn(t) {
-  if (skipLive(t, GATE)) return true;
-  if (String(process.env[TURN_ENV] || '') === '1') return false;
-  const why = `${TURN_ENV} is not 1 — this arm SPENDS THE OPERATOR'S OpenAI QUOTA on a real turn`;
-  t.diagnostic(`SKIPPED, NOT PASSED — ${why}`);
-  t.skip(why);
-  return true;
-}
+const skipLiveTurn = (t) => skipLive(t, GATE) || skipTurn(t);
 
 function listen(handler) {
   const server = http.createServer((req, res) => {
@@ -351,7 +343,7 @@ describe('TIER 2 — a real model, given Dopl\'s REAL first turn, searches on it
   // ⚠ THE GATE HERE IS THE REAL ONE: `session-profiles.js › grantDecision`, op-scoped, at the posture
   // a windowless agent is floored to (`auto_outbound` + `on-request`). An own-channel post allows.
   test('the Codex framing gets a fresh agent from zero tools to ONE marker posted through the gate', async (t) => {
-    if (skipTurn(t)) return;
+    if (skipLiveTurn(t)) return;
     const dopl = await standInDopl();
     const root = mkdtempSync(join(tmpdir(), 'dopl-codex-discovery-turn-'));
     const cwd = join(root, 'cwd');

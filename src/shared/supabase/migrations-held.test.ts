@@ -22,6 +22,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { FILES as APPLIED } from "@/features/knowledge/migration-replay";
+import { HELD_MIGRATIONS_DIR, readMigrationTexts } from "./migration-files";
 
 const HELD_DIR = join(
   dirname(fileURLToPath(import.meta.url)),
@@ -100,6 +101,33 @@ describe("held migrations cannot be applied by accident", () => {
           `${file.name} names held version ${version} in EXECUTABLE SQL — it is ` +
             `assuming a migration that has deliberately not been applied.`
         ).toBe(false);
+      }
+    }
+  });
+
+  it("🔒 a held file is ORDER-PROOF — guarded, and naming both sides of a later rename", () => {
+    // Released held files replay by filename, so one stamped before a rename runs against the
+    // OLD table name. `APPLIED` is forward-renamed and hides that, so the raw texts are read.
+    const raw = readMigrationTexts();
+    const heldTexts = readMigrationTexts(HELD_MIGRATIONS_DIR);
+    for (const held of heldTexts) {
+      const altered = [
+        ...held.sql.matchAll(/ALTER\s+TABLE\s+(IF\s+EXISTS\s+)?(?:ONLY\s+)?(?:public\.)?([a-z0-9_]+)/gi),
+      ];
+      for (const [, guard, table] of altered) {
+        expect(guard, `${held.name}: ALTER TABLE ${table} without IF EXISTS`).toBeTruthy();
+      }
+      const named = new Set(altered.map((m) => m[2]));
+      for (const later of raw.filter((f) => versionOf(f.name) > versionOf(held.name))) {
+        for (const [, from, to] of later.sql.matchAll(
+          /ALTER\s+TABLE\s+(?:IF\s+EXISTS\s+)?(?:public\.)?([a-z0-9_]+)\s+RENAME\s+TO\s+([a-z0-9_]+)/gi
+        )) {
+          if (!named.has(from) && !named.has(to)) continue;
+          expect(
+            [named.has(from), named.has(to)],
+            `${held.name} names only one side of ${later.name}'s ${from} -> ${to}`
+          ).toEqual([true, true]);
+        }
       }
     }
   });

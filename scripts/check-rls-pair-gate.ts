@@ -61,8 +61,9 @@
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 
+import { livePolicies, liveRlsEnabled } from "../src/shared/supabase/rls-policy-scan";
+
 const ROOT = process.cwd();
-const MIGRATIONS = join(ROOT, "supabase", "migrations");
 
 interface Covered {
   /** The `canSee*` predicates that fence these rows. `[]` = fenced by a parent,
@@ -233,89 +234,6 @@ function discoverPredicates(): Map<string, string> {
   return found;
 }
 
-function stripLineComments(sql: string): string {
-  return sql
-    .split("\n")
-    .map((line) => {
-      const at = line.indexOf("--");
-      return at === -1 ? line : line.slice(0, at);
-    })
-    .join("\n");
-}
-
-/** The statement starting at `from`, to the first `;` at paren depth 0. */
-function statementAt(sql: string, from: number): string {
-  let depth = 0;
-  for (let i = from; i < sql.length; i++) {
-    if (sql[i] === "(") depth++;
-    else if (sql[i] === ")") depth--;
-    else if (sql[i] === ";" && depth === 0) return sql.slice(from, i + 1);
-  }
-  return sql.slice(from);
-}
-
-interface Replay {
-  /** `<table>.<policy>` → the whole `CREATE POLICY` statement, after replay. */
-  policies: Map<string, string>;
-  /** Tables whose last `… ROW LEVEL SECURITY` statement was `ENABLE`. */
-  rlsEnabled: Set<string>;
-}
-
-/**
- * REPLAY every migration in filename (= apply) order and answer with the FINAL
- * state. Policies are OR-ed and a `DROP` in a later migration is as load-bearing
- * as the `CREATE`, so nothing here may read one file.
- */
-function replay(): Replay {
-  const policies = new Map<string, string>();
-  const rlsEnabled = new Set<string>();
-  for (const name of readdirSync(MIGRATIONS).filter((f) => f.endsWith(".sql")).sort()) {
-    const sql = stripLineComments(readFileSync(join(MIGRATIONS, name), "utf8"));
-    const events: Array<{ at: number; run: () => void }> = [];
-    for (const m of sql.matchAll(
-      /CREATE\s+POLICY\s+"?([a-z0-9_]+)"?\s+ON\s+(?:public\.)?"?([a-z0-9_]+)"?/gi
-    )) {
-      const key = `${m[2]}.${m[1]}`;
-      const body = statementAt(sql, m.index);
-      events.push({ at: m.index, run: () => policies.set(key, body) });
-    }
-    for (const m of sql.matchAll(
-      /DROP\s+POLICY\s+(?:IF\s+EXISTS\s+)?"?([a-z0-9_]+)"?\s+ON\s+(?:public\.)?"?([a-z0-9_]+)"?/gi
-    )) {
-      const key = `${m[2]}.${m[1]}`;
-      events.push({ at: m.index, run: () => policies.delete(key) });
-    }
-    // ⚠ A `DROP TABLE` takes its policies with it, silently — without this arm
-    // the replay reports the policies of a table that no longer exists.
-    for (const m of sql.matchAll(
-      /DROP\s+TABLE\s+(?:IF\s+EXISTS\s+)?(?:public\.)?"?([a-z0-9_]+)"?/gi
-    )) {
-      const table = m[1];
-      events.push({
-        at: m.index,
-        run: () => {
-          for (const key of [...policies.keys()]) {
-            if (key.startsWith(`${table}.`)) policies.delete(key);
-          }
-          rlsEnabled.delete(table);
-        },
-      });
-    }
-    for (const m of sql.matchAll(
-      /ALTER\s+TABLE\s+(?:IF\s+EXISTS\s+)?(?:ONLY\s+)?(?:public\.)?"?([a-z0-9_]+)"?\s+(ENABLE|DISABLE)\s+ROW\s+LEVEL\s+SECURITY/gi
-    )) {
-      const [, table, verb] = m;
-      events.push({
-        at: m.index,
-        run: () =>
-          verb.toUpperCase() === "ENABLE" ? rlsEnabled.add(table) : rlsEnabled.delete(table),
-      });
-    }
-    for (const e of events.sort((a, b) => a.at - b.at)) e.run();
-  }
-  return { policies, rlsEnabled };
-}
-
 const problems: string[] = [];
 const found = discoverPredicates();
 const declaredPredicates = new Map<string, string>();
@@ -338,7 +256,9 @@ for (const name of declaredPredicates.keys()) {
   }
 }
 
-const { policies, rlsEnabled } = replay();
+// Forward-renamed replay (`migration-files.ts`): a renamed table keeps its policies and RLS.
+const policies = livePolicies();
+const rlsEnabled = liveRlsEnabled();
 const NEVER_DROP =
   "A policy is the record of a leak that was once possible — correct it, never drop it (tenancy risk 1).";
 

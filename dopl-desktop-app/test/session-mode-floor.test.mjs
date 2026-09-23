@@ -44,6 +44,7 @@ import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
+import { fnOf } from "./helpers/source-probe.mjs";
 
 const require = createRequire(import.meta.url);
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -101,8 +102,7 @@ function harness({ windowless = true, state = {} } = {}) {
   // `agentId` matches exactly; none takes the oldest live agent on the thread). Slicing the op
   // without it would evaluate to a ReferenceError, and stubbing it would test a resolution
   // this file does not ship.
-  const resolver = src.slice(src.indexOf("function resolveSession("), src.indexOf("// PURE READ —"));
-  const body = resolver + src.slice(src.indexOf("function setModeByTask("), src.indexOf("// ── THE DIRECT 1:1 LANE"));
+  const body = fnOf(src, "resolveSession") + "\n" + fnOf(src, "setModeByTask");
   const dispatched = [];
   const s = {
     key: "chan-1:task-1:a1b2c3d4",
