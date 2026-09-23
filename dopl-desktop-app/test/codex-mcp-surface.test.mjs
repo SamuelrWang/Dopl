@@ -441,8 +441,7 @@ describe('the real app-server accepts the entry Dopl builds', () => {
         });
         await conn.request('turn/start', {
           threadId: thread.thread.id,
-          input: [{ type: 'text', text: `Call the ${mcp.CHANNEL_TOOL} tool once with op set to rooms, then stop. Do not retry if it is denied.` }],
-          ...LIVE_TURN,
+          input: [{ type: 'text', text: `Call the ${mcp.CHANNEL_TOOL} tool once with op set to rooms, then stop. Do not retry if it is denied.` }], ...LIVE_TURN,
         });
         // ⚠ THE BUDGET TIMER IS CLEARED, NOT LEFT TO FIRE. An un-cleared `setTimeout` holds the
         // event loop open and makes a 9-second test report three minutes — the CI-on-Node-22
