@@ -30,6 +30,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
+import { createRequire } from "node:module";
 import { evalModule, bootIpc } from "./_ipc-harness.mjs";
 import { harness, session } from "./_auth-hold-harness.mjs";
 
@@ -46,15 +47,17 @@ const F_END = "// ─── END AUTH-RESUME-FAN-OUT";
 const FAN_BLOCK = AUTH_SRC.slice(AUTH_SRC.indexOf(F_BEGIN), AUTH_SRC.indexOf(F_END));
 
 /** The block, driven with an injected registry and an injected per-session resume. */
+const runtimeRegistry = createRequire(import.meta.url)(M("runtime/index.js"));
 function fanOut({ sessions, resume } = {}) {
   const resumed = [];
   const api = new Function(
-    "deps", "resumeAfterSignIn", "diag",
+    "deps", "resumeAfterSignIn", "diag", "copyFor",
     `${FAN_BLOCK}\n return { resumeHeldSessions };`
   )(
     { sessions: sessions === undefined ? new Map() : sessions },
     async (s) => { resumed.push(s); if (resume) await resume(s); },
-    () => {}
+    () => {},
+    (s) => runtimeRegistry.descriptorFor(s && s.runtimeId)
   );
   return { ...api, resumed };
 }
@@ -80,8 +83,21 @@ test("it resumes EVERY held session, and only the held ones", async () => {
     ["c1:t3:c3", { key: "c1:t3:c3", settled: false }], // running fine, never held
   ]);
   const f = fanOut({ sessions });
-  assert.equal(await f.resumeHeldSessions(), 2);
+  assert.equal(await f.resumeHeldSessions("claude"), 2);
   assert.deepEqual(f.resumed, [a, b], "both held agents, in registry order, and nothing else");
+});
+
+test("P4-06: a sign-in releases ONLY its own runtime's held sessions", async () => {
+  // A Claude sign-in says nothing about Codex's credential: releasing a held Codex agent here would
+  // relaunch it still signed out and hold it again.
+  const claude = held("c1:t1:a1");
+  const legacy = held("c1:t2:b2", { runtimeId: undefined }); // un-stamped = the default runtime
+  const codex = held("c1:t3:c3", { runtimeId: "codex" });
+  const sessions = new Map([[claude.key, claude], [legacy.key, legacy], [codex.key, codex]]);
+  const f = fanOut({ sessions });
+  assert.equal(await f.resumeHeldSessions("claude"), 2);
+  assert.deepEqual(f.resumed, [claude, legacy], "the Codex agent stays held");
+  assert.equal(await fanOut({ sessions }).resumeHeldSessions(), 0, "no runtime named, nothing released");
 });
 
 test("a SETTLED session is never resumed, however it was holding", async () => {
@@ -89,7 +105,7 @@ test("a SETTLED session is never resumed, however it was holding", async () => {
   // and `resumeAfterSignIn` on a settled session would start a query behind a closed lifecycle.
   const sessions = new Map([["c1:t1:a1", held("c1:t1:a1", { settled: true })]]);
   const f = fanOut({ sessions });
-  assert.equal(await f.resumeHeldSessions(), 0);
+  assert.equal(await f.resumeHeldSessions("claude"), 0);
   assert.deepEqual(f.resumed, []);
 });
 
@@ -104,7 +120,7 @@ test("it takes the list BEFORE walking it — a resume that spawns cannot hide a
     sessions,
     resume: (s) => { if (s === a) sessions.set("c1:t9:z9", held("c1:t9:z9")); },
   });
-  assert.equal(await f.resumeHeldSessions(), 2, "the two that were held when the sign-in landed");
+  assert.equal(await f.resumeHeldSessions("claude"), 2, "the two that were held when the sign-in landed");
   assert.deepEqual(f.resumed.map((s) => s.key), ["c1:t1:a1", "c1:t2:b2"]);
 });
 
@@ -118,7 +134,7 @@ test("ONE session's failure does not strand the ones behind it", async () => {
     sessions: new Map([["c1:t1:a1", a], ["c1:t2:b2", b]]),
     resume: (s) => { if (s === a) throw new Error("sdk load failed"); },
   });
-  assert.equal(await f.resumeHeldSessions(), 2, "both were attempted");
+  assert.equal(await f.resumeHeldSessions("claude"), 2, "both were attempted");
   assert.deepEqual(f.resumed, [a, b]);
 });
 
@@ -126,7 +142,7 @@ test("an UNBOUND registry answers 0 rather than throwing into the sign-in", asyn
   // A mid-wave caller or a harness that never called `bind` must degrade: a completed sign-in
   // that throws here would report failure over a credential that really is present.
   const f = fanOut({ sessions: null });
-  assert.equal(await f.resumeHeldSessions(), 0);
+  assert.equal(await f.resumeHeldSessions("claude"), 0);
   assert.deepEqual(f.resumed, []);
 });
 
@@ -155,11 +171,14 @@ function bootOp({ usable = true, bundled = "/bundle/claude", external = "/usr/lo
           calls.order.push("probe");
           return { usable, source: usable ? "cli-store" : null };
         },
-        resumeHeldSessions: async () => { calls.resume += 1; calls.order.push("resume"); return resumed; },
+        resumeHeldSessions: async (runtimeId) => {
+          calls.resume += 1; calls.order.push("resume"); calls.resumedRuntime = runtimeId; return resumed;
+        },
       };
     }
     if (id === "./diag") return { diag: () => {} };
-    if (id === "./sdk-loader") {
+    if (id === "./runtime/claude") return { descriptor: { id: "claude" } };
+    if (id === "./runtime/claude/loader") {
       if (bundledThrows) throw new Error("electron.app unavailable");
       return { resolveClaudeExecutable: () => bundled };
     }
@@ -179,6 +198,7 @@ test("a completed sign-in re-probes the CREDENTIAL and releases every held sessi
   // probe taken before it would answer with the state this flow just changed, and report failure
   // over a credential that is now present.
   assert.deepEqual(calls.order, ["flow", "forget", "probe", "resume"]);
+  assert.equal(calls.resumedRuntime, "claude", "only Claude's held sessions (P4-06)");
 });
 
 test("SUCCESS IS THE CREDENTIAL, NOT THE FLOW — a sign-in that did not take resumes nothing", async () => {
@@ -208,9 +228,8 @@ test("ONE FLOW PER CALL — the single-flight stays in claude-auth.js, unduplica
 
 test("the flow is pointed at the BUNDLED binary first, the external CLI second", async () => {
   // The executable a session really runs ships inside the app bundle
-  // (`sdk-loader.resolveClaudeExecutable`), and most machines we distribute to never installed a
-  // `claude` on PATH at all — offering THEM a sign-in that needs one is the silent-drop defect
-  // `claude-runtime.js › sessionSpawnAvailable` was written for. Same order, same reason.
+  // (`runtime/claude/loader.js › resolveClaudeExecutable`), and most machines we distribute to
+  // never installed a `claude` on PATH — a sign-in that needs one is the silent-drop defect.
   const bundledFirst = bootOp({ bundled: "/bundle/claude", external: "/usr/local/bin/claude" });
   await bundledFirst.op.signIn();
   assert.equal(bundledFirst.calls.flow[0].bin, "/bundle/claude");
@@ -218,7 +237,7 @@ test("the flow is pointed at the BUNDLED binary first, the external CLI second",
   const fallback = bootOp({ bundled: null });
   await fallback.op.signIn();
   assert.equal(fallback.calls.flow[0].bin, "/usr/local/bin/claude");
-  // And a THROWING sdk-loader (it pulls `electron.app` at module scope) degrades to the same
+  // And a THROWING loader (it pulls `electron.app` at module scope) degrades to the same
   // fallback rather than taking the sign-in down.
   const thrown = bootOp({ bundledThrows: true });
   await thrown.op.signIn();
@@ -237,6 +256,7 @@ test("a flow that THROWS still re-probes — the credential may have landed anyw
       };
     }
     if (id === "./diag") return { diag: () => {} };
+    if (id === "./runtime/claude") return { descriptor: { id: "claude" } };
     throw new Error("unexpected require: " + id);
   };
   const op = evalModule(OP_SRC, stub);
@@ -280,7 +300,7 @@ test("HELD -> SIGN IN -> RUNNING: the fan-out really un-holds a session the engi
   assert.equal(s.state.authHeld, true, "held: no wake can resume it, and a re-post is refused");
 
   const f = fanOut({ sessions: new Map([[s.key, s]]), resume: h.resumeAfterSignIn });
-  assert.equal(await f.resumeHeldSessions(), 1);
+  assert.equal(await f.resumeHeldSessions("claude"), 1);
 
   assert.equal(s.state.authHeld, false, "the reducer-visible hold is RELEASED");
   assert.equal(s.authHold, null, "…and the ticket is claimed, so a second sign-in is a no-op");
@@ -306,5 +326,5 @@ test("a WINDOWLESS PREFLIGHT hold, then a sign-in, and the RE-POST launches", as
   assert.equal(repost.state.authHeld, false, "…and reaches the engine's own startQuery untouched");
   // The fan-out has nothing to do on this lane, and must say so rather than inventing work.
   const f = fanOut({ sessions: new Map() });
-  assert.equal(await f.resumeHeldSessions(), 0);
+  assert.equal(await f.resumeHeldSessions("claude"), 0);
 });

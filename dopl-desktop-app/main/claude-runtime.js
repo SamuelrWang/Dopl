@@ -1,4 +1,3 @@
-const { claudeAvailable } = require('./claude-resolve');
 const { diag } = require('./diag');
 
 // CAN THIS MACHINE RUN A CLAUDE SESSION AT ALL? (2026-08-04, launch-critical)
@@ -29,23 +28,19 @@ const { diag } = require('./diag');
 //   `claudeAvailable()`      — is there an EXTERNAL cli for auxiliary commands
 //                              (`claude mcp …`, `claude setup-token`)? Those
 //                              genuinely need a binary on PATH.
-//   `sessionSpawnAvailable()`— can a session be RUN, by any route? The bundled
-//                              executable first (the SDK/window path, and the
-//                              normal one), the external CLI second (the headless
-//                              fallback). Either is enough to answer a request.
+//   `sessionSpawnAvailable()`— can a session be RUN on ANY registered runtime?
 //
-// LAZY require of sdk-loader, deliberately: it pulls `electron.app` at module
-// scope, and this module is loaded by harnesses that stub electron thinly. A
-// throw here must degrade to "no bundled binary" and let the external probe
-// answer, never take the trigger path down with it — which is the failure mode
-// this whole function exists to remove.
+// Asks the runtime registry (`runtime/index.js › connectedIds`, leashed and cached), so a
+// Codex-only Mac answers requests too (P3-01). A probe failure answers false: the trigger
+// defers, it never drops.
 async function sessionSpawnAvailable() {
   try {
-    if (require('./sdk-loader').resolveClaudeExecutable()) return true;
+    const ids = await require('./runtime').connectedIds();
+    return Array.isArray(ids) && ids.length > 0;
   } catch (err) {
-    diag('sessionSpawnAvailable: bundled probe failed', err && err.message);
+    diag('sessionSpawnAvailable: runtime probe failed', err && err.message);
+    return false;
   }
-  return claudeAvailable();
 }
 
 // The startup notice, here rather than in channel-listener.js — it is a statement
@@ -60,7 +55,7 @@ async function sessionSpawnAvailable() {
 // Both halves are fixed together; a notice must not outlive the defect it described.)
 const NO_RUNTIME_NOTICE = {
   title: 'Dopl',
-  body: 'No Claude Code runtime was found on this Mac, so channel requests cannot be answered. Reinstall Dopl, or install the Claude Code CLI.',
+  body: `${require('./runtime').copy.noRuntimeCopy(null)}, so channel requests cannot be answered.`,
 };
 
 async function checkRuntimeAtStart({ externalCli, notify, log }) {

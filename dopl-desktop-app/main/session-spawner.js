@@ -19,7 +19,7 @@
 //
 // ⚠ `claudeAvailable()` AND `sessionSpawnAvailable()` ARE STILL DIFFERENT QUESTIONS (§11). The
 // first asks "is there an EXTERNAL `claude` on PATH" — what `claude mcp …` needs; the second
-// asks "can a session RUN at all", which since the headless death means the bundled SDK alone.
+// asks "can a session RUN at all", on any registered runtime (the registry's `available()`).
 // Anything gating a channel trigger or a session launch asks the SECOND. Do not collapse them.
 
 const { claudeAvailable, getClaudeBinPath, cliEnv } = require('./claude-resolve');
@@ -32,7 +32,7 @@ const {
 } = require('./tool-profiles');
 
 module.exports = {
-  // "can a session RUN at all" (bundled SDK) — the gate every trigger and launch asks.
+  // "can a session RUN at all" (any registered runtime) — the gate every trigger asks.
   sessionSpawnAvailable,
   // CLI resolution / env (claude-resolve.js) — what `claude mcp …` and the sign-in pty need.
   claudeAvailable,

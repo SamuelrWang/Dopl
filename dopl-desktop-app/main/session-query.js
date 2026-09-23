@@ -173,7 +173,7 @@ async function consume(s, q, rt) {
         if (mcpGuard.handleMcpStatus(s, signal.status)) return; // retried (this loop is superseded) or ended
         continue;
       }
-      if (signal && sessionAuth.holdIfAuthFailure(s, signal.text)) return;
+      if (signal && signal.type === 'auth_hold' && sessionAuth.holdIfAuthFailure(s, signal.text)) return;
     }
   } catch (err) {
     if (s.query !== q) return;
@@ -185,7 +185,8 @@ async function consume(s, q, rt) {
       // a synthetic error message.
       const text = (err && err.message) || err;
       const held = rt.normalize({ type: 'error', text: String(text == null ? '' : text) }, normalizeCtx(s));
-      if (held.length && sessionAuth.holdIfAuthFailure(s, held[0].text)) return;
+      const hold = held.find((ev) => ev && ev.type === 'auth_hold');
+      if (hold && sessionAuth.holdIfAuthFailure(s, hold.text)) return;
       diag('session-engine: query error', text);
       // ── ⚠ THE STRUCTURED END CODE (2026-09-21, U10) ───────────────────────────────────────
       //

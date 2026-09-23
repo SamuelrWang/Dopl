@@ -386,7 +386,12 @@ function messageByTask(a) {
   // H1: a session HELD on the sign-in action has no query to feed — the push would land on
   // a closed iterator and the operator's words would vanish. Refuse and say which, so the
   // composer can tell them to sign in rather than silently eating the message.
-  if (s.state && s.state.authHeld === true) return { ok: false, reason: 'auth-hold' };
+  if (s.state && s.state.authHeld === true) {
+    // P4-06: a runtime with no in-app sign-in re-probes its credential on the next message.
+    const auth = require('./session-auth');
+    if (!auth.reprobesOnWake(s)) return { ok: false, reason: 'auth-hold' };
+    return auth.reprobeHeld(s).then((released) => (released ? messageByTask(a) : { ok: false, reason: 'auth-hold' }));
+  }
   try {
     // OPEN THE PRIVATE WINDOW BEFORE THE DISPATCH (2026-08-22, Samuel's ruling), and read the
     // in-flight state while it is still THIS turn's: `openPrivateTurn` looks at `s.state.activity`

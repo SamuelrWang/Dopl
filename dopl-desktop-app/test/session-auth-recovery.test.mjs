@@ -28,9 +28,12 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
+import { createRequire } from "node:module";
 import {
   M, detect, AUTH_SRC, ENGINE, HOLD_BLOCK, harness, session, sessionReducer,
 } from "./_auth-hold-harness.mjs";
+
+const requireMain = (p) => createRequire(import.meta.url)(M(p));
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const DETECT_SRC = readFileSync(M("session-auth-detect.js"), "utf8");
@@ -230,13 +233,21 @@ test("MID-SESSION: an auth-shaped failure parks and HOLDS (never `crash`)", () =
     "the ONE surviving emit, asserted whole so a re-added notice comes back through here");
 });
 
-test("MID-SESSION: a NON-auth failure is refused, so today's crash path still runs", () => {
-  const h = harness({ usable: true });
-  for (const text of ["process exited with code 143", "ENOENT", "", null, "timed out"]) {
-    const s = session();
-    assert.equal(h.holdIfAuthFailure(s, text), false, String(text));
-    assert.deepEqual(h.calls.emit, [], "nothing painted");
-    assert.equal(s.authHold, undefined);
+test("MID-SESSION: the RUNTIME decides what is auth — a non-auth failure never reaches the hold", () => {
+  // P4-03: core trusts the adapter's `auth_hold` and no longer re-tests the text with Claude's
+  // patterns, so the refusal lives in each normalizer. A non-auth rejection normalizes to nothing
+  // (the crash path runs); Codex's own wider auth words are held, not dropped.
+  const claudeNormalize = requireMain("runtime/claude/normalize.js").normalize;
+  const codexNormalize = requireMain("runtime/codex/normalize.js").normalize;
+  for (const text of ["process exited with code 143", "ENOENT", "", "timed out"]) {
+    assert.deepEqual(claudeNormalize({ type: "error", text }, {}), [], text);
+    assert.deepEqual(codexNormalize({ type: "error", text }, {}), [], text);
+  }
+  for (const text of ["Not logged in", "authentication required", "403 Forbidden", "invalid api key"]) {
+    assert.deepEqual(codexNormalize({ type: "error", text }, {}).map((e) => e.type), ["auth_hold"], text);
+    const h = harness({ usable: true });
+    const s = session({ runtimeId: "codex" });
+    assert.equal(h.holdIfAuthFailure(s, text), true, `core holds on the adapter's verdict: ${text}`);
   }
 });
 
@@ -262,13 +273,12 @@ test("D7.4: a SETTLED session answers FALSE to an auth-shaped failure — so the
 });
 
 test("MID-SESSION: the CLI's own login bubble is CONSUMED, never rendered", () => {
-  const h = harness({ usable: true });
-  const s = session();
+  // The Claude normalizer turns the bubble into `auth_hold` ALONE (no render event beside it).
+  const normalize = requireMain("runtime/claude/normalize.js").normalize;
   const bubble = { type: "assistant", message: { content: [{ type: "text", text: "Not logged in · Please run /login" }] } };
-  assert.equal(h.holdIfAuthMessage(s, bubble), true, "the dead-end bubble is replaced by the action");
-  const s2 = session(); // a normal assistant message is never consumed
-  assert.equal(h.holdIfAuthMessage(s2, { type: "assistant", message: { content: [{ type: "text", text: "on it" }] } }), false);
-  assert.equal(h.holdIfAuthMessage(s2, { type: "result", is_error: false, result: "ok" }), false);
+  assert.deepEqual(normalize(bubble, {}).map((e) => e.type), ["auth_hold"], "the dead-end bubble is replaced by the action");
+  const plain = normalize({ type: "assistant", message: { content: [{ type: "text", text: "on it" }] } }, {});
+  assert.ok(!plain.some((e) => e.type === "auth_hold"), "a normal assistant message is never consumed");
 });
 
 test("MID-SESSION: a second failure never stacks a second hold", () => {
@@ -346,7 +356,7 @@ test("the consume loop routes an auth failure to the hold before it can dispatch
   // message stopped draining a stream HEAD kept reading (the case below proves the false answer is
   // real). ⚠ ASSERTED AS THE CONJUNCTION, not merely "holdIfAuthFailure appears": a call whose
   // answer is discarded matches any looser regex, which is exactly how this was lost.
-  assert.match(QUERY, /if \(signal && sessionAuth\.holdIfAuthFailure\(s, signal\.text\)\) return;/,
+  assert.match(QUERY, /if \(signal && signal\.type === 'auth_hold' && sessionAuth\.holdIfAuthFailure\(s, signal\.text\)\) return;/,
     "…and the loop stops only when the sentinel says it ACTED");
   assert.ok(!/holdIfAuthFailure\(s, hold\.text\);\s*return;/.test(QUERY),
     "no unconditional return past a sentinel that answered false");
@@ -355,7 +365,7 @@ test("the consume loop routes an auth failure to the hold before it can dispatch
   const hold = QUERY.indexOf("const held = rt.normalize({ type: 'error', text:");
   const crash = QUERY.indexOf("deps.dispatch(s, { type: 'crash' })", hold);
   assert.ok(hold !== -1 && crash > hold, "the auth branch precedes the crash dispatch");
-  assert.match(QUERY, /if \(held\.length && sessionAuth\.holdIfAuthFailure\(s, held\[0\]\.text\)\) return;/,
+  assert.match(QUERY, /const hold = held\.find\(\(ev\) => ev && ev\.type === 'auth_hold'\);\s*if \(hold && sessionAuth\.holdIfAuthFailure\(s, hold\.text\)\) return;/,
     "a REJECTION is asked of the same normalizer — the runtime decides what is auth-shaped");
   assert.match(QUERY, /if \(!isAbortError\(err\)\) \{/, "and an abort is still not an error at all");
 });

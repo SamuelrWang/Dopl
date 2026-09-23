@@ -27,7 +27,6 @@ const os = require('os');
 const claudeAuth = require('./claude-auth');
 const spawner = require('./session-spawner');
 const { getStoredOAuthToken } = require('./claude-token');
-const detect = require('./session-auth-detect');
 const store = require('./session-store');
 // AXIS B's windowless floor — the ONE statement of it (F-236). A hold RESETS the posture, so the
 // release has to put the floor back; see `resumeAfterSignIn`.
@@ -135,7 +134,7 @@ function withStoredCredential(env) {
 }
 
 // ─── BEGIN SESSION-AUTH-HOLD (injectable; unit-tested via source extraction) ──
-// The block below references its leaf deps (deps / detect / store / claudeAuth / spawner / diag)
+// The block below references its leaf deps (deps / store / diag)
 // and the two probe helpers as free vars, so test/session-auth-recovery.test.mjs slices it,
 // proves it holds no electron require, and drives it with fakes — the session-park idiom.
 
@@ -205,12 +204,12 @@ async function holdIfNoRuntimeCredential(s, runtime) {
   }
 }
 
-// MID-SESSION (Q6.2). The query threw, or the SDK relayed the CLI's own login sentinel. Park
-// the session on the button instead of dispatching `crash` (which settles it, destroys the
-// window, and posts task_failed{interrupted} — the dead end). Returns true when it took over.
-function holdIfAuthFailure(s, text) {
+// MID-SESSION (Q6.2). The runtime's own normalizer classified a message or a rejection as an auth
+// failure (`auth_hold`, whose `text` is carried for the log); that verdict is trusted — core never
+// re-tests one runtime's words with Claude's patterns (P4-03). Park the session instead of
+// dispatching `crash` (settle + task_failed{interrupted}). Returns true when it took over.
+function holdIfAuthFailure(s, _text) {
   if (!deps || !s || s.settled) return false;
-  if (!detect.isAuthShapedError(text) && !detect.CLI_LOGIN_SENTINEL.test(String(text == null ? '' : text))) return false;
   // H1(b) — ALREADY HELD IS NOT "NOTHING TO DO". This used to `return true` here having taken
   // no action at all, which was only safe while a held session could not be restarted. It
   // could: a wake resumed it (H1(a)), the resumed query failed auth again, and this branch
@@ -233,14 +232,6 @@ function holdIfAuthFailure(s, text) {
   if (already) return true; // converged
   deps.emit(s, { type: 'status', phase: 'parked' });
   return true;
-}
-
-// The SDK-message twin, so an auth failure the CLI reports as content (the "Not logged in ·
-// Please run /login" bubble) is REPLACED by the action rather than rendered beside it. Returns
-// true when the message was consumed and must not reach the renderer.
-function holdIfAuthMessage(s, msg) {
-  const text = detect.authFailureText(msg);
-  return text ? holdIfAuthFailure(s, text) : false;
 }
 
 // ── Sign in, then continue ───────────────────────────────────────────────────
@@ -313,7 +304,7 @@ async function resumeAfterSignIn(s) {
 // resolved their session from `event.sender` against a window's webContents.
 //
 // ⚠ THE HOLD ITSELF IS UNTOUCHED AND IS NOT A WINDOW THING. `holdIfNoCredential`,
-// `holdIfAuthFailure` and `holdIfAuthMessage` still fail the launch CLOSED on a missing or
+// `holdIfAuthFailure` still fail the launch CLOSED on a missing or
 // broken Claude Code sign-in, and `trigger.js` still answers the peer honestly on the
 // `auth-hold` skip (`AUTH_HELD_REPLY`). What is gone is the in-place REMEDY, not the guard —
 // the operator signs in the way every other surface asks them to, and the held session resumes
@@ -322,9 +313,11 @@ async function resumeAfterSignIn(s) {
 // ─── END SESSION-AUTH-HOLD ───────────────────────────────────────────────────
 
 // ─── BEGIN AUTH-RESUME-FAN-OUT (injectable; unit-tested via source extraction) ─
-// EVERY SESSION THIS MAC IS HOLDING, RELEASED ONCE — the fan-out half of the in-app sign-in
-// (`main/claude-signin-op.js`, its ONE caller). The per-session behaviour is `resumeAfterSignIn`
-// above and is UNCHANGED; this only decides WHICH sessions get one.
+// EVERY SESSION THIS MAC IS HOLDING ON ONE RUNTIME, RELEASED ONCE — the fan-out half of an in-app
+// sign-in (`main/claude-signin-op.js`, its ONE caller). The per-session behaviour is
+// `resumeAfterSignIn` above and is UNCHANGED; this only decides WHICH sessions get one.
+// ⚠ SCOPED BY RUNTIME (P4-06): one runtime's sign-in says nothing about another's credential, so
+// a Claude sign-in releases only Claude sessions (an un-stamped one resolves to the default).
 //
 // ⚠ IT SITS OUTSIDE THE BLOCK ABOVE ON PURPOSE. That block is sliced and evaluated with a fixed
 // injection set (`test/_auth-hold-harness.mjs`) that hands it no registry; this reads
@@ -339,12 +332,12 @@ async function resumeAfterSignIn(s) {
 // session comes to be skipped.
 // ⚠ SEQUENTIAL, AND EACH ONE IS CAUGHT ALONE. A resume awaits `acquireRuntime()` and starts a query; one
 // machine-level failure must not strand the sessions queued behind it in the hold forever.
-async function resumeHeldSessions() {
+async function resumeHeldSessions(runtimeId) {
   const registry = deps && deps.sessions;
-  if (!registry) return 0;
+  if (!registry || !runtimeId) return 0;
   const held = [];
   for (const s of registry.values()) {
-    if (s && !s.settled && s.authHold) held.push(s);
+    if (s && !s.settled && s.authHold && copyFor(s).id === runtimeId) held.push(s);
   }
   for (const s of held) {
     try {
@@ -357,6 +350,24 @@ async function resumeHeldSessions() {
 }
 // ─── END AUTH-RESUME-FAN-OUT ─────────────────────────────────────────────────
 
+// A runtime with NO in-app sign-in (Codex: `codex login` in a terminal) has no op to release its
+// held sessions, so the next message to one re-probes that runtime's credential and resumes it when
+// the probe no longer says signed out (P4-06). A runtime WITH an in-app sign-in is released by it.
+function reprobesOnWake(s) {
+  return !!(s && !s.settled && s.authHold && !runtimeCopy.canSignIn(copyFor(s)));
+}
+
+/** Re-probe a held session's own credential; resolves true when the session was released. */
+async function reprobeHeld(s) {
+  if (!reprobesOnWake(s) || s.authResuming) return false;
+  let state = null;
+  try { state = await runtimeRegistry.runtimeFor(s.runtimeId).credentialState(); } catch (_) { return false; }
+  if (!state || state.usable === false || !s.authHold) return false;
+  diag('session-auth: credential is back for', runtimeCopy.runtimeLabel(copyFor(s)), '-> releasing the hold');
+  await resumeAfterSignIn(s);
+  return true;
+}
+
 module.exports = {
   bind,
   credentialState,
@@ -365,7 +376,8 @@ module.exports = {
   holdIfNoCredential,
   holdIfNoRuntimeCredential,
   holdIfAuthFailure,
-  holdIfAuthMessage,
   resumeAfterSignIn, // H1: exported for the idempotency test
   resumeHeldSessions, // the in-app sign-in's fan-out (main/claude-signin-op.js)
+  reprobesOnWake, // P4-06: a runtime with no in-app sign-in re-probes on the next message
+  reprobeHeld,
 };

@@ -37,21 +37,14 @@ const claudeAuth = require('./claude-auth');
 const sessionAuth = require('./session-auth');
 const { diag } = require('./diag');
 
-// WHICH `claude` THE SIGN-IN DRIVES — the BUNDLED binary FIRST, in the same order and for the
-// same reason `claude-runtime.js › sessionSpawnAvailable` uses: the executable a session really
-// runs ships inside the app bundle (`sdk-loader.resolveClaudeExecutable`, asar-unpacked and
-// signed), and most machines we distribute to never installed a `claude` on PATH at all —
-// offering them a sign-in that needs one is the silent-drop bug that module was written for. The
-// external CLI (`claude-resolve.js › getClaudeBinPath`, through the spawner facade) is the
-// fallback, so a developer machine behaves exactly as it did.
-//
-// ⚠ BOTH REQUIRES ARE LAZY AND BOTH FAILURES DEGRADE. `sdk-loader` pulls `electron.app` at
-// module scope; a throw here must mean "no bundled binary" and let the external probe answer,
-// never take the sign-in down. A null from both is not an error either — `startSignInFlow` goes
-// straight to its Terminal tier, which is the one path that needs no path from us.
+// WHICH `claude` THE SIGN-IN DRIVES — the BUNDLED binary first (`runtime/claude/loader.js ›
+// resolveClaudeExecutable`, asar-unpacked and signed; most machines never installed a `claude` on
+// PATH), then the external CLI (`claude-resolve.js › getClaudeBinPath`, through the spawner facade).
+// ⚠ Both requires are lazy and both failures degrade: the loader pulls `electron.app`, and a throw
+// must mean "no bundled binary". A null from both goes straight to the Terminal tier.
 async function resolveClaudeBin() {
   try {
-    const bundled = require('./sdk-loader').resolveClaudeExecutable();
+    const bundled = require('./runtime/claude/loader').resolveClaudeExecutable();
     if (bundled) return bundled;
   } catch (err) {
     diag('claude signin: bundled binary unresolved', err && err.message);
@@ -80,7 +73,8 @@ async function signIn() {
     diag('claude signin: no usable credential after the flow');
     return { ok: false };
   }
-  const resumed = await sessionAuth.resumeHeldSessions();
+  // Only Claude sessions: this sign-in says nothing about another runtime's credential (P4-06).
+  const resumed = await sessionAuth.resumeHeldSessions(require('./runtime/claude').descriptor.id);
   diag('claude signin: signed in; held sessions resumed:', resumed);
   return { ok: true, resumed: resumed };
 }
