@@ -19,128 +19,26 @@
  */
 
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
-import type { AgentIdentity } from "../client/types";
-import { draftToCreateBody, type IdentityDraft } from "../lib/identity-draft";
+import { cleanup, fireEvent, screen } from "@testing-library/react";
+import { draftToCreateBody } from "../lib/identity-draft";
 import { SECTIONS_CONTAINER } from "../lib/visibility";
-import { IdentityEditor } from "./identity-editor";
-
-const TEAMS = [
-  { id: "team-1", name: "Platform" },
-  { id: "team-2", name: "Growth" },
-];
-const BASES = [
-  { id: "kb-1", name: "Runbooks" },
-  { id: "kb-2", name: "Specs" },
-];
+import {
+  CREATE_VERB,
+  addField,
+  field,
+  filledIdentity,
+  open,
+  pick,
+  press,
+  row,
+  tabLabels,
+} from "./identity-editor-harness";
 
 /** ⚠ THE PICKER READS A TREE PER BASE. Shape in `./knowledge-tree-mock`; the
  *  factory imports it because `vi.mock` is hoisted above every binding. */
 vi.mock("@/features/knowledge/client/hooks", async () => ({
   useKnowledgeTree: (await import("./knowledge-tree-mock")).useKnowledgeTree,
 }));
-
-function identity(over: Partial<AgentIdentity> = {}): AgentIdentity {
-  return {
-    id: "tpl-1",
-    workspaceId: "ws-1",
-    name: "Release captain",
-    description: "Runs the checklist",
-    instructions: "Be terse.",
-    model: "claude-opus-5",
-    fields: [{ key: "repo", value: "dopl" }],
-    visibility: "private",
-    teamIds: [],
-    knowledgeBases: [{ id: "kb-1", name: "Runbooks" }],
-    knowledge: [
-      { baseId: "kb-1", baseName: "Runbooks", scope: "base", path: "Runbooks" },
-    ],
-    createdBy: "user-1",
-    createdAt: "2026-08-01T00:00:00Z",
-    updatedAt: "2026-08-01T00:00:00Z",
-    ...over,
-  };
-}
-
-/**
- * ⚠ `await`ed because `ModalShell` mounts a FRAME after `open` flips (it
- * animates in), so nothing is in the DOM on the render that asked for it — the
- * same reason `channels/components/thread-manage.test.tsx` awaits its confirm.
- */
-async function open(over: Partial<React.ComponentProps<typeof IdentityEditor>> = {}) {
-  const onSave = vi.fn();
-  const onDelete = vi.fn();
-  const onClose = vi.fn();
-  render(
-    <IdentityEditor
-      open
-      workspaceId="ws-1"
-      session={1}
-      identity={null}
-      teams={TEAMS}
-      knowledgeBases={BASES}
-      saving={false}
-      deleting={false}
-      error={null}
-      onClose={onClose}
-      onSave={onSave}
-      onDelete={onDelete}
-      {...over}
-    />
-  );
-  await screen.findByRole("dialog");
-  return { onSave, onDelete, onClose };
-}
-
-const field = (selector: string) =>
-  document.querySelector<HTMLInputElement | HTMLTextAreaElement>(selector)!;
-
-/**
- * ⚠ **INLINE SINCE 2026-09-22 — THERE IS NO ADD-FIELD DIALOG (Samuel).** The
- * gray "New field" box appends a BLANK row and the operator types in it, so this
- * helper fills the first empty row and only presses the box when every row on
- * screen already has a key. A new identity opens holding one blank row
- * (`lib/identity-draft.ts › emptyDraft`), which is why the press is conditional
- * rather than unconditional.
- */
-function addField(key: string, value: string) {
-  const keys = () =>
-    Array.from(
-      document.querySelectorAll<HTMLInputElement>('input[aria-label$=" key"]')
-    );
-  let at = keys().findIndex((input) => input.value === "");
-  if (at === -1) {
-    fireEvent.click(screen.getByRole("button", { name: "New field" }));
-    at = keys().length - 1;
-  }
-  fireEvent.change(keys()[at], { target: { value: key } });
-  fireEvent.change(
-    field(`input[aria-label="Field ${at + 1} value"]`),
-    { target: { value } }
-  );
-}
-
-/** The create verb, in ONE place — the kit conversion shortened the word. */
-const CREATE_VERB = "Create";
-
-/**
- * ⚠ EVERY PILL LOOKUP IS SCOPED TO ITS ROW. Model and Visibility are both
- * `PillChoice` now, so `getAllByRole("tab")` spans two controls and a bare
- * `getByRole("tab", { name })` can match the wrong one.
- */
-const row = (name: string) =>
-  within(screen.getByRole("tablist", { name }));
-
-/** Pick a VISIBILITY scope by the label `lib/visibility.ts` gives it. */
-function pickScope(label: string) {
-  fireEvent.click(row("Visibility").getByRole("tab", { name: label }));
-}
-
-/** The scope pills on screen, in order, as text. */
-const scopeLabels = () =>
-  row("Visibility")
-    .getAllByRole("tab")
-    .map((t) => t.textContent);
 
 afterEach(cleanup);
 
@@ -150,7 +48,7 @@ describe("what the editor renders", () => {
     expect(field("#agent-identity-name")).toBeTruthy();
     expect(field("#agent-identity-description")).toBeTruthy();
     expect(field("#agent-identity-instructions")).toBeTruthy();
-    expect(scopeLabels()).toEqual(["Private", "Team", "Public"]);
+    expect(tabLabels("Visibility")).toEqual(["Private", "Team", "Public"]);
     expect(row("Model").getByRole("tab", { name: "Default" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "New field" })).toBeTruthy();
     // ⚠ **THE KNOWLEDGE TREE IS IN THE FORM, NOT BEHIND AN ADD BUTTON**
@@ -159,7 +57,7 @@ describe("what the editor renders", () => {
   });
 
   it("loads an existing identity's values, chips included", async () => {
-    await open({ identity: identity() });
+    await open({ identity: filledIdentity() });
     expect(field("#agent-identity-name").value).toBe("Release captain");
     expect(field("#agent-identity-instructions").value).toBe("Be terse.");
     expect(field('input[aria-label="Field 1 key"]').value).toBe("repo");
@@ -170,7 +68,7 @@ describe("what the editor renders", () => {
     await open();
     expect(screen.queryByRole("button", { name: "Delete" })).toBeNull();
     cleanup();
-    await open({ identity: identity() });
+    await open({ identity: filledIdentity() });
     expect(screen.getByRole("button", { name: "Delete" })).toBeTruthy();
   });
 
@@ -185,10 +83,10 @@ describe("what the editor renders", () => {
 describe("the visibility scopes the mount offers", () => {
   it("is the workspace's three by default, in `SECTIONS` order", async () => {
     await open();
-    expect(scopeLabels()).toEqual(["Private", "Team", "Public"]);
+    expect(tabLabels("Visibility")).toEqual(["Private", "Team", "Public"]);
   });
 
-  it("🔒 is ONE inside a link container, and it is not called Public", async () => {
+  it("is ONE inside a link container, and it is not called Public", async () => {
     // ⚠ A container has no teams (INVARIANTS §4A), so `team` there is a scope
     // that can never resolve to anybody — and `workspace` means "the other
     // people in this relationship", not "everyone in your company".
@@ -198,7 +96,7 @@ describe("the visibility scopes the mount offers", () => {
     // option would create write-only rows. The array IS the control, so the
     // array is where that door closes (`lib/visibility.ts`).
     await open({ sections: SECTIONS_CONTAINER, containerKind: "link" });
-    expect(scopeLabels()).toEqual(["Shared in this channel"]);
+    expect(tabLabels("Visibility")).toEqual(["Shared in this channel"]);
   });
 
   it("takes its LABELS from `lib/visibility.ts`, never from a literal here", async () => {
@@ -224,16 +122,14 @@ describe("the team picker", () => {
   it("appears the moment the operator picks Team, and takes MORE than one", async () => {
     // ⚠ MULTI, because the server's `teamIds` is a set — a single-value control
     // would drop every other grant on the next save.
-    const { onSave } = await open();
+    const { draft } = await open();
     fireEvent.change(field("#agent-identity-name"), { target: { value: "Scout" } });
-    pickScope("Team");
-    fireEvent.click(screen.getByRole("button", { name: "Add team" }));
+    pick("Visibility", "Team");
+    press("Add team");
     fireEvent.click(screen.getByRole("menuitem", { name: "Platform" }));
     fireEvent.click(screen.getByRole("menuitem", { name: "Growth" }));
-    fireEvent.click(screen.getByRole("button", { name: CREATE_VERB }));
-
-    const draft = onSave.mock.calls[0][0] as IdentityDraft;
-    expect(draftToCreateBody(draft)).toEqual({
+    press(CREATE_VERB);
+    expect(draftToCreateBody(draft())).toEqual({
       name: "Scout",
       visibility: "team",
       teamIds: ["team-1", "team-2"],
@@ -245,7 +141,7 @@ describe("the team picker", () => {
     fireEvent.change(field("#agent-identity-name"), { target: { value: "Scout" } });
     const save = screen.getByRole("button", { name: CREATE_VERB });
     expect((save as HTMLButtonElement).disabled).toBe(false);
-    pickScope("Team");
+    pick("Visibility", "Team");
     expect(
       (screen.getByRole("button", { name: CREATE_VERB }) as HTMLButtonElement).disabled
     ).toBe(true);
@@ -316,17 +212,16 @@ describe("the popup-form kit's anatomy", () => {
   it("keeps the schema's own length caps, which the kit's field cannot state", async () => {
     // ⚠ `maxLength` went with the boxes; the handler clamps instead, so no save
     // can 400 on a length the operator could not see.
-    const { onSave } = await open();
+    const { draft } = await open();
     fireEvent.change(field("#agent-identity-name"), {
       target: { value: "x".repeat(200) },
     });
-    fireEvent.click(screen.getByRole("button", { name: CREATE_VERB }));
-    const draft = onSave.mock.calls[0][0] as IdentityDraft;
-    expect(draft.name).toHaveLength(120);
+    press(CREATE_VERB);
+    expect(draft().name).toHaveLength(120);
   });
 });
 
-describe("🔒 no Team scope outside a standard workspace", () => {
+describe("no Team scope outside a standard workspace", () => {
   /**
    * Samuel, 2026-09-08: *"we should remove the team option, if it's in the home
    * space, because the team thing is for workspaces."* The client half; the
@@ -334,14 +229,14 @@ describe("🔒 no Team scope outside a standard workspace", () => {
    */
   it("offers all three in a STANDARD workspace", async () => {
     await open({ containerKind: "standard" });
-    expect(scopeLabels()).toEqual(["Private", "Team", "Public"]);
+    expect(tabLabels("Visibility")).toEqual(["Private", "Team", "Public"]);
   });
 
   it.each(["personal", "link"] as const)(
     "drops Team in a %s container, and keeps the rest in order",
     async (kind) => {
       await open({ containerKind: kind });
-      expect(scopeLabels()).toEqual(["Private", "Public"]);
+      expect(tabLabels("Visibility")).toEqual(["Private", "Public"]);
       expect(screen.queryByRole("button", { name: "Add team" })).toBeNull();
     }
   );
@@ -352,7 +247,7 @@ describe("🔒 no Team scope outside a standard workspace", () => {
     // form they may close without saving.
     await open({
       containerKind: "personal",
-      identity: identity({ visibility: "team", teamIds: ["team-1"] }),
+      identity: filledIdentity({ visibility: "team", teamIds: ["team-1"] }),
     });
     const pill = row("Visibility").getByRole("tab", { name: /^Team/ });
     expect(pill.getAttribute("aria-selected")).toBe("true");
@@ -366,61 +261,35 @@ describe("🔒 no Team scope outside a standard workspace", () => {
   });
 
   it("lets Save through the moment the operator picks a value the container holds", async () => {
-    const { onSave } = await open({
+    const { draft } = await open({
       containerKind: "personal",
-      identity: identity({ visibility: "team", teamIds: ["team-1"] }),
+      identity: filledIdentity({ visibility: "team", teamIds: ["team-1"] }),
     });
-    pickScope("Private");
+    pick("Visibility", "Private");
     const save = screen.getByRole("button", { name: "Save" }) as HTMLButtonElement;
     expect(save.disabled).toBe(false);
     fireEvent.click(save);
     // ⚠ AND THE GRANTS GO WITH THE SCOPE — the schema refuses a `teamIds` key on
     // a non-team patch, so carrying them would 400 the next unrelated edit.
-    const draft = onSave.mock.calls[0][0] as IdentityDraft;
-    expect(draft).toMatchObject({ visibility: "private", teamIds: [] });
+    expect(draft()).toMatchObject({ visibility: "private", teamIds: [] });
   });
 
   it("no longer offers the pill it just dropped, once the row is off Team", async () => {
     await open({
       containerKind: "personal",
-      identity: identity({ visibility: "team", teamIds: ["team-1"] }),
+      identity: filledIdentity({ visibility: "team", teamIds: ["team-1"] }),
     });
-    pickScope("Private");
-    expect(scopeLabels()).toEqual(["Private", "Public"]);
+    pick("Visibility", "Private");
+    expect(tabLabels("Visibility")).toEqual(["Private", "Public"]);
   });
 });
 
 describe("the save payload", () => {
   it("is the trimmed name plus the scope, and nothing the operator left empty", async () => {
-    const { onSave } = await open();
+    const { draft } = await open();
     fireEvent.change(field("#agent-identity-name"), { target: { value: "  Scout  " } });
-    fireEvent.click(screen.getByRole("button", { name: CREATE_VERB }));
-    const draft = onSave.mock.calls[0][0] as IdentityDraft;
-    expect(draftToCreateBody(draft)).toEqual({ name: "Scout", visibility: "private" });
-  });
-
-  it("carries instructions, custom fields and attached bases", async () => {
-    const { onSave } = await open();
-    fireEvent.change(field("#agent-identity-name"), { target: { value: "Scout" } });
-    fireEvent.change(field("#agent-identity-instructions"), {
-      target: { value: "Search first." },
-    });
-    addField("repo", "dopl");
-    // ⚠ NO ADD BUTTON SINCE 2026-09-22: the tree is in the form, so the base is
-    // checked where it is listed (Samuel).
-    fireEvent.click(screen.getByRole("treeitem", { name: "Specs" }));
-    fireEvent.click(screen.getByRole("button", { name: CREATE_VERB }));
-
-    const draft = onSave.mock.calls[0][0] as IdentityDraft;
-    expect(draftToCreateBody(draft)).toEqual({
-      name: "Scout",
-      visibility: "private",
-      instructions: "Search first.",
-      fields: [{ key: "repo", value: "dopl" }],
-      // ⚠ `knowledge`, NEVER `knowledgeBaseIds`: the schema refuses both keys in
-      // one request, and this client can spell a folder scope the older cannot.
-      knowledge: [{ baseId: "kb-2", scope: "base" }],
-    });
+    press(CREATE_VERB);
+    expect(draftToCreateBody(draft())).toEqual({ name: "Scout", visibility: "private" });
   });
 
   it("writes NO field for a row the operator opened and never typed in", async () => {
@@ -430,12 +299,11 @@ describe("the save payload", () => {
     // body has to be byte-identical to what it was when adding was a dialog.
     // `cleanFields` is the backstop and it is pinned on its own in
     // `../lib/identity-draft.test.ts`; this is the face's half.
-    const { onSave } = await open();
+    const { draft } = await open();
     fireEvent.change(field("#agent-identity-name"), { target: { value: "Scout" } });
-    fireEvent.click(screen.getByRole("button", { name: "New field" }));
-    fireEvent.click(screen.getByRole("button", { name: CREATE_VERB }));
-    const draft = onSave.mock.calls[0][0] as IdentityDraft;
-    expect(draftToCreateBody(draft).fields).toBeUndefined();
+    press("New field");
+    press(CREATE_VERB);
+    expect(draftToCreateBody(draft()).fields).toBeUndefined();
   });
 
   it("opens a NEW identity on one blank row, and the box adds another", async () => {
@@ -448,21 +316,79 @@ describe("the save payload", () => {
     expect(field('input[aria-label="Field 1 key"]')).toBeTruthy();
     expect(field('input[aria-label="Field 1 key"]').value).toBe("");
     expect(document.querySelector('input[aria-label="Field 2 key"]')).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: "New field" }));
+    press("New field");
     expect(field('input[aria-label="Field 2 key"]')).toBeTruthy();
   });
 
   it("removes the row the X names, and leaves the rest", async () => {
-    await open({ identity: identity() });
-    fireEvent.click(screen.getByRole("button", { name: "Remove field 1" }));
+    await open({ identity: filledIdentity() });
+    press("Remove field 1");
     expect(document.querySelector('input[aria-label="Field 1 key"]')).toBeNull();
+  });
+});
+
+describe("a field's type", () => {
+  it("carries the field TYPE on the wire, and spells `text` as ABSENCE", async () => {
+    // The type must persist (a dropdown whose answer is dropped at save lies); `text` stays
+    // absent, so an untouched row puts the same `{key, value}` on the wire as before types.
+    const { draft } = await open();
+    fireEvent.change(field("#agent-identity-name"), { target: { value: "Scout" } });
+    addField("repo", "dopl");
+    addField("ships", "2026-01-02");
+    press("Field 2 type");
+    fireEvent.click(await screen.findByRole("menuitem", { name: /Date/ }));
+    press(CREATE_VERB);
+    expect(draftToCreateBody(draft()).fields).toEqual([
+      { key: "repo", value: "dopl" },
+      { key: "ships", value: "2026-01-02", type: "date" },
+    ]);
+  });
+
+  it("swaps the VALUE control for the shape, and stores a string either way", async () => {
+    // `number`/`date` change only the keyboard; `boolean` swaps the element so a yes/no is never free text.
+    await open();
+    addField("count", "");
+    press("Field 1 type");
+    fireEvent.click(await screen.findByRole("menuitem", { name: /Number/ }));
+    expect(field('input[aria-label="Field 1 value"]').getAttribute("type")).toBe("number");
+
+    press("Field 1 type");
+    fireEvent.click(await screen.findByRole("menuitem", { name: /Yes \/ no/ }));
+    // A `<select>` keeping its empty option: an unanswered yes/no is not a "no".
+    expect(document.querySelector('select[aria-label="Field 1 value"]')).toBeTruthy();
+  });
+});
+
+describe("attached bases this view cannot reach", () => {
+  // Only a count reaches this viewer; nothing may name the dropped base (id, name or container).
+  it("says how many, and never which", async () => {
+    await open({ identity: filledIdentity({ unreachableKnowledgeBaseCount: 2 }) });
+    expect(screen.getByText(/2 attachments aren't reachable from here/)).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Detach Runbooks" })).toBeTruthy();
+    // `kb-2`/`Specs` are in the editor's options, so resolving the count against them would leak.
+    const line = screen.getByText(/aren't reachable from here/).textContent ?? "";
+    expect(line).not.toMatch(/kb-|Specs|workspace|channel/);
+  });
+
+  // `0` is a decided answer and an absent field an undecorated row; neither prints a line (INVARIANTS §5).
+  it("says nothing when every attached base is reachable", async () => {
+    await open({ identity: filledIdentity({ unreachableKnowledgeBaseCount: 0 }) });
+    expect(screen.queryByText(/reachable from here/)).toBeNull();
+    cleanup();
+    await open({ identity: filledIdentity() });
+    expect(screen.queryByText(/reachable from here/)).toBeNull();
+  });
+
+  it("says nothing while creating an identity", async () => {
+    await open();
+    expect(screen.queryByText(/reachable from here/)).toBeNull();
   });
 });
 
 describe("delete is behind the confirm, and the copy says HARD", () => {
   it("does not fire until the confirmation is taken", async () => {
-    const { onDelete } = await open({ identity: identity() });
-    fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+    const { onDelete } = await open({ identity: filledIdentity() });
+    press("Delete");
     // ⚠ The confirm is its own `ModalShell`, so it too arrives a frame later.
     const confirm = await screen.findByRole("button", { name: "Delete identity" });
     expect(onDelete).not.toHaveBeenCalled();

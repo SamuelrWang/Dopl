@@ -61,7 +61,7 @@ function entryRef(
 
 function identity(over: Partial<AgentIdentity> = {}): AgentIdentity {
   return {
-    id: "tpl-1",
+    id: "id-1",
     workspaceId: "ws-1",
     name: "Release captain",
     description: "Runs the release checklist",

@@ -37,9 +37,10 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { readFileSync } from "node:fs";
-import path from "node:path";
+import { fileURLToPath } from "node:url";
+import { readCode } from "@/shared/testing/source-text";
 import type { AgentIdentity } from "../client/types";
+import { identity as blankIdentity } from "./identity-editor-harness";
 
 let identities: AgentIdentity[] = [];
 let listError: unknown = null;
@@ -61,24 +62,14 @@ const { IdentityLaunchPicker, authorMarker, SEARCH_THRESHOLD } = await import(
 const ME = "user-me";
 const THEM = "user-them";
 
-function identity(over: Partial<AgentIdentity> = {}): AgentIdentity {
-  return {
-    id: "tpl-1",
-    workspaceId: "ws-1",
+const identity = (over: Partial<AgentIdentity> = {}) =>
+  blankIdentity({
     name: "Code auditor",
-    description: null,
     instructions: "Audit the diff. Report findings.",
     model: "claude-opus-5",
-    fields: [],
-    visibility: "private",
-    teamIds: [],
-    knowledgeBases: [],
     createdBy: ME,
-    createdAt: "2026-08-01T00:00:00Z",
-    updatedAt: "2026-08-01T00:00:00Z",
     ...over,
-  };
-}
+  });
 
 const NAMES = new Map([
   [ME, "Sam Wang"],
@@ -137,7 +128,7 @@ describe("what the popover offers", () => {
     // that matters**: the popup prefills Name / Description / Instructions FROM THIS OBJECT
     // (`channels/components/use-agent-launch.ts › applyIdentity`), so an id arrives as three empty fields
     // and a title that cannot name the identity.
-    identities = [identity({ id: "tpl-9" })];
+    identities = [identity({ id: "id-9" })];
     const { onPick, onClose } = mount();
 
     fireEvent.click(screen.getByRole("menuitem", { name: /^Launch Code auditor/ }));
@@ -149,7 +140,7 @@ describe("what the popover offers", () => {
     // ⚠ ONE `menuitem` PER IDENTITY, not two. The chevron's whole job was
     // `launch-sheet.tsx`; a second control opening the same popup would be two ways to do one
     // thing, which is what Samuel's one-launch-surface ruling closes (INVARIANTS §5A).
-    identities = [identity({ id: "tpl-9" })];
+    identities = [identity({ id: "id-9" })];
     mount();
     expect(
       screen.queryByRole("menuitem", { name: "Launch options for Code auditor" })
@@ -279,16 +270,13 @@ describe("grouping and search", () => {
  * them from it.
  */
 describe("no concave surfaces on the launch path", () => {
-  const HERE = path.join(process.cwd(), "src", "features", "agent-identities");
   // ⚠ `launch-sheet.tsx` LEFT THIS LIST ON 2026-09-13 WITH THE FILE (Samuel's one-launch-surface
   // ruling). The sweep in `./identity-editor-surface.test.tsx` reads the whole feature; this list
   // is the explicit half, so a path that no longer exists must come off it or every case here
   // fails on `readFileSync`.
-  const NEW_FILES = [
-    path.join(HERE, "components", "identity-picker.tsx"),
-    path.join(HERE, "components", "identity-approval.tsx"),
-    path.join(HERE, "lib", "launch-overrides.ts"),
-  ];
+  const FILES = ["./identity-picker.tsx", "./identity-approval.tsx", "../lib/launch-overrides.ts"].map(
+    (file) => fileURLToPath(new URL(file, import.meta.url))
+  );
   const FORBIDDEN = [
     "concave-field",
     "concave-track",
@@ -297,11 +285,8 @@ describe("no concave surfaces on the launch path", () => {
     "SECTION_BOX_INSET",
   ];
 
-  it.each(NEW_FILES)("%s wears no pressed-in recipe", (file) => {
-    const code = readFileSync(file, "utf8")
-      .split("\n")
-      .filter((line) => !/^\s*(\/\/|\*|\/\*)/.test(line))
-      .join("\n");
+  it.each(FILES)("%s wears no pressed-in recipe", (file) => {
+    const code = readCode(file);
     for (const forbidden of FORBIDDEN) {
       expect(code, `${file} must not use ${forbidden}`).not.toContain(forbidden);
     }

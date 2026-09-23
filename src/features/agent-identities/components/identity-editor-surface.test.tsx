@@ -16,8 +16,12 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { existsSync, readdirSync } from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
+import { readCode } from "@/shared/testing/source-text";
+
+const REPO = fileURLToPath(new URL("../../../../", import.meta.url));
 
 /**
  * Every shipped `.ts`/`.tsx` under `dir`. ⚠ TESTS ARE EXCLUDED: the suites here
@@ -40,7 +44,7 @@ function sources(dir: string): string[] {
 describe("no concave surfaces", () => {
   // ⚠ SOURCE READ. jsdom loads no stylesheet, so the only honest place to pin a
   // SURFACE ruling is the class strings themselves.
-  const ROOT = path.join(process.cwd(), "src", "features", "agent-identities");
+  const ROOT = path.join(REPO, "src", "features", "agent-identities");
   // ⚠ The UI half only. `server/` renders nothing and has no surface to get
   // wrong; sweeping it would make this suite fail for reasons that are not the
   // ruling, in a directory this page does not own.
@@ -88,14 +92,7 @@ describe("no concave surfaces", () => {
    * membership test is now the one the sentence always stated: every `.tsx` in
    * `pages/home/`, minus an explicit opt-out that has to say why.
    */
-  const HOME_DIR = path.join(
-    process.cwd(),
-    "apps",
-    "desktop-ui",
-    "src",
-    "pages",
-    "home"
-  );
+  const HOME_DIR = path.join(REPO, "apps", "desktop-ui", "src", "pages", "home");
 
   /**
    * ⚠ MAY ONLY EVER SHRINK, and each entry names a reason that is about the
@@ -162,13 +159,9 @@ describe("no concave surfaces", () => {
   });
 
   it.each(FILES)("%s wears no pressed-in recipe", (file) => {
-    const source = readFileSync(file, "utf8");
     // Comments EXPLAIN the ruling by naming the classes it bans, so the check
-    // runs over code lines only.
-    const code = source
-      .split("\n")
-      .filter((line) => !/^\s*(\/\/|\*|\/\*)/.test(line))
-      .join("\n");
+    // runs over code only.
+    const code = readCode(file);
     const sanctioned = HOME_CONCAVE_SANCTIONED.get(path.basename(file));
     for (const forbidden of FORBIDDEN) {
       // ⚠ ONE recipe is excused in ONE file, by name — see
@@ -189,7 +182,7 @@ describe("no concave surfaces", () => {
     (name, recipe) => {
       const file = path.join(HOME_DIR, name);
       expect(existsSync(file)).toBe(true);
-      expect(readFileSync(file, "utf8")).toContain(recipe);
+      expect(readCode(file)).toContain(recipe);
     }
   );
 
@@ -208,8 +201,6 @@ describe("no concave surfaces", () => {
    * rather than restating them.
    */
   describe("the concave section recipe is off the desktop", () => {
-    const REPO = process.cwd();
-
     const ALL = [
       ...sources(path.join(REPO, "src")),
       ...sources(path.join(REPO, "apps", "desktop-ui", "src")),
@@ -221,14 +212,7 @@ describe("no concave surfaces", () => {
      * that name on a line a prefix filter never sees.
      */
     function wearers(recipe: string): string[] {
-      return ALL.filter((file) => {
-        const code = readFileSync(file, "utf8")
-          .replace(/\/\*[\s\S]*?\*\//g, "")
-          .split("\n")
-          .filter((line) => !/^\s*\/\//.test(line))
-          .join("\n");
-        return code.includes(recipe);
-      })
+      return ALL.filter((file) => readCode(file).includes(recipe))
         .map((file) => path.relative(REPO, file))
         .sort();
     }
@@ -268,12 +252,9 @@ describe("no concave surfaces", () => {
    * this page's rows must still be wearing that recipe rather than a fork.
    */
   it("uses the kit's RAISED well for its inputs", () => {
-    const wells = readFileSync(
-      path.join(process.cwd(), "src", "shared", "ui", "wells.ts"),
-      "utf8"
-    );
+    const wells = readCode(new URL("../../../shared/ui/wells.ts", import.meta.url));
     expect(wells).toContain("export const RAISED_INPUT = `${RAISED_WELL}");
-    const rows = readFileSync(path.join(ROOT, "components", "identity-editor-rows.tsx"), "utf8");
+    const rows = readCode(new URL("./identity-editor-rows.tsx", import.meta.url));
     expect(rows).toContain("RAISED_INPUT");
   });
 
@@ -292,7 +273,7 @@ describe("no concave surfaces", () => {
    * from every other one in the tree.
    */
   it("wears the kit's 26px pill on the buttons inside its body", () => {
-    const rows = readFileSync(path.join(ROOT, "components", "identity-editor-rows.tsx"), "utf8");
+    const rows = readCode(new URL("./identity-editor-rows.tsx", import.meta.url));
     expect(rows).toContain("OpenScaleButton");
     expect(rows).toContain("OpenScaleIconButton");
     // A hand-written pill FACE is what the ruling replaced, and the kit's

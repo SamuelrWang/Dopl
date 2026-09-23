@@ -63,7 +63,7 @@ afterEach(cleanup);
 describe("the tree", () => {
   it("opens on the BASES and drills into folders and entries", () => {
     mount();
-      // ⚠ Bases at the root, and nothing beneath them until asked — the read is
+    // ⚠ Bases at the root, and nothing beneath them until asked — the read is
     // lazy, so an unexpanded base costs no request.
     expect(screen.getByRole("treeitem", { name: "Runbooks" })).toBeTruthy();
     expect(screen.getByRole("treeitem", { name: "Specs" })).toBeTruthy();
@@ -145,7 +145,7 @@ describe("the implied subtree", () => {
 
   it("does NOT imply a sibling outside the folder", () => {
     mount([folderRef]);
-      fireEvent.click(screen.getByRole("button", { name: "Expand Runbooks" }));
+    fireEvent.click(screen.getByRole("button", { name: "Expand Runbooks" }));
     // "Loose" sits at the base root, not under Deploys.
     expect(
       screen.getByRole("treeitem", { name: "Loose" }).getAttribute("aria-selected")
@@ -180,32 +180,14 @@ describe("the implied subtree", () => {
       scope: "base",
       path: "Specs",
     };
-    const nested: IdentityKnowledgeRef = {
-      baseId: "kb-1",
-      baseName: "Runbooks",
-      scope: "folder",
-      folderId: "f-1",
-      folderName: "Deploys",
-      path: "Runbooks / Deploys",
-      toolPath: "Deploys",
-    };
-    const onChange = mount([nested, otherBase]);
-      fireEvent.click(screen.getByRole("button", { name: "Expand Runbooks" }));
+    const onChange = mount([folderRef, otherBase]);
+    fireEvent.click(screen.getByRole("button", { name: "Expand Runbooks" }));
     fireEvent.click(screen.getByRole("treeitem", { name: "Runbooks" }));
     const next = last(onChange);
     expect(next.map((r) => r.path).sort()).toEqual(["Runbooks", "Specs"]);
   });
 
-  it("prunes the base's scopes when the base is checked COLLAPSED — the tree is unread (P7-04)", () => {
-    const nested: IdentityKnowledgeRef = {
-      baseId: "kb-1",
-      baseName: "Runbooks",
-      scope: "folder",
-      folderId: "f-1",
-      folderName: "Deploys",
-      path: "Runbooks / Deploys",
-      toolPath: "Deploys",
-    };
+  it("prunes the base's scopes when the base is checked COLLAPSED — the tree is unread", () => {
     const otherEntry: IdentityKnowledgeRef = {
       baseId: "kb-2",
       baseName: "Specs",
@@ -215,7 +197,7 @@ describe("the implied subtree", () => {
       path: "Specs / API",
       toolPath: "API.md",
     };
-    const onChange = mount([nested, otherEntry]);
+    const onChange = mount([folderRef, otherEntry]);
     fireEvent.click(screen.getByRole("treeitem", { name: "Runbooks" }));
     expect(last(onChange).map((r) => r.path).sort()).toEqual(["Runbooks", "Specs / API"]);
   });
@@ -274,7 +256,7 @@ describe("the chips", () => {
 describe("the keyboard", () => {
   it("moves focus with the arrows and toggles with Space", () => {
     const onChange = mount();
-      const rows = screen.getAllByRole("treeitem");
+    const rows = screen.getAllByRole("treeitem");
     rows[0].focus();
     fireEvent.keyDown(screen.getByRole("tree"), { key: "ArrowDown" });
     expect(document.activeElement).toBe(rows[1]);
@@ -284,7 +266,7 @@ describe("the keyboard", () => {
 
   it("expands and collapses with ArrowRight / ArrowLeft", () => {
     mount();
-      const base = screen.getByRole("treeitem", { name: "Runbooks" });
+    const base = screen.getByRole("treeitem", { name: "Runbooks" });
     fireEvent.keyDown(base, { key: "ArrowRight" });
     expect(screen.getByRole("treeitem", { name: "Deploys" })).toBeTruthy();
     fireEvent.keyDown(base, { key: "ArrowLeft" });

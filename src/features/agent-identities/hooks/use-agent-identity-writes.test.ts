@@ -78,7 +78,7 @@ const apiRequest = vi.fn(
     }
     if (method === "POST") {
       const body = opts.body as { name: string };
-      const created = identity("tpl-new", workspaceId, body.name);
+      const created = identity("id-new", workspaceId, body.name);
       // The row EXISTS server-side from here on, so a refetch can find it —
       // which is the only way the cold-entry case below can reach the screen.
       rows[workspaceId] = [...(rows[workspaceId] ?? []), created];
@@ -143,8 +143,8 @@ async function warm() {
 const names = (list: readonly AgentIdentity[]) => list.map((t) => t.name);
 
 beforeEach(() => {
-  rows[WS_CONTAINER] = [identity("tpl-c1", WS_CONTAINER, "Channel Auditor")];
-  rows[WS_HOME] = [identity("tpl-h1", WS_HOME, "Home Scout")];
+  rows[WS_CONTAINER] = [identity("id-c1", WS_CONTAINER, "Channel Auditor")];
+  rows[WS_HOME] = [identity("id-h1", WS_HOME, "Home Scout")];
 });
 
 afterEach(() => {
@@ -179,9 +179,9 @@ describe("a write patches ONE workspace's list", () => {
     const view = await warm();
     await act(async () => {
       await view.result.current.containerWrites.update.mutateAsync({
-        identityId: "tpl-c1",
+        identityId: "id-c1",
         body: { name: "Renamed" },
-        optimistic: identity("tpl-c1", WS_CONTAINER, "Renamed"),
+        optimistic: identity("id-c1", WS_CONTAINER, "Renamed"),
       });
     });
     await waitFor(() =>
@@ -197,9 +197,9 @@ describe("a write patches ONE workspace's list", () => {
     const view = await warm();
     await act(async () => {
       await view.result.current.containerWrites.update.mutateAsync({
-        identityId: "tpl-c1",
+        identityId: "id-c1",
         body: { name: "Renamed" },
-        optimistic: identity("tpl-c1", WS_CONTAINER, "Renamed"),
+        optimistic: identity("id-c1", WS_CONTAINER, "Renamed"),
         expectedUpdatedAt: "2026-08-26T00:00:00.000Z",
       });
     });
@@ -215,7 +215,7 @@ describe("a write patches ONE workspace's list", () => {
     const view = await warm();
     await act(async () => {
       await view.result.current.homeWrites.remove.mutateAsync({
-        identityId: "tpl-h1",
+        identityId: "id-h1",
       });
     });
     await waitFor(() =>

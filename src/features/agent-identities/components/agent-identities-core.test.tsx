@@ -20,6 +20,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import type { AgentIdentity } from "../client/types";
+import { identity } from "./identity-editor-harness";
 
 const identities: AgentIdentity[] = [];
 const mutate = vi.fn();
@@ -48,25 +49,6 @@ vi.mock("@/features/knowledge/client/hooks", () => ({
 }));
 
 const { AgentIdentitiesCore } = await import("./agent-identities-core");
-
-function identity(over: Partial<AgentIdentity> = {}): AgentIdentity {
-  return {
-    id: "tpl-1",
-    workspaceId: "ws-1",
-    name: "Release captain",
-    description: null,
-    instructions: null,
-    model: null,
-    fields: [],
-    visibility: "private",
-    teamIds: [],
-    knowledgeBases: [],
-    createdBy: "user-1",
-    createdAt: "2026-08-01T00:00:00Z",
-    updatedAt: "2026-08-01T00:00:00Z",
-    ...over,
-  };
-}
 
 function renderPage(rows: AgentIdentity[]) {
   identities.length = 0;
@@ -165,7 +147,7 @@ describe("the create affordance", () => {
 });
 
 describe("what this page deliberately leaves out", () => {
-  it("offers no launch control — launch-time selection is a later phase", () => {
+  it("offers no launch control", () => {
     renderPage([identity()]);
     expect(screen.queryByText(/launch/i)).toBeNull();
     expect(screen.queryByText(/run/i)).toBeNull();

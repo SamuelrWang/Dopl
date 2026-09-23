@@ -77,7 +77,7 @@ describe("a failed read is a failed read", () => {
   });
 
   it("lets a real (even stale) answer win on a failed refetch", () => {
-    const rows = [{ id: "tpl-real" }] as unknown as AgentIdentity[];
+    const rows = [{ id: "id-real" }] as unknown as AgentIdentity[];
     const result = read({ data: rows, error: new Error("refetch failed") });
     expect(result.identities).toBe(rows);
   });
