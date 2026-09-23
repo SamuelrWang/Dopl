@@ -153,7 +153,7 @@ test("CONTAINMENT: the profile comes from MAIN's watched-channel DTO, not the di
 test("CONTAINMENT: the permission axes are the operator's DURABLE posture, not the directive's", async () => {
   const h = boot();
   await h.api.handle(row({ start_modes: { tools: "bypass", messages: "auto_both" }, tools: "bypass" }), WS);
-  assert.deepEqual(h.cfg.lastSpec.startModes, { tools: "bypass", messages: "auto_both" },
+  assert.deepEqual(h.cfg.lastSpec.startModes, { tools: "bypass", messages: "auto_both", native: {} },
     "…which is what `channel-prefs.launchStartModes` answered, from local storage");
 });
 

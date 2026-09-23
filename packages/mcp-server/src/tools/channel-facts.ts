@@ -247,51 +247,12 @@ export function postureFacts(d: LaunchDirective): Record<string, FactValue> {
   const tools = d.appliedToolMode;
   const messages = d.appliedMessageMode;
   const chain = d.appliedChain;
-  const reported =
-    tools === null && messages === null && chain === null
-      ? { posture: "not reported", chain: "not reported" }
-      : {
-          posture: `${tools ?? "-"}/${messages ?? "-"}`,
-          chain: chain === null ? "not reported" : chain ? "on" : "off",
-        };
-  return { ...reported, ...allowedFacts(d) };
-}
-
-/**
- * **WHAT THE SERVER PERMITTED** — A9's G6/G7/G8 half of the same question, and
- * the reason it is SEPARATE fields rather than a better `posture=` (2026-09-02).
- *
- * ⚠ **THREE GROUPS, NOT TWO SPELLINGS OF ONE.** `start*` is what was ASKED,
- * `applied*` is what the MACHINE reported, and `resolved*` is what the SERVER
- * allowed to be asked. G6's rule — *"your operator's machine narrows what you
- * ask; it never widens"* — was enforced on the desktop alone, so an offline or
- * older machine narrowed nothing and reported nothing: `posture=not reported`
- * was the whole answer, and it was indistinguishable from "nothing was clamped".
- * The server's clamp happens either way, which is exactly why it is worth a
- * field of its own rather than being folded into the machine's echo.
- *
- * ⚠ **SILENT WHEN THE SERVER RECORDED NO CEILING**, which is every channel today
- * (F-449: the columns have no editing surface yet). An `allowed=-/-` on every
- * launch would be a line of noise claiming a decision nobody made.
- *
- * ⚠ **`model=` IS AN ECHO AND NEVER A REFUSAL** (G8). It prints only when the
- * server resolved the request to a DIFFERENT canonical id than the caller typed
- * — the case the caller cannot otherwise see. A model this build does not
- * recognise resolves to `null` and still reaches the machine; the silence there
- * is the honest answer, and `directive.model` above already says what was asked.
- */
-export function allowedFacts(d: LaunchDirective): Record<string, FactValue> {
-  const tools = d.resolvedToolMode ?? null;
-  const messages = d.resolvedMessageMode ?? null;
-  const chain = d.resolvedChain ?? null;
-  const model = d.resolvedModel ?? null;
-  const facts: Record<string, FactValue> = {};
-  if (tools !== null || messages !== null) {
-    facts.allowed = `${tools ?? "-"}/${messages ?? "-"}`;
-  }
-  if (chain !== null) facts.allowedChain = chain ? "on" : "off";
-  if (model !== null && model !== d.model) facts.resolvedModel = model;
-  return facts;
+  return tools === null && messages === null && chain === null
+    ? { posture: "not reported", chain: "not reported" }
+    : {
+        posture: `${tools ?? "-"}/${messages ?? "-"}`,
+        chain: chain === null ? "not reported" : chain ? "on" : "off",
+      };
 }
 
 /**
@@ -326,12 +287,11 @@ export function allowedFacts(d: LaunchDirective): Record<string, FactValue> {
  * than swapping vendors, and the refusal arm renders that. This function only
  * ever describes a launch that happened.
  *
- * ⚠ **`model=` HERE IS THE MACHINE'S, AND IT IS SEPARATE FROM THE `model=` THE
- * OP ALREADY PRINTS** (which is the REQUEST) and from `resolvedModel=` in
- * {@link allowedFacts} (which is the SERVER's create-time echo of an id IT
- * recognised, off a Claude-shaped table). This one prints only when the machine
+ * ⚠ **`appliedModel=` IS THE MACHINE'S, AND IT IS SEPARATE FROM THE `model=` THE
+ * OP ALREADY PRINTS** (which is the REQUEST). It prints only when the machine
  * reports a model different from the one asked for — the case a caller cannot
- * otherwise see, and the case a dropped cross-vendor model produces.
+ * otherwise see (e.g. the runtime default filling an absent pick). There is no
+ * server-side model echo any more (F7/P8-11): the machine's roster is the truth.
  */
 export function runtimeFacts(d: LaunchDirective): Record<string, FactValue> {
   const applied = d.appliedRuntime ?? null;

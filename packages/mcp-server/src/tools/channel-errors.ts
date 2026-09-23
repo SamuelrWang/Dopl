@@ -14,6 +14,7 @@
  */
 
 import { neutralizeInline } from "./channel-shared";
+import { apiErrorCode } from "./respond";
 
 /** Duck-typed HTTP 400 from the Dopl API (across the @dopl/client boundary). */
 export function isBadRequest(e: unknown): boolean {
@@ -62,13 +63,6 @@ export type BadRequestKind =
   | "invalid_request"
   | "workspace"
   | "unknown";
-
-/** The `code` a DoplApiError carries, or null when the body had none. */
-function apiErrorCode(e: unknown): string | null {
-  if (typeof e !== "object" || e === null) return null;
-  const code = (e as { code?: unknown }).code;
-  return typeof code === "string" && code.length > 0 ? code : null;
-}
 
 export function classifyBadRequest(e: unknown): BadRequestKind {
   switch (apiErrorCode(e)) {
@@ -147,9 +141,22 @@ export function classifyForbidden(e: unknown): ForbiddenKind {
 export function serverDetail(e: unknown): string {
   if (typeof e !== "object" || e === null) return "";
   const raw = (e as { apiMessage?: unknown }).apiMessage;
-  if (typeof raw !== "string" || raw.trim() === "") return "";
-  const safe = neutralizeInline(raw);
+  const message = typeof raw === "string" ? raw.trim() : "";
+  // P8-04: a VALIDATION_FAILED names no field; its first zod issue does (`field: why`).
+  const issue = firstIssue((e as { details?: unknown }).details);
+  const text = [message, issue && `(${issue})`].filter(Boolean).join(" ");
+  if (!text) return "";
+  const safe = neutralizeInline(text);
   return safe ? ` The server said: ${safe}.` : "";
+}
+
+/** The first zod issue in a 400's `details`, as `path: message`, or "". */
+function firstIssue(details: unknown): string {
+  if (!Array.isArray(details) || details.length === 0) return "";
+  const issue = details[0] as { path?: unknown; message?: unknown };
+  const path = Array.isArray(issue?.path) ? issue.path.map(String).join(".") : "";
+  const message = typeof issue?.message === "string" ? issue.message : "";
+  return [path, message].filter(Boolean).join(": ");
 }
 
 /**

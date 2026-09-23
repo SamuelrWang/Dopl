@@ -160,7 +160,7 @@ async function launch(a) {
   // rather than of the adapter, because a runtime with no floor is perfectly launchable WITH a gate.
   // ⚠ `'disabled'` AND NOT AN EIGHTH WIRE WORD, AND THAT IS A DECISION RATHER THAN A SHORTCUT.
   // `launch-directive-wire.js › REFUSAL_REASONS` is not a local list: the SAME seven words are
-  // `schema-launch.ts › LaunchRefusalReasonSchema`, `service-launch.ts › LAUNCH_REFUSAL_REASONS`,
+  // `schema-launch.ts › LaunchRefusalReasonSchema`, `schema-launch-modes.ts › LAUNCH_REFUSAL_REASONS`,
   // `use-agents-panel.ts › launchRefusalText`'s copy map, and a column CHECK in a deployed
   // migration. Minting a word here would put this tree one word ahead of a constraint that
   // REJECTS it at rest — a refusal that fails to record itself. `'disabled'` is the existing
@@ -297,7 +297,7 @@ async function launch(a) {
   if (s.authHold === true) return { skipped: 'auth-hold' };
   // ⚠ THE AGENT ID IS PART OF THE ANSWER (2026-08-21): a SPAWN-IDLE launch has no work in
   // flight, so what the caller needs back is the ADDRESS it just created.
-  return { sessionId: s.sessionId, agentId: agentId };
+  return { sessionId: s.sessionId, agentId: agentId, model }; // `model`: what it launched with (directive echo)
 }
 
 /**

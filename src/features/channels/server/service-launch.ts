@@ -12,11 +12,6 @@ import {
   LaunchDirectiveNotFoundError,
 } from "./errors";
 import { resolveDirectiveColor } from "./service-launch-color";
-// ⚠ THE CEILING IS THE CREATE'S FIFTH GATE AND ITS OWN MODULE (§1 cap, and the
-// `service-launch-identity.ts` precedent one line up): it is a SECOND COPY of the
-// desktop's clamp across a tree boundary the two cannot import over, so it lives
-// in one place with a parity test rather than inline in a service.
-import { resolveDirectivePosture } from "./service-launch-posture";
 import * as launchRepo from "./repository-launch";
 import * as repoTasks from "./repository-tasks";
 import { loadVisibleChannel, type ChannelContext } from "./service-shared";
@@ -26,12 +21,10 @@ import { insertOrConverge } from "./service-mailbox-idempotency";
 // ⚠ THE IDENTITY FENCE LEFT THIS FILE ON 2026-09-02 (§1 cap). It is the CREATE's
 // third gate and its position in the order is argued below, where the gates are.
 import { resolveIdentityForDirective } from "./service-launch-identity";
-// ⚠ THE MAPPER AND THE REFUSAL VOCABULARY LEFT THIS FILE ON 2026-09-01 (§1 cap,
-// and a second service now reads both — `service-launch-agent.ts`). RE-EXPORTED
-// below so no import path outside this feature changed and there is still no
-// second path to either symbol.
+// The row → DTO mapper lives in `service-launch-dto.ts` (`service-launch-agent.ts` reads it too);
+// re-exported so no import path outside this feature changed.
 import { isTerminal, toDirective } from "./service-launch-dto";
-export { LAUNCH_REFUSAL_REASONS, toDirective } from "./service-launch-dto";
+export { toDirective } from "./service-launch-dto";
 
 /**
  * LAUNCH-OVER-MCP — an operator's external agent asking that operator's OWN
@@ -220,19 +213,8 @@ export async function createLaunchDirective(
 
   const identity = await resolveIdentityForDirective(ctx, input.identity);
 
-  // ── 5. **THE POSTURE CEILING** (2026-09-02, A9 — G6, G7, G8) ──────────────
-  //
-  // ⚠ **ABOVE PRESENCE, ON THE IDENTITY GATE'S ARGUMENT.** `offline` is a 200
-  // saying "nothing was asked", and answering a chain the channel forbids with
-  // "your machine is asleep" makes the caller fix the wrong thing and ask again a
-  // minute later for the real refusal — a ceiling needs nobody's machine.
-  // ⚠ **AND BELOW THE IDEMPOTENCY PROBE**: a stored row is this request's answer
-  // and must not be re-decided against a ceiling that has moved since.
-  // The rule itself, and why it refuses on one axis and clamps on two, is
-  // `service-launch-posture.ts`.
-  const posture = resolveDirectivePosture(channel, input);
-
-  // ── 6. **THE COLOUR**, at the ceiling's position on the ceiling's argument.
+  // ── **THE COLOUR**, above presence on the identity gate's argument: a caller error is
+  // answerable without anyone's machine.
   const color = await resolveDirectiveColor(ctx, channel.id, input.color);
 
   if (!(await operatorIsOnline(ctx))) {
@@ -283,17 +265,13 @@ export async function createLaunchDirective(
       start_tool_mode: input.tools ?? null,
       start_message_mode: input.messages ?? null,
       chain: input.chain ?? null,
-      // ⚠ **THE THIRD POSTURE GROUP, AND THE CREATE IS ITS ONLY WRITER**
-      // (2026-09-02, A9). `start_*` records what was ASKED and is never
-      // rewritten; `applied_*` is the MACHINE's echo and is written by the
-      // DECIDE; this is what the SERVER permitted. G6 asks for the applied value
-      // to be non-null, and it is — by CONSTRUCTION, on every row this build
-      // files, rather than by a constraint that would 500 an insert from a
-      // rolled-back one.
-      resolved_tool_mode: posture.tools,
-      resolved_message_mode: posture.messages,
-      resolved_chain: posture.chain,
-      resolved_model: posture.model,
+      // ⚠ NOT WRITTEN (F7/F10): the server clamps nothing, so `resolved_*` was a byte copy of
+      // the request, and `resolved_model` came from Claude's frozen table on every runtime. The
+      // columns stay (no migration); the machine's `applied_*` echo is the truth.
+      resolved_tool_mode: null,
+      resolved_message_mode: null,
+      resolved_chain: null,
+      resolved_model: null,
       // ⚠ THE RESOLVED KEY, NEVER `input.color`: a caller who named nothing gets the first free
       // one, and the row records what the machine will APPLY.
       color,
@@ -413,8 +391,9 @@ export type DecideLaunchInput =
     }
   /** ⚠ THE NON-LAUNCH KINDS' SUCCESS (2026-09-01). No agent id: the row already
    *  NAMES its target, so a second id on the decide would be a field the machine
-   *  could get wrong about a row it did not write. */
-  | { status: "done" }
+   *  could get wrong about a row it did not write. The optional pair is
+   *  `set_agent_mode`'s echo (F2). */
+  | { status: "done"; appliedTools?: LaunchToolMode; appliedMessages?: LaunchMessageMode }
   | { status: "refused"; refusalReason: LaunchRefusalReason };
 
 /**
@@ -464,13 +443,13 @@ export async function decideLaunchDirective(
       agent_id: input.status === "launched" ? input.agentId : null,
       refusal_reason:
         input.status === "refused" ? input.refusalReason : null,
-      // ⚠ ONLY THE `launched` ARM CAN CARRY THESE. On `done` and `refused` they
-      // are written as `null` rather than left off, so a retried decide cannot
-      // leave a stale echo standing beside a refusal.
+      // ⚠ THE POSTURE PAIR rides `launched` and `done` (a `set_agent_mode`, F2); the rest is
+      // `launched`-only. Every other case is written as `null` rather than left off, so a
+      // retried decide cannot leave a stale echo standing beside a refusal.
       applied_tool_mode:
-        input.status === "launched" ? input.appliedTools ?? null : null,
+        input.status !== "refused" ? input.appliedTools ?? null : null,
       applied_message_mode:
-        input.status === "launched" ? input.appliedMessages ?? null : null,
+        input.status !== "refused" ? input.appliedMessages ?? null : null,
       applied_chain:
         input.status === "launched" ? input.appliedChain ?? null : null,
       applied_agent_name:

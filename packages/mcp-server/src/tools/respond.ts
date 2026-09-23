@@ -108,6 +108,13 @@ export function isApiError(e: unknown, status: number, code: string): boolean {
   );
 }
 
+/** The `code` a DoplApiError carries, or null (duck-typed, like {@link isApiError}). */
+export function apiErrorCode(e: unknown): string | null {
+  if (typeof e !== "object" || e === null) return null;
+  const code = (e as { code?: unknown }).code;
+  return typeof code === "string" && code.length > 0 ? code : null;
+}
+
 /**
  * The SERVER's own human sentence off an api error, or null when it sent none.
  * ⚠ Prefer it over a hand-written one wherever it exists: the server knows which

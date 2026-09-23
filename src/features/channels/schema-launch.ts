@@ -20,33 +20,10 @@ import type {
  * would be a way to name somebody else's computer.
  */
 
-/**
- * THE TWO PERMISSION AXES, **DECLARED ONCE IN THIS FILE AND EXPORTED** —
- * ORDERED NARROWEST FIRST (2026-09-01, T24).
- *
- * ⚠ **THE ORDER IS THE CONTRACT, AND NO COMPILER CHECKS IT.** `closedEnum` proves
- * these arrays are the same SET as {@link LaunchToolMode} / {@link
- * LaunchMessageMode}; it says nothing about the SEQUENCE. The clamp on the other
- * side of the wire is an INDEX COMPARISON over the desktop's own copies
- * (`dopl-desktop-app/main/launch-posture.js › narrowTo`, over
- * `main/launch-directive-wire.js › TOOL_MODES` / `MESSAGE_MODES`), so re-ordering
- * either array silently INVERTS the bound with every test still green.
- *
- * ⚠ **THREE STATEMENTS OF EACH SET, AND ONLY ONE PAIR IS COMPILER-CHECKED** —
- * exactly the caveat {@link LaunchRefusalReasonSchema} carries. Here and
- * `types-launch.ts` are held together by `closedEnum`; the third is
- * `20260910120000_channel_launch_directives_posture.sql`'s value CHECKs, which no
- * TypeScript can reach. A fifth mode is a schema change in all three, in one
- * wave, or a request carrying it passes zod, passes the route and is refused AT
- * REST.
- *
- * ⚠ EXPORTED because the MCP surface publishes the same two enums to its callers
- * and a second literal there is the drift this declaration exists to prevent.
- */
-// ⚠ **THE TWO MODE ARRAYS MOVED TO `schema-launch-modes.ts` (§1 SPLIT, 2026-09-15)** — a LEAF,
-// so this file and `schema-launch-decide.ts` can both read them without a module-eval cycle (that
-// file's header carries the measurement). ⚠ RE-EXPORTED, so every existing importer is unchanged,
-// and the NARROWEST-FIRST order is documented there beside the arrays the clamp indexes into.
+// THE TWO PERMISSION AXES live in the `schema-launch-modes.ts` leaf (both this file and
+// `schema-launch-decide.ts` read them without a module-eval cycle) and are RE-EXPORTED here, so the
+// MCP surface and every importer keep one address. Axis A is the union of every runtime's own
+// words (ruling R3); the machine validates and clamps a word in the launch runtime's order.
 export {
   LAUNCH_MESSAGE_MODES,
   LAUNCH_TOOL_MODES,
@@ -61,32 +38,6 @@ import {
 
 const ToolModeSchema = closedEnum<LaunchToolMode>()(LAUNCH_TOOL_MODES);
 const MessageModeSchema = closedEnum<LaunchMessageMode>()(LAUNCH_MESSAGE_MODES);
-
-// ── ⚠ **`ChannelAgentPostureSchema` AND `ChannelAgentPostureInput` ARE DELETED**
-// (2026-09-06, Samuel's rulings on items 12, 13 and 14) ──────────────────────────────────────
-//
-// They validated THE CHANNEL'S POSTURE CEILING — the three `channels.agent_*` columns a room
-// MANAGER set over EVERY member's agents — edited through the ordinary channel PATCH and
-// manage-gated there. The whole record is gone: the columns are unread, the field is off
-// `MANAGED_CHANNEL_FIELDS`, and `service-launch-posture.ts` no longer clamps or refuses.
-//
-// ⚠ **THE TWO ORDERED ENUMS ABOVE STAY, AND THE DIFFERENCE MATTERS.** This schema reused
-// `LAUNCH_TOOL_MODES` / `LAUNCH_MESSAGE_MODES` rather than restating them because the CEILING
-// and the REQUEST had to agree about what "wider" means — the clamp's comparison was an INDEX
-// into those arrays. That coupling reason is dead with the clamp. **The ORDER is not**: the
-// arrays are still ordered narrowest-first, `LaunchCreateSchema` below still validates a
-// request against them, and `dopl-desktop-app/main/launch-posture.js` still clamps the
-// operator's own posture by index on its own side. Do not "simplify" either array to an
-// unordered set on the grounds that nothing compares them any more — one thing still does, and
-// it is in the other tree where this file's reader cannot see it.
-//
-// ⚠ The `null`-is-the-clear rule this block used to state was rehomed on
-// `ChannelUpdateSchema.defaultResponderAgentName` — and THAT field is deleted too (2026-09-07,
-// items 10 and 11), so the rule now has no channel-agent field left to govern. It survives on
-// `infoCard` and `archived`, where `undefined` still means "not in this patch". ⚠ Its successor
-// setting deliberately has NO clear: `channel_members.unaddressed_responder` is `NOT NULL` with
-// two values, and `'last_addressed'` IS the unconfigured answer, so a nullable spelling there
-// would mint the third state the migration refused.
 
 export const LaunchCreateSchema = z.object({
   /** Channel slug or id. ⚠ Not `.uuid()` — a slug is a legal ref everywhere else
@@ -169,14 +120,15 @@ export const LaunchCreateSchema = z.object({
    */
   identity: safeLabel("Identity", 120).optional(),
   /**
-   * THE POSTURE THIS LAUNCH **ASKS** ITS NEW SESSION TO START ON (T24).
+   * THE POSTURE THIS LAUNCH **ASKS** ITS NEW SESSION TO START ON (T24), in the launch runtime's
+   * own words (ruling R3).
    *
    * ⚠ **ASKS. NEVER WIDENS, AND OMITTING BOTH IS THE PRE-T24 BEHAVIOUR EXACTLY.**
    * The operator's machine CLAMPS each axis to that operator's own stored channel
-   * posture (`main/launch-posture.js › resolvePosture`) and an absent axis
-   * resolves to the ceiling itself. Nothing on this path enforces the clamp and
-   * nothing can — the ceiling is an `electron-store` record no server sees — so
-   * these two are a request, and the result copy has to say so.
+   * posture (`main/launch-posture.js › resolvePosture`), in that runtime's order, and an absent
+   * axis — or a word that runtime does not offer — resolves to the ceiling itself. Nothing on
+   * this path enforces the clamp and nothing can — the ceiling is an `electron-store` record no
+   * server sees — so these two are a request, and the result copy has to say so.
    * ⚠ A `z.enum` rather than a label: the set is CLOSED on the wire, the column
    * CHECK says the same at rest, and a value outside it must be a 400 that NAMES
    * the field rather than a constraint violation surfacing as an opaque 500.

@@ -64,9 +64,9 @@ export const LAUNCH_INPUT_FIELDS = {
     .max(32)
     .optional()
     .describe(
-      // ⚠ **THE SHORTEST HONEST FORM, AND THE STANDING RULE IS IN THE PULLED DOCTRINE** — this
-      // gate's own instruction (`channel-doctrine.ts › MANAGE`, which now carries the full
-      // asymmetry: an unknown MODEL falls back silently, an unknown RUNTIME is refused).
+      // ⚠ **THE SHORTEST HONEST FORM, AND THE STANDING RULE IS IN THE PULLED DOCTRINE**
+      // (`channel-doctrine.ts › MANAGE`: nothing is swapped — an unknown model is refused
+      // `no-model`, an unusable runtime `no-sdk`).
       'op="manage" action="launch" (optional): WHICH RUNTIME, e.g. claude or codex — NOT a `model`, which picks a model inside it. Omit for the channel\'s own. One that machine cannot start is REFUSED, never swapped.',
     ),
 
@@ -106,9 +106,10 @@ export const LAUNCH_INPUT_FIELDS = {
   // `channel-facts.ts › postureFacts` renders the trio together, the desktop
   // clamps them together, and `action="posture"` exists to set them together.
   // Three top-level params for one concept is what made this shape 35 fields.
-  // ⚠ **THE ENUM MEMBERS ARE ORDERED NARROWEST FIRST AND THAT ORDER IS THE
-  // CONTRACT.** The operator's machine clamps by INDEXING into a copy of these
-  // sequences, so re-ordering either one silently inverts the bound.
+  // ⚠ `tools` IS EACH RUNTIME'S OWN WORDS (Samuel ruling R3), grouped per runtime and narrowest
+  // first within each group; the operator's machine validates a word against the launch (or the
+  // running agent's) runtime and clamps in THAT runtime's order. Mirror of
+  // `src/features/channels/schema-launch-modes.ts › LAUNCH_TOOL_MODES` (suite-pinned).
   // ⚠ **`chain` HAS THREE VALUES BECAUSE THERE ARE THREE STATES** (C11): it was
   // an optional boolean whose describe had to spend a paragraph saying that
   // omitting it was NOT `false`, and that exact confusion was a live wire bug
@@ -116,16 +117,20 @@ export const LAUNCH_INPUT_FIELDS = {
   posture: z
     .object({
       tools: z
-        .enum(["manual", "accept_edits", "auto", "bypass"])
+        .enum([
+          "manual", "accept_edits", "auto", "bypass",
+          "untrusted", "granular", "on-request", "never",
+          "allowlist", "auto-review", "run-everything",
+        ])
         .optional()
         .describe(
-          "How much TOOL freedom to ask for — values ordered narrowest first.",
+          "TOOL freedom in the agent's runtime's words, narrowest first: claude manual..bypass, codex untrusted..never, cursor allowlist..run-everything.",
         ),
       messages: z
         .enum(["ask", "auto_inbound", "auto_outbound", "auto_both"])
         .optional()
         .describe(
-          "How much MESSAGE freedom to ask for — narrowest first, floored for a windowless session.",
+          "MESSAGE freedom to ask for — narrowest first, floored for a windowless session.",
         ),
       chain: z
         .enum(["inherit", "on", "off"])

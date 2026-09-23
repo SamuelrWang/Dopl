@@ -7,23 +7,33 @@
  * MODULE-EVAL cycle, not a type one. **Measured**: `ToolModeSchema` arrived `undefined` and every
  * schema suite failed to collect. One leaf, two readers, members declared exactly once.
  *
- * ⚠ **THE ORDER OF THE TWO MODE ARRAYS IS THE CONTRACT AND MAY NOT BE SORTED.** They are
- * NARROWEST FIRST, and the operator's machine clamps by INDEXING into a copy of these sequences
- * (`main/launch-posture.js`), so re-ordering either one silently inverts the bound.
- *
  * ⚠ **THEY ARE ARRAYS, NOT SCHEMAS.** `closedEnum` wraps them at each end, which is what keeps
  * the zod objects out of a module two schemas import at load time.
  */
 
-/** ⚠ NARROWEST FIRST — the clamp indexes into this order. */
+/**
+ * Axis A in EACH RUNTIME'S OWN WORDS (Samuel ruling R3), narrowest first — hand mirrors of the
+ * desktop descriptors' `toolMode.options` (`dopl-desktop-app/main/runtime/<id>/tools.js ›
+ * TOOL_MODES`, suite-pinned). The machine clamps a request in the LAUNCH runtime's order.
+ */
+export const LAUNCH_TOOL_MODES_BY_RUNTIME = {
+  claude: ["manual", "accept_edits", "auto", "bypass"],
+  codex: ["untrusted", "granular", "on-request", "never"],
+  cursor: ["allowlist", "auto-review", "run-everything"],
+} as const;
+
+/**
+ * The union the wire, the route schemas and the column CHECKs accept — a SET, not an order. A
+ * word the resolved runtime does not offer is not applied by the machine (it launches at the
+ * channel posture and echoes that).
+ */
 export const LAUNCH_TOOL_MODES = [
-  "manual",
-  "accept_edits",
-  "auto",
-  "bypass",
+  ...LAUNCH_TOOL_MODES_BY_RUNTIME.claude,
+  ...LAUNCH_TOOL_MODES_BY_RUNTIME.codex,
+  ...LAUNCH_TOOL_MODES_BY_RUNTIME.cursor,
 ] as const;
 
-/** ⚠ NARROWEST FIRST, like its twin, and for the same clamp. */
+/** Axis B is runtime-neutral. ⚠ NARROWEST FIRST. */
 export const LAUNCH_MESSAGE_MODES = [
   "ask",
   "auto_inbound",

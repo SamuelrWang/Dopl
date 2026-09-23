@@ -55,6 +55,14 @@ export const IDENTITY_COMMIT_SRC = readFileSync(join(MAIN, "agent-identity-commi
 // the containment inputs every case in this suite asserts are the real ones.
 export const SPAWN_SRC = readFileSync(join(MAIN, "launch-directive-spawn.js"), "utf8");
 export const wire = require_(join(MAIN, "launch-directive-wire.js"));
+const LAUNCH_DEFAULT = require_(join(MAIN, "runtime", "launch-default.js"));
+const POSTURE = require_(join(MAIN, "launch-posture.js"));
+const PROFILES = require_(join(MAIN, "session-profiles.js"));
+const floorMessages = (m) => (m === "auto_outbound" || m === "auto_both" ? "auto_both" : "auto_inbound");
+/** A runtime's REAL Axis-A words, narrowest first — its own `tools.js › TOOL_MODES`. */
+export function runtimeToolModes(rid) {
+  try { return require_(join(MAIN, "runtime", rid, "tools.js")).TOOL_MODES.slice(); } catch { return []; }
+}
 
 export const WS = "11111111-1111-4111-8111-111111111111";
 export const CH = "22222222-2222-4222-8222-222222222222";
@@ -114,6 +122,30 @@ export function boot(over = {}) {
   const acquires = []; // every `runtime.acquire` this lane made (2026-09-21, U9)
   const rosters = [];  // every `runtime.models()` read this lane made (2026-09-21, U9)
   const identityAsks = []; // every runtime the identity link was asked of (2026-09-23)
+  const runtimeAsks = []; // every C3 `resolveLaunchRuntime` call ({ pick, identity, channelId })
+  const startAsks = []; // every C1 `launchStartModes(channelId, runtimeId)` read — the runtime asked
+  const ceilingAsks = []; // every C1 `launchPostureFor(channelId, runtimeId)` read — the ceiling's runtime
+  // The registry stub, shared by `./runtime` and the REAL C3 resolver's `deps.registry`.
+  const rids = cfg.runtimeIds || ["claude", "codex", "cursor"];
+  const registry = {
+    DEFAULT_ID: rids[0],
+    ids: () => rids.slice(),
+    acquire: async (rid) => {
+      acquires.push(rid);
+      if ((cfg.runtimeUnavailable || []).indexOf(rid) !== -1) {
+        throw new Error(`${rid} is not available on this Mac`);
+      }
+      return {};
+    },
+    resolve: (rid) => ({ descriptor: { id: rid, models: {} } }),
+    runtimeFor: (rid) => ({
+      models: async () => {
+        rosters.push(rid);
+        if (cfg.rosterThrows) throw new Error("model/list did not answer in time");
+        return (cfg.rosters || {})[rid] || { source: "live", ids: [], aliases: [] };
+      },
+    }),
+  };
   const stub = (id) => {
     if (id === "./api") {
       return {
@@ -155,7 +187,22 @@ export function boot(over = {}) {
     if (id === "./channel-prefs") {
       return {
         getOrchestratorLaunch: () => cfg.enabled === true,
-        launchStartModes: () => ({ tools: "bypass", messages: "auto_both" }),
+        // C1 (a1's contract), stubbed at its seam: THAT runtime's record, messages windowless-
+        // floored, native bag verbatim. `cfg.ceilings[rid]` beats `cfg.ceiling` for one runtime.
+        // C1's ceiling helper: the same record, messages NOT floored.
+        launchPostureFor: (channelId, rid) => {
+          ceilingAsks.push(rid);
+          const c = (cfg.ceilings && cfg.ceilings[rid]) || cfg.ceiling
+            || { tools: "bypass", messages: "auto_both" };
+          return { tools: c.tools, messages: c.messages };
+        },
+        launchStartModes: (channelId, rid) => {
+          startAsks.push(rid);
+          const c = (cfg.ceilings && cfg.ceilings[rid]) || cfg.ceiling
+            || { tools: "bypass", messages: "auto_both" };
+          const out = c.messages === "auto_outbound" || c.messages === "auto_both" ? "auto_both" : "auto_inbound";
+          return { tools: c.tools, messages: out, native: { ...(c.native || {}) } };
+        },
         // ⚠ `getLaunchModel` / `getLaunchModelLink` LEFT WITH THE REAL FUNCTIONS (2026-09-23): the
         // channel no longer stores a model, and a fake offering one would let a lane that still
         // read it pass here and throw in production.
@@ -191,6 +238,8 @@ export function boot(over = {}) {
       };
     }
     if (id === "./launch-directive-wire") return wire;
+    // Each runtime's REAL Axis-A words (`toolModesFor`, C2's helper) — it loads under node.
+    if (id === "./session-profiles") return require_(join(MAIN, "session-profiles.js"));
     // ⚠ THE CONTAINMENT NARROWING (2026-09-02, ruling B7) — the REAL table, not a stub. It is the
     // one statement of the profile vocabulary and it is electron-free by contract, so a fake here
     // would let this suite go green about a narrowing that never happened.
@@ -222,30 +271,7 @@ export function boot(over = {}) {
     // ⚠ **`ids` DOES NOT CONTAIN AN UNKNOWN ID, WHICH IS THE POINT OF THE MEMBERSHIP TEST**: the
     // real `resolve()` fails OPEN to the default, so `acquire('nonsense')` would SUCCEED. A case
     // asking for an unregistered runtime must be refused by `ids()`, before `acquire` is reached.
-    if (id === "./runtime") {
-      const rids = cfg.runtimeIds || ["claude", "codex", "cursor"];
-      return {
-        DEFAULT_ID: rids[0],
-        ids: () => rids.slice(),
-        acquire: async (rid) => {
-          acquires.push(rid);
-          if ((cfg.runtimeUnavailable || []).indexOf(rid) !== -1) {
-            throw new Error(`${rid} is not available on this Mac`);
-          }
-          return {};
-        },
-        // 2026-09-23: the directive lane resolves a non-default runtime's no-pick DEFAULT against
-        // the sealed adapter; the default itself is `./runtime/launch-default`'s, stubbed below.
-        resolve: (rid) => ({ descriptor: { id: rid, models: {} } }),
-        runtimeFor: (rid) => ({
-          models: async () => {
-            rosters.push(rid);
-            if (cfg.rosterThrows) throw new Error("model/list did not answer in time");
-            return (cfg.rosters || {})[rid] || { source: "live", ids: [], aliases: [] };
-          },
-        }),
-      };
-    }
+    if (id === "./runtime") return registry;
     // ⚠ 2026-09-23 — THE RUNTIME'S OWN DEFAULT MODEL, stubbed at its seam: the real module settles a
     // live catalog. `cfg.runtimeDefault` is what this account's catalog would offer; absent, a no-pick
     // stays no-pick. `test/runtime-launch-default.test.mjs` drives the real rule.
@@ -253,6 +279,13 @@ export function boot(over = {}) {
     // identity's model travels as given (a roster that cannot say — the real function's fail-open).
     if (id === "./runtime/launch-default") {
       return {
+        // C3 — the REAL resolver (a1), over this harness's registry and channel pick.
+        resolveLaunchRuntime: (args) => {
+          runtimeAsks.push(args);
+          return LAUNCH_DEFAULT.resolveLaunchRuntime(args, {
+            registry, channelRuntime: { getChannelRuntime: () => cfg.channelRuntime || "" },
+          });
+        },
         withRuntimeDefault: async (_adapter, model) => (model || cfg.runtimeDefault || ""),
         identityModelFor: async (rid, model) => {
           identityAsks.push(rid);
@@ -302,7 +335,21 @@ export function boot(over = {}) {
         // reducer's fail-closed coercion live, and it is driven for real in
         // `session-mode-floor.test.mjs`. What THIS harness controls is which answer comes back,
         // so a case can ask what the DIRECTIVE lane does with each.
-        setModeByTask: (a) => { modes.push(a); return cfg.setMode || { ok: true }; },
+        // C2's reply shape, emulated with the REAL rules: a pinned mode clamps to the channel
+        // value for the session's runtime (its own order / message bits), then the windowless
+        // message floor; `{ ok, tools, messages, clamped }`. `cfg.setMode` overrides the answer.
+        setModeByTask: (a) => {
+          modes.push(a);
+          if (cfg.setMode) return cfg.setMode;
+          const live = (cfg.live || []).find((r) => r && r.agentId === a.agentId) || {};
+          const rid = live.runtimeId || null;
+          const c = (cfg.ceilings && cfg.ceilings[rid]) || cfg.ceiling || { tools: "bypass", messages: "auto_both" };
+          const clampTo = a.axis === "tools"
+            ? POSTURE.narrowTo(a.mode, c.tools, PROFILES.toolModesFor(rid))
+            : POSTURE.narrowMessageMode(a.mode, c.messages);
+          const mode = a.axis === "messages" ? floorMessages(clampTo) : clampTo;
+          return { ok: true, [a.axis]: mode, clamped: clampTo !== a.mode };
+        },
       };
     }
     if (id === "./agent-names") {
@@ -353,7 +400,7 @@ export function boot(over = {}) {
   // was actually asked about. Nothing about the module is wrapped — `handle` is the real one.
   const handle = (frame, ws) => { cfg.lastFrame = frame; return api.handle(frame, ws); };
   return { api: { ...api, handle }, cfg, posts, gets, arms, logged, resolves, controls, names,
-    flushes, modes, acquires, rosters, identityAsks };
+    flushes, modes, acquires, rosters, identityAsks, runtimeAsks, startAsks, ceilingAsks };
 }
 
 /**

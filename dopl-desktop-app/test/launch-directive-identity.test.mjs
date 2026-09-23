@@ -80,7 +80,7 @@ for (const [label, reason] of [
 // ⚠ T35 — AND A CLASSIFIED 404 CHANGES NOTHING ABOUT THE OUTCOME. `identity-resolve.js` may now
 // come back with the SERVER's own "it lives in <tenancy>" note beside the word; the note is for
 // this operator's log, and the DECISION is byte-identical, because a decide carries a refusal
-// REASON out of a closed vocabulary (`service-launch-dto.ts › LAUNCH_REFUSAL_REASONS`, paired with
+// REASON out of a closed vocabulary (`schema-launch-modes.ts › LAUNCH_REFUSAL_REASONS`, paired with
 // the column's own CHECK) and no free text. The orchestrator is told the same RULE by
 // `channel-ops-launch.ts › REFUSAL_SENTENCES["no-identity"]` instead of the ROW.
 test("IDENTITY: a 404 the server CLASSIFIED still decides `refused` / `no-identity`, unchanged", async () => {
@@ -136,7 +136,7 @@ test("CONTAINMENT: an IDENTITY supplies prompt content and NOT ONE containment i
   await h.api.handle(row({ identity_id: TPL }), WS);
   const spec = h.cfg.lastSpec;
   assert.equal(spec.toolProfile, "dopl_only", "main's own watched-channel DTO, unchanged");
-  assert.deepEqual(spec.startModes, { tools: "bypass", messages: "auto_both" },
+  assert.deepEqual(spec.startModes, { tools: "bypass", messages: "auto_both", native: {} },
     "…which is channel-prefs' answer, not the identity's — same object, different SOURCE");
   assert.equal(spec.windowless, true);
   assert.equal(spec.operatorArmed, true);

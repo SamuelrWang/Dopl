@@ -190,7 +190,6 @@ export {
   listPendingLaunchDirectives,
   claimLaunchDirective,
   decideLaunchDirective,
-  LAUNCH_REFUSAL_REASONS,
 } from "./service-launch";
 
 // AGENT MANAGEMENT OVER MCP (Samuel, 2026-09-01) — the SAME mailbox, two more

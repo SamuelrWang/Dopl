@@ -119,59 +119,21 @@ describe("POST /api/channels/launch-directives — the handler forwards the whol
   });
 });
 
-/**
- * THE `launched` ARM of `LaunchDecideSchema`, as the handler re-builds it.
- *
- * ⚠ ANCHORED ON THE ARM, NOT THE FILE. The handler's ternary also builds a `done` and a
- * `refused` object, and a whole-file scan would pass because some other arm happened to mention
- * the key.
- */
-function decidedKeys(): Set<string> {
-  const src = readFileSync(DECIDE_ROUTE_PATH, "utf8");
-  const arm = /status:\s*"launched",([\s\S]*?)\n\s*\}\n/.exec(src);
-  expect(arm, "the decide handler no longer builds a `launched` arm").not.toBeNull();
-  const keys = new Set<string>();
-  for (const line of arm![1].split("\n")) {
-    const code = line.trim();
-    if (code.startsWith("//") || code.startsWith("*") || code.startsWith("/*")) continue;
-    const key = /^(\w+):/.exec(code);
-    if (key) keys.add(key[1]);
-  }
-  return keys;
-}
-
+// 🔒 F2: the decide handler re-built each arm by enumerating fields, and dropped the `done` arm's
+// `set_agent_mode` echo (as it had dropped `appliedAgentName` before). It now passes the parsed
+// decision through whole, so no field the schema validates can be lost at this handler.
 describe("POST /api/channels/launch-directives/decide — the machine's whole report lands", () => {
-  it("forwards every `launched`-arm field the schema validates", () => {
-    // ⚠ THE SHAPE OF A DISCRIMINATED-UNION ARM, read off the schema rather than hand-listed, so
-    // the field added next month is covered by the case written today.
-    const arm = LaunchDecideSchema.options.find(
-      (o) => o.shape.status.value === "launched",
-    );
-    expect(arm, "the schema still has a `launched` arm").toBeDefined();
-    // ⚠ `status` IS THE DISCRIMINATOR AND `directiveId` IS A SEPARATE ARGUMENT to the service —
-    // `decideLaunchDirective(ctx, input.directiveId, { … })` — so neither belongs in the object
-    // this case reads. Everything else the machine reported does.
-    const schemaKeys = Object.keys(arm!.shape).filter(
-      (k) => k !== "status" && k !== "directiveId",
-    );
-    const forwarded = decidedKeys();
-    const missing = schemaKeys.filter((k) => !forwarded.has(k));
-    expect(
-      missing,
-      `the machine REPORTED these and the route DROPS them, so the row records "not reported" `
-        + `for something that was reported: ${missing.join(", ")}`,
-    ).toEqual([]);
+  it("passes the parsed decision through whole — no arm is re-built by hand", () => {
+    const src = readFileSync(DECIDE_ROUTE_PATH, "utf8");
+    expect(src).toMatch(/const \{ directiveId, \.\.\.decision \} = input;/);
+    expect(src).toMatch(/decideLaunchDirective\(ctx, directiveId, decision\)/);
+    expect(src).not.toMatch(/status:\s*"(launched|done|refused)"/);
   });
 
-  /**
-   * ⚠ **THE THREE THE DEFECTS WERE ABOUT, NAMED.** `appliedAgentName` is the one that was
-   * actually lost; `appliedRuntime` / `appliedModel` are U9's pair, added to the same object
-   * the same day this was found — which is precisely the situation where a fourth goes missing.
-   */
-  it("forwards appliedAgentName, appliedRuntime and appliedModel by name", () => {
-    const forwarded = decidedKeys();
-    for (const k of ["appliedAgentName", "appliedRuntime", "appliedModel"]) {
-      expect(forwarded.has(k), `${k} is dropped by the decide handler`).toBe(true);
-    }
+  it("the schema's `done` arm carries the re-posture echo the handler now forwards", () => {
+    const done = LaunchDecideSchema.options.find((o) => o.shape.status.value === "done");
+    expect(Object.keys(done!.shape)).toEqual(
+      expect.arrayContaining(["appliedTools", "appliedMessages"]),
+    );
   });
 });

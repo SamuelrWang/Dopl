@@ -25,7 +25,9 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 import { join } from "node:path";
-import { boot, decidePosts, row, wire, MAIN, WS, DID } from "./_launch-directive-harness.mjs";
+import {
+  boot, decidePosts, row, wire, runtimeToolModes, MAIN, WS, DID,
+} from "./_launch-directive-harness.mjs";
 
 const require_ = createRequire(import.meta.url);
 const posture = require_(join(MAIN, "launch-posture.js"));
@@ -34,11 +36,13 @@ const launchRow = (over = {}) => row({ goal: "do the thing", ...over });
 const decided = (h) => decidePosts(h).map((p) => p.body);
 /** The `startModes` the lane handed the spawn funnel. */
 const handed = (h) => (h.cfg.lastSpec || {}).startModes;
+/** Claude's own Axis-A order — the clamp order is always ONE runtime's, never the wire union. */
+const CLAUDE = runtimeToolModes("claude");
 
 // ── 1. THE PURE RULE ─────────────────────────────────────────────────────────────────────
 
 test("NARROW: a request no wider than the ceiling stands; a wider one lands at the ceiling", () => {
-  const T = wire.TOOL_MODES;
+  const T = CLAUDE;
   assert.equal(posture.narrowTo("auto", "bypass", T), "auto");
   assert.equal(posture.narrowTo("bypass", "bypass", T), "bypass");
   assert.equal(posture.narrowTo("bypass", "auto", T), "auto");
@@ -47,7 +51,7 @@ test("NARROW: a request no wider than the ceiling stands; a wider one lands at t
 });
 
 test("NARROW: an unknown value on EITHER side fails closed, because -1 is narrower than all", () => {
-  const T = wire.TOOL_MODES;
+  const T = CLAUDE;
   assert.equal(posture.narrowTo("god_mode", "bypass", T), "bypass", "an unknown REQUEST clamps");
   assert.equal(posture.narrowTo("bypass", "god_mode", T), "god_mode", "an unknown CEILING clamps to itself");
 });
@@ -76,17 +80,17 @@ test("NARROW MESSAGES: the axis is TWO capabilities, not a ladder", () => {
 
 test("RESOLVE: an axis nobody asked for takes the ceiling — the pre-T24 behaviour, exactly", () => {
   const p = posture.resolvePosture({ tools: "", messages: "" },
-    { tools: "bypass", messages: "auto_both" }, wire.TOOL_MODES, wire.MESSAGE_MODES);
+    { tools: "bypass", messages: "auto_both" }, CLAUDE, wire.MESSAGE_MODES);
   assert.deepEqual(p, { tools: "bypass", messages: "auto_both", clamped: false });
 });
 
 test("RESOLVE: `clamped` is true only when a REQUEST was cut, never for an absent one", () => {
   const ceiling = { tools: "auto", messages: "auto_inbound" };
   const cut = posture.resolvePosture({ tools: "bypass", messages: "" }, ceiling,
-    wire.TOOL_MODES, wire.MESSAGE_MODES);
+    CLAUDE, wire.MESSAGE_MODES);
   assert.equal(cut.clamped, true);
   const none = posture.resolvePosture({ tools: "", messages: "" }, ceiling,
-    wire.TOOL_MODES, wire.MESSAGE_MODES);
+    CLAUDE, wire.MESSAGE_MODES);
   assert.equal(none.clamped, false, "inheriting the ceiling is not being clamped to it");
 });
 
@@ -105,7 +109,7 @@ test("ORDER: the clamp runs BEFORE the windowless floor, which is the contract",
     ceiling: { tools: "manual", messages: "ask" },
     chainRequested: null, chainAllowed: false,
     floorMessages: (m) => (m === "ask" ? "auto_inbound" : "auto_both"),
-    toolOrder: wire.TOOL_MODES, messageOrder: wire.MESSAGE_MODES,
+    toolOrder: CLAUDE, messageOrder: wire.MESSAGE_MODES,
   });
   assert.deepEqual(plan.modes, { tools: "manual", messages: "auto_inbound" });
   assert.equal(plan.clamped, true);
@@ -118,7 +122,8 @@ test("LANE: a directive naming NO posture launches exactly as it did before T24"
   // stored pair, message axis floored.
   const h = boot({ ceiling: { tools: "bypass", messages: "auto_both" } });
   return h.api.handle(launchRow(), WS).then(() => {
-    assert.deepEqual(handed(h), { tools: "bypass", messages: "auto_both" });
+    assert.deepEqual(handed(h), { tools: "bypass", messages: "auto_both", native: {} },
+      "nothing asked → nothing pinned: the session follows the live channel value");
     // ⚠ "EXACTLY AS BEFORE T24" IS A CLAIM ABOUT THE **SESSION**, NOT ABOUT THE DECIDE BODY. The
     // echo trio joined that body on 2026-09-01 (T24's second half, F-410) and it is reported on
     // EVERY launch, not only a clamped one — otherwise silence would mean two things at once
@@ -144,13 +149,14 @@ test("LANE: a directive naming NO posture launches exactly as it did before T24"
 test("LANE: a NARROWER request is honoured — asking is the point of the ticket", async () => {
   const h = boot({ ceiling: { tools: "bypass", messages: "auto_both" } });
   await h.api.handle(launchRow({ start_tool_mode: "auto", start_message_mode: "auto_inbound" }), WS);
-  assert.deepEqual(handed(h), { tools: "auto", messages: "auto_inbound" });
+  assert.deepEqual(handed(h), { tools: "auto", messages: "auto_inbound", native: {}, pinned: true },
+    "an ASKED posture is pinned as the session's own pick, so the narrower ask sticks (C2)");
 });
 
 test("LANE: a WIDER request is CLAMPED to the operator's stored pair, and still launches", async () => {
   const h = boot({ ceiling: { tools: "accept_edits", messages: "auto_inbound" } });
   await h.api.handle(launchRow({ start_tool_mode: "bypass", start_message_mode: "auto_both" }), WS);
-  assert.deepEqual(handed(h), { tools: "accept_edits", messages: "auto_inbound" });
+  assert.deepEqual(handed(h), { tools: "accept_edits", messages: "auto_inbound", native: {}, pinned: true });
   // ⚠ **AND THE CLAMP IS NOW REPORTED TO THE CALLER, WHICH IS F-410 CLOSED.** The decide echoes
   // the APPLIED pair — `accept_edits`/`auto_inbound` — never the `bypass`/`auto_both` that was
   // asked for. Before 2026-09-01 the clamp existed only in the `diag` line below, so an
@@ -172,7 +178,7 @@ test("LANE: an UNSET channel posture is manual/ask, so no directive can widen th
   await h.api.handle(launchRow({ start_tool_mode: "bypass", start_message_mode: "auto_both" }), WS);
   // ⚠ The tool axis lands at `manual`; the MESSAGE axis is floored to `auto_inbound` afterwards,
   // because a windowless session has no Accept surface and `ask` would strand every inbound turn.
-  assert.deepEqual(handed(h), { tools: "manual", messages: "auto_inbound" });
+  assert.deepEqual(handed(h), { tools: "manual", messages: "auto_inbound", native: {}, pinned: true });
 });
 
 // ── 3. THE CHAIN REQUEST ─────────────────────────────────────────────────────────────────

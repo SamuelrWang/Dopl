@@ -344,11 +344,21 @@ describe("the two permission axes agree across both trees", () => {
         // own modules) is still held against the winner, which is where the drift this suite
         // exists for would actually appear.
         if (name === "TOOL_MODES" && isOtherAdapter(file)) continue;
+        // The directive wire's list is the UNION of every runtime's words (ruling R3) — its own case below.
+        if (name === "TOOL_MODES" && file === DIRECTIVE_VOCAB) continue;
         expect(modes(desktopSource(file), name), file).toEqual(winner);
       }
       expect(modes(web, name), WEB_MODULE).toEqual(winner);
     }
   );
+
+  const DIRECTIVE_VOCAB = "launch-directive-vocab.js";
+  it("the directive wire's Axis A is the union of every adapter's own list", () => {
+    const adapters = declaringFiles("TOOL_MODES").filter((f) => f.startsWith("runtime/"));
+    const union = adapters.flatMap((f) => modes(desktopSource(f), "TOOL_MODES"));
+    expect(adapters.length).toBeGreaterThanOrEqual(3);
+    expect([...modes(desktopSource(DIRECTIVE_VOCAB), "TOOL_MODES")].sort()).toEqual([...union].sort());
+  });
 
   it("the web module's DEFAULT is the desktop's fail-closed answer", () => {
     // A default the desktop would itself coerce away is a posture the operator can never

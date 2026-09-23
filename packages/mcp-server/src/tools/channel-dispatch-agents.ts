@@ -212,7 +212,7 @@ export async function dispatchManageAction(
         args.posture?.messages === undefined
       ) {
         return err(
-          'op="manage" action="posture" is missing required params: pass posture with at least one of tools (manual | accept_edits | auto | bypass) or messages (ask | auto_inbound | auto_outbound | auto_both). Passing one and omitting the other is normal — the omitted axis is left alone. ⚠ Whatever you pass is a REQUEST: your operator\'s machine narrows it to the ceiling they set by hand and never widens past it.',
+          'op="manage" action="posture" is missing required params: pass posture with at least one of tools (in the agent\'s runtime\'s own words — claude manual..bypass, codex untrusted..never, cursor allowlist..run-everything) or messages (ask | auto_inbound | auto_outbound | auto_both). Passing one and omitting the other is normal — the omitted axis is left alone. ⚠ Whatever you pass is a REQUEST: your operator\'s machine narrows it to the ceiling they set by hand and never widens past it.',
         );
       }
       // ⚠ THE TWO AXES GO THROUGH UNTOUCHED. The schema's enum is the only

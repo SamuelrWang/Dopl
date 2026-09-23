@@ -144,7 +144,7 @@ test("DIRECTIVE/CODEX: the identity's Codex model is spent — the bug this file
 test("DIRECTIVE/CODEX: a Claude identity model is skipped to Codex's default, not refused", async () => {
   const h = withIdentity("claude-opus-5", { channelRuntime: "codex", runtimeDefault: "gpt-6-sol" });
   const s = await spec(h, { model: "" });
-  assert.equal(s.model, "gpt-6-sol");
+  assert.equal(s.model, "", "no model named — the FUNNEL spends Codex's default (P3-09: one path)");
   assert.deepEqual(h.identityAsks, ["codex"], "asked of the LAUNCH runtime");
 });
 

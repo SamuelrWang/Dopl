@@ -16,7 +16,6 @@
 // call, so this module holds no module state and its suite can drive it without arming a watcher.
 
 const channelPrefs = require('./channel-prefs');
-const channelRuntime = require('./channel-runtime'); // 2026-08-31: which runtime this channel's agents run on
 const wire = require('./launch-directive-wire');
 const sessionModel = require('./session-model');
 // ⚠ THE POSTURE BOUND (2026-09-01, T24), SHARED WITH THE `set_agent_mode` KIND and pure. A
@@ -27,9 +26,92 @@ const launchPosture = require('./launch-posture');
 const { diag } = require('./diag');
 
 /**
+ * THE LAUNCH RUNTIME (C3, Samuel ruling R5): the directive's pick → the identity's runtime → the
+ * channel's → the registry default. A pick or an identity runtime this Mac cannot run is REFUSED
+ * `no-sdk` (no eleventh wire word: it already means "no such runtime here"), never swapped.
+ */
+async function launchRuntime(pick, identity, channelId) {
+  const r = await require('./runtime/launch-default').resolveLaunchRuntime({ pick, identity, channelId });
+  if (r && r.ok) return { id: String(r.runtimeId || '') };
+  diag('launch-directive: runtime', String((r && r.runtimeId) || pick || '(identity)'),
+    'is not usable here (' + String((r && r.reason) || 'unknown') + ') — REFUSING rather than falling back');
+  return { refused: 'no-sdk' };
+}
+
+/**
+ * **THE ID THIS LANE REPORTS AS `appliedRuntime`** — the resolved pick spelled out.
+ *
+ * ⚠ `''` MEANS THE DEFAULT ADAPTER AND MUST BE REPORTED AS ITS NAME, NOT AS SILENCE. `null` on
+ * the column means NOT REPORTED (an older desktop), and an orchestrator reading that word beside
+ * a successful launch learns nothing. The registry is the only thing that can name the default.
+ */
+function appliedRuntimeId(id) {
+  if (id) return id;
+  try { return require('./runtime').DEFAULT_ID || ''; } catch (_err) { return ''; }
+}
+
+/** The model id the launch actually resolved to — `runtime.modelArg`'s answer where there is one. */
+function appliedModelId(runtimeId, modelArg) {
+  try {
+    const rt = require('./runtime').runtimeFor(runtimeId);
+    if (rt && typeof rt.modelArg === 'function') {
+      const r = rt.modelArg(modelArg || '');
+      if (r && r.ok && r.id) return r.id;
+    }
+  } catch (_err) { /* fall through to what this lane applied */ }
+  return modelArg || '';
+}
+
+/**
+ * The model, on every runtime alike (P3-09): the directive's own pick as given, else the
+ * identity's model when THIS runtime offers it (`launch-default.js › identityModelFor`), else `''`.
+ * The funnel refuses an unknown pick on the cached catalog (`no-model`), fails open when the roster
+ * is unreadable (the pick is never dropped), and spends the runtime default for `''`.
+ */
+async function resolveModel(runtimeId, d, identity) {
+  const fromIdentity = require('./session-launch-op').identityModel(sessionModel, identity);
+  return sessionModel.chainModel(d.model)
+    || require('./runtime/launch-default').identityModelFor(runtimeId, fromIdentity);
+}
+
+/**
+ * The posture a new session starts on, in the LAUNCH runtime's own words (rulings R3/R4).
+ * Ceiling: that runtime's record (`channel-prefs.js › launchPostureFor`, C1); native bag:
+ * `launchStartModes`. A tool word the runtime does not offer is not applied (that axis runs at the
+ * channel posture); the clamp order is the runtime's descriptor order, then the windowless floor.
+ * An ask is PINNED as the session's own pick (C2: both axes), so the gate keeps the narrower of it
+ * and the live channel value — the echo is what it enforces.
+ */
+function planPosture(d, runtimeId, chainAllowed) {
+  const order = require('./session-profiles').toolModesFor(runtimeId); // that runtime's words, narrowest first
+  const askedTools = d.startToolMode && order.indexOf(d.startToolMode) !== -1 ? d.startToolMode : '';
+  if (d.startToolMode && !askedTools) {
+    diag('launch-directive: tool mode', d.startToolMode, 'is not a', runtimeId || 'default-runtime',
+      'word — that axis launches at the channel posture');
+  }
+  const plan = launchPosture.resolveLaunch({
+    requested: { tools: askedTools, messages: d.startMessageMode },
+    ceiling: channelPrefs.launchPostureFor(d.channelId, runtimeId),
+    chainRequested: d.chain,
+    chainAllowed,
+    floorMessages: (m) => channelPrefs.windowlessMessageMode(d.channelId, m),
+    toolOrder: order, messageOrder: wire.MESSAGE_MODES,
+  });
+  if (plan.clamped) {
+    diag('launch-directive: posture CLAMPED to this channel\'s stored pair — asked',
+      String(d.startToolMode || '-') + '/' + String(d.startMessageMode || '-'),
+      'applied', plan.modes.tools + '/' + plan.modes.messages);
+  }
+  const start = channelPrefs.launchStartModes(d.channelId, runtimeId) || {};
+  const hand = { tools: plan.modes.tools, messages: plan.modes.messages, native: { ...(start.native || {}) } };
+  if (askedTools || d.startMessageMode) hand.pinned = true;
+  return { hand, chain: plan.chain };
+}
+
+/**
  * SPAWN, THROUGH THE ORDINARY FUNNEL. Returns `{ refused: <word> }`, or — on success —
- * `{ agentId, appliedTools, appliedMessages, appliedChain }`, the ECHO the decide reports back
- * (2026-09-01). The three `applied*` values are the RESOLVED ones, never the requested ones.
+ * `{ agentId, applied* }`, the ECHO the decide reports back. Every `applied*` value is the
+ * RESOLVED one, never the requested one.
  *
  * EVERY CONTAINMENT INPUT COMES FROM THIS MACHINE, NOT FROM THE DIRECTIVE. Stated field by field
  * because this is the whole safety argument:
@@ -40,11 +122,11 @@ const { diag } = require('./diag');
  *                 `channel_agent` — `full` minus the shell — because an agent with a shell and its
  *                 own bearer reaches the REST API directly. The fact comes from this machine's own
  *                 roster memo, never the row.
- *   startModes    the operator's DURABLE per-channel posture (`channel-prefs.js ›
- *                 getLaunchPosture`) as the CEILING, message axis floored at `auto_inbound` for the
- *                 windowless reason. Since T24 a directive may ASK for a NARROWER pair, and
- *                 `launch-posture.js › resolveLaunch` is the clamp: asking is admitted, widening is
- *                 not, and the ceiling is still the operator's own record.
+ *   startModes    the operator's DURABLE per-channel record FOR THE LAUNCH RUNTIME
+ *                 (`channel-prefs.js › launchStartModes`) as the CEILING, its native bag verbatim,
+ *                 message axis floored at `auto_inbound` for the windowless reason. A directive may
+ *                 ASK for a NARROWER pair in that runtime's words; `launch-posture.js ›
+ *                 resolveLaunch` is the clamp: asking is admitted, widening is not.
  *   windowless    literal `true`. There is one spawn shape.
  * The directive supplies `goal`, `model`, an IDENTITY ID and — since T24 — a posture REQUEST and a
  * chaining REQUEST. None reaches a permission decision unclamped, and a chain asked for where the
@@ -76,200 +158,17 @@ const { diag } = require('./diag');
  * `session-dispatch.js › mayWake` refuses. The FENCE did not move and must not; the SPAWN SHAPE
  * did. `buildFencedTurn` fences the goal on both branches, and only the WHEN differs.
  */
-/**
- * **WHICH RUNTIME THIS DIRECTIVE RUNS ON — AND THE ONE PLACE AN EXPLICIT ASK IS REFUSED RATHER
- * THAN SWAPPED** (2026-09-21, U9).
- *
- * 🔒 **THE DEFECT, VERBATIM FROM THE PLAN**: *a live MCP launch carrying `model: "codex"` was
- * accepted but started a Claude Sonnet agent, because the MCP contract has no runtime field and
- * an unknown model falls through to the default adapter.* Both halves were real, and this
- * function is the second half's answer.
- *
- * ── THE PRECEDENCE, AND WHY IT IS NOT SYMMETRIC ──────────────────────────────────────────────
- *   1. THE DIRECTIVE'S OWN `runtime` — an EXPLICIT ask. Honoured, or REFUSED. Never swapped.
- *   2. THE CHANNEL'S stored runtime (`channel-runtime.js › getChannelRuntime`) — the inherited
- *      default this lane has always used, unchanged.
- *   3. THE REGISTRY DEFAULT (`main/runtime/index.js › DEFAULT_ID`, the first registered).
- * Links 2 and 3 FAIL OPEN, exactly as they did before this wave: an absent or unknown channel
- * pick reads as "no pick" and the default adapter runs. Link 1 FAILS CLOSED. **That asymmetry IS
- * the ticket**: a stored channel pick from a build that knew an adapter this one does not must
- * not strand the room, while a request somebody just made must not quietly become another vendor.
- *
- * ⚠ **THE MEMBERSHIP TEST IS `ids()` AND IT MUST COME BEFORE `acquire()`, WHICH IS THE ONE TRAP
- * HERE.** `runtime/index.js › resolve` FAILS OPEN to the default for an unknown id — correct for
- * a stored session record, and exactly wrong for a live request — so `acquire('nonsense')`
- * SUCCEEDS by acquiring Claude. Asking the registry for its `ids()` first is what makes the
- * refusal real. **Do not reorder these two.**
- *
- * ⚠ **AND THE SECOND CHECK IS A REAL ONE, NOT BELT AND BRACES.** `acquire` runs the adapter's own
- * `available()` gate, so "registered but not installed / not signed in" is refused HERE with the
- * runtime NAMED in the diag, instead of reaching `session-launch.js` and coming back as the
- * anonymous `no-sdk` that means "this machine has no agent runtime" on every runtime.
- *
- * ⚠ **`no-sdk` RATHER THAN AN ELEVENTH REFUSAL WORD**, deliberately. The vocabulary is CLOSED on
- * the wire in four places (this tree's `REFUSAL_REASONS`, `schema-launch-modes.ts`, the column
- * CHECK, and the MCP `RETRY_ADVICE` map), and `no-sdk` already means precisely *"there is no such
- * agent runtime on this Mac"* — which is the true statement in both arms below. Its retry advice
- * is already `no`, which is also right: nothing the caller does changes the answer.
- *
- * ⚠ **THE REGISTRY IS LAZY-REQUIRED**, the idiom this lane already uses for `./targeting` and
- * `./identity-resolve`: `main/runtime/index.js` registers three adapters at load and the suites
- * evaluate this module against stubbed leaves.
- */
-async function resolveRuntime(requested, channelId) {
-  const registry = require('./runtime');
-  const asked = typeof requested === 'string' ? requested.trim() : '';
-  if (asked) {
-    // ⚠ MEMBERSHIP FIRST — see the docblock. `ids()` is the ONLY enumeration of what this build
-    // ships, and a second copy anywhere is the drift the registry exists to prevent.
-    if (registry.ids().indexOf(asked) === -1) {
-      diag('launch-directive: the directive asked for runtime', asked,
-        '— this build has no such adapter registered (' + registry.ids().join(', ') + ');'
-        + ' REFUSING rather than launching another vendor');
-      return { refused: 'no-sdk' };
-    }
-    try {
-      await registry.acquire(asked);
-    } catch (err) {
-      diag('launch-directive: runtime', asked, 'is registered but NOT usable here —',
-        (err && err.message) || String(err), '— REFUSING rather than falling back');
-      return { refused: 'no-sdk' };
-    }
-    return { id: asked, explicit: true };
-  }
-  // ⚠ THE INHERITED CHAIN, UNCHANGED FROM BEFORE U9. `getChannelRuntime` already normalizes
-  // against the same registry and answers `''` for "no pick", which `session-launch.js` reads as
-  // the default adapter — so `''` is passed on rather than being resolved to a literal here.
-  const channel = channelRuntime.getChannelRuntime(channelId);
-  return { id: channel, explicit: false };
-}
-
-/**
- * **THE ID THIS LANE REPORTS AS `appliedRuntime`** — the resolved pick spelled out.
- *
- * ⚠ `''` MEANS THE DEFAULT ADAPTER AND MUST BE REPORTED AS ITS NAME, NOT AS SILENCE. `null` on
- * the column means NOT REPORTED (an older desktop), and an orchestrator reading that word beside
- * a successful launch learns nothing. The registry is the only thing that can name the default.
- */
-function appliedRuntimeId(id) {
-  if (id) return id;
-  try { return require('./runtime').DEFAULT_ID || ''; } catch (_err) { return ''; }
-}
-
-/**
- * **THE MODEL, RESOLVED INSIDE THE RUNTIME THAT WILL ACTUALLY RUN IT** (2026-09-21, U9).
- *
- * ⚠ **THE OLD CHAIN WAS CLAUDE'S, ON EVERY RUNTIME, AND THAT IS HALF THE ORIGINAL DEFECT.**
- * `sessionModel.chainModel` / `aliasForModelId` resolve against `session-model.js`'s FROZEN
- * CLAUDE TABLE, so on a Codex launch the directive's own `codex` id collapsed to `''` ("no
- * opinion") and the chain fell through to the IDENTITY's and then the CHANNEL's model — both
- * Claude ids — which were then handed to a non-Claude adapter.
- *
- * ⚠ **SO THE CHAIN IS NOW SCOPED TO THE DEFAULT (CLAUDE) ADAPTER, AND EVERY OTHER RUNTIME GETS
- * ITS OWN ROSTER OR NOTHING.** `''` is not a degradation: it is `descriptor.models
- * .defaultMeansAbsent`, the convention the whole precedence chain rests on — no model argument at
- * all, i.e. that platform's own default — which is the only correct answer once a cross-vendor id
- * has been refused. ⚠ SINCE 2026-09-23 THE IDENTITY LINK RUNS ON EVERY RUNTIME, filtered by THAT
- * runtime's roster (`launch-default.js › identityModelFor`), so a Codex identity's Codex model is
- * spent on Codex and a Claude identity's model is skipped there — never handed across.
- *
- * ⚠ **THE ROSTER IS ASKED ONLY WHEN THERE IS A QUESTION TO ANSWER** — a non-default runtime AND a
- * requested model. `runtime.models()` on a live-roster adapter spawns a process, so asking it on
- * every launch would put a Codex app-server in the path of every Claude launch. It is also
- * allowed to FAIL: an unreachable roster answers "drop the model", never "guess", and never
- * another runtime's list (the plan's R11 — catalog failure must not substitute a vendor).
- *
- * ⚠ **IT REJECTS, IT NEVER RE-ROUTES.** A Claude model named on a Codex launch changes NOTHING
- * about the runtime — the session still starts on Codex, on Codex's own default model, and the
- * drop is named in the diag and in the `model=` / `appliedModel=` pair the MCP result prints.
- */
-/** The model id the launch actually resolved to — `runtime.modelArg`'s answer where there is one. */
-function appliedModelId(runtimeId, modelArg) {
-  try {
-    const rt = require('./runtime').runtimeFor(runtimeId);
-    if (rt && typeof rt.modelArg === 'function') {
-      const r = rt.modelArg(modelArg || '');
-      if (r && r.ok && r.id) return r.id;
-    }
-  } catch (_err) { /* fall through to what this lane applied */ }
-  return modelArg || '';
-}
-
-async function resolveModel(runtimeId, d, identity) {
-  const registry = require('./runtime');
-  let defaultId = '';
-  try { defaultId = registry.DEFAULT_ID || ''; } catch (_err) { defaultId = ''; }
-  // ⚠ THE DEFAULT ADAPTER'S CHAIN (spec §3c, minus the channel link since 2026-09-23):
-  //   directive.model > identity.model > the runtime's default
-  // Every link is `chainModel` — "a real pick, or '' meaning KEEP GOING" — INCLUDING the
-  // directive's own (F-285). ⚠ SINCE 2026-09-22 AN UNRECOGNISED ID NO LONGER FALLS THROUGH: it
-  // commits the chain and the funnel REFUSES it (`no-model`), because falling through is how an
-  // unknown id started the product default while the launch echoed the id it was asked for.
-  // 🔓 `channelPrefs.getLaunchModelLink` WAS THE THIRD LINK AND IS DELETED (Samuel: *"We don't
-  // need a pin model in the settings"*); `''` now reaches the funnel, which spends the runtime's
-  // own default (`runtime/launch-default.js`).
-  // ⚠ **THE IDENTITY LINK IS ASKED OF THE LAUNCH RUNTIME, ON BOTH BRANCHES (2026-09-23).** An
-  // identity's model counts only when THIS runtime offers it (`launch-default.js ›
-  // identityModelFor`); a foreign one — a Claude id on a Codex launch — is SKIPPED to the runtime
-  // default, never refused. The directive's own `model` is the launcher's explicit pick and is
-  // not filtered: an unknown one is still refused `no-model`.
-  const launchDefault = require('./runtime/launch-default');
-  const fromIdentity = require('./session-launch-op').identityModel(sessionModel, identity);
-  if (!runtimeId || runtimeId === defaultId) {
-    return sessionModel.chainModel(d.model)
-      || launchDefault.identityModelFor(runtimeId || defaultId, fromIdentity);
-  }
-  const asked = typeof d.model === 'string' ? d.model.trim() : '';
-  // ⚠ NO PICK ON A NON-DEFAULT RUNTIME: the identity's model if this runtime offers it, else the
-  // runtime default RESOLVED HERE rather than left to the funnel, so the `appliedModel=` this lane
-  // reports is the model the launch actually names (Codex: `gpt-6-sol` when this account's catalog
-  // offers it, else `''` — Codex's own pick). The funnel's call is then a no-op on a named id.
-  if (!asked) {
-    const own = await launchDefault.identityModelFor(runtimeId, fromIdentity);
-    if (own) return own;
-    try {
-      return await launchDefault.withRuntimeDefault(registry.resolve(runtimeId), '');
-    } catch (_err) {
-      return '';
-    }
-  }
-  let roster = null;
-  try {
-    roster = await registry.runtimeFor(runtimeId).models();
-  } catch (err) {
-    diag('launch-directive: could not read', runtimeId, "'s model roster —",
-      (err && err.message) || String(err), '— launching on that runtime\'s own default model');
-    return '';
-  }
-  const ids = (roster && Array.isArray(roster.ids) ? roster.ids : []);
-  if (ids.indexOf(asked) !== -1) return asked;
-  // ⚠ **NOT DROPPED ANY MORE (2026-09-22) — HANDED ON, SO THE FUNNEL REFUSES IT WITH A SENTENCE.**
-  // A roster that ANSWERED and lacks the id is a definitive "this runtime does not offer that
-  // model", and launching on the platform default anyway is the silent substitution this wave
-  // removes. `session-launch.js › refuseUnknownModel` answers `no-model`. An UNREADABLE roster
-  // (the catch above) still drops: that is "Dopl could not check", not "it does not exist".
-  // ⚠ The runtime is still NOT changed: a model never selects a vendor.
-  diag('launch-directive: model', asked, 'is not in', runtimeId, "'s roster — the launch will be refused (no-model)");
-  return asked;
-}
-
 async function spawn(d, deps) {
-  // ⚠ **ANSWERED BEFORE ANY WORK, BESIDE THE CHAIN REFUSAL BELOW**, and for the same reason: an
-  // explicit runtime this machine cannot run is a REFUSAL, and a refusal that costs an identity
-  // fetch and a spawn attempt first is a refusal the operator pays for.
-  const runtime = await resolveRuntime(d.runtime, d.channelId);
-  if (runtime.refused) return { refused: runtime.refused };
-  const plan = launchPosture.resolveLaunch({
-    requested: { tools: d.startToolMode, messages: d.startMessageMode },
-    ceiling: channelPrefs.getLaunchPosture(d.channelId),
-    chainRequested: d.chain,
-    chainAllowed: channelPrefs.getAgentChain(d.channelId),
-    floorMessages: (m) => channelPrefs.windowlessMessageMode(d.channelId, m),
-    toolOrder: wire.TOOL_MODES, messageOrder: wire.MESSAGE_MODES,
-  });
+  // An explicit runtime this machine cannot run is refused before any work (identity fetch, spawn).
+  let runtime = null;
+  if (d.runtime) {
+    runtime = await launchRuntime(d.runtime, null, d.channelId);
+    if (runtime.refused) return { refused: runtime.refused };
+  }
   // ⚠ ANSWERED BEFORE ANY WORK, because the chain request REFUSES where the posture CLAMPS —
   // `launch-posture.js › resolveChain` carries both halves of that asymmetry.
-  if (plan.refused) {
+  const chainAllowed = channelPrefs.getAgentChain(d.channelId);
+  if (launchPosture.resolveChain(d.chain, chainAllowed).refused) {
     // `no-chain`, NOT `no-bridge` (2026-09-02): the two facts are opposite instructions —
     // `no-bridge` means this machine has no context for that channel, while this means the channel
     // is right and ONE SETTING is off. The setting's name travels in the log AND on the wire,
@@ -277,11 +176,6 @@ async function spawn(d, deps) {
     diag('launch-directive: chaining asked for and NOT enabled here —', launchPosture.CHAIN_SETTING,
       'is off for this channel; the operator turns it on in the channel Settings tab');
     return { refused: 'no-chain', setting: launchPosture.CHAIN_SETTING };
-  }
-  if (plan.clamped) {
-    diag('launch-directive: posture CLAMPED to this channel\'s stored pair — asked',
-      String(d.startToolMode || '-') + '/' + String(d.startMessageMode || '-'),
-      'applied', plan.modes.tools + '/' + plan.modes.messages);
   }
   const channel = deps.watchedChannel ? deps.watchedChannel(d.channelId) : null;
   if (!channel) {
@@ -317,23 +211,18 @@ async function spawn(d, deps) {
     return { refused: 'no-identity' };
   }
 
-  // ⚠ **RESOLVED BEFORE THE MODEL, BECAUSE THE MODEL IS RESOLVED INSIDE IT** (U9). The old order
-  // had no such dependency — there was one model table and it was Claude's.
+  // No pick: the identity's runtime, then the channel's (ruling R5) — so it waits for the identity.
+  if (!runtime) {
+    runtime = await launchRuntime('', identity, d.channelId);
+    if (runtime.refused) return { refused: runtime.refused };
+  }
+  const plan = planPosture(d, runtime.id, chainAllowed);
   const modelArg = await resolveModel(runtime.id, d, identity);
   const res = await deps.launch({
     channelId: d.channelId,
     taskId: d.taskId,
     workspaceId: d.workspaceId || null,
-    // ── THE RUNTIME (2026-08-31, port wave D; the DIRECTIVE'S OWN ask added 2026-09-21, U9) ──
-    //
-    // THE CHANNEL'S RUNTIME, INHERITED — `trigger.js › launchResponderSession` carries the
-    // argument for why this record travels where the permission pair may not. A directive lane
-    // has no human at the keyboard, so it inherits the channel's setting exactly as it inherits
-    // the tool profile. Absent => the default.
-    // ⚠ **AND SINCE U9 A DIRECTIVE MAY NAME ONE ITSELF, WHICH OVERRIDES THE CHANNEL AND IS
-    // REFUSED RATHER THAN SWAPPED WHEN THIS MACHINE CANNOT RUN IT.** `resolveRuntime` above is
-    // the whole rule, including why link 1 fails CLOSED while links 2 and 3 fail OPEN.
-    runtime: runtime.id,
+    runtime: runtime.id, // `launchRuntime` above: pick → identity → channel → default (C3)
     goal: d.goal || defaultGoal(channelLevel),
     counterpartyId: null,
     direct: false,
@@ -363,12 +252,8 @@ async function spawn(d, deps) {
     toolProfile: targeting.resolveLaunchToolProfile(channel),
     mode: 'interactive',
     windowless: true,
-    startModes: plan.modes, // T24: the operator's stored pair, or a narrower one the directive asked for
-    // ── ⚠ THE MODEL, RESOLVED INSIDE THE RESOLVED RUNTIME (U9; spec §3c for the Claude chain) ──
-    // `resolveModel` above holds the whole rule and the reason it is now runtime-scoped: the old
-    // chain was Claude's on EVERY runtime, so a Codex launch fell through the directive's own
-    // `codex` id and handed a CLAUDE model to a non-Claude adapter.
-    model: modelArg,
+    startModes: plan.hand, // `planPosture` above: the launch runtime's record, narrowed and pinned if asked
+    model: modelArg, // `resolveModel` above; the funnel refuses an unknown pick and fills a default
     // THE COLOUR THE ORCHESTRATOR ASKED FOR (Samuel, 2026-09-13; docs/specs/agent-colors.md).
     // `dopl_channel(op="manage", action="launch", color=…)` reaches this lane as a directive column
     // and nowhere else — a parameter the server accepts and the spawning machine cannot see would be
@@ -387,7 +272,7 @@ async function spawn(d, deps) {
   //
   // They are `plan`'s values, NEVER `d`'s: `d.*` is what the ORCHESTRATOR ASKED FOR, `plan.*` is
   // what this machine SETTLED ON after the clamp, the windowless floor and the chain rule — the same
-  // objects handed to `deps.launch`, so the report cannot drift from the session. REPORTED ON EVERY
+  // objects handed to `deps.launch`, and (pinned when asked, C2) what the gate enforces. REPORTED ON EVERY
   // LAUNCH, not only a clamped one, so that "not reported" keeps meaning "this machine said
   // nothing" (an older desktop) rather than becoming ambiguous.
   if (res && res.agentId) {
@@ -440,8 +325,8 @@ async function spawn(d, deps) {
     }
     return {
       agentId: res.agentId,
-      appliedTools: plan.modes.tools,
-      appliedMessages: plan.modes.messages,
+      appliedTools: plan.hand.tools,
+      appliedMessages: plan.hand.messages,
       appliedChain: plan.chain,
       appliedAgentName: applied,
       // ⚠ **WHICH RUNTIME AND MODEL THIS LANE SETTLED ON** (2026-09-21, U9) — `runtime`'s and
@@ -452,14 +337,10 @@ async function spawn(d, deps) {
       // so that "not reported" keeps meaning "this machine said nothing" (an older desktop).
       // ⚠ `appliedRuntimeId('')` NAMES THE DEFAULT ADAPTER rather than reporting silence — the
       // whole value of the field is that an orchestrator stops having to assume which vendor ran.
-      // ⚠ **THE MODEL IS THE ONE THE ADAPTER RESOLVED IT TO (2026-09-22)**, off the same live
-      // roster the launch spec spends (`runtime.modelArg`, where an adapter offers one): an absent
-      // pick reports the product fallback's real id rather than silence, and a legacy alias
-      // reports the model it named. An adapter with no resolver reports what this lane applied.
-      // (The old "KNOWN GAP" note here is closed: U5 moved the engine's coercion behind the
-      // adapter, and an unknown id is refused before this point — `no-model`.)
+      // The model the FUNNEL launched with (its runtime default when this lane named none),
+      // resolved by the adapter where it offers `modelArg` (an absent Claude pick → its fallback id).
       appliedRuntime: appliedRuntimeId(runtime.id),
-      appliedModel: appliedModelId(runtime.id, modelArg),
+      appliedModel: appliedModelId(runtime.id, typeof res.model === 'string' ? res.model : modelArg),
     };
   }
   return { refused: wire.refusalFor(res && res.skipped) };

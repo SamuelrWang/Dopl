@@ -14,7 +14,7 @@ import { err, type ToolResponse } from "./respond";
  * than a new pattern.
  *
  * ⚠ **DUCK-TYPED ACROSS THE `@dopl/client` BOUNDARY**, the same discipline
- * `channel-ops-launch.ts › apiErrorCode` / `identityMatches` and `respond.ts ›
+ * `respond.ts › apiErrorCode`, `identityMatches` and `respond.ts ›
  * isNotFound` follow: the error's `details` is a wire shape, not a class this package
  * imports, so it is read defensively and a malformed one degrades to "no list".
  */

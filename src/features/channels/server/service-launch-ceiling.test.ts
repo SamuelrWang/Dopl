@@ -35,17 +35,10 @@ import { ChannelAgentChainForbiddenError } from "./errors";
 import { LAUNCH_DIRECTIVE_TTL_MS } from "../constants";
 
 /**
- * **THE SERVER-SIDE POSTURE CEILING** (2026-09-02, A9 — guardrails G6, G7, G8).
- *
- * ⚠ **WHAT THESE THREE GUARDRAILS ACTUALLY RECORDED IS AN ABSENCE.** *"Your
- * operator's machine narrows what you ask; it never widens"* was true only while
- * a machine was listening — the ceiling lived in an `electron-store` record no
- * server could read, so an offline or older desktop narrowed nothing and refused
- * nothing. Every case below is about what happens with no machine in the loop.
- *
- * ⚠ **AND ABOUT WHAT MUST *NOT* HAPPEN WITH NO CEILING RECORDED.** A channel that
- * has never had one behaves exactly as it does today; a clamp invented from an
- * absence is a server refusing what it was never told to refuse.
+ * **THE SERVER DECIDES NO POSTURE AND RESOLVES NO MODEL.** The channel ceiling is retired, so the
+ * request is stored verbatim (`start_*` / `chain`) and the `resolved_*` group is written `null`
+ * (F10); `resolved_model` is no longer looked up in Claude's frozen table on every runtime (F7).
+ * The operator's machine clamps (`main/launch-posture.js`) and reports `applied_*`.
  */
 
 const WS = "22222222-2222-2222-2222-222222222222";
@@ -104,57 +97,39 @@ beforeEach(() => {
   );
 });
 
-/**
- * ── ⚠ **G6 AND G7 ARE RETIRED (2026-09-06, Samuel's rulings on items 12, 13 and 14)** ──────
- *
- * The channel ceiling is deleted end to end, so there is no clamp to pin and no refusal to
- * pin. These cases REPLACE the old G6/G7 suites and assert the opposite property: **a
- * directive gets exactly the posture it asked for, whatever the channel row still carries.**
- *
- * ⚠ **THEY DRIVE A ROW THAT STILL HAS THE OLD COLUMNS ON PURPOSE.** The migration is
- * non-destructive — the three `agent_*` columns remain and old values are not cleared — so
- * "a row carrying a ceiling no longer clamps" is the real production case, not a synthetic
- * one. A suite that only tested ceiling-free rows would pass without proving the removal.
- *
- * ⚠ **WHAT WAS LOST IS NAMED HERE RATHER THAN JUST DELETED.** G7 refused where G6 clamped,
- * because a clamped chain hands back an agent that hits a bound mid-run after its caller gave
- * it work assuming workers. Both are gone; no room bounds a peer's agent on any axis. The
- * OPERATOR's own clamp (`main/launch-posture.js`) is untouched and is a different thing.
- */
-describe("the channel ceiling is retired — a request is no longer narrowed", () => {
+describe("a request is stored verbatim and never narrowed by the server", () => {
   it("does NOT narrow a request that the old ceiling would have clamped", async () => {
     withCeiling({ agent_tool_ceiling: "accept_edits", agent_message_ceiling: "ask" });
     await createLaunchDirective(ctx, { channel: CHAN, tools: "bypass", messages: "auto_both" });
     expect(inserted()).toMatchObject({
-      // ⚠ `start_*` STILL RECORDS THE REQUEST VERBATIM, unchanged by this wave.
       start_tool_mode: "bypass",
       start_message_mode: "auto_both",
-      // …and `resolved_*` is now the same thing, because nothing narrows it.
-      resolved_tool_mode: "bypass",
-      resolved_message_mode: "auto_both",
     });
   });
 
-  it("a request that named NO posture resolves to NULL, never to a stored ceiling", async () => {
-    // ⚠ THIS IS THE CASE REVIEW D4 INVERTED, AND THE INVERSION IS THE RULING. D4 made an
-    // unasked axis resolve to the CHANNEL'S ceiling so an orchestrator could tell "no ceiling
-    // exists" from "nobody asked". There is no ceiling to substitute now, so `null` means the
-    // only thing it can mean: the server states no opinion.
-    withCeiling({ agent_tool_ceiling: "manual", agent_message_ceiling: "ask" });
-    await createLaunchDirective(ctx, { channel: CHAN });
+  // 🔒 F10: `resolved_*` was a byte copy of the request once the clamp was deleted, and MCP's
+  // `allowed=` printed it as if the server had permitted something.
+  it("writes the whole `resolved_*` group as NULL — the server permitted nothing", async () => {
+    await createLaunchDirective(ctx, { channel: CHAN, tools: "bypass", messages: "auto_both", chain: true });
     expect(inserted()).toMatchObject({
       resolved_tool_mode: null,
       resolved_message_mode: null,
+      resolved_chain: null,
+      resolved_model: null,
     });
   });
 
+  // C5 (ruling R3): a Codex launch may ask in Codex words.
+  it("stores a Codex tool word verbatim", async () => {
+    await createLaunchDirective(ctx, { channel: CHAN, runtime: "codex", tools: "on-request" });
+    expect(inserted()).toMatchObject({ runtime: "codex", start_tool_mode: "on-request" });
+  });
+
   it("a chain:true directive is GRANTED even where the channel forbade it", async () => {
-    // ⚠ THE SHARPEST DELETION IN THE WAVE, PINNED SO IT CANNOT REGRESS SILENTLY. This used to
-    // throw `ChannelAgentChainForbiddenError` and insert nothing.
     withCeiling({ agent_chain_allowed: false });
     await createLaunchDirective(ctx, { channel: CHAN, chain: true });
     expect(vi.mocked(launchRepo.insertLaunchDirective)).toHaveBeenCalledTimes(1);
-    expect(inserted().resolved_chain).toBe(true);
+    expect(inserted().chain).toBe(true);
   });
 
   it("nothing throws the retired refusal any more, on any row shape", async () => {
@@ -170,58 +145,24 @@ describe("the channel ceiling is retired — a request is no longer narrowed", (
   });
 
   it("`chain: false` still means false — the CALLER may always narrow itself", async () => {
-    // ⚠ NOT A CEILING, AND THAT DISTINCTION SURVIVES THE WAVE. What died is one member
-    // bounding another; a caller declining chaining for its own agent is untouched.
     withCeiling({ agent_chain_allowed: true });
     await createLaunchDirective(ctx, { channel: CHAN, chain: false });
-    expect(inserted().resolved_chain).toBe(false);
+    expect(inserted().chain).toBe(false);
   });
 });
 
-describe("G8 — the model is ECHOED, never refused", () => {
-  it("resolves a known id to itself", async () => {
-    await createLaunchDirective(ctx, { channel: CHAN, model: "claude-opus-5" });
-    expect(inserted()).toMatchObject({
-      model: "claude-opus-5",
-      resolved_model: "claude-opus-5",
-    });
-  });
-
-  it("resolves a bare ALIAS to its canonical id — the machine accepts both", async () => {
-    await createLaunchDirective(ctx, { channel: CHAN, model: "sonnet" });
-    expect(inserted().resolved_model).toBe("claude-sonnet-5");
-  });
-
-  it("an UNRECOGNISED id is carried unchanged and echoed as null — not refused", async () => {
-    // ⚠ THE WHOLE OF G8. The silent fallback is `main/session-model.js ›
-    // normalizeModelId` failing closed; a 400 here would refuse a model a NEWER
-    // desktop runs happily, which is a narrowing nobody ruled. So the request
-    // survives and the null says "this server did not recognise it".
-    await createLaunchDirective(ctx, { channel: CHAN, model: "claude-from-the-future" });
-    expect(inserted()).toMatchObject({
-      model: "claude-from-the-future",
-      resolved_model: null,
-    });
-  });
-
-  it("a PROTOTYPE key is not a model — `constructor` resolves to null like any other word", async () => {
-    // 🔒 THE ALIAS TABLE IS INDEXED WITH CALLER TEXT (2026-09-02). A bare
-    // `ALIASES[key]` walks `Object.prototype`, so `"constructor"` answered the
-    // `Object` FUNCTION and `?? null` never fired — `resolveAgentModelId`'s
-    // `string | null` return type was false for a value anybody could send, and
-    // the value went into `resolved_model` and onto the launch line.
-    for (const key of ["constructor", "__proto__", "toString", "hasOwnProperty"]) {
-      vi.mocked(launchRepo.insertLaunchDirective).mockClear();
-      await createLaunchDirective(ctx, { channel: CHAN, model: key });
-      expect(inserted(), key).toMatchObject({ model: key, resolved_model: null });
-    }
-  });
-
-  it("asking for no model resolves to null, which is the same shape as unrecognised", async () => {
-    // ⚠ The two are told apart by `model` itself, which is why both live on the
-    // row: null/null is "did not ask", set/null is "asked and unrecognised".
-    await createLaunchDirective(ctx, { channel: CHAN });
-    expect(inserted()).toMatchObject({ model: null, resolved_model: null });
+// 🔒 F7: `launch_agent runtime=codex model=opus` got `resolved_model = "claude-opus-5"` off
+// Claude's frozen alias table, and MCP printed it on a Codex launch the machine then refused.
+describe("the model is carried verbatim and never resolved server-side", () => {
+  it.each([
+    ["claude-opus-5", undefined],
+    ["sonnet", undefined],
+    ["opus", "codex"],
+    ["gpt-6-sol", "codex"],
+    ["constructor", undefined],
+  ])("model %s (runtime %s) is stored as asked, with resolved_model NULL", async (model, runtime) => {
+    await createLaunchDirective(ctx, { channel: CHAN, model, runtime });
+    expect(inserted()).toMatchObject({ model, resolved_model: null });
   });
 });
 

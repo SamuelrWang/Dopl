@@ -21,6 +21,8 @@
  *     channel's setting and can be the opposite.
  */
 
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import { describe, it, expect } from "vitest";
 import {
   AgentDirectiveCreateSchema,
@@ -28,21 +30,36 @@ import {
   LAUNCH_TOOL_MODES,
   LaunchCreateSchema,
 } from "./schema-launch";
+import { LAUNCH_TOOL_MODES_BY_RUNTIME } from "./schema-launch-modes";
 
 const AGENT = "a1b2c3d4";
 const BASE = { channel: "general", agentId: AGENT } as const;
 
-describe("the mode vocabularies are ORDERED narrowest first", () => {
-  // ⚠ `toEqual` ON THE ARRAY, NOT `toContain` PER MEMBER. A set assertion is
-  // exactly the one that cannot fail when the sequence is reversed, which is the
-  // change that silently inverts the desktop's clamp.
-  it("tools: manual -> accept_edits -> auto -> bypass, in that order", () => {
-    expect([...LAUNCH_TOOL_MODES]).toEqual([
-      "manual",
-      "accept_edits",
-      "auto",
-      "bypass",
-    ]);
+// Axis A is EACH RUNTIME'S OWN WORDS (Samuel ruling R3): per-runtime lists narrowest first, pinned
+// against the desktop adapters' own `tools.js`, and the wire accepts their union.
+function desktopToolModes(runtime: string): string[] {
+  const src = readFileSync(
+    path.join(process.cwd(), "dopl-desktop-app", "main", "runtime", runtime, "tools.js"),
+    "utf8",
+  );
+  const m = /const TOOL_MODES = \[([^\]]*)\]/.exec(src);
+  expect(m, `${runtime}/tools.js declares TOOL_MODES`).not.toBeNull();
+  return [...m![1].matchAll(/'([^']+)'/g)].map((x) => x[1]);
+}
+
+describe("the mode vocabularies", () => {
+  it.each(Object.keys(LAUNCH_TOOL_MODES_BY_RUNTIME))(
+    "tools (%s) are that runtime's own words, in its narrowest-first order",
+    (runtime) => {
+      const mine = LAUNCH_TOOL_MODES_BY_RUNTIME[runtime as keyof typeof LAUNCH_TOOL_MODES_BY_RUNTIME];
+      expect([...mine]).toEqual(desktopToolModes(runtime));
+    },
+  );
+
+  it("the wire accepts the UNION of every runtime's words, and no word is shared", () => {
+    const union = Object.values(LAUNCH_TOOL_MODES_BY_RUNTIME).flat();
+    expect([...LAUNCH_TOOL_MODES].sort()).toEqual([...union].sort());
+    expect(new Set(LAUNCH_TOOL_MODES).size).toBe(LAUNCH_TOOL_MODES.length);
   });
 
   it("messages: ask -> auto_inbound -> auto_outbound -> auto_both, in that order", () => {
@@ -54,11 +71,26 @@ describe("the mode vocabularies are ORDERED narrowest first", () => {
     ]);
   });
 
-  it("the widest tool mode is LAST — the property the index comparison depends on", () => {
-    expect(LAUNCH_TOOL_MODES[LAUNCH_TOOL_MODES.length - 1]).toBe("bypass");
-    expect(LAUNCH_MESSAGE_MODES[LAUNCH_MESSAGE_MODES.length - 1]).toBe(
-      "auto_both",
-    );
+  // C5: the column CHECKs must admit exactly the words the route accepts, or a legal decide is
+  // refused AT REST for a launch that really happened.
+  it("the latest tool-mode CHECKs admit exactly the wire union", () => {
+    const sql = readFileSync(path.join(process.cwd(), "supabase", "migrations",
+      "20261020120000_channel_launch_directives_runtime_tool_words.sql"), "utf8");
+    for (const col of ["start_tool_mode", "target_tool_mode", "applied_tool_mode", "resolved_tool_mode"]) {
+      const m = new RegExp(`${col} IN \\(([^)]*)\\)`).exec(sql);
+      expect(m, col).not.toBeNull();
+      const words = [...m![1].matchAll(/'([^']+)'/g)].map((x) => x[1]);
+      expect(words.sort(), col).toEqual([...LAUNCH_TOOL_MODES].sort());
+    }
+  });
+
+  // C5: a Codex launch may ask in Codex words; a word no runtime speaks is a named 400.
+  it("a launch and a re-posture accept a Codex word, and refuse a word no runtime has", () => {
+    const launch = { agentName: "Scout", channel: "general" };
+    expect(LaunchCreateSchema.parse({ ...launch, tools: "on-request" }).tools).toBe("on-request");
+    expect(LaunchCreateSchema.safeParse({ ...launch, tools: "yolo" }).success).toBe(false);
+    expect(AgentDirectiveCreateSchema.parse({ ...BASE, kind: "set_agent_mode", tools: "never" }))
+      .toMatchObject({ tools: "never" });
   });
 });
 

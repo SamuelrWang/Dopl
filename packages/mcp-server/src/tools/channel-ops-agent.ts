@@ -19,7 +19,8 @@
  * ── ⚠ WHERE THESE TWO DIFFER FROM `launch_agent`, AND IT IS WORTH SAYING ────
  *
  *  1. **NO CONSENT TOGGLE APPLIES.** `launch_agent`'s `no-bridge` is the operator
- *     saying no via a per-machine setting. That setting gates LAUNCHES ONLY. An
+ *     saying no via a per-machine setting. That setting gates LAUNCHES (and
+ *     re-postures) ONLY — it does NOT gate these two verbs. An
  *     end or a rename is not refused by it and **the copy below must never tell a
  *     caller to ask for it to be turned on** — that would send an orchestrator to
  *     request a permission that has nothing to do with what failed.
@@ -36,13 +37,14 @@ import type {
   DoplClient,
   LaunchDirective,
   LaunchMessageMode,
-  LaunchRefusalReason,
   LaunchToolMode,
 } from "@dopl/client";
 // ⚠ NO `err` HERE SINCE 2026-09-18 — every refusal this file used to WRITE now lives in
 // `channel-agent-target.ts` (the not-an-id arm and `foreignAgent`), so this module builds
 // only `ok` fact lines and returns refusals its neighbour composed.
-import { ok, isNotFound, type ToolResponse } from "./respond";
+import { ok, apiErrorCode, isNotFound, type ToolResponse } from "./respond";
+// The mailbox ops' one hold loop and one retry map (P8-07/P8-08).
+import { LAUNCH_RETRY_ADVICE, holdRow } from "./channel-directive-hold";
 import { channelNotFound, isErr, resolveChannelOr } from "./channel-shared";
 import { agentDisplayName } from "./agent-display-name";
 // ⚠ **THE TWO "WHICH AGENT IS THIS" REFUSALS ARE A NEIGHBOUR** (`channel-agent-target.ts`,
@@ -82,73 +84,6 @@ export type AgentDirectiveInput =
       tools?: LaunchToolMode;
       messages?: LaunchMessageMode;
     };
-
-/** Peer-influenced display text, neutralized — never an empty span. */
-
-/** ⚠ MIRRORS `channel-ops-launch.ts`. The schema is what an MCP client sees;
- *  these are what run. Deliberately the same numbers: three ops holding on one
- *  mailbox that disagreed about how long to wait would be three answers to one
- *  question. */
-const WAIT_DEFAULT_MS = 15_000;
-const WAIT_CAP_MS = 30_000;
-const POLL_INTERVAL_MS = 1_500;
-
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-
-/** The `code` a DoplApiError carries, or null. ⚠ Duck-typed rather than imported
- *  — the discipline `respond.ts`'s `isNotFound` follows across the @dopl/client
- *  boundary. */
-function apiErrorCode(e: unknown): string | null {
-  if (typeof e !== "object" || e === null) return null;
-  const code = (e as { code?: unknown }).code;
-  return typeof code === "string" && code.length > 0 ? code : null;
-}
-
-/**
- * THE REFUSAL CONTRACT FOR THESE TWO VERBS, AS SENTENCES AN AGENT CAN ACT ON.
- *
- * ⚠ **A SEPARATE MAP FROM THE LAUNCH ONE, OVER THE SAME NINE-WORD ENUM, AND THAT
- * IS THE POINT RATHER THAN DUPLICATION.** The wire word is shared; what it MEANS
- * TO DO NEXT is not. `cap` on a launch means "wait for a slot"; on an end it can
- * only mean the machine is in a state it cannot act from at all, and telling a
- * caller to "wait for one of the running agents to finish" before ENDING one is
- * advice that contradicts the request. Sharing the map would have made every one
- * of these sentences hedge.
- *
- * ⚠ EACH SENTENCE ENDS IN WHAT TO DO, because a reason with no next action gets
- * an agent to retry the same call.
- */
-/**
- * MAY THE CALLER ASK AGAIN? — ⚠ the ONE thing a refusal is read for, kept as a
- * field where the sentence became doctrine (T10, 2026-09-02).
- *
- * ⚠ THE NINE WORDS ARE STILL THE WIRE CONTRACT and the result still renders the
- * one it got. The paragraph per word is in `channel-doctrine.ts`'s WHY A LAUNCH,
- * END, DIRECTION OR RENAME IS REFUSED section, which covers all three mailboxes
- * with ONE text — this lane, the launch lane and the direction lane overlap on
- * most of the vocabulary, and three copies of one explanation is how they drift.
- *
- * ⚠ `no-session` ON AN END IS USUALLY GOOD NEWS and the doctrine says so: the
- * agent already finished and there was nothing left to stop. That is why it is
- * `no` here rather than `once` — there is nothing to retry, not because a retry
- * would fail. ⚠ `no-bridge` is the LAUNCH toggle and does NOT gate these two
- * verbs, so arriving here on it means the machines disagree; still `no`.
- */
-const RETRY_ADVICE: Record<LaunchRefusalReason, "once" | "no"> = {
-  cap: "no",
-  busy: "once",
-  "no-sdk": "no",
-  "auth-hold": "no",
-  "no-bridge": "no",
-  "no-counterparty": "no",
-  "no-identity": "no",
-  "no-session": "no",
-  "bad-name": "no",
-  // ⚠ NO PRODUCER ON AN END OR A RENAME — `no-chain` belongs to a launch that
-  // asked to chain. Arriving here means the machines disagree; still `no`.
-  "no-chain": "no",
-  "no-model": "no", // a LAUNCH word (2026-09-22); an end or a rename names no model
-};
 
 /**
  * THE PENDING FACTS. ⚠ **`retry=no` IS THE ONE INSTRUCTION THAT COULD NOT BECOME
@@ -205,30 +140,6 @@ export function pendingFacts(
   };
 }
 
-/** Shared hold: poll the directive row until it settles or the deadline passes.
- *  ⚠ POLLS THE ROW, never an `await` — a directive is not a message, has no
- *  `seq`, and can never end a message hold. */
-async function holdFor(
-  client: DoplClient,
-  directive: LaunchDirective,
-  waitMs: number,
-): Promise<LaunchDirective> {
-  let d = directive;
-  const deadline = Date.now() + Math.min(waitMs, WAIT_CAP_MS);
-  while ((d.status === "pending" || d.status === "claimed") && Date.now() < deadline) {
-    await sleep(Math.min(POLL_INTERVAL_MS, Math.max(0, deadline - Date.now())));
-    try {
-      d = await client.getLaunchDirective(d.id);
-    } catch {
-      // ⚠ A FAILED POLL DESTROYS NEITHER THE HOLD NOR THE DIRECTIVE. The request
-      // is filed and the machine may still take it, so the honest ending is the
-      // PENDING one — which tells the caller where to look.
-      break;
-    }
-  }
-  return d;
-}
-
 /**
  * FILE THE DIRECTIVE AND HOLD — the half `end_agent` and `rename_agent` share.
  *
@@ -240,11 +151,10 @@ async function holdFor(
  */
 /**
  * ⚠ EXPORTED FOR `channel-ops-agent-mode.ts` (2026-09-01), and for that ONE
- * caller. It is the whole hold protocol — file the row, poll it, give up — and a
- * second copy would be a second answer to "how long do we wait", which is the
- * drift the shared `WAIT_*` constants above exist to prevent. ⚠ What is shared
- * is the PLUMBING; every sentence a caller reads is written in its own module,
- * because the three verbs' consent stories differ.
+ * caller. It is the whole hold protocol — file the row, poll it, give up — over
+ * `channel-directive-hold.ts › holdRow`, the one hold every mailbox op shares.
+ * ⚠ What is shared is the PLUMBING; every sentence a caller reads is written in
+ * its own module, because the three verbs' consent stories differ.
  */
 export async function fileAndHold(
   client: DoplClient,
@@ -299,7 +209,10 @@ export async function fileAndHold(
       ),
     };
   }
-  return { done: false, directive: await holdFor(client, created.directive, waitMs ?? WAIT_DEFAULT_MS) };
+  return {
+    done: false,
+    directive: await holdRow(created.directive, (id) => client.getLaunchDirective(id), waitMs),
+  };
 }
 
 /**
@@ -367,7 +280,7 @@ export async function opEndAgent(
         agent: `@agent-${agent}`,
         reason: d.refusalReason ?? undefined,
         // ⚠ `-` WHEN THE MACHINE NAMED NO REASON, never a guessed verdict.
-        retry: d.refusalReason ? RETRY_ADVICE[d.refusalReason] : undefined,
+        retry: d.refusalReason ? LAUNCH_RETRY_ADVICE[d.refusalReason] : undefined,
         filed: true,
       }),
     );
@@ -469,7 +382,7 @@ export async function opRenameAgent(
       factsLine("not renamed", {
         agent: `@agent-${agent}`,
         reason: d.refusalReason ?? undefined,
-        retry: d.refusalReason ? RETRY_ADVICE[d.refusalReason] : undefined,
+        retry: d.refusalReason ? LAUNCH_RETRY_ADVICE[d.refusalReason] : undefined,
         // ⚠ NOTHING ABOUT THE AGENT CHANGED — it is still running and still
         // addressed the same way. A refused rename is cosmetic, not a fault.
         agentChanged: false,

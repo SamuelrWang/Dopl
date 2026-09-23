@@ -174,15 +174,9 @@ export type LaunchRefusalReason =
 export type LaunchDirectiveKind = "launch" | "end" | "rename" | "set_agent_mode";
 
 /**
- * THE TWO PERMISSION AXES, **ORDERED NARROWEST FIRST** — and the ORDER IS PART OF
- * THE CONTRACT, not presentation (2026-09-01, T24).
- *
- * ⚠ **THE CLAMP IS AN INDEX COMPARISON OVER THESE SEQUENCES**
- * (`dopl-desktop-app/main/launch-posture.js › narrowTo`, over
- * `main/launch-directive-wire.js › TOOL_MODES` / `MESSAGE_MODES`). Re-ordering
- * either union — or the array in `schema-launch.ts` that mirrors it — silently
- * INVERTS the bound, and nothing type-checks that: a union is a set to the
- * compiler and a sequence to that function.
+ * THE TWO PERMISSION AXES. Axis A is EACH RUNTIME'S OWN WORDS (Samuel ruling R3) — Claude,
+ * Codex, Cursor — as one union; the operator's machine validates a word against the launch (or
+ * running) runtime and clamps it in THAT runtime's descriptor order. Axis B is runtime-neutral.
  *
  * ⚠ **A DIRECTIVE CARRYING ONE OF THESE ASKS. IT NEVER WIDENS.** The value is
  * clamped to the operator's own stored channel posture before it reaches a spawn
@@ -190,7 +184,10 @@ export type LaunchDirectiveKind = "launch" | "end" | "rename" | "set_agent_mode"
  * ceiling is an `electron-store` record no server sees — so every sentence built
  * from these values must say "asked for", never "set".
  */
-export type LaunchToolMode = "manual" | "accept_edits" | "auto" | "bypass";
+export type LaunchToolMode =
+  | "manual" | "accept_edits" | "auto" | "bypass" // claude
+  | "untrusted" | "granular" | "on-request" | "never" // codex
+  | "allowlist" | "auto-review" | "run-everything"; // cursor
 
 export type LaunchMessageMode =
   | "ask"

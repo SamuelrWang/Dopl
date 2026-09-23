@@ -222,3 +222,40 @@ describe("the result names what actually ran", () => {
     expect(out).not.toContain("runtime=");
   });
 });
+
+// 🔒 P8-04: a `runtime` outside the id shape came back as "Shorten or fix the field that is over"
+// with only the generic "Request body failed validation" — the agent trimmed its goal and retried.
+describe("a refused FIELD is named", () => {
+  it("a VALIDATION_FAILED names the first zod issue's field and message", async () => {
+    const rejected = Object.assign(new Error("bad"), {
+      status: 400,
+      code: "VALIDATION_FAILED",
+      apiMessage: "Request body failed validation",
+      details: [{ path: ["runtime"], message: "A runtime id is 1-32 lowercase characters, e.g. claude or codex" }],
+    });
+    const out = await text(client({ createLaunchDirective: vi.fn(async () => { throw rejected; }) }),
+      { runtime: "Codex" });
+    expect(out).toContain("runtime: A runtime id is 1-32 lowercase characters");
+    expect(out).not.toContain("Shorten");
+  });
+});
+
+// C5 (ruling R3): a Codex word is published, carried to the create untouched, and echoed.
+describe("each runtime's own tool words", () => {
+  it("publishes every runtime's Axis-A words and says which are whose", () => {
+    const posture = (CHANNEL_INPUT_SHAPE as Record<string, unknown>).posture as {
+      unwrap: () => { shape: { tools: { unwrap: () => { options: string[] }; description?: string } } };
+    };
+    const tools = posture.unwrap().shape.tools;
+    expect(tools.unwrap().options).toEqual(expect.arrayContaining(["on-request", "never", "run-everything"]));
+    expect(tools.description).toContain("codex untrusted..never");
+  });
+
+  it("files a Codex word as asked and renders the machine's Codex echo", async () => {
+    const c = created(launched({ runtime: "codex", appliedRuntime: "codex", appliedToolMode: "on-request" }));
+    const out = await text(c, { runtime: "codex", tools: "never" });
+    expect((c.createLaunchDirective as ReturnType<typeof vi.fn>).mock.calls[0][0])
+      .toMatchObject({ runtime: "codex", tools: "never" });
+    expect(out).toContain("posture=on-request/-");
+  });
+});
