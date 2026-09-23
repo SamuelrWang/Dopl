@@ -1,186 +1,28 @@
 #!/usr/bin/env node
 //
-// check-doc-refs.mjs — the lint for the docs' rottable reference classes.
+// check-doc-refs.mjs — the lint for the docs' rottable reference classes (`docs/*.md`,
+// non-recursive: subfolders are frozen snapshots). No dependencies; exit 1 lists every miss.
 //
-// WHY THIS EXISTS. A 2026-08-11 measurement over `docs/` put the accuracy of
-// inline `path/to/file.ts:NNN` references at ~33%: the line number is a
-// snapshot of a file that keeps being edited, and NOTHING in this repo ever
-// re-read one. The same sweep found 37 `F-NNN` ids referenced with no entry
-// behind them. Both classes rot silently, both mislead the next agent, and
-// both are cheap to check — so they are checked here, on every push.
+//   (a) FILE REFS `path/file.ext:NNN` — the file exists (the line number is never checked).
+//   (b) F-IDS in docs — resolve to a live `### F-NNN` heading in REFACTOR-FINDINGS.md or to a
+//       mention in its header block (above the first `##`), where deleted entries are recorded.
+//       Ranges (`F-001–F-015`, `F-179 through F-187`) expand.
+//   (c) SYMBOL ANCHORS `path › symbol` — the file exists AND the symbol's name appears in it as
+//       plain text (`normalizeSymbol` cuts signatures/values). Containment, not parsing: it
+//       catches the symbol that exists nowhere, not one that exists only in a comment.
+//   (d) F-IDS IN SOURCE (`src/`, `packages/`, `apps/`, `dopl-desktop-app/`, `scripts/`,
+//       `supabase/`; `dist/` skipped) — same rule as (b). Catches a dangling id, never a mis-cited
+//       live one.
+//   (e) PLAIN PATHS — an inline code span whose ENTIRE content is a path (anchored `^…$`; prose
+//       and fenced blocks are never scanned). A RATCHET: paths already dead when this class landed
+//       live in `scripts/doc-refs-plain-path-baseline.json` and report as BASELINED debt; anything
+//       else fails. The baseline only shrinks — stale entries print (never fail), and there is no
+//       flag to regenerate it.
+// Basenames resolve against any path suffix (weak but real: fires when a file is deleted or
+// renamed). TS aliases (`@/`, `#/`) are un-aliased first. `DATED_CAPTURES` and
+// `KNOWN_DEAD_REFS` exempt snapshot docs and deliberate dead citations.
 //
-// AND THEN THE THIRD CLASS PROVED THE POINT (added 2026-08-11, same day). The
-// docs' PREFERRED anchor form — `path › symbolName` — was never checked at all,
-// and an adversarial read of `docs/INVARIANTS.md` found
-// `shared/api/error-handler.ts › withErrorHandler` sitting in §2: a file that
-// has never existed in this repo, naming a wrapper nothing ever exported. It
-// had been copied from `docs/ENGINEERING.md`, which had carried the fiction for
-// months. A symbol anchor is MORE durable than a line number and MORE
-// confident-looking, which is exactly why an unchecked one is worse: the next
-// agent greps for a symbol, finds nothing, and assumes the tree drifted.
-//
-// AND THEN THE GATE TURNED OUT TO EXEMPT THE FORM THE DOCS ARE TOLD TO USE
-// (class (e), added 2026-08-26). `FILE_REF_RE` requires a `:LINE` suffix and
-// `SYMBOL_ANCHOR_RE` requires a `›`, so a PLAIN backticked path —
-// `` `src/features/knowledge/server/service-grants.ts` `` — was never
-// existence-checked by anything. That is precisely the citation form CLAUDE.md's
-// standing rule 2 PRESCRIBES ("never a bare line number"), so for two weeks the
-// script enforced existence only on the two forms the docs are instructed not to
-// write, and passed the one they are instructed to write. Live proof at the time:
-// `docs/REFACTOR-FINDINGS.md`'s F-334 entry cited a migration filename that
-// belongs to a different migration and a `service-grants.ts` under
-// `src/features/channels/` that has never existed — both green.
-//
-// WHAT IT CHECKS.
-//
-//   (a) FILE REFERENCES — `path/to/file.ext:NNN`. It asserts the FILE EXISTS.
-//       It does NOT assert the line number is right, and it never will:
-//       verifying a line means knowing what was supposed to be there, which is
-//       the judgement the doc is making. Line numbers rot; existence is a fact
-//       a script can hold. The rule the docs adopt alongside this check is to
-//       prefer `path › symbolName` anchors, which survive edits above them —
-//       this script is the floor, not the ceiling.
-//
-//   (c) SYMBOL ANCHORS — `path/to/file.ext › symbolName`. TWO assertions: the
-//       file exists, AND the symbol's name appears somewhere in it as PLAIN
-//       TEXT. Containment, not parsing, and the weakness is deliberate — a
-//       parse would need a TypeScript program per doc reference and would still
-//       have to decide what "defined" means across `export const`, a class
-//       method, an object literal key and a `.js` CommonJS export. Containment
-//       costs a `readFileSync` and catches the failure that actually happens:
-//       the symbol IS NOT THERE AT ALL, because it was renamed, deleted, or —
-//       as above — never existed. A symbol that moved to a different file in
-//       the same sentence's tree still fails, which is correct: the anchor
-//       names a file.
-//
-//       ANCHOR TEXT IS NORMALIZED before the search (`normalizeSymbol`), because
-//       the docs legitimately write the symbol with its shape attached —
-//       `resolveActiveWorkspace(userId, headerWorkspaceId)`, `SESSION_ONLY_FIELDS
-//       = ["visibility"]`, `"max-lines"`. The signature and the value are prose
-//       for the reader; the NAME is the anchor, so the name is what is checked.
-//
-//       AMBIGUOUS BASENAMES pass on ANY match, exactly like class (a): a bare
-//       `route.ts › SESSION_ONLY_FIELDS` resolves against every `route.ts` in
-//       the repo and one of them containing the symbol is enough. That is weak
-//       and it is the same weak-but-real bargain (a) already makes — it still
-//       fires the moment the symbol exists nowhere.
-//
-//       ⚠ THE CEILING, STATED SO NOBODY MISTAKES A PASS FOR A PROOF: containment
-//       does not know a comment from code. `src/shared/lib/http-error.ts ›
-//       withErrorHandler` PASSES this check — that file's docblock mentions the
-//       name in prose ("by `withErrorHandler` … into a") while nothing exports
-//       it. Verified by planting it, 2026-08-11. So the check catches the symbol
-//       that exists NOWHERE, not the symbol that exists only as a mention.
-//       Deliberately not hardened: stripping comments before the search would
-//       start failing anchors that legitimately point at a documented constant
-//       or a rule stated in a header, and a checker with false failures gets
-//       switched off, which costs more than this gap. A GREEN RUN HERE IS NOT
-//       EVIDENCE A SYMBOL IS EXPORTED — it is evidence it is not a ghost.
-//
-//       Many refs in these docs are BARE BASENAMES (`targeting.js:64`,
-//       `route.ts:35-44`) because the surrounding prose already established the
-//       tree. Those resolve against any path SUFFIX in the repo, so the check
-//       on them is weak (dozens of files are named `route.ts`) but real: it
-//       still fires the moment a named file is deleted or renamed, which is the
-//       failure that actually happened.
-//
-//   (e) PLAIN PATH REFERENCES IN INLINE CODE SPANS — a markdown single-backtick
-//       span whose ENTIRE trimmed content is a path, e.g.
-//       `` `src/features/channels/server/service.ts` ``. It asserts the FILE
-//       EXISTS, resolving through the same suffix index and taking the same
-//       ambiguous-basename bargain as (a) and (c): any suffix match passes.
-//
-//       THE NARROW RULE IS THE WHOLE DESIGN, and it is what makes this class
-//       safe where a general bare-path scan was refused for months. Only inline
-//       code spans are read — PROSE IS NEVER SCANNED, so `a MAPPING.md next to
-//       it` is still invisible, which is the sentence that killed the earlier
-//       attempt. Inside a span, the path must be the ENTIRE content: the match
-//       is anchored `^…$`, which by construction excludes a sentence, a glob
-//       (`*`), a call signature, a `:NNN` (class (a) owns that) and a `›`
-//       (class (c) owns that). A span is either a naked path claim or it is not
-//       this class; there is no partial credit and therefore no guessing.
-//       Fenced code blocks are skipped — inside one, backticks are content, and
-//       a path in a sample command or a directory listing is an ILLUSTRATION,
-//       not a citation.
-//
-//       ⚠ CLASS (e) IS A RATCHET, and that is a compromise stated out loud. The
-//       run that introduced it found 613 dead plain paths already sitting in
-//       `docs/` (measured 2026-08-26), dominated by `docs/ENGINEERING.md`'s
-//       archaeology — prose about how the system got here, naming files this repo
-//       DELETED ON PURPOSE. Failing on all 613 would have turned CI red on a
-//       backlog nobody had triaged, and a red CI that everyone learns to ignore
-//       is worth less than no check at all. So the pre-existing set is recorded
-//       in `scripts/doc-refs-plain-path-baseline.json` and reported as BASELINED;
-//       anything NOT in that file fails. New rot is caught from day one; old rot
-//       is measured instead of hidden.
-//
-//       THE BASELINE ONLY SHRINKS, and the script enforces both halves of that:
-//       an entry that no longer reproduces is printed as STALE with an
-//       instruction to delete it (NEVER a failure — fixing a doc must not turn CI
-//       red), and the file is not a place to add things. A newly dead path is
-//       fixed at the citation or the citation is deleted. Appending to the
-//       baseline is how this check stops meaning anything, which is why there is
-//       deliberately NO flag on this script that regenerates it.
-//
-//       ⚠ THE OTHER CEILING: A BASELINED REF IS UNCHECKED DEBT, NOT A PASSING
-//       CITATION. A green run means "no NEW dead plain paths", never "the docs'
-//       paths are good". 457 keys in that file are 457 citations a reader will
-//       follow to nothing.
-//
-//       TS PATH ALIASES are un-aliased first (`PATH_ALIASES`): a span written as
-//       an import specifier — `@/features/…/x.tsx` — is a real reference to a
-//       real file and must not be reported as missing. That was the ONE false
-//       failure this class produced on its first run, and it is fixed at the
-//       resolver, not by narrowing what counts as a claim.
-//
-//       `DATED_CAPTURES` and `KNOWN_DEAD_REFS` are honoured exactly as (a)
-//       honours them; a per-reference exemption keys on the bare path
-//       (`doc.md::path/to/file.ts`). The findings log's header block is NOT
-//       skipped here — the F-id classes skip it because it is a tombstone
-//       record of ids, but a PATH written there is still a claim about the tree.
-//
-//       ⚠ THE CEILING: a code span that is prose is not scanned, and that is on
-//       purpose. `` `MAPPING.md is gone` `` and `` `see src/foo.ts for why` ``
-//       both pass, because widening past the anchored match is how this check
-//       starts producing false failures — and a checker with false failures gets
-//       switched off, which costs more than the gap. This catches the CONFIDENT
-//       NAKED PATH, which is the form the docs are told to write and the form
-//       that had never been checked.
-//
-//   (d) FINDING IDS IN SOURCE — every `F-NNN` mention in the SOURCE trees
-//       (`src/`, `packages/*/src`, `apps/`, `dopl-desktop-app/`, `scripts/`,
-//       `supabase/`) must resolve exactly as class (b) requires inside `docs/`.
-//       ADDED 2026-08-18 (F-224), after a review found five source files citing
-//       `F-203` where they meant `F-206` and this script had never looked
-//       outside `docs/`. **STATE THE CEILING, because it is the same ceiling
-//       (b) has: this catches a DANGLING id, never a MIS-CITED one.** `F-203`
-//       is a live entry, so those five would have passed even under this class
-//       — what it catches is the id that resolves to nothing at all, which is
-//       the failure that rots silently when an entry is deleted as resolved.
-//       Measured at the time it was added: 208 source files carry an `F-NNN`
-//       and every id in them resolved, so this went in green rather than with
-//       a backlog. `dist/` is skipped here (and only here) — the committed
-//       build output is generated, so an id in it is not a claim anybody wrote.
-//
-//   (b) FINDING IDS — every `F-NNN` mention in `docs/*.md` must resolve to
-//       either a live `### F-NNN:` heading in REFACTOR-FINDINGS.md, or a
-//       mention inside that file's HEADER BLOCK (everything above its first
-//       `##`). The header is where the log records what it deleted, and the
-//       log's convention is that a resolved entry is DELETED, not struck
-//       through — so a dangling id is not automatically a bug, it is a bug ONLY
-//       IF the header never recorded it. Ranges (`F-001–F-015`,
-//       `F-179 through F-187`) are expanded.
-//
-// SCOPE: `docs/*.md`, non-recursive on purpose — `docs/audit-2026-06-01/` and
-// `docs/migration-research/` are frozen historical snapshots whose references
-// SHOULD point at a tree that no longer exists.
-//
-// Usage: `node scripts/check-doc-refs.mjs`  → exit 0 clean, exit 1 with a named
-// list of every miss. No dependencies; no network; read-only.
-//
-// COST: the symbol check reads source files, which classes (a) and (b) never
-// did. Reads are memoized per path, and only files an anchor actually names are
-// opened — a few dozen, not the tree. Still well under a second.
+// Usage: `node scripts/check-doc-refs.mjs`
 
 import fs from 'node:fs';
 import path from 'node:path';
@@ -192,15 +34,8 @@ const FINDINGS_REL = 'docs/REFACTOR-FINDINGS.md';
 const PLAIN_PATH_BASELINE_REL = 'scripts/doc-refs-plain-path-baseline.json';
 
 /**
- * Class (e)'s ratchet: the plain paths that were ALREADY dead when the class was
- * added. Keys are `<docRelPath>::<ref as the code span writes it>` — BEFORE
- * dealiasing, and with NO line number, so an entry survives the doc being
- * reflowed and covers every line in that doc citing that path.
- *
- * A missing or unreadable baseline is a HARD ERROR, not an empty set: silently
- * treating it as empty would fail 457 pre-existing refs and get this script
- * deleted from CI within the hour. It is also not auto-created — see the header
- * on why there is no regenerate flag.
+ * Class (e)'s baseline. Keys are `<docRelPath>::<span as written>` (before dealiasing, no line
+ * number). A missing or unreadable baseline is a HARD ERROR, never an empty set.
  */
 function loadPlainPathBaseline() {
   const abs = path.join(REPO_ROOT, PLAIN_PATH_BASELINE_REL);
@@ -223,35 +58,14 @@ function loadPlainPathBaseline() {
   return { measuredAt: parsed.measuredAt ?? 'unknown', keys: new Set(parsed.entries) };
 }
 
-// Trees that are either not source or not ours. `dist/` is NOT here: the
-// committed build output under `packages/*/dist` is referenced by findings on
-// purpose (a bug present in both source and shipped artifact).
+// `dist/` is not skipped here: findings cite the committed build output on purpose.
 const SKIP_DIRS = new Set(['node_modules', '.git', '.next', '.claude', 'out', 'coverage', '.turbo', '.vercel']);
 
-// DATED CAPTURES — exempt from the file-existence check, and the reason is not
-// convenience. Each of these docs states its own capture date in its first
-// lines and describes the tree AS IT WAS THEN. Updating their references to
-// today's tree would destroy the thing they are for. A dead ref in a
-// forward-looking doc is a defect; a dead ref in a snapshot is the record.
-// A doc leaves this list by being rewritten as live guidance, never by being
-// "cleaned up". DO NOT ADD A LIVE DOC HERE — fix its reference instead.
+// Docs that state their own capture date and describe the tree as it was then: a dead ref in a
+// snapshot is the record. Never add a live doc here — fix its reference.
 const DATED_CAPTURES = new Map([
   ['docs/AUDIT-FIX-VERIFICATION.md', 'captured 2026-05-04'],
-  // ⚠ Added 2026-08-18, when the wiring plan's Phase 4 deleted the stale-threads cron and
-  // `service-tasks-propose.ts` and three of this doc's C-numbered findings went dead with them.
-  // It qualifies on the list's own terms rather than on convenience: it is titled with its
-  // capture date, its header states the method and the tree it read, and its findings are
-  // numbered claims about that tree. Repointing them at today's code would delete the record of
-  // what was audited.
   ['docs/CHANNELS-AUDIT-2026-08-07.md', 'audited 2026-08-07'],
-  // ⚠ Added 2026-09-13, when Samuel's one-launch-surface ruling deleted
-  // `agent-identities/components/launch-sheet.tsx` and three of this ledger's references — one
-  // `›` anchor and two plain paths — went dead with it. It qualifies on this list's own terms
-  // rather than on convenience: it is TITLED with its measurement date, its first lines name the
-  // commit and the tag it read (`master` @ `6b3b1ead`, v1.22.0) and the seven audits it
-  // synthesises, and every claim in it is a numbered verdict about THAT tree. Repointing them at
-  // today's code would delete the record of what was measured — the CHANNELS-AUDIT precedent
-  // above, for the same reason.
   ['docs/DRIFT-LEDGER-2026-08-30.md', 'measured 2026-08-30 @ 6b3b1ead'],
   ['docs/CLEANUP.md', 'generated + executed 2026-06-12'],
   ['docs/DATA-LOADING-AUDIT.md', 'audited 2026-06-20'],
@@ -261,39 +75,22 @@ const DATED_CAPTURES = new Map([
   ['docs/NEXT-SESSION-FIXES.md', 'handoff 2026-08-01, ⛔ superseded 2026-08-05'],
 ]);
 
-// The narrow, per-REFERENCE escape hatch, for a LIVE doc that names a file this
-// repo deliberately deleted. Only two exist, both in the roadmap's retirement
-// paragraph, and both are load-bearing there: the sentence is about what the
-// retirement removed, so the file is supposed to be gone.
-// THIS LIST SHRINKS. Adding to it is how the check stops meaning anything —
-// prefer dropping the `:NNN` (a line number into a deleted file resolves to
-// nothing) over an entry here.
+// Per-reference exemptions for a live doc naming a deliberately deleted file. This list shrinks.
 const KNOWN_DEAD_REFS = new Set([
   'docs/LAUNCH-READINESS-ROADMAP.md::trash/server/service.ts:178',
   'docs/LAUNCH-READINESS-ROADMAP.md::skills-trash-modal.tsx:174',
 ]);
 
-// `md` joined 2026-08-18 (F-224). A doc that names another doc with a line
-// number or a `›` anchor rots exactly like one naming a `.ts` file, and this
-// list was the only reason those went unchecked. It now drives classes (a), (c)
-// AND (e). ⚠ A BARE path with no `:NNN` and no `›` — the form 42 live citations
-// of a deleted `MAPPING.md` used to slip through — is checked as of 2026-08-26,
-// but ONLY when it is the entire content of an inline code span (class (e)).
-// A path loose in prose is still invisible, and deliberately so: `a MAPPING.md
-// next to it` is a sentence, and a checker with false failures gets switched off.
+// `md` included: a doc citing a doc rots like one citing code.
 const SOURCE_EXT = 'ts|tsx|mts|cts|js|jsx|mjs|cjs|sql|md';
 
-// Class (d)'s roots: where a `F-NNN` in a COMMENT is a claim somebody wrote.
-// `docs/` is absent because classes (a)–(c) already own it.
+// Class (d)'s roots (`docs/` is classes (a)–(c)'s).
 const SOURCE_ID_ROOTS = ['src', 'packages', 'apps', 'dopl-desktop-app', 'scripts', 'supabase'];
 const SOURCE_ID_EXT = /\.(ts|tsx|mts|cts|js|jsx|mjs|cjs|sql)$/;
-// Generated output carries whatever its source carried; an id in it is not a
-// second claim. This is the one place `dist/` is skipped (see SKIP_DIRS above).
+// Generated output repeats its source's ids, so class (d) alone skips `dist/`.
 const SOURCE_ID_SKIP = new Set([...SKIP_DIRS, 'dist']);
 
-// The leading lookbehind blocks a match that starts mid-token: it keeps
-// `index.d.ts:69` whole instead of matching the `d.ts:69` tail, and it lets a
-// ref start right after a `/` so `/members/route.ts:75` still resolves.
+// The lookbehind keeps `index.d.ts:69` whole and lets a ref start right after a `/`.
 const FILE_REF_RE = new RegExp(
   String.raw`(?<![A-Za-z0-9_.-])([A-Za-z0-9_@][A-Za-z0-9_.@/-]*\.(?:${SOURCE_EXT})):(\d+)(?:-(\d+))?`,
   'g',
@@ -301,33 +98,22 @@ const FILE_REF_RE = new RegExp(
 
 const F_ID_RE = /\bF-(\d{1,4})\b/g;
 
-// `path.ext › symbol`. The symbol half runs to the end of the inline-code span
-// (or the line), and `normalizeSymbol` cuts it back to the NAME — so an anchor
-// written bare in prose, with a signature, or with its value attached all reduce
-// to the same thing. `›` is the SINGLE RIGHT-POINTING ANGLE QUOTATION MARK
-// the docs use; nothing else in these files carries it.
+// `path.ext › symbol`: the symbol half runs to the end of the code span (or line) and
+// `normalizeSymbol` cuts it to the name. `›` is U+203A.
 const SYMBOL_ANCHOR_RE = new RegExp(
   String.raw`(?<![A-Za-z0-9_.-])([A-Za-z0-9_@][A-Za-z0-9_.@/-]*\.(?:${SOURCE_EXT}))\s*›\s*([^\n\`]+)`,
   'g',
 );
 
-// Class (e). CODE_SPAN_RE lifts every single-backtick inline span out of a line;
-// WHOLE_SPAN_PATH_RE decides whether that span is a naked path and nothing else.
-// The `^…$` anchors are the entire safety argument — see the header on class (e).
-// A ```` ```fence ```` line toggles FENCE_RE and the block it opens is skipped.
+// Class (e): every single-backtick span; a claim only if the WHOLE span is a path. Fences toggle.
 const CODE_SPAN_RE = /`([^`\n]+)`/g;
 const WHOLE_SPAN_PATH_RE = new RegExp(
   String.raw`^[A-Za-z0-9_@#][A-Za-z0-9_.@#/-]*\.(?:${SOURCE_EXT})$`,
 );
 const FENCE_RE = /^\s{0,3}(?:```|~~~)/;
 
-// TS PATH ALIASES, resolved before the index lookup. These are import specifiers,
-// not repo-relative paths, so a literal lookup of `@/features/…/x.tsx` misses a
-// file that is really there — the first false-failure class this check produced,
-// caught on the run that introduced it (`docs/AGENT-TEMPLATES-SPEC.md`, 2026-08-26).
-// Sources: tsconfig.json `@/* → ./src/*`; apps/desktop-ui/tsconfig.json adds
-// `#/* → ./src/*` (i.e. apps/desktop-ui/src) and re-points `@/*` at the same root
-// `src/`. If a tsconfig gains an alias, it belongs here or this check lies about it.
+// TS path aliases (root `tsconfig.json` `@/`, `apps/desktop-ui/tsconfig.json` `#/`). A new alias
+// belongs here or class (e) reports its files missing.
 const PATH_ALIASES = [
   ['@/', 'src/'],
   ['#/', 'apps/desktop-ui/src/'],
@@ -342,20 +128,9 @@ function dealias(ref) {
 }
 
 /**
- * The anchor's NAME, or `null` when there is nothing checkable in it.
- *
- * Strips markdown emphasis, then takes the FIRST token: a quoted string's
- * contents (`"max-lines"` → `max-lines`) or a bare identifier, stopping at the
- * `(`, `=`, `.` or space that begins a signature, a value, or the rest of the
- * sentence. A `member.method` anchor keeps only `member` — deliberately: the
- * property half is what a rename is most likely to leave behind correctly, and
- * a false failure here would be paid for by loosening the check.
- *
- * ⚠ `_` IS NOT EMPHASIS HERE. Stripping it (the first cut of this function did)
- * turns `SESSION_ONLY_FIELDS` into `SESSIONONLYFIELDS` and fails every
- * SCREAMING_SNAKE constant in the docs — i.e. the check would have been loudest
- * exactly where the anchors are most correct. These anchors live inside code
- * spans, where `_` was never emphasis to begin with.
+ * The anchor's NAME, or `null`: markdown emphasis stripped, then the first quoted string or bare
+ * identifier (`member.method` keeps `member`). `_` is not emphasis here — code spans keep
+ * SCREAMING_SNAKE names whole.
  */
 function normalizeSymbol(raw) {
   const text = raw.replace(/[*`]/g, '').trim();
@@ -365,11 +140,7 @@ function normalizeSymbol(raw) {
   return ident ? ident[0] : null;
 }
 
-/**
- * Every repo-relative path, plus every suffix of it at a `/` boundary, mapped to
- * the real repo-relative path(s) that suffix names. Class (a) only needs the
- * KEYS; class (c) has to open the file, so the values are carried too.
- */
+/** Every repo-relative path and each `/`-boundary suffix → the real path(s) it names. */
 function buildPathIndex(root) {
   const suffixes = new Map();
   const walk = (dir, rel) => {
@@ -400,7 +171,7 @@ function buildPathIndex(root) {
   return suffixes;
 }
 
-/** Memoized file reads — one `route.ts` anchor should not re-read 70 files twice. */
+/** Memoized file reads. */
 const fileTextCache = new Map();
 function fileText(root, rel) {
   let text = fileTextCache.get(rel);
@@ -428,8 +199,7 @@ function expandRanges(text, into) {
 function main() {
   const suffixes = buildPathIndex(REPO_ROOT);
   const plainPathBaseline = loadPlainPathBaseline();
-  // Every baseline key that actually reproduced this run. The complement is the
-  // stale set: reported, never fatal.
+  // Baseline keys that reproduced; the complement is reported as stale, never fatal.
   const baselineHits = new Set();
 
   const docs = fs
@@ -440,12 +210,10 @@ function main() {
 
   const findingsText = fs.readFileSync(path.join(REPO_ROOT, FINDINGS_REL), 'utf8');
 
-  // Live entries: `### F-NNN: ...` (any heading level, so a future re-nest of
-  // the file does not silently empty this set).
+  // Live entries: `### F-NNN` at any heading level.
   const liveIds = new Set();
   for (const m of findingsText.matchAll(/^#+\s+\**F-(\d{1,4})\b/gm)) liveIds.add(Number(m[1]));
 
-  // Recorded-as-deleted: the header block, everything above the first `##`.
   const firstSection = findingsText.search(/^##\s/m);
   const header = firstSection === -1 ? findingsText : findingsText.slice(0, firstSection);
   const recordedIds = new Set();
@@ -501,12 +269,10 @@ function main() {
   for (const name of docs) {
     const rel = `docs/${name}`;
     const lines = fs.readFileSync(path.join(DOCS_DIR, name), 'utf8').split('\n');
-    // The findings log's own header IS the tombstone record; the ids it lists
-    // are by definition not dangling, so do not re-report them as references.
+    // The findings log's header is the tombstone record: its ids are not references.
     const headerEndLine =
       rel === FINDINGS_REL ? header.split('\n').length : 0;
-    // Class (e) only. The other classes have always read fenced blocks and this
-    // change does not alter that.
+    // Class (e) only; the other classes read fenced blocks too.
     let inFence = false;
 
     lines.forEach((line, i) => {
@@ -542,8 +308,7 @@ function main() {
           badAnchors.push({ doc: rel, line: lineNo, ref: `${m[1]} › ${symbol}`, why: 'no such file' });
           continue;
         }
-        // ANY matching file containing the name is enough — see the header on
-        // ambiguous basenames.
+        // Any matching file containing the name is enough (ambiguous basenames).
         if (targets.some((t) => fileText(REPO_ROOT, t).includes(symbol))) continue;
         badAnchors.push({
           doc: rel,
@@ -571,8 +336,6 @@ function main() {
             allowedDeadRefs += 1;
             continue;
           }
-          // THE RATCHET. Already dead when class (e) landed → measured debt, not
-          // a failure. Anything else is new rot and fails.
           const baselineKey = `${rel}::${span}`;
           if (plainPathBaseline.keys.has(baselineKey)) {
             baselinedPlainPaths += 1;
@@ -612,7 +375,7 @@ function main() {
       `— DEBT, NOT PASSING CITATIONS`,
   );
 
-  // STALE BASELINE ENTRIES. Visible, never fatal: a doc fix must not turn CI red.
+  // Stale baseline entries: visible, never fatal (a doc fix must not turn CI red).
   const staleBaseline = [...plainPathBaseline.keys].filter((k) => !baselineHits.has(k)).sort();
   if (staleBaseline.length) {
     console.log(

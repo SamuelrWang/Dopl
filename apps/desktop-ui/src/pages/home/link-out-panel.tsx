@@ -3,41 +3,16 @@ import { CopyButton } from "@/shared/ui/copy-button";
 import { RAISED_WELL } from "@/shared/ui/wells";
 import { formatChannelTimestamp, formatDate } from "@/shared/lib/format-time";
 import { errorMessage } from "#/components/page-states";
-// ⚠ **`ChannelPendingLink` SINCE WAVE 3 (R-26)** — `HomePendingLink` was the
-// same shape under a second name; it lives in `shared/links/types.ts` now and
-// is re-exported by the channels barrel with the rest of the row projection.
 import type { ChannelPendingLink } from "@/features/channels/types";
 import { displayUrl, linkGrantLabel, linkUsesLabel } from "./home-rows";
 import { useRevokeHomeLink } from "./home-writes";
 
 /**
- * AN INVITATION THAT IS STILL OUT: the URL to send, what it is good for, and
- * the one action that exists.
- *
- * ⚠ THE MOCK'S "RENEW" IS DELETED — there is no renew endpoint, and the same
- * outcome is one click away (mint another). Revoke is `DELETE /api/home/links/
- * {id}`, which is soft and idempotent: the row survives as the record of what
- * was minted, so revoking never erases a relationship that already claimed it.
- *
- * ⚠ REVOKING INVALIDATES THE CHANNELS READ (`home-writes.ts › LINK_READS`), so
- * the chip on the row clears itself from the same refetch that empties this
- * panel. Nothing here edits a cache by hand.
- *
- * ⚠ TWO PLACEMENTS, ONE COMPONENT (2026-08-25). A BOUND link is a state of a
- * channel and renders as a section inside that channel's Info tab; a LEGACY
- * unbound one has no channel to hang off and is still its own row, whose record
- * pane is {@link PendingLinkCard} — the same panel in a floating card. Two
- * copies of a revoke button is how the two come to disagree about what revoking
- * means.
- *
- * ⚠ THE URL WELL IS `RAISED_WELL`, NOT `FIELD_WELL` (2026-08-30). It wore the
- * concave `FIELD_WELL` against /home's "nothing here is pressed in" ruling
- * (Samuel, 2026-08-27), while `add-person-dialog.tsx` renders the SAME BLOCK —
- * the same class tail, the same `displayUrl` + `CopyButton` pair — on
- * `RAISED_WELL` one file over. The sweep that pins that ruling
- * (`agent-identities/components/identity-editor-surface.test.tsx`) had a hand-typed
- * five-file list and this file was not on it; the list is derived from the
- * directory now, so the enforcement mechanism covers what the ruling always did.
+ * An invitation that is still out: the URL, what it is good for, and Revoke (`DELETE
+ * /api/home/links/{id}`, soft and idempotent). Revoking invalidates the channels read
+ * (`home-writes.ts › LINK_READS`), so the row's chip clears from the same refetch. One component
+ * for both placements: a bound link's section in the channel Info tab, and a legacy unbound
+ * link's own card. The URL sits on `RAISED_WELL`: nothing on /home is pressed in.
  */
 export function LinkOutPanel({ link }: { link: ChannelPendingLink }) {
   const revoke = useRevokeHomeLink();
@@ -60,10 +35,7 @@ export function LinkOutPanel({ link }: { link: ChannelPendingLink }) {
         <span aria-hidden>·</span>
         <span>{linkUsesLabel(link)}</span>
         <span aria-hidden>·</span>
-        {/* ⚠ A LABEL, NOT AN EXPLAINER (the minimal-copy ruling): three words in
-            the row that already states expiry and uses, not a sentence about
-            what a guest may do. It is the only place an operator can see which
-            grant the open invitation carries. */}
+        {/* A label, not an explainer: the only place the invitation's grant is shown. */}
         <span>{linkGrantLabel(link)}</span>
         <span aria-hidden>·</span>
         <span>Sent {formatChannelTimestamp(link.createdAt)}</span>
@@ -85,14 +57,8 @@ export function LinkOutPanel({ link }: { link: ChannelPendingLink }) {
   );
 }
 
-/**
- * The record pane for a LEGACY unbound link — one nobody has claimed and which
- * names no container, so it is a row of its own rather than a channel's state.
- *
- * ⚠ NOTHING CAN MINT ANOTHER (2026-08-24, the inversion): every new link is
- * bound to the channel it adds a person to. This renders the tail that predates
- * that, and it goes away on its own as those tokens are claimed or expire.
- */
+/** The record pane for a legacy unbound link (it names no container). Nothing mints these any
+ *  more; they go away as they are claimed or expire. */
 export function PendingLinkCard({ link }: { link: ChannelPendingLink }) {
   return (
     <div className="flex flex-1 items-center justify-center px-6">

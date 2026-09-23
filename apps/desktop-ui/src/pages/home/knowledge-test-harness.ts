@@ -5,22 +5,9 @@ import type { KnowledgeBase } from "@/features/knowledge/types";
 import { LINK_WORKSPACE_ID } from "./home-test-ids";
 
 /**
- * THE /home KNOWLEDGE FACE'S FIXTURES (plan M3) AND ITS BASE-LIST READ.
- *
- * ⚠ SPLIT OUT OF `home-test-harness.tsx` ON 2026-09-01, for the reason that
- * file records about its OWN birth: it sat at EXACTLY 500 lines
- * (`eslint.config.mjs › max-lines`, an error over `apps/*​/src/**`), so the
- * Overview wave could not add a single route row to it. **A file at the cap
- * cannot absorb a new entry** (INVARIANTS §1) — the remedy is to relieve it by
- * a whole FACE, not to shave comments off it. Overview's fixtures went to
- * `overview-test-harness.ts` in the same change.
- *
- * ⚠ THE HARNESS RE-EXPORTS EVERYTHING HERE, so every suite still imports these
- * from `./home-test-harness` and no call site moved.
- *
- * ⚠ A `.ts` FILE, NOT `.tsx`: nothing here renders, and the /home no-concave
- * sweep (`identity-editor.test.tsx › no concave surfaces`) enumerates every
- * non-test `.tsx` in this directory.
+ * The /home Knowledge face's fixtures and base-list read, re-exported by `home-test-harness.tsx`.
+ * A `.ts` file: the /home no-concave sweep (`identity-editor-surface.test.tsx`) reads every
+ * non-test `.tsx` here, and nothing in this module renders.
  */
 
 /** One base, typed so a rename of any `KnowledgeBase` field breaks the fixture
