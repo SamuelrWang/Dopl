@@ -9,7 +9,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { createRequire } from "node:module";
-import { fnOf } from "./helpers/source-probe.mjs";
+import { codeOf, fnOf, sentinelBlock } from "./helpers/source-probe.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
@@ -41,12 +41,8 @@ const JUNK = ["", " ", null, undefined, 0, 1, true, {}, [], "Opus", "opus ", "so
 
 test("the frozen table evaluates standalone, with nothing in scope but itself", () => {
   const SRC = M("runtime/claude/model-table.js");
-  const from = SRC.indexOf("// ─── BEGIN CLAUDE-MODEL-TABLE");
-  const to = SRC.indexOf("// ─── END CLAUDE-MODEL-TABLE");
-  assert.notEqual(from, -1, "BEGIN sentinel missing");
-  assert.ok(to > from, "sentinels out of order");
   assert.ok(!/require\(|electron|process\./.test(SRC), "the module reaches nothing");
-  const pure = new Function(`${SRC.slice(from, to)}
+  const pure = new Function(`${sentinelBlock(SRC, "CLAUDE-MODEL-TABLE")}
     return { MODEL_IDS, aliasForModelId, contextWindowFor, promptTokens };`)();
   assert.deepEqual(pure.MODEL_IDS, model.MODEL_IDS);
   assert.equal(pure.aliasForModelId("rm -rf /"), "default");
@@ -281,11 +277,7 @@ test("the ONE construction site coerces what a spec hands in", () => {
   // session-core path imports one runtime's model enums to validate another runtime's launch.
   // ⚠ CODE LINES ONLY — the engine's header NAMES the require it dropped, in the words it may no
   // longer execute, which is the documentation this repo treats as load-bearing.
-  const engineCode = ENGINE.split("\n")
-    .filter((l) => !/^\s*(\/\/|\*|\/\*)/.test(l))
-    .map((l) => { const i = l.indexOf("//"); return i === -1 ? l : l.slice(0, i); })
-    .join("\n");
-  assert.ok(!/require\('\.\/session-model'\)/.test(engineCode),
+  assert.ok(!/require\('\.\/session-model'\)/.test(codeOf(ENGINE)),
     "session-engine.js must not require the model table it used to coerce every runtime through");
   assert.ok(!/takeStartModel/.test(ENGINE), "and the consent module is unreachable from the engine");
   // ⚠ `adoptsConsent` is deliberately NOT asserted absent from the whole file: `launch()` still

@@ -33,19 +33,15 @@ import assert from "node:assert/strict";
 import { readFileSync, readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { sentinelBlock } from "./helpers/source-probe.mjs";
+import { codeOf, fnOf, sentinelBlock } from "./helpers/source-probe.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const MAIN = join(HERE, "..", "main");
 const read = (p) => readFileSync(join(MAIN, p), "utf8");
 const SRC = read("channel-seed-watch.js");
 
-// Comments legitimately NAME what the module must not do, so every absence assertion below
-// scans CODE only — the same `stripComments` the H2 suites share.
-const stripComments = (src) => src.split("\n")
-  .filter((l) => !/^\s*(\/\/|\*|\/\*)/.test(l))
-  .map((l) => { const i = l.indexOf("//"); return i === -1 ? l : l.slice(0, i); })
-  .join("\n");
+// Comments may name what the module must not do, so absence assertions scan code only.
+const stripComments = codeOf;
 
 // ⚠ SLICED BY THE FENCE, NOT BY LINE NUMBERS — a comment added above the block must not move
 // this suite onto a different program.
@@ -199,8 +195,7 @@ test("WRITE-ONCE: seedChannel still refuses a configured channel, BEFORE it writ
   // ORDER is the property: a guard after the write is not a guard. `hasLaunchPosture` asks BOTH
   // stored records (`channel-prefs.js`), so a channel configured before U5 counts as configured.
   const seed = read("agent-defaults.js");
-  const body = seed.slice(seed.indexOf("function seedChannel("));
-  assert.ok(body.length > 0, "seedChannel is still where the census expects it");
+  const body = fnOf(seed, "seedChannel");
   const guard = body.indexOf("channelPrefs.hasLaunchPosture(channelId)");
   const write = body.indexOf("channelPrefs.setLaunchSelection(");
   assert.ok(guard > -1, "the write-once guard is still there");
@@ -242,7 +237,7 @@ test("observeChannels SEEDS FIRST and ADVANCES SECOND, and installs instead of s
   // ⚠ ASSERTED ON THE SHIPPED SOURCE (electron-store again), and the ORDER is the property.
   // Advancing first would move the boundary past a channel a crash then left unseeded — and it
   // would do so silently, because the next pass would find that channel below the line.
-  const body = SRC.slice(SRC.indexOf("function observeChannels("));
+  const body = fnOf(SRC, "observeChannels");
   const install = body.indexOf("res.install != null");
   const loop = body.indexOf("for (const id of res.seed)");
   const seedCall = body.indexOf("agentDefaults.seedChannel(id)");

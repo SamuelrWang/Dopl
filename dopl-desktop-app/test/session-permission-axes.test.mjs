@@ -33,7 +33,7 @@ import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { createRequire } from "node:module";
 import { createHash } from "node:crypto";
-import { fnOf, between } from "./helpers/source-probe.mjs";
+import { between, codeOf, fnOf } from "./helpers/source-probe.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
@@ -56,14 +56,6 @@ const STATE_SRC = readFileSync(M("session-state.js"), "utf8");
 const QUERY = readFileSync(M("runtime/claude/launch-spec.js"), "utf8");
 
 const { grantDecision, grantKeyFor, TOOL_MODES, MESSAGE_MODES } = profiles;
-// Source pins run against CODE, not the prose above it: a comment may name the thing it replaced
-// (these ones deliberately do). Drops whole-line comments AND trailing ` // ...` ones. (A url's
-// `://` never matches the space-slash-slash-space form, so this cannot eat code.)
-const stripComments = (src) => src
-  .split("\n")
-  .filter((l) => !/^\s*\/\//.test(l))
-  .map((l) => l.replace(/\s\/\/\s.*$/, ""))
-  .join("\n");
 const CH = "ch1";
 // FIX F4: the FULL digest. 48 bits is seconds of search for a counterparty who supplies the text.
 const shaKey = (v) => createHash("sha256").update(String(v)).digest("hex");
@@ -377,10 +369,9 @@ test("the mode tables agree across main and the reducer's own state module", () 
   assert.deepEqual(MESSAGE_MODES, ["ask", "auto_inbound", "auto_outbound", "auto_both"]);
   // The state machine's own copy (source-extracted, since the block is evaluated standalone).
   const red = (name) => {
-    const at = STATE_SRC.indexOf("const " + name + " = [");
-    assert.notEqual(at, -1, name + " missing from session-state.js");
-    const list = STATE_SRC.slice(STATE_SRC.indexOf("[", at) + 1, STATE_SRC.indexOf("]", at));
-    return list.split(",").map((x) => x.trim().replace(/['"]/g, ""));
+    const m = new RegExp(`const ${name} = \\[([^\\]]*)\\]`).exec(STATE_SRC);
+    assert.ok(m, name + " missing from session-state.js");
+    return m[1].split(",").map((x) => x.trim().replace(/['"]/g, ""));
   };
   assert.deepEqual(red("TOOL_MODES"), TOOL_MODES);
   assert.deepEqual(red("MESSAGE_MODES"), MESSAGE_MODES);
@@ -393,18 +384,17 @@ test("the stored selection's messaging list agrees with the canonical table", ()
   assert.deepEqual(sel.SELECTION_MESSAGE_MODES, MESSAGE_MODES);
 });
 
-test("the SPA holds a FOURTH copy, and it is out of this tree's reach — stated, not asserted", () => {
-  // ⚠ `src/features/channels/lib/permission-modes.ts` declares both axes again, for the
-  // renderer that offers them. This suite cannot read it (different package, different lint
-  // and test tiers), so this case exists to make the fourth copy VISIBLE from the desktop side
-  // rather than to check it — a count nobody states is a count nobody re-measures.
-  //
-  // ⚠ THE DESKTOP IS THE FENCE EITHER WAY, and that is why the gap is tolerable: every mode
-  // crossing the bridge is re-validated here (`normalizeToolMode` / `normalizeMessageMode`,
-  // fail-closed) and the reducer coerces AGAIN. A drifted SPA copy can offer a value main
-  // refuses; it can never make main accept one.
-  assert.deepEqual(MESSAGE_MODES.length, 4, "a fifth mode is a change in FOUR places — see above");
-  assert.deepEqual(TOOL_MODES.length, 4);
+test("the web's launch vocabulary agrees with main's tables", () => {
+  // The desktop re-validates every mode crossing the bridge, so a drifted web copy can offer a value
+  // main refuses but never make main accept one.
+  const web = readFileSync(join(HERE, "..", "..", "src", "features", "channels", "schema-launch-modes.ts"), "utf8");
+  const list = (re) => {
+    const m = re.exec(web);
+    assert.ok(m, `schema-launch-modes.ts no longer declares ${re}`);
+    return [...m[1].matchAll(/"([a-z_-]+)"/g)].map((x) => x[1]);
+  };
+  assert.deepEqual(list(/^\s*claude: \[([^\]]*)\]/m), TOOL_MODES);
+  assert.deepEqual(list(/LAUNCH_MESSAGE_MODES = \[([^\]]*)\]/), MESSAGE_MODES);
 });
 
 test("the two inbound-auto predicates (gate + reducer) agree on all four message modes", () => {
@@ -449,10 +439,10 @@ test("A: the SDK is still driven at permissionMode 'default' with settingSources
   // The load-bearing pin: `bypassPermissions` would stop the SDK calling canUseTool at all,
   // which would kill the outbound message card AND the hard-deny path. All four tool modes
   // resolve in OUR gate, so the SDK options must never learn about them.
-  const opts = QUERY.slice(QUERY.indexOf("function buildOptions(s, dispatch) {"), QUERY.indexOf("function buildLaunchSpec("));
+  const opts = fnOf(codeOf(QUERY), "buildOptions");
   assert.match(opts, /permissionMode: 'default'/);
   assert.match(opts, /settingSources: \[\]/);
-  assert.ok(!/acceptEdits|bypassPermissions|toolMode|messageMode/.test(stripComments(opts)),
+  assert.ok(!/acceptEdits|bypassPermissions|toolMode|messageMode/.test(opts),
     "no mode may ever be handed to the SDK");
 });
 

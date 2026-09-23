@@ -25,6 +25,7 @@ import { createRequire } from "node:module";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
+import { sliceFrom } from "./helpers/source-probe.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
@@ -287,7 +288,7 @@ test("frameContinuation puts EVERY branch above the fence, and none of it inside
   for (const [label, verdict, phrase] of cases) {
     const out = seed.frameContinuation(NONCE, "the peer's words", "Dave", verdict);
     const head = preambleOf(out).join(" ").replace(/\s+/g, " ");
-    const tail = out.slice(out.indexOf(`BEGIN-REQUEST-${NONCE}`));
+    const tail = sliceFrom(out, `BEGIN-REQUEST-${NONCE}`);
     assert.match(head, phrase, `${label}: the verdict is missing from the trusted preamble`);
     assert.ok(!phrase.test(tail), `${label}: the verdict leaked inside the fence`);
     // Its POSITION is fixed: after our two authored lines, before the opening fence.

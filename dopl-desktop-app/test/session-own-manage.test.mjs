@@ -18,6 +18,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { createRequire } from "node:module";
+import { codeOf } from "./helpers/source-probe.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
@@ -327,11 +328,7 @@ test("🔒 THE DELIVERY END'S PER-KIND CONSENT IS UNTOUCHED — widening a gate 
   // ...and this lane's CODE says nothing about any of it. COMMENTS ARE STRIPPED FIRST: the header
   // names that consent split, so a raw regex over the file text would redden the invariant the
   // prose documents.
-  const stripComments = (src) => src
-    .replace(/\/\*[\s\S]*?\*\//g, "")
-    .replace(/(^|[^:])\/\/.*$/gm, "$1");
-  const executableSrc = stripComments(read("session-own-manage.js"));
-  assert.ok(executableSrc.length > 0);
+  const executableSrc = codeOf(read("session-own-manage.js"));
   assert.ok(!/launchEnabled|getOrchestratorLaunch|KINDS_NEEDING/.test(executableSrc),
     "the classifier must not grow an opinion about the delivery end's consent");
 });

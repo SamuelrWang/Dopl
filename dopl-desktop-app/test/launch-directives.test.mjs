@@ -46,7 +46,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import {
   boot, claimPosts, decidePosts, row, wire,
-  MAIN, SRC, WS, CH, TH, ME, OTHER, DID,
+  MAIN, SRC, WS, CH, OTHER, DID,
 } from "./_launch-directive-harness.mjs";
 import { codeOf } from "./helpers/source-probe.mjs";
 

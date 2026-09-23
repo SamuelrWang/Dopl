@@ -30,6 +30,7 @@ import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
+import { between, sentinelBlock } from "./helpers/source-probe.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 // 2026-08-22: `startResume` mints its own instance id (it is the one spawn `launch` does not
@@ -43,10 +44,7 @@ const RUNTIME = createRequire(import.meta.url)(join(HERE, "..", "main", "runtime
 const PARK_SRC = readFileSync(join(HERE, "..", "main", "session-park.js"), "utf8");
 const ENGINE_SRC = readFileSync(join(HERE, "..", "main", "session-engine.js"), "utf8");
 
-const from = PARK_SRC.indexOf("// ─── BEGIN SESSION-PARK-PURE");
-const to = PARK_SRC.indexOf("// ─── END SESSION-PARK-PURE");
-assert.ok(from !== -1 && to > from, "SESSION-PARK-PURE sentinels missing or out of order");
-const BLOCK = PARK_SRC.slice(from, to);
+const BLOCK = sentinelBlock(PARK_SRC, "SESSION-PARK-PURE");
 
 // ── (a) startResume carries the record's counters ────────────────────────────────
 
@@ -132,11 +130,7 @@ test("D3(a): a legacy record with no counters resumes at zero, never NaN", async
 // The real preamble: everything startSession does to `state` between building it and
 // assembling the context. Evaluated verbatim, so this cannot drift from what ships.
 const preamble = (() => {
-  const at = ENGINE_SRC.indexOf("const state = initialSessionState(");
-  assert.notEqual(at, -1, "startSession's state assembly moved");
-  const end = ENGINE_SRC.indexOf("const context = {", at);
-  assert.ok(end > at, "startSession's context assembly moved");
-  const seg = ENGINE_SRC.slice(at, end);
+  const seg = between(ENGINE_SRC, "const state = initialSessionState(", "const context = {");
   return seg.slice(seg.indexOf("\n") + 1); // drop the initialSessionState line itself
 })();
 const applyPreamble = new Function("state", "spec", `${preamble}\n return state;`);

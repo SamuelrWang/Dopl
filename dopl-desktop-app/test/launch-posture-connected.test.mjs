@@ -31,6 +31,7 @@ import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { evalModule, loadWithStubs } from "./helpers/module-sandbox.mjs";
+import { sentinelBlock } from "./helpers/source-probe.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const MAIN = join(HERE, "..", "main");
@@ -230,11 +231,7 @@ const DESCRIPTORS = [
 /** `channel-dir-ipc.js` with everything but the posture read stubbed at its seam. */
 function bootIpc(opts = {}) {
   const handlers = {};
-  const guards = (() => {
-    const g = readFileSync(join(MAIN, "ipc-guards.js"), "utf8");
-    const block = g.slice(g.indexOf("// ─── BEGIN IPC-GUARDS"), g.indexOf("// ─── END IPC-GUARDS"));
-    return new Function(`${block}\n return { isAppWindowSender, isUuid, UUID_RE };`)();
-  })();
+  const guards = new Function(`${sentinelBlock(readFileSync(join(MAIN, "ipc-guards.js"), "utf8"), "IPC-GUARDS")}\n return { isAppWindowSender, isUuid, UUID_RE };`)();
   const stub = (id) => {
     if (id === "electron") return { ipcMain: { handle: (n, fn) => { handlers[n] = fn; } } };
     if (id === "./ipc-guards") return guards;

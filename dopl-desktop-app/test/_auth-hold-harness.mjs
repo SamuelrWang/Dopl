@@ -20,7 +20,6 @@
 // `deps.acquireRuntime()` is the only await left in the resume, so that is where a re-entrancy race is
 // made now.
 
-import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
@@ -37,8 +36,6 @@ export const ENGINE = readFileSync(M("session-engine.js"), "utf8");
 
 export const { initialSessionState, sessionReducer } = loadReducer();
 
-export const H_BEGIN = "// ─── BEGIN SESSION-AUTH-HOLD";
-export const H_END = "// ─── END SESSION-AUTH-HOLD";
 export const HOLD_BLOCK = sentinelBlock(AUTH_SRC, "SESSION-AUTH-HOLD");
 
 // H1: the fake dispatch runs the REAL reducer and applies its state, so these tests prove the

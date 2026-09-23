@@ -53,7 +53,7 @@ import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { sentinelBlock } from "./helpers/source-probe.mjs";
+import { codeOf, sentinelBlock } from "./helpers/source-probe.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const MAIN = join(HERE, "..", "main");
@@ -283,7 +283,7 @@ test("the pure block really is pure — it is sliced and evaluated, so it may no
   // module does not, which is the failure mode source extraction is worth nothing without.
   // ⚠ COMMENTS STRIPPED FIRST: the fence's own header explains what it may not reach, in the
   // words it may not reach, so a raw-text scan would fail on the documentation of the rule.
-  const code = block.replace(/\/\/.*$/gm, "").replace(/\/\*[\s\S]*?\*\//g, "");
+  const code = codeOf(block);
   assert.ok(!/\brequire\s*\(|\bstore\./.test(code), "no store or require inside the fence");
   assert.ok(!/electron/.test(code), "no electron inside the fence");
   // ⚠ AND IT MAY NOT NAME A RUNTIME'S VOCABULARY EITHER (U5). Every mode, model id and native

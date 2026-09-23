@@ -23,7 +23,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { createRequire } from "node:module";
-import { fnOf } from "./helpers/source-probe.mjs";
+import { between, codeOf, fnOf } from "./helpers/source-probe.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
@@ -33,7 +33,6 @@ const read = (p) => readFileSync(M(p), "utf8");
 const lane = require(M("session-own-launch.js"));
 const profiles = require(M("session-profiles.js"));
 const perms = require(M("session-permissions.js"));
-const io = require(M("session-io.js"));
 // ⚠ 2026-08-31 (runtime-adapter port, step 3): `makeCanUseTool` SPLIT. The verdict plumbing, the
 // diag line, the card payloads and the resolver parking are platform-free and live in
 // `main/session-gate-bridge.js`; what remains under this name is the HELD-CALLBACK WIRING and the
@@ -175,11 +174,8 @@ test("a RECREATE RESTORES the chain stamp off the durable record, and may not ar
   // NOTHING but its record, so an orchestrator woke unable to staff the room it was launched in.
   // ⚠ WHAT THE REVERSAL DOES NOT TOUCH is the test above: RESTORING a flag the record carries is
   // not READING the room's setting, and only `launch-directive-spawn.js` may do the latter.
-  const stripComments = (src) => src
-    .replace(/\/\*[\s\S]*?\*\//g, "")
-    .replace(/(^|[^:])\/\/.*$/gm, "$1");
   for (const f of ["session-park.js", "session-boot.js"]) {
-    assert.match(stripComments(read(f)), /launchChain: rec\.launchChain === true,/,
+    assert.match(codeOf(read(f)), /launchChain: rec\.launchChain === true,/,
       `${f} must restore the flag with the gate's own \`=== true\``);
   }
   const src = read("session-io.js");
@@ -216,8 +212,8 @@ test("NO live fan-out — a containment flag is a spawn-time stamp, unlike the p
   // posture out to running sessions on an argument that names its own limit: it widens
   // SUPERVISION, never CONTAINMENT. This is containment.
   const ipc = read("channel-dir-ipc.js");
-  const handler = ipc.slice(ipc.indexOf("'channels:setAgentChain'"), ipc.indexOf("ORCHESTRATOR LAUNCH TOGGLE"));
-  assert.ok(handler.length > 0 && !/applyPostureToLive|setModeByTask|listLiveSessions/.test(handler),
+  const handler = between(ipc, "'channels:setAgentChain'", "'channels:getAgentDefaults'");
+  assert.ok(!/applyPostureToLive|setModeByTask|listLiveSessions/.test(handler),
     "flipping chaining must not reach a session that is already running");
 });
 

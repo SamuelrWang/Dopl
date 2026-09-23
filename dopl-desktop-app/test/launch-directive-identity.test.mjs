@@ -30,6 +30,7 @@ import assert from "node:assert/strict";
 import {
   boot, decidePosts, row, SRC, WS, CH,
 } from "./_launch-directive-harness.mjs";
+import { codeOf } from "./helpers/source-probe.mjs";
 
 // ⚠ THE SECOND FENCE, AND IT BELONGS TO A DIFFERENT PERSON THAN THE FIRST. The orchestrator
 // already proved server-side that it could SEE the identity it named. This proves the OPERATOR
@@ -171,10 +172,6 @@ test("IDENTITY: this lane has NO first-use approval gate, and cannot answer `ide
   await h.api.handle(row({ identity_id: TPL }), WS);
   assert.equal(h.cfg.lastSpec.idle, false, "a FOREIGN identity launches here with no click");
   assert.equal(decidePosts(h)[0].body.status, "launched");
-  const code = SRC.split("\n")
-    .filter((l) => !/^\s*(\/\/|\*|\/\*)/.test(l))
-    .map((l) => { const i = l.indexOf("//"); return i === -1 ? l : l.slice(0, i); })
-    .join("\n");
-  assert.equal(/identity-approval|isIdentityApproved|approveIdentity/.test(code), false,
+  assert.equal(/identity-approval|isIdentityApproved|approveIdentity/.test(codeOf(SRC)), false,
     "no approval word and no approval store reader may appear in this lane's code");
 });

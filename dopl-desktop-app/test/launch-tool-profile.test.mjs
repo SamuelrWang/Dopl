@@ -209,8 +209,7 @@ test("a WATCHED channel whose DTO carries NO profile field fails closed too", as
 test("the fail-closed answer is the TABLE's, not a second literal in the handler", () => {
   // C-11: one definition of "what does an unknown profile mean". The handler must not carry its
   // own `: 'read_only'` fallback — that is the shape that once answered `'full'` one file over.
-  const body = LAUNCH_OP.slice(LAUNCH_OP.indexOf("async function launchFromButton("));
-  const launchBody = body.slice(0, body.indexOf("ipcMain.handle(", 1));
+  const launchBody = fnOf(LAUNCH_OP, "launchFromButton");
   assert.match(launchBody, /const toolProfile = targeting\.resolveLaunchToolProfile\(/);
   assert.equal(/toolProfile\s*=.*\?.*:\s*'read_only'/.test(launchBody), false,
     "no ternary fallback beside the resolver — normalizeProfile owns the floor");
@@ -257,8 +256,7 @@ test("the TRAY PROJECTION carries no profile at all — feeding it back floors e
 
 test("`sessions:launch` does not read the projection, and `watchedChannel` returns the DTO whole",
   () => {
-    const body = LAUNCH_OP.slice(LAUNCH_OP.indexOf("async function launchFromButton("));
-    const launchBody = body.slice(0, body.indexOf("ipcMain.handle(", 1));
+    const launchBody = fnOf(LAUNCH_OP, "launchFromButton");
     assert.equal(/listWatchedChannels/.test(launchBody), false,
       "the projection must not come back as this lane's input");
     assert.match(launchBody, /listener\.watchedChannel\(p\.channelId\)/);

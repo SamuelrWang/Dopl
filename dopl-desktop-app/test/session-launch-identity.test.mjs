@@ -17,6 +17,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { bootLaunchOp } from "./_session-launch-op-harness.mjs";
+import { fnOf } from "./helpers/source-probe.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const MAIN = join(HERE, "..", "main");
@@ -409,7 +410,7 @@ test("`context.identity` rides the funnel's LITERAL WHITELIST and survives park/
     "startSession merges the spec's context onto the session"
   );
   const park = read("session-park.js");
-  const resume = park.slice(park.indexOf("function resumeParked("), park.indexOf("async function startResumedConsumer("));
+  const resume = fnOf(park, "resumeParked");
   assert.equal(/s\.context/.test(resume), false, "a park/resume never rewrites the context");
   // …and the framing reads it from there, with the session's OWN profile spread on at wake.
   assert.match(read("session-seed.js"), /context: \{ \.\.\.\(\(s && s\.context\) \|\| \{\}\), profile: s\.profile, mcpDiscovery: discoveryFor\(s && s\.runtimeId\) \}/);

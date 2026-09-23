@@ -27,7 +27,7 @@ import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { boot, claimPosts } from "./_launch-directive-harness.mjs";
-import { codeOf } from "./helpers/source-probe.mjs";
+import { between, codeOf, sliceFrom } from "./helpers/source-probe.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const MAIN = join(HERE, "..", "main");
@@ -192,8 +192,8 @@ const dtoKeys = () => {
   const service = readFileSync(
     join(HERE, "..", "..", "src", "features", "channels", "server", DTO_FILE), "utf8"
   );
-  const body = service.slice(service.indexOf("function toDirective"));
-  return [...body.slice(0, body.indexOf("\n}")).matchAll(/^\s{4}([A-Za-z]+):/gm)].map((m) => m[1]);
+  const body = between(sliceFrom(service, "function toDirective"), "function toDirective", "\n}");
+  return [...body.matchAll(/^\s{4}([A-Za-z]+):/gm)].map((m) => m[1]);
 };
 
 test("CONTRACT: the pending-read DTO carries `operatorUserId` (F-284)", () => {
@@ -434,7 +434,7 @@ test("IDENTITY: `identity-approval` is NOT a directive refusal word, on either s
   const SCHEMA = readFileSync(
     join(HERE, "..", "..", "src", "features", "channels", "schema-launch.ts"), "utf8"
   );
-  const enumBody = SCHEMA.slice(SCHEMA.indexOf("LaunchRefusalReasonSchema"));
+  const enumBody = sliceFrom(SCHEMA, "LaunchRefusalReasonSchema");
   assert.equal(enumBody.slice(0, 400).includes("identity-approval"), false,
     "the server's own enum must not carry it either");
 });

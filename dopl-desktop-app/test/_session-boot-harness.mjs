@@ -46,7 +46,7 @@ import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { fnOf } from "./helpers/source-probe.mjs";
+import { fnOf, sentinelBlock } from "./helpers/source-probe.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const MAIN = join(HERE, "..", "main");
@@ -63,17 +63,8 @@ const PROFILES = require_(join(MAIN, "session-profiles.js"));
 const TOOL_PROFILES = require_(join(MAIN, "tool-profiles.js"));
 const { initialSessionState } = require_(join(MAIN, "session-state.js"));
 
-function slice(src, label) {
-  const from = src.indexOf(`// ─── BEGIN ${label}`);
-  const to = src.indexOf(`// ─── END ${label}`);
-  assert.notEqual(from, -1, `BEGIN ${label} sentinel missing`);
-  assert.notEqual(to, -1, `END ${label} sentinel missing`);
-  assert.ok(to > from, `${label} sentinels out of order`);
-  return src.slice(from, to);
-}
-
-const BOOT_BLOCK = slice(BOOT_SRC, "SESSION-BOOT-PURE");
-const PARK_BLOCK = slice(PARK_SRC, "SESSION-PARK-PURE");
+const BOOT_BLOCK = sentinelBlock(BOOT_SRC, "SESSION-BOOT-PURE");
+const PARK_BLOCK = sentinelBlock(PARK_SRC, "SESSION-PARK-PURE");
 
 // Every free var the block is handed below must be a name the module itself binds above its
 // sentinel. Injecting one it never declares is how a ReferenceError shipped green (P4-01).
@@ -82,7 +73,7 @@ const BOOT_INJECTED = [
   "sessionPark", "sessionSummary", "agentHistory", "sessionEffects",
   "runtimeRegistry", "runtimeCapability", "runtimeTruth", "diag",
 ];
-const BOOT_HEADER = BOOT_SRC.slice(0, BOOT_SRC.indexOf("// ─── BEGIN SESSION-BOOT-PURE"));
+const BOOT_HEADER = BOOT_SRC.slice(0, BOOT_SRC.indexOf(BOOT_BLOCK));
 for (const name of BOOT_INJECTED) {
   assert.match(BOOT_HEADER, new RegExp(`^const (${name}\\b|\\{[^}]*\\b${name}\\b[^}]*\\})`, "m"),
     `session-boot.js must bind ${name} above SESSION-BOOT-PURE — the harness may inject only what the module declares`);
@@ -227,6 +218,6 @@ function harness(over = {}) {
 }
 
 export const flush = () => new Promise((r) => setImmediate(r));
-export { assert, test, harness, parkedRecord, slice, CHANNEL, KEY, storePure, parkReaders };
+export { assert, test, harness, parkedRecord, CHANNEL, KEY, storePure, parkReaders };
 export { BOOT_SRC, PARK_SRC, STORE_SRC, BOOT_BLOCK, PARK_BLOCK };
 export { RUNTIME, PILL, EFFECTS, PROFILES, TOOL_PROFILES, initialSessionState, MAIN, require_ };

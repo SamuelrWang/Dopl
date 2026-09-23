@@ -6,7 +6,8 @@
 // the injected leaf deps, the REAL registry and the REAL ceiling — is unchanged; that file's own
 // header states the seam. The RESUME-REFUSAL cases live in `session-park-resume-refusal.test.mjs`.
 
-import { test, assert, harness, flush, agentId, RUNTIME, REAL_MAX, SRC } from "./_session-park-harness.mjs";
+import { test, assert, harness, flush, agentId, REAL_MAX, SRC } from "./_session-park-harness.mjs";
+import { between } from "./helpers/source-probe.mjs";
 
 // ── P1: resumeParked rebuilds the query on the SAME object, through buildLaunchSpec ──
 
@@ -302,8 +303,7 @@ test("the park door closes the runtime handle, exactly as the resume door does",
     readFileSync(fileURLToPath(new URL(rel, import.meta.url)), "utf8");
 
   const engine = read("../main/session-engine.js");
-  const abortCase = engine.slice(engine.indexOf("case 'abortQuery':"));
-  const body = abortCase.slice(0, abortCase.indexOf("case 'denyPending'"));
+  const body = between(engine, "case 'abortQuery':", "case 'denyPending'");
 
   // The close and its typeof guard are `session-handles.js › teardownHandles` (P4-14), driven in
   // test/session-handles.test.mjs; the park door must go through it.

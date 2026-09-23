@@ -29,7 +29,7 @@ import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import {
   SRC, BLOCK_START, load, entry, adHocEntry, fakeSummary, armed, drained, bodies,
-  CHAN_A, TASK_A, CHAN_B, TASK_B, ADHOC_TASK_ID,
+  CHAN_A, TASK_A, CHAN_B, TASK_B,
 } from "./_session-state-push-harness.mjs";
 
 // THE ONE TRANSPORT. `api.js` carries the F-132 401 repair that `listener-io.js` shipped without and took the whole

@@ -27,7 +27,7 @@ import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { orderOf } from "./helpers/source-probe.mjs";
+import { between, orderOf } from "./helpers/source-probe.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const MAIN = join(HERE, "..", "main");
@@ -88,8 +88,7 @@ test("SPLIT: the agent-window op keeps its IPC surface here and its body there",
   assert.match(ops,
     /ipcMain\.handle\('sessions:openAgentWindow', appWindowOnly\('sessions:openAgentWindow', \{ ok: false \}/);
   assert.match(ops, /require\('\.\/session-ipc-window-op'\)\.openAgentWindow\(p\)/);
-  const handler = ops.slice(ops.indexOf("ipcMain.handle('sessions:openAgentWindow'"),
-    ops.indexOf("require('./session-ipc-window-op')"));
+  const handler = between(ops, "ipcMain.handle('sessions:openAgentWindow'", "require('./session-ipc-window-op')");
   assert.match(handler, /if \(!isUuid\(p\.channelId\)\) return \{ ok: false \};/,
     "the UUID gate stays AHEAD of the delegate — a bad payload must never reach it");
   // ⚠ `asAgentId` IS READ BACK FROM THE REGISTRAR, never re-spelled: it is the third coordinate

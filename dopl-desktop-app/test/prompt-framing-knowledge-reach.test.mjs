@@ -16,6 +16,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
+import { orderOf } from "./helpers/source-probe.mjs";
 
 const require = createRequire(import.meta.url);
 const M = (f) => require(fileURLToPath(new URL(`../main/${f}`, import.meta.url)));
@@ -90,7 +91,7 @@ test("an identity with one reachable and one unreachable base gets BOTH sections
   assert.match(text, /ATTACHED KNOWLEDGE:/);
   assert.match(text, /- Ops Notes {2}\(mcp__dopl__dopl_kb/);
   assert.match(text, /ATTACHED KNOWLEDGE YOU CANNOT REACH:/);
-  assert.ok(text.indexOf("ATTACHED KNOWLEDGE:") < text.indexOf("YOU CANNOT REACH"));
+  assert.ok(orderOf(text, "ATTACHED KNOWLEDGE:", "YOU CANNOT REACH"));
   assert.ok(text.includes(SENTENCE));
 });
 

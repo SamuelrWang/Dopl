@@ -25,6 +25,7 @@ import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
+import { between, codeOf } from "./helpers/source-probe.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 // ⚠ `createRequire`, NOT AN IMPORT — `main/launch-selection.js` is CommonJS and, like every
@@ -49,14 +50,14 @@ test("PRELOAD: every launch-posture field is forwarded ONLY when the caller supp
   );
   assert.ok(!/messages: asMode\(preset && preset\.messages\)/.test(PRELOAD));
   // ⚠ 2026-09-23 (Samuel: "We don't need a pin model in the settings"): `model` is NOT forwarded.
-  assert.ok(!/preset\.model/.test(PRELOAD.replace(/\/\/.*$/gm, "")), "the stored model is deleted");
+  assert.ok(!/preset\.model/.test(codeOf(PRELOAD)), "the stored model is deleted");
 });
 
 
 test("PRELOAD: the native bag crosses as a FLAT MAP OF STRINGS and nothing else", () => {
   // ⚠ NO NESTING, NO ARRAYS, NO NUMBERS — the same fail-closed coercion every other value on this
   // bridge takes. Main re-validates every key against the SELECTED adapter's declared dimensions.
-  const body = PRELOAD.slice(PRELOAD.indexOf("const asNative"), PRELOAD.indexOf("const asRuntimeRecords"));
+  const body = between(PRELOAD, "const asNative", "const asRuntimeRecords");
   assert.match(body, /out\[String\(key\)\] = asMode\(native\[key\]\)/);
   assert.ok(!/JSON\.|structuredClone|Object\.assign/.test(body), "nothing structural may cross");
 });
@@ -68,13 +69,13 @@ test("PRELOAD: the defaults write carries `v` and `byRuntime`, or main reads it 
   // the operator's Codex sandbox.
   assert.match(PRELOAD, /\.\.\.\(defaults && defaults\.v !== undefined \? \{ v: Number\(defaults\.v\) \} : \{\}\)/);
   assert.match(PRELOAD, /byRuntime: asRuntimeRecords\(defaults\.byRuntime\)/);
-  const body = PRELOAD.slice(PRELOAD.indexOf("const asRuntimeRecords"), PRELOAD.indexOf("contextBridge.exposeInMainWorld"));
+  const body = between(PRELOAD, "const asRuntimeRecords", "contextBridge.exposeInMainWorld");
   for (const key of ["tools", "native"]) {
     assert.match(body, new RegExp(`record\\.${key} !== undefined`), `\`${key}\` is own-key inside a record too`);
   }
   // ⚠ 2026-09-23: no `model` inside a record, and none on the defaults write either.
   assert.ok(!/record\.model/.test(body), "a runtime record carries no model");
-  assert.ok(!/defaults\.model/.test(PRELOAD.replace(/\/\/.*$/gm, "")), "the defaults write carries no model");
+  assert.ok(!/defaults\.model/.test(codeOf(PRELOAD)), "the defaults write carries no model");
   assert.match(read("main", "agent-defaults.js"), /const legacy = raw\.v == null;/,
     "…and main's branch is the reason the key has to be there");
 });

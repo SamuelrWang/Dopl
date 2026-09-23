@@ -26,7 +26,7 @@ import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { fnOf, codeOf } from "./helpers/source-probe.mjs";
+import { asyncFnOf, fnOf, codeOf } from "./helpers/source-probe.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const MAIN = join(HERE, "..", "main");
@@ -90,7 +90,7 @@ function consumeHarness(over = {}) {
   const fn = new Function(
     "io", "store", "diag", "sessionAuth", "mcpGuard", "deps",
     `${fnOf(QUERY, "normalizeCtx")}
-     async ${fnOf(QUERY, "consume")}
+     ${asyncFnOf(QUERY, "consume")}
      ${fnOf(QUERY, "isAbortError")}
      return consume;`
   )(io, {}, (...p) => calls.diag.push(p.join(" ")), sessionAuth, mcpGuard, deps);

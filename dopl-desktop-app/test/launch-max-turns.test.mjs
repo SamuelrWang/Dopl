@@ -30,7 +30,7 @@ import { readFileSync, readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { createRequire } from "node:module";
-import { fnOf } from "./helpers/source-probe.mjs";
+import { codeOf, fnOf } from "./helpers/source-probe.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
@@ -44,12 +44,7 @@ const SPEC = M("runtime/claude/launch-spec.js");
 // tell a citation from a reference and failed on the comment that explains the very deletion it
 // is checking for, which would have been "fixed" by deleting the explanation. So the comments come
 // off first and the assertion keeps its full strength over everything that executes.
-const stripComments = (src) => src
-  .replace(/\/\*[\s\S]*?\*\//g, "")
-  .split("\n")
-  .map((line) => line.replace(/(^|\s)\/\/.*$/, "$1"))
-  .join("\n");
-const SPEC_CODE = stripComments(SPEC);
+const SPEC_CODE = codeOf(SPEC);
 
 const shipped = (src, name) => {
   const m = new RegExp(`const ${name} = (\\d+);`).exec(src);

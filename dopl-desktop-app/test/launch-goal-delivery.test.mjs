@@ -37,6 +37,7 @@ import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { boot, row, MAIN, WS } from "./_launch-directive-harness.mjs";
+import { sliceFrom } from "./helpers/source-probe.mjs";
 
 const require = createRequire(import.meta.url);
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -105,7 +106,7 @@ test("BUTTON: New Agent still spawns IDLE — ruling 3 is not what moved", () =>
   // goal-conditional, because there IS no operator-written goal on it — it composes its own
   // stand-by sentence, and a human is at the keyboard to talk to what it registers.
   const src = readFileSync(join(MAIN, "session-launch-op.js"), "utf8");
-  const call = src.slice(src.indexOf("engine.launchRequesterSession({"));
+  const call = sliceFrom(src, "engine.launchRequesterSession({");
   assert.match(call, /\n\s*idle: true,/, "the button lane spawns idle, unconditionally");
   assert.ok(!/idle: !/.test(call), "…and must not copy the directive lane's conditional");
   // The directive lane's own literal, so the two cannot silently converge.

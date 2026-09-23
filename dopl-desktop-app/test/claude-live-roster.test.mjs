@@ -23,7 +23,7 @@ import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { fnOf } from "./helpers/source-probe.mjs";
+import { asyncFnOf } from "./helpers/source-probe.mjs";
 import { loadCatalog, settle } from "./_model-catalog-harness.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -189,7 +189,6 @@ test("RC-03: the build's fallback table LABELS only — a pick it lacks is not r
 // ── 6. THE FUNNEL ────────────────────────────────────────────────────────────────────────────
 
 const LAUNCH_SRC = readFileSync(join(MAIN, "session-launch.js"), "utf8");
-const asyncFnOf = (src, name) => `async ${fnOf(src, name)}`;
 function refuser(stub) {
   const logged = [];
   const fn = new Function("require", "diag", `${asyncFnOf(LAUNCH_SRC, "refuseUnknownModel")}\n return refuseUnknownModel;`)(

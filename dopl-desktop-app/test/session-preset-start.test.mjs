@@ -80,6 +80,7 @@ import {
   test, assert, read, ENGINE, LAUNCH, PARK, TRIGGER, CONTEXT, PREFS, DIRIPC, CHANIPC,
   initialSessionState, WIDE, stripComments, startedStateFor,
 } from "./_session-preset-harness.mjs";
+import { between, fnOf } from "./helpers/source-probe.mjs";
 
 // ── 1. THE CONSTRUCTION SITE, driven ─────────────────────────────────────────
 // The real `startSession` head: the ONE expression that decides a new session's axes,
@@ -146,8 +147,7 @@ test("H2: a PARKED SHELL refuses a posture unless a human armed it JUST NOW", ()
   // is deliberately still READ rather than scrubbed — a future non-window dormant shape sets it
   // and inherits the safe behaviour. A guard with no live producer is exactly the kind that gets
   // deleted as dead, so its presence at the construction site is asserted here.
-  const head = ENGINE.slice(ENGINE.indexOf("const armedModes = spec.startModes;"),
-    ENGINE.indexOf("const context = { ...(spec.context || {})"));
+  const head = between(ENGINE, "const armedModes = spec.startModes;", "const context = { ...(spec.context || {})");
   assert.match(head, /!spec\.parkedShell \|\| operatorArmed/, "the guard itself, not just its effect");
 });
 
@@ -171,7 +171,7 @@ test("H2: the preset is not, and cannot become, part of any GRANT", () => {
 // ── 2. THE RE-APPLYING PATHS: they hand in nothing, structurally ─────────────
 
 test("H2: startResume (the crash/interrupted resume) passes NO startModes either", () => {
-  const body = PARK.slice(PARK.indexOf("async function startResume("), PARK.indexOf("async function resume("));
+  const body = fnOf(PARK, "startResume");
   assert.ok(body.includes("deps.startSession("), "startResume really spawns");
   // ⚠ CODE ONLY SINCE 2026-08-22. The resume now passes `windowless: true` and its comment says
   // OUT LOUD that it is still not handing in a posture — which a whole-source scan read as the
@@ -197,7 +197,7 @@ test("H2: the requester launch mints NO posture of its own — it forwards its c
   // `launchRequesterSession` reads no stored posture, so a caller that hands it nothing
   // still inherits the reducer's manual/ask.
   // ⚠ IT MOVED FILES 2026-08-21, NOT MEANING: the funnel split off the engine at the §2 cap.
-  const body = LAUNCH.slice(LAUNCH.indexOf("function launchRequesterSession("), LAUNCH.indexOf("function hasLiveSession("));
+  const body = fnOf(LAUNCH, "launchRequesterSession");
   assert.ok(!/startModes/.test(body), "the lane wrapper neither reads nor defaults one");
   for (const src of [ENGINE, LAUNCH]) {
     assert.ok(!/channel-prefs|channelPrefs/.test(stripComments(src)),
@@ -224,8 +224,7 @@ test("H2: the peer-triggered launch consumes NOTHING, and carries no stored post
   // ⚠ THE RULE MOVED IN THE SAFE DIRECTION AND IS ASSERTED IN ITS STRONGEST FORM YET. "At most
   // one consumer, and only for a human decision" is now "NO consumer, and a LITERAL most-
   // restrictive value": there is no stored pair on this path at all for a future edit to widen.
-  const body = TRIGGER.slice(TRIGGER.indexOf("async function launchResponderSession("));
-  assert.ok(body.length > 0, "the lane still exists — an empty slice passes every negative below");
+  const body = fnOf(TRIGGER, "launchResponderSession");
   assert.match(body, /startModes: \{ tools: registry\.capability\.narrowestToolMode\(registry\.descriptorFor\(runtimeId\)\), messages: 'ask' \}/,
     "pinned to THIS runtime's most restrictive member, not merely absent");
   const code = stripComments(body);
@@ -266,7 +265,7 @@ test("H2/split: the DURABLE posture is read by sessions:launch and by nothing el
   // away from. That is a strictly tighter assertion than the old prefix slice: a stray
   // `launchStartModes` anywhere in this module is still the only read, and there is nothing
   // else in it for one to hide behind.
-  const body = DIRIPC.slice(DIRIPC.indexOf("async function launchFromButton("));
+  const body = fnOf(DIRIPC, "launchFromButton");
   assert.match(body, /channelPrefs\.launchStartModes\(p\.channelId, runtimeId\)/, "consumed here, on the LAUNCH runtime's record (C1)");
   assert.equal(stripComments(DIRIPC).match(/launchStartModes/g).length, 1, "read exactly once");
   // ...and the pinned 'manual' it replaced is really gone from this handler.
@@ -298,7 +297,7 @@ test("H2/split: the RESPONDER lane reads NO stored record, and its tool axis flo
   // ⚠ THE NEGATIVE HALF IS THE WHOLE POINT AND IT IS UNCHANGED: a peer-driven launch must not
   // inherit a setting the operator left on a tab. That is what separates the two lanes, and with
   // one record left it is the ONLY thing separating them — so it matters more, not less.
-  const body = TRIGGER.slice(TRIGGER.indexOf("async function launchResponderSession("));
+  const body = fnOf(TRIGGER, "launchResponderSession");
   assert.match(body, /startModes: \{ tools: registry\.capability\.narrowestToolMode\(registry\.descriptorFor\(runtimeId\)\), messages: 'ask' \}/,
     "the tool axis is the runtime's most restrictive member for anything a peer can trigger");
   assert.ok(!/getLaunchPosture|launchStartModes/.test(stripComments(body)),
@@ -356,11 +355,10 @@ test("M2: a park KEEPS the posture; only the AUTH HOLD resets it", () => {
   // to the auth hold, and the away case is answered by ending an abandoned session instead.
   // What a PRESET seeds is untouched either way: a fresh session still starts where it is told.
   const REDUCER = read("session-reducer.js");
-  const idle = REDUCER.slice(REDUCER.indexOf("if (type === 'idle_timeout')"),
-    REDUCER.indexOf("if (type === 'abandon_timeout')"));
+  const idle = between(REDUCER, "if (type === 'idle_timeout')", "if (type === 'abandon_timeout')");
   assert.doesNotMatch(idle, /toolMode: 'manual'/, "the idle park writes no posture at all");
   assert.match(idle, /resetPosture: false/);
-  const hold = REDUCER.slice(REDUCER.indexOf("if (type === 'auth_hold')"), REDUCER.indexOf("if (type === 'auth_release')"));
+  const hold = between(REDUCER, "if (type === 'auth_hold')", "if (type === 'auth_release')");
   assert.match(hold, /toolMode: toolModesOf\(state\)\[0\], messageMode: MESSAGE_MODES\[0\], inboundForTask: false/,
     "a session with no credential still hard-resets to the restrictive pair, in ITS runtime's words");
 });

@@ -29,7 +29,7 @@ import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { sentinelBlock } from "./helpers/source-probe.mjs";
+import { codeOf, sentinelBlock } from "./helpers/source-probe.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const MAIN = join(HERE, "..", "main");
@@ -319,7 +319,7 @@ test("the shape module holds NO runtime's vocabulary — the whole bar of the un
   // ⚠ CODE LINES ONLY: the header explains the rule in the words the code may not use.
   const src = req("node:fs").readFileSync(join(MAIN, "launch-selection.js"), "utf8");
   const block = sentinelBlock(src, "LAUNCH-SELECTION");
-  const code = block.replace(/\/\/.*$/gm, "").replace(/\/\*[\s\S]*?\*\//g, "");
+  const code = codeOf(block);
   assert.ok(!/\brequire\s*\(|\bstore\./.test(code), "no store or require inside the fence");
   assert.ok(!/manual|accept_edits|bypass|untrusted|on-request|claude|codex|cursor|gpt-|sandbox_mode|reasoningEffort/i
     .test(code), "no runtime's vocabulary inside the fence");

@@ -37,6 +37,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { SRC, SELECTION_SRC } from "./_channel-prefs-block.mjs";
+import { codeOf, fnOf } from "./helpers/source-probe.mjs";
 
 test("the posture is never SPENT by reading it — no take-and-remove twin exists", () => {
   assert.ok(!/function consumeLaunchPosture|takePostureFrom/.test(SRC + SELECTION_SRC),
@@ -59,11 +60,7 @@ test("the module keys the posture under its own store key, and the arm's is gone
   // ⚠ CODE ONLY. The module's header NAMES `channelPermissionPresets` at length, explaining what
   // the arm was and why it went — which is the documentation §14 asks for, and would make a
   // whole-source scan here fail on the excision note itself.
-  const code = SRC.split("\n")
-    .filter((l) => !/^\s*(\/\/|\*|\/\*)/.test(l))
-    .map((l) => { const i = l.indexOf("//"); return i === -1 ? l : l.slice(0, i); })
-    .join("\n");
-  assert.ok(!/PRESETS_KEY|channelPermissionPresets/.test(code),
+  assert.ok(!/PRESETS_KEY|channelPermissionPresets/.test(codeOf(SRC)),
     "the arm's key must not be read, re-used, or migrated FROM — stale arms stay unread");
 });
 
@@ -84,13 +81,10 @@ test("getLaunchPosture falls back to the restrictive default, never to null", ()
   // every renderer older than U5; the fallback it falls back TO is `emptySelection()`, which is
   // the restrictive one by construction. Pinned as the SPELLING, because the store-backed reader
   // is the half source extraction cannot reach.
-  const body = SRC.slice(SRC.indexOf("function getLaunchPosture("));
-  assert.match(body.slice(0, 260), /toLegacyPosture\(ctx\(\), getLaunchSelection\(channelId\)\)/);
-  const helper = SELECTION_SRC.slice(SELECTION_SRC.indexOf("function toLegacyPosture("));
-  assert.match(helper.slice(0, 400), /rec\.tools \|\| ctx\.narrowestToolFor\(selection\.runtime\)/,
+  assert.match(fnOf(SRC, "getLaunchPosture"), /toLegacyPosture\(ctx\(\), getLaunchSelection\(channelId\)\)/);
+  assert.match(fnOf(SELECTION_SRC, "toLegacyPosture"), /rec\.tools \|\| ctx\.narrowestToolFor\(selection\.runtime\)/,
     "the restrictive fallback must survive the move, or an unset channel reads as no constraint");
   // …and the thing it falls back to really is the narrowest, not "whatever parsed".
-  const empty = SELECTION_SRC.slice(SELECTION_SRC.indexOf("function emptySelection("));
-  assert.match(empty.slice(0, 400), /messages: SELECTION_MESSAGE_MODES\[0\]/,
+  assert.match(fnOf(SELECTION_SRC, "emptySelection"), /messages: SELECTION_MESSAGE_MODES\[0\]/,
     "an unset selection resolves to the restrictive messaging member, never a wider one");
 });

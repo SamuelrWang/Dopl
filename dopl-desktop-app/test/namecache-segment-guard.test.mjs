@@ -25,7 +25,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { fnOf } from "./helpers/source-probe.mjs";
+import { asyncFnOf, fnOf } from "./helpers/source-probe.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const M = (p) => readFileSync(join(HERE, "..", "main", p), "utf8");
@@ -33,13 +33,6 @@ const IDENTITY = M("listener-people.js");
 const LISTENER = M("channel-listener.js");
 const CONTEXT = M("channel-context.js");
 
-// fnOf slices from the `function` keyword, so an `async function` loses its
-// modifier and the body no longer parses. Re-attach it, asserting the shipped
-// function really is async so this can never quietly turn a sync one async.
-function asyncFnOf(src, name) {
-  assert.match(src, new RegExp(`async function ${name}\\(`), `${name} must be async`);
-  return `async ${fnOf(src, name)}`;
-}
 
 // The guarded prelude is what matters; the fetch below it is driven with fakes.
 function loadRefresh(ws) {

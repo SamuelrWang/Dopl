@@ -24,7 +24,7 @@ import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { legacyPreset } from "./_channel-prefs-block.mjs";
-import { codeOf, fnOf } from "./helpers/source-probe.mjs";
+import { between, codeOf, fnOf, orderOf } from "./helpers/source-probe.mjs";
 
 const require = createRequire(import.meta.url);
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -38,11 +38,8 @@ const RUNTIME_REGISTRY = require(join(MAIN, "runtime/index.js"));
 const JUNK = ["", " ", null, undefined, 0, 1, true, {}, [], "opus", "claude-opus-4-5",
   "claude-opus-5 ", "--dangerously-skip-permissions", "claude-opus-5\n--model=x"];
 
-/** Source with `//` comments stripped, so a tombstone naming a deleted symbol does not count. */
-const code = (src) => src.split("\n")
-  .filter((l) => !/^\s*(\/\/|\*)/.test(l))
-  .map((l) => { const i = l.indexOf("//"); return i === -1 ? l : l.slice(0, i); })
-  .join("\n");
+/** Source with comments blanked, so a tombstone naming a deleted symbol does not count. */
+const code = codeOf;
 
 // ── 1. NO STORED MODEL (2026-09-23) ──────────────────────────────────────────────────────────
 
@@ -60,13 +57,9 @@ test("WIRE: `getLaunchPosture` is that composition, not a second spelling of it"
   // A REGEX BECAUSE THE REAL FUNCTION NEEDS electron-store. The reader is the VERSIONED,
   // RUNTIME-KEYED selection, rendered back into the legacy wire.
   const PREFS = read("channel-prefs.js");
-  const body = PREFS.slice(PREFS.indexOf("function getLaunchPosture("));
-  assert.match(body.slice(0, body.indexOf("}")),
-    /toLegacyPosture\(ctx\(\), getLaunchSelection\(channelId\)\)/);
-  assert.ok(!/model/.test(code(read("launch-selection.js")).slice(
-    code(read("launch-selection.js")).indexOf("function toLegacyPosture("),
-    code(read("launch-selection.js")).indexOf("function patchRejections("))),
-  "the legacy wire shape must not grow the key back");
+  assert.match(fnOf(PREFS, "getLaunchPosture"), /toLegacyPosture\(ctx\(\), getLaunchSelection\(channelId\)\)/);
+  assert.ok(!/model/.test(fnOf(code(read("launch-selection.js")), "toLegacyPosture")),
+    "the legacy wire shape must not grow the key back");
 });
 
 test("PRELOAD: the posture and defaults writes forward NO model key", () => {
@@ -95,10 +88,9 @@ test("LAUNCH: the spawn funnel FORWARDS the resolved model — launcher/identity
   const LAUNCH = read("session-launch.js");
   assert.match(LAUNCH, /const model = await launchDefault\.withRuntimeDefault\(rt, a\.model\);/,
     "the runtime default is applied ONCE, in the funnel every lane shares");
-  const spec = LAUNCH.slice(LAUNCH.indexOf("const s = await deps.startSession({"), LAUNCH.indexOf("}, rt);"));
+  const spec = between(LAUNCH, "const s = await deps.startSession({", "}, rt);");
   assert.match(spec, /^\s*model,$/m, "forwarded, never invented by a lane");
-  assert.ok(LAUNCH.indexOf("await refuseUnknownModel(a.runtime, a.model)")
-    < LAUNCH.indexOf("await launchDefault.withRuntimeDefault(rt, a.model)"),
+  assert.ok(orderOf(LAUNCH, "await refuseUnknownModel(a.runtime, a.model)", "await launchDefault.withRuntimeDefault(rt, a.model)"),
   "an explicit unknown model is refused BEFORE a default could be substituted");
 });
 

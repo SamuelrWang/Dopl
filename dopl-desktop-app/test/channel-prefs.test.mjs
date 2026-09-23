@@ -70,6 +70,7 @@ import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { legacyPreset, mapPrefs, RESTRICTIVE, CH_A, CH_B } from "./_channel-prefs-block.mjs";
 import { evalModule } from "./helpers/module-sandbox.mjs";
+import { sentinelBlock } from "./helpers/source-probe.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const M = (p) => readFileSync(join(HERE, "..", "main", p), "utf8");
@@ -349,11 +350,7 @@ function bootIpc() {
     throw new Error("unexpected require: " + id);
   };
   // The REAL guard block, sliced (the module is electron-free, so this is a plain evaluate).
-  const guards = (() => {
-    const g = M("ipc-guards.js");
-    const block = g.slice(g.indexOf("// ─── BEGIN IPC-GUARDS"), g.indexOf("// ─── END IPC-GUARDS"));
-    return new Function(`${block}\n return { isAppWindowSender, isUuid, UUID_RE };`)();
-  })();
+  const guards = new Function(`${sentinelBlock(M("ipc-guards.js"), "IPC-GUARDS")}\n return { isAppWindowSender, isUuid, UUID_RE };`)();
   const runtimeReply = evalModule(M("channel-runtime-reply.js"), stubRequire);
   const ops = evalModule(M("session-ipc-ops.js"), stubRequire);
   const mod = evalModule(M("channel-dir-ipc.js"), stubRequire);

@@ -28,6 +28,7 @@ import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
+import { sentinelBlock } from "./helpers/source-probe.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const SRC = readFileSync(join(HERE, "..", "main", "session-park.js"), "utf8");
@@ -40,10 +41,7 @@ const ids = createRequire(import.meta.url)(join(HERE, "..", "main", "agent-id.js
 const RUNTIME = createRequire(import.meta.url)(join(HERE, "..", "main", "runtime", "index.js"));
 
 
-const from = SRC.indexOf("// ─── BEGIN SESSION-PARK-PURE");
-const to = SRC.indexOf("// ─── END SESSION-PARK-PURE");
-assert.ok(from !== -1 && to > from, "SESSION-PARK-PURE sentinels missing/out of order");
-const BLOCK = SRC.slice(from, to);
+const BLOCK = sentinelBlock(SRC, "SESSION-PARK-PURE");
 
 function harness() {
   const started = [];

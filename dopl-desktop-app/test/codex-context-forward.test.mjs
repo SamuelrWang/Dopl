@@ -19,6 +19,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import { between, sliceFrom } from "./helpers/source-probe.mjs";
 
 // ─── THE FORWARD THAT MAKES ALL OF THE ABOVE REACHABLE (2026-09-22) ──────────────────────────
 //
@@ -35,8 +36,7 @@ test("launch-spec forwards the reported window onto the completed frame", () => 
     fileURLToPath(new URL("../main/runtime/codex/launch-spec.js", import.meta.url)),
     "utf8"
   );
-  const fold = src.slice(src.indexOf("const enriched = Object.assign("));
-  const body = fold.slice(0, fold.indexOf("});"));
+  const body = between(sliceFrom(src, "const enriched = Object.assign("), "const enriched", "});");
   assert.match(body, /contextWindow:\s*latestUsage \? latestUsage\.modelContextWindow : null/,
     "the window must ride the same fold as usage/promptUsage");
   // ⚠ ABSENT, NOT ZERO — a `0` denominator renders a FULL meter on an empty session, and
