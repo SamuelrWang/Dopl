@@ -385,11 +385,7 @@ function applyCoreEvents(s, list, dispatch, store, log) {
       const tokenTotal = Number(ev.sessionTokens) || 0;
       s.tokensSpent = (s.tokensSpent || 0) + Math.max(0, tokenTotal - (s.lastTotalTokens || 0));
       s.lastTotalTokens = tokenTotal;
-      // THE TURN COUNT (2026-09-01, T83). A `result` IS one completed turn on every runtime, so
-      // this is the one honest place to count them. It survives a park/resume for `tokensSpent`'s
-      // reason: both accumulate on the session object rather than reading a per-run cumulative total
-      // back, which is what makes "12 turns and nothing posted" a readable sentence.
-      s.turns = (Number(s.turns) || 0) + 1;
+      // The turn count is the reducer's `state.turns`, persisted with the record (P4-10).
       dispatch(s, { type: 'result', model: ev.model });
       // ⚠ AFTER the result, and only when something was measured: say nothing rather than paint a
       // zero (`session-model.js › contextEvent`).
