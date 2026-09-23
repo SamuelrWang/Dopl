@@ -1,11 +1,6 @@
 /**
- * Agent-identity method group — link 9 of the chain in `client-base.ts`
- * (`BillingMethods` extends this one). Pure delegation to `agent-identities.ts`;
- * no HTTP here.
- *
- * `GET`/`POST /api/agent-identities` and `GET`/`PATCH .../{id}` are all
- * agent-token reachable by design (the route docblocks carry the argument);
- * only `DELETE` is `sessionOnly`, and it is deliberately unbound.
+ * Agent-identity method group (`HomeMethods` extends this one; chain in `client-base.ts`). Pure
+ * delegation to `agent-identities.ts`; only `DELETE` is `sessionOnly`, and it is unbound.
  */
 
 import { SkillMethods } from "./client-skills.js";
@@ -25,8 +20,7 @@ export class AgentIdentityMethods extends SkillMethods {
     return identities.listAgentIdentities(this.transport, opts);
   }
 
-  /** The rows PLUS the shelf sibling key. ⚠ Same single request; read
-   *  `homeScopedIdentityIds` as `?? []` (INVARIANTS §8). */
+  /** The rows plus the shelf sibling key; read `homeScopedIdentityIds` as `?? []` (INVARIANTS §8). */
   listAgentIdentitiesPayload(
     opts: { shelf?: IdentityShelf } = {}
   ): Promise<AgentIdentityListPayload> {
@@ -41,9 +35,7 @@ export class AgentIdentityMethods extends SkillMethods {
     return identities.createAgentIdentity(this.transport, input);
   }
 
-  /** ⚠ `expectedVersion` is TRI-STATE and OMITTING IT REFUSES — see
-   *  `agent-identities.ts › updateAgentIdentity`. Same three arms as
-   *  `knowledge.ts › writeKbFileByPath`. */
+  /** `expectedVersion` is tri-state and omitting it refuses (`agent-identities.ts › updateAgentIdentity`). */
   updateAgentIdentity(
     identityId: string,
     patch: AgentIdentityUpdateInput,
