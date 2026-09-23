@@ -119,7 +119,6 @@ function settle(s, outcome, keepWindow) {
       // is the trap `identityName` above records. ⚠ null on every ordinary ending.
       endCode: s.endCode || null,
       runtimeId: s.runtimeId || null,
-      usageBaseline: s.usageBaseline || null,
       // The final measurement, frozen here for the same reason the identity is: the registry
       // entry is about to go and `metrics(s)` is the only reader of it.
       ...sessionMetrics.metrics(s),

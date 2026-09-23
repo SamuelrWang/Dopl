@@ -122,7 +122,6 @@ function durableHistory(rec) {
     // code renders `errorCopy`'s GENERIC arm rather than a raw key.
     endCode: historyName(r.endCode, 40),
     runtimeId: historyName(r.runtimeId, 32),
-    usageBaseline: historyName(r.usageBaseline, 16),
     // ⚠ THE FINAL MEASUREMENT, FROZEN WITH THE IDENTITY. The session object is gone by the time
     // anything reads this, so a live read would blank every number at exactly the moment the
     // operator wants to know what the run cost. `session-summary.js › endedSummary` already

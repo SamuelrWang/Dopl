@@ -7,8 +7,9 @@
 //   sessionIds      { [sessionKey]: sdkSessionId }      — the resume map (the SESSION_KEY analog)
 //
 // A durable record carries only the fields needed to re-post the interrupted echo
-// and offer a resume ({ sessionId, sdkSessionId, channelId, taskId, workspaceId,
-// side, profile, mode, phase, startedAt }). Live handles (the SDK query, the
+// and offer a resume ({ sessionId, channelId, taskId, workspaceId, side, profile,
+// mode, phase, startedAt, … }; the conversation id lives in the resume map, never
+// here — `durableSessionRecord` is the full list). Live handles (the SDK query, the
 // BrowserWindow, the push iterator) live ONLY in the engine's in-memory registry
 // and are NEVER written here. On restart the engine reads records back and, per
 // reloadDisposition, either ignores a settled one or treats a running/awaiting one
@@ -126,7 +127,6 @@ function durableSessionRecord(rec) {
   return {
     key: r.key,
     sessionId: r.sessionId,
-    sdkSessionId: r.sdkSessionId || null,
     channelId: r.channelId,
     taskId: r.taskId || '',
     workspaceId: r.workspaceId,

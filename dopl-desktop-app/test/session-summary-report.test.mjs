@@ -65,12 +65,11 @@ test("REPORT: `list()` narrows the report-only `key` back off — `workspaceId` 
     // all — the one state the three-value pill cannot express.
     "diag",
     "displayName",
-    // ── 2026-09-21 (U10) — `endReason` / `runtimeId` / `usageBaseline`, ALL THREE LOCAL-ONLY ──
+    // ── `endReason` / `runtimeId`, BOTH LOCAL-ONLY ──
     // `endReason` is the STRUCTURED half of `diag` above: the code was frozen, the sentence is
     // rebuilt at read time from the runtime that produced it, so a Codex failure reads as a Codex
-    // failure. `runtimeId` says WHO is answering where `model` says WHAT. `usageBaseline` is the
-    // three-word answer to whether a resume would keep the cost cap honest. None is named by
-    // `session-state-push.js › reportRow`, so none of them reaches `channel_sessions`.
+    // failure. `runtimeId` says WHO is answering where `model` says WHAT. Neither is named by
+    // `session-state-push.js › reportRow`, so neither reaches `channel_sessions`.
     // ⚠ `endReason` SORTS BEFORE `endedAt` — capital `R`, and this list is asserted SORTED.
     "endReason", "endedAt",
     // `heldGates` (2026-09-17, Samuel's inline-approval ruling) is local-only, and that matters
@@ -85,7 +84,6 @@ test("REPORT: `list()` narrows the report-only `key` back off — `workspaceId` 
     "name", "runtimeId", "sessionId", "stale", "startedAt", "state", "taskId",
     "threadTitle", "tokensDelta", "tokensSpent", "toolLabel", "toolMode",
     "turns",
-    "usageBaseline",
     // `workspaceId` joined the WIRE on 2026-09-14 (the pop-out rail routes by it).
     "workspaceId",
   ]);

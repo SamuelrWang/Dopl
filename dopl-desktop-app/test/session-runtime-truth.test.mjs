@@ -2,13 +2,9 @@
 // trip through `session-io.js › baseRecord` -> `session-store.js › saveRecord` ->
 // `session-boot.js › parkedSessionFromRecord` (2026-09-21, U10).
 //
-// ⚠ WHAT A RECORD COULD ALREADY SAY, AND WHY IT WAS NOT ENOUGH. `runtimeId` says which ADAPTER
-// owns the handle and `sdkSessionId` is the handle — together they stop a crash resume landing
-// one platform's conversation on another's adapter, which is what they were added for. What no
-// record could state is what the conversation was RUNNING AS: the model the runtime itself
-// reported (the operator's pick is usually "no pick"), the native policy the spawn was made under,
-// and whether this runtime's cumulative usage RESETS on a resume — the one fact `session-park.js ›
-// resumeParked` bets the cost cap on when it zeroes both delta baselines.
+// `runtimeId` says which ADAPTER owns the conversation (the handle itself lives in the resume map).
+// What the record adds is whether this runtime's cumulative usage RESETS on a resume — the fact
+// `session-park.js › resumeParked` decides the token baseline from.
 //
 // ⚠ AND THE REGRESSION HALF: A CLAUDE RECORD WRITTEN BEFORE THESE FIELDS MUST STILL READ. The
 // plan asks for exactly that ("Claude metrics and resume records remain readable across the
@@ -130,60 +126,12 @@ test("a hostile or absent stored baseline lands on `unverified`, never on a flat
   assert.equal(truth.durableRuntimeTruth({ usageBaseline: "continues" }).usageBaseline, "continues");
 });
 
-// ── 2. THE EFFECTIVE MODEL + THE NATIVE POLICY SUMMARY ───────────────────────────────────────
+// ── 2. THE ROUND TRIP A RESUME DEPENDS ON ────────────────────────────────────────────────────
 
-test("the effective model is what the RUNTIME reported, then the pick, then null", () => {
-  // ⚠ THE SAME PRECEDENCE `session-summary.js › liveSummary` USES, and for its reason: the pick
-  // over the live id goes wrong the moment the two differ, which is the NORMAL case.
-  assert.equal(truth.effectiveModel({ liveModel: "gpt-6-astra", model: "opus" }), "gpt-6-astra");
-  assert.equal(truth.effectiveModel({ model: "opus" }), "opus");
-  // ⚠ `'default'` NAMES NO MODEL — it is "ask for no model at all", so reporting it as an
-  // effective model would be a measurement of a non-choice.
-  assert.equal(truth.effectiveModel({ model: "default" }), null);
-  assert.equal(truth.effectiveModel({}), null);
-});
-
-test("the native policy summary is a REPORT of the runtime's own labels, never a synthetic word", () => {
-  const claude = truth.nativePolicySummary(registry.descriptorFor("claude"), live());
-  assert.equal(claude, "Ask each time", "Claude's own label for its `manual` mode");
-  // ⚠ TWO AXES JOIN ONLY WHEN THE SESSION CARRIES A VALUE FOR THE SECOND. A descriptor that
-  // DECLARES `secondaryAxis` while nothing produces a value for it is F-390's exact shape — a
-  // control that writes nowhere — and printing its default would report a choice nobody made.
-  const codexNoNative = truth.nativePolicySummary(
-    registry.descriptorFor("codex"), live({ state: { toolMode: "untrusted" } })
-  );
-  assert.ok(!codexNoNative.includes("·"), `an unset second axis was printed: ${codexNoNative}`);
-  const axis = registry.descriptorFor("codex").toolMode.secondaryAxis;
-  const codexWithNative = truth.nativePolicySummary(
-    registry.descriptorFor("codex"),
-    live({ state: { toolMode: "untrusted" }, native: { [axis.key]: axis.options[0].value } })
-  );
-  assert.match(codexWithNative, / · /, "both axes, joined");
-  assert.ok(codexWithNative.includes(axis.options[0].label));
-  // ⚠ '' IS A REAL ANSWER for a runtime this build does not ship; the caller stores `null`.
-  assert.equal(truth.nativePolicySummary(null, live()), "");
-});
-
-test("the summary is bounded and single-line on the way to disk", () => {
-  const out = truth.durableRuntimeTruth({ nativePolicy: `a\nb\t${"x".repeat(400)}` });
-  assert.equal(out.nativePolicy.length, truth.TRUTH_MAX);
-  assert.ok(!/[\r\n\t]/.test(out.nativePolicy));
-  assert.equal(truth.durableRuntimeTruth({ nativePolicy: "   " }).nativePolicy, null);
-  assert.equal(truth.durableRuntimeTruth({ effectiveModel: 42 }).effectiveModel, null);
-});
-
-// ── 3. THE ROUND TRIP A RESUME DEPENDS ON ────────────────────────────────────────────────────
-
-test("a Codex session's record states its runtime, its model, its policy and its baseline", () => {
-  const rec = persist(live({
-    runtimeId: "codex", liveModel: "gpt-6-astra",
-    state: { phase: "running", turns: 0, toolMode: "untrusted" },
-  }));
+test("a Codex session's record states its runtime and its baseline", () => {
+  const rec = persist(live({ runtimeId: "codex", liveModel: "gpt-6-astra", state: { phase: "running", turns: 0, toolMode: "untrusted" } }));
   assert.equal(rec.runtimeId, "codex");
-  assert.equal(rec.effectiveModel, "gpt-6-astra");
-  assert.ok(rec.nativePolicy && rec.nativePolicy.length > 0);
-  assert.equal(rec.usageBaseline, "continues",
-    "and the record says WHY a resume of it will be refused");
+  assert.equal(rec.usageBaseline, "continues", "and the record says how a resume of it counts usage");
 });
 
 test("REGRESSION: a Claude record still round-trips, and the metrics beside it are untouched", () => {
@@ -192,37 +140,37 @@ test("REGRESSION: a Claude record still round-trips, and the metrics beside it a
     state: { phase: "running", turns: 7, toolMode: "auto" },
     ownPostSeq: 3, sdkSessionId: "sdk-1",
   }));
-  assert.equal(rec.model, "opus", "the operator's pick is unchanged by the new fields");
+  assert.equal(rec.model, "opus");
   assert.equal(rec.turns, 7);
   assert.equal(rec.ownPostSeq, 3);
-  assert.equal(rec.sdkSessionId, "sdk-1");
   assert.equal(rec.usageBaseline, "resets");
-  assert.equal(rec.effectiveModel, "claude-opus-5");
 });
 
-test("REGRESSION: a record written BEFORE these fields reads, and reads fail-closed", () => {
-  // ⚠ THE PRE-U10 SHAPE, verbatim: no `effectiveModel`, no `nativePolicy`, no `usageBaseline`.
+test("P4-18: the RECORD's word survives a later save — a rebuilt session is never re-derived", () => {
+  // `session-boot.js › parkedSessionFromRecord` restores `usageBaseline` from the record; the next
+  // park re-saves through `baseRecord`, which used to answer off TODAY's descriptor instead.
+  const rebuilt = live({ runtimeId: "claude", usageBaseline: "continues" });
+  assert.equal(persist(rebuilt).usageBaseline, "continues");
+  // Junk on the session is not a word: the descriptor answers, and the whitelist fail-closes.
+  assert.equal(persist(live({ runtimeId: "claude", usageBaseline: "sure" })).usageBaseline, "resets");
+});
+
+test("REGRESSION: a record written BEFORE the field reads, and reads fail-closed", () => {
   const old = { key: "c1:t1:a1", channelId: "c1", runtimeId: "claude", model: "opus", phase: "parked" };
-  const read = truth.durableRuntimeTruth(old);
-  assert.deepEqual(read, { effectiveModel: null, nativePolicy: null, usageBaseline: "unverified" });
-  // ⚠ AND `durableSessionRecord` STILL ANSWERS EVERYTHING IT ALWAYS DID for that record, which is
-  // the "resume records remain readable across the storage migration" half of the plan's scenario.
+  assert.deepEqual(truth.durableRuntimeTruth(old), { usageBaseline: "unverified" });
   const kept = durableSessionRecord(old);
   assert.equal(kept.model, "opus");
   assert.equal(kept.runtimeId, "claude");
   assert.equal(kept.phase, "parked");
 });
 
-// ── 4. NOTHING SENSITIVE MAY JOIN THIS SHAPE ─────────────────────────────────────────────────
+// ── 3. NOTHING ELSE MAY JOIN THIS SHAPE ──────────────────────────────────────────────────────
 
-test("the record shape is exactly three fields — a token or a path could only arrive by edit", () => {
-  // 🔒 The durable record is written to `electron-store` in the clear and read back by
-  // diagnostics. The bound that matters is the SHAPE: a whitelist that grew a passthrough is how
-  // a prompt or a filesystem path reaches disk, and it is the kind of change nothing else notices.
-  assert.deepEqual(
-    Object.keys(truth.durableRuntimeTruth({ effectiveModel: "m", secret: "sk-live", cwd: "/Users/x" })).sort(),
-    ["effectiveModel", "nativePolicy", "usageBaseline"]
-  );
-  const out = truth.durableRuntimeTruth({ effectiveModel: "m", secret: "sk-live" });
-  assert.ok(!JSON.stringify(out).includes("sk-live"));
+test("the record shape is exactly one field — anything else could only arrive by edit", () => {
+  // 🔒 The durable record is written to `electron-store` in the clear. A whitelist that grew a
+  // passthrough is how a prompt or a filesystem path reaches disk. P4-18 deleted the two display
+  // fields (`effectiveModel`, `nativePolicy`) that nothing read back.
+  const out = truth.durableRuntimeTruth({ effectiveModel: "m", nativePolicy: "p", secret: "sk-live", cwd: "/Users/x" });
+  assert.deepEqual(Object.keys(out), ["usageBaseline"]);
+  assert.deepEqual(Object.keys(truth.runtimeTruthFields(registry.descriptorFor("claude"), live({ liveModel: "m" }))), ["usageBaseline"]);
 });

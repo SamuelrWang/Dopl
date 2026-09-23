@@ -135,7 +135,6 @@ function liveSummary(s, name) {
     // ⚠ WHETHER A RESUME WOULD KEEP THE COST CAP HONEST, in the record's own three words
     // (`session-runtime-truth.js`). `'unverified'` is a REAL answer and not a gap — it is the one
     // `capability.js › canResume` refuses on, and UNKNOWN is not EMPTY.
-    usageBaseline: (s && s.usageBaseline) || null,
     // ⚠ null on a LIVE row, stated rather than omitted so no reader branches on absence — the
     // rule `endedAt` above follows. A running agent has not stopped, so it has no end reason.
     endReason: null,
@@ -173,7 +172,6 @@ function endedSummary(e, name) {
     // row's twin. The session object is gone, so this is the only thing left that can say whose
     // failure `endReason` below is describing.
     runtimeId: (e && e.runtimeId) || '',
-    usageBaseline: (e && e.usageBaseline) || null,
     // ⚠ WHY IT STOPPED, AS A STRUCTURED CODE RE-SAID IN THAT RUNTIME'S OWN WORDS (U10). The CODE
     // is what was frozen; the sentence is rebuilt at read time from the owning runtime's
     // descriptor, which is what a generic SDK string could never be. `null` is the ordinary

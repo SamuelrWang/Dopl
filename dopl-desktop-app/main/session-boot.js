@@ -238,19 +238,8 @@ function parkedSessionFromRecord(key, rec, sdkId) {
     model: runtimeCapability.launchModelPick(
       runtimeRegistry.descriptorFor(rec.runtimeId || null), rec.model
     ), // the operator's pick, re-coerced in the stored runtime's own vocabulary
-    // ── 2026-09-21 (U10) — THE RUNTIME TRUTH, RESTORED AND NOT RE-DERIVED ────────────────────
-    //
-    // ⚠ THE RECORD'S ANSWER WINS OVER TODAY'S DESCRIPTOR, DELIBERATELY. Re-deriving
-    // `usageBaseline` here would read the CURRENT build's `session.usageResetsOnResume` and
-    // silently re-interpret a conversation that already happened under the old one — a build that
-    // later flips `'unverified'` to `true` would be claiming a measurement about a run nobody
-    // measured. A record states what was true when it was written. ⚠ IT DECIDES NOTHING:
-    // `reparkDormant` below still asks `capability.js › resumeRefusal` of the LIVE descriptor, so
-    // a runtime whose resume is refused is ENDED here exactly as before, and this weakens nothing.
-    // ⚠ `session-runtime-truth.js › durableRuntimeTruth` coerced these on the way out, so a
-    // hand-edited store lands on `null` / `'unverified'` — the fail-closed members.
-    effectiveModel: rec.effectiveModel || null,
-    nativePolicy: rec.nativePolicy || null,
+    // The RECORD's word, restored and not re-derived (`session-runtime-truth.js` header); a
+    // hand-edited store lands on `'unverified'`. `reparkDormant` still asks the live descriptor.
     usageBaseline: recordedBaseline,
     state: state,
     context: sessionPark.contextFromRecord(rec), // channel/thread/peer names + the identity NAME (F-288)
@@ -340,7 +329,6 @@ function endInterrupted(key, rec, why, opts) {
     // when BOTH `endCode` and `diag` are absent, so this line adds identity to the row without
     // reviving the reason line that ruling deleted.
     runtimeId: rec.runtimeId || null,
-    usageBaseline: rec.usageBaseline || null,
     entries: [],
   });
   diag('session-boot: ended dormant agent —', why, '| agent', String(rec.agentId || ''), 'channel', String(rec.channelId || '').slice(0, 8), 'thread', String(rec.taskId || '').slice(0, 8));
