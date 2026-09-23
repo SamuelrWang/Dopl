@@ -138,7 +138,10 @@ function buildLaunchSpec(request) {
     approvalPolicy: pair.approval_policy,
     sandbox: pair.sandbox_mode,
   };
-  if (wired.usable) threadStart.config = { mcp_servers: { dopl: server } };
+  // ⚠ THE `features` FENCE RIDES EVERY LAUNCH, TOKEN OR NOT (`tools.js › ACCOUNT_FENCE`): the
+  // foreign `codex_apps` server mounts from the operator's auth, not from Dopl's entry.
+  threadStart.config = { features: Object.assign({}, cfg.features) };
+  if (wired.usable) threadStart.config.mcp_servers = { dopl: server };
   const model = typeof s.model === 'string' ? s.model.trim() : '';
   // `''` (or anything the roster does not know) sets no field at all — the platform's own pick,
   // which is `descriptor.models.defaultMeansAbsent`.

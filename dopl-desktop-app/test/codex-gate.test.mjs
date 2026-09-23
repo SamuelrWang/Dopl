@@ -228,6 +228,25 @@ test("THE MOUNT KEY AND THE ELICITATION'S SERVER COMPARISON ARE ONE CONSTANT", (
   assert.equal(approval.doplElicitation({ serverName: mounted[0] + "x", _meta: meta }), null);
 });
 
+test("CXP-3A: every launch carries the `features` fence — apps off always, delegation off when restricted", () => {
+  const specFor = (profile, containerToken) => launchSpec.buildLaunchSpec({
+    session: { profile, channelId: null, state: {}, workspaceId: "ws-1", model: "", containerToken },
+    dispatch: () => {}, emitQuiet: () => {},
+  });
+  for (const profile of ["read_only", "dopl_only"]) {
+    const f = specFor(profile, { token: "t" }).threadStart.config.features;
+    assert.deepEqual(f, { apps: false, plugins: false, multi_agent: false }, profile);
+  }
+  for (const profile of ["channel_agent", "full"]) {
+    const f = specFor(profile, { token: "t" }).threadStart.config.features;
+    assert.deepEqual(f, { apps: false, plugins: false }, profile);
+  }
+  // ⚠ NO TOKEN, NO DOPL ENTRY — AND STILL THE FENCE: `codex_apps` mounts from the operator's auth.
+  const bare = specFor("read_only", null).threadStart.config;
+  assert.equal(bare.mcp_servers, undefined);
+  assert.equal(bare.features.apps, false);
+});
+
 test("a Dopl elicitation reaches AXIS B with the call's own op — the blocker, end to end", () => {
   // 🔒 ⚠ **THE CASE THAT SAYS A DOPL-LAUNCHED CODEX AGENT CAN POST.** The approval carries no tool
   // name; the name is derived from Dopl's own entry, the arguments ride `_meta.tool_params`, and

@@ -27,8 +27,8 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import http from 'node:http';
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync, symlinkSync } from 'node:fs';
+import { tmpdir, homedir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
@@ -133,7 +133,12 @@ const catalogNames = (body) => (body.tools || []).map((t) => t.name || t.type);
 const mentionsChannelTool = (body) => JSON.stringify(body.tools || []).includes(mcp.CHANNEL_TOOL);
 
 /** One scripted turn against the real app-server, with the approval answered by `verdict`. */
-async function scriptedTurn(profile, verdict) {
+// ⚠ `opts.linkAuth` links the operator's REAL `auth.json` (never read here, never copied): with it,
+// Codex mounts its own `codex_apps` server exactly as a real Dopl launch does, while the stub
+// provider still answers for the model — so the foreign surface is measured at zero quota.
+const OPERATOR_AUTH = join(process.env.CODEX_HOME || join(homedir(), '.codex'), 'auth.json');
+async function scriptedTurn(profile, verdict, opts) {
+  const o = opts || {};
   const model = await scriptedModel();
   const dopl = await standInDopl();
   const home = mkdtempSync(join(tmpdir(), 'dopl-codex-discovery-'));
@@ -142,6 +147,7 @@ async function scriptedTurn(profile, verdict) {
     `base_url = "http://127.0.0.1:${model.port}/v1"`, 'wire_api = "responses"',
     'requires_openai_auth = false', 'stream_max_retries = 0', 'request_max_retries = 0', '',
   ].join('\n'));
+  if (o.linkAuth) symlinkSync(OPERATOR_AUTH, join(home, 'auth.json'));
   const env = { ...process.env, CODEX_HOME: home, [mcp.BEARER_ENV]: 'cxp3a-bearer', [mcp.WORKSPACE_ENV]: 'ws', [mcp.SESSION_ENV]: 'slot' };
   const items = [];
   const asked = [];
@@ -170,7 +176,9 @@ async function scriptedTurn(profile, verdict) {
       await conn.request('initialize', client.initializeParams('0.0.0-cxp3a'));
       const th = await conn.request('thread/start', {
         cwd: home, approvalPolicy: cfg.native ? cfg.native.approval_policy : 'untrusted',
-        sandbox: cfg.native ? cfg.native.sandbox_mode : 'read-only', config: { mcp_servers: { dopl: entry } },
+        sandbox: cfg.native ? cfg.native.sandbox_mode : 'read-only',
+        // ⚠ THE SAME FENCE `launch-spec.js › buildLaunchSpec` sends, unless the arm asks to see without it.
+        config: { features: o.noFence ? {} : { ...cfg.features }, mcp_servers: { dopl: entry } },
       });
       await conn.request('turn/start', { threadId: th.thread.id, input: [{ type: 'text', text: 'hello' }] });
       await finished;
@@ -227,6 +235,32 @@ describe('TIER 1 — the real app-server defers Dopl, and `tool_search` is the w
     });
   }
 
+  // 🔒 4 — THE FOREIGN SURFACE. Measured 2026-09-22: WITHOUT the fence, a signed-in thread's search
+  // sources are `codex_apps`' (Sites, Codex Document Control, Hotline, …), 'Multi-agent tools' and
+  // `dopl`; WITH it, `dopl` alone on the restricted profiles.
+  for (const profile of ['read_only', 'dopl_only', 'full']) {
+    test(`4: ${profile} — with the operator's auth linked, the ONLY MCP source is Dopl`, async (t) => {
+      if (skipLive(t, GATE)) return;
+      if (!existsSync(OPERATOR_AUTH)) {
+        t.diagnostic(`SKIPPED, NOT PASSED — no ${OPERATOR_AUTH}, so codex_apps cannot mount here`);
+        t.skip('no operator auth.json');
+        return;
+      }
+      const sources = (body) => {
+        const search = (body.tools || []).find((x) => x.type === 'tool_search');
+        return search ? [...search.description.matchAll(/^- ([^:\n]+)/gm)].map((m) => m[1]) : [];
+      };
+      const bare = await scriptedTurn(profile, 'deny', { linkAuth: true, noFence: true });
+      assert.ok(sources(bare.requests[0]).length > 1, 'control: an unfenced signed-in thread has foreign sources');
+      const run = await scriptedTurn(profile, 'deny', { linkAuth: true });
+      const expected = profile === 'full' ? ['Multi-agent tools', 'dopl'] : ['dopl'];
+      assert.deepEqual(sources(run.requests[0]), expected);
+      assert.equal(catalogNames(run.requests[0]).includes('request_plugin_install'), false);
+      const out = run.requests[1].input.find((i) => i.type === 'tool_search_output');
+      assert.deepEqual(out.tools.filter((x) => x.type === 'namespace').map((n) => n.name), ['mcp__dopl']);
+    });
+  }
+
   test('DENY at the held approval prevents execution', async (t) => {
     if (skipLive(t, GATE)) return;
     const run = await scriptedTurn('read_only', 'deny');
@@ -277,7 +311,7 @@ describe('TIER 2 — a real model, given Dopl\'s REAL first turn, searches on it
         await conn.request('initialize', client.initializeParams('0.0.0-cxp3a'));
         const th = await conn.request('thread/start', {
           cwd, approvalPolicy: cfg.native.approval_policy, sandbox: cfg.native.sandbox_mode,
-          config: { mcp_servers: { dopl: entry } },
+          config: { features: { ...cfg.features }, mcp_servers: { dopl: entry } },
         });
         await conn.request('turn/start', { threadId: th.thread.id, input: [{ type: 'text', text }] });
         let budget = null;
