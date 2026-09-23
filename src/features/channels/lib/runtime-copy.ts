@@ -48,13 +48,8 @@ import type { RuntimeDescriptor } from "./runtime-capability";
  * real one ("No the agent runtime runtime on this Mac"). Each sentence carries
  * its own unnamed form, worded to read.
  */
-export function named(d: RuntimeDescriptor | null | undefined): string {
+function named(d: RuntimeDescriptor | null | undefined): string {
   return typeof d?.label === "string" ? d.label.trim() : "";
-}
-
-/** The runtime's own name for itself. ⚠ NEVER a vendor literal and never an id. */
-export function runtimeLabel(d: RuntimeDescriptor | null | undefined): string {
-  return named(d) || "the agent runtime";
 }
 
 /** Can Dopl drive this runtime's sign-in from inside the app? */
@@ -71,16 +66,7 @@ export const canSignIn = (d: RuntimeDescriptor | null | undefined): boolean =>
 export function signInAction(
   d: RuntimeDescriptor | null | undefined
 ): string | null {
-  return canSignIn(d) ? `Sign in to ${runtimeLabel(d)}` : null;
-}
-
-/** Where the operator signs in when Dopl cannot do it for them. ⚠ NAMES NO
- *  COMMAND — that is a runtime fact this module does not hold. */
-export function signInPointer(
-  d: RuntimeDescriptor | null | undefined
-): string {
-  const name = runtimeLabel(d);
-  return `Sign in to ${name} the way ${name} expects, then try again.`;
+  return canSignIn(d) ? `Sign in to ${named(d) || "the agent runtime"}` : null;
 }
 
 /** "This machine cannot run an agent at all", in the selected runtime's words.
@@ -115,22 +101,3 @@ export const agentAuthHeldCopy = (
     ? `Your agent is waiting for you to sign in to ${name}.`
     : "Your agent is waiting for you to sign in to its runtime.";
 };
-
-/**
- * Why a RUNNING agent's model cannot be switched here. `null` when it can.
- *
- * ⚠ THE MIRROR OF `main/runtime/runtime-copy.js › liveModelSwitchRefusal`, and
- * the web must not tighten it: main refuses the CONTROL, never the launch.
- * `'unverified'` and `false` are worded apart because the operator can act on
- * the difference.
- */
-export function liveModelSwitchRefusal(
-  d: RuntimeDescriptor | null | undefined
-): string | null {
-  const declared = d?.session?.liveModelSwitch;
-  if (declared === true) return null;
-  const name = runtimeLabel(d);
-  return declared === "unverified"
-    ? `Switching the model of a running ${name} agent has not been measured, so Dopl will not claim it worked. Start a new agent on the model you want.`
-    : `${name} cannot change a running agent's model. Start a new agent on the model you want.`;
-}

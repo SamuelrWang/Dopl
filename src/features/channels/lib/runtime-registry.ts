@@ -71,17 +71,14 @@ export function normalizeRuntimeId(
  * unknown stored id reads as `''` and `runtime/index.js › resolve` answers the
  * one adapter the build is certain it ships. Rendering nothing there would show
  * a channel with no vocabulary at all while its agents launch perfectly well.
- * ⚠ `null` MEANS "THIS BUILD OFFERED NO ADAPTERS" and every caller renders
- * nothing — the older-desktop case, and the plain browser.
+ * ⚠ `null` MEANS NO ADAPTERS (the plain browser) or no reported default, and every caller
+ * renders nothing — never a guess from registry order.
  */
 export function descriptorFor(
   runtimes: ReadonlyArray<RuntimeDescriptor>,
   id: unknown,
-  defaultRuntime?: unknown
+  defaultRuntime: unknown
 ): RuntimeDescriptor | null {
-  const picked = normalizeRuntimeId(runtimes, id);
-  if (picked) return runtimes.find((d) => d.id === picked) ?? null;
-  const fallback = normalizeRuntimeId(runtimes, defaultRuntime);
-  if (fallback) return runtimes.find((d) => d.id === fallback) ?? null;
-  return runtimes[0] ?? null;
+  const picked = normalizeRuntimeId(runtimes, id) || normalizeRuntimeId(runtimes, defaultRuntime);
+  return picked ? runtimes.find((d) => d.id === picked) ?? null : null;
 }
