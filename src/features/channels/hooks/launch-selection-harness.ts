@@ -99,7 +99,7 @@ export function launchSelectionStub(over: SelectionStubInput = {}): LaunchSelect
     update: vi.fn().mockResolvedValue(undefined),
     ...over,
     catalogs,
-    // Derived from `byRuntime` so `record` and `recordFor` cannot disagree.
+    // Both derive from `byRuntime` so they cannot disagree; no suite overrides `record`.
     record: over.record ?? byRuntime[over.runtime ?? ""] ?? {},
     recordFor: (id: string) => byRuntime[id || defaultRuntime] ?? {},
     catalogFor: (id: string) => catalogs[id || defaultRuntime] ?? null,

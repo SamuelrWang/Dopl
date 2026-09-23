@@ -1,19 +1,5 @@
 // @vitest-environment jsdom
-/**
- * THE MODEL CATALOG ON A SETTINGS READ (U6, 2026-09-21) — `use-runtime-catalogs.ts`, and the two
- * hook this file drives (`use-channel-launch-posture.ts`; `use-launch-selection.ts` has its own suite).
- *
- * THE PROPERTY THIS FILE EXISTS FOR:
- *
- *   🔒 **THE MODEL ROW'S SOURCE IS NOW THE SELECTED RUNTIME'S CATALOG.** Before U6 every surface
- *      read `lib/agent-models.ts` — four CLAUDE ids — whatever runtime was selected, so picking
- *      Codex offered Fable. These cases assert that a Codex-selected hook hands out CODEX models
- *      and that a Codex failure hands out NOTHING rather than Claude's list.
- *
- * AND THE THREE-STATE PROBE THAT MAKES AN OLDER DESKTOP SAFE: no `catalogs` key (a build that
- * predates the contract) is NOT the same answer as `catalogs: {}` (this build, no adapters).
- * Reading the first as "no models" empties the picker on a machine that works perfectly.
- */
+/** `use-runtime-catalogs.ts`, driven through `useChannelLaunchPosture`. */
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { useEffect } from "react";
@@ -129,11 +115,13 @@ describe("the selected runtime's catalog is what the model row gets", () => {
     expect(holder.value.catalog?.status).toBe("unavailable");
     expect(selectableModels(holder.value.catalog)).toEqual([]);
     expect(holder.value.catalog?.reason).toMatch(/not installed/);
-    // ⚠ THE NEIGHBOUR IS UNTOUCHED: one runtime's outage is not the map's.
+    // One runtime's outage leaves the others' catalogs alone.
     expect(holder.value.catalogs.claude.status).toBe("ready");
   });
 });
 
+// No `catalogs` key (older desktop) and `catalogs: {}` both mean no catalog: no frozen fallback, even
+// for the default runtime, and a non-default runtime never gets Claude's list.
 describe("a runtime with no catalog reads null, never another runtime's list", () => {
   it("no `catalogs` key ⇒ even the DEFAULT runtime gets no catalog (no frozen substitute)", async () => {
     installBridge({
@@ -157,8 +145,6 @@ describe("a runtime with no catalog reads null, never another runtime's list", (
   it("`catalogs: {}` is a DIFFERENT answer — this build said, and registered nothing", async () => {
     installBridge(reply({ catalogs: {}, runtime: "" }));
     const holder = await mountPosture();
-    // ⚠ NO FALLBACK HERE: the desktop answered. Substituting the frozen list would claim four
-    // models on a machine that reported none.
     expect(holder.value.catalog).toBeNull();
   });
 });
@@ -178,7 +164,7 @@ describe("a `loading` roster is re-read, boundedly", () => {
       }));
     const holder = await mountPosture();
     expect(holder.value.catalog?.status).toBe("loading");
-    // ⚠ `loading` CARRIES NO SENTENCE: nothing was attempted, so there is nothing to explain.
+    // `loading` carries no reason: nothing was attempted yet.
     expect(holder.value.catalog?.reason).toBe("");
     const first = getLaunchPosture.mock.calls.length;
 
@@ -189,7 +175,7 @@ describe("a `loading` roster is re-read, boundedly", () => {
     expect(holder.value.catalog?.status).toBe("ready");
     expect(getLaunchPosture.mock.calls.length).toBeGreaterThan(first);
 
-    // Once everything is settled the re-read stops — it is a hand-off, not a standing timer.
+    // Settled: the re-read stops (a bounded hand-off, not a standing timer).
     const after = getLaunchPosture.mock.calls.length;
     await act(async () => {
       await vi.advanceTimersByTimeAsync(10000);
@@ -209,8 +195,7 @@ describe("a `loading` roster is re-read, boundedly", () => {
     await act(async () => {
       await vi.advanceTimersByTimeAsync(60000);
     });
-    // ⚠ "NOTHING CAME BACK YET" IS THE TRUE STATEMENT. Flipping to `unavailable` here would put
-    // words in the desktop's mouth about a read it never reported failing (INVARIANTS §11).
+    // Still `loading`, never `unavailable`: the desktop reported no failure (INVARIANTS §11).
     expect(holder.value.catalog?.status).toBe("loading");
     expect(getLaunchPosture.mock.calls.length).toBeLessThanOrEqual(1 + MAX_RELOADS + 1);
   });
@@ -310,7 +295,7 @@ describe("a SETTLED failure recovers after repair, with no restart", () => {
     });
     expect(getLaunchPosture.mock.calls.length).toBe(settledCalls);
 
-    // The operator repairs Codex in a terminal and comes back to the window.
+    // The operator repairs Codex elsewhere, then refocuses the window.
     phase = "retrying";
     await act(async () => {
       window.dispatchEvent(new Event("focus"));

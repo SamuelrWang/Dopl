@@ -1,14 +1,4 @@
-/**
- * THE CLAUDE ROSTER WENT LIVE (2026-09-22) — what the web side must do with it.
- *
- * Samuel: *"if claude or codex add a new model, would dopl auto mark those as options"*. The
- * desktop now sends the CLI's own `supportedModels()` roster (`dopl-desktop-app/main/runtime/
- * claude/roster.js`), so the web must:
- *
- *   • render WHATEVER the catalog sends — a model this bundle has never heard of included;
- *   • label with the runtime's own display name, and a model with none by its raw id (never hidden);
- *   • find a legacy stored id through the entry's `aliases`, so an old pick shows as ONE option.
- */
+/** The live Claude roster (`dopl-desktop-app/main/runtime/claude/roster.js`) as the web reads it. */
 
 import { describe, expect, it } from "vitest";
 import {
@@ -23,7 +13,7 @@ import { agentModelLabel, agentModelShortLabel } from "./agent-models";
 import { modelBelongsTo } from "./model-affinity";
 import { wireCatalog } from "../hooks/launch-selection-harness";
 
-// ⚠ The shape the desktop sends for the MEASURED roster (2026-09-22), plus one model no table has.
+// The desktop's measured roster shape, plus one model no table names.
 const WIRE = {
   claude: wireCatalog("claude", [
     { id: "claude-opus-5[1m]", label: "Opus (1M context)", short: "Opus", aliases: ["opus[1m]", "claude-opus-5", "opus"] },
@@ -68,7 +58,7 @@ describe("the live Claude roster, on the web", () => {
   });
 
   it("glance labels (cards, chips) use the runtime's own name from the catalogs they are handed", () => {
-    // F15: no module-level cache — the same call with and without the catalogs, side by side.
+    // No module-level label cache: the same call with and without the catalogs.
     expect(agentModelShortLabel("claude-opus-5[1m]")).toBe("claude-opus-5[1m]");
     const catalogs = normalizeCatalogs(WIRE);
     expect(agentModelShortLabel("claude-opus-5[1m]", catalogs)).toBe("Opus");

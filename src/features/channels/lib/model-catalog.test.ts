@@ -1,19 +1,4 @@
-/**
- * THE RUNTIME-KEYED MODEL CATALOG, ON THE WEB SIDE (U6, 2026-09-21) — `lib/model-catalog.ts`.
- *
- * THE PROPERTY THIS FILE EXISTS FOR:
- *
- *   🔒 **NO SURFACE MAY RENDER ONE RUNTIME'S MODELS WHILE ANOTHER IS SELECTED.** The defect U6
- *      closes is that `lib/agent-models.ts` — four CLAUDE ids — was every runtime's source, so
- *      picking Codex offered Fable. Every miss and every failure path below is asserted to
- *      contain NONE of those ids, not merely to be "empty".
- *
- * AND THE THREE RULES THAT FOLLOW FROM THE FOUR STATES:
- *
- *   • an empty `models` list means NOTHING without its status (INVARIANTS §11);
- *   • a `stale` or `unavailable` id may still be LABELLED and may not be newly SELECTED;
- *   • omission is the platform default — it is DISPLAYED and never persisted.
- */
+/** Miss and failure paths assert no Claude id, not merely emptiness. */
 
 import { describe, expect, it } from "vitest";
 import {
@@ -75,9 +60,8 @@ describe("the wire, narrowed", () => {
   });
 
   it("reads an UNKNOWN status as `loading`, never as `ready`", () => {
-    // A newer desktop with a fifth state is telling this bundle something it cannot act on.
-    // `loading` persists nothing and refuses nothing; `ready` would offer a list it cannot vouch
-    // for, and `unavailable` would invent a failure nobody reported.
+    // A newer desktop's fifth state: `loading` offers and refuses nothing; `ready` or `unavailable`
+    // would claim something nobody reported.
     const c = codex({ status: "quantum" });
     expect(c?.status).toBe("loading");
     expect(catalogReason(c)).toBeNull();
@@ -88,6 +72,7 @@ describe("the wire, narrowed", () => {
   });
 });
 
+// `catalogFor` has no fallback arm: a miss (an older desktop's absent `catalogs` included) is null.
 describe("no runtime borrows another's models", () => {
   it("a MISS answers null — there is no 'else' arm and no merge", () => {
     const list = catalogs();
@@ -135,8 +120,6 @@ describe("the four states drive what may be picked", () => {
   });
 
   it("STALE still LABELS and may not be newly SELECTED", () => {
-    // The plan's rule, in one case: "unknown effective models stay visible as RAW IDs on
-    // historical session cards, while a stale/unavailable id cannot be NEWLY selected."
     const c = codex({ status: "stale", reason: "the Codex CLI was upgraded" });
     expect(modelLabel(c, "gpt-a")).toBe("GPT Alpha");
     expect(selectableModels(c)).toEqual([]);
@@ -167,14 +150,12 @@ describe("omission is the platform default — displayed, never persisted", () =
   });
 
   it("an id that left the roster still renders — the select does not go BLANK", () => {
-    // A `SelectMenu` whose value matches no option renders empty, which would report "no model"
-    // about a channel that has one. The current value is APPENDED, never inserted.
+    // A `SelectMenu` whose value matches no option renders blank; the value is appended, never inserted.
     const c = codex();
     const options = modelOptionsFor(c, "gpt-retired");
     expect(options.map((o) => o.value)).toEqual(["gpt-a", "gpt-b", "gpt-retired"]);
     expect(options[2].label).toBe("gpt-retired");
     expect(modelLabel(c, "gpt-retired")).toBe("gpt-retired");
-    // ⚠ AND IT IS GONE the moment the value is a member again.
     expect(modelOptionsFor(c, "gpt-b").map((o) => o.value)).toEqual(["gpt-a", "gpt-b"]);
   });
 
