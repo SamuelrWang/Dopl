@@ -10524,3 +10524,11 @@ already wrong — `channel-dispatch-agents.ts` does pass `waitMs` — so do not 
 - Why it matters: CLAUDE.md's glossary has to carry an exception list for the word; each remaining name is a place a reader confuses "the caller" or "the role block" with the durable agent identity.
 - Proposed resolution: rename both in one change that also moves every doc anchor.
 - Status: OPEN (low, naming).
+
+### F-763 — the browser `fetch` transports read a body cut off mid-stream as "no body" (2026-09-23)
+
+- Location: `src/shared/api/api-client.ts › readJsonBody` and `apps/desktop-ui/src/lib/api-transport.ts › fetchTransport` (the web client and the SPA's dev-in-browser transport).
+- Found during: the fetch-failed recovery (`fix/fetch-failed-recovery`), which made the desktop bridge answer a mid-body socket failure as `NETWORK_UNAVAILABLE` (`dopl-desktop-app/main/ui-bridge.js › performApiRequest`).
+- **The effect.** Both catch every `res.json()` throw as a non-JSON body, so a 2xx whose stream dies resolves as `undefined` data instead of a `NetworkError`. The packaged app no longer takes this path; the web app still does.
+- Proposed resolution: rethrow through `api-envelope.ts › transportFailure` when the read throws a network-class error (not a `SyntaxError`), in both readers.
+- Status: OPEN (low).
