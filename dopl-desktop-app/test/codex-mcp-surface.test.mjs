@@ -258,7 +258,7 @@ describe('the real app-server accepts the entry Dopl builds', () => {
         const why = `args=${JSON.stringify(args)}`;
         assert.equal(back.url, entry.url, why);
         assert.equal(back.bearer_token_env_var, mcp.BEARER_ENV, why);
-        assert.deepEqual(back.http_headers, mcp.RUNTIME_HEADERS, why);
+        assert.deepEqual(back.http_headers, entry.http_headers, why);
         assert.equal(back.env_http_headers['X-Workspace-Id'], mcp.WORKSPACE_ENV, why);
         assert.equal(back.env_http_headers['X-Dopl-Session-Id'], mcp.SESSION_ENV, why);
         assert.equal(back.startup_timeout_sec, entry.startup_timeout_sec, why);
