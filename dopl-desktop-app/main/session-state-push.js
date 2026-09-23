@@ -1,142 +1,69 @@
-// SESSION STATE -> THE SERVER. The writer behind `dopl_channel(op="status")` -> GET /api/channels/sessions -> `channel_sessions`.
-//
-// A PUSH ON STATE CHANGE, NOT A HEARTBEAT. presence.js beats every 30s per listener per workspace
-// unconditionally (~120 writes/hour/machine, forever); this writes when a session's DERIVED state
-// actually moves — launch, first tool, park, end — a handful of writes per session lifetime. That
-// difference is the whole argument for the table existing: do NOT "simplify" it to a timer.
-//
-// A KEEPALIVE WAS CONSIDERED AND NOT BUILT (2026-08-23, F-294). The machine's liveness is not
-// missing from the wire — `agent_presence` carries it unconditionally — so the fix went to the side
-// that was lying (`listSessionStates` joins it; the renderer says "quiet Xm", not "may be
-// offline"), with no contract change and no new write. And a wall-clock value inside `setDigest`'s
-// input turns the digest gate this module is built around into a writer for sets that did not move.
-// A future wave that still needs one needs a reason this one did not have, and must state it HERE.
-//
-// The failure backoff added 2026-09-14 (`session-state-push-retry.js`) is not the timer this
-// forbids: armed by a FAILURE and by nothing else, cleared by a success, absent on a machine whose
-// pushes land. It replaces "the session's next real state change is the retry", which was true of a
-// SESSION and false of a BOOT RECONCILE — that cycle has no next state change to wait for.
-//
-// THE TRIGGER IS NOT DERIVED HERE. session-summary.js is the ONE place engine state becomes a pill
-// state, and it already coalesces and fires only when the digest moved; this SUBSCRIBES and
-// re-derives nothing. A separate module because session-summary.js is network-free above
-// `module.exports` — its suite reads it as SOURCE — so the seam is a subscription.
-//
-// TRANSPORT IS api.js: a short POST with no abort wiring and no long-poll, so it inherits the
-// shared 401 repair (api-repair.js — a second copy of that repair produced the 1.8.x Channels
-// outage), the app-version stamp and the undici pool reset.
-//
-// ── ROW LIFETIME ────────────────────────────────────────────────────────────────────────
-// A session's row exists while its PILL does and is DELETED when the pill leaves, ended rows
-// included — the row IS that projection (session-summary's retention rule). The delete is IMPLICIT,
-// which is why this POSTS THE WHOLE SET: the server replaces the caller's set, where a delta
-// protocol needs an explicit "this one is gone" that a crashed or quit desktop never sends. KNOWN
-// GAP: rows outlive the process that wrote them, bounded by (a) the first push for a workspace in a
-// new run replacing its whole set and (b) `reportedWorkspaces` being PERSISTED. Not covered:
-// signing out — the credential that could delete the rows is gone before anything here can react.
-//
-// ── IDENTITY ────────────────────────────────────────────────────────────────────────────
-// CROSS-ACCOUNT GUARD. Signing out does not end engine sessions, so operator A's sessions are still
-// in the registry when operator B signs in on the same Mac, and a push under B's credential would
-// file A's handles, channel names and thread titles as B's. Every session key is therefore stamped
-// with the identity current WHEN THIS MODULE FIRST SAW IT, and only matching keys are reported. A
-// key first seen with no resolvable identity is never reported — fail closed.
+// Session state -> the server (`channel_sessions`, read by `dopl_channel op="status"`). A PUSH ON STATE CHANGE,
+// never a heartbeat: it subscribes to session-summary's coalesced digest and writes only when a workspace's set
+// moved. It posts the WHOLE set (the server replaces it, so a gone row is deleted by omission). Transport is
+// api.js (the shared 401 repair). The only timer is the failure backoff (`session-state-push-retry.js`).
+// Cross-account guard: every key is stamped with the operator current when first seen; only matching keys report.
 
 const { apiFetch } = require('./api');
-const { discardBody } = require('./api-repair'); // ⚠ NO branch here read the body — success included (the presence.beatOnce leak)
+// No branch reads the body, success included, so every exit discards it (undici pool leak).
+const { discardBody } = require('./api-repair');
 const { diag } = require('./diag');
-// ⚠ ABOVE THE SENTINEL, like every other dep: the extracted block below may not `require`.
+// Every dep sits above the sentinel: the extracted block may not `require`.
 const wire = require('./session-state-push-wire');
-// THE QUANTIZER + CADENCE FLOOR (2026-08-22). ABOVE the sentinel like `apiFetch`, so the harness injects the REAL
-// module. Its header carries the derivations; this file only spends them.
 const telemetry = require('./session-telemetry');
-// THE WAKE-ACK BUFFER (2026-09-02, A9). This module is the only thing that may post it: the
-// endpoint is a WHOLE-SET REPLACE, so a module posting receipts on its own with an empty session
-// list would delete this machine's projection every time it spoke. `delivery-ack.js` therefore
-// HOLDS receipts and this drains them into the payload it was going to send anyway.
+// Wake receipts are HELD there and drained into this push: a module posting receipts alone would send an empty
+// session list and delete this machine's projection (A9).
 const deliveryAck = require('./delivery-ack');
-// THE FAILURE LANE (2026-09-14) — the once-per-shape log line, `retryable`, and the BACKOFF that
-// re-runs a FAILED reconcile until one lands. ABOVE THE SENTINEL like every dep; its header carries the incident.
 const retryLane = require('./session-state-push-retry');
-// THE WATCHDOG (2026-09-14, F-698) — `listener-heal.js › watchPass`, the same deadline the listener's guard took.
 const heal = require('./listener-heal');
-// THE REPORTED-WORKSPACE RECORD (2026-09-14) — moved out at the cap; its header carries the rule.
 const record = require('./session-state-push-record');
 const Store = require('electron-store');
 
 const store = new Store();
 
 // ─── BEGIN SESSION-STATE-PUSH (injectable; unit-tested via source extraction) ───────────
-// ⚠ `apiFetch`, `diag`, `store`, `telemetry` and `Date` are free vars from here down, so
-// test/session-state-push.test.mjs evaluates this verbatim with fakes — no Electron, no
-// network, no disk, and a clock a case can drive.
+
+// `apiFetch`, `diag`, `store`, `telemetry` and `Date` are free vars from here down.
 
 const ENDPOINT = '/api/channels/sessions';
 const HTTP_TIMEOUT_MS = 15000;
 
-// Workspaces this machine has written rows into, persisted beside the listener's cursors. For ONE case: a run that
-// starts with no sessions in a workspace a previous run left rows in. Without it those rows stand claiming `working` for
-// a process that is gone.
+// Workspaces this machine has rows in, persisted: a run that starts with no sessions there still clears them.
 const REPORTED_WORKSPACES_KEY = 'sessionReportWorkspaces';
 
-// THE INNER, PER-POST RETRY, deliberately small (ui-sync's ~39 000-attempt storm is the
-// cautionary tale): two attempts, one fixed gap, then this POST gives up and the CYCLE is failed.
-// What happens next is the outer lane's (`session-state-push-retry.js`). The digest rule is what
-// makes both safe — nothing is recorded on failure, so any later cycle re-sends the set.
+// The inner per-POST retry is deliberately small; nothing is recorded on failure, so a later cycle re-sends.
 const MAX_ATTEMPTS = 2;
 const RETRY_DELAY_MS = 2000;
-// ⚠ A DEADLOCK DETECTOR, NOT A LATENCY BUDGET (2026-09-14, F-698). The worst HONEST cycle is a quarantine sweep —
-// up to 32 probes × (15s + 2s + 15s) — so a healthy cycle never comes near this; tripping it is always a defect.
+// A deadlock detector, not a latency budget: the worst honest cycle (a quarantine sweep) stays far below (F-698).
 const CYCLE_WATCHDOG_MS = 20 * 60 * 1000;
 
 let armed = false;
 let deps = { getUserId: null, summary: null };
 let unsubscribe = null;
 let lastUserId = null;
-let running = false; // one cycle at a time — the pushes inside one are serial
-let queued = null; // the newest entries that arrived while a cycle was in flight
-let draining = null; // the in-flight cycle, so the quit path can await one final push
+let running = false;
+let queued = null;
+let draining = null;
 
-// sessionKey -> userId current when this module first saw that key. Pruned to the live set
-// every cycle, so it is bounded by the window budget.
+// sessionKey -> the userId current when first seen; pruned to the live set every cycle.
 const origin = new Map();
-// workspaceId -> digest of the set this process last STORED there. ⚠ An unchanged digest is
-// not sent: a window rebuild, a re-mount or an identical re-derivation must not cost a write.
+// workspaceId -> digest of the set last STORED there; an unchanged set is not sent.
 const pushedDigest = new Map();
-// ⚠ THE CADENCE FLOOR'S TWO FACTS (2026-08-22): the STATE HALF of the stored set, and when it
-// was stored. Beside `pushedDigest` rather than folded into it because they answer a different
-// question — that map says "is this set new", these say "is what is new worth a write NOW".
+// The cadence floor's facts: the stored set's STATE half and when it was stored.
 const pushedStateDigest = new Map();
 const pushedAt = new Map();
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-// THE FAILURE LANE, MINTED PER WRITER because it REMEMBERS (the shapes it has said, the
-// consecutive-failure count, its one timer) — the same reason `makeWireFilter` is a factory. The
-// retry's run is `kick(true)`: a normal cycle off the CURRENT projection, coalesced through
-// `schedule`, where the `true` keeps it from resetting its own ladder. No timer function is named
-// here: the lane defaults to the real clock and the suites inject a hand-driven one at ITS seam, so
-// the timer count in THIS file is still just the gap above.
+// The failure lane and the quarantine are minted per writer (they remember). The retry re-runs `kick(true)`.
 const { noteFailure, clearFailures, forgetFailures, retryable, armRetry, clearRetry } =
   retryLane.makeFailureLane(diag, () => kick(true));
-// THE QUARANTINE (2026-09-14) — the rows the SERVER refuses for a reason no client predicate can
-// restate. Minted per writer for the lane's own reason (it remembers), and its probe is `send`
-// with NO acks: every probe is a real WRITE on a replace-by-omission endpoint, so the winning one
-// stores exactly the set the next cycle would have sent. Its header carries the sweep-vs-bisect
-// measurement.
+// Rows the server refuses for reasons no client predicate restates; probed with `send` and no acks, so the winning
+// probe stores exactly the set the next cycle would send.
 const quarantine = retryLane.makeQuarantine(diag, (ws, rows) => send(ws, rows));
 
-/**
- * ONE REPORT ENTRY -> THE WIRE ROW. The only mapping here, and it is a rename: `key` is the
- * server's `sessionKey` (the stable (channel, thread) key the table upserts on, NOT the ephemeral
- * `sessionId`), and an empty `taskId` becomes the NULL the column stores. state / name /
- * channelName / threadTitle pass through byte-for-byte — no vote on state.
- *
- * Eight rich fields joined on 2026-08-22 (F-270), from `session-telemetry.js › telemetryFields`,
- * whose header carries the argument. The BY-NAME PICK is unchanged, and those values are QUANTIZED:
- * `lastActivityAt` moves on every engine dispatch, so an unquantized widening turns the digest gate
- * off. `identityName` joined the same day and is quantization-exempt — an IDENTITY, not a metric,
- * riding the STATE half so a change pushes. THE NAME, NEVER THE ID: the server stores it verbatim. */
+/** One report entry -> the wire row, picked BY NAME (a new summary field reaches no column until named here).
+ *  `key` is the stable session key (not the ephemeral sessionId); '' taskId is the column's NULL. */
 function reportRow(e) {
   return {
     sessionKey: String((e && e.key) || ''),
@@ -147,46 +74,20 @@ function reportRow(e) {
     channelName: (e && e.channelName) || null,
     threadTitle: (e && e.threadTitle) || null,
     identityName: telemetry.labelOrNull(e && e.identityName, telemetry.IDENTITY_NAME_MAX),
-    // THE OPERATOR-GIVEN NAME, PEER-VISIBLE BY DESIGN (2026-08-31, Samuel's ruling; migration
-    // 20260905120000 + `schema-sessions.ts › displayName`). It rides the summary's `displayName`,
-    // so a RENAME changes the digest and pushes like any state change — which was FALSE until
-    // 2026-09-16 (F-708), when the field was not in `session-telemetry.js › STATE_FIELDS`, the
-    // floor's whole definition of a state change. A field is state because THAT LITERAL names it,
-    // never because a docblock here says so. 60 is `agent-names.js › MAX_NAME`, the column CHECK's
-    // own bound, sanitized through `labelOrNull` so a pathological stored name cannot 400 the whole
-    // payload (INVARIANTS §11).
+    // Peer-visible by design; it is state because `STATE_FIELDS` names it (F-708). 60 is the column's bound.
     displayName: telemetry.labelOrNull(e && e.displayName, 60),
-    // THE AGENT COLOUR — PEER-VISIBLE BY DESIGN, which is the entire ruling (Samuel, 2026-09-13;
-    // migration `20261005120000` + `schema-sessions.ts › color`). It rides `displayName` above in
-    // every respect but one.
-    //
-    // IT IS AN ASK AND NOT AN ASSIGNMENT, which makes the null case safe: uniqueness is per channel
-    // across EVERY member, which no machine can evaluate, so the server resolves it —
-    // `server/session-colors.ts › resolveReportedColors` rule 1 KEEPS whatever the stored row
-    // already holds, so a push reporting no colour cannot erase one. The summary has carried one
-    // since 2026-09-13; until then every row reported `undefined` and the server assigned FIRST
-    // FREE on every push, so the operator's pick reached the column by luck. That is also why this
-    // is not the `identityName` hazard (`session-store.js`'s durable-whitelist block): that column
-    // is stored VERBATIM, where a colour cannot be nulled by omission.
-    //
-    // Not `labelOrNull`: a CLOSED SET, membership-tested rather than length-bounded — a sanitizer
-    // would pass `agent-99` through as a legal label.
+    // An ASK the server resolves (its rule 1 keeps a stored colour, so null cannot erase one); a closed set, so
+    // membership-tested rather than length-bounded.
     color: wire.colorKey(e && e.color),
     ...telemetry.telemetryFields(e),
   };
 }
 
-/** One stable string, like `summariesDigest`, so a field added to the row shape is compared
- *  automatically. */
 function setDigest(rows) {
   return JSON.stringify(rows || []);
 }
 
-/**
- * Stamp unseen keys with the identity current NOW; release stamps of keys that left the projection.
- * The whole cross-account guard: a stamp is written once per key and NEVER rewritten, so a session
- * started under one operator can never be re-attributed to the next.
- */
+// Stamp unseen keys with the identity current NOW (never rewritten); release keys that left the projection.
 function trackOrigin(entries, userId) {
   const live = new Set();
   for (const e of entries) {
@@ -199,22 +100,15 @@ function trackOrigin(entries, userId) {
   }
 }
 
-/** The entries this operator may honestly report as their own. */
 function ownedBy(entries, userId) {
   if (!userId) return [];
   return entries.filter((e) => origin.get(String((e && e.key) || '')) === userId);
 }
 
-// The three wire refusals moved to `main/session-state-push-wire.js` on 2026-08-31 — the ad-hoc
-// key, the nameless row and the ended row — at the §1 cap and on a real seam: they change when the
-// SERVER's contract for a row changes, where the rest of this file changes when the PUSH does.
-// `wireFilter` is minted per writer because `reportable` REMEMBERS what it already said, and it is
-// injected with `diag` so the suites' fake logger still receives the skip lines.
+// The wire refusals (ad-hoc key, nameless row, ended row) live in `session-state-push-wire.js`.
 const { nameReportable, liveForWire, reportable } = wire.makeWireFilter(diag);
 
-/** workspaceId -> rows to report there. ⚠ An entry with no workspace is DROPPED, never
- *  guessed at (the server fences on X-Workspace-Id). Unreachable from a real session, which
- *  is why it diags rather than throws. */
+/** workspaceId -> rows. An entry with no workspace is dropped, never guessed at (the server fences on it). */
 function groupByWorkspace(entries) {
   const out = new Map();
   for (const e of entries) {
@@ -230,20 +124,10 @@ function groupByWorkspace(entries) {
   return out;
 }
 
-// ── The persisted "workspaces this machine has rows in" record — `session-state-push-record.js` ──
 const { reportedWorkspaces, rememberWorkspace } = record.makeReportedRecord(store, diag, REPORTED_WORKSPACES_KEY);
 
-/**
- * POST one workspace's whole set, plus any delivery receipts riding along.
- *
- * THREE ANSWERS, NOT TWO (2026-09-14): `true` stored; `'retry'` failed on a shape that may answer
- * differently (a network throw, or an exhausted 429/5xx); `false` failed on one that will not (a
- * 4xx). Only `'retry'` may arm the outer lane, because a timer over a bad payload is the ui-sync
- * storm with a longer period.
- *
- * `acks` is OMITTED when empty, not sent as `[]`: the key is optional on the endpoint and every
- * build in the field posts without it.
- */
+/** POST one workspace's whole set plus any receipts. Answers `true` (stored), `'retry'` (a network throw or an
+ *  exhausted 429/5xx) or `false` (a 4xx that will not answer differently); only `'retry'` may arm the backoff. */
 async function send(workspaceId, rows, acks) {
   const body = { sessions: rows };
   if (acks && acks.length) body.acks = acks;
@@ -262,7 +146,7 @@ async function send(workspaceId, rows, acks) {
       noteFailure(workspaceId, 'network', (err && err.message) || 'network error'); return 'retry';
     }
     if (res && res.ok) { discardBody(res); clearFailures(workspaceId); return true; }
-    const status = (res && res.status) || 0; discardBody(res); // nothing below reads it
+    const status = (res && res.status) || 0; discardBody(res);
     if (retryable(status) && attempt < MAX_ATTEMPTS) { await sleep(RETRY_DELAY_MS); continue; }
     noteFailure(workspaceId, 'http-' + status, 'HTTP ' + status);
     return retryable(status) ? 'retry' : false;
@@ -270,108 +154,71 @@ async function send(workspaceId, rows, acks) {
   return 'retry';
 }
 
-/**
- * ONE CYCLE: the projection as it stands -> at most one POST per workspace whose set moved.
- * ⚠ The empty-set push is the DELETE half: a workspace with rows but no sessions gets
- * `{ sessions: [] }` once, removing the last session's row (and a previous run's leftovers).
- */
+/** One cycle: the projection as it stands -> at most one POST per workspace whose set moved. An empty set is
+ *  the DELETE half. */
 async function cycle(entries) {
   const userId = (deps.getUserId && deps.getUserId()) || null;
   trackOrigin(entries, userId);
-  // ⚠ SIGNED OUT DISARMS THE LANE: nothing here is ours, and the sign-in transition kicks its own cycle.
+  // Signed out disarms the lane: nothing here is ours.
   if (!userId) { clearRetry(); return; }
+  // A different operator: their server state and failures are not ours; only the origin stamps carry over. The
+  // receipts are not cleared — `take` already hands back only this operator's.
   if (userId !== lastUserId) {
-    // A different operator's server state is unknown here and their failures are not ours.
-    // ⚠ Nothing carries across except the origin stamps, which are the whole point.
     pushedDigest.clear();
-    // ⚠ THE FLOOR'S STATE GOES WITH THE DIGEST, ALL THREE TOGETHER. A surviving `pushedAt`
-    // would delay the NEW operator's first write for one THEY never made, and a surviving state
-    // digest would misread their first set as churn — and the first write for a workspace is
-    // the one carrying its whole set.
     pushedStateDigest.clear();
     pushedAt.clear();
-    forgetFailures(); // …and the ladder with them: a new operator starts at the first rung
-    // THE RECEIPTS ARE NOT CLEARED HERE, DELIBERATELY (2026-09-02, A9). They carry the identity
-    // that earned them (`delivery-ack.js`) and `take` hands back only this operator's, so the
-    // cross-account rule holds whether or not anything noticed the handover — which a clear could
-    // not promise, since this branch also runs on the FIRST cycle of a run, where a receipt the
-    // dispatch path already filed would be destroyed.
+    forgetFailures();
     lastUserId = userId;
   }
-  // ⚠ Ad-hoc rows are dropped HERE, before grouping, so the digest, the empty-set delete and
-  // the bounded retry all operate on exactly the set that goes on the wire. Filtering inside
-  // `send` leaves the digest recording a payload that was never sent.
+  // Refusals are applied before grouping, so the digest, the delete and the retry all see exactly the wire set.
   const reported = reportable(ownedBy(entries, userId));
-  // ⚠ PRUNED TO THE LIVE SET FIRST, like `loggedAdHoc`: an agent that ends takes its quarantine
-  // with it, so a row is never banished for longer than the session that owned it.
   quarantine.prune(new Set(reported.map((e) => String((e && e.key) || ''))));
   const groups = groupByWorkspace(reported);
   for (const ws of reportedWorkspaces(userId)) {
     if (!groups.has(ws)) groups.set(ws, []);
   }
-    // A WORKSPACE HOLDING RECEIPTS IS PUSHED EVEN IF ITS SESSION SET NEVER MOVED (2026-09-02, A9).
-    // Almost every receipt coincides with a state change, but "almost" is not a contract for a
-    // field an orchestrator polls, and a receipt stranded behind the digest gate is exactly the
-    // silent miss the ack exists to remove.
+  // A workspace holding receipts is pushed even if its set never moved (A9).
   for (const ws of deliveryAck.pendingWorkspaces(userId)) {
     if (!groups.has(ws)) groups.set(ws, []);
   }
-  let wantsRetry = false; // any workspace whose POST failed on a shape that may answer differently
+  let wantsRetry = false;
   for (const [ws, all] of groups) {
-    // ⚠ THE QUARANTINE IS APPLIED HERE, ABOVE THE DIGEST, so a banished row cannot make a set look
-    // NEW every cycle and re-send a payload that is known to 400.
+    // Above the digest, so a banished row cannot make a set look new every cycle.
     const rows = quarantine.allowed(ws, all);
-    // ⚠ TAKEN BEFORE THE GATES BELOW MAY `continue`, and PUT BACK on every path that does not
-    // send: a receipt held past a skipped cycle is a receipt this machine forgot it owed.
+    // Taken before the gates may `continue`, and restored on every path that does not send.
     const acks = deliveryAck.take(ws, userId);
     const digest = setDigest(rows);
     if (pushedDigest.get(ws) === digest && acks.length === 0) continue;
-    // ── THE CADENCE FLOOR (2026-08-22) — A DELAY, NOT A SCHEDULE ─────────────────────────
-    // Nothing is queued and no timer is armed. A churn-only set inside the window is not written
-    // and its digest is NOT recorded, so the session's NEXT projection move carries it — and a
-    // machine that falls quiet never writes it, because nothing wakes up to. A STATE CHANGE
-    // BYPASSES IT (`telemetry.STATE_FIELDS` is the whole definition of which is which). Silent: a
-    // skipped churn push is constant and working-as-designed.
+    // The cadence floor: a DELAY, not a schedule — a churn-only set inside the window is not written and not
+    // recorded; a state change or a receipt bypasses it.
     const state = telemetry.stateDigest(rows);
     const stateMoved = pushedStateDigest.get(ws) !== state;
-    // Receipts bypass the cadence floor the way a STATE CHANGE does, and for the same reason: the
-    // floor exists to swallow CHURN, and a receipt is news. No `restore` on this branch — it is
-    // only reachable with an EMPTY `acks`.
     if (!stateMoved && acks.length === 0 && !telemetry.floorAllows(pushedAt.get(ws), Date.now())) continue;
-    // Serial on purpose: a burst of parallel writes is what this design exists to avoid.
+    // Serial on purpose.
     let stored = await send(ws, rows, acks);
-    if (stored !== true) { // NOT recorded, so ANY later cycle re-sends this set
+    if (stored !== true) {
       deliveryAck.restore(ws, acks, userId);
       if (stored === 'retry') wantsRetry = true;
-      // ⚠ A NON-RETRYABLE REFUSAL IS SWEPT ONCE: a 4xx will not answer differently in 15s, so
-      // without this ONE poisoned row wedges the whole workspace's projection for the run. The
-      // winning probe stores the good set, so the retry armed below only has to carry the acks.
+      // A non-retryable refusal is swept once, so one poisoned row cannot wedge the workspace for the run.
       else if (await quarantine.sweep(ws, rows)) wantsRetry = true;
       continue;
     }
-    // ONE LINE PER LANDED PUSH (2026-09-14, F-698): success was silent and failure logged once per
-    // shape, so a lane that never ran and a lane that ran fine read identically for nine hours.
-    // Bounded by the cadence floor and the digest gate, so it is one line per real state change.
     diag('session-state push: stored', rows.length, 'row(s) ws', String(ws).slice(0, 8));
     pushedDigest.set(ws, digest);
     pushedStateDigest.set(ws, state);
-    // ⚠ STAMPED AFTER THE SEND. `send` can hold 15s plus a retry, and a stamp taken before it
-    // would let the very next cycle read the floor as already expired.
+    // Stamped AFTER the send (which can hold 15s+), or the next cycle would read the floor as expired.
     pushedAt.set(ws, Date.now());
     rememberWorkspace(userId, ws, rows.length > 0);
   }
-  // ⚠ THE WHOLE CYCLE IS THE UNIT, and a CLEAN one arms NOTHING — including a cycle where nothing
-  // was due (every set inside the digest gate), so a quiet machine holds no timer.
+  // The cycle is the unit; a clean one (or one with nothing due) arms nothing.
   if (wantsRetry) armRetry();
   else clearRetry();
 }
 
-/** Coalesce: a cycle already running takes the newest entries when it comes round again,
- *  so a state change during a slow POST can never start a second overlapping run. */
+/** Coalesce: a running cycle takes the newest entries next time round, so runs never overlap. A real state change
+ *  resets the backoff; a retry's own re-run passes `fromRetry`. */
 function schedule(entries, fromRetry) {
   if (!armed) return;
-  // ⚠ A REAL STATE CHANGE RESETS THE LADDER AND RUNS AT ONCE — its set supersedes the one that
-  // failed. A retry's own re-run passes `true`, or it would reset itself to 15s forever: a poll.
   if (!fromRetry) clearRetry();
   queued = Array.isArray(entries) ? entries : [];
   if (running) return;
@@ -389,12 +236,9 @@ async function drain() {
     while (queued) {
       const entries = queued;
       queued = null;
-      // WATCHDOGGED (2026-09-14, F-698): `running` had no deadline, so ONE cycle that never settled
-      // was a permanent OFF SWITCH — every later `schedule` took `if (running) return`. Same shape
-      // and fix as `channel-listener.js › reconcile`; the hung cycle is abandoned, not cancelled.
-      // The `.catch` is on the PASS, not the watchdog: `watchPass` RESOLVES on either arm, so a
-      // rejection handled only by the try/catch below would be swallowed with no line at all.
-      await heal.watchPass(cycle(entries).catch(onCycleError), onHungCycle, CYCLE_WATCHDOG_MS); // the loop IS the serialization
+      // Watchdogged (F-698): a cycle that never settled was a permanent off switch. The hung one is abandoned, not
+      // cancelled; `.catch` is on the pass because `watchPass` resolves on either arm.
+      await heal.watchPass(cycle(entries).catch(onCycleError), onHungCycle, CYCLE_WATCHDOG_MS);
     }
   } finally {
     running = false;
@@ -405,11 +249,7 @@ function onCycleError(err) {
   diag('session-state push: cycle error —', (err && err.message) || String(err));
 }
 
-/**
- * Arm the writer. ⚠ `getUserId()` is read at PUSH time, never captured — it changes
- * underneath us. `summary` is session-summary.js, INJECTED rather than required so the block
- * above stays evaluable. Idempotent.
- */
+/** Arm the writer. `getUserId()` is read at push time; `summary` is injected so the block stays evaluable. */
 function start(opts) {
   const o = opts || {};
   deps = {
@@ -426,23 +266,13 @@ function start(opts) {
   diag('session-state push: armed (on state change — no heartbeat)');
 }
 
-/**
- * Run a cycle now off the CURRENT projection. One caller: the sign-in transition. A fresh
- * credential is not a state change, so nothing fires on its own — yet a run that starts signed
- * out then signs in has a previous run's rows to clear and possibly a live session to report.
- */
+/** Run a cycle off the current projection (the sign-in transition; the retry). */
 function kick(fromRetry) {
   if (!armed || !deps.summary || typeof deps.summary.reportList !== 'function') return;
   schedule(deps.summary.reportList(), fromRetry === true);
 }
 
-/**
- * `kick()`, AWAITABLE, for the quit path and nothing else — a quit that ends every session
- * otherwise leaves rows saying `working` for a dead process until the same account signs in again.
- * THE CALLER BOUNDS THE WAIT: `send`'s 15s timeout + one retry is right for a running app and wrong
- * for a quit, so racing it against a short deadline is the quit guard's decision. `drain()`'s own
- * try/catch means this promise can never reject.
- */
+/** An awaitable `kick` for the quit path; the caller bounds the wait, and it never rejects. */
 function flush() {
   kick();
   return draining || Promise.resolve();
@@ -453,27 +283,25 @@ function stop() {
   unsubscribe = null;
   armed = false;
   queued = null;
-  clearRetry(); // a disarmed writer holds no timer — `schedule` would refuse the re-run anyway
+  clearRetry();
 }
 
 // ─── END SESSION-STATE-PUSH ─────────────────────────────────────────────────────────────
 
 module.exports = {
-  // the live half
   start,
   kick,
-  flush, // an awaitable kick, for the quit teardown
+  flush,
   stop,
-  // the pure core (exported for the shell + the tests)
   MAX_ATTEMPTS,
   RETRY_DELAY_MS,
   REPORTED_WORKSPACES_KEY,
   reportRow,
-  liveForWire, // 2026-08-22: an ENDED row is local-only — see its block
-  nameReportable, // 2026-08-22: the belt against a nameless row 400-ing the whole set
+  liveForWire,
+  nameReportable,
   setDigest,
-  TELEMETRY_MIN_INTERVAL_MS: telemetry.TELEMETRY_MIN_INTERVAL_MS, // 2026-08-22, the floor
+  TELEMETRY_MIN_INTERVAL_MS: telemetry.TELEMETRY_MIN_INTERVAL_MS,
   retryable,
-  RETRY_BACKOFF_MS: retryLane.RETRY_BACKOFF_MS, // 2026-09-14: the outer lane's ladder
+  RETRY_BACKOFF_MS: retryLane.RETRY_BACKOFF_MS,
   reportedWorkspaces,
 };
