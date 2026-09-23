@@ -176,7 +176,13 @@ function sweepableKeys(all, now) {
 function loadAll() {
   try {
     const raw = store.get(HISTORY_KEY);
-    return raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
+    // A record written before the template→identity rename carries `templateName` (P3-10).
+    for (const k of Object.keys(raw)) {
+      const r = raw[k];
+      if (r && typeof r === 'object' && !r.identityName && r.templateName) raw[k] = { ...r, identityName: r.templateName };
+    }
+    return raw;
   } catch (_err) { return {}; }
 }
 

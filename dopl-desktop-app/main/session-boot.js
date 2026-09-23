@@ -320,7 +320,7 @@ function endInterrupted(key, rec, why, opts) {
     workspaceId: rec.workspaceId,
     channelName: rec.channelName,
     threadTitle: rec.taskTitle,
-    identityName: rec.identityName, // frozen like the rest of the identity (F-288)
+    identityName: rec.identityName || rec.templateName, // frozen (F-288); `templateName` = pre-rename record (P3-10)
     startedAt: rec.startedAt,
     endedAt: Date.now(),
     // 🔒 `diag: why` STOOD HERE AND IS DELETED (2026-09-13, Samuel's ruling). The card rendered the
