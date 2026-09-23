@@ -389,3 +389,21 @@ describe("an IDENTITY with a runtime (rulings 4, 5)", () => {
     expect(notes).not.toContain("Bypass");
   });
 });
+
+describe("an identity model the launch runtime's ready roster lacks (X-03)", () => {
+  it("is not shown as the model that will run — the runtime default is", async () => {
+    bothRuntimes();
+    posture.stored = "claude";
+    identityList.identities = [
+      { id: "tpl-3", name: "Veteran", workspaceId: "ws-1", createdBy: ME, model: "claude-opus-4-1", runtime: "claude" },
+    ];
+    await open();
+    fireEvent.click(
+      Array.from(
+        screen.getByRole("tablist", { name: "Identity" }).querySelectorAll('[role="tab"]')
+      ).find((el) => (el.textContent || "").startsWith("Veteran"))!
+    );
+    await waitFor(() => expect(modelSelected()).toContain("Fable 5"));
+    expect(modelPills().join(" ")).not.toContain("claude-opus-4-1");
+  });
+});

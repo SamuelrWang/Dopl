@@ -40,6 +40,7 @@ import {
   type ModelCatalogs,
 } from "../lib/model-catalog";
 import {
+  modelBelongsTo,
   modelSubmittableForRuntime,
   identityModelMismatch,
   type ModelMismatch,
@@ -99,7 +100,10 @@ export function modelRowFor(input: ModelRowInput): ModelRow {
     selected,
     input.fromIdentity
   );
-  const usableIdentityModel = mismatch ? "" : input.fromIdentity;
+  // Main skips an identity model the launch runtime's READY roster positively lacks (a
+  // retired id, X-03); the row must not show it as the model that will run.
+  const usableIdentityModel =
+    mismatch || modelBelongsTo(catalog, input.fromIdentity) === false ? "" : input.fromIdentity;
   const usableOwn = modelSubmittableForRuntime(
     runtimes,
     catalogs,
