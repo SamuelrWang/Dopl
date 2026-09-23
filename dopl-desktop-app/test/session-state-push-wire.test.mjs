@@ -29,6 +29,7 @@ import assert from "node:assert/strict";
 import {
   load, entry, adHocEntry, armed, drained, bodies,
   CHAN_A, TASK_A, TASK_B, ADHOC_TASK_ID,
+  wire,
 } from "./_session-state-push-harness.mjs";
 
 // ── 4. C-2: THE AD-HOC SESSION IS FILTERED, AND THE REST OF THE SET SURVIVES ─────────
@@ -39,7 +40,7 @@ import {
 // including its perfectly valid uuid-threaded sessions — while stale rows are never cleared.
 
 test("C-2: the predicate is the server's contract restated, not a name sniff", () => {
-  const m = load();
+  const m = wire.makeWireFilter(() => {});
   assert.equal(m.serverReportable(entry()), true);
   assert.equal(m.serverReportable(entry({ taskId: "" })), true, "a thread-less responder is legal");
   assert.equal(m.serverReportable(adHocEntry()), false, "…an ad-hoc THREAD ID is not");

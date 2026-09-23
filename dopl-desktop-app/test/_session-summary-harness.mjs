@@ -68,7 +68,7 @@ const EXPORTED = [
   // DURABLE history (`agent-history.js`), bounded by SEVEN DAYS from `endedAt` and surviving a
   // restart. `retainedEnded` is the reader; `releaseEnded` is the sweep's cleaner.
   "retainedEnded", "releaseEnded",
-  "bind", "start", "list", "nameForSession", "noteEnded", "noteActivity", "touch",
+  "bind", "start", "list", "noteEnded", "noteActivity", "touch",
   // F-147: the report view and the change subscription the server writer rides.
   "reportEntry", "wireSummary", "reportList", "subscribe",
 ];

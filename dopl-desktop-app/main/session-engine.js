@@ -177,7 +177,7 @@ function runEffect(s, eff) {
     case 'clearIdle': if (s.idleTimer) { clearTimeout(s.idleTimer); s.idleTimer = null; } break;
     case 'resumeQuery': sessionPark.resumeParked(s); break; // P1 lazy resume: the SAME object
     case 'lifecycle': runLifecycle(s, eff.kind, eff.extra, eff.body); break;
-    case 'settle': settle(s, eff.outcome, eff.keepWindow === true); break; // a `closeTask` case sat above this one until Phase 4 (2026-08-18)
+    case 'settle': settle(s, eff.outcome); break;
     default: diag('session-engine: unknown effect', eff && eff.type);
   }
 }
@@ -275,8 +275,6 @@ async function startSession(spec, rt) {
     workspaceId: spec.workspaceId,
     side: state.side,
     profile: spec.profile, launchDepth: spec.launchDepth, launchChain: spec.launchChain === true, // ...and the LAUNCH-DEPTH stamp (2026-08-25, F-320): a containment input like the profile beside it, normalized fail-closed at the gate — ABSENT IS THE CAP, so only a lane that says "a human started this" (0) can launch agents (session-own-launch.js). `launchChain` is the CHANNEL's chaining setting (2026-08-31, Samuel's ruling), stamped the same way and `=== true` here so absent reads FALSE and the one-generation bound stands
-    // Item 9: human tool-profile label for the renderer's posture line (passed on init).
-    profileLabel: require('./tool-profiles').profileLabel(spec.profile),
     mode: state.mode,
     counterpartyId: spec.counterpartyId || null, // FIX L1: the task's other party
     // D2 — THE BINDING. 'pair' is every shape that exists today and is the default by

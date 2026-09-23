@@ -51,14 +51,12 @@ function gateActivity(state, activity) {
 // since thread closing was removed (wiring plan Phase 4, 2026-08-18) there is no other end that
 // touches it either. A real end ALSO posts a CALM lifecycle so the web card stops pulsing
 // "Working…". ⚠ Idle never reaches here; it PARKS instead.
-function endedEmit(state, outcome, reason, summary) {
+function endedEmit(outcome, reason, summary) {
   // 🔒 ⚠ **`totalCostUsd` RODE THIS PAYLOAD AND IS DELETED (2026-09-22, Samuel: *"we dont need
   // cost tracking"*).** It was the ONLY place `state.costUsd` ever left the reducer, and the one
   // consumer it ever had was a cap that was deleted on 2026-09-07 — since then it crossed the IPC
   // boundary to a renderer that reads `type`, `outcome`, `reason` and `summary` and has never
-  // named it. ⚠ `state` STAYS IN THE SIGNATURE: `endedEmit` is called from four sites and the
-  // parameter is what a later field would ride; deleting it would be a churn this ruling did not
-  // ask for.
+  // named it.
   const payload = { type: 'ended', outcome: outcome, reason: reason };
   if (summary !== undefined) payload.summary = summary;
   return { type: 'emit', payload: payload };
@@ -216,7 +214,7 @@ function endReasonOf(event) {
   return named && END_EVENT_REASONS.indexOf(named) !== -1 ? named : 'operator';
 }
 
-function endLifecycle(reason, state) {
+function endLifecycle(reason) {
   if (reason === 'operator') return { type: 'lifecycle', kind: 'task_progress', extra: { session_ended: true }, body: 'Session ended' };
   // 2026-09-15: the park-on-claim sweep, which is an END the operator did not ask for. Same
   // shape as the operator's own End (it IS terminal, and it keeps no window); only the sentence
@@ -267,7 +265,7 @@ function endLifecycle(reason, state) {
 // is still more than the silence A9 is about, and a future `endEffects` caller that forgets to
 // add its copy here degrades to a visible raw word instead of vanishing.
 // ⚠ NO EM DASH (Samuel's copy rule). The line it replaces, `'Ended — inactive'`, carried one.
-function endedStatusText(reason, state) {
+function endedStatusText(reason) {
   if (!reason || typeof reason !== 'string') return null;
   // 2026-09-07: `turn_cap` and `cost_cap` arms deleted with the caps.
   if (reason === 'operator') return 'Ended by you';
@@ -289,10 +287,9 @@ function endedStatusText(reason, state) {
 // drained SDK tail from waking the session, and `settle` still denies every pending permission,
 // closes the iterator, aborts the query and drops the map entry.
 function endEffects(state, outcome, reason, summary) {
-  const lc = endLifecycle(reason, state);
+  const lc = endLifecycle(reason);
   return [{ type: 'abortQuery' }].concat(lc ? [lc] : [],
-    [endedEmit(state, outcome, reason, summary),
-      { type: 'settle', outcome: outcome, keepWindow: reason === 'abandoned' }]);
+    [endedEmit(outcome, reason, summary), { type: 'settle', outcome: outcome }]);
 }
 
 // The header posture echo: ⚠ ONE shape for BOTH axes, so the renderer never sees half a one.

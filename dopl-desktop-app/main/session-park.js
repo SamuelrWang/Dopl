@@ -246,7 +246,7 @@ async function startResumedConsumer(s) {
     // stamp, and the ONE fact `mcp-connect-guard.js › relaunch` needs to retry on the lane that
     // launched rather than always on the cold one.
     s.launchVia = 'resume';
-    const q = rt.resume(deps.buildLaunchSpec(s), s.query);
+    const q = rt.resume(deps.buildLaunchSpec(s));
     s.query = q;
     s.resuming = false;
     deps.consume(s, q, rt); // fire-and-forget consumer loop
@@ -384,7 +384,10 @@ async function startResume(rec, sdkSessionId, rawFirstTurn) {
   // wave persists `tokensSpent`, it owes this lane a `usageBaselineTokens` hand-in — and
   // `capability.js › resumeZeroesBaseline` is already the predicate it would ask.
   let rt;
-  try { rt = await deps.acquireRuntime(rec.runtimeId); } catch (_) { return false; }
+  try { rt = await deps.acquireRuntime(rec.runtimeId); } catch (err) {
+    diag('session-park: resume runtime unavailable', err && err.message);
+    return false;
+  }
   // ⚠ Re-check AFTER the await: a reopen shell or racing launch may have created this slot
   // during the runtime probe, and startSession would overwrite the Map entry and orphan that window.
   if (deps.hasLiveSession(slot)) return false;

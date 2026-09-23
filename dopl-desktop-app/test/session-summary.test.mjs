@@ -279,21 +279,6 @@ test("NAMES: a departed agent's name is never handed to the next one", () => {
  * is still ONE derivation behind them, in either call order. A window calling itself `flint`
  * while its own pill says `onyx` is F-142's defect reproduced inside one feature.
  */
-test("NAMES: a window's own handle is the SAME one its pill shows, either way round", () => {
-  const m = load();
-  const live = session();
-  const other = session({ sessionId: "sess-2", taskId: "task-2", agentId: "z9y8x7w6" });
-  m.bind({ sessions: new Map([[live.key, live], [other.key, other]]) });
-  const asked = m.nameForSession(live); // the window asks BEFORE any projection has run
-  assert.equal(asked, "a1b2c3d4");
-  const listed = m.list();
-  assert.equal(listed[0].name, asked, "the projection agrees with the answer already given");
-  assert.equal(m.nameForSession(other), listed[1].name, "and the other way round");
-  // No key, no handle — the guard survives the ledger it used to protect.
-  assert.equal(m.nameForSession(null), null);
-  assert.equal(m.nameForSession({}), null);
-});
-
 // ── 5. THE FRAME THAT CROSSES TO THE RENDERER ────────────────────────────────────────
 
 test("PUSH: the event name and payload are the shape the preload forwards", async () => {

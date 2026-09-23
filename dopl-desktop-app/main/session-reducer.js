@@ -16,7 +16,7 @@
 // here at module scope, ABOVE the sentinel, so inside the block below they are free vars —
 // which is what lets test/_reducer-block.mjs prepend those modules' blocks and evaluate the set
 // with no `require` in scope, exactly as before the splits.
-const { gatePhase, gateActivity, endedEmit, endEffects, endReasonOf, modesEmit, parkEffects, terminalBody } = require('./session-effects');
+const { gatePhase, gateActivity, endEffects, endReasonOf, modesEmit, parkEffects, terminalBody } = require('./session-effects');
 const {
   DEFAULT_IDLE_MS, MESSAGE_MODES, coerceMode, toolModesOf, initialSessionState, nextIdleMs, idleTimeout,
 } = require('./session-state');

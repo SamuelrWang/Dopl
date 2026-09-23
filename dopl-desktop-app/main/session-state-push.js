@@ -210,7 +210,7 @@ function ownedBy(entries, userId) {
 // SERVER's contract for a row changes, where the rest of this file changes when the PUSH does.
 // `wireFilter` is minted per writer because `reportable` REMEMBERS what it already said, and it is
 // injected with `diag` so the suites' fake logger still receives the skip lines.
-const { serverReportable, nameReportable, liveForWire, reportable } = wire.makeWireFilter(diag);
+const { nameReportable, liveForWire, reportable } = wire.makeWireFilter(diag);
 
 /** workspaceId -> rows to report there. ⚠ An entry with no workspace is DROPPED, never
  *  guessed at (the server fences on X-Workspace-Id). Unreachable from a real session, which

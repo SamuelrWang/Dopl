@@ -57,7 +57,7 @@ function bind(d) {
 // been dead since every session went windowless — `s.win` is null on all of them. What the
 // flag means now is "retain the ENDED PILL", which `session-summary.noteEnded` honours
 // unconditionally; the name is the engine's and is left alone rather than renamed for cosmetics.
-function settle(s, outcome, keepWindow) {
+function settle(s, outcome) {
   if (s.settled) return;
   s.settled = true;
   // C3 (CRITICAL) — a settled session must leave NOTHING live. The CRASH path settles WITHOUT
@@ -126,7 +126,7 @@ function settle(s, outcome, keepWindow) {
     });
   } catch (err) { diag('session-teardown: could not freeze agent history —', err && err.message); }
   deps.sessions.delete(s.key);
-  sessionSummary.noteEnded(s, keepWindow === true); // retention is the history file's, for 7 days
+  sessionSummary.noteEnded(); // retention is the history file's, for 7 days
   deps.refreshTray();
 }
 

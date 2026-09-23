@@ -81,7 +81,7 @@ test("baseRecord still copies NO live handle (the durability leak guard holds)",
 
 // ── system/init: the renderer gets the same identity, and the record is saved ──
 
-test("the init payload carries taskTitle / channelName / from", () => {
+test("the launch record carries taskTitle / channelName / from", () => {
   const s = liveSession();
   const events = [];
   const saved = [];
@@ -97,12 +97,8 @@ test("the init payload carries taskTitle / channelName / from", () => {
     store
   );
 
-  const init = events.find((e) => e.type === "launched").payload;
-  assert.equal(init.type, "init");
-  assert.equal(init.taskTitle, "Ship the invoice import");
-  assert.equal(init.channelName, "Ops");
-  assert.equal(init.from, "David");
-  // The SAME identity is persisted on the way, so a later reopen can rebuild it.
+  assert.ok(events.find((e) => e.type === "launched"), "the reducer is told");
+  // The identity is persisted on the way, so a later reopen can rebuild it.
   assert.equal(saved.length, 1);
   assert.equal(saved[0].taskTitle, "Ship the invoice import");
   assert.equal(saved[0].channelName, "Ops");

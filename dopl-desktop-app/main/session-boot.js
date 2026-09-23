@@ -62,7 +62,6 @@ const { floorWindowlessMessage } = require('./session-profiles'); // AXIS B's wi
 // from the least trustworthy input there is. A third spelling of that list is how one of them
 // silently stops matching.
 const sessionPark = require('./session-park');
-const toolProfiles = require('./tool-profiles'); // item 9: the human posture label
 const sessionSummary = require('./session-summary'); // §3.3: registration is a projection move
 const agentHistory = require('./agent-history'); // what an ended agent leaves, for 7 days
 const sessionEffects = require('./session-effects'); // `terminalBody` — a terminal says why
@@ -216,7 +215,6 @@ function parkedSessionFromRecord(key, rec, sdkId) {
     workspaceId: rec.workspaceId,
     side: state.side,
     profile: profile,
-    profileLabel: toolProfiles.profileLabel(profile),
     // ⚠ THE LAUNCH STAMPS, RESTORED FROM THE RECORD (2026-09-18, Samuel's ruling). This rebuild
     // and `session-park.js › startResume` are the two sites the persisted fields exist for: they
     // are the only inputs a woken agent has after a restart, and without them an operator's own

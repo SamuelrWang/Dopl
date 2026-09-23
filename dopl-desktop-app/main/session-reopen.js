@@ -38,7 +38,6 @@ const directedTurn = require('./session-directed'); // 2026-08-31: attribution +
 // injects it. Neither require pulls electron — `main/runtime/index.js` is electron-free by
 // contract and `runtime-copy.js` requires nothing at all.
 const runtimeRegistry = require('./runtime');
-const runtimeCapability = runtimeRegistry.capability;
 const runtimeCopy = runtimeRegistry.copy;
 // The auth re-probe (P4-06): a free var inside the PURE block, required lazily.
 const authReprobe = {
@@ -128,12 +127,6 @@ function listLiveSessions() {
       channelName: (s.context && s.context.channelName) || null,
       taskTitle: (s.context && s.context.taskTitle) || null,
       status: (s.state && s.state.phase) || null,
-      // ALWAYS FALSE, AND KEPT AS A WIRE FIELD ON PURPOSE (2026-08-20). `windowHidden` is
-      // initialised false and never set; the reshow branch that wrote it went with the session
-      // window (F-228). It stays because this shape can cross to an OLDER build during an update,
-      // and dropping a field from a wire shape is the change that needs a reason — but nothing may
-      // start reasoning from it.
-      hidden: false,
     });
   }
   return out;

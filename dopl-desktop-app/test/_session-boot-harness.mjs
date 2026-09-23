@@ -79,7 +79,7 @@ const PARK_BLOCK = slice(PARK_SRC, "SESSION-PARK-PURE");
 // sentinel. Injecting one it never declares is how a ReferenceError shipped green (P4-01).
 const BOOT_INJECTED = [
   "crypto", "store", "initialSessionState", "floorWindowlessMessage",
-  "sessionPark", "toolProfiles", "sessionSummary", "agentHistory", "sessionEffects",
+  "sessionPark", "sessionSummary", "agentHistory", "sessionEffects",
   "runtimeRegistry", "runtimeCapability", "runtimeTruth", "diag",
 ];
 const BOOT_HEADER = BOOT_SRC.slice(0, BOOT_SRC.indexOf("// ─── BEGIN SESSION-BOOT-PURE"));
@@ -190,7 +190,7 @@ function harness(over = {}) {
     ...BOOT_INJECTED,
     `${BOOT_BLOCK}\n return { bind, parkedSessionFromRecord, endInterrupted, reparkDormant, withinReparkWindow, REPARK_WINDOW_MS };`
   )(crypto, store, initialSessionState, PROFILES.floorWindowlessMessage,
-    parkReaders, TOOL_PROFILES, sessionSummary, agentHistory, EFFECTS,
+    parkReaders, sessionSummary, agentHistory, EFFECTS,
     // ⚠ THE REAL `session-runtime-truth.js` (2026-09-21, U10), REQUIRED rather than faked: it
     // requires nothing at all, so a plain require works, and what `parkedSessionFromRecord` has
     // to assert is that the SHIPPED coercion is what a restored record lands on.

@@ -324,14 +324,6 @@ function list() {
   return reportList().map(wireSummary);
 }
 
-/** The handle one session is wearing, for a caller holding the session. It ASSIGNS NOTHING since
- *  2026-08-21 — it reads the id the session was minted with, so it is safe at any point in its
- *  life. */
-function nameForSession(s) {
-  if (!s || !s.key) return null;
-  return nameOf(s);
-}
-
 /**
  * A session ENDED — the projection's half of it: mark the digest dirty so the card flips.
  *
@@ -342,9 +334,8 @@ function nameForSession(s) {
  * deliberately: deleting the parameter would change the engine's effect vocabulary for a cosmetic
  * gain. It returns whether a record is expected to exist, i.e. "an end happened".
  */
-function noteEnded(s, _keepWindow) {
+function noteEnded() {
   touch();
-  return true;
 }
 
 /**
@@ -352,7 +343,7 @@ function noteEnded(s, _keepWindow) {
  * (`main/agent-retention.js`). The durable read is fresh every time, so this only has to make
  * the next digest move — otherwise the card would linger until some unrelated state change.
  */
-function releaseEnded(_keys) {
+function releaseEnded() {
   touch();
 }
 
@@ -458,7 +449,6 @@ module.exports = {
   list,
   reportList,
   subscribe,
-  nameForSession,
   noteEnded,
   releaseEnded, // 2026-08-22: the 7-day sweep's cleaner for this projection
   noteActivity,

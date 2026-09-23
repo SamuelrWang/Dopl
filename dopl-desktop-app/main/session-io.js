@@ -229,7 +229,7 @@ function postWillGate(s, input, toolName) {
 // in `main/session-post-surface.js` — this file was AT the 500-line cap with zero headroom, and
 // threading the counterparty id through `withPostSurface` (so `to` is a display NAME, not the raw
 // id an agent typed) pushed it over. RE-EXPORTED BELOW, so every `io.<name>` caller is unchanged.
-const sessionPrivate = require('./session-private'); const postSurface = require('./session-post-surface'); const { denyMessageFor } = require('./session-permissions'); // the 1:1 gate; the post surface; which sentence a `deny` verdict carries (F-320)
+const sessionPrivate = require('./session-private'); const postSurface = require('./session-post-surface'); // the 1:1 gate; the post surface
 const { withPostSurface, postKindOf } = postSurface;
 
 // The whitelisted durable projection of a live session (mirrors the store shape).
@@ -342,7 +342,7 @@ function applyCoreEvents(s, list, dispatch, store) {
       store.setSdkSessionId(s.key, ev.sessionId);
       store.saveRecord(baseRecord(s));
       if (ev.model) s.liveModel = ev.model; // the first honest statement of what is really running
-      dispatch(s, { type: 'launched', payload: launchedPayload(s, ev.model) });
+      dispatch(s, { type: 'launched' });
       // THE CONNECT ASSERTION (F-692, 2026-09-13). This is the ONE message that states which MCP
       // servers the runtime really connected, and nothing read it: a `dopl` entry that ran out the
       // CLI's 5s connect budget left the session with `rename_agent` working and EVERY
@@ -379,25 +379,6 @@ function applyCoreEvents(s, list, dispatch, store) {
     dispatch(s, ev); // every render event, unchanged
   }
   return mcpSignal; // F-692: `{type:'mcp_status', status}` after a `launched`, else null
-}
-
-// The `launched` payload. Split out only so `applyCoreEvents` stays a routing shape; every field
-// is the one `handleSdkMessage` sent.
-function launchedPayload(s, model) {
-  return {
-    type: 'init',
-    sessionId: s.sessionId,
-    side: s.side,
-    profile: s.profile,
-    mode: s.mode,
-    model: model,
-    profileLabel: s.profileLabel || null, // item 9: human posture label (§B.2)
-    channelName: (s.context && s.context.channelName) || null,
-    taskTitle: (s.context && s.context.taskTitle) || null,
-    from: s.counterpartyName || null,
-    // NEVER the platform's absolute cwd (label-only rule) — emitFolder() feeds the chip its label.
-    cwdLabel: null,
-  };
 }
 
 module.exports = {

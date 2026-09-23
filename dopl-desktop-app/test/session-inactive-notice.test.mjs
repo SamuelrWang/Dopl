@@ -154,13 +154,6 @@ test("ABANDONMENT: the note comes BEFORE the settle, so it posts from a live ses
   assert.deepEqual(effects, ["abortQuery", "lifecycle", "emit", "settle"]);
 });
 
-test("ABANDONMENT: M2b's kept window is unchanged — the note did not cost the transcript", () => {
-  const settle = endEffects(parked(), "ended", "abandoned").find((e) => e.type === "settle");
-  assert.equal(settle.keepWindow, true, "an abandonment still keeps its painted transcript");
-  const other = endEffects(running(), "ended", "operator").find((e) => e.type === "settle");
-  assert.equal(other.keepWindow, false);
-});
-
 // ── 2. THE AUTH-PREFLIGHT HOLD ───────────────────────────────────────────────────────
 
 // ⚠ THIS CASE READ "…now posts the SAME note" AND PINNED `INACTIVE_NOTE` UNTIL 2026-09-15.
@@ -216,8 +209,6 @@ test("PARK-ON-CLAIM: it settles identically to the operator's own End", () => {
   const claimed = endEffects(running(), "ended", "claimed").map((e) => e.type);
   const operator = endEffects(running(), "ended", "operator").map((e) => e.type);
   assert.deepEqual(claimed, operator, "same effects, same order");
-  const settle = endEffects(running(), "ended", "claimed").find((e) => e.type === "settle");
-  assert.equal(settle.keepWindow, false, "only an ABANDONMENT keeps its painted transcript");
 });
 
 test("PARK-ON-CLAIM: an UNRECOGNISED reason falls back to the End's own wording, never to silence", () => {
