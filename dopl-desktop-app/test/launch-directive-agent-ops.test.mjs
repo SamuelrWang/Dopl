@@ -69,9 +69,13 @@ test("KIND: `done` is the non-launch success and `launched` is NOT reused for it
   const SCHEMA = readFileSync(
     join(HERE, "..", "..", "src", "features", "channels", "schema-launch-decide.ts"), "utf8");
   assert.match(SCHEMA, /status: z\.literal\("done"\)/);
+  // The TS union is `@dopl/contracts › LaunchDirectiveStatus`, which `types-launch.ts` imports.
+  const CONTRACTS = readFileSync(
+    join(HERE, "..", "..", "packages", "contracts", "src", "directives.ts"), "utf8");
+  assert.match(CONTRACTS, /"launched"\s*\|\s*"done"\s*\|\s*"refused"/);
   const TYPES = readFileSync(
     join(HERE, "..", "..", "src", "features", "channels", "types-launch.ts"), "utf8");
-  assert.match(TYPES, /"launched" \| "done" \| "refused"/);
+  assert.match(TYPES, /status: LaunchDirectiveStatus;/);
 });
 
 test("TARGET: `target_agent_id` is shape-checked, in BOTH spellings, and never guessed", () => {
