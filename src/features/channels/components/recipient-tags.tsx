@@ -24,7 +24,6 @@
  * who does not skips the line.
  */
 
-import { cn } from "@/shared/lib/utils";
 import type { RecipientTag } from "../lib/recipient-tags";
 
 /** ⚠ ONE SHAPE FOR BOTH NAMESPACES. An agent and a person are addressed the same
@@ -57,7 +56,7 @@ export function RecipientTags({ tags }: { tags: readonly RecipientTag[] }) {
              mention, so a test asking "is there a tag on this row" cannot ask for its text.
              Carries no meaning and is never read back by this tree. */
           data-recipient-tag={tag.kind}
-          className={cn(TAG_FACE)}
+          className={TAG_FACE}
         >
           <span className="truncate">{tag.face}</span>
         </span>

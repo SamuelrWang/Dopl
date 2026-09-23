@@ -40,8 +40,8 @@ import { useLaunchSelection } from "../hooks/use-launch-selection";
 import { AgentLaunchPostureRows } from "./settings-agent-launch-rows";
 import { SettingRow } from "./settings-agent-rows";
 
-export const DEFAULT_CHAIN_OFF = "off";
-export const DEFAULT_CHAIN_ON = "on";
+const DEFAULT_CHAIN_OFF = "off";
+const DEFAULT_CHAIN_ON = "on";
 
 /** The two picks. ⚠ THERE IS NO "In every channel" OPTION AND THERE MUST NOT BE ONE. On the
  *  per-channel tab that phrase writes the MACHINE-WIDE orchestrator consent

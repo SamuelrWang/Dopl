@@ -38,10 +38,6 @@
 import type { ReactNode } from "react";
 import { cn } from "@/shared/lib/utils";
 
-/** ⚠ KEEP IN STEP WITH `.fade-swap-in`'s duration in BOTH stylesheets. Exported
- *  for the tests, which assert the class rather than waiting on it. */
-export const FADE_SWAP_MS = 140;
-
 export function FadeSwap({
   viewKey,
   className,

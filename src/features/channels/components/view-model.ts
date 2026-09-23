@@ -172,19 +172,19 @@ const KEY_ROW_SEP = "\u0001";
  */
 export function agentIndexKey(agents: ReadonlyMap<string, AgentRosterEntry>): string {
   const parts: string[] = [];
-  for (const [agentId, identity] of agents) {
+  for (const [agentId, entry] of agents) {
     parts.push(
       [
         agentId,
-        identity.displayName ?? "",
-        identity.description ?? "",
+        entry.displayName ?? "",
+        entry.description ?? "",
         // ⚠ IT MUST RIDE THE KEY OR THE ROUND TRIP DROPS IT (a dead agent's tag tinting again) —
         // the transcript's map is rebuilt FROM this string. Churn-safe: {@link AgentRosterEntry.ended}.
-        identity.ended ? "1" : "",
+        entry.ended ? "1" : "",
         // ⚠ THE COLOUR RIDES IT FOR THE IDENTICAL REASON, and it is the field that makes
         // the round trip VISIBLE when it breaks: a dropped colour is a whole transcript
         // of neutral boxes, where a dropped `ended` is one tag tinted wrong.
-        identity.color ?? "",
+        entry.color ?? "",
       ].join(KEY_FIELD_SEP)
     );
   }

@@ -30,11 +30,17 @@ export interface WellSpec<Id extends string = string> {
 
 type OpenMap<Id extends string> = Record<Id, boolean>;
 
-function wellDefaults<Id extends string>(
-  wells: readonly WellSpec<Id>[]
+/** The set's defaults, overlaid with a stored choice's booleans for KNOWN wells only — an unknown
+ *  key (a later build's well) or a non-boolean (a corrupt write) is ignored. */
+function mergeOpen<Id extends string>(
+  wells: readonly WellSpec<Id>[],
+  stored: Partial<Record<string, unknown>> | null | undefined
 ): OpenMap<Id> {
   const out = {} as OpenMap<Id>;
-  for (const well of wells) out[well.id] = well.defaultOpen;
+  for (const well of wells) {
+    const value = stored?.[well.id];
+    out[well.id] = typeof value === "boolean" ? value : well.defaultOpen;
+  }
   return out;
 }
 
@@ -56,26 +62,13 @@ function storedWells<Id extends string>(
   storageKey: string,
   wells: readonly WellSpec<Id>[]
 ): OpenMap<Id> {
-  const defaults = wellDefaults(wells);
-  if (typeof window === "undefined") return defaults;
-  let raw: string | null = null;
+  if (typeof window === "undefined") return mergeOpen(wells, null);
   try {
-    raw = window.localStorage.getItem(storageKey);
+    const raw = window.localStorage.getItem(storageKey);
+    return mergeOpen(wells, raw ? (JSON.parse(raw) as Partial<Record<string, unknown>>) : null);
   } catch {
-    return defaults;
-  }
-  if (!raw) return defaults;
-  try {
-    const parsed = JSON.parse(raw) as Partial<Record<string, unknown>>;
-    const next = { ...defaults };
-    for (const well of wells) {
-      const value = parsed?.[well.id];
-      if (typeof value === "boolean") next[well.id] = value;
-    }
-    return next;
-  } catch {
-    // a corrupt write is the defaults, never a crash
-    return defaults;
+    // storage refused or a corrupt write — the defaults, never a crash
+    return mergeOpen(wells, null);
   }
 }
 
@@ -154,41 +147,27 @@ export function useWells<Id extends string>(
 } {
   const [open, setOpen] = useState<OpenMap<Id>>(() =>
     store === "session"
-      ? // ⚠ THE MAP, NEVER `localStorage`, AND THE DEFAULTS WHEN IT IS EMPTY —
-        // which is exactly the first render after a launch or a hard reload.
-        // An unknown key in a stale entry is ignored on the same terms
-        // `storedWells` ignores one, because both are filtered through `wells`.
-        (() => {
-          const remembered = sessionWells.get(storageKey);
-          const defaults = wellDefaults(wells);
-          if (!remembered) return defaults;
-          const next = { ...defaults };
-          for (const well of wells) {
-            const value = remembered[well.id];
-            if (typeof value === "boolean") next[well.id] = value;
-          }
-          return next;
-        })()
+      ? // The module map, never localStorage; empty (first render after a relaunch) ⇒ defaults.
+        mergeOpen(wells, sessionWells.get(storageKey))
       : storedWells(storageKey, wells)
   );
 
+  // The write sits outside the state updater: an updater must stay pure (React may re-run it).
   const toggle = useCallback(
     (id: Id) => {
-      setOpen((prev) => {
-        const next = { ...prev, [id]: !prev[id] };
-        if (store === "session") {
-          sessionWells.set(storageKey, next);
-          return next;
-        }
-        try {
-          window.localStorage.setItem(storageKey, JSON.stringify(next));
-        } catch {
-          // storage unavailable — the choice still holds for this session
-        }
-        return next;
-      });
+      const next = { ...open, [id]: !open[id] };
+      setOpen(next);
+      if (store === "session") {
+        sessionWells.set(storageKey, next);
+        return;
+      }
+      try {
+        window.localStorage.setItem(storageKey, JSON.stringify(next));
+      } catch {
+        // storage unavailable — the choice still holds for this session
+      }
     },
-    [storageKey, store]
+    [open, storageKey, store]
   );
 
   const isOpen = useCallback((id: Id) => open[id], [open]);

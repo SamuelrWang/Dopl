@@ -46,6 +46,9 @@ export interface SettingHelpCopy {
   options?: ReadonlyArray<{ label: string; text: string }>;
 }
 
+/** How far the panel opens left of the eye: the popover's `min-w-[240px]` less the trigger. */
+const PANEL_PULL_LEFT = 220;
+
 /**
  * The eye, and the panel it opens.
  *
@@ -72,7 +75,7 @@ export function SettingHelp({ name, copy }: { name: string; copy: SettingHelpCop
     // ⚠ COORDINATE MODE, and the panel is pulled LEFT of the trigger's right edge
     // so a row near the panel's right rail does not open off-surface. Same reason
     // `select-menu.tsx` measures rather than anchors.
-    if (rect) setAnchor({ x: rect.left - 220, y: rect.bottom + 4 });
+    if (rect) setAnchor({ x: rect.left - PANEL_PULL_LEFT, y: rect.bottom + 4 });
   }
 
   return (

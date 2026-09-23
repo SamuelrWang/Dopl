@@ -212,16 +212,16 @@ export function transcriptFilterAgents(
     const agentId = transcriptRowAgentId(row, index);
     if (agentId === null || seen.has(agentId)) continue;
     seen.add(agentId);
-    const identity = index.agents.get(agentId);
+    const entry = index.agents.get(agentId);
     out.push({
       agentId,
       label: attributionName({
         agent: true,
         agentId,
         authorLabel: row.authorLabel,
-        agentName: identity?.displayName ?? null,
+        agentName: entry?.displayName ?? null,
       }),
-      color: identity?.color ?? null,
+      color: entry?.color ?? null,
     });
   }
   return out;

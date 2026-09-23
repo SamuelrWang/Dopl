@@ -355,7 +355,9 @@ export async function launchAgentOnThread(payload: {
 }): Promise<{
   ok: boolean;
   agentId?: string;
-  reason?: string; detail?: string; // `detail`: main's `no-model` sentence (2026-09-22)
+  reason?: string;
+  /** Main's own `no-model` sentence. */
+  detail?: string;
   identity?: { name?: string | null; instructions?: string | null } | null;
 }> {
   const sessions = getSpaBridge()?.sessions;
@@ -365,7 +367,8 @@ export async function launchAgentOnThread(payload: {
   return {
     ok: res?.ok === true || agentId !== undefined,
     agentId,
-    reason: res?.reason, detail: res?.detail,
+    reason: res?.reason,
+    detail: res?.detail,
     identity: res?.identity ?? null,
   };
 }
