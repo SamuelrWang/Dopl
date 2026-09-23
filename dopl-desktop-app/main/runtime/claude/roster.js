@@ -75,12 +75,20 @@ function entryFrom(row, legacy) {
   return { id, value, label, short: shortOf(label), isDefault: false, hidden: false, aliases, dimensions: {} };
 }
 
-/** The row a pick names — exact id, then any alias, then the same model under its base spelling. */
-function match(models, pick) {
+/** The row a pick names EXACTLY — its id, then any alias. What a LAUNCH resolves by (RC-01). */
+function matchExact(models, pick) {
   const v = str(pick);
   if (!v || !Array.isArray(models)) return null;
   return models.find((m) => m.id === v)
     || models.find((m) => Array.isArray(m.aliases) && m.aliases.indexOf(v) !== -1)
+    || null;
+}
+
+/** For labelling and the default marker: exact, then the same model under its base spelling. */
+function match(models, pick) {
+  const v = str(pick);
+  if (!v || !Array.isArray(models)) return null;
+  return matchExact(models, v)
     || models.find((m) => baseId(m.id) === baseId(v))
     || null;
 }
@@ -158,4 +166,4 @@ async function probe(o) {
   }
 }
 
-module.exports = { probe, rosterFrom, entryFrom, match, baseId, shortOf, PROBE_TIMEOUT_MS };
+module.exports = { probe, rosterFrom, entryFrom, match, matchExact, baseId, shortOf, PROBE_TIMEOUT_MS };
