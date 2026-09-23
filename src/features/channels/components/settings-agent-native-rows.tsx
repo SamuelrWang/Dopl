@@ -50,7 +50,6 @@ import { SettingRow } from "./settings-agent-rows";
 import {
   approvalCategories,
   approvalCategoryMode,
-  freeform,
   normalizeToolMode,
   toolModeOptions,
   type RuntimeDescriptor,
@@ -59,12 +58,6 @@ import {
   effectiveNative,
   type NativeDimension,
 } from "../lib/runtime-native";
-
-/** The value-only recipe this tab already uses for a fact the operator cannot set here
- *  (`settings-desktop-rows.tsx › AgentFolderRows`'s folder line). ⚠ Kit tokens only — no hex,
- *  no raw px (docs/DESIGN-SYSTEM.md). */
-const VALUE_PILL =
-  "truncate rounded-[8px] border border-border-subtle bg-bg-inset px-2.5 py-1 text-caption text-text-secondary";
 
 export interface AgentToolModeRowsProps {
   /** The runtime a launch here would use, or null off-desktop / pre-runtime. */
@@ -77,7 +70,7 @@ export interface AgentToolModeRowsProps {
   /** The selected runtime's stored native bag. */
   native?: Readonly<Record<string, string>>;
   /** ⚠ THE WHOLE BAG, not one key — main replaces `native` wholesale. */
-  onChangeNative?: (next: Record<string, string>) => void;
+  onChangeNative: (next: Record<string, string>) => void;
   busy: boolean;
 }
 
@@ -116,7 +109,6 @@ export function AgentToolModeRows({
   const value = declared.length ? normalizeToolMode(descriptor, tools) : tools;
   const categories = approvalCategories(descriptor);
   const categoryMode = approvalCategoryMode(descriptor);
-  const classifier = freeform(descriptor);
 
   return (
     <>
@@ -141,35 +133,23 @@ export function AgentToolModeRows({
           branch is the whole of that rule: no row, no placeholder, no greyed control.
           ⚠ **AND THEY ARE CONTROLS NOW, NOT DATA** — U5 gave them a validated write path and
           `session-engine.js` stamps the bag at spawn, so the pick affects the launch. The old
-          value pill is gone with the illusion it carried (F-390).
-          ⚠ A DIMENSION WITH NO WRITER STILL RENDERS AS A FACT: a caller that hands no
-          `onChangeNative` (a read-only mount) gets the effective value rather than a control
-          that goes nowhere. */}
-      {dimensions.map((dimension) => {
-        const picked = effectiveNative(dimension, native?.[dimension.key]);
-        return (
-          <SettingRow key={dimension.key} name={dimension.label}>
-            {onChangeNative ? (
-              <SelectMenu<string>
-                variant="text"
-                value={picked}
-                options={dimension.options.map((o) => ({
-                  value: o.value,
-                  label: o.label,
-                  description: o.description ?? undefined,
-                }))}
-                onChange={(next) => onChangeNative({ ...native, [dimension.key]: next })}
-                ariaLabel={`${dimension.label} for agents you launch`}
-                disabled={busy}
-              />
-            ) : (
-              <span className={VALUE_PILL}>
-                {dimension.options.find((o) => o.value === picked)?.label ?? picked}
-              </span>
-            )}
-          </SettingRow>
-        );
-      })}
+          value pill is gone with the illusion it carried (F-390). */}
+      {dimensions.map((dimension) => (
+        <SettingRow key={dimension.key} name={dimension.label}>
+          <SelectMenu<string>
+            variant="text"
+            value={effectiveNative(dimension, native?.[dimension.key])}
+            options={dimension.options.map((o) => ({
+              value: o.value,
+              label: o.label,
+              description: o.description ?? undefined,
+            }))}
+            onChange={(next) => onChangeNative({ ...native, [dimension.key]: next })}
+            ariaLabel={`${dimension.label} for agents you launch`}
+            disabled={busy}
+          />
+        </SettingRow>
+      ))}
 
       {/* THE APPROVAL CATEGORIES — under the platform's own category-granularity mode ONLY, and
           in the platform's own words.
@@ -191,17 +171,6 @@ export function AgentToolModeRows({
             </li>
           ))}
         </ul>
-      )}
-
-      {/* THE CLASSIFIER INSTRUCTIONS — `null` on all three adapters today, so this renders
-          nothing. It is written as data anyway because §3.1 asks for it, and because `transport`
-          must be SHOWN rather than hidden: the documented home is a file Dopl would share with
-          the operator and with the platform itself, which is a fact about where the operator's
-          words end up and not an implementation note. */}
-      {classifier && (
-        <SettingRow name={classifier.label}>
-          <span className={VALUE_PILL}>{classifier.transport ?? "not stored"}</span>
-        </SettingRow>
       )}
     </>
   );

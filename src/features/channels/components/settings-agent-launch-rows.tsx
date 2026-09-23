@@ -40,16 +40,11 @@ import { SelectMenu, type SelectMenuOption } from "@/shared/ui/select-menu";
 import { MESSAGE_OPTIONS } from "./permission-preset-row";
 import { SettingRow } from "./settings-agent-rows";
 import { AgentToolModeRows } from "./settings-agent-native-rows";
-import type { MessageMode, PermissionPreset } from "../lib/permission-modes";
+import type { MessageMode } from "../lib/permission-modes";
 import type { PosturePatch } from "./posture-warning";
 import type { LaunchSelectionState } from "../hooks/use-launch-selection";
 import { nativeDimensions } from "../lib/runtime-native";
 import type { RuntimeDescriptor } from "../lib/runtime-capability";
-
-/** ⚠ ONE SENTENCE, and it is a FACT rather than an apology (INVARIANTS §5). What a launch that
- *  names no model does when the runtime's catalog cannot say: the platform picks. The New Agent
- *  dialog is its reader now that the Settings Model row is gone. */
-export const PLATFORM_DEFAULT_LABEL = "Platform default";
 
 export interface AgentLaunchPostureRowsProps {
   /** The record at THIS scope, and the only writer of every field below. */
@@ -178,7 +173,7 @@ export function AgentLaunchPostureRows({
  * record — and minting a `"default"` sentinel here would put a value on the wire main has to
  * special-case.
  */
-export const RUNTIME_DEFAULT = "";
+const RUNTIME_DEFAULT = "";
 
 /** ⚠ It names the ACT, not a vendor: which adapter a launch lands on when the operator has
  *  expressed no preference. The default's own label is not used — that would read as a pick
@@ -191,7 +186,7 @@ const RUNTIME_DEFAULT_LABEL = "Default";
  * of it: an older main DROPS the field on write, so the pick would appear to save and every
  * launch would ignore it.
  */
-export function AgentRuntimeRow({
+function AgentRuntimeRow({
   runtime,
   runtimes,
   onChange,
@@ -226,11 +221,3 @@ export function AgentRuntimeRow({
     </SettingRow>
   );
 }
-
-/** ⚠ RE-EXPORTED so `settings-agent-runtime.test.tsx` and any caller that imported it from here
- *  did not move with the §1 split. `settings-agent-native-rows.tsx` is the file. */
-export { AgentToolModeRows } from "./settings-agent-native-rows";
-
-/** ⚠ KEPT FOR THE TYPE'S CALLERS. The group no longer takes a `PermissionPreset` — it takes the
- *  versioned record — but `settings-agent.tsx` still reads the pair for the messaging warning. */
-export type { PermissionPreset };
