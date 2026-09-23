@@ -248,10 +248,8 @@ function selectionProblems(d) {
     problems.push(`${id}: descriptor.models.pick is missing — `
       + 'capability.js › launchModelPick has no list and no pattern to validate against');
   } else if (pick.kind === 'closed') {
-    if (!Array.isArray(pick.stored) || !pick.stored.length) {
-      problems.push(`${id}: a CLOSED model roster must declare a non-empty models.pick.stored — `
-        + 'membership is the whole check on a closed roster');
-    }
+    // ⚠ `models.pick.stored` (what a DURABLE record could keep) IS DELETED (2026-09-23) with
+    // `storeModelPick` and the stored model; `accepted` is the one list a closed roster owes now.
     if (!Array.isArray(pick.accepted) || !pick.accepted.length) {
       problems.push(`${id}: a CLOSED model roster must declare a non-empty models.pick.accepted`);
     }

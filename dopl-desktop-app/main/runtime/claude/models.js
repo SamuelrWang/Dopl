@@ -200,7 +200,6 @@ const descriptor = {
   // an unknown pick with a sentence).
   pick: {
     kind: 'open',
-    stored: null,
     accepted: null,
     canonical: null,
     absent: '',

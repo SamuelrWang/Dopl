@@ -151,7 +151,6 @@ const descriptor = {
   // interprets nothing; the value becomes an argument to the platform, so the alphabet is a gate.
   pick: {
     kind: 'open',
-    stored: null,
     accepted: null,
     canonical: null,
     absent: '',

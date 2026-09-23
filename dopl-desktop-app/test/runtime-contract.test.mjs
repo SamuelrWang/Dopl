@@ -385,8 +385,8 @@ test("every adapter declares a usable model PICK RULE, and a malformed one is RE
     const pick = capability.pickRule(descriptor);
     assert.ok(pick, `${descriptor.id}: declares no models.pick`);
     assert.ok(pick.kind === "closed" || pick.kind === "open", `${descriptor.id}: models.pick.kind`);
+    assert.equal("stored" in pick, false, `${descriptor.id}: models.pick.stored is deleted (2026-09-23)`);
     if (pick.kind === "closed") {
-      assert.ok(Array.isArray(pick.stored) && pick.stored.length, `${descriptor.id}: closed roster, no stored list`);
       assert.ok(Array.isArray(pick.accepted) && pick.accepted.length, `${descriptor.id}: closed roster, no accepted list`);
     } else {
       // ⚠ A SHAPE CHECK REPLACES MEMBERSHIP ON A LIVE ROSTER, AND IT IS A GATE: the stored value

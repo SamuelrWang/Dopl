@@ -327,7 +327,6 @@ const descriptor = {
   // `[A-Za-z0-9]` first, then the id alphabet, and nothing else.
   pick: {
     kind: 'open',
-    stored: null, // no closed list to offer — the roster is the wire's
     accepted: null,
     canonical: null,
     absent: '', // `defaultMeansAbsent` — no `model` field at all, i.e. the platform's own pick
