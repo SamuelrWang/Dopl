@@ -4,7 +4,7 @@
 // the count that forced it — the same seam and the same precedent as `orchestrator-consent.js`
 // one wave earlier. This file changes when the rules for trusting ANOTHER MEMBER'S standing
 // configuration change; `channel-prefs.js` changes when a CHANNEL preference does. The record it
-// holds is not keyed by a channel at all, which is the tell: it is keyed by a IDENTITY ID, and a
+// holds is not keyed by a channel at all, which is the tell: it is keyed by an IDENTITY ID, and a
 // identity is a workspace-scoped thing that outlives every channel it is launched into.
 // Re-exported from `channel-prefs.js`, so no caller moved.
 //

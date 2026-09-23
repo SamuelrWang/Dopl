@@ -46,7 +46,7 @@ const { diag } = require('./diag');
  *                 `launch-posture.js › resolveLaunch` is the clamp: asking is admitted, widening is
  *                 not, and the ceiling is still the operator's own record.
  *   windowless    literal `true`. There is one spawn shape.
- * The directive supplies `goal`, `model`, a IDENTITY ID and — since T24 — a posture REQUEST and a
+ * The directive supplies `goal`, `model`, an IDENTITY ID and — since T24 — a posture REQUEST and a
  * chaining REQUEST. None reaches a permission decision unclamped, and a chain asked for where the
  * channel forbids it REFUSES rather than launching quietly narrower.
  *

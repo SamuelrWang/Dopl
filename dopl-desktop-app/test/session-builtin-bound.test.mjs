@@ -199,7 +199,7 @@ test("WIRE: the restricted profiles carry theirs, and no profile ships an ABSENT
   }
 });
 
-// ── 4. G21: a IDENTITY cannot be approved into a wider posture ───────────────────────────────
+// ── 4. G21: an IDENTITY cannot be approved into a wider posture ───────────────────────────────
 
 test("G21: an identity is not an input to the containment table, and the assembly proves it", () => {
   // ⚠ THE ATTACK: a FOREIGN identity whose payload names a wider profile, a wider posture, or a

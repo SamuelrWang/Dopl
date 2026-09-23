@@ -61,7 +61,7 @@ import { HOME_DEFAULT_TAB, type HomeTab } from "./home-tabs";
  * `channels` PAGE segment (`routes.tsx › WORKSPACE_PAGES`), which is a real
  * path with a hand copy in `dopl-desktop-app/main/deep-link-target.js`.
  *
- * ⚠ "AGENTS" HERE MEANS IDENTITY IDENTITIES, not running sessions — the channel
+ * ⚠ "IDENTITIES" HERE MEANS AGENT IDENTITIES (the face read "Agents" until 2026-09-22), not running sessions — the channel
  * info column has its own **Agents** tab and that one lists live sessions. Both
  * names stay (Samuel's ruling Q6, 2026-08-26); see `identity-panels.tsx` and
  * INVARIANTS §5A.

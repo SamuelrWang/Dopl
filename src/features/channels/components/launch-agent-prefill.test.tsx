@@ -5,7 +5,7 @@
  *
  * ⚠ ITS OWN FILE ON THE SEAM `launch-agent-dialog-runtime.test.tsx` already took: that file owns
  * the Runtime row's contract, `launch-agent-dialog.test.tsx` owns the field list, the selectors'
- * defaults, the payload parity and the two exits, and this owns **what a IDENTITY does to the
+ * defaults, the payload parity and the two exits, and this owns **what an IDENTITY does to the
  * form**. The dialog's suite stood at 429 of the 500-line cap; these cases did not fit, and
  * shaving their comments to make them fit would have been the cap deciding what a review may say.
  *

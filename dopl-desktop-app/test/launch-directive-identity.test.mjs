@@ -115,7 +115,7 @@ test("IDENTITY: E-4 — a nulled id beside a live NAME refuses `no-identity`, wi
 // permission axes and the delivery lane are still resolved from this machine's own state, and
 // the ORDER in `spawn` is what enforces it — the profile is computed before any identity text
 // exists in the function.
-test("CONTAINMENT: a IDENTITY supplies prompt content and NOT ONE containment input", async () => {
+test("CONTAINMENT: an IDENTITY supplies prompt content and NOT ONE containment input", async () => {
   const TPL = "77777777-7777-4777-8777-777777777777";
   const h = boot({
     watched: { id: CH, name: "General", toolProfile: "dopl_only" },

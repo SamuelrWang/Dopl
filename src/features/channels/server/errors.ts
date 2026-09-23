@@ -391,7 +391,7 @@ export class LaunchDirectiveNotClaimableError extends ChannelError {
 }
 
 /**
- * A directive named a IDENTITY that does not resolve for the CALLER
+ * A directive named an IDENTITY that does not resolve for the CALLER
  * (2026-08-23).
  *
  * ⚠ ONE ERROR FOR "no such identity" AND "not visible to you", exactly as

@@ -35,7 +35,7 @@
  * ⚠ "AGENTS" NAMES TWO DIFFERENT SURFACES AND BOTH NAMES STAY (Samuel's ruling
  * Q6, 2026-08-26; INVARIANTS §5A). THIS tab is the RUNNING SESSIONS — ephemeral,
  * per-operator. The /home **Agents** face (`apps/desktop-ui/src/pages/home/
- * identity-panels.tsx`) is IDENTITY IDENTITIES, durable and authored, and has no
+ * identity-panels.tsx`) is AGENT IDENTITIES, durable and authored, and has no
  * launch control precisely so this side stays the only place an agent starts.
  * They join at `agent-identities/components/identity-picker.tsx ›
  * IdentityLaunchPicker` below, which reads the list the /home face authors.

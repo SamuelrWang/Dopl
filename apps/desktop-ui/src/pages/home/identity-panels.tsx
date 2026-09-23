@@ -48,7 +48,7 @@ import { HomeIdentityPanelsSkeleton } from "./home-skeleton";
  * identity.
  *
  * ⚠ "AGENTS" NAMES TWO THINGS AND BOTH NAMES STAY (Samuel's ruling Q6,
- * 2026-08-26): THIS face lists identity IDENTITIES, the channel info column's
+ * 2026-08-26): THIS face lists AGENT IDENTITIES, the channel info column's
  * **Agents** tab (`channels/components/agents-tab.tsx`) lists RUNNING SESSIONS. The
  * collision is RECORDED (INVARIANTS §5A), not resolved; a rename needs his word.
  *

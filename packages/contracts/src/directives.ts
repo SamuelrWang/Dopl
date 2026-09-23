@@ -74,7 +74,7 @@ export type DirectionRefusalReason =
  *                        CHOICE and the render must not read as a fault.
  *  - `no-counterparty` — nothing to work with in that channel.
  *  - `no-identity`     — ⚠ THE SEVENTH, 2026-08-22 (agent identities). The
- *                        directive named a IDENTITY and the operator's machine
+ *                        directive named an IDENTITY and the operator's machine
  *                        could not resolve it: DELETED, or not visible to the
  *                        OPERATOR even though it was visible to the orchestrator
  *                        that named it. Those are ONE answer on purpose — the

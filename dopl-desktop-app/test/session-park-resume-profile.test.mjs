@@ -130,7 +130,7 @@ test("C7: the rest of the resume spec is unchanged (ids, counterparty, resume id
   assert.equal(spec.context.authorName, "David");
 });
 
-// ── ⚠ F-288 — THE IDENTITY IDENTITY SURVIVES A CRASH RESUME ──────────────────────────────
+// ── ⚠ F-288 — THE AGENT IDENTITY SURVIVES A CRASH RESUME ──────────────────────────────
 //
 // ⚠ **THE HALF `resumeParked` DOES NOT COVER, AND THE DOC SAID IT DID.** INVARIANTS §5A justified
 // identity survival on the grounds that a park/resume "works IN PLACE and never rewrites

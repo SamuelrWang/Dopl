@@ -293,7 +293,7 @@ describe("a runtime this Mac is not connected to", () => {
   });
 });
 
-describe("a IDENTITY whose model belongs to another runtime", () => {
+describe("an IDENTITY whose model belongs to another runtime", () => {
   it("is not submitted, and the mismatch is explained in both platforms' own names", async () => {
     bothRuntimes();
     posture.stored = "codex";

@@ -175,7 +175,7 @@ test("the specific regression: no session turn tells the agent to call ToolSearc
 // is the one part of a prompt built from OPERATOR DATA that would order it. The block gates on
 // `kbReadable(profile)` and lists the base NAMES with no call under `read_only` — §11's
 // UNKNOWN-is-not-EMPTY rule — and this is what fails if that gate is ever dropped.
-test("a IDENTITY-built turn names no dopl tool its profile hard-denies", () => {
+test("an IDENTITY-built turn names no dopl tool its profile hard-denies", () => {
   const doplDenied = (profile) =>
     buildSessionToolConfig(profile).disallowedTools.filter((t) => t.startsWith("mcp__dopl__"));
   for (const profile of PROFILES) {

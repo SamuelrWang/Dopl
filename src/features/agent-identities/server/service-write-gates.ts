@@ -24,7 +24,7 @@ import { IdentityTeamNotGrantableError } from "./errors";
  *   1. **IT TAKES A `KnowledgeContext` AND ASKS `resolveAgentAudience`**, which
  *      is the KNOWLEDGE ceiling — it reads `resource_grants` rows for
  *      KNOWLEDGE BASES on this container's channels and answers which BASE IDS
- *      an agent may reach. Asking it where a IDENTITY should land would decide a
+ *      an agent may reach. Asking it where an IDENTITY should land would decide a
  *      identity's container from the grant state of somebody's knowledge bases.
  *   2. **§1 FORBIDS THE CROSS-FEATURE IMPORT.** `canSeeBase` is mirrored into
  *      this feature rather than imported for exactly this reason, and

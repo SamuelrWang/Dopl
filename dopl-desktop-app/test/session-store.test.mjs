@@ -128,7 +128,7 @@ test("durableSessionRecord whitelists exactly the durable fields", () => {
     counterpartyName: "David", // D1: the header identity, persisted for a reopen
     channelName: "Ops",
     taskTitle: "Ship the invoice import",
-    identityName: "Code Auditor", // F-288: the agent's IDENTITY identity, persisted for a resume
+    identityName: "Code Auditor", // F-288: the agent identity it ran as, persisted for a resume
     turns: 7, // FIX #9: the running counter, persisted for a P2 rehydrate
     costUsd: 0.42, // ⚠ DELETED 2026-09-22 — still handed IN here, to prove the whitelist drops it
     ownPostSeq: 11, // 2026-08-22: the outbound post counter, persisted for the SAME resume

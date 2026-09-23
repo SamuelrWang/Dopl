@@ -127,7 +127,7 @@ const orchestratorConsent = require('./orchestrator-consent');
 // ⚠ **THE FIRST-USE IDENTITY APPROVAL MOVED TO `main/identity-approval.js` ON 2026-08-31**, at
 // the §1 cap and on the same seam the two MCP consents moved on one wave earlier: it changes when
 // the rules for trusting ANOTHER MEMBER'S standing configuration change, where the rest of this
-// file changes when a CHANNEL preference does — and its record is keyed by a IDENTITY ID, not by
+// file changes when a CHANNEL preference does — and its record is keyed by an IDENTITY ID, not by
 // a channel at all. Re-exported below, so no caller moved.
 const identityApproval = require('./identity-approval');
 

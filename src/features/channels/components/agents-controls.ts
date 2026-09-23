@@ -327,7 +327,7 @@ export async function launchAgentOnThread(payload: {
    * runtime-adapter port).
    *
    * ⚠ IT IS A TOP-LEVEL FIELD, NOT AN `overrides` MEMBER, because it is not a
-   * re-point of a IDENTITY: `main/session-launch-op.js` reads `p.runtime` and
+   * re-point of an IDENTITY: `main/session-launch-op.js` reads `p.runtime` and
    * resolves `p.runtime > the channel's durable pick > the default adapter`,
    * while `overrides` is the identity's own model/fields lane.
    * ⚠ ABSENT IS THE ORDINARY CASE and the channel's pick applies — every launch
