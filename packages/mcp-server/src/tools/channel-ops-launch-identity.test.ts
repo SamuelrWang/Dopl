@@ -21,21 +21,8 @@
  */
 
 import { describe, it, expect, vi } from "vitest";
-import type { DoplClient } from "@dopl/client";
 import { opLaunchAgent } from "./channel-ops-launch";
-
-// ⚠ THE MINIMUM CLIENT THIS LANE NEEDS, and deliberately not the sibling file's:
-// every case here fails INSIDE `createLaunchDirective`, so there is no directive
-// to poll and no `directive()` fixture to keep in step. A shared harness for two
-// stubs would couple two suites that fail for different reasons.
-const CHANNEL = { id: "chan-1", slug: "general", name: "General", visibility: "private" };
-
-function client(over: Record<string, unknown> = {}): DoplClient {
-  return {
-    listChannels: vi.fn(async () => [CHANNEL]),
-    ...over,
-  } as unknown as DoplClient;
-}
+import { launchClient as client } from "./launch-fixtures";
 
 /** ⚠ Duck-typed exactly as `channel-ops-launch.ts` reads it across the
  *  @dopl/client boundary — `status`, `code`, `details` and nothing else. */
@@ -106,7 +93,17 @@ describe("the identity ref", () => {
     expect(out).not.toContain("not in this channel's own container");
   });
 
-  it("an identity that lives in ANOTHER tenancy of the caller's is NAMED, with the place (T35)", async () => {
+  it("a channel 404 with NO identity code is still a channel not-found", async () => {
+    const res = await opLaunchAgent(
+      client({ createLaunchDirective: vi.fn(async () => { throw apiError(404, "LAUNCH_DIRECTIVE_NOT_FOUND"); }) }),
+      "general",
+      { name: "Scout", identity: "Code Auditor" },
+    );
+    expect(res.content[0].text).toContain("general");
+    expect(res.content[0].text).not.toContain("agent identity");
+  });
+
+  it("an identity that lives in ANOTHER tenancy of the caller's is NAMED, with the place", async () => {
     // ⚠ THE MISS THAT IS NOT A MYSTERY. `details.elsewhere` is produced ONLY for
     // a row this caller could already list for themselves — their own, or
     // `workspace`-visible, in a workspace they belong to — so naming the place

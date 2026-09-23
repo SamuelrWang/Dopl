@@ -59,7 +59,7 @@ function ownRow(over: Partial<ChannelSessionStateOwn> = {}): ChannelSessionState
   };
 }
 
-describe("🔒 the two facts called `stale` render as different clauses", () => {
+describe("the two facts called `stale` render as different clauses", () => {
   it("the MACHINE's flag says WEDGED and never the word `stale`", () => {
     const line = clauses({ stale: true });
     expect(line).toContain("WEDGED");

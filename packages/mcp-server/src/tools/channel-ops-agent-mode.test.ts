@@ -48,8 +48,7 @@ import { opSetAgentMode } from "./channel-ops-agent-mode";
 // distinction it exists to hold — a null echo is "not reported", never the
 // request — did not move, so the cases below drive the new function and render
 // its answer through the one write-result renderer, which is what a caller sees.
-import { postureFacts } from "./channel-facts";
-import { factsLine } from "./channel-facts";
+import { factsLine, postureFacts } from "./channel-facts";
 import { CHANNEL_DOCTRINE } from "./channel-doctrine";
 // ⚠ **THE ASK-IS-NOT-A-GRANT RULE IS `posture`'S OWN `.describe()` NOW.** The
 // five-op collapse folded the three axes into one object and moved the rule onto
@@ -57,59 +56,18 @@ import { CHANNEL_DOCTRINE } from "./channel-doctrine";
 // the decision than the op paragraph was. The claim did not move surfaces by
 // accident — the doctrine keeps CONTRACTS, an argument keeps its own rule.
 import { CHANNEL_INPUT_SHAPE } from "./channel-schema";
+import {
+  AGENT,
+  DIRECTIVE_ID,
+  agentClient,
+  modeDirective as directive,
+  settledMode as settled,
+} from "./launch-fixtures";
 
 /** The argument `.describe()` text, which is prose a client reads too. */
 const ARG_PROSE = Object.values(CHANNEL_INPUT_SHAPE)
   .map((arg) => arg.description ?? "")
   .join("\n");
-
-const CHANNEL = { id: "chan-1", slug: "general", name: "General", visibility: "private" };
-const AGENT = "a1b2c3d4";
-const DIRECTIVE_ID = "55555555-5555-5555-5555-555555555555";
-
-function directive(over: Partial<LaunchDirective> = {}): LaunchDirective {
-  return {
-    id: DIRECTIVE_ID,
-    kind: "set_agent_mode",
-    operatorUserId: "user-1",
-    channelId: "chan-1",
-    threadId: null,
-    goal: null,
-    model: null,
-    status: "pending",
-    identityId: null,
-    identityName: null,
-    targetAgentId: AGENT,
-    targetName: null,
-    startToolMode: null,
-    startMessageMode: null,
-    chain: null,
-    targetToolMode: "auto",
-    targetMessageMode: null,
-    appliedToolMode: null,
-    appliedMessageMode: null,
-    appliedChain: null,
-    refusalReason: null,
-    agentId: null,
-    claimedAt: null,
-    decidedAt: null,
-    expiresAt: "2026-09-01T12:02:00.000Z",
-    createdAt: "2026-09-01T12:00:00.000Z",
-    ...over,
-  };
-}
-
-/** A client whose create returns a settled directive, so no hold runs. */
-function settled(over: Partial<LaunchDirective>): DoplClient {
-  return {
-    listChannels: vi.fn(async () => [CHANNEL]),
-    createAgentDirective: vi.fn(async () => ({
-      offline: false,
-      directive: directive(over),
-    })),
-    getLaunchDirective: vi.fn(async () => directive(over)),
-  } as unknown as DoplClient;
-}
 
 const modeText = async (
   c: DoplClient,
@@ -190,7 +148,7 @@ describe('manage action="posture" — the ASK, never the SET', () => {
   });
 });
 
-describe("🔒 the posture ECHO — a NULL is 'not reported', never agreement", () => {
+describe("the posture ECHO — a NULL is 'not reported', never agreement", () => {
   it("says NOT REPORTED, in words, when all three echo fields are null", () => {
     // ⚠ ASSERTED ON THE WHOLE RECORD, not on a substring: a field QUIETLY
     // DROPPED is the same lie as one filled in wrongly, because a reader with no
@@ -213,7 +171,7 @@ describe("🔒 the posture ECHO — a NULL is 'not reported', never agreement", 
     expect(CHANNEL_DOCTRINE).toContain("A `—` cell was NOT REPORTED");
   });
 
-  it("⚠ NEVER echoes the REQUEST back when the echo is null", () => {
+  it("NEVER echoes the REQUEST back when the echo is null", () => {
     // The failure this closes: a line that is right whenever nothing was clamped
     // and confidently wrong precisely when it was. ⚠ THE SOURCE ROW IS LOADED
     // WITH REQUEST-SIDE VALUES on every axis, so a renderer reaching for the
@@ -301,7 +259,7 @@ describe('manage action="posture" — the terminal shapes', () => {
     expect(CHANNEL_DOCTRINE).toContain("`no-session` no such agent");
   });
 
-  it("⚠ `no-bridge` HERE MAY BE THE LAUNCH TOGGLE — and the doctrine names it", async () => {
+  it("`no-bridge` HERE MAY BE THE LAUNCH TOGGLE — and the doctrine names it", async () => {
     const text = await modeText(
       settled({ status: "refused", refusalReason: "no-bridge" }),
     );
@@ -377,7 +335,7 @@ describe('manage action="posture" — the terminal shapes', () => {
     );
   });
 
-  it("🔒 the PENDING line answers `confirm=none`, not the END's confirm surface", async () => {
+  it("the PENDING line answers `confirm=none`, not the END's confirm surface", async () => {
     // The defect a `kind === "end" ? … : …` ternary produces the day a third
     // verb arrives: a re-posture told to go and confirm itself somewhere that
     // cannot report it. ⚠ THE DANGEROUS MISREAD IS THE `op="status"` ONE — an
@@ -414,10 +372,9 @@ describe('manage action="posture" — the terminal shapes', () => {
   });
 
   it("OFFLINE names THIS verb, not a rename — the shared verb table", async () => {
-    const client = {
-      listChannels: vi.fn(async () => [CHANNEL]),
+    const client = agentClient({
       createAgentDirective: vi.fn(async () => ({ offline: true, directive: null })),
-    } as unknown as DoplClient;
+    });
     const text = await modeText(client);
     // ⚠ `filed=no` IS THE HALF THAT MAKES OFFLINE DIFFERENT FROM EVERY OTHER
     // TERMINAL SHAPE: no row was written, so there is nothing pending and

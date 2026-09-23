@@ -35,66 +35,11 @@
  * (`parity.test.ts`) and the removed-vocabulary source scan.
  */
 
-import { describe, it, expect, vi } from "vitest";
-import type { DoplClient, LaunchDirective } from "@dopl/client";
-import { opEndAgent, opRenameAgent } from "./channel-ops-agent";
+import { describe, it, expect } from "vitest";
 // ⚠ THE OTHER HALF OF EVERY PIN BELOW. The paragraph a result stopped carrying
 // has to still EXIST, or the tersening deleted doctrine instead of moving it.
 import { CHANNEL_DOCTRINE } from "./channel-doctrine";
-
-const CHANNEL = { id: "chan-1", slug: "general", name: "General", visibility: "private" };
-const AGENT = "a1b2c3d4";
-
-function directive(over: Partial<LaunchDirective> = {}): LaunchDirective {
-  return {
-    id: "55555555-5555-5555-5555-555555555555",
-    kind: "end",
-    operatorUserId: "user-1",
-    channelId: "chan-1",
-    threadId: null,
-    goal: null,
-    model: null,
-    status: "pending",
-    identityId: null,
-    identityName: null,
-    targetAgentId: AGENT,
-    targetName: null,
-    refusalReason: null,
-    agentId: null,
-    claimedAt: null,
-    decidedAt: null,
-    expiresAt: "2026-09-01T12:02:00.000Z",
-    createdAt: "2026-09-01T12:00:00.000Z",
-    ...over,
-  };
-}
-
-function client(over: Record<string, unknown> = {}): DoplClient {
-  return {
-    listChannels: vi.fn(async () => [CHANNEL]),
-    createAgentDirective: vi.fn(async () => ({
-      offline: false,
-      directive: directive(),
-    })),
-    getLaunchDirective: vi.fn(async () => directive()),
-    ...over,
-  } as unknown as DoplClient;
-}
-
-/** A client whose create returns a settled directive, so no hold runs. */
-function settled(over: Partial<LaunchDirective>): DoplClient {
-  return client({
-    createAgentDirective: vi.fn(async () => ({
-      offline: false,
-      directive: directive(over),
-    })),
-  });
-}
-
-const endText = async (c: DoplClient) =>
-  (await opEndAgent(c, "general", AGENT, { waitMs: 0 })).content[0].text as string;
-const renameText = async (c: DoplClient, name = "Research") =>
-  (await opRenameAgent(c, "general", AGENT, name, { waitMs: 0 })).content[0].text as string;
+import { endText, renameText, settled } from "./launch-fixtures";
 
 /**
  * THE PARAGRAPHS THESE TWO OPS STOPPED CARRYING, as fragments of the sentences

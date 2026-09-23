@@ -25,53 +25,14 @@
  */
 
 import { describe, it, expect, vi } from "vitest";
-import type { DoplClient, LaunchDirective } from "@dopl/client";
 import { opEndAgent, opRenameAgent } from "./channel-ops-agent";
 import { CHANNEL_INPUT_SHAPE } from "./channel-schema";
-
-const AGENT = "a1b2c3d4";
-
-const CHANNEL = { id: "chan-1", slug: "general", name: "General", visibility: "private" };
-
-function directive(over: Partial<LaunchDirective> = {}): LaunchDirective {
-  return {
-    id: "55555555-5555-5555-5555-555555555555",
-    channelId: "chan-1",
-    threadId: null,
-    goal: null,
-    model: null,
-    status: "pending",
-    identityId: null,
-    identityName: null,
-    refusalReason: null,
-    agentId: AGENT,
-    claimedAt: null,
-    decidedAt: null,
-    expiresAt: "2026-08-22T12:02:00.000Z",
-    createdAt: "2026-08-22T12:00:00.000Z",
-    ...over,
-  };
-}
-
-function client(over: Record<string, unknown> = {}): DoplClient {
-  return {
-    listChannels: vi.fn(async () => [CHANNEL]),
-    getChannel: vi.fn(async () => CHANNEL),
-    createAgentDirective: vi.fn(async () => ({ offline: false, directive: directive() })),
-    getLaunchDirective: vi.fn(async () => directive()),
-    ...over,
-  } as unknown as DoplClient;
-}
-
-/** A client whose create returns a settled directive, so no hold runs. */
-function settled(over: Partial<LaunchDirective>): DoplClient {
-  return client({
-    createAgentDirective: vi.fn(async () => ({
-      offline: false,
-      directive: directive(over),
-    })),
-  });
-}
+import {
+  AGENT,
+  agentClient as client,
+  agentDirective as directive,
+  settled,
+} from "./launch-fixtures";
 
 describe("`to` on op=\"manage\" is an agent id, and a NAME handle is refused by name", () => {
   it("refuses a name handle on action=\"end\" and files NOTHING", async () => {

@@ -21,53 +21,15 @@
  */
 
 import { describe, it, expect, vi } from "vitest";
-import type { DoplClient, LaunchDirective } from "@dopl/client";
 import { opLaunchAgent } from "./channel-ops-launch";
 import { CHANNEL_INPUT_SHAPE } from "./channel-schema";
 import { DOCTRINE_SECTIONS } from "./channel-doctrine";
-
-const CHANNEL = { id: "chan-1", slug: "general", name: "General", visibility: "private" };
-
-function directive(over: Partial<LaunchDirective> = {}): LaunchDirective {
-  return {
-    id: "55555555-5555-5555-5555-555555555555",
-    channelId: "chan-1",
-    threadId: null,
-    goal: "ship the parser",
-    model: null,
-    status: "pending",
-    identityId: null,
-    identityName: null,
-    refusalReason: null,
-    agentId: null,
-    claimedAt: null,
-    decidedAt: null,
-    expiresAt: "2026-08-22T12:02:00.000Z",
-    createdAt: "2026-08-22T12:00:00.000Z",
-    ...over,
-  };
-}
-
-function client(over: Record<string, unknown> = {}): DoplClient {
-  return {
-    listChannels: vi.fn(async () => [CHANNEL]),
-    createLaunchDirective: vi.fn(async () => ({ offline: false, directive: directive() })),
-    getLaunchDirective: vi.fn(async () => directive()),
-    ...over,
-  } as unknown as DoplClient;
-}
-
-/** A client whose CREATE already answers with this directive (no poll needed). */
-const created = (over: Partial<LaunchDirective>) =>
-  client({
-    createLaunchDirective: vi.fn(async () => ({ offline: false, directive: directive(over) })),
-  });
-
-const text = async (c: DoplClient, opts = {}) =>
-  (await opLaunchAgent(c, "general", { name: "Scout", ...opts })).content[0].text as string;
-
-const launched = (over: Partial<LaunchDirective> = {}) =>
-  directive({ status: "launched", agentId: "abcd1234", ...over });
+import {
+  created,
+  launchClient as client,
+  launchText as text,
+  launched,
+} from "./launch-fixtures";
 
 describe("the published shape", () => {
   it("publishes `runtime` SEPARATELY from `model` — neither describes the other", () => {
@@ -110,10 +72,7 @@ describe("the published shape", () => {
 
 describe("the create body", () => {
   it("passes an explicit runtime through untouched", async () => {
-    const createLaunchDirective = vi.fn(async () => ({
-      offline: false,
-      directive: launched(),
-    }));
+    const createLaunchDirective = vi.fn(async () => ({ offline: false, directive: launched() }));
     await opLaunchAgent(client({ createLaunchDirective }), "general", {
       name: "Scout",
       runtime: "codex",
@@ -124,10 +83,7 @@ describe("the create body", () => {
   // ⚠ OMITTED MUST STAY OMITTED ALL THE WAY DOWN. A default substituted here would turn "the
   // operator's own chain decides" into "this process decided", on a machine it cannot see.
   it("sends NO runtime when none was asked for — never a default", async () => {
-    const createLaunchDirective = vi.fn(async () => ({
-      offline: false,
-      directive: launched(),
-    }));
+    const createLaunchDirective = vi.fn(async () => ({ offline: false, directive: launched() }));
     await opLaunchAgent(client({ createLaunchDirective }), "general", { name: "Scout" });
     expect(createLaunchDirective.mock.calls[0][0]).toMatchObject({ runtime: undefined });
   });
@@ -136,10 +92,7 @@ describe("the create body", () => {
   // NOTHING else — it is not a runtime request, and the result below proves it cannot masquerade
   // as one.
   it("`model: \"codex\"` asks for no runtime at all", async () => {
-    const createLaunchDirective = vi.fn(async () => ({
-      offline: false,
-      directive: launched(),
-    }));
+    const createLaunchDirective = vi.fn(async () => ({ offline: false, directive: launched() }));
     await opLaunchAgent(client({ createLaunchDirective }), "general", {
       name: "Scout",
       model: "codex",
@@ -215,7 +168,7 @@ describe("the result names what actually ran", () => {
   // ran, so there is nothing to name, and `retry=no` is the whole of what to do next.
   it("a refused launch names the word and reports no runtime", async () => {
     const out = await text(
-      created(directive({ status: "refused", refusalReason: "no-sdk" })),
+      created({ status: "refused", refusalReason: "no-sdk" }),
     );
     expect(out).toContain("reason=no-sdk");
     expect(out).toContain("retry=no");

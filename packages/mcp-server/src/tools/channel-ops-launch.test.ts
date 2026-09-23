@@ -22,57 +22,16 @@
  */
 
 import { describe, it, expect, vi } from "vitest";
-import type { DoplClient, LaunchDirective, LaunchRefusalReason } from "@dopl/client";
-import { opLaunchAgent } from "./channel-ops-launch";
+import type { LaunchDirective, LaunchRefusalReason } from "@dopl/client";
 import { CHANNEL_DOCTRINE } from "./channel-doctrine";
 import { WRITE_RESULT_MAX_CHARS } from "./channel-facts";
-
-const CHANNEL = { id: "chan-1", slug: "general", name: "General", visibility: "private" };
-
-function directive(over: Partial<LaunchDirective> = {}): LaunchDirective {
-  return {
-    id: "55555555-5555-5555-5555-555555555555",
-    channelId: "chan-1",
-    threadId: null,
-    goal: "ship the parser",
-    model: null,
-    status: "pending",
-    identityId: null,
-    identityName: null,
-    refusalReason: null,
-    agentId: null,
-    claimedAt: null,
-    decidedAt: null,
-    expiresAt: "2026-08-22T12:02:00.000Z",
-    createdAt: "2026-08-22T12:00:00.000Z",
-    ...over,
-  };
-}
-
-function client(over: Record<string, unknown> = {}): DoplClient {
-  return {
-    listChannels: vi.fn(async () => [CHANNEL]),
-    createLaunchDirective: vi.fn(async () => ({ offline: false, directive: directive() })),
-    getLaunchDirective: vi.fn(async () => directive()),
-    ...over,
-  } as unknown as DoplClient;
-}
-
-/**
- * ⚠ **`name` IS SUPPLIED BY DEFAULT SINCE 2026-09-15** (Samuel: *"if agents are spinning up
- * agents, they should be the ones that are naming the agent"*). It is REQUIRED, and a case that
- * omitted it would measure the missing-param refusal instead of the terminal shape it is about
- * — so the default is here and the two cases that measure the REFUSAL pass their own value.
- */
-const text = async (c: DoplClient, opts: Record<string, unknown> = {}) =>
-  (await opLaunchAgent(c, "general", { name: "Scout", ...opts })).content[0].text as string;
-
-/** A client whose CREATE already answers with this directive (no poll needed). */
-const created = (over: Partial<LaunchDirective>) =>
-  client({ createLaunchDirective: vi.fn(async () => ({ offline: false, directive: directive(over) })) });
-/** A client whose create stays pending and whose POLL answers with this row. */
-const polls = (over: Partial<LaunchDirective>) =>
-  client({ getLaunchDirective: vi.fn(async () => directive(over)) });
+import {
+  created,
+  directive,
+  launchClient as client,
+  launchText as text,
+  polls,
+} from "./launch-fixtures";
 
 describe("OFFLINE — nothing is filed, and the caveat is honest about presence", () => {
   const offline = client({
@@ -156,7 +115,7 @@ describe("LAUNCHED — the id, and how to direct it", () => {
    * nothing collided and confidently wrong exactly when it mattered, which is the argument the
    * posture echo (T24/F-410) already made on this same result line.
    */
-  it("🔒 publishes the name the MACHINE stored, as a tag, not the one that was asked for", async () => {
+  it("publishes the name the MACHINE stored, as a tag, not the one that was asked for", async () => {
     const out = await text(
       created({ status: "launched", agentId: "abcd1234", appliedAgentName: "Coder-1" }),
       { name: "Coder" }
@@ -176,7 +135,7 @@ describe("LAUNCHED — the id, and how to direct it", () => {
    * ⚠ **NEITHER ARM MAY ECHO THE REQUEST.** An orchestrator handed `@coder` for an agent the
    * machine filed as `Coder-1` or as `New Agent` addresses nobody, silently, forever.
    */
-  it("🔒 says (not reported) when the field is ABSENT", async () => {
+  it("says (not reported) when the field is ABSENT", async () => {
     const out = await text(created({ status: "launched", agentId: "abcd1234" }), {
       name: "Bug Reviewer",
     });
@@ -184,7 +143,7 @@ describe("LAUNCHED — the id, and how to direct it", () => {
     expect(out).not.toContain("@bug-reviewer");
   });
 
-  it("🔒 says (not reported) when the machine CARRIES the field and it is null", async () => {
+  it("says (not reported) when the machine CARRIES the field and it is null", async () => {
     const out = await text(
       created({ status: "launched", agentId: "abcd1234", appliedAgentName: null }),
       { name: "Coder" }
@@ -208,7 +167,7 @@ describe("LAUNCHED — the id, and how to direct it", () => {
     expect(CHANNEL_DOCTRINE).not.toContain("it reaches no server");
   });
 
-  it("⚠ KEEPS THE WAKE **WITH ITS THREE LIMITS** — the sentence the repro bought", async () => {
+  it("KEEPS THE WAKE **WITH ITS THREE LIMITS** — the sentence the repro bought", async () => {
     // ⚠ THIS BRANCH SAID "DIRECT IT WITH `@<id>` — write that token in the BODY
     // of a post … and that specific agent picks it up", full stop. The sentence
     // was right and the surface underneath it was not: the loop fence refused
@@ -239,7 +198,7 @@ describe("LAUNCHED — the id, and how to direct it", () => {
     expect(CHANNEL_DOCTRINE).toContain("`woken` a dormant one was started");
   });
 
-  it("⚠ says a BODY-LESS launch runs nothing, and a body RUNS", async () => {
+  it("says a BODY-LESS launch runs nothing, and a body RUNS", async () => {
     // ⚠ `idle=` IS NOT COSMETIC AND MAY NEVER BE DROPPED FOR BREVITY: "it is on
     // it" vs "parked and running nothing" are different outcomes, and one field
     // covering both must be the weaker claim — which leaves a caller waiting
@@ -257,7 +216,7 @@ describe("LAUNCHED — the id, and how to direct it", () => {
     );
   });
 
-  it("reads `idle=` off the DIRECTIVE, so a converged retry with no body reports the first goal (P8-13)", async () => {
+  it("reads `idle=` off the DIRECTIVE, so a converged retry with no body reports the first goal", async () => {
     const converged = client({
       createLaunchDirective: vi.fn(async () => ({
         offline: false,

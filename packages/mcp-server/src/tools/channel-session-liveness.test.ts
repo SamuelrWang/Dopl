@@ -52,6 +52,14 @@ import { SESSION_TABLE_HEAD, sessionBlockLines } from "./channel-session-table";
 // promise there rather than dropping it with the constant.
 import { CHANNEL_DOCTRINE } from "./channel-doctrine";
 
+/** The text strictly between two markers; throws when either is missing or they are out of order. */
+function between(src: string, from: string, to: string): string {
+  const start = src.indexOf(from);
+  const end = src.indexOf(to, start + 1);
+  if (start < 0 || end < 0) throw new Error(`marker missing: ${start < 0 ? from : to}`);
+  return src.slice(start, end);
+}
+
 const NOW = Date.parse("2026-08-23T12:00:00.000Z");
 const fresh = new Date(NOW - 5_000).toISOString();
 const quietFor = (ms: number) => new Date(NOW - ms).toISOString();
@@ -271,6 +279,7 @@ describe("F-293 — a model id can never split into two bare names", () => {
   it("still never invents a name, and still renders an unknown id as itself", () => {
     expect(shortModelLabel("claude-opus-5")).toBe("claude-opus-5");
     expect(shortModelLabel("claude-opus-4-5-20251101")).toBe("claude-opus-4-5");
+    expect(shortModelLabel("gpt-5.5-codex")).toBe("gpt-5.5-codex");
     expect(shortModelLabel("some-future-model")).toBe("some-future-model");
     // ⚠ A strip that would EMPTY the label falls back to the original.
     expect(shortModelLabel("claude-")).toBe("claude-");
@@ -292,12 +301,11 @@ describe("F-293 — a model id can never split into two bare names", () => {
    * one file and not the other re-opens F-293 silently.
    */
   it("the joined class covers every character the neutralizer blanks", () => {
-    const narration = readFileSync("src/tools/narration.ts", "utf8");
-    const body = narration.slice(
-      narration.indexOf("export function neutralizeInline"),
-      narration.indexOf("export function inlineOr"),
+    const body = between(
+      readFileSync(new URL("./narration.ts", import.meta.url), "utf8"),
+      "export function neutralizeInline",
+      "export function inlineOr",
     );
-    expect(body, "neutralizeInline moved or was renamed").not.toBe("");
     // Every character class `neutralizeInline` REPLACES WITH A SPACE, as source.
     const blanked = body.match(/\.replace\(\/\[[^\n]*?\/g[u]?, " "\)/g) ?? [];
     expect(

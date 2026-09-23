@@ -24,7 +24,6 @@
  */
 
 import { describe, it, expect, vi } from "vitest";
-import type { DoplClient, LaunchDirective } from "@dopl/client";
 import { opLaunchAgent } from "./channel-ops-launch";
 // ⚠ **THE TENANCY RULE IS A NAMED EXPORT, NOT A LINE IN THE DOCUMENT, SINCE THE
 // FIVE-OP COLLAPSE.** It ships in `channel-ops-launch.ts`'s create-time
@@ -35,54 +34,17 @@ import { CHANNEL_DOCTRINE, TENANCY_RULE } from "./channel-doctrine";
 // reads it at the moment it decides what to pass, which is closer to the
 // decision than the op paragraph was.
 import { CHANNEL_INPUT_SHAPE } from "./channel-schema";
-
-const CHANNEL = { id: "chan-1", slug: "general", name: "General", visibility: "private" };
-
-function directive(over: Partial<LaunchDirective> = {}): LaunchDirective {
-  return {
-    id: "55555555-5555-5555-5555-555555555555",
-    channelId: "chan-1",
-    threadId: null,
-    goal: "ship the parser",
-    model: null,
-    status: "pending",
-    identityId: null,
-    identityName: null,
-    refusalReason: null,
-    agentId: null,
-    claimedAt: null,
-    decidedAt: null,
-    expiresAt: "2026-08-22T12:02:00.000Z",
-    createdAt: "2026-08-22T12:00:00.000Z",
-    ...over,
-  };
-}
-
-function client(over: Record<string, unknown> = {}): DoplClient {
-  return {
-    listChannels: vi.fn(async () => [CHANNEL]),
-    createLaunchDirective: vi.fn(async () => ({ offline: false, directive: directive() })),
-    getLaunchDirective: vi.fn(async () => directive()),
-    ...over,
-  } as unknown as DoplClient;
-}
-
-const text = async (c: DoplClient, opts = {}) =>
-  (await opLaunchAgent(c, "general", { name: "Scout", ...opts })).content[0].text as string;
-
-/** A client whose CREATE already answers with this directive (no poll needed). */
-const created = (over: Partial<LaunchDirective>) =>
-  client({ createLaunchDirective: vi.fn(async () => ({ offline: false, directive: directive(over) })) });
-/** A client whose create stays pending and whose POLL answers with this row. */
-const polls = (over: Partial<LaunchDirective>) =>
-  client({ getLaunchDirective: vi.fn(async () => directive(over)) });
+import {
+  created,
+  launchClient as client,
+  launchText as text,
+  launched,
+  polls,
+} from "./launch-fixtures";
 
 describe("the call itself", () => {
   it("passes channel id, thread, goal, model and identity through", async () => {
-    const createLaunchDirective = vi.fn(async () => ({
-      offline: false,
-      directive: directive({ status: "launched", agentId: "abcd1234" }),
-    }));
+    const createLaunchDirective = vi.fn(async () => ({ offline: false, directive: launched() }));
     await opLaunchAgent(client({ createLaunchDirective }), "general", {
       name: "Scout",
       thread: "44444444-4444-4444-4444-444444444444",
@@ -107,10 +69,7 @@ describe("the call itself", () => {
   });
 
   it("names NO operator — there is no argument that could", async () => {
-    const createLaunchDirective = vi.fn(async () => ({
-      offline: false,
-      directive: directive({ status: "launched", agentId: "abcd1234" }),
-    }));
+    const createLaunchDirective = vi.fn(async () => ({ offline: false, directive: launched() }));
     await opLaunchAgent(client({ createLaunchDirective }), "general", { name: "Scout" });
     const body = createLaunchDirective.mock.calls[0][0] as Record<string, unknown>;
     expect(Object.keys(body)).toEqual([
@@ -158,75 +117,6 @@ describe("the call itself", () => {
       // unconditionally where `color` and `clientMsgId` would be `undefined`.
       "agentName",
     ]);
-  });
-
-  /**
-   * THE IDENTITY REFUSALS AT CREATE TIME (2026-08-23).
-   *
-   * ⚠ **THE DISCRIMINATOR IS THE ERROR CODE, NEVER THE STATUS**, and that is the
-   * whole reason these cases exist. One call now has TWO ways to 404 (no such
-   * channel / membership, no such identity) and one to 409. A status-only branch
-   * tells an agent its CHANNEL was wrong when its IDENTITY NAME was — the exact
-   * mis-narration `channel-errors.ts` was written to stop.
-   */
-  const apiError = (status: number, code: string, details?: unknown) =>
-    Object.assign(new Error(code), { status, code, details });
-
-  it("an AMBIGUOUS name is refused and EVERY match is listed with its id and visibility", async () => {
-    // ⚠ REFUSES AND LISTS, NEVER PICKS. Names are deliberately not unique — a
-    // unique index across a visibility boundary would leak the existence of a
-    // private row through a conflict error — so two visible "Researcher"s is a
-    // legitimate state and any tie-break silently starts the wrong identity.
-    const res = await opLaunchAgent(
-      client({
-        createLaunchDirective: vi.fn(async () => {
-          throw apiError(409, "AGENT_IDENTITY_AMBIGUOUS", {
-            matches: [
-              { id: "t-1", name: "Researcher", visibility: "private" },
-              { id: "t-2", name: "Researcher", visibility: "workspace" },
-            ],
-          });
-        }),
-      }),
-      "general",
-      { name: "Scout", identity: "Researcher" },
-    );
-    const out = res.content[0].text as string;
-    expect(res.isError).toBe(true);
-    expect(out).toContain("nothing was filed");
-    expect(out).toContain("`t-1`");
-    expect(out).toContain("`t-2`");
-    expect(out).toContain("(private)");
-    expect(out).toContain("(workspace)");
-    // ⚠ It must not read as a CHANNEL problem, and it must not tell the agent to
-    // wait for a machine: nothing was asked of one.
-    expect(out).not.toContain("Channel not found");
-    expect(out).not.toContain("still PENDING");
-  });
-
-  it("an UNRESOLVABLE identity says so, and never says whether it EXISTS", async () => {
-    // ⚠ 404-never-403 all the way down: "no such identity" and "not shared with
-    // you" are ONE answer, or the refusal becomes an id-probe.
-    const res = await opLaunchAgent(
-      client({ createLaunchDirective: vi.fn(async () => { throw apiError(404, "AGENT_IDENTITY_NOT_FOUND"); }) }),
-      "general",
-      { name: "Scout", identity: "Ghost" },
-    );
-    const out = res.content[0].text as string;
-    expect(res.isError).toBe(true);
-    expect(out).toContain("`Ghost`");
-    expect(out).toContain("nothing was filed");
-    expect(out).not.toContain("Channel not found");
-  });
-
-  it("a channel 404 with NO identity code is still a channel not-found", async () => {
-    const res = await opLaunchAgent(
-      client({ createLaunchDirective: vi.fn(async () => { throw apiError(404, "LAUNCH_DIRECTIVE_NOT_FOUND"); }) }),
-      "general",
-      { name: "Scout", identity: "Code Auditor" },
-    );
-    expect(res.content[0].text).toContain("general");
-    expect(res.content[0].text).not.toContain("agent identity");
   });
 
   it("`no-identity` from the MACHINE says WHOSE visibility failed, and does not guess why", async () => {
@@ -332,10 +222,7 @@ describe("the call itself", () => {
  */
 describe("the launch goal has its own cap, and it is refused before the wire", () => {
   it("refuses a 2,001-character body BY NAME, and files nothing", async () => {
-    const createLaunchDirective = vi.fn(async () => ({
-      offline: false,
-      directive: directive({ status: "launched", agentId: "abcd1234" }),
-    }));
+    const createLaunchDirective = vi.fn(async () => ({ offline: false, directive: launched() }));
     const res = await opLaunchAgent(client({ createLaunchDirective }), "general", {
       name: "Scout",
       goal: "x".repeat(2_001),
@@ -359,10 +246,7 @@ describe("the launch goal has its own cap, and it is refused before the wire", (
 
   it("a 2,000-character body still goes through, untouched", async () => {
     const goal = "x".repeat(2_000);
-    const createLaunchDirective = vi.fn(async () => ({
-      offline: false,
-      directive: directive({ status: "launched", agentId: "abcd1234" }),
-    }));
+    const createLaunchDirective = vi.fn(async () => ({ offline: false, directive: launched() }));
     await opLaunchAgent(client({ createLaunchDirective }), "general", {
       name: "Scout",
       goal,
@@ -379,10 +263,7 @@ describe("the launch goal has its own cap, and it is refused before the wire", (
     // ⚠ 2,000 characters inside 40 of whitespace is a LEGAL goal — `.trim().max(2000)`.
     // Measuring the raw string would refuse a call the server would have taken.
     const goal = `${" ".repeat(20)}${"x".repeat(2_000)}${" ".repeat(20)}`;
-    const createLaunchDirective = vi.fn(async () => ({
-      offline: false,
-      directive: directive({ status: "launched", agentId: "abcd1234" }),
-    }));
+    const createLaunchDirective = vi.fn(async () => ({ offline: false, directive: launched() }));
     await opLaunchAgent(client({ createLaunchDirective }), "general", {
       name: "Scout",
       goal,
@@ -396,19 +277,13 @@ describe("the launch goal has its own cap, and it is refused before the wire", (
   });
 
   it("an ABSENT goal is not a refusal — a stand-by agent is a supported launch", async () => {
-    const createLaunchDirective = vi.fn(async () => ({
-      offline: false,
-      directive: directive({ status: "launched", agentId: "abcd1234" }),
-    }));
+    const createLaunchDirective = vi.fn(async () => ({ offline: false, directive: launched() }));
     await opLaunchAgent(client({ createLaunchDirective }), "general", { name: "Scout" });
     expect(createLaunchDirective).toHaveBeenCalled();
   });
 
   it("refuses a 61-character name the same way, and that cap was unpublished too", async () => {
-    const createLaunchDirective = vi.fn(async () => ({
-      offline: false,
-      directive: directive({ status: "launched", agentId: "abcd1234" }),
-    }));
+    const createLaunchDirective = vi.fn(async () => ({ offline: false, directive: launched() }));
     const res = await opLaunchAgent(client({ createLaunchDirective }), "general", {
       name: "N".repeat(61),
     });

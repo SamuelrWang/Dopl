@@ -161,7 +161,7 @@ const COL = {
   idle: 8,
 } as const;
 
-describe('op="status" — the summary shape (rollback §3.5)', () => {
+describe('op="status" — the summary shape', () => {
   it("returns each session's name, state and thread", async () => {
     const listChannelSessions = vi.fn(async () => PAGE([
       SESSION(),

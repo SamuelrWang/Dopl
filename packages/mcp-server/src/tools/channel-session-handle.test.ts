@@ -43,9 +43,6 @@ import { sessionBlockLines } from "./channel-session-table";
 // section. `DOCTRINE_SECTIONS.manage` is the section-scoped subject those pins
 // now take.
 import { CHANNEL_DOCTRINE, DOCTRINE_SECTIONS } from "./channel-doctrine";
-// ⚠ THE DENIAL MOVED TO THE SCHEMA, which is the other half of the fence pin
-// below — see that case for why the subject changed rather than the claim.
-import { CHANNEL_INPUT_SHAPE } from "./channel-schema";
 import type { ChannelSessionStateOwn } from "@dopl/client";
 
 const NOW = Date.parse("2026-08-31T05:00:00.000Z");
@@ -175,7 +172,7 @@ describe("the handle rule survived the move to the doctrine, clause for clause",
     expect(CHANNEL_DOCTRINE).toContain("NEVER WRITE AN AGENT ID IN A MESSAGE");
   });
 
-  it("⚠ SAYS THE HANDLE WAKES, AND NAMES IT AS A WAKE RATHER THAN A TAG", () => {
+  it("SAYS THE HANDLE WAKES, AND NAMES IT AS A WAKE RATHER THAN A TAG", () => {
     // Samuel's same-account carve made this sentence TRUE (2026-08-31): the MCP
     // caller posts under its operator's account, which is what licenses the wake.
     // Before it, the id `launch_agent` handed out could not be spent by the only
@@ -206,7 +203,7 @@ describe("the handle rule survived the move to the doctrine, clause for clause",
     );
   });
 
-  it("⚠ CARRIES ALL THREE LIMITS — an exception without its boundary is a hole", () => {
+  it("CARRIES ALL THREE LIMITS — an exception without its boundary is a hole", () => {
     // (1) ADDRESSED ONLY. Tiers 2 and 3 wake on traffic nobody addressed and stay
     // shut to every agent-authored message; dropping this clause invites exactly
     // the unaddressed post the loop brake exists to refuse.
@@ -255,16 +252,12 @@ describe("the handle rule survived the move to the doctrine, clause for clause",
     // `posture.tools`, and the denial is `posture`'s own `.describe()` — so the
     // section needs no exemption at all, and the scan runs over the whole of it.
     // Both halves are still pinned, so deleting either still fails here.
-    const posture = CHANNEL_INPUT_SHAPE.posture.description ?? "";
-    expect(posture).toContain(
-      "narrows whatever you ask for to their own ceiling and never widens past it",
-    );
     expect(DOCTRINE_SECTIONS.manage).not.toMatch(
       /work ?around|bypass|instead you can post/i,
     );
   });
 
-  it("⚠ IS NO LONGER RE-TRANSMITTED PER CALL — the other half of the move", () => {
+  it("IS NO LONGER RE-TRANSMITTED PER CALL — the other half of the move", () => {
     // A rule that moved out of a result and did NOT arrive in the doctrine has
     // left the product; a rule in BOTH is the repetition this tier removed. The
     // test above proves arrival, this one proves departure.

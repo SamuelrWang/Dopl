@@ -39,69 +39,14 @@
  * (`parity.test.ts`) and the removed-vocabulary source scan (`channel-law.test.ts`).
  */
 
-import { describe, it, expect, vi } from "vitest";
-import type { DoplClient, LaunchDirective } from "@dopl/client";
-import { opEndAgent, opRenameAgent } from "./channel-ops-agent";
+import { describe, it, expect } from "vitest";
+import { opRenameAgent } from "./channel-ops-agent";
 import { CHANNEL_DOCTRINE } from "./channel-doctrine";
+import { AGENT, endText, settledMode as settled } from "./launch-fixtures";
 import { sourceOf } from "./tool-group-files";
 
-const CHANNEL = { id: "chan-1", slug: "general", name: "General", visibility: "private" };
-const AGENT = "a1b2c3d4";
-
-// ⚠ A SECOND COPY OF THE SIBLING FIXTURE, AND DELIBERATELY SO. Sharing it would
-// couple two suites that must be able to disagree — the whole claim here is that
-// the three verbs answer differently over the SAME row, so each side building its
-// own row is what makes a difference in the answer mean something.
-function directive(over: Partial<LaunchDirective> = {}): LaunchDirective {
-  return {
-    id: "55555555-5555-5555-5555-555555555555",
-    kind: "set_agent_mode",
-    operatorUserId: "user-1",
-    channelId: "chan-1",
-    threadId: null,
-    goal: null,
-    model: null,
-    status: "pending",
-    identityId: null,
-    identityName: null,
-    targetAgentId: AGENT,
-    targetName: null,
-    startToolMode: null,
-    startMessageMode: null,
-    chain: null,
-    targetToolMode: "auto",
-    targetMessageMode: null,
-    appliedToolMode: null,
-    appliedMessageMode: null,
-    appliedChain: null,
-    refusalReason: null,
-    agentId: null,
-    claimedAt: null,
-    decidedAt: null,
-    expiresAt: "2026-09-01T12:02:00.000Z",
-    createdAt: "2026-09-01T12:00:00.000Z",
-    ...over,
-  };
-}
-
-/** A client whose create returns a settled directive, so no hold runs. */
-function settled(over: Partial<LaunchDirective>): DoplClient {
-  return {
-    listChannels: vi.fn(async () => [CHANNEL]),
-    createAgentDirective: vi.fn(async () => ({
-      offline: false,
-      directive: directive(over),
-    })),
-    getLaunchDirective: vi.fn(async () => directive(over)),
-  } as unknown as DoplClient;
-}
-
-
 describe("the sibling verbs keep their own answers (the two maps stay two)", () => {
-  const endText = async (c: DoplClient) =>
-    (await opEndAgent(c, "general", AGENT, { waitMs: 0 })).content[0].text as string;
-
-  it("🔒 an END's `no-bridge` still DENIES the launch toggle — the opposite claim", async () => {
+  it("an END's `no-bridge` still DENIES the launch toggle — the opposite claim", async () => {
     const text = await endText(
       settled({ kind: "end", status: "refused", refusalReason: "no-bridge" }),
     );
@@ -170,7 +115,7 @@ describe("the sibling verbs keep their own answers (the two maps stay two)", () 
  * is still the right instrument for — a NEGATIVE over every byte of a file, which
  * is the one thing a behavioural test cannot do.
  */
-describe("🔒 the ungated verbs' copy never sends a caller to the launch toggle", () => {
+describe("the ungated verbs' copy never sends a caller to the launch toggle", () => {
   const src = sourceOf("channel-ops-agent.ts");
 
   it("states the DENIAL, and states it positively", () => {

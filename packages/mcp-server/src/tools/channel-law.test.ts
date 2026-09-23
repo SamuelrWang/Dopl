@@ -130,7 +130,7 @@ describe("THE LAW is stated, in full, in the doctrine", () => {
     );
   });
 
-  it("⚠ STATES THE ONE EXCEPTION, AND STATES ITS TWO LIMITS WITH IT", () => {
+  it("STATES THE ONE EXCEPTION, AND STATES ITS TWO LIMITS WITH IT", () => {
     // ⚠ SAMUEL'S SAME-ACCOUNT CARVE, 2026-08-31. An agent-authored message under
     // the OPERATOR'S OWN user id may @-wake that operator's dormant agents. It
     // had to be said here because the brake above, unqualified, is what a reader
@@ -206,7 +206,7 @@ describe("THE LAW is stated, in full, in the doctrine", () => {
     expect(CHANNEL_LAW).toContain("Tagging is not addressing and starts no agent");
   });
 
-  it("🔒 puts the recipient in `to=` and keeps the envelope OUT of the body", () => {
+  it("puts the recipient in `to=` and keeps the envelope OUT of the body", () => {
     // 🔒 SAMUEL, 2026-09-22 — the ruling this pin exists for: the recipient is set
     // ONLY by `to=`, every surface renders it from that metadata, and a body carries
     // no routing header, no sender name and no recipient handle.

@@ -34,42 +34,10 @@
 import { describe, it, expect, vi } from "vitest";
 import type { DoplClient, LaunchDirective } from "@dopl/client";
 import { registerChannelTool } from "./channel";
+import { CHANNEL_ROW as CHANNEL, LAUNCH, directive } from "./launch-fixtures";
 import { callTool, stub } from "./narration-fixtures";
 
-const CHANNEL = {
-  id: "ch-1",
-  workspaceId: "ws-1",
-  slug: "general",
-  name: "General",
-  topic: "",
-  visibility: "private" as const,
-  createdBy: "u1",
-  archivedAt: null,
-  createdAt: "2026-01-01T00:00:00Z",
-  updatedAt: "2026-01-01T00:00:00Z",
-};
-
 const KEY = "orchestrator-run-7:launch-1";
-
-function directive(over: Partial<LaunchDirective> = {}): LaunchDirective {
-  return {
-    id: "55555555-5555-5555-5555-555555555555",
-    channelId: "ch-1",
-    threadId: null,
-    goal: "ship the parser",
-    model: null,
-    status: "pending",
-    identityId: null,
-    identityName: null,
-    refusalReason: null,
-    agentId: null,
-    claimedAt: null,
-    decidedAt: null,
-    expiresAt: "2026-09-02T12:02:00.000Z",
-    createdAt: "2026-09-02T12:00:00.000Z",
-    ...over,
-  };
-}
 
 const DIRECTION = {
   id: "d-1",
@@ -102,16 +70,6 @@ const agentStub = (over: Record<string, unknown> = {}) =>
 const run = (client: DoplClient, args: Record<string, unknown>) =>
   callTool(registerChannelTool, client, "dopl_channel", args);
 
-const LAUNCH = {
-  op: "manage",
-  action: "launch",
-  channel: "general",
-  // ⚠ REQUIRED SINCE 2026-09-15 — an agent that launches an agent names it, and a call without
-  // this measures the missing-param refusal instead of the subject of these cases.
-  name: "Scout",
-  body: "ship it",
-  wait_ms: 0,
-};
 const DIRECT = {
   op: "manage",
   action: "direct",

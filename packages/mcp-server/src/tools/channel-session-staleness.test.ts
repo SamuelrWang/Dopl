@@ -23,7 +23,6 @@ import {
   formatSessionLine,
   sessionIsStale,
   sessionLegend,
-  shortModelLabel,
 } from "./channel-session-render";
 // ⚠ THE PAGE RENDERER MOVED (T13, 2026-09-02). `channel-session-render.ts` kept
 // the VOCABULARY — what state a row is in, the staleness window, the legend —
@@ -31,10 +30,17 @@ import {
 // dependency runs one way, so the block comes from there and the predicates
 // this file drives it with still come from the file above.
 import { sessionBlockLines } from "./channel-session-table";
-// ⚠ THE COLUMN PROMISES ARE DOCTRINE NOW, not a constant under every page. The
-// order and the "one unbroken token" rule this suite renders against are pinned
-// against `CHANNEL_DOCTRINE`, which is the text a reader is actually served.
-import { CHANNEL_DOCTRINE } from "./channel-doctrine";
+
+/** The web tree's `src/`, resolved from this file rather than the working directory. */
+const WEB_SRC = new URL("../../../../src/", import.meta.url).href;
+
+/** The text strictly between two markers; throws when either is missing or they are out of order. */
+function between(src: string, from: string, to: string): string {
+  const start = src.indexOf(from);
+  const end = src.indexOf(to, start + 1);
+  if (start < 0 || end < 0) throw new Error(`marker missing: ${start < 0 ? from : to}`);
+  return src.slice(start, end);
+}
 
 const NOW = Date.parse("2026-08-22T12:00:00.000Z");
 const fresh = new Date(NOW - 5_000).toISOString();
@@ -206,11 +212,6 @@ describe("the operator-only telemetry, compactly", () => {
     // used to state it under every page and is deleted; the doctrine states it
     // once, so the words are pinned there and the RENDER is pinned here.
     expect(line).toContain("`Code Auditor` · `claude-opus-5`");
-    // ⚠ THE PROMISE MOVED, NOT THE RULE — and the doctrine's clause now says
-    // what this ORDER is for: a two-token span is an identity beside a model.
-    expect(CHANNEL_DOCTRINE).toContain(
-      "ONE unbroken token, so a name with a space in it is an identity",
-    );
   });
 
   it("an ABSENT identity renders nothing at all — a blank launch is the common case", () => {
@@ -243,16 +244,6 @@ describe("the operator-only telemetry, compactly", () => {
       now: NOW,
     });
     expect(line).not.toContain("Code Auditor");
-  });
-
-  it("shortModelLabel never invents a name, and renders an unknown id as itself", () => {
-    expect(shortModelLabel("claude-opus-5")).toBe("claude-opus-5");
-    expect(shortModelLabel("claude-opus-4-5-20251101")).toBe("claude-opus-4-5");
-    expect(shortModelLabel("gpt-5.5-codex")).toBe("gpt-5.5-codex");
-    expect(shortModelLabel("some-future-model")).toBe("some-future-model");
-    // ⚠ A strip that would empty the label falls back to the original — a blank
-    // chip reports "no model", which is a different claim.
-    expect(shortModelLabel("claude-")).toBe("claude-");
   });
 });
 
@@ -364,18 +355,15 @@ describe("the await session block", () => {
  */
 describe("the cross-tree duplicates stay in step", () => {
   it("SESSION_STALE_WINDOW_MS matches the web's PRESENCE_ONLINE_WINDOW_MS", () => {
-    const web = readFileSync("../../src/features/channels/constants.ts", "utf8");
+    const web = readFileSync(new URL(`${WEB_SRC}features/channels/constants.ts`), "utf8");
     const declared = /PRESENCE_ONLINE_WINDOW_MS = ([\d_]+)/.exec(web);
     expect(declared, "the web constant moved or was renamed").not.toBeNull();
     expect(Number(declared![1].replace(/_/g, ""))).toBe(SESSION_STALE_WINDOW_MS);
   });
 
   it("the six detail keys match the desktop's own wire union", () => {
-    const shapes = readFileSync("../../src/shared/lib/spa-bridge-shapes.ts", "utf8");
-    const block = shapes.slice(
-      shapes.indexOf("detail?:"),
-      shapes.indexOf("toolLabel?:")
-    );
+    const shapes = readFileSync(new URL(`${WEB_SRC}shared/lib/spa-bridge-shapes.ts`), "utf8");
+    const block = between(shapes, "detail?:", "toolLabel?:");
     for (const key of [
       "thinking",
       "tool",

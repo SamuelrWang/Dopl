@@ -46,7 +46,6 @@
  */
 
 import { describe, it, expect, vi } from "vitest";
-import type { DoplClient, LaunchDirective } from "@dopl/client";
 import { opEndAgent, opRenameAgent } from "./channel-ops-agent";
 // ⚠ THE OTHER HALF OF EVERY PIN BELOW. The paragraph a result stopped carrying
 // has to still EXIST, or the tersening deleted doctrine instead of moving it.
@@ -56,65 +55,19 @@ import { CHANNEL_DOCTRINE } from "./channel-doctrine";
 // moment it decides what to pass, which is closer to the decision than the op
 // paragraph was.
 import { CHANNEL_INPUT_SHAPE } from "./channel-schema";
-
-const CHANNEL = { id: "chan-1", slug: "general", name: "General", visibility: "private" };
-const AGENT = "a1b2c3d4";
+import {
+  AGENT,
+  agentClient as client,
+  endText,
+  renameText,
+  settled,
+} from "./launch-fixtures";
 
 /** The argument `.describe()` text, which is prose a client reads too. */
 const ARG_PROSE = Object.values(CHANNEL_INPUT_SHAPE)
   .map((arg) => arg.description ?? "")
   .join("\n");
 
-function directive(over: Partial<LaunchDirective> = {}): LaunchDirective {
-  return {
-    id: "55555555-5555-5555-5555-555555555555",
-    kind: "end",
-    operatorUserId: "user-1",
-    channelId: "chan-1",
-    threadId: null,
-    goal: null,
-    model: null,
-    status: "pending",
-    identityId: null,
-    identityName: null,
-    targetAgentId: AGENT,
-    targetName: null,
-    refusalReason: null,
-    agentId: null,
-    claimedAt: null,
-    decidedAt: null,
-    expiresAt: "2026-09-01T12:02:00.000Z",
-    createdAt: "2026-09-01T12:00:00.000Z",
-    ...over,
-  };
-}
-
-function client(over: Record<string, unknown> = {}): DoplClient {
-  return {
-    listChannels: vi.fn(async () => [CHANNEL]),
-    createAgentDirective: vi.fn(async () => ({
-      offline: false,
-      directive: directive(),
-    })),
-    getLaunchDirective: vi.fn(async () => directive()),
-    ...over,
-  } as unknown as DoplClient;
-}
-
-/** A client whose create returns a settled directive, so no hold runs. */
-function settled(over: Partial<LaunchDirective>): DoplClient {
-  return client({
-    createAgentDirective: vi.fn(async () => ({
-      offline: false,
-      directive: directive(over),
-    })),
-  });
-}
-
-const endText = async (c: DoplClient) =>
-  (await opEndAgent(c, "general", AGENT, { waitMs: 0 })).content[0].text as string;
-const renameText = async (c: DoplClient, name = "Research") =>
-  (await opRenameAgent(c, "general", AGENT, name, { waitMs: 0 })).content[0].text as string;
 describe('manage action="end" — the success line', () => {
   const done = settled({ status: "done" });
 
@@ -312,10 +265,6 @@ describe('manage action="rename" — display only, on one machine', () => {
     // — the session table included — could ever show it. 🔴 The "and that is
     // correct rather than a stale read" half was RETIRED BY RULING and is pinned
     // ABSENT in `channel-ops-agent-doctrine.test.ts › RETIRED_BY_RULING`.
-    expect(CHANNEL_DOCTRINE).toContain("what people see and what agents tag it by");
-    // ⚠ RE-POINTED 2026-09-15 — "never addressable from here" was FALSE (the name door has
-    // resolved in all three trees since 2026-08-28). What op="status" prints is still the id,
-    // and `confirm=none` is still what says nothing here can verify a rename took.
     expect(CHANNEL_DOCTRINE).toContain("what people see and what agents tag it by");
   });
 

@@ -26,34 +26,15 @@
 import { describe, it, expect } from "vitest";
 import type { LaunchDirective } from "@dopl/client";
 import { postureFacts } from "./channel-facts";
+import { launched } from "./launch-fixtures";
 
 /** A decided directive. ⚠ The three echo fields default to `null`, which is what `toDirective`
  *  really hands back — `undefined` is not a shape this render ever sees. */
-function directive(over: Partial<LaunchDirective> = {}): LaunchDirective {
-  return {
-    id: "55555555-5555-4555-8555-555555555555",
-    channelId: "chan-1",
-    threadId: null,
-    goal: "ship the parser",
-    model: null,
-    status: "launched",
-    identityId: null,
-    identityName: null,
-    refusalReason: null,
-    agentId: "a1b2c3d4",
-    claimedAt: null,
-    decidedAt: null,
-    expiresAt: "2026-08-22T12:02:00.000Z",
-    createdAt: "2026-08-22T12:00:00.000Z",
-    appliedToolMode: null,
-    appliedMessageMode: null,
-    appliedChain: null,
-    ...over,
-  } as LaunchDirective;
-}
+const directive = (over: Partial<LaunchDirective> = {}): LaunchDirective =>
+  launched({ appliedToolMode: null, appliedMessageMode: null, appliedChain: null, ...over });
 
 describe("postureFacts", () => {
-  it("🔒 SAYS `not reported`, IN WORDS, WHEN ALL THREE ARE NULL — the older-desktop row", () => {
+  it("SAYS `not reported`, IN WORDS, WHEN ALL THREE ARE NULL — the older-desktop row", () => {
     // ⚠ THE CASE THAT MUST SURVIVE THE WRITER LANDING. Deleting it would let a later refactor
     // start printing the REQUEST here, which is the one claim this lane cannot make.
     expect(postureFacts(directive())).toEqual({
@@ -76,7 +57,7 @@ describe("postureFacts", () => {
     ).toEqual({ posture: "auto/auto_inbound", chain: "on" });
   });
 
-  it("🔒 `chain=off` for a reported false — and `off` is NOT what a null renders as", () => {
+  it("`chain=off` for a reported false — and `off` is NOT what a null renders as", () => {
     // ⚠ THE DISTINCTION THE WHOLE TRIO EXISTS FOR. `false` is "this session may not launch
     // workers", which an orchestrator acts on; `null` is "nobody said", which it must not.
     // Reading null as `off` is wrong in the direction that makes it do the work itself for no
@@ -98,7 +79,7 @@ describe("postureFacts", () => {
     expect(postureFacts(directive({ appliedMessageMode: "ask" })).posture).toBe("-/ask");
   });
 
-  it("⚠ NEVER echoes the REQUEST back — a clamped launch that reported nothing still says so", () => {
+  it("NEVER echoes the REQUEST back — a clamped launch that reported nothing still says so", () => {
     // The row asked for the widest pair and the machine said nothing about what it applied. The
     // ONLY honest answer is silence; printing `bypass/auto_both` here is the bug this file names.
     const asked = directive({
