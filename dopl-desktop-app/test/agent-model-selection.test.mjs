@@ -138,12 +138,11 @@ test("LAUNCH: every lane's chain is launcher pick > identity model, and nothing 
     "the button lane must not restate the rule — it delegates");
   const DIRECTIVE = read("launch-directive-spawn.js");
   assert.match(DIRECTIVE,
-    /return sessionModel\.chainModel\(d\.model\)\s*\|\| launchDefault\.identityModelFor\(runtimeId \|\| defaultId, fromIdentity\);/,
-    "the directive lane: the directive's `model`, then the identity's on the launch runtime");
-  assert.match(DIRECTIVE, /const own = await launchDefault\.identityModelFor\(runtimeId, fromIdentity\);/,
-    "…and a non-default runtime asks the identity link too, before its default");
-  assert.match(DIRECTIVE, /withRuntimeDefault\(registry\.resolve\(runtimeId\), ''\)/,
-    "…and a non-default runtime with no pick reports the default it will actually launch on");
+    /return sessionModel\.chainModel\(d\.model\)\s*\|\| require\('\.\/runtime\/launch-default'\)\.identityModelFor\(runtimeId, fromIdentity\);/,
+    "the directive lane, ONE path for every runtime: the directive's `model`, then the identity's on the launch runtime");
+  // P3-09: no second model check on the directive lane — no roster spawn, no pre-resolved default.
+  assert.doesNotMatch(DIRECTIVE, /\.models\(\)|withRuntimeDefault/,
+    "the funnel owns the unknown-model refusal and the runtime default");
 });
 
 test("LAUNCH: an unknown stored model degrades to the PRODUCT FALLBACK, never to argv", () => {

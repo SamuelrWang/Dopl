@@ -136,7 +136,7 @@ test("CONTAINMENT: an IDENTITY supplies prompt content and NOT ONE containment i
   await h.api.handle(row({ identity_id: TPL }), WS);
   const spec = h.cfg.lastSpec;
   assert.equal(spec.toolProfile, "dopl_only", "main's own watched-channel DTO, unchanged");
-  assert.deepEqual(spec.startModes, { tools: "bypass", messages: "auto_both" },
+  assert.deepEqual(spec.startModes, { tools: "bypass", messages: "auto_both", native: {} },
     "…which is channel-prefs' answer, not the identity's — same object, different SOURCE");
   assert.equal(spec.windowless, true);
   assert.equal(spec.operatorArmed, true);

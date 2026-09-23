@@ -294,7 +294,7 @@ async function launch(a) {
   if (s.authHold === true) return { skipped: 'auth-hold' };
   // ⚠ THE AGENT ID IS PART OF THE ANSWER (2026-08-21): a SPAWN-IDLE launch has no work in
   // flight, so what the caller needs back is the ADDRESS it just created.
-  return { sessionId: s.sessionId, agentId: agentId };
+  return { sessionId: s.sessionId, agentId: agentId, model }; // `model`: what it launched with (directive echo)
 }
 
 /**

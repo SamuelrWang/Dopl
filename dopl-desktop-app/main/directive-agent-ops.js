@@ -233,7 +233,8 @@ function renameAgent(d) {
  *
  * ⚠ **BOTH AXES OPTIONAL, AND BOTH EMPTY IS A REFUSAL.** A directive may move one axis
  * and leave the other; one that names neither (or names only values this build does not
- * recognise — `directiveFrom` empties those) asked for nothing this machine can do, and
+ * recognise — `directiveFrom` empties those — or a tool word the agent's runtime does not offer)
+ * asked for nothing this machine can do, and
  * `no-bridge` is the honest word for it in the closed vocabulary: "this machine could
  * not take it". Reporting `done` for a no-op would tell an orchestrator its posture
  * landed when nothing moved.
@@ -249,29 +250,6 @@ function setAgentMode(d) {
     return { refused: 'no-bridge' };
   }
 
-  // ⚠ THE CEILING IS READ AT DECISION TIME AND NEVER CACHED, exactly as the consent
-  // toggle is: the operator may narrow their channel posture while a directive is in
-  // flight, and the next one must see it immediately. `getLaunchPosture` never answers
-  // null — an unset or unreadable record IS the restrictive default — so a store failure
-  // narrows rather than opens.
-  let ceiling = { tools: 'manual', messages: 'ask' };
-  try {
-    ceiling = require('./channel-prefs').getLaunchPosture(d.channelId) || ceiling;
-  } catch (err) {
-    diag('directive-agent-ops: set_agent_mode — posture ceiling unreadable, using the floor:',
-      (err && err.message) || String(err));
-  }
-  const tools = posture.narrowTo(d.targetToolMode, ceiling.tools, wire.TOOL_MODES);
-  // ⚠ NOT `narrowTo` — the message axis is two independent capability bits, not a ladder
-  // (`launch-posture.js › narrowMessageMode`). An index clamp granted `auto_inbound` against an
-  // `auto_outbound` ceiling and vice versa.
-  const messages = posture.narrowMessageMode(d.targetMessageMode, ceiling.messages);
-  if (tools !== d.targetToolMode || messages !== d.targetMessageMode) {
-    diag('directive-agent-ops: set_agent_mode', d.targetAgentId, 'CLAMPED to the channel posture —',
-      'asked', String(d.targetToolMode || '-') + '/' + String(d.targetMessageMode || '-'),
-      'ceiling', ceiling.tools + '/' + ceiling.messages);
-  }
-
   let rows = [];
   try {
     const engine = require('./session-engine');
@@ -285,26 +263,57 @@ function setAgentMode(d) {
     diag('directive-agent-ops: set_agent_mode', d.targetAgentId, '— no live session');
     return { refused: 'no-session' };
   }
+  // ⚠ THE ADDRESS COMES FROM THE RESOLVED REGISTRY ROW, NOT FROM THE DIRECTIVE — the same rule
+  // `endAgent` follows: the row is what the engine matches on.
+  const target = {
+    channelId: String(row.channelId || ''),
+    taskId: String(row.taskId || ''),
+    agentId: String(row.agentId || ''),
+  };
 
+  // The SESSION's runtime decides the words (ruling R3): a tool word it does not offer is not
+  // applied, and the clamp runs in its own descriptor order against its own channel record (C1).
+  const runtimeId = sessionRuntimeId(target);
+  const order = require('./launch-directive-runtime').toolOrderFor(runtimeId);
+  const askedTools = d.targetToolMode && order.indexOf(d.targetToolMode) !== -1 ? d.targetToolMode : '';
+  if (d.targetToolMode && !askedTools) {
+    diag('directive-agent-ops: set_agent_mode', d.targetAgentId, '— tool mode', d.targetToolMode,
+      'is not a', runtimeId || 'default-runtime', 'word; the tool axis is left alone');
+  }
+  if (!askedTools && !d.targetMessageMode) return { refused: 'no-bridge' };
+
+  // ⚠ THE CEILING IS READ AT DECISION TIME AND NEVER CACHED: the operator may narrow their channel
+  // posture while a directive is in flight. An unreadable record narrows to the floor, never opens.
+  let ceiling = { tools: order[0] || '', messages: 'ask' };
+  try {
+    ceiling = require('./channel-prefs').launchStartModes(d.channelId, runtimeId) || ceiling;
+  } catch (err) {
+    diag('directive-agent-ops: set_agent_mode — posture ceiling unreadable, using the floor:',
+      (err && err.message) || String(err));
+  }
+  const tools = posture.narrowTo(askedTools, ceiling.tools, order);
+  // ⚠ NOT `narrowTo` — the message axis is two independent capability bits, not a ladder
+  // (`launch-posture.js › narrowMessageMode`).
+  const messages = posture.narrowMessageMode(d.targetMessageMode, ceiling.messages);
+  if (tools !== askedTools || messages !== d.targetMessageMode) {
+    diag('directive-agent-ops: set_agent_mode', d.targetAgentId, 'CLAMPED to the channel posture —',
+      'asked', String(d.targetToolMode || '-') + '/' + String(d.targetMessageMode || '-'),
+      'ceiling', ceiling.tools + '/' + ceiling.messages);
+  }
+
+  // `pinned: true` = the orchestrator's per-agent pick: the gate keeps the NARROWER of it and the
+  // live channel value on that axis (C2, ruling R4), so a narrower ask sticks and never widens.
+  const out = { done: true };
   let applied = 0;
   try {
     const engine = require('./session-engine');
-    // ⚠ THE ADDRESS COMES FROM THE RESOLVED REGISTRY ROW, NOT FROM THE DIRECTIVE — the
-    // same rule `endAgent` follows: the row is what the engine matches on, and re-deriving
-    // a session key from wire fields is how the two come to disagree about which session a
-    // request names.
-    const target = {
-      channelId: String(row.channelId || ''),
-      taskId: String(row.taskId || ''),
-      agentId: String(row.agentId || ''),
-    };
     if (tools) {
-      const r = engine.setModeByTask(Object.assign({ axis: 'tools', mode: tools }, target));
-      if (r && r.ok) applied += 1;
+      const r = engine.setModeByTask(Object.assign({ axis: 'tools', mode: tools, pinned: true }, target));
+      if (r && r.ok) { applied += 1; out.appliedTools = typeof r.tools === 'string' && r.tools ? r.tools : tools; }
     }
     if (messages) {
-      const r = engine.setModeByTask(Object.assign({ axis: 'messages', mode: messages }, target));
-      if (r && r.ok) applied += 1;
+      const r = engine.setModeByTask(Object.assign({ axis: 'messages', mode: messages, pinned: true }, target));
+      if (r && r.ok) { applied += 1; out.appliedMessages = typeof r.messages === 'string' && r.messages ? r.messages : messages; }
     }
   } catch (err) {
     diag('directive-agent-ops: set_agent_mode', d.targetAgentId, '— engine threw:',
@@ -318,21 +327,22 @@ function setAgentMode(d) {
     return { refused: 'no-session' };
   }
   diag('directive-agent-ops: set_agent_mode', d.targetAgentId, 'ok —',
-    (tools || '-') + '/' + (messages || '-'));
-  // ⚠ THE ECHO, ON THIS LANE TOO (2026-09-02). It returned a bare `{ done: true }`, so a
-  // request CLAMPED to the channel's ceiling was answered `taken` with the clamp visible only
-  // in this machine's own log — the exact defect T24's echo closed on the LAUNCH lane, left
-  // open on the one lane whose entire purpose is moving a posture. An orchestrator told
-  // `taken` sizes its next instruction for the room it asked for.
-  // ⚠ ONLY WHAT WAS REALLY APPLIED. An axis the directive left alone stays ABSENT, which the
-  // server stores as NULL and `channel-ops-launch.ts › postureFacts` renders as `-`; echoing
-  // the ceiling for an axis nobody asked about would report a move that did not happen.
-  // ⚠ NO `appliedChain` — a re-posture starts nothing, so it decides no chaining, and a
-  // `false` here would be a claim about a session's spawn-time stamp this lane never touched.
-  const out = { done: true };
-  if (tools) out.appliedTools = tools;
-  if (messages) out.appliedMessages = messages;
+    (out.appliedTools || '-') + '/' + (out.appliedMessages || '-'));
+  // ⚠ THE ECHO IS THE ENGINE'S POST-DISPATCH VALUE (the windowless floor included), i.e. what the
+  // gate enforces — never the request. An axis the directive left alone stays ABSENT ("not
+  // reported" on the row), and there is no `appliedChain`: a re-posture decides no chaining.
   return out;
+}
+
+/** The live session's own runtime id (its spawn stamp), or `''` for the default. */
+function sessionRuntimeId(target) {
+  try {
+    const engine = require('./session-engine');
+    const s = typeof engine.sessionOn === 'function' ? engine.sessionOn(target) : null;
+    return (s && typeof s.runtimeId === 'string') ? s.runtimeId : '';
+  } catch (_err) {
+    return '';
+  }
 }
 
 /**

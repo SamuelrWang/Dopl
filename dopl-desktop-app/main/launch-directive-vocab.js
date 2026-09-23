@@ -98,21 +98,16 @@ const KINDS = [KIND_LAUNCH, KIND_END, KIND_RENAME, KIND_SET_MODE];
 // fifth kind comes to be admitted by whichever reader nobody updated.
 const KINDS_NEEDING_LAUNCH_CONSENT = [KIND_LAUNCH, KIND_SET_MODE];
 
-// ⚠ THE TWO AXES, RESTATED — and the restatement is forced, not lazy. This block is
-// PURE (no require below the sentinel) so its suite can evaluate it verbatim, and
-// `session-profiles.js` is the authority. `test/directive-set-mode.test.mjs` drives
-// the two lists against that module's own exports rather than trusting this
-// comment, which is the same pin `channel-prefs.js` takes for the same copies.
-//
-// ⚠ **NARROWEST FIRST, AND THE ORDER IS LOAD-BEARING HERE TOO.** The bound this
-// lane applies is "never wider than the operator's own stored channel posture", and
-// `launch-posture.js › narrowTo` implements that as an INDEX COMPARISON over these
-// arrays. Re-ordering either one silently inverts the bound. ⚠ This comment said
-// `directive-agent-ops.js` until 2026-09-02 — that module CALLS `narrowTo`, along
-// with `launch-directive-spawn.js`, and neither owns it. Both lanes take the ONE
-// implementation, which is the whole reason a posture cannot be widened on one of
-// them and not the other.
-const TOOL_MODES = ['manual', 'accept_edits', 'auto', 'bypass'];
+// Axis A on the wire: every registered runtime's OWN words (Samuel ruling R3), as a SET. It only
+// narrows what may cross; a word is validated against the launch runtime, and clamped in that
+// runtime's `descriptor.toolMode.options` order, at spawn/apply time — never in this list's order.
+// Mirrors `schema-launch-modes.ts › LAUNCH_TOOL_MODES` and the column CHECKs (suite-pinned).
+const TOOL_MODES = [
+  'manual', 'accept_edits', 'auto', 'bypass', // claude
+  'untrusted', 'granular', 'on-request', 'never', // codex
+  'allowlist', 'auto-review', 'run-everything', // cursor
+];
+// Axis B is runtime-neutral, narrowest first.
 const MESSAGE_MODES = ['ask', 'auto_inbound', 'auto_outbound', 'auto_both'];
 
 // ⚠ THE WORDS, VERBATIM AND CLOSED. Not a guess — see the header.

@@ -55,6 +55,12 @@ export const IDENTITY_COMMIT_SRC = readFileSync(join(MAIN, "agent-identity-commi
 // the containment inputs every case in this suite asserts are the real ones.
 export const SPAWN_SRC = readFileSync(join(MAIN, "launch-directive-spawn.js"), "utf8");
 export const wire = require_(join(MAIN, "launch-directive-wire.js"));
+// The shared runtime-words helper (ruling R3), evaluated REAL against the stubbed registry.
+export const RUNTIME_WORDS_SRC = readFileSync(join(MAIN, "launch-directive-runtime.js"), "utf8");
+/** A runtime's REAL Axis-A words, narrowest first — its own `tools.js › TOOL_MODES`. */
+export function runtimeToolModes(rid) {
+  try { return require_(join(MAIN, "runtime", rid, "tools.js")).TOOL_MODES.slice(); } catch { return []; }
+}
 
 export const WS = "11111111-1111-4111-8111-111111111111";
 export const CH = "22222222-2222-4222-8222-222222222222";
@@ -114,6 +120,8 @@ export function boot(over = {}) {
   const acquires = []; // every `runtime.acquire` this lane made (2026-09-21, U9)
   const rosters = [];  // every `runtime.models()` read this lane made (2026-09-21, U9)
   const identityAsks = []; // every runtime the identity link was asked of (2026-09-23)
+  const runtimeAsks = []; // every C3 `resolveLaunchRuntime` call ({ pick, identity, channelId })
+  const startAsks = []; // every C1 `launchStartModes(channelId, runtimeId)` read — the runtime asked
   const stub = (id) => {
     if (id === "./api") {
       return {
@@ -155,7 +163,15 @@ export function boot(over = {}) {
     if (id === "./channel-prefs") {
       return {
         getOrchestratorLaunch: () => cfg.enabled === true,
-        launchStartModes: () => ({ tools: "bypass", messages: "auto_both" }),
+        // C1 (a1's contract), stubbed at its seam: THAT runtime's record, messages windowless-
+        // floored, native bag verbatim. `cfg.ceilings[rid]` beats `cfg.ceiling` for one runtime.
+        launchStartModes: (channelId, rid) => {
+          startAsks.push(rid);
+          const c = (cfg.ceilings && cfg.ceilings[rid]) || cfg.ceiling
+            || { tools: "bypass", messages: "auto_both" };
+          const out = c.messages === "auto_outbound" || c.messages === "auto_both" ? "auto_both" : "auto_inbound";
+          return { tools: c.tools, messages: out, native: { ...(c.native || {}) } };
+        },
         // ⚠ `getLaunchModel` / `getLaunchModelLink` LEFT WITH THE REAL FUNCTIONS (2026-09-23): the
         // channel no longer stores a model, and a fake offering one would let a lane that still
         // read it pass here and throw in production.
@@ -191,6 +207,11 @@ export function boot(over = {}) {
       };
     }
     if (id === "./launch-directive-wire") return wire;
+    if (id === "./launch-directive-runtime") {
+      const m = { exports: {} };
+      new Function("require", "module", "exports", RUNTIME_WORDS_SRC)(stub, m, m.exports);
+      return m.exports;
+    }
     // ⚠ THE CONTAINMENT NARROWING (2026-09-02, ruling B7) — the REAL table, not a stub. It is the
     // one statement of the profile vocabulary and it is electron-free by contract, so a fake here
     // would let this suite go green about a narrowing that never happened.
@@ -234,9 +255,13 @@ export function boot(over = {}) {
           }
           return {};
         },
-        // 2026-09-23: the directive lane resolves a non-default runtime's no-pick DEFAULT against
-        // the sealed adapter; the default itself is `./runtime/launch-default`'s, stubbed below.
         resolve: (rid) => ({ descriptor: { id: rid, models: {} } }),
+        // Each runtime's REAL Axis-A words, narrowest first (its `tools.js`, which the descriptor's
+        // `toolMode.options` is built from) — the clamp order the lane must use (ruling R3).
+        descriptorFor: (rid) => ({
+          id: rid || rids[0],
+          toolMode: { options: runtimeToolModes(rid || rids[0]).map((value) => ({ value })) },
+        }),
         runtimeFor: (rid) => ({
           models: async () => {
             rosters.push(rid);
@@ -253,6 +278,22 @@ export function boot(over = {}) {
     // identity's model travels as given (a roster that cannot say — the real function's fail-open).
     if (id === "./runtime/launch-default") {
       return {
+        // C3 (a1's contract), stubbed at its seam with its documented order and refusal:
+        // pick → identity.runtime → channel → registry default; an unregistered or unusable pick /
+        // identity runtime answers `{ ok: false }`.
+        resolveLaunchRuntime: async ({ pick, identity, channelId }) => {
+          runtimeAsks.push({ pick, identity, channelId });
+          const rids = cfg.runtimeIds || ["claude", "codex", "cursor"];
+          const want = pick || (identity && identity.runtime) || "";
+          if (want) {
+            const usable = rids.includes(want) && !(cfg.runtimeUnavailable || []).includes(want);
+            return usable
+              ? { ok: true, runtimeId: want, source: pick ? "pick" : "identity" }
+              : { ok: false, reason: rids.includes(want) ? "unavailable" : "unregistered", runtimeId: want };
+          }
+          if (cfg.channelRuntime) return { ok: true, runtimeId: cfg.channelRuntime, source: "channel" };
+          return { ok: true, runtimeId: rids[0], source: "default" };
+        },
         withRuntimeDefault: async (_adapter, model) => (model || cfg.runtimeDefault || ""),
         identityModelFor: async (rid, model) => {
           identityAsks.push(rid);
@@ -303,6 +344,8 @@ export function boot(over = {}) {
         // `session-mode-floor.test.mjs`. What THIS harness controls is which answer comes back,
         // so a case can ask what the DIRECTIVE lane does with each.
         setModeByTask: (a) => { modes.push(a); return cfg.setMode || { ok: true }; },
+        // The live session object, as `sessionOn` answers it — only its `runtimeId` is read.
+        sessionOn: (a) => (cfg.live || []).find((r) => r && r.agentId === a.agentId) || null,
       };
     }
     if (id === "./agent-names") {
@@ -353,7 +396,7 @@ export function boot(over = {}) {
   // was actually asked about. Nothing about the module is wrapped — `handle` is the real one.
   const handle = (frame, ws) => { cfg.lastFrame = frame; return api.handle(frame, ws); };
   return { api: { ...api, handle }, cfg, posts, gets, arms, logged, resolves, controls, names,
-    flushes, modes, acquires, rosters, identityAsks };
+    flushes, modes, acquires, rosters, identityAsks, runtimeAsks, startAsks };
 }
 
 /**

@@ -21,7 +21,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-  boot, decidePosts, row, wire, WS, CH, DID,
+  boot, decidePosts, row, wire, runtimeToolModes, WS, CH, DID,
 } from "./_launch-directive-harness.mjs";
 
 /** A live-registry row, as `session-engine.js › listLiveSessions` projects one. */
@@ -66,17 +66,20 @@ test("WIRE: a mode this build does not recognise collapses to `''`, not to a coe
   }
 });
 
-test("WIRE: the two enums are `session-profiles.js`'s own, narrowest first", async () => {
-  // ⚠ THE RESTATEMENT IS FORCED (the wire block is pure and may hold no require), so it is
-  // DRIVEN against the authority rather than trusted. ⚠ NARROWEST FIRST IS LOAD-BEARING: the
-  // clamp is an INDEX COMPARISON over these arrays, so re-ordering either silently inverts it.
-  const profiles = await import("node:module")
-    .then((m) => m.createRequire(import.meta.url))
-    .then((r) => r(new URL("../main/session-profiles.js", import.meta.url).pathname));
+test("WIRE: Axis A is the UNION of every runtime's own words; Axis B is `session-profiles.js`'s", async () => {
+  // ⚠ The wire block is pure (no require), so both lists are DRIVEN against their authorities:
+  // each runtime's `tools.js › TOOL_MODES` (ruling R3), and the runtime-neutral message axis.
+  const req = await import("node:module").then((m) => m.createRequire(import.meta.url));
+  const profiles = req(new URL("../main/session-profiles.js", import.meta.url).pathname);
   assert.deepEqual(wire.MESSAGE_MODES, profiles.MESSAGE_MODES);
-  assert.deepEqual(wire.TOOL_MODES, profiles.TOOL_MODES);
-  assert.equal(wire.TOOL_MODES[0], "manual", "[0] is the fail-closed member");
-  assert.equal(wire.TOOL_MODES[wire.TOOL_MODES.length - 1], "bypass", "the last is the widest");
+  const union = ["claude", "codex", "cursor"].flatMap((r) => runtimeToolModes(r));
+  assert.deepEqual([...wire.TOOL_MODES].sort(), [...union].sort());
+  assert.equal(new Set(wire.TOOL_MODES).size, wire.TOOL_MODES.length, "no word is shared by two runtimes");
+});
+
+test("WIRE: a Codex word survives the narrowing — it used to collapse to `''`", () => {
+  const d = wire.directiveFrom(modeRow({ target_tool_mode: "on-request" }), WS);
+  assert.equal(d.targetToolMode, "on-request");
 });
 
 // ── 2. THE CONSENT ASYMMETRY ─────────────────────────────────────────────────────────────
@@ -105,9 +108,10 @@ test("CONSENT: the gate is the DATA list, not a condition a fifth kind could sli
 test("APPLY: both axes reach `setModeByTask`, addressed by the RESOLVED registry row", async () => {
   const h = boot({ live: live() });
   await h.api.handle(modeRow({ target_tool_mode: "auto", target_message_mode: "auto_both" }), WS);
+  // `pinned: true` — the orchestrator's per-agent pick (C2): a narrower ask sticks.
   assert.deepEqual(h.modes, [
-    { axis: "tools", mode: "auto", channelId: CH, taskId: "", agentId: "a1b2c3d4" },
-    { axis: "messages", mode: "auto_both", channelId: CH, taskId: "", agentId: "a1b2c3d4" },
+    { axis: "tools", mode: "auto", pinned: true, channelId: CH, taskId: "", agentId: "a1b2c3d4" },
+    { axis: "messages", mode: "auto_both", pinned: true, channelId: CH, taskId: "", agentId: "a1b2c3d4" },
   ]);
   // ⚠ THE ECHO RIDES THE `done` SINCE 2026-09-02 — see the CLAMP case below for why.
   assert.deepEqual(decided(h), [{
@@ -164,11 +168,11 @@ test("CLAMP: a request NARROWER than the ceiling is applied as asked", async () 
 });
 
 test("CLAMP: an UNSET channel posture is the restrictive default, so nothing widens", async () => {
-  // ⚠ `getLaunchPosture` never answers null — an unset or unreadable record IS manual/ask — so a
-  // channel the operator has never configured cannot be widened by a directive at all.
+  // ⚠ An unset or unreadable record IS the narrowest tool word and `ask` — the message ceiling
+  // arrives windowless-floored (`launchStartModes`), which is what the engine enforces anyway.
   const h = boot({ live: live(), ceiling: { tools: "manual", messages: "ask" } });
   await h.api.handle(modeRow({ target_tool_mode: "bypass", target_message_mode: "auto_both" }), WS);
-  assert.deepEqual(h.modes.map((m) => m.mode), ["manual", "ask"]);
+  assert.deepEqual(h.modes.map((m) => m.mode), ["manual", "auto_inbound"]);
 });
 
 test("CLAMP: the comparison is an index, so an unknown CEILING clamps to itself", async () => {
@@ -225,4 +229,47 @@ test("REFUSE: every path out of a CLAIMED row writes a verdict", async () => {
     await h.api.handle(modeRow(over), WS);
     assert.equal(decidePosts(h).length, 1, JSON.stringify(over));
   }
+});
+
+// ── 6. EACH RUNTIME IN ITS OWN WORDS (Samuel ruling R3) AND NARROWER STICKS (R4) ──────────
+
+const codexLive = () => [liveRow("a1b2c3d4", { runtimeId: "codex" })];
+
+test("RUNTIME: a Codex agent is re-postured in Codex words, against the CODEX record", async () => {
+  const h = boot({ live: codexLive(), ceilings: { codex: { tools: "on-request", messages: "auto_both" } } });
+  await h.api.handle(modeRow({ target_tool_mode: "never" }), WS);
+  assert.deepEqual(h.startAsks, ["codex"], "the ceiling is the SESSION runtime's record (C1)");
+  assert.deepEqual(h.modes.map((m) => [m.axis, m.mode, m.pinned]), [["tools", "on-request", true]],
+    "`never` is wider than `on-request` in CODEX order, so it clamps there");
+  assert.deepEqual(decided(h), [{ directiveId: DID, status: "done", appliedTools: "on-request" }]);
+});
+
+// 🔒 P3-07: Claude's order put `manual` first, so a Codex `untrusted` (unknown to it) clamped to
+// the ceiling — asking the NARROWEST got the WIDEST. The runtime's own order keeps it narrow.
+test("RUNTIME: asking Codex's narrowest against a `never` ceiling gets the narrowest", async () => {
+  const h = boot({ live: codexLive(), ceilings: { codex: { tools: "never", messages: "auto_both" } } });
+  await h.api.handle(modeRow({ target_tool_mode: "untrusted" }), WS);
+  assert.deepEqual(h.modes.map((m) => m.mode), ["untrusted"]);
+});
+
+test("RUNTIME: a word the agent's runtime does not offer is NOT applied — never coerced", async () => {
+  const onlyTools = boot({ live: codexLive() });
+  await onlyTools.api.handle(modeRow({ target_tool_mode: "bypass" }), WS);
+  assert.deepEqual(onlyTools.modes, [], "a Claude word means nothing to a Codex session");
+  assert.deepEqual(decided(onlyTools), [{ directiveId: DID, status: "refused", refusalReason: "no-bridge" }]);
+  const both = boot({ live: codexLive() });
+  await both.api.handle(modeRow({ target_tool_mode: "bypass", target_message_mode: "auto_both" }), WS);
+  assert.deepEqual(both.modes.map((m) => m.axis), ["messages"], "the legal axis still lands");
+  assert.deepEqual(decided(both), [{ directiveId: DID, status: "done", appliedMessages: "auto_both" }]);
+});
+
+// 🔒 P3-08: the echo is what the GATE enforces — the engine's post-dispatch value (the windowless
+// floor lifts a pinned `ask` to `auto_inbound`), never the request or the pre-floor clamp.
+test("ECHO: the engine's post-dispatch values are reported, not the clamp's arithmetic", async () => {
+  const h = boot({ live: live(), setMode: { ok: true, tools: "auto", messages: "auto_inbound" } });
+  await h.api.handle(modeRow({ target_tool_mode: "auto", target_message_mode: "ask" }), WS);
+  assert.deepEqual(h.modes.map((m) => m.pinned), [true, true]);
+  assert.deepEqual(decided(h), [{
+    directiveId: DID, status: "done", appliedTools: "auto", appliedMessages: "auto_inbound",
+  }]);
 });

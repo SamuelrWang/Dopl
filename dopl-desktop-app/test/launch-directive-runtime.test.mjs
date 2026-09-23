@@ -12,13 +12,11 @@
 //     MODEL slot read as "no opinion" and the chain fell through to the identity's and then the
 //     channel's model — both Claude ids — which were handed to whatever adapter ran.
 //
-// ── ⚠ THE ONE TRAP A REVIEWER SHOULD LOOK FOR FIRST ─────────────────────────────────────
-// `main/runtime/index.js › resolve` **FAILS OPEN to the default adapter for an unknown id.** That
-// is correct where it lives (a stored session record written by a build that knew a runtime this
-// one does not must still be endable) and it is exactly wrong for a request somebody just made —
-// `acquire('nonsense')` SUCCEEDS, by acquiring Claude. So the membership test against `ids()`
-// MUST run before `acquire`, and the case below named "an unregistered runtime is REFUSED" is
-// the one that fails if anybody reorders them.
+// ── THE ORDER (Samuel ruling R5) ────────────────────────────────────────────────────────
+// The launch runtime is `runtime/launch-default.js › resolveLaunchRuntime` (C3, a1's contract,
+// stubbed here at its seam): the directive's pick → the identity's runtime → the channel's → the
+// registry default. The registry walk (membership before `acquire`) is that function's, and its
+// own suite pins it; this file pins what the DIRECTIVE LANE does with each answer.
 //
 // ── ⚠ AND WHY THE WORD IS `no-sdk` RATHER THAN AN ELEVENTH ──────────────────────────────
 // The refusal vocabulary is CLOSED in four places (`launch-directive-vocab.js`,
@@ -38,6 +36,7 @@ const launchRow = (over = {}) => row({ goal: "do the thing", ...over });
 const decided = (h) => decidePosts(h).map((p) => p.body);
 /** The runtime id the lane handed the spawn funnel. ⚠ `''` is a REAL value — the default. */
 const handedRuntime = (h) => (h.cfg.lastSpec || {}).runtime;
+const handedModes = (h) => (h.cfg.lastSpec || {}).startModes;
 const handedModel = (h) => (h.cfg.lastSpec || {}).model;
 
 // ── 1. THE WIRE NARROWING ────────────────────────────────────────────────────────────────
@@ -96,7 +95,7 @@ test("WIRE: the migration's CHECK admits exactly the same grammar", () => {
 test("PRECEDENCE: no ask and no channel pick → the registry default, and it is REPORTED", async () => {
   const h = boot();
   await h.api.handle(launchRow(), WS);
-  assert.equal(handedRuntime(h), "", "'' is how this lane spells the default adapter downstream");
+  assert.equal(handedRuntime(h), "claude", "C3 names the registry default");
   assert.equal(decided(h)[0].appliedRuntime, "claude",
     "the ordinary launch must still SAY which vendor ran — silence is what U9 removes");
 });
@@ -124,14 +123,12 @@ test("PRECEDENCE: `runtime: claude` still launches Claude", async () => {
 
 // ── 3. THE REFUSALS — the half the ticket exists for ─────────────────────────────────────
 
-// 🔒 THE REORDERING GUARD. `resolve()` fails OPEN, so `acquire('borg')` returns CLAUDE. Only the
-// `ids()` membership test standing FIRST makes this a refusal instead of a silent Claude launch.
 test("REFUSE: an UNREGISTERED runtime is refused — it never falls through to the default", async () => {
   const h = boot();
-  await h.api.handle(launchRow({ runtime: "borg" }), WS);
+  await h.api.handle(launchRow({ runtime: "borg", identity_id: "77777777-7777-4777-8777-777777777777" }), WS);
   assert.deepEqual(decided(h), [{ directiveId: DID, status: "refused", refusalReason: "no-sdk" }]);
   assert.equal(h.cfg.lastSpec, undefined, "and NOTHING was launched");
-  assert.deepEqual(h.acquires, [], "the membership test answered BEFORE acquire — do not reorder");
+  assert.deepEqual(h.resolves, [], "an explicit pick is answered BEFORE any identity fetch");
 });
 
 test("REFUSE: a REGISTERED runtime this Mac cannot start is refused, with the runtime named", async () => {
@@ -139,7 +136,6 @@ test("REFUSE: a REGISTERED runtime this Mac cannot start is refused, with the ru
   await h.api.handle(launchRow({ runtime: "codex" }), WS);
   assert.deepEqual(decided(h), [{ directiveId: DID, status: "refused", refusalReason: "no-sdk" }]);
   assert.equal(h.cfg.lastSpec, undefined);
-  assert.deepEqual(h.acquires, ["codex"], "it really asked the adapter's own availability gate");
   assert.ok(h.logged.some((l) => l.includes("codex") && l.includes("REFUSING")),
     "the diagnostic NAMES the runtime — a generic no-sdk is what U9 replaces");
 });
@@ -161,10 +157,9 @@ test("REFUSE: only the EXPLICIT ask fails closed — an unreachable CHANNEL pick
 
 // ── 4. THE MODEL, INSIDE THE RESOLVED RUNTIME ────────────────────────────────────────────
 
-test("MODEL: the default adapter keeps the Claude chain — the pick handed on as given", async () => {
+test("MODEL: the pick is handed on as given — the funnel resolves it on the live roster", async () => {
   const h = boot();
   await h.api.handle(launchRow({ model: "claude-opus-5" }), WS);
-  // 2026-09-22: resolved on the LIVE roster at the launch spec, not aliased here.
   assert.equal(handedModel(h), "claude-opus-5");
   assert.deepEqual(h.rosters, [], "and it never spends a roster read to do it");
 });
@@ -175,39 +170,35 @@ test("MODEL: a non-default runtime is NEVER handed the Claude chain's model", as
   const h = boot({ channelRuntime: "codex" });
   await h.api.handle(launchRow({ model: "" }), WS);
   assert.equal(handedModel(h), "",
-    "no model argument at all — codex's own default, never claude-sonnet-5 off channel-prefs");
+    "no model argument at all — the funnel spends codex's own default");
 });
 
-// 🔒 2026-09-23 (Samuel: "I think we should do Sol"): no pick on Codex → the runtime's own default,
-// resolved HERE so `appliedModel=` names the model the launch really spends — and only when this
-// account's catalog offers it (the stub answers what the catalog would).
-test("MODEL: a no-pick Codex launch spends the runtime default the catalog offers, and reports it", async () => {
-  const h = boot({ channelRuntime: "codex", runtimeDefault: "gpt-6-sol" });
+// The runtime default is the FUNNEL's (`session-launch.js › launch` → `withRuntimeDefault`), and
+// the model it launched with is what `appliedModel` reports.
+test("MODEL: a no-pick Codex launch reports the default the FUNNEL launched with", async () => {
+  const h = boot({ channelRuntime: "codex",
+    launch: async () => ({ agentId: "a1b2c3d4", sessionId: "s1", model: "gpt-6-sol" }) });
   await h.api.handle(launchRow({ model: "" }), WS);
-  assert.equal(handedModel(h), "gpt-6-sol");
-  const absent = boot({ channelRuntime: "codex" });
-  await absent.api.handle(launchRow({ model: "" }), WS);
-  assert.equal(handedModel(absent), "", "no Sol in the catalog → no model at all, never a refusal");
+  assert.equal(handedModel(h), "", "the lane names none; the funnel fills the default");
+  assert.equal(decided(h)[0].appliedModel, "gpt-6-sol");
 });
 
-test("MODEL: a model IN the resolved runtime's roster is passed through raw", async () => {
-  const h = boot({
-    channelRuntime: "codex",
-    rosters: { codex: { source: "live", ids: ["gpt-6-astra"], aliases: ["", "gpt-6-astra"] } },
-  });
+// 🔒 P3-09: a pick on a NON-default runtime is no longer checked against a fresh `runtime.models()`
+// spawn (a Codex app-server per launch). It goes to the funnel, whose check reads the cached
+// catalog (`model-catalog.js › settle`) — the same path every other lane takes.
+test("MODEL: a pick on a non-default runtime spends NO roster read of its own", async () => {
+  const h = boot({ channelRuntime: "codex",
+    rosters: { codex: { source: "live", ids: ["gpt-6-astra"], aliases: [] } } });
   await h.api.handle(launchRow({ model: "gpt-6-astra" }), WS);
   assert.equal(handedModel(h), "gpt-6-astra");
-  assert.deepEqual(h.rosters, ["codex"], "asked the RESOLVED runtime, not the default one");
+  assert.deepEqual(h.rosters, [], "no per-launch roster spawn — the funnel's cached check decides");
 });
 
-// ⚠ REFUSED — NEVER RE-ROUTED, AND SINCE 2026-09-22 NEVER DROPPED EITHER. A roster that ANSWERED
-// and lacks the id is definitive, so the pick goes on to the funnel and the funnel refuses it
-// (`no-model`); launching on the platform default instead is the silent substitution this wave
-// removes. The runtime is still never changed by a model it cannot run.
+// ⚠ REFUSED — NEVER RE-ROUTED. The funnel refuses an id the runtime's catalog lacks (`no-model`);
+// the runtime is never changed by a model it cannot run.
 test("MODEL: a CLAUDE model on a CODEX launch is REFUSED and the runtime is untouched", async () => {
   const h = boot({
     channelRuntime: "codex",
-    rosters: { codex: { source: "live", ids: ["gpt-6-astra"], aliases: ["", "gpt-6-astra"] } },
     // what `session-launch.js › refuseUnknownModel` answers for an id Codex's catalog lacks
     launch: async () => ({ skipped: "no-model" }),
   });
@@ -215,25 +206,22 @@ test("MODEL: a CLAUDE model on a CODEX launch is REFUSED and the runtime is unto
   assert.equal(handedRuntime(h), "codex", "the runtime is NOT changed by a model it cannot run");
   assert.equal(handedModel(h), "claude-opus-5", "handed on so the funnel can refuse it with a sentence");
   assert.deepEqual(decided(h), [{ directiveId: DID, status: "refused", refusalReason: "no-model" }]);
-  assert.ok(h.logged.some((l) => l.includes("will be refused (no-model)")));
 });
 
-// ⚠ R11: A CATALOG FAILURE MUST NOT SUBSTITUTE ANOTHER RUNTIME'S MODELS. The honest answer is the
-// platform default, which is what `''` means.
-test("MODEL: an unreachable roster drops the model — it never guesses and never refuses", async () => {
+// 🔒 P3-09: an unreadable roster used to DROP the launcher's explicit pick here (the MCP Codex lane
+// silently launched the default) while every other lane failed open. The pick now always reaches
+// the funnel, whose check fails open on an unreadable roster.
+test("MODEL: an unreachable roster never drops the launcher's explicit pick", async () => {
   const h = boot({ channelRuntime: "codex", rosterThrows: true });
   await h.api.handle(launchRow({ model: "gpt-6-astra" }), WS);
-  assert.equal(handedModel(h), "");
+  assert.equal(handedModel(h), "gpt-6-astra");
   assert.equal(decided(h)[0].status, "launched", "a roster outage is not a launch refusal");
 });
 
 // ── 5. REQUESTED vs APPLIED, AS AN AUDIT RECORD ──────────────────────────────────────────
 
 test("AUDIT: the decide reports the APPLIED runtime and model, never the requested ones", async () => {
-  const h = boot({
-    channelRuntime: "codex",
-    rosters: { codex: { source: "live", ids: ["gpt-6-astra"], aliases: ["", "gpt-6-astra"] } },
-  });
+  const h = boot({ channelRuntime: "codex" });
   await h.api.handle(launchRow({ runtime: "codex", model: "" }), WS);
   const body = decided(h)[0];
   assert.equal(body.appliedRuntime, "codex");
@@ -280,4 +268,83 @@ test("COMPAT: a row written before the column existed launches on the default pa
   await h.api.handle(old, WS);
   assert.equal(decided(h)[0].status, "launched");
   assert.equal(decided(h)[0].appliedRuntime, "claude");
+});
+
+// ── 7. THE LAUNCH RUNTIME'S OWN RECORD AND WORDS (rulings R3/R5; P3-03, P3-04, P3-07) ─────
+
+// 🔒 P3-04 + P3-03: the ceiling AND the native bag are read for the LAUNCH runtime, not the
+// channel's selected one — a Codex pick on a Claude channel used to get Claude's posture and no
+// sandbox, i.e. Codex's `workspace-write` default: WIDER than the button lane's `read-only`.
+test("RECORD: a Codex launch reads the CODEX record — its sandbox reaches the spawn", async () => {
+  const h = boot({ ceilings: {
+    claude: { tools: "bypass", messages: "auto_both" },
+    codex: { tools: "on-request", messages: "auto_both", native: { sandbox_mode: "read-only" } },
+  } });
+  await h.api.handle(launchRow({ runtime: "codex" }), WS);
+  assert.deepEqual(h.startAsks, ["codex"], "C1 is asked for the LAUNCH runtime's record");
+  assert.deepEqual(handedModes(h),
+    { tools: "on-request", messages: "auto_both", native: { sandbox_mode: "read-only" } });
+  assert.equal(decided(h)[0].appliedTools, "on-request", "the echo is a CODEX word (C5)");
+});
+
+// 🔒 P3-07: Claude's clamp order on a Codex launch turned an ask for the NARROWEST into the WIDEST.
+test("WORDS: a Codex launch asking `untrusted` against a `never` ceiling gets `untrusted`", async () => {
+  const h = boot({ channelRuntime: "codex", ceilings: { codex: { tools: "never", messages: "auto_both" } } });
+  await h.api.handle(launchRow({ start_tool_mode: "untrusted" }), WS);
+  assert.equal(handedModes(h).tools, "untrusted");
+  assert.equal(handedModes(h).pinned, true, "an asked posture sticks as the session's own pick (C2)");
+  assert.equal(decided(h)[0].appliedTools, "untrusted");
+});
+
+test("WORDS: a wider Codex ask clamps in CODEX order to the Codex ceiling", async () => {
+  const h = boot({ channelRuntime: "codex", ceilings: { codex: { tools: "granular", messages: "auto_both" } } });
+  await h.api.handle(launchRow({ start_tool_mode: "never" }), WS);
+  assert.equal(handedModes(h).tools, "granular");
+});
+
+// C5: a word the launch runtime does not offer is NOT applied — that axis launches at the channel
+// posture and the echo says what actually runs.
+test("WORDS: a Claude word on a Codex launch is not applied — the channel posture runs", async () => {
+  const h = boot({ channelRuntime: "codex", ceilings: { codex: { tools: "on-request", messages: "auto_both" } } });
+  await h.api.handle(launchRow({ start_tool_mode: "bypass" }), WS);
+  assert.deepEqual(handedModes(h), { tools: "on-request", messages: "auto_both", native: {} },
+    "nothing asked that this runtime speaks → nothing pinned");
+  assert.equal(decided(h)[0].appliedTools, "on-request");
+  assert.ok(h.logged.some((l) => l.includes("bypass") && l.includes("codex")));
+});
+
+// Ruling R5: with no pick, the IDENTITY's runtime beats the channel's.
+test("ORDER: no pick → the identity's runtime, ahead of the channel's", async () => {
+  const h = boot({
+    channelRuntime: "claude",
+    resolve: { ok: true, identity: { name: "Coder", model: null, runtime: "codex" } },
+  });
+  await h.api.handle(launchRow({ identity_id: "77777777-7777-4777-8777-777777777777" }), WS);
+  assert.equal(handedRuntime(h), "codex");
+  assert.equal(decided(h)[0].appliedRuntime, "codex");
+  assert.deepEqual(h.runtimeAsks.map((a) => a.pick), [""], "asked once, after the identity resolved");
+  assert.equal(h.runtimeAsks[0].identity.runtime, "codex");
+});
+
+test("ORDER: an explicit pick beats the identity's runtime", async () => {
+  const h = boot({ resolve: { ok: true, identity: { name: "Coder", model: null, runtime: "codex" } } });
+  await h.api.handle(launchRow({ runtime: "cursor", identity_id: "77777777-7777-4777-8777-777777777777" }), WS);
+  assert.equal(handedRuntime(h), "cursor");
+});
+
+test("ORDER: an identity runtime this Mac cannot run is REFUSED, never swapped", async () => {
+  const h = boot({
+    runtimeUnavailable: ["codex"],
+    resolve: { ok: true, identity: { name: "Coder", model: null, runtime: "codex" } },
+  });
+  await h.api.handle(launchRow({ identity_id: "77777777-7777-4777-8777-777777777777" }), WS);
+  assert.deepEqual(decided(h), [{ directiveId: DID, status: "refused", refusalReason: "no-sdk" }]);
+  assert.equal(h.cfg.lastSpec, undefined);
+});
+
+// The echo's `appliedModel` is the FUNNEL's model (its runtime default filled in), so the funnel
+// must answer it — a foreign one-field hunk on `session-launch.js › launch`'s success return.
+test("FUNNEL: a successful launch answers the model it launched with", () => {
+  const src = readFileSync(join(HERE, "..", "main", "session-launch.js"), "utf8");
+  assert.match(src, /return \{ sessionId: s\.sessionId, agentId: agentId, model \};/);
 });
