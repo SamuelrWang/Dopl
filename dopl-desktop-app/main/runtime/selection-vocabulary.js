@@ -157,6 +157,15 @@ function normalizeNative(descriptor, raw) {
   return { value: value, review: review };
 }
 
+/**
+ * A launcher's model pick as a real pick, or `''` for "no pick". The legacy word `'default'` is the
+ * Claude lane's "no opinion", never a model id, so it reads as no pick on every runtime (RC-15).
+ */
+function pickOf(v) {
+  const s = typeof v === 'string' ? v.trim() : '';
+  return s === 'default' ? '' : s;
+}
+
 module.exports = {
-  pickRule, launchModelPick, nativeDimensions, normalizeNative,
+  pickRule, launchModelPick, nativeDimensions, normalizeNative, pickOf,
 };
