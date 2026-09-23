@@ -126,8 +126,9 @@ test("LAUNCH: the spawn funnel FORWARDS the resolved model — launcher/identity
 
 test("LAUNCH: every lane's chain is launcher pick > identity model, and nothing below it", () => {
   const OPS = read("session-launch-op.js");
-  assert.match(OPS, /model: overrides\.model \|\| identityModel\(sessionModel, identity\),/,
-    "the operator's own Launch: the sheet, then the identity default — the funnel does the rest");
+  assert.match(OPS,
+    /const model = overrides\.model \|\| await require\('\.\/runtime\/launch-default'\)\s*\.identityModelFor\(runtimeId, identityModel\(sessionModel, identity\)\);/,
+    "the operator's own Launch: the sheet, then the identity default ON THE LAUNCH RUNTIME — the funnel does the rest");
   assert.match(read("session-model.js"), /return !v \|\| v === 'default' \? '' : v;/,
     "absent and `default` step aside; everything else is the pick as given");
   assert.equal(model.chainModel("claude-opus-6[1m]"), "claude-opus-6[1m]", "a model this build predates commits the chain");
@@ -137,8 +138,10 @@ test("LAUNCH: every lane's chain is launcher pick > identity model, and nothing 
     "the button lane must not restate the rule — it delegates");
   const DIRECTIVE = read("launch-directive-spawn.js");
   assert.match(DIRECTIVE,
-    /return sessionModel\.chainModel\(d\.model\)\s*\|\| require\('\.\/session-launch-op'\)\.identityModel\(sessionModel, identity\);/,
-    "the directive lane: the directive's `model`, then the identity's");
+    /return sessionModel\.chainModel\(d\.model\)\s*\|\| launchDefault\.identityModelFor\(runtimeId \|\| defaultId, fromIdentity\);/,
+    "the directive lane: the directive's `model`, then the identity's on the launch runtime");
+  assert.match(DIRECTIVE, /const own = await launchDefault\.identityModelFor\(runtimeId, fromIdentity\);/,
+    "…and a non-default runtime asks the identity link too, before its default");
   assert.match(DIRECTIVE, /withRuntimeDefault\(registry\.resolve\(runtimeId\), ''\)/,
     "…and a non-default runtime with no pick reports the default it will actually launch on");
 });

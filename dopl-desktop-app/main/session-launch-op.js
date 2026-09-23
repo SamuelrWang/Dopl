@@ -187,6 +187,15 @@ async function launchFromButton(payload) {
       ? `Join the thread "${title}" as my agent: read it with dopl_channel (op "read", thread=<id>) and carry the work forward.`
       : 'Join this thread as my agent: read it with dopl_channel (op "read", thread=<id>) and carry the work forward.';
 
+  // ⚠ THE RUNTIME IS RESOLVED BEFORE THE MODEL, BECAUSE THE IDENTITY LINK IS ASKED OF IT
+  // (2026-09-23): an identity's model counts only if THIS runtime offers it
+  // (`runtime/launch-default.js › identityModelFor`). The sheet's own pick is not filtered here —
+  // it is the launcher's explicit choice, and the funnel refuses it with a sentence if unknown.
+  const runtimeId = require('./channel-runtime').normalizeRuntimeId(p.runtime)
+    || require('./channel-runtime').getChannelRuntime(p.channelId);
+  const model = overrides.model || await require('./runtime/launch-default')
+    .identityModelFor(runtimeId, identityModel(sessionModel, identity));
+
   const res = await engine.launchRequesterSession({
     channelId: p.channelId,
     // '' is the CHANNEL-LEVEL scope, not a missing value — see the block above.
@@ -269,8 +278,7 @@ async function launchFromButton(payload) {
     // Dopl profile it declares. That is why a runtime may come off the payload where the TOOL
     // PROFILE, three fields down, may never: picking a runtime widens nothing (see
     // `main/channel-runtime.js`'s header), and picking a profile is containment itself.
-    runtime: require('./channel-runtime').normalizeRuntimeId(p.runtime)
-      || require('./channel-runtime').getChannelRuntime(p.channelId),
+    runtime: runtimeId,
     // ── ⚠ THE MODEL PRECEDENCE CHAIN, COMPUTED IN MAIN AND ONLY IN MAIN ───────────────────
     //
     //   sessions:setModel live override (post-spawn, `session-reopen.js`)
@@ -293,14 +301,17 @@ async function launchFromButton(payload) {
     // BUILD'S FROZEN TABLE did not know it ("unknown model falls back, never refuses") — which is
     // also how a model the CLI started offering after this build shipped could never be launched,
     // and how a mistyped one silently became the next link's. The table is not the authority any
-    // more; the runtime's LIVE roster is. So a named model is spent as named, and one this
+    // more; the runtime's LIVE roster is. So the SHEET's pick is spent as named, and one this
     // machine's runtime does not offer is REFUSED by the funnel with the list it does offer
-    // (`session-launch.js › refuseUnknownModel`, `no-model`) — the operator picks another in the
-    // sheet, whose pick outranks the identity's.
+    // (`session-launch.js › refuseUnknownModel`, `no-model`).
+    // ⚠ **THE IDENTITY'S MODEL IS NOT REFUSED — IT IS SKIPPED WHEN THE RUNTIME DOES NOT OFFER IT
+    // (2026-09-23).** It is a default, and a Claude-authored identity launched on Codex asked for
+    // nothing on Codex; `identityModelFor` (computed above, beside the runtime) answers `''` and
+    // the runtime default applies.
     // ⚠ A legacy alias (`opus`) or an old full id still resolves: the roster carries them as
     // aliases of the row that is that model today (`runtime/claude/roster.js`).
     // ⚠ `''` HERE IS "NO PICK", and the funnel turns it into the runtime's default.
-    model: overrides.model || identityModel(sessionModel, identity),
+    model,
     // ⚠ **THE AGENT COLOUR THE OPERATOR PICKED IN THE NEW-AGENT POPUP** (Samuel, 2026-09-13;
     // docs/specs/agent-colors.md). ⚠ IT SITS BESIDE `model` BECAUSE IT IS THE SAME KIND OF
     // FIELD, and that block's argument transfers line for line: forwarded, never invented,

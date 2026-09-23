@@ -113,6 +113,7 @@ export function boot(over = {}) {
   const resolves = [];
   const acquires = []; // every `runtime.acquire` this lane made (2026-09-21, U9)
   const rosters = [];  // every `runtime.models()` read this lane made (2026-09-21, U9)
+  const identityAsks = []; // every runtime the identity link was asked of (2026-09-23)
   const stub = (id) => {
     if (id === "./api") {
       return {
@@ -248,9 +249,17 @@ export function boot(over = {}) {
     // ⚠ 2026-09-23 — THE RUNTIME'S OWN DEFAULT MODEL, stubbed at its seam: the real module settles a
     // live catalog. `cfg.runtimeDefault` is what this account's catalog would offer; absent, a no-pick
     // stays no-pick. `test/runtime-launch-default.test.mjs` drives the real rule.
+    // `cfg.identityOffered` = `{ <runtimeId>: [model ids that runtime offers] }`; absent, an
+    // identity's model travels as given (a roster that cannot say — the real function's fail-open).
     if (id === "./runtime/launch-default") {
       return {
         withRuntimeDefault: async (_adapter, model) => (model || cfg.runtimeDefault || ""),
+        identityModelFor: async (rid, model) => {
+          identityAsks.push(rid);
+          if (!model) return "";
+          if (!cfg.identityOffered) return model;
+          return (cfg.identityOffered[rid] || []).includes(model) ? model : "";
+        },
       };
     }
     if (id === "./session-model") return require_(join(MAIN, "session-model.js"));
@@ -344,7 +353,7 @@ export function boot(over = {}) {
   // was actually asked about. Nothing about the module is wrapped — `handle` is the real one.
   const handle = (frame, ws) => { cfg.lastFrame = frame; return api.handle(frame, ws); };
   return { api: { ...api, handle }, cfg, posts, gets, arms, logged, resolves, controls, names,
-    flushes, modes, acquires, rosters };
+    flushes, modes, acquires, rosters, identityAsks };
 }
 
 /**

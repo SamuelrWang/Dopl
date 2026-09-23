@@ -89,6 +89,8 @@ function boot() {
     if (id === "./channel-runtime") {
       return { normalizeRuntimeId: (v) => (v === "codex" || v === "cursor" ? v : ""), getChannelRuntime: () => "" };
     }
+    // 2026-09-23: the identity link, asked of the launch runtime — passthrough here.
+    if (id === "./runtime/launch-default") return { identityModelFor: async (_rid, m) => m || "" };
     throw new Error("unexpected require: " + id);
   };
   const mod = { exports: {} };

@@ -169,7 +169,9 @@ function appliedRuntimeId(id) {
  * ITS OWN ROSTER OR NOTHING.** `''` is not a degradation: it is `descriptor.models
  * .defaultMeansAbsent`, the convention the whole precedence chain rests on — no model argument at
  * all, i.e. that platform's own default — which is the only correct answer once a cross-vendor id
- * has been refused.
+ * has been refused. ⚠ SINCE 2026-09-23 THE IDENTITY LINK RUNS ON EVERY RUNTIME, filtered by THAT
+ * runtime's roster (`launch-default.js › identityModelFor`), so a Codex identity's Codex model is
+ * spent on Codex and a Claude identity's model is skipped there — never handed across.
  *
  * ⚠ **THE ROSTER IS ASKED ONLY WHEN THERE IS A QUESTION TO ANSWER** — a non-default runtime AND a
  * requested model. `runtime.models()` on a live-roster adapter spawns a process, so asking it on
@@ -206,18 +208,27 @@ async function resolveModel(runtimeId, d, identity) {
   // 🔓 `channelPrefs.getLaunchModelLink` WAS THE THIRD LINK AND IS DELETED (Samuel: *"We don't
   // need a pin model in the settings"*); `''` now reaches the funnel, which spends the runtime's
   // own default (`runtime/launch-default.js`).
+  // ⚠ **THE IDENTITY LINK IS ASKED OF THE LAUNCH RUNTIME, ON BOTH BRANCHES (2026-09-23).** An
+  // identity's model counts only when THIS runtime offers it (`launch-default.js ›
+  // identityModelFor`); a foreign one — a Claude id on a Codex launch — is SKIPPED to the runtime
+  // default, never refused. The directive's own `model` is the launcher's explicit pick and is
+  // not filtered: an unknown one is still refused `no-model`.
+  const launchDefault = require('./runtime/launch-default');
+  const fromIdentity = require('./session-launch-op').identityModel(sessionModel, identity);
   if (!runtimeId || runtimeId === defaultId) {
     return sessionModel.chainModel(d.model)
-      || require('./session-launch-op').identityModel(sessionModel, identity);
+      || launchDefault.identityModelFor(runtimeId || defaultId, fromIdentity);
   }
   const asked = typeof d.model === 'string' ? d.model.trim() : '';
-  // ⚠ NO PICK ON A NON-DEFAULT RUNTIME: RESOLVE ITS DEFAULT HERE rather than leaving it to the
-  // funnel, so the `appliedModel=` this lane reports is the model the launch actually names
-  // (Codex: `gpt-6-sol` when this account's catalog offers it, else `''` — Codex's own pick). The
-  // funnel's call is then a no-op on an id already named.
+  // ⚠ NO PICK ON A NON-DEFAULT RUNTIME: the identity's model if this runtime offers it, else the
+  // runtime default RESOLVED HERE rather than left to the funnel, so the `appliedModel=` this lane
+  // reports is the model the launch actually names (Codex: `gpt-6-sol` when this account's catalog
+  // offers it, else `''` — Codex's own pick). The funnel's call is then a no-op on a named id.
   if (!asked) {
+    const own = await launchDefault.identityModelFor(runtimeId, fromIdentity);
+    if (own) return own;
     try {
-      return await require('./runtime/launch-default').withRuntimeDefault(registry.resolve(runtimeId), '');
+      return await launchDefault.withRuntimeDefault(registry.resolve(runtimeId), '');
     } catch (_err) {
       return '';
     }

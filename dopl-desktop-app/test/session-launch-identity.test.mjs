@@ -90,6 +90,7 @@ function boot(api = {}, opts = {}) {
     if (id === "./channel-runtime") {
       return { normalizeRuntimeId: (v) => (v === "codex" || v === "cursor" ? v : ""), getChannelRuntime: () => "" };
     }
+    if (id === "./runtime/launch-default") return { identityModelFor: async (_rid, m) => m || "" }; // real rule: launch-identity-runtime.test.mjs
     throw new Error("unexpected require: " + id);
   };
   const resolveMod = { exports: {} };

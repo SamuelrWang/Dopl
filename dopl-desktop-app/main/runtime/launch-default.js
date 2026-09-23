@@ -5,7 +5,7 @@
 // have it go to the default model"*):
 //
 //   1. the LAUNCHER's explicit pick — the New Agent dialog, or the MCP `model` param
-//   2. the agent IDENTITY's model, when it names one
+//   2. the agent IDENTITY's model, when it names one THIS runtime offers (`identityModelFor`)
 //   3. the RUNTIME's default — THIS FILE
 //
 // There is no channel link and no profile link any more: the "pin model" settings are deleted,
@@ -71,4 +71,46 @@ async function withRuntimeDefault(adapter, model, catalogs) {
   }
 }
 
-module.exports = { preferredDefault, catalogOffers, launchDefaultFrom, withRuntimeDefault };
+// ── THE IDENTITY LINK, ON THE LAUNCH RUNTIME (2026-09-23, follow-up) ─────────────────────────
+//
+// 🔒 **AN IDENTITY'S MODEL MUST BELONG TO THE RUNTIME THE LAUNCH RUNS ON.** An identity is a
+// DEFAULT, not a pick: one authored on Claude (`claude-opus-5`) launched on Codex is not a request
+// for Codex to run Opus, so the link is SKIPPED and the runtime's default applies — never a
+// `no-model` refusal. Only the LAUNCHER's explicit pick (link 1) is refused when the runtime does
+// not offer it (`session-launch.js › refuseUnknownModel`). Every lane asks this ONE function, so
+// the button, the MCP directive (default and non-default runtime alike) cannot drift.
+// ⚠ "BELONGS" IS ASKED OF THE RUNTIME'S OWN CATALOG, AND A CATALOG THAT HOLDS NO MODELS CANNOT
+// ANSWER IT — then the model travels as given, the same fail-open the funnel's refusal uses (a
+// roster Dopl could not read is not evidence a model does not exist).
+
+/** Does this catalog hold any model it could answer a membership question with? */
+const catalogHolds = (catalog) => !!(catalog && Array.isArray(catalog.models) && catalog.models.length);
+
+/** Is `id` one of this catalog's models (by id or alias), whatever its status? */
+function offeredBy(catalog, id) {
+  return catalogHolds(catalog)
+    && catalog.models.some((m) => m && (m.id === id || (Array.isArray(m.aliases) && m.aliases.indexOf(id) !== -1)));
+}
+
+/**
+ * The identity's model if runtime `runtimeId` offers it, `''` ("skip to the runtime default") when
+ * that runtime's roster positively lacks it, or the model as given when the roster cannot say.
+ * ⚠ NEVER THROWS; the fallback is "as given", which the funnel then resolves or fails open on.
+ */
+async function identityModelFor(runtimeId, model, catalogs, registry) {
+  if (!named(model)) return '';
+  const v = str(model);
+  try {
+    const adapter = (registry || require('./index')).resolve(runtimeId);
+    const catalog = await (catalogs || require('./model-catalog')).settle(adapter);
+    if (!catalogHolds(catalog)) return v;
+    return offeredBy(catalog, v) ? v : '';
+  } catch (_err) {
+    return v;
+  }
+}
+
+module.exports = {
+  preferredDefault, catalogOffers, launchDefaultFrom, withRuntimeDefault,
+  offeredBy, identityModelFor,
+};

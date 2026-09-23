@@ -140,6 +140,8 @@ export function bootIpc({ blocked = false } = {}) {
         normalizeRuntimeId: (v) => (v === "codex" || v === "cursor" ? v : ""),
       };
     }
+    // 2026-09-23: the identity link, asked of the launch runtime — passthrough here.
+    if (id === "./runtime/launch-default") return { identityModelFor: async (_rid, m) => m || "" };
     // 2026-09-18 — DEFAULT AGENT SETTINGS. ⚠ EVERY WRITER RECORDS INTO THE SAME `writes` LEDGER as
     // `channel-prefs`' fakes, because the refusal cases assert that ledger is EMPTY: a second
     // ledger would let a forged `setAgentDefaults` or `applyAgentDefaults` pass unseen. ⚠ AND BOTH
