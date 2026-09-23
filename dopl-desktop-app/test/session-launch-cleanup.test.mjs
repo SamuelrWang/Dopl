@@ -169,7 +169,7 @@ function settleHarness() {
   const sessionMetrics = { metrics: () => ({}) };
   const api = new Function(
     "store", "deps", "sessionSummary", "agentHistory", "sessionMetrics", "sessionNarration",
-    "sessionCredential", "diag",
+    "sessionCredential", "diag", "teardownHandles",
     `${cutFrom(PERMS, "function denyPendingPermissions(s, message) {", "// Returns TRUE only when")}
      ${cutFrom(TEARDOWN, "function settle(s, outcome, keepWindow) {", "// THE WORK LANE FOR ONE ADDRESS")}
      return { settle, denyPendingPermissions };`
@@ -183,7 +183,8 @@ function settleHarness() {
       sessionOn: () => null,
     },
     sessionSummary, agentHistory, sessionMetrics, { ringFor: () => [] },
-    { releaseContainerCredential: () => {} }, () => {}
+    { releaseContainerCredential: () => {} }, () => {},
+    require_(join(MAIN, "session-handles.js")).teardownHandles
   );
   const s = {
     key: "c1:t1:a1", runtimeId: "codex", endCode: "runtime-start-failed",
@@ -191,6 +192,8 @@ function settleHarness() {
     pendingPermissions: new Map(), pendingNames: new Map(),
     pushIterator: { closes: 0, close() { this.closes += 1; } },
     abortController: { aborts: 0, abort() { this.aborts += 1; } },
+    // A Codex handle: `close()` is the only thing that ends its child (P4-14).
+    query: { closes: 0, close() { this.closes += 1; } },
   };
   s.pendingPermissions.set("r1", (v) => calls.denied.push(v));
   s.pendingNames.set("r1", "mcp__dopl__dopl_channel#post");
@@ -208,9 +211,10 @@ test("a failed launch frees the slot, denies the pending approval, and stops the
   // orphan shape — and it must be denied FAIL-CLOSED rather than simply dropped.
   assert.equal(h.calls.denied.length, 1);
   assert.equal(h.s.pendingPermissions.size, 0);
-  // ⚠ THE PROCESS. The iterator closes and the controller aborts exactly once each.
+  // ⚠ THE PROCESS. The iterator closes, the controller aborts and the runtime handle closes, once each.
   assert.equal(h.s.pushIterator.closes, 1);
   assert.equal(h.s.abortController.aborts, 1);
+  assert.equal(h.s.query.closes, 1, "the Codex child is stopped by its handle, not by the signal");
   // ⚠ THE PILL. The history row is what makes an ENDED card exist, and it carries the structured
   // code so the card can say WHY in the runtime's own words rather than showing a launching pill.
   assert.equal(h.calls.frozen.length, 1);
@@ -230,6 +234,7 @@ test("a SECOND settle changes nothing — no second deny, no second abort, no se
   assert.equal(h.calls.denied.length, 1);
   assert.equal(h.s.pushIterator.closes, 1);
   assert.equal(h.s.abortController.aborts, 1);
+  assert.equal(h.s.query.closes, 1);
   assert.equal(h.calls.frozen.length, 1);
   assert.equal(h.calls.saved.length, 1);
   assert.equal(h.calls.tray, 1);
