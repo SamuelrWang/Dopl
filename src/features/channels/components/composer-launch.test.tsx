@@ -48,6 +48,8 @@ vi.mock("@/features/agent-identities/hooks/use-agent-identities", () => ({
 }));
 
 import { ChannelsComposer } from "./composer";
+import { catalog, channelRecordBridge } from "../hooks/launch-selection-harness";
+import { REAL_DEFAULT_RUNTIME } from "../lib/runtime-descriptors-harness";
 import type { AgentLaunchControls } from "./use-agents-panel";
 import { member, CHANNEL_ID, ME, PEER } from "./test-fixtures";
 
@@ -340,6 +342,10 @@ describe("what Launch puts on the wire", () => {
   });
 
   it("a CHOSEN model rides as an override; Default sends none", async () => {
+    // The runtime's own roster — a model row with no catalog offers nothing to pick (P6-15).
+    const models = [{ id: "claude-opus-5", label: "Opus 5" }, { id: "claude-sonnet-5", isDefault: true }];
+    (window as unknown as { dopl: Record<string, unknown> }).dopl.channels =
+      channelRecordBridge({ catalogs: { [REAL_DEFAULT_RUNTIME]: catalog(REAL_DEFAULT_RUNTIME, models) } });
     const controls = launcher();
     mount({ newAgent: controls });
     await openPanel();
@@ -492,7 +498,3 @@ describe("the two composer forms never stand at once", () => {
     expect(screen.getByRole("button", { name: "Discard" })).toBeTruthy();
   });
 });
-
-// ⚠ THE SHARED FIELD KIT'S PINS ARE `panel-field.test.tsx` (2026-08-27) — the underline's node,
-// text-only underlining, and the label's auto width. It is `PanelField`, which BOTH panels mount,
-// so asserting it from one panel's suite made the other the wrong place to add the next case.

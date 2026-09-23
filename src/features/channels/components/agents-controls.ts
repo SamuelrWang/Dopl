@@ -311,8 +311,10 @@ export async function launchAgentOnThread(payload: {
   workspaceId: string;
   channelName: string;
   threadTitle: string | null;
-  counterpartyId: string | null;
-  direct: boolean;
+  /** The thread's other party, when known — a label on the outbound card, never a fence. */
+  counterpartyId?: string | null;
+  /** Absent reads `false` in main. */
+  direct?: boolean;
   /** The identity to wear, or `null`/absent for a BLANK agent. */
   identityId?: string | null;
   /** ⚠ THE INSTANCE ID THIS AGENT SHOULD WEAR, pre-assigned by the composer's launch panel so
@@ -366,26 +368,6 @@ export async function launchAgentOnThread(payload: {
     reason: res?.reason, detail: res?.detail,
     identity: res?.identity ?? null,
   };
-}
-
-/**
- * Whether this build can REMEMBER a first-use approval of another member's
- * identity (2026-08-22).
- *
- * ⚠ IT DETECTS `sessions.approveIdentity`, the op it is about to USE — the strict
- * form of this family's rule ({@link canMessageAgent} carries the bug that earned
- * it). ⚠ DO NOT WIDEN IT TO `sessions.launch`: every build with the launch op
- * would then claim the approval op, and the modal would spin on a desktop that
- * cannot store the answer.
- *
- * ⚠ THE DECLARATION DOES NOT REPLACE THIS CHECK, and the op being `?`-optional in
- * `spa-bridge.ts` is exactly the point: an older main ships a `sessions` object
- * without the member, and the type cannot know which main is on the other side
- * (INVARIANTS §11). This read no longer needs a local widening — the member is
- * declared — but the `typeof` gate is the real fence and stays.
- */
-export function canApproveIdentity(): boolean {
-  return typeof getSpaBridge()?.sessions?.approveIdentity === "function";
 }
 
 /**

@@ -25,7 +25,6 @@ import {
   useLaunchSelection,
   type LaunchSelectionState,
 } from "../hooks/use-launch-selection";
-import { defaultRuntimeFallbackCatalog } from "../lib/agent-models";
 import { interruptRefusal, type RuntimeDescriptor } from "../lib/runtime-capability";
 import { signedOutLaunchCopy } from "../lib/runtime-copy";
 import { nativeDimensions, nativeSummary } from "../lib/runtime-native";
@@ -112,21 +111,8 @@ export function useLaunchDialogRuntime(
   const selectedRuntime = effectiveRuntime?.id ?? "";
   const scopeId = selectedRuntime || selection.defaultRuntime;
 
-  /**
-   * ⚠ **THE ONE SUBSTITUTION, AND IT IS THE PRE-RUNTIME LANE.** A plain browser and every desktop
-   * older than the adapter port report NO runtime at all, so there is no id to key a catalog by
-   * and `useRuntimeCatalogs` can answer nothing — yet that product was the DEFAULT runtime's and
-   * its Model row has always listed the frozen table. Rendering raw ids there would be a
-   * regression dressed as honesty (INVARIANTS §11 — unknown is not empty).
-   * ⚠ **IT IS GATED ON `runtimes.length === 0`, WHICH IS THE WHOLE FENCE.** The moment this
-   * desktop reports a roster, a runtime with no catalog gets `null` and shows the platform
-   * default — never another runtime's list. That asymmetry is the plan's hardest invariant, and
-   * `use-runtime-catalogs.ts` makes the same two-part argument about its own fallback.
-   */
-  const catalog = useMemo(
-    () => catalogFor(scopeId) ?? (runtimes.length ? null : defaultRuntimeFallbackCatalog("")),
-    [catalogFor, scopeId, runtimes.length]
-  );
+  // ⚠ NEVER ANOTHER RUNTIME'S LIST: a runtime with no catalog shows the platform default.
+  const catalog = useMemo(() => catalogFor(scopeId), [catalogFor, scopeId]);
   const record = useMemo(() => recordFor(scopeId), [recordFor, scopeId]);
 
   /**

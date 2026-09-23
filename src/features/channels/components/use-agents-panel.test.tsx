@@ -31,6 +31,7 @@ import {
   type AgentLaunchOutcome,
 } from "./use-agents-panel";
 import { AgentsTab } from "./agents-tab";
+import { wholeLaunch } from "./use-launch-controls";
 import type { Channel, ChannelThread } from "../types";
 
 vi.mock("../hooks/use-channel-agent-sessions", () => ({
@@ -38,6 +39,7 @@ vi.mock("../hooks/use-channel-agent-sessions", () => ({
 }));
 
 const peerRefetch = vi.fn();
+const noLaunch = wholeLaunch(async () => ({ ok: true }));
 
 afterEach(() => {
   cleanup();
@@ -101,7 +103,6 @@ describe("launchRefusalText", () => {
     // render a raw enum at the operator.
     for (const reason of [
       "no-bridge",
-      "no-counterparty",
       "busy",
       "cap",
       "no-sdk",
@@ -132,18 +133,18 @@ describe("useAgentsPanel › launch", () => {
     expect(holder.value!.launchBusy).toBe(false);
   });
 
-  it("refuses a thread with no other party, and SAYS so", async () => {
+  it("launches a thread with no resolvable other party, and OMITS the counterparty (P6-08)", async () => {
+    // Main has no `no-counterparty` refusal (`session-launch-op.js`); the counterparty only
+    // labels the outbound card, and the pop-out lane already launched without one.
     const launch = bridge({ ok: true });
-    // MY OWN thread, addressed to nobody: `createdBy === currentUserId` so the
-    // counterparty is `targetUserId`, which is null. The hook used to `return`
-    // silently here, which is the same blank screen a discarded refusal gave.
     const orphan = { ...thread, createdBy: ME, targetUserId: null };
     const holder = mount([orphan as unknown as ChannelThread]);
     await act(async () => {
       await holder.value!.launchAgent("t-1");
     });
-    expect(launch).not.toHaveBeenCalled();
-    expect(holder.value!.launchError).toBe("This thread has no other party");
+    expect(launch).toHaveBeenCalledTimes(1);
+    expect("counterpartyId" in launch.mock.calls[0][0]).toBe(false);
+    expect(holder.value!.launchError).toBeNull();
   });
 
   /**
@@ -167,20 +168,9 @@ describe("useAgentsPanel › launch", () => {
     // ⚠ `null`, never `""` — the empty string is already a real wire value
     // meaning "a responder whose thread never became first-class".
     expect(payload.taskId).toBeNull();
-    expect(payload.counterpartyId).toBeNull();
+    expect("counterpartyId" in payload).toBe(false);
     expect(payload.threadTitle).toBeNull();
     expect(payload.channelId).toBe("c-1");
-  });
-
-  it("still refuses a THREAD whose other party cannot be resolved", async () => {
-    const launch = bridge({ ok: true });
-    const orphan = { ...thread, createdBy: ME, targetUserId: null };
-    const holder = mount([orphan as unknown as ChannelThread]);
-    await act(async () => {
-      await holder.value!.launchAgent("t-1");
-    });
-    expect(launch).not.toHaveBeenCalled();
-    expect(holder.value!.launchError).toBe("This thread has no other party");
   });
 
   it("reads main's NEW answer shape — an agentId is a success", async () => {
@@ -261,7 +251,7 @@ describe("useAgentsPanel › launch", () => {
         currentUserId={ME}
         canLaunch
         launchError="Session limit reached"
-        onLaunchAgent={() => {}}
+        onLaunchAgent={noLaunch}
         openAgent={null}
         onOpenAgent={() => {}}
       />
@@ -302,7 +292,7 @@ describe("useAgentsPanel › launch", () => {
         openThreadId="t-1"
         currentUserId={ME}
         canLaunch
-        onLaunchAgent={() => {}}
+        onLaunchAgent={noLaunch}
         openAgent={null}
         onOpenAgent={() => {}}
       />
@@ -320,7 +310,7 @@ describe("useAgentsPanel › launch", () => {
         currentUserId={ME}
         canLaunch
         launchBusy
-        onLaunchAgent={() => {}}
+        onLaunchAgent={noLaunch}
         openAgent={null}
         onOpenAgent={() => {}}
       />
@@ -338,7 +328,7 @@ describe("useAgentsPanel › launch", () => {
         openThreadId="t-1"
         currentUserId={ME}
         canLaunch
-        onLaunchAgent={() => {}}
+        onLaunchAgent={noLaunch}
         openAgent={null}
         onOpenAgent={() => {}}
       />

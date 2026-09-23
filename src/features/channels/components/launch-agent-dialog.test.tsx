@@ -275,9 +275,16 @@ describe("what the three selectors hold before anybody touches them", () => {
     expect(pill("Code auditor")).toBeTruthy();
   });
 
-  it("Model defaults to the BACK-FILL, and sends nothing", async () => {
-    // ⚠ `agentModelSelection` answers Sonnet for an unset model (2026-09-06, Samuel's ruling
-    // removing "Default"). The ROW shows it; the WIRE carries no model at all — asserted in §3.
+  it("Model defaults to the RUNTIME's own default, and sends nothing", async () => {
+    // The ROW shows the selected runtime's catalog default; the WIRE carries no model at all —
+    // asserted in §3. With no catalog there is no back-fill (P6-15).
+    posture.runtimeSupported = true;
+    posture.catalogs = {
+      [REAL_DEFAULT_RUNTIME]: catalog(REAL_DEFAULT_RUNTIME, [
+        { id: "claude-opus-5", label: "Opus 5" },
+        { id: "claude-sonnet-5", label: "Sonnet 5", isDefault: true },
+      ]),
+    };
     await open();
     expect(selected("Agent model")).toBe("Sonnet 5");
   });
@@ -305,7 +312,6 @@ function oldPanelState(over: Partial<AgentLaunchPanel>): AgentLaunchPanel {
     identityId: null,
     model: "",
     runtime: "",
-    ready: true,
     identityError: null,
     setIdentityError: () => {},
     setName: () => {},

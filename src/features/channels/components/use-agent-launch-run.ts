@@ -22,7 +22,11 @@ import {
   type IdentityLaunchOverrides,
 } from "@/features/agent-identities/lib/launch-overrides";
 import { AGENT_MODEL_DEFAULT } from "../lib/agent-models";
-import { LAUNCH_APPROVAL_REASON, type AgentLaunchControls } from "./use-agents-panel";
+import {
+  LAUNCH_APPROVAL_REASON,
+  launchRefusalText,
+  type AgentLaunchControls,
+} from "./use-launch-controls";
 import {
   describeAgent,
   renameAgent,
@@ -184,19 +188,18 @@ export function useLaunchRunner({
   openThreadId: string | null;
 }) {
   const [approval, setApproval] = useState<IdentityApprovalRequest | null>(null);
+  const [approvalError, setApprovalError] = useState<string | null>(null);
 
   const run = useCallback(async () => {
-    if (!newAgent || !panel.ready) return;
+    if (!newAgent) return;
     const res = await launchWithIdentity(newAgent, panel, openThreadId);
     if (res.reason === LAUNCH_APPROVAL_REASON && panel.identityId) {
       // ⚠ MAIN'S OWN RESOLVED TEXT, read tolerantly — the dialog shows the INSTRUCTIONS the
       // operator is being asked to accept. The local cache's name is only the fallback for a
       // build that sends none; the instructions have no fallback and must not get one, because
       // inventing them is precisely what the question exists to prevent.
-      // ⚠ MAIN'S OWN RESOLVED NAME, and no local fallback beyond the generic. The identity LIST
-      // is no longer in scope here (it is read inside `ComposerLaunch`, which mounts only where a
-      // launch is possible), and reaching for it would drag a react-query hook up to the composer
-      // — which is exactly the mount the identities read was gated behind.
+      // ⚠ MAIN'S OWN RESOLVED NAME, and no local fallback beyond the generic: the identity LIST
+      // is not in scope here.
       setApproval({
         identityId: panel.identityId,
         name: res.identity?.name ?? "this identity",
@@ -216,15 +219,29 @@ export function useLaunchRunner({
 
   return {
     approval,
+    /** Why storing the approval failed. ⚠ The modal stays open holding it — a refused approval
+     *  that closed silently left the next Launch asking again with nothing said (P6-14). */
+    approvalError,
     launch: () => void run(),
-    cancelApproval: () => setApproval(null),
+    cancelApproval: () => {
+      setApproval(null);
+      setApprovalError(null);
+    },
     confirmApproval: () => {
       const identityId = approval?.identityId;
-      setApproval(null);
       if (!identityId || !newAgent) return;
-      void newAgent.approveIdentity(identityId).then((res) => {
-        if (res.ok) void run();
-      });
+      setApprovalError(null);
+      void newAgent.approveIdentity(identityId).then(
+        (res) => {
+          if (!res.ok) {
+            setApprovalError(launchRefusalText(res.reason));
+            return;
+          }
+          setApproval(null);
+          void run();
+        },
+        () => setApprovalError(launchRefusalText(undefined))
+      );
     },
   };
 }

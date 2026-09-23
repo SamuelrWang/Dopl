@@ -144,10 +144,9 @@ export interface AgentLaunchPanel {
    * ⚠ **IT REPLACED THE LAUNCH SHEET'S READ-ONLY "Read" DISCLOSURE**, which is the ruling that
    * deleted that file: a launch had a place to SHOW instructions and no place to change them, and
    * Samuel asked for the field rather than the disclosure.
-   * ⚠ **OPTIONAL FOR {@link AgentLaunchPanel.color}'s REASON** — the two hand-built panel
-   * literals (`runtime-refusals.test.tsx › panelStub`, `launch-agent-dialog.test.tsx ›
-   * oldPanelState`) are not this hook, and absent reads as "this panel carries no instructions",
-   * which is what those surfaces mean.
+   * ⚠ **OPTIONAL FOR {@link AgentLaunchPanel.color}'s REASON** — the hand-built panel literal
+   * (`launch-agent-dialog.test.tsx › oldPanelState`) is not this hook, and absent reads as "this
+   * panel carries no instructions".
    */
   instructions?: string;
   setInstructions?: (next: string) => void;
@@ -192,25 +191,14 @@ export interface AgentLaunchPanel {
    * hold.
    *
    * ⚠ **OPTIONAL, LIKE `ChannelSessionState.color` AND FOR THE SAME REASON.** Adding a
-   * REQUIRED member here breaks every hand-built panel literal that is not this hook —
-   * `runtime-refusals.test.tsx › panelStub` and `launch-agent-dialog.test.tsx ›
-   * oldPanelState` are the two — so the addition is genuinely ADDITIVE: absent reads as
-   * "this panel does not carry a colour", which is exactly what those two surfaces mean.
+   * REQUIRED member here breaks every hand-built panel literal that is not this hook
+   * (`launch-agent-dialog.test.tsx › oldPanelState`), so the addition is genuinely ADDITIVE:
+   * absent reads as "this panel does not carry a colour".
    */
   color?: AgentColorKey | null;
   /** ⚠ OPTIONAL for {@link AgentLaunchPanel.color}'s reason, and consumed as
    *  `panel.setColor?.(…)`. The hook always supplies it. */
   setColor?: (next: AgentColorKey) => void;
-  /**
-   * **NOTHING IS REQUIRED SINCE 2026-09-15** — the dialog is launchable the moment it can reach
-   * main (Samuel: *"if a user launches an agent with no name, just give it the name, New
-   * Agent"*). A name, a description, an identity, a model and a runtime are all optional.
-   *
-   * ⚠ **IT IS KEPT AS A FIELD RATHER THAN DELETED**, because the dialog, the one-click launch
-   * row and `useLaunchRunner` all consult it and because the next required thing will want the
-   * same door. It is the LAUNCHABILITY of the form, not an assertion about the name.
-   */
-  ready: boolean;
   /** A rename/describe that main refused AFTER the agent started. Never a launch failure. */
   identityError: string | null;
   setIdentityError: (next: string | null) => void;
@@ -424,14 +412,6 @@ export function useAgentLaunch(): AgentLaunchPanel {
     runtime,
     color,
     setColor,
-    // ⚠ **THE NAME GATE IS GONE (Samuel, 2026-09-15).** It read `name.trim().length > 0`, and
-    // its own note said why that was defensible: *"an unnamed one is refused only because the
-    // field is PREFILLED"* — an empty field could only mean the operator had deliberately
-    // cleared the `#<id>` put there for them. The field opens BLANK now, so the same gate would
-    // mean a freshly opened dialog is un-launchable until somebody types, which is the opposite
-    // of the ruling it came from. A blank submit is named `New Agent`
-    // (`use-agent-launch-run.ts › launchWithIdentity`).
-    ready: true,
     identityError,
     setIdentityError,
     setName,

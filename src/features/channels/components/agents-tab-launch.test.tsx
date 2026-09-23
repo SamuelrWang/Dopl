@@ -19,6 +19,7 @@ vi.mock("@/features/agent-identities/hooks/use-agent-identities", () => ({
 }));
 
 import { AgentsTab } from "./agents-tab";
+import { wholeLaunch } from "./use-launch-controls";
 import { CHANNEL_ID, ME } from "./test-fixtures";
 
 afterEach(() => {
@@ -58,7 +59,7 @@ describe("the Launch agent split button", () => {
         openThreadId="t-1"
         currentUserId={ME}
         canLaunch
-        onLaunchAgent={onLaunchAgent}
+        onLaunchAgent={wholeLaunch(onLaunchAgent)}
         openAgent={null}
         onOpenAgent={vi.fn()}
         {...over}

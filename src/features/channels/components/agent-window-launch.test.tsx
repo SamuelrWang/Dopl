@@ -27,18 +27,6 @@ vi.mock("@/features/agent-identities/hooks/use-agent-identities", () => ({
     refetch: () => {},
   }),
 }));
-vi.mock("../hooks/use-channel-launch-posture", () => ({
-  useChannelLaunchPosture: () => ({
-    posture: { model: null },
-    modelSupported: false,
-    runtimeSupported: false,
-    runtimes: [],
-    runtime: "",
-    connected: [],
-    connectedKnown: false,
-    defaultRuntime: "claude",
-  }),
-}));
 
 import { AgentWindowLaunch } from "./agent-window-launch";
 import { useAgentLaunch } from "./use-agent-launch";
@@ -165,6 +153,49 @@ describe("the + opens the New agent form", () => {
  * bug — and the wiring lives in the SPA page, which this suite cannot mount (it is router- and
  * workspace-bound). Three lines are the whole contract.
  */
+/**
+ * 🔒 THE POP-OUT'S LAUNCH IS THE PANEL'S LAUNCH (P6-02 / P6-10): the same busy guard and the same
+ * refusal line, from `use-launch-controls.ts`. It used to hard-wire `launchBusy: false` and
+ * `launchError: null`, so a refused launch said nothing and a double click started two agents.
+ */
+describe("the pop-out's launch says its refusals and guards its click", () => {
+  it("says a refusal out loud and keeps the form open", async () => {
+    launch.mockResolvedValue({ ok: false, reason: "cap" });
+    render(<Harness />);
+    fireEvent.click(screen.getByRole("button", { name: "New agent" }));
+    await screen.findByRole("heading", { name: "New agent" });
+    fireEvent.click(screen.getByRole("button", { name: "Launch" }));
+    expect((await screen.findByRole("alert")).textContent).toBe("Session limit reached");
+    expect(screen.getByRole("heading", { name: "New agent" })).toBeTruthy();
+  });
+
+  it("starts ONE agent for a double click", async () => {
+    let release: (v: unknown) => void = () => {};
+    launch.mockImplementation(() => new Promise((resolve) => (release = resolve)));
+    render(<Harness />);
+    fireEvent.click(screen.getByRole("button", { name: "New agent" }));
+    await screen.findByRole("heading", { name: "New agent" });
+    const button = screen.getByRole("button", { name: "Launch" });
+    fireEvent.click(button);
+    fireEvent.click(button);
+    await waitFor(() => expect(launch).toHaveBeenCalledTimes(1));
+    release({ ok: true, agentId: "k3v7d2mq" });
+    await waitFor(() => expect(screen.queryByRole("heading", { name: "New agent" })).toBeNull());
+    expect(launch).toHaveBeenCalledTimes(1);
+  });
+
+  it("puts no counterparty and no `direct` on the wire — this window knows neither", async () => {
+    render(<Harness />);
+    fireEvent.click(screen.getByRole("button", { name: "New agent" }));
+    await screen.findByRole("heading", { name: "New agent" });
+    fireEvent.click(screen.getByRole("button", { name: "Launch" }));
+    await waitFor(() => expect(launch).toHaveBeenCalledTimes(1));
+    const payload = launch.mock.calls[0]![0] as Record<string, unknown>;
+    expect("counterpartyId" in payload).toBe(false);
+    expect("direct" in payload).toBe(false);
+  });
+});
+
 describe("the pop-out page wires the + to the form", () => {
   const page = readFileSync(
     join(import.meta.dirname, "../../../../apps/desktop-ui/src/pages/agent-window/index.tsx"),
