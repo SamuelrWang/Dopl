@@ -35,7 +35,7 @@ export default function IdentitiesPage() {
   const { access, isPending, error, refetch } = useWorkspaceAccess();
 
   if (error) return <PageError error={error} onRetry={refetch} />;
-  if (isPending || !access) return <IdentitiesPageSkeleton label="Loading identities" />;
+  if (isPending || !access) return <IdentitiesPageSkeleton />;
 
   return (
     <AgentIdentitiesCore
@@ -44,7 +44,7 @@ export default function IdentitiesPage() {
       // ⚠ A SLOT, NOT AN IMPORT ON THE OTHER SIDE — the core is Next-free and
       // router-free so both trees mount it, and it cannot reach into this
       // package. Same idiom as `RouterLink` on `pages/channels/index.tsx`.
-      loadingSkeleton={<IdentitiesPageSkeleton label="Loading identities" />}
+      loadingSkeleton={<IdentitiesPageSkeleton />}
     />
   );
 }

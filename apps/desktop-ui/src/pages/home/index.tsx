@@ -173,7 +173,7 @@ export default function HomePage() {
   // centred `max-w-[960px]` column under a 52px bar — a surface /home has never
   // had. `HomePageSkeleton` mirrors what resolves here: the rail, the base
   // panel's header, the 290px list and the bordered record pane.
-  if (pending) return <HomePageSkeleton label="Opening home" />;
+  if (pending) return <HomePageSkeleton />;
   if (isUnauthorized(error)) return <SignedOutScreen />;
   if (error || !identity.data) {
     return (

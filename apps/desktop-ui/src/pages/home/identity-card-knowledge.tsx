@@ -13,6 +13,7 @@ import type {
   AgentIdentity,
   IdentityKnowledgeRef,
 } from "@/features/agent-identities/client/types";
+import { HOME_SHELF } from "./identity-editor";
 
 /**
  * **"Add knowledge", ON THE CARD** (Samuel, 2026-09-22: *"under the description
@@ -121,7 +122,7 @@ export function IdentityKnowledgeDialog({
   ]);
   const { save, error, saving } = useIdentitySave({
     workspaceId,
-    shelf: "home",
+    shelf: HOME_SHELF,
     noun: "identity",
     onDone: onClose,
   });

@@ -68,6 +68,10 @@ import {
  * cheaper than a second copy of the draft-reset rule.
  */
 
+/** The personal shelf. `?shelf=home` is a server WHERE: a forgotten argument widens silently, and
+ *  the write's shelf must equal the read's or the optimistic patch lands on an unread key (F-331). */
+export const HOME_SHELF: IdentityShelf = "home";
+
 export interface HomeIdentityEditorProps {
   /** `null` = create. Anything else edits that row IN ITS OWN WORKSPACE. */
   identity: AgentIdentity | null;
@@ -140,7 +144,7 @@ export function HomeWorkspaceIdentityEditor({
       // into the caller's personal container (the shelf this pane lists), and it
       // keys the cache entry the optimistic patch addresses (F-331, with the
       // shelf as a second axis).
-      shelf="home"
+      shelf={HOME_SHELF}
       onClose={onClose}
     />
   );
@@ -210,7 +214,7 @@ function IdentityEditorMount({
           ? { acknowledgeShared: true }
           : {};
       return {
-        create: { ...(shelf === "home" ? { homeScoped: true } : {}), ...acknowledgeShared },
+        create: { ...(shelf === HOME_SHELF ? { homeScoped: true } : {}), ...acknowledgeShared },
         patch: acknowledgeShared,
       };
     },

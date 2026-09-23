@@ -23,6 +23,7 @@ import {
 } from "./identity-panel-cards";
 import {
   ContainerIdentityEditor,
+  HOME_SHELF,
   HomeWorkspaceIdentityEditor,
 } from "./identity-editor";
 import { LaunchIntoChannelButton, useCardLaunch } from "./identity-card-launch";
@@ -185,7 +186,7 @@ export function HomeIdentityPanels({
   if (hasChannel && !containerList.resolved) {
     // ⚠ THIS FACE'S OWN SHAPE — two flat sections over `IdentityGrid`'s
     // auto-fill card grid — not the shared page ghost.
-    return <HomeIdentityPanelsSkeleton label="Loading identities" />;
+    return <HomeIdentityPanelsSkeleton />;
   }
 
   const scopeUnavailable = homeWorkspaceId === null;
@@ -365,17 +366,6 @@ export function HomeIdentityPanels({
 function isMine(identity: AgentIdentity, currentUserId: string): boolean {
   return identity.createdBy === currentUserId;
 }
-
-/**
- * 🔒 PERSONAL READS ONE SHELF, NOT ONE WORKSPACE (Samuel's ruling 2026-08-27,
- * `20260901120000_agent_template_home_scoped.sql`) — the sibling of the
- * Knowledge face's `HOME_SHELF`, and the same trap: `?shelf=home` is a server
- * `WHERE`, there is no client-side filter to fall back on, and a forgotten
- * argument WIDENS silently. It is a module constant threaded through the read
- * and (via `useAgentIdentityWrites`) the cache key, so it cannot be spelled two
- * ways.
- */
-const HOME_SHELF = "home" as const;
 
 /**
  * What the editor is open ON.
