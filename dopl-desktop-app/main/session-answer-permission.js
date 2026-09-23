@@ -59,9 +59,8 @@ function bind(d) {
  *
  * THE ANSWER GOES THROUGH THE REDUCER, NEVER STRAIGHT TO THE RESOLVER. `permission_decision` is
  * the one event that resolves a gate: it clears the id from `state.pendingPermissions`, re-arms
- * the idle timer, emits `permission_resolved`, only then calls `resolvePerm`, and maps the
- * decision fail-closed. Writing to the resolver here would leave the reducer believing the call
- * was still held.
+ * the idle timer, only then calls `resolvePerm`, and maps the decision fail-closed. Writing to the
+ * resolver here would leave the reducer believing the call was still held.
  *
  * The grant name rides along unused by `allow-once`: the reducer reads `event.name` only on
  * `allow-task`, and supplying the session's own recorded key means a later widening of this op

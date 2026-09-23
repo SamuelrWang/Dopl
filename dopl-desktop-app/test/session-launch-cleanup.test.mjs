@@ -58,7 +58,7 @@ test("the Codex adapter answers an unresolvable binary with a handle whose STREA
     const spec = {
       session: { key: "c1:t1:a1", state: {} },
       args: [], env: {}, cwd: HERE,
-      dispatch: () => {}, emitQuiet: () => {},
+      dispatch: () => {},
     };
     let handle;
     assert.doesNotThrow(() => { handle = launchSpec.start(spec); },

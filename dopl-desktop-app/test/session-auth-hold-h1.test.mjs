@@ -83,14 +83,12 @@ test("H1(b) A SECOND AUTH FAILURE CONVERGES TO PARKED — it never leaves a sess
   // Now force the exact pre-fix state: something dragged the held session back to 'running'
   // with no query behind it (what H1(a)'s wake used to do). The next auth failure MUST park it.
   s.state = { ...s.state, phase: "running", parked: false, activity: "working", authHeld: false };
-  const emitted = h.calls.emit.length;
   assert.equal(h.holdIfAuthFailure(s, "401 again"), true, "still reports handled");
   assert.deepEqual([s.state.phase, s.state.parked, s.state.authHeld], ["parked", true, true],
     "and it really is parked now, not 'running' forever");
   assert.equal(s.pushIterator.closed, true, "the prompt stream is closed");
   assert.equal(s.abortController.aborted, true, "the query is torn down");
   assert.ok(h.calls.denyPending.length >= 1, "awaited tool promises fail closed");
-  assert.equal(h.calls.emit.length, emitted, "but the status is NOT re-emitted");
 });
 
 test("H1(b) the hold is idempotent in the reducer: two holds, one park", () => {

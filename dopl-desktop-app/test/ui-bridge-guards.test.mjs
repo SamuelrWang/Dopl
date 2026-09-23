@@ -263,7 +263,7 @@ test("SPA password sign-in and sign-out restart the listener (and sign-in writes
   // Without it the listener long-polls on a revoked credential (with a misleading
   // "session expired" notification) and the tray reads signed-out for up to the
   // 5-minute reconcile after a successful sign-in.
-  const signIn = between(BRIDGE, "'dopl:password-sign-in'", "'dopl:magic-link'");
+  const signIn = between(BRIDGE, "'dopl:password-sign-in'", "'dopl:sign-out'");
   assert.match(signIn, /kickListener\('password-sign-in'\)/);
   assert.match(signIn, /ensureMcpConfig\('password-sign-in'\)/);
   const signOut = between(BRIDGE, "'dopl:sign-out'", "'dopl:sync-watch'");

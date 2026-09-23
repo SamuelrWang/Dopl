@@ -45,7 +45,7 @@ function asyncFnOf(src, name) {
 function loadRefresh(ws) {
   const calls = { fetched: [], logged: [] };
   const fn = new Function(
-    "apiFetch", "diag", "normalizeList", "nameCache", "avatarUrlCache",
+    "apiFetch", "diag", "normalizeList", "nameCache",
     `${asyncFnOf(IDENTITY, "refreshNameCache")}\n return refreshNameCache;`
   )(
     async (path) => {
@@ -54,7 +54,6 @@ function loadRefresh(ws) {
     },
     (...a) => calls.logged.push(a.join(" ")),
     () => [],
-    new Map(),
     new Map()
   );
   return { run: () => fn(ws), calls };

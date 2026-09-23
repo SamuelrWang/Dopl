@@ -15,10 +15,9 @@ import type { AgentToolProfile, ResolvedAgentToolProfile } from "../types";
  *
  * ⚠ **IT IS A HAND COPY OF `dopl-desktop-app/main/tool-profiles.js ›
  * profileForChannel` AND `main/targeting-window.js › isSharedChannel`**, because
- * main is CommonJS and cannot import this tree. `lib/agent-posture.ts` is the
- * precedent and its docblock carries the whole argument; the drift bomb is defused
- * the same way — `tool-profile-resolve-parity.test.ts` SLICES the desktop's own
- * sentinel block and runs it against this file over the full cross product.
+ * main is CommonJS and cannot import this tree. The drift is fenced by
+ * `tool-profile-resolve-parity.test.ts`, which SLICES the desktop's own sentinel
+ * block and runs it against this file over the full cross product.
  *
  * ⚠ **IT NARROWS AND IT CAN NEVER WIDEN.** The only pair it moves is `full` →
  * `channel_agent`, in a SHARED room. `read_only` and `dopl_only` are already

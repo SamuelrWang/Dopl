@@ -13,11 +13,10 @@
 // server's own `isDirect` flag, FAIL-QUIET — only an explicit `true` names anyone.
 //
 // WHAT THIS FILE COVERS NOW: the PRODUCER side only. Where `directChannel` comes from, that it
-// can only ever be the server's own flag, that it rides BOTH the gated and the auto-allowed post
-// paths identically, that it survives every surviving session-start path, and that the `to` it
-// travels with is a display NAME rather than the raw user id an agent typed. All of it is
-// `main/session-io.js` / `session-outbound.js` / `session-post-surface.js`, and all of it still
-// ships. See the ⚠ block below for the consumer half and why it is gone.
+// can only ever be the server's own flag, that it rides the gated post path, that it survives
+// every surviving session-start path, and that the `to` it travels with is a display NAME rather
+// than the raw user id an agent typed. All of it is `main/session-io.js` /
+// `session-post-surface.js`, and all of it still ships. See the ⚠ block below for the consumer half and why it is gone.
 //
 // WHY THIS FILE EXISTS AT ALL (F-145). These assertions lived in
 // `test/session-addressee-truth.test.mjs`, a MIXED file: the N-PARTY half (an unaddressed post
@@ -46,7 +45,6 @@ const io = require(M("session-io.js"));
 // platform's own reply vocabulary, which is the adapter's. The tests below drive the shipped
 // callback, so they take it from there.
 const axisB = require(M("runtime/claude/axis-b.js"));
-const outbound = require(M("session-outbound.js"));
 const { DOPL_CHANNEL_TOOL } = require(M("tool-profiles.js"));
 
 // ── ⚠ THE APPROVAL CARD'S COPY — REMOVED 2026-08-20, both surfaces are deleted ─
@@ -159,27 +157,6 @@ test("the counterparty's id is resolved to their name before it leaves main", ()
     io.withPostSurface({ type: "outbound_gate" }, { op: "send", to: ID }, null, ID).to,
     ID
   );
-});
-
-test("H2: an AUTO-ALLOWED post carries the same destination fields as a gated one", () => {
-  // Axis B auto_outbound resolves the record itself (session-outbound). If the flag rode only
-  // the gated path, turning auto-send on would silently downgrade the record — the operator who
-  // opted INTO hands-off sending would be the one who stopped being told where things went.
-  const emitted = [];
-  const s = { channelId: "ch1", counterpartyName: "David", direct: true };
-  outbound.wrapGate(s, () => Promise.resolve({ behavior: "allow" }), (_s, ev) => emitted.push(ev))(
-    DOPL_CHANNEL_TOOL, { op: "send", body: "hi" }, { toolUseID: "t1" });
-  return new Promise((resolve) => setImmediate(() => {
-    assert.equal(emitted[0].directChannel, true);
-    // ⚠ REWRITTEN 2026-08-20: the two assertions here used to be
-    // `labels.postDestinationText({...emitted[0], ownChannel: true}) === "To: David"` and
-    // `render.outboundLabel(emitted[0]) === "Sent to David"`. Both formatters are deleted. The
-    // property they were proving is that the auto path and the gated path emit the SAME fields,
-    // so it is now asserted on the fields — which is also the stronger form, since it fails on a
-    // divergence the two formatters happened to render identically.
-    assert.equal(emitted[0].to, "David");
-    resolve();
-  }));
 });
 
 test("H2: the flag is read off the channel DTO and survives every session-start path", () => {

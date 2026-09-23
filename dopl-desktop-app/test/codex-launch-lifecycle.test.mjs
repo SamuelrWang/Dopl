@@ -74,7 +74,7 @@ function run(o = {}) {
     session: { key: "c:t:a", state: {}, profile: "full" },
     args: [], env: {}, cwd: import.meta.dirname, prompt: prompts,
     resumeThreadId: o.resumeThreadId || null,
-    dispatch: () => {}, emitQuiet: () => {},
+    dispatch: () => {},
   });
   const restore = () => { client.connect = realConnect; catalog.writeDelegationFreeCatalog = realCatalog; };
   const notify = (method, params) => hooks.onNotification({ method, params });

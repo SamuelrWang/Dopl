@@ -1,6 +1,6 @@
 // Channels listener — WHO THE PEOPLE ARE: the operator's own user id (so a loop never self-triggers)
-// and the peer display-name / avatar caches, both read off the workspace members listing.
-// `listener-io.js` re-exports these exact function objects (one instance of each cache).
+// and the peer display-name cache, read off the workspace members listing.
+// `listener-io.js` re-exports these exact function objects (one instance of the cache).
 
 const auth = require('./auth');
 const { diag } = require('./diag');
@@ -11,9 +11,8 @@ const apiFetch = (pathname, opts) => require('./listener-io').apiFetch(pathname,
 const normalizeList = (data, key) => require('./listener-io').normalizeList(data, key);
 
 const nameCache = new Map(); // userId -> displayName, refreshed once per reconcile
-const avatarUrlCache = new Map(); // userId -> avatarUrl (item 1/5/6), refreshed with the name cache
 
-// Both caches are bounded, oldest-out: `refreshNameCache` re-inserts every member it sees each
+// Bounded, oldest-out: `refreshNameCache` re-inserts every member it sees each
 // reconcile, so a still-watched workspace's members stay. A miss reads 'A teammate'.
 const MAX_CACHED_MEMBERS = 1000;
 
@@ -57,11 +56,6 @@ function displayNameFor(userId) {
   return (userId && nameCache.get(userId)) || 'A teammate';
 }
 
-/** A member's remote avatar URL, for `avatar-cache.js` only — never handed to a renderer as a URL. */
-function avatarUrlFor(userId) {
-  return (userId && avatarUrlCache.get(userId)) || null;
-}
-
 async function refreshNameCache(ws) {
   // Guarded like its twins: a DTO missing slug or publicId would build `slug-undefined` and 404.
   const segment = ws && ws.slug && ws.publicId ? `${ws.slug}-${ws.publicId}` : null;
@@ -83,7 +77,6 @@ async function refreshNameCache(ws) {
       if (mem && mem.userId) {
         const dn = mem.displayName || mem.email || null;
         if (dn) cacheMember(nameCache, mem.userId, dn);
-        if (mem.avatarUrl) cacheMember(avatarUrlCache, mem.userId, mem.avatarUrl);
       }
     }
     diag('namecache loaded', members.length, 'ws', ws.slug);
@@ -95,6 +88,5 @@ async function refreshNameCache(ws) {
 module.exports = {
   resolveOperatorUserId,
   displayNameFor,
-  avatarUrlFor,
   refreshNameCache,
 };

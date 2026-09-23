@@ -39,17 +39,13 @@ const cacheMember = new Function(
   `const MAX_CACHED_MEMBERS = ${MAX};\n${fnOf(SRC, "cacheMember")}\n return cacheMember;`
 )();
 
-test("the ceiling is NAMED, and both caches go through the one bounded writer", () => {
+test("the ceiling is NAMED, and the cache goes through the one bounded writer", () => {
   assert.ok(Number.isInteger(MAX) && MAX > 0, "MAX_CACHED_MEMBERS must be a named integer");
   // ⚠ The pin that matters is the CALL SITE: a bare `.set()` re-introduces the unbounded
   // cache with the constant still sitting there looking like it does something.
   const refresh = fnOf(SRC, "refreshNameCache");
   assert.match(refresh, /cacheMember\(nameCache, mem\.userId, dn\)/);
-  assert.match(refresh, /cacheMember\(avatarUrlCache, mem\.userId, mem\.avatarUrl\)/);
-  assert.ok(
-    !/\bnameCache\.set\(|\bavatarUrlCache\.set\(/.test(SRC),
-    "nothing may write either cache except through cacheMember"
-  );
+  assert.ok(!/\bnameCache\.set\(/.test(SRC), "nothing may write the cache except through cacheMember");
 });
 
 test("BOUND: the cache never exceeds the ceiling, however many members are seen", () => {

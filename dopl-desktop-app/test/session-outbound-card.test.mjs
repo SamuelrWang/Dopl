@@ -131,10 +131,10 @@ test("io: the AXIS B auto-send bypass still dispatches NOTHING (no card, no dock
 // ⚠ DELETED 2026-08-20 (F-228) — "L3 PARK: the park's fail-closed deny echo resolves a pending
 // post to 'Not sent'" pinned the RENDERER end of the same wire: that vm.reduceEvent turned the
 // park's `permission_resolved{deny}` into a `not_sent` card. renderer/session/session-viewmodel.js
-// is deleted. The MAIN end — that the reducer really emits that echo, keyed on the post's own
-// requestId — is the test immediately below and is untouched, so the fail-closed rule still runs.
+// is deleted, and the echo with it. The MAIN end — the park deny-closes the post's own request —
+// is the test immediately below.
 
-test("L3 PARK: the reducer really does emit that echo for the post's own requestId", () => {
+test("L3 PARK: the park deny-closes the post's own request first", () => {
   // Source-extracted so this can never drift from the shipped reducer. A post gates through
   // the SAME `permission_request` event as any other tool, which is exactly why park,
   // denyPending and the auto-approve drain already cover it — no new event type was added.
@@ -159,11 +159,9 @@ test("L3 PARK: the reducer really does emit that echo for the post's own request
   assert.deepEqual(awaiting.state.pendingPermissions, ["r1"], "tracked like any gated tool");
   assert.deepEqual(awaiting.effects[0].payload, { type: "outbound_gate", requestId: "r1", toolUseId: "t1" });
 
-  // A park deny-closes it fail-closed AND tells the renderer, which resolves the card.
+  // A park deny-closes it fail-closed.
   const parked = sessionReducer(awaiting.state, { type: "idle_timeout" });
   assert.equal(parked.effects[0].type, "denyPending", "the SDK promise is denied first");
-  const echo = parked.effects.find((e) => e.type === "emit" && e.payload.type === "permission_resolved");
-  assert.deepEqual(echo.payload, { type: "permission_resolved", requestId: "r1", decision: "deny" });
   assert.deepEqual(parked.state.pendingPermissions, []);
 
   // (b) A DENY's failing tool_result still un-counts the post, so the turn ends idle and

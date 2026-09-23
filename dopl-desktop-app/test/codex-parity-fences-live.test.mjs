@@ -138,7 +138,7 @@ async function turn(o) {
 
 const fullSpec = (toolMode) => launchSpec.buildLaunchSpec({
   session: { profile: 'full', channelId: CH, state: { toolMode }, workspaceId: 'ws', model: '', containerToken: { token: 't' } },
-  dispatch: () => {}, emitQuiet: () => {},
+  dispatch: () => {},
 }).threadStart;
 const outputs = (run) => {
   const last = run.requests[run.requests.length - 1];

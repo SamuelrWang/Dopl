@@ -14,8 +14,7 @@ const { diag } = require('./diag');
 // it is `claude-resolve.resolveClaude()`, which is `probeStaticPath()` (common
 // install dirs) || `probeLoginShell()` — an EXTERNAL `claude` on PATH, and
 // nothing else. The binary a SESSION actually runs ships INSIDE the app bundle
-// (`sdk-loader.resolveClaudeExecutable`, asar-unpacked and signed), which
-// `session-auth-detect.js` already documents in as many words.
+// (`runtime/claude/loader.js › resolveClaudeExecutable`, asar-unpacked and signed).
 //
 // So on a fresh install by somebody who never separately installed the Claude
 // Code CLI — which is most people we are distributing to — every inbound channel

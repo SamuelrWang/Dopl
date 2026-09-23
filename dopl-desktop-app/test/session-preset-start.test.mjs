@@ -359,7 +359,7 @@ test("M2: a park KEEPS the posture; only the AUTH HOLD resets it", () => {
   const idle = REDUCER.slice(REDUCER.indexOf("if (type === 'idle_timeout')"),
     REDUCER.indexOf("if (type === 'abandon_timeout')"));
   assert.doesNotMatch(idle, /toolMode: 'manual'/, "the idle park writes no posture at all");
-  assert.match(idle, /resetPosture: false/);
+  assert.match(idle, /parkEffects\(\{ armAbandon: true \}\)/);
   const hold = REDUCER.slice(REDUCER.indexOf("if (type === 'auth_hold')"), REDUCER.indexOf("if (type === 'auth_release')"));
   assert.match(hold, /toolMode: toolModesOf\(state\)\[0\], messageMode: MESSAGE_MODES\[0\], inboundForTask: false/,
     "a session with no credential still hard-resets to the restrictive pair, in ITS runtime's words");

@@ -243,8 +243,8 @@ test("AUTH HOLD: the IDLE park still posts NOTHING — it is a pause, not an end
   // abandonment bound is what speaks if they are not. Posting here would narrate every lunch
   // break into the shared thread.
   assert.equal(lifecycleOf(sessionReducer(running(), { type: "idle_timeout" }).effects), null);
-  assert.equal(lifecycleOf(parkEffects(running(), { resetPosture: false, armAbandon: true })), null);
-  assert.ok(lifecycleOf(parkEffects(running(), { lifecycle: true })), "only the flagged park posts");
+  assert.equal(lifecycleOf(parkEffects({ armAbandon: true })), null);
+  assert.ok(lifecycleOf(parkEffects({ lifecycle: true })), "only the flagged park posts");
 });
 
 // ── 3. THE `inactive` TERMINAL ───────────────────────────────────────────────────────

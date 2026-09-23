@@ -168,8 +168,3 @@ export function approvalCategoryMode(
   const named = toolModeOptions(d).find((o) => o.value === GRANULAR_MODE);
   return named ? named.value : null;
 }
-
-/** Cursor's classifier instructions — `null` on every shipped adapter; rendered when declared. */
-export const freeform = (
-  d: RuntimeDescriptor | null | undefined
-): RuntimeFreeform | null => d?.toolMode?.freeform ?? null;

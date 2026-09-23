@@ -179,6 +179,6 @@ test("startQuery arms it, so every launch through it is covered by one line", ()
   // platform handle held here. The ORDER this pins is unchanged and is the whole point.
   assert.ok(body.indexOf("rt.start(buildLaunchSpec(s))") < body.indexOf("deps.scheduleIdle(s)"),
     "armed AFTER the query exists, so a throwing assembly leaves no orphan timer");
-  assert.match(ENGINE, /sessionQuery\.bind\(\{ dispatch, emitQuiet: \(\) => \{\}, scheduleIdle \}\)/,
+  assert.match(ENGINE, /sessionQuery\.bind\(\{ dispatch, scheduleIdle \}\)/,
     "and the engine hands its OWN scheduleIdle in — never a second timer implementation");
 });

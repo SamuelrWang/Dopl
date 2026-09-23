@@ -28,12 +28,12 @@
 // nothing in this log saying why (F-336/F-333).
 //
 // ⚠ MINTED AT SPAWN, STAMPED ON THE SESSION, REVOKED AT SETTLE. It is stamped
-// rather than fetched on demand for the reason `launchDepth` is: `buildSdkOptions`
+// rather than fetched on demand for the reason `launchDepth` is: a runtime's `buildLaunchSpec`
 // is SYNCHRONOUS and is re-entered by every spawn shape (fresh launch, parked
 // resume, recreated shell, post-sign-in relaunch), so a value it needs must
 // already be on the session object by then. That is also why the credential is
 // NOT released on PARK — `session-park.js › resumeParked` re-enters
-// `buildSdkOptions` with the same object, and a released credential would come
+// `buildLaunchSpec` with the same object, and a released credential would come
 // back as a session that 401s on its first tool call with nothing to say why.
 // Park keeps it; only `settle` gives it up. (The 24h TTL is the backstop for the
 // case where `settle` never runs at all — a crash, a kill, a power cut.)

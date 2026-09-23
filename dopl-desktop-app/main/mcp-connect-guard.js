@@ -7,7 +7,7 @@ const { diag } = require('./diag');
 const store = require('./session-store');
 const mcpConnect = require('./mcp-connect');
 
-let deps = null; // { acquireRuntime, startQuery, dispatch, emit, denyPending, resumeParked, abortInFlight }
+let deps = null; // { acquireRuntime, startQuery, dispatch, denyPending, resumeParked, abortInFlight }
 
 function bind(d) {
   deps = d || null;
@@ -92,7 +92,6 @@ function failVisibly(s, status, attempt) {
   s.endCode = 'mcp-unreachable';
   try { if (deps.denyPending) deps.denyPending(s, mcpConnect.MCP_UNAVAILABLE_LABEL); } catch (_) { /* best effort */ }
   try { store.setRecordPhase(s.key, 'ended'); } catch (_) { /* the visible end matters more than the record */ }
-  try { deps.emit(s, { type: 'error', message: text }); } catch (_) { /* best effort */ }
   try { deps.dispatch(s, { type: 'crash' }); } catch (err) { diag('mcp-connect: crash dispatch failed', err && err.message); }
 }
 

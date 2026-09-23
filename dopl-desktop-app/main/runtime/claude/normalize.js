@@ -6,7 +6,7 @@ const events = require('../events');
 const io = require('../../session-io');
 const modelTable = require('./model-table');
 
-// The auth-sentinel matchers live beside the operator copy in `session-auth-detect.js`.
+// The auth-sentinel matchers live in `session-auth-detect.js`.
 const detect = require('../../session-auth-detect');
 
 // Core's synthetic frame for a stream REJECTION: the thrown error's text comes through here too, so

@@ -4,6 +4,7 @@ import type {
   AgentColorKey,
   LaunchRefusalReason,
   LaunchDirectiveKind,
+  LaunchDirectiveStatus,
   LaunchToolMode,
   LaunchMessageMode,
 } from "@dopl/contracts";
@@ -40,7 +41,7 @@ export type LaunchDirective = {
   /** The machine's stored name (e.g. `Coder-1`): address the agent by it. `null` = not reported. */
   appliedAgentName: string | null;
   /** `done` is the non-launch kinds' success; `launched` is never reused for it. */
-  status: "pending" | "claimed" | "launched" | "done" | "refused" | "expired";
+  status: LaunchDirectiveStatus;
   refusalReason: LaunchRefusalReason | null;
   targetAgentId: string | null;
   /** The rename's new name: `""` clears it, `null` means this is not a rename. */

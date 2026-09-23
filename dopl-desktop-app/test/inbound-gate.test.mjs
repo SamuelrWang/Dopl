@@ -27,8 +27,6 @@ const running = (opts) =>
   sessionReducer(initialSessionState(opts), { type: "launched", payload: { type: "init" } }).state;
 const effTypes = (effects) => effects.map((e) => e.type);
 const findEff = (effects, type) => effects.find((e) => e.type === type);
-const emitted = (effects, payloadType) =>
-  effects.filter((e) => e.type === "emit").map((e) => e.payload).find((p) => p.type === payloadType);
 const arrive = { type: "inbound_arrived", pendingId: "p1", message: "can you ship it?", authorName: "David" };
 
 // ── the default is a HOLD, in every mode ─────────────────────────────────────────
@@ -38,16 +36,9 @@ test("GATE: a fresh session holds an inbound reply — no push, no counterparty 
     const r = sessionReducer(running({ mode }), arrive);
     assert.equal(r.state.phase, "awaiting_inbound", `${mode}: held`);
     assert.equal(r.state.hasPendingInbound, true);
-    // FIX #1: the gate card AND the status that makes the pill say so. Those two emits are
-    // the ONLY effects — nothing is pushed, nothing is written.
-    assert.deepEqual(effTypes(r.effects), ["emit", "emit"], `${mode}: card + status, nothing else`);
-    assert.deepEqual(emitted(r.effects, "inbound_pending"), {
-      type: "inbound_pending", pendingId: "p1", from: "David", text: "can you ship it?",
-    });
-    assert.deepEqual(emitted(r.effects, "status"), {
-      type: "status", phase: "awaiting_inbound", activity: "awaiting_inbound",
-    }, `${mode}: the pill is told a message is waiting`);
-    assert.ok(!r.effects.some((e) => e.type === "pushInbound"), `${mode}: the agent never sees it`);
+    assert.equal(r.state.activity, "awaiting_inbound", `${mode}: the pill reads a message waiting`);
+    // The hold is state only: nothing is pushed, nothing is written.
+    assert.deepEqual(r.effects, [], `${mode}: the agent never sees it`);
   }
 });
 
@@ -68,7 +59,6 @@ test("ACCEPT: feeds the held reply as the next turn and returns to working", () 
   assert.equal(r.state.hasPendingInbound, false);
   assert.equal(r.state.inboundForTask, false, "a one-off accept grants nothing standing");
   assert.deepEqual(findEff(r.effects, "pushInbound"), { type: "pushInbound", message: "can you ship it?", authorName: "David", authorNote: null, addressing: null });
-  assert.deepEqual(emitted(r.effects, "inbound_resolved"), { type: "inbound_resolved", pendingId: "p1", decision: "accepted" });
 });
 
 test("ACCEPT FOR THIS TASK: feeds it AND arms the standing grant", () => {
@@ -76,12 +66,11 @@ test("ACCEPT FOR THIS TASK: feeds it AND arms the standing grant", () => {
   const r = sessionReducer(held, { type: "inbound_accept_for_task", pendingId: "p1", message: "go", authorName: "David" });
   assert.equal(r.state.inboundForTask, true);
   assert.deepEqual(findEff(r.effects, "pushInbound"), { type: "pushInbound", message: "go", authorName: "David", authorNote: null, addressing: null });
-  assert.deepEqual(emitted(r.effects, "inbound_resolved"), { type: "inbound_resolved", pendingId: "p1", decision: "accepted-task" });
   // The grant makes every LATER reply flow straight through (no second card).
   const next = sessionReducer(r.state, { type: "inbound_arrived", pendingId: "p2", message: "and this", authorName: "David" });
   assert.equal(next.state.phase, "running");
   assert.ok(next.effects.some((e) => e.type === "pushInbound"), "the standing grant feeds it");
-  assert.ok(!next.effects.some((e) => e.type === "emit" && e.payload.type === "inbound_pending"), "no card");
+  assert.equal(next.state.hasPendingInbound, false, "no card");
 });
 
 test("ACCEPT: `inbound_released` is kept as the accept-once alias (v2.3 callers)", () => {
@@ -108,7 +97,6 @@ test("DECLINE is LOCAL: nothing is pushed, nothing is posted, no grant is record
   for (const banned of ["lifecycle", "closeTask", "persist", "settle"]) {
     assert.ok(!r.effects.some((e) => e.type === banned), `a decline must not ${banned}`);
   }
-  assert.deepEqual(emitted(r.effects, "inbound_resolved"), { type: "inbound_resolved", pendingId: "p1", decision: "declined" });
 });
 
 // ── parked: the gate composes with the v2.3 park machinery ───────────────────────
@@ -138,7 +126,7 @@ test("PARKED: an auto-accepted reply wakes it exactly like the pre-gate path did
   const parked = sessionReducer(running({ mode: "autonomous" }), { type: "idle_timeout" }).state;
   const r = sessionReducer({ ...parked, inboundForTask: true }, arrive);
   assert.equal(effTypes(r.effects)[0], "resumeQuery");
-  assert.deepEqual(emitted(r.effects, "counterparty"), { type: "counterparty", from: "David", text: "can you ship it?" });
+  assert.ok(findEff(r.effects, "pushInbound"), "and feeds the reply");
 });
 
 // ── the standing grant vs. AXIS B (D4, re-cut for v2.9) ──────────────────────────
@@ -191,18 +179,18 @@ test("M2: a park keeps BOTH axes and the standing grant, so a woken reply feeds 
 // on a genuinely mid-flight turn (see session-chrome.test.mjs).
 
 const held = () => sessionReducer(running(), arrive).state;
-const statusOf = (effects) => emitted(effects, "status");
 
 test("FIX #6: a turn ENDING does not overwrite the pending gate (phase stays, activity is true)", () => {
   for (const [posted, activity] of [[false, "idle"], [true, "awaiting_peer"]]) {
     const s = { ...held(), postedThisTurn: posted };
     const r = sessionReducer(s, { type: "result", turnCostUsd: 0.01 });
-    assert.deepEqual(statusOf(r.effects), { type: "status", phase: "awaiting_inbound", activity: activity });
+    assert.equal(r.state.activity, activity);
     assert.equal(r.state.phase, "awaiting_inbound", "the card still owns the pill");
   }
-  // With NO card pending the turn-end status is byte-identical to before.
+  // With NO card pending the turn end reads as before.
   const clean = sessionReducer(running(), { type: "result", turnCostUsd: 0.01 });
-  assert.deepEqual(statusOf(clean.effects), { type: "status", phase: "running", activity: "idle" });
+  assert.equal(clean.state.phase, "running");
+  assert.equal(clean.state.activity, "idle");
 });
 
 test("FIX #6: a permission request / decision does not overwrite the pending gate", () => {
@@ -221,7 +209,6 @@ test("FIX #6: STEERING while a card waits keeps the gate but reports the turn as
   const r = sessionReducer(held(), { type: "steer", text: "start on the other thing" });
   assert.equal(r.state.phase, "awaiting_inbound", "typing does not answer the gate");
   assert.equal(r.state.activity, "working");
-  assert.deepEqual(statusOf(r.effects), { type: "status", phase: "awaiting_inbound", activity: "working" });
   assert.equal(r.state.hasPendingInbound, true, "the card is still there to answer");
 });
 
@@ -229,16 +216,17 @@ test("FIX #6: an outbound post while a card waits keeps the gate phase", () => {
   const r = sessionReducer({ ...held(), activity: "idle" }, {
     type: "outbound_post", payload: { type: "outbound_post", toolUseId: "u1", text: "hi" },
   });
-  assert.deepEqual(statusOf(r.effects), { type: "status", phase: "awaiting_inbound", activity: "working" });
+  assert.equal(r.state.phase, "awaiting_inbound");
+  assert.equal(r.state.activity, "working");
 });
 
 test("FIX #6: ANSWERING the card releases the phase (the pill goes back to the work state)", () => {
   const accepted = sessionReducer(held(), { type: "inbound_accept", pendingId: "p1", message: "go", authorName: "David" });
   assert.equal(accepted.state.phase, "running");
-  assert.deepEqual(statusOf(accepted.effects), { type: "status", phase: "running", activity: "working" });
+  assert.equal(accepted.state.activity, "working");
   const declined = sessionReducer(held(), { type: "inbound_decline", pendingId: "p1" });
   assert.equal(declined.state.phase, "running");
-  assert.deepEqual(statusOf(declined.effects), { type: "status", phase: "running", activity: "idle" });
+  assert.equal(declined.state.activity, "idle");
 });
 
 // ── FIX #10 / #17: park + toggle on a PARKED session ──────────────────────────────
@@ -249,9 +237,7 @@ test("FIX #10 (v2.9): an axis change on a PARKED session does not claim it is ru
   assert.equal(r.state.messageMode, "auto_both", "the value still lands");
   assert.equal(r.state.phase, "parked", "a query-less session is not running");
   assert.equal(r.state.activity, "parked");
-  assert.ok(!r.effects.some((e) => e.type === "resumeQuery"), "and nothing is resumed by a select");
-  assert.deepEqual(r.effects.map((e) => e.type), ["emit"]);
-  assert.deepEqual(r.effects[0].payload, { type: "modes", tool: "manual", message: "auto_both" });
+  assert.deepEqual(r.effects, [], "and nothing is resumed by a select");
   // A LIVE session keeps whatever phase it had — an axis change is not a lifecycle event.
   const live = sessionReducer(running(), { type: "set_tool_mode", mode: "auto" });
   assert.equal(live.state.phase, "running");
@@ -273,17 +259,13 @@ test("FIX #17: a park that lands on a HELD message says so, and re-parking is id
   const r = sessionReducer(held(), { type: "idle_timeout" });
   assert.equal(r.state.parked, true);
   assert.equal(r.state.phase, "awaiting_inbound", "the pill keeps saying a message waits");
-  assert.deepEqual(emitted(r.effects, "status"), { type: "status", phase: "awaiting_inbound" });
-  assert.deepEqual(emitted(r.effects, "paused"), { type: "paused", gated: true }, "the note names the real next step");
   // The guard now reads `parked`, not `phase` — a stale timer on a parked-and-held session
   // used to re-run the WHOLE park (a second denyPending / abort / persist) on it.
   const again = sessionReducer(r.state, { type: "idle_timeout" });
   assert.equal(again.state, r.state, "same object: a no-op");
   assert.deepEqual(again.effects, []);
-  // An ordinary park is byte-identical to before (no `gated` key at all).
-  const plain = sessionReducer(running(), { type: "idle_timeout" });
-  assert.deepEqual(emitted(plain.effects, "paused"), { type: "paused" });
-  assert.deepEqual(emitted(plain.effects, "status"), { type: "status", phase: "parked" });
+  // An ordinary park reads parked.
+  assert.equal(sessionReducer(running(), { type: "idle_timeout" }).state.phase, "parked");
 });
 
 // ── the grant never reaches disk ─────────────────────────────────────────────────

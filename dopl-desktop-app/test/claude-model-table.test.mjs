@@ -132,7 +132,7 @@ const SHIPPED_MAX_TURNS = shippedNum(SPEC, "SESSION_MAX_TURNS");
 function assembled(s) {
   const src = `${fnOf(SPEC, "buildOptions")}\n return buildOptions;`;
   const fake = new Function(
-    "tools", "channelDirs", "loader", "sessionAuth", "sessionOutbound", "axisB", "diag",
+    "tools", "channelDirs", "loader", "sessionAuth", "axisB", "diag",
     "store", "models", "sessionCredential", "agentOps", "SESSION_MAX_TURNS", src
   )(
     { buildSessionToolConfig: () => ({ preApproved: [], disallowedTools: [], doplToolsPolicy: "full", builtinTools: [] }) },
@@ -149,7 +149,6 @@ function assembled(s) {
       resolveClaudeExecutable: () => null,
     },
     { withStoredCredential: (e) => e },
-    { wrapGate: () => () => {} },
     // agent-self-ops (2026-08-31): no server in this harness — the real builder answers null
     // outside Electron too (its own test pins that), so options carry no dopl_agents entry.
     { makeCanUseTool: () => () => {}, makeAgentOpsServer: () => null },

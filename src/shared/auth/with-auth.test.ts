@@ -50,7 +50,6 @@ vi.mock("./mcp-oauth", () => ({
   // ⚠ Real predicate, not a stub — the bearer-kind router depends on it.
   isOAuthAccessToken: (token: string) => token.startsWith("dopl_at_"),
 }));
-vi.mock("@/features/analytics/server/mcp-events", () => ({ logMcpEvent: vi.fn() }));
 vi.mock("@/features/analytics/server/system-events", () => ({ logSystemEvent: vi.fn() }));
 vi.mock("@supabase/ssr", () => ({
   createServerClient: () => ({

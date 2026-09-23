@@ -1,10 +1,6 @@
 // Claude Agent SDK loader — the CLAUDE ADAPTER's platform half.
 //
-// ⚠ MOVED HERE FROM `main/sdk-loader.js` ON 2026-08-31 (runtime-adapter port, step 3), BY MOVE
-// AND NOT BY REWRITE. Not one line of behaviour changed: the whole point of that step is that a
-// regression at this stage is a regression, never an improvement. What changed is WHO MAY REACH
-// IT — core no longer requires this module at all, and asks `main/runtime/index.js` instead. The
-// three relative requires below gained `../../` and nothing else did.
+// Core never requires this module; it asks `main/runtime/index.js` instead.
 //
 // ⚠ The SINGLE module that touches the ESM-only SDK, so CJS->ESM interop and packaged-binary
 // path math live in exactly one place (contract §D).
@@ -46,7 +42,7 @@ async function getSdk() {
 }
 
 // The SYNC read of that cache, for SYNCHRONOUS option assembly (agent-self-ops.js builds an
-// in-process server inside buildSdkOptions, which every query path reaches only AFTER awaiting
+// in-process server inside `launch-spec.js › buildOptions`, which every query path reaches only AFTER awaiting
 // getSdk). ⚠ NULL BEFORE THE FIRST AWAIT IS THE CONTRACT, not an error: a caller answers "no
 // SDK extras this session" and the launch proceeds — never throw a launch over a display verb.
 function peekSdk() {
@@ -243,7 +239,7 @@ const SESSION_ID_RE = /^[A-Za-z0-9:._-]{1,128}$/;
 function withSessionStamp(servers, sessionId) {
   const slot = typeof sessionId === 'string' ? sessionId.trim() : '';
   const entry = servers && typeof servers === 'object' ? servers.dopl : null;
-  // ⚠ A LABEL MUST NEVER BREAK A LAUNCH. Runs inside buildSdkOptions, the ONE assembly point
+  // ⚠ A LABEL MUST NEVER BREAK A LAUNCH. Runs inside `launch-spec.js › buildOptions`, the ONE assembly point
   // every spawn shape goes through, so a throw takes the whole session down for an attribution
   // hint. The guards are unreachable today (buildMcpServers always ships `headers`) and exist
   // so a future entry without one stamps nothing instead of crashing the spawn.
@@ -281,7 +277,7 @@ const TOOL_PROFILE_HEADER = 'X-Dopl-Tool-Profile';
 function withToolProfileStamp(servers, profile) {
   const entry = servers && typeof servers === 'object' ? servers.dopl : null;
   // ⚠ A LABEL MUST NEVER BREAK A LAUNCH — same rule as the session stamp: this runs inside
-  // buildSdkOptions, the one assembly point every spawn shape goes through.
+  // `launch-spec.js › buildOptions`, the one assembly point every spawn shape goes through.
   if (entry && typeof entry === 'object') {
     entry.headers = entry.headers || {};
     entry.headers[TOOL_PROFILE_HEADER] = normalizeProfile(profile);
@@ -305,7 +301,7 @@ const PERMISSION_ENV_RE = /PERMISSION|BYPASS|ACCEPT_EDITS|DONT_ASK|SKIP_PERMISSI
 // connects EVERY claude.ai ACCOUNT CONNECTOR as `mcp__claude_ai_<Name>__*`. Measured 2026-08-22
 // against the bundled binary (claude 2.1.220 / claude-agent-sdk 0.3.220): the init message's
 // `mcp_servers` listed 12 servers, NINE of them connectors (Slack, Gmail, Google Calendar, Google
-// Drive, Figma, Granola, Notion, Attio, Dopl) that no option in `buildSdkOptions` asked for.
+// Drive, Figma, Granola, Notion, Attio, Dopl) that no launch option asked for.
 // ⚠ THE SETTINGS KILL SWITCH IS UNREADABLE TO US, WHICH IS THE IRONY: the CLI's own off switch is
 // the `disableClaudeAiConnectors` SETTING, and `settingSources: []` — our isolation — is exactly
 // what stops it being read. Tightening the sandbox removed the switch. The env var is the lever

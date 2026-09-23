@@ -177,7 +177,7 @@ const descriptor = {
   // (`runtime/launch-default.js`). A preference, never a refusal.
   launchDefault: 'gpt-6-sol',
   // Shape check only: storage cannot call the live roster; the live catalog narrows NEW picks
-  // (`lib/model-catalog.ts › canSelectModel`). Still a gate: the value becomes `thread/start.model`.
+  // (`lib/model-catalog.ts › selectableModels`). Still a gate: the value becomes `thread/start.model`.
   pick: {
     absent: '', // no `model` field at all: the platform's own pick
     pattern: '^[A-Za-z0-9][A-Za-z0-9._:/-]{0,63}$',

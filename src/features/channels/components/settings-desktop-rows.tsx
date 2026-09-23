@@ -15,20 +15,11 @@
  *   `~/Downloads`, or the homedir when that is missing — and this sentence said
  *   "the isolated sandbox" until 2026-09-05, which is the same fiction the row
  *   below was printing. There is no sandbox anywhere in this feature.
- * - **Auto-send** (Samuel, 2026-08-20; live since 2026-08-31) — the durable
- *   posture for this channel's OWN-agent replies. OFF: the draft waits in the
- *   thread view's send box; ON: it posts on its own. ⚠ Read LIVE at the gate
- *   (`main/session-private.js › effectiveMessageMode`), so flipping it applies
- *   to every agent in this channel immediately — running sessions, reopened
- *   shells, and panel-directed turns included; it is no longer frozen into a
- *   session at launch.
- * - **Orchestrator launches** (2026-08-22) — may the operator's own EXTERNAL
- *   Claude session start agents on THIS Mac. ⚠ **PER-MACHINE, not per-channel**,
- *   and the only control on this tab that is: see
- *   {@link OrchestratorLaunchRows}.
- * - **Agent chaining** (Samuel, 2026-08-31) — may an agent launched in THIS
- *   channel launch further agents? Default OFF = the one-generation bound
- *   (`main/session-own-launch.js`). Per channel, see {@link AgentChainRows}.
+ * - **Launch agents** — one pick over two records: agent chaining `(this channel)`,
+ *   default OFF = the one-generation bound (`main/session-own-launch.js`), and
+ *   orchestrator launches `(this Mac)`. See {@link LaunchAgentsRow}.
+ * - **Direct agents** — may the operator's other sessions direct agents running on
+ *   this Mac. See {@link DirectAgentsRow}.
  */
 
 // ⚠ `Switch` LEFT WITH THE TWO LAUNCH TOGGLES AND THE REPLIES ROW (2026-09-06,
@@ -36,10 +27,6 @@
 // `SelectMenu` or the folder button — and an import kept "in case" is how a deleted
 // recipe comes back.
 import { SelectMenu, type SelectMenuOption } from "@/shared/ui/select-menu";
-// ⚠ IMPORTED, NOT TAKEN AS A PROP (2026-09-06, item 4). `SettingName` / `GroupLabel`
-// arrive as props for a historical reason this file's header records — they used to
-// live in the host. `SettingRow` never did, and threading a fourth prop through to
-// keep the pattern would be preserving an accident.
 import { SettingRow } from "./settings-agent-rows";
 import type { AgentFolderState } from "./settings-agent";
 
@@ -135,40 +122,8 @@ export function AgentFolderRows({
 }
 
 /**
- * ORCHESTRATOR LAUNCHES — the one PER-MACHINE control on a per-channel tab.
- *
- * ⚠ THE GROUP LABEL IS THE WHOLE SCOPE STATEMENT, AND IT IS NOT DECORATION.
- * Every other group here governs `(this channel, this Mac)`; this one governs
- * `(this Mac)`, so an operator who read it as per-channel would turn it on for
- * one room and hand an external session their whole machine. The tab's own
- * convention is that a `GroupLabel` "says what each group GOVERNS"
- * (`settings-agent.tsx › GroupLabel`), so the scope rides the heading rather
- * than a sentence under the switch — which is also what keeps this inside the
- * MINIMAL-COPY ruling (INVARIANTS §5: a row is a NAME and a CONTROL; the `Note`
- * recipe was deleted and must not come back for this).
- *
- * ⚠ IT TAKES `GroupLabel` RATHER THAN DRAWING ITS OWN. The two groups above are
- * unlabelled because their names carry them; this one cannot be, and a second
- * heading recipe in this file is how the tab ends up with two type scales.
- *
- * ⚠ NO ROW AT ALL WITHOUT THE BRIDGE — the caller passes `null` and this never
- * renders (no dead rows). ⚠ AND OFF IS THE FAILURE DIRECTION: the switch mirrors
- * a store that reads `false` for every "cannot say"
- * (`hooks/use-orchestrator-launch.ts`).
- */
-/**
- * ⚠ `OrchestratorLaunchRows` AND `AgentChainRows` ARE BOTH DELETED AND REPLACED BY
- * {@link LaunchAgentsRow} (2026-09-06, Samuel's settings overhaul, item 9).
- *
- * They were two switches over two records with two scopes — `(this channel)` for
- * chaining, `(this Mac)` for the orchestrator — and an operator had to read a group
- * heading to tell which was which. Item 2 deleted those headings, so the pair could
- * not survive item 2 even if item 9 had not asked for it: two identical-looking
- * switches with no rendered scope statement is the misread the old
- * `OrchestratorLaunchRows` docblock was written to prevent.
- *
- * The scope distinction is NOT lost — it is now the thing the operator picks. It
- * moved from a heading nobody had to read into the option labels themselves.
+ * "Launch agents": two records at two scopes, chaining `(this channel)` and orchestrator launches
+ * `(this Mac)`, as one pick — the scope is the thing the operator picks.
  */
 export const LAUNCH_AGENTS_OFF = "off";
 export const LAUNCH_AGENTS_CHANNEL = "channel";
@@ -334,18 +289,3 @@ export function DirectAgentsRow({
     </SettingRow>
   );
 }
-
-// ⚠ `AgentChainRows` IS DELETED (2026-09-06, item 9). Its record is untouched and
-// still per-channel; only the control moved, into {@link LaunchAgentsRow}'s "In this
-// channel" pick. Its docblock's warning — that a reader must not confuse the
-// per-channel switch with the per-machine one — is now answered by construction:
-// there is one control, and the scope is the thing being picked rather than a
-// heading the operator had to read first.
-//
-// ⚠ `AutoSendRows` IS DELETED (2026-09-06, item 8). It set the same axis as
-// Messaging and disagreed with it by construction. `main/session-private.js ›
-// effectiveMessageMode` is still the one gate read and still LIVE, sourced from
-// Messaging now — so the property that mattered survives and the second control does
-// not. ⚠ ITS RECORD AND BRIDGE ARE DELETED IN THE SAME CHANGE — the hook is a
-// tombstone, and `channel-prefs.getAutoSend` / `setAutoSend`, both IPC handlers,
-// their preload methods and their bridge declarations are gone.

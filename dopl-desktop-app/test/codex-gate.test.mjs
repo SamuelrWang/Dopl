@@ -219,7 +219,7 @@ test("THE MOUNT KEY AND THE ELICITATION'S SERVER COMPARISON ARE ONE CONSTANT", (
       // A container-locked bearer, which is what makes the entry wired and the config present.
       containerToken: { token: "test-bearer-not-a-real-token" },
     },
-    dispatch: () => {}, emitQuiet: () => {},
+    dispatch: () => {},
   });
   const mounted = Object.keys(spec.threadStart.config.mcp_servers);
   assert.deepEqual(mounted, [mcp.SERVER_KEY],
@@ -323,7 +323,7 @@ test("`granular` uses the measured structured app-server shape and asks every sh
 test("the removed `--ignore-user-config` flag is never sent; CODEX_HOME owns isolation", () => {
   const spec = launchSpec.buildLaunchSpec({
     session: { profile: "full", channelId: null, state: {}, workspaceId: "", model: "" },
-    dispatch: () => {}, emitQuiet: () => {},
+    dispatch: () => {},
   });
   assert.ok(!spec.args.includes("--ignore-user-config"));
   assert.deepEqual(spec.args, []);

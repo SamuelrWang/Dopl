@@ -8,11 +8,8 @@
 //
 // ⚠ AND ONE TRAP THAT IS ONLY VISIBLE HERE (F-382). `execute()` receives CORE'S verdict shape —
 // `{ behavior, message?, updatedInput? }` — and translates it into a tool result only AFTERWARDS.
-// Three core modules mint or read that shape, and `main/session-outbound.js › wrapGate` is the one
-// that breaks silently if an adapter translates too early: it observes `verdict.behavior ===
-// 'allow'` to resolve the card an allowed post painted, so a platform-worded answer upstream of it
-// sails past and leaves an already-delivered post reading "awaiting your approval" forever. The
-// ORDER is asserted below, not just the outcome.
+// Core mints and reads that shape, so an adapter that translates too early hands core a word it
+// cannot read. The ORDER is asserted below, not just the outcome.
 //
 // ⚠ NO NETWORK AND NO SDK. The forward is INJECTED into `axisBTools`, so the whole enforcement
 // path is drivable from a fake `list`/`call` pair — which is the same discipline every normalizer
@@ -82,7 +79,6 @@ async function surface(over) {
   const tools = await axisB.axisBTools({
     session: s,
     dispatch,
-    emitQuiet: () => {},
     policy: o.policy === undefined ? null : o.policy,
     deny: o.deny || [],
     list: async () => (o.list || SERVER_TOOLS),
@@ -131,7 +127,7 @@ test("a `tools/list` that fails yields NO surface and does NOT break the launch"
   // ⚠ A SESSION WITH NO DOPL TOOLS RUNS AND CAN STILL BE READ; a THROWN launch takes the whole
   // session with it for a roster read.
   const tools = await axisB.axisBTools({
-    session: session(), dispatch: () => {}, emitQuiet: () => {},
+    session: session(), dispatch: () => {},
     policy: null, deny: [],
     list: async () => { throw new Error("network down"); },
     call: async () => ({ ok: true, text: "" }),
@@ -214,10 +210,8 @@ test("these implementations are NOT in any pre-approval list — the shadow is u
 });
 
 test("⚠ F-382: the gate answers CORE's `{behavior}` shape, and only then is it translated", async () => {
-  // ⚠ THE ORDER IS THE TRAP, NOT THE OUTCOME. `main/session-outbound.js › wrapGate` observes
-  // `verdict.behavior === 'allow'` to resolve the card an allowed post painted; an adapter that
-  // translated to a platform word BEFORE that wrapper saw it would leave an already-delivered post
-  // reading "awaiting your approval" forever. Driven here on the raw gate rather than inferred.
+  // ⚠ THE ORDER IS THE TRAP, NOT THE OUTCOME: core reads `verdict.behavior`, so the platform word
+  // must come after it. Driven here on the raw gate rather than inferred.
   const s = session({ state: { toolMode: "allowlist", messageMode: "auto_outbound", allowForTask: [] } });
   const gate = axisB.makeGate(s, () => {}, () => {});
   const verdict = await gate("mcp__dopl__dopl_channel", { op: "send", body: "hi" }, { toolUseID: "tc_1" });
@@ -259,7 +253,7 @@ test("a forward that FAILS is reported as a refusal, not as a delivery", async (
   // silent while everyone believes it was answered.
   const s = session({ state: { toolMode: "allowlist", messageMode: "auto_outbound", allowForTask: [] } });
   const tools = await axisB.axisBTools({
-    session: s, dispatch: () => {}, emitQuiet: () => {}, policy: null, deny: [],
+    session: s, dispatch: () => {}, policy: null, deny: [],
     list: async () => SERVER_TOOLS,
     call: async () => ({ ok: false, text: "Dopl MCP answered HTTP 503" }),
   });

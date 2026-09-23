@@ -82,7 +82,7 @@ test("start drives the measured v2 thread/turn state machine", async () => {
       args: [], env: {}, cwd: HERE, prompt: prompts(),
       threadStart: { approvalPolicy: "on-request", sandbox: "read-only", model: "gpt-6-astra" },
       turnStart: { effort: "high" },
-      dispatch: () => {}, emitQuiet: () => {},
+      dispatch: () => {},
     });
 
     await waitFor(() => calls.some((c) => c.method === "turn/steer"), "prompt pump never steered");
@@ -203,7 +203,6 @@ test("LIVE: the adapter completes a real app-server turn", { timeout: 120000 }, 
     prompt: onePrompt(),
     log: (...parts) => process.stderr.write(`${parts.join(" ")}\n`),
     dispatch: () => {},
-    emitQuiet: () => {},
   });
   const frames = [];
   try {

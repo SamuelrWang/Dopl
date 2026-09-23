@@ -1,7 +1,7 @@
 // WHAT IS THIS TOOL CALLED, UNDER ANY CLIENT (F-139, 2026-08-05).
 //
 // ── THE DEFECT ──────────────────────────────────────────────────────────────────────
-// `mcp__dopl__` is what OUR OWN registration produces: sdk-loader keys the in-memory MCP
+// `mcp__dopl__` is what OUR OWN registration produces: runtime/claude/loader.js keys the in-memory MCP
 // server `dopl`, so a session we spawn sees `mcp__dopl__dopl_channel`. It is NOT what every
 // client produces. The claude.ai connector exposes the SAME server as `mcp__claude_ai_Dopl__`,
 // and other clients use a UUID server segment (`mcp__6a12c8bd-4187-40eb-9b21-eb230264f726__`,

@@ -25,8 +25,7 @@ function aliasForModelId(value) {
   return Object.prototype.hasOwnProperty.call(ID_TO_ALIAS, value) ? ID_TO_ALIAS[value] : 'default';
 }
 
-// The product's default model for a launch with no pick (Samuel's back-fill ruling). Its web twin,
-// `agent-models.ts › AGENT_MODEL_FALLBACK`, is pinned against it by test/claude-model-table.test.mjs.
+// The product's default model for a launch with no pick (Samuel's back-fill ruling).
 const LAUNCH_MODEL_FALLBACK = 'claude-sonnet-5';
 
 const WINDOW_200K = 200000;

@@ -4,7 +4,7 @@
 
 // Required above the sentinel: inside the block these are free vars, and test/_reducer-block.mjs prepends
 // the effects and state blocks to evaluate the set standalone.
-const { gatePhase, gateActivity, endEffects, endReasonOf, modesEmit, parkEffects, terminalBody } = require('./session-effects');
+const { gatePhase, gateActivity, endEffects, endReasonOf, parkEffects, terminalBody } = require('./session-effects');
 const {
   DEFAULT_IDLE_MS, MESSAGE_MODES, coerceMode, toolModesOf, initialSessionState, nextIdleMs, idleTimeout,
 } = require('./session-state');
@@ -43,11 +43,7 @@ function pushInboundEffect(event) {
 
 function feedInboundEffects(state, event) {
   const effects = wakeEffects(state);
-  effects.push({ type: 'emit', payload: { type: 'counterparty', from: event.authorName, text: event.message } });
   effects.push(pushInboundEffect(event));
-  if (state.activity !== 'working') {
-    effects.push({ type: 'emit', payload: { type: 'status', phase: 'running', activity: 'working' } });
-  }
   // A pushed turn is not idle.
   effects.push({ type: 'scheduleIdle' });
   return effects;
@@ -59,8 +55,8 @@ function sessionReducer(state, event) {
   const type = event && event.type;
 
   // FIX #5: a parked session stays inert to its drained tail; only wake triggers, timers and controls act.
-  if (state.parked === true && (type === 'assistant' || type === 'thinking' || type === 'tool_use' || type === 'tool_result'
-      || type === 'outbound_post' || type === 'result' || type === 'permission_request')) {
+  if (state.parked === true && (type === 'tool_result' || type === 'outbound_post' || type === 'result'
+      || type === 'permission_request')) {
     return { state: state, effects: [] };
   }
 
@@ -71,41 +67,28 @@ function sessionReducer(state, event) {
       state: clone(state, { phase: phase }),
       effects: [
         { type: 'persist', phase: phase },
-        { type: 'emit', payload: event.payload },
         { type: 'lifecycle', kind: 'task_started', extra: {} },
         { type: 'scheduleIdle' },
       ],
     };
   }
 
-  if (type === 'assistant' || type === 'thinking' || type === 'tool_use') {
-    return { state: state, effects: [{ type: 'emit', payload: event.payload }] };
-  }
-
   if (type === 'tool_result') {
     const p = event.payload || {};
     const id = p.toolUseId;
-    // FIX F3: a DENIED own-channel post was painted before the decision; its failing result un-counts it.
+    // FIX F3: a DENIED own-channel post was counted before the decision; its failing result un-counts it.
     if (p.ok === false && id && state.postedToolUseIds.indexOf(id) !== -1) {
       const remaining = without(state.postedToolUseIds, id);
-      return {
-        state: clone(state, { postedToolUseIds: remaining, postedThisTurn: remaining.length > 0 }),
-        effects: [{ type: 'emit', payload: event.payload }],
-      };
+      return { state: clone(state, { postedToolUseIds: remaining, postedThisTurn: remaining.length > 0 }), effects: [] };
     }
-    return { state: state, effects: [{ type: 'emit', payload: event.payload }] };
+    return { state: state, effects: [] };
   }
 
   // The agent posted to its own channel: recorded so the turn ends awaiting the peer. A held gate outranks "working".
   if (type === 'outbound_post') {
-    const act = gateActivity(state, 'working');
-    const effects = [{ type: 'emit', payload: event.payload }];
-    if (state.activity !== act) {
-      effects.push({ type: 'emit', payload: { type: 'status', phase: state.phase, activity: act } });
-    }
     const id = event.payload && event.payload.toolUseId;
     const posted = id ? addUnique(state.postedToolUseIds, id) : state.postedToolUseIds;
-    return { state: clone(state, { postedThisTurn: true, activity: act, postedToolUseIds: posted }), effects: effects };
+    return { state: clone(state, { postedThisTurn: true, activity: gateActivity(state, 'working'), postedToolUseIds: posted }), effects: [] };
   }
 
   if (type === 'permission_request') {
@@ -120,7 +103,7 @@ function sessionReducer(state, event) {
         activity: 'awaiting_permission',
         pendingPermissions: addUnique(state.pendingPermissions, event.requestId),
       }),
-      // An open card is the opposite of idle: re-arm the TTL (FIX 3).
+      // The emit reaches the gate bridge (`session-windowless.js › claimGate`); an open card re-arms the TTL.
       effects: [{ type: 'emit', payload: event.payload }, { type: 'scheduleIdle' }],
     };
   }
@@ -133,10 +116,7 @@ function sessionReducer(state, event) {
     // A stale click on a PARKED session must not flip it to running; only a steer or an inbound turn wakes it.
     const phase = gatePhase(state, state.parked ? 'parked' : (nextPending.length ? 'awaiting_permission' : 'running'));
     const activity = state.parked ? 'parked' : (nextPending.length ? 'awaiting_permission' : 'working');
-    const effects = [
-      { type: 'resolvePermission', requestId: event.requestId, decision: sdkDecision },
-      { type: 'emit', payload: { type: 'permission_resolved', requestId: event.requestId, decision: event.decision } },
-    ];
+    const effects = [{ type: 'resolvePermission', requestId: event.requestId, decision: sdkDecision }];
     // Answering a card is activity, except on a parked session, which has no live turn to keep alive.
     if (!state.parked) effects.push({ type: 'scheduleIdle' });
     return {
@@ -157,7 +137,7 @@ function sessionReducer(state, event) {
     const next = clone(state, event.pinned === true
       ? { [k + 'ModeSet']: true, [k + 'Pick']: mode, [k + 'Mode']: mode }
       : { [k + 'Mode']: !pick ? mode : tools ? narrowTo(pick, mode, list) : narrowMessageMode(pick, mode) });
-    return { state: next, effects: [modesEmit(next)] };
+    return { state: next, effects: [] };
   }
 
   if (type === 'result') {
@@ -165,14 +145,7 @@ function sessionReducer(state, event) {
     const turns = state.turns + 1;
     const ns = clone(state, { turns: turns, postedThisTurn: false, postedToolUseIds: [] });
     const activity = state.postedThisTurn ? 'awaiting_peer' : 'idle';
-    return {
-      state: clone(ns, { activity: activity }),
-      effects: [
-        // FIX #6: a turn end never overwrites a still-pending gate card.
-        { type: 'emit', payload: { type: 'status', phase: gatePhase(ns, 'running'), activity: activity } },
-        { type: 'scheduleIdle' },
-      ],
-    };
+    return { state: clone(ns, { activity: activity }), effects: [{ type: 'scheduleIdle' }] };
   }
 
   if (type === 'inbound_arrived') {
@@ -180,14 +153,8 @@ function sessionReducer(state, event) {
     if (inboundAutoAccepted(state)) {
       return { state: clone(state, { phase: 'running', activity: 'working', parked: false }), effects: feedInboundEffects(state, event) };
     }
-    return {
-      // Hold it for the operator; a parked session stays parked (the Accept wakes it). The hold statuses (FIX #1).
-      state: clone(state, { phase: 'awaiting_inbound', activity: 'awaiting_inbound', hasPendingInbound: true }),
-      effects: [
-        { type: 'emit', payload: { type: 'inbound_pending', pendingId: event.pendingId, from: event.authorName, text: event.message } },
-        { type: 'emit', payload: { type: 'status', phase: 'awaiting_inbound', activity: 'awaiting_inbound' } },
-      ],
-    };
+    // Hold it for the operator; a parked session stays parked (the Accept wakes it).
+    return { state: clone(state, { phase: 'awaiting_inbound', activity: 'awaiting_inbound', hasPendingInbound: true }), effects: [] };
   }
 
   // ACCEPT (`inbound_released` is the legacy alias): feed the held reply; the accept wakes a parked session.
@@ -195,10 +162,6 @@ function sessionReducer(state, event) {
   if (type === 'inbound_accept' || type === 'inbound_accept_for_task' || type === 'inbound_released') {
     const effects = wakeEffects(state);
     effects.push(pushInboundEffect(event));
-    effects.push({ type: 'emit', payload: { type: 'status', phase: 'running', activity: 'working' } });
-    if (event.pendingId) {
-      effects.push({ type: 'emit', payload: { type: 'inbound_resolved', pendingId: event.pendingId, decision: type === 'inbound_accept_for_task' ? 'accepted-task' : 'accepted' } });
-    }
     if (state.authHeld !== true) effects.push({ type: 'scheduleIdle' });
     // A held session never comes out of here claiming to run (H1 belt; the gate normally refuses first).
     const patch = state.authHeld === true
@@ -213,10 +176,7 @@ function sessionReducer(state, event) {
     const parked = state.parked === true;
     return {
       state: clone(state, { phase: parked ? 'parked' : 'running', activity: parked ? 'parked' : 'idle', hasPendingInbound: false }),
-      effects: [
-        { type: 'emit', payload: { type: 'inbound_resolved', pendingId: event.pendingId, decision: 'declined' } },
-        { type: 'emit', payload: { type: 'status', phase: parked ? 'parked' : 'running', activity: parked ? 'parked' : 'idle' } },
-      ],
+      effects: [],
     };
   }
 
@@ -229,18 +189,12 @@ function sessionReducer(state, event) {
     effects.push({ type: 'pushTurn', text: event.text, priority: event.priority || 'next' });
     // Typing does not answer the gate, so a held card keeps the phase (FIX #6).
     const nextPhase = gatePhase(state, waking ? 'running' : state.phase);
-    if (state.activity !== 'working') {
-      effects.push({ type: 'emit', payload: { type: 'status', phase: nextPhase, activity: 'working' } });
-    }
     effects.push({ type: 'scheduleIdle' });
     return { state: clone(state, { phase: nextPhase, activity: 'working', parked: false }), effects: effects };
   }
 
   if (type === 'interrupt') {
-    return {
-      state: clone(state, { phase: 'interrupted' }),
-      effects: [{ type: 'interruptQuery' }, { type: 'emit', payload: { type: 'status', phase: 'interrupted' } }],
-    };
+    return { state: clone(state, { phase: 'interrupted' }), effects: [{ type: 'interruptQuery' }] };
   }
 
   if (type === 'end') {
@@ -256,7 +210,7 @@ function sessionReducer(state, event) {
     return {
       state: clone(state, { phase: gatePhase(state, 'parked'), parked: true, activity: 'parked',
         pendingPermissions: [], postedThisTurn: false, postedToolUseIds: [] }),
-      effects: parkEffects(state, { resetPosture: false, armAbandon: true }),
+      effects: parkEffects({ armAbandon: true }),
     };
   }
 
@@ -275,7 +229,7 @@ function sessionReducer(state, event) {
       state: clone(state, { phase: gatePhase(state, 'parked'), parked: true, activity: 'parked',
         authHeld: true, toolMode: toolModesOf(state)[0], messageMode: MESSAGE_MODES[0], inboundForTask: false,
         allowForTask: [], pendingPermissions: [], postedThisTurn: false, postedToolUseIds: [] }),
-      effects: parkEffects(state, { lifecycle: true }),
+      effects: parkEffects({ lifecycle: true }),
     };
   }
 
@@ -300,7 +254,6 @@ function sessionReducer(state, event) {
         { type: 'abortQuery' },
         { type: 'settle', outcome: 'interrupted' },
         { type: 'lifecycle', kind: 'task_failed', extra: { interrupted: true }, body: terminalBody({ interrupted: true }) },
-        { type: 'emit', payload: { type: 'error', message: 'Session ended unexpectedly.' } },
       ],
     };
   }

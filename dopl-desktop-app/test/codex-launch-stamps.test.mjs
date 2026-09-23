@@ -23,7 +23,7 @@ const { normalizeProfile } = require(join(MAIN, "tool-profiles.js"));
 const PROFILES = ["read_only", "dopl_only", "channel_agent", "full"];
 const specFor = (profile) => launchSpec.buildLaunchSpec({
   session: { profile, channelId: null, state: {}, workspaceId: "ws-1", model: "", containerToken: { token: "tok-SECRET" } },
-  dispatch: () => {}, emitQuiet: () => {},
+  dispatch: () => {},
 });
 
 /** Codex's `exclude` entries are case-insensitive globs over the variable NAME. */

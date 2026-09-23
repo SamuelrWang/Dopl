@@ -8,7 +8,6 @@ import {
   approvalCategories,
   approvalCategoryMode,
   descriptorFor,
-  freeform,
   interruptRefusal,
   normalizeRuntimeId,
   normalizeToolMode,
@@ -112,14 +111,6 @@ describe("approval.categories — Codex's own five, under Codex's own mode", () 
     expect(approvalCategoryMode(CURSOR)).toBeNull();
     expect(approvalCategories(CLAUDE)).toEqual([]);
     expect(approvalCategories(CURSOR)).toEqual([]);
-  });
-});
-
-describe("freeform — a branch that renders nothing today, on purpose", () => {
-  it("is null on all three adapters as shipped", () => {
-    // §3.1 asks for it and `transport` must be SHOWN if it ever lands; the branch is
-    // written as data so the day a descriptor fills this in, the row is already right.
-    for (const d of REAL_DESCRIPTORS) expect(freeform(d)).toBeNull();
   });
 });
 

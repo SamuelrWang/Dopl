@@ -1,4 +1,4 @@
-// Native email/password + magic-link sign-in for the bundled SPA.
+// Native email/password sign-in for the bundled SPA.
 //
 // The renderer has no network and no Supabase client, so the GoTrue calls the
 // web login page made from the browser run HERE, in main, against the same
@@ -11,17 +11,10 @@
 // process or the OS). One code path owns "a session enters the store", with
 // its gate satisfied legitimately — we ARE the initiator.
 //
-// The magic link arms the same gate, STATE-BOUND (F-054 residual, 2026-08-08):
-// the nonce rides out on `redirect_to`, so the emailed link completes in the
-// browser and returns through /auth/desktop-handoff?state=<nonce> →
-// dopl://auth#tokens&state=<nonce>, i.e. the standard capture, which now requires
-// the pending record AND an exact echo. TTL is 10 minutes — a link clicked later
-// is refused and the user just requests a fresh one.
-//
 // SECRETS: the password goes into ONE https request body and is never logged,
 // stored, or echoed; tokens ride the same rules as every other auth path.
 
-const { SUPABASE_URL, SUPABASE_ANON_KEY, APP_ORIGIN } = require('./config');
+const { SUPABASE_URL, SUPABASE_ANON_KEY } = require('./config');
 const auth = require('./auth');
 const { diag } = require('./diag');
 
@@ -122,49 +115,4 @@ async function passwordAuth(payload) {
   }
 }
 
-/** Send a magic sign-in link that completes back into the app through the
- *  standard browser handoff. Arms the pending-auth gate first. */
-async function sendMagicLink(payload) {
-  const p = payload && typeof payload === 'object' ? payload : {};
-  const email = typeof p.email === 'string' ? p.email.trim() : '';
-  if (!email || !email.includes('@') || email.length > 320) {
-    return { ok: false, error: 'Enter a valid email address.' };
-  }
-  try {
-    // F-054 RESIDUAL (2026-08-08) — this was the last PRESENCE-ONLY leg, and it
-    // was renderer-reachable (ipc `dopl:magic-link`): any address GoTrue accepted
-    // armed a ten-minute window in which a state-less `dopl://auth#access_token=…`
-    // from ANY local process was adopted. The pre-F-054 attack, on demand.
-    //
-    // GoTrue owns this redirect, so the only way our nonce reaches the fragment is
-    // to hang it on `redirect_to`: the emailed link lands on
-    // /auth/desktop-handoff?state=<nonce>#access_token=…, and that page reads
-    // `state` off window.location.search — the tokens ride the FRAGMENT, so the
-    // query survives untouched — and echoes it into the dopl:// link it fires.
-    // Same web page, same read, as the OAuth leg; no web change is needed.
-    //
-    // ORDER, deliberately reversed: the nonce does not exist until the record is
-    // armed, so arming now happens BEFORE the send — the thing the 2026-08-03
-    // audit told us not to do. What made that order dangerous was the record being
-    // presence-only; it is not any more. The nonce leaves this process ONLY inside
-    // the request below, so a record stranded by a rejected address, a dead
-    // network, or a link the user never clicks is unspendable by anything at all
-    // and simply expires. (This is the shape auth-actions.maybeBeginAuth has always
-    // armed with, before it opens the system browser on a flow that may never
-    // finish.) The residue is slot pressure, not session adoption: a stranded
-    // record occupies one of PENDING_AUTH_MAX until its TTL runs out.
-    const nonce = auth.beginPendingAuth({ requireState: true });
-    const redirect = encodeURIComponent(`${APP_ORIGIN}/auth/desktop-handoff?state=${nonce}`);
-    const res = await gotrue(`/otp?redirect_to=${redirect}`, {
-      email,
-      create_user: false,
-    });
-    if (!res.ok) return { ok: false, error: gotrueErrorMessage(res.body, res.status) };
-    return { ok: true };
-  } catch (err) {
-    diag('auth-password: magic link failed —', (err && err.message) || String(err));
-    return { ok: false, error: 'Could not reach the sign-in service.' };
-  }
-}
-
-module.exports = { passwordAuth, sendMagicLink, normalizeCredentials, gotrueErrorMessage, sessionFragment };
+module.exports = { passwordAuth, normalizeCredentials, gotrueErrorMessage, sessionFragment };

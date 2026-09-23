@@ -20,7 +20,6 @@ vi.mock("@/shared/auth/mcp-session", () => ({
   // under test is the caller-type one, not the ceiling.
   checkAndRecordRateLimitSubject: vi.fn(async () => true),
 }));
-vi.mock("@/features/analytics/server/mcp-events", () => ({ logMcpEvent: vi.fn() }));
 vi.mock("@/features/analytics/server/system-events", () => ({ logSystemEvent: vi.fn() }));
 vi.mock("@supabase/ssr", () => ({
   createServerClient: () => ({

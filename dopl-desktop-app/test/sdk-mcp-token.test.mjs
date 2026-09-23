@@ -331,6 +331,4 @@ test("C1: the token is never written to disk in plaintext — by ANY path in thi
   // place the bearer is spelled is an execFile argv (mcp-cli-add.js), which is not a file.
   assert.match(CONFIG, /deviceTokenForSpawn/, "the accessor exists");
   assert.ok(!/spawnToken/.test(LOADER), "sdk-loader keeps no copy of its own");
-  const io = readFileSync(M("session-outbound.js"), "utf8");
-  assert.ok(!/token|Authorization/i.test(io), "and no other session module handles the bearer");
 });

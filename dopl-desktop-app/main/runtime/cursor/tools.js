@@ -51,8 +51,7 @@
 // fence.
 // ⚠ THE REFUSAL IS THE ONE ALREADY IN THE CONTRACT, not a new branch here.
 // `contract.js › LAUNCH_BLOCKING[1]` (`containment.profiles.<profile>.denyList`) refuses a LAUNCH
-// AT A PROFILE this adapter declares no deny list for, and `capability.js › profileRefusal` is
-// the sentence an operator reads. `cursor/index.js › containment.profiles` therefore names three,
+// AT A PROFILE this adapter declares no deny list for. `cursor/index.js › containment.profiles` therefore names three,
 // and `test/channel-agent-profile.test.mjs` pins the refusal so the freeze cannot rot into a
 // silent fall-through. ⚠ WHEN X0 CLEARS, this file gains the branch and that descriptor gains the
 // entry, in one change with the smoke item that grounds it.

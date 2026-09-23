@@ -244,14 +244,6 @@ test("a post while a gate is HELD keeps the session at awaiting_permission", () 
   assert.ok(after.postedToolUseIds.includes("tu-2"), "F3's un-count ledger is unaffected");
 });
 
-test("no status emit falsely announces 'working' while a gate is held", () => {
-  const gated = held(initialSessionState({}));
-  const { effects } = sessionReducer(gated, POST("tu-2"));
-  const statuses = effects.filter((e) => e.type === "emit" && e.payload && e.payload.type === "status");
-  assert.deepEqual(statuses.map((e) => e.payload.activity).filter((a) => a === "working"), [],
-    "a 'working' status emit here is the lie the operator read off the card");
-});
-
 test("with NOTHING pending a post still goes to working — the rule widens in one direction only", () => {
   const idle = initialSessionState({});
   const after = sessionReducer(idle, POST("tu-1")).state;

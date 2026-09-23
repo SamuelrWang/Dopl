@@ -347,8 +347,6 @@ test("M2: a park preserves both axes, inboundForTask AND every standing grant", 
   assert.equal(r.state.messageMode, "auto_both");
   assert.equal(r.state.inboundForTask, true);
   assert.deepEqual(r.state.allowForTask, [postGrant, bashGrant], "the grants outlive the park");
-  assert.ok(!r.effects.some((e) => e.type === "emit" && e.payload.type === "modes"),
-    "and the header is not dragged back to a posture the woken session would not honor");
   // The WOKEN session behaves as the operator set it — asked with the woken state, as before.
   const s = { profile: "full", channelId: CH, state: r.state };
   const woken = { ...s, allowForTask: r.state.allowForTask, toolMode: r.state.toolMode, messageMode: r.state.messageMode };

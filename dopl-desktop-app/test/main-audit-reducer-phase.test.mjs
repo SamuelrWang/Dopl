@@ -52,7 +52,7 @@ test("F8: with no card waiting, launched still flips launching -> running", () =
   assert.equal(findEff(effects, "persist").phase, "running");
   assert.deepEqual(
     effects.map((e) => e.type),
-    ["persist", "emit", "lifecycle", "scheduleIdle"],
+    ["persist", "lifecycle", "scheduleIdle"],
     "the effect set is untouched"
   );
   assert.equal(findEff(effects, "lifecycle").kind, "task_started");

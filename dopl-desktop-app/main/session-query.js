@@ -27,7 +27,6 @@ function buildLaunchSpec(s) {
   return runtimeRegistry.runtimeFor(s.runtimeId).buildLaunchSpec({
     session: s,
     dispatch: deps.dispatch,
-    emitQuiet: deps.emitQuiet,
   });
 }
 

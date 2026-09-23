@@ -41,12 +41,11 @@ function session(over = {}) {
 }
 
 function rig(over = {}) {
-  const calls = { startQuery: [], resumeParked: [], abort: [], deny: [], emit: [], dispatch: [] };
+  const calls = { startQuery: [], resumeParked: [], abort: [], deny: [], dispatch: [] };
   guard.bind({
     acquireRuntime: async () => ({ __rt: true }),
     startQuery: async (s, rt) => { calls.startQuery.push({ s, rt }); },
     dispatch: (s, ev) => calls.dispatch.push(ev),
-    emit: (s, ev) => calls.emit.push(ev),
     denyPending: (s, why) => calls.deny.push(why),
     abortInFlight: (s) => { calls.abort.push(s.key); s.query = null; },
     // The REAL `resumeParked` contract in one line: it mints a FRESH push iterator synchronously
@@ -94,7 +93,7 @@ test("COLD: a first failure denies pending, re-arms the phase and re-enters star
   // The watchdog re-arms off the phase; `startQuery` is what supersedes the dead child.
   assert.equal(s.state.phase, "launching");
   assert.equal(s.state.parked, false);
-  assert.equal(calls.emit.length, 0, "a retry is not a visible failure");
+  assert.deepEqual(calls.dispatch, [], "a retry is not a visible failure");
 });
 
 test("COLD: a SECOND failure ends the session visibly — exactly one retry, ever", async () => {
@@ -107,8 +106,6 @@ test("COLD: a SECOND failure ends the session visibly — exactly one retry, eve
   assert.equal(calls.startQuery.length, 0, "no second retry");
   assert.match(s.mcpDiag, /MCP unavailable/, "the sentence survives on the session for the card");
   assert.match(s.mcpDiag, /after a retry/);
-  assert.equal(calls.emit[0].type, "error");
-  assert.equal(calls.emit[0].message, s.mcpDiag, "the specific sentence goes ABOVE the reducer's generic one");
   assert.deepEqual(calls.dispatch, [{ type: "crash" }], "`crash` is reused, never a fourth terminal path");
   assert.ok(calls.deny.includes(mcpConnect.MCP_UNAVAILABLE_LABEL));
 });

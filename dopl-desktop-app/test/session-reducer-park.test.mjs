@@ -39,14 +39,8 @@ test("idle_timeout PARKS the session — no settle/destroy/delete, sdkSessionId 
   assert.equal(r.state.phase, "parked");
   assert.equal(r.state.parked, true);
   assert.equal(r.state.turns, s.turns, "turn count is preserved across a park");
-  assert.deepEqual(effTypes(r.effects), ["denyPending", "abortQuery", "scheduleIdle", "persist", "emit", "emit"]);
-  assert.ok(!r.effects.some((e) => e.type === "emit" && e.payload.type === "modes"),
-    "M2: a park that takes no posture away echoes no posture change");
-  assert.ok(!r.effects.some((e) => e.type === "settle"), "park NEVER settles (no destroy/delete)");
+  assert.deepEqual(effTypes(r.effects), ["denyPending", "abortQuery", "scheduleIdle", "persist"], "park NEVER settles");
   assert.equal(findEff(r.effects, "persist").phase, "parked");
-  const status = r.effects.find((e) => e.type === "emit" && e.payload.type === "status");
-  assert.deepEqual(status.payload, { type: "status", phase: "parked" });
-  assert.ok(r.effects.some((e) => e.type === "emit" && e.payload.type === "paused"), "emits the inline paused note");
 });
 
 // ── M2: the ABANDONMENT bound, and what it ends ───────────────────────────────────
@@ -110,13 +104,6 @@ test("idle_timeout clears any awaited permission (denyPending) and empties pendi
   assert.equal(r.state.phase, "parked");
   assert.deepEqual(r.state.pendingPermissions, [], "no awaited permission survives a park");
   assert.equal(effTypes(r.effects)[0], "denyPending", "denyPending runs BEFORE abort (fail closed)");
-  // FIX #6: park also clears the RENDERER's dock — a permission_resolved{deny} per pending id
-  // so a query-less parked session never shows a live-looking (clickable, lying) prompt.
-  const resolved = r.effects.filter((e) => e.type === "emit" && e.payload.type === "permission_resolved");
-  assert.deepEqual(resolved.map((e) => e.payload), [
-    { type: "permission_resolved", requestId: "r1", decision: "deny" },
-    { type: "permission_resolved", requestId: "r2", decision: "deny" },
-  ]);
 });
 
 // ── FIX F6 (v2.7): the per-turn POST counters must not survive a park either ─────────
@@ -136,12 +123,8 @@ test("FIX F6: parking clears postedThisTurn + postedToolUseIds (no 'Waiting for 
   assert.equal(r.state.parked, true);
   assert.equal(r.state.postedThisTurn, false, "nothing is awaiting a reply — the post was denied");
   assert.deepEqual(r.state.postedToolUseIds, []);
-  // The park still deny-closes the card itself, which is what makes the counters wrong to keep.
-  const echo = r.effects.find((e) => e.type === "emit" && e.payload.type === "permission_resolved");
-  assert.deepEqual(echo.payload, { type: "permission_resolved", requestId: "r1", decision: "deny" });
-  // The effect SET (M2: `scheduleIdle` arms the abandonment bound where `clearIdle` used to sit,
-  // and there is no `modes` echo because the idle park no longer takes a posture away).
-  assert.deepEqual(effTypes(r.effects), ["denyPending", "abortQuery", "scheduleIdle", "persist", "emit", "emit", "emit"]);
+  // The park deny-closes the card itself, which is what makes the counters wrong to keep.
+  assert.deepEqual(effTypes(r.effects), ["denyPending", "abortQuery", "scheduleIdle", "persist"]);
 });
 
 test("FIX F6: a woken session still counts a NEW post normally", () => {
@@ -173,9 +156,6 @@ test("M2: parking keeps BOTH axes, inboundForTask AND every standing grant", () 
   assert.equal(r.state.messageMode, "auto_both", "and so is AXIS B");
   assert.equal(r.state.inboundForTask, true, "and the standing inbound grant");
   assert.deepEqual(r.state.allowForTask, ["Bash#ls#abc"], "and the scoped for-task grants");
-  // ...and the operator is told nothing was taken away, because nothing was.
-  assert.ok(!r.effects.some((e) => e.type === "emit" && e.payload.type === "notice"),
-    "no posture-reset note: the park revoked nothing");
 });
 
 test("M2: a woken session behaves as the operator set it — the whole point of the change", () => {
@@ -195,8 +175,6 @@ test("M2: the AUTH HOLD still disarms — it is the one park that does", () => {
   assert.deepEqual({ t: r.state.toolMode, m: r.state.messageMode }, { t: "manual", m: "ask" });
   assert.equal(r.state.inboundForTask, false);
   assert.deepEqual(r.state.allowForTask, []);
-  const modes = r.effects.find((e) => e.type === "emit" && e.payload.type === "modes");
-  assert.deepEqual(modes.payload, { type: "modes", tool: "manual", message: "ask" }, "and it says so");
   // A held session arms NO abandonment bound: the window carries the Sign in button.
   assert.ok(r.effects.some((e) => e.type === "clearIdle"), "the hold CLEARS the timer, it does not re-arm");
   assert.ok(!r.effects.some((e) => e.type === "scheduleIdle"));
@@ -294,10 +272,8 @@ test("LAZY RESUME (b): operator steer wakes a parked session (resumeQuery, no in
   assert.equal(r.state.phase, "running");
   assert.equal(r.state.parked, false);
   // A parked query has nothing live to interrupt, so a priority:'now' wake skips it.
-  assert.deepEqual(effTypes(r.effects), ["resumeQuery", "pushTurn", "emit", "scheduleIdle"]); // FIX 3
-  assert.ok(!r.effects.some((e) => e.type === "interruptQuery"), "no interrupt while waking");
-  const status = r.effects.find((e) => e.type === "emit" && e.payload.type === "status");
-  assert.deepEqual(status.payload, { type: "status", phase: "running", activity: "working" });
+  assert.deepEqual(effTypes(r.effects), ["resumeQuery", "pushTurn", "scheduleIdle"], "no interrupt while waking"); // FIX 3
+  assert.equal(r.state.activity, "working");
 });
 
 test("interactive park holds an inbound reply (stays parked); the RELEASE wakes it", () => {

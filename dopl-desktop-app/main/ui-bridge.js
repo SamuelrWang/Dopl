@@ -368,11 +368,6 @@ function register(opts = {}) {
   );
 
   ipcMain.handle(
-    'dopl:magic-link',
-    bound('magic-link', (_event, payload) => authPassword.sendMagicLink(payload))
-  );
-
-  ipcMain.handle(
     'dopl:sign-out',
     bound('sign-out', async () => {
       // SPA sign-out: drop the credential (blob + jar) and emit the signed-out push.

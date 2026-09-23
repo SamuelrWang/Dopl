@@ -34,7 +34,6 @@ vi.mock("./mcp-oauth", () => ({
   validateAccessToken: vi.fn(async () => state.token),
   isOAuthAccessToken: (token: string) => token.startsWith("dopl_at_"),
 }));
-vi.mock("@/features/analytics/server/mcp-events", () => ({ logMcpEvent: vi.fn() }));
 vi.mock("@/features/analytics/server/system-events", () => ({ logSystemEvent: vi.fn() }));
 vi.mock("@supabase/ssr", () => ({
   createServerClient: () => ({
