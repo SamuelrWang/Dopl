@@ -315,14 +315,14 @@ describe("the two permission axes agree across both trees", () => {
   it("session-profiles.js READS Axis A rather than declaring it — core holds no copy", () => {
     // The half that keeps the winner honest: if this file ever re-declares a literal, the
     // comparison below silently starts measuring core against itself.
-    // 2026-09-14: the runtime-resolved Axis-A surface moved to
-    // `session-profiles-runtime.js` in the 500-cap split; `session-profiles.js`
-    // re-exports it and still declares no literal.
+    // The runtime-resolved Axis-A surface lives in `session-profiles-runtime.js`; per-runtime
+    // lists come from the descriptor through `toolModesFor`.
     const profiles = desktopSource("session-profiles.js");
     const runtimeSurface = desktopSource("session-profiles-runtime.js");
     expect(profiles).not.toMatch(/const TOOL_MODES = \[/);
     expect(runtimeSurface).not.toMatch(/const TOOL_MODES = \[/);
-    expect(runtimeSurface).toContain("const TOOL_MODES = cap.toolModes(descriptorFor(null));");
+    expect(runtimeSurface).toMatch(/const toolModesFor = \(runtimeId\) => cap\.toolModes\(descriptorFor\(runtimeId\)\);/);
+    expect(runtimeSurface).toContain("const TOOL_MODES = toolModesFor(null);");
   });
 
   it.each(["TOOL_MODES", "MESSAGE_MODES"])(
