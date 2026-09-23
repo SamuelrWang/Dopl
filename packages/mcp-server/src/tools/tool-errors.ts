@@ -362,14 +362,6 @@ export const CHANNEL_ERRORS: readonly ToolError[] = [
   },
 ];
 
-export const HOME_ERRORS: readonly ToolError[] = [
-  {
-    reason: "invite_is_app_only",
-    meaning: "minting an invite link needs an interactive session",
-    retry: "no",
-  },
-];
-
 export const SEARCH_ERRORS: readonly ToolError[] = [
   {
     reason: "partial_read",
