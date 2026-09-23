@@ -291,6 +291,7 @@ export function boot(over = {}) {
       };
     }
     if (id === "./runtime/selection-vocabulary") return require_(join(MAIN, "runtime/selection-vocabulary.js"));
+    if (id === "./session-launch-op") return require_(join(MAIN, "session-launch-op.js")); // `defaultGoal`, the button lane's sentence
     // ⚠ THE IDENTITY RESOLVE IS STUBBED AT ITS SEAM, not faked at the transport. The real module
     // is `main/identity-resolve.js` and it rides `api.js`, which reaches Electron — so what is
     // controlled here is exactly its documented ANSWER SET (`{ok:true, identity}` /

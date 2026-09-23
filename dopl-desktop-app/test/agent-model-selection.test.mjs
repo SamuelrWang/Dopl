@@ -23,7 +23,7 @@ import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { prefs, legacyPreset } from "./_channel-prefs-block.mjs";
+import { legacyPreset } from "./_channel-prefs-block.mjs";
 import { codeOf, fnOf } from "./helpers/source-probe.mjs";
 
 const require = createRequire(import.meta.url);
