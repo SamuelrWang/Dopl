@@ -48,6 +48,7 @@ function boot(api = {}, opts = {}) {
   const requests = [];
   const stub = (id) => {
     if (id === "./ipc-guards") return require(join(MAIN, "ipc-guards.js"));
+    if (id === "./launch-directive-vocab") return require(join(MAIN, "launch-directive-vocab.js"));
     if (id === "./agent-id") return require(join(MAIN, "agent-id.js"));
     if (id === "./diag") return { diag: () => {} };
     if (id === "./session-model") return require(join(MAIN, "session-model.js"));
@@ -136,13 +137,11 @@ test("F-1 / F-2: a 404 REFUSES with `no-identity` — deleted and invisible are 
   assert.equal(m.launches.length, 0, "REFUSE, never degrade to a blank agent");
 });
 
-// ⚠ T35 — THE WORD DOES NOT MOVE (one `reason` for all three causes); only the SERVER's own
-// classification travels, and anything that is not TWO NON-EMPTY STRINGS falls to the plain 404
-// (`identity-resolve.js › resolveAgentIdentity` carries why that is not an oracle).
-test("T35: a classified 404 carries the place; every other 404 is byte-identical to before", async () => {
+// ⚠ EVERY 404 IS ONE ANSWER (P7-13): the server stopped sending a tenancy hint, and a body that
+// still carries one is not read — nothing here may reconstruct the 404-never-403 oracle.
+test("every 404 is `no-identity`, whatever its body says", async () => {
   const shelf = { name: "Code Auditor", label: "your personal shelf" }, at = (el) => boot({ status: 404, body: el === undefined ? undefined : { error: { details: { elsewhere: el } } } });
-  assert.deepEqual(await at(shelf).resolve.resolveAgentIdentity(TPL, WS), { ok: false, reason: "no-identity", elsewhere: shelf });
-  for (const el of [undefined, {}, { name: "x" }, { label: "y" }, { name: "", label: "y" }, "shelf", 7, null])
+  for (const el of [shelf, undefined, {}, { name: "x" }, "shelf", 7, null])
     assert.deepEqual(await at(el).resolve.resolveAgentIdentity(TPL, WS), { ok: false, reason: "no-identity" }, JSON.stringify(el ?? null));
 });
 
@@ -219,11 +218,11 @@ test("the payload is NARROWED to a literal whitelist — a new server field is D
   const m = boot({ body: { ...RESOLVED, createdBy: "user-9", id: TPL, visibility: "team" } });
   await m.launchFromButton(payload({ identityId: TPL }));
   const t = m.launches[0].context.identity;
-  // ⚠ EIGHT SINCE 2026-09-08 (`knowledge` — `launch-identity-scopes.test.mjs` owns that
-  // narrowing). The list is CLOSED; dropping `createdBy`/`id`/`visibility` IS the case.
+  // ⚠ NINE: `knowledge` (`launch-identity-scopes.test.mjs` owns that narrowing) and `runtime`
+  // (C4). The list is CLOSED; dropping `createdBy`/`id`/`visibility` IS the case.
   assert.deepEqual(Object.keys(t).sort(), [
     "authoredByCaller", "fields", "instructions", "knowledge", "knowledgeBases", "model", "name",
-    "unreachableKnowledgeBaseCount",
+    "runtime", "unreachableKnowledgeBaseCount",
   ]);
   // ⚠ OWNERSHIP MUST NOT RIDE A LAUNCH PAYLOAD — `authoredByCaller` is a COMPUTED boolean
   // precisely so a raw creator id never has to.
@@ -478,7 +477,7 @@ test("F-288: the identity NAME is projected, whitelisted and rehydrated — all 
   assert.match(read("session-store.js"), /identityName: durableName\(r\.identityName, 120\)/,
     "the durable whitelist must name it — at 120, the column's own bound, not the 80 display default");
   assert.match(read("session-park.js"),
-    /identity: r\.identityName \? \{ name: r\.identityName \} : null/,
+    /identity: \(r\.identityName \|\| r\.templateName\) \? \{ name: r\.identityName \|\| r\.templateName \} : null/,
     "contextFromRecord must rebuild it, or the resumed session reports a blank identity");
   // ⚠ THE NAME ONLY. Persisting another member's prompt text to answer a question nothing asks
   // after spawn would be a real cost for no reader — see `contextFromRecord`'s own note.
