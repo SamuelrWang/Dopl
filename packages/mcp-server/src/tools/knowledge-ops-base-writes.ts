@@ -16,7 +16,7 @@
 
 import type { DoplClient } from "@dopl/client";
 import { inlineOr, NO_NAME } from "./narration";
-import { ok, err, type ToolResponse } from "./respond";
+import { ok, err, apiMessage, isApiError, type ToolResponse } from "./respond";
 import {
   resolveBaseOr,
   writeOr,
@@ -50,14 +50,8 @@ import {
  * place this refusal is worded.
  */
 function agentCreateForbidden(e: unknown): string | null {
-  if (typeof e !== "object" || e === null) return null;
-  if ((e as { status?: number }).status !== 403) return null;
-  if ((e as { code?: unknown }).code !== "AGENT_WRITE_DISABLED") return null;
-  const msg = (e as { apiMessage?: unknown }).apiMessage;
-  const detail =
-    typeof msg === "string" && msg
-      ? msg
-      : "An agent cannot create a knowledge base here.";
+  if (!isApiError(e, 403, "AGENT_WRITE_DISABLED")) return null;
+  const detail = apiMessage(e) ?? "An agent cannot create a knowledge base here.";
   return `${detail} Nothing was created — no row, no slug taken, so retrying the same call will fail the same way.`;
 }
 

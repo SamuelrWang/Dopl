@@ -216,6 +216,7 @@ export type {
   LaunchDirectiveCreateInput,
   LaunchDirectiveCreated,
   LaunchDirectiveKind,
+  LaunchDirectiveStatus,
   // ⚠ THE TWO POSTURE AXES (2026-09-01, T24). ORDERED unions — the clamp on the
   // machine indexes into them, so their order is contract, not presentation.
   LaunchToolMode,

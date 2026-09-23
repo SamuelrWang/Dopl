@@ -67,6 +67,7 @@ export type {
   DirectionRefusalReason,
   LaunchRefusalReason,
   LaunchDirectiveKind,
+  LaunchDirectiveStatus,
   LaunchToolMode,
   LaunchMessageMode,
 } from "./directives.js";

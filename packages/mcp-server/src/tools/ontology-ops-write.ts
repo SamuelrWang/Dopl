@@ -13,7 +13,7 @@ import type {
   OntologyObject,
   OntologySnapshot,
 } from "@dopl/client";
-import { inlineOr, NO_NAME } from "./narration";
+import { inlineOr, NO_NAME, UUID_RE } from "./narration";
 import { err, isConflict, missingParams, ok, type ToolResponse } from "./respond";
 import { resolveClusterRef, resolveObjectRef } from "./ontology-render";
 import { opAnchor, opGet, opMap, opResolve } from "./ontology-ops-read";
@@ -388,8 +388,6 @@ function resolveObjectValues(
   }
   return { ids };
 }
-
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 async function resolveResourceValues(
   client: DoplClient,

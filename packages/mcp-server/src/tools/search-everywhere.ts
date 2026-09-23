@@ -143,9 +143,9 @@ async function searchOneLeg(
     if (found.identities.hits.length > 0) {
       hits += found.identities.hits.length;
       lines.push("", "### Agent identities");
-      for (const t of found.identities.hits) {
+      for (const ident of found.identities.hits) {
         lines.push(
-          `- ${inlineOr(t.name, NO_NAME)} (id: \`${t.id}\` · seen by ${found.audienceOf(t)})`,
+          `- ${inlineOr(ident.name, NO_NAME)} (id: \`${ident.id}\` · seen by ${found.audienceOf(ident)})`,
         );
       }
       lines.push(...more(found.identities, "agent identities"));

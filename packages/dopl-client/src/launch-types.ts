@@ -20,6 +20,7 @@ import type {
   AgentColorKey,
   LaunchRefusalReason,
   LaunchDirectiveKind,
+  LaunchDirectiveStatus,
   LaunchToolMode,
   LaunchMessageMode,
 } from "@dopl/contracts";
@@ -28,6 +29,7 @@ export type {
   AgentColorKey,
   LaunchRefusalReason,
   LaunchDirectiveKind,
+  LaunchDirectiveStatus,
   LaunchToolMode,
   LaunchMessageMode,
 };
@@ -117,7 +119,7 @@ export interface LaunchDirective {
    *  They are two words because this row is rendered into an agent-facing
    *  sentence, and "launched" on the record of an agent being STOPPED is the one
    *  kind of wrong nothing downstream can detect. */
-  status: "pending" | "claimed" | "launched" | "done" | "refused" | "expired";
+  status: LaunchDirectiveStatus;
   /** Set iff `status` is `refused`. */
   refusalReason: LaunchRefusalReason | null;
   /** WHICH AGENT an `end` / `rename` acts on — an INPUT you named. `null` on a

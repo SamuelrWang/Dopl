@@ -173,6 +173,15 @@ export type LaunchRefusalReason =
  */
 export type LaunchDirectiveKind = "launch" | "end" | "rename" | "set_agent_mode";
 
+/** A directive row's lifecycle. `done` is the non-launch kinds' success, `launched` the launch's. */
+export type LaunchDirectiveStatus =
+  | "pending"
+  | "claimed"
+  | "launched"
+  | "done"
+  | "refused"
+  | "expired";
+
 /**
  * THE TWO PERMISSION AXES. Axis A is EACH RUNTIME'S OWN WORDS (Samuel ruling R3) — Claude,
  * Codex, Cursor — as one union; the operator's machine validates a word against the launch (or

@@ -6,7 +6,7 @@
  */
 
 import { inlineOr } from "./narration";
-import { err, type ToolResponse } from "./respond";
+import { apiMessage, err, isApiError, type ToolResponse } from "./respond";
 
 /**
  * ⚠ A published skill is workspace-visible and none of `name` / `folder` /
@@ -70,18 +70,8 @@ export function failureDetail(e: unknown): string {
  * ⚠ Duck-typed to avoid importing the @dopl/client error class.
  */
 export function agentWriteDenied(e: unknown): ToolResponse | null {
-  if (
-    typeof e !== "object" ||
-    e === null ||
-    (e as { status?: number }).status !== 403 ||
-    (e as { code?: unknown }).code !== "SKILL_AGENT_WRITE_DISABLED"
-  ) {
-    return null;
-  }
-  const msg = (e as { apiMessage?: unknown }).apiMessage;
+  if (!isApiError(e, 403, "SKILL_AGENT_WRITE_DISABLED")) return null;
   return err(
-    typeof msg === "string" && msg
-      ? msg
-      : "This skill is read-only to agents — delete it from the Dopl web UI."
+    apiMessage(e) ?? "This skill is read-only to agents — delete it from the Dopl web UI."
   );
 }

@@ -44,7 +44,7 @@ export interface ScopeHits {
   /** Neutralized name of the object holding `id`, or `"object"`. */
   containerOf: (id: string) => string;
   /** "Who can see this" for an identity hit, from its container, not its column (S21/S23). */
-  audienceOf: (t: AgentIdentity) => AudienceLabel;
+  audienceOf: (ident: AgentIdentity) => AudienceLabel;
   /** `partialRead`'s notice; "" when every group answered. */
   notice: string;
 }
@@ -101,7 +101,7 @@ export async function searchScope(
     // Name + description only, never `instructions`: another member's prompt must not decide
     // which identity a stranger's agent surfaces.
     identities: cap(
-      identityPayload.identities.filter((t) => matches(t.name, t.description)),
+      identityPayload.identities.filter((ident) => matches(ident.name, ident.description)),
       limit,
     ),
     ontologyTruncated: ontology.truncated === true,
@@ -109,9 +109,9 @@ export async function searchScope(
       const name = objects.find((c) => c.childIds.includes(id))?.name;
       return name ? inlineOr(name, NO_NAME) : "object";
     },
-    audienceOf: (t) =>
-      identityAudience(t, {
-        personal: personalIds.has(t.id),
+    audienceOf: (ident) =>
+      identityAudience(ident, {
+        personal: personalIds.has(ident.id),
         inHomeChannel: opts.inHomeChannel,
       }),
     notice: reads.notice(SEARCH_GROUP_COUNT, "groups"),

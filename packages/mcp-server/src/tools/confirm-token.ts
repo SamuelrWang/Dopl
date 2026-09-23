@@ -49,7 +49,7 @@ import { workspaceContext } from "@dopl/client";
 import type { DoplClient } from "@dopl/client";
 import { isSharedRoom } from "../shared-room.js";
 import { inlineOr } from "./narration.js";
-import { err, type ToolResponse } from "./respond.js";
+import { err, isApiError, type ToolResponse } from "./respond.js";
 
 /** ⚠ SHORT-LIVED on purpose: the preview must be the thing the agent is still
  *  holding when it acts, not something it found in an old turn. */
@@ -271,11 +271,7 @@ export function containerPublishUnacknowledged(
   e: unknown,
   remedy: string,
 ): ToolResponse | null {
-  if (typeof e !== "object" || e === null) return null;
-  if ((e as { status?: number }).status !== 400) return null;
-  if ((e as { code?: unknown }).code !== "CONTAINER_PUBLISH_UNACKNOWLEDGED") {
-    return null;
-  }
+  if (!isApiError(e, 400, "CONTAINER_PUBLISH_UNACKNOWLEDGED")) return null;
   return err(
     `Nothing was written. This would publish into a home channel somebody ELSE is standing in, and the server requires that the audience change be acknowledged. ${remedy}`,
   );

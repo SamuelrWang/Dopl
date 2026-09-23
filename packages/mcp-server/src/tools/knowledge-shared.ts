@@ -4,7 +4,7 @@
  */
 
 import type { DoplClient, KnowledgeBase } from "@dopl/client";
-import { inlineOr, NO_NAME, NO_PATH } from "./narration";
+import { inlineOr, NO_NAME, NO_PATH, UUID_RE } from "./narration";
 import { apiMessage, err, isApiError, type ToolResponse } from "./respond";
 import { PRIVATE_VISIBILITY_DENIED_CODE } from "./agent-shared";
 import { KB_ENTRY_NOT_FOUND, KB_ERRORS, refusal } from "./tool-errors";
@@ -23,9 +23,6 @@ const AMBIGUOUS_SLUG = KB_ERRORS[2];
  *  lines of it buys nothing the first ten did not. */
 const MAX_LISTED_MATCHES = 10;
 
-/** ⚠ Local, like `agent-shared.ts` and `channel-addressing.ts` — this package
- *  already carries several copies and unifying them is not this change. */
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 
 /**

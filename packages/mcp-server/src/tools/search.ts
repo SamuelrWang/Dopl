@@ -217,10 +217,10 @@ export function registerSearchTool(
 
       lines.push("", "## Agent identities");
       if (found.identities.hits.length === 0) lines.push("_No matches._");
-      for (const t of found.identities.hits) {
-        const summary = inlineOr(t.description, "`(no description)`");
+      for (const ident of found.identities.hits) {
+        const summary = inlineOr(ident.description, "`(no description)`");
         lines.push(
-          `- ${inlineOr(t.name, NO_NAME)} (id: \`${t.id}\` · seen by ${found.audienceOf(t)}) — ${summary}`,
+          `- ${inlineOr(ident.name, NO_NAME)} (id: \`${ident.id}\` · seen by ${found.audienceOf(ident)}) — ${summary}`,
         );
       }
       lines.push(...more(found.identities, "agent identities"));

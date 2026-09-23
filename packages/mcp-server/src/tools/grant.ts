@@ -32,7 +32,7 @@ import {
 } from "../workspace-directory.js";
 import { ambiguousContainer } from "../container-resolve.js";
 import { inlineOr, NO_NAME } from "./narration.js";
-import { err, ok, type ToolResponse } from "./respond.js";
+import { apiErrorCode, err, ok, type ToolResponse } from "./respond.js";
 
 /**
  * Where a resource can be lent, **AS OFFERED HERE**.
@@ -101,11 +101,7 @@ export function levelForScope(
  * `DoplApiError.code` pattern of `channel-errors.ts › classifyBadRequest`.
  */
 export function channelScopeRefusal(e: unknown): ToolResponse | null {
-  const code =
-    typeof e === "object" && e !== null
-      ? (e as { code?: unknown }).code
-      : undefined;
-  if (code !== "SCOPE_NOT_ALLOWED_IN_WORKSPACE") return null;
+  if (apiErrorCode(e) !== "SCOPE_NOT_ALLOWED_IN_WORKSPACE") return null;
   return err(
     `Refused: NOTHING was shared. In a WORKSPACE, a resource is scoped to the whole workspace — everyone in it already reaches it — so there is no such thing as lending one to a single channel. Narrow it with a TEAM instead. \`scope="channel"\` is for HOME channels, where the channel IS the container.`,
   );

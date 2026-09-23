@@ -16,6 +16,7 @@ import {
   IDENTITIES_SCOPE_NOTE,
   identityAudience,
   identityRow,
+  identityScopes,
 } from "./agent-shared.js";
 import { isErr } from "./channel-shared.js";
 import {
@@ -81,8 +82,8 @@ export async function opList(
   // are two CONTAINERS, so that is the axis a caller acts on; visibility only
   // says who inside one of them may use the row.
   const personalIds = new Set(payload.homeScopedIdentityIds ?? EMPTY_IDENTITY_IDS);
-  const personal = identities.filter((t) => personalIds.has(t.id));
-  const here = identities.filter((t) => !personalIds.has(t.id));
+  const personal = identities.filter((ident) => personalIds.has(ident.id));
+  const here = identities.filter((ident) => !personalIds.has(ident.id));
   const inHomeChannel = await resolveHomeChannelContainer(client, directory);
 
   // ⚠ GROUPED BY VISIBILITY **WITHIN A WORKSPACE** because that is the axis a
@@ -100,14 +101,14 @@ export async function opList(
   // one: everything that is not `workspace` there is reachable from no surface.
   const hereGroups: Array<readonly [string, AgentIdentity[]]> = inHomeChannel
     ? [
-        [DESTINATION_HEADINGS.shared, here.filter((t) => t.visibility === "workspace")],
-        [DESTINATION_HEADINGS.legacy, here.filter((t) => t.visibility !== "workspace")],
+        [DESTINATION_HEADINGS.shared, here.filter((ident) => ident.visibility === "workspace")],
+        [DESTINATION_HEADINGS.legacy, here.filter((ident) => ident.visibility !== "workspace")],
       ]
     : [
         ...IDENTITY_VISIBILITY_VALUES.map(
-          (v) => [VISIBILITY_HEADINGS[v], here.filter((t) => t.visibility === v)] as const,
+          (v) => [VISIBILITY_HEADINGS[v], here.filter((ident) => ident.visibility === v)] as const,
         ),
-        [OTHER_HEADING, here.filter((t) => !OFFERED_VISIBILITIES.has(t.visibility))],
+        [OTHER_HEADING, here.filter((ident) => !OFFERED_VISIBILITIES.has(ident.visibility))],
       ];
   // ⚠ THE CHANNEL'S OWN ROWS FIRST, the personal shelf under them: the call
   // named a container, and a heading order that led with rows from somewhere
@@ -120,12 +121,12 @@ export async function opList(
   for (const [heading, rows] of groups) {
     if (rows.length === 0) continue;
     lines.push(`### ${heading}`);
-    for (const t of rows) {
-      const audience = identityAudience(t, {
-        personal: personalIds.has(t.id),
+    for (const ident of rows) {
+      const audience = identityAudience(ident, {
+        personal: personalIds.has(ident.id),
         inHomeChannel: inHomeChannel !== null,
       });
-      lines.push(identityRow(t, audience));
+      lines.push(identityRow(ident, audience));
     }
     lines.push("");
   }
@@ -162,19 +163,7 @@ export async function opGet(
     `Version: \`${identity.updatedAt}\` (pass as expected_version to op="update")`,
     ...(identity.description ? [inlineOr(identity.description, "")] : []),
   ];
-  // ⚠ **`knowledge` WINS AND THE BASE LIST IS THE FALLBACK** (2026-09-08). A
-  // newer server sends both, the second being the base-level slice of the first,
-  // so rendering both would list every whole-base attachment twice. An older one
-  // sends only the base list, which is why the fallback is not dead code.
-  const scopes =
-    (identity.knowledge ?? []).length > 0
-      ? (identity.knowledge ?? [])
-      : identity.knowledgeBases.map((kb) => ({
-          baseId: kb.id,
-          baseName: kb.name,
-          scope: "base" as const,
-          path: kb.name,
-        }));
+  const scopes = identityScopes(identity);
   if (scopes.length > 0) {
     lines.push("", "## Attached knowledge");
     for (const scope of scopes) {

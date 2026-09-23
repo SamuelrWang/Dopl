@@ -14,7 +14,7 @@
  * one that knows it cannot tell.
  */
 
-import { inlineOr } from "./narration";
+import { inlineOr, UUID_RE } from "./narration";
 
 /**
  * Recognized `X-Dopl-Runtime` value. ⚠ HAND-COPIED from
@@ -247,7 +247,3 @@ export function boundChannelId(identity: CallerIdentity): string | null {
   const head = identity.sessionId?.split(":")[0];
   return head && UUID_RE.test(head) ? head : null;
 }
-
-/** ⚠ Shape only — a uuid here is a ROUTING hint, never a proven channel. */
-const UUID_RE =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;

@@ -25,9 +25,9 @@
  * §5A), and this surface must not rebuild on a new door what the route closed.
  */
 
-import type { AgentIdentity, DoplClient } from "@dopl/client";
+import type { AgentIdentity, DoplClient, IdentityKnowledgeRef } from "@dopl/client";
 import { AUDIENCE_LABELS, type AudienceLabel } from "./audience-label.js";
-import { inlineOr, NO_NAME } from "./narration.js";
+import { inlineOr, NO_NAME, UUID_RE } from "./narration.js";
 import { apiMessage, err, isApiError, type ToolResponse } from "./respond.js";
 import { AGENT_ERRORS, refusal } from "./tool-errors.js";
 
@@ -88,11 +88,6 @@ export type OfferedIdentityVisibility =
 export const VISIBILITY_ENUM_MESSAGE =
   'visibility must be "private" or "workspace", and nothing was written — "team" is no longer a sharing option on this surface.';
 
-/** ⚠ Local, like `channel-addressing.ts` and `ontology-ops-write.ts` — three
- *  copies already exist in this package and unifying them is not this wave. */
-const UUID_RE =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
 export type IdentityRefResolution =
   | { kind: "found"; identity: AgentIdentity }
   | { kind: "not-found" }
@@ -141,7 +136,7 @@ export async function resolveIdentityRef(
   // never mentioned a shelf.
   const all = await client.listAgentIdentities();
   if (UUID_RE.test(needle)) {
-    const byId = all.find((t) => t.id === needle);
+    const byId = all.find((ident) => ident.id === needle);
     if (byId) return { kind: "found", identity: byId };
     try {
       return { kind: "found", identity: await client.getAgentIdentity(needle) };
@@ -151,7 +146,7 @@ export async function resolveIdentityRef(
     }
   }
   const matches = all.filter(
-    (t) => t.name.toLocaleLowerCase() === needle.toLocaleLowerCase(),
+    (ident) => ident.name.toLocaleLowerCase() === needle.toLocaleLowerCase(),
   );
   if (matches.length === 0) return { kind: "not-found" };
   if (matches.length === 1) return { kind: "found", identity: matches[0] };
@@ -227,17 +222,10 @@ export function identityNotFound(ref: string): ToolResponse {
 }
 
 export function identityWriteDenied(e: unknown): ToolResponse | null {
-  if (
-    typeof e !== "object" ||
-    e === null ||
-    (e as { status?: number }).status !== 403 ||
-    (e as { code?: unknown }).code !== "RESOURCE_ACCESS_DENIED"
-  ) {
-    return null;
-  }
-  const msg = (e as { apiMessage?: unknown }).apiMessage;
+  if (!isApiError(e, 403, "RESOURCE_ACCESS_DENIED")) return null;
+  const msg = apiMessage(e);
   return err(
-    typeof msg === "string" && msg
+    msg
       ? `${msg} Nothing was changed.`
       : `Only the identity's creator or a workspace admin can change it. Nothing was changed.`,
   );
@@ -270,6 +258,23 @@ export function sharedCredentialPrivateDenied(e: unknown): ToolResponse | null {
   );
 }
 
+/**
+ * An identity's knowledge attachments. `knowledge` wins; the base list is the older-server (§8)
+ * fallback — never their sum, which would list every whole-base attachment twice.
+ */
+export function identityScopes(
+  ident: Pick<AgentIdentity, "knowledge" | "knowledgeBases">,
+): IdentityKnowledgeRef[] {
+  const scoped = ident.knowledge ?? [];
+  if (scoped.length > 0) return scoped;
+  return ident.knowledgeBases.map((kb) => ({
+    baseId: kb.id,
+    baseName: kb.name,
+    scope: "base" as const,
+    path: kb.name,
+  }));
+}
+
 /** A stored visibility this surface does not offer (`team`): the audience is not stated, never guessed. */
 const UNSTATED_AUDIENCE = "an audience this surface cannot state" as AudienceLabel;
 
@@ -278,15 +283,15 @@ const UNSTATED_AUDIENCE = "an audience this surface cannot state" as AudienceLab
  * (S21/S23). Inside a home channel `workspace` means the room, and anything else is unreachable.
  */
 export function identityAudience(
-  t: Pick<AgentIdentity, "visibility">,
+  ident: Pick<AgentIdentity, "visibility">,
   where: { personal: boolean; inHomeChannel: boolean },
 ): AudienceLabel {
   if (where.personal) return AUDIENCE_LABELS.you;
   if (where.inHomeChannel) {
-    return t.visibility === "workspace" ? AUDIENCE_LABELS.channel : AUDIENCE_LABELS.nobody;
+    return ident.visibility === "workspace" ? AUDIENCE_LABELS.channel : AUDIENCE_LABELS.nobody;
   }
-  if (t.visibility === "private") return AUDIENCE_LABELS.you;
-  if (t.visibility === "workspace") return AUDIENCE_LABELS.workspace;
+  if (ident.visibility === "private") return AUDIENCE_LABELS.you;
+  if (ident.visibility === "workspace") return AUDIENCE_LABELS.workspace;
   return UNSTATED_AUDIENCE;
 }
 
@@ -294,27 +299,22 @@ export function identityAudience(
  *  spliced into a line we wrote — name and description are length-bounded only,
  *  so a newline in either would otherwise start a row of its own.
  *
- *  ⚠ **`audience` IS PASSED IN, NOT READ OFF `t.visibility` (S21/S23,
+ *  ⚠ **`audience` IS PASSED IN, NOT READ OFF `ident.visibility` (S21/S23,
  *  2026-09-18).** The column answers "what is in the visibility field"; a
  *  caller asks "who can see this", and inside a home channel `workspace` means
  *  the room rather than the company. The GROUP the caller put this row in is
  *  the only place that distinction exists — see `audience-label.ts`. */
-export function identityRow(t: AgentIdentity, audience: AudienceLabel): string {
-  const desc = t.description ? `\n  ${inlineOr(t.description, "")}` : "";
-  const runtime = t.runtime ? ` · runtime ${inlineOr(t.runtime, NO_NAME)}` : "";
-  const model = t.model ? ` · model ${inlineOr(t.model, NO_NAME)}` : "";
-  // ⚠ **"knowledge scope(s)", NOT "knowledge base(s)" (2026-09-08).** An
-  // attachment is a base, a FOLDER or an ENTRY now, and counting three folders
-  // of one base as "3 knowledge bases" is a false sentence about what the
-  // identity names. ⚠ `knowledge` first, the base list as the §8/older-server
-  // FALLBACK — never their sum, which would double-count every whole base.
-  const scopeCount =
-    (t.knowledge ?? []).length > 0 ? (t.knowledge ?? []).length : t.knowledgeBases.length;
+export function identityRow(ident: AgentIdentity, audience: AudienceLabel): string {
+  const desc = ident.description ? `\n  ${inlineOr(ident.description, "")}` : "";
+  const runtime = ident.runtime ? ` · runtime ${inlineOr(ident.runtime, NO_NAME)}` : "";
+  const model = ident.model ? ` · model ${inlineOr(ident.model, NO_NAME)}` : "";
+  // "scope(s)", not "base(s)": an attachment is a base, a folder or an entry.
+  const scopeCount = identityScopes(ident).length;
   const kbs =
     scopeCount > 0
       ? ` · ${scopeCount} knowledge scope${scopeCount === 1 ? "" : "s"}`
       : "";
-  return `- ${inlineOr(t.name, NO_NAME)} (id: \`${t.id}\` · seen by ${audience}${runtime}${model}${kbs})${desc}`;
+  return `- ${inlineOr(ident.name, NO_NAME)} (id: \`${ident.id}\` · seen by ${audience}${runtime}${model}${kbs})${desc}`;
 }
 
 /**
