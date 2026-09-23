@@ -21,6 +21,7 @@ import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { boot as bootDirective, row, WS } from "./_launch-directive-harness.mjs";
+import { launchDefaultStub } from "./_launch-runtime-stub.mjs";
 
 const require = createRequire(import.meta.url);
 const MAIN = join(dirname(fileURLToPath(import.meta.url)), "..", "main");
@@ -84,11 +85,8 @@ function bootButton(identityModel) {
     if (id === "./session-engine") {
       return { launchRequesterSession: async (spec) => { launches.push(spec); return { agentId: "ag-1", sessionId: "s-1" }; } };
     }
-    if (id === "./channel-runtime") {
-      return { normalizeRuntimeId: (v) => (v === "codex" ? v : ""), getChannelRuntime: () => "" };
-    }
     // ⚠ THE REAL RULE, over fake catalogs — not a passthrough.
-    if (id === "./runtime/launch-default") return { identityModelFor: (rid, m) => identityOn(rid, m) };
+    if (id === "./runtime/launch-default") return launchDefaultStub({ identityModelFor: (rid, m) => identityOn(rid, m) });
     throw new Error("unexpected require: " + id);
   };
   const resolveMod = { exports: {} };

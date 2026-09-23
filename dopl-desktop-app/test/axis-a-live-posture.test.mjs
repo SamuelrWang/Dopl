@@ -31,19 +31,31 @@ const read = (p) => readFileSync(M(p), "utf8");
 
 const profiles = require(M("session-profiles.js"));
 const io = require(M("session-io.js"));
+const posture = require(M("launch-posture.js"));
+const { initialSessionState, sessionReducer } = require(M("session-reducer.js"));
 
 const CH = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee";
 const THREAD = "11111111-2222-3333-4444-555555555555";
 
-const sess = (state = {}, over = {}) => ({
-  key: `${CH}:${THREAD}:a1b2c3d4`,
-  agentId: "a1b2c3d4",
-  channelId: CH,
-  taskId: THREAD,
-  profile: "full",
-  state: { toolMode: "manual", messageMode: "auto_both", activity: "idle", allowForTask: [], ...state },
-  ...over,
-});
+// The state comes from the REAL `initialSessionState`, on the session's runtime's own word list —
+// the only shape production builds.
+const sess = (state = {}, over = {}) => {
+  const runtimeId = over.runtimeId || "claude";
+  const { toolMode = "manual", ...rest } = state;
+  return {
+    key: `${CH}:${THREAD}:a1b2c3d4`,
+    agentId: "a1b2c3d4",
+    channelId: CH,
+    taskId: THREAD,
+    profile: "full",
+    runtimeId,
+    state: {
+      ...initialSessionState({ toolModes: profiles.toolModesFor(runtimeId), toolMode, messageMode: "auto_both" }),
+      activity: "idle", ...rest,
+    },
+    ...over,
+  };
+};
 
 // The pure block with the live read INJECTED — the only way to drive a STORED value in plain node,
 // where `channel-prefs.js` cannot load (its electron-store) and `channelToolMode` answers `''`.
@@ -60,13 +72,17 @@ const slice = (channelToolMode) =>
     "autoOutboundMode",
     "channelMessageMode",
     "channelToolMode",
+    "narrowTo",
+    "narrowMessageMode",
     `${body}\nreturn { effectiveToolMode };`
   )(
     profiles.privateTurnMessageMode,
     profiles.floorWindowlessMessage,
     profiles.autoOutboundMode,
     () => "",
-    channelToolMode
+    channelToolMode,
+    posture.narrowTo,
+    posture.narrowMessageMode
   );
 
 /** The real gate, with Axis A re-derived through the sliced live read. */
@@ -107,24 +123,47 @@ test("LIVE: an unreadable store falls back to the FROZEN value, never to a grant
   const s = sess({ toolMode: "bypass" });
   assert.equal(slice(() => "").effectiveToolMode(s), "bypass");
   assert.equal(slice(() => "").effectiveToolMode(sess({ toolMode: undefined })), "manual");
-  assert.equal(slice(() => "").effectiveToolMode(null), "manual", "no session, most restrictive answer");
+  assert.equal(slice(() => "").effectiveToolMode(null), "", "no session: no mode, which allows nothing");
+  assert.equal(profiles.toolModeAllows("", "Bash"), false);
 });
 
 // ── 2. THE PER-SESSION PICK STILL WINS ──────────────────────────────────────────────────────
 
-test("SET: an explicit set_tool_mode keeps its value against a wider channel record", () => {
-  const s = sess({ toolMode: "manual", toolModeSet: true });
+const pinTo = (s, mode) => ({ ...s, state: sessionReducer(s.state, { type: "set_tool_mode", mode, pinned: true }).state });
+
+test("SET: a per-agent pick keeps its value against a wider channel record", () => {
+  const s = pinTo(sess({ toolMode: "manual" }), "manual");
   assert.equal(slice(() => "bypass").effectiveToolMode(s), "manual");
   assert.equal(decideWith("bypass", s, "Bash"), "gate", "the operator narrowed THIS agent");
 });
 
-test("SET: the flag is the reducer's alone, and only the TOOL arm stamps it", () => {
-  const reducer = read("session-reducer.js");
-  assert.match(reducer, /toolMode: coerceMode\(TOOL_MODES, event\.mode\), toolModeSet: true/,
-    "set_tool_mode stamps the flag");
-  assert.match(read("session-state.js"), /toolModeSet: false/,
-    "every spawn starts unstamped — startModes is a default, not an operator's live pick");
-  assert.match(reducer, /toolModeSet: false/, "the auth hold clears it with the axes it marks");
+test("C2: a pick is NEVER wider than the channel — it narrows with it and comes back with it", () => {
+  const s = pinTo(sess({ toolMode: "manual" }), "auto");
+  assert.equal(slice(() => "bypass").effectiveToolMode(s), "auto", "the pick holds under a wider channel");
+  assert.equal(slice(() => "manual").effectiveToolMode(s), "manual", "the channel narrowing wins at once");
+  assert.equal(slice(() => "bypass").effectiveToolMode(s), "auto", "…and the pick is still the agent's");
+});
+
+test("C2 (Codex): a pick is ordered by CODEX's own ladder, not Claude's", () => {
+  const s = sess({ toolMode: "never" }, { runtimeId: "codex" });
+  const picked = { ...s, state: sessionReducer(s.state, { type: "set_tool_mode", mode: "granular", pinned: true }).state };
+  assert.equal(picked.state.toolMode, "granular", "a Codex word survives the reducer on a Codex session");
+  assert.equal(slice(() => "never").effectiveToolMode(picked), "granular");
+  assert.equal(slice(() => "untrusted").effectiveToolMode(picked), "untrusted");
+});
+
+test("SET: only a PINNED set stamps the flag; the channel fan-out never does", () => {
+  const s = sess({ toolMode: "manual" });
+  const fanned = sessionReducer(s.state, { type: "set_tool_mode", mode: "bypass" }).state;
+  assert.equal(fanned.toolModeSet, false, "a channel write is not an agent's pick (P3-02)");
+  assert.equal(fanned.toolMode, "bypass");
+  assert.equal(initialSessionState({}).toolModeSet, false, "an unpinned start posture is a default, not a pick");
+  const picked = sessionReducer(s.state, { type: "set_tool_mode", mode: "auto", pinned: true }).state;
+  assert.equal(picked.toolModeSet, true);
+  const narrowed = sessionReducer(picked, { type: "set_tool_mode", mode: "manual" }).state;
+  assert.deepEqual([narrowed.toolMode, narrowed.toolPick], ["manual", "auto"], "a fan-out narrows the stamp, keeps the pick");
+  const widened = sessionReducer(narrowed, { type: "set_tool_mode", mode: "bypass" }).state;
+  assert.equal(widened.toolMode, "auto", "and a wider channel never lifts it past the pick");
 });
 
 // ── 3. THE WIRING, IN THE SHIPPED SOURCE ────────────────────────────────────────────────────
@@ -150,5 +189,6 @@ test("WIRING: the live half checks PRESENCE first, exactly like its Axis-B twin"
   // without `hasLaunchPosture` would make the default win over every session's launch posture.
   const block = SRC.slice(SRC.indexOf("function channelToolMode"));
   assert.match(block, /hasLaunchPosture\(channelId\)/);
-  assert.match(block, /getLaunchPosture\(channelId\)/);
+  assert.ok(block.indexOf("hasLaunchPosture(channelId)") < block.indexOf("launchPostureFor(channelId, sessionRuntimeId(runtimeId))"),
+    "presence first, then the SESSION runtime's record (never the selected runtime's)");
 });

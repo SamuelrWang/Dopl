@@ -52,8 +52,9 @@ test("SHAPE: a live summary carries exactly what the Agents tab and the agent vi
       diag: null,
       // The live POSTURE pair (2026-08-20) is read-only on this wire and is the REDUCER's state,
       // not the channel's stored launch posture: a running session can be moved OFF what it
-      // launched on. An absent state reads fail-closed (`manual` / `ask`).
-      toolMode: "manual",
+      // launched on. An absent Axis A reads null (the fixture's state carries no runtime word
+      // list), never one runtime's word; an absent Axis B reads `ask`.
+      toolMode: null,
       messageMode: "ask",
       // `model` (2026-08-22, Samuel's model-selection ruling), and the fixture shows the
       // PRECEDENCE: the SDK's own reported id (`s.liveModel`) beats the operator's pick, because

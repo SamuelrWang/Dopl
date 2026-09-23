@@ -33,6 +33,8 @@ const require_ = createRequire(import.meta.url);
 // plain Node test is the proof of that claim as much as it is a convenience.
 const truth = require_(join(MAIN, "session-runtime-truth.js"));
 const registry = require_(join(MAIN, "runtime/index.js"));
+const capability = registry.capability;
+const { initialSessionState } = require_(join(MAIN, "session-state.js"));
 
 const IO = readFileSync(join(MAIN, "session-io.js"), "utf8");
 const STORE = readFileSync(join(MAIN, "session-store.js"), "utf8");
@@ -154,12 +156,18 @@ test("the native policy summary is a REPORT of the runtime's own labels, never a
   );
   assert.ok(!codexNoNative.includes("·"), `an unset second axis was printed: ${codexNoNative}`);
   const axis = registry.descriptorFor("codex").toolMode.secondaryAxis;
-  const codexWithNative = truth.nativePolicySummary(
-    registry.descriptorFor("codex"),
-    live({ state: { toolMode: "untrusted" }, native: { [axis.key]: axis.options[0].value } })
-  );
+  // ⚠ THE STATE IS THE ONE THE SPAWN BUILDS (P4-09): the bag lives on `state.native`, and the
+  // Codex word survives on a Codex session (X-01). A fixture that put `native` on the session
+  // object matched nothing in production and hid both.
+  const codexState = initialSessionState({
+    toolModes: capability.toolModes(registry.descriptorFor("codex")), toolMode: "never",
+    native: { [axis.key]: axis.options[0].value },
+  });
+  const codexWithNative = truth.nativePolicySummary(registry.descriptorFor("codex"), live({ state: codexState }));
   assert.match(codexWithNative, / · /, "both axes, joined");
   assert.ok(codexWithNative.includes(axis.options[0].label));
+  const neverLabel = registry.descriptorFor("codex").toolMode.options.find((o) => o.value === "never").label;
+  assert.ok(codexWithNative.startsWith(neverLabel), `the Codex mode is recorded, not Claude's manual: ${codexWithNative}`);
   // ⚠ '' IS A REAL ANSWER for a runtime this build does not ship; the caller stores `null`.
   assert.equal(truth.nativePolicySummary(null, live()), "");
 });

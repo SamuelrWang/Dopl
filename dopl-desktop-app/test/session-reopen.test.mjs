@@ -412,6 +412,7 @@ test("MODE: it answers with MAIN's post-dispatch values, never an echo of the as
     ok: true,
     tools: "auto",
     messages: "ask",
+    clamped: false,
   });
 });
 
@@ -444,11 +445,16 @@ test("MODE: an unknown or SETTLED key answers no-session — own agents only", (
   assert.equal(h.calls.dispatch.length, 0);
 });
 
-test("MODE: the mode string is passed through for the REDUCER to coerce, not pre-judged here", () => {
-  // Main's IPC layer normalizes against the frozen enums and the reducer coerces again; this
-  // function is deliberately not a third opinion on the vocabulary.
-  const h = harness({});
-  h.sessions.set(KEY, fakeSession({ win: null, windowless: true }));
-  h.setModeByTask({ ...task, axis: "tools", mode: "not-a-mode" });
-  assert.equal(h.calls.dispatch[0][1].mode, "not-a-mode");
+test("MODE: the mode is read in the SESSION's runtime words, never another runtime's (X-01)", () => {
+  // The IPC boundary cannot see the session, so this is where Axis A is validated — against the
+  // session's OWN runtime. An unknown word fail-closes to that runtime's narrowest, and the
+  // reducer coerces again.
+  const codex = harness({});
+  codex.sessions.set(KEY, fakeSession({ win: null, windowless: true, runtimeId: "codex" }));
+  for (const mode of ["never", "on-request", "bypass", "not-a-mode"]) codex.setModeByTask({ ...task, axis: "tools", mode });
+  assert.deepEqual(codex.calls.dispatch.map(([, e]) => e.mode), ["never", "on-request", "untrusted", "untrusted"]);
+  const claude = harness({});
+  claude.sessions.set(KEY, fakeSession({ win: null, windowless: true, runtimeId: "claude" }));
+  for (const mode of ["bypass", "never"]) claude.setModeByTask({ ...task, axis: "tools", mode });
+  assert.deepEqual(claude.calls.dispatch.map(([, e]) => e.mode), ["bypass", "manual"]);
 });

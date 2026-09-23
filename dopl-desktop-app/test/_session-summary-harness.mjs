@@ -42,6 +42,8 @@ const { displayText, IDENTITY_NAME_MAX } = summaryText;
 // The held-gate projection (2026-09-17). Injected REAL; safe to `req` because that module takes NO
 // requires of its own, so it cannot drag an `electron-store` into this loader.
 const { heldGatesFor } = req(join(MAIN, "session-held-gates.js"));
+// RC-15's one spelling of "no model pick". Injected REAL; the module requires nothing.
+const { pickOf } = req(join(MAIN, "runtime", "selection-vocabulary.js"));
 
 const BEGIN = "// ─── BEGIN SESSION-SUMMARY-PURE";
 const from = SRC.indexOf(BEGIN);
@@ -94,12 +96,14 @@ export function load() {
     "queryTornDown",
     "listeningState",
     "diag",
+    "pickOf",
     `${BLOCK}\n return { ${EXPORTED.join(", ")} };`
   )(
     metricOrNull, metrics, noteEvent, detailFor, endReasonFor, displayNameFor, descriptionForAgent,
     displayText, IDENTITY_NAME_MAX, heldGatesFor,
     PILL_STATES, ACTIVITY_PILL, PILL_ENDED, pillState, queryTornDown, listeningState,
-    (...parts) => logged.push(parts.join(" "))
+    (...parts) => logged.push(parts.join(" ")),
+    pickOf
   );
   const spaWindow = {
     destroyed: false,

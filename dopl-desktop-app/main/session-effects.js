@@ -6,6 +6,7 @@
 // .mjs slices it, PREPENDS it to the session-reducer block and evaluates the pair verbatim in
 // plain Node. session-reducer.js requires these names ABOVE its own sentinel, so inside its
 // block they are free vars.
+const { toolModesOf } = require('./session-state'); // a hold resets to THIS session's narrowest word
 
 // ─── BEGIN SESSION-EFFECTS (pure; unit-tested via source extraction) ─────────
 
@@ -307,7 +308,7 @@ function modesEmit(state) {
 // `notice`, which the view-model renders via textContent. No em dash.
 const POSTURE_RESET_NOTE = 'Paused. Tools and Messages reset to Manual / Ask.';
 function postureWasReset(state) {
-  return !!state && (state.toolMode !== 'manual' || state.messageMode !== 'ask');
+  return !!state && (state.toolMode !== toolModesOf(state)[0] || state.messageMode !== 'ask');
 }
 
 // Idle PARKS the session, never ends it: deny any awaited canUseTool promise fail-closed, tear
@@ -352,7 +353,7 @@ function parkEffects(state, opts) {
   if (resetPosture) {
     // ⚠ A park that DISARMS both axes says so — a silent reset leaves the control reading "on"
     // over a session that will ask again.
-    effects.push(modesEmit({ toolMode: 'manual', messageMode: 'ask' }));
+    effects.push(modesEmit({ toolMode: toolModesOf(state)[0], messageMode: 'ask' }));
   }
   effects.push({ type: 'emit', payload: { type: 'status', phase: gatePhase(state, 'parked') } });
   // `paused` drops the one-line inline note (renderer owns the copy), distinct from the reopen

@@ -35,7 +35,11 @@
 // half, so "does this posture consent to posting" has one answer on both sides of the gate.
 const {
   privateTurnMessageMode, floorWindowlessMessage, autoOutboundMode,
+  normalizeToolMode, normalizeMessageMode, toolModesFor,
 } = require('./session-profiles');
+// C2 "narrower sticks": a per-agent pick is held under the channel's live value by the SAME rules a
+// directive's request is clamped by (a ladder for Axis A, capability bits for Axis B).
+const { narrowTo, narrowMessageMode } = require('./launch-posture');
 
 // ─── BEGIN SESSION-PRIVATE-PURE (pure; unit-tested via source extraction) ────────
 
@@ -139,7 +143,8 @@ function isPrivateTurn(s) {
  * and the IN half is preserved on every path.
  */
 function effectiveMessageMode(s) {
-  const frozen = (s && s.state && s.state.messageMode) || 'ask';
+  const st = (s && s.state) || {};
+  const frozen = st.messageMode || 'ask';
   const stored = channelMessageMode(s && s.channelId);
   // THE WINDOWLESS FLOOR IS RE-APPLIED HERE; leaving it off would be F-236 from the other end. The
   // stored value is the operator's PICK and carries no floor, where the frozen value had one applied
@@ -148,8 +153,10 @@ function effectiveMessageMode(s) {
   // unable to look at the thread it was answering on `ask` channels, which is the default. ONE
   // STATEMENT OF THE FLOOR: the same function `channel-prefs.js` applies at launch, pinned by
   // `test/session-mode-floor.test.mjs`.
-  const live = stored && s && s.windowless ? floorWindowlessMessage(stored) : stored;
-  const mode = live || frozen;
+  const floor = (m) => (m && s && s.windowless ? floorWindowlessMessage(m) : m);
+  const live = floor(stored);
+  // C2: a per-agent pick holds under the channel's live value, never above it.
+  const mode = (live && st.messageModeSet === true ? floor(narrowMessageMode(st.messagePick || frozen, live)) : live) || frozen;
   // Samuel's ruling, 2026-09-06 — auto means full auto. An OUT-half posture is the operator's
   // explicit, visible, channel-wide consent to their agents posting with no click, so it defeats
   // the private-turn withdrawal below.
@@ -181,11 +188,11 @@ function effectiveMessageMode(s) {
  * rules, the profile's `disallowedTools` and the Axis-A/Axis-B split are all checked BEFORE
  * `grantDecision` consults this value.
  *
- * AN EXPLICIT PER-SESSION PICK WINS, the one place this is stricter than Axis B: the agent view can
- * move a LIVE session's tool posture (`session-reopen.js › setModeByTask`), and letting the
- * channel-wide record override it would make the select lie in the other direction.
- * `state.toolModeSet` is stamped by the reducer's `set_tool_mode` arm and nothing else. Axis B needs
- * no such flag because its own live read IS the channel-wide control it folded into.
+ * A PER-AGENT PICK NARROWS, ON BOTH AXES (Samuel's ruling 3, "narrower sticks"): the agent view or
+ * an orchestrator can pin ONE session's posture (`session-reopen.js › setModeByTask` with `pinned`,
+ * or a pinned start posture), and the gate then enforces the narrower of that pick and the channel's
+ * live value. It can never be wider than the channel. `state.toolModeSet` / `messageModeSet` are
+ * stamped only by a pinned set; a channel fan-out never stamps one.
  *
  * NO FLOOR IS APPLIED HERE, deliberately: the windowless Axis-A floor is the RUNTIME's
  * (`floorWindowlessTool`) and is applied at the single read site in `session-io.js › grantArgs`;
@@ -196,9 +203,14 @@ function effectiveMessageMode(s) {
  */
 function effectiveToolMode(s) {
   const st = (s && s.state) || {};
-  const frozen = st.toolMode || 'manual';
-  if (st.toolModeSet === true) return frozen; // the operator moved THIS session, seconds ago
-  return channelToolMode(s && s.channelId) || frozen;
+  const list = Array.isArray(st.toolModes) ? st.toolModes : [];
+  const frozen = st.toolMode || list[0] || '';
+  // The channel's value for THIS session's runtime, in that runtime's words (X-01).
+  const live = channelToolMode(s && s.channelId, s && s.runtimeId);
+  if (!live) return frozen;
+  // C2: a per-agent pick holds under the channel's live value, never above it.
+  if (st.toolModeSet === true) return list.length ? narrowTo(st.toolPick || frozen, live, list) : frozen;
+  return live;
 }
 
 // ─── END SESSION-PRIVATE-PURE ────────────────────────────────────────────────────
@@ -237,23 +249,49 @@ function channelMessageMode(channelId) {
 }
 
 /**
- * THE LIVE HALF OF AXIS A — the channel's durable TOOLS value, read at DECISION time, or `''` when
- * there is none to read. `channelMessageMode`'s twin, and every clause of that function's header
- * applies here for the same reasons: LAZY-REQUIRED, `''` rather than a mode when it cannot read,
- * the PRESENCE check first (because `getLaunchPosture` answers the restrictive DEFAULT for an
- * unconfigured channel, which would make the session's frozen launch posture dead code), and
- * coerced by the store rather than here against the frozen `TOOL_MODES` list.
+ * THE LIVE HALF OF AXIS A — the channel's durable TOOLS value for the SESSION'S runtime, read at
+ * DECISION time, or `''` when there is none to read. `channelMessageMode`'s twin, and every clause
+ * of that function's header applies here for the same reasons: LAZY-REQUIRED, `''` rather than a
+ * mode when it cannot read, the PRESENCE check first, and coerced by the store (validated against
+ * that runtime's own words on write). ⚠ Never the SELECTED runtime's record: a Codex session in a
+ * Claude-selected room reads the Codex record (X-01).
  */
-function channelToolMode(channelId) {
+function channelToolMode(channelId, runtimeId) {
   if (!channelId) return '';
   try {
     if (!require('./channel-prefs').hasLaunchPosture(channelId)) return '';
-    const preset = require('./channel-prefs').getLaunchPosture(channelId);
+    const preset = require('./channel-prefs').launchPostureFor(channelId, sessionRuntimeId(runtimeId));
     const mode = preset && preset.tools;
     return typeof mode === 'string' && mode ? mode : '';
   } catch (_err) {
     return '';
   }
+}
+
+/** A session's runtime id; an absent one (a pre-port record) is the DEFAULT runtime, never the
+ *  channel's selected one. */
+function sessionRuntimeId(runtimeId) {
+  if (runtimeId) return runtimeId;
+  try { return require('./runtime').DEFAULT_ID || ''; } catch (_err) { return ''; }
+}
+
+/**
+ * C2: validate a per-axis mode against the SESSION's own words (Axis A: its runtime's list; Axis B:
+ * Dopl's four) and, for a PINNED pick, clamp it to the channel's current value for that runtime.
+ * Answers `{ mode, clamped }`. An unreadable store clamps to the narrowest, never to a grant.
+ */
+function pickForSession(s, axis, asked, pinned) {
+  const rt = sessionRuntimeId(s && s.runtimeId);
+  const tools = axis === 'tools';
+  const want = tools ? normalizeToolMode(asked, rt) : normalizeMessageMode(asked);
+  if (pinned !== true) return { mode: want, clamped: false };
+  const list = toolModesFor(rt);
+  let ceiling = { tools: list[0], messages: 'ask' };
+  try {
+    ceiling = require('./channel-prefs').launchPostureFor(s && s.channelId, rt) || ceiling;
+  } catch (_err) { /* the narrowest stands */ }
+  const got = tools ? narrowTo(want, ceiling.tools, list) : narrowMessageMode(want, ceiling.messages);
+  return { mode: got, clamped: got !== want };
 }
 
 module.exports = {
@@ -267,4 +305,5 @@ module.exports = {
   channelMessageMode, // 2026-09-06: the live read of the channel's Messaging value, for the suite
   effectiveToolMode, // 2026-09-16: Axis A's decision-time read — the half that was missing
   channelToolMode, //  ...and its live half, exported on `channelMessageMode`'s precedent
+  pickForSession, // C2: a live mode change, in the session's words, clamped when it is a pick
 };

@@ -18,12 +18,9 @@
 // with no `require` in scope, exactly as before the splits.
 const { gatePhase, gateActivity, endedEmit, endEffects, endReasonOf, modesEmit, parkEffects, terminalBody } = require('./session-effects');
 const {
-  DEFAULT_IDLE_MS, TOOL_MODES, MESSAGE_MODES,
-  // 2026-09-07: `DEFAULT_TURN_CAP`, `DEFAULT_COST_CAP_USD`, `turnCapReached` and `costCapReached`
-  // were imported here and enforced at every `result` event. Deleted with the caps — see
-  // `session-state.js`'s header.
-  coerceMode, initialSessionState, nextIdleMs, idleTimeout,
+  DEFAULT_IDLE_MS, MESSAGE_MODES, coerceMode, toolModesOf, initialSessionState, nextIdleMs, idleTimeout,
 } = require('./session-state');
+const { narrowTo, narrowMessageMode } = require('./launch-posture'); // C2: a pick narrows, never widens
 
 // ─── BEGIN SESSION-REDUCER (pure; unit-tested via source extraction) ─────────
 
@@ -208,19 +205,18 @@ function sessionReducer(state, event) {
   }
 
   if (type === 'set_tool_mode' || type === 'set_message_mode') {
-    // v2.9 — set ONE axis, coerced fail-closed (unknown => most restrictive); the `modes` echo
-    // re-paints the header posture live. NO DRAIN: `pendingPermissions` holds requestIds only, so
-    // the reducer cannot tell a queued Bash from a queued `op=open direct:true`, and a blanket
-    // drain would let the TOOL axis answer a MESSAGE operation — the very invariant this contract
-    // establishes. A mode change governs the NEXT call; anything already waiting keeps its buttons
-    // (fail-closed). The INBOUND half of Axis B still drains, because that queue holds messages and
-    // nothing else. The tool arm also stamps `toolModeSet` (2026-09-16) and is its ONE producer — a
-    // fact about WHO CHOSE, not a posture, and Axis B needs no twin; the argument is in
-    // `session-private.js › effectiveToolMode`, because this file is AT the §1 500-line cap.
-    const patch = type === 'set_tool_mode'
-      ? { toolMode: coerceMode(TOOL_MODES, event.mode), toolModeSet: true }
-      : { messageMode: coerceMode(MESSAGE_MODES, event.mode) };
-    const next = clone(state, patch);
+    // Set ONE axis, coerced fail-closed against the session's own words; the `modes` echo repaints.
+    // NO DRAIN: `pendingPermissions` holds requestIds only, so a drain could let the TOOL axis answer
+    // a MESSAGE op. C2: `pinned` stores a per-agent pick (the caller clamped it to the channel); an
+    // unpinned set is the channel's value and never stamps one — a picked session narrows to it.
+    const tools = type === 'set_tool_mode';
+    const list = tools ? toolModesOf(state) : MESSAGE_MODES;
+    const mode = coerceMode(list, event.mode);
+    const k = tools ? 'tool' : 'message';
+    const pick = state[k + 'ModeSet'] === true ? state[k + 'Pick'] : '';
+    const next = clone(state, event.pinned === true
+      ? { [k + 'ModeSet']: true, [k + 'Pick']: mode, [k + 'Mode']: mode }
+      : { [k + 'Mode']: !pick ? mode : tools ? narrowTo(pick, mode, list) : narrowMessageMode(pick, mode) });
     return { state: next, effects: [modesEmit(next)] };
   }
 
@@ -422,8 +418,8 @@ function sessionReducer(state, event) {
     // here, or an auth-shaped SDK failure) and the window painting; this records the one bit the
     // rest of the machine must agree on. A hold IS a park — same effects, same durable phase, so it
     // is dormant on restart and reopenable, and parkEffects fail-closes every awaited canUseTool
-    // promise before the abort. It resets both axes and every standing grant, and it is now the ONLY
-    // park that does (M2 above): a hold is a session whose CREDENTIAL is gone, relaunching through
+    // promise before the abort. It resets both stamped axes to the narrowest of THIS runtime's words
+    // and every standing grant (a per-agent pick survives, C2), and it is the ONLY park that does: a hold is a session whose CREDENTIAL is gone, relaunching through
     // startQuery on sign-in rather than resuming in place, so the arm it was given belongs to the
     // run that ended. It arms NO abandonment timer — a held session is waiting on a human clicking
     // Sign in, and ending it would destroy the window carrying that button. IDEMPOTENT, so two
@@ -431,8 +427,8 @@ function sessionReducer(state, event) {
     if (state.authHeld === true) return { state: state, effects: [] };
     return {
       state: clone(state, { phase: gatePhase(state, 'parked'), parked: true, activity: 'parked',
-        authHeld: true, toolMode: 'manual', messageMode: 'ask', inboundForTask: false,
-        allowForTask: [], pendingPermissions: [], postedThisTurn: false, postedToolUseIds: [], toolModeSet: false }), // ⚠ `toolModeSet` CLEARS WITH THE AXES IT MARKS (2026-09-16): a hold ends the run that pick belonged to, so leaving it set would pin the relaunch to a `manual` nobody chose and lock out the channel's own value
+        authHeld: true, toolMode: toolModesOf(state)[0], messageMode: MESSAGE_MODES[0], inboundForTask: false,
+        allowForTask: [], pendingPermissions: [], postedThisTurn: false, postedToolUseIds: [] }),
       effects: parkEffects(state, { lifecycle: true }), // C-5: and the peer is told, once
     };
   }

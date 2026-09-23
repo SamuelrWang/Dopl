@@ -41,7 +41,6 @@ const { Notification } = require('electron');
 const io = require('./listener-io');
 const targeting = require('./targeting');
 const channelPrefs = require('./channel-prefs'); // the shared windowless message derivation
-const channelRuntime = require('./channel-runtime'); // 2026-08-31: which runtime this channel's agents run on
 // ⚠ `require('./session-model')` LEFT ON 2026-09-21 (U5). This lane aliased the channel's stored
 // model through the DEFAULT runtime's table, which silently dropped a pick made on any other
 // runtime; `channel-prefs.js › getLaunchModelLink` resolves it on the channel's own runtime now.
@@ -246,14 +245,19 @@ async function launchResponderSession(entry, m, { taskId, toolProfile, requester
   // (the arm is deleted) — the parameter STAYS because the requester lane still passes a
   // real value, and one derivation with two inputs is the point.
   const messages = channelPrefs.windowlessMessageMode(entry.channel.id, null);
+  // No launcher pick and no identity on this lane, so the channel's runtime (else the default)
+  // decides (`launch-default.js › resolveLaunchRuntime`, ruling 5) — it never refuses here.
+  const launch = await require('./runtime/launch-default').resolveLaunchRuntime({ channelId: entry.channel.id });
+  const runtimeId = launch.runtimeId;
+  const registry = require('./runtime');
   const res = await sessionEngine.launchResponderSession({
     channelId: entry.channel.id,
     taskId,
     workspaceId: entry.workspaceId,
     // ⚠ THE CHANNEL'S RUNTIME, INHERITED ON THIS LANE ON PURPOSE (2026-08-31) — the `model`'s
     // rule, not the durable PERMISSION pair's. `main/channel-runtime.js`'s header carries the
-    // whole argument for why (picking a runtime widens nothing) in one place. Absent => default.
-    runtime: channelRuntime.getChannelRuntime(entry.channel.id),
+    // whole argument for why (picking a runtime widens nothing) in one place.
+    runtime: runtimeId,
     message: m.body,
     windowless: true,
     triggerSeq: m.seq, // the ask's seq — the outbound bridge's seq-join floor
@@ -283,12 +287,12 @@ async function launchResponderSession(entry, m, { taskId, toolProfile, requester
     // has no launcher pick and no identity, so the funnel gives it the RUNTIME's own default
     // (`runtime/launch-default.js`) — which is never a `no-model` refusal.
     // ⚠ H2 IS UNCHANGED AND THIS PATH STILL OBEYS IT. A peer-triggered launch carries NO tool
-    // posture: `manual` is the reducer's own most-restrictive value, and the operator's durable
-    // pick applies to the launch shape they press themselves (`sessions:launch`) and to nothing
-    // a peer can trigger. ⚠ THE WINDOWLESS FLOOR still applies on top of it
-    // (`session-profiles.js › floorWindowlessTool`) — that is a fact about having no gate
-    // surface, not a posture anybody chose.
-    startModes: { tools: 'manual', messages },
+    // posture: the narrowest word of THIS runtime (never another runtime's `manual`), and the
+    // operator's durable pick applies to the launch shape they press themselves
+    // (`sessions:launch`) and to nothing a peer can trigger. ⚠ THE WINDOWLESS FLOOR still applies
+    // on top of it (`session-profiles.js › floorWindowlessTool`) — that is a fact about having no
+    // gate surface, not a posture anybody chose.
+    startModes: { tools: registry.capability.narrowestToolMode(registry.descriptorFor(runtimeId)), messages },
   });
   if (res && res.sessionId) {
     diag('responder session launched', String(res.sessionId).slice(0, 8), 'profile', toolProfile);

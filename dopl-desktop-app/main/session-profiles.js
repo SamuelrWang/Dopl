@@ -62,7 +62,7 @@ const { DOPL_READ_TOOLS, DOPL_WRITE_TOOLS, DOPL_READ_REFERENCE } = require('./se
 // as the free vars its extraction injects.
 const {
   runtimeFor,
-  buildSessionToolConfig, toolModeAllows, normalizeToolMode, floorWindowlessTool,
+  buildSessionToolConfig, toolModeAllows, normalizeToolMode, floorWindowlessTool, toolModesFor,
   windowlessFloorRefusal, axisBOpScopedWarning, isClassifiedTool,
   TOOL_MODES, AUTO_TOOLS, BYPASS_TOOLS, BYPASS_READS, ESCALATION_TOOLS, EDIT_TOOLS,
 } = require('./session-profiles-runtime');
@@ -399,6 +399,7 @@ module.exports = {
   EDIT_TOOLS, ESCALATION_TOOLS, AUTO_TOOLS, BYPASS_TOOLS, BYPASS_READS,
   DOPL_READ_TOOLS, DOPL_WRITE_TOOLS, // re-exported from session-dopl-tools.js (§2 SPLIT 2026-08-31)
   normalizeToolMode, normalizeMessageMode, toolModeAllows, isClassifiedTool, autoInboundMode,
+  toolModesFor, // a session's own Axis-A words, narrowest first
   // `autoOutboundMode` is exported since 2026-09-06 (Samuel's full-auto ruling); its INBOUND twin
   // has been since M3. Exported rather than re-spelled in `session-private.js ›
   // effectiveMessageMode`: "does this posture consent to posting" must have ONE answer, or the gate

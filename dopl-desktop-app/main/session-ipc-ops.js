@@ -184,16 +184,15 @@ function register(opts = {}) {
   //
   // BOUNDS HERE, because this is the boundary: sender-bound; `channelId` UUID-gated; the AXIS
   // restricted to two literals (it cannot coerce — there is no "most restrictive axis"); the MODE
-  // re-validated against `session-profiles.js`'s frozen enums, after which the reducer coerces
-  // AGAIN fail-closed. The WINDOWLESS FLOOR is applied in `setModeByTask`, not here: this boundary
-  // cannot see whether the resolved session is windowless.
+  // bounded to a short string. It is validated in `setModeByTask` against the RESOLVED session's
+  // runtime words (this boundary cannot see the session), clamped to the channel as a per-agent pick
+  // (`pinned`, C2), floored if windowless, and coerced AGAIN fail-closed by the reducer.
   ipcMain.handle('sessions:setMode', appWindowOnly('sessions:setMode', { ok: false }, (_event, payload) => {
     const p = payload || {};
     if (!isUuid(p.channelId)) return { ok: false };
     const axis = p.axis === 'tools' || p.axis === 'messages' ? p.axis : null;
     if (!axis) return { ok: false, reason: 'bad-axis' };
-    const { normalizeToolMode, normalizeMessageMode } = require('./session-profiles');
-    const mode = axis === 'tools' ? normalizeToolMode(p.mode) : normalizeMessageMode(p.mode);
+    const mode = typeof p.mode === 'string' ? p.mode.slice(0, 64) : '';
     const engine = require('./session-engine');
     if (typeof engine.setModeByTask !== 'function') return { ok: false };
     return engine.setModeByTask({
@@ -202,6 +201,7 @@ function register(opts = {}) {
       agentId: asAgentId(p.agentId),
       axis: axis,
       mode: mode,
+      pinned: true,
     });
   }));
 
