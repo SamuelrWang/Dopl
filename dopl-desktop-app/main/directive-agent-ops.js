@@ -1,107 +1,20 @@
-// THE AGENT-MANAGEMENT DIRECTIVE KINDS — what this machine DOES when an external
-// agent of this operator's asks it to END or RENAME one of its running agents
-// (2026-09-01, Samuel: "yeah I need you to build out dopl mcp being able to end
-// agents. Dopl MCP need to be able to do all that stuff").
-//
-// ── WHAT THIS IS, AND WHAT IT DELIBERATELY IS NOT ────────────────────────────
-//
-// `end_agent` / `rename_agent` already existed — INSIDE a desktop-spawned session,
-// as the in-process `dopl_agents` MCP server (`agent-self-ops.js`, mounted by
-// `runtime/claude/axis-b.js › makeAgentOpsServer`). What did not exist was any way
-// for an EXTERNAL session — the Claude Desktop / Claude Code process holding this
-// operator's own Dopl credential — to reach them, because no server can reach a
-// desktop main process. The launch mailbox is the ONE mechanism that crosses that
-// gap, so the verbs became KINDS of `channel_launch_directives` row and this
-// module is the branch `launch-directives.js › handle` dispatches to.
-//
-// ⚠ **IT IMPLEMENTS NEITHER VERB. IT ROUTES TO THE EXISTING ONE.** That is the
-// whole design constraint and it is worth stating flatly, because a second stop
-// path is a second set of teardown bugs (`session-reopen.js › controlByTask` says
-// the same about the Agents tab):
-//   end    -> `agent-self-ops.js › endVerdict` for the verdict table, then
-//             `session-engine.js › controlByTask({action:'end'})` — the SAME two
-//             calls `axis-b.js`'s in-process `end_agent` makes, in the same order.
-//             That bottoms out in the reducer's `{type:'end'}` event, which is
-//             also what `sessions:end` and `sessions:delete` dispatch.
-//   rename -> `agent-self-ops.js › applyRenameTo`, the ONE rename write, shared
-//             with `sessions:rename` and with the in-process tool. Display-only,
-//             sanitizer-bounded, local `electron-store`, no network.
-// **If either verb needs to change, it changes THERE and this file follows for
-// free. Nothing here may grow a second opinion about what an end is.**
-//
-// ── ⚠ THE CONSENT GATE: THERE ISN'T ONE, AND THAT IS A RULING ────────────────
-//
-// `launch-directives.js` is OFF unless `channel-prefs.js › getOrchestratorLaunch`
-// is true, per machine — "THE TOGGLE IS THE CONSENT" (Samuel, 2026-08-22;
-// INVARIANTS §6/§11). **These two kinds are NOT behind it.**
-//
-// The argument is `agent-self-ops.js`'s own, applied to the same two verbs on the
-// same subjects, and it is the argument that already licensed those verbs to ride
-// PRE-APPROVED past the Axis-A gate inside every spawned session:
-//   • **END is a STOP VERB that widens nothing.** It cannot start a query, wake a
-//     parked shell, grant a tool or post. The failure direction of an abused call
-//     is an agent that STOPS — on the machine of the operator whose agents they
-//     all are, at the request of a session holding that same operator's own
-//     credential.
-//   • **RENAME is DISPLAY ONLY, on this machine.** `agent-names.js` holds it in a
-//     local store, nothing resolves an agent by it, no server ever sees it, and no
-//     other member can observe it. A rename cannot re-point a running instruction.
-// The toggle exists to gate LOCAL COMPUTE BEING SPENT — a directive that starts a
-// process this operator pays for, on hardware they own. Neither of these spends
-// any, so gating them on it would be a fence that buys nothing and costs the
-// feature: an operator who has not armed launch-over-MCP would be able to have
-// agents started for them by the button and then be unable to stop them from the
-// same place their orchestrator lives.
-//
-// ⚠ **THIS IS THE ASSUMPTION MOST WORTH OVERRULING IF SAMUEL DISAGREES, AND IT IS
-// ONE `if` IN `launch-directives.js › handle`.** Recorded here rather than buried:
-// making these kinds respect the toggle is a two-line change, and this paragraph
-// is what a future reader needs in order to make it deliberately.
-//
-// ⚠ **THE OWN-OPERATOR BOUND IS FREE HERE, NOT ENFORCED** — the same sentence
-// `session-ipc-ops.js` writes over `sessions:end` and `agent-self-ops.js` writes
-// over both its verbs. `handle` has already re-checked `operatorUserId` against
-// the signed-in identity, and the registry holds only sessions THIS machine runs
-// for THIS operator, so there is no cross-member agent to reach and nothing to
-// refuse. A peer's agent is a handle in a channel read, never a row either verb
-// can resolve. (The SERVER refuses a demonstrably foreign target earlier, so the
-// caller gets a sentence instead of a two-minute round trip — but that is an error
-// message, not the fence.)
-//
-// ⚠ **SELF-END DOES NOT ARISE ON THIS LANE, WHICH IS WHY IT IS NOT REFUSED HERE.**
-// `agent-self-ops.js` refuses it because the dispatch would abort the CALLING
-// turn mid-tool-call, so the result could never be delivered and the call would
-// read as a hang. The caller here is an EXTERNAL session — not a desktop agent,
-// holding no instance id, and not in the middle of a turn this process runs — so
-// there is no self to end. `endVerdict` is still handed `''` as the caller id,
-// which makes its `self` branch unreachable rather than absent: the verdict table
-// stays the one table, and a future in-process caller of THIS module would get the
-// refusal for free.
+// The NON-LAUNCH directive kinds — end, rename, set_agent_mode — dispatched from
+// `launch-directives.js › handle`. It implements no verb: each routes to the existing one
+// (`agent-self-ops.js › endVerdict` + `session-engine.js › controlByTask`, `agent-identity-commit.js
+// › commitRename`, `session-engine.js › setModeByTask`), so there is one stop path and one rename write.
+// `end` and `rename` are NOT behind the launch toggle: a stop and a display-only rename widen nothing
+// and spend no compute (the toggle gates compute). That is one `if` in `handle` if Samuel overrules it.
+// The own-operator bound is free: `handle` re-checked the operator, and the registry holds only this
+// machine's own sessions. Self-end cannot arise (the caller is an external session).
 
 const { diag } = require('./diag');
 const agentOps = require('./agent-self-ops');
 const wire = require('./launch-directive-wire');
 
 /**
- * END THE AGENT A DIRECTIVE NAMES. Returns `{ done: true }` or
- * `{ refused: <wire word> }`.
- *
- * ⚠ THE VERDICT TABLE IS `agent-self-ops.js › endVerdict`, UNCHANGED AND UNCOPIED
- * — pure over (caller id, requested id, the registry projection), so the whole
- * table is testable without a session and both callers get the same answers.
- * `''` as the caller id is deliberate; see this file's header on self-end.
- *
- * ⚠ **`no-session` IS THE ORDINARY ANSWER AND IS NOT AN ERROR.** An agent that
- * finished is the commonest cause, and for an END that is the outcome the
- * requester wanted, reached without them. It is logged at the same level as a
- * success and the MCP render says so in as many words.
- *
- * ⚠ A `bad-agent-id` VERDICT MAPS TO `no-session` RATHER THAN MINTING A TENTH
- * WIRE WORD. It is unreachable from a real directive — the create schema and the
- * column CHECK both require the anchored 8-character shape, and
- * `directiveFrom` empties anything else — so a word for it would be a refusal
- * nothing can produce, and the vocabulary is CLOSED on the wire for exactly that
- * reason. "There is no such agent here" is also true of a malformed id.
+ * End the agent a directive names → `{ done: true }` or `{ refused }`. The verdict table is
+ * `endVerdict`'s, handed `''` as the caller id. `no-session` is the ordinary answer (it already
+ * finished), and a `bad-agent-id` verdict maps to it rather than minting an unreachable word.
  */
 function endAgent(d) {
   let rows = [];
@@ -119,11 +32,7 @@ function endAgent(d) {
 
   let res = { ok: false };
   try {
-    // ⚠ THE SAME DISPATCH `sessions:end`, `sessions:delete` and the in-process
-    // `end_agent` all make. The address comes from the RESOLVED REGISTRY ROW, not
-    // from the directive: the row is what the engine will match on, and re-deriving
-    // a session key from wire fields is how the two come to disagree about which
-    // session a request names.
+    // Addressed from the RESOLVED registry row, never re-derived from wire fields.
     res = require('./session-engine').controlByTask({
       channelId: String(v.row.channelId || ''),
       taskId: String(v.row.taskId || ''),
@@ -133,9 +42,6 @@ function endAgent(d) {
   } catch (_err) { res = { ok: false }; }
 
   if (!res.ok) {
-    // ⚠ THE SESSION SETTLED BETWEEN THE LOOKUP AND THE DISPATCH — the one race
-    // this path has, and `no-session` is the honest word for it: whatever the
-    // requester wanted stopped is not running now.
     diag('directive-agent-ops: end', String(v.row.agentId || ''),
       'REFUSED by the engine (' + String(res.reason || 'no-session') + ') — it settled mid-flight');
     return { refused: 'no-session' };
@@ -145,50 +51,23 @@ function endAgent(d) {
 }
 
 /**
- * RENAME THE AGENT A DIRECTIVE NAMES. Returns `{ done: true }` or
- * `{ refused: <wire word> }`.
- *
- * ⚠ **IT DOES NOT REQUIRE A LIVE SESSION, AND THAT IS NOT AN OVERSIGHT.**
- * `agent-names.js` is keyed by the INSTANCE ADDRESS and outlives the session
- * object on purpose — the operator's mental model ("the one I called Research")
- * survives an idle park, a lazy resume and a crash resume, and so does the id.
- * `sessions:rename` consults no registry either, and this must not either, or a
- * name would become un-settable at exactly the moments a session is being rebuilt.
- *
- * ⚠ THE TARGET IS THE DIRECTIVE'S, NEVER A DEFAULT. `agent-self-ops.js ›
- * renameTargetFor` has a SELF fallback for the in-process tool ("name yourself
- * after your role"); there is no self here, so a directive that carried no usable
- * target is refused rather than defaulted — an unaddressed rename that guessed
- * would label an agent nobody asked about, silently.
- *
- * ⚠ `bad-name` IS THE SANITIZER'S WORD, and it is a REFUSAL rather than a strip:
- * `sanitizeName` rejects control, zero-width and bidi characters instead of
- * removing them, because storing a silently altered name is worse than not taking
- * it. `''` is not a bad name — it CLEARS.
+ * Rename the agent a directive names. Needs no live session (names are keyed by the instance id and
+ * outlive parks and resumes). No self fallback: no usable target refuses. `bad-name` is the
+ * sanitizer's REFUSAL (it never strips); `''` clears.
  */
 function renameAgent(d) {
   if (!d.targetAgentId) {
     diag('directive-agent-ops: rename — directive carried no usable agent id');
     return { refused: 'no-session' };
   }
+  // null means "not a rename": acting on it would wipe a name nobody asked to wipe.
   if (typeof d.targetName !== 'string') {
-    // ⚠ Unreachable from a real directive (the column CHECK requires a non-null
-    // `target_name` on `kind='rename'`), and refused rather than treated as a
-    // CLEAR: `null` means "this is not a rename", and acting on it would wipe a
-    // name nobody asked to wipe.
     diag('directive-agent-ops: rename', d.targetAgentId, '— directive carried no name at all');
     return { refused: 'bad-name' };
   }
   let res = { ok: false, reason: 'bad-name' };
   try {
-    // ⚠ THE ONE RENAME WRITE, shared with `sessions:rename` and the in-process
-    // tool. Lazy require: `agent-names.js` opens an electron-store the moment it
-    // is loaded, and this module is required at watcher arm time.
-    // ⚠ COMMITTED THROUGH `agent-identity-commit.js` SINCE 2026-09-05 — the wrapper writes the
-    // store AND flushes the summary, which is what carries the name to the server and so to the
-    // @-picker every OTHER member sees. This path is where the gap bit hardest: an external
-    // directive renames an agent on a machine where nothing else may be happening, so there was
-    // no unrelated engine event to piggyback a push on and the new name sat local until restart.
+    // Through the commit wrapper, which also refreshes the summary other members read.
     res = require('./agent-identity-commit').commitRename(d.targetAgentId, d.targetName);
   } catch (err) {
     diag('directive-agent-ops: rename', d.targetAgentId, '— store write threw:',
@@ -204,37 +83,12 @@ function renameAgent(d) {
   return { done: true };
 }
 
-
 /**
- * MOVE A RUNNING AGENT'S TWO PERMISSION AXES. Returns `{ done: true }` or
- * `{ refused: <wire word> }`.
- *
- * ⚠ **IT IMPLEMENTS NOTHING, EXACTLY LIKE THE TWO VERBS ABOVE.** The live-apply op is
- * `session-engine.js › setModeByTask` — where the session-runtime validation, the
- * `pinned` clamp to the channel's value (`session-private.js › pickForSession`, C2) and the
- * windowless MESSAGE floor (F-236) live — the same op `sessions:setMode` and
- * `channel-dir-ipc.js › applyPostureToLive` call. A second writer to those fields, or a
- * second clamp, is how two readers come to disagree about one posture. This lane only
- * drops a tool word the session's runtime does not speak (ruling R3).
- *
- * ⚠ **IT WIDENS SUPERVISION, NEVER CONTAINMENT**, and that is not a claim this file
- * has to make good on: the tool PROFILE is resolved at spawn from this machine's own
- * watched-channel DTO, `SESSION_HARD_DENY` is unconditional, and `bypass` is a
- * POSITIVE allow-list — so no posture reaching `setModeByTask` can widen what an agent
- * may touch. `applyPostureToLive`'s header makes the identical argument for the
- * operator's own Settings tab, which is the surface this lane mirrors.
- *
- * ⚠ **PER AGENT, NEVER PER THREAD.** The directive names ONE `target_agent_id`; passing
- * only (channel, thread) would take the oldest agent on the thread and silently skip
- * its siblings, which under multiplayer is most of the room.
- *
- * ⚠ **BOTH AXES OPTIONAL, AND BOTH EMPTY IS A REFUSAL.** A directive may move one axis
- * and leave the other; one that names neither (or names only values this build does not
- * recognise — `directiveFrom` empties those — or a tool word the agent's runtime does not offer)
- * asked for nothing this machine can do, and
- * `no-bridge` is the honest word for it in the closed vocabulary: "this machine could
- * not take it". Reporting `done` for a no-op would tell an orchestrator its posture
- * landed when nothing moved.
+ * Move a running agent's posture through `setModeByTask` with `pinned: true` (C2, ruling R4): the
+ * engine validates in the SESSION's words, clamps to the channel's value for its runtime and floors
+ * windowless messages, so a narrower ask sticks and nothing widens. Per agent, never per thread.
+ * Nothing this build can apply (no axis, or a tool word the runtime lacks) is `no-bridge`, never a
+ * `done` for a no-op. The echo is the engine's post-dispatch value; an untouched axis stays absent.
  */
 function setAgentMode(d) {
   if (!d.targetAgentId) {
@@ -254,22 +108,16 @@ function setAgentMode(d) {
   } catch (_err) { rows = []; }
   const row = rows.find((r) => r && String(r.agentId || '') === d.targetAgentId) || null;
   if (!row) {
-    // ⚠ THE ORDINARY ANSWER, AND NOT AN ERROR — the same sentence `endAgent` writes. A
-    // posture is a property of a RUNNING session (it lives on `s.state`), so there is
-    // nothing to move on an agent that has finished and no durable record to move it in.
     diag('directive-agent-ops: set_agent_mode', d.targetAgentId, '— no live session');
     return { refused: 'no-session' };
   }
-  // ⚠ THE ADDRESS COMES FROM THE RESOLVED REGISTRY ROW, NOT FROM THE DIRECTIVE — the same rule
-  // `endAgent` follows: the row is what the engine matches on.
   const target = {
     channelId: String(row.channelId || ''),
     taskId: String(row.taskId || ''),
     agentId: String(row.agentId || ''),
   };
 
-  // The SESSION's runtime decides the words (ruling R3): a tool word it does not offer is NOT
-  // applied — the engine would read it as that runtime's narrowest, which nobody asked for.
+  // A tool word the session's runtime does not offer is not applied (R3).
   const runtimeId = row.runtimeId || null;
   const words = require('./session-profiles').toolModesFor(runtimeId);
   const tools = d.targetToolMode && words.indexOf(d.targetToolMode) !== -1 ? d.targetToolMode : '';
@@ -280,9 +128,6 @@ function setAgentMode(d) {
   const messages = d.targetMessageMode;
   if (!tools && !messages) return { refused: 'no-bridge' };
 
-  // `pinned: true` = the orchestrator's per-agent pick (C2, ruling R4): the engine clamps it to the
-  // channel's value for the session's runtime (never wider), floors windowless messages, and keeps
-  // it as the session's own pick — so a narrower ask sticks. Its reply is what the gate enforces.
   const out = { done: true };
   let applied = 0;
   try {
@@ -304,30 +149,18 @@ function setAgentMode(d) {
       (err && err.message) || String(err));
     return { refused: 'busy' };
   }
+  // The one race: the session settled between the lookup and the dispatch.
   if (!applied) {
-    // The one race this path has: the session settled between the lookup and the dispatch.
     diag('directive-agent-ops: set_agent_mode', d.targetAgentId,
       'REFUSED by the engine — it settled mid-flight');
     return { refused: 'no-session' };
   }
   diag('directive-agent-ops: set_agent_mode', d.targetAgentId, 'ok —',
     (out.appliedTools || '-') + '/' + (out.appliedMessages || '-'));
-  // ⚠ THE ECHO IS THE ENGINE'S POST-DISPATCH VALUE (the windowless floor included), i.e. what the
-  // gate enforces — never the request. An axis the directive left alone stays ABSENT ("not
-  // reported" on the row), and there is no `appliedChain`: a re-posture decides no chaining.
   return out;
 }
 
-/**
- * THE ONE ENTRY POINT — dispatch a NON-LAUNCH directive.
- *
- * ⚠ **AN UNKNOWN KIND CANNOT ARRIVE AND IS STILL ANSWERED.**
- * `launch-directive-wire.js › directiveFrom` collapses anything it does not
- * recognise to `launch`, which never reaches this function, and the caller only
- * routes `end` / `rename` here. The fallthrough exists because this row has been
- * CLAIMED: a claimed directive that is never decided is the one outcome the
- * requester cannot act on, so every path out of here writes a verdict.
- */
+/** Dispatch a claimed non-launch directive; an unknown kind is still answered (a claimed row must be decided). */
 function apply(d) {
   if (d.kind === wire.KIND_END) return endAgent(d);
   if (d.kind === wire.KIND_RENAME) return renameAgent(d);
