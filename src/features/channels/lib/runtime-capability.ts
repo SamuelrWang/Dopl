@@ -162,7 +162,6 @@ const NO_CATEGORIES: ReadonlyArray<string> = [];
 // Re-exported here so no caller and no suite moved — the idiom
 // `main/runtime/capability.js` sets for `selection-vocabulary.js`.
 export {
-  hasRuntimeKey,
   normalizeRuntimes,
   normalizeRuntimeId,
   descriptorFor,

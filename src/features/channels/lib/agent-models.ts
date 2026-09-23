@@ -44,21 +44,15 @@
 import { findModel, type CatalogModel, type ModelCatalog, type ModelCatalogs } from "./model-catalog";
 
 /**
- * **THE LAST CATALOGS ANY SURFACE READ, FOR LABELLING ONLY** (2026-09-22).
+ * THE RUNTIME'S OWN ENTRY FOR AN ID, from whichever catalogs the caller holds (2026-09-22; F15).
  *
- * ⚠ THE CLAUDE ROSTER WENT LIVE (`dopl-desktop-app/main/runtime/claude/roster.js`), so a model the
- * CLI started offering after this bundle shipped has a DISPLAY NAME on the desktop and none in
- * {@link AGENT_MODELS}. The glance surfaces below (cards, chips) render with no catalog of their
- * own, so `use-runtime-catalogs.ts` hands every catalog it adopts to {@link rememberCatalogs} and
- * the two label functions prefer the runtime's own name. ⚠ LABELLING IS NOT SELECTING: nothing
- * here is offered or submitted — pickers read a catalog, never this.
+ * ⚠ THE CLAUDE ROSTER IS LIVE, so a model the CLI started offering after this bundle shipped has a
+ * display name on the desktop and none in {@link AGENT_MODELS}. The caller passes the catalogs it
+ * read (`useChannelLaunchPosture(...).catalogs`) — no module-level cache, so a card re-renders
+ * when they arrive. ⚠ LABELLING IS NOT SELECTING: pickers read one runtime's catalog, never this.
  */
-let remembered: ModelCatalogs = {};
-export function rememberCatalogs(catalogs: ModelCatalogs): void {
-  if (catalogs && Object.keys(catalogs).length) remembered = catalogs;
-}
-function liveEntry(id: string): CatalogModel | null {
-  for (const c of Object.values(remembered)) {
+function liveEntry(catalogs: ModelCatalogs | null | undefined, id: string): CatalogModel | null {
+  for (const c of Object.values(catalogs ?? {})) {
     const hit = findModel(c, id);
     if (hit) return hit;
   }
@@ -126,10 +120,7 @@ export const AGENT_MODEL_FALLBACK = "claude-sonnet-5" as const;
  * The `SelectMenu` options. ⚠ **"Default" IS GONE (2026-09-06, Samuel's ruling)** —
  * the dropdown lists only real models and always holds an actual selection.
  *
- * ⚠ THE WIRE'S ABSENT STATE DID NOT GO WITH IT. A channel that never chose still
- * stores no model; what this list guarantees is that the operator cannot ARRIVE at
- * that state through the UI. {@link agentModelSelection} is where an absent stored
- * value becomes a rendered one.
+ * ⚠ THE WIRE'S ABSENT STATE DID NOT GO WITH IT: no pick still stores no model.
  *
  * ⚠ NO PER-OPTION DESCRIPTION, deliberately, and it is the minimal-copy ruling
  * rather than an oversight (INVARIANTS §5). The permission axes carry a
@@ -141,25 +132,6 @@ export const AGENT_MODEL_OPTIONS: ReadonlyArray<{
   value: string;
   label: string;
 }> = AGENT_MODELS.map(({ id, label }) => ({ value: id, label }));
-
-/**
- * WHAT THE MODEL ROW SHOWS for a stored value — the back-fill, as a pure function.
- *
- * ⚠ IT RESOLVES FOR DISPLAY AND DOES NOT WRITE. The row renders this; the operator's
- * first explicit pick is what actually stores an id. So a channel that never chose
- * SHOWS Sonnet and STORES nothing until somebody touches the control, which is the
- * narrowest reading of Samuel's ruling that still satisfies it: the dropdown always
- * holds an actual selection, and no channel's stored posture changes underneath it
- * without a human acting.
- *
- * ⚠ AN UNKNOWN STORED ID IS RETURNED AS ITSELF, never replaced by the fallback — a
- * newer main may run a model this build predates ({@link normalizeAgentModel}'s own
- * rule), and `agentModelOptionsFor` already appends it so the row can render it.
- */
-export function agentModelSelection(stored: string | null | undefined): string {
-  const trimmed = typeof stored === "string" ? stored.trim() : "";
-  return trimmed || AGENT_MODEL_FALLBACK;
-}
 
 /**
  * THE OPTIONS A LIVE SELECTOR MAY SHOW, given what the agent is ACTUALLY on.
@@ -191,10 +163,16 @@ export function agentModelOptionsFor(
  * THE FULL LABEL for a stored id, for a surface where the operator is choosing.
  * An unset model reads "Default"; an id this build does not know reads AS ITSELF.
  */
-export function agentModelLabel(id: string | null | undefined): string {
+export function agentModelLabel(
+  id: string | null | undefined,
+  catalogs?: ModelCatalogs | null
+): string {
   const trimmed = typeof id === "string" ? id.trim() : "";
   if (!trimmed) return "Default";
-  return liveEntry(trimmed)?.label || (AGENT_MODELS.find((m) => m.id === trimmed)?.label ?? trimmed);
+  return (
+    liveEntry(catalogs, trimmed)?.label ||
+    (AGENT_MODELS.find((m) => m.id === trimmed)?.label ?? trimmed)
+  );
 }
 
 /**
@@ -209,10 +187,13 @@ export function agentModelLabel(id: string | null | undefined): string {
  * ⚠ AN UNKNOWN ID STILL RENDERS, as itself. A newer main may run a model this
  * build predates, and the honest chip is the raw id rather than silence.
  */
-export function agentModelShortLabel(id: string | null | undefined): string | null {
+export function agentModelShortLabel(
+  id: string | null | undefined,
+  catalogs?: ModelCatalogs | null
+): string | null {
   const trimmed = typeof id === "string" ? id.trim() : "";
   if (!trimmed) return null;
-  const live = liveEntry(trimmed);
+  const live = liveEntry(catalogs, trimmed);
   return live?.short || live?.label || (AGENT_MODELS.find((m) => m.id === trimmed)?.short ?? trimmed);
 }
 

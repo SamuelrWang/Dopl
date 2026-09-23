@@ -122,23 +122,24 @@ async function mount<T>(use: () => T) {
 const mountPosture = () =>
   mount<ChannelLaunchPostureState>(() => useChannelLaunchPosture(CH));
 
-const reply = (over: Record<string, unknown> = {}) => ({
-  tools: "manual",
-  messages: "ask",
-  runtime: "codex",
-  runtimes: RUNTIMES,
-  defaultRuntime: "claude",
-  connected: ["claude"],
-  catalogVersion: CATALOG_VERSION,
-  catalogs: { claude: claudeCatalog, codex: codexCatalog() },
-  ...over,
-});
+const reply = (over: Record<string, unknown> = {}) => {
+  const row: Record<string, unknown> = {
+    runtime: "codex",
+    runtimes: RUNTIMES,
+    defaultRuntime: "claude",
+    connected: ["claude"],
+    catalogVersion: CATALOG_VERSION,
+    catalogs: { claude: claudeCatalog, codex: codexCatalog() },
+    ...over,
+  };
+  // The channel's pick rides the versioned record, as every current reply carries it.
+  return { ...row, selection: { v: 2, runtime: row.runtime, messages: "ask", byRuntime: {} } };
+};
 
 describe("🔒 the selected runtime's catalog is what the model row gets", () => {
   it("Codex selected ⇒ Codex models, and NOT ONE Claude id", async () => {
     installBridge(reply());
     const holder = await mountPosture();
-    expect(holder.value.catalogsKnown).toBe(true);
     expect(holder.value.catalog?.runtime).toBe("codex");
     const ids = selectableModels(holder.value.catalog).map((m) => m.id);
     expect(ids).toEqual(["gpt-a"]);
@@ -182,18 +183,16 @@ describe("an OLDER desktop is not read as 'no models'", () => {
       runtime: "", runtimes: RUNTIMES, defaultRuntime: "claude", connected: [],
     });
     const holder = await mountPosture();
-    expect(holder.value.catalogsKnown).toBe(false);
     expect(holder.value.catalog?.source).toBe("frozen");
     expect(selectableModels(holder.value.catalog).map((m) => m.id)).toEqual(CLAUDE_IDS);
   });
 
   it("🔒 …and a NON-default runtime on that desktop gets NOTHING, never Claude's list", async () => {
     installBridge({
-      tools: "manual", messages: "ask",
-      runtime: "codex", runtimes: RUNTIMES, defaultRuntime: "claude", connected: [],
+      runtimes: RUNTIMES, defaultRuntime: "claude", connected: [],
+      selection: { v: 2, runtime: "codex", messages: "ask", byRuntime: {} },
     });
     const holder = await mountPosture();
-    expect(holder.value.catalogsKnown).toBe(false);
     expect(holder.value.catalog).toBeNull();
     expect(selectableModels(holder.value.catalog)).toEqual([]);
   });
@@ -201,7 +200,6 @@ describe("an OLDER desktop is not read as 'no models'", () => {
   it("`catalogs: {}` is a DIFFERENT answer — this build said, and registered nothing", async () => {
     installBridge(reply({ catalogs: {}, runtime: "" }));
     const holder = await mountPosture();
-    expect(holder.value.catalogsKnown).toBe(true);
     // ⚠ NO FALLBACK HERE: the desktop answered. Substituting the frozen list would claim four
     // models on a machine that reported none.
     expect(holder.value.catalog).toBeNull();

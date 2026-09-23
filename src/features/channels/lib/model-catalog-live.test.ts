@@ -21,7 +21,7 @@ import {
   modelShortLabel,
   normalizeCatalogs,
 } from "./model-catalog";
-import { agentModelLabel, agentModelShortLabel, rememberCatalogs } from "./agent-models";
+import { agentModelLabel, agentModelShortLabel } from "./agent-models";
 import { modelBelongsTo } from "./model-affinity";
 
 // ⚠ The shape the desktop sends for the MEASURED roster (2026-09-22), plus one model no table has.
@@ -78,12 +78,14 @@ describe("the live Claude roster, on the web", () => {
     });
   });
 
-  it("glance labels (cards, chips) prefer the runtime's own name once any catalog was read", () => {
-    expect(agentModelShortLabel("claude-opus-5[1m]")).toBe("claude-opus-5[1m]"); // nothing read yet
-    rememberCatalogs(normalizeCatalogs(WIRE));
-    expect(agentModelShortLabel("claude-opus-5[1m]")).toBe("Opus");
-    expect(agentModelLabel("claude-opus-5[1m]")).toBe("Opus (1M context)");
-    expect(agentModelShortLabel("claude-opus-6[1m]")).toBe("claude-opus-6[1m]"); // unnamed → raw id
-    expect(agentModelShortLabel("gpt-6-luna")).toBe("gpt-6-luna"); // no catalog lists it → itself
+  it("glance labels (cards, chips) use the runtime's own name from the catalogs they are handed", () => {
+    // F15: no module-level cache — the same call with and without the catalogs, side by side.
+    expect(agentModelShortLabel("claude-opus-5[1m]")).toBe("claude-opus-5[1m]");
+    const catalogs = normalizeCatalogs(WIRE);
+    expect(agentModelShortLabel("claude-opus-5[1m]", catalogs)).toBe("Opus");
+    expect(agentModelLabel("claude-opus-5[1m]", catalogs)).toBe("Opus (1M context)");
+    expect(agentModelShortLabel("claude-opus-5[1m]")).toBe("claude-opus-5[1m]"); // nothing remembered
+    expect(agentModelShortLabel("claude-opus-6[1m]", catalogs)).toBe("claude-opus-6[1m]"); // unnamed → raw id
+    expect(agentModelShortLabel("gpt-6-luna", catalogs)).toBe("gpt-6-luna"); // no catalog lists it → itself
   });
 });

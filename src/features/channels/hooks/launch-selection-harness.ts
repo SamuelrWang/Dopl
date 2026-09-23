@@ -19,6 +19,7 @@
 
 import { vi } from "vitest";
 import type { ModelCatalog, ModelCatalogs } from "../lib/model-catalog";
+import { REAL_DEFAULT_RUNTIME, REAL_DESCRIPTORS } from "../lib/runtime-descriptors-harness";
 import type { RuntimeRecord } from "../lib/launch-selection";
 import type { LaunchSelectionState } from "./use-launch-selection";
 
@@ -72,7 +73,6 @@ export function launchSelectionStub(over: SelectionStubInput = {}): LaunchSelect
   const defaultRuntime = over.defaultRuntime ?? "";
   return {
     bridge: { read: async () => null, write: async () => ({ ok: true }) },
-    supported: true,
     runtimeSupported: false,
     runtimes: [],
     connected: [],
@@ -93,5 +93,23 @@ export function launchSelectionStub(over: SelectionStubInput = {}): LaunchSelect
     record: over.record ?? byRuntime[over.runtime ?? ""] ?? {},
     recordFor: (id: string) => byRuntime[id || defaultRuntime] ?? {},
     catalogFor: (id: string) => catalogs[id || defaultRuntime] ?? null,
+  };
+}
+
+/**
+ * `window.dopl.channels` answering ONE channel launch record, as a current main does: every real
+ * adapter, all connected, the channel on `runtime` (`''` = the default adapter).
+ */
+export function channelRecordBridge(over: { runtime?: string; catalogs?: ModelCatalogs } = {}) {
+  return {
+    getLaunchPosture: vi.fn().mockResolvedValue({
+      runtimes: REAL_DESCRIPTORS,
+      defaultRuntime: REAL_DEFAULT_RUNTIME,
+      connected: REAL_DESCRIPTORS.map((d) => d.id),
+      catalogVersion: 1,
+      catalogs: over.catalogs ?? {},
+      selection: { v: 2, runtime: over.runtime ?? "", messages: "ask", byRuntime: {} },
+    }),
+    setLaunchPosture: vi.fn().mockResolvedValue({ ok: true }),
   };
 }

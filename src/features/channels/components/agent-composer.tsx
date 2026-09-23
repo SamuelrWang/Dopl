@@ -70,7 +70,7 @@ export const MESSAGE_REFUSED =
  * ⚠ THE AUTH-HELD LINE IS THE RUNTIME'S OWN SINCE 2026-09-21 (U10), where it was a frozen
  * `"…sign in to Claude Code."` on a path every runtime reaches — the agent held here may be a
  * Codex or a Cursor one, and naming Claude at it points the operator at a credential the session
- * does not use. {@link agentAuthHeldCopy} builds it from the channel's own descriptor.
+ * does not use. {@link agentAuthHeldCopy} builds it from the agent's own runtime's descriptor.
  *
  * ⚠ THE EXPORT SURVIVES AS THE **DEFAULT-RUNTIME** SPELLING, and it is still the honest fallback:
  * a plain browser and a desktop older than the runtime port send no descriptor at all, and
@@ -115,6 +115,7 @@ export function AgentComposer({
   channelId,
   taskId,
   agentId,
+  runtimeId,
   name,
   ended = false,
   className,
@@ -123,6 +124,9 @@ export function AgentComposer({
   taskId: string;
   /** WHICH instance. Absent on an older main — see the header. */
   agentId?: string;
+  /** The runtime this agent was spawned on (`DesktopSessionSummary.runtimeId`) — whose sign-in
+   *  and held copy apply, never the channel's current pick. */
+  runtimeId?: string;
   /** The addressee's id, for the placeholder and the label. */
   name: string | null;
   /** `state === "ended"`. ⚠ THE STATE DRIVES THIS, never a timestamp: an agent
@@ -146,7 +150,7 @@ export function AgentComposer({
   // ⚠ HIDE, NEVER GRAY, AND THE SENTENCE IS NOT HIDDEN WITH IT: the banner still says the agent
   // is waiting on a sign-in; what goes away is a remedy that would not work.
   const bridgeCanSignIn = useCanSignInToClaude();
-  const { descriptor: runtime } = useChannelLaunchPosture(channelId);
+  const runtime = useChannelLaunchPosture(channelId).descriptorOf(runtimeId);
   // ⚠ UNKNOWN IS NOT EMPTY (INVARIANTS §11), AND THAT IS WHY THIS IS A THREE-WAY TEST. `runtime`
   // is `null` on a plain browser and on every desktop older than the runtime port — reading that
   // absence as "this runtime has no sign-in" would DELETE the button on exactly the builds where

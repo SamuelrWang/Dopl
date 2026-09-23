@@ -32,16 +32,13 @@
  * structural rather than remembered. Nothing here is optimistic; {@link LaunchSelectionState.busy}
  * is what the controls go inert on.
  *
- * ⚠ **IT IS NOT A SECOND `useChannelLaunchPosture`.** That hook reads the LEGACY PAIR and is
- * still what four read-only surfaces mount for a descriptor (`agent-composer.tsx`,
- * `agent-panel-controls.tsx`, `composer-launch-panel.tsx`, `use-agents-panel.ts`). This one reads
- * the versioned record U5 introduced — `byRuntime`, the native bag, `needsReview` — which that
- * hook's reply shape cannot carry, and it is the only writer of any field inside it.
+ * ⚠ **`useChannelLaunchPosture` IS A READ-ONLY SELECTOR OVER THIS HOOK**, not a second store:
+ * one bridge read and one reader set per record, so a write here reaches every surface that reads
+ * a channel's runtime.
  */
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  emptySelection,
   readLaunchSelection,
   recordFor,
   type LaunchSelection,
@@ -51,7 +48,6 @@ import type { ModelCatalog, ModelCatalogs } from "../lib/model-catalog";
 import { useRuntimeCatalogs } from "./use-runtime-catalogs";
 import {
   descriptorFor,
-  hasRuntimeKey,
   normalizeRuntimeId,
   normalizeRuntimes,
   type RuntimeDescriptor,
@@ -61,7 +57,6 @@ import {
 const EMPTY_RUNTIMES: ReadonlyArray<RuntimeDescriptor> = [];
 const EMPTY_IDS: ReadonlyArray<string> = [];
 const NO_LINES: ReadonlyArray<string> = [];
-const EMPTY_RECORD: RuntimeRecord = Object.freeze({});
 
 /**
  * WHICH RECORD. ⚠ A CHANNEL SCOPE WITH AN EMPTY ID READS NOTHING — the pop-out mounts before its
@@ -91,12 +86,11 @@ interface Bridge {
 export interface LaunchSelectionState {
   /** Null in a plain browser and on a desktop with no such op — the caller renders NOTHING. */
   bridge: Bridge | null;
-  /** The reply carried the versioned record. ⚠ FALSE IS AN OLDER DESKTOP, not an empty record. */
-  supported: boolean;
-  /** This desktop has a runtime concept (`runtime-capability.ts › hasRuntimeKey`). */
+  /** The desktop has reported its runtime roster. */
   runtimeSupported: boolean;
   runtimes: ReadonlyArray<RuntimeDescriptor>;
   connected: ReadonlyArray<string>;
+  /** A read has answered, so {@link connected} is the desktop's word rather than the empty start. */
   connectedKnown: boolean;
   defaultRuntime: string;
   /** The stored pick, `''` for the default adapter. */
@@ -109,12 +103,8 @@ export interface LaunchSelectionState {
   record: RuntimeRecord;
   /** Any runtime's record — what makes "switch away and back restores it" observable. */
   recordFor: (runtimeId: string) => RuntimeRecord;
-  /**
-   * ⚠ **`null` IS A REAL ANSWER AND MUST NOT BECOME ANOTHER RUNTIME'S LIST** — `model-catalog.ts
-   * › catalogFor` has no "else" arm for exactly this reason. The ONE substitution allowed is the
-   * DEFAULT runtime's frozen table on a desktop that predates the catalog contract, which is what
-   * that build actually renders; see {@link useLaunchSelection}'s catalog memo.
-   */
+  /** ⚠ `null` IS A REAL ANSWER AND MUST NOT BECOME ANOTHER RUNTIME'S LIST (`model-catalog.ts ›
+   *  catalogFor` has no "else" arm). */
   catalogFor: (runtimeId: string) => ModelCatalog | null;
   catalogs: ModelCatalogs;
   /** Sentences for a record main could not fully honour. ⚠ NEVER a failure of the read. */
@@ -173,8 +163,7 @@ const scopeKey = (scope: LaunchSelectionScope) =>
 /**
  * Every mounted reader of ONE record. ⚠ ONE SHARED SET, NEVER A PER-MOUNT SNAPSHOT: the Settings
  * tab can be open in the main window and a pop-out at once, and a private snapshot would let the
- * second writer revert the row the first just changed. `use-channel-launch-posture.ts` carries
- * the same mechanism for the legacy pair and states the same reason.
+ * second writer revert the row the first just changed.
  */
 const readers = new Map<string, Set<(reply: unknown) => void>>();
 
@@ -191,11 +180,6 @@ export function useLaunchSelection(scope: LaunchSelectionScope): LaunchSelection
   const [reply, setReply] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
   const [rejected, setRejected] = useState<ReadonlyArray<string>>(NO_LINES);
-  // ⚠ LATCHED TO TRUE, NEVER BACK — yanking a control out from under a mid-pick operator is
-  // worse than one stale row. Probed off the RAW reply, before any normalizer, exactly as
-  // `use-channel-launch-posture.ts` does it.
-  const [runtimeSupported, setRuntimeSupported] = useState(false);
-  const [connectedKnown, setConnectedKnown] = useState(false);
   /**
    * ⚠ **THE ROSTER HALF IS U6's AND IS SHARED RATHER THAN COPIED** (`use-runtime-catalogs.ts`,
    * whose own header says why): the catalogs ride the SAME reply as this record, so a second
@@ -214,10 +198,6 @@ export function useLaunchSelection(scope: LaunchSelectionScope): LaunchSelection
   const adopt = useCallback(
     (next: unknown) => {
       setReply(next ?? null);
-      if (hasRuntimeKey(next)) setRuntimeSupported(true);
-      if (Array.isArray((next as { connected?: unknown } | null)?.connected)) {
-        setConnectedKnown(true);
-      }
       adoptCatalogs(next);
     },
     [adoptCatalogs]
@@ -274,32 +254,16 @@ export function useLaunchSelection(scope: LaunchSelectionScope): LaunchSelection
     runtimes,
     (reply as { defaultRuntime?: unknown } | null)?.defaultRuntime
   );
-  // ⚠ THE RECORD'S OWN PICK FIRST, THE LEGACY TOP-LEVEL KEY SECOND. The versioned record is the
-  // authority where it exists; the flat `runtime` key is what a desktop older than U5 sends.
-  const stored = read.supported
-    ? read.selection.runtime
-    : String((reply as { runtime?: unknown } | null)?.runtime ?? "");
-  const runtime = normalizeRuntimeId(runtimes, stored);
+  const runtime = normalizeRuntimeId(runtimes, read.selection.runtime);
   const descriptor = useMemo(
     () => descriptorFor(runtimes, runtime, defaultRuntime),
     [runtimes, runtime, defaultRuntime]
   );
 
-  const selection: LaunchSelection = read.supported ? read.selection : emptySelection();
+  const selection: LaunchSelection = read.selection;
   const recordAt = useCallback(
-    (runtimeId: string): RuntimeRecord => {
-      if (read.supported) return recordFor(selection, runtimeId, defaultRuntime);
-      // ⚠ THE OLDER-DESKTOP LANE. Such a build sends the legacy pair alone, which describes the
-      // SELECTED runtime and nothing else — so it answers for that runtime and is empty for any
-      // other, rather than pretending one vocabulary covers every adapter.
-      const active = normalizeRuntimeId(runtimes, runtimeId) || defaultRuntime;
-      if (active !== runtime) return EMPTY_RECORD;
-      const legacy = reply as { tools?: unknown } | null;
-      const out: RuntimeRecord = {};
-      if (typeof legacy?.tools === "string" && legacy.tools) out.tools = legacy.tools;
-      return out;
-    },
-    [defaultRuntime, read.supported, reply, runtime, runtimes, selection]
+    (runtimeId: string): RuntimeRecord => recordFor(selection, runtimeId, defaultRuntime),
+    [defaultRuntime, selection]
   );
 
   const update = useCallback(
@@ -315,9 +279,9 @@ export function useLaunchSelection(scope: LaunchSelectionScope): LaunchSelection
             // global `tools` into the DEFAULT runtime's slot and drops every other
             // runtime's settings. Sending `v` and `byRuntime` is what makes Decision #2 true at
             // this scope: switch away and back and both picks are still there.
-            wholeDefaultsRecord(selection, read.supported, patch, {
+            wholeDefaultsRecord(selection, patch, {
               runtime,
-              messages: read.supported ? read.selection.messages : "ask",
+              defaultRuntime,
               agentChain: (reply as { agentChain?: unknown } | null)?.agentChain === true,
               record: recordAt(patch.runtime ?? runtime),
             });
@@ -344,22 +308,19 @@ export function useLaunchSelection(scope: LaunchSelectionScope): LaunchSelection
         setBusy(false);
       }
     },
-    [adopt, bridge, busy, key, kind, read.selection.messages, read.supported, recordAt, reply, runtime, selection]
+    [adopt, bridge, busy, defaultRuntime, key, kind, recordAt, reply, runtime, selection]
   );
 
   return {
     bridge,
-    supported: read.supported,
-    runtimeSupported,
+    runtimeSupported: runtimes.length > 0,
     runtimes,
     connected,
-    connectedKnown,
+    connectedKnown: reply !== null,
     defaultRuntime,
     runtime,
     descriptor,
-    messages: read.supported
-      ? read.selection.messages
-      : String((reply as { messages?: unknown } | null)?.messages ?? "ask"),
+    messages: selection.messages,
     record: recordAt(runtime),
     recordFor: recordAt,
     catalogs: runtimeCatalogs.catalogs,
@@ -383,19 +344,21 @@ export function useLaunchSelection(scope: LaunchSelectionScope): LaunchSelection
  * ⚠ **EVERY OTHER RUNTIME'S RECORD IS CARRIED THROUGH UNTOUCHED.** That is Decision #1: Claude's
  * and Codex's settings sit side by side and neither is translated, cleared or reinterpreted when
  * the other is edited.
+ * ⚠ **NO PICK (`''`) FILES THE EDIT UNDER THE DEFAULT RUNTIME'S KEY**, the key main's
+ * `activeRecord` reads; the pick itself stays `''`.
  */
 function wholeDefaultsRecord(
   selection: LaunchSelection,
-  supported: boolean,
   patch: LaunchSelectionPatch,
   current: {
     runtime: string;
-    messages: string;
+    defaultRuntime: string;
     agentChain: boolean;
     record: RuntimeRecord;
   }
 ): Record<string, unknown> {
-  const target = patch.runtime !== undefined ? patch.runtime : current.runtime;
+  const pick = patch.runtime !== undefined ? patch.runtime : current.runtime;
+  const target = pick || current.defaultRuntime;
   const byRuntime: Record<string, RuntimeRecord> = { ...selection.byRuntime };
   const next: RuntimeRecord = { ...current.record };
   if (patch.tools !== undefined) next.tools = patch.tools;
@@ -404,14 +367,10 @@ function wholeDefaultsRecord(
   return {
     // ⚠ THE VERSION IS THE ONE MAIN SENT BACK, never a literal typed here. A build whose record
     // version this bundle does not know must not have a version it DOES know stamped onto it.
-    ...(supported && selection.v ? { v: selection.v } : {}),
-    runtime: target,
-    messages: patch.messages !== undefined ? patch.messages : current.messages,
+    ...(selection.v ? { v: selection.v } : {}),
+    runtime: pick,
+    messages: patch.messages !== undefined ? patch.messages : selection.messages,
     agentChain: patch.agentChain !== undefined ? patch.agentChain : current.agentChain,
     byRuntime,
-    // ⚠ THE LEGACY KEYS RIDE ALONG AS THE DOWNGRADE MIRROR, exactly as main writes them. They are
-    // ignored while `v` parses; without them a desktop older than U5 reading this store would
-    // find no pair at all.
-    tools: next.tools ?? "",
   };
 }

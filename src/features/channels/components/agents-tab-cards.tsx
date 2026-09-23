@@ -56,6 +56,7 @@ import {
 import { formatTokens } from "@/shared/lib/format-tokens";
 import { metric } from "./agent-metrics";
 import { agentModelShortLabel } from "../lib/agent-models";
+import type { ModelCatalogs } from "../lib/model-catalog";
 
 /**
  * WHAT THE OPERATOR SAID THIS AGENT IS FOR, or `null` (2026-08-27).
@@ -173,9 +174,12 @@ export function AgentCard({
   owner = null,
   viewing,
   color = null,
+  catalogs = null,
   onOpen,
 }: {
   agent: DesktopSessionSummary;
+  /** The desktop's model rosters, for the runtime's own model name on the chip (F15). */
+  catalogs?: ModelCatalogs | null;
   /**
    * **THIS AGENT'S COLOUR, SUPPLIED BY THE HOST** (2026-09-13; docs/specs/agent-colors.md
    * item 8).
@@ -210,7 +214,7 @@ export function AgentCard({
   const description = agentDescription(agent);
   // ⚠ THE SESSION'S model, never the CHANNEL's stored pick — a live agent may
   // have been switched mid-run, or spawned before the posture changed.
-  const modelLabel = agentModelShortLabel(agentRunningModel(agent));
+  const modelLabel = agentModelShortLabel(agentRunningModel(agent), catalogs);
   // ⚠ WHICH IDENTITY THIS AGENT IS WEARING (2026-08-22, agent identities) — a
   // SNAPSHOT of the name main resolved at spawn, never a pointer, so the session
   // keeps what it RAN AS after the identity is renamed or deleted

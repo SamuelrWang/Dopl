@@ -54,7 +54,6 @@ const CHANNEL_PREFS = desktopSource("channel-prefs.js");
 describe("the LAUNCH POSTURE renders with its current values, and changes on selection", () => {
   it("shows both axes' current values without opening anything", () => {
     agentView({
-      posture: { tools: "bypass", messages: "auto_both" },
       selection: launchSelectionStub({
         runtime: "",
         byRuntime: { "": { tools: "bypass" } },
@@ -102,6 +101,10 @@ describe("the LAUNCH POSTURE renders with its current values, and changes on sel
     expect(text).not.toContain("When you launch an agent");
     expect(text).not.toContain("For every session on this channel");
     expect(SETTINGS_HELP["Tool use"].body).toContain("an agent you launch here");
+    // P6-12: no Claude-only option list under a row whose words are the runtime's, and no help
+    // for a Model row that does not exist.
+    expect(SETTINGS_HELP["Tool use"].options).toBeUndefined();
+    expect("Model" in SETTINGS_HELP).toBe(false);
     // ⚠ The arm's heading must NOT appear here — and since 2026-08-20 there is no
     // surface it could belong to instead: the arm is DELETED (F-233, Samuel's
     // ruling). This assertion outlived its subject on purpose, because the
@@ -189,7 +192,7 @@ describe("the LAUNCH POSTURE renders with its current values, and changes on sel
   });
 
   it("drops the whole posture subsection, heading included, with no bridge", () => {
-    const text = copy({ posture: null });
+    const text = copy({ selection: launchSelectionStub({ bridge: null }) });
     expect(text).not.toContain("When you launch an agent");
     expect(screen.queryByText("Permissions")).toBeNull();
     expect(screen.queryByText("Sends")).toBeNull();
@@ -243,8 +246,16 @@ describe("the two permission axes agree across both trees", () => {
   // comparison for the other. The needle is the LITERAL DECLARATION, so a file that merely READS
   // a list (as `session-profiles.js` now does for Axis A) is correctly not in it.
   const declaringFiles = (name: string) => desktopMainFilesContaining(`const ${name} = [`);
-  const WEB_MODULE = "src/features/channels/lib/permission-modes.ts";
+  // ⚠ THE WEB HALF IS WHAT THE SPA OFFERS — the option lists, in order. `permission-modes.ts` holds
+  // types only since F5, so the offering is the one literal left on this side.
+  const WEB_MODULE = "src/features/channels/components/permission-preset-row.tsx";
   const web = readFileSync(resolve(process.cwd(), WEB_MODULE), "utf8");
+  const offered = (name: string): string[] => {
+    const list = name === "TOOL_MODES" ? "TOOL_OPTIONS" : "MESSAGE_OPTIONS";
+    const m = new RegExp(`export const ${list}[^=]*=\\s*\\[([\\s\\S]*?)\\n\\];`).exec(web);
+    if (!m) throw new Error(`no \`${list}\` in ${WEB_MODULE}`);
+    return [...m[1].matchAll(/value: "([^"]+)"/g)].map((x) => x[1]);
+  };
 
   /**
    * ⚠ AXIS A'S LIST STOPPED BEING A LITERAL ON 2026-08-31 (the runtime-adapter port,
@@ -346,11 +357,11 @@ describe("the two permission axes agree across both trees", () => {
         if (name === "TOOL_MODES" && isOtherAdapter(file)) continue;
         expect(modes(desktopSource(file), name), file).toEqual(winner);
       }
-      expect(modes(web, name), WEB_MODULE).toEqual(winner);
+      expect(offered(name), WEB_MODULE).toEqual(winner);
     }
   );
 
-  it("the web module's DEFAULT is the desktop's fail-closed answer", () => {
+  it("the web offering's FIRST option is the desktop's fail-closed answer", () => {
     // A default the desktop would itself coerce away is a posture the operator can never
     // actually hold. ⚠ Axis A's fail-closed answer is `descriptor.toolMode.default`, which
     // `runtime-contract.test.mjs` separately pins to be the NARROWEST option — the two halves
@@ -358,10 +369,10 @@ describe("the two permission axes agree across both trees", () => {
     const profiles = desktopSource("session-profiles.js");
     const adapterDefault = /default: '([^']+)',/.exec(desktopSource(ADAPTER))?.[1];
     expect(adapterDefault).toBe(declaredToolModes()[0]);
-    expect(web).toContain(`tools: "${adapterDefault}"`);
+    expect(offered("TOOL_MODES")[0]).toBe(adapterDefault);
     const messageFallback =
       /MESSAGE_MODES\.indexOf\(mode\) === -1 \? '([^']+)'/.exec(profiles)?.[1];
-    expect(web).toContain(`messages: "${messageFallback}"`);
+    expect(offered("MESSAGE_MODES")[0]).toBe(messageFallback);
   });
 });
 

@@ -26,7 +26,6 @@ import { useChannelFolder } from "../hooks/use-channel-folder";
 import { useOrchestratorDirect } from "../hooks/use-orchestrator-direct";
 import { useOrchestratorLaunch } from "../hooks/use-orchestrator-launch";
 import { useLaunchSelection } from "../hooks/use-launch-selection";
-import { type PermissionPreset } from "../lib/permission-modes";
 import {
   ChannelAgentSettingsView,
 } from "./settings-agent";
@@ -87,13 +86,8 @@ function consentRow(state: {
 }
 
 export function ChannelAgentSettings(props: ChannelAgentSettingsProps) {
-  // ⚠ **THE VERSIONED, RUNTIME-KEYED RECORD SINCE 2026-09-21 (U8), NOT THE LEGACY PAIR.**
-  // `useChannelLaunchPosture` reads `{tools, messages}` — the SELECTED runtime's pair — which
-  // cannot express the one thing this tab is now about: Claude's and Codex's
-  // settings sitting side by side, untranslated (Decisions #1 and #2). It also rewrote the whole
-  // pair on every write, so a runtime switch re-sent the OLD runtime's `accept_edits` under the
-  // NEW runtime and `patchRejections` refused the write with nothing on screen saying why.
-  // ⚠ THAT HOOK IS NOT DELETED — four read-only surfaces still mount it for a descriptor.
+  // ⚠ THE VERSIONED, RUNTIME-KEYED RECORD (U8): Claude's and Codex's settings side by side,
+  // untranslated. The one writer of the channel's launch record.
   const launchSelection = useLaunchSelection({ kind: "channel", channelId: props.channelId });
   const folder = useChannelFolder(props.channelId);
   // ⚠ PER CHANNEL, unlike the machine-wide toggle below it (Samuel, 2026-08-31).
@@ -111,21 +105,6 @@ export function ChannelAgentSettings(props: ChannelAgentSettingsProps) {
       roster={props.roster}
       currentUserId={props.currentUserId}
       memberCount={props.memberCount}
-      // ⚠ THE PAIR IS DERIVED FROM THE ONE RECORD, never read a second time. It exists for the
-      // WARNING's `messageMode` conjunct and for the "is there a bridge" gate; every control
-      // below reads `selection` directly.
-      posture={
-        launchSelection.bridge
-          ? {
-              tools: (launchSelection.record.tools ?? "manual") as PermissionPreset["tools"],
-              messages: launchSelection.messages as PermissionPreset["messages"],
-            }
-          : null
-      }
-      postureBusy={launchSelection.busy}
-      // ⚠ NO `model` TO MAP SINCE 2026-09-23 — the patch is the pair (and runtime), passed
-      // through own-key.
-      onChangePosture={(patch) => void launchSelection.update(patch)}
       selection={launchSelection}
       folder={
         folder.bridge

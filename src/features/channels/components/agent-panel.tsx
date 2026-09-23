@@ -75,6 +75,7 @@ import {
   parseAgentPostStamp,
 } from "./agents-model";
 import { agentModelShortLabel } from "../lib/agent-models";
+import { useChannelLaunchPosture } from "../hooks/use-channel-launch-posture";
 import { AgentComposer } from "./agent-composer";
 import { AgentStream } from "./agent-stream";
 import { useAgentNarration } from "./use-agent-narration";
@@ -388,6 +389,7 @@ export function ChannelsAgentPanel({
             channelId={agent.channelId}
             taskId={agent.taskId}
             agentId={agent.agentId}
+            runtimeId={agent.runtimeId}
             name={agentDisplayName(agent)}
             ended={agent.state === "ended"}
             className="px-3.5"
@@ -405,6 +407,9 @@ export function AgentPanelHeader({
   agent: DesktopSessionSummary;
   onClose: () => void;
 }) {
+  // The desktop's model rosters, so the chip names a live model the way its runtime does (F15).
+  const { catalogs } = useChannelLaunchPosture(agent.channelId);
+  const modelLabel = agentModelShortLabel(agentRunningModel(agent), catalogs);
   return (
     <header className="flex h-[56px] shrink-0 items-center gap-2 border-b border-border-default px-3.5">
       <Bot size={15} aria-hidden className="shrink-0 text-text-secondary" />
@@ -423,9 +428,9 @@ export function AgentPanelHeader({
             renders NOTHING: a main that does not report a model has said nothing
             about what this agent is running, and "Default" would be this build
             claiming to know (`agents-model.ts › agentRunningModel`). */}
-          {agentModelShortLabel(agentRunningModel(agent)) && (
+          {modelLabel && (
             <span className="shrink-0 text-text-muted">
-              · {agentModelShortLabel(agentRunningModel(agent))}
+              · {modelLabel}
             </span>
           )}
         </span>

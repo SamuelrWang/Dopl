@@ -1,17 +1,15 @@
 // @vitest-environment jsdom
 /**
- * THE REFUSAL SURFACES — the Stop control and the launch panel, over the three real
- * descriptors (2026-08-31, design §3.2).
+ * THE REFUSAL SURFACES — the Stop control and the live model picker over the three real
+ * descriptors (2026-08-31, design §3.2), and the runtime-owned launch copy (U10).
  *
  * ⚠ THE RULE BEING PINNED IS "A REFUSAL GETS A SENTENCE", NOT "A CONTROL GOES AWAY".
  * `session.interrupt: 'unverified'` disables Pause/End *and* warns, because without an
- * interrupt Dopl cannot stop a session it started — `main/session-engine.js › runEffect`
- * case `interruptQuery` is the tree's only `.interrupt()` — and a button that vanishes
- * with no reason is one the operator works around. A test that asserted only `disabled`
+ * interrupt Dopl cannot stop a session it started. A test that asserted only `disabled`
  * would stay green against the version of this that ships silence.
  *
- * ⚠ AND THE OTHER HALF IS THAT CLAUDE IS UNTOUCHED. Every case below has its negative:
- * a hide-on-absent rule that fires on all three runtimes is a regression, not a feature.
+ * ⚠ A RUNNING AGENT IS JUDGED BY ITS OWN RUNTIME (P6-04), never the channel's current pick:
+ * every case below puts the agent on a runtime the channel is NOT on.
  */
 
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -28,11 +26,10 @@ import {
   signInPointer,
   signedOutLaunchCopy,
 } from "../lib/runtime-copy";
-import { launchRefusalText } from "./use-agents-panel";
+import { catalog } from "../hooks/launch-selection-harness";
+import { launchRefusalText } from "./use-launch-controls";
 import { AgentControls } from "./agent-panel-controls";
 import { PostureControls } from "./agent-posture";
-import { AgentLaunchPanelView } from "./composer-launch-panel";
-import type { AgentLaunchPanel } from "./use-agent-launch";
 
 const CH = "44444444-4444-4444-8444-444444444444";
 
@@ -41,51 +38,61 @@ afterEach(() => {
   delete (window as { dopl?: unknown }).dopl;
 });
 
+/** Every runtime's own one-model roster, so a picker's absence is the RUNTIME's doing. */
+const CATALOGS = Object.fromEntries(
+  REAL_DESCRIPTORS.map((d) => [d.id, catalog(d.id, [{ id: `${d.id}-m`, isDefault: true }])])
+);
+
 /**
- * `window.dopl` answering a posture read that carries the runtime family.
- * ⚠ `runtime` IS ON THE REPLY EVEN WHEN EMPTY — that is the wire, and the own-key
- * probe is the whole reason it is. Pass `omitRuntime` for the older-desktop shape.
+ * `window.dopl` answering the channel's launch record. `channelRuntime` is the channel's pick;
+ * `withRecord: false` leaves the channel ops off (nothing read, no descriptor).
  */
-function installBridge(runtime: string, omitRuntime = false) {
-  const reply = omitRuntime
-    ? { tools: "manual", messages: "ask" }
-    : {
-        tools: "manual",
-        messages: "ask",
-        runtime,
-        runtimes: REAL_DESCRIPTORS,
-        defaultRuntime: "claude",
-      };
+function installBridge(channelRuntime: string, withRecord = true) {
   (window as { dopl?: unknown }).dopl = {
     apiRequest: vi.fn(),
-    channels: {
-      getLaunchPosture: vi.fn().mockResolvedValue(reply),
-      setLaunchPosture: vi.fn().mockResolvedValue({ ok: true }),
-    },
+    ...(withRecord
+      ? {
+          channels: {
+            getLaunchPosture: vi.fn().mockResolvedValue({
+              runtimes: REAL_DESCRIPTORS,
+              defaultRuntime: "claude",
+              connected: ["claude"],
+              catalogVersion: 1,
+              catalogs: CATALOGS,
+              selection: { v: 2, runtime: channelRuntime, messages: "ask", byRuntime: {} },
+            }),
+            setLaunchPosture: vi.fn().mockResolvedValue({ ok: true }),
+          },
+        }
+      : {}),
     sessions: {
       pause: vi.fn().mockResolvedValue({ ok: true }),
       end: vi.fn().mockResolvedValue({ ok: true }),
-      // ⚠ BOTH BRIDGE OPS PRESENT ON PURPOSE. They are the FIRST gate on the posture strip
-      // below, so a case that proved a hidden model picker without them would be proving the
-      // wrong absence — the runtime gate has to be the only thing left deciding.
+      // ⚠ BOTH BRIDGE OPS PRESENT ON PURPOSE: the runtime gate has to be the only thing left
+      // deciding the model picker.
       setMode: vi.fn().mockResolvedValue({ ok: true }),
       setModel: vi.fn().mockResolvedValue({ ok: true }),
     },
   };
 }
 
-const AGENT: DesktopSessionSummary = {
-  channelId: CH,
-  taskId: "t1",
-  agentId: "abcd1234",
-  state: "idle",
-} as unknown as DesktopSessionSummary;
+const agentOn = (runtimeId: string): DesktopSessionSummary =>
+  ({
+    channelId: CH,
+    taskId: "t1",
+    agentId: "abcd1234",
+    state: "idle",
+    runtimeId,
+  }) as unknown as DesktopSessionSummary;
 
-async function mountControls(runtime: string, omitRuntime = false) {
-  installBridge(runtime, omitRuntime);
+/** The channel sits on a DIFFERENT runtime than the agent, so the agent's own must decide. */
+const otherThan = (id: string) => (id === "claude" ? "cursor" : "claude");
+
+async function mountControls(runtimeId: string, withRecord = true) {
+  installBridge(otherThan(runtimeId), withRecord);
   await act(async () => {
     render(
-      <AgentControls agent={AGENT} workspaceSlug="ws" onRefreshSessions={() => {}} />
+      <AgentControls agent={agentOn(runtimeId)} workspaceSlug="ws" onRefreshSessions={() => {}} />
     );
   });
 }
@@ -95,8 +102,8 @@ const stopButtons = () =>
     screen.getByRole("button", { name: n })
   ) as HTMLButtonElement[];
 
-describe("the Stop control, against the channel's runtime", () => {
-  it("Cursor: Pause and End are inert AND the reason is on screen", async () => {
+describe("the Stop control, against the AGENT's runtime", () => {
+  it("Cursor agent: Pause and End are inert AND the reason is on screen", async () => {
     await mountControls("cursor");
     for (const b of stopButtons()) expect(b.disabled).toBe(true);
     expect(screen.getByRole("note").textContent).toMatch(
@@ -104,7 +111,7 @@ describe("the Stop control, against the channel's runtime", () => {
     );
   });
 
-  it("Claude: both verbs live, and NO refusal line", async () => {
+  it("Claude agent on a Cursor channel: both verbs live, and NO refusal line", async () => {
     await mountControls("claude");
     for (const b of stopButtons()) expect(b.disabled).toBe(false);
     expect(screen.queryByRole("note")).toBeNull();
@@ -116,98 +123,10 @@ describe("the Stop control, against the channel's runtime", () => {
     expect(screen.queryByRole("note")).toBeNull();
   });
 
-  it("a desktop with no runtime concept keeps both verbs", async () => {
-    // ⚠ A descriptor nobody sent cannot refuse anything. Reading its ABSENCE as a
-    // refusal would disable Pause and End on every desktop older than the port.
-    await mountControls("", true);
+  it("with no launch record read, nothing is refused", async () => {
+    // ⚠ A descriptor nobody sent cannot refuse anything.
+    await mountControls("cursor", false);
     for (const b of stopButtons()) expect(b.disabled).toBe(false);
-    expect(screen.queryByRole("note")).toBeNull();
-  });
-});
-
-/** The launch panel's state object, with only what the view reads. */
-function panelStub(over: Partial<AgentLaunchPanel> = {}): AgentLaunchPanel {
-  return {
-    open: true,
-    agentId: "abcd1234",
-    name: "#abcd1234",
-    description: "",
-    identityId: null,
-    model: "",
-    runtime: "",
-    ready: true,
-    identityError: null,
-    setIdentityError: () => {},
-    setName: () => {},
-    setDescription: () => {},
-    setIdentityId: () => {},
-    setModel: () => {},
-    setRuntime: vi.fn(),
-    toggle: () => {},
-    close: () => {},
-    reset: () => {},
-    ...over,
-  };
-}
-
-function launchView(over: Partial<AgentLaunchPanel> = {}, channelRuntime = "") {
-  return render(
-    <AgentLaunchPanelView
-      panel={panelStub(over)}
-      identities={[]}
-      runtimes={REAL_DESCRIPTORS}
-      channelRuntime={channelRuntime}
-      defaultRuntime="claude"
-    />
-  );
-}
-
-describe("the launch surface", () => {
-  it("offers Channel default plus every adapter, by the platform's own label", () => {
-    launchView();
-    const trigger = screen.getByLabelText("Agent runtime");
-    act(() => {
-      trigger.click();
-    });
-    expect(screen.getAllByRole("menuitem").map((el) => el.textContent)).toEqual([
-      "Channel default",
-      "Claude Code",
-      "Codex",
-      "Cursor",
-    ]);
-  });
-
-  it("carries the interrupt refusal when THIS SPAWN would land on Cursor", () => {
-    launchView({ runtime: "cursor" });
-    expect(screen.getByRole("note").textContent).toMatch(
-      /cannot promise to stop a session it started/
-    );
-  });
-
-  it("carries it when the CHANNEL would land on Cursor and the panel said nothing", () => {
-    // ⚠ MAIN'S PRECEDENCE CHAIN, MIRRORED: `payload.runtime > the channel's pick >
-    // the default`. A warning computed off any other order names a refusal belonging
-    // to a runtime this launch is not about to use.
-    launchView({ runtime: "" }, "cursor");
-    expect(screen.getByRole("note")).toBeTruthy();
-  });
-
-  it("does NOT carry it when the panel overrides Cursor back to Claude", () => {
-    launchView({ runtime: "claude" }, "cursor");
-    expect(screen.queryByRole("note")).toBeNull();
-  });
-
-  it("says nothing on Claude or Codex", () => {
-    for (const id of ["claude", "codex"]) {
-      const { unmount } = launchView({ runtime: id });
-      expect(screen.queryByRole("note")).toBeNull();
-      unmount();
-    }
-  });
-
-  it("renders neither the row nor a warning with no adapters — the browser lane", () => {
-    render(<AgentLaunchPanelView panel={panelStub()} identities={[]} />);
-    expect(screen.queryByLabelText("Agent runtime")).toBeNull();
     expect(screen.queryByRole("note")).toBeNull();
   });
 });
@@ -241,7 +160,7 @@ describe("the signed-out and no-runtime copy", () => {
     expect(agentAuthHeldCopy(realDescriptor("claude"))).toMatch(/Claude/);
   });
 
-  it("the `auth-hold` / `no-sdk` launch refusals name the runtime the channel would launch on", () => {
+  it("the `auth-hold` / `no-sdk` launch refusals name the runtime they are given", () => {
     for (const id of ["claude", "codex", "cursor"]) {
       const d = realDescriptor(id);
       expect(launchRefusalText("auth-hold", d)).toBe(signedOutLaunchCopy(d));
@@ -303,53 +222,36 @@ describe("the signed-out and no-runtime copy", () => {
 });
 
 /**
- * THE LIVE MODEL PICKER, AGAINST THE CHANNEL'S RUNTIME (2026-09-22).
+ * THE LIVE MODEL PICKER, AGAINST THE AGENT'S RUNTIME (2026-09-22; P6-04).
  *
- * ⚠ **THE DECLARATION EXISTED, WAS MIRRORED, AND WAS READ BY NOTHING ON THIS SIDE.**
- * `runtime-capability.ts › canSwitchModelLive`'s own docblock is the rule — *"absent ⇒ the live
- * model picker is hidden on a RUNNING agent"* — and `agent-posture.tsx` rendered it regardless,
- * so a Codex agent was offered a control `main/session-reopen.js › setModel` refuses AND shown
- * **"Model: Sonnet 5"** as its running model, because `agent-models.ts › agentModelSelection`
- * back-fills `claude-sonnet-5` and `agentModelOptionsFor` offers that file's four Claude ids.
- * ⚠ **AND THE NEGATIVE IS HALF THE CASE.** A hide-on-absent rule that fires on all three
- * runtimes is a regression: Claude and Cursor both declare `liveModelSwitch: true` and keep the
- * control exactly as they had it.
+ * ⚠ `canSwitchModelLive` is the rule — *"absent ⇒ the live model picker is hidden on a RUNNING
+ * agent"*. ⚠ AND THE NEGATIVE IS HALF THE CASE: Claude and Cursor both declare
+ * `liveModelSwitch: true` and keep the control.
  */
-async function mountPosture(runtime: string, omitRuntime = false) {
-  installBridge(runtime, omitRuntime);
+async function mountPosture(runtimeId: string) {
+  installBridge(otherThan(runtimeId));
   await act(async () => {
-    render(<PostureControls agent={AGENT} channelId={CH} taskId="t1" />);
+    render(<PostureControls agent={agentOn(runtimeId)} channelId={CH} taskId="t1" />);
   });
 }
 
 const modelPicker = () => screen.queryByLabelText("Model for this agent");
 const toolPicker = () => screen.queryByLabelText("Tool permissions for this agent");
 
-describe("the live model picker, against the channel's runtime", () => {
-  it("Codex: the picker is ABSENT — main would refuse the switch anyway", async () => {
+describe("the live model picker, against the AGENT's runtime", () => {
+  it("Codex agent: the picker is ABSENT — main would refuse the switch anyway", async () => {
     await mountPosture("codex");
     expect(modelPicker()).toBeNull();
-    // ⚠ IT REFUSES A CONTROL, NOT THE STRIP. The two permission axes are a different
-    // capability and are untouched — hiding them would be this fix overreaching.
+    // ⚠ IT REFUSES A CONTROL, NOT THE STRIP.
     expect(toolPicker()).not.toBeNull();
-    // ⚠ AND THE CLAUDE BACK-FILL GOES WITH IT: no "Sonnet 5" anywhere on a Codex agent.
     expect(screen.queryByText(/Sonnet 5/)).toBeNull();
   });
 
-  it("Claude and Cursor declare a live switch and KEEP the picker", async () => {
+  it("Claude and Cursor agents declare a live switch and KEEP the picker", async () => {
     for (const id of ["claude", "cursor"]) {
       await mountPosture(id);
       expect(modelPicker(), id).not.toBeNull();
       cleanup();
     }
-  });
-
-  it("a desktop with no runtime concept keeps the picker — UNKNOWN IS NOT EMPTY", async () => {
-    // ⚠ A descriptor nobody sent decides nothing. Reading its ABSENCE as a refusal would
-    // DELETE a working control on every desktop older than the runtime port, where the one
-    // registered adapter has always been the one that can switch. The bridge op stays the
-    // whole gate there, byte-identical to before this rule existed.
-    await mountPosture("", true);
-    expect(modelPicker()).not.toBeNull();
   });
 });

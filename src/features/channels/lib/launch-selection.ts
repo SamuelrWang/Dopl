@@ -3,25 +3,16 @@
  * `dopl-desktop-app/main/launch-selection.js`'s versioned, runtime-keyed record (2026-09-21, U5's
  * contract; consumed by U7/U8).
  *
- * ⚠ **WHY THE RENDERER NEEDS THE WHOLE RECORD AND NOT THE LEGACY PAIR.** The reply still carries
- * `{tools, messages}` for the SELECTED runtime — a compatibility window every renderer older than
- * U5 feature-probes (`model` left that reply on 2026-09-23, so an older renderer's
- * an older renderer's `hasModelKey` probe draws no Model row) — but those keys cannot express the one
- * thing U7 and U8 are about: **Claude's and Codex's settings sit side by side and are never
- * translated.** Switching Claude → Codex → Claude has to restore BOTH remembered tool settings and
- * BOTH native sets, which one global pair cannot hold. `byRuntime` is that record.
+ * ⚠ **WHY THE RENDERER NEEDS THE WHOLE RECORD AND NOT A PAIR.** Claude's and Codex's settings sit
+ * side by side and are never translated: switching Claude → Codex → Claude has to restore BOTH
+ * remembered tool settings and BOTH native sets, which one global pair cannot hold. `byRuntime` is
+ * that record.
  *
  * ⚠ **IT INTERPRETS NOTHING AND VALIDATES NOTHING.** Every vocabulary belongs to the selected
- * adapter's descriptor (`runtime-model-catalog.ts`, `runtime-native.ts`), and main re-validates
+ * adapter's descriptor (`model-catalog.ts`, `runtime-native.ts`), and main re-validates
  * every write regardless — this module narrows a value that crossed a process boundary and says
  * which keys were present. A renderer that coerced a stored mode here would be a second
  * authority on a vocabulary it does not own.
- *
- * ⚠ **`selectionVersion` IS A CAPABILITY, NOT A VALUE.** A desktop older than U5 sends no
- * `selection` key at all, and reading that absence as "an empty record" would show every runtime
- * as unconfigured on a machine that has settings — INVARIANTS §11, UNKNOWN is not EMPTY.
- * {@link readLaunchSelection} answers `supported: false` there and the rows fall back to the
- * legacy pair.
  *
  * ⚠ NO HOOK, NO BRIDGE, NO REACT (INVARIANTS §1). The ONE reason this file changes is that the
  * stored record's shape changed.
@@ -46,8 +37,7 @@ export interface LaunchSelection {
 }
 
 export interface LaunchSelectionRead {
-  /** Did the reply carry the record at all? ⚠ FALSE IS AN OLDER DESKTOP, not an empty record. */
-  supported: boolean;
+  /** The restrictive empty selection when no reply has answered. */
   selection: LaunchSelection;
   /**
    * The sentences main attached for a record it could not fully honour — `[]` when there are
@@ -91,9 +81,6 @@ function normalizeRecord(raw: unknown): RuntimeRecord | null {
 /**
  * Read the versioned record off a launch-posture or agent-defaults reply.
  *
- * ⚠ **THE PROBE IS OWN-KEY ON `selection`, NOT TRUTHINESS**, for the own-key probe's reason: a
- * current main with nothing stored still sends the record, and `!!reply.selection` would read
- * that as an older desktop and hide every per-runtime row.
  * ⚠ **TWO SHAPES, ONE READER.** The per-channel reply nests the record under `selection`; the
  * defaults reply IS the record (`agent-defaults.js › effectiveDefaults` returns `v` and
  * `byRuntime` at the top level), because that record is a launch selection plus one flag. Reading
@@ -101,7 +88,7 @@ function normalizeRecord(raw: unknown): RuntimeRecord | null {
  */
 export function readLaunchSelection(raw: unknown): LaunchSelectionRead {
   if (!raw || typeof raw !== "object") {
-    return { supported: false, selection: emptySelection(), review: NO_REVIEW };
+    return { selection: emptySelection(), review: NO_REVIEW };
   }
   const reply = raw as Record<string, unknown>;
   const nested = Object.prototype.hasOwnProperty.call(reply, "selection")
@@ -113,7 +100,7 @@ export function readLaunchSelection(raw: unknown): LaunchSelectionRead {
       ? reply
       : null;
   if (!record) {
-    return { supported: false, selection: emptySelection(), review: NO_REVIEW };
+    return { selection: emptySelection(), review: NO_REVIEW };
   }
   const byRuntime: Record<string, RuntimeRecord> = {};
   const source = record.byRuntime;
@@ -131,7 +118,6 @@ export function readLaunchSelection(raw: unknown): LaunchSelectionRead {
     ? (reply.needsReview as unknown[]).map((line) => str(line)).filter((line) => line)
     : NO_REVIEW;
   return {
-    supported: true,
     selection: {
       v: Number.isFinite(version) ? version : 0,
       runtime: str(record.runtime),
@@ -147,10 +133,8 @@ const EMPTY_RECORD: RuntimeRecord = Object.freeze({});
 /**
  * ONE RUNTIME'S RECORD — never null, possibly empty.
  *
- * ⚠ **`''` RESOLVES TO THE DEFAULT ADAPTER'S RECORD**, which is where a migrated legacy
- * `{tools}` landed (`launch-selection.js › fromLegacy` files it under the DEFAULT runtime
- * untranslated, because that is the only vocabulary the old validators could store). It is why
- * an old `accept_edits` is still Claude's value after the migration and is never shown on Codex.
+ * ⚠ **`''` RESOLVES TO THE DEFAULT ADAPTER'S RECORD**, the key main's `activeRecord` reads for a
+ * record with no pick (`launch-selection.js › fromLegacy` also files a migrated `{tools}` there).
  */
 export function recordFor(
   selection: LaunchSelection,
@@ -158,5 +142,5 @@ export function recordFor(
   defaultRuntime: string
 ): RuntimeRecord {
   const id = str(runtimeId) || str(defaultRuntime);
-  return selection.byRuntime[id] ?? (id ? EMPTY_RECORD : selection.byRuntime[""] ?? EMPTY_RECORD);
+  return (id && selection.byRuntime[id]) || EMPTY_RECORD;
 }

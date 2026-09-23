@@ -25,34 +25,6 @@ import type { RuntimeDescriptor } from "./runtime-capability";
 // ── THE REGISTRY, AS THE WIRE HANDS IT OVER ──────────────────────────────────
 
 /**
- * DID THIS REPLY CARRY A RUNTIME FIELD AT ALL — the capability probe, and the
- * TWIN of the since-deleted `permission-modes.ts` `hasModelKey` rather than a new idea.
- *
- * ⚠ IT IS AN OWN-KEY TEST, NOT A TRUTHINESS TEST, and the distinction is the
- * whole feature. `runtime: ''` is a current desktop saying "no pick, the DEFAULT
- * adapter applies"; NO KEY is a desktop that predates the runtime concept
- * entirely. A `!!raw.runtime` check collapses those into one answer and would
- * hide the row from every operator who had not yet chosen — INVARIANTS §11,
- * UNKNOWN is not EMPTY.
- *
- * ⚠ WHY A VALUE PROBE RATHER THAN A BRIDGE-MEMBER DETECTION, restated because it
- * is the same constraint the model hit: the runtime rides the EXISTING
- * `getLaunchPosture` / `setLaunchPosture` pair (`main/channel-dir-ipc.js` states
- * why it gets no op of its own), so there is no new member to feature-detect on.
- * ⚠ IT PROBES `runtime`, NOT `runtimes`. Both always ride the read together on a
- * build that has either, and the singular is the one whose ABSENCE is meaningful
- * on its own — an empty `runtimes` array is a legal answer from a build with the
- * concept and no adapters to offer.
- */
-export function hasRuntimeKey(raw: unknown): boolean {
-  return (
-    !!raw &&
-    typeof raw === "object" &&
-    Object.prototype.hasOwnProperty.call(raw, "runtime")
-  );
-}
-
-/**
  * Coerce a bridge reply's `runtimes` into a descriptor list. Anything that is
  * not an array of objects carrying a string `id` is dropped — a half-shaped
  * entry would render a row naming an adapter nothing can resolve.

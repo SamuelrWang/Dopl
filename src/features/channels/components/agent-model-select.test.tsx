@@ -32,18 +32,12 @@ import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
 import type { DesktopSessionSummary } from "@/shared/lib/spa-bridge";
 import {
   AGENT_MODEL_DEFAULT,
-  AGENT_MODEL_FALLBACK,
   AGENT_MODEL_OPTIONS,
   agentModelLabel,
   agentModelOptionsFor,
-  agentModelSelection,
   agentModelShortLabel,
   normalizeAgentModel,
 } from "../lib/agent-models";
-import {
-  normalizePermissionPreset,
-  DEFAULT_PERMISSION_PRESET,
-} from "../lib/permission-modes";
 import { agentRunningModel } from "./agents-model";
 import { ChannelAgentSettingsView } from "./settings-agent";
 import { PostureControls } from "./agent-posture";
@@ -54,7 +48,8 @@ import { CHANNEL_ID } from "./test-fixtures";
 // DEFAULT runtime's four ids are still what a desktop older than the catalog contract renders —
 // `agent-models.ts › defaultRuntimeFallbackCatalog` is that lane, and it is what these cases
 // drive.
-import { launchSelectionStub } from "../hooks/launch-selection-harness";
+import { catalog, launchSelectionStub } from "../hooks/launch-selection-harness";
+import { REAL_DESCRIPTORS } from "../lib/runtime-descriptors-harness";
 import { defaultRuntimeFallbackCatalog } from "../lib/agent-models";
 
 afterEach(() => {
@@ -92,7 +87,32 @@ function stubBridge(over: Record<string, unknown> = {}) {
       setMode: vi.fn(async () => ({ ok: true })),
       ...over,
     },
+    // The channel's launch record — the agent's runtime descriptor and its live roster.
+    channels: {
+      getLaunchPosture: vi.fn(async () => ({
+        runtimes: REAL_DESCRIPTORS,
+        defaultRuntime: "claude",
+        connected: ["claude"],
+        catalogVersion: 1,
+        catalogs: {
+          claude: catalog("claude", [
+            { id: "claude-fable-5", label: "Fable 5" },
+            { id: "claude-opus-5", label: "Opus 5" },
+            { id: "claude-sonnet-5", label: "Sonnet 5", isDefault: true },
+            { id: "claude-haiku-4-5-20251001", label: "Haiku 4.5" },
+          ]),
+        },
+        selection: { v: 2, runtime: "", messages: "ask", byRuntime: {} },
+      })),
+      setLaunchPosture: vi.fn(),
+    },
   };
+}
+
+/** Renders the live strip and lets the channel's launch record answer. */
+async function renderLive(agent: DesktopSessionSummary) {
+  render(<PostureControls agent={agent} channelId={CHANNEL_ID} taskId="t-1" />);
+  await act(async () => {});
 }
 
 describe("the model vocabulary — one map, four surfaces", () => {
@@ -121,8 +141,7 @@ describe("the model vocabulary — one map, four surfaces", () => {
    * ⚠ THE ABSENT STATE STILL WRITES NO ID — it is just no longer OFFERED. A
    * sentinel would be a value main has to special-case, and would make "never
    * chosen" and "chose the default" indistinguishable the moment the SDK default
-   * moved. What CHANGED is that every picker back-fills it for DISPLAY through
-   * {@link agentModelSelection} rather than showing it as a pick.
+   * moved.
    */
   it("spells the absent state as the ABSENCE of an id, never as a sentinel", () => {
     expect(AGENT_MODEL_DEFAULT).toBe("");
@@ -186,33 +205,6 @@ describe("the model vocabulary — one map, four surfaces", () => {
     expect(agentModelOptionsFor(null)).toBe(AGENT_MODEL_OPTIONS);
   });
 
-  /**
-   * 🔒 **THE BACK-FILL IS WHAT REPLACED THE "Default" OPTION, SO IT IS THE PIN THAT
-   * MATTERS NOW** (2026-09-06). Every surface that used to render the empty option
-   * — the launch panel, the identity sheet, the live posture strip — resolves its
-   * value through this instead, and the invariant all three need is the same one:
-   * **the answer is always a value `SelectMenu` can match.** An absent model
-   * answers `AGENT_MODEL_FALLBACK`; an id this build predates answers AS ITSELF,
-   * because `agentModelOptionsFor` appends it and replacing it with Sonnet would
-   * report a real model as the wrong one.
-   */
-  it("back-fills an absent model to the fallback, and never to `''`", () => {
-    expect(agentModelSelection(AGENT_MODEL_DEFAULT)).toBe(AGENT_MODEL_FALLBACK);
-    expect(agentModelSelection(null)).toBe(AGENT_MODEL_FALLBACK);
-    expect(agentModelSelection(undefined)).toBe(AGENT_MODEL_FALLBACK);
-    expect(agentModelSelection("   ")).toBe(AGENT_MODEL_FALLBACK);
-    expect(AGENT_MODEL_FALLBACK).toBe("claude-sonnet-5");
-    expect(
-      AGENT_MODEL_OPTIONS.some((o) => o.value === AGENT_MODEL_FALLBACK)
-    ).toBe(true);
-  });
-
-  it("returns a stored id unchanged, known or not", () => {
-    expect(agentModelSelection("claude-opus-5")).toBe("claude-opus-5");
-    expect(agentModelSelection("claude-opus-4-5-20251101")).toBe(
-      "claude-opus-4-5-20251101"
-    );
-  });
 });
 /**
  * 🔓 **THE DURABLE MODEL ROW IS DELETED (2026-09-23, Samuel, verbatim):** *"We don't need a pin
@@ -227,9 +219,6 @@ describe("NO model row on the Settings tab (2026-09-23)", () => {
         profile="full"
         onSetToolProfile={noop}
         toolProfileBusy={false}
-        posture={DEFAULT_PERMISSION_PRESET}
-        postureBusy={false}
-        onChangePosture={noop}
         folder={null}
         selection={launchSelectionStub({
           defaultRuntime: "",
@@ -246,20 +235,6 @@ describe("NO model row on the Settings tab (2026-09-23)", () => {
     // …while the rows that stay, stay.
     expect(screen.getByLabelText("Messaging for agents you launch")).toBeTruthy();
   });
-
-  it("reads a two-axis reply as the pair, and ignores a `model` an older desktop still sends", () => {
-    expect(normalizePermissionPreset({ tools: "auto", messages: "ask" })).toEqual({
-      tools: "auto",
-      messages: "ask",
-    });
-    expect(
-      normalizePermissionPreset({ tools: "auto", messages: "ask", model: "claude-opus-5" })
-    ).toEqual({ tools: "auto", messages: "ask" });
-    // A half-valid PAIR is still refused whole.
-    expect(
-      normalizePermissionPreset({ tools: "nonsense", messages: "ask", model: "x" })
-    ).toBeNull();
-  });
 });
 
 describe("the LIVE model selector on a running agent", () => {
@@ -271,16 +246,16 @@ describe("the LIVE model selector on a running agent", () => {
    * build shape — gating both on one flag would either hide working controls or
    * render one that can only refuse.
    */
-  it("renders no selector on a build with the axes and no model op", () => {
+  it("renders no selector on a build with the axes and no model op", async () => {
     stubBridge();
-    render(<PostureControls agent={summary()} channelId={CHANNEL_ID} taskId="t-1" />);
+    await renderLive(summary());
     expect(screen.getByLabelText("Tool permissions for this agent")).not.toBeNull();
     expect(live()).toBeNull();
   });
 
-  it("renders it when the op exists", () => {
+  it("renders it when the op exists", async () => {
     stubBridge({ setModel: vi.fn(async () => ({ ok: true })) });
-    render(<PostureControls agent={summary()} channelId={CHANNEL_ID} taskId="t-1" />);
+    await renderLive(summary());
     expect(live()).not.toBeNull();
   });
 
@@ -290,16 +265,10 @@ describe("the LIVE model selector on a running agent", () => {
    * these controls belong to — and the feed would then show this card unchanged,
    * reading as a refusal that never happened (F-239's rule).
    */
-  it("addresses the instance, and spells Default as the empty id", () => {
+  it("addresses the instance", async () => {
     const setModel = vi.fn(async () => ({ ok: true }));
     stubBridge({ setModel });
-    render(
-      <PostureControls
-        agent={summary({ agentId: "k3v7d2mq" })}
-        channelId={CHANNEL_ID}
-        taskId="t-1"
-      />
-    );
+    await renderLive(summary({ agentId: "k3v7d2mq" }));
     fireEvent.click(screen.getByLabelText("Model for this agent"));
     act(() => {
       fireEvent.click(screen.getByRole("menuitem", { name: /^Opus 5/ }));
@@ -309,53 +278,49 @@ describe("the LIVE model selector on a running agent", () => {
 
   /** ⚠ An ENDED agent has no posture to change — no strip at all, not a strip
    *  that always refuses. */
-  it("renders nothing at all for an ended agent", () => {
+  it("renders nothing at all for an ended agent", async () => {
     stubBridge({ setModel: vi.fn(async () => ({ ok: true })) });
-    render(
-      <PostureControls agent={summary({ state: "ended" })} channelId={CHANNEL_ID} taskId="t-1" />
-    );
+    await renderLive(summary({ state: "ended" }));
     expect(live()).toBeNull();
   });
 
   /**
    * ⚠ A FREE-FORM EFFECTIVE MODEL STILL RENDERS. Main stamps whatever the CLI
-   * reported, which need not be one of the four `setModel` accepts.
+   * reported, which need not be on the roster.
    */
-  it("shows an off-roster effective model rather than a blank control", () => {
+  it("shows an off-roster effective model rather than a blank control", async () => {
     stubBridge({ setModel: vi.fn(async () => ({ ok: true })) });
-    render(
-      <PostureControls
-        agent={{ ...summary(), model: "claude-opus-4-5-20251101" }}
-        channelId={CHANNEL_ID}
-        taskId="t-1"
-      />
-    );
+    await renderLive({ ...summary(), model: "claude-opus-4-5-20251101" });
     expect(screen.getByLabelText("Model for this agent").textContent).toContain(
       "claude-opus-4-5-20251101"
     );
   });
 
   /** ⚠ MAIN'S VALUE, ALWAYS — the same rule both axes follow. */
-  it("shows the model main reports, and Default when it reports none", () => {
+  it("shows the model main reports, and the runtime's own default when it reports none", async () => {
     stubBridge({ setModel: vi.fn(async () => ({ ok: true })) });
-    render(
-      <PostureControls
-        agent={{ ...summary(), model: "claude-haiku-4-5-20251001" }}
-        channelId={CHANNEL_ID}
-        taskId="t-1"
-      />
-    );
+    await renderLive({ ...summary(), model: "claude-haiku-4-5-20251001" });
     expect(screen.getByLabelText("Model for this agent").textContent).toContain("Haiku 4.5");
     cleanup();
     stubBridge({ setModel: vi.fn(async () => ({ ok: true })) });
-    render(<PostureControls agent={summary()} channelId={CHANNEL_ID} taskId="t-1" />);
-    // ⚠ **"Default" UNTIL 2026-09-06.** A build that reports no running model now
-    // back-fills like every other picker rather than matching no option at all —
-    // an unmatched `value` renders `options[0]`, which would have claimed the agent
-    // was on Fable. See `agent-posture.tsx`'s note at the `agentModelSelection` call.
-    expect(screen.getByLabelText("Model for this agent").textContent).toContain(
-      "Sonnet 5"
-    );
+    await renderLive(summary());
+    expect(screen.getByLabelText("Model for this agent").textContent).toContain("Sonnet 5");
+  });
+
+  /** 🔒 NO CATALOG, NO PICKER — never a frozen Claude list in its place (P6-04). */
+  it("renders no selector when the desktop sent no catalog for the agent's runtime", async () => {
+    stubBridge({ setModel: vi.fn(async () => ({ ok: true })) });
+    const channels = (window as unknown as { dopl: { channels: { getLaunchPosture: ReturnType<typeof vi.fn> } } }).dopl.channels;
+    channels.getLaunchPosture.mockResolvedValue({
+      runtimes: REAL_DESCRIPTORS,
+      defaultRuntime: "claude",
+      connected: ["claude"],
+      catalogVersion: 1,
+      catalogs: {},
+      selection: { v: 2, runtime: "", messages: "ask", byRuntime: {} },
+    });
+    await renderLive(summary());
+    expect(live()).toBeNull();
   });
 });
 
