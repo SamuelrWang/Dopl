@@ -28,8 +28,15 @@
 
 import { cn } from "@/shared/lib/utils";
 import { AttributionPill } from "./attribution-pill";
+import { RecipientTags } from "./recipient-tags";
 import type { MessageRow } from "./view-model-rows";
+import type { RecipientTag } from "../lib/recipient-tags";
 import type { AgentColorKey } from "../types";
+
+/** ⚠ ONE FROZEN EMPTY ARRAY, not a `[]` default per call — a fresh identity every render
+ *  is a new prop on every row, which is the churn `view-model.ts › NO_AGENTS` exists to
+ *  avoid one level up. */
+const NO_RECIPIENTS: readonly RecipientTag[] = [];
 
 /**
  * **A CHANNEL AGENT'S COLOUR, ALREADY RESOLVED** — what the row draws its ring and its bar
@@ -269,6 +276,11 @@ export const FLASH_TINT = "bg-surface-raised-3";
  * one per post. That is Samuel's *"one post, one bar"* in the same words the deleted box used
  * for *"one post, one box"*, and for a better reason than the box had: nothing is lost now,
  * since the time still rides the pill of whichever post carries one.
+ *
+ * ⚠ **AND THE HEADER NOW CARRIES WHO THE POST REACHED** (Samuel, 2026-09-22, decision
+ * #2200 option 1) — {@link recipients}, beside the pill and on the pill's own line. It
+ * rides the HEADER and not the body for the reason the pill does: it is a fact about the
+ * group, so it appears exactly where a group is announced and a continuation shows none.
  */
 export function AuthoredRow({
   id,
@@ -280,6 +292,7 @@ export function AuthoredRow({
   external = false,
   agentId = null,
   agentName = null,
+  recipients = NO_RECIPIENTS,
   continuation,
   flash,
   accent = null,
@@ -300,6 +313,17 @@ export function AuthoredRow({
   /** ⚠ ITS CURRENT NAME, RESOLVED BY THE CALLER from `AuthorIndex.agents` and passed in — this
    *  shell takes no index. Never a field on the row (2026-08-27). */
   agentName?: string | null;
+  /**
+   * **WHO THE POST WAS DELIVERED TO, ALREADY SPELLED** (2026-09-22) — drawn beside the
+   * pill by `recipient-tags.tsx › RecipientTags`.
+   *
+   * ⚠ **RESOLVED BY THE CALLER, EXACTLY LIKE {@link agentName}**, and this shell takes no
+   * index for the same reason. `lib/recipient-tags.ts › recipientTags` is the one place ids
+   * become words.
+   * ⚠ **EMPTY IS THE ORDINARY ANSWER** — a person's row, a record, a legacy row — and it
+   * draws nothing at all, so every existing host is byte-identical without passing this.
+   */
+  recipients?: readonly RecipientTag[];
   continuation: boolean;
   flash: boolean;
   /** **THIS POST'S AGENT COLOUR, OR NOTHING** — see {@link AuthoredRowAccent}. ⚠ THE
@@ -344,6 +368,37 @@ export function AuthoredRow({
       onOpenAgent={onOpenAgent}
     />
   );
+  /**
+   * THE PILL PLUS WHO IT REACHED, AS ONE HEADER LINE (2026-09-22).
+   *
+   * ⚠ **IT WRAPS WHATEVER THE PILL NODE ALREADY IS**, which is why it is a function of
+   * one: the accented arm hands the FRAMED capsule and the bare arm hands the capsule
+   * itself, and neither may grow a second copy of the tag row.
+   * ⚠ **NO RECIPIENTS ⇒ THE PILL, UNWRAPPED AND BYTE-IDENTICAL.** Every existing row —
+   * a person's, a record's, a legacy post's — keeps the exact DOM it had, so nothing
+   * that selects on the pill's position has to learn about a new element.
+   * ⚠ **THE SIDE IS EXPRESSED AS A REVERSAL**, the ACCENT_BAR's own idiom: on the
+   * viewer's own side the pill stays on the outer edge and the tags read inward, and the
+   * pill stays the FIRST child in the DOM either way, so a screen reader meets the author
+   * before the address.
+   * ⚠ **`flex-wrap`**: several recipients on a 380px column must fall to a second line
+   * rather than size the header past the pane, which is `wrap-anywhere`'s argument on the
+   * pill one element in.
+   */
+  const header = (node: React.ReactNode) =>
+    recipients.length === 0 ? (
+      node
+    ) : (
+      <div
+        className={cn(
+          "flex min-w-0 max-w-full flex-wrap items-center gap-1.5",
+          mine && "flex-row-reverse"
+        )}
+      >
+        {node}
+        <RecipientTags tags={recipients} />
+      </div>
+    );
   /* ⚠ `w-full` so the column is the row's full width whatever the article's
      align-items says — the pill hugs its content, the bodies must not. */
   const body = (
@@ -356,7 +411,12 @@ export function AuthoredRow({
           to one surface"*. ⚠ The ROW still carries `routedAgentIds`
           (`view-model-rows.ts`): the filter and the tests read it, and an older
           post routed before this change keeps its stored answer. Nothing draws
-          it. */}
+          it.
+          ⚠ **AND THE ADDRESS CAME BACK AS CHROME ON 2026-09-22, ONE LEVEL UP** —
+          Samuel's decision #2200 option 1 moved the consolidation the other way:
+          the tag is drawn from the stamped `to=` set on the HEADER line
+          ({@link recipients}), and agents stop typing recipients into bodies. The
+          principle is unchanged and still one surface; this lane is still not it. */}
       {children}
     </div>
   );
@@ -373,7 +433,7 @@ export function AuthoredRow({
           flash && `${FLASH_TINT} duration-150`
         )}
       >
-        {pill}
+        {pill && header(pill)}
         {body}
       </article>
     );
@@ -409,22 +469,23 @@ export function AuthoredRow({
           GUTTER[edge]
         )}
       >
-        {pill && (
-          <span
-            className={cn(
-              ACCENT_FRAME,
-              ACCENT_RADIUS[edge],
-              ACCENT_FRAME_EDGE[edge],
-              GUTTER_PULL[edge]
-            )}
-            /* ⚠ THE ONE VALUE TAILWIND CANNOT CARRY FOR A RUNTIME KEY — the palette
-               member is chosen by DATA, so `border-[var(--agent-color-NN)]` is a class
-               the JIT never sees. See {@link ACCENT_FRAME}. */
-            style={{ borderColor: accent.paint }}
-          >
-            {pill}
-          </span>
-        )}
+        {pill &&
+          header(
+            <span
+              className={cn(
+                ACCENT_FRAME,
+                ACCENT_RADIUS[edge],
+                ACCENT_FRAME_EDGE[edge],
+                GUTTER_PULL[edge]
+              )}
+              /* ⚠ THE ONE VALUE TAILWIND CANNOT CARRY FOR A RUNTIME KEY — the palette
+                 member is chosen by DATA, so `border-[var(--agent-color-NN)]` is a class
+                 the JIT never sees. See {@link ACCENT_FRAME}. */
+              style={{ borderColor: accent.paint }}
+            >
+              {pill}
+            </span>
+          )}
         {body}
       </div>
     </article>

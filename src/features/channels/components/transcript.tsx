@@ -47,6 +47,8 @@ import { agentBoxOf, agentPostAccent } from "./agent-box-rule";
 import { ThreadCardMessage } from "./thread-card-row";
 import { EscalationCardMessage } from "./escalation-card-row";
 import { MessageMarkdown } from "./message-markdown";
+// ⚠ IDS → WORDS, IN ONE PLACE (2026-09-22) — the delivered-to faces beside the pill.
+import { recipientTags } from "../lib/recipient-tags";
 import type { AuthorIndex } from "./view-model";
 import type { MessageRow, ReceiptRow, TranscriptRow } from "./view-model-rows";
 
@@ -373,6 +375,15 @@ function Message({
   const agentName = row.agentId
     ? (index.agents.get(row.agentId)?.displayName ?? null)
     : null;
+  // ⚠ **WHO IT REACHED, RESOLVED HERE FOR THE SAME REASON THE NAME ABOVE IS** (2026-09-22,
+  // decision #2200 option 1): the row carries the stamped IDS and the words are read off the
+  // live index at render, so a rename re-faces every tag with nothing stored rewritten. The
+  // agent-row gate is the ROW's (`view-model-rows.ts › toMessageRow`), not a second one here.
+  const recipients = recipientTags(
+    { agentIds: row.recipientAgentIds, userIds: row.recipientUserIds },
+    index.agents,
+    index.byId
+  );
   const body = (
     <MessageMarkdown
       text={row.body}
@@ -429,6 +440,7 @@ function Message({
       external={row.external}
       agentId={row.agentId}
       agentName={agentName}
+      recipients={recipients}
       continuation={row.continuation}
       flash={flash}
       accent={box && agentPostAccent(box)}

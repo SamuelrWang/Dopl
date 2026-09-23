@@ -18,6 +18,16 @@
  * places, and for a post sent by this build it would sit beside the identical tag
  * in the body.
  *
+ * ⚠ **AND ON 2026-09-22 SAMUEL MOVED THE CONSOLIDATION THE OTHER WAY, FOR AGENT
+ * ROWS ONLY** (decision #2200 option 1: *"Render the tag from the real address"*).
+ * The address is chrome again — drawn from the stamped `to=` set beside the
+ * attribution pill (`recipient-tags.tsx`, `lib/recipient-tags.ts`) — and the tool
+ * description now tells agents not to type recipients at all, so the doubling this
+ * file was written about does not come back. **Every case below is a HUMAN's row
+ * and every one of them still holds**: a person's composer still writes the handle
+ * into their words, so their row still faces nothing. `recipient-tags.test.tsx`
+ * carries the new half, including that gate.
+ *
  * ⚠ **THE STORED DATA IS UNTOUCHED AND STILL READ.** `recipient_agent_ids` and
  * `metadata.wake_reason` are still stamped, still carried on the row
  * (`view-model-rows.ts › routedAgentIds`) and still what every machine routes on;
