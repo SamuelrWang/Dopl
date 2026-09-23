@@ -80,18 +80,18 @@ test("ONE LINE PER ONTOLOGY: name, LEVEL, and the exact dopl_ontology call", () 
   assert.equal(lines[1], "ONTOLOGIES YOU CAN REACH IN THIS CHANNEL:");
   assert.equal(
     lines[2],
-    `- "Pipeline" (EDIT) — read it with mcp__dopl__dopl_ontology op "map", cluster "${PIPELINE.id}", workspace "${PIPELINE.workspaceId}"; you may also write to it with the write ops.`
+    `- "Pipeline" (EDIT) — read it with mcp__dopl__dopl_ontology op "map", cluster "${PIPELINE.id}"; you may also write to it with the write ops.`
   );
   assert.match(lines[3], /^- "Roster" \(VIEW\)/);
   assert.match(lines[3], /READ ONLY — a write to it is refused/);
 });
 
-test("THE WORKSPACE CLAUSE IS OMITTED WHEN THE ID IS UNKNOWN — never printed blank", () => {
-  const [, , line] = ontologyReachLines({
-    ontologies: [{ ...PIPELINE, workspaceId: null }],
-  });
-  assert.match(line, /cluster "11111111-1111-4111-8111-111111111111";/);
-  assert.doesNotMatch(line, /workspace ""/);
+test("NO WORKSPACE CLAUSE, known id or not — dopl_ontology refuses `workspace=`", () => {
+  for (const workspaceId of [PIPELINE.workspaceId, null]) {
+    const [, , line] = ontologyReachLines({ ontologies: [{ ...PIPELINE, workspaceId }] });
+    assert.match(line, /cluster "11111111-1111-4111-8111-111111111111";/);
+    assert.doesNotMatch(line, /workspace/);
+  }
 });
 
 // ── 3. WHAT IT REFUSES TO SAY ───────────────────────────────────────────────

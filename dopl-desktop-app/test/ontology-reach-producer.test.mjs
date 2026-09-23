@@ -161,7 +161,7 @@ test("the producer's field names are the RENDERER's — the two halves actually 
   const lines = ontologyReachLines({ ontologies: boot().narrow([ONE]) });
   assert.ok(lines.length > 0, "the block must render from the producer's shape");
   assert.match(lines.join("\n"), /"Sales" \(EDIT\)/);
-  assert.match(lines.join("\n"), new RegExp(`cluster "${ONE.id}", workspace "${ONE.workspaceId}"`));
+  assert.match(lines.join("\n"), new RegExp(`cluster "${ONE.id}";`));
   // …and the empty answer stays byte-identical to the pre-module turn.
   assert.deepEqual(ontologyReachLines({ ontologies: [] }), []);
 });
