@@ -40,7 +40,6 @@
 const { Notification } = require('electron');
 const io = require('./listener-io');
 const targeting = require('./targeting');
-const channelPrefs = require('./channel-prefs'); // the shared windowless message derivation
 // ⚠ `require('./session-model')` LEFT ON 2026-09-21 (U5). This lane aliased the channel's stored
 // model through the DEFAULT runtime's table, which silently dropped a pick made on any other
 // runtime; `channel-prefs.js › getLaunchModelLink` resolves it on the channel's own runtime now.
@@ -236,15 +235,6 @@ async function launchResponderSession(entry, m, { taskId, toolProfile, requester
   // carries one (server-stamped), else autonomous — either way the session runs
   // under the turn / idle / cost caps, so it cannot self-sustain unbounded.
   const mode = targeting.metaStr(m, 'taskMode') || 'autonomous';
-  // 2026-08-20 — THE WINDOWLESS POSTURE. There is no Accept UI, so the message axis is
-  // floored at auto_inbound; the OUT half is the channel's durable auto-send setting.
-  // ⚠ THE RULE LIVES IN channel-prefs (`windowlessMessageMode`) AND IS SHARED WITH THE
-  // REQUESTER LANE (`session-ipc-ops.js › sessions:launch`). It was inlined here while
-  // that lane pinned its own answer, which is exactly the drift the shared function
-  // removes. ⚠ Its second argument was the ARM's message axis and is now always null
-  // (the arm is deleted) — the parameter STAYS because the requester lane still passes a
-  // real value, and one derivation with two inputs is the point.
-  const messages = channelPrefs.windowlessMessageMode(entry.channel.id, null);
   // No launcher pick and no identity on this lane, so the channel's runtime (else the default)
   // decides (`launch-default.js › resolveLaunchRuntime`, ruling 5) — it never refuses here.
   const launch = await require('./runtime/launch-default').resolveLaunchRuntime({ channelId: entry.channel.id });
@@ -292,7 +282,7 @@ async function launchResponderSession(entry, m, { taskId, toolProfile, requester
     // (`sessions:launch`) and to nothing a peer can trigger. ⚠ THE WINDOWLESS FLOOR still applies
     // on top of it (`session-profiles.js › floorWindowlessTool`) — that is a fact about having no
     // gate surface, not a posture anybody chose.
-    startModes: { tools: registry.capability.narrowestToolMode(registry.descriptorFor(runtimeId)), messages },
+    startModes: { tools: registry.capability.narrowestToolMode(registry.descriptorFor(runtimeId)), messages: 'ask' },
   });
   if (res && res.sessionId) {
     diag('responder session launched', String(res.sessionId).slice(0, 8), 'profile', toolProfile);

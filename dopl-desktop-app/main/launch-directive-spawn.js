@@ -83,7 +83,8 @@ async function resolveModel(runtimeId, d, identity) {
  * and the live channel value — the echo is what it enforces.
  */
 function planPosture(d, runtimeId, chainAllowed) {
-  const order = require('./session-profiles').toolModesFor(runtimeId); // that runtime's words, narrowest first
+  const profiles = require('./session-profiles');
+  const order = profiles.toolModesFor(runtimeId); // that runtime's words, narrowest first
   const askedTools = d.startToolMode && order.indexOf(d.startToolMode) !== -1 ? d.startToolMode : '';
   if (d.startToolMode && !askedTools) {
     diag('launch-directive: tool mode', d.startToolMode, 'is not a', runtimeId || 'default-runtime',
@@ -94,7 +95,7 @@ function planPosture(d, runtimeId, chainAllowed) {
     ceiling: channelPrefs.launchPostureFor(d.channelId, runtimeId),
     chainRequested: d.chain,
     chainAllowed,
-    floorMessages: (m) => channelPrefs.windowlessMessageMode(d.channelId, m),
+    floorMessages: profiles.floorWindowlessMessage,
     toolOrder: order, messageOrder: wire.MESSAGE_MODES,
   });
   if (plan.clamped) {

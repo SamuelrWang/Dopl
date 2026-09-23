@@ -267,40 +267,6 @@ function setLaunchSelection(channelId, patch) {
 }
 
 /**
- * THE WINDOWLESS MESSAGE AXIS — ONE derivation, both windowless lanes.
- *
- * A windowless session has NO Accept UI, so the IN half is floored at
- * `auto_inbound` on every shape (INVARIANTS §11: the consent that admitted the
- * thread is the human decision, and a counterparty reply feeds as a turn). The
- * OUT half is a picked posture that already says "send out".
- *
- * ⚠ **AUTO-SEND IS NO LONGER FOLDED IN HERE (2026-08-31, Samuel's ruling).** The toggle is read
- * LIVE at decision time — `session-private.js › effectiveMessageMode`, the single Axis-B read —
- * and it must have exactly ONE consumer: the frozen copy this function used to bake into
- * `state.messageMode` at launch is precisely why flipping the switch did nothing for sessions
- * already running, and why a reopened/recreated/resumed shell (which drops its startModes — H2)
- * silently lost it while the control still said ON. A setting with a live reader and a frozen
- * copy is two settings that disagree; the frozen copy is the one that goes.
- *
- * ⚠ ONE FUNCTION BECAUSE THE LANES MUST NOT DRIFT. `trigger.js ›
- * launchResponderSession` passes NULL (it said "derives it from the consumed ARM" until
- * 2026-08-20; the arm is deleted — F-233 — and that lane now supplies no posture at all), and
- * `session-ipc-ops.js › sessions:launch` passes the DURABLE posture. The inputs differ and the
- * rule does not; two copies of "does this pick mean auto-out" is how one lane starts posting
- * without the other.
- * ⚠ AND THERE IS A THIRD LANE SINCE 2026-08-20 (F-236): a mode set on a session ALREADY
- * RUNNING. It does not call this function — it has no channel and no auto-send to read — but it
- * must land on the same floor, so both defer to `session-profiles.js › floorWindowlessMessage`
- * and `test/session-mode-floor.test.mjs` pins the two against each other mode for mode.
- * ⚠ WIDEN-ONLY: there is no return value below `auto_inbound`. A posture of
- * `ask` cannot switch the floor off, because there is nothing to ask on.
- */
-function windowlessMessageMode(channelId, picked) {
-  const autoOut = picked === 'auto_outbound' || picked === 'auto_both';
-  return autoOut ? 'auto_both' : 'auto_inbound';
-}
-
-/**
  * The channel's posture for ONE runtime — `{ tools, messages }`, messages UNFLOORED. The ceiling a
  * directive or a per-agent pick is clamped to, and the live Axis-A value a running session of that
  * runtime reads. `runtimeId` `''`/unregistered = the channel's selected runtime, else the default.
@@ -328,7 +294,7 @@ function launchStartModes(channelId, runtimeId) {
   const r = runtimeRecord(channelId, runtimeId);
   return {
     tools: r.tools,
-    messages: windowlessMessageMode(channelId, r.sel.messages),
+    messages: require('./session-profiles').floorWindowlessMessage(r.sel.messages),
     // ⚠ **THE NATIVE SETTINGS, AND THIS IS THE ONE PLACE THEY BECOME A SPAWN** (U5). Codex's
     // `sandbox_mode` had a READER (`runtime/codex/launch-spec.js › nativePair`) and **no producer
     // anywhere in the tree** — F-390's shape exactly, a control that writes nowhere. ⚠ CONTAINMENT
@@ -365,7 +331,6 @@ module.exports = {
   setLaunchSelection,
   getLaunchPosture,
   hasLaunchPosture,
-  windowlessMessageMode,
   launchStartModes,
   launchPostureFor,
 };

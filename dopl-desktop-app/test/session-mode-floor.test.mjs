@@ -193,32 +193,10 @@ test("LIVE: a session that is NOT windowless is left alone", () => {
 
 // ── 3. ONE RULE, TWO LANES ───────────────────────────────────────────────────────────
 
-test("the LAUNCH lane and the LIVE lane agree, mode for mode", () => {
-  // ⚠ TWO SPELLINGS OF ONE FLOOR IS HOW ONE LANE STARTS HOLDING MESSAGES THE OTHER RELEASES.
-  // `channel-prefs.js › windowlessMessageMode` is the launch-time derivation: it takes a picked
-  // mode and must land on exactly what the live clamp lands on.
-  // ⚠ IT NO LONGER TAKES AN AUTO-SEND SETTING (2026-09-06, item 8) — there is no such setting,
-  // so there is no arm to isolate and the whole domain is now driven below.
+test("the LAUNCH lane applies the SAME floor function, not a second spelling of it", () => {
   const prefs = read("channel-prefs.js");
-  const body = prefs.slice(
-    prefs.indexOf("function windowlessMessageMode("),
-    prefs.indexOf("function launchStartModes(")
-  );
-  // ⚠ THE INJECTED `getAutoSend` IS GONE (2026-09-06, item 8): `windowlessMessageMode` reads no
-  // send toggle any more, because there is no send toggle — the axis is the launch posture's
-  // `messages`, which this function already receives. The slice is built with NO free variables,
-  // which is the stronger statement: the launch-time floor depends on the mode alone.
-  const windowlessMessageMode = new Function(
-    `${body}\n return windowlessMessageMode;`
-  )();
-
-  for (const mode of MESSAGE_MODES) {
-    assert.equal(
-      windowlessMessageMode(CH, mode),
-      floorWindowlessMessage(mode),
-      `the two lanes disagree about ${mode}`
-    );
-  }
+  assert.match(prefs, /require\('\.\/session-profiles'\)\.floorWindowlessMessage\(/);
+  assert.ok(!/function windowlessMessageMode/.test(prefs), "the launch-time copy is gone");
 });
 
 test("2026-09-06: the GATE lane is a THIRD application of the same floor, and it agrees too", () => {

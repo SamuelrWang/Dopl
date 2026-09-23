@@ -109,7 +109,7 @@ test("H2: exactly THREE callers in main/ hand a posture in, and two may arm a do
   // threaded into `{ tools: (startModes && startModes.tools) || 'manual', … }` — a seam whose one
   // producer (`inboundApproved`) passed null, and which went with the inbound consent lane
   // (Samuel's ruling). The value is written where it applies now.
-  assert.match(read("trigger.js"), /startModes: \{ tools: registry\.capability\.narrowestToolMode\(registry\.descriptorFor\(runtimeId\)\), messages \}/,
+  assert.match(read("trigger.js"), /startModes: \{ tools: registry\.capability\.narrowestToolMode\(registry\.descriptorFor\(runtimeId\)\), messages: 'ask' \}/,
     "the responder lane hands in its runtime's most restrictive tool axis — a census member with no stored posture");
   // ⚠ THE PARKED-SHELL CARVE-OUT ASSERTED `[]` UNTIL SAMUEL'S SPAWN-IDLE RULING (2026-08-21).
   // `operatorArmed` lets a handed-in posture reach a DORMANT shell, and the argument for why the

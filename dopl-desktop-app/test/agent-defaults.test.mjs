@@ -63,8 +63,8 @@ const req = createRequire(import.meta.url);
 // ⚠ SLICED BY THE FENCE, NOT BY LINE NUMBERS — a comment added above the block must not move
 // this suite onto a different program.
 const block = sentinelBlock(SRC, "AGENT-DEFAULTS-VALIDATE");
-const { MESSAGE_MODES, FACTORY_DEFAULTS, normalizeDefaults, effectiveDefaults } = new Function(
-  `${block}\n return { MESSAGE_MODES, FACTORY_DEFAULTS, normalizeDefaults, effectiveDefaults };`
+const { normalizeDefaults, effectiveDefaults } = new Function(
+  `${block}\n return { normalizeDefaults, effectiveDefaults };`
 )();
 
 // ⚠ THE REAL SHAPE MODULE AND THE REAL ADAPTER VOCABULARY. `launch-selection.js` reaches nothing
@@ -80,19 +80,9 @@ const wire = (stored) => effectiveDefaults(sel, ctx, stored);
 
 const OK = { messages: "auto_inbound" };
 
-test("the messaging enum is exactly Dopl's own four, and it does NOT move with the runtime", () => {
-  // ⚠ SPELLED OUT rather than compared to another module's copy: these lists must AGREE, and a
-  // test that derived one from the other could not notice them drifting apart together.
-  // ⚠ AND THERE IS NO `TOOL_MODES` HERE ANY MORE (U5). Dopl — not either vendor — gates channel
-  // delivery, so messaging is core's on every adapter; the TOOL axis belongs to the selected
-  // runtime and is validated against its own declared options.
-  assert.deepEqual(MESSAGE_MODES, ["ask", "auto_inbound", "auto_outbound", "auto_both"]);
-});
-
 test("the factory answer is the MOST RESTRICTIVE one, and chaining is off", () => {
   // A machine that has never opened the Agents tab must seed nothing different from what a
   // channel got before this feature existed.
-  assert.deepEqual(FACTORY_DEFAULTS, { messages: "ask", agentChain: false });
   assert.deepEqual(wire(null), {
     tools: ctx.narrowestToolFor(""),
     messages: "ask",

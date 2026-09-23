@@ -83,6 +83,7 @@ function load(opts = {}) {
     if (id === "./runtime") return RUNTIME;
     if (id === "./launch-selection") return evaluate("launch-selection.js");
     if (id === "./channel-prefs") return evaluate("channel-prefs.js");
+    if (id === "./session-profiles") return createRequire(import.meta.url)(join(MAIN, "session-profiles.js"));
     // The three records `channel-prefs.js` re-exports and this file never touches. Stubbed rather
     // than evaluated because each opens its own store handle and none of them is under test here.
     if (id === "./channel-agent-chain") return { AGENT_CHAIN_KEY: "channelAgentChain", getAgentChain: () => false, setAgentChain: () => false };

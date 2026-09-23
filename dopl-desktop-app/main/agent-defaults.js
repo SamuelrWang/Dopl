@@ -69,17 +69,6 @@ const ctx = () => runtimeRegistry.selectionContext();
 // `main/launch-selection.js` module) and `ctx` (the adapter vocabulary), which is what keeps it
 // pure — and, since U5, what keeps ONE runtime's enums out of another runtime's validation.
 
-// The DOPL-OWNED half of the record, and the only enum this file still spells. ⚠ `tools` IS NOT
-// HERE ANY MORE: it is per-runtime now and is validated against the selected adapter's own
-// declared options, because `accept_edits` is not a word Codex speaks and refusing a Codex
-// operator's write for not saying it is F-390 in the defaults record.
-const MESSAGE_MODES = ['ask', 'auto_inbound', 'auto_outbound', 'auto_both'];
-
-// ⚠ THE SAME MOST-RESTRICTIVE ANSWER THE PER-CHANNEL RECORD RESOLVES TO, and it must stay the
-// same: this is what the Agents tab shows an operator who has never opened it, and a machine with
-// no defaults record must seed nothing different from what it seeds today.
-const FACTORY_DEFAULTS = { messages: 'ask', agentChain: false };
-
 /**
  * Validate an arbitrary value into a defaults record, or null when it is not one.
  *
@@ -112,7 +101,7 @@ function normalizeDefaults(sel, ctx, raw) {
   // unknown messaging value to `ask` and says so in its review; this record's contract is that such
   // a write is REJECTED WHOLE, so the check has to look at what was asked for.
   const asked = typeof raw.messages === 'string' ? raw.messages : '';
-  if (MESSAGE_MODES.indexOf(asked) === -1) return null;
+  if (sel.SELECTION_MESSAGE_MODES.indexOf(asked) === -1) return null;
   return {
     v: res.selection.v,
     runtime: res.selection.runtime,
@@ -250,11 +239,6 @@ function seedChannel(channelId) {
 }
 
 module.exports = {
-  DEFAULTS_KEY,
-  FACTORY_DEFAULTS,
-  MESSAGE_MODES,
-  normalizeDefaults,
-  effectiveDefaults,
   getAgentDefaults,
   setAgentDefaults,
   seedChannel,
