@@ -42,11 +42,19 @@ import {
   type ModelCatalogs,
 } from "../lib/model-catalog";
 
-/** How many times a settings read is repeated while a live roster is still being fetched. */
-export const MAX_RELOADS = 6;
-
-/** How long between those re-reads. ⚠ Comfortably under main's own 8s `model/list` leash. */
+/** How long between re-reads while a live roster is still being fetched. */
 export const RELOAD_DELAY_MS = 1200;
+
+/**
+ * The longest main takes to SETTLE a roster read: Codex's `--version` probe (5s,
+ * `codex/client.js › PROBE_TIMEOUT_MS`) plus its `model/list` leash (8s, `codex/models.js ›
+ * LIST_TIMEOUT_MS`); Claude's handshake probe is 10s. The budget must outlast it, or the picker
+ * stops asking before main answers and stays `loading` (F3).
+ */
+export const MAIN_ROSTER_SETTLE_MS = 13000;
+
+/** How many re-reads: enough to span {@link MAIN_ROSTER_SETTLE_MS} with a margin. */
+export const MAX_RELOADS = Math.ceil((MAIN_ROSTER_SETTLE_MS + 2000) / RELOAD_DELAY_MS);
 
 export interface RuntimeCatalogsState {
   /** Every runtime's catalog, keyed by runtime id. `{}` until a read answers. */
@@ -92,8 +100,11 @@ export function useRuntimeCatalogs(): RuntimeCatalogsState {
     [catalogs]
   );
 
+  // A catalog still `loading` after the whole budget is re-read on focus too (F3).
+  const stalled = loading && reloadsLeft <= 0;
+
   useEffect(() => {
-    if (!settledFailure || typeof window === "undefined") return;
+    if ((!settledFailure && !stalled) || typeof window === "undefined") return;
     const reread = () => {
       if (document.visibilityState === "hidden") return;
       setReloadsLeft(MAX_RELOADS);
@@ -105,7 +116,7 @@ export function useRuntimeCatalogs(): RuntimeCatalogsState {
       window.removeEventListener("focus", reread);
       document.removeEventListener("visibilitychange", reread);
     };
-  }, [settledFailure]);
+  }, [settledFailure, stalled]);
 
   useEffect(() => {
     if (!loading || reloadsLeft <= 0) return;
