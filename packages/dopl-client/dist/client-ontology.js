@@ -40,6 +40,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.OntologyMethods = void 0;
 const client_knowledge_js_1 = require("./client-knowledge.js");
 const ontology = __importStar(require("./ontology.js"));
+const revisions = __importStar(require("./revisions.js"));
 class OntologyMethods extends client_knowledge_js_1.KnowledgeMethods {
     getOntology(opts) {
         return opts?.view === "summary"
@@ -69,6 +70,18 @@ class OntologyMethods extends client_knowledge_js_1.KnowledgeMethods {
     }
     claimOntologyAnchor(objectId) {
         return ontology.claimOntologyAnchor(this.transport, objectId);
+    }
+    /** One object's per-FIELD history, newest first (DMP-002). */
+    listOntologyObjectRevisions(objectId, opts = {}) {
+        return revisions.listOntologyObjectRevisions(this.transport, objectId, opts);
+    }
+    /** The ontology (cluster) roll-up: its own revisions and every object's in it. */
+    listOntologyClusterRevisions(clusterId, opts = {}) {
+        return revisions.listOntologyClusterRevisions(this.transport, clusterId, opts);
+    }
+    /** Write ONE field's prior value back, under the object's Version (412 if stale). */
+    restoreOntologyObjectRevision(objectId, revisionId, expectedVersion) {
+        return revisions.restoreOntologyObjectRevision(this.transport, objectId, revisionId, expectedVersion);
     }
 }
 exports.OntologyMethods = OntologyMethods;

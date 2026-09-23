@@ -7,6 +7,7 @@
  * `agent_write_enabled` toggle for API-key (agent) callers.
  */
 import { ChannelMethods } from "./client-channels.js";
+import type { SkillHistory, SkillVersionMeta } from "./revisions.js";
 import type { CreateSkillInput, UpdateSkillPatch as SkillUpdatePatch } from "./skills.js";
 import type { ResolvedSkill, Skill, SkillFile, SkillWriteFileResult } from "./skill-types.js";
 export declare class SkillMethods extends ChannelMethods {
@@ -20,4 +21,14 @@ export declare class SkillMethods extends ChannelMethods {
     deleteSkill(slug: string): Promise<void>;
     readSkillBody(slug: string): Promise<SkillFile>;
     writeSkillBody(slug: string, body: string, expectedVersion?: string | null): Promise<SkillWriteFileResult>;
+    /** Body snapshots + structural events, newest first (DMP-002). */
+    getSkillHistory(slug: string, opts?: {
+        limit?: number;
+    }): Promise<SkillHistory>;
+    /** One snapshot with its full body. */
+    getSkillVersion(versionId: string): Promise<SkillVersionMeta & {
+        body: string;
+    }>;
+    /** Write a snapshot back as a NEW save, under the body's Version precondition (412 if stale). */
+    restoreSkillVersion(versionId: string, expectedVersion: string): Promise<SkillFile>;
 }

@@ -16,7 +16,8 @@ import { z } from "zod";
 import { RESPONSE_FORMAT_FIELD } from "./response-size";
 import { UNKNOWN_CALLER, type CallerIdentity } from "./identity";
 import type { DoplClient } from "@dopl/client";
-import { type RegisterTool, type ToolResponse } from "./respond";
+import { err, missingParams, unusedParams, type RegisterTool, type ToolResponse } from "./respond";
+import { opHistory, opRestore } from "./ontology-ops-history";
 import { dispatch } from "./ontology-ops-write";
 import { ONTOLOGY_ERRORS } from "./tool-errors";
 import { composeDescription } from "./tool-style";
@@ -37,7 +38,7 @@ import { composeDescription } from "./tool-style";
  * the write-op glosses into an MCP resource, so they stop being pushed to every
  * client that only reads the graph.
  */
-const ONTOLOGY_PROSE_BUDGET = 1_503; // ⚠ **UNMOVED AT 1,503 THROUGH THE 2026-09-11 VOCABULARY RULING, AND THAT IS THE POINT**: a cluster reads as an *ontology* and a column as an *object*, so four strings were respelled to net ZERO — the headline became the containment ladder `items in objects in ontologies` (±0), `op="map"`'s bullet lost `members`/`objects` for `items` (−4), and that −4 paid for `create_column`'s gloss naming an *object type* (+3) and `ONTOLOGY_ERRORS`' `cluster_not_found` noun (+1). Op names and arg names did not move. // ⚠ **1,506 → 1,503 (2026-09-09): BANKED, NOT RAISED.** The CHANGELOG lane part 2 added one clause to `policy` — every ontology write is filed per field in the changelog, which is a fact an agent cannot derive from any op — and paid for it out of this same description: five glosses trimmed to what only they say (the headline's routing tail, `op="get"`'s "Version token", `op="anchor"`'s phrasing, `create_column`'s, and "an agent gets its operator's" losing a word the ladder already carries). The three chars left over are banked here rather than left as headroom, which is the discipline `knowledge.ts › KB_PROSE_BUDGET` states: a ratchet that fails on a SHRINK is how a win gets kept.
+const ONTOLOGY_PROSE_BUDGET = 1_572; // ⚠ **1,503 → 1,572 (2026-09-23, +69, DMP-002): TWO NEW OPS, "history" and "restore"**, which `parity.test.ts` requires quoted; the served string stays under `HARD_DESCRIPTION_CEILING`. ⚠ **UNMOVED AT 1,503 THROUGH THE 2026-09-11 VOCABULARY RULING, AND THAT IS THE POINT**: a cluster reads as an *ontology* and a column as an *object*, so four strings were respelled to net ZERO — the headline became the containment ladder `items in objects in ontologies` (±0), `op="map"`'s bullet lost `members`/`objects` for `items` (−4), and that −4 paid for `create_column`'s gloss naming an *object type* (+3) and `ONTOLOGY_ERRORS`' `cluster_not_found` noun (+1). Op names and arg names did not move. // ⚠ **1,506 → 1,503 (2026-09-09): BANKED, NOT RAISED.** The CHANGELOG lane part 2 added one clause to `policy` — every ontology write is filed per field in the changelog, which is a fact an agent cannot derive from any op — and paid for it out of this same description: five glosses trimmed to what only they say (the headline's routing tail, `op="get"`'s "Version token", `op="anchor"`'s phrasing, `create_column`'s, and "an agent gets its operator's" losing a word the ladder already carries). The three chars left over are banked here rather than left as headroom, which is the discipline `knowledge.ts › KB_PROSE_BUDGET` states: a ratchet that fails on a SHRINK is how a win gets kept.
 
 /**
  * ⚠ RENDERED, NOT WRITTEN — `tool-style.ts › composeDescription` holds the
@@ -79,7 +80,8 @@ const ONTOLOGY_DESCRIPTION = composeDescription({
 - "set_template_field" — a DEFAULT field; new objects inherit it empty.
 - "set_attribute" / "set_relationship" / "set_action" — one attribute, one labeled edge (never onto itself), or something the OBJECT does.
 - "remove_template_field" / "remove_attribute" / "remove_relationship" / "remove_action" — drop one, by label or name.
-- "claim_anchor" — link the CALLING user to an object.`,
+- "claim_anchor" — link the CALLING user to an object.
+- "history" (object=/cluster= changelog), "restore" (one field back).`,
   ],
   errors: ONTOLOGY_ERRORS,
   examples: [
@@ -121,6 +123,8 @@ export function registerOntologyTool(
           "set_action",
           "remove_action",
           "claim_anchor",
+          "history",
+          "restore",
         ])
         .describe("Operation to perform."),
       query: z.string().optional().describe("resolve: name/description text to match."),
@@ -164,13 +168,34 @@ export function registerOntologyTool(
         .string()
         .optional()
         .describe(
-          "Object-mutating ops: the object's Version from a prior op=\"get\", which rejects the write if the object changed since; omit to overwrite blindly (last-writer-wins)."
+          "Object-mutating ops: the object's Version from a prior op=\"get\", which rejects the write if the object changed since; omit to overwrite blindly (last-writer-wins). Required on restore."
         ),
+      revision: z.string().optional().describe("restore (required): the revision id from op=\"history\"."),
       // ⚠ A16's response-size knob, on the FOUR read ops. ONE `.describe()`, in
       // `./response-size.ts`, shared with every tool that takes it: five wordings
       // is five chances to promise something `concise` does not do.
       response_format: RESPONSE_FORMAT_FIELD,
     },
-    (args): Promise<ToolResponse> => dispatch(client, args, caller)
+    (args): Promise<ToolResponse> => {
+      if (args.op === "history") {
+        const stray = unusedParams("history", args, ["object", "cluster"]);
+        if (stray) return Promise.resolve(stray);
+        if (args.object === undefined && args.cluster === undefined) {
+          return Promise.resolve(err('op="history" needs object= (one item) or cluster= (an ontology roll-up).'));
+        }
+        if (args.object !== undefined && args.cluster !== undefined) {
+          return Promise.resolve(err('op="history" takes object= OR cluster=, never both — nothing was read.'));
+        }
+        return opHistory(client, caller.userId, args);
+      }
+      if (args.op === "restore") {
+        const miss = missingParams("restore", args, ["object", "revision", "expected_version"]);
+        if (miss) return Promise.resolve(miss);
+        const stray = unusedParams("restore", args, ["object", "revision", "expected_version"]);
+        if (stray) return Promise.resolve(stray);
+        return opRestore(client, args as { object: string; revision: string; expected_version: string });
+      }
+      return dispatch(client, args, caller);
+    }
   );
 }

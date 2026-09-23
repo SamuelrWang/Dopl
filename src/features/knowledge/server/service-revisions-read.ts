@@ -100,7 +100,9 @@ export async function listBaseRevisions(
 export async function restoreEntryRevision(
   ctx: KnowledgeContext,
   entryId: string,
-  revisionId: string
+  revisionId: string,
+  /** The `X-Updated-At` precondition — the entry's Version. Stale → 412; absent → last writer wins. */
+  expectedUpdatedAt?: string
 ): Promise<void> {
   const entry = await getEntry(ctx, entryId);
   const reach = revisionReach([
@@ -115,7 +117,7 @@ export async function restoreEntryRevision(
         body: source.payload.body ?? "",
         ...(source.payload.title ? { title: source.payload.title } : {}),
       },
-      undefined,
+      expectedUpdatedAt,
       { op: "restore", summary: restoreSummary(source) }
     );
   });

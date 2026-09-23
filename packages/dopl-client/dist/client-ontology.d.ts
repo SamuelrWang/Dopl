@@ -3,6 +3,7 @@
  * delegation to `ontology.ts`; no HTTP here.
  */
 import { KnowledgeMethods } from "./client-knowledge.js";
+import type { ContentRevisionPage, RevisionPageOpts } from "./revisions.js";
 import type { OntologyCluster, OntologyClusterCreateInput, OntologyClusterPatch, OntologyObject, OntologyObjectCreateInput, OntologyObjectPatch, OntologySnapshot, OntologySummary } from "./ontology-types.js";
 export declare class OntologyMethods extends KnowledgeMethods {
     /**
@@ -30,4 +31,10 @@ export declare class OntologyMethods extends KnowledgeMethods {
     updateOntologyObject(objectId: string, patch: OntologyObjectPatch, expectedVersion?: string): Promise<OntologyObject>;
     deleteOntologyObject(objectId: string): Promise<void>;
     claimOntologyAnchor(objectId: string): Promise<OntologyObject>;
+    /** One object's per-FIELD history, newest first (DMP-002). */
+    listOntologyObjectRevisions(objectId: string, opts?: RevisionPageOpts): Promise<ContentRevisionPage>;
+    /** The ontology (cluster) roll-up: its own revisions and every object's in it. */
+    listOntologyClusterRevisions(clusterId: string, opts?: RevisionPageOpts): Promise<ContentRevisionPage>;
+    /** Write ONE field's prior value back, under the object's Version (412 if stale). */
+    restoreOntologyObjectRevision(objectId: string, revisionId: string, expectedVersion: string): Promise<OntologyObject>;
 }

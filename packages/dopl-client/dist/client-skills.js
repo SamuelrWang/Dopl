@@ -44,6 +44,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.SkillMethods = void 0;
 const client_channels_js_1 = require("./client-channels.js");
 const skills = __importStar(require("./skills.js"));
+const revisions = __importStar(require("./revisions.js"));
 class SkillMethods extends client_channels_js_1.ChannelMethods {
     listSkills() {
         return skills.listSkills(this.transport);
@@ -65,6 +66,18 @@ class SkillMethods extends client_channels_js_1.ChannelMethods {
     }
     writeSkillBody(slug, body, expectedVersion) {
         return skills.writeSkillBody(this.transport, slug, body, expectedVersion);
+    }
+    /** Body snapshots + structural events, newest first (DMP-002). */
+    getSkillHistory(slug, opts = {}) {
+        return revisions.getSkillHistory(this.transport, slug, opts);
+    }
+    /** One snapshot with its full body. */
+    getSkillVersion(versionId) {
+        return revisions.getSkillVersion(this.transport, versionId);
+    }
+    /** Write a snapshot back as a NEW save, under the body's Version precondition (412 if stale). */
+    restoreSkillVersion(versionId, expectedVersion) {
+        return revisions.restoreSkillVersion(this.transport, versionId, expectedVersion);
     }
 }
 exports.SkillMethods = SkillMethods;

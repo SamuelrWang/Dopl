@@ -17,7 +17,8 @@
 import { z } from "zod";
 import type { DoplClient } from "@dopl/client";
 import { UNKNOWN_CALLER, type CallerIdentity } from "./identity";
-import { ok, missingParams, type RegisterTool, type ToolResponse } from "./respond";
+import { ok, missingParams, unusedParams, type RegisterTool, type ToolResponse } from "./respond";
+import { opHistory, opRestore } from "./skills-ops-history";
 import { SKILL_ERRORS } from "./tool-errors";
 import { composeDescription, DESCRIPTION_MAX_CHARS } from "./tool-style";
 import { SKILL_AUTHORING_GUIDE } from "../prompts/skill-authoring-guide.js";
@@ -44,12 +45,14 @@ const SKILL_SHAPE = {
       "update",
       "set_visibility",
       "authoring_guide",
+      "history",
+      "restore",
     ])
     .describe("Operation to perform."),
   slug: z
     .string()
     .optional()
-    .describe("Skill slug OR stable id (the uuid from list/get output — survives renames, prefer it for held references). Required for get, read, write, update, set_visibility."),
+    .describe("Skill slug OR stable id (the uuid from list/get output — survives renames, prefer it for held references). Required for get, read, write, update, set_visibility, history, restore."),
   name: z.string().min(1).max(120).optional().describe("op=create (required) / op=update: skill name."),
   description: z.string().min(1).max(2000).optional().describe("op=create (required) / op=update: skill description."),
   when_to_use: z.string().min(1).max(2000).optional().describe("op=create (required) / op=update: when_to_use trigger."),
@@ -59,7 +62,9 @@ const SKILL_SHAPE = {
   agent_write_enabled: z.boolean().optional().describe("op=create: initial agent-write toggle. On op=update an agent passing this is rejected — it's a human-only protection setting (change it from the Dopl web UI)."),
   folder: z.string().max(80).nullable().optional().describe("op=create / op=update: organizing folder label (empty or null = unfiled). op=list: filter to skills in this folder."),
   body: z.string().max(1_048_576).optional().describe("op=create: initial SKILL.md content. op=write (required): the new full SKILL.md body."),
-  expected_version: z.string().optional().describe("op=write: the Version from a prior read. Required when overwriting an existing body — omitting it fails with 412; only force=true skips the check."),
+  expected_version: z.string().optional().describe("op=write: the Version from a prior read. Required when overwriting an existing body — omitting it fails with 412; only force=true skips the check. op=restore: required, the Version op=history printed."),
+  revision: z.string().optional().describe("op=history: preview this version's body. op=restore (required): the version id to write back, as a NEW save."),
+  limit: z.coerce.number().int().min(1).max(100).optional().describe("op=history: newest versions to list (default 20)."),
   force: z.boolean().optional().describe("op=write: overwrite even if the body changed since you read it. Discards the other edit — use only when intentional."),
   visibility: z.enum(["public", "private"]).optional().describe("op=set_visibility: 'public' shares the skill workspace-wide (every member can list and read it); 'private' reverses it (a knowledge base cannot). Owner or workspace-admin only. Team-scoped sharing is web-UI-managed."),
   detail: z.enum(["summary", "full"]).optional().describe("op=get: 'summary' returns metadata + body length WITHOUT the body (cheap orientation); 'full' (default) includes the SKILL.md body."),
@@ -99,7 +104,8 @@ const SKILL_DESCRIPTION = composeDescription({
 - "create" — a new skill. Call op="authoring_guide" first.
 - "update" — skill metadata.
 - "set_visibility" — share workspace-wide, or make it owner-only.
-- "authoring_guide" — the canonical skill-authoring framework.`,
+- "authoring_guide" — the canonical skill-authoring framework.
+- "history" (SKILL.md versions; revision= previews one), "restore" (writes it back).`,
   ],
   limits: { shape: SKILL_SHAPE, only: ["name"] },
   errors: SKILL_ERRORS,
@@ -173,6 +179,23 @@ export function registerSkillTools(
         }
         case "authoring_guide":
           return ok(SKILL_AUTHORING_GUIDE);
+        case "history": {
+          const miss = missingParams("history", args, ["slug"]);
+          if (miss) return miss;
+          const stray = unusedParams("history", args, ["slug", "revision", "limit"]);
+          if (stray) return stray;
+          return opHistory(client, args.slug as string, caller.userId, {
+            revision: args.revision,
+            limit: args.limit,
+          });
+        }
+        case "restore": {
+          const miss = missingParams("restore", args, ["slug", "revision", "expected_version"]);
+          if (miss) return miss;
+          const stray = unusedParams("restore", args, ["slug", "revision", "expected_version"]);
+          if (stray) return stray;
+          return opRestore(client, args.slug as string, args.revision as string, args.expected_version as string);
+        }
       }
     },
   );

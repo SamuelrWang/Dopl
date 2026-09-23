@@ -27,14 +27,16 @@ import { restoreObjectRevision } from "@/features/ontology/server/service-revisi
  * the service, because the restore writes through `updateObject` and the object
  * the caller wants back is the one their audience can see.
  */
-async function handlePost(_request: NextRequest, auth: WorkspaceAuthContext) {
+async function handlePost(request: NextRequest, auth: WorkspaceAuthContext) {
   try {
     const objectId = auth.params?.objectId;
     const revisionId = auth.params?.revisionId;
     if (!objectId) throw HttpError.badRequest("Missing objectId");
     if (!revisionId) throw HttpError.badRequest("Missing revisionId");
+    // Optional `X-Updated-At` precondition (the MCP restore always sends it). Mismatch → 412.
+    const expectedUpdatedAt = request.headers.get("x-updated-at") ?? undefined;
     const ctx = buildOntologyContext(auth);
-    await restoreObjectRevision(ctx, objectId, revisionId);
+    await restoreObjectRevision(ctx, objectId, revisionId, expectedUpdatedAt);
     const snapshot = await getSnapshot(ctx);
     const object = snapshot.objects[objectId];
     if (!object) throw HttpError.notFound("Object not found");

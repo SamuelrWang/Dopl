@@ -67,8 +67,8 @@ import {
   restoreEntryRevision,
 } from "@/features/knowledge/server/service";
 
-function req(url: string, method = "GET") {
-  return new NextRequest(new URL(url, "http://localhost"), { method });
+function req(url: string, method = "GET", headers: Record<string, string> = {}) {
+  return new NextRequest(new URL(url, "http://localhost"), { method, headers });
 }
 
 /** Next's second handler argument. The mocked wrapper ignores it — the real
@@ -133,8 +133,17 @@ describe("POST .../revisions/{revisionId}/restore", () => {
     expect(restoreEntryRevision).toHaveBeenCalledWith(
       expect.anything(),
       "e-1",
-      "rev-1"
+      "rev-1",
+      undefined
     );
+  });
+
+  it("forwards X-Updated-At as the restore's CAS precondition (DMP-002)", async () => {
+    await POST_RESTORE(
+      req("/api/knowledge/entries/e-1/revisions/rev-1/restore", "POST", { "x-updated-at": "v-7" }),
+      CTX_ARG
+    );
+    expect(restoreEntryRevision).toHaveBeenCalledWith(expect.anything(), "e-1", "rev-1", "v-7");
   });
 
   it("🔒 sits at the `member` write floor", async () => {

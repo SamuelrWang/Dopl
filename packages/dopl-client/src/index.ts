@@ -77,11 +77,20 @@ export type {
   KnowledgeWriteSource,
 } from "./knowledge-types.js";
 export type {
+  ContentRevision,
+  ContentRevisionPage,
+  RevisionOp,
+  RevisionPageOpts,
+  SkillHistory,
+  SkillVersionMeta,
+} from "./revisions.js";
+export type {
   ResolvedSkill,
   ResolvedSkillReference,
   Skill,
   SkillAccessMode,
   SkillConnector,
+  SkillFile,
   SkillProvider,
   SkillStatus,
   SkillVisibility,

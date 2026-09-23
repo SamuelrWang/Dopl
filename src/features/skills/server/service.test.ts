@@ -21,6 +21,7 @@ vi.mock("./repository", () => ({
 vi.mock("./history", () => ({
   recordVersion: vi.fn(),
   recordEvent: vi.fn(),
+  findVersionWithBody: vi.fn(),
 }));
 
 vi.mock("@/features/teams/server/repository", () => ({
@@ -33,7 +34,7 @@ vi.mock("@/features/teams/server/repository", () => ({
 import * as repo from "./repository";
 import * as history from "./history";
 import * as teamsRepo from "@/features/teams/server/repository";
-import { deleteSkill, listSkills, updateSkill, writeBody } from "./service";
+import { deleteSkill, listSkills, restoreFileVersion, updateSkill, writeBody } from "./service";
 import { SkillStaleVersionError } from "./errors";
 
 const mockRepo = vi.mocked(repo);
@@ -320,5 +321,38 @@ describe("updateSkill sharing narrowing — nothing blocks it", () => {
 
     expect(saved.visibility).toBe("private");
     expect(mockRepo.updateSkillRow).toHaveBeenCalledTimes(1);
+  });
+});
+
+// ── restoreFileVersion CAS (DMP-002) ─────────────────────────────────
+
+describe("restoreFileVersion optimistic concurrency", () => {
+  beforeEach(() => {
+    mockHistory.findVersionWithBody.mockResolvedValue({
+      id: "ver-1", skillId: "skill-x", authorId: null, source: "web", createdAt: "t0", bodyBytes: 3, body: "old",
+    } as never);
+    mockRepo.findSkillById.mockResolvedValue(skill({ id: "skill-x" }));
+  });
+
+  it("a stale expected version refuses before any write", async () => {
+    mockRepo.readSkillBody.mockResolvedValue(file({ updatedAt: "v1", body: "new" }));
+    await expect(restoreFileVersion(ctx(), "ver-1", "v0")).rejects.toBeInstanceOf(SkillStaleVersionError);
+    expect(mockRepo.updateSkillBody).not.toHaveBeenCalled();
+  });
+
+  it("passes the expected version to the atomic CAS and records one version", async () => {
+    mockRepo.readSkillBody.mockResolvedValue(file({ updatedAt: "v1", body: "new" }));
+    mockRepo.updateSkillBody.mockResolvedValue(file({ updatedAt: "v2", body: "old" }));
+    const saved = await restoreFileVersion(ctx(), "ver-1", "v1");
+    expect(saved.updatedAt).toBe("v2");
+    expect(mockRepo.updateSkillBody.mock.calls[0][2]).toBe("v1");
+    expect(mockHistory.recordVersion).toHaveBeenCalledTimes(1);
+  });
+
+  it("a lost CAS race is a stale-version error, not a silent success", async () => {
+    mockRepo.readSkillBody.mockResolvedValue(file({ updatedAt: "v1", body: "new" }));
+    mockRepo.updateSkillBody.mockResolvedValue(null as never);
+    await expect(restoreFileVersion(ctx(), "ver-1", "v1")).rejects.toBeInstanceOf(SkillStaleVersionError);
+    expect(mockHistory.recordVersion).not.toHaveBeenCalled();
   });
 });

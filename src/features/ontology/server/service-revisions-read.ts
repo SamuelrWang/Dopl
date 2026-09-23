@@ -101,7 +101,9 @@ export async function listClusterRevisions(
 export async function restoreObjectRevision(
   ctx: OntologyContext,
   objectId: string,
-  revisionId: string
+  revisionId: string,
+  /** The `X-Updated-At` precondition — the object's Version. Stale → 412; absent → last writer wins. */
+  expectedUpdatedAt?: string
 ): Promise<void> {
   const row = await requireObject(ctx, objectId, "edit");
   const reach = revisionReach([
@@ -109,7 +111,7 @@ export async function restoreObjectRevision(
   ]);
   await restoreRevision(revisionId, reach, async (source) => {
     if (source.resourceId !== row.id) throw new RevisionNotFoundError(revisionId);
-    await updateObject(ctx, row.id, restorePatch(row, source, revisionId), undefined, {
+    await updateObject(ctx, row.id, restorePatch(row, source, revisionId), expectedUpdatedAt, {
       op: "restore",
       summary: restoreSummary(source),
     });

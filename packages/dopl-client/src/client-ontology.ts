@@ -5,6 +5,8 @@
 
 import { KnowledgeMethods } from "./client-knowledge.js";
 import * as ontology from "./ontology.js";
+import * as revisions from "./revisions.js";
+import type { ContentRevisionPage, RevisionPageOpts } from "./revisions.js";
 import type {
   OntologyCluster,
   OntologyClusterCreateInput,
@@ -72,5 +74,24 @@ export class OntologyMethods extends KnowledgeMethods {
 
   claimOntologyAnchor(objectId: string): Promise<OntologyObject> {
     return ontology.claimOntologyAnchor(this.transport, objectId);
+  }
+
+  /** One object's per-FIELD history, newest first (DMP-002). */
+  listOntologyObjectRevisions(objectId: string, opts: RevisionPageOpts = {}): Promise<ContentRevisionPage> {
+    return revisions.listOntologyObjectRevisions(this.transport, objectId, opts);
+  }
+
+  /** The ontology (cluster) roll-up: its own revisions and every object's in it. */
+  listOntologyClusterRevisions(clusterId: string, opts: RevisionPageOpts = {}): Promise<ContentRevisionPage> {
+    return revisions.listOntologyClusterRevisions(this.transport, clusterId, opts);
+  }
+
+  /** Write ONE field's prior value back, under the object's Version (412 if stale). */
+  restoreOntologyObjectRevision(
+    objectId: string,
+    revisionId: string,
+    expectedVersion: string
+  ): Promise<OntologyObject> {
+    return revisions.restoreOntologyObjectRevision(this.transport, objectId, revisionId, expectedVersion);
   }
 }

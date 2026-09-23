@@ -1,7 +1,7 @@
 import "server-only";
 import { PRIMARY_SKILL_FILE_NAME } from "../types";
 import type { SkillContext, SkillFile } from "../types";
-import { SkillFileNotFoundError, SkillNotFoundError } from "./errors";
+import { SkillFileNotFoundError, SkillNotFoundError, SkillStaleVersionError } from "./errors";
 import * as repo from "./repository";
 import * as history from "./history";
 import {
@@ -41,10 +41,12 @@ export async function getFileVersion(ctx: SkillContext, versionId: string) {
 /** Roll the body back to a snapshot. ⚠ Restore never rewrites history — it
  *  writes the old body as a NEW save, minting a fresh version. No-ops when the
  *  body already matches. No structural event: the version snapshot is the
- *  record. */
+ *  record. `expectedUpdatedAt` (the `X-Updated-At` precondition, the body's
+ *  Version) makes it a CAS like `writeBody`: stale → 412, absent → as before. */
 export async function restoreFileVersion(
   ctx: SkillContext,
-  versionId: string
+  versionId: string,
+  expectedUpdatedAt?: string
 ): Promise<SkillFile> {
   const version = await getFileVersion(ctx, versionId);
   const skill = await repo.findSkillById(ctx.workspaceId, version.skillId);
@@ -53,12 +55,20 @@ export async function restoreFileVersion(
   // readSkillBody excludes trashed skills, so rolling one back 404s.
   const file = await repo.readSkillBody(ctx.workspaceId, skill.id);
   if (!file) throw new SkillFileNotFoundError(skill.slug, PRIMARY_SKILL_FILE_NAME);
+  if (expectedUpdatedAt && file.updatedAt !== expectedUpdatedAt) {
+    throw new SkillStaleVersionError(expectedUpdatedAt, file.updatedAt);
+  }
   if (file.body === version.body) return file;
-  const saved = await repo.updateSkillBody(skill.id, {
-    body: version.body,
-    editedBy: ctx.userId,
-    editedSource: ctx.source,
-  });
+  const saved = await repo.updateSkillBody(
+    skill.id,
+    { body: version.body, editedBy: ctx.userId, editedSource: ctx.source },
+    expectedUpdatedAt
+  );
+  // null = the atomic CAS lost a race after the check above.
+  if (saved === null) {
+    const fresh = await repo.readSkillBody(ctx.workspaceId, skill.id);
+    throw new SkillStaleVersionError(expectedUpdatedAt!, fresh?.updatedAt ?? "concurrent");
+  }
   await history.recordVersion({
     ctx,
     skillId: skill.id,

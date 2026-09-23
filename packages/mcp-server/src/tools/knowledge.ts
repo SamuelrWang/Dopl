@@ -10,7 +10,8 @@ import { OFFSET_FIELD, RESPONSE_FORMAT_FIELD } from "./response-size";
 import { composeDescription } from "./tool-style";
 import { KB_ERRORS } from "./tool-errors";
 import { UNKNOWN_CALLER, type CallerIdentity } from "./identity";
-import { err, missingParams, type RegisterTool, type ToolResponse } from "./respond";
+import { err, missingParams, unusedParams, type RegisterTool, type ToolResponse } from "./respond";
+import { opHistory, opRestore } from "./knowledge-ops-history";
 import {
   opGetTree,
   opListBases,
@@ -42,7 +43,7 @@ import type { WorkspaceDirectory } from "../workspace-directory";
 const KB_OPS = [
   "list_bases", "get_tree", "list_dir", "create_base", "update_base",
   "grant", "create_folder", "move_folder", "outline", "read_file",
-  "write_file", "move_file", "search", "set_visibility",
+  "write_file", "move_file", "search", "set_visibility", "history", "restore",
 ] as const;
 
 /** The published argument shape: registered, and rendered into the description's limits by
@@ -61,9 +62,9 @@ const KB_INPUT_SHAPE = {
     ),
   offset: OFFSET_FIELD,
   op: z.enum(KB_OPS).describe("Operation to perform."),
-  base: z.string().optional().describe("Base slug or id. Required for get_tree/list_dir/update_base/grant/create_folder/move_folder/read_file/write_file/move_file; optional scope for search."),
+  base: z.string().optional().describe("Base slug or id. Required for every op but list_bases/create_base/search (optional scope there)."),
   section: z.string().max(300).optional().describe('read_file: only this HEADING\'s section, down to the next heading of the same or higher level — case-insensitive; an unknown one answers with the outline. write_file: replace that section (`body` is its new content), appended at "##" if absent.'),
-  path: z.string().optional().describe("Path within the base. list_dir: '/' or '' for root. create_folder: required, e.g. 'projects/foo'. outline/read_file: required entry path. write_file: entry path — required unless you pass `title` (then the title becomes the path). There is no delete op — deletion is app-only."),
+  path: z.string().optional().describe("Path within the base. list_dir: '/' or '' for root. create_folder: required, e.g. 'projects/foo'. outline/read_file/history/restore: required entry path. write_file: entry path — required unless you pass `title` (then the title becomes the path). There is no delete op — deletion is app-only."),
   from_path: z.string().optional().describe("move_folder/move_file: source path."),
   to_path: z.string().optional().describe("move_folder/move_file: destination path (leaf becomes the new name/title)."),
   name: z.string().optional().describe("create_base: required base name (1-120 chars). update_base: optional new name."),
@@ -72,7 +73,8 @@ const KB_INPUT_SHAPE = {
   body: z.string().max(1_048_576).optional().describe("write_file: required markdown body. Can't be empty — pass a single space for a deliberate stub."),
   title: z.string().optional().describe("write_file: the entry's title, which can't contain '/'. It RENAMES the path's last segment, and becomes the path itself when `path` is omitted."),
   excerpt: z.string().optional().describe("write_file: the entry's agent-facing summary (max 300), shown in get_tree/list_dir; on an update it changes only when provided."),
-  expected_version: z.string().optional().describe("write_file: the entry's Version from a prior read_file — required when overwriting (412 without it, and only force=true skips the check); creates need none."),
+  expected_version: z.string().optional().describe("write_file: the entry's Version from a prior read_file — required when overwriting (412 without it, and only force=true skips the check); creates need none. restore: required, the Version op=\"history\" printed."),
+  revision: z.string().optional().describe("history: preview this revision's snapshot. restore (required): the revision id to write back, as a NEW revision."),
   force: z.boolean().optional().describe("write_file: overwrite even if the entry changed since you read it. Discards the other edit. REFUSED if the entry moved — a forced write at a vacated path would duplicate it."),
   client_write_id: z
     .string()
@@ -85,9 +87,9 @@ const KB_INPUT_SHAPE = {
   query: z.string().optional().describe("search: required free-text query."),
   // coerce: some MCP clients send numbers as strings. Ranges live only in the zod bounds (`renderLimits` reads
   // them); the default stays in the describe because no schema keyword carries it.
-  limit: z.coerce.number().int().min(1).max(100).optional().describe("search: max hits (default 20)."),
+  limit: z.coerce.number().int().min(1).max(100).optional().describe("search: max hits; history: rows per page (default 20 each)."),
   entry_limit: z.coerce.number().int().min(1).max(1000).optional().describe("get_tree: max entries per page (default 400). Folders always ship in full."),
-  entry_cursor: z.string().optional().describe("get_tree: opaque cursor from a prior page's 'more entries' notice — fetches the next page."),
+  entry_cursor: z.string().optional().describe("get_tree/history: opaque cursor from a prior page's 'more' notice — fetches the next page."),
   visibility: z.enum(["public", "private"]).optional().describe("op=set_visibility: 'public' publishes a base you created to every member, ONE WAY ('private' is rejected). op=create_base: initial visibility — 'private' (default) = you and your own agents."),
   scope: z.enum(GRANT_SCOPE_VALUES).optional().describe(GRANT_SCOPE_ARG_DESCRIPTION),
   to: z.string().optional().describe(GRANT_TO_ARG_DESCRIPTION),
@@ -102,7 +104,7 @@ const KB_INPUT_SHAPE = {
 
 /** Above `tool-style.ts › DESCRIPTION_MAX_CHARS` by decision: the excess is the untrusted-content fence, not prose.
  *  Measured via `composeDescription`'s over-cap throw; lower it on a shrink, never raise it for prose. */
-const KB_PROSE_BUDGET = 1_294;
+const KB_PROSE_BUDGET = 1_371; // +77 (2026-09-23, DMP-002): two NEW OPS, "history" and "restore", which `parity.test.ts` requires quoted.
 
 /**
  * Rendered by `tool-style.ts › composeDescription`, which throws at import when over budget. Carries nothing an
@@ -123,7 +125,8 @@ const KB_DESCRIPTION = composeDescription({
 - "get_tree" — the tree, metadata only. Folders whole, ENTRIES are paged: 400 a call, entry_cursor for more.
 - "search" — over the BODIES of bases you can read: a ranked SAMPLE, not an exhaustive scan (20 by default); zero hits is not proof of absence.
 - "outline" (headings + what each costs, no body), "read_file", "list_dir", "write_file" (upsert — entries past ~1.5k chars carry ## headings, one topic each; writes land in the changelog), "move_file", "create_folder" (mkdir -p), "move_folder".
-- "create_base", "update_base", "set_visibility" (publish, one way), "grant" (lend one YOU made).`,
+- "create_base", "update_base", "set_visibility" (publish, one way), "grant" (lend one YOU made).
+- "history" (changelog; revision= previews one), "restore" (writes it back).`,
   ],
   limits: { shape: KB_INPUT_SHAPE, only: ["limit", "entry_limit"] },
   errors: KB_ERRORS,
@@ -259,6 +262,30 @@ export function registerKnowledgeTools(
           const miss = missingParams("search", args, ["query"]);
           if (miss) return miss;
           return opSearch(client, args.query as string, args.base, args.limit);
+        }
+        case "history": {
+          const miss = missingParams("history", args, ["base", "path"]);
+          if (miss) return miss;
+          const stray = unusedParams("history", args, ["base", "path", "revision", "limit", "entry_cursor"]);
+          if (stray) return stray;
+          return opHistory(client, args.base as string, args.path as string, caller.userId, {
+            revision: args.revision,
+            limit: args.limit,
+            cursor: args.entry_cursor,
+          });
+        }
+        case "restore": {
+          const miss = missingParams("restore", args, ["base", "path", "revision", "expected_version"]);
+          if (miss) return miss;
+          const stray = unusedParams("restore", args, ["base", "path", "revision", "expected_version"]);
+          if (stray) return stray;
+          return opRestore(
+            client,
+            args.base as string,
+            args.path as string,
+            args.revision as string,
+            args.expected_version as string,
+          );
         }
         case "set_visibility": {
           const miss = missingParams("set_visibility", args, ["base", "visibility"]);

@@ -9,6 +9,8 @@
 
 import { ChannelMethods } from "./client-channels.js";
 import * as skills from "./skills.js";
+import * as revisions from "./revisions.js";
+import type { SkillHistory, SkillVersionMeta } from "./revisions.js";
 import type {
   CreateSkillInput,
   UpdateSkillPatch as SkillUpdatePatch,
@@ -53,5 +55,20 @@ export class SkillMethods extends ChannelMethods {
     expectedVersion?: string | null
   ): Promise<SkillWriteFileResult> {
     return skills.writeSkillBody(this.transport, slug, body, expectedVersion);
+  }
+
+  /** Body snapshots + structural events, newest first (DMP-002). */
+  getSkillHistory(slug: string, opts: { limit?: number } = {}): Promise<SkillHistory> {
+    return revisions.getSkillHistory(this.transport, slug, opts);
+  }
+
+  /** One snapshot with its full body. */
+  getSkillVersion(versionId: string): Promise<SkillVersionMeta & { body: string }> {
+    return revisions.getSkillVersion(this.transport, versionId);
+  }
+
+  /** Write a snapshot back as a NEW save, under the body's Version precondition (412 if stale). */
+  restoreSkillVersion(versionId: string, expectedVersion: string): Promise<SkillFile> {
+    return revisions.restoreSkillVersion(this.transport, versionId, expectedVersion);
   }
 }

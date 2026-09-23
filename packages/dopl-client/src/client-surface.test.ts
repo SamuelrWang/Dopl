@@ -229,6 +229,16 @@ const PUBLIC_SURFACE = [
   "writeChannelArtifact",
   "writeKbFileByPath",
   "writeSkillBody",
+  // HISTORY + RESTORE (2026-09-23, DMP-002) — eight names over routes the app's
+  // Changelog panels already call. Every restore carries a Version precondition.
+  "getSkillHistory",
+  "getSkillVersion",
+  "listKbEntryRevisions",
+  "listOntologyClusterRevisions",
+  "listOntologyObjectRevisions",
+  "restoreKbEntryRevision",
+  "restoreOntologyObjectRevision",
+  "restoreSkillVersion",
 ] as const;
 
 /** Every method reachable on an instance, across the whole chain. */

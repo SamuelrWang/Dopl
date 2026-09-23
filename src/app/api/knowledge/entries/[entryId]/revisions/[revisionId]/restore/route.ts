@@ -27,14 +27,16 @@ import {
  * ⚠ THE RESPONSE IS THE RESTORED ENTRY, so the caller's cache can be patched
  * without a second read — the shape `PATCH .../entries/{id}` already answers.
  */
-async function handlePost(_request: NextRequest, auth: WorkspaceAuthContext) {
+async function handlePost(request: NextRequest, auth: WorkspaceAuthContext) {
   try {
     const entryId = auth.params?.entryId;
     const revisionId = auth.params?.revisionId;
     if (!entryId) throw HttpError.badRequest("entryId is required");
     if (!revisionId) throw HttpError.badRequest("revisionId is required");
+    // Optional `X-Updated-At` precondition (the MCP restore always sends it). Mismatch → 412.
+    const expectedUpdatedAt = request.headers.get("x-updated-at") ?? undefined;
     const ctx = buildKnowledgeContext(auth);
-    await restoreEntryRevision(ctx, entryId, revisionId);
+    await restoreEntryRevision(ctx, entryId, revisionId, expectedUpdatedAt);
     const entry = await readEntry(ctx, entryId);
     return NextResponse.json({ entry });
   } catch (err) {

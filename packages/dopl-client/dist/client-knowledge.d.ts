@@ -6,6 +6,7 @@
  * resolves to folder/entry rows.
  */
 import { WorkspaceMethods } from "./client-workspaces.js";
+import type { ContentRevisionPage, RevisionPageOpts } from "./revisions.js";
 import type { KbShelf, KnowledgeBase, KnowledgeBaseCreateInput, KnowledgeBaseListPayload, KnowledgeBaseUpdateInput, KnowledgeDirListing, KnowledgeEntry, KnowledgeFolder, KnowledgePathOpResult, KnowledgeReadFileResult, KnowledgeSearchHit, KnowledgeTreeSnapshot, KnowledgeWriteFileInput, KnowledgeWriteFileResult } from "./knowledge-types.js";
 export declare class KnowledgeMethods extends WorkspaceMethods {
     listKbBases(opts?: {
@@ -46,4 +47,8 @@ export declare class KnowledgeMethods extends WorkspaceMethods {
         baseSlug?: string;
         limit?: number;
     }): Promise<KnowledgeSearchHit[]>;
+    /** One entry's changelog, newest first (DMP-002). Rows carry the post-write snapshot. */
+    listKbEntryRevisions(entryId: string, opts?: RevisionPageOpts): Promise<ContentRevisionPage>;
+    /** Write a revision's snapshot back as a NEW revision, under the entry's Version (412 if stale). */
+    restoreKbEntryRevision(entryId: string, revisionId: string, expectedVersion: string): Promise<KnowledgeEntry>;
 }

@@ -86,6 +86,7 @@ exports.WRITE_OPS = {
         "set_action",
         "remove_action",
         "claim_anchor",
+        "restore",
     ]),
     dopl_kb: new Set([
         "create_base",
@@ -96,12 +97,14 @@ exports.WRITE_OPS = {
         "move_file",
         "set_visibility",
         "grant",
+        "restore",
     ]),
     dopl_skill: new Set([
         "create",
         "update",
         "write",
         "set_visibility",
+        "restore",
     ]),
     // update can widen visibility (a share); grant lends to another scope (`resource_grants`).
     dopl_agent: new Set(["create", "update", "grant"]),

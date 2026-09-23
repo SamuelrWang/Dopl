@@ -43,6 +43,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.KnowledgeMethods = void 0;
 const client_workspaces_js_1 = require("./client-workspaces.js");
 const kb = __importStar(require("./knowledge.js"));
+const revisions = __importStar(require("./revisions.js"));
 class KnowledgeMethods extends client_workspaces_js_1.WorkspaceMethods {
     listKbBases(opts = {}) {
         return kb.listKbBases(this.transport, opts);
@@ -97,6 +98,14 @@ class KnowledgeMethods extends client_workspaces_js_1.WorkspaceMethods {
     }
     searchKb(query, opts = {}) {
         return kb.searchKb(this.transport, query, opts);
+    }
+    /** One entry's changelog, newest first (DMP-002). Rows carry the post-write snapshot. */
+    listKbEntryRevisions(entryId, opts = {}) {
+        return revisions.listKbEntryRevisions(this.transport, entryId, opts);
+    }
+    /** Write a revision's snapshot back as a NEW revision, under the entry's Version (412 if stale). */
+    restoreKbEntryRevision(entryId, revisionId, expectedVersion) {
+        return revisions.restoreKbEntryRevision(this.transport, entryId, revisionId, expectedVersion);
     }
 }
 exports.KnowledgeMethods = KnowledgeMethods;

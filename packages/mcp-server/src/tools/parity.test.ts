@@ -87,11 +87,11 @@ describe("tool capture", () => {
 const READ_OPS: Record<string, string[]> = {
   // ⚠ `outline` is a READ that deliberately returns no body — `opOutline` calls
   // only `readKbFilePart({outline:true})`, whose response the server empties.
-  dopl_kb: ["list_bases", "get_tree", "list_dir", "outline", "read_file", "search"],
-  dopl_skill: ["list", "get", "read", "authoring_guide"],
+  dopl_kb: ["list_bases", "get_tree", "list_dir", "outline", "read_file", "search", "history"],
+  dopl_skill: ["list", "get", "read", "authoring_guide", "history"],
   dopl_chats: ["list", "get", "folders", "guide"],
   dopl_members: ["whoami", "list", "get", "teams", "get_team", "access_matrix", "my_access"],
-  dopl_ontology: ["map", "anchor", "resolve", "get"],
+  dopl_ontology: ["map", "anchor", "resolve", "get", "history"],
   // `opList` calls only `listAgentIdentities`; `opGet` resolves a ref through
   // the same list and then `getAgentIdentity`. Neither writes.
   dopl_agent: ["list", "get"],
