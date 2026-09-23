@@ -37,6 +37,7 @@ const channelDirs = require('../../channel-dirs');
 const store = require('../../session-store');
 const sessionOutbound = require('../../session-outbound');
 const sessionCredential = require('../../session-credential');
+const sessionDirected = require('../../session-directed');
 const capability = require('../capability');
 const { diag } = require('../../diag');
 
@@ -357,6 +358,9 @@ function start(spec) {
           threadId, expectedTurnId: activeTurnId, input,
         });
         if (steered && steered.turnId) activeTurnId = String(steered.turnId);
+        // 🔒 A STEER JOINS THE LIVE TURN — ONE `turn/completed` ANSWERS BOTH (CXP-3B). Core's
+        // directed capture over-covered it as a turn of its own; say so, or it never reports.
+        sessionDirected.steerJoined(s, text);
       }
     }
   })().catch((err) => frames.fail(err));

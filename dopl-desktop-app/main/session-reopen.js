@@ -395,9 +395,10 @@ function messageByTask(a) {
     // `rawText` rides beside the framed text and is display-only — the work lane shows the operator
     // what they said, and the FRAMED string is a prompt, not a caption. `private: true` tells the
     // lane this steer is the 1:1 lane.
+    const framed = (directed ? framing.frameDirectedTurn : framing.frameOperatorTurn)(s.nonce, text);
     deps.dispatch(s, {
       type: 'steer',
-      text: (directed ? framing.frameDirectedTurn : framing.frameOperatorTurn)(s.nonce, text),
+      text: framed,
       rawText: text,
       private: true,
       directed: !!directed, senderAgentId: (directed && directed.senderAgentId) || null, // ⚠ ATTRIBUTION — `session-narration.js` reads both. ⚠ THE SECOND IS A CAPTION AND AN UNVERIFIED ONE (F-376a): WHICH of the operator's own agents filed the direction, server-derived from `X-Dopl-Session-Id`, which proves nothing — nothing may gate on it, and the FENCE two lines up (`s.operatorUserId !== directed.operatorUserId`) is untouched by its presence
@@ -405,7 +406,8 @@ function messageByTask(a) {
     });
     // 🔒 AFTER THE DISPATCH (F-372) — a wake RESETS both windows. See `openPrivateTurn`.
     privateTurn.openPrivateTurn(s, inFlight);
-    if (directed) directedTurn.armAndOpen(s, directed, inFlight);
+    // ⚠ `framed` rides along so a runtime whose steer JOINS the live turn can say so (CXP-3B).
+    if (directed) directedTurn.armAndOpen(s, directed, inFlight, framed);
   } catch (_) {
     return { ok: false };
   }

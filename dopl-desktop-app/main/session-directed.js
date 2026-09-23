@@ -87,104 +87,136 @@ function readDirected(a) {
   return d;
 }
 
-/** Arm the capture and open its window, in the one order that is correct. ⚠ ONE CALL so a
- *  caller cannot arm without opening — an armed capture with a zero depth is spent by the
- *  FIRST `result` to arrive, which may be a channel turn's. */
-function armAndOpen(s, directed, turnInFlight) {
-  armDirected(s, directed.id, directed.workspaceId);
-  return openDirected(s, turnInFlight);
+/** Arm a capture for a direction just pushed and open its window, in one call. ⚠ ONE CALL so
+ *  a caller cannot arm without opening — a capture at depth zero would be spent by the FIRST
+ *  `result` to arrive, which may be a channel turn's.
+ *  `prompt` is the FRAMED text that was pushed; the Codex adapter matches it to say the push
+ *  JOINED a live turn ({@link noteSteerJoined}). Absent, the capture can never be joined. */
+function armAndOpen(s, directed, turnInFlight, prompt) {
+  if (!s || !directed || !directed.id) return 0;
+  const id = String(directed.id);
+  const list = captures(s);
+  // ⚠ One direction, one capture: a re-delivered id must not arm a second report.
+  const existing = list.find((c) => c.id === id);
+  if (existing) return existing.depth;
+  const c = {
+    id,
+    workspaceId: String(directed.workspaceId || ''),
+    // The last assistant text seen while this capture is armed.
+    text: '',
+    // ⚠ A DEPTH, exactly like the private window's: +1 when the agent is idle (the pushed
+    // message IS the next turn), +2 when a turn is already in flight and the runtime QUEUES the
+    // push behind it (Claude, `priority: 'next'`) — that turn's `result` spends one. It is its
+    // own counter because `privateDepth` is also moved by the OPERATOR's messages.
+    depth: turnInFlight ? 2 : 1,
+    inFlight: !!turnInFlight,
+    spent: 0, // `result`s seen since arming
+    ended: '', // the text the last NON-closing turn ended on
+    joined: false,
+    prompt: typeof prompt === 'string' && prompt ? prompt : null,
+  };
+  list.push(c);
+  s.directed = list;
+  return c.depth;
 }
 
 /**
- * ARM the capture for a direction just pushed. Returns the session for chaining.
- *
- * ⚠ **IT OVERWRITES RATHER THAN QUEUES, AND THAT IS A DELIBERATE, NARROW LOSS.** Two directions
- * pushed before the first turn ends would each want their own answer, and a session produces
- * one final text per turn — there is no way to attribute two answers to two directions from
- * inside this process. So the SECOND direction wins the capture and the first is left to
- * lazy-expire, which the MCP op already tells its caller not to cause: *"a second direction
- * says the same thing to a live agent twice"*. Reporting the same text to both would be worse
- * — it would tell one orchestrator its question was answered when a different one was.
+ * ⚠ **A QUEUE, NOT A SLOT (CXP-3B, 2026-09-22).** This used to be ONE capture that a second
+ * direction OVERWROTE, leaving the first to lapse. Measured live on Codex (direction 73c88154):
+ * a capture stranded by the join bug below was then silently replaced by the next direction,
+ * so the first row sat `claimed` beside a reply the operator could see. Each capture now keeps
+ * its OWN depth from the moment it was armed, and every `result` spends one from each — which
+ * is what attributes two answers to two directions when the runtime queues them as two turns.
  */
-function armDirected(s, directionId, workspaceId) {
-  if (!s) return s;
-  s.directed = {
-    id: String(directionId || ''),
-    workspaceId: String(workspaceId || ''),
-    // The last assistant text seen while this capture is armed.
-    text: '',
-    // ⚠ A DEPTH, exactly like the private window's and for the same reason: a `steer` QUEUES
-    // (`priority: 'next'`), so the turn that ends next may be a CHANNEL turn that was already
-    // in flight. Spending one per `result` is what makes the capture land on the right turn.
-    depth: 0,
-  };
-  return s;
+function captures(s) {
+  return Array.isArray(s && s.directed) ? s.directed : [];
 }
 
 /** Is a directed capture armed right now? The one question the narration tag asks. */
 function isDirectedTurn(s) {
-  return !!(s && s.directed && s.directed.id);
-}
-
-/**
- * OPEN the window for the pushed direction. ⚠ MIRRORS `session-private.js › openPrivateTurn`'s
- * arithmetic EXACTLY — +1 when the agent is idle (the pushed message IS the next turn), +2 when
- * a turn is already in flight (that turn's `result` spends one, leaving the directed turn
- * covered by the second). It is a separate counter rather than a read of `privateDepth` because
- * that one is also incremented by the OPERATOR's own messages, and a capture must not be spent
- * by a turn the operator opened.
- */
-function openDirected(s, turnInFlight) {
-  if (!isDirectedTurn(s)) return 0;
-  s.directed.depth += turnInFlight ? 2 : 1;
-  return s.directed.depth;
+  return captures(s).length > 0;
 }
 
 /** Record what the agent just said, while a capture is armed. ⚠ LAST ONE WINS: a turn may emit
  *  several `assistant` blocks and the FINAL text is the answer. */
 function noteDirectedText(s, text) {
-  if (!isDirectedTurn(s)) return;
+  const list = captures(s);
+  if (!list.length) return;
   const clean = safeReply(text);
-  if (clean) s.directed.text = clean;
+  if (!clean) return;
+  for (const c of list) c.text = clean;
 }
 
 /**
- * A TURN ENDED. Spend one of the window; when it closes, hand back what to report.
+ * 🔒 **THE PUSH JOINED THE TURN ALREADY RUNNING — CODEX'S `turn/steer` (CXP-3B, 2026-09-22).**
  *
- * ⚠ RETURNS `null` UNTIL THE DIRECTED TURN ITSELF ENDS, so the in-flight channel turn the `+2`
+ * The `+2` assumes a push while a turn is in flight becomes its OWN later turn, which is true on
+ * Claude and false on Codex: `turn/steer` appends the input to the ACTIVE turn, so ONE
+ * `turn/completed` answers both, the depth stopped at 1 with its text cleared, and the direction
+ * never reported. Called by the Codex adapter only AFTER the app-server accepted the steer, and
+ * only for the capture whose own framed prompt it carried — a join of some other push must not
+ * spend this one, or an in-flight channel turn's text would be reported as the answer.
+ *
+ * TWO ORDERS, ONE ANSWER. Usually the join lands BEFORE the joined turn's `result` and simply
+ * pays off the surplus unit (2 → 1). But the steer's response and `turn/completed` race on the
+ * frame queue, so the `result` may already have spent one and cleared the text; the join then
+ * proves THAT turn carried the direction, and the capture closes now on the text it ended with.
+ * Returns the captures that closed — the caller reports them, exactly as `observe` does.
+ */
+function noteSteerJoined(s, pushedText) {
+  const text = typeof pushedText === 'string' ? pushedText : '';
+  if (!text) return [];
+  const c = captures(s).find((x) => x.inFlight && !x.joined && x.prompt && text.includes(x.prompt));
+  if (!c) return [];
+  c.joined = true;
+  if (c.spent === 0) {
+    c.depth -= 1;
+    return [];
+  }
+  // ⚠ `spent === 1`: the joined turn already ended — its text is the answer.
+  s.directed = captures(s).filter((x) => x !== c);
+  if (!s.directed.length) s.directed = null;
+  return [{ id: c.id, workspaceId: c.workspaceId, reply: c.ended }];
+}
+
+/**
+ * A TURN ENDED. Spend one from every capture; hand back each one whose window just closed.
+ *
+ * ⚠ RETURNS `[]` UNTIL A DIRECTED TURN ITSELF ENDS, so the in-flight channel turn the `+2`
  * covers cannot carry its own final text back to the orchestrator as if it were the answer.
- * ⚠ CLEARS THE CAPTURE ON THE WAY OUT: one direction, one report, ever.
+ * ⚠ A CLOSED CAPTURE IS REMOVED ON THE WAY OUT: one direction, one report, ever.
  */
 function closeDirected(s) {
-  if (!isDirectedTurn(s)) return null;
-  s.directed.depth -= 1;
-  if (s.directed.depth > 0) {
-    // 🔒 **THE TEXT BELONGS TO THE TURN THAT JUST ENDED, NOT TO THE DIRECTION** (adversarial
-    // review, 2026-08-31). The `+2` covers a turn that was ALREADY IN FLIGHT — a channel turn,
-    // or the OPERATOR's own private turn — and `noteDirectedText` records any `assistant` line
-    // while the capture is armed. Without this clear, a directed turn that ends on tool output
-    // and says nothing would report the PREVIOUS turn's final text as its reply: a
-    // counterparty-facing answer, or the operator's own private words, written off-machine.
-    // That is the exact prohibition this module's header states.
-    s.directed.text = '';
-    return null;
+  const list = captures(s);
+  if (!list.length) return [];
+  const out = [];
+  const keep = [];
+  for (const c of list) {
+    c.depth -= 1;
+    c.spent += 1;
+    if (c.depth > 0) {
+      // Kept ONLY for a late steer join (`noteSteerJoined`), which proves this turn was the one.
+      c.ended = c.text;
+      // 🔒 **THE TEXT BELONGS TO THE TURN THAT JUST ENDED, NOT TO THE DIRECTION** (adversarial
+      // review, 2026-08-31). The `+2` covers a turn that was ALREADY IN FLIGHT — a channel turn,
+      // or the OPERATOR's own private turn. Without this clear, a directed turn that ends on tool
+      // output and says nothing would report the PREVIOUS turn's final text as its reply.
+      c.text = '';
+      keep.push(c);
+    } else {
+      out.push({ id: c.id, workspaceId: c.workspaceId, reply: c.text });
+    }
   }
-  const out = {
-    id: s.directed.id,
-    workspaceId: s.directed.workspaceId,
-    reply: s.directed.text,
-  };
-  s.directed = null;
+  s.directed = keep.length ? keep : null;
   return out;
 }
 
 /**
- * A QUERY WAS TORN DOWN: the capture is DROPPED and NOTHING IS REPORTED.
+ * A QUERY WAS TORN DOWN: every capture is DROPPED and NOTHING IS REPORTED.
  *
  * ⚠ **DROPPED, NOT FLUSHED, AND THE DIRECTION IS THE WRONG PLACE TO BE CLEVER.** A park, an
  * auth hold, a crash or an operator End means the turn owes no `result` — so any text captured
- * so far is a PARTIAL answer to a question that was never finished. Reporting it would hand an
- * orchestrator a half-answer indistinguishable from a complete one. The row lazy-expires, and
+ * so far is a PARTIAL answer to a question that was never finished. The row lazy-expires, and
  * "it lapsed" is the honest thing to tell a caller about a turn nobody finished.
  * ⚠ Called from the same three edges `session-private.js › resetPrivateTurn` is: the
  * `abortQuery` and `denyPending` effects, and `session-park.js › resumeParked`.
@@ -219,14 +251,23 @@ function observe(s, event) {
     return;
   }
   if (event.type !== 'result') return;
-  const done = closeDirected(s);
-  if (!done) return;
-  try {
-    // ⚠ Lazy-required: `agent-directions.js` reaches the network and the store, and this
-    // module is sliced and evaluated PURE by its suite.
-    void require('./agent-directions').reportDelivered(done);
-  } catch (_err) {
-    /* a failed report leaves the row to expire, which is the honest terminal state */
+  report(closeDirected(s));
+}
+
+/** THE CODEX ADAPTER'S HOOK — its `turn/steer` was accepted (CXP-3B). See `noteSteerJoined`. */
+function steerJoined(s, pushedText) {
+  report(noteSteerJoined(s, pushedText));
+}
+
+function report(closed) {
+  for (const done of closed) {
+    try {
+      // ⚠ Lazy-required: `agent-directions.js` reaches the network and the store, and this
+      // module is sliced and evaluated PURE by its suite.
+      void require('./agent-directions').reportDelivered(done);
+    } catch (_err) {
+      /* a failed report leaves the row to expire, which is the honest terminal state */
+    }
   }
 }
 
@@ -249,13 +290,13 @@ function observe(s, event) {
  */
 module.exports = {
   observe, // the engine's one hook
+  steerJoined, // CXP-3B: the Codex adapter's one hook
   readDirected,
   armAndOpen,
   REPLY_CAP,
   safeReply,
-  armDirected,
-  openDirected,
   isDirectedTurn,
+  noteSteerJoined, // CXP-3B: the Codex adapter's `turn/steer` joined the live turn
   noteDirectedText,
   closeDirected,
   resetDirected,

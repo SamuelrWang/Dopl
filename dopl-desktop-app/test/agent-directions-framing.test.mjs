@@ -52,11 +52,11 @@ test("CAPTURE: the LAST assistant text of the directed turn is what is reported"
   directed.armAndOpen(s, { id: DID, workspaceId: WS }, false);
   directed.noteDirectedText(s, "first");
   directed.noteDirectedText(s, "second and final");
-  assert.deepEqual(directed.closeDirected(s), {
+  assert.deepEqual(directed.closeDirected(s), [{
     id: DID,
     workspaceId: WS,
     reply: "second and final",
-  });
+  }]);
 });
 
 test("CAPTURE: a turn already IN FLIGHT is over-covered, so the answer lands on the right turn", () => {
@@ -65,9 +65,9 @@ test("CAPTURE: a turn already IN FLIGHT is over-covered, so the answer lands on 
   const s = {};
   directed.armAndOpen(s, { id: DID, workspaceId: WS }, true);
   directed.noteDirectedText(s, "the channel turn's own answer");
-  assert.equal(directed.closeDirected(s), null, "the in-flight turn reports nothing");
+  assert.deepEqual(directed.closeDirected(s), [], "the in-flight turn reports nothing");
   directed.noteDirectedText(s, "the direction's answer");
-  assert.equal(directed.closeDirected(s).reply, "the direction's answer");
+  assert.equal(directed.closeDirected(s)[0].reply, "the direction's answer");
 });
 
 test("CAPTURE: a torn-down query reports NOTHING — never a partial answer", () => {
@@ -77,7 +77,7 @@ test("CAPTURE: a torn-down query reports NOTHING — never a partial answer", ()
   directed.armAndOpen(s, { id: DID, workspaceId: WS }, false);
   directed.noteDirectedText(s, "half an answer");
   directed.resetDirected(s);
-  assert.equal(directed.closeDirected(s), null);
+  assert.deepEqual(directed.closeDirected(s), []);
   assert.equal(directed.isDirectedTurn(s), false);
 });
 
@@ -87,7 +87,7 @@ test("CAPTURE: an OPERATOR's own private turn leaves no trace on this lane", () 
   const s = {};
   directed.noteDirectedText(s, "what the operator typed");
   assert.equal(directed.isDirectedTurn(s), false);
-  assert.equal(directed.closeDirected(s), null);
+  assert.deepEqual(directed.closeDirected(s), []);
 });
 
 test("CAPTURE: the reply is bounded and control-stripped, and KEEPS its line breaks", () => {
