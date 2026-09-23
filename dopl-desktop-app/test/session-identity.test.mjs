@@ -17,6 +17,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
+import { codeOf } from "./helpers/source-probe.mjs";
 
 const require = createRequire(import.meta.url);
 const M = (p) => fileURLToPath(new URL("../main/" + p, import.meta.url));
@@ -154,11 +155,11 @@ test("session-engine: startSession merges the spec ids into the context for EVER
   // reached; a running directive spawn reaches this one, and an undefined profile reads as "not
   // read_only" through `kbReadable`, i.e. the turn would ORDER a hard-denied tool.
   assert.match(src, /framing\.buildFencedTurn\(\{ side: spec\.side, message: spec\.firstMessage, context: \{ \.\.\.context, profile: spec\.profile, mcpDiscovery: runtimeRegistry\.capability\.mcpDiscovery\([^}]*\) \}, nonce \}\)/);
-  assert.match(src, /\n {4}context, \/\//, "the SAME merged object is what the session carries");
-  assert.ok(!/context: spec\.context/.test(src), "no path keeps the un-merged context");
+  assert.match(codeOf(src), /\n {4}context,\s*\n/, "the SAME merged object is what the session carries");
+  assert.ok(!/context: spec\.context/.test(codeOf(src)), "no path keeps the un-merged context");
   // ⚠ …and the profile is NOT written INTO the merged object: `s.context` must stay
   // caller-shaped, so nothing a launch payload carries can pose as the session's profile.
-  assert.ok(!/channelId: spec\.channelId, workspaceId: spec\.workspaceId, profile/.test(src),
+  assert.ok(!/channelId: spec\.channelId, workspaceId: spec\.workspaceId, profile/.test(codeOf(src)),
     "the profile never joins the stored context");
 });
 

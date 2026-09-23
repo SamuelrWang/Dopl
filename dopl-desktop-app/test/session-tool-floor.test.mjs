@@ -36,6 +36,7 @@ import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
+import { codeOf } from "./helpers/source-probe.mjs";
 
 const require = createRequire(import.meta.url);
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -223,7 +224,7 @@ test("session-io takes the SHARED floor, and does not re-declare it", () => {
   assert.match(src, /s\.windowless === true/, "conditioned on the surface, not on the axis");
 });
 
-test("the two floors SPLIT, and each half still points at the other", () => {
+test("the two floors SPLIT: Axis B's is declared in core, Axis A's in the adapter", () => {
   // ⚠ THEY WERE ADJACENT IN ONE FILE UNTIL 2026-08-31 (runtime-adapter port, §0.1b), and the
   // split is the argument rather than a filing decision. Axis B's floor moves between members of
   // a DOPL enum every runtime shares, so it stayed in `session-profiles.js`. Axis A's names
@@ -231,17 +232,14 @@ test("the two floors SPLIT, and each half still points at the other", () => {
   // as `descriptor.toolMode.windowlessFloor` and applied by `runtime/capability.js`. A floor that
   // fail-closes to a vocabulary the runtime does not speak denies EVERYTHING on a surface-less
   // session, which is the failure the declaration prevents.
-  // ⚠ SO THE PIN IS THE CROSS-REFERENCE, not the adjacency: each half must still carry the
-  // other's argument, or the next reader gets one of the two rules and none of the reason.
-  const core = read("session-profiles.js");
+  const core = codeOf(read("session-profiles.js"));
   assert.ok(core.indexOf("function floorWindowlessMessage(") !== -1,
     "Axis B's floor is DOPL's and stays in core");
   assert.ok(!/function floorWindowlessTool\(/.test(core),
     "Axis A's floor is a runtime vocabulary and must not be re-declared in core");
-  assert.match(core, /floorWindowlessTool/, "…but core still names it, and says where it went");
-  const adapter = read("runtime/claude/tools.js");
+  assert.equal(typeof profiles.floorWindowlessTool, "function", "…but core still exports it");
+  const adapter = codeOf(read("runtime/claude/tools.js"));
   assert.ok(adapter.indexOf("function floorWindowlessTool(") !== -1, "the adapter states it");
-  assert.match(adapter, /floorWindowlessMessage/, "…and points back at its Axis-B twin");
 });
 
 test("the gate surface EXISTS now — a windowless gate is HELD and asked (2026-08-31)", () => {

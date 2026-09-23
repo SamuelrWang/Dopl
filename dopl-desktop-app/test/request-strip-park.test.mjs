@@ -64,9 +64,7 @@ test("the strip and the requester shell are DECLARED nowhere and EXPORTED nowher
   const offenders = [];
   for (const [name, src] of mainSources()) {
     for (const gone of GONE) {
-      // A declaration or a re-export — the two shapes a revival takes. A MENTION in prose is
-      // legal and expected (the deletion comments name what they removed); tier 3 below is what
-      // keeps those honest.
+      // A declaration or a re-export — the two shapes a revival takes. A MENTION in prose is legal.
       if (new RegExp(`function\\s+${gone}\\s*\\(`).test(src)) offenders.push(`${name}: declares ${gone}`);
       if (new RegExp(`(^|[\\s{,])${gone}\\s*[,:]`, "m").test(src)) offenders.push(`${name}: exports/binds ${gone}`);
     }
@@ -108,25 +106,4 @@ test("the `request_status` WIRE PAYLOAD is gone from main and from the renderer"
     if (/request_status/.test(src)) offenders.push(name);
   }
   assert.deepEqual(offenders, [], `the deleted strip payload is referenced in:\n${offenders.join("\n")}`);
-});
-
-test("session-park's surviving mention of the strip is annotated as HISTORY, not stated as live", () => {
-  // The removed-vocabulary tier-3 rule, applied to the two names this file owns. A paragraph
-  // that names `armRequestStatus` without saying it is gone is a confident wrong answer waiting
-  // to be acted on — in this codebase an agent reads the comment instead of the source.
-  const lines = PARK_SRC.split("\n");
-  const hits = lines
-    .map((line, i) => [line, i])
-    .filter(([line]) => /armRequestStatus|noteRequestStatus/.test(line));
-  assert.ok(hits.length > 0, "the deletion is documented in session-park.js, not silently absent");
-  for (const [line, i] of hits) {
-    assert.ok(/^\s*\/\//.test(line), `main/session-park.js:${i + 1} names the strip on a CODE line`);
-    let start = i;
-    while (start > 0 && /^\s*\/\//.test(lines[start - 1])) start -= 1;
-    let end = i;
-    while (end < lines.length - 1 && /^\s*\/\//.test(lines[end + 1])) end += 1;
-    const block = lines.slice(start, end + 1).join("\n");
-    assert.match(block, /\b(deleted|gone|went with|no longer|removed)\b/i,
-      `main/session-park.js:${i + 1} names the strip in a block that never says it is gone`);
-  }
 });

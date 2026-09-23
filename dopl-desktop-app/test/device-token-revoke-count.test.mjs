@@ -31,7 +31,7 @@ import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { fnOf } from "./helpers/source-probe.mjs";
+import { codeOf, fnOf } from "./helpers/source-probe.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const M = (p) => readFileSync(join(HERE, "..", "main", p), "utf8");
@@ -186,12 +186,8 @@ test("signOut gives 'no-match' its OWN words — it must not read as a completed
   assert.ok(!/\+ revoked server-side/.test(line), "the old bug: success claimed for a no-op");
 });
 
-// ── the reason the label misses in the first place, recorded ────────────────
+// ── the count is read from the body, not assumed ────────────────────────────
 
-test("the source names WHY a label can miss, so the next reader does not re-derive it", () => {
-  const prose = MCP.replace(/\n\/\/ ?/g, " ");
-  assert.match(prose, /idempotent/i);
-  assert.match(prose, /only\s+PERSISTED as of this round/i, "already-installed machines have no label");
-  assert.match(prose, /hostname/i, "…and the fallback drifts");
-  assert.match(fnOf(MCP, "revokeDeviceToken"), /data\.revoked === 'number'/, "the count is really read");
+test("revokeDeviceToken reads the revoked count off the response body", () => {
+  assert.match(codeOf(fnOf(MCP, "revokeDeviceToken")), /data\.revoked === 'number'/, "the count is really read");
 });

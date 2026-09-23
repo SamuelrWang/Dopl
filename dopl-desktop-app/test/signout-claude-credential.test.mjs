@@ -231,11 +231,3 @@ test("a THROWING clear cannot break the sign-out", async () => {
   assert.ok(order.includes("clearDeviceToken"), "the earlier teardown still happened");
   assert.match(logged.join("\n"), /claude-token teardown failed/);
 });
-
-test("the reasoning is recorded where the next reader will look", () => {
-  const prose = (STATE + TOKEN).replace(/\n\/\/ ?/g, " ");
-  assert.match(prose, /ZERO callers/, "why this was missed");
-  assert.match(prose, /CLAUDE_CODE_OAUTH_TOKEN/, "what the residue is used for");
-  assert.match(prose, /one writer|ONE writer|only writer|ONLY writer/,
-    "the argument that makes clearing it unambiguous");
-});

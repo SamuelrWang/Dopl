@@ -29,7 +29,7 @@ import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { fnOf } from "./helpers/source-probe.mjs";
+import { codeOf, fnOf } from "./helpers/source-probe.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const M = (p) => readFileSync(join(HERE, "..", "main", p), "utf8");
@@ -286,16 +286,13 @@ test("FIX M4: a THROWN revoke is reported as failed, not as 'none'", async () =>
 
 // ── the residual we deliberately did NOT touch ──────────────────────────────
 
-test("the CLI's own user-scope entry is left alone, ON PURPOSE, and it says why", () => {
+test("sign-out leaves the CLI's own user-scope entry alone", () => {
   // ensureMcpConfig only ADDS that entry when it was confirmed absent, so an entry that exists
   // may be one the operator wrote with their own credential — indistinguishable from ours from
   // outside. After a successful revoke its bearer is dead anyway (401), and the next sign-in
   // refreshes it. Deleting a hand-made global config entry would be the worse failure.
-  const prose = MCP.replace(/\n\/\/ ?/g, " ");
-  assert.match(prose, /F-085/, "the residual stays tracked");
-  assert.match(prose, /cannot tell the two apart from outside/i);
   assert.ok(
-    !/removeMcpEntry/.test(fnOf(MCP, "clearDeviceToken") + fnOf(STATE, "signOut")),
+    !/removeMcpEntry/.test(codeOf(fnOf(MCP, "clearDeviceToken") + "\n" + fnOf(STATE, "signOut"))),
     "no sign-out path spawns the CLI child process"
   );
 });

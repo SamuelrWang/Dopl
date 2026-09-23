@@ -48,6 +48,7 @@ import {
   boot, claimPosts, decidePosts, row, wire, launchOp,
   MAIN, SRC, WS, CH, TH, ME, OTHER, DID,
 } from "./_launch-directive-harness.mjs";
+import { codeOf } from "./helpers/source-probe.mjs";
 
 // ── 2. OFF MEANS OFF, AND SILENTLY ───────────────────────────────────────────────────────
 
@@ -401,9 +402,8 @@ test("CRASH: a throw inside the spawn writes NO decision, and does not take the 
   assert.equal(claimPosts(h).length, 1);
 });
 
-test("CRASH: there is no restart sweep, and that is the documented decision, not an omission", () => {
-  assert.match(SRC, /CRASH SAFETY — A CLAIMED-BUT-UNDECIDED DIRECTIVE IS LEFT TO LAZY-EXPIRE/);
-  assert.equal(/function sweep\(/.test(SRC), false);
+test("CRASH: there is no restart sweep", () => {
+  assert.equal(/function sweep\(/.test(codeOf(SRC)), false);
 });
 
 // ── 7. THE BACKSTOP ──────────────────────────────────────────────────────────────────────

@@ -26,6 +26,7 @@ import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
+import { fnOf, codeOf } from "./helpers/source-probe.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const MAIN = join(HERE, "..", "main");
@@ -35,13 +36,6 @@ const read = (p) => readFileSync(join(MAIN, p), "utf8");
 const QUERY = read("session-query.js");
 const TEARDOWN = read("session-teardown.js");
 const PERMS = read("session-permissions.js");
-
-const cutFrom = (src, from, to) => {
-  const a = src.indexOf(from);
-  const b = src.indexOf(to);
-  assert.ok(a !== -1 && b > a, `slice ${from} not found`);
-  return src.slice(a, b);
-};
 
 // ── 1. THE ADAPTER: A FAILED START IS A FAILING STREAM, NEVER A THROW INTO THE FUNNEL ────────
 //
@@ -95,9 +89,9 @@ function consumeHarness(over = {}) {
   const mcpGuard = { handleMcpStatus: () => false };
   const fn = new Function(
     "io", "store", "diag", "sessionAuth", "mcpGuard", "deps",
-    `${cutFrom(QUERY, "function normalizeCtx(s) {", "async function consume(")}
-     ${cutFrom(QUERY, "async function consume(s, q, rt) {", "/**\n * THE BEARER THE PRE-FLIGHT WARMS WITH")}
-     ${cutFrom(QUERY, "function isAbortError(err) {", "module.exports = {")}
+    `${fnOf(QUERY, "normalizeCtx")}
+     async ${fnOf(QUERY, "consume")}
+     ${fnOf(QUERY, "isAbortError")}
      return consume;`
   )(io, {}, (...p) => calls.diag.push(p.join(" ")), sessionAuth, mcpGuard, deps);
   return { consume: fn, calls, ...over };
@@ -170,8 +164,8 @@ function settleHarness() {
   const api = new Function(
     "store", "deps", "sessionSummary", "agentHistory", "sessionMetrics", "sessionNarration",
     "sessionCredential", "diag",
-    `${cutFrom(PERMS, "function denyPendingPermissions(s, message) {", "// Returns TRUE only when")}
-     ${cutFrom(TEARDOWN, "function settle(s, outcome, keepWindow) {", "// THE WORK LANE FOR ONE ADDRESS")}
+    `${fnOf(PERMS, "denyPendingPermissions")}
+     ${fnOf(TEARDOWN, "settle")}
      return { settle, denyPendingPermissions };`
   )(
     store,
@@ -239,7 +233,7 @@ test("the guard is `s.settled`, taken BEFORE any work — not a flag set at the 
   // ⚠ A LATE FLAG IS NOT A GUARD. If `settled` were assigned after the sweep, a re-entrant
   // terminal (the abort below can dispatch synchronously in production) would run the whole body
   // a second time. The source shape is pinned because the behavioural case above cannot see it.
-  const body = cutFrom(TEARDOWN, "function settle(s, outcome, keepWindow) {", "// THE WORK LANE FOR ONE ADDRESS");
+  const body = codeOf(fnOf(TEARDOWN, "settle"));
   const guard = body.indexOf("if (s.settled) return;");
   const mark = body.indexOf("s.settled = true;");
   const firstWork = body.indexOf("deps.denyPendingPermissions(");

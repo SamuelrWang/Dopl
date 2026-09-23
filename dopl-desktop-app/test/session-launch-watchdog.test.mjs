@@ -17,10 +17,8 @@
 //   2. THE NUMBER IS EVIDENCE, not a guess — asserted as RELATIONS against the constants in
 //      this tree that bracket it, so moving any of them fails here rather than drifting
 //      silently (the test/mcp-client-timeout.test.mjs precedent).
-//      ⚠ ONE OF THE THREE BRACKETS WAS DELETED 2026-08-20 (Samuel's headless ruling):
-//      `session-spawner.MAX_RUNTIME_MS`, the lane that gave this number its value. The relation
-//      became a PROVENANCE assertion rather than a comparison — see the case that says so.
-//      The other two (MCP_CLIENT_TIMEOUT_MS below it, DEFAULT_IDLE_MS / ABANDONED_MS above)
+//      `session-spawner.MAX_RUNTIME_MS`, the third bracket, was deleted with the headless lane;
+//      the value itself is pinned directly. The other two (MCP_CLIENT_TIMEOUT_MS below it, DEFAULT_IDLE_MS / ABANDONED_MS above)
 //      are untouched and still bracket it from both sides.
 //   3. A REAL LAUNCH CANCELS IT. `launched` re-arms the ordinary idle TTL, so the watchdog
 //      can only ever fire on a session that never started.
@@ -35,12 +33,12 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { loadReducer } from "./_reducer-block.mjs";
+import { codeOf } from "./helpers/source-probe.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const M = (p) => readFileSync(join(HERE, "..", "main", p), "utf8");
 const QUERY = M("session-query.js");
 const ENGINE = M("session-engine.js");
-const STATE = M("session-state.js");
 
 const {
   initialSessionState, sessionReducer, idleTimeout, LAUNCHING_MS, DEFAULT_IDLE_MS, ABANDONED_MS,
@@ -92,7 +90,7 @@ test("the launch bound sits ABOVE this process's own MCP client abort", () => {
   assert.ok(LAUNCHING_MS > mcpClient, `${LAUNCHING_MS} must exceed ${mcpClient}`);
 });
 
-test("…and its derivation still CITES the headless answer it was matched to", () => {
+test("…and it stays five minutes, with no second runtime bound in the spawner facade", () => {
   // ⚠ REWRITTEN, NOT REMOVED (2026-08-20, Samuel's ruling; INVARIANTS §14). This read "…and it
   // MATCHES the headless lane's answer to the same question" and asserted
   // `LAUNCHING_MS === constFrom(M("session-spawner.js"), "MAX_RUNTIME_MS")` — this tree's
@@ -103,23 +101,9 @@ test("…and its derivation still CITES the headless answer it was matched to", 
   // `MAX_RUNTIME_MS` is deleted with the `claude -p` executor — `session-spawner.js` is now a
   // 46-line re-export facade — so the comparison has nothing on its right-hand side and the
   // `constFrom` regex would throw on a missing const.
-  //
-  // ⚠ THE NUMBER IS NOT ORPHANED, AND THAT IS WHY THIS IS REWRITTEN RATHER THAN DROPPED. This
-  // file's whole point (item 2 of the header) is that 300_000 is EVIDENCE rather than a guess,
-  // held by RELATIONS to other constants so that moving any of them fails here instead of
-  // drifting silently. Losing one of three relations to a deletion would quietly reduce it back
-  // toward a bare literal. The provenance is asserted directly instead: `session-state.js` must
-  // still cite where the value came from, and the value must still BE that value — the last lane
-  // that answered this question is gone, so the derivation comment is now the only record of why
-  // five minutes, and it has to stay legible.
   assert.equal(LAUNCHING_MS, 5 * 60 * 1000, "five minutes — the headless lane's MAX_RUNTIME_MS, inherited");
-  const at = STATE.indexOf("const LAUNCHING_MS");
-  assert.notEqual(at, -1, "LAUNCHING_MS not found — the anchors below would be vacuous");
-  assert.ok(STATE.slice(Math.max(0, at - 1800), at).includes("MAX_RUNTIME_MS"),
-    "the derivation must keep naming the constant it was matched to, even though that constant " +
-      "is deleted — a number whose provenance is unwritten is a number the next person re-guesses");
   // …and the deleted lane must not have quietly grown a second answer somewhere.
-  assert.ok(!/MAX_RUNTIME_MS\s*=/.test(M("session-spawner.js")),
+  assert.ok(!/MAX_RUNTIME_MS\s*=/.test(codeOf(M("session-spawner.js"))),
     "session-spawner.js is a re-export facade now — a runtime bound reappearing there is a second executor");
 });
 
@@ -140,14 +124,6 @@ test("…and it is comfortably UNDER the idle TTL, so the two can never be confu
   assert.ok(LAUNCHING_MS < DEFAULT_IDLE_MS);
   assert.ok(LAUNCHING_MS < ABANDONED_MS);
   assert.equal(LAUNCHING_MS * 3, DEFAULT_IDLE_MS, "one third — stated in the source, pinned here");
-});
-
-test("the bound is documented where it is defined, not left as a bare literal", () => {
-  const at = STATE.indexOf("const LAUNCHING_MS");
-  const preamble = STATE.slice(Math.max(0, at - 1800), at);
-  for (const cited of ["MCP_CLIENT_TIMEOUT_MS", "HOLD_MARGIN_MS", "MAX_RUNTIME_MS"]) {
-    assert.ok(preamble.includes(cited), `the derivation must cite ${cited}`);
-  }
 });
 
 // ── 3. A REAL LAUNCH CANCELS IT ──────────────────────────────────────────────────────

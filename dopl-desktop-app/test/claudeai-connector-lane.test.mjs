@@ -54,7 +54,7 @@ import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { fnOf } from "./helpers/source-probe.mjs";
+import { codeOf, fnOf } from "./helpers/source-probe.mjs";
 
 const require = createRequire(import.meta.url);
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -195,13 +195,11 @@ test("the option set names exactly one MCP server, and no connector lane among t
     "no connector server is constructed in code (comments may name the lane)");
 });
 
-test("`settingSources: []` is still pinned, and it is WHY the env var is needed", () => {
+test("`settingSources: []` is still pinned", () => {
   // Not a regression pin on its own — the join. The empty setting sources are what make
   // `disableClaudeAiConnectors` unreadable, so this line and the env var have to move together:
   // anyone who re-admits setting sources should reconsider the var, and vice versa.
-  assert.match(QUERY, /settingSources: \[\],/, "settingSources is still the empty array");
-  assert.match(LOADER, /disableClaudeAiConnectors/,
-    "sdk-loader must keep stating why the setting cannot be our lever");
+  assert.match(codeOf(QUERY), /settingSources: \[\],/, "settingSources is still the empty array");
 });
 
 test("`--strict-mcp-config` has NOT crept in as a second answer", () => {

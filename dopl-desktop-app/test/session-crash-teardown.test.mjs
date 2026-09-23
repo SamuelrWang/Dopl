@@ -45,25 +45,15 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
+import { fnOf, codeOf } from "./helpers/source-probe.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const ENGINE = readFileSync(join(HERE, "..", "main", "session-engine.js"), "utf8");
 const TEARDOWN = readFileSync(join(HERE, "..", "main", "session-teardown.js"), "utf8");
 // ⚠ `denyPendingPermissions` MOVED AGAIN IN THE SAME WAVE — to `main/session-permissions.js`,
 // which owns how a held `canUseTool` promise is resolved AND what the agent is told when the
 // answer is no (a windowless auto-deny is not a decision, so it may not say "Denied by operator").
 // The C3 sweep it performs is byte-unchanged; only its address is.
 const PERMS = readFileSync(join(HERE, "..", "main", "session-permissions.js"), "utf8");
-
-const cutFrom = (src, from, to) => {
-  const a = src.indexOf(from);
-  const b = src.indexOf(to);
-  assert.ok(a !== -1 && b > a, `slice ${from} not found`);
-  return src.slice(a, b);
-};
-const cut = (from, to) => cutFrom(ENGINE, from, to);
-const cutPerms = (from, to) => cutFrom(PERMS, from, to);
-const cutTeardown = (from, to) => cutFrom(TEARDOWN, from, to);
 
 // The REAL settle + the REAL denyPendingPermissions, evaluated verbatim with fakes for the
 // leaf deps (store / sessions / refreshTray / baseRecord).
@@ -91,8 +81,8 @@ function harness(over = {}) {
   const api = new Function(
     "store", "deps", "sessionSummary",
     "agentHistory", "sessionMetrics", "sessionNarration", "diag",
-    `${cutPerms("function denyPendingPermissions(s, message) {", "// Returns TRUE only when")}
-     ${cutTeardown("function settle(s, outcome, keepWindow) {", "// THE WORK LANE FOR ONE ADDRESS")}
+    `${fnOf(PERMS, "denyPendingPermissions")}
+     ${fnOf(TEARDOWN, "settle")}
      return { settle, denyPendingPermissions };`
   )(
     store,
@@ -184,7 +174,7 @@ test("C3: a session with no live handles settles without throwing (parked shell 
 });
 
 test("C3: the shipped settle really runs the teardown BEFORE it drops the handles", () => {
-  const body = cutTeardown("function settle(s, outcome, keepWindow) {", "// THE WORK LANE FOR ONE ADDRESS");
+  const body = codeOf(fnOf(TEARDOWN, "settle"));
   const order = ["deps.denyPendingPermissions(s, 'Session ended')", "s.pushIterator.close()", "s.abortController.abort()", "deps.sessions.delete(s.key)"];
   let at = -1;
   for (const needle of order) {

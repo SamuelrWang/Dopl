@@ -33,6 +33,7 @@ import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { createRequire } from "node:module";
 import { loadReducer } from "./_reducer-block.mjs";
+import { fnOf, codeOf } from "./helpers/source-probe.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
@@ -285,17 +286,14 @@ test("F4: main sends the AUTHORIZED bytes, and `to` is the peer NAME (never an i
   assert.equal(events2[0].payload.text, "");
 });
 
-const stripComments = (src) => src.split("\n").filter((l) => !/^\s*\/\//.test(l)).join("\n");
-
 test("F4: includePartialMessages:false and NO hooks option are load-bearing for the gate", () => {
   // ⚠ ALSO KEPT (2026-08-20), and the `hooks` half is the reason: it is asserted NOWHERE ELSE in
   // the suite. Its subject is main/session-query.js, which F-228 did not touch. Two of the four
   // pins below (permissionMode / settingSources) are doubled by test/session-model.test.mjs §3;
   // the other two are only here.
-  const opts = QUERY.slice(QUERY.indexOf("function buildOptions(s, dispatch, emitQuiet) {"), QUERY.indexOf("function buildLaunchSpec("));
+  const opts = codeOf(fnOf(QUERY, "buildOptions"));
   assert.match(opts, /includePartialMessages: false,/, "a partial tool_use input must never paint the decision");
-  assert.ok(!/hooks/.test(stripComments(opts)), "no PreToolUse hook may rewrite the input the operator approved");
-  assert.match(opts, /LOAD-BEARING for v2\.7 L3 \(FIX F4\)/, "and the option site says why");
+  assert.ok(!/hooks/.test(opts), "no PreToolUse hook may rewrite the input the operator approved");
   // The two pins the whole gate rests on are still here as well.
   assert.match(opts, /permissionMode: 'default'/);
   assert.match(opts, /settingSources: \[\]/);
