@@ -1,20 +1,11 @@
 "use client";
 
 /**
- * Minimal toast primitive — no external dependency. ONE active toast at a time,
- * bottom-right, auto-dismiss after 4s. Call shape matches sonner/radix-toast so
- * either can be swapped in without touching call sites.
- *
- * Mount `<ToastHost />` once at the root; fire `toast({title, description,
- * action})` from any client component.
- *
- * ⚠ **TWO FACES, ONE HOST (2026-09-22, Samuel's agent-card launch ruling: *"a
- * notification popup, small, black, bottom right of the screen"*).** The default
- * face is the light card every existing caller already fires; `variant:
- * "invert"` is the SMALL BLACK one — one line, no chrome, auto-dismiss only.
- * ⚠ **IT IS A VARIANT RATHER THAN A SECOND PRIMITIVE** because a second host
- * would be a second "one active toast at a time" — two stacked popups in the
- * same corner, each certain it is alone.
+ * Minimal toast primitive, no external dependency: one active toast at a time, bottom-right,
+ * auto-dismiss after 4s; the call shape matches sonner/radix-toast. Mount `<ToastHost />` once at
+ * the root and fire `toast({ title, description, action })` from any client component.
+ * `variant: "invert"` is the small black one-line face. A variant, not a second host: two hosts
+ * would stack two "only" toasts in the same corner.
  */
 
 import { useEffect, useState } from "react";
@@ -48,20 +39,24 @@ function setCurrent(t: ToastData | null) {
   for (const l of listeners) l(t);
 }
 
-export function toast(opts: {
-  title: string;
-  description?: string;
-  action?: ToastAction;
-  durationMs?: number;
-  /** ⚠ ADDITIVE AND OPTIONAL — every existing caller omits it and is unchanged. */
-  variant?: ToastVariant;
-}) {
+/** The `invert` face renders only the title, so its options carry nothing else (F25). */
+export type ToastOptions =
+  | {
+      title: string;
+      description?: string;
+      action?: ToastAction;
+      durationMs?: number;
+      variant?: "default";
+    }
+  | { title: string; durationMs?: number; variant: "invert" };
+
+export function toast(opts: ToastOptions) {
   const id = nextId++;
   setCurrent({
     id,
     title: opts.title,
-    description: opts.description,
-    action: opts.action,
+    description: opts.variant === "invert" ? undefined : opts.description,
+    action: opts.variant === "invert" ? undefined : opts.action,
     durationMs: opts.durationMs ?? 4000,
     variant: opts.variant ?? "default",
   });
@@ -82,8 +77,7 @@ export function ToastHost() {
   useEffect(() => {
     if (!active) return;
     const t = setTimeout(() => {
-      // ⚠ Only clear if THIS toast is still current, or a newer one arriving
-      // mid-timeout gets wiped.
+      // Only clear if this toast is still current, or a newer one arriving mid-timeout is wiped.
       if (currentToast?.id === active.id) setCurrent(null);
     }, active.durationMs);
     return () => clearTimeout(t);
@@ -91,10 +85,7 @@ export function ToastHost() {
 
   if (!active) return null;
 
-  // ⚠ **THE BLACK FACE CARRIES NO CONTROLS, AND THAT IS THE POINT.** It reports
-  // something that already happened — an agent is running — so there is nothing
-  // to undo and nothing to dismiss: it slides in from the right and goes on its
-  // own. A × on a one-line report is more chrome than report.
+  // The black face carries no controls: it reports something already done, with nothing to undo.
   if (active.variant === "invert") {
     return (
       <div

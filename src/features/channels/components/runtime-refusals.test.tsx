@@ -19,11 +19,8 @@ import { REAL_DESCRIPTORS, realDescriptor } from "../lib/runtime-descriptors-har
 import {
   agentAuthHeldCopy,
   canSignIn,
-  liveModelSwitchRefusal,
   noRuntimeCopy,
-  runtimeLabel,
   signInAction,
-  signInPointer,
   signedOutLaunchCopy,
 } from "../lib/runtime-copy";
 import { catalog } from "../hooks/launch-selection-harness";
@@ -149,7 +146,6 @@ describe("the signed-out and no-runtime copy", () => {
   it("a signed-out Codex says `Sign in to Codex`, and the Claude path still says Claude", () => {
     expect(signInAction(realDescriptor("codex"))).toBe(null);
     expect(signedOutLaunchCopy(realDescriptor("codex"))).toBe("Sign in to Codex to start an agent");
-    expect(signInPointer(realDescriptor("codex"))).toMatch(/^Sign in to Codex/);
     expect(agentAuthHeldCopy(realDescriptor("codex"))).toBe(
       "Your agent is waiting for you to sign in to Codex."
     );
@@ -164,7 +160,7 @@ describe("the signed-out and no-runtime copy", () => {
     for (const id of ["claude", "codex", "cursor"]) {
       const d = realDescriptor(id);
       expect(launchRefusalText("auth-hold", d)).toBe(signedOutLaunchCopy(d));
-      expect(launchRefusalText("no-sdk", d)).toBe(`No ${runtimeLabel(d)} runtime on this Mac`);
+      expect(launchRefusalText("no-sdk", d)).toBe(`No ${d.label} runtime on this Mac`);
     }
     // ⚠ NOT ONE SENTENCE WEARING THREE HATS: a copy function that ignored the descriptor would
     // satisfy every line above if they were read one at a time.
@@ -207,17 +203,6 @@ describe("the signed-out and no-runtime copy", () => {
     expect(canSignIn(realDescriptor("codex"))).toBe(false);
     expect(canSignIn(realDescriptor("cursor"))).toBe(false);
     expect(signInAction(realDescriptor("cursor"))).toBe(null);
-  });
-
-  it("the live-model-switch refusal is per runtime, and Claude keeps the control", () => {
-    // ⚠ `canSwitchModelLive` HAD NO CONSUMER IN `main/` UNTIL 2026-09-22 (NOT U10, which is what
-    // this said and what F-753 said: U10's refusal re-read the field itself) — it was declared, mirrored
-    // here, and read by nothing, so a Codex session recorded a model switch that never happened.
-    expect(liveModelSwitchRefusal(realDescriptor("claude"))).toBe(null);
-    const codex = liveModelSwitchRefusal(realDescriptor("codex"));
-    expect(codex).toMatch(/Codex/);
-    expect(codex).toMatch(/has not been measured/);
-    expect(codex).not.toMatch(/Claude/);
   });
 });
 

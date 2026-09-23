@@ -127,6 +127,15 @@ describe("LaunchDecideSchema — the machine reports what it ran", () => {
     ).toBe(false);
   });
 
+  // F27: MCP renders `model=` from this column, so it takes the request's label charset.
+  it("refuses an appliedModel carrying a line separator or control character", () => {
+    expect(
+      LaunchDecideSchema.safeParse({ ...LAUNCHED, appliedModel: "gpt\u2028## forged" }).success,
+    ).toBe(false);
+    expect(LaunchDecideSchema.safeParse({ ...LAUNCHED, appliedModel: "claude-opus-5[1m]" }).success)
+      .toBe(true);
+  });
+
   // ⚠ ONLY A LAUNCH STARTS A SESSION ON A RUNTIME. A `done` arm carrying one would be a machine
   // asserting a fact about a session it did not start, and the column CHECK says the same at rest.
   it("the `done` arm has no runtime fields at all", () => {

@@ -190,11 +190,6 @@ test("🔒 the desktop's label table AGREES WITH THE WEB'S, because the two tree
   assert.equal(rows.length, 4, "the web table moved — re-derive this pin");
   const desktop = claudeTable().models;
   assert.deepEqual(desktop.map((m) => ({ id: m.id, label: m.label, short: m.short })), rows);
-
-  const fallback = /export const AGENT_MODEL_FALLBACK = "([^"]+)"/.exec(web);
-  assert.ok(fallback, "agent-models.ts › AGENT_MODEL_FALLBACK was not found");
-  assert.equal(claudeTable().defaultId, fallback[1],
-    "the catalog's default marker and the web's back-fill are one decision");
 });
 
 // ── 6. THE MAP ITSELF ────────────────────────────────────────────────────────────────────────

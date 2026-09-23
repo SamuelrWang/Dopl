@@ -7,30 +7,17 @@ import { cn } from "@/shared/lib/utils";
 const MIN_BODY_H = 56;
 
 /**
- * SectionBox's concave-body recipe.
- *
- * 🔒 ⚠ **THE DESKTOP DOES NOT WEAR IT ANY MORE (Samuel's ruling R-39,
- * 2026-09-17: flat wins; the web login page keeps concave for now).** What is
- * left is a closed list — the FROZEN settings surfaces (INVARIANTS §15) and the
- * composer panel's own standing ruling — and the list is a TEST, not prose:
- * `features/agent-identities/components/identity-editor-surface.test.tsx › the
- * concave section recipe is off the desktop` names each entry and its reason,
- * and may only shrink. Anything else reaching for this on a desktop surface is
- * the ruling being re-broken.
+ * SectionBox's concave-body recipe. Off the desktop (flat wins) except a closed list pinned by
+ * `identity-editor-surface.test.tsx › the concave section recipe is off the desktop`, which may
+ * only shrink.
  */
 export const SECTION_BOX_INSET =
   "border-t border-border-subtle bg-bg-inset shadow-[inset_0_2px_4px_rgba(0,0,0,0.1),inset_0_1px_2px_rgba(0,0,0,0.06),inset_0_-1px_0_rgba(255,255,255,0.9)]";
 
 /**
- * Bordered section — uppercase label strip over a concave inset body, with a
- * corner grip that drag-resizes the body (clamped to its content height).
- *
- * 🔒 ⚠ **ONE CONSUMER LEFT, AND IT IS ON THE WEB (R-39, 2026-09-17):**
- * `features/playground/components/panes/members-pane.tsx`. Every DESKTOP
- * section this painted is `./section-panel.tsx › SectionPanel` on the one flat
- * gray now, and **the drag-resize grip went with the box**. ⚠ NOT DELETED
- * BECAUSE NOT DEAD — the web keeps concave — but a NEW desktop section that
- * mounts this is the ruling being re-broken; same pin as `SECTION_BOX_INSET`.
+ * Bordered section: uppercase label strip over a concave inset body, with a corner grip that
+ * drag-resizes the body (clamped to its content height). Web only; a desktop section uses
+ * `./section-panel.tsx › SectionPanel`.
  */
 export function SectionBox({
   label,

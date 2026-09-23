@@ -3,50 +3,26 @@ import { createServerClient } from "@supabase/ssr";
 import { touchMcpStatus, checkAndRecordRateLimitSubject } from "./mcp-session";
 import { isOAuthAccessToken, validateAccessToken } from "./mcp-oauth";
 import { getBearerJwtUser } from "./bearer-jwt";
-import { logMcpEvent } from "@/features/analytics/server/mcp-events";
 import { logSystemEvent } from "@/features/analytics/server/system-events";
 import { HttpError } from "@/shared/lib/http-error";
 import { runWithCallerScope } from "@/shared/supabase/caller-scope";
 import { sessionCallerScope, tokenCallerScope } from "./with-auth-scope";
 
-/** Per-route options for `withUserAuth` (forwarded through
- *  `withWorkspaceAuth`). ⚠ Both flags affect OAuth-bearer (agent) callers ONLY;
- *  session callers never reach the token branch. */
+/** Per-route options for `withUserAuth` (forwarded through `withWorkspaceAuth`). Both affect OAuth
+ *  bearer (agent) callers only. */
 export interface UserAuthOptions {
-  /**
-   * Exempt route from OAuth write-scope method gate. ⚠ Set ONLY on a non-GET
-   * route that is not a content write and must stay reachable read-only
-   * (`dopl.read`-only) — sole legitimate case is the MCP liveness ping
-   * `POST /api/user/mcp-status`. Never on a route that mutates content.
-   */
+  /** Exempt a non-GET, non-content route from the write-scope gate — only the MCP liveness ping
+   *  `POST /api/user/mcp-status`. Never on a route that mutates content. */
   writeScopeExempt?: boolean;
-  /**
-   * Reject EVERY OAuth agent token (any scope, incl. `dopl.write`) with
-   * `403 SESSION_REQUIRED`. Stricter than, and independent of, the write-scope
-   * gate. For the destructive admin surface: account/workspace deletion,
-   * membership + invitation + join-request mutations, billing mutations.
-   */
+  /** Refuse every OAuth agent token (any scope) with `403 SESSION_REQUIRED` — the destructive admin
+   *  surface (account/workspace deletion, membership, billing). */
   sessionOnly?: boolean;
 }
 
 /**
- * Second argument Next passes to an exported route method, and the ONLY shape
- * its type checker accepts there.
- *
- * ⚠ BOTH the parameter AND `params` must be REQUIRED. Next generates, per route
- * it compiles, `.next/dev/types/app/api/**\/route.ts` containing
- * `type RouteContext = { params: Promise<SegmentParams> }` and asserts
- * `SecondArg<HANDLER>` extends it (`ParamCheck<RouteContext>`), and tsconfig
- * includes `.next/dev/types/**\/*.ts`. `SecondArg` is inferred from the
- * parameter tuple, so an OPTIONAL param (incl. one with a default value —
- * a default does not make a parameter required in the function type) yields
- * `... | undefined` and fails; an optional `params?` fails too, because
- * `Promise<…> | undefined` is not assignable to `Promise<SegmentParams>`.
- * Pinned by `route-context-signature.test.ts`, which mirrors the generated
- * checker (a test cannot import from `.next/`).
- *
- * Runtime is unaffected: Next always calls with a context object, and the
- * wrapper still reads `params` defensively.
+ * Next's second route-handler argument. Both the parameter and `params` must be required: Next's
+ * generated `ParamCheck<RouteContext>` rejects any `| undefined` (a default value counts as optional).
+ * Pinned by `route-context-signature.test.ts`.
  */
 export interface RouteContextArg {
   params: Promise<Record<string, string>>;
@@ -55,13 +31,8 @@ export interface RouteContextArg {
 /** HTTP methods that are reads for the purposes of the write-scope gate. */
 const READ_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
 
-/**
- * Per-token ceiling for OAuth bearers hitting REST directly. ⚠ Must stay
- * identical to the `/api/mcp` transport limiter in
- * `src/shared/auth/with-mcp-transport-auth.ts`: same store
- * (`rate_limit_events`), same subject (`mcp:<tokenId>`), same env var — one
- * UNIFIED budget across both doors, not two.
- */
+/** Per-token ceiling for OAuth bearers on REST. Must match `with-mcp-transport-auth.ts`: same store,
+ *  subject `mcp:<tokenId>` and env var — one budget across both doors. */
 const OAUTH_REST_RPM = Number(process.env.MCP_OAUTH_RATE_LIMIT_RPM) || 600;
 
 /** Emit a system_events row on any throw or 5xx — feeds the health dashboard. */
@@ -100,56 +71,27 @@ async function runAndLog5xx(
 }
 
 /**
- * Injects the authenticated user's ID into the handler.
- *
- * - OAuth-token (remote MCP): token's user_id, plus the credential's TWO AXES.
- * - Session / bearer JWT: user.id, unfenced, and the subject is that user.
- *
- * 🔒 ⚠ THE CREDENTIAL CARRIES TWO INDEPENDENT AXES AND THIS IS WHERE THEY ENTER
- * THE APP (`20260917120000_mcp_token_credential_axes`, wave B slice B3):
- *   - `apiKeyWorkspaceId` — WHICH CONTAINER, from `mcp_tokens.container_id`.
- *     Its producer is the CONTAINER-LOCKED CHILD CREDENTIAL (plan §4.4 B1); this
- *     line is what makes the fence reach `with-workspace-auth`'s 403. (This
- *     docblock used to say the field was *"always undefined"*, and it was: the
- *     `api_keys` table it was written for was dropped by
- *     `20260609000000_drop_api_key_auth.sql` and INVARIANTS §4 recorded the
- *     whole chain as "dead scaffolding; preserved".)
- *   - `credentialSubjectUserId` — WHOSE REACH, from `mcp_tokens.subject_user_id`.
- *     The M-10 gates — `knowledge/server/service-shared.ts › canSeeBase`, the
- *     same predicate in chats, skills and agent-identities, and the
- *     `fromWorkspaceKey` branches in the three write services — read this axis
- *     and ONLY this axis, through `credential-audience.ts › isSharedCredential`.
- *
- * 🔒 ⚠ READING ONE OFF THE OTHER IS F-336/F-333, WHICH IS WHY THEY ARE TWO
- * FIELDS. A session credential is fenced AND personal; a shared container key is
- * fenced AND anonymous; a device token is unfenced AND personal. `null` on the
- * subject axis is "nobody in particular" and keeps the original refusal, so a
- * shared workspace key reintroduced later inherits the NARROW rule by default.
- *
- * 🔒 ⚠ AND IT ESTABLISHES THE CALLER SCOPE (`shared/supabase/caller-scope.ts`),
- * which is what lets a repository read as the CALLER instead of as the service
- * role once `RLS_CALLER_SCOPED_READS` is on. It is set HERE — the one wrapper
- * every API route composes, `withWorkspaceAuth` and `withMcpAccess` included —
- * from the credential this function has already validated. A route that
- * authenticates some other way, or a read that runs outside a request, finds no
- * scope and keeps the service-role client; the fence is then the TS predicate,
- * exactly as today.
+ * Injects the authenticated user into the handler, with the credential's two independent axes:
+ *  - `apiKeyWorkspaceId` — which container (`mcp_tokens.container_id`), for a container-locked token;
+ *  - `credentialSubjectUserId` — whose reach (`mcp_tokens.subject_user_id`), read only through
+ *    `credential-audience.ts › isSharedCredential`; `null` = nobody in particular, the narrow rule.
+ * Reading one axis off the other is F-333/F-336. Sessions and bearer JWTs are unfenced, own subject.
+ * The caller scope (`shared/supabase/caller-scope.ts`) is established here, from the credential this
+ * function validated; `withWorkspaceAuth` composes this. A read outside such a request has no scope
+ * and keeps the service-role client, fenced by the TS predicates.
  */
 export function withUserAuth(
   handler: (
     request: NextRequest,
     context: {
       userId: string;
-      // OAuth access-token id for agent calls, undefined for session (UI)
-      // calls. Truthiness (not the id) is the "is this an agent?" signal read
-      // by writeback `source` tagging and per-resource agent gates
-      // (`agent_write_enabled`, canvas-edit).
+      // Set for agent (OAuth) calls only; its truthiness is the "is this an agent?" signal
+      // (writeback `source`, `agent_write_enabled`).
       agentTokenId?: string;
-      /** AXIS 1 — WHICH CONTAINER (`mcp_tokens.container_id`). `null` = unfenced. */
+      /** Axis 1 — which container (`mcp_tokens.container_id`); `null` = unfenced. */
       apiKeyWorkspaceId?: string | null;
-      /** AXIS 2 — WHOSE REACH (`mcp_tokens.subject_user_id`). `null` = nobody in
-       *  particular. ⚠ REQUIRED, and read only through
-       *  `credential-audience.ts › isSharedCredential`. */
+      /** Axis 2 — whose reach (`mcp_tokens.subject_user_id`); `null` = nobody in particular. Required;
+       *  read only through `isSharedCredential`. */
       credentialSubjectUserId: string | null;
       params?: Record<string, string>;
     }
@@ -166,17 +108,10 @@ export function withUserAuth(
     if (authHeader) {
       const token = authHeader.replace(/^Bearer\s+/i, "").trim();
 
-      // ⚠ BEARER KIND DISCRIMINATION. Two credential families arrive as
-      // Authorization headers; never confuse them:
-      //   - `dopl_at_*` (minted by mcp-oauth.ts) = AGENT: agentTokenId set,
-      //     sessionOnly + write-scope gates apply, writes stamped `source:
-      //     "agent"`.
-      //   - anything else = tried as Supabase access JWT (desktop SPA). A valid
-      //     JWT caller is a SESSION, semantics identical to a cookie caller: no
-      //     agentTokenId, sessionOnly routes allowed, no write-scope gate.
-      // Prefix check is exact-match routing, not a heuristic — a Supabase JWT
-      // can never start with `dopl_at_`. No fallthrough from a presented bearer
-      // to cookie auth; an invalid credential of either kind is 401.
+      // Two bearer families, routed by exact prefix (a Supabase JWT never starts `dopl_at_`):
+      //   `dopl_at_*` = agent: `agentTokenId` set, sessionOnly + write-scope gates apply.
+      //   anything else = Supabase access JWT (desktop SPA) = a session, same as a cookie caller.
+      // No fallthrough to cookie auth once a bearer is presented; an invalid one is 401.
       if (!isOAuthAccessToken(token)) {
         const jwtUser = await getBearerJwtUser(token);
         if (jwtUser) {
@@ -185,9 +120,7 @@ export function withUserAuth(
               runWithCallerScope(sessionCallerScope(jwtUser.id), () =>
                 handler(request, {
                   userId: jwtUser.id,
-                  // 🔒 A SIGNED-IN PERSON IS THEIR OWN SUBJECT, and unfenced. Both
-                  // axes are stated rather than defaulted: the subject axis is the
-                  // one whose ABSENCE used to widen.
+                  // A signed-in person is their own subject, and unfenced — stated, not defaulted.
                   credentialSubjectUserId: jwtUser.id,
                   params: resolvedParams,
                 })
@@ -204,15 +137,11 @@ export function withUserAuth(
         );
       }
 
-      // Remote-MCP OAuth access token. /api/mcp forwards the caller's token to
-      // these /api/* endpoints over loopback.
+      // Remote-MCP OAuth token; `/api/mcp` forwards it to `/api/*` over loopback.
       const tok = await validateAccessToken(token);
       if (tok) {
-        // ⚠ Same limiter as the `/api/mcp` transport (with-mcp-transport-auth.ts):
-        // same store, subject `mcp:<tokenId>`, same ceiling — one unified budget
-        // across both doors. Without it a bearer pointed straight at REST bypasses
-        // the transport limit. Enforced FIRST so requests the gates below would 403
-        // still count. Fail-closed (RPC returns false on any DB error).
+        // Subject `mcp:<tokenId>`, shared with the `/api/mcp` limiter, so a bearer aimed at REST cannot
+        // bypass it. Checked first so gated-out requests still count; fail-closed on DB error.
         const withinLimit = await checkAndRecordRateLimitSubject(
           `mcp:${tok.tokenId}`,
           OAUTH_REST_RPM,
@@ -229,12 +158,9 @@ export function withUserAuth(
           );
         }
 
-        // Heartbeat for the settings MCP-connection detector (polls
-        // /api/user/mcp-status). Debounced ~30s.
+        // Heartbeat for the settings MCP-connection detector; debounced.
         touchMcpStatus(tok.userId);
 
-        // Session-only gate: destructive admin routes refuse ALL agent tokens
-        // regardless of scope.
         if (options.sessionOnly) {
           return NextResponse.json(
             new HttpError(
@@ -246,11 +172,8 @@ export function withUserAuth(
           );
         }
 
-        // Write-scope gate. Fail-closed: write permitted ONLY when `scopes`
-        // explicitly includes `dopl.write`. ⚠ Mirrors the MCP tool gate in
-        // packages/mcp-server/src/server.ts — keep both in sync. The /api/mcp
-        // JSON-RPC transport uses a separate wrapper (authenticateMcpRequest)
-        // and never hits this branch; its writes are gated per-op by WRITE_OPS.
+        // Fail-closed: a write needs `dopl.write` explicitly. Mirrors the tool gate in
+        // `packages/mcp-server/src/server.ts`; keep both in sync.
         const isWrite = !READ_METHODS.has(request.method);
         const canWrite =
           Array.isArray(tok.scopes) && tok.scopes.includes("dopl.write");
@@ -272,17 +195,13 @@ export function withUserAuth(
 
         return runAndLog5xx(
           () =>
-            // 🔒 The one lane whose credential axes are not constant —
-            // `with-auth-scope.ts › tokenCallerScope` reads the SUBJECT axis.
+            // The one lane whose axes vary; `with-auth-scope.ts › tokenCallerScope` reads the subject axis.
             runWithCallerScope(tokenCallerScope(tok), () =>
               handler(request, {
                 userId: tok.userId,
                 agentTokenId: tok.tokenId,
-                // 🔒 AXIS 1. `null` for every ordinary credential.
                 apiKeyWorkspaceId: tok.containerId,
-                // 🔒 AXIS 2. Dropping this line is silent and fails CLOSED: every
-                // session reverts to being read as a shared credential, and the
-                // operator's agent 404s on the operator's own private rows (F-336).
+                // Dropping this fails closed, silently: every agent token reads as shared (F-336).
                 credentialSubjectUserId: tok.subjectUserId,
                 params: resolvedParams,
               })
@@ -299,7 +218,7 @@ export function withUserAuth(
       );
     }
 
-    // No auth header — check Supabase session
+    // No auth header: Supabase session cookie.
     const user = await getSessionUser(request);
     if (user) {
       return runAndLog5xx(
@@ -307,8 +226,7 @@ export function withUserAuth(
           runWithCallerScope(sessionCallerScope(user.id), () =>
             handler(request, {
               userId: user.id,
-              // 🔒 Same as the bearer-JWT branch above: a cookie caller is a
-              // person, and is nobody's shared credential.
+              // A cookie caller is a person, never a shared credential.
               credentialSubjectUserId: user.id,
               params: resolvedParams,
             })
@@ -327,121 +245,6 @@ export function withUserAuth(
   };
 }
 
-/**
- * Wraps an MCP-reachable endpoint. Does NOT paywall (billing is
- * workspace-level). Auth + per-token rate limiting via withUserAuth; OAuth-token
- * callers are logged to mcp_events; session (UI) calls pass straight through,
- * unmetered and unlogged. `action` is a tool-name hint for logMcpEvent.
- * ⚠ These are the read-only knowledge packs — workspace-scoped tool traffic goes
- * through withWorkspaceAuth, which records per-op usage to mcp_tool_calls.
- */
-export function withMcpAccess(
-  action: string,
-  handler: (
-    request: NextRequest,
-    context: {
-      userId: string;
-      agentTokenId?: string;
-      params?: Record<string, string>;
-    }
-  ) => Promise<Response | NextResponse>
-) {
-  return withUserAuth(async (request, ctx) => {
-    // ⚠ Key off token KIND, never header presence: a bare "has Authorization"
-    // test misclassifies desktop Supabase-JWT sessions as MCP and writes their
-    // request bodies into mcp_events.
-    const bearerForKind = (request.headers.get("authorization") ?? "")
-      .replace(/^Bearer\s+/i, "")
-      .trim();
-    const isMcpCaller = isOAuthAccessToken(bearerForKind);
-
-    if (!isMcpCaller) {
-      return handler(request, ctx);
-    }
-
-    const endpoint = `${request.method} ${request.nextUrl.pathname}`;
-    const toolName = request.headers.get("x-mcp-tool") || action;
-    // Loopback always sends the workspace UUID; ignore slugs/garbage.
-    const rawWorkspace = request.headers.get("x-workspace-id");
-    const eventWorkspaceId =
-      rawWorkspace &&
-      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(rawWorkspace)
-        ? rawWorkspace
-        : null;
-    const queryParams = Object.fromEntries(request.nextUrl.searchParams.entries());
-    let argsPayload: unknown = Object.keys(queryParams).length > 0 ? queryParams : null;
-    if (request.method !== "GET" && request.method !== "DELETE") {
-      try {
-        const bodyJson = await request.clone().json();
-        argsPayload = bodyJson ?? argsPayload;
-      } catch {
-        // Empty/non-JSON body — fall back to query params (or null)
-      }
-    }
-    const startedAt = Date.now();
-
-    let response: Response | NextResponse;
-    try {
-      response = await handler(request, ctx);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      logMcpEvent({
-        userId: ctx.userId,
-        workspaceId: eventWorkspaceId,
-        agentTokenId: ctx.agentTokenId ?? null,
-        toolName,
-        endpoint,
-        arguments: argsPayload,
-        responseStatus: 500,
-        latencyMs: Date.now() - startedAt,
-        source: "mcp",
-        error: message,
-      }).catch(() => {});
-      throw err;
-    }
-
-    let responseSummary: unknown = null;
-    let errorMessage: string | null = null;
-    try {
-      const clone = response.clone();
-      const text = await clone.text();
-      if (text) {
-        try {
-          responseSummary = JSON.parse(text);
-          if (
-            !response.ok &&
-            responseSummary &&
-            typeof responseSummary === "object" &&
-            "error" in responseSummary
-          ) {
-            errorMessage = String((responseSummary as { error: unknown }).error);
-          }
-        } catch {
-          responseSummary = { _nonJson: true, preview: text.slice(0, 500) };
-        }
-      }
-    } catch {
-      // clone/read failed — skip summary
-    }
-
-    logMcpEvent({
-      userId: ctx.userId,
-      workspaceId: eventWorkspaceId,
-      agentTokenId: ctx.agentTokenId ?? null,
-      toolName,
-      endpoint,
-      arguments: argsPayload,
-      responseStatus: response.status,
-      responseSummary,
-      latencyMs: Date.now() - startedAt,
-      source: "mcp",
-      error: errorMessage,
-    }).catch(() => {});
-
-    return response;
-  });
-}
-
 /** Admin is a single Supabase auth UUID, bound via the ADMIN_USER_ID env var. */
 export function isAdmin(userId: string | null | undefined): boolean {
   const adminId = process.env.ADMIN_USER_ID;
@@ -449,8 +252,7 @@ export function isAdmin(userId: string | null | undefined): boolean {
   return userId === adminId;
 }
 
-// Boot validation: without ADMIN_USER_ID every admin route silently 404s and
-// the moderation queue fills with no way to approve entries.
+// Without ADMIN_USER_ID every admin route silently 404s.
 if (typeof process !== "undefined" && !process.env.ADMIN_USER_ID) {
   console.warn(
     "[auth] ADMIN_USER_ID is not set. /admin/* routes will reject all callers as 404. " +
@@ -459,19 +261,10 @@ if (typeof process !== "undefined" && !process.env.ADMIN_USER_ID) {
 }
 
 /**
- * Extract the authenticated user id from Supabase session cookies.
- *
- * ⚠ Never `getUser()` here — network round-trip to GoTrue (≈5 Postgres queries)
- * on EVERY cookie-authed API request. `getClaims()` verifies the access token
- * locally against the ES256 JWKS; a tampered signature errors, an HS256/kid-less
- * legacy token degrades to a network `getUser()` inside auth-js.
- *
- * ⚠ THE try/catch IS LOAD-BEARING. `getClaims()` converts only `AuthError`s into
- * `{ data: null, error }`; auth-js `validateExp` throws a PLAIN `Error` ("JWT has
- * expired" / "Missing exp claim") that `getClaims()` re-throws at the caller.
- * Every `/api/channels/**` route composes this via `withWorkspaceAuth`, so an
- * uncaught throw is a 500 on every API route instead of the required 401. Every
- * road — thrown, errored, no session — must end at `null`.
+ * The user id from Supabase session cookies. Never `getUser()` here: a network round trip per
+ * request; `getClaims()` verifies the token locally against the JWKS.
+ * The try/catch is load-bearing: `getClaims()` re-throws a plain `Error` on an expired JWT, which
+ * would be a 500 instead of a 401 — every road must end at `null`.
  */
 async function getSessionUser(request: NextRequest): Promise<{ id: string } | null> {
   try {
@@ -484,7 +277,7 @@ async function getSessionUser(request: NextRequest): Promise<{ id: string } | nu
             return request.cookies.getAll();
           },
           setAll() {
-            // API routes don't need to set cookies — middleware handles refresh
+            // Middleware handles refresh; API routes never set cookies.
           },
         },
       }

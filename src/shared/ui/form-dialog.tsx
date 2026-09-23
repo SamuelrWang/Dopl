@@ -1,49 +1,20 @@
 "use client";
 
 /**
- * THE POPUP FORM KIT — the recipe Samuel approved on the New agent popup, stated ONCE so the
- * next dialog composes it instead of copying it (2026-09-08).
- *
- * His words, verbatim, because this file exists for them: *"i want to make a pop up for the
- * threads creation as well. And put in the new agent button in the agents tab. Also, what other
- * buttons result in a pop up? Because i want to start conforming all pop ups to the UI of the one
- * we just made, we should make a design system for this."*
- *
- * ⚠ IT IS AN EXTRACTION, NOT A NEW FACE. Every rule below was
- * `channels/components/launch-agent-dialog.tsx` an hour ago and moved unchanged — the CSS module came
- * with it, verbatim, exactly as its own docblock said it would when the experiment was ruled in.
- * `launch-agent-dialog.test.tsx` passes with no edit, and that is the proof the move cost nothing.
- *
- * THE ANATOMY, top to bottom:
- *   1. `StandardDialog` — one width, the uppercase title top-left of a close ×.
- *   2. {@link FormSection}s, stacked — a SEMI-BOLD label ABOVE its control, never beside it.
- *   3. text entry is {@link UnderlineField}: no box, a 1px `--border-strong` rule at rest, a 2px
- *      ink line sweeping in from the left on focus (reduced motion keeps the state, drops the
- *      sweep).
- *   4. a single choice is {@link PillChoice}: `SegmentedControl variant="plain" size="md"` —
- *      30px, regular weight, gray fill, no hairline, one option preselected.
- *   5. the footer: a text Discard on the left of the pair, the `auth-btn-3d` verb on the right,
- *      both `--action-h-sm` and `rounded-[8px]`.
- *
- * ⚠ THE TWO SCALES ARE NOT INTERCHANGEABLE. Everything INSIDE a popup form is the 30px
- * small-action scale (`--action-h-sm`); the 36px scale belongs to the PAGE buttons that open one
- * (`channels/components/bits.tsx › TAB_ACTION`, the Agents tab's New agent). A dialog cut to 36px is the
- * drift this file exists to stop.
- *
- * ⚠ ESCAPE AND THE BACKDROP **ARE** DISCARD, so {@link FormDialog} takes ONE exit and not two.
- * A dialog whose × kept a half-typed draft the operator dismissed would be remembering a decision
- * they undid — and a second callback is how the × and the button come to disagree.
- *
- * ⚠ EVERY DIALOG THAT COLLECTS INPUT IS A `FormDialog`. A dialog that only asks a yes/no question
- * stays `shared/ui/confirm-dialog.tsx › ConfirmDialog` — it has no fields, so it has nothing this
- * kit gives it. The live conformance table is docs/DESIGN-SYSTEM.md's "Popup forms" section.
+ * The popup form kit: every dialog that collects input is a `FormDialog` (a yes/no question stays
+ * `confirm-dialog.tsx › ConfirmDialog`). Anatomy: `StandardDialog`, stacked {@link FormSection}s
+ * (label above control), {@link UnderlineField} for text, {@link PillChoice} for a single choice,
+ * and a footer of text Discard + `auth-btn-3d` verb.
+ * Everything inside a popup is the 30px `--action-h-sm` scale; 36px belongs to the page buttons
+ * that open one (`channels/components/bits.tsx › TAB_ACTION`).
+ * Escape, the backdrop and × are Discard, so {@link FormDialog} takes one exit, not two.
+ * Conformance table: docs/DESIGN-SYSTEM.md, "Popup forms".
  */
 
 import { useState, type ReactNode } from "react";
 import { DialogActions, StandardDialog } from "./standard-dialog";
 import { SegmentedControl } from "./segmented-control";
 import { cn } from "@/shared/lib/utils";
-// Discard is `SMALL_TEXT_BUTTON` — the composer's own text-button face, one declaration.
 import { SMALL_TEXT_BUTTON } from "./small-action-button";
 import styles from "./form-dialog.module.css";
 
@@ -53,14 +24,10 @@ const PRIMARY_BTN =
   "font-semibold text-text-on-cta";
 
 /**
- * ONE SECTION — the bold label, then the control under it.
- *
- * ⚠ THE WEIGHT LIVES IN THE MODULE, NOT PER CALLER (Samuel, 2026-09-08: *"All of the headers
- * (name, description, identity, etc), should be bolded"*). Every label on every popup form is
- * `.label` and nothing else, which is what `launch-agent-dialog.test.tsx` pins by asserting that
- * the four labels share ONE class string and that none carries a `font-*` utility.
- * ⚠ `htmlFor` MAKES IT A `<label>`; without one it is a `<span>`, because a `<label>` wrapping a
- * pill row would make the word itself click the first option.
+ * One section: the bold label, then the control under it. The weight lives in the module's
+ * `.label`, never per caller (pinned by `launch-agent-dialog.test.tsx`). `htmlFor` makes it a
+ * `<label>`; without one it is a `<span>`, since a `<label>` around a pill row would click the
+ * first option.
  */
 export function FormSection({
   label,
@@ -71,7 +38,7 @@ export function FormSection({
   label: string;
   /** The control's id, for a text field. Absent ⇒ the label is a plain span. */
   htmlFor?: string;
-  /** ⚠ A WORD OR TWO, NEVER LONGER THAN ONE LINE (INVARIANTS §5, minimal copy). */
+  /** A word or two, never longer than one line (INVARIANTS §5). */
   caption?: string;
   children: ReactNode;
 }) {
@@ -96,14 +63,9 @@ export function FormSection({
 }
 
 /**
- * ONE TEXT FIELD — the label, then the line.
- *
- * ⚠ THE ACTIVE CLASS IS REACT STATE, NOT `:focus-within`, and the module states why: jsdom loads
- * no stylesheet, so a pure-CSS focus rule cannot be pinned on a rendered tree. The animation is
- * the CSS module's either way, and `.lineActive` is the CONTRACT the suites match on.
- * ⚠ `multiline` SWAPS THE ELEMENT AND NOTHING ELSE — same label, same line, same sweep. Enter
- * therefore breaks the line and does not submit, which is the rule the composer's own body field
- * has carried since 2026-08-26.
+ * One text field: the label, then the line. The active class is React state, not
+ * `:focus-within`, because jsdom loads no stylesheet; `.lineActive` is the contract suites match
+ * on. `multiline` swaps the element only, so Enter breaks the line and does not submit.
  */
 export function UnderlineField({
   label,
@@ -125,38 +87,19 @@ export function UnderlineField({
   id: string;
   caption?: string;
   multiline?: boolean;
-  /** Starting height in lines for a `multiline` field (Samuel, 2026-09-08: instructions
-   *  "shouldn't be a one line default"). Grows past it with the text; 1 = as tall as a
-   *  one-line field. */
+  /** Starting height in lines for a `multiline` field; it grows with the text. */
   minRows?: number;
-  /**
-   * The SERVER'S OWN CEILING, felt at the keyboard rather than as a 400 after the fact.
-   * ⚠ ADDITIVE AND OPTIONAL (2026-09-15): every existing caller omits it and is unchanged.
-   * ⚠ It is a MIRROR of a zod `.max()`, so a caller that passes one owes a comment naming
-   * the schema it copies — a cap only this file knows is a cap that silently drifts.
-   */
+  /** The server's own ceiling, felt at the keyboard. It mirrors a zod `.max()`, so a caller that
+   *  passes one names the schema it copies. */
   maxLength?: number;
   /**
-   * ENTER SUBMITS — for a SINGLE-LINE field whose dialog has one obvious verb.
-   * ⚠ IGNORED WHEN `multiline`, and that is the kit's standing rule rather than this
-   * prop's caution: Enter breaks the line in a body field and only the verb raises the
-   * write (the composer's rule since 2026-08-26, restated in {@link UnderlineField}'s
-   * own docblock). Wiring it on both would make one popup disagree with the others.
-   * ⚠ The caller's handler must re-check its own guard — a disabled-looking button a
-   * keystroke can still fire is the bug this shape invites.
-   * ⚠ IME-GUARDED (2026-09-15), the same guard every other Enter handler in the tree
-   * keeps (`channels/components/agent-composer.tsx`, `use-composer-mentions.ts`,
-   * `shared/ui/inline-editable-row.tsx`): a CJK operator presses Enter to COMMIT A
-   * CANDIDATE, so an unguarded handler raises a write they did not ask for AND
-   * `preventDefault`s the confirmation away.
+   * Enter submits, for a single-line field with one obvious verb; ignored when `multiline`.
+   * The caller's handler must re-check its own guard (a keystroke can fire a disabled-looking
+   * verb). IME-guarded: a CJK operator's Enter commits a candidate and must not raise a write.
    */
   onEnter?: () => void;
-  /**
-   * THE FIELD THE CARET LANDS IN. ⚠ At most ONE per dialog — `StandardDialog` does no
-   * focus management of its own, so two would race and the loser's field would look
-   * focused to nobody. Additive and default-`false`: every existing caller opens with
-   * no field focused, exactly as it did.
-   */
+  /** The field the caret lands in. At most one per dialog: `StandardDialog` manages no focus,
+   *  so two would race. */
   autoFocus?: boolean;
 }) {
   const [focused, setFocused] = useState(false);
@@ -199,15 +142,10 @@ export function UnderlineField({
 }
 
 /**
- * ONE SINGLE-CHOICE ROW — 30px borderless pills under a bold label.
- *
- * ⚠ `plain` + `md` ARE THE RULING, IN TWO WORDS: gray fill with no hairline, at `--action-h-sm`.
- * Both live on the shared primitive, and this wrapper FIXES them so a popup form cannot reach a
- * fifth face by passing a different pair.
- * ⚠ `flex-wrap` IS THE CONSUMER'S, deliberately: an identity roster has no width budget this file
- * can promise, and a row that wrapped by default would silently reshape a two-option choice.
- * ⚠ `ariaLabel` IS REQUIRED — the visible word above the row is not attached to the `role=
- * "tablist"`, so without it a screen-reader operator gets an unnamed group.
+ * One single-choice row: 30px borderless pills under a bold label. `plain` + `md` are fixed here
+ * so a popup form cannot reach another face. `flex-wrap` is the consumer's, since a roster has no
+ * width budget this file can promise. `ariaLabel` is required: the visible label is not attached
+ * to the `role="tablist"`.
  */
 export function PillChoice<K extends string>({
   label,
@@ -242,23 +180,18 @@ export function PillChoice<K extends string>({
   );
 }
 
-/** The footer's right-hand verb. `busy` disables WITHOUT dimming; `disabled` does both, because
- *  a control that is merely in flight has not become unavailable. */
+/** The footer's verb. `busy` disables without dimming; `disabled` does both (in flight is not
+ *  unavailable). */
 export interface FormDialogPrimary {
   label: string;
   onClick: () => void;
   disabled?: boolean;
   busy?: boolean;
-  /** ⚠ A DISABLED SUBMIT SAYS WHY (INVARIANTS §8, rule 4) — the `title`, one short sentence. */
+  /** A disabled submit says why (INVARIANTS §8): the `title`, one short sentence. */
   hint?: string;
 }
 
-/**
- * THE SHELL — title, close ×, the stacked sections, the footer pair.
- *
- * ⚠ ONE EXIT, NOT TWO: `onDiscard` is the ×, the backdrop, Escape AND the Discard button. See
- * the header.
- */
+/** The shell. One exit: `onDiscard` is the ×, the backdrop, Escape and the Discard button. */
 export function FormDialog({
   open,
   onDiscard,
@@ -271,11 +204,10 @@ export function FormDialog({
 }: {
   open: boolean;
   onDiscard: () => void;
-  /** Visible heading AND the dialog's accessible name (`StandardDialog`'s own rule). */
+  /** Visible heading and the dialog's accessible name. */
   title: string;
-  /** ⚠ `false` when the title interpolates a name the operator typed — CSS
-   *  `capitalize` would rewrite "iPhone leads" to "IPhone Leads"
-   *  (`standard-dialog.tsx › DIALOG_TITLE_AS_TYPED`). */
+  /** `false` when the title interpolates a name the operator typed: CSS `capitalize` would
+   *  rewrite "iPhone leads" (`standard-dialog.tsx › DIALOG_TITLE_AS_TYPED`). */
   titleCase?: boolean;
   /** Accessible name for the ×, where a surface has more than one open dialog. */
   closeLabel?: string;

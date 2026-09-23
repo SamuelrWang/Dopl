@@ -4,94 +4,30 @@ import {
   resolveDefaultResponder,
   UNADDRESSED_RESPONDER_DEFAULT,
   type ResponderChoice,
-  // 2026-09-06 (items 10/11): the per-member setting that replaced the room-wide pin.
   type UnaddressedResponderSetting,
 } from "../lib/agent-mentions";
 import { recentAgentsAddressedBy } from "../lib/agent-post-stamp";
 import type { SessionStateRow } from "./collab-dto";
-// ⚠ `ChannelRow` LEFT THIS IMPORT ON 2026-09-07 with the room-wide pin that was its only
-// reader (see `defaultResponder`'s docblock below, which keeps the record of the parameter).
 import * as repoMessages from "./repository-messages";
-// 2026-09-06 (items 10/11): `findUnaddressedResponder` — the author's own setting, read on the
-// RR3 branch only. The channel repository owns `channel_members`; there is no members-only
-// module and this change was not the place to mint one.
 import * as repo from "./repository";
 import * as repoSessions from "./repository-sessions";
 import type { ChannelContext } from "./service-shared";
 
 /**
- * **THE THREE RESILIENCE RULES** (2026-09-02, v2 wave B slice B4 — Samuel's
- * ruling B1), one function each.
- *
- * ⚠ **ITS OWN FILE (§1) BECAUSE `service-wake-verdict.ts` REACHED THE 500-LINE
- * CAP**, and the seam is real rather than arithmetic: everything here changes
- * when a RESILIENCE rule changes, and that file when the PRECEDENCE between
- * explicit addressing and repair does. Same arrangement `service-writes.ts` /
- * `service-writes-direct.ts` and `types.ts` / `types-delivery.ts` already have —
- * `service-wake-verdict.ts` is the entry point and there is no second caller of
- * anything here.
- *
- * ⚠ **THEY EXIST BECAUSE THE FAN-OUT NARROWS** (`b-fanout-narrow`). Narrowing
- * delivery to the addressed recipient, on its own, means a message that named
- * nobody reaches nobody — and Samuel's ruling in the same breath is that a
- * forgotten `@` must never stall a conversation. The repair is the SERVER'S, so
- * every desktop gets it at once and the weakest build in the field does not set
- * the rule.
- *
- * ⚠ **THE ARMS ARE DISJOINT BY (in a thread?) × (author kind), SO EXACTLY ONE
- * FIRES**, and the caller applies them in that shape. None of them is a fallback
- * for another: RR1 answering nobody does not hand the message to RR3.
+ * The wake verdict's resilience rules; `service-wake-verdict.ts` is the entry point and only
+ * caller. The fan-out narrows to the addressed recipient, so a forgotten `@` must be repaired here,
+ * server-side, so every desktop gets the same rule. The arms are disjoint by (in a thread?) ×
+ * (author kind): exactly one fires and none is a fallback for another. RR2 (`reciprocalParty`) is
+ * retired; its `reciprocal` verdict is a tombstone in `types-delivery.ts › ChannelWakeVerdict`.
  */
 
 /**
- * **EVERY AGENT LIVE IN THIS ROOM, WHOEVER RUNS IT** — RR3's candidate set, and
- * the LIST a `delivery=none` reports.
- *
- * ⚠ **CHANNEL-WIDE, AND THAT IS NOT THE CROSS-ACCOUNT WAKE THE CARVE FORBIDS.**
- * Both its callers are gated on a PERSON having written the message — RR3, and
- * (since 2026-09-04) `service-wake-verdict.ts › resolveAgentRecipients`'s human
- * arm. An unaddressed human post already reaches every machine's agents in the
- * room today, each machine feeding its own; a human post that TYPED a handle is
- * asking for strictly less than that. The carve is about what an AGENT-authored
- * message may start, and no path from an agent author reaches this function: the
- * two doors an agent author CAN take stay own-scoped by construction
- * (`resolveAgentRecipients`'s agent arm, and
- * `service-writes-metadata-recipient.ts › liveAgentHandles` for `to=`).
- * ⚠ There is deliberately no `authorKind` test INSIDE this function; a second
- * spelling of the fence is what the desktop's three-module version cost. The
- * gate lives at each call site, where the credential is already in hand.
- *
- * ⚠ **PRESENCE, NOT RECENCY — LIVENESS IS MEMBERSHIP (Samuel, 2026-08-22).** The
- * push is a FULL-SET REPLACE keyed on `(user, workspace)` and
- * `main/session-state-push.js › liveForWire` drops ended rows before they are
- * sent, so a session that has gone away is deleted BY OMISSION: a row in this
- * read is a session that has not gone away. That is the whole test.
- *
- * ⚠ **THE WALL-CLOCK FRESHNESS FILTER IS DELETED HERE, AND ITS GRAVE IS THIS
- * BLOCK.** It stood until 2026-09-05 and it read `updated_at` as a HEARTBEAT,
- * which that column has never been — the push fires on state CHANGE only, so
- * *"an agent thinking for four minutes writes nothing at all"* and one idle for
- * an hour writes nothing either. Filtering on it collapsed
- * `service-wake-freshness.ts › isFresh`'s own asymmetry at the exact point that
- * docblock forbids: a filtered-out row is indistinguishable from a row that is
- * not there, so STALE was read as ABSENT. Rows #1080, #1081 and #1092 of the
- * Mobile Command Center are the bill — three agents deliberately idle on a
- * verification hold, every row aged past the window, candidate list EMPTY, and
- * every untagged post by the operator stored `verdict=none` while three agents
- * sat listening in the room.
- * ⚠ **THIS IS SAMUEL'S 2026-08-22 AGENTS-TAB RULING, REACHING THE SURFACE THAT
- * NEVER TOOK IT** — *"the card STAYS until the session actually goes away"*. See
- * `channels/components/agents-model.ts › peerCardsFor`, which deleted the
- * identical guard for the identical reason and states the argument in full. A
- * liveness rule built on a stamp that is not a heartbeat cannot be tuned; it has
- * to go.
- * ⚠ **`isFresh` SURVIVES ONLY WHERE IT LICENSES A REFUSAL** — `ownLiveAgentIds`'s
- * `projectionFresh`, which a caller may act on only when TRUE. Resolving is the
- * other direction and does not need it.
- *
- * ⚠ **A NAMELESS ROW IS STILL DROPPED, AND THAT IS NOT A FRESHNESS RULE.**
- * `name` IS the agent id every door addresses; a row that carries none names
- * nobody and could not be woken if it were picked.
+ * Every live agent in this room, whoever runs it: RR3's candidates and the list a `delivery=none`
+ * reports. Channel-wide is safe only because every caller is gated on a PERSON authoring the post;
+ * that gate lives at each call site, never here (agent authors stay own-scoped).
+ * Liveness is presence: the push is a full-set replace that omits ended sessions. Never filter on
+ * `updated_at` — it is not a heartbeat, and a filtered row would read stale as absent.
+ * A nameless row is dropped: `name` is the agent id every door addresses.
  */
 export async function liveChannelSessions(
   ctx: ChannelContext,
@@ -105,28 +41,11 @@ export async function liveChannelSessions(
 }
 
 /**
- * **RR1 — A THREAD REPLY WITH NO `to` GOES TO THE THREAD'S OTHER PARTY.**
- *
- * ⚠ **"OTHER" IS TOTAL BECAUSE A THREAD HAS EXACTLY TWO PARTIES.**
- * `isThreadParticipant` 403s a third before this ever runs, so the author is one
- * of `{created_by, target_user_id}` and the answer is the one they are not.
- *
- * ⚠ **IT READS THE SERVER'S OWN STAMPS AND COSTS NO ROUND TRIP.**
- * `resolvePostMetadata` fold 3 has already re-stamped `taskCreatedBy` /
- * `taskTarget` from the resolved thread row, so the pair is here for free and is
- * the same pair the fence checked. Re-reading `channel_tasks` would be a second
- * read that can only agree.
- *
- * ⚠ **A LEGACY `task-<channelId>-<seq>` TAG RESOLVES TO NOBODY HERE, ON
- * PURPOSE.** Those ids match no row, so fold 3 stamps none of the four keys (the
- * titleless card is the tell) and this answers `null` — the send then keeps the
- * pre-existing `thread` verdict: it reaches sessions already working that thread
- * and wakes nothing. That is the behaviour those posts have today, and inventing
- * a party for them would mean a second read of the OPENER on every lifecycle
- * echo an installed desktop sends.
- *
- * ⚠ **AN UNADDRESSED THREAD (`taskTarget` absent) ALSO RESOLVES TO NOBODY** —
- * there is no other party to be the other of.
+ * RR1: a thread reply with no `to` goes to the thread's other party. Total because a thread has
+ * exactly two parties (`isThreadParticipant` 403s a third first). Reads the stamps
+ * `resolvePostMetadata` already re-derived from the thread row, so no round trip. A legacy
+ * `task-<channelId>-<seq>` tag or an unaddressed thread resolves to `null`: the send keeps the
+ * `thread` verdict and wakes nothing.
  */
 export function threadOtherParty(
   ctx: ChannelContext,
@@ -142,142 +61,41 @@ export function threadOtherParty(
   return null;
 }
 
-// ── 🔴 **RR2 `reciprocal` IS DELETED (2026-09-18, Samuel's ruling)** ─────────────────────────
-//
-// *"Agents should only be woken up when addressed (besides the logic for a user with no @ in
-// their message)."* RR2 was the arm that REPAIRED an unaddressed AGENT post's address, aiming it
-// back at whoever last addressed that agent in the room — and its whole charter, *a forgotten
-// `@` must never stall a conversation*, is a PERSON's problem. An agent now chooses: it addresses
-// somebody, or it files a record. There is nothing left to repair, so `reciprocalParty` and the
-// read under it (`repository-messages.ts › findLastRoomAddressToAgent`) are deleted rather than
-// left unreachable.
-//
-// ⚠ **THE VERDICT VALUE SURVIVES AS A TOMBSTONE AND MUST**: rows written before today carry
-// `wake_verdict = 'reciprocal'`, the column's `CHECK` still admits it
-// (`20260918120000_channel_default_responder.sql`), and `types-delivery.ts › ChannelWakeVerdict`
-// still names it so a reader of an old row is not handed a word the type cannot express. What is
-// gone is the PRODUCER. ⚠ The desktop treats such a row as context-free and wake-free
-// (`main/session-dispatch.js`), so an old row is inert rather than dangerous.
-//
-// ⚠ **`RESILIENCE_WINDOW_MS` LEFT THIS FILE WITH IT** — it was RR2's window and nothing here
-// reads it any more. It is still live in `shared/channels/caps.ts` for the composer's own
-// recency derivations; only this module stopped importing it.
-
 /**
- * **RR3 — AN UNADDRESSED HUMAN MESSAGE IS ANSWERED BY ONE AGENT, DECIDED BY THE
- * ROOM.** Three arms, in order, and the third is a real answer:
- *
- *   1. the channel's configured **default responder**, if that handle is live;
- *   2. else **exactly one** live agent in the channel → it;
- *   3. else, with several live, the one that POSTED here most recently;
- *   4. else the one that LAUNCHED most recently.
- *   Nobody at all is answered only when the room holds NO live agent.
- *
- * ⚠ **ARM 1 DEGRADES INTO ARM 2 RATHER THAN FAILING.** The setting stores a
- * HANDLE and nothing enforces that it names a live session (the migration says
- * why: an FK to `agent_identities` would be a cross-visibility reference from a
- * row members can read). A responder that is not running is simply not the
- * answer today.
- *
- * ⚠ **ARM 2 IS WHY THE LLM TRIAGE LOOP GOES (B6).** `main/session-wake-tiers.js
- * › tierFor` collapses to `n === 1 ? SOLO : NONE`, and RR3 arm 2 IS solo —
- * computed here, once, for free, from the projection the server already holds.
- *
- * ⚠ **AN EMPTY ROOM IS NOT A FAILURE AND MUST NOT BECOME A REFUSAL.** Nobody was
- * named, so nothing was mis-addressed: this is a person talking to a room with
- * no agent in it. The refusal (`CHANNEL_RECIPIENT_UNRESOLVED`) belongs to a `to`
- * that named somebody who is not there — a different fact with a different
- * remedy.
- *
- * ⚠ **TWO LIVE AGENTS AND NO SETTING WAS "DELIBERATELY NOBODY" UNTIL 2026-09-04,
- * AND THAT WAS THE COMMON CASE WEARING AN EDGE CASE'S CLOTHES.** Row #966: a
- * person wrote in a room with two live agents and no default, the post stored
- * `verdict=none`, fed 0 of 2, and he re-sent it with a tag. Two live agents is
- * the ordinary shape of a multiplayer channel, and Samuel's ruling in the same
- * breath as the fan-out narrowing is that a forgotten `@` must never stall a
- * conversation. Arms 3 and 4 answer it, and the REASON is stamped so the
- * transcript can say why — see {@link ResponderReason}.
- *
- * ⚠ **ARM 3's READ IS LAZY.** Arms 1 and 2 settle the overwhelming majority of
- * rooms with no round trip at all; only a multi-agent room with no configured
- * responder pays for `listRecentRoomAgentPosts`.
- */
-/**
- * ⚠ **THE RULE ITSELF MOVED TO `lib/agent-mentions.ts › resolveDefaultResponder`
- * ON 2026-09-02 (slice B10)**, and this is the row-shaped adapter over it. The
- * composer's recipient line has to predict THIS answer for an unsent draft, and
- * a client cannot import a `server-only` module — so the arms live where both
- * trees can read them and WHEN they are asked stays here. Nothing about the
- * behaviour changed; this function's own tests still drive it.
+ * RR3: an unaddressed human message is answered by at most one agent. The row-shaped adapter over
+ * `lib/agent-mentions.ts › resolveDefaultResponder`, which lives there so the composer can predict
+ * the same answer. An empty room answers nobody and is not a refusal: nothing was mis-addressed
+ * (`CHANNEL_RECIPIENT_UNRESOLVED` is for a `to` naming someone absent).
  */
 export async function defaultResponder(
-  /**
-   * ⚠ **THE ASKING MEMBER'S OWN SETTING, NOT THE CHANNEL'S** (2026-09-06, Samuel's ruling on
-   * items 10 and 11). This parameter was `channel: ChannelRow`, read for its room-wide
-   * `default_responder_agent_name`. The question is per-person now — *"if there's another
-   * member in the room, their last agent address would be different from my last agent
-   * address"* — so the caller supplies the AUTHOR's `channel_members.unaddressed_responder`.
-   *
-   * ⚠ **THE CALLER COERCES; THIS SIGNATURE TAKES NO NULL.** `normalizeUnaddressedResponder`
-   * exists so "I could not read the column" cannot arrive here spelled as "this member chose
-   * nobody" — the two are opposite answers and only one of them silences a person.
-   *
-   * ⚠ **THE CHANNEL ROW IS NO LONGER NEEDED AT ALL** — nothing else here read it.
-   */
+  /** The author's own `channel_members.unaddressed_responder`, coerced by the caller: "could not
+   *  read it" must never arrive here as `"none"`. */
   setting: UnaddressedResponderSetting,
   sessions: readonly SessionStateRow[],
-  /** Arm 3's input, fetched only if the earlier arms leave it needed. A thunk rather than a
-   *  value because the read is the arm's whole cost. */
+  /** A thunk: the recency read is this arm's whole cost, so it runs only when needed. */
   recent: () => Promise<string[]>
 ): Promise<ResponderChoice | null> {
-  // ⚠ **"No one" COSTS NOTHING AND TOUCHES NOTHING.** `resolveDefaultResponder` short-circuits
-  // on its own first line too, so this is belt-and-braces — but it also means a member who has
-  // opted out never pays for `launchOrder` or the session mapping, and can never reach the
-  // lazy read below. The cheap path and the honoured-selection path are the same path.
+  // `"none"` first: an opted-out member never pays for the sort or the read.
   if (setting === "none") return null;
   const candidates = launchOrder(sessions).map((row) => ({
     agentId: row.name,
     displayName: row.display_name,
   }));
-  // ⚠ NOTHING LIVE, NOTHING TO ASK — and no read to pay for. Previously implied by the arms,
-  // because a `null` settle returned below; stated now that it no longer does.
+  // No live agent: nobody, without paying for the read.
   if (candidates.length === 0) return null;
   const settled = resolveDefaultResponder(setting, candidates);
-  // ⚠ **ONLY `only agent` SHORT-CIRCUITS THE READ, AND THE WIDENING IS THE 2026-09-15 RULING'S
-  // ONE COST** (F-705). This gate read `settled === null || settled.reason !== "most recently
-  // launched"`, which was exact while the tertiary arm ALWAYS answered a name: any other reason
-  // meant the room had settled without needing to know who the asker addressed, and `null` could
-  // only mean "no agents at all".
-  // ⚠ **`null` MEANS SOMETHING ELSE NOW — "nobody I addressed is alive" — AND RETURNING ON IT
-  // WOULD BREAK THE PRIMARY RULE.** With two live agents the settle-without-recency answer is
-  // `null`, so an early return there would skip arm 3 entirely and a person's last-tagged LIVE
-  // agent would stop being the default: exactly what Samuel's #1 forbids (*"tagged messages sent
-  // from me go to the agent that was tagged by me last"*). The tertiary arm must never outrank
-  // the primary one, and this line is where that is enforced.
-  // ⚠ THE COMMON ROOM IS UNAFFECTED: one live agent still settles with no round trip at all.
+  // Only `only agent` skips the read (F-705). A `null` here is an answer ("nobody"), not "no
+  // opinion": with several live agents it is the no-recency answer, and returning it would skip
+  // the asker's last-tagged live agent.
   if (settled !== null && settled.reason === "only agent") return settled;
   return resolveDefaultResponder(setting, candidates, await recent());
 }
 
 /**
- * **THE ASKING MEMBER'S OWN "unaddressed messages" SETTING** (2026-09-06, Samuel's ruling on
- * items 10 and 11) — one keyed lookup on `(channel_id, user_id)`.
- *
- * ⚠ **IT LIVES HERE, WITH THE OTHER RESILIENCE READS**, because it is one of them: RR3's inputs
- * are the room's live sessions, the author's recent tags, and now the author's own setting.
- * Putting it in the verdict file would split one rule's reads across two modules.
- *
- * ⚠ **IT FAILS TO THE DEFAULT, NEVER TO `"none"`, AND THAT DIRECTION IS THE WHOLE POINT.** The
- * reflex is that the narrow answer is the safe one; here it is the opposite. `"none"` means
- * "this person's untagged messages reach nobody", so a missing row, an unreadable column or a
- * transient database error would SILENTLY STOP ANSWERING a member who never chose that — and
- * they would have no way to tell, because the failure looks exactly like the setting working.
- * `normalizeUnaddressedResponder` owns the coercion; this function must not grow a second one.
- *
- * ⚠ **A MISSING ROW IS NOT AN ERROR HERE.** RR3 only runs for a post that was accepted, so the
- * author is a member — but a race (a member removed between the write and the verdict) must not
- * throw on the post path. Absent reads as the default, which is what a member who never opened
- * Settings has anyway.
+ * The asking member's own "unaddressed messages" setting: one keyed lookup on
+ * `(channel_id, user_id)`. Fails to the default, never to `"none"`: a missing row or a read error
+ * must not silently stop answering a member who never chose that. `normalizeUnaddressedResponder`
+ * owns the coercion; do not add a second.
  */
 export async function unaddressedResponderFor(
   channelId: string,
@@ -288,23 +106,15 @@ export async function unaddressedResponderFor(
       await repo.findUnaddressedResponder(channelId, userId)
     );
   } catch {
-    // ⚠ SWALLOWED DELIBERATELY, AND ONLY HERE. The post has already been written; failing the
-    // verdict over a settings read would turn a degraded lookup into a lost message. The
-    // fail-safe is the default, per the block above.
+    // Swallowed here only: the post is already written, and a failed settings read must degrade
+    // to the default rather than lose the message.
     return UNADDRESSED_RESPONDER_DEFAULT;
   }
 }
 
 /**
- * THE ROOM'S LIVE SESSIONS, **MOST RECENTLY LAUNCHED FIRST** — arm 4's ordering,
- * supplied here because {@link resolveDefaultResponder} deliberately orders
- * nothing itself.
- *
- * ⚠ **`started_at` IS THE DESKTOP'S OWN REPORT OF WHEN THE SESSION BEGAN, AND
- * `created_at` IS THE FALLBACK** — the row's first push, which is the closest
- * thing the server has for a build that reports no start. An unparseable or
- * absent pair sorts LAST rather than first: a session that cannot say when it
- * launched must not win a tie-break about which launched most recently.
+ * Live sessions, most recently launched first (`started_at`, else the row's first push,
+ * `created_at`). An unparseable or absent pair sorts last.
  */
 function launchOrder(
   sessions: readonly SessionStateRow[]
@@ -317,42 +127,16 @@ function launchOrder(
 }
 
 /**
- * ARM 3's ANSWER — **the agents THIS AUTHOR has addressed in this room**, most recent first
- * (Samuel, 2026-09-04), **with no time window at all** (Samuel, 2026-09-06).
- *
- * ⚠ **THE WINDOW WAS THE SECOND BUG, AND IT OUTLIVED THE FIRST BY TWO DAYS.** Both this walk and
- * the read under it were bounded by {@link RESILIENCE_WINDOW_MS}, so fifteen minutes after a person
- * tagged an agent their default fell through to arm 4 — *the most recently launched* — and the room
- * answered in a different voice with nothing they had done. The ruling: author stickiness has NO
- * expiry. The agent you last addressed stays the default until you address a different live agent,
- * or that agent ends; then the next-most-recent tag wins, and only then the arms below.
- * ⚠ **THE ONLY BOUND LEFT IS THE PAGE** — `RECENT_AGENT_POSTS_LIMIT` (50) rows of this author's own
- * main-room messages, newest `seq` first. It suffices because the walk stops at the FIRST id that
- * is still live: fifty of one person's own room posts is far more than the handful it takes to find
- * their last surviving tag, and a person whose last fifty room posts named no live agent has no
- * stickiness to honour — falling to arm 4 there is the correct answer, not a truncation.
- * ⚠ **THE WINDOW IS NOT THIS READ'S.** `RESILIENCE_WINDOW_MS` bounded RR2, which is deleted
- * (2026-09-18), and it still bounds the composer's own recency derivations. It never bounded
- * this one: "who spoke here lately" is freshness and goes stale; "who did this person address"
- * is a habit and does not.
- *
- * ⚠ **IT WAS "who posted here last" UNTIL 2026-09-04, AND THAT IS THE BUG IT FIXES.** One agent
- * addressing another re-pointed the room's default responder, so the operator saw the answer wander
- * with nothing they had done. The rule is now stickiness PER PERSON: the agent you last tagged is
- * the one you are probably still talking to.
- *
- * ⚠ **THE RULE IS `lib/agent-post-stamp.ts › recentAgentsAddressedBy`, IMPORTED** — the composer
- * asks the same question of the transcript it is rendering, and a second spelling here is how the
- * recipient LINE comes to name one agent and the stored verdict another.
- *
- * ⚠ **THE WALK DOES NOT FILTER FOR LIVENESS AND MUST NOT.** It answers "who did they address"; the
- * resolver below intersects that with the live candidates, so an ENDED agent cannot eat the pick —
- * it is simply not a candidate and the next id in this list is tried. One rule in the resolver
- * rather than two half-rules in both places.
+ * The agents THIS author addressed in this room, most recent first, with no time window: the one
+ * you last tagged stays your default until you tag another live agent or it ends. The only bound
+ * is the read's page of the author's own room posts, enough because the walk stops at the first
+ * live id. The rule is `lib/agent-post-stamp.ts › recentAgentsAddressedBy`, shared with the
+ * composer so its recipient line and the stored verdict cannot disagree. The walk does not filter
+ * for liveness; the resolver intersects it with the live candidates.
  */
 export async function recentRoomAgents(
   channelId: string,
-  /** The author whose habit is being read — the routed message's own author. */
+  /** The routed message's own author. */
   authorUserId: string,
   now: number
 ): Promise<string[]> {
@@ -363,15 +147,13 @@ export async function recentRoomAgents(
       seq: Number(row.seq),
       createdAt: row.created_at,
       authorUserId: row.author_user_id,
-      // ⚠ **CARRIED SO THE RULE CAN DROP THIS AUTHOR'S OWN AGENTS** (2026-09-15, F-704). The read
-      // already excludes them in SQL; the mapping hands the field over anyway because the
-      // PREDICATE is the enforcement and a mocked read is one fixture away from not filtering.
+      // Carried so the rule itself drops this author's own agents (F-704); the SQL excludes them
+      // too, but the predicate is the enforcement.
       authorKind: row.author_kind,
       recipientAgentIds: row.recipient_agent_ids ?? null,
       metadata: (row.metadata ?? null) as Record<string, unknown> | null,
     })),
-    // ⚠ NO `windowMs` — see the header. `now` is still handed in rather than read, so the walk
-    // stays a pure function of the write's own clock even though nothing bounds it by time.
+    // No `windowMs`; `now` is still passed so the walk stays a pure function of the write's clock.
     { now }
   );
 }

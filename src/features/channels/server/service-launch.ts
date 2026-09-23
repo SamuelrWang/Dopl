@@ -1,5 +1,5 @@
 import "server-only";
-import { LAUNCH_DIRECTIVE_TTL_MS } from "../constants"; // ⚠ `PRESENCE_ONLINE_WINDOW_MS` moved with `operatorIsOnline` (§1 split, 2026-09-15)
+import { LAUNCH_DIRECTIVE_TTL_MS } from "../constants";
 import type {
   AgentColorKey,
   LaunchDirective,
@@ -15,178 +15,64 @@ import { resolveDirectiveColor } from "./service-launch-color";
 import * as launchRepo from "./repository-launch";
 import * as repoTasks from "./repository-tasks";
 import { loadVisibleChannel, type ChannelContext } from "./service-shared";
-// ⚠ THE RACE HALF OF G10, SHARED WITH THE DIRECTION LANE — see that module for
-// why the PROBE is not in it and this file states its own gate ordering instead.
 import { insertOrConverge } from "./service-mailbox-idempotency";
-// ⚠ THE IDENTITY FENCE LEFT THIS FILE ON 2026-09-02 (§1 cap). It is the CREATE's
-// third gate and its position in the order is argued below, where the gates are.
 import { resolveIdentityForDirective } from "./service-launch-identity";
-// The row → DTO mapper lives in `service-launch-dto.ts` (`service-launch-agent.ts` reads it too);
-// re-exported so no import path outside this feature changed.
 import { isTerminal, toDirective } from "./service-launch-dto";
 export { toDirective } from "./service-launch-dto";
 
-/**
- * LAUNCH-OVER-MCP — an operator's external agent asking that operator's OWN
- * desktop to start an agent (Samuel's ruling, 2026-08-22: approved, with a local
- * desktop toggle as the consent).
- *
- * ⚠ **THE SERVER STARTS NOTHING, AND CANNOT.** Agents live in a desktop main
- * process no server can reach. What this service does is FILE A REQUEST and
- * report what came back. Every result sentence has to survive that: "launched"
- * means a machine SAID it launched, and there is no third party to check it
- * against.
- *
- * ⚠ **`operator_user_id` IS ALWAYS `ctx.userId` AND IS NEVER A PARAMETER.** Not
- * on the create, not on the claim, not on the decide. An agent may ask its own
- * operator's machine to do something; the ability to name a DIFFERENT operator
- * would be the ability to start a process on a stranger's computer, and the way
- * to make that unreachable is for no function in this file to accept the
- * argument. The type signatures below are the enforcement, not a convention.
- */
+/** Launch-directive lifecycle: an operator's own agent asks that operator's own desktop to start an
+ *  agent. The server starts nothing; it files a request and reports what the machine said it did. */
 
-// ⚠ **`operatorIsOnline` MOVED TO `service-launch-presence.ts` (§1 SPLIT, 2026-09-15)** — this
-// file went over the 500-line cap when the launch gained its required `agentName`. The seam is
-// the one this lane already draws five times (`-color`, `-dto`, `-posture`, `-identity`,
-// `-agent`): that file changes when what PRESENCE means changes, this one when the CREATE
-// contract does. It was already exported for `service-launch-agent.ts`, so it had two readers
-// before it had its own file. ⚠ RE-EXPORTED so no importer moved.
 import { operatorIsOnline } from "./service-launch-presence";
 export { operatorIsOnline };
 
 export type CreateLaunchInput = {
-  /** Channel slug or id. ⚠ Resolved through the ordinary visibility gate. */
+  /** Slug or id. */
   channel: string;
-  /** Thread to start the agent on. Must belong to `channel`. */
+  /** Must belong to `channel`. */
   threadId?: string;
   goal?: string;
   model?: string;
-  /**
-   * **WHICH RUNTIME — A FIRST-CLASS FIELD, NEVER INFERRED FROM `model`** (2026-09-21, U9).
-   * ⚠ **CARRIED, NOT RESOLVED, AND THIS SERVICE CANNOT RESOLVE IT** — hence no `resolvedRuntime`
-   * beside the posture's `resolved*` group, and there must not be one. The roster is the
-   * operator's desktop registry; the MACHINE decides membership, REFUSES an explicit runtime it
-   * cannot start (`no-sdk`) rather than substituting a vendor, and reports what it did start on.
-   * Omitted is the pre-U9 chain byte for byte. `schema-launch.ts › runtime` argues it in full.
-   */
+  /** Carried verbatim, never inferred from `model`; the operator's machine resolves it and
+   *  refuses one it cannot start (`no-sdk`). */
   runtime?: string;
-  /**
-   * The agent identity to run as — **an id OR an exact name**, resolved here (2026-08-23).
-   *
-   * ⚠ IT IS A REF, NOT AN ID, AND THE RESOLUTION IS THE FENCE. `channels/` never sees an identity
-   * id it did not obtain by asking the agent-identities service what THIS caller can see, so "name
-   * an identity you cannot see" has no spelling on this path. See {@link
-   * resolveIdentityForDirective}.
-   */
+  /** An id or exact name; {@link resolveIdentityForDirective} resolves it for this caller. */
   identity?: string;
-  /**
-   * THE POSTURE THIS LAUNCH **ASKS** ITS NEW SESSION TO START ON, and whether it may launch
-   * workers (2026-09-01, T24).
-   *
-   * ⚠ **ASKS. NEVER WIDENS — AND THIS SERVICE DOES NOT AND CANNOT CHECK THAT.** The ceiling is
-   * the operator's own stored channel posture, an `electron-store` record no server sees;
-   * `main/launch-posture.js › resolveLaunch` CLAMPS the two axes to it and REFUSES a chain the
-   * channel forbids. All this path does is carry the request. ⚠ **THE TICKET'S "unless the caller
-   * is the operator" CARVE-OUT WAS REFUSED, and the reason is measurable here: every caller on
-   * this lane IS the operator's own account** (INVARIANTS §11), so the exception is not narrow,
-   * it is the whole set. Do not add one. ⚠ OMITTING ALL THREE IS THE PRE-T24 BEHAVIOUR BYTE FOR
-   * BYTE.
-   */
+  /** The posture this launch asks for. The operator's machine clamps it
+   *  (`main/launch-posture.js › resolveLaunch`): narrower sticks, never wider than the channel. */
   tools?: LaunchToolMode;
   messages?: LaunchMessageMode;
   chain?: boolean;
-  /**
-   * **THE CALLER'S IDEMPOTENCY KEY — "a retry may not queue a SECOND agent"** (2026-09-02,
-   * A10/G10).
-   *
-   * ⚠ **IT IS THE ONLY THING THAT MAKES THE SURFACE'S STRONGEST WARNING TRUE.**
-   * `op="launch_agent"` holds ~15 s and then returns PENDING, and the doctrine tells the caller
-   * not to re-issue because a second launch starts a second agent on the same work. That was
-   * enforced by NOTHING. Sending the same key again now returns the stored directive instead
-   * ({@link CreateLaunchResult.existing}). ⚠ ABSENT IS THE ORDINARY CASE and changes nothing —
-   * see `service-mailbox-idempotency.ts`.
-   */
+  /** Idempotency key: a resend returns the stored directive (`existing: true`), never a second agent. */
   clientMsgId?: string;
-  /** THE NEW AGENT'S COLOUR. ⚠ Omitted is "pick for me" (first free), never "no colour"; a taken
-   *  key is a 409 with the free set — `service-launch-color.ts`. */
+  /** Omitted = first free colour, never "no colour"; a taken key is a 409 with the free set. */
   color?: AgentColorKey;
-  agentName?: string; // ⚠ **WHAT THE NEW AGENT IS CALLED** (2026-09-15) — REQUIRED by `schema-launch.ts › LaunchCreateSchema`, optional here on §13: an older `@dopl/mcp-server` posts none, and the claiming machine names that one `New Agent`
+  agentName?: string; // required by `LaunchCreateSchema`; a nameless row is named `New Agent` by the claiming machine
 };
 
-/**
- * `offline` = no row was created and nothing was asked; the caller renders the
- * honest caveat. Any other outcome carries the filed directive.
- *
- * ⚠ **`existing: true` MEANS THE ROW WAS ALREADY THERE — this call filed
- * NOTHING** (2026-09-02, A10/G10). The caller re-sent a `clientMsgId` it had
- * used before and got the FIRST request's directive back, which is the whole
- * point: a timed-out launch may be retried without starting a second agent. The
- * MCP result renders it as `retry=existing`, because a converged retry that
- * looked like a fresh launch would leave the caller guessing exactly what the
- * key removed.
- */
+/** `offline`: no row was created. `existing: true`: a resent `clientMsgId` returned the first
+ *  request's directive and this call filed nothing. */
 export type CreateLaunchResult =
   | { offline: true; directive: null }
   | { offline: false; directive: LaunchDirective; existing: boolean };
 
-/**
- * FILE A LAUNCH DIRECTIVE.
- *
- * THREE GATES, IN THIS ORDER, AND THE ORDER IS THE CHEAPNESS ORDER:
- *  1. **THE CHANNEL MUST BE VISIBLE AND THE CALLER MUST BE A MEMBER.**
- *     `loadVisibleChannel` alone is NOT enough here and this is the one place in
- *     the feature that says so out loud: it admits a non-member to a PUBLIC
- *     channel (§5), and a launch is not a read. Starting an agent in a room you
- *     never joined is not something a member of the room agreed to, so the
- *     membership row is required on top.
- *  2. **A `threadId`, IF GIVEN, MUST BELONG TO THAT CHANNEL.** Otherwise a
- *     directive could stamp an agent onto an exchange in a different room —
- *     including one the caller cannot read. Refused, never silently dropped: a
- *     dropped thread id starts the agent in the wrong place and reports success.
- *  3. **THE IDENTITY REF, IF GIVEN, MUST RESOLVE FOR THIS CALLER** (2026-08-23).
- *     Id or exact name, through the agent-identities visibility matrix; ambiguous
- *     names REFUSE and list. See {@link resolveIdentityForDirective}.
- *  4. **PRESENCE.** See {@link operatorIsOnline} — the only gate that can pass
- *     while the answer is still "no", which is why it is last and why it does
- *     not pretend to be a decision.
- *
- * ⚠ **THE IDENTITY GATE IS DELIBERATELY ABOVE PRESENCE, WHICH BREAKS THE
- * CHEAPNESS ORDER ON PURPOSE.** `offline` is a 200 that says "nothing was asked",
- * and it is the ordinary answer for a closed laptop. Checking presence first
- * would answer a MISSPELLED OR AMBIGUOUS IDENTITY with "your machine is asleep" —
- * the caller fixes the wrong thing, asks again when the machine is up, and gets
- * the real refusal a minute later. A bad ref is the caller's own error and is
- * answerable without anyone's machine.
- *
- * ⚠ `operator_user_id` is `ctx.userId`. {@link CreateLaunchInput} has no field
- * for it.
- */
+/** File a launch directive. Gates, in order: membership → idempotency probe → thread in channel →
+ *  identity → colour → presence (`offline`, nothing filed). Identity and colour sit above presence:
+ *  a bad ref is the caller's error, answerable without anyone's machine.
+ *  `operator_user_id` is always `ctx.userId`; no function on this path accepts an operator. */
 export async function createLaunchDirective(
   ctx: ChannelContext,
   input: CreateLaunchInput
 ): Promise<CreateLaunchResult> {
   const { channel, membership } = await loadVisibleChannel(ctx, input.channel);
   if (membership === null) {
-    // ⚠ NOT-FOUND-SHAPED on purpose: to a non-member of a public channel this
-    // reads exactly like a private channel they cannot see, which is the answer
-    // §5 gives everywhere else. A distinct "you may read but not launch" error
-    // would be a new fact about the room.
+    // Membership, not just visibility (`loadVisibleChannel` admits non-members to public channels);
+    // not-found shaped so a non-member learns nothing new about the room.
     throw new LaunchDirectiveNotFoundError(input.channel);
   }
 
-  // ⚠ **THE IDEMPOTENCY PROBE SITS HERE — ABOVE THE THREAD, IDENTITY AND
-  // PRESENCE GATES — AND THE POSITION IS THE CONTRACT** (2026-09-02, A10/G10).
-  // A key that has already been filed means THIS REQUEST ALREADY HAPPENED, so the
-  // honest answer is the stored row and nothing else may be re-decided against
-  // today's world:
-  //   • THE IDENTITY GATE would refuse a retry of a launch that SUCCEEDED, if the
-  //     identity has since been deleted or unshared. The row already names the id
-  //     it resolved to.
-  //   • THE PRESENCE GATE would answer `offline` — "nothing was filed" — about a
-  //     directive that IS filed and may be running. That is the double-launch
-  //     hazard inverted, and it is the reading most likely to make a caller retry.
-  // ⚠ It is BELOW membership because the fence may never be skipped: converging
-  // on a stored row is still a read of a channel the caller must be in.
+  // Below membership, above thread/identity/presence: a filed key is this request's answer, and
+  // re-deciding it against today's world could refuse or `offline` a launch that already happened.
   if (input.clientMsgId) {
     const stored = await launchRepo.findLaunchDirectiveByClientMsgId(
       ctx.userId,
@@ -204,17 +90,13 @@ export async function createLaunchDirective(
       channel.id,
       input.threadId
     );
-    // ⚠ Reuses the thread-not-in-this-channel refusal rather than minting a
-    // launch-specific one: it is the same fact, and ids must not be probeable
-    // across channels through a new door.
+    // Same not-found as a foreign id, so thread ids can't be probed across channels.
     if (!task) throw new LaunchDirectiveNotFoundError(input.threadId);
     taskId = task.id;
   }
 
   const identity = await resolveIdentityForDirective(ctx, input.identity);
 
-  // ── **THE COLOUR**, above presence on the identity gate's argument: a caller error is
-  // answerable without anyone's machine.
   const color = await resolveDirectiveColor(ctx, channel.id, input.color);
 
   if (!(await operatorIsOnline(ctx))) {
@@ -222,10 +104,8 @@ export async function createLaunchDirective(
   }
 
   const now = Date.now();
-  // ⚠ THE RACE HALF OF G10. The probe above answers the ordinary retry; this
-  // answers two of them arriving together, where both probes missed and the
-  // partial unique index refuses the second insert. See
-  // `service-mailbox-idempotency.ts` for why the two are one rule.
+  // The race half: two concurrent retries both miss the probe and the unique index refuses the
+  // second insert (`service-mailbox-idempotency.ts`).
   const { row, existing } = await insertOrConverge({
     clientMsgId: input.clientMsgId,
     find: (key) =>
@@ -236,46 +116,23 @@ export async function createLaunchDirective(
       task_id: taskId,
       goal: input.goal ?? null,
       model: input.model ?? null,
-      // ⚠ **THE REQUESTED RUNTIME, VERBATIM AND RESOLVED NOWHERE HERE** (U9). `?? null` maps
-      // "did not ask" onto the column's spelling for it, which the machine reads as the
-      // documented chain. ⚠ **NEVER DERIVED FROM `model` ABOVE** — that inference IS the defect.
       runtime: input.runtime ?? null,
-      // ⚠ THE PAIR, WRITTEN TOGETHER. `identity_name` is a SNAPSHOT and is what
-      // survives the FK's `ON DELETE SET NULL` — without it an identity deleted
-      // between here and the claim is indistinguishable from no identity at all,
-      // and the desktop would launch a blank agent wearing an identity the caller
-      // asked for and will not notice is missing (E-4).
+      // `identity_name` is a snapshot that survives the FK's ON DELETE SET NULL, so a deleted
+      // identity stays distinguishable from none.
       identity_id: identity?.id ?? null,
       identity_name: identity?.name ?? null,
-      // ⚠ **THE REQUESTED POSTURE, CARRIED VERBATIM AND VALIDATED NOWHERE ELSE
-      // HERE.** The route's zod holds each axis to its closed enum and the column
-      // CHECK says the same at rest; this path adds no opinion, because the only
-      // opinion that matters is the OPERATOR'S CEILING and it lives on their
-      // machine. ⚠ `?? null` maps "not asked" onto the column's own spelling for it,
-      // which the desktop then resolves to that ceiling — the pre-T24 behaviour.
-      // ⚠ `chain` USES `?? null` RATHER THAN `|| null` SO THE ROW RECORDS WHAT THE
-      // CALLER ACTUALLY SENT. `||` would rewrite a `false` into "did not ask" here,
-      // in the one place that is supposed to be a faithful record of the request.
-      // ⚠ **AND SINCE 2026-09-01 THE `false` IS HONOURED, NOT MERELY RECORDED**:
-      // `main/launch-directive-wire.js › directiveFrom` carries all three states and
-      // `main/launch-posture.js › resolveChain` grants `false` unconditionally — it
-      // only ever NARROWS, so it wins even over a channel set to ON. This comment
-      // said the opposite ("promised to nobody") while the desktop flattened `false`
-      // into `null`; see `types-launch.ts › LaunchDirective.chain` for the fix.
+      // The asked posture, verbatim; `null` = not asked. `chain` uses `?? null`, not `||`, so a
+      // sent `false` is recorded.
       start_tool_mode: input.tools ?? null,
       start_message_mode: input.messages ?? null,
       chain: input.chain ?? null,
-      // ⚠ NOT WRITTEN (F7/F10): the server clamps nothing, so `resolved_*` was a byte copy of
-      // the request, and `resolved_model` came from Claude's frozen table on every runtime. The
-      // columns stay (no migration); the machine's `applied_*` echo is the truth.
+      // The server clamps nothing and resolves no model; the machine's `applied_*` is the truth.
       resolved_tool_mode: null,
       resolved_message_mode: null,
       resolved_chain: null,
       resolved_model: null,
-      // ⚠ THE RESOLVED KEY, NEVER `input.color`: a caller who named nothing gets the first free
-      // one, and the row records what the machine will APPLY.
       color,
-      agent_name: input.agentName ?? null, // ⚠ VERBATIM (2026-09-15); `agent-names.js › sanitizeName` is the authority on what is stored
+      agent_name: input.agentName ?? null, // verbatim; `agent-names.js › sanitizeName` decides what the machine stores
       expires_at: new Date(now + LAUNCH_DIRECTIVE_TTL_MS).toISOString(),
       client_msg_id: input.clientMsgId ?? null,
     }),
@@ -283,18 +140,9 @@ export async function createLaunchDirective(
   return { offline: false, directive: toDirective(row, now), existing };
 }
 
-/**
- * **WHAT IS STILL AWAITING THIS OPERATOR'S DECISION** — the desktop's breaker-open backstop
- * (F-273).
- *
- * ⚠ EXPIRED ROWS ARE DROPPED HERE, NOT IN SQL. Expiry is lazy and {@link toDirective} is the one
- * place that decides it; a `WHERE expires_at > now()` in the repository would be a SECOND rule,
- * and two rules for one question drift. The cost is reading a handful of dead rows and discarding
- * them, on a poll that only runs while realtime is DOWN for that workspace.
- *
- * ⚠ IT RETURNS `claimed` ROWS TOO — a machine that claimed and crashed before deciding has to
- * find its own row again. Nothing can re-action one: the CAS only moves a row out of `pending`.
- */
+/** This operator's `pending` and `claimed` directives: the desktop's breaker-open backstop (F-273).
+ *  Expiry is filtered here, not in SQL, so {@link toDirective} stays the one expiry rule. `claimed`
+ *  rows are included so a machine that crashed before deciding finds its own row. */
 export async function listPendingLaunchDirectives(
   ctx: ChannelContext
 ): Promise<LaunchDirective[]> {
@@ -308,7 +156,7 @@ export async function listPendingLaunchDirectives(
     .filter((d) => d.status !== "expired");
 }
 
-/** Read one directive, expiry applied. ⚠ Own-scoped in the repository. */
+/** One directive, expiry applied; own-scoped in the repository. */
 export async function getLaunchDirective(
   ctx: ChannelContext,
   id: string
@@ -322,18 +170,9 @@ export async function getLaunchDirective(
   return toDirective(row, Date.now());
 }
 
-/**
- * **THE DESKTOP LANE — CLAIM.** Move `pending → claimed`, single-winner.
- *
- * ⚠ THE FRESHNESS CHECK IS HERE AND THE ATOMICITY IS IN THE REPOSITORY, and the split is
- * deliberate: `now` is a service concern (lazy expiry lives at read time), while single-winner is
- * a database concern. Putting `expires_at > now()` into the CAS would collapse "lost the race"
- * and "too late" into one `null` and the desktop could not tell a sibling machine from a stale
- * request.
- *
- * ⚠ THREE FAILURES, THREE MEANINGS, ONE POSTURE — stand down, do not retry: `expired` (too late),
- * `taken` (a sibling machine won), `decided` (already answered). All are 409.
- */
+/** Desktop lane: claim, `pending → claimed`, single winner. Freshness is checked here and atomicity
+ *  lives in the CAS, so a lost race (`taken`) and a timeout (`expired`) stay distinguishable. Every
+ *  failure is a 409: stand down, do not retry. */
 export async function claimLaunchDirective(
   ctx: ChannelContext,
   id: string
@@ -358,22 +197,15 @@ export async function claimLaunchDirective(
     id,
     new Date(now).toISOString()
   );
-  // ⚠ `null` HERE IS THE RACE, and only the race: the pre-read above already
-  // ruled out missing / decided / expired, so the row moved between the two
-  // statements. That is exactly what the CAS is for, and the loser is told.
+  // `null` here is only the race: the pre-read already ruled out missing, decided and expired.
   if (!row) throw new LaunchDirectiveNotClaimableError("taken");
   return toDirective(row, now);
 }
 
 export type DecideLaunchInput =
   /**
-   * ⚠ THE LAUNCH KIND'S SUCCESS ONLY — the column CHECK pairs `launched` with `kind = 'launch'`,
-   * so this arm on an `end` row is refused AT REST.
-   *
-   * ⚠ **THE THREE `applied*` FIELDS ARE THE ECHO, AND THEY ARE OPTIONAL FOREVER** (2026-09-01). A
-   * desktop older than this wave reports nothing and must keep being able to decide (INVARIANTS
-   * §13), so absent is a first-class input — it maps to `null`, which every reader is required to
-   * render as "not reported" rather than as agreement.
+   * A launch's success (the column CHECK pairs `launched` with `kind = 'launch'`). The `applied*`
+   * echo is optional forever: an older desktop reports none (INVARIANTS §13).
    */
   | {
       status: "launched";
@@ -381,53 +213,20 @@ export type DecideLaunchInput =
       appliedTools?: LaunchToolMode;
       appliedMessages?: LaunchMessageMode;
       appliedChain?: boolean;
-      /** ⚠ THE MACHINE'S OWN VALUE (2026-09-15) — the uniqueness rule may have stored `Coder-1`,
-       *  and that is the name the launcher must address from now on. */
+      /** The machine's final name; its uniqueness rule may have changed the requested one. */
       appliedAgentName?: string;
-      /** ⚠ WHAT THE MACHINE STARTED ON (U9). Optional on the echo trio's rule — an older desktop
-       *  reports neither, and `undefined` must reach the column as `null` = not reported. */
       appliedRuntime?: string;
       appliedModel?: string;
     }
-  /** ⚠ THE NON-LAUNCH KINDS' SUCCESS (2026-09-01). No agent id: the row already
-   *  NAMES its target, so a second id on the decide would be a field the machine
-   *  could get wrong about a row it did not write. The optional pair is
-   *  `set_agent_mode`'s echo (F2). */
+  /** Non-launch kinds' success. No agent id: the row already names its target. The optional pair
+   *  is `set_agent_mode`'s echo. */
   | { status: "done"; appliedTools?: LaunchToolMode; appliedMessages?: LaunchMessageMode }
   | { status: "refused"; refusalReason: LaunchRefusalReason };
 
-/**
- * **THE DESKTOP LANE — DECIDE.** Write the terminal outcome.
- *
- * ⚠ A DECISION IS FINAL. The repository's UPDATE only matches `pending` or
- * `claimed`, so a retried or duplicated decide cannot flip a `launched` into a
- * `refused` — the second call is a 409, not a silent overwrite. That matters
- * because the requester may already have read the first outcome and started
- * addressing `@<agentId>`.
- *
- * ⚠ **AN EXPIRED DIRECTIVE MAY STILL BE DECIDED, AND THAT IS NOT A BUG.** If the
- * machine really did start an agent, the truthful record is `launched` with the
- * agent id, however late it is. Refusing the write would leave a running agent
- * that no directive accounts for — the worst of the available outcomes. Expiry
- * governs whether a NEW claim may begin, not whether a completed one may be
- * reported.
- *
- * ⚠ **THE DECIDE IS THE ECHO TRIO'S ONLY WRITER, AND THAT IS THE WHOLE POINT OF
- * PUTTING IT HERE** (2026-09-01, T24's second half). `repository-launch.ts ›
- * LaunchDirectiveInsert` deliberately has no field for `applied_*`: a CREATE that
- * could stamp them would let the REQUESTER write its own confirmation, which is
- * the one value on this row that must not come from the asking side. The machine
- * that did the clamping is the only honest reporter of it.
- * ⚠ **ABSENT MAPS TO `null`, AND `null` IS "NOT REPORTED".** Never a value
- * echoed from the REQUEST columns (`start_tool_mode` / `start_message_mode` /
- * `chain`). Echoing those back would produce a value that is right whenever
- * nothing was clamped and confidently wrong precisely when it mattered, and the
- * orchestrator would size its next instruction for room the agent does not have.
- * ⚠ `?? null` RATHER THAN `|| null` ON THE CHAIN, for the reason
- * `createLaunchDirective` states about the REQUEST column: `||` would rewrite a
- * reported `false` — "I settled the chain OFF" — into "I said nothing", which is
- * the exact collapse this wave exists to remove from the other half of the lane.
- */
+/** Desktop lane: write the terminal outcome. A decision is final: the UPDATE matches only
+ *  `pending`/`claimed`, so a retried decide is a 409, never an overwrite. An expired directive may
+ *  still be decided: a started agent must be recorded. This is the only writer of `applied_*`;
+ *  absent maps to `null` = "not reported", never echoed from the request columns. */
 export async function decideLaunchDirective(
   ctx: ChannelContext,
   id: string,
@@ -443,9 +242,8 @@ export async function decideLaunchDirective(
       agent_id: input.status === "launched" ? input.agentId : null,
       refusal_reason:
         input.status === "refused" ? input.refusalReason : null,
-      // ⚠ THE POSTURE PAIR rides `launched` and `done` (a `set_agent_mode`, F2); the rest is
-      // `launched`-only. Every other case is written as `null` rather than left off, so a
-      // retried decide cannot leave a stale echo standing beside a refusal.
+      // Posture pair on `launched` and `done`, the rest `launched`-only; every other arm writes
+      // `null` so no stale echo stands beside a refusal. `?? null` keeps a reported `false` chain.
       applied_tool_mode:
         input.status !== "refused" ? input.appliedTools ?? null : null,
       applied_message_mode:
@@ -454,9 +252,6 @@ export async function decideLaunchDirective(
         input.status === "launched" ? input.appliedChain ?? null : null,
       applied_agent_name:
         input.status === "launched" ? input.appliedAgentName ?? null : null,
-      // ⚠ **WHAT THE MACHINE STARTED ON** (U9), on the echo trio's contract above: `launched`
-      // only, `null` elsewhere so a retried decide leaves no stale runtime beside a refusal, and
-      // `undefined` from an older desktop is NOT REPORTED, never the request column echoed back.
       applied_runtime:
         input.status === "launched" ? input.appliedRuntime ?? null : null,
       applied_model:
@@ -465,8 +260,7 @@ export async function decideLaunchDirective(
     }
   );
   if (!row) {
-    // ⚠ Distinguish "not yours / gone" from "already decided" — the desktop logs
-    // them differently, and only one of them is worth an operator's attention.
+    // "Not yours / gone" vs "already decided": the desktop logs them differently.
     const existing = await launchRepo.findLaunchDirective(
       ctx.userId,
       ctx.workspaceId,

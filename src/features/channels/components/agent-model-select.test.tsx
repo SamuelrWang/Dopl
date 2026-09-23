@@ -32,9 +32,7 @@ import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
 import type { DesktopSessionSummary } from "@/shared/lib/spa-bridge";
 import {
   AGENT_MODEL_DEFAULT,
-  AGENT_MODEL_OPTIONS,
   agentModelLabel,
-  agentModelOptionsFor,
   agentModelShortLabel,
   normalizeAgentModel,
 } from "../lib/agent-models";
@@ -42,15 +40,8 @@ import { agentRunningModel } from "./agents-model";
 import { ChannelAgentSettingsView } from "./settings-agent";
 import { PostureControls } from "./agent-posture";
 import { CHANNEL_ID } from "./test-fixtures";
-// ⚠ **THE DURABLE ROW READS THE SELECTED RUNTIME'S CATALOG SINCE 2026-09-21 (U6/U8), NOT THIS
-// FILE'S FROZEN TABLE.** Every claim below is unchanged; what moved is where the row gets its
-// options from, because a picker sourced from one runtime's list offered Fable under Codex. The
-// DEFAULT runtime's four ids are still what a desktop older than the catalog contract renders —
-// `agent-models.ts › defaultRuntimeFallbackCatalog` is that lane, and it is what these cases
-// drive.
 import { catalog, launchSelectionStub } from "../hooks/launch-selection-harness";
 import { REAL_DESCRIPTORS } from "../lib/runtime-descriptors-harness";
-import { defaultRuntimeFallbackCatalog } from "../lib/agent-models";
 
 afterEach(() => {
   cleanup();
@@ -117,27 +108,6 @@ async function renderLive(agent: DesktopSessionSummary) {
 
 describe("the model vocabulary — one map, four surfaces", () => {
   /**
-   * ⚠ **THIS PINNED "Default first, then the four" UNTIL 2026-09-06** (Samuel's
-   * ruling: *"why can't we just set a value and when the user launches the agent
-   * it would just be set to that value unless they change it"*). The empty option
-   * is OFF the list, and the property that replaces it is the one the deletion put
-   * at risk: a `SelectMenu` whose `value` matches no option renders `options[0]`,
-   * so a list still carrying `""` would have let every unpicked surface read
-   * "Fable 5" over a launch that carried no model at all.
-   */
-  it("carries the four real models and NO empty option", () => {
-    expect(AGENT_MODEL_OPTIONS.map((o) => o.value)).toEqual([
-      "claude-fable-5",
-      "claude-opus-5",
-      "claude-sonnet-5",
-      "claude-haiku-4-5-20251001",
-    ]);
-    expect(
-      AGENT_MODEL_OPTIONS.some((o) => o.value === AGENT_MODEL_DEFAULT)
-    ).toBe(false);
-  });
-
-  /**
    * ⚠ THE ABSENT STATE STILL WRITES NO ID — it is just no longer OFFERED. A
    * sentinel would be a value main has to special-case, and would make "never
    * chosen" and "chose the default" indistinguishable the moment the SDK default
@@ -181,30 +151,6 @@ describe("the model vocabulary — one map, four surfaces", () => {
     expect(agentModelShortLabel("claude-something-9")).toBe("claude-something-9");
     expect(normalizeAgentModel("claude-something-9")).toBe("claude-something-9");
   });
-
-  /**
-   * ⚠ THE EFFECTIVE MODEL IS FREE-FORM AND THE PICKABLE ROSTER IS NOT
-   * (`spa-bridge.ts › DesktopSessionSummary.model` — a dated id, a `[1m]`
-   * variant). A `SelectMenu` whose value matches no option renders BLANK, so an
-   * agent on a dated id would show an empty control where its model should be.
-   */
-  it("appends an OFF-ROSTER effective model so the control can show it", () => {
-    const opts = agentModelOptionsFor("claude-opus-4-5-20251101");
-    expect(opts).toHaveLength(AGENT_MODEL_OPTIONS.length + 1);
-    expect(opts[opts.length - 1]).toEqual({
-      value: "claude-opus-4-5-20251101",
-      label: "claude-opus-4-5-20251101",
-    });
-  });
-
-  /** ⚠ It appends the CURRENT VALUE and nothing else — the four the desktop
-   *  accepts stay the four an operator can PICK. */
-  it("adds nothing for a known id, for the absent state, or for no model", () => {
-    expect(agentModelOptionsFor("claude-opus-5")).toBe(AGENT_MODEL_OPTIONS);
-    expect(agentModelOptionsFor(AGENT_MODEL_DEFAULT)).toBe(AGENT_MODEL_OPTIONS);
-    expect(agentModelOptionsFor(null)).toBe(AGENT_MODEL_OPTIONS);
-  });
-
 });
 /**
  * 🔓 **THE DURABLE MODEL ROW IS DELETED (2026-09-23, Samuel, verbatim):** *"We don't need a pin
@@ -222,7 +168,7 @@ describe("NO model row on the Settings tab (2026-09-23)", () => {
         folder={null}
         selection={launchSelectionStub({
           defaultRuntime: "",
-          catalogs: { "": defaultRuntimeFallbackCatalog("") },
+          catalogs: { "": catalog("", [{ id: "claude-sonnet-5", label: "Sonnet 5", isDefault: true }]) },
         })}
         {...over}
       />

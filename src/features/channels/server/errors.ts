@@ -1,5 +1,3 @@
-// ⚠ `ChannelError` MOVED TO `errors-base.ts` (§1, 2026-09-02) — a LEAF, so the
-// second error module can extend it without a cycle back through this file.
 import { ChannelError } from "./errors-base";
 
 export class ChannelNotFoundError extends ChannelError {
@@ -43,10 +41,7 @@ export class ChannelAddresseeNotMemberError extends ChannelError {
   }
 }
 
-// ⚠ **`ChannelRecipientUnresolvedError` LIVES IN `errors-recipient.ts` (§1
-// SPLIT, 2026-09-02) AND IS RE-EXPORTED HERE**, because this file was AT the
-// 500-line cap. `errors.ts` stays the ONE import path for every channel error —
-// same arrangement `types.ts` has with `types-delivery.ts`.
+// Re-exported: `errors.ts` is the one import path for every channel error.
 export {
   ChannelAgentHandleAmbiguousError,
   ChannelRecipientUnresolvedError,
@@ -59,8 +54,8 @@ export class ChannelLastOwnerError extends ChannelError {
   }
 }
 
-/** Consent request the caller can't act on. ⚠ Nonexistent and foreign-operator
- *  collapse to ONE not-found so request ids can't be probed. */
+/** Consent request the caller can't act on. Nonexistent and foreign-operator collapse to one
+ *  not-found so request ids can't be probed. */
 export class ConsentNotFoundError extends ChannelError {
   constructor(public readonly ref: string) {
     super(`Consent request not found: ${ref}`);
@@ -74,16 +69,8 @@ export class ConsentAlreadyDecidedError extends ChannelError {
   }
 }
 
-// ⚠ `TrustSelfError` and `TrustedNotMemberError` STOOD HERE AND ARE DELETED
-// (2026-08-22). Both were raised only by `trust-service.ts › createTrustRule`,
-// which is deleted with the `agent_trust_rules` table and the two `/trust`
-// routes. Their `TRUST_SELF` / `TRUST_NOT_MEMBER` codes left
-// `http-mapping.ts` in the same change — an error class with no thrower still
-// publishes an API code, and a published code is a contract somebody writes a
-// client against.
-
-/** Task the caller can't act on. ⚠ Wrong-channel and wrong-workspace collapse
- *  to ONE not-found so ids can't be probed. */
+/** Task the caller can't act on. Wrong-channel and wrong-workspace collapse to one not-found so
+ *  ids can't be probed. */
 export class TaskNotFoundError extends ChannelError {
   constructor(public readonly ref: string) {
     super(`Task not found: ${ref}`);
@@ -98,26 +85,16 @@ export class TaskForbiddenError extends ChannelError {
   }
 }
 
-/**
- * A first-class (UUID) `taskId` resolving to no task in THIS channel. ⚠ Rejected
- * 400 rather than silently dropping the stamp, so a bogus id can't fabricate a
- * threaded group. Legacy `task-<uuid>-<seq>` ids are not UUIDs and never reach
- * this branch.
- */
+/** A UUID `taskId` naming no task in this channel. 400 rather than dropping the stamp, so a bogus id
+ *  can't fabricate a thread; legacy `task-<uuid>-<seq>` ids are not UUIDs and never reach it. */
 export class ChannelTaskNotInChannelError extends ChannelError {
   constructor(public readonly taskId: string) {
     super(`Task is not in this channel: ${taskId}`);
   }
 }
 
-/**
- * A thread addressed to its own creator. ⚠ Refused 400, never accepted silently:
- * only creator and target may post, so it has ONE party and nobody's desktop
- * routes it — it renders as a live request that can never be answered.
- * Distinct from {@link DirectSelfTargetError} (self-DM): different resource,
- * different code. ⚠ `post to=self` is deliberately NOT guarded — the desktop
- * classifies a self-addressed post as noise, and a post is not a thread.
- */
+/** A thread addressed to its own creator: 400, since it has one party and nobody's desktop would
+ *  route it. `post to=self` is not guarded — a post is not a thread. */
 export class TaskSelfTargetError extends ChannelError {
   constructor() {
     super(
@@ -126,20 +103,9 @@ export class TaskSelfTargetError extends ChannelError {
   }
 }
 
-/**
- * `intent:"chat"` AND a human `toUserId`. 400.
- *
- * ⚠ Refused, never reconciled. Chat means "raise no prompt on anyone's machine";
- * a `toUserId` means "raise one on exactly this machine". Dropping the address
- * silently fails to deliver a message the caller believes was routed; dropping
- * the intent pokes a machine the caller said not to. The CALLER chooses.
- *
- * ⚠ Keep the message in sync with the MCP twin,
- * `packages/mcp-server/src/tools/channel-post-notes.ts`
- * `CHAT_ADDRESSED_REFUSAL`, and never let it recommend a param that
- * `schema.ts#removedParam` declares `z.never()` — that advises the caller to do
- * the one thing guaranteed to 400 again.
- */
+/** `intent:"chat"` with a human `toUserId`: 400, refused rather than reconciled — the caller chooses.
+ *  The message must never recommend a param `schema-removed-params.ts › removedParam` declares
+ *  `z.never()`. */
 export class ChannelChatAddressedError extends ChannelError {
   constructor(public readonly field: string) {
     super(
@@ -148,34 +114,9 @@ export class ChannelChatAddressedError extends ChannelError {
   }
 }
 
-/**
- * An AGENT-token caller tried to post a LIFECYCLE kind. 403.
- *
- * ⚠ The three lifecycle kinds state a fact about a RUNTIME, which an agent is
- * not in a position to make. The runtime that owned those facts was the desktop
- * session engine — and since wiring plan Phase 5 (2026-08-18) it no longer posts
- * them either (`main/session-window.js`), though the server deliberately still
- * ACCEPTS them because installed builds do (INVARIANTS §13). Either way an
- * answer posted as `task_finished` renders NOWHERE: the reader drops the three
- * kinds on sight (`channels/components/view-model.ts › isLifecycleEcho`),
- * body and all. The old reason — a session card folding the marker into its
- * `endEvent` — went with the card.
- *
- * ⚠ The lane is closed by IDENTITY, not kind alone. `ctx.source === "agent"`
- * means a bearer AGENT TOKEN — every MCP `op="post"` and nothing else. Desktop
- * listener and web post on the operator's cookies (`source === "user"`) and are
- * unaffected, and they need no exemption to be. ⚠ THERE IS NO EXEMPTION LEFT AT
- * ALL: `internalLifecycle` — the declared "this post is the server speaking"
- * seam — was deleted on 2026-08-20 with no caller and none in prospect, and the
- * close echo it was written for went with thread closing in Phase 4
- * (2026-08-18). The CREDENTIAL is now the whole question. A future
- * server-internal lifecycle post earns its pass the way the reopen echo did —
- * post a kind the guard already permits — rather than ask for one. See
- * `service-writes-lifecycle.ts › PostMessageOptions`.
- *
- * ⚠ `task_progress` is deliberately NOT here — it is the milestone lane, the one
- * `task_*` kind whose body IS rendered, and claims nothing about lifecycle.
- */
+/** An agent token (`ctx.source === "agent"`) posted a lifecycle kind: 403. Those kinds state a
+ *  runtime fact and their body never renders (`view-model-receipt-rows.ts › isLifecycleKind`); the
+ *  credential is the whole test, with no exemption. `task_progress` is allowed: it is the milestone lane. */
 export class ChannelLifecycleKindForbiddenError extends ChannelError {
   constructor(public readonly kind: string) {
     super(
@@ -186,15 +127,6 @@ export class ChannelLifecycleKindForbiddenError extends ChannelError {
   }
 }
 
-/**
- * ⚠ `ThreadCloseIsHumanOnlyError` (403 `CHANNEL_CLOSE_IS_HUMAN_ONLY`) USED TO
- * LIVE HERE and was deleted with thread closing (wiring plan Phase 4,
- * 2026-08-18). It guarded a human-only lane over a shared thread's settlement;
- * there is no settlement left to guard — the operator pauses or ends an AGENT,
- * and nothing anywhere moves `channel_tasks.status`. Do not reintroduce the
- * code; the MCP classifier arm that read it is gone too.
- */
-
 /** A direct channel would target the caller themselves — a self-DM is refused. */
 export class DirectSelfTargetError extends ChannelError {
   constructor() {
@@ -202,62 +134,32 @@ export class DirectSelfTargetError extends ChannelError {
   }
 }
 
-/**
- * ⚠ A direct channel's shape is IMMUTABLE — two-member roster, always private.
- * Blocks a third member and a visibility toggle so neither surfaces the raw
- * CHECK-constraint 500. `aspect` names what was attempted. 400.
- */
+/** A direct channel is immutable (two members, always private). Refused as 400 instead of the
+ *  CHECK-constraint 500. `aspect` names what was attempted. */
 export class DirectChannelImmutableError extends ChannelError {
   constructor(aspect: string) {
     super(`Direct message ${aspect} can't be changed`);
   }
 }
 
-/**
- * The info card's serialized form exceeds the app byte ceiling.
- *
- * ⚠ THIS IS THE FRIENDLY 4xx IN FRONT OF THE DB CHECK. `channels_info_card_check`
- * bounds `octet_length(info_card::text)` and a PostgREST constraint failure is
- * not an `Error` this layer can classify — it falls through to a generic 500.
- * The per-field zod caps cannot bound the TOTAL (a full CJK card is ~9.6 KB), so
- * the write path measures the same jsonb text form and raises this first
- * (`info-card.ts › infoCardWithinByteLimit`).
- */
+/** The info card exceeds the byte ceiling: the friendly 4xx in front of `channels_info_card_check`,
+ *  which PostgREST would surface as a 500 (`info-card.ts › infoCardWithinByteLimit`). */
 export class ChannelInfoCardTooLargeError extends ChannelError {
   constructor(bytes: number, limit: number) {
     super(`Info card is too large (${bytes} bytes; limit ${limit})`);
   }
 }
 
-/**
- * An `escalationAnswer` naming a message that is not an answerable escalation in
- * this channel.
- *
- * ⚠ ONE ERROR FOR FOUR SITUATIONS, DELIBERATELY: no such message, a message in
- * another channel, a message carrying no escalation payload, and an option index
- * outside that escalation's own list. `ChannelNotFoundError`'s rule and the same
- * reason — the alternative is a probe that walks the deployment's message ids and
- * learns which of them are escalations and how many options each has.
- */
+/** Not an answerable escalation in this channel. One error for four causes (missing, other channel,
+ *  no escalation payload, option index out of range) so message ids can't be probed. */
 export class EscalationNotFoundError extends ChannelError {
   constructor(public readonly ref: string) {
     super(`No answerable escalation here: ${ref}`);
   }
 }
 
-/**
- * The caller is not one of the people this escalation asked.
- *
- * ⚠ **403, WHERE A FOREIGN THREAD TAG IS SILENTLY STRIPPED (INVARIANTS §5), AND
- * THE ASYMMETRY IS THE RULING.** The strip exists because installed desktops post
- * legacy `task-…` ids and a refusal would reject real posts from the field.
- * `escalationAnswer` has no installed writers; a silent strip here would let a
- * button report success over an answer that reached nobody, which is the failure
- * the escalation card exists to remove.
- *
- * ⚠ It is reached only AFTER the row has been proved to be an answerable
- * escalation in this channel, so it discloses nothing a 404 was protecting.
- */
+/** The caller is not one this escalation asked. 403 rather than a silent strip: a strip would report
+ *  success over an answer nobody received. Reached only after the 404 checks, so it discloses nothing. */
 export class EscalationForbiddenError extends ChannelError {
   constructor() {
     super(
@@ -266,156 +168,57 @@ export class EscalationForbiddenError extends ChannelError {
   }
 }
 
-/**
- * A second answer to an escalation that already has one.
- *
- * ⚠ Raised from the 23505 of the partial unique index over
- * `metadata->'escalationAnswer'->>'escalationMessageId'`, never from a
- * read-then-write check: that would be a race with a friendlier message and no
- * guarantee behind it.
- */
+/** A second answer. Raised from the partial unique index's 23505, never a read-then-write check. */
 export class EscalationAlreadyAnsweredError extends ChannelError {
   constructor(public readonly ref: string) {
     super(`This escalation has already been answered: ${ref}`);
   }
 }
 
-/**
- * A DIRECTION id that resolves to nothing THIS operator owns.
- *
- * ⚠ ONE ERROR FOR THREE SITUATIONS, DELIBERATELY, and here the stakes are higher
- * than the launch mailbox's: it does not exist, it belongs to another operator, or
- * it is in another workspace. Splitting them would make this an id-probe primitive
- * for every direction in the deployment — **and a direction row carries a private
- * turn's answer in `reply`.** `ChannelNotFoundError`'s rule, same reason.
- */
+/** A direction id this operator doesn't own. Missing, other operator and other workspace are one
+ *  error: a direction row carries a private turn's `reply`, so ids must not be probeable. */
 export class DirectionNotFoundError extends ChannelError {
   constructor(public readonly ref: string) {
     super(`Direction not found: ${ref}`);
   }
 }
 
-/**
- * A direction that cannot be claimed: already taken by another of this operator's
- * machines, already decided, or past its TTL.
- *
- * ⚠ THE DESKTOP LANE READS THE 409 AS "STAND DOWN", NOT AS A FAULT — losing the
- * claim CAS is the designed outcome for every machine but one.
- */
+/** Taken by another of this operator's machines, decided, or expired; the desktop reads the 409 as
+ *  stand down. */
 export class DirectionNotClaimableError extends ChannelError {
   constructor(public readonly reason: "taken" | "decided" | "expired") {
     super(`Direction is not claimable (${reason})`);
   }
 }
 
-/**
- * A launch directive id that resolves to nothing THIS operator owns.
- *
- * ⚠ ONE ERROR FOR THREE SITUATIONS, DELIBERATELY: it does not exist, it belongs
- * to another operator, or it is in another workspace. Splitting them would make
- * this a probe primitive for every directive in the deployment — the same rule
- * `ChannelNotFoundError` follows for a private channel, and the same reason.
- */
-/**
- * **THE TARGET AGENT BELONGS TO ANOTHER MEMBER** — the agent-management kinds'
- * cross-member refusal (2026-09-01, `end` / `rename` over MCP).
- *
- * ⚠ **403-SHAPED, AND IT IS THE ONE PLACE ON THIS LANE THAT IS.** Everywhere
- * else here a foreign id answers 404 so existence cannot be probed
- * ({@link LaunchDirectiveNotFoundError}), and that rule is not being relaxed —
- * it does not APPLY. To reach this error the caller has already proved
- * membership of the channel, and inside a channel `dopl_channel(op="members")`
- * and `op="read_sessions"` disclose the roster and the live agents anyway. So
- * "that instance is another member's" reveals nothing new, while a 404 here
- * would tell an orchestrator its OWN agent had vanished and send it to re-launch.
- *
- * ⚠ **IT IS NOT THE FENCE.** `operator_user_id` is: a directive is stamped with
- * the authenticated caller and only that caller's machines ever claim one. This
- * turns a two-minute round trip ending in `no-session` into an immediate,
- * actionable sentence. `server/repository-agent-owner.ts` states exactly what the
- * underlying read can and cannot prove.
- */
+/** The target agent belongs to another member. The one 403 on this lane: the caller has proved
+ *  membership, where roster and live agents are readable anyway, and a 404 would send an orchestrator
+ *  to re-launch its own agent. Not the fence (`operator_user_id` is). */
 export class AgentDirectiveForeignError extends ChannelError {
   constructor(public readonly agentId: string) {
     super(`Agent ${agentId} belongs to another member`);
   }
 }
 
-/**
- * A LAUNCH ASKED FOR `chain: true` IN A CHANNEL WHOSE STORED CEILING FORBIDS IT
- * (2026-09-02, A9 — guardrail G7).
- *
- * ⚠ **REFUSED, NOT CLAMPED, AND THE ASYMMETRY WITH THE POSTURE PAIR IS THE
- * POINT.** A clamped posture still produces a working agent doing the asked-for
- * work under more supervision; a clamped chain produces an agent that hits a
- * bound it was told it did not have, MID-RUN, after the orchestrator has already
- * handed it work that assumes workers. Refusing costs one round trip; clamping
- * costs the whole run, and the orchestrator learns about it from silence.
- *
- * ⚠ **IT NAMES THE SETTING, because the caller cannot change it and the operator
- * can.** `channelAgentChain` is a per-channel toggle on the operator's own
- * Settings tab, and a refusal that did not name it leaves the caller with nothing
- * to ask for. This is the SERVER half of a refusal the desktop already mints as
- * `no-chain` — the difference is that this one happens whether or not a machine
- * is listening.
- */
-export class ChannelAgentChainForbiddenError extends ChannelError {
-  constructor() {
-    super(
-      "This channel does not allow launched agents to launch further agents " +
-        "(channelAgentChain). Re-issue without `chain`, or ask your operator to " +
-        "enable that one setting for this channel."
-    );
-  }
-}
-
+/** Missing, another operator's, or another workspace's: one error so directive ids can't be probed. */
 export class LaunchDirectiveNotFoundError extends ChannelError {
   constructor(public readonly ref: string) {
     super(`Launch directive not found: ${ref}`);
   }
 }
 
-/**
- * A directive that is no longer claimable or decidable — already taken by
- * another of this operator's machines, already decided, or past its TTL.
- *
- * ⚠ NOT AN ERROR ON THE DESKTOP'S SIDE OF THE CONVERSATION: losing a claim race
- * is the DESIGNED outcome for every machine but one, and the route answers 409
- * so the loser can stand down without logging a fault. It is an error only in
- * the sense that nothing was written.
- */
+/** Taken by a sibling machine, decided, or expired. A 409 the desktop treats as stand down: losing
+ *  the claim race is the designed outcome for every machine but one. */
 export class LaunchDirectiveNotClaimableError extends ChannelError {
   constructor(public readonly reason: "taken" | "decided" | "expired") {
     super(`Launch directive is not claimable: ${reason}`);
   }
 }
 
-/**
- * A directive named an IDENTITY that does not resolve for the CALLER
- * (2026-08-23).
- *
- * ⚠ ONE ERROR FOR "no such identity" AND "not visible to you", exactly as
- * `agent-identities/server/errors.ts › AgentIdentityNotFoundError` is, and it
- * carries that error's CODE rather than a channels-flavoured one: the two are
- * the same fact reached through two doors, and an agent that learned to read
- * `AGENT_IDENTITY_NOT_FOUND` from `/resolve` must not have to learn a second
- * spelling here. Splitting them would make this a probe primitive for other
- * people's private identities — the oracle the 404-never-403 rule closes.
- *
- * ⚠ THROWN IN THE CHANNELS FEATURE RATHER THAN RE-THROWN FROM THE IDENTITY ONE.
- * `agent-identities/server › resolveIdentityRef` answers with a union and throws
- * nothing, so this feature's error mapper does not have to import another
- * feature's error classes to know what a 404 means.
- *
- * ⚠ `elsewhere` IS THE ONE THING IT MAY ADD, AND IT IS NOT A CRACK IN THE RULE
- * ABOVE (T35). It is present only when the ref names an identity the caller
- * COULD ALREADY LIST FOR THEMSELVES — their own row, or a `workspace`-visible
- * one, in a workspace they are an active member of — sitting in a DIFFERENT
- * tenancy than the channel's (`agent-identities/server/service-resolve-ref.ts ›
- * classifyMissingIdentityRef` holds the whole argument). It therefore says
- * nothing a list call would not, and `null` covers BOTH "no such identity" and
- * "somebody else's, and not yours to see" — the two that must stay one answer.
- */
+/** An identity ref that does not resolve for the caller; missing and invisible stay one answer. It
+ *  answers on `AgentIdentityNotFoundError`'s code (`http-mapping.ts`). `elsewhere` only names an
+ *  identity the caller could already list, in another tenancy
+ *  (`service-resolve-ref.ts › classifyMissingIdentityRef`). */
 export class LaunchIdentityNotFoundError extends ChannelError {
   constructor(
     public readonly ref: string,
@@ -425,29 +228,9 @@ export class LaunchIdentityNotFoundError extends ChannelError {
   }
 }
 
-/**
- * **A LAUNCH NAMED A COLOUR ANOTHER LIVE AGENT IN THIS CHANNEL ALREADY HOLDS**
- * (2026-09-13; Samuel: *"we need to make sure their agents should be pulled from the
- * color"*).
- *
- * ⚠ **A REFUSAL RATHER THAN A SILENT SUBSTITUTION, AND ONLY ON THIS LANE.** The
- * caller NAMED a key, so quietly starting their agent in a different colour would
- * mean the one thing they were specific about is the one thing that did not happen.
- * (Contrast the PUSH lane, where a collision IS resolved silently: there the colour
- * was chosen minutes ago in a popup against a set that has since moved, and the
- * alternative to substituting is discarding a machine's whole projection —
- * `server/session-colors.ts` argues both directions.)
- *
- * ⚠ **THE FREE SET RIDES ON THE ERROR AND IS NOT AN ORACLE.** It is sixteen minus
- * whatever is out in a channel the caller has already proved they are a MEMBER of,
- * and every colour in it is drawn on that caller's own transcript anyway. Without it
- * the refusal forces a guess or a second tool call for facts already in hand — the
- * same argument {@link LaunchIdentityAmbiguousError} makes for its match list.
- *
- * ⚠ IT IS NOT A RESERVATION. By the time the operator's machine claims the directive
- * a key in this list may be gone; the authority is
- * `channel_sessions_channel_color_live_key` and nothing else.
- */
+/** A launch named a colour a live agent in this channel holds. Refused, never substituted: the caller
+ *  named it. `free` is not an oracle (the caller is a member and sees every colour) and not a
+ *  reservation (`channel_sessions_channel_color_live_key` is the authority). */
 export class AgentColorTakenError extends ChannelError {
   constructor(
     public readonly color: string,
@@ -459,21 +242,8 @@ export class AgentColorTakenError extends ChannelError {
   }
 }
 
-/**
- * A directive named an identity by NAME and more than one visible identity
- * carries it (2026-08-23).
- *
- * ⚠ **A REFUSAL, AND NEVER A PICK.** `agent_identities` has no name uniqueness by
- * design, so two people may each keep a "Researcher" and one of them may be
- * shared with the caller. Any collision rule — mine wins, newest wins,
- * most-recently-used wins — launches an identity the caller did not choose and
- * says nothing about it.
- *
- * ⚠ THE MATCH LIST RIDES ON THE ERROR AND IS NOT AN ORACLE: every row in it
- * already passed `canSeeIdentity` for this caller, so it discloses exactly what
- * `GET /api/agent-identities` would. It carries `visibility` because that is what
- * makes the disambiguation actionable — "the private one is mine".
- */
+/** A name matching more than one visible identity: refused, never picked (names are not unique).
+ *  Every listed match already passed `canSeeIdentity` for the caller. */
 export class LaunchIdentityAmbiguousError extends ChannelError {
   constructor(
     public readonly ref: string,

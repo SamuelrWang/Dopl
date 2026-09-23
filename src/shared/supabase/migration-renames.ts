@@ -1,29 +1,12 @@
 /**
- * RENAME-AWARE MIGRATION REPLAY — the one place the text-scanning gates learn that an object
- * they are looking for was `ALTER … RENAME`d rather than dropped and re-created.
- *
- * ⚠ WHY IT EXISTS (2026-09-22, the agent-template → agent-identity rename). Every replay in this
- * repo — `knowledge/migration-replay.ts`, `shared/supabase/rls-policy-scan.ts`,
- * `scripts/check-rls-pair-gate.ts`, `scripts/check-tenancy-move-gate.ts`, the per-feature
- * `schema-sql` suites — answers "what is live at the end" by regexing `CREATE TABLE` / `ADD
- * CONSTRAINT` / `CREATE POLICY` under a NAME. A rename keeps the object and changes the name, so
- * without this every one of them reports the renamed table as never created and the old one as
- * still standing.
- *
- * THE MODEL: FORWARD-RENAMING. Each file's text is rewritten with every rename that a LATER file
- * performs, in apply order — so the file that CREATED `agent_templates` reads, to the replay, as
- * having created `agent_identities`, and the rename statement itself becomes a no-op. Everything
- * downstream (policies, constraints, columns, `REFERENCES`) then replays exactly as if the object
- * had always carried the name it carries at the end. That is the question every one of these
- * gates asks, so it is the right fiction.
- *
- * ⚠ WHAT IT UNDERSTANDS, and nothing else: `ALTER TABLE … RENAME TO`, `… RENAME COLUMN a TO b`,
- * `… RENAME CONSTRAINT a TO b`, `ALTER INDEX … RENAME TO`, `ALTER TRIGGER a ON t RENAME TO b`.
- * A rename is applied as a WHOLE-WORD textual substitution, so a column rename lands on every
- * table that spells that column — correct for every rename this directory holds today
- * (`template_id` / `template_name` were renamed on every table that had them), and the reason a
- * future column rename that is NOT uniform must say so here before it relies on this.
- * ⚠ It reads COMMENT-STRIPPED SQL: callers pass what their own scan reads.
+ * Rename-aware migration replay for the text-scanning gates (`rls-policy-scan.ts`,
+ * `scripts/check-rls-pair-gate.ts`, `scripts/check-tenancy-move-gate.ts`, the `schema-sql` suites).
+ * Forward-renaming: each file is rewritten with every rename a LATER file performs, so the replay
+ * sees each object under its final name and the rename itself is a no-op.
+ * Understands `ALTER TABLE … RENAME TO / RENAME COLUMN / RENAME CONSTRAINT`, `ALTER INDEX … RENAME
+ * TO` and `ALTER TRIGGER … RENAME TO`. ⚠ A rename is a whole-word substitution applied to every
+ * table that spells the name, so a non-uniform column rename must be declared here before relying
+ * on this. Reads comment-stripped SQL.
  */
 
 export interface MigrationText {
