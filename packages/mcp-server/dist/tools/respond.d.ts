@@ -58,3 +58,9 @@ export declare function creditsExhausted(o: CreditsOutcome): ToolResponse;
 export declare function entitlementDenied(e: unknown): ToolResponse | null;
 /** Refusal when any `required` param is absent (undefined, null or ""), else null. */
 export declare function missingParams(op: string, args: Record<string, unknown>, required: string[]): ToolResponse | null;
+/**
+ * Refusal when a param the op does NOT take was sent (a flat schema cannot say "this key belongs to
+ * that op"), else null. `allowed` is the op's own keys; `op`/`action` always pass. An ignored param
+ * would narrate success over an argument that did nothing.
+ */
+export declare function unusedParams(op: string, args: Record<string, unknown>, allowed: readonly string[]): ToolResponse | null;

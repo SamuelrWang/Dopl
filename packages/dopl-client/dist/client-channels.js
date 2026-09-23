@@ -67,8 +67,8 @@ class ChannelMethods extends client_members_js_1.MemberMethods {
     createChannel(input) {
         return channel.createChannel(this.transport, input);
     }
-    /** ⚠ `infoCard` ONLY — see `channel.ts › updateChannel` for why the other
-     *  four fields of that PATCH are deliberately unbound. */
+    /** `name` / `topic` / `infoCard` — see `channel.ts › updateChannel` for why
+     *  `visibility` is deliberately unbound. */
     updateChannel(channelId, patch) {
         return channel.updateChannel(this.transport, channelId, patch);
     }

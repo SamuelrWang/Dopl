@@ -16,6 +16,10 @@ export interface ToolError {
 /** The one refusal renderer, so the wire and the description that predicts it cannot drift. */
 export declare function refusal(error: ToolError, detail?: string): string;
 export declare const MISSING_PARAMS: ToolError;
+/** Emit-only: `respond.ts › unusedParams`. A param the op ignores is refused, never dropped. */
+export declare const UNUSED_PARAM: ToolError;
+/** Emit-only: a channel rename/description write by a caller who cannot manage the room. */
+export declare const CHANNEL_MANAGE_REQUIRED: ToolError;
 export declare const READ_ONLY_SESSION: ToolError;
 export declare const DELETE_IS_APP_ONLY: ToolError;
 export declare const AMBIGUOUS_CONTAINER: ToolError;

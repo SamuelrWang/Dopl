@@ -47,12 +47,18 @@ export interface ChannelInfoCard {
 }
 
 /**
- * ⚠ THE WHOLE CARD, EVERY TIME — not a delta. A card is small, bounded and
+ * `infoCard`: ⚠ THE WHOLE CARD, EVERY TIME — not a delta. A card is small, bounded and
  * read-modify-write from one surface; a patch language for it would need an
  * ordering rule, a conflict rule and a second shape to test, to buy nothing.
  * `{}` therefore CLEARS it, which is what makes "drop this channel's
  * customisation" expressible without a second verb.
+ *
+ * `name` / `topic` (the UI's "description") are MANAGE-gated server-side (owner or
+ * workspace admin). `visibility` is deliberately absent: it is `sessionOnly` and an
+ * agent credential is refused it.
  */
 export interface ChannelUpdateInput {
+  name?: string;
+  topic?: string;
   infoCard?: ChannelInfoCard;
 }

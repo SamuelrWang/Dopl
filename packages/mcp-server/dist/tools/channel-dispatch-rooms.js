@@ -111,15 +111,28 @@ async function dispatchRoomsAction(action, args, client, selfUserId, isAdmin) {
                 return miss;
             return (0, channel_ops_threads_1.opSetThreadMode)(client, args.channel, args.thread, args.mode);
         }
-        // ⚠ THE INFO CARD ONLY. `name` / `topic` are accepted by the
-        // same route and are deliberately NOT routed here (Samuel's ruling Q12 (b);
-        // F-346 holds the rename hole open). ⚠ `info_card` OMITTED is the READ — the
+        // ⚠ NAME, DESCRIPTION (`summary` → `topic`) AND THE INFO CARD (DMP-001,
+        // 2026-09-23 — F-346's "no UI can ask for it" stopped being true when the
+        // Info tab began saving both). `visibility` stays app-only and is REFUSED
+        // here by `unusedParams`, not dropped. ⚠ All three OMITTED is the READ — the
         // card is replaced whole, so a blind write clobbers.
         case "update": {
             const miss = (0, respond_1.missingParams)('rooms action="update"', args, ["channel"]);
             if (miss)
                 return miss;
-            return (0, channel_ops_update_1.opUpdate)(client, args.channel, args.info_card);
+            const stray = (0, respond_1.unusedParams)('rooms action="update"', args, [
+                "channel",
+                "name",
+                "summary",
+                "info_card",
+            ]);
+            if (stray)
+                return stray;
+            return (0, channel_ops_update_1.opUpdate)(client, args.channel, {
+                card: args.info_card,
+                name: args.name,
+                description: args.summary,
+            });
         }
     }
 }

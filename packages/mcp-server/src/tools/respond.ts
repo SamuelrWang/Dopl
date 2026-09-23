@@ -9,6 +9,7 @@ import {
   MISSING_PARAMS,
   refusal,
   SESSION_REQUIRED,
+  UNUSED_PARAM,
 } from "./tool-errors";
 
 export type ToolResponse = {
@@ -226,5 +227,23 @@ export function missingParams(
   // Through the declared code, so the wire matches the `reason=` every description teaches.
   return err(
     refusal(MISSING_PARAMS, `op="${op}" is missing required ${plural}: ${missing.join(", ")}.`),
+  );
+}
+
+/**
+ * Refusal when a param the op does NOT take was sent (a flat schema cannot say "this key belongs to
+ * that op"), else null. `allowed` is the op's own keys; `op`/`action` always pass. An ignored param
+ * would narrate success over an argument that did nothing.
+ */
+export function unusedParams(
+  op: string,
+  args: Record<string, unknown>,
+  allowed: readonly string[],
+): ToolResponse | null {
+  const own = new Set(["op", "action", ...allowed]);
+  const stray = Object.keys(args).filter((k) => !own.has(k) && args[k] !== undefined);
+  if (stray.length === 0) return null;
+  return err(
+    refusal(UNUSED_PARAM, `op="${op}" does not take: ${stray.join(", ")}. It takes: ${allowed.join(", ")}.`),
   );
 }

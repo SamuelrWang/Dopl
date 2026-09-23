@@ -23,8 +23,8 @@ export declare class ChannelMethods extends MemberMethods {
     readAccountMessages(opts: AccountMessagesOptions): Promise<AccountMessagesPage>;
     getChannel(channelId: string): Promise<Channel>;
     createChannel(input: ChannelCreateInput): Promise<Channel>;
-    /** ⚠ `infoCard` ONLY — see `channel.ts › updateChannel` for why the other
-     *  four fields of that PATCH are deliberately unbound. */
+    /** `name` / `topic` / `infoCard` — see `channel.ts › updateChannel` for why
+     *  `visibility` is deliberately unbound. */
     updateChannel(channelId: string, patch: ChannelUpdateInput): Promise<Channel>;
     listChannelMembers(channelId: string): Promise<ChannelMember[]>;
     inviteToChannel(channelId: string, userId: string): Promise<ChannelMember>;

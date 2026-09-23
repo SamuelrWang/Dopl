@@ -17,6 +17,7 @@ exports.isAlreadyExists = isAlreadyExists;
 exports.creditsExhausted = creditsExhausted;
 exports.entitlementDenied = entitlementDenied;
 exports.missingParams = missingParams;
+exports.unusedParams = unusedParams;
 const tool_errors_1 = require("./tool-errors");
 function ok(text) {
     return { content: [{ type: "text", text }] };
@@ -162,4 +163,16 @@ function missingParams(op, args, required) {
     const plural = missing.length === 1 ? "param" : "params";
     // Through the declared code, so the wire matches the `reason=` every description teaches.
     return err((0, tool_errors_1.refusal)(tool_errors_1.MISSING_PARAMS, `op="${op}" is missing required ${plural}: ${missing.join(", ")}.`));
+}
+/**
+ * Refusal when a param the op does NOT take was sent (a flat schema cannot say "this key belongs to
+ * that op"), else null. `allowed` is the op's own keys; `op`/`action` always pass. An ignored param
+ * would narrate success over an argument that did nothing.
+ */
+function unusedParams(op, args, allowed) {
+    const own = new Set(["op", "action", ...allowed]);
+    const stray = Object.keys(args).filter((k) => !own.has(k) && args[k] !== undefined);
+    if (stray.length === 0)
+        return null;
+    return err((0, tool_errors_1.refusal)(tool_errors_1.UNUSED_PARAM, `op="${op}" does not take: ${stray.join(", ")}. It takes: ${allowed.join(", ")}.`));
 }

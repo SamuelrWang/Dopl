@@ -1,25 +1,23 @@
 /**
- * `dopl_channel` op="rooms" action="update" — THE CHANNEL'S CURATED INFO CARD, and nothing else.
+ * `dopl_channel` op="rooms" action="update" — THE CHANNEL'S NAME, DESCRIPTION AND INFO CARD.
  *
  * ⚠ `channel-` filename prefix required by the parity split-scan.
  *
- * ── WHY ONE FIELD (Samuel's ruling Q12 (b), 2026-08-28) ────────────────────
+ * ── THREE FIELDS, TWO GATES (DMP-001, 2026-09-23) ──────────────────────────
  *
  * `PATCH /api/channels/{id}` accepts four things and they do not share a gate:
  *   - `visibility` is field-level `sessionOnly` — an agent token is refused it
  *     outright, in the route, and nothing here goes near it.
- *   - `name` / `topic` are MANAGE writes the route accepts and **no UI on /home
- *     or the workspace channels page can ask for** (F-346). ⚠ `archived` was a
- *     third until R-21 deleted the archive feature (2026-09-17).
- *     Shipping RENAME first on the AGENT surface would leave the operator's only
- *     undo as "ask an agent", which is a worse first surface than none.
+ *   - `name` / `topic` ("description") are MANAGE writes (`canManageChannel`:
+ *     the room's owner or a workspace admin). ⚠ They were withheld until
+ *     2026-09-23 because no UI could make them (F-346, ruling Q12 (b)); the
+ *     channel Info tab now saves both (`use-channel-header-writes.ts`), so the
+ *     operator's undo is a click, and the agent reaches the same outcome here.
+ *     A non-manager is refused by NAME (`CHANNEL_MANAGE_REQUIRED`), not a 403.
  *   - `infoCard` is documented as *deliberately* agent-writable and gated on
  *     MEMBERSHIP rather than session (Samuel, 2026-08-25): it is the channel's
  *     shared scratch surface and changes no visibility, roster, lifecycle or
  *     fact.
- *
- * So this op writes the card. Widening it is a product decision, not a schema
- * edit.
  *
  * ── THE CARD IS REPLACED WHOLE, WHICH IS WHY THE READ IS HERE TOO ──────────
  *
@@ -44,11 +42,19 @@ export interface InfoCardArg {
     hidden?: string[];
     rows?: InfoCardRowArg[];
 }
+/** What `rooms.update` may change. Every key absent is the READ. */
+export interface RoomUpdateArg {
+    card?: InfoCardArg;
+    /** The new channel name (MANAGE-gated). */
+    name?: string;
+    /** The new description — the wire field `topic` (MANAGE-gated); "" clears it. */
+    description?: string;
+}
 /**
- * READ or REPLACE the channel's info card.
+ * READ the room, or write its name, description and/or info card in ONE patch.
  *
- * ⚠ `card === undefined` IS THE READ, and it is documented on the op rather than
+ * ⚠ ALL THREE ABSENT IS THE READ, and it is documented on the op rather than
  * inferred: the card is replaced whole, so an agent that cannot see the current
  * one can only clobber it.
  */
-export declare function opUpdate(client: DoplClient, ref: string, card: InfoCardArg | undefined): Promise<ToolResponse>;
+export declare function opUpdate(client: DoplClient, ref: string, arg: RoomUpdateArg): Promise<ToolResponse>;

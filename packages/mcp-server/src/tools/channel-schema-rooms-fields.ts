@@ -35,7 +35,7 @@ export const ROOMS_INPUT_FIELDS = {
       // ⚠ **AND IT TEACHES TITLE CASE RATHER THAN "slugged" SINCE 2026-09-17** — that word read
       // as an instruction to PASS `picker-fix`. The tag is DERIVED, and
       // `agent-display-name.ts` repairs a slug that arrives anyway.
-      'op="rooms" action="open" (required for a NAMED channel): the channel name. op="manage" action="launch" (REQUIRED), action="rename": what to call that agent — a DISPLAY NAME in Title Case ("Picker Fix" → `@picker-fix`), never a slug. 1-60 visible characters on ONE line, an id is not a name, "" clears; a launch answers the name it GOT — read `name=`. op="artifact" action="create": the card\'s name.',
+      'op="rooms" action="open" (NAMED channel) / "update" (rename): the channel name. op="manage" action="launch" (REQUIRED) / "rename": what to call that agent — a DISPLAY NAME in Title Case ("Picker Fix" → `@picker-fix`), never a slug; 1-60 visible characters on ONE line, an id is not a name, "" clears; a launch answers the name it GOT — read `name=`. op="artifact" action="create": the card\'s name.',
     ),
 
   visibility: z
@@ -91,7 +91,7 @@ export const ROOMS_INPUT_FIELDS = {
     .describe(
       // ⚠ Its "everyone sees it" moved to `channel-doctrine.ts › ROOMS` (2026-09-13; why:
       // `SCHEMA_MAX_CHARS`).
-      'op="rooms" action="update": the channel\'s whole info card, REPLACED — an omitted row is DELETED and `info_card={}` clears the card. Omit the argument entirely to READ the card unchanged.',
+      'op="rooms" action="update": the whole info card, REPLACED — an omitted row is DELETED and `info_card={}` clears the card. Omitted with name and summary, the call READS.',
     ),
 
   // ⚠ **THE DOCTRINE IS PULLED, SO IT MUST BE PULLABLE IN PIECES** (2026-09-02).

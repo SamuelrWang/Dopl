@@ -254,17 +254,13 @@ export async function createChannel(
 }
 
 /**
- * Patch a channel. ⚠ **`infoCard` IS THE ONLY FIELD BOUND HERE, AND THAT IS A
- * RULING, NOT A GAP** (Samuel's ruling Q12, 2026-08-28).
+ * Patch a channel: `name`, `topic` and `infoCard`.
  *
- * `PATCH /api/channels/{id}` also accepts `name`, `topic` and `visibility` (it
- * accepted `archived` until R-21 deleted the archive feature, 2026-09-17).
- * `visibility` is field-level `sessionOnly` and an agent token is refused it
- * outright. The other two are MANAGE writes the route accepts and **no UI can ask
- * for** (F-346) — shipping RENAME first on the AGENT surface
- * would mean the operator's only way to undo one is to ask an agent. So
- * {@link ChannelUpdateInput} carries one key, and widening it is a product
- * decision rather than a type edit.
+ * `PATCH /api/channels/{id}` also accepts `visibility`, which is field-level
+ * `sessionOnly` — an agent token is refused it outright, so
+ * {@link ChannelUpdateInput} does not carry it. `name` / `topic` are MANAGE
+ * writes (owner or workspace admin); they were withheld under F-346 until the
+ * channel Info tab could edit both (2026-09-23, DMP-001).
  *
  * `infoCard` is intentionally AGENT-WRITABLE and gated on MEMBERSHIP rather than
  * session: the card is the channel's shared scratch surface and changes no

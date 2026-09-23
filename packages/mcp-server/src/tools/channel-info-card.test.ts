@@ -2,12 +2,9 @@
  * `dopl_channel(op="rooms", action="update")` — the info card, and the ruling
  * around it.
  *
- * ⚠ THE HEADLINE ASSERTION IS AN ABSENCE. Samuel ruled Q12 (b): `infoCard` ONLY.
- * The same `PATCH` route accepts `name`, `topic` and `archived`, which NO UI can
- * ask for (F-346), and shipping RENAME first on the AGENT surface would leave
- * the operator's only undo as "ask an agent". So this suite pins that the action
- * cannot send them — a widening would otherwise be a one-line change nothing
- * noticed.
+ * ⚠ `visibility` IS THE ONE FIELD THIS ACTION MUST NEVER SEND (it is
+ * `sessionOnly`). `name`/`topic` joined the patch on 2026-09-23 (DMP-001) once
+ * the Info tab could edit both — `channel-room-rename.test.ts` owns them.
  *
  * ⚠ AND THE CARD IS REPLACED WHOLE, which makes a blind write DESTRUCTIVE. The
  * read arm (omit `info_card`) is what makes read-modify-write possible without a
@@ -156,19 +153,28 @@ describe("passing info_card REPLACES the card", () => {
 });
 
 describe("🔒 the fields this op deliberately cannot send", () => {
-  it("NEVER puts name / topic / archived / visibility in the patch", async () => {
-    // ⚠ THE RULING, PINNED. `name` IS a declared param on this tool
-    // (rooms action="open" uses it), `visibility` is too, and `summary` is what
-    // carries a room's TOPIC since B8 — so a careless widening of the update arm
-    // is one spread away, and the route would accept the fields it maps to.
+  it("REFUSES visibility by name and sends nothing", async () => {
+    // ⚠ `visibility` is a declared param (rooms action="open" uses it) and the
+    // route would accept it from a session — so it is refused HERE, not dropped.
+    const update = vi.fn(async () => CHANNEL);
+    const text = await run(channelStub({ updateChannel: update }), {
+      op: "rooms",
+      action: "update",
+      channel: "with-dana",
+      visibility: "public",
+      info_card: { rows: [] },
+    });
+    expect(update).not.toHaveBeenCalled();
+    expect(text).toContain("reason=unused_param");
+    expect(text).toContain("does not take: visibility");
+  });
+
+  it("an info_card-only write still sends exactly one key", async () => {
     const update = vi.fn(async () => CHANNEL);
     await run(channelStub({ updateChannel: update }), {
       op: "rooms",
       action: "update",
       channel: "with-dana",
-      name: "Renamed",
-      summary: "new topic",
-      visibility: "public",
       info_card: { rows: [] },
     });
     const [, patch] = update.mock.calls[0] as [string, Record<string, unknown>];

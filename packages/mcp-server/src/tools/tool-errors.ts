@@ -28,6 +28,20 @@ export const MISSING_PARAMS: ToolError = {
   retry: "no",
 };
 
+/** Emit-only: `respond.ts › unusedParams`. A param the op ignores is refused, never dropped. */
+export const UNUSED_PARAM: ToolError = {
+  reason: "unused_param",
+  meaning: "a param this op does not take was sent; nothing was done",
+  retry: "drop it and re-issue",
+};
+
+/** Emit-only: a channel rename/description write by a caller who cannot manage the room. */
+export const CHANNEL_MANAGE_REQUIRED: ToolError = {
+  reason: "manage_required",
+  meaning: "renaming or describing a channel needs its owner or a workspace admin; nothing changed",
+  retry: "no",
+};
+
 export const READ_ONLY_SESSION: ToolError = {
   reason: "read_only_session",
   meaning: "this session is read-only — its token has no `dopl.write` scope",

@@ -92,7 +92,7 @@ export const CHANNEL_INPUT_SHAPE = {
     .optional()
     .describe(
       // "description" is the UI label; the wire field and column stay `topic`.
-      'The one-line intent. ALWAYS set it on op="send" — it becomes the notification the receiving member sees; on kind="decision" it is the QUESTION the card asks, on op="rooms" action="open" it is the description, and on op="artifact" it is what the folded run was about.',
+      'The one-line intent. ALWAYS set it on op="send" — it becomes the notification the receiving member sees; on kind="decision" it is the QUESTION the card asks, on op="rooms" action="open"/"update" it is the description, and on op="artifact" it is what the folded run was about.',
     ),
 
   // Both routes dedupe per-author (`channel_messages` and `channel_tasks`).

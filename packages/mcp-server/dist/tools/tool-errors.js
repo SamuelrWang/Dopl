@@ -6,7 +6,7 @@
  * these tables prevent.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.STATUS_ERRORS = exports.SEARCH_ERRORS = exports.CHANNEL_ERRORS = exports.AGENT_ERRORS = exports.ONTOLOGY_ERRORS = exports.MEMBERS_ERRORS = exports.CHATS_ERRORS = exports.BAD_SESSION_DATE = exports.SKILL_ERRORS = exports.KB_ERRORS = exports.SESSION_REQUIRED = exports.KB_TARGET_VANISHED = exports.KB_ENTRY_NOT_FOUND = exports.KB_INVALID_FIELD = exports.CREDITS_EXHAUSTED = exports.AMBIGUOUS_CONTAINER = exports.DELETE_IS_APP_ONLY = exports.READ_ONLY_SESSION = exports.MISSING_PARAMS = void 0;
+exports.STATUS_ERRORS = exports.SEARCH_ERRORS = exports.CHANNEL_ERRORS = exports.AGENT_ERRORS = exports.ONTOLOGY_ERRORS = exports.MEMBERS_ERRORS = exports.CHATS_ERRORS = exports.BAD_SESSION_DATE = exports.SKILL_ERRORS = exports.KB_ERRORS = exports.SESSION_REQUIRED = exports.KB_TARGET_VANISHED = exports.KB_ENTRY_NOT_FOUND = exports.KB_INVALID_FIELD = exports.CREDITS_EXHAUSTED = exports.AMBIGUOUS_CONTAINER = exports.DELETE_IS_APP_ONLY = exports.READ_ONLY_SESSION = exports.CHANNEL_MANAGE_REQUIRED = exports.UNUSED_PARAM = exports.MISSING_PARAMS = void 0;
 exports.refusal = refusal;
 exports.versionConflict = versionConflict;
 exports.fieldTooLong = fieldTooLong;
@@ -19,6 +19,18 @@ function refusal(error, detail = "") {
 exports.MISSING_PARAMS = {
     reason: "missing_params",
     meaning: "a param this op needs is absent; the message names it",
+    retry: "no",
+};
+/** Emit-only: `respond.ts › unusedParams`. A param the op ignores is refused, never dropped. */
+exports.UNUSED_PARAM = {
+    reason: "unused_param",
+    meaning: "a param this op does not take was sent; nothing was done",
+    retry: "drop it and re-issue",
+};
+/** Emit-only: a channel rename/description write by a caller who cannot manage the room. */
+exports.CHANNEL_MANAGE_REQUIRED = {
+    reason: "manage_required",
+    meaning: "renaming or describing a channel needs its owner or a workspace admin; nothing changed",
     retry: "no",
 };
 exports.READ_ONLY_SESSION = {

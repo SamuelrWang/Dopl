@@ -4749,7 +4749,14 @@ per-file string — and the CSS-module faces in (c) fold in with the same move.
 
 ---
 
-### F-346 — `PATCH /api/channels/[channelId]` accepts a RENAME that no surface can ask for (2026-08-28)
+### F-346 — `PATCH /api/channels/[channelId]` accepts a RENAME that no surface can ask for (2026-08-28) — ✅ RESOLVED 2026-09-23
+
+**✅ RESOLVED in the order the ruling required (DMP-001, 2026-09-23).** The HUMAN half landed first:
+the channel Info tab saves name and description (`src/features/channels/hooks/use-channel-header-writes.ts`).
+The AGENT half followed: `dopl_channel(op="rooms", action="update")` takes `name` and `summary`
+(→ `topic`) beside `info_card`, `@dopl/client › ChannelUpdateInput` carries `name`/`topic`/`infoCard`,
+and a non-manager is refused by name (`tool-errors.ts › CHANNEL_MANAGE_REQUIRED`). `visibility` stays
+`sessionOnly` and unreachable from MCP. The text below is the original entry.
 
 **What was measured.** `src/app/api/channels/[channelId]/route.ts` takes `name`, `topic`, `archived`
 and `infoCard`; `PATCH` floors at `minRole: "member"`, only `visibility` is field-level
