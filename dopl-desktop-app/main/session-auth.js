@@ -1,72 +1,34 @@
-// Q6 — the Claude Code credential PREFLIGHT and the auth HOLD it raises.
-//
-// THE BUG THIS EXISTS FOR: a session window on a Mac with no Claude Code sign-in rendered an
-// agent bubble reading "Not logged in · Please run /login" and then died (task_failed
-// {interrupted}). The recovery machinery already existed — claude-auth.startSignInFlow drives
-// `claude setup-token` under a pty against the BUNDLED binary, with a Terminal fallback — but
-// it was wired ONLY to the headless path (trigger.js:341). This module is the session-path
-// twin: it PREFLIGHTS the credential before a query is started, HOLDS the session instead of
-// burning it when there is none, and turns an auth-shaped mid-session failure into a button.
-//
-// SEAM: the engine injects everything stateful (bind) exactly like session-park.js — this file
-// holds no session registry of its own and never imports session-engine (no cycle). The pure
-// half (which failures are auth-shaped, and every string the operator reads) lives in
-// session-auth-detect.js so it is testable without electron.
-//
-// WHAT COUNTS AS A USABLE CREDENTIAL (credentialState below): an auth env var the SDK passes
-// through, our own stored setup-token, or the CLI's own signed-in state on this machine. We
-// NEVER read the macOS keychain item itself ("Claude Code-credentials"): a read from a
-// different app pops a keychain-access prompt, which would be a worse interruption than the
-// bug. The probe therefore reads MARKERS, never a secret, and is FAIL-OPEN — an unreadable or
-// unrecognized state counts as "credential present", so the preflight can only ever block a
-// machine we are confident has none. Everything else falls through to the mid-session recovery.
+// The credential preflight and the auth HOLD. The hold is core (every runtime): a session whose runtime
+// reports an auth failure parks and is held instead of crashing. The Claude Code credential probe here
+// is Claude's own (called through `runtime/claude/credential.js`) until the credential lane moves.
 
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
 const { getStoredOAuthToken } = require('./claude-token');
 const store = require('./session-store');
-// AXIS B's windowless floor — the ONE statement of it (F-236). A hold RESETS the posture, so the
-// release has to put the floor back; see `resumeAfterSignIn`.
 const { floorWindowlessMessage } = require('./session-profiles');
 const { diag } = require('./diag');
-// ⚠ THE RUNTIME'S OWN WORDS (2026-09-21, U10). Two sentences on this file's SHARED paths named
-// Claude — the held-tool denial and the post-sign-in nudge — and both are reached by EVERY
-// runtime's auth hold (`session-query.js › consume` calls `holdIfAuthFailure` whatever adapter
-// produced the stream). An agent told to sign in to a runtime it is not running on has been
-// handed a false statement about its own machine. `runtime-copy.js` builds both from the
-// session's own descriptor; it requires nothing and `main/runtime/index.js` is electron-free by
-// contract, so neither require can cycle or pull a platform handle.
-// ⚠ WHAT IS DELIBERATELY *NOT* DE-NAMED HERE: `claude-auth.js` / `claude-token.js` and
-// `session-auth-detect.js`'s banner copy. Those are the CLAUDE-OWNED credential surfaces
-// INVARIANTS §11.0a names as a single later step (the five vendor-named modules, the IPC channel
-// and its two test pins move together); doing half of it here would leave the pin and the op
-// disagreeing, which is the exact reason that step is fenced.
 const runtimeRegistry = require('./runtime');
 const runtimeCopy = runtimeRegistry.copy;
 
-/** The descriptor of the runtime THIS session was stamped with at spawn. ⚠ READ, NEVER RE-CHOSEN
- *  (INVARIANTS §11): an unknown id resolves to the default, which is what such a session ran on. */
+/** The descriptor of the runtime this session was stamped with; its copy is what the agent reads. */
 function copyFor(s) {
   return runtimeRegistry.descriptorFor(s && s.runtimeId);
 }
 
-// The auth-critical env vars sdk-loader.buildScrubbedEnv deliberately preserves (its
-// PERMISSION_ENV_RE cannot match any of them). Present => the SDK child can authenticate.
+// The auth env vars the scrubbed spawn env preserves; any one present means the child can authenticate.
 const ENV_KEYS = ['CLAUDE_CODE_OAUTH_TOKEN', 'ANTHROPIC_API_KEY', 'ANTHROPIC_AUTH_TOKEN'];
-const PROBE_TTL_MS = 5000; // a click-rate cache; forget() clears it the moment sign-in returns
+// A click-rate cache; `forget()` clears it the moment a sign-in returns.
+const PROBE_TTL_MS = 5000;
 
 let deps = null;
-let probe = null; // { at, state } — the cached credentialState()
+let probe = null;
 
-// The engine binds its internals here at load: the SDK loader, its OWN startQuery (the deferred
-// launch — never a second query assembly), dispatch, the replay-aware emit, and denyPending
-// (fail-closed teardown of awaited canUseTool promises).
 function bind(d) {
   deps = d || null;
 }
 
-// ── The credential probe ─────────────────────────────────────────────────────
 function envCredential() {
   const env = process.env || {};
   for (const key of ENV_KEYS) {
@@ -75,32 +37,25 @@ function envCredential() {
   return '';
 }
 
-// The CLI's own record that THIS machine completed an interactive sign-in. Two shapes:
-//   ~/.claude/.credentials.json — the file-backed credential store (no OS keychain).
-//   ~/.claude.json `oauthAccount` — written after an interactive login; the macOS keychain
-//     holds the actual token, which we never touch. The account block is read for ONE bit
-//     (does it name an account); no field of it is copied, logged, or sent anywhere.
+// The CLI's own record of a completed sign-in. Reads MARKERS, never the keychain secret (a cross-app
+// read pops an OS prompt). Fails OPEN when the file exists but cannot be read; absent is the real "no".
 function cliStoreSignedIn() {
   const home = os.homedir();
   try {
     const st = fs.statSync(path.join(home, '.claude', '.credentials.json'));
     if (st.isFile() && st.size > 2) return true;
-  } catch (_) { /* absent -> try the account marker below */ }
+  } catch (_) {}
   try {
     const raw = fs.readFileSync(path.join(home, '.claude.json'), 'utf8');
     const account = JSON.parse(raw).oauthAccount;
     return !!(account && typeof account === 'object' && account.accountUuid);
   } catch (err) {
-    // Unreadable / unparseable / absent. FAIL OPEN only when the file EXISTS but could not be
-    // read — a machine that has never run claude has no file at all, which is the real
-    // "no sign-in" signal the preflight is looking for.
     return err && err.code !== 'ENOENT';
   }
 }
 
-// { usable, source } — the ONE definition of "this Mac can run a session". Order matters:
-// `stored-token` is last so it is chosen only when it is the ONLY credential we hold, which
-// is exactly when withStoredCredential injects it.
+// `{ usable, source }`. `stored-token` is last so it is chosen only when it is the only credential, which is
+// exactly when `withStoredCredential` injects it.
 function credentialState() {
   const now = Date.now();
   if (probe && now - probe.at < PROBE_TTL_MS) return probe.state;
@@ -117,11 +72,7 @@ function forget() {
   probe = null;
 }
 
-// The env a session query runs with. When our OWN stored setup-token is the only credential on
-// this machine (the branch where `claude setup-token` PRINTED a token instead of storing it),
-// inject it the same way session-spawner's headless spawnEnv already does — otherwise a
-// completed in-app sign-in would leave the session path still unauthenticated. On every other
-// machine this returns the SAME object it was handed, so a healthy launch is byte-identical.
+// Inject our own stored setup-token only when it is the sole credential; otherwise the env is returned as is.
 function withStoredCredential(env) {
   const state = credentialState();
   if (state.source !== 'stored-token') return env;
@@ -132,51 +83,17 @@ function withStoredCredential(env) {
 }
 
 // ─── BEGIN SESSION-AUTH-HOLD (injectable; unit-tested via source extraction) ──
-// The block below references its leaf deps (deps / store / diag)
-// and the two probe helpers as free vars, so test/session-auth-recovery.test.mjs slices it,
-// proves it holds no electron require, and drives it with fakes — the session-park idiom.
 
-// ── The hold ─────────────────────────────────────────────────────────────────
-// A held session is a PARKED session: the same durable phase, so it is dormant on restart
-// (no spurious task_failed{interrupted} echo) and reopenable. ⚠ IT ALSO SAID "evictable by the
-// window-budget LRU" until 2026-08-20; that LRU is deleted with the window
-// (`session-park.js`), and the surviving ceiling REFUSES a new launch rather than reclaiming an
-// existing session — so a held session is never taken away to make room.
-// Nothing is posted into the channel: no task_started ever fired, because no query ran.
-//
-// H1 — THE HOLD IS NOW REDUCER STATE, not three fields poked onto the session object. The old
-// version set s.state.phase/parked/activity directly and recorded the hold ONLY as
-// `s.authHold`, a field no other module could see. Two things followed from that:
-//   (a) session-reducer.wakeEffects saw nothing but `parked` and resumed held sessions — a
-//       peer follow-up under an auto_both preset spawned the SDK on a machine with NO
-//       credential, and a later sign-in then started a SECOND query beside it.
-//   (b) holdIfAuthFailure's "already held" branch returned `true` (handled) having done
-//       NOTHING — no denyPending, no abort, no park — so a session that had been dragged back
-//       to phase 'running' by (a) stayed there forever: no query, no idle timer (scheduleIdle
-//       only arms on `launched`), nothing to ever settle it, and the peer's await got nothing.
-// Dispatching `auth_hold` fixes both: the reducer sets `authHeld` where wakeEffects and
-// inboundAutoAccepted can see it, and runs the full parkEffects set (denyPending fail-closed,
-// abortQuery, clearIdle, persist 'parked'), idempotently.
+// The block below takes its leaf deps (deps / store / diag / copy helpers) as free vars.
+
+// A held session is a PARKED session held in reducer state (`authHeld`), so a wake cannot resume it and
+// the park teardown runs (deny pending fail-closed, abort, clear idle, persist parked) idempotently (H1).
 function dispatchHold(s) {
   try { deps.dispatch(s, { type: 'auth_hold' }); } catch (err) { diag('session-auth: hold dispatch failed', err && err.message); }
   try { store.setRecordPhase(s.key, 'parked'); } catch (err) { diag('session-auth: persist failed', err && err.message); }
 }
 
-// ⚠ THREE WINDOW PAINTERS STOOD HERE AND ARE DELETED (2026-08-20, F-228): `emitHeldInit`
-// synthesized the `init` a held PREFLIGHT window needed because no SDK system/init would land;
-// `showWindow` un-hid it; `paintNotice` wrote the banner. All three emitted into a renderer
-// that no longer exists — and every one of those emits already no-ops on a windowless
-// session's null `win`, so removing them changes no behaviour, only the pretence.
-//
-// ⚠ `detect.authNotice` SURVIVES with no caller in this file, and that is deliberate rather
-// than an oversight: `session-auth-detect.js` owns the auth COPY as well as the shape-matching,
-// and its wording is what a replacement surface would render. Deleting the copy would make the
-// next surface invent its own.
-
-// PREFLIGHT (Q6.1). Called by startSession immediately before startQuery. Returns true when the
-// launch was HELD, in which case the caller returns the session as-is: the window is open, the
-// request is painted, and the operator has one button. Returns false on every machine with a
-// usable credential, where the launch continues untouched.
+// The preflight verdict. Every spawn is windowless, so `startSession` rolls a held launch back.
 function holdMissingCredential(s, state) {
   if (!deps || !s || !state || state.usable !== false) return false;
   diag('session-auth: preflight HOLD — no credential on this machine for', runtimeCopy.runtimeLabel(copyFor(s)));
@@ -186,8 +103,8 @@ function holdMissingCredential(s, state) {
   return true;
 }
 
-// Asks the session's own runtime (never Claude's file markers for every session). Fail-open: no
-// probe, or a probe that throws, is not a hold; the stream's auth sentinel parks it recoverably.
+// Asks the session's own runtime; no probe, or one that throws, is not a hold (the stream's auth sentinel
+// parks it recoverably).
 async function holdIfNoRuntimeCredential(s, runtime) {
   if (!runtime || typeof runtime.credentialState !== 'function') return false;
   try {
@@ -197,76 +114,34 @@ async function holdIfNoRuntimeCredential(s, runtime) {
   }
 }
 
-// MID-SESSION (Q6.2). The runtime's own normalizer classified a message or a rejection as an auth
-// failure (`auth_hold`, whose `text` is carried for the log); that verdict is trusted — core never
-// re-tests one runtime's words with Claude's patterns (P4-03). Park the session instead of
-// dispatching `crash` (settle + task_failed{interrupted}). Returns true when it took over.
+// The runtime's normalizer classified a message or rejection as auth-shaped (`auth_hold`); that verdict is
+// trusted — core never re-tests one runtime's words (P4-03). Already held CONVERGES rather than returning
+// early: re-dispatching is idempotent and guarantees the session ends up parked and held (H1b).
 function holdIfAuthFailure(s, _text) {
   if (!deps || !s || s.settled) return false;
-  // H1(b) — ALREADY HELD IS NOT "NOTHING TO DO". This used to `return true` here having taken
-  // no action at all, which was only safe while a held session could not be restarted. It
-  // could: a wake resumed it (H1(a)), the resumed query failed auth again, and this branch
-  // handed back "handled" over a session the wake had already flipped to phase 'running' with
-  // no query behind it — unparkable, un-timeout-able, unsettleable, and invisible to the peer
-  // waiting on it. So CONVERGE instead of returning: re-dispatch the hold, which is idempotent
-  // in the reducer (no second banner, no second denyPending sweep) but GUARANTEES the session
-  // ends up parked and held no matter which path got it here. Cheap, and it cannot regress.
   const already = !!s.authHold;
   if (!already) diag('session-auth: auth-shaped SDK failure -> hold');
   s.authHold = s.authHold || { kind: 'error' };
-  // Fail closed FIRST (P1 discipline): every awaited canUseTool promise is denied before the
-  // teardown, so no resolver dangles on a session that is about to stop consuming. (parkEffects
-  // denies again via the reducer; both are idempotent.)
-  try { if (deps.denyPending) deps.denyPending(s, runtimeCopy.heldToolDenial(copyFor(s))); } catch (_) { /* best effort */ } // U10: the AGENT reads this, and it must name the runtime the AGENT is running on
-  deps.teardown(s); // `session-handles.js`: the converge case gets no reducer abort, so the handle closes here (P4-14)
+  // Fail closed first; the agent is told in its own runtime's words.
+  try { if (deps.denyPending) deps.denyPending(s, runtimeCopy.heldToolDenial(copyFor(s))); } catch (_) { /* best effort */ }
+  // The converge case gets no reducer abort, so the handle closes here (P4-14).
+  deps.teardown(s);
   if (s.idleTimer) { clearTimeout(s.idleTimer); s.idleTimer = null; }
   dispatchHold(s);
-  if (already) return true; // converged
+  if (already) return true;
   deps.emit(s, { type: 'status', phase: 'parked' });
   return true;
 }
 
-// ── Sign in, then continue ───────────────────────────────────────────────────
-// The retry is the SAME path the launch would have taken. A preflight hold re-runs the engine's
-// own startQuery with the first turn it never got to push (byte-identical to a healthy launch);
-// an error hold takes the ordinary lazy-wake (`steer` -> resumeQuery with options.resume), which
-// is the same route an operator typing into a parked window takes.
-// ⚠ PER RUNTIME SINCE 2026-09-21 (U10), where it was one frozen Claude sentence. It is STEERED
-// INTO THE SESSION, so a Codex agent was being told its Claude sign-in was restored — a statement
-// about a credential its own turn does not use. `runtime-copy.js › resumeNudge` builds it from
-// the session's descriptor; the shape and the `priority: 'next'` are unchanged.
 const resumeNudgeFor = (s) => runtimeCopy.resumeNudge(copyFor(s));
 
-// H1 — IDEMPOTENT BY CONSTRUCTION. The old version read s.authHold, nulled it, and on a
-// preflight hold called startQuery unconditionally — while startQuery itself overwrote
-// s.abortController / s.query with no teardown. Two ways that produced two live claude
-// children for one request: a double-click on the sign-in button (both runs pass the
-// `s.authHold` check before either clears it), and a sign-in landing on a session a peer wake
-// had already resumed (H1(a)) so a query was ALREADY running under the hold.
-//
-// Three defences now, deliberately layered because each closes a different window:
-//   1. `s.authResuming` — a re-entrancy latch taken BEFORE the first await.
-//   2. the CLAIM of s.authHold is the ticket: whoever nulls it is the one that proceeds, so a
-//      second caller finds nothing to resume and returns.
-//   3. session-query.startQuery SUPERSEDES (aborts + closes + un-tags) whatever was live
-//      before assembling anything, so even a caller that gets past 1 and 2 cannot leave an
-//      orphan child behind. That one is the real backstop and is tested on its own.
+// Release a hold: the claim of `s.authHold` is the ticket (a second caller finds nothing), `auth_release`
+// precedes the steer because wakeEffects refuses while authHeld, and the steer is the ordinary lazy wake.
 async function resumeAfterSignIn(s) {
-  if (!s.authHold) return; // already resumed: the claim below is the ticket
+  if (!s.authHold) return;
   s.authHold = null;
-  // Clear the reducer-visible hold BEFORE anything can spawn: `steer` below goes through
-  // wakeEffects, which refuses to resume while authHeld is true.
   try { deps.dispatch(s, { type: 'auth_release' }); } catch (err) { diag('session-auth: release dispatch failed', err && err.message); }
-  // ⚠ AND RE-APPLY AXIS B's WINDOWLESS FLOOR (2026-08-22, F-236's last hole). The HOLD is the one
-  // park that resets the posture — `auth_hold` writes `messageMode: 'ask'`, because a session
-  // whose CREDENTIAL is gone relaunches rather than resuming and the arm it was given belongs to
-  // the run that ended. That reset is right for the TOOL axis and wrong for this one: a windowless
-  // session has NO ACCEPT SURFACE, so a recovered session came back BELOW the floor and
-  // `session-gate.js › enqueue` HELD the next peer reply with no drain left to release it
-  // (`decideInbound` / `drainQueue` / `drainInbound` all went with the session window). The
-  // operator signed in and their agent then silently stopped receiving.
-  // ⚠ THE SHARED RULE, NEVER A LOCAL SPELLING, and it is dispatched through the reducer's own
-  // `set_message_mode` so the value is coerced fail-closed and the `modes` echo repaints.
+  // The hold reset Axis B to `ask`; a windowless session has no accept surface, so re-apply the floor (F-236).
   if (s.windowless === true) {
     const floored = floorWindowlessMessage(s.state && s.state.messageMode);
     if (!s.state || s.state.messageMode !== floored) {
@@ -276,42 +151,11 @@ async function resumeAfterSignIn(s) {
   deps.dispatch(s, { type: 'steer', text: resumeNudgeFor(s), priority: 'next' });
 }
 
-// ⚠ `runSignIn(s)` STOOD HERE AND IS DELETED (2026-08-20, F-228). It drove the IN-WINDOW
-// sign-in recovery: the held session's window painted a banner with a button, the click ran
-// `claude setup-token` through a pty, and a usable credential then called `resumeAfterSignIn`
-// above. Every part of that except the resume was a WINDOW: `paintNotice` wrote to a surface
-// that no longer exists, and the two `session:auth-signin` / `session:auth-state` handlers
-// resolved their session from `event.sender` against a window's webContents.
-//
-// ⚠ THE HOLD ITSELF IS UNTOUCHED AND IS NOT A WINDOW THING. `holdIfNoCredential`,
-// `holdIfAuthFailure` still fail the launch CLOSED on a missing or
-// broken Claude Code sign-in, and `trigger.js` still answers the peer honestly on the
-// `auth-hold` skip (`AUTH_HELD_REPLY`). What is gone is the in-place REMEDY, not the guard —
-// the operator signs in the way every other surface asks them to, and the held session resumes
-// through `resumeAfterSignIn` when a credential appears.
-
 // ─── END SESSION-AUTH-HOLD ───────────────────────────────────────────────────
 
 // ─── BEGIN AUTH-RESUME-FAN-OUT (injectable; unit-tested via source extraction) ─
-// EVERY SESSION THIS MAC IS HOLDING ON ONE RUNTIME, RELEASED ONCE — the fan-out half of an in-app
-// sign-in (`main/claude-signin-op.js`, its ONE caller). The per-session behaviour is
-// `resumeAfterSignIn` above and is UNCHANGED; this only decides WHICH sessions get one.
-// Scoped by runtime (P4-06): one runtime's sign-in says nothing about another's credential, so
-// a Claude sign-in releases only Claude sessions (an un-stamped one resolves to the default).
-//
-// ⚠ IT SITS OUTSIDE THE BLOCK ABOVE ON PURPOSE. That block is sliced and evaluated with a fixed
-// injection set (`test/_auth-hold-harness.mjs`) that hands it no registry; this reads
-// `deps.sessions` — bound by the engine at load since Q6 and, until this wire landed, never used
-// here. Its own sentinels, so it is drivable on the same terms without widening that harness.
-//
-// ⚠ IT DOES NOT PROBE. The credential question is answered ONCE by the caller before it gets
-// here; a per-session re-probe is five filesystem reads for one decision and can disagree with
-// itself mid-loop.
-// ⚠ THE LIST IS TAKEN FIRST, then walked. `resumeAfterSignIn` mutates the sessions it releases
-// (and `steer` can wake one), and iterating the live Map while that happens is how a held
-// session comes to be skipped.
-// ⚠ SEQUENTIAL, AND EACH ONE IS CAUGHT ALONE. A resume awaits `acquireRuntime()` and starts a query; one
-// machine-level failure must not strand the sessions queued behind it in the hold forever.
+// The in-app sign-in's fan-out (`claude-signin-op.js`), scoped by runtime (P4-06). It does not re-probe (the
+// caller asked once), takes the list before walking it, and resumes each alone so one failure strands none.
 async function resumeHeldSessions(runtimeId) {
   const registry = deps && deps.sessions;
   if (!registry || !runtimeId) return 0;
@@ -330,14 +174,12 @@ async function resumeHeldSessions(runtimeId) {
 }
 // ─── END AUTH-RESUME-FAN-OUT ─────────────────────────────────────────────────
 
-// A runtime with NO in-app sign-in (Codex: `codex login` in a terminal) has no op to release its
-// held sessions, so the next message to one re-probes that runtime's credential and resumes it when
-// the probe no longer says signed out (P4-06). A runtime WITH an in-app sign-in is released by it.
+// A runtime with no in-app sign-in (Codex: `codex login`) re-probes its credential on the next message and
+// resumes when it is back (P4-06).
 function reprobesOnWake(s) {
   return !!(s && !s.settled && s.authHold && !runtimeCopy.canSignIn(copyFor(s)));
 }
 
-/** Re-probe a held session's own credential; resolves true when the session was released. */
 async function reprobeHeld(s) {
   if (!reprobesOnWake(s)) return false;
   let state = null;
@@ -355,8 +197,8 @@ module.exports = {
   withStoredCredential,
   holdIfNoRuntimeCredential,
   holdIfAuthFailure,
-  resumeAfterSignIn, // H1: exported for the idempotency test
-  resumeHeldSessions, // the in-app sign-in's fan-out (main/claude-signin-op.js)
-  reprobesOnWake, // P4-06: a runtime with no in-app sign-in re-probes on the next message
+  resumeAfterSignIn,
+  resumeHeldSessions,
+  reprobesOnWake,
   reprobeHeld,
 };
