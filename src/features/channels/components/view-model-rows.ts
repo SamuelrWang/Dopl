@@ -7,10 +7,10 @@ import { authorViewOf, desktopAddresseeOf } from "../lib/desktop-handle";
 import { serverRoutedAgentIds } from "../lib/agent-post-stamp";
 import { addressKey } from "../lib/recipient-tags";
 import {
-  isLifecycleKind,
-  toReceiptRow,
-  type ReceiptRow,
-} from "./view-model-receipt-rows";
+  RECEIPT_LABEL,
+  lifecycleReceiptStatus,
+  type ReceiptStatus,
+} from "../lib/message-receipt";
 import { authorAgentIdOf } from "./agents-model";
 import {
   fanoutGroupOf,
@@ -27,9 +27,6 @@ import {
 import type { ArtifactRow } from "./view-model-artifacts";
 import type { ChannelMessage, ChannelThread } from "../types";
 import type { AvatarPerson } from "@/shared/ui/avatar";
-
-// Re-exported so this stays the one import path for transcript row types.
-export type { ReceiptRow } from "./view-model-receipt-rows";
 
 /** An agent hangs on its operator's side — never a third column (INVARIANTS §5). */
 export type MessageSide = "peer" | "me";
@@ -102,6 +99,48 @@ function ownThreadOf(
       (t) => t.createdBy === currentUserId || t.targetUserId === currentUserId
     ) ?? threads[0]
   );
+}
+
+/** How one exchange ended — no side, avatar or author. `label` is flag-derived
+ *  (`lib/message-receipt.ts › RECEIPT_LABEL`), never the caller-controlled body (INVARIANTS §5). */
+export interface ReceiptRow {
+  kind: "receipt";
+  id: string;
+  seq: number;
+  status: ReceiptStatus;
+  label: string;
+  /** `false` only for a real `failed` — the one status that may wear alarm ink. */
+  calm: boolean;
+  time: string;
+}
+
+/** Runtime-state kinds: never a bubble, at most a receipt. `task_progress` is absent on purpose:
+ *  it is the milestone lane, whose body is prose a peer needs (INVARIANTS §5). */
+function isLifecycleKind(message: ChannelMessage): boolean {
+  return (
+    message.kind === "task_started" ||
+    message.kind === "task_finished" ||
+    message.kind === "task_failed"
+  );
+}
+
+/** A terminal lifecycle row's receipt, or null: always for `task_started` (run state lives in
+ *  the Agents tab), and for a terminal row with no calm flag and no body. */
+function toReceiptRow(
+  message: ChannelMessage,
+  formatTime: (iso: string) => string
+): ReceiptRow | null {
+  const status = lifecycleReceiptStatus(message);
+  if (status === null) return null;
+  return {
+    kind: "receipt",
+    id: message.id,
+    seq: message.seq,
+    status,
+    label: RECEIPT_LABEL[status],
+    calm: status !== "failed",
+    time: formatTime(message.createdAt),
+  };
 }
 
 export type TranscriptRow =

@@ -87,6 +87,20 @@ export function toggleTranscriptAgent(
   );
 }
 
+/**
+ * The transcript cross-fade's key (`fade-swap.tsx`): names the selection only, never the rows,
+ * so a realtime push does not fade. Agent ids are sorted so one set has one spelling; the
+ * channel id is part of the key because filters are stored per channel.
+ */
+export function transcriptFilterViewKey(
+  channelId: string,
+  filter: TranscriptFilter
+): string {
+  return `${channelId}:${filter.people ? "p" : "-"}:${[...filter.agentIds]
+    .sort()
+    .join(",")}`;
+}
+
 /** The agent whose box this row wears, or null (People — every non-message row too). An ended
  *  agent (`{ color: null }`, a neutral box) is still an agent, never People. */
 export function transcriptRowAgentId(

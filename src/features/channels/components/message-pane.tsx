@@ -18,11 +18,11 @@ import {
   filterTranscriptRows,
   resolveTranscriptFilter,
   transcriptFilterAgents,
+  transcriptFilterViewKey,
   type TranscriptFilter,
 } from "./transcript-filter";
 import { ChannelsComposer } from "./composer";
 import { FadeSwap } from "./fade-swap";
-import { transcriptFilterViewKey } from "./transcript-view-key";
 import { ThreadSendBox } from "./thread-consent";
 import type { AgentLaunchControls } from "./use-agents-panel";
 import {
@@ -37,15 +37,21 @@ import type {
   ChannelThread,
 } from "../types";
 
-// Re-exported: `use-channels-selection.ts` imports `ScrollTarget` from this module.
-import type { ScrollTarget } from "./message-pane-scroll-target";
-import {
-  SCROLL_TARGET_MISSING_NOTE,
-  FLASH_MS,
-  MISSING_NOTICE_MS,
-} from "./message-pane-scroll-target";
-export type { ScrollTarget };
-export { SCROLL_TARGET_MISSING_NOTE };
+/** `nonce` exists so clicking the same mention twice re-scrolls. */
+export interface ScrollTarget {
+  messageId: string;
+  nonce: number;
+}
+
+/** Shown when the target is not in the loaded transcript; promises no remedy, since the pane has none (INVARIANTS §9). */
+export const SCROLL_TARGET_MISSING_NOTE =
+  "That message is older than the loaded history, so the transcript did not move.";
+
+/** How long the flash tint stands on a found row. */
+const FLASH_MS = 1600;
+
+/** How long the missing-target note stands — longer than the flash, because it is read. */
+const MISSING_NOTICE_MS = 6000;
 
 /** Stable default: the composer's recipient line memoizes on it. */
 const EMPTY_RECENT_AGENT_IDS: readonly string[] = [];
@@ -287,7 +293,7 @@ export function ChannelsMessagePane({
             Loading transcript
           </p>
         ) : (
-          /* Fades on filter change only (`transcript-view-key.ts`); wraps the transcript, not the
+          /* Fades on filter change only (`transcriptFilterViewKey`); wraps the transcript, not the
              scroller, so paging and the pin are untouched. */
           <FadeSwap viewKey={transcriptFilterViewKey(channelId, filter)}>
           <Transcript
