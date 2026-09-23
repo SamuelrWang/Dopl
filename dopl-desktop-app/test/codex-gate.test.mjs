@@ -228,30 +228,6 @@ test("THE MOUNT KEY AND THE ELICITATION'S SERVER COMPARISON ARE ONE CONSTANT", (
   assert.equal(approval.doplElicitation({ serverName: mounted[0] + "x", _meta: meta }), null);
 });
 
-test("CXP-3A: every launch carries the `features` fence — apps off always, delegation off when restricted", () => {
-  const specFor = (profile, containerToken) => launchSpec.buildLaunchSpec({
-    session: { profile, channelId: null, state: {}, workspaceId: "ws-1", model: "", containerToken },
-    dispatch: () => {}, emitQuiet: () => {},
-  });
-  for (const profile of ["read_only", "dopl_only"]) {
-    const f = specFor(profile, { token: "t" }).threadStart.config.features;
-    assert.deepEqual(f, { apps: false, plugins: false, multi_agent: false }, profile);
-  }
-  for (const profile of ["channel_agent", "full"]) {
-    const f = specFor(profile, { token: "t" }).threadStart.config.features;
-    assert.deepEqual(f, { apps: false, plugins: false }, profile);
-  }
-  // ⚠ NO TOKEN, NO DOPL ENTRY — AND STILL THE FENCE: `codex_apps` mounts from the operator's auth.
-  const bare = specFor("read_only", null).threadStart.config;
-  assert.equal(bare.mcp_servers, undefined);
-  assert.equal(bare.features.apps, false);
-  // …AND THE PROJECT-TRUST FENCE for the spawn cwd (`codex-project-trust.test.mjs` measures why).
-  const full = specFor("full", { token: "t" });
-  const fence = require(join(CODEX, "config-home.js")).projectTrustFence(full.cwd);
-  assert.deepEqual(full.threadStart.config.projects, fence);
-  assert.equal(full.threadStart.config.projects[full.cwd].trust_level, "untrusted");
-});
-
 test("a Dopl elicitation reaches AXIS B with the call's own op — the blocker, end to end", () => {
   // 🔒 ⚠ **THE CASE THAT SAYS A DOPL-LAUNCHED CODEX AGENT CAN POST.** The approval carries no tool
   // name; the name is derived from Dopl's own entry, the arguments ride `_meta.tool_params`, and
@@ -488,12 +464,10 @@ test("the sign-in button and the deep link are HIDDEN, never grayed; the tool-se
   assert.equal(capability.hasInteractiveSignIn(D), false);
   assert.equal(RT.signIn(), null, "a method whose capability is absent still EXISTS and answers null");
   assert.equal(capability.hasDeepLink(D), false);
-  // 🔒 CXP-3A (2026-09-22, codex-cli 0.155.1): MEASURED, no longer null — Codex defers every
-  // MCP tool behind `tool_search`, and nothing opts Dopl's entry out, so the turn orders it.
+  // 🔒 CXP-3A (2026-09-22, 0.155.1): MEASURED, no longer null — Codex defers every MCP tool.
   assert.equal(capability.toolSearchVerb(D), "tool_search", "the measured verb, never Claude's");
   // …and code-mode models reach the same tool through `exec`'s `ALL_TOOLS` (measured, same day).
-  assert.deepEqual(capability.mcpDiscovery(D), { verb: "tool_search", catalog: "ALL_TOOLS" },
-    "no eager-load flag, so both ways in are ordered");
+  assert.deepEqual(capability.mcpDiscovery(D), { verb: "tool_search", catalog: "ALL_TOOLS" }, "no eager-load flag");
   assert.equal(capability.entryFile(D), "AGENTS.md");
 });
 

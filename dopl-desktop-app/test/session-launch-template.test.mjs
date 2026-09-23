@@ -459,8 +459,7 @@ test("`context.template` rides the funnel's LITERAL WHITELIST and survives park/
   const resume = park.slice(park.indexOf("function resumeParked("), park.indexOf("async function startResumedConsumer("));
   assert.equal(/s\.context/.test(resume), false, "a park/resume never rewrites the context");
   // …and the framing reads it from there, with the session's OWN profile spread on at wake.
-  assert.match(read("session-seed.js"), /context: \{ \.\.\.\(\(s && s\.context\) \|\| \{\}\), profile: s\.profile, mcpDiscovery: discoveryOf\(s\) \}/,
-    "…and the SESSION's runtime discovery verb (CXP-3A)");
+  assert.match(read("session-seed.js"), /context: \{ \.\.\.\(\(s && s\.context\) \|\| \{\}\), profile: s\.profile, mcpDiscovery: discoveryOf\(s\) \}/);
 });
 
 // ⚠ **AND A CRASH RESUME IS THE OTHER HALF, NOT FREE** (F-288, 2026-08-23). Above is `resumeParked`,

@@ -462,15 +462,10 @@ test("D1: the predicate itself answers a SENTENCE for a null floor and for an un
 // spawn shape this tree has, which is a release decision and not this function's.
 
 test("D3: a runtime whose Axis B is not op-scoped LAUNCHES, and says so", async () => {
-  // ⚠ NO SHIPPED ADAPTER IS UNVERIFIED SINCE CXP-3A (2026-09-22): Codex measured op-scoped. So the
-  // REAL capability sentence is built from the Codex descriptor with the field set back to
-  // `'unverified'` — the launch path under test is the shipped one; only the declaration is the
-  // counterfactual (the descriptor itself is frozen).
-  const req = createRequire(import.meta.url);
-  const capability = req(join(MAIN, "runtime", "capability.js"));
-  const D = req(join(MAIN, "runtime", "index.js")).descriptorFor("codex");
-  const sentence = capability.axisBOpScopedWarning({ ...D, axisB: { ...D.axisB, opScoped: "unverified" } });
-  const h = harness({ opScopedWarning: sentence });
+  // ⚠ NO SHIPPED ADAPTER IS UNVERIFIED SINCE CXP-3A (2026-09-22), so the REAL sentence is built
+  // from the frozen Codex descriptor with `opScoped` set back to `'unverified'` and injected.
+  const req = createRequire(import.meta.url), D = req(join(MAIN, "runtime", "index.js")).descriptorFor("codex");
+  const h = harness({ opScopedWarning: req(join(MAIN, "runtime", "capability.js")).axisBOpScopedWarning({ ...D, axisB: { ...D.axisB, opScoped: "unverified" } }) });
   const res = await h.launch(call({ channelId: CH, taskId: TASK, runtime: "codex" }));
   assert.equal(res.skipped, undefined, "it is a WARNING — the launch proceeds");
   assert.equal(h.calls.started.length, 1, "…and the session is really constructed");
