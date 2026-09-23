@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 /**
  * THE MODEL CATALOG ON A SETTINGS READ (U6, 2026-09-21) — `use-runtime-catalogs.ts`, and the two
- * hooks that carry it (`use-channel-launch-posture.ts`, `use-agent-defaults.ts`).
+ * hook this file drives (`use-channel-launch-posture.ts`; `use-launch-selection.ts` has its own suite).
  *
  * THE PROPERTY THIS FILE EXISTS FOR:
  *
@@ -22,7 +22,6 @@ import {
   useChannelLaunchPosture,
   type ChannelLaunchPostureState,
 } from "./use-channel-launch-posture";
-import { useAgentDefaults, type AgentDefaultsState } from "./use-agent-defaults";
 import { CATALOG_VERSION, selectableModels } from "../lib/model-catalog";
 
 afterEach(() => {
@@ -122,7 +121,6 @@ async function mount<T>(use: () => T) {
 
 const mountPosture = () =>
   mount<ChannelLaunchPostureState>(() => useChannelLaunchPosture(CH));
-const mountDefaults = () => mount<AgentDefaultsState>(() => useAgentDefaults());
 
 const reply = (over: Record<string, unknown> = {}) => ({
   tools: "manual",
@@ -172,14 +170,6 @@ describe("🔒 the selected runtime's catalog is what the model row gets", () =>
     expect(holder.value.catalog?.reason).toMatch(/not installed/);
     // ⚠ THE NEIGHBOUR IS UNTOUCHED: one runtime's outage is not the map's.
     expect(holder.value.catalogs.claude.status).toBe("ready");
-  });
-
-  it("the Agents tab (profile defaults) reads the same contract through the same module", async () => {
-    installBridge(reply({ runtime: "codex" }));
-    const holder = await mountDefaults();
-    expect(holder.value.catalogsKnown).toBe(true);
-    expect(holder.value.catalog?.runtime).toBe("codex");
-    expect(selectableModels(holder.value.catalog).map((m) => m.id)).toEqual(["gpt-a"]);
   });
 });
 
@@ -268,5 +258,75 @@ describe("a `loading` roster is re-read, boundedly", () => {
     // words in the desktop's mouth about a read it never reported failing (INVARIANTS §11).
     expect(holder.value.catalog?.status).toBe("loading");
     expect(getLaunchPosture.mock.calls.length).toBeLessThanOrEqual(1 + 6 + 1);
+  });
+});
+
+describe("🔒 a SETTLED failure recovers after repair, with no restart (CXP-5)", () => {
+  const failed = () =>
+    codexCatalog({
+      status: "unavailable",
+      models: [],
+      defaultId: null,
+      reason: "`codex` is not installed where Dopl can find it.",
+    });
+
+  it("unavailable → (window focus) → loading → ready, and never one Claude id on the way", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    let phase: "failed" | "retrying" | "ready" = "failed";
+    const { getLaunchPosture } = installBridge(() =>
+      reply({
+        catalogs: {
+          claude: claudeCatalog,
+          codex:
+            phase === "failed"
+              ? failed()
+              : phase === "retrying"
+                ? codexCatalog({ status: "loading", models: [], defaultId: null })
+                : codexCatalog(),
+        },
+      }));
+    const holder = await mountPosture();
+    const noClaude = () => {
+      for (const m of holder.value.catalog?.models ?? []) expect(CLAUDE_IDS).not.toContain(m.id);
+      for (const m of selectableModels(holder.value.catalog)) expect(CLAUDE_IDS).not.toContain(m.id);
+    };
+    expect(holder.value.catalog?.status).toBe("unavailable");
+    noClaude();
+
+    // Settled: no timer re-reads a failure on its own.
+    const settledCalls = getLaunchPosture.mock.calls.length;
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(30000);
+    });
+    expect(getLaunchPosture.mock.calls.length).toBe(settledCalls);
+
+    // The operator repairs Codex in a terminal and comes back to the window.
+    phase = "retrying";
+    await act(async () => {
+      window.dispatchEvent(new Event("focus"));
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(getLaunchPosture.mock.calls.length).toBeGreaterThan(settledCalls);
+    expect(holder.value.catalog?.status).toBe("loading");
+    expect(holder.value.catalog?.runtime).toBe("codex");
+    noClaude();
+
+    phase = "ready";
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1500);
+    });
+    expect(holder.value.catalog?.status).toBe("ready");
+    expect(selectableModels(holder.value.catalog).map((m) => m.id)).toEqual(["gpt-a"]);
+    noClaude();
+  });
+
+  it("a READY map does not listen for focus — the re-read is for failures only", async () => {
+    const { getLaunchPosture } = installBridge(reply());
+    await mountPosture();
+    const calls = getLaunchPosture.mock.calls.length;
+    await act(async () => {
+      window.dispatchEvent(new Event("focus"));
+    });
+    expect(getLaunchPosture.mock.calls.length).toBe(calls);
   });
 });

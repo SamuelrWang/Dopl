@@ -116,6 +116,10 @@ const all = () => Array.from(REGISTRY.values());
  */
 const connectedIds = () => connectivity.connectedIds(all());
 
+/** Expire the standing connectivity sweep because a change was OBSERVED (CXP-5) — event-driven
+ *  only; see `connectivity.js › expire`. */
+const expireConnectivity = () => connectivity.expire();
+
 /**
  * THE VALIDATION CONTEXT A DURABLE LAUNCH SELECTION IS CHECKED AGAINST (2026-09-21, U5).
  *
@@ -148,7 +152,7 @@ function selectionContext() {
 }
 
 module.exports = {
-  register, resolve, descriptorFor, runtimeFor, acquire, ids, all, connectedIds,
+  register, resolve, descriptorFor, runtimeFor, acquire, ids, all, connectedIds, expireConnectivity,
   DEFAULT_ID,
   capability, // re-exported so a consumer needs ONE require to ask a capability question
   selectionContext, // U5: the adapter vocabulary `main/launch-selection.js` validates against
