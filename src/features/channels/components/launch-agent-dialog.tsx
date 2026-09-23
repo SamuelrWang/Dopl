@@ -78,7 +78,6 @@ import { useAgentIdentities } from "@/features/agent-identities/hooks/use-agent-
 import { authorMarker } from "@/features/agent-identities/components/identity-picker";
 import { IdentityApprovalDialog } from "@/features/agent-identities/components/identity-approval";
 import { FormDialog, PillChoice, UnderlineField } from "@/shared/ui/form-dialog";
-import { PLATFORM_DEFAULT_LABEL } from "./settings-agent-launch-rows";
 import { useLaunchDialogRuntime } from "./launch-agent-dialog-state";
 import { AgentColorCircles, agentColorsTaken } from "./agent-color-circles";
 import { firstFreeAgentColor } from "../lib/agent-colors";
@@ -159,13 +158,6 @@ export function LaunchAgentDialog({
   const { identities } = useAgentIdentities(workspaceId ?? "", {
     enabled: panel.open && workspaceId !== null,
   });
-  // ⚠ **THE VERSIONED, RUNTIME-KEYED RECORD SINCE 2026-09-21 (U7), NOT THE LEGACY PAIR.** This
-  // dialog has to answer "what does THIS runtime remember" for whichever pill is selected right
-  // now, and the legacy `{tools, messages, model}` reply describes only the runtime the CHANNEL
-  // picked. `hooks/use-launch-selection.ts` carries the whole argument.
-  // ⚠ THE RUNNER LIVES HERE NOW, beside the button that fires it — see the header's note on the
-  // submit moving back inside the form. It reaches `launchWithIdentity` unchanged.
-  const runner = useLaunchRunner({ newAgent, panel, openThreadId });
 
   const memberNames = useMemo(
     () => new Map(members.map((m) => [m.userId, m.displayName || m.email || ""] as const)),
@@ -219,6 +211,7 @@ export function LaunchAgentDialog({
     stopWarning,
     chooseRuntime,
   } = runtime;
+  const runner = useLaunchRunner({ newAgent, panel, openThreadId, runtime: selectedRuntime });
 
   /**
    * THE SELECTED IDENTITY'S ROW, or `null` for None — the TITLE's one input and the PREFILL's.
@@ -382,11 +375,7 @@ export function LaunchAgentDialog({
         ) : (
           <PillChoice
             label="Model"
-            options={
-              modelRow.shown
-                ? [{ key: modelRow.shown, label: modelRow.options[0]?.label ?? modelRow.shown }]
-                : [{ key: "", label: PLATFORM_DEFAULT_LABEL }]
-            }
+            options={[{ key: modelRow.shown, label: modelRow.shownLabel }]}
             value={modelRow.shown}
             // ⚠ NO WRITER, SO NO PICK — a single pill stating the fact. It is not `disabled`
             // chrome around a live control; there is one option and it is what will run.

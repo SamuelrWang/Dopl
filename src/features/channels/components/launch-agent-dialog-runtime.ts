@@ -22,14 +22,9 @@ import {
   type RuntimeDescriptor,
 } from "../lib/runtime-capability";
 
-/** ⚠ Module-level, so a surface with no runtime concept hands the same array every render —
- *  the popup memoizes this row on both of these. */
-export const EMPTY_RUNTIMES: ReadonlyArray<RuntimeDescriptor> = [];
-export const EMPTY_CONNECTED: ReadonlyArray<string> = [];
-
 /** What an unconnected pill says. ⚠ TWO WORDS, NOT A SENTENCE (INVARIANTS §5, the minimal-copy
  *  ruling): the row states a fact about this Mac; it does not teach an install. */
-export const NOT_CONNECTED = "not connected";
+const NOT_CONNECTED = "not connected";
 
 /**
  * THE ROW'S OPTIONS — every reported runtime, in the desktop's own order, under the PLATFORM's own

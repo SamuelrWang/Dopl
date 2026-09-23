@@ -59,23 +59,14 @@ import { getSpaBridge } from "@/shared/lib/spa-bridge";
 import type { AgentColorKey } from "../types";
 import { AGENT_MODEL_DEFAULT } from "../lib/agent-models";
 
-/**
- * Whether this build honours a pre-assigned instance id.
- *
- * ⚠ IT DETECTS `sessions.mintAgentId`, WHICH IS NOT THE OP BEING GATED, and that is deliberate
- * rather than sloppy: the thing being gated (`launchFromButton`'s forward) has no observable
- * surface of its own, and the mint op shipped in the same change. ⚠ DO NOT WIDEN IT TO
- * `sessions.launch` — every build has that, including every build that drops the field.
- */
-export function canPreassignAgentId(): boolean {
-  return typeof getSpaBridge()?.sessions?.mintAgentId === "function";
-}
-
-/** One fresh instance id from main, or `null` when this build cannot mint one. */
+/** One fresh instance id from main, or `null` when this build cannot mint one. ⚠ Detects
+ *  `sessions.mintAgentId`, never `sessions.launch`: every build has launch, and older ones drop
+ *  the forwarded id. */
 export async function mintAgentId(): Promise<string | null> {
   const sessions = getSpaBridge()?.sessions;
   if (typeof sessions?.mintAgentId !== "function") return null;
-  const res = await sessions.mintAgentId();
+  // A failed mint is "no pre-assigned id" — the launch reply supplies one.
+  const res = await sessions.mintAgentId().catch(() => null);
   // ⚠ TOLERANT: an id came back ⇒ we have one, whatever else the object carries. Same
   // two-success-shapes discipline `launchAgentOnThread` applies to its own reply.
   return typeof res?.agentId === "string" && res.agentId ? res.agentId : null;
@@ -165,16 +156,7 @@ export interface AgentLaunchPanel {
   identityId: string | null;
   /** `AGENT_MODEL_DEFAULT` (`""`) is "whatever the chain decides". */
   model: string;
-  /**
-   * THIS SPAWN'S RUNTIME, or `''` for "the channel's own pick" (2026-08-31).
-   *
-   * ⚠ `''` IS NOT "THE DEFAULT ADAPTER" HERE, and that is the one place this
-   * field's empty string means something different from the Settings row's. On
-   * the DURABLE record `''` sets the channel back to the default; on a LAUNCH it
-   * means the operator expressed no per-spawn preference, so the channel's pick
-   * stands. `use-agents-panel.ts › launchAgent` therefore omits the key rather
-   * than sending `''`.
-   */
+  /** The Runtime row's explicit pick, or `''` — none, so the dialog's preselect chain decides. */
   runtime: string;
   /**
    * THIS SPAWN'S COLOUR IN THIS CHANNEL, or `null` for "let the server pick the first
@@ -250,8 +232,6 @@ export function useAgentLaunch(): AgentLaunchPanel {
   const [instructionsBaseline, setInstructionsBaseline] = useState("");
   const [identityId, setIdentityId] = useState<string | null>(null);
   const [model, setModel] = useState<string>(AGENT_MODEL_DEFAULT);
-  // ⚠ `""` = follow the channel's pick, NOT "the default adapter" — see the
-  // field's docblock on `AgentLaunchPanel`.
   const [runtime, setRuntime] = useState<string>("");
   // ⚠ `null` = the operator touched no circle, so the payload omits `color` and the
   // server assigns the first free key — see the field's docblock on `AgentLaunchPanel`.

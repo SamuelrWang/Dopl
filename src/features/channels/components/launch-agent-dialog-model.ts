@@ -36,6 +36,7 @@ import {
   catalogReady,
   catalogReason,
   catalogSelection,
+  modelLabel,
   modelOptionsFor,
   type ModelCatalog,
   type ModelCatalogs,
@@ -47,6 +48,9 @@ import {
   type ModelMismatch,
 } from "../lib/model-affinity";
 import type { RuntimeDescriptor } from "../lib/runtime-capability";
+
+/** What a launch that names no model shows when the runtime's catalog cannot say: the platform picks. */
+const PLATFORM_DEFAULT_LABEL = "Platform default";
 
 export interface ModelRowInput {
   /** Every reported runtime, for deciding which one an identity's model belongs to. */
@@ -65,6 +69,8 @@ export interface ModelRowInput {
 export interface ModelRow {
   /** What the control displays. ⚠ `''` means "the platform's own pick" and renders as a fact. */
   shown: string;
+  /** {@link shown}'s label — the catalog's name, the raw id, or {@link PLATFORM_DEFAULT_LABEL}. */
+  shownLabel: string;
   options: ReadonlyArray<{ key: string; label: string }>;
   /** May the operator pick? ⚠ `false` RENDERS A FACT, NOT A GREYED CONTROL (design §3.2). */
   selectable: boolean;
@@ -114,12 +120,13 @@ export function modelRowFor(input: ModelRowInput): ModelRow {
     : "";
   const resolved = usableOwn || usableIdentityModel;
   const shown = catalogSelection(catalog, resolved);
+  // The effective id is appended when the roster lacks it, and `''` gets its own pill (a ready
+  // roster may declare no default): a pill row whose value matches no option selects nothing.
+  const options = modelOptionsFor(catalog, shown).map((o) => ({ key: o.value, label: o.label }));
   return {
     shown,
-    // ⚠ `agentModelOptionsFor`'s RULE, MOVED TO THE CATALOG: the currently EFFECTIVE id is
-    // appended when the roster does not carry it, because a `SelectMenu` whose value matches no
-    // option renders BLANK — the surface saying nothing where it has an answer (INVARIANTS §11).
-    options: modelOptionsFor(catalog, shown).map((o) => ({ key: o.value, label: o.label })),
+    shownLabel: shown ? modelLabel(catalog, shown) : PLATFORM_DEFAULT_LABEL,
+    options: shown ? options : [{ key: "", label: PLATFORM_DEFAULT_LABEL }, ...options],
     selectable: catalogReady(catalog),
     mismatch,
     reason: catalogReason(catalog),

@@ -14,7 +14,7 @@
  * act, reached through `AgentLaunchControls`; this file is the popup's business end.
  */
 
-import { useCallback, useState } from "react";
+import { useState } from "react";
 import type { IdentityApprovalRequest } from "@/features/agent-identities/components/identity-approval";
 import { NEW_AGENT_NAME } from "@/shared/lib/agent-name";
 import {
@@ -82,7 +82,9 @@ export function launchOverridesOf(
 export async function launchWithIdentity(
   newAgent: AgentLaunchControls,
   panel: AgentLaunchPanel,
-  threadId: string | null
+  threadId: string | null,
+  /** The dialog's selected runtime (always sent, Samuel 2026-09-08); `''` sends none. */
+  runtime: string = panel.runtime
 ): Promise<{
   ok: boolean;
   reason?: string;
@@ -99,10 +101,7 @@ export async function launchWithIdentity(
     // wire a one-click launch always did (`launch-overrides.ts › overridesFor`'s own rule).
     launchOverridesOf(panel),
     panel.agentId ?? undefined,
-    // ⚠ `undefined` WHEN THE PANEL EXPRESSED NO PREFERENCE, so an untouched panel puts the
-    // same payload on the wire a one-click launch always did — `overridesFor`'s own rule,
-    // applied to the field main resolves FIRST in its precedence chain.
-    panel.runtime || undefined,
+    runtime || undefined,
     /**
      * **THE COLOUR — THE SIXTH ARGUMENT, ON `runtime`'s EXACT ARGUMENT** (2026-09-13;
      * docs/specs/agent-colors.md item 3).
@@ -182,17 +181,20 @@ export function useLaunchRunner({
   newAgent,
   panel,
   openThreadId,
+  runtime,
 }: {
   newAgent?: AgentLaunchControls;
   panel: AgentLaunchPanel;
   openThreadId: string | null;
+  /** The runtime the dialog shows selected — sent as is. */
+  runtime: string;
 }) {
   const [approval, setApproval] = useState<IdentityApprovalRequest | null>(null);
   const [approvalError, setApprovalError] = useState<string | null>(null);
 
-  const run = useCallback(async () => {
+  const run = async () => {
     if (!newAgent) return;
-    const res = await launchWithIdentity(newAgent, panel, openThreadId);
+    const res = await launchWithIdentity(newAgent, panel, openThreadId, runtime);
     if (res.reason === LAUNCH_APPROVAL_REASON && panel.identityId) {
       // ⚠ MAIN'S OWN RESOLVED TEXT, read tolerantly — the dialog shows the INSTRUCTIONS the
       // operator is being asked to accept. The local cache's name is only the fallback for a
@@ -215,7 +217,7 @@ export function useLaunchRunner({
       return;
     }
     panel.reset();
-  }, [newAgent, panel, openThreadId]);
+  };
 
   return {
     approval,

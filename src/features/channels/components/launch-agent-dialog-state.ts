@@ -20,22 +20,13 @@
  * two-readers-one-fact defect with the LAUNCH RUNTIME as the thing that drifts.
  */
 
-import { useCallback, useEffect, useMemo, useState } from "react";
-import {
-  useLaunchSelection,
-  type LaunchSelectionState,
-} from "../hooks/use-launch-selection";
+import { useEffect, useMemo } from "react";
+import { useLaunchSelection } from "../hooks/use-launch-selection";
 import { interruptRefusal, type RuntimeDescriptor } from "../lib/runtime-capability";
 import { signedOutLaunchCopy } from "../lib/runtime-copy";
 import { nativeDimensions, nativeSummary } from "../lib/runtime-native";
-import type { ModelCatalog } from "../lib/model-catalog";
 import { modelRowFor, ownPickSurvives, type ModelRow } from "./launch-agent-dialog-model";
-import {
-  EMPTY_CONNECTED,
-  EMPTY_RUNTIMES,
-  pickRuntime,
-  runtimeRowOptions,
-} from "./launch-agent-dialog-runtime";
+import { pickRuntime, runtimeRowOptions } from "./launch-agent-dialog-runtime";
 import type { AgentLaunchPanel } from "./use-agent-launch";
 
 /** Only what this hook reads off an identity row. ⚠ A SHAPE, not `AgentIdentity` by name —
@@ -50,24 +41,16 @@ export interface IdentityModelRow {
 export interface LaunchDialogRuntime {
   /** Every reported runtime. ⚠ NEVER FILTERED BY CONNECTIVITY — Samuel's 2026-09-08 correction. */
   runtimes: ReadonlyArray<RuntimeDescriptor>;
-  connected: ReadonlyArray<string>;
-  connectedKnown: boolean;
-  /** What this spawn will run on, or `null` where the desktop reported nothing. */
-  effectiveRuntime: RuntimeDescriptor | null;
-  /** `''` only where nothing was reported — the no-row, no-key lane. */
+  /** What this spawn runs on — always sent; `''` only where nothing was reported. */
   selectedRuntime: string;
   runtimeOptions: Array<{ key: string; label: string; hint?: string }>;
   modelRow: ModelRow;
-  /** The selected runtime's catalog, or `null`. */
-  catalog: ModelCatalog | null;
   /** "on-request approvals · workspace-write sandbox", or `''`. ⚠ A REPORT, NEVER A CONTROL. */
   nativeLine: string;
   /** The selected runtime's OWN sign-in sentence, or `null`. ⚠ Never Claude's, on any runtime. */
   connectionNote: string | null;
   /** Why this runtime cannot stop a running turn, or `null`. */
   stopWarning: string | null;
-  /** The whole record, for a caller that needs more than the above. */
-  selection: LaunchSelectionState;
   /** The Runtime row's writer: an OPERATOR pick, which outranks the identity's runtime. */
   chooseRuntime: (runtimeId: string) => void;
 }
@@ -84,45 +67,19 @@ export function useLaunchDialogRuntime(
    * `hooks/use-launch-selection.ts` carries the whole argument.
    */
   const selection = useLaunchSelection({ kind: "channel", channelId });
-  // ⚠ DESTRUCTURED so the sync effect below can DEPEND on it: `panel` is a fresh object every
-  // render, while `setRuntime` is `useAgentLaunch`'s own setState function and is stable.
   const { setRuntime, setModel } = panel;
-  const { recordFor, catalogFor } = selection;
-
-  // ⚠ EMPTY UNTIL THE PROBE ANSWERS, and empty forever off-desktop — which renders NO runtime row
-  // and no warning, the correct direction while the answer is out (INVARIANTS §11).
-  const runtimes = selection.runtimeSupported ? selection.runtimes : EMPTY_RUNTIMES;
-  // ⚠ THE ROSTER IS NEVER FILTERED BY THIS (Samuel's correction). It labels and it orders the
-  // preselect; it removes nothing.
-  const connected = selection.runtimeSupported ? selection.connected : EMPTY_CONNECTED;
-  const connectedKnown = selection.runtimeSupported && selection.connectedKnown;
+  const { runtimes, connected, connectedKnown, recordFor, catalogFor } = selection;
 
   const runtimeOptions = useMemo(
     () => runtimeRowOptions(runtimes, connected, connectedKnown),
     [runtimes, connected, connectedKnown]
   );
 
-  /**
-   * WHAT THIS SPAWN WILL RUN ON — one descriptor that is the SELECTION, the refusal sentence and
-   * the payload at once. ⚠ ONE OBJECT ON PURPOSE: a row selecting one runtime while the warning
-   * read another's refusals is what `runtime-capability.ts › descriptorFor` exists to prevent.
-   * {@link pickRuntime} is the whole four-link chain and its argument.
-   */
-  // Ruling 5: launcher's explicit pick → the identity's runtime → the channel's. `panel.runtime`
-  // is also written back by the effect below, so only a Runtime-row click counts as a pick; the
-  // flag resets with the dialog (derived during render, never in an effect).
-  const [explicit, setExplicit] = useState({ open: panel.open, picked: false });
-  if (explicit.open !== panel.open) setExplicit({ open: panel.open, picked: false });
-  const chooseRuntime = useCallback(
-    (runtimeId: string) => {
-      setExplicit({ open: true, picked: true });
-      setRuntime(runtimeId);
-    },
-    [setRuntime]
-  );
+  // Ruling 5: launcher's explicit pick → the identity's runtime → the channel's. Only the Runtime
+  // row writes `panel.runtime` and `reset()` clears it, so non-empty means the operator picked.
   const identityRuntime =
     identities.find((t) => t.id === panel.identityId)?.runtime ?? "";
-  const ownPick = explicit.picked ? panel.runtime : identityRuntime;
+  const ownPick = panel.runtime || identityRuntime;
   const effectiveRuntime = useMemo(
     () => pickRuntime(runtimes, ownPick, selection.runtime, connected, connectedKnown),
     [runtimes, ownPick, selection.runtime, connected, connectedKnown]
@@ -201,21 +158,6 @@ export function useLaunchDialogRuntime(
       : null;
 
   /**
-   * THE SELECTION IS WRITTEN BACK INTO THE PANEL, so the pill on screen and the argument on the
-   * wire are ONE value (`use-agent-launch-run.ts › launchWithIdentity` sends `panel.runtime`).
-   *
-   * ⚠ NOT THE MODEL ROW'S FORBIDDEN MOVE, AND THE DIFFERENCE IS THE RULING: `''` in the model row
-   * means "follow the chain", so stamping it would freeze a per-spawn copy. The runtime row no
-   * longer has that meaning — Samuel removed the fall-through on 2026-09-08.
-   * ⚠ IT RUNS ONLY WHILE OPEN, and `reset()` clears the field on close, so a dialog reopened after
-   * the channel's pick moved re-derives.
-   */
-  useEffect(() => {
-    if (!panel.open || !selectedRuntime || panel.runtime === selectedRuntime) return;
-    setRuntime(selectedRuntime);
-  }, [panel.open, panel.runtime, selectedRuntime, setRuntime]);
-
-  /**
    * ⚠ **A PER-LAUNCH MODEL PICK DOES NOT SURVIVE A RUNTIME SWITCH IT DOES NOT BELONG TO**
    * (U7: *"on runtime change, show that runtime's REMEMBERED model or its reported platform
    * default"*). The operator picked Fable while Claude was selected; that is not a pick they made
@@ -255,20 +197,15 @@ export function useLaunchDialogRuntime(
 
   return {
     runtimes,
-    connected,
-    connectedKnown,
-    effectiveRuntime,
     selectedRuntime,
     runtimeOptions,
     modelRow,
-    catalog,
     nativeLine,
     connectionNote,
     // ⚠ ONE SENTENCE, AND THE ONE EXCEPTION TO THE MINIMAL-COPY RULING (INVARIANTS §5). It is the
     // descriptor's own words, and it is a NOTE rather than an ALERT: nothing has failed, and the
     // operator is told what this runtime cannot do BEFORE they start it.
     stopWarning: runtimes.length ? interruptRefusal(effectiveRuntime) : null,
-    selection,
-    chooseRuntime,
+    chooseRuntime: setRuntime,
   };
 }
