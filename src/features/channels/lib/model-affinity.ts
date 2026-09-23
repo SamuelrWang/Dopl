@@ -62,7 +62,7 @@ export function modelBelongsTo(
  * one id is not a state any shipped pair produces, and if it ever were, the first is the one the
  * registry would resolve.
  */
-export function runtimeForModel(
+function runtimeForModel(
   runtimes: ReadonlyArray<RuntimeDescriptor>,
   catalogs: ModelCatalogs | null | undefined,
   modelId: string | null | undefined
@@ -73,23 +73,6 @@ export function runtimeForModel(
     if (modelBelongsTo(catalogFor(catalogs, d.id), id) === true) return d;
   }
   return null;
-}
-
-/**
- * IS THIS MODEL SUBMITTABLE ON THE SELECTED RUNTIME?
- *
- * ⚠ **`null` IS SUBMITTABLE AND `false` IS NOT.** The tree's standing rule for a model is
- * *"unknown model falls back, never refuses"* (`main/session-launch-op.js`, F-5) — a desktop that
- * cannot read a roster must still be able to launch on an id an operator typed into an identity.
- * What must NOT travel is an id this build can positively see belongs to another runtime, because
- * main would coerce it to that runtime's "no pick" member and the operator would silently get the
- * platform default with nothing saying why.
- */
-export function modelSubmittableOn(
-  catalog: ModelCatalog | null | undefined,
-  modelId: string | null | undefined
-): boolean {
-  return modelBelongsTo(catalog, modelId) !== false;
 }
 
 /**

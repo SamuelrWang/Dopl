@@ -72,7 +72,7 @@ export interface CatalogModel {
   dimensions: Readonly<Record<string, ModelDimension>>;
   /** Other spellings the runtime accepts for THIS model (2026-09-22) — a legacy stored id, a
    *  launch alias. ⚠ MATCHED, NEVER OFFERED: {@link findModel} is how an old pick keeps its row. */
-  aliases?: ReadonlyArray<string>;
+  aliases: ReadonlyArray<string>;
 }
 
 export interface ModelCatalog {
@@ -100,23 +100,10 @@ const NO_OPTIONS: ReadonlyArray<ModelDimensionOption> = Object.freeze([]);
 const NO_DIMENSIONS: Readonly<Record<string, ModelDimension>> = Object.freeze({});
 const NO_ALIASES: ReadonlyArray<string> = Object.freeze([]);
 
-const REASONING_EFFORT = "reasoningEffort";
+/** The model-scoped dimension every runtime that has one spells the same way. */
+export const REASONING_EFFORT = "reasoningEffort";
 
 const str = (v: unknown): string => (typeof v === "string" ? v.trim() : "");
-
-/**
- * DOES THIS DESKTOP SPEAK THE CATALOG CONTRACT AT ALL?
- *
- * ⚠ AN OWN-KEY PROBE, THE IDIOM `runtime-capability.ts › hasRuntimeKey` SHARES. A desktop older than
- * U6 omits `catalogs` entirely, and reading that absence as "every runtime has no models" would
- * empty every picker on a machine running three runtimes. The caller falls back to the DEFAULT
- * runtime's frozen list instead (`agent-models.ts`) — which is exactly what that build renders.
- * ⚠ `catalogs: {}` IS A REAL ANSWER and a different one: this desktop said, and registered nothing.
- */
-export function hasCatalogKey(reply: unknown): boolean {
-  if (!reply || typeof reply !== "object") return false;
-  return Object.prototype.hasOwnProperty.call(reply, "catalogs");
-}
 
 /**
  * NARROW THE WIRE'S `catalogs` MAP.
@@ -139,7 +126,7 @@ export function normalizeCatalogs(
 }
 
 /** One catalog. `null` when the entry carries no usable runtime id or no known status. */
-export function normalizeCatalog(id: unknown, raw: unknown): ModelCatalog | null {
+function normalizeCatalog(id: unknown, raw: unknown): ModelCatalog | null {
   if (!raw || typeof raw !== "object") return null;
   const row = raw as Record<string, unknown>;
   const runtime = str(row.runtime) || str(id);
@@ -257,7 +244,7 @@ export function findModel(
   const wanted = str(id);
   if (!wanted || !c) return null;
   return c.models.find((m) => m.id === wanted)
-    ?? c.models.find((m) => (m.aliases ?? NO_ALIASES).includes(wanted))
+    ?? c.models.find((m) => m.aliases.includes(wanted))
     ?? null;
 }
 
@@ -295,15 +282,6 @@ export function selectableModels(
   return visible.length ? visible : NO_MODELS;
 }
 
-/** May this id be chosen NOW? ⚠ The gate for a select's options and for a submitted payload. */
-export function canSelectModel(
-  c: ModelCatalog | null | undefined,
-  id: string | null | undefined
-): boolean {
-  const hit = findModel(c, id);
-  return !!hit && selectableModels(c).some((m) => m.id === hit.id);
-}
-
 /**
  * WHAT TO DISPLAY FOR AN ID — the runtime's label, else the RAW ID.
  *
@@ -322,16 +300,6 @@ export function modelLabel(
   return findModel(c, wanted)?.label || wanted;
 }
 
-/** The glance word for a card chip, or `null` for "render no chip" (there is no id at all). */
-export function modelShortLabel(
-  c: ModelCatalog | null | undefined,
-  id: string | null | undefined
-): string | null {
-  const wanted = str(id);
-  if (!wanted) return null;
-  return findModel(c, wanted)?.short || wanted;
-}
-
 /**
  * WHAT THE MODEL ROW SHOWS for a stored value — the display-versus-wire discipline, as a pure
  * function.
@@ -342,7 +310,7 @@ export function modelShortLabel(
  * picker existed. `agent-models.ts › agentModelSelection` is the same rule for the default runtime
  * on an older desktop.
  * ⚠ AN UNKNOWN STORED ID IS RETURNED AS ITSELF, never replaced by the default — see
- * {@link modelLabel}. The row can render it; {@link canSelectModel} is what stops it being
+ * {@link modelLabel}. The row can render it; {@link selectableModels} is what stops it being
  * re-offered.
  */
 export function catalogSelection(
@@ -394,7 +362,7 @@ export function dimensionOptionsFor(
 ): ReadonlyArray<ModelDimensionOption> {
   const wanted = str(modelId) || c?.defaultId || "";
   if (!wanted) return NO_OPTIONS;
-  return c?.models.find((m) => m.id === wanted)?.dimensions[dimension]?.options ?? NO_OPTIONS;
+  return findModel(c, wanted)?.dimensions[dimension]?.options ?? NO_OPTIONS;
 }
 
 /** This model's own declared default for a dimension, or `null`. */
@@ -405,28 +373,5 @@ export function dimensionDefaultFor(
 ): string | null {
   const wanted = str(modelId) || c?.defaultId || "";
   if (!wanted) return null;
-  return c?.models.find((m) => m.id === wanted)?.dimensions[dimension]?.default ?? null;
-}
-
-/**
- * THE VALUE A DIMENSION CARRIES AFTER THE MODEL MOVED — the normalization the plan asks for
- * ("reasoning effort stored per Codex model, or normalized when the newly-selected model does not
- * support the previous effort").
- *
- * ⚠ **THE ORDER IS KEEP → THIS MODEL'S OWN DEFAULT → ABSENT, AND THE LAST ARM IS NOT A FAILURE.**
- * `""` means no field on the wire, i.e. the platform's own pick, which is what every session did
- * before the control existed. Falling back to another model's effort, or to the previous one
- * unchecked, would spend a setting the selected model cannot honour.
- */
-export function normalizeDimensionValue(
-  c: ModelCatalog | null | undefined,
-  modelId: string | null | undefined,
-  current: string | null | undefined,
-  dimension: string = REASONING_EFFORT
-): string {
-  const options = dimensionOptionsFor(c, modelId, dimension);
-  if (!options.length) return "";
-  const wanted = str(current);
-  if (wanted && options.some((o) => o.value === wanted)) return wanted;
-  return dimensionDefaultFor(c, modelId, dimension) ?? "";
+  return findModel(c, wanted)?.dimensions[dimension]?.default ?? null;
 }

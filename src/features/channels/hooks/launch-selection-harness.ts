@@ -40,6 +40,7 @@ export function catalog(
       short: m.label ?? m.id,
       isDefault: m.isDefault === true,
       hidden: false,
+      aliases: [],
       dimensions: (m.efforts
         ? {
             reasoningEffort: {

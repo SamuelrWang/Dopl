@@ -18,22 +18,17 @@
 import { describe, expect, it } from "vitest";
 import {
   CATALOG_VERSION,
-  canSelectModel,
   catalogFor,
   catalogReady,
   catalogReason,
   catalogSelection,
   dimensionDefaultFor,
   dimensionOptionsFor,
-  hasCatalogKey,
   modelLabel,
   modelOptionsFor,
-  modelShortLabel,
   normalizeCatalogs,
-  normalizeDimensionValue,
   selectableModels,
 } from "./model-catalog";
-import { defaultRuntimeFallbackCatalog } from "./agent-models";
 
 const CLAUDE_IDS = [
   "claude-fable-5",
@@ -99,15 +94,6 @@ const noClaude = (ids: ReadonlyArray<string>) => {
 };
 
 describe("the wire, narrowed", () => {
-  it("reads an own-key probe, so an OLDER desktop is not read as 'no models'", () => {
-    // ⚠ THE THREE STATES ARE THREE ANSWERS: no key (an older build), an empty map (this build
-    // registered nothing), and a populated one. Collapsing the first two empties the picker on a
-    // machine that works perfectly.
-    expect(hasCatalogKey({ tools: "manual" })).toBe(false);
-    expect(hasCatalogKey({ catalogs: {} })).toBe(true);
-    expect(hasCatalogKey(null)).toBe(false);
-  });
-
   it("ignores a catalog VERSION this bundle does not know, rather than half-reading it", () => {
     expect(normalizeCatalogs({ codex: wire() }, CATALOG_VERSION + 1)).toEqual({});
   });
@@ -157,16 +143,6 @@ describe("🔒 no runtime borrows another's models", () => {
     expect(catalogReason(c)).toMatch(/not installed/);
     noClaude(modelOptionsFor(c, "").map((o) => o.value));
   });
-
-  it("the older-desktop fallback is scoped to the DEFAULT runtime and says so", () => {
-    // It is the only Claude-shaped list left on this side, and it is a catalog for ONE runtime id.
-    const fallback = defaultRuntimeFallbackCatalog("claude");
-    expect(fallback.runtime).toBe("claude");
-    expect(fallback.models.map((m) => m.id)).toEqual(CLAUDE_IDS);
-    expect(fallback.defaultId).toBe("claude-sonnet-5");
-    expect(fallback.models.filter((m) => m.isDefault)).toHaveLength(1);
-    expect(fallback.dimensions).toEqual([]);
-  });
 });
 
 describe("the four states drive what may be picked", () => {
@@ -182,17 +158,14 @@ describe("the four states drive what may be picked", () => {
 
   it("a HIDDEN model is out of the picker and still LABELLED", () => {
     const c = codex();
-    expect(canSelectModel(c, "gpt-hidden")).toBe(false);
+    expect(selectableModels(c).map((m) => m.id)).not.toContain("gpt-hidden");
     expect(modelLabel(c, "gpt-hidden")).toBe("GPT Hidden");
-    // ⚠ `short` FALLS BACK TO THE FULL LABEL, never to a truncation.
-    expect(modelShortLabel(c, "gpt-hidden")).toBe("GPT Hidden");
   });
 
   it("LOADING explains nothing and offers nothing — it is not a failure", () => {
     const c = codex({ status: "loading", models: [], defaultId: null, reason: "" });
     expect(catalogReason(c)).toBeNull();
     expect(selectableModels(c)).toEqual([]);
-    expect(canSelectModel(c, "gpt-a")).toBe(false);
   });
 
   it("STALE still LABELS and may not be newly SELECTED", () => {
@@ -200,7 +173,6 @@ describe("the four states drive what may be picked", () => {
     // historical session cards, while a stale/unavailable id cannot be NEWLY selected."
     const c = codex({ status: "stale", reason: "the Codex CLI was upgraded" });
     expect(modelLabel(c, "gpt-a")).toBe("GPT Alpha");
-    expect(canSelectModel(c, "gpt-a")).toBe(false);
     expect(selectableModels(c)).toEqual([]);
     expect(catalogReason(c)).toMatch(/upgraded/);
   });
@@ -244,7 +216,6 @@ describe("omission is the platform default — displayed, never persisted", () =
     const c = codex({ status: "unavailable", models: [], defaultId: null, reason: "no CLI" });
     expect(modelLabel(c, "gpt-retired")).toBe("gpt-retired");
     expect(modelLabel(null, "gpt-retired")).toBe("gpt-retired");
-    expect(modelShortLabel(null, "")).toBeNull();
   });
 });
 
@@ -266,18 +237,21 @@ describe("reasoning effort follows the MODEL, not the runtime", () => {
     expect(dimensionOptionsFor(codex(), "").map((o) => o.value)).toEqual(["low", "medium", "high"]);
   });
 
-  it("a value the NEWLY selected model cannot honour is normalized to that model's own default", () => {
-    const c = codex();
-    // Kept when it is still supported…
-    expect(normalizeDimensionValue(c, "gpt-a", "low")).toBe("low");
-    // …and moved to the NEW model's default when it is not. Never left spending an effort the
-    // selected model refuses, and never borrowed from the previous model.
-    expect(normalizeDimensionValue(c, "gpt-b", "low")).toBe("high");
-  });
-
-  it("a model with no efforts normalizes to ABSENT — the platform's own pick, not a failure", () => {
-    expect(normalizeDimensionValue(codex(), "gpt-hidden", "high")).toBe("");
-    expect(normalizeDimensionValue(null, "gpt-a", "high")).toBe("");
+  it("an ALIAS of a model gets that model's efforts (F20)", () => {
+    const c = codex({
+      models: [
+        {
+          id: "gpt-a",
+          label: "A",
+          isDefault: true,
+          hidden: false,
+          aliases: ["gpt-a-legacy"],
+          dimensions: effort(["low", "high"], "high"),
+        },
+      ],
+    });
+    expect(dimensionOptionsFor(c, "gpt-a-legacy").map((o) => o.value)).toEqual(["low", "high"]);
+    expect(dimensionDefaultFor(c, "gpt-a-legacy")).toBe("high");
   });
 
   it("a dimension whose options are empty on the wire is DROPPED, not rendered blank", () => {

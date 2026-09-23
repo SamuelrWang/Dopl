@@ -1,56 +1,12 @@
 /**
- * WHICH MODEL AN AGENT RUNS ON **UNDER THE DEFAULT RUNTIME** — the shared
- * vocabulary, and nothing that reads or writes it.
- *
- * ⚠ **IT STOPPED BEING EVERY RUNTIME'S SOURCE ON 2026-09-21 (U6), AND BEING ONE
- * WAS THE DEFECT.** This table is four Claude ids with four labels; the New Agent
- * dialog, the channel Settings row, the profile-defaults row and the agent cards
- * all read it REGARDLESS of which runtime was selected — so choosing Codex
- * offered Fable/Opus/Sonnet/Haiku and submitted one of them. The runtime-aware
- * source is {@link ./model-catalog}, fed by the desktop's own per-runtime roster
- * (`dopl-desktop-app/main/runtime/model-catalog.js`).
- *
- * ⚠ **WHAT THIS FILE IS NOW: THE DEFAULT RUNTIME'S OLDER-DESKTOP FALLBACK.** A
- * desktop that predates U6 sends no `catalogs` key at all, and reading that
- * absence as "no models" would empty every picker on a machine that works
- * perfectly (INVARIANTS §11 — UNKNOWN is not EMPTY). So the frozen list survives
- * as {@link defaultRuntimeFallbackCatalog}, scoped to the DEFAULT runtime and
- * offered to nothing else. ⚠ A future reader widening it back to "the model
- * list" is re-introducing the bug U6 closed.
- *
- * ⚠ THE ID→LABEL MAP STILL HAS ONE COPY PER TREE (Samuel, 2026-08-22): an
- * operator reading "Opus" on a card and "Sonnet" in Settings for one agent has no
- * way to tell which is lying. The desktop declares the same table in
- * `main/runtime/claude/models.js › LABELS` because the two trees cannot import
- * each other, and `dopl-desktop-app/test/runtime-model-catalog.test.mjs` READS
- * this file and fails when they disagree — the pin `session-model.js ›
- * LAUNCH_MODEL_FALLBACK` already had.
- *
- * ⚠ NO HOOK, NO BRIDGE, NO REACT — the rule `permission-modes.ts` follows and the
- * precedent this file is built on (INVARIANTS §1: one file, one reason to
- * change). Anything that reaches `window.dopl` belongs in a hook; anything that
- * renders belongs in a component. The one reason THIS changes is that the model
- * roster changed.
- *
- * ⚠ THE IDS ARE THE SDK'S, AND THIS IS NOT A SECOND AUTHORITY ON THEM. The
- * desktop re-validates every write; this module's job is to keep the web from
- * OFFERING a value main would reject, exactly as `permission-modes.ts` does for
- * the two permission axes. An id this table does not know is rendered as itself
- * (see {@link agentModelLabel}) rather than dropped — a newer main may run a
- * model this build has never heard of, and a blank chip would report that as "no
- * model" (INVARIANTS §11 — UNKNOWN is not EMPTY).
+ * Model labels for glance and picker surfaces. Pickers read one runtime's catalog
+ * (`model-catalog.ts`); this only names ids, preferring the live catalogs the caller holds.
+ * An id nobody names renders as itself, never blank (INVARIANTS §11).
  */
 
-import { findModel, type CatalogModel, type ModelCatalog, type ModelCatalogs } from "./model-catalog";
+import { findModel, type CatalogModel, type ModelCatalogs } from "./model-catalog";
 
-/**
- * THE RUNTIME'S OWN ENTRY FOR AN ID, from whichever catalogs the caller holds (2026-09-22; F15).
- *
- * ⚠ THE CLAUDE ROSTER IS LIVE, so a model the CLI started offering after this bundle shipped has a
- * display name on the desktop and none in {@link AGENT_MODELS}. The caller passes the catalogs it
- * read (`useChannelLaunchPosture(...).catalogs`) — no module-level cache, so a card re-renders
- * when they arrive. ⚠ LABELLING IS NOT SELECTING: pickers read one runtime's catalog, never this.
- */
+/** Labelling is not selecting: any runtime's catalog may name an id here. */
 function liveEntry(catalogs: ModelCatalogs | null | undefined, id: string): CatalogModel | null {
   for (const c of Object.values(catalogs ?? {})) {
     const hit = findModel(c, id);
@@ -59,28 +15,13 @@ function liveEntry(catalogs: ModelCatalogs | null | undefined, id: string): Cata
   return null;
 }
 
-/**
- * ⚠ ABSENCE IS STILL "NO PICK ON THE WIRE" — but it is no longer OFFERED (2026-09-06,
- * Samuel's ruling). There is still no `"default"` id, and the posture record still
- * carries NO model when nothing has been chosen; what changed is that the operator
- * can no longer SELECT that state. His reasoning: *"why can't we just set a value
- * and when the user launches the agent it would just be set to that value unless
- * they change it."*
- *
- * ⚠ SO THIS CONSTANT IS NOW AN INTERNAL SENTINEL, NOT AN OPTION. It is what the
- * WIRE spells for "unset", and {@link AGENT_MODEL_OPTIONS} no longer contains it.
- * Keep it: `normalizeAgentModel` and the back-fill below both need a word for the
- * absent state, and a bare `""` scattered at call sites is how that state stops
- * being recognisable.
- */
+/** "No model pick" on the wire: no field at all, never a `"default"` id. */
 export const AGENT_MODEL_DEFAULT = "" as const;
 
 /**
- * The roster, in the order an operator reads it — most capable first, cheapest
- * last, with Default at the top because it is what an unset channel already does.
- *
- * `short` is the ONE-WORD label for a glance surface (a card chip, a header); the
- * full `label` carries the version an operator needs when they are CHOOSING.
+ * Claude's display names, used when no catalog names the id. `short` is the chip word.
+ * ⚠ `dopl-desktop-app/test/runtime-model-catalog.test.mjs` source-reads this table against
+ * `main/runtime/claude/models.js › LABELS`.
  */
 export const AGENT_MODELS: ReadonlyArray<{
   id: string;
@@ -93,76 +34,7 @@ export const AGENT_MODELS: ReadonlyArray<{
   { id: "claude-haiku-4-5-20251001", label: "Haiku 4.5", short: "Haiku" },
 ];
 
-/**
- * ⚠ **THE MODEL THE ABSENT STATE RESOLVES TO — THE BACK-FILL TARGET** (2026-09-06,
- * Samuel's ruling).
- *
- * ⚠ **THIS IS A PRODUCT DECISION WRITTEN DOWN, NOT A FACT THIS TREE CAN DERIVE, AND
- * THAT DISTINCTION IS THE WHOLE RISK OF THE ITEM.** "Default" never named a model:
- * it meant NO `--model` argument, i.e. whatever the bundled CLI picks
- * (`main/session-model.js`: *"'default' … sets NO `model` option at all, i.e. the
- * CLI's own pick"*). Nothing on either side of the wire knows what that resolves to,
- * and the CLI can move it without this tree shipping. So a back-fill CANNOT be
- * "whatever default resolves to" — it can only be a value somebody CHOSE, and the
- * cost of choosing is that a channel pinned here stops tracking the CLI if it moves.
- * Samuel accepted that cost explicitly; this constant is where the choice lives so
- * it is one edit rather than a literal spread across surfaces.
- *
- * ⚠ **SONNET, AND IT IS THE CONVENTIONAL DEFAULT RATHER THAN A MEASURED ONE.** It
- * wants one word of confirmation from Samuel or one reading of the CLI's own
- * resolution; it is deliberately NOT the most capable member, because a back-fill
- * that silently upgraded every unset channel's spend would be the loud version of
- * this change.
- */
-export const AGENT_MODEL_FALLBACK = "claude-sonnet-5" as const;
-
-/**
- * The `SelectMenu` options. ⚠ **"Default" IS GONE (2026-09-06, Samuel's ruling)** —
- * the dropdown lists only real models and always holds an actual selection.
- *
- * ⚠ THE WIRE'S ABSENT STATE DID NOT GO WITH IT: no pick still stores no model.
- *
- * ⚠ NO PER-OPTION DESCRIPTION, deliberately, and it is the minimal-copy ruling
- * rather than an oversight (INVARIANTS §5). The permission axes carry a
- * description each because a security review found operators could not tell what
- * a mode PERMITTED — a model name has no blast radius to explain, and ranking
- * them ("fastest", "most capable") would be this tab explaining itself again.
- */
-export const AGENT_MODEL_OPTIONS: ReadonlyArray<{
-  value: string;
-  label: string;
-}> = AGENT_MODELS.map(({ id, label }) => ({ value: id, label }));
-
-/**
- * THE OPTIONS A LIVE SELECTOR MAY SHOW, given what the agent is ACTUALLY on.
- *
- * ⚠ THE EFFECTIVE MODEL IS FREE-FORM AND THE ROSTER IS NOT (`spa-bridge.ts ›
- * DesktopSessionSummary.model`: "what arrives is whatever the CLI reported — a
- * dated id like `claude-opus-4-5-20251101`, or a `[1m]` long-context variant —
- * NOT necessarily a member of the four ids `sessions.setModel` accepts. Render
- * it; do not match it against that list."). A `SelectMenu` whose `value` matches
- * no option renders BLANK, so an agent running a dated id would show an empty
- * control where its model should be — the surface saying nothing where it has an
- * answer (INVARIANTS §11).
- *
- * ⚠ THE EXTRA OPTION IS THE CURRENT VALUE AND NOTHING ELSE. It is appended, never
- * inserted into the roster, and it disappears the moment the agent moves onto a
- * known id — the four the desktop accepts stay the four an operator can PICK.
- */
-export function agentModelOptionsFor(
-  effective: string | null | undefined
-): ReadonlyArray<{ value: string; label: string }> {
-  const trimmed = typeof effective === "string" ? effective.trim() : "";
-  if (!trimmed || AGENT_MODEL_OPTIONS.some((o) => o.value === trimmed)) {
-    return AGENT_MODEL_OPTIONS;
-  }
-  return [...AGENT_MODEL_OPTIONS, { value: trimmed, label: agentModelLabel(trimmed) }];
-}
-
-/**
- * THE FULL LABEL for a stored id, for a surface where the operator is choosing.
- * An unset model reads "Default"; an id this build does not know reads AS ITSELF.
- */
+/** The full label for a picker surface. Unset reads "Default"; an unknown id reads as itself. */
 export function agentModelLabel(
   id: string | null | undefined,
   catalogs?: ModelCatalogs | null
@@ -176,16 +48,8 @@ export function agentModelLabel(
 }
 
 /**
- * THE ONE-WORD label for a glance surface (an agent card, a header).
- *
- * ⚠ `null` MEANS "DO NOT RENDER A CHIP", and that is a different answer from
- * {@link agentModelLabel}'s "Default". A card states what an agent IS RUNNING; an
- * older main reports no model at all, and a chip reading "Default" there would
- * claim this build knows something it does not. The Settings row is the opposite
- * case — the operator is picking, and "Default" is one of the picks.
- *
- * ⚠ AN UNKNOWN ID STILL RENDERS, as itself. A newer main may run a model this
- * build predates, and the honest chip is the raw id rather than silence.
+ * The chip word for a glance surface. `null` = render no chip: a card states what an agent
+ * runs, and "Default" there would claim knowledge the build does not have.
  */
 export function agentModelShortLabel(
   id: string | null | undefined,
@@ -197,62 +61,8 @@ export function agentModelShortLabel(
   return live?.short || live?.label || (AGENT_MODELS.find((m) => m.id === trimmed)?.short ?? trimmed);
 }
 
-/**
- * Coerce a bridge reply's model into a storable id, or `null` for "unset".
- *
- * ⚠ IT DOES NOT REJECT AN UNKNOWN ID. Unlike `normalizePermissionPreset`, which
- * refuses a value the two axes cannot name, the model roster is the SDK's and
- * moves without this tree shipping — so a main running a newer model must not
- * have its answer erased into "Default" by a web build that predates it. What is
- * rejected is a non-string and an empty one, both of which mean unset.
- */
+/** A bridge reply's model as an id, or `null` for unset. Unknown ids are kept (the roster moves). */
 export function normalizeAgentModel(raw: unknown): string | null {
   const trimmed = typeof raw === "string" ? raw.trim() : "";
   return trimmed || null;
-}
-
-/**
- * **THE DEFAULT RUNTIME'S FROZEN LIST, AS A CATALOG — THE OLDER-DESKTOP LANE**
- * (2026-09-21, U6).
- *
- * ⚠ **IT EXISTS FOR ONE CALLER AND ONE CONDITION**: a desktop that predates the
- * catalog contract sends no `catalogs` key, and `model-catalog.ts › hasCatalogKey`
- * is how a hook tells that absence from an empty map. Reading the absence as "no
- * models" would empty the picker on a machine that works perfectly (INVARIANTS
- * §11 — UNKNOWN is not EMPTY), so the hook substitutes this — **for the DEFAULT
- * runtime only.**
- *
- * ⚠ **NEVER FOR ANOTHER RUNTIME, EVER.** That substitution is the exact failure
- * the plan forbids ("catalog failure must never substitute another runtime's
- * models"): an older desktop had no Codex catalog because it had no catalog
- * contract, and answering Codex with Claude's four ids would be this file
- * becoming every runtime's source again. A non-default runtime on such a build
- * gets `null` and renders the platform default, which is what that build does.
- *
- * ⚠ `status: "ready"` IS HONEST HERE: a frozen table needs no read, so there is
- * nothing to be loading or unavailable about. The default marker is
- * {@link AGENT_MODEL_FALLBACK} — the PRODUCT's back-fill, not a measured platform
- * answer; that constant's own block carries the argument.
- */
-export function defaultRuntimeFallbackCatalog(runtimeId: string): ModelCatalog {
-  return {
-    runtime: runtimeId,
-    source: "frozen",
-    status: "ready",
-    reason: "",
-    models: AGENT_MODELS.map((m) => ({
-      id: m.id,
-      label: m.label,
-      short: m.short,
-      isDefault: m.id === AGENT_MODEL_FALLBACK,
-      hidden: false,
-      // ⚠ NO MODEL-SCOPED DIMENSIONS: this runtime declares none, so an empty
-      // record is the same statement made twice and cannot disagree with it.
-      dimensions: {},
-      aliases: [],
-    })),
-    defaultId: AGENT_MODEL_FALLBACK,
-    dimensions: [],
-    truncated: false,
-  };
 }

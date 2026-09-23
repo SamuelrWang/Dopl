@@ -175,20 +175,17 @@ describe("🔒 the selected runtime's catalog is what the model row gets", () =>
   });
 });
 
-describe("an OLDER desktop is not read as 'no models'", () => {
-  it("no `catalogs` key ⇒ the DEFAULT runtime falls back to the frozen list", async () => {
-    // ⚠ THE FALLBACK IS THE ONE THIS BUILD RENDERS ANYWAY on such a desktop. Reading the absent
-    // key as an empty catalog would empty the picker on a machine that works perfectly.
+describe("a runtime with no catalog reads null, never another runtime's list", () => {
+  it("no `catalogs` key ⇒ even the DEFAULT runtime gets no catalog (no frozen substitute)", async () => {
     installBridge({
       tools: "manual", messages: "ask",
       runtime: "", runtimes: RUNTIMES, defaultRuntime: "claude", connected: [],
     });
     const holder = await mountPosture();
-    expect(holder.value.catalog?.source).toBe("frozen");
-    expect(selectableModels(holder.value.catalog).map((m) => m.id)).toEqual(CLAUDE_IDS);
+    expect(holder.value.catalog).toBeNull();
   });
 
-  it("🔒 …and a NON-default runtime on that desktop gets NOTHING, never Claude's list", async () => {
+  it("🔒 a NON-default runtime with no catalog gets NOTHING, never Claude's list", async () => {
     installBridge({
       runtimes: RUNTIMES, defaultRuntime: "claude", connected: [],
       selection: { v: 2, runtime: "codex", messages: "ask", byRuntime: {} },

@@ -7,19 +7,17 @@
  *
  *   • render WHATEVER the catalog sends — a model this bundle has never heard of included;
  *   • label with the runtime's own display name, and a model with none by its raw id (never hidden);
- *   • find a legacy stored id through the entry's `aliases`, so an old pick shows as ONE option;
- *   • keep the frozen `agent-models.ts` list as the older-desktop fallback only.
+ *   • find a legacy stored id through the entry's `aliases`, so an old pick shows as ONE option.
  */
 
 import { describe, expect, it } from "vitest";
 import {
-  canSelectModel,
   catalogSelection,
   findModel,
   modelLabel,
   modelOptionsFor,
-  modelShortLabel,
   normalizeCatalogs,
+  selectableModels,
 } from "./model-catalog";
 import { agentModelLabel, agentModelShortLabel } from "./agent-models";
 import { modelBelongsTo } from "./model-affinity";
@@ -50,13 +48,12 @@ describe("the live Claude roster, on the web", () => {
       "claude-sonnet-5",
       "claude-opus-6[1m]",
     ]);
-    expect(canSelectModel(catalog, "claude-opus-6[1m]")).toBe(true);
+    expect(selectableModels(catalog).map((m) => m.id)).toContain("claude-opus-6[1m]");
   });
 
   it("labels by the runtime's own name, and an unnamed model by its raw id — never hidden", () => {
     expect(modelLabel(catalog, "claude-opus-5[1m]")).toBe("Opus (1M context)");
     expect(modelLabel(catalog, "claude-opus-6[1m]")).toBe("claude-opus-6[1m]");
-    expect(modelShortLabel(catalog, "claude-opus-6[1m]")).toBe("claude-opus-6[1m]");
     expect(modelOptionsFor(catalog, "").find((o) => o.value === "claude-opus-6[1m]")?.label).toBe("claude-opus-6[1m]");
   });
 
@@ -64,14 +61,14 @@ describe("the live Claude roster, on the web", () => {
     expect(findModel(catalog, "claude-opus-5")?.id).toBe("claude-opus-5[1m]");
     expect(catalogSelection(catalog, "claude-opus-5")).toBe("claude-opus-5[1m]");
     expect(modelOptionsFor(catalog, "claude-opus-5")).toHaveLength(3); // no extra raw row appended
-    expect(canSelectModel(catalog, "opus")).toBe(true);
+    expect(findModel(catalog, "opus")?.id).toBe("claude-opus-5[1m]");
     expect(modelBelongsTo(catalog, "claude-opus-5")).toBe(true);
     expect(modelLabel(catalog, "claude-opus-5")).toBe("Opus (1M context)");
   });
 
   it("an id nobody lists is still shown as itself and is not selectable", () => {
     expect(catalogSelection(catalog, "claude-from-the-future-9")).toBe("claude-from-the-future-9");
-    expect(canSelectModel(catalog, "claude-from-the-future-9")).toBe(false);
+    expect(findModel(catalog, "claude-from-the-future-9")).toBeNull();
     expect(modelOptionsFor(catalog, "claude-from-the-future-9").at(-1)).toEqual({
       value: "claude-from-the-future-9",
       label: "claude-from-the-future-9",

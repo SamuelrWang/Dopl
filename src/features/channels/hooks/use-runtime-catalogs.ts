@@ -24,18 +24,12 @@
  * Each return re-reads once, with a fresh `loading` budget, because main answers a retry in flight
  * as `loading` (`main/runtime/model-catalog.js › refresh`). No timer runs while nothing is loading.
  *
- * ⚠ **NOTHING HERE SUBSTITUTES A RUNTIME'S MODELS.** The only fallback in this file is the
- * DEFAULT runtime's frozen list, and only when the desktop said nothing at all
- * (`hasCatalogKey === false`, i.e. a build older than the catalog contract). Every other runtime
- * on such a build gets `null` and renders the platform default — answering it with Claude's four
- * ids is the exact failure the plan forbids.
+ * ⚠ NOTHING HERE SUBSTITUTES A RUNTIME'S MODELS: a runtime with no catalog reads `null`.
  */
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { defaultRuntimeFallbackCatalog } from "../lib/agent-models";
 import {
   catalogFor,
-  hasCatalogKey,
   normalizeCatalogs,
   NO_CATALOGS,
   type ModelCatalog,
@@ -59,33 +53,23 @@ export const MAX_RELOADS = Math.ceil((MAIN_ROSTER_SETTLE_MS + 2000) / RELOAD_DEL
 export interface RuntimeCatalogsState {
   /** Every runtime's catalog, keyed by runtime id. `{}` until a read answers. */
   catalogs: ModelCatalogs;
-  /**
-   * THIS DESKTOP SPOKE THE CATALOG CONTRACT AT ALL. ⚠ FALSE IS "IT DID NOT SAY", NOT "NO MODELS":
-   * a build older than U6 omits the key entirely, and an unknown-is-empty read would empty the
-   * picker on a machine that works perfectly. Latched to true, `connectedKnown`'s rule.
-   */
-  catalogsKnown: boolean;
-  /** Adopt a raw settings reply. ⚠ Reads the RAW object, before any normalizer, so the own-key
-   *  probe sees what the desktop actually sent. */
+  /** Adopt a raw settings reply. A reply that is not an object (a failed read) keeps what is held. */
   adopt: (reply: unknown) => void;
   /** Bump this into a read effect's dependency list — it changes while a roster is loading. */
   reloadToken: number;
-  /** The catalog for one runtime, with the older-desktop fallback applied. */
+  /** The catalog for one runtime (`''` = the default runtime), or `null`. */
   catalogFor: (runtimeId: string, defaultRuntimeId: string) => ModelCatalog | null;
 }
 
 export function useRuntimeCatalogs(): RuntimeCatalogsState {
   const [catalogs, setCatalogs] = useState<ModelCatalogs>(NO_CATALOGS);
-  const [catalogsKnown, setCatalogsKnown] = useState(false);
   const [reloadToken, setReloadToken] = useState(0);
   const [reloadsLeft, setReloadsLeft] = useState(MAX_RELOADS);
 
   const adopt = useCallback((reply: unknown) => {
-    if (!hasCatalogKey(reply)) return; // an older desktop: leave `catalogsKnown` false
-    setCatalogsKnown(true);
+    if (!reply || typeof reply !== "object") return;
     const row = reply as { catalogs?: unknown; catalogVersion?: unknown };
-    const next = normalizeCatalogs(row.catalogs, row.catalogVersion);
-    setCatalogs(next);
+    setCatalogs(normalizeCatalogs(row.catalogs, row.catalogVersion));
   }, []);
 
   const loading = useMemo(
@@ -129,16 +113,10 @@ export function useRuntimeCatalogs(): RuntimeCatalogsState {
   const read = useCallback(
     (runtimeId: string, defaultRuntimeId: string): ModelCatalog | null => {
       const id = runtimeId || defaultRuntimeId;
-      if (!id) return null;
-      const hit = catalogFor(catalogs, id);
-      if (hit) return hit;
-      // ⚠ THE ONE FALLBACK, AND IT IS SCOPED TWICE: only when the desktop said NOTHING, and only
-      // for the DEFAULT runtime. See the header.
-      if (catalogsKnown || id !== defaultRuntimeId) return null;
-      return defaultRuntimeFallbackCatalog(id);
+      return id ? catalogFor(catalogs, id) : null;
     },
-    [catalogs, catalogsKnown]
+    [catalogs]
   );
 
-  return { catalogs, catalogsKnown, adopt, reloadToken, catalogFor: read };
+  return { catalogs, adopt, reloadToken, catalogFor: read };
 }

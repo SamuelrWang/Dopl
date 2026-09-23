@@ -198,32 +198,9 @@ test("chainModel is UNCHANGED by the fallback — a link with no opinion still s
   );
 });
 
-test("⚠ THE PINNED TWIN: the desktop's fallback and the web's are the same id", () => {
-  // ⚠ TWO TREES, ONE FACT, AND THEY CANNOT IMPORT EACH OTHER — the situation
-  // `src/features/channels/lib/agent-models.ts › AGENT_MODEL_ALIASES` already restates
-  // `MODEL_CHOICES` / `ID_TO_ALIAS` for. The web's `AGENT_MODEL_FALLBACK` decides what the
-  // Settings dropdown SHOWS for an unpicked channel; this file's `LAUNCH_MODEL_FALLBACK` decides
-  // what that channel actually LAUNCHES with. If they drift, the control names one model and
-  // spends another — which is precisely the defect this pair was built to close, reappearing as
-  // a typo instead of as a design.
-  //
-  // ⚠ READ FROM SOURCE, NOT IMPORTED. The web tree is TypeScript and outside this suite's reach;
-  // the same technique every other cross-tree pin in this file uses.
-  const WEB = readFileSync(
-    join(HERE, "..", "..", "src", "features", "channels", "lib", "agent-models.ts"),
-    "utf8"
-  );
-  const match = WEB.match(/AGENT_MODEL_FALLBACK\s*=\s*"([^"]+)"/);
-  assert.ok(match, "the web declares AGENT_MODEL_FALLBACK as a string literal");
-  assert.equal(
-    match[1],
-    model.LAUNCH_MODEL_FALLBACK,
-    "the model the dropdown SHOWS must be the model the launch SPENDS"
-  );
-  // ⚠ AND IT MUST BE A MODEL THIS BUILD CAN ACTUALLY SPEND — agreement alone is not enough. A
-  // pinned pair that agreed on an id NEITHER side knew would pass the check above and still be
-  // broken: `aliasForModelId` fails closed to `'default'`, so `modelArg` would hand argv the
-  // literal string `default` as though it were an alias. The guard is membership, not spelling.
+test("the launch fallback is a model this build can actually spend", () => {
+  // `aliasForModelId` fails closed to `'default'`, so a non-member would reach argv as the literal
+  // string `default`. The guard is membership, not spelling.
   assert.notEqual(model.normalizeModelId(model.LAUNCH_MODEL_FALLBACK), "",
     "the fallback is a member of MODEL_IDS");
   assert.notEqual(model.aliasForModelId(model.LAUNCH_MODEL_FALLBACK), "default",
