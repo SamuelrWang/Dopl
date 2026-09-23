@@ -394,7 +394,7 @@ describe("launch from the card", () => {
   /** The desktop, with the three ops this lane uses. ⚠ `installBridge` REPLACES
    *  the surface, so `apiRequest` is re-supplied here. */
   function installDesktop(
-    outcome: { ok: boolean; agentId?: string; reason?: string } = {
+    outcome: { ok: boolean; agentId?: string; reason?: string; detail?: string } = {
       ok: true,
       agentId: "ag-1",
     }
@@ -433,7 +433,6 @@ describe("launch from the card", () => {
       workspaceId: WORKSPACE_ID,
       channelName: expect.any(String),
       threadTitle: null,
-      counterpartyId: null,
       // ⚠ THE CHANNEL'S OWN FLAG, FORWARDED UNTOUCHED — the harness's row is a
       // direct one, and main reads this to decide how the session addresses the
       // room.
@@ -464,6 +463,20 @@ describe("launch from the card", () => {
     await screen.findByRole("alert");
     expect(screen.getByRole("alert").textContent).toContain("Session limit");
     expect(rename).not.toHaveBeenCalled();
+  });
+
+  it("says main's own `no-model` sentence, not the generic line", async () => {
+    installDesktop({
+      ok: false,
+      reason: "no-model",
+      detail: "gpt-x is not offered here. Offered: claude-sonnet-5",
+    });
+    await pressLaunch();
+
+    await screen.findByRole("alert");
+    expect(screen.getByRole("alert").textContent).toBe(
+      "gpt-x is not offered here. Offered: claude-sonnet-5"
+    );
   });
 
   it("offers no launch control on a SHARED row — that list is the container's", async () => {

@@ -1,58 +1,36 @@
-import type { ReactNode } from "react";
 import { cn } from "@/shared/lib/utils";
 import { Skeleton, SkeletonBar, SkeletonLine } from "@/shared/ui/skeleton";
-import { SECTION_PANEL_GROUND } from "@/shared/ui/section-panel";
+import { PANEL_ROWS, PANEL_WELL_ON_PANEL } from "@/shared/ui/panel-well";
+import { NAKED_ICON } from "@/shared/ui/naked-icon-button";
 import shell from "@/shared/layout/app-shell/app-shell.module.css";
+import {
+  IdentityCardsGhost,
+  SectionPanelGhost,
+} from "#/components/skeletons/section-panel-ghost";
 import { SkeletonSurface } from "#/components/skeletons/skeleton-surface";
 import { AccountRailSkeleton } from "#/components/skeletons/shell-skeleton";
 import { PLOT_HEIGHT_CLASS } from "#/components/charts/bar-series";
+import { HOME_CHANNEL_WELLS, type HomeChannelWellId } from "./channel-wells";
 import { HOME_TABS } from "./home-tabs";
-// ⚠ THE FLAT FACE AND THE CHANNEL COLUMN ARE THEIR OWN MODULES (§1 splits,
-// 2026-09-22) — see each file's own docblock for the seam.
-import { GHOST_FLAT_FACE } from "./home-ghost-face";
-import { HomeListGhost } from "./home-list-skeleton";
 import home from "./home.module.css";
-import { IDENTITY_GRID } from "@/features/agent-identities/components/identity-section";
 
 /**
- * /home's LOADING SHAPES — the page frame, and one per face of the record pane.
- *
- * ⚠ THE GEOMETRY IS THE PAGE'S OWN CLASSES, READ BY REFERENCE (R3). The list
- * column and the header's leading CELL are both `w-[var(--home-list-w)]` — the
- * SAME var, the same two places `home.module.css › .page` says are load-bearing,
- * so the ghost selector starts on the ghost record pane's left edge exactly as
- * the real one does. The Knowledge face's grid is
- * `home.kbCards` itself, not a re-typed `repeat(3, …)` / `224px`: the card size,
- * the gap and the 1080px step-down cannot drift from the loaded pane, and a
- * re-tune of that grid moves the ghost with it.
- *
- * ⚠ THE FACE SELECTOR IS GHOSTED, NEVER FAKE-INTERACTIVE — one inert pill per
- * `home-tabs.ts › HOME_TABS` entry, in the `plain` control's own trackless row.
- * No `<button>`, no labels: a skeleton that offered a pressable tab would be
- * offering a face the page has not loaded. ⚠ The `.seg-track` this ghost wore
- * until 2026-09-10 left the page on 2026-09-08 (Samuel: plain pills, no track).
- *
- * ⚠ NO TEXT ANYWHERE. The label goes to `SkeletonSurface`'s `sr-only` status
- * line and nowhere else.
+ * /home's loading shapes: the page frame, and one per record-pane face. Geometry is the page's own
+ * classes by reference (`--home-list-w`, `home.kbCards`, `IDENTITY_GRID`, `PLOT_HEIGHT_CLASS`),
+ * never re-typed. No text and nothing pressable; the label is `SkeletonSurface`'s `sr-only` line.
  */
 
 /**
- * THE WHOLE /home FRAME while the three page reads are in flight — account rail,
- * the base panel with its header, the relationship list, and the record pane.
- *
- * ⚠ IT MIRRORS THE FRAME, not a generic page. This gate used to render the
- * shared `PageShellSkeleton` inside a bare `h-screen` div, which resolved into
- * a surface /home has never had: a 52px top bar over a centred `max-w-[960px]`
- * column, where the real page is a dark slab holding a rail, a 290px list and a
- * bordered record pane.
+ * The one face every /home loading ghost wears: the radius and the border box, nothing visible
+ * (skeletons are flat — shimmer blocks only). `border-transparent`, never a dropped border: the
+ * background paints under the border box and dropping it would move every block in by a pixel.
  */
+const GHOST_FLAT_FACE = "rounded-[14px] border border-transparent";
+
+/** The whole /home frame while the page reads are in flight: rail, header, list, record pane. */
 export function HomePageSkeleton({ label = "Opening home" }: { label?: string }) {
   return (
-    // `!ml-0` (×2) for the reason `index.tsx`'s own docblock gives: the panel
-    // butts flush against the rail, so the visible dark column is the 54px rail
-    // exactly. The frame ink itself is the SHELL's since 2026-08-30 — the three
-    // `!bg-home-frame` overrides are gone from both this ghost and the page, so
-    // neither can drift off the other or off the workspace shell.
+    // `!ml-0`: the panel butts flush against the rail, as on the page (`index.tsx`).
     <SkeletonSurface label={label} className={shell.root}>
       <div className={shell.body}>
         <AccountRailSkeleton />
@@ -69,18 +47,9 @@ export function HomePageSkeleton({ label = "Opening home" }: { label?: string })
               <HomeListGhost />
               <div
                 className={cn(
-                  // The record pane's own frame, verbatim from `index.tsx` —
-                  // a COLUMN of the surface, bounded by the account palette's
-                  // 2px line rather than by an elevation. ⚠ NO `flex-col`: the
-                  // real pane is a ROW holding one `Crossfade` that fills it,
-                  // and the ghost carried a column for as long as it drew a
-                  // 52px header the landing face does not have.
+                  // The record pane's own frame, verbatim from `index.tsx` — a ROW, not a column.
                   "mb-3 mr-3 flex min-w-0 flex-1 overflow-hidden rounded-[14px] border-2 border-home-panel-line bg-home-card"
                 )}
-                // `data-frame-skin` carries that colour and weight INTO the
-                // hairlines below, so the ghost's panel lines are the account
-                // palette's, like the real pane's. The kit owns the skin since
-                // R-38 (2026-09-17); this ghost wore `home.module.css › .frame`.
                 data-frame-skin
               >
                 <OverviewFaceGhost />
@@ -93,13 +62,7 @@ export function HomePageSkeleton({ label = "Opening home" }: { label?: string })
   );
 }
 
-/**
- * /home → Knowledge, while the channel-scoped base list is in flight. TWO FLAT
- * SECTIONS over the three-column card grid.
- *
- * ⚠ THE PANE'S OWN COLUMN, `gap-3 p-3`, exactly as the loaded pane is — so the
- * sections do not move when the read lands.
- */
+/** /home → Knowledge while the base list is in flight: two flat sections over the card grid. */
 export function HomeKnowledgePanelsSkeleton({
   label = "Loading knowledge",
 }: {
@@ -110,29 +73,18 @@ export function HomeKnowledgePanelsSkeleton({
       label={label}
       className="flex min-w-0 flex-1 flex-col gap-3 overflow-hidden p-3"
     >
-      {/* SHARED IN THIS CHANNEL */}
-      <PanelGhost actionWidth={122}>
+      <SectionPanelGhost headingWidth={HEADING_W} action={<CreateGhost w={122} />}>
         <KbCardsGhost />
-      </PanelGhost>
-      {/* PERSONAL — the one caption line under the heading. */}
-      <PanelGhost actionWidth={140} caption>
+      </SectionPanelGhost>
+      <SectionPanelGhost headingWidth={HEADING_W} action={<CreateGhost w={140} />} caption>
         <KbCardsGhost />
-      </PanelGhost>
+      </SectionPanelGhost>
     </SkeletonSurface>
   );
 }
 
-/**
- * /home → Agents, while the container identity list is in flight. The SAME two
- * flat sections, over the identities' own four-column grid.
- *
- * ⚠ NOT THE KNOWLEDGE GRID. The two faces really do differ here: Knowledge is
- * `home.kbCards` (3 fixed columns, 224px rows), Agents is
- * `identity-section.tsx › IDENTITY_GRID` (FOUR fixed columns since 2026-09-13 —
- * Samuel's ruling; it was `auto-fill` at a 196px minimum) over `min-h-[92px]`
- * cards. A skeleton that shared one grid would resolve into the wrong one on
- * whichever face it did not come from.
- */
+/** /home → Identities while the container list is in flight: the same two sections over the
+ *  identities' own four-column grid (not the Knowledge grid). */
 export function HomeIdentityPanelsSkeleton({
   label = "Loading identities",
 }: {
@@ -143,69 +95,24 @@ export function HomeIdentityPanelsSkeleton({
       label={label}
       className="flex min-w-0 flex-1 flex-col gap-3 overflow-hidden p-3"
     >
-      <PanelGhost actionWidth={132}>
-        <IdentityCardsGhost />
-      </PanelGhost>
-      <PanelGhost actionWidth={92} caption>
-        <IdentityCardsGhost />
-      </PanelGhost>
+      <SectionPanelGhost headingWidth={HEADING_W} action={<CreateGhost w={132} />}>
+        <IdentityCardsGhost count={4} />
+      </SectionPanelGhost>
+      <SectionPanelGhost headingWidth={HEADING_W} action={<CreateGhost w={92} />} caption>
+        <IdentityCardsGhost count={4} />
+      </SectionPanelGhost>
     </SkeletonSurface>
   );
 }
 
+/** Every /home section heading ghost is one width. */
+const HEADING_W = 148;
 
-
-/**
- * One `SectionPanel`-shaped region: heading row, optional caption, body.
- *
- * ⚠ IT IS NOT `SectionPanel` ITSELF, and the reason is the no-text rule: that
- * component takes a `label` STRING and paints it as an `<h2>`, which is the one
- * thing a loading state must not do (a heading that says "Personal" over a
- * shimmering grid asserts a section the read has not confirmed). What it DOES
- * keep is the three things the page depends on — `data-section-panel`, the
- * `rounded-[14px] p-3` box and, since R-38 (2026-09-17), `SECTION_PANEL_GROUND`
- * by default — so the ghost stands on the same panel gray as its loaded
- * counterpart and needs no palette of its own.
- */
-function PanelGhost({
-  children,
-  ground = SECTION_PANEL_GROUND,
-  actionWidth,
-  caption = false,
-}: {
-  children: ReactNode;
-  /** ⚠ DEFAULTED since R-38 (2026-09-17): the loaded `SectionPanel` paints the
-   *  ground itself, so a ghost passing nothing would flash white and resolve
-   *  into gray. Pass one only to say something else. */
-  ground?: string;
-  /**
-   * The header-right create button's ghost width. ⚠ OMITTED = NO BUTTON, and
-   * that is the Overview face: its two `SectionPanel`s take a `label` and no
-   * `action`, so a bar there would ghost an affordance the panel never grows.
-   */
-  actionWidth?: number;
-  caption?: boolean;
-}) {
-  return (
-    <div data-section-panel className={cn("rounded-[14px] p-3", ground)}>
-      <div className="flex min-h-[22px] items-center justify-between gap-2 px-1 pb-2.5">
-        <SkeletonLine w={148} h={10} />
-        {actionWidth !== undefined && (
-          <SkeletonBar h={28} w={actionWidth} className="rounded-lg" />
-        )}
-      </div>
-      {caption && (
-        <div className="px-1 pb-2.5">
-          <SkeletonLine w="58%" h={9} />
-        </div>
-      )}
-      {children}
-    </div>
-  );
+/** A section header's create-button ghost. */
+function CreateGhost({ w }: { w: number }) {
+  return <SkeletonBar h={28} w={w} className="rounded-lg" />;
 }
 
-/** ⚠ `home.kbCards` ITSELF — see the file docblock. The 224px row height and
- *  the 1080px step-down come from the grid, never from this file. */
 function KbCardsGhost() {
   return (
     <div className={home.kbCards}>
@@ -218,56 +125,16 @@ function KbCardsGhost() {
   );
 }
 
-/** ⚠ `IdentityGrid`'s grid class **BY IMPORT** — `IDENTITY_GRID`, exported when
- *  the grid became a fixed four columns (2026-09-13). The source scan in
- *  `components/skeletons/page-skeletons.test.tsx` pins the import, so the count
- *  and the gap cannot move on one surface only. It was a copied string while the
- *  value was an un-exported Tailwind arbitrary. */
-function IdentityCardsGhost() {
-  return (
-    <div className={IDENTITY_GRID}>
-      {Array.from({ length: 4 }).map((_, i) => (
-        <Skeleton key={i} className="h-[92px] rounded-[14px]" />
-      ))}
-    </div>
-  );
-}
-
 /**
- * THE HEADER STRIP — `home-header.tsx`'s OWN three boxes, in its nesting.
- *
- * ⚠ THE CELL HOLDS "New channel" (2026-09-15) — see the ghost itself.
- *
- * ⚠ THE LIST-WIDTH PAD IS A CELL, NOT A `pl-`. That strip stopped being
- * `pl-[var(--home-list-w)]` on 2026-08-30, when the operator's face moved INTO
- * that column: it is a `w-[var(--home-list-w)] px-3` cell holding the settings
- * control, grouped with the selector so `justify-between` sees two children and
- * not three. The ghost held the old pad, so its selector started one `px-3`
- * short of where the real one does and the avatar's slot was empty.
- *
- * ⚠ ONE PILL PER `HOME_TABS` ENTRY, SIZED FROM THAT ENTRY'S LABEL — FIVE since
- * the Ontology face (2026-09-09), and it was still drawing four. Reading the
- * table is what stops a sixth face from leaving this behind again. The row is
- * the `plain` `SegmentedControl` at `size="lg"`, i.e. `flex items-center gap-1.5`
- * over `h-9` hug-width pills, NOT the `.seg-track` this ghost still wore: that
- * form left the page on 2026-09-08.
+ * `home-header.tsx`'s three boxes: the list-width cell (a cell, not a `pl-`), one inert pill per
+ * `HOME_TABS` entry sized from its label, then search + Profile.
  */
 function HomeHeaderGhost() {
   return (
     <div className="flex items-center justify-between gap-3 py-3 pr-5">
       <div className="flex min-w-0 items-center">
         <div className="flex w-[var(--home-list-w)] min-w-0 shrink-0 items-center px-3">
-          {/* 🔒 **THE CELL IS THE "New channel" PILL SINCE 2026-09-15** (Samuel:
-              "move the new channel button to be where the search bar now is. It
-              will be left aligned basically"). It ghosted a `HOME_CARD_FACE` bar
-              with an avatar in it, then the search field for one revision — three
-              shapes in one cell, which is why this ghost is the first thing to
-              re-check when the strip moves.
-              ⚠ **HUG-WIDTH AND LEFT-ALIGNED, NOT `w-full`.** The real pill is
-              `PAGE_ACTION_BTN`'s `px-[15px]` around its label, so a full-width
-              block here would collapse to a short button the instant the read
-              lands. 112px is the same number the right group's ghost used for this
-              button when it lived there — one label, one width. */}
+          {/* The "New channel" pill: hug-width and left-aligned, as the real `PAGE_ACTION_BTN`. */}
           <Skeleton className="h-9 w-[112px] rounded-full" />
         </div>
         <div className="flex items-center gap-1.5">
@@ -282,16 +149,7 @@ function HomeHeaderGhost() {
         </div>
       </div>
       <div className="flex items-center gap-2.5">
-        {/* THE SEARCH PILL AT ITS OPEN WIDTH, then the "Profile" pill — that
-            order since 2026-09-15 (Samuel: "move the search bar back … turn the
-            profile button to be black, and have it say Profile"). ⚠ **260px IS
-            `kit.css › .search-expand[data-open="true"]`'s OWN NUMBER** — /home
-            renders the pill open, so the ghost reserves what the real box
-            reserves; a 36px circle here was the CLOSED pill's ghost and left 224px
-            of the row unaccounted for. ⚠ The Profile pill is TEXT ONLY since
-            Samuel dropped its glyph the same day ("remove the profile icon"), so
-            it is the page's narrowest `PAGE_ACTION_BTN`: `px-[15px]` around one
-            short word. */}
+        {/* 260px = `kit.css › .search-expand[data-open="true"]`: /home renders the search open. */}
         <Skeleton className="h-9 w-[260px] rounded-full" />
         <Skeleton className="h-9 w-[72px] rounded-full" />
       </div>
@@ -300,58 +158,16 @@ function HomeHeaderGhost() {
 }
 
 /**
- * THE RECORD PANE ON THE FACE THE PAGE ACTUALLY OPENS ON —
- * `home-tabs.ts › HOME_DEFAULT_TAB` is `"overview"` (Samuel, 2026-09-01: opening
- * Dopl should answer *"what needs me / what is happening / what is running"*),
- * so this is what a cold launch resolves into.
- *
- * ⚠ IT WAS THE CHANNELS FACE — a 52px pane header over `TranscriptSkeleton` —
- * which is the face the page STOPPED landing on nine days after the ghost was
- * written. A skeleton for a face the page does not open on is the "way off"
- * defect in its purest form: correct geometry, wrong pane.
- *
- * ⚠ TWO PANELS, AND THE FACE NOW HAS ONLY THREE TO CHOOSE FROM. `overview-
- * panels.tsx` renders Token spend ONLY when a row exists — it folds away
- * entirely — so ghosting it would flash a box and then remove it for every
- * operator whose agents have never spent anything. Usage and All channels always
- * render, and they are the whole ghost.
- * ⚠ **THE THIRD PANEL WAS ACTIVITY AND IT IS DELETED (Samuel, 2026-09-20).**
- * This ghost never drew it — same fold-away argument — so the frame it mirrors
- * did not change when the panel left, which is the one case where "skeletons
- * mirror the frame" costs nothing. ⚠ **Do not read that as licence to skip a
- * ghost for a panel that always renders.**
- *
- * ⚠ THE COLUMN, THE GEOMETRY AND THE PLOT ARE THE PAGE'S. `p-3` / `gap-3`, the
- * `grid-cols-2 gap-3` rails at `h-40` (`overview-panels.tsx › RailsGhost`'s own
- * size), and the plot IMPORTED from `bar-series.tsx › PLOT_HEIGHT_CLASS` the way
- * the Overview page's ghost takes it, never re-typed.
- *
- * 🔒 ⚠ **THE TWO USAGE CARDS ARE FLAT SINCE 2026-09-21 (Samuel's ruling).** They
- * wore the kit's `.bento` — `--panel-surface` fill, a 1px line and
- * `--shadow-bento` — which is the elevation he named on this face. They now wear
- * `GHOST_FLAT_FACE`: the radius and the border box, nothing visible. **The
- * REAL cards keep `.bento`** (`RailCard` and the two Usage cards share it), so
- * this is a restyle of the loading state and not of the page.
+ * The record pane on the face the page opens on (`HOME_DEFAULT_TAB`, Overview): Usage and the
+ * channel rails. Token spend is not ghosted — it folds away when no row exists. The Usage cards
+ * wear `GHOST_FLAT_FACE`, not the page's `.bento` (skeletons are flat).
  */
 function OverviewFaceGhost() {
   return (
-    // ⚠ NO `data-overview-face` ANY MORE (2026-09-17). It existed for ONE
-    // reason — the kit scoped a deeper `--shadow-card` to
-    // `[data-overview-face] .bento` — and Samuel reverted that elevation
-    // (*"I want to revert it to the old amount of shadow"*), so the hook and the
-    // token are both deleted.
-    // ⚠ **THE GHOST AND THE PAGE NO LONGER SHARE A SHADOW, DELIBERATELY** — the
-    // ghost wears none. That parity was the old argument here; the flatness
-    // ruling replaces it, so do not "restore" `.bento` to this ghost.
     <div className="min-w-0 flex-1 overflow-y-auto p-3">
       <div className="flex flex-col gap-3">
-        {/* USAGE — ONE well holding the TWO Usage cards, `gap-3` between them:
-            the capacity bar, then the plot (Samuel, 2026-09-13). ⚠ **NO
-            `ground` OVERRIDE**: the 2026-09-08 white trial passed
-            `!bg-home-card` here to mirror the page, and BOTH are reverted — the
-            ghost takes `PanelGhost`'s default ground, the same as the rails
-            panel below. */}
-        <PanelGhost>
+        {/* USAGE — one well holding the capacity bar, then the plot. */}
+        <SectionPanelGhost headingWidth={HEADING_W}>
           <div className="flex flex-col gap-3">
             <div className={cn(GHOST_FLAT_FACE, "p-3.5")}>
               <Skeleton className="h-[46px] w-full rounded-[10px]" />
@@ -362,16 +178,104 @@ function OverviewFaceGhost() {
               />
             </div>
           </div>
-        </PanelGhost>
+        </SectionPanelGhost>
 
-        {/* ALL CHANNELS — the two rows of two rails. */}
-        <PanelGhost>
+        {/* ALL CHANNELS — two rows of two rails. */}
+        <SectionPanelGhost headingWidth={HEADING_W}>
           <div className="grid grid-cols-2 gap-3">
             {Array.from({ length: 4 }).map((_, i) => (
               <Skeleton key={i} className="h-40 rounded-[14px]" />
             ))}
           </div>
-        </PanelGhost>
+        </SectionPanelGhost>
+      </div>
+    </div>
+  );
+}
+
+/* ── The channel column: the gray wells and the rows inside them ── */
+
+/** Rows each OPEN well stands in for — per well, because a list is mostly Recent. */
+const WELL_ROWS: Record<HomeChannelWellId, number> = {
+  pinned: 2,
+  recent: 4,
+  earlier: 3,
+};
+
+/**
+ * The column's wells, read from `HOME_CHANNEL_WELLS` (set, order and `defaultOpen`), never
+ * re-typed. The well's gray is geometry, not elevation; the column and scroller classes are
+ * `relationship-list.tsx`'s and `collapse-wells.tsx › WellsColumn`'s own.
+ */
+function HomeListGhost() {
+  return (
+    <div className="flex w-[var(--home-list-w)] shrink-0 flex-col">
+      <div className="flex flex-1 flex-col gap-2 overflow-hidden px-3 pb-3 pt-1">
+        <div className="flex flex-col gap-2">
+          {HOME_CHANNEL_WELLS.map((well) => (
+            <WellGhost
+              key={well.id}
+              label={well.label}
+              // A closed well ghosts its header only, as the loaded column opens it.
+              rows={well.defaultOpen ? WELL_ROWS[well.id] : 0}
+            />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * One well: a heading bar with its chevron, then the rows. A `<section>` with no button in it.
+ * The header box restates `collapse-wells.tsx › WELL_HEADER` minus the pointer (that constant is
+ * file-private); its 30px is what the chevron's `p-2` box makes. The heading bar is sized from
+ * the label, so each well resolves into its own heading width.
+ */
+function WellGhost({ label, rows }: { label: string; rows: number }) {
+  return (
+    <section aria-hidden className={PANEL_WELL_ON_PANEL}>
+      <div className="flex min-h-[30px] w-full min-w-0 items-center justify-between gap-2 pl-1">
+        <SkeletonLine w={`calc(${label.length}ch)`} h={12} />
+        <span className="flex shrink-0 items-center justify-center p-2">
+          <SkeletonBar h={NAKED_ICON} w={NAKED_ICON} className="rounded-[4px]" />
+        </span>
+      </div>
+      {rows > 0 && (
+        <div className={PANEL_ROWS}>
+          {Array.from({ length: rows }).map((_, i) => (
+            <HomeRowGhost key={i} />
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
+/**
+ * One channel row, on the pane's flat white — never the loaded row's raised `HOME_CARD_FACE`
+ * (skeletons are flat). Two `h-5` lines (title + time, then the peer stack) inside the row's own
+ * `py-2.5`. No ghost for unread marks: only some rows carry one.
+ */
+function HomeRowGhost() {
+  return (
+    <div
+      aria-hidden
+      className={cn(
+        GHOST_FLAT_FACE,
+        "bg-home-card",
+        "flex w-full items-start gap-2.5 px-2.5 py-2.5"
+      )}
+    >
+      <div className="min-w-0 flex-1">
+        <div className="flex h-5 items-center justify-between gap-2">
+          <SkeletonLine w="58%" h={11} />
+          <SkeletonLine w={30} h={8} />
+        </div>
+        <div className="mt-0.5 flex h-5 items-center gap-1.5">
+          <Skeleton className="h-5 w-5 rounded-full" />
+          <Skeleton className="h-5 w-5 rounded-full" />
+        </div>
       </div>
     </div>
   );

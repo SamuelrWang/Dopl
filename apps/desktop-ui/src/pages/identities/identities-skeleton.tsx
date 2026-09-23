@@ -1,33 +1,14 @@
-import { cn } from "@/shared/lib/utils";
 import { Skeleton, SkeletonBar, SkeletonLine } from "@/shared/ui/skeleton";
-import { SECTION_PANEL_GROUND } from "@/shared/ui/section-panel";
+import {
+  IdentityCardsGhost,
+  SectionPanelGhost,
+} from "#/components/skeletons/section-panel-ghost";
 import { SkeletonSurface } from "#/components/skeletons/skeleton-surface";
-import { IDENTITY_GRID } from "@/features/agent-identities/components/identity-section";
 
 /**
- * `/:workspaceSegment/agents`'s loading shape — the identities page's OWN
- * column: a 52px header over the `max-w-[960px]` stack of THREE scope panels
- * (Private / Team / Public), each a card grid.
- *
- * ⚠ THREE PANELS, because `SECTIONS` has three rows and the page renders one
- * per row (`agent-identities/lib/visibility.ts`). A two-panel ghost would jump a
- * panel's height when the read lands.
- *
- * ⚠ THE GRID CLASS IS `IdentityGrid`'S, **BY IMPORT** — `identity-section.tsx ›
- * IDENTITY_GRID` (exported 2026-09-13, when the grid became a FIXED four
- * columns; it was `auto-fill` at a 196px minimum and a copied string until
- * then). The source scan in `components/skeletons/page-skeletons.test.tsx` now
- * pins the IMPORT rather than the bytes, so the column count and the gap cannot
- * move on one surface.
- *
- * ⚠ IT STANDS AT **BOTH** OF THIS PAGE'S GATES (2026-08-28). A cold /agents
- * crosses two pending states back to back — the workspace resolve in
- * `./index.tsx`, then `agent-identities-core.tsx`'s own identity read — and the
- * second one painted the shared `PageShellSkeleton`, so one page swapped
- * skeletons mid-load. The core takes a `loadingSkeleton` SLOT now and the seam
- * hands it this shape; the web tree passes nothing and keeps the shared ghost.
- * ⚠ Do not "simplify" that to an import inside the core — it is Next-free and
- * router-free by construction and cannot reach into this package.
+ * `/:workspaceSegment/identities`'s loading shape: a 52px header over one panel per `SECTIONS` row
+ * (`agent-identities/lib/visibility.ts`), each a card grid. Used at both gates, handed to the
+ * Next-free core as its `loadingSkeleton` slot.
  */
 export function IdentitiesPageSkeleton({
   label = "Loading identities",
@@ -53,31 +34,14 @@ export function IdentitiesPageSkeleton({
   );
 }
 
-/**
- * One `IdentityPanel` — `SectionPanel`'s box on the workspace default ground,
- * over `IdentityGrid`'s four-column card grid (`IDENTITY_GRID`).
- *
- * ⚠ NOT `SectionPanel` ITSELF: it takes a `label` STRING and paints it as an
- * `<h2>`, and a skeleton must carry no text. What it keeps is the box
- * (`rounded-[14px] p-3`), the `data-section-panel` hook and
- * `SECTION_PANEL_GROUND` — the constant the two real consumers share, so the
- * ghost's fill and hairline cannot drift from theirs.
- */
+/** One `IdentityPanel` over `IdentityGrid`'s cards. */
 function IdentityPanelGhost({ cards }: { cards: number }) {
   return (
-    <div
-      data-section-panel
-      className={cn("rounded-[14px] p-3", SECTION_PANEL_GROUND)}
+    <SectionPanelGhost
+      headingWidth={128}
+      action={<SkeletonBar h={22} w={64} className="rounded-full" />}
     >
-      <div className="flex min-h-[22px] items-center justify-between gap-2 px-1 pb-2.5">
-        <SkeletonLine w={128} h={10} />
-        <SkeletonBar h={22} w={64} className="rounded-full" />
-      </div>
-      <div className={IDENTITY_GRID}>
-        {Array.from({ length: cards }).map((_, i) => (
-          <Skeleton key={i} className="h-[92px] rounded-[14px]" />
-        ))}
-      </div>
-    </div>
+      <IdentityCardsGhost count={cards} />
+    </SectionPanelGhost>
   );
 }

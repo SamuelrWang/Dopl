@@ -8,19 +8,9 @@ import { MembersPageSkeleton } from "#/pages/members/members-skeleton";
 import { KnowledgeHomeSkeleton } from "./knowledge-skeletons";
 
 /**
- * THE SKELETON THE ROUTED SECTION WILL RESOLVE INTO — picked off the path the
- * switch is heading for, so the card under the sidebar ghosts the page that is
- * about to land and not a generic one.
- *
- * ⚠ THE THREE MISSING SECTIONS ARE DELIBERATE. Skills, Chats and Ontology have
- * no shape of their own (§1A: *"`PageLoading` IS NOT DEPRECATED AND MUST NOT
- * BE"* — it is still the loading state of every page without one), so they get
- * it here too. Inventing three shapes to fill this table is exactly the
- * "multiply the ghosts" that bullet argues against.
- *
- * ⚠ `null` (a bare `/{segment}`) IS OVERVIEW, matching
- * `app-sidebar-core.tsx › activeSectionFromPath`, which answers `"overview"`
- * for that path — the nav highlights Overview there and so does this.
+ * The skeleton of the section the route is heading for. Skills, Chats and Ontology have no shape
+ * of their own and keep `PageLoading` (INVARIANTS §1A). `null` (a bare `/{segment}`) is Overview,
+ * as `app-sidebar-core.tsx › activeSectionFromPath` answers.
  */
 export function sectionSkeleton(section: NavSection | null): ReactNode {
   const label = "Opening workspace";

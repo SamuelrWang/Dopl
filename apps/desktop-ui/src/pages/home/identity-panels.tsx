@@ -1,131 +1,74 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { Bot } from "lucide-react";
 import { EmptyState } from "@/shared/ui/empty-state";
+import { OpenScaleButton } from "@/shared/ui/open-scale-button";
 import { agentIdentityErrorMessage } from "@/features/agent-identities/client/api";
+import { authorMarker } from "@/features/agent-identities/components/identity-picker";
+import {
+  IdentityGrid,
+  IdentityPanel,
+} from "@/features/agent-identities/components/identity-section";
 import { useAgentIdentities } from "@/features/agent-identities/hooks/use-agent-identities";
 import { EMPTY_KNOWLEDGE } from "@/features/agent-identities/lib/knowledge-scopes";
 import {
   SECTIONS_CONTAINER,
   SECTION_PRIVATE_EVERYWHERE,
   groupByVisibility,
+  type IdentitySectionDef,
 } from "@/features/agent-identities/lib/visibility";
 import type { AgentIdentity } from "@/features/agent-identities/client/types";
 import {
+  EMPTY_PEERS,
   EMPTY_WORKSPACE_ROLE,
   type Channel,
 } from "@/features/channels/types";
 import { meetsMinRole } from "@/features/workspaces/types";
 import { PageError } from "#/components/page-states";
 import {
-  PrivateIdentitySection,
-  SharedIdentitySection,
-  useContainerAuthorMarker,
-} from "./identity-panel-cards";
-import {
   ContainerIdentityEditor,
+  HOME_SHELF,
   HomeWorkspaceIdentityEditor,
 } from "./identity-editor";
 import { LaunchIntoChannelButton, useCardLaunch } from "./identity-card-launch";
 import { AddKnowledgeWell, IdentityKnowledgeDialog } from "./identity-card-knowledge";
+import { channelPeople } from "./home-rows";
 import { CreateButton } from "./panel-buttons";
 import { HomeIdentityPanelsSkeleton } from "./home-skeleton";
 
 /**
- * /home → Agents. THE THREE IDENTITY SCOPES OF ONE CHANNEL (Samuel, 2026-08-26;
- * `docs/specs/home-agents-tab.plan.md` §1):
- *
- *   A  SHARED, in this channel — this channel's link CONTAINER, `visibility ===
- *                  "workspace"`. Inside a container that value means THE OTHER
- *                  PERSON, so the heading is **"Shared in this channel", never
- *                  "Public"** — and it lives in `agent-identities/lib/
- *                  visibility.ts › SECTIONS_CONTAINER`, never hand-typed here.
- *   B  PRIVATE, in this channel — container identities, `private`, the caller's.
- *   C  PRIVATE, across all channels — the same question of the caller's HOME
- *                  workspace (`POST /api/boot`'s `workspace`).
- *
- * B and C share one section with a scope dropdown (one shelf at two ranges); A
- * is its own because it answers a different QUESTION — who else may wear this
- * identity.
- *
- * ⚠ "AGENTS" NAMES TWO THINGS AND BOTH NAMES STAY (Samuel's ruling Q6,
- * 2026-08-26): THIS face lists AGENT IDENTITIES, the channel info column's
- * **Agents** tab (`channels/components/agents-tab.tsx`) lists RUNNING SESSIONS. The
- * collision is RECORDED (INVARIANTS §5A), not resolved; a rename needs his word.
- *
- * 🔒 **THE PERSONAL CARD LAUNCHES SINCE 2026-09-22 (Samuel), SUPERSEDING
- * "NO LAUNCH CONTROL, DELIBERATELY" (§4.6, §5A).** That rule was written against
- * a second launch FORM — the Channels face's popup reads this same list, and two
- * places to CHOOSE a model, a runtime and a colour is how the two come to
- * disagree. The card offers no choices: one click sends the identity id and
- * nothing else (`identity-card-launch.tsx`), so `resolve` is still resolved in one
- * place and the popup is still the only surface that can re-point a spawn.
- * ⚠ **THE SHARED SECTION HAS NO LAUNCH.** Its rows are the CONTAINER's, the
- * launch payload resolves an identity in ONE workspace, and Samuel's ruling names
- * the personal card. CREATE and EDIT are the authoring half and stay.
- *
- * ⚠ THE CREATE AFFORDANCE FOLLOWS THE SCOPE PILL (Knowledge-wave ruling 6): "in
- * this channel" writes into the CONTAINER, "across all channels" into the home
- * workspace. It sits beside the pill it obeys, and that pill also decides which
- * workspace's teams and bases the editor may ask for (`identity-editor.tsx`).
- *
- * ⚠ TWO READS, ONE PATH, TWO WORKSPACES — F-331's shape. `GET
- * /api/agent-identities` is cached under `[path, workspaceId, undefined]` twice,
- * so writes patch the ENTRY key, never the path PREFIX (INVARIANTS §8). No
- * channel-scoped key is needed: the workspace element distinguishes them.
- *
- * ⚠ ONE LAYOUT FOR ALL THREE TABS (`index.tsx`): this renders INSIDE the record
- * pane, never moving the conversation column and never going full-width.
- *
- * 🔒 **BOTH SECTION BUTTONS READ "+ Agent Identity" (Samuel, 2026-09-09; the word was
- * "template" until the 2026-09-22 rename — Samuel: *"it's going to say + Agent Identity"*), on the
- * page's black `h-9` pill** (`panel-buttons.tsx › CreateButton`) — the SECTION
- * names the destination, so the button says only what it makes. **The two
- * accessible names are identical on purpose**: reach them through their section
- * (`getByRole("region", { name: … })`), never by button name alone.
+ * /home → Identities: two sections for one channel. SHARED is the channel's link container at
+ * `visibility: "workspace"` (heading from `SECTIONS_CONTAINER`, never "Public"); PERSONAL is the
+ * caller's own private identities on the home shelf. Only a personal card launches: the shared
+ * rows are the container's, and a launch resolves an identity in one workspace.
+ * Two reads share one path in two workspaces, so writes patch the ENTRY key, never the path
+ * prefix (F-331, INVARIANTS §8). Both create buttons read "+ Agent Identity"; reach them through
+ * their section's region.
  */
 export function HomeIdentityPanels({
   channel,
   homeWorkspaceId,
   currentUserId,
 }: {
-  /** `null` when the selected row is a legacy unbound LINK, or when there is
-   *  no row at all — both are "no container to read identities from". */
+  /** `null` = no container to read shared identities from (no row, or an unbound link). */
   channel: Channel | null;
-  /** ⚠ `POST /api/boot`'s `workspace`, which is NULL until the caller is
-   *  onboarded. Scope C is UNAVAILABLE, not empty, when it is. */
+  /** `POST /api/boot`'s `workspace`; null until onboarded — Personal is then UNAVAILABLE, not empty. */
   homeWorkspaceId: string | null;
   currentUserId: string;
 }) {
   const [editing, setEditing] = useState<EditorTarget | null>(null);
-  /**
-   * The PERSONAL row whose knowledge popup is open (Samuel, 2026-09-22).
-   *
-   * ⚠ **IT REPLACED `sharing`**, which held the row waiting on the grant
-   * dialog's confirm step — the card's second control is a LAUNCH now, and
-   * `agent-share.tsx` is deleted with it (`dopl_agent(op="grant")` still writes
-   * a grant). The state is kept in the PANE rather than in the card so a channel
-   * switch tears it down: a dialog held across one would silently retarget.
-   */
+  /** The personal row whose knowledge popup is open. Pane state, so a channel switch tears it
+   *  down instead of retargeting it. */
   const [attaching, setAttaching] = useState<AgentIdentity | null>(null);
-  /** The card launch lane — one in flight, per-row spinner, per-row refusal. */
   const cardLaunch = useCardLaunch(channel);
 
-  // ⚠ A CONTAINER READ IS UNFILTERED. A shelf is a TENANCY and this container is
-  // not the caller's personal one, so `?shelf=` here would be a question with one
-  // possible answer.
-  // ⚠ **THE WORKSPACE ROLE (`myWorkspaceRole`), NOT `Channel.role`** — the
-  // identity create is floored on `workspace_members.role`, the only ladder with
-  // a `guest` rung; `Channel.role` is the channel's own `owner|member`.
-  // ⚠ §8 STALE-CACHE, SPELLED INLINE: `EMPTY_WORKSPACE_ROLE` (rank 0) hides the
-  // create for one paint rather than offering a write the server would refuse.
+  // The container read is unfiltered: `?shelf=` is a tenancy and the container is not the
+  // caller's personal one. The create gate is the WORKSPACE role (has `guest`), not
+  // `Channel.role`; `EMPTY_WORKSPACE_ROLE` hides it for one paint. The server floor is the fence.
   const canCreateShared = meetsMinRole(
     channel?.myWorkspaceRole ?? EMPTY_WORKSPACE_ROLE,
     "member"
   );
   const containerList = useAgentIdentities(channel?.workspaceId ?? null);
-  // ⚠ NO LONGER LAZY (2026-08-27). It was gated on the scope pill; with the
-  // pill gone Personal is ALWAYS on screen, so a deferred read would just be a
-  // guaranteed second round trip after first paint.
   const homeList = useAgentIdentities(homeWorkspaceId, { shelf: HOME_SHELF });
 
   const containerGroups = useMemo(
@@ -137,17 +80,10 @@ export function HomeIdentityPanels({
     [homeList.identities]
   );
 
-  // ⚠ `groupByVisibility` DROPS a `team` row rather than filing it elsewhere. In
-  // a container `team` is a DEAD value — there are no teams to link (§4A) — and
-  // a surface that swept it into "Shared in this channel" would be inventing a
-  // sharing fact nobody stored (§11). ⚠ SINCE 2026-08-27 A CONTAINER `private`
-  // ROW IS DROPPED THE SAME WAY: the section that listed it is gone, and the
-  // editor no longer offers the value (`lib/visibility.ts`).
+  // `groupByVisibility` drops container `team`/`private` rows: no section lists them.
   const shared = containerGroups.workspace;
-  // ⚠ THE `isMine` HALF IS NOT REDUNDANT WITH `?shelf=home`. The shelf says
-  // WHICH SHELF; `canSeeIdentity` already drops other people's private rows, but
-  // the home workspace can hold a member's `workspace`-visible identity too, and
-  // Personal is the caller's own things. Two questions, both asked.
+  // `isMine` is not redundant with `?shelf=home`: the home workspace can hold another member's
+  // workspace-visible row, and Personal is the caller's own.
   const personal = useMemo(
     () => homeGroups.private.filter((t) => isMine(t, currentUserId)),
     [homeGroups.private, currentUserId]
@@ -155,14 +91,7 @@ export function HomeIdentityPanels({
 
   const markerFor = useContainerAuthorMarker(channel, currentUserId);
 
-  // 🔒 **NO CHANNEL REPLACES SECTION A, NOT THE WHOLE FACE (2026-09-10, the
-  // new-user flow).** This used to return the empty state INSTEAD of the pane, so
-  // a brand-new account — no channels yet, which is every account on its first
-  // day — opened Agents and was told to "pick one on the left" beside an empty
-  // list, with its own Personal identities (a HOME-workspace read that needs no
-  // channel at all) nowhere on screen and no way to make one. The sentence is
-  // true of section A and only of section A: `channel === null` means there is no
-  // CONTAINER to read shared identities from, and says nothing about scope C.
+  // No channel replaces the SHARED section only; Personal needs no channel.
   const hasChannel = channel !== null;
 
   if (hasChannel && containerList.error) {
@@ -174,46 +103,26 @@ export function HomeIdentityPanels({
     );
   }
 
-  // ⚠ NEITHER SECTION MAY STATE AN EMPTINESS IT HAS NOT MEASURED. The pane
-  // waits for the CONTAINER read; the private section waits separately for the
-  // HOME one, because only that half of it moved when the pill did.
-  // ⚠ ONLY WHILE THERE IS A CONTAINER READ TO WAIT FOR. With no channel the
-  // container read is never ENABLED (`use-agent-identities.ts`: `null` workspace
-  // → disabled, `resolved` false forever), so gating on it here would hold the
-  // skeleton up permanently — UNAVAILABLE read as PENDING, which is the exact
-  // shape of F-339 one scope over.
+  // With no channel the container read is disabled and never resolves, so the skeleton waits
+  // only while there is a container read to wait for.
   if (hasChannel && !containerList.resolved) {
-    // ⚠ THIS FACE'S OWN SHAPE — two flat sections over `IdentityGrid`'s
-    // auto-fill card grid — not the shared page ghost.
-    return <HomeIdentityPanelsSkeleton label="Loading identities" />;
+    return <HomeIdentityPanelsSkeleton />;
   }
 
   const scopeUnavailable = homeWorkspaceId === null;
-  // ⚠ A FAILED SCOPE-C READ IS A SETTLED ANSWER, NOT A PENDING ONE, AND THE
-  // DIFFERENCE IS THE WHOLE OF F-339. `resolved` is
-  // `data !== undefined`, so a 403/404/500 leaves it FALSE FOREVER — read as
-  // "still pending" that painted a blank body with no sentence AND held the
-  // pill in `pendingRow(true)` = `pointer-events-none`, so the operator could
-  // not switch back to "in this channel". The only escape was leaving the tab.
-  // M0's own argument is that a 403/404 on this face is an ORDINARY answer
-  // (`use-agent-identities.ts`): an ordinary answer must be SAID, and it must
-  // never take the control that undoes it (§5A: UNKNOWN is not EMPTY, and it is
-  // not a trap either).
+  // A failed read is a settled answer, not a pending one: `resolved` stays false forever on a
+  // 4xx/5xx, so failure must outrank pending (F-339).
   const scopeFailed = homeWorkspaceId !== null && homeList.error != null;
   const scopePending =
     homeWorkspaceId !== null && !homeList.resolved && !scopeFailed;
 
-  // ⚠ WHICH WORKSPACE A NEW PERSONAL AGENT WOULD LAND IN — `null` = nowhere,
-  // which is the "not onboarded yet" case and disables the button rather than
-  // writing into the container the section is not about.
+  // `null` = not onboarded: the button disables rather than writing into the container.
   const personalCreateTarget: EditorTarget | null =
     homeWorkspaceId !== null ? { where: "home", identity: null } : null;
 
   return (
     <div className="flex min-w-0 flex-1 flex-col gap-3 overflow-y-auto p-3">
       {channel === null ? (
-        // ⚠ IN THE SECTION'S PLACE, not the pane's. Same sentence as before, now
-        // scoped to the thing it is actually about.
         <EmptyState
           icon={Bot}
           title="No channel selected"
@@ -224,18 +133,8 @@ export function HomeIdentityPanels({
         identities={shared}
         markerFor={markerFor}
         onOpen={(identity) => setEditing({ where: "container", identity })}
-        // ⚠ CREATES DIRECTLY AT `visibility: 'workspace'` — there is no grant
-        // table for identities, so "shared into this channel" IS that value, and
-        // `ContainerIdentityEditor` now opens on it because
-        // `SECTIONS_CONTAINER` offers nothing else (`lib/visibility.ts`).
-        // 🔒 **GATED ON THE CALLER'S REAL ROLE (2026-09-17, F-343's consequence
-        // 1b).** `POST /api/agent-identities` is `minRole: "member"`, so a GUEST
-        // peer's click was a 403 the editor surfaced — a dead control (INVARIANTS
-        // §5) shown because the pane could not tell a member from a guest. It can
-        // now, and it asks the SAME ladder the server asks rather than restating
-        // the floor. ⚠ **THE SERVER FENCE IS UNCHANGED AND IS STILL THE FENCE.**
-        // ⚠ HIDDEN, NOT DISABLED — one fix, the same shape as the Knowledge face's
-        // (`knowledge-panels.tsx`), because it is the same finding.
+        // Creates at `visibility: 'workspace'`, which IS "shared into this channel". Hidden, not
+        // disabled, below the POST floor (member) so a guest never meets a dead control.
         action={
           canCreateShared ? (
             <CreateButton onClick={() => setEditing({ where: "container", identity: null })}>
@@ -251,13 +150,7 @@ export function HomeIdentityPanels({
         identities={personal}
         unavailable={scopeUnavailable ? SCOPE_UNAVAILABLE : null}
         pending={scopePending}
-        // ⚠ THE SECTION'S OWN FAILURE, NOT THE PANE'S. The container read gets
-        // `PageError` over the whole pane because without it there is no pane;
-        // the home read is ONE SECTION's body, and blanking the pane for it
-        // would take away the shared section too. Sentence + retry, in place.
-        // 🔒 F-339: a FAILED read is a SETTLED answer, not a pending one —
-        // `resolved` stays false forever on a 403/404/500, so without this the
-        // body sat blank with no sentence. Keep the three states distinct.
+        // The section's own failure, sentence + retry in place: the shared section still loaded.
         failure={
           scopeFailed
             ? {
@@ -269,28 +162,16 @@ export function HomeIdentityPanels({
               }
             : null
         }
-        // ⚠ EDITED WHERE IT LIVES. A Personal row is a HOME-workspace row, so
-        // its editor addresses the home workspace — the same id its PATCH and
-        // its cache entry take (F-331, now with the SHELF as a second axis).
+        // A personal row is edited in the home workspace, the id its PATCH and cache entry take.
         onOpen={(identity) => setEditing({ where: "home", identity })}
-        // ⚠ EVERY PERSONAL ROW CARRIES IT. It used to be scope-C only because
-        // scope B's rows were already in the container; there is no scope B any
-        // more, so the condition has no second branch to guard against.
-        // ⚠ AND NOT WITH NO CHANNEL TO LAUNCH INTO. The launch takes
-        // `channel.id`; offering the button with nothing selected would be an
-        // affordance whose only outcome is a crash. ⚠ THE KNOWLEDGE BOX GOES
-        // WITH IT even though attaching needs no channel — the two are ONE
-        // control slot (`identity-section.tsx › IdentityCard` carries exactly
-        // one), and a card that showed half of it would be a second layout
-        // nobody ruled on.
+        // No channel = no launch target, and the knowledge box shares the card's one action slot.
         cardActionFor={
           channel === null
             ? undefined
             : (identity) => (
                 <div className="flex w-full flex-col gap-1.5">
                   <AddKnowledgeWell
-                    // ⚠ §8's STALE-CACHE FALLBACK, SPELLED INLINE: `knowledge`
-                    // was added to an already-persisted payload.
+                    // Stale-cache fallback: `knowledge` joined an already-persisted payload (INVARIANTS §8).
                     refs={identity.knowledge ?? EMPTY_KNOWLEDGE}
                     identityName={identity.name}
                     onClick={() => setAttaching(identity)}
@@ -300,16 +181,12 @@ export function HomeIdentityPanels({
                       {cardLaunch.error.message}
                     </p>
                   )}
-                  {/* ⚠ BOTTOM-RIGHT (Samuel, 2026-09-22). The row is what puts
-                      it there; the slot itself is full-width and bottom-anchored
-                      in `IdentityCard`. */}
-                  {/* No launch op on this build (a plain browser) = no button (P9-09). */}
+                  {/* No launch op on this build (a plain browser) = no button. */}
                   {cardLaunch.canLaunch && (
                     <div className="flex justify-end">
                       <LaunchIntoChannelButton
                         busy={cardLaunch.busyId === identity.id}
-                        // ⚠ EVERY OTHER ROW IS INERT WHILE ONE LAUNCHES — the
-                        // double-submit guard is the pane's, so the cards say so.
+                        // The double-submit guard is the pane's, so every other row is inert.
                         disabled={cardLaunch.busyId !== null}
                         onClick={() => cardLaunch.launch(identity)}
                       />
@@ -328,9 +205,7 @@ export function HomeIdentityPanels({
         }
       />
 
-      {/* ⚠ MOUNTED ONLY WHILE OPEN, and the two mounts are DIFFERENT COMPONENTS
-          — see `identity-editor.tsx`: a container must not fetch teams, and that is
-          a rule you cannot state with a conditional hook. */}
+      {/* Mounted only while open; two components because the two mounts differ (`identity-editor.tsx`). */}
       {editing?.where === "container" && channel !== null && (
         <ContainerIdentityEditor
           workspaceId={channel.workspaceId}
@@ -346,10 +221,7 @@ export function HomeIdentityPanels({
         />
       )}
 
-      {/* ⚠ MOUNTED ONLY WHILE OPEN, and against the HOME workspace: a personal
-          row's knowledge lives where the row does, and the patch must address
-          the same shelf-keyed cache entry the section read
-          (`HOME_SHELF`, F-331 with the shelf as the second axis). */}
+      {/* Against the HOME workspace: the patch must hit the shelf-keyed entry the section read. */}
       {attaching && homeWorkspaceId && (
         <IdentityKnowledgeDialog
           identity={attaching}
@@ -361,30 +233,11 @@ export function HomeIdentityPanels({
   );
 }
 
-/** Scope B and C ask the same question of two workspaces. */
 function isMine(identity: AgentIdentity, currentUserId: string): boolean {
   return identity.createdBy === currentUserId;
 }
 
-/**
- * 🔒 PERSONAL READS ONE SHELF, NOT ONE WORKSPACE (Samuel's ruling 2026-08-27,
- * `20260901120000_agent_template_home_scoped.sql`) — the sibling of the
- * Knowledge face's `HOME_SHELF`, and the same trap: `?shelf=home` is a server
- * `WHERE`, there is no client-side filter to fall back on, and a forgotten
- * argument WIDENS silently. It is a module constant threaded through the read
- * and (via `useAgentIdentityWrites`) the cache key, so it cannot be spelled two
- * ways.
- */
-const HOME_SHELF = "home" as const;
-
-/**
- * What the editor is open ON.
- *
- * ⚠ `where` IS THE TARGET WORKSPACE, NOT THE PILL. Section A's rows are
- * container rows whatever the pill says, so the two cannot be one value — a
- * shared row opened while the pill reads "across all channels" is still edited
- * in the container it lives in.
- */
+/** What the editor is open on. `where` is the row's own workspace, never the section's. */
 interface EditorTarget {
   where: "container" | "home";
   /** `null` = create. */
@@ -394,3 +247,121 @@ interface EditorTarget {
 /** No home workspace yet — a different sentence from "none here". */
 const SCOPE_UNAVAILABLE = "Finish setting up your home space to keep identities there.";
 
+// ── The two sections: `identity-section.tsx`'s flat `IdentityPanel` + `IdentityGrid`, never
+// `SectionBox` (/home has no concave surface; swept by `identity-editor-surface.test.tsx`).
+
+/** The channel's shared identities — who else in this relationship can wear them. */
+function SharedIdentitySection({
+  section,
+  identities,
+  markerFor,
+  onOpen,
+  action,
+}: {
+  section: IdentitySectionDef;
+  identities: ReadonlyArray<AgentIdentity>;
+  markerFor: (identity: AgentIdentity) => string | null;
+  /** Header-right control (the create button). */
+  action?: ReactNode;
+  /** Opens the editor against the channel's container. Openable on a peer's row too: the write
+   *  floor is the server's (member+), and the marker says whose instructions these are. */
+  onOpen: (identity: AgentIdentity) => void;
+}) {
+  return (
+    <IdentityPanel id="home-agents-shared" label={section.label} action={action}>
+      <IdentityGrid
+        identities={identities}
+        emptyLine={section.emptyLine}
+        markerFor={markerFor}
+        onOpen={onOpen}
+      />
+    </IdentityPanel>
+  );
+}
+
+/**
+ * The caller's own private identities. Five body states and only the grid may state an
+ * emptiness: `unavailable` (no home workspace), `failure` (answered with an error — outranks
+ * `pending`, since a failed read never resolves, F-339), `pending`, the empty line, the grid.
+ */
+function PrivateIdentitySection({
+  section,
+  identities,
+  action,
+  unavailable,
+  failure,
+  pending,
+  onOpen,
+  cardActionFor,
+}: {
+  section: IdentitySectionDef;
+  identities: ReadonlyArray<AgentIdentity>;
+  /** The create button. */
+  action: ReactNode;
+  /** There is nowhere to look — a sentence, not an empty list. */
+  unavailable: string | null;
+  /** The server's own wording plus a retry; `null` when the read did not fail. */
+  failure: { message: string; onRetry: () => void } | null;
+  pending: boolean;
+  /** Opens the editor where the row lives (the home workspace). */
+  onOpen: (identity: AgentIdentity) => void;
+  /** The card's one action slot: the knowledge box and Launch travel together
+   *  (`identity-section.tsx › IdentityCard` carries exactly one). */
+  cardActionFor?: (identity: AgentIdentity) => ReactNode;
+}) {
+  return (
+    <IdentityPanel
+      id="home-agents-private"
+      label={section.label}
+      action={action}
+    >
+      {unavailable !== null ? (
+        <p className="px-1 pb-1 text-caption text-text-muted">{unavailable}</p>
+      ) : failure !== null ? (
+        // Not `PageError`: that is a whole-pane state, and the other section loaded fine.
+        <div className="flex flex-wrap items-center gap-2 px-1 pb-1">
+          <p className="text-caption text-text-muted">{failure.message}</p>
+          <OpenScaleButton onClick={failure.onRetry}>
+            Try again
+          </OpenScaleButton>
+        </div>
+      ) : pending ? (
+        <div className="h-10" />
+      ) : (
+        <IdentityGrid
+          identities={identities}
+          emptyLine={section.emptyLine}
+          onOpen={onOpen}
+          actionFor={cardActionFor}
+        />
+      )}
+    </IdentityPanel>
+  );
+}
+
+/**
+ * `by <member>` for a shared row this operator did not write, else `null`. A security signal
+ * (INVARIANTS §5A): an author the roster cannot name still reads "by another member", never mine.
+ * The roster is `channel.peers` (every member but the caller, already on the payload), so it costs
+ * no request.
+ */
+function useContainerAuthorMarker(
+  channel: Channel | null,
+  currentUserId: string
+): (identity: AgentIdentity) => string | null {
+  // Keyed on `channel`, the stable object the cache hands back, not on the peer list.
+  const names = useMemo(() => {
+    const map = new Map<string, string>();
+    // A nameless peer is left out, not entered blank: `authorMarker` already answers
+    // "by another member", where an empty entry would render "by ".
+    for (const peer of channel ? channelPeople(channel) : EMPTY_PEERS) {
+      if (peer.displayName) map.set(peer.userId, peer.displayName);
+    }
+    return map;
+  }, [channel]);
+  return useMemo(
+    () => (identity: AgentIdentity) =>
+      authorMarker(identity, currentUserId, names),
+    [currentUserId, names]
+  );
+}

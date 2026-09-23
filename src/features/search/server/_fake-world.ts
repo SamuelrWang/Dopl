@@ -1,13 +1,6 @@
 /**
- * The world the fence tests run in: two containers, two channels, and one
- * matching row in every searchable table on each side.
- *
- * Shared by `fence.test.ts` (nothing foreign comes back) and
- * `prefix-match.test.ts` (a half-typed word reaches a body, F-717), so a widening
- * that leaked fails in the same fixture rather than in a drifted copy.
- *
- * Every foreign-side row is an exact twin of its own-side row, so a failed fence
- * shows up as a VISIBLE row rather than a silent absence.
+ * The fence tests' world, shared by `fence.test.ts` and `prefix-match.test.ts` so a
+ * leaking widening fails in one fixture rather than a drifted copy.
  */
 
 import type { FakeTables } from "./_fake-db";
@@ -26,9 +19,8 @@ const CTX = {
 };
 
 /**
- * Two containers, two channels, and EVERY searchable table carries one row in
- * each. The query `zephyr` matches all of them, so any leak is a visible row
- * rather than a silent absence.
+ * Two containers and channels; every searchable table has one `zephyr` row per side,
+ * each foreign row an exact twin, so a leak is a visible row, not a silent absence.
  */
 function world(): FakeTables {
   const pair = <T extends Record<string, unknown>>(

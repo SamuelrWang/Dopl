@@ -7,30 +7,12 @@ import type {
 import { LINK_WORKSPACE_ID } from "./home-test-ids";
 
 /**
- * THE OVERVIEW FACE'S FIXTURES AND ITS THREE READS.
- *
- * ⚠ SPLIT OUT OF `home-test-harness.tsx` ON 2026-09-01, and for the reason that
- * file was itself split out of `index.test.tsx`: it was AT the 500-line cap
- * (§1 — `eslint.config.mjs › max-lines`, an error over `apps/*​/src/**`), so it
- * could not absorb a fourth face's fixtures. The harness re-exports everything
- * here, so `import { HOME_OVERVIEW } from "./home-test-harness"` keeps working
- * and no suite moved.
- *
- * 🔒 **THERE IS NO SCOPED FIXTURE ANY MORE, AND ITS ABSENCE IS AN ASSERTION.**
- * `HOME_OVERVIEW_SCOPED` existed to answer `?workspaceId=`, which is the param
- * that made the face render every section twice for an operator with one home
- * channel — the duplication Samuel reported. The param is gone; a fixture for it
- * would be a fixture for a request the client can no longer make.
- *
- * ⚠ A `.ts` FILE, NOT `.tsx`, DELIBERATELY. Nothing here renders, and the
- * /home no-concave sweep (`identity-editor-surface.test.tsx › no concave surfaces`)
- * enumerates every non-test `.tsx` in this directory — a JSX-free fixture
- * module has no surface to get wrong and does not belong in that list.
+ * The Overview face's fixtures and reads, re-exported by `home-test-harness.tsx`. No scoped
+ * fixture: the client no longer sends `?workspaceId=`. A `.ts` file: the /home no-concave sweep
+ * reads every non-test `.tsx` here.
  */
 
-/** A second container, so the by-channel rails have more than one row to sort.
- *  ⚠ It also gave the agent BOARD a second lane until 2026-09-20, when the
- *  Activity panel and the `agents` payload key were deleted from this face. */
+/** A second container, so the by-channel rails have more than one row to sort. */
 export const SECOND_WORKSPACE_ID = "ws-link-2";
 
 /**
@@ -88,10 +70,8 @@ export const HOME_SERIES: HomeOverviewSeries = {
  * The credit bar's read — the SAME endpoint the settings modal's billing pane
  * uses, so one cache entry serves both in the app.
  *
- * ⚠ **`credits.used` (320) IS DELIBERATELY NOT `HOME_SERIES`'s SUM (210).** The
- * bar's spent figure comes from the LEDGER now (ruling #10, 2026-09-06), and two
- * fixtures that happened to agree would let the payer's counter creep back onto
- * that card without a single test turning red.
+ * `credits.used` (320) is deliberately NOT `HOME_SERIES`'s sum (210): the bar prints the wallet
+ * counter, and fixtures that agreed could not tell it from the ledger sum.
  *
  * ⚠ EXPORTED so a case can degrade ONE field of it — a suite hand-rolling a
  * whole status body is a second fixture that stops matching the endpoint.

@@ -23,7 +23,6 @@ import {
   updateWorkspace,
   ensurePersonalContainerRow,
 } from "./repository";
-import { findPersonalContainerId } from "@/shared/tenancy/personal-container";
 import { assertWorkspacePermanent } from "./authz";
 import { scrubHiddenPresence } from "./dto";
 
@@ -32,10 +31,7 @@ export interface ResolvedMembership {
   membership: WorkspaceMembership;
 }
 
-/**
- * A reachable workspace + the membership facts the lookup already read to prove
- * reachability, so no caller re-asks `GET /api/workspaces/me` for them.
- */
+/** A reachable workspace + the membership facts the lookup already read, so no caller re-asks. */
 export interface MemberWorkspace {
   workspace: Workspace;
   role: Role;
@@ -43,16 +39,8 @@ export interface MemberWorkspace {
 }
 
 /**
- * Workspace-resolution failure from `resolveActiveWorkspace`. ⚠ FLAT
- * billing-style envelope (`{ error, message }`, mirroring
- * `entitlementDeniedBody`), NOT the nested `HttpError` shape, so the MCP client
- * and web `apiRequest` surface code + message verbatim.
- *
- * 🔒 **ONE CODE SINCE B10** — `WORKSPACE_INVALID`, "you named something that is
- * not a workspace id". `WORKSPACE_REQUIRED` and the `workspaces: []` choice list
- * it carried are DELETED: naming nothing is no longer a question, so there is no
- * refusal to render and nothing to pick from. A caller who names nothing gets
- * their own container.
+ * `resolveActiveWorkspace`'s one failure: a named id that is not a workspace UUID. Flat `{ error, message }`
+ * envelope like `entitlementDeniedBody`, not `HttpError`'s, so MCP and `apiRequest` surface it verbatim.
  */
 export class WorkspaceResolutionError extends Error {
   readonly status = 400 as const;
@@ -72,19 +60,14 @@ const WORKSPACE_ID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
- * Authoritative auth lookup behind `withWorkspaceAuth`: workspace + the
- * caller's active membership, or throws `HttpError`. ⚠ Never null — 404 answers
- * both "not a member" and "does not exist" so existence isn't an oracle.
+ * Workspace + the caller's active membership behind `withWorkspaceAuth`. One 404 answers both
+ * "not a member" and "does not exist", so existence isn't an oracle.
  */
 export async function resolveMembershipOrThrow(
   workspaceId: string,
   userId: string
 ): Promise<ResolvedMembership> {
-  // ⚠ PARALLEL, not sequential: both reads key only on `workspaceId` (plus
-  // `userId`), and series adds a DB round trip to every route behind
-  // `withWorkspaceAuth`. ⚠ 404 ordering is preserved exactly — a missing
-  // workspace answers before the membership is judged, so a non-member of a
-  // real workspace is indistinguishable from a member of a nonexistent one.
+  // Parallel: in series this adds a round trip to every authed route. The 404 answer is unchanged.
   const [workspace, membership] = await Promise.all([
     findWorkspaceById(workspaceId),
     findMembership(workspaceId, userId),
@@ -98,32 +81,9 @@ export async function resolveMembershipOrThrow(
 }
 
 /**
- * Resolve the active workspace for an authenticated request
- * (`withWorkspaceAuth`, `GET /api/workspaces/me`).
- *
- *   1. `X-Workspace-Id` header (or export `?workspaceId=`, threaded as
- *      `headerWorkspaceId`) — UUID only. Blank or non-UUID → 400
- *      `WORKSPACE_INVALID`, never coerced to "no header".
- *   2. No header → **the caller's PERSONAL CONTAINER**, minted on first ask.
- *
- * 🔒 **THE ANSWER IS A CONSTANT, NOT A LOOKUP (Samuel's ruling B10).** *"The
- * home channel is now the default … all workspaces are just normal
- * workspaces."* What went from this function is the whole apparatus that used
- * to derive one: the membership COUNT, the sole-membership auto-target, the
- * `WORKSPACE_REQUIRED` refusal at 0 and at 2+, and the `WorkspaceChoice[]` list
- * the refusal carried. None of them has a question left to answer — a caller
- * who names nothing means their own container, and a caller who means anything
- * else names it.
- *
- * ⚠ **THIS IS STILL FAIL-CLOSED, AND FOR A BETTER REASON THAN BEFORE.** The old
- * refusal was fail-closed because it refused; this is fail-closed because the
- * answer cannot be somebody ELSE's workspace. A container is minted for the
- * caller, owned by the caller, with exactly one member — so an unnamed request
- * can no longer land on a tenant the caller merely belongs to, which is the
- * cross-tenant hazard the count was standing in for.
- *
- * ⚠ The API-key workspace LOCK is applied by `withWorkspaceAuth` before this
- * runs, so a locked credential never reaches step 2.
+ * The request's workspace: the `X-Workspace-Id` header (UUID only; blank or non-UUID is 400, never
+ * coerced to "no header"), else the caller's personal container. Fail-closed: an unnamed request lands
+ * only on a container the caller owns alone. `withWorkspaceAuth` applies the API-key lock before this.
  */
 export async function resolveActiveWorkspace(
   userId: string,
@@ -140,47 +100,14 @@ export async function resolveActiveWorkspace(
   }
 
   const container = await ensurePersonalContainer(userId);
-  // ⚠ Fail-closed even on the container just ensured: the membership read is
-  // what every other caller of this function gets, and a revoked row must 404
-  // here exactly as it does on a named workspace.
+  // Membership is re-read even here: a revoked row must 404 as it does on a named workspace.
   return resolveMembershipOrThrow(container.id, userId);
 }
 
 /**
- * THE CALLER'S HOME — their one `kind='personal'` container, minted if absent.
- *
- * 🔒 **THE ONE ANSWER TO "WHICH WORKSPACE, WHEN NOTHING IS NAMED"** (ruling
- * B10), and the replacement for the provisioning call that derived one.
- * Every entry point that used to provision a default calls this: the auth
- * callback, `POST /api/boot`'s provisioning mode, `resolveActiveWorkspace` and
- * onboarding.
- *
- * ⚠ ONE ROUND TRIP, DELIBERATELY. The old shape read first and locked only on a
- * miss; the RPC's own `SELECT` under a per-owner advisory lock is the same
- * check, so the fast path bought a second query to avoid an uncontended lock.
- * Race-proofing lives in the DATABASE either way — `workspaces_personal_owner_uidx`
- * makes a second container unrepresentable, so a catch-23505 here would be
- * reporting a bug rather than resolving a race.
- *
- * 🔒 **NOTHING IS SEEDED HERE, AND THE MIGRATION SAID SO FIRST (Samuel,
- * 2026-09-10: "drop seed content").** `20260920120000_workspace_kind_personal.sql`
- * carries a `WHAT IS DELIBERATELY *NOT* SEEDED` paragraph naming
- * `seedNewWorkspace` by symbol — *"a personal container is a SHELF, not a
- * workspace … the one surface that must show only what its owner put there"* —
- * and the code did it anyway. **The header was right and the code was the bug,
- * which is the precedence rule in CLAUDE.md running the direction it usually
- * does not.** A fresh home space is EMPTY: zero bases, zero skills, zero
- * ontology objects, zero chats.
- *
- * ⚠ **`created` HAS NO CONSUMER LEFT AND THAT IS THE WHOLE CHANGE.** It was read
- * for exactly one thing — whether this call owed the seed — so the branch is
- * gone rather than emptied. The RPC still returns the flag; a future caller with
- * a real first-mint side effect can read it again.
- *
- * ⚠ **STANDARD WORKSPACE CREATION KEEPS ITS SEED** —
- * `createWorkspaceForUser` below, unchanged. The ruling is about the personal
- * shelf, not about the starter corpus, which is still what a new *workspace*
- * opens with (and `playground/server/service.ts` depends on it by name).
+ * The caller's one `kind='personal'` home, minted if absent: the answer when nothing is named. One RPC;
+ * `workspaces_personal_owner_uidx` makes a second container unrepresentable. Never seeded: a home space
+ * starts empty (only `createWorkspaceForUser` seeds).
  */
 export async function ensurePersonalContainer(userId: string): Promise<Workspace> {
   const { workspace } = await ensurePersonalContainerRow(userId);
@@ -188,59 +115,16 @@ export async function ensurePersonalContainer(userId: string): Promise<Workspace
 }
 
 /**
- * Is `workspaceId` this user's OWN home?
- *
- * ⚠ EXPORTED FOR THE TWO `resolveHomeScope` FENCES —
- * `knowledge/server/service-base-gates.ts` and
- * `agent-identities/server/service-writes.ts` — which asked the same question of
- * the derived default and must not each grow their own spelling of the new one.
- * It is stated here rather than in `shared/tenancy/personal-container.ts`
- * because it is a POLICY over that module's read, and this feature owns the
- * policy; that module answers WHERE a row lives and holds no opinion about who.
- *
- * ⚠ FALSE, never null: "not minted yet" and "not yours" are the same refusal to
- * a fence, and a fence that distinguishes them leaks whether a container exists.
- */
-export async function isOwnPersonalContainer(
-  userId: string,
-  workspaceId: string
-): Promise<boolean> {
-  return (await findPersonalContainerId(userId)) === workspaceId;
-}
-
-/**
- * The name `ensure_personal_container` mints when there is nothing to inherit —
- * a brand-new account with no workspace to be named after.
- *
- * ⚠ **THE LITERAL IS THE MIGRATION'S** (`20260922120000` §2's restatement of
- * `COALESCE(origin.name, 'Personal')`), so the two are pinned together by
- * `workspaces/b10-no-derived-default.test.ts` rather than by whoever reads
- * both files next. Drift is silent in BOTH directions: onboarding would either
- * refuse to name a fresh container or overwrite one a user already named.
+ * The name `ensure_personal_container` mints for a brand-new account. The literal is the migration's
+ * `COALESCE(origin.name, 'Personal')`, pinned by `b10-no-derived-default.test.ts`.
  */
 export const PERSONAL_CONTAINER_PLACEHOLDER_NAME = "Personal";
-/**
- * What the personal container is called once onboarding lands and the user
- * typed nothing. "Home" is the word the product already uses for this space
- * (the Home pane, home channels, `/home`); a name shaped like a workspace
- * ("<First>'s Workspace") was read by agents as one (Samuel, 2026-09-06).
- * Existing rows were backfilled to it the same day.
- */
+/** The home's name after onboarding if the user typed none; agents read a workspace-shaped name as one. */
 export const PERSONAL_CONTAINER_DEFAULT_NAME = "Home";
 
 /**
- * Onboarding helper: name the caller's home, + optional description.
- *
- * ⚠ Only fires while the name is still the placeholder — a user rename
- * (settings, MCP) wins, and so does the name the container inherited from the
- * workspace it was minted from. Idempotent.
- *
- * ⚠ **THE SLUG IS NOT TOUCHED, AND THE MIGRATION'S ARGUMENT IS WHY.**
- * `ensure_personal_container` mints the constant `personal` precisely so this
- * row is never routed to by slug (it has its own surface, `/home`), and
- * `findMemberWorkspaceBySlug` answers `null` on 2+ matches. Re-sluggifying it
- * to the user's chosen name would put a second row in that scan under a name a
- * real workspace is likely to hold — F-561, re-opened by a rename.
+ * Onboarding: name the caller's home while it still has the placeholder name (any rename wins). The slug
+ * stays `personal`: `findMemberWorkspaceBySlug` answers `null` on 2+ matches, so re-slugging collides (F-561).
  */
 export async function renamePersonalContainerIfPlaceholder(
   userId: string,
@@ -255,13 +139,8 @@ export async function renamePersonalContainerIfPlaceholder(
 }
 
 /**
- * The caller's workspaces, each row carrying their role and (once the column
- * exists) its `kind`.
- *
- * ⚠ UNFILTERED, deliberately: the desktop main process discovers home channels
- * by fanning over `GET /api/workspaces`, so dropping `kind='link'` here would
- * stop home-channel agents waking. Filtering is the CONSUMER's job — every
- * user-facing list runs the rows through `isStandardWorkspace`.
+ * The caller's workspaces with role and `kind`, unfiltered: desktop discovers home channels through
+ * `GET /api/workspaces`. User-facing lists filter through `isStandardWorkspace`.
  */
 export async function listMyWorkspacesWithRole(
   userId: string
@@ -296,9 +175,7 @@ export async function renameWorkspace(
   if (patch.description !== undefined) update.description = patch.description;
   if (patch.name && patch.name !== workspace.name) update.name = patch.name;
 
-  // Slug is cosmetic (publicId is the URL identity), so no uniqueness check.
-  // Reserved top-level route names are still gated so a workspace cannot
-  // visually claim `/login`, `/settings`, etc.
+  // Slug is cosmetic (publicId routes), so no uniqueness check; reserved top-level route names are refused.
   if (patch.slug && patch.slug !== workspace.slug) {
     if (RESERVED_WORKSPACE_SLUGS.has(patch.slug)) {
       throw new HttpError(
@@ -316,11 +193,7 @@ export async function renameWorkspace(
   return updateWorkspace(workspaceId, update);
 }
 
-/**
- * Set or clear a workspace's icon URL. Admin+. ⚠ The URL is produced
- * server-side by the upload route (Supabase Storage public URL) or null to
- * clear — never user-supplied, hence no URL validation beyond the role gate.
- */
+/** Set or clear a workspace's icon URL (admin+). The upload route produces the URL; no validation here. */
 export async function updateWorkspaceIcon(
   workspaceId: string,
   userId: string,
@@ -332,18 +205,8 @@ export async function updateWorkspaceIcon(
 }
 
 /**
- * Destroy a workspace. Owner-only.
- *
- * 🔒 ⚠ **AND IT REFUSES A `kind='personal'` CONTAINER OUTRIGHT (Samuel's ruling
- * R-35, 2026-09-17).** The home space is permanent for the life of the account,
- * so the one role that could delete it — its owner, who is also its only member
- * — is exactly the caller this guard exists to stop. `assertWorkspacePermanent`
- * is FREE here: `resolveMembershipOrThrow` already read the workspace row, so
- * the kind is in hand and no second query is paid.
- *
- * ⚠ The guard runs AFTER the role gate on purpose. A non-owner must get the
- * answer a non-owner gets for any workspace (403 `WORKSPACE_FORBIDDEN`), not a
- * refusal that tells them which KIND of row they are looking at.
+ * Destroy a workspace (owner-only). A `kind='personal'` home is permanent, and its owner is exactly who
+ * this refuses. The guard runs after the role gate so a non-owner learns nothing about the row's kind.
  */
 export async function deleteWorkspaceForUser(
   workspaceId: string,
@@ -356,13 +219,7 @@ export async function deleteWorkspaceForUser(
   await deleteWorkspace(workspaceId);
 }
 
-/**
- * The roster, with presence already scrubbed per caller (R-12(a), 2026-09-17).
- * ⚠ **THE SCRUB IS HERE BECAUSE THE CALLER'S ROLE IS** — the resolve above
- * already read the membership row, so the rule costs nothing and no route can
- * forget it. This function has ONE consumer (`GET /api/workspaces/[slug]/members`),
- * which is why scrubbing it scrubs the wire.
- */
+/** The roster, presence scrubbed per caller's role; its one consumer is the members route. */
 export async function listWorkspaceMembers(
   workspaceId: string,
   userId: string
@@ -394,11 +251,7 @@ export async function findWorkspaceForMember(
   return { workspace, role: membership.role, userId };
 }
 
-/**
- * Membership-aware publicId lookup: the workspace iff the caller is an active
- * member, plus the MEMBERSHIP FACTS the read already had. ⚠ The route resolver
- * surfaces 404 (not 403) so existence is not an oracle.
- */
+/** Membership-aware publicId lookup; the route resolver answers 404 (not 403) so existence is no oracle. */
 export async function findWorkspaceForMemberByPublicId(
   userId: string,
   publicId: string

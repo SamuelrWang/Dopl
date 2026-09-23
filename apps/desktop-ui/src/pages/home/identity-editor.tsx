@@ -14,59 +14,16 @@ import {
 } from "@/features/agent-identities/lib/visibility";
 
 /**
- * /home → Agents → THE AUTHORING HALF. The workspace page's editor, mounted
- * against whichever workspace the operator is writing INTO
- * (`docs/specs/home-agents-tab.plan.md` §4.5, M3).
- *
- * ⚠ THE EDITOR ITSELF IS REUSED, NOT FORKED. `agent-identities/components/
- * identity-editor.tsx` is the one statement of what an identity IS — six fields
- * and their two bodies — and a second modal on this face would be that list
- * written twice. What differs per surface is only what the mount HANDS it, which
- * is the whole reason this file exists.
- *
- * 🔑 TWO MOUNTS, NOT ONE COMPONENT WITH A FLAG. ⚠ **THE REASON USED TO BE A
- * HOOK — `HomeWorkspaceIdentityEditor` read the workspace's teams and
- * `ContainerIdentityEditor` must not — AND THAT REASON IS GONE (2026-09-08,
- * Samuel: *"we should remove the team option, if it's in the home space, because
- * the team thing is for workspaces"*).** NEITHER mount asks for teams now, so
- * what is left is four facts that differ per surface: the section array, the
- * default visibility, the SHELF a create lands on, and whether the mount named
- * the audience (G16). They are still two components because those four travel
- * together — one component with four flags is the same file with the reader's
- * job made harder — and `identity-authoring.test.tsx` pins the pair from the wire.
- *
- * 🔒 ⚠ **NEITHER OF THESE SURFACES HAS TEAMS, AND THE SECOND HALF WAS THE BUG.**
- * A `kind='link'` container holds members and no team rows (INVARIANTS §4A), so
- * `team` was always dead there. The PERSONAL mount looked different and was not:
- * `shelf="home"` routes the row into the caller's `kind='personal'` container,
- * where `server/service-write-gates.ts` has refused `team` since the container
- * migration — so the third pill was a control whose only outcome was a 403. Both
- * mounts now declare their `containerKind` and the editor drops the pill
- * (`agent-identities/lib/visibility.ts › visibilityOptions`).
- * 🔒 ⚠ `SECTIONS_CONTAINER` IS **ONE** OPTION SINCE 2026-08-27, NOT TWO. The
- * /home pane lost its per-channel private section, and a container is not
- * navigable, so a `private` CONTAINER identity would be reachable from nowhere —
- * a write-only row. The array is the control, so trimming the array is what
- * closes that door; this mount also passes `defaultVisibility="workspace"`,
- * because `emptyDraft()` starts at `private` and a draft opening on a value the
- * control cannot show is a form with no visible selection.
- * ⚠ **A PERSONAL-SHELF IDENTITY SAVED AS PUBLIC LANDS OUTSIDE THE PERSONAL
- * SECTION**, which lists `private` + mine. ⚠ **THIS BULLET ALSO SAID "Team" AND
- * NO LONGER CAN** (2026-09-08) — that value is not offered here and the server
- * refuses it on this shelf. **The `workspace` half is a REAL open question and
- * is deliberately left alone rather than quietly closed**: inside a
- * `kind='personal'` container that value reaches an audience of one (the
- * operator), and no surface lists such a row — the same write-only shape that
- * trimmed `SECTIONS_CONTAINER` on 2026-08-27. Samuel ruled on the TEAM option;
- * dropping a second pill he did not name is his call, not this file's.
- *
- * ⚠ MOUNTED ONLY WHILE OPEN, so `session` is the constant `1`. That prop exists
- * because the workspace page keeps ONE editor mounted and bumps it to reload the
- * draft; here the caller renders this component when the operator opens an
- * editor and drops it when they close one, so the draft is loaded by the MOUNT.
- * The trade is the exit animation, which a mounted-per-open editor cannot play —
- * cheaper than a second copy of the draft-reset rule.
+ * /home → Identities' authoring half: the workspace page's `IdentityEditor`, reused, mounted
+ * against the workspace the operator writes INTO. Two mounts because four facts travel together
+ * per surface: the section array, the default visibility, the shelf, and whether the mount names
+ * the audience. Neither surface offers `team` (the editor drops it by `containerKind`).
+ * Mounted only while open, so `session` is the constant `1` and the mount loads the draft.
  */
+
+/** The personal shelf. `?shelf=home` is a server WHERE: a forgotten argument widens silently, and
+ *  the write's shelf must equal the read's or the optimistic patch lands on an unread key (F-331). */
+export const HOME_SHELF: IdentityShelf = "home";
 
 export interface HomeIdentityEditorProps {
   /** `null` = create. Anything else edits that row IN ITS OWN WORKSPACE. */
@@ -74,17 +31,8 @@ export interface HomeIdentityEditorProps {
   onClose: () => void;
 }
 
-/**
- * Writing into THIS CHANNEL's link container — the SHARED section.
- *
- * ⚠ NO `useTeams` CALL IN THIS COMPONENT — and since 2026-09-08 none in its
- * sibling either. See the module docblock.
- *
- * ⚠ NO `shelf` EITHER. A shelf is a TENANCY and this container is not the
- * caller's personal one, so `?shelf=` here would be a question with one possible
- * answer: the container's list and its cache entry are the UNFILTERED ones, and
- * the writes below must address that same entry.
- */
+/** Writing into this channel's link container (the shared section). No `shelf`: the container's
+ *  list and cache entry are the unfiltered ones. */
 export function ContainerIdentityEditor({
   workspaceId,
   identity,
@@ -97,33 +45,17 @@ export function ContainerIdentityEditor({
       sections={SECTIONS_CONTAINER}
       containerKind="link"
       defaultVisibility="workspace"
-      // 🔒 G16 — THIS MOUNT NAMES THE AUDIENCE, SO IT MAY ACKNOWLEDGE IT (A11).
-      // `SECTIONS_CONTAINER`'s single option is labelled "Shared in this
-      // channel", and it is the control the operator chose from — that label IS
-      // the audience statement, which is why this needs no dialog of its own
-      // (INVARIANTS §5, minimal UI copy). Without the flag the server 400s
-      // `CONTAINER_PUBLISH_UNACKNOWLEDGED` and "New shared agent" cannot save.
-      // ⚠ NOT SET ON THE HOME-WORKSPACE MOUNT BELOW: its "Public" option is
-      // about a standard workspace, which the server's predicate excludes — a
-      // flag there would be a claim about a room that mount never shows.
+      // The one option is labelled "Shared in this channel", so this mount names the audience;
+      // without it the server 400s `CONTAINER_PUBLISH_UNACKNOWLEDGED`. `defaultVisibility` is
+      // `workspace` because `emptyDraft()` starts `private`, which the one option cannot show.
       namesSharedAudience
       onClose={onClose}
     />
   );
 }
 
-/**
- * Writing onto the caller's OWN PERSONAL SHELF — scope C.
- *
- * 🔒 ⚠ **NO TEAMS READ, AND NO TEAM SCOPE (2026-09-08, Samuel's ruling — quoted
- * in the module docblock).** The old note here said *"the teams read is what
- * makes the third option honest"*; the third option is gone, so the read that
- * fed it is dead weight and a control that could only 403 is not honest at any
- * price. ⚠ **THE SHELF IS WHY, NOT THE WORKSPACE'S OWN KIND**: `shelf="home"`
- * sends `homeScoped: true`, which routes the row into the caller's
- * `kind='personal'` container — so `containerKind` names where the row LANDS,
- * which is the only container whose rules apply to it.
- */
+/** Writing onto the caller's personal shelf. `containerKind` is where the row LANDS: the home
+ *  shelf routes it into the caller's `kind='personal'` container. */
 export function HomeWorkspaceIdentityEditor({
   workspaceId,
   identity,
@@ -135,35 +67,16 @@ export function HomeWorkspaceIdentityEditor({
       identity={identity}
       sections={SECTIONS}
       containerKind="personal"
-      // 🔒 THE SHELF THE PERSONAL SECTION READS. It does two things and both
-      // are silent when wrong: it sends `homeScoped: true`, which ROUTES the row
-      // into the caller's personal container (the shelf this pane lists), and it
-      // keys the cache entry the optimistic patch addresses (F-331, with the
-      // shelf as a second axis).
-      shelf="home"
+      // Sends `homeScoped: true` (routes the row) and keys the patched cache entry (F-331).
+      shelf={HOME_SHELF}
       onClose={onClose}
     />
   );
 }
 
 /**
- * The half both mounts share: the writes, the attachable knowledge bases, and
- * the one place a failed write gets a sentence.
- *
- * ⚠ THE BASE LIST IS THE **PLAIN** WORKSPACE KEY, NOT THE CHANNEL-SCOPED ONE.
- * `GET /api/knowledge/bases?channelId=` folds in `channelGrants` and lives in its
- * own cache entry on purpose (`knowledge-panels.tsx`); what the ATTACH picker
- * needs is just "which bases can this caller read in this workspace", which is
- * the plain read `useKnowledgeBaseList(workspaceId)` — the same entry the
- * workspace Agents page and `HomeKnowledgeBaseView`'s controller mount, so this
- * modal usually opens on a warm cache and never pulls the grant-bearing entry
- * out from under the Knowledge pane.
- *
- * ⚠ THE MODAL STAYS OPEN UNTIL THE WRITE SETTLES and closes only on success —
- * this tree's dialog idiom (INVARIANTS §5A). The writes are optimistic, so a
- * modal that closed on the click would leave a failed save with nowhere to
- * report: the row rolls back and the operator's edit is gone with no sentence
- * saying why.
+ * The half both mounts share. The base list is the PLAIN workspace key, never the channel-scoped
+ * (grant-bearing) entry. The modal closes only on success: the writes are optimistic.
  */
 function IdentityEditorMount({
   workspaceId,
@@ -177,17 +90,13 @@ function IdentityEditorMount({
 }: HomeIdentityEditorProps & {
   workspaceId: string;
   sections: ReadonlyArray<IdentitySectionDef>;
-  /** 🔒 WHERE THE ROW LANDS, so the editor can drop a scope that container
-   *  cannot hold — never the room the call happens to stand in. */
+  /** Where the row lands, so the editor can drop a scope that container cannot hold. */
   containerKind: WorkspaceKind;
   defaultVisibility?: IdentityVisibility;
-  /** 🔒 G16 — this surface's own visibility control states who will see a
-   *  shared row, so a save at that visibility may send `acknowledgeShared`.
-   *  ⚠ A PROPERTY OF THE MOUNT, never of the draft: only the caller knows
-   *  whether the operator was shown the room. */
+  /** This surface's control states who will see a shared row, so a save at that visibility may
+   *  send `acknowledgeShared`. A property of the mount, never of the draft. */
   namesSharedAudience?: boolean;
-  /** ⚠ Must match the `shelf` the surface's list read was mounted with, or
-   *  every optimistic patch below lands on a key nobody is subscribed to. */
+  /** Must match the `shelf` the list read was mounted with. */
   shelf?: IdentityShelf;
 }) {
   const attachable = useAttachableBases(workspaceId);
@@ -196,21 +105,14 @@ function IdentityEditorMount({
     shelf,
     noun: "identity",
     onDone: onClose,
-    // 🔒 G16 — `acknowledgeShared` is sent ONLY when this mount named the
-    // audience AND the row is landing at the shared visibility. ⚠ `undefined`,
-    // never `false`: the server examines only an explicit `true`, and a `false`
-    // on every private save would suggest to a reader that the other value is
-    // examined too — the same rule `homeScoped` states beside it.
-    // ⚠ `homeScoped` IS ONLY EVER SENT for the home shelf: an unconditional
-    // `homeScoped: shelf === "home"` would put an explicit `false` on every
-    // container create, widening the contract the fence allows.
+    // `acknowledgeShared` / `homeScoped` are only ever sent as an explicit `true`, never `false`.
     extras: (draft) => {
       const acknowledgeShared =
         namesSharedAudience && draft.visibility === "workspace"
           ? { acknowledgeShared: true }
           : {};
       return {
-        create: { ...(shelf === "home" ? { homeScoped: true } : {}), ...acknowledgeShared },
+        create: { ...(shelf === HOME_SHELF ? { homeScoped: true } : {}), ...acknowledgeShared },
         patch: acknowledgeShared,
       };
     },

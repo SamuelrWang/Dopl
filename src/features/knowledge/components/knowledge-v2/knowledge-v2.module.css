@@ -1,8 +1,7 @@
-/* Knowledge V2 styles. Isolated from app-shell.module.css + global token
-   system on purpose. Promote to global tokens only when v2 replaces v1. */
+/* Knowledge surface styles: the opened base (rail + detail) and the home card grid. */
 
 .shell {
-  /* --kv-* alias global design tokens (docs/DESIGN-SYSTEM.md). */
+  /* --kv-* alias the global design tokens (docs/DESIGN-SYSTEM.md). */
   --kv-panel: var(--panel-surface);
   --kv-border: var(--border-default);
   --kv-border-strong: var(--border-strong);
@@ -13,34 +12,12 @@
   --kv-row-hover: var(--surface-raised-1);
   --kv-row-active: var(--surface-raised-3);
 
-  /* Surface geometry (margin/border/shadow/radius) from global .page-float,
-     composed alongside this class in knowledge-v2.tsx — EXCEPT on an embedded
-     mount, which paints no surface of its own (see that file's `embedded`
-     prop). Direction is COLUMN in both modes now: the opened base is ONE panel
-     whose header spans it and whose rail + detail are the row below. */
+  /* Surface geometry comes from `.page-float` (composed in knowledge-v2.tsx), except on an embedded mount. */
   display: flex;
   flex-direction: column;
 
-  /* 🔒 THE FILL, AND IT IS STATED HERE BECAUSE IT CANNOT COME FROM THE HOST
-     (Samuel's live review, 2026-08-28: the view sat in the LEFT HALF of the
-     record pane with page-gray beside it, and the header band stopped where the
-     content did).
-
-     ⚠ IT WAS `.page-float`'S ALL ALONG. That kit class carries `flex: 1;
-     min-width: 0` as well as the fill and the radius — so while this shell was
-     always composed with it, the sizing arrived for free and nothing in this
-     module said so. The `embedded` mount drops the float, and it dropped the
-     sizing with it: the shell became a content-sized flex item of /home's
-     `Crossfade` row (`pages/home/index.tsx`, `flex min-w-0 flex-1`), which is
-     exactly half a pane of white and half a pane of nothing.
-
-     ⚠ `min-width: 0` IS NOT OPTIONAL ALONGSIDE `flex: 1`. A flex item's default
-     `min-width: auto` floors it at its content, so a long file name in the rail
-     or a wide document would push the panel past the pane instead of scrolling
-     inside it. `min-height: 0` is the same rule on the column axis — without it
-     the header + body stack cannot shrink and the two inner scrollers never
-     engage. Declaring all three here means the float and the embedded mount are
-     the same box, and the ONE difference between the hosts stays the surface. */
+  /* Sizing is stated here, not left to `.page-float`, so the embedded mount fills its row too;
+     the zero minimums let the inner scrollers engage instead of pushing the panel past the pane. */
   flex: 1;
   min-width: 0;
   min-height: 0;
@@ -55,27 +32,8 @@
 }
 
 /* ═══════════════════ OPENED BASE — one panel, two columns ═══════════════════
-   ⚠ NOTHING HERE PAINTS A SURFACE (Samuel's ruling, 2026-08-28: "kill the
-   double panel"). The rail and the detail column used to carry
-   `background: var(--kv-panel)` each, INSIDE a `.page-float` that already
-   painted it — and on /home inside the record pane on top of that, which is
-   what read as a panel on a panel. The single panel is the host's: the
-   workspace page's own `.page-float`, or /home's record pane
-   (`pages/home/index.tsx`, `border-2 border-home-panel-line bg-home-card`).
-
-   ⚠ THE TWO DIVIDERS ARE TAILWIND UTILITIES IN THE TSX, NOT RULES HERE — the
-   header's `border-b` and the detail column's `border-l`, both
-   `border-border-default` — because that is the class
-   the account palette skin selects on (`src/app/globals.css` › THE ACCOUNT
-   PALETTE SKIN). A `--kv-border` rule in
-   this module is invisible to that scope, so the hairlines stayed neutral gray
-   inside a pane whose every other line is the account palette's: the "stray
-   hairlines" in the screenshot. ⚠ **AND THE SIDES ARE CHOSEN, NOT ARBITRARY**:
-   that block widens exactly `.border-l` and `.border-b` to 2px, so the rail's
-   divider is a `border-l` on the column to its RIGHT. Drawn as a `border-r` on
-   the rail it would take the colour and miss the weight. One mechanism, both
-   hosts — neutral hairlines on the workspace page, account palette at the
-   channel surface's weight on /home, no per-page fork. */
+   Nothing here paints a surface: the host owns the one panel. The dividers are Tailwind `border-b` /
+   `border-l` in the TSX because the account palette skin selects on (and widens) exactly those. */
 
 .baseHead {
   display: flex;
@@ -88,36 +46,19 @@
 .headSpacer {
   flex: 1;
 }
-/* Search well: shared <SearchField> (src/shared/ui/search-field.tsx). */
-/* Filter tabs: shared <SegmentedControl> (src/shared/ui/segmented-control.tsx).
-   Home mode only. */
+/* Search well and filter tabs: shared <SearchField> / <SegmentedControl>. */
 
 .baseBody {
   display: flex;
   flex: 1;
-  /* Both axes, for the reason `.shell` states: the rail is fixed-width and the
-     detail column takes the rest, so the ROW must be allowed to shrink or the
-     document's own measure decides the panel's width. */
+  /* Both axes, as in `.shell`, or the document's measure decides the panel's width. */
   min-height: 0;
   min-width: 0;
 }
 
 /* ───────────────────────── Folder rail (left) ─────────────────────────
-   ⚠ WIDTH, NOT TRANSFORM, and the same argument `.channel-info-slide` carries:
-   the rail is a FLEX SIBLING of the detail column, so a transform would slide
-   it OVER the content instead of handing the space back.
-
-   ⚠ IT COLLAPSES TO A STRIP, NOT TO NOTHING (mechanic chosen 2026-08-28). The
-   panel has ONE header and it belongs to the base (breadcrumb + controls); a
-   fully hidden rail would have to put its re-open control up there, which is a
-   second toggle for the same column in a place that names the base rather than
-   the tree. The 34px strip keeps the toggle where the rail is.
-
-   ⚠ THE CONTENT DOES NOT SQUASH MID-SLIDE: `.railInner` holds its own fixed
-   width and is clipped by the rail's `overflow: hidden`, so rows reflow zero
-   times during the 150ms. The toggle is OUTSIDE that block — absolutely
-   positioned in the strip — which is why it survives the fade the inner block
-   takes. */
+   Width, not transform: the rail is a flex sibling, so it must hand the space back. It collapses to a
+   34px strip that keeps the toggle; `.railInner` holds a fixed width so rows don't reflow mid-slide. */
 
 .rail {
   --kv-rail-w: 232px;
@@ -146,9 +87,7 @@
   min-height: 0;
   transition: opacity 0.15s ease;
 }
-/* ⚠ `visibility`, not `display`: a collapsed rail's rows must leave the tab
-   order and the a11y tree (a Tab-reachable control inside a 34px strip is a
-   trap), and `display:none` would also drop the fade. */
+/* `visibility`, not `display`: hidden rows must leave the tab order, and the fade must survive. */
 .railCollapsed .railInner {
   opacity: 0;
   visibility: hidden;
@@ -277,18 +216,8 @@
   opacity: 0.4;
   cursor: default;
 }
-/* ⚠ LAYOUT ONLY. The two buttons inside are `OpenScaleButton` (Samuel's ruling,
-   2026-08-28: the tree's create actions use the global button component), so
-   `.addBtn` — a naked hover-tint recipe declared here — is DELETED. Do not
-   re-add one: the pill is `src/shared/ui/open-scale-button.module.css`, and a
-   local rule beside it is the drift that move removed. */
-/* ⚠ THE ROW WRAPS SO THE PILLS DO NOT (2026-08-28). Two labelled 26px pills
-   against a 232px rail is a near-exact fit, and "near-exact" is a promise about
-   font metrics nobody can keep — a longer label, a different platform font, and
-   the row is over. `flex-wrap` stacks them cleanly instead; the pills
-   themselves are `nowrap` + `shrink-0` in the shared recipe. Left pad is the
-   tree's own indent, not the deeper row indent it used to carry, which is where
-   the missing ~12px came from. */
+/* Layout only: the pills are `OpenScaleButton`; do not re-add a local button rule. */
+/* The row wraps so the pills never do: two labelled pills barely fit the 232px rail. */
 .addRow {
   display: flex;
   flex-wrap: wrap;
@@ -297,8 +226,7 @@
   padding: 6px 10px 4px 12px;
 }
 
-/* ───────────────────────── Detail column (right) ─────────────────────────
-   No fill: see the "one panel, two columns" note above. */
+/* ───────────────────────── Detail column (right) ───────────────────────── */
 
 .detailPane {
   flex: 1;
@@ -307,9 +235,7 @@
   flex-direction: column;
 }
 
-/* The `Crossfade` surface itself (`src/shared/ui/crossfade.tsx`) — layout only;
-   the 150ms opacity swap and its reduced-motion opt-out are the kit's
-   `.crossfade`. Both faces below fill it and own their own scroll. */
+/* The `Crossfade` surface, layout only (the kit's `.crossfade` owns the swap); each face owns its scroll. */
 .detailFade {
   display: flex;
   flex-direction: column;
@@ -366,16 +292,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
-/* ⚠ `.divider` STOOD HERE AND IS DELETED (Samuel, 2026-08-28: "stray
-   hairlines"). It was a 1px × 22px `--kv-border-strong` bar fencing the delete
-   control off from settings inside the header row — the only vertical rule in
-   the whole surface, and one the /home scope could not reach (it is a
-   background, not a border). The control cluster is spaced, not fenced. */
-
-/* Entry formatting toolbar. Sits above the scroll body so controls stay
-   reachable while a long document scrolls. ⚠ It lives INSIDE the fading face
-   now (`detail/file-view.tsx`), not in the panel header: it belongs to the
-   document, so it must arrive and leave with it. */
+/* Entry toolbar: above the scroll body, inside the fading face, so it arrives and leaves with the document. */
 .detailToolbarBand {
   display: flex;
   align-items: center;
@@ -384,7 +301,7 @@
   border-bottom: 1px solid var(--kv-border);
 }
 
-/* The DOCUMENT face's scroll body — generous measure, unchanged. */
+/* The document face's scroll body. */
 .docBody {
   flex: 1;
   min-height: 0;
@@ -395,10 +312,7 @@
   width: 0;
 }
 
-/* The INFO face's scroll body: a stack of flat `SectionPanel`s, at the same
-   gap and padding /home's own panel stack uses (`knowledge-panels.tsx ›
-   HomeKnowledgePanels`: `gap-3 … p-3`), because on /home these two stacks are
-   the same rectangle one level apart. */
+/* The info face's scroll body: same gap and padding as /home's panel stack (`HomeKnowledgePanels`). */
 .infoBody {
   display: flex;
   flex-direction: column;
@@ -412,26 +326,12 @@
   width: 0;
 }
 
-/* ⚠ `.metaCard` / `.metaCardHead` / `.metaCardBody` STOOD HERE AND ARE DELETED
-   (2026-08-28). They were a bordered 14px card with its own
-   `--card-surface-subtle` header STRIP — a second framed surface inside the
-   pane, i.e. the third panel in a two-panel screenshot. The Details section is
-   `shared/ui/section-panel.tsx › SectionPanel` now, like every other section on
-   this surface and like both /home faces; the GROUND is the component's own on
-   every host since R-38/R-39 (2026-09-17), so no caller and no page rule states
-   it. */
-
-/* Layout + type for the editable field rows. ⚠ THE FACE IS NOT HERE: it is the
-   kit's `shared/ui/wells.ts › RAISED_INPUT`, composed in `detail/meta-card.tsx`.
-   These rules used to sit beside `.concave-field` — a pressed-in well — which
-   is the language Samuel's ruling replaced with raised-on-flat. */
+/* Layout + type for the editable field rows; the face is `shared/ui/wells.ts › RAISED_INPUT`. */
 .fieldGroup {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  /* A flex item's `min-width: auto` floors it at its CONTENT, and a textarea's
-     content floor is its `cols` default (~20 characters plus padding) — which
-     is how a `w-full` field ends up wider than the card it is in. */
+  /* `min-width: auto` would floor this at a textarea's intrinsic `cols` width. */
   min-width: 0;
 }
 .fieldLabelRow {
@@ -452,28 +352,8 @@
   font-size: var(--text-micro);
   color: var(--kv-text-3);
 }
-/* ⚠ `.fieldInput` / `.fieldTextarea` STOOD HERE AND ARE DELETED (2026-08-28).
-   Every declaration they carried — radius, type, ink, placeholder ink — is in
-   `RAISED_INPUT`, and the two that are not (height and padding) belong to the
-   caller by that recipe's own rule. What is left is the textarea's resize +
-   measure, below, which is layout. */
-/* The description textarea's measure and containment.
- *
- * 🔒 ⚠ `resize: none`, AND IT IS THE SAME RULING AS THE DELETED GRIP (Samuel's
- * live review, 2026-08-28: the field overflowed its card with the resize handle
- * sitting on the border). A user-resizable box on a flat section has the same
- * problem `SectionBox`'s drag grip had when the frame went away — it is a
- * handle gripping air — except this one could also be dragged WIDER than the
- * section that contains it, which is what the screenshot shows. The 2026-08-27
- * flat ruling took the grip off the section; this takes it off the last control
- * that still had one.
- *
- * ⚠ `max-width: 100%` IS NOT REDUNDANT WITH `w-full`. A textarea carries an
- * intrinsic `cols` width, and `width: 100%` resolves against the parent while
- * the intrinsic minimum still floors the layout — so the pair (this plus
- * `.fieldGroup`'s `min-width: 0`) is what actually contains it. Belt and
- * braces, deliberately: this field is the one control on the surface that
- * overflowed in a real screenshot. */
+/* The description textarea: no resize grip (it could drag wider than its section); `max-width: 100%`
+   plus `.fieldGroup`'s `min-width: 0` contain its intrinsic `cols` width. */
 .fieldBlock {
   line-height: 1.55;
   resize: none;
@@ -535,8 +415,7 @@
   color: var(--link);
 }
 
-/* Shrink shared DocEditor prose to v2 type scale (defaults 16px). Scoped to
-   this wrapper so v1 KB detail keeps its larger size. */
+/* Shrink the shared DocEditor prose (16px default) to this scale; scoped so other hosts keep theirs. */
 .editorScope :global(.ProseMirror) {
   font-size: var(--text-lead);
   line-height: 1.625;
@@ -567,25 +446,14 @@
   font-size: var(--text-body);
 }
 
-/* ⚠ `.detailEmpty` STOOD HERE AND IS DELETED (2026-08-28) — with the branch it
-   dressed. It was the detail pane's "Select a knowledge base or file to see its
-   overview" state, reachable only through a `selection === null` that this
-   branch cannot hold: `knowledge-v2.tsx` renders the HOME GRID for a null
-   selection and the detail panel only under a narrowed non-null one. A face for
-   an impossible state is not a safety net, it is a second answer to "what does
-   an opened base look like when nothing is picked" — and the ruling's answer is
-   the base's own info page. */
-
 /* ═════════════════════ KNOWLEDGE HOME (the card grid) ═════════════════════
-   `/knowledge` mode: one page-wide column instead of two panes. `.shell` still
-   applies — it carries the --kv-* aliases these rules read. */
+   One page-wide column; `.shell` still supplies the --kv-* aliases. */
 
 .shellHome {
   flex-direction: column;
   min-height: 0;
 }
-/* ⚠ WHOLE COLUMN SCROLLS, not an inner region. Inner-only scroller leaves the
-   wheel dead over the hero and squeezes the grid into the leftover sliver. */
+/* The whole column scrolls: an inner-only scroller leaves the wheel dead over the hero. */
 .home {
   display: flex;
   flex-direction: column;
@@ -602,12 +470,7 @@
   gap: 12px;
   padding: 18px 22px 12px;
 }
-/* THE ROUNDED CONTAINER: border and radius live here, `overflow:hidden` clips
-   the band, so no seam/gap/second border.
-   ⚠ IT HELD TWO BANDS UNTIL 2026-08-30 — the image, and the fake hero chat
-   panel under it (ledger ASK-5, deleted). The column layout is kept as-is
-   rather than collapsed into `.homeHeroBand`: the ruling was "remove the fake
-   chat", not "redesign the landing". */
+/* Border and radius live here; `overflow: hidden` clips the band, so no seam or second border. */
 .homeHero {
   position: relative;
   display: flex;
@@ -636,12 +499,6 @@
   user-select: none;
   -webkit-user-drag: none;
 }
-/* ⚠ `.heroChatReveal` / `.heroChatRevealInner` / `.heroChatLog` (+ its
-   scrollbar rules and the reduced-motion block) STOOD HERE AND ARE DELETED
-   (2026-08-30, ledger ASK-5). They dressed `home/hero-chat.tsx`, which is gone;
-   nothing else has ever used them. The grid-rows 0fr→1fr auto-height idiom they
-   carried is not lost — the kit's `.collapse-grid` is its home. */
-
 /* Hairline sits ABOVE the filters (hero↔pills), not between pills and grid. */
 .homeFilters {
   padding: 14px 22px;
@@ -683,23 +540,12 @@
     0 6px 18px rgba(0, 0, 0, 0.05);
   transition: border-color 0.14s ease, box-shadow 0.14s ease, transform 0.14s ease;
 
-  /* Card scope hue, read by both places that must agree: `.cardScope` pill and
-     `.cardAccent` sliver. One variable so they cannot drift; scope modifiers
-     below rebind it. Neutral default = scope with no modifier. */
+  /* One scope hue for the `.cardScope` pill and `.cardAccent` sliver; scope modifiers rebind it. */
   --kv-scope: var(--kv-text-3);
-  /* The private hue — the one the "Shared" pill wears (a shared base is a
-     private one, `kbCardLabel`) — and the pill's tint amount. Named here so
-     `.cardInset` reads the Shared pill's gray BY REFERENCE (Samuel,
-     2026-09-19: "use the same gray as that of the shared pill"). */
+  /* The "Shared" pill's hue and tint; `.cardInset` reads the hue by reference. */
   --kv-hue-private: var(--text-secondary);
   --kv-pill-tint: 12%;
-  /* ⚠ THE WELL IS THE PILL'S GRAY, LIGHTER — A SECOND TINT, NOT A SECOND HUE
-     (Samuel, 2026-09-21: "that gray ... can you make that gray color lighter?
-     I think it's too dark right now"). The hue stays shared, so the well and
-     the "Shared" pill still cannot drift apart; only the amount differs, which
-     is the whole of what he asked to change. ⚠ Do NOT lower `--kv-pill-tint`
-     to achieve this — that is the PILL's tint, and the pill is not what he
-     called too dark. */
+  /* Separate from `--kv-pill-tint` on purpose: only the well is lightened, the pill keeps its tint. */
   --kv-well-tint: 6%;
 }
 /* Scope hues from the global status/link palette — no local colours. */
@@ -712,12 +558,7 @@
 .scopePublic {
   --kv-scope: var(--success);
 }
-/* ⚠ ONE LIFT ACROSS BOTH CARD FACES (Samuel, 2026-09-21) — the values are
-   `src/shared/ui/card-lift.ts`'s, and `card-lift.test.ts` scans BOTH this rule
-   and the Agents face's Tailwind string and fails when they drift. A CSS module
-   cannot import the constant, so the pin is a source read, not an import.
-   ⚠ Change them THERE first, then here, in one commit. */
-/* The kit's `.card-lift` rise and shadow token — one hover lift for every card face. */
+/* The kit's `.card-lift` rise and `--shadow-card-lift` token: one hover lift for every card face. */
 .card:hover {
   border-color: var(--kv-border-strong);
   transform: translateY(-3px);
@@ -729,33 +570,7 @@
   gap: 10px;
   min-width: 0;
 }
-/* 🔒 ⚠ **THE DEFAULT *IS* THE CHANNEL-ROW TITLE'S FACE NOW (Samuel,
-   2026-09-01), ON EVERY SURFACE — /home AND the workspace Knowledge page.**
-   The one reference is `apps/desktop-ui/src/pages/home/relationship-list.tsx ›
-   RelationshipRow`'s name span, `truncate text-body font-medium
-   text-text-primary`, so the three declarations below are that class list
-   restated in CSS and nothing else:
-     `text-body`         → --text-body           (the ramp's default-body rung)
-     `font-medium`       → 500
-     `text-text-primary` → --text-primary, which is what --kv-text resolves to
-                           in `.shell` (line 9) and in /home's `.kbCards`.
-   ⚠ **NO `letter-spacing` ANY MORE.** It was -0.01em, and the row has none —
-   "match exactly" includes the tracking, which at 12.5px is the difference
-   between two words that look set in different faces.
-
-   ⚠ **THE ALIASES SURVIVE, THE DIVERGENCE DOES NOT.** `--kv-card-title-size` /
-   `--kv-card-title-weight` are still readable so a future surface can rebind
-   them on its own grid; what is gone is the state where the two Knowledge faces
-   answered differently (title/600 here, body/400 on /home — one of them was
-   always going to be the wrong one), and /home's rebind of these two is deleted
-   with it. History: they were minted 2026-08-28 to make /home alone match this
-   face; the ruling widened that match to every surface rather than keeping a
-   per-page fork. A fork of `home/base-card.tsx` remains forbidden. */
-/* THE BASE'S NAME = the agent identity card's name type (Samuel, 2026-09-13:
-   "make the name of the kb be the same font styling as that of the name of the
-   agent identity in the agent cards") — `identity-section.tsx › IDENTITY_NAME_TEXT`
-   is `text-title font-medium text-text-primary`, so: --text-title, 500, primary ink.
-   Was --text-body (the channel row's face). */
+/* The name wears the identity card's name type (`identity-section.tsx › IDENTITY_NAME_TEXT`). */
 .cardName {
   flex: 1;
   min-width: 0;
@@ -779,12 +594,8 @@
   color: var(--kv-scope);
 }
 
-/* Inset well spans everything below the name; description/meta/Open are rows
-   fenced by hairlines. Description row flexes so the foot stays pinned to the
-   card bottom at fixed heights.
-   The well is the "Shared" pill's gray on every card, whatever its scope —
-   the pill's own HUE, at `--kv-well-tint` rather than the pill's own amount
-   (Samuel, 2026-09-21: lighter). */
+/* Inset well below the name; its rows are fenced by hairlines and the description row flexes so the
+   foot stays pinned. The well is the "Shared" pill's hue at `--kv-well-tint`, whatever the scope. */
 .cardInset {
   display: flex;
   flex-direction: column;
@@ -794,13 +605,8 @@
   background: color-mix(in oklab, var(--kv-hue-private) var(--kv-well-tint), white);
   overflow: hidden;
 }
-/* ⚠ CENTRED, NOT TOP-ANCHORED (Samuel, 2026-09-19: the description sat
-   closer to the bottom hairline than the top). The grid row is a FIXED height
-   and this row is the inset's only `flex: 1; min-height: 0` child, so it takes
-   whatever the meta row (with its storage meter) and the foot leave — which is
-   less than 9 + clamp + 9 on both surfaces. A top-anchored description with a
-   line-count floor then spilled the whole deficit into the BOTTOM padding.
-   Centred, content-height text splits any slack or deficit evenly. */
+/* Centred, not top-anchored: the fixed grid row leaves this row less than its padding + clamp, and
+   centring splits the deficit evenly. */
 .cardDescRow {
   display: flex;
   align-items: center;
@@ -831,11 +637,7 @@
   font-size: var(--text-caption);
   font-style: italic;
   line-height: 1.45;
-  /* `--kv-card-desc-lines` is the clamp, defaulted to the workspace page's 3;
-     /home rebinds it to 2 on `.kbCards` so the shorter grid row still fits the
-     meta row and the foot. ⚠ NO LINE-COUNT FLOOR (removed 2026-09-19): the
-     row's height is set by the fixed grid row, never by this span, so a floor
-     only pinned short text to the top of a taller box and kept it off centre. */
+  /* `--kv-card-desc-lines`: 3 here, rebound to 2 by /home's `.kbCards`. No line-count floor. */
   color: var(--kv-text-2);
   display: -webkit-box;
   -webkit-line-clamp: var(--kv-card-desc-lines, 3);
@@ -865,10 +667,7 @@
   border-top: 1px solid var(--kv-border);
 }
 
-/* Starred uses global `--warning` (palette gold) rather than a new token: it
-   already exists in all four token copies — globals.css, apps/desktop-ui
-   tokens.css, dopl-desktop-app session tokens.css, and the .lightScope block
-   in app-shell.module.css. */
+/* Starred reuses the palette's `--warning` gold rather than a new token. */
 .cardStar {
   display: inline-flex;
   align-items: center;
@@ -892,15 +691,7 @@
   color: var(--warning);
 }
 
-/* ⚠ `.cardOpen` STOOD HERE AND IS GONE (2026-08-28). Samuel ruled that /home's
-   small section buttons adopt this button's size/UI, so the declarations moved
-   OUT of this feature-private module into the shared primitive both surfaces
-   render: `src/shared/ui/open-scale-button.module.css › .openScale`, wrapped by
-   `shared/ui/open-scale-button.tsx › OpenScaleButton`. The card's own Open is
-   just another caller (`home/base-card.tsx`). Do NOT re-add a local rule here:
-   a second declaration of the 26px pill is the drift the move removed. The
-   `--kv-text` binding still reaches it — the shared rule reads
-   `var(--kv-text, var(--text-primary))`. */
+/* The card's Open is `OpenScaleButton`; do not add a local rule. */
 
 .cardNew {
   display: flex;

@@ -316,14 +316,14 @@ describe("the /home shapes are /home's own geometry", () => {
     // The two OPEN wells draw rows; the closed one draws its header alone.
     expect(container.querySelectorAll(".bg-home-card.rounded-\\[14px\\]").length)
       .toBeGreaterThan(0);
-    const ghost = file("../../pages/home/home-list-skeleton.tsx");
+    const ghost = HOME_SKELETON;
     expect(ghost).toContain('from "@/shared/ui/panel-well"');
     expect(ghost).toContain("HOME_CHANNEL_WELLS.map");
     // 🚫 BIDIRECTIONAL: the raised row face stays on the PAGE and out of the ghost.
     // ⚠ COMMENT-STRIPPED, on this suite's stated rule — the ghost's docblock NAMES
     // the face it does not wear, and a raw scan would make the repair "delete the
     // explanation".
-    const ghostCode = code("../../pages/home/home-list-skeleton.tsx");
+    const ghostCode = code("../../pages/home/home-skeleton.tsx");
     expect(ghostCode).not.toContain("HOME_CARD_FACE");
     expect(ghostCode).not.toContain("auth-btn-3d");
     expect(code("../../../../../src/shared/ui/home-channel-row.tsx")).toContain(
@@ -372,17 +372,9 @@ describe("the /home shapes are /home's own geometry", () => {
       expect(panels).toContain(face);
       expect(HOME_SKELETON).not.toContain(face);
     }
-    // ⚠ **THE CONSTANT MOVED TO `home-ghost-face.ts` ON 2026-09-22** — a §1 split,
-    // because the channel-column ghost left `home-skeleton.tsx` the same day and
-    // both wear this face; a constant in either file would have the other importing
-    // THROUGH it. The pin follows the split and is otherwise unchanged: the face is
-    // still spelled ONCE, and the frame ghost still reads it rather than re-typing
-    // a `rounded-[14px]` of its own.
-    expect(file("../../pages/home/home-ghost-face.ts")).toContain(
-      'export const GHOST_FLAT_FACE = "rounded-[14px] border border-transparent"'
-    );
+    // The face is spelled ONCE; every ghost on the page reads it.
     expect(HOME_SKELETON).toContain(
-      'import { GHOST_FLAT_FACE } from "./home-ghost-face"'
+      'const GHOST_FLAT_FACE = "rounded-[14px] border border-transparent"'
     );
     // The plot height is IMPORTED, the way the Overview page's ghost takes it.
     expect(HOME_SKELETON).toContain(

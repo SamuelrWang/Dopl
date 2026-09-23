@@ -1,60 +1,15 @@
 /**
- * THE PAIR GATE — every `canSee*` TS predicate has a policy twin, and every
- * covered table's SELECT surface is exactly the one declared here.
- *
- * Wave B B7's interim guard while RLS is phased in table by table (Samuel's
- * ruling B5: "RLS is the fence"). Until a table's policy has been proved by a
- * redteam test AND the flag has run a release, the TS predicate is still the
- * fence — so the two must at least EXIST in pairs. What this catches is the
- * shape that has bitten twice already: a visibility rule that lives in TS with
- * no policy behind it at all, which is invisible until the day a read moves off
- * the service role and the table turns out to have no fence in the database.
- *
- * FOUR CHECKS, and the first is the one this gate was built for:
- *
- *   1. **A NEW `canSee*` FAILS THE BUILD until it declares its table here.** The
- *      discovered set of exported predicates must EQUAL the declared set — the
- *      same "equals, not includes" shape `tool-profile.test.ts` uses, because a
- *      subset check is how the sixth predicate ships unnoticed.
- *   2. **RLS IS STILL ENABLED** on every covered table after replay. A
- *      `DISABLE ROW LEVEL SECURITY` retires every policy on a table at once and
- *      leaves all their names standing, which is invisible to a name check.
- *   3. **THE LIVE SELECT-POLICY SET EQUALS THE DECLARED SET**, per table.
- *      Permissive policies are OR-ed, so an EXTRA one is a widening that no
- *      per-policy assertion can see: the declared policies all still exist and
- *      still say what they said. Equality is the only reading that catches it.
- *   4. **EACH DECLARED POLICY IS `FOR SELECT` AND REACHES ITS PREDICATE.** A
- *      policy that keeps its name and becomes `USING (true)`, or flips to
- *      `FOR INSERT` (leaving the table's SELECT surface empty), passes a name
- *      check unchanged. So the `cmd` is asserted explicitly and the body must
- *      call the function named in `via`.
- *
- * ⚠ **THE FIRST THREE OF THOSE ARRIVED 2026-09-02, IN REVIEW, AND THE GATE HAD
- * SHIPPED WITHOUT THEM (F-585).** It asserted that a policy NAME survived the
- * replay and nothing else — so `USING (true)`, a second permissive policy, a
- * `DISABLE ROW LEVEL SECURITY` and a `FOR SELECT` → `FOR INSERT` flip were all
- * green. A gate whose failure mode is "the fence is still called a fence" is
- * the failure it exists to catch, one level up.
- *
- * ⚠ IT STILL DOES NOT CLAIM THE TWO AGREE. Equality of MEANING is what the
- * redteam suites prove, per table, one table at a time
- * (`{knowledge,skills,chats,agent-identities}/server/rls-redteam.test.ts` and
- * `shared/supabase/rls-redteam-resource-grants.test.ts`). This gate proves that
- * nothing is unpaired and that the SELECT surface is the declared one. Say it
- * that way in any doc that cites it.
- *
- * ⚠ AND A COVERED TABLE NEED NOT HAVE A PREDICATE. Five of the nine tables
- * phases 1–2 cover are fenced by a PARENT's rule (`knowledge_folders`,
- * `knowledge_entries`, `chat_messages`, `agent_identity_knowledge_bases`) or by
- * no TS predicate at all (`resource_grants`) — hence `predicates: []`.
- *
- * ⚠ **`skill_files` IS NOT ONE OF THEM AND NEVER WAS (F-586).** It was declared
- * here and given a phase-2 policy, and the table has not existed since
- * `20260716064733_collapse_skill_files_into_skills.sql` dropped it CASCADE in
- * July 2026 — so the policy would have aborted the apply. Check 2 is what found
- * it: a `DROP TABLE`-aware replay plus "is RLS still on". A gate that reads only
- * policy NAMES cannot tell a fence from an epitaph.
- *
+ * The pair gate: every `canSee*` TS predicate has a policy twin, and every covered table's SELECT
+ * surface is exactly the one declared here. Four checks:
+ *  1. the discovered `canSee*` exports EQUAL the declared set (a new predicate fails until declared);
+ *  2. RLS is still enabled on every covered table after replay (a `DISABLE` keeps every name);
+ *  3. the live SELECT-policy set EQUALS the declared set — permissive policies are OR-ed, so an
+ *     extra one widens the table while every declared one still passes;
+ *  4. each declared policy is `FOR SELECT` and reaches its predicate function (`via`).
+ * It does not claim predicate and policy AGREE — the per-table redteam suites prove that (F-523).
+ * The replay is `shared/supabase/rls-policy-scan.ts`: forward-renamed, and a `DROP TABLE` takes
+ * its policies with it (F-586). A covered table may have no predicate (`predicates: []`): fenced
+ * by a parent's rule, or by none in TS.
  * Run: `npx tsx scripts/check-rls-pair-gate.ts`
  */
 
@@ -75,15 +30,8 @@ interface Covered {
   select: Record<string, string>;
 }
 
-/**
- * ⚠ ONE DECLARATION, KEYED BY TABLE. It used to be two maps — predicate→policy
- * and table→policy — which meant the tables with a predicate and the tables
- * without were checked by different code and only one half grew the checks.
- *
- * ⚠ `canSeeBaseRow` is a HAND COPY of `canSeeBase` (F-278) and shares its
- * table; it disappears when the five predicates become one (B16), and this map
- * is one of the places that will notice.
- */
+/** One declaration, keyed by table. `canSeeBaseRow` is a hand copy of `canSeeBase` (F-278) and
+ *  shares its table. */
 const COVERED: Record<string, Covered> = {
   knowledge_bases: {
     predicates: ["canSeeBase", "canSeeBaseRow"],
@@ -103,10 +51,8 @@ const COVERED: Record<string, Covered> = {
   },
   chats: {
     predicates: ["canSeeChat"],
-    // Two permissive SELECT policies, OR-ed: owner, and the team-aware member
-    // arm. ⚠ `chats_member_select_public` is NOT here and must not be re-added:
-    // `20260716150000_chats_team_aware_rls.sql` REPLACED it — the public arm was
-    // the leak that migration exists to record. Check 3 now enforces that.
+    // Two permissive policies, OR-ed. `chats_member_select_public` was the leak
+    // `20260716150000` replaced; never re-add it.
     select: {
       chats_owner_select: "dopl_chat_readable",
       chats_member_select: "dopl_chat_readable",
@@ -129,26 +75,10 @@ const COVERED: Record<string, Covered> = {
         "can_current_user_read_agent_identity",
     },
   },
-  // ── ontology (2026-09-09, `docs/specs/home-ontology.md` §3.3, slice S1) ────
-  // FIVE rows, and only the parent has a predicate. The three CHILD tables are
-  // workspace-keyed and carry no `cluster_id` (spec R3/R5) — a card's membership
-  // row names a PARENT OBJECT, and only a column's names the cluster — so their
-  // policies reach the cluster through `ontology_memberships`, via
-  // `dopl_ontology_object_clusters()`, and end at the PARENT's function. Hence
-  // `predicates: []` on all three, the `knowledge_folders` / `knowledge_entries`
-  // shape.
-  //
-  // ⚠ EACH KEEPS ITS `is_current_workspace_member(workspace_id,'viewer')` ARM
-  // and gains an OR — this wave only ever WIDENS the policy, because ontology has
-  // been workspace-scoped since `20260706120000` and narrowing here would blank
-  // every standard-workspace board for a feature those boards do not use. The
-  // NARROWING Samuel's matrix asks for is the service's (spec I6/§4).
-  //
-  // ⚠ THE FOUR `*_editor_*` WRITE POLICIES ARE NOT DECLARED AND MUST NOT BE:
-  // check 3 counts only `FOR SELECT` policies, and the two `FOR ALL` ones
-  // (`ontology_memberships_editor_write`, `ontology_relationships_editor_write`)
-  // are the topology `20260720211005`'s closing note deliberately left in place —
-  // their SELECT arm is `'editor'`, provably SUBSUMED by the `'viewer'` arm above.
+  // ── ontology: only the parent has a predicate; the child tables reach the cluster through
+  // `ontology_memberships` and end at the parent's function. Each policy keeps its workspace
+  // `viewer` arm (this only ever widens). The `*_editor_*` write policies are not declared: check 3
+  // counts `FOR SELECT` only, and their `editor` SELECT arm is subsumed by `viewer`.
   ontology_clusters: {
     predicates: ["canSeeOntology"],
     select: { ontology_clusters_member_select: "dopl_ontology_readable" },
@@ -166,52 +96,29 @@ const COVERED: Record<string, Covered> = {
     select: { ontology_relationships_member_select: "dopl_ontology_readable" },
   },
   ontology_channel_shares: {
-    // The SHARE ROW is the OWNER's settings, so its own read is the owner's
-    // container — never the channel's. A channel's people need the ONTOLOGY, and
-    // they reach it through `dopl_ontology_readable`, which is SECURITY DEFINER
-    // and reads this table past this policy. `via` therefore names the membership
-    // helper, the `resource_grants` shape.
+    // The share row is the owner's settings (read in the owner's container); a channel reaches
+    // the ontology through SECURITY DEFINER `dopl_ontology_readable`. `via` = the membership helper.
     predicates: [],
     select: {
       ontology_channel_shares_member_select: "is_current_workspace_member",
     },
   },
-  // ── revisions (2026-09-09, the CHANGELOG lane) ────────────────────────────
-  // ⚠ THE PREDICATE STATES NO VISIBILITY RULE — it defers, exactly as its policy
-  // twin does. `canSeeRevision` asks whether the caller's already-proved REACH
-  // names the resource the row is about; `dopl_revision_readable` is one `CASE`
-  // handing the same question to `dopl_knowledge_base_readable` /
-  // `dopl_ontology_readable`. So `via` names the deferring function rather than a
-  // resource predicate: what this gate can prove here is that the SELECT surface
-  // is one policy and that it reaches the CASE. That the CASE agrees with each
-  // resource's own rule is the redteam suites' job, per table, as ever.
-  //
-  // ⚠ ONE SELECT POLICY AND NO WRITE POLICY. Writes are REVOKED from the login
-  // roles instead — an audit log a subject can forge or erase with their own JWT
-  // is not an audit log — so check 3's equality is the whole SELECT surface and
-  // the migration's own `DO $$` asserts the write-policy count is zero.
+  // ── revisions: the predicate defers to the resource's own rule, as `dopl_revision_readable`'s
+  // `CASE` does, so `via` names the deferring function. No write policy: writes are REVOKED from
+  // the login roles (an audit log a subject can edit is not one).
   revisions: {
     predicates: ["canSeeRevision"],
     select: { revisions_member_select: "dopl_revision_readable" },
   },
   resource_grants: {
-    // No TS twin, and not for a child table's reason: this is the GRANT table
-    // every other policy resolves the teams axis through, and its own read rule
-    // was written as a policy first. So `via` names the membership helper
-    // rather than a predicate function — the rule is stated inline, here only.
+    // No TS twin: the grant table every other policy resolves through; its rule is the policy.
     predicates: [],
     select: { resource_grants_member_select: "is_current_workspace_member" },
   },
 };
 
-// ⚠ **`knowledge_entry_chunks` IS DELIBERATELY ABSENT — F-575, still open.**
-// RLS is ENABLED on it with no policy at all, which fails CLOSED: the cost is
-// an EMPTY search the day a chunk read moves to `readClient()`, never a leak.
-// Phase 2 briefly gave it its parent's policy and that arm was WITHDRAWN in
-// review: every other change in that file narrows, this one widened a table
-// from "nobody" to "every viewer", and a policy is not behind the phase flag.
-// The policy lands in phase 3, in the same change as the reader it unblocks.
-// ⚠ Adding a row here without a live policy is what turns this gate red.
+// `knowledge_entry_chunks` is deliberately absent (F-575): RLS on with no policy fails closed.
+// Its policy lands with the reader it unblocks; adding a row here without one turns this red.
 
 function walk(dir: string, out: string[] = []): string[] {
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
@@ -222,13 +129,15 @@ function walk(dir: string, out: string[] = []): string[] {
   return out;
 }
 
-/** Exported `canSee*` predicates across `src/`. */
+/** Exported `canSee*` predicates (function or const) across `src/`. */
 function discoverPredicates(): Map<string, string> {
   const found = new Map<string, string>();
   for (const file of walk(join(ROOT, "src"))) {
     const text = readFileSync(file, "utf8");
-    for (const m of text.matchAll(/export function (canSee[A-Za-z0-9_]*)\s*\(/g)) {
-      found.set(m[1], file.slice(ROOT.length + 1));
+    for (const m of text.matchAll(
+      /export\s+(?:async\s+)?function\s+(canSee\w*)\s*[<(]|export\s+const\s+(canSee\w*)\s*[:=]/g
+    )) {
+      found.set(m[1] ?? m[2], file.slice(ROOT.length + 1));
     }
   }
   return found;
@@ -256,7 +165,6 @@ for (const name of declaredPredicates.keys()) {
   }
 }
 
-// Forward-renamed replay (`migration-files.ts`): a renamed table keeps its policies and RLS.
 const policies = livePolicies();
 const rlsEnabled = liveRlsEnabled();
 const NEVER_DROP =
@@ -269,8 +177,7 @@ for (const [table, { select }] of Object.entries(COVERED)) {
     );
   }
 
-  // ⚠ EQUALITY, NOT CONTAINMENT. Permissive policies are OR-ed, so an EXTRA
-  // SELECT policy widens the table while every declared one still passes.
+  // Equality, not containment (check 3).
   const liveSelect = [...policies.entries()]
     .filter(([key, body]) => key.startsWith(`${table}.`) && isSelectPolicy(body))
     .map(([key]) => key.slice(table.length + 1))
@@ -309,8 +216,7 @@ for (const [table, { select }] of Object.entries(COVERED)) {
   }
 }
 
-/** `FOR SELECT` explicitly. ⚠ A policy with NO `FOR` clause is `FOR ALL`, which
- *  is a WRITE surface as well as a read one and is never a declared twin. */
+/** `FOR SELECT` explicitly: a policy with no `FOR` clause is `FOR ALL`, a write surface too. */
 function isSelectPolicy(body: string): boolean {
   return /\bFOR\s+SELECT\b/i.test(body);
 }

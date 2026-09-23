@@ -1,18 +1,5 @@
-# CI for the whole repo, not just `packages/`.
-#
-# WHAT THIS FILE USED TO BE, and why it changed (2026-08-05, F-146). It ran on
-# `packages/**` only, and its one test step was `npm test -w @dopl/client` — 48
-# tests. The root suite (2133), `@dopl/mcp-server` (483), the desktop
-# (2313) and the SPA (143) were MANUAL-INVOCATION ONLY: 4 963 tests that no
-# push or PR has ever run, guarding the code that actually changes. The root
-# `package.json` had no `test` script at all and `packages/mcp-server`'s had
-# none either, so there was nothing for a workflow to call even if it wanted to.
-# Both scripts now exist; every suite runs here.
-#
-# THE PATH FILTERS ARE GONE ON PURPOSE. They existed to keep a packages-only job
-# off unrelated PRs. Now that the job covers the repo, a filter would reintroduce
-# exactly the gap this change closes — a `src/` PR skipping the `src/` suite —
-# and the whole matrix is a few minutes.
+# CI for the whole repo. No path filters: a filter would let a `src/` PR skip the `src/` suite.
+# Every step here is part of the definition of green (CLAUDE.md, INVARIANTS §14).
 name: ci
 
 on:
@@ -26,13 +13,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # Node 20 dropped 2026-08-09: the desktop's `node --test 'test/**/*.mjs'`
-        # glob needs >=22, and GitHub is deprecating node 20 runner images.
+        # >=22: the desktop's `node --test` glob needs it.
         node: [22]
-        # macOS ONLY (Samuel, 2026-09-07: "ignore windows and ubuntu, we're only
-        # focusing on macos from now on"). Dopl ships one platform, and the
-        # Windows leg only ever produced flakes that cost reruns. Tooling jobs
-        # below (lint, size cap, drift, RLS) stay on ubuntu: they test no
+        # macOS only (Dopl ships one platform). Tooling jobs below stay on ubuntu: they test no
         # platform, the RLS job needs Docker, and macOS minutes bill at 10x.
         os: [macos-latest]
     runs-on: ${{ matrix.os }}
@@ -56,13 +39,7 @@ jobs:
       - name: Test @dopl/client
         run: npm test -w @dopl/client
 
-      # THE FOUR SUITES THAT WERE NEVER RUN BY CI (F-146). Each is its own step so
-      # a failure names the tree it is in instead of one opaque red X. Expected
-      # counts at the time of writing, as a sanity anchor for whoever reads a
-      # surprising number here (remeasured 2026-08-09 post-launch-wave):
-      # root 2664, mcp-server 555, SPA 177, desktop 2521, dopl-client 75.
-      # (The SPA is net -7 since the 2026-08-07 retirement: the canvas,
-      # configuration and workflows page suites went with their routes.)
+      # One step per suite, so a failure names its tree.
       - name: Test root suite
         run: npm test
 
@@ -72,18 +49,14 @@ jobs:
       - name: Test @dopl/desktop-ui (the bundled SPA)
         run: npm test -w @dopl/desktop-ui
 
-  # The desktop app is a SEPARATE npm project (its own package.json and lockfile,
-  # not a workspace of the root), so it needs its own install and its own job. It
-  # is `node --test` over source-extraction truth tables — no Electron binary is
-  # launched, so it runs headless on ubuntu with no display server.
+  # The desktop app is a separate npm project (own lockfile). Its suite is `node --test` over
+  # source-extraction truth tables; no Electron binary is launched.
   desktop:
     name: desktop app (node ${{ matrix.node }})
     strategy:
       fail-fast: false
       matrix:
-        # Node 20 dropped 2026-08-09: `node --test` glob expansion needs >=22.
         node: [22]
-    # The macOS app's own tests run on macOS (Samuel, 2026-09-07 — see build-test).
     runs-on: macos-latest
     defaults:
       run:
@@ -95,8 +68,7 @@ jobs:
         with:
           node-version: ${{ matrix.node }}
 
-      # `npm ci` would also fetch the Electron binary, which this suite never
-      # launches. `--ignore-scripts` skips its postinstall download.
+      # `--ignore-scripts` skips the Electron binary download this suite never uses.
       - name: Install dependencies
         run: npm ci --ignore-scripts
 
@@ -121,59 +93,21 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      # Root `tsconfig.json` EXCLUDES `apps` (and `packages`) — verify with
-      # `npx tsc --listFilesOnly` before believing otherwise. This step is
-      # therefore `src/` + `scripts/` + the Next tree only.
+      # Root `tsconfig.json` excludes `apps` and `packages`: `src/` + `scripts/` + the Next tree.
       - name: Typecheck (root)
         run: npm run typecheck
 
-      # The SPA needs its OWN typecheck: it is outside the root program, and
-      # `npm test -w @dopl/desktop-ui` (vitest) does not typecheck. Its
-      # `tsc --noEmit` also pulls in everything the pages import through the
-      # `@/*` → `../../src/*` alias, which is the only compile-time cover the
-      # unrouted retirement leftovers (`pages/{canvas,canvas2,configuration,
-      # workflows,workflows/detail}`) have left — they have no routes and no
-      # tests, so nothing else would notice them breaking against `src/`.
-      # `npm run build:ui` runs this same `tsc --noEmit` before `vite build`
-      # and is in NO CI job; run the typecheck directly rather than the build
-      # so a bundler failure and a type error stay distinguishable.
+      # The SPA is outside the root program and vitest does not typecheck, so it gets its own step
+      # (also the only compile cover for its unrouted leftovers under `pages/`).
       - name: Typecheck @dopl/desktop-ui (the bundled SPA)
         run: npm run typecheck -w @dopl/desktop-ui
 
-      # 0 errors AND 0 warnings is the bar (both trees measured at true zero
-      # 2026-08-11, and --max-warnings 0 now holds it there — the old "two known
-      # warnings" this comment tracked were fixed in the launch wave, so the
-      # allowance had become a hole, not a kindness).
+      # 0 errors and 0 warnings.
       - name: Lint
         run: npm run lint -- --max-warnings 0
 
-      # THE DOCS' THREE ROTTABLE ANCHOR CLASSES (added 2026-08-11). A measurement
-      # over `docs/` put inline `path/to/file.ts:NNN` accuracy at ~33% and found
-      # F-ids referenced with no entry behind them — both rot silently, both
-      # mislead the next agent, and nothing had ever re-read one. This asserts
-      # the FILE exists (never the line: lines rot, existence is checkable) and
-      # that every `F-NNN` resolves to a live entry or to a deletion the
-      # findings log's header records.
-      #
-      # THE THIRD CLASS WAS ADDED THE SAME DAY, and it is the one with teeth:
-      # `path › symbolName` anchors — the form these docs PREFER over line
-      # numbers — must name a file that exists AND a symbol whose name appears
-      # in it. An adversarial read of INVARIANTS.md had just found
-      # `shared/api/error-handler.ts › withErrorHandler`: a file that never
-      # existed, naming a wrapper nothing ever exported, copied out of
-      # ENGINEERING.md where it had lived for months. A symbol anchor reads as
-      # MORE authoritative than a line number, so an unchecked one is worse.
-      #
-      # No dependencies, ~170ms (the symbol check reads the files an anchor
-      # names; reads are memoized), so it is a step here rather than a job.
-      #
-      # DELIBERATELY LAST in this job: it is the cheapest check and the least
-      # urgent, and putting it ahead of `tsc` would let a stale doc anchor hide
-      # a type error behind a red X.
-      #
-      # NOTE it is NOT covered by `npm run lint` above — `eslint.config.mjs`'s
-      # `globalIgnores` excludes `scripts/**` wholesale, so nothing in that tree
-      # is linted by the root config at any extension. Run it directly.
+      # Doc anchors: files exist, F-ids resolve, `path › symbol` anchors resolve. Not covered by
+      # `npm run lint` (`eslint.config.mjs` ignores `scripts/**`). Last: cheapest, least urgent.
       - name: Doc references (files exist, F-ids resolve, symbol anchors resolve)
         run: node scripts/check-doc-refs.mjs
 
@@ -187,22 +121,9 @@ jobs:
         shell: bash
         run: |
           set -eu
-          # ⚠ **NOTHING IS EXEMPT, AND THE TABLE THIS COMMENT USED TO CITE DOES NOT
-          # EXIST** — it said "ENGINEERING.md §2 (Known files >500 lines)" and
-          # `grep -n 'Known files >500' docs/ENGINEERING.md` answers nothing
-          # (F-689, 2026-09-10). The exemption list for the WEB tree lives in
-          # `eslint.config.mjs`'s `max-lines: off` block; `packages/` has none and
-          # must not acquire one — adding a name here is how a cap stops being a cap.
-          # ⚠ **THIS JOB WAS RED ON THREE FILES FROM 2026-09-10 TO 2026-09-14**
-          # (`dopl-client/src/channel-types.ts`, `dopl-client/src/channel.ts`,
-          # `mcp-server/src/tools/channel-schema.ts`) and was closed by SPLITTING
-          # all three into re-export shims — `channel-artifact-types.ts`,
-          # `channel-directives.ts`, `channel-vocab.ts` and
-          # `channel-schema-launch-fields.ts` — with no importer moved and no
-          # published schema character changed. That is the only way to close it.
-          # 2026-08-09: server.ts and client.ts were split under the cap and
-          # left this list. The placeholder keeps `grep -vF` safe — an empty
-          # ALLOW would filter every line and let any overage pass silently.
+          # Nothing is exempt; the web tree's exemptions live in `eslint.config.mjs`. A split into
+          # re-export shims is the only way to close a red here. The placeholder keeps `grep -vF`
+          # safe: an empty ALLOW would filter every line.
           ALLOW=$(printf '%s\n' \
             '__no_exemptions__')
 
@@ -211,18 +132,14 @@ jobs:
             -exec awk 'END { if (NR > 500) print FILENAME, NR }' {} \; \
             | grep -vF "$ALLOW" || true)
           if [ -n "$BAD" ]; then
-            echo "Files over 500 lines (ENGINEERING.md §2):"
+            echo "Files over 500 lines:"
             echo "$BAD"
             exit 1
           fi
           echo "All files within the 500-line cap."
 
-  # THE HAND-MIRROR GATES. Every step here guards a declaration that exists in
-  # two or more trees with no shared module between them, because the SDK and
-  # the MCP package cannot import `src/`, SQL can import nothing, and the SPA's
-  # CSS is a second copy of the web's. ⚠ The job name says "knowledge" for
-  # history; it covers knowledge types, the shelf vocabulary, the role set, the
-  # workspace list-item mirror, `WorkspaceKind` and the design tokens.
+  # The hand-mirror gates: declarations that exist in two or more trees with no shared module.
+  # The job name predates every family after the first.
   type-drift:
     name: knowledge type-drift check
     runs-on: ubuntu-latest
@@ -237,111 +154,49 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      # Also the SHELF vocabulary since 2026-08-30 (the two unions, their dist/
-      # mirrors, both `readShelf` guards, the MCP wire mapper, and the
-      # `home_scoped` boolean that caps the union at two).
+      # Knowledge field names and the shelf vocabulary (unions, dist/ mirrors, `readShelf` guards).
       - name: Diff knowledge types and the shelf vocabulary
         run: npx tsx scripts/check-knowledge-type-drift.ts
 
-      # Three families in one script: the role set, the workspace list-item
-      # field set, and `WorkspaceKind`/`isStandardWorkspace` (F-295).
+      # The role set, the workspace list-item fields, and `WorkspaceKind` (F-295).
       - name: Diff workspace role set across server, SDK and MCP
         run: npx tsx scripts/check-role-drift.ts
 
-      # The SEVEN session-health fields, across FOUR hand-mirrors plus the
-      # migration's columns (2026-09-02). Every one of them is optional AND
-      # nullable by design, so drift there fails no build and no test — the
-      # field simply never arrives.
+      # The session-health fields: optional and nullable by design, so drift fails nothing else.
       - name: Diff the session-health field set across its four mirrors
         run: npx tsx scripts/check-session-health-drift.ts
 
-      # The `channel_messages` kind and author_kind sets, across the server
-      # union, the SDK's copy, its committed dist/ and the column CHECK
-      # (2026-09-02). The zod half is NOT a step here: `closedEnum` over a
-      # derived type makes that pair a compile error. Mutation-verified by
-      # `src/features/channels/message-kind-drift.test.ts`.
+      # `channel_messages` kind/author_kind sets vs the column CHECK (the zod half is a compile error).
       - name: Diff the message-kind sets across the union, the SDK and the column CHECK
         run: npx tsx scripts/check-message-kind-drift.ts
 
-      # The SPA's `tokens.css` is a hand copy of `globals.css`'s token layer
-      # (F-074). The prose "edit both together" instruction it carries failed
-      # twice in one wave, which is why this is a gate and not a comment.
+      # `tokens.css`/`kit.css` are hand copies of `globals.css` (F-074): tokens and kit class names.
       - name: Diff design tokens between globals.css and the SPA's tokens.css
         run: npx tsx scripts/check-css-token-drift.ts
 
-      # 🔒 EVERY `canSee*` PREDICATE HAS A NAMED POLICY TWIN (2026-09-02, Wave B
-      # B7). Visibility is stated twice today — a TS predicate that is the real
-      # fence, and a policy that never runs because every repository read goes
-      # through the service role — and the pair had already drifted WIDE on the
-      # knowledge tables. This gate does not claim the two AGREE; that is what
-      # the per-table redteam suites prove, one table at a time. It claims only
-      # that nothing is unpaired, so a NEW predicate cannot ship with no policy
-      # behind it at all. Mutation-verified: dropping an entry from `TWINS`, or
-      # naming a policy a later migration drops, turns it red.
+      # Every `canSee*` predicate has a named SELECT-policy twin and each covered table's SELECT
+      # surface is the declared one. It does not claim the two agree (the redteam suites do).
       - name: Pair every canSee* predicate with a live SELECT policy
         run: npx tsx scripts/check-rls-pair-gate.ts
 
-      # 🔒 A PRELOAD BRIDGE WITH NO CALLER IS A CAPABILITY NOBODY CAN REACH
-      # (2026-09-16, DIRECTION-DROP-TRACE.md). `dopl.orchestratorDirect` shipped
-      # on 2026-08-31 with its store key, its `appWindowOnly` IPC pair, its
-      # `SpaBridgeSurface` type and its preload member all present and correct —
-      # and nothing in the SPA ever called it, so the consent it gated was never
-      # writable and 38 of 38 private directions expired unclaimed over fifteen
-      # days, each reporting `pending, claimed=no` and naming no cause. Every
-      # layer was individually tested; `_ipc-ops-table.mjs` asserted both ops
-      # existed and `preload-parity.test.mjs` asserted the preload matched. NO
-      # TEST ASKED WHETHER ANYTHING CALLED IT, because each owned one layer and
-      # the gap was between two of them. ⚠ Declaration files are excluded from
-      # the caller search BY NAME — `spa-bridge.ts` names every member by
-      # construction, so counting it would make this gate pass on precisely the
-      # bug it exists for. Mutation-verified both ways: removing the caller
-      # turns it red, and it was RED against the pre-fix tree before it was
-      # green against the fixed one.
+      # Every preload bridge member is named by SPA code (declaration files excluded, or the gate
+      # would pass on the orphan it exists to catch).
       - name: Every preload bridge member has a caller in the SPA
         run: node scripts/check-bridge-caller-drift.mjs
 
-      # 🔒 A MIGRATION THAT RE-STAMPS A PARENT'S `workspace_id` RE-STAMPS EVERY
-      # CHILD THAT COPIES IT (2026-09-03, F-664). `20260920120000` moved the
-      # personal rows into their author's container and left the folders,
-      # entries, chunks and identity↔KB junctions on the old tenancy. Nothing
-      # compares the two until a caller resolves a PATH inside a moved base, so
-      # the move measured clean and the contents of that base were unreadable —
-      # F-604's shape a second time, and a CLASS rather than an incident. The
-      # gate also holds the declared child set EQUAL to the one discovered from
-      # the `CREATE TABLE` bodies, so the fifth child cannot ship unnoticed.
-      # Mutation-verified: deleting one UPDATE from the repair turns it red.
+      # A migration that re-stamps a parent's `workspace_id` re-stamps every child (F-664).
       - name: A tenancy move takes its children with it
         run: npx tsx scripts/check-tenancy-move-gate.ts
 
-      # 🔒 THE COMMITTED `dist/` IS THE BUILD OF `src/`, AND THIS IS THE ONLY
-      # THING THAT SAYS SO (2026-09-02, F-452). Both packages ship a TRACKED
-      # `dist/` and `next.config.ts › serverExternalPackages` keeps them
-      # external, so the committed output is what the app LOADS. A slice that
-      # edits `src/` and forgets the rebuild ships a change that exists in the
-      # repo and in no running process — which is exactly what the A10 branch
-      # did, and nothing caught it: the suites import `src/`, both typechecks
-      # read `src/`, and `build-test` rebuilds into a throwaway checkout, so it
-      # proves the build SUCCEEDS and never that the committed output matches.
+      # The committed `dist/` is what the app loads (`serverExternalPackages`), so it must be the
+      # build of `src/` (F-452). The build is a precondition; the `git status` below is the gate.
       - name: Build the packages
         run: npm run build:packages
 
       - name: Fail if the committed dist/ is not the build of src/
         run: |
-          # ⚠ SCOPED TO dist/, not to `packages`: a clean checkout plus a build
-          # can only dirty generated output, and widening it would make an
-          # unrelated stray file read as a stale build.
-          #
-          # 🔒 ⚠ THE PATHSPEC ENDS `/*` AND THAT IS THE WHOLE GATE (fixed
-          # 2026-09-02, batch-3 review). It read `packages/*/dist`, which
-          # matches NOTHING: git applies leading-directory matching only to
-          # LITERAL pathspecs, and a glob has to match the whole path — so
-          # `packages/dopl-client/dist/channel.js` was never a match and
-          # `git ls-files -- 'packages/*/dist'` answers 0 against 286 tracked
-          # files. This job has been reporting a stale `dist/` as clean since
-          # the day it landed, which is F-661's shape a second time: a gate
-          # that cannot fail is worse than no gate, because it is counted.
-          # `*` does NOT stop at `/` in a git pathspec, so one `/*` covers
-          # `dist/tools/*.js` as well.
+          # Scoped to dist/. The pathspec's trailing `/*` IS the gate: a glob must match the whole
+          # path, so `packages/*/dist` matches nothing; `*` crosses `/` in a pathspec.
           DIRTY=$(git status --porcelain -- 'packages/*/dist/*')
           if [ -n "$DIRTY" ]; then
             echo "::error::packages/*/dist is stale — run 'npm run build:packages' and commit the result."
@@ -350,28 +205,9 @@ jobs:
             exit 1
           fi
 
-  # 🔒 THE LIVE HALF OF THE RLS REDTEAM SUITES — the only thing that can say
-  # POSTGRES agrees (2026-09-02, review of wave-B batch 2).
-  #
-  # ⚠ WHY THIS JOB EXISTS. Every behavioural case in the five redteam suites is
-  # `skipIf(!liveRedteamEnabled)`, and `RLS_REDTEAM_LIVE` was set NOWHERE — not
-  # in CI, not on the authoring machine, where Docker has been down for two full
-  # waves. So twenty-six cases were green having never executed a statement, and
-  # every claim about a policy in this wave is read out of SQL TEXT. **A
-  # structural assertion is not a behavioural one (F-523):** the scan proves a
-  # rule is WRITTEN once and names every arm; only a database can say what a
-  # policy admits. The gap was not theoretical — the same replay-only reading is
-  # what let a policy be written for a table dropped in July 2026 (F-586).
-  #
-  # ⚠ UBUNTU RUNNERS HAVE DOCKER, which is the whole reason this is possible in
-  # CI and not on the machine the wave was written on. `supabase db reset` also
-  # REPLAYS every migration against a real Postgres, so this job is simultaneously
-  # the replay gate that INVARIANTS §12 has been recording as OWED — a migration
-  # that cannot apply fails here before any assertion runs.
-  #
-  # ⚠ THE LOCAL SKIP STAYS. `liveRedteamEnabled` still requires a LOOPBACK
-  # Supabase URL as well as the flag, because the fixture writes auth users and
-  # rows and cannot tell a staging project from a local one.
+  # The live half of the RLS redteam suites — the only gate that can say Postgres agrees (F-523).
+  # `supabase db reset` also replays every migration, so this is the migration-replay gate too.
+  # The local skip stays: `liveRedteamEnabled` also needs a loopback Supabase URL.
   rls-redteam:
     name: RLS redteam (live, against a real Postgres)
     runs-on: ubuntu-latest
@@ -386,26 +222,18 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      # ⚠ PINNED, NOT `latest`. Resolving "latest" is an unauthenticated GitHub
-      # API call inside the action, and it fails the whole job with "rate limit
-      # exceeded" before a single test runs (2026-09-07 on 3171593b). The pin
-      # is the version CI was already resolving to; bump it deliberately.
+      # Pinned: resolving `latest` is an unauthenticated GitHub API call that can rate-limit.
       - uses: supabase/setup-cli@v1
         with:
           version: 2.116.0
 
-      # `db reset` applies every migration in `supabase/migrations` in filename
-      # order. It is the gate as much as the setup: a migration that cannot
-      # apply — a policy on a dropped table, a function referencing one — fails
-      # the job here, with the SQL error, instead of on a production apply.
+      # A migration that cannot apply fails here, with the SQL error, not on a production apply.
       - name: Start Supabase and replay every migration
         run: |
           supabase start
           supabase db reset
 
-      # The keys are the local stack's own, read back rather than hardcoded:
-      # `supabase start` prints them and they are not secrets — the stack is
-      # loopback-only and dies with the runner.
+      # The local stack's own keys, read back: loopback-only, not secrets.
       - name: Export the local stack's credentials
         run: |
           set -eu
@@ -417,31 +245,12 @@ jobs:
             echo "SUPABASE_JWT_SECRET=$(echo "$status" | jq -r .JWT_SECRET)"
           } >> "$GITHUB_ENV"
 
-      # ⚠ NAMED FILES, NOT A GLOB. `RLS_REDTEAM_LIVE=1` changes the behaviour of
-      # exactly these suites; running the whole root suite under it would
-      # spend ten minutes to re-run 5,600 tests that do not read the flag.
-      # ⚠ **SEVEN SINCE 2026-09-14** — the ontology one joined with the home-share
-      # wave (slice S1), and `rls-redteam-personal-container.test.ts` was found
-      # MISSING from this list in the 2026-09-14 review: it landed at `fee04723`
-      # with the 1.26.0 smoke fix, has been on disk ever since, and its live half
-      # had never executed once. A named list means a new suite that is not added
-      # here has a live half that NEVER EXECUTES, which is F-523's whole lesson —
-      # and this is the second time that lesson has been paid for.
-      # ⚠ RE-DERIVE, NEVER TRUST THE NUMBER:
-      #   find src -name 'rls-redteam*.test.ts' | sort
-      # against the list below.
+      # `RLS_REDTEAM_LIVE=1` changes only the redteam suites, so the run is filtered to them: vitest's
+      # path filter picks up every `*rls-redteam*` test file, including a new one (and fails on none).
       - name: Run the redteam suites with the live half ARMED
         env:
           RLS_REDTEAM_LIVE: "1"
-        run: >-
-          npx vitest run
-          src/features/knowledge/server/rls-redteam.test.ts
-          src/features/knowledge/server/rls-redteam-personal-container.test.ts
-          src/features/skills/server/rls-redteam.test.ts
-          src/features/chats/server/rls-redteam.test.ts
-          src/features/agent-identities/server/rls-redteam.test.ts
-          src/features/ontology/server/rls-redteam.test.ts
-          src/shared/supabase/rls-redteam-resource-grants.test.ts
+        run: npx vitest run rls-redteam
 
       - name: Stop Supabase
         if: always()

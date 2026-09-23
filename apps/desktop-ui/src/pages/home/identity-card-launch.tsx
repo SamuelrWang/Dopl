@@ -7,63 +7,33 @@ import {
   launchAgentOnThread,
 } from "@/features/channels/components/agents-controls";
 import {
-  LAUNCH_APPROVAL_REASON,
+  buildLaunchPayload,
   launchRefusalText,
-} from "@/features/channels/components/use-agents-panel";
+} from "@/features/channels/components/use-launch-controls";
 import {
   describeAgent,
   renameAgent,
 } from "@/features/channels/components/use-agent-launch";
+import { useChannelLaunchPosture } from "@/features/channels/hooks/use-channel-launch-posture";
 import type { AgentIdentity } from "@/features/agent-identities/client/types";
 import type { Channel } from "@/features/channels/types";
 import { channelTitle } from "./home-rows";
 
 /**
- * **LAUNCH, FROM THE CARD, AS-IS** (Samuel, 2026-09-22: the agent card's control
- * *"should say Launch"*, sit *"on the bottom right of the card"*, and a click
- * *"launches that identity as is, directly into the selected channel"*).
- *
- * ⚠ **IT REPLACED "Share into this channel" AND THAT FILE IS DELETED**
- * (`agent-share.tsx`, the grant dialog of slice B15). The card now carries ONE
- * second control and it is this one; a grant is still writable through
- * `dopl_agent(op="grant")`, which is where that capability lives now.
- *
- * ⚠ **AS-IS MEANS NO FORM.** The New-agent popup exists to CHANGE what a launch
- * carries (`channels/components/launch-agent-dialog.tsx`); this control exists
- * because Samuel asked for the launch that changes nothing — so it sends the
- * identity id and NOTHING else, which is byte-for-byte the payload the composer's
- * one-click launch puts on the wire (`use-agents-panel.ts › launchAgent`'s own
- * rule: absent, never `undefined`-valued).
- *
- * ⚠ **THE AGENT IS NAMED AFTER THE IDENTITY, AND THAT IS THE POPUP'S OWN
- * BEHAVIOUR** rather than an invention here: `use-agent-launch.ts › applyIdentity`
- * prefills the Name field from the identity, and `launchWithIdentity` writes it
- * after the spawn. Both writes are keyed by the instance address, so neither can
- * happen until main has answered with one.
- * ⚠ **A REFUSED RENAME IS NOT A REFUSED LAUNCH.** The agent is already running by
- * then and an older desktop ships no `sessions.rename` at all; reporting that as
- * a failed launch would be a lie about the thing that mattered.
- *
- * ⚠ **THE WORKSPACE ON THE PAYLOAD IS THE IDENTITY'S OWN, NOT THE CHANNEL'S.**
- * Main resolves the row at spawn with it (`main/identity-resolve.js ›
- * resolveAgentIdentity`, which reads `(workspace_id, id)`), and these cards are the
- * caller's PERSONAL shelf — rows that live in their home workspace. Sending the
- * channel's container id here would 404 every one of them.
+ * The personal card's one-click Launch: the identity as-is into the selected channel, no form.
+ * The payload is `use-launch-controls.ts › buildLaunchPayload` with only the identity id, so it is
+ * byte-for-byte the composer's one-click launch.
  */
 
-/** The card control — the same small pill the card's other buttons wear.
- *  ⚠ A `<button>` INSIDE the card's face, never over it: see
- *  `identity-section.tsx › IdentityCard`. */
+/** The card control. A `<button>` inside the card's face, never over it
+ *  (`identity-section.tsx › IdentityCard`). */
 export function LaunchIntoChannelButton({
   onClick,
   busy,
   disabled,
 }: {
   onClick: () => void;
-  /** ⚠ **THE LAUNCH IS IN FLIGHT ON THIS ROW** (Samuel: *"when the user clicks
-   *  launch, maybe a small spinner or loading state on the button so that the
-   *  user sees something happened"*). It is per-ROW, not per-pane: a spinner on
-   *  every card would say the wrong thing about the fifteen that are idle. */
+  /** The launch in flight is on THIS row. */
   busy: boolean;
   disabled: boolean;
 }) {
@@ -87,70 +57,65 @@ export function LaunchIntoChannelButton({
 
 /** Which row is launching, and the one line a refusal gets. */
 export interface CardLaunch {
-  /** The bridge op exists on this build. ⚠ Absent ⇒ offer no control at all —
-   *  a launch button in a plain browser can only refuse. */
+  /** The bridge op exists on this build; the caller renders no button otherwise. */
   canLaunch: boolean;
   /** The identity id with a launch in flight, or `null`. */
   busyId: string | null;
-  /** The last refusal, ON THE ROW THAT EARNED IT. ⚠ Never swallowed: a refusal
-   *  is not a push, so the card is the only place it can be said. */
+  /** The last refusal, on the row that earned it (a refusal is not a push). */
   error: { identityId: string; message: string } | null;
   launch: (identity: AgentIdentity) => void;
 }
 
 export function useCardLaunch(channel: Channel | null): CardLaunch {
+  const posture = useChannelLaunchPosture(channel?.id ?? "");
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<CardLaunch["error"]>(null);
 
   const run = useCallback(
     async (identity: AgentIdentity) => {
-      // ⚠ ONE LAUNCH IN FLIGHT ACROSS THE PANE — a double-submit guard over a
-      // single click, exactly `use-agents-panel.ts › launchBusy`'s scope, and
-      // not a cap on how many agents a channel may hold.
+      // One launch in flight across the pane — a double-submit guard, not a cap.
       if (!channel || busyId !== null) return;
       setBusyId(identity.id);
       setError(null);
       try {
-        const res = await launchAgentOnThread({
-          channelId: channel.id,
-          // ⚠ `null` IS A CHANNEL-LEVEL AGENT and is not a missing value: this
-          // card names no exchange, so there is nobody on the other side of it.
-          taskId: null,
-          workspaceId: identity.workspaceId,
-          channelName: channel.name,
-          threadTitle: null,
-          // ⚠ NO COUNTERPARTY, AND THAT IS NOT A REFUSAL — see `launchAgent`'s
-          // own note: the refusal is about a THREAD whose other party could not
-          // be resolved, which is a different fact.
-          counterpartyId: null,
-          direct: channel.isDirect,
-          identityId: identity.id,
-        });
+        const res = await launchAgentOnThread(
+          buildLaunchPayload(
+            {
+              channelId: channel.id,
+              // The IDENTITY's workspace: main resolves `(workspace_id, id)`; the channel's
+              // container id would 404 every personal identity.
+              workspaceId: identity.workspaceId,
+              channelName: channel.name,
+              direct: channel.isDirect,
+              thread: () => null,
+            },
+            // `null` = a channel-level agent, never `""` (the legacy "thread never became
+            // first-class" value).
+            null,
+            identity.id
+          )
+        );
         if (!res.ok) {
+          // The launched runtime is the identity's, else the channel's (no per-spawn pick here).
+          const descriptor = identity.runtime
+            ? posture.descriptorOf(identity.runtime)
+            : posture.descriptor;
           setError({
             identityId: identity.id,
             message:
-              res.reason === LAUNCH_APPROVAL_REASON
-                ? // ⚠ NOT REACHABLE FROM THESE ROWS TODAY (they are the caller's
-                  // own identities, and main asks only for a FOREIGN one's first
-                  // run) — and said honestly rather than reported as a failure,
-                  // because the approval question belongs to the popup that can
-                  // show the instructions being accepted.
-                  "Launch it from the channel once to approve it"
-                : launchRefusalText(res.reason),
+              res.reason === "no-model" && res.detail
+                ? res.detail
+                : launchRefusalText(res.reason, descriptor),
           });
           return;
         }
         const address = res.agentId;
         if (address) {
+          // A refused rename/describe is not a failed launch: the agent is already running.
           await renameAgent(address, identity.name);
           const described = identity.description?.trim();
           if (described) await describeAgent(address, described);
         }
-        // 🔒 **THE POPUP SAMUEL ASKED FOR, VERBATIM**: *"'name of agent'
-        // launched into 'name of channel'"*. The NAME is the identity's, which
-        // is the name the agent now wears; the CHANNEL is `channelTitle`'s — a
-        // channel's own display identity, never its roster (`home-rows.ts`).
         toast({
           title: `"${identity.name}" launched into "${channelTitle(channel)}"`,
           variant: "invert",
@@ -159,12 +124,10 @@ export function useCardLaunch(channel: Channel | null): CardLaunch {
         setBusyId(null);
       }
     },
-    [channel, busyId]
+    [channel, busyId, posture]
   );
 
   return {
-    // ⚠ FEATURE-DETECTED ON THE OP ABOUT TO BE USED, at the call site, never on
-    // `window.dopl` being truthy (`agents-controls.ts`'s rule for the family).
     canLaunch: canLaunchAgents(),
     busyId,
     error,

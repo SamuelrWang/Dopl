@@ -1,17 +1,9 @@
 "use client";
 
 /**
- * The hero scene's tree — /home's frame, rail, header, channel column and record
- * pane, as a pure function of the step.
- *
- * Split from `banner-demo.tsx` so `demo-class-coverage.test.tsx` can mount the
- * scene at one step and read the DOM: the clock, the ResizeObserver fit, the
- * scripted cursor and the click ripple are all things that gate must not have to
- * start. What is left here is exactly what paints.
- *
- * (2026-09-17) The scene is /home's CHANNEL RECORD and never a thread. The pane
- * header is the channel's name, the info column is Info / Threads 0 / Agents N /
- * Settings, and the Info tab is the account surface's own mentions face.
+ * The hero scene as a pure function of the step: /home's frame, rail, header, channel
+ * column and record pane. Split from `banner-demo.tsx` so `demo-class-coverage.test.tsx`
+ * can mount one step without starting the clock, resize fit or scripted cursor.
  */
 
 import { useMemo, useState, type RefObject } from "react";
@@ -53,16 +45,10 @@ const DEMO_GATE: MutationGate = { begin() {}, end() {} };
 
 const NOOP = () => {};
 
-/** Module-level so the empty list is one REFERENCE, not a fresh `[]` per render
- *  — it is in a memo's dependency list. */
+/** One reference, not a fresh `[]` per render: it is a memo dependency. */
 const NO_THREADS: never[] = [];
 
-/**
- * The composer's Bot glyph. `composer-toolbar.tsx` draws it only on
- * `newAgent?.canLaunch`, so a scene that passed nothing correctly rendered a
- * BROWSER's composer, which is not what /home looks like on a machine running
- * Dopl. Every handler is inert and refuses rather than hangs.
- */
+/** `canLaunch` draws the composer's Bot glyph, as desktop /home does; every handler refuses. */
 const DEMO_LAUNCH: AgentLaunchControls = {
   canLaunch: true,
   launchBusy: false,
@@ -79,10 +65,9 @@ export function DemoScene({
   onOpenAgent = NOOP,
 }: {
   step: number;
-  /** Bumped per loop so the info column's own tab state starts from the
-   *  product's default on every replay. */
+  /** Bumped per loop so the info column's tab state resets on every replay. */
   run?: number;
-  /** The RECORD PANE — the scripted cursor's search root (`banner-demo.tsx`). */
+  /** The record pane — the scripted cursor's search root (`banner-demo.tsx`). */
   paneRef?: RefObject<HTMLDivElement | null>;
   agentOpen?: boolean;
   onOpenAgent?: () => void;
@@ -93,8 +78,7 @@ export function DemoScene({
     () => indexMembers(MEMBERS, CURRENT_USER_ID, AGENT_INDEX),
     []
   );
-  /** No threads: the ruling, not an empty fixture. The column's Threads tab reads
-   *  `0`, exactly as /home does on a channel with none. */
+  /** No threads by design: the Threads tab reads `0`, as on a /home channel with none. */
   const rows = useMemo(
     () => channelRows(messages, NO_THREADS, index, formatChannelTimestamp),
     [messages, index]
@@ -113,31 +97,23 @@ export function DemoScene({
 
   return (
     <QueryClientProvider client={qc}>
-          {/* /home's frame: the dark slab, the rail, and ONE gray panel butting
-              flush-left against the rail — `pages/home/index.tsx`'s `!ml-0`,
-              here as `.lp-demo-panel`'s own zeroed left margin. */}
+          {/* /home's frame: the panel sits flush on the rail, as `pages/home/index.tsx`'s `!ml-0`. */}
           <div className="lp-demo-home antialiased">
             <DemoAccountRail />
             <main className="page-float lp-demo-panel">
               <DemoHomeHeader />
               <div className="flex min-h-0 flex-1">
                 <DemoChannelList rows={homeRows} selectedId={HOME_ROW_ID} />
-                {/* THE RECORD PANE — a white card bounded by the account
-                    palette's 2px line, NOT an elevation (`index.tsx`: no
-                    `.bento`, the drop had nowhere to fall). `data-frame-skin`
-                    is the account palette on the shared surface's own dividers,
-                    sender pills and composer panel — the KIT's since R-38
-                    (2026-09-17), where this scene used to carry a ported copy in
-                    `marketing.css`. `relative` is the agent view's containing
-                    block, exactly as `channel-surface-standalone.tsx` states. */}
+                {/* The record pane: a line-bounded card, not an elevation, as on /home.
+                    `data-frame-skin` applies the kit's account palette; the pane is
+                    the agent view's containing block. */}
                 <div className="lp-demo-record" data-frame-skin ref={paneRef}>
                   <ChannelsMessagePane
                     key={`pane-${run}`}
                     channelId={CHANNEL_ID}
                     workspaceId={WORKSPACE_ID}
                     channelName="q4-outbound"
-                    // Always the channel record: a thread here puts a breadcrumb
-                    // in the header and a thread-scoped column beside it.
+                    // Always the channel record, never a thread (no breadcrumb or thread column).
                     thread={null}
                     rows={rows}
                     index={index}
@@ -147,7 +123,6 @@ export function DemoScene({
                     infoOpen
                     favorited
                     gate={DEMO_GATE}
-                    // The composer's Bot glyph — see `DEMO_LAUNCH`.
                     newAgent={DEMO_LAUNCH}
                     onToggleInfo={NOOP}
                     onToggleFavorite={NOOP}
@@ -175,20 +150,13 @@ export function DemoScene({
                       mentionsLoading={false}
                       onOpenMention={NOOP}
                       onMarkAllMentionsRead={NOOP}
-                      // /home's own capabilities (`relationship-record.tsx`): the
-                      // Threads tab carries the Artifacts toggle here and only
-                      // here, and the Info tab wears the account surface's
-                      // mentions face.
+                      // /home's own capabilities (`relationship-record.tsx`).
                       artifacts
                       mentionsLayout="category"
-                      // The hero renders the product's own Info body. No
-                      // `headerEdit` or `infoCardEdit` is passed, which is the
-                      // display-only face a decorative pane wants.
+                      // No `headerEdit`/`infoCardEdit`: the display-only face.
                       activityBins={ACTIVITY_BINS}
                       activityLoading={false}
-                      // (2026-08-25) Add person sits under the roster with no
-                      // heading. A `<span>`, not a button: the pane is decorative
-                      // and `aria-hidden`.
+                      // A `<span>`, not a button: the pane is decorative and `aria-hidden`.
                       infoExtras={{
                         belowRoster: (
                           <div className="px-3.5 pt-2.5">
@@ -205,8 +173,7 @@ export function DemoScene({
                     messages={messages}
                     currentUserId={CURRENT_USER_ID}
                     viewer={VIEWER}
-                    // Off the index, as the real panel resolves it: the colour is
-                    // a live fact about the SESSION, never stamped on a row.
+                    // From the index, as the real panel resolves it: colour belongs to the session.
                     color={
                       index.agents.get(MY_SESSION.agentId ?? "")?.color ?? null
                     }

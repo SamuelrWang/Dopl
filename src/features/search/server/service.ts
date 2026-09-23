@@ -30,28 +30,12 @@ import type { SearchCaller } from "./repository-visibility";
 import { assembleGroups, type SearchLabels } from "./service-groups";
 
 /**
- * Global search behind `GET /api/search`: `scope=account` for /home (every
- * container the caller is a member of), `scope=container` for one workspace.
- *
- * The fence: nothing is queried that `loadSearchReach` did not prove. Every read
- * is handed an id array built from the caller's active memberships, so a
- * container or channel they do not belong to is never named. The reads run as
- * service role (INVARIANTS §2), so this service is the fence with no backstop.
- *
- * Three rules that fail quietly:
- * 1. Home scope never TOUCHES members / skills / chats — an absence, so
- *    `service.test.ts` asserts the repositories were not called.
- * 2. Container scope gates those three on `kind === "standard"` too — asked
- *    POSITIVELY of the RAW column, never through `isStandardWorkspace`
- *    (F-729, 2026-09-18). That predicate reads an absent kind AS standard,
- *    which is fail-closed where `standard` denies and fail-OPEN here, where
- *    `standard` is what unlocks the three groups.
- * 3. A shared credential loses every own-row arm: `isSharedCredential` collapses
- *    `ownerUserId` to `null` before any visibility clause is written.
+ * Global search behind `GET /api/search`: `account` scope spans every container the
+ * caller is in, `container` scope one. Reads run as service role, so this service is
+ * the fence (INVARIANTS §2): nothing is queried that `loadSearchReach` did not prove.
  */
 
-/** What the route hands in. `lockedWorkspaceId` is `ctx.apiKeyWorkspaceId` and
- *  can never be a request field (INVARIANTS §4/§10, R3). */
+/** `lockedWorkspaceId` is `ctx.apiKeyWorkspaceId`, never a request field (INVARIANTS §4). */
 export interface SearchContext {
   userId: string;
   credentialSubjectUserId: string | null;
@@ -65,11 +49,8 @@ export interface SearchInput {
 }
 
 /**
- * 403 for "not a member" AND for "no such container", deliberately the same
- * answer (INVARIANTS §3: membership existence must not leak). The membership
- * proof is narrowed rather than checked, so both are the same empty read. Do not
- * split this into 404-for-missing / 403-for-forbidden — that split is the oracle
- * both codes exist to deny.
+ * 403 for "not a member" and "no such container" alike: a 404/403 split would be a
+ * membership oracle (INVARIANTS §3).
  */
 const CONTAINER_FORBIDDEN = "SEARCH_CONTAINER_FORBIDDEN";
 
@@ -88,9 +69,7 @@ export async function runSearch(
   const startedAt = Date.now();
   const q = (input.q ?? "").trim();
 
-  // Too short is a 200 with no groups, never a 400 (contract): the popup asks on
-  // the first keystroke, and an error would render as a failed search rather than
-  // "keep typing". No query runs.
+  // Too short is a 200 with no groups, not a 400: the popup asks from the first keystroke.
   if (q.length < SEARCH_MIN_QUERY_LENGTH) {
     return { q, scope: input.scope, tookMs: Date.now() - startedAt, groups: [] };
   }
@@ -104,9 +83,7 @@ export async function runSearch(
     throw new HttpError(403, CONTAINER_FORBIDDEN, "No access to that container");
   }
 
-  // One `Promise.all` over a fixed set of reads, never a per-row or per-container
-  // fan (INVARIANTS §9). In account scope the container-only reads are absent from
-  // the array entirely, not present-and-discarded.
+  // A fixed set of batched reads, never a per-row fan (INVARIANTS §9).
   const byKind = await runGroupReads(ctx, input.scope, reach, q);
 
   const labels: SearchLabels = {
@@ -115,8 +92,7 @@ export async function runSearch(
   };
   const standard =
     reach.containers.length === 1 &&
-    // F-729: `=== "standard"` of the raw column. An unknown or absent kind
-    // offers no container-only group rather than every one of them.
+    // F-729: the raw column, positively; an absent or unknown kind unlocks nothing.
     reach.containers[0]?.kind === "standard";
   return {
     q,
@@ -131,11 +107,7 @@ export async function runSearch(
   };
 }
 
-/**
- * The reads, run together. Split out so {@link runSearch} reads as the gate it
- * is; the two halves are the two fences (channel membership, container
- * membership) and the split follows them.
- */
+/** The reads, in two halves following the two fences: channel and container membership. */
 async function runGroupReads(
   ctx: SearchContext,
   scope: SearchScope,
@@ -144,14 +116,9 @@ async function runGroupReads(
 ): Promise<Map<SearchGroupKind, SearchHit[]>> {
   const containerIds = reach.containers.map((c) => c.id);
   const channelIds = reach.channels.map((c) => c.id);
-  // Rule 3: a credential with nobody behind it has no own rows, so every arm
-  // below the widest visibility is dropped before any clause is written.
+  // A credential standing for nobody has no own rows and no grants to read.
   const ownerUserId: OwnerRef = isSharedCredential(ctx) ? null : ctx.userId;
-  /**
-   * F-716: the caller as the four `canSee*` predicates need them. Built once per
-   * request from the reach that proved access, never from caller input. The role
-   * map is what makes the workspace-admin arms container-correct in account scope.
-   */
+  /** Built from the proven reach, never caller input; roles are per container (F-716). */
   const caller: SearchCaller = {
     userId: ctx.userId,
     ownerUserId,
@@ -179,14 +146,9 @@ async function runGroupReads(
     ["agentIdentities", agentIdentities],
   ]);
 
-  // Rules 1 and 2: an early return, not a filter on the results, because what
-  // must be true is that the queries did not happen.
-  // F-564: the POSITIVE form. "Not the listing kind" is not "therefore a home
-  // channel", and there are three kinds — asking positively makes a fourth kind
-  // inherit the refusal rather than opt into it.
-  // F-729: and it asks the RAW column, not `isStandardWorkspace`, which reads an
-  // ABSENT kind as standard. Here that is the permissive side, so `null` — a
-  // narrowed projection, a kind this build does not know — must refuse.
+  // Home scope and non-standard containers must not even query these groups, so this is
+  // an early return, not a filter. `kind === "standard"` is asked positively of the raw
+  // column: `isStandardWorkspace` reads an absent kind as standard (F-564, F-729).
   const container = reach.containers[0];
   const servesContainerModules =
     scope === "container" &&

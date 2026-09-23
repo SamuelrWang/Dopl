@@ -1,39 +1,13 @@
 import { cn } from "@/shared/lib/utils";
-import {
-  SECTION_PANEL_GROUND,
-  SECTION_PANEL_SHELL,
-} from "@/shared/ui/section-panel";
 import { Skeleton, SkeletonLine, SkeletonText } from "@/shared/ui/skeleton";
 import { SECTION_CARD } from "@/features/members/components/members-v2/bits";
+import { SectionPanelGhost } from "#/components/skeletons/section-panel-ghost";
 import { SkeletonSurface } from "#/components/skeletons/skeleton-surface";
 
 /**
- * `/:workspaceSegment/members`'s loading shape — the console's OWN two panes.
- *
- * ⚠ IT REPLACES `PageLoading variant="two-pane"`, which was `TwoPaneListSkeleton`:
- * a FIXED 372px list of avatar rows over `DetailDocSkeleton`'s centred
- * `max-w-[760px]` document column. This page is neither. Its list is the LEFT
- * CELL OF A GRID (`minmax(380px,42fr)`), it stacks role SECTIONS of bordered
- * cards rather than a flat row list, and its right pane opens on a DARK header
- * band over one `.bento` — no document measure anywhere on the surface. The v1
- * members skeleton that used to carry this shape was deleted with the v1 tab
- * (`src/features/members/components/members-skeleton.tsx`, 2026-08-30) and
- * nothing replaced it, which is how the generic ghost came back.
- *
- * 🔑 GEOMETRY BY REFERENCE. The grid identity is the page's own string, pinned
- * byte-for-byte against `members-v2-view.tsx` in
- * `#/components/skeletons/page-skeletons.test.tsx`; the roster cards mount
- * `members-v2/bits.tsx › SECTION_CARD` itself, so their fill, hairline and
- * radius cannot drift from the loaded roster's.
- *
- * ⚠ THE SAME SHAPE STANDS AT **BOTH** GATES. A cold /members crosses the
- * workspace resolve in `./index.tsx` and then `MembersV2View`'s own roster read;
- * the second one painted `TwoPaneListSkeleton`, so the page swapped skeletons
- * mid-load — the flicker `#/components/page-states.tsx` argues against, arriving
- * inside a single page. The view takes a `loadingSkeleton` SLOT now and the seam
- * hands it this shape. ⚠ Do not "simplify" that to an import on the other side:
- * `members-v2-view.tsx` lives in the shared tree and cannot reach into this
- * package (same idiom as `agent-identities-core.tsx`).
+ * `/:workspaceSegment/members`'s loading shape: the console's own two panes. The grid template is
+ * the page's own string (pinned against `members-v2-view.tsx`) and the roster cards mount
+ * `SECTION_CARD` itself. Used at both gates, handed to the shared view as its `loadingSkeleton`.
  */
 export function MembersPageSkeleton({
   label = "Loading members",
@@ -43,7 +17,6 @@ export function MembersPageSkeleton({
   return (
     <SkeletonSurface
       label={label}
-      // The page's own grid, verbatim — NOT a fixed list width.
       className="page-float grid grid-cols-[minmax(380px,42fr)_minmax(0,58fr)] antialiased"
     >
       <RosterPaneGhost />
@@ -52,11 +25,7 @@ export function MembersPageSkeleton({
   );
 }
 
-/**
- * THE LEFT CELL — `list-pane.tsx › ListPane`: title block + "Add" pill, the
- * compact search well, the two-option filter row, then the scroller of role
- * sections.
- */
+/** The left cell (`list-pane.tsx › ListPane`): title + Add pill, search, filter row, role sections. */
 function RosterPaneGhost() {
   return (
     <div className="flex min-w-0 flex-col border-r border-border-default">
@@ -65,14 +34,11 @@ function RosterPaneGhost() {
           <SkeletonLine w={112} h={20} />
           <SkeletonLine w={244} h={10} />
         </div>
-        {/* The `auth-btn-3d` "Add" pill: h-8, hug width, fully round. */}
         <Skeleton className="h-8 w-[76px] shrink-0 rounded-full" />
       </div>
 
-      {/* `SearchField size="sm"` is an h-8 concave well. */}
       <Skeleton className="mx-4 mb-3 h-8 rounded-[9px]" />
 
-      {/* `SegmentedControl` in its trackless `sm` form — two h-[27px] pills. */}
       <div className="mx-4 mb-3 flex items-center gap-1.5">
         <Skeleton className="h-[27px] w-[104px] rounded-full" />
         <Skeleton className="h-[27px] w-[88px] rounded-full" />
@@ -80,8 +46,7 @@ function RosterPaneGhost() {
 
       <div className="min-h-0 flex-1 overflow-hidden border-t border-border-default pt-3">
         <div className="flex flex-col gap-5 px-3 pb-6">
-          {/* Two sections, because a workspace always has at least one role
-              group and the Pending group is the common second. */}
+          {/* A workspace always has one role group; Pending is the common second. */}
           <RosterSectionGhost rows={3} />
           <RosterSectionGhost rows={2} />
         </div>
@@ -90,15 +55,7 @@ function RosterPaneGhost() {
   );
 }
 
-/**
- * One role group — the heading pair `ListPane` draws above every section, then
- * `member-rows.tsx › MemberSectionCard`'s bordered card: a 32px column strip
- * over the member rows.
- *
- * ⚠ THE CARD MOUNTS `SECTION_CARD` ITSELF rather than restating its four
- * utilities. That constant is `bits.tsx`'s and the three real roster cards read
- * it, so this ghost re-grounds with them.
- */
+/** One role group: its heading pair, then `MemberSectionCard`'s card (`SECTION_CARD` itself). */
 function RosterSectionGhost({ rows }: { rows: number }) {
   return (
     <section>
@@ -107,7 +64,6 @@ function RosterSectionGhost({ rows }: { rows: number }) {
         <SkeletonLine w="82%" h={9} />
       </div>
       <div className={SECTION_CARD}>
-        {/* `HeaderStrip` — h-8, its own subtle fill, one hairline under it. */}
         <div className="flex h-8 items-center gap-2.5 border-b border-border-default bg-card-surface-subtle px-3">
           <SkeletonLine w={44} h={8} />
           <span className="flex-1" />
@@ -118,7 +74,6 @@ function RosterSectionGhost({ rows }: { rows: number }) {
             key={i}
             className="flex items-center gap-2.5 border-b border-border-subtle px-3 py-2 last:border-b-0"
           >
-            {/* `Avatar size="sm"` — 32px round. */}
             <Skeleton className="h-8 w-8 shrink-0 rounded-full" />
             <div className="min-w-0 flex-1 space-y-1.5">
               <SkeletonLine w="52%" h={10} />
@@ -132,22 +87,13 @@ function RosterSectionGhost({ rows }: { rows: number }) {
   );
 }
 
-/**
- * THE RIGHT CELL — `detail-pane.tsx › MemberDetailPane`, which opens on the
- * signed-in user and therefore never shows the empty state at this gate.
- *
- * ⚠ THE HEADER BAND IS DARK AND THAT IS THE SURFACE'S LOUDEST FACT
- * (`member-header.tsx`: `bg-surface-invert px-5 pt-4`). A ghost that skipped it
- * resolved into a black strip dropping onto the reader — the exact "moves the
- * content the operator was already reading toward" failure INVARIANTS §1A opens
- * with.
- */
+/** The right cell (`detail-pane.tsx › MemberDetailPane`), opening on the signed-in user. Its dark
+ *  header band is the surface's loudest fact, so the ghost draws it. */
 function MemberDetailGhost() {
   return (
     <div className="flex min-h-0 flex-1 flex-col bg-card-surface-subtle">
       <div className="shrink-0 bg-surface-invert px-5 pt-4">
         <div className="flex items-start gap-3.5">
-          {/* `Avatar size="md"` — 40px round. */}
           <OnInvert className="h-10 w-10 shrink-0 rounded-full" />
           <div className="min-w-0 flex-1 space-y-2 pt-0.5">
             <OnInvert className="h-5 w-[196px] rounded-full" />
@@ -158,7 +104,7 @@ function MemberDetailGhost() {
             <StatBlockGhost />
           </div>
         </div>
-        {/* The tab row — inert blocks at the tab rhythm, no `<button>`. */}
+        {/* The tab row: inert blocks, no `<button>`. */}
         <div className="mt-3 flex items-center gap-3 pb-2.5 pt-1">
           <OnInvert className="h-3 w-[44px] rounded-full" />
           <OnInvert className="h-3 w-[48px] rounded-full" />
@@ -168,16 +114,14 @@ function MemberDetailGhost() {
 
       <div className="min-h-0 flex-1 overflow-hidden p-4">
         <div className="bento flex flex-col gap-3.5 px-4 py-4">
-          {/* `PaneHeading` — title over one quiet line. */}
           <div className="min-w-0 space-y-1.5">
             <SkeletonLine w={92} h={16} />
             <SkeletonLine w="64%" h={9} />
           </div>
-          {/* `member-facts.tsx` — the Role and Teams sections, each a flat
-              14px-radius gray well since R-39 (2026-09-17). */}
+          {/* `member-facts.tsx` — the Role and Teams sections. */}
           <div className="flex flex-col gap-3">
-            <SectionPanelGhost lines={2} />
-            <SectionPanelGhost lines={1} />
+            <SectionPanelLinesGhost lines={2} />
+            <SectionPanelLinesGhost lines={1} />
           </div>
         </div>
       </div>
@@ -195,39 +139,21 @@ function StatBlockGhost() {
   );
 }
 
-/**
- * One `shared/ui/section-panel.tsx › SectionPanel` — heading row over the body,
- * on ONE flat ground since R-39 (2026-09-17). ⚠ NOT `SectionPanel` itself: it
- * prints its `label` as an `<h2>`, which a loading state must not do — so this
- * keeps the GROUND and the BOX by name and draws a bar instead.
- */
-function SectionPanelGhost({ lines }: { lines: number }) {
+/** One `SectionPanel`: heading bar over a few text lines. */
+function SectionPanelLinesGhost({ lines }: { lines: number }) {
   return (
-    <div
-      data-section-panel
-      className={cn(SECTION_PANEL_SHELL, SECTION_PANEL_GROUND)}
-    >
-      <div className="flex min-h-[22px] items-center px-1 pb-2.5">
-        <SkeletonLine w={58} h={10} />
-      </div>
+    <SectionPanelGhost headingWidth={58}>
       <div className="px-1">
         <SkeletonText lines={lines} />
       </div>
-    </div>
+    </SectionPanelGhost>
   );
 }
 
 /**
- * The shimmer atom RE-GROUNDED FOR THE INVERTED BAND, and nothing else about it
- * changes — same `Skeleton`, same `animate-pulse`, same `aria-hidden`, so the
- * one-recipe pin in `page-skeletons.test.tsx` still counts it.
- *
- * ⚠ IT EXISTS BECAUSE THE ATOM'S FILL IS BLACK AT 3.5% (`bg-surface-raised-2`),
- * which is invisible on `--surface-invert`. `!bg-text-on-invert/15` is the same
- * on-invert tint `member-header.tsx` gives the avatar it sits beside; the `!` is
- * there because both are `bg-*` utilities in one layer and source order would
- * otherwise decide which wins. This is a GROUND, not a second pulse recipe —
- * never fork `Skeleton` itself (INVARIANTS §1A).
+ * The shimmer atom re-grounded for the inverted band: its 3.5% black fill is invisible on
+ * `--surface-invert`. A ground, not a second pulse recipe (INVARIANTS §1A); the `!` wins over the
+ * atom's own `bg-*` utility in the same layer.
  */
 function OnInvert({ className }: { className?: string }) {
   return <Skeleton className={cn("!bg-text-on-invert/15", className)} />;

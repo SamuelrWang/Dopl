@@ -24,7 +24,7 @@ import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { prefs, CH_A } from "./_channel-prefs-block.mjs";
-import { fnOf } from "./helpers/source-probe.mjs";
+import { codeOf, fnOf } from "./helpers/source-probe.mjs";
 
 const require = createRequire(import.meta.url);
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -294,11 +294,12 @@ test("REPORT: the bridge declares the field and the op, in BOTH trees", () => {
   assert.match(shared, /export type \{ SpaBridgeSessions \} from "\.\/spa-bridge-sessions";/,
     "…which is re-exported from it, so one import path stays canonical");
   assert.match(sessionOps, /setModel\?\(/, "…and the shared declaration has the op");
-  assert.match(mirror, /setModel\?\(/, "…and so does the mirror");
-  // ⚠ 2026-09-23: the durable posture's third field is DELETED, and the mirror says so.
-  assert.match(mirror, /preset: \{ tools: string; messages: string \}/,
-    "the durable posture declares no model where the SPA writes it");
-  assert.match(readFileSync(join(HERE, "..", "renderer", "app-preload.js"), "utf8"), /setModel: \(channelId, taskId, model, agentId\) =>/,
+  assert.match(mirror, /interface DoplBridge extends SpaBridgeSurface/,
+    "…which the SPA's bridge type extends rather than re-declares");
+  const preload = readFileSync(join(HERE, "..", "renderer", "app-preload.js"), "utf8");
+  // The durable posture has no model field: the preload forwards none.
+  assert.doesNotMatch(codeOf(preload), /preset\.model/, "the durable posture forwards no model");
+  assert.match(preload, /setModel: \(channelId, taskId, model, agentId\) =>/,
     "and the preload is the ground truth all three follow");
 });
 
