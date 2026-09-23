@@ -93,10 +93,14 @@ function linkAuth(source, target) {
   fs.symlinkSync(source, target, 'file');
 }
 
+/** The app-owned CODEX_HOME a launch runs against (created by `isolatedEnv`). */
+function privateHome(userDataRoot) {
+  return path.join(userDataRoot || appUserData(), PRIVATE_HOME);
+}
+
 function isolatedEnv(env, userDataRoot) {
   const input = Object.assign({}, env || {});
-  const root = userDataRoot || appUserData();
-  const target = path.join(root, PRIVATE_HOME);
+  const target = privateHome(userDataRoot);
   fs.mkdirSync(target, { recursive: true, mode: 0o700 });
   try { fs.chmodSync(target, 0o700); } catch (_) { /* best effort on non-POSIX filesystems */ }
   retireCodexTrustFile(target);
@@ -110,4 +114,4 @@ function isolatedEnv(env, userDataRoot) {
   return input;
 }
 
-module.exports = { isolatedEnv, hasAmbientConfig, onlyTrustEntries, projectTrustFence, PRIVATE_HOME };
+module.exports = { isolatedEnv, privateHome, hasAmbientConfig, onlyTrustEntries, projectTrustFence, PRIVATE_HOME };

@@ -23,15 +23,13 @@
 //   outbound channels    -> the sandbox's network boundary (no network under read-only, and none
 //                           under workspace-write by default) + `sandbox_approval`
 //   capability escalation-> `sandbox_approval` / `request_permissions` / `skill_approval`
-// The FIFTH — DELEGATION — does not. Codex has subagents (`/agent`, `/subagents`,
-// `SubagentStart`/`SubagentStop`), and `codex-research.md` §3 marks them "Less documented than the
-// rest; treat as unverified for adapter purposes." There is no documented name to deny and no
-// documented switch to turn them off. PERSISTENCE/SCHEDULING is the same: `notify` and
-// `codex://automations` exist, with no documented agent-invocable verb and no documented deny.
-// ⚠ SO A CODEX SESSION AT `read_only` OR `dopl_only` IS NOT PROVEN TO BE UNABLE TO DELEGATE, and
-// that is written here rather than papered over — see the C25/C26 entries in the design's §5
-// amendment. It is the honest cost of shipping the restricted profiles on this runtime at all,
-// and it is Samuel's open question 2 (§8) in concrete form.
+// The FIFTH — DELEGATION — has no approval item to deny, and 🔒 SINCE 2026-09-22 IT IS OFF ON
+// EVERY PROFILE BY CONFIGURATION instead (§5 C25 closed, measured on codex-cli 0.155.1):
+// `features.multi_agent = false` below removes it for a model with no catalog
+// `multi_agent_version` (gpt-5.5), and `catalog.js`'s delegation-free model catalog removes it for
+// every code-mode model, where the feature flag alone does nothing. A forced `spawn_agent` then
+// answers `unsupported call` and no child thread starts. PERSISTENCE/SCHEDULING is still
+// ungrounded: `notify` and `codex://automations` exist, with no agent-invocable verb measured.
 
 const {
   DOPL_SAFE_TOOLS, DOPL_ADMIN_TOOLS, RETIRED_DOPL_TOOLS, UNIVERSAL_HARD_DENY,
@@ -171,13 +169,14 @@ function axisAAllows(mode, toolName) {
 // removes the apps source (and `request_plugin_install`); `multi_agent = false` removes delegation.
 // ⚠ APPS OFF ON EVERY PROFILE: the twin of Claude's `ENABLE_CLAUDEAI_MCP_SERVERS=0`, which is set
 // unconditionally too — an account connector is ambient authority no profile granted.
-// ⚠ DELEGATION OFF ON THE RESTRICTED TWO ONLY, matching Claude's `DENIED_BUILTINS` (Task/Agent):
-// a subagent is a fresh session that does not inherit the bound. ⚠ IT CLOSES §5 C25 ONLY FOR A
-// NON-CODE-MODE MODEL (gpt-5.5): a `code_mode_only` model (gpt-6-*, gpt-5.6-*) still carries a
-// top-level `collaboration` namespace (`spawn_agent`, …) with `multi_agent`, `multi_agent_v2` and
-// `enable_fanout` all false — measured 2026-09-22, and still OPEN.
-const ACCOUNT_FENCE = Object.freeze({ apps: false, plugins: false });
-const RESTRICTED_FENCE = Object.freeze({ ...ACCOUNT_FENCE, multi_agent: false });
+// 🔒 ⚠ DELEGATION OFF ON EVERY PROFILE TOO (2026-09-22), matching Claude, which removes `Agent` on
+// ALL profiles (`runtime/claude/tools.js › FULL_BUILTIN_BOUND`): on Dopl an agent delegates by
+// launching a visible Dopl agent (`dopl_channel(op="manage", action="launch")`), never a hidden
+// sub-session that does not inherit the bound. ⚠ THIS FLAG IS HALF THE FENCE: it is what gpt-5.5
+// obeys. A `code_mode_only` model keeps its `collaboration` namespace whatever `[features]` say —
+// its catalog `multi_agent_version` wins — so `catalog.js` fences those, on every launch.
+const ACCOUNT_FENCE = Object.freeze({ apps: false, plugins: false, multi_agent: false });
+const RESTRICTED_FENCE = Object.freeze({ ...ACCOUNT_FENCE });
 
 function buildSessionToolConfig(profile) {
   const p = normalizeProfile(profile);
@@ -233,9 +232,8 @@ function buildSessionToolConfig(profile) {
   // the operator's own Axis-A pick off a profile that is otherwise `full`. The deny list is the
   // fence, exactly as this file's own header argues for the restricted profiles.
   //
-  // ⚠ AND THE TWO UNGROUNDED HARM GROUPS ARE UNCHANGED HERE. Delegation and persistence have no
-  // documented name to deny on this runtime (see the header), so `channel_agent` is no more
-  // proven against a Codex subagent than `read_only` is. Recorded, not papered over.
+  // ⚠ DELEGATION IS FENCED HERE AS ON EVERY PROFILE (`ACCOUNT_FENCE` + `catalog.js`); only
+  // PERSISTENCE stays ungrounded (see the header). Recorded, not papered over.
   if (p === 'channel_agent') {
     return {
       builtinTools: [],

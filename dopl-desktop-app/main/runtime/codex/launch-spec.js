@@ -18,19 +18,27 @@
 //                            operator's Axis-A pick does not move them. `full`'s supervision IS
 //                            Axis A plus the sandbox row, so there the operator's choices ride.
 //
-// ⚠ AND ONE THING THE CLAUDE LANE PINS THAT THIS ONE CANNOT. There, `permissionMode: 'default'` is
-// pinned so a wider platform mode cannot stop the gate being called at all. Here the operator's
-// own `approval_policy` IS the native control decision (1) requires us to show, and it genuinely
-// changes what the app-server asks about: at `never` it raises no approval requests, so actions
-// Dopl's Axis A would have gated never reach the gate. THAT IS CODEX'S OWN GRANULARITY, SHOWN
-// HONESTLY (`codex-research.md` §4 item 1 reaches the same conclusion), and it is bounded on the
-// side that matters — Axis B's pin above is per-MCP-tool and survives every policy value.
+// 🔒 ⚠ AND THE CLAUDE LANE'S "NEVER HAND OVER THE WIDEST MODE" PIN, PORTED (2026-09-22). There,
+// `permissionMode: 'default'` is pinned so a wider platform mode cannot stop the gate being called.
+// Here Codex's native `never` did exactly that to the channel tool — it raised no request and the
+// call FAILED — so the operator's `never` is SENT as a narrower `granular` whose only asking
+// category is MCP elicitation (`policy.js › NEVER_NATIVE`, measured identical to `never` for
+// shell, files, escalation and network). The operator-facing mode and its meaning are unchanged.
+//
+// 🔒 ⚠ AND NATIVE DELEGATION + THE SKILLS CATALOGUE ARE OFF ON EVERY LAUNCH: `features.multi_agent =
+// false` (all profiles), a delegation-free model catalog on argv (`catalog.js`, the only lever a
+// code-mode model obeys), and the skills fence (`skills-fence.js`). Claude's lane removes `Agent`
+// and `Skill` on every profile; these are the same two decisions in Codex's vocabulary.
 
 const client = require('./client');
 const tools = require('./tools');
 const axisB = require('./axis-b');
 const serverRequests = require('./server-requests');
 const configHome = require('./config-home');
+const policy = require('./policy');
+const catalog = require('./catalog');
+const skillsFence = require('./skills-fence');
+const resolveBin = require('./resolve-bin');
 const mcp = require('./mcp');
 const normalizer = require('./normalize');
 const channelDirs = require('../../channel-dirs');
@@ -77,21 +85,10 @@ function buildScrubbedEnv(extra) {
 const DEFAULT_SANDBOX = 'workspace-write';
 const SANDBOX_MODES = ['read-only', 'workspace-write', 'danger-full-access'];
 
+// The NATIVE policy for the operator's Axis-A pick. ⚠ `never` and `granular` answer OBJECTS
+// (`policy.js`), and a persisted `never` keeps meaning what the picker says — no migration.
 function approvalPolicy(mode) {
-  const normalized = tools.normalizeToolMode(mode);
-  if (normalized !== 'granular') return normalized;
-  // The current app-server schema requires the granular mode to be an object, not the literal
-  // string "granular". Until category toggles gain a persisted UI path, every declared category
-  // asks; this is the narrow, operator-visible meaning of selecting granular.
-  return {
-    granular: {
-      mcp_elicitations: true,
-      rules: true,
-      sandbox_approval: true,
-      request_permissions: true,
-      skill_approval: true,
-    },
-  };
+  return policy.nativeApprovalPolicy(tools.normalizeToolMode(mode));
 }
 
 function nativePair(s, cfg) {
@@ -135,18 +132,22 @@ function buildLaunchSpec(request) {
 
   // ⚠ NO DOPL SERVER WITHOUT A TOKEN, and the session still launches. A half-built entry that 401s
   // on every call would tell the agent it HAS a delivery path and let it watch that path fail.
-  const threadStart = {
-    approvalPolicy: pair.approval_policy,
-    sandbox: pair.sandbox_mode,
-  };
+  const threadStart = { sandbox: pair.sandbox_mode };
   // ⚠ THE `features` FENCE RIDES EVERY LAUNCH, TOKEN OR NOT (`tools.js › ACCOUNT_FENCE`): the
   // foreign `codex_apps` server mounts from the operator's auth, not from Dopl's entry.
   // ⚠ …AND THE PROJECT-TRUST FENCE (`config-home.js › projectTrustFence`): without it a
   // workspace-write thread auto-trusts its cwd, persists that into the private home (refusing the
   // NEXT launch) and loads `<cwd>/.codex/config.toml` — hooks, MCP servers — from the agent's folder.
   const cwd = channelDirs.sessionSpawnDir(s.channelId);
-  threadStart.config = { features: Object.assign({}, cfg.features), projects: configHome.projectTrustFence(cwd) };
+  // ⚠ …AND THE SKILLS FENCE (`skills-fence.js`): no personal or bundled skill is listed or mentionable.
+  threadStart.config = {
+    features: Object.assign({}, cfg.features),
+    projects: configHome.projectTrustFence(cwd),
+    skills: skillsFence.skillsFence({ cwd, codexHome: configHome.privateHome() }),
+  };
   if (wired.usable) threadStart.config.mcp_servers = { dopl: server };
+  // An OBJECT policy rides `config.approval_policy` (the typed field needs the experimental API).
+  policy.placePolicy(threadStart, pair.approval_policy);
   const model = typeof s.model === 'string' ? s.model.trim() : '';
   // `''` (or anything the roster does not know) sets no field at all — the platform's own pick,
   // which is `descriptor.models.defaultMeansAbsent`.
@@ -301,9 +302,15 @@ function start(spec) {
   };
 
   try {
+    const env = configHome.isolatedEnv(spec.env);
+    // 🔒 THE DELEGATION FENCE A CODE-MODE MODEL OBEYS (`catalog.js`) — process config, so argv.
+    // ⚠ A catalog Dopl cannot build THROWS here, and the session fails rather than delegating.
+    const fenced = catalog.writeDelegationFreeCatalog(env.CODEX_HOME, {
+      bin: codexBin(), env, model: (spec.threadStart && spec.threadStart.model) || '',
+    });
     conn = client.connect({
-      args: spec.args,
-      env: configHome.isolatedEnv(spec.env),
+      args: (spec.args || []).concat(catalog.catalogArgs(fenced)),
+      env,
       cwd: spec.cwd,
       log: typeof spec.log === 'function' ? spec.log : diag,
       onNotification,
@@ -368,34 +375,13 @@ function start(spec) {
   return handleFor(conn, frames, () => threadId, () => activeTurnId);
 }
 
-/**
- * 🔒 THE POLICY ACTUALLY TOOK — checked against the app-server's own echo.
- *
- * ⚠ **`thread/start` IGNORES A FIELD IT DOES NOT RECOGNISE AND ANSWERS WITH ITS DEFAULT**
- * (MEASURED 2026-09-22, `codex-cli 0.155.1`): sending the pre-v2 `approval_policy` / `sandbox_mode`
- * spellings is ACCEPTED, the thread starts, and the response reports `approvalPolicy: "on-request"`
- * — the server's own default, not the `never` that was asked for. Nothing errors. So a renamed
- * field in a future CLI, or a typo here, does not break a launch: it SILENTLY WIDENS one, and a
- * session runs at a supervision level the operator did not choose with no symptom anywhere.
- *
- * ⚠ THE RESPONSE ECHO IS THE ONLY DEFENCE, and it is a real one: `ThreadStartResponse` /
- * `ThreadResumeResponse` both REQUIRE `approvalPolicy`, so it is there to be read. This compares
- * only the STRING form — `granular` is an object whose echo shape is the server's own normalised
- * one, and an inequality there would be a false alarm rather than a caught downgrade.
- *
- * 🔒 UNKNOWN IS NOT A MISMATCH (`docs/INVARIANTS.md`). A response that carries no `approvalPolicy`
- * has told us nothing and is left alone; only a value that is PRESENT and DIFFERENT throws.
- */
-function assertPolicyTook(sent, response) {
-  const asked = sent && sent.approvalPolicy;
-  if (typeof asked !== 'string' || !asked) return;
-  const got = response && response.approvalPolicy;
-  if (typeof got !== 'string' || !got) return;
-  if (got === asked) return;
-  throw new Error(
-    `Codex started the thread at approval policy \`${got}\` after Dopl asked for \`${asked}\` — `
-    + 'refusing a session that would run wider than the operator chose.'
-  );
+// 🔒 THE POLICY ACTUALLY TOOK — `policy.js › assertPolicyTook`, which since 2026-09-22 compares the
+// `granular` object form too (the operator's `never` travels as one).
+const { assertPolicyTook } = policy;
+
+function codexBin() {
+  const r = resolveBin.resolveCodexBin();
+  return r && r.ok ? r.path : null;
 }
 
 // 🔒 ⚠ **`turn/interrupt` IS THE ONE VERB THAT CAN ANSWER NOTHING AT ALL** (MEASURED 2026-09-22,

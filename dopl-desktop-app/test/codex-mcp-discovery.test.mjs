@@ -273,8 +273,8 @@ describe('TIER 1 — the real app-server defers Dopl, and `tool_search` is the w
       const bare = await scriptedTurn(profile, 'deny', { linkAuth: true, noFence: true });
       assert.ok(sources(bare.requests[0]).length > 1, 'control: an unfenced signed-in thread has foreign sources');
       const run = await scriptedTurn(profile, 'deny', { linkAuth: true });
-      const expected = profile === 'full' ? ['Multi-agent tools', 'dopl'] : ['dopl'];
-      assert.deepEqual(sources(run.requests[0]), expected);
+      // 🔒 2026-09-22: delegation is off on EVERY profile, so `full` loses 'Multi-agent tools' too.
+      assert.deepEqual(sources(run.requests[0]), ['dopl']);
       assert.equal(catalogNames(run.requests[0]).includes('request_plugin_install'), false);
       const out = run.requests[1].input.find((i) => i.type === 'tool_search_output');
       assert.deepEqual(out.tools.filter((x) => x.type === 'namespace').map((n) => n.name), ['mcp__dopl']);

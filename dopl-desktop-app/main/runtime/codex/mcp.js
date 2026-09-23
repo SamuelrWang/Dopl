@@ -176,9 +176,11 @@ function doplBearer() {
  * approval as genuinely per-tool and calls it "strictly better than what we have" — this is that
  * lever used for the one thing it must guarantee.
  * ⚠ `'prompt'` RATHER THAN `'approve'`, AND SINCE 2026-09-22 THAT IS MEASURED (§5 C24): `prompt`
- * raises the elicitation, `approve` runs the call with no request at all. ⚠ AND UNDER
- * `approval_policy: 'never'` EVEN `prompt` RAISES NOTHING — the call FAILS (measured), so a Codex
- * session on the widest Axis-A mode cannot use the channel tool; closed, not open.
+ * raises the elicitation, `approve` runs the call with no request at all. ⚠ UNDER CODEX'S NATIVE
+ * `approval_policy: 'never'` EVEN `prompt` RAISES NOTHING — the call FAILS (measured) — which is
+ * why Dopl no longer SENDS native `never` (2026-09-22): the operator's `never` rides as `granular`
+ * with only `mcp_elicitations` asking (`policy.js › NEVER_NATIVE`), so this pin reaches the gate
+ * on every Axis-A mode.
  * ⚠ `default_tools_approval_mode` IS `'approve'` (it was `'writes'`, then `'auto'` on 2026-09-22,
  * which was measured to ASK — see `DEFAULT_TOOL_APPROVAL_MODE`) AND THAT IS A RULING, NOT A DEFAULT. The argument for the change — and what it costs — is written out in
  * full beside `TOOL_APPROVAL_MODES` above; the short form is that a second asking tool makes every

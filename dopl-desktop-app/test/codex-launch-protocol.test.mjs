@@ -99,6 +99,11 @@ test("start drives the measured v2 thread/turn state machine", async () => {
       model: "gpt-6-astra",
     });
 
+    // 🔒 THE DELEGATION FENCE RIDES ARGV ON EVERY START (`catalog.js`), pointing into the private home.
+    const at = hooks.args.indexOf("-c");
+    assert.ok(at !== -1 && /^model_catalog_json=".*dopl-model-catalog\.json"$/.test(hooks.args[at + 1]), JSON.stringify(hooks.args));
+    assert.ok(hooks.args[at + 1].includes(hooks.env.CODEX_HOME), "the catalog lives in the isolated CODEX_HOME");
+
     const started = calls.find((c) => c.method === "turn/start");
     assert.deepEqual(started.params, {
       threadId: "thread-1",
@@ -167,8 +172,16 @@ test("a thread that started at a WIDER policy than Dopl asked for is refused", (
   // inequality there would be a false alarm, not a caught downgrade.
   launchSpec.assertPolicyTook({ approvalPolicy: "never" }, {});
   launchSpec.assertPolicyTook({ approvalPolicy: "never" }, { approvalPolicy: null });
-  launchSpec.assertPolicyTook({ approvalPolicy: { granular: { rules: true } } }, { approvalPolicy: "on-request" });
   launchSpec.assertPolicyTook({}, { approvalPolicy: "on-request" });
+  // 🔒 SINCE 2026-09-22 THE OBJECT FORM IS COMPARED: the operator's `never` travels as `granular`
+  // (on `config.approval_policy`), and a server that fell back to a string would be a silent widen.
+  const never = { config: { approval_policy: launchSpec.approvalPolicy("never") } };
+  launchSpec.assertPolicyTook(never, { approvalPolicy: launchSpec.approvalPolicy("never") });
+  assert.throws(() => launchSpec.assertPolicyTook(never, { approvalPolicy: "on-request" }), /refusing/);
+  assert.throws(() => launchSpec.assertPolicyTook(never, { approvalPolicy: launchSpec.approvalPolicy("granular") }), /refusing/);
+  // An absent key reads as the schema default (`false`), so a normalised echo is not a false alarm.
+  launchSpec.assertPolicyTook({ approvalPolicy: { granular: { mcp_elicitations: true, rules: false, sandbox_approval: false } } },
+    { approvalPolicy: launchSpec.approvalPolicy("never") });
 });
 
 // 💰 ⚠ ONE MODEL TURN PER ARMED RUN. The prompt asks for a single token and forbids tools; the

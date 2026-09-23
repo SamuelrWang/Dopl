@@ -22,14 +22,11 @@ const specFor = (profile, containerToken) => launchSpec.buildLaunchSpec({
   dispatch: () => {}, emitQuiet: () => {},
 });
 
-test("every launch carries the `features` fence — apps off always, delegation off when restricted", () => {
-  for (const profile of ["read_only", "dopl_only"]) {
+test("every launch carries the `features` fence — apps AND native delegation off on EVERY profile", () => {
+  // 🔒 2026-09-22: delegation off on all four, matching Claude's `Agent` removal on every profile.
+  for (const profile of ["read_only", "dopl_only", "channel_agent", "full"]) {
     const f = specFor(profile, { token: "t" }).threadStart.config.features;
     assert.deepEqual(f, { apps: false, plugins: false, multi_agent: false }, profile);
-  }
-  for (const profile of ["channel_agent", "full"]) {
-    const f = specFor(profile, { token: "t" }).threadStart.config.features;
-    assert.deepEqual(f, { apps: false, plugins: false }, profile);
   }
   // ⚠ NO TOKEN, NO DOPL ENTRY — AND STILL THE FENCE: `codex_apps` mounts from the operator's auth.
   const bare = specFor("read_only", null).threadStart.config;

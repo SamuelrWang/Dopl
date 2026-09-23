@@ -181,8 +181,9 @@ const descriptor = {
 
   containment: {
     // ⚠ `native` AND STILL A DENY LIST. A sandbox bounds the FILESYSTEM; it does not deny
-    // delegation, exfil or persistence. `tools.js`'s header carries the derivation, including the
-    // two harm groups this research cannot ground (§5 items C25/C26).
+    // delegation, exfil or persistence. `tools.js`'s header carries the derivation: delegation is
+    // fenced by configuration on every profile since 2026-09-22 (C25, `catalog.js`); persistence
+    // (C26) is still ungrounded.
     mode: 'native',
     nativeControls: ['sandbox_mode'],
     profiles: {
