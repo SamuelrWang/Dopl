@@ -15,7 +15,9 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { load, session, endedRecord } from "./_session-summary-harness.mjs";
 
-const settle = (m) => new Promise((r) => setTimeout(r, m.PUSH_COALESCE_MS + 30));
+// The coalesce timer runs on mocked time: `tick` fires it synchronously.
+const settle = (t, m) => t.mock.timers.tick(m.PUSH_COALESCE_MS);
+const mocked = (fn) => (t) => { t.mock.timers.enable({ apis: ["setTimeout"] }); return fn(t); };
 
 // ── 1. THE REPORT SHAPE ──────────────────────────────────────────────────────────────
 
@@ -135,84 +137,84 @@ test("REPORT: a session with no workspace reports '' rather than undefined", () 
 
 // ── 2. THE CHANGE SUBSCRIPTION — THE WRITER'S ONE TRIGGER ────────────────────────────
 
-test("CHANGE: a subscriber gets the report entries when the projection first moves", async () => {
+test("CHANGE: a subscriber gets the report entries when the projection first moves", mocked((t) => {
   const m = load();
   const seen = [];
   m.subscribe((entries) => seen.push(entries));
   m.bind({ sessions: new Map([["chan-1:task-1", session()]]) });
   m.start({ getWindows: () => [m.spaWindow] });
-  await settle(m);
+  settle(t, m);
   assert.equal(seen.length, 1);
   assert.equal(seen[0][0].key, "chan-1:task-1:a1b2c3d4");
   assert.equal(seen[0][0].workspaceId, "ws-1");
-});
+}));
 
-test("CHANGE: a burst of dispatches with nothing moving costs ZERO further events", async () => {
+test("CHANGE: a burst of dispatches with nothing moving costs ZERO further events", mocked((t) => {
   const m = load();
   const seen = [];
   const s = session();
   m.subscribe((entries) => seen.push(entries));
   m.bind({ sessions: new Map([[s.key, s]]) });
   m.start({ getWindows: () => [m.spaWindow] });
-  await settle(m);
+  settle(t, m);
   assert.equal(seen.length, 1);
   // One turn is dozens of engine dispatches — tool results, token counts, cost deltas.
   // NONE of them is a pill state change, and none of them may cost a server write.
   for (let i = 0; i < 50; i += 1) m.touch();
-  await settle(m);
+  settle(t, m);
   assert.equal(seen.length, 1, "this gate is the difference between a push and a heartbeat");
   // A REAL transition does fire, exactly once.
   s.state = { phase: "running", activity: "awaiting_peer" };
   m.touch();
-  await settle(m);
+  settle(t, m);
   assert.equal(seen.length, 2);
   assert.equal(seen[1][0].state, "idle");
-});
+}));
 
-test("CHANGE: a REBUILT renderer repaints but is NOT a change — the two gates are separate", async () => {
+test("CHANGE: a REBUILT renderer repaints but is NOT a change — the two gates are separate", mocked((t) => {
   const m = load();
   const seen = [];
   m.subscribe((entries) => seen.push(entries));
   m.bind({ sessions: new Map([["chan-1:task-1", session()]]) });
   m.start({ getWindows: () => [m.spaWindow] });
-  await settle(m);
+  settle(t, m);
   assert.equal(m.sent.length, 1);
   assert.equal(seen.length, 1);
   // The SPA window is closed and reopened: `start()` resets the window's digest so the fresh
   // renderer is painted. Nothing about the SESSIONS changed, so the server must not be written to.
   m.start({ getWindows: () => [m.spaWindow] });
-  await settle(m);
+  settle(t, m);
   assert.equal(m.sent.length, 2, "the renderer is repainted");
   assert.equal(seen.length, 1, "and the server is not");
-});
+}));
 
-test("CHANGE: an event that reached NO window still counts — delivery is not the trigger", async () => {
+test("CHANGE: an event that reached NO window still counts — delivery is not the trigger", mocked((t) => {
   const m = load();
   const seen = [];
   m.subscribe((entries) => seen.push(entries));
   m.bind({ sessions: new Map([["chan-1:task-1", session()]]) });
   m.start({ getWindows: () => [] }); // headless: the SPA window is not built
-  await settle(m);
+  settle(t, m);
   assert.equal(m.sent.length, 0);
   assert.equal(seen.length, 1, "a session runs whether or not anyone is looking at it");
-});
+}));
 
-test("CHANGE: unsubscribing stops it, and the renderer feed is untouched", async () => {
+test("CHANGE: unsubscribing stops it, and the renderer feed is untouched", mocked((t) => {
   const m = load();
   const seen = [];
   const s = session();
   const off = m.subscribe((entries) => seen.push(entries));
   m.bind({ sessions: new Map([[s.key, s]]) });
   m.start({ getWindows: () => [m.spaWindow] });
-  await settle(m);
+  settle(t, m);
   assert.equal(seen.length, 1);
   off();
   s.state = { phase: "ended", activity: "idle" };
   m.touch();
-  await settle(m);
+  settle(t, m);
   assert.equal(seen.length, 1);
   assert.equal(m.sent.length, 2, "the pills keep working with nobody subscribed");
-});
+}));
 
 test("CHANGE: a non-function subscriber is a no-op, not a crash", () => {
   const m = load();
@@ -220,34 +222,34 @@ test("CHANGE: a non-function subscriber is a no-op, not a crash", () => {
   assert.equal(typeof m.subscribe("nope"), "function");
 });
 
-test("CHANGE: a THROWING subscriber cannot break the engine's dispatch", async () => {
+test("CHANGE: a THROWING subscriber cannot break the engine's dispatch", mocked((t) => {
   const m = load();
   const after = [];
   m.subscribe(() => { throw new Error("writer exploded"); });
   m.subscribe((entries) => after.push(entries)); // registered after the thrower
   m.bind({ sessions: new Map([["chan-1:task-1", session()]]) });
   m.start({ getWindows: () => [m.spaWindow] });
-  await settle(m);
+  settle(t, m);
   // `touch()` is called from the engine's dispatch, so an exception here would unwind into the
   // SDK event loop. The frame still lands, the next subscriber still runs, and it is logged.
   assert.equal(m.sent.length, 1);
   assert.equal(after.length, 1);
   assert.ok(m.logged.some((l) => l.includes("change subscriber threw")));
-});
+}));
 
-test("CHANGE: ending a session is a change, and so is its pill leaving", async () => {
+test("CHANGE: ending a session is a change, and so is its pill leaving", mocked((t) => {
   const m = load();
   const seen = [];
   m.subscribe((entries) => seen.push(entries));
   const s = session();
   m.bind({ sessions: new Map([[s.key, s]]) });
   m.start({ getWindows: () => [m.spaWindow] });
-  await settle(m);
+  settle(t, m);
   assert.equal(seen.length, 1);
   // The end: the pill (and the row) stay as `ended`, now read from the durable history.
   m.bind({ sessions: new Map(), endedRecords: () => [endedRecord()] });
   m.noteEnded(s, true);
-  await settle(m);
+  settle(t, m);
   assert.equal(seen.length, 2);
   assert.equal(seen[1][0].state, "ended");
   // The third beat is deleted (2026-08-20, F-234): retention no longer consults a window — every
@@ -255,7 +257,7 @@ test("CHANGE: ending a session is a change, and so is its pill leaving", async (
   // The rule that survives: a retained pill is STABLE across projections, and the writer is not
   // told to delete a row that is still on the tab.
   m.touch();
-  await settle(m);
+  settle(t, m);
   assert.equal(seen.length, 2, "a projection with nothing new is not a change");
   assert.equal(m.list().length, 1, "and the retained pill is still there");
-});
+}));

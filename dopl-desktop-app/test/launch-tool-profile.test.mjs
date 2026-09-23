@@ -41,6 +41,7 @@ import { dirname, join } from "node:path";
 import { fnOf } from "./helpers/source-probe.mjs";
 import { mkWin, evt, idsOf } from "./_ipc-harness.mjs";
 import { launchDefaultStub } from "./_launch-runtime-stub.mjs";
+import { evalModule } from "./helpers/module-sandbox.mjs";
 
 const require = createRequire(import.meta.url);
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -122,7 +123,6 @@ function bootLaunch(entries) {
   const stub = (id) => {
     if (id === "electron") return { ipcMain: { handle: (n, fn) => { handlers[n] = fn; } } };
     if (id === "./ipc-guards") return guards;
-    if (id === "./agent-id") return require(join(MAIN, "agent-id.js"));
     if (id === "./agent-id") return agentId;
     if (id === "./diag") return { diag: () => {} };
     // ⚠ THE REAL REGISTRY AND THE REAL RESOLVER — the two halves of the defect.
@@ -143,7 +143,7 @@ function bootLaunch(entries) {
     }
     // ⚠ THE BODY IS A SEPARATE MODULE SINCE 2026-08-22, and it is the REAL one: a stub here
     // would make this whole file assert a fake's profile read.
-    if (id === "./session-launch-op") return launchOp.exports;
+    if (id === "./session-launch-op") return launchOp;
     // No identity is asked for by any case in this file, so `resolveAgentIdentity` is never called;
     // it is stubbed to REFUSE so a case that starts passing one goes red rather than silently
     // reaching the network.
@@ -158,12 +158,9 @@ function bootLaunch(entries) {
     if (id === "./runtime/launch-default") return launchDefaultStub(); // the REAL runtime order, a passthrough model link
     throw new Error("unexpected require: " + id);
   };
-  const launchOp = { exports: {} };
-  new Function("require", "module", "exports", LAUNCH_OP)(stub, launchOp, launchOp.exports);
-  const mod = { exports: {} };
-  new Function("require", "module", "exports", OPS)(stub, mod, mod.exports);
+  const launchOp = evalModule(LAUNCH_OP, stub);
   const win = mkWin();
-  mod.exports.register({ getSenderIds: () => idsOf(win.webContents) });
+  evalModule(OPS, stub).register({ getSenderIds: () => idsOf(win.webContents) });
   return { launch: handlers["sessions:launch"], launches, event: evt(win.webContents, win.mainFrame) };
 }
 
@@ -212,8 +209,7 @@ test("a WATCHED channel whose DTO carries NO profile field fails closed too", as
 test("the fail-closed answer is the TABLE's, not a second literal in the handler", () => {
   // C-11: one definition of "what does an unknown profile mean". The handler must not carry its
   // own `: 'read_only'` fallback — that is the shape that once answered `'full'` one file over.
-  const body = LAUNCH_OP.slice(LAUNCH_OP.indexOf("async function launchFromButton("));
-  const launchBody = body.slice(0, body.indexOf("ipcMain.handle(", 1));
+  const launchBody = fnOf(LAUNCH_OP, "launchFromButton");
   assert.match(launchBody, /const toolProfile = targeting\.resolveLaunchToolProfile\(/);
   assert.equal(/toolProfile\s*=.*\?.*:\s*'read_only'/.test(launchBody), false,
     "no ternary fallback beside the resolver — normalizeProfile owns the floor");
@@ -260,8 +256,7 @@ test("the TRAY PROJECTION carries no profile at all — feeding it back floors e
 
 test("`sessions:launch` does not read the projection, and `watchedChannel` returns the DTO whole",
   () => {
-    const body = LAUNCH_OP.slice(LAUNCH_OP.indexOf("async function launchFromButton("));
-    const launchBody = body.slice(0, body.indexOf("ipcMain.handle(", 1));
+    const launchBody = fnOf(LAUNCH_OP, "launchFromButton");
     assert.equal(/listWatchedChannels/.test(launchBody), false,
       "the projection must not come back as this lane's input");
     assert.match(launchBody, /listener\.watchedChannel\(p\.channelId\)/);

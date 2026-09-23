@@ -33,7 +33,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { createRequire } from "node:module";
-import { fnOf } from "./helpers/source-probe.mjs";
+import { between, fnOf, orderOf } from "./helpers/source-probe.mjs";
 import { loadReducer } from "./_reducer-block.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -188,15 +188,14 @@ test("a missing record on either side applies NOTHING", () => {
 // ── 3. THE WIRING, AS SOURCE ─────────────────────────────────────────────────
 
 test("the fan-out runs only AFTER the durable write succeeded, and never replaces it", () => {
-  const handler = IPC.slice(IPC.indexOf("'channels:setLaunchPosture'"));
-  const body = handler.slice(0, handler.indexOf("ipcMain.handle", 10));
+  const body = between(IPC, "'channels:setLaunchPosture'", "'channels:getAgentChain'");
   // ⚠ THE ONE VALIDATING WRITER IS `setLaunchSelection` SINCE 2026-09-21 (U5) — the runtime pick
   // is a FIELD of the same versioned record now rather than a second store write issued after the
   // pair, so a rejected write cannot half-apply a runtime. The property this case is about is
   // unchanged: the durable record is written first and the fan-out is guarded by its answer.
   assert.match(body, /channelPrefs\.setLaunchSelection/, "the record is still written first");
   assert.match(body, /res\.ok !== true/, "a rejected write applies nothing to anything");
-  assert.ok(body.indexOf("res.ok !== true") < body.indexOf("applyPostureToLive"),
+  assert.ok(orderOf(body, "res.ok !== true", "applyPostureToLive"),
     "the ok-check must GUARD the fan-out, not follow it");
   assert.match(body, /applied:/, "and the count comes back so a caller can say what moved");
 });

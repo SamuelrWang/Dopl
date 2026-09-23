@@ -26,6 +26,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { sentinelBlock } from "./helpers/source-probe.mjs";
+import { loadWithStubs } from "./helpers/module-sandbox.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const MAIN = join(HERE, "..", "main");
@@ -177,16 +178,7 @@ test("SWEEP: the COUNT belt bounds the set under the clock, oldest first", () =>
 
 // ── 4. THE PASS: every store keyed by that key, or it is an orphan ───────────
 
-function retention(historyFake) {
-  const mod = { exports: {} };
-  const req = (id) => {
-    if (id === "./agent-history") return historyFake;
-    if (id === "./diag") return { diag: () => {} };
-    throw new Error(`unexpected require: ${id}`);
-  };
-  new Function("require", "module", "exports", read("agent-retention.js"))(req, mod, mod.exports);
-  return mod.exports;
-}
+const retention = (historyFake) => loadWithStubs("agent-retention.js", { "./agent-history": historyFake, "./diag": { diag: () => {} } });
 
 const KEYS = ["k1", "k2"];
 

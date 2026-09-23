@@ -26,17 +26,14 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
-import { dirname, join } from "node:path";
 import { createRequire } from "node:module";
 import {
-  M, detect, AUTH_SRC, ENGINE, HOLD_BLOCK, harness, session, sessionReducer,
+  M, detect, AUTH_SRC, ENGINE, HOLD_BLOCK, harness, session,
 } from "./_auth-hold-harness.mjs";
 import { sentinelBlock, fnOf } from "./helpers/source-probe.mjs";
 
 const requireMain = (p) => createRequire(import.meta.url)(M(p));
 
-const HERE = dirname(fileURLToPath(import.meta.url));
 const DETECT_SRC = readFileSync(M("session-auth-detect.js"), "utf8");
 const CLAUDE_AUTH = readFileSync(M("claude-auth.js"), "utf8");
 const QUERY = readFileSync(M("session-query.js"), "utf8"); // §3 SPLIT: startQuery / consume / buildSdkOptions
@@ -314,7 +311,7 @@ test("the consume loop routes an auth failure to the hold before it can dispatch
 });
 
 test("what counts as a usable credential — and what the SPAWN env does about it", () => {
-  const probe = AUTH_SRC.slice(AUTH_SRC.indexOf("function credentialState("), AUTH_SRC.indexOf("function forget("));
+  const probe = fnOf(AUTH_SRC, "credentialState");
   // Three sources, most-explicit first. `stored-token` is LAST so it is chosen only when it is the
   // only credential we hold, which is exactly when withStoredCredential injects it.
   assert.match(probe, /if \(envKey\) state = \{ usable: true, source: 'env' \};/);
@@ -323,7 +320,7 @@ test("what counts as a usable credential — and what the SPAWN env does about i
   // The keychain item is NEVER read: a cross-app read pops an OS prompt, a worse interruption than
   // the bug. Only markers.
   assert.ok(!/security find-generic-password|execFile|spawn\(/.test(AUTH_SRC), "no keychain shell-out");
-  const marker = AUTH_SRC.slice(AUTH_SRC.indexOf("function cliStoreSignedIn("), AUTH_SRC.indexOf("function credentialState("));
+  const marker = fnOf(AUTH_SRC, "cliStoreSignedIn");
   assert.match(marker, /\.credentials\.json/, "the file-backed store, when there is one");
   assert.match(marker, /account\.accountUuid/, "else the CLI's own signed-in marker (one bit, no field copied)");
   assert.match(marker, /err\.code !== 'ENOENT'/, "an unreadable file FAILS OPEN; only a MISSING one blocks");

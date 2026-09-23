@@ -117,6 +117,17 @@ test("2: no cache → the binary's bundled catalog; nothing usable → the launc
   } finally { rmSync(home, { recursive: true, force: true }); }
 });
 
+test("2: a named model no catalog source knows REFUSES the launch rather than run on generic defaults", async () => {
+  const home = tmp("dopl-cat-");
+  try {
+    writeFileSync(join(home, catalog.CACHE_FILE), JSON.stringify({ models: [{ slug: "gpt-5.5" }] }));
+    await assert.rejects(catalog.writeDelegationFreeCatalog(home, { bin: null, model: "gpt-7" }),
+      /no entry for "gpt-7".*refusing the launch/);
+    assert.ok(await catalog.writeDelegationFreeCatalog(home, { bin: null, model: "gpt-5.5" }), "a model the cache knows still launches");
+    assert.ok(await catalog.writeDelegationFreeCatalog(home, { bin: null }), "and so does the platform's own pick");
+  } finally { rmSync(home, { recursive: true, force: true }); }
+});
+
 // ── 3. skills ────────────────────────────────────────────────────────────────────────────────
 
 function skill(dir, name, declared) {

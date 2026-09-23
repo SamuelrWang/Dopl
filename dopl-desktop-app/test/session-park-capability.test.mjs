@@ -23,6 +23,7 @@ import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
+import { sentinelBlock } from "./helpers/source-probe.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const SRC = readFileSync(join(HERE, "..", "main", "session-park.js"), "utf8");
@@ -44,14 +45,7 @@ const RUNTIME = createRequire(import.meta.url)(join(HERE, "..", "main", "runtime
 // multiplayer blended all three — so a case could pass here against a key production never builds.
 const fakeSlotKey = (a) => `${(a && a.channelId) || ""}:${(a && a.taskId) || ""}:${(a && a.agentId) || ""}`;
 
-const BEGIN = "// ─── BEGIN SESSION-PARK-PURE";
-const END = "// ─── END SESSION-PARK-PURE";
-const from = SRC.indexOf(BEGIN);
-const to = SRC.indexOf(END);
-assert.notEqual(from, -1, "BEGIN SESSION-PARK-PURE sentinel missing");
-assert.notEqual(to, -1, "END SESSION-PARK-PURE sentinel missing");
-assert.ok(to > from, "session-park sentinels out of order");
-const BLOCK = SRC.slice(from, to);
+const BLOCK = sentinelBlock(SRC, "SESSION-PARK-PURE");
 
 // The purity assertion is UNCHANGED by the retirement and is the reason the block can be sliced
 // at all: the resume family must stay reachable from a plain `new Function`, so a future edit

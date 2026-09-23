@@ -30,6 +30,8 @@ import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
+import { evalModule, loadWithStubs } from "./helpers/module-sandbox.mjs";
+import { sentinelBlock } from "./helpers/source-probe.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const MAIN = join(HERE, "..", "main");
@@ -37,11 +39,7 @@ const requireMain = createRequire(import.meta.url);
 
 /** A fresh module instance — the cache is module-level, so each case gets its own. */
 function loadConnectivity() {
-  const src = readFileSync(join(MAIN, "runtime", "connectivity.js"), "utf8");
-  const mod = { exports: {} };
-  const stub = (id) => { throw new Error(`unexpected require: ${id}`); };
-  new Function("require", "module", "exports", src)(stub, mod, mod.exports);
-  return mod.exports;
+  return loadWithStubs("runtime/connectivity.js", {});
 }
 
 /** One fake sealed adapter. `answer` is whatever `available()` does. */
@@ -72,31 +70,17 @@ test("all three adapters are probed, and only the ones that answered `ok` are co
   assert.deepEqual(connected, ["claude", "cursor"]);
 });
 
-test("a probe that NEVER ANSWERS reads as not connected, and does not hold up the ones that did", async () => {
-  // ⚠ THE LEASH. `codex/client.js` already refuses to let a hung binary become a stuck session;
-  // this is the same rule one layer up, where the thing waiting is a dialog opening.
+test("a probe that NEVER ANSWERS reads as not connected, and does not hold up the ones that did", async (t) => {
+  // Mocked time: the leash fires on `tick`, so the sweep resolving there proves it cannot outlast it.
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"] });
   const c = loadConnectivity();
-  // ⚠ A REF'D KEEP-ALIVE, IN THE TEST ONLY (2026-09-16). `connectivity.js › leashed` unref's its
-  // leash — correct in production, where a probe still running must never hold the app open at
-  // quit — but under Node 22's `node --test` an unref'd timer lets the event loop drain, so this
-  // case was `cancelledByParent` before the leash could fire, taking the rest of the file with it
-  // (Node 24 keeps the loop alive differently, which is why it was green locally and red in CI).
-  // ⚠ SOURCE IS UNTOUCHED AND SO IS THE WALL-CLOCK CLAIM BELOW: this timer only holds the loop
-  // open for as long as the leash itself needs, and it is cleared the moment the sweep lands.
-  const keepAlive = setTimeout(() => {}, c.LEASH_MS + 250);
-  const started = Date.now();
-  try {
-    const connected = await c.connectedIds([
-      adapter("claude", ok),
-      adapter("codex", never),
-      adapter("cursor", ok),
-    ]);
-    assert.deepEqual(connected, ["claude", "cursor"]);
-    // The leash is the ceiling, not the wait: two adapters answered at once.
-    assert.ok(Date.now() - started < c.LEASH_MS + 750, "the sweep must not outlast the leash");
-  } finally {
-    clearTimeout(keepAlive);
-  }
+  let settled = null;
+  const sweep = c.connectedIds([adapter("claude", ok), adapter("codex", never), adapter("cursor", ok)])
+    .then((ids) => { settled = ids; return ids; });
+  await new Promise((r) => setImmediate(r));
+  assert.equal(settled, null, "the hung probe holds the sweep until the leash");
+  t.mock.timers.tick(c.LEASH_MS);
+  assert.deepEqual(await sweep, ["claude", "cursor"]);
 });
 
 test("a REJECTION, a SYNCHRONOUS THROW and a missing `available` are all just not connected", async () => {
@@ -233,11 +217,7 @@ const DESCRIPTORS = [
 /** `channel-dir-ipc.js` with everything but the posture read stubbed at its seam. */
 function bootIpc(opts = {}) {
   const handlers = {};
-  const guards = (() => {
-    const g = readFileSync(join(MAIN, "ipc-guards.js"), "utf8");
-    const block = g.slice(g.indexOf("// ─── BEGIN IPC-GUARDS"), g.indexOf("// ─── END IPC-GUARDS"));
-    return new Function(`${block}\n return { isAppWindowSender, isUuid, UUID_RE };`)();
-  })();
+  const guards = new Function(`${sentinelBlock(readFileSync(join(MAIN, "ipc-guards.js"), "utf8"), "IPC-GUARDS")}\n return { isAppWindowSender, isUuid, UUID_RE };`)();
   const stub = (id) => {
     if (id === "electron") return { ipcMain: { handle: (n, fn) => { handlers[n] = fn; } } };
     if (id === "./ipc-guards") return guards;
@@ -296,26 +276,12 @@ function bootIpc(opts = {}) {
     if (id === "./runtime/model-catalog") return { CATALOG_VERSION: 1, catalogs: () => ({}) };
     throw new Error(`unexpected require: ${id}`);
   };
-  const runtimeReply = (() => {
-    const m = { exports: {} };
-    new Function("require", "module", "exports", readFileSync(join(MAIN, "channel-runtime-reply.js"), "utf8"))(
-      stub, m, m.exports
-    );
-    return m.exports;
-  })();
-  const ops = (() => {
-    const m = { exports: {} };
-    new Function("require", "module", "exports", readFileSync(join(MAIN, "session-ipc-ops.js"), "utf8"))(
-      stub, m, m.exports
-    );
-    return m.exports;
-  })();
-  const mod = { exports: {} };
-  new Function("require", "module", "exports", readFileSync(join(MAIN, "channel-dir-ipc.js"), "utf8"))(
-    stub, mod, mod.exports
-  );
+  const evalMain = (file) => evalModule(readFileSync(join(MAIN, file), "utf8"), stub);
+  const runtimeReply = evalMain("channel-runtime-reply.js");
+  const ops = evalMain("session-ipc-ops.js");
+  const mod = evalMain("channel-dir-ipc.js");
   const mainFrame = { name: "top" };
   const webContents = { id: 1, mainFrame, isDestroyed: () => false };
-  mod.exports.register({ getSenderIds: () => new Set([webContents.id]) });
+  mod.register({ getSenderIds: () => new Set([webContents.id]) });
   return { handlers, event: { sender: webContents, senderFrame: mainFrame } };
 }

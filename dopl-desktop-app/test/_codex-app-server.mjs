@@ -42,9 +42,9 @@ export const resolveBin = require(join(CODEX, 'resolve-bin.js'));
 export const RUNTIME_DESCRIPTOR = require(join(CODEX, 'index.js')).descriptor;
 
 export const LIVE_ENV = 'CODEX_APP_SERVER_LIVE';
-export const FIXTURE_PATH = join(HERE, 'fixtures', 'codex-app-server.json');
+const FIXTURE_PATH = join(HERE, 'fixtures', 'codex-app-server.json');
 export const REGENERATE_CMD = 'cd dopl-desktop-app && npm run codex:schema';
-export const DEFAULT_TIMEOUT_MS = 20000;
+const DEFAULT_TIMEOUT_MS = 20000;
 
 // 💰 🔒 **EVERY REAL-MODEL TURN IN THIS SUITE RUNS THE CHEAPEST MODEL AT LOW EFFORT** (Samuel,
 // 2026-09-22: "the cheapest model possible, the cheapest model with low thinking"). ONE constant,
@@ -52,13 +52,10 @@ export const DEFAULT_TIMEOUT_MS = 20000;
 // the most capable model, not the cheapest). `gpt-6-luna` is the catalog's "Fast and affordable
 // model for easier tasks"; `low` is the lowest effort it lists. ⚠ NO `serviceTier` IS SENT: the
 // isolated home carries no config, so the thread runs the standard tier, never `priority`/fast.
-// ⚠ `gpt-5.5` ONLY where a test needs the NON-code-mode `tool_search` path — pass
-// `LIVE_THREAD_FOR('gpt-5.5')`, still at `LIVE_TURN`'s effort, and name why at the call site.
 export const LIVE_MODEL = 'gpt-6-luna';
-export const LIVE_EFFORT = 'low';
+const LIVE_EFFORT = 'low';
 export const LIVE_THREAD = Object.freeze({ model: LIVE_MODEL });
 export const LIVE_TURN = Object.freeze({ effort: LIVE_EFFORT });
-export function LIVE_THREAD_FOR(model) { return Object.freeze({ model: model || LIVE_MODEL }); }
 const EXIT_GRACE_MS = 1500;
 const EXIT_GIVE_UP_MS = 3500;
 
@@ -180,15 +177,8 @@ export function appEnv() {
   return configHome.isolatedEnv(process.env);
 }
 
-/**
- * Close a connection this file did not open through `withAppServer`, on the SAME discipline:
- * close, wait for `exit`, `SIGKILL` on a grace timeout, and record the pid if it still answers.
- */
+/** Close a connection: close, wait for `exit`, SIGKILL after a grace period, record the pid if it still answers. */
 export async function terminateConn(conn) {
-  return terminate(conn);
-}
-
-async function terminate(conn) {
   const child = conn && conn.child;
   try { if (conn && typeof conn.close === 'function') conn.close(); } catch (_) { /* best effort */ }
   if (!child) return;
@@ -223,13 +213,13 @@ export async function withAppServer(opts, fn) {
     return await Promise.race([Promise.resolve().then(() => fn(conn)), budget]);
   } finally {
     clearTimeout(timer);
-    await terminate(conn);
+    await terminateConn(conn);
   }
 }
 
 /**
  * The handshake, as one call: `initialize`, then whatever `extra(conn)` asks for.
- * Returns `{ initialize, facts, extra, ms }`. ⚠ `facts` is what `client.checkProtocol` consumes.
+ * Returns `{ initialize, extra, ms }`.
  */
 export async function handshake(opts) {
   const o = opts || {};

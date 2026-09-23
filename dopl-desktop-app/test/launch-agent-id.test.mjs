@@ -33,7 +33,8 @@ import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { launchDefaultStub } from "./_launch-runtime-stub.mjs";
+import { bootLaunchOp } from "./_session-launch-op-harness.mjs";
+import { codeOf } from "./helpers/source-probe.mjs";
 
 const require = createRequire(import.meta.url);
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -46,52 +47,8 @@ const THREAD = "22222222-2222-4222-8222-222222222222";
 /** A real id by `agent-id.js`'s own charset: a letter, then seven of [a-z0-9]. */
 const MINE = "k3v7d2mq";
 
-function boot() {
-  const launches = [];
-  const stub = (id) => {
-    if (id === "./ipc-guards") return require(join(MAIN, "ipc-guards.js"));
-    if (id === "./launch-directive-vocab") return require(join(MAIN, "launch-directive-vocab.js"));
-    // ⚠ THE REAL PREDICATE, never a permissive fake: this file's whole subject is which ids
-    // are accepted, and a fake that said yes to everything would assert nothing.
-    if (id === "./agent-id") return require(join(MAIN, "agent-id.js"));
-    if (id === "./diag") return { diag: () => {} };
-    if (id === "./runtime/selection-vocabulary") return require(join(MAIN, "runtime/selection-vocabulary.js"));
-    if (id === "./channel-listener") {
-      return { watchedChannel: () => ({ channel: { myAgentToolProfile: "full" } }) };
-    }
-    // ⚠ BOTH READS, because `session-launch-op.js` takes the LAUNCH one since ruling B7 and
-    // this file is about identities, not containment: a constant keeps the profile out of the
-    // way of what it does assert. `channel-agent-profile.test.mjs` drives the real rule.
-    if (id === "./targeting") {
-      return { resolveToolProfile: () => "full", resolveLaunchToolProfile: () => "full" };
-    }
-    // Real: a blank launch calls `narrowOverrides` and nothing else in it.
-    if (id === "./identity-resolve") return require(join(MAIN, "identity-resolve.js"));
-    if (id === "./channel-prefs") {
-      return {
-        launchStartModes: () => ({ tools: "manual", messages: "auto_inbound" }),
-        isIdentityApproved: () => true,
-      };
-    }
-    if (id === "./session-engine") {
-      return {
-        launchRequesterSession: async (spec) => {
-          launches.push(spec);
-          // ⚠ MAIN'S OWN ANSWER, and deliberately NOT the id it was handed. The real engine
-          // echoes back whatever `launch` settled on; answering something else here is what
-          // keeps the assertions below about the FORWARD rather than about this stub.
-          return { agentId: "zzzzzzzz", sessionId: "s-1" };
-        },
-      };
-    }
-    // 2026-09-23: the identity link, asked of the launch runtime — passthrough here.
-    if (id === "./runtime/launch-default") return launchDefaultStub(); // the REAL runtime order, a passthrough model link
-    throw new Error("unexpected require: " + id);
-  };
-  const mod = { exports: {} };
-  new Function("require", "module", "exports", read("session-launch-op.js"))(stub, mod, mod.exports);
-  return { ...mod.exports, launches };
-}
+// The engine answers its own id, never the one it was handed, so the assertions are about the forward.
+const boot = () => bootLaunchOp({ answer: { agentId: "zzzzzzzz", sessionId: "s-1" } });
 
 const payload = (over = {}) => ({ channelId: CH, taskId: THREAD, workspaceId: "ws-1", ...over });
 
@@ -189,10 +146,7 @@ test("the mint RESERVES nothing — it is a draw, not an allocation", () => {
   // path out of the panel, including a crash.
   // ⚠ READS THE CODE, NOT THE PROSE. This file's docblock discusses `session-store.js` and the
   // session registry at length, so a whole-source substring check answers on the comments.
-  const code = read("agent-id.js")
-    .split("\n")
-    .filter((line) => !/^\s*(\/\/|\*|\/\*)/.test(line))
-    .join("\n");
+  const code = codeOf(read("agent-id.js"));
   for (const banned of ["store", "Store", "sessions", "registry"]) {
     assert.ok(!code.includes(banned), `agent-id.js must not reference ${banned}`);
   }

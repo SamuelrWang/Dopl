@@ -27,6 +27,7 @@ import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
+import { evalModule } from "./helpers/module-sandbox.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const MAIN = join(HERE, "..", "main");
@@ -69,13 +70,8 @@ function load(opts = {}) {
   const diag = { diag: (...p) => logged.push(p.join(" ")) };
   const cache = {};
   const evaluate = (file) => {
-    if (cache[file]) return cache[file].exports;
-    const mod = { exports: {} };
-    cache[file] = mod;
-    new Function("require", "module", "exports", readFileSync(join(MAIN, file), "utf8"))(
-      stub, mod, mod.exports
-    );
-    return mod.exports;
+    if (!cache[file]) cache[file] = evalModule(readFileSync(join(MAIN, file), "utf8"), stub);
+    return cache[file];
   };
   const stub = (id) => {
     if (id === "electron-store") return function Store() { return store; };
@@ -91,8 +87,7 @@ function load(opts = {}) {
     if (id === "./identity-approval") return {};
     throw new Error(`unexpected require: ${id}`);
   };
-  const mod = { exports: {} };
-  new Function("require", "module", "exports", SRC)(stub, mod, mod.exports);
+  const mod = evalModule(SRC, stub);
   const prefs = evaluate("channel-prefs.js");
   // ⚠ **THE WRITE DOOR IS `setLaunchSelection`, AND THERE IS NO `setChannelRuntime` ANY MORE
   // (2026-09-21, U5).** The pick is a FIELD of the versioned record, so it is written by that
@@ -103,9 +98,9 @@ function load(opts = {}) {
   // pick" while driving the real path the Settings tab uses.
   const setRuntime = (channelId, raw) => {
     const res = prefs.setLaunchSelection(channelId, { runtime: raw });
-    return res && res.ok ? res.selection.runtime : mod.exports.getChannelRuntime(channelId);
+    return res && res.ok ? res.selection.runtime : mod.getChannelRuntime(channelId);
   };
-  return { ...mod.exports, prefs, setChannelRuntime: setRuntime, disk, logged };
+  return { ...mod, prefs, setChannelRuntime: setRuntime, disk, logged };
 }
 
 // ── 1. WHAT MAY BE STORED ────────────────────────────────────────────────────────────────────

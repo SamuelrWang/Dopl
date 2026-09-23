@@ -23,6 +23,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
+import { orderOf } from "./helpers/source-probe.mjs";
 
 const require = createRequire(import.meta.url);
 const M = (f) => require(fileURLToPath(new URL(`../main/${f}`, import.meta.url)));
@@ -102,8 +103,8 @@ test("it names the role, fences the instructions, and closes the fence", () => {
   assert.ok(out.includes(`END-ROLE-${N}`), out);
   assert.ok(out.includes("Audit the diff. Cite file and line."), out);
   // The instructions sit INSIDE the fence, never above it.
-  assert.ok(out.indexOf(`BEGIN-ROLE-${N}`) < out.indexOf("Audit the diff"));
-  assert.ok(out.indexOf("Audit the diff") < out.indexOf(`END-ROLE-${N}`));
+  assert.ok(orderOf(out, `BEGIN-ROLE-${N}`, "Audit the diff"));
+  assert.ok(orderOf(out, "Audit the diff", `END-ROLE-${N}`));
 });
 
 test("F-6: a NAME-ONLY identity is legal and still emits an identity", () => {
@@ -210,7 +211,7 @@ test("fields render one `- key: value` line each, in the array's own order", () 
   assert.match(out, /^FIELDS:$/m);
   assert.match(out, /^- repo: acme\/api$/m);
   assert.match(out, /^- severity: high$/m);
-  assert.ok(out.indexOf("- repo:") < out.indexOf("- severity:"), "⚠ NOT SORTED — the operator chose the order");
+  assert.ok(orderOf(out, "- repo:", "- severity:"), "⚠ NOT SORTED — the operator chose the order");
 });
 
 test("a key with an EMPTY value renders as `- key:` rather than disappearing", () => {
@@ -433,8 +434,8 @@ test("the pinned ORDERING constraints are unmoved by the splice", () => {
       side: "requester", message: "x", nonce: N,
       context: { channelName: "Ops", channelId: CH, workspaceId: WS, taskId: "t", profile: "full", identity },
     });
-    assert.ok(out.indexOf("FIRST ACTIONS THIS TURN") < out.indexOf("VOCABULARY (use these words"));
-    assert.ok(out.indexOf("VOCABULARY (use these words") < out.indexOf("Deliver every message"));
+    assert.ok(orderOf(out, "FIRST ACTIONS THIS TURN", "VOCABULARY (use these words"));
+    assert.ok(orderOf(out, "VOCABULARY (use these words", "Deliver every message"));
   }
 });
 

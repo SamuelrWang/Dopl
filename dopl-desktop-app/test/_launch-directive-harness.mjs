@@ -26,6 +26,7 @@ import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
+import { evalModule } from "./helpers/module-sandbox.mjs";
 
 export const HERE = dirname(fileURLToPath(import.meta.url));
 export const MAIN = join(HERE, "..", "main");
@@ -70,6 +71,7 @@ export const TH = "33333333-3333-4333-8333-333333333333";
 export const ME = "44444444-4444-4444-8444-444444444444";
 export const OTHER = "55555555-5555-4555-8555-555555555555";
 export const DID = "66666666-6666-4666-8666-666666666666";
+export const IDENTITY_ID = "77777777-7777-4777-8777-777777777777";
 
 /** A pending directive row, as the server would write it (snake_case, like a realtime frame). */
 export const row = (over = {}) => ({
@@ -243,11 +245,7 @@ export function boot(over = {}) {
     // require, no clock, no store) and it is the rule under test on both lanes; a fake here would
     // let the suite go green about a clamp that never happened.
     if (id === "./launch-posture") return require_(join(MAIN, "launch-posture.js"));
-    if (id === "./launch-directive-calls") {
-      const m = { exports: {} };
-      new Function("require", "module", "exports", CALLS_SRC)(stub, m, m.exports);
-      return m.exports;
-    }
+    if (id === "./launch-directive-calls") return evalModule(CALLS_SRC, stub);
     // ⚠ 2026-08-31 (port wave D): WHICH RUNTIME this channel's agents run on. Stubbed at its seam
     // like `./targeting` above — the real module opens an electron-store — and answering `''`
     // (the DEFAULT adapter, and what every pre-port launch resolved to) is what keeps the specs
@@ -306,16 +304,8 @@ export function boot(over = {}) {
       };
     }
     // ── ⚠ THE AGENT-MANAGEMENT KINDS (2026-09-01) ───────────────────────────────────────────
-    if (id === "./launch-directive-spawn") {
-      const m = { exports: {} };
-      new Function("require", "module", "exports", SPAWN_SRC)(stub, m, m.exports);
-      return m.exports;
-    }
-    if (id === "./directive-agent-ops") {
-      const m = { exports: {} };
-      new Function("require", "module", "exports", AGENT_OPS_SRC)(stub, m, m.exports);
-      return m.exports;
-    }
+    if (id === "./launch-directive-spawn") return evalModule(SPAWN_SRC, stub);
+    if (id === "./directive-agent-ops") return evalModule(AGENT_OPS_SRC, stub);
     if (id === "./agent-self-ops") return require_(join(MAIN, "agent-self-ops.js"));
     if (id === "./session-engine") {
       return {
@@ -367,20 +357,14 @@ export function boot(over = {}) {
     // RENAME case went green-to-red against an empty `names`. Evaluated with the SAME stub, so
     // the write still lands on the `./agent-names` recorder below and the flush lands on
     // `flushes` — which is what makes "write PLUS flush" a claim these tests can see.
-    if (id === "./agent-identity-commit") {
-      const m = { exports: {} };
-      new Function("require", "module", "exports", IDENTITY_COMMIT_SRC)(stub, m, m.exports);
-      return m.exports;
-    }
+    if (id === "./agent-identity-commit") return evalModule(IDENTITY_COMMIT_SRC, stub);
     // The flush half of that wrapper, stubbed at its seam: the real one is an electron-store
     // push, driven for real in the desktop's own summary tests.
     if (id === "./session-summary") return { touch: () => { flushes.push(true); } };
     if (id === "./diag") return { diag: (...p) => logged.push(p.join(" ")) };
     throw new Error(`unexpected require: ${id}`);
   };
-  const mod = { exports: {} };
-  new Function("require", "module", "exports", SRC)(stub, mod, mod.exports);
-  const api = mod.exports;
+  const api = evalModule(SRC, stub);
   api.start({
     getUserId: () => cfg.user,
     launch: (spec) => { cfg.lastSpec = spec; return cfg.launch(spec); },

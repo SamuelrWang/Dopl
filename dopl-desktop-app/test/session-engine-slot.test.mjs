@@ -40,7 +40,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { createRequire } from "node:module";
-import { fnOf } from "./helpers/source-probe.mjs";
+import { asyncFnOf, codeOf, fnOf } from "./helpers/source-probe.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const MAIN = join(HERE, "..", "main");
@@ -71,26 +71,12 @@ const sessionWindowless = new Function(
   `${CAP_DECL}\n${fnOf(WINDOWLESS_SRC, "liveCount")}\n return { liveCount, MAX_CONCURRENT_SESSIONS };`
 )();
 
-// `launch` is an `async function`; the keyword has to come with it or its awaits are a
-// syntax error in the evaluated scope.
-function asyncFnOf(src, name) {
-  const at = src.indexOf(`async function ${name}(`);
-  assert.notEqual(at, -1, `async function ${name} not found in session-launch.js`);
-  let depth = 0;
-  let i = src.indexOf("{", at);
-  for (; i < src.length; i++) {
-    if (src[i] === "{") depth++;
-    else if (src[i] === "}" && --depth === 0) { i++; break; }
-  }
-  return src.slice(at, i);
-}
-
 const LAUNCH_SRC = asyncFnOf(ENGINE, "launch");
 // ⚠ CODE ONLY. `launch`'s comments NAME the branches that were deleted — that is the house rule
 // (nothing is removed silently) — so a negative grep over the raw source would fail on the very
 // annotation that documents the removal. Line comments blanked; `launch` carries no string
 // literal containing `//`.
-const LAUNCH_CODE = LAUNCH_SRC.replace(/\/\/[^\n]*/g, "");
+const LAUNCH_CODE = codeOf(LAUNCH_SRC);
 
 const CH = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee";
 const AGENT = "a1b2c3d4";

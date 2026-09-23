@@ -24,10 +24,10 @@
 //   armed, with turns   CODEX_APP_SERVER_LIVE=1 CODEX_LIVE_TURN=1 npm test
 //   the release gate    npm run test:codex-compat               (sets both)
 
-import { test, describe } from 'node:test';
+import { test, describe, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
-import { mkdtempSync } from 'node:fs';
+import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -46,6 +46,7 @@ const normalize = require('../main/runtime/codex/normalize.js');
 // and `thread/list` filters by it; pointing a live turn at this checkout would put the tree in a
 // real model's context for no measurement gain.
 const WORKDIR = mkdtempSync(join(tmpdir(), 'dopl-codex-live-'));
+after(() => rmSync(WORKDIR, { recursive: true, force: true }));
 
 // The narrowest thread a turn can run in: no approvals can be raised, nothing can be written.
 const SAFE_THREAD = Object.freeze({ approvalPolicy: 'never', sandbox: 'read-only' });

@@ -11,19 +11,17 @@
 //   4. the cache is keyed per binary/version/credential, and a moved key re-reads on a look;
 //   5. a pick launches as the row it names; an unknown pick is REFUSED, never coerced;
 //   6. the launch funnel asks, and fails OPEN when the roster cannot be read;
-//   7. Codex: a named model no catalog source knows refuses instead of running on generic defaults;
-//   8. LIVE (opt-in, `CLAUDE_SDK_LIVE=1`): the real SDK answers, with zero messages.
+//   7. LIVE (opt-in, `CLAUDE_SDK_LIVE=1`): the real SDK answers, with zero messages.
 //
 // Run: `node --test dopl-desktop-app/test/claude-live-roster.test.mjs`
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
-import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { fnOf } from "./helpers/source-probe.mjs";
+import { asyncFnOf } from "./helpers/source-probe.mjs";
 import { loadCatalog, settle } from "./_model-catalog-harness.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -189,7 +187,6 @@ test("RC-03: the build's fallback table LABELS only — a pick it lacks is not r
 // ── 6. THE FUNNEL ────────────────────────────────────────────────────────────────────────────
 
 const LAUNCH_SRC = readFileSync(join(MAIN, "session-launch.js"), "utf8");
-const asyncFnOf = (src, name) => `async ${fnOf(src, name)}`;
 function refuser(stub) {
   const logged = [];
   const fn = new Function("require", "diag", `${asyncFnOf(LAUNCH_SRC, "refuseUnknownModel")}\n return refuseUnknownModel;`)(
@@ -220,28 +217,14 @@ test("the funnel FAILS OPEN when the roster cannot be read — never a refusal o
   assert.ok(h.logged.some((l) => l.includes("launch goes ahead")));
 });
 
-// ── 7. CODEX: THE DELEGATION FENCE NEVER DEGRADES A NAMED MODEL ──────────────────────────────
+// ── 7. LIVE — THE REAL SDK, OPT-IN ───────────────────────────────────────────────────────────
 
-test("Codex: a named model NO catalog source knows REFUSES the launch rather than run on generic defaults", async () => {
-  const catalog = require("../main/runtime/codex/catalog.js");
-  const home = mkdtempSync(join(tmpdir(), "dopl-cat-"));
-  try {
-    writeFileSync(join(home, catalog.CACHE_FILE), JSON.stringify({ models: [{ slug: "gpt-5.5" }] }));
-    await assert.rejects(catalog.writeDelegationFreeCatalog(home, { bin: null, model: "gpt-7" }),
-      /no entry for "gpt-7".*refusing the launch/);
-    assert.ok(await catalog.writeDelegationFreeCatalog(home, { bin: null, model: "gpt-5.5" }), "a model the cache knows still launches");
-    assert.ok(await catalog.writeDelegationFreeCatalog(home, { bin: null }), "and so does the platform's own pick");
-  } finally { rmSync(home, { recursive: true, force: true }); }
-});
-
-// ── 8. LIVE — THE REAL SDK, OPT-IN ───────────────────────────────────────────────────────────
-
-function liveSkip() {
-  if (process.env.CLAUDE_SDK_LIVE !== "1") return "SKIPPED, NOT PASSED — set CLAUDE_SDK_LIVE=1 to read the real CLI's roster";
-  return false;
-}
-
-test("LIVE: the bundled CLI lists its models with NO model turn (zero SDK messages)", { skip: liveSkip() }, async () => {
+test("LIVE: the bundled CLI lists its models with NO model turn (zero SDK messages)", async (t) => {
+  if (process.env.CLAUDE_SDK_LIVE !== "1") {
+    t.diagnostic("SKIPPED, NOT PASSED — set CLAUDE_SDK_LIVE=1 to read the real CLI's roster");
+    t.skip("CLAUDE_SDK_LIVE is not 1");
+    return;
+  }
   const sdk = await import("@anthropic-ai/claude-agent-sdk");
   const bin = require.resolve(`@anthropic-ai/claude-agent-sdk-${process.platform}-${process.arch}/package.json`).replace(/package\.json$/, "claude");
   let messages = 0;

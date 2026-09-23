@@ -11,7 +11,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { fnOf } from "./helpers/source-probe.mjs";
+import { fnOf, sentinelBlock } from "./helpers/source-probe.mjs";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
@@ -22,14 +22,7 @@ const SRC = readFileSync(join(HERE, "..", "main", "session-store.js"), "utf8");
 // `saveRecord`'s U10 whitelist is driven against the shipped module rather than a lookalike.
 const RUNTIME_TRUTH = createRequire(import.meta.url)(join(HERE, "..", "main", "session-runtime-truth.js"));
 
-const BEGIN = "// ─── BEGIN SESSION-STORE-PURE";
-const END = "// ─── END SESSION-STORE-PURE";
-const from = SRC.indexOf(BEGIN);
-const to = SRC.indexOf(END);
-assert.notEqual(from, -1, "BEGIN SESSION-STORE-PURE sentinel missing");
-assert.notEqual(to, -1, "END SESSION-STORE-PURE sentinel missing");
-assert.ok(to > from, "session-store sentinels out of order");
-const BLOCK = SRC.slice(from, to);
+const BLOCK = sentinelBlock(SRC, "SESSION-STORE-PURE");
 
 const { sessionKey, slotKey, threadKeyPrefix, isTerminalPhase, reloadDisposition, durableName, durableSessionRecord } = new Function(
   `${BLOCK}

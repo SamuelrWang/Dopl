@@ -5,13 +5,13 @@
 // faked; only electron and the store/window-backed modules are swapped. Both halves are built with
 // the SAME stub, so they register into ONE `handlers` map and every case drives both.
 
-import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { fnOf } from "./helpers/source-probe.mjs";
 import { launchDefaultStub } from "./_launch-runtime-stub.mjs";
+import { evalModule } from "./helpers/module-sandbox.mjs";
+import { sentinelBlock } from "./helpers/source-probe.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const req = createRequire(import.meta.url);
@@ -46,21 +46,11 @@ export const BOTH = `${SRC}\n${OPS_SRC}`;
 
 // Sliced from `main/ipc-guards.js` since 2026-08-20 — it used to be two byte-identical copies
 // (the other in `ui-bridge.js`), which is the F-221 drift. One source now; both suites drive it.
-const GUARDS = M("ipc-guards.js");
-const from = GUARDS.indexOf("// ─── BEGIN IPC-GUARDS");
-const to = GUARDS.indexOf("// ─── END IPC-GUARDS");
-assert.notEqual(from, -1, "BEGIN IPC-GUARDS sentinel missing");
-assert.ok(to > from, "IPC-GUARDS sentinels out of order");
-export const BLOCK = GUARDS.slice(from, to);
+export const BLOCK = sentinelBlock(M("ipc-guards.js"), "IPC-GUARDS");
 
 export const { isAppWindowSender } = new Function(`${BLOCK}\n return { isAppWindowSender };`)();
 
-/** Evaluate a main-process module against a stub `require`, and hand back its exports. */
-export function evalModule(src, stubRequire) {
-  const m = { exports: {} };
-  new Function("require", "module", "exports", src)(stubRequire, m, m.exports);
-  return m.exports;
-}
+export { evalModule };
 
 let nextWcId = 1;
 export const mkWin = () => {
@@ -220,15 +210,14 @@ export function bootIpc({ blocked = false } = {}) {
   const deleteOpModule = evalModule(DELETE_OP_SRC, stubRequire);
   const answerPermModule = evalModule(ANSWER_PERM_SRC, stubRequire);
   const opsModule = evalModule(OPS_SRC, stubRequire);
-  const mod = { exports: {} };
-  new Function("require", "module", "exports", SRC)(stubRequire, mod, mod.exports);
+  const mod = evalModule(SRC, stubRequire);
 
   // TWO bound windows — the shell and a pop-out thread window. This is the enumeration:
   // both must work, and nothing else may.
   const shell = mkWin();
   const popout = mkWin();
   const stranger = mkWin();
-  mod.exports.register({ getSenderIds: () => idsOf(shell.webContents, popout.webContents) });
+  mod.register({ getSenderIds: () => idsOf(shell.webContents, popout.webContents) });
   return {
     handlers, writes, dialogs, reopens, popouts, approvals,
     shell: evt(shell.webContents, shell.mainFrame),

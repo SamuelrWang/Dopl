@@ -46,7 +46,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import {
   boot, claimPosts, decidePosts, row, wire,
-  MAIN, SRC, WS, CH, TH, ME, OTHER, DID,
+  MAIN, SRC, WS, CH, OTHER, DID, IDENTITY_ID,
 } from "./_launch-directive-harness.mjs";
 import { codeOf } from "./helpers/source-probe.mjs";
 
@@ -257,8 +257,7 @@ test("MODEL: the funnel's `no-model` reaches the decide as a REFUSAL, in its own
 // ⚠ THE IDENTITY'S LINK SITS BETWEEN THEM: it still beats the channel when the directive names none.
 test("MODEL: with no directive model, the IDENTITY's comes before the channel's", async () => {
   const h = boot({ resolve: { ok: true, identity: { name: "Code Auditor", model: "claude-haiku-4-5-20251001" } } });
-  const TPL = "77777777-7777-4777-8777-777777777777";
-  await h.api.handle(row({ model: "", identity_id: TPL }), WS);
+  await h.api.handle(row({ model: "", identity_id: IDENTITY_ID }), WS);
   assert.equal(h.cfg.lastSpec.model, "claude-haiku-4-5-20251001");
 });
 

@@ -14,7 +14,7 @@ import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { mkdtempSync } from "node:fs";
+import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 
 import { liveGate, announceGate, skipLive, skipTurn, appEnv, LIVE_THREAD, LIVE_TURN, LIVE_MODEL } from "./_codex-app-server.mjs";
@@ -191,6 +191,8 @@ test("LIVE: the adapter completes a real app-server turn", { timeout: 120000 }, 
   async function* onePrompt() {
     yield { message: { content: "Reply with exactly DOPL_CODEX_OK. Do not use tools." } };
   }
+  const cwd = mkdtempSync(join(tmpdir(), "dopl-codex-adapter-live-"));
+  t.after(() => rmSync(cwd, { recursive: true, force: true }));
   const handle = launchSpec.start({
     session: { key: "live:codex:adapter", profile: "full", channelId: null, state: {} },
     args: [],
@@ -199,7 +201,7 @@ test("LIVE: the adapter completes a real app-server turn", { timeout: 120000 }, 
     // ⚠ THE ISOLATED HOME, NOT `~/.codex`. A live turn run through the operator's own
     // `config.toml` measures their machine; `appEnv()` is the child the app would spawn.
     env: appEnv(),
-    cwd: mkdtempSync(join(tmpdir(), "dopl-codex-adapter-live-")),
+    cwd,
     prompt: onePrompt(),
     log: (...parts) => process.stderr.write(`${parts.join(" ")}\n`),
     dispatch: () => {},

@@ -19,6 +19,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
+import { orderOf } from "./helpers/source-probe.mjs";
 
 const require = createRequire(import.meta.url);
 const framing = require("../main/prompt-framing.js");
@@ -64,7 +65,7 @@ for (const side of ["requester", "responder"]) {
     // In FIRST ACTIONS, above the fenced body; the grant and op-scope rule unchanged around it.
     const first = t.indexOf("FIRST ACTIONS THIS TURN");
     assert.ok(first !== -1 && t.indexOf("tool_search") > first);
-    assert.ok(t.indexOf("tool_search") < t.indexOf("BEGIN-REQUEST-n0nce"), "above the fenced body");
+    assert.ok(orderOf(t, "tool_search", "BEGIN-REQUEST-n0nce"), "above the fenced body");
     assert.match(t, /mcp__dopl__dopl_channel is GRANTED to this session, and OP-SCOPED by your posture/);
     assert.match(t, /Just make the call in the delivery section below/);
     // No bare `dopl_channel` (the F-139 rule, `prompt-tool-name.test.mjs`).

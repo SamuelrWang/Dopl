@@ -251,7 +251,7 @@ test("LABELS: the bounds are the server's, field for field", () => {
 
 test("LABELS: structure-forging characters are STRIPPED here, where the server would reject", () => {
   // The classes `SAFE_LABEL_RE` refuses: control, zero-width/bidi, line/paragraph separators.
-  const row = t.telemetryFields({ toolLabel: "Ba sh​ mcp" });
+  const row = t.telemetryFields({ toolLabel: "Ba\u0000sh\u200b\u2028mcp\u0007" });
   assert.equal(row.toolLabel, "Ba sh mcp");
   const SAFE = readFileSync(join(HERE, "..", "..", "src", "shared", "lib", "safe-label.ts"), "utf8");
   const re = new RegExp(SAFE.match(/SAFE_LABEL_RE =\s*(\/\^\[\^[^\n]*\/u);/)[1].slice(1, -2), "u");

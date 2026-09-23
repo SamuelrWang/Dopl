@@ -16,16 +16,15 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { boot as bootDirective, row, WS } from "./_launch-directive-harness.mjs";
 import { launchDefaultStub } from "./_launch-runtime-stub.mjs";
+import { bootLaunchOp } from "./_session-launch-op-harness.mjs";
 
 const require = createRequire(import.meta.url);
 const MAIN = join(dirname(fileURLToPath(import.meta.url)), "..", "main");
-const read = (f) => readFileSync(join(MAIN, f), "utf8");
 const LD = require(join(MAIN, "runtime", "launch-default.js"));
 
 const CLAUDE_IDS = ["claude-fable-5", "claude-opus-5", "claude-sonnet-5"];
@@ -75,41 +74,18 @@ test("RULE: no identity model, or the legacy `default` word, is no pick", async 
 // ── 2. THE BUTTON LANE ───────────────────────────────────────────────────────────────────────
 
 const CH = "11111111-1111-4111-8111-111111111111";
-const TPL = "33333333-3333-4333-8333-333333333333";
+const IDENTITY_ID = "33333333-3333-4333-8333-333333333333";
 
 function bootButton(identityModel) {
-  const launches = [];
-  const stub = (id) => {
-    if (id === "./ipc-guards") return require(join(MAIN, "ipc-guards.js"));
-    if (id === "./launch-directive-vocab") return require(join(MAIN, "launch-directive-vocab.js"));
-    if (id === "./agent-id") return require(join(MAIN, "agent-id.js"));
-    if (id === "./diag") return { diag: () => {} };
-    if (id === "./runtime/selection-vocabulary") return require(join(MAIN, "runtime/selection-vocabulary.js"));
-    if (id === "./session-telemetry") return require(join(MAIN, "session-telemetry.js"));
-    if (id === "./api") {
-      return { apiFetch: async () => ({ ok: true, status: 200, json: async () => ({
-        name: "Coder", instructions: null, model: identityModel, fields: [], knowledgeBases: [], authoredByCaller: true,
-      }) }) };
-    }
-    if (id === "./identity-resolve") return resolveMod.exports;
-    if (id === "./channel-listener") return { watchedChannel: () => ({ channel: { myAgentToolProfile: "full" } }) };
-    if (id === "./targeting") return { resolveToolProfile: () => "full", resolveLaunchToolProfile: () => "full" };
-    if (id === "./channel-prefs") return { launchStartModes: () => ({ tools: "manual", messages: "auto_inbound" }) };
-    if (id === "./session-engine") {
-      return { launchRequesterSession: async (spec) => { launches.push(spec); return { agentId: "ag-1", sessionId: "s-1" }; } };
-    }
-    // ⚠ THE REAL RULE, over fake catalogs — not a passthrough.
-    if (id === "./runtime/launch-default") return launchDefaultStub({ identityModelFor: (rid, m, own) => identityOn(rid, m, own) });
-    throw new Error("unexpected require: " + id);
-  };
-  const resolveMod = { exports: {} };
-  new Function("require", "module", "exports", read("identity-resolve.js"))(stub, resolveMod, resolveMod.exports);
-  const mod = { exports: {} };
-  new Function("require", "module", "exports", read("session-launch-op.js"))(stub, mod, mod.exports);
-  const launch = (extra = {}) => mod.exports.launchFromButton({
-    channelId: CH, taskId: "", workspaceId: "ws-1", identityId: TPL, ...extra,
+  const apiFetch = async () => ({ ok: true, status: 200, json: async () => ({
+    name: "Coder", instructions: null, model: identityModel, fields: [], knowledgeBases: [], authoredByCaller: true,
+  }) });
+  // The real model rule over fake catalogs, not a passthrough.
+  const op = bootLaunchOp({ apiFetch, launchDefault: launchDefaultStub({ identityModelFor: (rid, m, own) => identityOn(rid, m, own) }) });
+  const launch = (extra = {}) => op.launchFromButton({
+    channelId: CH, taskId: "", workspaceId: "ws-1", identityId: IDENTITY_ID, ...extra,
   });
-  return { launch, launches };
+  return { launch, launches: op.launches };
 }
 
 test("BUTTON: a Claude identity on a CODEX launch sends no model — the funnel spends Codex's default", async () => {
@@ -144,7 +120,7 @@ const withIdentity = (model, extra = {}) => bootDirective({
   resolve: { ok: true, identity: { name: "Coder", model } }, identityOffered: OFFERED, ...extra,
 });
 const spec = async (h, over = {}) => {
-  await h.api.handle(row({ goal: "go", identity_id: TPL, identity_name: "Coder", ...over }), WS);
+  await h.api.handle(row({ goal: "go", identity_id: IDENTITY_ID, identity_name: "Coder", ...over }), WS);
   return h.cfg.lastSpec;
 };
 

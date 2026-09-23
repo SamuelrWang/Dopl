@@ -20,28 +20,24 @@ import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
+import { evalModule } from "./helpers/module-sandbox.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const MAIN = join(HERE, "..", "main");
 const requireMain = createRequire(import.meta.url);
 
-/** Evaluate a main-process module against a stub `require`. */
-export function evalModule(path, stub) {
-  const mod = { exports: {} };
-  new Function("require", "module", "exports", readFileSync(path, "utf8"))(stub, mod, mod.exports);
-  return mod.exports;
-}
+const evalFile = (path, stub) => evalModule(readFileSync(path, "utf8"), stub);
 
 /** A fresh `model-catalog.js` — the snapshot cache is module-level, so each case gets its own. */
 export const loadCatalog = () =>
-  evalModule(join(MAIN, "runtime", "model-catalog.js"), (id) => {
+  evalFile(join(MAIN, "runtime", "model-catalog.js"), (id) => {
     if (id === "./selection-vocabulary") return requireMain(join(MAIN, "runtime", "selection-vocabulary.js")); // pure
     throw new Error(`unexpected require: ${id}`);
   });
 
 /** A fresh `codex/models.js` over a fake app-server. `client` is the whole seam. */
 export function loadCodexModels(client) {
-  return evalModule(join(MAIN, "runtime", "codex", "models.js"), (id) => {
+  return evalFile(join(MAIN, "runtime", "codex", "models.js"), (id) => {
     if (id === "./client") return client;
     if (id === "./config-home") return { isolatedEnv: (env) => env };
     if (id === "../../app-version") return { appVersion: () => "" };

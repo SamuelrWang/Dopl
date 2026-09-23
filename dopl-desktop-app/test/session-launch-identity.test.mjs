@@ -14,19 +14,18 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { launchDefaultStub } from "./_launch-runtime-stub.mjs";
+import { bootLaunchOp } from "./_session-launch-op-harness.mjs";
+import { fnOf } from "./helpers/source-probe.mjs";
 
-const require = createRequire(import.meta.url);
 const HERE = dirname(fileURLToPath(import.meta.url));
 const MAIN = join(HERE, "..", "main");
 const read = (f) => readFileSync(join(MAIN, f), "utf8");
 
 const CH = "11111111-1111-4111-8111-111111111111";
 const THREAD = "22222222-2222-4222-8222-222222222222";
-const TPL = "33333333-3333-4333-8333-333333333333";
+const IDENTITY_ID = "33333333-3333-4333-8333-333333333333";
 const WS = "ws-1";
 
 const RESOLVED = {
@@ -39,62 +38,24 @@ const RESOLVED = {
   authoredByCaller: true,
 };
 
-/**
- * Boot the REAL launch body over a faked transport and a faked engine.
- * `api` decides what `/resolve` answers; `approved` is the machine-local store's verdict.
- */
+/** `api` decides what `/resolve` answers; `opts.approved` is the machine-local store's verdict. */
 function boot(api = {}, opts = {}) {
-  const launches = [];
   const approvals = [];
   const requests = [];
-  const stub = (id) => {
-    if (id === "./ipc-guards") return require(join(MAIN, "ipc-guards.js"));
-    if (id === "./launch-directive-vocab") return require(join(MAIN, "launch-directive-vocab.js"));
-    if (id === "./agent-id") return require(join(MAIN, "agent-id.js"));
-    if (id === "./diag") return { diag: () => {} };
-    if (id === "./runtime/selection-vocabulary") return require(join(MAIN, "runtime/selection-vocabulary.js"));
-    if (id === "./session-telemetry") return require(join(MAIN, "session-telemetry.js"));
-    if (id === "./api") {
-      return {
-        apiFetch: async (path, o) => {
-          requests.push({ path, ...o });
-          if (typeof api.throws === "function") throw api.throws();
-          return {
-            ok: api.status === undefined || (api.status >= 200 && api.status < 300),
-            status: api.status === undefined ? 200 : api.status,
-            json: async () => (api.body === undefined ? RESOLVED : api.body),
-          };
-        },
-      };
-    }
-    if (id === "./identity-resolve") return resolveMod.exports;
-    if (id === "./channel-listener") return { watchedChannel: () => ({ channel: { myAgentToolProfile: "full" } }) };
-    if (id === "./targeting") return { resolveToolProfile: () => "full", resolveLaunchToolProfile: () => "full" }; // ⚠ BOTH READS — the lane takes the LAUNCH one since ruling B7; `channel-agent-profile.test.mjs` drives the real rule
-    if (id === "./channel-prefs") {
-      return {
-        launchStartModes: () => ({ tools: "manual", messages: "auto_inbound" }),
-        isIdentityApproved: () => opts.approved === true,
-        approveIdentity: (t) => { approvals.push(t); return opts.storeWrites !== false; },
-      };
-    }
-    if (id === "./session-engine") {
-      return {
-        launchRequesterSession: async (spec) => {
-          launches.push(spec);
-          return { agentId: "ag-1", sessionId: "s-1" };
-        },
-      };
-    }
-    if (id === "./runtime/launch-default") return launchDefaultStub(); // the REAL runtime order, a passthrough model link
-    throw new Error("unexpected require: " + id);
+  const apiFetch = async (path, o) => {
+    requests.push({ path, ...o });
+    if (typeof api.throws === "function") throw api.throws();
+    return {
+      ok: api.status === undefined || (api.status >= 200 && api.status < 300),
+      status: api.status === undefined ? 200 : api.status,
+      json: async () => (api.body === undefined ? RESOLVED : api.body),
+    };
   };
-  const resolveMod = { exports: {} };
-  new Function("require", "module", "exports", read("identity-resolve.js"))(
-    stub, resolveMod, resolveMod.exports
-  );
-  const mod = { exports: {} };
-  new Function("require", "module", "exports", read("session-launch-op.js"))(stub, mod, mod.exports);
-  return { ...mod.exports, resolve: resolveMod.exports, launches, approvals, requests };
+  const prefs = {
+    isIdentityApproved: () => opts.approved === true,
+    approveIdentity: (t) => { approvals.push(t); return opts.storeWrites !== false; },
+  };
+  return { ...bootLaunchOp({ apiFetch, prefs }), approvals, requests };
 }
 
 const payload = (over = {}) => ({
@@ -125,7 +86,7 @@ test("F-1 / F-2: a 404 REFUSES with `no-identity` — deleted and invisible are 
   // ⚠ THE ENDPOINT IS 404-NEVER-403 SO THE DIFFERENCE IS NOT OBSERVABLE, and the desktop must
   // not try to reconstruct it. One word for both.
   const m = boot({ status: 404 });
-  assert.deepEqual(await m.launchFromButton(payload({ identityId: TPL })), {
+  assert.deepEqual(await m.launchFromButton(payload({ identityId: IDENTITY_ID })), {
     ok: false, reason: "no-identity",
   });
   assert.equal(m.launches.length, 0, "REFUSE, never degrade to a blank agent");
@@ -136,12 +97,12 @@ test("F-1 / F-2: a 404 REFUSES with `no-identity` — deleted and invisible are 
 test("every 404 is `no-identity`, whatever its body says", async () => {
   const shelf = { name: "Code Auditor", label: "your personal shelf" }, at = (el) => boot({ status: 404, body: el === undefined ? undefined : { error: { details: { elsewhere: el } } } });
   for (const el of [shelf, undefined, {}, { name: "x" }, "shelf", 7, null])
-    assert.deepEqual(await at(el).resolve.resolveAgentIdentity(TPL, WS), { ok: false, reason: "no-identity" }, JSON.stringify(el ?? null));
+    assert.deepEqual(await at(el).resolve.resolveAgentIdentity(IDENTITY_ID, WS), { ok: false, reason: "no-identity" }, JSON.stringify(el ?? null));
 });
 
 test("F-3: a timeout / dead socket REFUSES with the EXISTING word `busy`", async () => {
   const m = boot({ throws: () => Object.assign(new Error("aborted"), { name: "AbortError" }) });
-  assert.deepEqual(await m.launchFromButton(payload({ identityId: TPL })), {
+  assert.deepEqual(await m.launchFromButton(payload({ identityId: IDENTITY_ID })), {
     ok: false, reason: "busy",
   });
   assert.equal(m.launches.length, 0);
@@ -150,7 +111,7 @@ test("F-3: a timeout / dead socket REFUSES with the EXISTING word `busy`", async
 test("F-4: a 5xx is the same class — `busy`, and so is every other non-2xx", async () => {
   for (const status of [500, 502, 401, 403, 400]) {
     const m = boot({ status });
-    const res = await m.launchFromButton(payload({ identityId: TPL }));
+    const res = await m.launchFromButton(payload({ identityId: IDENTITY_ID }));
     // ⚠ A 4xx IS `busy`, NOT `no-identity`: none of them means the identity is GONE, and
     // "reload the list" would send the operator to fix the wrong thing.
     assert.deepEqual(res, { ok: false, reason: "busy" }, `HTTP ${status}`);
@@ -159,7 +120,7 @@ test("F-4: a 5xx is the same class — `busy`, and so is every other non-2xx", a
 
 test("F-5 REVERSED (2026-09-22): an UNKNOWN identity model is handed on — the funnel resolves or refuses it", async () => {
   const m = boot({ body: { ...RESOLVED, model: "gpt-9-turbo" } });
-  assert.equal((await m.launchFromButton(payload({ identityId: TPL }))).ok, true);
+  assert.equal((await m.launchFromButton(payload({ identityId: IDENTITY_ID }))).ok, true);
   assert.equal(m.launches[0].model, "gpt-9-turbo", "the funnel decides; the lane does not substitute");
 });
 
@@ -167,7 +128,7 @@ test("F-6: a NAME-ONLY identity LAUNCHES — an empty identity is a real configu
   const m = boot({
     body: { name: "Bare", instructions: null, model: null, fields: [], knowledgeBases: [], authoredByCaller: true },
   });
-  const res = await m.launchFromButton(payload({ identityId: TPL }));
+  const res = await m.launchFromButton(payload({ identityId: IDENTITY_ID }));
   assert.equal(res.ok, true);
   assert.equal(m.launches[0].context.identity.name, "Bare");
   assert.equal(m.launches[0].context.identity.instructions, null);
@@ -186,7 +147,7 @@ test("a PRESENT but MALFORMED id refuses rather than silently launching blank", 
 test("a 200 whose body is not a usable identity is `no-identity`, not a blank launch", async () => {
   for (const body of [null, {}, { name: "" }, "nonsense"]) {
     const m = boot({ body });
-    assert.deepEqual(await m.launchFromButton(payload({ identityId: TPL })), {
+    assert.deepEqual(await m.launchFromButton(payload({ identityId: IDENTITY_ID })), {
       ok: false, reason: "no-identity",
     }, JSON.stringify(body));
   }
@@ -196,10 +157,10 @@ test("a 200 whose body is not a usable identity is `no-identity`, not a blank la
 
 test("the resolve is a GET on the launch contract, 5s, no-store, workspace-scoped", async () => {
   const m = boot();
-  await m.launchFromButton(payload({ identityId: TPL }));
+  await m.launchFromButton(payload({ identityId: IDENTITY_ID }));
   assert.equal(m.requests.length, 1);
   const r = m.requests[0];
-  assert.equal(r.path, `/api/agent-identities/${TPL}/resolve`);
+  assert.equal(r.path, `/api/agent-identities/${IDENTITY_ID}/resolve`);
   assert.equal(r.method, "GET");
   assert.equal(r.workspaceId, WS);
   assert.equal(r.noStore, true);
@@ -209,8 +170,8 @@ test("the resolve is a GET on the launch contract, 5s, no-store, workspace-scope
 });
 
 test("the payload is NARROWED to a literal whitelist — a new server field is DROPPED", async () => {
-  const m = boot({ body: { ...RESOLVED, createdBy: "user-9", id: TPL, visibility: "team" } });
-  await m.launchFromButton(payload({ identityId: TPL }));
+  const m = boot({ body: { ...RESOLVED, createdBy: "user-9", id: IDENTITY_ID, visibility: "team" } });
+  await m.launchFromButton(payload({ identityId: IDENTITY_ID }));
   const t = m.launches[0].context.identity;
   // ⚠ NINE: `knowledge` (`launch-identity-scopes.test.mjs` owns that narrowing) and `runtime`
   // (C4). The list is CLOSED; dropping `createdBy`/`id`/`visibility` IS the case.
@@ -227,7 +188,7 @@ test("the payload is NARROWED to a literal whitelist — a new server field is D
 
 test("a FOREIGN identity's first launch on this machine asks, and starts nothing", async () => {
   const m = boot({ body: { ...RESOLVED, authoredByCaller: false } }, { approved: false });
-  const res = await m.launchFromButton(payload({ identityId: TPL }));
+  const res = await m.launchFromButton(payload({ identityId: IDENTITY_ID }));
   assert.equal(res.ok, false);
   assert.equal(res.reason, "identity-approval");
   // ⚠ THE INSTRUCTIONS RIDE BACK so the sheet shows THE TEXT MAIN RESOLVED, verbatim. An
@@ -238,33 +199,33 @@ test("a FOREIGN identity's first launch on this machine asks, and starts nothing
 
 test("…and once approved on this machine it launches without asking again", async () => {
   const m = boot({ body: { ...RESOLVED, authoredByCaller: false } }, { approved: true });
-  assert.equal((await m.launchFromButton(payload({ identityId: TPL }))).ok, true);
+  assert.equal((await m.launchFromButton(payload({ identityId: IDENTITY_ID }))).ok, true);
   assert.equal(m.launches[0].context.identity.authoredByCaller, false, "still marked foreign");
 });
 
 test("an OWN identity is never gated — the approval store is not even consulted", async () => {
   const m = boot({ body: { ...RESOLVED, authoredByCaller: true } }, { approved: false });
-  assert.equal((await m.launchFromButton(payload({ identityId: TPL }))).ok, true);
+  assert.equal((await m.launchFromButton(payload({ identityId: IDENTITY_ID }))).ok, true);
 });
 
 test("⚠ IT FAILS FOREIGN: a missing `authoredByCaller` is treated as somebody else's", async () => {
   const body = { ...RESOLVED };
   delete body.authoredByCaller;
   const m = boot({ body }, { approved: false });
-  assert.equal((await m.launchFromButton(payload({ identityId: TPL }))).reason, "identity-approval");
+  assert.equal((await m.launchFromButton(payload({ identityId: IDENTITY_ID }))).reason, "identity-approval");
 });
 
 test("approveIdentity is UUID-gated, records, and RETURNS THE VERDICT", async () => {
   const m = boot();
-  assert.deepEqual(m.approveIdentity({ identityId: TPL }), { ok: true });
-  assert.deepEqual(m.approvals, [TPL]);
+  assert.deepEqual(m.approveIdentity({ identityId: IDENTITY_ID }), { ok: true });
+  assert.deepEqual(m.approvals, [IDENTITY_ID]);
   assert.deepEqual(m.approveIdentity({ identityId: "nope" }), { ok: false });
   assert.deepEqual(m.approveIdentity({}), { ok: false });
-  assert.deepEqual(m.approvals, [TPL], "a bad id records nothing");
+  assert.deepEqual(m.approvals, [IDENTITY_ID], "a bad id records nothing");
   // ⚠ AN UNWRITABLE STORE IS NOT AN APPROVAL. Swallowing that makes the next launch ask again,
   // which reads as a broken modal unless the SPA can say what happened.
   const dead = boot({}, { storeWrites: false });
-  assert.deepEqual(dead.approveIdentity({ identityId: TPL }), { ok: false });
+  assert.deepEqual(dead.approveIdentity({ identityId: IDENTITY_ID }), { ok: false });
 });
 
 // ── 4. THE MODEL PRECEDENCE CHAIN ────────────────────────────────────────────
@@ -282,14 +243,14 @@ test("CHAIN: overrides.model > identity.model > '' (the funnel's runtime default
   ];
   for (const [body, overrides, expected] of cases) {
     const m = boot({ body });
-    await m.launchFromButton(payload({ identityId: TPL, overrides }));
+    await m.launchFromButton(payload({ identityId: IDENTITY_ID, overrides }));
     assert.equal(m.launches[0].model, expected, `${body.model} / ${JSON.stringify(overrides)}`);
   }
 });
 
 test("an identity model written as an ALIAS works too — both vocabularies are accepted", async () => {
   const m = boot({ body: { ...RESOLVED, model: "haiku" } });
-  await m.launchFromButton(payload({ identityId: TPL }));
+  await m.launchFromButton(payload({ identityId: IDENTITY_ID }));
   assert.equal(m.launches[0].model, "haiku");
 });
 
@@ -313,7 +274,7 @@ test("an override model the frozen table does not know is SPENT, not dropped —
 test("overrides.fields REPLACE the identity's fields — never merged", async () => {
   const m = boot();
   await m.launchFromButton(payload({
-    identityId: TPL,
+    identityId: IDENTITY_ID,
     overrides: { fields: [{ key: "repo", value: "acme/web" }, { key: "severity", value: "high" }] },
   }));
   assert.deepEqual(m.launches[0].context.identity.fields, [
@@ -325,7 +286,7 @@ test("overrides.fields REPLACE the identity's fields — never merged", async ()
 test("an ABSENT overrides object leaves the identity's own fields untouched", async () => {
   for (const overrides of [undefined, {}, null, "junk"]) {
     const m = boot();
-    await m.launchFromButton(payload({ identityId: TPL, overrides }));
+    await m.launchFromButton(payload({ identityId: IDENTITY_ID, overrides }));
     assert.deepEqual(m.launches[0].context.identity.fields, RESOLVED.fields, JSON.stringify(overrides));
   }
 });
@@ -333,7 +294,7 @@ test("an ABSENT overrides object leaves the identity's own fields untouched", as
 test("F-281: MAIN enforces the charset the renderer cannot reach, and DROPS the bad row", async () => {
   const m = boot();
   await m.launchFromButton(payload({
-    identityId: TPL,
+    identityId: IDENTITY_ID,
     overrides: {
       fields: [
         { key: "ok", value: "fine" },
@@ -351,7 +312,7 @@ test("F-281: MAIN enforces the charset the renderer cannot reach, and DROPS the 
 test("override key / value bounds are the schema's own numbers, applied here too", async () => {
   const m = boot();
   await m.launchFromButton(payload({
-    identityId: TPL,
+    identityId: IDENTITY_ID,
     overrides: { fields: [{ key: "k".repeat(200), value: "v".repeat(5000) }] },
   }));
   const [f] = m.launches[0].context.identity.fields;
@@ -370,7 +331,7 @@ test("the RESOLVED identity's bounds are the server's own, field by field (F-287
       fields: [{ key: "k".repeat(200), value: "v".repeat(5000) }],
     },
   });
-  await m.launchFromButton(payload({ identityId: TPL }));
+  await m.launchFromButton(payload({ identityId: IDENTITY_ID }));
   const t = m.launches[0].context.identity;
   assert.equal(t.name.length, 120, "`schema.ts › NameSchema`, not the old 200 and not 80");
   assert.equal(t.fields[0].key.length, 80, "`IdentityFieldSchema.key`");
@@ -380,13 +341,13 @@ test("the RESOLVED identity's bounds are the server's own, field by field (F-287
 test("a 300-character field value survives the boundary intact — it is legal", async () => {
   const value = "x".repeat(300);
   const m = boot({ body: { ...RESOLVED, fields: [{ key: "style_rules", value }] } });
-  await m.launchFromButton(payload({ identityId: TPL }));
+  await m.launchFromButton(payload({ identityId: IDENTITY_ID }));
   assert.equal(m.launches[0].context.identity.fields[0].value, value);
 });
 
 test("an EMPTY VALUE survives — a key with no value yet is a legitimate half-filled form", async () => {
   const m = boot();
-  await m.launchFromButton(payload({ identityId: TPL, overrides: { fields: [{ key: "repo", value: "" }] } }));
+  await m.launchFromButton(payload({ identityId: IDENTITY_ID, overrides: { fields: [{ key: "repo", value: "" }] } }));
   assert.deepEqual(m.launches[0].context.identity.fields, [{ key: "repo", value: "" }]);
 });
 
@@ -395,7 +356,7 @@ test("the field overrides are applied AFTER the approval gate, never before it",
   // never overridable at launch. Renderer text must not sit in front of that question.
   const m = boot({ body: { ...RESOLVED, authoredByCaller: false } }, { approved: false });
   const res = await m.launchFromButton(payload({
-    identityId: TPL, overrides: { fields: [{ key: "repo", value: "evil" }] },
+    identityId: IDENTITY_ID, overrides: { fields: [{ key: "repo", value: "evil" }] },
   }));
   assert.equal(res.reason, "identity-approval");
   assert.deepEqual(res.identity, { name: "Code Auditor", instructions: "Audit the diff." });
@@ -412,7 +373,7 @@ test("an identity supplies NO containment input — profile, posture and lane st
       windowless: false, idle: false, cwd: "/etc",
     },
   });
-  await m.launchFromButton(payload({ identityId: TPL }));
+  await m.launchFromButton(payload({ identityId: IDENTITY_ID }));
   const spec = m.launches[0];
   assert.equal(spec.toolProfile, "full", "resolved from main's own channel DTO, not the payload");
   assert.deepEqual(spec.startModes, { tools: "manual", messages: "auto_inbound" });
@@ -428,7 +389,7 @@ test("an identity supplies NO containment input — profile, posture and lane st
 
 test("an identity never replaces the GOAL — ROLE first, GOAL last", async () => {
   const m = boot();
-  await m.launchFromButton(payload({ identityId: TPL, threadTitle: "Ship it" }));
+  await m.launchFromButton(payload({ identityId: IDENTITY_ID, threadTitle: "Ship it" }));
   assert.match(m.launches[0].goal, /^Join the thread "Ship it" as my agent:/);
 });
 
@@ -449,7 +410,7 @@ test("`context.identity` rides the funnel's LITERAL WHITELIST and survives park/
     "startSession merges the spec's context onto the session"
   );
   const park = read("session-park.js");
-  const resume = park.slice(park.indexOf("function resumeParked("), park.indexOf("async function startResumedConsumer("));
+  const resume = fnOf(park, "resumeParked");
   assert.equal(/s\.context/.test(resume), false, "a park/resume never rewrites the context");
   // …and the framing reads it from there, with the session's OWN profile spread on at wake.
   assert.match(read("session-seed.js"), /context: \{ \.\.\.\(\(s && s\.context\) \|\| \{\}\), profile: s\.profile, mcpDiscovery: discoveryFor\(s && s\.runtimeId\) \}/);

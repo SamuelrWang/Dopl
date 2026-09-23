@@ -23,6 +23,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
+import { sentinelBlock } from "./helpers/source-probe.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const SRC = readFileSync(join(HERE, "..", "main", "session-reopen.js"), "utf8");
@@ -43,14 +44,7 @@ const { floorWindowlessMessage } = createRequire(import.meta.url)(
   join(HERE, "..", "main", "session-profiles.js")
 );
 
-const BEGIN = "// ─── BEGIN SESSION-REOPEN-PURE";
-const END = "// ─── END SESSION-REOPEN-PURE";
-const from = SRC.indexOf(BEGIN);
-const to = SRC.indexOf(END);
-assert.notEqual(from, -1, "BEGIN SESSION-REOPEN-PURE sentinel missing");
-assert.notEqual(to, -1, "END SESSION-REOPEN-PURE sentinel missing");
-assert.ok(to > from, "session-reopen sentinels out of order");
-const BLOCK = SRC.slice(from, to);
+const BLOCK = sentinelBlock(SRC, "SESSION-REOPEN-PURE");
 
 for (const banned of ["require(", "electron", "process.", "child_process", "@anthropic"]) {
   assert.ok(!BLOCK.includes(banned), `SESSION-REOPEN-PURE block must not reference ${banned}`);

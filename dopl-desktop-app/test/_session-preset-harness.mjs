@@ -31,6 +31,7 @@ import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { createRequire } from "node:module";
 import { loadReducer } from "./_reducer-block.mjs";
+import { between, codeOf } from "./helpers/source-probe.mjs";
 
 export const HERE = dirname(fileURLToPath(import.meta.url));
 export const MAIN = join(HERE, "..", "main");
@@ -60,8 +61,7 @@ const PROFILES = createRequire(import.meta.url)(M("session-profiles.js"));
  * from the shipped engine and evaluated against the real initialSessionState, for runtime `rt`.
  */
 export function startedStateFor(spec, rt = { id: "claude" }) {
-  const src = ENGINE.slice(ENGINE.indexOf("const armedModes = spec.startModes;"),
-    ENGINE.indexOf("const context = { ...(spec.context || {})"));
+  const src = between(ENGINE, "const armedModes = spec.startModes;", "const context = { ...(spec.context || {})");
   assert.ok(src.includes("initialSessionState("), "the construction site moved — reslice it");
   assert.ok(!/sessionConsent|consentModes|adoptsConsent/.test(src),
     "a second posture source is back at the construction site — that is H2, re-opened");
@@ -71,11 +71,7 @@ export function startedStateFor(spec, rt = { id: "claude" }) {
 
 export const WIDE = { tools: "bypass", messages: "auto_both" };
 
-// Comments legitimately NAME the deleted seam (they explain why it is gone), so the
-// absence assertions below scan CODE only.
-export const stripComments = (src) => src.split("\n")
-  .filter((l) => !/^\s*(\/\/|\*|\/\*)/.test(l))
-  .map((l) => { const i = l.indexOf("//"); return i === -1 ? l : l.slice(0, i); })
-  .join("\n");
+// Absence assertions scan code only: comments may name a deleted seam.
+export const stripComments = codeOf;
 
 export { test, assert, readdirSync };

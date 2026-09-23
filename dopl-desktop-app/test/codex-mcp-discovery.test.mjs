@@ -30,14 +30,14 @@
 
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import http from 'node:http';
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync, symlinkSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, rmSync, existsSync, symlinkSync } from 'node:fs';
 import { tmpdir, homedir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 
 import { client, liveGate, announceGate, skipLive, skipTurn, withAppServer, leakedPids, LIVE_THREAD, LIVE_TURN } from './_codex-app-server.mjs';
+import { CH, CHANNEL_TOOL_DEF, STUB_MODEL, standInDopl, scriptedModel, stubHome, say, fc, exec, toolSearch } from './_codex-stub.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
@@ -58,85 +58,29 @@ const DISCOVERY = runtime.capability.mcpDiscovery(runtime.descriptorFor('codex')
 
 const skipLiveTurn = (t) => skipLive(t, GATE) || skipTurn(t);
 
-function listen(handler) {
-  const server = http.createServer((req, res) => {
-    let body = '';
-    req.on('data', (c) => { body += c; });
-    req.on('end', () => handler(req, res, body));
-  });
-  return new Promise((r) => server.listen(0, '127.0.0.1', () => r({
-    port: server.address().port, close: () => new Promise((d) => server.close(d)),
-  })));
-}
+// Two tools, so a restricted profile's `enabled_tools` has something to hide.
+const DOPL_TOOLS = [CHANNEL_TOOL_DEF, { name: 'dopl_kb', description: 'Dopl knowledge bases.', inputSchema: { type: 'object', properties: {} } }];
 
-// The far side of Dopl's HTTP hop (see `codex-mcp-surface.test.mjs › standInDopl`): TWO tools, so
-// a restricted profile's `enabled_tools` has something to hide.
-async function standInDopl() {
-  const calls = [];
-  const srv = await listen((req, res, body) => {
-    let m = null; try { m = JSON.parse(body); } catch (_) { /* GET */ }
-    if (!m || m.id === undefined) { res.writeHead(202); res.end(); return; }
-    const reply = (result) => {
-      res.writeHead(200, { 'content-type': 'application/json', 'mcp-session-id': 'dopl-standin' });
-      res.end(JSON.stringify({ jsonrpc: '2.0', id: m.id, result }));
-    };
-    if (m.method === 'initialize') {
-      return reply({ protocolVersion: '2025-06-18', capabilities: { tools: {} }, serverInfo: { name: 'dopl-standin', version: '0' } });
-    }
-    if (m.method === 'tools/list') {
-      return reply({ tools: [
-        { name: mcp.CHANNEL_TOOL, description: 'Read or post in a Dopl channel.', inputSchema: { type: 'object', properties: { op: { type: 'string' } }, required: ['op'] } },
-        { name: 'dopl_kb', description: 'Dopl knowledge bases.', inputSchema: { type: 'object', properties: {} } },
-      ] });
-    }
-    if (m.method === 'tools/call') { calls.push(m.params); return reply({ content: [{ type: 'text', text: 'STANDIN-OK' }], isError: false }); }
-    return reply({});
-  });
-  return { ...srv, calls, url: `http://127.0.0.1:${srv.port}/api/mcp` };
-}
-
-// THE SCRIPTED MODEL. Round 1: search. Round 2: call whatever the search returned. Round 3: stop.
-function sse(res, items) {
-  const id = `resp_${Math.random().toString(36).slice(2)}`;
-  const ev = (type, obj) => res.write(`event: ${type}\ndata: ${JSON.stringify({ type, ...obj })}\n\n`);
-  res.writeHead(200, { 'content-type': 'text/event-stream' });
-  ev('response.created', { response: { id } });
-  for (const item of items) ev('response.output_item.done', { item });
-  ev('response.completed', { response: { id, usage: { input_tokens: 1, input_tokens_details: { cached_tokens: 0 }, output_tokens: 1, output_tokens_details: { reasoning_tokens: 0 }, total_tokens: 2 } } });
-  res.end();
-}
-async function scriptedModel(call) {
+// The scripted model: search, call whatever the search returned, stop. Code mode: one `exec` that
+// finds the tool in `ALL_TOOLS` and calls it, then stop.
+function discoveryScript(call) {
   const want = (call && call.fn) || mcp.CHANNEL_TOOL;
   const args = (call && call.args) || { op: 'rooms' };
-  const requests = [];
-  const srv = await listen((req, res, body) => {
-    if (!req.url.endsWith('/responses')) { res.writeHead(404); res.end('{}'); return; }
-    const b = JSON.parse(body);
-    requests.push(b);
+  return (b) => {
     const input = b.input || [];
-    // CODE MODE: one `exec` whose JS finds the tool in `ALL_TOOLS` and calls it, then stop.
     if (call && call.codeMode) {
-      if (input.some((i) => i.type === 'custom_tool_call_output')) {
-        return sse(res, [{ type: 'message', role: 'assistant', id: 'm1', content: [{ type: 'output_text', text: 'done' }] }]);
-      }
-      const js = call.js || `const hits = ALL_TOOLS.filter((t) => /dopl_channel/.test(t.name)).map((t) => t.name);
+      if (input.some((i) => i.type === 'custom_tool_call_output')) return null;
+      return exec(call.js || `const hits = ALL_TOOLS.filter((t) => /dopl_channel/.test(t.name)).map((t) => t.name);
 text(JSON.stringify(hits));
-await tools.mcp__dopl__dopl_channel(${JSON.stringify(args)});`;
-      return sse(res, [{ type: 'custom_tool_call', id: 'ct_1', call_id: 'ct_call_1', name: 'exec', input: js }]);
+await tools.mcp__dopl__dopl_channel(${JSON.stringify(args)});`, '1');
     }
     const out = input.find((i) => i.type === 'tool_search_output');
-    if (!out) {
-      return sse(res, [{ type: 'tool_search_call', id: 'ts_1', call_id: 'ts_call_1', status: 'completed', execution: 'client', arguments: { query: 'dopl channel', limit: 8 } }]);
-    }
-    if (!input.some((i) => i.type === 'function_call_output')) {
-      const ns = (out.tools || []).find((x) => x.type === 'namespace') || {};
-      const fn = (ns.tools || []).find((x) => x.name === want);
-      if (!fn) return sse(res, [{ type: 'message', role: 'assistant', id: 'm0', content: [{ type: 'output_text', text: 'NOT FOUND' }] }]);
-      return sse(res, [{ type: 'function_call', id: 'fc_1', call_id: 'fc_call_1', namespace: ns.name, name: fn.name, arguments: JSON.stringify(args) }]);
-    }
-    return sse(res, [{ type: 'message', role: 'assistant', id: 'm1', content: [{ type: 'output_text', text: 'done' }] }]);
-  });
-  return { ...srv, requests };
+    if (!out) return [toolSearch('dopl channel')];
+    if (input.some((i) => i.type === 'function_call_output')) return null;
+    const ns = (out.tools || []).find((x) => x.type === 'namespace') || {};
+    const fn = (ns.tools || []).find((x) => x.name === want);
+    return fn ? fc('1', fn.name, args, ns.name) : say('NOT FOUND');
+  };
 }
 
 const catalogNames = (body) => (body.tools || []).map((t) => t.name || t.type);
@@ -149,15 +93,9 @@ const mentionsChannelTool = (body) => JSON.stringify(body.tools || []).includes(
 const OPERATOR_AUTH = join(process.env.CODEX_HOME || join(homedir(), '.codex'), 'auth.json');
 async function scriptedTurn(profile, verdict, opts) {
   const o = opts || {};
-  const model = await scriptedModel(o.call);
-  const dopl = await standInDopl();
-  const home = mkdtempSync(join(tmpdir(), 'dopl-codex-discovery-'));
-  writeFileSync(join(home, 'config.toml'), [
-    // ⚠ gpt-5.5 is the catalog's one NON-code-mode model; gpt-6-astra is `code_mode_only` (2026-09-22).
-    'model_provider = "stub"', `model = "${o.call && o.call.codeMode ? 'gpt-6-astra' : 'gpt-5.5'}"`, '[model_providers.stub]', 'name = "stub"',
-    `base_url = "http://127.0.0.1:${model.port}/v1"`, 'wire_api = "responses"',
-    'requires_openai_auth = false', 'stream_max_retries = 0', 'request_max_retries = 0', '',
-  ].join('\n'));
+  const model = await scriptedModel(discoveryScript(o.call));
+  const dopl = await standInDopl(DOPL_TOOLS);
+  const home = stubHome({ port: model.port, model: o.call && o.call.codeMode ? STUB_MODEL.codeMode : STUB_MODEL.searchPath });
   if (o.linkAuth) symlinkSync(OPERATOR_AUTH, join(home, 'auth.json'));
   const env = { ...process.env, CODEX_HOME: home, [mcp.BEARER_ENV]: 'cxp3a-bearer', [mcp.WORKSPACE_ENV]: 'ws', [mcp.SESSION_ENV]: 'slot' };
   const items = [];
@@ -344,7 +282,7 @@ describe('TIER 2 — a real model, given Dopl\'s REAL first turn, searches on it
   // a windowless agent is floored to (`auto_outbound` + `on-request`). An own-channel post allows.
   test('the Codex framing gets a fresh agent from zero tools to ONE marker posted through the gate', async (t) => {
     if (skipLiveTurn(t)) return;
-    const dopl = await standInDopl();
+    const dopl = await standInDopl(DOPL_TOOLS);
     const root = mkdtempSync(join(tmpdir(), 'dopl-codex-discovery-turn-'));
     const cwd = join(root, 'cwd');
     mkdirSync(cwd, { recursive: true });
@@ -352,7 +290,6 @@ describe('TIER 2 — a real model, given Dopl\'s REAL first turn, searches on it
     const env = configHome.isolatedEnv({ ...process.env, [mcp.BEARER_ENV]: 'cxp3a-bearer', [mcp.WORKSPACE_ENV]: 'ws', [mcp.SESSION_ENV]: 'slot' }, join(root, 'user-data'));
     const items = [];
     const asked = [];
-    const CH = '11111111-1111-4111-8111-111111111111';
     const MARKER = `CXP3A-${Date.now().toString(36)}`;
     try {
       const cfg = tools.buildSessionToolConfig('dopl_only');

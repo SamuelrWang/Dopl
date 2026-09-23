@@ -9,11 +9,13 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { startedStateFor } from "./_session-preset-harness.mjs";
 import { fakeRegistry } from "./_launch-runtime-stub.mjs";
+import { evalModule } from "./helpers/module-sandbox.mjs";
 
 const require = createRequire(import.meta.url);
 const MAIN = join(dirname(fileURLToPath(import.meta.url)), "..", "main");
@@ -173,16 +175,15 @@ test("X-02: the button lane starts a dialog-picked Codex agent on the CODEX reco
     }
     return require(join(MAIN, id));
   };
-  const mod = { exports: {} };
-  new Function("require", "module", "exports", require("node:fs").readFileSync(M("session-launch-op.js"), "utf8"))(stub, mod, mod.exports);
-  const res = await mod.exports.launchFromButton({ channelId: CH, taskId: "", runtime: "codex" });
+  const op = evalModule(readFileSync(M("session-launch-op.js"), "utf8"), stub);
+  const res = await op.launchFromButton({ channelId: CH, taskId: "", runtime: "codex" });
   assert.equal(res.ok, true, JSON.stringify(res));
   assert.equal(launches[0].runtime, "codex");
   assert.deepEqual(launches[0].startModes, { tools: "never", messages: "auto_inbound", native: { sandbox_mode: "read-only" } });
-  await mod.exports.launchFromButton({ channelId: CH, taskId: "" });
+  await op.launchFromButton({ channelId: CH, taskId: "" });
   assert.equal(launches[1].runtime, "claude", "no pick: the channel's runtime");
   assert.equal(launches[1].startModes.tools, "bypass");
-  const refused = await mod.exports.launchFromButton({ channelId: CH, taskId: "", runtime: "borg" });
+  const refused = await op.launchFromButton({ channelId: CH, taskId: "", runtime: "borg" });
   assert.deepEqual(refused, { ok: false, reason: "no-sdk" }, "an explicit pick this build cannot run is refused, never swapped");
   assert.equal(launches.length, 2);
 });
@@ -199,9 +200,7 @@ test("C2: sessions:setMode hands the RAW word to the session (validated there) a
     if (id === "./diag") return { diag: () => {} };
     return require(join(MAIN, id));
   };
-  const mod = { exports: {} };
-  new Function("require", "module", "exports", require("node:fs").readFileSync(M("session-ipc-ops.js"), "utf8"))(stub, mod, mod.exports);
-  mod.exports.register({ getSenderIds: () => new Set([1]) });
+  evalModule(readFileSync(M("session-ipc-ops.js"), "utf8"), stub).register({ getSenderIds: () => new Set([1]) });
   handlers["sessions:setMode"]({}, { channelId: CH, taskId: "", agentId: "a1b2c3d4", axis: "tools", mode: "never" });
   assert.equal(sent[0].mode, "never", "not pre-coerced against the default runtime's words at the boundary");
   assert.equal(sent[0].pinned, true);

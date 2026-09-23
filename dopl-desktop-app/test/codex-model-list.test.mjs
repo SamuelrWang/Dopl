@@ -23,36 +23,15 @@ import { readFileSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { createRequire } from "node:module";
 import {
   loadCatalog, loadCodexModels, fakeClient, row, noClaude, CODEX_DESCRIPTOR,
 } from "./_model-catalog-harness.mjs";
+import { liveGate, announceGate, skipLive } from "./_codex-app-server.mjs";
+import { codeOf } from "./helpers/source-probe.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const requireMain = createRequire(import.meta.url);
 
-/**
- * The LIVE tier's two gates, stated separately so a skip names WHICH one is shut — the idiom
- * `test/codex-app-server-contract.test.mjs` established, because a skip that reads as a pass is
- * this tier's whole failure mode.
- */
-function codexBinForTest() {
-  const resolver = requireMain(join(HERE, "..", "main", "runtime", "codex", "resolve-bin.js"));
-  resolver.forget();
-  const found = resolver.resolveCodexBin();
-  resolver.forget();
-  return found.ok ? found.path : null;
-}
-
-function liveSkipReason() {
-  if (process.env.CODEX_APP_SERVER_LIVE !== "1") {
-    return "SKIPPED, NOT PASSED — set CODEX_APP_SERVER_LIVE=1 to measure the real CLI";
-  }
-  if (!codexBinForTest()) {
-    return "SKIPPED, NOT PASSED — CODEX_APP_SERVER_LIVE=1 is set but no codex binary resolved";
-  }
-  return false;
-}
+const GATE = announceGate(liveGate());
 
 // ── 1. THE HAPPY PATH ────────────────────────────────────────────────────────────────────────
 
@@ -270,7 +249,7 @@ test("Dopl sends `cursor`, and sends neither `includeHidden` nor `limit`", () =>
   // ⚠ OMITTING `includeHidden` IS THE POLICY, NOT AN OVERSIGHT: omitted, the server withholds
   // models it hides from a picker, which is the roster a picker should offer. Asking for them and
   // filtering here would make Dopl responsible for a policy the platform already has.
-  const code = src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+  const code = codeOf(src);
   assert.ok(!/includeHidden/.test(code), "includeHidden must not be sent");
   assert.ok(!/\blimit\b\s*:/.test(code), "limit must not be sent — the server's default is wanted");
   // `hidden` is still READ off each row: a hidden model can be the one a session already runs, and
@@ -278,10 +257,11 @@ test("Dopl sends `cursor`, and sends neither `includeHidden` nor `limit`", () =>
   assert.match(code, /row\.hidden === true/);
 });
 
-test("the supported CLI declares `cursor` — LIVE, and it skips loudly", { skip: liveSkipReason() }, () => {
+test("the supported CLI declares `cursor` — LIVE, and it skips loudly", (t) => {
+  if (skipLive(t, GATE)) return;
   const dir = mkdtempSync(join(tmpdir(), "codex-modellist-"));
   try {
-    execFileSync(codexBinForTest(), ["app-server", "generate-json-schema", "--out", dir], {
+    execFileSync(GATE.bin.path, ["app-server", "generate-json-schema", "--out", dir], {
       timeout: 60_000,
       stdio: "ignore",
     });

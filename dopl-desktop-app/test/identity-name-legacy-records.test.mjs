@@ -7,27 +7,19 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { createRequire } from "node:module";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { join } from "node:path";
 import { fnOf } from "./helpers/source-probe.mjs";
+import { loadWithStubs, real, MAIN } from "./helpers/module-sandbox.mjs";
 import { harness, parkedRecord, CHANNEL, KEY } from "./_session-boot-harness.mjs";
-
-const require = createRequire(import.meta.url);
-const MAIN = join(dirname(fileURLToPath(import.meta.url)), "..", "main");
 
 /** A main module over a fake electron-store document. */
 function load(file, doc) {
   const store = { get: (k) => doc[k], set: (k, v) => { doc[k] = v; }, delete: (k) => { delete doc[k]; } };
-  const stub = (id) => {
-    if (id === "electron-store") return function Store() { return store; };
-    if (id === "./diag") return { diag: () => {} };
-    if (id === "./session-runtime-truth") return require(join(MAIN, "session-runtime-truth.js"));
-    throw new Error("unexpected require: " + id);
-  };
-  const mod = { exports: {} };
-  new Function("require", "module", "exports", readFileSync(join(MAIN, file), "utf8"))(stub, mod, mod.exports);
-  return mod.exports;
+  return loadWithStubs(file, {
+    "electron-store": function Store() { return store; },
+    "./diag": { diag: () => {} },
+    "./session-runtime-truth": real("./session-runtime-truth"),
+  });
 }
 
 test("a parked record's `templateName` rebuilds the identity; a new record is untouched", () => {

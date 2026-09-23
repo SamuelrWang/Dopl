@@ -11,6 +11,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { join } from "node:path";
+import { fnOf } from "./helpers/source-probe.mjs";
 
 const require_ = createRequire(import.meta.url);
 const MAIN = join(import.meta.dirname, "..", "main");
@@ -146,7 +147,7 @@ test("observeQuery yields every frame unchanged and keeps the query's own method
 
 test("the Claude adapter's start() stamps the prompt and watches the stream", () => {
   const src = readFileSync(join(MAIN, "runtime", "claude", "launch-spec.js"), "utf8");
-  const start = src.slice(src.indexOf("function start(spec) {"), src.indexOf("function resume("));
+  const start = fnOf(src, "start");
   assert.match(start, /fold\.makeFoldWatch\(\(text\) => sessionDirected\.steerJoined\(spec\.session, text\)\)/);
   assert.match(start, /fold\.observeQuery\(sdk\.query\(\{ prompt: watch\.stamp\(spec\.prompt\), options: spec\.options \}\), watch\.observe\)/);
   assert.match(src, /return \{ prompt: s\.pushIterator, options: buildOptions\(s, req\.dispatch\), session: s \};/);

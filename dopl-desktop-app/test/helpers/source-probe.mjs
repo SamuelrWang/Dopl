@@ -36,6 +36,13 @@ export function between(src, from, to, label) {
   return src.slice(i, j);
 }
 
+// Everything from `from` to the end; throws when the marker is missing (a -1 slice is one char).
+export function sliceFrom(src, from, label) {
+  const i = src.indexOf(from);
+  if (i === -1) throw new Error(`${label ? label + ": " : ""}start marker not found: ${JSON.stringify(from)}`);
+  return src.slice(i);
+}
+
 // "a is declared before b" as a checked question, not a bare indexOf comparison
 // (two -1s compare equal, which is how an absent marker used to read as "in order").
 export function orderOf(src, a, b, label) {
@@ -248,4 +255,12 @@ export function fnOf(src, name) {
   const close = open === -1 ? -1 : matchBrace(masked, open);
   if (close === -1) throw new Error(`unbalanced body for function ${name}`);
   return src.slice(at, close + 1);
+}
+
+// `fnOf` for an `async function`, keyword restored so its awaits evaluate; throws if it is not async.
+export function asyncFnOf(src, name) {
+  const body = fnOf(src, name);
+  const at = src.indexOf(body);
+  if (!/async\s+$/.test(src.slice(Math.max(0, at - 16), at))) throw new Error(`not an async function: ${name}`);
+  return `async ${body}`;
 }

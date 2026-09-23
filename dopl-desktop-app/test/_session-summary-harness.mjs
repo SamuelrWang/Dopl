@@ -11,6 +11,7 @@ import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
+import { between } from "./helpers/source-probe.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 export const MAIN = join(HERE, "..", "main");
@@ -45,12 +46,8 @@ const { heldGatesFor } = req(join(MAIN, "session-held-gates.js"));
 // RC-15's one spelling of "no model pick". Injected REAL; the module requires nothing.
 const { pickOf } = req(join(MAIN, "runtime", "selection-vocabulary.js"));
 
-const BEGIN = "// ─── BEGIN SESSION-SUMMARY-PURE";
-const from = SRC.indexOf(BEGIN);
-const to = SRC.indexOf("module.exports = {");
-assert.notEqual(from, -1, "BEGIN SESSION-SUMMARY-PURE sentinel missing");
-assert.ok(to > from, "module.exports not found after the sentinel");
-const BLOCK = SRC.slice(from, to);
+// Through `module.exports`, not END: the push wiring after the pure block is evaluated too.
+const BLOCK = between(SRC, "// ─── BEGIN SESSION-SUMMARY-PURE", "module.exports = {");
 
 // The purity assertion IS a test — it is what makes "this module reaches no network" a fact rather
 // than a docblock. `fetch(` is the one that matters now.

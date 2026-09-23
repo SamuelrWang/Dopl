@@ -27,6 +27,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { createRequire } from "node:module";
+import { codeOf } from "./helpers/source-probe.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const M = (p) => readFileSync(join(HERE, "..", "main", p), "utf8");
@@ -34,16 +35,12 @@ const SERVER = (p) => readFileSync(join(HERE, "..", "..", "src", p), "utf8");
 
 const IO = M("listener-io.js");
 const POST = M("channel-post.js");
-const STAMP = M("session-id-header.js");
 const require = createRequire(import.meta.url);
 // Pure by construction (no electron, no fs, no network), so the REAL module is what runs here.
 const stamp = require("../main/session-id-header.js");
 
-/** CODE only. These modules explain themselves at length, and every explanation NAMES the
- *  reserved key it is being careful about; a source grep that counted those would fail on the
- *  documentation rather than on the behaviour. */
-const withoutComments = (src) =>
-  src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^[ \t]*\/\/.*$/gm, "");
+/** Code only: these modules' comments name the reserved key they guard. */
+const withoutComments = codeOf;
 
 // The desktop's own rule, taken from the SHIPPED export rather than retyped here — a
 // hand-copied third spelling is exactly the drift this test is checking for.

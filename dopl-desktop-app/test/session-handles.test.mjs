@@ -11,6 +11,7 @@ import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { join } from "node:path";
 import { harness, session } from "./_auth-hold-harness.mjs";
+import { between, fnOf } from "./helpers/source-probe.mjs";
 
 const require_ = createRequire(import.meta.url);
 const MAIN = join(import.meta.dirname, "..", "main");
@@ -72,17 +73,11 @@ test("the auth hold's CONVERGE case closes the handle — the reducer runs no ab
 test("every teardown site goes through the helper", () => {
   const read = (f) => readFileSync(join(MAIN, f), "utf8");
   const engine = read("session-engine.js");
-  const abortCase = engine.slice(engine.indexOf("case 'abortQuery':"), engine.indexOf("case 'denyPending':"));
-  assert.match(abortCase, /teardownHandles\(s\);/);
+  assert.match(between(engine, "case 'abortQuery':", "case 'denyPending':"), /teardownHandles\(s\);/);
   assert.match(engine, /teardown: teardownHandles \}\);/, "the auth hold is handed the same helper");
-  const settle = read("session-teardown.js");
-  assert.match(settle.slice(settle.indexOf("function settle("), settle.indexOf("function narrationFor(")), /teardownHandles\(s\);/);
-  const query = read("session-query.js");
-  assert.match(query.slice(query.indexOf("function abortInFlight("), query.indexOf("async function startQuery(")), /teardownHandles\(s, \{ supersede: true \}\);/);
-  const auth = read("session-auth.js");
-  assert.match(auth.slice(auth.indexOf("function holdIfAuthFailure("), auth.indexOf("// ── Sign in, then continue")), /deps\.teardown\(s\);/);
-  // The resume door's reap lives in a pure block that may not require; it carries the same three steps.
-  const park = read("session-park.js");
-  const reap = park.slice(park.indexOf("function reapPriorChild("), park.indexOf("function resumeParked("));
-  assert.match(reap, /typeof prior\.close === 'function'\) prior\.close\(\)/);
+  assert.match(fnOf(read("session-teardown.js"), "settle"), /teardownHandles\(s\);/);
+  assert.match(fnOf(read("session-query.js"), "abortInFlight"), /teardownHandles\(s, \{ supersede: true \}\);/);
+  assert.match(fnOf(read("session-auth.js"), "holdIfAuthFailure"), /deps\.teardown\(s\);/);
+  // The resume door's reap is in a pure block that may not require, so it repeats the steps inline.
+  assert.match(fnOf(read("session-park.js"), "reapPriorChild"), /typeof prior\.close === 'function'\) prior\.close\(\)/);
 });

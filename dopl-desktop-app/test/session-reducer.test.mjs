@@ -9,12 +9,8 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
-import { dirname, join } from "node:path";
-import { loadReducer, REDUCER_SRC } from "./_reducer-block.mjs";
+import { loadReducer } from "./_reducer-block.mjs";
 
-const HERE = dirname(fileURLToPath(import.meta.url));
 // §2 SPLIT (H1): the pure block now spans session-effects.js + session-reducer.js;
 // test/_reducer-block.mjs slices BOTH sentinel pairs and evaluates them as one program.
 const { initialSessionState, sessionReducer, nextIdleMs, DEFAULT_IDLE_MS } = loadReducer();
