@@ -45,6 +45,20 @@ export const LIVE_ENV = 'CODEX_APP_SERVER_LIVE';
 export const FIXTURE_PATH = join(HERE, 'fixtures', 'codex-app-server.json');
 export const REGENERATE_CMD = 'cd dopl-desktop-app && npm run codex:schema';
 export const DEFAULT_TIMEOUT_MS = 20000;
+
+// 💰 🔒 **EVERY REAL-MODEL TURN IN THIS SUITE RUNS THE CHEAPEST MODEL AT LOW EFFORT** (Samuel,
+// 2026-09-22: "the cheapest model possible, the cheapest model with low thinking"). ONE constant,
+// so a new live test cannot quietly spend the operator's quota on the platform default (which is
+// the most capable model, not the cheapest). `gpt-6-luna` is the catalog's "Fast and affordable
+// model for easier tasks"; `low` is the lowest effort it lists. ⚠ NO `serviceTier` IS SENT: the
+// isolated home carries no config, so the thread runs the standard tier, never `priority`/fast.
+// ⚠ `gpt-5.5` ONLY where a test needs the NON-code-mode `tool_search` path — pass
+// `LIVE_THREAD_FOR('gpt-5.5')`, still at `LIVE_TURN`'s effort, and name why at the call site.
+export const LIVE_MODEL = 'gpt-6-luna';
+export const LIVE_EFFORT = 'low';
+export const LIVE_THREAD = Object.freeze({ model: LIVE_MODEL });
+export const LIVE_TURN = Object.freeze({ effort: LIVE_EFFORT });
+export function LIVE_THREAD_FOR(model) { return Object.freeze({ model: model || LIVE_MODEL }); }
 const EXIT_GRACE_MS = 1500;
 const EXIT_GIVE_UP_MS = 3500;
 

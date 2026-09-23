@@ -37,7 +37,7 @@ import { join, dirname } from 'node:path';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 
-import { client, liveGate, announceGate, skipLive, withAppServer, leakedPids } from './_codex-app-server.mjs';
+import { client, liveGate, announceGate, skipLive, withAppServer, leakedPids, LIVE_THREAD, LIVE_TURN } from './_codex-app-server.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
@@ -395,9 +395,9 @@ describe('TIER 2 — a real model, given Dopl\'s REAL first turn, searches on it
         await conn.request('initialize', client.initializeParams('0.0.0-cxp3a'));
         const th = await conn.request('thread/start', {
           cwd, approvalPolicy: cfg.native.approval_policy, sandbox: cfg.native.sandbox_mode,
-          config: { features: { ...cfg.features }, mcp_servers: { dopl: entry } },
+          config: { features: { ...cfg.features }, mcp_servers: { dopl: entry } }, ...LIVE_THREAD,
         });
-        await conn.request('turn/start', { threadId: th.thread.id, input: [{ type: 'text', text }] });
+        await conn.request('turn/start', { threadId: th.thread.id, input: [{ type: 'text', text }], ...LIVE_TURN });
         let budget = null;
         try {
           return await Promise.race([finished, new Promise((r) => { budget = setTimeout(() => r('BUDGET'), TURN_BUDGET_MS - 5000); })]);

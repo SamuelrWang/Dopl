@@ -33,6 +33,7 @@ import { join } from 'node:path';
 import {
   client, liveGate, announceGate, skipLive,
   withAppServer, appEnv, terminateConn, leakedPids, RUNTIME_DESCRIPTOR,
+  LIVE_THREAD, LIVE_TURN,
 } from './_codex-app-server.mjs';
 
 const GATE = announceGate(liveGate());
@@ -104,13 +105,13 @@ describe('live: steer and interrupt target the ACTIVE turn, and only the active 
     const conn = openSession(t, (m) => frames.push(m));
     {
       await conn.request('initialize', client.initializeParams('0.0.0-live'));
-      const thread = await conn.request('thread/start', Object.assign({ cwd: WORKDIR }, SAFE_THREAD));
+      const thread = await conn.request('thread/start', Object.assign({ cwd: WORKDIR }, SAFE_THREAD, LIVE_THREAD));
       const threadId = thread.thread.id;
 
       // A turn long enough to still be running when the steer and the interrupt arrive.
-      const turn = await conn.request('turn/start', {
+      const turn = await conn.request('turn/start', Object.assign({
         threadId, input: [{ type: 'text', text: 'count from 1 to 60, one number per line' }],
-      });
+      }, LIVE_TURN));
       const turnId = turn.turn.id;
       await until(() => turnFrames(frames, 'turn/started', turnId).length, 60000, `turn/started for ${turnId}`);
 
@@ -190,7 +191,7 @@ describe('live: usage accounting across thread/resume', () => {
     // all, and "no tokenUsage" would otherwise read as a protocol finding rather than as the
     // account problem it is. The failure message carries the server's own reason.
     async function oneTurn(conn, frames, threadId) {
-      const turn = await conn.request('turn/start', { threadId, input: TRIVIAL });
+      const turn = await conn.request('turn/start', Object.assign({ threadId, input: TRIVIAL }, LIVE_TURN));
       const turnId = turn.turn.id;
       await until(
         () => frames.some((f) => f.method === 'turn/completed' && f.params.turn.id === turnId),
@@ -221,7 +222,7 @@ describe('live: usage accounting across thread/resume', () => {
     let coldUsage = null;
     {
       await connA.request('initialize', client.initializeParams('0.0.0-live'));
-      const thread = await connA.request('thread/start', Object.assign({ cwd: WORKDIR }, SAFE_THREAD));
+      const thread = await connA.request('thread/start', Object.assign({ cwd: WORKDIR }, SAFE_THREAD, LIVE_THREAD));
       threadId = thread.thread.id;
       const turnId = await oneTurn(connA, a, threadId);
       coldUsage = usageFor(a, turnId);
@@ -257,7 +258,7 @@ describe('live: usage accounting across thread/resume', () => {
       await terminateConn(connA);
 
       const resumed = await connB.request(
-        'thread/resume', Object.assign({ threadId, cwd: WORKDIR }, SAFE_THREAD),
+        'thread/resume', Object.assign({ threadId, cwd: WORKDIR }, SAFE_THREAD, LIVE_THREAD),
       );
       assert.equal(resumed.thread.id, threadId, 'thread/resume returns the SAME thread, nested');
       assert.ok(resumed.model, 'and it reports the model the resumed thread will run');

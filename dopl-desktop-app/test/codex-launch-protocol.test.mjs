@@ -17,7 +17,7 @@ import { dirname, join } from "node:path";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 
-import { liveGate, announceGate, skipLive, appEnv } from "./_codex-app-server.mjs";
+import { liveGate, announceGate, skipLive, appEnv, LIVE_THREAD, LIVE_TURN, LIVE_MODEL } from "./_codex-app-server.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
@@ -181,7 +181,8 @@ test("LIVE: the adapter completes a real app-server turn", { timeout: 120000 }, 
   const handle = launchSpec.start({
     session: { key: "live:codex:adapter", profile: "full", channelId: null, state: {} },
     args: [],
-    threadStart: { approvalPolicy: "untrusted", sandbox: "read-only" },
+    threadStart: { approvalPolicy: "untrusted", sandbox: "read-only", ...LIVE_THREAD },
+    turnStart: { ...LIVE_TURN },
     // ⚠ THE ISOLATED HOME, NOT `~/.codex`. A live turn run through the operator's own
     // `config.toml` measures their machine; `appEnv()` is the child the app would spawn.
     env: appEnv(),
@@ -208,4 +209,6 @@ test("LIVE: the adapter completes a real app-server turn", { timeout: 120000 }, 
     && String(f.params.item.text || "").includes("DOPL_CODEX_OK")));
   const completed = frames.find((f) => f.method === "turn/completed");
   assert.ok(completed.params.usage && completed.params.usage.totalTokens > 0);
+  // 💰 The live-tier model rule, checked against what the server says it RAN, not what was asked.
+  assert.equal(completed.params.model, LIVE_MODEL);
 });
