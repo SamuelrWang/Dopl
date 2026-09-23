@@ -101,7 +101,9 @@ export function boot(over = {}) {
     // an ABSENT count reads as shared, so this number is stated rather than left off; a case opts
     // into the narrowing by raising it.
     watched: { id: CH, name: "General", toolProfile: "full", memberCount: 1 },
-    launch: async () => ({ agentId: "a1b2c3d4", sessionId: "s1" }),
+    // ⚠ The funnel answers the STORED name (DMP-005: `startSession` commits the directive's name
+    // before the first turn); this stub stores what it was handed, as an un-contested commit does.
+    launch: async (spec) => ({ agentId: "a1b2c3d4", sessionId: "s1", agentName: spec && spec.agentName }),
     // ⚠ THE LIVE REGISTRY, as `session-engine.js › listLiveSessions` projects it. Empty by
     // default, so the ordinary `no-session` answer is what a case gets unless it says otherwise.
     live: [],

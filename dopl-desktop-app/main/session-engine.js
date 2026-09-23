@@ -50,8 +50,11 @@ mcpGuard.bind({ acquireRuntime, startQuery, dispatch, denyPending: denyPendingPe
 sessionGate.bind({ sessions, dispatch });
 sessionReopen.bind({ sessions, refreshTray, dispatch, openAgentWindow: (t) => require('./agent-window').openAgentWindow(t) });
 sessionAnswerPermission.bind({ resolveSession: sessionReopen.resolveSession, dispatch });
-sessionSummary.bind({ sessions, endedRecords: agentHistory.listEnded }); sessionNarration.bind({ sessions }); sessionRegistry.bind({ sessions });
-sessionLaunch.bind({ sessions, acquireRuntime, startSession, liveOnThread, sessionOn });
+sessionSummary.bind({ sessions, endedRecords: agentHistory.listEnded }); sessionNarration.bind({ sessions });
+// `nameOf` is the rename store's read (electron-backed, so lazy): the framing's `ctx.agentName` (DMP-005).
+sessionRegistry.bind({ sessions, nameOf: (id) => require('./agent-names').displayNameFor(id) });
+// `selfUserId` is the operator identity the listener resolved (H2): every launch lane's roster reads it here (DMP-005).
+sessionLaunch.bind({ sessions, acquireRuntime, startSession, liveOnThread, sessionOn, selfUserId: () => selfUserId });
 sessionTeardown.bind({ sessions, baseRecord: (s) => io.baseRecord(s), denyPendingPermissions, refreshTray, sessionOn });
 
 const baseRecord = io.baseRecord;
@@ -152,10 +155,6 @@ async function startSession(spec, rt) {
   // Spawn idle: registered with no query; the first fed turn resumes it (`wakeEffects`).
   if (spec.parkedShell) { state.phase = 'parked'; state.parked = true; state.activity = 'parked'; }
   const context = { ...(spec.context || {}), channelId: spec.channelId, workspaceId: spec.workspaceId };
-  // A parked shell pushes nothing now: `launchGoal` carries the goal to its wake turn (`takeFraming`).
-  const firstTurn = spec.parkedShell ? ''
-    : spec.rawFirstTurn ? spec.rawFirstTurn
-      : framing.buildFencedTurn({ side: spec.side, message: spec.firstMessage, context: { ...context, profile: spec.profile, mcpDiscovery: io.discoveryFor(rt && rt.id) }, nonce });
   const s = {
     key: spec.key,
     sessionId,
@@ -185,7 +184,8 @@ async function startSession(spec, rt) {
     state,
     context, // display identity + the channel/workspace ids the framing addresses
     nonce,
-    firstTurn,
+    // Built below, once the session is registered and named (`firstTurnFor`).
+    firstTurn: '',
     resumeSdkId: spec.resumeSdkId || null,
     startedAt: Date.now(),
     // Token delta baseline: `tokensSpent` is not in the record, so both start at 0.
@@ -210,7 +210,6 @@ async function startSession(spec, rt) {
   };
   // The cross-account stamp, written once: the registry outlives a sign-out, and the direct lane fences on it.
   s.operatorUserId = selfUserId || null;
-  noteSiblings(s);
   // Registration is a projection move: the pill must not wait for the first dispatch.
   sessions.set(s.key, s); sessionSummary.touch();
   store.saveRecord(baseRecord(s));
@@ -223,6 +222,7 @@ async function startSession(spec, rt) {
   // New Agent answers auth-hold rather than an address.
   const credentialHeld = await sessionAuth.holdIfNoRuntimeCredential(s, rt);
   if (credentialHeld) { sessions.delete(s.key); sessionSummary.touch(); return { authHold: true }; }
+  nameAndFrame(s, spec, rt);
   // Spawn idle starts no child (a held query would hold channel access unwatched); the timer arms the
   // abandonment bound, since no reducer event has run yet.
   if (spec.parkedShell) {
@@ -232,6 +232,34 @@ async function startSession(spec, rt) {
   }
   await startQuery(s, rt);
   return s;
+}
+
+/** After registration, before any turn: commit the launch's name — registered, so the uniqueness rule sees this
+ *  channel's live siblings and excludes this agent — stamp the context's id + name, then build the first turn
+ *  off that context, so it states the FINAL name on every runtime (DMP-005). */
+function nameAndFrame(s, spec, rt) {
+  if (typeof spec.agentName === 'string') commitLaunchName(s, spec.agentName);
+  noteSiblings(s);
+  s.firstTurn = firstTurnFor(s, spec, rt);
+}
+
+/** The first user turn, off the stamped context. A parked shell pushes nothing now: `launchGoal` carries the
+ *  goal to its wake turn (`takeFraming`); a resume pushes its raw nudge. */
+function firstTurnFor(s, spec, rt) {
+  if (spec.parkedShell) return '';
+  if (spec.rawFirstTurn) return spec.rawFirstTurn;
+  return framing.buildFencedTurn({ side: spec.side, message: spec.firstMessage, context: { ...s.context, profile: spec.profile, mcpDiscovery: io.discoveryFor(rt && rt.id) }, nonce: s.nonce });
+}
+
+/** Store the name a launch asked for through the one rename door (uniqueness + sanitizer + summary flush).
+ *  Never fails a launch: a refusal or a throw leaves the agent unnamed, which the caller reports. */
+function commitLaunchName(s, wanted) {
+  try {
+    const res = require('./agent-identity-commit').commitRename(s.agentId, wanted);
+    if (!res || !res.ok) diag('session-engine: launch name REFUSED —', (res && res.reason) || 'no reason given', '— agent', String(s.agentId || ''), 'runs unnamed');
+  } catch (err) {
+    diag('session-engine: could not store the launch name —', err && err.message);
+  }
 }
 
 /** App start: a record that was live when the app died ends with an interrupted echo and an opt-in

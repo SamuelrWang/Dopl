@@ -14,7 +14,9 @@ const { diag } = require('./diag');
 const roomRoster = require('./room-roster');
 const launchDefault = require('./runtime/launch-default');
 
-let deps = { sessions: null, acquireRuntime: null, startSession: null, liveOnThread: null, sessionOn: null };
+let deps = {
+  sessions: null, acquireRuntime: null, startSession: null, liveOnThread: null, sessionOn: null, selfUserId: null,
+};
 
 // `bind` rebuilds `deps` from a literal: a handle the engine passes and this list omits is dropped silently.
 function bind(d) {
@@ -24,6 +26,8 @@ function bind(d) {
     startSession: (d && d.startSession) || null,
     liveOnThread: (d && d.liveOnThread) || null,
     sessionOn: (d && d.sessionOn) || null,
+    // The signed-in operator's id (the engine's H2 identity), read at launch time — never off a caller's payload.
+    selfUserId: (d && typeof d.selfUserId === 'function') ? d.selfUserId : null,
   };
 }
 
@@ -76,11 +80,15 @@ async function launch(a) {
   // One funnel, three lanes, so the producers sit here (F-510). Neither can refuse a launch, and a key is added
   // only when there is something to say, so an unreached context stays byte-identical.
   const ontologies = await ontologyReach.fetchOntologyReach(a.workspaceId);
+  // The signed-in operator, resolved HERE for every lane (New Agent, responder, directive) so none can forget it
+  // (DMP-005); null while unresolved, and the roster then fails open exactly as it did before.
+  let selfUserId = null;
+  try { selfUserId = (deps.selfUserId && deps.selfUserId()) || null; } catch (_) { selfUserId = null; }
   const roster = await roomRoster.fetchRoomRoster({
     channelId: a.channelId,
     workspaceId: a.workspaceId,
     selfAgentId: agentId,
-    selfUserId: a.selfUserId || null,
+    selfUserId,
     memberCount: a.memberCount,
   });
   const extra = {};
@@ -117,11 +125,15 @@ async function launch(a) {
     parkedShell: a.idle === true,
     operatorArmed: a.operatorArmed === true,
     triggerSeq: a.triggerSeq,
+    // The name the launcher asked for; `startSession` commits it (unique per channel) before the first turn.
+    // Absent = no commit here (the New Agent button renames after its idle launch, before any turn).
+    agentName: typeof a.agentName === 'string' ? a.agentName : undefined,
   }, rt);
   if (!s) return { skipped: 'disabled' };
   if (s.authHold === true) return { skipped: 'auth-hold' };
-  // The answer is the ADDRESS (and the model it launched with, for the directive echo).
-  return { sessionId: s.sessionId, agentId: agentId, model };
+  // The answer is the ADDRESS (and the model and the STORED name, for the directive echo).
+  const agentName = (s.context && typeof s.context.agentName === 'string' && s.context.agentName) || null;
+  return { sessionId: s.sessionId, agentId: agentId, model, agentName };
 }
 
 /** The sentence refusing `model` on `runtimeId`, or null. Waits for the roster only when a model was named;

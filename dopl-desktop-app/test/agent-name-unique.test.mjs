@@ -210,11 +210,13 @@ test("🔒 `commitRename` is where the rule runs, so every launch AND rename lan
     /uniqueFor\(agentId, value\)/,
     "…and it wraps the value on its way INTO applyRenameTo, not after"
   );
-  // ⚠ **AND THE LAUNCH LANE COMMITS THROUGH THAT DOOR TOO** — an agent-filed launch names its
-  // agent by calling `commitRename` once the id exists, which is the only moment there is
-  // something to key a name to.
+  // ⚠ **AND THE LAUNCH LANE COMMITS THROUGH THAT DOOR TOO** — an agent-filed launch hands its
+  // name to the funnel, and `startSession` calls `commitRename` once the id is registered and
+  // BEFORE the first turn is built (DMP-005), so that turn states the final name.
   const spawn = readFileSync(join(HERE, "..", "main", "launch-directive-spawn.js"), "utf8");
-  assert.match(spawn, /commitRename\(res\.agentId/, "the directive lane names through the door");
+  assert.match(spawn, /agentName: asked \|\| NEW_AGENT_NAME/, "the directive lane hands its name to the funnel");
+  const engine = readFileSync(join(HERE, "..", "main", "session-engine.js"), "utf8");
+  assert.match(engine, /commitRename\(s\.agentId, wanted\)/, "…which names through the door");
   // ⚠ **AND REPORTS BACK WHAT IT GOT**, which is what lets an orchestrator tag the right agent
   // after the rule appended a `-1`.
   assert.match(spawn, /appliedAgentName/, "the applied name is echoed to the launcher");
