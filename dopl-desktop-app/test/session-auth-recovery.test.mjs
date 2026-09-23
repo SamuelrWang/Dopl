@@ -31,6 +31,7 @@ import { dirname, join } from "node:path";
 import {
   M, detect, AUTH_SRC, ENGINE, HOLD_BLOCK, harness, session, sessionReducer,
 } from "./_auth-hold-harness.mjs";
+import { sentinelBlock, fnOf } from "./helpers/source-probe.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const DETECT_SRC = readFileSync(M("session-auth-detect.js"), "utf8");
@@ -39,8 +40,7 @@ const QUERY = readFileSync(M("session-query.js"), "utf8"); // §3 SPLIT: startQu
 
 // ── 1. PURE: the detector + the copy ─────────────────────────────────────────
 
-const D_BEGIN = "// ─── BEGIN SESSION-AUTH-DETECT";
-const DETECT_BLOCK = DETECT_SRC.slice(DETECT_SRC.indexOf(D_BEGIN), DETECT_SRC.indexOf("// ─── END SESSION-AUTH-DETECT"));
+const DETECT_BLOCK = sentinelBlock(DETECT_SRC, "SESSION-AUTH-DETECT");
 
 test("the detect block is standalone-evaluable (no electron / fs / require)", () => {
   assert.ok(DETECT_BLOCK.length > 200, "the sentinels bracket a real block");
@@ -375,7 +375,7 @@ test("what counts as a usable credential — and what the SPAWN env does about i
   assert.match(marker, /account\.accountUuid/, "else the CLI's own signed-in marker (one bit, no field copied)");
   assert.match(marker, /err\.code !== 'ENOENT'/, "an unreadable file FAILS OPEN; only a MISSING one blocks");
   // The healthy path stays byte-identical: no stored-token source -> the same env object back.
-  const envFn = AUTH_SRC.slice(AUTH_SRC.indexOf("function withStoredCredential("), AUTH_SRC.indexOf("// ─── BEGIN SESSION-AUTH-HOLD"));
+  const envFn = fnOf(AUTH_SRC, "withStoredCredential");
   assert.match(envFn, /if \(state\.source !== 'stored-token'\) return env;/, "untouched on every other machine");
 });
 

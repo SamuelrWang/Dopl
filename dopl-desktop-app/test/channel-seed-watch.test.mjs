@@ -33,6 +33,7 @@ import assert from "node:assert/strict";
 import { readFileSync, readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
+import { sentinelBlock } from "./helpers/source-probe.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const MAIN = join(HERE, "..", "main");
@@ -48,11 +49,7 @@ const stripComments = (src) => src.split("\n")
 
 // ⚠ SLICED BY THE FENCE, NOT BY LINE NUMBERS — a comment added above the block must not move
 // this suite onto a different program.
-const block = SRC.slice(
-  SRC.indexOf("// ─── BEGIN SEED-WATCH-DECIDE"),
-  SRC.indexOf("// ─── END SEED-WATCH-DECIDE")
-);
-assert.ok(block.length > 0, "the pure block's fence is intact");
+const block = sentinelBlock(SRC, "SEED-WATCH-DECIDE");
 const { WATERMARK_V, stampMs, readWatermark, seenRows, decidePass } = new Function(
   `${block}\n return { WATERMARK_V, stampMs, readWatermark, seenRows, decidePass };`
 )();

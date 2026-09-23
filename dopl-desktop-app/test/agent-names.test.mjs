@@ -21,13 +21,11 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
+import { sentinelBlock } from "./helpers/source-probe.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const SRC = readFileSync(join(HERE, "..", "main", "agent-names.js"), "utf8");
-const BLOCK = SRC.slice(
-  SRC.indexOf("// ─── BEGIN AGENT-NAMES-PURE"),
-  SRC.indexOf("// ─── END AGENT-NAMES-PURE")
-);
+const BLOCK = sentinelBlock(SRC, "AGENT-NAMES-PURE");
 
 // The purity assertion IS a test: a require here would end the extraction that lets these cases
 // drive the real code, and this block decides what reaches the disk.

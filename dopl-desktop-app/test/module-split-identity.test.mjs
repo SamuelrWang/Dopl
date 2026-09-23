@@ -27,6 +27,7 @@ import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
+import { orderOf } from "./helpers/source-probe.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const MAIN = join(HERE, "..", "main");
@@ -110,7 +111,7 @@ test("SPLIT: the ring's two bounds and its append are re-exported, never respell
   // ⚠ AND THE REQUIRE SITS ABOVE THE SENTINEL, like every other one in that file: a require inside
   // SESSION-NARRATION-PURE breaks the extraction idiom the marker promises.
   const src = read("session-narration.js");
-  assert.ok(src.indexOf("require('./narration-ring')") < src.indexOf("// ─── BEGIN SESSION-NARRATION-PURE"));
+  assert.ok(orderOf(src, "require('./narration-ring')", "// ─── BEGIN SESSION-NARRATION-PURE"));
 });
 
 // ── 5. session-dispatch.js → agent-handles-escalation.js ─────────────────────────────

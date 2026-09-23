@@ -26,6 +26,7 @@ import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { loadReducer } from "./_reducer-block.mjs";
+import { sentinelBlock } from "./helpers/source-probe.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
@@ -38,7 +39,7 @@ export const { initialSessionState, sessionReducer } = loadReducer();
 
 export const H_BEGIN = "// ─── BEGIN SESSION-AUTH-HOLD";
 export const H_END = "// ─── END SESSION-AUTH-HOLD";
-export const HOLD_BLOCK = AUTH_SRC.slice(AUTH_SRC.indexOf(H_BEGIN), AUTH_SRC.indexOf(H_END));
+export const HOLD_BLOCK = sentinelBlock(AUTH_SRC, "SESSION-AUTH-HOLD");
 
 // H1: the fake dispatch runs the REAL reducer and applies its state, so these tests prove the
 // hold actually reaches the state the rest of the engine reads (`authHeld`, `parked`) rather

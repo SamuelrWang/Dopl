@@ -17,6 +17,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { join } from "node:path";
+import { sentinelBlock } from "./helpers/source-probe.mjs";
 
 const require_ = createRequire(import.meta.url);
 const MAIN = join(import.meta.dirname, "..", "main");
@@ -89,9 +90,7 @@ function row(id, status = "pending") {
 // ── The REAL `messageByTask`, sliced the way `session-direction-lane.test.mjs` does it ─────────
 function reopenOps(sessions, dispatch) {
   const SRC = readFileSync(join(MAIN, "session-reopen.js"), "utf8");
-  const BLOCK = SRC.slice(
-    SRC.indexOf("// ─── BEGIN SESSION-REOPEN-PURE"), SRC.indexOf("// ─── END SESSION-REOPEN-PURE")
-  );
+  const BLOCK = sentinelBlock(SRC, "SESSION-REOPEN-PURE");
   const store = {
     sessionKey: (c, t, a) => `${c}:${t}:${a || ""}`,
     slotKey: (x) => `${x.channelId || ""}:${x.taskId || ""}:${x.agentId || ""}`,
