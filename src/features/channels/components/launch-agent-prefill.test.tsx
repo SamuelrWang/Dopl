@@ -52,9 +52,21 @@ vi.mock("@/features/agent-identities/hooks/use-agent-identities", () => ({
 // ⚠ **THE DIALOG READS THE VERSIONED RECORD SINCE 2026-09-21 (U7)** — one hook, mounted inside
 // `launch-agent-dialog-state.ts`. This file is about PREFILL and says nothing about runtimes, so
 // the stub is the no-runtime-concept lane: no rows, no roster, no catalog.
+// ⚠ ONE CATALOG, for the DEFAULT runtime, so the model case below reads a label (P6-15: no catalog,
+// no frozen table).
 vi.mock("../hooks/use-launch-selection", async () => {
   const harness = await import("../hooks/launch-selection-harness");
-  return { useLaunchSelection: () => harness.launchSelectionStub() };
+  return {
+    useLaunchSelection: () =>
+      harness.launchSelectionStub({
+        catalogs: {
+          "": harness.catalog("", [
+            { id: "claude-opus-5", label: "Opus 5" },
+            { id: "claude-sonnet-5", label: "Sonnet 5", isDefault: true },
+          ]),
+        },
+      }),
+  };
 });
 
 import { LaunchAgentDialog } from "./launch-agent-dialog";

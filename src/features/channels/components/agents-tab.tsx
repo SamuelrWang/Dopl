@@ -48,10 +48,10 @@ import {
   IdentityLaunchPicker,
   useIdentityPicker,
 } from "@/features/agent-identities/components/identity-picker";
-import type { IdentityLaunchOverrides } from "@/features/agent-identities/lib/launch-overrides";
 import type { DesktopSessionSummary } from "@/shared/lib/spa-bridge";
 import { cn } from "@/shared/lib/utils";
 import type { ChannelPeerSession } from "../hooks/use-channel-agent-sessions";
+import { useChannelLaunchPosture } from "../hooks/use-channel-launch-posture";
 import type { AgentColorKey, ChannelMember } from "../types";
 import { TAB_ACTION_INK, TAB_ACTION_SHELL } from "./bits";
 import { AgentCard, PeerCards } from "./agents-tab-cards";
@@ -68,7 +68,11 @@ import {
 } from "./agents-wells";
 import { LaunchAgentDialog } from "./launch-agent-dialog";
 import { useAgentLaunch } from "./use-agent-launch";
-import type { AgentLaunchControls, AgentLaunchOutcome } from "./use-agents-panel";
+import type { AgentLaunchControls, LaunchAgentFn } from "./use-launch-controls";
+
+/** A tab with no launch act answers `no-bridge`, never an invented success. */
+const refuseNoBridge = async () => ({ ok: false, reason: "no-bridge" });
+const approveNoBridge = async () => ({ ok: false, reason: "no-bridge" });
 
 
 export function AgentsTab({
@@ -118,28 +122,10 @@ export function AgentsTab({
    *  can be said (`use-agents-panel.ts › launchRefusalText`). */
   launchError?: string | null;
   /**
-   * ⚠ THE ZERO-IDENTITY CALL IS THE PINNED ONE. `onLaunchAgent(threadId)` is what
-   * the New Agent button does in ONE CLICK; the optional arguments are the
-   * picker's and the popup's (Samuel's "one lane, one-click launch" ruling — the
-   * picker never intercepts the button).
-   * ⚠ `null` IS A CHANNEL-LEVEL LAUNCH (Samuel, 2026-08-31) — an agent on the
-   * ROOM, the threadless lane the composer's Bot icon has had since 2026-08-21;
-   * no counterparty is not a refusal (`use-agents-panel.ts`).
+   * The launch act (`use-launch-controls.ts`). `null` as the thread is a CHANNEL-LEVEL launch.
+   * ⚠ `LaunchAgentFn` refuses a narrower wrapper (P6-01).
    */
-  onLaunchAgent?: (
-    threadId: string | null,
-    identityId?: string | null,
-    overrides?: IdentityLaunchOverrides,
-    /** ⚠ THE POPUP'S TWO EXTRA ARGUMENTS (2026-09-08) — the pre-assigned id and the
-     *  per-spawn runtime `use-agents-panel.ts › launchAgent` has taken since
-     *  2026-08-27/08-31. The picker's shorter calls are unchanged. */
-    agentId?: string,
-    runtime?: string,
-    /** ⚠ THE POPUP'S THIRD EXTRA ARGUMENT (2026-09-13, agent colours) — the colour key, on
-     *  `runtime`'s exact argument. Absent means the server assigns the first free one, never
-     *  "no colour"; the picker's shorter calls stay unchanged. */
-    color?: AgentColorKey
-  ) => Promise<AgentLaunchOutcome> | void;
+  onLaunchAgent?: LaunchAgentFn;
   /** Store a first-use approval for another member's identity, machine-locally.
    *  ⚠ Absent ⇒ the approval modal says the build cannot remember it, rather
    *  than looping on a refusal it can never clear. */
@@ -167,6 +153,8 @@ export function AgentsTab({
   const picker = useIdentityPicker();
   // ⚠ SAME RULE, SAME REASON — the popup's own state, above every early return.
   const launch = useAgentLaunch();
+  // The desktop's model rosters, so a card names a live model the way its runtime does (F15).
+  const { catalogs } = useChannelLaunchPosture(channelId);
   // `userId → name` for the picker's authorship marker. ⚠ THE CHANNEL ROSTER,
   // which is not the workspace's — an identity shared by someone outside this
   // channel resolves to no name and the marker degrades to "by another member"
@@ -182,36 +170,16 @@ export function AgentsTab({
   );
 
   /**
-   * THE POPUP'S CONTROLS, ASSEMBLED FROM THE FLAT PROPS THIS TAB ALREADY TAKES.
-   *
-   * ⚠ NOT A SECOND LAUNCH PATH — every face reaches `use-agents-panel.ts ›
-   * launchAgent` through `onLaunchAgent`. ⚠ AND IT NEVER INVENTS A SUCCESS, for
-   * the reason {@link launchFromPicker} states.
+   * THE POPUP'S CONTROLS, ASSEMBLED FROM THE FLAT PROPS THIS TAB ALREADY TAKES. ⚠ NOT A SECOND
+   * LAUNCH PATH — `onLaunchAgent` is `use-launch-controls.ts`'s act itself, never re-wrapped.
    */
   const launchControls: AgentLaunchControls = useMemo(
     () => ({
       canLaunch,
       launchBusy,
       launchError,
-      // ⚠ SIX ARGUMENTS, SPELLED OUT — NOT ROUTED THROUGH {@link launchFromPicker}, whose
-      // THREE-argument payload `agents-tab-launch.test.tsx` pins argument for argument.
-      // ⚠ **SPELLED OUT RATHER THAN `(...args) => onLaunchAgent?.(...args)`, AND THAT IS THE
-      // POINT OF THE COUNT BEING IN THIS COMMENT**: a rest-spread would forward a seventh
-      // argument nobody had declared, and the failure mode of this lane is a field that LOOKS
-      // wired and sends nothing (2026-09-13: `color` was the sixth to be added this way).
-      launchAgent: async (threadId, identityId, overrides, agentId, runtime, color) => {
-        const res = await onLaunchAgent?.(
-          threadId,
-          identityId,
-          overrides,
-          agentId,
-          runtime,
-          color
-        );
-        return res ?? { ok: false, reason: "no-bridge" as const };
-      },
-      approveIdentity: async (identityId: string) =>
-        (await onApproveIdentity?.(identityId)) ?? { ok: false, reason: "no-bridge" },
+      launchAgent: onLaunchAgent ?? refuseNoBridge,
+      approveIdentity: onApproveIdentity ?? approveNoBridge,
     }),
     [canLaunch, launchBusy, launchError, onLaunchAgent, onApproveIdentity]
   );
@@ -432,6 +400,7 @@ export function AgentsTab({
                   // ASK and the server may have substituted the next free one, so reading it
                   // here would paint a card in a hue the transcript's boxes do not use.
                   color={colorOf(agent.agentId)}
+                  catalogs={catalogs}
                   owner={me}
                   viewing={agentKey(agent) === openAgent}
                   onOpen={() => onOpenAgent(agentKey(agent))}

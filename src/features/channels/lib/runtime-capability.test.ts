@@ -25,7 +25,6 @@ import {
   freeform,
   hasDeepLink,
   hasReasoningEffort,
-  hasRuntimeKey,
   interruptRefusal,
   narrowestToolMode,
   normalizeRuntimeId,
@@ -63,23 +62,6 @@ const CURSOR = realDescriptor("cursor");
  */
 const partial = (session: Record<string, unknown>) =>
   ({ session }) as unknown as Parameters<typeof canResume>[0];
-
-describe("hasRuntimeKey — the own-key capability probe", () => {
-  it("reads a MISSING key as 'this desktop has no runtime concept'", () => {
-    expect(hasRuntimeKey({ tools: "manual", messages: "ask" })).toBe(false);
-  });
-
-  it("reads `runtime: ''` as PRESENT — no pick is not no concept", () => {
-    // ⚠ THE WHOLE FEATURE. A `!!raw.runtime` check collapses these two into one
-    // answer and hides the row from every operator who has not yet chosen.
-    expect(hasRuntimeKey({ tools: "manual", messages: "ask", runtime: "" })).toBe(true);
-  });
-
-  it("is not fooled by a null or a non-object", () => {
-    expect(hasRuntimeKey(null)).toBe(false);
-    expect(hasRuntimeKey("runtime")).toBe(false);
-  });
-});
 
 describe("normalizeRuntimeId / descriptorFor — fail toward the DEFAULT, never a refusal", () => {
   it("keeps a registered id and drops an unregistered one", () => {

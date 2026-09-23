@@ -21,6 +21,8 @@ import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
 import type { DesktopSessionSummary } from "@/shared/lib/spa-bridge";
 import { POSTURE_REFUSED, PostureControls } from "./agent-posture";
 import { CHANNEL_ID } from "./test-fixtures";
+import { REAL_DESCRIPTORS } from "../lib/runtime-descriptors-harness";
+import { catalog } from "../hooks/launch-selection-harness";
 
 const TASK = "t-1";
 afterEach(() => {
@@ -43,25 +45,49 @@ function agent(over: Partial<DesktopSessionSummary> = {}): DesktopSessionSummary
   };
 }
 
-function install(setMode?: ReturnType<typeof vi.fn>) {
-  const api: Record<string, unknown> = {};
+/** The channel's launch record: every real adapter, one catalog each, the channel on `runtime`. */
+function channelsBridge(runtime = "claude") {
+  return {
+    getLaunchPosture: vi.fn().mockResolvedValue({
+      runtimes: REAL_DESCRIPTORS,
+      defaultRuntime: "claude",
+      connected: ["claude", "codex"],
+      catalogVersion: 1,
+      catalogs: {
+        claude: catalog("claude", [
+          { id: "claude-opus-5", label: "Opus 5" },
+          { id: "claude-sonnet-5", label: "Sonnet 5", isDefault: true },
+        ]),
+        codex: catalog("codex", [{ id: "gpt-6-sol", label: "GPT-6 Sol", isDefault: true }]),
+      },
+      selection: { v: 2, runtime, messages: "ask", byRuntime: {} },
+    }),
+    setLaunchPosture: vi.fn(),
+  };
+}
+
+function install(setMode?: ReturnType<typeof vi.fn>, sessions: Record<string, unknown> = {}) {
+  const api: Record<string, unknown> = { ...sessions };
   if (setMode) api.setMode = setMode;
   (window as unknown as { dopl?: unknown }).dopl = {
     apiRequest: () => Promise.resolve({ status: 200, statusText: "", hasBody: false }),
     sessions: api,
+    channels: channelsBridge(),
   };
 }
 
-function mount(over: Partial<DesktopSessionSummary> = {}) {
+/** Renders, then lets the channel's launch-record read answer. */
+async function mount(over: Partial<DesktopSessionSummary> = {}) {
   render(
     <PostureControls agent={agent(over)} channelId={CHANNEL_ID} taskId={TASK} />
   );
+  await act(async () => {});
 }
 
 describe("what the controls show", () => {
-  it("renders the LIVE posture main reported, not a default", () => {
+  it("renders the LIVE posture main reported, not a default", async () => {
     install(vi.fn());
-    mount({ toolMode: "bypass", messageMode: "auto_both" });
+    await mount({ toolMode: "bypass", messageMode: "auto_both" });
     expect(screen.getByLabelText("Tool permissions for this agent").textContent).toMatch(
       /Bypass/
     );
@@ -82,15 +108,15 @@ describe("what the controls show", () => {
    * exactly the kind of copy that comes back; the case below at the `!canPosture` branch asserted
    * the same absence for a different reason and still does.
    */
-  it("says NOTHING about when it takes effect — the sentence is gone", () => {
+  it("says NOTHING about when it takes effect — the sentence is gone", async () => {
     install(vi.fn());
-    mount();
+    await mount();
     expect(screen.queryByText(/from its next decision/i)).toBeNull();
   });
 
-  it("falls back to the fail-closed pair when an older main sends no posture", () => {
+  it("falls back to the fail-closed pair when an older main sends no posture", async () => {
     install(vi.fn());
-    mount({ toolMode: undefined, messageMode: undefined });
+    await mount({ toolMode: undefined, messageMode: undefined });
     expect(screen.getByLabelText("Tool permissions for this agent").textContent).toMatch(
       /Ask each time/
     );
@@ -109,9 +135,9 @@ describe("what the controls show", () => {
    * posture, and asserting its presence is what stops this being read as a blanket
    * ban on the phrase.
    */
-  it("does NOT offer Ask each time on the live MESSAGE axis — there is no accept surface", () => {
+  it("does NOT offer Ask each time on the live MESSAGE axis — there is no accept surface", async () => {
     install(vi.fn());
-    mount();
+    await mount();
     fireEvent.click(screen.getByLabelText("Message permissions for this agent"));
     expect(screen.queryByRole("menuitem", { name: /^Ask each time/ })).toBeNull();
     // The three that remain all resolve at or above the floor.
@@ -120,16 +146,16 @@ describe("what the controls show", () => {
     expect(screen.getByRole("menuitem", { name: /^Automatic/ })).toBeTruthy();
   });
 
-  it("still offers Ask each time on the TOOL axis — that one has a live gate", () => {
+  it("still offers Ask each time on the TOOL axis — that one has a live gate", async () => {
     install(vi.fn());
-    mount();
+    await mount();
     fireEvent.click(screen.getByLabelText("Tool permissions for this agent"));
     expect(screen.getByRole("menuitem", { name: /^Ask each time/ })).toBeTruthy();
   });
 
-  it("shows the FLOOR, not 'ask', when an older main sends no message posture", () => {
+  it("shows the FLOOR, not 'ask', when an older main sends no message posture", async () => {
     install(vi.fn());
-    mount({ toolMode: undefined, messageMode: undefined });
+    await mount({ toolMode: undefined, messageMode: undefined });
     // Defaulting the display to a value the list no longer carries renders an
     // empty control; `auto_inbound` is what such a session actually runs on.
     expect(
@@ -152,14 +178,11 @@ describe("what the controls show", () => {
    * ⚠ CLASS TOKENS, NOT SUBSTRINGS — the rule `panel-field.test.tsx` bought: a `toContain`
    * check answers true on a neighbouring utility that merely spells the same letters.
    */
-  it("wears the consolidated raisedField size on all three — the window width is measured from it", () => {
+  it("wears the consolidated raisedField size on all three — the window width is measured from it", async () => {
     // The MODEL control is a separately detected capability, so the bridge needs both ops for
     // this case to see the third trigger at all.
-    (window as { dopl?: unknown }).dopl = {
-      apiRequest: () => Promise.resolve({ status: 200, statusText: "", hasBody: false }),
-      sessions: { setMode: vi.fn(), setModel: vi.fn() },
-    };
-    mount();
+    install(vi.fn(), { setModel: vi.fn() });
+    await mount();
     for (const label of [
       "Tool permissions for this agent",
       "Message permissions for this agent",
@@ -198,14 +221,11 @@ describe("what the controls show", () => {
    * the truncate contract on the span that holds the long text, and the long label present rather
    * than silently dropped. The pixel half is `test/agent-window.test.mjs`'s width bound.
    */
-  it("keeps ONE line and ellipsizes a long free-form model label instead of wrapping", () => {
-    (window as { dopl?: unknown }).dopl = {
-      apiRequest: () => Promise.resolve({ status: 200, statusText: "", hasBody: false }),
-      sessions: { setMode: vi.fn(), setModel: vi.fn() },
-    };
+  it("keeps ONE line and ellipsizes a long free-form model label instead of wrapping", async () => {
+    install(vi.fn(), { setModel: vi.fn() });
     // Not one of the four pickable ids — the exact shape `spa-bridge.ts` warns arrives.
     const long = "claude-opus-4-5-20251101[1m]";
-    mount({ model: long } as Partial<DesktopSessionSummary>);
+    await mount({ model: long } as Partial<DesktopSessionSummary>);
 
     const trigger = screen.getByLabelText("Model for this agent");
     const row = trigger.parentElement!;
@@ -234,7 +254,7 @@ describe("what a change does", () => {
   it("sends ONE axis at a time, keyed by (channel, thread)", async () => {
     const setMode = vi.fn().mockResolvedValue({ ok: true, tools: "bypass", messages: "ask" });
     install(setMode);
-    mount();
+    await mount();
     fireEvent.click(screen.getByLabelText("Tool permissions for this agent"));
     await act(async () => {
       fireEvent.click(screen.getByRole("menuitem", { name: /^Bypass/ }));
@@ -255,7 +275,7 @@ describe("what a change does", () => {
   it("sends the MESSAGE axis under its own name", async () => {
     const setMode = vi.fn().mockResolvedValue({ ok: true });
     install(setMode);
-    mount();
+    await mount();
     fireEvent.click(screen.getByLabelText("Message permissions for this agent"));
     await act(async () => {
       fireEvent.click(screen.getByRole("menuitem", { name: /^Auto accept in/ }));
@@ -273,7 +293,7 @@ describe("what a change does", () => {
   it("does NOT move the select on its own — the value comes back from the feed", async () => {
     const setMode = vi.fn().mockResolvedValue({ ok: true, tools: "bypass", messages: "ask" });
     install(setMode);
-    mount({ toolMode: "manual" });
+    await mount({ toolMode: "manual" });
     fireEvent.click(screen.getByLabelText("Tool permissions for this agent"));
     await act(async () => {
       fireEvent.click(screen.getByRole("menuitem", { name: /^Bypass/ }));
@@ -287,7 +307,7 @@ describe("what a change does", () => {
 
   it("says so when main refused", async () => {
     install(vi.fn().mockResolvedValue({ ok: false, reason: "no-session" }));
-    mount();
+    await mount();
     fireEvent.click(screen.getByLabelText("Tool permissions for this agent"));
     await act(async () => {
       fireEvent.click(screen.getByRole("menuitem", { name: /^Bypass/ }));
@@ -297,7 +317,7 @@ describe("what a change does", () => {
 });
 
 describe("when the controls are not offered at all", () => {
-  it("renders nothing on a build without the op", () => {
+  it("renders nothing on a build without the op", async () => {
     install(); // no `setMode`
     const { container } = render(
       <PostureControls agent={agent()} channelId={CHANNEL_ID} taskId={TASK} />
@@ -307,7 +327,7 @@ describe("when the controls are not offered at all", () => {
 
   // An ended agent has no posture to change; main answers `no-session`, and the honest face
   // of that is no control rather than one that always refuses.
-  it("renders nothing for an ENDED agent", () => {
+  it("renders nothing for an ENDED agent", async () => {
     install(vi.fn());
     const { container } = render(
       <PostureControls
@@ -332,7 +352,7 @@ describe("when the controls are not offered at all", () => {
    * ⚠ AND THE GATE ITSELF IS UNCHANGED AND MUST STAY: no posture row on an ended
    * agent (`3dc7e6a7`'s rule), and no sentence about when a posture applies.
    */
-  it("keeps the STATS on an ended agent, and still offers no posture", () => {
+  it("keeps the STATS on an ended agent, and still offers no posture", async () => {
     install(vi.fn());
     render(
       <PostureControls
@@ -349,11 +369,8 @@ describe("when the controls are not offered at all", () => {
 
   // ⚠ A LIVE agent on a build with the op renders all THREE — the state the
   // "vanished dropdowns" report was actually about. Same component in the pop-out.
-  it("renders all three dropdowns for a LIVE agent", () => {
-    (window as unknown as { dopl?: unknown }).dopl = {
-      apiRequest: () => Promise.resolve({ status: 200, statusText: "", hasBody: false }),
-      sessions: { setMode: vi.fn(), setModel: vi.fn() },
-    };
+  it("renders all three dropdowns for a LIVE agent", async () => {
+    install(vi.fn(), { setModel: vi.fn() });
     render(
       <PostureControls
         agent={agent()}
@@ -362,9 +379,37 @@ describe("when the controls are not offered at all", () => {
         stats={<p>Context tokens</p>}
       />
     );
+    await act(async () => {});
     expect(screen.getByLabelText("Tool permissions for this agent")).toBeTruthy();
     expect(screen.getByLabelText("Message permissions for this agent")).toBeTruthy();
     expect(screen.getByLabelText("Model for this agent")).toBeTruthy();
     expect(screen.getByText("Context tokens")).toBeTruthy();
+  });
+});
+
+/**
+ * 🔒 THE AGENT'S OWN RUNTIME, NOT THE CHANNEL'S (P6-04 / P6-05). A per-spawn pick puts a Codex agent
+ * on a Claude channel; its live controls must speak Codex's words and never offer Claude's models.
+ */
+describe("a running agent on a runtime other than the channel's", () => {
+  it("offers the AGENT's tool words and no Claude model list", async () => {
+    install(vi.fn(), { setModel: vi.fn() });
+    await mount({ runtimeId: "codex", toolMode: "on-request", model: "gpt-6-sol" });
+    const tools = screen.getByLabelText("Tool permissions for this agent");
+    expect(tools.textContent).toMatch(/on-request/);
+    fireEvent.click(tools);
+    expect(screen.getByRole("menuitem", { name: /^never/ })).toBeTruthy();
+    expect(screen.queryByRole("menuitem", { name: /^Bypass/ })).toBeNull();
+    // Codex declares no verified live model switch, so there is no picker to offer Opus in.
+    expect(screen.queryByLabelText("Model for this agent")).toBeNull();
+  });
+
+  it("offers a Claude agent Claude's models on a Codex channel", async () => {
+    install(vi.fn(), { setModel: vi.fn() });
+    (window as unknown as { dopl: { channels: unknown } }).dopl.channels = channelsBridge("codex");
+    await mount({ runtimeId: "claude", model: "claude-sonnet-5" });
+    fireEvent.click(screen.getByLabelText("Model for this agent"));
+    expect(screen.getByRole("menuitem", { name: /^Opus 5/ })).toBeTruthy();
+    expect(screen.queryByRole("menuitem", { name: /GPT-6 Sol/ })).toBeNull();
   });
 });

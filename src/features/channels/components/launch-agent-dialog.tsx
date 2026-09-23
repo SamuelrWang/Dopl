@@ -313,12 +313,9 @@ export function LaunchAgentDialog({
         primary={{
           label: "Launch",
           onClick: runner.launch,
-          disabled: !panel.ready,
           busy: newAgent?.launchBusy,
-          // ⚠ **NOTHING DISABLES THIS BUTTON ANY MORE (Samuel, 2026-09-15).** It read
-          // `panel.ready ? "Launch" : "An agent needs a name"` — INVARIANTS §8 rule 4 — and the
-          // condition is withdrawn: a blank name is a launch that is named `New Agent`.
-          // ⚠ `disabled`/`panel.ready` STAY WIRED so the next real blocker has a door.
+          // ⚠ NOTHING DISABLES THIS BUTTON (Samuel, 2026-09-15): a blank name is a launch that is
+          // named `New Agent`.
           hint: "Launch",
         }}
       >
@@ -491,6 +488,7 @@ export function LaunchAgentDialog({
       <IdentityApprovalDialog
         open={runner.approval !== null}
         request={runner.approval}
+        error={runner.approvalError}
         busy={newAgent?.launchBusy}
         onCancel={runner.cancelApproval}
         onConfirm={runner.confirmApproval}

@@ -5,26 +5,21 @@
  * `channels-core.tsx` at the 500-line cap: the peer-session poll (every
  * member's state projection for the open channel) and the "New Agent"
  * action — start MY OWN agent on a thread, windowless, main owning the
- * posture.
- *
- * ⚠ ONE LAUNCH IN FLIGHT, NOT ONE AGENT PER THREAD (2026-08-21). `launchBusy` is
- * a double-submit guard over a single click and nothing more; a thread may carry
- * as many of this operator's agents as main will spawn, and no state here caps
- * that or re-arms after the first.
+ * posture. The act itself is `use-launch-controls.ts`, shared with the agent
+ * pop-out's `+`.
  */
 
-import { useState } from "react";
 import { useChannelAgentSessions } from "../hooks/use-channel-agent-sessions";
-import { useChannelLaunchPosture } from "../hooks/use-channel-launch-posture";
-import type { RuntimeDescriptor } from "../lib/runtime-capability";
-import { noRuntimeCopy, signedOutLaunchCopy } from "../lib/runtime-copy";
-import {
-  approveIdentity,
-  canLaunchAgents,
-  launchAgentOnThread,
-} from "./agents-controls";
-import type { AgentColorKey, Channel, ChannelThread } from "../types";
-import type { IdentityLaunchOverrides } from "@/features/agent-identities/lib/launch-overrides";
+import { useLaunchControls, type LaunchSite } from "./use-launch-controls";
+import type { Channel, ChannelThread } from "../types";
+
+export {
+  LAUNCH_APPROVAL_REASON,
+  launchRefusalText,
+  type AgentLaunchControls,
+  type AgentLaunchOutcome,
+  type LaunchAgentFn,
+} from "./use-launch-controls";
 
 /**
  * `channel_sessions` is unpublished (INVARIANTS §7), so the peer projection polls.
@@ -35,192 +30,6 @@ import type { IdentityLaunchOverrides } from "@/features/agent-identities/lib/la
  * enough"; one exported number is the whole fix.
  */
 export const PEER_SESSIONS_POLL_MS = 30_000;
-
-/**
- * WHY A REFUSED LAUNCH NEEDS COPY (2026-08-20). `sessions:launch` answers
- * `{ ok: false, reason }` for SEVEN real conditions — main's own
- * `session-ipc-ops.js › sessions:launch` and `session-engine.js › launch`
- * between them produce `no-counterparty`, `busy`, `cap`, `no-sdk`, `auth-hold`
- * and `disabled`, plus the bridge's own `no-bridge`. The result was DISCARDED, so
- * a launch main refused looked exactly like a launch that succeeded and had not
- * pushed yet: nothing appeared, and nothing said why.
- *
- * ⚠ THE COUNT IS THE MAP'S OWN LENGTH — this docblock said "five" while listing
- * six and keying seven, which is what a hand-maintained number does. Read the
- * keys; INVARIANTS §11 states the same set from main's side.
- *
- * ⚠ ONE SHORT LINE EACH, per the minimal-copy ruling (INVARIANTS §5) — a label,
- * not an explanation. An unrecognized reason falls back rather than rendering a
- * raw enum at the operator.
- */
-const LAUNCH_REFUSALS: Record<string, string> = {
-  "no-bridge": "Not available here",
-  "no-counterparty": "This thread has no other party",
-  // ⚠ IT NO LONGER MEANS "one agent per thread" (2026-08-21). Every click mints a
-  // NEW agent, so the old copy — "An agent is already on this thread" — would
-  // state a rule the product just dropped, beside a button that is still enabled
-  // and about to work. What main can still be is momentarily unable to start one.
-  busy: "Busy right now — try again",
-  cap: "Session limit reached",
-  // ── ⚠ THE TWO RUNTIME-OWNED WORDS ARE NOT IN THIS MAP (2026-09-21, U10) ────────────────
-  //
-  // They read `"No Claude runtime on this Mac"` and `"Sign in to Claude to start an agent"`, on a
-  // path EVERY runtime reaches. Main's own vocabulary was already vendor-neutral —
-  // `session-launch.js` says in as many words that `no-sdk` means "this machine has no agent
-  // runtime" ON EVERY RUNTIME — so the Claude was invented here, in the copy. A signed-out Codex
-  // therefore sent the operator to fix a Claude credential the session does not use.
-  // ⚠ THEY ARE BUILT FROM THE SELECTED RUNTIME'S DESCRIPTOR INSTEAD (`runtime-copy.ts`), which is
-  // why they are absent here rather than re-worded: a constant cannot name a runtime, and a map
-  // entry that looked right would be the thing the next reader copied.
-  // ⚠ REACHABLE, and NOT a settings state. It is the `attachSurface` rollback —
-  // the spawn was refused on the way up. The old copy ("Sessions are turned off")
-  // described the deleted session-window master switch and sent the operator
-  // looking for a toggle that no longer exists.
-  disabled: "The agent could not be started",
-  // ⚠ THE IDENTITY PICKER'S OWN REFUSAL (2026-08-22). Main resolves the identity
-  // ITSELF at spawn, so an identity deleted — or narrowed out of this operator's
-  // visibility — between the picker row rendering and the click answers 404, and
-  // main REFUSES rather than degrading to a blank agent: the operator picked an
-  // IDENTITY, and an agent silently wearing none is worse than nothing because
-  // nobody notices for several turns. The endpoint deliberately cannot tell
-  // "deleted" from "invisible" (404-never-403), so neither can this copy.
-  "no-identity": "That identity is gone — reload the list",
-  // 2026-09-22: the runtime does not offer the model this launch named (main sends the list).
-  "no-model": "That model is not offered on this machine — pick another",
-};
-
-/**
- * ⚠ NOT A REFUSAL — A QUESTION, AND THE ONE WORD THIS MAP MUST NOT CARRY. Main
- * answers it for the FIRST launch of another member's identity on this machine,
- * with `{ identity: { name, instructions } }` for the approval modal to show
- * verbatim (`agent-identities/components/identity-approval.tsx`). Rendering
- * "could not start the agent" underneath a modal that is asking permission would
- * report the question as a failure, so `launchAgent` deliberately leaves
- * `launchError` alone for this one word and hands the outcome back to the caller.
- */
-export const LAUNCH_APPROVAL_REASON = "identity-approval";
-
-/**
- * ⚠ THE TWO RUNTIME-OWNED REFUSALS, KEYED BY THE SAME WIRE WORDS (2026-09-21, U10). They are a
- * function of the DESCRIPTOR rather than entries in {@link LAUNCH_REFUSALS} because the copy
- * depends on which runtime this channel would launch on — see that map's own note.
- * ⚠ DATA-DRIVEN, SO A THIRD RUNTIME NEEDS NO BRANCH: `runtime-copy.ts` builds both from
- * `descriptor.label`, and a descriptor nobody sent (a plain browser, a desktop older than the
- * runtime port) falls back to a sentence that names no vendor at all.
- */
-const RUNTIME_REFUSALS: Record<
-  string,
-  (d: RuntimeDescriptor | null | undefined) => string
-> = {
-  "no-sdk": noRuntimeCopy,
-  "auth-hold": signedOutLaunchCopy,
-};
-
-/**
- * One refusal word -> the line the operator reads.
- *
- * ⚠ `descriptor` IS OPTIONAL AND ABSENT IS A REAL ANSWER, not a bug: a plain browser and a
- * desktop older than the runtime port both send none, and the copy then names the runtime
- * generically rather than naming the wrong one. ⚠ An unrecognized reason still falls back rather
- * than rendering a raw enum at the operator.
- */
-export function launchRefusalText(
-  reason: string | undefined,
-  descriptor?: RuntimeDescriptor | null
-): string {
-  if (reason && RUNTIME_REFUSALS[reason]) return RUNTIME_REFUSALS[reason](descriptor);
-  return (reason && LAUNCH_REFUSALS[reason]) || "Could not start the agent";
-}
-
-/**
- * THE LAUNCH HALF OF THIS HOOK, as the shape a second surface can take
- * (2026-08-21). The composer's Bot icon starts an agent exactly as the Agents
- * tab's New Agent button does, and it takes THIS OBJECT rather than mounting its
- * own `useAgentsPanel`: a second mount would be a second peer poll of
- * `channel_sessions` on its own interval — two answers to "how fresh is fresh
- * enough" — which is the same argument `PEER_SESSIONS_POLL_MS` was exported on.
- *
- * ⚠ `useAgentsPanel`'s return satisfies it STRUCTURALLY, so there is nothing to
- * keep in step: the page hands the panel down and the type checks it.
- */
-export interface AgentLaunchOutcome {
-  ok: boolean;
-  reason?: string;
-  /**
-   * THE ADDRESS MAIN CREATED, on a successful launch (2026-08-27).
-   *
-   * ⚠ IT IS MAIN'S ANSWER, NEVER AN ECHO OF THE ASK. A caller that pre-assigned an id
-   * (the composer's launch panel) still paints THIS — a desktop older than the forward in
-   * `main/session-launch-op.js` mints its own and says so here, and that is exactly the arm
-   * the panel's fallback exists for. Same never-echo rule `rename` / `setMode` / `setModel`
-   * follow. ⚠ Absent when the build could not say; read it optionally.
-   */
-  agentId?: string;
-  /** Rides {@link LAUNCH_APPROVAL_REASON} only. Read tolerantly. */
-  identity?: { name?: string | null; instructions?: string | null } | null;
-}
-
-export interface AgentLaunchControls {
-  /** The bridge op exists on this build. Absent ⇒ offer no control at all. */
-  canLaunch: boolean;
-  launchBusy: boolean;
-  /** The last refusal's copy, or null. ⚠ Never swallowed — a refusal is not a
-   *  push, so the button's own surface is the only place it can be said. */
-  launchError: string | null;
-  /**
-   * `null` starts a CHANNEL-LEVEL agent; a thread id starts one on it.
-   *
-   * ⚠ `identityId` AND `overrides` ARE BOTH OPTIONAL AND THE ZERO-ARGUMENT CALL
-   * IS THE PINNED ONE (2026-08-22). `launchAgent(threadId)` still spawns a BLANK
-   * agent with a byte-identical payload, because that is what the New Agent
-   * button and the composer's Bot icon do in ONE CLICK and Samuel's channels-v2
-   * ruling is that they keep doing it. The picker is a second, adjacent control.
-   *
-   * ⚠ IT RETURNS THE OUTCOME NOW, and the reason is `identity-approval`: that
-   * word needs a MODAL rather than a line of copy, and only the caller that
-   * opened the picker can own it. Every other refusal is still reported through
-   * {@link AgentLaunchControls.launchError}, so nothing has two places to look.
-   */
-  launchAgent: (
-    threadId: string | null,
-    identityId?: string | null,
-    overrides?: IdentityLaunchOverrides,
-    /**
-     * ⚠ THE FOURTH PARAM, AND IT IS FOURTH ON PURPOSE (2026-08-27). The zero- and one-argument
-     * calls above stay byte-identical, which is what keeps the one-click Bot icon pinned by
-     * `composer-launch.test.tsx` unchanged. Only the launch PANEL passes it.
-     */
-    agentId?: string,
-    /**
-     * ⚠ THE FIFTH, ON THE FOURTH'S EXACT ARGUMENT (2026-08-31, the runtime-adapter port).
-     * `''` and absent both mean NO OVERRIDE — the channel's durable pick applies — so an
-     * untouched panel and a one-click launch still put the same payload on the wire.
-     * ⚠ IT IS NOT AN `overrides` MEMBER: that object is the IDENTITY's re-points, and main
-     * reads the runtime off the payload's top level (`agents-controls.ts ›
-     * launchAgentOnThread` carries the whole argument).
-     */
-    runtime?: string,
-    /**
-     * ⚠ **THE SIXTH, ON THE FOURTH'S AND FIFTH'S EXACT ARGUMENT** (2026-09-13, agent colours;
-     * docs/specs/agent-colors.md). The zero- and one-argument calls stay byte-identical, so the
-     * one-click Bot icon pinned by `composer-launch.test.tsx` is unchanged and only the New-agent
-     * POPUP passes it.
-     * ⚠ **ABSENT MEANS "THE SERVER PICKS THE FIRST FREE KEY", NEVER "NO COLOUR"** — an untouched
-     * popup and a one-click launch both get a colour, which is the whole ruling: every live agent
-     * in a channel is distinguishable. A colourless agent is a room with all sixteen out.
-     * ⚠ **NOT AN `overrides` MEMBER**, on `runtime`'s argument above: that object is the
-     * IDENTITY's re-points, and an identity cannot carry a colour — the key is unique among a
-     * channel's live agents across every member, so a stored default would collide the second
-     * time it was used. Main reads it off the payload's top level
-     * (`agents-controls.ts › launchAgentOnThread`).
-     */
-    color?: AgentColorKey
-  ) => Promise<AgentLaunchOutcome>;
-  /** Store a first-use approval for a FOREIGN identity, machine-locally.
-   *  ⚠ Feature-detected inside (`agents-controls.ts › approveIdentity`); an
-   *  older main answers `no-bridge` and the modal says so. */
-  approveIdentity: (identityId: string) => Promise<{ ok: boolean; reason?: string }>;
-}
 
 export function useAgentsPanel({
   channel,
@@ -249,106 +58,32 @@ export function useAgentsPanel({
     workspaceId,
     PEER_SESSIONS_POLL_MS
   );
-  // ⚠ THE RUNTIME THIS CHANNEL'S NEXT LAUNCH WOULD LAND ON (2026-09-21, U10), for the two
-  // refusals that name one ({@link RUNTIME_REFUSALS}). `descriptor` is the pick, else the default,
-  // else `null` — the precedence main applies, mirrored once in `runtime-capability.ts ›
-  // descriptorFor` so no surface re-derives it.
-  // ⚠ THIS IS NOT THE PEER POLL AND THE SINGLE-MOUNT RULE ABOVE DOES NOT REACH IT. That rule is
-  // about `useChannelAgentSessions` — a second mount is a second 30s poll of `channel_sessions`.
-  // `useChannelLaunchPosture` is a one-shot bridge read plus a broadcast subscription and is
-  // ALREADY mounted by four other surfaces (the settings tab, both launch panels, the agent
-  // controls); it feature-detects `window.dopl` and does nothing at all in a plain browser.
-  const { descriptor: runtimeDescriptor } = useChannelLaunchPosture(channel?.id ?? "");
-  const [launchBusy, setLaunchBusy] = useState(false);
-  const [launchError, setLaunchError] = useState<string | null>(null);
-
-  const launchAgent = async (
-    threadId: string | null,
-    identityId?: string | null,
-    overrides?: IdentityLaunchOverrides,
-    agentId?: string,
-    runtime?: string,
-    color?: AgentColorKey
-  ): Promise<AgentLaunchOutcome> => {
-    // ⚠ A GUARDED CALL ANSWERS `busy` RATHER THAN `undefined`. The picker awaits
-    // this, and a silent early return would leave a row click looking exactly
-    // like a launch that succeeded and had not pushed yet — the same silence
-    // `LAUNCH_REFUSALS` exists to end.
-    if (!channel || launchBusy) return { ok: false, reason: "busy" };
-    const thread = threadId ? (threads.find((t) => t.id === threadId) ?? null) : null;
-    // My agent's counterparty is the thread's OTHER party — the target when I
-    // asked, the asker when I was asked. A thread I'm not party to has none.
-    const counterpartyId = thread
-      ? thread.createdBy === currentUserId
-        ? thread.targetUserId
-        : thread.createdBy
-      : null;
-    // ⚠ A CHANNEL-LEVEL AGENT HAS NO COUNTERPARTY AND THAT IS NOT A REFUSAL
-    // (2026-08-21, the composer's Bot icon in channel view). It is an agent on
-    // the ROOM: nobody is on the other side of it, because there is no exchange
-    // yet. The refusal below is about a THREAD whose other party could not be
-    // resolved, which is a different fact and still has to be said — this used
-    // to return silently, the same blank screen a discarded `{ok:false}` gave.
-    if (threadId !== null && !counterpartyId) {
-      setLaunchError(launchRefusalText("no-counterparty", runtimeDescriptor));
-      return { ok: false, reason: "no-counterparty" };
-    }
-    setLaunchBusy(true);
-    setLaunchError(null);
-    try {
-      const res = await launchAgentOnThread({
+  const site: LaunchSite | null = channel
+    ? {
         channelId: channel.id,
-        taskId: threadId,
         workspaceId,
         channelName: channel.name,
-        threadTitle: thread?.title ?? null,
-        counterpartyId,
         direct: channel.isDirect,
-        // ⚠ ABSENT, NOT `null`, WHEN THERE IS NO IDENTITY — a blank launch must
-        // put the same object on the wire it always did, so the one-click path
-        // stays byte-identical to a main that has never heard of identities.
-        ...(identityId ? { identityId } : {}),
-        ...(overrides ? { overrides } : {}),
-        // ⚠ ABSENT, NOT `undefined`-valued, for the same reason `identityId` is: a launch with
-        // no panel behind it must put the object it always did on the wire.
-        ...(agentId ? { agentId } : {}),
-        // ⚠ ABSENT WHEN THERE IS NO OVERRIDE, for `agentId`'s reason and one more: an
-        // EMPTY string is a real value further down the wire (it clears a channel's
-        // durable pick), so putting `runtime: ''` on a LAUNCH would be a per-spawn
-        // statement where the operator made none.
-        ...(runtime ? { runtime } : {}),
-        // ⚠ ABSENT WHEN THE POPUP NAMED NONE, for `runtime`'s first reason: a one-click launch
-        // must put the object it always did on the wire. ⚠ AND THE SECOND REASON DOES NOT APPLY
-        // HERE — there is no "empty string clears a durable pick" hazard, because no colour is
-        // ever stored durably; the only two states are "the operator named one" and "the server
-        // picks the first free". Main re-narrows it either way
-        // (`main/session-launch-op.js › colorKey`).
-        ...(color ? { color } : {}),
-      });
-      // ⚠ THE APPROVAL WORD IS NOT AN ERROR LINE — see LAUNCH_APPROVAL_REASON.
-      if (!res.ok && res.reason !== LAUNCH_APPROVAL_REASON) {
-        setLaunchError(res.reason === "no-model" && res.detail ? res.detail : launchRefusalText(res.reason, runtimeDescriptor));
+        // My agent's counterparty is the thread's OTHER party — the target when I asked, the
+        // asker when I was asked.
+        thread: (threadId) => {
+          const t = threads.find((row) => row.id === threadId);
+          if (!t) return null;
+          return {
+            title: t.title,
+            counterpartyId: t.createdBy === currentUserId ? t.targetUserId : t.createdBy,
+          };
+        },
       }
-      if (res.ok) refreshDesktopSessions?.();
-      void refetch();
-      return { ok: res.ok, reason: res.reason, identity: res.identity, agentId: res.agentId };
-    } finally {
-      setLaunchBusy(false);
-    }
-  };
+    : null;
+  const launch = useLaunchControls(site, (outcome) => {
+    if (outcome.ok) refreshDesktopSessions?.();
+    void refetch();
+  });
 
   return {
+    ...launch,
     peerSessions,
-    canLaunch: canLaunchAgents(),
-    launchBusy,
-    launchAgent,
-    // ⚠ A THIN PASS-THROUGH ON PURPOSE. It stores nothing here and caches
-    // nothing here: the approval lives in the desktop's `electron-store`, and a
-    // renderer-side "already approved" memo would be exactly the fence the
-    // untrusted text is in a position to influence (`agents-controls.ts ›
-    // approveIdentity`).
-    approveIdentity,
-    launchError,
     // Wave 3: the peer projection's re-read, handed to the page's `refetchAll` so
     // peer cards ride the `channel_messages` doorbell that is already paid for
     // instead of waiting out the 30s poll (INVARIANTS §7 — no new publication).

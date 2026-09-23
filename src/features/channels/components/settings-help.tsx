@@ -137,15 +137,11 @@ export const SETTINGS_HELP: Readonly<Record<string, SettingHelpCopy>> = {
   },
   // ⚠ `LAUNCH_POSTURE_HEADING`'s sentence, rehomed (item 2): this is the scope the
   // deleted heading used to carry for this row and the two under it.
+  // ⚠ NO OPTION LIST: the words are the selected runtime's, and its dropdown already describes
+  // each one in them (P6-12).
   "Tool use": {
     body:
       "How much freedom an agent you launch here starts with over its tools. Set when the agent launches; changing it does not move a running agent.",
-    options: [
-      { label: "Ask each time", text: "every tool call waits for you" },
-      { label: "Accept edits", text: "file edits run, everything else asks" },
-      { label: "Auto", text: "the common work tools run on their own" },
-      { label: "Bypass", text: "the widest set this runtime allows" },
-    ],
   },
   "Tool access": {
     body:
@@ -203,8 +199,5 @@ export const SETTINGS_HELP: Readonly<Record<string, SettingHelpCopy>> = {
       { label: "Cannot direct agents", text: "directions are refused and the sender is told why" },
       { label: "In every channel", text: "your outside sessions may direct agents on this Mac" },
     ],
-  },
-  Model: {
-    body: "Which model agents you launch in this channel run on.",
   },
 };

@@ -15,12 +15,9 @@
  * wiring is copied from that file deliberately: INVARIANTS §5A's *"there is still exactly ONE launch
  * lane"* is a rule about the LANE, and a second form for one lane is how two vocabularies start.
  *
- * ⚠ **WHAT IT DOES NOT COPY IS THE PROP CHAIN, BECAUSE THIS WINDOW HAS NO PAGE ABOVE IT.** The
- * Agents tab is handed `onLaunchAgent` / `onApproveIdentity` down from the channels page's
- * `useAgentsPanel`; the pop-out is a different `BrowserWindow` with a different React tree and
- * inherits nothing. So the controls are built HERE over `agents-controls.ts` — the same module
- * `useAgentsPanel` itself calls — rather than by mounting that hook, which would also drag a peer
- * poll and a roster into a window whose whole diet is messages + consent.
+ * ⚠ **THE CONTROLS ARE BUILT HERE, NOT HANDED DOWN**: the pop-out is a different `BrowserWindow`
+ * with no channels page above it, so it mounts `use-launch-controls.ts › useLaunchControls` — the
+ * same act, busy guard and refusal copy `useAgentsPanel` uses — without that hook's peer poll.
  *
  * ⚠ **THE DIALOG PORTALS TO `document.body`** (`settings-modal/modal-shell.tsx › createPortal`), so
  * it is not clipped by the inset panel's `overflow-hidden` and this component can be mounted
@@ -32,12 +29,7 @@ import type { DesktopSessionSummary } from "@/shared/lib/spa-bridge";
 import { agentColorOrNull } from "../lib/agent-colors";
 import { LaunchAgentDialog } from "./launch-agent-dialog";
 import type { AgentLaunchPanel } from "./use-agent-launch";
-import type { AgentLaunchControls } from "./use-agents-panel";
-import {
-  approveIdentity,
-  canLaunchAgents,
-  launchAgentOnThread,
-} from "./agents-controls";
+import { useLaunchControls } from "./use-launch-controls";
 
 /**
  * ⚠ **EMPTY, AND THAT IS THE MEASURED ANSWER RATHER THAN A SHORTCUT.** `members` feeds ONE thing:
@@ -101,58 +93,22 @@ export function AgentWindowLaunch({
   /**
    * The ACTIVE tab's own feed row, for the room's NAME and the thread's TITLE.
    *
-   * ⚠ **IT IS THE ONLY SOURCE THIS WINDOW HAS FOR EITHER**, and that is why the launch reads it
-   * rather than a channel record: the pop-out never reads `GET /channels`. `null` (a browser, or an
-   * agent that has ended) leaves both empty, which main accepts — they are LABELS on the session.
-   * ⚠ **AND IT IS WHY `direct` GOES OUT `false` AND `counterpartyId` `null`**: neither is on
-   * `spa-bridge-shapes.ts › DesktopSessionSummary`, so this side genuinely does not know them.
-   * Measured: main treats `counterpartyId` as optional and both of them as the OUTBOUND CARD's
-   * recipient line (`main/session-launch.js`, `› session-outbound.js`) — so a DM launched from here
-   * gets a less specific recipient label, and nothing is mis-routed. It is not guessed `true`.
+   * ⚠ **IT IS THE ONLY SOURCE THIS WINDOW HAS FOR EITHER** — the pop-out never reads
+   * `GET /channels`. `null` (a browser, or an agent that has ended) leaves both empty, which main
+   * accepts — they are LABELS on the session. `direct` and the counterparty are not on the summary,
+   * so the payload omits them (`use-launch-controls.ts › buildLaunchPayload`).
    */
   agent: DesktopSessionSummary | null;
 }) {
-  const newAgent: AgentLaunchControls | undefined = useMemo(() => {
-    // ⚠ ABSENT, NOT DISABLED, when the bridge cannot launch — `LaunchAgentDialog` takes
-    // `newAgent?` for exactly this, and the chrome draws no `+` either (INVARIANTS §11).
-    if (!canLaunchAgents()) return undefined;
-    return {
-      canLaunch: true,
-      // ⚠ NO BUSY LIGHT AND NO STICKY ERROR LINE HERE, because there is no hook holding either:
-      // `useLaunchRunner` inside the dialog owns the in-flight guard and prints its own refusal.
-      // A `false` that never changes is honest; a spinner this file cannot drive would not be.
-      launchBusy: false,
-      launchError: null,
-      // ⚠ **SIX ARGUMENTS, SPELLED OUT, AND THE SIXTH IS WHY THE COUNT IS IN THIS COMMENT**
-      // (2026-09-14). `color` was added to `AgentLaunchControls.launchAgent` on 2026-09-13 and
-      // this adapter still declared five — TypeScript accepts a narrower implementation of a
-      // wider function type, so the operator's colour pick reached here and was DROPPED with no
-      // error anywhere: the one row the popup asks this window about was the one row it threw
-      // away. The same failure shape `agents-tab.tsx` records beside its own spelled-out six.
-      launchAgent: async (threadId, identityId, overrides, agentId, runtime, color) =>
-        launchAgentOnThread({
-          channelId,
-          // ⚠ THE DIALOG'S OWN ARGUMENT, PASSED THROUGH — never re-derived from `taskId` here. The
-          // host resolves `openThreadId` once (`""` → `null`), and a second reading of that rule in
-          // this callback is how the form and the payload come to disagree about where they launch.
-          taskId: threadId,
-          workspaceId,
-          channelName: agent?.channelName ?? "",
-          threadTitle: agent?.threadTitle ?? null,
-          counterpartyId: null,
-          direct: false,
-          identityId,
-          overrides,
-          agentId,
-          runtime,
-          // ⚠ ABSENT WHEN THE OPERATOR TOUCHED NO CIRCLE — the server then assigns the first
-          // free key, which is what an untouched popup has always meant. Never `null`: the
-          // payload's absence IS the spelling of "pick for me".
-          color,
-        }),
-      approveIdentity,
-    };
-  }, [channelId, workspaceId, agent?.channelName, agent?.threadTitle]);
+  const launch = useLaunchControls({
+    channelId,
+    workspaceId,
+    channelName: agent?.channelName ?? "",
+    thread: () => ({ title: agent?.threadTitle ?? null, counterpartyId: null }),
+  });
+  // ⚠ ABSENT, NOT DISABLED, when the bridge cannot launch — the chrome draws no `+` either
+  // (INVARIANTS §11).
+  const newAgent = launch.canLaunch ? launch : undefined;
 
   /**
    * THIS ROOM'S OWN LIVE AGENTS, in the shape the colour row reads.

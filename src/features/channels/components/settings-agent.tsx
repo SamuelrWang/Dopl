@@ -91,10 +91,10 @@
 // tombstone for each.
 import { AgentFolderRows, DirectAgentsRow, LaunchAgentsRow } from "./settings-desktop-rows";
 import { isSharedChannel } from "../lib/tool-profile-resolve";
-import { type PermissionPreset } from "../lib/permission-modes";
+import type { MessageMode } from "../lib/permission-modes";
 import type { LaunchSelectionState } from "../hooks/use-launch-selection";
 import { PanelHeading } from "./bits";
-import { usePostureWarning, type PosturePatch } from "./posture-warning";
+import { usePostureWarning } from "./posture-warning";
 // ⚠ **THE BRIDGE-BOUND CONTAINER LIVES IN `settings-agent-container.tsx` (§1 split, U8)** and is
 // re-exported here, so no caller and no suite moved. That file changes when a RECORD changes;
 // this one when a ROW does. ⚠ A `import type` would not do — the name is a COMPONENT callers
@@ -157,22 +157,10 @@ export interface ChannelAgentSettingsViewProps {
    *  for why it is the count and not the roster's length, and why absent reads as
    *  SHARED. */
   memberCount?: number | null;
-  /** The DURABLE launch posture, or null outside the desktop shell (subsection
-   *  absent). ⚠ NOT the arm — `use-channel-launch-posture.ts` says why they are
-   *  two records with two consumers. */
-  posture: PermissionPreset | null;
-  /** True while a posture write is in flight — every posture select goes inert. */
-  postureBusy: boolean;
-  onChangePosture: (patch: PosturePatch) => void;
   /**
-   * THE RUNTIME FAMILY (2026-08-31, the runtime-adapter port) — the channel's
-   * pick, every adapter this desktop registered, and the descriptor a launch
-   * here would use. `settings-agent-launch-rows.tsx` is where all four are read
-   * and where the §3.1/§3.2 rules over them are stated.
-   *
-   * ⚠ `runtimeSupported` IS A SEPARATE GATE FROM `posture` BEING NON-NULL: the
-   * two axes exist on desktops the runtime does not, and false renders NO runtime
-   * row rather than a greyed one.
+   * THE CHANNEL'S DURABLE LAUNCH RECORD — the runtime, both axes and the native settings, read
+   * and written through `useLaunchSelection`. ⚠ No bridge (a plain browser) renders the launch
+   * group NOT AT ALL, and the posture warning then has no Messaging axis to read.
    */
   selection?: LaunchSelectionState | null;
   // ⚠ `modelSupported` STOOD HERE AND IS DELETED (2026-09-23, Samuel: "We don't
@@ -223,8 +211,6 @@ export function ChannelAgentSettingsView({
   roster = EMPTY_ROSTER,
   currentUserId = null,
   memberCount = null,
-  posture,
-  onChangePosture,
   selection = null,
   folder,
   agentChain = null,
@@ -235,12 +221,13 @@ export function ChannelAgentSettingsView({
   // the flip into `auto_both` + `full` + a peer. `posture-warning.tsx` holds the
   // predicate, the copy and the dialog, and commits the ORIGINAL write on
   // confirm; cancel writes nothing at all.
+  const launch = selection?.bridge ? selection : null;
   const warning = usePostureWarning({
-    messageMode: posture?.messages ?? null,
+    messageMode: launch ? (launch.messages as MessageMode) : null,
     toolProfile: profile,
     roster,
     currentUserId,
-    commitPosture: onChangePosture,
+    commitPosture: (patch) => void launch?.update(patch),
     commitToolProfile: onSetToolProfile,
   });
 
@@ -265,9 +252,9 @@ export function ChannelAgentSettingsView({
             ⚠ BOTH WRITES STILL GO THROUGH THE WARNING, unchanged: `changePosture`
             is what the group is handed, so the `auto_both` + `full` + a-peer dialog
             fires on exactly the transitions it always did. */}
-        {posture && selection && (
+        {launch && (
           <AgentLaunchPostureRows
-            selection={selection}
+            selection={launch}
             // ⚠ THE MESSAGING WRITE IS THE ONLY ONE THAT GOES THROUGH THE WARNING, and that is
             // narrower than before rather than looser: `usePostureWarning › changePosture` reads
             // ONLY `patch.messages`, so the runtime, model, effort, tool-use and sandbox writes

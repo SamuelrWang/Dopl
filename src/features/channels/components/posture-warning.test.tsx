@@ -205,32 +205,31 @@ describe("the one production mount actually hands the roster over", () => {
   });
 });
 
-/** The view at the combination minus ONE axis, so a single click completes it. */
 /**
- * ⚠ **THE MESSAGING ROW READS THE VERSIONED RECORD SINCE 2026-09-21 (U8), SO `posture` ALONE NO
- * LONGER DRIVES IT.** The warning's own input is still `posture.messages` — it is the view's
- * `messageMode` conjunct — but the SELECT renders and writes `selection.messages`. Handing a
- * `posture` without a matching record would leave a case picking an option the row already holds,
- * which fires no `onChange` and reads as the dialog "staying silent" for the wrong reason. So
- * this derives the record from the pair every case already states.
+ * The view at the combination minus ONE axis, so a single click completes it. `posture` states
+ * the record's Messaging axis and tools; `null` is no bridge at all. The posture commit IS the
+ * record's own `update` (P6-11), returned under the name every case already reads.
  */
-function mount(over: Parameters<typeof agentView>[0] = {}) {
-  const onChangePosture = vi.fn();
+function mount(
+  over: Parameters<typeof agentView>[0] & {
+    posture?: { tools: string; messages: MessageMode } | null;
+  } = {}
+) {
   const onSetToolProfile = vi.fn();
-  const posture = "posture" in over ? over.posture : undefined;
+  const { posture, ...rest } = over;
   const selection = launchSelectionStub({
     messages: posture?.messages ?? "ask",
     byRuntime: posture ? { "": { tools: posture.tools } } : {},
+    ...(posture === null ? { bridge: null } : {}),
   });
   agentView({
     roster: WITH_PEER,
     currentUserId: ME,
-    onChangePosture,
     onSetToolProfile,
     selection,
-    ...over,
+    ...rest,
   });
-  return { onChangePosture, onSetToolProfile, selection };
+  return { onChangePosture: vi.mocked(selection.update), onSetToolProfile, selection };
 }
 
 /** Pick a Sends option by its rendered label. */

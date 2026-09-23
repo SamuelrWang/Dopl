@@ -21,7 +21,6 @@ import {
   ChannelAgentSettingsView,
   type ChannelAgentSettingsViewProps,
 } from "./settings-agent";
-import { DEFAULT_PERMISSION_PRESET } from "../lib/permission-modes";
 import { launchSelectionStub } from "../hooks/launch-selection-harness";
 
 /** The desktop modules these claims are ABOUT. ⚠ Off `process.cwd()` (the vitest
@@ -80,9 +79,6 @@ export function agentView(over: Partial<ChannelAgentSettingsViewProps> = {}) {
       profile="full"
       onSetToolProfile={noop}
       toolProfileBusy={false}
-      posture={DEFAULT_PERMISSION_PRESET}
-      postureBusy={false}
-      onChangePosture={noop}
       // ⚠ **A STUB, NOT A DEFAULT** (2026-09-21, U8). The launch group reads the versioned,
       // runtime-keyed record now (`hooks/use-launch-selection.ts`), so a suite that renders the
       // tab has to hand one — and a suite that cares about it overrides this. The stub's own
@@ -102,10 +98,7 @@ export const copy = (over: Partial<ChannelAgentSettingsViewProps> = {}) =>
 /** ⚠ The root suite has no jest-dom — `toBeDisabled` does not exist here. */
 export const disabled = (el: HTMLElement) => (el as HTMLButtonElement).disabled;
 
-// ⚠ NAMED FOR THE RECORD THEY READ (2026-08-20). These selects wrote the single-use
-// ARM until the split; they write the DURABLE LAUNCH POSTURE now, and the arm went
-// back to the request card — the only surface that can honestly show a fuse.
-// `use-channel-launch-posture.ts` states the split.
+// ⚠ NAMED FOR THE RECORD THEY READ — the channel's DURABLE LAUNCH record.
 // ⚠ THE ACCESSIBLE NAMES MOVED 2026-09-06 (settings overhaul, items 5 and 7):
 // "Permissions" → "Tool use", "Sends" → "Messaging". The HELPERS keep their names —
 // they are named for the RECORD they read (`posture.tools` / `posture.messages`),

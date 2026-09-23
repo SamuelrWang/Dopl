@@ -91,13 +91,13 @@ afterEach(() => {
 
 async function channelHook() {
   const hook = renderHook(() => useLaunchSelection({ kind: "channel", channelId: CHANNEL }));
-  await waitFor(() => expect(hook.result.current.supported).toBe(true));
+  await waitFor(() => expect(hook.result.current.connectedKnown).toBe(true));
   return hook;
 }
 
 async function defaultsHook() {
   const hook = renderHook(() => useLaunchSelection({ kind: "defaults" }));
-  await waitFor(() => expect(hook.result.current.supported).toBe(true));
+  await waitFor(() => expect(hook.result.current.connectedKnown).toBe(true));
   return hook;
 }
 
@@ -151,24 +151,6 @@ describe("the CHANNEL scope", () => {
     expect(result.current.rejected).toEqual(['"accept_edits" is not a tool setting Codex offers']);
     expect(result.current.recordFor("claude").tools).toBe("accept_edits");
   });
-
-  it("reads an older desktop's legacy pair WITHOUT inventing per-runtime records", async () => {
-    // ⚠ INVARIANTS §11 — the legacy reply describes the SELECTED runtime and nothing else, so
-    // every other runtime answers EMPTY rather than borrowing it.
-    getLaunchPosture.mockResolvedValue({
-      tools: "auto",
-      messages: "ask",
-      model: "claude-opus-5", // ⚠ an OLDER desktop still sends it — it is NOT read (2026-09-23)
-      runtime: "claude",
-      runtimes: [{ id: "claude", label: "Claude Code" }, { id: "codex", label: "Codex" }],
-      defaultRuntime: "claude",
-    });
-    const hook = renderHook(() => useLaunchSelection({ kind: "channel", channelId: CHANNEL }));
-    await waitFor(() => expect(hook.result.current.runtime).toBe("claude"));
-    expect(hook.result.current.supported).toBe(false);
-    expect(hook.result.current.recordFor("claude")).toEqual({ tools: "auto" });
-    expect(hook.result.current.recordFor("codex")).toEqual({});
-  });
 });
 
 describe("the DEFAULTS scope", () => {
@@ -207,6 +189,21 @@ describe("the DEFAULTS scope", () => {
       await result.current.update({ agentChain: true });
     });
     expect(setLaunchPosture).not.toHaveBeenCalled();
+  });
+
+  it("with NO runtime picked, files the edit under the DEFAULT runtime's key main reads (F1)", async () => {
+    // Main's `activeRecord` reads `byRuntime[runtime || defaultId]`; a `byRuntime[""]` key is
+    // kept verbatim and never read, so the write returned ok and the value never changed.
+    const { result } = await defaultsHook();
+    expect(result.current.runtime).toBe("");
+    await act(async () => {
+      await result.current.update({ tools: "auto" });
+    });
+    const sent = setAgentDefaults.mock.calls[0][0];
+    expect(sent.runtime).toBe("");
+    expect(sent.byRuntime.claude.tools).toBe("auto");
+    expect(Object.keys(sent.byRuntime)).not.toContain("");
+    expect(sent.byRuntime.codex).toEqual({ native: { sandbox_mode: "read-only" } });
   });
 
   it("carries the chaining flag, which is this record's and not a channel's", async () => {

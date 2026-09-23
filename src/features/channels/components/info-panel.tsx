@@ -49,8 +49,7 @@ import {
 export { channelPaneTabs };
 export type { TabKey };
 import type { ChannelPeerSession } from "../hooks/use-channel-agent-sessions";
-import type { AgentLaunchOutcome } from "./use-agents-panel";
-import type { IdentityLaunchOverrides } from "@/features/agent-identities/lib/launch-overrides";
+import type { LaunchAgentFn } from "./use-launch-controls";
 import type { AuthorIndex } from "./view-model";
 import type {
   ChannelInfoExtras,
@@ -136,21 +135,9 @@ export function ChannelsInfoPanel({
   /** The last launch refusal's copy, or null. Passed through — the tab owns
    *  where it sits. */
   launchError?: string | null;
-  /** ⚠ WIDENED FOR THE IDENTITY PICKER (2026-08-22), and the one-argument call
-   *  is still what the New Agent button makes. Passed straight through — this
-   *  panel decides nothing about launches. */
-  onLaunchAgent?: (
-    // ⚠ `null` = a CHANNEL-LEVEL launch (2026-08-31) — see `agents-tab.tsx`.
-    threadId: string | null,
-    identityId?: string | null,
-    overrides?: IdentityLaunchOverrides,
-    /** ⚠ WIDENED WITH THE TAB'S OWN PROP (2026-09-08): the launch POPUP carries a
-     *  pre-assigned instance id and a per-spawn runtime. A narrower type here would
-     *  have COMPILED (a 3-arg function is assignable to a 5-arg signature) while
-     *  silently dropping two arguments. */
-    agentId?: string,
-    runtime?: string
-  ) => Promise<AgentLaunchOutcome> | void;
+  /** The launch act, passed straight through — this panel decides nothing about launches.
+   *  ⚠ `LaunchAgentFn` refuses a narrower wrapper (P6-01). */
+  onLaunchAgent?: LaunchAgentFn;
   /** Machine-local first-use approval for a foreign identity. Passed through. */
   onApproveIdentity?: (identityId: string) => Promise<{ ok: boolean; reason?: string }>;
   /** `agentsModel › agentKey` of the agent whose view is open — read only to

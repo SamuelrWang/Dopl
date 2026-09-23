@@ -81,11 +81,24 @@ function bridge(opts: { present?: boolean; ok?: boolean; folder?: boolean } = {}
   // DELETED with the arm — and two cases asserted the Settings tab did not call
   // them. A test double WIDER than the surface it stands in cannot catch a
   // regression; it can only assert about a world that no longer exists.
-  const posture: { value: unknown } = { value: null };
-  const getLaunchPosture = vi.fn(() => Promise.resolve(posture.value));
-  const setLaunchPosture = vi.fn((_id: string, next: unknown) => {
+  // ⚠ THE STORE ANSWERS AS A CURRENT MAIN DOES — the versioned record with its roster — and
+  // merges each own-key patch onto what it holds (`main/launch-selection.js › patchSelection`).
+  const posture: { value: { tools?: string; messages?: string } } = { value: {} };
+  const reply = () => ({
+    runtimes: [{ id: "claude", label: "Claude Code" }],
+    defaultRuntime: "claude",
+    connected: ["claude"],
+    selection: {
+      v: 2,
+      runtime: "",
+      messages: posture.value.messages ?? "ask",
+      byRuntime: posture.value.tools ? { claude: { tools: posture.value.tools } } : {},
+    },
+  });
+  const getLaunchPosture = vi.fn(() => Promise.resolve(reply()));
+  const setLaunchPosture = vi.fn((_id: string, next: { tools?: string; messages?: string }) => {
     if (opts.ok === false) return Promise.resolve({ ok: false });
-    posture.value = next;
+    posture.value = { ...posture.value, ...next };
     return Promise.resolve({ ok: true });
   });
   // ⚠ THE PAIR, NOT A LABEL (2026-09-05, task 15). All three ops answer

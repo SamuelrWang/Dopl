@@ -313,6 +313,7 @@ export function ChannelsAgentWindow({
         channelId={channelId}
         taskId={taskId}
         agentId={agent?.agentId}
+        runtimeId={agent?.runtimeId}
         name={agent ? agentDisplayName(agent) : null}
         ended={ended}
         className="px-4"

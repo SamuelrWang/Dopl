@@ -175,12 +175,9 @@ export function SurfaceInfoPanel({
       canLaunchAgent={launchAllowedInView(agentsPanel.canLaunch, openThread, currentUserId)}
       launchBusy={agentsPanel.launchBusy}
       launchError={agentsPanel.launchError}
-      // ⚠ THE PROMISE IS HANDED THROUGH, not voided (2026-08-22): the identity
-      // picker AWAITS it to learn whether main asked for a first-use approval, and
-      // a `void` wrapper would make every picker launch look like a dead bridge.
-      onLaunchAgent={(id, identityId, overrides) =>
-        agentsPanel.launchAgent(id, identityId, overrides)
-      }
+      // ⚠ THE FUNCTION ITSELF, NEVER A WRAPPER (P6-01): a 3-argument lambda here dropped the
+      // popup's agent id, runtime and colour. The prop's `LaunchAgentFn` type refuses one.
+      onLaunchAgent={agentsPanel.launchAgent}
       onApproveIdentity={agentsPanel.approveIdentity}
       openAgent={sel.openAgent}
       onOpenAgent={sel.setOpenAgent}

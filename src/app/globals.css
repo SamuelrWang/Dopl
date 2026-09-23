@@ -500,6 +500,12 @@
    * at; this token is the HOVER step alone, which is the half Samuel pointed at.
    */
   --shadow-raised-hover: 0 4px 7px rgba(0, 0, 0, 0.24), 0 10px 24px rgba(0, 0, 0, 0.24);
+  /**
+   * 🔒 THE CARD HOVER LIFT'S SHADOW (Samuel, 2026-09-21: the Agents and Knowledge cards *"should
+   * have the same animation"*). Read by the kit's `.card-lift:hover` and by
+   * `knowledge-v2.module.css › .card:hover`, so the two faces cannot drift.
+   */
+  --shadow-card-lift: 0 2px 4px rgba(0, 0, 0, 0.07), 0 12px 28px rgba(0, 0, 0, 0.1);
   --shadow-floating: 0 16px 48px -12px oklch(0 0 0 / 70%),
     0 4px 16px -4px oklch(0 0 0 / 50%);
   --glow-accent: 0 0 24px oklch(0.68 0.22 250 / 50%),
@@ -949,6 +955,17 @@ html {
      component is exactly the drift docs/DESIGN-SYSTEM.md forbids, so the pair is
      a token and both readers name it. */
   box-shadow: var(--shadow-bento);
+}
+
+/* THE CARD HOVER LIFT (Samuel, 2026-09-21: the Agents and Knowledge cards *"should have the same
+   animation"*). A class rather than Tailwind arbitraries, which a template-built string never
+   emitted (P9-01). The knowledge card's own `.card:hover` wears the same rise and token. */
+.card-lift {
+  transition: transform 0.14s ease-out, box-shadow 0.14s ease-out;
+}
+.card-lift:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-card-lift);
 }
 
 /* Frosted glass panel — THE card a PUBLIC page standing on white renders into
@@ -1582,16 +1599,6 @@ html {
   background: var(--raised-light-face);
   border-color: var(--raised-light-line);
   box-shadow: var(--raised-light-shadow);
-}
-
-/* THE COMPOSER'S PANELS wear the frame's panel gray (Samuel, 2026-08-26): the
-   recess a panel's header sits in reads as the same surface the "New channel"
-   button stands on, one card out. ⚠ BOTH of them — new-thread and new-agent —
-   share `composer-panel-fields.tsx › PANEL_HOOK`, so this stays ONE rule and no
-   utility swap can silently drop it. ⚠ FILL ONLY: the concave shadow stack is
-   deliberate and stays. */
-[data-frame-skin] [data-composer-panel] {
-  background-color: var(--home-panel);
 }
 
 /* Menu-card open/close — duplicated from marketing.css › `lpMenuIn` /

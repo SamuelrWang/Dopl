@@ -56,10 +56,9 @@ const CHAIN_OPTIONS: ReadonlyArray<SelectMenuOption<DefaultChainValue>> = [
 ];
 
 /**
- * ⚠ **THE PANE IS ABSENT WHOLE WITHOUT THE BRIDGE** — the no-dead-rows rule (INVARIANTS §5), and
- * here the strong version of it: the record lives in the desktop's own store, so a browser would
- * otherwise render four controls that persist nothing and a promise that new channels inherit
- * something they cannot.
+ * ⚠ **NO ROWS WITHOUT THE BRIDGE** — the no-dead-rows rule (INVARIANTS §5): the record lives in
+ * the desktop's own store, so a browser would otherwise render controls that persist nothing. The
+ * pane keeps its title and says nothing else (minimal copy).
  */
 export function AgentDefaultsSettings() {
   // ⚠ **THE SAME HOOK THE PER-CHANNEL TAB MOUNTS, AT THE OTHER SCOPE (2026-09-21, U8).** The
@@ -72,29 +71,16 @@ export function AgentDefaultsSettings() {
   // dropping every other runtime's model and native settings on every keystroke of this pane.
   const state = useLaunchSelection({ kind: "defaults" });
 
-  if (!state.bridge) {
-    return (
-      <SectionShell title="Agents">
-        <p className="text-caption text-text-secondary">
-          Default agent settings live on the Dopl desktop app.
-        </p>
-      </SectionShell>
-    );
-  }
+  if (!state.bridge) return <SectionShell title="Agents">{null}</SectionShell>;
 
   const chain: DefaultChainValue = state.agentChain
     ? DEFAULT_CHAIN_ON
     : DEFAULT_CHAIN_OFF;
 
   return (
-    // ⚠ THE SUBTITLE IS THE ONE SENTENCE ON THIS PANE, and it is the SCOPE statement rather than
-    // an explainer: without it "Agents" in a profile popup reads as a control over the agents
-    // running right now. The minimal-copy ruling (INVARIANTS §5) bars a paragraph under any ROW;
-    // a pane still says what it governs, exactly as every other section here does.
-    <SectionShell
-      title="Agents"
-      subtitle="What a new channel's agents start on. Channels you already have keep their own settings."
-    >
+    // ⚠ THE SUBTITLE IS THE SCOPE CLAUSE AND NOTHING MORE (minimal copy, INVARIANTS §5): without
+    // it "Agents" in a profile popup reads as a control over the agents running right now.
+    <SectionShell title="Agents" subtitle="What a new channel's agents start on.">
       <div className="flex flex-col gap-1">
         {/* ⚠ NO `onChangeMessages`, AND THAT IS DELIBERATE RATHER THAN AN OMISSION — the
             messaging write goes STRAIGHT TO THE RECORD. `posture-warning.tsx`'s dialog fires on

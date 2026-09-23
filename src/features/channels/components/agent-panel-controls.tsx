@@ -118,29 +118,13 @@ export function AgentControls({
 }) {
   const control = useAgentControls();
   /**
-   * ⚠ WHY THE STOP VERBS ASK THE CHANNEL AND NOT THE AGENT. A runtime is stamped at spawn
-   * and `DesktopSessionSummary` does not carry it (measured 2026-08-31 —
-   * `shared/lib/spa-bridge-shapes.ts` has `channelId` and `agentId` and no runtime), so the
-   * channel's effective descriptor is the only answer this side can give. It is the right
-   * one for every agent launched from this channel with no per-spawn override, and F-393
-   * records the gap for the one that had one.
-   * ⚠ IT IS THE SAME SHARED RECORD the Settings tab writes, so a runtime changed there
-   * reaches this strip without a second read.
+   * ⚠ THE AGENT'S OWN RUNTIME (`DesktopSessionSummary.runtimeId`), never the channel's current
+   * pick. A REFUSAL WITH ITS SENTENCE, never a control that vanishes (§3.2): without an interrupt
+   * Dopl cannot stop a session it started, so the buttons go inert AND say why. No descriptor yet
+   * (off-desktop, or before the first read answers) refuses nothing.
    */
-  const posture = useChannelLaunchPosture(agent.channelId);
-  /**
-   * ⚠ A REFUSAL, WITH ITS SENTENCE — never a control that vanishes (§3.2). Without an
-   * interrupt Dopl cannot stop a session it started: `main/session-engine.js › runEffect`
-   * case `interruptQuery` is the tree's only `.interrupt()`, and the reducer's `interrupt`
-   * and `abandon_timeout` effects have no other actuator. So the buttons go inert AND say
-   * why, rather than shipping two that do nothing.
-   * ⚠ NULL WHENEVER THIS BUILD HAS NO RUNTIME CONCEPT — a descriptor nobody sent cannot
-   * refuse anything, and reading its absence as a refusal would disable Pause and End on
-   * every desktop older than the port.
-   */
-  const stopRefusal = posture.runtimeSupported
-    ? interruptRefusal(posture.descriptor)
-    : null;
+  const runtime = useChannelLaunchPosture(agent.channelId).descriptorOf(agent.runtimeId);
+  const stopRefusal = runtime ? interruptRefusal(runtime) : null;
   const [pending, setPending] = useState<AgentControl | null>(null);
   // ⚠ ONE notice slot for both refusal kinds, not two: they occupy the same
   // line under the same buttons, and two independent timers there race to blank

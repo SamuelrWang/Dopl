@@ -1,29 +1,23 @@
 // @vitest-environment jsdom
 /**
- * The DURABLE LAUNCH POSTURE hook, and the failure it was introduced to end.
+ * `useChannelLaunchPosture` — a READ-ONLY selector over `useLaunchSelection` (P6-07 / F4).
  *
- * ⚠ THE BUG THIS RECORD REPLACED. The Settings tab wrote the SINGLE-USE ARM. The
- * operator picked Bypass; the first consent-approved launch consumed it (or thirty
- * minutes passed); every session after that started manual/ask — and nothing told
- * the control, which went on displaying "Bypass" because it re-reads only on mount.
- * A durable record has nothing to be stale ABOUT, which is why the fix is a second
- * record rather than a refresh.
- *
- * ⚠ WHAT MUST STAY TRUE OF THE OTHER RECORD. The arm is untouched: single-use,
- * 30-minute, consumed by `trigger.js › inboundApproved` alone. H2 is intact because
- * the split is by CONSUMER — `main/channel-prefs.js` is the statement of record and
- * `dopl-desktop-app/test/session-preset-start.test.mjs` pins the consumer counts.
+ * 🔒 THE PROPERTY: one channel record, one store. The hook used to keep its own bridge read and its
+ * own reader set while every write went through `useLaunchSelection`, so a runtime changed in
+ * Settings never reached the agent panel, the composer or the launch refusal copy until they
+ * remounted.
  */
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { useEffect } from "react";
 import { act, cleanup, render } from "@testing-library/react";
 import {
-  getDesktopLaunchPosture,
   useChannelLaunchPosture,
   type ChannelLaunchPostureState,
 } from "./use-channel-launch-posture";
+import { useLaunchSelection, type LaunchSelectionState } from "./use-launch-selection";
 import { REAL_DESCRIPTORS } from "../lib/runtime-descriptors-harness";
+import { catalog } from "./launch-selection-harness";
 
 afterEach(() => {
   cleanup();
@@ -31,317 +25,120 @@ afterEach(() => {
 });
 
 const CH = "44444444-4444-4444-8444-444444444444";
-const BYPASS = { tools: "bypass", messages: "auto_both" } as const;
-const MANUAL = { tools: "manual", messages: "ask" } as const;
 
-function installBridge(over: Record<string, unknown> = {}) {
-  const getLaunchPosture = vi.fn().mockResolvedValue(MANUAL);
-  const setLaunchPosture = vi.fn().mockResolvedValue({ ok: true });
-  const channels = { getLaunchPosture, setLaunchPosture, ...over };
-  (window as { dopl?: unknown }).dopl = { apiRequest: vi.fn(), channels };
-  return channels as unknown as {
-    getLaunchPosture: ReturnType<typeof vi.fn>;
-    setLaunchPosture: ReturnType<typeof vi.fn>;
+const reply = (runtime: string) => ({
+  runtimes: REAL_DESCRIPTORS,
+  defaultRuntime: "claude",
+  connected: ["claude", "codex"],
+  catalogVersion: 1,
+  catalogs: {
+    claude: catalog("claude", [{ id: "claude-sonnet-5", isDefault: true }]),
+    codex: catalog("codex", [{ id: "gpt-6-sol", isDefault: true }]),
+  },
+  selection: { v: 2, runtime, messages: "ask", byRuntime: {} },
+});
+
+function installBridge(initial: string) {
+  let stored = initial;
+  const getLaunchPosture = vi.fn().mockImplementation(async () => reply(stored));
+  const setLaunchPosture = vi
+    .fn()
+    .mockImplementation(async (_id: string, patch: { runtime?: string }) => {
+      if (patch.runtime !== undefined) stored = patch.runtime;
+      return { ok: true };
+    });
+  (window as { dopl?: unknown }).dopl = {
+    apiRequest: vi.fn(),
+    channels: { getLaunchPosture, setLaunchPosture },
   };
+  return { getLaunchPosture, setLaunchPosture };
 }
 
 /** Publishes from an effect — a render-phase write trips `react-hooks/immutability`. */
-async function mount(channelId = CH) {
-  const holder: { value: ChannelLaunchPostureState | null } = { value: null };
-  function Probe() {
-    const state = useChannelLaunchPosture(channelId);
+async function mountBoth() {
+  const posture: { value: ChannelLaunchPostureState | null } = { value: null };
+  const settings: { value: LaunchSelectionState | null } = { value: null };
+  function AgentSurface() {
+    const state = useChannelLaunchPosture(CH);
     useEffect(() => {
-      holder.value = state;
+      posture.value = state;
+    });
+    return null;
+  }
+  function SettingsTab() {
+    const state = useLaunchSelection({ kind: "channel", channelId: CH });
+    useEffect(() => {
+      settings.value = state;
     });
     return null;
   }
   await act(async () => {
-    render(<Probe />);
+    render(
+      <>
+        <AgentSurface />
+        <SettingsTab />
+      </>
+    );
   });
-  return holder;
+  return { posture: posture as { value: ChannelLaunchPostureState }, settings };
 }
 
-describe("getDesktopLaunchPosture", () => {
-  it("is null in a plain browser, so the control renders nowhere", () => {
-    expect(getDesktopLaunchPosture()).toBeNull();
-  });
-
-  it("is null on a desktop that predates the split — feature-keyed, not marker-keyed", () => {
-    // An older main has the ARM ops and not these. Detecting on `window.dopl`
-    // being truthy would hand that build a control whose writes go nowhere.
-    (window as { dopl?: unknown }).dopl = {
-      apiRequest: vi.fn(),
-      channels: { getPermissionPreset: vi.fn(), setPermissionPreset: vi.fn() },
-    };
-    expect(getDesktopLaunchPosture()).toBeNull();
-  });
-
-  it("is the bridge once BOTH halves are present", () => {
-    installBridge();
-    expect(getDesktopLaunchPosture()).not.toBeNull();
-  });
-});
-
 describe("useChannelLaunchPosture", () => {
-  it("reads the stored pair on mount", async () => {
-    const bridge = installBridge();
-    bridge.getLaunchPosture.mockResolvedValue(BYPASS);
-    const holder = await mount();
-    expect(holder.value!.posture).toEqual(BYPASS);
-    expect(bridge.getLaunchPosture).toHaveBeenCalledWith(CH);
-  });
-
-  it("falls back to the restrictive pair when the bridge answers nothing", async () => {
-    const bridge = installBridge();
-    bridge.getLaunchPosture.mockResolvedValue(null);
-    const holder = await mount();
-    expect(holder.value!.posture).toEqual(MANUAL);
-  });
-
-  it("rejects a half-valid pair WHOLE, like the main-process validator", async () => {
-    const bridge = installBridge();
-    bridge.getLaunchPosture.mockResolvedValue({ tools: "bypass", messages: "nonsense" });
-    const holder = await mount();
-    expect(holder.value!.posture).toEqual(MANUAL);
-  });
-
-  it("writes one axis and carries the other through unchanged", async () => {
-    const bridge = installBridge();
-    const holder = await mount();
+  it("🔒 a Settings runtime write reaches a mounted reader without a remount", async () => {
+    installBridge("");
+    const { posture, settings } = await mountBoth();
+    expect(posture.value.descriptor?.id).toBe("claude");
+    expect(posture.value.catalog?.runtime).toBe("claude");
     await act(async () => {
-      await holder.value!.update({ tools: "bypass" });
+      await settings.value!.update({ runtime: "codex" });
     });
-    expect(bridge.setLaunchPosture).toHaveBeenCalledWith(CH, {
-      tools: "bypass",
-      messages: "ask",
-    });
-    expect(holder.value!.posture).toEqual({ tools: "bypass", messages: "ask" });
+    expect(posture.value.runtime).toBe("codex");
+    expect(posture.value.descriptor?.id).toBe("codex");
+    expect(posture.value.catalog?.runtime).toBe("codex");
   });
 
-  it("merges onto what is STORED, never onto the mount snapshot", async () => {
-    // Another surface moved the OTHER axis since this component mounted. Writing
-    // `{...snapshot, ...patch}` would silently revert it.
-    const bridge = installBridge();
-    const holder = await mount();
-    bridge.getLaunchPosture.mockResolvedValue({ tools: "manual", messages: "auto_both" });
+  it("reads the record once per mount — no second bridge read of its own", async () => {
+    const bridge = installBridge("");
+    const holder: { value: ChannelLaunchPostureState | null } = { value: null };
+    function Probe() {
+      const state = useChannelLaunchPosture(CH);
+      useEffect(() => {
+        holder.value = state;
+      });
+      return null;
+    }
     await act(async () => {
-      await holder.value!.update({ tools: "bypass" });
+      render(<Probe />);
     });
-    expect(bridge.setLaunchPosture).toHaveBeenCalledWith(CH, {
-      tools: "bypass",
-      messages: "auto_both",
-    });
+    expect(bridge.getLaunchPosture).toHaveBeenCalledTimes(1);
+    expect(holder.value!.runtimes.map((d) => d.id)).toEqual(REAL_DESCRIPTORS.map((d) => d.id));
   });
 
-  it("REVERTS when the desktop refused — the row never claims an unstored posture", async () => {
-    // ⚠ This is the exact failure the durable record exists to end, in its other
-    // form: a control displaying a posture nothing will launch with.
-    const bridge = installBridge();
-    bridge.setLaunchPosture.mockResolvedValue({ ok: false });
-    const holder = await mount();
+  it("answers a RUNNING agent's own runtime, whatever the channel's pick is", async () => {
+    installBridge("claude");
+    const { posture } = await mountBoth();
+    expect(posture.value.descriptor?.id).toBe("claude");
+    expect(posture.value.descriptorOf("codex")?.id).toBe("codex");
+    expect(posture.value.catalogOf("codex")?.runtime).toBe("codex");
+    // `''` is a session with no stamp: the DEFAULT adapter, not the channel's pick.
+    expect(posture.value.descriptorOf("")?.id).toBe("claude");
+  });
+
+  it("answers nothing in a plain browser", async () => {
+    const holder: { value: ChannelLaunchPostureState | null } = { value: null };
+    function Probe() {
+      const state = useChannelLaunchPosture(CH);
+      useEffect(() => {
+        holder.value = state;
+      });
+      return null;
+    }
     await act(async () => {
-      await holder.value!.update({ tools: "bypass" });
+      render(<Probe />);
     });
-    expect(holder.value!.posture).toEqual(MANUAL);
-  });
-
-  it("REVERTS when the bridge throws", async () => {
-    const bridge = installBridge();
-    bridge.setLaunchPosture.mockRejectedValue(new Error("ipc gone"));
-    const holder = await mount();
-    await act(async () => {
-      await holder.value!.update({ tools: "bypass" });
-    });
-    expect(holder.value!.posture).toEqual(MANUAL);
-  });
-
-  it("does not write when neither axis actually moved", async () => {
-    const bridge = installBridge();
-    const holder = await mount();
-    await act(async () => {
-      await holder.value!.update({ tools: "manual" });
-    });
-    expect(bridge.setLaunchPosture).not.toHaveBeenCalled();
-  });
-
-  it("does nothing at all without a bridge", async () => {
-    const holder = await mount();
-    expect(holder.value!.bridge).toBeNull();
-    await act(async () => {
-      await holder.value!.update({ tools: "bypass" });
-    });
-    expect(holder.value!.posture).toEqual(MANUAL);
-  });
-
-  it("adopts a write made on ANOTHER mounted surface", async () => {
-    // Two readers of one channel (the tab, and a pop-out). A private snapshot in
-    // each is how the second writer reverts the first's axis.
-    installBridge();
-    const a = await mount();
-    const b = await mount();
-    await act(async () => {
-      await a.value!.update({ tools: "bypass" });
-    });
-    expect(b.value!.posture.tools).toBe("bypass");
-  });
-});
-
-/**
- * THE RUNTIME RIDES THE SAME RECORD AND THE SAME TWO OPS (2026-08-31, the
- * runtime-adapter port). ⚠ EVERY CASE HERE IS ABOUT THE OWN-KEY RULE, on both ends: the
- * READ's `runtime` key is the capability probe, and the WRITE's `runtime` key is what
- * separates "set it back to the default adapter" (`''`) from "leave it alone" (absent).
- * Main branches on `hasOwnProperty` too — the two ends implement one rule and must agree.
- */
-describe("the runtime family", () => {
-  const WITH_RUNTIME = {
-    ...MANUAL,
-    runtime: "codex",
-    runtimes: REAL_DESCRIPTORS,
-    defaultRuntime: "claude",
-  };
-
-  it("reads NOT SUPPORTED from a reply with no runtime key", async () => {
-    installBridge();
-    const holder = await mount();
-    expect(holder.value!.runtimeSupported).toBe(false);
-    expect(holder.value!.runtimes).toEqual([]);
     expect(holder.value!.descriptor).toBeNull();
-  });
-
-  it("reads SUPPORTED from `runtime: ''` — no pick is not no concept", async () => {
-    const bridge = installBridge();
-    bridge.getLaunchPosture.mockResolvedValue({
-      ...MANUAL,
-      runtime: "",
-      runtimes: REAL_DESCRIPTORS,
-      defaultRuntime: "claude",
-    });
-    const holder = await mount();
-    expect(holder.value!.runtimeSupported).toBe(true);
-    // ⚠ Falls through to the DEFAULT adapter rather than to null.
-    expect(holder.value!.descriptor?.id).toBe("claude");
-  });
-
-  it("resolves the channel's pick to that adapter's descriptor", async () => {
-    const bridge = installBridge();
-    bridge.getLaunchPosture.mockResolvedValue(WITH_RUNTIME);
-    const holder = await mount();
-    expect(holder.value!.runtime).toBe("codex");
-    expect(holder.value!.descriptor?.id).toBe("codex");
-  });
-
-  it("drops an id this build never registered, without refusing the posture", async () => {
-    const bridge = installBridge();
-    bridge.getLaunchPosture.mockResolvedValue({ ...WITH_RUNTIME, runtime: "gemini" });
-    const holder = await mount();
-    expect(holder.value!.runtime).toBe("");
-    expect(holder.value!.descriptor?.id).toBe("claude");
-    expect(holder.value!.posture).toEqual(MANUAL);
-  });
-
-  it("sends NO runtime key when only an axis moved — the pick is left alone", async () => {
-    const bridge = installBridge();
-    bridge.getLaunchPosture.mockResolvedValue(WITH_RUNTIME);
-    const holder = await mount();
-    await act(async () => {
-      await holder.value!.update({ tools: "bypass" });
-    });
-    const [, written] = bridge.setLaunchPosture.mock.calls[0];
-    expect(Object.prototype.hasOwnProperty.call(written, "runtime")).toBe(false);
-    expect(holder.value!.runtime).toBe("codex");
-  });
-
-  it("sends `runtime: ''` when the operator picks Default — a real write", async () => {
-    const bridge = installBridge();
-    bridge.getLaunchPosture.mockResolvedValue(WITH_RUNTIME);
-    const holder = await mount();
-    await act(async () => {
-      await holder.value!.update({ runtime: "" });
-    });
-    const [, written] = bridge.setLaunchPosture.mock.calls[0];
-    expect(Object.prototype.hasOwnProperty.call(written, "runtime")).toBe(true);
-    expect(written.runtime).toBe("");
-    expect(holder.value!.runtime).toBe("");
-  });
-
-  it("adopts MAIN'S answer over the ask when the store landed elsewhere", async () => {
-    // ⚠ `setChannelRuntime` answers the value the store ACTUALLY holds — an
-    // unregistered id CLEARS the pick — so echoing the ask would leave the row
-    // claiming an adapter that was refused.
-    const bridge = installBridge();
-    bridge.getLaunchPosture.mockResolvedValue(WITH_RUNTIME);
-    bridge.setLaunchPosture.mockResolvedValue({ ok: true, runtime: "" });
-    const holder = await mount();
-    await act(async () => {
-      await holder.value!.update({ runtime: "cursor" });
-    });
-    expect(holder.value!.runtime).toBe("");
-  });
-
-  it("fans the runtime out to a SECOND mounted surface", async () => {
-    const bridge = installBridge();
-    bridge.getLaunchPosture.mockResolvedValue(WITH_RUNTIME);
-    const a = await mount();
-    const b = await mount();
-    await act(async () => {
-      await a.value!.update({ runtime: "cursor" });
-    });
-    expect(b.value!.runtime).toBe("cursor");
-  });
-});
-
-/**
- * WHICH RUNTIMES THIS MAC IS CONNECTED TO — the `connected` key `channels:getLaunchPosture`
- * started carrying on 2026-09-08 (Samuel's correction: *"even if the user does not have codex or
- * cursor connected, I still want them to be options there … I did not say to remove them"*).
- *
- * ⚠ EVERY CASE HERE IS ABOUT THE THIRD STATE. The field has a meaningful EMPTY value, so
- * "[] because nothing is connected" and "[] because this desktop never said" cannot be one answer:
- * the first labels every pill "not connected", and the second must label none of them
- * (INVARIANTS §8's stale-cache direction, §11's UNKNOWN-is-not-EMPTY). `connectedKnown` is that
- * separation and it is the only thing keeping a pre-2026-09-08 desktop from reading as offline.
- */
-describe("the connectivity field", () => {
-  const REPORTED = { ...MANUAL, runtime: "", runtimes: REAL_DESCRIPTORS, defaultRuntime: "claude" };
-
-  it("a reply with NO `connected` key is UNKNOWN, not empty", async () => {
-    const bridge = installBridge();
-    bridge.getLaunchPosture.mockResolvedValue(REPORTED);
-    const holder = await mount();
-    expect(holder.value!.connectedKnown).toBe(false);
-    expect(holder.value!.connected).toEqual([]);
-    // ⚠ AND THE ROSTER IS UNAFFECTED: an older desktop still offers every adapter it registered.
-    expect(holder.value!.runtimes).toHaveLength(REAL_DESCRIPTORS.length);
-  });
-
-  it("an EMPTY array is a real answer — nothing is connected, and the desktop said so", async () => {
-    // ⚠ **MUTATION-PROOF: gate `connectedKnown` on the array being NON-empty and only this case
-    // fails** — and the popup would then hint nothing on a machine connected to nothing.
-    const bridge = installBridge();
-    bridge.getLaunchPosture.mockResolvedValue({ ...REPORTED, connected: [] });
-    const holder = await mount();
-    expect(holder.value!.connectedKnown).toBe(true);
-    expect(holder.value!.connected).toEqual([]);
-  });
-
-  it("narrows to ids this desktop actually REPORTED, dropping everything else", async () => {
-    // A newer desktop, or a garbled hop. An id with no descriptor beside it can label nothing.
-    const bridge = installBridge();
-    bridge.getLaunchPosture.mockResolvedValue({
-      ...REPORTED,
-      connected: ["codex", "gemini", 7, null, "claude"],
-    });
-    const holder = await mount();
-    expect(holder.value!.connected).toEqual(["codex", "claude"]);
-    expect(holder.value!.connectedKnown).toBe(true);
-  });
-
-  it("a non-ARRAY answer is UNKNOWN — narrowed, never asserted into shape", async () => {
-    const bridge = installBridge();
-    bridge.getLaunchPosture.mockResolvedValue({ ...REPORTED, connected: "codex" });
-    const holder = await mount();
-    expect(holder.value!.connectedKnown).toBe(false);
-    expect(holder.value!.connected).toEqual([]);
+    expect(holder.value!.descriptorOf("codex")).toBeNull();
+    expect(holder.value!.catalogOf("codex")).toBeNull();
+    expect(holder.value!.runtimes).toEqual([]);
   });
 });

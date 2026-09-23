@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { closedEnum } from "@/shared/lib/closed-enum";
+import { safeLabel } from "@/shared/lib/safe-label";
 import {
   LAUNCH_MESSAGE_MODES,
   LAUNCH_TOOL_MODES,
@@ -89,16 +90,7 @@ export const LaunchDecideSchema = z.discriminatedUnion("status", [
      * ⚠ THE SAME 60/charset bound the request takes — a name legal to ask for must be legal to
      * report. ⚠ Absent is "not reported" (an older desktop), never "unnamed".
      */
-    appliedAgentName: z
-      .string()
-      .trim()
-      .min(1)
-      .max(60)
-      .refine(
-        (v) => !/[\u0000-\u001f\u007f\u200b-\u200f\u2028\u2029\u202a-\u202e\u2066-\u2069\ufeff]/.test(v),
-        "Control, zero-width and bidi characters are refused, not stripped",
-      )
-      .optional(),
+    appliedAgentName: safeLabel("Agent name", 60).optional(),
     /**
      * **WHICH RUNTIME THE SESSION ACTUALLY STARTED ON, AND WHICH MODEL IT ACTUALLY GOT**
      * (2026-09-21, U9).

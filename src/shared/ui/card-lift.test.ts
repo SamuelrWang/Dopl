@@ -1,23 +1,15 @@
-// ONE HOVER LIFT, TWO CARD FACES, TWO LANGUAGES — the pin that stops them drifting.
+// ONE HOVER LIFT, TWO CARD FACES — the kit's `.card-lift` and the knowledge card's `.card:hover`.
 //
-// 🔒 SAMUEL, 2026-09-21: the Agents and Knowledge cards *"should have the same animation"*. They
-// were not two tunings of one recipe — the Agents face transitioned the SHADOW ONLY and never
-// moved — so this file asserts the two faces carry the SAME numbers, in both directions.
-//
-// ⚠ A SOURCE SCAN, BECAUSE NEITHER VALUE IS COMPARABLE ANY OTHER WAY: a CSS-module class is a build
-// artifact and a Tailwind arbitrary is a string. Same idiom as
-// `apps/desktop-ui/src/components/skeletons/frame-skeletons.test.tsx`.
+// 🔒 SAMUEL, 2026-09-21: the Agents and Knowledge cards *"should have the same animation"*.
+// ⚠ P9-01: the Agents half used to be Tailwind arbitraries built by TEMPLATE interpolation, which
+// Tailwind never emits (it scans literal source text) — so the identity card got a transition and
+// no lift while a string-comparing test passed. The lift is a kit class and a token now, and this
+// file checks the CSS both faces actually load.
 
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { describe, expect, it } from "vitest";
-import {
-  CARD_LIFT_CLASS,
-  CARD_LIFT_SHADOW,
-  CARD_LIFT_TRANSITION,
-  CARD_LIFT_Y,
-} from "./card-lift";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const read = (rel: string) => readFileSync(join(HERE, rel), "utf8");
@@ -26,56 +18,65 @@ const KNOWLEDGE_CSS = read(
   "../../features/knowledge/components/knowledge-v2/knowledge-v2.module.css"
 );
 const AGENTS_TSX = read("../../features/agent-identities/components/identity-section.tsx");
+const KITS = {
+  "src/app/globals.css": read("../../app/globals.css"),
+  "apps/desktop-ui/src/styles/kit.css": read("../../../apps/desktop-ui/src/styles/kit.css"),
+};
+const TOKENS = {
+  "src/app/globals.css": KITS["src/app/globals.css"],
+  "apps/desktop-ui/src/styles/tokens.css": read("../../../apps/desktop-ui/src/styles/tokens.css"),
+};
 
-/** `.card:hover { … }` — the rule, without the rest of the sheet. */
-function cardHoverRule(css: string) {
-  const start = css.indexOf(".card:hover {");
-  expect(start, ".card:hover must exist in the knowledge module").toBeGreaterThan(-1);
-  return css.slice(start, css.indexOf("}", start));
+/** One rule's body, comments stripped and whitespace collapsed. */
+function rule(css: string, selector: string) {
+  const clean = css.replace(/\/\*[\s\S]*?\*\//g, "");
+  const start = clean.indexOf(`${selector} {`);
+  expect(start, `${selector} must exist`).toBeGreaterThan(-1);
+  return clean.slice(start, clean.indexOf("}", start)).replace(/\s+/g, " ");
 }
 
+const token = (css: string) =>
+  /--shadow-card-lift:\s*([^;]+);/.exec(css.replace(/\/\*[\s\S]*?\*\//g, ""))?.[1].trim();
+
 describe("the two card faces share one hover lift", () => {
-  it("the knowledge card carries the constant's own numbers", () => {
-    const rule = cardHoverRule(KNOWLEDGE_CSS);
-    expect(rule).toContain(`translateY(${CARD_LIFT_Y})`);
-    // ⚠ Whitespace-normalised: the module is prettier-formatted and the constant is not.
-    expect(rule.replace(/\s+/g, " ")).toContain(CARD_LIFT_SHADOW.replace(/\s+/g, " "));
+  it("both kit copies define `.card-lift` — a rise AND the token shadow, both transitioned", () => {
+    for (const [file, css] of Object.entries(KITS)) {
+      const hover = rule(css, ".card-lift:hover");
+      expect(hover, file).toContain("transform: translateY(-3px)");
+      expect(hover, file).toContain("box-shadow: var(--shadow-card-lift)");
+      const base = rule(css, ".card-lift");
+      expect(base, file).toContain("transform");
+      expect(base, file).toContain("box-shadow");
+    }
   });
 
-  it("the agents card consumes the constant rather than restating it", () => {
-    expect(AGENTS_TSX).toContain('from "@/shared/ui/card-lift"');
-    expect(AGENTS_TSX).toContain("CARD_LIFT_CLASS");
-    // 🚫 THE OLD SHADOW-ONLY RECIPE IS GONE. This is the defect Samuel saw: a face that changed
-    // its shadow and never rose, next to one that rose.
-    expect(AGENTS_TSX).not.toContain("transition-shadow hover:shadow-[");
+  it("the token is declared once per tree, with one value", () => {
+    const values = Object.entries(TOKENS).map(([file, css]) => {
+      const v = token(css);
+      expect(v, `${file} declares --shadow-card-lift`).toBeTruthy();
+      return v;
+    });
+    expect(new Set(values).size).toBe(1);
   });
 
-  it("both faces MOVE — a shadow-only hover is the bug, not a variant", () => {
-    expect(CARD_LIFT_TRANSITION).toContain("transform");
-    expect(CARD_LIFT_CLASS).toContain("hover:-translate-y-[");
-    expect(cardHoverRule(KNOWLEDGE_CSS)).toContain("transform: translateY(");
+  it("the knowledge card rises the same distance onto the same token", () => {
+    const hover = rule(KNOWLEDGE_CSS, ".card:hover");
+    expect(hover).toContain("transform: translateY(-3px)");
+    expect(hover).toContain("box-shadow: var(--shadow-card-lift)");
+  });
+
+  it("the identity card wears the kit class as a literal — nothing for Tailwind to miss", () => {
+    expect(AGENTS_TSX).toContain('"card-lift"');
+    expect(AGENTS_TSX).not.toMatch(/hover:-translate-y-\[|hover:shadow-\[|CARD_LIFT/);
   });
 
   it("the lift is bigger than the 1px it replaced, and the shadow more visible", () => {
-    // Samuel: "translate up a bit more and have a slightly more visible shadow". A future tune may
-    // move these, but it may not go back UNDER what he rejected.
-    const px = Number(CARD_LIFT_Y.replace(/[^\d.]/g, ""));
-    expect(px).toBeGreaterThan(1);
-    const alphas = [...CARD_LIFT_SHADOW.matchAll(/rgba\([^)]*?([\d.]+)\)/g)].map((m) =>
-      Number(m[1])
+    // Samuel: "translate up a bit more and have a slightly more visible shadow".
+    const alphas = [...String(token(TOKENS["src/app/globals.css"])).matchAll(/rgba\([^)]*?([\d.]+)\)/g)].map(
+      (m) => Number(m[1])
     );
     expect(alphas.length).toBe(2);
-    // The two the knowledge face used to wear were 0.05 and 0.05.
     for (const a of alphas) expect(a).toBeGreaterThan(0.05);
-  });
-
-  it("the Tailwind escaping cannot hide a drift", () => {
-    // The class string escapes spaces as `_`; unescaping must return the shared shadow exactly, so
-    // a number changed on one side and not the other fails here rather than rendering differently.
-    const escaped = CARD_LIFT_CLASS.match(/hover:shadow-\[(.+?)\]/);
-    expect(escaped, "the class must carry a hover shadow").not.toBeNull();
-    const unescaped = String(escaped?.[1]).replace(/_/g, " ").replace(/,(?! )/g, ", ");
-    expect(unescaped).toBe(CARD_LIFT_SHADOW);
   });
 });
 

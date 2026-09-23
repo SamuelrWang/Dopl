@@ -28,7 +28,8 @@
  * ⚠ **DISPLAY IS NOT SUBMISSION, AND THAT DISTINCTION IS OLDER THAN THIS FILE.** The row DISPLAYS
  * the resolved id while `panel.model` stays `''` until the operator touches the control, so an
  * untouched dialog puts no model on the wire at all and main's precedence chain stays the one
- * authority. {@link ModelRow.submit} is the only value that may travel.
+ * authority. The wire carries `panel.model`; the clear-effect in `launch-agent-dialog-state.ts`
+ * drops a pick the selected runtime positively lacks.
  */
 
 import {
@@ -66,8 +67,6 @@ export interface ModelRow {
   options: ReadonlyArray<{ key: string; label: string }>;
   /** May the operator pick? ⚠ `false` RENDERS A FACT, NOT A GREYED CONTROL (design §3.2). */
   selectable: boolean;
-  /** The id this launch may put on the wire, or `''` for none. */
-  submit: string;
   /** The identity's model belongs to another runtime. ⚠ `null` when it does not, or when this
    *  build cannot say — "I cannot tell" must never read as "it belongs to somebody else". */
   mismatch: ModelMismatch | null;
@@ -118,7 +117,6 @@ export function modelRowFor(input: ModelRowInput): ModelRow {
     // option renders BLANK — the surface saying nothing where it has an answer (INVARIANTS §11).
     options: modelOptionsFor(catalog, shown).map((o) => ({ key: o.value, label: o.label })),
     selectable: catalogReady(catalog),
-    submit: usableOwn,
     mismatch,
     reason: catalogReason(catalog),
   };

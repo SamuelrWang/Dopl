@@ -12,12 +12,8 @@
 import { useState, type ReactNode } from "react";
 import { SelectMenu } from "@/shared/ui/select-menu";
 import type { DesktopSessionSummary } from "@/shared/lib/spa-bridge";
-import { MESSAGE_OPTIONS, TOOL_OPTIONS } from "./permission-preset-row";
-import type { MessageMode, ToolMode } from "../lib/permission-modes";
-import {
-  agentModelSelection,
-  agentModelOptionsFor,
-} from "../lib/agent-models";
+import { MESSAGE_OPTIONS } from "./permission-preset-row";
+import type { MessageMode } from "../lib/permission-modes";
 import { catalogSelection, modelOptionsFor } from "../lib/model-catalog";
 import {
   canSetAgentMode,
@@ -27,7 +23,11 @@ import {
 } from "./agents-controls";
 import { agentRunningModel } from "./agents-model";
 import { useChannelLaunchPosture } from "../hooks/use-channel-launch-posture";
-import { canSwitchModelLive } from "../lib/runtime-capability";
+import {
+  canSwitchModelLive,
+  normalizeToolMode,
+  toolModeOptions,
+} from "../lib/runtime-capability";
 
 /** What a refused posture change says. ⚠ Exported for the test: a select that moves while
  *  main refuses is the exact lie the deleted session window's selects earned a fix for
@@ -121,36 +121,21 @@ export function PostureControls({
   // either hide working controls or render one that can only refuse
   // (`agents-controls.ts › canSetAgentModel` carries the argument).
   const [bridgeCanModel] = useState(() => canSetAgentModel());
-  // ── ⚠ THE SECOND GATE ON THE MODEL PICKER: THE RUNTIME'S OWN DECLARATION (2026-09-22) ───────
-  //
-  // ⚠ **`capability.js › canSwitchModelLive` HAS EXISTED, BEEN MIRRORED HERE, AND BEEN READ BY
-  // NOTHING ON THIS SIDE.** Its docblock states the rule outright — *"absent ⇒ the live model
-  // picker is hidden on a RUNNING agent"* — and the picker below rendered regardless, so this
-  // surface offered a control that `main/session-reopen.js › setModel` REFUSES with a sentence
-  // (`runtime-copy.js › liveModelSwitchRefusal`, U10). A control whose only outcome is
-  // POSTURE_REFUSED is the exact lie this file's header was written about.
-  // ⚠ **AND THE OPTIONS WERE THE OTHER HALF OF IT.** `agentModelSelection` back-fills
-  // `AGENT_MODEL_FALLBACK` — `claude-sonnet-5` — and `agentModelOptionsFor` offers the four
-  // Claude ids, so a Codex agent that had reported no model yet rendered **"Model: Sonnet 5"**
-  // with Fable/Opus/Sonnet/Haiku to switch to. Those helpers are the DEFAULT runtime's roster by
-  // construction (`agent-models.ts`'s own header: being every runtime's source WAS the defect);
-  // the launch path moved to `model-catalog.ts` in U6 and this running-agent path did not.
-  // Hiding the control is the honest state until it reads a per-runtime roster too — that is a
-  // build, not a coercion, and inventing one vendor's list for another is what U6 removed.
-  // ⚠ **UNKNOWN IS NOT EMPTY, SO THIS IS A THREE-WAY TEST** — `agent-composer.tsx`'s sign-in gate
-  // exactly. `descriptor` is `null` on a plain browser and on every desktop older than the
-  // runtime port; reading that absence as a refusal would DELETE a working control on the builds
-  // that have only ever had one runtime. A descriptor that is PRESENT decides; one never sent
-  // decides nothing and the bridge op stays the whole gate, byte-identical to before.
-  // ⚠ **IT IS THE CHANNEL'S RUNTIME, NOT THIS AGENT'S, AND THAT IS A KNOWN IMPRECISION** — the
-  // same one the sign-in gate carries. `main/session-summary.js › liveSummary` DOES project a
-  // per-session `runtimeId`, but `spa-bridge-shapes.ts › DesktopSessionSummary` never learned the
-  // field (it stands at 498 of the 500-line cap), so the exact answer needs that shape split
-  // first. Main refuses either way, so the worst case here is a hidden control on an agent that
-  // could have taken one — never a control that claims a switch nothing applied.
-  const { descriptor: runtime, catalog } = useChannelLaunchPosture(channelId);
+  // ⚠ THE AGENT'S OWN RUNTIME, never the channel's current pick: a per-spawn pick or a later
+  // Settings change makes the two differ, and the vocabulary, catalog and live-switch flag all
+  // belong to the runtime the session was spawned on (`DesktopSessionSummary.runtimeId`).
+  const posture = useChannelLaunchPosture(channelId);
+  const runtime = posture.descriptorOf(agent.runtimeId);
+  const catalog = posture.catalogOf(agent.runtimeId);
+  // ⚠ NO CATALOG, NO PICKER — never another runtime's list, and never a control main refuses
+  // (`session-reopen.js › setModel` answers a runtime without `liveModelSwitch` with a sentence).
   const canModel =
-    bridgeCanModel && (runtime == null || canSwitchModelLive(runtime));
+    bridgeCanModel && runtime !== null && catalog !== null && canSwitchModelLive(runtime);
+  const toolOptions = toolModeOptions(runtime).map((o) => ({
+    value: o.value,
+    label: o.label,
+    description: o.description ?? undefined,
+  }));
   // An ENDED agent has no posture to change; main answers `no-session` and the honest face
   // of that is no control, not a control that always refuses. ⚠ THIS GATE IS ORIGINAL
   // (`3dc7e6a7`, the wave that added these controls) and is NOT what to change when the
@@ -164,24 +149,11 @@ export function PostureControls({
   // either the bridge op or the session still running. They are the summary feed's.
   if (!canPosture && !stats) return null;
 
-  // ⚠ MAIN'S VALUE, LIKE BOTH AXES. Absent means this build does not report a
-  // running model.
-  // ⚠ THE EFFECTIVE MODEL IS FREE-FORM AND MAY NOT BE ONE OF THE FOUR PICKABLE
-  // IDS (`spa-bridge.ts › DesktopSessionSummary.model`: a dated id, a `[1m]`
-  // variant). `agentModelOptionsFor` appends it so the control SHOWS what the
-  // agent is on — a `SelectMenu` whose value matches no option renders blank,
-  // which is the surface saying nothing where it has an answer.
-  // ⚠ AND ABSENCE NOW BACK-FILLS RATHER THAN SPELLING ITSELF `''` (2026-09-06,
-  // Samuel's ruling): "Default" left `AGENT_MODEL_OPTIONS`, so `''` matches no
-  // option and the select would have silently rendered `options[0]` — reporting
-  // "Fable 5" as the running model on a build that reported none.
-  // `agentModelSelection` is the one place that back-fill lives.
-  // ⚠ 2026-09-22: THE RUNTIME'S OWN CATALOG WHEN THE DESKTOP SENT ONE — the Claude roster is live,
-  // so a model this bundle predates is offered with the CLI's own name. The frozen helpers are the
-  // older-desktop fallback only (`agent-models.ts`'s header).
+  // ⚠ MAIN'S VALUE, LIKE BOTH AXES. The effective model is free-form (a `[1m]` variant, a dated
+  // id); `modelOptionsFor` appends an off-roster value so the control still shows it.
   const running = agentRunningModel(agent);
-  const model = catalog ? catalogSelection(catalog, running) || agentModelSelection(running) : agentModelSelection(running);
-  const modelOptions = catalog ? modelOptionsFor(catalog, model) : agentModelOptionsFor(model);
+  const model = catalogSelection(catalog, running);
+  const modelOptions = modelOptionsFor(catalog, model);
 
   const apply = (axis: "tools" | "messages", mode: string) => {
     setBusy(true);
@@ -227,7 +199,7 @@ export function PostureControls({
           ⚠ `flex-nowrap`, AND IT WAS `flex-wrap` UNTIL 2026-08-29 (Samuel: "only just enough so
           that they are all on the same line with the same spacing"). THE WRAP WAS THE WHOLE REASON
           THE WINDOW CARRIED SLACK. A too-long label — the model axis is FREE-FORM, so
-          `agentModelOptionsFor` can append a dated id far wider than any of the four picks — used to
+          `modelOptionsFor` can append a dated id far wider than any roster pick — used to
           push the third control onto a SECOND LINE, silently, and the only defence available was to
           open the window wide enough that it could not happen. That bought a band of dead space to
           the right of Model on every normal agent to protect an uncommon label.
@@ -241,20 +213,23 @@ export function PostureControls({
           decision in two trees. */}
       {canPosture && (
         <div className="flex flex-nowrap items-center gap-2">
-          <SelectMenu<ToolMode>
-            value={(agent.toolMode as ToolMode) ?? "manual"}
-            options={TOOL_OPTIONS}
-            onChange={(next) => apply("tools", next)}
-            prefix="Tools"
-            ariaLabel="Tool permissions for this agent"
-            variant="raisedField"
-            disabled={busy}
-          />
+          {/* ⚠ THE RUNTIME'S OWN WORDS, in its declared order; an unknown value shows as the
+              narrowest, the same fail-closed answer main gives it. */}
+          {toolOptions.length > 0 && (
+            <SelectMenu<string>
+              value={normalizeToolMode(runtime, agent.toolMode) ?? toolOptions[0].value}
+              options={toolOptions}
+              onChange={(next) => apply("tools", next)}
+              prefix="Tools"
+              ariaLabel="Tool permissions for this agent"
+              variant="raisedField"
+              disabled={busy}
+            />
+          )}
           <SelectMenu<MessageMode>
-            // ⚠ The FALLBACK stays `auto_inbound`, not `"ask"`: that is the floor a
-            // windowless session actually runs on, and defaulting the display to a
-            // value the list no longer offers would render an empty control.
-            value={(agent.messageMode as MessageMode) ?? "auto_inbound"}
+            // ⚠ The FALLBACK is the list's first entry, the floor a windowless session
+            // actually runs on — never `"ask"`, which the list does not offer.
+            value={agent.messageMode ?? LIVE_MESSAGE_OPTIONS[0].value}
             options={LIVE_MESSAGE_OPTIONS}
             onChange={(next) => apply("messages", next)}
             prefix="Messages"
@@ -264,7 +239,7 @@ export function PostureControls({
           />
           {/* THE LIVE MODEL (Samuel, 2026-08-22). ⚠ ABSENT, NOT DISABLED, without
               the op — the rule every control in this family follows. */}
-          {canModel && (
+          {canModel && modelOptions.length > 0 && (
             <SelectMenu<string>
               value={model}
               options={modelOptions}
