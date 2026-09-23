@@ -119,8 +119,7 @@ interface Options {
  * Per-workspace routes use this; user-global routes (settings, billing, global
  * entry KB, admin) keep `withUserAuth`.
  *
- * ⚠ Deliberately does NOT call `withMcpAccess`: a user's own workspace + KBs are
- * their content and must not be paywalled. The per-resource gate is
+ * ⚠ No paywall: a user's own workspace + KBs are their content. The per-resource gate is
  * `agent_write_enabled`; rate-limit + analytics still happen in `withUserAuth`.
  */
 export function withWorkspaceAuth(

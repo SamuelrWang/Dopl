@@ -82,7 +82,7 @@ export const DELETE = withWorkspaceAuth(handleDelete, { minRole: "member" });
  *
  * The attack it closes: the desktop hands every spawned agent a 90-day `dopl.read`+`dopl.write`
  * device token via `--mcp-config`; that agent processes an untrusted teammate's message and a
- * `full` profile has live Bash (`sdk-loader.js` fences only `Read/Grep/Glob` from secret paths).
+ * `full` profile has live Bash (`runtime/claude/loader.js` fences only `Read/Grep/Glob` from secret paths).
  * Ungated, the agent reads its own bearer off disk and PATCHes itself back to `full` after the
  * operator tightens it — DURABLY, since the column outlives the session.
  *

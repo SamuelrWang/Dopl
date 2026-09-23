@@ -13,8 +13,8 @@ const OAUTH_RPM = Number(process.env.MCP_OAUTH_RATE_LIMIT_RPM) || 600;
  * Auth for the remote MCP transport boundary (`/api/mcp`). OAuth access token
  * only — there is no API-key path.
  *
- * ⚠ Deliberately distinct from `withMcpAccess` / `withWorkspaceAuth`, which run
- * the heavy gating on every downstream loopback `/api/*` call. Here only:
+ * ⚠ Deliberately distinct from `withWorkspaceAuth`, which runs the heavy gating
+ * on every downstream loopback `/api/*` call. Here only:
  *   1. cheap credential validation for an early, spec-correct 401;
  *   2. lighting the "MCP connected" indicator.
  * The credential is forwarded to the loopback client so real gating happens

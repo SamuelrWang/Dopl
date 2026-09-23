@@ -115,7 +115,7 @@ export class ChannelChatAddressedError extends ChannelError {
 }
 
 /** An agent token (`ctx.source === "agent"`) posted a lifecycle kind: 403. Those kinds state a
- *  runtime fact and their body never renders (`view-model-receipt-rows.ts › isLifecycleKind`); the
+ *  runtime fact and their body never renders (`view-model-rows.ts › isLifecycleKind`); the
  *  credential is the whole test, with no exemption. `task_progress` is allowed: it is the milestone lane. */
 export class ChannelLifecycleKindForbiddenError extends ChannelError {
   constructor(public readonly kind: string) {
