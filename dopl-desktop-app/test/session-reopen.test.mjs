@@ -116,9 +116,12 @@ function harness(over = {}) {
     // and arms the reply capture. The REAL module — it is pure, and the branch it
     // drives is the behaviour.
     "directedTurn",
+    // P4-06: the held-session re-probe; these sessions carry no auth hold, so it never probes.
+    "authReprobe",
     `${BLOCK}\n return { bind, resolveSession, listLiveSessions, reopenByTask, controlByTask, setModeByTask, messageByTask,
        listOrphanRisk, endLiveSessions };`
-  )(store, framing, floorWindowlessMessage, privateTurn, directedTurn);
+  )(store, framing, floorWindowlessMessage, privateTurn, directedTurn,
+    { reprobesOnWake: () => false, reprobeHeld: async () => false });
   const sessions = new Map();
   // ⚠ The REAL `frameOperatorTurn` is injected, not a stub: the MESSAGE cases are about the
   // delimiting the operator's turn actually gets, and a stub would let the two drift.
