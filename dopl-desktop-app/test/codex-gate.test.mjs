@@ -454,7 +454,7 @@ test("resume is ALLOWED on the measured baseline, and the adapter's own door ope
   assert.equal(typeof launchSpec.resume, "function");
 });
 
-test("the sign-in button, the deep link and the tool-search verb are HIDDEN, never grayed", () => {
+test("the sign-in button and the deep link are HIDDEN, never grayed; the tool-search verb is MEASURED", () => {
   // ⚠ THE COST CAP WAS THE FIRST ASSERTION HERE AND IS DELETED WITH THE COLUMN (2026-09-22,
   // Samuel: *"we dont need cost tracking"*). It read `showsCostCap(D) === false` — a control
   // hidden because this runtime emits no cost — and there is no control, no predicate and no
@@ -463,7 +463,10 @@ test("the sign-in button, the deep link and the tool-search verb are HIDDEN, nev
   assert.equal(capability.hasInteractiveSignIn(D), false);
   assert.equal(RT.signIn(), null, "a method whose capability is absent still EXISTS and answers null");
   assert.equal(capability.hasDeepLink(D), false);
-  assert.equal(capability.toolSearchVerb(D), null, "the sentence is omitted, never translated");
+  // 🔒 CXP-3A (2026-09-22, codex-cli 0.155.1): MEASURED, no longer null — Codex defers every
+  // MCP tool behind `tool_search`, and nothing opts Dopl's entry out, so the turn orders it.
+  assert.equal(capability.toolSearchVerb(D), "tool_search", "the measured verb, never Claude's");
+  assert.equal(capability.mcpDiscoveryVerb(D), "tool_search", "no eager-load flag, so it is ordered");
   assert.equal(capability.entryFile(D), "AGENTS.md");
 });
 

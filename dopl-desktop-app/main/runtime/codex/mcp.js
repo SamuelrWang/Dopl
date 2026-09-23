@@ -296,9 +296,10 @@ const descriptor = {
   // approval_mode` through `config/read` EVEN UNDER `--strict-config`, which errors on any field
   // this CLI does not recognise. The key is supported; what it produces is the elicitation above.
   perToolApproval: 'tools.<tool>.approval_mode',
-  // ⚠ null: this runtime has no eager-load flag. Claude's `alwaysLoad` exists because its CLI
-  // defers every MCP tool behind a tool-search verb; nothing in the research says Codex defers
-  // tools at all, and `prose.toolSearchVerb` is `null` here for the same reason.
+  // ⚠ null: this runtime has no eager-load flag — MEASURED 2026-09-22 (codex-cli 0.155.1,
+  // CXP-3A). Codex DOES defer every MCP tool behind `tool_search`, and no server key, thread
+  // `config` or `[features]` toggle opts Dopl's entry out, so `prose.toolSearchVerb` names that
+  // verb and `capability.mcpDiscoveryVerb` makes the turn order the search (index.js).
   eagerLoadFlag: null,
   sessionStampHeader: 'X-Dopl-Session-Id',
 };

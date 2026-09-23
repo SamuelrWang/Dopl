@@ -363,6 +363,10 @@ const inputRewrite = (d) => (d && d.axisB && d.axisB.inputRewrite) || null;
 // ── PROSE + MISC ─────────────────────────────────────────────────────────────────────────────
 
 const toolSearchVerb = (d) => (d && d.prose && d.prose.toolSearchVerb) || null;
+// CXP-3A (2026-09-22): the verb a turn must tell the agent to load DOPL'S tools with, or `null`.
+// ⚠ `null` WHEN THE ENTRY IS EAGER-LOADED even though a verb exists: Claude has `ToolSearch` but
+// Dopl's entry carries `alwaysLoad`, so ordering the lookup there would order a denied call.
+const mcpDiscoveryVerb = (d) => ((d && d.mcp && d.mcp.eagerLoadFlag) ? null : toolSearchVerb(d));
 const entryFile = (d) => (d && d.entryFile) || null;
 const hasDeepLink = (d) => !absent(d && d.deepLink);
 const hasInteractiveSignIn = (d) => !absent(d && d.credential && d.credential.interactiveSignIn);
@@ -392,5 +396,5 @@ module.exports = {
   normalizeNative: selection.normalizeNative,
   windowlessToolFloor: windowlessToolFloorValue, axisBEnforcement, axisBOpScoped, inputRewrite,
   axisBOpScopedWarning, // D3: `axisBOpScoped`'s consumer — the sentence a launch carries
-  toolSearchVerb, entryFile, hasDeepLink, hasInteractiveSignIn, showsLocationPicker,
+  toolSearchVerb, mcpDiscoveryVerb, entryFile, hasDeepLink, hasInteractiveSignIn, showsLocationPicker,
 };
