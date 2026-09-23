@@ -3608,7 +3608,7 @@ passes against exactly the gate that must not exist.
 ### What was NOT copied, and why that is the finding
 
 The workspace channels page has a section titled "Thread activity". It is twenty-four coloured
-squares from `fixtures.ts`, marked hardcoded at its render site since 2026-08-18 for a good reason:
+squares from the channels fixtures file (now `sidebar-nav-rows.ts`), marked hardcoded at its render site since 2026-08-18 for a good reason:
 `channel_tasks_activity` carries one timestamp per thread, not a histogram, and zeros would assert
 quiet weeks nobody measured. "Bring that UI over" therefore had two readings, and the fixture
 reading would have put invented density about a real relationship on the operator's own surface.

@@ -1843,7 +1843,7 @@ COMMIT;
   - **WHY NULLING IS HONEST RATHER THAN A SWALLOW:** the row's other half — *user U is running an agent, in channel C, state working* — is still true, and a null `task_id` is exactly what the column's own `ON DELETE SET NULL` would have left had the row been stored a moment earlier. Dropping the row instead would lose a LIVE agent from the projection; nulling the whole batch would discard the thread of rows whose threads are fine
   - ⚠ **IT NEVER GUESSES WHICH CONSTRAINT FAILED.** `channel_sessions` has four FKs and the match is on the CODE alone (the house rule — a constraint name in an error message is prose). If nothing in the batch names a dead thread the ORIGINAL error is rethrown: a `23503` on `channel_id` means the CHANNEL is gone, which nulling a thread id cannot fix and must not be made to look fixed
   - ⚠ **ONE RETRY, BY CONSTRUCTION** — the healer returns rows, the caller upserts once more and throws. No loop, so a violation this degrade does not cover cannot spin. The existence probe runs on the FAILURE PATH ONLY; a pre-flight check on every push would add a query per push to protect against a once-per-deleted-thread race, which is the cost this table's design refuses
-  - **Pinned by `repository-sessions-replace.test.ts › "replaceSessionStates — a thread deleted under a live peer agent (F-241)"`** (⚠ it lived in `repository-sessions.test.ts` until 2026-09-01, when the health columns split that file at the §1 cap; the anchor moved with the test) — five cases: the replace SUCCEEDS with one dead `task_id` and only that row nulled; a `23503` naming no dead thread rethrows; a report with no thread ids never probes; every other write error still surfaces; a second failure throws rather than looping
+  - **Pinned by `repository-sessions-replace.test.ts › "replaceSessionStates — a thread deleted under a live peer agent"`** (⚠ it lived in `repository-sessions.test.ts` until 2026-09-01, when the health columns split that file at the §1 cap; the anchor moved with the test) — five cases: the replace SUCCEEDS with one dead `task_id` and only that row nulled; a `23503` naming no dead thread rethrows; a report with no thread ids never probes; every other write error still surfaces; a second failure throws rather than looping
   - **Remedy (b) is still worth doing later and is not blocked by this** — a desktop that drops a session whose thread 404s stops reporting the dead id at all. This makes the server survive it; that would stop it happening
 - Status: **RESOLVED** (2026-08-21, remedy (a))
 
@@ -3297,7 +3297,7 @@ constraint moves, and nothing connects the two.
   for: one route, one quantiser, one ramp.
 
 - Location: `src/features/channels/components/info-tab.tsx` (fed from
-  `› fixtures.ts › HARDCODED_THREAD_ACTIVITY`) against /home's own wrapper (fed from
+  `› HARDCODED_THREAD_ACTIVITY`, since deleted) against /home's own wrapper (fed from
   `GET /api/workspaces/[workspaceSlug]/overview-series?metric=messages&channelId=`).
   ⚠ **THE CITATION NAMED A /home WRAPPER FILE THAT IS NOW DELETED (wave 1A, 2026-09-17), so
   the path is gone from this line rather than repointed at something it never was** — the
@@ -3343,7 +3343,7 @@ constraint moves, and nothing connects the two.
 - **When taken, the shape is already decided:** mount `workspaces/hooks/use-overview-series.ts ›
   useOverviewSeries` in `channel-surface-data.ts` keyed on the open channel, pass `bins` down, and
   swap `ActivityCells` for `ThreadActivityStrip`. Delete `HARDCODED_THREAD_ACTIVITY` from
-  `fixtures.ts` in the same change — a fixture with no caller is the next agent's furniture.
+  the channels fixtures file in the same change — a fixture with no caller is the next agent's furniture.
   ⚠ **THE SWAP LANDED 2026-09-05 AND THE DELETE DID NOT; IT LANDED IN WAVE 1A, TWELVE DAYS LATE,
   AND THE ARRAY WAS FURNITURE FOR ALL TWELVE.** "In the same change" is the load-bearing half of
   that sentence.
