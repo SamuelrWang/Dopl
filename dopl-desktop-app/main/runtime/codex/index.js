@@ -182,8 +182,9 @@ const descriptor = {
   containment: {
     // ⚠ `native` AND STILL A DENY LIST. A sandbox bounds the FILESYSTEM; it does not deny
     // delegation, exfil or persistence. `tools.js`'s header carries the derivation: delegation is
-    // fenced by configuration on every profile since 2026-09-22 (C25, `catalog.js`); persistence
-    // (C26) is still ungrounded.
+    // fenced by configuration on every profile since 2026-09-22 (C25, `catalog.js`), and so is
+    // persistence/scheduling (C26, measured the same day: goals, `clock.sleep`, memories, hooks
+    // and `notify` off on every launch — `tools.js › PERSISTENCE_FENCE` / `NOTIFY_FENCE`).
     mode: 'native',
     nativeControls: ['sandbox_mode'],
     profiles: {

@@ -16,8 +16,8 @@
 // deny a delegation, an exfil channel or a persistence hook. So a restricted profile ships BOTH:
 // the native containment floor (declared in `native`) and a deny list in Codex's own words.
 //
-// ⚠ AND THE HALF THIS RESEARCH CANNOT GROUND IS ON THE SMOKE CHECKLIST, NOT GUESSED SILENT.
-// Claude's `DENIED_BUILTINS` has five harm groups. Four map onto something Codex documents:
+// ⚠ AND THE TWO GROUPS THE RESEARCH COULD NOT GROUND WERE MEASURED, NOT GUESSED SILENT.
+// Claude's `DENIED_BUILTINS` has six harm groups. Four map onto something Codex documents:
 //   local execution      -> `commandExecution` (the approval item) + `sandbox_mode`
 //   filesystem writes    -> `fileChange` (the approval item) + `sandbox_mode`
 //   outbound channels    -> the sandbox's network boundary (no network under read-only, and none
@@ -28,8 +28,10 @@
 // `features.multi_agent = false` below removes it for a model with no catalog
 // `multi_agent_version` (gpt-5.5), and `catalog.js`'s delegation-free model catalog removes it for
 // every code-mode model, where the feature flag alone does nothing. A forced `spawn_agent` then
-// answers `unsupported call` and no child thread starts. PERSISTENCE/SCHEDULING is still
-// ungrounded: `notify` and `codex://automations` exist, with no agent-invocable verb measured.
+// answers `unsupported call` and no child thread starts. The SIXTH — PERSISTENCE/SCHEDULING — is
+// 🔒 GROUNDED TOO (§5 C26 closed, 2026-09-22, codex-cli 0.155.1): every surface that makes work run
+// later or state outlive the session was measured and is off on every profile by configuration —
+// `PERSISTENCE_FENCE` and `NOTIFY_FENCE` below record what each did before the fence and after it.
 
 const {
   DOPL_SAFE_TOOLS, DOPL_ADMIN_TOOLS, RETIRED_DOPL_TOOLS, UNIVERSAL_HARD_DENY,
@@ -176,7 +178,47 @@ function axisAAllows(mode, toolName) {
 // obeys. A `code_mode_only` model keeps its `collaboration` namespace whatever `[features]` say —
 // its catalog `multi_agent_version` wins — so `catalog.js` fences those, on every launch.
 const ACCOUNT_FENCE = Object.freeze({ apps: false, plugins: false, multi_agent: false });
-const RESTRICTED_FENCE = Object.freeze({ ...ACCOUNT_FENCE });
+
+// 🔒 ⚠ THE PERSISTENCE / SCHEDULING FENCE (§5 C26, MEASURED 2026-09-22 on codex-cli 0.155.1 with
+// a scripted model — `test/codex-persistence-fence-live.test.mjs`). The twin of Claude's
+// `CronCreate` / `ScheduleWakeup` / `Monitor` removal: on Dopl, later work is a VISIBLE Dopl agent
+// (`dopl_channel(op="manage", action="launch")`) and waiting is a hold on `dopl_channel`
+// `read(wait_ms)` — never a runtime's own timer, goal loop or memory. Off on EVERY profile:
+//   goals       `get_goal`/`create_goal`/`update_goal` were OFFERED on every profile (top-level on
+//               gpt-5.5, in `ALL_TOOLS` on code-mode). ONE forced `create_goal` made the app-server
+//               start ~500 turns by itself in 8s ("Continue working toward the active thread
+//               goal"), none prompted by Dopl, the goal stored in `goals_1.sqlite` in the SHARED
+//               private home. Off: tools absent on both paths, a forced call is `unsupported call`.
+//   sleep_tool  `clock.sleep` (1ms..12h) on every code-mode model — a timed wake inside a turn.
+//               Off: namespace absent, a forced call is `unsupported call: clocksleep`.
+//   memories    OFF BY DEFAULT today and pinned here because a default flip would be a leak: ON,
+//               Codex ran a hidden "Memory Writing Agent" (a second model request, on a model the
+//               session did not pick) with a shell, writing `$CODEX_HOME/memories/` — the home
+//               EVERY Dopl Codex session shares, so any channel's agent would read another's.
+//   hooks       NOT agent-reachable: a `hooks.json` planted in the private home LOADS but is
+//               `untrusted` and never fired, and trust can only come from config (a `config.toml`
+//               there refuses the launch; `thread/start.config` is Dopl's). Pinned anyway because
+//               with trust supplied it DID fire, and off it did not — the twin of Claude's
+//               `settingSources: []`. ⚠ Dopl's own `PreToolUse` stamp (§5 C18) turns this back on
+//               with its own hook; that is one deliberate edit here, never a side effect.
+// ⚠ AUTOMATIONS AND THE THREAD QUEUE HAVE NO AGENT VERB: no automation tool is offered, signed in
+// or not, with `in_app_local_automation` on or off, and `thread/queue/*` / `thread/goal/set` /
+// `memory/*` are CLIENT methods only Dopl could send (it sends none). Plugin-carried
+// `scheduled_tasks` arrive by `plugin/install` behind `plugins: false` above. The shell remains a
+// shell — `crontab`, `launchd`, `codex queue` — exactly as Claude's `Bash` is; that is the
+// shell's own fence (`commandExecution`, the sandbox), not this one.
+const PERSISTENCE_FENCE = Object.freeze({ goals: false, sleep_tool: false, memories: false, hooks: false });
+
+// 🔒 `notify` — a program Codex runs after EVERY turn. MEASURED: it fires from the home
+// `config.toml`, from `-c notify=…` on argv AND from `thread/start.config.notify`, and a thread
+// `notify = []` silenced a home-layer one. No agent can write either lane Dopl owns (argv, thread
+// config) and the private home refuses a `config.toml`; the empty thread value is the belt that
+// also covers a layer the home fence does not reach (`/etc/codex/config.toml`).
+const NOTIFY_FENCE = Object.freeze([]);
+
+// Every profile's thread `features`: the account fence plus the persistence fence.
+const FEATURE_FENCE = Object.freeze({ ...ACCOUNT_FENCE, ...PERSISTENCE_FENCE });
+const RESTRICTED_FENCE = Object.freeze({ ...FEATURE_FENCE });
 
 function buildSessionToolConfig(profile) {
   const p = normalizeProfile(profile);
@@ -232,8 +274,8 @@ function buildSessionToolConfig(profile) {
   // the operator's own Axis-A pick off a profile that is otherwise `full`. The deny list is the
   // fence, exactly as this file's own header argues for the restricted profiles.
   //
-  // ⚠ DELEGATION IS FENCED HERE AS ON EVERY PROFILE (`ACCOUNT_FENCE` + `catalog.js`); only
-  // PERSISTENCE stays ungrounded (see the header). Recorded, not papered over.
+  // ⚠ DELEGATION AND PERSISTENCE ARE FENCED HERE AS ON EVERY PROFILE (`FEATURE_FENCE` +
+  // `catalog.js` + `NOTIFY_FENCE`), so this profile differs from `full` by the shell alone.
   if (p === 'channel_agent') {
     return {
       builtinTools: [],
@@ -241,7 +283,7 @@ function buildSessionToolConfig(profile) {
       disallowedTools: UNIVERSAL_HARD_DENY.concat(ESCALATION_ITEMS),
       doplToolsPolicy: null,
       native: null,
-      features: { ...ACCOUNT_FENCE },
+      features: { ...FEATURE_FENCE },
     };
   }
 
@@ -254,7 +296,7 @@ function buildSessionToolConfig(profile) {
     disallowedTools: UNIVERSAL_HARD_DENY.slice(),
     doplToolsPolicy: null,
     native: null,
-    features: { ...ACCOUNT_FENCE },
+    features: { ...FEATURE_FENCE },
   };
 }
 
@@ -277,5 +319,6 @@ module.exports = {
   axisAAllows, normalizeToolMode,
   TOOL_MODES, GRANULAR_CATEGORIES, ESCALATION_ITEMS, EDIT_ITEMS,
   COMMAND_ITEM, FILE_ITEM, WINDOWLESS_FLOOR, ACCOUNT_FENCE, RESTRICTED_FENCE,
+  PERSISTENCE_FENCE, FEATURE_FENCE, NOTIFY_FENCE,
   UNTRUSTED_TOOLS, ON_REQUEST_TOOLS, NEVER_TOOLS,
 };

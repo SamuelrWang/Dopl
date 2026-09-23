@@ -29,6 +29,9 @@
 // false` (all profiles), a delegation-free model catalog on argv (`catalog.js`, the only lever a
 // code-mode model obeys), and the skills fence (`skills-fence.js`). Claude's lane removes `Agent`
 // and `Skill` on every profile; these are the same two decisions in Codex's vocabulary.
+// 🔒 SO IS PERSISTENCE (C26): goals, `clock.sleep`, memories and hooks ride `features`
+// (`tools.js › PERSISTENCE_FENCE`) and `notify` is pinned empty — Claude's `CronCreate` /
+// `ScheduleWakeup` removal, in Codex's words.
 
 const client = require('./client');
 const tools = require('./tools');
@@ -144,6 +147,9 @@ function buildLaunchSpec(request) {
     features: Object.assign({}, cfg.features),
     projects: configHome.projectTrustFence(cwd),
     skills: skillsFence.skillsFence({ cwd, codexHome: configHome.privateHome() }),
+    // ⚠ …AND NO `notify` PROGRAM FROM ANY LAYER (`tools.js › NOTIFY_FENCE`, C26): measured, a
+    // thread-level `[]` silences one set lower down.
+    notify: tools.NOTIFY_FENCE.slice(),
   };
   if (wired.usable) threadStart.config.mcp_servers = { dopl: server };
   // An OBJECT policy rides `config.approval_policy` (the typed field needs the experimental API).
