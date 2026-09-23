@@ -23,11 +23,17 @@ import { authorViewOf, desktopAddresseeOf } from "../lib/desktop-handle";
 // ⚠ THE `lib/` COPY, NOT A LOCAL ONE: the same module the SERVER's arm 3 reads,
 // so the tag this transcript faces and the agent the router woke are one answer.
 import { serverRoutedAgentIds } from "../lib/agent-post-stamp";
+// ⚠ THE ADDRESS KEY ONLY — the FACES are resolved at render, never on a row
+// (`lib/recipient-tags.ts`, and {@link MessageRow.recipientAgentIds}'s note).
+import { addressKey } from "../lib/recipient-tags";
+// ⚠ THE RECEIPT HALF IS ITS OWN MODULE (§1 split, 2026-09-22) — it moves when the
+// LIFECYCLE vocabulary moves, this file when a MESSAGE row's shape does. Same seam, and
+// the same argument, as `view-model-escalation.ts` below.
 import {
-  RECEIPT_LABEL,
-  lifecycleReceiptStatus,
-  type ReceiptStatus,
-} from "../lib/message-receipt";
+  isLifecycleKind,
+  toReceiptRow,
+  type ReceiptRow,
+} from "./view-model-receipt-rows";
 import { authorAgentIdOf } from "./agents-model";
 import {
   fanoutGroupOf,
@@ -47,57 +53,10 @@ import type { ArtifactRow } from "./view-model-artifacts";
 import type { ChannelMessage, ChannelThread } from "../types";
 import type { AvatarPerson } from "@/shared/ui/avatar";
 
-/**
- * The three RUNTIME-STATE kinds. Never a message bubble on any surface — the
- * most a lifecycle row can be is a receipt, and `task_started` cannot even be
- * that. ⚠ `task_progress` is deliberately absent: the calm `session_ended` note
- * is the milestone lane and its BODY is real prose a peer needs (INVARIANTS §5).
- */
-function isLifecycleKind(message: ChannelMessage): boolean {
-  return (
-    message.kind === "task_started" ||
-    message.kind === "task_finished" ||
-    message.kind === "task_failed"
-  );
-}
-
-/**
- * A terminal lifecycle row's RECEIPT ROW, or null when it renders as nothing.
- *
- * ⚠ **THIS USED TO DROP ALL THREE KINDS, AND THAT SILENCED THIS BUILD'S OWN
- * CONSENT OUTCOMES.** `main/trigger-outcomes.js` posts `task_failed` +
- * `{declined:true}` / `{dropped:true}` / `{interrupted:true}` on the SHIPPING
- * desktop and the headless lane posts the full set, so a peer who DECLINED left
- * the requester looking at an unanswered ask. A calm ending changes how the peer
- * reads the exchange — INVARIANTS §5's calm-flag rationale is the whole argument
- * for storing the flag — so it renders.
- *
- * Still nothing, and the line is drawn at the KIND: **`task_started` always**
- * (run state lives in the Agents tab — INVARIANTS §5; the ruling arrived in the
- * port's intent doc, deleted at the Phase 12 cutover), and a terminal row with
- * no calm flag AND no body (a bare state transition, nothing human in it). The
- * derivation is `lib/message-receipt.ts › lifecycleReceiptStatus` — the receipt
- * VOCABULARY the retired page spoke, so "Declined" has one spelling, not two.
- */
-function toReceiptRow(
-  message: ChannelMessage,
-  formatTime: (iso: string) => string
-): ReceiptRow | null {
-  const status = lifecycleReceiptStatus(message);
-  if (status === null) return null;
-  return {
-    kind: "receipt",
-    id: message.id,
-    seq: message.seq,
-    status,
-    label: RECEIPT_LABEL[status],
-    // ⚠ `failed` is the ONE lifecycle status that is not an operator-chosen
-    // ending, so it is the only one that may wear alarm ink — the distinction
-    // `lib/calm-terminal.ts` exists to preserve.
-    calm: status !== "failed",
-    time: formatTime(message.createdAt),
-  };
-}
+// ⚠ RE-EXPORTED WHOLE so `view-model-rows` stays the ONE import path for a transcript
+// row's types — `transcript.tsx` imports {@link ReceiptRow} from here and did not move
+// (the `types.ts › ChannelListProjection` precedent: a split, not a new import site).
+export type { ReceiptRow } from "./view-model-receipt-rows";
 
 /** Which side of the transcript a row hangs on. An agent hangs on its
  *  operator's side — never in a third column (INVARIANTS §5). */
@@ -164,6 +123,20 @@ export interface MessageRow {
    * nobody.
    */
   routedAgentIds: string[];
+  /**
+   * **WHO THE SERVER ACTUALLY DELIVERED THIS POST TO** — the stamped `to=` set,
+   * faced beside the attribution pill (2026-09-22, decision #2200 option 1). Whole
+   * ruling, and why an empty set draws nothing: `lib/recipient-tags.ts`.
+   *
+   * ⚠ **AGENT ROWS ONLY** — a person's composer writes the handle into their own
+   * words, so a human row is always `[]` here (that gate is stated in
+   * {@link toMessageRow}, once). ⚠ **IDS, NEVER FACES**, on
+   * {@link MessageRow.routedAgentIds}'s rule and for its reason.
+   */
+  recipientAgentIds: string[];
+  /** The PEOPLE half of {@link MessageRow.recipientAgentIds} — same source, same
+   *  gate. A different namespace, never merged with the agents. */
+  recipientUserIds: string[];
 }
 
 /** A `system` row (joins, topic changes) — no side, no avatar, no author. */
@@ -172,27 +145,6 @@ export interface SystemRow {
   id: string;
   seq: number;
   body: string;
-}
-
-/**
- * A RECEIPT: how one exchange ENDED, on a slim muted line of its own. No side,
- * no avatar, no author, because it is not somebody's words — the same shape as
- * {@link SystemRow} on purpose: both are the transcript narrating itself.
- *
- * ⚠ The desktop's own body copy is NOT carried here. `label` comes from the
- * FLAG via `lib/message-receipt.ts › RECEIPT_LABEL`, so a caller-influenceable
- * sentence can never state the outcome (INVARIANTS §5).
- */
-export interface ReceiptRow {
-  kind: "receipt";
-  id: string;
-  seq: number;
-  status: ReceiptStatus;
-  /** Flag-derived label — never the row's own body. */
-  label: string;
-  /** An operator-chosen ending; only a REAL `failed` is false. */
-  calm: boolean;
-  time: string;
 }
 
 /**
@@ -289,7 +241,20 @@ function isContinuation(
     // ⚠ THE SESSION KEY COUNTS TOO (2026-09-04). Keyed on the STAMP alone, every post an agent
     // gave its own `client_msg_id` answered `null` — so two of an operator's agents alternating
     // read as one continuous speaker, which is the exact collapse this predicate exists to stop.
-    authorAgentIdOf(previous) === authorAgentIdOf(message)
+    authorAgentIdOf(previous) === authorAgentIdOf(message) &&
+    // ⚠ **AND THE ADDRESS COUNTS TOO, SINCE 2026-09-22** (decision #2200). The tag hangs
+    // off the pill and a continuation has no pill, so one agent posting to three places
+    // would collapse under ONE tag naming the first of them — the disagreement the tag
+    // exists to remove, rebuilt by the layout. A new address earns a new header, and
+    // `addressKey` reads an ABSENT set as its own value so legacy runs group unchanged.
+    addressKey({
+      agentIds: previous.recipientAgentIds,
+      userIds: previous.recipientUserIds,
+    }) ===
+      addressKey({
+        agentIds: message.recipientAgentIds,
+        userIds: message.recipientUserIds,
+      })
   );
 }
 
@@ -345,6 +310,17 @@ function toMessageRow(
     // the rule changed. `serverRoutedAgentIds` is the complement of the
     // predicate RR3's own arm 3 turns on, spelled once, in `lib/`.
     routedAgentIds: serverRoutedAgentIds(message),
+    // ⚠ **THE STAMPED ADDRESS, ONLY ON AN AGENT ROW** (2026-09-22, decision #2200). The
+    // gate is HERE, once: a human's row keeps its address in the WORDS their composer
+    // wrote, and two places deciding that is how one of them drifts.
+    // ⚠ NOT `serverRoutedAgentIds` — that is the narrow "routed although nobody was
+    // tagged" subset; this is every recipient the post reached.
+    // ⚠ `?? []` COLLAPSES ABSENT AND NULL, which the TAG wants and the GROUPING does not —
+    // `isContinuation` above reads the message's own fields, where the three stay apart.
+    recipientAgentIds:
+      message.authorKind === "agent" ? [...(message.recipientAgentIds ?? [])] : [],
+    recipientUserIds:
+      message.authorKind === "agent" ? [...(message.recipientUserIds ?? [])] : [],
   };
 }
 
