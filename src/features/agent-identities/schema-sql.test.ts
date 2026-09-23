@@ -67,6 +67,7 @@ import {
   MAX_OVERRIDE_VALUE_CHARS,
 } from "./lib/launch-overrides";
 import { forwardRenamed } from "@/shared/supabase/migration-renames";
+import { LAUNCH_RUNTIME_ID_RE } from "@/features/channels/schema-launch-modes";
 
 const ROOT = process.cwd();
 const MIGRATIONS = join(ROOT, "supabase", "migrations");
@@ -180,12 +181,13 @@ describe("the replayed CHECK constraints exist at all", () => {
     expect(LIVE.size).toBeGreaterThan(0);
   });
 
-  it("all four named bounds are live", () => {
+  it("all five named bounds are live", () => {
     expect([...LIVE.keys()].sort()).toEqual([
       "agent_identities_fields_shape_check",
       "agent_identities_model_charset_check",
       "agent_identities_name_charset_check",
       "agent_identities_prose_charset_check",
+      "agent_identities_runtime_shape_check",
     ]);
   });
 });
@@ -201,6 +203,14 @@ describe("🔒 the zod bounds are the DATABASE's bounds", () => {
     expect(constraint("agent_identities_model_charset_check")).toMatch(
       new RegExp(String.raw`char_length\(model\)\s+BETWEEN\s+1\s+AND\s+${MAX_MODEL_CHARS}\b`, "i")
     );
+  });
+
+  it("runtime — the launch runtime-id grammar, NULL allowed", () => {
+    const runtime = constraint("agent_identities_runtime_shape_check");
+    expect(runtime).toMatch(/runtime\s+IS\s+NULL\s+OR/i);
+    const m = /runtime\s*~\s*'([^']+)'/.exec(runtime);
+    expect(m, "no regex in the runtime CHECK").toBeTruthy();
+    expect((m as RegExpExecArray)[1]).toBe(LAUNCH_RUNTIME_ID_RE.source);
   });
 
   it("description and instructions — the two prose caps, in one constraint", () => {
