@@ -146,9 +146,8 @@ test("RC-01: a long-context pick resumes as ITSELF before any roster read — ne
   try {
     assert.equal(models.launchArg("claude-opus-5[1m]"), "claude-opus-5[1m]");
     assert.equal(models.launchArg("claude-fable-5[1m]"), "claude-fable-5[1m]");
-    assert.deepEqual(models.resolveLaunchModel("claude-opus-5[1m]"),
-      { ok: true, arg: "claude-opus-5[1m]", id: "claude-opus-5[1m]", reason: "" },
-      "the frozen table labels; it cannot prove a model absent");
+    // A live switch on the frozen table refuses with a sentence rather than moving to the short row.
+    assert.equal(models.resolveLaunchModel("claude-opus-5[1m]").ok, false);
     assert.equal(models.launchArg("claude-opus-5"), "opus", "an exact frozen id still finds its row");
     assert.equal(models.launchArg("opus --print"), "sonnet", "what could not BE an id never reaches argv");
     // Labelling keeps the base-id step: `[1m]` still names the Opus row for a card.
