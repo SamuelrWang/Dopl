@@ -12,7 +12,7 @@
 --
 -- Backfill (ruling 6): an identity whose model is a Claude id (`claude-*`) or a
 -- Claude alias (`opus|sonnet|haiku|fable`, optional `[1m]`-style suffix; the
--- aliases of `dopl-desktop-app/main/session-model.js`) gets `claude`; every
+-- aliases of `dopl-desktop-app/main/runtime/claude/model-table.js`) gets `claude`; every
 -- other row, including no model, stays NULL.
 --
 -- The table's SELECT grant and RLS policy are table-level and no function

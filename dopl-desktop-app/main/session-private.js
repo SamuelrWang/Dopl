@@ -253,8 +253,8 @@ function effectiveToolMode(s) {
  * session's frozen value; answering a MODE here would make an unreadable store into a posture, and
  * the narrowest would be as wrong as the widest.
  *
- * COERCED BY THE STORE, NOT HERE: `channel-prefs.js › normalizePreset` validates the axis against
- * the frozen `MESSAGE_MODES` list on WRITE, so what comes back is already a member or nothing.
+ * Validated by the store on write (`launch-selection.js › patchRejections`), so what comes back is a
+ * `MESSAGE_MODES` member or nothing.
  */
 function channelMessageMode(channelId) {
   if (!channelId) return '';

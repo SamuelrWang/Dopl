@@ -10507,7 +10507,7 @@ already wrong — `channel-dispatch-agents.ts` does pass `waitMs` — so do not 
 - Location: `dopl-desktop-app/main/session-private.js › channelMessageMode`'s docblock ("COERCED BY THE STORE, NOT HERE" still names the deleted `normalizePreset`; the store validates through `launch-selection.js › patchRejections` / `› legacyPreset` now), and the header of the unapplied `supabase/migrations/20261021120000_agent_identities_runtime.sql`, which names the deleted core session-model module as the home of the Claude aliases (they are `main/runtime/claude/model-table.js`'s now).
 - Found during: the 2026-09-23 docs pass, re-grepping every deleted symbol after the w3-left merge.
 - Proposed resolution: repoint both comments (the migration is unapplied, so its header can still change before release).
-- Status: OPEN (trivial).
+- Status: RESOLVED (2026-09-23, release integration: both comments repointed before 20261021 was applied).
 
 ### F-761 — `.fade-swap-in` sits outside `@layer components` in both stylesheets, so the kit drift gate cannot see it (2026-09-23)
 
