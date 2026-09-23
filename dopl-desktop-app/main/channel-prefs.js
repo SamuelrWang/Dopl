@@ -162,10 +162,6 @@ function readMap(key) {
   }
 }
 
-function getAllPostures() {
-  return readMap(POSTURE_KEY);
-}
-
 /**
  * THE CHANNEL'S DURABLE LAUNCH SELECTION — `{ selection, review, stored }`, never null.
  *
@@ -184,7 +180,7 @@ function getLaunchSelectionDetail(channelId) {
   // ⚠ LAZY, AND ONLY HERE. `channel-runtime.js` reads its pick THROUGH this function now, so a
   // top-level require there plus one here would cycle; the legacy key is read directly instead,
   // which is also the only place in this tree that still touches it for a decision.
-  return selection.fromLegacy(c, getAllPostures()[channelId], readMap(RUNTIME_KEY)[channelId]);
+  return selection.fromLegacy(c, readMap(POSTURE_KEY)[channelId], readMap(RUNTIME_KEY)[channelId]);
 }
 
 /** The selection alone, for the callers that cannot act on a review. */
@@ -223,7 +219,7 @@ function getLaunchPosture(channelId) {
 function hasLaunchPosture(channelId) {
   if (!channelId) return false;
   if (readMap(SELECTION_KEY)[channelId] != null) return true;
-  return selection.readPostureFrom(getAllPostures(), channelId) !== null;
+  return selection.legacyPreset(ctx(), readMap(POSTURE_KEY)[channelId]) !== null;
 }
 
 /**
@@ -261,23 +257,6 @@ function setLaunchSelection(channelId, patch) {
     const map = readMap(SELECTION_KEY);
     map[channelId] = res.selection;
     store.set(SELECTION_KEY, map);
-    // THE DOWNGRADE MIRROR — see the block above. Best-effort: a mirror that fails costs an older
-    // build a stale read, never this build a lost setting, so it does not fail the write.
-    // ⚠ NO `model` SINCE 2026-09-23 — so a downgraded build reads "no pick" and launches on its
-    // own default, rather than resurrecting a channel model this build no longer offers a way to
-    // change.
-    const legacy = getAllPostures();
-    legacy[channelId] = { tools: preset.tools, messages: preset.messages };
-    store.set(POSTURE_KEY, legacy);
-    // The runtime was a separate pre-U5 record, so it needs its own downgrade mirror beside the
-    // posture mirror above. Use the NORMALIZED selection value rather than the patch: an unknown
-    // renderer-supplied id resolves to the default runtime, and an omitted runtime keeps the
-    // current effective pick. `''` deletes the legacy member, preserving the old record's one
-    // spelling of "default" and leaving every neighbouring channel untouched.
-    const runtimes = { ...readMap(RUNTIME_KEY) };
-    if (res.selection.runtime) runtimes[channelId] = res.selection.runtime;
-    else delete runtimes[channelId];
-    store.set(RUNTIME_KEY, runtimes);
   } catch (err) {
     diag('channel-prefs: could not persist the launch selection —', err && err.message);
     return { ok: false };
@@ -285,23 +264,6 @@ function setLaunchSelection(channelId, patch) {
   diag('channel-prefs selection', String(channelId).slice(0, 8),
     res.selection.runtime || '(default)', preset.tools, preset.messages);
   return { ok: true, preset: preset, selection: res.selection, review: res.review };
-}
-
-/**
- * Persist the channel's launch posture — the LEGACY WRITE NAME, kept because it is what
- * `channel-dir-ipc.js › channels:setLaunchPosture` and `agent-defaults.js › seedChannel` call.
- * ⚠ SPENT BY NOTHING. There is no consume twin on purpose — that is what makes this the durable
- * half of the split described above.
- */
-function setLaunchPosture(channelId, raw) {
-  // ⚠ THE LEGACY WRITE REQUIRED BOTH AXES AND THIS KEEPS THAT, because its callers send both and
-  // a pre-U5 renderer sending one of them means something it cannot mean here. `setLaunchSelection`
-  // itself is own-key — that is what lets a native-settings write leave the pair alone.
-  const p = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
-  const hasTools = Object.prototype.hasOwnProperty.call(p, 'tools');
-  const hasMessages = Object.prototype.hasOwnProperty.call(p, 'messages');
-  if (hasTools !== hasMessages) return { ok: false };
-  return setLaunchSelection(channelId, p);
 }
 
 /**
@@ -390,52 +352,20 @@ function launchStartModes(channelId, runtimeId) {
 // channel link to read — and no "the channel's stored model is no longer offered" refusal either.
 
 module.exports = {
-  // ⚠ `getAutoSend` / `setAutoSend` REMOVED 2026-09-06 (item 8) — see the block above. The one
-  // live reader was `session-private.js › effectiveMessageMode`, which reads `getLaunchPosture`
-  // now; the IPC ops and the web hook went in the same change.
-  // 2026-08-31 (Samuel's ruling): the per-channel AGENT-CHAINING setting — the one-generation
-  // launch bound, made toggleable. Default OFF = today's bound. The block above states what it
-  // lifts, what it does not, and what stands in for a generation count when it is on.
-  AGENT_CHAIN_KEY: agentChain.AGENT_CHAIN_KEY,
   getAgentChain: agentChain.getAgentChain,
   setAgentChain: agentChain.setAgentChain,
-  // THE MACHINE-WIDE STANDING CONSENTS for the two MCP-driven capabilities — launching an
-  // agent (2026-08-22) and DIRECTING one (2026-08-31). ⚠ RE-EXPORTED from
-  // `orchestrator-consent.js` (§1 split), which carries why "outside the server entirely" is
-  // the security content rather than the storage, and why there is one toggle per capability.
-  ORCHESTRATOR_LAUNCH_KEY: orchestratorConsent.ORCHESTRATOR_LAUNCH_KEY,
   getOrchestratorLaunch: orchestratorConsent.getOrchestratorLaunch,
   setOrchestratorLaunch: orchestratorConsent.setOrchestratorLaunch,
-  ORCHESTRATOR_DIRECT_KEY: orchestratorConsent.ORCHESTRATOR_DIRECT_KEY,
   getOrchestratorDirect: orchestratorConsent.getOrchestratorDirect,
   setOrchestratorDirect: orchestratorConsent.setOrchestratorDirect,
-  // 2026-08-22 (OQ-3): FIRST-USE APPROVAL for another member's agent identity. Same
-  // machine-local, never-server-reachable property as the toggle above, and the block over these
-  // two functions says why that property is the security content.
-  IDENTITY_APPROVAL_KEY: identityApproval.IDENTITY_APPROVAL_KEY,
   isIdentityApproved: identityApproval.isIdentityApproved,
   approveIdentity: identityApproval.approveIdentity,
-  // The DURABLE launch selection. ⚠ THE SHAPE AND ITS VALIDATION LIVE IN
-  // `main/launch-selection.js` (§1 split, 2026-09-21 — U5); the five names below are re-exported
-  // from there so no caller and no suite moved, and they are the LEGACY READER for one
-  // compatibility window, not the write path.
-  readPostureFrom: selection.readPostureFrom,
-  effectivePosture: selection.effectivePosture, // the pre-U5 WIRE shape
-  postureInto: selection.postureInto,
-  TOOL_MODES: selection.TOOL_MODES,
-  MESSAGE_MODES: selection.MESSAGE_MODES,
-  DEFAULT_PRESET: selection.DEFAULT_PRESET,
-  normalizePreset: selection.normalizePreset,
-  defaultPreset: selection.defaultPreset,
-  POSTURE_KEY, // the legacy mirror's key — see the storage block
-  SELECTION_KEY, // U5: the versioned, runtime-keyed record — the one a read trusts
   getLaunchSelection,
-  getLaunchSelectionDetail, // U5: the selection PLUS its `needs review` sentences
+  getLaunchSelectionDetail,
   setLaunchSelection,
   getLaunchPosture,
-  hasLaunchPosture, // 2026-09-07: presence only — see the block above and `session-private.js`
-  setLaunchPosture,
+  hasLaunchPosture,
   windowlessMessageMode,
   launchStartModes,
-  launchPostureFor, // C1: the ceiling / live Axis-A value for ONE runtime
+  launchPostureFor,
 };

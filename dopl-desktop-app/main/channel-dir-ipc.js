@@ -256,7 +256,6 @@ function register(opts = {}) {
     // failure of the read** — the settings it describes are already the narrower ones.
     const detail = channelPrefs.getLaunchSelectionDetail(channelId);
     return Object.assign({}, channelPrefs.getLaunchPosture(channelId), {
-      selectionVersion: selectionShape.SELECTION_VERSION,
       selection: detail.selection,
       needsReview: detail.review,
       // The channel's pick, `''` for the default adapter. ⚠ ALWAYS PRESENT ON THE WIRE even when
@@ -268,13 +267,15 @@ function register(opts = {}) {
   ipcMain.handle('channels:setLaunchPosture', appWindowOnly('setLaunchPosture', { ok: false }, (_event, payload) => {
     const p = payload || {};
     if (!isUuid(p.channelId)) return { ok: false };
+    const patch = p.preset && typeof p.preset === 'object' && !Array.isArray(p.preset) ? p.preset : null;
+    if (!patch || !Object.keys(patch).length) return { ok: false }; // an empty patch writes nothing (P3-35)
     // ⚠ ONE WRITE, NOT TWO, SINCE 2026-09-21 (U5). The runtime pick used to be a SECOND store
     // write issued after the pair; it is a field of the same versioned record now, so a rejected
     // write cannot half-apply a runtime and a successful one cannot leave the two disagreeing.
     // `setLaunchSelection` is own-key throughout, so a patch that omits `runtime` still leaves the
     // pick alone — which is the contract this op already had.
     const before = channelPrefs.getLaunchSelection(p.channelId);
-    const res = channelPrefs.setLaunchSelection(p.channelId, p.preset);
+    const res = channelPrefs.setLaunchSelection(p.channelId, patch);
     if (!res || res.ok !== true) return res || { ok: false };
     // ⚠ THE RUNTIME IS WRITTEN AFTER THE PAIR AND ONLY ON A SUCCESSFUL ONE, so a rejected posture
     // never half-applies. `setChannelRuntime` answers the value the store ACTUALLY holds, and an
@@ -294,7 +295,6 @@ function register(opts = {}) {
     return Object.assign({}, res, {
       applied: applyPostureToLive(p.channelId, before, res.selection),
       runtime,
-      selectionVersion: selectionShape.SELECTION_VERSION,
     });
   }));
 
@@ -358,9 +358,7 @@ function register(opts = {}) {
     // runtime half as `channels:getLaunchPosture` one op above — roster, connectivity labels and
     // the per-runtime model CATALOGS. The Agents tab renders the same rows as the per-channel
     // Settings tab, so a tab that sourced its own roster would be the second table U6 deletes.
-    return Object.assign({}, agentDefaults.getAgentDefaults(), {
-      selectionVersion: selectionShape.SELECTION_VERSION,
-    }, await channelRuntimeReply.runtimeReply());
+    return Object.assign({}, agentDefaults.getAgentDefaults(), await channelRuntimeReply.runtimeReply());
   }));
   // ⚠ NO `channelId` AND NOTHING TO UUID-GATE — the subject is the machine-user, like the two
   // orchestrator consents below. The sender binding is the only guard, which is why this pair is

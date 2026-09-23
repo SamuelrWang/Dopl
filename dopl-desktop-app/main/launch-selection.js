@@ -54,16 +54,6 @@
 // PRIVACY — the CALLER owns storage (`channel-prefs.js`, `agent-defaults.js`); this module is
 // pure. Nothing here reads a store, a file, the environment or the network.
 
-// ⚠ **THE LEGACY POSTURE READER LIVES IN `main/launch-posture-legacy.js` (§1 split, U5)**, and
-// the seam is a LIFETIME rather than a topic: that file is deleted whole when the compatibility
-// window closes, and it is the only place in shared storage that still holds a frozen vocabulary.
-// Re-exported below, so no caller and no suite moved.
-// ⚠ THIS FILE ITSELF REQUIRES NOTHING ELSE. Every runtime vocabulary arrives through the injected
-// `ctx`, which is what keeps the block below sliceable and what keeps ONE runtime's enums out of
-// another runtime's validation.
-const legacy = require('./launch-posture-legacy');
-
-
 // ─── BEGIN LAUNCH-SELECTION (pure; unit-tested via source extraction) ────────
 // No electron/fs/store/require refs below. Every runtime vocabulary arrives through the injected
 // `ctx` (`main/runtime/index.js › selectionContext`), so this block can be sliced and driven
@@ -274,22 +264,25 @@ function foldDefaultKey(ctx, by) {
 function fromLegacy(ctx, preset, runtimeId) {
   const out = emptySelection();
   out.runtime = ctx.known(runtimeId) ? runtimeId : '';
-  const p = preset && typeof preset === 'object' && !Array.isArray(preset) ? preset : null;
+  const p = legacyPreset(ctx, preset);
   if (!p) return { selection: out, review: [], stored: false };
+  out.messages = p.messages;
+  out.byRuntime[ctx.defaultId] = { tools: p.tools };
+  return { selection: out, review: [], stored: true };
+}
 
-  const messages = typeof p.messages === 'string' ? p.messages : '';
-  if (SELECTION_MESSAGE_MODES.indexOf(messages) !== -1) out.messages = messages;
-
-  const legacyId = ctx.defaultId;
-  const res = normalizeRuntimeRecord(ctx, legacyId, {
-    ...(typeof p.tools === 'string' ? { tools: p.tools } : {}),
-  });
-  if (Object.keys(res.record).length) out.byRuntime[legacyId] = res.record;
-  // ⚠ THE MIGRATION ITSELF RAISES NO REVIEW. `res.review` can only fire on a legacy value the
-  // DEFAULT adapter no longer offers, which is a real fact an operator can act on, so it is
-  // forwarded — but a clean migration is silent, as it must be for the thousands of records that
-  // will take this path once and never notice.
-  return { selection: out, review: res.review, stored: true };
+/**
+ * A whole, valid pre-U5 `{ tools, messages }` pair, or null. `tools` is checked against the DEFAULT
+ * runtime's own words (the only words the old validator stored). A half-valid pair is no pair, so
+ * this migration and `channel-prefs.js › hasLaunchPosture` agree on what counts as configured.
+ */
+function legacyPreset(ctx, raw) {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  const tools = typeof raw.tools === 'string' ? raw.tools : '';
+  const messages = typeof raw.messages === 'string' ? raw.messages : '';
+  if (!tools || ctx.toolModeFor(ctx.defaultId, tools) !== tools) return null;
+  if (SELECTION_MESSAGE_MODES.indexOf(messages) === -1) return null;
+  return { tools: tools, messages: messages };
 }
 
 /** The per-runtime record for the SELECTED runtime — never null, possibly empty. */
@@ -457,24 +450,13 @@ function patchSelection(ctx, selection, patch) {
 // ─── END LAUNCH-SELECTION ─────
 
 module.exports = {
-  // THE LEGACY READER (one compatibility window) — re-exported from `launch-posture-legacy.js`
-  // and again by `channel-prefs.js`, so nothing that used to require these moved.
-  TOOL_MODES: legacy.TOOL_MODES,
-  MESSAGE_MODES: legacy.MESSAGE_MODES,
-  DEFAULT_PRESET: legacy.DEFAULT_PRESET,
-  normalizePreset: legacy.normalizePreset,
-  defaultPreset: legacy.defaultPreset,
-  readPostureFrom: legacy.readPostureFrom,
-  effectivePosture: legacy.effectivePosture,
-  postureInto: legacy.postureInto,
-  // THE VERSIONED, RUNTIME-KEYED SELECTION (2026-09-21, U5).
   SELECTION_VERSION,
   SELECTION_MESSAGE_MODES,
   emptySelection,
-  normalizeRuntimeRecord,
   normalizeSelection,
   fromLegacy,
-  patchRejections, // U5: the HARD failures — the ones that reject a whole write
+  legacyPreset,
+  patchRejections,
   activeRecord,
   toLegacyPosture,
   patchSelection,

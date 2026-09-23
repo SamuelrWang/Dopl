@@ -386,27 +386,11 @@ test("the mode tables agree across main and the reducer's own state module", () 
   assert.deepEqual(red("MESSAGE_MODES"), MESSAGE_MODES);
 });
 
-test("the THIRD copy — channel-prefs' WRITE validator — agrees with the canonical tables", () => {
-  // ⚠ FOUND UNPINNED 2026-08-20 (F-236's audit). `main/channel-prefs.js` carries its own frozen
-  // enums and its own suite asserted them against LITERALS, never against session-profiles — so
-  // the two were only ever kept in step by a reviewer's memory. It is not a harmless copy:
-  // `normalizePreset` REJECTS a pair outside its lists (`{ok:false}`, nothing written), so a
-  // fifth mode added to the canonical axis would make the durable launch posture silently
-  // unwritable for that value, with every suite green.
-  //
-  // Read as SOURCE because the module requires electron-store, and the enums sit in its own block.
-  // ⚠ IT MOVED TO `main/launch-posture-legacy.js` ON U5: the WRITE validator is runtime-scoped now
-  // (`launch-selection.js › patchRejections` — F-390's fix), and these two frozen lists survive as
-  // the LEGACY READER — what the records on disk were written in, which must still agree here.
-  const PREFS = readFileSync(M("launch-posture-legacy.js"), "utf8");
-  const prefsList = (name) => {
-    const at = PREFS.indexOf("const " + name + " = [");
-    assert.notEqual(at, -1, name + " missing from launch-posture-legacy.js");
-    return PREFS.slice(PREFS.indexOf("[", at) + 1, PREFS.indexOf("]", at))
-      .split(",").map((x) => x.trim().replace(/['"]/g, ""));
-  };
-  assert.deepEqual(prefsList("TOOL_MODES"), TOOL_MODES);
-  assert.deepEqual(prefsList("MESSAGE_MODES"), MESSAGE_MODES);
+test("the stored selection's messaging list agrees with the canonical table", () => {
+  // `launch-selection.js` validates every stored messaging value against its own list (it requires
+  // nothing, so it cannot import this one); a drift would make a value silently unstorable.
+  const sel = require(M("launch-selection.js"));
+  assert.deepEqual(sel.SELECTION_MESSAGE_MODES, MESSAGE_MODES);
 });
 
 test("the SPA holds a FOURTH copy, and it is out of this tree's reach — stated, not asserted", () => {

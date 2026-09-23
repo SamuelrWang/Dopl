@@ -116,7 +116,7 @@ function normalizeDefaults(sel, ctx, raw) {
   return {
     v: res.selection.v,
     runtime: res.selection.runtime,
-    messages: res.selection.messages,
+    messages: legacy ? asked : res.selection.messages, // a legacy record migrates its messages even when its tools do not
     byRuntime: res.selection.byRuntime,
     agentChain: raw.agentChain === true,
   };

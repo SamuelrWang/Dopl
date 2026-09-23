@@ -82,7 +82,6 @@ function load(opts = {}) {
     if (id === "./diag") return diag;
     if (id === "./runtime") return RUNTIME;
     if (id === "./launch-selection") return evaluate("launch-selection.js");
-    if (id === "./launch-posture-legacy") return evaluate("launch-posture-legacy.js");
     if (id === "./channel-prefs") return evaluate("channel-prefs.js");
     // The three records `channel-prefs.js` re-exports and this file never touches. Stubbed rather
     // than evaluated because each opens its own store handle and none of them is under test here.
@@ -251,8 +250,6 @@ test("NO PIN (2026-09-23): a `model` in a write is ignored — never stored, nev
   assert.equal(res.ok, true);
   assert.deepEqual(m.prefs.getLaunchSelection(CH_A).byRuntime.claude, { tools: "bypass" });
   assert.equal("model" in m.prefs.getLaunchPosture(CH_A), false);
-  assert.deepEqual(m.disk.channelLaunchPosture[CH_A], { tools: "bypass", messages: "auto_both" },
-    "…and the downgrade mirror carries none either");
   // A record an older build wrote WITH a model reads harmlessly, and the next write strips it.
   const old = load({ disk: { channelLaunchSelection: { [CH_A]: {
     v: 2, runtime: "codex", messages: "ask",
@@ -303,16 +300,11 @@ test("a pre-U5 record migrates into the DEFAULT runtime's half, untranslated, on
   assert.deepEqual(m.disk.channelRuntime, { [CH_A]: "codex" });
 });
 
-test("a WRITE re-stamps both legacy mirrors, so a downgraded build reads what is in force", () => {
-  const m = load({ disk: { channelRuntime: { [CH_A]: "claude", [CH_B]: "cursor" } } });
-  m.prefs.setLaunchSelection(CH_A, {
-    runtime: "codex", tools: "never", messages: "auto_both",
-  });
-  assert.deepEqual(m.disk.channelLaunchPosture[CH_A], { tools: "never", messages: "auto_both" });
-  assert.deepEqual(m.disk.channelRuntime, { [CH_A]: "codex", [CH_B]: "cursor" },
-    "the normalized runtime replaces this channel and preserves its neighbour");
-
-  m.prefs.setLaunchSelection(CH_A, { runtime: "" });
-  assert.deepEqual(m.disk.channelRuntime, { [CH_B]: "cursor" },
-    "the default runtime deletes the legacy member instead of storing a second spelling");
+test("a WRITE leaves both legacy records untouched — they are a migration source only (P3-13)", () => {
+  const legacy = { [CH_A]: { tools: "manual", messages: "ask" } };
+  const m = load({ disk: { channelLaunchPosture: legacy, channelRuntime: { [CH_A]: "claude", [CH_B]: "cursor" } } });
+  m.prefs.setLaunchSelection(CH_A, { runtime: "codex", tools: "never", messages: "auto_both" });
+  assert.deepEqual(m.disk.channelLaunchPosture, legacy);
+  assert.deepEqual(m.disk.channelRuntime, { [CH_A]: "claude", [CH_B]: "cursor" });
+  assert.equal(m.getChannelRuntime(CH_A), "codex", "the selection record is the authority once written");
 });

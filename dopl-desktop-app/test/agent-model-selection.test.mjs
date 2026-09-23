@@ -23,7 +23,7 @@ import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { prefs, CH_A } from "./_channel-prefs-block.mjs";
+import { legacyPreset } from "./_channel-prefs-block.mjs";
 import { fnOf } from "./helpers/source-probe.mjs";
 
 const require = createRequire(import.meta.url);
@@ -46,24 +46,9 @@ const code = (src) => src.split("\n")
 
 // ── 1. NO STORED MODEL (2026-09-23) ──────────────────────────────────────────────────────────
 
-test("NO PIN: the legacy reader never stores a model, supplied or not", () => {
-  const map = {};
-  const res = prefs.postureInto(map, CH_A, { tools: "bypass", messages: "auto_both", model: "claude-opus-5" });
-  assert.equal(res.ok, true, "the pair is still written — a model key must not refuse it");
-  assert.deepEqual(map[CH_A], { tools: "bypass", messages: "auto_both" });
-  assert.deepEqual(res.preset, map[CH_A], "the reply states what was STORED");
-});
-
-test("NO PIN: a record on disk that still carries a model reads back as the pair alone", () => {
-  const map = { [CH_A]: { tools: "manual", messages: "ask", model: "claude-fable-5" } };
-  assert.deepEqual(prefs.readPostureFrom(map, CH_A), { tools: "manual", messages: "ask" });
-});
-
-test("NO PIN: an unknown AXIS still refuses the whole write", () => {
-  const map = {};
-  assert.deepEqual(prefs.postureInto(map, CH_A, { tools: "YOLO", messages: "ask", model: "claude-opus-5" }),
-    { ok: false });
-  assert.deepEqual(map, {}, "nothing is stored");
+test("NO PIN: a legacy record on disk that still carries a model reads back as the pair alone", () => {
+  assert.deepEqual(legacyPreset({ tools: "manual", messages: "ask", model: "claude-fable-5" }),
+    { tools: "manual", messages: "ask" });
 });
 
 // ── THE WIRE CARRIES NO `model` KEY, AND ITS ABSENCE IS THE POINT ────────────────────────────
@@ -71,14 +56,6 @@ test("NO PIN: an unknown AXIS still refuses the whole write", () => {
 // The web's capability probe (`src/features/channels/lib/permission-modes.ts › hasModelKey`) is an
 // OWN-KEY test: a missing `model` means "this desktop has no model setting" and the Settings tab
 // draws NO model row. So an OLDER renderer meeting this build hides the row too.
-test("WIRE: the effective read carries NO `model` key", () => {
-  const fresh = prefs.effectivePosture({}, CH_A);
-  assert.deepEqual(fresh, { tools: "manual", messages: "ask" });
-  assert.equal("model" in fresh, false);
-  const legacy = prefs.effectivePosture({ [CH_A]: { tools: "auto", messages: "ask", model: "claude-opus-5" } }, CH_A);
-  assert.deepEqual(legacy, { tools: "auto", messages: "ask" });
-});
-
 test("WIRE: `getLaunchPosture` is that composition, not a second spelling of it", () => {
   // A REGEX BECAUSE THE REAL FUNCTION NEEDS electron-store. The reader is the VERSIONED,
   // RUNTIME-KEYED selection, rendered back into the legacy wire.
