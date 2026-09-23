@@ -236,13 +236,13 @@ function durableSessionRecord(rec) {
     ownPostSeq: Number.isFinite(Number(r.ownPostSeq)) ? Math.max(0, Math.floor(Number(r.ownPostSeq))) : 0,
     // 2026-08-02 — THE MODEL THIS SESSION RUNS ON, whitelisted so a P2 recreate or a crash
     // resume comes back on the operator's pick instead of silently reverting to the CLI
-    // default. Coerced against the frozen enum INLINE, the same shape `bind` above uses and
-    // for the same reason: this function is evaluated standalone by the extraction tests, so
-    // it may not reach into session-model (which is canonical, and pins this copy). The value
-    // becomes `--model <argv>` downstream, so a hand-edited store, a record written before
-    // this field existed, or a mid-wave caller can only ever land on 'default' — no model
-    // option at all. Frozen enum, spelled out, no normalization of near misses.
-    model: ['default', 'opus', 'sonnet', 'haiku', 'fable'].indexOf(r.model) === -1 ? 'default' : r.model,
+    // default. Checked INLINE, the same shape `bind` above uses and for the same reason: this
+    // function is evaluated standalone by the extraction tests.
+    // ⚠ A GRAMMAR SINCE 2026-09-22, NOT THE FROZEN FIVE-ALIAS ENUM, which reset every live-roster id
+    // (`claude-opus-5[1m]`, any Codex id) to 'default' on the first crash resume. It is the pick
+    // grammar (`runtime/claude/models.js › PICK_PATTERN`, restated because this block is pure): no
+    // space, quote, newline or shell metacharacter. Anything else is '' — no pick.
+    model: typeof r.model === 'string' && /^[A-Za-z0-9][A-Za-z0-9._:/@-]{0,109}(\[[A-Za-z0-9]{1,8}\])?$/.test(r.model) ? r.model : '',
     // ── 2026-08-31 (port wave D) — WHICH RUNTIME THIS SESSION RAN ON ─────────────────────────
     //
     // ⚠ WITHOUT IT A CRASH RESUME COMES BACK ON A DIFFERENT VENDOR. `session-park.js ›

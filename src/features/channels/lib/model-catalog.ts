@@ -70,6 +70,9 @@ export interface CatalogModel {
   /** `{ reasoningEffort: { options, default } }` — ⚠ PER MODEL, because Codex's supported
    *  efforts differ BETWEEN models and a runtime-level list would offer one the model refuses. */
   dimensions: Readonly<Record<string, ModelDimension>>;
+  /** Other spellings the runtime accepts for THIS model (2026-09-22) — a legacy stored id, a
+   *  launch alias. ⚠ MATCHED, NEVER OFFERED: {@link findModel} is how an old pick keeps its row. */
+  aliases?: ReadonlyArray<string>;
 }
 
 export interface ModelCatalog {
@@ -95,6 +98,7 @@ export const NO_CATALOGS: ModelCatalogs = Object.freeze({});
 const NO_MODELS: ReadonlyArray<CatalogModel> = Object.freeze([]);
 const NO_OPTIONS: ReadonlyArray<ModelDimensionOption> = Object.freeze([]);
 const NO_DIMENSIONS: Readonly<Record<string, ModelDimension>> = Object.freeze({});
+const NO_ALIASES: ReadonlyArray<string> = Object.freeze([]);
 
 const REASONING_EFFORT = "reasoningEffort";
 
@@ -179,7 +183,14 @@ function normalizeModel(raw: unknown): CatalogModel | null {
     isDefault: row.isDefault === true,
     hidden: row.hidden === true,
     dimensions: normalizeModelDimensions(row.dimensions),
+    aliases: normalizeAliases(row.aliases, id),
   };
+}
+
+function normalizeAliases(raw: unknown, id: string): ReadonlyArray<string> {
+  if (!Array.isArray(raw)) return NO_ALIASES;
+  const out = raw.map(str).filter((v, i, a) => v.length > 0 && v !== id && a.indexOf(v) === i);
+  return out.length ? Object.freeze(out) : NO_ALIASES;
 }
 
 function normalizeModelDimensions(
@@ -231,6 +242,25 @@ export function catalogFor(
   return catalogs[id] ?? null;
 }
 
+/**
+ * THE ENTRY AN ID NAMES — its own `id`, else one of its `aliases` (2026-09-22).
+ *
+ * ⚠ **WHY ALIASES EXIST: THE CLAUDE ROSTER WENT LIVE.** Its ids are the CLI's own now
+ * (`claude-opus-5[1m]`), so a channel that stored `claude-opus-5` before that must still find the
+ * row that IS that model, or its picker would show the stored id as a second, unlabelled option
+ * beside the real one. The desktop names the spellings; nothing here knows a vendor's id.
+ */
+export function findModel(
+  c: ModelCatalog | null | undefined,
+  id: string | null | undefined
+): CatalogModel | null {
+  const wanted = str(id);
+  if (!wanted || !c) return null;
+  return c.models.find((m) => m.id === wanted)
+    ?? c.models.find((m) => (m.aliases ?? NO_ALIASES).includes(wanted))
+    ?? null;
+}
+
 /** `true` only when the catalog is a list an operator may pick from RIGHT NOW. */
 export const catalogReady = (c: ModelCatalog | null | undefined): boolean =>
   c?.status === "ready";
@@ -270,9 +300,8 @@ export function canSelectModel(
   c: ModelCatalog | null | undefined,
   id: string | null | undefined
 ): boolean {
-  const wanted = str(id);
-  if (!wanted) return false;
-  return selectableModels(c).some((m) => m.id === wanted);
+  const hit = findModel(c, id);
+  return !!hit && selectableModels(c).some((m) => m.id === hit.id);
 }
 
 /**
@@ -289,7 +318,8 @@ export function modelLabel(
 ): string {
   const wanted = str(id);
   if (!wanted) return "";
-  return c?.models.find((m) => m.id === wanted)?.label || wanted;
+  // ⚠ A MODEL THE RUNTIME DID NOT NAME RENDERS ITS RAW ID — never hidden, never blank.
+  return findModel(c, wanted)?.label || wanted;
 }
 
 /** The glance word for a card chip, or `null` for "render no chip" (there is no id at all). */
@@ -299,7 +329,7 @@ export function modelShortLabel(
 ): string | null {
   const wanted = str(id);
   if (!wanted) return null;
-  return c?.models.find((m) => m.id === wanted)?.short || wanted;
+  return findModel(c, wanted)?.short || wanted;
 }
 
 /**
@@ -320,7 +350,8 @@ export function catalogSelection(
   stored: string | null | undefined
 ): string {
   const trimmed = str(stored);
-  if (trimmed) return trimmed;
+  // ⚠ A LEGACY SPELLING SHOWS AS THE ROW IT NAMES (2026-09-22); an unknown one as itself.
+  if (trimmed) return findModel(c, trimmed)?.id ?? trimmed;
   return c?.defaultId ?? "";
 }
 
@@ -340,7 +371,7 @@ export function modelOptionsFor(
     value: m.id,
     label: m.label || m.id,
   }));
-  const trimmed = str(effective);
+  const trimmed = findModel(c, effective)?.id ?? str(effective);
   if (!trimmed || options.some((o) => o.value === trimmed)) return options;
   return [...options, { value: trimmed, label: modelLabel(c, trimmed) }];
 }

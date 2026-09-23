@@ -380,18 +380,21 @@ function isSafeLabel(value) {
  * `''` is "no override" — the popup sends the key only when the operator's text differs from the
  * template's own (`channels/components/use-agent-launch-run.ts › launchOverridesOf`).
  *
- * Answers `{ model: '' | <alias>, instructions: '' | <prose>, fields: null | [{key, value}] }` —
- * `model` already coerced onto the alias vocabulary, `''` meaning "the chain continues".
+ * Answers `{ model: '' | <pick>, instructions: '' | <prose>, fields: null | [{key, value}] }` —
+ * `''` meaning "the chain continues".
+ * ⚠ THE MODEL IS BOUNDED, NOT COERCED (2026-09-22). It was `normalizeModel` — the FROZEN Claude
+ * table — so a model the live picker offered that this build predates was dropped to `''` here
+ * and the launch silently ran the next link's model. The funnel resolves it on the live roster or
+ * refuses it (`session-launch.js`); `chainModel` is the one rule for "no opinion".
  */
 function narrowOverrides(overrides) {
   const o = overrides && typeof overrides === 'object' ? overrides : {};
   const sessionModel = require('./session-model');
-  const asked = typeof o.model === 'string' ? o.model : '';
-  const alias = asked ? sessionModel.normalizeModel(asked) : 'default';
+  const asked = typeof o.model === 'string' ? o.model.slice(0, MAX_MODEL) : '';
   const instructions = typeof o.instructions === 'string'
     ? o.instructions.slice(0, MAX_INSTRUCTIONS).trim()
     : '';
-  const out = { model: alias === 'default' ? '' : alias, instructions, fields: null };
+  const out = { model: sessionModel.chainModel(asked), instructions, fields: null };
   if (!Array.isArray(o.fields)) return out;
   const kept = [];
   const seen = new Set();

@@ -18,6 +18,7 @@ import {
   agentModelSelection,
   agentModelOptionsFor,
 } from "../lib/agent-models";
+import { catalogSelection, modelOptionsFor } from "../lib/model-catalog";
 import {
   canSetAgentMode,
   canSetAgentModel,
@@ -147,7 +148,7 @@ export function PostureControls({
   // field (it stands at 498 of the 500-line cap), so the exact answer needs that shape split
   // first. Main refuses either way, so the worst case here is a hidden control on an agent that
   // could have taken one — never a control that claims a switch nothing applied.
-  const { descriptor: runtime } = useChannelLaunchPosture(channelId);
+  const { descriptor: runtime, catalog } = useChannelLaunchPosture(channelId);
   const canModel =
     bridgeCanModel && (runtime == null || canSwitchModelLive(runtime));
   // An ENDED agent has no posture to change; main answers `no-session` and the honest face
@@ -175,8 +176,12 @@ export function PostureControls({
   // option and the select would have silently rendered `options[0]` — reporting
   // "Fable 5" as the running model on a build that reported none.
   // `agentModelSelection` is the one place that back-fill lives.
-  const model = agentModelSelection(agentRunningModel(agent));
-  const modelOptions = agentModelOptionsFor(model);
+  // ⚠ 2026-09-22: THE RUNTIME'S OWN CATALOG WHEN THE DESKTOP SENT ONE — the Claude roster is live,
+  // so a model this bundle predates is offered with the CLI's own name. The frozen helpers are the
+  // older-desktop fallback only (`agent-models.ts`'s header).
+  const running = agentRunningModel(agent);
+  const model = catalog ? catalogSelection(catalog, running) || agentModelSelection(running) : agentModelSelection(running);
+  const modelOptions = catalog ? modelOptionsFor(catalog, model) : agentModelOptionsFor(model);
 
   const apply = (axis: "tools" | "messages", mode: string) => {
     setBusy(true);
@@ -198,7 +203,8 @@ export function PostureControls({
     setNotice(null);
     void setAgentModel({ channelId, taskId, agentId: agent.agentId, model: next })
       .then((res) => {
-        if (!res.ok) setNotice(POSTURE_REFUSED);
+        // ⚠ `no-model` carries main's sentence — which models this machine offers (2026-09-22).
+        if (!res.ok) setNotice(res.detail || POSTURE_REFUSED);
       })
       .finally(() => setBusy(false));
   };

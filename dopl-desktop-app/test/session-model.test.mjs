@@ -44,6 +44,7 @@ const require = createRequire(import.meta.url);
 const M = (p) => readFileSync(join(HERE, "..", "main", p), "utf8");
 
 const model = require("../main/session-model.js");
+const CLAUDE_MODELS = require("../main/runtime/claude/models.js");
 // U10 (2026-09-21): `baseRecord`'s two new free vars — the runtime REGISTRY (for the session's own
 // descriptor) and the runtime-truth projection. Required, never faked: neither pulls electron.
 const RUNTIME_REGISTRY = require("../main/runtime/index.js");
@@ -287,7 +288,7 @@ function assembled(s) {
   const src = `${fnOf(SPEC, "buildOptions")}\n return buildOptions;`;
   const fake = new Function(
     "tools", "channelDirs", "loader", "sessionAuth", "sessionOutbound", "axisB", "diag",
-    "store", "sessionModel", "sessionCredential", "agentOps", "SESSION_MAX_TURNS", src
+    "store", "models", "sessionCredential", "agentOps", "SESSION_MAX_TURNS", src
   )(
     { buildSessionToolConfig: () => ({ preApproved: [], disallowedTools: [], doplToolsPolicy: "full", builtinTools: [] }) },
     { sessionSpawnDir: () => "/tmp" },
@@ -309,7 +310,7 @@ function assembled(s) {
     { makeCanUseTool: () => () => {}, makeAgentOpsServer: () => null },
     () => {},
     { slotKey: () => "c1:t1" },
-    require("../main/session-model.js"),
+    CLAUDE_MODELS, // 2026-09-22: the adapter's roster module, REAL — unread, it resolves on its fallback table
     // 🔒 THE CONTAINER LOCK (plan §4.4 B1) — an UNLOCKED session, which is what every assertion
     // in this file is about. The assembly passes this bearer to `buildMcpServers` as a third
     // argument; '' means "use the device token", i.e. the pre-ceiling behaviour.
@@ -339,19 +340,21 @@ test("the launch spec carries it on a RESUME too — one assembly point, so park
 // — which is the whole point of the back-fill: the row and the launch state the same fact.
 test("'default' / absent assembles the PRODUCT fallback, not an unset option", () => {
   const fallback = model.aliasForModelId(model.LAUNCH_MODEL_FALLBACK);
-  for (const s of [session({ model: "default" }), session({ model: null }), session({})]) {
+  for (const s of [session({ model: "default" }), session({ model: null }), session({ model: "" }), session({})]) {
     assert.equal(assembled(s).model, fallback);
   }
 });
 
+// ⚠ 2026-09-22: the last gate is the pick GRAMMAR, not the frozen enum — what could not BE an id
+// never reaches argv. A WELL-FORMED unlisted id is sent as itself, and a live-roster id by its
+// row's value: `claude-live-roster.test.mjs` drives both through `models.js › launchArg`.
+const PICK_RE = new RegExp(CLAUDE_MODELS.PICK_PATTERN);
+const HOSTILE = JUNK.filter((v) => typeof v !== "string" || !v.trim() || !PICK_RE.test(v.trim()));
 test("the launch spec re-coerces: a hostile s.model can never reach argv", () => {
-  // 2026-09-07: junk used to assemble to `undefined` (no option). It now lands on the product
-  // fallback — the coercion is what this case is about, and it is unchanged: what argv gets is
-  // NEVER the caller's string.
   const fallback = model.aliasForModelId(model.LAUNCH_MODEL_FALLBACK);
-  for (const junk of JUNK) {
-    assert.equal(assembled(session({ model: junk })).model, fallback, JSON.stringify(junk));
-  }
+  for (const bad of ["sonnet;rm -rf /", "opus --print", "--dangerously-skip-permissions"]) assert.ok(HOSTILE.includes(bad), bad);
+  for (const junk of HOSTILE) assert.equal(assembled(session({ model: junk })).model, fallback, JSON.stringify(junk));
+  assert.equal(assembled(session({ model: "claude-opus-4-5" })).model, "claude-opus-4-5", "well-formed: as itself");
 });
 
 test("the model changed NOTHING else about the assembled options", () => {
@@ -381,25 +384,23 @@ const live = (over = {}) => ({
 });
 
 test("the model survives the round trip a P2 recreate depends on", () => {
-  for (const m of ["opus", "sonnet", "haiku", "fable"]) {
+  for (const m of ["opus", "sonnet", "haiku", "fable", "default", "claude-opus-5[1m]", "gpt-6-luna"]) {
     assert.equal(durable(baseRecord(live({ model: m }))).model, m, m);
   }
-  assert.equal(durable(baseRecord(live())).model, "default", "a session that never picked one");
+  assert.equal(durable(baseRecord(live())).model, "", "a session that never picked one");
 });
 
-test("a HOSTILE stored value coerces to 'default' on the way out of the projection", () => {
-  // The store is a plain JSON file on disk. This is the whole reason the whitelist coerces.
-  for (const junk of JUNK) {
-    assert.equal(durable(baseRecord(live({ model: junk }))).model, "default", JSON.stringify(junk));
-    assert.equal(durable({ model: junk }).model, "default", "and straight into the whitelist too");
+test("a HOSTILE stored value is dropped to '' (no pick) on the way out of the projection", () => {
+  for (const junk of HOSTILE) {
+    assert.equal(durable(baseRecord(live({ model: junk }))).model, "", JSON.stringify(junk));
+    assert.equal(durable({ model: junk }).model, "", "and straight into the whitelist too");
   }
 });
 
-test("a record written BEFORE this field existed reopens on 'default', not on undefined", () => {
+test("a record written BEFORE this field existed reopens on the product fallback, not on undefined", () => {
   const old = durable({ key: "c1:t1", channelId: "c1", phase: "parked" });
-  assert.equal(old.model, "default");
-  // 2026-09-06: 'default' is no longer "no model option" — it spends the product fallback.
-  assert.equal(model.modelArg(old.model), model.aliasForModelId(model.LAUNCH_MODEL_FALLBACK));
+  assert.equal(old.model, "");
+  assert.equal(CLAUDE_MODELS.launchArg(old.model), model.aliasForModelId(model.LAUNCH_MODEL_FALLBACK));
 });
 
 test("the record-driven resume hands the stored pick back to startSession", () => {

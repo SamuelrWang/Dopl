@@ -206,8 +206,10 @@ test("durableSessionRecord whitelists exactly the durable fields", () => {
   for (const junk of [undefined, null, "x", NaN, {}, -1 / 0]) {
     assert.equal(durableSessionRecord({ ownPostSeq: junk }).ownPostSeq, 0, JSON.stringify(junk));
   }
-  // ...and it defaults to the CLI's own pick, because the input above never named a model.
-  assert.equal(rec.model, "default");
+  // ...and it is NO PICK ('' — the product fallback at launch), because the input above never
+  // named a model. ⚠ 2026-09-22: it was the literal 'default' while the whitelist was the frozen
+  // five-alias enum; it is a grammar now (`session-store.js`), and absent is ''.
+  assert.equal(rec.model, "");
   assert.equal(rec.counterpartyId, "u2");
   assert.equal(rec.direct, true);
   // H2 fail-quiet: a hand-edited store can only ever turn this OFF, which understates the

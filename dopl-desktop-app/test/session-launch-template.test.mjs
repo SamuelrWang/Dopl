@@ -71,7 +71,7 @@ function boot(api = {}, opts = {}) {
     if (id === "./channel-prefs") {
       return {
         launchStartModes: () => ({ tools: "manual", messages: "auto_inbound" }),
-        getLaunchModelLink: () => ({ "claude-opus-5": "opus", "claude-sonnet-5": "sonnet", "claude-haiku-4-5-20251001": "haiku", "claude-fable-5": "fable" })[opts.channelModel] || "default", // ⚠ U5 replaced `getLaunchModel` here: the LAST chain link, resolved on the CHANNEL'S OWN runtime, ending the chain on that runtime's own "no pick" member. Inline + trailing because this file is at the §1 cap.
+        getLaunchModelLink: () => opts.channelModel || "", // ⚠ U5: the LAST chain link, on the CHANNEL'S OWN runtime. 2026-09-22: Claude's pick rule is OPEN (live roster), so it is the stored id as given, and absent is ''. Inline because this file is at the §1 cap.
         isTemplateApproved: () => opts.approved === true,
         approveTemplate: (t) => { approvals.push(t); return opts.storeWrites !== false; },
       };
@@ -164,10 +164,10 @@ test("F-4: a 5xx is the same class — `busy`, and so is every other non-2xx", a
   }
 });
 
-test("F-5: an UNKNOWN template model DEGRADES to the next link, it never refuses", async () => {
+test("F-5 REVERSED (2026-09-22): an UNKNOWN template model is handed on — the funnel resolves or refuses it", async () => {
   const m = boot({ body: { ...RESOLVED, model: "gpt-9-turbo" } }, { channelModel: "claude-opus-5" });
   assert.equal((await m.launchFromButton(payload({ templateId: TPL }))).ok, true);
-  assert.equal(m.launches[0].model, "opus", "the operator's own channel pick is not thrown away");
+  assert.equal(m.launches[0].model, "gpt-9-turbo", "the funnel decides; the lane does not substitute");
 });
 
 test("F-6: a NAME-ONLY template LAUNCHES — an empty template is a real configuration", async () => {
@@ -279,12 +279,12 @@ test("approveTemplate is UUID-gated, records, and RETURNS THE VERDICT", async ()
 test("CHAIN: overrides.model > template.model > channelPrefs > the SDK's own pick", async () => {
   const withTemplateModel = { ...RESOLVED, model: "claude-sonnet-5" };
   const cases = [
-    // [template body, channel pick, overrides, expected alias]
-    [RESOLVED, null, undefined, "default"],
-    [RESOLVED, "claude-opus-5", undefined, "opus"],
-    [withTemplateModel, "claude-opus-5", undefined, "sonnet"],
-    [withTemplateModel, "claude-opus-5", { model: "claude-haiku-4-5-20251001" }, "haiku"],
-    [RESOLVED, null, { model: "claude-fable-5" }, "fable"],
+    // [template body, channel pick, overrides, expected pick — AS GIVEN since 2026-09-22; absent is '']
+    [RESOLVED, null, undefined, ""],
+    [RESOLVED, "claude-opus-5", undefined, "claude-opus-5"],
+    [withTemplateModel, "claude-opus-5", undefined, "claude-sonnet-5"],
+    [withTemplateModel, "claude-opus-5", { model: "claude-haiku-4-5-20251001" }, "claude-haiku-4-5-20251001"],
+    [RESOLVED, null, { model: "claude-fable-5" }, "claude-fable-5"],
   ];
   for (const [body, channelModel, overrides, expected] of cases) {
     const m = boot({ body }, { channelModel });
@@ -305,14 +305,14 @@ test("a BLANK launch still honours the sheet's model override", async () => {
   // silently does nothing.
   const m = boot({}, { channelModel: "claude-opus-5" });
   await m.launchFromButton(payload({ overrides: { model: "claude-sonnet-5" } }));
-  assert.equal(m.launches[0].model, "sonnet");
+  assert.equal(m.launches[0].model, "claude-sonnet-5");
   assert.equal(m.launches[0].context.template, null);
 });
 
-test("an UNKNOWN override model falls THROUGH, exactly as an unknown template model does", async () => {
+test("an override model the frozen table does not know is SPENT, not dropped — the live picker offers it", async () => {
   const m = boot({}, { channelModel: "claude-opus-5" });
-  await m.launchFromButton(payload({ overrides: { model: "gpt-9" } }));
-  assert.equal(m.launches[0].model, "opus");
+  await m.launchFromButton(payload({ overrides: { model: "claude-opus-6[1m]" } }));
+  assert.equal(m.launches[0].model, "claude-opus-6[1m]");
 });
 
 // ── 5. THE FIELD OVERRIDES, AND THE CHARSET MAIN IS THE ONLY VALIDATOR OF ────

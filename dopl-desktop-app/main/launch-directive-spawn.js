@@ -181,6 +181,18 @@ function appliedRuntimeId(id) {
  * about the runtime — the session still starts on Codex, on Codex's own default model, and the
  * drop is named in the diag and in the `model=` / `appliedModel=` pair the MCP result prints.
  */
+/** The model id the launch actually resolved to — `runtime.modelArg`'s answer where there is one. */
+function appliedModelId(runtimeId, modelArg) {
+  try {
+    const rt = require('./runtime').runtimeFor(runtimeId);
+    if (rt && typeof rt.modelArg === 'function') {
+      const r = rt.modelArg(modelArg || '');
+      if (r && r.ok && r.id) return r.id;
+    }
+  } catch (_err) { /* fall through to what this lane applied */ }
+  return modelArg || '';
+}
+
 async function resolveModel(runtimeId, d, template) {
   const registry = require('./runtime');
   let defaultId = '';
@@ -188,7 +200,9 @@ async function resolveModel(runtimeId, d, template) {
   // ⚠ THE DEFAULT ADAPTER KEEPS THE EXISTING CHAIN, BYTE FOR BYTE (spec §3c):
   //   directive.model > template.model > channelPrefs.getLaunchModel > SDK default
   // Every link is `chainModel` — "a real pick, or '' meaning KEEP GOING" — INCLUDING the
-  // directive's own (F-285): an unrecognised id FALLS THROUGH rather than committing the chain.
+  // directive's own (F-285). ⚠ SINCE 2026-09-22 AN UNRECOGNISED ID NO LONGER FALLS THROUGH: it
+  // commits the chain and the funnel REFUSES it (`no-model`), because falling through is how an
+  // unknown id started the product default while the launch echoed the id it was asked for.
   if (!runtimeId || runtimeId === defaultId) {
     // ⚠ `getLaunchModelLink`, NOT `aliasForModelId(getLaunchModel(...))` (U5, 2026-09-21). The
     // channel's stored model is now RUNTIME-KEYED (`launch-selection.js › byRuntime`), and the old
@@ -212,10 +226,14 @@ async function resolveModel(runtimeId, d, template) {
   }
   const ids = (roster && Array.isArray(roster.ids) ? roster.ids : []);
   if (ids.indexOf(asked) !== -1) return asked;
-  diag('launch-directive: model', asked, 'is not in', runtimeId, "'s roster —",
-    'DROPPING the model and launching on that runtime\'s own default.',
-    'The runtime is NOT changed: a model never selects a vendor.');
-  return '';
+  // ⚠ **NOT DROPPED ANY MORE (2026-09-22) — HANDED ON, SO THE FUNNEL REFUSES IT WITH A SENTENCE.**
+  // A roster that ANSWERED and lacks the id is a definitive "this runtime does not offer that
+  // model", and launching on the platform default anyway is the silent substitution this wave
+  // removes. `session-launch.js › refuseUnknownModel` answers `no-model`. An UNREADABLE roster
+  // (the catch above) still drops: that is "Dopl could not check", not "it does not exist".
+  // ⚠ The runtime is still NOT changed: a model never selects a vendor.
+  diag('launch-directive: model', asked, 'is not in', runtimeId, "'s roster — the launch will be refused (no-model)");
+  return asked;
 }
 
 async function spawn(d, deps) {
@@ -417,17 +435,14 @@ async function spawn(d, deps) {
       // so that "not reported" keeps meaning "this machine said nothing" (an older desktop).
       // ⚠ `appliedRuntimeId('')` NAMES THE DEFAULT ADAPTER rather than reporting silence — the
       // whole value of the field is that an orchestrator stops having to assume which vendor ran.
-      // ⚠ **A KNOWN GAP, NAMED RATHER THAN PAPERED OVER (U5 is open):**
-      // `session-engine.js › startSession` still re-coerces `spec.model` through `session-model
-      // .js › normalizeModel`, which is the CLAUDE table — so on a non-default runtime a
-      // roster-valid id resolved here is coerced to `'default'` downstream and the session runs
-      // that platform's own default. `appliedModel` is therefore what the DIRECTIVE LANE applied.
-      // It is already strictly more than nothing (the requested/applied split is what an audit
-      // needs), and when U5 moves that coercion behind the selected adapter the two agree by
-      // construction. Do not "fix" this by re-implementing the coercion here — a second copy of
-      // the engine's rule is how the two come to disagree while both suites stay green.
+      // ⚠ **THE MODEL IS THE ONE THE ADAPTER RESOLVED IT TO (2026-09-22)**, off the same live
+      // roster the launch spec spends (`runtime.modelArg`, where an adapter offers one): an absent
+      // pick reports the product fallback's real id rather than silence, and a legacy alias
+      // reports the model it named. An adapter with no resolver reports what this lane applied.
+      // (The old "KNOWN GAP" note here is closed: U5 moved the engine's coercion behind the
+      // adapter, and an unknown id is refused before this point — `no-model`.)
       appliedRuntime: appliedRuntimeId(runtime.id),
-      appliedModel: modelArg || '',
+      appliedModel: appliedModelId(runtime.id, modelArg),
     };
   }
   return { refused: wire.refusalFor(res && res.skipped) };

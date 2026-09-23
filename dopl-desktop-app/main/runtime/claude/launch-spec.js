@@ -40,7 +40,7 @@ const channelDirs = require('../../channel-dirs');
 const store = require('../../session-store');
 const sessionAuth = require('../../session-auth');
 const sessionOutbound = require('../../session-outbound');
-const sessionModel = require('../../session-model');
+const models = require('./models');
 const sessionCredential = require('../../session-credential');
 const { diag } = require('../../diag');
 
@@ -181,10 +181,12 @@ function buildOptions(s, dispatch, emitQuiet) {
   if (bin) options.pathToClaudeCodeExecutable = bin;
   // THE PER-SESSION MODEL. `s.model` survives park/resume and the post-sign-in relaunch for
   // free, because every one of those shapes re-enters through this one assembly point on the
-  // SAME session object. `modelArg` re-coerces against the frozen enum HERE, at the last step
-  // before the value becomes an argv flag on a child process, so nothing upstream is trusted; a
-  // 'default' (or anything unrecognized) sets no field at all, which is the platform's own pick.
-  const model = sessionModel.modelArg(s.model);
+  // SAME session object.
+  // ⚠ RESOLVED ON THE LIVE ROSTER SINCE 2026-09-22 (`models.js › launchArg`), not coerced into a
+  // frozen five-alias enum: a pick launches as the row it names, by that row's own `value`, and
+  // absent is the product fallback. An unknown pick never reaches here on a launch — the funnel
+  // refused it (`session-launch.js`); a resumed session's own recorded id is sent as itself.
+  const model = models.launchArg(s.model);
   if (model) options.model = model;
   if (s.resumeSdkId) options.resume = s.resumeSdkId;
   return options;

@@ -78,6 +78,14 @@ function pickModels(home, o) {
   if (has(bundled)) return bundled;
   const fresh = readDebug(o.bin, o.env, false);
   if (has(fresh)) return fresh;
+  // ⚠ **A NAMED MODEL NO SOURCE KNOWS IS REFUSED, NOT DEGRADED (2026-09-22).** This answered
+  // `cached || bundled || fresh` — a catalog WITHOUT the session's model — and the override then
+  // REPLACED Codex's catalog, so a model `model/list` offered (a brand-new one above all) started
+  // on generic defaults: no code mode, no `apply_patch`, no `tool_search`. Not a widening, but a
+  // quietly worse agent than the one the operator picked. `model/list` refreshes the same
+  // `models_cache.json` in this home, so reaching here means Codex's own catalog is behind its
+  // own picker; the launch says so instead of guessing an entry.
+  if (want) return { missing: want };
   return cached || bundled || fresh;
 }
 
@@ -89,6 +97,11 @@ function pickModels(home, o) {
 function writeDelegationFreeCatalog(home, opts) {
   const o = opts || {};
   const models = pickModels(home, o);
+  if (models && models.missing) {
+    throw new Error(`Codex's own model catalog has no entry for "${models.missing}" (checked its cache, `
+      + 'its built-in list and a fresh fetch), so Dopl cannot turn off Codex\'s own sub-agents for it '
+      + 'without starting it on generic defaults — refusing the launch. Pick another model, or retry once Codex has refreshed.');
+  }
   if (!models) {
     throw new Error('Dopl could not read Codex\'s model catalog, so it cannot turn off Codex\'s own '
       + 'sub-agents for this session — refusing the launch rather than starting one that can delegate invisibly.');

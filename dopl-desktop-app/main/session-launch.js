@@ -120,6 +120,18 @@ async function launch(a) {
     return { skipped: 'no-sdk' };
   }
   if (hasLiveSession(slot)) return { skipped: 'busy' }; // FIX #7: re-check after await — a slot-scoped check now, so only an id collision (unreachable) trips it
+  // ── ⚠ A MODEL THIS RUNTIME DOES NOT OFFER IS REFUSED, NEVER SWAPPED (2026-09-22) ─────────────
+  // Every lane's pick arrives here, so the refusal sits here. It used to fall through to the
+  // product default: an MCP launch naming a mistyped or unknown id started Sonnet and echoed the
+  // id it was asked for. `no-model` is a wire word (`launch-directive-vocab.js`), and `detail` is
+  // the sentence — which models this machine DOES offer.
+  // ⚠ BEFORE `startSession`, like the floor refusal below: nothing is registered yet, so there is
+  // no rollback to get wrong.
+  const modelRefusal = await refuseUnknownModel(a.runtime, a.model);
+  if (modelRefusal) {
+    diag('session-launch: model refused —', modelRefusal);
+    return { skipped: 'no-model', detail: modelRefusal };
+  }
   // ── ⚠ THE WINDOWLESS TOOL FLOOR, AS A LAUNCH REFUSAL (2026-09-01, D1) ─────────────────────
   //
   // `contract.js › LAUNCH_BLOCKING[3]`. `capability.js › floorWindowlessTool`'s header has always
@@ -275,6 +287,25 @@ async function launch(a) {
   return { sessionId: s.sessionId, agentId: agentId };
 }
 
+/**
+ * The sentence refusing `model` on `runtimeId`, or `null`. ⚠ It waits for the runtime's roster
+ * (`model-catalog.js › settle`) ONLY when a model was actually named, and it FAILS OPEN on any
+ * error: a roster Dopl cannot read is not evidence that a model does not exist.
+ */
+async function refuseUnknownModel(runtimeId, model) {
+  const v = typeof model === 'string' ? model.trim() : '';
+  if (!v || v === 'default') return null;
+  try {
+    const adapter = require('./runtime').resolve(runtimeId);
+    const catalogs = require('./runtime/model-catalog');
+    const catalog = await catalogs.settle(adapter);
+    return catalogs.modelRefusal(catalog, v, adapter.descriptor.label);
+  } catch (err) {
+    diag('session-launch: model roster unreadable, launch goes ahead —', err && err.message);
+    return null;
+  }
+}
+
 function launchResponderSession(a) {
   return launch({ ...a, side: 'responder', firstMessage: a.message });
 }
@@ -313,6 +344,7 @@ function counterpartyFor(a) {
 module.exports = {
   bind,
   launch,
+  refuseUnknownModel, // 2026-09-22: also asked by the live model switch
   launchResponderSession,
   launchRequesterSession,
   hasLiveSession,

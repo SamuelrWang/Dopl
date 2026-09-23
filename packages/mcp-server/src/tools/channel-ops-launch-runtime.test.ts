@@ -99,10 +99,11 @@ describe("the published shape", () => {
   it("states the REFUSE-not-swap asymmetry in the pulled doctrine, where the rule belongs", () => {
     const manage = DOCTRINE_SECTIONS.manage;
     expect(manage).toContain("no-sdk");
-    // ⚠ BOTH HALVES IN ONE PLACE, because the asymmetry is the confusing part: an unknown MODEL
-    // falls back silently, an unknown RUNTIME is refused. A caller that generalised from the
-    // first would plan for a launch that never happens.
-    expect(manage).toContain("FALLS BACK");
+    // ⚠ BOTH HALVES IN ONE PLACE. Since 2026-09-22 there is no asymmetry left to warn about: an
+    // unknown MODEL is refused (`no-model`, the Claude roster went live) exactly as an unknown
+    // RUNTIME is (`no-sdk`) — and neither is ever swapped for another.
+    expect(manage).toContain("NOTHING IS SWAPPED");
+    expect(manage).toContain("`no-model`");
     expect(manage.toLowerCase()).toContain("rather than launching another vendor");
   });
 });

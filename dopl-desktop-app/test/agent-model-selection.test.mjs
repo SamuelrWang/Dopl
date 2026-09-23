@@ -234,8 +234,15 @@ test("LAUNCH: both lanes convert the ID to the argv-safe ALIAS before it travels
     "the operator's own Launch: the sheet, then the template default, then the channel's pick");
   // The rule itself moved to `session-model.js › chainModel` on 2026-08-23 (F-285): the DIRECTIVE
   // lane needed the identical answer, and a rule written once per lane drifts in one of them.
-  assert.match(read("session-model.js"), /alias === 'default' \? '' : alias/,
-    "an unrecognised model falls THROUGH to the next link, it does not end the chain");
+  // ⚠ 2026-09-22: THE RULE CHANGED — `chainModel` is VOCABULARY-FREE. Only "no opinion" (absent
+  // or the legacy word `default`) steps aside; any other value COMMITS the chain as given, and the
+  // funnel resolves it on the live roster or refuses it (`no-model`). Falling THROUGH on an id the
+  // frozen table did not know is how an unknown id started the product default.
+  assert.match(read("session-model.js"), /return !v \|\| v === 'default' \? '' : v;/,
+    "absent and `default` step aside; everything else is the pick as given");
+  assert.equal(model.chainModel("claude-opus-6[1m]"), "claude-opus-6[1m]", "a model this build predates commits the chain");
+  assert.equal(model.chainModel("default"), "");
+  assert.equal(model.chainModel("  "), "");
   assert.match(OPS, /return sessionModel\.chainModel\(/,
     "the button lane must not restate the rule — it delegates");
   // The chain moved with `spawn` on 2026-09-01 (the §1 split); the precedence is unchanged.
@@ -276,7 +283,7 @@ function live({ query, settled = false, runtimeId = "claude" } = {}) {
     src.indexOf("async function setModelByTask("),
     src.indexOf("// ── THE DIRECT 1:1 LANE")
   );
-  const s = { key: "c:t:a1b2c3d4", agentId: "a1b2c3d4", settled, model: "default", query, runtimeId };
+  const s = { key: "c:t:a1b2c3d4", agentId: "a1b2c3d4", settled, model: "", query, runtimeId };
   const sessions = new Map([[s.key, s]]);
   // ⚠ `runtimeRegistry` / `runtimeCopy` JOINED THE INJECTED SET ON 2026-09-21 (U10) AND ARE REAL.
   // `setModelByTask` now asks the SESSION'S OWN descriptor whether a live model switch is a thing
@@ -303,25 +310,28 @@ test("LIVE: the SDK is told, and the pick is RECORDED for the next assembly", ()
   // operator's pick the first time the session was rebuilt.
   const seen = [];
   const h = live({ query: { setModel: async (m) => { seen.push(m); } } });
+  // ⚠ 2026-09-22: resolved on the SESSION'S OWN RUNTIME'S roster (`runtime.modelArg`). With nothing
+  // read live here that is the adapter's fallback table, so the id reaches the SDK as that row's
+  // launch value (`opus`) and the session records the row's id.
   return h.fn({ ...address, model: "claude-opus-5" }).then((res) => {
-    assert.deepEqual(res, { ok: true, model: "opus" });
-    assert.deepEqual(seen, ["opus"], "the ALIAS reaches the SDK, never the raw id");
-    assert.equal(h.s.model, "opus", "…and it is recorded on the session object");
+    assert.deepEqual(res, { ok: true, model: "claude-opus-5" });
+    assert.deepEqual(seen, ["opus"], "the row's own launch value reaches the SDK");
+    assert.equal(h.s.model, "claude-opus-5", "…and the pick is recorded on the session object");
   });
 });
 
-test("LIVE: an unknown value RESETS to the product default rather than being refused", () => {
-  // 2026-09-06: "Default" was removed as an option and an unpicked channel was ruled to run
-  // `LAUNCH_MODEL_FALLBACK`, so there is nothing left to clear TO. The property the case exists for
-  // is untouched — an unknown value is ACCEPTED and normalized, never refused — and `s.model` still
-  // records `'default'`, which is "no explicit pick", not a model name.
+test("LIVE: an unknown value is REFUSED with a sentence — it used to RESET the session silently", () => {
+  // ⚠ REVERSED 2026-09-22. This pinned "an unknown value is ACCEPTED and normalized, never
+  // refused", which meant an operator who picked one model was moved onto another without being
+  // told. The switch now refuses, names what this machine offers, and changes nothing.
   const seen = [];
   const h = live({ query: { setModel: async (m) => { seen.push(m); } } });
   return h.fn({ ...address, model: "claude-opus-4-5" }).then((res) => {
-    assert.deepEqual(res, { ok: true, model: "default" });
-    assert.deepEqual(seen, [model.aliasForModelId(model.LAUNCH_MODEL_FALLBACK)],
-      "the product fallback, which is what an unpicked channel launches");
-    assert.equal(h.s.model, "default");
+    assert.equal(res.ok, false);
+    assert.equal(res.reason, "no-model");
+    assert.match(res.detail, /does not offer the model "claude-opus-4-5"/);
+    assert.deepEqual(seen, [], "nothing reached the SDK");
+    assert.equal(h.s.model, "", "and nothing was recorded");
   });
 });
 
@@ -329,7 +339,7 @@ test("LIVE: a THROWING switch records NOTHING — a pick nothing applied is a li
   const h = live({ query: { setModel: async () => { throw new Error("query is gone"); } } });
   return h.fn({ ...address, model: "claude-fable-5" }).then((res) => {
     assert.deepEqual(res, { ok: false, reason: "switch-failed" });
-    assert.equal(h.s.model, "default", "the previous pick survives an attempt that did not land");
+    assert.equal(h.s.model, "", "the previous pick survives an attempt that did not land");
   });
 });
 
@@ -350,8 +360,8 @@ test("LIVE: a session with no query yet is still recorded, so its first launch u
   // the whole of the switch — `buildSdkOptions` reads it when the wake starts the query.
   const h = live({ query: null });
   return h.fn({ ...address, model: "claude-sonnet-5" }).then((res) => {
-    assert.deepEqual(res, { ok: true, model: "sonnet" });
-    assert.equal(h.s.model, "sonnet");
+    assert.deepEqual(res, { ok: true, model: "claude-sonnet-5" });
+    assert.equal(h.s.model, "claude-sonnet-5");
   });
 });
 
@@ -426,7 +436,7 @@ test("U10: a runtime whose live model switch is UNVERIFIED refuses, with a reaso
   assert.match(res.detail, /Codex/, res.detail);
   assert.match(res.detail, /has not been measured/, "unverified is worded apart from a measured no");
   assert.deepEqual(seen, [], "nothing was told");
-  assert.equal(h.s.model, "default", "and nothing was recorded — the whole point");
+  assert.equal(h.s.model, "", "and nothing was recorded — the whole point");
 });
 
 test("U10: a handle with no model verb refuses instead of recording a switch it did not make", async () => {
@@ -438,12 +448,13 @@ test("U10: a handle with no model verb refuses instead of recording a switch it 
   assert.equal(res.ok, false);
   assert.equal(res.reason, "unsupported");
   assert.match(res.detail, /Cursor/, res.detail);
-  assert.equal(h.s.model, "default");
+  assert.equal(h.s.model, "");
 });
 
 test("U10: Claude is untouched — the refusal is per runtime, not a new blanket rule", async () => {
   const seen = [];
   const h = live({ runtimeId: "claude", query: { setModel: async (m) => { seen.push(m); } } });
-  assert.deepEqual(await h.fn({ ...address, model: "claude-opus-5" }), { ok: true, model: "opus" });
+  // 2026-09-22: the RECORD is the roster row's id; what the SDK is told is that row's launch value.
+  assert.deepEqual(await h.fn({ ...address, model: "claude-opus-5" }), { ok: true, model: "claude-opus-5" });
   assert.deepEqual(seen, ["opus"]);
 });

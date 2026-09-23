@@ -1,45 +1,32 @@
-// THE MODEL ROSTER, AS A CAPABILITY.
+// THE MODEL ROSTER, AS A CAPABILITY — ⚠ `source: 'live'` SINCE 2026-09-22.
 //
-// ⚠ `source: 'frozen'`, AND THE REASON IS DOCUMENTED IN THE TABLE ITSELF. The platform's own
-// `supportedModels()` would answer authoritatively, but it needs a LIVE query — and the picker has
-// to be usable before anything is running. So the roster is a table read off the bundled binary,
-// dated, with an explicit rule that an unknown model gets NO denominator rather than a guessed
-// one. A runtime whose roster is a live call declares `source: 'live'` and answers `models()` from
-// the wire; nothing else about the seam changes.
+// ⚠ **IT WAS `'frozen'`, AND THE REASON IT GAVE WAS WRONG.** The header said the platform's own
+// `supportedModels()` "needs a LIVE query" and the picker must work before anything runs. Both are
+// true and neither forces a frozen table: `roster.js` starts the CLI with a prompt that never
+// yields, reads `supportedModels()` off the handshake and stops it — no user message, no API
+// request, no model turn (MEASURED). So a model Anthropic ships appears here the day the CLI
+// offers it, with the CLI's own display name, and nothing in this tree has to change.
 //
-// ⚠ THE TABLES HAVE NOT MOVED YET, AND THIS FILE SAYS SO RATHER THAN COPYING THEM. They are still
-// `main/session-model.js`'s — the model-roster step of the port (design §4 step 5) is what brings
-// them here, together with the six duplicated id vocabularies it has to collapse. Restating them
-// now would create the seventh copy that step exists to remove, so this delegates instead. The
-// ONE thing that is declared here and nowhere else is the descriptor data below.
+// ⚠ **THE FROZEN TABLE IS THE FALLBACK, AND ONLY WHEN THE LIVE READ FAILS.** `session-model.js ›
+// MODEL_IDS` + `LABELS` below answer when the CLI cannot be started or does not answer — and the
+// roster then says `stale: true` with a reason, which `model-catalog.js` turns into a `stale`
+// catalog: the old ids still LABEL, they are not newly SELECTABLE, and the operator is told why.
+//
+// ⚠ **CACHED BY `<binary>@<sdk version>#<credential source>`.** The roster is per ACCOUNT (a
+// signed-out CLI omits Fable — measured), so a sign-in or a swapped credential is a different
+// key; an SDK upgrade is too. `rosterKey()` is SYNC so `model-catalog.js` can notice a moved key
+// on an ordinary look and re-read without a timer.
+//
+// ⚠ ELECTRON-FREE AT LOAD. The loader (which requires `electron`) and the credential probe are
+// reached lazily inside `defaultDeps`, so `main/session-profiles.js` — a PURE module two suites
+// evaluate standalone — can still reach this adapter through the registry.
 
-// ⚠ **REQUIRED AT MODULE LOAD SINCE 2026-09-21 (U5), AND THAT IS A CHANGE OF KIND.** It was lazy
-// (`const modelTable = () => require(…)`) for ONE reason: `session-model.js` carried a dead
-// `require('./diag')`, and `diag.js` pulls `electron` — which `main/session-profiles.js`, a PURE
-// module two suites evaluate standalone, may not transitively load. That dead line is gone, so the
-// table is reachable at load, and the DESCRIPTOR below can finally declare this platform's own
-// model vocabulary as data. That declaration is the whole point: before it, every shared storage
-// module (`channel-prefs.js`, `agent-defaults.js`) and `session-engine.js` imported THIS RUNTIME'S
-// enum directly and validated a CODEX pick against it.
-// ⚠ STILL NOT A COPY. The tables remain `session-model.js`'s; this names them.
 const modelTable = require('../../session-model');
+const roster = require('./roster');
 
-// ── ⚠ THE DISPLAY NAMES (2026-09-21, U6) — WHY THIS RUNTIME NOW CARRIES ITS OWN LABELS ───────
-//
-// ⚠ **THE LABELS USED TO LIVE ONLY IN THE RENDERER, AND THAT IS WHAT MADE THEM EVERY RUNTIME'S.**
-// `src/features/channels/lib/agent-models.ts` held four ids with four labels and FOUR SURFACES
-// read it regardless of which runtime was selected — so picking Codex offered Fable. U6's fix is
-// that every runtime delivers its OWN roster over one normalized contract
-// (`main/runtime/model-catalog.js`), and a roster with no names is a picker that renders raw ids.
-// Codex names its models on the wire (`model/list` → `displayName`); this one has no wire to ask,
-// so the names are declared here, beside the ids they name.
-//
-// ⚠ **IT IS A TWIN, AND THE TWIN IS PINNED RATHER THAN TRUSTED.** The web file keeps the same
-// table as the OLDER-DESKTOP FALLBACK (a desktop that predates the catalog sends none), exactly
-// as `session-model.js › LAUNCH_MODEL_FALLBACK` is pinned against
-// `agent-models.ts › AGENT_MODEL_FALLBACK` — the two trees cannot import each other.
-// `test/runtime-model-catalog.test.mjs` READS the web file and fails when they disagree.
-// ⚠ `short` IS THE GLANCE WORD a card chip renders; it is not a truncation rule.
+// ── THE FALLBACK'S DISPLAY NAMES — the web twin is `agent-models.ts › AGENT_MODELS` ──────────
+// ⚠ PINNED, NOT TRUSTED: `test/runtime-model-catalog.test.mjs` reads the web file and fails when
+// they disagree. Only the FALLBACK uses these; a live roster carries the CLI's own names.
 const LABELS = {
   'claude-fable-5': { label: 'Fable 5', short: 'Fable' },
   'claude-opus-5': { label: 'Opus 5', short: 'Opus' },
@@ -47,85 +34,182 @@ const LABELS = {
   'claude-haiku-4-5-20251001': { label: 'Haiku 4.5', short: 'Haiku' },
 };
 
-/** The offerable roster. ⚠ Unknown ids still render raw and round-trip — only the PICKS are closed. */
-function models() {
-  const table = modelTable;
-  // ⚠ **THE DEFAULT IS THE PRODUCT'S BACK-FILL, NOT A MEASURED PLATFORM ANSWER, AND SAYING SO IS
-  // THE POINT.** `session-model.js › LAUNCH_MODEL_FALLBACK` is the id Samuel chose on 2026-09-06
-  // for a channel that never picked; "default" on this platform means NO `--model` argument and
-  // nothing in either tree knows what the CLI resolves that to. So the catalog reports the id the
-  // PRODUCT displays for an unset channel — which is what a picker's default marker means — and
-  // the wire still carries no model until the operator picks one.
-  const fallback = table.LAUNCH_MODEL_FALLBACK;
-  return {
-    source: 'frozen',
-    // ⚠ THE CACHE KEY OF A TABLE IS THE BUILD IT SHIPPED IN. It never goes stale inside one
-    // process, so a constant is the honest answer rather than `null` (which reads as "unkeyed").
-    key: 'frozen',
-    ids: table.MODEL_IDS.slice(),
-    // The argv alias vocabulary. `[0]` is the fail-closed member and sets no model option at all,
-    // i.e. the platform's own pick — which is what every session did before a picker existed.
-    aliases: table.MODEL_CHOICES.slice(),
-    // ── U6: the normalized entries `runtime/model-catalog.js` turns into a catalog. ⚠ ORDER IS
-    // THE ORDER AN OPERATOR READS, and it is `MODEL_IDS`' own — most capable first, unchanged.
-    models: table.MODEL_IDS.map((id) => ({
+// ⚠ THE PICK GRAMMAR. The value becomes `--model <value>` on an argv array (no shell), so this is
+// a SHAPE gate, not a roster check: an id, an alias, a `[1m]`-style suffix at the END only, and the
+// separators Bedrock/Vertex ids use. No space, quote, newline or shell metacharacter; 120 chars is
+// the column bound every model field in the schema carries.
+const PICK_PATTERN = '^[A-Za-z0-9][A-Za-z0-9._:/@-]{0,109}(\\[[A-Za-z0-9]{1,8}\\])?$';
+const PICK_RE = new RegExp(PICK_PATTERN);
+
+const legacyAliases = () => modelTable.MODEL_IDS.reduce((m, id) => {
+  m[id] = modelTable.aliasForModelId(id);
+  return m;
+}, {});
+
+/** The table this build shipped with, in the live roster's own shape. */
+function frozenRoster(reason) {
+  const fallback = modelTable.LAUNCH_MODEL_FALLBACK;
+  const models = modelTable.MODEL_IDS.map((id) => {
+    const alias = modelTable.aliasForModelId(id);
+    return {
       id,
+      value: alias,
       label: (LABELS[id] && LABELS[id].label) || id,
       short: (LABELS[id] && LABELS[id].short) || null,
       isDefault: id === fallback,
       hidden: false,
-      // ⚠ NO MODEL-SCOPED DIMENSIONS: this runtime declares `dimensions: null` below, so an empty
-      // object here is the same statement made twice and cannot disagree with it.
+      aliases: [alias, roster.baseId(id)].filter((v, i, a) => v && v !== id && a.indexOf(v) === i),
       dimensions: {},
-    })),
+    };
+  });
+  return {
+    source: 'live',
+    key: 'frozen',
+    ids: models.map((m) => m.id),
+    models,
     defaultId: fallback,
-    reason: '',
+    // ⚠ `stale` IS THE WHOLE STATEMENT: these ids are this build's memory, not the CLI's answer.
+    stale: true,
+    reason: reason || 'Dopl could not read Claude Code\'s model list, so it is showing the list this build shipped with.',
+    truncated: false,
   };
 }
 
-// Descriptor half. ⚠ `defaultMeansAbsent: ''` is the absence-of-an-id convention the whole launch
-// precedence chain rests on (`session-model.js › chainModel`): a link that names nothing this
-// build knows STEPS ASIDE instead of spending the platform default and discarding the rest.
+// ── DEPENDENCIES (injectable for the suite) ───────────────────────────────────────────────────
+function defaultDeps() {
+  return {
+    loadSdk: () => require('./loader').getSdk(),
+    bin: () => require('./loader').resolveClaudeExecutable(),
+    env: () => require('../../session-auth').withStoredCredential(require('./loader').buildScrubbedEnv()),
+    credentialSource: () => {
+      try { return String(require('../../session-auth').credentialState().source || 'none'); } catch (_) { return 'none'; }
+    },
+    // ⚠ THE PLATFORM BINARY'S PACKAGE, NOT THE SDK'S: the SDK's `exports` map does not export its
+    // `package.json` (ERR_PACKAGE_PATH_NOT_EXPORTED, measured), and the binary is what answers.
+    sdkVersion: () => {
+      try {
+        return String(require(`@anthropic-ai/claude-agent-sdk-${process.platform}-${process.arch}/package.json`).version || '?');
+      } catch (_) { return '?'; }
+    },
+    probe: roster.probe,
+  };
+}
+let deps = defaultDeps();
+
+let held = null; // { key, roster } — the last LIVE answer, never a fallback
+let inflight = null; // { key, promise }
+
+/** `<binary>@<sdk version>#<credential source>` — SYNC, so a moved key is noticed on a look. */
+function rosterKey() {
+  let bin = '?';
+  try { bin = String(deps.bin() || '?'); } catch (_) { bin = '?'; }
+  return `${bin}@${deps.sdkVersion()}#${deps.credentialSource()}`;
+}
+
+async function readLive(key) {
+  const sdk = await deps.loadSdk();
+  const options = { env: deps.env() };
+  const bin = deps.bin();
+  if (bin) options.pathToClaudeCodeExecutable = bin;
+  const rows = await deps.probe({ sdk, options });
+  return roster.rosterFrom(rows, {
+    key,
+    legacy: legacyAliases(),
+    fallbackId: modelTable.LAUNCH_MODEL_FALLBACK,
+    fallbackAlias: modelTable.aliasForModelId(modelTable.LAUNCH_MODEL_FALLBACK),
+  });
+}
+
+/**
+ * The offerable roster. ⚠ ASYNC and NEVER THROWS: a failed read answers the frozen table marked
+ * `stale`, with the reason — never an empty list, never another runtime's.
+ */
+async function models() {
+  const key = rosterKey();
+  if (held && held.key === key) return held.roster;
+  if (inflight && inflight.key === key) return inflight.promise;
+  const promise = readLive(key)
+    .then((live) => {
+      if (!live.models.length) return frozenRoster(live.reason);
+      held = { key, roster: live };
+      return live;
+    })
+    .catch((err) => frozenRoster(`Dopl could not read Claude Code's model list (${(err && err.message) || 'unknown error'}), so it is showing the list this build shipped with.`))
+    .finally(() => { if (inflight && inflight.promise === promise) inflight = null; });
+  inflight = { key, promise };
+  return promise;
+}
+
+/** The roster a SYNCHRONOUS caller resolves against: the live one when held, else the table. */
+function current() {
+  return (held && held.roster) || frozenRoster();
+}
+
+/**
+ * THE `--model` ARGUMENT FOR A PICK — `{ ok, arg, id, reason }`, synchronous.
+ *
+ * ⚠ **A PICK LAUNCHES AS THE ROW IT NAMES, BY THAT ROW'S OWN `value`** — never squeezed through a
+ * fixed alias list. Absent (or the legacy word `default`) is the PRODUCT fallback, resolved on the
+ * same roster. ⚠ `ok: false` IS A REFUSAL WITH A SENTENCE — never a silent substitute.
+ */
+function resolveLaunchModel(value) {
+  const r = current();
+  const v = typeof value === 'string' ? value.trim() : '';
+  if (!v || v === 'default') {
+    const fb = roster.match(r.models, modelTable.LAUNCH_MODEL_FALLBACK)
+      || roster.match(r.models, modelTable.aliasForModelId(modelTable.LAUNCH_MODEL_FALLBACK));
+    return fb
+      ? { ok: true, arg: fb.value, id: fb.id, reason: '' }
+      : { ok: true, arg: modelTable.aliasForModelId(modelTable.LAUNCH_MODEL_FALLBACK), id: modelTable.LAUNCH_MODEL_FALLBACK, reason: '' };
+  }
+  const row = roster.match(r.models, v);
+  if (row) return { ok: true, arg: row.value, id: row.id, reason: '' };
+  const offered = r.models.filter((m) => !m.hidden).map((m) => m.label || m.id).join(', ');
+  return { ok: false, arg: '', id: '', reason: `Claude Code does not offer the model "${v}" on this machine${offered ? ` (it offers: ${offered})` : ''}.` };
+}
+
+/**
+ * What `buildOptions` spends. ⚠ AN UNMATCHED VALUE THAT PASSES THE GRAMMAR IS SENT AS ITSELF: the
+ * launch funnel already refused unknown picks with a sentence (`session-launch.js`), so what
+ * reaches here unmatched is a RESUMED session's own recorded model, and that conversation runs on
+ * exactly that model or fails visibly — never on a substitute.
+ */
+function launchArg(value) {
+  const r = resolveLaunchModel(value);
+  if (r.ok) return r.arg;
+  const v = String(value).trim();
+  return PICK_RE.test(v) ? v : resolveLaunchModel('').arg;
+}
+
+/** Drop the live cache. ⚠ For tests and an explicit re-probe; `inject` swaps the dependencies. */
+function forget() { held = null; inflight = null; }
+function inject(overrides) { deps = Object.assign(defaultDeps(), overrides || {}); forget(); }
+
+// Descriptor half.
 const descriptor = {
-  source: 'frozen',
-  // ⚠ null, not []. Reasoning effort is a second dimension only some runtimes have, and an empty
-  // array here would render an empty control instead of no control (§3.2, hide-on-absent).
+  source: 'live',
+  // ⚠ null, not []: no second dimension renders here (the CLI's effort levels are not wired).
   dimensions: null,
   defaultMeansAbsent: '',
-  // ⚠ false: this runtime carries the model through a resume by itself, so nothing re-stamps it.
   reStampOnResume: false,
-  // ── ⚠ THE PICK RULE (2026-09-21, U5) — THIS RUNTIME'S MODEL VOCABULARY, AS DECLARED DATA ─────
-  //
-  // Before this block, `main/channel-prefs.js`, `main/agent-defaults.js` and `main/session-engine.js`
-  // each imported `session-model.js` and validated EVERY runtime's model through THIS runtime's
-  // frozen list. A Codex id therefore normalized to `'default'` in shared code and reached the
-  // Codex launch spec as the literal string `default`. The fix is not a second list — it is moving
-  // the ONE list behind the adapter that owns it, so `runtime/capability.js › storeModelPick` /
-  // `› launchModelPick` can answer for any runtime without knowing a single vendor id.
-  //
-  // ⚠ TWO VOCABULARIES, AND THE SPLIT IS `session-model.js`'s, UNCHANGED. `stored` is what a UI
-  // offers and a durable record keeps (FULL IDS — version-stable round-tripping for a select);
-  // `accepted` additionally admits the ALIASES a launch may carry, and `canonical` is the lossy
-  // id→alias seam that makes argv version-stable. `absent` is the value that means "no pick".
-  // ⚠ `'default'` IS A LEGAL ACCEPTED VALUE AND MAPS TO `absent`, which is exactly what
-  // `session-model.js › normalizeModel` answers for it today.
+  // ── ⚠ THE PICK RULE IS `open` SINCE 2026-09-22 — IT WAS `closed` OVER THE FROZEN IDS ────────
+  // A closed rule is a picker that can never offer a model this build predates, which is the
+  // defect Samuel named. Storage keeps a SHAPE-CHECKED string (a durable record written while the
+  // CLI answered must not be erased by a read taken while it does not); the live roster decides
+  // what may be NEWLY SELECTED (the renderer) and what may LAUNCH (`session-launch.js` refuses
+  // an unknown pick with a sentence).
   pick: {
-    kind: 'closed',
-    stored: modelTable.MODEL_IDS.slice(),
-    // MODEL_CHOICES[0] is `'default'` — the absence member — so it is deliberately NOT in
-    // `accepted`: `launchModelPick` answers `absent` for anything outside the list anyway, and
-    // listing it would make "an alias this build knows" and "no opinion" the same assertion.
-    accepted: modelTable.MODEL_IDS.concat(modelTable.MODEL_CHOICES.slice(1)),
-    canonical: modelTable.MODEL_IDS.reduce((m, id) => {
-      m[id] = modelTable.aliasForModelId(id);
-      return m;
-    }, {}),
-    absent: modelTable.MODEL_CHOICES[0],
-    pattern: null, // closed rosters do not shape-check; membership IS the check
+    kind: 'open',
+    stored: null,
+    accepted: null,
+    canonical: null,
+    absent: '',
+    pattern: PICK_PATTERN,
   },
-  // ⚠ null, not {}: there is no model-scoped second dimension here, so nothing renders and nothing
-  // is storable. `contract.js` refuses a descriptor that names a dimension it cannot back.
   dimensionOptions: null,
 };
 
-module.exports = { models, descriptor };
+module.exports = {
+  models, current, rosterKey, resolveLaunchModel, launchArg, frozenRoster, forget, inject,
+  descriptor, LABELS, PICK_PATTERN,
+};

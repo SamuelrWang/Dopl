@@ -202,8 +202,15 @@ test("the model validates SOFT, and ABSENT IS NOT A MEMBER", () => {
   // ⚠ AN UNKNOWN MODEL DOES NOT FAIL THE RECORD — a desktop that has not heard of a newer id must
   // still be able to store the rest; refusing the whole record over a model name is the wrong
   // trade in both directions.
-  const unknown = norm({ ...OK, v: 2, byRuntime: { claude: { model: "gpt-9" } } });
-  assert.equal(unknown.byRuntime.claude, undefined, "unknown is absent, and an empty record is no record");
+  // ⚠ 2026-09-22: CLAUDE'S PICK RULE IS OPEN (its roster is live), so STORAGE keeps any
+  // WELL-FORMED id — a record written while the CLI offered a model must not be erased by a build
+  // that has not heard of it. The runtime boundary is enforced where it can be KNOWN: the picker
+  // offers only that runtime's live catalog, and a launch naming an id its roster lacks is REFUSED
+  // (`claude-live-roster.test.mjs`). What storage still refuses is anything that cannot BE an id.
+  const kept = norm({ ...OK, v: 2, byRuntime: { claude: { model: "claude-opus-6[1m]" } } });
+  assert.equal(kept.byRuntime.claude.model, "claude-opus-6[1m]", "a model this build predates is kept");
+  const unknown = norm({ ...OK, v: 2, byRuntime: { claude: { model: "gpt 9; rm" } } });
+  assert.equal(unknown.byRuntime.claude, undefined, "a malformed id is absent, and an empty record is no record");
   // ⚠ OMITTED RATHER THAN '' OR null, so a record from before the field and a record whose model
   // was cleared are the SAME record and no reader can grow a third state to get wrong.
   assert.equal(norm({ ...OK, v: 2, byRuntime: { claude: { tools: "bypass", model: "" } } })

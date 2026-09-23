@@ -1,8 +1,8 @@
 // THE MODEL ROSTER, AS A CAPABILITY — ⚠ `source: 'live'`, WHICH IS THE OPPOSITE OF THE CLAUDE
 // LANE'S ANSWER AND IS WHY THAT FIELD EXISTS AT ALL.
 //
-// The Claude adapter keeps a FROZEN table because its platform's authoritative roster needs a live
-// query and the picker has to be usable before anything is running. Codex answers `model/list`
+// (⚠ The Claude adapter is `live` too since 2026-09-22 — `runtime/claude/roster.js` reads
+// `supportedModels()` off a turn-free CLI handshake — so "the opposite" is history.) Codex answers `model/list`
 // over the same app-server protocol the session already speaks, WITH each model's reasoning-effort
 // options — so the picker is populated from the wire and an id this build has never seen renders
 // raw rather than being dropped.

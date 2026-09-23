@@ -210,12 +210,14 @@ test("LAUNCH: a goal-less directive falls back to the button's own sentence", as
   assert.equal(ch.cfg.lastSpec.idle, true);
 });
 
-// ⚠ THE MODEL GOES THROUGH THE FROZEN LIST, so an unknown id from an orchestrator on a newer
-// build cannot reach argv — and cannot refuse the launch either.
-test("MODEL: a known id becomes its argv-safe alias", async () => {
+// ⚠ 2026-09-22: THE LANE HANDS THE PICK ON AS GIVEN. It is resolved on the runtime's LIVE roster
+// at the launch spec (`runtime/claude/models.js › launchArg`), and an id that roster does not
+// offer is REFUSED by the funnel (`session-launch.js › refuseUnknownModel`, `no-model`) — the
+// frozen list is no longer the gate, so a model the CLI offers that this build predates launches.
+test("MODEL: a known id is handed on as given — resolution is the launch spec's", async () => {
   const ok = boot();
   await ok.api.handle(row({ model: "claude-opus-5" }), WS);
-  assert.equal(ok.cfg.lastSpec.model, "opus");
+  assert.equal(ok.cfg.lastSpec.model, "claude-opus-5");
   assert.equal(ok.cfg.lastSpec.idle, false, "the fixture carries a goal — see the ruling above");
 });
 
@@ -234,23 +236,29 @@ test("MODEL: a bare ALIAS is honoured, not collapsed to the SDK default (F-285)"
   }
 });
 
-// ⚠ AND AN UNRECOGNISED ID FALLS THROUGH RATHER THAN ENDING THE CHAIN — which is what
-// `channel-schema.ts › model` promises the orchestrator in so many words ("it silently FALLS BACK
-// to whatever the channel is set to") and what INVARIANTS §10's `launch_agent` bullet records.
-// Before F-285 it ended the chain at `'default'`, so the doc and the code disagreed.
-test("MODEL: an id this build does not know FALLS BACK to the channel's pick (F-285)", async () => {
+// ⚠ REVERSED 2026-09-22 — AN UNRECOGNISED ID NO LONGER FALLS THROUGH. It used to be replaced by
+// the channel's (or template's) model, so an orchestrator asking for a mistyped or newer id got a
+// different model and an echo of the id it asked for. The pick now COMMITS the chain and reaches
+// the funnel, which resolves it on the live roster or REFUSES it (`no-model`, with the list).
+test("MODEL: an id this build does not know is handed on — the funnel resolves or refuses it", async () => {
   const bad = boot();
   await bad.api.handle(row({ model: "claude-from-the-future-9" }), WS);
-  assert.equal(bad.cfg.lastSpec.model, "sonnet", "the channel's stored pick, not the SDK default");
-  assert.equal(bad.cfg.lastSpec.idle, false, "…and the launch still happens (F-5: never refuse)");
+  assert.equal(bad.cfg.lastSpec.model, "claude-from-the-future-9", "never swapped for the channel's pick");
 });
 
-// ⚠ THE TEMPLATE'S LINK SITS BETWEEN THEM, and an unknown DIRECTIVE model must not step over it.
-test("MODEL: an unknown directive model falls to the TEMPLATE's before the channel's", async () => {
+test("MODEL: the funnel's `no-model` reaches the decide as a REFUSAL, in its own word", async () => {
+  const h = boot({ launch: async () => ({ skipped: "no-model", detail: "Claude Code does not offer the model \"x\"" }) });
+  await h.api.handle(row({ model: "x" }), WS);
+  assert.deepEqual(decidePosts(h).map((p) => p.body.refusalReason), ["no-model"],
+    "a closed-vocabulary word the orchestrator can act on — never `no-bridge`");
+});
+
+// ⚠ THE TEMPLATE'S LINK SITS BETWEEN THEM: it still beats the channel when the directive names none.
+test("MODEL: with no directive model, the TEMPLATE's comes before the channel's", async () => {
   const h = boot({ resolve: { ok: true, template: { name: "Code Auditor", model: "claude-haiku-4-5-20251001" } } });
   const TPL = "77777777-7777-4777-8777-777777777777";
-  await h.api.handle(row({ model: "claude-from-the-future-9", template_id: TPL }), WS);
-  assert.equal(h.cfg.lastSpec.model, "haiku");
+  await h.api.handle(row({ model: "", template_id: TPL }), WS);
+  assert.equal(h.cfg.lastSpec.model, "claude-haiku-4-5-20251001");
 });
 
 test("MODEL: an ABSENT model falls back to the CHANNEL's own stored pick", async () => {
@@ -313,7 +321,7 @@ test("CLAIM: the launch is driven by the CLAIMED row, not by the realtime frame"
   const h = boot({ claimed: row({ status: "claimed", goal: "THE REAL GOAL", model: "claude-haiku-4-5-20251001" }) });
   await h.api.handle(row({ goal: "the frame's goal", model: "claude-opus-5" }), WS);
   assert.equal(h.cfg.lastSpec.goal, "THE REAL GOAL");
-  assert.equal(h.cfg.lastSpec.model, "haiku");
+  assert.equal(h.cfg.lastSpec.model, "claude-haiku-4-5-20251001");
 });
 
 test("ONCE: the same row delivered twice is claimed once", async () => {
@@ -359,7 +367,7 @@ test("DECIDE: a successful launch writes `launched` and the AGENT ID", async () 
     directiveId: DID, status: "launched", agentId: "a1b2c3d4",
     appliedTools: "bypass", appliedMessages: "auto_both", appliedChain: false,
     appliedAgentName: "New Agent",
-    appliedRuntime: "claude", appliedModel: "opus",
+    appliedRuntime: "claude", appliedModel: "claude-opus-5",
   });
   assert.equal(decidePosts(h)[0].workspaceId, WS, "fenced on the workspace, like every write here");
 });

@@ -31,9 +31,8 @@ const framing = require('./session-seed');
 // the source-extraction test injects it and the block stays free of runtime handles.
 const privateTurn = require('./session-private');
 const directedTurn = require('./session-directed'); // 2026-08-31: attribution + capture
-// 2026-08-22: the frozen model enum + the id -> alias seam. A free var inside the block below,
-// like `store` and `framing`, so the source-extraction test injects it.
-const sessionModel = require('./session-model');
+// ⚠ `require('./session-model')` LEFT ON 2026-09-22: the live switch resolves a pick on the
+// session's own runtime (`runtime.modelArg`), not on the frozen id -> alias seam.
 // ⚠ THE RUNTIME'S OWN ANSWER TO "CAN A RUNNING AGENT'S MODEL BE SWITCHED" (2026-09-21, U10). A free
 // var inside the PURE block below, like `store` and `framing`, so the source-extraction test
 // injects it. Neither require pulls electron — `main/runtime/index.js` is electron-free by
@@ -308,13 +307,20 @@ async function setModelByTask(a) {
   const descriptor = runtimeRegistry.descriptorFor(s.runtimeId);
   const liveSwitchRefusal = runtimeCopy.liveModelSwitchRefusal(descriptor);
   if (liveSwitchRefusal) return { ok: false, reason: 'unsupported', detail: liveSwitchRefusal };
-  const alias = sessionModel.aliasForModelId(a && a.model);
-  // 2026-09-06: `modelArg` no longer answers null for `'default'` — it answers the PRODUCT fallback,
-  // because "Default" stopped being an option an operator can pick (`session-model.js ›
-  // LAUNCH_MODEL_FALLBACK`). So an unrecognised value RESETS this session to the model a fresh
-  // launch would spend rather than clearing the override. The `|| undefined` below covers a value
-  // that cannot resolve at all, and is what a runtime with no model concept relies on.
-  const arg = sessionModel.modelArg(alias);
+  // ⚠ **RESOLVED ON THE SESSION'S OWN RUNTIME'S LIVE ROSTER (2026-09-22)**, not squeezed through
+  // the frozen five-alias table: `runtime.modelArg` answers the row's own launch value, so a model
+  // the CLI started offering after this build shipped can be switched to. ⚠ AN UNKNOWN PICK IS
+  // REFUSED WITH A SENTENCE — it used to RESET the session to the product fallback, i.e. the
+  // operator asked for one model and was silently moved to another. Absent is the fallback, as a
+  // fresh launch's is. A runtime with no resolver passes the pick as given.
+  const picked = typeof (a && a.model) === 'string' ? a.model.trim() : '';
+  const rt = typeof runtimeRegistry.runtimeFor === 'function' ? runtimeRegistry.runtimeFor(s.runtimeId) : null;
+  const resolved = rt && typeof rt.modelArg === 'function'
+    ? rt.modelArg(picked) : { ok: true, arg: picked, id: picked };
+  if (!resolved || !resolved.ok) {
+    return { ok: false, reason: 'no-model', detail: (resolved && resolved.reason) || '' };
+  }
+  const arg = resolved.arg;
   try {
     // ⚠ A LIVE SESSION WHOSE HANDLE HAS NO MODEL VERB IS A REFUSAL, NOT A NO-OP (2026-09-21, U10).
     // The declaration above is the runtime's PROMISE; this is the handle in hand disagreeing with
@@ -333,8 +339,8 @@ async function setModelByTask(a) {
   }
   // ⚠ AFTER the SDK accepted it, never before: `s.model` is what the next assembly reads, so
   // recording a switch that did not land would survive the running query and outlive the error.
-  s.model = alias;
-  return { ok: true, model: alias };
+  s.model = resolved.id || picked;
+  return { ok: true, model: s.model };
 }
 
 // ── THE DIRECT 1:1 LANE: THE OPERATOR TALKS TO THEIR OWN AGENT ───────────────────

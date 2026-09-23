@@ -32,9 +32,13 @@
 // for the rule and the argument. Do not grow this table a row for a runtime that already answers;
 // that is a maintenance debt taken on to duplicate a fact the platform states per turn.
 //
-// Query.supportedModels() would answer both questions authoritatively, but it needs a LIVE
-// query: the picker has to be usable on a pre-consent card, where by construction nothing is
-// running yet. Hence the frozen list.
+// ⚠ **SINCE 2026-09-22 THE PICKER'S LIST IS LIVE, AND THESE TABLES ARE ITS FALLBACK.** This
+// paragraph used to say `Query.supportedModels()` "needs a LIVE query … hence the frozen list".
+// It does not need a TURN: `runtime/claude/roster.js` reads it off a CLI handshake with a prompt
+// that never yields (MEASURED — zero messages, no API request). The live roster is what a picker
+// offers and what a launch resolves against (`runtime/claude/models.js`); `MODEL_IDS` / `ID_TO_ALIAS`
+// below answer only when that read FAILS, and they also name the legacy spellings an old record
+// may still carry. ⚠ DO NOT ADD A ROW HERE FOR A NEW MODEL — the live roster already offers it.
 //
 // THE SENTINEL BLOCK below is PURE: no electron / fs / SDK / require reference inside it, so
 // test/session-model.test.mjs slices it and evaluates it verbatim in a plain Node context (the
@@ -128,16 +132,22 @@ function normalizeModel(value) {
  * `'default'` is not a pick — it is "the CLI's own", i.e. no opinion — so it must not END a chain
  * whose lower links may have one. Every launch lane spells its precedence as
  * `chainModel(a) || chainModel(b) || …`, so a link that names nothing this build knows steps
- * aside instead of silently spending the SDK default and discarding the rest (F-5: unknown model
- * FALLS BACK, never refuses).
+ * aside instead of silently spending the SDK default and discarding the rest. ⚠ F-5's old
+ * corollary — "an unknown model FALLS BACK, never refuses" — is REVERSED (2026-09-22, below).
  * ⚠ IT LIVES HERE, NOT IN A LANE, because there are two lanes — the button
  * (`session-launch-op.js › templateModel`) and the directive (`launch-directives.js › spawn`) —
  * and a rule restated once per lane is a rule that drifts in one of them.
  */
+// ⚠ **VOCABULARY-FREE SINCE 2026-09-22.** It answered `normalizeModel(value)` and so turned every
+// id this build's frozen table did not know into `''` — the chain then FELL THROUGH to the next
+// link and, at the bottom, to the product fallback: an MCP launch asking for a model this build
+// predated (or mistyped) started Sonnet and echoed the id it was asked for. A link now answers
+// the pick AS GIVEN, and the launch funnel resolves it on the live roster or REFUSES it with a
+// sentence (`session-launch.js`, `runtime/model-catalog.js › modelRefusal`).
+// ⚠ `'default'` STILL STEPS ASIDE — it is "no opinion", not a model — and so does absent.
 function chainModel(value) {
-  if (!value) return '';
-  const alias = normalizeModel(value);
-  return alias === 'default' ? '' : alias;
+  const v = typeof value === 'string' ? value.trim() : '';
+  return !v || v === 'default' ? '' : v;
 }
 
 // ── ⚠ THE PRODUCT'S DEFAULT MODEL (2026-09-06, Samuel's back-fill ruling) ────────────────────

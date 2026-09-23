@@ -157,25 +157,26 @@ test("MODEL: the template's default slots in BELOW the directive's param and ABO
   // 1. The orchestrator's EXPLICIT param wins — a deliberate per-call choice beats a default.
   const explicit = withTemplate("claude-haiku-5");
   await explicit.api.handle(row({ model: "claude-opus-5", template_id: TPL }), WS);
-  assert.equal(explicit.cfg.lastSpec.model, "opus");
+  // 2026-09-22: handed on as given; the launch spec resolves it on the live roster.
+  assert.equal(explicit.cfg.lastSpec.model, "claude-opus-5");
 
   // 2. With no param, the TEMPLATE's default wins over the channel's stored `sonnet`.
   const fromTemplate = withTemplate("claude-opus-5");
   await fromTemplate.api.handle(row({ model: "", template_id: TPL }), WS);
-  assert.equal(fromTemplate.cfg.lastSpec.model, "opus");
+  assert.equal(fromTemplate.cfg.lastSpec.model, "claude-opus-5");
 
   // 3. A template naming NO model falls through to the channel's pick.
   const noModel = withTemplate(null);
   await noModel.api.handle(row({ model: "", template_id: TPL }), WS);
   assert.equal(noModel.cfg.lastSpec.model, "sonnet");
 
-  // 4. ⚠ F-5: a template naming a model THIS BUILD DOES NOT KNOW falls through too — it does not
-  //    throw the operator's own channel default away, and it does not refuse. Refusing would make
-  //    a template unusable on any machine running an older desktop build, which is the common case.
+  // 4. ⚠ F-5 REVERSED (2026-09-22): a template naming a model this build's frozen table does not
+  //    know is handed on AS GIVEN. The funnel resolves it on the runtime's LIVE roster (so a model
+  //    the CLI started offering after this build shipped launches) or refuses it with `no-model`
+  //    and the list it does offer — never a silent swap for the channel's pick.
   const unknown = withTemplate("claude-from-the-future-9");
   await unknown.api.handle(row({ model: "", template_id: TPL }), WS);
-  assert.equal(unknown.cfg.lastSpec.model, "sonnet");
-  assert.equal(unknown.cfg.lastSpec.idle, false, "…and the launch still happens (the fixture carries a goal)");
+  assert.equal(unknown.cfg.lastSpec.model, "claude-from-the-future-9");
 });
 
 // ⚠ THE NEGATIVE PIN. `template-approval` is the BUTTON lane's answer to its own renderer when a

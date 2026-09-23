@@ -152,13 +152,11 @@ export interface SpaBridgeSessions {
    * so a park/resume, a crash resume or the post-sign-in relaunch keeps it — a
    * switch that only told the SDK would silently revert.
    *
-   * `model` is one of FOUR ids: `"claude-fable-5"`, `"claude-opus-5"`,
-   * `"claude-sonnet-5"`, `"claude-haiku-4-5-20251001"`. ⚠ ANYTHING ELSE — a
-   * typo, an empty string, a model this desktop build has not heard of — CLEARS
-   * the override rather than being refused, because "let the CLI choose" is a
-   * legitimate thing to ask for and is what an unset channel already does. So
-   * the answer is `{ ok: true }` with `model` reporting what main actually
-   * applied, which will be `"default"` in that case: **render MAIN's value,
+   * `model` is an id from that runtime's LIVE catalog (2026-09-22 — it was four
+   * frozen Claude ids). `""` is the product default. ⚠ AN ID THE RUNTIME DOES NOT
+   * OFFER IS REFUSED — `{ ok: false, reason: "no-model", detail }`, with `detail`
+   * the sentence naming what it does offer; it used to silently RESET the session.
+   * `model` on success is what main actually recorded: **render MAIN's value,
    * never an echo of the request.**
    *
    * ⚠ IT IS NOT `channels.setLaunchPosture`, whose `model` field governs the
@@ -172,7 +170,7 @@ export interface SpaBridgeSessions {
     taskId: string,
     model: string,
     agentId?: string
-  ): Promise<{ ok: boolean; reason?: string; model?: string }>;
+  ): Promise<{ ok: boolean; reason?: string; model?: string; detail?: string }>;
   /** The agent's WORK RING — its own text, its tool calls with names, their
    *  results, what it posted. Read once on mount, then listen; a push-only
    *  surface leaves a freshly opened window blank until the next event. */
@@ -289,6 +287,8 @@ export interface SpaBridgeSessions {
      * 404-never-403 and the difference is deliberately not observable.
      */
     reason?: string;
+    /** With `reason: "no-model"` (2026-09-22): main's sentence, naming the models it offers. */
+    detail?: string;
     /** Present ONLY with `reason: "template-approval"` — the text to show. */
     template?: { name?: string | null; instructions?: string | null } | null;
   }>;

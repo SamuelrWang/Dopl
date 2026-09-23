@@ -83,9 +83,13 @@ test("CONTRACT: the refusal words are this tree's existing vocabulary, verbatim"
   // all, and the two are opposite instructions to an orchestrator. Its producer is not in
   // `session-launch.js` either, so the subset loop below stays one-directional; section 4 pins
   // the producer.
+  // ⚠ ELEVEN SINCE 2026-09-22: `no-model`, produced by `session-launch.js › launch` when a launch
+  // names a model the resolved runtime's LIVE roster does not offer (it used to fall through to the
+  // product default and echo the id it was asked for). Its producer IS in `session-launch.js`, so
+  // the subset loop below covers it.
   assert.deepEqual(wire.REFUSAL_REASONS,
     ["cap", "busy", "no-sdk", "auth-hold", "no-bridge", "no-counterparty", "no-template",
-      "no-session", "bad-name", "no-chain"]);
+      "no-session", "bad-name", "no-chain", "no-model"]);
   const launchSrc = readFileSync(join(MAIN, "session-launch.js"), "utf8");
   const produced = [...launchSrc.matchAll(/skipped: '([a-z-]+)'/g)].map((m) => m[1]);
   for (const word of produced) {

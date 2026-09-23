@@ -10,6 +10,8 @@ import {
 } from "@/shared/ui/form-dialog";
 import { ConfirmDialog } from "@/shared/ui/confirm-dialog";
 import { agentModelLabel, agentModelOptionsFor } from "@/features/channels/lib/agent-models";
+import { modelOptionsFor } from "@/features/channels/lib/model-catalog";
+import { useLaunchSelection } from "@/features/channels/hooks/use-launch-selection";
 import type { AgentTemplate, TemplateVisibility } from "../client/types";
 import {
   draftFromTemplate,
@@ -241,15 +243,20 @@ export function TemplateEditor({
    * not know is APPENDED rather than dropped, so an older template keeps its
    * selection instead of showing none.
    */
+  // ⚠ 2026-09-22: A TEMPLATE'S MODEL IS THE DEFAULT RUNTIME'S (the directive chain reads it only
+  // there), so the row offers THAT runtime's live catalog — a model the CLI added after this bundle
+  // shipped included. The frozen list is the plain-browser / older-desktop fallback.
+  const defaults = useLaunchSelection({ kind: "defaults" });
+  const catalog = defaults.catalogFor(defaults.defaultRuntime);
   const models = useMemo(
     () => [
       { key: NO_MODEL, label: agentModelLabel(NO_MODEL) },
-      ...agentModelOptionsFor(draft.model).map((o) => ({
+      ...(catalog ? modelOptionsFor(catalog, draft.model) : agentModelOptionsFor(draft.model)).map((o) => ({
         key: o.value,
         label: o.label,
       })),
     ],
-    [draft.model]
+    [catalog, draft.model]
   );
 
   // 🔒 A STORED `team` ROW INSIDE A CONTAINER THAT HAS NO TEAMS. Shown, hinted,

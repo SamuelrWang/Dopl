@@ -19,7 +19,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import {
-  loadCatalog, loadCodexModels, claudeModels, CLAUDE_IDS, noClaude,
+  loadCatalog, loadCodexModels, claudeModels, claudeTable, CLAUDE_IDS, noClaude,
   fakeClient, row, adapter, CODEX_DESCRIPTOR, settle,
 } from "./_model-catalog-harness.mjs";
 
@@ -43,7 +43,7 @@ function repairableCodex() {
 
 const claudeAdapter = () => adapter(
   { id: "claude", label: "Claude Code", models: { source: "frozen", dimensions: null } },
-  () => claudeModels.models());
+  () => claudeTable());
 
 /** Run `fn` with `Date.now` shifted forward by `ms` — the failure floor, without a real wait. */
 async function later(ms, fn) {
