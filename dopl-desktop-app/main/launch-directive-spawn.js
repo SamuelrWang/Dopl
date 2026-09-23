@@ -83,7 +83,7 @@ async function resolveModel(runtimeId, d, identity) {
  * and the live channel value — the echo is what it enforces.
  */
 function planPosture(d, runtimeId, chainAllowed) {
-  const order = require('./launch-directive-runtime').toolOrderFor(runtimeId);
+  const order = require('./session-profiles').toolModesFor(runtimeId); // that runtime's words, narrowest first
   const askedTools = d.startToolMode && order.indexOf(d.startToolMode) !== -1 ? d.startToolMode : '';
   if (d.startToolMode && !askedTools) {
     diag('launch-directive: tool mode', d.startToolMode, 'is not a', runtimeId || 'default-runtime',

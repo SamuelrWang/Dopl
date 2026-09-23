@@ -55,8 +55,10 @@ export const IDENTITY_COMMIT_SRC = readFileSync(join(MAIN, "agent-identity-commi
 // the containment inputs every case in this suite asserts are the real ones.
 export const SPAWN_SRC = readFileSync(join(MAIN, "launch-directive-spawn.js"), "utf8");
 export const wire = require_(join(MAIN, "launch-directive-wire.js"));
-// The shared runtime-words helper (ruling R3), evaluated REAL against the stubbed registry.
-export const RUNTIME_WORDS_SRC = readFileSync(join(MAIN, "launch-directive-runtime.js"), "utf8");
+const LAUNCH_DEFAULT = require_(join(MAIN, "runtime", "launch-default.js"));
+const POSTURE = require_(join(MAIN, "launch-posture.js"));
+const PROFILES = require_(join(MAIN, "session-profiles.js"));
+const floorMessages = (m) => (m === "auto_outbound" || m === "auto_both" ? "auto_both" : "auto_inbound");
 /** A runtime's REAL Axis-A words, narrowest first — its own `tools.js › TOOL_MODES`. */
 export function runtimeToolModes(rid) {
   try { return require_(join(MAIN, "runtime", rid, "tools.js")).TOOL_MODES.slice(); } catch { return []; }
@@ -123,6 +125,27 @@ export function boot(over = {}) {
   const runtimeAsks = []; // every C3 `resolveLaunchRuntime` call ({ pick, identity, channelId })
   const startAsks = []; // every C1 `launchStartModes(channelId, runtimeId)` read — the runtime asked
   const ceilingAsks = []; // every C1 `launchPostureFor(channelId, runtimeId)` read — the ceiling's runtime
+  // The registry stub, shared by `./runtime` and the REAL C3 resolver's `deps.registry`.
+  const rids = cfg.runtimeIds || ["claude", "codex", "cursor"];
+  const registry = {
+    DEFAULT_ID: rids[0],
+    ids: () => rids.slice(),
+    acquire: async (rid) => {
+      acquires.push(rid);
+      if ((cfg.runtimeUnavailable || []).indexOf(rid) !== -1) {
+        throw new Error(`${rid} is not available on this Mac`);
+      }
+      return {};
+    },
+    resolve: (rid) => ({ descriptor: { id: rid, models: {} } }),
+    runtimeFor: (rid) => ({
+      models: async () => {
+        rosters.push(rid);
+        if (cfg.rosterThrows) throw new Error("model/list did not answer in time");
+        return (cfg.rosters || {})[rid] || { source: "live", ids: [], aliases: [] };
+      },
+    }),
+  };
   const stub = (id) => {
     if (id === "./api") {
       return {
@@ -215,11 +238,8 @@ export function boot(over = {}) {
       };
     }
     if (id === "./launch-directive-wire") return wire;
-    if (id === "./launch-directive-runtime") {
-      const m = { exports: {} };
-      new Function("require", "module", "exports", RUNTIME_WORDS_SRC)(stub, m, m.exports);
-      return m.exports;
-    }
+    // Each runtime's REAL Axis-A words (`toolModesFor`, C2's helper) — it loads under node.
+    if (id === "./session-profiles") return require_(join(MAIN, "session-profiles.js"));
     // ⚠ THE CONTAINMENT NARROWING (2026-09-02, ruling B7) — the REAL table, not a stub. It is the
     // one statement of the profile vocabulary and it is electron-free by contract, so a fake here
     // would let this suite go green about a narrowing that never happened.
@@ -251,34 +271,7 @@ export function boot(over = {}) {
     // ⚠ **`ids` DOES NOT CONTAIN AN UNKNOWN ID, WHICH IS THE POINT OF THE MEMBERSHIP TEST**: the
     // real `resolve()` fails OPEN to the default, so `acquire('nonsense')` would SUCCEED. A case
     // asking for an unregistered runtime must be refused by `ids()`, before `acquire` is reached.
-    if (id === "./runtime") {
-      const rids = cfg.runtimeIds || ["claude", "codex", "cursor"];
-      return {
-        DEFAULT_ID: rids[0],
-        ids: () => rids.slice(),
-        acquire: async (rid) => {
-          acquires.push(rid);
-          if ((cfg.runtimeUnavailable || []).indexOf(rid) !== -1) {
-            throw new Error(`${rid} is not available on this Mac`);
-          }
-          return {};
-        },
-        resolve: (rid) => ({ descriptor: { id: rid, models: {} } }),
-        // Each runtime's REAL Axis-A words, narrowest first (its `tools.js`, which the descriptor's
-        // `toolMode.options` is built from) — the clamp order the lane must use (ruling R3).
-        descriptorFor: (rid) => ({
-          id: rid || rids[0],
-          toolMode: { options: runtimeToolModes(rid || rids[0]).map((value) => ({ value })) },
-        }),
-        runtimeFor: (rid) => ({
-          models: async () => {
-            rosters.push(rid);
-            if (cfg.rosterThrows) throw new Error("model/list did not answer in time");
-            return (cfg.rosters || {})[rid] || { source: "live", ids: [], aliases: [] };
-          },
-        }),
-      };
-    }
+    if (id === "./runtime") return registry;
     // ⚠ 2026-09-23 — THE RUNTIME'S OWN DEFAULT MODEL, stubbed at its seam: the real module settles a
     // live catalog. `cfg.runtimeDefault` is what this account's catalog would offer; absent, a no-pick
     // stays no-pick. `test/runtime-launch-default.test.mjs` drives the real rule.
@@ -286,21 +279,12 @@ export function boot(over = {}) {
     // identity's model travels as given (a roster that cannot say — the real function's fail-open).
     if (id === "./runtime/launch-default") {
       return {
-        // C3 (a1's contract), stubbed at its seam with its documented order and refusal:
-        // pick → identity.runtime → channel → registry default; an unregistered or unusable pick /
-        // identity runtime answers `{ ok: false }`.
-        resolveLaunchRuntime: async ({ pick, identity, channelId }) => {
-          runtimeAsks.push({ pick, identity, channelId });
-          const rids = cfg.runtimeIds || ["claude", "codex", "cursor"];
-          const want = pick || (identity && identity.runtime) || "";
-          if (want) {
-            const usable = rids.includes(want) && !(cfg.runtimeUnavailable || []).includes(want);
-            return usable
-              ? { ok: true, runtimeId: want, source: pick ? "pick" : "identity" }
-              : { ok: false, reason: rids.includes(want) ? "unavailable" : "unregistered", runtimeId: want };
-          }
-          if (cfg.channelRuntime) return { ok: true, runtimeId: cfg.channelRuntime, source: "channel" };
-          return { ok: true, runtimeId: rids[0], source: "default" };
+        // C3 — the REAL resolver (a1), over this harness's registry and channel pick.
+        resolveLaunchRuntime: (args) => {
+          runtimeAsks.push(args);
+          return LAUNCH_DEFAULT.resolveLaunchRuntime(args, {
+            registry, channelRuntime: { getChannelRuntime: () => cfg.channelRuntime || "" },
+          });
         },
         withRuntimeDefault: async (_adapter, model) => (model || cfg.runtimeDefault || ""),
         identityModelFor: async (rid, model) => {
@@ -351,9 +335,21 @@ export function boot(over = {}) {
         // reducer's fail-closed coercion live, and it is driven for real in
         // `session-mode-floor.test.mjs`. What THIS harness controls is which answer comes back,
         // so a case can ask what the DIRECTIVE lane does with each.
-        setModeByTask: (a) => { modes.push(a); return cfg.setMode || { ok: true }; },
-        // The live session object, as `sessionOn` answers it — only its `runtimeId` is read.
-        sessionOn: (a) => (cfg.live || []).find((r) => r && r.agentId === a.agentId) || null,
+        // C2's reply shape, emulated with the REAL rules: a pinned mode clamps to the channel
+        // value for the session's runtime (its own order / message bits), then the windowless
+        // message floor; `{ ok, tools, messages, clamped }`. `cfg.setMode` overrides the answer.
+        setModeByTask: (a) => {
+          modes.push(a);
+          if (cfg.setMode) return cfg.setMode;
+          const live = (cfg.live || []).find((r) => r && r.agentId === a.agentId) || {};
+          const rid = live.runtimeId || null;
+          const c = (cfg.ceilings && cfg.ceilings[rid]) || cfg.ceiling || { tools: "bypass", messages: "auto_both" };
+          const clampTo = a.axis === "tools"
+            ? POSTURE.narrowTo(a.mode, c.tools, PROFILES.toolModesFor(rid))
+            : POSTURE.narrowMessageMode(a.mode, c.messages);
+          const mode = a.axis === "messages" ? floorMessages(clampTo) : clampTo;
+          return { ok: true, [a.axis]: mode, clamped: clampTo !== a.mode };
+        },
       };
     }
     if (id === "./agent-names") {

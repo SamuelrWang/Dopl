@@ -140,49 +140,38 @@ test("APPLY: it is PER AGENT — a sibling on the same thread is not touched", a
 });
 
 // ── 4. THE CLAMP — "nothing an orchestrator writes can widen it" ─────────────────────────
+// The clamp is the ENGINE's (`setModeByTask` with `pinned: true`, C2): the lane hands the ask on
+// pinned and reports the engine's answer. The harness emulates that reply with the real rules.
 
-test("CLAMP: a request WIDER than the operator's channel posture lands at the ceiling", async () => {
+test("CLAMP: a request WIDER than the channel posture is REPORTED at the ceiling", async () => {
   const h = boot({ live: live(), ceiling: { tools: "auto", messages: "auto_inbound" } });
   await h.api.handle(modeRow({ target_tool_mode: "bypass", target_message_mode: "auto_both" }), WS);
-  assert.deepEqual(h.modes.map((m) => m.mode), ["auto", "auto_inbound"],
-    "the operator's own durable pair is the ceiling on both axes");
-  // ⚠ IT CLAMPS, IT DOES NOT REFUSE — `setModeByTask`'s own rule for the windowless floor one
-  // layer down, and the right trade for the same reason: refusing would apply nothing when part
-  // of what was asked for was legal.
-  // ⚠ AND THE CLAMP IS NOW REPORTED TO THE REQUESTER, not only to the operator's log
-  // (2026-09-02). A bare `{ done: true }` here answered `taken` for a posture that had been
-  // narrowed, and an orchestrator sized its next instruction for room the agent does not have —
-  // the exact defect T24's echo closed on the LAUNCH lane. ⚠ NO `appliedChain`: a re-posture
-  // starts nothing and decides no chaining.
+  assert.deepEqual(h.modes.map((m) => [m.mode, m.pinned]), [["bypass", true], ["auto_both", true]],
+    "the ask goes to the engine PINNED — the engine is the one clamp");
+  // ⚠ IT CLAMPS, IT DOES NOT REFUSE, and the clamp is REPORTED to the requester (the echo rides
+  // the `done`), never only the operator's log. ⚠ NO `appliedChain`: a re-posture decides none.
   assert.deepEqual(decided(h), [{
     directiveId: DID, status: "done", appliedTools: "auto", appliedMessages: "auto_inbound",
   }]);
-  assert.ok(h.logged.some((l) => l.includes("CLAMPED") && l.includes("auto/auto_inbound")));
+  assert.ok(h.logged.some((l) => l.includes("CLAMPED") && l.includes("bypass")));
 });
 
 test("CLAMP: a request NARROWER than the ceiling is applied as asked", async () => {
   const h = boot({ live: live(), ceiling: { tools: "bypass", messages: "auto_both" } });
-  await h.api.handle(modeRow({ target_tool_mode: "manual", target_message_mode: "ask" }), WS);
-  assert.deepEqual(h.modes.map((m) => m.mode), ["manual", "ask"]);
+  await h.api.handle(modeRow({ target_tool_mode: "manual", target_message_mode: "auto_inbound" }), WS);
+  assert.deepEqual(decided(h), [{
+    directiveId: DID, status: "done", appliedTools: "manual", appliedMessages: "auto_inbound",
+  }]);
   assert.ok(!h.logged.some((l) => l.includes("CLAMPED")));
 });
 
 test("CLAMP: an UNSET channel posture is the restrictive default, so nothing widens", async () => {
-  // ⚠ An unset or unreadable record IS the narrowest tool word and `ask`; the engine then applies
-  // the windowless message floor.
+  // An unset record IS the runtime's narrowest word and `ask`; the windowless floor lifts `ask`.
   const h = boot({ live: live(), ceiling: { tools: "manual", messages: "ask" } });
   await h.api.handle(modeRow({ target_tool_mode: "bypass", target_message_mode: "auto_both" }), WS);
-  assert.deepEqual(h.modes.map((m) => m.mode), ["manual", "ask"]);
-});
-
-test("CLAMP: the comparison is an index, so an unknown CEILING clamps to itself", async () => {
-  // ⚠ A ceiling this build does not know indexes to -1, which is narrower than every real mode,
-  // so every request is clamped to it — and the reducer then coerces the unknown value
-  // fail-closed. Two layers, both failing in the same direction, which is the only direction a
-  // posture may fail in.
-  const h = boot({ live: live(), ceiling: { tools: "from_the_future", messages: "ask" } });
-  await h.api.handle(modeRow({ target_tool_mode: "auto" }), WS);
-  assert.deepEqual(h.modes.map((m) => m.mode), ["from_the_future"]);
+  assert.deepEqual(decided(h), [{
+    directiveId: DID, status: "done", appliedTools: "manual", appliedMessages: "auto_inbound",
+  }]);
 });
 
 // ── 5. THE REFUSALS, IN THE CLOSED WIRE VOCABULARY ───────────────────────────────────────
@@ -238,10 +227,10 @@ const codexLive = () => [liveRow("a1b2c3d4", { runtimeId: "codex" })];
 test("RUNTIME: a Codex agent is re-postured in Codex words, against the CODEX record", async () => {
   const h = boot({ live: codexLive(), ceilings: { codex: { tools: "on-request", messages: "auto_both" } } });
   await h.api.handle(modeRow({ target_tool_mode: "never" }), WS);
-  assert.deepEqual(h.ceilingAsks, ["codex"], "the ceiling is the SESSION runtime's record (C1)");
-  assert.deepEqual(h.modes.map((m) => [m.axis, m.mode, m.pinned]), [["tools", "on-request", true]],
-    "`never` is wider than `on-request` in CODEX order, so it clamps there");
-  assert.deepEqual(decided(h), [{ directiveId: DID, status: "done", appliedTools: "on-request" }]);
+  assert.deepEqual(h.modes.map((m) => [m.axis, m.mode, m.pinned]), [["tools", "never", true]],
+    "a Codex word reaches the engine as asked — it used to be emptied as not-a-Claude-word");
+  assert.deepEqual(decided(h), [{ directiveId: DID, status: "done", appliedTools: "on-request" }],
+    "`never` is wider than `on-request` in CODEX order, so the engine clamps there");
 });
 
 // 🔒 P3-07: Claude's order put `manual` first, so a Codex `untrusted` (unknown to it) clamped to
@@ -249,7 +238,7 @@ test("RUNTIME: a Codex agent is re-postured in Codex words, against the CODEX re
 test("RUNTIME: asking Codex's narrowest against a `never` ceiling gets the narrowest", async () => {
   const h = boot({ live: codexLive(), ceilings: { codex: { tools: "never", messages: "auto_both" } } });
   await h.api.handle(modeRow({ target_tool_mode: "untrusted" }), WS);
-  assert.deepEqual(h.modes.map((m) => m.mode), ["untrusted"]);
+  assert.deepEqual(decided(h), [{ directiveId: DID, status: "done", appliedTools: "untrusted" }]);
 });
 
 test("RUNTIME: a word the agent's runtime does not offer is NOT applied — never coerced", async () => {

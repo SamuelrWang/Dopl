@@ -129,6 +129,7 @@ test("REFUSE: an UNREGISTERED runtime is refused — it never falls through to t
   assert.deepEqual(decided(h), [{ directiveId: DID, status: "refused", refusalReason: "no-sdk" }]);
   assert.equal(h.cfg.lastSpec, undefined, "and NOTHING was launched");
   assert.deepEqual(h.resolves, [], "an explicit pick is answered BEFORE any identity fetch");
+  assert.deepEqual(h.acquires, [], "C3's membership test answered BEFORE acquire");
 });
 
 test("REFUSE: a REGISTERED runtime this Mac cannot start is refused, with the runtime named", async () => {
@@ -136,6 +137,7 @@ test("REFUSE: a REGISTERED runtime this Mac cannot start is refused, with the ru
   await h.api.handle(launchRow({ runtime: "codex" }), WS);
   assert.deepEqual(decided(h), [{ directiveId: DID, status: "refused", refusalReason: "no-sdk" }]);
   assert.equal(h.cfg.lastSpec, undefined);
+  assert.deepEqual(h.acquires, ["codex"], "it really asked the adapter's own availability gate");
   assert.ok(h.logged.some((l) => l.includes("codex") && l.includes("REFUSING")),
     "the diagnostic NAMES the runtime — a generic no-sdk is what U9 replaces");
 });
