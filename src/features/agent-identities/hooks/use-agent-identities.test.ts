@@ -1,31 +1,5 @@
 // @vitest-environment jsdom
-/**
- * WHAT THE LIST HOOK ANSWERS WITH — and, since 2026-08-26, what it must NEVER
- * answer with.
- *
- * ⚠ THIS FILE WAS THE DEV MOCK FALLBACK'S GATE-KEEPER AND IS NOW ITS EPITAPH
- * (F-332, ✅ RESOLVED). `../client/mock.ts` and the `isMockFallback` branch were
- * written while `20260822200000_agent_templates.sql` was unapplied; it is
- * applied (INVARIANTS §5A, §12), and on a link CONTAINER a 403/404 from this
- * endpoint is a NORMAL answer — so the branch had become a dev build painting
- * fabricated identities under a channel that has none. The file is **rewritten
- * down to the properties that survive the deletion, not removed** (INVARIANTS
- * §14): three of the four were always about the hook rather than the fixtures,
- * and the fourth — the plain error state — was the production-only case and is
- * now the ONLY case.
- *
- *  - **A FAILED READ RENDERS EMPTY PLUS THE ERROR, IN EVERY BUILD.** Nothing is
- *    substituted for a failure, so there is no build in which this surface shows
- *    rows the server did not send.
- *  - **A SUCCESSFUL `[]` IS A REAL ANSWER**, distinct from a failure, so the
- *    real empty states stay reachable (INVARIANTS §11 — UNKNOWN is not EMPTY).
- *  - **THE ERROR IS NEVER SWALLOWED.** The page's alert line is driven by the
- *    `error` this hook returns.
- *  - **A REAL (EVEN STALE) ANSWER SURVIVES A FAILED REFETCH.**
- *
- * The transport is mocked — this file is about what the hook projects, not about
- * TanStack (the agent-identities core's rule for its own hooks).
- */
+// Nothing is substituted for a failed read, in any build (INVARIANTS §11: unknown is not empty).
 
 import { describe, expect, it, vi } from "vitest";
 import { renderHook } from "@testing-library/react";
@@ -57,12 +31,7 @@ function read(over: Partial<FakeQuery>) {
 }
 
 describe("a failed read is a failed read", () => {
-  /**
-   * ⚠ THE TEST THIS FILE NOW EXISTS FOR. A 403 or 404 on this endpoint is an
-   * ORDINARY answer on a link container (a roster change, a stale header, a
-   * guest opening the tab); the surface must render the plain error state and
-   * NOTHING else, with no dev/production asymmetry to reason about.
-   */
+  // A 403/404 here is an ordinary answer on a link container, so no fallback rows may appear.
   it("renders the PLAIN error state — no rows, error intact", () => {
     const boom = new Error("forbidden");
     const result = read({ error: boom });
@@ -77,7 +46,7 @@ describe("a failed read is a failed read", () => {
   });
 
   it("lets a real (even stale) answer win on a failed refetch", () => {
-    const rows = [{ id: "tpl-real" }] as unknown as AgentIdentity[];
+    const rows = [{ id: "id-real" }] as unknown as AgentIdentity[];
     const result = read({ data: rows, error: new Error("refetch failed") });
     expect(result.identities).toBe(rows);
   });

@@ -1,75 +1,14 @@
-/**
- * **F-438 — THE POSTURE ASK, THROUGH THE DISPATCHER** (fixed 2026-09-02, slice
- * A6b), and **C11's `chain` TRI-STATE** on the same call site.
- *
- * ⚠ **THE BUG THIS FILE EXISTS FOR SHIPPED IN EVERY LAYER BUT ONE.**
- * `channel-schema.ts` published `posture.tools`, `posture.messages` and
- * `posture.chain`;
- * `channel-ops-launch.ts › opLaunchAgent` accepted them; `schema-launch.ts`
- * validated them; `service-launch.ts` stored them; and
- * `20260910120000_channel_launch_directives_posture.sql` gave them columns and
- * CHECKs. `channel-dispatch-agents.ts`'s `case "launch"` read NONE of
- * them, so a caller asking for a narrower agent got the operator's stored
- * ceiling and was told nothing.
- *
- * ⚠ **AND IT SURVIVED BECAUSE THE DIRECTION OF THE BUG IS SAFE.** A dropped ask
- * can only WIDEN back to the ceiling, never past it, so nothing was
- * over-granted; the row simply recorded "did not ask", which is also what an
- * honest omission looks like. What was lost is the ability to ask for LESS —
- * `posture.tools: "manual"`, `posture.chain: "off"` — which T24 shipped so an orchestrator could
- * hand a worker a narrower posture than its own.
- *
- * ⚠ **SO EVERY CASE HERE IS DRIVEN THROUGH `registerChannelTool`, NOT THROUGH
- * `opLaunchAgent`.** That is the whole lesson of the finding:
- * `channel-ops-launch-body.test.ts` already enumerates every key of the create
- * body and would have caught this — except it calls the handler DIRECTLY and
- * therefore never sees the dispatcher. A guard that skips the seam cannot see a
- * seam defect.
- *
- * ⚠ `channel-` filename prefix, like every other file the parity split-scan and
- * the removed-vocabulary source scan walk.
- */
+// The posture ask and the `chain` tri-state, driven through `registerChannelTool` because the
+// dispatcher is the seam a direct-handler suite cannot see (F-438).
 
 import { describe, it, expect, vi } from "vitest";
-import type { DoplClient, LaunchDirective } from "@dopl/client";
+import type { DoplClient } from "@dopl/client";
 import { registerChannelTool } from "./channel";
 import { CHANNEL_INPUT_SHAPE } from "./channel-schema";
+import { CHANNEL_ROW as CHANNEL, LAUNCH, directive } from "./launch-fixtures";
 import { callTool, stub } from "./narration-fixtures";
 
-const CHANNEL = {
-  id: "ch-1",
-  workspaceId: "ws-1",
-  slug: "general",
-  name: "General",
-  topic: "",
-  visibility: "private" as const,
-  createdBy: "u1",
-  archivedAt: null,
-  createdAt: "2026-01-01T00:00:00Z",
-  updatedAt: "2026-01-01T00:00:00Z",
-};
-
-function directive(over: Partial<LaunchDirective> = {}): LaunchDirective {
-  return {
-    id: "55555555-5555-5555-5555-555555555555",
-    channelId: "ch-1",
-    threadId: null,
-    goal: "ship the parser",
-    model: null,
-    status: "pending",
-    identityId: null,
-    identityName: null,
-    refusalReason: null,
-    agentId: null,
-    claimedAt: null,
-    decidedAt: null,
-    expiresAt: "2026-09-02T12:02:00.000Z",
-    createdAt: "2026-09-02T12:00:00.000Z",
-    ...over,
-  } as LaunchDirective;
-}
-
-/** The create spy every case reads — the ONE thing the dispatcher decides. */
+/** The create spy every case reads: the one thing the dispatcher decides. */
 function launchStub() {
   const createLaunchDirective = vi.fn(async () => ({
     offline: false,
@@ -86,17 +25,6 @@ function launchStub() {
   };
 }
 
-const LAUNCH = {
-  op: "manage",
-  action: "launch",
-  channel: "general",
-  // ⚠ REQUIRED SINCE 2026-09-15 — an agent that launches an agent names it, and a call without
-  // this measures the missing-param refusal instead of the subject of these cases.
-  name: "Scout",
-  body: "ship it",
-  wait_ms: 0,
-};
-
 const run = (client: DoplClient, args: Record<string, unknown>) =>
   callTool(registerChannelTool, client, "dopl_channel", args);
 
@@ -111,8 +39,7 @@ describe("F-438 — the two posture axes reach the wire", () => {
   });
 
   it("a caller that asks for NEITHER still sends neither — absent is not a value", async () => {
-    // ⚠ The honest omission must stay distinguishable from a dropped ask, which
-    // is the whole reason the bug was invisible: both produced the ceiling.
+    // An honest omission must stay distinguishable from a dropped ask; both produce the ceiling.
     const { client, createLaunchDirective } = launchStub();
     await run(client, LAUNCH);
     const body = createLaunchDirective.mock.calls[0][0] as Record<string, unknown>;
@@ -121,8 +48,7 @@ describe("F-438 — the two posture axes reach the wire", () => {
   });
 
   it('action="posture" — the sibling arm that always did — is unchanged', async () => {
-    // ⚠ THE CONTROL. This op read both axes all along, which is what proved the
-    // launch arm was an OMISSION rather than a design.
+    // The control: this arm always read both axes.
     const createAgentDirective = vi.fn(async () => ({
       offline: false,
       directive: { ...directive(), kind: "set_agent_mode" },
@@ -148,11 +74,9 @@ describe("F-438 — the two posture axes reach the wire", () => {
   });
 });
 
-describe("C11 — `chain` is three words at the seam and a boolean on the wire", () => {
+describe("`chain` is three words at the seam and a boolean on the wire", () => {
   it("publishes the three states rather than an optional boolean", () => {
-    // ⚠ Asserted through the PARSER, not off a zod internal: what matters is
-    // which values a caller can send, and that a BOOLEAN is no longer one of
-    // them — `true`/`false` were the whole of the old surface.
+    // Through the parser: a boolean is no longer a value a caller can send.
     for (const word of ["inherit", "on", "off"]) {
       expect(
         CHANNEL_INPUT_SHAPE.posture.safeParse({ chain: word }).success,
@@ -176,14 +100,7 @@ describe("C11 — `chain` is three words at the seam and a boolean on the wire",
     expect(createLaunchDirective.mock.calls[0][0]).toMatchObject({ chain: wire });
   });
 
-  /**
-   * ⚠ **`inherit` IS `undefined`, NOT `false`, AND THIS IS THE CASE THAT SAYS
-   * SO.** Flattening the two was a live wire bug (GAP C, `directiveFrom`), and
-   * it was possible because the published param was an optional boolean whose
-   * `.describe()` had to spend a paragraph insisting that omitting it was not
-   * `false`. `false` FORBIDS chaining; absent takes the operator's channel
-   * setting, which may be ON. Three words in, three states out.
-   */
+  // `false` forbids chaining; absent takes the operator's channel setting, which may be ON.
   it.each(["inherit", undefined])("chain=%s sends NOTHING, not false", async (word) => {
     const { client, createLaunchDirective } = launchStub();
     await run(client, {

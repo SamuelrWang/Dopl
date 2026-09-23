@@ -1,129 +1,46 @@
 /**
- * **A RETRY MAY NOT QUEUE A SECOND AGENT** — G10, on both agent mailboxes
- * (2026-09-02, MCP/architecture v2 slice A10).
- *
- * ⚠ **WHAT THIS SUITE IS ACTUALLY FOR.** Until this wave the rule was a
- * SENTENCE: `channel-doctrine.ts` told the caller that a timed-out launch is
- * still pending and must not be re-issued because a second launch starts a
- * second agent on the same work — and nothing enforced it. A timeout is
- * indistinguishable from a lost response, so the instruction asked the caller to
- * accept an unknown outcome. These cases are the code that replaces it.
- *
- * The four properties, each of which fails silently and in a different
- * direction:
- *  1. **THE PROBE CONVERGES.** A repeated key returns the stored row and files
- *     nothing.
- *  2. **THE PROBE SITS ABOVE THE IDENTITY, THREAD AND PRESENCE GATES.** A retry
- *     of a request that already succeeded may not be re-decided against today's
- *     world — a since-deleted identity, or a laptop that has since closed, would
- *     otherwise answer "nothing was filed" about a directive that IS filed.
- *  3. **THE RACE IS REPAIRED.** Two retries arriving together both miss the
- *     probe; the partial unique index refuses the second insert and the loser
- *     converges rather than 500-ing.
- *  4. **A 23505 THAT IS NOT THIS KEY STILL THROWS.** Both tables carry other
- *     unique objects, and swallowing on the error code alone would turn an
- *     unrelated violation into a silent success with no row.
- *
- * ⚠ AND `existing` IS PART OF THE ANSWER, not bookkeeping: the MCP result
- * renders it as `retry=existing`, which is the only thing separating "your retry
- * was absorbed" from "a second agent was requested".
+ * A retry may not queue a second agent, on both agent mailboxes: a repeated key converges on the
+ * stored row, above the identity/thread/presence gates; a lost insert race converges too; a 23505 on
+ * any other constraint still throws. `existing` is what MCP renders as `retry=existing`.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-vi.mock("./repository-launch", () => ({
-  insertLaunchDirective: vi.fn(),
-  findLaunchDirective: vi.fn(),
-  findLaunchDirectiveByClientMsgId: vi.fn(),
-  claimLaunchDirective: vi.fn(),
-  decideLaunchDirective: vi.fn(),
-}));
-// ⚠ THE FOREIGN-AGENT READ (2026-09-02, A9 / F-418). `createAgentDirection` now
-// asks whether a FRESH projection row says the target belongs to another member —
-// the only case a server can answer — so this suite has to say "no" or it reaches
-// a live Supabase client. `false` is the ordinary answer: unknown, stale and quiet
-// all still FILE, which is the whole of F-418's warning.
-vi.mock("./repository-agent-owner", () => ({ agentIsAnotherMembers: vi.fn(async () => false) }));
+const fx = await vi.hoisted(() => import("./service-launch-fixtures"));
+vi.mock("./repository-launch", () => fx.mocks.launchRepo);
+// `createAgentDirection` asks whether the target is another member's; `false` (unknown or stale still files) is the default (F-418).
+vi.mock("./repository-agent-owner", () => fx.mocks.agentOwner);
 vi.mock("./repository-directions");
-vi.mock("./repository-collab", () => ({ presenceForWorkspace: vi.fn() }));
-vi.mock("./repository-tasks", () => ({ findTaskByChannelAndId: vi.fn() }));
-// ⚠ MOCKED IN EVERY LAUNCH SUITE THOUGH NONE OF THEM NAMES A COLOUR: the create's
-// SIXTH gate (`service-launch-color.ts`) reads the channel's taken set, and that read
-// is a live `supabaseAdmin()` client. The POLICY stays real — only the READ is
-// stubbed — so these suites still execute the gate rather than skipping it, on the
-// `repository-collab` precedent one line up. The colour cases are in
-// `service-launch-color.test.ts`.
-vi.mock("./repository-session-colors", () => ({
-  foreignLiveColorsByChannel: vi.fn(async () => new Map()),
-  // ⚠ THE SECOND READ THE GATE MAKES SINCE 2026-09-14 (pending directives hold their key
-  // too). Stubbed for the same reason as the first: the POLICY stays real here, the READS
-  // do not. Its own cases are in `service-launch-color.test.ts`.
-  pendingDirectiveColors: vi.fn(async () => []),
-}));
-vi.mock("./service-shared", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("./service-shared")>();
-  return { ...actual, loadVisibleChannel: vi.fn() };
-});
-// ⚠ MOCKED THOUGH ONLY ONE CASE NAMES AN IDENTITY: `service-launch.ts` imports the
-// agent-identities barrel at module scope and that module is `server-only` with a
-// live Supabase admin client under it.
-vi.mock("@/features/agent-identities/server/service", () => ({
-  resolveIdentityRef: vi.fn(),
-}));
+vi.mock("./repository-collab", () => fx.mocks.collab);
+vi.mock("./repository-tasks", () => fx.mocks.tasks);
+vi.mock("./repository-session-colors", () => fx.mocks.sessionColors);
+vi.mock("./service-shared", (importOriginal) => fx.serviceSharedMock(importOriginal));
+vi.mock("@/features/agent-identities/server/service", () => fx.mocks.identities);
 
 import * as launchRepo from "./repository-launch";
 import * as directionRepo from "./repository-directions";
 import * as collab from "./repository-collab";
 import * as repoTasks from "./repository-tasks";
 import { resolveIdentityRef } from "@/features/agent-identities/server/service";
-import { loadVisibleChannel, type ChannelContext } from "./service-shared";
+import { loadVisibleChannel } from "./service-shared";
 import { createLaunchDirective } from "./service-launch";
 import { createAgentDirection } from "./service-directions";
-import { AGENT_DIRECTION_TTL_MS, LAUNCH_DIRECTIVE_TTL_MS } from "../constants";
+import { AGENT_DIRECTION_TTL_MS } from "../constants";
+import {
+  CHAN,
+  CHANNEL_ROW,
+  DIR,
+  ME,
+  WS,
+  ctx,
+  row,
+  wireLaunchDefaults,
+} from "./service-launch-fixtures";
 
-const WS = "22222222-2222-2222-2222-222222222222";
-const ME = "33333333-3333-3333-3333-333333333333";
-const CHAN = "11111111-1111-1111-1111-111111111111";
-const DIR = "55555555-5555-5555-5555-555555555555";
 const AGENT = "k3wpf7c5";
 const KEY = "orchestrator-run-7:launch-1";
 
-const ctx: ChannelContext = {
-  workspaceId: WS,
-  userId: ME,
-  credentialSubjectUserId: ME,
-  source: "agent",
-  role: "member",
-};
-
-const CHANNEL_ROW = { id: CHAN, slug: "general", name: "General", visibility: "private" };
-const MEMBERSHIP = { channel_id: CHAN, user_id: ME, role: "member" };
-
-function launchRow(over: Record<string, unknown> = {}) {
-  return {
-    id: DIR,
-    kind: "launch",
-    workspace_id: WS,
-    channel_id: CHAN,
-    task_id: null,
-    operator_user_id: ME,
-    goal: "ship the parser",
-    model: null,
-    identity_id: null,
-    identity_name: null,
-    target_agent_id: null,
-    target_name: null,
-    status: "pending",
-    refusal_reason: null,
-    agent_id: null,
-    claimed_at: null,
-    decided_at: null,
-    client_msg_id: KEY,
-    expires_at: new Date(Date.now() + LAUNCH_DIRECTIVE_TTL_MS).toISOString(),
-    created_at: new Date().toISOString(),
-    ...over,
-  } as never;
-}
+const launchRow = (over: Record<string, unknown> = {}) => row({ client_msg_id: KEY, ...over });
 
 function directionRow(over: Record<string, unknown> = {}) {
   return {
@@ -153,19 +70,8 @@ const uniqueViolation = (constraint: string) =>
     code: "23505",
   });
 
-const online = () =>
-  vi.mocked(collab.presenceForWorkspace).mockResolvedValue(
-    new Map([[ME, { lastSeenAt: new Date().toISOString() }]]) as never
-  );
-
 beforeEach(() => {
-  vi.clearAllMocks();
-  vi.mocked(loadVisibleChannel).mockResolvedValue({
-    channel: CHANNEL_ROW,
-    membership: MEMBERSHIP,
-  } as never);
-  online();
-  vi.mocked(launchRepo.findLaunchDirectiveByClientMsgId).mockResolvedValue(null);
+  wireLaunchDefaults();
   vi.mocked(launchRepo.insertLaunchDirective).mockResolvedValue(launchRow());
   vi.mocked(directionRepo.findAgentDirectionByClientMsgId).mockResolvedValue(null);
   vi.mocked(directionRepo.insertAgentDirection).mockResolvedValue(directionRow());
@@ -195,14 +101,11 @@ describe("launch_agent — the probe converges instead of filing a second direct
     expect(launchRepo.insertLaunchDirective).not.toHaveBeenCalled();
     expect(result).toMatchObject({ offline: false, existing: true });
     expect(result.directive?.id).toBe(DIR);
-    // ⚠ THE PROBE IS OWN-SCOPED AND CHANNEL-SCOPED IN THE REPOSITORY, and the
-    // arguments are the index: drop the operator and another member's key
-    // answers, drop the channel and a key minted for one room converges onto a
-    // directive filed in another.
+    // The probe's arguments are the index: without the operator another member's key answers; without the channel another room's.
     expect(launchRepo.findLaunchDirectiveByClientMsgId).toHaveBeenCalledWith(ME, CHAN, KEY);
   });
 
-  it("🔒 a MEMBERSHIP row is still required — converging is still a read of that channel", async () => {
+  it("a MEMBERSHIP row is still required — converging is still a read of that channel", async () => {
     vi.mocked(loadVisibleChannel).mockResolvedValue({
       channel: CHANNEL_ROW,
       membership: null,
@@ -219,9 +122,7 @@ describe("launch_agent — the probe sits ABOVE the gates a retry must not be re
     vi.mocked(collab.presenceForWorkspace).mockResolvedValue(new Map() as never);
     vi.mocked(launchRepo.findLaunchDirectiveByClientMsgId).mockResolvedValue(launchRow());
     const result = await createLaunchDirective(ctx, { channel: "general", clientMsgId: KEY });
-    // ⚠ THE HAZARD INVERTED. `offline: true` says NOTHING WAS FILED, which is the
-    // one answer most likely to make a caller retry — over a row that exists and
-    // may already be running.
+    // `offline: true` says nothing was filed, which invites a retry over a row that exists.
     expect(result).toMatchObject({ offline: false, existing: true });
   });
 
@@ -309,10 +210,7 @@ describe("direct_agent — the same rule, and the reply is what a converged retr
   });
 
   it("a repeated key returns the stored direction, REPLY INCLUDED", async () => {
-    // ⚠ THIS IS THE HALF THE LAUNCH LANE HAS NO EQUIVALENT OF. A direction's
-    // answer is private and reaches the caller nowhere else — not through `read`,
-    // not through `await` — so a converged retry is how a caller whose hold timed
-    // out collects it, instead of asking a live agent the same thing twice.
+    // A direction's reply reaches the caller nowhere else, so a converged retry is how a timed-out hold collects it.
     vi.mocked(directionRepo.findAgentDirectionByClientMsgId).mockResolvedValue(
       directionRow({ status: "delivered", reply: "done, 3 files changed" })
     );
@@ -355,7 +253,7 @@ describe("direct_agent — the same rule, and the reply is what a converged retr
     expect(result).toMatchObject({ existing: true });
   });
 
-  it("🔒 the key never becomes an identity — the operator is still a separate argument", async () => {
+  it("the key never becomes an identity — the operator is still a separate argument", async () => {
     await createAgentDirection(ctx, {
       channel: "general",
       agentId: AGENT,

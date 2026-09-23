@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest";
 import { effectiveNative, nativeDimensions } from "./runtime-native";
 import { realDescriptor } from "./runtime-descriptors-harness";
 
-// X-05: main's `selection-vocabulary.js › normalizeNative` floors an unrecognised containment value
-// to the narrowest option and leaves an absent one absent (the adapter's declared default applies).
+// Mirrors main's `runtime/selection-vocabulary.js › normalizeNative`: an unrecognised containment value
+// floors to the narrowest option; an absent one stays absent (the adapter's declared default applies).
 describe("effectiveNative on a containment axis", () => {
   const sandbox = nativeDimensions(realDescriptor("codex"), null, null).find(
     (d) => d.kind === "containment"

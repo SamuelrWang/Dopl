@@ -1,25 +1,11 @@
 // @vitest-environment jsdom
-/**
- * THE AGENTS PAGE — the three scope panels, and what a card is allowed to say.
- *
- * These are the properties that go quiet rather than loud when they break:
- *
- *  - **"PUBLIC" IS A LABEL OVER `workspace`.** Two vocabularies for one field,
- *    and the wire's word must never reach an operator (`../lib/visibility.ts`).
- *  - **AN EMPTY PANEL KEEPS ITS HEADER.** A section that vanished would make
- *    "you have no team identities" and "this workspace has no teams" the same
- *    picture.
- *  - **AN UNSET MODEL RENDERS NO CHIP, not "Default"** — a card states what a
- *    identity CARRIES (INVARIANTS §5, and `agent-models.ts ›
- *    agentModelShortLabel`, which returns `null` for exactly this).
- *
- * Every data hook is mocked: the assertions are about the grouping this page
- * computes, not about the transport underneath it (the channels core's rule).
- */
+// The identities page's scope panels and cards. Data hooks are mocked: the grouping is under test,
+// not the transport. An unset model renders no chip (`agent-models.ts › agentModelShortLabel` → null).
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import type { AgentIdentity } from "../client/types";
+import { identity } from "./identity-editor-harness";
 
 const identities: AgentIdentity[] = [];
 const mutate = vi.fn();
@@ -48,25 +34,6 @@ vi.mock("@/features/knowledge/client/hooks", () => ({
 }));
 
 const { AgentIdentitiesCore } = await import("./agent-identities-core");
-
-function identity(over: Partial<AgentIdentity> = {}): AgentIdentity {
-  return {
-    id: "tpl-1",
-    workspaceId: "ws-1",
-    name: "Release captain",
-    description: null,
-    instructions: null,
-    model: null,
-    fields: [],
-    visibility: "private",
-    teamIds: [],
-    knowledgeBases: [],
-    createdBy: "user-1",
-    createdAt: "2026-08-01T00:00:00Z",
-    updatedAt: "2026-08-01T00:00:00Z",
-    ...over,
-  };
-}
 
 function renderPage(rows: AgentIdentity[]) {
   identities.length = 0;
@@ -115,8 +82,7 @@ describe("the three panels", () => {
   });
 
   it("drops a row whose scope this build does not know, rather than guessing", () => {
-    // A newer server may mint a fourth scope. Filing it under "Private" would be
-    // this page claiming something it does not know.
+    // A newer server may mint a fourth scope; filing it under "Private" would be a guess.
     renderPage([
       identity({ id: "t-9", name: "From the future", visibility: "org" as never }),
     ]);
@@ -147,7 +113,7 @@ describe("the create affordance", () => {
     expect(screen.getAllByRole("button", { name: "Agent Identity" })).toHaveLength(1);
   });
 
-  // ⚠ `await`ed: `ModalShell` mounts a FRAME after `open` flips (it animates in).
+  // Awaited: `ModalShell` mounts its frame a render after `open` flips.
   it("opens the editor in CREATE mode — no identity preloaded", async () => {
     renderPage([identity()]);
     fireEvent.click(screen.getByRole("button", { name: "Agent Identity" }));
@@ -165,7 +131,7 @@ describe("the create affordance", () => {
 });
 
 describe("what this page deliberately leaves out", () => {
-  it("offers no launch control — launch-time selection is a later phase", () => {
+  it("offers no launch control", () => {
     renderPage([identity()]);
     expect(screen.queryByText(/launch/i)).toBeNull();
     expect(screen.queryByText(/run/i)).toBeNull();

@@ -3,17 +3,9 @@ import { SESSION_PROJECTION_FRESH_MS } from "../constants";
 
 vi.mock("./repository-sessions");
 vi.mock("./repository-messages");
-/**
- * ⚠ **PARTIAL, AND THAT IS LOAD-BEARING** (2026-09-07, items 10 and 11). RR3 grew a third input —
- * the AUTHOR's own `channel_members.unaddressed_responder`, read through `./repository` — and a
- * flat module mock would replace every other real read alongside it.
- *
- * ⚠ **AND IT IS NOT OPTIONAL, THOUGH THE SUITE WOULD "PASS" WITHOUT IT.**
- * `unaddressedResponderFor` SWALLOWS a read error and answers the default, so an UNMOCKED
- * repository reaches for a database that is not there — every case in this file timed out on that
- * read — and, had it failed fast instead, the cases would have gone green by way of the catch
- * block rather than by way of the setting. The harness seeds it in `beforeEach`.
- */
+/** Partial: RR3 reads the author's `unaddressed_responder` through `./repository`, and the real
+ *  `unaddressedResponderFor` swallows a read error into the default — unmocked, cases would time out or
+ *  pass by the catch rather than the setting. The harness seeds it in `beforeEach`. */
 vi.mock("./repository", async (importOriginal) => ({
   ...(await importOriginal<typeof import("./repository")>()),
   findUnaddressedResponder: vi.fn(),
@@ -30,24 +22,9 @@ import {
   unaddressedResponder,
 } from "./service-wake-verdict-harness";
 
-/**
- * **THE THREE RESILIENCE ARMS (B1)** — Samuel's ruling: narrowing the fan-out to
- * the addressed recipient must never let a forgotten `@` stall a conversation
- * (2026-09-02, v2 wave B slice B4).
- *
- * ⚠ **ITS OWN FILE BECAUSE `service-wake-verdict.test.ts` REACHED THE 500-LINE
- * CAP**, and the seam matches the one the source took: that file measures the
- * PRECEDENCE between explicit addressing and repair, this one measures the
- * three repair rules. ⚠ **THE HARNESS IS SHARED, NOT COPIED**
- * (`service-wake-verdict-harness.ts`, 2026-09-04): it was a near-verbatim
- * duplicate with a note saying it had to stay one, and a second way of driving
- * one resolver is how two suites come to disagree about what they are testing.
- *
- * ⚠ **EVERY CASE HERE IS PAIRED WITH ITS DEGENERATE ONE**, because each arm's
- * failure mode is silent: an arm that never fires looks exactly like a room
- * where nobody was addressed, and an arm that fires too eagerly looks exactly
- * like a delivery. Only the pair distinguishes them.
- */
+/** The resilience arms: narrowing fan-out to the addressed recipient must never let a forgotten `@`
+ *  stall a conversation. Each arm is paired with its degenerate case, since a silent arm and an eager
+ *  one both look like ordinary outcomes. Driven through `service-wake-verdict-harness.ts`. */
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -91,9 +68,7 @@ describe("RR1 — a thread reply with no `to` goes to the thread's other party",
   });
 
   it("DEGENERATE: an unaddressed thread has no other party — `thread`, not a guess", async () => {
-    // `taskTarget` absent = the thread names nobody. There is no "other" to be
-    // the other of, and inventing one would route a reply at the opener's
-    // machine on the strength of a missing key.
+    // `taskTarget` absent: the thread names nobody, so there is no other party to route to.
     const out = await resolve("anyone?", {
       taskId: "task-1",
       taskCreatedBy: "user-1",
@@ -102,18 +77,13 @@ describe("RR1 — a thread reply with no `to` goes to the thread's other party",
   });
 
   it("DEGENERATE: a LEGACY tag stamps no pair, so it stays `thread`", async () => {
-    // A `task-<channelId>-<seq>` id resolves to no row, so fold 3 stamps none of
-    // the four keys. RR1 answering nobody here is what keeps every installed
-    // desktop's lifecycle echo costing one read instead of two.
+    // A legacy `task-<channelId>-<seq>` id resolves to no row, so no pair is stamped.
     const out = await resolve("step done", { taskId: "task-chan-1-4" });
     expect(out).toMatchObject({ verdict: "thread", delivery: "idle" });
   });
 
   it("DEGENERATE: a STRIPPED legacy tag answers `none` and repairs NOTHING", async () => {
-    // The poster is not in that exchange, so the tag was dropped. The post LOOKS
-    // like a main-room post and is not one — the author was talking to a thread,
-    // and repairing the address would put their words in front of whoever
-    // happens to be in the room.
+    // The author was talking to a thread; repairing the address would show their words to the room.
     roomProjection(sessionRow({ name: "k3v7d2mq" }));
     const out = await resolve("as discussed", {}, { threadTagStripped: true });
     expect(out).toMatchObject({ verdict: "none", delivery: "none" });
@@ -131,20 +101,8 @@ describe("RR1 — a thread reply with no `to` goes to the thread's other party",
   });
 });
 
-describe("🔴 RR2 IS DELETED — an unaddressed AGENT post reaches nobody", () => {
-  // **THIS BLOCK REPLACES TWELVE CASES** (2026-09-18, Samuel: *"agree with stopping that. Agents
-  // should only be woken up when addressed (besides the logic for a user with no @ in their
-  // message)"*). They drove the arm that re-addressed an unaddressed agent post back to whoever
-  // last addressed that agent in the room: that it selected the highest `seq` inside the window,
-  // that it read the STORED recipient set rather than the body, that an unstamped post fired
-  // nothing, that a courtesy stamp was not an agent stamp, and that a `client_msg_id` claiming
-  // somebody else's agent id was refused (F-589).
-  //
-  // ⚠ **THE RULE THEY PROTECTED IS NOT LOST — IT BECAME STRUCTURE.** Every one of them was an
-  // answer to *"which member should this unaddressed agent post be aimed at?"*, and that
-  // question no longer arises: an agent addresses somebody or files a record, and the send path
-  // refuses anything else. What is pinned here instead is the ONE outcome that replaces all
-  // twelve, plus the two negatives that are now the whole of the arm's former surface.
+describe("RR2 IS DELETED — an unaddressed AGENT post reaches nobody", () => {
+  // Agents are woken only when addressed: an unaddressed agent post reaches nobody.
   beforeEach(() => {
     projection(sessionRow({ name: "k3v7d2mq" }));
   });
@@ -163,9 +121,7 @@ describe("🔴 RR2 IS DELETED — an unaddressed AGENT post reaches nobody", () 
   });
 
   it("never reaches RR3 — an agent author does not get the room's default responder", async () => {
-    // 🔒 THE ARMS ARE DISJOINT, and this is the half that survived the deletion. RR3 exists so a
-    // PERSON is answered; handing an agent's unaddressed thinking to the room's responder is the
-    // fan-out this wave deleted, wearing a new name.
+    // RR3 exists so a person is answered; an agent's unaddressed post gets no default responder.
     projection(sessionRow({ name: "m8q1zzzz" }));
     roomProjection(sessionRow({ name: "k3v7d2mq" }));
     const out = await resolve("musing", {}, {
@@ -177,9 +133,7 @@ describe("🔴 RR2 IS DELETED — an unaddressed AGENT post reaches nobody", () 
   });
 
   it("a THREADED agent post is UNTOUCHED — RR1 is an address, not a repair", async () => {
-    // ⚠ **THE CARVE-OUT, PINNED BESIDE THE DELETION** so the two cannot be confused. A thread has
-    // exactly two parties, so "the other one" is the thread's own structure answering — which is
-    // why `thread_peer` survives for either author kind while `reciprocal` does not.
+    // A thread has exactly two parties, so `thread_peer` holds for either author kind.
     const out = await resolve("here is the diff", {
       taskId: "task-1",
       taskCreatedBy: "user-1",
@@ -190,21 +144,10 @@ describe("🔴 RR2 IS DELETED — an unaddressed AGENT post reaches nobody", () 
 });
 
 describe("RR3 — an unaddressed human message is answered by one agent", () => {
-  // 🔒 **ARM 1 IS DELETED AND SO ARE ITS THREE CASES** (2026-09-06, Samuel's ruling on items 10
-  // and 11; INVARIANTS §5). They drove `channels.default_responder_agent_name` — a manager's
-  // ROOM-WIDE pin of one agent for everybody — through this resolver: that the pin won, that it
-  // accepted the bare handle as well as the `agent-<id>` form, and that a RENAMED agent resolved
-  // by its slug. The column is retired (`20260928130000`), it is off `ChannelRow`, and
-  // `lib/agent-mentions.ts › resolveDefaultResponder` has no arm that reads a handle at all.
-  // ⚠ WHAT REPLACED IT IS NOT A NARROWER PIN BUT A DIFFERENT QUESTION: the ASKING PERSON's own
-  // two-valued setting (`channel_members.unaddressed_responder`), read by
-  // `unaddressedResponderFor` and pinned in the `'none'` cases in this file — *"if there's
-  // another member in the room, their last agent address would be different from my last agent
-  // address"*. A repaired pin on the pin would be fake coverage.
+  // The unaddressed responder is the asking person's own `channel_members.unaddressed_responder`, read by
+  // `unaddressedResponderFor`; there is no room-wide pin.
 
   it("arm 2: exactly ONE live agent answers by itself — no setting needed", async () => {
-    // ⚠ THIS IS WHY THE LLM TRIAGE LOOP GOES (B6). `tierFor` collapses to
-    // `n === 1 ? SOLO : NONE`, and solo is computed here for free.
     roomProjection(sessionRow({ name: "k3v7d2mq" }));
     const out = await resolve("morning");
     expect(out).toMatchObject({
@@ -214,33 +157,15 @@ describe("RR3 — an unaddressed human message is answered by one agent", () => 
     });
   });
 
-  // 🔒 "arm 2: a responder that is NOT LIVE degrades into the sole agent" STOOD HERE AND IS
-  // DELETED with arm 1 (2026-09-06). It pinned that the configured handle DEGRADED rather than
-  // dangled — nothing enforced that the stored handle named a live session, deliberately, because
-  // an FK to `agent_identities` would have been a cross-visibility reference. No handle is stored
-  // any more, so there is nothing left to dangle; the sole-agent answer it degraded INTO is the
-  // case immediately above, which now stands on its own.
-
   it("arm 3: no live agent at all is `none` — an empty room is still an answer", async () => {
     const out = await resolve("morning");
     expect(out).toMatchObject({ verdict: "none", delivery: "none" });
     expect(out.reason).toBeNull();
   });
 
-  it("🔒 THE ASYMMETRY: a STALE but PRESENT room row IS a live agent and IS woken (2026-09-05)", async () => {
-    // ⚠ **THE CASE THIS ARM EXISTS FOR, AND IT ASSERTED THE OPPOSITE UNTIL
-    // 2026-09-05.** It is paired, deliberately, with "no live agent at all is
-    // `none`" above: STALE must resolve and ABSENT must not, because a filter
-    // makes the two indistinguishable and a rule that cannot tell them apart
-    // reads a quiet agent as a dead one. That is what emptied RR3's candidate
-    // list while three agents sat idle on a verification hold — rows #1080,
-    // #1081 and #1092 stored `verdict=none` and the operator's untagged posts
-    // reached nobody. Samuel's 2026-08-22 ruling (`agents-model.ts ›
-    // peerCardsFor`, same guard, deleted for the same reason): *"the card STAYS
-    // until the session actually goes away."*
-    // ⚠ `updated_at` IS NOT A HEARTBEAT: `session-state-push.js` writes on state
-    // CHANGE only and forbids a timer, so age measures silence, never absence.
-    // Absence is carried by the push being a FULL-SET REPLACE.
+  it("THE ASYMMETRY: a STALE but PRESENT room row IS a live agent and IS woken", async () => {
+    // Paired with the empty-room case: stale must resolve and absent must not. `updated_at` is
+    // written on state change only, so age measures silence; absence is the full-set replace.
     roomProjection(
       sessionRow({
         name: "k3v7d2mq",
@@ -255,9 +180,7 @@ describe("RR3 — an unaddressed human message is answered by one agent", () => 
   });
 
   it("a room row with NO agent id is still dropped — that was never a freshness rule", async () => {
-    // `name` IS the agent id every door addresses. A row carrying none names
-    // nobody and could not be woken if it were picked, which is why this filter
-    // outlived the one beside it.
+    // `name` is the agent id; a row with none could not be woken.
     roomProjection(sessionRow({ name: "" }));
     expect((await resolve("morning")).verdict).toBe("none");
   });
@@ -279,9 +202,7 @@ describe("RR3 — an unaddressed human message is answered by one agent", () => 
 
 describe("`to=@agent` — the union resolver's half of the verdict", () => {
   it("stores the agent the PARAMETER named, without reading the projection", async () => {
-    // The resolution already happened at the door
-    // (`service-writes-metadata-recipient.ts`); re-deriving it here would be a
-    // second answer to a settled question.
+    // Resolved at the door (`service-writes-metadata-recipient.ts`); not re-derived here.
     const out = await resolve("please take this", {}, { toAgentId: "k3v7d2mq" });
     expect(out).toMatchObject({
       verdict: "agent",

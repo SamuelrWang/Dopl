@@ -1,70 +1,26 @@
 /**
- * THE IDENTITY REF ON A LAUNCH DIRECTIVE — the CREATE fence (2026-08-23).
- *
- * ⚠ SPLIT OUT OF `service-launch.test.ts` AT THE 500-LINE CAP, and the seam is
- * the subject rather than the size: that file drives the DIRECTIVE LIFECYCLE
- * (create gates, the claim CAS and its races, decide, lazy expiry, operator
- * scoping) and this one drives WHAT NAMING AN IDENTITY DOES. They move on
- * different clocks — the lifecycle when the mailbox does, this when agent
- * identities do.
- *
- * ⚠ THE SETUP IS RESTATED RATHER THAN SHARED, and that is vitest's shape, not a
- * choice: `vi.mock` is FILE-SCOPED, so a suite that mocks a module has to declare
- * it. What is duplicated is four mock declarations and a row fixture; what is not
- * duplicated is a single assertion.
- *
- * ── ⚠ THIS IS ONE OF TWO FENCES AND THEY BELONG TO DIFFERENT PEOPLE ────────
- *
- * Here the ORCHESTRATOR proves it can SEE the identity it names, under its own
- * credential, before any row is written. On the desktop, at spawn, the OPERATOR
- * proves the same thing under theirs (`main/launch-directives.js › spawn`, and
- * `dopl-desktop-app/test/launch-directive-identity.test.mjs`). A `team` identity
- * the first is in and the second is not passes here and is refused there, as
- * `no-identity` — fail-closed, and the designed outcome rather than a bug.
- * Neither fence substitutes for the other.
+ * The identity ref on a launch directive — the create fence. The orchestrator proves here, under its
+ * own credential, that it can see the identity; the operator proves it again at spawn
+ * (`main/launch-directive-spawn.js › spawn`), so an identity only the first can see is refused
+ * `no-identity` there. Neither fence substitutes for the other.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-vi.mock("./repository-launch", () => ({
-  insertLaunchDirective: vi.fn(),
-  findLaunchDirective: vi.fn(),
-  claimLaunchDirective: vi.fn(),
-  decideLaunchDirective: vi.fn(),
-}));
-vi.mock("./repository-collab", () => ({ presenceForWorkspace: vi.fn() }));
-vi.mock("./repository-tasks", () => ({ findTaskByChannelAndId: vi.fn() }));
-// ⚠ MOCKED IN EVERY LAUNCH SUITE THOUGH NONE OF THEM NAMES A COLOUR: the create's
-// SIXTH gate (`service-launch-color.ts`) reads the channel's taken set, and that read
-// is a live `supabaseAdmin()` client. The POLICY stays real — only the READ is
-// stubbed — so these suites still execute the gate rather than skipping it, on the
-// `repository-collab` precedent one line up. The colour cases are in
-// `service-launch-color.test.ts`.
-vi.mock("./repository-session-colors", () => ({
-  foreignLiveColorsByChannel: vi.fn(async () => new Map()),
-  // ⚠ THE SECOND READ THE GATE MAKES SINCE 2026-09-14 (pending directives hold their key
-  // too). Stubbed for the same reason as the first: the POLICY stays real here, the READS
-  // do not. Its own cases are in `service-launch-color.test.ts`.
-  pendingDirectiveColors: vi.fn(async () => []),
-}));
-vi.mock("./service-shared", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("./service-shared")>();
-  return { ...actual, loadVisibleChannel: vi.fn() };
-});
-// ⚠ THE CROSS-FEATURE RESOLVER IS MOCKED AT ITS BARREL, not re-implemented. What
-// this suite drives is the WIRING — that the ref goes through it under this
-// caller's context, that its three answers become the three right outcomes, and
-// that the PAIR of columns is written. The MATRIX itself is
-// `agent-identities/server/service-resolve-ref.test.ts`'s subject, and restating
-// it here would be a third copy of a predicate that is already written twice.
-vi.mock("@/features/agent-identities/server/service", () => ({
-  resolveIdentityRef: vi.fn(),
-}));
+const fx = await vi.hoisted(() => import("./service-launch-fixtures"));
+vi.mock("./repository-launch", () => fx.mocks.launchRepo);
+vi.mock("./repository-collab", () => fx.mocks.collab);
+vi.mock("./repository-tasks", () => fx.mocks.tasks);
+vi.mock("./repository-session-colors", () => fx.mocks.sessionColors);
+vi.mock("./service-shared", (importOriginal) => fx.serviceSharedMock(importOriginal));
+// The resolver is mocked at its barrel: this suite drives the wiring; the visibility matrix is
+// `agent-identities/server/service-resolve-ref.test.ts`'s.
+vi.mock("@/features/agent-identities/server/service", () => fx.mocks.identities);
 
 import * as launchRepo from "./repository-launch";
 import * as collab from "./repository-collab";
 import { resolveIdentityRef } from "@/features/agent-identities/server/service";
-import { loadVisibleChannel, type ChannelContext } from "./service-shared";
+import { loadVisibleChannel } from "./service-shared";
 import {
   LaunchDirectiveNotFoundError,
   LaunchIdentityAmbiguousError,
@@ -72,71 +28,16 @@ import {
 } from "./errors";
 import { createLaunchDirective, getLaunchDirective } from "./service-launch";
 import { toChannelErrorResponse } from "./http-mapping";
-import { LAUNCH_DIRECTIVE_TTL_MS } from "../constants";
+import { CHANNEL_ROW, DIR, ME, WS, ctx, row, wireLaunchDefaults } from "./service-launch-fixtures";
 
-const WS = "22222222-2222-2222-2222-222222222222";
-const ME = "33333333-3333-3333-3333-333333333333";
-const CHAN = "11111111-1111-1111-1111-111111111111";
-const DIR = "55555555-5555-5555-5555-555555555555";
-
-const ctx: ChannelContext = {
-  workspaceId: WS,
-  userId: ME,
-  credentialSubjectUserId: ME,
-  source: "agent",
-  role: "member",
-};
-
-const CHANNEL_ROW = { id: CHAN, slug: "general", name: "General", visibility: "private" };
-const MEMBERSHIP = { channel_id: CHAN, user_id: ME, role: "member" };
-
-function row(over: Record<string, unknown> = {}) {
-  return {
-    id: DIR,
-    workspace_id: WS,
-    channel_id: CHAN,
-    task_id: null,
-    operator_user_id: ME,
-    goal: "ship the parser",
-    model: null,
-    identity_id: null,
-    identity_name: null,
-    status: "pending",
-    refusal_reason: null,
-    agent_id: null,
-    claimed_at: null,
-    decided_at: null,
-    expires_at: new Date(Date.now() + LAUNCH_DIRECTIVE_TTL_MS).toISOString(),
-    created_at: new Date().toISOString(),
-    ...over,
-  } as never;
-}
-
-function online() {
-  vi.mocked(collab.presenceForWorkspace).mockResolvedValue(
-    new Map([[ME, { online: true, lastSeenAt: new Date().toISOString() }]]) as never
-  );
-}
-
-beforeEach(() => {
-  vi.clearAllMocks();
-  vi.mocked(loadVisibleChannel).mockResolvedValue({
-    channel: CHANNEL_ROW,
-    membership: MEMBERSHIP,
-  } as never);
-  vi.mocked(launchRepo.insertLaunchDirective).mockResolvedValue(row());
-});
+beforeEach(wireLaunchDefaults);
 
 describe("the identity ref — resolved under the CALLER's visibility, before any row", () => {
   const T1 = "77777777-7777-7777-7777-777777777777";
   const T2 = "88888888-8888-8888-8888-888888888888";
 
   it("stores the RESOLVED id and a NAME SNAPSHOT — the pair, never one", async () => {
-    // ⚠ BOTH COLUMNS OR THE FEATURE DOES NOT WORK. `identity_id` is ON DELETE SET
-    // NULL, so without the snapshot a deleted identity is indistinguishable from
-    // no identity at all and the desktop launches a blank agent wearing an
-    // identity nobody notices is missing (E-4).
-    online();
+    // `identity_id` is ON DELETE SET NULL; without the name snapshot a deleted identity reads as none.
     vi.mocked(resolveIdentityRef).mockResolvedValue({
       kind: "found",
       id: T1,
@@ -149,10 +50,7 @@ describe("the identity ref — resolved under the CALLER's visibility, before an
   });
 
   it("stores the resolved NAME, not the ref the caller typed", async () => {
-    // ⚠ The caller may name it by ID or in the wrong case; the snapshot has to be
-    // the row's own name, because it is what a later deletion is read against and
-    // what an operator sees on the session card.
-    online();
+    // The snapshot is the row's own name — what a later deletion is read against and the card shows.
     vi.mocked(resolveIdentityRef).mockResolvedValue({
       kind: "found",
       id: T1,
@@ -165,9 +63,7 @@ describe("the identity ref — resolved under the CALLER's visibility, before an
   });
 
   it("NO identity named → both columns are NULL, and the resolver is never called", async () => {
-    // ⚠ A launch with no identity must be byte-identical to what this lane did
-    // before identities existed — no read, no round trip, no columns.
-    online();
+    // No identity: no read, no round trip, no columns.
     await createLaunchDirective(ctx, { channel: "general" });
     expect(resolveIdentityRef).not.toHaveBeenCalled();
     const insert = vi.mocked(launchRepo.insertLaunchDirective).mock.calls[0][1];
@@ -175,12 +71,8 @@ describe("the identity ref — resolved under the CALLER's visibility, before an
     expect(insert.identity_name).toBeNull();
   });
 
-  it("hands the resolver THIS caller's context, `apiKeyWorkspaceId` included (M-10)", async () => {
-    // ⚠ ARM 2 OF THE MATRIX RIDES ON THAT ONE FIELD. A credential that may be
-    // shared between humans inherits nobody's personal reach — passing `null`
-    // here would let such a credential resolve its owner's PRIVATE identities by
-    // name. `ChannelContext` started carrying the field for this.
-    online();
+  it("hands the resolver THIS caller's context, `apiKeyWorkspaceId` included", async () => {
+    // Arm 2 of the matrix: a possibly shared credential must not resolve its owner's private identities.
     vi.mocked(resolveIdentityRef).mockResolvedValue({ kind: "found", id: T1, name: "X" });
     await createLaunchDirective(
       { ...ctx, apiKeyWorkspaceId: WS },
@@ -195,13 +87,9 @@ describe("the identity ref — resolved under the CALLER's visibility, before an
     expect(ref).toBe("X");
   });
 
-  // 🔒 F-333's OTHER HALF. The lock alone is not the answer — the resolver needs
-  // the lock's KIND too, or `canSeeIdentity`'s arm 2 reads a container session
-  // as a shared credential and `POST /api/channels/launch-directives` answers
-  // AGENT_IDENTITY_NOT_FOUND for the operator's own private identity, which is
-  // every "Use in this channel" copy.
+  // Without the lock's kind, arm 2 reads a container session as a shared credential and 404s the
+  // operator's own private identity (F-333).
   it("carries BOTH axes to the resolver, or a container session cannot name its own identity", async () => {
-    online();
     vi.mocked(resolveIdentityRef).mockResolvedValue({ kind: "found", id: T1, name: "X" });
     await createLaunchDirective(
       { ...ctx, apiKeyWorkspaceId: WS, credentialSubjectUserId: ctx.userId },
@@ -215,10 +103,7 @@ describe("the identity ref — resolved under the CALLER's visibility, before an
   });
 
   it("carries a SHARED credential's absent subject through unchanged", async () => {
-    // 🔒 The mutation: forwarding `ctx.userId` instead of the subject axis would
-    // hand `canSeeIdentity` a person that is not there and let a shared
-    // credential name the key owner's private identities.
-    online();
+    // Forwarding `ctx.userId` instead would let a shared credential name the key owner's private identities.
     vi.mocked(resolveIdentityRef).mockResolvedValue({ kind: "found", id: T1, name: "X" });
     await createLaunchDirective(
       { ...ctx, apiKeyWorkspaceId: WS, credentialSubjectUserId: null },
@@ -229,7 +114,6 @@ describe("the identity ref — resolved under the CALLER's visibility, before an
   });
 
   it("an UNRESOLVABLE ref refuses and files NOTHING", async () => {
-    online();
     vi.mocked(resolveIdentityRef).mockResolvedValue({ kind: "not-found" });
     await expect(
       createLaunchDirective(ctx, { channel: "general", identity: "Ghost" })
@@ -237,12 +121,8 @@ describe("the identity ref — resolved under the CALLER's visibility, before an
     expect(launchRepo.insertLaunchDirective).not.toHaveBeenCalled();
   });
 
-  it("an `elsewhere` ref refuses with the TENANCY attached, and still files nothing (T35)", async () => {
-    // ⚠ THE FOURTH ANSWER, WIRED LIKE THE OTHER THREE. The classification is the
-    // identity feature's — this service adds no rule of its own to it, it only
-    // carries it — and the OUTCOME does not move: still a refusal, still a 404,
-    // still nothing filed. What changes is that the sentence can name the place.
-    online();
+  it("an `elsewhere` ref refuses with the TENANCY attached, and still files nothing", async () => {
+    // The classification is the identity feature's; the outcome is unchanged (404, nothing filed).
     vi.mocked(resolveIdentityRef).mockResolvedValue({
       kind: "elsewhere",
       identity: { name: "Code Auditor", label: "your personal shelf" },
@@ -260,10 +140,7 @@ describe("the identity ref — resolved under the CALLER's visibility, before an
   });
 
   it("a plain NOT-FOUND carries NO tenancy — the two must stay one answer", async () => {
-    // 🔒 `null`, not an empty object: "no such identity" and "somebody else's,
-    // not yours to see" are the pair this surface refuses to distinguish, and a
-    // detail key present on one and absent on the other IS the distinction.
-    online();
+    // `null`, not `{}`: "no such identity" and "not yours to see" must stay one answer.
     vi.mocked(resolveIdentityRef).mockResolvedValue({ kind: "not-found" });
     const err = await createLaunchDirective(ctx, {
       channel: "general",
@@ -273,10 +150,7 @@ describe("the identity ref — resolved under the CALLER's visibility, before an
   });
 
   it("an AMBIGUOUS name refuses, files nothing, and carries every match", async () => {
-    // ⚠ REFUSES AND LISTS, NEVER PICKS. Names are deliberately not unique, and
-    // the list is what makes the refusal actionable — the caller re-issues with
-    // an id it is already holding.
-    online();
+    // Names are not unique; the list lets the caller re-issue by id.
     vi.mocked(resolveIdentityRef).mockResolvedValue({
       kind: "ambiguous",
       matches: [
@@ -297,10 +171,7 @@ describe("the identity ref — resolved under the CALLER's visibility, before an
   });
 
   it("a BAD IDENTITY REF beats PRESENCE — an offline machine does not hide the caller's own error", async () => {
-    // ⚠ THE GATE ORDER, ASSERTED. `offline` is a 200 saying "nothing was asked"
-    // and is the ordinary answer for a closed laptop. Checking presence first
-    // would answer a misspelt identity with "your machine is asleep": the caller
-    // fixes the wrong thing, waits, and meets the real refusal a minute later.
+    // Presence first would answer a misspelt identity with "your machine is asleep".
     vi.mocked(collab.presenceForWorkspace).mockResolvedValue(new Map() as never);
     vi.mocked(resolveIdentityRef).mockResolvedValue({ kind: "not-found" });
     await expect(
@@ -309,7 +180,6 @@ describe("the identity ref — resolved under the CALLER's visibility, before an
   });
 
   it("the CHANNEL and THREAD gates still come first — a bad channel is never an identity error", async () => {
-    online();
     vi.mocked(loadVisibleChannel).mockResolvedValue({
       channel: { ...CHANNEL_ROW, visibility: "public" },
       membership: null,
@@ -321,9 +191,7 @@ describe("the identity ref — resolved under the CALLER's visibility, before an
   });
 
   it("the DTO carries both halves out again — the desktop reads them from the CLAIM", async () => {
-    // ⚠ `toDirective` is where the signal would be lost one layer above the wire
-    // narrowing that gets blamed for it: the desktop re-narrows from the CLAIM's
-    // answer (the server DTO), not from the realtime frame.
+    // The desktop reads the identity from the claim's DTO, not the realtime frame.
     vi.mocked(launchRepo.findLaunchDirective).mockResolvedValue(
       row({ identity_id: T1, identity_name: "Code Auditor" })
     );
@@ -332,7 +200,7 @@ describe("the identity ref — resolved under the CALLER's visibility, before an
     expect(out.identityName).toBe("Code Auditor");
   });
 
-  it("E-4 on the DTO: a NULLED id beside a live name survives the mapping", async () => {
+  it("on the DTO: a NULLED id beside a live name survives the mapping", async () => {
     vi.mocked(launchRepo.findLaunchDirective).mockResolvedValue(
       row({ identity_id: null, identity_name: "Code Auditor" })
     );
@@ -342,13 +210,7 @@ describe("the identity ref — resolved under the CALLER's visibility, before an
   });
 });
 
-// ── T35 — AND THE FACT REACHES THE WIRE, OR IS ABSENT FROM IT ────────────
-//
-// ⚠ ABSENT, NOT NULL. `HttpError.toResponseBody` omits `details` when it is
-// `undefined`, and that is the shape this arm depends on: a `details` key
-// present on one 404 and absent on the other must correspond to "there was
-// something non-leaky to say" and nothing else. A `details: { elsewhere: null }`
-// on every miss would make the KEY the signal instead of its content.
+// `toResponseBody` omits an undefined `details`, so the key is present only when there is a tenancy to name.
 describe("the 404 body", () => {
   it("carries `details.elsewhere` when the refusal named a tenancy", async () => {
     const res = toChannelErrorResponse(

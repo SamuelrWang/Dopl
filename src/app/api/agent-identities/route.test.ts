@@ -1,9 +1,4 @@
-/**
- * `GET|POST /api/agent-identities`. What is under test is the COMPOSITION, not
- * the service: auth is mocked at the wrapper so the wrapper's own configuration
- * (`minRole`, and the ABSENCE of `sessionOnly`) is assertable as part of the
- * contract. Same idiom as `knowledge/bases/[baseId]/star/route.test.ts`.
- */
+/** `GET|POST /api/agent-identities` composition; auth is mocked at the wrapper so its options are assertable. */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { NextRequest } from "next/server";
@@ -19,7 +14,7 @@ const AUTH: WorkspaceAuthContext = {
   apiKeyWorkspaceId: null,
 };
 
-/** Captured so a test can assert the wrapper's config — it IS the contract. */
+/** The wrapper's options are the contract. */
 const wrapperOptions: Array<Record<string, unknown> | undefined> = [];
 
 vi.mock("@/shared/auth/with-workspace-auth", () => ({
@@ -102,15 +97,12 @@ describe("GET /api/agent-identities", () => {
     const res = await GET(req("GET"), { params: Promise.resolve({}) });
     expect(res.status).toBe(200);
     const body = await res.json();
-    // The client groups on this field; a payload without it forces a second
-    // call or a grouping decision made server-side for every consumer.
+    // The client groups on this field.
     expect(body.identities[0].visibility).toBe("workspace");
   });
 
   it("folds homeScopedIdentityIds in as a SIBLING KEY, never onto the row", async () => {
-    // 🔒 `home_scoped` stays out of `server/dto.ts › AGENT_IDENTITY_COLS` so the
-    // cached row payload gains no key and §8's stale-cache rule has nothing to
-    // apply to THERE. It applies to this key instead.
+    // A sibling key, so the cached row payload gains no field; the stale-cache rule applies to this key (INVARIANTS §8).
     mockHomeScoped.mockResolvedValue([IDENTITY.id]);
 
     const res = await GET(req("GET"), { params: Promise.resolve({}) });
@@ -122,9 +114,7 @@ describe("GET /api/agent-identities", () => {
   });
 
   it("degrades a shelf-flag failure to [] — UNLABELLED, never mislabelled", async () => {
-    // ⚠ The roster is the answer; the label is decoration over it. `[]` is what
-    // every surface showed before the key existed, and the unsafe direction
-    // (calling a workspace identity personal) is unreachable.
+    // The roster is the answer and the label decoration; `[]` can never call a workspace identity personal.
     mockHomeScoped.mockRejectedValue(new Error("flag read down"));
 
     const res = await GET(req("GET"), { params: Promise.resolve({}) });
@@ -165,8 +155,7 @@ describe("POST /api/agent-identities", () => {
     const res = await POST(req("POST", { name: "" }), { params: Promise.resolve({}) });
     expect(res.status).toBe(400);
     const body = await res.json();
-    // ⚠ NESTED envelope — `{ error: { code, message, details? } }`, what
-    // `HttpError.toResponseBody()` returns. Any new route uses this shape.
+    // The nested `HttpError.toResponseBody()` envelope: `{ error: { code, message, details? } }`.
     expect(body.error.code).toBe("VALIDATION_FAILED");
     expect(Array.isArray(body.error.details)).toBe(true);
     expect(mockCreate).not.toHaveBeenCalled();
@@ -185,18 +174,7 @@ describe("POST /api/agent-identities", () => {
   });
 });
 
-/**
- * 🔒 `?shelf=` — WHICH SHELF (Samuel's ruling 2026-08-27;
- * `features/agent-identities/types.ts › IdentityShelf`).
- *
- * ⚠ THE MIXED-LIST QUESTION, ANSWERED AT THE ROUTE. A request that ASKED for a
- * shelf must never be answered with both — and the dangerous shape is the
- * MISSPELLING, not the happy path. Absent means "no filter" for compatibility
- * (the launch picker, `resolveIdentityRef`, MCP), so a route that shrugged at
- * `?shelf=hom` would silently serve the WIDER list to a caller that was trying
- * to narrow, and it would look like it worked. There is no client-side fallback:
- * `home_scoped` is never projected.
- */
+/** `?shelf=` (`types.ts › IdentityShelf`): absent means both, so a misspelling must 400, never widen. */
 describe("GET /api/agent-identities?shelf=", () => {
   it("passes a recognised shelf DOWN to the service", async () => {
     await GET(shelfReq("home"), { params: Promise.resolve({}) });
@@ -209,16 +187,14 @@ describe("GET /api/agent-identities?shelf=", () => {
   });
 
   it("asks for BOTH shelves when the param is absent", async () => {
-    // ⚠ Compatibility, not a default: every pre-shelf caller lands here, and
-    // the launch picker MUST keep seeing the operator's whole workspace.
+    // Every pre-shelf caller lands here; the launch picker must keep seeing both shelves.
     await GET(req("GET"), { params: Promise.resolve({}) });
     expect(mockList).toHaveBeenCalledWith(expect.anything(), { shelf: undefined });
   });
 
-  it("🔒 400s an UNRECOGNISED shelf instead of widening to the mixed list", async () => {
+  it("400s an UNRECOGNISED shelf instead of widening to the mixed list", async () => {
     const res = await GET(shelfReq("hom"), { params: Promise.resolve({}) });
     expect(res.status).toBe(400);
-    // And it never reached the service — no list was built, wide or narrow.
     expect(mockList).not.toHaveBeenCalled();
   });
 });

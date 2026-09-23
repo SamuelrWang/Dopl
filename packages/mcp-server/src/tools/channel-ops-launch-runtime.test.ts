@@ -1,73 +1,16 @@
-/**
- * `op="manage" action="launch"` — **THE RUNTIME FIELD, END TO END ACROSS THIS PROCESS** (U9,
- * 2026-09-21).
- *
- * 🔒 **THE DEFECT, VERBATIM FROM `docs/plans/2026-09-21-001-fix-codex-runtime-parity-plan.md`**:
- * *a live MCP launch carrying `model: "codex"` was accepted but started a Claude Sonnet agent,
- * because the MCP contract has no runtime field and an unknown model falls through to the default
- * adapter.*
- *
- * ⚠ **THIS SUITE'S HALF OF THAT IS THE CONTRACT, NOT THE LAUNCH.** No agent starts here: this
- * process files a row and renders what came back. So what is asserted is exactly (a) that the
- * shape PUBLISHES a runtime separately from a model, (b) that the field reaches the create body
- * untouched, and (c) that the RESULT names the runtime that actually ran — which is the half the
- * original reproduction lacked, since a result that never mentioned a vendor could not have
- * revealed the wrong one.
- *
- * ⚠ **THE THIRD SUITE ON THIS OP AND THE SEAM IS THE EXISTING ONE.**
- * `channel-ops-launch.test.ts` asserts what a RESULT TEACHES, `channel-ops-launch-body.test.ts`
- * what the CREATE BODY CONTAINS; this one is about one field crossing both, and it fails for a
- * reason neither of those does.
- */
+// `manage action="launch"` runtime field: published apart from `model`, carried to the create body
+// untouched, and named on the RESULT as the runtime that actually ran.
 
 import { describe, it, expect, vi } from "vitest";
-import type { DoplClient, LaunchDirective } from "@dopl/client";
 import { opLaunchAgent } from "./channel-ops-launch";
 import { CHANNEL_INPUT_SHAPE } from "./channel-schema";
 import { DOCTRINE_SECTIONS } from "./channel-doctrine";
-
-const CHANNEL = { id: "chan-1", slug: "general", name: "General", visibility: "private" };
-
-function directive(over: Partial<LaunchDirective> = {}): LaunchDirective {
-  return {
-    id: "55555555-5555-5555-5555-555555555555",
-    channelId: "chan-1",
-    threadId: null,
-    goal: "ship the parser",
-    model: null,
-    status: "pending",
-    identityId: null,
-    identityName: null,
-    refusalReason: null,
-    agentId: null,
-    claimedAt: null,
-    decidedAt: null,
-    expiresAt: "2026-08-22T12:02:00.000Z",
-    createdAt: "2026-08-22T12:00:00.000Z",
-    ...over,
-  };
-}
-
-function client(over: Record<string, unknown> = {}): DoplClient {
-  return {
-    listChannels: vi.fn(async () => [CHANNEL]),
-    createLaunchDirective: vi.fn(async () => ({ offline: false, directive: directive() })),
-    getLaunchDirective: vi.fn(async () => directive()),
-    ...over,
-  } as unknown as DoplClient;
-}
-
-/** A client whose CREATE already answers with this directive (no poll needed). */
-const created = (over: Partial<LaunchDirective>) =>
-  client({
-    createLaunchDirective: vi.fn(async () => ({ offline: false, directive: directive(over) })),
-  });
-
-const text = async (c: DoplClient, opts = {}) =>
-  (await opLaunchAgent(c, "general", { name: "Scout", ...opts })).content[0].text as string;
-
-const launched = (over: Partial<LaunchDirective> = {}) =>
-  directive({ status: "launched", agentId: "abcd1234", ...over });
+import {
+  created,
+  launchClient as client,
+  launchText as text,
+  launched,
+} from "./launch-fixtures";
 
 describe("the published shape", () => {
   it("publishes `runtime` SEPARATELY from `model` — neither describes the other", () => {
@@ -75,20 +18,15 @@ describe("the published shape", () => {
     expect(shape.runtime, "the field must exist or U9 ships as a no-op").toBeDefined();
     const runtime = shape.runtime.description ?? "";
     const model = shape.model.description ?? "";
-    // ⚠ THE ONE THING A CALLER MUST NOT GUESS: that these are two fields. The describe says so in
-    // the caller's own words rather than relying on the reader noticing two params.
     expect(runtime).toContain("`model`");
     expect(runtime.toLowerCase()).toContain("refused");
-    // ⚠ AND `model`'s OWN DESCRIBE MUST NOT START NAMING RUNTIMES. The moment it does, a caller
-    // has two places to learn one rule and the surface has re-created the overload.
+    // `model`'s describe must not name runtimes, or one rule has two homes.
     expect(model.toLowerCase()).not.toContain("runtime");
     expect(model.toLowerCase()).not.toContain("codex");
   });
 
   it("is NOT a closed enum — the roster lives on the operator's desktop", () => {
-    // ⚠ `color` beside it IS an enum, and the contrast is the decision: the sixteen colour keys
-    // are OURS, the runtime roster is `main/runtime/index.js`'s REGISTRY and moves with a DESKTOP
-    // release. An enum here would refuse a runtime a newer machine already ships.
+    // The runtime roster ships with the desktop, so an enum here would refuse a newer machine's runtime.
     const json = JSON.stringify(
       (CHANNEL_INPUT_SHAPE as Record<string, unknown>).runtime,
     );
@@ -99,9 +37,7 @@ describe("the published shape", () => {
   it("states the REFUSE-not-swap asymmetry in the pulled doctrine, where the rule belongs", () => {
     const manage = DOCTRINE_SECTIONS.manage;
     expect(manage).toContain("no-sdk");
-    // ⚠ BOTH HALVES IN ONE PLACE. Since 2026-09-22 there is no asymmetry left to warn about: an
-    // unknown MODEL is refused (`no-model`, the Claude roster went live) exactly as an unknown
-    // RUNTIME is (`no-sdk`) — and neither is ever swapped for another.
+    // An unknown model (`no-model`) and an unknown runtime (`no-sdk`) are both refused, never swapped.
     expect(manage).toContain("NOTHING IS SWAPPED");
     expect(manage).toContain("`no-model`");
     expect(manage.toLowerCase()).toContain("rather than launching another vendor");
@@ -110,10 +46,7 @@ describe("the published shape", () => {
 
 describe("the create body", () => {
   it("passes an explicit runtime through untouched", async () => {
-    const createLaunchDirective = vi.fn(async () => ({
-      offline: false,
-      directive: launched(),
-    }));
+    const createLaunchDirective = vi.fn(async () => ({ offline: false, directive: launched() }));
     await opLaunchAgent(client({ createLaunchDirective }), "general", {
       name: "Scout",
       runtime: "codex",
@@ -121,25 +54,16 @@ describe("the create body", () => {
     expect(createLaunchDirective.mock.calls[0][0]).toMatchObject({ runtime: "codex" });
   });
 
-  // ⚠ OMITTED MUST STAY OMITTED ALL THE WAY DOWN. A default substituted here would turn "the
-  // operator's own chain decides" into "this process decided", on a machine it cannot see.
+  // Omitted stays omitted: the operator's own chain decides, not this process.
   it("sends NO runtime when none was asked for — never a default", async () => {
-    const createLaunchDirective = vi.fn(async () => ({
-      offline: false,
-      directive: launched(),
-    }));
+    const createLaunchDirective = vi.fn(async () => ({ offline: false, directive: launched() }));
     await opLaunchAgent(client({ createLaunchDirective }), "general", { name: "Scout" });
     expect(createLaunchDirective.mock.calls[0][0]).toMatchObject({ runtime: undefined });
   });
 
-  // 🔒 THE ORIGINAL REPRODUCTION, AS A TEST. `model: "codex"` must reach the model slot and
-  // NOTHING else — it is not a runtime request, and the result below proves it cannot masquerade
-  // as one.
+  // The reproduction: `model: "codex"` fills the model slot only and is not a runtime request.
   it("`model: \"codex\"` asks for no runtime at all", async () => {
-    const createLaunchDirective = vi.fn(async () => ({
-      offline: false,
-      directive: launched(),
-    }));
+    const createLaunchDirective = vi.fn(async () => ({ offline: false, directive: launched() }));
     await opLaunchAgent(client({ createLaunchDirective }), "general", {
       name: "Scout",
       model: "codex",
@@ -154,14 +78,11 @@ describe("the result names what actually ran", () => {
   it("prints the APPLIED runtime on every launch, asked for or not", async () => {
     const out = await text(created(launched({ appliedRuntime: "claude" })));
     expect(out).toContain("runtime=claude");
-    // ⚠ AND NOT A SECOND FIELD SAYING THE SAME THING. On the ordinary launch the request is null
-    // and the applied value is real; a `runtimeAsked=-` on every line is noise the write-result
-    // budget cannot carry.
+    // No `runtimeAsked=` when the request was null; the write-result budget cannot carry the noise.
     expect(out).not.toContain("runtimeAsked");
   });
 
-  // 🔒 THE REPRODUCTION'S RESULT. The row says `model=codex` and `runtime=claude` — the two facts
-  // side by side, which is exactly what the original launch could not say.
+  // `model=codex` beside `runtime=claude`: the two facts the reproduction could not show.
   it("cannot let `model: codex` masquerade as a successful Codex selection", async () => {
     const out = await text(
       created(launched({ model: "codex", runtime: null, appliedRuntime: "claude" })),
@@ -189,9 +110,8 @@ describe("the result names what actually ran", () => {
     expect(out).not.toContain("runtimeAsked");
   });
 
-  // ⚠ §13 — AN OLDER DESKTOP REPORTS NOTHING, AND THE WORD FOR THAT IS NOT A VENDOR. `postureFacts`
-  // already refuses to guess for the same reason; guessing `claude` here would tell an
-  // orchestrator which vendor ran on the strength of a column nobody filled in.
+  // An older desktop reports nothing; guessing `claude` would name a vendor off an empty column
+  // (INVARIANTS §13).
   it("says `not reported` for an older desktop — never the default runtime", async () => {
     const out = await text(created(launched({ appliedRuntime: null })));
     expect(out).toContain('runtime="not reported"');
@@ -203,19 +123,17 @@ describe("the result names what actually ran", () => {
       created(launched({ model: "gpt-6-astra", appliedModel: "gpt-6-astra" })),
     );
     expect(same).not.toContain("appliedModel");
-    // ⚠ THE CASE THAT MATTERS: a cross-vendor model was DROPPED, so the machine ran something
-    // else. Without this the caller reads `model=claude-opus-5` on a Codex session.
+    // A dropped cross-vendor model: without this the caller reads a Claude model on a Codex session.
     const differs = await text(
       created(launched({ model: "claude-opus-5", appliedModel: "gpt-6-astra" })),
     );
     expect(differs).toContain("appliedModel=gpt-6-astra");
   });
 
-  // ⚠ A REFUSAL IS THE OTHER HALF OF THE CONTRACT AND IT MUST NOT GROW A RUNTIME FIELD: nothing
-  // ran, so there is nothing to name, and `retry=no` is the whole of what to do next.
+  // Nothing ran, so a refusal names no runtime.
   it("a refused launch names the word and reports no runtime", async () => {
     const out = await text(
-      created(directive({ status: "refused", refusalReason: "no-sdk" })),
+      created({ status: "refused", refusalReason: "no-sdk" }),
     );
     expect(out).toContain("reason=no-sdk");
     expect(out).toContain("retry=no");
@@ -223,8 +141,8 @@ describe("the result names what actually ran", () => {
   });
 });
 
-// 🔒 P8-04: a `runtime` outside the id shape came back as "Shorten or fix the field that is over"
-// with only the generic "Request body failed validation" — the agent trimmed its goal and retried.
+// A `runtime` validation failure names the field, not the generic body error (which sent agents
+// to trim their goal).
 describe("a refused FIELD is named", () => {
   it("a VALIDATION_FAILED names the first zod issue's field and message", async () => {
     const rejected = Object.assign(new Error("bad"), {
@@ -240,7 +158,7 @@ describe("a refused FIELD is named", () => {
   });
 });
 
-// C5 (ruling R3): a Codex word is published, carried to the create untouched, and echoed.
+// Codex tool words are published, carried to the create untouched, and echoed.
 describe("each runtime's own tool words", () => {
   it("publishes every runtime's Axis-A words and says which are whose", () => {
     const posture = (CHANNEL_INPUT_SHAPE as Record<string, unknown>).posture as {

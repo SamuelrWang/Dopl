@@ -1,7 +1,4 @@
-/**
- * The capability helper, driven over the three real descriptors (`runtime-descriptors-harness.ts`
- * loads the adapters, so a descriptor change fails here).
- */
+/** Driven over the real adapters' descriptors (`runtime-descriptors-harness.ts`), so a descriptor change fails here. */
 
 import { describe, expect, it } from "vitest";
 import {
@@ -35,8 +32,7 @@ describe("normalizeRuntimeId / descriptorFor — fail toward the DEFAULT, never 
   });
 
   it("resolves an unknown pick to the default adapter rather than to nothing", () => {
-    // A downgrade must not strand a channel whose stored id belongs to a build
-    // that knew an adapter this one does not.
+    // A downgrade must not strand a channel whose stored id names an adapter this build lacks.
     expect(descriptorFor(REAL_DESCRIPTORS, "gemini", REAL_DEFAULT_RUNTIME)?.id).toBe(
       REAL_DEFAULT_RUNTIME
     );
@@ -46,7 +42,7 @@ describe("normalizeRuntimeId / descriptorFor — fail toward the DEFAULT, never 
     expect(descriptorFor([], "codex", "claude")).toBeNull();
   });
 
-  it("answers null with no reported default, never registry order (F23)", () => {
+  it("answers null with no reported default, never registry order", () => {
     expect(descriptorFor(REAL_DESCRIPTORS, "", "")).toBeNull();
     expect(descriptorFor(REAL_DESCRIPTORS, "gemini", undefined)).toBeNull();
   });
@@ -54,10 +50,8 @@ describe("normalizeRuntimeId / descriptorFor — fail toward the DEFAULT, never 
 
 describe("toolMode.options is an ORDERING — narrowest first, widest last", () => {
   it("ships the ORDER the 08-31 amendments corrected, not the design table's", () => {
-    // ⚠ `granular` is SECOND on Codex and `allowlist` FIRST on Cursor. The design's
-    // §1.4 table put `granular` last (declaring it the widest) and Cursor's modes in
-    // the order the docs print them; both were refuted by the shipped adapters, and
-    // the printed order would have made the windowless floor NARROW a session.
+    // `[0]` is the fail-closed mode and the last the widest; a wrong order makes the windowless
+    // floor narrow a session.
     expect(toolModes(CLAUDE)).toEqual(["manual", "accept_edits", "auto", "bypass"]);
     expect(toolModes(CODEX)).toEqual(["untrusted", "granular", "on-request", "never"]);
     expect(toolModes(CURSOR)).toEqual(["allowlist", "auto-review", "run-everything"]);
@@ -94,8 +88,6 @@ describe("secondaryAxis — a row Claude does not have", () => {
 
 describe("approval.categories — Codex's own five, under Codex's own mode", () => {
   it("names the five verbatim and invents none", () => {
-    // ⚠ Revision 1 of the design declared ['command','file-change','network','mcp'],
-    // none of which appear in the platform's documentation. These are the shipped ones.
     expect(approvalCategories(CODEX)).toEqual([
       "sandbox_approval",
       "rules",

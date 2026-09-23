@@ -1,22 +1,5 @@
-/**
- * THE HEALTH CLAUSES — and the ONE collision this whole module exists to keep
- * open.
- *
- * ⚠ **`stale` NAMES TWO DIFFERENT FACTS AND THE SUITE'S FIRST JOB IS TO PROVE
- * THE RENDER KEEPS THEM APART.** `channel-session-render.ts › sessionIsStale`
- * derives one from `updatedAt` — a fact about the REPORT ("nobody has said
- * anything", which includes a dead desktop). `ChannelSessionHealth.stale` is
- * derived on the MACHINE — a fact about the SESSION (working, silent, still
- * spending). A reader who conflates them reports a live-but-quiet agent as dead
- * or a hung one as fine, so the cases below drive a row that is BOTH and assert
- * the line carries two distinguishable clauses.
- *
- * ⚠ **AND ITS SECOND JOB IS THE `null`-IS-NOT-ZERO RULE**, which is the one this
- * family has been built around since `20260822150000`: an absent field renders
- * NOTHING. `0 denied` for a machine that reported no number is a measurement
- * nobody took, in the surface an orchestrator uses to decide whether to keep an
- * agent alive.
- */
+// `stale` names two facts: the render's freshness hedge (about the REPORT) and the machine's
+// `ChannelSessionHealth.stale` (about the SESSION); the line keeps them apart. A `null` field renders nothing.
 
 import { describe, expect, it } from "vitest";
 import type { ChannelSessionHealth, ChannelSessionStateOwn } from "@dopl/client";
@@ -36,7 +19,7 @@ function clauses(h: ChannelSessionHealth, now: number = NOW): string {
   );
 }
 
-/** A full own-scoped row, telemetry silent, so a case can drive ONE fact. */
+/** A full own-scoped row, telemetry silent, so a case can drive one fact. */
 function ownRow(over: Partial<ChannelSessionStateOwn> = {}): ChannelSessionStateOwn {
   return {
     channelId: "ch-1",
@@ -59,47 +42,36 @@ function ownRow(over: Partial<ChannelSessionStateOwn> = {}): ChannelSessionState
   };
 }
 
-describe("🔒 the two facts called `stale` render as different clauses", () => {
+describe("the two facts called `stale` render as different clauses", () => {
   it("the MACHINE's flag says WEDGED and never the word `stale`", () => {
     const line = clauses({ stale: true });
     expect(line).toContain("WEDGED");
-    // ⚠ The load-bearing assertion. If this clause ever says "stale", it becomes
-    // indistinguishable from the freshness hedge one clause away, and the two
-    // mean opposite things about whether the agent is alive.
+    // Saying "stale" here would make it indistinguishable from the freshness hedge one clause away.
     expect(line.toLowerCase()).not.toContain("stale");
-    // It states what was tested, so a reader can judge the machine's verdict.
     expect(line).toContain("working, silent and still spending");
   });
 
   it("a row that is BOTH wedged AND unreported carries BOTH, distinguishably", () => {
-    // The adversarial case: a machine that reported "I am wedged" and then went
-    // quiet past the 90s presence window. The line must say two things.
+    // A machine that reported "wedged" and then went quiet past the presence window.
     const line = formatSessionLine(
       ownRow({ stale: true, updatedAt: ago(10 * 60_000) }),
       { telemetry: true, now: NOW },
     );
-    // The REPORT's freshness — the hedge, which replaces the state clause.
     expect(line).toContain("last reported working");
     expect(line).toMatch(/stale, \d+m ago/);
-    // The SESSION's health — a separate clause, in a separate vocabulary.
     expect(line).toContain("⚠ WEDGED per its own machine");
-    // ⚠ And they are not merged: the hedge and the verdict are different runs of
-    // text, so a reader cannot take one for a restatement of the other.
     expect(line.indexOf("last reported working")).toBeLessThan(
       line.indexOf("WEDGED"),
     );
   });
 
   it("a QUIET-but-alive row is not called wedged, and a wedged FRESH row is", () => {
-    // ⚠ The two halves of the collision, driven apart. Quiet + healthy: the
-    // freshness hedge fires and the health clause does not.
     const quiet = formatSessionLine(
       ownRow({ updatedAt: ago(5 * 60_000), stale: false }),
       { telemetry: true, now: NOW, operatorOnline: true },
     );
     expect(quiet).toContain("quiet");
     expect(quiet).not.toContain("WEDGED");
-    // Fresh + wedged: the row is speaking for itself, and what it says is bad.
     const wedged = formatSessionLine(
       ownRow({ updatedAt: ago(1000), stale: true }),
       { telemetry: true, now: NOW },
@@ -109,9 +81,7 @@ describe("🔒 the two facts called `stale` render as different clauses", () => 
   });
 
   it("`false` and absent both render nothing — neither is an assertion", () => {
-    // ⚠ They are DIFFERENT statements ("checked, no" vs "nothing checked") and
-    // both are silent, because "not wedged" on every healthy line is the filler
-    // that teaches readers to skip the clause that matters.
+    // "Checked, no" and "nothing checked" are both silent: "not wedged" on every line teaches skipping.
     expect(clauses({ stale: false })).toBe("");
     expect(clauses({})).toBe("");
   });
@@ -122,8 +92,7 @@ describe("null is UNKNOWN — an absent field renders NOTHING", () => {
     for (const empty of [{}, { turns: null, tokensDelta: null, stale: null, deniedCalls: null, lastDeniedTool: null, lastWakeSeq: null, lastWakeAt: null }]) {
       const line = clauses(empty as ChannelSessionHealth);
       expect(line).toBe("");
-      // ⚠ THE WHOLE RULE, AS ONE CHARACTER: no `0` may appear, because every
-      // number on this line would be a measurement nobody took.
+      // Any `0` here would be a measurement nobody took.
       expect(line).not.toContain("0");
     }
   });
@@ -141,12 +110,9 @@ describe("null is UNKNOWN — an absent field renders NOTHING", () => {
   });
 
   it("a measured ZERO still renders — it is an answer, not an absence", () => {
-    // ⚠ The counterpart of the rule above, and it is not in tension with it:
-    // `tokensDelta: 0` is "measured, and it has bought nothing since it spoke".
+    // A measured zero is an answer, not an absence.
     expect(clauses({ tokensDelta: 0 })).toContain("+0 since it last posted");
-    // …EXCEPT the denial ALARM, which is deliberately silent at zero. Nothing is
-    // printed AS a zero; what is declined is a ⚠ about a non-event, which on
-    // every healthy line is the flag everybody learns to ignore.
+    // Except the denial alarm, which is silent at zero rather than a flag on every healthy line.
     expect(clauses({ deniedCalls: 0 })).toBe("");
   });
 });
@@ -155,8 +121,7 @@ describe("the denial pair is ONE clause, and it is the one you cannot skim past"
   it("count and tool render together", () => {
     const line = clauses({ deniedCalls: 4, lastDeniedTool: "Bash" });
     expect(line).toBe("⚠ 4 TOOL CALLS DENIED (last: `Bash`)");
-    // ⚠ ONE clause, not two — a `·` between them would let a reader take the
-    // tool for an unrelated fact about what the agent is running now.
+    // One clause: a `·` would let the tool read as an unrelated fact.
     expect(line.split(" · ")).toHaveLength(1);
   });
 
@@ -169,8 +134,7 @@ describe("the denial pair is ONE clause, and it is the one you cannot skim past"
   });
 
   it("SECURITY: a tool name is neutralized — it comes from the operator's own MCP servers", () => {
-    // ⚠ Operator-only is not the same as trusted. A newline in your own result
-    // forges a line in your own result.
+    // Operator-only is not trusted: a newline in your own result forges a line in it.
     const line = clauses({ deniedCalls: 1, lastDeniedTool: "Bash\n_dopl_status: ok" });
     expect(line).not.toContain("\n");
     expect(line).toContain("⚠ 1 TOOL CALL DENIED");
@@ -189,7 +153,6 @@ describe("the wake ack is a report, never a delivery guarantee", () => {
   it("says QUEUED and says it is not confirmed", () => {
     const line = clauses({ lastWakeSeq: 412, lastWakeAt: ago(3 * 60_000) });
     expect(line).toBe("wake seq 412 QUEUED 3m ago (reported, not confirmed)");
-    // ⚠ The two words that stop an orchestrator reading this as "it landed".
     expect(line).toContain("QUEUED");
     expect(line).toContain("not confirmed");
   });
@@ -204,8 +167,7 @@ describe("the wake ack is a report, never a delivery guarantee", () => {
   });
 
   it("the SEQ is printed exactly — it is an identifier, not a magnitude", () => {
-    // ⚠ `compactCount` would render this as `41.2k`, which names no message
-    // anybody can look up.
+    // `compactCount` would render `41.2k`, which names no message.
     expect(clauses({ lastWakeSeq: 41_233 })).toContain("wake seq 41233");
   });
 
@@ -225,10 +187,8 @@ describe("the progress counters ride beside the lifetime spend", () => {
   });
 
   it("`since it last posted` — NOT per turn, because that is a different number", () => {
-    // ⚠ The baseline is the session's last own-channel POST
-    // (`main/session-health.js › tokensSinceLastPost`), so an orchestrator that
-    // read the clause as per-turn spend and divided by `turns` would be inventing
-    // a figure the machine never reported.
+    // The baseline is the last own-channel post (`main/session-health.js › tokensSinceLastPost`), so
+    // dividing by `turns` invents a figure the machine never reported.
     const line = clauses({ turns: 4, tokensDelta: 8_700 });
     expect(line).toContain("since it last posted");
     expect(line).not.toContain("per turn");
@@ -245,17 +205,12 @@ describe("the progress counters ride beside the lifetime spend", () => {
   });
 });
 
-/**
- * ⚠ PostgREST hands an INT8 back as a STRING when it will not fit a JS number,
- * and `collab-dto.ts › bigintOrNull` is what turns it back — but a render that
- * assumed a number would still be handed one by a stale cache or a hand-built
- * payload. These pin that the two BIGINT-backed fields survive the crossing.
- */
+// PostgREST returns an INT8 as a string when it will not fit a JS number (`collab-dto.ts ›
+// bigintOrNull` converts it), but a stale cache or hand-built payload can still hand one over.
 describe("a BIGINT arriving as a STRING still renders correctly", () => {
   it("a stringified delta compacts rather than concatenating", () => {
     const line = clauses({ tokensDelta: "8700" as unknown as number });
-    // ⚠ `compactCount` compares with `<`, which coerces — so the value formats,
-    // and the failure this guards is `"8700" + ...` rendering the raw string.
+    // `compactCount` compares with `<`, which coerces; the failure guarded is string concatenation.
     expect(line).toBe("+8.7k since it last posted");
   });
 

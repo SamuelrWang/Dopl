@@ -1,16 +1,5 @@
-/**
- * THE WORKSPACE-WIDE `await` OP, and the ADDITIVITY of the per-channel one's
- * new `sessions` key.
- *
- * ⚠ TWO PROPERTIES THIS SUITE EXISTS FOR:
- *  1. **THE SCOPE IS STATED, ALWAYS.** A workspace hold watches channels the
- *     caller is a MEMBER of. An agent that sees traffic will otherwise assume it
- *     is seeing ALL traffic, and read silence from a public room it never joined
- *     as evidence the workspace is quiet.
- *  2. **`sessions` IS ADDITIVE.** An older server sends no such key; the render
- *     must be byte-identical to the pre-wave one in that case, because a heading
- *     with no rows under it reads as "you have no agents".
- */
+// The workspace-wide hold: its scope (member channels only) is stated on every result, and the
+// `sessions` block is additive on both holds.
 
 import { describe, it, expect, vi } from "vitest";
 import type { DoplClient } from "@dopl/client";
@@ -38,13 +27,8 @@ function message(over: Record<string, unknown> = {}) {
   };
 }
 
-/**
- * ⚠ THE INNER POLL SLEEPS, AND IT HAS TO. `opHoldWorkspace` treats a hold that
- * returns far under its ask as CUT SHORT — the platform-clamp branch, which
- * deliberately tells the agent NOT to re-arm. An instant mock trips it every
- * time, so a case testing the ordinary TIMEOUT result would be testing the clamp
- * warning instead. Paired with `HOLD_MS` below: elapsed must exceed half the ask.
- */
+// The mock must sleep: an instant hold reads as CUT SHORT (the clamp branch, which says not to
+// re-arm), so elapsed time must exceed half the ask.
 const POLL_DELAY_MS = 30;
 const HOLD_MS = 40;
 
@@ -77,13 +61,8 @@ describe("a workspace page names the channel every message came from", () => {
     expect(out).toContain("across 2 channels");
   });
 
-  /**
-   * ⚠ THE CURSOR IS THE MAX OVER THE WHOLE PAGE, NOT THE LAST LINE. Grouping
-   * reorders the page relative to `seq`, so "the last message shown" is no
-   * longer the highest seq — taking it would advance the cursor past the other
-   * group's newer messages and lose them PERMANENTLY, because a cursor only
-   * moves forward.
-   */
+  // Grouping reorders the page, so the last line is not the highest seq; a cursor only moves
+  // forward, so taking it would lose the other group's newer messages for good.
   it("REGRESSION: the next `since` is the page MAXIMUM, not the last rendered line", async () => {
     const out = await text(
       wsClient({
@@ -95,9 +74,6 @@ describe("a workspace page names the channel every message came from", () => {
         timedOut: false,
       })
     );
-    // ⚠ `cursor=` IS THE CURSOR TOKEN NOW (2026-09-03) — same fact, lifted
-    // without parsing prose. The property under test is unchanged: the number
-    // is the page MAXIMUM, not the last rendered line.
     expect(out).toContain("cursor=99");
     expect(out).toContain("since=99");
   });
@@ -126,8 +102,7 @@ describe("the scope is stated on every result", () => {
   });
 
   it("ZERO memberships is a REFUSAL to re-arm, not a quiet empty page", async () => {
-    // ⚠ A hold watching nothing can never fire; telling the agent to keep
-    // waiting on it is telling it to wait forever.
+    // A hold watching nothing can never fire.
     const out = await text(wsClient({ channelCount: 0 }), 5, HOLD_MS);
     expect(out).toContain("THIS HOLD WATCHED NOTHING");
     expect(out).toContain("Do not re-arm");
@@ -136,28 +111,15 @@ describe("the scope is stated on every result", () => {
 
 describe("the workspace stop rule is its own, not the per-channel one", () => {
   it("warns that ANY channel's traffic wakes it, so a wake is not news", async () => {
-    // ⚠ ON THE PAGE, NOT ON THE TIMEOUT (2026-09-03). The scope warning is a
-    // FACT about this lane and it survives; what left the timed-out result with
-    // the rest of the re-arm doctrine is the STOP RULE, which is the same rule
-    // in both lanes and is now stated once in `dopl://doctrine/channels`.
+    // The scope warning is a fact about this lane; the stop rule is doctrine (`› Waiting`).
     const out = await text(wsClient({ messages: [message()], timedOut: false }));
     expect(out).toContain("wakes on ANY message in ANY channel");
     expect(out).toContain("judge liveness there");
   });
 
-  /**
-   * ⚠ ON A PAGE, NOT ON THE TIMEOUT. Since T03 the timed-out result is the
-   * COMPRESSED one — an external orchestrator reads it every ~45s and it says
-   * the same thing every time — so the full rule is taught where it is new
-   * information: the hold that RETURNED. The compressed line still carries the
-   * same exit (checked below).
-   */
+  // The full rule rides a page that RETURNED; the timed-out result is the compressed one an
+  // orchestrator reads every ~45s.
   it("says the TIMEOUT stops being the 'nothing is happening' signal", async () => {
-    // ⚠ **RE-POINTED (2026-09-03).** The clause that said the timeout stops
-    // being a signal was part of an 855-character stop rule; what replaced it
-    // is the same fact said as an inversion of how a WAKE reads — a workspace
-    // hold fires for any room, so neither firing nor timing out is news about
-    // the one exchange you are blocked on.
     const out = await text(
       wsClient({ messages: [message()], timedOut: false })
     );
@@ -165,24 +127,16 @@ describe("the workspace stop rule is its own, not the per-channel one", () => {
   });
 
   it("the COMPRESSED timeout still carries the cursor and the 30-minute exit", async () => {
-    // ⚠ HOLD_MS, not the default — see POLL_DELAY_MS above: an instant mock on a
-    // long ask lands in the CUT SHORT branch, not the timeout one.
+    // HOLD_MS, not the default: see POLL_DELAY_MS.
     const out = await text(wsClient({}), 5, HOLD_MS);
     expect(out).toContain("cursor=5");
-    // ⚠ THE EXIT IS CARRIED BY A POINTER NOW, NOT BY A COPY (2026-09-03) — one
-    // statement of it, in the section every hold result names. Both halves are
-    // asserted, here and on the doctrine below.
     expect(out).toContain(`${DOCTRINE_URI} › Waiting`);
-    // ⚠ …and it still states the SCOPE, which is a fact about what was watched
-    // rather than doctrine: "no messages" and "that room was never watched" are
-    // different answers.
+    // Still states the scope: "no messages" and "that room was never watched" are different answers.
     expect(out).toContain("Scope: every channel you are a MEMBER of");
   });
 
   it("states the ABSENCE of a finished state (INVARIANTS §10)", async () => {
-    // ⚠ An agent trained on a surface that HAD a finished state waits for one
-    // forever, so the absence must be SAID rather than merely be true. It is
-    // said once, in the section both hold lanes point at.
+    // An agent trained on a surface with a finished state waits for one forever, so the absence is said.
     expect(await text(wsClient({}), 5, HOLD_MS)).toContain(
       `${DOCTRINE_URI} › Waiting`,
     );
@@ -193,20 +147,8 @@ describe("the workspace stop rule is its own, not the per-channel one", () => {
   });
 });
 
-/**
- * ⚠ THE UNTRUSTED-BODY HEADER IS PART OF THE RESULT, ON BOTH HOLDS.
- *
- * It was DROPPED from both await lanes on 2026-09-02 in the belief that the
- * tool description's SECURITY paragraph had absorbed it. It had not — there is
- * no such paragraph — so for the length of that commit every await rendered
- * counterparty bodies with nothing framing them as data. The per-channel lane
- * had a test (`channel-wake.test.ts` › "frames counterparty bodies BEFORE
- * rendering them") and went red; the WORKSPACE lane had none and went quiet,
- * which is the whole reason this block exists.
- *
- * ⚠ The header must precede the first body: a caveat read only AFTER an
- * injected line has been read is not a caveat.
- */
+// The untrusted-body header must precede the first body: a caveat read after an injected line is
+// not a caveat.
 describe("counterparty bodies are FRAMED before they are rendered", () => {
   it("heads a workspace page with the untrusted-body header", async () => {
     const out = await text(
@@ -219,13 +161,8 @@ describe("counterparty bodies are FRAMED before they are rendered", () => {
   });
 });
 
-/**
- * ⚠ THE SUPPRESSION IS SESSION-SCOPED, AND THERE IS NO ACCOUNT FALLBACK (F-405).
- * Across a whole workspace the account filter hid most of what an orchestrator
- * waits for, and ALL of it from an unstamped external client — see
- * `channel-hold-author.test.ts` for the per-channel repro and the full
- * argument. This block used to assert `excludeAuthor === ME`, i.e. the bug.
- */
+// Session-scoped suppression, no account fallback: the account filter hid a sibling session's posts
+// (F-405; `channel-hold-author.test.ts` has the per-channel case).
 describe("the caller's own posts never end its own workspace hold", () => {
   it("sends NO author filter, stamped or not", async () => {
     for (const self of [ME, null]) {
@@ -262,12 +199,8 @@ describe("the caller's own posts never end its own workspace hold", () => {
   });
 });
 
-/**
- * ADDITIVITY. ⚠ `undefined` (an older server, or a failed session read behind a
- * good hold) and `[]` (the server looked, this machine reports nothing) are
- * DIFFERENT ANSWERS and must render differently — collapsing them tells an
- * orchestrator it has no agents whenever it talks to an older deployment.
- */
+// `undefined` (older server, or a failed session read) and `[]` (nothing reported) must render
+// differently, or an older deployment reads as "you have no agents".
 describe("the `sessions` block is ADDITIVE on both holds", () => {
   const session = {
     channelId: "chan-1",
@@ -301,15 +234,8 @@ describe("the `sessions` block is ADDITIVE on both holds", () => {
     expect(out).toContain("not proof there are none");
   });
 
-  /**
-   * ⚠ **ADDITIVE, AND THE TELEMETRY IS ASSERTED THROUGH THE COLUMNS THAT
-   * EXIST** (T13). This asserted `900 tokens`, a clause on the prose line;
-   * `sessionRow` has no tokens and no context column, so the operator-only half
-   * is now pinned by identity/model/tool — the same property, on the shape the
-   * block actually renders. ⚠ The shared fixture keeps `tokensSpent: 900` and
-   * it must appear NOWHERE: a column the table dropped may not leak into a
-   * neighbour. ⚠ Restore the tokens assertion when the column lands.
-   */
+  // `sessionRow` has no tokens column; `tokensSpent: 900` stays on the fixture so a dropped column
+  // cannot leak into a neighbour.
   it("workspace: a populated array renders the sessions, telemetry included", async () => {
     const out = await text(
       wsClient({
@@ -328,10 +254,7 @@ describe("the `sessions` block is ADDITIVE on both holds", () => {
     expect(out).toContain("### Your agents — 1");
     expect(out).toContain("| `Code Auditor` | `claude-opus-5` | `Bash` |");
     expect(out).not.toContain("900");
-    // ⚠ **ADDITIVE MEANS THE HOLD'S OWN RESULT IS UNTOUCHED.** The block rides
-    // UNDER the messages and their cursor, never in place of them — a caller
-    // that lost `Highest seq shown` to a session table would re-arm from the
-    // wrong seq, or not at all.
+    // Additive: the block rides under the messages and their cursor, never in place of them.
     expect(out).toContain("cursor=10");
   });
 
@@ -363,15 +286,13 @@ describe("the `sessions` block is ADDITIVE on both holds", () => {
   });
 
   it("per-channel: the block renders on a TIMEOUT too — the case it earns most", async () => {
-    // ⚠ A hold that came back empty is exactly when an orchestrator has to decide
-    // whether the agent it is waiting on is still alive.
+    // An empty hold is exactly when an orchestrator must judge whether its agent is alive.
     const client = {
       listChannels: vi.fn(async () => [
         { id: "chan-1", slug: "general", name: "General", visibility: "private" },
       ]),
       awaitChannelMessages: vi.fn(async () => {
-        // ⚠ Same reason as `POLL_DELAY_MS` above — an instant hold reads as CUT
-        // SHORT, which is a different result with different guidance.
+        // Same reason as `POLL_DELAY_MS`: an instant hold reads as CUT SHORT.
         await new Promise((r) => setTimeout(r, POLL_DELAY_MS));
         return { messages: [], timedOut: true, sessions: [session] };
       }),

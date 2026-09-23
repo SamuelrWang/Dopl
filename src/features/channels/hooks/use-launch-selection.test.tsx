@@ -1,29 +1,10 @@
 // @vitest-environment jsdom
-/**
- * THE DURABLE LAUNCH SELECTION AT BOTH SCOPES — the two persistence contracts, and the three
- * ways a write can end (2026-09-21, U7/U8).
- *
- * The properties here, every one of which fails silently:
- *
- *  - **A CHANNEL WRITE IS AN OWN-KEY PATCH.** Main leaves a key the caller did not send alone, so
- *    a control with no model concept must not restate one. The failure this closes is concrete:
- *    before U8 the preload coerced an absent `tools` to `''`, so a runtime-only write arrived as
- *    `{tools:'', messages:''}` and `patchRejections` REFUSED THE WHOLE THING — the row reverted
- *    with nothing on screen saying why.
- *  - **A DEFAULTS WRITE IS THE WHOLE RECORD, AND IT CARRIES `v` AND `byRuntime`.**
- *    `agent-defaults.js › normalizeDefaults` branches on `v == null` and reads a record without it
- *    as a pre-U5 LEGACY one — which migrates the single global `tools`/`model` into the DEFAULT
- *    runtime's slot and drops every other runtime's settings. A `v`-less write from this tab
- *    erased the operator's Codex model on every keystroke.
- *  - **PROFILE DEFAULTS NEVER TOUCH A CHANNEL.** Samuel's write-once ruling: the seed is
- *    `channels:applyAgentDefaults` at creation and nothing else. A defaults write that reached
- *    `setLaunchPosture` would re-point rooms the operator never opened.
- *  - **A REFUSED WRITE RE-ADOPTS WHAT IS STORED AND ECHOES NOTHING.** Main fails closed before the
- *    store, so there is no optimistic value to revert and no rejected value to display.
- */
+/** `useLaunchSelection` at both scopes; a refused write re-adopts what is stored and echoes nothing. */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
+import { installSpaBridge } from "@/shared/testing/spa-bridge";
+import { REAL_DEFAULT_RUNTIME, REAL_DESCRIPTORS } from "../lib/runtime-descriptors-harness";
 import { useLaunchSelection } from "./use-launch-selection";
 
 const CHANNEL = "11111111-2222-3333-4444-555555555555";
@@ -33,15 +14,14 @@ const setLaunchPosture = vi.fn();
 const getAgentDefaults = vi.fn();
 const setAgentDefaults = vi.fn();
 
-/** What a current main answers. ⚠ The legacy keys AND the versioned record, additively —
- *  `channel-dir-ipc.js › channels:getLaunchPosture` is the statement of record. (No `model`
- *  since 2026-09-23 — the channel stores none.) */
+/** What a current main answers: the legacy keys and the versioned record, additively
+ *  (`channel-dir-ipc.js › channels:getLaunchPosture`). */
 const postureReply = (over: Record<string, unknown> = {}) => ({
   tools: "accept_edits",
   messages: "ask",
   runtime: "",
-  runtimes: [{ id: "claude", label: "Claude Code" }, { id: "codex", label: "Codex" }],
-  defaultRuntime: "claude",
+  runtimes: REAL_DESCRIPTORS,
+  defaultRuntime: REAL_DEFAULT_RUNTIME,
   connected: ["claude"],
   selectionVersion: 2,
   needsReview: [],
@@ -68,8 +48,8 @@ const defaultsReply = (over: Record<string, unknown> = {}) => ({
     claude: { tools: "accept_edits" },
     codex: { native: { sandbox_mode: "read-only" } },
   },
-  runtimes: [{ id: "claude", label: "Claude Code" }, { id: "codex", label: "Codex" }],
-  defaultRuntime: "claude",
+  runtimes: REAL_DESCRIPTORS,
+  defaultRuntime: REAL_DEFAULT_RUNTIME,
   connected: ["claude"],
   ...over,
 });
@@ -79,15 +59,11 @@ beforeEach(() => {
   setLaunchPosture.mockReset().mockResolvedValue({ ok: true });
   getAgentDefaults.mockReset().mockResolvedValue(defaultsReply());
   setAgentDefaults.mockReset().mockResolvedValue({ ok: true });
-  (window as { dopl?: unknown }).dopl = {
-    apiRequest: () => Promise.resolve({ status: 200, statusText: "OK", hasBody: false }),
+  installSpaBridge({
     channels: { getLaunchPosture, setLaunchPosture, getAgentDefaults, setAgentDefaults },
-  };
+  });
 });
-afterEach(() => {
-  cleanup();
-  delete (window as { dopl?: unknown }).dopl;
-});
+afterEach(cleanup);
 
 async function channelHook() {
   const hook = renderHook(() => useLaunchSelection({ kind: "channel", channelId: CHANNEL }));
@@ -101,6 +77,7 @@ async function defaultsHook() {
   return hook;
 }
 
+// A channel write is an own-key patch: main leaves every key the caller did not send alone.
 describe("the CHANNEL scope", () => {
   it("reads every runtime's record, not just the selected one", async () => {
     const { result } = await channelHook();
@@ -146,13 +123,12 @@ describe("the CHANNEL scope", () => {
     await act(async () => {
       await result.current.update({ tools: "accept_edits" });
     });
-    // ⚠ NO RE-READ, because nothing was written — and no optimistic value to revert.
+    // Main fails closed before the store: nothing to re-read, nothing to revert.
     expect(getLaunchPosture).not.toHaveBeenCalled();
     expect(result.current.rejected).toEqual(['"accept_edits" is not a tool setting Codex offers']);
     expect(result.current.recordFor("claude").tools).toBe("accept_edits");
   });
 
-  // F22: a failed re-read after a write that landed flipped every reader to "no desktop".
   it("keeps the last good reply when the re-read after a write fails", async () => {
     const { result } = await channelHook();
     getLaunchPosture.mockRejectedValueOnce(new Error("ipc down"));
@@ -175,6 +151,8 @@ describe("the CHANNEL scope", () => {
   });
 });
 
+// A defaults write is the whole record and carries `v`: without it `agent-defaults.js › normalizeDefaults`
+// reads it as legacy and drops every other runtime's record.
 describe("the DEFAULTS scope", () => {
   it("writes the WHOLE record, carrying `v` so main does not read it as legacy", async () => {
     const { result } = await defaultsHook();
@@ -189,7 +167,6 @@ describe("the DEFAULTS scope", () => {
   });
 
   it("carries EVERY runtime's record through a write that names one", async () => {
-    // Decision #1: editing Codex may not clear Claude, and vice versa.
     const { result } = await defaultsHook();
     await act(async () => {
       await result.current.update({ runtime: "codex", tools: "never" });
@@ -197,9 +174,9 @@ describe("the DEFAULTS scope", () => {
     const sent = setAgentDefaults.mock.calls[0][0];
     expect(sent.byRuntime.claude).toEqual({ tools: "accept_edits" });
     expect(sent.byRuntime.codex.tools).toBe("never");
-    // ⚠ AND THE NATIVE BAG SURVIVES A TOOLS-ONLY WRITE.
+    // The native bag survives a tools-only write…
     expect(sent.byRuntime.codex.native).toEqual({ sandbox_mode: "read-only" });
-    // ⚠ AND NO MODEL IS WRITTEN, AT EITHER LEVEL (2026-09-23).
+    // …and no model is written at either level.
     expect("model" in sent).toBe(false);
     expect(JSON.stringify(sent.byRuntime)).not.toContain("model");
   });
@@ -213,9 +190,8 @@ describe("the DEFAULTS scope", () => {
     expect(setLaunchPosture).not.toHaveBeenCalled();
   });
 
-  it("with NO runtime picked, files the edit under the DEFAULT runtime's key main reads (F1)", async () => {
-    // Main's `activeRecord` reads `byRuntime[runtime || defaultId]`; a `byRuntime[""]` key is
-    // kept verbatim and never read, so the write returned ok and the value never changed.
+  it("with NO runtime picked, files the edit under the DEFAULT runtime's key main reads", async () => {
+    // Main's `activeRecord` reads `byRuntime[runtime || defaultId]`; a `byRuntime[""]` key is never read.
     const { result } = await defaultsHook();
     expect(result.current.runtime).toBe("");
     await act(async () => {
@@ -223,7 +199,7 @@ describe("the DEFAULTS scope", () => {
     });
     const sent = setAgentDefaults.mock.calls[0][0];
     expect(sent.runtime).toBe("");
-    expect(sent.byRuntime.claude.tools).toBe("auto");
+    expect(sent.byRuntime[REAL_DEFAULT_RUNTIME].tools).toBe("auto");
     expect(Object.keys(sent.byRuntime)).not.toContain("");
     expect(sent.byRuntime.codex).toEqual({ native: { sandbox_mode: "read-only" } });
   });

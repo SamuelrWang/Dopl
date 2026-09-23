@@ -1,8 +1,5 @@
 // @vitest-environment jsdom
-/**
- * A failed per-base tree read says so, with a retry — it never renders "Empty"
- * (INVARIANTS §11: unknown is not empty; P7-06).
- */
+// A failed tree read is unknown, not empty (INVARIANTS §11).
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";

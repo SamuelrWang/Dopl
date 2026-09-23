@@ -5,15 +5,29 @@
  */
 
 import { vi } from "vitest";
-import type { ModelCatalog, ModelCatalogs } from "../lib/model-catalog";
+import { CATALOG_VERSION, type ModelCatalog, type ModelCatalogs } from "../lib/model-catalog";
 import { REAL_DEFAULT_RUNTIME, REAL_DESCRIPTORS } from "../lib/runtime-descriptors-harness";
 import type { RuntimeRecord } from "../lib/launch-selection";
 import type { LaunchSelectionState } from "./use-launch-selection";
 
+export interface CatalogModelInput {
+  id: string;
+  /** Omitted = the id; `null` = a model the runtime does not name. */
+  label?: string | null;
+  /** Omitted = the label. */
+  short?: string | null;
+  isDefault?: boolean;
+  hidden?: boolean;
+  aliases?: string[];
+  efforts?: string[];
+  /** Omitted = the first effort. */
+  effortDefault?: string;
+}
+
 /** A `ready` catalog in the runtime's own order; `isDefault` marks one member. */
 export function catalog(
   runtime: string,
-  models: ReadonlyArray<{ id: string; label?: string; isDefault?: boolean; efforts?: string[] }>,
+  models: ReadonlyArray<CatalogModelInput>,
   over: Partial<ModelCatalog> = {}
 ): ModelCatalog {
   return {
@@ -21,27 +35,40 @@ export function catalog(
     source: "live",
     status: "ready",
     reason: "",
-    models: models.map((m) => ({
-      id: m.id,
-      label: m.label ?? m.id,
-      short: m.label ?? m.id,
-      isDefault: m.isDefault === true,
-      hidden: false,
-      aliases: [],
-      dimensions: (m.efforts
-        ? {
-            reasoningEffort: {
-              options: m.efforts.map((v) => ({ value: v, label: v, description: null })),
-              default: m.efforts[0] ?? null,
-            },
-          }
-        : {}) as ModelCatalog["models"][number]["dimensions"],
-    })),
+    models: models.map((m) => {
+      const label = m.label === undefined ? m.id : m.label;
+      return {
+        id: m.id,
+        label,
+        short: m.short === undefined ? label : m.short,
+        isDefault: m.isDefault === true,
+        hidden: m.hidden === true,
+        aliases: m.aliases ?? [],
+        dimensions: (m.efforts
+          ? {
+              reasoningEffort: {
+                options: m.efforts.map((v) => ({ value: v, label: v, description: null })),
+                default: m.effortDefault ?? m.efforts[0] ?? null,
+              },
+            }
+          : {}) as ModelCatalog["models"][number]["dimensions"],
+      };
+    }),
     defaultId: models.find((m) => m.isDefault)?.id ?? null,
     dimensions: models.some((m) => m.efforts) ? ["reasoningEffort"] : [],
     truncated: false,
     ...over,
   };
+}
+
+/** {@link catalog} as the desktop sends it (`main/runtime/model-catalog.js › makeCatalog`): with the
+ *  per-catalog `version` and `key` the web normaliser ignores. */
+export function wireCatalog(
+  runtime: string,
+  models: ReadonlyArray<CatalogModelInput>,
+  over: Partial<ModelCatalog> = {}
+) {
+  return { version: CATALOG_VERSION, key: null, ...catalog(runtime, models, over) };
 }
 
 export interface SelectionStubInput extends Partial<Omit<LaunchSelectionState, "recordFor" | "catalogFor">> {
@@ -72,7 +99,7 @@ export function launchSelectionStub(over: SelectionStubInput = {}): LaunchSelect
     update: vi.fn().mockResolvedValue(undefined),
     ...over,
     catalogs,
-    // Derived from `byRuntime` so `record` and `recordFor` cannot disagree.
+    // Both derive from `byRuntime` so they cannot disagree; no suite overrides `record`.
     record: over.record ?? byRuntime[over.runtime ?? ""] ?? {},
     recordFor: (id: string) => byRuntime[id || defaultRuntime] ?? {},
     catalogFor: (id: string) => catalogs[id || defaultRuntime] ?? null,

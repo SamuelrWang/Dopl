@@ -1,134 +1,45 @@
 /**
- * THE VISIBILITY MATRIX, as a property over the whole grid rather than a
- * handful of examples: 3 visibilities × 7 caller kinds, every cell asserted.
- *
- * ⚠ WHY A GRID AND NOT CASES. `canSeeIdentity` is six ordered arms, and the
- * bugs this class of function actually ships are ORDER bugs — an admin arm
- * placed above the `private` arm, an API-key arm placed below the creator arm.
- * Neither shows up in the cases anyone writes by hand, because each looks right
- * on its own row. Enumerating the product means a reordering cannot be green.
- *
- * Through the public service with the repository mocked: no Supabase, no
- * network. Same idiom as `skills/server/service.test.ts`.
+ * The visibility matrix as a whole grid: `canSeeIdentity` is ordered arms, and an arm-order bug looks
+ * right on any single hand-written case.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { meetsMinRole } from "@/features/workspaces/types";
-import type { AgentIdentity, AgentIdentityContext } from "../types";
 
-// ⚠ **THE GRANT ARM IS A DB READ, SO IT IS DECLARED HERE** (F-604, 2026-09-02).
-// `canSeeBase` / `canSeeIdentity` gained an arm over `resource_grants`, and its
-// batch precompute is the one part of this seam that talks to Postgres. Every
-// case in this file is about the OTHER arms, so the grant set is empty — which
-// is also the pre-2026-09-02 behaviour, and therefore the right default for a
-// suite that predates the arm. The cases that exercise a GRANT live in
-// `service-shared-grant-arm.test.ts` and the redteam suites.
-vi.mock("@/shared/tenancy/resource-grant-reach", async (importOriginal) => ({
-  ...(await importOriginal<
-    typeof import("@/shared/tenancy/resource-grant-reach")
-  >()),
-  grantedResourceIds: vi.fn(async () => new Set<string>()),
-}));
-
-vi.mock("./repository", () => ({
-  listIdentitiesForWorkspace: vi.fn(),
-  findIdentityById: vi.fn(),
-  listTeamLinksForIdentities: vi.fn(),
-  listTeamIdsForUser: vi.fn(),
-  listKnowledgeLinksForIdentities: vi.fn(),
-  listKnowledgeBaseAccessRows: vi.fn(),
-  listKnowledgeBaseTeamGrants: vi.fn(),
-  listLiveFoldersForBases: vi.fn(),
-  listLiveEntryRows: vi.fn(),
-}));
+vi.mock("@/shared/tenancy/resource-grant-reach", async (orig) =>
+  (await import("./service-writes-fixtures")).noGrantsMock(orig)
+);
+vi.mock("./repository", async () => (await import("./service-writes-fixtures")).repoMock());
 
 import * as repo from "./repository";
 import { getIdentityById, listIdentities } from "./service";
 import { AgentIdentityNotFoundError } from "./errors";
+import { OWNER as CREATOR, ctx, identity, resetReadMocks } from "./service-writes-fixtures";
 
 const mockRepo = vi.mocked(repo);
 
-const CREATOR = "user-creator";
 const TEAMMATE = "user-teammate";
 const OUTSIDER = "user-outsider";
 const ADMIN = "user-admin";
 const SHARED_TEAM = "team-shared";
 
-function ctx(overrides: Partial<AgentIdentityContext> = {}): AgentIdentityContext {
-  return {
-    workspaceId: "ws-1",
-    userId: CREATOR,
-    source: "user",
-    role: "member",
-    apiKeyWorkspaceId: null,
-    credentialSubjectUserId: CREATOR,
-    ...overrides,
-  };
-}
-
-function identity(overrides: Partial<AgentIdentity> = {}): AgentIdentity {
-  return {
-    id: "tpl-1",
-    workspaceId: "ws-1",
-    name: "Researcher",
-    description: null,
-    instructions: null,
-    model: null,
-    fields: [],
-    visibility: "private",
-    teamIds: [],
-    knowledgeBases: [],
-    createdBy: CREATOR,
-    createdAt: "2026-01-01T00:00:00Z",
-    updatedAt: "2026-01-01T00:00:00Z",
-    ...overrides,
-  };
-}
-
 beforeEach(() => {
   vi.clearAllMocks();
-  mockRepo.listKnowledgeLinksForIdentities.mockResolvedValue([]);
-  mockRepo.listKnowledgeBaseAccessRows.mockResolvedValue([]);
-  mockRepo.listKnowledgeBaseTeamGrants.mockResolvedValue([]);
-  mockRepo.listLiveFoldersForBases.mockResolvedValue([]);
-  mockRepo.listLiveEntryRows.mockResolvedValue([]);
-  mockRepo.listTeamLinksForIdentities.mockResolvedValue([]);
-  mockRepo.listTeamIdsForUser.mockResolvedValue([]);
+  resetReadMocks(mockRepo);
 });
 
-// ── The grid ─────────────────────────────────────────────────────────
-
-/** The five callers the matrix distinguishes. `teamsOf` is what
- *  `listTeamIdsForUser` answers for them. */
+/** The callers the matrix distinguishes; `teamsOf` is what `listTeamIdsForUser` answers for each. */
 const CALLERS = {
   creator: { c: ctx({ userId: CREATOR }), teamsOf: [] as string[] },
   teammate: { c: ctx({ userId: TEAMMATE }), teamsOf: [SHARED_TEAM] },
   nonTeamMember: { c: ctx({ userId: OUTSIDER }), teamsOf: ["team-other"] },
   admin: { c: ctx({ userId: ADMIN, role: "admin" }), teamsOf: [] as string[] },
-  /**
-   * ⚠ NOT "a caller in another workspace" — there is no such caller at this
-   * layer, and pretending there is would test nothing. Cross-workspace
-   * isolation is enforced one layer down, by the `workspace_id` filter every
-   * repository query carries, and it is asserted separately below.
-   * This row is the WORKSPACE-SCOPED API KEY (M-10): a credential that may be
-   * shared between humans and therefore inherits no individual's reach.
-   */
+  // A workspace-scoped API key: shareable between humans, so it inherits no one's reach.
   workspaceKey: {
     c: ctx({ userId: CREATOR, apiKeyWorkspaceId: "ws-1", credentialSubjectUserId: null }),
     teamsOf: [] as string[],
   },
-  /**
-   * 🔒 THE CONTAINER-SESSION CHILD CREDENTIAL (F-333, ruled 2026-08-27) — the
-   * row this grid was missing, and the reason arm 2 could not stay keyed on the
-   * lock. It carries the SAME `apiKeyWorkspaceId` as `workspaceKey` above and
-   * the OPPOSITE answer on every private row, because it is one human's session
-   * rather than a credential shared between humans. Every PERSONAL identity is
-   * `private`, so without this row the operator's own agents cannot see the
-   * identities the operator authored for them. ⚠ **THE ORIGINAL CASE WAS THE
-   * "Use in this channel" COPY, WHICH IS DELETED (2026-09-02, B15)** — the arm
-   * it forced is unchanged and now covers every personal row instead of one
-   * gesture's output.
-   */
+  // A container-session child credential: same lock as `workspaceKey`, but one human's session (F-333).
   containerSession: {
     c: ctx({
       userId: CREATOR,
@@ -137,11 +48,7 @@ const CALLERS = {
     }),
     teamsOf: [] as string[],
   },
-  /**
-   * ⚠ AND THE PEER'S container session, which is what proves the widening is
-   * per-PERSON and not per-credential-kind: same lock, same kind, different
-   * user id — and the operator's private identity stays hidden from it.
-   */
+  // The peer's session proves the widening is per person, not per credential kind.
   containerSessionPeer: {
     c: ctx({
       userId: OUTSIDER,
@@ -154,12 +61,7 @@ const CALLERS = {
 
 type CallerName = keyof typeof CALLERS;
 
-/**
- * ⚠ THE EXPECTED GRID IS WRITTEN OUT, NOT COMPUTED. A table derived from the
- * same rules the implementation uses would pass for a wrong implementation;
- * this one is a statement of the product decision and has to be edited by hand
- * when the decision changes.
- */
+/** Written out, not computed: a grid derived from the implementation's rules would pass a wrong one. */
 const EXPECTED: Record<
   "private" | "team" | "workspace",
   Record<CallerName, boolean>
@@ -168,17 +70,11 @@ const EXPECTED: Record<
     creator: true,
     teammate: false,
     nonTeamMember: false,
-    // ⚠ FALSE, and it is the arm ordering that makes it so: an admin
-    // administers SHARING, which is not a read of a teammate's private row.
+    // An admin administers sharing, which is not a read of a private row.
     admin: false,
-    // The key IS the creator by user id, and still gets nothing — that is the
-    // whole of M-10, and it survives F-333 unchanged: what distinguishes this
-    // row from `containerSession` below is the lock's KIND, never the lock.
+    // The key IS the creator by user id and still gets nothing; the credential kind decides.
     workspaceKey: false,
-    // 🔒 F-333: the operator's own session reads the operator's own private
-    // identity — including every "Use in this channel" copy.
     containerSession: true,
-    // 🔒 …and the PEER's session does not.
     containerSessionPeer: false,
   },
   team: {
@@ -187,9 +83,7 @@ const EXPECTED: Record<
     nonTeamMember: false,
     admin: true,
     workspaceKey: false,
-    // Creator arm, same as `creator`.
     containerSession: true,
-    // No shared team, not the creator, not an admin.
     containerSessionPeer: false,
   },
   workspace: {
@@ -197,8 +91,6 @@ const EXPECTED: Record<
     teammate: true,
     nonTeamMember: true,
     admin: true,
-    // The only cell where a workspace-scoped key sees anything: a row every
-    // member can see is not one person's content.
     workspaceKey: true,
     containerSession: true,
     containerSessionPeer: true,
@@ -223,10 +115,7 @@ describe("canSeeIdentity — 3 visibilities × 7 callers, every cell", () => {
         const listed = await listIdentities(caller.c);
         expect(listed.map((t) => t.id)).toEqual(expected ? [row.id] : []);
 
-        // ⚠ THE LIST FILTER AND THE SINGLE-ROW GATE MUST AGREE. They are
-        // separate code paths (`listIdentities` filters, `getIdentityById`
-        // throws) and a divergence between them is a row that is invisible in
-        // the UI and readable by id.
+        // The list filter and the single-row gate are separate paths and must agree.
         mockRepo.findIdentityById.mockResolvedValue(row);
         const single = getIdentityById(caller.c, row.id);
         if (expected) {
@@ -239,19 +128,8 @@ describe("canSeeIdentity — 3 visibilities × 7 callers, every cell", () => {
   }
 });
 
-/**
- * 🔒 F-333 CLAIMS THERE IS NO GUEST EXPOSURE TO WEIGH, AND THAT CLAIM IS A
- * COMPOSITION OF TWO FACTS THAT LIVE IN DIFFERENT FILES — so it is asserted
- * here rather than trusted. (1) `withWorkspaceAuth`'s floor is `viewer` and no
- * agent-identities route lowers it (`app/api/agent-identities/route.test.ts ›
- * "reads at VIEWER — the default, so no options are passed"` asserts the
- * options object is undefined, i.e. the default; `POST`/`PATCH`/`DELETE` raise it to `member`), and
- * `POST /api/channels/launch-directives` — the agent-token lane that resolves a
- * identity BY NAME — keeps the same default. (2) `guest` ranks BELOW `viewer`.
- * Together: a guest never reaches an identity surface at all, so widening
- * `canSeeIdentity` for a container session cannot expose one to a guest.
- */
-describe("the guest floor — why F-333 has no guest arm", () => {
+/** No identity route lowers the `viewer` floor (the route tests pin it), and a guest ranks below it (F-333). */
+describe("the guest floor — why the container-session arm has no guest arm", () => {
   it("guest does not clear the viewer floor every identity route sits at", () => {
     expect(meetsMinRole("guest", "viewer")).toBe(false);
     expect(meetsMinRole("viewer", "viewer")).toBe(true);
@@ -262,13 +140,7 @@ describe("cross-workspace isolation", () => {
   it("every read is workspace-filtered AT THE REPOSITORY, not by the caller", async () => {
     mockRepo.listIdentitiesForWorkspace.mockResolvedValue([]);
     await listIdentities(ctx({ workspaceId: "ws-other" }));
-    // The service passes its own context's workspace and the repository takes
-    // it as a required argument — there is no code path that reads a workspace
-    // id off a request body.
-    // ⚠ The second argument is the SHELF (2026-08-27), and `undefined` here is
-    // the assertion that an unasked-for shelf means NO filter — the workspace
-    // fence and the shelf filter are different axes and neither substitutes for
-    // the other.
+    // The second argument is the shelf; `undefined` means no shelf filter, a different axis from the fence.
     expect(mockRepo.listIdentitiesForWorkspace).toHaveBeenCalledWith(
       "ws-other",
       undefined
@@ -277,13 +149,11 @@ describe("cross-workspace isolation", () => {
 
   it("a missing row 404s exactly like an invisible one", async () => {
     mockRepo.findIdentityById.mockResolvedValue(null);
-    await expect(getIdentityById(ctx(), "tpl-gone")).rejects.toBeInstanceOf(
+    await expect(getIdentityById(ctx(), "id-gone")).rejects.toBeInstanceOf(
       AgentIdentityNotFoundError
     );
   });
 });
-
-// ── Team-composition leakage ─────────────────────────────────────────
 
 describe("the sharing set is owner/admin-only", () => {
   const row = identity({ visibility: "team" });
@@ -311,8 +181,7 @@ describe("the sharing set is owner/admin-only", () => {
   it("a granted TEAMMATE sees the identity and NOT the team list", async () => {
     mockRepo.listTeamIdsForUser.mockResolvedValue([SHARED_TEAM]);
     const [t] = await listIdentities(ctx({ userId: TEAMMATE }));
-    // They can use it; they may not learn that "team-second" also has it —
-    // that is org-chart information leaking through a shared identity.
+    // Which other teams have it is org-chart information.
     expect(t.id).toBe(row.id);
     expect(t.teamIds).toEqual([]);
   });
@@ -326,8 +195,6 @@ describe("the sharing set is owner/admin-only", () => {
     expect(t.teamIds).toEqual([]);
   });
 });
-
-// ── Query-count discipline ───────────────────────────────────────────
 
 describe("fixed query count", () => {
   it("no team lookup at all when nothing is team-scoped", async () => {

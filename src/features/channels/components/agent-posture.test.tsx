@@ -1,19 +1,7 @@
 // @vitest-environment jsdom
 /**
- * THE LIVE PERMISSION CONTROLS (Samuel, 2026-08-20) — both axes, on a RUNNING session.
- *
- * The properties that fail quietly, and the first one is why this surface exists at all:
- *
- *  - **THE VALUE SHOWN IS MAIN'S, NEVER THE RENDERER'S OWN ASK.** The reducer coerces
- *    fail-closed, and three things move a posture without this control touching it: the auth
- *    hold resetting both axes, a resume, and a change made in another window on the same
- *    agent. A select that stamped its own request would claim a posture nothing is
- *    enforcing — the exact lie the deleted session window's selects earned a fix for twice.
- *  - **A REFUSAL IS SAID OUT LOUD.** A control that visibly does nothing and says nothing is
- *    the failure this whole family has been bitten by repeatedly.
- *  - **AN ENDED AGENT GETS NO CONTROL**, rather than one that always refuses.
- *  - **IT IS NOT THE CHANNEL'S DURABLE POSTURE.** That governs the NEXT spawn and is a
- *    different surface (`settings-agent.tsx`); this stores nothing.
+ * Live posture controls on a running agent: the value shown is always main's (no optimistic stamp), a
+ * refusal is said out loud, an ended agent gets no control, and nothing is stored.
  */
 
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -21,14 +9,12 @@ import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
 import type { DesktopSessionSummary } from "@/shared/lib/spa-bridge";
 import { POSTURE_REFUSED, PostureControls } from "./agent-posture";
 import { CHANNEL_ID } from "./test-fixtures";
-import { REAL_DESCRIPTORS } from "../lib/runtime-descriptors-harness";
-import { catalog } from "../hooks/launch-selection-harness";
+import { AGENT_MODELS } from "../lib/agent-models";
+import { catalog, channelRecordBridge } from "../hooks/launch-selection-harness";
+import { installSpaBridge } from "@/shared/testing/spa-bridge";
 
 const TASK = "t-1";
-afterEach(() => {
-  cleanup();
-  delete (window as { dopl?: unknown }).dopl;
-});
+afterEach(cleanup);
 
 function agent(over: Partial<DesktopSessionSummary> = {}): DesktopSessionSummary {
   return {
@@ -45,35 +31,29 @@ function agent(over: Partial<DesktopSessionSummary> = {}): DesktopSessionSummary
   };
 }
 
-/** The channel's launch record: every real adapter, one catalog each, the channel on `runtime`. */
-function channelsBridge(runtime = "claude") {
-  return {
-    getLaunchPosture: vi.fn().mockResolvedValue({
-      runtimes: REAL_DESCRIPTORS,
-      defaultRuntime: "claude",
-      connected: ["claude", "codex"],
-      catalogVersion: 1,
-      catalogs: {
-        claude: catalog("claude", [
-          { id: "claude-opus-5", label: "Opus 5" },
-          { id: "claude-sonnet-5", label: "Sonnet 5", isDefault: true },
-        ]),
-        codex: catalog("codex", [{ id: "gpt-6-sol", label: "GPT-6 Sol", isDefault: true }]),
-      },
-      selection: { v: 2, runtime, messages: "ask", byRuntime: {} },
-    }),
-    setLaunchPosture: vi.fn(),
-  };
-}
+const CATALOGS = {
+  claude: catalog("claude", [
+    { id: "claude-opus-5", label: "Opus 5" },
+    { id: "claude-sonnet-5", label: "Sonnet 5", isDefault: true },
+  ]),
+  codex: catalog("codex", [{ id: "gpt-6-sol", label: "GPT-6 Sol", isDefault: true }]),
+  cursor: catalog("cursor", [
+    { id: "composer-2", label: "Composer 2", isDefault: true },
+    { id: "gpt-6-sol", label: "GPT-6 Sol" },
+  ]),
+};
 
-function install(setMode?: ReturnType<typeof vi.fn>, sessions: Record<string, unknown> = {}) {
+function install(
+  setMode?: ReturnType<typeof vi.fn>,
+  sessions: Record<string, unknown> = {},
+  channelRuntime = "claude"
+) {
   const api: Record<string, unknown> = { ...sessions };
   if (setMode) api.setMode = setMode;
-  (window as unknown as { dopl?: unknown }).dopl = {
-    apiRequest: () => Promise.resolve({ status: 200, statusText: "", hasBody: false }),
+  installSpaBridge({
     sessions: api,
-    channels: channelsBridge(),
-  };
+    channels: channelRecordBridge({ runtime: channelRuntime, catalogs: CATALOGS }),
+  });
 }
 
 /** Renders, then lets the channel's launch-record read answer. */
@@ -96,18 +76,7 @@ describe("what the controls show", () => {
     ).toMatch(/Automatic/);
   });
 
-  /**
-   * 🔒 **THE TIMING SENTENCE IS DELETED AND ITS ABSENCE IS NOW THE PIN (Samuel, 2026-09-13: *"Also
-   * remove this line from it that says 'Permissions applied to this agent from its next
-   * decision'"*).** It read "Permissions apply to this agent from its next decision." under the two
-   * axes, on BOTH surfaces that mount this strip — the window and the slide-out panel — and the
-   * ruling is minimal copy (INVARIANTS §5).
-   *
-   * ⚠ **PINNED AS AN ABSENCE, NOT DELETED OUTRIGHT.** The sentence was itself added deliberately
-   * (it distinguished these two axes from every "next launch" control on the channel), so it is
-   * exactly the kind of copy that comes back; the case below at the `!canPosture` branch asserted
-   * the same absence for a different reason and still does.
-   */
+  // Minimal copy (INVARIANTS §5); pinned as an absence because this sentence is the kind that comes back.
   it("says NOTHING about when it takes effect — the sentence is gone", async () => {
     install(vi.fn());
     await mount();
@@ -122,19 +91,8 @@ describe("what the controls show", () => {
     );
   });
 
-  /**
-   * F-236's SPA HALF (2026-08-20). A windowless session has NO ACCEPT SURFACE, so
-   * `"ask"` on the MESSAGE axis held the peer's next message with every release
-   * path deleted — the session parked at `awaiting_inbound` permanently and the
-   * message was invisible to the agent, with no error anywhere. Main now floors
-   * the live axis (`session-profiles.js › floorWindowlessMessage`), so the option
-   * can no longer strand a reply; offering it anyway would leave a control that
-   * silently snaps back, which is the lie this surface has been fixed for twice.
-   *
-   * ⚠ THE TOOL AXIS IS UNTOUCHED — "Ask each time" there is a real, working
-   * posture, and asserting its presence is what stops this being read as a blanket
-   * ban on the phrase.
-   */
+  // A windowless session has no accept surface and main floors the live message axis
+  // (`session-profiles.js › floorWindowlessMessage`), so `ask` would silently snap back (F-236).
   it("does NOT offer Ask each time on the live MESSAGE axis — there is no accept surface", async () => {
     install(vi.fn());
     await mount();
@@ -156,31 +114,16 @@ describe("what the controls show", () => {
   it("shows the FLOOR, not 'ask', when an older main sends no message posture", async () => {
     install(vi.fn());
     await mount({ toolMode: undefined, messageMode: undefined });
-    // Defaulting the display to a value the list no longer carries renders an
-    // empty control; `auto_inbound` is what such a session actually runs on.
+    // `auto_inbound` is what such a session runs on; a value off the list would render empty.
     expect(
       screen.getByLabelText("Message permissions for this agent").textContent
     ).toMatch(/Auto accept in/);
   });
 
-  /**
-   * ALL THREE WEAR THE CONSOLIDATED DROPDOWN SIZE (Samuel, 2026-08-29) —
-   * `select-menu.tsx › TRIGGER_FACE.raisedField`, the size the composer launch panel's
-   * Identity/Model rows already wore, so the app has ONE small dropdown rather than two.
-   *
-   * ⚠ THIS PIN IS LOAD-BEARING FOR A NUMBER IN ANOTHER TREE. `main/agent-window.js ›
-   * createAgentWindow` derives the pop-out's default width (540) from THESE dimensions, and the
-   * row is `flex-wrap`: putting the taller/wider `raised` box back here does not clip or throw —
-   * the third control silently drops to a second line in a window that is now too narrow for it.
-   * Nothing in the renderer can observe that, and `test/agent-window.test.mjs` only sees the
-   * width. This case is the other half of that pair.
-   *
-   * ⚠ CLASS TOKENS, NOT SUBSTRINGS — the rule `panel-field.test.tsx` bought: a `toContain`
-   * check answers true on a neighbouring utility that merely spells the same letters.
-   */
+  // `main/agent-window.js` sizes the pop-out from these triggers, so the larger `raised` box would wrap
+  // the third control. Class tokens, not substrings: `toContain` would match a neighbouring utility.
   it("wears the consolidated raisedField size on all three — the window width is measured from it", async () => {
-    // The MODEL control is a separately detected capability, so the bridge needs both ops for
-    // this case to see the third trigger at all.
+    // The model control is a separate capability, so the bridge needs both ops.
     install(vi.fn(), { setModel: vi.fn() });
     await mount();
     for (const label of [
@@ -189,41 +132,23 @@ describe("what the controls show", () => {
       "Model for this agent",
     ]) {
       const tokens = screen.getByLabelText(label).className.split(/\s+/);
-      // The FACE is shared with `raised` and must not drift; only the box is smaller.
+      // The face is shared with `raised`; only the box is smaller.
       expect(tokens).toContain("auth-btn-3d-light");
       expect(tokens).toContain("h-6");
       expect(tokens).toContain("px-2");
       expect(tokens).toContain("text-small");
-      // `raised`'s box, the one this replaced.
+      // `raised`'s box.
       expect(tokens).not.toContain("h-9");
       expect(tokens).not.toContain("px-3");
       expect(tokens).not.toContain("text-body");
     }
   });
 
-  /**
-   * ONE LINE, AND A LONG LABEL ELLIPSIZES RATHER THAN BREAKING IT (Samuel, 2026-08-29).
-   *
-   * ⚠ THIS IS THE HALF THAT LETS THE WINDOW BE NARROW. `main/agent-window.js` opened at 540 with
-   * ~34px of slack whose ONLY job was a long free-form model label — `agentModelOptionsFor`
-   * appends whatever the agent is actually running, and a dated id is far wider than any of the
-   * four picks. Samuel ruled the slack out ("only just enough so that they are all on the same
-   * line with the same spacing"), so the overflow case had to move to the CONTROL, and the window
-   * came down to 510.
-   *
-   * ⚠ THE ROW WAS `flex-wrap` AND THAT IS WHY THE TRUNCATION NEVER FIRED. `select-menu.tsx` has
-   * always given the trigger `min-w-0 max-w-full` and its label span `min-w-0 truncate` — but a
-   * flex line break is decided on an item's CONTENT width, BEFORE shrinking is considered, so the
-   * pill wrapped to line two while its own ellipsis contract sat there unused. `flex-nowrap` is
-   * what connects them.
-   *
-   * ⚠ jsdom LAYS NOTHING OUT, so this pins the MECHANISM and not the pixels: no wrap on the row,
-   * the truncate contract on the span that holds the long text, and the long label present rather
-   * than silently dropped. The pixel half is `test/agent-window.test.mjs`'s width bound.
-   */
+  // A flex line breaks on content width before shrinking, so only `flex-nowrap` lets the label truncate.
+  // jsdom lays nothing out: this pins the mechanism; the pixel half is `test/agent-window.test.mjs`.
   it("keeps ONE line and ellipsizes a long free-form model label instead of wrapping", async () => {
     install(vi.fn(), { setModel: vi.fn() });
-    // Not one of the four pickable ids — the exact shape `spa-bridge.ts` warns arrives.
+    // Off the roster, the shape `spa-bridge.ts` warns arrives.
     const long = "claude-opus-4-5-20251101[1m]";
     await mount({ model: long } as Partial<DesktopSessionSummary>);
 
@@ -231,13 +156,11 @@ describe("what the controls show", () => {
     const row = trigger.parentElement!;
     const rowTokens = row.className.split(/\s+/);
     expect(rowTokens).toContain("flex-nowrap");
-    // The class whose presence used to make the window pay for this label.
     expect(rowTokens).not.toContain("flex-wrap");
 
-    // The label is SHOWN, not swallowed — a `SelectMenu` whose value matches no option renders
-    // blank, which is the surface saying nothing where it has an answer.
+    // Shown, not swallowed: a `SelectMenu` whose value matches no option renders blank.
     expect(trigger.textContent).toContain(long);
-    // …and it is the span carrying the ellipsis contract that holds it.
+    // …held by the span carrying the ellipsis contract.
     const label = Array.from(trigger.querySelectorAll("span")).find((s) =>
       s.textContent?.includes(long)
     )!;
@@ -245,7 +168,7 @@ describe("what the controls show", () => {
     const labelTokens = label.className.split(/\s+/);
     expect(labelTokens).toContain("truncate");
     expect(labelTokens).toContain("min-w-0");
-    // The trigger itself must be allowed to shrink, or the span never gets the chance.
+    // The trigger must be allowed to shrink, or the span never gets the chance.
     expect(trigger.className.split(/\s+/)).toContain("min-w-0");
   });
 });
@@ -259,10 +182,8 @@ describe("what a change does", () => {
     await act(async () => {
       fireEvent.click(screen.getByRole("menuitem", { name: /^Bypass/ }));
     });
-    // ⚠ THE FIFTH ARGUMENT NAMES THE INSTANCE (2026-08-22). `(channel, thread)`
-    // is a GROUP since multiplayer and main moves the OLDEST live member of it —
-    // so without the id these selects would move a different agent's posture and
-    // then show this one's unchanged, reading as a refusal that never happened.
+    // The fifth argument names the instance: `(channel, thread)` is a group, and without it main moves
+    // its oldest live member.
     expect(setMode).toHaveBeenCalledWith(
       CHANNEL_ID,
       TASK,
@@ -289,7 +210,6 @@ describe("what a change does", () => {
     );
   });
 
-  // ⚠ THE CASE THE WHOLE no-optimistic-stamp RULE EXISTS FOR.
   it("does NOT move the select on its own — the value comes back from the feed", async () => {
     const setMode = vi.fn().mockResolvedValue({ ok: true, tools: "bypass", messages: "ask" });
     install(setMode);
@@ -298,8 +218,7 @@ describe("what a change does", () => {
     await act(async () => {
       fireEvent.click(screen.getByRole("menuitem", { name: /^Bypass/ }));
     });
-    // The prop still says `manual`; main's push is what will change it. A select that
-    // stamped its own ask would show a posture nothing is enforcing.
+    // The prop still says `manual`; only main's push changes it.
     expect(screen.getByLabelText("Tool permissions for this agent").textContent).toMatch(
       /Ask each time/
     );
@@ -325,8 +244,7 @@ describe("when the controls are not offered at all", () => {
     expect(container.firstChild).toBeNull();
   });
 
-  // An ended agent has no posture to change; main answers `no-session`, and the honest face
-  // of that is no control rather than one that always refuses.
+  // Main answers `no-session` for an ended agent; the honest face is no control.
   it("renders nothing for an ENDED agent", async () => {
     install(vi.fn());
     const { container } = render(
@@ -339,19 +257,7 @@ describe("when the controls are not offered at all", () => {
     expect(container.firstChild).toBeNull();
   });
 
-  /**
-   * …BUT THE BOX ONLY GOES WHEN IT HOLDS NOTHING (2026-08-27).
-   *
-   * ⚠ THE REGRESSION THIS PINS. The usage readout moved INSIDE this box in the
-   * one-box wave, and the posture gate's bare `return null` then swallowed it:
-   * an ended agent's window lost its context meter along with its controls, which
-   * looked from the outside like the dropdowns "vanishing" on every agent. The
-   * numbers are the summary feed's — they have nothing to do with the session
-   * still running, or with the bridge op being present.
-   *
-   * ⚠ AND THE GATE ITSELF IS UNCHANGED AND MUST STAY: no posture row on an ended
-   * agent (`3dc7e6a7`'s rule), and no sentence about when a posture applies.
-   */
+  // The usage readout lives in this box: the ended-agent gate drops the posture row, never the stats.
   it("keeps the STATS on an ended agent, and still offers no posture", async () => {
     install(vi.fn());
     render(
@@ -367,8 +273,6 @@ describe("when the controls are not offered at all", () => {
     expect(screen.queryByText(/from its next decision/i)).toBeNull();
   });
 
-  // ⚠ A LIVE agent on a build with the op renders all THREE — the state the
-  // "vanished dropdowns" report was actually about. Same component in the pop-out.
   it("renders all three dropdowns for a LIVE agent", async () => {
     install(vi.fn(), { setModel: vi.fn() });
     render(
@@ -387,10 +291,7 @@ describe("when the controls are not offered at all", () => {
   });
 });
 
-/**
- * 🔒 THE AGENT'S OWN RUNTIME, NOT THE CHANNEL'S (P6-04 / P6-05). A per-spawn pick puts a Codex agent
- * on a Claude channel; its live controls must speak Codex's words and never offer Claude's models.
- */
+// The agent's own runtime, not the channel's: a per-spawn pick can put a Codex agent on a Claude channel.
 describe("a running agent on a runtime other than the channel's", () => {
   it("offers the AGENT's tool words and no Claude model list", async () => {
     install(vi.fn(), { setModel: vi.fn() });
@@ -400,16 +301,29 @@ describe("a running agent on a runtime other than the channel's", () => {
     fireEvent.click(tools);
     expect(screen.getByRole("menuitem", { name: /^never/ })).toBeTruthy();
     expect(screen.queryByRole("menuitem", { name: /^Bypass/ })).toBeNull();
-    // Codex declares no verified live model switch, so there is no picker to offer Opus in.
+    // Codex declares no verified live model switch, so there is no picker.
     expect(screen.queryByLabelText("Model for this agent")).toBeNull();
   });
 
   it("offers a Claude agent Claude's models on a Codex channel", async () => {
-    install(vi.fn(), { setModel: vi.fn() });
-    (window as unknown as { dopl: { channels: unknown } }).dopl.channels = channelsBridge("codex");
+    install(vi.fn(), { setModel: vi.fn() }, "codex");
     await mount({ runtimeId: "claude", model: "claude-sonnet-5" });
     fireEvent.click(screen.getByLabelText("Model for this agent"));
     expect(screen.getByRole("menuitem", { name: /^Opus 5/ })).toBeTruthy();
     expect(screen.queryByRole("menuitem", { name: /GPT-6 Sol/ })).toBeNull();
+  });
+
+  it("offers a non-Claude agent its own catalog's models and no Claude one", async () => {
+    install(vi.fn(), { setModel: vi.fn() });
+    await mount({ runtimeId: "cursor", model: "composer-2" });
+    fireEvent.click(screen.getByLabelText("Model for this agent"));
+    const offered = screen.getAllByRole("menuitem").map((el) => el.textContent ?? "");
+    expect(offered).toHaveLength(2);
+    expect(offered[0]).toMatch(/^Composer 2/);
+    expect(offered[1]).toMatch(/^GPT-6 Sol/);
+    for (const m of AGENT_MODELS) {
+      expect(offered.join(" ")).not.toContain(m.label);
+      expect(offered.join(" ")).not.toContain(m.id);
+    }
   });
 });

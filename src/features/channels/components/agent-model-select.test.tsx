@@ -1,30 +1,7 @@
 // @vitest-environment jsdom
 /**
- * WHICH MODEL AN AGENT RUNS ON — the vocabulary, the ABSENCE of a durable row on
- * the Settings tab (deleted 2026-09-23), the LIVE selector on a running agent, and
- * the effective-model chip (Samuel, 2026-08-22).
- *
- * Its own file rather than an addition to `settings-tab.test.tsx` (410 lines) or
- * `agents-tab.test.tsx` (456 of the 500-line cap): the feature crosses three
- * surfaces and one vocabulary module, and the properties below are about the
- * FEATURE rather than about any one of those surfaces' layout.
- *
- * The properties that fail quietly, and are therefore what this file is for:
- *
- *  - **ONE ID→LABEL MAP.** Four surfaces name a model; a second table is the
- *    two-readers-one-fact defect with a MODEL NAME as the thing that drifts, and
- *    an operator reading "Opus" on a card and "Sonnet" in Settings has no way to
- *    tell which is lying.
- *  - **ABSENT IS NOT `null` IS NOT `"Default"`.** A desktop with no model concept
- *    omits the field; a current one answers `null` for "the SDK default applies".
- *    The Settings row gates on the FIRST distinction and the card renders the
- *    SECOND as no chip at all (INVARIANTS §11 — UNKNOWN is not EMPTY).
- *  - **NO CONTROL WITHOUT THE CAPABILITY.** A row that writes a field main drops
- *    is the worst shape available: the pick appears to save and every launch
- *    ignores it.
- *  - **AN UNKNOWN ID STILL RENDERS.** The roster is the SDK's and moves without
- *    this tree shipping, so a model this build predates must read as itself
- *    rather than vanish.
+ * Which model an agent runs on: the label vocabulary, no durable Settings row, the live selector and
+ * the effective-model chip. Absent is not `null` is not "Default" (INVARIANTS §11).
  */
 
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -32,6 +9,7 @@ import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
 import type { DesktopSessionSummary } from "@/shared/lib/spa-bridge";
 import {
   AGENT_MODEL_DEFAULT,
+  AGENT_MODELS,
   agentModelLabel,
   agentModelShortLabel,
   normalizeAgentModel,
@@ -40,13 +18,15 @@ import { agentRunningModel } from "./agents-model";
 import { ChannelAgentSettingsView } from "./settings-agent";
 import { PostureControls } from "./agent-posture";
 import { CHANNEL_ID } from "./test-fixtures";
-import { catalog, launchSelectionStub } from "../hooks/launch-selection-harness";
-import { REAL_DESCRIPTORS } from "../lib/runtime-descriptors-harness";
+import type { ModelCatalogs } from "../lib/model-catalog";
+import {
+  catalog,
+  channelRecordBridge,
+  launchSelectionStub,
+} from "../hooks/launch-selection-harness";
+import { installSpaBridge } from "@/shared/testing/spa-bridge";
 
-afterEach(() => {
-  cleanup();
-  delete (window as { dopl?: unknown }).dopl;
-});
+afterEach(cleanup);
 
 const noop = () => {};
 
@@ -64,40 +44,19 @@ function summary(over: Partial<DesktopSessionSummary> = {}): DesktopSessionSumma
   };
 }
 
-/**
- * Stand up just enough bridge for the LIVE controls' two capability probes.
- *
- * ⚠ `apiRequest` IS THE SPA MARKER (`spa-bridge.ts › getSpaBridge`) — without it
- * the whole bridge reads as absent and every probe answers false, which looks
- * exactly like the capability being missing.
- */
-function stubBridge(over: Record<string, unknown> = {}) {
-  (window as { dopl?: unknown }).dopl = {
-    apiRequest: () => Promise.resolve({ status: 200, statusText: "", hasBody: false }),
-    sessions: {
-      setMode: vi.fn(async () => ({ ok: true })),
-      ...over,
-    },
-    // The channel's launch record — the agent's runtime descriptor and its live roster.
-    channels: {
-      getLaunchPosture: vi.fn(async () => ({
-        runtimes: REAL_DESCRIPTORS,
-        defaultRuntime: "claude",
-        connected: ["claude"],
-        catalogVersion: 1,
-        catalogs: {
-          claude: catalog("claude", [
-            { id: "claude-fable-5", label: "Fable 5" },
-            { id: "claude-opus-5", label: "Opus 5" },
-            { id: "claude-sonnet-5", label: "Sonnet 5", isDefault: true },
-            { id: "claude-haiku-4-5-20251001", label: "Haiku 4.5" },
-          ]),
-        },
-        selection: { v: 2, runtime: "", messages: "ask", byRuntime: {} },
-      })),
-      setLaunchPosture: vi.fn(),
-    },
-  };
+const CLAUDE_CATALOGS: ModelCatalogs = {
+  claude: catalog(
+    "claude",
+    AGENT_MODELS.map(({ id, label }) => ({ id, label, isDefault: id === "claude-sonnet-5" }))
+  ),
+};
+
+/** Just enough bridge for the live controls' two capability probes and the channel's launch record. */
+function stubBridge(sessions: Record<string, unknown> = {}, catalogs = CLAUDE_CATALOGS) {
+  installSpaBridge({
+    sessions: { setMode: vi.fn(async () => ({ ok: true })), ...sessions },
+    channels: channelRecordBridge({ catalogs }),
+  });
 }
 
 /** Renders the live strip and lets the channel's launch record answer. */
@@ -107,12 +66,7 @@ async function renderLive(agent: DesktopSessionSummary) {
 }
 
 describe("the model vocabulary — one map, four surfaces", () => {
-  /**
-   * ⚠ THE ABSENT STATE STILL WRITES NO ID — it is just no longer OFFERED. A
-   * sentinel would be a value main has to special-case, and would make "never
-   * chosen" and "chose the default" indistinguishable the moment the SDK default
-   * moved.
-   */
+  // A sentinel would make "never chosen" and "chose the default" indistinguishable once the default moved.
   it("spells the absent state as the ABSENCE of an id, never as a sentinel", () => {
     expect(AGENT_MODEL_DEFAULT).toBe("");
     expect(normalizeAgentModel("")).toBeNull();
@@ -129,13 +83,7 @@ describe("the model vocabulary — one map, four surfaces", () => {
     expect(agentModelLabel(null)).toBe("Default");
   });
 
-  /**
-   * ⚠ THE TWO LABEL FUNCTIONS DISAGREE ON ABSENCE ON PURPOSE, and that is the
-   * property most likely to be "simplified" into one. `agentModelLabel` is for a
-   * PICKER, where Default is one of the picks; `agentModelShortLabel` is for a
-   * CARD, which states what an agent IS RUNNING — and a build that reports no
-   * model has said nothing about that.
-   */
+  // The two disagree on absence on purpose: a picker offers Default; a card states what is running.
   it("renders a glance surface's absence as NOTHING, not as Default", () => {
     expect(agentModelShortLabel("claude-opus-5")).toBe("Opus");
     expect(agentModelShortLabel("claude-fable-5")).toBe("Fable");
@@ -144,21 +92,15 @@ describe("the model vocabulary — one map, four surfaces", () => {
     expect(agentModelLabel(null)).toBe("Default");
   });
 
-  /** ⚠ The roster is the SDK's and moves without this tree shipping. Erasing an
-   *  id this build predates would report a real model as no model. */
+  // The roster moves without this tree shipping; an id this build predates is still a real model.
   it("renders an UNKNOWN id as itself rather than dropping it", () => {
     expect(agentModelLabel("claude-something-9")).toBe("claude-something-9");
     expect(agentModelShortLabel("claude-something-9")).toBe("claude-something-9");
     expect(normalizeAgentModel("claude-something-9")).toBe("claude-something-9");
   });
 });
-/**
- * 🔓 **THE DURABLE MODEL ROW IS DELETED (2026-09-23, Samuel, verbatim):** *"We don't need a pin
- * model in the settings … either the agent will choose it, or the agent is launched by another
- * agent … or you can just have it go to the default model."* Its capability probe (`hasModelKey`)
- * went with it. What is pinned now is the ABSENCE, on a desktop that would once have drawn it.
- */
-describe("NO model row on the Settings tab (2026-09-23)", () => {
+// The durable model row is deleted; its absence is pinned with a catalog that could fill it.
+describe("NO model row on the Settings tab", () => {
   const view = (over: Partial<Parameters<typeof ChannelAgentSettingsView>[0]> = {}) =>
     render(
       <ChannelAgentSettingsView
@@ -178,7 +120,6 @@ describe("NO model row on the Settings tab (2026-09-23)", () => {
     view();
     expect(screen.queryByLabelText("Model for agents you launch")).toBeNull();
     expect(screen.queryByLabelText(/Reasoning effort for agents you launch/)).toBeNull();
-    // …while the rows that stay, stay.
     expect(screen.getByLabelText("Messaging for agents you launch")).toBeTruthy();
   });
 });
@@ -186,12 +127,7 @@ describe("NO model row on the Settings tab (2026-09-23)", () => {
 describe("the LIVE model selector on a running agent", () => {
   const live = () => screen.queryByLabelText("Model for this agent");
 
-  /**
-   * ⚠ TWO CAPABILITIES, TWO DETECTIONS. The model op lands on the desktop in a
-   * different wave than the two axes, so "has `setMode`, no `setModel`" is a real
-   * build shape — gating both on one flag would either hide working controls or
-   * render one that can only refuse.
-   */
+  // Separate capabilities: a build with `setMode` and no `setModel` is a real shape.
   it("renders no selector on a build with the axes and no model op", async () => {
     stubBridge();
     await renderLive(summary());
@@ -205,12 +141,7 @@ describe("the LIVE model selector on a running agent", () => {
     expect(live()).not.toBeNull();
   });
 
-  /**
-   * ⚠ `agentId` NAMES THE INSTANCE. Without it main moves the OLDEST live agent
-   * on the thread, which under multiplayer is a different agent than the card
-   * these controls belong to — and the feed would then show this card unchanged,
-   * reading as a refusal that never happened (F-239's rule).
-   */
+  // Without `agentId` main moves the thread's oldest live agent, not this card's (F-239).
   it("addresses the instance", async () => {
     const setModel = vi.fn(async () => ({ ok: true }));
     stubBridge({ setModel });
@@ -222,18 +153,13 @@ describe("the LIVE model selector on a running agent", () => {
     expect(setModel).toHaveBeenCalledWith(CHANNEL_ID, "t-1", "claude-opus-5", "k3v7d2mq");
   });
 
-  /** ⚠ An ENDED agent has no posture to change — no strip at all, not a strip
-   *  that always refuses. */
   it("renders nothing at all for an ended agent", async () => {
     stubBridge({ setModel: vi.fn(async () => ({ ok: true })) });
     await renderLive(summary({ state: "ended" }));
     expect(live()).toBeNull();
   });
 
-  /**
-   * ⚠ A FREE-FORM EFFECTIVE MODEL STILL RENDERS. Main stamps whatever the CLI
-   * reported, which need not be on the roster.
-   */
+  // Main stamps whatever the CLI reported, which need not be on the roster.
   it("shows an off-roster effective model rather than a blank control", async () => {
     stubBridge({ setModel: vi.fn(async () => ({ ok: true })) });
     await renderLive({ ...summary(), model: "claude-opus-4-5-20251101" });
@@ -242,7 +168,6 @@ describe("the LIVE model selector on a running agent", () => {
     );
   });
 
-  /** ⚠ MAIN'S VALUE, ALWAYS — the same rule both axes follow. */
   it("shows the model main reports, and the runtime's own default when it reports none", async () => {
     stubBridge({ setModel: vi.fn(async () => ({ ok: true })) });
     await renderLive({ ...summary(), model: "claude-haiku-4-5-20251001" });
@@ -253,28 +178,15 @@ describe("the LIVE model selector on a running agent", () => {
     expect(screen.getByLabelText("Model for this agent").textContent).toContain("Sonnet 5");
   });
 
-  /** 🔒 NO CATALOG, NO PICKER — never a frozen Claude list in its place (P6-04). */
+  // Never a frozen Claude list in the catalog's place.
   it("renders no selector when the desktop sent no catalog for the agent's runtime", async () => {
-    stubBridge({ setModel: vi.fn(async () => ({ ok: true })) });
-    const channels = (window as unknown as { dopl: { channels: { getLaunchPosture: ReturnType<typeof vi.fn> } } }).dopl.channels;
-    channels.getLaunchPosture.mockResolvedValue({
-      runtimes: REAL_DESCRIPTORS,
-      defaultRuntime: "claude",
-      connected: ["claude"],
-      catalogVersion: 1,
-      catalogs: {},
-      selection: { v: 2, runtime: "", messages: "ask", byRuntime: {} },
-    });
+    stubBridge({ setModel: vi.fn(async () => ({ ok: true })) }, {});
     await renderLive(summary());
     expect(live()).toBeNull();
   });
 });
 
-/**
- * THE EFFECTIVE MODEL A CARD SHOWS — the SESSION's, never the channel's stored
- * pick. A live agent may have been switched mid-run, or spawned before the
- * posture changed, which is the F-142 defect restated for a different field.
- */
+// The session's model, never the channel's stored pick: an agent may have been switched mid-run (F-142).
 describe("agentRunningModel", () => {
   it("reads the summary's own model", () => {
     expect(
