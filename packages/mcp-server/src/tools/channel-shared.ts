@@ -106,7 +106,7 @@ export async function resolveMemberOr(
   const match = byId ?? (byEmail.length === 1 ? byEmail[0] : undefined);
   if (!match) {
     return err(
-      `No workspace member matching "${ref}". Invites are in-workspace only — pass the email or user id of an ACTIVE member (see dopl_members(op="list")).`,
+      `No workspace member matching "${ref}". Invites are in-workspace only — pass the email or user id of an ACTIVE member (dopl_members lists them).`,
     );
   }
   if (match.status !== "active") {

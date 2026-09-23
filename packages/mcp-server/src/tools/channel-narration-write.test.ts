@@ -236,7 +236,7 @@ describe("Q1-D write · a hostile display_name", () => {
     const client = stubClient({ listWorkspaceMembers: vi.fn(async () => []) });
     const res = await opInvite(client, "public-sync", "nobody@example.com");
     expect(res.isError).toBe(true);
-    expect(res.content[0].text).toContain('dopl_members(op="list")');
+    expect(res.content[0].text).toContain("dopl_members lists them");
     expect(res.content[0].text).not.toContain('op="rooms"');
   });
 });
