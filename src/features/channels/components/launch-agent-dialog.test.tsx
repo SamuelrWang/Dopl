@@ -45,7 +45,7 @@ vi.mock("@/features/agent-identities/hooks/use-agent-identities", () => ({
  * THE DESKTOP'S OWN ANSWER — enough of it for the popup to MOUNT, and no more.
  *
  * ⚠ THE RUNTIME ROW'S OWN CONTRACT MOVED TO `launch-agent-dialog-runtime.test.tsx` (2026-09-08,
- * Samuel's connectivity correction; the split is the same seam as `launch-agent-dialog-runtime.ts`
+ * Samuel's connectivity correction; the split is the same seam as `launch-agent-dialog-state.ts`
  * and it is what put this file back under the §1 cap). What this fixture still buys HERE is the
  * two field-list cases in §1 — the row renders when the desktop reported a runtime family and does
  * not when it did not — plus the payload's runtime argument in §3. Every case that MEANS something
@@ -296,7 +296,7 @@ describe("what the three selectors hold before anybody touches them", () => {
 // ⚠ ITS WHOLE CONTRACT IS `launch-agent-dialog-runtime.test.tsx` NOW (2026-09-08, Samuel's
 // connectivity correction): the roster that is never shortened, the "not connected" hints, and the
 // four-link preselect chain. It left this file at the §1 cap, on the same seam as
-// `launch-agent-dialog-runtime.ts`. ⚠ ADD THE NEXT RUNTIME CASE THERE, not here — the two runtime
+// `launch-agent-dialog-state.ts`. ⚠ ADD THE NEXT RUNTIME CASE THERE, not here — the two runtime
 // assertions that remain in this file are about the popup's FIELD LIST (§1), not about the row.
 
 // ── 3. THE PAYLOAD ───────────────────────────────────────────────────────────
