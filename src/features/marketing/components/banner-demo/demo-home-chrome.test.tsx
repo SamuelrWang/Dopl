@@ -257,10 +257,16 @@ describe("the record pane plays /home's channel record", () => {
     expect(screen.getByText("Add person").className).toBe(PAGE_ACTION_BTN);
   });
 
-  it("🔒 the composer addresses nobody and carries the Bot glyph", () => {
+  it("🔒 the composer addresses NOBODY BY DRAWING NOTHING, and carries the Bot glyph", () => {
     const { container } = scene();
-    // `composer-recipients.tsx › REACH_NOBODY` — a channel post with no tag.
-    expect(screen.getByLabelText("Recipients").textContent).toContain("nobody");
+    // 🔒 ⚠ **THIS ASSERTED THE RETIRED COPY UNTIL 2026-09-22.** It required the recipient line to
+    // SAY "nobody"; Samuel's ruling is the opposite — *"show an arrow pointing to nobody, just
+    // have no arrow basically … if there is no addressee just have it be nothing"* — and
+    // `composer-recipients.tsx` returns null on an empty reach. The demo renders the REAL
+    // composer, so the scene followed the product and this case was the only thing still
+    // defending the old behaviour. `REACH_NOBODY` survives as an EXPORT that nothing renders
+    // (that file's docblock says why), so a pin on the constant would not have caught this.
+    expect(screen.queryByLabelText("Recipients")).toBeNull();
     // `composer-toolbar.tsx` draws the Bot only on `newAgent?.canLaunch`, so a
     // scene that passed nothing rendered a browser's composer.
     for (const label of ["New Agent", "New thread", "Mention", "Emoji"]) {
