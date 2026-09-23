@@ -77,6 +77,12 @@ export type {
   KnowledgeWriteSource,
 } from "./knowledge-types.js";
 export type {
+  AppSearchGroup,
+  AppSearchGroupKind,
+  AppSearchItem,
+  AppSearchResponse,
+} from "./search.js";
+export type {
   ContentRevision,
   ContentRevisionPage,
   RevisionOp,

@@ -1,12 +1,16 @@
 /**
- * One scope's four-group search, shared by `dopl_search`'s single-scope path and every
+ * One scope's search — four MCP-native reads plus the app's own search (DMP-004) — shared by `dopl_search`'s single-scope path and every
  * `scope="everywhere"` leg (P8-10). Only the renderers differ; what is read, matched, capped and
  * reported as partial is decided here once.
  */
-import type { AgentIdentity, DoplClient, KnowledgeSearchHit, OntologyObjectSummary, Skill } from "@dopl/client";
+import type { AgentIdentity, AppSearchGroup, DoplClient, KnowledgeSearchHit, OntologyObjectSummary, Skill } from "@dopl/client";
 import type { AudienceLabel } from "./audience-label.js";
-/** The `partialRead` denominator; moves with the four reads below. */
-export declare const SEARCH_GROUP_COUNT = 4;
+/** The `partialRead` denominator — READS, not groups: the fifth read (the app's search) answers six. */
+export declare const SEARCH_READ_COUNT = 5;
+/** The app-search groups this tool renders, in the popup's order. Knowledge, skills and identities
+ *  come from the four MCP-native reads (entries match on BODIES there, titles only in the app). */
+export declare const APP_GROUP_ORDER: readonly ["channels", "messages", "threads", "artifacts", "members", "chats"];
+export declare const APP_READ_LABEL = "Channels, messages, threads, artifacts, members and chats";
 export type Matcher = (...fields: Array<string | null | undefined>) => boolean;
 /** A capped group: the hits shown and how many matched before the cap. */
 export interface Group<T> {
@@ -18,6 +22,10 @@ export interface ScopeHits {
     skills: Group<Skill>;
     objects: Group<OntologyObjectSummary>;
     identities: Group<AgentIdentity>;
+    /** The app-search groups in {@link APP_GROUP_ORDER}; a group with no match is absent. */
+    app: AppSearchGroup[];
+    /** False when no container id was known, so the app search could not be asked. */
+    appSearched: boolean;
     /** The ontology read was itself a prefix, so "no match" says nothing about the rest. */
     ontologyTruncated: boolean;
     /** Neutralized name of the object holding `id`, or `"object"`. */
@@ -42,6 +50,8 @@ export declare function searchScope(client: DoplClient, opts: {
     limit: number;
     matches: Matcher;
     inHomeChannel: boolean;
+    /** The container searched; null = unknown, and the app search is skipped (and says so). */
+    containerId: string | null;
 }): Promise<ScopeHits>;
 /** Beside the ontology group when its read was clipped; a capped group is `more()`'s, not this. */
 export declare const ONTOLOGY_CLIPPED_NOTE: string;

@@ -225,7 +225,7 @@ describe("dopl_ontology(op='resolve') admits its cap", () => {
   });
 });
 
-// ─── dopl_search — four domains, three of them metadata-only ─────────
+// ─── dopl_search — ten domains, two of them matched on bodies ────────
 
 describe("dopl_search carries its own scope", () => {
   const searchStub = (skillCount: number) =>
@@ -250,7 +250,7 @@ describe("dopl_search carries its own scope", () => {
 
     expect(text).toContain("Showing 8 of 12 matching skills");
     expect(text).toContain("Scope: max 8 per group");
-    expect(text).toContain("CHAT ARCHIVE is not searched at all");
+    expect(text).toContain("the chat archive on names, titles and short metadata only");
     // ⚠ A broken group still shows "No matches" (failing the whole search over
     // one dead domain is worse), but it must be NAMED — that is what lets the
     // footer say a group not named there was really searched.

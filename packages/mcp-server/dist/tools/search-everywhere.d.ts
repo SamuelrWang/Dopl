@@ -11,7 +11,7 @@ import type { ChargeCredit } from "../registrar.js";
 import type { SearchLeg } from "../workspace-directory.js";
 import type { ToolResponse } from "./respond.js";
 import { type Matcher } from "./search-scope.js";
-/** A latency budget (each leg is four reads, legs are sequential); a truncation is always named. */
+/** A latency budget (each leg is five reads, legs are sequential); a truncation is always named. */
 export declare const MAX_SCOPES = 6;
 /** The fan-out: body lines plus the coverage sentence. `alreadyCharged` is matched by id, so the
  *  registrar's leg is never charged twice. */

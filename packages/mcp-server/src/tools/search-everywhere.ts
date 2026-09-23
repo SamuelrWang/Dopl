@@ -21,8 +21,9 @@ import {
   snippet,
   type Matcher,
 } from "./search-scope.js";
+import { appGroupLines } from "./search-app-render.js";
 
-/** A latency budget (each leg is four reads, legs are sequential); a truncation is always named. */
+/** A latency budget (each leg is five reads, legs are sequential); a truncation is always named. */
 export const MAX_SCOPES = 6;
 
 interface LegResult {
@@ -58,6 +59,7 @@ async function searchOneLeg(
       limit,
       matches,
       inHomeChannel: leg.kind === "home_channel",
+      containerId: leg.id,
     });
 
     const lines: string[] = [heading(leg)];
@@ -102,6 +104,14 @@ async function searchOneLeg(
       }
       lines.push(...more(found.identities, "agent identities"));
     }
+
+    const appLines = appGroupLines(found.app, "###", {
+      searched: true,
+      skipEmpty: true,
+      standard: leg.kind === "workspace",
+    });
+    for (const g of found.app) hits += g.items.length;
+    lines.push(...appLines);
 
     // An empty scope keeps its heading: "searched, nothing" must not look like "not searched".
     if (hits === 0) lines.push("", "_No matches in this scope._");

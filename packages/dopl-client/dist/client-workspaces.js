@@ -38,6 +38,7 @@ exports.WorkspaceMethods = void 0;
 const client_base_js_1 = require("./client-base.js");
 const workspaces = __importStar(require("./workspaces.js"));
 const grants = __importStar(require("./grants.js"));
+const search = __importStar(require("./search.js"));
 class WorkspaceMethods extends client_base_js_1.DoplClientBase {
     async listWorkspaces() {
         return workspaces.listWorkspaces(this.transport);
@@ -53,6 +54,10 @@ class WorkspaceMethods extends client_base_js_1.DoplClientBase {
      *  identities both call it). */
     async grantResource(input) {
         return grants.grantResource(this.transport, input);
+    }
+    /** The app's global search over ONE container (`GET /api/search`), cross-domain like a grant. */
+    async searchContainer(query, containerId) {
+        return search.searchContainer(this.transport, query, containerId);
     }
     async pingMcpStatus() {
         return workspaces.pingMcpStatus(this.transport);

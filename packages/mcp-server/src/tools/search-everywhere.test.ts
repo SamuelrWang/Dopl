@@ -88,6 +88,8 @@ function clientStub(over: Record<string, unknown> = {}) {
     getOntology: vi.fn(async () => ({ clusters: [], objects: {} })),
     listAgentIdentitiesPayload: vi.fn(async () => ({ identities: [] })),
     getHomeChannels: vi.fn(async () => ({ channels: [], pendingLinks: [] })),
+    // The fifth read per leg since 2026-09-23 (DMP-004): the app's search, for THAT leg's container.
+    searchContainer: vi.fn(async () => ({ q: "", scope: "container", tookMs: 0, groups: [] })),
     ...over,
   } as unknown as DoplClient;
 }
@@ -304,7 +306,7 @@ describe("provenance is structural", () => {
       { query: "ship", scope: "everywhere" },
     );
     expect(text).toContain("Skills (`HTTP 500`)");
-    expect(text).toContain("1 of 4 groups could NOT be read");
+    expect(text).toContain("1 of 5 reads could NOT be read");
   });
 
   it("says a wider SCOPE is not a wider DOMAIN", async () => {
@@ -315,7 +317,7 @@ describe("provenance is structural", () => {
       { query: "ship", scope: "everywhere" },
     );
     expect(text).toContain("A wider SCOPE is not a wider DOMAIN");
-    expect(text).toContain("CHAT ARCHIVE, members, teams and channels are not searched in ANY scope");
+    expect(text).toContain("Teams are not searched in ANY scope");
   });
 
   /**

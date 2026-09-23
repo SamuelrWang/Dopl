@@ -13,7 +13,8 @@ exports.fanOut = fanOut;
 const client_1 = require("@dopl/client");
 const narration_js_1 = require("./narration.js");
 const search_scope_js_1 = require("./search-scope.js");
-/** A latency budget (each leg is four reads, legs are sequential); a truncation is always named. */
+const search_app_render_js_1 = require("./search-app-render.js");
+/** A latency budget (each leg is five reads, legs are sequential); a truncation is always named. */
 exports.MAX_SCOPES = 6;
 /** The heading is the provenance: what the scope is (never "workspace" for a container) plus the
  *  slug/id a single-scope follow-up needs. */
@@ -31,6 +32,7 @@ async function searchOneLeg(client, leg, query, limit, matches) {
             limit,
             matches,
             inHomeChannel: leg.kind === "home_channel",
+            containerId: leg.id,
         });
         const lines = [heading(leg)];
         let hits = 0;
@@ -67,6 +69,14 @@ async function searchOneLeg(client, leg, query, limit, matches) {
             }
             lines.push(...(0, search_scope_js_1.more)(found.identities, "agent identities"));
         }
+        const appLines = (0, search_app_render_js_1.appGroupLines)(found.app, "###", {
+            searched: true,
+            skipEmpty: true,
+            standard: leg.kind === "workspace",
+        });
+        for (const g of found.app)
+            hits += g.items.length;
+        lines.push(...appLines);
         // An empty scope keeps its heading: "searched, nothing" must not look like "not searched".
         if (hits === 0)
             lines.push("", "_No matches in this scope._");

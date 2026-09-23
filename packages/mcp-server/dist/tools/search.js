@@ -1,6 +1,6 @@
 "use strict";
 /**
- * `dopl_search`: ranked hits across four groups, one scope or (`scope="everywhere"`) every reachable
+ * `dopl_search`: ranked hits across ten groups (four MCP-native reads + the app search), one scope or (`scope="everywhere"`) every reachable
  * one. The per-scope read is `search-scope.ts › searchScope`; this file renders.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
@@ -15,6 +15,7 @@ const tool_errors_1 = require("./tool-errors");
 const tool_style_1 = require("./tool-style");
 const workspace_directory_1 = require("../workspace-directory");
 const search_everywhere_1 = require("./search-everywhere");
+const search_app_render_1 = require("./search-app-render");
 const respond_1 = require("./respond");
 /** One shape: published by the registrar and read by `composeDescription` for its bounds. */
 const SEARCH_SHAPE = {
@@ -29,13 +30,13 @@ const SEARCH_SHAPE = {
 };
 /** Budgeted at {@link READ_DESCRIPTION_MAX_CHARS}; the fan-out's cost and cap live on `scope`'s describe. */
 const SEARCH_DESCRIPTION = (0, tool_style_1.composeDescription)({
-    headline: "Ranked hits across FOUR domains: knowledge entries, skills, ontology objects, agent identities.",
+    headline: "Hits, with addresses, in TEN domains: knowledge, skills, ontology objects, identities, channels, messages, threads, artifacts, members, chats.",
     policy: "Read-only.",
     routing: [
-        'Use dopl_kb(op="read_file"), dopl_skill(op="get"), dopl_ontology(op="get") or dopl_agent(op="get") to read a hit.',
+        'Use dopl_channel for a message/thread hit; dopl_kb, dopl_skill, dopl_ontology, dopl_agent, dopl_members, dopl_chats read the rest.',
     ],
     body: [
-        'A miss is not absence: only ENTRIES match on bodies, so a term inside a SKILL.md or an identity\'s INSTRUCTIONS is lost. Members, teams, channels, the CHAT ARCHIVE: unsearched — dopl_chats(op="list") is the archive\'s own filter.',
+        'A miss is not absence: only ENTRIES and MESSAGES match on bodies: a term in a SKILL.md or an identity\'s INSTRUCTIONS is lost; the CHAT ARCHIVE matches titles.',
     ],
     limits: { shape: SEARCH_SHAPE, only: ["limit"] },
     errors: tool_errors_1.SEARCH_ERRORS,
@@ -58,10 +59,34 @@ function scopeNote(limit, notice, terse) {
             ? `_${notice}Scope: max ${limit} per group — a recall-capped sample, not a census. See this tool's description._`
             : `_Scope: max ${limit} per group — a recall-capped sample, not a census. See this tool's description._`;
     }
-    return `_${notice}Scope: max ${limit} per group, in ONE workspace — this one, with no cross-workspace fan-out. Only knowledge entries are matched on their BODIES; skills, ontology objects and agent identities on names and short metadata only, so a term living inside a SKILL.md or inside an identity's instructions is not findable here. Drafts are excluded from Skills. Agent identities are the ones you can SEE, across both shelves. The CHAT ARCHIVE is not searched at all (dopl_chats(op="list", query=...)). Knowledge entries are a ranked SAMPLE: candidates are capped before ranking, distant matches are dropped, and hits in bases you cannot read are removed after ranking — so fewer hits than \`limit\` does not mean there are no others. A group whose read failed still shows "No matches" and is named with reason=partial_read opening this line; no group here is proof of absence._`;
+    return `_${notice}Scope: max ${limit} per group, in ONE workspace — this one, with no cross-workspace fan-out. Only knowledge entries and channel messages are matched on their BODIES; skills, ontology objects, agent identities, channels, threads, artifacts, members (by name, never shown by email) and the chat archive on names, titles and short metadata only, so a term living inside a SKILL.md or inside an identity's instructions is not findable here. Channel groups cover only channels you are a member of. Drafts are excluded from Skills. Agent identities are the ones you can SEE, across both shelves. Teams are not searched. Knowledge entries are a ranked SAMPLE: candidates are capped before ranking, distant matches are dropped, and hits in bases you cannot read are removed after ranking — so fewer hits than \`limit\` does not mean there are no others. A group whose read failed still shows "No matches" and is named with reason=partial_read opening this line; no group here is proof of absence._`;
 }
 /** The fan-out footer: a wider scope is not a wider domain. */
-const SCOPE_AXIS_NOTE = `Each scope was searched the same way a single-scope call searches: knowledge entries on their BODIES, skills, ontology objects and agent identities on names and short metadata only, ACTIVE skills only, and only what you can see there. The CHAT ARCHIVE, members, teams and channels are not searched in ANY scope. A wider SCOPE is not a wider DOMAIN — no scope here is proof of absence.`;
+const SCOPE_AXIS_NOTE = `Each scope was searched the same way a single-scope call searches: knowledge entries and channel messages on their BODIES, every other group on names and short metadata only, ACTIVE skills only, and only what you can see there. Teams are not searched in ANY scope. A wider SCOPE is not a wider DOMAIN — no scope here is proof of absence.`;
+/**
+ * The container a single-scope call searched, for the app search (which names its container
+ * explicitly, unlike the four MCP-native reads): the per-call override, else the connection's
+ * binding, else the home space. `standard` is false for a home space or home channel, where the app
+ * searches no members and no chats; an unknown kind reads as standard.
+ */
+async function searchedContainer(client, directory) {
+    let id = null;
+    try {
+        id = client_1.workspaceContext.getStore() ?? client.getWorkspaceId();
+    }
+    catch {
+        id = null; // an unreadable binding is "not known", never a throw on the search path
+    }
+    if (!id && directory)
+        id = (await directory.homeContainer().catch(() => null))?.id ?? null;
+    if (!id || !directory)
+        return { id, standard: true };
+    const kind = await directory
+        .containerKindIndex()
+        .then((k) => k.get(id))
+        .catch(() => undefined);
+    return { id, standard: kind === undefined || kind === "workspace" };
+}
 /** Without `directory` and `charge` there is no fan-out: `scope="everywhere"` answers (and says it
  *  answered) the single-scope search. */
 function registerSearchTool(register, client, directory, charge) {
@@ -86,15 +111,17 @@ function registerSearchTool(register, client, directory, charge) {
                 `# Search: ${(0, narration_1.inlineOr)(args.query, "`(unreadable query)`")} — everywhere`,
                 "",
             ];
-            const foot = [`_${fan.coverage} ${SCOPE_AXIS_NOTE}_`];
+            const foot = [search_app_render_1.APP_FOLLOW_UP, "", `_${fan.coverage} ${SCOPE_AXIS_NOTE}_`];
             return (0, respond_1.ok)([...head, ...fan.lines, ...foot].join("\n"));
         }
         const terse = (0, response_size_1.isConcise)(args.response_format);
+        const where = await searchedContainer(client, directory);
         const found = await (0, search_scope_1.searchScope)(client, {
             query: args.query,
             limit,
             matches,
             inHomeChannel: (await (0, container_destination_1.resolveHomeChannelContainer)(client, directory)) !== null,
+            containerId: where.id,
         });
         // The caller's own query is still neutralized: a backtick would escape the heading.
         const lines = [`# Search: ${(0, narration_1.inlineOr)(args.query, "`(unreadable query)`")}`];
@@ -130,6 +157,13 @@ function registerSearchTool(register, client, directory, charge) {
             lines.push(`- ${(0, narration_1.inlineOr)(ident.name, narration_1.NO_NAME)} (id: \`${ident.id}\` · seen by ${found.audienceOf(ident)}) — ${summary}`);
         }
         lines.push(...(0, search_scope_1.more)(found.identities, "agent identities"));
+        lines.push(...(0, search_app_render_1.appGroupLines)(found.app, "##", {
+            searched: found.appSearched,
+            skipEmpty: false,
+            standard: where.standard,
+        }));
+        if (found.app.length > 0)
+            lines.push("", search_app_render_1.APP_FOLLOW_UP);
         lines.push("", scopeNote(limit, found.notice, terse));
         return (0, respond_1.ok)(lines.join("\n"));
     });

@@ -3,6 +3,8 @@
 import { DoplClientBase } from "./client-base.js";
 import * as workspaces from "./workspaces.js";
 import * as grants from "./grants.js";
+import * as search from "./search.js";
+import type { AppSearchResponse } from "./search.js";
 import type { ResolvedWorkspace, WorkspaceListItem } from "./types.js";
 import type {
   ResourceGrantInput,
@@ -27,6 +29,11 @@ export class WorkspaceMethods extends DoplClientBase {
    *  identities both call it). */
   async grantResource(input: ResourceGrantInput): Promise<ResourceGrantResult> {
     return grants.grantResource(this.transport, input);
+  }
+
+  /** The app's global search over ONE container (`GET /api/search`), cross-domain like a grant. */
+  async searchContainer(query: string, containerId: string): Promise<AppSearchResponse> {
+    return search.searchContainer(this.transport, query, containerId);
   }
 
   async pingMcpStatus(): Promise<{

@@ -260,7 +260,7 @@ const SCHEMA_CEILINGS: Record<string, number> = {
  * true also forces the headline number to be re-measured on every slice that
  * claims a win.
  */
-const SERVED_TOTAL_CEILING = 50_282; // re-derive, never quote: +964 DMP-002 history+restore on three tools, +119 DMP-009 field type enum, −6 DMP-001 net, −229 home-channel addressing pulled (P8-23), +15 caller's own tool loader (X-09), +9 P8-15/P8-18.
+const SERVED_TOTAL_CEILING = 50_277; // re-derive, never quote: −5 DMP-004 (dopl_search names ten domains in the same 450), +964 DMP-002 history+restore on three tools, +119 DMP-009 field type enum, −6 DMP-001 net, −229 home-channel addressing pulled (P8-23), +15 caller's own tool loader (X-09), +9 P8-15/P8-18.
 /**
  * ⚠ THE BRIEFING IS WRITTEN ONCE AND PUSHED ONCE. It was 17,067 chars — 18% of
  * the connection, larger than every description put together bar three — and

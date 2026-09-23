@@ -129,10 +129,10 @@ describe("dopl_search finds agent identities", () => {
       { query: "research" },
     );
     expect(text).toContain("Agent identities (`HTTP 500`)");
-    expect(text).toContain("1 of 4 groups could NOT be read");
+    expect(text).toContain("1 of 4 reads could NOT be read");
   });
 
-  it("the description advertises FOUR domains and routes to dopl_agent", async () => {
+  it("the description advertises TEN domains and routes to dopl_agent", async () => {
     let description = "";
     registerSearchTool(
       ((name: string, d: string) => {
@@ -140,9 +140,9 @@ describe("dopl_search finds agent identities", () => {
       }) as never,
       stub({}),
     );
-    expect(description).toContain("FOUR domains");
-    expect(description).toContain('dopl_agent(op="get")');
-    expect(description).not.toContain("THREE domains");
+    expect(description).toContain("TEN domains");
+    expect(description).toContain("dopl_agent");
+    expect(description).not.toContain("FOUR domains");
     // ⚠ **THE CLAIM IS PINNED, NOT THE SENTENCE (A14, 2026-09-02).** It used to
     // read "agent identities are matched on names and short metadata only" —
     // one of four clauses enumerating what each group matches on. The house
@@ -152,7 +152,7 @@ describe("dopl_search finds agent identities", () => {
     // repeating the rule per group. What must not weaken is the consequence,
     // and that is what these two assert — a term living only inside an identity
     // is not findable here.
-    expect(description).toContain("only ENTRIES match on bodies");
+    expect(description).toContain("only ENTRIES and MESSAGES match on bodies");
     expect(description).toContain("INSTRUCTIONS");
   });
 });

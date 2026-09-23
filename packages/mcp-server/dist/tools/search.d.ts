@@ -1,5 +1,5 @@
 /**
- * `dopl_search`: ranked hits across four groups, one scope or (`scope="everywhere"`) every reachable
+ * `dopl_search`: ranked hits across ten groups (four MCP-native reads + the app search), one scope or (`scope="everywhere"`) every reachable
  * one. The per-scope read is `search-scope.ts › searchScope`; this file renders.
  */
 import type { DoplClient } from "@dopl/client";

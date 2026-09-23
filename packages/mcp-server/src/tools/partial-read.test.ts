@@ -55,6 +55,9 @@ const healthySearch = (over: Record<string, unknown> = {}) =>
     // FOURTH group since 2026-08-28 — a new domain is a new read the stub has
     // to model, or the group renders as a failure nobody meant to test.
     listAgentIdentitiesPayload: vi.fn(async () => ({ identities: [] })),
+    // FIFTH read since 2026-09-23 (DMP-004) — the app's own search, for one container.
+    getWorkspaceId: () => "ws-1",
+    searchContainer: vi.fn(async () => ({ q: "ship", scope: "container", tookMs: 1, groups: [] })),
     ...over,
   });
 
@@ -185,10 +188,21 @@ describe("dopl_search names the groups it could not read", () => {
 
     expect(text).toContain("reason=partial_read");
     expect(text).toContain("Knowledge entries (`HTTP 500`)");
-    expect(text).toContain("1 of 4 groups could NOT be read");
+    expect(text).toContain("1 of 5 reads could NOT be read");
     expect(text).toContain("not absent from the workspace");
     expect(text).toContain("## Knowledge entries");
     expect(text).toContain("`ship-it`");
+  });
+
+  it("a failing APP search names its six groups as ONE read", async () => {
+    const text = await callTool(
+      registerSearchTool,
+      healthySearch({ searchContainer: vi.fn(async () => { throw apiError(503); }) }),
+      "dopl_search",
+      { query: "ship" },
+    );
+    expect(text).toContain("Channels, messages, threads, artifacts, members and chats (`HTTP 503`)");
+    expect(text).toContain("1 of 5 reads could NOT be read");
   });
 
   it("ALL-HEALTHY IS BYTE-IDENTICAL — the whole result, pinned", async () => {
@@ -215,7 +229,25 @@ describe("dopl_search names the groups it could not read", () => {
         "## Agent identities",
         "_No matches._",
         "",
-        '_Scope: max 8 per group, in ONE workspace — this one, with no cross-workspace fan-out. Only knowledge entries are matched on their BODIES; skills, ontology objects and agent identities on names and short metadata only, so a term living inside a SKILL.md or inside an identity\'s instructions is not findable here. Drafts are excluded from Skills. Agent identities are the ones you can SEE, across both shelves. The CHAT ARCHIVE is not searched at all (dopl_chats(op="list", query=...)). Knowledge entries are a ranked SAMPLE: candidates are capped before ranking, distant matches are dropped, and hits in bases you cannot read are removed after ranking — so fewer hits than `limit` does not mean there are no others. A group whose read failed still shows "No matches" and is named with reason=partial_read opening this line; no group here is proof of absence._',
+        "## Channels",
+        "_No matches._",
+        "",
+        "## Messages",
+        "_No matches._",
+        "",
+        "## Threads",
+        "_No matches._",
+        "",
+        "## Artifacts",
+        "_No matches._",
+        "",
+        "## Members",
+        "_No matches._",
+        "",
+        "## Chats",
+        "_No matches._",
+        "",
+        '_Scope: max 8 per group, in ONE workspace — this one, with no cross-workspace fan-out. Only knowledge entries and channel messages are matched on their BODIES; skills, ontology objects, agent identities, channels, threads, artifacts, members (by name, never shown by email) and the chat archive on names, titles and short metadata only, so a term living inside a SKILL.md or inside an identity\'s instructions is not findable here. Channel groups cover only channels you are a member of. Drafts are excluded from Skills. Agent identities are the ones you can SEE, across both shelves. Teams are not searched. Knowledge entries are a ranked SAMPLE: candidates are capped before ranking, distant matches are dropped, and hits in bases you cannot read are removed after ranking — so fewer hits than `limit` does not mean there are no others. A group whose read failed still shows "No matches" and is named with reason=partial_read opening this line; no group here is proof of absence._',
       ].join("\n"),
     );
     expect(text).not.toContain("reason=partial_read —");
