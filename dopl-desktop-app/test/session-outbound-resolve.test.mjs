@@ -108,21 +108,15 @@ test("C6: a bodiless post still resolves its card (text degrades to '')", async 
   assert.equal(h.emitted[1].decision, "allow-once");
 });
 
-test("C6: the engine wires the wrapper around the REAL gate and emits QUIETLY", async () => {
+test("C6 / P4-12: the adapter wires the REAL gate, unwrapped; the engine's quiet emit has no receiver", async () => {
   const { readFileSync } = await import("node:fs");
   const ENGINE = readFileSync(join(HERE, "..", "main", "session-engine.js"), "utf8");
-  // ⚠ 2026-08-31 (runtime-adapter port): the option assembly is the RUNTIME ADAPTER's, and the
-  // engine's two handles — the dispatch and the replay-aware quiet emit — reach it on the
-  // launch REQUEST rather than through a module-level `deps`. The WRAPPING is unchanged and is
-  // what this pins: `wrapGate` is core (it observes a verdict, it never makes one) and the
-  // gate it wraps is the adapter's held callback.
   const SPEC = readFileSync(join(HERE, "..", "main", "runtime", "claude", "launch-spec.js"), "utf8");
-  // The third argument is the injected `log` (the gate bridge must stay electron-free, so the
-  // forced-thread-tag conflict line is diag'd from here). The wrapper still only OBSERVES.
-  assert.match(
-    SPEC,
-    /canUseTool: sessionOutbound\.wrapGate\(s, axisB\.makeCanUseTool\(s, dispatch, diag\), emitQuiet\)/,
-    "the gate is unchanged; the wrapper only observes its verdict");
+  // The third argument is the injected `log` (the gate bridge must stay electron-free).
+  // P4-12: every session is windowless, so the quiet emit had no receiver; the adapter wires the
+  // held gate directly and `wrapGate` is no longer on the launch path.
+  assert.match(SPEC, /canUseTool: axisB\.makeCanUseTool\(s, dispatch, diag\)/, "the gate, unwrapped");
+  assert.doesNotMatch(SPEC, /wrapGate/);
   const QUERY = readFileSync(join(HERE, "..", "main", "session-query.js"), "utf8");
   assert.match(QUERY, /dispatch: deps\.dispatch,\n\s*emitQuiet: deps\.emitQuiet,/,
     "…and core is what supplies both, from its own injected deps");

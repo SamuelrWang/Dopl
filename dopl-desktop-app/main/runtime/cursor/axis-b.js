@@ -25,14 +25,9 @@
 //
 // ⚠ ONE VERDICT SHAPE, AND THE ORDER IS THE TRAP (F-382). `execute()` asks the gate and receives
 // CORE'S verdict — `{ behavior, message?, updatedInput? }` — and only THEN translates it into what
-// this platform reads. Three core modules mint or read that shape and none of them is an adapter:
-// `main/session-permissions.js` resolves the OPERATOR'S OWN CLICK with `{behavior:'allow'}` /
-// `{behavior:'deny', message}`, `main/session-outbound-tag.js › allowResult` / `› wrapAllow` build
-// the tagged allow, and `main/session-outbound.js › wrapGate` observes `verdict.behavior ===
-// 'allow'` to resolve the card an allowed post painted. Translating to a platform word before
-// `wrapGate` sees it would sail past that wrapper and leave an already-delivered post reading
-// "awaiting your approval" forever. So: gate -> core verdict -> `approval.js › answerApproval`,
-// in that order, in one function.
+// this platform reads: `main/session-permissions.js` resolves the OPERATOR'S OWN CLICK in that
+// shape and `main/session-outbound-tag.js › allowResult` / `› wrapAllow` build the tagged allow.
+// So: gate -> core verdict -> `approval.js › answerApproval`, in that order, in one function.
 //
 // ⚠ THE FORWARD IS INJECTED, NOT REQUIRED. The tools are OURS, so an allowed call still has to
 // REACH the Dopl endpoint — but the HTTP half lives in `mcp.js` and arrives here as a `call`
@@ -98,14 +93,13 @@ function makeGate(s, dispatch, log) {
 
 // ── THE CALL ID ──────────────────────────────────────────────────────────────────────────────
 //
-// ⚠ READ TOLERANTLY, AND DECLARED UNMEASURED (§5 item X16). `main/session-outbound.js › wrapGate`
-// and `session-gate-bridge.js › gatePayload` key the consent card on `opts.toolUseID` so the
+// ⚠ READ TOLERANTLY, AND DECLARED UNMEASURED (§5 item X16). `session-gate-bridge.js › gatePayload`
+// keys the consent card on `opts.toolUseID` so the
 // inline card the STREAM painted (`normalize.js`, keyed on `tool_call.call_id`) and the card the
 // GATE paints are one card. `cursor-research.md` documents `tool_call` events carrying `call_id`
 // and does NOT document what an `execute()` implementation is handed, so this reads the spellings
 // a context argument would plausibly use and answers `null` otherwise.
-// ⚠ `null` IS THE SAFE ANSWER, NOT A GUESSED ID. With no id `wrapGate` returns early and no
-// auto-resolve events fire — a card that may go stale. A MINTED id would be worse: it would join
+// ⚠ `null` IS THE SAFE ANSWER, NOT A GUESSED ID. A MINTED id would be worse: it would join
 // the gate's card to nothing while looking joined, and the renderer would resolve an artifact that
 // does not exist. The GATE is unaffected either way; every call still stops at `grantDecision`.
 const CALL_ID_KEYS = ['call_id', 'callId', 'toolCallId', 'tool_call_id', 'id'];
@@ -187,7 +181,7 @@ function buildTool(spec, ctx) {
  * what it offers rather than this file restating it; `launch-spec.js › start` awaits it inside the
  * detached boot so the handle is still returned synchronously.
  *
- * `request` — `{ session, dispatch, emitQuiet, log, policy, deny, list, call }`.
+ * `request` — `{ session, dispatch, log, policy, deny, list, call }`.
  *   `policy`  the profile's `doplToolsPolicy` (bare names), or null for the whole surface.
  *   `deny`    the profile's deny list — belt for the braces below.
  *   `list`    `() => Promise<[{name, description, inputSchema}]>`
@@ -197,12 +191,7 @@ async function axisBTools(request) {
   const req = request || {};
   const s = req.session;
   if (!s || typeof req.list !== 'function' || typeof req.call !== 'function') return null;
-  const sessionOutbound = require('../../session-outbound');
-  const inner = makeGate(s, req.dispatch, req.log);
-  // ⚠ WRAPPED IN CORE'S OWN OBSERVER, NOT A COPY OF IT. `wrapGate` resolves the card an
-  // AUTO-ALLOWED post painted — the F2 path — and it is core because it observes a verdict and
-  // never makes one. Every runtime wraps the same function.
-  const gate = sessionOutbound.wrapGate(s, inner, req.emitQuiet || function () {});
+  const gate = makeGate(s, req.dispatch, req.log);
   const ctx = { session: s, gate, call: req.call, log: req.log };
 
   let specs = [];

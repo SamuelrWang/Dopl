@@ -136,7 +136,7 @@ test("C1: the launch spec really concatenates them onto the profile's hard-deny"
   // written in one platform's option vocabulary. The rule it carries is unchanged, and so is the
   // reason it is pinned: a pre-approved read is SHADOWED past the gate, so only this tool-bound
   // layer can fence the credential directories.
-  const opts = slice(SPEC, "function buildOptions(s, dispatch, emitQuiet) {", "function buildLaunchSpec(", "buildOptions");
+  const opts = slice(SPEC, "function buildOptions(s, dispatch) {", "function buildLaunchSpec(", "buildOptions");
   assert.match(opts, /disallowedTools: cfg\.disallowedTools\.concat\(loader\.buildSecretPathDenyRules\(\)\),/);
   // ...and that every profile therefore gets them: it is the ONE assembly path
   // (session-park resumes and recreated shells call deps.buildLaunchSpec).

@@ -16,7 +16,7 @@ function settledVerdict(decision) {
 
 /**
  * The callback a runtime's permission hook calls. Answers `{ behavior }`, never the platform's
- * words: the operator's own click and `session-outbound.js › wrapGate` share this promise (F-382).
+ * words: the operator's own click resolves the same parked promise in that shape (F-382).
  */
 function makeHeldGate(s, dispatch, log) {
   return function heldGate(name, input, opts) {

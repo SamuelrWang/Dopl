@@ -117,7 +117,6 @@ function buildLaunchSpec(request) {
   return {
     session: s,
     dispatch: req.dispatch,
-    emitQuiet: req.emitQuiet,
     prompt: s.pushIterator,
     options,
     // ⚠ CARRIED AND DELIBERATELY NOT WRITTEN INTO `options` — header item 3. Kept on the spec so
@@ -154,7 +153,6 @@ async function* frames(spec, live) {
     const custom = await axisB.axisBTools({
       session: spec.session,
       dispatch: spec.dispatch,
-      emitQuiet: spec.emitQuiet,
       log: diag,
       policy: spec.policy,
       deny: spec.deny,

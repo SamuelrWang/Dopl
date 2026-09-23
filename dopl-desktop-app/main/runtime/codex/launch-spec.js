@@ -46,7 +46,6 @@ const mcp = require('./mcp');
 const normalizer = require('./normalize');
 const channelDirs = require('../../channel-dirs');
 const store = require('../../session-store');
-const sessionOutbound = require('../../session-outbound');
 const sessionCredential = require('../../session-credential');
 const sessionDirected = require('../../session-directed');
 const capability = require('../capability');
@@ -168,7 +167,6 @@ function buildLaunchSpec(request) {
   return {
     session: s,
     dispatch: req.dispatch,
-    emitQuiet: req.emitQuiet,
     prompt: s.pushIterator,
     // Current app-server rejects approval_policy/sandbox_mode as process config. They are native
     // thread fields; MCP config rides thread/start's explicit `config` object.
@@ -239,8 +237,8 @@ function makeFrameQueue() {
  * (`axis-b.js › preToolUseStamp`) — the design's §0.1 split of "one place decides, one place
  * stamps", with §5 items C6/C17/C18 as its open questions.
  */
-function makeApprovalHandler(s, dispatch, emitQuiet) {
-  const gate = sessionOutbound.wrapGate(s, axisB.makeCanUseTool(s, dispatch, diag), emitQuiet);
+function makeApprovalHandler(s, dispatch) {
+  const gate = axisB.makeCanUseTool(s, dispatch, diag);
   return async function onServerRequest(msg) {
     const params = msg && msg.params ? msg.params : {};
     return serverRequests.answer(msg, async (name, input) => {
@@ -339,7 +337,7 @@ function start(spec) {
       cwd: spec.cwd,
       log: typeof spec.log === 'function' ? spec.log : diag,
       onNotification,
-      onServerRequest: makeApprovalHandler(s, spec.dispatch, spec.emitQuiet),
+      onServerRequest: makeApprovalHandler(s, spec.dispatch),
       // An exit is never a clean end-of-stream for a live session; the spawn error is the cause.
       onExit: (code, signal, spawnError) => frames.fail(
         spawnError || new Error(`Codex app-server exited (code ${code}, signal ${signal})`)

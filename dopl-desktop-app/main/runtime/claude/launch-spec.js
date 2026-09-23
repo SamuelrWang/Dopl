@@ -39,7 +39,6 @@ const agentOps = require('../../agent-self-ops');
 const channelDirs = require('../../channel-dirs');
 const store = require('../../session-store');
 const sessionAuth = require('../../session-auth');
-const sessionOutbound = require('../../session-outbound');
 const models = require('./models');
 const sessionCredential = require('../../session-credential');
 const sessionDirected = require('../../session-directed');
@@ -107,7 +106,7 @@ const { diag } = require('../../diag');
 // true.
 const SESSION_MAX_TURNS = 8000;
 
-function buildOptions(s, dispatch, emitQuiet) {
+function buildOptions(s, dispatch) {
   const cfg = tools.buildSessionToolConfig(s.profile);
   const options = {
     // Item 7: the per-channel folder (else ~/Downloads) as the cwd. Context (§H-9), not a fence.
@@ -142,7 +141,7 @@ function buildOptions(s, dispatch, emitQuiet) {
     // this runtime's OAuth token only when our own setup-token is this machine's ONLY credential.
     env: sessionAuth.withStoredCredential(loader.buildScrubbedEnv()),
     // C6: the gate is unchanged; the wrapper only resolves the card an ALLOWED post painted.
-    canUseTool: sessionOutbound.wrapGate(s, axisB.makeCanUseTool(s, dispatch, diag), emitQuiet), // diag: the forced-thread-tag conflict log (the bridge stays electron-free)
+    canUseTool: axisB.makeCanUseTool(s, dispatch, diag), // diag: the forced-thread-tag conflict log (the bridge stays electron-free)
     abortController: s.abortController,
     includePartialMessages: false, // LOAD-BEARING for v2.7 L3 (FIX F4) — see the header
     // THE LOOP BRAKE (G19). ⚠ UNCONDITIONAL: every profile, and every spawn
@@ -208,7 +207,7 @@ function buildOptions(s, dispatch, emitQuiet) {
 function buildLaunchSpec(request) {
   const req = request || {};
   const s = req.session;
-  return { prompt: s.pushIterator, options: buildOptions(s, req.dispatch, req.emitQuiet), session: s };
+  return { prompt: s.pushIterator, options: buildOptions(s, req.dispatch), session: s };
 }
 
 /**

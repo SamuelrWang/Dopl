@@ -112,7 +112,7 @@ test("WIRE PIN: the launch spec passes the PROFILE'S list through and mounts the
   // `session-profiles.test.mjs`.
   const SPEC = readFileSync(join(HERE, "..", "main", "runtime", "claude", "launch-spec.js"), "utf8");
   const opts = SPEC.slice(
-    SPEC.indexOf("function buildOptions(s, dispatch, emitQuiet) {"),
+    SPEC.indexOf("function buildOptions(s, dispatch) {"),
     SPEC.indexOf("function buildLaunchSpec(")
   );
   assert.ok(opts.length > 0, "the option assembly slice not found");

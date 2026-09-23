@@ -465,7 +465,7 @@ test("A: the SDK is still driven at permissionMode 'default' with settingSources
   // The load-bearing pin: `bypassPermissions` would stop the SDK calling canUseTool at all,
   // which would kill the outbound message card AND the hard-deny path. All four tool modes
   // resolve in OUR gate, so the SDK options must never learn about them.
-  const opts = QUERY.slice(QUERY.indexOf("function buildOptions(s, dispatch, emitQuiet) {"), QUERY.indexOf("function buildLaunchSpec("));
+  const opts = QUERY.slice(QUERY.indexOf("function buildOptions(s, dispatch) {"), QUERY.indexOf("function buildLaunchSpec("));
   assert.match(opts, /permissionMode: 'default'/);
   assert.match(opts, /settingSources: \[\]/);
   assert.ok(!/acceptEdits|bypassPermissions|toolMode|messageMode/.test(stripComments(opts)),
