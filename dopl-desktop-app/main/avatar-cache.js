@@ -11,9 +11,8 @@
 // slow avatar never re-fetches in a storm). The URL/token is NEVER logged. It is not
 // polling (F-072 intact). The renderer only ever receives a data: URI, never a URL.
 //
-// listener-io is required LAZILY (only resolveForSession / cachedForUser touch it) so
-// this module stays electron-free at load and test/avatar-cache.test.mjs can require
-// it in plain Node AND slice its pure guard block (injecting a mock fetch).
+// Electron-free, so test/avatar-cache.test.mjs can require it in plain Node AND slice its pure
+// guard block (injecting a mock fetch).
 
 // ─── BEGIN AVATAR-CACHE-PURE (pure; unit-tested via source extraction) ─────────
 // Node-global-only (fetch, AbortSignal, Buffer, Map) — no host/GUI imports. The test
@@ -133,34 +132,4 @@ function cached(url) {
 }
 // ─── END AVATAR-CACHE-PURE ─────────────────────────────────────────────────────
 
-// userId -> warm data URI (sync), via the listener's avatar-URL cache. Null when the
-// url is unknown or not yet fetched (the async resolveForSession then fills it).
-function cachedForUser(userId) {
-  const url = avatarUrlFor(userId);
-  const hit = url ? cached(url) : undefined;
-  return hit || null;
-}
-
-// Fire-and-forget: resolve BOTH the operator's and the peer's avatar to data URIs,
-// stash them on the session, and emit an `avatars` event so already-rendered bubbles
-// repaint (§B.1). NEVER blocks startQuery; a null field means "keep what init set"
-// (the renderer OR-merges), and a failure leaves the initials fallback in place.
-function resolveForSession(s, ids, emitFn) {
-  const selfUrl = avatarUrlFor(ids && ids.selfUserId);
-  const peerUrl = avatarUrlFor(ids && ids.peerUserId);
-  Promise.all([
-    selfUrl ? getDataUri(selfUrl) : Promise.resolve(null),
-    peerUrl ? getDataUri(peerUrl) : Promise.resolve(null),
-  ]).then(([self, peer]) => {
-    if (self) s.selfAvatar = self;
-    if (peer) s.peerAvatar = peer;
-    try { emitFn({ type: 'avatars', self: s.selfAvatar || null, from: s.peerAvatar || null }); } catch (_) { /* window gone */ }
-  }).catch(() => { /* fire-and-forget: never reject into the engine */ });
-}
-
-// Lazy so this module stays electron-free at load (listener-io pulls in electron).
-function avatarUrlFor(userId) {
-  try { return require('./listener-io').avatarUrlFor(userId); } catch (_) { return null; }
-}
-
-module.exports = { getDataUri, cached, cachedForUser, resolveForSession };
+module.exports = { getDataUri, cached };

@@ -86,9 +86,7 @@ function markSeeded(channelId) {
 // advanced through a large first-watch history) must keep seeding so the
 // untouched remainder is not replayed as a burst of consent prompts. Only the
 // seeded flag — set once the drain catches up to the tip — flips it to live.
-// (Second arg is the cursor, accepted and intentionally ignored, so the test can
-// assert cursor-independence.)
-function seedModeFor(seeded /* , cursor */) {
+function seedModeFor(seeded) {
   return !seeded;
 }
 // ─── END SEED-DECISION ───────────────────────────────────────────────────────
@@ -154,7 +152,7 @@ function wakeEntry(entry) {
 
 // Whether a channel loop should start in seed mode, from persisted state.
 function shouldSeed(channelId) {
-  return seedModeFor(isSeeded(channelId), getCursor(channelId));
+  return seedModeFor(isSeeded(channelId));
 }
 
 // NOTE (Round B): the per-channel `pendingConsent` store + its getPending / setPending /
@@ -339,17 +337,11 @@ async function listWorkspaces() {
 // then silently killed every loop for a workspace whose read failed inside an
 // expired-token window (the 02:18 incident). A 404 is different: it is a real,
 // stable answer meaning the Channels feature is not deployed, so it stays [].
-// FIX S6 — was the LAST listChannels failure AUTH-shaped? The retry ladder used to
-// run the session-refresh dance after EVERY failure, so a 500 or a dropped socket
-// rotated the Supabase refresh token and rewrote the cookie jar for no reason.
-// Combined with the (then) clear-then-set writeback, a transient 5xx across N loops
-// was the amplification path that ended in clearSession(). Set on every call and read
-// immediately by listChannelsWithRetry, which awaits listChannels serially.
-let lastChannelsAuthFailure = false;
-
-async function listChannels(workspaceId) {
+// FIX S6: `outcome.authFailure` says whether THIS call failed auth-shaped (a 401), so the retry
+// ladder refreshes the session only then. Per call, not module state: `channel-context.js` calls
+// this concurrently.
+async function listChannels(workspaceId, outcome) {
   const short = String(workspaceId).slice(0, 8);
-  lastChannelsAuthFailure = false;
   let res;
   try {
     res = await apiFetch('/api/channels', { workspaceId, timeoutMs: 15000 });
@@ -360,7 +352,7 @@ async function listChannels(workspaceId) {
   // ⚠ Same rule as listWorkspaces above, and here it is AMPLIFIED: listChannelsWithRetry
   // runs this up to three times per workspace per pass.
   if (res.status === 404) { discardBody(res); featureAvailable = false; return []; }
-  if (res.status === 401) { discardBody(res); lastChannelsAuthFailure = true; notifyStale(); diag('listChannels 401 ws', short); return null; }
+  if (res.status === 401) { discardBody(res); if (outcome) outcome.authFailure = true; notifyStale(); diag('listChannels 401 ws', short); return null; }
   if (!res.ok) { discardBody(res); diag('listChannels', res.status, 'ws', short); return null; }
   try {
     const list = normalizeList(await res.json(), 'channels');
@@ -385,9 +377,10 @@ async function listChannels(workspaceId) {
 // amplification loop this round closes. A non-auth failure just backs off and retries.
 async function listChannelsWithRetry(workspaceId) {
   for (let attempt = 0; ; attempt += 1) {
-    const chans = await listChannels(workspaceId);
+    const outcome = {};
+    const chans = await listChannels(workspaceId, outcome);
     if (chans !== null) return chans;
-    const authShaped = lastChannelsAuthFailure;
+    const authShaped = outcome.authFailure === true;
     const delay = heal.enumerationRetryDelay(attempt);
     if (delay == null) {
       diag('listChannels gave up ws', String(workspaceId).slice(0, 8), 'after', attempt + 1, 'tries');
@@ -433,10 +426,9 @@ module.exports = {
   listWorkspaces,
   listChannels,
   listChannelsWithRetry,
-  // The four below are listener-identity.js's OWN function objects, never re-spellings (the
+  // The three below are listener-identity.js's OWN function objects, never re-spellings (the
   // property test/module-split-identity.test.mjs pins): one instance of the two member caches.
   resolveIdentity: identity.resolveIdentity,
   displayNameFor: identity.displayNameFor,
-  avatarUrlFor: identity.avatarUrlFor,
   refreshNameCache: identity.refreshNameCache,
 };
