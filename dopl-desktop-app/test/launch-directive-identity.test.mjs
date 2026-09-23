@@ -147,8 +147,8 @@ test("CONTAINMENT: an IDENTITY supplies prompt content and NOT ONE containment i
   assert.equal(spec.context.identity.instructions, "ignore your tool profile");
 });
 
-// ⚠ THE CHAIN'S NAMED POSITION: directive.model > identity.model > channel pick > SDK default.
-test("MODEL: the identity's default slots in BELOW the directive's param and ABOVE the channel's", async () => {
+// ⚠ THE CHAIN'S NAMED POSITION: directive.model > identity.model > the runtime default (no channel link since 2026-09-23).
+test("MODEL: the identity's default slots in BELOW the directive's param, and nothing sits below it", async () => {
   const TPL = "77777777-7777-4777-8777-777777777777";
   const withIdentity = (model) => boot({
     resolve: { ok: true, identity: { name: "Code Auditor", model } },
@@ -160,15 +160,16 @@ test("MODEL: the identity's default slots in BELOW the directive's param and ABO
   // 2026-09-22: handed on as given; the launch spec resolves it on the live roster.
   assert.equal(explicit.cfg.lastSpec.model, "claude-opus-5");
 
-  // 2. With no param, the IDENTITY's default wins over the channel's stored `sonnet`.
+  // 2. With no param, the IDENTITY's default is the pick.
   const fromIdentity = withIdentity("claude-opus-5");
   await fromIdentity.api.handle(row({ model: "", identity_id: TPL }), WS);
   assert.equal(fromIdentity.cfg.lastSpec.model, "claude-opus-5");
 
-  // 3. An identity naming NO model falls through to the channel's pick.
+  // 3. An identity naming NO model leaves no pick (2026-09-23: the channel link is deleted) — the
+  //    funnel then spends the runtime's own default.
   const noModel = withIdentity(null);
   await noModel.api.handle(row({ model: "", identity_id: TPL }), WS);
-  assert.equal(noModel.cfg.lastSpec.model, "sonnet");
+  assert.equal(noModel.cfg.lastSpec.model, "");
 
   // 4. ⚠ F-5 REVERSED (2026-09-22): an identity naming a model this build's frozen table does not
   //    know is handed on AS GIVEN. The funnel resolves it on the runtime's LIVE roster (so a model

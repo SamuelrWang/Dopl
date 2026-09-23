@@ -1,6 +1,10 @@
-// DEFAULT AGENT SETTINGS — the pair, the model, the runtime and the chaining flag a NEWLY
-// CREATED channel starts with. LOCAL ONLY, never sent to Dopl (2026-09-18, Samuel's ruling:
-// "profile popup gets an Agents tab; new channels inherit it instead of the hardcoded blanks").
+// DEFAULT AGENT SETTINGS — the pair, the runtime (and its containment setting) and the chaining
+// flag a NEWLY CREATED channel starts with. LOCAL ONLY, never sent to Dopl (2026-09-18, Samuel's
+// ruling: "profile popup gets an Agents tab; new channels inherit it instead of the hardcoded
+// blanks").
+// ⚠ **NO MODEL SINCE 2026-09-23** (Samuel: *"We don't need this model, channel, and profile
+// settings"*): the record stores none and seeds none — `launch-selection.js ›
+// normalizeRuntimeRecord` drops a legacy one on read.
 //
 // ⚠ **ITS OWN MODULE, NOT A FOURTH RECORD IN `channel-prefs.js`.** That file is at the §1
 // 500-line cap and, more importantly, everything in it is keyed BY CHANNEL: this record is keyed
@@ -38,8 +42,8 @@
 //
 // SECURITY — every write is re-validated here against the frozen enums below, the same hard/soft
 // split `channel-prefs.js › normalizePreset` uses: an unknown value on either AXIS rejects the
-// whole write, an unknown MODEL or RUNTIME is simply absent. Nothing but the validated members is
-// ever stored; there is no free-text field and no path.
+// whole write, an unknown RUNTIME is simply absent (a MODEL is never stored). Nothing but the
+// validated members is ever stored; there is no free-text field and no path.
 //
 // PRIVACY — local electron-store only. Never POSTed to Dopl, never in a channel message, never
 // off this machine. The diag line carries the two enum values and nothing else.
@@ -80,7 +84,7 @@ const FACTORY_DEFAULTS = { messages: 'ask', agentChain: false };
  * Validate an arbitrary value into a defaults record, or null when it is not one.
  *
  * ⚠ **IT IS A LAUNCH SELECTION PLUS ONE FLAG.** The defaults record and a channel's record now
- * answer the same question in the same shape — which runtime, which messaging, and which model +
+ * answer the same question in the same shape — which runtime, which messaging, and which tool +
  * native settings PER RUNTIME — because `seedChannel` copies one into the other. Two shapes for
  * one copy is how a field comes to be seeded on some channels and not others.
  *
@@ -88,21 +92,21 @@ const FACTORY_DEFAULTS = { messages: 'ask', agentChain: false };
  *  · MESSAGING is Dopl's own axis and validates HARD — an unknown value rejects the whole record,
  *    because a partially applied record is the "one switch, two meanings" confusion the axes exist
  *    to remove;
- *  · the RUNTIME-KEYED half validates SOFT and FAIL-CLOSED — an unknown model is ABSENT (so a
- *    desktop that predates an id can still store the rest) and an unknown MODE or NATIVE value
- *    falls to that adapter's NARROWEST, never to its widest and never to unrestricted;
+ *  · the RUNTIME-KEYED half validates SOFT and FAIL-CLOSED — an unknown MODE or NATIVE value
+ *    falls to that adapter's NARROWEST, never to its widest and never to unrestricted (and a
+ *    `model` is not stored at all since 2026-09-23);
  *  · `agentChain` is `=== true` and nothing else, because it lifts a bound.
  * Extra properties are dropped; nothing else is ever stored.
  *
  * ⚠ A LEGACY RECORD MIGRATES IN PLACE. A pre-U5 `{tools, messages, agentChain, model?, runtime?}`
- * has no `v`, so it is read through `sel.fromLegacy` — its global `tools`/`model` land in the
- * DEFAULT runtime's record untranslated, exactly as a channel's do.
+ * has no `v`, so it is read through `sel.fromLegacy` — its global `tools` lands in the DEFAULT
+ * runtime's record untranslated, exactly as a channel's does, and its `model` is dropped.
  */
 function normalizeDefaults(sel, ctx, raw) {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
   const legacy = raw.v == null;
   const res = legacy
-    ? sel.fromLegacy(ctx, { tools: raw.tools, messages: raw.messages, model: raw.model }, raw.runtime)
+    ? sel.fromLegacy(ctx, { tools: raw.tools, messages: raw.messages }, raw.runtime)
     : sel.normalizeSelection(ctx, raw);
   // ⚠ THE HARD HALF, ASKED OF THE INPUT RATHER THAN OF THE RESULT. `normalizeSelection` FLOORS an
   // unknown messaging value to `ask` and says so in its review; this record's contract is that such
@@ -120,14 +124,15 @@ function normalizeDefaults(sel, ctx, raw) {
 
 /**
  * The record as the RENDERER sees it — the stored one or the factory answer, and ALWAYS carrying
- * `model`, `runtime`, `tools`, `byRuntime` and `v` keys.
+ * `runtime`, `tools`, `byRuntime` and `v` keys. ⚠ NO `model` KEY SINCE 2026-09-23 — its absence
+ * is what makes an older renderer's `hasModelKey` probe draw no Model row.
  *
  * ⚠ THE LEGACY KEYS ARE PRESENT ON THE WAY OUT EVEN THOUGH STORAGE HOLDS THEM PER RUNTIME, and
  * that asymmetry is the point rather than an inconsistency to tidy away. The web's capability
  * probes (`lib/permission-modes.ts › hasModelKey`, `lib/runtime-capability.ts › hasRuntimeKey`) are
  * OWN-KEY tests, and a missing key reads as "this desktop has no such concept" — which renders NO
- * row, and the only way to store a value is the row that was never drawn. So `tools` and `model`
- * answer the SELECTED runtime's values, in that runtime's own words.
+ * row, and the only way to store a value is the row that was never drawn. So `tools` answers the
+ * SELECTED runtime's value, in that runtime's own words.
  * ⚠ `v` AND `byRuntime` ARE ADDITIVE AND ARE THE CAPABILITY FIELDS U5 ASKS REPLIES TO CARRY: a
  * renderer that knows about them reads the whole per-runtime truth, and one that does not sees the
  * shape it always saw.
@@ -139,7 +144,6 @@ function effectiveDefaults(sel, ctx, stored) {
     tools: rec.tools || ctx.narrowestToolFor(base.runtime),
     messages: base.messages,
     agentChain: base.agentChain === true,
-    model: rec.model || null,
     runtime: base.runtime || '',
     v: base.v,
     byRuntime: base.byRuntime,
@@ -175,7 +179,7 @@ function getAgentDefaults() {
  * Persist the defaults. `{ ok: false }` and NO mutation when either axis is unknown — fail-closed,
  * so a rejected write can never leave a half-applied record behind.
  *
- * ⚠ THE WHOLE RECORD IS REWRITTEN, so a caller that omits `model` or `runtime` CLEARS it. That is
+ * ⚠ THE WHOLE RECORD IS REWRITTEN, so a caller that omits `runtime` CLEARS it. That is
  * the opposite of `channel-prefs.js › postureInto`'s carry-through rule and it is deliberate:
  * there is exactly ONE surface writing this record (the profile popup's Agents tab), it always
  * sends the whole record, and there is no second control that could drop a field it does not know
@@ -224,10 +228,10 @@ function seedChannel(channelId) {
   // restrictive settings when it is unset. `seeded: false` is the honest answer.
   if (!stored) return { ok: true, seeded: false };
   // ⚠ **THE WHOLE SELECTION IS COPIED, EVERY RUNTIME'S RECORD INCLUDED (2026-09-21, U5).** The
-  // pre-U5 seed copied one global tool mode, one global model and the runtime pick, in three
-  // writes; a new channel therefore inherited the operator's Claude model and LOST the Codex model
-  // and sandbox setting they had configured on the same tab. Decisions #1 and #2 say both sets are
-  // remembered and neither is translated, so the seed carries both.
+  // pre-U5 seed copied one global tool mode and the runtime pick; a new channel therefore LOST the
+  // Codex sandbox setting configured on the same tab. Decisions #1 and #2 say both sets are
+  // remembered and neither is translated, so the seed carries both. (No model is seeded since
+  // 2026-09-23 — none is stored.)
   // ⚠ STILL ONE WRITE THROUGH ONE VALIDATING WRITER, which re-validates every field against the
   // selected adapter on arrival — the defaults record is not a trusted source, it is just another
   // stored record.

@@ -33,12 +33,12 @@ const setLaunchPosture = vi.fn();
 const getAgentDefaults = vi.fn();
 const setAgentDefaults = vi.fn();
 
-/** What a current main answers. ⚠ The legacy three keys AND the versioned record, additively —
- *  `channel-dir-ipc.js › channels:getLaunchPosture` is the statement of record. */
+/** What a current main answers. ⚠ The legacy keys AND the versioned record, additively —
+ *  `channel-dir-ipc.js › channels:getLaunchPosture` is the statement of record. (No `model`
+ *  since 2026-09-23 — the channel stores none.) */
 const postureReply = (over: Record<string, unknown> = {}) => ({
   tools: "accept_edits",
   messages: "ask",
-  model: "claude-fable-5",
   runtime: "",
   runtimes: [{ id: "claude", label: "Claude Code" }, { id: "codex", label: "Codex" }],
   defaultRuntime: "claude",
@@ -50,8 +50,8 @@ const postureReply = (over: Record<string, unknown> = {}) => ({
     runtime: "",
     messages: "ask",
     byRuntime: {
-      claude: { tools: "accept_edits", model: "claude-fable-5" },
-      codex: { tools: "on-request", model: "gpt-6-astra", native: { sandbox_mode: "read-only" } },
+      claude: { tools: "accept_edits" },
+      codex: { tools: "on-request", native: { sandbox_mode: "read-only" } },
     },
   },
   ...over,
@@ -61,13 +61,12 @@ const postureReply = (over: Record<string, unknown> = {}) => ({
 const defaultsReply = (over: Record<string, unknown> = {}) => ({
   tools: "accept_edits",
   messages: "ask",
-  model: "claude-fable-5",
   agentChain: false,
   runtime: "",
   v: 2,
   byRuntime: {
-    claude: { tools: "accept_edits", model: "claude-fable-5" },
-    codex: { model: "gpt-6-astra", native: { sandbox_mode: "read-only" } },
+    claude: { tools: "accept_edits" },
+    codex: { native: { sandbox_mode: "read-only" } },
   },
   runtimes: [{ id: "claude", label: "Claude Code" }, { id: "codex", label: "Codex" }],
   defaultRuntime: "claude",
@@ -105,8 +104,8 @@ async function defaultsHook() {
 describe("the CHANNEL scope", () => {
   it("reads every runtime's record, not just the selected one", async () => {
     const { result } = await channelHook();
-    expect(result.current.recordFor("claude").model).toBe("claude-fable-5");
-    expect(result.current.recordFor("codex").model).toBe("gpt-6-astra");
+    expect(result.current.recordFor("claude").tools).toBe("accept_edits");
+    expect(result.current.recordFor("codex").tools).toBe("on-request");
     expect(result.current.recordFor("codex").native).toEqual({ sandbox_mode: "read-only" });
   });
 
@@ -132,7 +131,7 @@ describe("the CHANNEL scope", () => {
     const { result } = await channelHook();
     getLaunchPosture.mockClear();
     await act(async () => {
-      await result.current.update({ model: "claude-opus-5" });
+      await result.current.update({ tools: "auto" });
     });
     expect(getLaunchPosture).toHaveBeenCalled();
   });
@@ -159,7 +158,7 @@ describe("the CHANNEL scope", () => {
     getLaunchPosture.mockResolvedValue({
       tools: "auto",
       messages: "ask",
-      model: "claude-opus-5",
+      model: "claude-opus-5", // ⚠ an OLDER desktop still sends it — it is NOT read (2026-09-23)
       runtime: "claude",
       runtimes: [{ id: "claude", label: "Claude Code" }, { id: "codex", label: "Codex" }],
       defaultRuntime: "claude",
@@ -167,7 +166,7 @@ describe("the CHANNEL scope", () => {
     const hook = renderHook(() => useLaunchSelection({ kind: "channel", channelId: CHANNEL }));
     await waitFor(() => expect(hook.result.current.runtime).toBe("claude"));
     expect(hook.result.current.supported).toBe(false);
-    expect(hook.result.current.recordFor("claude")).toEqual({ tools: "auto", model: "claude-opus-5" });
+    expect(hook.result.current.recordFor("claude")).toEqual({ tools: "auto" });
     expect(hook.result.current.recordFor("codex")).toEqual({});
   });
 });
@@ -189,13 +188,16 @@ describe("the DEFAULTS scope", () => {
     // Decision #1: editing Codex may not clear Claude, and vice versa.
     const { result } = await defaultsHook();
     await act(async () => {
-      await result.current.update({ runtime: "codex", model: "gpt-6-mini" });
+      await result.current.update({ runtime: "codex", tools: "never" });
     });
     const sent = setAgentDefaults.mock.calls[0][0];
-    expect(sent.byRuntime.claude).toEqual({ tools: "accept_edits", model: "claude-fable-5" });
-    expect(sent.byRuntime.codex.model).toBe("gpt-6-mini");
-    // ⚠ AND THE NATIVE BAG SURVIVES A MODEL-ONLY WRITE.
+    expect(sent.byRuntime.claude).toEqual({ tools: "accept_edits" });
+    expect(sent.byRuntime.codex.tools).toBe("never");
+    // ⚠ AND THE NATIVE BAG SURVIVES A TOOLS-ONLY WRITE.
     expect(sent.byRuntime.codex.native).toEqual({ sandbox_mode: "read-only" });
+    // ⚠ AND NO MODEL IS WRITTEN, AT EITHER LEVEL (2026-09-23).
+    expect("model" in sent).toBe(false);
+    expect(JSON.stringify(sent.byRuntime)).not.toContain("model");
   });
 
   it("NEVER writes a channel's record — the write-once seed is the only inheritance point", async () => {

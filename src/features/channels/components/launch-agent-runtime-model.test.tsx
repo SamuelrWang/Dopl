@@ -6,8 +6,8 @@
  * ⚠ **ITS OWN FILE PAST THE §1 CAP, AND THE SEAM IS WHAT THE CASES ARE ABOUT.**
  * `launch-agent-dialog.test.tsx` is the FORM (the fields, the two exits, the payload's shape);
  * `launch-agent-dialog-runtime.test.tsx` is the RUNTIME ROW (its roster, its hints, its
- * preselect). This file is what the selected runtime IMPLIES — the model roster, the remembered
- * picks, the identity-compatibility sentence and the sign-in copy — which is exactly the seam
+ * preselect). This file is what the selected runtime IMPLIES — the model roster, the runtime
+ * default, the identity-compatibility sentence and the sign-in copy — which is exactly the seam
  * `launch-agent-dialog-state.ts` was split on.
  *
  * Every case is about the SAME defect from a different side: before this wave the dialog held one
@@ -35,8 +35,7 @@ vi.mock("@/features/agent-identities/hooks/use-agent-identities", () => ({
 const posture = vi.hoisted(() => ({
   stored: "",
   connected: [] as string[],
-  modelSupported: false,
-  byRuntime: {} as Record<string, { tools?: string; model?: string; native?: Record<string, string> }>,
+  byRuntime: {} as Record<string, { tools?: string; native?: Record<string, string> }>,
   catalogs: {} as Record<string, unknown>,
 }));
 
@@ -54,7 +53,6 @@ vi.mock("../hooks/use-launch-selection", async () => {
         connected: posture.connected,
         connectedKnown: true,
         defaultRuntime: REAL_DEFAULT_RUNTIME,
-        modelSupported: posture.modelSupported,
         byRuntime: posture.byRuntime,
         catalogs: posture.catalogs as never,
       }),
@@ -94,7 +92,6 @@ beforeEach(() => {
   mintAgentId.mockReset().mockResolvedValue({ ok: true, agentId: MINTED });
   posture.stored = "";
   posture.connected = [];
-  posture.modelSupported = false;
   posture.byRuntime = {};
   posture.catalogs = {};
   identityList.identities = [];
@@ -167,7 +164,6 @@ const CODEX_CATALOG = catalog("codex", [
 ]);
 
 function bothRuntimes() {
-  posture.modelSupported = true;
   posture.connected = ["claude", "codex"];
   posture.catalogs = { claude: CLAUDE_CATALOG, codex: CODEX_CATALOG };
 }
@@ -197,25 +193,28 @@ describe("the MODEL row follows the RUNTIME row", () => {
     expect(overridesArg(controls)).toEqual({ model: "gpt-6-mini" });
   });
 
-  it("restores BOTH remembered picks when the runtime moves and moves back", async () => {
-    // Decision #2. The pre-U5 record CLEARED the model on every switch, because one global field
-    // cannot hold two rosters.
+  it("shows each RUNTIME's default — never a stored channel model (2026-09-23)", async () => {
+    // Samuel: "We don't need a pin model in the settings." A record an OLDER desktop wrote may
+    // still carry a per-runtime model; the row must not read it, on either runtime.
     bothRuntimes();
     posture.byRuntime = {
       claude: { model: "claude-opus-5" },
       codex: { model: "gpt-6-mini" },
-    };
-    await open();
-    expect(modelSelected()).toContain("Opus 5");
+    } as never;
+    const controls = await open();
+    expect(modelSelected()).toContain("Fable 5");
     fireEvent.click(pillFor(CODEX.label));
-    await waitFor(() => expect(modelSelected()).toContain("GPT-6 Mini"));
+    await waitFor(() => expect(modelSelected()).toContain("GPT-6 Astra"));
     fireEvent.click(pillFor(CLAUDE.label));
-    await waitFor(() => expect(modelSelected()).toContain("Opus 5"));
+    await waitFor(() => expect(modelSelected()).toContain("Fable 5"));
+    fireEvent.click(launchButton());
+    await waitFor(() => expect(controls.launchAgent).toHaveBeenCalled());
+    expect(overridesArg(controls)).toBeUndefined();
   });
 
   it("drops a per-launch pick that belongs to the runtime the operator left", async () => {
     // ⚠ NOT A RE-POINT — it clears to "no per-spawn pick", so the row falls to the NEW runtime's
-    // remembered model and then to its platform default.
+    // own default (there is no remembered channel model since 2026-09-23).
     bothRuntimes();
     const controls = await open();
     fireEvent.click(modelPill("Opus 5"));
@@ -231,7 +230,6 @@ describe("the MODEL row follows the RUNTIME row", () => {
   it.each(["loading", "unavailable"] as const)(
     "does not submit a Claude pick after an immediate switch to Codex while its catalog is %s",
     async (status) => {
-      posture.modelSupported = true;
       posture.connected = ["claude", "codex"];
       posture.catalogs = {
         claude: CLAUDE_CATALOG,
@@ -255,7 +253,6 @@ describe("the MODEL row follows the RUNTIME row", () => {
   );
 
   it("offers nothing to pick when the roster could not be read, and says why", async () => {
-    posture.modelSupported = true;
     posture.connected = ["claude", "codex"];
     posture.stored = "codex";
     posture.catalogs = {
@@ -278,7 +275,6 @@ describe("a runtime this Mac is not connected to", () => {
     // Samuel's 2026-09-08 correction: an unconnected runtime is a setup step, not a missing
     // capability. What changed in U10/U7 is that the sentence names the RIGHT platform — a
     // signed-out Codex used to be told to fix a Claude credential the session does not use.
-    posture.modelSupported = true;
     posture.connected = ["claude"];
     posture.catalogs = { claude: CLAUDE_CATALOG, codex: CODEX_CATALOG };
     render(<Harness newAgent={launcher()} />);

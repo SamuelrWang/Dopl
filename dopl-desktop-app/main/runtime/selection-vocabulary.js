@@ -20,11 +20,9 @@
 // never reinterprets a vendor id**, so the vocabulary moved into each adapter's own descriptor and
 // the interpretation of it lives in this module, beside the other place `null` is interpreted.
 //
-// ⚠ TWO FUNCTIONS, NOT ONE, BECAUSE STORAGE AND ARGV ARE DIFFERENT QUESTIONS. `storeModelPick` is
-// what a DURABLE record may keep — the operator's own vocabulary, so a select round-trips what it
-// set. `launchModelPick` is what a SESSION is stamped with — which on a closed roster may be the
-// canonical (argv-stable) spelling of the same model. Collapsing them is how a picker comes to
-// display an alias it never offered.
+// ⚠ `storeModelPick` — what a DURABLE record could keep — IS DELETED (2026-09-23): no launch
+// selection stores a model any more (Samuel: *"We don't need a pin model in the settings"*).
+// `launchModelPick` — what a SESSION is stamped with — is the one model question left here.
 
 /** The pick rule a descriptor declares, or `null` when it declares none. */
 const pickRule = (d) => (d && d.models && d.models.pick) || null;
@@ -36,29 +34,6 @@ function matchesPattern(rule, value) {
   } catch (_err) {
     return false; // an unparseable pattern stores nothing — never "anything goes"
   }
-}
-
-/**
- * The value a DURABLE record may keep for this runtime, or `''` for "no pick".
- *
- * ⚠ `''` IS THE ONLY SPELLING OF ABSENCE, on every runtime, whatever that runtime calls its own
- * default. The record OMITS the key rather than writing `''`, so a record from before the field
- * and a record whose model was cleared are the same record — `channel-prefs.js`'s rule, unchanged.
- * ⚠ FAIL-CLOSED: anything this runtime cannot vouch for is ABSENT, never passed through. Absence
- * is the platform's own pick, which is what every session did before a picker existed.
- */
-function storeModelPick(descriptor, value) {
-  const rule = pickRule(descriptor);
-  const v = typeof value === 'string' ? value.trim() : '';
-  if (!rule || !v) return '';
-  if (rule.kind === 'closed') {
-    const stored = Array.isArray(rule.stored) ? rule.stored : [];
-    return stored.indexOf(v) === -1 ? '' : v;
-  }
-  // OPEN: a live roster this process cannot call from a storage path. The shape check is a GATE
-  // (the value becomes a launch argument) and is deliberately NOT a roster check — see the
-  // adapter's own note. U6 narrows it to the live catalog.
-  return matchesPattern(rule, v) ? v : '';
 }
 
 /**
@@ -183,5 +158,5 @@ function normalizeNative(descriptor, raw) {
 }
 
 module.exports = {
-  pickRule, storeModelPick, launchModelPick, nativeDimensions, normalizeNative,
+  pickRule, launchModelPick, nativeDimensions, normalizeNative,
 };

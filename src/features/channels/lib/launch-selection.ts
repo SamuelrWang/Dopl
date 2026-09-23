@@ -4,12 +4,12 @@
  * contract; consumed by U7/U8).
  *
  * ⚠ **WHY THE RENDERER NEEDS THE WHOLE RECORD AND NOT THE LEGACY PAIR.** The reply still carries
- * `{tools, messages, model}` for the SELECTED runtime — a compatibility window every renderer
- * older than U5 feature-probes (`permission-modes.ts › hasModelKey`) — but those three keys
- * cannot express the one thing U7 and U8 are about: **Claude's and Codex's settings sit side by
- * side and are never translated.** Switching Claude → Codex → Claude has to restore BOTH
- * remembered models and BOTH native sets, and a record with one global `model` field cannot hold
- * two rosters. `byRuntime` is that record.
+ * `{tools, messages}` for the SELECTED runtime — a compatibility window every renderer older than
+ * U5 feature-probes (`model` left that reply on 2026-09-23, so an older renderer's
+ * an older renderer's `hasModelKey` probe draws no Model row) — but those keys cannot express the one
+ * thing U7 and U8 are about: **Claude's and Codex's settings sit side by side and are never
+ * translated.** Switching Claude → Codex → Claude has to restore BOTH remembered tool settings and
+ * BOTH native sets, which one global pair cannot hold. `byRuntime` is that record.
  *
  * ⚠ **IT INTERPRETS NOTHING AND VALIDATES NOTHING.** Every vocabulary belongs to the selected
  * adapter's descriptor (`runtime-model-catalog.ts`, `runtime-native.ts`), and main re-validates
@@ -32,7 +32,6 @@
  *  wrong. */
 export interface RuntimeRecord {
   tools?: string;
-  model?: string;
   native?: Readonly<Record<string, string>>;
 }
 
@@ -76,8 +75,8 @@ function normalizeRecord(raw: unknown): RuntimeRecord | null {
   const out: RuntimeRecord = {};
   const tools = str(row.tools);
   if (tools) out.tools = tools;
-  const model = str(row.model);
-  if (model) out.model = model;
+  // ⚠ NO `model` SINCE 2026-09-23 (Samuel: "We don't need a pin model in the settings") — main
+  // stores none, and one an older desktop still sends is not read.
   if (row.native && typeof row.native === "object" && !Array.isArray(row.native)) {
     const native: Record<string, string> = {};
     for (const [key, value] of Object.entries(row.native as Record<string, unknown>)) {
@@ -92,7 +91,7 @@ function normalizeRecord(raw: unknown): RuntimeRecord | null {
 /**
  * Read the versioned record off a launch-posture or agent-defaults reply.
  *
- * ⚠ **THE PROBE IS OWN-KEY ON `selection`, NOT TRUTHINESS**, for `hasModelKey`'s reason: a
+ * ⚠ **THE PROBE IS OWN-KEY ON `selection`, NOT TRUTHINESS**, for the own-key probe's reason: a
  * current main with nothing stored still sends the record, and `!!reply.selection` would read
  * that as an older desktop and hide every per-runtime row.
  * ⚠ **TWO SHAPES, ONE READER.** The per-channel reply nests the record under `selection`; the
@@ -149,7 +148,7 @@ const EMPTY_RECORD: RuntimeRecord = Object.freeze({});
  * ONE RUNTIME'S RECORD — never null, possibly empty.
  *
  * ⚠ **`''` RESOLVES TO THE DEFAULT ADAPTER'S RECORD**, which is where a migrated legacy
- * `{tools, model}` landed (`launch-selection.js › fromLegacy` files it under the DEFAULT runtime
+ * `{tools}` landed (`launch-selection.js › fromLegacy` files it under the DEFAULT runtime
  * untranslated, because that is the only vocabulary the old validators could store). It is why
  * an old `accept_edits` is still Claude's value after the migration and is never shown on Codex.
  */

@@ -71,7 +71,6 @@ function boot(api = {}, opts = {}) {
     if (id === "./channel-prefs") {
       return {
         launchStartModes: () => ({ tools: "manual", messages: "auto_inbound" }),
-        getLaunchModelLink: () => opts.channelModel || "", // ⚠ U5: the LAST chain link, on the CHANNEL'S OWN runtime. 2026-09-22: Claude's pick rule is OPEN (live roster), so it is the stored id as given, and absent is ''. Inline because this file is at the §1 cap.
         isIdentityApproved: () => opts.approved === true,
         approveIdentity: (t) => { approvals.push(t); return opts.storeWrites !== false; },
       };
@@ -165,7 +164,7 @@ test("F-4: a 5xx is the same class — `busy`, and so is every other non-2xx", a
 });
 
 test("F-5 REVERSED (2026-09-22): an UNKNOWN identity model is handed on — the funnel resolves or refuses it", async () => {
-  const m = boot({ body: { ...RESOLVED, model: "gpt-9-turbo" } }, { channelModel: "claude-opus-5" });
+  const m = boot({ body: { ...RESOLVED, model: "gpt-9-turbo" } });
   assert.equal((await m.launchFromButton(payload({ identityId: TPL }))).ok, true);
   assert.equal(m.launches[0].model, "gpt-9-turbo", "the funnel decides; the lane does not substitute");
 });
@@ -276,26 +275,26 @@ test("approveIdentity is UUID-gated, records, and RETURNS THE VERDICT", async ()
 
 // ── 4. THE MODEL PRECEDENCE CHAIN ────────────────────────────────────────────
 
-test("CHAIN: overrides.model > identity.model > channelPrefs > the SDK's own pick", async () => {
+// ⚠ NO CHANNEL LINK SINCE 2026-09-23 (Samuel: "We don't need a pin model in the settings"): `''`
+// leaves the lane and the funnel spends the RUNTIME's default (`runtime/launch-default.js`).
+test("CHAIN: overrides.model > identity.model > '' (the funnel's runtime default)", async () => {
   const withIdentityModel = { ...RESOLVED, model: "claude-sonnet-5" };
   const cases = [
-    // [identity body, channel pick, overrides, expected pick — AS GIVEN since 2026-09-22; absent is '']
-    [RESOLVED, null, undefined, ""],
-    [RESOLVED, "claude-opus-5", undefined, "claude-opus-5"],
-    [withIdentityModel, "claude-opus-5", undefined, "claude-sonnet-5"],
-    [withIdentityModel, "claude-opus-5", { model: "claude-haiku-4-5-20251001" }, "claude-haiku-4-5-20251001"],
-    [RESOLVED, null, { model: "claude-fable-5" }, "claude-fable-5"],
+    // [identity body, overrides, expected pick — AS GIVEN since 2026-09-22; absent is '']
+    [RESOLVED, undefined, ""],
+    [withIdentityModel, undefined, "claude-sonnet-5"],
+    [withIdentityModel, { model: "claude-haiku-4-5-20251001" }, "claude-haiku-4-5-20251001"],
+    [RESOLVED, { model: "claude-fable-5" }, "claude-fable-5"],
   ];
-  for (const [body, channelModel, overrides, expected] of cases) {
-    const m = boot({ body }, { channelModel });
+  for (const [body, overrides, expected] of cases) {
+    const m = boot({ body });
     await m.launchFromButton(payload({ identityId: TPL, overrides }));
-    assert.equal(m.launches[0].model, expected,
-      `${body.model} / ${channelModel} / ${JSON.stringify(overrides)}`);
+    assert.equal(m.launches[0].model, expected, `${body.model} / ${JSON.stringify(overrides)}`);
   }
 });
 
 test("an identity model written as an ALIAS works too — both vocabularies are accepted", async () => {
-  const m = boot({ body: { ...RESOLVED, model: "haiku" } }, { channelModel: "claude-opus-5" });
+  const m = boot({ body: { ...RESOLVED, model: "haiku" } });
   await m.launchFromButton(payload({ identityId: TPL }));
   assert.equal(m.launches[0].model, "haiku");
 });
@@ -303,14 +302,14 @@ test("an identity model written as an ALIAS works too — both vocabularies are 
 test("a BLANK launch still honours the sheet's model override", async () => {
   // The sheet opens on `Blank agent` too, and dropping the pick there would be a control that
   // silently does nothing.
-  const m = boot({}, { channelModel: "claude-opus-5" });
+  const m = boot({});
   await m.launchFromButton(payload({ overrides: { model: "claude-sonnet-5" } }));
   assert.equal(m.launches[0].model, "claude-sonnet-5");
   assert.equal(m.launches[0].context.identity, null);
 });
 
 test("an override model the frozen table does not know is SPENT, not dropped — the live picker offers it", async () => {
-  const m = boot({}, { channelModel: "claude-opus-5" });
+  const m = boot({});
   await m.launchFromButton(payload({ overrides: { model: "claude-opus-6[1m]" } }));
   assert.equal(m.launches[0].model, "claude-opus-6[1m]");
 });

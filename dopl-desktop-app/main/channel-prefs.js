@@ -149,7 +149,7 @@ const identityApproval = require('./identity-approval');
 // ⚠ THE MIRROR IS NEVER READ WHILE A SELECTION RECORD PARSES. If it were, the two could disagree
 // and nothing would say which won — which is the failure the auto-send/`messages` overlap already
 // cost this tree once (2026-09-06, item 8).
-const POSTURE_KEY = 'channelLaunchPosture'; // LEGACY MIRROR: { [channelId]: { tools, messages, model? } }
+const POSTURE_KEY = 'channelLaunchPosture'; // LEGACY MIRROR: { [channelId]: { tools, messages } } (a stored `model` is ignored)
 const SELECTION_KEY = 'channelLaunchSelection'; // { [channelId]: { v, runtime, messages, byRuntime } }
 const RUNTIME_KEY = 'channelRuntime'; // LEGACY MIRROR: { [channelId]: '<runtime id>' }
 
@@ -194,8 +194,8 @@ const getLaunchSelection = (channelId) => getLaunchSelectionDetail(channelId).se
  * THE EFFECTIVE launch posture for this channel, in the LEGACY WIRE SHAPE — the selected runtime's
  * pair, or the restrictive default. ⚠ NEVER null: a durable setting that is absent IS the
  * narrowest pair, and saying so is the truth. Reading never writes.
- * ⚠ AND IT ALWAYS CARRIES `model` — `null` when none is stored. See
- * `launch-selection.js › toLegacyPosture` for why the WIRE shape and the STORED shape differ.
+ * ⚠ AND IT CARRIES NO `model` SINCE 2026-09-23 — `launch-selection.js › toLegacyPosture` says why
+ * the key's absence is the point.
  */
 function getLaunchPosture(channelId) {
   return selection.toLegacyPosture(ctx(), getLaunchSelection(channelId));
@@ -213,8 +213,8 @@ function getLaunchPosture(channelId) {
  * channel the operator has never opened Settings for, which is most of them.
  *
  * ⚠ IT DISCLOSES NO POSTURE, only whether one was written, so it is not a second reader of the
- * permission pair in the sense the H2 census is about (`channel-runtime.test.mjs`,
- * `agent-model-selection.test.mjs`): nothing can widen a launch with a boolean.
+ * permission pair in the sense the H2 census is about (`channel-runtime.test.mjs`): nothing can
+ * widen a launch with a boolean.
  * ⚠ **IT ASKS BOTH RECORDS, AND THAT IS WHAT KEEPS THE WRITE-ONCE SEED HONEST ACROSS THE
  * MIGRATION** (`agent-defaults.js › seedChannel` refuses when this answers true). A channel
  * configured before U5 has only the legacy pair; reading the new key alone would call it
@@ -236,12 +236,11 @@ function hasLaunchPosture(channelId) {
  * ⚠ **`{ ok: false }` AND NO MUTATION WHEN THE LEGACY PAIR IS HALF-VALID.** A caller sending
  * `tools`/`messages` in the pre-U5 way still gets the whole-pair-or-nothing rule, because a
  * partially applied posture is the "one switch, two meanings" confusion the two axes exist to
- * remove. A caller sending only runtime/model/native is not making that claim and is not held to
- * it.
+ * remove. A caller sending only runtime/native is not making that claim and is not held to it.
  * ⚠ **EVERY VALUE IS RE-VALIDATED HERE, IN MAIN, AGAINST THE SELECTED ADAPTER.** The app window
  * hosts remote content, so a renderer one version ahead is a hostile input: an unregistered
- * runtime, a mode outside the adapter's declared options, a model outside its roster/alphabet and
- * a native key the adapter cannot spend are each refused or floored on THIS side of the bridge.
+ * runtime, a mode outside the adapter's declared options and a native key the adapter cannot
+ * spend are each refused or floored on THIS side of the bridge (a `model` key is ignored).
  */
 function setLaunchSelection(channelId, patch) {
   if (!channelId) return { ok: false };
@@ -264,10 +263,11 @@ function setLaunchSelection(channelId, patch) {
     store.set(SELECTION_KEY, map);
     // THE DOWNGRADE MIRROR — see the block above. Best-effort: a mirror that fails costs an older
     // build a stale read, never this build a lost setting, so it does not fail the write.
+    // ⚠ NO `model` SINCE 2026-09-23 — so a downgraded build reads "no pick" and launches on its
+    // own default, rather than resurrecting a channel model this build no longer offers a way to
+    // change.
     const legacy = getAllPostures();
-    legacy[channelId] = preset.model
-      ? { tools: preset.tools, messages: preset.messages, model: preset.model }
-      : { tools: preset.tools, messages: preset.messages };
+    legacy[channelId] = { tools: preset.tools, messages: preset.messages };
     store.set(POSTURE_KEY, legacy);
     // The runtime was a separate pre-U5 record, so it needs its own downgrade mirror beside the
     // posture mirror above. Use the NORMALIZED selection value rather than the patch: an unknown
@@ -356,9 +356,10 @@ function launchStartModes(channelId) {
     tools: rec.tools || c.narrowestToolFor(sel.runtime),
     messages: windowlessMessageMode(channelId, sel.messages),
     // ⚠ **THE NATIVE SETTINGS, AND THIS IS THE ONE PLACE THEY BECOME A SPAWN** (U5). Codex's
-    // `sandbox_mode` and reasoning effort had a READER (`runtime/codex/launch-spec.js › nativePair`)
-    // and **no producer anywhere in the tree** — F-390's shape exactly, a control that writes
-    // nowhere. They travel as `spec.startModes`, handed in per launch by a caller executing a
+    // `sandbox_mode` had a READER (`runtime/codex/launch-spec.js › nativePair`) and **no producer
+    // anywhere in the tree** — F-390's shape exactly, a control that writes nowhere. ⚠ CONTAINMENT
+    // ONLY since 2026-09-23: the model-scoped reasoning effort is no longer stored
+    // (`launch-selection.js › normalizeRuntimeRecord`). They travel as `spec.startModes`, handed in per launch by a caller executing a
     // decision a human is making right now, which is the SAME rule and the same single consumer
     // the permission pair has (H2). A shape that passes nothing inherits the runtime's own
     // declared defaults, exactly as it does for the pair.
@@ -368,53 +369,13 @@ function launchStartModes(channelId) {
   };
 }
 
-/**
- * THE CHANNEL'S CHOSEN MODEL FOR THE RUNTIME IT WILL LAUNCH ON, or '' for the platform default.
- *
- * ⚠ IT IS A SEPARATE READER FROM `getLaunchPosture` ON PURPOSE, AND THE REASON IS H2. That
- * function has exactly ONE consumer — `session-ipc-ops.js › sessions:launch`, the operator's own
- * click — and `test/session-preset-start.test.mjs` pins the count, because a second reader of the
- * stored PERMISSION pair re-opens the failure H2 exists to prevent (a posture reaching a spawn
- * nobody is attending). The MODEL is not that: it grants nothing, widens nothing, and reaches no
- * gate, so the PEER-TRIGGERED lane (`trigger.js`) may inherit it and must not be able to inherit
- * the pair alongside it. Two readers, so the census stays honest about which one is which.
- *
- * ⚠ **RUNTIME-SCOPED SINCE 2026-09-21 (U5).** It used to read ONE global field, which is why
- * `channel-runtime.js` had to CLEAR it on every runtime switch: a Claude id left behind on a Codex
- * channel sat ABOVE the platform default in the launch precedence chain, so the stale id WON and
- * Codex was asked for a model it has never heard of. With one record per runtime there is no stale
- * id to win — and switching back restores the pick instead of finding it deleted.
- */
-function getLaunchModel(channelId) {
-  const c = ctx();
-  return selection.activeRecord(c, getLaunchSelection(channelId)).model || '';
-}
-
-/**
- * THE CHANNEL'S MODEL AS THE LAST LINK OF A LAUNCH'S MODEL PRECEDENCE CHAIN — the value a spawn is
- * stamped with when no sheet pick and no identity default outranked it.
- *
- * ⚠ **IT EXISTS BECAUSE THE CALL SITES USED TO ALIAS THE STORED ID THROUGH THE DEFAULT RUNTIME'S
- * TABLE** (`sessionModel.aliasForModelId(channelPrefs.getLaunchModel(id))`). That was correct while
- * only one roster could ever be stored; now that a Codex id can be, aliasing it answers the default
- * runtime's "no pick" member and the operator's choice is silently dropped. Resolving it HERE,
- * against the channel's own runtime, is what keeps one rule in one place across the three launch
- * lanes — `session-launch-op.js › launchFromButton`, `trigger.js › launchResponderSession` and the
- * orchestrator directive lane.
- *
- * ⚠ **IT ENDS THE CHAIN RATHER THAN STEPPING ASIDE, AND THAT IS THE EXPRESSION IT REPLACED, VERB
- * FOR VERB.** `chainModel`'s `''` means "keep going" (F-285) and belongs to the links ABOVE this
- * one — an identity naming a model this build does not know must fall THROUGH to the channel. This
- * is the bottom link: when nothing is stored it answers the runtime's own "no pick" member
- * (`descriptor.models.defaultMeansAbsent`), which is what every spawn got before a picker existed.
- */
-function getLaunchModelLink(channelId) {
-  const sel = getLaunchSelection(channelId);
-  const picked = selection.activeRecord(ctx(), sel).model || '';
-  return runtimeRegistry.capability.launchModelPick(
-    runtimeRegistry.descriptorFor(sel.runtime), picked
-  );
-}
+// ── ⚠ `getLaunchModel` / `getLaunchModelLink` ARE DELETED (2026-09-23, Samuel: *"We don't need a
+// pin model in the settings"*) ─────────────────────────────────────────────────────────────────
+//
+// They were the CHANNEL link of every launch lane's model chain. A launch's model is now the
+// launcher's explicit pick, else the identity's, else the RUNTIME's own default
+// (`runtime/launch-default.js`, applied once in `session-launch.js › launch`), so there is no
+// channel link to read — and no "the channel's stored model is no longer offered" refusal either.
 
 module.exports = {
   // ⚠ `getAutoSend` / `setAutoSend` REMOVED 2026-09-06 (item 8) — see the block above. The one
@@ -464,6 +425,4 @@ module.exports = {
   setLaunchPosture,
   windowlessMessageMode,
   launchStartModes,
-  getLaunchModel, // 2026-08-22: the model half, readable WITHOUT the permission pair
-  getLaunchModelLink, // U5: the same pick, resolved as a launch-chain link on its OWN runtime
 };

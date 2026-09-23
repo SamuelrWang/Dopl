@@ -392,9 +392,10 @@ test("every adapter declares a usable model PICK RULE, and a malformed one is RE
       // ⚠ A SHAPE CHECK REPLACES MEMBERSHIP ON A LIVE ROSTER, AND IT IS A GATE: the stored value
       // becomes a launch argument, so the alphabet is what stands in for the list.
       assert.ok(typeof pick.pattern === "string" && pick.pattern, `${descriptor.id}: open roster, no pattern`);
-      assert.equal(capability.storeModelPick(descriptor, "a; rm -rf /"), "", `${descriptor.id}: shell metacharacters`);
-      assert.equal(capability.storeModelPick(descriptor, "a b"), "", `${descriptor.id}: whitespace`);
-      assert.equal(capability.storeModelPick(descriptor, "x".repeat(200)), "", `${descriptor.id}: length`);
+      // ⚠ ASKED OF THE STAMP SINCE 2026-09-23 (`storeModelPick` is deleted with the stored model).
+      assert.equal(capability.launchModelPick(descriptor, "a; rm -rf /"), pick.absent, `${descriptor.id}: shell metacharacters`);
+      assert.equal(capability.launchModelPick(descriptor, "a b"), pick.absent, `${descriptor.id}: whitespace`);
+      assert.equal(capability.launchModelPick(descriptor, "x".repeat(200)), pick.absent, `${descriptor.id}: length`);
     }
     // ⚠ AND FAIL-CLOSED IN BOTH DIRECTIONS on every adapter: nothing this runtime cannot vouch
     // for is ever stored, and a launch that cannot resolve one lands on the runtime's OWN "no pick"
@@ -406,7 +407,6 @@ test("every adapter declares a usable model PICK RULE, and a malformed one is RE
     // resolved one step later by the adapter's launch spec. Collapsing them would end every chain
     // at its first link.
     for (const junk of [null, undefined, 7, {}, [], "   "]) {
-      assert.equal(capability.storeModelPick(descriptor, junk), "", `${descriptor.id}: ${JSON.stringify(junk)}`);
       assert.equal(capability.launchModelPick(descriptor, junk), pick.absent,
         `${descriptor.id}: ${JSON.stringify(junk)}`);
     }

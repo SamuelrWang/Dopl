@@ -13,8 +13,8 @@
  *
  * ⚠ **THE PERSISTENCE SEMANTICS ARE THE THING THAT DIFFERS, AND THEY ARE NOT SYMMETRICAL:**
  *   · CHANNEL — an OWN-KEY PATCH. A key the caller did not send is left alone, `''` is a real
- *     clear. Many surfaces write one channel's record, so a control with no model concept must
- *     not wipe the operator's pick (the 2026-09-05 failure, `channel-prefs.js`'s own rule).
+ *     clear. Many surfaces write one channel's record, so a control with no native concept must
+ *     not wipe the operator's settings (the 2026-09-05 failure, `channel-prefs.js`'s own rule).
  *   · DEFAULTS — the WHOLE RECORD, every time. It has exactly one writer (this tab), main
  *     rewrites it wholesale, and an omitted field really is "no pick".
  *
@@ -25,9 +25,9 @@
  * Settings tab nobody ever opened.
  *
  * ⚠ **A WRITE NEVER ECHOES THE REQUEST. IT RE-READS.** Main validates SOFT in three directions
- * (an unstorable model is absent, an unreadable mode floors to the adapter's narrowest, an
- * undeclared native key is dropped) and REJECTS a whole write on a bad axis value. So the
- * rendered value is always what the store actually holds — which is what the plan's *"a rejected
+ * (a `model` is ignored — none is stored since 2026-09-23 —, an unreadable mode floors to the
+ * adapter's narrowest, an undeclared native key is dropped) and REJECTS a whole write on a bad
+ * axis value. So the rendered value is always what the store actually holds — which is what the plan's *"a rejected
  * native write re-adopts stored values and does not echo the rejected request"* asks for, made
  * structural rather than remembered. Nothing here is optimistic; {@link LaunchSelectionState.busy}
  * is what the controls go inert on.
@@ -49,7 +49,6 @@ import {
 } from "../lib/launch-selection";
 import type { ModelCatalog, ModelCatalogs } from "../lib/model-catalog";
 import { useRuntimeCatalogs } from "./use-runtime-catalogs";
-import { hasModelKey } from "../lib/permission-modes";
 import {
   descriptorFor,
   hasRuntimeKey,
@@ -76,7 +75,6 @@ export type LaunchSelectionScope =
 export interface LaunchSelectionPatch {
   runtime?: string;
   tools?: string;
-  model?: string;
   messages?: string;
   /** ⚠ THE WHOLE BAG FOR THE TARGET RUNTIME, never one key — main replaces `native` wholesale
    *  (`launch-selection.js › normalizeRuntimeRecord` merges FIELDS, not the map inside one). */
@@ -97,8 +95,6 @@ export interface LaunchSelectionState {
   supported: boolean;
   /** This desktop has a runtime concept (`runtime-capability.ts › hasRuntimeKey`). */
   runtimeSupported: boolean;
-  /** This desktop understands the record's model field (`permission-modes.ts › hasModelKey`). */
-  modelSupported: boolean;
   runtimes: ReadonlyArray<RuntimeDescriptor>;
   connected: ReadonlyArray<string>;
   connectedKnown: boolean;
@@ -198,7 +194,6 @@ export function useLaunchSelection(scope: LaunchSelectionScope): LaunchSelection
   // ⚠ LATCHED TO TRUE, NEVER BACK — yanking a control out from under a mid-pick operator is
   // worse than one stale row. Probed off the RAW reply, before any normalizer, exactly as
   // `use-channel-launch-posture.ts` does it.
-  const [modelSupported, setModelSupported] = useState(false);
   const [runtimeSupported, setRuntimeSupported] = useState(false);
   const [connectedKnown, setConnectedKnown] = useState(false);
   /**
@@ -219,7 +214,6 @@ export function useLaunchSelection(scope: LaunchSelectionScope): LaunchSelection
   const adopt = useCallback(
     (next: unknown) => {
       setReply(next ?? null);
-      if (hasModelKey(next)) setModelSupported(true);
       if (hasRuntimeKey(next)) setRuntimeSupported(true);
       if (Array.isArray((next as { connected?: unknown } | null)?.connected)) {
         setConnectedKnown(true);
@@ -300,10 +294,9 @@ export function useLaunchSelection(scope: LaunchSelectionScope): LaunchSelection
       // other, rather than pretending one vocabulary covers every adapter.
       const active = normalizeRuntimeId(runtimes, runtimeId) || defaultRuntime;
       if (active !== runtime) return EMPTY_RECORD;
-      const legacy = reply as { tools?: unknown; model?: unknown } | null;
+      const legacy = reply as { tools?: unknown } | null;
       const out: RuntimeRecord = {};
       if (typeof legacy?.tools === "string" && legacy.tools) out.tools = legacy.tools;
-      if (typeof legacy?.model === "string" && legacy.model) out.model = legacy.model;
       return out;
     },
     [defaultRuntime, read.supported, reply, runtime, runtimes, selection]
@@ -319,7 +312,7 @@ export function useLaunchSelection(scope: LaunchSelectionScope): LaunchSelection
             { ...patch }
           : // ⚠ THE WHOLE RECORD. `agent-defaults.js › normalizeDefaults` branches on `v == null`
             // and reads a record WITHOUT it as a pre-U5 legacy one — which migrates the single
-            // global `tools`/`model` into the DEFAULT runtime's slot and drops every other
+            // global `tools` into the DEFAULT runtime's slot and drops every other
             // runtime's settings. Sending `v` and `byRuntime` is what makes Decision #2 true at
             // this scope: switch away and back and both picks are still there.
             wholeDefaultsRecord(selection, read.supported, patch, {
@@ -358,7 +351,6 @@ export function useLaunchSelection(scope: LaunchSelectionScope): LaunchSelection
     bridge,
     supported: read.supported,
     runtimeSupported,
-    modelSupported,
     runtimes,
     connected,
     connectedKnown,
@@ -386,8 +378,8 @@ export function useLaunchSelection(scope: LaunchSelectionScope): LaunchSelection
  * ⚠ **THE PATCH'S FIELDS LAND ON THE RUNTIME THE PATCH SELECTS**, not on the one selected before
  * it — `launch-selection.js › patchSelection`'s rule, which has to be true on this side as well
  * because this scope assembles the record rather than patching it. A single write that switches
- * runtime AND sets that runtime's model is one operation, and splitting it would file the new
- * model under the old runtime.
+ * runtime AND sets that runtime's sandbox is one operation, and splitting it would file the new
+ * setting under the old runtime.
  * ⚠ **EVERY OTHER RUNTIME'S RECORD IS CARRIED THROUGH UNTOUCHED.** That is Decision #1: Claude's
  * and Codex's settings sit side by side and neither is translated, cleared or reinterpreted when
  * the other is edited.
@@ -407,7 +399,6 @@ function wholeDefaultsRecord(
   const byRuntime: Record<string, RuntimeRecord> = { ...selection.byRuntime };
   const next: RuntimeRecord = { ...current.record };
   if (patch.tools !== undefined) next.tools = patch.tools;
-  if (patch.model !== undefined) next.model = patch.model;
   if (patch.native !== undefined) next.native = patch.native;
   byRuntime[target] = next;
   return {
@@ -422,6 +413,5 @@ function wholeDefaultsRecord(
     // ignored while `v` parses; without them a desktop older than U5 reading this store would
     // find no pair at all.
     tools: next.tools ?? "",
-    model: next.model ?? "",
   };
 }

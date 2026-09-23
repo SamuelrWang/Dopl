@@ -68,8 +68,6 @@ function boot() {
     if (id === "./channel-prefs") {
       return {
         launchStartModes: () => ({ tools: "manual", messages: "auto_inbound" }),
-        getLaunchModel: () => null,
-        getLaunchModelLink: () => "", // U5
         isIdentityApproved: () => true,
       };
     }

@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 /**
- * WHICH MODEL AN AGENT RUNS ON — the vocabulary, the DURABLE row on the Settings
- * tab, the LIVE selector on a running agent, and the effective-model chip
- * (Samuel, 2026-08-22).
+ * WHICH MODEL AN AGENT RUNS ON — the vocabulary, the ABSENCE of a durable row on
+ * the Settings tab (deleted 2026-09-23), the LIVE selector on a running agent, and
+ * the effective-model chip (Samuel, 2026-08-22).
  *
  * Its own file rather than an addition to `settings-tab.test.tsx` (410 lines) or
  * `agents-tab.test.tsx` (456 of the 500-line cap): the feature crosses three
@@ -41,7 +41,6 @@ import {
   normalizeAgentModel,
 } from "../lib/agent-models";
 import {
-  hasModelKey,
   normalizePermissionPreset,
   DEFAULT_PERMISSION_PRESET,
 } from "../lib/permission-modes";
@@ -215,58 +214,14 @@ describe("the model vocabulary — one map, four surfaces", () => {
     );
   });
 });
-
 /**
- * THE CAPABILITY PROBE. The model rides the EXISTING posture ops, so there is no
- * bridge member to feature-detect — the signal is whether the get reply carried
- * the KEY.
+ * 🔓 **THE DURABLE MODEL ROW IS DELETED (2026-09-23, Samuel, verbatim):** *"We don't need a pin
+ * model in the settings … either the agent will choose it, or the agent is launched by another
+ * agent … or you can just have it go to the default model."* Its capability probe (`hasModelKey`)
+ * went with it. What is pinned now is the ABSENCE, on a desktop that would once have drawn it.
  */
-describe("hasModelKey — absent is a different fact from null", () => {
-  it("says YES for an explicit null and NO for a missing key", () => {
-    expect(hasModelKey({ tools: "manual", messages: "ask", model: null })).toBe(true);
-    expect(hasModelKey({ tools: "manual", messages: "ask", model: "claude-opus-5" })).toBe(
-      true
-    );
-    expect(hasModelKey({ tools: "manual", messages: "ask" })).toBe(false);
-    expect(hasModelKey(null)).toBe(false);
-    expect(hasModelKey("nope")).toBe(false);
-  });
-
-  /**
-   * ⚠ THE MODEL IS NOT PART OF THE WHOLE-PAIR REJECTION. Both AXES must be known
-   * or the posture is refused entirely — but a reply with two good axes and no
-   * model is valid from every desktop older than the field, and rejecting it
-   * would blank the permission controls on all of them.
-   */
-  it("keeps a two-axis reply valid with no model, and carries one when present", () => {
-    expect(normalizePermissionPreset({ tools: "auto", messages: "ask" })).toEqual({
-      tools: "auto",
-      messages: "ask",
-    });
-    expect(
-      normalizePermissionPreset({ tools: "auto", messages: "ask", model: "claude-opus-5" })
-    ).toEqual({ tools: "auto", messages: "ask", model: "claude-opus-5" });
-    // An explicit null survives as null — it is the "default applies" answer.
-    expect(
-      normalizePermissionPreset({ tools: "auto", messages: "ask", model: null })
-    ).toEqual({ tools: "auto", messages: "ask", model: null });
-    // A half-valid PAIR is still refused whole, model or no model.
-    expect(
-      normalizePermissionPreset({ tools: "nonsense", messages: "ask", model: "x" })
-    ).toBeNull();
-  });
-
-  /** ⚠ The default preset omits the key so it cannot be mistaken for a probe
-   *  that ran — it also stands in for "could not read the posture at all". */
-  it("leaves the key off the default preset", () => {
-    expect(hasModelKey(DEFAULT_PERMISSION_PRESET)).toBe(false);
-  });
-});
-
-describe("the DURABLE model row on the Settings tab", () => {
-  const view = (over: Parameters<typeof ChannelAgentSettingsView>[0] extends never
-    ? never
-    : Partial<Parameters<typeof ChannelAgentSettingsView>[0]> = {}) =>
+describe("NO model row on the Settings tab (2026-09-23)", () => {
+  const view = (over: Partial<Parameters<typeof ChannelAgentSettingsView>[0]> = {}) =>
     render(
       <ChannelAgentSettingsView
         profile="full"
@@ -276,102 +231,34 @@ describe("the DURABLE model row on the Settings tab", () => {
         postureBusy={false}
         onChangePosture={noop}
         folder={null}
-        selection={launchSelectionStub()}
+        selection={launchSelectionStub({
+          defaultRuntime: "",
+          catalogs: { "": defaultRuntimeFallbackCatalog("") },
+        })}
         {...over}
       />
     );
 
-  const modelSelect = () => screen.queryByLabelText("Model for agents you launch");
-
-  /** The DEFAULT runtime's frozen table — the older-desktop lane, which is what these cases are
-   *  about. ⚠ `""` is the wire's own spelling of "the default adapter". */
-  const claudeSelection = (model?: string) =>
-    launchSelectionStub({
-      modelSupported: true,
-      defaultRuntime: "",
-      catalogs: { "": defaultRuntimeFallbackCatalog("") },
-      byRuntime: model ? { "": { model } } : {},
-    });
-
-  /**
-   * ⚠ ABSENT, NOT DISABLED. An older main DROPS the field on write, so a live row
-   * would let the operator pick Opus, report success, and launch every agent on
-   * the default with nothing anywhere saying so.
-   */
-  it("renders NO row on a desktop that does not know the field", () => {
-    view({ modelSupported: false });
-    expect(modelSelect()).toBeNull();
+  it("renders no Model control and no Reasoning-effort control, even with a catalog to offer", () => {
+    view();
+    expect(screen.queryByLabelText("Model for agents you launch")).toBeNull();
+    expect(screen.queryByLabelText(/Reasoning effort for agents you launch/)).toBeNull();
+    // …while the rows that stay, stay.
+    expect(screen.getByLabelText("Messaging for agents you launch")).toBeTruthy();
   });
 
-  it("renders the row when the desktop reported the field", () => {
-    view({ selection: claudeSelection() });
-    expect(modelSelect()).not.toBeNull();
-  });
-
-  /** ⚠ It is gated on the POSTURE too: no bridge, no posture group at all. */
-  it("renders no row outside the desktop shell, however supported it claims to be", () => {
-    view({ posture: null, selection: claudeSelection() });
-    expect(modelSelect()).toBeNull();
-  });
-
-  /**
-   * ⚠ **THIS READ "shows Default for an unset model" UNTIL 2026-09-06.** The empty
-   * option is deleted (Samuel's ruling), so an unset channel BACK-FILLS through
-   * `agentModelSelection` and the row names the model it will actually get rather
-   * than a word for the absence. The record still stores nothing until somebody
-   * picks — that half is pinned by the write case below.
-   */
-  it("back-fills an unset model to Sonnet, and shows the full label for a set one", () => {
-    view({ selection: claudeSelection() });
-    expect(screen.getByLabelText("Model for agents you launch").textContent).toContain(
-      "Sonnet 5"
-    );
-    cleanup();
-    view({ selection: claudeSelection("claude-opus-5") });
-    expect(screen.getByLabelText("Model for agents you launch").textContent).toContain(
-      "Opus 5"
-    );
-  });
-
-  /**
-   * ⚠ **THE `null` HALF OF THIS CASE IS DELETED WITH THE "Default" OPTION**
-   * (2026-09-06). There is no menu item that clears the record any more — every
-   * option is a real model — so what is left to pin is that picking one writes
-   * its id. `normalizeAgentModel` still answers `null` for an absent value and is
-   * pinned above; nothing on this surface can reach that state by clicking.
-   */
-  it("writes an id for the model the operator picks", () => {
-    const selection = claudeSelection("claude-opus-5");
-    view({ selection });
-    fireEvent.click(screen.getByLabelText("Model for agents you launch"));
-    act(() => {
-      fireEvent.click(screen.getByRole("menuitem", { name: /^Fable 5/ }));
-    });
-    expect(selection.update).toHaveBeenCalledWith({ model: "claude-fable-5" });
-    vi.mocked(selection.update).mockClear();
-    fireEvent.click(screen.getByLabelText("Model for agents you launch"));
-    act(() => {
-      fireEvent.click(screen.getByRole("menuitem", { name: /^Sonnet 5/ }));
-    });
-    expect(selection.update).toHaveBeenCalledWith({ model: "claude-sonnet-5" });
-    // 🔒 AND NO OPTION CLEARS THE RECORD. The menu is the four real models; a
-    // "Default" item here would be the sentinel the ruling removed, back as a pick.
-    expect(screen.queryByRole("menuitem", { name: /^Default/ })).toBeNull();
-  });
-
-  /** The posture write is one flight for all three controls. */
-  it("goes inert with the other posture selects while a write is in flight", () => {
-    view({
-      selection: launchSelectionStub({
-        modelSupported: true,
-        defaultRuntime: "",
-        catalogs: { "": defaultRuntimeFallbackCatalog("") },
-        busy: true,
-      }),
+  it("reads a two-axis reply as the pair, and ignores a `model` an older desktop still sends", () => {
+    expect(normalizePermissionPreset({ tools: "auto", messages: "ask" })).toEqual({
+      tools: "auto",
+      messages: "ask",
     });
     expect(
-      (screen.getByLabelText("Model for agents you launch") as HTMLButtonElement).disabled
-    ).toBe(true);
+      normalizePermissionPreset({ tools: "auto", messages: "ask", model: "claude-opus-5" })
+    ).toEqual({ tools: "auto", messages: "ask" });
+    // A half-valid PAIR is still refused whole.
+    expect(
+      normalizePermissionPreset({ tools: "nonsense", messages: "ask", model: "x" })
+    ).toBeNull();
   });
 });
 

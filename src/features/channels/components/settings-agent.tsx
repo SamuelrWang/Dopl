@@ -2,7 +2,7 @@
 
 /**
  * Channels — the SETTINGS tab's AGENT half: the durable launch posture (both
- * permission axes and, since 2026-08-22, the MODEL), the durable per-channel tool
+ * permission axes; the MODEL rode it 2026-08-22..09-23), the durable per-channel tool
  * profile, and the desktop-only working folder and auto-send rows. All of it
  * INLINE, and all of it DURABLE.
  *
@@ -170,22 +170,13 @@ export interface ChannelAgentSettingsViewProps {
    * here would use. `settings-agent-launch-rows.tsx` is where all four are read
    * and where the §3.1/§3.2 rules over them are stated.
    *
-   * ⚠ `runtimeSupported` IS A SEPARATE GATE FROM `posture` BEING NON-NULL, for
-   * `modelSupported`'s reason: the two axes exist on desktops the runtime does
-   * not, and false renders NO runtime row rather than a greyed one.
+   * ⚠ `runtimeSupported` IS A SEPARATE GATE FROM `posture` BEING NON-NULL: the
+   * two axes exist on desktops the runtime does not, and false renders NO runtime
+   * row rather than a greyed one.
    */
   selection?: LaunchSelectionState | null;
-  /**
-   * This desktop understands the posture record's `model` field (2026-08-22).
-   *
-   * ⚠ FALSE RENDERS NO MODEL ROW — the no-dead-rows rule (INVARIANTS §5), and
-   * here it is worse than a dead row would normally be: an older main DROPS the
-   * field, so the pick would appear to save and every launch would ignore it.
-   * ⚠ It is a SEPARATE gate from `posture` being non-null, because the two axes
-   * exist on builds the model does not. `use-channel-launch-posture.ts ›
-   * ChannelLaunchPostureState.modelSupported` is where it is probed.
-   */
-  modelSupported?: boolean;
+  // ⚠ `modelSupported` STOOD HERE AND IS DELETED (2026-09-23, Samuel: "We don't
+  // need a pin model in the settings") — there is no Model row on this tab.
   /** The working folder, or null outside the desktop shell (row absent). */
   folder: AgentFolderState | null;
   // ⚠ `autoSend` IS DELETED FROM THIS CONTRACT (2026-09-06, item 8). It was the
@@ -261,7 +252,7 @@ export function ChannelAgentSettingsView({
       <PanelHeading title="Agent Settings" />
       <div className="flex flex-col gap-1 px-3.5">
         {/* THE DURABLE LAUNCH POSTURE — the runtime, both permission axes and
-            the model, as ONE group. Absent entirely in a plain browser: no
+            its containment setting, as ONE group. Absent entirely in a plain browser: no
             bridge, no dead rows.
 
             ⚠ THE GROUP AND ITS WHOLE ARGUMENT MOVED TO

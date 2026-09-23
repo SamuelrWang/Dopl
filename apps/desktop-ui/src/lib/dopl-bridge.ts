@@ -171,12 +171,14 @@ export interface DoplBridge {
      * exactly one call site (`main/session-ipc-ops.js`'s `sessions:launch`). The
      * arm it replaced is deleted; do not reintroduce a second permission record.
      */
+    // ⚠ NO `model` ON EITHER SINCE 2026-09-23 (Samuel: "We don't need a pin model in the
+    // settings") — main stores no channel model and its reply carries no `model` key.
     getLaunchPosture?(
       channelId: string
-    ): Promise<{ tools: string; messages: string; model?: string } | null>;
+    ): Promise<{ tools: string; messages: string } | null>;
     setLaunchPosture?(
       channelId: string,
-      preset: { tools: string; messages: string; model?: string }
+      preset: { tools: string; messages: string }
     ): Promise<{ ok: boolean }>;
     // ⚠ `getAutoSend` / `setAutoSend` REMOVED 2026-09-06 (item 8). Auto-send was a
     // SECOND control over the same axis as the launch posture's `messages`, and the
@@ -206,14 +208,12 @@ export interface DoplBridge {
       tools: string;
       messages: string;
       agentChain?: boolean;
-      model?: string | null;
       runtime?: string;
     } | null>;
     setAgentDefaults?(defaults: {
       tools: string;
       messages: string;
       agentChain: boolean;
-      model?: string | null;
       runtime: string;
     }): Promise<{ ok: boolean }>;
     applyAgentDefaults?(

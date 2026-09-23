@@ -135,8 +135,8 @@ export function useLaunchDialogRuntime(
    *
    * ⚠ **DISPLAY ONLY, unchanged since 2026-09-06**: `panel.model` stays `''` until the operator
    * touches the control, so an untouched dialog puts no model on the wire and main's precedence
-   * chain stays the one authority. A row that stamped its resolved id into the panel would turn a
-   * channel's setting into a per-spawn pick that then stops following the setting.
+   * chain stays the one authority. A row that stamped its resolved id into the panel would turn
+   * the identity's model (or the runtime default) into a per-spawn pick that stops following it.
    */
   const modelRow = useMemo(
     () =>
@@ -147,16 +147,14 @@ export function useLaunchDialogRuntime(
         selected: effectiveRuntime,
         own: panel.model,
         fromIdentity: identities.find((t) => t.id === panel.identityId)?.model ?? "",
-        // ⚠ ONLY WHEN THIS DESKTOP UNDERSTANDS THE FIELD. A build that drops `model` on write has
-        // no remembered pick to honour, and showing one would name a value no launch reads.
-        remembered: selection.modelSupported ? record.model ?? "" : "",
+        // ⚠ NO `remembered` CHANNEL MODEL SINCE 2026-09-23 (Samuel: "We don't need a pin model in
+        // the settings") — the row falls from the identity's model straight to the runtime's
+        // default, which is what main's launch does.
       }),
     [
       runtimes,
       selection.catalogs,
-      selection.modelSupported,
       catalog,
-      record,
       effectiveRuntime,
       panel.model,
       panel.identityId,
@@ -223,8 +221,8 @@ export function useLaunchDialogRuntime(
    * ids survive because the tree's standing rule is that an unknown model FALLS BACK rather than
    * being refused (F-5), and a desktop that cannot read a catalog must stay launchable.
    * ⚠ IT CLEARS TO `''` RATHER THAN RE-POINTING. `''` is "no per-spawn pick", so the row falls to
-   * the new runtime's REMEMBERED model and then to its platform default — the sentence the plan
-   * asks for, made by doing nothing rather than by choosing for the operator.
+   * the identity's model and then to the new runtime's own default (there is no remembered channel
+   * model since 2026-09-23), made by doing nothing rather than by choosing for the operator.
    */
   useEffect(() => {
     if (!panel.open || !panel.model) return;

@@ -78,7 +78,7 @@ const asNative = (native) => {
   }
   return out;
 };
-// ⚠ THE RUNTIME-KEYED HALF OF A LAUNCH SELECTION — `{ <runtimeId>: { tools?, model?, native? } }`. Its ONE producer is the profile popup's Agents tab, whose record `main/agent-defaults.js › seedChannel` copies into a NEW channel whole; before U5 the seed copied one global model and lost the operator's Codex pick entirely. Each field is forwarded only on an OWN KEY, because absence and `''` are different facts in that record.
+// ⚠ THE RUNTIME-KEYED HALF OF A LAUNCH SELECTION — `{ <runtimeId>: { tools?, native? } }`. Its ONE producer is the profile popup's Agents tab, whose record `main/agent-defaults.js › seedChannel` copies into a NEW channel whole. Each field is forwarded only on an OWN KEY, because absence and `''` are different facts in that record. ⚠ NO `model` SINCE 2026-09-23 — the stored model is deleted (Samuel: "We don't need a pin model in the settings"), so a renderer that still sends one is dropped here and ignored by main.
 const asRuntimeRecords = (byRuntime) => {
   const out = {};
   if (!byRuntime || typeof byRuntime !== 'object' || Array.isArray(byRuntime)) return out;
@@ -86,7 +86,6 @@ const asRuntimeRecords = (byRuntime) => {
     const record = byRuntime[id] || {};
     out[String(id)] = {
       ...(record.tools !== undefined ? { tools: asMode(record.tools) } : {}),
-      ...(record.model !== undefined ? { model: asMode(record.model) } : {}),
       ...(record.native !== undefined ? { native: asNative(record.native) } : {}),
     };
   }
@@ -169,13 +168,8 @@ contextBridge.exposeInMainWorld('dopl', {
         preset: {
           ...(preset && preset.tools !== undefined ? { tools: asMode(preset.tools) } : {}), // ⚠ OWN-KEY SINCE 2026-09-21 (U8), AND THE UNCONDITIONAL VERSION HAD BECOME A REFUSAL. `channels:setLaunchPosture` hands the payload to `main/channel-prefs.js › setLaunchSelection`, which is own-key throughout and REJECTS THE WHOLE WRITE when `tools` carries a value the SELECTED runtime does not offer. Coercing an absent field to `''` therefore turned every runtime-only write into `{tools:'', messages:''}` — a rejected write, nothing stored, and the row reverting with no sentence. The model and runtime keys one line below have been own-key since 2026-09-05 for the neighbouring reason; this is the same rule finally applied to the two axes.
           ...(preset && preset.messages !== undefined ? { messages: asMode(preset.messages) } : {}),
-          // THE MODEL JOINED THE POSTURE ON 2026-08-22 (Samuel's ruling) AND IS NOT A THIRD AXIS.
-          // It rides the same record because it is the same decision — what MY agent starts as when
-          // I press Launch — but it grants nothing and reaches no gate. Main validates it against
-          // `session-model.js › MODEL_IDS` and an unknown value is simply ABSENT (the SDK default),
-          // where an unknown value on either AXIS rejects the whole write.
-          ...(preset && preset.model !== undefined ? { model: asMode(preset.model) } : {}), // ⚠ THE KEY IS FORWARDED ONLY WHEN THE CALLER SUPPLIED ONE — a SPREAD, not `asMode(...)` unconditionally (2026-09-05) — for the RUNTIME's exact reason one line below, on the axis the runtime copied it from. `''` is a REAL VALUE here too: it is the "Default" row, which CLEARS the channel's pick. Coercing an ABSENT field into it made every posture write from a surface that does not carry a model — an older SPA, a Permissions-only or Sends-only control, anything that predates this field — silently clear the pick, so the operator's chosen model stopped reaching the launch with nothing anywhere saying so. A launch sends NO model unless one was explicitly picked, and an absent key must never be how a pick disappears. Main's own-key test is the other half of the same rule (`main/channel-prefs.js › postureInto` carries the stored model through a write that does not mention it); the two must agree or the rule has a hole at whichever end forgets.
-          ...(preset && preset.native !== undefined ? { native: asNative(preset.native) } : {}), // ⚠ 2026-09-21 (U8) — THE SELECTED RUNTIME'S NATIVE LAUNCH SETTINGS, on the model key's exact own-key discipline and for its exact reason: `{}` is a real "clear them all" and an absent key must leave them alone. It lands on the record of whichever runtime the same patch selects (`main/launch-selection.js › patchSelection`), so one write may switch runtime AND set that runtime's sandbox.
+          // ⚠ THE `model` KEY IS NO LONGER FORWARDED (2026-09-23, Samuel: "We don't need a pin model in the settings"). The channel's stored model is deleted; a launch's model is the launcher's pick, the identity's, or the runtime default (`main/runtime/launch-default.js`).
+          ...(preset && preset.native !== undefined ? { native: asNative(preset.native) } : {}), // ⚠ 2026-09-21 (U8) — THE SELECTED RUNTIME'S NATIVE LAUNCH SETTINGS, on the own-key discipline and for its reason: `{}` is a real "clear them all" and an absent key must leave them alone. It lands on the record of whichever runtime the same patch selects (`main/launch-selection.js › patchSelection`), so one write may switch runtime AND set that runtime's sandbox.
           ...(preset && preset.runtime !== undefined ? { runtime: asMode(preset.runtime) } : {}), // ⚠ 2026-08-31 (port wave D) — WHICH AGENT RUNTIME this channel's agents launch on. It rides this record for the MODEL's exact reason and with the model's exact discipline: same decision (what MY agent starts as when I press Launch), grants nothing, reaches no gate, and an id main does not have REGISTERED clears the key rather than being stored (`main/channel-runtime.js › normalizeRuntimeId`) — where an unknown value on either AXIS rejects the whole write. The read answers `runtime` + the frozen `runtimes` descriptor table, so the SPA feature-probes an OWN KEY exactly as it does for `model` and renders NO row on a desktop that has no runtime concept. ⚠ THE KEY IS FORWARDED ONLY WHEN THE CALLER SUPPLIED ONE — a SPREAD, not `asMode(...)` unconditionally — because `''` is a REAL VALUE here (reset to the default runtime) and coercing an absent field into it would make every posture write from a surface that does not know about runtimes silently clear the channel's pick. Main's own-key test is the other half of the same rule; the two must agree or the rule has a hole at whichever end forgets.
         },
       }),
@@ -191,8 +185,7 @@ contextBridge.exposeInMainWorld('dopl', {
           tools: asMode(defaults && defaults.tools),
           messages: asMode(defaults && defaults.messages),
           agentChain: !!(defaults && defaults.agentChain),
-          // ⚠ COERCED UNCONDITIONALLY HERE, UNLIKE `setLaunchPosture` ABOVE, AND THE ASYMMETRY IS THE RULE. That op forwards `model` / `runtime` only on an own-key because MANY surfaces write one channel's posture and a surface with no model concept must not clear the operator's pick. This record has exactly ONE writer — the profile popup's Agents tab — which always sends the whole record, so an absent field really is "no pick" and `''` really is "clear it". Main re-validates both SOFT either way.
-          model: asMode(defaults && defaults.model),
+          // ⚠ COERCED UNCONDITIONALLY HERE, UNLIKE `setLaunchPosture` ABOVE, AND THE ASYMMETRY IS THE RULE. That op forwards `runtime` only on an own-key because MANY surfaces write one channel's posture. This record has exactly ONE writer — the profile popup's Agents tab — which always sends the whole record, so an absent field really is "no pick" and `''` really is "clear it". Main re-validates it SOFT either way. (No `model` since 2026-09-23.)
           runtime: asMode(defaults && defaults.runtime),
           // ⚠ 2026-09-21 (U8) — THE VERSIONED, RUNTIME-KEYED HALF. `main/agent-defaults.js › normalizeDefaults` branches on `v == null`: WITHOUT it the record is read as a pre-U5 legacy one and its single global `tools`/`model` are migrated into the DEFAULT runtime's slot, so every write from this tab ERASED the operator's Codex model and sandbox. With it the record is read as a selection and both runtimes' settings survive — Decisions #1 and #2, which is the whole of U5's contract. Own-key so a caller that predates the field still writes the legacy shape it means.
           ...(defaults && defaults.v !== undefined ? { v: Number(defaults.v) } : {}),
@@ -372,8 +365,8 @@ contextBridge.exposeInMainWorld('dopl', {
     // ⚠ THE LIVE MODEL SWITCH (2026-08-22, Samuel's model-selection ruling). It takes the ID
     // vocabulary a UI offers (`main/session-model.js › MODEL_IDS`); main coerces against that
     // frozen list and converts to the argv-safe ALIAS, so an unknown string CLEARS the override
-    // rather than reaching a child process. It moves ONE live session and records the pick; the
-    // per-channel record governing the NEXT spawn is `channels.setLaunchPosture`'s `model` field.
+    // rather than reaching a child process. It moves ONE live session and records the pick on that
+    // session only — there is no per-channel model for the NEXT spawn (deleted 2026-09-23).
     setModel: (channelId, taskId, model, agentId) => ipcRenderer.invoke('sessions:setModel',
       { channelId: asId(channelId), taskId: asId(taskId), model: asMode(model), agentId: asId(agentId) }),
 

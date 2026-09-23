@@ -88,8 +88,8 @@ function consentRow(state: {
 
 export function ChannelAgentSettings(props: ChannelAgentSettingsProps) {
   // ⚠ **THE VERSIONED, RUNTIME-KEYED RECORD SINCE 2026-09-21 (U8), NOT THE LEGACY PAIR.**
-  // `useChannelLaunchPosture` reads `{tools, messages, model}` — the SELECTED runtime's three
-  // fields — which cannot express the one thing this tab is now about: Claude's and Codex's
+  // `useChannelLaunchPosture` reads `{tools, messages}` — the SELECTED runtime's pair — which
+  // cannot express the one thing this tab is now about: Claude's and Codex's
   // settings sitting side by side, untranslated (Decisions #1 and #2). It also rewrote the whole
   // pair on every write, so a runtime switch re-sent the OLD runtime's `accept_edits` under the
   // NEW runtime and `patchRejections` refused the write with nothing on screen saying why.
@@ -123,15 +123,9 @@ export function ChannelAgentSettings(props: ChannelAgentSettingsProps) {
           : null
       }
       postureBusy={launchSelection.busy}
-      // ⚠ `PosturePatch.model` IS `string | null` AND THE RECORD'S IS `string`, so `null` is
-      // mapped to `''` here rather than widening the record's type: on the wire `''` IS the
-      // clear, and a second spelling of absence is a third state for a reader to get wrong.
-      onChangePosture={(patch) => {
-        const { model, ...rest } = patch;
-        void launchSelection.update(
-          model !== undefined ? { ...rest, model: model ?? "" } : rest
-        );
-      }}
+      // ⚠ NO `model` TO MAP SINCE 2026-09-23 — the patch is the pair (and runtime), passed
+      // through own-key.
+      onChangePosture={(patch) => void launchSelection.update(patch)}
       selection={launchSelection}
       folder={
         folder.bridge

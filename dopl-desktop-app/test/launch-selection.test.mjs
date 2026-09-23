@@ -120,7 +120,8 @@ test("a legacy record migrates into the DEFAULT runtime's half, UNTRANSLATED", (
   const res = sel.fromLegacy(ctx, { tools: "bypass", messages: "auto_both", model: "claude-opus-5" }, "codex");
   assert.equal(res.selection.runtime, "codex");
   assert.equal(res.selection.messages, "auto_both");
-  assert.deepEqual(res.selection.byRuntime[DEFAULT_ID], { tools: "bypass", model: "claude-opus-5" });
+  // ⚠ THE LEGACY `model` IS DROPPED (2026-09-23): no launch record stores one any more.
+  assert.deepEqual(res.selection.byRuntime[DEFAULT_ID], { tools: "bypass" });
   assert.equal(res.selection.byRuntime.codex, undefined,
     "nothing is invented for the selected runtime — there is no Codex synonym for `bypass`");
   assert.deepEqual(res.review, [], "a clean migration is SILENT; thousands take this path once");
@@ -128,18 +129,19 @@ test("a legacy record migrates into the DEFAULT runtime's half, UNTRANSLATED", (
 
 test("migration EQUIVALENCE: the legacy wire answers exactly what it answered before", () => {
   // ⚠ THE TABLE IS THE CASE. Every one of these is a record that exists on disk today, and the
-  // third column is what `channel-prefs.js › getLaunchPosture` answered for it before U5.
+  // third column is what `channel-prefs.js › getLaunchPosture` answered for it before U5 — minus
+  // `model`, which left the wire on 2026-09-23 (Samuel: "We don't need a pin model in the settings").
   const cases = [
-    [null, "", { tools: NARROW(""), messages: "ask", model: null }],
-    [{ tools: "manual", messages: "ask" }, "", { tools: "manual", messages: "ask", model: null }],
-    [{ tools: "bypass", messages: "auto_both" }, "", { tools: "bypass", messages: "auto_both", model: null }],
+    [null, "", { tools: NARROW(""), messages: "ask" }],
+    [{ tools: "manual", messages: "ask" }, "", { tools: "manual", messages: "ask" }],
+    [{ tools: "bypass", messages: "auto_both" }, "", { tools: "bypass", messages: "auto_both" }],
     [{ tools: "auto", messages: "auto_inbound", model: "claude-opus-5" }, "",
-      { tools: "auto", messages: "auto_inbound", model: "claude-opus-5" }],
+      { tools: "auto", messages: "auto_inbound" }],
     // ⚠ A CODEX-SELECTED CHANNEL IS THE ONE ROW WHOSE WIRE VALUE MOVES, AND IT IS NOT A BEHAVIOUR
     // CHANGE. `manual` is not a Codex mode, so the gate already coerced it to Codex's narrowest at
     // every decision (`capability.js › normalizeToolMode`); what changes is that the wire now says
     // so instead of saying `manual` and being coerced on the other side of the bridge.
-    [{ tools: "manual", messages: "ask" }, "codex", { tools: NARROW("codex"), messages: "ask", model: null }],
+    [{ tools: "manual", messages: "ask" }, "codex", { tools: NARROW("codex"), messages: "ask" }],
   ];
   for (const [legacy, runtime, expected] of cases) {
     const res = sel.fromLegacy(ctx, legacy, runtime);
@@ -150,44 +152,65 @@ test("migration EQUIVALENCE: the legacy wire answers exactly what it answered be
 
 // ── 3. A CODEX RECORD, WITHOUT PASSING THROUGH ANOTHER RUNTIME'S ENUMS ───────────────────────
 
-test("a Codex record accepts Codex values — mode, model and both native dimensions", () => {
+test("a Codex record accepts Codex values — its mode and its CONTAINMENT native axis", () => {
+  const res = sel.patchSelection(ctx, sel.emptySelection(), {
+    runtime: "codex",
+    tools: "on-request",
+    native: { sandbox_mode: "read-only" },
+  });
+  assert.deepEqual(res.review, []);
+  assert.deepEqual(res.selection.byRuntime.codex, {
+    tools: "on-request",
+    native: { sandbox_mode: "read-only" },
+  });
+  // ⚠ NEITHER VALUE IS A MEMBER OF THE DEFAULT RUNTIME'S VOCABULARY, which is the point: before U5
+  // the mode rejected the whole write and the sandbox had nowhere to be stored at all.
+  assert.equal(ctx.toolModeFor(DEFAULT_ID, "on-request"), NARROW(DEFAULT_ID));
+});
+
+test("NO PIN (2026-09-23): a model and a MODEL-scoped native key are DROPPED, silently", () => {
+  // Samuel: "We don't need a pin model in the settings." A launch's model is the launcher's pick,
+  // the identity's, or the runtime's default — never a stored one — and the reasoning effort is a
+  // property OF a model, so it goes with it. The CONTAINMENT axis beside it stays.
   const res = sel.patchSelection(ctx, sel.emptySelection(), {
     runtime: "codex",
     tools: "on-request",
     model: "gpt-5-codex",
     native: { sandbox_mode: "read-only", reasoningEffort: "high" },
   });
-  assert.deepEqual(res.review, []);
-  assert.deepEqual(res.selection.byRuntime.codex, {
-    tools: "on-request",
-    model: "gpt-5-codex",
-    native: { sandbox_mode: "read-only", reasoningEffort: "high" },
+  assert.deepEqual(res.review, [], "nothing narrowed, so nothing is reviewed");
+  assert.deepEqual(res.selection.byRuntime.codex, { tools: "on-request", native: { sandbox_mode: "read-only" } });
+  // A record an older build wrote WITH both reads harmlessly, with no review either.
+  const old = sel.normalizeSelection(ctx, {
+    v: 2, runtime: "codex", messages: "ask",
+    byRuntime: {
+      codex: { model: "gpt-5-codex", native: { reasoningEffort: "high" } },
+      [DEFAULT_ID]: { tools: "bypass", model: "claude-opus-5" },
+    },
   });
-  // ⚠ NONE OF THOSE THREE VALUES IS A MEMBER OF THE DEFAULT RUNTIME'S VOCABULARY, which is the
-  // point: before U5 the mode rejected the whole write, the model was silently dropped, and the
-  // sandbox had nowhere to be stored at all.
-  assert.equal(ctx.toolModeFor(DEFAULT_ID, "on-request"), NARROW(DEFAULT_ID));
-  // ⚠ 2026-09-22: the default runtime's STORAGE is shape-only now (its roster is live), so it no
-  // longer answers "not mine" for a well-formed foreign id — a malformed one is still refused. The
-  // vendor boundary moved to where it can be KNOWN: its picker offers only its own live catalog,
-  // and a launch naming an id its roster lacks is REFUSED (`claude-live-roster.test.mjs`).
-  assert.equal(ctx.storeModelFor(DEFAULT_ID, "gpt 5; codex"), "");
+  assert.deepEqual(old.review, []);
+  assert.equal(old.selection.byRuntime.codex, undefined, "a record that held only a model and an effort is no record");
+  assert.deepEqual(old.selection.byRuntime[DEFAULT_ID], { tools: "bypass" });
+  assert.equal("model" in sel.toLegacyPosture(ctx, old.selection), false, "and no model reaches the wire");
+  // A patch carrying ONLY a model is a no-op, not a clear of anything else.
+  const s = sel.patchSelection(ctx, old.selection, { model: "claude-fable-5" }).selection;
+  assert.deepEqual(s.byRuntime, old.selection.byRuntime);
 });
 
-test("Claude → Codex → Claude restores BOTH remembered model choices and BOTH native sets", () => {
+test("Claude → Codex → Claude restores BOTH remembered tool settings and native sets", () => {
   let s = sel.emptySelection();
-  s = sel.patchSelection(ctx, s, { runtime: DEFAULT_ID, tools: "bypass", model: "claude-opus-5" }).selection;
+  s = sel.patchSelection(ctx, s, { runtime: DEFAULT_ID, tools: "bypass" }).selection;
   s = sel.patchSelection(ctx, s, { runtime: "codex" }).selection;
   // The switch alone changes nothing but the pick: the new runtime starts at ITS OWN defaults.
-  assert.deepEqual(sel.toLegacyPosture(ctx, s), { tools: NARROW("codex"), messages: "ask", model: null });
+  assert.deepEqual(sel.toLegacyPosture(ctx, s), { tools: NARROW("codex"), messages: "ask" });
   s = sel.patchSelection(ctx, s, {
-    tools: "never", model: "gpt-5-codex", native: { sandbox_mode: "danger-full-access" },
+    tools: "never", native: { sandbox_mode: "danger-full-access" },
   }).selection;
   s = sel.patchSelection(ctx, s, { runtime: DEFAULT_ID }).selection;
-  assert.deepEqual(sel.toLegacyPosture(ctx, s), { tools: "bypass", messages: "ask", model: "claude-opus-5" });
+  assert.deepEqual(sel.toLegacyPosture(ctx, s), { tools: "bypass", messages: "ask" });
   assert.deepEqual(sel.activeRecord(ctx, s).native, undefined, "the runtime with no such axis gets no bag");
   s = sel.patchSelection(ctx, s, { runtime: "codex" }).selection;
-  assert.deepEqual(sel.toLegacyPosture(ctx, s), { tools: "never", messages: "ask", model: "gpt-5-codex" });
+  assert.deepEqual(sel.toLegacyPosture(ctx, s), { tools: "never", messages: "ask" });
   assert.deepEqual(sel.activeRecord(ctx, s).native, { sandbox_mode: "danger-full-access" });
 });
 
@@ -228,42 +251,36 @@ test("a renderer cannot smuggle a NATIVE key the adapter cannot spend", () => {
   assert.match(res.review.join(" "), /no native setting called "granular"/);
 });
 
-test("an unreadable CONTAINMENT value floors to the NARROWEST; a model dimension is dropped", () => {
-  // ⚠ TWO DIRECTIONS, DECLARED PER DIMENSION. The sandbox is CONTAINMENT, so an unreadable value
-  // resolves to the narrowest declared option. Reasoning effort has no narrow/wide ordering at
-  // all, so an unreadable value sets no field and the platform picks — which is what every Codex
-  // session did before a picker existed.
+test("an unreadable CONTAINMENT value floors to the NARROWEST, and says so", () => {
+  // ⚠ The sandbox is CONTAINMENT, so an unreadable value resolves to the narrowest declared option.
   const res = sel.patchSelection(ctx, sel.emptySelection(), {
-    runtime: "codex", native: { sandbox_mode: "danger-please", reasoningEffort: "maximum" },
+    runtime: "codex", native: { sandbox_mode: "danger-please" },
   });
   assert.deepEqual(res.selection.byRuntime.codex.native, { sandbox_mode: "read-only" });
   assert.match(res.review.join(" "), /narrowest/);
-  assert.match(res.review.join(" "), /platform default applies/);
 });
 
 test("a patch is OWN-KEY throughout — a write that omits a field leaves it alone", () => {
-  // ⚠ THE 2026-09-05 FAILURE, GENERALISED. A Permissions pick from a surface with no model concept
-  // rewrote the record whole and dropped the operator's stored model on the floor.
+  // ⚠ THE 2026-09-05 FAILURE, GENERALISED. A pick from a surface that knows nothing about native
+  // settings must not rewrite the record whole and drop them on the floor.
   let s = sel.patchSelection(ctx, sel.emptySelection(), {
-    runtime: "codex", tools: "never", model: "gpt-5-codex", native: { sandbox_mode: "read-only" },
+    runtime: "codex", tools: "never", native: { sandbox_mode: "read-only" },
   }).selection;
   s = sel.patchSelection(ctx, s, { messages: "auto_both" }).selection;
-  assert.deepEqual(s.byRuntime.codex, {
-    tools: "never", model: "gpt-5-codex", native: { sandbox_mode: "read-only" },
-  });
-  // ⚠ `''` IS A REAL "CLEAR IT", which is the other half of the same rule.
-  s = sel.patchSelection(ctx, s, { model: "" }).selection;
-  assert.equal(s.byRuntime.codex.model, undefined);
+  assert.deepEqual(s.byRuntime.codex, { tools: "never", native: { sandbox_mode: "read-only" } });
+  // ⚠ `{}` IS A REAL "CLEAR THEM", which is the other half of the same rule.
+  s = sel.patchSelection(ctx, s, { native: {} }).selection;
+  assert.equal(s.byRuntime.codex.native, undefined);
   assert.equal(s.byRuntime.codex.tools, "never", "…and clearing one field touches no other");
 });
 
 test("a patch's fields land on the runtime the PATCH selects, not the one selected before it", () => {
-  // A single write that switches runtime AND sets that runtime's model is one operation; splitting
-  // it would write the new model into the old runtime's record.
+  // A single write that switches runtime AND sets that runtime's sandbox is one operation;
+  // splitting it would write the new setting into the old runtime's record.
   const s = sel.patchSelection(ctx, sel.emptySelection(), {
-    runtime: "codex", model: "gpt-5-codex",
+    runtime: "codex", native: { sandbox_mode: "read-only" },
   }).selection;
-  assert.equal(s.byRuntime.codex.model, "gpt-5-codex");
+  assert.deepEqual(s.byRuntime.codex.native, { sandbox_mode: "read-only" });
   assert.equal(s.byRuntime[DEFAULT_ID], undefined);
 });
 
@@ -273,8 +290,8 @@ test("an unchanged field is RE-VALIDATED on every write, not carried untouched",
   const smuggled = {
     v: 2, runtime: "codex", messages: "ask", byRuntime: { codex: { tools: "never", native: { bogus: "x" } } },
   };
-  const s = sel.patchSelection(ctx, sel.normalizeSelection(ctx, smuggled).selection, { model: "gpt-5-codex" });
-  assert.deepEqual(s.selection.byRuntime.codex, { tools: "never", model: "gpt-5-codex" });
+  const s = sel.patchSelection(ctx, sel.normalizeSelection(ctx, smuggled).selection, { tools: "never" });
+  assert.deepEqual(s.selection.byRuntime.codex, { tools: "never" });
 });
 
 // ── 5. THE MODULE MAY NOT KNOW A VENDOR ──────────────────────────────────────────────────────

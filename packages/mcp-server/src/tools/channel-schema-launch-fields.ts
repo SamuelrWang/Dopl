@@ -31,7 +31,7 @@ export const LAUNCH_INPUT_FIELDS = {
     .describe(
       // ⚠ What happens to an id the machine's runtime does not offer is in `channel-doctrine.ts ›
       // MANAGE` (why: `SCHEMA_MAX_CHARS`) — REFUSED `no-model` since 2026-09-22, never swapped.
-      'op="manage" action="launch" (optional): the model to run the agent on. Omit it for whatever the operator set for that channel.',
+      'op="manage" action="launch" (optional): the model to run the agent on. Omit for the identity\'s model, else the default.',
     ),
 
   /**

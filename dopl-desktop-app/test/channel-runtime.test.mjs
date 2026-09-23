@@ -225,26 +225,49 @@ test("every id this record can hold belongs to an adapter that PASSED the contra
 // asked for a model it has never heard of. The record is runtime-keyed now, so the stale id is
 // unreachable from the wrong adapter by construction and clearing it would be nothing but the
 // operator losing a pick every time they look at another runtime.
+// ⚠ 2026-09-23: the stored MODEL is gone entirely (Samuel: "We don't need a pin model in the
+// settings"); what is remembered per runtime is its tool setting and its CONTAINMENT native axis.
 
-test("switching runtime and back RESTORES both remembered models — it clears neither", () => {
+test("switching runtime and back RESTORES both remembered tool settings — it clears neither", () => {
   const m = load();
   m.setChannelRuntime(CH_A, "claude");
-  m.prefs.setLaunchSelection(CH_A, { tools: "bypass", messages: "auto_both", model: "claude-opus-5" });
+  m.prefs.setLaunchSelection(CH_A, { tools: "bypass", messages: "auto_both" });
   m.setChannelRuntime(CH_A, "codex");
-  // The Claude record is untouched, and the Codex side starts at Codex's own defaults rather than
-  // inheriting a word Codex does not speak.
-  assert.equal(m.prefs.getLaunchPosture(CH_A).model, null, "no model on the runtime just switched to");
-  assert.equal(m.prefs.getLaunchPosture(CH_A).tools, "untrusted", "…and its own narrowest mode");
-  m.prefs.setLaunchSelection(CH_A, { tools: "on-request", messages: "auto_both", model: "gpt-5-codex" });
+  // The Claude record is untouched, and the Codex side starts at Codex's own narrowest mode rather
+  // than inheriting a word Codex does not speak.
+  assert.equal(m.prefs.getLaunchPosture(CH_A).tools, "untrusted", "…its own narrowest mode");
+  m.prefs.setLaunchSelection(CH_A, { tools: "on-request", messages: "auto_both" });
   m.setChannelRuntime(CH_A, "claude");
-  assert.deepEqual(m.prefs.getLaunchPosture(CH_A), { tools: "bypass", messages: "auto_both", model: "claude-opus-5" });
+  assert.deepEqual(m.prefs.getLaunchPosture(CH_A), { tools: "bypass", messages: "auto_both" });
   m.setChannelRuntime(CH_A, "codex");
-  assert.deepEqual(m.prefs.getLaunchPosture(CH_A), { tools: "on-request", messages: "auto_both", model: "gpt-5-codex" });
+  assert.deepEqual(m.prefs.getLaunchPosture(CH_A), { tools: "on-request", messages: "auto_both" });
+});
+
+test("NO PIN (2026-09-23): a `model` in a write is ignored — never stored, never refusing the rest", () => {
+  // Samuel: "We don't need a pin model in the settings." A renderer one version behind may still
+  // send the key; the write lands without it and no model reaches the wire.
+  const m = load();
+  const res = m.prefs.setLaunchSelection(CH_A, { tools: "bypass", messages: "auto_both", model: "claude-opus-5" });
+  assert.equal(res.ok, true);
+  assert.deepEqual(m.prefs.getLaunchSelection(CH_A).byRuntime.claude, { tools: "bypass" });
+  assert.equal("model" in m.prefs.getLaunchPosture(CH_A), false);
+  assert.deepEqual(m.disk.channelLaunchPosture[CH_A], { tools: "bypass", messages: "auto_both" },
+    "…and the downgrade mirror carries none either");
+  // A record an older build wrote WITH a model reads harmlessly, and the next write strips it.
+  const old = load({ disk: { channelLaunchSelection: { [CH_A]: {
+    v: 2, runtime: "codex", messages: "ask",
+    byRuntime: { codex: { tools: "never", model: "gpt-5-codex", native: { reasoningEffort: "high" } } },
+  } } } });
+  assert.deepEqual(old.prefs.getLaunchSelection(CH_A).byRuntime.codex, { tools: "never" });
+  assert.deepEqual(old.prefs.getLaunchSelectionDetail(CH_A).review, [], "dropping it is silent");
+  old.prefs.setLaunchSelection(CH_A, { messages: "auto_both" });
+  assert.deepEqual(old.disk.channelLaunchSelection[CH_A].byRuntime.codex, { tools: "never" });
 });
 
 test("the two runtimes' NATIVE settings are remembered side by side, never translated", () => {
-  // ⚠ Codex declares a `sandbox_mode` axis and a reasoning-effort dimension; the default adapter
-  // declares neither. A switch must not carry one into the other, invent a synonym, or drop it.
+  // ⚠ Codex declares a `sandbox_mode` axis; the default adapter declares none. A switch must not
+  // carry one into the other, invent a synonym, or drop it. ⚠ The model-scoped reasoning effort is
+  // NOT stored since 2026-09-23 and is dropped silently.
   const m = load();
   m.setChannelRuntime(CH_A, "codex");
   m.prefs.setLaunchSelection(CH_A, { native: { sandbox_mode: "read-only", reasoningEffort: "high" } });
@@ -252,7 +275,7 @@ test("the two runtimes' NATIVE settings are remembered side by side, never trans
   assert.deepEqual(m.prefs.launchStartModes(CH_A).native, {}, "the runtime with no such axis gets no bag");
   m.setChannelRuntime(CH_A, "codex");
   assert.deepEqual(m.prefs.launchStartModes(CH_A).native,
-    { sandbox_mode: "read-only", reasoningEffort: "high" }, "…and the runtime that owns it gets its own back");
+    { sandbox_mode: "read-only" }, "…and the runtime that owns it gets its own back, minus the effort");
 });
 
 test("a pre-U5 record migrates into the DEFAULT runtime's half, untranslated, on first read", () => {
@@ -268,7 +291,7 @@ test("a pre-U5 record migrates into the DEFAULT runtime's half, untranslated, on
   });
   assert.equal(m.getChannelRuntime(CH_A), "codex", "the separately stored pick is carried over");
   const sel = m.prefs.getLaunchSelection(CH_A);
-  assert.deepEqual(sel.byRuntime.claude, { tools: "bypass", model: "claude-opus-5" });
+  assert.deepEqual(sel.byRuntime.claude, { tools: "bypass" }, "the legacy model is dropped (2026-09-23)");
   assert.equal(sel.byRuntime.codex, undefined, "nothing is invented for the selected runtime");
   // ⚠ AND THE EFFECTIVE BEHAVIOUR IS UNCHANGED BY THE MIGRATION. `bypass` is not a Codex mode, so
   // before U5 it was coerced to Codex's narrowest at every gate decision anyway; the migration

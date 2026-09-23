@@ -59,11 +59,9 @@ const isClassifiedTool = (toolName, runtimeId) =>
 // validated against another vendor's vocabulary — the exact coupling this file exists to remove.
 // Core asks for a session's runtime and gets back that runtime's own answer; it holds no id and
 // no setting name of its own.
-// ⚠ `launchModelPick` IS THE **STAMP** AND `storeModelPick` IS THE **RECORD**, and they are not
-// interchangeable: one may answer an argv-stable alias, the other must round-trip exactly what a
-// picker offered. `runtime/selection-vocabulary.js` carries the argument.
+// ⚠ `launchModelPick` IS THE **STAMP** — what a session starts on. (`storeModelPick`, the RECORD
+// half, is deleted 2026-09-23 with the stored model.) `runtime/selection-vocabulary.js` has more.
 const launchModelPick = (value, runtimeId) => cap.launchModelPick(descriptorFor(runtimeId), value);
-const storeModelPick = (value, runtimeId) => cap.storeModelPick(descriptorFor(runtimeId), value);
 const normalizeNative = (raw, runtimeId) => cap.normalizeNative(descriptorFor(runtimeId), raw);
 // The native launch dimensions this runtime declares AND can spend, or `null` for "no such
 // concept" — never `{}` (INVARIANTS §11: UNKNOWN is not EMPTY).
@@ -96,6 +94,6 @@ module.exports = {
   runtimeFor, descriptorFor, cap,
   buildSessionToolConfig, toolModeAllows, normalizeToolMode, floorWindowlessTool,
   windowlessFloorRefusal, axisBOpScopedWarning, isClassifiedTool,
-  launchModelPick, storeModelPick, normalizeNative, nativeDimensions, // U5
+  launchModelPick, normalizeNative, nativeDimensions, // U5
   TOOL_MODES, TAXONOMY, AUTO_TOOLS, BYPASS_TOOLS, BYPASS_READS, ESCALATION_TOOLS, EDIT_TOOLS,
 };

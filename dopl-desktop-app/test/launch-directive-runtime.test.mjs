@@ -178,6 +178,18 @@ test("MODEL: a non-default runtime is NEVER handed the Claude chain's model", as
     "no model argument at all — codex's own default, never claude-sonnet-5 off channel-prefs");
 });
 
+// 🔒 2026-09-23 (Samuel: "I think we should do Sol"): no pick on Codex → the runtime's own default,
+// resolved HERE so `appliedModel=` names the model the launch really spends — and only when this
+// account's catalog offers it (the stub answers what the catalog would).
+test("MODEL: a no-pick Codex launch spends the runtime default the catalog offers, and reports it", async () => {
+  const h = boot({ channelRuntime: "codex", runtimeDefault: "gpt-6-sol" });
+  await h.api.handle(launchRow({ model: "" }), WS);
+  assert.equal(handedModel(h), "gpt-6-sol");
+  const absent = boot({ channelRuntime: "codex" });
+  await absent.api.handle(launchRow({ model: "" }), WS);
+  assert.equal(handedModel(absent), "", "no Sol in the catalog → no model at all, never a refusal");
+});
+
 test("MODEL: a model IN the resolved runtime's roster is passed through raw", async () => {
   const h = boot({
     channelRuntime: "codex",

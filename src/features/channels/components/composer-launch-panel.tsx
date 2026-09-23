@@ -67,8 +67,8 @@ export interface LaunchIdentityOption {
   /**
    * THE IDENTITY'S OWN DEFAULT MODEL, here to be NAMED rather than sent (2026-09-05). Nothing on
    * this panel writes it — main's chain reads the identity itself — but an identity's model
-   * OUTRANKS the channel's pick (`main/session-launch-op.js`), so a label computed without it
-   * would name the channel's model on a launch that will not use it.
+   * OUTRANKS the runtime default (`main/session-launch-op.js`), so a label computed without it
+   * would name the default on a launch that will not use it.
    * ⚠ OPTIONAL, AND ABSENT IS "THIS BUILD WAS NOT TOLD" rather than "no model" — the row names
    * the next link down instead of claiming the SDK default (INVARIANTS §11).
    */
@@ -97,7 +97,6 @@ export function AgentLaunchPanelView({
   runtimes = EMPTY_RUNTIMES,
   channelRuntime = "",
   defaultRuntime = "",
-  channelModel = "",
 }: {
   panel: AgentLaunchPanel;
   /** The channel's identities. ⚠ READ-ONLY here — this surface authors none. */
@@ -112,13 +111,8 @@ export function AgentLaunchPanelView({
   /** The channel's durable pick, `''` for the default adapter. */
   channelRuntime?: string;
   defaultRuntime?: string;
-  /**
-   * THE CHANNEL'S DURABLE MODEL PICK, `''` when it has none (2026-09-05, task 12b).
-   * ⚠ IT IS FOR THE EMPTY ROW'S LABEL AND FOR NOTHING ELSE. It is never sent and never
-   * pre-selected: pre-selecting it would turn the channel's setting into a per-spawn pick that
-   * then stops following the setting, which is the failure the durable record exists to end.
-   */
-  channelModel?: string;
+  // ⚠ `channelModel` STOOD HERE AND IS DELETED (2026-09-23, Samuel: "We don't need a pin model in
+  // the settings") — there is no channel model for the empty row to name any more.
 }) {
   const descriptionRef = useRef<HTMLTextAreaElement>(null);
   useAutoGrow(descriptionRef, panel.description);
@@ -147,16 +141,14 @@ export function AgentLaunchPanelView({
    * carried no model at all.
    *
    * ⚠ THE ORDER IS MAIN'S, LINK FOR LINK (`main/session-launch-op.js`): the operator's own pick,
-   * then the IDENTITY's model, then the CHANNEL's — reading the channel first would be wrong on
-   * exactly the launches an identity is for. When no link carries one, `agentModelSelection`
-   * answers `AGENT_MODEL_FALLBACK` (Sonnet), the back-fill Samuel ruled when he removed "Default"
-   * (*"why can't we just set a value … unless they change it"*), so the row always names a real
-   * model.
+   * then the IDENTITY's model (the channel link is deleted, 2026-09-23). When neither carries one,
+   * `agentModelSelection` answers `AGENT_MODEL_FALLBACK` (Sonnet) — the runtime default a no-pick
+   * Claude launch spends — so the row always names a real model.
    */
   const effectiveModel = useMemo(() => {
     const fromIdentity = identities.find((t) => t.id === panel.identityId)?.model;
-    return agentModelSelection(panel.model || fromIdentity || channelModel);
-  }, [panel.model, identities, panel.identityId, channelModel]);
+    return agentModelSelection(panel.model || fromIdentity);
+  }, [panel.model, identities, panel.identityId]);
   // ⚠ `agentModelOptionsFor`, not the bare roster: an identity or a channel may carry an id this
   // build predates, and an option list without it would render the control blank.
   const modelOptions = useMemo(
@@ -386,12 +378,6 @@ export function ComposerLaunch({
             runtimes={posture.runtimeSupported ? posture.runtimes : EMPTY_RUNTIMES}
             channelRuntime={posture.runtime}
             defaultRuntime={posture.defaultRuntime}
-            // ⚠ GATED ON THE CAPABILITY PROBE, exactly as the runtime family above is — on a
-            // desktop with no model concept it stays null rather than naming a channel pick this
-            // build cannot see.
-            // ⚠ THE MODEL IS ON THE PRESET, NOT HOISTED (2026-09-05): `permission-modes.ts ›
-            // PermissionPreset.model` is where it lives and `modelSupported` is its detector.
-            channelModel={posture.modelSupported ? posture.posture.model ?? "" : ""}
           />
         </div>
       </div>

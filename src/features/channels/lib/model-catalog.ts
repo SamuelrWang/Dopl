@@ -107,7 +107,7 @@ const str = (v: unknown): string => (typeof v === "string" ? v.trim() : "");
 /**
  * DOES THIS DESKTOP SPEAK THE CATALOG CONTRACT AT ALL?
  *
- * ⚠ AN OWN-KEY PROBE, THE IDIOM `permission-modes.ts › hasModelKey` SETS. A desktop older than
+ * ⚠ AN OWN-KEY PROBE, THE IDIOM `runtime-capability.ts › hasRuntimeKey` SHARES. A desktop older than
  * U6 omits `catalogs` entirely, and reading that absence as "every runtime has no models" would
  * empty every picker on a machine running three runtimes. The caller falls back to the DEFAULT
  * runtime's frozen list instead (`agent-models.ts`) — which is exactly what that build renders.

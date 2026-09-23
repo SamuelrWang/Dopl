@@ -155,9 +155,9 @@ export function boot(over = {}) {
       return {
         getOrchestratorLaunch: () => cfg.enabled === true,
         launchStartModes: () => ({ tools: "bypass", messages: "auto_both" }),
-        getLaunchModel: () => "claude-sonnet-5",
-        // U5: the same pick, resolved as a launch-chain link on the channel's OWN runtime.
-        getLaunchModelLink: () => "sonnet",
+        // ⚠ `getLaunchModel` / `getLaunchModelLink` LEFT WITH THE REAL FUNCTIONS (2026-09-23): the
+        // channel no longer stores a model, and a fake offering one would let a lane that still
+        // read it pass here and throw in production.
         // ⚠ THE CHANNEL'S AGENT-CHAINING SETTING (2026-08-31, Samuel's ruling). Default here is
         // FALSE — the one-generation bound — so every existing case in this suite keeps asserting
         // the shipped behaviour; `cfg.chain` opts a case in, and `launch-chain.test.mjs` drives it.
@@ -233,6 +233,9 @@ export function boot(over = {}) {
           }
           return {};
         },
+        // 2026-09-23: the directive lane resolves a non-default runtime's no-pick DEFAULT against
+        // the sealed adapter; the default itself is `./runtime/launch-default`'s, stubbed below.
+        resolve: (rid) => ({ descriptor: { id: rid, models: {} } }),
         runtimeFor: (rid) => ({
           models: async () => {
             rosters.push(rid);
@@ -240,6 +243,14 @@ export function boot(over = {}) {
             return (cfg.rosters || {})[rid] || { source: "live", ids: [], aliases: [] };
           },
         }),
+      };
+    }
+    // ⚠ 2026-09-23 — THE RUNTIME'S OWN DEFAULT MODEL, stubbed at its seam: the real module settles a
+    // live catalog. `cfg.runtimeDefault` is what this account's catalog would offer; absent, a no-pick
+    // stays no-pick. `test/runtime-launch-default.test.mjs` drives the real rule.
+    if (id === "./runtime/launch-default") {
+      return {
+        withRuntimeDefault: async (_adapter, model) => (model || cfg.runtimeDefault || ""),
       };
     }
     if (id === "./session-model") return require_(join(MAIN, "session-model.js"));

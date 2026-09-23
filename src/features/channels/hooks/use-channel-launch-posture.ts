@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   DEFAULT_PERMISSION_PRESET,
-  hasModelKey,
   normalizePermissionPreset,
   type PermissionPreset,
 } from "../lib/permission-modes";
@@ -23,11 +22,9 @@ import { useRuntimeCatalogs } from "./use-runtime-catalogs";
  * 2026-08-22 the MODEL, the operator's OWN agent starts on when they press
  * Launch.
  *
- * ⚠ THE MODEL RIDES THE SAME RECORD AND THE SAME TWO OPS, so it is a field here
- * rather than a hook of its own: main stores one launch posture per channel and
- * reads it at one call site (`session-ipc-ops.js › sessions:launch`), and a second
- * record would be a second thing to keep in step at spawn. ⚠ It is NOT a third
- * permission axis — `permission-modes.ts › PermissionPreset.model` carries that.
+ * ⚠ THE MODEL NO LONGER RIDES THIS RECORD (2026-09-23, Samuel: "We don't need a pin
+ * model in the settings"). It did from 2026-08-22; main stores no channel model now and
+ * the reply carries no `model` key, so there is no field here and no `modelSupported`.
  *
  * ⚠ THE SINGLE-USE ARM IS DELETED (2026-08-20, Samuel's ruling):
  * `hooks/use-channel-permission-preset.ts`, the 30-minute consent-only fuse, went
@@ -129,8 +126,8 @@ export interface DoplLaunchPostureBridge {
    *  channel really is manual/ask; the nullable type is for an older build. */
   getLaunchPosture: (channelId: string) => Promise<LaunchPostureReply | null>;
   /** Store a pair. `ok: false` when main rejected a value. ⚠ The two AXES
-   *  validate HARD (an unknown value rejects the whole write); `model` and
-   *  `runtime` validate SOFT — an unregistered runtime id CLEARS the pick back
+   *  validate HARD (an unknown value rejects the whole write); `runtime`
+   *  validates SOFT — an unregistered runtime id CLEARS the pick back
    *  to the default rather than failing the pair beside it. */
   setLaunchPosture: (
     channelId: string,
@@ -161,17 +158,8 @@ export interface ChannelLaunchPostureState {
   /** The pair the operator's next own launch will start on. */
   posture: PermissionPreset;
   /**
-   * THIS DESKTOP UNDERSTANDS THE MODEL FIELD (2026-08-22). ⚠ A CAPABILITY, NOT A
-   * VALUE: false renders NO MODEL ROW (INVARIANTS §5's no-dead-rows rule), because
-   * a row that writes a field main drops lets the operator pick Opus while every
-   * agent keeps launching on the default with nothing saying so. ⚠ FALSE UNTIL THE
-   * FIRST READ ANSWERS — a probe over the reply (`permission-modes.ts ›
-   * hasModelKey`), and failing toward "no row" meanwhile is the right direction.
-   */
-  modelSupported: boolean;
-  /**
    * THIS DESKTOP HAS A RUNTIME CONCEPT (2026-08-31, the runtime-adapter port).
-   * ⚠ FALSE RENDERS NO RUNTIME ROW AT ALL — `modelSupported`'s rule, for its
+   * ⚠ FALSE RENDERS NO RUNTIME ROW AT ALL — the no-dead-rows rule, for its
    * reason: a desktop that predates the field DROPS it on write. An OWN-KEY probe
    * over the raw reply (`runtime-capability.ts › hasRuntimeKey`), latched to true
    * and false until the first read answers.
@@ -239,7 +227,6 @@ export function useChannelLaunchPosture(
     DEFAULT_PERMISSION_PRESET
   );
   const [busy, setBusy] = useState(false);
-  const [modelSupported, setModelSupported] = useState(false);
   const [runtimeSupported, setRuntimeSupported] = useState(false);
   const [runtime, setRuntime] = useState("");
   const [runtimes, setRuntimes] = useState<RuntimeDescriptor[]>(EMPTY_RUNTIMES);
@@ -279,12 +266,9 @@ export function useChannelLaunchPosture(
       .then((next) => {
         if (!alive) return;
         setPosture(normalizePermissionPreset(next) ?? DEFAULT_PERMISSION_PRESET);
-        // ⚠ PROBED OFF THE RAW REPLY, before the normalizer, and a one-way latch
-        // to TRUE: yanking a control out from under a mid-pick operator is worse
-        // than one stale row.
-        if (hasModelKey(next)) setModelSupported(true);
-        // ⚠ THE RUNTIME FAMILY IS PROBED AND LATCHED THE SAME WAY, off the SAME
-        // raw reply — it rides the model's ops so there is one read to probe.
+        // ⚠ THE RUNTIME FAMILY IS PROBED OFF THE RAW REPLY, before the normalizer,
+        // and a one-way latch to TRUE: yanking a control out from under a mid-pick
+        // operator is worse than one stale row.
         if (hasRuntimeKey(next)) setRuntimeSupported(true);
         // ⚠ THE CATALOGS ARE PROBED OFF THE SAME RAW REPLY, before any normalizer, and the
         // own-key probe is what tells an older desktop from a machine with no adapters.
@@ -358,11 +342,6 @@ export function useChannelLaunchPosture(
       if (
         optimistic.tools === previous.tools &&
         optimistic.messages === previous.messages &&
-        // ⚠ `?? null` ON BOTH SIDES so an absent model and an explicit `null`
-        // compare EQUAL: different facts to the capability probe above, the same
-        // POSTURE here. Without it the first Default pick on a fresh channel would
-        // look like a change and stamp a `model` key on a record that had none.
-        (optimistic.model ?? null) === (previous.model ?? null) &&
         optimisticRuntime === previousRuntime
       ) {
         return;
@@ -429,7 +408,6 @@ export function useChannelLaunchPosture(
     catalogs: runtimeCatalogs.catalogs,
     catalogsKnown: runtimeCatalogs.catalogsKnown,
     catalog,
-    modelSupported,
     runtimeSupported,
     runtime,
     runtimes,

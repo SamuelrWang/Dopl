@@ -1,8 +1,17 @@
 "use client";
 
 /**
- * THE SETTINGS TAB'S "WHEN YOU LAUNCH AN AGENT" GROUP, WHOLE — the runtime, the model, the
- * runtime's own native settings, Axis A in that runtime's vocabulary, and Dopl's messaging axis.
+ * THE SETTINGS TAB'S "WHEN YOU LAUNCH AN AGENT" GROUP, WHOLE — the runtime, Axis A in that
+ * runtime's vocabulary, the runtime's own CONTAINMENT setting, and Dopl's messaging axis.
+ *
+ * 🔓 **NO MODEL ROW AND NO REASONING-EFFORT ROW SINCE 2026-09-23 (Samuel, verbatim):** *"We don't
+ * need a pin model in the settings. Basically, when an agent is created, either the agent will
+ * choose it, or the agent is launched by another agent. That model will be chosen by the agent,
+ * or you can just have it go to the default model. It's fine. We don't need this model, channel,
+ * and profile settings."* A launch's model is the launcher's pick (the New Agent dialog, an MCP
+ * `model`), else the identity's, else the runtime's own default — resolved in main
+ * (`main/runtime/launch-default.js`). The effort row went with it: it is a property OF a model.
+ * The desktop no longer stores either (`main/launch-selection.js › normalizeRuntimeRecord`).
  *
  * ⚠ **ONE COMPONENT, TWO SCOPES, AND THAT IS THE POINT (2026-09-21, U8).** The per-channel
  * Settings tab and the profile popup's Agents pane render THIS component over the SAME record
@@ -12,22 +21,16 @@
  * has nothing to measure at defaults scope — see {@link AgentLaunchPostureRowsProps.onChangeMessages}.
  *
  * ⚠ **THE ROWS ARE IN DEPENDENCY ORDER, AND THE ORDER IS LOAD-BEARING** (the plan's U8):
- * **runtime → model → reasoning effort → tool use → containment → messaging**. Each row decides
- * what the rows under it MEAN — the runtime decides the model roster and the Axis-A vocabulary,
- * the model decides which reasoning efforts exist — so reading the group top to bottom is
- * "which runtime, on which model, doing what" rather than a vocabulary that changes under a
- * heading that does not. ⚠ The model rows moved ABOVE Tool use in this wave for exactly that
- * reason; they were last before.
+ * **runtime → tool use → containment → messaging**. The runtime decides the Axis-A vocabulary and
+ * which containment axis exists, so reading the group top to bottom is "which runtime, doing
+ * what" rather than a vocabulary that changes under a heading that does not.
  *
- * ⚠ **AXIS A AND THE NATIVE ROWS MOVED TO `settings-agent-native-rows.tsx`** at the §1 cap, on a
+ * ⚠ **AXIS A AND THE NATIVE ROWS LIVE IN `settings-agent-native-rows.tsx`** at the §1 cap, on a
  * real seam: that file changes when a RUNTIME'S VOCABULARY changes, this one when the GROUP
  * changes. F-390's whole account lives over there, beside the controls it is about.
  *
- * ⚠ **NOTHING HERE IS DISPLAY-ONLY ANY MORE.** Every control in this group has an exercised
- * write path, which is what INVARIANTS asks for (a control that writes nowhere must be ABSENT).
- * The two things that are still FACTS rather than controls — the approval categories and the
- * classifier transport — are rendered as facts, and `settings-agent-native-rows.tsx` says why
- * each one may not become a control yet.
+ * ⚠ **NOTHING HERE IS DISPLAY-ONLY.** Every control in this group has an exercised write path,
+ * which is what INVARIANTS asks for (a control that writes nowhere must be ABSENT).
  *
  * ⚠ **MINIMAL COPY** (Samuel, 2026-08-19; INVARIANTS §5). A row is a NAME and a CONTROL; the
  * per-option sentences live inside the dropdown, in the PLATFORM's own words.
@@ -40,24 +43,12 @@ import { AgentToolModeRows } from "./settings-agent-native-rows";
 import type { MessageMode, PermissionPreset } from "../lib/permission-modes";
 import type { PosturePatch } from "./posture-warning";
 import type { LaunchSelectionState } from "../hooks/use-launch-selection";
-import {
-  catalogReady,
-  catalogReason,
-  catalogSelection,
-  modelLabel,
-  modelOptionsFor,
-  normalizeDimensionValue,
-} from "../lib/model-catalog";
-import { nativeDimensions, REASONING_EFFORT } from "../lib/runtime-native";
+import { nativeDimensions } from "../lib/runtime-native";
 import type { RuntimeDescriptor } from "../lib/runtime-capability";
 
-/** The value-only recipe this tab already uses for a fact the operator cannot set here. ⚠ Kit
- *  tokens only — no hex, no raw px (docs/DESIGN-SYSTEM.md). */
-const VALUE_PILL =
-  "truncate rounded-[8px] border border-border-subtle bg-bg-inset px-2.5 py-1 text-caption text-text-secondary";
-
-/** ⚠ ONE SENTENCE, and it is a FACT rather than an apology (INVARIANTS §5). It is what an unset
- *  record actually does: no `model` on the wire, so the platform picks. */
+/** ⚠ ONE SENTENCE, and it is a FACT rather than an apology (INVARIANTS §5). What a launch that
+ *  names no model does when the runtime's catalog cannot say: the platform picks. The New Agent
+ *  dialog is its reader now that the Settings Model row is gone. */
 export const PLATFORM_DEFAULT_LABEL = "Platform default";
 
 export interface AgentLaunchPostureRowsProps {
@@ -95,34 +86,10 @@ export function AgentLaunchPostureRows({
   onChangeMessages,
 }: AgentLaunchPostureRowsProps) {
   const { descriptor, record, busy } = selection;
-  const catalog = selection.catalogFor(selection.runtime || selection.defaultRuntime);
-  // ⚠ WHAT THE ROW SHOWS, WHICH IS NOT WHAT IS STORED. A record that never chose SHOWS the
-  // runtime's declared default and STORES nothing until somebody touches the control — the
-  // display-versus-wire discipline `model-catalog.ts › catalogSelection` carries.
-  const shownModel = catalogSelection(catalog, record.model);
-  const dimensions = nativeDimensions(descriptor, catalog, shownModel);
-  const effortDimension = dimensions.find((d) => d.key === REASONING_EFFORT) ?? null;
-  const rosterReason = catalogReason(catalog);
-
-  /**
-   * ⚠ **THE MODEL AND ITS EFFORT MOVE IN ONE WRITE.** The plan asks for the effort to be
-   * "normalized when the selected model does not support the previous effort"; doing it as a
-   * second write would leave a window in which the record names an effort the new model refuses,
-   * and would make a rejected second write look like a successful first one.
-   */
-  const pickModel = (next: string) => {
-    const effort = effortDimension
-      ? normalizeDimensionValue(catalog, next, record.native?.[REASONING_EFFORT])
-      : "";
-    const native = { ...record.native };
-    if (effortDimension) {
-      if (effort) native[REASONING_EFFORT] = effort;
-      else delete native[REASONING_EFFORT];
-    }
-    void selection.update(
-      effortDimension ? { model: next, native } : { model: next }
-    );
-  };
+  // ⚠ THE CONTAINMENT AXIS ONLY. `nativeDimensions` answers a MODEL dimension only when it is
+  // handed a catalog and a model, and this group has neither since the Model row left — so what
+  // comes back is exactly the runtime's containment setting (Codex's sandbox), or nothing.
+  const dimensions = nativeDimensions(descriptor, null, null).filter((d) => d.kind === "containment");
 
   return (
     <>
@@ -136,91 +103,25 @@ export function AgentLaunchPostureRows({
           runtime={selection.runtime}
           runtimes={selection.runtimes}
           // ⚠ **THE PICK, AND NOTHING ELSE, ON THE `runtime` KEY ALONE.** Main's write is own-key
-          // and lands a patch's fields on the runtime the PATCH selects, so restating `tools` or
-          // `model` here would file the OLD runtime's words under the NEW one — which
-          // `patchRejections` refuses outright, because `accept_edits` is not a word Codex
-          // speaks. A bare switch changes nothing else: both remembered sets survive, which is
-          // Decision #1 and the whole reason the record is runtime-keyed.
+          // and lands a patch's fields on the runtime the PATCH selects, so restating `tools` here
+          // would file the OLD runtime's words under the NEW one — which `patchRejections` refuses
+          // outright, because `accept_edits` is not a word Codex speaks. A bare switch changes
+          // nothing else: both remembered sets survive, which is Decision #1 and the whole reason
+          // the record is runtime-keyed.
           onChange={(next) => void selection.update({ runtime: next })}
           busy={busy}
         />
       )}
 
-      {/* THE MODEL (Samuel, 2026-08-22) — durable, per scope, and READ FROM THE SELECTED
-          RUNTIME'S OWN CATALOG since U6. A Codex surface can never render Fable, because
-          `model-catalog.ts › catalogFor` has no fall-back arm to another runtime's list.
-          ⚠ ABSENT ON A MAIN THAT HAS NO MODEL FIELD, never disabled — such a build DROPS the
-          value on write, so a greyed row would be the mild version of the failure and a live one
-          the loud version.
-          ⚠ A ROSTER THAT IS NOT `ready` RENDERS A FACT, NOT A CONTROL. `loading`, `unavailable`
-          and `stale` all offer nothing to pick: the first has not answered, the second measured a
-          failure, and the third holds models it may still LABEL with but may not newly select.
-          The sentence under the row is the desktop's own words. */}
-      {selection.modelSupported && (
-        <SettingRow name="Model">
-          {catalogReady(catalog) ? (
-            <SelectMenu<string>
-              variant="text"
-              value={shownModel}
-              options={modelOptionsFor(catalog, shownModel)}
-              onChange={pickModel}
-              ariaLabel="Model for agents you launch"
-              disabled={busy}
-            />
-          ) : (
-            <span className={VALUE_PILL}>
-              {shownModel ? modelLabel(catalog, shownModel) : PLATFORM_DEFAULT_LABEL}
-            </span>
-          )}
-        </SettingRow>
-      )}
-      {selection.modelSupported && rosterReason && (
-        <p role="note" className="text-caption text-text-secondary">
-          {rosterReason}
-        </p>
-      )}
-
-      {/* REASONING EFFORT — beside Model, because it is a property OF the selected model and its
-          options change with it (`model-catalog.ts › dimensionOptionsFor` carries why it cannot
-          be sourced from the runtime).
-          ⚠ ABSENT ON EVERY RUNTIME THAT DECLARES NO SUCH DIMENSION, which is two of the three
-          today — hide, never gray.
-          ⚠ **AND IT WRITES.** Before U5 `launch-spec.js` read a `state.reasoningEffort` that had
-          NO PRODUCER anywhere in the tree; declaring `models.dimensionOptions` is what turned it
-          into a storable setting, and this is its one control. */}
-      {effortDimension && (
-        <SettingRow name={effortDimension.label}>
-          <SelectMenu<string>
-            variant="text"
-            value={
-              record.native?.[REASONING_EFFORT] ??
-              effortDimension.default ??
-              effortDimension.options[0]?.value ??
-              ""
-            }
-            options={effortDimension.options.map((o) => ({
-              value: o.value,
-              label: o.label,
-              description: o.description ?? undefined,
-            }))}
-            onChange={(next) =>
-              void selection.update({
-                native: { ...record.native, [REASONING_EFFORT]: next },
-              })
-            }
-            ariaLabel={`${effortDimension.label} for agents you launch`}
-            disabled={busy}
-          />
-        </SettingRow>
-      )}
+      {/* ⚠ THE MODEL ROW, ITS ROSTER NOTE AND THE REASONING-EFFORT ROW STOOD HERE AND ARE DELETED
+          (2026-09-23) — see the header. Do not put a model control back on either scope: the
+          record behind it no longer exists, so it would be a control that writes nowhere. */}
 
       <AgentToolModeRows
         descriptor={selection.runtimeSupported ? descriptor : null}
         tools={record.tools ?? ""}
         onChange={(tools) => void selection.update({ tools })}
-        // ⚠ THE CONTAINMENT AXIS ONLY. The model dimension has its own row above, beside the
-        // model it belongs to; rendering it twice would be two controls over one field.
-        dimensions={dimensions.filter((d) => d.kind === "containment")}
+        dimensions={dimensions}
         native={record.native}
         onChangeNative={(native) => void selection.update({ native })}
         busy={busy}

@@ -278,12 +278,10 @@ async function launchResponderSession(entry, m, { taskId, toolProfile, requester
     },
     toolProfile,
     mode,
-    // ⚠ THE CHANNEL'S CHOSEN MODEL, AND NOT ITS PERMISSION PAIR (2026-08-22, Samuel's ruling).
-    // A peer-triggered launch inherits the operator's model choice — it is a fact about how this
-    // machine answers, not a grant — while H2 keeps it from inheriting the stored posture, which
-    // is why `channel-prefs.js` exposes the two through separate readers.
-    // ⚠ U5: resolved on the CHANNEL'S OWN runtime (`channel-prefs.js › getLaunchModelLink`).
-    model: channelPrefs.getLaunchModelLink(entry.channel.id),
+    // ⚠ NO `model` (2026-09-23). This lane read the CHANNEL's stored model, and that setting is
+    // deleted (Samuel: *"We don't need a pin model in the settings"*); a peer-triggered responder
+    // has no launcher pick and no identity, so the funnel gives it the RUNTIME's own default
+    // (`runtime/launch-default.js`) — which is never a `no-model` refusal.
     // ⚠ H2 IS UNCHANGED AND THIS PATH STILL OBEYS IT. A peer-triggered launch carries NO tool
     // posture: `manual` is the reducer's own most-restrictive value, and the operator's durable
     // pick applies to the launch shape they press themselves (`sessions:launch`) and to nothing
@@ -338,8 +336,9 @@ function skippedHint(skipped) {
   // id into a copy helper. The state is what the operator can act on; §3.3's per-runtime prose is
   // step 9's and needs the id, not a second guess here.
   if (skipped === 'no-sdk') return 'No agent runtime is available on this machine.';
-  // 2026-09-22: the channel's stored model is not one this machine's runtime offers any more.
-  if (skipped === 'no-model') return 'This channel\'s model is not offered on this machine — pick another in the channel Settings.';
+  // ⚠ THE `no-model` HINT ("This channel's model is not offered … pick another in the channel
+  // Settings") IS DELETED (2026-09-23): this lane names no model any more, and the runtime default
+  // the funnel supplies is only ever one its catalog offers, so that skip cannot reach here.
   return 'The agent could not be started.';
 }
 

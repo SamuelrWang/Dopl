@@ -24,8 +24,10 @@
 //     because one global model field cannot hold two rosters.
 //
 // ⚠ **THE TWO RULINGS THE SHAPE ENCODES, AND NEITHER IS NEGOTIABLE.** Claude's and Codex's native
-// settings are stored SEPARATELY and are NEVER translated into one another, and so are their model
-// choices. `Accept edits` is not a Codex approval mode — Codex separates approval policy from
+// settings are stored SEPARATELY and are NEVER translated into one another. (Their MODEL choices
+// were stored the same way until 2026-09-23, when Samuel removed the stored model outright — a
+// launch's model is the launcher's pick, the identity's, or the runtime default; see
+// `normalizeRuntimeRecord`.) `Accept edits` is not a Codex approval mode — Codex separates approval policy from
 // sandbox containment, and `granular` has no Claude equivalent — so a switch Claude → Codex →
 // Claude must restore BOTH remembered sets rather than mapping, clearing or reinterpreting either.
 // That is what `byRuntime` is: one record per runtime, side by side, and the selected runtime says
@@ -33,7 +35,7 @@
 //
 // ── ⚠ WHAT THIS MODULE MAY NOT KNOW ──────────────────────────────────────────────────────────
 //
-// It holds NO runtime's vocabulary. Every mode, model id and native setting is validated through
+// It holds NO runtime's vocabulary. Every mode and native setting is validated through
 // an injected context (`main/runtime/index.js › selectionContext`) that resolves the SELECTED
 // adapter's own descriptor. The verification bar U5 sets is exactly this: **no shared storage or
 // session-core path imports one runtime's model/tool enums to validate another runtime's launch.**
@@ -45,8 +47,8 @@
 //
 // SECURITY — every write is re-validated here, in main, against the selected adapter. A renderer
 // one version ahead cannot smuggle a runtime id this build does not register, a mode outside the
-// selected adapter's declared options, a model id outside its declared roster/alphabet, or a
-// native setting the adapter cannot spend. Nothing but validated members is ever stored; there is
+// selected adapter's declared options, or a native setting the adapter cannot spend (a model id
+// is not stored at all). Nothing but validated members is ever stored; there is
 // no free-text field and no path.
 //
 // PRIVACY — the CALLER owns storage (`channel-prefs.js`, `agent-defaults.js`); this module is
@@ -92,8 +94,16 @@ function emptySelection() {
 }
 
 /**
- * The per-runtime half of a selection — `{ tools?, model?, native? }` — validated against THAT
- * runtime's own descriptor.
+ * The per-runtime half of a selection — `{ tools?, native? }` — validated against THAT runtime's
+ * own descriptor.
+ *
+ * 🔓 **NO `model` AND NO MODEL-SCOPED `native` KEY SINCE 2026-09-23 (Samuel: *"We don't need a pin
+ * model in the settings"*).** A launch's model is the LAUNCHER's pick, else the identity's, else
+ * the runtime's own default (`session-launch.js › launch`) — never a channel's or a profile's
+ * stored one. So a stored `model`, and a stored native key the runtime declares as a MODEL
+ * dimension (Codex's `reasoningEffort`), are DROPPED here SILENTLY: an old record reads
+ * harmlessly and the next write strips it. ⚠ Not reviewed — nothing narrowed, so there is nothing
+ * for an operator to act on. ⚠ The CONTAINMENT native axis (Codex's sandbox) is unchanged.
  *
  * ⚠ EVERY FIELD IS OMITTED WHEN ABSENT, never written as `''`/`null`/`{}`. A record from before a
  * field and a record whose field was cleared must be the SAME record, so no reader can grow a
@@ -124,23 +134,22 @@ function normalizeRuntimeRecord(ctx, runtimeId, raw) {
     }
   }
 
-  if (Object.prototype.hasOwnProperty.call(src, 'model')) {
-    const asked = typeof src.model === 'string' ? src.model.trim() : '';
-    const coerced = ctx.storeModelFor(runtimeId, asked);
-    if (coerced) out.model = coerced;
-    // ⚠ NOT REVIEWED. An unstorable model is the SOFT half of this record's validation and has
-    // been since the field existed: a desktop that has not heard of a newer id must still be able
-    // to store the rest of the selection, and the platform's own pick is the honest fallback. A
-    // review sentence here would fire on every ordinary downgrade.
-  }
-
   if (Object.prototype.hasOwnProperty.call(src, 'native')) {
-    const res = ctx.nativeFor(runtimeId, src.native);
+    const res = ctx.nativeFor(runtimeId, withoutModelDimensions(ctx, runtimeId, src.native));
     if (Object.keys(res.value).length) out.native = res.value;
     for (const line of res.review) review.push(line);
   }
 
   return { record: out, review: review };
+}
+
+/** The native bag minus every key the runtime declares as a MODEL dimension — see above. */
+function withoutModelDimensions(ctx, runtimeId, raw) {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return raw;
+  const modelDims = ctx.modelDimensionsFor(runtimeId);
+  const out = {};
+  for (const key of Object.keys(raw)) if (modelDims.indexOf(key) === -1) out[key] = raw[key];
+  return out;
 }
 
 /**
@@ -226,13 +235,14 @@ function normalizeSelection(ctx, raw) {
 }
 
 /**
- * MIGRATE the pre-U5 records into a selection. `preset` is the legacy `{tools, messages, model}`;
- * `runtimeId` is the separately stored pick.
+ * MIGRATE the pre-U5 records into a selection. `preset` is the legacy `{tools, messages, model?}`;
+ * `runtimeId` is the separately stored pick. ⚠ A legacy `model` is IGNORED since 2026-09-23 —
+ * `normalizeRuntimeRecord`'s header says why.
  *
  * ⚠ **INTO THE DEFAULT RUNTIME'S RECORD, WHATEVER RUNTIME IS SELECTED, AND WITHOUT TRANSLATING
- * ANYTHING.** The legacy `tools` and `model` are written in the DEFAULT adapter's vocabulary —
- * that is what the old validators accepted and the only thing they could have stored — so that is
- * whose record they belong in. Putting them under the SELECTED runtime would be this function
+ * ANYTHING.** The legacy `tools` is written in the DEFAULT adapter's vocabulary — that is what
+ * the old validator accepted and the only thing it could have stored — so that is whose record it
+ * belongs in. Putting them under the SELECTED runtime would be this function
  * asserting that `accept_edits` "is" some Codex approval mode, which is exactly the one-to-one
  * mapping the plan refuses: the platforms expose different dimensions and no such equivalence
  * exists.
@@ -244,8 +254,7 @@ function normalizeSelection(ctx, raw) {
  * narrowest. The migration stores what was always effective.
  *
  * ⚠ AND THE CLAUDE VALUES ARE NOT LOST BY THAT — they are in `byRuntime[default]`, which is what
- * makes switching back restore them (Decision #2), where the pre-U5 code CLEARED the model on
- * every runtime switch precisely because one global field could not hold two rosters.
+ * makes switching back restore them (Decision #2).
  */
 function fromLegacy(ctx, preset, runtimeId) {
   const out = emptySelection();
@@ -258,10 +267,7 @@ function fromLegacy(ctx, preset, runtimeId) {
 
   const legacyId = ctx.defaultId;
   const res = normalizeRuntimeRecord(ctx, legacyId, {
-    // ⚠ FORWARDED ONLY WHEN PRESENT. The legacy record omits `model` when none was picked, and
-    // `normalizeRuntimeRecord` treats the KEY's presence as the signal.
     ...(typeof p.tools === 'string' ? { tools: p.tools } : {}),
-    ...(Object.prototype.hasOwnProperty.call(p, 'model') ? { model: p.model } : {}),
   });
   if (Object.keys(res.record).length) out.byRuntime[legacyId] = res.record;
   // ⚠ THE MIGRATION ITSELF RAISES NO REVIEW. `res.review` can only fire on a legacy value the
@@ -279,12 +285,14 @@ function activeRecord(ctx, selection) {
 }
 
 /**
- * THE LEGACY WIRE SHAPE, DERIVED FROM A SELECTION — `{ tools, messages, model }`.
+ * THE LEGACY WIRE SHAPE, DERIVED FROM A SELECTION — `{ tools, messages }`.
  *
  * ⚠ **IT IS A COMPATIBILITY WINDOW, NOT A SECOND AUTHORITY.** Every renderer older than U5
- * feature-probes these three OWN KEYS (`lib/permission-modes.ts › hasModelKey`) and renders no row
- * at all when one is missing — so dropping them would not "migrate" those builds, it would make
- * the controls vanish, and the only way to store a value is the row that was never drawn.
+ * feature-probes these OWN KEYS and renders no row at all when one is missing.
+ * ⚠ **`model` LEFT THIS SHAPE ON 2026-09-23, AND ITS ABSENCE IS NOW THE POINT.** The web's own-key
+ * probe (`lib/permission-modes.ts › hasModelKey`) reads a missing key as "this desktop has no
+ * model setting", so an OLDER renderer meeting this build draws no Model row either — Samuel's
+ * ruling reached through the probe, with no flag.
  * ⚠ `tools` COMES BACK IN THE SELECTED RUNTIME'S OWN WORDS, which may not be one of the four
  * legacy members. That is correct and is what the SPA already expects: it coerces the value through
  * `runtime-capability.ts › normalizeToolMode` against the descriptor before rendering, so a Codex
@@ -296,7 +304,6 @@ function toLegacyPosture(ctx, selection) {
   return {
     tools: rec.tools || ctx.narrowestToolFor(selection.runtime),
     messages: selection.messages,
-    model: rec.model || null,
   };
 }
 
@@ -310,15 +317,13 @@ function toLegacyPosture(ctx, selection) {
  * failure the model field hit in 2026-09-05.
  *
  * ⚠ **THE PATCH'S FIELDS LAND ON THE RUNTIME THE PATCH SELECTS, NOT ON THE ONE THAT WAS SELECTED
- * BEFORE IT.** A single write that switches runtime AND sets that runtime's model is one
- * operation, and splitting it would write the new model into the old runtime's record.
+ * BEFORE IT.** A single write that switches runtime AND sets that runtime's sandbox is one
+ * operation, and splitting it would write the new setting into the old runtime's record.
  *
- * ⚠ **A RUNTIME SWITCH CHANGES NOTHING ELSE — NO CLEAR, NO TRANSLATION.** This reverses
- * `channel-runtime.js › clearLaunchModelForRuntimeSwitch` (2026-09-06), which dropped the stored
- * model on every switch because a single global field could not hold two rosters and a stale id
- * would have WON over the new runtime's default. With one record per runtime the stale id cannot
- * be read by the wrong adapter at all, so clearing it is no longer protective — it is just the
- * operator losing a pick they will have to make again, every time they look at another runtime.
+ * ⚠ **A RUNTIME SWITCH CHANGES NOTHING ELSE — NO CLEAR, NO TRANSLATION.** Both remembered sets
+ * survive (Decision #1).
+ * ⚠ A `model` KEY IN A PATCH IS IGNORED (2026-09-23): a renderer one version behind may still send
+ * one, and it must neither be stored nor refuse the rest of the write.
  */
 /**
  * The HARD failures in a patch — the ones that reject the whole write rather than floor a field.
@@ -417,13 +422,13 @@ function patchSelection(ctx, selection, patch) {
 
   const targetId = next.runtime || ctx.defaultId;
   const fields = {};
-  for (const key of ['tools', 'model', 'native']) if (has(key)) fields[key] = p[key];
+  for (const key of ['tools', 'native']) if (has(key)) fields[key] = p[key];
   if (Object.keys(fields).length) {
     const prior = next.byRuntime[targetId] && typeof next.byRuntime[targetId] === 'object'
       ? next.byRuntime[targetId]
       : {};
-    // ⚠ MERGED ONTO THE PRIOR RECORD, FIELD BY FIELD, so a patch carrying only `model` leaves
-    // `tools` and `native` where they were. The merge happens BEFORE validation so an unchanged
+    // ⚠ MERGED ONTO THE PRIOR RECORD, FIELD BY FIELD, so a patch carrying only `native` leaves
+    // `tools` where it was. The merge happens BEFORE validation so an unchanged
     // field is re-validated on every write — a value stored by a build that offered it and since
     // withdrawn must not survive untouched just because nobody mentioned it.
     const res = normalizeRuntimeRecord(ctx, targetId, { ...prior, ...fields });

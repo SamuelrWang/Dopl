@@ -61,15 +61,14 @@ const stored = (tools: string) => ({ tools });
 function withRuntime(
   descriptorId: string,
   over: {
-    byRuntime?: Record<string, { tools?: string; model?: string; native?: Record<string, string> }>;
+    byRuntime?: Record<string, { tools?: string; native?: Record<string, string> }>;
     catalogs?: Record<string, ReturnType<typeof catalog>>;
-    modelSupported?: boolean;
     busy?: boolean;
     review?: string[];
     rejected?: string[];
   } = {}
 ) {
-  const { byRuntime, catalogs, modelSupported, busy, review, rejected } = over;
+  const { byRuntime, catalogs, busy, review, rejected } = over;
   return agentView({
     selection: launchSelectionStub({
       runtimeSupported: true,
@@ -79,7 +78,6 @@ function withRuntime(
       descriptor: realDescriptor(descriptorId || REAL_DEFAULT_RUNTIME),
       byRuntime: byRuntime ?? {},
       catalogs: catalogs as never,
-      modelSupported: modelSupported ?? false,
       busy: busy ?? false,
       review: review ?? [],
       rejected: rejected ?? [],
@@ -329,7 +327,11 @@ describe("the five approval categories, under `granular` and nowhere else", () =
   });
 });
 
-describe("the MODEL row reads the SELECTED runtime's own catalog and nobody else's", () => {
+// 🔓 THE MODEL ROW AND THE REASONING-EFFORT ROW ARE DELETED (2026-09-23, Samuel: "We don't need a
+// pin model in the settings … We don't need this model, channel, and profile settings"). A launch's
+// model is the launcher's pick, the identity's, or the runtime default — so what is pinned is the
+// ABSENCE, on every runtime, with a live catalog that once would have filled both rows.
+describe("NO model row and NO reasoning-effort row, on any runtime (2026-09-23)", () => {
   const CLAUDE_MODELS = catalog("claude", [
     { id: "claude-fable-5", label: "Fable 5" },
     { id: "claude-sonnet-5", label: "Sonnet 5", isDefault: true },
@@ -339,108 +341,26 @@ describe("the MODEL row reads the SELECTED runtime's own catalog and nobody else
     { id: "gpt-6-mini", label: "GPT-6 Mini", efforts: ["minimal", "low"] },
   ]);
   const both = { claude: CLAUDE_MODELS, codex: CODEX_MODELS };
-  const MODEL_ROW = "Model for agents you launch";
 
-  it("Claude shows Fable and Sonnet", () => {
-    withRuntime("claude", { modelSupported: true, catalogs: both });
-    expect(openMenu(screen.getByLabelText(MODEL_ROW))).toEqual(["Fable 5", "Sonnet 5"]);
-  });
-
-  it("Codex shows Codex models, and NEVER Fable", () => {
-    withRuntime("codex", { modelSupported: true, catalogs: both });
-    const labels = openMenu(screen.getByLabelText(MODEL_ROW));
-    expect(labels).toEqual(["GPT-6 Astra", "GPT-6 Mini"]);
-    expect(labels.join(" ")).not.toMatch(/Fable|Sonnet|Opus|Haiku/);
-  });
-
-  it("shows the ROSTER's own default for a runtime that never picked", () => {
-    // ⚠ DISPLAY, NOT STORAGE. The record still holds no model; showing the default is what the
-    // display-versus-wire discipline asks for, and the first explicit pick is what writes.
-    withRuntime("codex", { modelSupported: true, catalogs: both });
-    expect(screen.getByLabelText(MODEL_ROW).textContent).toContain("GPT-6 Astra");
-  });
-
-  it("restores BOTH remembered picks across a switch away and back", () => {
-    // Decision #2, and the case the pre-U5 record could not express: one global model field
-    // cannot hold two rosters, so picking a runtime used to CLEAR it.
-    const byRuntime = {
-      claude: { model: "claude-fable-5" },
-      codex: { model: "gpt-6-mini" },
-    };
-    const first = withRuntime("claude", { modelSupported: true, catalogs: both, byRuntime });
-    expect(screen.getByLabelText(MODEL_ROW).textContent).toContain("Fable 5");
-    first.unmount();
-    const second = withRuntime("codex", { modelSupported: true, catalogs: both, byRuntime });
-    expect(screen.getByLabelText(MODEL_ROW).textContent).toContain("GPT-6 Mini");
-    second.unmount();
-    withRuntime("claude", { modelSupported: true, catalogs: both, byRuntime });
-    expect(screen.getByLabelText(MODEL_ROW).textContent).toContain("Fable 5");
-  });
-
-  it("offers NOTHING to pick when the roster could not be read, and says why", () => {
-    // ⚠ AND IT STILL DOES NOT BORROW ANOTHER RUNTIME'S LIST — the plan's hardest invariant.
-    const { container } = withRuntime("codex", {
-      modelSupported: true,
-      catalogs: {
-        claude: CLAUDE_MODELS,
-        codex: catalog("codex", [], {
-          status: "unavailable",
-          reason: "Dopl could not read this runtime's model list.",
-        }),
-      },
+  for (const runtime of ["claude", "codex", "cursor"]) {
+    it(`${runtime}: neither row renders, and the runtime/tool/messaging rows still do`, () => {
+      const { container } = withRuntime(runtime, {
+        catalogs: both,
+        // A record an OLDER desktop wrote still carrying a model and an effort must not bring
+        // either row back.
+        byRuntime: { [runtime]: { native: { reasoningEffort: "high" } } },
+      });
+      expect(screen.queryByLabelText("Model for agents you launch")).toBeNull();
+      expect(screen.queryByLabelText("Reasoning effort for agents you launch")).toBeNull();
+      expect(container.textContent).not.toMatch(/GPT-6 Astra|Fable 5/);
+      expect(screen.getByLabelText("Runtime for agents you launch")).toBeTruthy();
+      expect(screen.getByLabelText("Messaging for agents you launch")).toBeTruthy();
     });
-    expect(screen.queryByLabelText(MODEL_ROW)).toBeNull();
-    expect(container.textContent).toContain("could not read this runtime's model list");
-    expect(container.textContent).not.toMatch(/Fable|Sonnet/);
-  });
+  }
 
-  it("renders NO model row at all on a desktop with no model field", () => {
+  it("Codex's CONTAINMENT row (the sandbox) survives the cut", () => {
     withRuntime("codex", { catalogs: both });
-    expect(screen.queryByLabelText(MODEL_ROW)).toBeNull();
-  });
-});
-
-describe("REASONING EFFORT — beside the model it belongs to, and only where declared", () => {
-  const CODEX_MODELS = catalog("codex", [
-    { id: "gpt-6-astra", label: "GPT-6 Astra", isDefault: true, efforts: ["low", "high"] },
-    { id: "gpt-6-mini", label: "GPT-6 Mini", efforts: ["minimal", "low"] },
-  ]);
-  const EFFORT_ROW = "Reasoning effort for agents you launch";
-
-  it("is absent on Claude, which declares no such dimension", () => {
-    withRuntime("claude", {
-      modelSupported: true,
-      catalogs: { claude: catalog("claude", [{ id: "claude-fable-5", isDefault: true }]) },
-    });
-    expect(screen.queryByLabelText(EFFORT_ROW)).toBeNull();
-  });
-
-  it("offers the SELECTED MODEL's own efforts, not the runtime's whole set", () => {
-    withRuntime("codex", {
-      modelSupported: true,
-      catalogs: { codex: CODEX_MODELS },
-      byRuntime: { codex: { model: "gpt-6-mini" } },
-    });
-    expect(openMenu(screen.getByLabelText(EFFORT_ROW))).toEqual(["minimal", "low"]);
-  });
-
-  it("writes the whole native bag, and NORMALIZES the effort when the model moves", () => {
-    // ⚠ ONE WRITE, NOT TWO. A second write would leave a window in which the record names an
-    // effort the newly-selected model refuses.
-    const { selection } = withSelection({
-      runtime: "codex",
-      descriptor: CODEX,
-      modelSupported: true,
-      catalogs: { codex: CODEX_MODELS } as never,
-      byRuntime: { codex: { model: "gpt-6-astra", native: { reasoningEffort: "high" } } },
-    });
-    fireEvent.click(screen.getByLabelText("Model for agents you launch"));
-    fireEvent.click(screen.getByRole("menuitem", { name: "GPT-6 Mini" }));
-    expect(selection.update).toHaveBeenCalledWith({
-      model: "gpt-6-mini",
-      // `high` is not one of gpt-6-mini's efforts, so it falls to THAT model's own default.
-      native: { reasoningEffort: "minimal" },
-    });
+    expect(screen.getByText("Sandbox")).toBeTruthy();
   });
 });
 

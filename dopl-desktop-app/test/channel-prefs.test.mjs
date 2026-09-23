@@ -80,10 +80,6 @@ const { TOOL_MODES, MESSAGE_MODES, DEFAULT_PRESET, normalizePreset, defaultPrese
 
 const OK = { tools: "accept_edits", messages: "auto_inbound" };
 
-/** What a pair looks like ON THE WIRE: the stored shape plus the always-present `model` key.
- *  ⚠ STORAGE omits the key and the WIRE cannot — the web's capability probe is an OWN-KEY test,
- *  so a reply without it reads as "this desktop has no model concept" and hides the model row.
- *  `main/channel-prefs.js › effectivePosture` carries the full argument. */
 // ⚠ A MINIMAL DESCRIPTOR TABLE, not the real registry's. Loading `main/runtime/index.js` here
 // would pull three adapters and the SDK loader into a suite whose subject is a UUID gate; what
 // this section has to prove is that the handler PASSES THE TABLE THROUGH unaltered. The real
@@ -94,7 +90,7 @@ const FAKE_RUNTIMES = Object.freeze([
 ]);
 
 // ⚠ THE WIRE SHAPE IS WIDER THAN THE STORED PAIR, AND EACH EXTRA KEY IS A CAPABILITY PROBE.
-// `model` (2026-08-22) and `runtime` + `runtimes` + `defaultRuntime` (2026-08-31, the
+// `runtime` + `runtimes` + `defaultRuntime` (2026-08-31, the
 // runtime-adapter port) are always present on the READ even when nothing is stored, because the
 // SPA feature-detects an OWN KEY: a missing key is "this desktop has no such concept" and renders
 // no row, where a present one with an empty value is "nothing chosen, the default applies".
@@ -109,9 +105,10 @@ const FAKE_RUNTIMES = Object.freeze([
 // build could not fully honour (empty here — the harness's records are clean). The legacy three
 // keys are unchanged and must stay: every renderer older than U5 feature-probes them by OWN KEY
 // and renders NO row when one is missing.
+// ⚠ `model` LEFT THE WIRE ON 2026-09-23 (Samuel: "We don't need a pin model in the settings"):
+// its ABSENCE is what makes the SPA's own-key probe draw no Model row.
 const onWire = (pair) => ({
   ...pair,
-  model: null,
   selectionVersion: 2,
   selection: { v: 2, runtime: "", messages: pair.messages, byRuntime: {} },
   needsReview: [],
@@ -331,7 +328,7 @@ function bootIpc() {
     // when the gate was what had been deleted.
     if (id === "./agent-defaults") {
       return {
-        getAgentDefaults: () => ({ tools: "manual", messages: "ask", agentChain: false, model: null, runtime: "" }),
+        getAgentDefaults: () => ({ tools: "manual", messages: "ask", agentChain: false, runtime: "" }),
         setAgentDefaults: (raw) => (raw && raw.tools === "manual" ? { ok: true } : { ok: false }),
         seedChannel: () => ({ ok: true, seeded: true }),
       };

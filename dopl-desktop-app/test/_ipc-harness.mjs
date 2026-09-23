@@ -94,7 +94,6 @@ export function bootIpc({ blocked = false } = {}) {
         getLaunchPosture: () => ({ tools: "bypass", messages: "auto_both" }),
         setLaunchPosture: (channelId, preset) => { writes.push({ channelId, preset }); return { ok: true }; },
         launchStartModes: () => ({ tools: "manual", messages: "auto_inbound" }),
-        getLaunchModel: () => "",
         // U5 (2026-09-21): the versioned, runtime-keyed record the two posture ops now read and
         // write. `setLaunchSelection` records into the SAME `writes` ledger — it is the one
         // validating writer, so a second ledger would let one op's forged write pass unseen.
@@ -108,7 +107,6 @@ export function bootIpc({ blocked = false } = {}) {
           writes.push({ channelId, preset });
           return { ok: true, preset, selection: { v: 2, runtime: "", messages: "auto_both", byRuntime: {} }, review: [] };
         },
-        getLaunchModelLink: () => "",
         // `getAutoSend` / `setAutoSend` removed 2026-09-06 (item 8). The fakes go WITH the real
         // functions: a harness offering a method `channel-prefs.js` no longer exports would let a
         // handler reading it pass here and throw in production.

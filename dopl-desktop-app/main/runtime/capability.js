@@ -397,7 +397,6 @@ module.exports = {
   // launch-selection vocabulary is a different reason to change from what `null` means to a
   // control. No caller moved.
   pickRule: selection.pickRule,
-  storeModelPick: selection.storeModelPick,
   launchModelPick: selection.launchModelPick,
   nativeDimensions: selection.nativeDimensions,
   normalizeNative: selection.normalizeNative,

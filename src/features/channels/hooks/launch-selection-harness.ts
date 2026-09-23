@@ -56,7 +56,7 @@ export function catalog(
 }
 
 export interface SelectionStubInput extends Partial<Omit<LaunchSelectionState, "recordFor" | "catalogFor">> {
-  /** `{ <runtimeId>: { tools?, model?, native? } }` — what each runtime remembers. */
+  /** `{ <runtimeId>: { tools?, native? } }` — what each runtime remembers. */
   byRuntime?: Record<string, RuntimeRecord>;
   catalogs?: ModelCatalogs;
 }
@@ -74,7 +74,6 @@ export function launchSelectionStub(over: SelectionStubInput = {}): LaunchSelect
     bridge: { read: async () => null, write: async () => ({ ok: true }) },
     supported: true,
     runtimeSupported: false,
-    modelSupported: false,
     runtimes: [],
     connected: [],
     connectedKnown: false,

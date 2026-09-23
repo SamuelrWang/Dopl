@@ -100,7 +100,6 @@ test("the factory answer is the MOST RESTRICTIVE one, and chaining is off", () =
     tools: ctx.narrowestToolFor(""),
     messages: "ask",
     agentChain: false,
-    model: null,
     runtime: "",
     v: sel.SELECTION_VERSION,
     byRuntime: {},
@@ -136,23 +135,23 @@ test("agentChain is `=== true` and nothing else, because it lifts a bound", () =
 // ── U5: THE RUNTIME-KEYED HALF ───────────────────────────────────────────────────────────────
 
 test("a LEGACY record migrates into the DEFAULT runtime's half, untranslated", () => {
-  // ⚠ NO `v` ⇒ pre-U5. Its global `tools`/`model` are the DEFAULT runtime's vocabulary by
-  // construction — the only thing the old validators could store — so that is whose record they
-  // land in, WHATEVER runtime the operator had selected. Putting them under the SELECTED runtime
-  // would be the migration asserting that `bypass` "is" some Codex approval mode, which is the
-  // one-to-one mapping Samuel's Decision #1 refuses outright.
+  // ⚠ NO `v` ⇒ pre-U5. Its global `tools` is the DEFAULT runtime's vocabulary by construction —
+  // the only thing the old validator could store — so that is whose record it lands in, WHATEVER
+  // runtime the operator had selected. Putting it under the SELECTED runtime would be the migration
+  // asserting that `bypass` "is" some Codex approval mode, which Decision #1 refuses outright.
+  // ⚠ ITS `model` IS DROPPED (2026-09-23): no launch record stores a model any more.
   const out = norm({ tools: "bypass", messages: "auto_both", model: "claude-opus-5", runtime: "codex" });
   assert.equal(out.v, sel.SELECTION_VERSION);
   assert.equal(out.runtime, "codex", "the pick is carried over");
-  assert.deepEqual(out.byRuntime[ctx.defaultId], { tools: "bypass", model: "claude-opus-5" });
+  assert.deepEqual(out.byRuntime[ctx.defaultId], { tools: "bypass" });
   assert.equal(out.byRuntime.codex, undefined, "nothing is invented for the selected runtime");
 });
 
 test("a CODEX record accepts Codex values without passing through another runtime's enums", () => {
-  // ⚠ THE UNIT'S HEADLINE. Before U5 every one of these three fields was validated against the
-  // DEFAULT runtime's frozen lists: `on-request` is not one of its four tool words, `gpt-5-codex`
-  // is not one of its four model ids, and it has no sandbox axis at all — so the tool word
-  // rejected the whole write, the model was silently dropped, and the sandbox had nowhere to go.
+  // ⚠ THE UNIT'S HEADLINE. Before U5 these fields were validated against the DEFAULT runtime's
+  // frozen lists: `on-request` is not one of its four tool words and it has no sandbox axis at all.
+  // ⚠ 2026-09-23: the MODEL and the model-scoped REASONING EFFORT are DROPPED, silently — neither
+  // is stored any more; the containment axis (`sandbox_mode`) stays.
   const out = norm({
     v: 2,
     runtime: "codex",
@@ -167,8 +166,7 @@ test("a CODEX record accepts Codex values without passing through another runtim
   });
   assert.deepEqual(out.byRuntime.codex, {
     tools: "on-request",
-    model: "gpt-5-codex",
-    native: { sandbox_mode: "read-only", reasoningEffort: "high" },
+    native: { sandbox_mode: "read-only" },
   });
 });
 
@@ -186,33 +184,22 @@ test("BOTH runtimes' choices are remembered side by side, and the WIRE shows the
   });
   const onCodex = wire(stored);
   assert.equal(onCodex.tools, "never");
-  assert.equal(onCodex.model, "gpt-5-codex");
   assert.deepEqual(onCodex.native, { sandbox_mode: "danger-full-access" });
   const onClaude = wire({ ...stored, runtime: "claude" });
   assert.equal(onClaude.tools, "bypass");
-  assert.equal(onClaude.model, "claude-opus-5");
   assert.deepEqual(onClaude.native, {}, "the runtime with no such axis gets no bag, not the other's");
   // ⚠ AND THE OTHER RUNTIME'S RECORD IS STILL THERE, untouched, in both directions.
-  assert.equal(onClaude.byRuntime.codex.model, "gpt-5-codex");
+  assert.equal(onClaude.byRuntime.codex.tools, "never");
+  assert.equal("model" in onCodex || "model" in onClaude, false, "no model rides the wire (2026-09-23)");
 });
 
-test("the model validates SOFT, and ABSENT IS NOT A MEMBER", () => {
-  const ok = norm({ ...OK, v: 2, byRuntime: { claude: { model: "claude-opus-5" } } });
-  assert.equal(ok.byRuntime.claude.model, "claude-opus-5");
-  // ⚠ AN UNKNOWN MODEL DOES NOT FAIL THE RECORD — a desktop that has not heard of a newer id must
-  // still be able to store the rest; refusing the whole record over a model name is the wrong
-  // trade in both directions.
-  // ⚠ 2026-09-22: CLAUDE'S PICK RULE IS OPEN (its roster is live), so STORAGE keeps any
-  // WELL-FORMED id — a record written while the CLI offered a model must not be erased by a build
-  // that has not heard of it. The runtime boundary is enforced where it can be KNOWN: the picker
-  // offers only that runtime's live catalog, and a launch naming an id its roster lacks is REFUSED
-  // (`claude-live-roster.test.mjs`). What storage still refuses is anything that cannot BE an id.
-  const kept = norm({ ...OK, v: 2, byRuntime: { claude: { model: "claude-opus-6[1m]" } } });
-  assert.equal(kept.byRuntime.claude.model, "claude-opus-6[1m]", "a model this build predates is kept");
-  const unknown = norm({ ...OK, v: 2, byRuntime: { claude: { model: "gpt 9; rm" } } });
-  assert.equal(unknown.byRuntime.claude, undefined, "a malformed id is absent, and an empty record is no record");
-  // ⚠ OMITTED RATHER THAN '' OR null, so a record from before the field and a record whose model
-  // was cleared are the SAME record and no reader can grow a third state to get wrong.
+test("a stored model is DROPPED on every runtime — no launch record keeps one (2026-09-23)", () => {
+  // Samuel: "We don't need a pin model in the settings." A record written by an older build still
+  // carries one; it reads harmlessly and an empty record is no record.
+  const stale = norm({ ...OK, v: 2, byRuntime: { claude: { model: "claude-opus-5" } } });
+  assert.equal(stale.byRuntime.claude, undefined, "a record that held only a model is no record");
+  const mixed = norm({ ...OK, v: 2, byRuntime: { claude: { tools: "auto", model: "claude-opus-6[1m]" } } });
+  assert.deepEqual(mixed.byRuntime.claude, { tools: "auto" });
   assert.equal(norm({ ...OK, v: 2, byRuntime: { claude: { tools: "bypass", model: "" } } })
     .byRuntime.claude.model, undefined);
 });
@@ -275,17 +262,17 @@ test("a record for a runtime this build does not register is KEPT and never read
 
 test("the WIRE always carries the legacy keys; STORAGE keeps them per runtime", () => {
   // ⚠ THE ASYMMETRY IS THE POINT, NOT AN INCONSISTENCY TO TIDY. The web's capability probes are
-  // OWN-KEY tests, so a reply missing `tools`, `model` or `runtime` reads as "this desktop has no
-  // such concept" and renders NO row — and the only way to store a value is the row that was never
-  // drawn. `v` and `byRuntime` are ADDITIVE beside them: a renderer that knows about them reads the
-  // whole per-runtime truth, one that does not sees the shape it always saw.
+  // OWN-KEY tests, so a reply missing `tools` or `runtime` reads as "this desktop has no such
+  // concept" and renders NO row. `v` and `byRuntime` are ADDITIVE beside them.
+  // ⚠ `model` IS DELIBERATELY ABSENT SINCE 2026-09-23 — the missing key is what hides an older
+  // renderer's Model row (Samuel: "We don't need a pin model in the settings").
   const stored = norm(OK);
   assert.ok(!("tools" in stored) && !("model" in stored), "storage holds neither globally");
+  assert.equal("model" in wire(stored), false, "…and the wire no longer carries a model key at all");
   assert.deepEqual(wire(stored), {
     tools: ctx.narrowestToolFor(""),
     messages: "auto_inbound",
     agentChain: false,
-    model: null,
     runtime: "",
     v: sel.SELECTION_VERSION,
     byRuntime: {},

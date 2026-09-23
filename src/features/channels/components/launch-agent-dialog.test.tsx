@@ -61,8 +61,7 @@ const posture = vi.hoisted(() => ({
   connected: [] as string[],
   connectedKnown: false,
   /** ⚠ U7: what each runtime REMEMBERS, and which models each one offers. */
-  modelSupported: false,
-  byRuntime: {} as Record<string, { tools?: string; model?: string; native?: Record<string, string> }>,
+  byRuntime: {} as Record<string, { tools?: string; native?: Record<string, string> }>,
   catalogs: {} as Record<string, unknown>,
 }));
 // ⚠ **THE DIALOG READS THE VERSIONED, RUNTIME-KEYED RECORD SINCE 2026-09-21 (U7)** — one hook,
@@ -86,7 +85,6 @@ vi.mock("../hooks/use-launch-selection", async () => {
         connected: posture.connected,
         connectedKnown: posture.connectedKnown,
         defaultRuntime: REAL_DEFAULT_RUNTIME,
-        modelSupported: posture.modelSupported,
         byRuntime: posture.byRuntime,
         catalogs: posture.catalogs as never,
       }),
@@ -146,7 +144,6 @@ beforeEach(() => {
   posture.stored = "";
   posture.connected = [];
   posture.connectedKnown = false;
-  posture.modelSupported = false;
   posture.byRuntime = {};
   posture.catalogs = {};
   stubBridge();
@@ -349,7 +346,6 @@ describe("the payload is the slide-out's, argument for argument", () => {
 
   it("matches on a FULLY PICKED dialog — identity, model and runtime", async () => {
     posture.runtimeSupported = true;
-    posture.modelSupported = true;
     identityList.identities = [
       { id: "tpl-9", name: "Code auditor", workspaceId: "ws-1", createdBy: ME },
     ];

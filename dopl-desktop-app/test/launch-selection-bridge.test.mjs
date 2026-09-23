@@ -33,8 +33,9 @@ const requireMain = createRequire(import.meta.url);
 const read = (...p) => readFileSync(join(HERE, "..", ...p), "utf8");
 const PRELOAD = read("renderer", "app-preload.js");
 
+
 test("PRELOAD: every launch-posture field is forwarded ONLY when the caller supplied one", () => {
-  for (const key of ["tools", "messages", "model", "runtime", "native"]) {
+  for (const key of ["tools", "messages", "runtime", "native"]) {
     assert.match(
       PRELOAD,
       new RegExp(`\\.\\.\\.\\(preset && preset\\.${key} !== undefined \\?`),
@@ -47,7 +48,10 @@ test("PRELOAD: every launch-posture field is forwarded ONLY when the caller supp
     "the unconditional `tools` coercion is what turned a runtime-only write into a refusal"
   );
   assert.ok(!/messages: asMode\(preset && preset\.messages\)/.test(PRELOAD));
+  // ⚠ 2026-09-23 (Samuel: "We don't need a pin model in the settings"): `model` is NOT forwarded.
+  assert.ok(!/preset\.model/.test(PRELOAD.replace(/\/\/.*$/gm, "")), "the stored model is deleted");
 });
+
 
 test("PRELOAD: the native bag crosses as a FLAT MAP OF STRINGS and nothing else", () => {
   // ⚠ NO NESTING, NO ARRAYS, NO NUMBERS — the same fail-closed coercion every other value on this
@@ -59,15 +63,18 @@ test("PRELOAD: the native bag crosses as a FLAT MAP OF STRINGS and nothing else"
 
 test("PRELOAD: the defaults write carries `v` and `byRuntime`, or main reads it as LEGACY", () => {
   // ⚠ THE FAILURE IS SILENT AND TOTAL. `agent-defaults.js › normalizeDefaults` branches on
-  // `v == null`; without it the record is read as a pre-U5 one and its single global
-  // `tools`/`model` migrate into the DEFAULT runtime's slot — so every write from the profile
-  // Agents tab ERASED the operator's Codex model and sandbox.
+  // `v == null`; without it the record is read as a pre-U5 one and its single global `tools`
+  // migrates into the DEFAULT runtime's slot — so every write from the profile Agents tab ERASED
+  // the operator's Codex sandbox.
   assert.match(PRELOAD, /\.\.\.\(defaults && defaults\.v !== undefined \? \{ v: Number\(defaults\.v\) \} : \{\}\)/);
   assert.match(PRELOAD, /byRuntime: asRuntimeRecords\(defaults\.byRuntime\)/);
   const body = PRELOAD.slice(PRELOAD.indexOf("const asRuntimeRecords"), PRELOAD.indexOf("contextBridge.exposeInMainWorld"));
-  for (const key of ["tools", "model", "native"]) {
+  for (const key of ["tools", "native"]) {
     assert.match(body, new RegExp(`record\\.${key} !== undefined`), `\`${key}\` is own-key inside a record too`);
   }
+  // ⚠ 2026-09-23: no `model` inside a record, and none on the defaults write either.
+  assert.ok(!/record\.model/.test(body), "a runtime record carries no model");
+  assert.ok(!/defaults\.model/.test(PRELOAD.replace(/\/\/.*$/gm, "")), "the defaults write carries no model");
   assert.match(read("main", "agent-defaults.js"), /const legacy = raw\.v == null;/,
     "…and main's branch is the reason the key has to be there");
 });
@@ -87,12 +94,11 @@ test("MAIN: a runtime-only patch is not a tool-axis claim, so it cannot be rejec
       return modes.indexOf(mode) === -1 ? modes[0] : mode;
     },
     narrowestToolFor: (id) => (id === "codex" ? "untrusted" : "manual"),
-    storeModelFor: (_id, value) => value,
+    modelDimensionsFor: (id) => (id === "codex" ? ["reasoningEffort"] : []),
     nativeFor: (_id, raw) => ({ value: raw && typeof raw === "object" ? { ...raw } : {}, review: [] }),
   };
   const base = selection.patchSelection(ctx, selection.emptySelection(), {
     tools: "accept_edits",
-    model: "claude-fable-5",
   }).selection;
 
   assert.deepEqual(selection.patchRejections(ctx, base, { runtime: "codex" }), [],
@@ -100,19 +106,16 @@ test("MAIN: a runtime-only patch is not a tool-axis claim, so it cannot be rejec
   assert.equal(selection.patchRejections(ctx, base, { tools: "", messages: "" }).length, 2,
     "…and the shape the OLD preload produced is refused on BOTH axes, which is the defect");
 
-  // ⚠ AND THE SWITCH KEEPS BOTH SETS (Decisions #1 and #2). The pre-U5 record CLEARED the model.
+  // ⚠ AND THE SWITCH KEEPS BOTH SETS (Decisions #1 and #2).
   const switched = selection.patchSelection(ctx, base, { runtime: "codex" }).selection;
-  assert.equal(switched.byRuntime.claude.model, "claude-fable-5");
   assert.equal(switched.byRuntime.claude.tools, "accept_edits");
   const onCodex = selection.patchSelection(ctx, switched, {
-    model: "gpt-6-mini",
-    native: { sandbox_mode: "read-only" },
+    native: { sandbox_mode: "read-only", reasoningEffort: "high" },
   }).selection;
-  assert.equal(onCodex.byRuntime.codex.model, "gpt-6-mini");
-  assert.deepEqual(onCodex.byRuntime.codex.native, { sandbox_mode: "read-only" });
-  assert.equal(onCodex.byRuntime.claude.model, "claude-fable-5",
+  assert.deepEqual(onCodex.byRuntime.codex.native, { sandbox_mode: "read-only" },
+    "the MODEL-scoped effort is dropped (2026-09-23); the containment axis stays");
+  assert.equal(onCodex.byRuntime.claude.tools, "accept_edits",
     "editing Codex may not touch Claude — that is the whole reason the record is runtime-keyed");
   const back = selection.patchSelection(ctx, onCodex, { runtime: "claude" }).selection;
-  assert.equal(selection.activeRecord(ctx, back).model, "claude-fable-5");
   assert.equal(selection.activeRecord(ctx, back).tools, "accept_edits");
 });

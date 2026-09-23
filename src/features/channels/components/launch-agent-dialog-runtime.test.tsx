@@ -58,8 +58,7 @@ const posture = vi.hoisted(() => ({
   connected: [] as string[],
   connectedKnown: false,
   /** ⚠ U7: what each runtime REMEMBERS, and which models each one offers. */
-  modelSupported: false,
-  byRuntime: {} as Record<string, { tools?: string; model?: string; native?: Record<string, string> }>,
+  byRuntime: {} as Record<string, { tools?: string; native?: Record<string, string> }>,
   catalogs: {} as Record<string, unknown>,
 }));
 // ⚠ **THE DIALOG READS THE VERSIONED, RUNTIME-KEYED RECORD SINCE 2026-09-21 (U7)** — one hook,
@@ -83,7 +82,6 @@ vi.mock("../hooks/use-launch-selection", async () => {
         connected: posture.connected,
         connectedKnown: posture.connectedKnown,
         defaultRuntime: REAL_DEFAULT_RUNTIME,
-        modelSupported: posture.modelSupported,
         byRuntime: posture.byRuntime,
         catalogs: posture.catalogs as never,
       }),
@@ -142,7 +140,6 @@ beforeEach(() => {
   posture.stored = "";
   posture.connected = [];
   posture.connectedKnown = true;
-  posture.modelSupported = false;
   posture.byRuntime = {};
   posture.catalogs = {};
   stubBridge();

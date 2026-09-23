@@ -38,6 +38,7 @@ const { diag } = require('./diag');
 // ⚠ Lazily-required like `ontology-reach`, and for the same reason: `main/` truth tables load
 // this module directly and must not pull the IPC/electron surface in behind it.
 const roomRoster = require('./room-roster');
+const launchDefault = require('./runtime/launch-default'); // 2026-09-23: a no-pick launch's model
 
 let deps = { sessions: null, acquireRuntime: null, startSession: null, liveOnThread: null, sessionOn: null };
 
@@ -132,6 +133,13 @@ async function launch(a) {
     diag('session-launch: model refused —', modelRefusal);
     return { skipped: 'no-model', detail: modelRefusal };
   }
+  // ── 🔒 NO PICK → THE RUNTIME'S OWN DEFAULT, HERE AND ONLY HERE (2026-09-23) ──────────────────
+  // The last link of every lane's model order (launcher > identity > runtime default); the
+  // channel/profile "pin model" link is deleted. `runtime/launch-default.js` carries the rule —
+  // Codex names `gpt-6-sol` only when this account's live catalog offers it, and otherwise NO model,
+  // so a default can never become a `no-model` refusal. AFTER the refusal on purpose: it only ever
+  // names a model the catalog just proved.
+  const model = await launchDefault.withRuntimeDefault(rt, a.model);
   // ── ⚠ THE WINDOWLESS TOOL FLOOR, AS A LAUNCH REFUSAL (2026-09-01, D1) ─────────────────────
   //
   // `contract.js › LAUNCH_BLOCKING[3]`. `capability.js › floorWindowlessTool`'s header has always
@@ -239,7 +247,9 @@ async function launch(a) {
     // per-session picker's value had one producer left (a resume's stored record) and no way in
     // from a launch. It is coerced at the construction site and again at `buildSdkOptions`, the
     // last step before a child process can see it, so a bad value here is 'default', never argv.
-    model: a.model,
+    // ⚠ SINCE 2026-09-23 IT IS `a.model` OR THE RUNTIME DEFAULT resolved above — still invented by
+    // no lane.
+    model,
     // ⚠ **THE AGENT COLOUR, FORWARDED AND NEVER INVENTED** (Samuel, 2026-09-13;
     // docs/specs/agent-colors.md). It rides `model`'s exact argument one line up: a colour
     // GRANTS NOTHING and reaches NO GATE, so it may travel the funnel without the ceremony the

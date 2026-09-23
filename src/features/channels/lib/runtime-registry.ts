@@ -26,7 +26,7 @@ import type { RuntimeDescriptor } from "./runtime-capability";
 
 /**
  * DID THIS REPLY CARRY A RUNTIME FIELD AT ALL — the capability probe, and the
- * TWIN of `permission-modes.ts › hasModelKey` rather than a new idea.
+ * TWIN of the since-deleted `permission-modes.ts` `hasModelKey` rather than a new idea.
  *
  * ⚠ IT IS AN OWN-KEY TEST, NOT A TRUTHINESS TEST, and the distinction is the
  * whole feature. `runtime: ''` is a current desktop saying "no pick, the DEFAULT

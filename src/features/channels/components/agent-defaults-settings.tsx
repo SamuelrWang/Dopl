@@ -8,9 +8,10 @@
  *
  * ⚠ **IT RENDERS THE PER-CHANNEL TAB'S OWN ROWS, BY IMPORT, AND THAT IS THE POINT.**
  * `AgentLaunchPostureRows` is the same component `settings-agent.tsx` mounts, so the runtime, Tool
- * use, Messaging and Model rows cannot drift between "what a channel is set to" and "what a new
- * channel starts on". A second copy of those four rows is how the two surfaces come to offer
- * different vocabularies for one record.
+ * use, containment and Messaging rows cannot drift between "what a channel is set to" and "what
+ * a new channel starts on". A second copy of those rows is how the two surfaces come to offer
+ * different vocabularies for one record. ⚠ NO MODEL ROW SINCE 2026-09-23 (Samuel: *"We don't need
+ * this model, channel, and profile settings"*) — a new channel inherits no model either.
  *
  * ⚠ **NO POSTURE WARNING HERE, AND THAT IS DELIBERATE RATHER THAN AN OMISSION.**
  * `posture-warning.tsx`'s dialog fires on `auto_both` + `full` + **a peer in the room** — it is a

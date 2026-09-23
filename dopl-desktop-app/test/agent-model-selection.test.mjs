@@ -1,15 +1,15 @@
-// AGENT MODEL SELECTION — the desktop half (2026-08-22, Samuel's ruling).
+// AGENT MODEL SELECTION — the desktop half (2026-08-22, Samuel's ruling; the CHANNEL/PROFILE model
+// setting DELETED 2026-09-23, Samuel: "We don't need a pin model in the settings").
 //
 // TWO VOCABULARIES: the ruling names FULL IDS and the SPA renders those, while everything below the
 // launch boundary speaks version-stable ALIASES (an alias is what may become `--model` on a child
 // process). Hence two frozen lists in `session-model.js` and one map between them.
 // `test/session-model.test.mjs` owns the lists; THIS file owns the WIRING:
 //
-//   DURABLE  the per-channel launch posture carries `model` beside the two axes — a third FIELD,
-//            never a third AXIS. It validates SOFT (unknown = absent = the SDK default) where the
-//            axes validate HARD (unknown = the whole write is refused).
-//   LAUNCH   every lane that spawns hands it in, INCLUDING the peer-triggered one, which may NOT
-//            inherit the permission pair — hence two readers in `channel-prefs.js`.
+//   NO PIN   no launch record stores a model any more — not the channel's, not the profile
+//            defaults'. A legacy one on disk is dropped on read and never written back.
+//   LAUNCH   every lane resolves launcher pick > identity model > the RUNTIME's default
+//            (`runtime/launch-default.js`, applied once in the funnel).
 //   LIVE     `Query.setModel` really switches a running session; main records the pick so a
 //            park/resume keeps it.
 //   REPORT   the summary carries the EFFECTIVE model, SDK-reported first.
@@ -23,7 +23,7 @@ import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { prefs, CH_A, CH_B } from "./_channel-prefs-block.mjs";
+import { prefs, CH_A } from "./_channel-prefs-block.mjs";
 
 const require = createRequire(import.meta.url);
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -37,207 +37,97 @@ const RUNTIME_REGISTRY = require(join(MAIN, "runtime/index.js"));
 const JUNK = ["", " ", null, undefined, 0, 1, true, {}, [], "opus", "claude-opus-4-5",
   "claude-opus-5 ", "--dangerously-skip-permissions", "claude-opus-5\n--model=x"];
 
-// ── 1. THE DURABLE POSTURE ───────────────────────────────────────────────────────────────────
+/** Source with `//` comments stripped, so a tombstone naming a deleted symbol does not count. */
+const code = (src) => src.split("\n")
+  .filter((l) => !/^\s*(\/\/|\*)/.test(l))
+  .map((l) => { const i = l.indexOf("//"); return i === -1 ? l : l.slice(0, i); })
+  .join("\n");
 
-test("DURABLE: a valid model rides the pair and round-trips unchanged", () => {
+// ── 1. NO STORED MODEL (2026-09-23) ──────────────────────────────────────────────────────────
+
+test("NO PIN: the legacy reader never stores a model, supplied or not", () => {
   const map = {};
   const res = prefs.postureInto(map, CH_A, { tools: "bypass", messages: "auto_both", model: "claude-opus-5" });
-  assert.equal(res.ok, true);
-  assert.deepEqual(map[CH_A], { tools: "bypass", messages: "auto_both", model: "claude-opus-5" });
-  assert.deepEqual(prefs.readPostureFrom(map, CH_A),
-    { tools: "bypass", messages: "auto_both", model: "claude-opus-5" });
+  assert.equal(res.ok, true, "the pair is still written — a model key must not refuse it");
+  assert.deepEqual(map[CH_A], { tools: "bypass", messages: "auto_both" });
+  assert.deepEqual(res.preset, map[CH_A], "the reply states what was STORED");
 });
 
-test("DURABLE: an UNKNOWN model is ABSENT, and the pair is still written", () => {
-  // THE ASYMMETRY IS THE DESIGN. An unknown value on either AXIS rejects the whole write, so a
-  // half-applied posture cannot exist. An unknown MODEL is simply not stored: absent means the SDK
-  // default. Failing the write would stop a desktop that has not heard of a newer model from
-  // storing a POSTURE at all.
-  for (const junk of JUNK) {
-    const map = {};
-    const res = prefs.postureInto(map, CH_A, { tools: "auto", messages: "ask", model: junk });
-    assert.equal(res.ok, true, JSON.stringify(junk));
-    assert.deepEqual(map[CH_A], { tools: "auto", messages: "ask" }, JSON.stringify(junk));
-    assert.equal("model" in map[CH_A], false, "absent is a MISSING KEY, never '' or null");
-  }
-});
-
-test("DURABLE: an unknown AXIS still refuses the whole write, model or no model", () => {
-  const map = {};
-  assert.deepEqual(prefs.postureInto(map, CH_A, { tools: "YOLO", messages: "ask", model: "claude-opus-5" }),
-    { ok: false });
-  assert.deepEqual(map, {}, "nothing is stored — not even the valid model");
-});
-
-test("DURABLE: a record written BEFORE this field reads back as the pair alone", () => {
-  const map = { [CH_A]: { tools: "manual", messages: "ask" } };
+test("NO PIN: a record on disk that still carries a model reads back as the pair alone", () => {
+  const map = { [CH_A]: { tools: "manual", messages: "ask", model: "claude-fable-5" } };
   assert.deepEqual(prefs.readPostureFrom(map, CH_A), { tools: "manual", messages: "ask" });
 });
 
-// ── STORAGE OMITS THE KEY; THE WIRE MUST NOT. THIS IS THE SEAM. ─────────────────────────────
+test("NO PIN: an unknown AXIS still refuses the whole write", () => {
+  const map = {};
+  assert.deepEqual(prefs.postureInto(map, CH_A, { tools: "YOLO", messages: "ask", model: "claude-opus-5" }),
+    { ok: false });
+  assert.deepEqual(map, {}, "nothing is stored");
+});
+
+// ── THE WIRE CARRIES NO `model` KEY, AND ITS ABSENCE IS THE POINT ────────────────────────────
 //
 // The web's capability probe (`src/features/channels/lib/permission-modes.ts › hasModelKey`) is an
-// OWN-KEY test: a missing `model` means "this desktop predates the field" and the Settings tab draws
-// NO MODEL ROW at all. So a `getLaunchPosture` answering the pair alone told every channel without a
-// stored model that the feature did not exist — and the only way to store one is the row that was
-// never drawn. A closed loop, green in every suite, with the feature unreachable.
-test("WIRE: the effective read ALWAYS carries `model`, so the capability probe can see it", () => {
-  // A channel that has never chosen anything: the restrictive pair, and an EXPLICIT null.
+// OWN-KEY test: a missing `model` means "this desktop has no model setting" and the Settings tab
+// draws NO model row. So an OLDER renderer meeting this build hides the row too.
+test("WIRE: the effective read carries NO `model` key", () => {
   const fresh = prefs.effectivePosture({}, CH_A);
-  assert.deepEqual(fresh, { tools: "manual", messages: "ask", model: null });
-  assert.equal("model" in fresh, true, "an own-key probe must find the key on a fresh channel");
-
-  // A record written before the field existed: same answer. Absent is KNOWN-ABSENT here.
-  const legacy = prefs.effectivePosture({ [CH_A]: { tools: "auto", messages: "ask" } }, CH_A);
-  assert.deepEqual(legacy, { tools: "auto", messages: "ask", model: null });
-
-  // And "Default" — the web writes `''`, which stores no key and must still read as null
-  // rather than as a desktop with no model concept.
-  const cleared = {};
-  prefs.postureInto(cleared, CH_A, { tools: "auto", messages: "ask", model: "" });
-  assert.equal("model" in cleared[CH_A], false, "storage still omits it");
-  assert.equal(prefs.effectivePosture(cleared, CH_A).model, null, "the wire still states it");
-
-  // A real pick rides through unchanged.
-  const picked = {};
-  prefs.postureInto(picked, CH_A, { tools: "bypass", messages: "auto_both", model: "claude-opus-5" });
-  assert.equal(prefs.effectivePosture(picked, CH_A).model, "claude-opus-5");
+  assert.deepEqual(fresh, { tools: "manual", messages: "ask" });
+  assert.equal("model" in fresh, false);
+  const legacy = prefs.effectivePosture({ [CH_A]: { tools: "auto", messages: "ask", model: "claude-opus-5" } }, CH_A);
+  assert.deepEqual(legacy, { tools: "auto", messages: "ask" });
 });
 
 test("WIRE: `getLaunchPosture` is that composition, not a second spelling of it", () => {
-  // A REGEX BECAUSE THE REAL FUNCTION NEEDS electron-store. It pins the one property source
-  // extraction cannot: that the store-backed reader routes through the same helper the case above
-  // drives, rather than re-deriving the shape and drifting from it.
-  // ⚠ THE COMPOSITION MOVED ON 2026-09-21 (U5): the reader is the VERSIONED, RUNTIME-KEYED
-  // selection, rendered back into the legacy three-key wire the case above drives. The PROPERTY is
-  // unchanged — one helper, not a second spelling that can drift from it.
+  // A REGEX BECAUSE THE REAL FUNCTION NEEDS electron-store. The reader is the VERSIONED,
+  // RUNTIME-KEYED selection, rendered back into the legacy wire.
   const PREFS = read("channel-prefs.js");
   const body = PREFS.slice(PREFS.indexOf("function getLaunchPosture("));
   assert.match(body.slice(0, body.indexOf("}")),
     /toLegacyPosture\(ctx\(\), getLaunchSelection\(channelId\)\)/);
+  assert.ok(!/model/.test(code(read("launch-selection.js")).slice(
+    code(read("launch-selection.js")).indexOf("function toLegacyPosture("),
+    code(read("launch-selection.js")).indexOf("function patchRejections("))),
+  "the legacy wire shape must not grow the key back");
 });
 
-test("DURABLE: two channels hold independent models", () => {
-  const map = {};
-  prefs.postureInto(map, CH_A, { tools: "manual", messages: "ask", model: "claude-fable-5" });
-  prefs.postureInto(map, CH_B, { tools: "manual", messages: "ask" });
-  assert.equal(prefs.readPostureFrom(map, CH_A).model, "claude-fable-5");
-  assert.equal("model" in prefs.readPostureFrom(map, CH_B), false);
+test("PRELOAD: the posture and defaults writes forward NO model key", () => {
+  const PRELOAD = code(readFileSync(join(HERE, "..", "renderer", "app-preload.js"), "utf8"));
+  assert.ok(!/preset\.model/.test(PRELOAD), "setLaunchPosture no longer forwards `model`");
+  assert.ok(!/defaults\.model/.test(PRELOAD), "setAgentDefaults no longer forwards `model`");
+  assert.ok(!/record\.model/.test(PRELOAD), "the runtime-keyed records no longer carry one");
 });
 
-test("DURABLE: extra properties are still dropped whole", () => {
-  const map = {};
-  prefs.postureInto(map, CH_A, { tools: "auto", messages: "ask", model: "claude-sonnet-5", at: 1, evil: "x" });
-  assert.deepEqual(Object.keys(map[CH_A]).sort(), ["messages", "model", "tools"]);
-});
+// ── 2. THE CHANNEL MODEL READERS ARE GONE ────────────────────────────────────────────────────
 
-// ── ABSENT IS UNCHANGED; SUPPLIED IS OBEYED. THE OTHER SEAM. ────────────────────────────────
-//
-// The durable record is rewritten WHOLE on every posture change, and the preload used to coerce
-// `model` unconditionally — so a write from any surface that does not carry the field arrived as
-// `model: ''`, stored no key, and silently dropped the operator's pick while the Settings row still
-// read Opus. `{ model: undefined }` HAS the own key, so it is a caller SAYING "no model" and still
-// clears; only a `raw` with no `model` key at all preserves (INVARIANTS §11).
-test("SUPPLIED-ONLY: a write that never mentions the model leaves the stored pick alone", () => {
-  const map = {};
-  prefs.postureInto(map, CH_A, { tools: "bypass", messages: "auto_both", model: "claude-opus-5" });
-  // The Permissions row moves; this payload carries no `model` key at all.
-  const res = prefs.postureInto(map, CH_A, { tools: "manual", messages: "ask" });
-  assert.equal(res.ok, true);
-  assert.deepEqual(map[CH_A], { tools: "manual", messages: "ask", model: "claude-opus-5" },
-    "the axes moved and the pick survived");
-  assert.deepEqual(res.preset, map[CH_A], "…and the reply states what was STORED, not what was asked");
-});
-
-test("SUPPLIED-ONLY: an explicit '' still CLEARS it — the Default row is a real pick", () => {
-  const map = {};
-  prefs.postureInto(map, CH_A, { tools: "auto", messages: "ask", model: "claude-opus-5" });
-  prefs.postureInto(map, CH_A, { tools: "auto", messages: "ask", model: "" });
-  assert.equal("model" in map[CH_A], false, "supplied absence is absence, and storage omits the key");
-  // …and an UNRECOGNISED id is a supplied value too: it validates SOFT to the same absence, which
-  // is the 2026-08-22 rule and is deliberately not what a MISSING key does.
-  prefs.postureInto(map, CH_A, { tools: "auto", messages: "ask", model: "claude-opus-5" });
-  prefs.postureInto(map, CH_A, { tools: "auto", messages: "ask", model: "claude-opus-4-5" });
-  assert.equal("model" in map[CH_A], false, "an unknown id clears; only a MISSING key preserves");
-});
-
-test("SUPPLIED-ONLY: the two ends agree — the preload spreads, the validator probes the key", () => {
-  // SOURCE-ASSERTED BECAUSE THE HOLE IS AT AN END, NOT IN THE MIDDLE. Either half alone leaves the
-  // rule broken at whichever end forgot, and neither end can drive the other in-process: the preload
-  // needs `electron`, and the validator is sliced pure.
-  const PRELOAD = readFileSync(join(HERE, "..", "renderer", "app-preload.js"), "utf8");
-  assert.match(PRELOAD, /\.\.\.\(preset && preset\.model !== undefined \? \{ model: asMode\(preset\.model\) \} : \{\}\)/,
-    "the preload forwards the key ONLY when the caller supplied one");
-  assert.ok(!/model: asMode\(preset && preset\.model\)/.test(PRELOAD),
-    "…and the unconditional coercion is gone, not merely shadowed by a second spelling");
-  // ⚠ THE OWN-KEY PROBE MOVED WITH THE RECORD (U5). It is `launch-selection.js › patchSelection`
-  // that decides whether the caller SAID something about the model, and it now applies the same
-  // test to every field of the runtime-keyed record rather than to `model` alone.
-  assert.match(read("launch-selection.js"), /const has = \(k\) => Object\.prototype\.hasOwnProperty\.call\(p, k\);/,
-    "…and main tells a missing key from a supplied one, which is the other half");
-  assert.match(read("launch-posture-legacy.js"), /hasOwnProperty\.call\(raw, 'model'\)/,
-    "…and the legacy reader still does too, for the records already on disk");
-});
-
-// ── 2. TWO READERS, AND WHY ──────────────────────────────────────────────────────────────────
-
-test("READERS: the model has its OWN reader, so H2's posture census stays honest", () => {
-  // THE POINT OF THE SPLIT. `getLaunchPosture` has exactly ONE consumer and
-  // `test/session-preset-start.test.mjs` pins the count, because a second reader of the stored
-  // PERMISSION pair re-opens the failure H2 exists to prevent. A MODEL grants nothing and reaches no
-  // gate, so the PEER-TRIGGERED lane may inherit it; two readers make that distinction CHECKABLE.
-  const PREFS = read("channel-prefs.js");
-  assert.match(PREFS, /function getLaunchModel\(channelId\)/);
-  const body = PREFS.slice(PREFS.indexOf("function getLaunchModel("), PREFS.indexOf("module.exports = {"));
-  assert.ok(!/getLaunchPosture\(/.test(body),
-    "the model reader must not go through the posture reader, or the census cannot tell them apart");
-  // …and the peer-triggered lane reads the MODEL and nothing else from that record.
-  const TRIGGER = read("trigger.js");
-  // ⚠ `getLaunchModelLink` SINCE U5 — the same record, the same field, resolved on the channel's
-  // own runtime instead of through the DEFAULT runtime's alias table.
-  assert.match(TRIGGER, /channelPrefs\.getLaunchModelLink\(entry\.channel\.id\)/);
-  const code = TRIGGER.split("\n")
-    .filter((l) => !/^\s*\/\//.test(l))
-    .map((l) => { const i = l.indexOf("//"); return i === -1 ? l : l.slice(0, i); })
-    .join("\n");
-  assert.ok(!/getLaunchPosture|launchStartModes/.test(code),
+test("READERS: no channel-model reader survives, and no launch lane calls one", () => {
+  const PREFS = code(read("channel-prefs.js"));
+  assert.ok(!/function getLaunchModel/.test(PREFS), "getLaunchModel / getLaunchModelLink are deleted");
+  for (const f of ["session-launch-op.js", "launch-directive-spawn.js", "trigger.js"]) {
+    assert.ok(!/getLaunchModel/.test(code(read(f))), `${f} must not read a channel model`);
+  }
+  // …and the peer-triggered lane STILL does not inherit the operator's PERMISSION posture (H2).
+  assert.ok(!/getLaunchPosture|launchStartModes/.test(code(read("trigger.js"))),
     "a peer-driven launch must still not inherit the operator's PERMISSION posture");
 });
 
 // ── 3. THE LAUNCH LANES ──────────────────────────────────────────────────────────────────────
 
-test("LAUNCH: the spawn funnel FORWARDS a model — it used to drop one on every lane", () => {
-  // THE BUG THIS CASE IS FOR: `session-launch.js › launch` built the `startSession` spec with no
-  // `model` field at all, so `normalizeModel(spec.model)` could only answer 'default' for anything
-  // spawned through the funnel — which is every lane.
+test("LAUNCH: the spawn funnel FORWARDS the resolved model — launcher/identity pick or runtime default", () => {
   const LAUNCH = read("session-launch.js");
-  const spec = LAUNCH.slice(LAUNCH.indexOf("const s = await deps.startSession({"), LAUNCH.indexOf("}, sdk);"));
-  assert.match(spec, /^\s*model: a\.model,$/m, "forwarded, never invented");
+  assert.match(LAUNCH, /const model = await launchDefault\.withRuntimeDefault\(rt, a\.model\);/,
+    "the runtime default is applied ONCE, in the funnel every lane shares");
+  const spec = LAUNCH.slice(LAUNCH.indexOf("const s = await deps.startSession({"), LAUNCH.indexOf("}, rt);"));
+  assert.match(spec, /^\s*model,$/m, "forwarded, never invented by a lane");
+  assert.ok(LAUNCH.indexOf("await refuseUnknownModel(a.runtime, a.model)")
+    < LAUNCH.indexOf("await launchDefault.withRuntimeDefault(rt, a.model)"),
+  "an explicit unknown model is refused BEFORE a default could be substituted");
 });
 
-test("LAUNCH: both lanes convert the ID to the argv-safe ALIAS before it travels", () => {
-  // Everything below the launch boundary speaks the alias vocabulary, and `buildSdkOptions`
-  // re-coerces against it as the last gate. An AGENT IDENTITY may carry a default model and it
-  // outranks the channel's durable pick, so the channel read is the FALLBACK of the expression, not
-  // the whole of it; `identityModel` answers '' (not 'default') for an unknown identity model, which
-  // is what keeps it falling THROUGH instead of ending the chain one link early.
+test("LAUNCH: every lane's chain is launcher pick > identity model, and nothing below it", () => {
   const OPS = read("session-launch-op.js");
-  // The launch sheet sits in front of both since Phase 2: `overrides.model` is a DELIBERATE PER-CALL
-  // CHOICE and the other two are DEFAULTS.
-  // ⚠ THE CHANNEL LINK IS `getLaunchModelLink` SINCE 2026-09-21 (U5), NOT `aliasForModelId` OVER
-  // `getLaunchModel`. That spelling aliased the stored id through the DEFAULT runtime's table,
-  // which was right while only that runtime's ids could be stored and silently DROPS a pick made
-  // on any other runtime now that they can be. The new helper resolves the same link against the
-  // channel's own runtime, in one place, so the three launch lanes cannot drift.
-  assert.match(OPS,
-    /model: overrides\.model \|\| identityModel\(sessionModel, identity\)\s*\|\| channelPrefs\.getLaunchModelLink\(p\.channelId\)/,
-    "the operator's own Launch: the sheet, then the identity default, then the channel's pick");
-  // The rule itself moved to `session-model.js › chainModel` on 2026-08-23 (F-285): the DIRECTIVE
-  // lane needed the identical answer, and a rule written once per lane drifts in one of them.
-  // ⚠ 2026-09-22: THE RULE CHANGED — `chainModel` is VOCABULARY-FREE. Only "no opinion" (absent
-  // or the legacy word `default`) steps aside; any other value COMMITS the chain as given, and the
-  // funnel resolves it on the live roster or refuses it (`no-model`). Falling THROUGH on an id the
-  // frozen table did not know is how an unknown id started the product default.
+  assert.match(OPS, /model: overrides\.model \|\| identityModel\(sessionModel, identity\),/,
+    "the operator's own Launch: the sheet, then the identity default — the funnel does the rest");
   assert.match(read("session-model.js"), /return !v \|\| v === 'default' \? '' : v;/,
     "absent and `default` step aside; everything else is the pick as given");
   assert.equal(model.chainModel("claude-opus-6[1m]"), "claude-opus-6[1m]", "a model this build predates commits the chain");
@@ -245,17 +135,12 @@ test("LAUNCH: both lanes convert the ID to the argv-safe ALIAS before it travels
   assert.equal(model.chainModel("  "), "");
   assert.match(OPS, /return sessionModel\.chainModel\(/,
     "the button lane must not restate the rule — it delegates");
-  // The chain moved with `spawn` on 2026-09-01 (the §1 split); the precedence is unchanged.
-  // ⚠ THE SPELLING MOVED AGAIN ON 2026-09-21 (U9, `7964ea17`): the directive lane's chain is
-  // inside `resolveModel` now, because an explicit `runtime: codex` has to resolve its model
-  // against THAT runtime rather than through the default adapter's table. The PROPERTY this
-  // asserts is unchanged and is the only thing it ever asserted — the lane DELEGATES the
-  // "unrecognised model falls through" rule to `chainModel` instead of restating it — so the match
-  // is on the delegation, not on the assignment syntax around it.
-  assert.match(read("launch-directive-spawn.js"), /sessionModel\.chainModel\(d\.model\)/,
-    "…and so does the directive lane's own link, which used to be a ternary on aliasForModelId");
-  assert.match(read("trigger.js"),
-    /channelPrefs\.getLaunchModelLink\(entry\.channel\.id\)/, "the peer-triggered lane");
+  const DIRECTIVE = read("launch-directive-spawn.js");
+  assert.match(DIRECTIVE,
+    /return sessionModel\.chainModel\(d\.model\)\s*\|\| require\('\.\/session-launch-op'\)\.identityModel\(sessionModel, identity\);/,
+    "the directive lane: the directive's `model`, then the identity's");
+  assert.match(DIRECTIVE, /withRuntimeDefault\(registry\.resolve\(runtimeId\), ''\)/,
+    "…and a non-default runtime with no pick reports the default it will actually launch on");
 });
 
 test("LAUNCH: an unknown stored model degrades to the PRODUCT FALLBACK, never to argv", () => {
@@ -412,8 +297,9 @@ test("REPORT: the bridge declares the field and the op, in BOTH trees", () => {
     "…which is re-exported from it, so one import path stays canonical");
   assert.match(sessionOps, /setModel\?\(/, "…and the shared declaration has the op");
   assert.match(mirror, /setModel\?\(/, "…and so does the mirror");
-  assert.match(mirror, /preset: \{ tools: string; messages: string; model\?: string \}/,
-    "the durable posture's third field is declared where the SPA writes it");
+  // ⚠ 2026-09-23: the durable posture's third field is DELETED, and the mirror says so.
+  assert.match(mirror, /preset: \{ tools: string; messages: string \}/,
+    "the durable posture declares no model where the SPA writes it");
   assert.match(readFileSync(join(HERE, "..", "renderer", "app-preload.js"), "utf8"), /setModel: \(channelId, taskId, model, agentId\) =>/,
     "and the preload is the ground truth all three follow");
 });

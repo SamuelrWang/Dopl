@@ -297,6 +297,12 @@ const descriptor = {
   // elsewhere, a list here — never `[]`, which would render an empty control instead of none.
   dimensions: [DIMENSION],
   defaultMeansAbsent: '',
+  // ⚠ **THE MODEL A LAUNCH THAT NAMED NONE STARTS ON (2026-09-23, Samuel: *"I think we should do
+  // Sol"*)** — spent ONLY when this account's live `model/list` is `ready` and carries it, and
+  // otherwise NO model is sent and Codex picks (`runtime/launch-default.js`; the catalog shows it as
+  // the default for the same reason, `model-catalog.js › catalogFromRoster`). A preference, never a
+  // refusal: an account without Sol launches exactly as it did before this line.
+  launchDefault: 'gpt-6-sol',
   // ⚠ false: the thread carries its model through a resume by itself (`thread/resume` reopens the
   // conversation, it does not re-specify it), so nothing re-stamps it.
   reStampOnResume: false,

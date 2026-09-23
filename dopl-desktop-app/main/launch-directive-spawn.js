@@ -197,25 +197,31 @@ async function resolveModel(runtimeId, d, identity) {
   const registry = require('./runtime');
   let defaultId = '';
   try { defaultId = registry.DEFAULT_ID || ''; } catch (_err) { defaultId = ''; }
-  // ⚠ THE DEFAULT ADAPTER KEEPS THE EXISTING CHAIN, BYTE FOR BYTE (spec §3c):
-  //   directive.model > identity.model > channelPrefs.getLaunchModel > SDK default
+  // ⚠ THE DEFAULT ADAPTER'S CHAIN (spec §3c, minus the channel link since 2026-09-23):
+  //   directive.model > identity.model > the runtime's default
   // Every link is `chainModel` — "a real pick, or '' meaning KEEP GOING" — INCLUDING the
   // directive's own (F-285). ⚠ SINCE 2026-09-22 AN UNRECOGNISED ID NO LONGER FALLS THROUGH: it
   // commits the chain and the funnel REFUSES it (`no-model`), because falling through is how an
   // unknown id started the product default while the launch echoed the id it was asked for.
+  // 🔓 `channelPrefs.getLaunchModelLink` WAS THE THIRD LINK AND IS DELETED (Samuel: *"We don't
+  // need a pin model in the settings"*); `''` now reaches the funnel, which spends the runtime's
+  // own default (`runtime/launch-default.js`).
   if (!runtimeId || runtimeId === defaultId) {
-    // ⚠ `getLaunchModelLink`, NOT `aliasForModelId(getLaunchModel(...))` (U5, 2026-09-21). The
-    // channel's stored model is now RUNTIME-KEYED (`launch-selection.js › byRuntime`), and the old
-    // pair read the DEFAULT runtime's record through Claude's alias table — so a channel whose
-    // stored pick belongs to another runtime silently contributed nothing to this chain. The link
-    // form resolves the pick on ITS OWN runtime and still answers `''` for "keep going", which is
-    // what every other link in this expression means.
     return sessionModel.chainModel(d.model)
-      || require('./session-launch-op').identityModel(sessionModel, identity)
-      || channelPrefs.getLaunchModelLink(d.channelId);
+      || require('./session-launch-op').identityModel(sessionModel, identity);
   }
   const asked = typeof d.model === 'string' ? d.model.trim() : '';
-  if (!asked) return '';
+  // ⚠ NO PICK ON A NON-DEFAULT RUNTIME: RESOLVE ITS DEFAULT HERE rather than leaving it to the
+  // funnel, so the `appliedModel=` this lane reports is the model the launch actually names
+  // (Codex: `gpt-6-sol` when this account's catalog offers it, else `''` — Codex's own pick). The
+  // funnel's call is then a no-op on an id already named.
+  if (!asked) {
+    try {
+      return await require('./runtime/launch-default').withRuntimeDefault(registry.resolve(runtimeId), '');
+    } catch (_err) {
+      return '';
+    }
+  }
   let roster = null;
   try {
     roster = await registry.runtimeFor(runtimeId).models();

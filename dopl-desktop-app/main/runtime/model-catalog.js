@@ -193,6 +193,14 @@ function catalogFromRoster(runtimeId, descriptor, roster) {
     defaultId = asked;
     for (const m of models) m.isDefault = m.id === asked;
   }
+  // ⚠ DOPL'S OWN LAUNCH DEFAULT OUTRANKS THE SERVER'S MARKER WHEN THIS ROSTER CARRIES IT
+  // (2026-09-23): a no-pick launch spends it (`launch-default.js`), so a picker showing the
+  // server's marker instead would name a model the launch will not use. Current rosters only.
+  const preferred = str(declared.launchDefault);
+  if (preferred && roster.stale !== true && models.some((m) => m.id === preferred)) {
+    defaultId = preferred;
+    for (const m of models) m.isDefault = m.id === preferred;
+  }
   if (!models.length) {
     // ⚠ THE EMPTY ROSTER IS ALWAYS A FAILURE STATE, NEVER A `ready` ONE. See the header: no
     // adapter can say "this platform has no models", so no status is allowed to spell it.

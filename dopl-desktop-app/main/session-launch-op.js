@@ -276,8 +276,11 @@ async function launchFromButton(payload) {
     //   sessions:setModel live override (post-spawn, `session-reopen.js`)
     //     > overrides.model              (the LAUNCH SHEET's deliberate per-call pick)
     //     > identity.model               (the identity's DEFAULT)
-    //     > channelPrefs.getLaunchModel  (the channel's durable pick)
-    //     > SDK default                  (`modelArg` returns null ⇒ no --model at all)
+    //     > the RUNTIME's default        (`runtime/launch-default.js`, applied in the funnel)
+    //
+    // 🔓 **THE CHANNEL LINK IS DELETED (2026-09-23, Samuel: *"We don't need a pin model in the
+    // settings"*).** `channelPrefs.getLaunchModel(Link)` sat between the identity and the runtime
+    // default; there is no stored channel or profile model any more.
     //
     // ⚠ THE SHEET BEATS THE IDENTITY for the same reason the orchestrator's explicit `model`
     // param beats it on the directive lane: one is a DELIBERATE PER-CALL CHOICE and the other is
@@ -296,16 +299,8 @@ async function launchFromButton(payload) {
     // sheet, whose pick outranks the identity's.
     // ⚠ A legacy alias (`opus`) or an old full id still resolves: the roster carries them as
     // aliases of the row that is that model today (`runtime/claude/roster.js`).
-    // ⚠ A MODEL GRANTS NOTHING AND REACHES NO GATE, which is why it may travel further than the
-    // permission pair. `getLaunchModelLink` is deliberately not `getLaunchPosture`.
-    // ⚠ **THE CHANNEL LINK RESOLVES ON THE CHANNEL'S OWN RUNTIME SINCE 2026-09-21 (U5).** It read
-    // `sessionModel.aliasForModelId(getLaunchModel(...))` — the DEFAULT runtime's table — which
-    // was correct while only that runtime's ids could ever be stored. Now that a Codex id can be,
-    // aliasing it answers that runtime's "no pick" member and the operator's choice is silently
-    // dropped rather than spent. `channel-prefs.js › getLaunchModelLink` is the one spelling of
-    // the resolution, so the three launch lanes cannot drift.
-    model: overrides.model || identityModel(sessionModel, identity)
-      || channelPrefs.getLaunchModelLink(p.channelId),
+    // ⚠ `''` HERE IS "NO PICK", and the funnel turns it into the runtime's default.
+    model: overrides.model || identityModel(sessionModel, identity),
     // ⚠ **THE AGENT COLOUR THE OPERATOR PICKED IN THE NEW-AGENT POPUP** (Samuel, 2026-09-13;
     // docs/specs/agent-colors.md). ⚠ IT SITS BESIDE `model` BECAUSE IT IS THE SAME KIND OF
     // FIELD, and that block's argument transfers line for line: forwarded, never invented,

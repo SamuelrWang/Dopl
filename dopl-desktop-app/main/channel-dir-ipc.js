@@ -240,9 +240,10 @@ function register(opts = {}) {
   ipcMain.handle('channels:getLaunchPosture', appWindowOnly('getLaunchPosture', null, async (_event, channelId) => {
     if (!isUuid(channelId)) return null;
     // ⚠ **THE VERSIONED SELECTION RIDES BESIDE THE LEGACY PAIR, ADDITIVELY (2026-09-21, U5).**
-    // The three legacy OWN KEYS stay exactly where they were, because every renderer older than
-    // U5 feature-probes them and renders NO row when one is missing — dropping them would not
-    // migrate those builds, it would make the controls vanish. The new fields say what this build
+    // The legacy OWN KEYS stay exactly where they were, because every renderer older than U5
+    // feature-probes them and renders NO row when one is missing — dropping them would not migrate
+    // those builds, it would make the controls vanish. ⚠ `model` IS THE EXCEPTION AND IS GONE
+    // (2026-09-23): making an older renderer's Model row vanish is exactly the ruling. The new fields say what this build
     // can actually do, in the terms INVARIANTS §11 asks for: `selectionVersion` is the record
     // version main WRITES (a renderer that reads a different one must not assume the shape),
     // `selection` is the whole runtime-keyed record, and `needsReview` is the non-empty list of
@@ -343,8 +344,9 @@ function register(opts = {}) {
   //
   // ⚠ THE READ CARRIES THE RUNTIME ROSTER, exactly as `channels:getLaunchPosture` does and for the
   // same reason: the Agents tab renders the SAME row vocabulary as the per-channel Settings tab,
-  // and those rows feature-probe OWN KEYS (`runtime`, `model`) to decide whether to draw at all.
-  // Answering the pair alone would tell the tab this desktop has no runtime and no model concept.
+  // and those rows feature-probe OWN KEYS (`runtime`) to decide whether to draw at all. Answering
+  // the pair alone would tell the tab this desktop has no runtime concept. (`model` is ABSENT on
+  // purpose since 2026-09-23 — there is no stored model to draw a row for.)
   ipcMain.handle('channels:getAgentDefaults', appWindowOnly('getAgentDefaults', null, async () => {
     // ⚠ THE DEFAULTS RECORD CARRIES ITS OWN `v` AND `byRuntime` (U5, additive), and the SAME
     // runtime half as `channels:getLaunchPosture` one op above — roster, connectivity labels and

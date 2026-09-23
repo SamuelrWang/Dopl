@@ -16,8 +16,9 @@
  * one chain over ONE frozen Claude table, mirroring main's precedence link for link. With a
  * second runtime every link in it became wrong in a different way:
  *
- *   · the CHANNEL's model is now stored PER RUNTIME, so "the channel's model" is only meaningful
- *     once a runtime is named ({@link ModelRowInput.remembered});
+ *   · the CHANNEL's model became per-runtime, and then (2026-09-23, Samuel: *"We don't need a pin
+ *     model in the settings"*) stopped existing at all — the link is gone from this chain and
+ *     from main's;
  *   · the IDENTITY's model belongs to whichever runtime offers it, and an identity authored on
  *     Claude must not silently re-point a Codex launch — {@link modelRowFor} surfaces that as a
  *     MISMATCH rather than translating the id, which is the plan's U7 rule verbatim;
@@ -57,8 +58,6 @@ export interface ModelRowInput {
   own: string;
   /** The selected identity's model, or `''`. */
   fromIdentity: string;
-  /** What the CHANNEL remembers **for the selected runtime**, or `''`. */
-  remembered: string;
 }
 
 export interface ModelRow {
@@ -80,7 +79,8 @@ export interface ModelRow {
  * THE WHOLE ROW, IN ONE FUNCTION.
  *
  * ⚠ **THE CHAIN IS MAIN'S, LINK FOR LINK, WITH THE IDENTITY LINK GATED** — own pick > identity >
- * the selected runtime's remembered pick > the catalog's declared default. The gate is the only
+ * the catalog's declared default (which, for Codex, is Dopl's own launch default `gpt-6-sol` when
+ * the account's roster carries it — `main/runtime/model-catalog.js › catalogFromRoster`). The gate is the only
  * addition and it is the one the plan asks for: an identity model this build can positively see
  * belongs to another runtime is DROPPED FROM THE CHAIN and explained, rather than shown as this
  * launch's model and then silently coerced by main.
@@ -109,7 +109,7 @@ export function modelRowFor(input: ModelRowInput): ModelRow {
   )
     ? input.own
     : "";
-  const resolved = usableOwn || usableIdentityModel || input.remembered;
+  const resolved = usableOwn || usableIdentityModel;
   const shown = catalogSelection(catalog, resolved);
   return {
     shown,
@@ -128,7 +128,8 @@ export function modelRowFor(input: ModelRowInput): ModelRow {
  * IS THE OPERATOR'S OWN PICK STILL MEANINGFUL ON THIS RUNTIME?
  *
  * ⚠ **IT IS WHAT CLEARS A STALE PER-LAUNCH PICK ON A RUNTIME SWITCH.** The plan: *"on runtime
- * change, show that runtime's REMEMBERED model or its reported platform default."* A pick the
+ * change, show that runtime's REMEMBERED model or its reported platform default"* — and since
+ * 2026-09-23 nothing is remembered, so it is the default (or the identity's model). A pick the
  * operator made while Claude was selected is not a pick they made for Codex, and carrying it
  * across would put a Claude id in front of them under a Codex heading — the exact substitution
  * the whole unit exists to remove.

@@ -261,10 +261,12 @@ test("MODEL: with no directive model, the IDENTITY's comes before the channel's"
   assert.equal(h.cfg.lastSpec.model, "claude-haiku-4-5-20251001");
 });
 
-test("MODEL: an ABSENT model falls back to the CHANNEL's own stored pick", async () => {
+// ⚠ 2026-09-23 (Samuel: "We don't need a pin model in the settings"): there is no channel model to
+// fall back to. An absent pick leaves this lane as `''` and the funnel spends the RUNTIME's default.
+test("MODEL: an ABSENT model reaches the funnel as no pick — there is no channel model any more", async () => {
   const h = boot();
   await h.api.handle(row({ model: "" }), WS);
-  assert.equal(h.cfg.lastSpec.model, "sonnet", "what the button would have used");
+  assert.equal(h.cfg.lastSpec.model, "", "the funnel's runtime default decides, not a stored channel pick");
 });
 
 // ── 5. THE CLAIM, AND ACTIONING A DIRECTIVE EXACTLY ONCE ─────────────────────────────────

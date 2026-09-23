@@ -220,7 +220,7 @@ function descriptorProblems(descriptor) {
 
 // ── ⚠ THE LAUNCH-SELECTION DECLARATIONS (2026-09-21, U5) ─────────────────────────────────────
 //
-// `runtime/capability.js › storeModelPick` / `› launchModelPick` / `› nativeDimensions` read three
+// `runtime/capability.js › launchModelPick` / `› nativeDimensions` read three
 // descriptor declarations — `models.pick`, `models.dimensions` and `models.dimensionOptions` —
 // and shared storage validates every runtime's launch selection through them. So the descriptor is
 // no longer only a RENDERING table: it is the vocabulary a durable record is checked against, and
@@ -246,7 +246,7 @@ function selectionProblems(d) {
   const pick = models.pick;
   if (!pick || typeof pick !== 'object') {
     problems.push(`${id}: descriptor.models.pick is missing — `
-      + 'capability.js › storeModelPick has no list and no pattern to validate against');
+      + 'capability.js › launchModelPick has no list and no pattern to validate against');
   } else if (pick.kind === 'closed') {
     if (!Array.isArray(pick.stored) || !pick.stored.length) {
       problems.push(`${id}: a CLOSED model roster must declare a non-empty models.pick.stored — `

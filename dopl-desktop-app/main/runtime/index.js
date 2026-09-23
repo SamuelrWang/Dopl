@@ -145,7 +145,11 @@ function selectionContext() {
     known: (id) => typeof id === 'string' && REGISTRY.has(id),
     toolModeFor: (id, mode) => capability.normalizeToolMode(descriptorFor(id), mode),
     narrowestToolFor: (id) => capability.narrowestToolMode(descriptorFor(id)),
-    storeModelFor: (id, value) => capability.storeModelPick(descriptorFor(id), value),
+    // 2026-09-23: the MODEL-scoped native keys, which a stored selection drops (no model is stored).
+    modelDimensionsFor: (id) => {
+      const dims = (descriptorFor(id).models || {}).dimensions;
+      return Array.isArray(dims) ? dims.slice() : [];
+    },
     nativeFor: (id, raw) => capability.normalizeNative(descriptorFor(id), raw),
     labelFor: (id) => descriptorFor(id).label,
   };
