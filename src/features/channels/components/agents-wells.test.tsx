@@ -20,7 +20,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import type { DesktopSessionSummary } from "@/shared/lib/spa-bridge";
-import { IDENTITY_NAME_TEXT } from "@/features/agent-identities/components/identity-section";
+import { IDENTITY_NAME_TEXT } from "@/shared/ui/section-heading";
 import { PANEL_ROWS, PANEL_WELL } from "@/shared/ui/panel-well";
 
 vi.mock("@/features/agent-identities/hooks/use-agent-identities", () => ({

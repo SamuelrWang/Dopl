@@ -50,13 +50,7 @@
 
 import { Fragment, useEffect, useMemo, useState, type ReactNode } from "react";
 import { ChevronRight } from "lucide-react";
-// ⚠ CROSS-FEATURE, AND DELIBERATELY THE SMALLER OF TWO EVILS (F-275 records that
-// this tree has never obeyed §1's ban). `IDENTITY_NAME_TEXT` was exported
-// 2026-09-13 so a second surface could read the type Samuel names by pointing at
-// it. ⚠ **AND IT IS WHY THIS FILE IS NOT IN `src/shared/ui/`** — a `shared/`
-// module importing a feature is the direction §1 forbids OUTRIGHT; /home reaches
-// it as an APP importing a feature component, as eleven other pages already do.
-import { IDENTITY_NAME_TEXT } from "@/features/agent-identities/components/identity-section";
+import { IDENTITY_NAME_TEXT } from "@/shared/ui/section-heading";
 import { cn } from "@/shared/lib/utils";
 import { NAKED_ICON, NAKED_ICON_BUTTON } from "@/shared/ui/naked-icon-button";
 import { PANEL_ROWS, PANEL_WELL } from "@/shared/ui/panel-well";

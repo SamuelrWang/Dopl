@@ -3,8 +3,10 @@
 import type { ReactNode } from "react";
 import { cn } from "@/shared/lib/utils";
 import { agentModelShortLabel } from "@/features/channels/lib/agent-models";
+import type { ModelCatalogs } from "@/features/channels/lib/model-catalog";
 import { pendingRow } from "@/shared/ui/pending";
 import { SectionPanel } from "@/shared/ui/section-panel";
+import { IDENTITY_NAME_TEXT } from "@/shared/ui/section-heading";
 import type { AgentIdentity } from "../client/types";
 import type { IdentitySectionDef } from "../lib/visibility";
 
@@ -50,14 +52,6 @@ import type { IdentitySectionDef } from "../lib/visibility";
  * `className` at all.
  */
 /**
- * THE IDENTITY CARD'S NAME TYPE — title size, medium weight, primary ink.
- * ⚠ EXPORTED (2026-09-13) because Samuel named THIS text as the reference for
- * the /home Overview's "Usage" heading and its scope menu ("extract that exact
- * font, font size, and font color and apply it"); one constant, two readers.
- */
-export const IDENTITY_NAME_TEXT = "text-title font-medium text-text-primary";
-
-/**
  * THE CARD GRID — FOUR to a row, FIXED (Samuel, 2026-09-13: *"I want to
  * increase width of cards so it's 4 per row"*, then over an auto-fill that gave
  * two: *"this is 2 on a row. I said 4 on a row"*). Not `auto-fill`: the count is
@@ -100,6 +94,7 @@ export function IdentityGrid({
   pendingIds,
   markerFor,
   actionFor,
+  catalogs,
 }: {
   identities: ReadonlyArray<AgentIdentity>;
   /** ⚠ Only ever rendered against a RESOLVED read — see `resolved` on
@@ -115,6 +110,8 @@ export function IdentityGrid({
   markerFor?: (identity: AgentIdentity) => string | null;
   /** A SECOND control for a row, under the body ({@link IdentityCard}). */
   actionFor?: (identity: AgentIdentity) => ReactNode;
+  /** The live model catalogs the host holds, so a model chip reads as its label, not a raw id. */
+  catalogs?: ModelCatalogs | null;
 }) {
   if (identities.length === 0) {
     return emptyLine ? (
@@ -131,6 +128,7 @@ export function IdentityGrid({
           pending={pendingIds?.has(identity.id) ?? false}
           marker={markerFor?.(identity) ?? null}
           action={actionFor?.(identity) ?? null}
+          catalogs={catalogs}
         />
       ))}
     </div>
@@ -142,11 +140,13 @@ export function IdentitySection({
   identities,
   onOpen,
   pendingIds,
+  catalogs,
 }: {
   section: IdentitySectionDef;
   identities: ReadonlyArray<AgentIdentity>;
   onOpen: (identity: AgentIdentity) => void;
   pendingIds?: ReadonlySet<string>;
+  catalogs?: ModelCatalogs | null;
 }) {
   return (
     <IdentityPanel
@@ -158,6 +158,7 @@ export function IdentitySection({
         emptyLine={section.emptyLine}
         onOpen={onOpen}
         pendingIds={pendingIds}
+        catalogs={catalogs}
       />
     </IdentityPanel>
   );
@@ -200,14 +201,16 @@ function IdentityCard({
   pending,
   marker,
   action,
+  catalogs,
 }: {
   identity: AgentIdentity;
   onOpen?: (identity: AgentIdentity) => void;
   pending: boolean;
   marker: string | null;
   action: ReactNode;
+  catalogs?: ModelCatalogs | null;
 }) {
-  const model = agentModelShortLabel(identity.model);
+  const model = agentModelShortLabel(identity.model, catalogs);
   const description = identity.description?.trim();
   const body = (
     <>

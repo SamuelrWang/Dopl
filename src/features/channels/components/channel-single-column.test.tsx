@@ -138,7 +138,7 @@ vi.mock("./use-desktop-sessions", () => ({
 // Imported AFTER the mock declarations for readability; `vi.mock` is hoisted.
 import { StandaloneChannelSurface } from "./channel-surface-standalone";
 import { useChannelWebView } from "./use-channel-web-view";
-import { IDENTITY_NAME_TEXT } from "@/features/agent-identities/components/identity-section";
+import { IDENTITY_NAME_TEXT } from "@/shared/ui/section-heading";
 
 const CHANNEL = channel();
 
