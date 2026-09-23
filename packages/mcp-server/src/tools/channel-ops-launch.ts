@@ -12,7 +12,7 @@
  * process no server can reach; what crosses the wire is a row in a mailbox that
  * the operator's machine polls, decides, and answers. Three consequences the
  * copy must carry rather than paper over:
- *   1. A REFUSAL IS A NORMAL OUTCOME, not an error — and one of the seven reasons
+ *   1. A REFUSAL IS A NORMAL OUTCOME, not an error — and one of the closed reasons
  *      (`no-bridge`) is the OPERATOR SAYING NO. It must never read as a fault or
  *      as something to retry.
  *   2. A TIMEOUT IS NOT A FAILURE. The directive stays pending and the machine
@@ -30,10 +30,11 @@ import type {
   AgentColorKey,
   DoplClient,
   LaunchMessageMode,
-  LaunchRefusalReason,
   LaunchToolMode,
 } from "@dopl/client";
-import { ok, err, isNotFound, type ToolResponse } from "./respond";
+import { ok, err, apiErrorCode, isNotFound, type ToolResponse } from "./respond";
+// The mailbox ops' one hold loop and one retry map (P8-07/P8-08).
+import { LAUNCH_RETRY_ADVICE, holdRow } from "./channel-directive-hold";
 import { channelNotFound, isErr, resolveChannelOr } from "./channel-shared";
 // ⚠ ONE write-result renderer, shared with `post` / `create_thread`.
 import { factsLine, postureFacts, runtimeFacts } from "./channel-facts";
@@ -61,92 +62,12 @@ import {
   serverDetail,
 } from "./channel-errors";
 
-/** The `code` a DoplApiError carries, or null. ⚠ Duck-typed rather than imported
- *  — the same discipline `respond.ts`'s `isNotFound` follows across the
- *  @dopl/client boundary. */
-function apiErrorCode(e: unknown): string | null {
-  if (typeof e !== "object" || e === null) return null;
-  const code = (e as { code?: unknown }).code;
-  return typeof code === "string" && code.length > 0 ? code : null;
-}
-
-/** Default and cap for the bounded hold. ⚠ Mirrors `channel-schema.ts ›
- *  wait_ms`; the schema is what an MCP client sees, this is what runs. */
-const WAIT_DEFAULT_MS = 15_000;
-const WAIT_CAP_MS = 30_000;
-
-/**
- * ⚠ COARSE, AND DELIBERATELY SO. The thing being waited on is a human-scale
- * toggle plus a process spawn on another machine; polling faster buys nothing
- * and multiplies requests across every armed launch in the workspace. 1.5s is
- * the same tick the await hold uses server-side.
- */
-const POLL_INTERVAL_MS = 1_500;
-
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-
-/**
- * THE REFUSAL CONTRACT, AS SENTENCES AN AGENT CAN ACT ON.
- *
- * ⚠ **THE WORD CROSSES THE WIRE, THE SENTENCE IS WRITTEN HERE** — the same split
- * `detail` takes, and for the same two reasons: prose on the wire needs a
- * DESKTOP RELEASE to reword, and desktop-authored text rendered into an MCP
- * result is text nobody neutralized. A value outside this map cannot arrive (the
- * column CHECK and the route enum both refuse it) and is rendered as an unknown
- * reason rather than as itself.
- *
- * ⚠ EACH SENTENCE ENDS IN WHAT TO DO, because a reason with no next action gets
- * an agent to retry the same call. And the three that are TEMPORARY say so
- * differently from the three that are not — retrying `cap` in a minute is
- * sensible, retrying `no-bridge` is asking a machine to change its owner's mind.
- */
-/**
- * MAY THE CALLER ASK AGAIN? — ⚠ the ONE thing a refusal is read for, kept as a
- * field where the sentence became doctrine (T10, 2026-09-02).
- *
- * ⚠ THE NINE WORDS ARE STILL THE WIRE CONTRACT and the result still names the
- * one it got (`reason=<key>`); what left is the paragraph per key, now in
- * `channel-doctrine.ts`'s WHY A LAUNCH … IS REFUSED section. `busy` is the ONLY
- * temporary refusal on the list — every other word means the answer will not
- * change — so collapsing them into a boolean would either invite a retry loop
- * against a setting nobody is going to flip, or forbid the one retry that works.
- *
- * ⚠ IT IS A `Record<LaunchRefusalReason, …>` DELIBERATELY, which is the whole
- * value of the closed enum: a tenth word cannot enter the vocabulary without
- * this map being made to account for it.
- */
-const RETRY_ADVICE: Record<LaunchRefusalReason, "once" | "no"> = {
-  cap: "no",
-  busy: "once",
-  "no-sdk": "no",
-  "auth-hold": "no",
-  "no-bridge": "no",
-  "no-counterparty": "no",
-  "no-identity": "no",
-  // ⚠ NEITHER OF THESE HAS A PRODUCER ON A LAUNCH — they belong to the `end` /
-  // `rename` kinds that ride the same mailbox and therefore share the enum, and
-  // the column CHECK pairs `launched` with `kind='launch'`. Arriving here IS the
-  // anomaly, so the answer is `no`: a caller that re-issues over a word nothing
-  // could have produced re-issues forever.
-  "no-session": "no",
-  "bad-name": "no",
-  // ⚠ `no` LIKE EVERY OTHER SETTING WORD. The answer changes when a human flips
-  // one toggle, and asking again before they have is the retry loop the split
-  // off `no-bridge` exists to make avoidable rather than to invite.
-  "no-chain": "no",
-  // ⚠ 2026-09-22: re-issue with a model that machine lists (or none) — the SAME ask never changes.
-  "no-model": "no",
-};
-
-
-/** The line a PENDING (or expired) directive ends on. ⚠ Says the id, because the
- *  id is the only handle the agent has left, and says NOT to re-issue. */
 /**
  * ASK FOR AN AGENT, then hold briefly for the answer.
  *
  * ⚠ FOUR TERMINAL SHAPES, and each one ends in a different next action:
- * OFFLINE (nothing filed), LAUNCHED (an id to address), REFUSED (one of seven
- * sentences), PENDING/EXPIRED (the id, and an instruction not to re-issue).
+ * OFFLINE (nothing filed), LAUNCHED (an id to address), REFUSED (a closed reason
+ * word plus `retry=`), PENDING/EXPIRED (the id, and an instruction not to re-issue).
  */
 export async function opLaunchAgent(
   client: DoplClient,
@@ -273,9 +194,11 @@ export async function opLaunchAgent(
     // only read as "the tool broke". ⚠ IT SAYS WHAT IT IS **NOT**: no directive exists, so
     // there is nothing pending and nothing to cancel, and this is not a membership,
     // identity or colour problem — the three things an agent otherwise goes and "fixes".
+    // P8-04: `serverDetail` now names the refused field (e.g. a `runtime` outside the id shape),
+    // so the advice is "fix that field", never a guess that something was too long.
     if (isBadRequest(e) && classifyBadRequest(e) === "invalid_request") {
       return err(
-        `No agent was requested — that launch was rejected as INVALID before any directive was filed, and **nothing is pending**. This is NOT a membership, identity or colour problem, so do not invite anyone, re-pick an identity or change \`color\` over it.${serverDetail(e)} ${FIELD_CAPS_NOTE} Shorten or fix the field that is over and ask again.`,
+        `No agent was requested — that launch was rejected as INVALID before any directive was filed, and **nothing is pending**. This is NOT a membership, identity or colour problem, so do not invite anyone, re-pick an identity or change \`color\` over it.${serverDetail(e)} ${FIELD_CAPS_NOTE} Fix the field the server named and ask again.`,
       );
     }
     if (isNotFound(e)) return channelNotFound(ref);
@@ -306,26 +229,7 @@ export async function opLaunchAgent(
   // ⚠ `created.existing` IS OPTIONAL ON THE WIRE: a server older than this wave
   // sends no such key, and absent correctly reads as "a row was filed".
   const converged = created.existing ? { retry: "existing" } : {};
-  const waitMs = Math.min(opts.waitMs ?? WAIT_DEFAULT_MS, WAIT_CAP_MS);
-  const deadline = Date.now() + waitMs;
-
-  // ⚠ POLLS THE ROW, never an `await`: a directive is not a message, has no
-  // `seq`, and can never end a message hold.
-  while (
-    (directive.status === "pending" || directive.status === "claimed") &&
-    Date.now() < deadline
-  ) {
-    await sleep(Math.min(POLL_INTERVAL_MS, Math.max(0, deadline - Date.now())));
-    try {
-      directive = await client.getLaunchDirective(directive.id);
-    } catch {
-      // ⚠ A FAILED POLL DOES NOT DESTROY THE HOLD OR THE DIRECTIVE. The request
-      // is filed and the machine may still take it, so the honest ending is the
-      // PENDING one — which tells the agent where to look. Throwing here would
-      // report a failure over a launch that may well be running.
-      break;
-    }
-  }
+  directive = await holdRow(directive, (id) => client.getLaunchDirective(id), opts.waitMs);
 
   if (directive.status === "launched" && directive.agentId) {
     // ── THE RESULT: ONE LINE OF FACTS (T10, 2026-09-02) ────────────────────
@@ -386,7 +290,7 @@ export async function opLaunchAgent(
   }
 
   if (directive.status === "refused") {
-    // ⚠ THE REASON IS A KEY ON THE WIRE (`LaunchRefusalReason`, seven words) and
+    // ⚠ THE REASON IS A KEY ON THE WIRE (`LaunchRefusalReason`, a closed enum) and
     // is rendered AS the key. It used to be expanded into a sentence per reason
     // plus a paragraph saying a refusal is normal; the sentences are in
     // `channel-doctrine.ts` now, and the key is the half that a caller branches
@@ -398,7 +302,7 @@ export async function opLaunchAgent(
         // The column's own CHECK forbids that row; if one arrives, the honest
         // answer is that this build cannot advise.
         retry: directive.refusalReason
-          ? RETRY_ADVICE[directive.refusalReason]
+          ? LAUNCH_RETRY_ADVICE[directive.refusalReason]
           : undefined,
         filed: true,
         ...converged,
@@ -419,7 +323,7 @@ export async function opLaunchAgent(
     // silence next to that either stalls on a directive nobody will ever answer
     // or re-issues on a guess, and a guess here is how a second agent is
     // started on the same work.
-    // ⚠ `once`, NOT `yes`: it is `RETRY_ADVICE`'s own word for "ask again, once"
+    // ⚠ `once`, NOT `yes`: it is `LAUNCH_RETRY_ADVICE`'s own word for "ask again, once"
     // — the same vocabulary the refusal arm above prints, so a caller branches
     // on one set of values across the whole op.
     // ⚠ `converged` SPREADS LAST, so an `existing` verdict still wins it: "this

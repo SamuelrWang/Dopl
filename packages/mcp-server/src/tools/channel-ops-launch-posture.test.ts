@@ -127,4 +127,20 @@ describe("postureFacts", () => {
       chain: "off",
     });
   });
+
+  // 🔒 F10 / P8-11: an older row's `resolved*` group is a copy of the request plus a Claude-table
+  // model id; `allowed=` printed it as if the server had permitted something, and
+  // `resolvedModel=` named a Claude model on a Codex launch. Neither is printed any more.
+  it("prints nothing from the retired server-resolved group", () => {
+    const old = directive({
+      appliedToolMode: "on-request",
+      appliedMessageMode: "auto_both",
+      appliedChain: false,
+      resolvedToolMode: "never",
+      resolvedMessageMode: "auto_both",
+      resolvedChain: true,
+      resolvedModel: "claude-opus-5",
+    } as Partial<LaunchDirective>);
+    expect(postureFacts(old)).toEqual({ posture: "on-request/auto_both", chain: "off" });
+  });
 });
