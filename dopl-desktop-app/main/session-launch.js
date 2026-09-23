@@ -121,6 +121,9 @@ async function launch(a) {
     return { skipped: 'no-sdk' };
   }
   if (hasLiveSession(slot)) return { skipped: 'busy' }; // FIX #7: re-check after await — a slot-scoped check now, so only an id collision (unreachable) trips it
+  // Asked before anything registers: a hold raised after registration left a parked record that
+  // the next boot ended as a card for an agent that never started (P4-07).
+  if (await credentialMissing(rt)) return { skipped: 'auth-hold' };
   // ── ⚠ A MODEL THIS RUNTIME DOES NOT OFFER IS REFUSED, NEVER SWAPPED (2026-09-22) ─────────────
   // Every lane's pick arrives here, so the refusal sits here. It used to fall through to the
   // product default: an MCP launch naming a mistyped or unknown id started Sonnet and echoed the
@@ -313,6 +316,17 @@ async function refuseUnknownModel(runtimeId, model) {
   } catch (err) {
     diag('session-launch: model roster unreadable, launch goes ahead —', err && err.message);
     return null;
+  }
+}
+
+/** Does this runtime say, for certain, that this Mac has no credential? A failed probe is not a no. */
+async function credentialMissing(rt) {
+  if (!rt || typeof rt.credentialState !== 'function') return false;
+  try {
+    const state = await rt.credentialState();
+    return !!state && state.usable === false;
+  } catch (_) {
+    return false;
   }
 }
 
