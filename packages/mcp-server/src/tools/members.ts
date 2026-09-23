@@ -19,7 +19,7 @@ import {
   type CallerIdentity,
 } from "./identity";
 import {
-  CONTACT_POINTER,
+  contactPointer,
   defaultLevel,
   formatEffectiveAccess,
   formatTeam,
@@ -117,7 +117,7 @@ export function registerMembersTool(
         case "get": {
           const miss = missingParams("get", args, ["member"]);
           if (miss) return miss;
-          return opGet(client, args.member as string);
+          return opGet(client, caller, args.member as string);
         }
         case "teams":
           return opTeams(client);
@@ -175,7 +175,7 @@ async function opWhoami(
   if (me.role === "owner" || me.role === "admin") {
     lines.push(`- As ${me.role} you have edit access to everything, and can inspect any member's effective access (op="get").`);
   }
-  lines.push(``, CONTACT_POINTER);
+  lines.push(``, contactPointer(caller.vendor));
   lines.push(``, LOCUS_NOTE);
   return ok(lines.join("\n"));
 }
@@ -212,11 +212,15 @@ async function opList(
     `\n_Every membership row, INCLUDING invited-but-not-joined and deactivated ones — the count above is rows, not active people. Read the status on each._`,
   );
   lines.push(`\nUse dopl_members(op="get", member=...) for one member's teams + effective access.`);
-  lines.push(`\n${CONTACT_POINTER}`);
+  lines.push(`\n${contactPointer(caller.vendor)}`);
   return ok(lines.join("\n"));
 }
 
-async function opGet(client: DoplClient, ref: string): Promise<ToolResponse> {
+async function opGet(
+  client: DoplClient,
+  caller: CallerIdentity,
+  ref: string,
+): Promise<ToolResponse> {
   const members = await client.listWorkspaceMembers();
   const match = matchMember(members, ref);
   if ("error" in match) return err(match.error);
@@ -235,7 +239,7 @@ async function opGet(client: DoplClient, ref: string): Promise<ToolResponse> {
   lines.push(`- Status: ${statusLabel(m)}`);
   lines.push(`- Teams: ${teamChips(m.teams)}`);
 
-  // ⚠ CONTACT_POINTER deliberately NOT on this path: a DM and a channel invite
+  // ⚠ The contact pointer deliberately NOT on this path: a DM and a channel invite
   // both require an ACTIVE member, so offering it on an
   // invited-but-not-joined or deactivated row names a call the server refuses.
   if (m.status !== "active") {
@@ -258,7 +262,7 @@ async function opGet(client: DoplClient, ref: string): Promise<ToolResponse> {
       throw e;
     }
   }
-  lines.push(``, CONTACT_POINTER);
+  lines.push(``, contactPointer(caller.vendor));
   return ok(lines.join("\n"));
 }
 
