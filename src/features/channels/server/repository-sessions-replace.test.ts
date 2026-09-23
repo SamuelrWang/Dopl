@@ -1,21 +1,5 @@
-/**
- * `replaceSessionStates` — THE WRITE HALF of `channel_sessions` data access.
- *
- * ⚠ **SPLIT OUT OF `repository-sessions.test.ts` ON 2026-09-01, AT THE 500-LINE
- * CAP** (§1), when the health seven joined every fixture in both halves. The
- * seam is the one the file already had a blank line and a second set of helpers
- * at: that file drives the READ (the honest `PGRST205` degrade, the two fences),
- * this one drives the REPLACE (scope, row lifetime, the diff, and the F-241
- * thread-deleted degrade). Different builder stub, different failure mode,
- * different thing to read when it goes red.
- *
- * ⚠ THE COLUMN-LIST PIN IS A THIRD FILE AGAIN — `repository-sessions-columns.test.ts`
- * reads `repository-sessions-columns.ts`'s SOURCE TEXT. Nothing here duplicates
- * it: this suite drives BEHAVIOUR through a mocked client.
- *
- * Supabase mocked with the repository's chainable-builder stub, so the whole
- * `.from().select().eq()…` chain runs and only the awaited result is controlled.
- */
+/** `replaceSessionStates`, the `channel_sessions` write. Supabase is a chainable-builder stub answering a
+ *  queue, so the whole chain runs; the column-list pin is `repository-sessions-columns.test.ts`. */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
@@ -29,11 +13,7 @@ const USER = "11111111-e29b-41d4-a716-446655440000";
 const WS = "22222222-e29b-41d4-a716-446655440000";
 const CHAN = "33333333-e29b-41d4-a716-446655440000";
 
-/** The exact envelope PostgREST returns for an unknown relation. ⚠ A DELIBERATE
- *  copy of the read half's — the two suites assert OPPOSITE things about it
- *  (`repository-sessions.test.ts` degrades it to `[]`, this one requires the
- *  write to RETHROW), and a shared fixture would let one suite's edit quietly
- *  change what the other is testing. */
+/** The envelope PostgREST returns for an unknown relation; this suite requires the write to rethrow it. */
 const MISSING_RELATION = {
   code: "PGRST205",
   details: null,
@@ -46,32 +26,15 @@ beforeEach(() => {
   vi.clearAllMocks();
 });
 
-/**
- * `replaceSessionStates` — three properties:
- *   1. ⚠ SCOPE IS THE CONTEXT'S. The table REVOKEs writes from `authenticated`,
- *      so this runs on the RLS-bypassing admin client and IS the entire fence.
- *      Every statement carries `user_id` and `workspace_id`, neither from a
- *      payload.
- *   2. It REPLACES — a row cannot outlive its pill; anything the report omits
- *      is deleted.
- *   3. ⚠ It writes ONLY what changed. `updated_at` is the read's ORDER BY and
- *      the "when did this session last move" the MCP result reports; touching
- *      every row per push makes five sessions all claim to have moved.
- */
+/** The admin client bypasses RLS, so the context's `user_id` + `workspace_id` on every statement is the
+ *  fence. A row cannot outlive its report, and only changed rows are written: `updated_at` is the read's
+ *  ORDER BY and the MCP "last moved" stamp. */
 
 type Step = { op: string; args: unknown[] };
 
-/** Chainable stub answering a QUEUE — the write path issues select, upsert,
- *  delete, each with its own answer. Once one answer is left it repeats, unless
- *  `repeatTail` is off (then a drained queue answers `{ data: null, error: null }`).
- *
- *  ⚠ **THE COLOUR READ IS OFF THE QUEUE, DELIBERATELY** (2026-09-13). The reconcile
- *  gained a second SELECT — the per-channel taken set
- *  (`repository-session-colors.ts › foreignLiveColorsByChannel`) — and threading it
- *  through the queue would have renumbered the answers in all nine cases below, none
- *  of which are about colours. It is identified by the ONE builder member no other
- *  statement on this path uses (`.not`), answers a fixed empty set ("nobody holds a
- *  colour"), and consumes nothing. */
+/** Chainable stub answering a queue (select, upsert, delete…). Once one answer is left it repeats, unless
+ *  `repeatTail` is off (then a drained queue answers `{ data: null, error: null }`). The colour taken-set
+ *  read is off the queue: identified by `.not` (no other statement here uses it), it answers `[]`. */
 function makeSequencedAdmin(
   results: Array<{ data: unknown; error: unknown }>,
   { repeatTail = true } = {}
@@ -79,8 +42,7 @@ function makeSequencedAdmin(
   const steps: Step[] = [];
   const queue = [...results];
   const builder: Record<string, unknown> = {};
-  /** Is the chain being built RIGHT NOW the colour read? Set by `.not`, cleared by
-   *  `.from`, which every statement starts with. */
+  /** Is the chain being built the colour read? Set by `.not`, cleared by `.from`. */
   let colorRead = false;
   const rec = (op: string, args: unknown[]) => {
     steps.push({ op, args });
@@ -118,8 +80,7 @@ function makeSequencedAdmin(
 
 function reported(over: Partial<SessionStateUpsert> = {}): SessionStateUpsert {
   return {
-    // ⚠ The HEALTH seven default to `null` — what a desktop older than
-    // `20260909120000` reports, which is what most live rows still are.
+    // Health and telemetry default to `null`, as an older desktop reports them; `over` spreads on top.
     turns: null,
     tokens_delta: null,
     stale: null,
@@ -134,17 +95,10 @@ function reported(over: Partial<SessionStateUpsert> = {}): SessionStateUpsert {
     state: "working",
     channel_name: "General",
     thread_title: null,
-    // ⚠ EVERY TELEMETRY COLUMN, EXPLICITLY `null` — what a machine reporting
-    // nothing produces (2026-08-22). `over` spreads on top, so a case can say
-    // "only tokens_spent moved".
     detail: null, tool_label: null, model: null,
     context_used: null, context_window: null, tokens_spent: null,
     started_at: null, last_activity_at: null, identity_name: null, display_name: null,
-    // ⚠ A COLOUR IS **REQUESTED**, not reported (2026-09-13): every current desktop
-    // names one, and `session-colors.ts` resolves it against the channel's taken set
-    // before the diff. A fixture defaulting to `null` would make every stored row
-    // gain a colour on its first push and read as "changed" in the three cases below
-    // that are about the diff being QUIET.
+    // Every current desktop requests a colour; a `null` default would make every stored row read as changed.
     color: "agent-01",
     ...over,
   };
@@ -162,7 +116,7 @@ describe("replaceSessionStates — the scope", () => {
     const rows = upsert?.args[0] as Array<Record<string, unknown>>;
     expect(rows[0].user_id).toBe(USER);
     expect(rows[0].workspace_id).toBe(WS);
-    // ⚠ Conflict target is the migration's unique index, not the ephemeral id.
+    // The conflict target is the migration's unique index, not the ephemeral id.
     expect(upsert?.args[1]).toEqual({ onConflict: "user_id,session_key" });
   });
 
@@ -195,8 +149,7 @@ describe("replaceSessionStates — the row lifetime", () => {
       { data: null, error: null },
     ]);
     const out = await replaceSessionStates(USER, WS, [keep]);
-    // ⚠ BY COLUMN, not "the first `in`": the taken-set read (`channel_id`) is an `in`
-    // as well since agent colours.
+    // By column: the taken-set read's `channel_id` is an `in` too.
     const del = steps.find((s) => s.op === "in" && s.args[0] === "session_key");
     expect(del?.args).toEqual(["session_key", [`${CHAN}:gone`]]);
     expect(out.removed).toBe(1);
@@ -210,7 +163,7 @@ describe("replaceSessionStates — the row lifetime", () => {
     const out = await replaceSessionStates(USER, WS, []);
     expect(steps.some((s) => s.op === "delete")).toBe(true);
     expect(steps.some((s) => s.op === "upsert")).toBe(false);
-    // ⚠ By the keys the read actually saw, never a blanket delete.
+    // By the keys the read saw, never a blanket delete.
     expect(
       steps.find((s) => s.op === "in" && s.args[0] === "session_key")?.args
     ).toEqual(["session_key", [`${CHAN}:t-1`]]);
@@ -227,9 +180,7 @@ describe("replaceSessionStates — the row lifetime", () => {
   });
 
   it("writes ONLY the row that moved, so `updated_at` stays per-session", async () => {
-    // ⚠ DISTINCT COLOURS, so the only thing that moved is `state` on `moved` — two
-    // rows asking for one key would ALSO differ on colour and the case would pass for
-    // the wrong reason.
+    // Distinct colours, so `state` is the only difference.
     const still = reported({ session_key: `${CHAN}:a`, name: "onyx", color: "agent-02" });
     const moved = reported({ session_key: `${CHAN}:b` });
     const steps = makeSequencedAdmin([
@@ -250,7 +201,7 @@ describe("replaceSessionStates — the row lifetime", () => {
       { thread_title: "New title" },
       { task_id: "44444444-e29b-41d4-a716-446655440000" },
       { channel_id: "55555555-e29b-41d4-a716-446655440000" },
-      // ⚠ Never moves mid-session, and must still COUNT — see the column pin.
+      // Never moves mid-session, and must still count.
       { identity_name: "Code Auditor" },
     ];
     for (const over of fields) {
@@ -262,8 +213,7 @@ describe("replaceSessionStates — the row lifetime", () => {
 });
 
 describe("replaceSessionStates — failures are LOUD", () => {
-  // ⚠ The read degrades PGRST205 to []; a WRITE that swallowed it would report a
-  // store that did not happen. This throws instead.
+  // The read degrades PGRST205 to []; a write that did would report a store that never happened.
   for (const [label, at] of [["the read", 0], ["the upsert", 1]] as const) {
     it(`${label} rethrows a missing relation rather than degrading`, async () => {
       const results = [
@@ -285,22 +235,8 @@ describe("replaceSessionStates — failures are LOUD", () => {
   });
 });
 
-/**
- * F-241 — ONE DEAD `task_id` MUST NOT POISON THE WHOLE REPLACE.
- *
- * A thread can be deleted while a PEER's machine is still running an agent on
- * it: that agent is not reachable from any server (it stops on its own
- * idle/abandon timer), so its next push re-inserts a `task_id` whose
- * `channel_tasks` row is gone. The upsert is ONE statement over the changed
- * set, so a single `23503` used to fail `reportSessionStates` entirely — that
- * operator's every OTHER session stopped being reported and their peer cards
- * went stale workspace-wide, for a thread somebody deleted on purpose.
- *
- * The degrade re-reads which reported thread ids still exist, NULLs only the
- * dead ones and retries once. It is not a swallow: the row's other half — a
- * live agent, in this channel, in this state — is still true, and a null
- * `task_id` is exactly what the column's own `ON DELETE SET NULL` leaves.
- */
+/** A peer's running agent can re-push a `task_id` whose thread was deleted; one `23503` must not fail the
+ *  whole replace. The degrade nulls only the dead ids (what `ON DELETE SET NULL` leaves) and retries once (F-241). */
 describe("replaceSessionStates — a thread deleted under a live peer agent", () => {
   const DEAD = "44444444-e29b-41d4-a716-446655440000";
   const LIVE = "55555555-e29b-41d4-a716-446655440000";
@@ -322,7 +258,7 @@ describe("replaceSessionStates — a thread deleted under a live peer agent", ()
     const out = await replaceSessionStates(USER, WS, [deadRow, liveRow]);
     expect(out).toEqual({ stored: 2, changed: 2, removed: 0 });
 
-    // ⚠ The existence check asks `channel_tasks`, and only for the ids reported.
+    // The existence check asks `channel_tasks`, only for the ids reported.
     const probe = steps.find((s) => s.op === "in" && s.args[0] === "id");
     expect(probe?.args).toEqual(["id", [DEAD, LIVE]]);
 
@@ -331,15 +267,12 @@ describe("replaceSessionStates — a thread deleted under a live peer agent", ()
     const retried = upserts[1].args[0] as Array<Record<string, unknown>>;
     expect(retried[0].task_id).toBeNull();
     expect(retried[1].task_id).toBe(LIVE);
-    // ⚠ NOTHING ELSE IS TOUCHED: the live row keeps its thread, both rows are
-    // still written, and the session keys are unchanged.
+    // Nothing else changes: the live row keeps its thread and both keys stay.
     expect(retried.map((r) => r.session_key)).toEqual([deadRow.session_key, liveRow.session_key]);
   });
 
   it("a 23503 that names NO dead thread RETHROWS — it never guesses the constraint", async () => {
-    // `channel_sessions` has four foreign keys. A violation on `channel_id`
-    // means the CHANNEL is gone, which nulling a thread id cannot fix and must
-    // not be made to look fixed.
+    // A violation on another FK (e.g. a deleted channel) cannot be fixed by nulling a thread id.
     makeScriptedAdmin([
       { data: [], error: null },
       { data: null, error: FK },

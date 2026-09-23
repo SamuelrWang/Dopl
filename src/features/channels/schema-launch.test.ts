@@ -1,24 +1,8 @@
 /**
- * THE POSTURE SCHEMAS — T24's launch request and the `set_agent_mode` arm
- * (2026-09-01).
- *
- * ⚠ **THE PROPERTIES HERE ARE NOT "ZOD WORKS". THEY ARE THE THREE THINGS THAT GO
- * WRONG SILENTLY:**
- *
- *  1. **A `set_agent_mode` THAT ASKS FOR NOTHING MUST BE REFUSED AT THE SCHEMA.**
- *     It parses cleanly as an object with two optional fields, files a row, is
- *     claimed, and can only ever come back refused for a request that was never
- *     expressible. Three statements refuse it (here, the column CHECK, and
- *     `main/directive-agent-ops.js › setAgentMode`); this is the only one that
- *     costs the caller nothing.
- *  2. **THE MODE ARRAYS ARE ORDERED, AND `closedEnum` DOES NOT CHECK ORDER.** The
- *     clamp on the other side of the wire is an INDEX COMPARISON over a copy of
- *     these sequences (`main/launch-posture.js › narrowTo`), so a re-order
- *     inverts the bound with every type and every set-membership test still
- *     green. The order is asserted as a LIST, deliberately, not as a set.
- *  3. **`chain: false` MUST SURVIVE.** It is a real request ("run it with
- *     chaining off") and is not a spelling of "did not ask", which inherits the
- *     channel's setting and can be the opposite.
+ * The posture schemas: the launch request and the `set_agent_mode` arm. A `set_agent_mode` asking for
+ * nothing is refused here, where it costs the caller nothing. The mode arrays are ordered and the
+ * desktop clamps by index (`main/launch-posture.js › narrowTo`), so order is asserted as a list.
+ * `chain: false` is a real request, not "did not ask".
  */
 
 import { describe, it, expect } from "vitest";
@@ -37,8 +21,7 @@ const BASE = { channel: "general", agentId: AGENT } as const;
 /** Repo-root-relative path, resolved from this file rather than the working directory. */
 const repoFile = (rel: string) => new URL(`../../../${rel}`, import.meta.url);
 
-// Axis A is EACH RUNTIME'S OWN WORDS (Samuel ruling R3): per-runtime lists narrowest first, pinned
-// against the desktop adapters' own `tools.js`, and the wire accepts their union.
+// Each runtime asks in its own words, narrowest first, pinned against its adapter's `tools.js`.
 function desktopToolModes(runtime: string): string[] {
   const src = readCode(repoFile(`dopl-desktop-app/main/runtime/${runtime}/tools.js`));
   const m = /const TOOL_MODES = \[([^\]]*)\]/.exec(src);
@@ -70,8 +53,7 @@ describe("the mode vocabularies", () => {
     ]);
   });
 
-  // C5: the column CHECKs must admit exactly the words the route accepts, or a legal decide is
-  // refused AT REST for a launch that really happened.
+  // A CHECK narrower than the wire would refuse a legal decide at rest.
   it("the latest tool-mode CHECKs admit exactly the wire union", () => {
     const sql = readSource(
       repoFile("supabase/migrations/20261020120000_channel_launch_directives_runtime_tool_words.sql"),
@@ -84,7 +66,6 @@ describe("the mode vocabularies", () => {
     }
   });
 
-  // C5: a Codex launch may ask in Codex words; a word no runtime speaks is a named 400.
   it("a launch and a re-posture accept a Codex word, and refuse a word no runtime has", () => {
     const launch = { agentName: "Scout", channel: "general" };
     expect(LaunchCreateSchema.parse({ ...launch, tools: "on-request" }).tools).toBe("on-request");
@@ -97,7 +78,6 @@ describe("the mode vocabularies", () => {
 describe("LaunchCreateSchema — the posture a launch may ASK for", () => {
   it("takes both axes and the chain", () => {
     const parsed = LaunchCreateSchema.parse({
-      // ⚠ REQUIRED SINCE 2026-09-15 — an agent that launches an agent NAMES it.
       agentName: "Scout",
       channel: "general",
       tools: "auto",
@@ -111,7 +91,6 @@ describe("LaunchCreateSchema — the posture a launch may ASK for", () => {
 
   it("omitting all three is legal", () => {
     const parsed = LaunchCreateSchema.parse({
-      // ⚠ REQUIRED SINCE 2026-09-15 — an agent that launches an agent NAMES it.
       agentName: "Scout", channel: "general" });
     expect(parsed.tools).toBeUndefined();
     expect(parsed.messages).toBeUndefined();
@@ -119,48 +98,26 @@ describe("LaunchCreateSchema — the posture a launch may ASK for", () => {
   });
 
   it("`chain: false` PARSES as false — the row records what was sent", () => {
-    // ⚠ AND IT IS A BEHAVIOURAL PROPERTY SINCE 2026-09-01, NOT MERELY A
-    // RECORD-KEEPING ONE. `main/launch-directive-wire.js › directiveFrom` used to
-    // read only `true`/`"true"`, so a stored `false` resolved on the desktop
-    // exactly as an omission did; it now carries all three states and
-    // `main/launch-posture.js › resolveChain` grants `false` unconditionally —
-    // it wins even over a channel set to ON. A schema that dropped the value
-    // would now delete a real request, not just a record.
+    // `main/launch-posture.js › resolveChain` grants `false` even over a channel set to on.
     expect(LaunchCreateSchema.parse({ channel: "general", agentName: "Scout", chain: false }).chain)
       .toBe(false);
   });
 
-  /**
-   * 🔒 **AN AGENT THAT LAUNCHES AN AGENT MUST NAME IT** (Samuel, 2026-09-15, verbatim: *"if
-   * agents are spinning up agents, they should be the ones that are naming the agent. Shouldn't
-   * be a nameless agent."*).
-   *
-   * ⚠ **THE ARGUMENT DID NOT EXIST BEFORE THIS WAVE, WHICH IS THE WHOLE DEFECT** — a launch
-   * filed over MCP could carry a goal, a model, an identity, a colour and a posture, and no name,
-   * so every agent an agent launched was nameless BY CONSTRUCTION and rendered on every human
-   * surface as its own instance id. Adding the field as OPTIONAL would have left the defect
-   * reachable by omission, and the caller is a model that omits whatever it can.
-   * ⚠ **THE ID-SHAPED REFUSAL IS THE TOOL'S, NOT THIS SCHEMA'S** — see
-   * `packages/mcp-server/src/tools/channel-ops-launch-name.ts`. A zod message cannot say what to
-   * pass instead, and a refusal an orchestrator cannot act on is a retry loop.
-   */
+  /** An agent that launches an agent must name it; optional would leave it nameless by omission.
+   *  The id-shaped refusal is `packages/mcp-server/src/tools/channel-ops-launch-name.ts`'s. */
   it("REFUSES a launch with no name, and a whitespace-only one", () => {
     expect(LaunchCreateSchema.safeParse({ channel: "general" }).success).toBe(false);
     expect(
       LaunchCreateSchema.safeParse({ channel: "general", agentName: "" }).success,
     ).toBe(false);
-    // ⚠ TRIMMED FIRST, so `"   "` is refused rather than stored as a name nobody typed. The
-    // empty string is meaningful on the RENAME arm (it clears) and meaningless here.
+    // Trimmed first; `""` clears only on the rename arm.
     expect(
       LaunchCreateSchema.safeParse({ channel: "general", agentName: "   " }).success,
     ).toBe(false);
   });
 
   it("refuses the invisibles rather than stripping them, as `agent-names.js` does", () => {
-    // ⚠ STRIPPING WOULD STORE SOMETHING OTHER THAN WHAT WAS SENT AND SAY NOTHING ABOUT IT. A bidi
-    // override in an agent name renders a card that reads backwards; a zero-width joiner makes
-    // two names look identical. The desktop's `sanitizeName` is the authority at the far end and
-    // refuses, so accepting them here would file a directive the machine will only bounce.
+    // Refused, not stripped: the desktop's `sanitizeName` refuses them too, so a stripped name would only bounce.
     for (const bad of ["Bug\u200bReviewer", "Bug\u202eReviewer", "Bug\nReviewer"]) {
       expect(
         LaunchCreateSchema.safeParse({ channel: "general", agentName: bad }).success,
@@ -170,8 +127,6 @@ describe("LaunchCreateSchema — the posture a launch may ASK for", () => {
   });
 
   it("refuses a name past 60 — `main/agent-names.js › MAX_NAME`, not the identity's 120", () => {
-    // ⚠ A name legal here that the desktop then refuses is a 200 followed by a refusal the
-    // orchestrator cannot explain.
     expect(
       LaunchCreateSchema.safeParse({ channel: "general", agentName: "x".repeat(61) }).success,
     ).toBe(false);
@@ -226,8 +181,7 @@ describe("AgentDirectiveCreateSchema — the set_agent_mode arm", () => {
       ...BASE,
     });
     expect(res.success).toBe(false);
-    // ⚠ THE MESSAGE HAS TO NAME WHAT TO PASS. A bare "invalid input" sends the
-    // caller to guess at a required field the shape does not have.
+    // The message must name what to pass.
     const message = res.success ? "" : res.error.issues.map((i) => i.message).join(" ");
     expect(message).toContain("at least one axis");
     expect(message).toContain("tools");
@@ -235,8 +189,6 @@ describe("AgentDirectiveCreateSchema — the set_agent_mode arm", () => {
   });
 
   it("the refusal is the ARM's, not the union's — end and rename are untouched by it", () => {
-    // ⚠ A predicate hung on the whole union would run over every kind and the
-    // message a rename caller saw would be about axes it has no field for.
     expect(
       AgentDirectiveCreateSchema.safeParse({ kind: "end", ...BASE }).success,
     ).toBe(true);
@@ -257,8 +209,6 @@ describe("AgentDirectiveCreateSchema — the set_agent_mode arm", () => {
   });
 
   it("HAS NO `model` FIELD — the desktop's narrower has no column to read one into", () => {
-    // A model accepted here would be stored and silently dropped on the way in,
-    // i.e. the caller told its request landed while nothing carried it.
     const parsed = AgentDirectiveCreateSchema.parse({
       kind: "set_agent_mode",
       ...BASE,

@@ -1,20 +1,7 @@
 /**
- * `channel_sessions` data access — THE READ HALF: the degrade that is honest,
- * and the two fences.
- *
- * ⚠ **THE WRITE HALF IS `repository-sessions-replace.test.ts`** (split 2026-09-01
- * at the 500-line cap, §1). It has its own builder stub — a QUEUE rather than a
- * single answer, because the replace issues select/upsert/delete — which is why
- * the split cost nothing but the imports.
- *
- * ⚠ `listSessionStates` degrades ONLY `PGRST205` (relation missing from the
- * schema cache) to `[]`, because a missing relation is the one error whose
- * honest answer is "nothing is being reported" — the WRITER does not exist
- * either. Permission denied, a moved column, a dropped connection all mean the
- * answer is UNKNOWN, and `[]` for those fabricates state.
- *
- * Supabase mocked with the repository's chainable-builder stub, so the whole
- * `.from().select().eq()…` chain runs and only the awaited result is controlled.
+ * `channel_sessions` reads. `listSessionStates` degrades only `PGRST205` (relation missing — the writer
+ * is missing too) to `[]`; any other error means the answer is unknown and must throw. Supabase is a
+ * chainable-builder stub, so the whole `.from().select().eq()…` chain runs.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -57,10 +44,7 @@ function row(over: Partial<SessionStateRow> = {}): SessionStateRow {
     started_at: null,
     last_activity_at: null,
     identity_name: null,
-    // ── HEALTH (2026-09-01, 20260909120000) ─────────────────────────────
-    // ⚠ `null` IS THE FIXTURE DEFAULT, and that is the honest one: a desktop
-    // older than these columns reports none, so the row a test builds by default
-    // is the row most live rows still are.
+    // Health columns default to `null`, as an older desktop reports them.
     turns: null,
     tokens_delta: null,
     stale: null,
@@ -141,11 +125,7 @@ describe("the table is not there yet (the UNAPPLIED migration)", () => {
     await expect(listSessionStates(USER, WS, CHAN)).resolves.toEqual([]);
   });
 
-  // ⚠ THE PEER READ GETS THE SAME DEGRADE, and since 2026-08-20 it gets it from
-  // the SAME helper (`sessionRowsWhere`) rather than a second copy of the branch.
-  // Asserted because the sharing is the point: a future un-sharing would leave the
-  // Agents tab's peer cards 500ing against an unapplied migration while the own
-  // feed answered honestly, and nothing else would notice.
+  // The peer read shares the degrade through `sessionRowsWhere`; un-sharing it would 500 peer cards.
   it("…and on the CHANNEL-scoped peer read, from the same shared branch", async () => {
     makeAdmin({ data: null, error: MISSING_RELATION });
     await expect(listChannelSessionStates(WS, CHAN)).resolves.toEqual([]);
@@ -153,9 +133,7 @@ describe("the table is not there yet (the UNAPPLIED migration)", () => {
 });
 
 describe("the peer read is CHANNEL-fenced, never user-fenced", () => {
-  // ⚠ The fence is the one thing the shared helper deliberately does NOT own:
-  // this read is authorized by the caller having proved channel visibility, and
-  // narrowing it by `user_id` would silently empty every peer card.
+  // Authorized by channel visibility; a `user_id` filter would empty every peer card.
   it("filters on workspace + channel and NOT on user_id", async () => {
     const calls = makeAdmin({ data: [], error: null });
     await listChannelSessionStates(WS, CHAN);
@@ -167,8 +145,7 @@ describe("the peer read is CHANNEL-fenced, never user-fenced", () => {
 });
 
 describe("every OTHER failure still surfaces (an empty list is a claim)", () => {
-  // ⚠ Each means the answer is UNKNOWN, not EMPTY. Swallowing reports "no live
-  // sessions" about a database that never answered.
+  // Each means the answer is unknown, not empty.
   const realErrors: Array<[string, unknown]> = [
     ["permission denied (RLS / grant)", { code: "42501", message: "permission denied for table channel_sessions" }],
     ["a column that moved", { code: "42703", message: "column channel_sessions.state does not exist" }],
@@ -186,8 +163,6 @@ describe("every OTHER failure still surfaces (an empty list is a claim)", () => 
   }
 
   it("the match is on the CODE, never on the message prose", async () => {
-    // ⚠ Match on the CODE, not the message — text matching swallows real faults
-    // whose message happens to name the table.
     makeAdmin({
       data: null,
       error: {

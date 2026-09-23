@@ -1,16 +1,5 @@
-/**
- * LAUNCH-OVER-MCP — the directive lifecycle: create → claim (CAS, races
- * included) → decide, plus lazy expiry and operator scoping.
- *
- * ⚠ **THE PROPERTY THIS SUITE EXISTS FOR IS THE OPERATOR SCOPE.** A directive
- * asks a machine to start a process, so "whose machine" is the entire
- * authorization story — and because every write runs on the RLS-bypassing admin
- * client, the fence is an ARGUMENT rather than a policy. Two things are driven
- * adversarially: that `operator_user_id` is always `ctx.userId` and never
- * anything a caller supplied, and that ANOTHER operator's directive is
- * invisible and unclaimable (and invisible in the not-found sense, so ids cannot
- * be probed).
- */
+/** Every write runs on the RLS-bypassing admin client, so the operator scope is an argument, not a
+ *  policy: `operator_user_id` is always `ctx.userId`, and another operator's directive answers 404. */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
@@ -46,9 +35,7 @@ beforeEach(wireLaunchDefaults);
 
 describe("create — the three gates, in order", () => {
   it("stamps the CALLER as operator, and there is nowhere for a payload to say otherwise", async () => {
-    // ⚠ A caller-supplied operator has nowhere to go — the input TYPE has no such
-    // field, which is the real enforcement. The cast is how a test drives the
-    // shape a compiler already refuses, so the runtime behaviour is pinned too.
+    // The input type has no operator field; the cast drives the shape the compiler refuses.
     await createLaunchDirective(ctx, {
       channel: "general",
       operatorUserId: OTHER,
@@ -60,9 +47,7 @@ describe("create — the three gates, in order", () => {
   });
 
   it("REFUSES a channel the caller can READ but is not a MEMBER of", async () => {
-    // ⚠ `loadVisibleChannel` admits a non-member to a PUBLIC channel (§5). A
-    // launch is not a read: starting an agent in a room you never joined is not
-    // something the room agreed to.
+    // `loadVisibleChannel` admits a non-member to a public channel; a launch is not a read.
     vi.mocked(loadVisibleChannel).mockResolvedValue({
       channel: { ...CHANNEL_ROW, visibility: "public" },
       membership: null,
@@ -74,8 +59,7 @@ describe("create — the three gates, in order", () => {
   });
 
   it("REFUSES a thread that is not in that channel — never silently drops it", async () => {
-    // ⚠ A dropped thread id starts the agent in the wrong place and reports
-    // success, which is worse than a refusal.
+    // A dropped thread id would start the agent in the wrong place and report success.
     vi.mocked(repoTasks.findTaskByChannelAndId).mockResolvedValue(null);
     await expect(
       createLaunchDirective(ctx, { channel: "general", threadId: TASK })
@@ -107,8 +91,7 @@ describe("presence — offline files NO ROW", () => {
       "a stamp older than the online window",
       new Map([[ME, { online: false, lastSeenAt: new Date(Date.now() - 600_000).toISOString() }]]),
     ],
-    // ⚠ FAIL-SAFE DIRECTION: a projection that cannot say when it last heard
-    // from a machine is not evidence the machine is up.
+    // Fail-safe: a row with no stamp is not evidence the machine is up.
     ["a null stamp", new Map([[ME, { online: true, lastSeenAt: null }]])],
     ["an unparseable stamp", new Map([[ME, { online: true, lastSeenAt: "yesterday" }]])],
   ];
@@ -178,9 +161,7 @@ describe("claim — the CAS, and every way it can lose", () => {
   });
 
   it("RACE: the CAS returning null means a sibling machine won — 'taken', not an error about the row", async () => {
-    // ⚠ The pre-read ruled out missing / decided / expired, so a null from the
-    // UPDATE can only be the race. Reporting it as anything else would send the
-    // losing machine looking for a fault that does not exist.
+    // The pre-read ruled out missing/decided/expired, so a null from the UPDATE can only be the race.
     vi.mocked(launchRepo.findLaunchDirective).mockResolvedValue(row());
     vi.mocked(launchRepo.claimLaunchDirective).mockResolvedValue(null);
     await expect(claimLaunchDirective(ctx, DIR)).rejects.toMatchObject({
@@ -209,8 +190,7 @@ describe("claim — the CAS, and every way it can lose", () => {
   });
 
   it("ADVERSARIAL: ANOTHER operator's directive is INVISIBLE and unclaimable", async () => {
-    // The repository's own `operator_user_id` predicate makes it indistinguishable
-    // from absent — a 404, never a 403, so ids cannot be probed.
+    // The repository's operator predicate makes it indistinguishable from absent, so ids cannot be probed.
     vi.mocked(launchRepo.findLaunchDirective).mockResolvedValue(null);
     await expect(claimLaunchDirective(ctx, DIR)).rejects.toBeInstanceOf(
       LaunchDirectiveNotFoundError
@@ -257,8 +237,7 @@ describe("decide — terminal, and final", () => {
   });
 
   it("a SECOND decide is refused rather than overwriting the first", async () => {
-    // ⚠ The requester may already have read `launched` and started addressing
-    // `@abcd1234`; flipping it to `refused` afterwards would make that a lie.
+    // The requester may already be addressing `@abcd1234`; a later `refused` would make that a lie.
     vi.mocked(launchRepo.decideLaunchDirective).mockResolvedValue(null);
     vi.mocked(launchRepo.findLaunchDirective).mockResolvedValue(
       row({ status: "launched", agent_id: "abcd1234" })
@@ -277,9 +256,7 @@ describe("decide — terminal, and final", () => {
   });
 
   it("an EXPIRED directive may still be DECIDED — a started agent must be reportable", async () => {
-    // ⚠ Refusing the write would leave a running agent no directive accounts
-    // for. Expiry governs whether a NEW claim may begin, not whether a finished
-    // one may be reported.
+    // Expiry gates a new claim, not the report of an agent that already started.
     vi.mocked(launchRepo.decideLaunchDirective).mockResolvedValue(
       row({
         status: "launched",

@@ -1,25 +1,9 @@
 /**
- * THE EIGHT POSTURE COLUMNS, END TO END — what the service WRITES and what the
- * mapper HANDS BACK (2026-09-01, T24 + `set_agent_mode`).
- *
- * ⚠ **THE PROPERTY THIS SUITE EXISTS FOR IS THAT A FIELD CAN GO MISSING WITHOUT
- * ANYTHING FAILING.** `toDirective` is a literal whitelist and so is the
- * desktop's `directiveFrom`; a column the server writes and the mapper does not
- * name is dropped in silence, and the visible symptom is a lane that ships, files
- * rows, and does nothing. Every one of the eight is named individually below
- * rather than compared as an object, so the failure says WHICH.
- *
- * ⚠ **AND THE ECHO TRIO'S NULL IS ASSERTED AS NULL.** Its writer is the DECIDE
- * (2026-09-01; the last two describes below drive it), never the CREATE and never
- * the mapper: `null` is the live value on every row written before that wave and
- * on every row decided by an OLDER DESKTOP, and it means "NOT REPORTED". The one
- * thing the mapper must never do is default them from the REQUEST — that would
- * make the row assert the machine applied exactly what was asked, which is the
- * single claim this lane cannot make about a value it clamps.
- *
- * ⚠ THE REPOSITORY IS MOCKED. This is about the shape crossing two boundaries,
- * not about SQL; the column CHECKs are the database's own statement and
- * `schema-sql.test.ts` reads them out of the migration.
+ * The eight posture columns end to end: what the service writes and what `toDirective` hands back.
+ * Both `toDirective` and the desktop's `directiveFrom` are literal whitelists, so a dropped column
+ * fails nothing; each field is asserted by name. The echo trio is written only by the decide, and
+ * `null` means "not reported" — never defaulted from the request. The tool-mode column CHECKs are
+ * read from the migration in `schema-launch.test.ts`.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -81,12 +65,7 @@ describe("createLaunchDirective persists the request", () => {
   });
 
   it("`chain: false` IS WRITTEN AS false, never rewritten to null", async () => {
-    // ⚠ `|| null` here would rewrite what the caller sent, in the one place that
-    // exists to record it faithfully — and since 2026-09-01 it would also DELETE
-    // A REAL REQUEST: `main/launch-directive-wire.js › directiveFrom` carries all
-    // three states and `main/launch-posture.js › resolveChain` grants `false`
-    // unconditionally, so `false` turns chaining off even where the channel
-    // allows it. This comment said the opposite while the desktop flattened it.
+    // `false` is a real request: `main/launch-posture.js › resolveChain` grants it even where the channel allows chaining.
     await createLaunchDirective(ctx, { channel: "general", chain: false });
     expect(inserted().chain).toBe(false);
   });
@@ -179,9 +158,7 @@ describe("toDirective hands back all eight columns", () => {
       }) as never,
       now,
     );
-    // ⚠ NAMED ONE BY ONE. The desktop's `directiveFrom` reads exactly these
-    // camelCase spellings off the CLAIM's answer, so a single missing key is a
-    // request half that silently never arrives.
+    // `directiveFrom` reads exactly these camelCase keys off the claim's answer.
     expect(d.startToolMode).toBe("auto");
     expect(d.startMessageMode).toBe("auto_inbound");
     expect(d.chain).toBe(true);
@@ -210,9 +187,7 @@ describe("toDirective hands back all eight columns", () => {
   });
 
   it("a STALE CACHED PAYLOAD missing every new column maps to null, never undefined", () => {
-    // A payload cached against an older PostgREST schema arrives without the
-    // fields; `undefined` renders as the string "undefined" inside a sentence
-    // naming what an agent was allowed to do.
+    // Stale-cache rule (INVARIANTS): `undefined` would render as the string "undefined".
     const stale = row();
     for (const k of [
       "start_tool_mode",
@@ -242,21 +217,8 @@ describe("toDirective hands back all eight columns", () => {
   });
 });
 
-/**
- * **THE ECHO'S WRITER** (2026-09-01, T24's second half — F-410 closed).
- *
- * ⚠ **THE PROPERTY IS THAT THE DECIDE, AND ONLY THE DECIDE, CAN FILL THESE IN.** The columns
- * landed with the request pair and nothing wrote them, so a clamped launch was reported as a bare
- * `launched` and the orchestrator sized its next instruction for room the agent did not have.
- * Every case below asserts the object handed to `repository-launch.ts › decideLaunchDirective`,
- * which is what reaches the row.
- *
- * ⚠ **AND THAT ABSENT STAYS `null`.** A desktop older than this wave sends none of the three
- * fields (INVARIANTS §13 — an older peer is supported) and must still be able to decide; `null`
- * is what `channel-ops-launch.ts › postureFacts` renders as `not reported`. The one thing this
- * path must never do is fill the gap from the REQUEST columns, which would be right whenever
- * nothing was clamped and confidently wrong exactly when it mattered.
- */
+/** The decide is the echo's only writer (F-410). An older desktop sends none of the three (INVARIANTS
+ *  §13); `null` is what `channel-facts.ts › postureFacts` renders as `not reported`. */
 describe("decideLaunchDirective writes the applied echo", () => {
   const decided = () => {
     const call = vi.mocked(launchRepo.decideLaunchDirective).mock.calls[0];
@@ -284,8 +246,7 @@ describe("decideLaunchDirective writes the applied echo", () => {
   });
 
   it("`appliedChain: false` is written as false, NOT collapsed to null", async () => {
-    // ⚠ `|| null` here would delete the one fact that stops an orchestrator planning for workers.
-    // `false` is a REPORT ("this session may not launch further agents"); `null` is a SILENCE.
+    // `false` is a report ("may not launch further agents"); `null` is silence.
     await decideLaunchDirective(ctx, DIR, {
       status: "launched",
       agentId: AGENT,
@@ -295,10 +256,7 @@ describe("decideLaunchDirective writes the applied echo", () => {
   });
 
   it("an OLDER DESKTOP reports nothing, and all three land as null — never as the request", async () => {
-    // ⚠ THE OLDER-PEER CASE, WHICH IS ALSO THE ONLY REASON THE SCHEMA FIELDS ARE OPTIONAL. Such a
-    // machine posts `{ directiveId, status, agentId }` and nothing else. Filling the columns from
-    // `start_tool_mode` / `chain` here would make the row assert that the machine applied exactly
-    // what was asked — the single claim this lane cannot make about a value it clamps.
+    // An older desktop posts only `{ directiveId, status, agentId }`; filling from the request would claim what was applied.
     await decideLaunchDirective(ctx, DIR, { status: "launched", agentId: AGENT });
     const d = decided();
     expect(d.applied_tool_mode).toBeNull();
@@ -331,7 +289,7 @@ describe("decideLaunchDirective writes the applied echo", () => {
     expect(d.applied_chain).toBeNull();
   });
 
-  // 🔒 F2: a `set_agent_mode`'s echo rides `done`; it used to be written null ("not reported").
+  // A `set_agent_mode`'s echo rides `done`.
   it("a `set_agent_mode` `done` writes the applied pair — and never a chain", async () => {
     vi.mocked(launchRepo.decideLaunchDirective).mockResolvedValue(row({ kind: "set_agent_mode", status: "done" }) as never);
     await decideLaunchDirective(ctx, DIR, { status: "done", appliedTools: "on-request", appliedMessages: "auto_inbound" });
@@ -342,9 +300,7 @@ describe("decideLaunchDirective writes the applied echo", () => {
   });
 
   it("toDirective hands the echo back under its camelCase names", async () => {
-    // ⚠ THE OTHER END OF THE ROUND TRIP. `postureFacts` reads exactly these three spellings, so a
-    // single missing key is an echo that is written and never rendered — the same silent-drop the
-    // top of this file exists to catch on the request half.
+    // `postureFacts` reads exactly these three keys.
     const d = toDirective(
       row({
         status: "launched",
@@ -361,13 +317,7 @@ describe("decideLaunchDirective writes the applied echo", () => {
   });
 });
 
-/**
- * **THE DECIDE SCHEMA'S ECHO FIELDS** — the shape the route will actually accept.
- *
- * ⚠ ASSERTED HERE RATHER THAN LEFT TO THE SERVICE, because zod is what stands between a machine's
- * report and the column CHECK: a mode outside the frozen enum must be a 400 that NAMES the field,
- * never a constraint violation surfacing as an opaque 500.
- */
+/** zod stands between a machine's report and the column CHECK: a bad mode must be a named 400, not a 500. */
 describe("LaunchDecideSchema carries the echo, optionally", () => {
   const launched = { directiveId: DIR, status: "launched" as const, agentId: AGENT };
 
@@ -386,9 +336,7 @@ describe("LaunchDecideSchema carries the echo, optionally", () => {
   });
 
   it("parses a decide with NO echo at all — the older desktop must still be able to report", () => {
-    // ⚠ MAKING ANY OF THE THREE REQUIRED WOULD 400 EVERY DECIDE SUCH A MACHINE POSTS, turning
-    // "I cannot tell you what I applied" into "I could not report at all" — and the row would then
-    // expire with a running agent behind it. INVARIANTS §13: an older peer is supported.
+    // Required fields would 400 every decide an older desktop posts (INVARIANTS §13).
     const parsed = LaunchDecideSchema.parse(launched);
     expect(parsed).toEqual(launched);
   });
@@ -402,7 +350,7 @@ describe("LaunchDecideSchema carries the echo, optionally", () => {
     ).toBe(false);
   });
 
-  // 🔒 F2: zod stripped these from `done`, so a `set_agent_mode` clamp was stored as "not reported".
+  // zod must keep these on `done`, or a `set_agent_mode` clamp is stored as "not reported".
   it("`done` keeps a re-posture's applied pair (a Codex word too), and drops a chain", () => {
     const parsed = LaunchDecideSchema.parse({
       directiveId: DIR,

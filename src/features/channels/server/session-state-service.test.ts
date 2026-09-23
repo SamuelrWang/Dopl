@@ -1,20 +1,10 @@
-/**
- * READ-SESSION-STATE service (rollback §3.5) — the read half of "what is flint
- * doing?".
- *
- * Pins the SHAPE the MCP op renders (working/idle/ended, name, thread) and that
- * the read is scoped to the caller's own user + workspace (a session belongs to
- * one member's machine). The repository is mocked.
- *
- * F-147 added the WRITE half below — the delivery gap F-144 flagged, now wired
- * to `main/session-state-push.js`.
- */
+/** Session-state service: the read (the shape the MCP op renders, scoped to the caller's own user +
+ *  workspace) and the write (F-147). The repository is mocked. */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 vi.mock("./repository-sessions");
-// ⚠ The presence lane is mocked too since F-294: `listSessionStates` now joins
-// the caller's OWN heartbeat so the render can tell idle-but-alive from gone.
+// `listSessionStates` joins the caller's own heartbeat so the render can tell idle-but-alive from gone (F-294).
 vi.mock("./repository-collab");
 
 import * as collab from "./repository-collab";
@@ -59,10 +49,7 @@ function row(over: Partial<SessionStateRow> = {}): SessionStateRow {
     started_at: null,
     last_activity_at: null,
     identity_name: null,
-    // ── HEALTH (2026-09-01, 20260909120000) ─────────────────────────────
-    // ⚠ `null` IS THE FIXTURE DEFAULT, and that is the honest one: a desktop
-    // older than these columns reports none, so the row a test builds by default
-    // is the row most live rows still are.
+    // Health columns default to `null`, as an older desktop reports them.
     turns: null,
     tokens_delta: null,
     stale: null,
@@ -149,20 +136,9 @@ describe("listSessionStates", () => {
   });
 });
 
-/**
- * THE SECOND HALF OF THE ANSWER (2026-08-23, F-294) — IS THE MACHINE THERE?
- *
- * ⚠ **THE DEFECT THIS PINS: AN IDLE-BUT-ALIVE AGENT READ AS "its desktop may be
- * offline" WITHIN ~2 MINUTES.** `channel_sessions` is pushed on state CHANGE, so
- * a quiet row and a dead machine are indistinguishable ON THAT TABLE. They are
- * NOT indistinguishable on `agent_presence`, which beats unconditionally — so
- * the read joins it, and the render stops guessing.
- *
- * ⚠ It is a BOOLEAN on the wire, derived HERE against `PRESENCE_ONLINE_WINDOW_MS`.
- * Sending the stamp instead would invite a client to re-derive freshness against
- * a window of its own, which is the drift `SESSION_STALE_WINDOW_MS`'s
- * duplicate-plus-pin exists to prevent.
- */
+/** `channel_sessions` is pushed on state change, so a quiet row and a dead machine look alike there;
+ *  `agent_presence` beats unconditionally. It crosses the wire as a boolean derived against
+ *  `PRESENCE_ONLINE_WINDOW_MS`, so no client re-derives freshness against its own window. */
 describe("listSessionStates — the operator's own presence rides beside the rows", () => {
   beforeEach(() => {
     vi.mocked(sessionRepo.listSessionStates).mockResolvedValue([]);
@@ -191,8 +167,7 @@ describe("listSessionStates — the operator's own presence rides beside the row
 
   it("NO presence row answers offline — the fail-safe direction, never `undefined`", async () => {
     vi.mocked(collab.presenceForUser).mockResolvedValue(null);
-    // ⚠ `false` here and NEVER `undefined`: "not reported" is a WIRE state (the
-    // route omitting the key), and a missing row is a measured absence.
+    // `false`, never `undefined`: "not reported" is the route omitting the key; a missing row is measured.
     expect((await listSessionStates(ctx)).operatorOnline).toBe(false);
   });
 
@@ -208,7 +183,7 @@ describe("listSessionStates — the operator's own presence rides beside the row
         )
     );
     vi.mocked(collab.presenceForUser).mockImplementation(async () => {
-      // ⚠ If these were serialized, the session read would already be done.
+      // Serialized reads would have settled the session read already.
       expect(sessionsSettled).toBe(false);
       return null;
     });
@@ -216,15 +191,8 @@ describe("listSessionStates — the operator's own presence rides beside the row
   });
 });
 
-/**
- * F-147 — `reportSessionStates`, the WRITE half.
- *
- * The service is where the API's vocabulary meets the column vocabulary, and
- * where the caller's identity is attached. Both are worth pinning: the mapping
- * because `undefined` and `null` are different things to a column, and the
- * identity because it is the entire authorization story for a table whose
- * writes are REVOKEd from `authenticated` and therefore run with RLS bypassed.
- */
+/** Where the wire vocabulary meets the columns and the caller's identity is attached — the whole
+ *  authorization story, since writes run on the admin client with RLS bypassed. */
 describe("reportSessionStates", () => {
   /** The columns an entry that reports no telemetry or health writes: `null`, never `0` or `false`. */
   const UNREPORTED = {
@@ -267,8 +235,7 @@ describe("reportSessionStates", () => {
   });
 
   it("keys the write on the CALLER, never on anything in the payload", async () => {
-    // A caller-supplied user id has nowhere to go: the entry type has no such
-    // field, and the two ids the repository fences on come from `ctx` alone.
+    // The entry type has no user field; both fenced ids come from `ctx`.
     await reportSessionStates(ctx, [
       { ...entry, userId: "someone-else", workspaceId: "not-mine" },
     ] as never);
@@ -303,14 +270,7 @@ describe("reportSessionStates", () => {
     });
   });
 
-  /**
-   * ⚠ THE SERVER STORES WHAT THE DESKTOP REPORTED AND RESOLVES NOTHING. `main`
-   * captured the identity at spawn and reports its NAME; this service does not
-   * look an identity up, does not check that one still exists under that name,
-   * and must not — a session reports what it RAN AS, which is the whole reason
-   * the column is a denormalized TEXT snapshot rather than an FK
-   * (`20260823130000_channel_sessions_template_name.sql`).
-   */
+  /** Stored as reported, never looked up: a session reports what it ran as, so the column is a TEXT snapshot, not an FK. */
   it("carries a reported identity name straight to its column, unresolved", async () => {
     await reportSessionStates(ctx, [
       { ...entry, identityName: "Code Auditor" },
@@ -319,14 +279,7 @@ describe("reportSessionStates", () => {
     expect(rows[0].identity_name).toBe("Code Auditor");
   });
 
-  /**
-   * ⚠ THE HEALTH ROUND TRIP, camelCase wire → snake_case column, INCLUDING THE
-   * TWO VALUES A CARELESS `?? ` WOULD DESTROY. `turns: 0` and `stale: false` are
-   * REPORTED measurements and must arrive as `0` and `false` — `entry.turns ??
-   * null` keeps them, `entry.turns || null` does not, and the two differ only on
-   * exactly these inputs. That is why the case drives them rather than a set of
-   * comfortable non-zero numbers.
-   */
+  /** `turns: 0` and `stale: false` are measurements: `?? null` keeps them, `|| null` would not. */
   it("carries a reported health set to its columns, zero and false included", async () => {
     await reportSessionStates(ctx, [
       {

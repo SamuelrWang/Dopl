@@ -1,24 +1,8 @@
-/**
- * THE RECONCILE'S THREE COLUMN LISTS, PINNED AGAINST EACH OTHER.
- *
- * ⚠ **SPLIT OUT OF `repository-sessions.test.ts` AT THE 500-LINE CAP**
- * (2026-08-23). That file is about BEHAVIOUR under a mocked client; this one is
- * a static read of the repository's SOURCE plus a compile-time key set, which is
- * a different kind of test and reads better on its own.
- */
-
 import { describe, it, expect } from "vitest";
 import { readCode } from "@/shared/testing/source-text";
 import type { SessionStateUpsert } from "./collab-dto";
 
-/**
- * EVERY KEY OF {@link SessionStateUpsert}, AS A VALUE — and it is a
- * `Record<keyof …, true>` rather than a string array ON PURPOSE: TypeScript
- * refuses this declaration if a key is missing OR invented, so the list cannot
- * quietly fall behind the type it claims to enumerate. A `string[]` would be a
- * second, driftable statement of the same thing, which is precisely the failure
- * mode this suite exists to catch one level down.
- */
+/** Every key of {@link SessionStateUpsert}; `Record<keyof …, true>` makes tsc refuse a missing or invented key. */
 const UPSERT_KEYS: Record<keyof SessionStateUpsert, true> = {
   session_key: true,
   channel_id: true,
@@ -38,9 +22,6 @@ const UPSERT_KEYS: Record<keyof SessionStateUpsert, true> = {
   identity_name: true,
   display_name: true,
   color: true,
-  // ⚠ THE HEALTH SEVEN (2026-09-01). This declaration is the reason adding them
-  // to `SessionStateUpsert` and not to `SESSION_DIFF_COLUMNS` was a RED TYPECHECK
-  // rather than a silent freeze — the guarantee working, exactly as documented.
   turns: true,
   tokens_delta: true,
   stale: true,
@@ -53,37 +34,11 @@ const UPSERT_KEYS: Record<keyof SessionStateUpsert, true> = {
 const upsertKeys = () => Object.keys(UPSERT_KEYS);
 
 /**
- * THE THREE STATEMENTS OF "WHAT A SESSION ROW IS", PINNED AGAINST EACH OTHER.
- *
- * `SESSION_DIFF_COLUMNS` (what the reconcile SELECTs), `sessionRowMatches` (what
- * it COMPARES) and {@link SessionStateUpsert} (what the service WRITES) are the
- * same list written three times, and the reconcile is silently wrong if they
- * disagree:
- *
- *   - **In the type but not the SELECT** → the stored value reads back as
- *     `undefined`, compares unequal against every reported value, and makes
- *     EVERY row look changed on EVERY push. `updated_at` is the read's ORDER BY
- *     and the MCP result's "last reported" stamp, so the ordering goes arbitrary
- *     while still looking plausible.
- *   - **In the type but not the COMPARE** → a push carrying nothing but that
- *     column is discarded as a no-op. The value FREEZES at whatever it was on
- *     the row's first write, while the row keeps claiming to be current.
- *
- * ⚠ **THE REPOSITORY'S OWN DOCBLOCK CLAIMED THIS TEST EXISTED AND IT DID NOT**
- * (found 2026-08-23, while adding `identity_name` — the eighth operator-only
- * column and the third column added since the claim was written). The doc was
- * describing the guarantee it wanted rather than one anybody had built. Written
- * now, so the sentence is true.
- *
- * ⚠ **BOTH ARE READ OUT OF THE SOURCE TEXT**, not imported. The idiom is
- * `schema-sql.test.ts`'s: a pin that reads TEXT fails LOUDLY when a declaration
- * is moved or renamed, where an import would silently follow it. ⚠ **AND THAT IS
- * EXACTLY WHAT HAPPENED ON 2026-09-01**: `repository-sessions.ts` hit the
- * 500-line cap when the seven HEALTH columns joined both lists, and the two
- * declarations moved into `repository-sessions-columns.ts` — the module this
- * file was already named after. They are `export`ed there for the REPOSITORY,
- * which now imports them; this suite still reads the text and never the symbol,
- * so the "exporting a constant makes it public surface" rule is unbroken.
+ * `SESSION_DIFF_COLUMNS` (what the reconcile selects), `sessionRowMatches` (what it compares) and
+ * {@link SessionStateUpsert} (what the service writes) must list the same columns. Missing from the
+ * select, every row reads as changed on every push; missing from the compare, a push changing only that
+ * column is dropped and the value freezes. Read as comment-stripped source text, so a moved or renamed
+ * declaration fails loudly.
  */
 describe("the reconcile's three column lists cannot drift", () => {
   const SOURCE = readCode(new URL("./repository-sessions-columns.ts", import.meta.url));
@@ -123,8 +78,7 @@ describe("the reconcile's three column lists cannot drift", () => {
   });
 
   it("every column the service WRITES is one the reconcile COMPARES", () => {
-    // ⚠ `session_key` is the reconcile's KEY, not a compared field — two rows
-    // being compared always share it by construction.
+    // `session_key` is the reconcile's key, not a compared field.
     const compared = new Set(comparedColumns());
     for (const key of comparableUpsertKeys()) {
       expect(
@@ -145,21 +99,12 @@ describe("the reconcile's three column lists cannot drift", () => {
   });
 
   it("the extraction is real — it finds the columns rather than an empty set", () => {
-    // ⚠ Without this, a regex that stopped matching would make all three cases
-    // above vacuously true.
-    // ⚠ THE FLOORS MOVED WITH THE SEVEN (17 → 24 written columns, 23 compared
-    // once `session_key` is excluded). They are a floor and not an equality on
-    // purpose: this case exists to catch a regex that matched NOTHING, and an
-    // exact count would turn every legitimate column addition into a second red
-    // test saying the same thing as the three above.
+    // Floors, not equalities: this catches a regex that matches nothing, not a new column.
     expect(selectedColumns().length).toBeGreaterThanOrEqual(22);
     expect(comparedColumns().length).toBeGreaterThanOrEqual(21);
     expect(selectedColumns()).toContain("identity_name");
     expect(comparedColumns()).toContain("identity_name");
-    // ⚠ One HEALTH column named explicitly, and it is `last_wake_at` rather than
-    // any of the seven at random: it is the one an orchestrator POLLS for a
-    // change, so it is the one whose silent freeze would be read as "my redirect
-    // never reached the machine".
+    // `last_wake_at` is the column an orchestrator polls; a frozen one reads as a redirect that never landed.
     expect(selectedColumns()).toContain("last_wake_at");
     expect(comparedColumns()).toContain("last_wake_at");
   });

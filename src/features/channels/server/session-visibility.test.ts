@@ -1,23 +1,8 @@
 /**
- * THE VISIBILITY SPLIT — Samuel's ruling of 2026-08-22: session TELEMETRY is
- * OPERATOR-ONLY; peers keep the coarse projection.
- *
- * ⚠ **THIS SUITE IS A PROPERTY TEST, NOT A LIST OF EXAMPLES, AND THAT IS THE
- * WHOLE DESIGN.** A suite that checked "the peer mapper does not emit
- * `tokensSpent`" would pass forever and cover nothing the day a ninth column is
- * added. What is asserted instead is a property over the FIELD NAMES themselves
- * (`OPERATOR_ONLY_SESSION_FIELDS`): **no key of the peer mapper's output may be
- * one of them, for any row.** A new telemetry column is registered in that array
- * — which the same suite pins against the row type — and the property covers it
- * without anyone remembering to write a case.
- *
- * ⚠ THE FENCE IS THIS MAPPER AND NOT THE DATABASE, which is why the test lives
- * here rather than being left to RLS or a GRANT. Both session reads run on the
- * RLS- and grant-bypassing admin client (`repository-sessions.ts` says so in its
- * own header, and must, because the table REVOKEs writes from `authenticated`).
- * `service_role` keeps every column grant and is not subject to RLS, so the
- * column privileges in migration `20260822150000` cannot see this path at all —
- * they are the belt for PostgREST. The fence is `mapPeerSessionStateRow`.
+ * Session telemetry is operator-only; peers get the coarse projection. The suite is a property over
+ * `OPERATOR_ONLY_SESSION_FIELDS`, so a newly registered column is covered without a new case. The fence
+ * is `mapPeerSessionStateRow`: both session reads run on the admin client, which bypasses RLS and the
+ * column grants (`schema-sql-sessions.test.ts` pins those as the PostgREST belt).
  */
 
 import { describe, it, expect } from "vitest";
@@ -30,9 +15,7 @@ import {
   type SessionStateRow,
 } from "./collab-dto";
 
-/** A row with EVERY telemetry column populated — the adversarial input. A row of
- *  nulls would let a mapper that passes the fields through look identical to one
- *  that never names them. */
+/** Every telemetry column populated: a row of nulls cannot tell a passing-through mapper from a narrowing one. */
 function fullRow(over: Partial<SessionStateRow> = {}): SessionStateRow {
   return {
     id: "s-1",
@@ -55,48 +38,17 @@ function fullRow(over: Partial<SessionStateRow> = {}): SessionStateRow {
     tokens_spent: 41_233,
     started_at: "2026-08-22T09:40:00.000Z",
     last_activity_at: "2026-08-22T10:04:59.000Z",
-    // ⚠ 2026-08-23 — AND ADDING IT HERE IS THE ENTIRE TEST CHANGE FOR THE
-    // IDENTITY-NAME COLUMN. Registering `identity_name` / `identityName` in
-    // `OPERATOR_ONLY_SESSION_COLUMNS` + `…_FIELDS` and populating it on this row
-    // is what makes every property below cover it: the peer mapper must not emit
-    // the KEY, must not carry the VALUE under another name, the two arrays must
-    // stay parallel, and the coarse key set must not have grown. **No new case
-    // was written for it, and that is what this suite is for.**
-    // ⚠ The value is deliberately DISTINCTIVE prose — the value-property test
-    // does a substring search, and a value like "Auditor" would be defeated by a
-    // row field that legitimately contains it.
+    // Distinctive, because the value property does a substring search over the peer JSON.
     identity_name: "Acme Contract Auditor",
-    // ⚠ 2026-08-31 — populated, NOT registered as operator-only: the display
-    // name is PEER-VISIBLE BY DESIGN (Samuel's ruling), so the property test
-    // below must see it SURVIVE the peer mapper rather than be scrubbed.
+    // Peer-visible by design, so it must survive the peer mapper.
     display_name: "Bug Reviewer",
     color: "agent-04",
-    // ── THE HEALTH SEVEN, POPULATED (2026-09-01, 20260909120000) ───────────
-    // ⚠ **AND POPULATING THEM IS AGAIN THE ENTIRE TEST CHANGE.** Registering the
-    // seven in `OPERATOR_ONLY_SESSION_COLUMNS` + `…_FIELDS` and giving them
-    // values here is what makes every property below cover them — no new case
-    // was written, which is what this suite is for. A row of NULLS would let a
-    // peer mapper that PASSED a field through look identical to one that never
-    // names it, so the property would have gone green over exactly the seven
-    // columns it was extended to cover.
-    //
-    // ⚠ **EVERY VALUE IS CHOSEN SO IT CANNOT OCCUR INSIDE THE PEER PROJECTION,
-    // AND THAT IS A REAL CONSTRAINT RATHER THAN A FLOURISH.** The value-property
-    // test does a SUBSTRING search over the peer JSON, and the peer JSON carries
-    // `name: "abcd1234"` and an ISO stamp — so `turns: 3`, `tokens_delta: 1234`
-    // and `denied_calls: 26` would all match a fragment of a legitimately
-    // peer-visible field and fail the suite over a leak nobody made. Small
-    // integers are the trap; these are picked to have no such fragment.
+    // Values chosen to occur nowhere in the peer JSON (`name`, ISO stamps): the value property is a substring search.
     turns: 47,
     tokens_delta: 8_675_309,
-    // ⚠ `true` rather than `false`: the peer JSON contains neither word, but
-    // this is the MACHINE's wedged flag and the adversarial value for a leak
-    // test is the one that says something.
     stale: true,
     denied_calls: 419,
-    // ⚠ Deliberately NOT the same string as `tool_label` above — if the two
-    // matched, a peer mapper that leaked the CURRENT tool would satisfy the
-    // "last denied tool did not leak" assertion by accident.
+    // Not `tool_label`'s value, or a leak of the current tool would satisfy this one.
     last_denied_tool: "Terraform",
     last_wake_seq: 90_210,
     last_wake_at: "2026-08-22T09:59:00.000Z",
@@ -117,8 +69,7 @@ describe("the PEER mapper can never emit operator-only telemetry", () => {
   });
 
   it("PROPERTY: and no VALUE of the peer projection is one of the row's secrets", () => {
-    // ⚠ The name check above is defeated by a rename ("model" smuggled out as
-    // "engine"). This one is over the VALUES, so a renamed leak still fails.
+    // Over values, so a leak under another key name still fails.
     const row = fullRow();
     const serialized = JSON.stringify(mapPeerSessionStateRow(row));
     for (const column of OPERATOR_ONLY_SESSION_COLUMNS) {
@@ -153,20 +104,15 @@ describe("the PEER mapper can never emit operator-only telemetry", () => {
   });
 
   it("the peer projection is EXACTLY the coarse set — nothing crept in", () => {
-    // ⚠ An exact-key assertion as well as the property, because the property
-    // catches a KNOWN secret and this catches an UNKNOWN one: a future column
-    // that nobody classified would pass every test above and fail this.
+    // The property catches a known secret; the exact key set catches an unclassified new column.
     expect(Object.keys(mapPeerSessionStateRow(fullRow())).sort()).toEqual(
       [
         "channelId",
         "channelName",
-        // 2026-09-13 — the agent's COLOUR, peer-visible BY DESIGN and for the same
-        // kind of reason `displayName` is: it exists so the OTHER member's transcript
-        // can tell two agents apart (`20261005120000`; Samuel's colour ruling).
+        // Peer-visible by design: other members' transcripts tell agents apart by colour.
         "color",
         "detail",
-        // 2026-08-31 — the operator-given agent name, peer-visible BY DESIGN
-        // (Samuel's ruling; 20260905120000). The one addition since telemetry.
+        // Peer-visible by design.
         "displayName",
         "name",
         "state",
@@ -189,7 +135,6 @@ describe("the OWN mapper carries everything — the split has two directions", (
     expect(own.startedAt).toBe("2026-08-22T09:40:00.000Z");
     expect(own.lastActivityAt).toBe("2026-08-22T10:04:59.000Z");
     expect(own.identityName).toBe("Acme Contract Auditor");
-    // ── THE HEALTH SEVEN (2026-09-01) ──────────────────────────────────────
     expect(own.turns).toBe(47);
     expect(own.tokensDelta).toBe(8_675_309);
     expect(own.stale).toBe(true);
@@ -207,12 +152,7 @@ describe("the OWN mapper carries everything — the split has two directions", (
     }
   });
 
-  /**
-   * ⚠ NULL IS UNKNOWN, NEVER ZERO — the rule the whole telemetry wave is built
-   * on. A `?? 0` anywhere between the column and the render turns "this machine
-   * reported nothing" into "this agent has spent nothing", stated as fact in the
-   * surface an orchestrator uses to decide whether to keep an agent alive.
-   */
+  /** Null is unknown, never zero: `?? 0` would state "spent nothing" about an unreported machine. */
   it("a null count stays null and NEVER becomes 0", () => {
     const own = mapOwnSessionStateRow(
       fullRow({
@@ -234,14 +174,7 @@ describe("the OWN mapper carries everything — the split has two directions", (
     expect(own.toolLabel).toBeNull();
   });
 
-  /**
-   * ⚠ THE SAME RULE OVER THE HEALTH SEVEN, AND IT IS SHARPER THERE BECAUSE SIX
-   * OF THEM ARE COUNTS. `deniedCalls: 0` would report that nothing has been
-   * refused to an agent whose every shell call may be being refused silently —
-   * the exact defect `20260909120000` was written to make visible — and
-   * `stale: false` would state a health verdict on behalf of a machine that
-   * never ran the check.
-   */
+  /** `deniedCalls: 0` or `stale: false` would state a verdict about a machine that never measured. */
   it("an UNREPORTED health field stays null — never 0, and never false", () => {
     const own = mapOwnSessionStateRow(
       fullRow({
@@ -263,13 +196,7 @@ describe("the OWN mapper carries everything — the split has two directions", (
     expect(own.lastWakeAt).toBeNull();
   });
 
-  /**
-   * ⚠ A MEASURED ZERO IS NOT AN ABSENCE, AND THE MAPPER MUST KEEP THEM APART.
-   * `0` here means "counted, and it is none"; `null` means "nothing counted".
-   * A mapper that collapsed either into the other would destroy the distinction
-   * every layer above it is built on — and a falsy-test (`row.turns || null`)
-   * is exactly how that collapse gets written.
-   */
+  /** A measured 0 is "counted, none"; a falsy test (`row.turns || null`) would collapse it into null. */
   it("a measured 0 survives as 0, and a measured `false` as false", () => {
     const own = mapOwnSessionStateRow(
       fullRow({ turns: 0, tokens_delta: 0, denied_calls: 0, stale: false })
@@ -280,12 +207,7 @@ describe("the OWN mapper carries everything — the split has two directions", (
     expect(own.stale).toBe(false);
   });
 
-  /**
-   * ⚠ THE TWO BIGINT-BACKED HEALTH COLUMNS TAKE THE SAME CROSSING AS
-   * `tokens_spent`: PostgREST hands an INT8 back as a STRING when it will not fit
-   * a JS number. An unreadable one is UNKNOWN rather than 0, for the same reason
-   * a missing one is.
-   */
+  /** PostgREST hands back an INT8 that does not fit a JS number as a string; unreadable is unknown. */
   it("a health BIGINT arriving as a string becomes a number, unparseable becomes null", () => {
     const own = mapOwnSessionStateRow(
       fullRow({ tokens_delta: "8675309", last_wake_seq: "not-a-number" })
@@ -294,18 +216,10 @@ describe("the OWN mapper carries everything — the split has two directions", (
     expect(own.lastWakeSeq).toBeNull();
   });
 
-  /**
-   * `identityName` IS A SNAPSHOT, NOT A LOOKUP — the mapper passes the stored
-   * string through and resolves nothing. That is what lets a session go on
-   * reporting what it RAN AS after the identity was renamed or deleted
-   * (`20260823130000`), and it is the reason the column is TEXT rather than an
-   * FK. A mapper that ever "corrected" this value would be reinventing the FK.
-   */
+  /** A snapshot, not a lookup: a session keeps reporting what it ran as after a rename or deletion. */
   it("passes an identity name through verbatim, and a null through as null", () => {
     expect(mapOwnSessionStateRow(fullRow({ identity_name: null })).identityName)
       .toBeNull();
-    // An identity that no longer exists under that name is STILL what this
-    // session is running, and the row must keep saying so.
     expect(
       mapOwnSessionStateRow(fullRow({ identity_name: "Deleted Identity" }))
         .identityName
@@ -313,8 +227,6 @@ describe("the OWN mapper carries everything — the split has two directions", (
   });
 
   it("a BIGINT arriving as a string becomes a number, and an unparseable one becomes null", () => {
-    // PostgREST can hand a bigint back as either; an unreadable value is UNKNOWN
-    // rather than 0, for the same reason a missing one is.
     const own = mapOwnSessionStateRow(
       fullRow({ tokens_spent: "41233", context_used: "not-a-number" })
     );
@@ -323,11 +235,7 @@ describe("the OWN mapper carries everything — the split has two directions", (
   });
 });
 
-/**
- * `detail` IS PEER-VISIBLE **ONLY BECAUSE THE VOCABULARY IS CLOSED.** Free-form
- * prose in that column would be operator-only material on a peer-visible field —
- * so the narrowing is part of the fence, not a formatting nicety.
- */
+/** `detail` is peer-visible only because its vocabulary is closed; the narrowing is part of the fence. */
 describe("detail is a closed KEY on the way out, and forgiving on the way in", () => {
   it("passes the six known keys through", () => {
     for (const key of [
@@ -353,9 +261,7 @@ describe("detail is a closed KEY on the way out, and forgiving on the way in", (
   });
 
   it("a SEVENTH key from a newer desktop renders as nothing rather than as itself", () => {
-    // ⚠ Fail-closed, and it is the counterpart of the write path staying
-    // permissive: a newer key must STORE (or the whole push 400s unretryably)
-    // and must not RENDER raw.
+    // Fail-closed: a newer key must store (or the whole push 400s) but must not render raw.
     expect(narrowSessionDetail("awaiting_handoff")).toBeNull();
   });
 

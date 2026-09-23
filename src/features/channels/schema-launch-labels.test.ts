@@ -1,8 +1,5 @@
-/**
- * THE DIRECTIVE LANE'S AGENT NAMES USE THE ONE LABEL CHARSET (F14) — `shared/lib/safe-label.ts ›
- * SAFE_LABEL_RE`. Three hand-rolled copies had drifted from it and let U+202F, U+2060–U+2065 and
- * U+206A–U+206F through, into names spliced into MCP lines.
- */
+/** The directive lane's agent names use the one label charset (`shared/lib/safe-label.ts › SAFE_LABEL_RE`);
+ *  hand-rolled copies had let U+202F, U+2060–U+2065 and U+206A–U+206F into names spliced into MCP lines. */
 
 import { describe, expect, it } from "vitest";
 import { AgentDirectiveCreateSchema, LaunchCreateSchema } from "./schema-launch";
