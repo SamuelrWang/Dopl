@@ -61,7 +61,7 @@ import type { ResourceGrantWrite } from "./schema";
  *  sentence about ownership. */
 const RESOLVABLE = new Set([
   "knowledge_base",
-  "agent_template",
+  "agent_identity",
   "skill",
   "chat",
 ]);
@@ -80,7 +80,7 @@ async function assertGrantableResource(
   }
   const resolved = await resolveResource(
     caller,
-    input.resourceType as "knowledge_base" | "agent_template" | "skill" | "chat",
+    input.resourceType as "knowledge_base" | "agent_identity" | "skill" | "chat",
     input.resourceId
   );
   // ⚠ ONE ANSWER for "no such row", "not yours to lend" and "outside your lock".

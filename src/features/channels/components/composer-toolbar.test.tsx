@@ -30,8 +30,8 @@ vi.mock("../hooks/use-thread-writes", () => ({
   }),
 }));
 
-vi.mock("@/features/agent-templates/hooks/use-agent-templates", () => ({
-  useAgentTemplates: () => ({ templates: [], loading: false, error: null, refetch: () => {} }),
+vi.mock("@/features/agent-identities/hooks/use-agent-identities", () => ({
+  useAgentIdentities: () => ({ identities: [], loading: false, error: null, refetch: () => {} }),
 }));
 
 import { ChannelsComposer } from "./composer";

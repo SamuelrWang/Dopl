@@ -2,7 +2,7 @@
  * THE VISIBILITY MATRIX, as a property over the whole grid rather than a
  * handful of examples: 3 visibilities × 7 caller kinds, every cell asserted.
  *
- * ⚠ WHY A GRID AND NOT CASES. `canSeeTemplate` is six ordered arms, and the
+ * ⚠ WHY A GRID AND NOT CASES. `canSeeIdentity` is six ordered arms, and the
  * bugs this class of function actually ships are ORDER bugs — an admin arm
  * placed above the `private` arm, an API-key arm placed below the creator arm.
  * Neither shows up in the cases anyone writes by hand, because each looks right
@@ -14,10 +14,10 @@
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { meetsMinRole } from "@/features/workspaces/types";
-import type { AgentTemplate, AgentTemplateContext } from "../types";
+import type { AgentIdentity, AgentIdentityContext } from "../types";
 
 // ⚠ **THE GRANT ARM IS A DB READ, SO IT IS DECLARED HERE** (F-604, 2026-09-02).
-// `canSeeBase` / `canSeeTemplate` gained an arm over `resource_grants`, and its
+// `canSeeBase` / `canSeeIdentity` gained an arm over `resource_grants`, and its
 // batch precompute is the one part of this seam that talks to Postgres. Every
 // case in this file is about the OTHER arms, so the grant set is empty — which
 // is also the pre-2026-09-02 behaviour, and therefore the right default for a
@@ -31,11 +31,11 @@ vi.mock("@/shared/tenancy/resource-grant-reach", async (importOriginal) => ({
 }));
 
 vi.mock("./repository", () => ({
-  listTemplatesForWorkspace: vi.fn(),
-  findTemplateById: vi.fn(),
-  listTeamLinksForTemplates: vi.fn(),
+  listIdentitiesForWorkspace: vi.fn(),
+  findIdentityById: vi.fn(),
+  listTeamLinksForIdentities: vi.fn(),
   listTeamIdsForUser: vi.fn(),
-  listKnowledgeLinksForTemplates: vi.fn(),
+  listKnowledgeLinksForIdentities: vi.fn(),
   listKnowledgeBaseAccessRows: vi.fn(),
   listKnowledgeBaseTeamGrants: vi.fn(),
   listLiveFoldersForBases: vi.fn(),
@@ -43,8 +43,8 @@ vi.mock("./repository", () => ({
 }));
 
 import * as repo from "./repository";
-import { getTemplateById, listTemplates } from "./service";
-import { AgentTemplateNotFoundError } from "./errors";
+import { getIdentityById, listIdentities } from "./service";
+import { AgentIdentityNotFoundError } from "./errors";
 
 const mockRepo = vi.mocked(repo);
 
@@ -54,7 +54,7 @@ const OUTSIDER = "user-outsider";
 const ADMIN = "user-admin";
 const SHARED_TEAM = "team-shared";
 
-function ctx(overrides: Partial<AgentTemplateContext> = {}): AgentTemplateContext {
+function ctx(overrides: Partial<AgentIdentityContext> = {}): AgentIdentityContext {
   return {
     workspaceId: "ws-1",
     userId: CREATOR,
@@ -66,7 +66,7 @@ function ctx(overrides: Partial<AgentTemplateContext> = {}): AgentTemplateContex
   };
 }
 
-function template(overrides: Partial<AgentTemplate> = {}): AgentTemplate {
+function identity(overrides: Partial<AgentIdentity> = {}): AgentIdentity {
   return {
     id: "tpl-1",
     workspaceId: "ws-1",
@@ -87,12 +87,12 @@ function template(overrides: Partial<AgentTemplate> = {}): AgentTemplate {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mockRepo.listKnowledgeLinksForTemplates.mockResolvedValue([]);
+  mockRepo.listKnowledgeLinksForIdentities.mockResolvedValue([]);
   mockRepo.listKnowledgeBaseAccessRows.mockResolvedValue([]);
   mockRepo.listKnowledgeBaseTeamGrants.mockResolvedValue([]);
   mockRepo.listLiveFoldersForBases.mockResolvedValue([]);
   mockRepo.listLiveEntryRows.mockResolvedValue([]);
-  mockRepo.listTeamLinksForTemplates.mockResolvedValue([]);
+  mockRepo.listTeamLinksForIdentities.mockResolvedValue([]);
   mockRepo.listTeamIdsForUser.mockResolvedValue([]);
 });
 
@@ -122,7 +122,7 @@ const CALLERS = {
    * row this grid was missing, and the reason arm 2 could not stay keyed on the
    * lock. It carries the SAME `apiKeyWorkspaceId` as `workspaceKey` above and
    * the OPPOSITE answer on every private row, because it is one human's session
-   * rather than a credential shared between humans. Every PERSONAL template is
+   * rather than a credential shared between humans. Every PERSONAL identity is
    * `private`, so without this row the operator's own agents cannot see the
    * identities the operator authored for them. ⚠ **THE ORIGINAL CASE WAS THE
    * "Use in this channel" COPY, WHICH IS DELETED (2026-09-02, B15)** — the arm
@@ -140,7 +140,7 @@ const CALLERS = {
   /**
    * ⚠ AND THE PEER'S container session, which is what proves the widening is
    * per-PERSON and not per-credential-kind: same lock, same kind, different
-   * user id — and the operator's private template stays hidden from it.
+   * user id — and the operator's private identity stays hidden from it.
    */
   containerSessionPeer: {
     c: ctx({
@@ -176,7 +176,7 @@ const EXPECTED: Record<
     // row from `containerSession` below is the lock's KIND, never the lock.
     workspaceKey: false,
     // 🔒 F-333: the operator's own session reads the operator's own private
-    // template — including every "Use in this channel" copy.
+    // identity — including every "Use in this channel" copy.
     containerSession: true,
     // 🔒 …and the PEER's session does not.
     containerSessionPeer: false,
@@ -205,34 +205,34 @@ const EXPECTED: Record<
   },
 };
 
-describe("canSeeTemplate — 3 visibilities × 7 callers, every cell", () => {
+describe("canSeeIdentity — 3 visibilities × 7 callers, every cell", () => {
   for (const visibility of ["private", "team", "workspace"] as const) {
     for (const callerName of Object.keys(CALLERS) as CallerName[]) {
       const expected = EXPECTED[visibility][callerName];
-      it(`${visibility} template is ${expected ? "VISIBLE" : "hidden"} to ${callerName}`, async () => {
-        const row = template({ visibility });
+      it(`${visibility} identity is ${expected ? "VISIBLE" : "hidden"} to ${callerName}`, async () => {
+        const row = identity({ visibility });
         const caller = CALLERS[callerName];
-        mockRepo.listTemplatesForWorkspace.mockResolvedValue([row]);
-        mockRepo.listTeamLinksForTemplates.mockResolvedValue(
+        mockRepo.listIdentitiesForWorkspace.mockResolvedValue([row]);
+        mockRepo.listTeamLinksForIdentities.mockResolvedValue(
           visibility === "team"
-            ? [{ templateId: row.id, teamId: SHARED_TEAM }]
+            ? [{ identityId: row.id, teamId: SHARED_TEAM }]
             : []
         );
         mockRepo.listTeamIdsForUser.mockResolvedValue([...caller.teamsOf]);
 
-        const listed = await listTemplates(caller.c);
+        const listed = await listIdentities(caller.c);
         expect(listed.map((t) => t.id)).toEqual(expected ? [row.id] : []);
 
         // ⚠ THE LIST FILTER AND THE SINGLE-ROW GATE MUST AGREE. They are
-        // separate code paths (`listTemplates` filters, `getTemplateById`
+        // separate code paths (`listIdentities` filters, `getIdentityById`
         // throws) and a divergence between them is a row that is invisible in
         // the UI and readable by id.
-        mockRepo.findTemplateById.mockResolvedValue(row);
-        const single = getTemplateById(caller.c, row.id);
+        mockRepo.findIdentityById.mockResolvedValue(row);
+        const single = getIdentityById(caller.c, row.id);
         if (expected) {
           await expect(single).resolves.toMatchObject({ id: row.id });
         } else {
-          await expect(single).rejects.toBeInstanceOf(AgentTemplateNotFoundError);
+          await expect(single).rejects.toBeInstanceOf(AgentIdentityNotFoundError);
         }
       });
     }
@@ -243,16 +243,16 @@ describe("canSeeTemplate — 3 visibilities × 7 callers, every cell", () => {
  * 🔒 F-333 CLAIMS THERE IS NO GUEST EXPOSURE TO WEIGH, AND THAT CLAIM IS A
  * COMPOSITION OF TWO FACTS THAT LIVE IN DIFFERENT FILES — so it is asserted
  * here rather than trusted. (1) `withWorkspaceAuth`'s floor is `viewer` and no
- * agent-templates route lowers it (`app/api/agent-templates/route.test.ts ›
+ * agent-identities route lowers it (`app/api/agent-identities/route.test.ts ›
  * "reads at VIEWER — the default, so no options are passed"` asserts the
  * options object is undefined, i.e. the default; `POST`/`PATCH`/`DELETE` raise it to `member`), and
  * `POST /api/channels/launch-directives` — the agent-token lane that resolves a
- * template BY NAME — keeps the same default. (2) `guest` ranks BELOW `viewer`.
- * Together: a guest never reaches a template surface at all, so widening
- * `canSeeTemplate` for a container session cannot expose one to a guest.
+ * identity BY NAME — keeps the same default. (2) `guest` ranks BELOW `viewer`.
+ * Together: a guest never reaches an identity surface at all, so widening
+ * `canSeeIdentity` for a container session cannot expose one to a guest.
  */
 describe("the guest floor — why F-333 has no guest arm", () => {
-  it("guest does not clear the viewer floor every template route sits at", () => {
+  it("guest does not clear the viewer floor every identity route sits at", () => {
     expect(meetsMinRole("guest", "viewer")).toBe(false);
     expect(meetsMinRole("viewer", "viewer")).toBe(true);
   });
@@ -260,8 +260,8 @@ describe("the guest floor — why F-333 has no guest arm", () => {
 
 describe("cross-workspace isolation", () => {
   it("every read is workspace-filtered AT THE REPOSITORY, not by the caller", async () => {
-    mockRepo.listTemplatesForWorkspace.mockResolvedValue([]);
-    await listTemplates(ctx({ workspaceId: "ws-other" }));
+    mockRepo.listIdentitiesForWorkspace.mockResolvedValue([]);
+    await listIdentities(ctx({ workspaceId: "ws-other" }));
     // The service passes its own context's workspace and the repository takes
     // it as a required argument — there is no code path that reads a workspace
     // id off a request body.
@@ -269,16 +269,16 @@ describe("cross-workspace isolation", () => {
     // the assertion that an unasked-for shelf means NO filter — the workspace
     // fence and the shelf filter are different axes and neither substitutes for
     // the other.
-    expect(mockRepo.listTemplatesForWorkspace).toHaveBeenCalledWith(
+    expect(mockRepo.listIdentitiesForWorkspace).toHaveBeenCalledWith(
       "ws-other",
       undefined
     );
   });
 
   it("a missing row 404s exactly like an invisible one", async () => {
-    mockRepo.findTemplateById.mockResolvedValue(null);
-    await expect(getTemplateById(ctx(), "tpl-gone")).rejects.toBeInstanceOf(
-      AgentTemplateNotFoundError
+    mockRepo.findIdentityById.mockResolvedValue(null);
+    await expect(getIdentityById(ctx(), "tpl-gone")).rejects.toBeInstanceOf(
+      AgentIdentityNotFoundError
     );
   });
 });
@@ -286,42 +286,42 @@ describe("cross-workspace isolation", () => {
 // ── Team-composition leakage ─────────────────────────────────────────
 
 describe("the sharing set is owner/admin-only", () => {
-  const row = template({ visibility: "team" });
+  const row = identity({ visibility: "team" });
 
   beforeEach(() => {
-    mockRepo.listTemplatesForWorkspace.mockResolvedValue([row]);
-    mockRepo.listTeamLinksForTemplates.mockResolvedValue([
-      { templateId: row.id, teamId: SHARED_TEAM },
-      { templateId: row.id, teamId: "team-second" },
+    mockRepo.listIdentitiesForWorkspace.mockResolvedValue([row]);
+    mockRepo.listTeamLinksForIdentities.mockResolvedValue([
+      { identityId: row.id, teamId: SHARED_TEAM },
+      { identityId: row.id, teamId: "team-second" },
     ]);
   });
 
   it("the creator sees which teams it is shared with", async () => {
     mockRepo.listTeamIdsForUser.mockResolvedValue([]);
-    const [t] = await listTemplates(ctx({ userId: CREATOR }));
+    const [t] = await listIdentities(ctx({ userId: CREATOR }));
     expect(t.teamIds.sort()).toEqual(["team-second", SHARED_TEAM].sort());
   });
 
   it("a workspace admin sees it (they administer sharing)", async () => {
     mockRepo.listTeamIdsForUser.mockResolvedValue([]);
-    const [t] = await listTemplates(ctx({ userId: ADMIN, role: "admin" }));
+    const [t] = await listIdentities(ctx({ userId: ADMIN, role: "admin" }));
     expect(t.teamIds).toHaveLength(2);
   });
 
-  it("a granted TEAMMATE sees the template and NOT the team list", async () => {
+  it("a granted TEAMMATE sees the identity and NOT the team list", async () => {
     mockRepo.listTeamIdsForUser.mockResolvedValue([SHARED_TEAM]);
-    const [t] = await listTemplates(ctx({ userId: TEAMMATE }));
+    const [t] = await listIdentities(ctx({ userId: TEAMMATE }));
     // They can use it; they may not learn that "team-second" also has it —
-    // that is org-chart information leaking through a shared template.
+    // that is org-chart information leaking through a shared identity.
     expect(t.id).toBe(row.id);
     expect(t.teamIds).toEqual([]);
   });
 
-  it("a workspace-visible template reports no teams even to its creator", async () => {
-    const open = template({ visibility: "workspace" });
-    mockRepo.listTemplatesForWorkspace.mockResolvedValue([open]);
-    mockRepo.listTeamLinksForTemplates.mockResolvedValue([]);
-    const [t] = await listTemplates(ctx({ userId: CREATOR }));
+  it("a workspace-visible identity reports no teams even to its creator", async () => {
+    const open = identity({ visibility: "workspace" });
+    mockRepo.listIdentitiesForWorkspace.mockResolvedValue([open]);
+    mockRepo.listTeamLinksForIdentities.mockResolvedValue([]);
+    const [t] = await listIdentities(ctx({ userId: CREATOR }));
     // Stale links from a previous `team` scope must not read as live sharing.
     expect(t.teamIds).toEqual([]);
   });
@@ -331,24 +331,24 @@ describe("the sharing set is owner/admin-only", () => {
 
 describe("fixed query count", () => {
   it("no team lookup at all when nothing is team-scoped", async () => {
-    mockRepo.listTemplatesForWorkspace.mockResolvedValue([
-      template({ id: "a", visibility: "private" }),
-      template({ id: "b", visibility: "workspace" }),
+    mockRepo.listIdentitiesForWorkspace.mockResolvedValue([
+      identity({ id: "a", visibility: "private" }),
+      identity({ id: "b", visibility: "workspace" }),
     ]);
-    await listTemplates(ctx({ userId: OUTSIDER }));
-    expect(mockRepo.listTeamLinksForTemplates).not.toHaveBeenCalled();
+    await listIdentities(ctx({ userId: OUTSIDER }));
+    expect(mockRepo.listTeamLinksForIdentities).not.toHaveBeenCalled();
     expect(mockRepo.listTeamIdsForUser).not.toHaveBeenCalled();
   });
 
   it("ONE team-link query for many team-scoped rows, not one per row", async () => {
-    mockRepo.listTemplatesForWorkspace.mockResolvedValue([
-      template({ id: "a", visibility: "team", createdBy: OUTSIDER }),
-      template({ id: "b", visibility: "team", createdBy: OUTSIDER }),
-      template({ id: "c", visibility: "team", createdBy: OUTSIDER }),
+    mockRepo.listIdentitiesForWorkspace.mockResolvedValue([
+      identity({ id: "a", visibility: "team", createdBy: OUTSIDER }),
+      identity({ id: "b", visibility: "team", createdBy: OUTSIDER }),
+      identity({ id: "c", visibility: "team", createdBy: OUTSIDER }),
     ]);
-    await listTemplates(ctx({ userId: TEAMMATE }));
-    expect(mockRepo.listTeamLinksForTemplates).toHaveBeenCalledTimes(1);
-    expect(mockRepo.listTeamLinksForTemplates).toHaveBeenCalledWith("ws-1", [
+    await listIdentities(ctx({ userId: TEAMMATE }));
+    expect(mockRepo.listTeamLinksForIdentities).toHaveBeenCalledTimes(1);
+    expect(mockRepo.listTeamLinksForIdentities).toHaveBeenCalledWith("ws-1", [
       "a",
       "b",
       "c",

@@ -217,9 +217,9 @@ test("LAUNCH: the spawn funnel FORWARDS a model — it used to drop one on every
 
 test("LAUNCH: both lanes convert the ID to the argv-safe ALIAS before it travels", () => {
   // Everything below the launch boundary speaks the alias vocabulary, and `buildSdkOptions`
-  // re-coerces against it as the last gate. An AGENT TEMPLATE may carry a default model and it
+  // re-coerces against it as the last gate. An AGENT IDENTITY may carry a default model and it
   // outranks the channel's durable pick, so the channel read is the FALLBACK of the expression, not
-  // the whole of it; `templateModel` answers '' (not 'default') for an unknown template model, which
+  // the whole of it; `identityModel` answers '' (not 'default') for an unknown identity model, which
   // is what keeps it falling THROUGH instead of ending the chain one link early.
   const OPS = read("session-launch-op.js");
   // The launch sheet sits in front of both since Phase 2: `overrides.model` is a DELIBERATE PER-CALL
@@ -230,8 +230,8 @@ test("LAUNCH: both lanes convert the ID to the argv-safe ALIAS before it travels
   // on any other runtime now that they can be. The new helper resolves the same link against the
   // channel's own runtime, in one place, so the three launch lanes cannot drift.
   assert.match(OPS,
-    /model: overrides\.model \|\| templateModel\(sessionModel, template\)\s*\|\| channelPrefs\.getLaunchModelLink\(p\.channelId\)/,
-    "the operator's own Launch: the sheet, then the template default, then the channel's pick");
+    /model: overrides\.model \|\| identityModel\(sessionModel, identity\)\s*\|\| channelPrefs\.getLaunchModelLink\(p\.channelId\)/,
+    "the operator's own Launch: the sheet, then the identity default, then the channel's pick");
   // The rule itself moved to `session-model.js › chainModel` on 2026-08-23 (F-285): the DIRECTIVE
   // lane needed the identical answer, and a rule written once per lane drifts in one of them.
   // ⚠ 2026-09-22: THE RULE CHANGED — `chainModel` is VOCABULARY-FREE. Only "no opinion" (absent

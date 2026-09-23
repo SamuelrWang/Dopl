@@ -4,8 +4,8 @@
  * WHAT THE COMPOSER'S LAUNCH PANEL HOLDS — the identity a new agent is about to wear, and the
  * three-step act of giving it one (2026-08-27, Samuel's launch-panel ruling).
  *
- * ⚠ IT REPLACED THE TEMPLATE CHEVRON. The Bot icon used to launch a blank agent in one click
- * with a second glyph beside it opening a template menu; the panel is now the whole surface, and
+ * ⚠ IT REPLACED THE IDENTITY CHEVRON. The Bot icon used to launch a blank agent in one click
+ * with a second glyph beside it opening an identity menu; the panel is now the whole surface, and
  * `Launch` is its one submit. Samuel's *one lane, one-click launch* ruling is not violated —
  * there is still exactly ONE launch lane and one control that starts it, and the panel is where
  * the click happens.
@@ -111,19 +111,19 @@ export async function describeAgent(agentId: string, description: string): Promi
 // a helper for the empty string is a helper for nothing.
 
 /**
- * WHAT A TEMPLATE HANDS THE POPUP WHEN IT IS PICKED (2026-09-13, Samuel: *"when a user clicks a
- * template, all of those fields would be pre-filled"*).
+ * WHAT AN IDENTITY HANDS THE POPUP WHEN IT IS PICKED (2026-09-13, Samuel: *"when a user clicks a
+ * identity, all of those fields would be pre-filled"*).
  *
- * ⚠ **A SHAPE, NOT `AgentTemplate` BY NAME**, exactly as `agents-model.ts › agentLiveness` takes
- * one: this hook is `features/channels`' and the type is `features/agent-templates`'. The popup
+ * ⚠ **A SHAPE, NOT `AgentIdentity` BY NAME**, exactly as `agents-model.ts › agentLiveness` takes
+ * one: this hook is `features/channels`' and the type is `features/agent-identities`'. The popup
  * already imports that feature's HOOK, so an import would resolve — but a structural subset is
  * what lets the picker, the pill row and a test fixture all satisfy it without an adapter, and it
  * keeps this file honest about the four fields it actually reads.
- * ⚠ **NO `fields` AND NO KNOWLEDGE.** Those ride the TEMPLATE ID on the wire — main resolves the
+ * ⚠ **NO `fields` AND NO KNOWLEDGE.** Those ride the IDENTITY ID on the wire — main resolves the
  * row at spawn (`main/session-launch-op.js`) — so a copy here would be a second, staler account
  * of the same configuration. What is prefilled is what the operator can SEE and CHANGE.
  */
-export interface AgentTemplatePrefill {
+export interface AgentIdentityPrefill {
   id: string;
   name: string;
   description?: string | null;
@@ -137,7 +137,7 @@ export interface AgentLaunchPanel {
   name: string;
   description: string;
   /**
-   * WHAT THIS RUN IS TOLD TO DO — the template's instructions, editable per spawn (Samuel,
+   * WHAT THIS RUN IS TOLD TO DO — the identity's instructions, editable per spawn (Samuel,
    * 2026-09-13: *"we should add an Instructions field in the New agent popup. That should be a
    * field under description"*).
    *
@@ -152,18 +152,18 @@ export interface AgentLaunchPanel {
   instructions?: string;
   setInstructions?: (next: string) => void;
   /**
-   * THE TEXT {@link AgentLaunchPanel.applyTemplate} LAST WROTE INTO `instructions` — the BASELINE
+   * THE TEXT {@link AgentLaunchPanel.applyIdentity} LAST WROTE INTO `instructions` — the BASELINE
    * the wire is measured against, never a second copy of the value.
    *
-   * ⚠ **IT IS WHY A TEMPLATE LAUNCH SENDS NO `instructions` OVERRIDE UNLESS THE OPERATOR TYPED
-   * ONE.** `launch-overrides.ts › overridesFor`'s rule — *a pick equal to the template's own is
-   * not an override* — applied to a third field: sending the template's own prose back to main
+   * ⚠ **IT IS WHY AN IDENTITY LAUNCH SENDS NO `instructions` OVERRIDE UNLESS THE OPERATOR TYPED
+   * ONE.** `launch-overrides.ts › overridesFor`'s rule — *a pick equal to the identity's own is
+   * not an override* — applied to a third field: sending the identity's own prose back to main
    * would be a payload that only LOOKS like a decision, and it would go stale the moment the
-   * template was edited between this dialog opening and Launch being pressed.
+   * identity was edited between this dialog opening and Launch being pressed.
    */
   instructionsBaseline?: string;
-  /** `null` is a BLANK agent — the template selector's first option. */
-  templateId: string | null;
+  /** `null` is a BLANK agent — the identity selector's first option. */
+  identityId: string | null;
   /** `AGENT_MODEL_DEFAULT` (`""`) is "whatever the chain decides". */
   model: string;
   /**
@@ -204,7 +204,7 @@ export interface AgentLaunchPanel {
   /**
    * **NOTHING IS REQUIRED SINCE 2026-09-15** — the dialog is launchable the moment it can reach
    * main (Samuel: *"if a user launches an agent with no name, just give it the name, New
-   * Agent"*). A name, a description, a template, a model and a runtime are all optional.
+   * Agent"*). A name, a description, an identity, a model and a runtime are all optional.
    *
    * ⚠ **IT IS KEPT AS A FIELD RATHER THAN DELETED**, because the dialog, the one-click launch
    * row and `useLaunchRunner` all consult it and because the next required thing will want the
@@ -216,38 +216,38 @@ export interface AgentLaunchPanel {
   setIdentityError: (next: string | null) => void;
   setName: (next: string) => void;
   setDescription: (next: string) => void;
-  setTemplateId: (next: string | null) => void;
+  setIdentityId: (next: string | null) => void;
   setModel: (next: string) => void;
   setRuntime: (next: string) => void;
   /**
-   * PICK A TEMPLATE **AND PREFILL WHAT IT CARRIES** — one act, because Samuel's ruling is that
-   * the two happen together: *"when a user clicks a template, all of those fields would be
+   * PICK AN IDENTITY **AND PREFILL WHAT IT CARRIES** — one act, because Samuel's ruling is that
+   * the two happen together: *"when a user clicks an identity, all of those fields would be
    * pre-filled."*
    *
-   * ⚠ **`null` IS "None" AND IT PREFILLS NOTHING.** Clearing the template keeps whatever the
+   * ⚠ **`null` IS "None" AND IT PREFILLS NOTHING.** Clearing the identity keeps whatever the
    * operator typed — a field they can see is theirs, and blanking three of them because a
    * selector went back to its first option is data loss with no undo.
    * ⚠ **IT NEVER OVERWRITES A FIELD THE OPERATOR HAS EDITED**, which is the only rule under
-   * which *"the name field … an individual agent from that template might have a different name
+   * which *"the name field … an individual agent from that identity might have a different name
    * the user might want to set"* and *"all of those fields would be pre-filled"* are both true.
    * The test is per field and it is EDITED-SINCE-THE-LAST-PREFILL, not "non-empty": the Name
    * arrives already holding the mint's `#<id>`, so a non-empty test would never prefill it at all.
    * ⚠ **MODEL IS DELIBERATELY NOT IN THE SET.** `launch-agent-dialog.tsx › effectiveModel`
-   * already DISPLAYS the template's model, and `panel.model` staying `''` is what keeps the
-   * precedence chain in main (`session-launch-op.js`) the one authority — stamping the template's
-   * id here would turn a default into a per-spawn pick that then stops following the template.
+   * already DISPLAYS the identity's model, and `panel.model` staying `''` is what keeps the
+   * precedence chain in main (`session-launch-op.js`) the one authority — stamping the identity's
+   * id here would turn a default into a per-spawn pick that then stops following the identity.
    * ⚠ OPTIONAL for {@link AgentLaunchPanel.color}'s reason; the hook always supplies it.
    */
-  applyTemplate?: (template: AgentTemplatePrefill | null) => void;
+  applyIdentity?: (identity: AgentIdentityPrefill | null) => void;
   /**
-   * OPEN THE POPUP ALREADY HOLDING A TEMPLATE — the ONE entry point a "launch from a template"
+   * OPEN THE POPUP ALREADY HOLDING AN IDENTITY — the ONE entry point a "launch from an identity"
    * affordance uses (2026-09-13; INVARIANTS §5A: one launch surface).
    *
    * ⚠ **NOT {@link AgentLaunchPanel.toggle}**: a toggle called while the form is open CLOSES it,
-   * so a second template click would dismiss the dialog it was meant to re-point. This opens if
+   * so a second identity click would dismiss the dialog it was meant to re-point. This opens if
    * shut, applies either way, and mints on exactly the same terms `toggle` does.
    */
-  openWithTemplate?: (template: AgentTemplatePrefill | null) => void;
+  openWithIdentity?: (identity: AgentIdentityPrefill | null) => void;
   toggle: () => void;
   close: () => void;
   reset: () => void;
@@ -260,7 +260,7 @@ export function useAgentLaunch(): AgentLaunchPanel {
   const [description, setDescriptionState] = useState("");
   const [instructions, setInstructionsState] = useState("");
   const [instructionsBaseline, setInstructionsBaseline] = useState("");
-  const [templateId, setTemplateId] = useState<string | null>(null);
+  const [identityId, setIdentityId] = useState<string | null>(null);
   const [model, setModel] = useState<string>(AGENT_MODEL_DEFAULT);
   // ⚠ `""` = follow the channel's pick, NOT "the default adapter" — see the
   // field's docblock on `AgentLaunchPanel`.
@@ -272,11 +272,11 @@ export function useAgentLaunch(): AgentLaunchPanel {
   /**
    * WHICH OF THE THREE TEXT FIELDS THE OPERATOR HAS TOUCHED — a REF, because nothing renders off
    * it and a state update per keystroke would re-render the whole dialog to record a fact only
-   * {@link applyTemplate} ever asks about.
+   * {@link applyIdentity} ever asks about.
    *
    * ⚠ **THE MINT'S NAME PREFILL MUST NOT SET IT**, which is why the three public setters are
    * wrappers and the hook's own writes go to the raw `useState` setters. The mint writes
-   * `#<agentId>`; if that counted as the operator typing, a template pick would never fill the
+   * `#<agentId>`; if that counted as the operator typing, an identity pick would never fill the
    * Name in — the single case the whole prefill exists for.
    */
   const touched = useRef({ name: false, description: false, instructions: false });
@@ -302,9 +302,9 @@ export function useAgentLaunch(): AgentLaunchPanel {
     setInstructionsState("");
     setInstructionsBaseline("");
     // ⚠ CLEARED WITH THE VALUES. A reopened dialog is a fresh form, so every field is prefillable
-    // again — leaving these `true` would make the next template pick fill in nothing.
+    // again — leaving these `true` would make the next identity pick fill in nothing.
     touched.current = { name: false, description: false, instructions: false };
-    setTemplateId(null);
+    setIdentityId(null);
     setModel(AGENT_MODEL_DEFAULT);
     setRuntime("");
     // ⚠ CLEARED WITH THE REST, so a dialog reopened after the room's colours moved
@@ -332,7 +332,7 @@ export function useAgentLaunch(): AgentLaunchPanel {
    * ⚠ A MINT THAT ANSWERS NULL IS NOT AN ERROR. It is an older desktop, or a plain browser, and
    * the panel simply carries no pre-assigned id — the launch reply supplies one.
    *
-   * ⚠ **THE OPEN LANE IS ITS OWN CALLBACK SINCE 2026-09-13** so `openWithTemplate` reaches it
+   * ⚠ **THE OPEN LANE IS ITS OWN CALLBACK SINCE 2026-09-13** so `openWithIdentity` reaches it
    * without going through `toggle` (which would CLOSE an open dialog). One mint site, one set of
    * rules above it; a second copy is how the two-draw bug comes back on the other opener.
    */
@@ -361,10 +361,10 @@ export function useAgentLaunch(): AgentLaunchPanel {
    * backdrop went through {@link reset} (`launch-agent-dialog.tsx › discard`), while the Bot
    * icon and the pop-out's `+` — the SAME control that opened it — went through a bare
    * `setOpen(false)`. So a dialog dismissed by its own button kept the name, the description,
-   * the instructions, the template, the instructions BASELINE and the `touched` flags, and
+   * the instructions, the identity, the instructions BASELINE and the `touched` flags, and
    * reopening then MINTED A SECOND AGENT ID underneath the first one's typed name: the panel
    * showed one agent's address over another's name, which is the 2026-08-27 two-draw bug
-   * arriving by a different road. It also meant a template pick after such a reopen prefilled
+   * arriving by a different road. It also meant an identity pick after such a reopen prefilled
    * nothing, because `touched` still said the operator had typed.
    *
    * ⚠ **SO `toggle`, `close` AND THE DIALOG'S DISCARD ARE ONE PATH**, and it is {@link reset}.
@@ -379,37 +379,37 @@ export function useAgentLaunch(): AgentLaunchPanel {
   }, [open, openPanel, reset]);
 
   /**
-   * PICK A TEMPLATE AND FILL IN WHAT IT CARRIES — see {@link AgentLaunchPanel.applyTemplate} for
+   * PICK AN IDENTITY AND FILL IN WHAT IT CARRIES — see {@link AgentLaunchPanel.applyIdentity} for
    * the ruling and the three rules (None prefills nothing, an edited field is never overwritten,
    * Model is not in the set).
    *
    * ⚠ **FUNCTIONAL UPDATES, NOT A READ OF `name` / `description` / `instructions`.** This callback
-   * must stay stable across every keystroke — `openWithTemplate` depends on it and the dialog
+   * must stay stable across every keystroke — `openWithIdentity` depends on it and the dialog
    * hands it to a `SegmentedControl` — and closing over those three values would rebuild it about
    * as often as the operator types.
    */
-  const applyTemplate = useCallback((template: AgentTemplatePrefill | null) => {
-    setTemplateId(template?.id ?? null);
-    if (!template) return;
-    const nextInstructions = template.instructions ?? "";
-    if (!touched.current.name) setNameState(template.name);
-    if (!touched.current.description) setDescriptionState(template.description ?? "");
+  const applyIdentity = useCallback((identity: AgentIdentityPrefill | null) => {
+    setIdentityId(identity?.id ?? null);
+    if (!identity) return;
+    const nextInstructions = identity.instructions ?? "";
+    if (!touched.current.name) setNameState(identity.name);
+    if (!touched.current.description) setDescriptionState(identity.description ?? "");
     if (!touched.current.instructions) setInstructionsState(nextInstructions);
-    // ⚠ THE BASELINE MOVES WITH THE TEMPLATE EVEN WHERE THE FIELD DID NOT. It is what the wire is
+    // ⚠ THE BASELINE MOVES WITH THE IDENTITY EVEN WHERE THE FIELD DID NOT. It is what the wire is
     // measured against, and an operator who has typed their own prose is measured against the
-    // template they are now launching — not against one they clicked past.
+    // identity they are now launching — not against one they clicked past.
     setInstructionsBaseline(nextInstructions);
   }, []);
 
-  const openWithTemplate = useCallback(
-    (template: AgentTemplatePrefill | null) => {
+  const openWithIdentity = useCallback(
+    (identity: AgentIdentityPrefill | null) => {
       // ⚠ OPEN FIRST, APPLY SECOND, AND NEVER `toggle`: see the field's docblock. Both are state
       // updates in one handler, so React batches them and the mint's own `typed === ""` guard
       // sees the prefilled name rather than racing it.
       if (!open) openPanel();
-      applyTemplate(template);
+      applyIdentity(identity);
     },
-    [open, openPanel, applyTemplate]
+    [open, openPanel, applyIdentity]
   );
 
   return {
@@ -419,7 +419,7 @@ export function useAgentLaunch(): AgentLaunchPanel {
     description,
     instructions,
     instructionsBaseline,
-    templateId,
+    identityId,
     model,
     runtime,
     color,
@@ -437,11 +437,11 @@ export function useAgentLaunch(): AgentLaunchPanel {
     setName,
     setDescription,
     setInstructions,
-    setTemplateId,
+    setIdentityId,
     setModel,
     setRuntime,
-    applyTemplate,
-    openWithTemplate,
+    applyIdentity,
+    openWithIdentity,
     toggle,
     // ⚠ **`reset`, NOT `setOpen(false)` — ONE CLOSE PATH** (see {@link toggle}). Its one caller
     // is `composer.tsx › onNewThread`, on its way to the thread popup: two forms may not stand

@@ -26,7 +26,7 @@ import { __resetConfirmTokensForTest } from "./confirm-token";
 // `acknowledge-shared.test.ts` — this file carried a second copy until
 // 2026-09-17, which is two answers to the question R-08 just unified.
 import {
-  ME, base, sharedContainer, soloRoom, TEMPLATE, textOf, tokenIn, workspaceStub,
+  ME, base, sharedContainer, soloRoom, IDENTITY, textOf, tokenIn, workspaceStub,
 } from "./acknowledge-shared-fixtures";
 
 const PEER = "user-2";
@@ -239,10 +239,10 @@ describe("🔒 no token is ever minted for a create the confirm would refuse", (
 // ── B. The confirm class ─────────────────────────────────────────────
 
 describe("the confirm class fires only where the audience changes", () => {
-  it("a PRIVATE template in a shared container needs no preview", async () => {
-    const create = vi.fn(async () => ({ ...TEMPLATE, visibility: "private" as const }));
+  it("a PRIVATE identity in a shared container needs no preview", async () => {
+    const create = vi.fn(async () => ({ ...IDENTITY, visibility: "private" as const }));
     const res = await opCreate(
-      stub({ ...sharedContainer(), createAgentTemplate: create }) as DoplClient,
+      stub({ ...sharedContainer(), createAgentIdentity: create }) as DoplClient,
       ME,
       { name: "Researcher", visibility: "private" },
     );
@@ -250,15 +250,15 @@ describe("the confirm class fires only where the audience changes", () => {
     expect(create).toHaveBeenCalled();
   });
 
-  it("🔒 a WORKSPACE template in a MULTI-MEMBER standard workspace DOES preview (R-08)", async () => {
+  it("🔒 a WORKSPACE identity in a MULTI-MEMBER standard workspace DOES preview (R-08)", async () => {
     // ⚠ **THE INVERSION IS THE RULING.** This arm read "needs no preview" until
     // 2026-09-17, on the argument that `set_visibility` had published rows
     // workspace-wide with no confirm for months and that gating one door and
     // not the other would be theatre. R-08 answers that by gating BOTH: the
     // class is keyed on "is anybody else in this room", not on the kind of room.
-    const create = vi.fn(async () => TEMPLATE);
+    const create = vi.fn(async () => IDENTITY);
     const res = await opCreate(
-      stub({ ...workspaceStub("standard", 9), createAgentTemplate: create }) as DoplClient,
+      stub({ ...workspaceStub("standard", 9), createAgentIdentity: create }) as DoplClient,
       ME,
       { name: "Researcher", visibility: "workspace" },
     );
@@ -267,9 +267,9 @@ describe("the confirm class fires only where the audience changes", () => {
   });
 
   it("a SOLO container needs no preview — the class exists because a PEER arrived", async () => {
-    const create = vi.fn(async () => TEMPLATE);
+    const create = vi.fn(async () => IDENTITY);
     await opCreate(
-      stub({ ...workspaceStub("link", 1), createAgentTemplate: create }) as DoplClient,
+      stub({ ...workspaceStub("link", 1), createAgentIdentity: create }) as DoplClient,
       ME,
       { name: "Researcher", visibility: "workspace" },
     );
@@ -277,9 +277,9 @@ describe("the confirm class fires only where the audience changes", () => {
   });
 
   it("a SOLO STANDARD workspace needs no preview either — one member is one audience", async () => {
-    const create = vi.fn(async () => TEMPLATE);
+    const create = vi.fn(async () => IDENTITY);
     await opCreate(
-      stub({ ...soloRoom(), createAgentTemplate: create }) as DoplClient,
+      stub({ ...soloRoom(), createAgentIdentity: create }) as DoplClient,
       ME,
       { name: "Researcher", visibility: "workspace" },
     );
@@ -294,7 +294,7 @@ describe("the confirm class fires only where the audience changes", () => {
         listWorkspaces: vi.fn(async () => {
           throw new Error("boom");
         }),
-        createAgentTemplate: create,
+        createAgentIdentity: create,
       }) as DoplClient,
       ME,
       { name: "Researcher", visibility: "workspace" },
@@ -306,7 +306,7 @@ describe("the confirm class fires only where the audience changes", () => {
   it("a stray token on a non-audience-changing call is REFUSED, not ignored", async () => {
     const create = vi.fn();
     const res = await opCreate(
-      stub({ ...sharedContainer(), createAgentTemplate: create }) as DoplClient,
+      stub({ ...sharedContainer(), createAgentIdentity: create }) as DoplClient,
       ME,
       { name: "Researcher", visibility: "private", confirm_token: "whatever" },
     );
@@ -320,7 +320,7 @@ describe("the dry-run → token round trip", () => {
   it("the first call WRITES NOTHING and previews what, where and who", async () => {
     const create = vi.fn();
     const res = await opCreate(
-      stub({ ...sharedContainer(), createAgentTemplate: create }) as DoplClient,
+      stub({ ...sharedContainer(), createAgentIdentity: create }) as DoplClient,
       ME,
       { name: "Researcher", visibility: "workspace" },
     );
@@ -338,10 +338,10 @@ describe("the dry-run → token round trip", () => {
   });
 
   it("echoing the token back performs the write exactly once", async () => {
-    const create = vi.fn(async () => TEMPLATE);
+    const create = vi.fn(async () => IDENTITY);
     const client = stub({
       ...sharedContainer(),
-      createAgentTemplate: create,
+      createAgentIdentity: create,
     }) as DoplClient;
     const args = { name: "Researcher", visibility: "workspace" as const };
 
@@ -353,10 +353,10 @@ describe("the dry-run → token round trip", () => {
   });
 
   it("REPLAY — a spent token creates nothing a second time", async () => {
-    const create = vi.fn(async () => TEMPLATE);
+    const create = vi.fn(async () => IDENTITY);
     const client = stub({
       ...sharedContainer(),
-      createAgentTemplate: create,
+      createAgentIdentity: create,
     }) as DoplClient;
     const args = { name: "Researcher", visibility: "workspace" as const };
 
@@ -370,10 +370,10 @@ describe("the dry-run → token round trip", () => {
   });
 
   it("EXPIRY — a token older than its TTL is refused and says so", async () => {
-    const create = vi.fn(async () => TEMPLATE);
+    const create = vi.fn(async () => IDENTITY);
     const client = stub({
       ...sharedContainer(),
-      createAgentTemplate: create,
+      createAgentIdentity: create,
     }) as DoplClient;
     const args = { name: "Researcher", visibility: "workspace" as const };
 
@@ -390,10 +390,10 @@ describe("the dry-run → token round trip", () => {
   it("PAYLOAD MISMATCH — a token cannot be re-aimed at a different write", async () => {
     // ⚠ THE POINT OF BINDING. Without it the preview shows one thing and the
     // confirmed call lands another, which is worse than no preview at all.
-    const create = vi.fn(async () => TEMPLATE);
+    const create = vi.fn(async () => IDENTITY);
     const client = stub({
       ...sharedContainer(),
-      createAgentTemplate: create,
+      createAgentIdentity: create,
     }) as DoplClient;
 
     const token = tokenIn(
@@ -411,10 +411,10 @@ describe("the dry-run → token round trip", () => {
   });
 
   it("a token is bound to the CALLER who previewed", async () => {
-    const create = vi.fn(async () => TEMPLATE);
+    const create = vi.fn(async () => IDENTITY);
     const client = stub({
       ...sharedContainer(),
-      createAgentTemplate: create,
+      createAgentIdentity: create,
     }) as DoplClient;
     const args = { name: "Researcher", visibility: "workspace" as const };
 
@@ -428,7 +428,7 @@ describe("the dry-run → token round trip", () => {
   it("an invented token is refused, and the refusal does not invite guessing", async () => {
     const create = vi.fn();
     const res = await opCreate(
-      stub({ ...sharedContainer(), createAgentTemplate: create }) as DoplClient,
+      stub({ ...sharedContainer(), createAgentIdentity: create }) as DoplClient,
       ME,
       { name: "Researcher", visibility: "workspace", confirm_token: "made-up" },
     );

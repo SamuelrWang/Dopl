@@ -96,7 +96,27 @@ type WorkspaceArgShape = typeof WORKSPACE_ARG_SHAPE;
  * Applied at BOTH registration helpers below. Pinned in `server.test.ts`.
  */
 function strictInput<S extends ZodRawShape>(shape: S): z.ZodObject<S> {
-  return z.strictObject(shape) as unknown as z.ZodObject<S>;
+  return z.strictObject(shape, { error: renamedArgMessage }) as unknown as z.ZodObject<S>;
+}
+
+/**
+ * 🔒 **A RENAMED ARGUMENT'S REFUSAL NAMES ITS SUCCESSOR, NOT ONLY ITSELF.** `template` became
+ * `identity` on 2026-09-22 (Samuel: agent templates are AGENT IDENTITIES — a role of the user,
+ * a piece of their digital twin) with NO alias. A bare `Unrecognized key: "template"` tells a
+ * caller what is wrong but not what is right, and the caller most likely to send it learned it
+ * from this server. Every other unknown key keeps the SDK's own message.
+ */
+const RENAMED_ARGS: Readonly<Record<string, string>> = { template: "identity" };
+
+function renamedArgMessage(issue: { code?: string; keys?: readonly string[] }): string | undefined {
+  if (issue.code !== "unrecognized_keys" || !issue.keys) return undefined;
+  const renamed = issue.keys.filter((k) => Object.prototype.hasOwnProperty.call(RENAMED_ARGS, k));
+  if (renamed.length === 0) return undefined;
+  const keys = issue.keys.map((k) => `"${k}"`).join(", ");
+  // ⚠ The hint carries NO quotes: the SDK serializes the issue as JSON, so a quoted hint
+  // arrives backslash-escaped and reads worse than the bare words.
+  const hints = renamed.map((k) => `renamed: send ${RENAMED_ARGS[k]}, not ${k}`).join("; ");
+  return `Unrecognized key${issue.keys.length === 1 ? "" : "s"}: ${keys} — ${hints}`;
 }
 
 /**

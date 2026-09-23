@@ -56,7 +56,7 @@ const PRIMARY_BTN =
  * ONE SECTION — the bold label, then the control under it.
  *
  * ⚠ THE WEIGHT LIVES IN THE MODULE, NOT PER CALLER (Samuel, 2026-09-08: *"All of the headers
- * (name, description, template, etc), should be bolded"*). Every label on every popup form is
+ * (name, description, identity, etc), should be bolded"*). Every label on every popup form is
  * `.label` and nothing else, which is what `launch-agent-dialog.test.tsx` pins by asserting that
  * the four labels share ONE class string and that none carries a `font-*` utility.
  * ⚠ `htmlFor` MAKES IT A `<label>`; without one it is a `<span>`, because a `<label>` wrapping a
@@ -204,7 +204,7 @@ export function UnderlineField({
  * ⚠ `plain` + `md` ARE THE RULING, IN TWO WORDS: gray fill with no hairline, at `--action-h-sm`.
  * Both live on the shared primitive, and this wrapper FIXES them so a popup form cannot reach a
  * fifth face by passing a different pair.
- * ⚠ `flex-wrap` IS THE CONSUMER'S, deliberately: a template roster has no width budget this file
+ * ⚠ `flex-wrap` IS THE CONSUMER'S, deliberately: an identity roster has no width budget this file
  * can promise, and a row that wrapped by default would silently reshape a two-option choice.
  * ⚠ `ariaLabel` IS REQUIRED — the visible word above the row is not attached to the `role=
  * "tablist"`, so without it a screen-reader operator gets an unnamed group.

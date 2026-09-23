@@ -44,18 +44,18 @@ const BASE = "https://api.example.test";
  *        2026-08-18): `closeChannelThread` and `proposeChannelThreadClose`.
  *        The `PATCH /tasks/[id]` route arms behind them are deleted too, so
  *        restoring either binding would 400 rather than fail quietly.
- *   70 — PLUS FOUR with the `AgentTemplateMethods` link (MCP surface v2 wave A,
- *        2026-08-28): `listAgentTemplates`, `getAgentTemplate`,
- *        `createAgentTemplate`, `updateAgentTemplate`. ⚠ FOUR, NOT FIVE — the
+ *   70 — PLUS FOUR with the `AgentIdentityMethods` link (MCP surface v2 wave A,
+ *        2026-08-28): `listAgentIdentities`, `getAgentIdentity`,
+ *        `createAgentIdentity`, `updateAgentIdentity`. ⚠ FOUR, NOT FIVE — the
  *        DELETE verb is deliberately unbound (`sessionOnly` on the route AND
- *        app-only by standing policy), so there is no `deleteAgentTemplate` to
+ *        app-only by standing policy), so there is no `deleteAgentIdentity` to
  *        forget to gate.
  *   75 — PLUS FIVE with wave B (2026-08-28): `getHomeChannels`,
  *        `createHomeChannel` (the `HomeMethods` link), `updateChannel`, and the
  *        two sibling-key payload readers `listKbBasesPayload` /
- *        `listAgentTemplatesPayload`. ⚠ TWO home methods, not five — link MINT,
+ *        `listAgentIdentitiesPayload`. ⚠ TWO home methods, not five — link MINT,
  *        link REVOKE and the CLAIM are all `sessionOnly` and deliberately
- *        unbound, the same omission the template DELETE makes. ⚠ And the two
+ *        unbound, the same omission the identity DELETE makes. ⚠ And the two
  *        `*Payload` readers each DELEGATE to nothing new on the wire: they are
  *        the same request their array sibling makes, so the surface grew by two
  *        names and by zero round trips.
@@ -117,7 +117,7 @@ const PUBLIC_SURFACE = [
   "createAgentDirective",
   "createChannelThread",
   "createChatFolder",
-  "createAgentTemplate",
+  "createAgentIdentity",
   "createKbBase",
   "createKbFolderByPath",
   "createOntologyCluster",
@@ -144,7 +144,7 @@ const PUBLIC_SURFACE = [
   // wrapper, different fence, and no workspace argument anywhere on the path.
   "getAccountStatus",
   "getActiveWorkspace",
-  "getAgentTemplate",
+  "getAgentIdentity",
   "getBaseUrl",
   "getChannel",
   // LAUNCH-OVER-MCP (2026-08-22): file a directive, then poll the row. ⚠ EXACTLY
@@ -187,8 +187,8 @@ const PUBLIC_SURFACE = [
   // replaced the two MCP copy ops. On link 2 because a grant is cross-domain.
   "grantResource",
   "inviteToChannel",
-  "listAgentTemplates",
-  "listAgentTemplatesPayload",
+  "listAgentIdentities",
+  "listAgentIdentitiesPayload",
   "listChannelMembers",
   "listChannelSessions",
   "listChannelThreads",
@@ -218,7 +218,7 @@ const PUBLIC_SURFACE = [
   "searchKb",
   "setChannelThreadMode",
   "setWorkspaceId",
-  "updateAgentTemplate",
+  "updateAgentIdentity",
   "updateChannel",
   "updateChat",
   "updateChatFolder",

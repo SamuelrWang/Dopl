@@ -13,9 +13,9 @@
  * direction:
  *  1. **THE PROBE CONVERGES.** A repeated key returns the stored row and files
  *     nothing.
- *  2. **THE PROBE SITS ABOVE THE TEMPLATE, THREAD AND PRESENCE GATES.** A retry
+ *  2. **THE PROBE SITS ABOVE THE IDENTITY, THREAD AND PRESENCE GATES.** A retry
  *     of a request that already succeeded may not be re-decided against today's
- *     world — a since-deleted template, or a laptop that has since closed, would
+ *     world — a since-deleted identity, or a laptop that has since closed, would
  *     otherwise answer "nothing was filed" about a directive that IS filed.
  *  3. **THE RACE IS REPAIRED.** Two retries arriving together both miss the
  *     probe; the partial unique index refuses the second insert and the loser
@@ -64,18 +64,18 @@ vi.mock("./service-shared", async (importOriginal) => {
   const actual = await importOriginal<typeof import("./service-shared")>();
   return { ...actual, loadVisibleChannel: vi.fn() };
 });
-// ⚠ MOCKED THOUGH ONLY ONE CASE NAMES A TEMPLATE: `service-launch.ts` imports the
-// agent-templates barrel at module scope and that module is `server-only` with a
+// ⚠ MOCKED THOUGH ONLY ONE CASE NAMES AN IDENTITY: `service-launch.ts` imports the
+// agent-identities barrel at module scope and that module is `server-only` with a
 // live Supabase admin client under it.
-vi.mock("@/features/agent-templates/server/service", () => ({
-  resolveTemplateRef: vi.fn(),
+vi.mock("@/features/agent-identities/server/service", () => ({
+  resolveIdentityRef: vi.fn(),
 }));
 
 import * as launchRepo from "./repository-launch";
 import * as directionRepo from "./repository-directions";
 import * as collab from "./repository-collab";
 import * as repoTasks from "./repository-tasks";
-import { resolveTemplateRef } from "@/features/agent-templates/server/service";
+import { resolveIdentityRef } from "@/features/agent-identities/server/service";
 import { loadVisibleChannel, type ChannelContext } from "./service-shared";
 import { createLaunchDirective } from "./service-launch";
 import { createAgentDirection } from "./service-directions";
@@ -109,8 +109,8 @@ function launchRow(over: Record<string, unknown> = {}) {
     operator_user_id: ME,
     goal: "ship the parser",
     model: null,
-    template_id: null,
-    template_name: null,
+    identity_id: null,
+    identity_name: null,
     target_agent_id: null,
     target_name: null,
     status: "pending",
@@ -225,17 +225,17 @@ describe("launch_agent — the probe sits ABOVE the gates a retry must not be re
     expect(result).toMatchObject({ offline: false, existing: true });
   });
 
-  it("a template deleted since the first call does not refuse the retry", async () => {
-    vi.mocked(resolveTemplateRef).mockResolvedValue({ kind: "not-found" } as never);
+  it("an identity deleted since the first call does not refuse the retry", async () => {
+    vi.mocked(resolveIdentityRef).mockResolvedValue({ kind: "not-found" } as never);
     vi.mocked(launchRepo.findLaunchDirectiveByClientMsgId).mockResolvedValue(
-      launchRow({ template_id: null, template_name: "Code Auditor" })
+      launchRow({ identity_id: null, identity_name: "Code Auditor" })
     );
     const result = await createLaunchDirective(ctx, {
       channel: "general",
-      template: "Code Auditor",
+      identity: "Code Auditor",
       clientMsgId: KEY,
     });
-    expect(resolveTemplateRef).not.toHaveBeenCalled();
+    expect(resolveIdentityRef).not.toHaveBeenCalled();
     expect(result).toMatchObject({ existing: true });
   });
 

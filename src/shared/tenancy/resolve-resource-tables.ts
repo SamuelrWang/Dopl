@@ -9,7 +9,7 @@ import type { Role } from "@/features/workspaces/types";
  * second resolver.
  */
 export type ResourceType =
-  | "agent_template"
+  | "agent_identity"
   | "knowledge_base"
   | "skill"
   | "chat";
@@ -23,7 +23,7 @@ export type ResourceType =
  * `name` so one row shape serves every type.
  * ⚠ `sharedArm` is a POSTGREST FILTER FRAGMENT, not a value, and that is the
  * reason it is a fragment: "visible to every member of the container" is ONE
- * column on `agent_templates` (`visibility = 'workspace'`) and TWO everywhere
+ * column on `agent_identities` (`visibility = 'workspace'`) and TWO everywhere
  * else — a `public` base/skill/chat in `access_mode = 'teams'` is visible to the
  * GRANTED TEAMS and not to the container, so naming it here would widen clause 4
  * into the existence oracle the clause exists to close.
@@ -46,11 +46,11 @@ export const SHARED_WITH_CONTAINER =
   "and(visibility.eq.public,access_mode.eq.workspace)";
 
 export const RESOURCE_TABLES: Record<ResourceType, ResourceTable> = {
-  agent_template: {
-    table: "agent_templates",
+  agent_identity: {
+    table: "agent_identities",
     ownerColumn: "created_by",
     nameColumn: "name",
-    // ⚠ `agent_templates` has no `access_mode`: its third value IS `team`, so
+    // ⚠ `agent_identities` has no `access_mode`: its third value IS `team`, so
     // the team scope is already outside this arm rather than hidden inside it.
     sharedArm: "visibility.eq.workspace",
     // ⚠ No soft delete — `20260822200000_agent_templates.sql`: "A delete is a

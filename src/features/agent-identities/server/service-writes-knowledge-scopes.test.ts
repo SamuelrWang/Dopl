@@ -43,16 +43,16 @@ vi.mock("@/features/workspaces/server/repository-overview", () => ({
   countActiveMembers: vi.fn().mockResolvedValue(1),
 }));
 vi.mock("./repository", () => ({
-  listTemplatesForWorkspace: vi.fn(),
-  findTemplateById: vi.fn(),
-  insertTemplate: vi.fn(),
-  updateTemplateRow: vi.fn(),
-  hardDeleteTemplate: vi.fn(),
-  listTeamLinksForTemplates: vi.fn(),
+  listIdentitiesForWorkspace: vi.fn(),
+  findIdentityById: vi.fn(),
+  insertIdentity: vi.fn(),
+  updateIdentityRow: vi.fn(),
+  hardDeleteIdentity: vi.fn(),
+  listTeamLinksForIdentities: vi.fn(),
   replaceTeamLinks: vi.fn(),
   listTeamIdsForUser: vi.fn(),
   filterTeamIdsInWorkspace: vi.fn(),
-  listKnowledgeLinksForTemplates: vi.fn(),
+  listKnowledgeLinksForIdentities: vi.fn(),
   replaceKnowledgeLinks: vi.fn(),
   listKnowledgeBaseAccessRows: vi.fn(),
   listKnowledgeBaseTeamGrants: vi.fn(),
@@ -61,8 +61,8 @@ vi.mock("./repository", () => ({
 }));
 
 import * as repo from "./repository";
-import { createTemplate } from "./service";
-import { TemplateKnowledgeBaseNotFoundError } from "./errors";
+import { createIdentity } from "./service";
+import { IdentityKnowledgeBaseNotFoundError } from "./errors";
 import {
   BASES,
   KB_OPEN,
@@ -97,11 +97,11 @@ describe("a folder or an entry you cannot read, you cannot attach", () => {
     mockRepo.listLiveFoldersForBases.mockResolvedValue([
       { id: FOLDER, knowledgeBaseId: KB_PRIVATE, parentId: null, name: "Elsewhere" },
     ]);
-    const err = await createTemplate(ctx(), {
+    const err = await createIdentity(ctx(), {
       name: "R",
       knowledge: [{ baseId: KB_OPEN, scope: "folder", folderId: FOLDER }],
     }).catch((e) => e);
-    expect(err).toBeInstanceOf(TemplateKnowledgeBaseNotFoundError);
+    expect(err).toBeInstanceOf(IdentityKnowledgeBaseNotFoundError);
     expect(err.missingIds).toEqual([FOLDER]);
     expect(mockRepo.replaceKnowledgeLinks).not.toHaveBeenCalled();
   });
@@ -109,11 +109,11 @@ describe("a folder or an entry you cannot read, you cannot attach", () => {
   it("REFUSES a TRASHED entry — the live read simply does not return it", async () => {
     mockRepo.listKnowledgeBaseAccessRows.mockResolvedValue([BASES[KB_OPEN]]);
     mockRepo.listLiveEntryRows.mockResolvedValue([]);
-    const err = await createTemplate(ctx(), {
+    const err = await createIdentity(ctx(), {
       name: "R",
       knowledge: [{ baseId: KB_OPEN, scope: "entry", entryId: ENTRY }],
     }).catch((e) => e);
-    expect(err).toBeInstanceOf(TemplateKnowledgeBaseNotFoundError);
+    expect(err).toBeInstanceOf(IdentityKnowledgeBaseNotFoundError);
     expect(err.missingIds).toEqual([ENTRY]);
     expect(mockRepo.replaceKnowledgeLinks).not.toHaveBeenCalled();
   });
@@ -123,7 +123,7 @@ describe("a folder or an entry you cannot read, you cannot attach", () => {
     mockRepo.listLiveFoldersForBases.mockResolvedValue([
       { id: FOLDER, knowledgeBaseId: KB_OPEN, parentId: null, name: "Deploys" },
     ]);
-    await createTemplate(ctx(), {
+    await createIdentity(ctx(), {
       name: "R",
       knowledge: [{ baseId: KB_OPEN, scope: "folder", folderId: FOLDER }],
     });

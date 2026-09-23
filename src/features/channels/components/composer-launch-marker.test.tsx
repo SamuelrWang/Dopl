@@ -4,27 +4,27 @@
  * takes most of the launch traffic (RESTORED 2026-08-30, Samuel's standing §5A
  * ruling; ledger ASK-21).
  *
- * WHAT WAS LOST AND WHY IT MATTERED. On 2026-08-27 the composer's template
- * chevron was replaced by `composer-launch-panel.tsx`'s Template row, and that
+ * WHAT WAS LOST AND WHY IT MATTERED. On 2026-08-27 the composer's identity
+ * chevron was replaced by `composer-launch-panel.tsx`'s Identity row, and that
  * row narrowed the list to `{id, name}` — no `authorMarker`, no visibility,
  * nothing in the accessible name. INVARIANTS §5A calls the marker *"a SECURITY
  * SIGNAL, NOT DECORATION… the ONLY signal shown to the human BEFORE the choice
- * is made"*: a `team`/`workspace` template's instructions are another member's
+ * is made"*: a `team`/`workspace` identity's instructions are another member's
  * text about to run on this machine under this operator's credential.
- * `TemplateApprovalDialog` still fires on first use, so the FENCE never moved —
+ * `IdentityApprovalDialog` still fires on first use, so the FENCE never moved —
  * what went missing is the warning before the click, on the busiest lane.
  *
  * ⚠ THE MARKER MUST REACH THE ACCESSIBLE NAME, not merely the pixels. Every
  * assertion below addresses rows BY THEIR ACCESSIBLE NAME (`getByRole
  * ("menuitem", { name })`), so a marker painted in a `<span>` the a11y tree
  * cannot see fails exactly as a missing one does. That is the same property
- * `template-picker.tsx › TemplateRow` holds via its `aria-label`; here it comes
+ * `identity-picker.tsx › IdentityRow` holds via its `aria-label`; here it comes
  * from `MenuItem`'s `description`, which renders INSIDE the `role="menuitem"`
  * button.
  *
  * ⚠ AN UNRESOLVABLE AUTHOR IS STILL FOREIGN — "by another member", never no
  * marker. `createdBy` is a WORKSPACE member and the map is the CHANNEL roster,
- * so a template shared by someone outside this channel resolves to no name;
+ * so an identity shared by someone outside this channel resolves to no name;
  * `created_by` is also nulled when its author leaves the workspace. Dropping the
  * marker there would turn UNKNOWN into MINE (INVARIANTS §11).
  *
@@ -35,13 +35,13 @@
  *     rendered — the 2026-08-27 regression exactly) ............... 3 red
  *   - `authorMarker`'s nameless arm returns `null` instead of
  *     "by another member" ........................................ 2 red
- *   - `authorMarker`'s own-template guard removed ................ 1 red
+ *   - `authorMarker`'s own-identity guard removed ................ 1 red
  *   - the CHANNEL roster widened so an off-channel author resolves
  *     to a name .................................................. 1 red
- *   The last two are why the own-template and off-channel cases are written
+ *   The last two are why the own-identity and off-channel cases are written
  *   separately: each is the only one that catches its own revert.
  *
- * ⚠ `useThreadWrites` and the templates endpoint are MOCKED — this file is about
+ * ⚠ `useThreadWrites` and the identities endpoint are MOCKED — this file is about
  * one row's face and name, not about the write layer or the read.
  */
 
@@ -56,10 +56,10 @@ vi.mock("../hooks/use-thread-writes", () => ({
   }),
 }));
 
-const templateList = vi.hoisted(() => ({ templates: [] as unknown[] }));
-vi.mock("@/features/agent-templates/hooks/use-agent-templates", () => ({
-  useAgentTemplates: () => ({
-    templates: templateList.templates,
+const identityList = vi.hoisted(() => ({ identities: [] as unknown[] }));
+vi.mock("@/features/agent-identities/hooks/use-agent-identities", () => ({
+  useAgentIdentities: () => ({
+    identities: identityList.identities,
     loading: false,
     error: null,
     resolved: true,
@@ -88,7 +88,7 @@ function launcher(): AgentLaunchControls {
     launchBusy: false,
     launchError: null,
     launchAgent: vi.fn().mockResolvedValue({ ok: true, agentId: MINTED }),
-    approveTemplate: vi.fn().mockResolvedValue({ ok: true }),
+    approveIdentity: vi.fn().mockResolvedValue({ ok: true }),
   };
 }
 
@@ -110,7 +110,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   delete (window as { dopl?: unknown }).dopl;
-  templateList.templates = [];
+  identityList.identities = [];
 });
 
 /**
@@ -129,12 +129,12 @@ const NAME_RE = (label: string, marker: string) =>
 /**
  * Open the Bot popup; returns nothing — assert on roles.
  *
- * ⚠ THERE IS NO MENU TO OPEN SINCE 2026-09-08 (Samuel's popup-panel ruling). Template is a
+ * ⚠ THERE IS NO MENU TO OPEN SINCE 2026-09-08 (Samuel's popup-panel ruling). Identity is a
  * `SegmentedControl` row, so every option is on screen as a `role="tab"` the moment the dialog
  * is — which is a STRONGER reading of §5A than the dropdown gave: the marker is now visible
  * before the operator even reaches for the row, not just before the click.
  */
-async function openTemplateMenu() {
+async function openIdentityMenu() {
   render(
     <ChannelsComposer
       channelId={CHANNEL_ID}
@@ -157,12 +157,12 @@ async function openTemplateMenu() {
   await waitFor(() => expect(screen.getByRole("button", { name: "Launch" })).toBeTruthy());
 }
 
-describe("the launch popup's Template row carries the authorship marker", () => {
-  it("names the AUTHOR of a template this operator did not write", async () => {
-    templateList.templates = [
+describe("the launch popup's Identity row carries the authorship marker", () => {
+  it("names the AUTHOR of an identity this operator did not write", async () => {
+    identityList.identities = [
       { id: "tpl-1", name: "Code auditor", workspaceId: "ws-1", createdBy: PEER },
     ];
-    await openTemplateMenu();
+    await openIdentityMenu();
 
     // The marker is IN the accessible name, before the choice is made.
     expect(
@@ -170,10 +170,10 @@ describe("the launch popup's Template row carries the authorship marker", () => 
     ).toBeTruthy();
   });
 
-  it("still marks a template whose author the CHANNEL roster cannot name", async () => {
+  it("still marks an identity whose author the CHANNEL roster cannot name", async () => {
     // The author is a workspace member outside this channel — no name, and the
     // marker must NOT disappear. UNKNOWN is not MINE.
-    templateList.templates = [
+    identityList.identities = [
       {
         id: "tpl-2",
         name: "Release notes",
@@ -181,31 +181,31 @@ describe("the launch popup's Template row carries the authorship marker", () => 
         createdBy: OFF_CHANNEL,
       },
     ];
-    await openTemplateMenu();
+    await openIdentityMenu();
 
     expect(
       await screen.findByRole("tab", { name: NAME_RE("Release notes", "by another member") })
     ).toBeTruthy();
   });
 
-  it("marks a template whose author has LEFT the workspace (createdBy null)", async () => {
-    templateList.templates = [
+  it("marks an identity whose author has LEFT the workspace (createdBy null)", async () => {
+    identityList.identities = [
       { id: "tpl-3", name: "Orphan", workspaceId: "ws-1", createdBy: null },
     ];
-    await openTemplateMenu();
+    await openIdentityMenu();
 
     expect(
       await screen.findByRole("tab", { name: NAME_RE("Orphan", "by another member") })
     ).toBeTruthy();
   });
 
-  it("wears NO marker on this operator's OWN template", async () => {
+  it("wears NO marker on this operator's OWN identity", async () => {
     // A marker over your own configuration is the noise that stops markers
     // being read — so the absence here is load-bearing, not an omission.
-    templateList.templates = [
+    identityList.identities = [
       { id: "tpl-4", name: "My auditor", workspaceId: "ws-1", createdBy: ME },
     ];
-    await openTemplateMenu();
+    await openIdentityMenu();
 
     expect(
       await screen.findByRole("tab", { name: /^My auditor$/ })
@@ -214,17 +214,17 @@ describe("the launch popup's Template row carries the authorship marker", () => 
   });
 
   it("leaves None unmarked — it is a configuration, not somebody's text", async () => {
-    templateList.templates = [
+    identityList.identities = [
       { id: "tpl-5", name: "Code auditor", workspaceId: "ws-1", createdBy: PEER },
     ];
-    await openTemplateMenu();
+    await openIdentityMenu();
 
     expect(
       // ⚠ **"Blank agent" → "None" ON 2026-09-13** (Samuel, docs/specs/agent-colors.md item 7).
       // ⚠ THIS SUITE MOUNTS `composer.tsx` AND REACHES THE SAME DIALOG the sibling
       // `launch-agent-dialog.test.tsx` mounts directly — the `SegmentedControl` row this
-      // docblock describes is `launch-agent-dialog.tsx › templateOptions`, so the label moved
-      // here too. The WIRE is unchanged (`templateId: null`), which is why the marker property
+      // docblock describes is `launch-agent-dialog.tsx › identityOptions`, so the label moved
+      // here too. The WIRE is unchanged (`identityId: null`), which is why the marker property
       // this case actually guards is untouched.
       await screen.findByRole("tab", { name: "None" })
     ).toBeTruthy();

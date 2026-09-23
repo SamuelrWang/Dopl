@@ -162,7 +162,7 @@ test("a KB READ op ALLOWS at the windowless floor, under dopl_only and full", ()
       assert.equal(
         grantDecision({ ...kb(op, { base: "b" }), profile, toolMode: FLOOR }),
         "allow",
-        `${profile}: op="${op}" must reach the base a template attached`
+        `${profile}: op="${op}" must reach the base an identity attached`
       );
     }
   }

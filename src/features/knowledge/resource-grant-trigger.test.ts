@@ -65,7 +65,7 @@ describe("🔒 enforce_resource_grant — 'the grantor may share this'", () => {
     expect(SHARE).not.toBeNull();
     // The five `canSee*` matrices, asked about a named user — including the two
     // owner columns that are not `created_by`.
-    for (const table of ["knowledge_bases", "skills", "chats", "chat_folders", "agent_templates"]) {
+    for (const table of ["knowledge_bases", "skills", "chats", "chat_folders", "agent_identities"]) {
       expect(SHARE, table).toMatch(new RegExp(String.raw`FROM\s+public\.${table}\b`, "i"));
     }
     expect(SHARE).toMatch(/r\.owner_id\s*=\s*p_user_id/i);
@@ -107,7 +107,7 @@ describe("🔒 enforce_resource_grant — 'the grantor may share this'", () => {
     const backfills = file.sql.match(
       /CASE WHEN is_workspace_member\(\s*\w+\.workspace_id,\s*\w+\.(?:created_by|granted_by),\s*'viewer'\)\s*\n?\s*THEN \w+\.(?:created_by|granted_by) END/g
     );
-    // Both attributed backfills: the channel grants and the template teams.
+    // Both attributed backfills: the channel grants and the identity teams.
     expect(backfills?.length).toBe(2);
   });
 
@@ -117,7 +117,7 @@ describe("🔒 enforce_resource_grant — 'the grantor may share this'", () => {
     }
     for (const table of [
       "knowledge_bases",
-      "agent_templates",
+      "agent_identities",
       "skills",
       "chats",
       "chat_folders",

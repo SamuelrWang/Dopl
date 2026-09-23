@@ -57,9 +57,9 @@ test("ROW: the payload is the schema's shape, field for field", () => {
     state: "working",
     channelName: "General",
     threadTitle: "Ship the thing",
-    // ⚠ JOINED 2026-08-22 (agent templates, Phase 4's `channel_sessions.template_name`). NULL HERE AND STILL
-    // PRESENT, for the reason above: a blank agent has no template, and saying so is not saying nothing.
-    templateName: null,
+    // ⚠ JOINED 2026-08-22 (agent identities, Phase 4's `channel_sessions.identity_name`). NULL HERE AND STILL
+    // PRESENT, for the reason above: a blank agent has no identity, and saying so is not saying nothing.
+    identityName: null,
     // ⚠ JOINED 2026-08-31 (20260905120000): the operator-given name, PEER-VISIBLE by design.
     // NULL = never named; the render falls back to `#<id>`.
     displayName: null,
@@ -68,7 +68,7 @@ test("ROW: the payload is the schema's shape, field for field", () => {
     // PRESENT, for this case's own reason, and NULL IS NOT AN ERASURE on this one field: the
     // server RESOLVES this column rather than storing it verbatim, and
     // `server/session-colors.ts › resolveReportedColors` rule 1 keeps whatever the stored row
-    // already holds. That is what exempts `color` from the `templateName` erase hazard
+    // already holds. That is what exempts `color` from the `identityName` erase hazard
     // `session-store.js`'s durable whitelist records.
     color: null,
     detail: null,
@@ -107,7 +107,7 @@ test("ROW: the payload is the schema's shape, field for field", () => {
 // wire row" and listed SEVEN keys; the orchestrator wave deliberately added EIGHT more, with the columns to receive
 // them. So the pin is a closed list either way, and it still catches the case it was written for: a field appearing
 // on `session-summary.js` and reaching the table because nobody chose to send it. ⚠ SIXTEEN SINCE 2026-08-22 (agent
-// templates): `templateName` was added DELIBERATELY, with the column to receive it (`channel_sessions.template_name`,
+// identities): `identityName` was added DELIBERATELY, with the column to receive it (`channel_sessions.identity_name`,
 // OPERATOR-ONLY — the server's mapper is the fence and the GRANT list is the belt, neither of which is this file's).
 test("ROW: the wire row is exactly the twenty-five columns, and no summary field rides along free", () => {
   const m = load();
@@ -127,7 +127,7 @@ test("ROW: the wire row is exactly the twenty-five columns, and no summary field
     messageMode: "auto_both",
     sessionId: "sess-1",
     agentId: "a1b2c3d4",
-    templateName: "Code Auditor",
+    identityName: "Code Auditor",
   });
   // ⚠ SEVENTEEN since 2026-08-31: `displayName` joined DELIBERATELY, with the column to
   // receive it (`channel_sessions.display_name`, PEER-VISIBLE by design — Samuel's ruling).
@@ -138,8 +138,8 @@ test("ROW: the wire row is exactly the twenty-five columns, and no summary field
   // it (`channel_sessions.color`, PEER-VISIBLE by design — Samuel's cross-member ruling).
   assert.deepEqual(Object.keys(m.reportRow(wide)).sort(), [
     "channelId", "channelName", "color", "contextUsed", "contextWindow", "deniedCalls", "detail",
-    "displayName", "lastActivityAt", "lastDeniedTool", "lastWakeAt", "lastWakeSeq", "model",
-    "name", "sessionKey", "stale", "startedAt", "state", "templateName", "threadId",
+    "displayName", "identityName", "lastActivityAt", "lastDeniedTool", "lastWakeAt", "lastWakeSeq", "model",
+    "name", "sessionKey", "stale", "startedAt", "state", "threadId",
     "threadTitle", "tokensDelta", "tokensSpent", "toolLabel", "turns",
   ]);
   // ⚠ **THE COLOUR CROSSES MEMBERSHIP-TESTED, NOT SANITIZED**, which is the one difference from
@@ -153,7 +153,7 @@ test("ROW: the wire row is exactly the twenty-five columns, and no summary field
   assert.equal(m.reportRow(entry({ color: "red" })).color, null);
   assert.equal(m.reportRow(entry({ color: " agent-07" })).color, null);
   assert.equal(m.reportRow(entry({ color: 7 })).color, null);
-  // ⚠ THE NAME CROSSES SANITIZED, exactly as `templateName` does below — `labelOrNull` at 60
+  // ⚠ THE NAME CROSSES SANITIZED, exactly as `identityName` does below — `labelOrNull` at 60
   // (`agent-names.js › MAX_NAME`, the column CHECK's own bound).
   assert.equal(m.reportRow(entry({ displayName: "Bug Reviewer" })).displayName, "Bug Reviewer");
   assert.equal(m.reportRow(entry({ displayName: "  a​b\nc  " })).displayName, "a b c");
@@ -162,12 +162,12 @@ test("ROW: the wire row is exactly the twenty-five columns, and no summary field
   // ⚠ AND IT IS THE NAME, NEVER THE ID, AND IT IS SANITIZED HERE. The server stores the string verbatim and
   // resolves nothing, so the desktop is the only place the charset and the 120-char bound are applied —
   // through `session-telemetry.js › labelOrNull`, the helper the three telemetry labels take.
-  assert.equal(m.reportRow(wide).templateName, "Code Auditor");
+  assert.equal(m.reportRow(wide).identityName, "Code Auditor");
   // ⚠ AN UNSAFE CHARACTER BECOMES A SPACE, NOT ELIDED — `labelOrNull`'s rule, and the safe direction:
   // eliding a zero-width would silently JOIN two words a human sees apart.
-  assert.equal(m.reportRow(entry({ templateName: "  a\u200bb\nc  " })).templateName, "a b c");
-  assert.equal(m.reportRow(entry({ templateName: "x".repeat(300) })).templateName.length, 120);
-  assert.equal(m.reportRow(entry({ templateName: "   " })).templateName, null);
+  assert.equal(m.reportRow(entry({ identityName: "  a\u200bb\nc  " })).identityName, "a b c");
+  assert.equal(m.reportRow(entry({ identityName: "x".repeat(300) })).identityName.length, 120);
+  assert.equal(m.reportRow(entry({ identityName: "   " })).identityName, null);
   // And the pill value itself is untouched: `state` is the SERVER's closed vocabulary, and
   // a `detail` of "tool" must not leak into it.
   assert.equal(m.reportRow(wide).state, "working");

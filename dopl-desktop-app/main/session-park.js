@@ -65,18 +65,18 @@ function knownProfile(p) {
 // resume builds its first turn from this context (io.takeFraming -> prompt-framing
 // .deliverySection), and without them the session knows only the channel's display name and
 // cannot address dopl_channel.
-// ⚠ AND `template`, SINCE 2026-08-23 (F-288) — A NAME-ONLY STUB, ON PURPOSE.
-// `context.template` is a spawn-time capture, and this function is the ONLY thing standing
-// between a crash resume and a session that reports no template at all: `session-summary.js ›
-// liveSummary` reads `ctx.template && ctx.template.name`, `templateName` sits in
+// ⚠ AND `identity`, SINCE 2026-08-23 (F-288) — A NAME-ONLY STUB, ON PURPOSE.
+// `context.identity` is a spawn-time capture, and this function is the ONLY thing standing
+// between a crash resume and a session that reports no identity at all: `session-summary.js ›
+// liveSummary` reads `ctx.identity && ctx.identity.name`, `identityName` sits in
 // `session-telemetry.js › STATE_FIELDS`, and a null there bypasses the cadence floor and ERASES
-// `channel_sessions.template_name` under a still-running agent.
+// `channel_sessions.identity_name` under a still-running agent.
 // ⚠ THE STUB IS SUFFICIENT AND THE BODY IS DELIBERATELY ABSENT. `instructions` / `fields` /
-// `knowledgeBases` have exactly one consumer — `prompt-framing-template.js › templateRoleFraming`,
+// `knowledgeBases` have exactly one consumer — `prompt-framing-agent-identity.js › identityRoleFraming`,
 // reached through the one-shot `session-seed.js › takeFraming` — and a resume never runs it
 // (`session-engine.js` sets `freshFraming: spec.parkedShell === true && !spec.resumeSdkId`, and
 // `startResume` always passes `resumeSdkId`). The SDK resume carries the original ROLE block.
-// ⚠ SO A CONSUMER THAT LATER READS `template.instructions` OFF A LIVE SESSION MUST NOT ASSUME IT
+// ⚠ SO A CONSUMER THAT LATER READS `identity.instructions` OFF A LIVE SESSION MUST NOT ASSUME IT
 // IS THERE. That is the cost of the stub, stated rather than discovered.
 function contextFromRecord(rec) {
   const r = rec || {};
@@ -86,7 +86,7 @@ function contextFromRecord(rec) {
     authorName: r.counterpartyName || null,
     channelId: r.channelId || null,
     workspaceId: r.workspaceId || null,
-    template: r.templateName ? { name: r.templateName } : null,
+    identity: r.identityName ? { name: r.identityName } : null,
   };
 }
 

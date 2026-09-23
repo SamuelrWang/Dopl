@@ -5,13 +5,13 @@
  * Every other write test in this tree drives configs through TanStack's
  * `MutationObserver` and asserts the CACHE. This one renders BOTH READS as well,
  * because the defect it exists for is invisible from one workspace: the three
- * write configs used to patch `agentTemplateKeys.list().all` — the one-element
+ * write configs used to patch `agentIdentityKeys.list().all` — the one-element
  * PATH key — and TanStack matches by array prefix, so every patch landed on
- * EVERY workspace variant of `/api/agent-templates`. One mounted workspace never
+ * EVERY workspace variant of `/api/agent-identities`. One mounted workspace never
  * notices. The /home Agents tab mounts two (a channel CONTAINER and the home
  * workspace, side by side), and then:
  *
- *   - a template created in the container APPEARS under "across all channels",
+ *   - an identity created in the container APPEARS under "across all channels",
  *     because `upsertRow` APPENDS when the id is not in the cache it is handed;
  *   - an EDIT is worse than the create: the update path patches twice
  *     (optimistic + reconcile) and both appends, so an unrelated workspace's
@@ -27,7 +27,7 @@
  *
  * ⚠ REAL `QueryClient`, REAL HOOKS, MOCKED TRANSPORT. What is being pinned is
  * which cache entry a patch lands in and what a reader mounted on the OTHER
- * entry then projects — so the reader has to be the real `useAgentTemplates`
+ * entry then projects — so the reader has to be the real `useAgentIdentities`
  * and the cache has to be the real one. Only the network is fake.
  */
 
@@ -35,12 +35,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createElement, type ReactNode } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, renderHook, waitFor } from "@testing-library/react";
-import type { AgentTemplate } from "../client/types";
+import type { AgentIdentity } from "../client/types";
 
 const WS_CONTAINER = "ws-container";
 const WS_HOME = "ws-home";
 
-function template(id: string, workspaceId: string, name: string): AgentTemplate {
+function identity(id: string, workspaceId: string, name: string): AgentIdentity {
   return {
     id,
     workspaceId,
@@ -60,7 +60,7 @@ function template(id: string, workspaceId: string, name: string): AgentTemplate 
 
 /** The server, keyed by workspace — the fence this test is about is CLIENT-side,
  *  so the server here simply never returns another workspace's rows. */
-const rows: Record<string, AgentTemplate[]> = {};
+const rows: Record<string, AgentIdentity[]> = {};
 /** Workspaces whose LIST READ is currently failing, so their cache entry holds
  *  no data — the cold-entry condition `coldKeys` exists for. */
 const failingReads = new Set<string>();
@@ -74,19 +74,19 @@ const apiRequest = vi.fn(
     const workspaceId = opts.workspaceId ?? "";
     if (method === "GET") {
       if (failingReads.has(workspaceId)) throw new Error("forbidden");
-      return { templates: rows[workspaceId] ?? [] };
+      return { identities: rows[workspaceId] ?? [] };
     }
     if (method === "POST") {
       const body = opts.body as { name: string };
-      const created = template("tpl-new", workspaceId, body.name);
+      const created = identity("tpl-new", workspaceId, body.name);
       // The row EXISTS server-side from here on, so a refetch can find it —
       // which is the only way the cold-entry case below can reach the screen.
       rows[workspaceId] = [...(rows[workspaceId] ?? []), created];
-      return { template: created };
+      return { identity: created };
     }
     if (method === "PATCH") {
       const id = path.split("/").pop() as string;
-      return { template: template(id, workspaceId, "Renamed") };
+      return { identity: identity(id, workspaceId, "Renamed") };
     }
     return undefined;
   }
@@ -106,8 +106,8 @@ vi.mock("@/shared/api/api-client", () => ({
   },
 }));
 
-const { useAgentTemplates } = await import("./use-agent-templates");
-const { useAgentTemplateWrites } = await import("./use-agent-template-writes");
+const { useAgentIdentities } = await import("./use-agent-identities");
+const { useAgentIdentityWrites } = await import("./use-agent-identity-writes");
 
 function harness() {
   const client = new QueryClient({
@@ -120,10 +120,10 @@ function harness() {
     createElement(QueryClientProvider, { client }, children);
   return renderHook(
     () => ({
-      container: useAgentTemplates(WS_CONTAINER),
-      home: useAgentTemplates(WS_HOME),
-      containerWrites: useAgentTemplateWrites(WS_CONTAINER),
-      homeWrites: useAgentTemplateWrites(WS_HOME),
+      container: useAgentIdentities(WS_CONTAINER),
+      home: useAgentIdentities(WS_HOME),
+      containerWrites: useAgentIdentityWrites(WS_CONTAINER),
+      homeWrites: useAgentIdentityWrites(WS_HOME),
     }),
     { wrapper }
   );
@@ -140,11 +140,11 @@ async function warm() {
   return view;
 }
 
-const names = (list: readonly AgentTemplate[]) => list.map((t) => t.name);
+const names = (list: readonly AgentIdentity[]) => list.map((t) => t.name);
 
 beforeEach(() => {
-  rows[WS_CONTAINER] = [template("tpl-c1", WS_CONTAINER, "Channel Auditor")];
-  rows[WS_HOME] = [template("tpl-h1", WS_HOME, "Home Scout")];
+  rows[WS_CONTAINER] = [identity("tpl-c1", WS_CONTAINER, "Channel Auditor")];
+  rows[WS_HOME] = [identity("tpl-h1", WS_HOME, "Home Scout")];
 });
 
 afterEach(() => {
@@ -164,32 +164,32 @@ describe("a write patches ONE workspace's list", () => {
     // assert the other one does not. A `waitFor` on an ABSENCE passes before the
     // patch has been applied at all and would prove nothing.
     await waitFor(() =>
-      expect(names(view.result.current.container.templates)).toEqual([
+      expect(names(view.result.current.container.identities)).toEqual([
         "Channel Auditor",
         "New In Channel",
       ])
     );
     // 🔴 The assertion the fix exists for: under the PATH-prefix key this list
-    // grew "New In Channel", a template of a workspace it cannot read — in the
+    // grew "New In Channel", an identity of a workspace it cannot read — in the
     // SAME `setQueriesData` call, so by the line above it is already there.
-    expect(names(view.result.current.home.templates)).toEqual(["Home Scout"]);
+    expect(names(view.result.current.home.identities)).toEqual(["Home Scout"]);
   });
 
   it("UPDATE in the container never appends its row to the home list", async () => {
     const view = await warm();
     await act(async () => {
       await view.result.current.containerWrites.update.mutateAsync({
-        templateId: "tpl-c1",
+        identityId: "tpl-c1",
         body: { name: "Renamed" },
-        optimistic: template("tpl-c1", WS_CONTAINER, "Renamed"),
+        optimistic: identity("tpl-c1", WS_CONTAINER, "Renamed"),
       });
     });
     await waitFor(() =>
-      expect(names(view.result.current.container.templates)).toEqual(["Renamed"])
+      expect(names(view.result.current.container.identities)).toEqual(["Renamed"])
     );
     // Both the optimistic patch and the reconcile ran; under the prefix key each
     // one APPENDED (the id is absent here), so this list held "Renamed" twice.
-    expect(names(view.result.current.home.templates)).toEqual(["Home Scout"]);
+    expect(names(view.result.current.home.identities)).toEqual(["Home Scout"]);
   });
 
   /** 🔒 F-747 — the PATCH carries the precondition the caller handed it. */
@@ -197,9 +197,9 @@ describe("a write patches ONE workspace's list", () => {
     const view = await warm();
     await act(async () => {
       await view.result.current.containerWrites.update.mutateAsync({
-        templateId: "tpl-c1",
+        identityId: "tpl-c1",
         body: { name: "Renamed" },
-        optimistic: template("tpl-c1", WS_CONTAINER, "Renamed"),
+        optimistic: identity("tpl-c1", WS_CONTAINER, "Renamed"),
         expectedUpdatedAt: "2026-08-26T00:00:00.000Z",
       });
     });
@@ -215,15 +215,15 @@ describe("a write patches ONE workspace's list", () => {
     const view = await warm();
     await act(async () => {
       await view.result.current.homeWrites.remove.mutateAsync({
-        templateId: "tpl-h1",
+        identityId: "tpl-h1",
       });
     });
     await waitFor(() =>
-      expect(names(view.result.current.home.templates)).toEqual([])
+      expect(names(view.result.current.home.identities)).toEqual([])
     );
     // ⚠ COMPANION, NOT EVIDENCE — see the header: `dropRow` filters by id and
     // ids do not repeat across workspaces, so this passed against the bug too.
-    expect(names(view.result.current.container.templates)).toEqual([
+    expect(names(view.result.current.container.identities)).toEqual([
       "Channel Auditor",
     ]);
   });
@@ -249,7 +249,7 @@ describe("the cold-cache fallback is per workspace too", () => {
       expect(view.result.current.home.loading).toBe(false);
     });
     expect(view.result.current.home.error).not.toBeNull();
-    expect(view.result.current.home.templates).toEqual([]);
+    expect(view.result.current.home.identities).toEqual([]);
 
     failingReads.delete(WS_HOME);
     rows[WS_HOME] = [];
@@ -261,9 +261,9 @@ describe("the cold-cache fallback is per workspace too", () => {
     // Reconcile declined (nothing to patch), so the invalidation `coldKeys`
     // named is the ONLY path this row has to the screen.
     await waitFor(() =>
-      expect(names(view.result.current.home.templates)).toEqual(["First Ever"])
+      expect(names(view.result.current.home.identities)).toEqual(["First Ever"])
     );
-    expect(names(view.result.current.container.templates)).toEqual([
+    expect(names(view.result.current.container.identities)).toEqual([
       "Channel Auditor",
     ]);
   });

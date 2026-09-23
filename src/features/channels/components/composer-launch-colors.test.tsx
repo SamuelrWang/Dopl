@@ -26,7 +26,7 @@
  *   - `agentColorsTaken`'s `state?:` widened back to a REQUIRED `state` (the union's rows carry
  *     none, so every row would have to be adapted at the call site) ........... typecheck red
  *
- * ⚠ `useThreadWrites` and the templates endpoint are MOCKED — this file is about ONE prop reaching
+ * ⚠ `useThreadWrites` and the identities endpoint are MOCKED — this file is about ONE prop reaching
  * ONE row, not about the write layer or the read.
  */
 
@@ -40,9 +40,9 @@ vi.mock("../hooks/use-thread-writes", () => ({
     pending: false,
   }),
 }));
-vi.mock("@/features/agent-templates/hooks/use-agent-templates", () => ({
-  useAgentTemplates: () => ({
-    templates: [],
+vi.mock("@/features/agent-identities/hooks/use-agent-identities", () => ({
+  useAgentIdentities: () => ({
+    identities: [],
     loading: false,
     error: null,
     resolved: true,
@@ -69,7 +69,7 @@ function launcher(): AgentLaunchControls {
     launchBusy: false,
     launchError: null,
     launchAgent: vi.fn().mockResolvedValue({ ok: true, agentId: MINTED }),
-    approveTemplate: vi.fn().mockResolvedValue({ ok: true }),
+    approveIdentity: vi.fn().mockResolvedValue({ ok: true }),
   };
 }
 

@@ -81,7 +81,7 @@ export function ComposerToolbar({
       {/* NEW AGENT — my own agent, on this machine, over the bridge. It posts nothing and sends
           no first message: the engine spawns it IDLE.
           ⚠ IT OPENS THE LAUNCH DIALOG (2026-08-27, Samuel), where it used to spawn a blank agent
-          on the click. **The chevron beside it went with that change** — the dialog's Template
+          on the click. **The chevron beside it went with that change** — the dialog's Identity
           row is the one way to pick an identity.
           ⚠ RENDERED ONLY WHERE IT CAN WORK. `canLaunch` is the bridge op's own detection
           (`agents-controls.ts › canLaunchAgents`) — never a button that can only refuse (F-212).

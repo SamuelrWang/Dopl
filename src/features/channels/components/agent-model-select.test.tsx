@@ -190,7 +190,7 @@ describe("the model vocabulary — one map, four surfaces", () => {
   /**
    * 🔒 **THE BACK-FILL IS WHAT REPLACED THE "Default" OPTION, SO IT IS THE PIN THAT
    * MATTERS NOW** (2026-09-06). Every surface that used to render the empty option
-   * — the launch panel, the template sheet, the live posture strip — resolves its
+   * — the launch panel, the identity sheet, the live posture strip — resolves its
    * value through this instead, and the invariant all three need is the same one:
    * **the answer is always a value `SelectMenu` can match.** An absent model
    * answers `AGENT_MODEL_FALLBACK`; an id this build predates answers AS ITSELF,

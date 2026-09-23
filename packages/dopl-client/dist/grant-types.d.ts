@@ -15,7 +15,7 @@
 /** Where a resource is lent. ⚠ Mirrors `resource_grants.scope_type`'s CHECK. */
 export type GrantScopeType = "channel" | "container" | "team";
 /** What may be lent. ⚠ Mirrors `resource_grants.resource_type`'s CHECK. */
-export type GrantResourceType = "knowledge_base" | "agent_template" | "skill" | "chat" | "chat_folder";
+export type GrantResourceType = "knowledge_base" | "agent_identity" | "skill" | "chat" | "chat_folder";
 /** ⚠ CHANNEL scopes only — `resource_grants_level_check`'s first arm. */
 export type ChannelGrantLevel = "agent_only" | "visible";
 /** ⚠ CONTAINER and TEAM scopes only — that CHECK's `ELSE` arm. */

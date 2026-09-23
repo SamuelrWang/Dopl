@@ -7,7 +7,7 @@
 // to. Those clocks had already come apart (the file was at 499 of its 500 lines with three
 // preferences and one record shape in it); U5 is the wave that made the record shape move.
 // `channel-prefs.js` re-exports every name below, so no caller moved — the same idiom
-// `orchestrator-consent.js` and `template-approval.js` set.
+// `orchestrator-consent.js` and `identity-approval.js` set.
 //
 // ── ⚠ WHY A RUNTIME-KEYED RECORD EXISTS AT ALL ───────────────────────────────────────────────
 //

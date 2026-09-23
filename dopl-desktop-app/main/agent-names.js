@@ -36,8 +36,8 @@ const MAX_NAME = 60;
  * WHAT THIS AGENT IS FOR, in the operator's own words (2026-08-27, Samuel's launch-panel
  * ruling). Written at launch beside the name and shown wherever the name shows.
  *
- * ⚠ 2000 IS `agent-templates/schema.ts › DescriptionSchema` (`safeOptionalProse("Template
- * description", 2000)`), DELIBERATELY. A template's description answers the same question about
+ * ⚠ 2000 IS `agent-identities/schema.ts › DescriptionSchema` (`safeOptionalProse("Identity
+ * description", 2000)`), DELIBERATELY. An identity's description answers the same question about
  * the same kind of thing — "what is this agent for" — and two caps on one question is how a
  * description that fits in one surface is refused by the next.
  *

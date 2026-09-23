@@ -6,7 +6,7 @@
  *   1. **HOME** — `container="home"`, or a connection bound to nothing. The
  *      caller's own personal container; `private` is the right value there.
  *   2. **A HOME CHANNEL** — created in that channel's container AND shared into
- *      the channel: `visibility: "workspace"` for a template, `shareToChannelId`
+ *      the channel: `visibility: "workspace"` for an identity, `shareToChannelId`
  *      for a knowledge base.
  *   3. 🚫 **PRIVATE AND UNGRANTED INSIDE A HOME CHANNEL** — no door reaches it.
  *
@@ -24,7 +24,7 @@
  */
 
 import { describe, it, expect, vi } from "vitest";
-import type { DoplClient, AgentTemplate, KnowledgeBase } from "@dopl/client";
+import type { DoplClient, AgentIdentity, KnowledgeBase } from "@dopl/client";
 
 import { opList } from "./agent-ops-read";
 import { opCreate } from "./agent-ops-write";
@@ -66,7 +66,7 @@ const CHANNELS = {
   ],
 };
 
-function template(over: Partial<AgentTemplate> = {}): AgentTemplate {
+function identity(over: Partial<AgentIdentity> = {}): AgentIdentity {
   return {
     id: "11111111-1111-4111-8111-111111111111",
     workspaceId: ROOM,
@@ -109,12 +109,12 @@ const textOf = (res: { content: Array<{ text: string }> }) =>
 
 describe("dopl_agent op=create — the two destinations", () => {
   function agentClient(over: Record<string, unknown> = {}) {
-    const createAgentTemplate = vi.fn(
+    const createAgentIdentity = vi.fn(
       async (body: { visibility?: string }) =>
-        template({ visibility: body.visibility as AgentTemplate["visibility"] }),
+        identity({ visibility: body.visibility as AgentIdentity["visibility"] }),
     );
     return {
-      createAgentTemplate,
+      createAgentIdentity,
       client: stub({
         getWorkspaceId: () => ROOM,
         // ⚠ A SOLO ROOM, so the confirm class does not fire and the DESTINATION
@@ -123,7 +123,7 @@ describe("dopl_agent op=create — the two destinations", () => {
         listWorkspaces: async () => ({
           workspaces: [{ id: ROOM, name: "Room", memberCount: 1 }],
         }),
-        createAgentTemplate,
+        createAgentIdentity,
         ...over,
       }) as DoplClient,
     };
@@ -132,7 +132,7 @@ describe("dopl_agent op=create — the two destinations", () => {
   it("🔒 A CHANNEL-BOUND CONNECTION, NO container= ANYWHERE — lands at destination 2", async () => {
     // ⚠ THE ORPHAN-MINTING SHAPE. Before 2026-09-18 this wrote `private` into
     // the channel's container, where nothing lists it.
-    const { client, createAgentTemplate } = agentClient();
+    const { client, createAgentIdentity } = agentClient();
     const res = await opCreate(
       client,
       ME,
@@ -140,27 +140,27 @@ describe("dopl_agent op=create — the two destinations", () => {
       ROOM_IS_CHANNEL,
     );
     expect(res.isError).toBeFalsy();
-    expect(createAgentTemplate).toHaveBeenCalledWith(
+    expect(createAgentIdentity).toHaveBeenCalledWith(
       expect.objectContaining({ visibility: "workspace" }),
     );
     expect(textOf(res)).toContain("Shared in this channel");
   });
 
   it("the HOME space keeps the `private` default — destination 1 is untouched", async () => {
-    const { client, createAgentTemplate } = agentClient({
+    const { client, createAgentIdentity } = agentClient({
       getWorkspaceId: () => HOME,
     });
     await opCreate(client, ME, { name: "Researcher" }, HOME_IS_PERSONAL);
-    expect(createAgentTemplate).toHaveBeenCalledWith(
+    expect(createAgentIdentity).toHaveBeenCalledWith(
       expect.objectContaining({ visibility: "private" }),
     );
   });
 
   it("🔒 A STANDARD WORKSPACE IS UNCHANGED — kind='workspace' is out of scope", async () => {
     // ⚠ Samuel scoped the ruling to the home space. A workspace lists its own
-    // private templates on its own Agents page, so there is no orphan there and
+    // private identities on its own Agents page, so there is no orphan there and
     // nothing for this to refuse.
-    const { client, createAgentTemplate } = agentClient({
+    const { client, createAgentIdentity } = agentClient({
       getWorkspaceId: () => "ws-standard",
     });
     await opCreate(
@@ -169,13 +169,13 @@ describe("dopl_agent op=create — the two destinations", () => {
       { name: "Researcher" },
       directory({ "ws-standard": "workspace" }),
     );
-    expect(createAgentTemplate).toHaveBeenCalledWith(
+    expect(createAgentIdentity).toHaveBeenCalledWith(
       expect.objectContaining({ visibility: "private" }),
     );
   });
 
   it("an EXPLICIT private inside a channel is refused, and nothing is sent", async () => {
-    const { client, createAgentTemplate } = agentClient();
+    const { client, createAgentIdentity } = agentClient();
     const res = await opCreate(
       client,
       ME,
@@ -183,7 +183,7 @@ describe("dopl_agent op=create — the two destinations", () => {
       ROOM_IS_CHANNEL,
     );
     expect(res.isError).toBe(true);
-    expect(createAgentTemplate).not.toHaveBeenCalled();
+    expect(createAgentIdentity).not.toHaveBeenCalled();
     // ⚠ BOTH DESTINATIONS NAMED. A refusal with no accepted value is a dead end
     // an agent retries verbatim.
     expect(textOf(res)).toContain('visibility="workspace"');
@@ -195,21 +195,21 @@ describe("dopl_agent op=create — the two destinations", () => {
     // to `workspace` inside a channel means the COMMON call now lands in the
     // publish class; the tripwire that shows an operator what is about to be
     // published into a peer's room must still run.
-    const { client, createAgentTemplate } = agentClient({
+    const { client, createAgentIdentity } = agentClient({
       listWorkspaces: async () => ({
         workspaces: [{ id: ROOM, name: "Room", memberCount: 2 }],
       }),
     });
     const res = await opCreate(client, ME, { name: "Researcher" }, ROOM_IS_CHANNEL);
     expect(res.isError).toBe(true);
-    expect(createAgentTemplate).not.toHaveBeenCalled();
+    expect(createAgentIdentity).not.toHaveBeenCalled();
     expect(textOf(res)).toContain("confirm_token");
   });
 
   it("🔓 FAILS OPEN when the directory cannot answer — the SERVER holds the refusal", async () => {
-    const { client, createAgentTemplate } = agentClient();
+    const { client, createAgentIdentity } = agentClient();
     await opCreate(client, ME, { name: "Researcher" }, directory({}));
-    expect(createAgentTemplate).toHaveBeenCalledWith(
+    expect(createAgentIdentity).toHaveBeenCalledWith(
       expect.objectContaining({ visibility: "private" }),
     );
   });
@@ -281,15 +281,15 @@ describe("dopl_kb op=create_base — the two destinations", () => {
 
 describe("op=list / op=list_bases — container first, then the audience", () => {
   it("dopl_agent groups the channel's rows, the LEGACY ones, and the home shelf", async () => {
-    const mine = template({ id: "22222222-2222-4222-8222-222222222222", name: "Mine", visibility: "private", workspaceId: HOME });
-    const orphan = template({ id: "33333333-3333-4333-8333-333333333333", name: "Orphan", visibility: "private" });
+    const mine = identity({ id: "22222222-2222-4222-8222-222222222222", name: "Mine", visibility: "private", workspaceId: HOME });
+    const orphan = identity({ id: "33333333-3333-4333-8333-333333333333", name: "Orphan", visibility: "private" });
     const text = textOf(
       await opList(
         stub({
           getWorkspaceId: () => ROOM,
-          listAgentTemplatesPayload: async () => ({
-            templates: [template(), orphan, mine],
-            homeScopedTemplateIds: [mine.id],
+          listAgentIdentitiesPayload: async () => ({
+            identities: [identity(), orphan, mine],
+            homeScopedIdentityIds: [mine.id],
           }),
         }) as DoplClient,
         ROOM_IS_CHANNEL,
@@ -308,9 +308,9 @@ describe("op=list / op=list_bases — container first, then the audience", () =>
       await opList(
         stub({
           getWorkspaceId: () => "ws-standard",
-          listAgentTemplatesPayload: async () => ({
-            templates: [template({ visibility: "private" })],
-            homeScopedTemplateIds: [],
+          listAgentIdentitiesPayload: async () => ({
+            identities: [identity({ visibility: "private" })],
+            homeScopedIdentityIds: [],
           }),
         }) as DoplClient,
         directory({ "ws-standard": "workspace" }),
@@ -350,13 +350,13 @@ describe("op=list / op=list_bases — container first, then the audience", () =>
 // ── 4. §8 — A STALE PAYLOAD IS A STATE, NOT A CRASH ─────────────────────────
 
 describe("🔒 §8 — a cached payload missing the sibling keys", () => {
-  it("dopl_agent: no `homeScopedTemplateIds` ⇒ no personal heading, no crash", async () => {
+  it("dopl_agent: no `homeScopedIdentityIds` ⇒ no personal heading, no crash", async () => {
     const text = textOf(
       await opList(
         stub({
           getWorkspaceId: () => ROOM,
           // ⚠ THE KEY IS ABSENT, not empty — a bundle that predates it.
-          listAgentTemplatesPayload: async () => ({ templates: [template()] }),
+          listAgentIdentitiesPayload: async () => ({ identities: [identity()] }),
         }) as DoplClient,
         ROOM_IS_CHANNEL,
       ),

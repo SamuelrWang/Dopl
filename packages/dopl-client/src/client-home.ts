@@ -10,14 +10,14 @@
  * kept because `client-surface.test.ts` pins them. See `home.ts`.
  */
 
-import { AgentTemplateMethods } from "./client-agent-templates.js";
+import { AgentIdentityMethods } from "./client-agent-identities.js";
 import * as home from "./home.js";
 import type {
   HomeChannelCreateResult,
   HomeChannelsPayload,
 } from "./home-types.js";
 
-export class HomeMethods extends AgentTemplateMethods {
+export class HomeMethods extends AgentIdentityMethods {
   getHomeChannels(): Promise<HomeChannelsPayload> {
     return home.getHomeChannels(this.transport);
   }

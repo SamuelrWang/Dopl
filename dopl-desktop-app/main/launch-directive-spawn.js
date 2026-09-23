@@ -46,22 +46,22 @@ const { diag } = require('./diag');
  *                 `launch-posture.js › resolveLaunch` is the clamp: asking is admitted, widening is
  *                 not, and the ceiling is still the operator's own record.
  *   windowless    literal `true`. There is one spawn shape.
- * The directive supplies `goal`, `model`, a TEMPLATE ID and — since T24 — a posture REQUEST and a
+ * The directive supplies `goal`, `model`, a IDENTITY ID and — since T24 — a posture REQUEST and a
  * chaining REQUEST. None reaches a permission decision unclamped, and a chain asked for where the
  * channel forbids it REFUSES rather than launching quietly narrower.
  *
- * THE TEMPLATE IS RESOLVED HERE AND ONLY HERE (2026-08-23). The row carries an ID and a NAME
- * SNAPSHOT; the CONTENT is fetched by THIS machine at claim time (`template-resolve.js ›
- * resolveTemplate`). Three deliberate consequences: the SECOND FENCE IS THE OPERATOR'S (the
- * orchestrator proved it could SEE the template, this proves the operator can — a `team` template
- * the operator is not in is created fine and refused here as `no-template`, fail-closed and
- * designed); `knowledgeBases` is VIEWER-FILTERED against whoever resolves, so a shared template
+ * THE IDENTITY IS RESOLVED HERE AND ONLY HERE (2026-08-23). The row carries an ID and a NAME
+ * SNAPSHOT; the CONTENT is fetched by THIS machine at claim time (`identity-resolve.js ›
+ * resolveAgentIdentity`). Three deliberate consequences: the SECOND FENCE IS THE OPERATOR'S (the
+ * orchestrator proved it could SEE the identity, this proves the operator can — a `team` identity
+ * the operator is not in is created fine and refused here as `no-identity`, fail-closed and
+ * designed); `knowledgeBases` is VIEWER-FILTERED against whoever resolves, so a shared identity
  * cannot launder access to a private base; and REFUSE, NEVER DEGRADE, because a blank agent wearing
  * no identity goes unnoticed.
  *
  * NO FIRST-USE APPROVAL ON THIS LANE — a ruling, not an omission (OQ-3). The button lane's one-modal
  * gate has no equivalent here: there is no human at the keyboard and the toggle already stands in
- * for the click, so `template-approval` has no producer here and is not in the wire vocabulary.
+ * for the click, so `identity-approval` has no producer here and is not in the wire vocabulary.
  *
  * `operatorArmed: true`, AND IT IS THE TOGGLE THAT EARNS IT. `startSession`'s FIX-4 guard refuses a
  * handed-in posture on a `parkedShell` unless a human armed it just now; here that human is the
@@ -113,7 +113,7 @@ const { diag } = require('./diag');
  * is already `no`, which is also right: nothing the caller does changes the answer.
  *
  * ⚠ **THE REGISTRY IS LAZY-REQUIRED**, the idiom this lane already uses for `./targeting` and
- * `./template-resolve`: `main/runtime/index.js` registers three adapters at load and the suites
+ * `./identity-resolve`: `main/runtime/index.js` registers three adapters at load and the suites
  * evaluate this module against stubbed leaves.
  */
 async function resolveRuntime(requested, channelId) {
@@ -162,7 +162,7 @@ function appliedRuntimeId(id) {
  * ⚠ **THE OLD CHAIN WAS CLAUDE'S, ON EVERY RUNTIME, AND THAT IS HALF THE ORIGINAL DEFECT.**
  * `sessionModel.chainModel` / `aliasForModelId` resolve against `session-model.js`'s FROZEN
  * CLAUDE TABLE, so on a Codex launch the directive's own `codex` id collapsed to `''` ("no
- * opinion") and the chain fell through to the TEMPLATE's and then the CHANNEL's model — both
+ * opinion") and the chain fell through to the IDENTITY's and then the CHANNEL's model — both
  * Claude ids — which were then handed to a non-Claude adapter.
  *
  * ⚠ **SO THE CHAIN IS NOW SCOPED TO THE DEFAULT (CLAUDE) ADAPTER, AND EVERY OTHER RUNTIME GETS
@@ -193,12 +193,12 @@ function appliedModelId(runtimeId, modelArg) {
   return modelArg || '';
 }
 
-async function resolveModel(runtimeId, d, template) {
+async function resolveModel(runtimeId, d, identity) {
   const registry = require('./runtime');
   let defaultId = '';
   try { defaultId = registry.DEFAULT_ID || ''; } catch (_err) { defaultId = ''; }
   // ⚠ THE DEFAULT ADAPTER KEEPS THE EXISTING CHAIN, BYTE FOR BYTE (spec §3c):
-  //   directive.model > template.model > channelPrefs.getLaunchModel > SDK default
+  //   directive.model > identity.model > channelPrefs.getLaunchModel > SDK default
   // Every link is `chainModel` — "a real pick, or '' meaning KEEP GOING" — INCLUDING the
   // directive's own (F-285). ⚠ SINCE 2026-09-22 AN UNRECOGNISED ID NO LONGER FALLS THROUGH: it
   // commits the chain and the funnel REFUSES it (`no-model`), because falling through is how an
@@ -211,7 +211,7 @@ async function resolveModel(runtimeId, d, template) {
     // form resolves the pick on ITS OWN runtime and still answers `''` for "keep going", which is
     // what every other link in this expression means.
     return sessionModel.chainModel(d.model)
-      || require('./session-launch-op').templateModel(sessionModel, template)
+      || require('./session-launch-op').identityModel(sessionModel, identity)
       || channelPrefs.getLaunchModelLink(d.channelId);
   }
   const asked = typeof d.model === 'string' ? d.model.trim() : '';
@@ -238,7 +238,7 @@ async function resolveModel(runtimeId, d, template) {
 
 async function spawn(d, deps) {
   // ⚠ **ANSWERED BEFORE ANY WORK, BESIDE THE CHAIN REFUSAL BELOW**, and for the same reason: an
-  // explicit runtime this machine cannot run is a REFUSAL, and a refusal that costs a template
+  // explicit runtime this machine cannot run is a REFUSAL, and a refusal that costs an identity
   // fetch and a spawn attempt first is a refusal the operator pays for.
   const runtime = await resolveRuntime(d.runtime, d.channelId);
   if (runtime.refused) return { refused: runtime.refused };
@@ -277,32 +277,32 @@ async function spawn(d, deps) {
   const targeting = require('./targeting');
   const channelLevel = d.taskId === '';
 
-  // ── THE TEMPLATE, UNDER THIS OPERATOR'S CREDENTIAL ─────────────────────────────────────
+  // ── THE IDENTITY, UNDER THIS OPERATOR'S CREDENTIAL ─────────────────────────────────────
   // ⚠ AFTER the watched-channel lookup and BEFORE `deps.launch` — the order IS the containment
-  // statement: the tool profile is already decided by the time any template text exists here.
-  let template = null;
-  if (d.templateId) {
-    const resolved = await require('./template-resolve').resolveTemplate(d.templateId, d.workspaceId);
-    // `resolved.reason` is already one of the wire words — `no-template` for a 404 (deleted,
+  // statement: the tool profile is already decided by the time any identity text exists here.
+  let identity = null;
+  if (d.identityId) {
+    const resolved = await require('./identity-resolve').resolveAgentIdentity(d.identityId, d.workspaceId);
+    // `resolved.reason` is already one of the wire words — `no-identity` for a 404 (deleted,
     // invisible to THIS operator, or IN ANOTHER TENANCY: `d.workspaceId` is the CHANNEL's container,
-    // so a template this operator owns elsewhere is ABSENT from that read), `busy` for a timeout,
+    // so an identity this operator owns elsewhere is ABSENT from that read), `busy` for a timeout,
     // network failure or 5xx. 404-never-403 makes the first two one answer and this machine must not
     // try to tell them apart. Passed through rather than re-mapped: `decideBody › refusalFor` is the
     // closed-vocabulary gate.
     if (!resolved.ok) return { refused: resolved.reason };
-    template = resolved.template;
-  } else if (d.templateName) {
-    // E-4 — THE DELETION SIGNAL, AND IT REFUSES WITHOUT A RESOLVE ATTEMPT. `template_id` is
-    // `ON DELETE SET NULL`, so a template deleted between CREATE and CLAIM leaves the id null and
+    identity = resolved.identity;
+  } else if (d.identityName) {
+    // E-4 — THE DELETION SIGNAL, AND IT REFUSES WITHOUT A RESOLVE ATTEMPT. `identity_id` is
+    // `ON DELETE SET NULL`, so an identity deleted between CREATE and CLAIM leaves the id null and
     // the NAME standing — which is why the server snapshots the name, since on the id alone this
-    // machine cannot tell "no template requested" from "template deleted".
-    diag('launch-directive: template deleted before claim —', String(d.templateName).slice(0, 40));
-    return { refused: 'no-template' };
+    // machine cannot tell "no identity requested" from "identity deleted".
+    diag('launch-directive: identity deleted before claim —', String(d.identityName).slice(0, 40));
+    return { refused: 'no-identity' };
   }
 
   // ⚠ **RESOLVED BEFORE THE MODEL, BECAUSE THE MODEL IS RESOLVED INSIDE IT** (U9). The old order
   // had no such dependency — there was one model table and it was Claude's.
-  const modelArg = await resolveModel(runtime.id, d, template);
+  const modelArg = await resolveModel(runtime.id, d, identity);
   const res = await deps.launch({
     channelId: d.channelId,
     taskId: d.taskId,
@@ -328,13 +328,13 @@ async function spawn(d, deps) {
       taskId: d.taskId,
       scope: channelLevel ? 'channel' : 'thread',
       workspaceSegment: null,
-      // THE RESOLVED TEMPLATE, CAPTURED AT SPAWN AND NEVER RE-READ. The SAME `context.template` key
+      // THE RESOLVED IDENTITY, CAPTURED AT SPAWN AND NEVER RE-READ. The SAME `context.identity` key
       // the button lane uses, so this costs zero funnel changes: one resolution point, two lanes,
-      // one consumer (`prompt-framing-template.js › templateRoleFraming`). A session keeping its
-      // spawn-time template content FALLS OUT rather than being enforced — the role block is built
-      // at WAKE from what was captured here, so a template edited or deleted afterwards neither
+      // one consumer (`prompt-framing-agent-identity.js › identityRoleFraming`). A session keeping its
+      // spawn-time identity content FALLS OUT rather than being enforced — the role block is built
+      // at WAKE from what was captured here, so an identity edited or deleted afterwards neither
       // changes nor stops this session (E-1 / E-2). `null` when none was named.
-      template,
+      identity,
     },
     // THE CHANNEL'S PROFILE, NARROWED FOR A SHARED ROOM (2026-09-02, ruling B7). The READ is
     // unchanged and is still MAIN's own full server DTO; what is new is one NARROWING, which can

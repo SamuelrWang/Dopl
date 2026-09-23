@@ -1,5 +1,5 @@
 /**
- * `GET|POST /api/agent-templates`. What is under test is the COMPOSITION, not
+ * `GET|POST /api/agent-identities`. What is under test is the COMPOSITION, not
  * the service: auth is mocked at the wrapper so the wrapper's own configuration
  * (`minRole`, and the ABSENCE of `sessionOnly`) is assertable as part of the
  * contract. Same idiom as `knowledge/bases/[baseId]/star/route.test.ts`.
@@ -34,31 +34,31 @@ vi.mock("@/shared/auth/with-workspace-auth", () => ({
     },
 }));
 
-vi.mock("@/features/agent-templates/server/service", () => ({
-  buildAgentTemplateContext: (auth: WorkspaceAuthContext) => ({
+vi.mock("@/features/agent-identities/server/service", () => ({
+  buildAgentIdentityContext: (auth: WorkspaceAuthContext) => ({
     workspaceId: auth.workspaceId,
     userId: auth.userId,
     source: "user",
     role: auth.role,
     apiKeyWorkspaceId: auth.apiKeyWorkspaceId,
   }),
-  listTemplates: vi.fn(),
-  listHomeScopedTemplateIds: vi.fn(),
-  createTemplate: vi.fn(),
+  listIdentities: vi.fn(),
+  listHomeScopedIdentityIds: vi.fn(),
+  createIdentity: vi.fn(),
 }));
 
 import { GET, POST } from "./route";
 import {
-  createTemplate,
-  listHomeScopedTemplateIds,
-  listTemplates,
-} from "@/features/agent-templates/server/service";
+  createIdentity,
+  listHomeScopedIdentityIds,
+  listIdentities,
+} from "@/features/agent-identities/server/service";
 
-const mockList = vi.mocked(listTemplates);
-const mockCreate = vi.mocked(createTemplate);
-const mockHomeScoped = vi.mocked(listHomeScopedTemplateIds);
+const mockList = vi.mocked(listIdentities);
+const mockCreate = vi.mocked(createIdentity);
+const mockHomeScoped = vi.mocked(listHomeScopedIdentityIds);
 
-const TEMPLATE = {
+const IDENTITY = {
   id: "3f2504e0-4f89-41d3-9a0c-0305e82c3301",
   workspaceId: "ws-1",
   name: "Researcher",
@@ -75,13 +75,13 @@ const TEMPLATE = {
 };
 
 function shelfReq(shelf: string): NextRequest {
-  return new NextRequest(`http://localhost/api/agent-templates?shelf=${shelf}`, {
+  return new NextRequest(`http://localhost/api/agent-identities?shelf=${shelf}`, {
     method: "GET",
   });
 }
 
 function req(method: string, body?: unknown): NextRequest {
-  return new NextRequest("http://localhost/api/agent-templates", {
+  return new NextRequest("http://localhost/api/agent-identities", {
     method,
     ...(body === undefined
       ? {}
@@ -92,46 +92,46 @@ function req(method: string, body?: unknown): NextRequest {
 beforeEach(() => {
   vi.clearAllMocks();
   wrapperOptions.length = 0;
-  mockList.mockResolvedValue([TEMPLATE]);
+  mockList.mockResolvedValue([IDENTITY]);
   mockHomeScoped.mockResolvedValue([]);
-  mockCreate.mockResolvedValue(TEMPLATE);
+  mockCreate.mockResolvedValue(IDENTITY);
 });
 
-describe("GET /api/agent-templates", () => {
-  it("returns `{ templates }` with each row carrying its VISIBILITY", async () => {
+describe("GET /api/agent-identities", () => {
+  it("returns `{ identities }` with each row carrying its VISIBILITY", async () => {
     const res = await GET(req("GET"), { params: Promise.resolve({}) });
     expect(res.status).toBe(200);
     const body = await res.json();
     // The client groups on this field; a payload without it forces a second
     // call or a grouping decision made server-side for every consumer.
-    expect(body.templates[0].visibility).toBe("workspace");
+    expect(body.identities[0].visibility).toBe("workspace");
   });
 
-  it("folds homeScopedTemplateIds in as a SIBLING KEY, never onto the row", async () => {
-    // 🔒 `home_scoped` stays out of `server/dto.ts › AGENT_TEMPLATE_COLS` so the
+  it("folds homeScopedIdentityIds in as a SIBLING KEY, never onto the row", async () => {
+    // 🔒 `home_scoped` stays out of `server/dto.ts › AGENT_IDENTITY_COLS` so the
     // cached row payload gains no key and §8's stale-cache rule has nothing to
     // apply to THERE. It applies to this key instead.
-    mockHomeScoped.mockResolvedValue([TEMPLATE.id]);
+    mockHomeScoped.mockResolvedValue([IDENTITY.id]);
 
     const res = await GET(req("GET"), { params: Promise.resolve({}) });
     const body = await res.json();
-    expect(body.homeScopedTemplateIds).toEqual([TEMPLATE.id]);
-    expect(mockHomeScoped).toHaveBeenCalledWith(expect.anything(), [TEMPLATE]);
-    expect("homeScoped" in body.templates[0]).toBe(false);
-    expect("shelf" in body.templates[0]).toBe(false);
+    expect(body.homeScopedIdentityIds).toEqual([IDENTITY.id]);
+    expect(mockHomeScoped).toHaveBeenCalledWith(expect.anything(), [IDENTITY]);
+    expect("homeScoped" in body.identities[0]).toBe(false);
+    expect("shelf" in body.identities[0]).toBe(false);
   });
 
   it("degrades a shelf-flag failure to [] — UNLABELLED, never mislabelled", async () => {
     // ⚠ The roster is the answer; the label is decoration over it. `[]` is what
     // every surface showed before the key existed, and the unsafe direction
-    // (calling a workspace template personal) is unreachable.
+    // (calling a workspace identity personal) is unreachable.
     mockHomeScoped.mockRejectedValue(new Error("flag read down"));
 
     const res = await GET(req("GET"), { params: Promise.resolve({}) });
     expect(res.status).toBe(200);
     const body = await res.json();
-    expect(body.homeScopedTemplateIds).toEqual([]);
-    expect(body.templates).toHaveLength(1);
+    expect(body.homeScopedIdentityIds).toEqual([]);
+    expect(body.identities).toHaveLength(1);
   });
 
   it("reads at VIEWER — the default, so no options are passed", async () => {
@@ -140,11 +140,11 @@ describe("GET /api/agent-templates", () => {
   });
 });
 
-describe("POST /api/agent-templates", () => {
-  it("creates and answers 201 with `{ template }`", async () => {
+describe("POST /api/agent-identities", () => {
+  it("creates and answers 201 with `{ identity }`", async () => {
     const res = await POST(req("POST", { name: "Researcher" }), { params: Promise.resolve({}) });
     expect(res.status).toBe(201);
-    expect(await res.json()).toEqual({ template: TEMPLATE });
+    expect(await res.json()).toEqual({ identity: IDENTITY });
     expect(mockCreate).toHaveBeenCalledWith(
       expect.objectContaining({ workspaceId: "ws-1", userId: "user-1" }),
       { name: "Researcher" }
@@ -156,7 +156,7 @@ describe("POST /api/agent-templates", () => {
     expect(wrapperOptions.at(-1)).toMatchObject({ minRole: "member" });
   });
 
-  it("is NOT sessionOnly — an orchestrator agent authoring a template is the feature", async () => {
+  it("is NOT sessionOnly — an orchestrator agent authoring an identity is the feature", async () => {
     await POST(req("POST", { name: "R" }), { params: Promise.resolve({}) });
     expect(wrapperOptions.at(-1)).not.toHaveProperty("sessionOnly");
   });
@@ -173,10 +173,10 @@ describe("POST /api/agent-templates", () => {
   });
 
   it("maps a domain error to its own status, not a 500", async () => {
-    const { TemplateKnowledgeBaseNotFoundError } = await import(
-      "@/features/agent-templates/server/errors"
+    const { IdentityKnowledgeBaseNotFoundError } = await import(
+      "@/features/agent-identities/server/errors"
     );
-    mockCreate.mockRejectedValue(new TemplateKnowledgeBaseNotFoundError(["kb-x"]));
+    mockCreate.mockRejectedValue(new IdentityKnowledgeBaseNotFoundError(["kb-x"]));
     const res = await POST(req("POST", { name: "R" }), { params: Promise.resolve({}) });
     expect(res.status).toBe(404);
     const body = await res.json();
@@ -187,17 +187,17 @@ describe("POST /api/agent-templates", () => {
 
 /**
  * 🔒 `?shelf=` — WHICH SHELF (Samuel's ruling 2026-08-27;
- * `features/agent-templates/types.ts › TemplateShelf`).
+ * `features/agent-identities/types.ts › IdentityShelf`).
  *
  * ⚠ THE MIXED-LIST QUESTION, ANSWERED AT THE ROUTE. A request that ASKED for a
  * shelf must never be answered with both — and the dangerous shape is the
  * MISSPELLING, not the happy path. Absent means "no filter" for compatibility
- * (the launch picker, `resolveTemplateRef`, MCP), so a route that shrugged at
+ * (the launch picker, `resolveIdentityRef`, MCP), so a route that shrugged at
  * `?shelf=hom` would silently serve the WIDER list to a caller that was trying
  * to narrow, and it would look like it worked. There is no client-side fallback:
  * `home_scoped` is never projected.
  */
-describe("GET /api/agent-templates?shelf=", () => {
+describe("GET /api/agent-identities?shelf=", () => {
   it("passes a recognised shelf DOWN to the service", async () => {
     await GET(shelfReq("home"), { params: Promise.resolve({}) });
     expect(mockList).toHaveBeenCalledWith(expect.anything(), { shelf: "home" });

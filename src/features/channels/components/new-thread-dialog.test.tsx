@@ -41,10 +41,10 @@ vi.mock("../hooks/use-thread-writes", () => ({
   }),
 }));
 
-// ⚠ IN THE GRAPH, NOT UNDER ASSERTION — `composer.tsx` imports the template picker
+// ⚠ IN THE GRAPH, NOT UNDER ASSERTION — `composer.tsx` imports the identity picker
 // unconditionally. `composer.test.tsx` mocks it for the same reason.
-vi.mock("@/features/agent-templates/hooks/use-agent-templates", () => ({
-  useAgentTemplates: () => ({ templates: [], loading: false, error: null, refetch: () => {} }),
+vi.mock("@/features/agent-identities/hooks/use-agent-identities", () => ({
+  useAgentIdentities: () => ({ identities: [], loading: false, error: null, refetch: () => {} }),
 }));
 
 import { useState } from "react";

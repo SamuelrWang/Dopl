@@ -35,9 +35,9 @@ const { noteEvent, detailFor, endReasonFor } = require('./session-detail'); // �
 // projection, one answer. The reasoning is `agent-names.js`'s own header.
 const { displayNameFor, descriptionForAgent } = require('./agent-names');
 const { diag } = require('./diag');
-// `displayText` and `TEMPLATE_NAME_MAX` moved out on 2026-09-13 (`session-summary-text.js`), a
+// `displayText` and `IDENTITY_NAME_MAX` moved out on 2026-09-13 (`session-summary-text.js`), a
 // split forced by the 500-line cap. Injected by the harness like the rest.
-const { displayText, TEMPLATE_NAME_MAX } = require('./session-summary-text'); const { heldGatesFor } = require('./session-held-gates'); // ⚠ THE SECOND REQUIRE SHARES THIS LINE BECAUSE THE FILE IS AT THE §1 CAP: `heldGatesFor` (2026-09-17) projects WHAT A HELD CALL IS ASKING off the reducer's own `pendingPermissions` — never a second opinion about what is live — and takes no requires of its own precisely so this file's source-extraction harness keeps loading
+const { displayText, IDENTITY_NAME_MAX } = require('./session-summary-text'); const { heldGatesFor } = require('./session-held-gates'); // ⚠ THE SECOND REQUIRE SHARES THIS LINE BECAUSE THE FILE IS AT THE §1 CAP: `heldGatesFor` (2026-09-17) projects WHAT A HELD CALL IS ASKING off the reducer's own `pendingPermissions` — never a second opinion about what is live — and takes no requires of its own precisely so this file's source-extraction harness keeps loading
 
 // ─── BEGIN SESSION-SUMMARY-PURE (injectable; unit-tested via source extraction) ──────
 // The names above are free vars from here down.
@@ -113,12 +113,12 @@ function liveSummary(s, name) {
     model: (s && s.liveModel) || modelPick(s),
     channelName: displayText(ctx.channelName),
     threadTitle: displayText(ctx.taskTitle),
-    // SPAWN-TIME, AND IT CANNOT MOVE. `context.template` is captured once at spawn
+    // SPAWN-TIME, AND IT CANNOT MOVE. `context.identity` is captured once at spawn
     // (`session-launch-op.js`) and never re-resolved, which is what makes it free to carry in the
     // STATE half of the server digest rather than the quantized churn half.
-    templateName: displayText(ctx.template && ctx.template.name, TEMPLATE_NAME_MAX),
+    identityName: displayText(ctx.identity && ctx.identity.name, IDENTITY_NAME_MAX),
     // THE AGENT COLOUR — the key this session ASKED for, not the one it was granted (Samuel,
-    // 2026-09-13; docs/specs/agent-colors.md). An IDENTITY like `templateName`, quantization-exempt
+    // 2026-09-13; docs/specs/agent-colors.md). An IDENTITY like `identityName`, quantization-exempt
     // and on `session-telemetry.js › STATE_FIELDS` so a change PUSHES. `reportRow` had read
     // `e.color` since the colours wave while the summary carried none, so every push asked for
     // nothing. No bound and no sanitizer: a CLOSED SET, membership-tested at the two boundaries
@@ -191,7 +191,7 @@ function endedSummary(e, name) {
     threadTitle: displayText(e && e.threadTitle),
     // ⚠ FROZEN AT SETTLE (`session-teardown.js`): an ended session must still report what it
     // RAN AS, and reading null here would push a row that ERASES the name.
-    templateName: displayText(e && e.templateName, TEMPLATE_NAME_MAX),
+    identityName: displayText(e && e.identityName, IDENTITY_NAME_MAX),
     contextUsed: metricOrNull(e && e.contextUsed),
     contextWindow: metricOrNull(e && e.contextWindow),
     tokensSpent: metricOrNull(e && e.tokensSpent),

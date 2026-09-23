@@ -112,7 +112,7 @@ directory) {
     // destinations are two CONTAINERS, and inside a home channel the only question
     // left is whether the row is shared into it.
     // ⚠ THE HEADINGS ARE `container-destination.ts › DESTINATION_HEADINGS`, the
-    // same table the template lane reads its own wording from — two surfaces
+    // same table the identity lane reads its own wording from — two surfaces
     // naming one destination differently is how an agent learns a sharing model
     // the operator does not have.
     // ⚠ **EACH GROUP CARRIES THE ROW LABEL AS WELL AS THE HEADING (S21/S23,

@@ -108,14 +108,14 @@ export const CHROME_ROW = "h-[44px]";
  * 🔒 **ONE TYPE RECIPE FOR A TAB LABEL AND A RAIL ROW** (*"For the font, I think it should be the
  * smaller one"*).
  *
- * ⚠ **THE REJECTED CANDIDATE WAS `TEMPLATE_NAME_TEXT`** (`agent-templates/components/
- * template-section.tsx`, `text-title` = 14px) — the face Samuel named for /home's headings on the
+ * ⚠ **THE REJECTED CANDIDATE WAS `IDENTITY_NAME_TEXT`** (`agent-identities/components/
+ * identity-section.tsx`, `text-title` = 14px) — the face Samuel named for /home's headings on the
  * same day. He ruled it too big HERE: a tab label and a rail row are ROWS, not headings, so this is
  * `text-body` (12.5px, the scale's "row titles" step — `docs/DESIGN-SYSTEM.md` › Type scale).
  *
  * ⚠ **SIZE AND WEIGHT ONLY — THE INK IS STATE AND STAYS AT THE CALL SITE.** An active tab is
  * `text-text-primary` and an idle one `text-text-secondary`; baking either in would make one of the
- * two impossible to express without fighting this constant (the mistake `TEMPLATE_NAME_TEXT_LG`'s
+ * two impossible to express without fighting this constant (the mistake `IDENTITY_NAME_TEXT_LG`'s
  * docblock records at its own call site).
  */
 export const AGENT_NAME_TEXT = "text-body font-normal";
@@ -126,7 +126,7 @@ export const AGENT_NAME_TEXT = "text-body font-normal";
  *
  * ⚠ **THIS NARROWS THE 2026-09-13 "ONE TYPE RECIPE FOR A TAB LABEL AND A RAIL ROW" EQUALITY TO THE
  * SIZE, AND ONLY TO THE SIZE.** `text-body` is still the shared step — the ruling that rejected
- * `TEMPLATE_NAME_TEXT`'s 14px face stands — and the rail row keeps {@link AGENT_NAME_TEXT}'s
+ * `IDENTITY_NAME_TEXT`'s 14px face stands — and the rail row keeps {@link AGENT_NAME_TEXT}'s
  * regular weight.
  * ⚠ **A SECOND CONSTANT RATHER THAN `font-semibold` BESIDE `AGENT_NAME_TEXT` AT THE CALL SITE.**
  * Both are `font-weight` utilities, so which one wins is Tailwind's EMIT order and not the class

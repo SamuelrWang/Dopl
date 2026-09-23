@@ -14,8 +14,8 @@
 // THE OPS HERE, and why each is bound:
 //
 //   sessions:launch          ⚠ STARTS a windowless session on my own thread
-//   sessions:approveTemplate records this machine's first-use approval of ANOTHER
-//                            member's agent template; starts nothing, grants no tool
+//   sessions:approveIdentity records this machine's first-use approval of ANOTHER
+//                            member's agent identity; starts nothing, grants no tool
 //   sessions:reopen          opens the AGENT WINDOW on a live session (starts no query)
 //   sessions:openAgentWindow (F-212) opens the AGENT window on one of my own agents
 //   sessions:setMode         moves a LIVE session's two permission axes — supervision, not
@@ -91,20 +91,20 @@ function register(opts = {}) {
   // It returns an ADDRESS, `{ ok: true, agentId }`, and STARTS NOTHING — the session is registered
   // idle and its query launches on the first message for that agent. Refusals on this lane, as
   // words the SPA renders: `cap`, `busy`, `no-sdk`, `auth-hold`, `disabled`, and since 2026-08-22
-  // `no-template` and `template-approval`. `template-approval` is an IPC word ONLY and must not
+  // `no-identity` and `identity-approval`. `identity-approval` is an IPC word ONLY and must not
   // join the `channel_launch_directives` refusal vocabulary: the directive lane has no human at the
   // keyboard and `orchestratorLaunchEnabled` stands in for the click there (OQ-3).
   ipcMain.handle('sessions:launch', appWindowOnly('sessions:launch', { ok: false }, (_event, payload) => (
     require('./session-launch-op').launchFromButton(payload)
   )));
 
-  // FIRST-USE APPROVAL FOR ANOTHER MEMBER'S AGENT TEMPLATE (2026-08-22, OQ-3). It records a
+  // FIRST-USE APPROVAL FOR ANOTHER MEMBER'S AGENT IDENTITY (2026-08-22, OQ-3). It records a
   // MACHINE-LOCAL decision and starts nothing; it grants no tool, widens no axis and touches no
-  // containment input — it decides only whether a foreign template's TEXT may become an agent's
+  // containment input — it decides only whether a foreign identity's TEXT may become an agent's
   // role on this Mac. The store is unreachable from any Dopl endpoint, deliberately: a
   // server-writable approval lets a credential-holding agent pre-approve itself everywhere.
-  ipcMain.handle('sessions:approveTemplate', appWindowOnly('sessions:approveTemplate', { ok: false }, (_event, payload) => (
-    require('./session-launch-op').approveTemplate(payload)
+  ipcMain.handle('sessions:approveIdentity', appWindowOnly('sessions:approveIdentity', { ok: false }, (_event, payload) => (
+    require('./session-launch-op').approveIdentity(payload)
   )));
 
   // FORGET EVERY LOCAL TRACE OF THIS THREAD'S ENDED AGENTS (2026-08-22, Samuel's ended-agent

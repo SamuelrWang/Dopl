@@ -1,20 +1,20 @@
 /**
- * `op="manage" action="launch"` — **THE TEMPLATE REF, AND THE FOUR THINGS A MISS CAN MEAN.**
+ * `op="manage" action="launch"` — **THE IDENTITY REF, AND THE FOUR THINGS A MISS CAN MEAN.**
  *
  * ⚠ SPLIT OUT OF `channel-ops-launch.test.ts` ON 2026-09-01, AT THE 500-LINE CAP
  * AND ON A REAL SEAM. That file drives the op's FOUR TERMINAL SHAPES (offline,
  * launched, refused, pending); this one drives the ONE argument whose failure
  * modes are a subject of their own — and they move on different clocks, this one
- * when agent-template tenancy does.
+ * when agent-identity tenancy does.
  *
  * THE TWO PROPERTIES EVERY CASE HERE SERVES:
  *
  *   1. **AN AMBIGUOUS NAME REFUSES AND LISTS, AND NEVER PICKS.**
- *      `agent_templates` has no name uniqueness on purpose, so two visible
+ *      `agent_identities` has no name uniqueness on purpose, so two visible
  *      "Researcher"s is a legitimate state and every tie-break silently starts
  *      an identity the caller did not choose.
  *   2. **A MISS NAMES THE RULE, AND NAMES A PLACE ONLY WHEN THE SERVER DID.**
- *      "No such template" and "not shared with you" are ONE answer here, or the
+ *      "No such identity" and "not shared with you" are ONE answer here, or the
  *      refusal is an id probe (T35). `details.elsewhere` is the single exception,
  *      and it is not a crack in that: the server produces it only over rows the
  *      caller could already list for themselves.
@@ -42,7 +42,7 @@ function client(over: Record<string, unknown> = {}): DoplClient {
 const apiError = (status: number, code: string, details?: unknown) =>
   Object.assign(new Error(code), { status, code, details });
 
-describe("the template ref", () => {
+describe("the identity ref", () => {
   it("an AMBIGUOUS name is refused and EVERY match is listed with its id and visibility", async () => {
     // ⚠ REFUSES AND LISTS, NEVER PICKS. Names are deliberately not unique — a
     // unique index across a visibility boundary would leak the existence of a
@@ -51,7 +51,7 @@ describe("the template ref", () => {
     const res = await opLaunchAgent(
       client({
         createLaunchDirective: vi.fn(async () => {
-          throw apiError(409, "AGENT_TEMPLATE_AMBIGUOUS", {
+          throw apiError(409, "AGENT_IDENTITY_AMBIGUOUS", {
             matches: [
               { id: "t-1", name: "Researcher", visibility: "private" },
               { id: "t-2", name: "Researcher", visibility: "workspace" },
@@ -60,7 +60,7 @@ describe("the template ref", () => {
         }),
       }),
       "general",
-      { name: "Scout", template: "Researcher" },
+      { name: "Scout", identity: "Researcher" },
     );
     const out = res.content[0].text as string;
     expect(res.isError).toBe(true);
@@ -75,17 +75,17 @@ describe("the template ref", () => {
     expect(out).not.toContain("still PENDING");
   });
 
-  it("an UNRESOLVABLE template says so, and never says whether it EXISTS", async () => {
-    // ⚠ 404-never-403 all the way down: "no such template" and "not shared with
+  it("an UNRESOLVABLE identity says so, and never says whether it EXISTS", async () => {
+    // ⚠ 404-never-403 all the way down: "no such identity" and "not shared with
     // you" are ONE answer, or the refusal becomes an id-probe.
     const res = await opLaunchAgent(
       client({
         createLaunchDirective: vi.fn(async () => {
-          throw apiError(404, "AGENT_TEMPLATE_NOT_FOUND");
+          throw apiError(404, "AGENT_IDENTITY_NOT_FOUND");
         }),
       }),
       "general",
-      { name: "Scout", template: "Ghost" },
+      { name: "Scout", identity: "Ghost" },
     );
     const out = res.content[0].text as string;
     expect(res.isError).toBe(true);
@@ -100,13 +100,13 @@ describe("the template ref", () => {
     expect(out).toContain("CHECK THE TENANCY BEFORE THE SPELLING");
     expect(out).toContain("a home channel IS its own container");
     // ⚠ AND WITH NO `details.elsewhere` IT NAMES NO PLACE. This is the arm that
-    // covers "no such template" AND "somebody else's, not yours to see", and
+    // covers "no such identity" AND "somebody else's, not yours to see", and
     // those must stay ONE answer or the refusal becomes an id probe.
     expect(out).toContain("ONE answer here on purpose");
     expect(out).not.toContain("not in this channel's own container");
   });
 
-  it("a template that lives in ANOTHER tenancy of the caller's is NAMED, with the place (T35)", async () => {
+  it("an identity that lives in ANOTHER tenancy of the caller's is NAMED, with the place (T35)", async () => {
     // ⚠ THE MISS THAT IS NOT A MYSTERY. `details.elsewhere` is produced ONLY for
     // a row this caller could already list for themselves — their own, or
     // `workspace`-visible, in a workspace they belong to — so naming the place
@@ -115,13 +115,13 @@ describe("the template ref", () => {
     const out = (await opLaunchAgent(
       client({
         createLaunchDirective: vi.fn(async () => {
-          throw apiError(404, "AGENT_TEMPLATE_NOT_FOUND", {
+          throw apiError(404, "AGENT_IDENTITY_NOT_FOUND", {
             elsewhere: { name: "Code Auditor", label: "your personal shelf" },
           });
         }),
       }),
       "general",
-      { name: "Scout", template: "Code Auditor" },
+      { name: "Scout", identity: "Code Auditor" },
     )).content[0].text as string;
     expect(out).toContain("`Code Auditor`");
     expect(out).toContain("lives in `your personal shelf`, not in this channel's own container");
@@ -134,20 +134,20 @@ describe("the template ref", () => {
     expect(out).not.toContain("ONE answer here on purpose");
   });
 
-  it("ANOTHER MEMBER'S private template elsewhere is never named — the arm simply does not fire", async () => {
+  it("ANOTHER MEMBER'S private identity elsewhere is never named — the arm simply does not fire", async () => {
     // 🔒 THE PROPERTY, PINNED AT THIS END TOO. The classifier answers over the
     // caller's OWN rows and `workspace`-visible ones only
-    // (`agent-templates/server/service-resolve-ref.ts › classifyMissingTemplateRef`),
-    // so a stranger's private template produces NO `details.elsewhere` in any
+    // (`agent-identities/server/service-resolve-ref.ts › classifyMissingIdentityRef`),
+    // so a stranger's private identity produces NO `details.elsewhere` in any
     // workspace — and this surface has no other way to invent one.
     const out = (await opLaunchAgent(
       client({
         createLaunchDirective: vi.fn(async () => {
-          throw apiError(404, "AGENT_TEMPLATE_NOT_FOUND", { elsewhere: null });
+          throw apiError(404, "AGENT_IDENTITY_NOT_FOUND", { elsewhere: null });
         }),
       }),
       "general",
-      { name: "Scout", template: "Someone Elses Auditor" },
+      { name: "Scout", identity: "Someone Elses Auditor" },
     )).content[0].text as string;
     expect(out).toContain("ONE answer here on purpose");
     expect(out).not.toContain("not in this channel's own container");
@@ -161,11 +161,11 @@ describe("the template ref", () => {
       const out = (await opLaunchAgent(
         client({
           createLaunchDirective: vi.fn(async () => {
-            throw apiError(404, "AGENT_TEMPLATE_NOT_FOUND", { elsewhere: bad });
+            throw apiError(404, "AGENT_IDENTITY_NOT_FOUND", { elsewhere: bad });
           }),
         }),
         "general",
-        { name: "Scout", template: "Ghost" },
+        { name: "Scout", identity: "Ghost" },
       )).content[0].text as string;
       expect(out, JSON.stringify(bad)).toContain("ONE answer here on purpose");
       expect(out, JSON.stringify(bad)).not.toContain("not in this channel's own container");

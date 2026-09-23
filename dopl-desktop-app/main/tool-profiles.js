@@ -80,11 +80,11 @@ const DOPL_SAFE_TOOLS = [
   'mcp__dopl__dopl_skill',
   'mcp__dopl__dopl_ontology',
   'mcp__dopl__dopl_chats',
-  // AGENT TEMPLATES (2026-08-28, MCP surface v2 wave A). ⚠ SAFE-LIST placement is
+  // AGENT IDENTITIES (2026-08-28, MCP surface v2 wave A). ⚠ SAFE-LIST placement is
   // by the same rule `dopl_kb` and `dopl_skill` sit here under: it authors rows in
   // the workspace, which a restricted spawn may already do, and it POSTS NOTHING —
   // the exfil surface is `dopl_channel`, which stays out (and denied). Authoring a
-  // template starts no agent either: that is `dopl_channel(op="manage", action="launch")`.
+  // identity starts no agent either: that is `dopl_channel(op="manage", action="launch")`.
   'mcp__dopl__dopl_agent',
   // THE ORCHESTRATOR'S CHECK-IN (2026-09-01, agent-efficiency wave T20). ⚠ SAFE-LIST
   // placement, and the rule it sits under is the strictest one on this list: it is a

@@ -137,8 +137,8 @@ test("EMPTY is an answer, not a refusal — that is how one op both sets and cle
   assert.equal(pure.sanitizeDescription(42), null);
 });
 
-test("the bound is MAX_DESCRIPTION, and it is the template schema's own number", () => {
-  // ⚠ 2000 MIRRORS `agent-templates/schema.ts › DescriptionSchema`. A template's description
+test("the bound is MAX_DESCRIPTION, and it is the identity schema's own number", () => {
+  // ⚠ 2000 MIRRORS `agent-identities/schema.ts › DescriptionSchema`. An identity's description
   // answers the same question about the same kind of thing, and two caps on one question is how
   // a description that fits one surface is refused by the next.
   assert.equal(pure.MAX_DESCRIPTION, 2000);

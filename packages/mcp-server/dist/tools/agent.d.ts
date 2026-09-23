@@ -1,8 +1,8 @@
 /**
- * `dopl_agent` — AGENT TEMPLATES, the persistent agent IDENTITIES a user authors
+ * `dopl_agent` — AGENT IDENTITIES, the persistent agent IDENTITIES a user authors
  * once and launches many times. ⚠ There is no delete op and no
  * `dopl_agent_admin` (deleted 2026-09-02) — deletion is app-only, and
- * `DELETE /api/agent-templates/{id}` has been `sessionOnly` since 2026-08-22.
+ * `DELETE /api/agent-identities/{id}` has been `sessionOnly` since 2026-08-22.
  *
  * ⚠ THE NAME IS A DELIBERATE COLLISION, RESOLVED BY SAMUEL (ruling Q7,
  * 2026-08-28). "Agents" already names TWO surfaces — the identities on /home and

@@ -87,9 +87,9 @@ export const APP_OPS = [
   "orchestratorLaunch.set",
   "passwordSignIn",
   "sendMagicLink",
-  // 2026-08-22 (OQ-3): `sessions.approveTemplate` records THIS MACHINE's first-use approval of
-  // ANOTHER member's template. It starts nothing and grants nothing — it decides only whether a
-  // foreign template's TEXT may become an agent's role here, and a launch from an approved template
+  // 2026-08-22 (OQ-3): `sessions.approveIdentity` records THIS MACHINE's first-use approval of
+  // ANOTHER member's identity. It starts nothing and grants nothing — it decides only whether a
+  // foreign identity's TEXT may become an agent's role here, and a launch from an approved identity
   // is contained exactly like any other. The store is machine-local because a SERVER-writable
   // approval would let a credential-holding agent pre-approve itself across the fleet.
   // 2026-09-17 (Samuel's inline-approval ruling): `sessions.answerPermission` carries the operator's
@@ -99,7 +99,7 @@ export const APP_OPS = [
   // no resolver at all, so a hard-denied tool cannot be made to run here. EXACTLY ONCE is proved by
   // the resolver map, not a flag: `session-permissions.js › resolvePerm` deletes as it answers.
   "sessions.answerPermission",
-  "sessions.approveTemplate",
+  "sessions.approveIdentity",
   // 2026-08-25 (Samuel's delete ruling): `sessions.delete` — a STOP VERB plus a LOCAL ERASE. A live
   // session ends through the SAME reducer event `sessions:end` dispatches (one stop path, never
   // two), then the local stores keyed to that agent are dropped. IT REACHES NO `channel_messages`:

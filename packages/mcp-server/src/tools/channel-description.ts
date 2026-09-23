@@ -85,7 +85,7 @@ export { DESCRIPTION_MAX_CHARS } from "./tool-style";
  * ⚠ THREE FACTS, IN THE ORDER AN AGENT NEEDS THEM: the ADDRESSING (two args,
  * always, and `channel=` alone will not do), the DISCOVERY (`dopl_workspaces`, which is
  * where both ids come from), and the TENANCY (the container is what every other
- * tool reads, so a template or base has to live in it). Each was a measured
+ * tool reads, so an identity or base has to live in it). Each was a measured
  * misread in the orchestration run this tier came out of; the third is the one
  * that sends an agent to `channel-ops-launch.ts`'s refusal.
  *
@@ -110,7 +110,7 @@ export { DESCRIPTION_MAX_CHARS } from "./tool-style";
  * ⚠ It is ~250 characters shorter and teaches the same three things. A FOURTH
  * fact arriving here is the drift to watch for; the wording is not.
  */
-export const HOME_CHANNEL_ADDRESSING = `A HOME CHANNEL IS NOT A WORKSPACE DM: it lives in its own hidden container, so every op needs \`container=<slug or id>\` ALONGSIDE \`channel=\` — a bare \`channel=\` finds none, and they are absent from the room list. A Home template or base works here: address it by ID — a NAME resolves only in the container named.`;
+export const HOME_CHANNEL_ADDRESSING = `A HOME CHANNEL IS NOT A WORKSPACE DM: it lives in its own hidden container, so every op needs \`container=<slug or id>\` ALONGSIDE \`channel=\` — a bare \`channel=\` finds none, and they are absent from the room list. A Home identity or base works here: address it by ID — a NAME resolves only in the container named.`;
 
 export const CHANNEL_DESCRIPTION = composeDescription({
   // ⚠ THE DENIAL IS IN THE FIRST SENTENCE because a truncating client keeps only

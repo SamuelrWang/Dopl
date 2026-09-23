@@ -130,45 +130,45 @@ test("C7: the rest of the resume spec is unchanged (ids, counterparty, resume id
   assert.equal(spec.context.authorName, "David");
 });
 
-// ── ⚠ F-288 — THE TEMPLATE IDENTITY SURVIVES A CRASH RESUME ──────────────────────────────
+// ── ⚠ F-288 — THE IDENTITY IDENTITY SURVIVES A CRASH RESUME ──────────────────────────────
 //
 // ⚠ **THE HALF `resumeParked` DOES NOT COVER, AND THE DOC SAID IT DID.** INVARIANTS §5A justified
-// template survival on the grounds that a park/resume "works IN PLACE and never rewrites
+// identity survival on the grounds that a park/resume "works IN PLACE and never rewrites
 // `s.context`" — true of `resumeParked`, and false of `startResume`, which is a full
 // re-`startSession` off a durable record. So a CRASH resume rebuilt the context from
-// `contextFromRecord`, which named five keys and no template: `session-summary.js › liveSummary`
-// reported `templateName: null`, `templateName` is in `session-telemetry.js › STATE_FIELDS` (so
+// `contextFromRecord`, which named five keys and no identity: `session-summary.js › liveSummary`
+// reported `identityName: null`, `identityName` is in `session-telemetry.js › STATE_FIELDS` (so
 // the change bypassed the cadence floor and pushed at once), and `repository-sessions.ts ›
 // sessionRowMatches` saw a changed row and wrote NULL over the name — under a still-running agent
 // whose orchestrator was reading it in `read_sessions` to tell six agents apart.
 //
 // ⚠ A NAME-ONLY STUB IS THE WHOLE FIX. Nothing after spawn reads `instructions` / `fields` /
-// `knowledgeBases`: their one consumer is `prompt-framing-template.js › templateRoleFraming` via
+// `knowledgeBases`: their one consumer is `prompt-framing-agent-identity.js › identityRoleFraming` via
 // the one-shot `session-seed.js › takeFraming`, and `session-engine.js` sets `freshFraming` false
 // whenever `resumeSdkId` is present — which `startResume` always passes. The SDK's own resume
 // carries the original ROLE block.
-test("F-288: a crash resume rehydrates `context.template` as a name-only stub", async () => {
+test("F-288: a crash resume rehydrates `context.identity` as a name-only stub", async () => {
   const h = harness();
-  await h.startResume({ ...REC, templateName: "Contract Auditor" }, "sdk-1", "continue");
+  await h.startResume({ ...REC, identityName: "Contract Auditor" }, "sdk-1", "continue");
   const ctx = h.started[0].context;
-  assert.deepEqual(ctx.template, { name: "Contract Auditor" },
-    "the resumed session must report the template it was launched from, not null");
+  assert.deepEqual(ctx.identity, { name: "Contract Auditor" },
+    "the resumed session must report the identity it was launched from, not null");
   // ⚠ THE READER'S OWN EXPRESSION, so this pins the shape `liveSummary` actually asks for rather
   // than a shape that merely looks right here.
-  assert.equal(ctx.template && ctx.template.name, "Contract Auditor");
+  assert.equal(ctx.identity && ctx.identity.name, "Contract Auditor");
   // …and the body is deliberately NOT persisted or rehydrated.
   for (const k of ["instructions", "fields", "knowledgeBases", "authoredByCaller", "model"]) {
-    assert.equal(k in ctx.template, false, `${k} must not be rebuilt from disk`);
+    assert.equal(k in ctx.identity, false, `${k} must not be rebuilt from disk`);
   }
 });
 
-test("F-288: a record with NO template resumes with `template: null`, not undefined", async () => {
-  // ⚠ NULL, NOT ABSENT: `session-launch-op.js` puts `template: null` on a blank launch too, and a
+test("F-288: a record with NO identity resumes with `identity: null`, not undefined", async () => {
+  // ⚠ NULL, NOT ABSENT: `session-launch-op.js` puts `identity: null` on a blank launch too, and a
   // consumer that had to tell "absent" from "null" would be a consumer with two paths for one
   // state (the durable whitelist's own stated rule).
   const h = harness();
   await h.startResume(REC, "sdk-1", "continue");
-  assert.equal(h.started[0].context.template, null);
+  assert.equal(h.started[0].context.identity, null);
 });
 
 // ⚠ REWRITTEN, NOT REMOVED — the section it shared a test with is what went.

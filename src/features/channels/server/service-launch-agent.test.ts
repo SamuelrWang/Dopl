@@ -34,12 +34,12 @@ vi.mock("./service-shared", async (importOriginal) => {
   const actual = await importOriginal<typeof import("./service-shared")>();
   return { ...actual, loadVisibleChannel: vi.fn() };
 });
-// ⚠ MOCKED THOUGH THIS FILE NAMES NO TEMPLATE: `service-launch-agent.ts` imports
-// `operatorIsOnline` from `service-launch.ts`, which pulls the agent-templates
+// ⚠ MOCKED THOUGH THIS FILE NAMES NO IDENTITY: `service-launch-agent.ts` imports
+// `operatorIsOnline` from `service-launch.ts`, which pulls the agent-identities
 // barrel at module scope — `server-only`, with a live Supabase admin client under
 // it. The same mock `service-launch.test.ts` carries, for the same reason.
-vi.mock("@/features/agent-templates/server/service", () => ({
-  resolveTemplateRef: vi.fn(),
+vi.mock("@/features/agent-identities/server/service", () => ({
+  resolveIdentityRef: vi.fn(),
 }));
 
 import * as launchRepo from "./repository-launch";
@@ -80,8 +80,8 @@ function row(over: Record<string, unknown> = {}) {
     operator_user_id: ME,
     goal: null,
     model: null,
-    template_id: null,
-    template_name: null,
+    identity_id: null,
+    identity_name: null,
     target_agent_id: AGENT,
     target_name: null,
     status: "pending",
@@ -236,7 +236,7 @@ describe("createAgentDirective — the cross-member refusal", () => {
 
   it("checks ownership BEFORE presence — a foreign id is answerable with every machine asleep",
     async () => {
-      // ⚠ THIS BREAKS THE CHEAPNESS ORDER ON PURPOSE, the same way the template
+      // ⚠ THIS BREAKS THE CHEAPNESS ORDER ON PURPOSE, the same way the identity
       // gate does one file over. `offline` is a 200 meaning "nothing was asked" and
       // is the ordinary answer for a closed laptop; answering a PEER'S AGENT ID
       // with "your machine is asleep" sends the caller to fix the wrong thing and

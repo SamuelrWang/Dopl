@@ -36,7 +36,7 @@ export function mapSkillError(err: unknown): HttpError | null {
   }
   // 🔒 G16 — 400, not 403: the caller is ALLOWED to publish, the REQUEST is
   // incomplete. Same mapping as `knowledge/server/http-mapping.ts` and
-  // `agent-templates/server/http-mapping.ts`, because one error class answering
+  // `agent-identities/server/http-mapping.ts`, because one error class answering
   // three different statuses is how a remedy stops being actionable.
   if (err instanceof ContainerPublishUnacknowledgedError) {
     return new HttpError(400, "CONTAINER_PUBLISH_UNACKNOWLEDGED", err.message);

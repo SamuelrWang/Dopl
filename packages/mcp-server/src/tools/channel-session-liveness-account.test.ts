@@ -53,7 +53,7 @@ function rich(
     tokensSpent: 41_233,
     startedAt: new Date(NOW - 12 * 60_000).toISOString(),
     lastActivityAt: new Date(NOW - 30_000).toISOString(),
-    templateName: null,
+    identityName: null,
     ...over,
   };
 }
@@ -136,10 +136,10 @@ describe("the ACCOUNT-WIDE status renders the same rows as the per-channel one",
   const cases: Array<[string, ChannelSessionStateOwn]> = [
     ["the full rich row", rich()],
     [
-      "no template, suffixed model — the observed shape",
+      "no identity, suffixed model — the observed shape",
       rich({ model: "claude-opus-5[1m]" }),
     ],
-    ["a template AND a model", rich({ templateName: "Code Auditor" })],
+    ["an identity AND a model", rich({ identityName: "Code Auditor" })],
     [
       "every telemetry field absent — an older desktop",
       rich({

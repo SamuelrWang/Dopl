@@ -1,5 +1,5 @@
 /**
- * THE `op="manage" action="launch"` SHAPE FIELDS — `model`, `template`, `color`, `posture`.
+ * THE `op="manage" action="launch"` SHAPE FIELDS — `model`, `identity`, `color`, `posture`.
  *
  * ⚠ **ITS OWN MODULE BECAUSE `channel-schema.ts` WAS OVER THE 500-LINE CAP** (§1; the
  * `size-check` CI job and `max-lines` in `eslint.config.mjs`, F-689), and this is the seam
@@ -41,7 +41,7 @@ export declare const LAUNCH_INPUT_FIELDS: {
      * machine cannot start comes back REFUSED, never quietly launched on another vendor.
      */
     runtime: z.ZodOptional<z.ZodString>;
-    template: z.ZodOptional<z.ZodString>;
+    identity: z.ZodOptional<z.ZodString>;
     color: z.ZodOptional<z.ZodEnum<{
         "agent-01": "agent-01";
         "agent-02": "agent-02";

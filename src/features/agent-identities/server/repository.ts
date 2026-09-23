@@ -3,19 +3,19 @@ import { supabaseAdmin } from "@/shared/supabase/admin";
 import { readClient } from "@/shared/supabase/caller-client";
 import { personalWriteWorkspaceId, resolveShelfScope } from "@/shared/tenancy/personal-container";
 import type {
-  AgentTemplate,
-  TemplateField,
-  TemplateShelf,
-  TemplateVisibility,
+  AgentIdentity,
+  IdentityField,
+  IdentityShelf,
+  IdentityVisibility,
 } from "../types";
 import {
-  AGENT_TEMPLATE_COLS,
-  mapAgentTemplateRow,
-  type AgentTemplateRow,
+  AGENT_IDENTITY_COLS,
+  mapAgentIdentityRow,
+  type AgentIdentityRow,
 } from "./dto";
 
 /**
- * Raw I/O for agent templates and their two junctions.
+ * Raw I/O for agent identities and their two junctions.
  *
  * 🔒 TWO CLIENTS, AND WHICH ONE A FUNCTION TAKES IS THE WHOLE OF RLS PHASE 2
  * (Wave B B12); `knowledge/server/repository-bases.ts` states the same split for
@@ -26,10 +26,10 @@ import {
  * directly). With the flag on those become the SAME path, which is the point.
  *
  *   * **A read that answers "what may this caller see" takes `readClient()`,**
- *     and the row filter becomes `agent_templates_member_select` →
- *     `can_current_user_read_agent_template()`, repaired in
+ *     and the row filter becomes `agent_identities_member_select` →
+ *     `can_current_user_read_agent_identity()`, repaired in
  *     `20260921120000_rls_phase2_policies` to equal `service-shared.ts ›
- *     canSeeTemplate` — including arm 2, the shared-credential arm the SQL did
+ *     canSeeIdentity` — including arm 2, the shared-credential arm the SQL did
  *     not have.
  *   * **A read of a table this slice does NOT cover keeps `supabaseAdmin()`**
  *     and says so at the call site. `team_members` and `teams` are not among the
@@ -39,13 +39,13 @@ import {
  *     until RLS plan phase 4, `workspaceId` filter and all.
  */
 
-// ─── Templates ──────────────────────────────────────────────────────────
+// ─── Identities ──────────────────────────────────────────────────────────
 
 /**
- * One workspace's templates, optionally narrowed to ONE SHELF.
+ * One workspace's identities, optionally narrowed to ONE SHELF.
  *
  * ⚠ `shelf` UNDEFINED IS "NO FILTER", NOT A DEFAULT SHELF. Every caller that
- * omits it means the whole workspace: the launch picker, `resolveTemplateRef`,
+ * omits it means the whole workspace: the launch picker, `resolveIdentityRef`,
  * and MCP all ride the unfiltered path.
  *
  * ⚠ **THE SHELF IS A TENANCY, NOT A `WHERE` (2026-09-02, slice B15)** — the
@@ -53,88 +53,88 @@ import {
  * which carries the argument. `shelf="home"` is the caller's PERSONAL CONTAINER,
  * decided by `shared/tenancy/personal-container.ts › resolveShelfScope`.
  */
-export async function listTemplatesForWorkspace(
+export async function listIdentitiesForWorkspace(
   workspaceId: string,
-  shelf?: TemplateShelf
-): Promise<AgentTemplate[]> {
+  shelf?: IdentityShelf
+): Promise<AgentIdentity[]> {
   const db = readClient();
   const scope = await resolveShelfScope(workspaceId, shelf);
   const { data, error } = await db
-    .from("agent_templates")
-    .select(AGENT_TEMPLATE_COLS)
+    .from("agent_identities")
+    .select(AGENT_IDENTITY_COLS)
     .in("workspace_id", scope.workspaceIds)
-    // Matches `agent_templates_workspace_name_idx`. Name order, not created
+    // Matches `agent_identities_workspace_name_idx`. Name order, not created
     // order: the client groups by visibility and renders alphabetically inside
     // each group, so the server hands back the order it will display in.
     .order("name", { ascending: true });
   if (error) throw error;
-  return ((data ?? []) as unknown as AgentTemplateRow[]).map((r) =>
-    mapAgentTemplateRow(r)
+  return ((data ?? []) as unknown as AgentIdentityRow[]).map((r) =>
+    mapAgentIdentityRow(r)
   );
 }
 
 /**
- * WHICH of `templateIds` are on the caller's PERSONAL shelf — the fold behind
- * `GET /api/agent-templates › homeScopedTemplateIds` (2026-08-28).
+ * WHICH of `identityIds` are on the caller's PERSONAL shelf — the fold behind
+ * `GET /api/agent-identities › homeScopedIdentityIds` (2026-08-28).
  *
  * ⚠ **A TENANCY QUESTION SINCE 2026-09-02 (slice B15).** It selected the
  * `home_scoped` flag; the column is dropped and the question is "is this row in
  * my personal container". The answer set and the sibling key are unchanged — ids
  * the caller was ALREADY shown, labelled, never a new column on the row.
  *
- * ⚠ CALLERS MUST PASS THE POST-VISIBILITY LIST. This applies no `canSeeTemplate`
+ * ⚠ CALLERS MUST PASS THE POST-VISIBILITY LIST. This applies no `canSeeIdentity`
  * of its own; the id set IS the fence, the same contract
  * `knowledge/server/repository-bases.ts › listHomeScopedBaseIds` keeps.
  *
  * ⚠ THE SAME RESOLVER THE LIST USES: a second spelling of "is this row personal"
  * is how a label comes to disagree with the list it labels.
  */
-export async function listHomeScopedTemplateIds(
+export async function listHomeScopedIdentityIds(
   workspaceId: string,
-  templateIds: string[]
+  identityIds: string[]
 ): Promise<string[]> {
-  if (templateIds.length === 0) return [];
+  if (identityIds.length === 0) return [];
   const scope = await resolveShelfScope(workspaceId, "home");
   if (scope.workspaceIds.length === 0) return [];
   const { data, error } = await readClient()
-    .from("agent_templates")
+    .from("agent_identities")
     .select("id")
     .in("workspace_id", scope.workspaceIds)
-    .in("id", templateIds);
+    .in("id", identityIds);
   if (error) throw error;
   return ((data ?? []) as unknown as Array<{ id: string }>).map((r) => r.id);
 }
 
-export async function findTemplateById(
+export async function findIdentityById(
   workspaceId: string,
   id: string
-): Promise<AgentTemplate | null> {
+): Promise<AgentIdentity | null> {
   const db = readClient();
   const { data, error } = await db
-    .from("agent_templates")
-    .select(AGENT_TEMPLATE_COLS)
+    .from("agent_identities")
+    .select(AGENT_IDENTITY_COLS)
     .eq("workspace_id", workspaceId)
     .eq("id", id)
     .maybeSingle();
   if (error) throw error;
   return data
-    ? mapAgentTemplateRow(data as unknown as AgentTemplateRow)
+    ? mapAgentIdentityRow(data as unknown as AgentIdentityRow)
     : null;
 }
 
-export interface InsertTemplateArgs {
+export interface InsertIdentityArgs {
   workspaceId: string;
   name: string;
   description: string | null;
   instructions: string | null;
   model: string | null;
-  fields: TemplateField[];
-  visibility: TemplateVisibility;
+  fields: IdentityField[];
+  visibility: IdentityVisibility;
   /**
-   * WHICH SHELF (`../types.ts › TemplateShelf`). ⚠ **A ROUTING FLAG, NOT A
+   * WHICH SHELF (`../types.ts › IdentityShelf`). ⚠ **A ROUTING FLAG, NOT A
    * COLUMN, SINCE 2026-09-02 (slice B15)** — it decides the row's `workspace_id`
    * and nothing stores it. Absent = the container the call is in, so every
-   * existing caller is unchanged; only `createTemplate` ever passes `true`.
+   * existing caller is unchanged; only `createIdentity` ever passes `true`.
    */
   homeScoped?: boolean;
   createdBy: string | null;
@@ -146,13 +146,13 @@ export interface InsertTemplateArgs {
  * ⚠ Resolved BEFORE the chain, never inline in the insert literal — an `await`
  * between `.from()` and `.insert()` interleaves a second query into the builder.
  */
-export async function insertTemplate(
-  args: InsertTemplateArgs
-): Promise<AgentTemplate> {
+export async function insertIdentity(
+  args: InsertIdentityArgs
+): Promise<AgentIdentity> {
   const db = supabaseAdmin();
   const workspaceId = await personalWriteWorkspaceId(args);
   const { data, error } = await db
-    .from("agent_templates")
+    .from("agent_identities")
     .insert({
       workspace_id: workspaceId,
       name: args.name,
@@ -163,30 +163,30 @@ export async function insertTemplate(
       visibility: args.visibility,
       created_by: args.createdBy,
     })
-    .select(AGENT_TEMPLATE_COLS)
+    .select(AGENT_IDENTITY_COLS)
     .single();
   if (error || !data) {
-    throw error || new Error("Failed to insert agent template");
+    throw error || new Error("Failed to insert agent identity");
   }
-  return mapAgentTemplateRow(data as unknown as AgentTemplateRow);
+  return mapAgentIdentityRow(data as unknown as AgentIdentityRow);
 }
 
 /** ⚠ `undefined` = leave the column alone, `null` = clear it. The service
  *  translates an absent PATCH key into `undefined`; both reach here. */
-export interface UpdateTemplatePatch {
+export interface UpdateIdentityPatch {
   name?: string;
   description?: string | null;
   instructions?: string | null;
   model?: string | null;
-  fields?: TemplateField[];
+  fields?: IdentityField[];
   /** ⚠ The repo trusts whatever it gets — the service decides who may
    *  re-scope, exactly as `updateSkillRow` documents. */
-  visibility?: TemplateVisibility;
+  visibility?: IdentityVisibility;
 }
 
 /**
  * ⚠ **THE PRECONDITION IS A `WHERE` CLAUSE, NOT A READ-THEN-COMPARE** (F-747,
- * 2026-09-18). The service already holds `existing` from `getTemplateForWrite`,
+ * 2026-09-18). The service already holds `existing` from `getIdentityForWrite`,
  * so `existing.updatedAt !== expected → 412` is four lines away — and it is
  * CHECK-THEN-ACT: a write landing between that read and this UPDATE passes it.
  * Shipping that under the name `expected_version`, on a surface where the KB
@@ -195,23 +195,23 @@ export interface UpdateTemplatePatch {
  * the `.eq("updated_at", …)` and the `null` return are that function's, by
  * construction rather than by resemblance.
  */
-export async function updateTemplateRow(
+export async function updateIdentityRow(
   workspaceId: string,
   id: string,
-  patch: UpdateTemplatePatch
-): Promise<AgentTemplate>;
-export async function updateTemplateRow(
+  patch: UpdateIdentityPatch
+): Promise<AgentIdentity>;
+export async function updateIdentityRow(
   workspaceId: string,
   id: string,
-  patch: UpdateTemplatePatch,
+  patch: UpdateIdentityPatch,
   expectedUpdatedAt: string | undefined
-): Promise<AgentTemplate | null>;
-export async function updateTemplateRow(
+): Promise<AgentIdentity | null>;
+export async function updateIdentityRow(
   workspaceId: string,
   id: string,
-  patch: UpdateTemplatePatch,
+  patch: UpdateIdentityPatch,
   expectedUpdatedAt?: string
-): Promise<AgentTemplate | null> {
+): Promise<AgentIdentity | null> {
   const db = supabaseAdmin();
   const update: Record<string, unknown> = {};
   if (patch.name !== undefined) update.name = patch.name;
@@ -221,7 +221,7 @@ export async function updateTemplateRow(
   if (patch.fields !== undefined) update.fields = patch.fields;
   if (patch.visibility !== undefined) update.visibility = patch.visibility;
   // ⚠ NO `updated_at` HERE. §12: it is stamped by
-  // `agent_templates_touch_updated_at`, so a writer that sets it by hand is
+  // `agent_identities_touch_updated_at`, so a writer that sets it by hand is
   // fighting the trigger.
   //
   // ⚠ THE EMPTY PATCH IS A READ, NOT A WRITE (F-404, 2026-09-02). This used to
@@ -241,8 +241,8 @@ export async function updateTemplateRow(
   // the second thing the old comment was right to want to avoid.
   const query = (
     Object.keys(update).length === 0
-      ? db.from("agent_templates").select(AGENT_TEMPLATE_COLS)
-      : db.from("agent_templates").update(update).select(AGENT_TEMPLATE_COLS)
+      ? db.from("agent_identities").select(AGENT_IDENTITY_COLS)
+      : db.from("agent_identities").update(update).select(AGENT_IDENTITY_COLS)
   )
     .eq("workspace_id", workspaceId)
     .eq("id", id);
@@ -260,9 +260,9 @@ export async function updateTemplateRow(
     // ⚠ `null`, NEVER A THROW, when a precondition was given: zero rows is the
     // CAS losing the race, which is a 412 the service words — not a failure.
     if (expectedUpdatedAt !== undefined) return null;
-    throw new Error("Failed to update agent template");
+    throw new Error("Failed to update agent identity");
   }
-  return mapAgentTemplateRow(data as unknown as AgentTemplateRow);
+  return mapAgentIdentityRow(data as unknown as AgentIdentityRow);
 }
 
 /**
@@ -272,16 +272,16 @@ export async function updateTemplateRow(
  * ⚠ THE TEAM LINKAGE NO LONGER DOES, AND THAT IS WHY THE TRIGGER EXISTS. Since
  * `20260914120000` the team link is a `resource_grants` row whose `resource_id`
  * is POLYMORPHIC and carries no foreign key, so nothing cascades — the
- * `resource_grants_cleanup` AFTER DELETE trigger on `agent_templates` is what
+ * `resource_grants_cleanup` AFTER DELETE trigger on `agent_identities` is what
  * purges it, exactly as every other grantable type has had for its own rows.
  */
-export async function hardDeleteTemplate(
+export async function hardDeleteIdentity(
   workspaceId: string,
   id: string
 ): Promise<void> {
   const db = supabaseAdmin();
   const { error } = await db
-    .from("agent_templates")
+    .from("agent_identities")
     .delete()
     .eq("workspace_id", workspaceId)
     .eq("id", id);
@@ -298,34 +298,34 @@ export async function hardDeleteTemplate(
  * DELETES — another lane's rows.
  *
  * ⚠ `20260915120000_drop_agent_template_teams.sql` retired the dedicated
- * junction. **Team visibility on a template did not change**: `visibility='team'`
+ * junction. **Team visibility on an identity did not change**: `visibility='team'`
  * still means "members of a linked team", the links are still a replace-set, and
  * writes are still creator-or-workspace-admin. `20260822200000` §2 split the
  * junction off the polymorphic table because its `level` would always be
  * `'read'` (F-277) — it still is, and now a CHECK says so.
  */
-const TEMPLATE_TEAM_GRANT = {
+const IDENTITY_TEAM_GRANT = {
   scope_type: "team",
-  resource_type: "agent_template",
+  resource_type: "agent_identity",
 } as const;
 
-/** Team links for many templates in ONE query — fixed query count per request
- *  regardless of how many templates are team-scoped. */
-export async function listTeamLinksForTemplates(
+/** Team links for many identities in ONE query — fixed query count per request
+ *  regardless of how many identities are team-scoped. */
+export async function listTeamLinksForIdentities(
   workspaceId: string,
-  templateIds: string[]
-): Promise<Array<{ templateId: string; teamId: string }>> {
-  if (templateIds.length === 0) return [];
+  identityIds: string[]
+): Promise<Array<{ identityId: string; teamId: string }>> {
+  if (identityIds.length === 0) return [];
   const db = readClient();
   const { data, error } = await db
     .from("resource_grants")
     .select("resource_id, scope_id")
-    .match({ workspace_id: workspaceId, ...TEMPLATE_TEAM_GRANT })
-    .in("resource_id", templateIds);
+    .match({ workspace_id: workspaceId, ...IDENTITY_TEAM_GRANT })
+    .in("resource_id", identityIds);
   if (error) throw error;
   return (
     (data ?? []) as Array<{ resource_id: string; scope_id: string }>
-  ).map((r) => ({ templateId: r.resource_id, teamId: r.scope_id }));
+  ).map((r) => ({ identityId: r.resource_id, teamId: r.scope_id }));
 }
 
 /** REPLACE-SET: clear, then insert. ⚠ Not a diff — two clients editing the
@@ -334,7 +334,7 @@ export async function listTeamLinksForTemplates(
  *  reconciliation. */
 export async function replaceTeamLinks(
   workspaceId: string,
-  templateId: string,
+  identityId: string,
   teamIds: string[],
   grantedBy: string | null
 ): Promise<void> {
@@ -344,18 +344,18 @@ export async function replaceTeamLinks(
     .delete()
     .match({
       workspace_id: workspaceId,
-      resource_id: templateId,
-      ...TEMPLATE_TEAM_GRANT,
+      resource_id: identityId,
+      ...IDENTITY_TEAM_GRANT,
     });
   if (del.error) throw del.error;
   if (teamIds.length === 0) return;
   const { error } = await db.from("resource_grants").insert(
     [...new Set(teamIds)].map((teamId) => ({
-      ...TEMPLATE_TEAM_GRANT,
+      ...IDENTITY_TEAM_GRANT,
       scope_id: teamId,
-      resource_id: templateId,
+      resource_id: identityId,
       workspace_id: workspaceId,
-      // A template team link has no edit concept; the CHECK admits read|edit on
+      // An identity team link has no edit concept; the CHECK admits read|edit on
       // a team scope and the write path stays creator-or-admin.
       level: "read",
       // 🔒 The GRANTOR `enforce_resource_grant()` judges, carried over verbatim
@@ -417,7 +417,7 @@ export async function filterTeamIdsInWorkspace(
 // marked section rather than shave a comment. Every name below still resolves
 // through `repository.ts`, so no caller changed.
 export {
-  listKnowledgeLinksForTemplates,
+  listKnowledgeLinksForIdentities,
   replaceKnowledgeLinks,
   listKnowledgeBaseAccessRows,
   listKnowledgeBaseTeamGrants,
@@ -426,5 +426,5 @@ export {
   type KnowledgeBaseAccessRow,
   type KnowledgeFolderRow,
   type KnowledgeEntryRow,
-  type TemplateKnowledgeLinkRow,
+  type IdentityKnowledgeLinkRow,
 } from "./repository-knowledge-links";

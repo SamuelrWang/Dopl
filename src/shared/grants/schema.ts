@@ -23,7 +23,7 @@ export const GRANT_SCOPE_TYPES = ["channel", "container", "team"] as const;
 
 export const GRANT_RESOURCE_TYPES = [
   "knowledge_base",
-  "agent_template",
+  "agent_identity",
   "skill",
   "chat",
   "chat_folder",

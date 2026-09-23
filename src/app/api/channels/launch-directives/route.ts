@@ -57,11 +57,11 @@ async function handlePost(request: NextRequest, auth: WorkspaceAuthContext) {
       // (`no-sdk`) rather than swapped for another vendor. Absent follows the documented chain.
       runtime: input.runtime,
       // ⚠ A REF (id OR exact name), resolved in the service under THIS caller's
-      // visibility. An ambiguous name is a 409 `AGENT_TEMPLATE_AMBIGUOUS` whose
+      // visibility. An ambiguous name is a 409 `AGENT_IDENTITY_AMBIGUOUS` whose
       // `details.matches` lists every row the caller can already see; an
-      // unresolvable one is a 404 `AGENT_TEMPLATE_NOT_FOUND`, the same code and
-      // the same shape `/api/agent-templates/[id]/resolve` answers.
-      template: input.template,
+      // unresolvable one is a 404 `AGENT_IDENTITY_NOT_FOUND`, the same code and
+      // the same shape `/api/agent-identities/[id]/resolve` answers.
+      identity: input.identity,
       // ⚠ **THE POSTURE IS PASSED THROUGH AND IS NOT A GRANT** (T24, 2026-09-01).
       // The two axes and the chain are a REQUEST: the operator's machine clamps
       // each axis to that operator's own stored channel posture and REFUSES a

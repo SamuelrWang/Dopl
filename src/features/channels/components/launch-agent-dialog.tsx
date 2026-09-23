@@ -8,7 +8,7 @@
  * *"Right now, as you can see it is like a slide out panel thingy. Im thinking to scrap that and
  * unwire it from the text input bar, and instead, make it a pop up panel … instead of a box
  * though, it would be an underline … the user would click on the line, and the line will turn
- * from gray to black, in an animation that makes it turn color from left to right … for template,
+ * from gray to black, in an animation that makes it turn color from left to right … for identity,
  * instead of a dropdown, I think it should be a selector … and for model … a pill like selector …
  * Make the dimensions that of the 30px."*
  *
@@ -31,24 +31,24 @@
  * ── ⚠ **IT IS THE ONE LAUNCH FORM, AND `launch-sheet.tsx` IS DELETED (2026-09-13)** ──────────
  *
  * Samuel, over the old "Launch — Coder" sheet: *"the popup should essentially be the same as that
- * of a normal agent launch, except the template is pre-selected, and any options/descriptions …
- * instead of the popup saying New Agent, it should say New (name of template) Agent."* So a
- * template launch OPENS THIS DIALOG preselected (`use-agent-launch.ts › openWithTemplate`, from
- * `agent-templates/components/template-picker.tsx`) and the sheet's three jobs live here: its model
+ * of a normal agent launch, except the identity is pre-selected, and any options/descriptions …
+ * instead of the popup saying New Agent, it should say New (name of identity) Agent."* So a
+ * identity launch OPENS THIS DIALOG preselected (`use-agent-launch.ts › openWithIdentity`, from
+ * `agent-identities/components/identity-picker.tsx`) and the sheet's three jobs live here: its model
  * dropdown is the Model row, its read-only instructions disclosure is the **Instructions** field,
  * and its Cancel/Launch pair is the kit's footer. The heading is {@link title}.
  *
- * ⚠ **PREFILL IS THE PICK, NOT A SECOND SCREEN** (*"when a user clicks a template, all of those
- * fields would be pre-filled"*): `applyTemplate` fills Name, Description and Instructions and
+ * ⚠ **PREFILL IS THE PICK, NOT A SECOND SCREEN** (*"when a user clicks an identity, all of those
+ * fields would be pre-filled"*): `applyIdentity` fills Name, Description and Instructions and
  * never overwrites a field the operator edited. **Model is NOT prefilled and must not become so**
- * — `launch-agent-dialog-model.ts › modelRowFor` DISPLAYS the template's model while `panel.model`
+ * — `launch-agent-dialog-model.ts › modelRowFor` DISPLAYS the identity's model while `panel.model`
  * stays `''`, which is what keeps main's precedence chain the one authority; that file also
- * carries the rule for a template whose model belongs to ANOTHER runtime (it is not used and the
+ * carries the rule for an identity whose model belongs to ANOTHER runtime (it is not used and the
  * mismatch is said out loud, never translated).
  *
- * ⚠ **THE RUNTIME ROW SITS UNDER MODEL HERE.** The slide-out put it between Template and Model
+ * ⚠ **THE RUNTIME ROW SITS UNDER MODEL HERE.** The slide-out put it between Identity and Model
  * because it *"decides what the two rows under it mean"*; Samuel's popup ordering is Name,
- * Description, **Instructions** (2026-09-13), Template, Model, Runtime — and **Colour** under that
+ * Description, **Instructions** (2026-09-13), Identity, Model, Runtime — and **Colour** under that
  * (`agent-color-circles.tsx`, docs/specs/agent-colors.md item 7: *"At the bottom, under Runtime,
  * add multiple little circles"*), the only row whose data is the ROOM's rather than this
  * desktop's or this workspace's.
@@ -74,9 +74,9 @@
  */
 
 import { useMemo } from "react";
-import { useAgentTemplates } from "@/features/agent-templates/hooks/use-agent-templates";
-import { authorMarker } from "@/features/agent-templates/components/template-picker";
-import { TemplateApprovalDialog } from "@/features/agent-templates/components/template-approval";
+import { useAgentIdentities } from "@/features/agent-identities/hooks/use-agent-identities";
+import { authorMarker } from "@/features/agent-identities/components/identity-picker";
+import { IdentityApprovalDialog } from "@/features/agent-identities/components/identity-approval";
 import { FormDialog, PillChoice, UnderlineField } from "@/shared/ui/form-dialog";
 import { PLATFORM_DEFAULT_LABEL } from "./settings-agent-launch-rows";
 import { useLaunchDialogRuntime } from "./launch-agent-dialog-state";
@@ -88,9 +88,9 @@ import type { AgentLaunchPanel } from "./use-agent-launch";
 import { useLaunchRunner } from "./use-agent-launch-run";
 
 /** The blank-agent option's key. ⚠ `""` because `SegmentedControl` is `<K extends string>`; it
- *  maps to `templateId: null` at the boundary, which is the wire's own spelling of "no
- *  template". Same sentinel `composer-launch-panel.tsx` uses, for the same reason. */
-const BLANK_TEMPLATE = "";
+ *  maps to `identityId: null` at the boundary, which is the wire's own spelling of "no
+ *  identity". Same sentinel `composer-launch-panel.tsx` uses, for the same reason. */
+const BLANK_IDENTITY = "";
 
 /** ⚠ ONE OBJECT AT MODULE SCOPE for `EMPTY_RUNTIMES`' reason (`launch-agent-dialog-runtime.ts`):
  *  a fresh `[]` default would be a new identity every render and would rebuild the taken set on
@@ -114,14 +114,14 @@ export function LaunchAgentDialog({
   openThreadId: string | null;
   channelId: string;
   /**
-   * The template roster's one input. ⚠ `null` IS A REAL ANSWER AND NOT AN EMPTY ROSTER — it is
-   * "this caller has no workspace to list", so the read is not made and the Template row holds
+   * The identity roster's one input. ⚠ `null` IS A REAL ANSWER AND NOT AN EMPTY ROSTER — it is
+   * "this caller has no workspace to list", so the read is not made and the Identity row holds
    * None alone.
    */
   workspaceId: string | null;
-  /** Whose templates wear NO marker — everyone else's wear one. */
+  /** Whose identities wear NO marker — everyone else's wear one. */
   currentUserId: string;
-  /** The CHANNEL roster, for the marker's name half. ⚠ Not the workspace's: a template shared
+  /** The CHANNEL roster, for the marker's name half. ⚠ Not the workspace's: an identity shared
    *  by someone outside this channel degrades to "by another member" rather than losing its
    *  marker, because dropping it would turn UNKNOWN into MINE. */
   members: ReadonlyArray<{ userId: string; displayName: string | null; email: string | null }>;
@@ -156,7 +156,7 @@ export function LaunchAgentDialog({
 }) {
   // ⚠ NOT REQUESTED UNTIL THE DIALOG IS OPEN, and it is the SAME cache entry the Agents tab
   // mounts — a stable key on `[path, workspaceId, query]` (F-331). ⚠ READ-ONLY.
-  const { templates } = useAgentTemplates(workspaceId ?? "", {
+  const { identities } = useAgentIdentities(workspaceId ?? "", {
     enabled: panel.open && workspaceId !== null,
   });
   // ⚠ **THE VERSIONED, RUNTIME-KEYED RECORD SINCE 2026-09-21 (U7), NOT THE LEGACY PAIR.** This
@@ -176,29 +176,29 @@ export function LaunchAgentDialog({
   );
 
   /**
-   * 🔒 THE MARKER IS ATTACHED BESIDE THE READ, so no arm of this renders a template without one
+   * 🔒 THE MARKER IS ATTACHED BESIDE THE READ, so no arm of this renders an identity without one
    * (ledger ASK-21, INVARIANTS §5A). It rides `hint`, which `SegmentedControl` renders INSIDE
    * the option button — so it reaches the accessible name as well as the face.
    */
-  const templateOptions = useMemo(
+  const identityOptions = useMemo(
     () => [
       // ⚠ FIRST, AND NOT A PLACEHOLDER. A blank agent is a real configuration.
       // ⚠ **THE WORD IS "None" SINCE 2026-09-13 AND IT IS SAMUEL'S** (*"when the user
       // clicks New Agent in the New Agent pop-up, I want you to change 'Blank Agent' to
-      // 'None' for the template"*). The KEY is untouched — `BLANK_TEMPLATE` still maps to
-      // `templateId: null`, so nothing on the wire moved with the label. ⚠ The OTHER
+      // 'None' for the identity"*). The KEY is untouched — `BLANK_IDENTITY` still maps to
+      // `identityId: null`, so nothing on the wire moved with the label. ⚠ The OTHER
       // surfaces that still say "Blank agent" are the retired slide-out
-      // (`composer-launch-panel.tsx`) and the template MENU
-      // (`agent-templates/components/template-picker.tsx`); his ruling names this popup,
+      // (`composer-launch-panel.tsx`) and the identity MENU
+      // (`agent-identities/components/identity-picker.tsx`); his ruling names this popup,
       // and neither file is this slice's.
-      { key: BLANK_TEMPLATE, label: "None" },
-      ...templates.map((t) => ({
+      { key: BLANK_IDENTITY, label: "None" },
+      ...identities.map((t) => ({
         key: t.id,
         label: t.name,
         hint: authorMarker(t, currentUserId, memberNames) ?? undefined,
       })),
     ],
-    [templates, currentUserId, memberNames]
+    [identities, currentUserId, memberNames]
   );
 
   /**
@@ -211,7 +211,7 @@ export function LaunchAgentDialog({
    * switch had to re-derive a roster, a remembered pick, a native summary and a refusal sentence
    * rather than just a label.
    */
-  const runtime = useLaunchDialogRuntime(panel, channelId, templates);
+  const runtime = useLaunchDialogRuntime(panel, channelId, identities);
   const {
     runtimes,
     selectedRuntime,
@@ -223,51 +223,51 @@ export function LaunchAgentDialog({
   } = runtime;
 
   /**
-   * THE SELECTED TEMPLATE'S ROW, or `null` for None — the TITLE's one input and the PREFILL's.
+   * THE SELECTED IDENTITY'S ROW, or `null` for None — the TITLE's one input and the PREFILL's.
    *
-   * ⚠ **IT RESOLVES OFF THE SAME LIST THE PILL ROW RENDERS**, so a template the roster has not
+   * ⚠ **IT RESOLVES OFF THE SAME LIST THE PILL ROW RENDERS**, so an identity the roster has not
    * loaded yet (or one this operator may no longer see) leaves the title reading "New agent"
    * rather than naming a row this dialog cannot show. UNKNOWN is not a name.
    */
-  const selectedTemplate = useMemo(
-    () => templates.find((t) => t.id === panel.templateId) ?? null,
-    [templates, panel.templateId]
+  const selectedIdentity = useMemo(
+    () => identities.find((t) => t.id === panel.identityId) ?? null,
+    [identities, panel.identityId]
   );
 
   /**
-   * **THE HEADING NAMES THE TEMPLATE** (Samuel, 2026-09-13: *"instead of the popup saying New
-   * Agent, it should say New (name of template) Agent"*).
+   * **THE HEADING NAMES THE IDENTITY** (Samuel, 2026-09-13: *"instead of the popup saying New
+   * Agent, it should say New (name of identity) Agent"*).
    *
    * ⚠ **LOWER CASE IN THE STRING, TITLE CASE ON SCREEN.** `standard-dialog.tsx › DIALOG_TITLE`
    * carries `capitalize`, so "New Coder agent" is rendered "New Coder Agent" and the ACCESSIBLE
    * NAME stays the string — `StandardDialog`'s own rule, and the reason a `.toUpperCase()` there
    * was refused: this value is `ModalShell`'s `aria-label` as well as its text.
-   * ⚠ **"New agent" WHENEVER THERE IS NO TEMPLATE**, which includes None *and* a `templateId`
-   * this roster cannot resolve — see {@link selectedTemplate}.
+   * ⚠ **"New agent" WHENEVER THERE IS NO IDENTITY**, which includes None *and* an `identityId`
+   * this roster cannot resolve — see {@link selectedIdentity}.
    */
-  const title = selectedTemplate ? `New ${selectedTemplate.name} agent` : "New agent";
+  const title = selectedIdentity ? `New ${selectedIdentity.name} agent` : "New agent";
 
   /**
-   * THE TEMPLATE ROW'S ONE HANDLER — **pick AND prefill, which is one act** (Samuel, 2026-09-13:
-   * *"when a user clicks a template, all of those fields would be pre-filled"*). The three prefill
-   * rules are `use-agent-launch.ts › applyTemplate`'s and are stated there.
+   * THE IDENTITY ROW'S ONE HANDLER — **pick AND prefill, which is one act** (Samuel, 2026-09-13:
+   * *"when a user clicks an identity, all of those fields would be pre-filled"*). The three prefill
+   * rules are `use-agent-launch.ts › applyIdentity`'s and are stated there.
    *
-   * ⚠ **`setTemplateId` IS THE DEGRADATION, NOT A SECOND LANE.** A hand-built panel literal
-   * carrying no `applyTemplate` (the two in the suites) still SELECTS a template and still launches
+   * ⚠ **`setIdentityId` IS THE DEGRADATION, NOT A SECOND LANE.** A hand-built panel literal
+   * carrying no `applyIdentity` (the two in the suites) still SELECTS an identity and still launches
    * it — it simply prefills nothing, which is exactly what "this panel has no prefill" means.
    * ⚠ **AN ID THIS ROSTER CANNOT RESOLVE STILL SELECTS.** It cannot arrive from this row (the
-   * options ARE the roster), but routing it through `applyTemplate(null)` would silently turn the
+   * options ARE the roster), but routing it through `applyIdentity(null)` would silently turn the
    * operator's pick into None — a selector that answers a different value than it was given.
    */
-  const pickTemplate = (next: string) => {
-    if (next === BLANK_TEMPLATE) {
-      if (panel.applyTemplate) panel.applyTemplate(null);
-      else panel.setTemplateId(null);
+  const pickIdentity = (next: string) => {
+    if (next === BLANK_IDENTITY) {
+      if (panel.applyIdentity) panel.applyIdentity(null);
+      else panel.setIdentityId(null);
       return;
     }
-    const picked = templates.find((t) => t.id === next) ?? null;
-    if (picked && panel.applyTemplate) panel.applyTemplate(picked);
-    else panel.setTemplateId(next);
+    const picked = identities.find((t) => t.id === next) ?? null;
+    if (picked && panel.applyIdentity) panel.applyIdentity(picked);
+    else panel.setIdentityId(next);
   };
 
   /** WHICH KEYS THIS ROOM'S LIVE AGENTS HOLD — one derivation, in `agent-color-circles.tsx ›
@@ -344,7 +344,7 @@ export function LaunchAgentDialog({
             (`shared/ui/form-dialog.module.css › .inputMultiline`), which is the same mechanism
             the Description field above it already uses. There is no measuring script.
             ⚠ **AND IT REPLACED THE LAUNCH SHEET'S READ-ONLY "Read" DISCLOSURE**, which is why that
-            file is deleted: a launch could SHOW a template's instructions and not change them. */}
+            file is deleted: a launch could SHOW an identity's instructions and not change them. */}
         <UnderlineField
           id="launch-agent-instructions"
           label="Instructions"
@@ -358,12 +358,12 @@ export function LaunchAgentDialog({
         />
 
         <PillChoice
-          label="Template"
-          options={templateOptions}
-          value={panel.templateId ?? BLANK_TEMPLATE}
-          onChange={pickTemplate}
-          ariaLabel="Agent template"
-          // ⚠ THE LAYOUT IS THIS FILE'S, exactly as the kit's docblock says: a template roster
+          label="Identity"
+          options={identityOptions}
+          value={panel.identityId ?? BLANK_IDENTITY}
+          onChange={pickIdentity}
+          ariaLabel="Identity"
+          // ⚠ THE LAYOUT IS THIS FILE'S, exactly as the kit's docblock says: an identity roster
           // has no width budget the kit can promise.
           className="flex-wrap"
         />
@@ -405,10 +405,10 @@ export function LaunchAgentDialog({
             {modelRow.reason}
           </p>
         )}
-        {/* ⚠ **THE TEMPLATE'S MODEL BELONGS TO ANOTHER RUNTIME, SAID OUT LOUD** (U7: *"surface
+        {/* ⚠ **THE IDENTITY'S MODEL BELONGS TO ANOTHER RUNTIME, SAID OUT LOUD** (U7: *"surface
             incompatibility instead of silently translating model IDs"*). The id is NOT used and
             NOT translated; without this line the operator would see the runtime's default under a
-            template they picked for its model and have nothing to read about why. */}
+            identity they picked for its model and have nothing to read about why. */}
         {modelRow.mismatch && (
           <p role="note" className="text-caption text-warning">
             {modelRow.mismatch.sentence}
@@ -485,10 +485,10 @@ export function LaunchAgentDialog({
 
       </FormDialog>
 
-      {/* ⚠ A FOREIGN TEMPLATE'S FIRST RUN ON THIS MACHINE IS A QUESTION, NOT A FAILURE, and a
+      {/* ⚠ A FOREIGN IDENTITY'S FIRST RUN ON THIS MACHINE IS A QUESTION, NOT A FAILURE, and a
           SECOND dialog rather than a region inside this one: nesting another member's instructions
           in the form the operator is filling in is how untrusted text becomes Dopl's chrome. */}
-      <TemplateApprovalDialog
+      <IdentityApprovalDialog
         open={runner.approval !== null}
         request={runner.approval}
         busy={newAgent?.launchBusy}

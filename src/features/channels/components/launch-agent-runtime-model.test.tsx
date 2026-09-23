@@ -7,7 +7,7 @@
  * `launch-agent-dialog.test.tsx` is the FORM (the fields, the two exits, the payload's shape);
  * `launch-agent-dialog-runtime.test.tsx` is the RUNTIME ROW (its roster, its hints, its
  * preselect). This file is what the selected runtime IMPLIES — the model roster, the remembered
- * picks, the template-compatibility sentence and the sign-in copy — which is exactly the seam
+ * picks, the identity-compatibility sentence and the sign-in copy — which is exactly the seam
  * `launch-agent-dialog-state.ts` was split on.
  *
  * Every case is about the SAME defect from a different side: before this wave the dialog held one
@@ -20,10 +20,10 @@ import { useEffect } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 
-const templateList = vi.hoisted(() => ({ templates: [] as unknown[] }));
-vi.mock("@/features/agent-templates/hooks/use-agent-templates", () => ({
-  useAgentTemplates: () => ({
-    templates: templateList.templates,
+const identityList = vi.hoisted(() => ({ identities: [] as unknown[] }));
+vi.mock("@/features/agent-identities/hooks/use-agent-identities", () => ({
+  useAgentIdentities: () => ({
+    identities: identityList.identities,
     loading: false,
     error: null,
     resolved: true,
@@ -84,7 +84,7 @@ function launcher(): AgentLaunchControls {
     launchBusy: false,
     launchError: null,
     launchAgent: vi.fn().mockResolvedValue({ ok: true, agentId: MINTED }),
-    approveTemplate: vi.fn().mockResolvedValue({ ok: true }),
+    approveIdentity: vi.fn().mockResolvedValue({ ok: true }),
   };
 }
 
@@ -97,7 +97,7 @@ beforeEach(() => {
   posture.modelSupported = false;
   posture.byRuntime = {};
   posture.catalogs = {};
-  templateList.templates = [];
+  identityList.identities = [];
   // ⚠ `apiRequest` IS THE SPA MARKER (`spa-bridge.ts › getSpaBridge`) — without it the whole
   // bridge reads as absent and every probe answers false.
   (window as { dopl?: unknown }).dopl = {
@@ -293,11 +293,11 @@ describe("a runtime this Mac is not connected to", () => {
   });
 });
 
-describe("a TEMPLATE whose model belongs to another runtime", () => {
+describe("a IDENTITY whose model belongs to another runtime", () => {
   it("is not submitted, and the mismatch is explained in both platforms' own names", async () => {
     bothRuntimes();
     posture.stored = "codex";
-    templateList.templates = [
+    identityList.identities = [
       {
         id: "tpl-1",
         name: "Coder",
@@ -309,7 +309,7 @@ describe("a TEMPLATE whose model belongs to another runtime", () => {
     const controls = await open();
     fireEvent.click(
       Array.from(
-        screen.getByRole("tablist", { name: "Agent template" }).querySelectorAll('[role="tab"]')
+        screen.getByRole("tablist", { name: "Identity" }).querySelectorAll('[role="tab"]')
       ).find((el) => (el.textContent || "").startsWith("Coder"))!
     );
     await waitFor(() =>
@@ -318,7 +318,7 @@ describe("a TEMPLATE whose model belongs to another runtime", () => {
     const note = screen.getAllByRole("note").map((n) => n.textContent).join(" ");
     expect(note).toContain("Claude Code");
     expect(note).toContain("Codex");
-    // ⚠ AND THE ROW SHOWS CODEX'S OWN DEFAULT rather than the template's foreign id.
+    // ⚠ AND THE ROW SHOWS CODEX'S OWN DEFAULT rather than the identity's foreign id.
     expect(modelSelected()).toContain("GPT-6 Astra");
     fireEvent.click(launchButton());
     await waitFor(() => expect(controls.launchAgent).toHaveBeenCalled());

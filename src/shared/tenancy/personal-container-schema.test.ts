@@ -85,7 +85,7 @@ describe("🔒 exactly one container per user", () => {
 
 describe("🔒 the shelf moves by AUTHOR", () => {
   it("keys both moves on `created_by`, never on the workspace's owner", () => {
-    for (const table of ["knowledge_bases k", "agent_templates t"]) {
+    for (const table of ["knowledge_bases k", "agent_identities t"]) {
       const alias = table.split(" ")[1];
       expect(sql, table).toContain(`AND p.owner_id = ${alias}.created_by`);
       expect(sql, table).toContain(`AND ${alias}.home_scoped IS TRUE`);

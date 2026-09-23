@@ -5,7 +5,7 @@ import {
   type ApiQueryParams,
   type ApiResourceKeys,
 } from "@/shared/api/query-keys";
-import type { TemplateShelf } from "../types";
+import type { IdentityShelf } from "../types";
 
 /**
  * The feature's URLs and the cache keys built from them, in ONE module — so a
@@ -23,19 +23,19 @@ import type { TemplateShelf } from "../types";
  * a reader mounted (`?include=archived`); it is WRONG here, because the variant
  * axis on this path is the WORKSPACE ITSELF and one surface mounts two of them
  * (the /home Agents tab: a channel container and the home workspace, side by
- * side). A prefix patch reaches both, so a template created in one appears
- * under the other. `useAgentTemplates` passes `{workspaceId, select}` and no
+ * side). A prefix patch reaches both, so an identity created in one appears
+ * under the other. `useAgentIdentities` passes `{workspaceId, select}` and no
  * `query`, so `entry({workspaceId})` is `[path, workspaceId, undefined]` —
- * EXACTLY the tuple the read registers. See `../hooks/use-agent-template-writes.ts`
+ * EXACTLY the tuple the read registers. See `../hooks/use-agent-identity-writes.ts`
  * and INVARIANTS §8.
  */
 
-export function agentTemplatesPath(): string {
-  return "/api/agent-templates";
+export function agentIdentitiesPath(): string {
+  return "/api/agent-identities";
 }
 
-export function agentTemplatePath(templateId: string): string {
-  return `${agentTemplatesPath()}/${encodeURIComponent(templateId)}`;
+export function agentIdentityPath(identityId: string): string {
+  return `${agentIdentitiesPath()}/${encodeURIComponent(identityId)}`;
 }
 
 /**
@@ -44,20 +44,20 @@ export function agentTemplatePath(templateId: string): string {
  * passed, and `{}` would be a different tuple element and therefore a different
  * cache entry.
  */
-export function templateListQuery(shelf?: TemplateShelf): ApiQueryParams {
+export function identityListQuery(shelf?: IdentityShelf): ApiQueryParams {
   return shelf ? { shelf } : undefined;
 }
 
-export const agentTemplateKeys = {
+export const agentIdentityKeys = {
   /**
    * The list read every section on the page renders from, for ONE shelf.
    * ⚠ `entry()` here IGNORES a caller-supplied `query` on purpose: the shelf
    * argument is the only variant axis this path has, and letting a call site
    * pass its own would put the two spellings back in two places.
    */
-  list: (shelf?: TemplateShelf): ApiResourceKeys => {
-    const path = agentTemplatesPath();
-    const query = templateListQuery(shelf);
+  list: (shelf?: IdentityShelf): ApiResourceKeys => {
+    const path = agentIdentitiesPath();
+    const query = identityListQuery(shelf);
     return {
       path,
       all: apiPathKey(path),

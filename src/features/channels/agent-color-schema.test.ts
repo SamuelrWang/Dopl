@@ -33,7 +33,7 @@
  *      see `src/` either.
  *
  * ⚠ SOURCE READ, NOT IMPORT, for trees 4 and 5 — neither is in the root vitest project's
- * module graph. The same seam `agent-templates/schema-sql.test.ts` uses, for its reason.
+ * module graph. The same seam `agent-identities/schema-sql.test.ts` uses, for its reason.
  *
  * ⚠ **MUTATION-VERIFIED (2026-09-13). Each of these turns an assertion below red:**
  *   (a) dropping `WHERE color IS NOT NULL AND state <> 'ended'` from the index — the

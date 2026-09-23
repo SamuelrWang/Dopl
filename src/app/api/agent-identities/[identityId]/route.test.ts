@@ -1,9 +1,9 @@
 /**
- * `GET|PATCH|DELETE /api/agent-templates/{templateId}`.
+ * `GET|PATCH|DELETE /api/agent-identities/{identityId}`.
  *
  * ⚠ THE LOAD-BEARING ASSERTION IN THIS FILE IS THE PER-METHOD GATE. `DELETE` is
  * `sessionOnly` and `GET`/`PATCH` are deliberately NOT — an orchestrator agent
- * listing and editing templates is the entire point of making them persistent,
+ * listing and editing identities is the entire point of making them persistent,
  * and gating the whole route would gate the feature. The pin in
  * `src/shared/auth/write-gate-coverage.test.ts` sees only that the FILE contains
  * `sessionOnly: true`; only this file can say WHICH method carries it.
@@ -16,7 +16,7 @@ import type { WorkspaceAuthContext } from "@/shared/auth/with-workspace-auth";
 const ID = "3f2504e0-4f89-41d3-9a0c-0305e82c3301";
 
 /** Mutable so one test can hand the route a malformed param. */
-let params: Record<string, string> = { templateId: ID };
+let params: Record<string, string> = { identityId: ID };
 
 const AUTH: Omit<WorkspaceAuthContext, "params"> = {
   userId: "user-1",
@@ -50,31 +50,31 @@ vi.mock("@/shared/auth/with-workspace-auth", () => ({
     },
 }));
 
-vi.mock("@/features/agent-templates/server/service", () => ({
-  buildAgentTemplateContext: (auth: WorkspaceAuthContext) => ({
+vi.mock("@/features/agent-identities/server/service", () => ({
+  buildAgentIdentityContext: (auth: WorkspaceAuthContext) => ({
     workspaceId: auth.workspaceId,
     userId: auth.userId,
     source: "user",
     role: auth.role,
     apiKeyWorkspaceId: auth.apiKeyWorkspaceId,
   }),
-  readTemplateById: vi.fn(),
-  updateTemplate: vi.fn(),
-  deleteTemplate: vi.fn(),
+  readIdentityById: vi.fn(),
+  updateIdentity: vi.fn(),
+  deleteIdentity: vi.fn(),
 }));
 
 import { GET, PATCH, DELETE } from "./route";
 import {
-  deleteTemplate,
-  readTemplateById,
-  updateTemplate,
-} from "@/features/agent-templates/server/service";
+  deleteIdentity,
+  readIdentityById,
+  updateIdentity,
+} from "@/features/agent-identities/server/service";
 
-const mockGet = vi.mocked(readTemplateById);
-const mockUpdate = vi.mocked(updateTemplate);
-const mockDelete = vi.mocked(deleteTemplate);
+const mockGet = vi.mocked(readIdentityById);
+const mockUpdate = vi.mocked(updateIdentity);
+const mockDelete = vi.mocked(deleteIdentity);
 
-const TEMPLATE = {
+const IDENTITY = {
   id: ID,
   workspaceId: "ws-1",
   name: "Researcher",
@@ -94,7 +94,7 @@ const TEMPLATE = {
 const [GET_OPTS, PATCH_OPTS, DELETE_OPTS] = wrapperOptions;
 
 function req(method: string, body?: unknown, expectedVersion?: string): NextRequest {
-  return new NextRequest(`http://localhost/api/agent-templates/${ID}`, {
+  return new NextRequest(`http://localhost/api/agent-identities/${ID}`, {
     method,
     ...(body === undefined
       ? {}
@@ -111,9 +111,9 @@ function req(method: string, body?: unknown, expectedVersion?: string): NextRequ
 
 beforeEach(() => {
   vi.clearAllMocks();
-  params = { templateId: ID };
-  mockGet.mockResolvedValue(TEMPLATE);
-  mockUpdate.mockResolvedValue(TEMPLATE);
+  params = { identityId: ID };
+  mockGet.mockResolvedValue(IDENTITY);
+  mockUpdate.mockResolvedValue(IDENTITY);
   mockDelete.mockResolvedValue(undefined);
 });
 
@@ -127,10 +127,10 @@ describe("the per-method gate", () => {
 });
 
 describe("GET", () => {
-  it("returns `{ template }`", async () => {
+  it("returns `{ identity }`", async () => {
     const res = await GET(req("GET"), { params: Promise.resolve({}) });
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ template: TEMPLATE });
+    expect(await res.json()).toEqual({ identity: IDENTITY });
     expect(mockGet).toHaveBeenCalledWith(
       expect.objectContaining({ workspaceId: "ws-1" }),
       ID
@@ -138,25 +138,25 @@ describe("GET", () => {
   });
 
   it("400s on a non-UUID id BEFORE the service is reached", async () => {
-    params = { templateId: "researcher" };
+    params = { identityId: "researcher" };
     const res = await GET(req("GET"), { params: Promise.resolve({}) });
     expect(res.status).toBe(400);
     expect(mockGet).not.toHaveBeenCalled();
   });
 
   it("surfaces a not-found as 404 with the domain code", async () => {
-    const { AgentTemplateNotFoundError } = await import(
-      "@/features/agent-templates/server/errors"
+    const { AgentIdentityNotFoundError } = await import(
+      "@/features/agent-identities/server/errors"
     );
-    mockGet.mockRejectedValue(new AgentTemplateNotFoundError(ID));
+    mockGet.mockRejectedValue(new AgentIdentityNotFoundError(ID));
     const res = await GET(req("GET"), { params: Promise.resolve({}) });
     expect(res.status).toBe(404);
-    expect((await res.json()).error.code).toBe("AGENT_TEMPLATE_NOT_FOUND");
+    expect((await res.json()).error.code).toBe("AGENT_IDENTITY_NOT_FOUND");
   });
 });
 
 describe("PATCH", () => {
-  it("passes the parsed patch through and answers `{ template }`", async () => {
+  it("passes the parsed patch through and answers `{ identity }`", async () => {
     const res = await PATCH(req("PATCH", { name: "Renamed" }), { params: Promise.resolve({}) });
     expect(res.status).toBe(200);
     // ⚠ FOUR ARGUMENTS SINCE F-747, and the fourth is `undefined` here: this
@@ -186,11 +186,11 @@ describe("PATCH", () => {
   });
 
   it("412s a stale write with the domain code and the two versions", async () => {
-    const { TemplateStaleVersionError } = await import(
-      "@/features/agent-templates/server/errors"
+    const { IdentityStaleVersionError } = await import(
+      "@/features/agent-identities/server/errors"
     );
     mockUpdate.mockRejectedValue(
-      new TemplateStaleVersionError("2026-01-01T00:00:00Z", "2026-01-02T00:00:00Z")
+      new IdentityStaleVersionError("2026-01-01T00:00:00Z", "2026-01-02T00:00:00Z")
     );
     const res = await PATCH(
       req("PATCH", { name: "Renamed" }, "2026-01-01T00:00:00Z"),
@@ -198,7 +198,7 @@ describe("PATCH", () => {
     );
     expect(res.status).toBe(412);
     const body = await res.json();
-    expect(body.error.code).toBe("AGENT_TEMPLATE_STALE_VERSION");
+    expect(body.error.code).toBe("AGENT_IDENTITY_STALE_VERSION");
     expect(body.error.details).toMatchObject({
       expected: "2026-01-01T00:00:00Z",
       actual: "2026-01-02T00:00:00Z",
@@ -212,10 +212,10 @@ describe("PATCH", () => {
   });
 
   it("403s when the caller may see but not edit", async () => {
-    const { TemplateWriteForbiddenError } = await import(
-      "@/features/agent-templates/server/errors"
+    const { IdentityWriteForbiddenError } = await import(
+      "@/features/agent-identities/server/errors"
     );
-    mockUpdate.mockRejectedValue(new TemplateWriteForbiddenError("edit"));
+    mockUpdate.mockRejectedValue(new IdentityWriteForbiddenError("edit"));
     const res = await PATCH(req("PATCH", { name: "X" }), { params: Promise.resolve({}) });
     expect(res.status).toBe(403);
     expect((await res.json()).error.code).toBe("RESOURCE_ACCESS_DENIED");

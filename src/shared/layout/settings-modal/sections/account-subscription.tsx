@@ -70,7 +70,7 @@ export function AccountSubscription({
         </span>
       </div>
       {/* ⚠ Flat body, NOT `SECTION_BOX_INSET`: the concave recipe is retired off
-          new surfaces (`template-editor-surface.test.tsx` census). */}
+          new surfaces (`identity-editor-surface.test.tsx` census). */}
       <div className="divide-y divide-border-default">
         {showPersonal && (
           <SubscriptionRow ent={personal} workspaceId={undefined} />

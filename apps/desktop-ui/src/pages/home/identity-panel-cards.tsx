@@ -1,37 +1,37 @@
 import { useMemo, type ReactNode } from "react";
 import { OpenScaleButton } from "@/shared/ui/open-scale-button";
-import { authorMarker } from "@/features/agent-templates/components/template-picker";
+import { authorMarker } from "@/features/agent-identities/components/identity-picker";
 import {
-  TemplateGrid,
-  TemplatePanel,
-} from "@/features/agent-templates/components/template-section";
-import type { AgentTemplate } from "@/features/agent-templates/client/types";
-import type { TemplateSectionDef } from "@/features/agent-templates/lib/visibility";
+  IdentityGrid,
+  IdentityPanel,
+} from "@/features/agent-identities/components/identity-section";
+import type { AgentIdentity } from "@/features/agent-identities/client/types";
+import type { IdentitySectionDef } from "@/features/agent-identities/lib/visibility";
 import { EMPTY_PEERS } from "@/features/channels/types";
 import type { Channel } from "@/features/channels/types";
 import { channelPeople } from "./home-rows";
 
 /**
- * The /home Agents panels' SECTIONS — the two shapes `agent-panels.tsx` stacks,
+ * The /home Agents panels' SECTIONS — the two shapes `identity-panels.tsx` stacks,
  * and the authorship marker one of them carries.
  *
- * Split from `agent-panels.tsx` for the reason `knowledge-panel-cards.tsx` was
+ * Split from `identity-panels.tsx` for the reason `knowledge-panel-cards.tsx` was
  * split from `knowledge-panels.tsx`: to keep both halves clear of the 500-line
  * cap (INVARIANTS §1) with room for the next entry, rather than at it. The
  * controller keeps the READS and the gating; this file keeps what a resolved
  * read looks like.
  *
  * ⚠ NOTHING HERE IS A NEW SURFACE RECIPE. Both sections are
- * `agent-templates/components/template-section.tsx`'s `TemplatePanel` +
- * `TemplateGrid` — flat `bg-card-surface-subtle`, `.bento` cards, **never
+ * `agent-identities/components/identity-section.tsx`'s `IdentityPanel` +
+ * `IdentityGrid` — flat `bg-card-surface-subtle`, `.bento` cards, **never
  * `SectionBox`** (Samuel's no-concave ruling, 2026-08-22; Q4 of
  * `docs/specs/home-agents-tab.plan.md`). The source sweep that pins it
- * (`agent-templates/components/template-editor.test.tsx › no concave surfaces`)
+ * (`agent-identities/components/identity-editor.test.tsx › no concave surfaces`)
  * reaches these files too — see that suite's `HOME_FILES`.
  *
  * ⚠ NO LAUNCH CONTROL ON EITHER SECTION, and its absence is tested
- * (`agent-panels.test.tsx`). This is the AUTHORING face; the Channels face's
- * `TemplateLaunchPicker` is already wired to the same container list (plan
+ * (`identity-panels.test.tsx`). This is the AUTHORING face; the Channels face's
+ * `IdentityLaunchPicker` is already wired to the same container list (plan
  * §0.2), and a second launch surface fights `resolve`'s singularity (§5A).
  */
 
@@ -42,16 +42,16 @@ import { channelPeople } from "./home-rows";
  * seen at two ranges and share a dropdown; A asks "who else can run this", which
  * no scope pill can answer.
  */
-export function SharedAgentSection({
+export function SharedIdentitySection({
   section,
-  templates,
+  identities,
   markerFor,
   onOpen,
   action,
 }: {
-  section: TemplateSectionDef;
-  templates: ReadonlyArray<AgentTemplate>;
-  markerFor: (template: AgentTemplate) => string | null;
+  section: IdentitySectionDef;
+  identities: ReadonlyArray<AgentIdentity>;
+  markerFor: (identity: AgentIdentity) => string | null;
   /** Header-right control — the "New shared agent" button (2026-08-27). This
    *  section gained one when the pane became two sections, each owning its own
    *  create. */
@@ -63,17 +63,17 @@ export function SharedAgentSection({
    *  control would be a second, weaker copy of that rule — one that disagrees
    *  the day the floor moves. The marker is what tells the operator whose
    *  instructions they are reading. */
-  onOpen: (template: AgentTemplate) => void;
+  onOpen: (identity: AgentIdentity) => void;
 }) {
   return (
-    <TemplatePanel id="home-agents-shared" label={section.label} action={action}>
-      <TemplateGrid
-        templates={templates}
+    <IdentityPanel id="home-agents-shared" label={section.label} action={action}>
+      <IdentityGrid
+        identities={identities}
         emptyLine={section.emptyLine}
         markerFor={markerFor}
         onOpen={onOpen}
       />
-    </TemplatePanel>
+    </IdentityPanel>
   );
 }
 
@@ -97,9 +97,9 @@ export function SharedAgentSection({
  * not get back to the scope that works. A failed read SAYS SO and offers the
  * retry — it never silently occupies the section.
  */
-export function PrivateAgentSection({
+export function PrivateIdentitySection({
   section,
-  templates,
+  identities,
   action,
   unavailable,
   failure,
@@ -107,8 +107,8 @@ export function PrivateAgentSection({
   onOpen,
   cardActionFor,
 }: {
-  section: TemplateSectionDef;
-  templates: ReadonlyArray<AgentTemplate>;
+  section: IdentitySectionDef;
+  identities: ReadonlyArray<AgentIdentity>;
   /** The create button and the scope pill; the pill wears `pendingRow` while
    *  its scope is in flight. */
   action: ReactNode;
@@ -121,15 +121,15 @@ export function PrivateAgentSection({
   /** Opens the editor against the workspace the CURRENT SCOPE names — the
    *  container on "in this channel", the caller's own workspace on "across all
    *  channels". A row is always edited where it lives (plan §4.5). */
-  onOpen: (template: AgentTemplate) => void;
+  onOpen: (identity: AgentIdentity) => void;
   /** ONE second control per row — the PERSONAL card's knowledge box and its
    *  Launch button since 2026-09-22 (Samuel), where it was "Share into this
    *  channel" and, before that, the copy. ⚠ ONE SLOT, so the two travel
-   *  together: `template-section.tsx › TemplateCard` carries exactly one. */
-  cardActionFor?: (template: AgentTemplate) => ReactNode;
+   *  together: `identity-section.tsx › IdentityCard` carries exactly one. */
+  cardActionFor?: (identity: AgentIdentity) => ReactNode;
 }) {
   return (
-    <TemplatePanel
+    <IdentityPanel
       id="home-agents-private"
       label={section.label}
       action={action}
@@ -152,14 +152,14 @@ export function PrivateAgentSection({
         // here would be a third thing to read for one fact.
         <div className="h-10" />
       ) : (
-        <TemplateGrid
-          templates={templates}
+        <IdentityGrid
+          identities={identities}
           emptyLine={section.emptyLine}
           onOpen={onOpen}
           actionFor={cardActionFor}
         />
       )}
-    </TemplatePanel>
+    </IdentityPanel>
   );
 }
 
@@ -167,9 +167,9 @@ export function PrivateAgentSection({
  * `by <member>` for a section-A row this operator did not write, else `null`.
  *
  * ⚠ A SECURITY SIGNAL, NOT DECORATION (INVARIANTS §5A). A member-granted peer
- * can create a template in this container, and its instructions are what the
+ * can create an identity in this container, and its instructions are what the
  * operator's own agent would follow; the desktop already wears a different ROLE
- * header for a foreign template, and this is the operator seeing the same fact
+ * header for a foreign identity, and this is the operator seeing the same fact
  * BEFORE anything runs. An author the roster cannot name still reads
  * `by another member` — dropping the marker would turn UNKNOWN into MINE.
  *
@@ -189,7 +189,7 @@ export function PrivateAgentSection({
 export function useContainerAuthorMarker(
   channel: Channel | null,
   currentUserId: string
-): (template: AgentTemplate) => string | null {
+): (identity: AgentIdentity) => string | null {
   // ⚠ THE DEPENDENCY IS `channel`, NOT THE PEER LIST. `channelPeople` can hand
   // back the frozen `EMPTY_PEERS` or the cached array, and reading `.peers` here
   // would be a second read of the field §8's enforcement pins to one place; the
@@ -206,8 +206,8 @@ export function useContainerAuthorMarker(
     return map;
   }, [channel]);
   return useMemo(
-    () => (template: AgentTemplate) =>
-      authorMarker(template, currentUserId, names),
+    () => (identity: AgentIdentity) =>
+      authorMarker(identity, currentUserId, names),
     [currentUserId, names]
   );
 }

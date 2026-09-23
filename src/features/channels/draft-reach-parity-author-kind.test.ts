@@ -248,7 +248,7 @@ describe("F-704 — my own agent's tag moves neither the line nor the verdict", 
  * the second visible, which is why Samuel saw the symptom survive the fix and asked a fifth
  * time. Keeping both sets in one file keeps that history legible to whoever comes sixth.
  * ⚠ **AN ORCHESTRATOR-SHAPED FALLBACK WAS BUILT, GREEN, AND THROWN AWAY THE SAME DAY** — it
- * answered the asker's own `Orchestrator` template. Rejected on PRODUCT grounds: that is one
+ * answered the asker's own `Orchestrator` identity. Rejected on PRODUCT grounds: that is one
  * operator's setup and this rule ships to every user. Re-proposing a named fallback needs a
  * concept that exists for all users first.
  */

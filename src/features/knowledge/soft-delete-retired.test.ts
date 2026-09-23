@@ -19,7 +19,7 @@
  *      `knowledge_bases` and `skills`, which survived.
  *
  *   2. **Every child of a base cascades** — so `hardDeleteBase`'s single
- *      `DELETE` cannot leave entries, folders, chunks, stars or template
+ *      `DELETE` cannot leave entries, folders, chunks, stars or identity
  *      attachments behind. Asserted as a PROPERTY over every FK in the tree, not
  *      as a list: a table added tomorrow with a nullable or RESTRICT reference
  *      turns this red without anyone remembering to extend it.

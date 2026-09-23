@@ -82,7 +82,7 @@ export function StreamWorkingRow({
     >
       {workingRowWord(liveness.label)}
       <span aria-hidden className="flex shrink-0 items-center gap-[3px]">
-        {/* ⚠ THREE STATIC CLASS STRINGS, not a mapped template: Tailwind reads
+        {/* ⚠ THREE STATIC CLASS STRINGS, not a mapped identity: Tailwind reads
             the source, so a delay built at runtime generates no utility. */}
         <span className="h-1 w-1 animate-pulse rounded-full bg-current [animation-delay:0ms] [animation-duration:1.4s] motion-reduce:animate-none" />
         <span className="h-1 w-1 animate-pulse rounded-full bg-current [animation-delay:200ms] [animation-duration:1.4s] motion-reduce:animate-none" />

@@ -215,7 +215,7 @@ export function PostureControls({
           `select-menu.tsx › raisedField`. They were the `flat` inset pill until 2026-08-27, then
           `raised`, whose `h-9` box read as LARGE pills in the pop-out and pushed the window wider
           than its content. `raisedField` is the SAME FACE (`auth-btn-3d-light`, so the elevation
-          cannot drift), one size down — it is what the composer launch panel's Template/Model rows
+          cannot drift), one size down — it is what the composer launch panel's Identity/Model rows
           already wear, so this row and that one are one dropdown size across the app rather than
           two. No new size was added for this surface.
           ⚠ THE WINDOW'S DEFAULT WIDTH IS MEASURED FROM THESE DIMENSIONS —

@@ -16,8 +16,8 @@ import { UNIQUE_VIOLATION } from "./service-shared";
  *
  * ⚠ **THE PROBE IS NOT IN HERE, AND THAT IS DELIBERATE.** Where it goes is a
  * per-lane contract rather than a detail: on both mailboxes it must sit ABOVE the
- * template, thread and presence gates, so a retry of a request that already
- * succeeded is never re-decided against today's world (a since-deleted template,
+ * identity, thread and presence gates, so a retry of a request that already
+ * succeeded is never re-decided against today's world (a since-deleted identity,
  * a laptop that has since closed). A helper that probed on the caller's behalf
  * would put that decision somewhere no reader of the create path can see it, and
  * would read the row twice on every keyed call. Each `createAgent*` states its

@@ -1,6 +1,6 @@
 "use strict";
 /**
- * THE `op="manage" action="launch"` SHAPE FIELDS — `model`, `template`, `color`, `posture`.
+ * THE `op="manage" action="launch"` SHAPE FIELDS — `model`, `identity`, `color`, `posture`.
  *
  * ⚠ **ITS OWN MODULE BECAUSE `channel-schema.ts` WAS OVER THE 500-LINE CAP** (§1; the
  * `size-check` CI job and `max-lines` in `eslint.config.mjs`, F-689), and this is the seam
@@ -69,7 +69,7 @@ exports.LAUNCH_INPUT_FIELDS = {
     // ⚠ ID **OR** EXACT NAME, in ONE param — `dopl_kb`'s `base` already works this
     // way (`knowledge-shared.ts`), so this reuses the tree's idiom rather than
     // inventing a second convention.
-    template: zod_1.z
+    identity: zod_1.z
         .string()
         .trim()
         .min(1)
@@ -82,15 +82,15 @@ exports.LAUNCH_INPUT_FIELDS = {
     // so it was WRITTEN there before it was cut here.
     // 🔒 **"IT RESOLVES IN THIS CHANNEL'S container" WAS FALSE FOR AN ID, AND
     // HAD BEEN SINCE B2 (2026-09-02), FIXED 2026-09-18.** Ruling #18 made
-    // `src/features/agent-templates/server/service-resolve-ref.ts ›
-    // resolveTemplateRef` follow a UUID through `read-resource.ts ›
-    // readResourceById` — "a personal template launches anywhere its owner
+    // `src/features/agent-identities/server/service-resolve-ref.ts ›
+    // resolveIdentityRef` follow a UUID through `read-resource.ts ›
+    // readResourceById` — "a personal identity launches anywhere its owner
     // is", in that file's own words — while only the NAME path stayed keyed to
     // `ctx.workspaceId`. Two test agents read this sentence and concluded Home
-    // templates were unusable in a channel, which is the opposite of what the
+    // identities were unusable in a channel, which is the opposite of what the
     // code does. ⚠ The ID/NAME split is the load-bearing half and is pinned by
     // `channel-ops-launch-body.test.ts`.
-    'op="manage" action="launch" (optional): the AGENT TEMPLATE the new agent runs as, under THE OPERATOR\'S visibility. An ID resolves wherever it lives; a NAME, in THIS CHANNEL\'S container. Omit for a blank agent.'),
+    'op="manage" action="launch" (optional): the AGENT IDENTITY the new agent runs as, under THE OPERATOR\'S visibility. An ID resolves wherever it lives; a NAME, in THIS CHANNEL\'S container. Omit for a blank agent.'),
     // ⚠ Declared in `channel-ops-launch-color.ts` (one file, one rule; §1's cap). Argument there.
     color: channel_ops_launch_color_1.AGENT_COLOR_FIELD,
     // ── ⚠ THE PERMISSION AXES, IN ONE OBJECT (B8; 2026-09-01's T24 axes) ───────

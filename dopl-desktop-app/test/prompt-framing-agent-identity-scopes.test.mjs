@@ -1,6 +1,6 @@
 // THE THREE KNOWLEDGE SCOPES, AND THE THREE OPS THEY ORDER (2026-09-08).
 //
-// ⚠ ITS OWN FILE, AND THE REASON IS §1's 500-LINE CAP — `prompt-framing-template.test.mjs`
+// ⚠ ITS OWN FILE, AND THE REASON IS §1's 500-LINE CAP — `prompt-framing-agent-identity.test.mjs`
 // crossed it when these cases landed. The seam is honest rather than arbitrary: that file owns
 // the ROLE BLOCK (the fence, the headers, the fields, the profile gate), this one owns WHAT AN
 // ATTACHMENT TELLS THE AGENT TO CALL.
@@ -9,7 +9,7 @@
 // `idToken` instead of `sanitizeText`, and disabling the `knowledge`-over-`knowledgeBases`
 // preference each turn three cases here red.
 //
-// Run: `node --test dopl-desktop-app/test/prompt-framing-template-scopes.test.mjs`
+// Run: `node --test dopl-desktop-app/test/prompt-framing-agent-identity-scopes.test.mjs`
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -17,19 +17,19 @@ import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
 
 const require = createRequire(import.meta.url);
-const { templateRoleFraming } = require(
-  fileURLToPath(new URL("../main/prompt-framing-template.js", import.meta.url))
+const { identityRoleFraming } = require(
+  fileURLToPath(new URL("../main/prompt-framing-agent-identity.js", import.meta.url))
 );
 
 const N = "n1";
 const KB = "cccccccc-3333-4ddd-8eee-ffffffffffff";
 
-/** The role block as one string, for a template patched onto a minimal base. */
+/** The role block as one string, for an identity patched onto a minimal base. */
 function block(over = {}, ctx = {}) {
-  return templateRoleFraming(
+  return identityRoleFraming(
     {
       profile: ctx.profile ?? "full",
-      template: {
+      identity: {
         name: "Code Auditor",
         instructions: "Audit the diff. Cite file and line.",
         model: null,

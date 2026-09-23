@@ -29,7 +29,7 @@ import { UNKNOWN_CALLER, type CallerIdentity } from "./identity";
 import type { RegisterTool, ToolResponse } from "./respond";
 import type { WorkspaceDirectory } from "../workspace-directory";
 import {
-  ME, apiError, base, sharedContainer, TEMPLATE, textOf, tokenIn, workspaceStub,
+  ME, apiError, base, sharedContainer, IDENTITY, textOf, tokenIn, workspaceStub,
 } from "./acknowledge-shared-fixtures";
 
 /** ⚠ Both rows live in `acknowledge-shared-fixtures.ts` — one definition each. */
@@ -43,10 +43,10 @@ afterEach(() => {
 
 describe("dopl_agent — a spent token acknowledges the audience", () => {
   it("op=create sends acknowledgeShared on the confirmed write, and nothing before it", async () => {
-    const create = vi.fn(async () => TEMPLATE);
+    const create = vi.fn(async () => IDENTITY);
     const client = stub({
       ...sharedContainer(),
-      createAgentTemplate: create,
+      createAgentIdentity: create,
     }) as DoplClient;
     const input = { name: "Researcher", visibility: "workspace" as const };
 
@@ -63,24 +63,24 @@ describe("dopl_agent — a spent token acknowledges the audience", () => {
   });
 
   it("op=update carries it on the PATCH, beside the field that actually moves", async () => {
-    const update = vi.fn(async () => TEMPLATE);
+    const update = vi.fn(async () => IDENTITY);
     const client = stub({
       ...sharedContainer(),
-      listAgentTemplates: vi.fn(async () => [TEMPLATE]),
-      updateAgentTemplate: update,
+      listAgentIdentities: vi.fn(async () => [IDENTITY]),
+      updateAgentIdentity: update,
     }) as DoplClient;
     const input = { visibility: "workspace" as const };
 
-    const preview = await opUpdate(client, ME, TEMPLATE.id, input);
+    const preview = await opUpdate(client, ME, IDENTITY.id, input);
     expect(update).not.toHaveBeenCalled();
 
-    await opUpdate(client, ME, TEMPLATE.id, {
+    await opUpdate(client, ME, IDENTITY.id, {
       ...input,
       confirm_token: tokenIn(textOf(preview)),
     });
     // ⚠ THIRD ARG = THE F-747 VERSION, `undefined` because this fixture passes none.
     expect(update).toHaveBeenCalledWith(
-      TEMPLATE.id,
+      IDENTITY.id,
       expect.objectContaining({ visibility: "workspace", acknowledgeShared: true }),
       undefined
     );
@@ -179,10 +179,10 @@ describe("dopl_kb — a spent token acknowledges the audience", () => {
 // ── Every OTHER proceed sends nothing ────────────────────────────────
 
 describe("a proceed that showed nobody anything sends NO flag", () => {
-  it("a PRIVATE template — the class never fired", async () => {
-    const create = vi.fn(async () => ({ ...TEMPLATE, visibility: "private" as const }));
+  it("a PRIVATE identity — the class never fired", async () => {
+    const create = vi.fn(async () => ({ ...IDENTITY, visibility: "private" as const }));
     await opCreate(
-      stub({ ...sharedContainer(), createAgentTemplate: create }) as DoplClient,
+      stub({ ...sharedContainer(), createAgentIdentity: create }) as DoplClient,
       ME,
       { name: "Researcher", visibility: "private" }
     );
@@ -195,9 +195,9 @@ describe("a proceed that showed nobody anything sends NO flag", () => {
     // so what carries it now is the member count and nothing else; the
     // multi-member half of the old arm moved to `confirm-class.test.ts`, where
     // it asserts a preview rather than the absence of one.
-    const create = vi.fn(async () => TEMPLATE);
+    const create = vi.fn(async () => IDENTITY);
     await opCreate(
-      stub({ ...workspaceStub("standard", 1), createAgentTemplate: create }) as DoplClient,
+      stub({ ...workspaceStub("standard", 1), createAgentIdentity: create }) as DoplClient,
       ME,
       { name: "Researcher", visibility: "workspace" }
     );
@@ -205,9 +205,9 @@ describe("a proceed that showed nobody anything sends NO flag", () => {
   });
 
   it("a SOLO container — there is no second audience to acknowledge", async () => {
-    const create = vi.fn(async () => TEMPLATE);
+    const create = vi.fn(async () => IDENTITY);
     await opCreate(
-      stub({ ...workspaceStub("link", 1), createAgentTemplate: create }) as DoplClient,
+      stub({ ...workspaceStub("link", 1), createAgentIdentity: create }) as DoplClient,
       ME,
       { name: "Researcher", visibility: "workspace" }
     );
@@ -221,7 +221,7 @@ describe("a proceed that showed nobody anything sends NO flag", () => {
 
 /**
  * 🔒 **AN OMITTED `visibility` WAS AN UNESCAPABLE LOOP** (closed 2026-09-02).
- * The server's create default is CREDENTIAL-DEPENDENT — `createTemplate` /
+ * The server's create default is CREDENTIAL-DEPENDENT — `createIdentity` /
  * `createBase` give a SHARED credential `workspace`/`public` and everyone else
  * `private` — and this process cannot see which credential it holds. So the gate
  * computed `publishes: false`, minted no token, the server resolved a SHARED
@@ -235,9 +235,9 @@ describe("a proceed that showed nobody anything sends NO flag", () => {
  */
 describe("an omitted visibility is SENT as the documented default", () => {
   it("dopl_agent op=create sends `private` rather than leaving it open", async () => {
-    const create = vi.fn(async () => ({ ...TEMPLATE, visibility: "private" as const }));
+    const create = vi.fn(async () => ({ ...IDENTITY, visibility: "private" as const }));
     await opCreate(
-      stub({ ...sharedContainer(), createAgentTemplate: create }) as DoplClient,
+      stub({ ...sharedContainer(), createAgentIdentity: create }) as DoplClient,
       ME,
       { name: "Researcher" }
     );
@@ -258,10 +258,10 @@ describe("an omitted visibility is SENT as the documented default", () => {
   });
 
   it("an EXPLICIT visibility is still the caller's, on both lanes", async () => {
-    const create = vi.fn(async () => TEMPLATE);
+    const create = vi.fn(async () => IDENTITY);
     const client = stub({
       ...workspaceStub("standard", 1),
-      createAgentTemplate: create,
+      createAgentIdentity: create,
     }) as DoplClient;
     await opCreate(client, ME, { name: "Researcher", visibility: "workspace" });
     expect(create.mock.calls[0][0]).toMatchObject({ visibility: "workspace" });
@@ -274,7 +274,7 @@ describe("400 CONTAINER_PUBLISH_UNACKNOWLEDGED reaches the agent as a next actio
   it("on a previewed op it says to preview again — this can only be a race", async () => {
     const client = stub({
       ...workspaceStub("standard", 1),
-      createAgentTemplate: vi.fn(async () => {
+      createAgentIdentity: vi.fn(async () => {
         throw apiError(400, "CONTAINER_PUBLISH_UNACKNOWLEDGED");
       }),
     }) as DoplClient;
@@ -322,7 +322,7 @@ describe("400 CONTAINER_PUBLISH_UNACKNOWLEDGED reaches the agent as a next actio
   it("leaves every OTHER 400 alone — the mapper is keyed on the code", async () => {
     const client = stub({
       ...workspaceStub("standard", 1),
-      createAgentTemplate: vi.fn(async () => {
+      createAgentIdentity: vi.fn(async () => {
         throw apiError(400, "VALIDATION_FAILED");
       }),
     }) as DoplClient;
@@ -443,10 +443,10 @@ describe("dopl_agent — a scope SET is order-independent under the confirm toke
   const ENTRY = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
 
   it("accepts the token when the same scopes arrive in a different order", async () => {
-    const create = vi.fn(async () => TEMPLATE);
+    const create = vi.fn(async () => IDENTITY);
     const client = stub({
       ...sharedContainer(),
-      createAgentTemplate: create,
+      createAgentIdentity: create,
     }) as DoplClient;
     const base = { name: "Researcher", visibility: "workspace" as const };
 
@@ -478,10 +478,10 @@ describe("dopl_agent — a scope SET is order-independent under the confirm toke
     // ⚠ The other half: sorting must not make two DIFFERENT sets hash the same.
     // A folder added after the preview is an audience change the operator never
     // saw, and the remedy is a fresh preview.
-    const create = vi.fn(async () => TEMPLATE);
+    const create = vi.fn(async () => IDENTITY);
     const client = stub({
       ...sharedContainer(),
-      createAgentTemplate: create,
+      createAgentIdentity: create,
     }) as DoplClient;
     const base = { name: "Researcher", visibility: "workspace" as const };
 

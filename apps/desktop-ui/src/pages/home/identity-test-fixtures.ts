@@ -1,7 +1,7 @@
 import { fireEvent, screen } from "@testing-library/react";
 import type { BridgeRequestOpts, BridgeResponse } from "#/lib/dopl-bridge";
 import { SEGMENT, USER_ID, WORKSPACE_ID, bridgeCalls, ok } from "#/test-utils/bridge";
-import type { AgentTemplate } from "@/features/agent-templates/client/types";
+import type { AgentIdentity } from "@/features/agent-identities/client/types";
 import {
   CONTAINER_BASES,
   KB_SHARED,
@@ -11,29 +11,29 @@ import {
 
 /**
  * THE /home AGENTS FIXTURES AND THEIR ROUTING TABLE — shared by
- * `agent-panels.test.tsx` (the reading face, M2) and `agent-authoring.test.tsx`
+ * `identity-panels.test.tsx` (the reading face, M2) and `identity-authoring.test.tsx`
  * (the writing face, M3/M4).
  *
- * ⚠ EXTRACTED 2026-08-26 BECAUSE `agent-panels.test.tsx` WAS AT 412 LINES with
+ * ⚠ EXTRACTED 2026-08-26 BECAUSE `identity-panels.test.tsx` WAS AT 412 LINES with
  * the authoring wave still to cover (§1: a file near the cap cannot absorb the
  * next entry). Extracting the fixtures rather than copying them is the point —
  * a second `T_HOME` is how two suites come to disagree about what a
- * home-workspace template looks like, and this face's whole hazard (F-331) is
+ * home-workspace identity looks like, and this face's whole hazard (F-331) is
  * two workspaces being mistaken for each other.
  *
  * ⚠ THE ROUTES ARE CHAINED IN FRONT OF THE HOME HARNESS, not added to it:
- * `/api/agent-templates` is this face's read alone, and the harness answers
+ * `/api/agent-identities` is this face's read alone, and the harness answers
  * every other path the page opens with.
  */
 
 export const OTHER_WS = "ws-link-2";
 
-/** One template, typed so a rename of any `AgentTemplate` field breaks the
+/** One identity, typed so a rename of any `AgentIdentity` field breaks the
  *  fixture at compile time rather than leaving these suites green against a
  *  shape the endpoint stopped sending. */
-export function template(
-  over: Partial<AgentTemplate> & { id: string; name: string }
-): AgentTemplate {
+export function identity(
+  over: Partial<AgentIdentity> & { id: string; name: string }
+): AgentIdentity {
   return {
     workspaceId: LINK_WORKSPACE_ID,
     description: null,
@@ -51,24 +51,24 @@ export function template(
 }
 
 /** Scope A, mine — shared into the channel, no authorship marker. */
-export const T_SHARED = template({
+export const T_SHARED = identity({
   id: "tpl-shared-1",
   name: "Renewal chaser",
   visibility: "workspace",
 });
-/** ⚠ Scope A, the PEER's. A member-granted claimer can create templates in the
+/** ⚠ Scope A, the PEER's. A member-granted claimer can create identities in the
  *  container (Q5), so this is the row the marker exists for. */
-export const T_SHARED_PEER = template({
+export const T_SHARED_PEER = identity({
   id: "tpl-shared-2",
   name: "Priya's intake bot",
   visibility: "workspace",
   createdBy: "user-2",
 });
 /** Scope B — private, mine, in the container. */
-export const T_PRIVATE = template({ id: "tpl-private-1", name: "Scratch agent" });
+export const T_PRIVATE = identity({ id: "tpl-private-1", name: "Scratch agent" });
 /** ⚠ Private but SOMEBODY ELSE'S. The server would not send it; the client
  *  filter is a second fence and this is what pins it. */
-export const T_PRIVATE_PEER = template({
+export const T_PRIVATE_PEER = identity({
   id: "tpl-private-2",
   name: "Priya's drafts bot",
   createdBy: "user-2",
@@ -76,7 +76,7 @@ export const T_PRIVATE_PEER = template({
 /** ⚠ NEITHER SECTION. `team` has no referent in a container, so it must be
  *  DROPPED — without a row in this state, deleting the grouping's unknown-value
  *  guard changes nothing visible. */
-export const T_TEAM = template({
+export const T_TEAM = identity({
   id: "tpl-team-1",
   name: "Team ops bot",
   visibility: "team",
@@ -89,7 +89,7 @@ export const T_TEAM = template({
  * The copy (M4) must carry the fields and DROP the base; a bare fixture would
  * leave "knowledgeBaseIds cleared" indistinguishable from "there were none".
  */
-export const T_HOME = template({
+export const T_HOME = identity({
   id: "tpl-home-1",
   name: "Fundraise analyst",
   workspaceId: WORKSPACE_ID,
@@ -106,20 +106,20 @@ export const T_HOME = template({
  * separates them, and the router below answers BOTH shelves when the param is
  * missing. Collapse that branch and the exclusion pin goes vacuous.
  */
-export const T_HOME_WORKSPACE_SHELF = template({
+export const T_HOME_WORKSPACE_SHELF = identity({
   id: "tpl-home-ws-1",
   name: "Quarterly reporter",
   workspaceId: WORKSPACE_ID,
 });
 /** …and a `team` row over there too, so the drop is pinned on both reads. */
-export const T_HOME_TEAM = template({
+export const T_HOME_TEAM = identity({
   id: "tpl-home-2",
   name: "Team ops bot",
   workspaceId: WORKSPACE_ID,
   visibility: "team",
   teamIds: ["team-9"],
 });
-export const DANA_TEMPLATE = template({
+export const DANA_IDENTITY = identity({
   id: "tpl-dana-1",
   name: "Dana's assistant",
   workspaceId: OTHER_WS,
@@ -131,12 +131,12 @@ export const DANA_TEMPLATE = template({
 export const TEAMS_PATH = `/api/workspaces/${SEGMENT}/teams`;
 
 /**
- * `GET/POST/PATCH/DELETE /api/agent-templates`, routed by WHICH WORKSPACE was
+ * `GET/POST/PATCH/DELETE /api/agent-identities`, routed by WHICH WORKSPACE was
  * asked for.
  *
  * ⚠ `x-workspace-id` is an `opts` field over the bridge, not part of the path —
  * both scopes hit the SAME url, so a suite matching on the path alone would
- * serve the container's templates to the home scope and pass while the two
+ * serve the container's identities to the home scope and pass while the two
  * scopes were wired to one workspace (which is precisely F-331's shape).
  *
  * ⚠ THE POST ECHOES THE WORKSPACE IT WAS ADDRESSED TO. The created row's
@@ -148,16 +148,16 @@ export const TEAMS_PATH = `/api/workspaces/${SEGMENT}/teams`;
  * assertion that matters for the copy is on the REQUEST BODY, which is the
  * thing the client composed.
  */
-export function agentTemplates(
+export function agentIdentities(
   path: string,
   opts: BridgeRequestOpts
 ): Promise<BridgeResponse> {
-  const body = (opts.body ?? {}) as Partial<AgentTemplate>;
+  const body = (opts.body ?? {}) as Partial<AgentIdentity>;
   if (opts.method === "POST") {
     const name = body.name ?? "Untitled";
     return Promise.resolve(
       ok({
-        template: template({
+        identity: identity({
           id: `tpl-new-${name.toLowerCase().replace(/\W+/g, "-")}`,
           name,
           description: body.description ?? null,
@@ -172,12 +172,12 @@ export function agentTemplates(
   }
   if (opts.method === "PATCH") {
     const source = ALL.find((t) => path.endsWith(t.id)) ?? T_PRIVATE;
-    return Promise.resolve(ok({ template: { ...source, ...body } }));
+    return Promise.resolve(ok({ identity: { ...source, ...body } }));
   }
   if (opts.workspaceId !== WORKSPACE_ID) {
     return Promise.resolve(
       ok({
-        templates: [T_SHARED, T_SHARED_PEER, T_PRIVATE, T_PRIVATE_PEER, T_TEAM],
+        identities: [T_SHARED, T_SHARED_PEER, T_PRIVATE, T_PRIVATE_PEER, T_TEAM],
       })
     );
   }
@@ -187,13 +187,13 @@ export function agentTemplates(
   // forgotten param falls into and the only reason the exclusion pins can fail.
   const shelf = new URLSearchParams(path.split("?")[1] ?? "").get("shelf");
   if (shelf === "home") {
-    return Promise.resolve(ok({ templates: [T_HOME, T_HOME_TEAM] }));
+    return Promise.resolve(ok({ identities: [T_HOME, T_HOME_TEAM] }));
   }
   if (shelf === "workspace") {
-    return Promise.resolve(ok({ templates: [T_HOME_WORKSPACE_SHELF] }));
+    return Promise.resolve(ok({ identities: [T_HOME_WORKSPACE_SHELF] }));
   }
   return Promise.resolve(
-    ok({ templates: [T_HOME, T_HOME_TEAM, T_HOME_WORKSPACE_SHELF] })
+    ok({ identities: [T_HOME, T_HOME_TEAM, T_HOME_WORKSPACE_SHELF] })
   );
 }
 
@@ -204,7 +204,7 @@ const ALL = [T_SHARED, T_SHARED_PEER, T_PRIVATE, T_PRIVATE_PEER, T_TEAM, T_HOME]
  * folds in `channelGrants` and is a different cache entry from the plain
  * workspace read (INVARIANTS §9) — but until 2026-08-26 this table stripped the
  * query before dispatching, so both reads got the same body and
- * `agent-authoring.test.tsx › attaches the TARGET workspace's knowledge bases`
+ * `identity-authoring.test.tsx › attaches the TARGET workspace's knowledge bases`
  * pinned NOTHING about which entry the attach picker uses. This row is what
  * makes the two answers distinguishable: the attach picker must never show it.
  */
@@ -232,14 +232,14 @@ function channelScopedBases(): Promise<BridgeResponse> {
  * body, so a table that strips it hands the picker an answer it should not be
  * able to see and calls it a pass.
  */
-export function agentRoutes(
+export function identityRoutes(
   path: string,
   opts: BridgeRequestOpts = {}
 ): Promise<BridgeResponse> {
   const bare = path.split("?")[0];
-  if (bare.startsWith("/api/agent-templates")) return agentTemplates(path, opts);
+  if (bare.startsWith("/api/agent-identities")) return agentIdentities(path, opts);
   // ⚠ Answered so the HOME-workspace editor's teams read resolves. A CONTAINER
-  // mount must never reach it, and `agent-authoring.test.tsx` asserts on the
+  // mount must never reach it, and `identity-authoring.test.tsx` asserts on the
   // absence of this very call.
   if (bare === TEAMS_PATH) return Promise.resolve(ok({ teams: [] }));
   if (
@@ -258,12 +258,12 @@ export function agentRoutes(
  *  control the operator clicks, so nothing here bypasses the pane token.
  *  ⚠ Each suite declares its OWN `channel-surface` stub: `vi.mock` is hoisted
  *  per file and its factory may not close over module imports. */
-export async function openAgents(): Promise<void> {
+export async function openIdentities(): Promise<void> {
   // ⚠ GATES ON THE TAB ROW, NOT ON THE RECORD PANE (2026-09-01). It awaited
   // `channel-surface` — free when the page opened on Channels, and a hang now
   // that it opens on Overview, where no surface is mounted at all.
   await screen.findByRole("tab", { name: "Overview" });
-  fireEvent.click(screen.getByText("Agents"));
+  fireEvent.click(screen.getByText("Identities"));
 }
 
 // ⚠ `chooseScope` LIVED HERE AND IS DELETED (2026-08-27). The pane has two
@@ -271,14 +271,14 @@ export async function openAgents(): Promise<void> {
 // clicked a control which no longer exists would fail loudly, which is fine —
 // keeping it as a no-op is what would have been dangerous.
 
-/** The template calls, split by which workspace they addressed. */
-export function templateCalls(
+/** The identity calls, split by which workspace they addressed. */
+export function identityCalls(
   mock: { mock: { calls: unknown[][] } },
   workspaceId: string | undefined
 ) {
   return bridgeCalls(mock).filter(
     (c) =>
-      c.path.split("?")[0].startsWith("/api/agent-templates") &&
+      c.path.split("?")[0].startsWith("/api/agent-identities") &&
       c.opts.workspaceId === workspaceId
   );
 }

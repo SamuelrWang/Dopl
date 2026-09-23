@@ -150,7 +150,7 @@ test("session-engine: startSession merges the spec ids into the context for EVER
   // CALL (2026-08-31). The profile is a fact about the SESSION, not about the launch payload, so
   // it is spread here rather than stored on `s.context` — exactly what `session-seed.js ›
   // takeFraming` already did, and what this site was missing. It went unseen while both
-  // template-carrying lanes spawned idle, so `takeFraming` was the only builder a template ever
+  // identity-carrying lanes spawned idle, so `takeFraming` was the only builder an identity ever
   // reached; a running directive spawn reaches this one, and an undefined profile reads as "not
   // read_only" through `kbReadable`, i.e. the turn would ORDER a hard-denied tool.
   assert.match(src, /framing\.buildFencedTurn\(\{ side: spec\.side, message: spec\.firstMessage, context: \{ \.\.\.context, profile: spec\.profile, mcpDiscovery: runtimeRegistry\.capability\.mcpDiscovery\([^}]*\) \}, nonce \}\)/);

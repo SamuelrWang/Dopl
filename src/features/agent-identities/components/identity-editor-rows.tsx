@@ -13,10 +13,10 @@ import {
 import { DialogField } from "@/shared/ui/standard-dialog";
 import { MenuItem, Popover } from "@/shared/ui/popover-menu";
 import { SelectMenu, type SelectMenuOption } from "@/shared/ui/select-menu";
-import type { TemplateField, TemplateFieldType } from "../client/types";
+import type { IdentityField, IdentityFieldType } from "../client/types";
 import {
-  TEMPLATE_FIELD_TYPES,
-  TEMPLATE_FIELD_TYPE_DEFAULT,
+  IDENTITY_FIELD_TYPES,
+  IDENTITY_FIELD_TYPE_DEFAULT,
 } from "../types";
 
 /**
@@ -26,7 +26,7 @@ import {
  * faces, not one: a popup FORM field is `shared/ui/form-dialog.tsx ›
  * UnderlineField` (since 2026-09-08), and the repeating key/value LIST — no
  * `FormSection` of its own — wears `shared/ui/wells.ts › RAISED_INPUT`. Never
- * `FIELD_WELL` / `.concave-field`: `template-editor-surface.test.tsx` reads this
+ * `FIELD_WELL` / `.concave-field`: `identity-editor-surface.test.tsx` reads this
  * source and fails on the banned class name.
  *
  * 🔒 **IN-BODY BUTTONS ARE THE KIT'S 26px PILL (Samuel, 2026-08-28)** —
@@ -41,7 +41,7 @@ import {
  *
  * ⚠ `RAISED_INPUT` and `Field` are RE-EXPORTED from here (promoted to the kit
  * 2026-08-27) so this feature's dialogs keep one import path. ⚠ **THAT WAS TWO
- * READERS AND IS ONE SINCE 2026-09-13** — `template-approval.tsx`; the launch
+ * READERS AND IS ONE SINCE 2026-09-13** — `identity-approval.tsx`; the launch
  * sheet was DELETED by Samuel's one-launch-surface ruling (INVARIANTS §5A), and
  * the New agent popup wears the POPUP kit's underline instead
  * (`shared/ui/form-dialog.tsx › UnderlineField`), which is a different recipe.
@@ -54,7 +54,7 @@ export { DialogField as Field };
  *
  * 🔒 **THE ADD DIALOG IS GONE (Samuel, 2026-09-22: *"right now it's like a
  * button. I don't like that … instead a gray box button that says New field"*,
- * and a new template *"should have an existing blank field that is already in,
+ * and a new identity *"should have an existing blank field that is already in,
  * just have it blank"*).** ⚠ **THE NOTE THAT STOOD HERE ARGUED THE OPPOSITE AND
  * ITS PREMISE NEVER ARRIVED**: adding was a dialog *"because a field is about to
  * be more than a key and a value (type, default, required), and a row four
@@ -65,21 +65,21 @@ export { DialogField as Field };
  * ⚠ **A ROW IS ADDED BY TYPING IN ONE, NOT BY COMMITTING A FORM.** The gray box
  * appends a BLANK row and nothing else, which is why there is no Add verb and
  * nothing to refuse: an empty key is dropped at SAVE
- * (`../lib/template-draft.ts › cleanFields`), so a row the operator opened and
+ * (`../lib/identity-draft.ts › cleanFields`), so a row the operator opened and
  * abandoned costs nothing and is never written.
- * ⚠ **AND THE FIRST ROW IS ALREADY THERE ON A NEW TEMPLATE** — `emptyDraft()`,
+ * ⚠ **AND THE FIRST ROW IS ALREADY THERE ON A NEW IDENTITY** — `emptyDraft()`,
  * not this component: a starter row is a fact about a DRAFT, and putting it here
- * would also paint one over a saved template that has no fields, where it would
+ * would also paint one over a saved identity that has no fields, where it would
  * read as a field somebody removed.
  */
 export function CustomFieldRows({
   fields,
   onChange,
 }: {
-  fields: ReadonlyArray<TemplateField>;
-  onChange: (next: TemplateField[]) => void;
+  fields: ReadonlyArray<IdentityField>;
+  onChange: (next: IdentityField[]) => void;
 }) {
-  function edit(index: number, patch: Partial<TemplateField>) {
+  function edit(index: number, patch: Partial<IdentityField>) {
     onChange(fields.map((f, i) => (i === index ? { ...f, ...patch } : f)));
   }
 
@@ -105,13 +105,13 @@ export function CustomFieldRows({
           {/* 🔒 **THE TYPE (Samuel, 2026-09-22), THIRD IN THE ROW.** It says how
               the VALUE is typed and nothing else — the value is a string on every
               branch and the launch splice reads the same `key: value` line it
-              always did (`../types.ts › TemplateFieldType` carries the scope and
+              always did (`../types.ts › IdentityFieldType` carries the scope and
               what was deliberately left out of it).
               ⚠ THE DIALOG DROPDOWN'S OWN FACE (`variant="raised"`), so the row's
               three controls are one recipe rather than an input, an input and a
               pill. */}
           <SelectMenu
-            value={field.type ?? TEMPLATE_FIELD_TYPE_DEFAULT}
+            value={field.type ?? IDENTITY_FIELD_TYPE_DEFAULT}
             options={FIELD_TYPE_OPTIONS}
             onChange={(type) => edit(index, { type })}
             ariaLabel={`Field ${index + 1} type`}
@@ -134,7 +134,7 @@ export function CustomFieldRows({
           empty slot the next field goes in.
           ⚠ FLAT, NEVER PRESSED IN — `bg-bg-inset` and nothing else. The
           pressed-in field recipe here is a regression with a source scan behind
-          it (`template-editor-surface.test.tsx`), which reads this file for the
+          it (`identity-editor-surface.test.tsx`), which reads this file for the
           banned class NAMES — so this note may not spell one either. */}
       <button
         type="button"
@@ -144,7 +144,7 @@ export function CustomFieldRows({
             // ⚠ THE DEFAULT IS STAMPED ON THE DRAFT ROW AND NOT ON THE WIRE:
             // `cleanFields` drops it again on the way out, so `text` still
             // travels as ABSENCE.
-            { key: "", value: "", type: TEMPLATE_FIELD_TYPE_DEFAULT },
+            { key: "", value: "", type: IDENTITY_FIELD_TYPE_DEFAULT },
           ])
         }
         className="flex w-full cursor-pointer items-center gap-1.5 rounded-lg bg-bg-inset px-2.5 py-2 text-left text-caption text-text-muted transition-colors hover:bg-bg-inset-hover"
@@ -158,10 +158,10 @@ export function CustomFieldRows({
 
 /**
  * THE FIVE SHAPES, LABELLED FOR A PERSON. ⚠ Derived from `../types.ts ›
- * TEMPLATE_FIELD_TYPES` rather than hand-listed, so a value the schema accepts
+ * IDENTITY_FIELD_TYPES` rather than hand-listed, so a value the schema accepts
  * and the row cannot offer is a TYPE ERROR rather than a missing option.
  */
-const FIELD_TYPE_LABELS: Record<TemplateFieldType, string> = {
+const FIELD_TYPE_LABELS: Record<IdentityFieldType, string> = {
   text: "Text",
   number: "Number",
   date: "Date",
@@ -169,8 +169,8 @@ const FIELD_TYPE_LABELS: Record<TemplateFieldType, string> = {
   url: "Link",
 };
 
-const FIELD_TYPE_OPTIONS: ReadonlyArray<SelectMenuOption<TemplateFieldType>> =
-  TEMPLATE_FIELD_TYPES.map((value) => ({
+const FIELD_TYPE_OPTIONS: ReadonlyArray<SelectMenuOption<IdentityFieldType>> =
+  IDENTITY_FIELD_TYPES.map((value) => ({
     value,
     label: FIELD_TYPE_LABELS[value],
   }));
@@ -186,7 +186,7 @@ const FIELD_TYPE_OPTIONS: ReadonlyArray<SelectMenuOption<TemplateFieldType>> =
  * reader downstream honours.
  * ⚠ **`boolean` IS THE ONE THAT SWAPS THE ELEMENT**, because there is no input
  * type for a yes/no and a free-text box is how a field ends up holding "yes",
- * "Y" and "true" in three templates. Its stored values are `"yes"` / `"no"`, and
+ * "Y" and "true" in three identities. Its stored values are `"yes"` / `"no"`, and
  * the EMPTY option stays — a yes/no nobody has answered is not a "no".
  */
 function FieldValueInput({
@@ -194,12 +194,12 @@ function FieldValueInput({
   index,
   onChange,
 }: {
-  field: TemplateField;
+  field: IdentityField;
   index: number;
   onChange: (next: string) => void;
 }) {
   const label = `Field ${index + 1} value`;
-  const type = field.type ?? TEMPLATE_FIELD_TYPE_DEFAULT;
+  const type = field.type ?? IDENTITY_FIELD_TYPE_DEFAULT;
   if (type === "boolean") {
     return (
       <select

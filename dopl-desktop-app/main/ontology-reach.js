@@ -29,7 +29,7 @@
 // to fetch.
 
 const REACH_PATH = '/api/ontology/reach';
-// ⚠ FIVE SECONDS, `template-resolve.js`'s budget and not `launch-directives.js`'s
+// ⚠ FIVE SECONDS, `identity-resolve.js`'s budget and not `launch-directives.js`'s
 // fifteen: this await sits in the ONE spawn funnel, so a human at the New Agent
 // button is behind every one of them. Enrichment must never make a launch feel
 // broken.
@@ -39,7 +39,7 @@ const REACH_TIMEOUT_MS = 5000;
 // validation is not one, and this list becomes PROMPT LINES.
 const MAX_ONTOLOGIES = 50;
 
-/** Narrowed, never spread (`template-resolve.js › narrow`'s rule): a key the
+/** Narrowed, never spread (`identity-resolve.js › narrow`'s rule): a key the
  *  server adds later must not arrive on a session object and start being depended
  *  on. The per-field NEUTRALIZERS live in `prompt-framing-ontology.js`. */
 function narrow(list) {

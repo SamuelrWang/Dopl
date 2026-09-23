@@ -199,7 +199,7 @@ export function ChannelsCore({
    */
   const openSearchHit = (item: SearchItem) => {
     if (item.kind === "knowledge") return onNavigatePath?.(`/${workspaceSlug}/knowledge`);
-    if (item.kind === "agentTemplates") return onNavigatePath?.(`/${workspaceSlug}/agents`);
+    if (item.kind === "agentIdentities") return onNavigatePath?.(`/${workspaceSlug}/identities`);
     if (item.kind === "members") return onNavigatePath?.(`/${workspaceSlug}/members`);
     if (item.kind === "skills") return onNavigatePath?.(`/${workspaceSlug}/skills`);
     if (item.kind === "chats") return onNavigatePath?.(`/${workspaceSlug}/chats`);

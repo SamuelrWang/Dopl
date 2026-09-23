@@ -209,7 +209,7 @@ function frontHost() {
 // `raised` (`h-9`) trigger; 540 was the first pass at the smaller one.
 // ⚠ WHAT CHANGED: the three adopted `select-menu.tsx › TRIGGER_FACE.raisedField` (Samuel,
 // 2026-08-29) — the app's consolidated dropdown size, the one the composer launch panel's
-// Template/Model rows wear. The face is identical (`auth-btn-3d-light`); the BOX shrank, so the row
+// Identity/Model rows wear. The face is identical (`auth-btn-3d-light`); the BOX shrank, so the row
 // needs less width and the old 600 left a band of empty space to the right of it.
 // ⚠ THE ARITHMETIC, REDONE OVER THE NEW SIZE, so the next adjustment knows what the floor is.
 // A `raisedField` trigger is `px-2` (16) + `gap-1.5` twice (12) + an 11px chevron = 39px of chrome

@@ -16,7 +16,7 @@ import {
  * B15).** Until `20260923120000_drop_home_scoped.sql` a personal row was
  * `home_scoped = true` inside whichever standard workspace a lookup called "the
  * default"; the column is dropped and it is an ordinary row in a container the
- * user owns and is the only member of. That is what lets a personal template or
+ * user owns and is the only member of. That is what lets a personal identity or
  * KB be used from ANY container the user is in — the id resolves its own
  * container (`resolve-resource.ts`) and sharing it is a GRANT, not a copy.
  *
@@ -45,19 +45,19 @@ import {
  * somewhere the surface that asked for it will never list.
  *
  * ⚠ **NOT A VISIBILITY GATE.** This module answers WHERE a row lives. Who may
- * read it is still `canSeeBase` / `canSeeTemplate` and their RLS twins, applied
+ * read it is still `canSeeBase` / `canSeeIdentity` and their RLS twins, applied
  * by the service layer exactly as before — the same separation
  * `service-shelf.test.ts › does NOT become a visibility gate` pins.
  */
 
-/** The two shelves, structurally identical to `KbShelf` and `TemplateShelf` —
+/** The two shelves, structurally identical to `KbShelf` and `IdentityShelf` —
  *  each feature keeps its own spelling (INVARIANTS §10) and both assign here. */
 export type PersonalShelf = "home" | "workspace";
 
 /**
  * 🔒 **THE PERSONAL-SHELF FENCE, AND IT IS THE ONLY ONE LEFT.**
  *
- * ⚠ **IT REPLACES `resolveHomeScope` AND `resolveTemplateHomeScope`, BOTH
+ * ⚠ **IT REPLACES `resolveHomeScope` AND `resolveIdentityHomeScope`, BOTH
  * DELETED (2026-09-02, slice B15).** Those were two hand-mirrored copies of one
  * three-condition fence — a PERSON's credential, a PRIVATE row, and the caller's
  * own DEFAULT STANDARD WORKSPACE — and each condition died for its own reason:
@@ -80,7 +80,7 @@ export type PersonalShelf = "home" | "workspace";
  * neither silently created on the other shelf.
  *
  * ⚠ **ONE CLASS, ONE WIRE CODE, WHERE THERE WERE TWO.**
- * `HomeScopeForbiddenError` / `TEMPLATE_HOME_SCOPE_FORBIDDEN` were a pair of
+ * `HomeScopeForbiddenError` / `IDENTITY_HOME_SCOPE_FORBIDDEN` were a pair of
  * hand-mirrors over a pair of hand-mirrored fences, and both are deleted with
  * them. It extends `HttpError`, so `shared/api/http-error-response.ts`'s
  * pass-through carries it at EVERY boundary with no per-feature mapping arm —
@@ -105,8 +105,8 @@ export class PersonalContainerMissingError extends HttpError {
  *
  * ⚠ **IT EXISTS BECAUSE THERE ARE THREE CALLERS NOW, NOT TWO.** The router
  * below throws two of these inline, `knowledge/server/service-base-gates.ts ›
- * resolveCreateDestination` mapped all three by hand, and the AGENT-TEMPLATES
- * twin (`agent-templates/server/service-write-gates.ts`) is the third. Three
+ * resolveCreateDestination` mapped all three by hand, and the AGENT-IDENTITIES
+ * twin (`agent-identities/server/service-write-gates.ts`) is the third. Three
  * hand-mirrored copies of a tenancy sentence is the shape that produced the
  * divergent shelf fence this module's header retires by name.
  *

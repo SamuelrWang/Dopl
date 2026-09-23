@@ -8,15 +8,15 @@ import {
   type ApiMutation,
   type UseApiMutationConfig,
 } from "@/shared/hooks/use-api-mutation";
-import { AgentTemplateApiError, agentTemplateRequest } from "../client/api";
-import { agentTemplateKeys, agentTemplatePath, agentTemplatesPath } from "../client/query-keys";
-import type { TemplateShelf } from "../client/types";
+import { AgentIdentityApiError, agentIdentityRequest } from "../client/api";
+import { agentIdentityKeys, agentIdentityPath, agentIdentitiesPath } from "../client/query-keys";
+import type { IdentityShelf } from "../client/types";
 import type {
-  AgentTemplate,
-  AgentTemplateCreateBody,
-  AgentTemplateListResponse,
-  AgentTemplateResponse,
-  AgentTemplateUpdateBody,
+  AgentIdentity,
+  AgentIdentityCreateBody,
+  AgentIdentityListResponse,
+  AgentIdentityResponse,
+  AgentIdentityUpdateBody,
 } from "../client/types";
 
 /**
@@ -33,21 +33,21 @@ import type {
  * a cross-tenant display bug the moment a surface mounts two: the /home Agents
  * tab reads a channel CONTAINER and the home workspace side by side.
  *   - create/update `upsertRow` APPENDS when the id is absent, so a write in one
- *     workspace materialised that template in the OTHER workspace's list until a
+ *     workspace materialised that identity in the OTHER workspace's list until a
  *     cold refetch;
- *   - the entry key is exactly reproducible here because `useAgentTemplates`
+ *   - the entry key is exactly reproducible here because `useAgentIdentities`
  *     passes `{workspaceId, select}` and no `query` — `[path, workspaceId,
  *     undefined]`. **Check that before copying this pattern**: a path that also
  *     has query-param variants needs both axes, and the prefix is the answer for
  *     the param axis (INVARIANTS §8).
- * `./use-agent-template-writes.test.ts` is the two-workspace pin.
+ * `./use-agent-identity-writes.test.ts` is the two-workspace pin.
  *
  * ⚠ CREATE HAS NO OPTIMISTIC ROW, DELIBERATELY. The server mints the id, and a
  * placeholder card would have to invent one; the POST answers with the created
- * template, so `reconcile` folds the real row in and NO refetch is needed
+ * identity, so `reconcile` folds the real row in and NO refetch is needed
  * (INVARIANTS §8). `coldKeys` covers the one case reconcile cannot: a cache
  * entry that still holds nothing (cold start, or the IndexedDB restore window),
- * where a patch has nothing to patch and the new template would never reach the
+ * where a patch has nothing to patch and the new identity would never reach the
  * screen. ⚠ **IT TAKES THE ENTRY KEY FOR THE SAME REASON THE PATCHES DO** — over
  * the prefix, `coldKeys` asks "does ANY variant of this path hold data", so one
  * warm workspace beside a cold one answers "warm" and the cold list never
@@ -59,17 +59,17 @@ import type {
  */
 
 /** The list cache as it sits on disk — the RAW response body, not the selection. */
-type TemplatesCache = AgentTemplateListResponse;
+type IdentitiesCache = AgentIdentityListResponse;
 
 export interface CreateDraft {
-  body: AgentTemplateCreateBody;
+  body: AgentIdentityCreateBody;
 }
 
 export interface UpdateDraft {
-  templateId: string;
-  body: AgentTemplateUpdateBody;
+  identityId: string;
+  body: AgentIdentityUpdateBody;
   /** The row as it should read the moment the operator clicks Save. */
-  optimistic: AgentTemplate;
+  optimistic: AgentIdentity;
   /**
    * 🔒 The `X-Updated-At` precondition — the `updatedAt` of the row the editor
    * was OPENED on (F-747). Absent = last-writer-wins, which is the shape this
@@ -80,44 +80,44 @@ export interface UpdateDraft {
 }
 
 export interface DeleteDraft {
-  templateId: string;
+  identityId: string;
 }
 
 /** Put the server's own row where the optimistic one was — or append it. */
-function upsertRow(cache: TemplatesCache | undefined, row: AgentTemplate) {
+function upsertRow(cache: IdentitiesCache | undefined, row: AgentIdentity) {
   if (!cache) return cache;
-  const exists = cache.templates.some((t) => t.id === row.id);
+  const exists = cache.identities.some((t) => t.id === row.id);
   return {
     ...cache,
-    templates: exists
-      ? cache.templates.map((t) => (t.id === row.id ? row : t))
-      : [...cache.templates, row],
+    identities: exists
+      ? cache.identities.map((t) => (t.id === row.id ? row : t))
+      : [...cache.identities, row],
   };
 }
 
-function dropRow(cache: TemplatesCache | undefined, templateId: string) {
+function dropRow(cache: IdentitiesCache | undefined, identityId: string) {
   if (!cache) return cache;
   return {
     ...cache,
-    templates: cache.templates.filter((t) => t.id !== templateId),
+    identities: cache.identities.filter((t) => t.id !== identityId),
   };
 }
 
 export function createConfig(
   workspaceId: string,
-  shelf: TemplateShelf | undefined,
+  shelf: IdentityShelf | undefined,
   coldFallback: () => ReturnType<typeof coldKeys>
-): UseApiMutationConfig<CreateDraft, AgentTemplateResponse> {
+): UseApiMutationConfig<CreateDraft, AgentIdentityResponse> {
   return {
     request: (draft) => ({
-      path: agentTemplatesPath(),
+      path: agentIdentitiesPath(),
       method: "POST",
       body: draft.body,
       workspaceId,
     }),
     reconcile: (data) =>
-      patchCache<TemplatesCache>(agentTemplateKeys.list(shelf).entry({ workspaceId }), (cache) =>
-        upsertRow(cache, data.template)
+      patchCache<IdentitiesCache>(agentIdentityKeys.list(shelf).entry({ workspaceId }), (cache) =>
+        upsertRow(cache, data.identity)
       ),
     invalidate: coldFallback,
   };
@@ -125,70 +125,70 @@ export function createConfig(
 
 export function updateConfig(
   workspaceId: string,
-  shelf: TemplateShelf | undefined
-): UseApiMutationConfig<UpdateDraft, AgentTemplateResponse> {
+  shelf: IdentityShelf | undefined
+): UseApiMutationConfig<UpdateDraft, AgentIdentityResponse> {
   return {
     request: (draft) => ({
-      path: agentTemplatePath(draft.templateId),
+      path: agentIdentityPath(draft.identityId),
       method: "PATCH",
       body: draft.body,
       workspaceId,
       expectedUpdatedAt: draft.expectedUpdatedAt,
     }),
     optimistic: (draft) =>
-      patchCache<TemplatesCache>(agentTemplateKeys.list(shelf).entry({ workspaceId }), (cache) =>
+      patchCache<IdentitiesCache>(agentIdentityKeys.list(shelf).entry({ workspaceId }), (cache) =>
         upsertRow(cache, draft.optimistic)
       ),
     reconcile: (data) =>
-      patchCache<TemplatesCache>(agentTemplateKeys.list(shelf).entry({ workspaceId }), (cache) =>
-        upsertRow(cache, data.template)
+      patchCache<IdentitiesCache>(agentIdentityKeys.list(shelf).entry({ workspaceId }), (cache) =>
+        upsertRow(cache, data.identity)
       ),
   };
 }
 
 export function deleteConfig(
   workspaceId: string,
-  shelf: TemplateShelf | undefined
+  shelf: IdentityShelf | undefined
 ): UseApiMutationConfig<DeleteDraft, void> {
   return {
     request: (draft) => ({
-      path: agentTemplatePath(draft.templateId),
+      path: agentIdentityPath(draft.identityId),
       method: "DELETE",
       workspaceId,
     }),
     optimistic: (draft) =>
-      patchCache<TemplatesCache>(agentTemplateKeys.list(shelf).entry({ workspaceId }), (cache) =>
-        dropRow(cache, draft.templateId)
+      patchCache<IdentitiesCache>(agentIdentityKeys.list(shelf).entry({ workspaceId }), (cache) =>
+        dropRow(cache, draft.identityId)
       ),
   };
 }
 
-export interface AgentTemplateWrites {
-  create: ApiMutation<CreateDraft, AgentTemplateResponse>;
-  update: ApiMutation<UpdateDraft, AgentTemplateResponse>;
+export interface AgentIdentityWrites {
+  create: ApiMutation<CreateDraft, AgentIdentityResponse>;
+  update: ApiMutation<UpdateDraft, AgentIdentityResponse>;
   remove: ApiMutation<DeleteDraft, void>;
 }
 
 /**
- * @param shelf ⚠ MUST MATCH the `shelf` the surface's `useAgentTemplates` read
+ * @param shelf ⚠ MUST MATCH the `shelf` the surface's `useAgentIdentities` read
  *   was mounted with (`../client/query-keys.ts`). Every patch below addresses
  *   ONE entry; a mismatch patches a key nobody is subscribed to and the write
  *   silently does not appear — F-331's failure with the SHELF as the axis.
  *   `undefined` = the unfiltered list, which is what a link CONTAINER surface
  *   and the launch picker use.
  */
-export function useAgentTemplateWrites(
+export function useAgentIdentityWrites(
   workspaceId: string,
-  shelf?: TemplateShelf
-): AgentTemplateWrites {
+  shelf?: IdentityShelf
+): AgentIdentityWrites {
   const client = useQueryClient();
-  const listEntry = agentTemplateKeys.list(shelf).entry({ workspaceId });
+  const listEntry = agentIdentityKeys.list(shelf).entry({ workspaceId });
   return {
     create: useApiMutationWith(
-      agentTemplateRequest,
+      agentIdentityRequest,
       createConfig(workspaceId, shelf, () => coldKeys(client, [listEntry]))
     ),
-    update: useApiMutationWith(agentTemplateRequest, {
+    update: useApiMutationWith(agentIdentityRequest, {
       ...updateConfig(workspaceId, shelf),
       // 🔒 **THE 412 REFETCH (F-747), AND IT LIVES HERE BECAUSE THE CLIENT DOES.**
       // The optimistic patch has already rolled back by now, so the cache holds
@@ -197,7 +197,7 @@ export function useAgentTemplateWrites(
       // other failure leaves the list alone, which is what `reconcile` is for.
       onError: (error) => {
         if (
-          error instanceof AgentTemplateApiError &&
+          error instanceof AgentIdentityApiError &&
           error.status === 412
         ) {
           void client.invalidateQueries({ queryKey: listEntry });
@@ -205,7 +205,7 @@ export function useAgentTemplateWrites(
       },
     }),
     remove: useApiMutationWith(
-      agentTemplateRequest,
+      agentIdentityRequest,
       deleteConfig(workspaceId, shelf)
     ),
   };

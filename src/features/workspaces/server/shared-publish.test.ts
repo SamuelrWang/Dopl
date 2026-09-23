@@ -7,11 +7,11 @@
  * that is the point of putting it here rather than beside any of them. The gap
  * it closes was one rule stated in one client; the repair is one predicate
  * called from three features, and a unit test of the predicate would pass just
- * as well if `createTemplate` never called it. Each `it` below reaches the real
+ * as well if `createIdentity` never called it. Each `it` below reaches the real
  * service and asserts on the REPOSITORY — what was written, or that nothing was.
  *
  * ⚠ **SKILLS WERE THE THIRD CALLER AND THEY WERE MISSING UNTIL 2026-09-02.** A11
- * shipped the helper into knowledge bases and agent templates and left
+ * shipped the helper into knowledge bases and agent identities and left
  * `dopl_skill(op="set_visibility")` publishing into a peer's container with
  * nothing in front of it and nothing behind it — a row closed on two of three
  * types reads, from the ledger, as a row closed. That is why the arms below are
@@ -45,17 +45,17 @@ vi.mock("./repository-overview", () => ({
   countActiveMembers: vi.fn(),
 }));
 
-vi.mock("@/features/agent-templates/server/repository", () => ({
-  listTemplatesForWorkspace: vi.fn(),
-  findTemplateById: vi.fn(),
-  insertTemplate: vi.fn(),
-  updateTemplateRow: vi.fn(),
-  hardDeleteTemplate: vi.fn(),
-  listTeamLinksForTemplates: vi.fn(),
+vi.mock("@/features/agent-identities/server/repository", () => ({
+  listIdentitiesForWorkspace: vi.fn(),
+  findIdentityById: vi.fn(),
+  insertIdentity: vi.fn(),
+  updateIdentityRow: vi.fn(),
+  hardDeleteIdentity: vi.fn(),
+  listTeamLinksForIdentities: vi.fn(),
   replaceTeamLinks: vi.fn(),
   listTeamIdsForUser: vi.fn(),
   filterTeamIdsInWorkspace: vi.fn(),
-  listKnowledgeLinksForTemplates: vi.fn(),
+  listKnowledgeLinksForIdentities: vi.fn(),
   replaceKnowledgeLinks: vi.fn(),
   listKnowledgeBaseAccessRows: vi.fn(),
   listKnowledgeBaseTeamGrants: vi.fn(),
@@ -171,20 +171,20 @@ vi.mock("@/features/teams/server/repository", () => ({
 import { findWorkspaceById } from "./repository";
 import { countActiveMembers } from "./repository-overview";
 import { ContainerPublishUnacknowledgedError } from "./shared-publish";
-import * as templateRepo from "@/features/agent-templates/server/repository";
+import * as identityRepo from "@/features/agent-identities/server/repository";
 // ⚠ THE FEATURE'S OWN FIXTURES, NOT A THIRD COPY. `resetRepoMocks` is where the
 // echo-what-you-inserted behaviour lives, and a hand-rolled row here would 404
-// on its own result the first time `canSeeTemplate` moved.
+// on its own result the first time `canSeeIdentity` moved.
 import {
   OWNER,
-  ctx as templateFixtureCtx,
+  ctx as identityFixtureCtx,
   resetRepoMocks,
-  template,
-} from "@/features/agent-templates/server/service-writes-fixtures";
+  identity,
+} from "@/features/agent-identities/server/service-writes-fixtures";
 import {
-  createTemplate,
-  updateTemplate,
-} from "@/features/agent-templates/server/service-writes";
+  createIdentity,
+  updateIdentity,
+} from "@/features/agent-identities/server/service-writes";
 import * as baseRepo from "@/features/knowledge/server/repository";
 import { getBaseById } from "@/features/knowledge/server/service-bases";
 import {
@@ -205,15 +205,15 @@ const USER = OWNER;
 
 const mockWorkspace = vi.mocked(findWorkspaceById);
 const mockCount = vi.mocked(countActiveMembers);
-const mockTemplates = vi.mocked(templateRepo);
+const mockIdentities = vi.mocked(identityRepo);
 const mockBases = vi.mocked(baseRepo);
 const mockGetBase = vi.mocked(getBaseById);
 const mockSkills = vi.mocked(skillRepo);
 const mockGetSkill = vi.mocked(getSkillBySlug);
 
 /** The operator, at the keyboard, inside their own link container. */
-function templateCtx() {
-  return templateFixtureCtx({ workspaceId: CONTAINER, role: "owner" });
+function identityCtx() {
+  return identityFixtureCtx({ workspaceId: CONTAINER, role: "owner" });
 }
 
 /** ⚠ ONE SHAPE, TWO NAMES — the two feature contexts differ only in their TYPE
@@ -250,9 +250,9 @@ beforeEach(() => {
   vi.clearAllMocks();
   room("link", 2);
 
-  resetRepoMocks(mockTemplates);
-  mockTemplates.findTemplateById.mockResolvedValue(
-    template({ workspaceId: CONTAINER })
+  resetRepoMocks(mockIdentities);
+  mockIdentities.findIdentityById.mockResolvedValue(
+    identity({ workspaceId: CONTAINER })
   );
 
   mockBases.insertBase.mockResolvedValue({ id: "kb-1", slug: "notes" } as never);
@@ -271,14 +271,14 @@ beforeEach(() => {
 // ── The refusal ──────────────────────────────────────────────────────
 
 describe("a publish into a shared room without the flag", () => {
-  it("refuses an agent-template create, and writes NOTHING", async () => {
+  it("refuses an agent-identity create, and writes NOTHING", async () => {
     await expect(
-      createTemplate(templateCtx(), { name: "Scout", visibility: "workspace" })
+      createIdentity(identityCtx(), { name: "Scout", visibility: "workspace" })
     ).rejects.toBeInstanceOf(ContainerPublishUnacknowledgedError);
     // 🔒 THE ASSERTION THAT MATTERS. A gate placed after the insert would throw
-    // the same error over a row that already exists — and a template published
+    // the same error over a row that already exists — and an identity published
     // into a peer's room is not undone by the caller seeing a 400.
-    expect(mockTemplates.insertTemplate).not.toHaveBeenCalled();
+    expect(mockIdentities.insertIdentity).not.toHaveBeenCalled();
   });
 
   it("refuses a knowledge-base create, before the slug is taken", async () => {
@@ -301,7 +301,7 @@ describe("a publish into a shared room without the flag", () => {
   });
 
   it("carries the code the route maps to a 400", async () => {
-    const err = await createTemplate(templateCtx(), {
+    const err = await createIdentity(identityCtx(), {
       name: "Scout",
       visibility: "workspace",
     }).catch((e: unknown) => e);
@@ -314,19 +314,19 @@ describe("a publish into a shared room without the flag", () => {
 // ── The flag ─────────────────────────────────────────────────────────
 
 describe("acknowledgeShared: true", () => {
-  it("lets the template create through, and is NOT written to the row", async () => {
-    await createTemplate(templateCtx(), {
+  it("lets the identity create through, and is NOT written to the row", async () => {
+    await createIdentity(identityCtx(), {
       name: "Scout",
       visibility: "workspace",
       acknowledgeShared: true,
     });
-    expect(mockTemplates.insertTemplate).toHaveBeenCalledWith(
+    expect(mockIdentities.insertIdentity).toHaveBeenCalledWith(
       expect.objectContaining({ visibility: "workspace" })
     );
     // ⚠ IT IS A PRECONDITION, NOT A COLUMN. A flag that reached the repository
     // would be a schema change nobody asked for, and the next reader would take
     // it for a stored fact about the row.
-    expect(mockTemplates.insertTemplate.mock.calls[0][0]).not.toHaveProperty(
+    expect(mockIdentities.insertIdentity.mock.calls[0][0]).not.toHaveProperty(
       "acknowledgeShared"
     );
   });
@@ -362,7 +362,7 @@ describe("acknowledgeShared: true", () => {
     // ⚠ THE QUERY BUDGET IS PART OF THE CONTRACT (`shared-publish.ts`): a
     // precondition that counted the room on every acknowledged create would put
     // the cost on the common path to fence the rare one.
-    await createTemplate(templateCtx(), {
+    await createIdentity(identityCtx(), {
       name: "Scout",
       visibility: "workspace",
       acknowledgeShared: true,
@@ -380,9 +380,9 @@ describe("the predicate is narrow, and every clause is load-bearing", () => {
     // 2026-09-17: forty people are forty second audiences, whatever the kind.
     room("standard", 40);
     await expect(
-      createTemplate(templateCtx(), { name: "Scout", visibility: "workspace" })
+      createIdentity(identityCtx(), { name: "Scout", visibility: "workspace" })
     ).rejects.toBeInstanceOf(ContainerPublishUnacknowledgedError);
-    expect(mockTemplates.insertTemplate).not.toHaveBeenCalled();
+    expect(mockIdentities.insertIdentity).not.toHaveBeenCalled();
   });
 
   // ⚠ BOTH KINDS, because the carve is the COUNT and nothing else (R-08).
@@ -390,8 +390,8 @@ describe("the predicate is narrow, and every clause is load-bearing", () => {
     "a SOLO %s publishes with no flag — there is no second audience",
     async (kind) => {
       room(kind, 1);
-      await createTemplate(templateCtx(), { name: "Scout", visibility: "workspace" });
-      expect(mockTemplates.insertTemplate).toHaveBeenCalled();
+      await createIdentity(identityCtx(), { name: "Scout", visibility: "workspace" });
+      expect(mockIdentities.insertIdentity).toHaveBeenCalled();
     }
   );
 
@@ -400,7 +400,7 @@ describe("the predicate is narrow, and every clause is load-bearing", () => {
     // learn the kind, so the gate costs one count instead of a row plus a count.
     room("link", 2);
     await expect(
-      createTemplate(templateCtx(), { name: "Scout", visibility: "workspace" })
+      createIdentity(identityCtx(), { name: "Scout", visibility: "workspace" })
     ).rejects.toBeInstanceOf(ContainerPublishUnacknowledgedError);
     expect(mockWorkspace).not.toHaveBeenCalled();
   });
@@ -408,8 +408,8 @@ describe("the predicate is narrow, and every clause is load-bearing", () => {
   it("a PRIVATE create never asks the room anything — G16 is the COUNT", async () => {
     // 🔒 NARROWED 2026-09-18, THE CLAUSE UNCHANGED: G16's predicate is the COUNT;
     room("standard", 2); // `mockWorkspace` is the DESTINATION fence's read now
-    await createTemplate(templateCtx(), { name: "Scout", visibility: "private" });
-    expect(mockTemplates.insertTemplate).toHaveBeenCalled();
+    await createIdentity(identityCtx(), { name: "Scout", visibility: "private" });
+    expect(mockIdentities.insertIdentity).toHaveBeenCalled();
     expect(mockCount).not.toHaveBeenCalled();
   });
 
@@ -419,9 +419,9 @@ describe("the predicate is narrow, and every clause is load-bearing", () => {
     // read R-08 deleted. Same direction as the unreadable-count arm below.
     mockCount.mockResolvedValue(0);
     await expect(
-      createTemplate(templateCtx(), { name: "Scout", visibility: "workspace" })
+      createIdentity(identityCtx(), { name: "Scout", visibility: "workspace" })
     ).rejects.toBeInstanceOf(ContainerPublishUnacknowledgedError);
-    expect(mockTemplates.insertTemplate).not.toHaveBeenCalled();
+    expect(mockIdentities.insertIdentity).not.toHaveBeenCalled();
   });
 
   it("an UNREADABLE member count fails the request rather than passing it", async () => {
@@ -429,20 +429,20 @@ describe("the predicate is narrow, and every clause is load-bearing", () => {
     // this room" must never read as "there is nobody in it".
     mockCount.mockRejectedValue(new Error("PostgREST is down"));
     await expect(
-      createTemplate(templateCtx(), { name: "Scout", visibility: "workspace" })
+      createIdentity(identityCtx(), { name: "Scout", visibility: "workspace" })
     ).rejects.toThrow("PostgREST is down");
-    expect(mockTemplates.insertTemplate).not.toHaveBeenCalled();
+    expect(mockIdentities.insertIdentity).not.toHaveBeenCalled();
   });
 });
 
 // ── The update door ──────────────────────────────────────────────────
 
 describe("the UPDATE path is fenced too", () => {
-  it("refuses a template patch that publishes, and writes no row", async () => {
+  it("refuses an identity patch that publishes, and writes no row", async () => {
     await expect(
-      updateTemplate(templateCtx(), "tpl-1", { visibility: "workspace" })
+      updateIdentity(identityCtx(), "tpl-1", { visibility: "workspace" })
     ).rejects.toBeInstanceOf(ContainerPublishUnacknowledgedError);
-    expect(mockTemplates.updateTemplateRow).not.toHaveBeenCalled();
+    expect(mockIdentities.updateIdentityRow).not.toHaveBeenCalled();
   });
 
   it("refuses a knowledge-base patch that publishes, and upserts no grant", async () => {
@@ -487,11 +487,11 @@ describe("the UPDATE path is fenced too", () => {
   });
 
   it("accepts the acknowledged patch", async () => {
-    await updateTemplate(templateCtx(), "tpl-1", {
+    await updateIdentity(identityCtx(), "tpl-1", {
       visibility: "workspace",
       acknowledgeShared: true,
     });
-    expect(mockTemplates.updateTemplateRow).toHaveBeenCalledWith(
+    expect(mockIdentities.updateIdentityRow).toHaveBeenCalledWith(
       CONTAINER,
       "tpl-1",
       expect.objectContaining({ visibility: "workspace" })

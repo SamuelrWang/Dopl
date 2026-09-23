@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 import { NAV } from "@/shared/layout/app-shell/app-sidebar-core";
 import { ChannelsSkeleton } from "#/pages/channels/channels-skeleton";
 import {
-  HomeAgentPanelsSkeleton,
+  HomeIdentityPanelsSkeleton,
   HomeKnowledgePanelsSkeleton,
   HomePageSkeleton,
 } from "#/pages/home/home-skeleton";
@@ -394,7 +394,7 @@ describe("the /home shapes are /home's own geometry", () => {
   it("keeps both faces on the panel hook the record pane repaints through", () => {
     for (const el of [
       <HomeKnowledgePanelsSkeleton key="k" />,
-      <HomeAgentPanelsSkeleton key="a" />,
+      <HomeIdentityPanelsSkeleton key="a" />,
     ]) {
       const { container } = render(el);
       expect(container.querySelectorAll("[data-section-panel]")).toHaveLength(2);

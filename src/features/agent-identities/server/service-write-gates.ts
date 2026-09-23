@@ -8,11 +8,11 @@ import { resolvePersonalReach } from "@/shared/tenancy/personal-reach";
 // makes for G16 — this feature already reaches that module, on the same lane.
 import { findWorkspaceById } from "@/features/workspaces/server/repository";
 import { isStandardWorkspace } from "@/features/workspaces/types";
-import type { AgentTemplateContext, TemplateVisibility } from "../types";
-import { TemplateTeamNotGrantableError } from "./errors";
+import type { AgentIdentityContext, IdentityVisibility } from "../types";
+import { IdentityTeamNotGrantableError } from "./errors";
 
 /**
- * 🔒 **WHERE A TEMPLATE CREATE LANDS — THE TWIN OF `knowledge/server/
+ * 🔒 **WHERE AN IDENTITY CREATE LANDS — THE TWIN OF `knowledge/server/
  * service-base-gates.ts › resolveCreateDestination`, AND DELIBERATELY NOT A COPY
  * OF IT.** Gap 2 of #1077, task 11's last owed seam.
  *
@@ -24,19 +24,19 @@ import { TemplateTeamNotGrantableError } from "./errors";
  *   1. **IT TAKES A `KnowledgeContext` AND ASKS `resolveAgentAudience`**, which
  *      is the KNOWLEDGE ceiling — it reads `resource_grants` rows for
  *      KNOWLEDGE BASES on this container's channels and answers which BASE IDS
- *      an agent may reach. Asking it where a TEMPLATE should land would decide a
- *      template's container from the grant state of somebody's knowledge bases.
+ *      an agent may reach. Asking it where a IDENTITY should land would decide a
+ *      identity's container from the grant state of somebody's knowledge bases.
  *   2. **§1 FORBIDS THE CROSS-FEATURE IMPORT.** `canSeeBase` is mirrored into
  *      this feature rather than imported for exactly this reason, and
- *      `TemplateShelf` is mirrored from `KbShelf` beside it.
+ *      `IdentityShelf` is mirrored from `KbShelf` beside it.
  *
- * ⚠ **AND THE THIRD ARM HAS NO TWIN AT ALL, WHICH IS A FACT ABOUT TEMPLATES
+ * ⚠ **AND THE THIRD ARM HAS NO TWIN AT ALL, WHICH IS A FACT ABOUT IDENTITIES
  * RATHER THAN AN OMISSION.** `resolveCreateDestination` re-routes a create whose
  * audience is RESTRICTED, because F-323's authoring half is real for knowledge:
  * an agent in a shared container could write a base its own next call could not
- * read. **A template has no such ceiling.** `canSeeTemplate`'s arm 3 answers for
+ * read. **An identity has no such ceiling.** `canSeeIdentity`'s arm 3 answers for
  * the CREATOR — and since F-333 a container session IS the operator, so it
- * answers for the operator's agent too — which means a template created in a
+ * answers for the operator's agent too — which means an identity created in a
  * shared room is readable back by its creator on the very next call. There is
  * nothing to rescue, so there is nothing to re-route, and inventing a re-route
  * here would move rows on a path that works today. The one thing the knowledge
@@ -44,7 +44,7 @@ import { TemplateTeamNotGrantableError } from "./errors";
  *
  * ── 🔒 WHAT WAS ACTUALLY OPEN ────────────────────────────────────────────────
  *
- * `createTemplate` passed `input.homeScoped` STRAIGHT to `insertTemplate`, and
+ * `createIdentity` passed `input.homeScoped` STRAIGHT to `insertIdentity`, and
  * `personal-container.ts › personalWriteWorkspaceId` routes on it by author. So
  * an AGENT standing in a shared room could put a row on its operator's personal
  * shelf by naming the flag — while `personal-reach.ts` says that same agent may
@@ -56,8 +56,8 @@ import { TemplateTeamNotGrantableError } from "./errors";
  * refusal sentences are ITS ({@link personalShelfRefusal}), shared with the
  * router and the knowledge gate so three doors cannot disagree about the remedy.
  */
-export interface TemplateCreateDestination {
-  /** ⚠ THE ROUTING FLAG, PASSED STRAIGHT TO THE REPOSITORY — `insertTemplate`
+export interface IdentityCreateDestination {
+  /** ⚠ THE ROUTING FLAG, PASSED STRAIGHT TO THE REPOSITORY — `insertIdentity`
    *  resolves the container from it through `personalWriteWorkspaceId`, by the
    *  same owner this gate asked the fence about, so the two cannot disagree. */
   homeScoped: boolean;
@@ -66,10 +66,10 @@ export interface TemplateCreateDestination {
   workspaceId: string;
 }
 
-export async function resolveTemplateCreateDestination(
-  ctx: AgentTemplateContext,
-  input: { homeScoped?: boolean; visibility: TemplateVisibility }
-): Promise<TemplateCreateDestination> {
+export async function resolveIdentityCreateDestination(
+  ctx: AgentIdentityContext,
+  input: { homeScoped?: boolean; visibility: IdentityVisibility }
+): Promise<IdentityCreateDestination> {
   if (input.homeScoped !== true) {
     return { homeScoped: false, workspaceId: ctx.workspaceId };
   }
@@ -83,13 +83,13 @@ export async function resolveTemplateCreateDestination(
   // ⚠ IT IS A REFUSAL RATHER THAN A SILENT LANDING BECAUSE THAT COMBINATION WAS
   // ALREADY INCOHERENT: the row went to the container while
   // `replaceTeamLinks(ctx.workspaceId, …)` wrote its grants to the room, so
-  // `listTeamLinksForTemplates` — which filters by the row's own container —
-  // read none of them back and the template was `team`-visible to nobody.
-  // ⚠ `TemplateTeamNotGrantableError` (`RESOURCE_ACCESS_DENIED`) rather than a
+  // `listTeamLinksForIdentities` — which filters by the row's own container —
+  // read none of them back and the identity was `team`-visible to nobody.
+  // ⚠ `IdentityTeamNotGrantableError` (`RESOURCE_ACCESS_DENIED`) rather than a
   // new class: this IS the "that team is not grantable here" answer, said about
   // the destination instead of about the team id.
   if (input.visibility === "team") {
-    throw new TemplateTeamNotGrantableError(
+    throw new IdentityTeamNotGrantableError(
       "A personal agent cannot be shared with a team. It lives in your own " +
         "personal container and a team grant belongs to the workspace the team " +
         "is in. Create it in the workspace and share it there, or keep it " +
@@ -110,7 +110,7 @@ export async function resolveTemplateCreateDestination(
  * guardrail in the code** — so this is the fence and the pill is the courtesy.
  *
  * 🔒 **WHAT WAS OPEN, AND IT WAS OPEN IN TWO PLACES.**
- * {@link resolveTemplateCreateDestination} above refuses `team` on a PERSONAL
+ * {@link resolveIdentityCreateDestination} above refuses `team` on a PERSONAL
  * create, and that was the whole of the rule. It left:
  *   1. **A CREATE DIRECTLY INTO A LINK CONTAINER.** `homeScoped` is absent
  *      there, so the arm above never runs; `assertGrantableTeams` returns `[]`
@@ -143,7 +143,7 @@ export async function resolveTemplateCreateDestination(
 export async function assertTeamScopeGrantable(workspaceId: string): Promise<void> {
   const workspace = await findWorkspaceById(workspaceId);
   if (workspace === null || isStandardWorkspace(workspace)) return;
-  throw new TemplateTeamNotGrantableError(
+  throw new IdentityTeamNotGrantableError(
     "This agent lives outside a workspace, and a team grant belongs to the " +
       "workspace the team is in. Create it in the workspace and share it there, " +
       "or keep it here and lend it with a grant."

@@ -9,7 +9,7 @@
  * A copy made a SECOND ROW that was a stranger to the first from the moment it
  * landed: no FK, no back-pointer, no sync, and an edit to the original reached
  * nothing. It also dropped everything that could not cross a tenancy — a
- * template's attached bases, a base's grants — so what arrived was a thinner
+ * identity's attached bases, a base's grants — so what arrived was a thinner
  * thing wearing the same name. **A grant lends the ONE row.** It stays where its
  * author edits it, an edit reaches everyone it is lent to, and the scope decides
  * the audience rather than the copier's tenancy.
@@ -128,7 +128,7 @@ export function isGrantRefusal(x: unknown): x is ToolResponse {
  *
  * Both ops resolve their resource through the ordinary READ resolvers, which
  * answer everything the caller can SEE — a teammate's `workspace`-visible
- * template, a shared base. Lending one of those into a room that teammate is not
+ * identity, a shared base. Lending one of those into a room that teammate is not
  * in is the one direction a grant widens somebody ELSE's audience.
  *
  * ⚠ **AND IT FAILS CLOSED ON AN UNKNOWN.** `createdBy` is nullable (rows older

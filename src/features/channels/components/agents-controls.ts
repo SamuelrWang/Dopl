@@ -45,7 +45,7 @@
 
 import { useCallback } from "react";
 import { getSpaBridge } from "@/shared/lib/spa-bridge";
-import type { TemplateLaunchOverrides } from "@/features/agent-templates/lib/launch-overrides";
+import type { IdentityLaunchOverrides } from "@/features/agent-identities/lib/launch-overrides";
 import type { AgentColorKey } from "../types";
 
 /** Whether the pause / end controls can be offered at all. Feature-detected like
@@ -267,21 +267,21 @@ export function canLaunchAgents(): boolean {
  * deliberate channel agent indistinguishable from a thread that failed to
  * resolve.
  *
- * ⚠ `templateId` IS AN ID, NEVER A SNAPSHOT (2026-08-22, agent templates). The
+ * ⚠ `identityId` IS AN ID, NEVER A SNAPSHOT (2026-08-22, agent identities). The
  * SPA names the identity; **MAIN resolves its content** through
- * `GET /api/agent-templates/{id}/resolve` under the operator's own credential,
+ * `GET /api/agent-identities/{id}/resolve` under the operator's own credential,
  * at spawn. A renderer-supplied `{name, instructions}` would be renderer-authored
- * text landing in a prompt, and main could not tell a real template from a
+ * text landing in a prompt, and main could not tell a real identity from a
  * fabricated one — the same class of mistake as F-267, with PROMPT TEXT as the
  * thing that got forged instead of a tool profile. Resolving in main also keeps
  * the knowledge-base viewer filter on the OPERATOR's credential and reads the
- * template fresh, so an edit landed a moment ago is honoured. The picker still
+ * identity fresh, so an edit landed a moment ago is honoured. The picker still
  * renders the name from its own cache — the optimistic render is a LABEL, the
  * authoritative resolve is the PROMPT.
  *
  * ⚠ `overrides` ARE EPHEMERAL AND MAIN RE-VALIDATES THEM
- * (`@/features/agent-templates/lib/launch-overrides.ts`). Nothing here is written
- * back to the template; this side's bounds exist to keep the web from OFFERING a
+ * (`@/features/agent-identities/lib/launch-overrides.ts`). Nothing here is written
+ * back to the identity; this side's bounds exist to keep the web from OFFERING a
  * payload main would reject, exactly as `agent-models.ts` does for the roster.
  *
  * ⚠ NO CASTS ANY MORE (2026-08-22, once Phase 1's declaration landed). Both new
@@ -297,10 +297,10 @@ export function canLaunchAgents(): boolean {
  * legitimately carry `agentId` and no `ok` at all. The type describes the
  * contract; the chains survive the build that has not adopted it yet.
  *
- * ⚠ `template-approval` IS NOT A FAILURE, IT IS A QUESTION (2026-08-22). Main
- * refuses the FIRST launch of a foreign template on this machine and hands back
+ * ⚠ `identity-approval` IS NOT A FAILURE, IT IS A QUESTION (2026-08-22). Main
+ * refuses the FIRST launch of a foreign identity on this machine and hands back
  * the name and instructions it resolved, for the approval modal to show verbatim
- * (`agent-templates/components/template-approval.tsx`). The payload is forwarded
+ * (`agent-identities/components/identity-approval.tsx`). The payload is forwarded
  * here untouched and read tolerantly by the picker; nothing in this module
  * interprets it.
  */
@@ -314,22 +314,22 @@ export async function launchAgentOnThread(payload: {
   counterpartyId: string | null;
   direct: boolean;
   /** The identity to wear, or `null`/absent for a BLANK agent. */
-  templateId?: string | null;
+  identityId?: string | null;
   /** ⚠ THE INSTANCE ID THIS AGENT SHOULD WEAR, pre-assigned by the composer's launch panel so
    *  the operator can be shown it BEFORE the spawn (2026-08-27). Absent is the ordinary case and
    *  main mints its own. ACCEPTED, NOT TRUSTED — main re-checks the charset — and only honoured
    *  by a build exposing `sessions.mintAgentId`, which is the gate the panel detects on. */
   agentId?: string;
-  /** This run's ephemeral re-points. Absent ⇒ the template's own values. */
-  overrides?: TemplateLaunchOverrides;
+  /** This run's ephemeral re-points. Absent ⇒ the identity's own values. */
+  overrides?: IdentityLaunchOverrides;
   /**
    * THIS SPAWN'S RUNTIME — the launch panel's per-call pick (2026-08-31, the
    * runtime-adapter port).
    *
    * ⚠ IT IS A TOP-LEVEL FIELD, NOT AN `overrides` MEMBER, because it is not a
-   * re-point of a TEMPLATE: `main/session-launch-op.js` reads `p.runtime` and
+   * re-point of a IDENTITY: `main/session-launch-op.js` reads `p.runtime` and
    * resolves `p.runtime > the channel's durable pick > the default adapter`,
-   * while `overrides` is the template's own model/fields lane.
+   * while `overrides` is the identity's own model/fields lane.
    * ⚠ ABSENT IS THE ORDINARY CASE and the channel's pick applies — every launch
    * with no panel behind it says nothing here and puts the object on the wire it
    * always did.
@@ -344,7 +344,7 @@ export async function launchAgentOnThread(payload: {
   /**
    * **THIS AGENT'S COLOUR** — the New-agent popup's per-call pick (2026-09-13; the rule is
    * INVARIANTS §5). ⚠ **TOP-LEVEL, NOT AN `overrides` MEMBER**, on `runtime`'s argument above: a
-   * template cannot carry a colour, since the key is unique among a channel's live agents across
+   * identity cannot carry a colour, since the key is unique among a channel's live agents across
    * members. ⚠ **ABSENT MEANS "THE SERVER PICKS THE FIRST FREE KEY", NEVER "NO COLOUR"**.
    * ⚠ ACCEPTED, NOT TRUSTED: main re-narrows (`main/session-launch-op.js › colorKey`, F-281), only
    * the server can see what is free, and picking a colour WIDENS NOTHING.
@@ -354,7 +354,7 @@ export async function launchAgentOnThread(payload: {
   ok: boolean;
   agentId?: string;
   reason?: string; detail?: string; // `detail`: main's `no-model` sentence (2026-09-22)
-  template?: { name?: string | null; instructions?: string | null } | null;
+  identity?: { name?: string | null; instructions?: string | null } | null;
 }> {
   const sessions = getSpaBridge()?.sessions;
   if (typeof sessions?.launch !== "function") return { ok: false, reason: "no-bridge" };
@@ -364,15 +364,15 @@ export async function launchAgentOnThread(payload: {
     ok: res?.ok === true || agentId !== undefined,
     agentId,
     reason: res?.reason, detail: res?.detail,
-    template: res?.template ?? null,
+    identity: res?.identity ?? null,
   };
 }
 
 /**
  * Whether this build can REMEMBER a first-use approval of another member's
- * template (2026-08-22).
+ * identity (2026-08-22).
  *
- * ⚠ IT DETECTS `sessions.approveTemplate`, the op it is about to USE — the strict
+ * ⚠ IT DETECTS `sessions.approveIdentity`, the op it is about to USE — the strict
  * form of this family's rule ({@link canMessageAgent} carries the bug that earned
  * it). ⚠ DO NOT WIDEN IT TO `sessions.launch`: every build with the launch op
  * would then claim the approval op, and the modal would spin on a desktop that
@@ -384,12 +384,12 @@ export async function launchAgentOnThread(payload: {
  * (INVARIANTS §11). This read no longer needs a local widening — the member is
  * declared — but the `typeof` gate is the real fence and stays.
  */
-export function canApproveTemplate(): boolean {
-  return typeof getSpaBridge()?.sessions?.approveTemplate === "function";
+export function canApproveIdentity(): boolean {
+  return typeof getSpaBridge()?.sessions?.approveIdentity === "function";
 }
 
 /**
- * STORE THIS OPERATOR'S FIRST-USE APPROVAL of a foreign template, on THIS Mac.
+ * STORE THIS OPERATOR'S FIRST-USE APPROVAL of a foreign identity, on THIS Mac.
  *
  * ⚠ MACHINE-LOCAL, AND THAT IS THE SECURITY CONTENT rather than a storage
  * detail. Main keeps it in `electron-store` beside `orchestratorLaunchEnabled`,
@@ -403,14 +403,14 @@ export function canApproveTemplate(): boolean {
  * they gave and main did not store means the next launch asks again, which reads
  * as a broken modal unless this side can say what happened.
  */
-export async function approveTemplate(
-  templateId: string
+export async function approveIdentity(
+  identityId: string
 ): Promise<{ ok: boolean; reason?: string }> {
   const sessions = getSpaBridge()?.sessions;
-  if (typeof sessions?.approveTemplate !== "function") {
+  if (typeof sessions?.approveIdentity !== "function") {
     return { ok: false, reason: "no-bridge" };
   }
-  const res = await sessions.approveTemplate(templateId);
+  const res = await sessions.approveIdentity(identityId);
   return { ok: res?.ok === true, reason: res?.reason };
 }
 

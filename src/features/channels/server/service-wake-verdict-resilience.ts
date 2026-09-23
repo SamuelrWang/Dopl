@@ -175,7 +175,7 @@ export function threadOtherParty(
  *
  * ⚠ **ARM 1 DEGRADES INTO ARM 2 RATHER THAN FAILING.** The setting stores a
  * HANDLE and nothing enforces that it names a live session (the migration says
- * why: an FK to `agent_templates` would be a cross-visibility reference from a
+ * why: an FK to `agent_identities` would be a cross-visibility reference from a
  * row members can read). A responder that is not running is simply not the
  * answer today.
  *

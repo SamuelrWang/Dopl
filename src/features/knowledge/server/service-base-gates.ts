@@ -2,11 +2,11 @@ import "server-only";
 import { isSharedCredential } from "@/shared/auth/credential-audience";
 import { meetsMinRole } from "@/features/workspaces/types";
 // G16 — the one statement of the publish-into-a-peer's-room precondition,
-// shared with `agent-templates/server/service-writes.ts`; two copies of a
+// shared with `agent-identities/server/service-writes.ts`; two copies of a
 // tenancy predicate is how the shelf fence ended up divergent (findings §6 #3).
 import { assertSharedPublishAcknowledged } from "@/features/workspaces/server/shared-publish";
 // The ONE statement of "a home channel holds only what is shared into it"
-// (Samuel, 2026-09-18), shared with `agent-templates/server/service-writes.ts`
+// (Samuel, 2026-09-18), shared with `agent-identities/server/service-writes.ts`
 // for the same reason the line above it is shared.
 import { assertHomeChannelRowIsShared } from "@/features/workspaces/server/home-channel-destination";
 import { listTeamIdsForUser } from "@/features/teams/server/repository";
@@ -243,7 +243,7 @@ export async function assertCreateBaseAllowed(
   // `private`, ungranted base inside a home channel is listed by nothing: /home's
   // Knowledge face lists only the container bases carrying a channel grant, and a
   // container has no Knowledge page of its own. The twin of the same call in
-  // `agent-templates/server/service-writes.ts`, one axis apart because the two
+  // `agent-identities/server/service-writes.ts`, one axis apart because the two
   // features answer "is it shared into the channel?" differently — a grant here,
   // the audience column there.
   // ⚠ THE DESTINATION, not the room: a personal row has already been re-routed

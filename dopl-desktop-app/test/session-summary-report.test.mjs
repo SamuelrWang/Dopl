@@ -37,7 +37,7 @@ test("REPORT: an entry carries the session KEY and the WORKSPACE a row cannot do
   assert.equal(entry.threadTitle, "Ship the thing");
   // 2026-08-22: `null` is the honest answer for a BLANK agent. Absent would be a different claim
   // on a wire whose reader cannot tell them apart once JSON.stringify has dropped it.
-  assert.equal(entry.templateName, null);
+  assert.equal(entry.identityName, null);
 });
 
 test("REPORT: `list()` narrows the report-only `key` back off — `workspaceId` rides the wire", () => {
@@ -77,11 +77,13 @@ test("REPORT: `list()` narrows the report-only `key` back off — `workspaceId` 
     // more here than elsewhere: an entry carries a one-line summary of a TOOL INPUT, which is a
     // fact about this machine and nobody else's business.
     "heldGates",
+    // `identityName` (2026-08-22, `templateName` until the 2026-09-22 rename) is named in
+    // `reportRow` on purpose — Phase 4 added the column.
+    "identityName",
     "lastActivityAt", "lastDeniedTool", "lastWakeAt", "lastWakeSeq", "listening", "messageMode",
     "model",
     "name", "runtimeId", "sessionId", "stale", "startedAt", "state", "taskId",
-    // `templateName` (2026-08-22) is named in `reportRow` on purpose — Phase 4 added the column.
-    "templateName", "threadTitle", "tokensDelta", "tokensSpent", "toolLabel", "toolMode",
+    "threadTitle", "tokensDelta", "tokensSpent", "toolLabel", "toolMode",
     "turns",
     "usageBaseline",
     // `workspaceId` joined the WIRE on 2026-09-14 (the pop-out rail routes by it).

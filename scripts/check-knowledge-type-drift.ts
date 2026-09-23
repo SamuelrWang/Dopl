@@ -91,8 +91,8 @@ function extractInterfaces(source: string): Map<string, InterfaceDecl> {
  *
  * THREE CLASSES, and the last is not an `export type` declaration at all:
  *
- *   1. THE UNIONS — `KbShelf` and `TemplateShelf` in `src/`, mirrored again in
- *      the SDK. `agent-templates/types.ts › TemplateShelf`'s own docblock says
+ *   1. THE UNIONS — `KbShelf` and `IdentityShelf` in `src/`, mirrored again in
+ *      the SDK. `agent-identities/types.ts › IdentityShelf`'s own docblock says
  *      it is "MIRRORED FROM `features/knowledge/types.ts › KbShelf`, NOT
  *      IMPORTED", which names the reference.
  *   2. THE COMMITTED `dist/` COPIES — what `main` and the MCP server actually
@@ -115,18 +115,18 @@ function checkShelfUnions(read: (rel: string) => string): boolean {
 
   const sites: Array<[string, string[]]> = [
     [
-      "src/features/agent-templates/types.ts › TemplateShelf",
-      extractUnion(read("src/features/agent-templates/types.ts"), "TemplateShelf"),
+      "src/features/agent-identities/types.ts › IdentityShelf",
+      extractUnion(read("src/features/agent-identities/types.ts"), "IdentityShelf"),
     ],
     [
       "packages/dopl-client/src/knowledge-types.ts › KbShelf",
       extractUnion(read("packages/dopl-client/src/knowledge-types.ts"), "KbShelf"),
     ],
     [
-      "packages/dopl-client/src/agent-template-types.ts › TemplateShelf",
+      "packages/dopl-client/src/agent-identity-types.ts › IdentityShelf",
       extractUnion(
-        read("packages/dopl-client/src/agent-template-types.ts"),
-        "TemplateShelf"
+        read("packages/dopl-client/src/agent-identity-types.ts"),
+        "IdentityShelf"
       ),
     ],
     [
@@ -134,10 +134,10 @@ function checkShelfUnions(read: (rel: string) => string): boolean {
       extractUnion(read("packages/dopl-client/dist/knowledge-types.d.ts"), "KbShelf"),
     ],
     [
-      "packages/dopl-client/dist/agent-template-types.d.ts › TemplateShelf",
+      "packages/dopl-client/dist/agent-identity-types.d.ts › IdentityShelf",
       extractUnion(
-        read("packages/dopl-client/dist/agent-template-types.d.ts"),
-        "TemplateShelf"
+        read("packages/dopl-client/dist/agent-identity-types.d.ts"),
+        "IdentityShelf"
       ),
     ],
     [
@@ -145,8 +145,8 @@ function checkShelfUnions(read: (rel: string) => string): boolean {
       readShelfArms(read("src/app/api/knowledge/bases/route.ts")),
     ],
     [
-      "src/app/api/agent-templates/route.ts › readShelf",
-      readShelfArms(read("src/app/api/agent-templates/route.ts")),
+      "src/app/api/agent-identities/route.ts › readShelf",
+      readShelfArms(read("src/app/api/agent-identities/route.ts")),
     ],
   ];
 
@@ -260,7 +260,7 @@ function main(): void {
   // The SECOND family this script guards — see `checkShelfUnions`.
   if (checkShelfUnions((rel) => readFileSync(resolve(repoRoot, rel), "utf8"))) {
     console.error(
-      "\n❌ Shelf vocabulary drift detected. `KbShelf`/`TemplateShelf`, their committed dist/ mirrors and both `readShelf` guards are hand-mirrored: change every side in ONE change and rebuild with `npm run build -w @dopl/client`."
+      "\n❌ Shelf vocabulary drift detected. `KbShelf`/`IdentityShelf`, their committed dist/ mirrors and both `readShelf` guards are hand-mirrored: change every side in ONE change and rebuild with `npm run build -w @dopl/client`."
     );
     process.exit(1);
   }

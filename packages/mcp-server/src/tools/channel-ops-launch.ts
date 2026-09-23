@@ -40,14 +40,14 @@ import { factsLine, postureFacts, runtimeFacts } from "./channel-facts";
 // ⚠ THE COLOUR REFUSAL IS A NEIGHBOUR, not a branch in here — this file is at the §1
 // cap and a refusal is prose about one server code (`channel-ops-launch-color.ts`).
 import { colorTaken, freeColors } from "./channel-ops-launch-color";
-// ⚠ AND SO ARE THE TWO TEMPLATE REFUSALS (`channel-ops-launch-template.ts`, 2026-09-18) —
+// ⚠ AND SO ARE THE TWO IDENTITY REFUSALS (`channel-ops-launch-identity.ts`, 2026-09-18) —
 // same seam, same reason: ONE FIELD's prose beside the op rather than inside it.
 import {
-  ambiguousTemplate,
-  templateElsewhere,
-  templateMatches,
-  templateNotFound,
-} from "./channel-ops-launch-template";
+  ambiguousIdentity,
+  identityElsewhere,
+  identityMatches,
+  identityNotFound,
+} from "./channel-ops-launch-identity";
 import { isNameRefusal, launchName, launchedName } from "./channel-ops-launch-name";
 // ⚠ AND SO IS THE GOAL CAP (`channel-ops-launch-goal.ts`, 2026-09-18, S50) — the ONE
 // pre-flight this lane owns, because the cap it enforces is the launch route's alone.
@@ -122,7 +122,7 @@ const RETRY_ADVICE: Record<LaunchRefusalReason, "once" | "no"> = {
   "auth-hold": "no",
   "no-bridge": "no",
   "no-counterparty": "no",
-  "no-template": "no",
+  "no-identity": "no",
   // ⚠ NEITHER OF THESE HAS A PRODUCER ON A LAUNCH — they belong to the `end` /
   // `rename` kinds that ride the same mailbox and therefore share the enum, and
   // the column CHECK pairs `launched` with `kind='launch'`. Arriving here IS the
@@ -161,14 +161,14 @@ export async function opLaunchAgent(
      * ⚠ **A SEPARATE FIELD FROM `model` ABOVE, ALWAYS.** `runtime` picks the ADAPTER, `model`
      * picks a model inside it; neither is ever derived from the other. A live launch carrying
      * `model: "codex"` was accepted and started Claude Sonnet, which is the defect this closes.
-     * ⚠ PASSED THROUGH UNTOUCHED, like `template` and `color`: the roster is the operator's own
+     * ⚠ PASSED THROUGH UNTOUCHED, like `identity` and `color`: the roster is the operator's own
      * desktop registry and this process cannot see it. Omitted means the documented chain (the
      * channel's runtime, then that machine's default) — never a particular vendor.
      */
     runtime?: string;
-    /** Template id OR exact name. ⚠ Passed through untouched — the id/name
+    /** Identity id OR exact name. ⚠ Passed through untouched — the id/name
      *  disambiguation and the visibility check both happen server-side. */
-    template?: string;
+    identity?: string;
     /** ⚠ **ASKED FOR, NEVER SET.** The operator's machine clamps each axis to
      *  that operator's own stored ceiling; omitting both is the pre-T24
      *  behaviour. Passed through untouched — this process cannot see the
@@ -226,13 +226,13 @@ export async function opLaunchAgent(
       // hands back the argument it actually bounded, the discipline `agentName` follows.
       goal: goal.goal,
       model: opts.model,
-      // ⚠ PASSED THROUGH UNTOUCHED, on `template`'s rule and for a sharper reason: the only
+      // ⚠ PASSED THROUGH UNTOUCHED, on `identity`'s rule and for a sharper reason: the only
       // list of runtimes is the one on the operator's machine, so this process can neither
       // validate membership nor predict whether the runtime would start. What it CAN do is
       // print what came back — see the `runtime=` / `runtimeAsked=` facts below.
       runtime: opts.runtime,
-      template: opts.template,
-      // ⚠ PASSED THROUGH UNTOUCHED, exactly like `template` above and for a
+      identity: opts.identity,
+      // ⚠ PASSED THROUGH UNTOUCHED, exactly like `identity` above and for a
       // sharper reason: the ceiling these are clamped against lives on the
       // OPERATOR'S MACHINE, so this process cannot evaluate the request, cannot
       // predict the outcome, and must not narrate one. What it can do is print
@@ -246,24 +246,24 @@ export async function opLaunchAgent(
       agentName: named.name,
     });
   } catch (e) {
-    // ⚠ THE TEMPLATE ARMS COME FIRST, AND THE DISCRIMINATOR IS THE **CODE**, NOT
+    // ⚠ THE IDENTITY ARMS COME FIRST, AND THE DISCRIMINATOR IS THE **CODE**, NOT
     // THE STATUS. This one call now has two ways to 404 (no such channel /
-    // membership, no such template) and one to 409, and a status-only branch
-    // would tell an agent its CHANNEL was wrong when it was the template name —
+    // membership, no such identity) and one to 409, and a status-only branch
+    // would tell an agent its CHANNEL was wrong when it was the identity name —
     // the exact mis-narration `channel-errors.ts` exists to stop.
     // ⚠ **THE COLOUR ARM IS FIRST AMONG THE 409s AND IS DISCRIMINATED BY CODE**, the
-    // same rule the template arms below follow: two codes now share one status, and a
-    // status-only branch would tell an agent its TEMPLATE name was ambiguous when its
+    // same rule the identity arms below follow: two codes now share one status, and a
+    // status-only branch would tell an agent its IDENTITY name was ambiguous when its
     // COLOUR was taken. ⚠ IT IS NOT A FAILURE OF THE CALL — nothing was filed, and the
     // fix is one retry with a key from the list.
     if (apiErrorCode(e) === "AGENT_COLOR_TAKEN") {
       return colorTaken(opts.color ?? "", freeColors(e));
     }
-    if (apiErrorCode(e) === "AGENT_TEMPLATE_AMBIGUOUS") {
-      return ambiguousTemplate(opts.template ?? "", templateMatches(e));
+    if (apiErrorCode(e) === "AGENT_IDENTITY_AMBIGUOUS") {
+      return ambiguousIdentity(opts.identity ?? "", identityMatches(e));
     }
-    if (apiErrorCode(e) === "AGENT_TEMPLATE_NOT_FOUND") {
-      return templateNotFound(opts.template ?? "", templateElsewhere(e));
+    if (apiErrorCode(e) === "AGENT_IDENTITY_NOT_FOUND") {
+      return identityNotFound(opts.identity ?? "", identityElsewhere(e));
     }
     // ⚠ **AND A 400 IS CLASSIFIED RATHER THAN LEFT BARE** (S50, 2026-09-18) — `opPost`'s
     // worked example, which this lane lacked. The pre-flight above catches the one cap this
@@ -272,10 +272,10 @@ export async function opLaunchAgent(
     // `VALIDATION_FAILED`, and without an arm it rendered as a raw throw the caller could
     // only read as "the tool broke". ⚠ IT SAYS WHAT IT IS **NOT**: no directive exists, so
     // there is nothing pending and nothing to cancel, and this is not a membership,
-    // template or colour problem — the three things an agent otherwise goes and "fixes".
+    // identity or colour problem — the three things an agent otherwise goes and "fixes".
     if (isBadRequest(e) && classifyBadRequest(e) === "invalid_request") {
       return err(
-        `No agent was requested — that launch was rejected as INVALID before any directive was filed, and **nothing is pending**. This is NOT a membership, template or colour problem, so do not invite anyone, re-pick a template or change \`color\` over it.${serverDetail(e)} ${FIELD_CAPS_NOTE} Shorten or fix the field that is over and ask again.`,
+        `No agent was requested — that launch was rejected as INVALID before any directive was filed, and **nothing is pending**. This is NOT a membership, identity or colour problem, so do not invite anyone, re-pick an identity or change \`color\` over it.${serverDetail(e)} ${FIELD_CAPS_NOTE} Shorten or fix the field that is over and ask again.`,
       );
     }
     if (isNotFound(e)) return channelNotFound(ref);
@@ -364,7 +364,7 @@ export async function opLaunchAgent(
         agent: `@agent-${directive.agentId}`,
         name: launchedName(directive.appliedAgentName),
         thread: directive.threadId ?? undefined,
-        template: directive.templateName ?? undefined,
+        identity: directive.identityName ?? undefined,
         model: directive.model ?? undefined,
         // ⚠ **WHICH RUNTIME ACTUALLY RAN, AND — WHEN THEY DIFFER — WHICH WAS ASKED FOR**
         // (2026-09-21, U9). ⚠ **ALWAYS PRINTED, INCLUDING WHEN NOTHING WAS ASKED FOR**, on

@@ -32,7 +32,7 @@ import {
   member,
   ME,
   personalContainer,
-  templateRow,
+  identityRow,
   T1,
   WS_A,
   WS_B,
@@ -56,8 +56,8 @@ describe("🔒 a SHARED credential resolves nothing, and does not even ask", () 
       credentialSubjectUserId: null,
       apiKeyWorkspaceId: WS_A,
     };
-    expect(await resolveResource(shared, "agent_template", T1)).toBeNull();
-    expect(await resolveResourcesByName(shared, "agent_template", "x")).toEqual(
+    expect(await resolveResource(shared, "agent_identity", T1)).toBeNull();
+    expect(await resolveResourcesByName(shared, "agent_identity", "x")).toEqual(
       []
     );
     // ⚠ Arm 2 of every `canSee*` predicate restated, not a second rule: a key
@@ -69,7 +69,7 @@ describe("🔒 a SHARED credential resolves nothing, and does not even ask", () 
   it("but a CONTAINER SESSION is one human's session and resolves normally", async () => {
     const calls = makeAdmin({
       workspace_members: [member(WS_A)],
-      agent_templates: [templateRow({ workspace_id: WS_A })],
+      agent_identities: [identityRow({ workspace_id: WS_A })],
     });
     const session: ResourceCaller = {
       userId: ME,
@@ -77,7 +77,7 @@ describe("🔒 a SHARED credential resolves nothing, and does not even ask", () 
       apiKeyWorkspaceId: WS_A,
     };
     expect(
-      await resolveResource(session, "agent_template", T1)
+      await resolveResource(session, "agent_identity", T1)
     ).not.toBeNull();
     expect(calls.length).toBeGreaterThan(0);
   });
@@ -89,16 +89,16 @@ describe("🔒 only containers the caller ACTIVELY belongs to, at the viewer flo
   it("bounds the read to the caller's own active memberships", async () => {
     const calls = makeAdmin({
       workspace_members: [member(WS_A), member(WS_B, "admin")],
-      agent_templates: [],
+      agent_identities: [],
     });
-    await resolveResource(caller, "agent_template", T1);
+    await resolveResource(caller, "agent_identity", T1);
     // ⚠ MUTATION CHECK. Drop `status` and a REVOKED membership resolves ids
     // again — `findMembership` carries the scar of exactly that omission.
     expect(filters(calls, "workspace_members")).toEqual([
       `eq("user_id"=${JSON.stringify(ME)})`,
       `eq("status"="active")`,
     ]);
-    expect(filters(calls, "agent_templates")).toContain(
+    expect(filters(calls, "agent_identities")).toContain(
       `in("workspace_id"=${JSON.stringify([WS_A, WS_B])})`
     );
   });
@@ -109,18 +109,18 @@ describe("🔒 only containers the caller ACTIVELY belongs to, at the viewer flo
     // there would be a door UNDER that floor rather than an extra fact.
     const calls = makeAdmin({
       workspace_members: [member(WS_A, "guest"), member(WS_B, "viewer")],
-      agent_templates: [],
+      agent_identities: [],
     });
-    await resolveResource(caller, "agent_template", T1);
-    expect(filters(calls, "agent_templates")).toContain(
+    await resolveResource(caller, "agent_identity", T1);
+    expect(filters(calls, "agent_identities")).toContain(
       `in("workspace_id"=${JSON.stringify([WS_B])})`
     );
   });
 
   it("issues NO resource query when no container clears the floor", async () => {
     const calls = makeAdmin({ workspace_members: [member(WS_A, "guest")] });
-    expect(await resolveResource(caller, "agent_template", T1)).toBeNull();
-    expect(calls.some((c) => c.table === "agent_templates")).toBe(false);
+    expect(await resolveResource(caller, "agent_identity", T1)).toBeNull();
+    expect(calls.some((c) => c.table === "agent_identities")).toBe(false);
   });
 });
 
@@ -136,9 +136,9 @@ describe("🔒 the container lock is honoured, and narrows", () => {
   it("asks only about the locked container, never the caller's other ones", async () => {
     const calls = makeAdmin({
       workspace_members: [member(WS_A)],
-      agent_templates: [],
+      agent_identities: [],
     });
-    await resolveResource(locked, "agent_template", T1);
+    await resolveResource(locked, "agent_identity", T1);
     // ⚠ MUTATION CHECK. Without this the membership set is the caller's WHOLE
     // reach and a locked credential resolves ids outside its own lock — a
     // workspace fence (§4 layer B1) quietly stepped over by a read.
@@ -186,9 +186,9 @@ describe("🔒 the container lock is honoured, and narrows", () => {
     const calls = makeAdmin({
       workspaces: [personalContainer()],
       workspace_members: [member(WS_A)],
-      agent_templates: [],
+      agent_identities: [],
     });
-    await resolveResource(locked, "agent_template", T1);
+    await resolveResource(locked, "agent_identity", T1);
     expect(filters(calls, "workspaces")).toEqual([
       `eq("owner_id"=${JSON.stringify(ME)})`,
       `eq("kind"="personal")`,
@@ -199,9 +199,9 @@ describe("🔒 the container lock is honoured, and narrows", () => {
     const calls = makeAdmin({
       workspaces: [personalContainer(WS_A)],
       workspace_members: [member(WS_A, "owner")],
-      agent_templates: [],
+      agent_identities: [],
     });
-    await resolveResource(locked, "agent_template", T1);
+    await resolveResource(locked, "agent_identity", T1);
     expect(filters(calls, "workspace_members")).toContain(
       `in("workspace_id"=${JSON.stringify([WS_A])})`
     );
@@ -227,9 +227,9 @@ describe("🔒 the container lock is honoured, and narrows", () => {
     // spans every container it belongs to.
     const calls = makeAdmin({
       workspace_members: [member(WS_A)],
-      agent_templates: [],
+      agent_identities: [],
     });
-    await resolveResource(caller, "agent_template", T1);
+    await resolveResource(caller, "agent_identity", T1);
     expect(calls.some((c) => c.table === "workspaces")).toBe(false);
   });
 });
@@ -240,11 +240,11 @@ describe("🔒 only rows the caller could already list for themselves", () => {
   it("names the caller's own rows and container-visible rows, and nothing else", async () => {
     const calls = makeAdmin({
       workspace_members: [member(WS_A)],
-      agent_templates: [],
+      agent_identities: [],
     });
-    await resolveResource(caller, "agent_template", T1);
+    await resolveResource(caller, "agent_identity", T1);
     // ⚠ MUTATION CHECK. Drop the `created_by` arm and the caller loses their
-    // own private rows; drop the `visibility` arm and a shared template stops
+    // own private rows; drop the `visibility` arm and a shared identity stops
     // resolving. ADD a third arm and this read starts naming the container
     // another member's private row lives in, which is the existence oracle the
     // 404-never-403 surface closes.
@@ -262,11 +262,11 @@ describe("🔒 only rows the caller could already list for themselves", () => {
     // fact about the caller and not about the fence.
     const calls = makeAdmin({
       workspace_members: [member(WS_A)],
-      agent_templates: [],
+      agent_identities: [],
     });
     await resolveResource(
       { ...caller, userId: 'x",visibility.eq.private,name.eq."y' },
-      "agent_template",
+      "agent_identity",
       T1
     );
     const filter = String(calls.find((c) => c.op === "or")?.args[0]);
@@ -283,11 +283,11 @@ describe("an id resolves by id and a name by name — never through each other",
   it("matches an id exactly, and returns AT MOST ONE answer", async () => {
     const calls = makeAdmin({
       workspace_members: [member(WS_B)],
-      agent_templates: [templateRow()],
+      agent_identities: [identityRow()],
     });
-    const resolved = await resolveResource(caller, "agent_template", T1);
+    const resolved = await resolveResource(caller, "agent_identity", T1);
     expect(resolved).toEqual({
-      type: "agent_template",
+      type: "agent_identity",
       id: T1,
       name: "Code Auditor",
       containerId: WS_B,
@@ -300,8 +300,8 @@ describe("an id resolves by id and a name by name — never through each other",
   });
 
   it("answers NULL for an id nothing nameable matches", async () => {
-    makeAdmin({ workspace_members: [member(WS_A)], agent_templates: [] });
-    expect(await resolveResource(caller, "agent_template", T1)).toBeNull();
+    makeAdmin({ workspace_members: [member(WS_A)], agent_identities: [] });
+    expect(await resolveResource(caller, "agent_identity", T1)).toBeNull();
   });
 
   it("matches a name case-insensitively and ESCAPES the wildcards", async () => {
@@ -309,9 +309,9 @@ describe("an id resolves by id and a name by name — never through each other",
     // `ilike` is an exact match here, never a pattern.
     const calls = makeAdmin({
       workspace_members: [member(WS_A)],
-      agent_templates: [],
+      agent_identities: [],
     });
-    await resolveResourcesByName(caller, "agent_template", "100%_off\\x");
+    await resolveResourcesByName(caller, "agent_identity", "100%_off\\x");
     expect(calls.find((c) => c.op === "ilike")?.args).toEqual([
       "name",
       "100\\%\\_off\\\\x",
@@ -323,14 +323,14 @@ describe("an id resolves by id and a name by name — never through each other",
     // launch lane's ambiguity refusal and the tenancy label a lie.
     makeAdmin({
       workspace_members: [member(WS_A), member(WS_B)],
-      agent_templates: [
-        templateRow({ workspace_id: WS_A }),
-        templateRow({ workspace_id: WS_B }),
+      agent_identities: [
+        identityRow({ workspace_id: WS_A }),
+        identityRow({ workspace_id: WS_B }),
       ],
     });
     const rows = await resolveResourcesByName(
       caller,
-      "agent_template",
+      "agent_identity",
       "Code Auditor"
     );
     expect(rows.map((r) => r.containerId)).toEqual([WS_A, WS_B]);
@@ -397,13 +397,13 @@ describe("every resource type resolves through the one query", () => {
   );
 
   it("does NOT filter a soft delete on the one table that has none", async () => {
-    // ⚠ `agent_templates` hard-deletes (`20260822200000_agent_templates.sql`).
+    // ⚠ `agent_identities` hard-deletes (`20260822200000_agent_templates.sql`).
     // An `is(deleted_at, null)` there is a 400, not a tighter fence.
     const calls = makeAdmin({
       workspace_members: [member(WS_B)],
-      agent_templates: [templateRow()],
+      agent_identities: [identityRow()],
     });
-    await resolveResource(caller, "agent_template", T1);
+    await resolveResource(caller, "agent_identity", T1);
     expect(calls.some((c) => c.op === "is")).toBe(false);
   });
 
@@ -423,11 +423,11 @@ describe("the 1:1 embed is flattened, whichever way PostgREST types it", () => {
   it("reads an ARRAY embed identically to an OBJECT one", async () => {
     makeAdmin({
       workspace_members: [member(WS_B, "admin")],
-      agent_templates: [
-        templateRow({ workspace: [{ name: "Alpha", kind: "link" }] }),
+      agent_identities: [
+        identityRow({ workspace: [{ name: "Alpha", kind: "link" }] }),
       ],
     });
-    expect(await resolveResource(caller, "agent_template", T1)).toMatchObject({
+    expect(await resolveResource(caller, "agent_identity", T1)).toMatchObject({
       containerName: "Alpha",
       containerKind: "link",
       ownedByCaller: true,
@@ -440,9 +440,9 @@ describe("the 1:1 embed is flattened, whichever way PostgREST types it", () => {
     // "standard" is the answer that claims the least.
     makeAdmin({
       workspace_members: [member(WS_B)],
-      agent_templates: [templateRow({ created_by: null, workspace: [] })],
+      agent_identities: [identityRow({ created_by: null, workspace: [] })],
     });
-    expect(await resolveResource(caller, "agent_template", T1)).toMatchObject({
+    expect(await resolveResource(caller, "agent_identity", T1)).toMatchObject({
       containerName: "",
       containerKind: "standard",
       // 🔒 AN UNATTRIBUTED ROW IS NOT YOURS. `created_by` is `SET NULL` when an

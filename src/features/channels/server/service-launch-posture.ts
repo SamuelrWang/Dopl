@@ -11,7 +11,7 @@ import { type ChannelRow } from "./dto";
  * **THE CREATE'S FIFTH GATE: WHAT THE SERVER PERMITS A LAUNCH TO ASK FOR**
  * (2026-09-02, A9 — guardrails G6, G7, G8).
  *
- * ⚠ **ITS OWN MODULE ON `service-launch-template.ts`'S PRECEDENT** (§1 cap, and
+ * ⚠ **ITS OWN MODULE ON `service-launch-identity.ts`'S PRECEDENT** (§1 cap, and
  * the same shape of reason): it is a gate with a rule of its own, and the rule is
  * a SECOND COPY of the desktop's clamp across a tree boundary neither side can
  * import over. `lib/agent-posture.ts` holds the copy and

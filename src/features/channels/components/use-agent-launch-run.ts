@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * RUNNING A LAUNCH — the payload, the three-step act, the foreign-template question, and the
+ * RUNNING A LAUNCH — the payload, the three-step act, the foreign-identity question, and the
  * relaunch that answers it.
  *
  * ⚠ **ITS OWN FILE SINCE 2026-09-13, ON THE SEAM `use-agent-launch.ts`'s OWN HEADER ALREADY
@@ -15,12 +15,12 @@
  */
 
 import { useCallback, useState } from "react";
-import type { TemplateApprovalRequest } from "@/features/agent-templates/components/template-approval";
+import type { IdentityApprovalRequest } from "@/features/agent-identities/components/identity-approval";
 import { NEW_AGENT_NAME } from "@/shared/lib/agent-name";
 import {
   MAX_OVERRIDE_INSTRUCTIONS_CHARS,
-  type TemplateLaunchOverrides,
-} from "@/features/agent-templates/lib/launch-overrides";
+  type IdentityLaunchOverrides,
+} from "@/features/agent-identities/lib/launch-overrides";
 import { AGENT_MODEL_DEFAULT } from "../lib/agent-models";
 import { LAUNCH_APPROVAL_REASON, type AgentLaunchControls } from "./use-agents-panel";
 import {
@@ -36,21 +36,21 @@ import {
  * overridesFor`, whose rule this is): an untouched popup must put the payload on the wire that a
  * one-click launch always did, or the two paths an operator reads as "launch this" reach main as
  * two different requests.
- * ⚠ **THE INSTRUCTIONS ARE MEASURED AGAINST THE TEMPLATE'S OWN, NOT AGAINST EMPTY.** The field
- * arrives PREFILLED from the template (`applyTemplate`), so a non-empty test would send the
- * template's own prose back on every template launch — a payload that looks like a decision and
- * goes stale the moment the template is edited between open and Launch.
+ * ⚠ **THE INSTRUCTIONS ARE MEASURED AGAINST THE IDENTITY'S OWN, NOT AGAINST EMPTY.** The field
+ * arrives PREFILLED from the identity (`applyIdentity`), so a non-empty test would send the
+ * identity's own prose back on every identity launch — a payload that looks like a decision and
+ * goes stale the moment the identity is edited between open and Launch.
  * ⚠ **IT IS AN `overrides` MEMBER AND NOT A SEVENTH ARGUMENT**, which is the opposite of where
  * `runtime` and `color` went: those two are properties of the SESSION (the adapter it runs on,
  * its identity in the room) and main reads them off the payload's top level, while instructions
- * are the TEMPLATE's prose re-pointed for one spawn — the exact thing `TemplateLaunchOverrides`
+ * are the IDENTITY's prose re-pointed for one spawn — the exact thing `IdentityLaunchOverrides`
  * is. It also means no lane between here and main grew an argument: every caller already forwards
  * `overrides`.
  */
 export function launchOverridesOf(
   panel: AgentLaunchPanel
-): TemplateLaunchOverrides | undefined {
-  const overrides: TemplateLaunchOverrides = {};
+): IdentityLaunchOverrides | undefined {
+  const overrides: IdentityLaunchOverrides = {};
   if (panel.model !== AGENT_MODEL_DEFAULT) overrides.model = panel.model;
   const typed = (panel.instructions ?? "").trim();
   if (typed !== (panel.instructionsBaseline ?? "").trim()) {
@@ -66,7 +66,7 @@ export function launchOverridesOf(
 /**
  * THE LAUNCH ITSELF — spawn, then name, then describe. Exported apart from the hook because it
  * is the ACT and the hook is the STATE (§1); `composer.tsx` runs it and owns what to do with the
- * outcome (the template-approval modal is the caller's, exactly as it was for the picker).
+ * outcome (the identity-approval modal is the caller's, exactly as it was for the picker).
  *
  * ⚠ THE ORDER IS NOT NEGOTIABLE. Both writes are keyed by the instance address, so neither can
  * happen until main has answered with one.
@@ -82,15 +82,15 @@ export async function launchWithIdentity(
 ): Promise<{
   ok: boolean;
   reason?: string;
-  /** ⚠ Rides `template-approval` only, forwarded from main UNTOUCHED — it is what the approval
+  /** ⚠ Rides `identity-approval` only, forwarded from main UNTOUCHED — it is what the approval
    *  dialog shows verbatim, and nothing here interprets it. */
-  template?: { name?: string | null; instructions?: string | null } | null;
+  identity?: { name?: string | null; instructions?: string | null } | null;
   agentId: string | null;
   identityRefused: boolean;
 }> {
   const outcome = await newAgent.launchAgent(
     threadId,
-    panel.templateId,
+    panel.identityId,
     // ⚠ ABSENT WHEN NOTHING WAS RE-POINTED, so an untouched panel puts the same payload on the
     // wire a one-click launch always did (`launch-overrides.ts › overridesFor`'s own rule).
     launchOverridesOf(panel),
@@ -109,9 +109,9 @@ export async function launchWithIdentity(
      * (`lib/agent-colors.ts › firstFreeAgentColor`), which is what the circles row already
      * PREVIEWS as its default selection. The popup's taken set is advisory — uniqueness is a
      * fact about every member's live agents and only `20261005120000`'s index can decide it.
-     * ⚠ **`TemplateLaunchOverrides` IS THE WRONG HOME AND WAS NOT USED** — that object is the
-     * TEMPLATE's re-points (`launch-overrides.ts`), and a colour is a property of the SESSION
-     * IN THE CHANNEL. A template cannot carry one: the key is unique among a channel's live
+     * ⚠ **`IdentityLaunchOverrides` IS THE WRONG HOME AND WAS NOT USED** — that object is the
+     * IDENTITY's re-points (`launch-overrides.ts`), and a colour is a property of the SESSION
+     * IN THE CHANNEL. An identity cannot carry one: the key is unique among a channel's live
      * agents, so a stored default would collide the second time it was used.
      */
     panel.color ?? undefined
@@ -120,7 +120,7 @@ export async function launchWithIdentity(
     return {
       ok: false,
       reason: outcome.reason,
-      template: outcome.template,
+      identity: outcome.identity,
       agentId: null,
       identityRefused: false,
     };
@@ -165,7 +165,7 @@ export async function launchWithIdentity(
 }
 
 /**
- * RUNNING A LAUNCH — the three-step act, the foreign-template question, and the relaunch that
+ * RUNNING A LAUNCH — the three-step act, the foreign-identity question, and the relaunch that
  * answers it. Split from `composer.tsx` at the 500-line cap; the seam is §1's own — that file is
  * about SENDING, and this is the launch panel's business end.
  *
@@ -183,24 +183,24 @@ export function useLaunchRunner({
   panel: AgentLaunchPanel;
   openThreadId: string | null;
 }) {
-  const [approval, setApproval] = useState<TemplateApprovalRequest | null>(null);
+  const [approval, setApproval] = useState<IdentityApprovalRequest | null>(null);
 
   const run = useCallback(async () => {
     if (!newAgent || !panel.ready) return;
     const res = await launchWithIdentity(newAgent, panel, openThreadId);
-    if (res.reason === LAUNCH_APPROVAL_REASON && panel.templateId) {
+    if (res.reason === LAUNCH_APPROVAL_REASON && panel.identityId) {
       // ⚠ MAIN'S OWN RESOLVED TEXT, read tolerantly — the dialog shows the INSTRUCTIONS the
       // operator is being asked to accept. The local cache's name is only the fallback for a
       // build that sends none; the instructions have no fallback and must not get one, because
       // inventing them is precisely what the question exists to prevent.
-      // ⚠ MAIN'S OWN RESOLVED NAME, and no local fallback beyond the generic. The template LIST
+      // ⚠ MAIN'S OWN RESOLVED NAME, and no local fallback beyond the generic. The identity LIST
       // is no longer in scope here (it is read inside `ComposerLaunch`, which mounts only where a
       // launch is possible), and reaching for it would drag a react-query hook up to the composer
-      // — which is exactly the mount the templates read was gated behind.
+      // — which is exactly the mount the identities read was gated behind.
       setApproval({
-        templateId: panel.templateId,
-        name: res.template?.name ?? "this template",
-        instructions: res.template?.instructions ?? null,
+        identityId: panel.identityId,
+        name: res.identity?.name ?? "this identity",
+        instructions: res.identity?.instructions ?? null,
       });
       return;
     }
@@ -219,10 +219,10 @@ export function useLaunchRunner({
     launch: () => void run(),
     cancelApproval: () => setApproval(null),
     confirmApproval: () => {
-      const templateId = approval?.templateId;
+      const identityId = approval?.identityId;
       setApproval(null);
-      if (!templateId || !newAgent) return;
-      void newAgent.approveTemplate(templateId).then((res) => {
+      if (!identityId || !newAgent) return;
+      void newAgent.approveIdentity(identityId).then((res) => {
         if (res.ok) void run();
       });
     },

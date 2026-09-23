@@ -37,8 +37,8 @@ function directive(over: Partial<LaunchDirective> = {}): LaunchDirective {
     goal: "ship the parser",
     model: null,
     status: "pending",
-    templateId: null,
-    templateName: null,
+    identityId: null,
+    identityName: null,
     refusalReason: null,
     agentId: null,
     claimedAt: null,
@@ -257,19 +257,19 @@ describe("LAUNCHED — the id, and how to direct it", () => {
 
   it("carries the identity fields, quoted where a value could forge a field", async () => {
     // ⚠ A FUTURE TIER ADDS FIELDS HERE, NOT PARAGRAPHS. And a value with a space
-    // is QUOTED: a template name is operator-authored, so an unquoted
-    // `template=x idle=no` lets a crafted name append a fact nobody asserted.
+    // is QUOTED: an identity name is operator-authored, so an unquoted
+    // `identity=x idle=no` lets a crafted name append a fact nobody asserted.
     const out = await text(
       created({
         status: "launched",
         agentId: "abcd1234",
         threadId: "44444444-4444-4444-4444-444444444444",
-        templateName: "Code Auditor",
+        identityName: "Code Auditor",
         model: "claude-opus-5",
       }),
       { goal: "Audit the migration" },
     );
-    expect(out).toContain('template="Code Auditor"');
+    expect(out).toContain('identity="Code Auditor"');
     expect(out).toContain("model=claude-opus-5");
     expect(out).toContain("thread=44444444-4444-4444-4444-444444444444");
     expect(out.length, out).toBeLessThanOrEqual(WRITE_RESULT_MAX_CHARS);
@@ -336,10 +336,10 @@ const REFUSALS: Record<LaunchRefusalReason, { retry: "once" | "no"; says: string
   // because the resolve endpoint is 404-never-403.
   // ⚠ AND THE TENANCY IS THE THIRD CAUSE, NAMED FIRST (T35). It is not an
   // oracle: the resolve is keyed `(workspace_id, id)` against the CHANNEL's
-  // container, so a template the caller owns elsewhere is ABSENT rather than
+  // container, so an identity the caller owns elsewhere is ABSENT rather than
   // hidden — a standing rule, answerable without reading any row. Which of the
   // OTHER two it was stays unobservable.
-  "no-template": { retry: "no", says: ["`no-template` THAT machine could not resolve it under the operator's visibility"] },
+  "no-identity": { retry: "no", says: ["`no-identity` THAT machine could not resolve it under the operator's visibility"] },
   // ⚠ Neither of the last two has a producer on a LAUNCH — they belong to the
   // `end`/`rename` kinds sharing this mailbox, so arriving here IS the anomaly
   // and the answer is `no`: re-issuing over it would re-issue forever.

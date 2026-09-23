@@ -54,7 +54,7 @@ export function sessionRow(over: Partial<SessionStateRow>): SessionStateRow {
     started_at: null,
     last_activity_at: null,
     display_name: null,
-    template_name: null,
+    identity_name: null,
     turns: null,
     tokens_delta: null,
     stale: null,

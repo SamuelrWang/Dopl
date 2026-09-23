@@ -47,7 +47,7 @@ const MAIN = join(HERE, "..", "main");
 const read = (f) => readFileSync(join(MAIN, f), "utf8");
 
 const LISTENER = read("channel-listener.js");
-// ⚠ REPOINTED 2026-08-22 (the agent-templates wave): the `sessions:launch` BODY moved to
+// ⚠ REPOINTED 2026-08-22 (the agent-identities wave): the `sessions:launch` BODY moved to
 // `main/session-launch-op.js` in a §1 split. THE PROFILE READ THIS FILE EXISTS FOR MOVED WITH
 // IT, so the lane under test is that module, driven through the real registration in
 // `session-ipc-ops.js` — both sources, because the defect (F-267) was a WRONG READ inside the
@@ -143,7 +143,7 @@ function bootLaunch(entries) {
       };
     }
     // ⚠ `chainModel` IS THE ONE LINK OF THE PRECEDENCE CHAIN (`session-model.js`, 2026-08-23) and
-    // `session-launch-op.js › templateModel` delegates to it, so the stub must carry it or this
+    // `session-launch-op.js › identityModel` delegates to it, so the stub must carry it or this
     // file's launches throw before they ever reach the profile question it is about.
     if (id === "./session-model") {
       return { aliasForModelId: (v) => v, normalizeModel: (v) => v, chainModel: (v) => v || "" };
@@ -151,12 +151,12 @@ function bootLaunch(entries) {
     // ⚠ THE BODY IS A SEPARATE MODULE SINCE 2026-08-22, and it is the REAL one: a stub here
     // would make this whole file assert a fake's profile read.
     if (id === "./session-launch-op") return launchOp.exports;
-    // No template is asked for by any case in this file, so `resolveTemplate` is never called;
+    // No identity is asked for by any case in this file, so `resolveAgentIdentity` is never called;
     // it is stubbed to REFUSE so a case that starts passing one goes red rather than silently
     // reaching the network.
-    if (id === "./template-resolve") {
+    if (id === "./identity-resolve") {
       return {
-        resolveTemplate: async () => ({ ok: false, reason: "no-template" }),
+        resolveAgentIdentity: async () => ({ ok: false, reason: "no-identity" }),
         narrowOverrides: () => ({ model: "", fields: null }),
         applyOverrides: (t) => t,
       };

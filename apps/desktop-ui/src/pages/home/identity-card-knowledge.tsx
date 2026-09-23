@@ -1,20 +1,20 @@
 import { useMemo, useState } from "react";
 import { FormDialog, FormSection } from "@/shared/ui/form-dialog";
-import { agentTemplateErrorMessage } from "@/features/agent-templates/client/api";
-import { useAgentTemplateWrites } from "@/features/agent-templates/hooks/use-agent-template-writes";
-import { BaseNode, type ScopeToggle } from "@/features/agent-templates/components/knowledge-scope-tree";
+import { agentIdentityErrorMessage } from "@/features/agent-identities/client/api";
+import { useAgentIdentityWrites } from "@/features/agent-identities/hooks/use-agent-identity-writes";
+import { BaseNode, type ScopeToggle } from "@/features/agent-identities/components/knowledge-scope-tree";
 import {
   EMPTY_KNOWLEDGE,
   refKey,
   refToScope,
   sameScopes,
   scopeChipLabel,
-} from "@/features/agent-templates/lib/knowledge-scopes";
+} from "@/features/agent-identities/lib/knowledge-scopes";
 import { useKnowledgeBaseList } from "@/features/knowledge/client/hooks";
 import type {
-  AgentTemplate,
-  TemplateKnowledgeRef,
-} from "@/features/agent-templates/client/types";
+  AgentIdentity,
+  IdentityKnowledgeRef,
+} from "@/features/agent-identities/client/types";
 
 /**
  * **"Add knowledge", ON THE CARD** (Samuel, 2026-09-22: *"under the description
@@ -24,8 +24,8 @@ import type {
  * knowledge bases as well as specific folders/entries"*, and the picked ones
  * *"showing up as white rectangle bars within the gray box"*).
  *
- * ⚠ **IT ATTACHES TO THE TEMPLATE, NOT TO ONE LAUNCH.** A card has no launch
- * form behind it (`agent-card-launch.tsx` sends the template id and nothing
+ * ⚠ **IT ATTACHES TO THE IDENTITY, NOT TO ONE LAUNCH.** A card has no launch
+ * form behind it (`identity-card-launch.tsx` sends the identity id and nothing
  * else), so knowledge picked here is a PATCH of the row — which is what makes it
  * true of the next launch, of the popup's launches, and of the MCP surface's.
  * A per-click attachment would be a fourth place knowledge can come from and the
@@ -39,9 +39,9 @@ import type {
  * anchored to an Add button, and Samuel asked for a popup on the kit's form
  * recipe with the selection rendered as bars.
  *
- * ⚠ **ONE SHELF, ONE CACHE ENTRY.** The write is `useAgentTemplateWrites(
+ * ⚠ **ONE SHELF, ONE CACHE ENTRY.** The write is `useAgentIdentityWrites(
  * homeWorkspaceId, "home")`, which MUST match the shelf the PERSONAL section's
- * read was mounted with (`agent-panels.tsx › HOME_SHELF`) — a mismatch patches a
+ * read was mounted with (`identity-panels.tsx › HOME_SHELF`) — a mismatch patches a
  * key nobody is subscribed to and the save silently does not appear (F-331 with
  * the shelf as the axis).
  */
@@ -64,27 +64,27 @@ function ScopeBar({ label }: { label: string }) {
  *
  * ⚠ IT IS A FLAT FILL, NEVER A PRESSED-IN WELL. /home has no concave surface
  * (Samuel, 2026-08-22) and the sweep over these files enforces it
- * (`template-editor-surface.test.tsx › no concave surfaces`).
+ * (`identity-editor-surface.test.tsx › no concave surfaces`).
  */
 export function AddKnowledgeWell({
   refs,
-  templateName,
+  identityName,
   onClick,
 }: {
-  refs: ReadonlyArray<TemplateKnowledgeRef>;
+  refs: ReadonlyArray<IdentityKnowledgeRef>;
   /** ⚠ **THE ACCESSIBLE NAME SAYS WHICH ROW** — one of these sits on every card
    *  in the grid, and the authoring modal's own picker is already called "Add
    *  knowledge" (`knowledge-scope-picker.tsx`, whose docblock makes exactly this
    *  argument about its own label). Several controls with one name is ambiguous
    *  on a screen reader and unaddressable for every `getByRole`. */
-  templateName: string;
+  identityName: string;
   onClick: () => void;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      aria-label={`Add knowledge to ${templateName}`}
+      aria-label={`Add knowledge to ${identityName}`}
       className="flex w-full cursor-pointer flex-col gap-1 rounded-lg bg-bg-inset p-2 text-left transition-colors hover:bg-bg-inset-hover"
     >
       {refs.map((ref) => (
@@ -107,14 +107,14 @@ export function AddKnowledgeWell({
  * this tree's idiom (INVARIANTS §5A). The patch is optimistic, so a dialog that
  * closed on the click would leave a failed save with nowhere to report.
  */
-export function AgentKnowledgeDialog({
-  template,
+export function IdentityKnowledgeDialog({
+  identity,
   workspaceId,
   onClose,
 }: {
   /** The row being attached to. ⚠ Its `workspaceId` is where its BASES are read
-   *  from — a personal template's knowledge lives in the same home workspace. */
-  template: AgentTemplate;
+   *  from — a personal identity's knowledge lives in the same home workspace. */
+  identity: AgentIdentity;
   /** The home workspace the PERSONAL list was read from, so the patch lands on
    *  the entry that list is subscribed to. */
   workspaceId: string;
@@ -123,13 +123,13 @@ export function AgentKnowledgeDialog({
   // ⚠ §8's STALE-CACHE FALLBACK, SPELLED INLINE at the read: `knowledge` was
   // added to an already-persisted payload, so an entry written by a previous
   // bundle survives with no such key.
-  const [refs, setRefs] = useState<ReadonlyArray<TemplateKnowledgeRef>>(
-    template.knowledge ?? EMPTY_KNOWLEDGE
+  const [refs, setRefs] = useState<ReadonlyArray<IdentityKnowledgeRef>>(
+    identity.knowledge ?? EMPTY_KNOWLEDGE
   );
   const [error, setError] = useState<string | null>(null);
-  const writes = useAgentTemplateWrites(workspaceId, "home");
+  const writes = useAgentIdentityWrites(workspaceId, "home");
   // ⚠ THE PLAIN WORKSPACE KEY, not the channel-scoped one — the same entry the
-  // authoring modal's picker mounts (`agent-editor.tsx`), so this popup usually
+  // authoring modal's picker mounts (`identity-editor.tsx`), so this popup usually
   // opens on a warm cache and never pulls the grant-bearing entry out from
   // under the Knowledge pane.
   const baseList = useKnowledgeBaseList(workspaceId);
@@ -154,8 +154,8 @@ export function AgentKnowledgeDialog({
 
   const scopes = useMemo(() => refs.map(refToScope), [refs]);
   const unchanged = useMemo(
-    () => sameScopes(scopes, (template.knowledge ?? EMPTY_KNOWLEDGE).map(refToScope)),
-    [scopes, template.knowledge]
+    () => sameScopes(scopes, (identity.knowledge ?? EMPTY_KNOWLEDGE).map(refToScope)),
+    [scopes, identity.knowledge]
   );
 
   async function save() {
@@ -168,13 +168,13 @@ export function AgentKnowledgeDialog({
     setError(null);
     try {
       await writes.update.mutateAsync({
-        templateId: template.id,
+        identityId: identity.id,
         // ⚠ `knowledge` IS A REPLACE-SET: `[]` empties it, absent leaves it
         // alone. This dialog always sends the whole set, which is what the
         // operator was looking at.
         body: { knowledge: scopes },
         optimistic: {
-          ...template,
+          ...identity,
           knowledge: [...refs],
           // ⚠ THE BASE-LEVEL SLICE, derived the way the server derives it — a
           // folder scope contributes nothing, because listing its base would
@@ -186,11 +186,11 @@ export function AgentKnowledgeDialog({
         // 🔒 The `X-Updated-At` precondition (F-747) — the row as the operator
         // opened it, so a save that lost a race is refused rather than silently
         // overwriting the other edit.
-        expectedUpdatedAt: template.updatedAt,
+        expectedUpdatedAt: identity.updatedAt,
       });
       onClose();
     } catch (err) {
-      setError(agentTemplateErrorMessage(err, "Couldn't save the knowledge."));
+      setError(agentIdentityErrorMessage(err, "Couldn't save the knowledge."));
     }
   }
 

@@ -1,6 +1,6 @@
 /**
  * THE NEW-AGENT POPUP'S MODEL ROW — what it shows, what it offers, what it SUBMITS, and the one
- * sentence it says when a template's model belongs to another runtime (2026-09-21, U7).
+ * sentence it says when an identity's model belongs to another runtime (2026-09-21, U7).
  *
  * ⚠ ITS OWN FILE past the §1 cap, on the seam `launch-agent-dialog-runtime.ts` already set: that
  * one answers what the RUNTIME row offers and which pill it opens on, this one answers what the
@@ -12,13 +12,13 @@
  *
  * ── ⚠ **WHAT CHANGED, AND WHY THE OLD CHAIN COULD NOT SURVIVE A SECOND RUNTIME** ─────────────
  *
- * The row used to read `agentModelSelection(panel.model || template.model || channel.model)` —
+ * The row used to read `agentModelSelection(panel.model || identity.model || channel.model)` —
  * one chain over ONE frozen Claude table, mirroring main's precedence link for link. With a
  * second runtime every link in it became wrong in a different way:
  *
  *   · the CHANNEL's model is now stored PER RUNTIME, so "the channel's model" is only meaningful
  *     once a runtime is named ({@link ModelRowInput.remembered});
- *   · the TEMPLATE's model belongs to whichever runtime offers it, and a template authored on
+ *   · the IDENTITY's model belongs to whichever runtime offers it, and an identity authored on
  *     Claude must not silently re-point a Codex launch — {@link modelRowFor} surfaces that as a
  *     MISMATCH rather than translating the id, which is the plan's U7 rule verbatim;
  *   · the BACK-FILL was Sonnet, which is a Claude id and may never be shown on a Codex surface.
@@ -40,13 +40,13 @@ import {
 } from "../lib/model-catalog";
 import {
   modelSubmittableForRuntime,
-  templateModelMismatch,
+  identityModelMismatch,
   type ModelMismatch,
 } from "../lib/model-affinity";
 import type { RuntimeDescriptor } from "../lib/runtime-capability";
 
 export interface ModelRowInput {
-  /** Every reported runtime, for deciding which one a template's model belongs to. */
+  /** Every reported runtime, for deciding which one an identity's model belongs to. */
   runtimes: ReadonlyArray<RuntimeDescriptor>;
   catalogs: ModelCatalogs | null | undefined;
   /** The catalog of the SELECTED runtime, or `null` when there is none. */
@@ -55,8 +55,8 @@ export interface ModelRowInput {
   selected: RuntimeDescriptor | null;
   /** The operator's own per-launch pick — `''` until they touch the control. */
   own: string;
-  /** The selected template's model, or `''`. */
-  fromTemplate: string;
+  /** The selected identity's model, or `''`. */
+  fromIdentity: string;
   /** What the CHANNEL remembers **for the selected runtime**, or `''`. */
   remembered: string;
 }
@@ -69,7 +69,7 @@ export interface ModelRow {
   selectable: boolean;
   /** The id this launch may put on the wire, or `''` for none. */
   submit: string;
-  /** The template's model belongs to another runtime. ⚠ `null` when it does not, or when this
+  /** The identity's model belongs to another runtime. ⚠ `null` when it does not, or when this
    *  build cannot say — "I cannot tell" must never read as "it belongs to somebody else". */
   mismatch: ModelMismatch | null;
   /** The desktop's own sentence about the roster, or `null`. */
@@ -79,9 +79,9 @@ export interface ModelRow {
 /**
  * THE WHOLE ROW, IN ONE FUNCTION.
  *
- * ⚠ **THE CHAIN IS MAIN'S, LINK FOR LINK, WITH THE TEMPLATE LINK GATED** — own pick > template >
+ * ⚠ **THE CHAIN IS MAIN'S, LINK FOR LINK, WITH THE IDENTITY LINK GATED** — own pick > identity >
  * the selected runtime's remembered pick > the catalog's declared default. The gate is the only
- * addition and it is the one the plan asks for: a template model this build can positively see
+ * addition and it is the one the plan asks for: an identity model this build can positively see
  * belongs to another runtime is DROPPED FROM THE CHAIN and explained, rather than shown as this
  * launch's model and then silently coerced by main.
  *
@@ -93,13 +93,13 @@ export interface ModelRow {
  */
 export function modelRowFor(input: ModelRowInput): ModelRow {
   const { catalog, selected, runtimes, catalogs } = input;
-  const mismatch = templateModelMismatch(
+  const mismatch = identityModelMismatch(
     runtimes,
     catalogs,
     selected,
-    input.fromTemplate
+    input.fromIdentity
   );
-  const usableTemplateModel = mismatch ? "" : input.fromTemplate;
+  const usableIdentityModel = mismatch ? "" : input.fromIdentity;
   const usableOwn = modelSubmittableForRuntime(
     runtimes,
     catalogs,
@@ -109,7 +109,7 @@ export function modelRowFor(input: ModelRowInput): ModelRow {
   )
     ? input.own
     : "";
-  const resolved = usableOwn || usableTemplateModel || input.remembered;
+  const resolved = usableOwn || usableIdentityModel || input.remembered;
   const shown = catalogSelection(catalog, resolved);
   return {
     shown,

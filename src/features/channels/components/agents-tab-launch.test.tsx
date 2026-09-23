@@ -8,10 +8,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 
-const templateList = vi.hoisted(() => ({ templates: [] as unknown[] }));
-vi.mock("@/features/agent-templates/hooks/use-agent-templates", () => ({
-  useAgentTemplates: () => ({
-    templates: templateList.templates,
+const identityList = vi.hoisted(() => ({ identities: [] as unknown[] }));
+vi.mock("@/features/agent-identities/hooks/use-agent-identities", () => ({
+  useAgentIdentities: () => ({
+    identities: identityList.identities,
     loading: false,
     error: null,
     refetch: () => {},
@@ -23,11 +23,11 @@ import { CHANNEL_ID, ME } from "./test-fixtures";
 
 afterEach(() => {
   cleanup();
-  templateList.templates = [];
+  identityList.identities = [];
 });
 
 /**
- * THE NEW AGENT SPLIT BUTTON (2026-08-22, the agent-templates launch wave).
+ * THE NEW AGENT SPLIT BUTTON (2026-08-22, the agent-identities launch wave).
  *
  * ⚠ **THE FACE OPENS THE POPUP SINCE 2026-09-08 AND NO LONGER LAUNCHES**, which supersedes this
  * file's oldest pin. Samuel: *"put in the new agent button in the agents tab"* — the button that
@@ -38,8 +38,8 @@ afterEach(() => {
  * one AND open the form over it).
  * ⚠ **AND THE CHEVRON OPENS THE SAME POPUP SINCE 2026-09-13** (Samuel, over the deleted
  * `launch-sheet.tsx`: *"the popup should essentially be the same as that of a normal agent launch,
- * except the template is pre-selected"*). The picker no longer launches at all, so what this file
- * pins about that half is the WIRING: a row click opens the ONE form with the template PRESELECTED
+ * except the identity is pre-selected"*). The picker no longer launches at all, so what this file
+ * pins about that half is the WIRING: a row click opens the ONE form with the identity PRESELECTED
  * and its heading naming it, on this tab's thread, and it launches nothing on the way.
  * ⚠ THE POPUP'S OWN CONTRACT IS `launch-agent-dialog.test.tsx` (the five fields, the defaults, the
  * payload's parity with the slide-out's). What belongs HERE is the WIRING — that this tab's button
@@ -80,7 +80,7 @@ describe("the Launch agent split button", () => {
   });
 
   it("opens the popup on BLANK AGENT — the one-click lane, one Launch away", async () => {
-    templateList.templates = [
+    identityList.identities = [
       { id: "tpl-9", workspaceId: WS, name: "Code auditor", createdBy: ME },
     ];
     mountLaunch();
@@ -89,14 +89,14 @@ describe("the Launch agent split button", () => {
       expect(screen.getByRole("dialog", { name: "New agent" })).toBeTruthy()
     );
     // ⚠ THE DEFAULT IS AN OPTION, NOT A PLACEHOLDER — `use-agent-launch.ts` opens on
-    // `templateId: null`, which is the row's `Blank agent` pill.
+    // `identityId: null`, which is the row's `Blank agent` pill.
     expect(
       screen
-        .getByRole("tablist", { name: "Agent template" })
+        .getByRole("tablist", { name: "Identity" })
         .querySelector('[aria-selected="true"]')?.textContent
     // ⚠ **"Blank agent" → "None" ON 2026-09-13** (Samuel, docs/specs/agent-colors.md item 7:
-    // *"change 'Blank Agent' to 'None' for the template"*). The WIRE is unchanged — the
-    // option still sends `templateId: null` — so this is a LABEL pin moving and nothing else.
+    // *"change 'Blank Agent' to 'None' for the identity"*). The WIRE is unchanged — the
+    // option still sends `identityId: null` — so this is a LABEL pin moving and nothing else.
     ).toBe("None");
   });
 
@@ -106,8 +106,8 @@ describe("the Launch agent split button", () => {
     expect(screen.queryByRole("menu")).toBeNull();
   });
 
-  it("renders the popup WITHOUT a workspace — the template row degrades, the form does not", async () => {
-    // ⚠ `workspaceId` GATES THE CHEVRON AND THE TEMPLATE READ, NEVER THE BUTTON. A New agent
+  it("renders the popup WITHOUT a workspace — the identity row degrades, the form does not", async () => {
+    // ⚠ `workspaceId` GATES THE CHEVRON AND THE IDENTITY READ, NEVER THE BUTTON. A New agent
     // button whose form did not open would be the dead control this whole gate exists to avoid.
     mountLaunch({ workspaceId: null });
     fireEvent.click(screen.getByRole("button", { name: "New agent" }));
@@ -118,7 +118,7 @@ describe("the Launch agent split button", () => {
 
   it("opens the picker from the ADJACENT chevron, which launches nothing itself", () => {
     const { onLaunchAgent } = mountLaunch();
-    const chevron = screen.getByRole("button", { name: "Launch from template" });
+    const chevron = screen.getByRole("button", { name: "Launch from identity" });
     expect(chevron.getAttribute("aria-expanded")).toBe("false");
 
     fireEvent.click(chevron);
@@ -130,7 +130,7 @@ describe("the Launch agent split button", () => {
   it("gives the chevron its OWN accessible name — two controls, not one", () => {
     mountLaunch();
     expect(screen.getByRole("button", { name: "New agent" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Launch from template" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Launch from identity" })).toBeTruthy();
   });
 
   it("renders NO chevron without a workspace to list", () => {
@@ -138,7 +138,7 @@ describe("the Launch agent split button", () => {
     // follows, applied to a READ: no affordance beats one that can only be empty.
     mountLaunch({ workspaceId: null });
     expect(screen.getByRole("button", { name: "New agent" })).toBeTruthy();
-    expect(screen.queryByRole("button", { name: "Launch from template" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Launch from identity" })).toBeNull();
   });
 
   // ⚠ CHANNEL VIEW IS WHERE MOST PEOPLE ARRIVE, and the button used to be
@@ -150,7 +150,7 @@ describe("the Launch agent split button", () => {
   // 2026-08-21) makes that redirect the one surface pretending otherwise. The
   // channel view now launches CHANNEL-LEVEL in one click, `threadId: null`.
   // ⚠ AND THE CHEVRON CAME WITH IT ON 2026-09-08 (Samuel: *"Same one, that
-  // enables me to launch a template"*). This case asserted the chevron was
+  // enables me to launch an identity"*). This case asserted the chevron was
   // ABSENT here — the last piece of the redirect — and the ruling flipped it.
   it("with no thread open, the popup's Launch is CHANNEL-LEVEL — threadId null", async () => {
     // 🔒 THE TAB'S OWN WIRING, END TO END: the face opens the form and the form's Launch carries
@@ -172,11 +172,11 @@ describe("the Launch agent split button", () => {
 
   // 🔒 THE WHOLE SPLIT BUTTON IS IN CHANNEL VIEW, NOT HALF OF IT. The face
   // moved on 2026-08-31 and the chevron stayed behind, so the view most people
-  // arrive in offered a blank launch and no template lane at all.
+  // arrive in offered a blank launch and no identity lane at all.
   it("renders the chevron with NO open thread — `workspaceId` is the only gate", () => {
     mountLaunch({ openThreadId: null });
     expect(screen.getByRole("button", { name: "New agent" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Launch from template" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Launch from identity" })).toBeTruthy();
   });
 
   it("still renders WITHOUT a new-thread lane — the launch no longer needs one", () => {
@@ -189,10 +189,10 @@ describe("the Launch agent split button", () => {
   it("renders neither half when the bridge cannot launch", () => {
     mountLaunch({ canLaunch: false });
     expect(screen.queryByRole("button", { name: "New agent" })).toBeNull();
-    expect(screen.queryByRole("button", { name: "Launch from template" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Launch from identity" })).toBeNull();
   });
 
-  /** One template row, shaped as the roster hands it over. */
+  /** One identity row, shaped as the roster hands it over. */
   function auditor(over: Record<string, unknown> = {}) {
     return {
       id: "tpl-9",
@@ -215,11 +215,11 @@ describe("the Launch agent split button", () => {
   it("OPENS THE POPUP PREFILLED on the picker's row, and launches nothing itself", async () => {
     // 🔒 MUTATION-PROOF: re-point `onPick` at a launch (the pre-2026-09-13 `launchFromPicker`) and
     // the dialog never appears AND `onLaunchAgent` fires — both halves of this case invert.
-    templateList.templates = [auditor()];
+    identityList.identities = [auditor()];
     const { onLaunchAgent } = mountLaunch();
-    fireEvent.click(screen.getByRole("button", { name: "Launch from template" }));
+    fireEvent.click(screen.getByRole("button", { name: "Launch from identity" }));
     fireEvent.click(screen.getByRole("menuitem", { name: /^Launch Code auditor/ }));
-    // ⚠ THE HEADING NAMES THE TEMPLATE — the accessible name IS the string (`StandardDialog`'s
+    // ⚠ THE HEADING NAMES THE IDENTITY — the accessible name IS the string (`StandardDialog`'s
     // rule), so the Title Case an operator reads is CSS and this matches the value.
     await waitFor(() =>
       expect(screen.getByRole("dialog", { name: "New Code auditor agent" })).toBeTruthy()
@@ -232,41 +232,41 @@ describe("the Launch agent split button", () => {
       "Read the diff. Report findings."
     );
     expect(onLaunchAgent).not.toHaveBeenCalled();
-    templateList.templates = [];
+    identityList.identities = [];
   });
 
-  // 🔒 A TEMPLATE LAUNCH IN CHANNEL VIEW IS THE SAME LAUNCH, THREADLESS. The popup the chevron
+  // 🔒 AN IDENTITY LAUNCH IN CHANNEL VIEW IS THE SAME LAUNCH, THREADLESS. The popup the chevron
   // opens is the SAME mount the face opens, so it reads `openThreadId` exactly once — which is
   // what makes the two halves unable to disagree about where they launch, and is now structural
   // rather than a pair of matching arguments.
-  it("with no thread open, the picker's popup launches the template CHANNEL-LEVEL", async () => {
-    templateList.templates = [auditor()];
+  it("with no thread open, the picker's popup launches the identity CHANNEL-LEVEL", async () => {
+    identityList.identities = [auditor()];
     const { onLaunchAgent } = mountLaunch({ openThreadId: null });
-    fireEvent.click(screen.getByRole("button", { name: "Launch from template" }));
+    fireEvent.click(screen.getByRole("button", { name: "Launch from identity" }));
     fireEvent.click(screen.getByRole("menuitem", { name: /^Launch Code auditor/ }));
     await waitFor(() =>
       expect(screen.getByRole("dialog", { name: "New Code auditor agent" })).toBeTruthy()
     );
     fireEvent.click(screen.getByRole("button", { name: "Launch" }));
     await waitFor(() => expect(onLaunchAgent).toHaveBeenCalled());
-    const [threadId, templateId] = vi.mocked(onLaunchAgent).mock.calls[0];
+    const [threadId, identityId] = vi.mocked(onLaunchAgent).mock.calls[0];
     expect(threadId).toBeNull();
-    expect(templateId).toBe("tpl-9");
-    templateList.templates = [];
+    expect(identityId).toBe("tpl-9");
+    identityList.identities = [];
   });
 });
 
 /**
  * WHICH IDENTITY THE CARD SAYS AN AGENT IS WEARING (2026-08-22).
  *
- * ⚠ OPERATOR-ONLY, AND IT IS STRUCTURAL RATHER THAN A CHECK. `templateName`
+ * ⚠ OPERATOR-ONLY, AND IT IS STRUCTURAL RATHER THAN A CHECK. `identityName`
  * exists on `DesktopSessionSummary` — this machine's own registry — and NOT on
- * `ChannelPeerSession`, because `channel_sessions.template_name` is excluded from
- * the peer projection: a private template's name on a colleague's card is an
+ * `ChannelPeerSession`, because `channel_sessions.identity_name` is excluded from
+ * the peer projection: a private identity's name on a colleague's card is an
  * existence oracle. There is nothing to plumb into `PeerCards` and nothing to
  * assert about it here beyond that.
  */
-describe("the template name on an own-agent card", () => {
+describe("the identity name on an own-agent card", () => {
   function card(over: Record<string, unknown> = {}) {
     render(
       <AgentsTab
@@ -290,8 +290,8 @@ describe("the template name on an own-agent card", () => {
     );
   }
 
-  it("names the template it launched as, before the model", () => {
-    card({ templateName: "Code auditor", model: "claude-opus-5" });
+  it("names the identity it launched as, before the model", () => {
+    card({ identityName: "Code auditor", model: "claude-opus-5" });
     const line = screen.getByText("UI-kit design").parentElement!;
     expect(line.textContent).toContain("· Code auditor");
     // WHO it is reads before WHAT it runs on.
@@ -301,7 +301,7 @@ describe("the template name on an own-agent card", () => {
   });
 
   it("renders NOTHING for a blank agent, and nothing on a main that omits the field", () => {
-    card({ templateName: null, model: "claude-opus-5" });
+    card({ identityName: null, model: "claude-opus-5" });
     expect(screen.getByText("UI-kit design").parentElement!.textContent).toBe(
       "UI-kit design· Opus"
     );

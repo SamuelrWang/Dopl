@@ -15,7 +15,7 @@
  * is the thing he noticed before any number.
  *
  * ⚠ **TWO CONSUMERS IN TWO LANGUAGES, WHICH IS WHY THE VALUES LIVE HERE:**
- *   - `src/features/agent-templates/components/template-section.tsx` — a
+ *   - `src/features/agent-identities/components/identity-section.tsx` — a
  *     Tailwind arbitrary-value class string.
  *   - `src/features/knowledge/components/knowledge-v2/knowledge-v2.module.css ›
  *     .card:hover` — a CSS module, which cannot import a TS constant.

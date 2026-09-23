@@ -146,14 +146,14 @@ export const LaunchCreateSchema = z.object({
     .regex(LAUNCH_RUNTIME_ID_RE, LAUNCH_RUNTIME_ID_MESSAGE)
     .optional(),
   /**
-   * THE AGENT TEMPLATE TO RUN AS — **an id OR an exact name** (2026-08-23).
+   * THE AGENT IDENTITY TO RUN AS — **an id OR an exact name** (2026-08-23).
    *
    * ⚠ ONE PARAM FOR BOTH, which is this tree's own idiom rather than a new
    * convention: `dopl_kb`'s `base` already takes either
    * (`knowledge-shared.ts › resolveBase`). The service disambiguates on shape —
    * UUID ⇒ id, otherwise a case-insensitive EXACT name over the caller-visible
    * set — and **refuses, listing every match, when a name is ambiguous.**
-   * `agent_templates` has no name uniqueness on purpose (a unique index across a
+   * `agent_identities` has no name uniqueness on purpose (a unique index across a
    * visibility boundary leaks the existence of a private row through a conflict
    * error), so ambiguity is a legitimate state and every "pick one" rule is
    * silently surprising.
@@ -161,13 +161,13 @@ export const LaunchCreateSchema = z.object({
    * ⚠ `safeLabel`, matching `model` beside it and for the same reason: the ref is
    * echoed back in the not-found refusal an MCP result renders, so it is
    * shape-bounded before it can carry a newline into a line we wrote. 120 is
-   * `agent_templates.name`'s own bound — a name that is legal on a template must
+   * `agent_identities.name`'s own bound — a name that is legal on an identity must
    * never be refusable here, or a legitimate launch 400s.
    *
    * ⚠ NOT `.uuid()`, and never narrowed to one: refusing the NAME form here
    * would make an orchestrator carry ids it has no way to look up over this tool.
    */
-  template: safeLabel("Template", 120).optional(),
+  identity: safeLabel("Identity", 120).optional(),
   /**
    * THE POSTURE THIS LAUNCH **ASKS** ITS NEW SESSION TO START ON (T24).
    *
@@ -309,8 +309,8 @@ export type LaunchClaimInput = z.infer<typeof LaunchClaimSchema>;
  * on the machine that is hardest to update, and would render desktop-authored
  * text into an MCP result nobody neutralized.
  */
-// ⚠ SEVEN SINCE 2026-08-22 (agent templates). `no-template` is what a machine answers when a
-// directive named a template its OPERATOR cannot resolve — deleted, or invisible to them
+// ⚠ SEVEN SINCE 2026-08-22 (agent identities). `no-identity` is what a machine answers when a
+// directive named an identity its OPERATOR cannot resolve — deleted, or invisible to them
 // though visible to the orchestrator that named it.
 // ⚠ THE COLUMN CHECK CAUGHT UP ON 2026-08-23. This enum ran one word ahead of
 // `channel_launch_directives_refusal_reason_check` for a day, and this comment carried the
@@ -386,7 +386,7 @@ export const AgentDirectiveCreateSchema = z.discriminatedUnion("kind", [
     /**
      * ⚠ **60, AND THE EMPTY STRING IS LEGAL.** 60 is `main/agent-names.js ›
      * MAX_NAME` — the store that will actually hold it — not
-     * `agent_templates.name`'s 120: a name legal here that the desktop then
+     * `agent_identities.name`'s 120: a name legal here that the desktop then
      * refuses is a 200 followed by a refusal the orchestrator cannot explain.
      * Empty CLEARS, back to `Agent #<id>`; a separate `unname` verb would be a
      * second way to say one thing.

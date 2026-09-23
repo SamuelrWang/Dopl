@@ -129,7 +129,7 @@ export function apiMessage(e: unknown): string | null {
  * ⚠ **IT LIVES HERE RATHER THAN IN ONE TOOL BECAUSE THE GATE IS CROSS-CUTTING.**
  * ⚠ **AND IT HAS NO CALLER AS OF 2026-09-19, WHICH IS A FACT AND NOT AN
  * OVERSIGHT.** The pin verbs raised it, and Samuel's ruling deleted knowledge
- * pinning outright; the delete routes, `channel-grants` and the template delete
+ * pinning outright; the delete routes, `channel-grants` and the identity delete
  * carry the same `sessionOnly` wrapper option, so the next op that grows an arm
  * gets this sentence rather than a second wording of it. It is asserted
  * directly by `knowledge-refusals.test.ts › S43`, which is what keeps an

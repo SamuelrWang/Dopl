@@ -2,7 +2,7 @@ import "server-only";
 import { isSharedCredential } from "@/shared/auth/credential-audience";
 import { meetsMinRole } from "@/features/workspaces/types";
 // G16 — the ONE statement of the publish-into-a-peer's-room precondition,
-// shared with `agent-templates/server/service-writes.ts`.
+// shared with `agent-identities/server/service-writes.ts`.
 import { assertSharedPublishAcknowledged } from "@/features/workspaces/server/shared-publish";
 import {
   deleteGrantRow,

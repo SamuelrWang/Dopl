@@ -15,9 +15,9 @@ import type { ReactNode } from "react";
 import { ChevronRight, PanelRight, Pin } from "lucide-react";
 // ⚠ CROSS-FEATURE, AND THE SAME "SMALLER OF TWO EVILS" `agents-wells.tsx` RECORDS
 // (INVARIANTS §1 forbids it; F-275 records that this tree has never obeyed the
-// rule). `TEMPLATE_NAME_TEXT` was exported on 2026-09-13 so a second surface could
+// rule). `IDENTITY_NAME_TEXT` was exported on 2026-09-13 so a second surface could
 // read the type Samuel names by POINTING AT IT; this header is the fourth reader.
-import { TEMPLATE_NAME_TEXT } from "@/features/agent-templates/components/template-section";
+import { IDENTITY_NAME_TEXT } from "@/features/agent-identities/components/identity-section";
 import { cn } from "@/shared/lib/utils";
 import { IconButton } from "./bits";
 
@@ -45,7 +45,7 @@ import { IconButton } from "./bits";
  * ⚠ **THE THREAD TITLE IS NOT THE CHANNEL NAME AND IS LEFT ALONE.** Samuel named
  * two things; R2 says change only those. In a thread the crumb's channel half
  * takes the new type and keeps its own resting ink and hover (it is a BUTTON —
- * the way back out), so `TEMPLATE_NAME_TEXT`'s `text-text-primary` is overridden
+ * the way back out), so `IDENTITY_NAME_TEXT`'s `text-text-primary` is overridden
  * there on purpose and only the size and weight survive.
  */
 
@@ -136,7 +136,7 @@ export function PaneHeader({
       <nav aria-label="Breadcrumb" className="flex min-w-0 items-center gap-1">
         {threadTitle === null ? (
           hideChannelCrumb ? null : (
-            <span className={cn("truncate", TEMPLATE_NAME_TEXT)}>
+            <span className={cn("truncate", IDENTITY_NAME_TEXT)}>
               {channelName}
             </span>
           )
@@ -147,7 +147,7 @@ export function PaneHeader({
               onClick={onExitThread}
               className={cn(
                 "truncate rounded-[7px] px-1 py-0.5 transition-colors hover:bg-surface-raised-1 hover:text-text-primary",
-                TEMPLATE_NAME_TEXT,
+                IDENTITY_NAME_TEXT,
                 // ⚠ INK LAST — the crumb's channel half is the way OUT of the
                 // thread and rests muted; only the size and weight are Samuel's
                 // ruling here (see the type's docblock).

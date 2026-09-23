@@ -3,7 +3,7 @@
  * CANNOT REACH (Samuel's ruling, 2026-09-05).
  *
  * ⚠ THE RULING IN ONE LINE: a user MAY attach a shared base to a personal
- * template, and launching it where the base is out of reach must START THE AGENT
+ * identity, and launching it where the base is out of reach must START THE AGENT
  * ANYWAY and let it say *"I don't have access to this knowledge base in this
  * channel"* — WITHOUT saying where the base lives.
  *
@@ -20,7 +20,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import type { AgentTemplate, AgentTemplateContext } from "../types";
+import type { AgentIdentity, AgentIdentityContext } from "../types";
 
 // ⚠ THE GRANT ARM IS A DB READ (F-604) — empty here, exactly as the sibling
 // suite declares it: every case below is about the viewer filter's OTHER arms.
@@ -32,11 +32,11 @@ vi.mock("@/shared/tenancy/resource-grant-reach", async (importOriginal) => ({
 }));
 
 vi.mock("./repository", () => ({
-  listTemplatesForWorkspace: vi.fn(),
-  findTemplateById: vi.fn(),
-  listTeamLinksForTemplates: vi.fn(),
+  listIdentitiesForWorkspace: vi.fn(),
+  findIdentityById: vi.fn(),
+  listTeamLinksForIdentities: vi.fn(),
   listTeamIdsForUser: vi.fn(),
-  listKnowledgeLinksForTemplates: vi.fn(),
+  listKnowledgeLinksForIdentities: vi.fn(),
   listKnowledgeBaseAccessRows: vi.fn(),
   listKnowledgeBaseTeamGrants: vi.fn(),
   listLiveFoldersForBases: vi.fn(),
@@ -49,7 +49,7 @@ vi.mock("@/shared/tenancy/resolve-resource", () => ({
 
 import * as repo from "./repository";
 import * as tenancy from "@/shared/tenancy/resolve-resource";
-import { resolveTemplateForLaunch } from "./service";
+import { resolveIdentityForLaunch } from "./service";
 
 const mockRepo = vi.mocked(repo);
 const mockTenancy = vi.mocked(tenancy);
@@ -58,7 +58,7 @@ const CREATOR = "user-creator";
 const REACHABLE = "kb-reachable";
 const OUT_OF_REACH = "kb-out-of-reach";
 
-function ctx(overrides: Partial<AgentTemplateContext> = {}): AgentTemplateContext {
+function ctx(overrides: Partial<AgentIdentityContext> = {}): AgentIdentityContext {
   return {
     workspaceId: "ws-1",
     userId: CREATOR,
@@ -70,7 +70,7 @@ function ctx(overrides: Partial<AgentTemplateContext> = {}): AgentTemplateContex
   };
 }
 
-function template(overrides: Partial<AgentTemplate> = {}): AgentTemplate {
+function identity(overrides: Partial<AgentIdentity> = {}): AgentIdentity {
   return {
     id: "tpl-1",
     workspaceId: "ws-1",
@@ -89,11 +89,11 @@ function template(overrides: Partial<AgentTemplate> = {}): AgentTemplate {
   };
 }
 
-/** A junction row: the template NAMES this base, whatever the reader can see.
+/** A junction row: the identity NAMES this base, whatever the reader can see.
  *  ⚠ SCOPED SINCE 2026-09-08 — `scope_kind` defaults to `'base'`, which is what
  *  every row written before that migration IS. */
 const link = (knowledgeBaseId: string) => ({
-  templateId: "tpl-1",
+  identityId: "tpl-1",
   knowledgeBaseId,
   scopeKind: "base" as const,
   folderId: null,
@@ -102,7 +102,7 @@ const link = (knowledgeBaseId: string) => ({
 
 /** A junction row naming ONE FOLDER of a base. */
 const folderLink = (knowledgeBaseId: string, folderId: string) => ({
-  templateId: "tpl-1",
+  identityId: "tpl-1",
   knowledgeBaseId,
   scopeKind: "folder" as const,
   folderId,
@@ -111,7 +111,7 @@ const folderLink = (knowledgeBaseId: string, folderId: string) => ({
 
 /** …and one naming a single ENTRY. */
 const entryLink = (knowledgeBaseId: string, entryId: string) => ({
-  templateId: "tpl-1",
+  identityId: "tpl-1",
   knowledgeBaseId,
   scopeKind: "entry" as const,
   folderId: null,
@@ -130,53 +130,53 @@ const visibleBase = (id: string, name: string) => ({
 beforeEach(() => {
   vi.clearAllMocks();
   mockTenancy.resolveResource.mockResolvedValue(null);
-  mockRepo.findTemplateById.mockResolvedValue(template());
-  mockRepo.listKnowledgeLinksForTemplates.mockResolvedValue([]);
+  mockRepo.findIdentityById.mockResolvedValue(identity());
+  mockRepo.listKnowledgeLinksForIdentities.mockResolvedValue([]);
   mockRepo.listKnowledgeBaseAccessRows.mockResolvedValue([]);
   mockRepo.listKnowledgeBaseTeamGrants.mockResolvedValue([]);
   mockRepo.listLiveFoldersForBases.mockResolvedValue([]);
   mockRepo.listLiveEntryRows.mockResolvedValue([]);
-  mockRepo.listTeamLinksForTemplates.mockResolvedValue([]);
+  mockRepo.listTeamLinksForIdentities.mockResolvedValue([]);
   mockRepo.listTeamIdsForUser.mockResolvedValue([]);
 });
 
 describe("the count", () => {
-  it("is 0 when the template attaches nothing", async () => {
+  it("is 0 when the identity attaches nothing", async () => {
     // ⚠ A DECIDED ZERO, not an absence: this row went through the decoration and
     // the answer is "nothing was dropped".
-    const resolved = await resolveTemplateForLaunch(ctx(), "tpl-1");
+    const resolved = await resolveIdentityForLaunch(ctx(), "tpl-1");
     expect(resolved.unreachableKnowledgeBaseCount).toBe(0);
     expect(resolved.knowledgeBases).toEqual([]);
   });
 
   it("is 0 when every attachment resolves", async () => {
-    mockRepo.listKnowledgeLinksForTemplates.mockResolvedValue([link(REACHABLE)]);
+    mockRepo.listKnowledgeLinksForIdentities.mockResolvedValue([link(REACHABLE)]);
     mockRepo.listKnowledgeBaseAccessRows.mockResolvedValue([
       visibleBase(REACHABLE, "Ops Notes"),
     ]);
-    const resolved = await resolveTemplateForLaunch(ctx(), "tpl-1");
+    const resolved = await resolveIdentityForLaunch(ctx(), "tpl-1");
     expect(resolved.unreachableKnowledgeBaseCount).toBe(0);
     expect(resolved.knowledgeBases).toEqual([{ id: REACHABLE, name: "Ops Notes" }]);
   });
 
   it("counts the attachment the viewer filter dropped — THE RULED CASE", async () => {
-    // The shared base attached to a personal template, launched where the base
+    // The shared base attached to a personal identity, launched where the base
     // does not resolve: the junction row exists, the base row does not come back.
-    mockRepo.listKnowledgeLinksForTemplates.mockResolvedValue([link(OUT_OF_REACH)]);
+    mockRepo.listKnowledgeLinksForIdentities.mockResolvedValue([link(OUT_OF_REACH)]);
     mockRepo.listKnowledgeBaseAccessRows.mockResolvedValue([]);
-    const resolved = await resolveTemplateForLaunch(ctx(), "tpl-1");
+    const resolved = await resolveIdentityForLaunch(ctx(), "tpl-1");
     expect(resolved.unreachableKnowledgeBaseCount).toBe(1);
   });
 
-  it("counts only the dropped ones when a template has both", async () => {
-    mockRepo.listKnowledgeLinksForTemplates.mockResolvedValue([
+  it("counts only the dropped ones when an identity has both", async () => {
+    mockRepo.listKnowledgeLinksForIdentities.mockResolvedValue([
       link(REACHABLE),
       link(OUT_OF_REACH),
     ]);
     mockRepo.listKnowledgeBaseAccessRows.mockResolvedValue([
       visibleBase(REACHABLE, "Ops Notes"),
     ]);
-    const resolved = await resolveTemplateForLaunch(ctx(), "tpl-1");
+    const resolved = await resolveIdentityForLaunch(ctx(), "tpl-1");
     expect(resolved.unreachableKnowledgeBaseCount).toBe(1);
     expect(resolved.knowledgeBases).toEqual([{ id: REACHABLE, name: "Ops Notes" }]);
   });
@@ -186,8 +186,8 @@ describe("what it must NOT do", () => {
   it("does not block the launch — the payload is whole, minus the base", async () => {
     // ⚠ THE HALF OF THE RULING A REFUSAL WOULD BREAK. An unreachable attachment
     // is a thing to SAY, never a reason to refuse to start.
-    mockRepo.listKnowledgeLinksForTemplates.mockResolvedValue([link(OUT_OF_REACH)]);
-    const resolved = await resolveTemplateForLaunch(ctx(), "tpl-1");
+    mockRepo.listKnowledgeLinksForIdentities.mockResolvedValue([link(OUT_OF_REACH)]);
+    const resolved = await resolveIdentityForLaunch(ctx(), "tpl-1");
     expect(resolved.name).toBe("Code Auditor");
     expect(resolved.instructions).toBe("Audit the diff.");
     expect(resolved.knowledgeBases).toEqual([]);
@@ -197,8 +197,8 @@ describe("what it must NOT do", () => {
   it("says NOTHING about the dropped base beyond the count — no id, no name, no container", async () => {
     // 🔒 The leak test. Serialised, because a location could hide in any key: the
     // payload may not contain the dropped id anywhere, at any depth.
-    mockRepo.listKnowledgeLinksForTemplates.mockResolvedValue([link(OUT_OF_REACH)]);
-    const resolved = await resolveTemplateForLaunch(ctx(), "tpl-1");
+    mockRepo.listKnowledgeLinksForIdentities.mockResolvedValue([link(OUT_OF_REACH)]);
+    const resolved = await resolveIdentityForLaunch(ctx(), "tpl-1");
     expect(JSON.stringify(resolved)).not.toContain(OUT_OF_REACH);
     expect(Object.keys(resolved).sort()).toEqual([
       "authoredByCaller",
@@ -216,9 +216,9 @@ describe("what it must NOT do", () => {
     // ⚠ THE ARITHMETIC IS OVER ROWS ALREADY READ. A probe for a base outside the
     // caller's reach is precisely what the no-location rule forbids, so the count
     // must cost exactly the queries the decoration already made.
-    mockRepo.listKnowledgeLinksForTemplates.mockResolvedValue([link(OUT_OF_REACH)]);
-    await resolveTemplateForLaunch(ctx(), "tpl-1");
-    expect(mockRepo.listKnowledgeLinksForTemplates).toHaveBeenCalledTimes(1);
+    mockRepo.listKnowledgeLinksForIdentities.mockResolvedValue([link(OUT_OF_REACH)]);
+    await resolveIdentityForLaunch(ctx(), "tpl-1");
+    expect(mockRepo.listKnowledgeLinksForIdentities).toHaveBeenCalledTimes(1);
     expect(mockRepo.listKnowledgeBaseAccessRows).toHaveBeenCalledTimes(1);
     expect(mockRepo.listKnowledgeBaseAccessRows).toHaveBeenCalledWith("ws-1", [
       OUT_OF_REACH,
@@ -240,7 +240,7 @@ describe("folder and entry scopes", () => {
   const ENTRY = "e-1";
 
   it("renders a folder scope as a path, and a toolPath that is NOT the display one", async () => {
-    mockRepo.listKnowledgeLinksForTemplates.mockResolvedValue([
+    mockRepo.listKnowledgeLinksForIdentities.mockResolvedValue([
       folderLink(REACHABLE, FOLDER),
     ]);
     mockRepo.listKnowledgeBaseAccessRows.mockResolvedValue([
@@ -250,7 +250,7 @@ describe("folder and entry scopes", () => {
       { id: "f-0", knowledgeBaseId: REACHABLE, parentId: null, name: "Runbooks" },
       { id: FOLDER, knowledgeBaseId: REACHABLE, parentId: "f-0", name: "Deploys" },
     ]);
-    const resolved = await resolveTemplateForLaunch(ctx(), "tpl-1");
+    const resolved = await resolveIdentityForLaunch(ctx(), "tpl-1");
     expect(resolved.knowledge).toEqual([
       {
         baseId: REACHABLE,
@@ -273,7 +273,7 @@ describe("folder and entry scopes", () => {
   });
 
   it("renders an entry scope at its folder's path", async () => {
-    mockRepo.listKnowledgeLinksForTemplates.mockResolvedValue([
+    mockRepo.listKnowledgeLinksForIdentities.mockResolvedValue([
       entryLink(REACHABLE, ENTRY),
     ]);
     mockRepo.listKnowledgeBaseAccessRows.mockResolvedValue([
@@ -285,7 +285,7 @@ describe("folder and entry scopes", () => {
     mockRepo.listLiveEntryRows.mockResolvedValue([
       { id: ENTRY, knowledgeBaseId: REACHABLE, folderId: "f-0", title: "Rollback" },
     ]);
-    const resolved = await resolveTemplateForLaunch(ctx(), "tpl-1");
+    const resolved = await resolveIdentityForLaunch(ctx(), "tpl-1");
     expect(resolved.knowledge[0]?.path).toBe("Ops Notes / Runbooks / Rollback");
     expect(resolved.knowledge[0]?.toolPath).toBe("Runbooks/Rollback");
   });
@@ -293,14 +293,14 @@ describe("folder and entry scopes", () => {
   it("drops a TRASHED entry into the same count, naming nothing", async () => {
     // The live-entry read simply does not return it, which is how a soft delete
     // reaches this layer.
-    mockRepo.listKnowledgeLinksForTemplates.mockResolvedValue([
+    mockRepo.listKnowledgeLinksForIdentities.mockResolvedValue([
       entryLink(REACHABLE, ENTRY),
     ]);
     mockRepo.listKnowledgeBaseAccessRows.mockResolvedValue([
       visibleBase(REACHABLE, "Ops Notes"),
     ]);
     mockRepo.listLiveEntryRows.mockResolvedValue([]);
-    const resolved = await resolveTemplateForLaunch(ctx(), "tpl-1");
+    const resolved = await resolveIdentityForLaunch(ctx(), "tpl-1");
     expect(resolved.knowledge).toEqual([]);
     expect(resolved.unreachableKnowledgeBaseCount).toBe(1);
     expect(JSON.stringify(resolved)).not.toContain(ENTRY);
@@ -310,7 +310,7 @@ describe("folder and entry scopes", () => {
     // 🔒 The trigger refuses this write; this refuses the READ of a row written
     // before the trigger existed. A path naming one base beside a tool call
     // naming another is an agent pointed at the wrong document.
-    mockRepo.listKnowledgeLinksForTemplates.mockResolvedValue([
+    mockRepo.listKnowledgeLinksForIdentities.mockResolvedValue([
       folderLink(REACHABLE, FOLDER),
     ]);
     mockRepo.listKnowledgeBaseAccessRows.mockResolvedValue([
@@ -319,17 +319,17 @@ describe("folder and entry scopes", () => {
     mockRepo.listLiveFoldersForBases.mockResolvedValue([
       { id: FOLDER, knowledgeBaseId: OUT_OF_REACH, parentId: null, name: "Elsewhere" },
     ]);
-    const resolved = await resolveTemplateForLaunch(ctx(), "tpl-1");
+    const resolved = await resolveIdentityForLaunch(ctx(), "tpl-1");
     expect(resolved.knowledge).toEqual([]);
     expect(resolved.unreachableKnowledgeBaseCount).toBe(1);
   });
 
   it("drops every scope of a base the viewer cannot see, without reading its tree", async () => {
-    mockRepo.listKnowledgeLinksForTemplates.mockResolvedValue([
+    mockRepo.listKnowledgeLinksForIdentities.mockResolvedValue([
       folderLink(OUT_OF_REACH, FOLDER),
     ]);
     mockRepo.listKnowledgeBaseAccessRows.mockResolvedValue([]);
-    const resolved = await resolveTemplateForLaunch(ctx(), "tpl-1");
+    const resolved = await resolveIdentityForLaunch(ctx(), "tpl-1");
     expect(resolved.knowledge).toEqual([]);
     expect(resolved.unreachableKnowledgeBaseCount).toBe(1);
     // ⚠ NO PROBE. Reading the folders of a base the caller cannot see is a
@@ -358,8 +358,8 @@ describe("the base card", () => {
   });
 
   beforeEach(() => {
-    mockRepo.findTemplateById.mockResolvedValue(template());
-    mockRepo.listKnowledgeLinksForTemplates.mockResolvedValue([link(REACHABLE)]);
+    mockRepo.findIdentityById.mockResolvedValue(identity());
+    mockRepo.listKnowledgeLinksForIdentities.mockResolvedValue([link(REACHABLE)]);
     mockRepo.listKnowledgeBaseAccessRows.mockResolvedValue([
       {
         ...visibleBase(REACHABLE, "Deploys"),
@@ -379,7 +379,7 @@ describe("the base card", () => {
       { ...folder("f-3", "2026"), parentId: "f-2" },
     ]);
 
-    const [ref] = (await resolveTemplateForLaunch(ctx(), "tpl-1")).knowledge;
+    const [ref] = (await resolveIdentityForLaunch(ctx(), "tpl-1")).knowledge;
     expect(ref.baseSlug).toBe("deploys");
     expect(ref.baseSummary).toBe("How this service is released.");
     expect(ref.baseFolders).toEqual([
@@ -393,22 +393,22 @@ describe("the base card", () => {
     // ⚠ The ruling's line: a dropped attachment discloses a COUNT and nothing
     // else. A card would be a name, a slug and a folder list — the exact
     // location information the filter exists to withhold.
-    mockRepo.listKnowledgeLinksForTemplates.mockResolvedValue([link(OUT_OF_REACH)]);
+    mockRepo.listKnowledgeLinksForIdentities.mockResolvedValue([link(OUT_OF_REACH)]);
     mockRepo.listKnowledgeBaseAccessRows.mockResolvedValue([]);
 
-    const resolved = await resolveTemplateForLaunch(ctx(), "tpl-1");
+    const resolved = await resolveIdentityForLaunch(ctx(), "tpl-1");
     expect(resolved.knowledge).toEqual([]);
     expect(resolved.unreachableKnowledgeBaseCount).toBe(1);
     expect(JSON.stringify(resolved)).not.toContain(OUT_OF_REACH);
   });
 
   it("a FOLDER scope gets no card — it already names the thing it points at", async () => {
-    mockRepo.listKnowledgeLinksForTemplates.mockResolvedValue([
+    mockRepo.listKnowledgeLinksForIdentities.mockResolvedValue([
       folderLink(REACHABLE, "f-1"),
     ]);
     mockRepo.listLiveFoldersForBases.mockResolvedValue([folder("f-1", "Runbooks")]);
 
-    const [ref] = (await resolveTemplateForLaunch(ctx(), "tpl-1")).knowledge;
+    const [ref] = (await resolveIdentityForLaunch(ctx(), "tpl-1")).knowledge;
     expect(ref.scope).toBe("folder");
     expect(ref.baseSlug).toBeUndefined();
     expect(ref.baseFolders).toBeUndefined();
@@ -417,7 +417,7 @@ describe("the base card", () => {
 
   it("a base with no folders carries a count of 0, which is an ANSWER", async () => {
     mockRepo.listLiveFoldersForBases.mockResolvedValue([]);
-    const [ref] = (await resolveTemplateForLaunch(ctx(), "tpl-1")).knowledge;
+    const [ref] = (await resolveIdentityForLaunch(ctx(), "tpl-1")).knowledge;
     expect(ref.baseFolders).toEqual([]);
     expect(ref.baseFolderCount).toBe(0);
   });

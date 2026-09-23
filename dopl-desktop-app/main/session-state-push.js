@@ -135,7 +135,7 @@ const quarantine = retryLane.makeQuarantine(diag, (ws, rows) => send(ws, rows));
  * Eight rich fields joined on 2026-08-22 (F-270), from `session-telemetry.js › telemetryFields`,
  * whose header carries the argument. The BY-NAME PICK is unchanged, and those values are QUANTIZED:
  * `lastActivityAt` moves on every engine dispatch, so an unquantized widening turns the digest gate
- * off. `templateName` joined the same day and is quantization-exempt — an IDENTITY, not a metric,
+ * off. `identityName` joined the same day and is quantization-exempt — an IDENTITY, not a metric,
  * riding the STATE half so a change pushes. THE NAME, NEVER THE ID: the server stores it verbatim. */
 function reportRow(e) {
   return {
@@ -146,7 +146,7 @@ function reportRow(e) {
     state: (e && e.state) || '',
     channelName: (e && e.channelName) || null,
     threadTitle: (e && e.threadTitle) || null,
-    templateName: telemetry.labelOrNull(e && e.templateName, telemetry.TEMPLATE_NAME_MAX),
+    identityName: telemetry.labelOrNull(e && e.identityName, telemetry.IDENTITY_NAME_MAX),
     // THE OPERATOR-GIVEN NAME, PEER-VISIBLE BY DESIGN (2026-08-31, Samuel's ruling; migration
     // 20260905120000 + `schema-sessions.ts › displayName`). It rides the summary's `displayName`,
     // so a RENAME changes the digest and pushes like any state change — which was FALSE until
@@ -166,7 +166,7 @@ function reportRow(e) {
     // already holds, so a push reporting no colour cannot erase one. The summary has carried one
     // since 2026-09-13; until then every row reported `undefined` and the server assigned FIRST
     // FREE on every push, so the operator's pick reached the column by luck. That is also why this
-    // is not the `templateName` hazard (`session-store.js`'s durable-whitelist block): that column
+    // is not the `identityName` hazard (`session-store.js`'s durable-whitelist block): that column
     // is stored VERBATIM, where a colour cannot be nulled by omission.
     //
     // Not `labelOrNull`: a CLOSED SET, membership-tested rather than length-bounded — a sanitizer

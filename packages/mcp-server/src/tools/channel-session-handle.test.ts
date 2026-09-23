@@ -66,7 +66,7 @@ const ownRow = (over: Partial<ChannelSessionStateOwn> = {}): ChannelSessionState
   tokensSpent: null,
   startedAt: null,
   lastActivityAt: null,
-  templateName: null,
+  identityName: null,
   ...over,
 });
 

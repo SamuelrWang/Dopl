@@ -1,11 +1,11 @@
 // @vitest-environment jsdom
 /**
  * ⚠ **ITS OWN FILE SINCE 2026-09-08, AND THE REASON IS §1's 500-LINE CAP.**
- * `template-editor.test.tsx` crossed it when the knowledge picker's tree mock
+ * `identity-editor.test.tsx` crossed it when the knowledge picker's tree mock
  * landed beside these cases (`eslint.config.mjs › max-lines`, `error`, no
  * exemption for this path). It is the same seam that file has already been cut
- * on twice — the SOURCE-READ half went to `template-editor-surface.test.tsx` and
- * the attachment half to `template-editor-knowledge.test.tsx`. What is here is
+ * on twice — the SOURCE-READ half went to `identity-editor-surface.test.tsx` and
+ * the attachment half to `identity-editor-knowledge.test.tsx`. What is here is
  * the PAYLOAD, whole; the fixture and the `open()` helper are local and
  * deliberately minimal, because a suite importing another's harness couples two
  * files that were split to be independent.
@@ -13,13 +13,13 @@
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
-import type { AgentTemplate } from "../client/types";
+import type { AgentIdentity } from "../client/types";
 import {
   draftToCreateBody,
   draftToPatchBody,
-  type TemplateDraft,
-} from "../lib/template-draft";
-import { TemplateEditor } from "./template-editor";
+  type IdentityDraft,
+} from "../lib/identity-draft";
+import { IdentityEditor } from "./identity-editor";
 
 /** ⚠ THE PICKER READS A TREE PER BASE. Shape in `./knowledge-tree-mock`; the
  *  factory imports it because `vi.mock` is hoisted above every binding. */
@@ -37,7 +37,7 @@ const BASES = [
 ];
 const CREATE_VERB = "Create";
 
-function template(over: Partial<AgentTemplate> = {}): AgentTemplate {
+function identity(over: Partial<AgentIdentity> = {}): AgentIdentity {
   return {
     id: "tpl-1",
     workspaceId: "ws-1",
@@ -60,14 +60,14 @@ function template(over: Partial<AgentTemplate> = {}): AgentTemplate {
 }
 
 /** ⚠ `await`ed because `ModalShell` mounts a FRAME after `open` flips. */
-async function open(over: Partial<React.ComponentProps<typeof TemplateEditor>> = {}) {
+async function open(over: Partial<React.ComponentProps<typeof IdentityEditor>> = {}) {
   const onSave = vi.fn();
   render(
-    <TemplateEditor
+    <IdentityEditor
       open
       workspaceId="ws-1"
       session={1}
-      template={null}
+      identity={null}
       teams={TEAMS}
       knowledgeBases={BASES}
       saving={false}
@@ -90,8 +90,8 @@ const field = (selector: string) =>
  * ⚠ **INLINE SINCE 2026-09-22 — THERE IS NO ADD-FIELD DIALOG (Samuel).** The
  * gray "New field" box appends a BLANK row and the operator types in it, so this
  * helper fills the first empty row and only presses the box when every row on
- * screen already has a key. A new template opens holding one blank row
- * (`lib/template-draft.ts › emptyDraft`), which is why the press is conditional
+ * screen already has a key. A new identity opens holding one blank row
+ * (`lib/identity-draft.ts › emptyDraft`), which is why the press is conditional
  * rather than unconditional.
  */
 function addField(key: string, value: string) {
@@ -139,11 +139,11 @@ afterEach(cleanup);
 describe("the payload survives the face", () => {
   it("CREATE — every control the editor has, in ONE body", async () => {
     const { onSave } = await open();
-    fireEvent.change(field("#agent-template-name"), { target: { value: "  Scout  " } });
-    fireEvent.change(field("#agent-template-description"), {
+    fireEvent.change(field("#agent-identity-name"), { target: { value: "  Scout  " } });
+    fireEvent.change(field("#agent-identity-description"), {
       target: { value: "  Finds things  " },
     });
-    fireEvent.change(field("#agent-template-instructions"), {
+    fireEvent.change(field("#agent-identity-instructions"), {
       target: { value: "  Search first.  " },
     });
     pickModel("Opus 5");
@@ -154,7 +154,7 @@ describe("the payload survives the face", () => {
     fireEvent.click(screen.getByRole("treeitem", { name: "Specs" }));
     fireEvent.click(screen.getByRole("button", { name: CREATE_VERB }));
 
-    const draft = onSave.mock.calls[0][0] as TemplateDraft;
+    const draft = onSave.mock.calls[0][0] as IdentityDraft;
     expect(draftToCreateBody(draft)).toEqual({
       name: "Scout",
       visibility: "workspace",
@@ -167,15 +167,15 @@ describe("the payload survives the face", () => {
   });
 
   it("EDIT — the PATCH is the CHANGED keys and nothing else", async () => {
-    const row = template();
-    const { onSave } = await open({ template: row });
-    fireEvent.change(field("#agent-template-name"), { target: { value: "Release captain v2" } });
-    fireEvent.change(field("#agent-template-description"), { target: { value: "" } });
+    const row = identity();
+    const { onSave } = await open({ identity: row });
+    fireEvent.change(field("#agent-identity-name"), { target: { value: "Release captain v2" } });
+    fireEvent.change(field("#agent-identity-description"), { target: { value: "" } });
     pickModel("Haiku 4.5");
     fireEvent.click(screen.getByRole("button", { name: "Detach Runbooks" }));
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
-    const draft = onSave.mock.calls[0][0] as TemplateDraft;
+    const draft = onSave.mock.calls[0][0] as IdentityDraft;
     expect(draftToPatchBody(draft, row)).toEqual({
       name: "Release captain v2",
       description: null,

@@ -1,7 +1,7 @@
 // AGENT CHAINING — THE ONE-GENERATION LAUNCH BOUND, MADE A PER-CHANNEL SETTING.
 //
 // ⚠ **§1 SPLIT OUT OF `channel-prefs.js` ON 2026-09-21 (U5)**, at the 500-line cap and on the
-// same seam `orchestrator-consent.js` (2026-08-31) and `template-approval.js` (2026-08-31) moved
+// same seam `orchestrator-consent.js` (2026-08-31) and `identity-approval.js` (2026-08-31) moved
 // on: this record changes when the rules for HOW FAR A CHAIN OF LAUNCHES MAY REACH change, where
 // the rest of that file changes when the shape of a channel's launch settings does. It is also
 // the only record in that family that is neither a posture nor a pick — it lifts a BOUND.
@@ -23,7 +23,7 @@ const store = new Store();
 // workers, in the ONE room they run orchestrators in.
 //
 // DEFAULT OFF, which is the CURRENT bound. An absent, corrupt or non-boolean record reads false,
-// the same fail-closed rule auto-send, the template approvals and the two orchestrator toggles all
+// the same fail-closed rule auto-send, the identity approvals and the two orchestrator toggles all
 // follow — so nothing about a machine that has never seen this key changes.
 //
 // ⚠ IT IS PER CHANNEL AND IT IS LOCAL, for auto-send's reason and for `orchestratorLaunch`'s. A

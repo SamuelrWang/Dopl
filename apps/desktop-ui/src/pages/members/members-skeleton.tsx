@@ -20,7 +20,7 @@ import { SkeletonSurface } from "#/components/skeletons/skeleton-surface";
  * (`src/features/members/components/members-skeleton.tsx`, 2026-08-30) and
  * nothing replaced it, which is how the generic ghost came back.
  *
- * 🔑 GEOMETRY BY REFERENCE. The grid template is the page's own string, pinned
+ * 🔑 GEOMETRY BY REFERENCE. The grid identity is the page's own string, pinned
  * byte-for-byte against `members-v2-view.tsx` in
  * `#/components/skeletons/page-skeletons.test.tsx`; the roster cards mount
  * `members-v2/bits.tsx › SECTION_CARD` itself, so their fill, hairline and
@@ -33,7 +33,7 @@ import { SkeletonSurface } from "#/components/skeletons/skeleton-surface";
  * inside a single page. The view takes a `loadingSkeleton` SLOT now and the seam
  * hands it this shape. ⚠ Do not "simplify" that to an import on the other side:
  * `members-v2-view.tsx` lives in the shared tree and cannot reach into this
- * package (same idiom as `agent-templates-core.tsx`).
+ * package (same idiom as `agent-identities-core.tsx`).
  */
 export function MembersPageSkeleton({
   label = "Loading members",

@@ -1,10 +1,10 @@
 /**
- * SHARED FIXTURES for the agent-template write suites — ⚠ NOT a test file, and
+ * SHARED FIXTURES for the agent-identity write suites — ⚠ NOT a test file, and
  * not a place for assertions.
  *
  * `service-writes.test.ts` and `service-writes-junction.test.ts` drive the same
  * service against the same mocked repository, and both need the same context,
- * the same template row and the same knowledge-base rows. They are two files
+ * the same identity row and the same knowledge-base rows. They are two files
  * only because one file was over the 500-line cap, so a second copy of this
  * harness would be a copy made for a formatting reason — the worst kind, since
  * nothing would ever tell you the two had drifted.
@@ -16,7 +16,7 @@
 
 import type { MockedObject } from "vitest";
 import type * as Repo from "./repository";
-import type { AgentTemplate, AgentTemplateContext } from "../types";
+import type { AgentIdentity, AgentIdentityContext } from "../types";
 
 export const OWNER = "user-owner";
 export const OTHER = "user-other";
@@ -27,8 +27,8 @@ export const KB_PRIVATE = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
 export const KB_TEAM = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
 
 export function ctx(
-  overrides: Partial<AgentTemplateContext> = {}
-): AgentTemplateContext {
+  overrides: Partial<AgentIdentityContext> = {}
+): AgentIdentityContext {
   return {
     workspaceId: "ws-1",
     userId: OWNER,
@@ -40,9 +40,9 @@ export function ctx(
   };
 }
 
-export function template(
-  overrides: Partial<AgentTemplate> = {}
-): AgentTemplate {
+export function identity(
+  overrides: Partial<AgentIdentity> = {}
+): AgentIdentity {
   return {
     id: "tpl-1",
     workspaceId: "ws-1",
@@ -90,8 +90,8 @@ export const BASES = {
  * The per-test reset both suites run.
  *
  * ⚠ The insert mock ECHOES the visibility it was asked for, and
- * `findTemplateById` returns the same row. Both writes re-read through
- * `getTemplateById` so the response is the gated shape a GET returns — a
+ * `findIdentityById` returns the same row. Both writes re-read through
+ * `getIdentityById` so the response is the gated shape a GET returns — a
  * fixture that answered a fixed `private` row would make every create by a
  * non-owner 404 on its own result, which is a fixture bug that reads exactly
  * like a gate bug.
@@ -103,9 +103,9 @@ export const BASES = {
  * first.
  */
 export function resetRepoMocks(mockRepo: MockedObject<typeof Repo>): void {
-  mockRepo.listTeamLinksForTemplates.mockResolvedValue([]);
+  mockRepo.listTeamLinksForIdentities.mockResolvedValue([]);
   mockRepo.listTeamIdsForUser.mockResolvedValue([]);
-  mockRepo.listKnowledgeLinksForTemplates.mockResolvedValue([]);
+  mockRepo.listKnowledgeLinksForIdentities.mockResolvedValue([]);
   mockRepo.listKnowledgeBaseAccessRows.mockResolvedValue([]);
   mockRepo.listKnowledgeBaseTeamGrants.mockResolvedValue([]);
   // ⚠ THE SUB-BASE READS (2026-09-08). Empty is the honest default: a base with
@@ -115,11 +115,11 @@ export function resetRepoMocks(mockRepo: MockedObject<typeof Repo>): void {
   mockRepo.listLiveFoldersForBases.mockResolvedValue([]);
   mockRepo.listLiveEntryRows.mockResolvedValue([]);
   mockRepo.filterTeamIdsInWorkspace.mockImplementation(async (_ws, ids) => ids);
-  mockRepo.insertTemplate.mockImplementation(async (args) => {
-    const row = template({ visibility: args.visibility, createdBy: args.createdBy });
-    mockRepo.findTemplateById.mockResolvedValue(row);
+  mockRepo.insertIdentity.mockImplementation(async (args) => {
+    const row = identity({ visibility: args.visibility, createdBy: args.createdBy });
+    mockRepo.findIdentityById.mockResolvedValue(row);
     return row;
   });
-  mockRepo.updateTemplateRow.mockResolvedValue(template());
-  mockRepo.findTemplateById.mockResolvedValue(template());
+  mockRepo.updateIdentityRow.mockResolvedValue(identity());
+  mockRepo.findIdentityById.mockResolvedValue(identity());
 }

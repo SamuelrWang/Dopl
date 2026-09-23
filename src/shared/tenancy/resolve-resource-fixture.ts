@@ -109,7 +109,7 @@ export function member(workspaceId: string, role = "member") {
   return { workspace_id: workspaceId, role };
 }
 
-export function templateRow(over: Record<string, unknown> = {}) {
+export function identityRow(over: Record<string, unknown> = {}) {
   return {
     id: T1,
     name: "Code Auditor",

@@ -15,7 +15,7 @@
 //   dopl_only   reachable, GATES  ⇒ and a windowless session has no gate surface, so DENY
 //   full        reachable, GATES  ⇒ same
 //
-// i.e. THE ATTACHED-KNOWLEDGE HALF OF AN AGENT TEMPLATE COULD NOT FUNCTION AT ALL except under
+// i.e. THE ATTACHED-KNOWLEDGE HALF OF AN AGENT IDENTITY COULD NOT FUNCTION AT ALL except under
 // a `bypass` posture. The spec called it a blocker and asked whether to accept it. The ruling
 // was to fix it, in the narrowest way that exists: classify the CALL, not the TOOL.
 //
@@ -50,7 +50,7 @@
 // has already normalized the caller's name onto (`mcp-tool-names.js › canonicalDoplName`).
 // ⚠ ONE NAME, DELIBERATELY. `dopl_skill`, `dopl_ontology` and `dopl_chats` are the other three
 // members of `DOPL_WRITE_TOOLS` and are ABSENT on purpose: nothing in the product points a
-// windowless agent at them the way a template's attached bases point it at `dopl_kb`, and a
+// windowless agent at them the way an identity's attached bases point it at `dopl_kb`, and a
 // classification with no consumer is a widening bought for nothing. Add one when something asks
 // for it, with its own parity pin.
 const KNOWLEDGE_TOOL = 'mcp__dopl__dopl_kb';

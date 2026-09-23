@@ -2,13 +2,13 @@
 // forge a line of OUR framing. One subject; the function count is this file's export list.
 //
 // ⚠ SPLIT OUT OF `main/prompt-framing.js` ON 2026-08-22, under the hard 500-line §1 cap, when
-// the TEMPLATE ROLE block landed. That file sat at 499: it could not absorb the two lines the
+// the IDENTITY ROLE block landed. That file sat at 499: it could not absorb the two lines the
 // splice needed, let alone the comment explaining them, and INVARIANTS §1's rule for that state
 // is explicit — a file at the cap stops being CORRECTABLE, so the answer is a split, never a
 // terser edit.
 //
 // ⚠ BUT THE SEAM IS NOT ARITHMETIC, AND THE NEW CONSUMER IS THE PROOF.
-// `prompt-framing-template.js` renders a template's name, its custom fields and its attached
+// `prompt-framing-agent-identity.js` renders an identity's name, its custom fields and its attached
 // knowledge-base names into a turn, and every one of those is caller-supplied text that must
 // pass the SAME neutralizer the counterparty framing passes. Left in `prompt-framing.js` these
 // were module-private, so the new module's only options were to import from a peer that does
@@ -54,7 +54,7 @@ const DISPLAY_MAX = 80;
 // depends on `max`. The cap is a BUDGET — how much prose one field may spend inside a trusted
 // line — so it belongs to the FIELD, not to the neutralizer. `sanitizeName` hard-coded 80 because
 // it was written for `display_name`; every later consumer inherited a display default as if it
-// were a rule, and a template field value whose real server bound is 1000 was rendered into the
+// were a rule, and an identity field value whose real server bound is 1000 was rendered into the
 // ROLE block at 8% of it, silently, with every surface around it still showing the whole thing.
 // ⚠ THE CALLER PASSES THE FIELD'S OWN SERVER BOUND, so the two ends agree by construction. A
 // bound this function invents is one the writer never enforced and the reader cannot predict.
@@ -100,8 +100,8 @@ function idToken(value) {
 // fence from inside the untrusted message body. Same rule as session-spawner.stripDelimiters,
 // re-homed so buildFencedTurn stays self-contained and electron/fs-free.
 //
-// ⚠ IT TAKES A VARIADIC DELIMITER LIST SINCE 2026-08-22, because the TEMPLATE ROLE body has to
-// have TWO vocabularies stripped from it, not one. A template's `instructions` are another
+// ⚠ IT TAKES A VARIADIC DELIMITER LIST SINCE 2026-08-22, because the IDENTITY ROLE body has to
+// have TWO vocabularies stripped from it, not one. An identity's `instructions` are another
 // member's text landing inside `BEGIN-ROLE-<nonce>`, and a line forging `BEGIN-REQUEST-<nonce>`
 // there would close the role fence and reopen the GOAL fence — i.e. forge a task in main's own
 // voice. `session-seed.js › frameOperatorTurn` strips both vocabularies for exactly that reason

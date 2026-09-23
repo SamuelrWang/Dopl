@@ -1,5 +1,5 @@
 /**
- * `GET /api/agent-templates/{templateId}/resolve` — THE LAUNCH CONTRACT.
+ * `GET /api/agent-identities/{identityId}/resolve` — THE LAUNCH CONTRACT.
  *
  * ⚠ THIS FILE IS THE CONTRACT PIN, not a smoke test. The launch integration
  * codes against these keys verbatim, so the assertions are deliberately EXACT
@@ -20,7 +20,7 @@ import type { WorkspaceAuthContext } from "@/shared/auth/with-workspace-auth";
 
 const ID = "3f2504e0-4f89-41d3-9a0c-0305e82c3301";
 
-let params: Record<string, string> = { templateId: ID };
+let params: Record<string, string> = { identityId: ID };
 
 const AUTH: Omit<WorkspaceAuthContext, "params"> = {
   userId: "user-1",
@@ -57,21 +57,21 @@ vi.mock("@/shared/auth/with-workspace-auth", () => ({
     },
 }));
 
-vi.mock("@/features/agent-templates/server/service", () => ({
-  buildAgentTemplateContext: (auth: WorkspaceAuthContext) => ({
+vi.mock("@/features/agent-identities/server/service", () => ({
+  buildAgentIdentityContext: (auth: WorkspaceAuthContext) => ({
     workspaceId: auth.workspaceId,
     userId: auth.userId,
     source: auth.agentTokenId ? "agent" : "user",
     role: auth.role,
     apiKeyWorkspaceId: auth.apiKeyWorkspaceId,
   }),
-  resolveTemplateForLaunch: vi.fn(),
+  resolveIdentityForLaunch: vi.fn(),
 }));
 
 import { GET } from "./route";
-import { resolveTemplateForLaunch } from "@/features/agent-templates/server/service";
+import { resolveIdentityForLaunch } from "@/features/agent-identities/server/service";
 
-const mockResolve = vi.mocked(resolveTemplateForLaunch);
+const mockResolve = vi.mocked(resolveIdentityForLaunch);
 
 /** ⚠ THE PAYLOAD, WRITTEN OUT. If this literal changes, the integration
  *  builder's consumer changes with it — that is the whole reason it is here. */
@@ -107,14 +107,14 @@ const RESOLVED = {
 
 function req(): NextRequest {
   return new NextRequest(
-    `http://localhost/api/agent-templates/${ID}/resolve`,
+    `http://localhost/api/agent-identities/${ID}/resolve`,
     { method: "GET" }
   );
 }
 
 beforeEach(() => {
   vi.clearAllMocks();
-  params = { templateId: ID };
+  params = { identityId: ID };
   mockResolve.mockResolvedValue(RESOLVED);
 });
 
@@ -123,7 +123,7 @@ describe("the launch payload", () => {
     const res = await GET(req(), { params: Promise.resolve({}) });
     expect(res.status).toBe(200);
     const body = await res.json();
-    // ⚠ Unwrapped on purpose. The record endpoints answer `{ template }`; this
+    // ⚠ Unwrapped on purpose. The record endpoints answer `{ identity }`; this
     // one is consumed by a launcher that wants the payload, not a container.
     expect(body).toEqual(RESOLVED);
     expect(Object.keys(body).sort()).toEqual([
@@ -204,18 +204,18 @@ describe("gating", () => {
     );
   });
 
-  it("404s — never 403s — for a template the caller may not use", async () => {
-    const { AgentTemplateNotFoundError } = await import(
-      "@/features/agent-templates/server/errors"
+  it("404s — never 403s — for an identity the caller may not use", async () => {
+    const { AgentIdentityNotFoundError } = await import(
+      "@/features/agent-identities/server/errors"
     );
-    mockResolve.mockRejectedValue(new AgentTemplateNotFoundError(ID));
+    mockResolve.mockRejectedValue(new AgentIdentityNotFoundError(ID));
     const res = await GET(req(), { params: Promise.resolve({}) });
     expect(res.status).toBe(404);
-    expect((await res.json()).error.code).toBe("AGENT_TEMPLATE_NOT_FOUND");
+    expect((await res.json()).error.code).toBe("AGENT_IDENTITY_NOT_FOUND");
   });
 
   it("400s a non-UUID id before reaching the service", async () => {
-    params = { templateId: "../../etc/passwd" };
+    params = { identityId: "../../etc/passwd" };
     const res = await GET(req(), { params: Promise.resolve({}) });
     expect(res.status).toBe(400);
     expect(mockResolve).not.toHaveBeenCalled();

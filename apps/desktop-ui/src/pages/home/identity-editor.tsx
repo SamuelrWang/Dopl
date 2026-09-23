@@ -1,18 +1,18 @@
 import { useMemo } from "react";
 import type { WorkspaceKind } from "@dopl/contracts";
 import type {
-  AgentTemplate,
-  TemplateShelf,
-  TemplateVisibility,
-} from "@/features/agent-templates/client/types";
-import { TemplateEditor } from "@/features/agent-templates/components/template-editor";
-import type { PickerOption } from "@/features/agent-templates/components/template-editor-rows";
-import { useTemplateSave } from "@/features/agent-templates/hooks/use-template-save";
+  AgentIdentity,
+  IdentityShelf,
+  IdentityVisibility,
+} from "@/features/agent-identities/client/types";
+import { IdentityEditor } from "@/features/agent-identities/components/identity-editor";
+import type { PickerOption } from "@/features/agent-identities/components/identity-editor-rows";
+import { useIdentitySave } from "@/features/agent-identities/hooks/use-identity-save";
 import {
   SECTIONS,
   SECTIONS_CONTAINER,
-  type TemplateSectionDef,
-} from "@/features/agent-templates/lib/visibility";
+  type IdentitySectionDef,
+} from "@/features/agent-identities/lib/visibility";
 import { useKnowledgeBaseList } from "@/features/knowledge/client/hooks";
 
 /**
@@ -20,22 +20,22 @@ import { useKnowledgeBaseList } from "@/features/knowledge/client/hooks";
  * against whichever workspace the operator is writing INTO
  * (`docs/specs/home-agents-tab.plan.md` §4.5, M3).
  *
- * ⚠ THE EDITOR ITSELF IS REUSED, NOT FORKED. `agent-templates/components/
- * template-editor.tsx` is the one statement of what a template IS — six fields
+ * ⚠ THE EDITOR ITSELF IS REUSED, NOT FORKED. `agent-identities/components/
+ * identity-editor.tsx` is the one statement of what an identity IS — six fields
  * and their two bodies — and a second modal on this face would be that list
  * written twice. What differs per surface is only what the mount HANDS it, which
  * is the whole reason this file exists.
  *
  * 🔑 TWO MOUNTS, NOT ONE COMPONENT WITH A FLAG. ⚠ **THE REASON USED TO BE A
- * HOOK — `HomeWorkspaceTemplateEditor` read the workspace's teams and
- * `ContainerTemplateEditor` must not — AND THAT REASON IS GONE (2026-09-08,
+ * HOOK — `HomeWorkspaceIdentityEditor` read the workspace's teams and
+ * `ContainerIdentityEditor` must not — AND THAT REASON IS GONE (2026-09-08,
  * Samuel: *"we should remove the team option, if it's in the home space, because
  * the team thing is for workspaces"*).** NEITHER mount asks for teams now, so
  * what is left is four facts that differ per surface: the section array, the
  * default visibility, the SHELF a create lands on, and whether the mount named
  * the audience (G16). They are still two components because those four travel
  * together — one component with four flags is the same file with the reader's
- * job made harder — and `agent-authoring.test.tsx` pins the pair from the wire.
+ * job made harder — and `identity-authoring.test.tsx` pins the pair from the wire.
  *
  * 🔒 ⚠ **NEITHER OF THESE SURFACES HAS TEAMS, AND THE SECOND HALF WAS THE BUG.**
  * A `kind='link'` container holds members and no team rows (INVARIANTS §4A), so
@@ -44,15 +44,15 @@ import { useKnowledgeBaseList } from "@/features/knowledge/client/hooks";
  * where `server/service-write-gates.ts` has refused `team` since the container
  * migration — so the third pill was a control whose only outcome was a 403. Both
  * mounts now declare their `containerKind` and the editor drops the pill
- * (`agent-templates/lib/visibility.ts › visibilityOptions`).
+ * (`agent-identities/lib/visibility.ts › visibilityOptions`).
  * 🔒 ⚠ `SECTIONS_CONTAINER` IS **ONE** OPTION SINCE 2026-08-27, NOT TWO. The
  * /home pane lost its per-channel private section, and a container is not
- * navigable, so a `private` CONTAINER template would be reachable from nowhere —
+ * navigable, so a `private` CONTAINER identity would be reachable from nowhere —
  * a write-only row. The array is the control, so trimming the array is what
  * closes that door; this mount also passes `defaultVisibility="workspace"`,
  * because `emptyDraft()` starts at `private` and a draft opening on a value the
  * control cannot show is a form with no visible selection.
- * ⚠ **A PERSONAL-SHELF TEMPLATE SAVED AS PUBLIC LANDS OUTSIDE THE PERSONAL
+ * ⚠ **A PERSONAL-SHELF IDENTITY SAVED AS PUBLIC LANDS OUTSIDE THE PERSONAL
  * SECTION**, which lists `private` + mine. ⚠ **THIS BULLET ALSO SAID "Team" AND
  * NO LONGER CAN** (2026-09-08) — that value is not offered here and the server
  * refuses it on this shelf. **The `workspace` half is a REAL open question and
@@ -73,9 +73,9 @@ import { useKnowledgeBaseList } from "@/features/knowledge/client/hooks";
 /** Shared frozen empty list — a container has no teams to offer, ever. */
 const NO_TEAMS: ReadonlyArray<PickerOption> = Object.freeze([]);
 
-export interface HomeTemplateEditorProps {
+export interface HomeIdentityEditorProps {
   /** `null` = create. Anything else edits that row IN ITS OWN WORKSPACE. */
-  template: AgentTemplate | null;
+  identity: AgentIdentity | null;
   onClose: () => void;
 }
 
@@ -90,15 +90,15 @@ export interface HomeTemplateEditorProps {
  * answer: the container's list and its cache entry are the UNFILTERED ones, and
  * the writes below must address that same entry.
  */
-export function ContainerTemplateEditor({
+export function ContainerIdentityEditor({
   workspaceId,
-  template,
+  identity,
   onClose,
-}: HomeTemplateEditorProps & { workspaceId: string }) {
+}: HomeIdentityEditorProps & { workspaceId: string }) {
   return (
-    <TemplateEditorMount
+    <IdentityEditorMount
       workspaceId={workspaceId}
-      template={template}
+      identity={identity}
       teams={NO_TEAMS}
       sections={SECTIONS_CONTAINER}
       containerKind="link"
@@ -130,19 +130,19 @@ export function ContainerTemplateEditor({
  * `kind='personal'` container — so `containerKind` names where the row LANDS,
  * which is the only container whose rules apply to it.
  * ⚠ `workspaceSegment` STAYS ON THE PROPS. It is the pane's own contract with
- * `HomeAgentPanels` (boot's `segment`, threaded down beside the id), and taking
+ * `HomeIdentityPanels` (boot's `segment`, threaded down beside the id), and taking
  * it off would be a second change to a second file for a value the caller
  * already holds.
  */
-export function HomeWorkspaceTemplateEditor({
+export function HomeWorkspaceIdentityEditor({
   workspaceId,
-  template,
+  identity,
   onClose,
-}: HomeTemplateEditorProps & { workspaceId: string; workspaceSegment: string }) {
+}: HomeIdentityEditorProps & { workspaceId: string; workspaceSegment: string }) {
   return (
-    <TemplateEditorMount
+    <IdentityEditorMount
       workspaceId={workspaceId}
-      template={template}
+      identity={identity}
       teams={NO_TEAMS}
       sections={SECTIONS}
       containerKind="personal"
@@ -176,9 +176,9 @@ export function HomeWorkspaceTemplateEditor({
  * report: the row rolls back and the operator's edit is gone with no sentence
  * saying why.
  */
-function TemplateEditorMount({
+function IdentityEditorMount({
   workspaceId,
-  template,
+  identity,
   teams,
   sections,
   containerKind,
@@ -186,14 +186,14 @@ function TemplateEditorMount({
   shelf,
   namesSharedAudience,
   onClose,
-}: HomeTemplateEditorProps & {
+}: HomeIdentityEditorProps & {
   workspaceId: string;
   teams: ReadonlyArray<PickerOption>;
-  sections: ReadonlyArray<TemplateSectionDef>;
+  sections: ReadonlyArray<IdentitySectionDef>;
   /** 🔒 WHERE THE ROW LANDS, so the editor can drop a scope that container
    *  cannot hold — never the room the call happens to stand in. */
   containerKind: WorkspaceKind;
-  defaultVisibility?: TemplateVisibility;
+  defaultVisibility?: IdentityVisibility;
   /** 🔒 G16 — this surface's own visibility control states who will see a
    *  shared row, so a save at that visibility may send `acknowledgeShared`.
    *  ⚠ A PROPERTY OF THE MOUNT, never of the draft: only the caller knows
@@ -201,10 +201,10 @@ function TemplateEditorMount({
   namesSharedAudience?: boolean;
   /** ⚠ Must match the `shelf` the surface's list read was mounted with, or
    *  every optimistic patch below lands on a key nobody is subscribed to. */
-  shelf?: TemplateShelf;
+  shelf?: IdentityShelf;
 }) {
   const baseList = useKnowledgeBaseList(workspaceId);
-  const { save, remove, error, saving, deleting } = useTemplateSave({
+  const { save, remove, error, saving, deleting } = useIdentitySave({
     workspaceId,
     shelf,
     noun: "agent",
@@ -235,12 +235,12 @@ function TemplateEditorMount({
   );
 
   return (
-    <TemplateEditor
+    <IdentityEditor
       open
       workspaceId={workspaceId}
       session={1}
       defaultVisibility={defaultVisibility}
-      template={template}
+      identity={identity}
       teams={teams}
       knowledgeBases={knowledgeBases}
       sections={sections}
@@ -249,8 +249,8 @@ function TemplateEditorMount({
       deleting={deleting}
       error={error}
       onClose={onClose}
-      onSave={(draft) => void save(draft, template)}
-      onDelete={() => void remove(template)}
+      onSave={(draft) => void save(draft, identity)}
+      onDelete={() => void remove(identity)}
     />
   );
 }

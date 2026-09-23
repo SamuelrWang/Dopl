@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { BridgeRequestOpts, BridgeResponse } from "#/lib/dopl-bridge";
 import { WORKSPACE_ID, bootBody, installBridge, ok } from "#/test-utils/bridge";
 import type { ChannelListPayload } from "@/features/channels/types";
-import { SECTION_PRIVATE_EVERYWHERE } from "@/features/agent-templates/lib/visibility";
+import { SECTION_PRIVATE_EVERYWHERE } from "@/features/agent-identities/lib/visibility";
 import {
   HOME,
   LINK_WORKSPACE_ID,
@@ -11,12 +11,12 @@ import {
   renderHome,
 } from "./home-test-harness";
 import {
-  DANA_TEMPLATE,
+  DANA_IDENTITY,
   OTHER_WS,
-  agentRoutes,
-  openAgents,
-  templateCalls as calls,
-} from "./agent-test-fixtures";
+  identityRoutes,
+  openIdentities,
+  identityCalls as calls,
+} from "./identity-test-fixtures";
 
 /**
  * /home → AGENTS, END TO END THROUGH THE REAL PAGE (plan M2, §1–§4).
@@ -25,7 +25,7 @@ import {
  * `knowledge-panels.test.tsx` gives. Three of the things here are properties of
  * the PAGE: that the pane token moves when the channel does (§4.1's wrong-channel
  * flash), that the home workspace arrives from the boot query this page already
- * mounts, and that a container with no templates still paints. A direct mount
+ * mounts, and that a container with no identities still paints. A direct mount
  * would hand the panel static props and pass with every one of those broken.
  *
  * ⚠ THE CHANNEL SURFACE IS STUBBED. The page opens on Channels, so the real
@@ -35,15 +35,15 @@ import {
  * second thing on this page called "Agents" (the info column's live-session
  * tab, Q6), so the header selector is unambiguous.
  *
- * ⚠ THE FIXTURES AND THE ROUTING TABLE ARE IN `agent-test-fixtures.ts`, shared
- * with `agent-authoring.test.tsx` — one `T_HOME`, because this face's whole
+ * ⚠ THE FIXTURES AND THE ROUTING TABLE ARE IN `identity-test-fixtures.ts`, shared
+ * with `identity-authoring.test.tsx` — one `T_HOME`, because this face's whole
  * hazard is two workspaces being mistaken for each other (F-331) and two copies
  * of the fixtures is how two suites come to disagree about which is which.
  *
  * ⚠ THE NO-CONCAVE SWEEP IS NOT MIRRORED HERE, and it did not need to be. The
  * SPA is a separate vitest project, but the sweep is a `readFileSync` over
  * SOURCE — not an import — and the root project runs with `process.cwd()` at
- * the repo root, so `agent-templates/components/template-editor.test.tsx ›
+ * the repo root, so `agent-identities/components/identity-editor.test.tsx ›
  * no concave surfaces › HOME_FILES` reads these two files directly. One sweep,
  * one list of forbidden recipes; a mirrored copy is how the two come to forbid
  * different things.
@@ -64,14 +64,14 @@ beforeEach(() => {
   installBridge({ apiRequest });
 });
 
-/** The template-list calls, split by which workspace they addressed. */
-const templateCalls = (workspaceId: string | undefined) =>
+/** The identity-list calls, split by which workspace they addressed. */
+const identityCalls = (workspaceId: string | undefined) =>
   calls(apiRequest, workspaceId);
 
 describe("the two sections", () => {
   it("fills SHARED from the container, and PERSONAL from the home shelf", async () => {
     renderHome();
-    await openAgents();
+    await openIdentities();
 
     // SHARED: the workspace-visible container rows, mine and the peer's.
     expect(await screen.findByText("Renewal chaser")).toBeInTheDocument();
@@ -80,17 +80,17 @@ describe("the two sections", () => {
     expect(await screen.findByText("Fundraise analyst")).toBeInTheDocument();
   });
 
-  it("🔒 shows NO container template that is not shared — the removed private scope", async () => {
+  it("🔒 shows NO container identity that is not shared — the removed private scope", async () => {
     // 🔒 SAMUEL'S RULING, 2026-08-27, AND THIS IS THE CONSEQUENCE HE ACCEPTED.
     // `Scratch agent` is private, the caller's own, and sits in this channel's
     // container — the whole of the old scope B. With that scope deleted a
-    // container template reaches /home only at `visibility: "workspace"`, and
+    // container identity reaches /home only at `visibility: "workspace"`, and
     // the container editor no longer offers any other value, so no NEW row can
     // land here either.
     // ⚠ The peer's private row rides along so this asserts the RULE and not one
     // row: a `createdBy` filter dropped by a typo passes without it.
     renderHome();
-    await openAgents();
+    await openIdentities();
     await screen.findByText("Renewal chaser");
 
     expect(screen.queryByText("Scratch agent")).not.toBeInTheDocument();
@@ -101,17 +101,17 @@ describe("the two sections", () => {
     // 🔒 `Quarterly reporter` is in the SAME workspace as `Fundraise analyst`,
     // also private, also the caller's own — only `?shelf=home` separates them,
     // and the harness answers BOTH shelves when the param is missing
-    // (`agent-test-fixtures.ts › agentTemplates`).
+    // (`identity-test-fixtures.ts › agentIdentities`).
     renderHome();
-    await openAgents();
+    await openIdentities();
 
     expect(await screen.findByText("Fundraise analyst")).toBeInTheDocument();
     expect(screen.queryByText("Quarterly reporter")).not.toBeInTheDocument();
   });
 
-  it("marks a template the operator did not write, and leaves their own bare", async () => {
+  it("marks an identity the operator did not write, and leaves their own bare", async () => {
     renderHome();
-    await openAgents();
+    await openIdentities();
     await screen.findByText("Renewal chaser");
 
     // ⚠ The marker is a SECURITY signal, so the assertion is that exactly one
@@ -126,7 +126,7 @@ describe("the two sections", () => {
 
   it("drops a `team` row instead of filing it under a section", async () => {
     renderHome();
-    await openAgents();
+    await openIdentities();
     await screen.findByText("Renewal chaser");
     await screen.findByText("Fundraise analyst");
 
@@ -142,15 +142,15 @@ describe("the two sections", () => {
     // ⚠ The workspace rides `opts` and the SHELF rides the path — two axes, and
     // Personal needs both.
     renderHome();
-    await openAgents();
+    await openIdentities();
     await screen.findByText("Fundraise analyst");
 
-    const home = templateCalls(WORKSPACE_ID);
+    const home = identityCalls(WORKSPACE_ID);
     expect(home.length).toBeGreaterThan(0);
     expect(home.every((c) => c.path.includes("shelf=home"))).toBe(true);
     // The container read carries NO shelf — shelves exist only in a standard
     // workspace, so narrowing a container would be a question with one answer.
-    const container = templateCalls(LINK_WORKSPACE_ID);
+    const container = identityCalls(LINK_WORKSPACE_ID);
     expect(container.length).toBeGreaterThan(0);
     expect(container.every((c) => !c.path.includes("shelf="))).toBe(true);
   });
@@ -159,12 +159,12 @@ describe("the two sections", () => {
 describe("empty scopes", () => {
   it("says nothing under an empty shared section, and states an empty Personal shelf", async () => {
     apiRequest.mockImplementation((path: string, opts: BridgeRequestOpts = {}) =>
-      path.split("?")[0] === "/api/agent-templates"
-        ? Promise.resolve(ok({ templates: [] }))
+      path.split("?")[0] === "/api/agent-identities"
+        ? Promise.resolve(ok({ identities: [] }))
         : defaultRoutes(path, opts)
     );
     renderHome();
-    await openAgents();
+    await openIdentities();
 
     expect(
       await screen.findByText("You haven't created an agent here yet.")
@@ -175,7 +175,7 @@ describe("empty scopes", () => {
     expect(screen.queryByText(/Yours alone/)).toBeNull();
   });
 
-  it("offers no Personal shelf, and asks for no home templates, when boot has no workspace", async () => {
+  it("offers no Personal shelf, and asks for no home identities, when boot has no workspace", async () => {
     apiRequest.mockImplementation((path: string, opts: BridgeRequestOpts = {}) =>
       path === "/api/boot"
         ? Promise.resolve(
@@ -186,7 +186,7 @@ describe("empty scopes", () => {
         : defaultRoutes(path, opts)
     );
     renderHome();
-    await openAgents();
+    await openIdentities();
 
     expect(
       await screen.findByText(
@@ -195,11 +195,11 @@ describe("empty scopes", () => {
     ).toBeInTheDocument();
     // ⚠ AND NO UNADDRESSED READ. With no home workspace the query is disabled;
     // a read with no `workspaceId` would auto-target on the server.
-    expect(templateCalls(undefined)).toHaveLength(0);
+    expect(identityCalls(undefined)).toHaveLength(0);
   });
 });
 
-/** Two channels, the second answering with its OWN template — so a pane
+/** Two channels, the second answering with its OWN identity — so a pane
  *  rendering the wrong channel is visible as DATA, not merely as a token. */
 function twoChannels() {
   const second = {
@@ -220,8 +220,8 @@ function twoChannels() {
     (path: string, opts: BridgeRequestOpts = {}): Promise<BridgeResponse> => {
       const bare = path.split("?")[0];
       if (isAccountChannels(path)) return Promise.resolve(ok(two));
-      if (bare === "/api/agent-templates" && opts.workspaceId === OTHER_WS) {
-        return Promise.resolve(ok({ templates: [DANA_TEMPLATE] }));
+      if (bare === "/api/agent-identities" && opts.workspaceId === OTHER_WS) {
+        return Promise.resolve(ok({ identities: [DANA_IDENTITY] }));
       }
       return defaultRoutes(path, opts);
     }
@@ -233,7 +233,7 @@ describe("the pane token", () => {
     twoChannels();
 
     const { view } = renderHome();
-    await openAgents();
+    await openIdentities();
     await screen.findByText("Renewal chaser");
 
     fireEvent.click(screen.getByText("Dana Ruiz"));
@@ -245,9 +245,9 @@ describe("the pane token", () => {
     expect(view.container.querySelector(".crossfade[data-out]")).not.toBeNull();
     expect(screen.getByText("Renewal chaser")).toBeInTheDocument();
 
-    await openAgents();
+    await openIdentities();
 
-    // …and the new channel's templates are what the pane comes back with.
+    // …and the new channel's identities are what the pane comes back with.
     // ⚠ `findBy`, not `getBy`: `Crossfade` keeps the outgoing subtree mounted
     // for its 150ms, so the incoming one is not in the DOM yet.
     expect(await screen.findByText("Dana's assistant")).toBeInTheDocument();
@@ -260,7 +260,7 @@ describe("the pane token", () => {
    * 🔒 THE TOKEN IS NOT THE KEY, AND THIS IS WHY THE PIN ABOVE WAS NOT ENOUGH
    * (F-338). That test asserts on rendered DATA and stayed green through the
    * whole bug: `Crossfade` renders `{children(shownToken)}` with NO key, and
-   * every `agents:<rowId>` token returns `<HomeAgentPanels>` at the SAME
+   * every `agents:<rowId>` token returns `<HomeIdentityPanels>` at the SAME
    * position — so React reconciled ONE INSTANCE across the switch. Data is a
    * prop and props move; the panel's own `useState` did not.
    *
@@ -268,11 +268,11 @@ describe("the pane token", () => {
    * read a component's identity from the DOM, and there does not need to be:
    * state can only survive a switch if the instance did, so a reset `scope` and
    * a torn-down dialog ARE the identity claim. What made it a HIGH rather than
-   * a cosmetic bug is what the survivors point at — `ContainerTemplateEditor`
+   * a cosmetic bug is what the survivors point at — `ContainerIdentityEditor`
    * and the share dialog take their target as a PROP, so one held open across
    * the switch silently retargets at the NEW room and its write SUCCEEDS there:
    * no 404, no rollback, the wrong relationship. ⚠ **THE HELD DIALOG IS THE CARD'S
-   * KNOWLEDGE POPUP SINCE 2026-09-22** (`agent-card-knowledge.tsx`), where it
+   * KNOWLEDGE POPUP SINCE 2026-09-22** (`identity-card-knowledge.tsx`), where it
    * was the share dialog and, before that, the copy — the defect is IDENTICAL
    * in shape each time, which is why this case keeps moving with it rather than
    * being deleted.
@@ -280,7 +280,7 @@ describe("the pane token", () => {
   it("TEARS THE PANE DOWN on a channel switch — no held state retargets", async () => {
     twoChannels();
     renderHome();
-    await openAgents();
+    await openIdentities();
     await screen.findByText("Renewal chaser");
 
     // ⚠ ONE PIECE OF HELD STATE SINCE 2026-08-27, NOT TWO. The scope pill was
@@ -297,7 +297,7 @@ describe("the pane token", () => {
     // ⚠ THE PICK RAISES THE CHANNEL FACE NOW (2026-09-13), so come back — and
     // the ROW KEY is still what this pins, because `selected` moves with NO
     // click whenever the selected row leaves `visible` (`home-panes.tsx`).
-    await openAgents();
+    await openIdentities();
     await screen.findByText("Dana's assistant");
 
     // The dialog went with the pane it belonged to. Held across the switch it
@@ -310,10 +310,10 @@ describe("the pane token", () => {
 });
 
 describe("a failed PERSONAL read", () => {
-  /** The home workspace's template list refuses; everything else answers. */
-  function refuseHomeTemplates() {
+  /** The home workspace's identity list refuses; everything else answers. */
+  function refuseHomeIdentities() {
     apiRequest.mockImplementation((path: string, opts: BridgeRequestOpts = {}) =>
-      path.split("?")[0] === "/api/agent-templates" && opts.workspaceId === WORKSPACE_ID
+      path.split("?")[0] === "/api/agent-identities" && opts.workspaceId === WORKSPACE_ID
         ? Promise.resolve({
             status: 403,
             statusText: "Forbidden",
@@ -333,9 +333,9 @@ describe("a failed PERSONAL read", () => {
     // `pointer-events-none` on the control that escapes the scope. There is no
     // such control now — which removes the trap rather than fixing it — but the
     // SENTENCE half is the part that was about telling the truth, and it stays.
-    refuseHomeTemplates();
+    refuseHomeIdentities();
     renderHome();
-    await openAgents();
+    await openIdentities();
     await screen.findByText("Renewal chaser");
 
     // The answer is SAID. M0's own argument is that a 403 here is an ORDINARY
@@ -348,26 +348,26 @@ describe("a failed PERSONAL read", () => {
   });
 
   it("offers the retry, and the retry re-asks", async () => {
-    refuseHomeTemplates();
+    refuseHomeIdentities();
     renderHome();
-    await openAgents();
+    await openIdentities();
     await screen.findByText("You can't read that.");
 
-    const before = templateCalls(WORKSPACE_ID).length;
+    const before = identityCalls(WORKSPACE_ID).length;
     apiRequest.mockImplementation(defaultRoutes);
     fireEvent.click(screen.getByRole("button", { name: "Try again" }));
 
     expect(await screen.findByText("Fundraise analyst")).toBeInTheDocument();
-    expect(templateCalls(WORKSPACE_ID).length).toBeGreaterThan(before);
+    expect(identityCalls(WORKSPACE_ID).length).toBeGreaterThan(before);
   });
 
   it("leaves the CONTAINER's own section standing — one section failed, not the pane", async () => {
     // A whole-pane `PageError` for a Personal failure would take away the
     // SHARED section too, which is a working half of the pane thrown away for a
     // failure in the other half.
-    refuseHomeTemplates();
+    refuseHomeIdentities();
     renderHome();
-    await openAgents();
+    await openIdentities();
     await screen.findByText("You can't read that.");
 
     expect(screen.getByText("Renewal chaser")).toBeInTheDocument();
@@ -381,7 +381,7 @@ describe("a failed PERSONAL read", () => {
  *
  * The pane used to return the "pick one on the left" empty state INSTEAD of
  * itself, so the whole face was one sentence beside an empty list: the caller's
- * own Personal templates — a HOME-workspace read that needs no channel — were off
+ * own Personal identities — a HOME-workspace read that needs no channel — were off
  * screen, and so was the button that makes one. `channel === null` is a fact about
  * the CONTAINER, so it takes section A and nothing else.
  *
@@ -393,7 +393,7 @@ describe("a failed PERSONAL read", () => {
 describe("🔒 with no channels, PERSONAL still renders", () => {
   beforeEach(() => {
     // ⚠ NOT `withHome`: that helper falls back to the HARNESS's routes, which do
-    // not answer `/api/agent-templates` at all — the Personal read would reject
+    // not answer `/api/agent-identities` at all — the Personal read would reject
     // and this whole block would be measuring a failed fetch.
     apiRequest.mockImplementation(
       (path: string, opts: BridgeRequestOpts = {}): Promise<BridgeResponse> =>
@@ -403,9 +403,9 @@ describe("🔒 with no channels, PERSONAL still renders", () => {
     );
   });
 
-  it("lists the caller's own home-shelf templates", async () => {
+  it("lists the caller's own home-shelf identities", async () => {
     renderHome();
-    await openAgents();
+    await openIdentities();
 
     expect(await screen.findByText("Fundraise analyst")).toBeInTheDocument();
   });
@@ -414,21 +414,21 @@ describe("🔒 with no channels, PERSONAL still renders", () => {
     // The whole point of the fix: a new account must be able to MAKE its first
     // agent. A pane that only listed would still be a dead end.
     renderHome();
-    await openAgents();
+    await openIdentities();
     await screen.findByText("Fundraise analyst");
 
     const personal = screen.getByRole("region", {
       name: SECTION_PRIVATE_EVERYWHERE.label,
     });
     const create = within(personal).getByRole("button", {
-      name: /Agent template/,
+      name: /Agent Identity/,
     });
     expect(create).toBeEnabled();
   });
 
   it("says the sentence about the CHANNEL section, and only there", async () => {
     renderHome();
-    await openAgents();
+    await openIdentities();
     await screen.findByText("Fundraise analyst");
 
     expect(await screen.findByText(/pick one on the left/)).toBeInTheDocument();
@@ -437,24 +437,24 @@ describe("🔒 with no channels, PERSONAL still renders", () => {
     expect(screen.getAllByRole("region").length).toBe(1);
   });
 
-  it("⚠ never asks for a container's templates, and never paints the skeleton", async () => {
+  it("⚠ never asks for a container's identities, and never paints the skeleton", async () => {
     // 🔒 THE SKELETON HALF IS THE REGRESSION THIS GUARDS. The container read is
     // DISABLED with no workspace, so `resolved` stays false forever — a pane that
-    // waited on it would show "Loading agents" until the user left the tab.
+    // waited on it would show "Loading identities" until the user left the tab.
     renderHome();
-    await openAgents();
+    await openIdentities();
     await screen.findByText("Fundraise analyst");
 
-    expect(templateCalls(LINK_WORKSPACE_ID)).toHaveLength(0);
-    expect(screen.queryByText("Loading agents")).not.toBeInTheDocument();
+    expect(identityCalls(LINK_WORKSPACE_ID)).toHaveLength(0);
+    expect(screen.queryByText("Loading identities")).not.toBeInTheDocument();
   });
 
   it("⚠ offers NO card action — there is no channel to launch into", async () => {
     // The launch takes `channel.id`; a button whose only outcome is a crash is
     // worse than a missing one. ⚠ THE KNOWLEDGE BOX GOES WITH IT: the two are
-    // ONE control slot (`template-section.tsx › TemplateCard`).
+    // ONE control slot (`identity-section.tsx › IdentityCard`).
     renderHome();
-    await openAgents();
+    await openIdentities();
     await screen.findByText("Fundraise analyst");
 
     expect(screen.queryByRole("button", { name: "Launch" })).not.toBeInTheDocument();
@@ -473,7 +473,7 @@ describe("what this pane deliberately leaves out", () => {
     // ⚠ SCOPED TO THE PANELS, never the document: /home's own empty states say
     // "launch an agent into it".
     renderHome();
-    await openAgents();
+    await openIdentities();
     await screen.findByText("Fundraise analyst");
 
     const personal = screen.getByRole("region", {
@@ -490,4 +490,4 @@ describe("what this pane deliberately leaves out", () => {
   });
 });
 
-const defaultRoutes = agentRoutes;
+const defaultRoutes = identityRoutes;

@@ -46,13 +46,13 @@ const CH = "11111111-1111-4111-8111-111111111111";
 const WS = "22222222-2222-4222-8222-222222222222";
 const TASK = "33333333-3333-4333-8333-333333333333";
 
-// ⚠ A TEMPLATE-BUILT TURN IS ONE OF THE SHAPES (2026-08-22, agent templates). An AGENT TEMPLATE
+// ⚠ AN IDENTITY-BUILT TURN IS ONE OF THE SHAPES (2026-08-22, agent identities). An AGENT IDENTITY
 // splices a ROLE BLOCK into the requester turn, and that block can NAME TOOLS — it teaches the
-// KB calls for the bases a template attached. So a template turn has to be inside every scan in
+// KB calls for the bases an identity attached. So an identity turn has to be inside every scan in
 // this file, or the one turn shape that can order a tool by data would be the one shape nobody
-// checked. ⚠ THE PROFILE IS PART OF THE INPUT for that shape: `templateRoleFraming` gates the KB
+// checked. ⚠ THE PROFILE IS PART OF THE INPUT for that shape: `identityRoleFraming` gates the KB
 // instruction on it, and `read_only` HARD-DENIES `mcp__dopl__dopl_kb`.
-const TEMPLATE = {
+const IDENTITY = {
   name: "Code Auditor",
   instructions: "Audit the diff. Cite file and line.",
   model: null,
@@ -71,10 +71,10 @@ function everyTurn(profile = "full") {
   ];
   for (const context of contexts) {
     turns.push({
-      label: `template requester ${Object.keys(context).length} ids / ${profile}`,
+      label: `identity requester ${Object.keys(context).length} ids / ${profile}`,
       text: buildFencedTurn({
         side: "requester", message: "x", nonce: "n",
-        context: { ...context, profile, template: TEMPLATE },
+        context: { ...context, profile, identity: IDENTITY },
       }),
     });
   }
@@ -161,7 +161,7 @@ test("the specific regression: no session turn tells the agent to call ToolSearc
   }
 });
 
-// ── ⚠ THE CONTAINMENT TEST FOR AGENT TEMPLATES (2026-08-22) ─────────────────────────────────
+// ── ⚠ THE CONTAINMENT TEST FOR AGENT IDENTITIES (2026-08-22) ─────────────────────────────────
 //
 // ⚠ IT IS A NAME SCAN, NOT `callsTool`, AND THE DIFFERENCE IS THE WHOLE POINT. `callsTool` looks
 // for `Name(` — the shape a BUILT-IN call takes. An MCP tool is never taught that way in this
@@ -171,11 +171,11 @@ test("the specific regression: no session turn tells the agent to call ToolSearc
 // ever act on. For the DOPL half the honest assertion is that the NAME does not appear at all.
 //
 // ⚠ WHAT IT CATCHES, CONCRETELY: `read_only` puts the whole of `DOPL_SAFE_TOOLS` into
-// `disallowedTools`, `mcp__dopl__dopl_kb` among them, and a template's ATTACHED KNOWLEDGE section
+// `disallowedTools`, `mcp__dopl__dopl_kb` among them, and an identity's ATTACHED KNOWLEDGE section
 // is the one part of a prompt built from OPERATOR DATA that would order it. The block gates on
 // `kbReadable(profile)` and lists the base NAMES with no call under `read_only` — §11's
 // UNKNOWN-is-not-EMPTY rule — and this is what fails if that gate is ever dropped.
-test("a TEMPLATE-built turn names no dopl tool its profile hard-denies", () => {
+test("a IDENTITY-built turn names no dopl tool its profile hard-denies", () => {
   const doplDenied = (profile) =>
     buildSessionToolConfig(profile).disallowedTools.filter((t) => t.startsWith("mcp__dopl__"));
   for (const profile of PROFILES) {
@@ -189,7 +189,7 @@ test("a TEMPLATE-built turn names no dopl tool its profile hard-denies", () => {
   }
 });
 
-test("…and under a profile that CAN reach it, the template turn really does name the KB tool", () => {
+test("…and under a profile that CAN reach it, the identity turn really does name the KB tool", () => {
   // ⚠ THE OTHER HALF, because a scan that only ever asserts an absence passes just as happily
   // against a block that emits nothing at all. Under `dopl_only` / `full` the KB read resolves
   // `allow` at the windowless floor (OQ-1), so ordering it is correct rather than merely allowed.

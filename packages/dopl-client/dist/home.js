@@ -18,7 +18,7 @@
  * reaches a PERSON, and `DELETE .../links/[linkId]` and the claim are
  * `sessionOnly` for the same reason. Binding any of them here would publish a
  * method every MCP tool holds and no MCP caller may use — the same argument that
- * keeps `deleteAgentTemplate` unbound.
+ * keeps `deleteAgentIdentity` unbound.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.getHomeChannels = getHomeChannels;

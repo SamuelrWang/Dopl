@@ -9,7 +9,7 @@ import { DELETE_IS_APP_ONLY, refusal } from "./tools/tool-errors.js";
  * ⚠ THE RULE IS ENFORCED IN CODE AT THE CREDENTIAL LAYER, WHICH IS WHY THE FIVE
  * `_admin` TOOLS ARE GONE (2026-09-02). All nine app-only `DELETE` routes carry
  * `sessionOnly: true` (`src/shared/auth/app-only-delete-gate.test.ts`, plus
- * `agent-templates/[templateId]` as the tenth), so an agent credential is
+ * `agent-identities/[identityId]` as the tenth), so an agent credential is
  * refused `SESSION_REQUIRED` at the door. Before that, `gating.ts › opRefusal`
  * was the only thing making the sentence true — and it guarded one door while
  * the loopback REST route stood open. A tool description is a PROMPT;

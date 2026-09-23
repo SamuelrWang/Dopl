@@ -36,7 +36,7 @@ export default function MembersPage() {
       myRole={access.role}
       // ⚠ A SLOT, NOT AN IMPORT ON THE OTHER SIDE — the view is in the shared
       // tree and cannot reach into this package. Same idiom as `RouterLink` on
-      // `pages/channels/index.tsx` and `loadingSkeleton` on `pages/agents`.
+      // `pages/channels/index.tsx` and `loadingSkeleton` on `pages/identities`.
       loadingSkeleton={<MembersPageSkeleton label="Loading members" />}
     />
   );

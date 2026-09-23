@@ -101,12 +101,12 @@ export const OPS = [
   // SPA's capability gate for the pre-assigned launch id (see `test/preload-parity.test.mjs`).
   ["sessions:describe", { agentId: "abcdefgh", description: "Reviews the docs" }, { ok: false }, { agentId: "" }],
   ["sessions:mintAgentId", undefined, { ok: false }],
-  // 2026-08-22 (OQ-3): the machine-local FIRST-USE APPROVAL of ANOTHER member's template. Its
+  // 2026-08-22 (OQ-3): the machine-local FIRST-USE APPROVAL of ANOTHER member's identity. Its
   // subject is not a channel, so it is the second op here with no `channelId` to probe with — hence
   // the FOURTH tuple slot, which names the bad payload instead of letting the shared loop assume
-  // every op is channel-gated. It decides only whether a foreign template's TEXT may become an
+  // every op is channel-gated. It decides only whether a foreign identity's TEXT may become an
   // agent's role on this Mac.
-  ["sessions:approveTemplate", { templateId: CH }, { ok: false }, { templateId: "not-a-uuid" }],
+  ["sessions:approveIdentity", { identityId: CH }, { ok: false }, { identityId: "not-a-uuid" }],
   // 2026-08-18 (wiring plan Phase 10): the pop-out thread window — the only op here that can MINT
   // one, which is why it lives under the same binding and why its own guards (UUID channel,
   // isSafeSegment, the version floor, the window budget) all answer in this `{ ok: false }` shape.

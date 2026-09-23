@@ -192,7 +192,7 @@ const MODEL_LABEL_EDGE = /^[`*_#>[\]{}|\s]+|[`*_#>[\]{}|\s]+$/g;
  * structure. So the model clause rendered `` `opus-5 1m` `` — a bare `1m` sitting
  * in the one segment the doctrine promises holds bare NAMES,
  * one clause away from `started 12m ago` and `stale, 10m ago`. A relative time is
- * exactly what `coarseAge` emits, so an operator reads a time shard as a template
+ * exactly what `coarseAge` emits, so an operator reads a time shard as an identity
  * or a model. **Whatever the neutralizer would blank into a space is joined with
  * a HYPHEN here instead**, so no desktop-supplied id can ever split the model slot
  * into two bare names.
@@ -243,15 +243,15 @@ function telemetryClauses(
   // ⚠ FIRST, AND IMMEDIATELY BEFORE THE MODEL — `Code Auditor · opus-5`. WHAT an
   // agent was configured to be, then WHAT it runs on: those two answer "which of
   // my six agents is this" together, and splitting them across the tokens and
-  // the tool clause is how a skimming orchestrator reads a template name as a
+  // the tool clause is how a skimming orchestrator reads an identity name as a
   // tool name.
   // ⚠ NEUTRALIZED, and operator-only is not the reason to skip it — this is
   // operator-authored free text up to 120 chars being spliced into a line WE
   // wrote, and a forged line in your own result is still a forged line.
   // ⚠ ABSENT RENDERS NOTHING. A session launched blank is the common case, and
-  // "(no template)" on five of six lines is filler saying one thing five times.
-  if (s.templateName) {
-    out.push(inlineOr(s.templateName, "(unnamed template)"));
+  // "(no identity)" on five of six lines is filler saying one thing five times.
+  if (s.identityName) {
+    out.push(inlineOr(s.identityName, "(unnamed identity)"));
   }
   if (s.model) out.push(inlineOr(shortModelLabel(s.model), "(unnamed model)"));
   const ctx = contextClause(s);

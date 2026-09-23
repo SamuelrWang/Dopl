@@ -123,7 +123,7 @@ test("ADMITTED: tools `bypass` + messages auto-outbound — the 2026-09-17 field
 });
 
 test("...AT THE LAUNCH CAP TOO, which is the shape the defect was reported on", () => {
-  // Launched sessions carry no depth stamp (=> the cap), and the Coder template tells each of
+  // Launched sessions carry no depth stamp (=> the cap), and the Coder identity tells each of
   // them to rename itself the moment it starts.
   for (const [name, input] of CALLS) {
     assert.equal(decide(args(input, { toolMode: "bypass", messageMode: "auto_both" })), "allow", name);

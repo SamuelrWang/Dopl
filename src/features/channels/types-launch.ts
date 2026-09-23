@@ -85,22 +85,22 @@ export type LaunchDirective = {
    */
   runtime: string | null;
   /**
-   * The agent template this directive asks the machine to run AS — resolved
+   * The agent identity this directive asks the machine to run AS — resolved
    * server-side, under the ORCHESTRATOR's visibility, before the row was written
-   * (2026-08-23). `null` when none was named, **or when the template has since
+   * (2026-08-23). `null` when none was named, **or when the identity has since
    * been DELETED** (`ON DELETE SET NULL`).
    *
-   * ⚠ **NEVER READ IT WITHOUT {@link LaunchDirective.templateName}.** Those two
+   * ⚠ **NEVER READ IT WITHOUT {@link LaunchDirective.identityName}.** Those two
    * nulls mean opposite things and the desktop acts on the difference: no
-   * template requested → launch blank; template deleted → REFUSE `no-template`,
+   * identity requested → launch blank; identity deleted → REFUSE `no-identity`,
    * because the orchestrator picked an IDENTITY and an agent silently wearing
    * none is not noticed for several turns. Spec E-4.
    */
-  templateId: string | null;
-  /** The template's name as it stood AT CREATE. ⚠ A SNAPSHOT, deliberately not a
+  identityId: string | null;
+  /** The identity's name as it stood AT CREATE. ⚠ A SNAPSHOT, deliberately not a
    *  join: it is the only thing that survives the FK's SET NULL, which is what
-   *  makes a deletion distinguishable from "no template was asked for". */
-  templateName: string | null;
+   *  makes a deletion distinguishable from "no identity was asked for". */
+  identityName: string | null;
   /**
    * **THE COLOUR THIS LAUNCH ASKED THE NEW AGENT TO WEAR** (2026-09-13,
    * `20261005120000`).

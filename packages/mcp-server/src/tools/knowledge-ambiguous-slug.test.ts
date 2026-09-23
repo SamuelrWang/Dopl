@@ -16,7 +16,7 @@
  * Every tie-break is wrong in the same way — "newest wins" picks the same empty
  * shell, "bound container wins" is the rule a caller holding a personal-shelf
  * slug is already violating — so the resolver lists and refuses, the shape
- * `agent-shared.ts › ambiguousTemplate` already uses for template names.
+ * `agent-shared.ts › ambiguousIdentity` already uses for identity names.
  *
  * ⚠ **THE BY-ID LANE IS THE ESCAPE HATCH AND IT IS ASSERTED UNCHANGED HERE.**
  * An id is unique workspace-wide, so it can never be ambiguous; the F-470 suite

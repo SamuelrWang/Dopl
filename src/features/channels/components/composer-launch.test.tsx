@@ -2,7 +2,7 @@
 /**
  * THE COMPOSER'S LAUNCH PANEL — the Bot icon's whole surface (2026-08-27, Samuel's ruling).
  *
- * ⚠ THE TEMPLATE CHEVRON'S PINS WENT WITH THE CHEVRON; the act they protected moved into the
+ * ⚠ THE IDENTITY CHEVRON'S PINS WENT WITH THE CHEVRON; the act they protected moved into the
  * FORM, and each has a replacement below. ⚠ AND THE FORM IS A CENTERED POPUP SINCE 2026-09-08
  * (`launch-agent-dialog.tsx`) — the Bot icon and the launch lane are unchanged; the submit and
  * the two exits now live in the dialog.
@@ -18,8 +18,8 @@
  *    one would wake every agent and retire ruling 3 by accident.
  *  - **NAME AND DESCRIPTION ARE WRITTEN AFTER THE SPAWN**, keyed to the address main returned.
  *
- * ⚠ `useThreadWrites` and the template read are MOCKED — this file is about the LAUNCH payload
- * and the identity writes, not the write layer or the templates endpoint. */
+ * ⚠ `useThreadWrites` and the identity read are MOCKED — this file is about the LAUNCH payload
+ * and the identity writes, not the write layer or the identities endpoint. */
 
 import { StrictMode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -36,10 +36,10 @@ vi.mock("../hooks/use-thread-writes", () => ({
   }),
 }));
 
-const templateList = vi.hoisted(() => ({ templates: [] as unknown[] }));
-vi.mock("@/features/agent-templates/hooks/use-agent-templates", () => ({
-  useAgentTemplates: () => ({
-    templates: templateList.templates,
+const identityList = vi.hoisted(() => ({ identities: [] as unknown[] }));
+vi.mock("@/features/agent-identities/hooks/use-agent-identities", () => ({
+  useAgentIdentities: () => ({
+    identities: identityList.identities,
     loading: false,
     error: null,
     resolved: true,
@@ -89,7 +89,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   delete (window as { dopl?: unknown }).dopl;
-  templateList.templates = [];
+  identityList.identities = [];
 });
 
 function launcher(over: Partial<AgentLaunchControls> = {}): AgentLaunchControls {
@@ -100,7 +100,7 @@ function launcher(over: Partial<AgentLaunchControls> = {}): AgentLaunchControls 
     // ⚠ ANSWERS AN `agentId`, as a current main does. The panel paints MAIN'S answer, so a stub
     // that returned none would silently exercise the old-desktop arm in every case.
     launchAgent: vi.fn().mockResolvedValue({ ok: true, agentId: MINTED }),
-    approveTemplate: vi.fn().mockResolvedValue({ ok: true }),
+    approveIdentity: vi.fn().mockResolvedValue({ ok: true }),
     ...over,
   };
 }
@@ -160,7 +160,7 @@ async function openPanelBare() {
   await waitFor(() => expect(nameField()).toBeTruthy());
 }
 
-/** ⚠ `tab`, not `menuitem`: Template/Model/Runtime are `SegmentedControl` rows now, not
+/** ⚠ `tab`, not `menuitem`: Identity/Model/Runtime are `SegmentedControl` rows now, not
  *  dropdowns (Samuel: *"instead of a dropdown, I think it should be a selector"*). */
 const pill = (name: string | RegExp) => screen.getByRole("tab", { name });
 
@@ -180,11 +180,11 @@ describe("the Bot icon opens a panel — it no longer launches on the click", ()
     expect(fanOutThreads).not.toHaveBeenCalled();
   });
 
-  it("has NO template chevron — one control chooses the identity, and it is the panel", () => {
+  it("has NO identity chevron — one control chooses the identity, and it is the panel", () => {
     mount({ newAgent: launcher() });
     // ⚠ THE DELETED PIN, INVERTED. Re-adding the chevron gives two ways to pick an identity,
     // which is how the Bot icon and the thread panel came to mean one thing in 2026-08-21.
-    expect(screen.queryByRole("button", { name: "Launch from template" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Launch from identity" })).toBeNull();
   });
 
   it("renders NO Bot icon at all when the bridge cannot launch", () => {
@@ -293,18 +293,18 @@ describe("the ID is assigned before the spawn", () => {
 // ── 3. THE PAYLOAD ───────────────────────────────────────────────────────────
 
 describe("what Launch puts on the wire", () => {
-  it("a BLANK agent carries no template and no model override", async () => {
+  it("a BLANK agent carries no identity and no model override", async () => {
     const controls = launcher();
     mount({ newAgent: controls, openThreadId: "t-1" });
     await openPanel();
     fireEvent.click(launchButton());
 
     await waitFor(() => expect(controls.launchAgent).toHaveBeenCalled());
-    const [threadId, templateId, overrides] = vi.mocked(controls.launchAgent).mock.calls[0];
+    const [threadId, identityId, overrides] = vi.mocked(controls.launchAgent).mock.calls[0];
     expect(threadId).toBe("t-1");
-    // ⚠ A blank agent is the Template row's FIRST option and a real configuration — `null`, and
+    // ⚠ A blank agent is the Identity row's FIRST option and a real configuration — `null`, and
     // `undefined` overrides, is byte-identical to what the one-click Bot icon always sent.
-    expect(templateId).toBeNull();
+    expect(identityId).toBeNull();
     expect(overrides).toBeUndefined();
   });
 
@@ -319,11 +319,11 @@ describe("what Launch puts on the wire", () => {
     expect(vi.mocked(controls.launchAgent).mock.calls[0][0]).toBeNull();
   });
 
-  it("a CHOSEN template rides as its id — the chevron's job, in a row", async () => {
+  it("a CHOSEN identity rides as its id — the chevron's job, in a row", async () => {
     // ⚠ `createdBy: ME` so the row wears NO authorship marker and its accessible name is the
-    // bare template name — the marker is `composer-launch-marker.test.tsx`'s subject (ledger
+    // bare identity name — the marker is `composer-launch-marker.test.tsx`'s subject (ledger
     // ASK-21, 2026-08-30), and pinning it here would fail this case for the wrong reason.
-    templateList.templates = [
+    identityList.identities = [
       { id: "tpl-9", name: "Code auditor", workspaceId: "ws-1", createdBy: ME },
     ];
     const controls = launcher();

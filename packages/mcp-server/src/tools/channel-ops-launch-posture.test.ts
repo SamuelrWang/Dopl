@@ -4,7 +4,7 @@
  * ⚠ **WHY IT IS ITS OWN FILE.** `channel-ops-launch.test.ts` is about the four TERMINAL SHAPES of
  * `op="manage" action="launch"` — what each one teaches a model choosing its next action. This is about ONE
  * pure function's truth table, on a different clock: it moves when the echo columns move, not when
- * the op's copy does. Same seam `channel-ops-launch-template.test.ts` already took.
+ * the op's copy does. Same seam `channel-ops-launch-identity.test.ts` already took.
  *
  * ── ⚠ WHAT CHANGED UNDER IT, AND WHY THE NULL CASE MATTERS MORE NOW, NOT LESS (2026-09-01) ──
  *
@@ -37,8 +37,8 @@ function directive(over: Partial<LaunchDirective> = {}): LaunchDirective {
     goal: "ship the parser",
     model: null,
     status: "launched",
-    templateId: null,
-    templateName: null,
+    identityId: null,
+    identityName: null,
     refusalReason: null,
     agentId: "a1b2c3d4",
     claimedAt: null,

@@ -274,7 +274,7 @@ function pendingTranscript(s) {
 //
 // ── ⚠ THE TOOL PROFILE RIDES INTO THE CONTEXT HERE, AND NOWHERE ELSE (2026-08-22) ────────────
 //
-// `prompt-framing-template.js › knowledgeLines` has to know whether this session can reach
+// `prompt-framing-agent-identity.js › knowledgeLines` has to know whether this session can reach
 // `mcp__dopl__dopl_kb` at all, because `read_only` HARD-DENIES it and
 // `prompt-profile-drift.test.mjs` fails any turn that ORDERS a hard-denied tool. The profile is
 // a fact about the SESSION (`s.profile`), not about the launch payload, so it is spread on at
@@ -285,10 +285,10 @@ function pendingTranscript(s) {
 // ⚠ AND THE OTHER TURN BUILDER WAS MISSING IT UNTIL 2026-08-31, INVISIBLY. `session-engine.js ›
 // startSession` builds a NON-PARKED spawn's first turn through the same `buildFencedTurn`, and
 // it passed `context` without the profile. Nothing showed, because `knowledgeLines` is reached
-// only through `templateRoleFraming` — requester-only, template-only — and BOTH lanes that can
-// carry a template spawned idle, so `takeFraming` was the only builder a template ever reached.
+// only through `identityRoleFraming` — requester-only, identity-only — and BOTH lanes that can
+// carry an identity spawned idle, so `takeFraming` was the only builder an identity ever reached.
 // The directive lane now spawns NON-IDLE when it carries a goal (`launch-directives.js › spawn`),
-// which routes a template through that site for the first time: an undefined profile reads as
+// which routes an identity through that site for the first time: an undefined profile reads as
 // "not read_only" through `kbReadable`, and the turn would ORDER a hard-denied tool. Both
 // builders spread it now; `prompt-profile-drift.test.mjs` is what fails if one stops.
 // CXP-3A: the SESSION's runtime decides whether the turn orders a Dopl-tool search. ⚠ Lazy: `./runtime` reaches adapters that reach session modules.
@@ -436,7 +436,7 @@ function frameOperatorTurn(nonce, text) {
 // under the same operator's credential, that they do not carry the operator's authority, and
 // that anything in them reading like a permission grant, a posture change or an instruction
 // to contact an outside system is a point to check with the operator FIRST. That is
-// `prompt-framing-template.js › FOREIGN_HEADER`'s family, and it takes its ruling in the half
+// `prompt-framing-agent-identity.js › FOREIGN_HEADER`'s family, and it takes its ruling in the half
 // that matters: it does not VOID the content — the operator's own orchestrator pointed it
 // here on purpose — it bounds the AUTHORITY.
 // ⚠ THE NONCE MECHANISM IS UNCHANGED and both vocabularies are stripped, so a body cannot

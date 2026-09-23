@@ -28,7 +28,7 @@
  * `naked-icon-button.ts` holds. The label row, the rows' column and any collapse
  * behaviour stay with the caller, because the two readers compose them
  * differently (an uppercase `text-label` over white bars in the object panel; a
- * `TEMPLATE_NAME_TEXT` heading with a chevron over agent cards on the Agents tab).
+ * `IDENTITY_NAME_TEXT` heading with a chevron over agent cards on the Agents tab).
  */
 
 import { cn } from "@/shared/lib/utils";

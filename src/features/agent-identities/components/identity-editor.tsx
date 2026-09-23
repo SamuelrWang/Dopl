@@ -12,31 +12,31 @@ import { ConfirmDialog } from "@/shared/ui/confirm-dialog";
 import { agentModelLabel, agentModelOptionsFor } from "@/features/channels/lib/agent-models";
 import { modelOptionsFor } from "@/features/channels/lib/model-catalog";
 import { useLaunchSelection } from "@/features/channels/hooks/use-launch-selection";
-import type { AgentTemplate, TemplateVisibility } from "../client/types";
+import type { AgentIdentity, IdentityVisibility } from "../client/types";
 import {
-  draftFromTemplate,
+  draftFromIdentity,
   emptyDraft,
   isDraftSavable,
-  type TemplateDraft,
-} from "../lib/template-draft";
+  type IdentityDraft,
+} from "../lib/identity-draft";
 import {
   SECTIONS,
   teamScopeStranded,
   visibilityOptions,
-  type TemplateSectionDef,
+  type IdentitySectionDef,
 } from "../lib/visibility";
 import {
   ChipMultiSelect,
   CustomFieldRows,
   type PickerOption,
-} from "./template-editor-rows";
+} from "./identity-editor-rows";
 import { KnowledgeScopePicker } from "./knowledge-scope-picker";
 
 /**
  * CREATE AND EDIT, in ONE surface — and since 2026-09-08 it is a
  * `shared/ui/form-dialog.tsx › FormDialog`, the POPUP FORM KIT, because Samuel
  * ruled every input dialog onto it: *"apply the UI styling to the Edit
- * template/new agent template pop up."*
+ * identity/new agent identity pop up."*
  *
  * ⚠ **WHAT THE KIT REPLACED, ITEM FOR ITEM.** The uppercase field headers over
  * `RAISED_INPUT` "pillow" boxes are the bold label over an UNDERLINE
@@ -48,16 +48,16 @@ import { KnowledgeScopePicker } from "./knowledge-scope-picker";
  * ⚠ **THE 2026-08-27 NOTE THAT THIS FILE WAS THE REFERENCE THE /home DIALOGS
  * STANDARDISED ONTO IS SUPERSEDED, NOT DELETED.** `RAISED_INPUT` is still the
  * face of every control that is NOT a popup form field — including this
- * dialog's own inline key/value rows (`./template-editor-rows.tsx`), which are
+ * dialog's own inline key/value rows (`./identity-editor-rows.tsx`), which are
  * a repeating LIST and have no `FormSection` of their own.
  *
  * ⚠ **THE PAYLOAD DID NOT MOVE, AND THAT IS PINNED RATHER THAN ASSERTED.**
- * `template-editor.test.tsx › the payload survives the face` was written and
+ * `identity-editor.test.tsx › the payload survives the face` was written and
  * green against the PRE-KIT editor, so its literals are a snapshot of what the
  * old markup sent. A face change that reaches `draftToCreateBody` /
  * `draftToPatchBody` fails there.
  *
- * ⚠ ONE COMPONENT FOR BOTH MODES. `template === null` is create; anything else
+ * ⚠ ONE COMPONENT FOR BOTH MODES. `identity === null` is create; anything else
  * is edit, and the ONLY differences are the heading, the Save verb, and whether
  * Delete exists.
  *
@@ -66,16 +66,16 @@ import { KnowledgeScopePicker } from "./knowledge-scope-picker";
  * act. Delete is still ink with no button face (Samuel's older ruling) and
  * still behind the confirm; what changed is which row it sits on.
  *
- * ⚠ NO LAUNCH CONTROL. Choosing a template AT LAUNCH is a later phase; this is
- * where templates are authored and nothing else.
+ * ⚠ NO LAUNCH CONTROL. Choosing an identity AT LAUNCH is a later phase; this is
+ * where identities are authored and nothing else.
  *
  * ⚠ THE VISIBILITY CONTROL IS DERIVED FROM A SECTION ARRAY THE CALLER NAMES —
  * **and, since 2026-09-08, from the CONTAINER KIND as well** ({@link
- * TemplateEditorProps.containerKind}). The labels still come from
+ * IdentityEditorProps.containerKind}). The labels still come from
  * `../lib/visibility.ts`, never from a literal here.
  */
 
-export interface TemplateEditorProps {
+export interface IdentityEditorProps {
   open: boolean;
   /** ⚠ THE MOUNT'S CONTAINER, threaded to the knowledge picker's per-base tree
    *  reads. The base OPTIONS already came from a read keyed to it; the tree
@@ -85,7 +85,7 @@ export interface TemplateEditorProps {
   /** Bumped by the caller on every open, so the draft reloads. */
   session: number;
   /** `null` = create. */
-  template: AgentTemplate | null;
+  identity: AgentIdentity | null;
   teams: ReadonlyArray<PickerOption>;
   /** ⚠ THE BASES ONLY — the ROOTS of the picker's tree. Folders and entries are
    *  read lazily per base by the picker itself. */
@@ -95,7 +95,7 @@ export interface TemplateEditorProps {
    * workspace page's three (`SECTIONS`); the /home Agents face's container mount
    * passes `SECTIONS_CONTAINER`, which is one.
    */
-  sections?: ReadonlyArray<TemplateSectionDef>;
+  sections?: ReadonlyArray<IdentitySectionDef>;
   /**
    * 🔒 **WHICH KIND OF CONTAINER THIS MOUNT WRITES INTO — Samuel's ruling,
    * 2026-09-08: *"we should remove the team option, if it's in the home space,
@@ -112,20 +112,20 @@ export interface TemplateEditorProps {
    */
   containerKind?: WorkspaceKind;
   /**
-   * What a NEW template starts as. Defaults to `emptyDraft()`'s `'private'`,
+   * What a NEW identity starts as. Defaults to `emptyDraft()`'s `'private'`,
    * which is right on a workspace page. ⚠ A CONTAINER mount must pass
    * `"workspace"`: `SECTIONS_CONTAINER` offers that value alone since
    * 2026-08-27, and a draft opening on a visibility the control cannot show is
    * a form whose selected option is invisible — and whose save would create a
    * row no surface lists (`../lib/visibility.ts`).
    */
-  defaultVisibility?: TemplateVisibility;
+  defaultVisibility?: IdentityVisibility;
   saving: boolean;
   deleting: boolean;
   /** Server's own wording for the last failed write; `null` clears the line. */
   error: string | null;
   onClose: () => void;
-  onSave: (draft: TemplateDraft) => void;
+  onSave: (draft: IdentityDraft) => void;
   onDelete: () => void;
 }
 
@@ -148,12 +148,12 @@ const NO_MODEL = "";
  * `service-knowledge-decoration.ts › decorateWithKnowledgeBases` withholds, so
  * none of them may be written here and none may be inferred out loud — the same
  * rule the desktop's ROLE block keeps in
- * `prompt-framing-template.js › unreachableKnowledgeLines`. What the operator
+ * `prompt-framing-agent-identity.js › unreachableKnowledgeLines`. What the operator
  * learns is a fact about THEIR OWN view: this role names something this view
  * cannot resolve.
  *
- * ⚠ **NO SECOND READ AND NO PROBE.** The count rides in on the template row the
- * editor was already handed (`types.ts › AgentTemplate`), which is arithmetic
+ * ⚠ **NO SECOND READ AND NO PROBE.** The count rides in on the identity row the
+ * editor was already handed (`types.ts › AgentIdentity`), which is arithmetic
  * the list read did over junction rows it had already fetched.
  *
  * ⚠ **IT DESCRIBES THE SAVED ROW, NEVER THE DRAFT**, and it cannot go stale
@@ -164,7 +164,7 @@ const NO_MODEL = "";
  * here on purpose — the operator cannot be shown the base to detach it.
  *
  * ⚠ ZERO RENDERS NOTHING. "0 bases unreachable" is a line every well-formed
- * template would carry forever (INVARIANTS §5: labels, not explainers).
+ * identity would carry forever (INVARIANTS §5: labels, not explainers).
  */
 function UnreachableBasesRow({ count }: { count: number }) {
   if (count <= 0) return null;
@@ -182,11 +182,11 @@ function UnreachableBasesRow({ count }: { count: number }) {
   );
 }
 
-export function TemplateEditor({
+export function IdentityEditor({
   open,
   workspaceId,
   session,
-  template,
+  identity,
   teams,
   knowledgeBases,
   sections = SECTIONS,
@@ -198,9 +198,9 @@ export function TemplateEditor({
   onClose,
   onSave,
   onDelete,
-}: TemplateEditorProps) {
+}: IdentityEditorProps) {
   // ⚠ DRAFT RESET IS DERIVED FROM `session` DURING RENDER, not from an effect —
-  // an effect paints one frame of the PREVIOUS template's values into the new
+  // an effect paints one frame of the PREVIOUS identity's values into the new
   // modal, and set-state in an effect body is the cascading render the lint rule
   // forbids. `session` changes only on open, so a close (which plays an exit
   // animation with this component still mounted) never blanks the form mid-fade.
@@ -210,18 +210,18 @@ export function TemplateEditor({
       : emptyDraft();
   const [loaded, setLoaded] = useState(() => ({
     session,
-    draft: template ? draftFromTemplate(template) : newDraft(),
+    draft: identity ? draftFromIdentity(identity) : newDraft(),
   }));
   if (loaded.session !== session) {
     setLoaded({
       session,
-      draft: template ? draftFromTemplate(template) : newDraft(),
+      draft: identity ? draftFromIdentity(identity) : newDraft(),
     });
   }
   const draft = loaded.draft;
   const [confirmOpen, setConfirmOpen] = useState(false);
 
-  function edit(patch: Partial<TemplateDraft>) {
+  function edit(patch: Partial<IdentityDraft>) {
     setLoaded((prev) => ({ ...prev, draft: { ...prev.draft, ...patch } }));
   }
 
@@ -232,18 +232,18 @@ export function TemplateEditor({
 
   /**
    * ⚠ **"Default" IS PREPENDED, AND IT IS THE DRAFT'S OWN VALUE RATHER THAN A
-   * NEW PICK.** `TemplateDraft.model` has always spelled "this template pins no
+   * NEW PICK.** `IdentityDraft.model` has always spelled "this identity pins no
    * model" as `""` (the create body OMITS the key, the patch sends `null`), and
    * `AGENT_MODEL_OPTIONS` stopped carrying that state on 2026-09-06 — so the
-   * retired `SelectMenu` rendered BLANK on every new template and could never be
+   * retired `SelectMenu` rendered BLANK on every new identity and could never be
    * put back once a model was chosen. A pill row needs one option selected, and
    * the honest one is the value the draft is actually holding (INVARIANTS §11 —
    * a back-filled "Sonnet" here would claim a pin the row does not have).
    * ⚠ `agentModelOptionsFor`, not the bare roster: a stored id this build does
-   * not know is APPENDED rather than dropped, so an older template keeps its
+   * not know is APPENDED rather than dropped, so an older identity keeps its
    * selection instead of showing none.
    */
-  // ⚠ 2026-09-22: A TEMPLATE'S MODEL IS THE DEFAULT RUNTIME'S (the directive chain reads it only
+  // ⚠ 2026-09-22: AN IDENTITY'S MODEL IS THE DEFAULT RUNTIME'S (the directive chain reads it only
   // there), so the row offers THAT runtime's live catalog — a model the CLI added after this bundle
   // shipped included. The frozen list is the plain-browser / older-desktop fallback.
   const defaults = useLaunchSelection({ kind: "defaults" });
@@ -263,7 +263,7 @@ export function TemplateEditor({
   // and refused at Save — never rewritten on the operator's behalf.
   const stranded = teamScopeStranded(containerKind, draft.visibility);
   const busy = saving || deleting;
-  const heading = template ? "Edit template" : "New template";
+  const heading = identity ? "Edit agent identity" : "New agent identity";
 
   return (
     <FormDialog
@@ -272,7 +272,7 @@ export function TemplateEditor({
       title={heading}
       closeLabel="Close editor"
       primary={{
-        label: saving ? "Saving…" : template ? "Save" : "Create",
+        label: saving ? "Saving…" : identity ? "Save" : "Create",
         onClick: () => onSave(draft),
         disabled: !isDraftSavable(draft) || stranded,
         busy,
@@ -281,7 +281,7 @@ export function TemplateEditor({
       }}
     >
       <UnderlineField
-        id="agent-template-name"
+        id="agent-identity-name"
         label="Name"
         ariaLabel="Name"
         value={draft.name}
@@ -289,7 +289,7 @@ export function TemplateEditor({
       />
 
       <UnderlineField
-        id="agent-template-description"
+        id="agent-identity-description"
         label="Description"
         caption="optional"
         ariaLabel="Description"
@@ -301,7 +301,7 @@ export function TemplateEditor({
       />
 
       <UnderlineField
-        id="agent-template-instructions"
+        id="agent-identity-instructions"
         label="Instructions"
         caption="optional"
         ariaLabel="Instructions"
@@ -329,7 +329,7 @@ export function TemplateEditor({
           hint: s.hint,
         }))}
         value={draft.visibility}
-        onChange={(next: TemplateVisibility) =>
+        onChange={(next: IdentityVisibility) =>
           // ⚠ Leaving the Team scope CLEARS the teams. A stale grant behind
           // a `private` label is sharing nobody asked for — and the schema
           // REFUSES a `teamIds` key on a non-team patch, so carrying them
@@ -376,7 +376,7 @@ export function TemplateEditor({
           onChange={(knowledge) => edit({ knowledge })}
           emptyLine="No knowledge here yet."
         />
-        <UnreachableBasesRow count={template?.unreachableKnowledgeBaseCount ?? 0} />
+        <UnreachableBasesRow count={identity?.unreachableKnowledgeBaseCount ?? 0} />
       </FormSection>
 
       {error && (
@@ -385,7 +385,7 @@ export function TemplateEditor({
         </p>
       )}
 
-      {template && (
+      {identity && (
         // ⚠ NO BUTTON FACE. Delete is the one verb here that must not look as
         // pressable as the pair in the footer; it is ink and a soft hover, and
         // the confirm below is the real gate.
@@ -405,9 +405,9 @@ export function TemplateEditor({
       <ConfirmDialog
         open={confirmOpen}
         onOpenChange={setConfirmOpen}
-        title={template ? `Delete "${template.name}"?` : "Delete template?"}
-        description="This permanently deletes the template. It can't be undone."
-        confirmLabel="Delete template"
+        title={identity ? `Delete "${identity.name}"?` : "Delete identity?"}
+        description="This permanently deletes the agent identity. It can't be undone."
+        confirmLabel="Delete identity"
         destructive
         onConfirm={() => {
           setConfirmOpen(false);

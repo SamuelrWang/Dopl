@@ -19,7 +19,7 @@ import { LINK_WORKSPACE_ID } from "./home-test-ids";
  * from `./home-test-harness` and no call site moved.
  *
  * ⚠ A `.ts` FILE, NOT `.tsx`: nothing here renders, and the /home no-concave
- * sweep (`template-editor.test.tsx › no concave surfaces`) enumerates every
+ * sweep (`identity-editor.test.tsx › no concave surfaces`) enumerates every
  * non-test `.tsx` in this directory.
  */
 

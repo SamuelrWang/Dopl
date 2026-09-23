@@ -22,7 +22,7 @@ function requireBaseId(auth: WorkspaceAuthContext): string {
  * GET goes through `readBaseById`, so the id names its own container and a
  * `workspace=` that contradicts it is IGNORED. PATCH and DELETE stay on the
  * workspace-keyed gate — a write that followed an id across a tenancy boundary
- * is a ruling nobody has made. Same split as `/api/agent-templates/{id}` (A12).
+ * is a ruling nobody has made. Same split as `/api/agent-identities/{id}` (A12).
  */
 async function handleGet(_request: NextRequest, auth: WorkspaceAuthContext) {
   try {

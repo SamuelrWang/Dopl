@@ -34,7 +34,7 @@ import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { BaseCard } from "@/features/knowledge/components/knowledge-v2/home/base-card";
 import type { KnowledgeBase } from "@/features/knowledge/types";
-import { LaunchIntoChannelButton } from "./agent-card-launch";
+import { LaunchIntoChannelButton } from "./identity-card-launch";
 import { CreateButton, PAGE_ACTION_BTN, PAGE_ACTION_ICON } from "./panel-buttons";
 import { HOME_CARD_FACE_SELECTED } from "./channel-row-marks";
 
@@ -203,7 +203,7 @@ describe("no page-local copy of either recipe is left in pages/home", () => {
 
 describe("the CARD-scale pill survives where the ruling did not reach", () => {
   it("🔒 `LaunchIntoChannelButton` is still the card Open's face", () => {
-    // ⚠ THE HALF THAT DID NOT MOVE. It sits ON a template card beside the
+    // ⚠ THE HALF THAT DID NOT MOVE. It sits ON an identity card beside the
     // card's own controls, not in a section header, so the 2026-08-28 ruling
     // still governs it — and the two buttons parting company is exactly the
     // thing that made this comparison worth rendering in the first place.

@@ -31,7 +31,7 @@ export declare function createLaunchDirective(t: DoplTransport, input: LaunchDir
  * ⚠ **THE SAME MAILBOX, A DIFFERENT KIND — so the result is a `LaunchDirective`
  * and `getLaunchDirective` polls it.** There is no second lane and no second poll
  * endpoint; only the CREATE body differs, because a launch's shape (goal, model,
- * template) and an end's (which agent) have nothing in common.
+ * identity) and an end's (which agent) have nothing in common.
  * ⚠ A REQUEST, NOT A COMMAND, exactly as a launch is. `offline` means the machine
  * is not listening and NOTHING WAS FILED.
  * ⚠ **NO LAUNCH TOGGLE APPLIES TO THESE TWO.** The desktop's launch-over-MCP

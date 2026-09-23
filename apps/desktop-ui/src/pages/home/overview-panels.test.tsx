@@ -102,7 +102,7 @@ describe("home overview face", () => {
     // in document order.
     expect(
       screen.getAllByRole("tab").slice(0, 4).map((tab) => tab.textContent)
-    ).toEqual(["Overview", "Channel", "Knowledge", "Agents"]);
+    ).toEqual(["Overview", "Channel", "Knowledge", "Identities"]);
   });
 
   /**

@@ -234,11 +234,11 @@ const LEDGER: FilteredOp[] = [
   {
     tool: "dopl_agent",
     op: "list",
-    filter: "canSeeTemplate server-side",
-    proof: "client.listAgentTemplatesPayload()",
+    filter: "canSeeIdentity server-side",
+    proof: "client.listAgentIdentitiesPayload()",
     // ⚠ **"NO shelf label" LEFT THIS ROW ON 2026-09-02 (slice B15).** It was a
     // disclosure about an axis this surface no longer has: the `home_scoped`
-    // column is dropped and a personal template is an ordinary row in the
+    // column is dropped and a personal identity is an ordinary row in the
     // caller's own `kind='personal'` container, so there is no unlabelled state
     // to warn about. The VISIBILITY disclosures are untouched.
     discloses: ["you can SEE", "not the workspace's roster"],

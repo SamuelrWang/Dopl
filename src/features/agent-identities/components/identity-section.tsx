@@ -7,8 +7,8 @@ import { pendingRow } from "@/shared/ui/pending";
 import { SectionPanel } from "@/shared/ui/section-panel";
 import { SECTION_HEADING_TEXT } from "@/shared/ui/section-heading";
 import { CARD_LIFT_CLASS } from "@/shared/ui/card-lift";
-import type { AgentTemplate } from "../client/types";
-import type { TemplateSectionDef } from "../lib/visibility";
+import type { AgentIdentity } from "../client/types";
+import type { IdentitySectionDef } from "../lib/visibility";
 
 /**
  * ONE scope panel and the cards inside it (Samuel's mock: three stacked gray
@@ -21,22 +21,22 @@ import type { TemplateSectionDef } from "../lib/visibility";
  * on it is pressed in** (2026-08-22). Raised, elevated and flat faces only: the
  * panel is flat, the cards on it are `.bento`, and the editor's fields are the
  * kit's RAISED well. A `.concave-field` / `.concave-track` / `SECTION_BOX_INSET`
- * anywhere under `features/agent-templates/` is a regression with a test behind
- * it (`template-editor-surface.test.tsx › no concave surfaces`) — and since 2026-08-26
+ * anywhere under `features/agent-identities/` is a regression with a test behind
+ * it (`identity-editor-surface.test.tsx › no concave surfaces`) — and since 2026-08-26
  * that sweep also reaches `apps/desktop-ui/src/pages/home/agent-*.tsx`, because
  * the /home Agents face reuses THIS module rather than growing a second panel
  * recipe (Q4, `home-agents-tab.plan.md` §0.6).
  *
  * ⚠ AN EMPTY SECTION KEEPS ITS HEADER and says one quiet line. A panel that
- * vanished when empty would make "you have no team templates" and "this
+ * vanished when empty would make "you have no team identities" and "this
  * workspace has no teams" the same picture, and the create affordance sits at
  * page level precisely so no section has to grow one.
  *
  * ⚠ THREE PARTS, BECAUSE TWO SURFACES COMPOSE THEM DIFFERENTLY. The workspace
- * page stacks whole {@link TemplateSection}s; the /home pane needs the same
+ * page stacks whole {@link IdentitySection}s; the /home pane needs the same
  * PANEL with a scope pill in its header and a body that can also say "in
- * flight" or "unavailable" — so the shell ({@link TemplatePanel}) and the grid
- * ({@link TemplateGrid}) are separately callable. **Neither surface forks the
+ * flight" or "unavailable" — so the shell ({@link IdentityPanel}) and the grid
+ * ({@link IdentityGrid}) are separately callable. **Neither surface forks the
  * class strings**, which is the whole point of the split.
  */
 
@@ -52,12 +52,12 @@ import type { TemplateSectionDef } from "../lib/visibility";
  * `className` at all.
  */
 /**
- * THE TEMPLATE CARD'S NAME TYPE — title size, medium weight, primary ink.
+ * THE IDENTITY CARD'S NAME TYPE — title size, medium weight, primary ink.
  * ⚠ EXPORTED (2026-09-13) because Samuel named THIS text as the reference for
  * the /home Overview's "Usage" heading and its scope menu ("extract that exact
  * font, font size, and font color and apply it"); one constant, two readers.
  */
-export const TEMPLATE_NAME_TEXT = "text-title font-medium text-text-primary";
+export const IDENTITY_NAME_TEXT = "text-title font-medium text-text-primary";
 
 /**
  * THE SAME NAME TYPE, ONE STEP UP THE SCALE AND BOLDER — `text-display` (18px)
@@ -72,7 +72,7 @@ export const TEMPLATE_NAME_TEXT = "text-title font-medium text-text-primary";
  * applies it — the Usage heading included. This alias survives only as the NAME
  * three files argue against by (`channels/components/agent-window-frame.ts`,
  * `channels/components/recency-wells.tsx`, `pages/home/overview-usage-filter.tsx` all say
- * "not `TEMPLATE_NAME_TEXT_LG`"); delete it together with those references, not
+ * "not `IDENTITY_NAME_TEXT_LG`"); delete it together with those references, not
  * before them.
  *
  * ⚠ **IT WAS APPLIED TO FOUR THINGS FOR ONE PASS AND THREE OF THEM WERE A
@@ -80,7 +80,7 @@ export const TEMPLATE_NAME_TEXT = "text-title font-medium text-text-primary";
  * credit spend, all channels, and the date to the super large size, like usage. I
  * did not ask for that. I only asked you to change the usage size to be
  * bigger."*** The scope menu (**All channels**), the month label and the credit
- * card's **Credit spend** heading are on `TEMPLATE_NAME_TEXT` — the 14px face —
+ * card's **Credit spend** heading are on `IDENTITY_NAME_TEXT` — the 14px face —
  * and the month label was RAISED to it rather than to this one, which is the
  * whole of what *"the month switcher as well"* asked for. **The block has two
  * scales on purpose: the panel heading, then everything inside it.** Do not
@@ -90,13 +90,13 @@ export const TEMPLATE_NAME_TEXT = "text-title font-medium text-text-primary";
  * scale): `text-title` → `text-display` is the next utility, and there is
  * nothing between them to pick instead.
  *
- * ⚠ **IT SITS BESIDE `TEMPLATE_NAME_TEXT` RATHER THAN OVERRIDING IT AT THE CALL
- * SITE.** The agent template card keeps the smaller face — a card NAME in a list
- * is not a page heading — and a `cn(TEMPLATE_NAME_TEXT, "text-display
+ * ⚠ **IT SITS BESIDE `IDENTITY_NAME_TEXT` RATHER THAN OVERRIDING IT AT THE CALL
+ * SITE.** The agent identity card keeps the smaller face — a card NAME in a list
+ * is not a page heading — and a `cn(IDENTITY_NAME_TEXT, "text-display
  * font-semibold")` at the reader would be a same-layer fight with the constant it
  * is composing, which is how a heading silently keeps 14px.
  */
-export const TEMPLATE_NAME_TEXT_LG = SECTION_HEADING_TEXT;
+export const IDENTITY_NAME_TEXT_LG = SECTION_HEADING_TEXT;
 
 /**
  * THE CARD GRID — FOUR to a row, FIXED (Samuel, 2026-09-13: *"I want to
@@ -104,9 +104,9 @@ export const TEMPLATE_NAME_TEXT_LG = SECTION_HEADING_TEXT;
  * two: *"this is 2 on a row. I said 4 on a row"*). Not `auto-fill`: the count is
  * the ruling, the width follows. Exported so both Agents skeletons byte-share it.
  */
-export const TEMPLATE_GRID = "grid grid-cols-4 gap-2.5";
+export const IDENTITY_GRID = "grid grid-cols-4 gap-2.5";
 
-export function TemplatePanel({
+export function IdentityPanel({
   id,
   label,
   action,
@@ -134,90 +134,90 @@ export function TemplatePanel({
 }
 
 /** The card grid, or the one quiet line that stands in for it. */
-export function TemplateGrid({
-  templates,
+export function IdentityGrid({
+  identities,
   emptyLine,
   onOpen,
   pendingIds,
   markerFor,
   actionFor,
 }: {
-  templates: ReadonlyArray<AgentTemplate>;
+  identities: ReadonlyArray<AgentIdentity>;
   /** ⚠ Only ever rendered against a RESOLVED read — see `resolved` on
-   *  `../hooks/use-agent-templates.ts`. Absent = an empty grid renders
+   *  `../hooks/use-agent-identities.ts`. Absent = an empty grid renders
    *  nothing. */
   emptyLine?: string;
   /** Absent = the cards are not openable on this surface yet (see
-   *  {@link TemplateCard}). */
-  onOpen?: (template: AgentTemplate) => void;
+   *  {@link IdentityCard}). */
+  onOpen?: (identity: AgentIdentity) => void;
   /** Rows with a write in flight — dimmed and inert via the kit's PENDING_ROW. */
   pendingIds?: ReadonlySet<string>;
   /** `by <member>` for a row this operator did not write, else `null`. */
-  markerFor?: (template: AgentTemplate) => string | null;
-  /** A SECOND control for a row, under the body ({@link TemplateCard}). */
-  actionFor?: (template: AgentTemplate) => ReactNode;
+  markerFor?: (identity: AgentIdentity) => string | null;
+  /** A SECOND control for a row, under the body ({@link IdentityCard}). */
+  actionFor?: (identity: AgentIdentity) => ReactNode;
 }) {
-  if (templates.length === 0) {
+  if (identities.length === 0) {
     return emptyLine ? (
       <p className="px-1 pb-1 text-caption text-text-muted">{emptyLine}</p>
     ) : null;
   }
   return (
-    <div className={TEMPLATE_GRID}>
-      {templates.map((template) => (
-        <TemplateCard
-          key={template.id}
-          template={template}
+    <div className={IDENTITY_GRID}>
+      {identities.map((identity) => (
+        <IdentityCard
+          key={identity.id}
+          identity={identity}
           onOpen={onOpen}
-          pending={pendingIds?.has(template.id) ?? false}
-          marker={markerFor?.(template) ?? null}
-          action={actionFor?.(template) ?? null}
+          pending={pendingIds?.has(identity.id) ?? false}
+          marker={markerFor?.(identity) ?? null}
+          action={actionFor?.(identity) ?? null}
         />
       ))}
     </div>
   );
 }
 
-export function TemplateSection({
+export function IdentitySection({
   section,
-  templates,
+  identities,
   onOpen,
   pendingIds,
 }: {
-  section: TemplateSectionDef;
-  templates: ReadonlyArray<AgentTemplate>;
-  onOpen: (template: AgentTemplate) => void;
+  section: IdentitySectionDef;
+  identities: ReadonlyArray<AgentIdentity>;
+  onOpen: (identity: AgentIdentity) => void;
   pendingIds?: ReadonlySet<string>;
 }) {
   return (
-    <TemplatePanel
-      id={`agent-templates-${section.visibility}`}
+    <IdentityPanel
+      id={`agent-identities-${section.visibility}`}
       label={section.label}
     >
-      <TemplateGrid
-        templates={templates}
+      <IdentityGrid
+        identities={identities}
         emptyLine={section.emptyLine}
         onOpen={onOpen}
         pendingIds={pendingIds}
       />
-    </TemplatePanel>
+    </IdentityPanel>
   );
 }
 
 /**
- * One template, as a card.
+ * One identity, as a card.
  *
  * ⚠ MINIMAL BY RULING (INVARIANTS §5): the NAME, a muted description line, and a
  * model chip only WHEN one is set. `agentModelShortLabel` returns `null` for an
  * unset model and that is not the same answer as "Default" — a card states what
- * a template CARRIES, and a chip reading "Default" on every unset row would be
+ * an identity CARRIES, and a chip reading "Default" on every unset row would be
  * three words of chrome per card saying nothing.
  *
  * ⚠ THE WHOLE CARD IS THE AFFORDANCE — WHEN THERE IS ONE. `onOpen` absent
  * renders a plain `div`, not a dead `button`: a card that looks pressable and
  * does nothing is worse than one that does not invite the press. Both surfaces
  * pass one now (the /home face gained its editor in `home-agents-tab.plan.md`
- * M3), so the branch is kept for the next surface that lists templates it
+ * M3), so the branch is kept for the next surface that lists identities it
  * cannot author. ⚠ **A row may carry ONE second control (`action`), and it goes
  * INSIDE the face rather than on top of it** — a `<button>` may not contain a
  * `<button>`, so an action turns the card into a `div` whose body is the button.
@@ -225,31 +225,31 @@ export function TemplateSection({
  * (Samuel), superseding the note that stood here — *"no launch control …
  * a second launch surface fights `resolve`'s singularity"*. That argument was
  * about launch-time SELECTION, which is still the New-agent popup's alone; the
- * card launches a template AS-IS and offers no choices at all
- * (`pages/home/agent-card-launch.tsx`). There is still no kebab and no per-card
+ * card launches an identity AS-IS and offers no choices at all
+ * (`pages/home/identity-card-launch.tsx`). There is still no kebab and no per-card
  * delete.
  *
  * ⚠ THE AUTHORSHIP MARKER IS A SECURITY SIGNAL, NOT DECORATION
- * (`template-picker.tsx › authorMarker`). A template another member wrote
+ * (`identity-picker.tsx › authorMarker`). An identity another member wrote
  * carries instructions the operator's agent will follow; the desktop wears a
  * different ROLE header for one (§5A), and the operator must be able to see the
  * same fact BEFORE it runs. It renders first, above the name.
  */
-function TemplateCard({
-  template,
+function IdentityCard({
+  identity,
   onOpen,
   pending,
   marker,
   action,
 }: {
-  template: AgentTemplate;
-  onOpen?: (template: AgentTemplate) => void;
+  identity: AgentIdentity;
+  onOpen?: (identity: AgentIdentity) => void;
   pending: boolean;
   marker: string | null;
   action: ReactNode;
 }) {
-  const model = agentModelShortLabel(template.model);
-  const description = template.description?.trim();
+  const model = agentModelShortLabel(identity.model);
+  const description = identity.description?.trim();
   const body = (
     <>
       {marker && (
@@ -261,8 +261,8 @@ function TemplateCard({
           2026-09-13: "put the model pill to be on the top right of the box.
           Also no borderline around pill"). */}
       <span className="flex w-full items-start justify-between gap-2">
-        <span className={cn("min-w-0 truncate", TEMPLATE_NAME_TEXT)}>
-          {template.name}
+        <span className={cn("min-w-0 truncate", IDENTITY_NAME_TEXT)}>
+          {identity.name}
         </span>
         {model && (
           <span className="shrink-0 rounded-full bg-bg-inset px-2 py-0.5 text-micro font-medium text-text-secondary">
@@ -297,7 +297,7 @@ function TemplateCard({
         {onOpen ? (
           <button
             type="button"
-            onClick={() => onOpen(template)}
+            onClick={() => onOpen(identity)}
             className="flex flex-1 cursor-pointer flex-col items-start gap-1.5 text-left"
           >
             {body}
@@ -319,7 +319,7 @@ function TemplateCard({
   return (
     <button
       type="button"
-      onClick={() => onOpen(template)}
+      onClick={() => onOpen(identity)}
       {...pendingRow(pending, cn(face, "cursor-pointer", raise))}
     >
       {body}

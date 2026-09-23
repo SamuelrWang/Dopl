@@ -26,7 +26,7 @@
  * rollback) is pinned against TanStack's `MutationObserver` in
  * `hooks/use-thread-writes.test.ts`, which is where it belongs.
  *
- * ⚠ THE BOT ICON AND THE TEMPLATE CHEVRON ARE `composer-launch.test.tsx` SINCE
+ * ⚠ THE BOT ICON AND THE IDENTITY CHEVRON ARE `composer-launch.test.tsx` SINCE
  * 2026-08-26 — the §1 split at the 500-line cap. **The seam is the subject, not
  * the line count**: this file is about what the composer WRITES; that one is
  * about the BRIDGE SPAWN beside it, which posts nothing and reaches a different
@@ -49,14 +49,14 @@ vi.mock("../hooks/use-thread-writes", () => ({
 
 /**
  * ⚠ MOCKED BECAUSE THE MODULE IS IN THE GRAPH, not because this file asserts on
- * it. `composer.tsx` imports the template picker unconditionally (it renders
+ * it. `composer.tsx` imports the identity picker unconditionally (it renders
  * only with launch controls, which no test here hands down), and an unmocked
- * `useAgentTemplates` would put a real react-query read behind every send case.
+ * `useAgentIdentities` would put a real react-query read behind every send case.
  * The picker's own behaviour is `composer-launch.test.tsx`'s.
  */
-vi.mock("@/features/agent-templates/hooks/use-agent-templates", () => ({
-  useAgentTemplates: () => ({
-    templates: [],
+vi.mock("@/features/agent-identities/hooks/use-agent-identities", () => ({
+  useAgentIdentities: () => ({
+    identities: [],
     loading: false,
     error: null,
     refetch: () => {},

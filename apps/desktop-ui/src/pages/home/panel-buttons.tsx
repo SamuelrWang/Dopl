@@ -25,10 +25,10 @@ export { PAGE_ACTION_BTN, PAGE_ACTION_ICON };
 
 /**
  * /home's SECTION-HEADER CREATE BUTTON — the `action` slot of every
- * `SectionPanel`/`TemplatePanel` on this page.
+ * `SectionPanel`/`IdentityPanel` on this page.
  *
  * ⚠ IT WAS DECLARED TWICE, BYTE-IDENTICALLY (2026-08-28) — once in
- * `knowledge-panels.tsx` and once in `agent-panels.tsx`, each with the same
+ * `knowledge-panels.tsx` and once in `identity-panels.tsx`, each with the same
  * docblock calling itself "the two section buttons". Four call sites across two
  * tabs of ONE pane is one component; two copies is a promise that the next
  * restyle lands on whichever file the reader opened.

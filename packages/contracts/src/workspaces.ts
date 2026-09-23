@@ -1,6 +1,6 @@
 /**
- * WORKSPACE AND TEMPLATE CLOSED SETS — the role scale, the container kind, the
- * membership lifecycle and the template visibility axis.
+ * WORKSPACE AND IDENTITY CLOSED SETS — the role scale, the container kind, the
+ * membership lifecycle and the identity visibility axis.
  *
  * ⚠ **THE ROLE SET IS THE ONE WITH THE LONGEST DRIFT HISTORY IN THIS REPO.** It
  * was written in `src/features/workspaces/types.ts › Role`, in
@@ -79,7 +79,7 @@ export type WorkspaceKind = "standard" | "link" | "personal";
  *   team      → members of any team linked through `agent_template_teams`
  *   workspace → every active workspace member
  */
-export type TemplateVisibility = "private" | "team" | "workspace";
+export type IdentityVisibility = "private" | "team" | "workspace";
 
 
 /**

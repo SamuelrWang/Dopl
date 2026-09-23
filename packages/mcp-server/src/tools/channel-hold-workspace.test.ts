@@ -285,7 +285,7 @@ describe("the `sessions` block is ADDITIVE on both holds", () => {
     tokensSpent: 900,
     startedAt: null,
     lastActivityAt: null,
-    templateName: null,
+    identityName: null,
   };
 
   it("workspace: an ABSENT key renders no block at all", async () => {
@@ -305,7 +305,7 @@ describe("the `sessions` block is ADDITIVE on both holds", () => {
    * ⚠ **ADDITIVE, AND THE TELEMETRY IS ASSERTED THROUGH THE COLUMNS THAT
    * EXIST** (T13). This asserted `900 tokens`, a clause on the prose line;
    * `sessionRow` has no tokens and no context column, so the operator-only half
-   * is now pinned by template/model/tool — the same property, on the shape the
+   * is now pinned by identity/model/tool — the same property, on the shape the
    * block actually renders. ⚠ The shared fixture keeps `tokensSpent: 900` and
    * it must appear NOWHERE: a column the table dropped may not leak into a
    * neighbour. ⚠ Restore the tokens assertion when the column lands.
@@ -318,7 +318,7 @@ describe("the `sessions` block is ADDITIVE on both holds", () => {
         sessions: [
           {
             ...session,
-            templateName: "Code Auditor",
+            identityName: "Code Auditor",
             model: "claude-opus-5",
             toolLabel: "Bash",
           },

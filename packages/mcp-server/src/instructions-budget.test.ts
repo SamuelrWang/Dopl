@@ -10,7 +10,7 @@
  * that line a sentence is not a weak rule — it is an absent one, served and
  * paid for on every connection and read by nobody.
  *
- * ⚠ THE BUDGET IS OVER THE RENDERED BLOCK, not over the template, because the
+ * ⚠ THE BUDGET IS OVER THE RENDERED BLOCK, not over the identity, because the
  * caller's own workspace directory is spliced into it. Hence the shapes below:
  * the cap has to hold for the caller who has one workspace and for the one who
  * has several, or it is a cap on the easy case only.

@@ -22,9 +22,9 @@ import {
  * by-id poll and the pending-collection backstop beside this file serve it
  * unchanged, because a directive's LIFECYCLE does not depend on which verb it
  * carries. ⚠ **THE CREATE IS THE ONE THING THAT COULD NOT BE SHARED**: the launch
- * create's body is a `channel` + `goal` + `model` + `template` shape and this one
+ * create's body is a `channel` + `goal` + `model` + `identity` shape and this one
  * is a `kind` + `agent_id` (+ `name`) shape, and folding both into one schema
- * would mean a POST that names a template AND an agent to end parses fine and
+ * would mean a POST that names an identity AND an agent to end parses fine and
  * then has to be sorted out downstream.
  *
  * ⚠ **NOT `sessionOnly`, AND FOR THE CREATE'S REASON RATHER THAN THE DESKTOP

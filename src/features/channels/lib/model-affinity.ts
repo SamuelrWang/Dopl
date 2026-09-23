@@ -1,14 +1,14 @@
 /**
- * WHICH RUNTIME A MODEL ID BELONGS TO — the template-compatibility rule, and nothing else
+ * WHICH RUNTIME A MODEL ID BELONGS TO — the identity-compatibility rule, and nothing else
  * (2026-09-21, U7).
  *
- * ⚠ **IT EXISTS BECAUSE A TEMPLATE CARRIES A MODEL AND NO RUNTIME.** `agent_templates.model` is
- * one column and there is no runtime affinity beside it, so a Coder template authored on Claude
+ * ⚠ **IT EXISTS BECAUSE AN IDENTITY CARRIES A MODEL AND NO RUNTIME.** `agent_identities.model` is
+ * one column and there is no runtime affinity beside it, so a Coder identity authored on Claude
  * carries `claude-sonnet-5` and would be launched under Codex the moment an operator switched the
- * Runtime row. The plan's U7 is explicit about the answer: *"give templates an explicit runtime
- * affinity or treat a template model as applicable only to its runtime. **Surface incompatibility
+ * Runtime row. The plan's U7 is explicit about the answer: *"give identities an explicit runtime
+ * affinity or treat an identity model as applicable only to its runtime. **Surface incompatibility
  * instead of silently translating model IDs.**"* This module derives the affinity — a model a
- * reported runtime OFFERS belongs to that runtime — and {@link templateModelMismatch} is the
+ * reported runtime OFFERS belongs to that runtime — and {@link identityModelMismatch} is the
  * sentence the operator reads.
  *
  * ⚠ **THREE ANSWERS, AND "I CANNOT TELL" IS ONE OF THEM** (INVARIANTS §11 — UNKNOWN is not
@@ -80,7 +80,7 @@ export function runtimeForModel(
  *
  * ⚠ **`null` IS SUBMITTABLE AND `false` IS NOT.** The tree's standing rule for a model is
  * *"unknown model falls back, never refuses"* (`main/session-launch-op.js`, F-5) — a desktop that
- * cannot read a roster must still be able to launch on an id an operator typed into a template.
+ * cannot read a roster must still be able to launch on an id an operator typed into an identity.
  * What must NOT travel is an id this build can positively see belongs to another runtime, because
  * main would coerce it to that runtime's "no pick" member and the operator would silently get the
  * platform default with nothing saying why.
@@ -130,13 +130,13 @@ export interface ModelMismatch {
 }
 
 /**
- * THE TEMPLATE/CHANNEL MODEL MISMATCH — `null` when there is none.
+ * THE IDENTITY/CHANNEL MODEL MISMATCH — `null` when there is none.
  *
  * ⚠ **IT STATES THE FACT AND THE CONSEQUENCE, IN ONE SENTENCE** (INVARIANTS §5, minimal copy).
  * Without the consequence the operator reads a silently dropped model as a bug; without the fact
  * they cannot tell which of their two configurations to change.
  */
-export function templateModelMismatch(
+export function identityModelMismatch(
   runtimes: ReadonlyArray<RuntimeDescriptor>,
   catalogs: ModelCatalogs | null | undefined,
   selected: RuntimeDescriptor | null | undefined,

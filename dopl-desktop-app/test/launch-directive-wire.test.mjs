@@ -70,8 +70,8 @@ test("CONTRACT: the refusal words are this tree's existing vocabulary, verbatim"
   // ⚠ THE ONE SHAPE HERE THAT IS NOT A GUESS. It is pinned against `session-launch.js`, which
   // PRODUCES these, so a new refusal added there fails HERE rather than reaching an
   // orchestrator as a word it has no copy for.
-  // ⚠ SEVEN SINCE 2026-08-22 (agent templates): `no-template`. It is the one member with NO
-  // producer in `session-launch.js` — the funnel cannot fail to resolve a template, because the
+  // ⚠ SEVEN SINCE 2026-08-22 (agent identities): `no-identity`. It is the one member with NO
+  // producer in `session-launch.js` — the funnel cannot fail to resolve an identity, because the
   // resolve happens above it — so the loop below is a subset check in that direction only.
   // ⚠ NINE SINCE 2026-09-01 (external end / rename). `no-session` and `bad-name` also have no
   // producer in `session-launch.js` — they belong to the AGENT-MANAGEMENT kinds, whose producer
@@ -88,7 +88,7 @@ test("CONTRACT: the refusal words are this tree's existing vocabulary, verbatim"
   // product default and echo the id it was asked for). Its producer IS in `session-launch.js`, so
   // the subset loop below covers it.
   assert.deepEqual(wire.REFUSAL_REASONS,
-    ["cap", "busy", "no-sdk", "auth-hold", "no-bridge", "no-counterparty", "no-template",
+    ["cap", "busy", "no-sdk", "auth-hold", "no-bridge", "no-counterparty", "no-identity",
       "no-session", "bad-name", "no-chain", "no-model"]);
   const launchSrc = readFileSync(join(MAIN, "session-launch.js"), "utf8");
   const produced = [...launchSrc.matchAll(/skipped: '([a-z-]+)'/g)].map((m) => m[1]);
@@ -238,8 +238,8 @@ test("CONTRACT: a directive in the DTO's spelling survives `handle`'s owner chec
     // ⚠ `null` IS THE ORDINARY LAUNCH: the caller named no runtime, so the machine's documented
     // chain applies. It is NOT "claude", and it is never read off `model` one line up.
     runtime: null,
-    templateId: null,
-    templateName: null,
+    identityId: null,
+    identityName: null,
     targetAgentId: null,
     targetName: null,
     // ⚠ THE COLOUR (2026-09-13, agent colours). Same argument as the pair above: `toDirective`
@@ -365,82 +365,82 @@ test("CONTRACT: a row is NARROWED, so a widened table cannot start influencing t
       "operatorUserId", "status",
       "chain", "startMessageMode", "startToolMode",
       "targetAgentId", "targetMessageMode", "targetName", "targetToolMode", "taskId",
-      "templateId", "templateName", "workspaceId"].sort());
+      "identityId", "identityName", "workspaceId"].sort());
   assert.equal(d.shell_command, undefined);
   assert.equal(d.startModes, undefined);
 });
 
-// ── 2. THE TEMPLATE PAIR (2026-08-23) ────────────────────────────────────────────────────
+// ── 2. THE IDENTITY PAIR (2026-08-23) ────────────────────────────────────────────────────
 //
 // ⚠ **`directiveFrom` IS WHERE A NEW FIELD SILENTLY NEVER ARRIVES.** It is a literal whitelist,
 // so a column the server adds and this function does not name is dropped without a word — which
-// is the point of the narrowing and is also the one way to ship "templates over the directive
+// is the point of the narrowing and is also the one way to ship "identities over the directive
 // lane" and have it do exactly nothing. Both halves get a case, and they get one EACH because
 // dropping either one is a different, separately-plausible mistake.
 
-test("TEMPLATE: `template_id` survives the narrowing, in BOTH spellings", () => {
-  // ⚠ TWO ROADS, TWO NAMES. A realtime frame is the raw row (`template_id`); the CLAIM's answer
-  // is the server DTO (`templateId`, `service-launch.ts › toDirective`). The module re-narrows
-  // from the CLAIM, so missing the camelCase spelling would make every template launch blank —
+test("IDENTITY: `identity_id` survives the narrowing, in BOTH spellings", () => {
+  // ⚠ TWO ROADS, TWO NAMES. A realtime frame is the raw row (`identity_id`); the CLAIM's answer
+  // is the server DTO (`identityId`, `service-launch.ts › toDirective`). The module re-narrows
+  // from the CLAIM, so missing the camelCase spelling would make every identity launch blank —
   // a success that wears no identity.
   const TPL = "77777777-7777-4777-8777-777777777777";
-  assert.equal(wire.directiveFrom(row({ template_id: TPL }), WS).templateId, TPL);
-  assert.equal(wire.directiveFrom(row({ templateId: TPL }), WS).templateId, TPL);
+  assert.equal(wire.directiveFrom(row({ identity_id: TPL }), WS).identityId, TPL);
+  assert.equal(wire.directiveFrom(row({ identityId: TPL }), WS).identityId, TPL);
   const service = readFileSync(
     join(HERE, "..", "..", "src", "features", "channels", "server", DTO_FILE), "utf8"
   );
-  assert.match(service, /templateId: row\.template_id/, "the DTO really does rename it");
-  assert.match(service, /templateName: row\.template_name/, "…and the name half with it");
+  assert.match(service, /identityId: row\.identity_id/, "the DTO really does rename it");
+  assert.match(service, /identityName: row\.identity_name/, "…and the name half with it");
 });
 
-test("TEMPLATE: `template_name` survives too, in BOTH spellings and bounded", () => {
-  assert.equal(wire.directiveFrom(row({ template_name: "Code Auditor" }), WS).templateName,
+test("IDENTITY: `identity_name` survives too, in BOTH spellings and bounded", () => {
+  assert.equal(wire.directiveFrom(row({ identity_name: "Code Auditor" }), WS).identityName,
     "Code Auditor");
-  assert.equal(wire.directiveFrom(row({ templateName: "Code Auditor" }), WS).templateName,
+  assert.equal(wire.directiveFrom(row({ identityName: "Code Auditor" }), WS).identityName,
     "Code Auditor");
-  const long = wire.directiveFrom(row({ template_name: `a\n\tb ${"z".repeat(400)}` }), WS);
-  assert.ok(long.templateName.length <= wire.TEMPLATE_NAME_MAX);
-  assert.equal(long.templateName.includes("\n"), false);
+  const long = wire.directiveFrom(row({ identity_name: `a\n\tb ${"z".repeat(400)}` }), WS);
+  assert.ok(long.identityName.length <= wire.IDENTITY_NAME_MAX);
+  assert.equal(long.identityName.includes("\n"), false);
 });
 
-test("TEMPLATE: a non-UUID id collapses to '' — it is about to be put in a URL path", () => {
+test("IDENTITY: a non-UUID id collapses to '' — it is about to be put in a URL path", () => {
   for (const junk of ["../../etc/passwd", "not-a-uuid", "", null, 7]) {
-    assert.equal(wire.directiveFrom(row({ template_id: junk }), WS).templateId, "",
+    assert.equal(wire.directiveFrom(row({ identity_id: junk }), WS).identityId, "",
       String(junk));
   }
 });
 
-// ⚠ **E-4 — THE DELETION SIGNAL, AND IT IS THE REASON THERE ARE TWO COLUMNS.** `template_id` is
-// `ON DELETE SET NULL`, so a template deleted between CREATE and CLAIM leaves the id null. On the
-// id ALONE that is byte-identical to a directive that named no template — and the two get
+// ⚠ **E-4 — THE DELETION SIGNAL, AND IT IS THE REASON THERE ARE TWO COLUMNS.** `identity_id` is
+// `ON DELETE SET NULL`, so an identity deleted between CREATE and CLAIM leaves the id null. On the
+// id ALONE that is byte-identical to a directive that named no identity — and the two get
 // OPPOSITE answers (launch blank vs REFUSE). A narrowing that dropped the name whenever the id
-// was empty would throw away the only evidence a template was ever named.
-test("TEMPLATE: a NULLED id beside a LIVE name is preserved — that pair IS the deletion (E-4)", () => {
-  const deleted = wire.directiveFrom(row({ template_id: null, template_name: "Code Auditor" }), WS);
-  assert.equal(deleted.templateId, "");
-  assert.equal(deleted.templateName, "Code Auditor");
-  // …and "no template was ever named" is the OTHER pair, distinguishable at a glance.
+// was empty would throw away the only evidence an identity was ever named.
+test("IDENTITY: a NULLED id beside a LIVE name is preserved — that pair IS the deletion (E-4)", () => {
+  const deleted = wire.directiveFrom(row({ identity_id: null, identity_name: "Code Auditor" }), WS);
+  assert.equal(deleted.identityId, "");
+  assert.equal(deleted.identityName, "Code Auditor");
+  // …and "no identity was ever named" is the OTHER pair, distinguishable at a glance.
   const none = wire.directiveFrom(row(), WS);
-  assert.equal(none.templateId, "");
-  assert.equal(none.templateName, "");
+  assert.equal(none.identityId, "");
+  assert.equal(none.identityName, "");
 });
 
-// ⚠ **THE NEGATIVE PIN.** `template-approval` is the desktop's answer to its OWN RENDERER when a
-// FOREIGN template's first run needs one human click. There is no human at the keyboard on the
+// ⚠ **THE NEGATIVE PIN.** `identity-approval` is the desktop's answer to its OWN RENDERER when a
+// FOREIGN identity's first run needs one human click. There is no human at the keyboard on the
 // directive lane — the launch-over-MCP toggle IS the standing consent there (Samuel, OQ-3) — so
 // it must never enter this vocabulary. If it ever did, `refusalFor` would stop mapping it to
 // `no-bridge` and an orchestrator would be told a first-use approval gate exists on a lane that
 // has none. Driven against the SERVER's own enum too, so the two trees cannot drift into it.
-test("TEMPLATE: `template-approval` is NOT a directive refusal word, on either side of the wire", () => {
-  assert.equal(wire.REFUSAL_REASONS.includes("template-approval"), false);
-  assert.equal(wire.refusalFor("template-approval"), "no-bridge",
+test("IDENTITY: `identity-approval` is NOT a directive refusal word, on either side of the wire", () => {
+  assert.equal(wire.REFUSAL_REASONS.includes("identity-approval"), false);
+  assert.equal(wire.refusalFor("identity-approval"), "no-bridge",
     "an IPC-only word must not pass through as itself");
-  assert.equal(wire.decideBody(DID, { refused: "template-approval" }).refusalReason, "no-bridge");
+  assert.equal(wire.decideBody(DID, { refused: "identity-approval" }).refusalReason, "no-bridge");
   const SCHEMA = readFileSync(
     join(HERE, "..", "..", "src", "features", "channels", "schema-launch.ts"), "utf8"
   );
   const enumBody = SCHEMA.slice(SCHEMA.indexOf("LaunchRefusalReasonSchema"));
-  assert.equal(enumBody.slice(0, 400).includes("template-approval"), false,
+  assert.equal(enumBody.slice(0, 400).includes("identity-approval"), false,
     "the server's own enum must not carry it either");
 });
 
@@ -449,25 +449,29 @@ test("TEMPLATE: `template-approval` is NOT a directive refusal word, on either s
 // carried a standing instruction not to ship a producer into that window — a `decide` with the
 // word would have passed zod and been refused AT REST. `launch-directive-spawn.js › spawn` IS that
 // producer now, so this case is what says the migration landed with it.
-test("TEMPLATE: the column CHECK admits `no-template`, and the producer exists", () => {
-  const MIG = join(HERE, "..", "..", "supabase", "migrations",
-    "20260823140000_channel_launch_directives_template.sql");
-  const sql = readFileSync(MIG, "utf8");
+test("IDENTITY: the column CHECK admits `no-identity`, and the producer exists", () => {
+  // ⚠ TWO FILES SINCE THE 2026-09-22 RENAME: created as `template_*`/`no-template`, moved by the rename.
+  const MIGS = join(HERE, "..", "..", "supabase", "migrations");
+  const created = readFileSync(join(MIGS, "20260823140000_channel_launch_directives_template.sql"), "utf8");
+  assert.match(created, /ADD COLUMN IF NOT EXISTS template_id UUID/);
+  assert.match(created, /ADD COLUMN IF NOT EXISTS template_name TEXT/);
+  assert.match(created, /CREATE INDEX IF NOT EXISTS channel_launch_directives_template_idx/,
+    "the FK cover is not optional — an identity DELETE would scan the whole table");
+  const sql = readFileSync(join(MIGS, "20261019120000_rename_agent_templates_to_agent_identities.sql"), "utf8");
   assert.match(sql, /channel_launch_directives_refusal_reason_check/);
-  assert.match(sql, /'no-counterparty',[\s\S]{0,900}'no-template'/,
-    "the widened CHECK must list no-template beside the original six");
-  assert.match(sql, /ADD COLUMN IF NOT EXISTS template_id UUID/);
-  assert.match(sql, /ADD COLUMN IF NOT EXISTS template_name TEXT/);
-  assert.match(sql, /CREATE INDEX IF NOT EXISTS channel_launch_directives_template_idx/,
-    "the FK cover is not optional — a template DELETE would scan the whole table");
+  assert.match(sql, /'no-counterparty',[\s\S]{0,900}'no-identity'/,
+    "the live CHECK must list no-identity beside the original six");
+  assert.match(sql, /RENAME COLUMN template_id TO identity_id/);
+  assert.match(sql, /RENAME COLUMN template_name TO identity_name/);
+  assert.match(sql, /channel_launch_directives_template_idx RENAME TO channel_launch_directives_identity_idx/);
   // ⚠ THE PRODUCER MOVED FILE ON 2026-09-01 — `spawn` left `launch-directives.js` at the §1 cap
   // (T24) — and the claim is unchanged: the word this migration widened the CHECK for must have
   // a producer in this tree, or the CHECK admits a refusal nothing can write.
-  assert.match(readFileSync(join(MAIN, "launch-directive-spawn.js"), "utf8"), /refused: 'no-template'/,
+  assert.match(readFileSync(join(MAIN, "launch-directive-spawn.js"), "utf8"), /refused: 'no-identity'/,
     "the producer this migration was landed for must be in launch-directive-spawn.js");
 });
 
-test("TEMPLATE: the migration NEVER touches the replica identity", () => {
+test("IDENTITY: the migration NEVER touches the replica identity", () => {
   // ⚠ `REPLICA IDENTITY USING INDEX` requires its index to keep existing: drop it and the table
   // falls to replica identity NOTHING, at which point every UPDATE on a published table FAILS —
   // which here means claim and decide both stop working.

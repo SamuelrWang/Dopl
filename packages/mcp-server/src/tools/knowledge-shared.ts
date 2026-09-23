@@ -76,7 +76,7 @@ export type BaseRefResolution =
  * wins" would have picked the same empty shell; "the bound container wins" is
  * the rule an agent holding a personal-shelf slug is already violating. Every
  * natural ordering acts on an identity the caller did not choose and reports
- * success — the argument `agent-shared.ts › ambiguousTemplate` makes for names,
+ * success — the argument `agent-shared.ts › ambiguousIdentity` makes for names,
  * which slugs now share.
  *
  *   1. UUID → **ID FIRST, ALWAYS**: the visible list, then the server's own id
@@ -161,7 +161,7 @@ export async function resolveBaseOr(client: DoplClient, ref: string): Promise<Kn
  *
  * ⚠ **THE LIST IS NOT AN ORACLE.** Every row already came back from this
  * caller's own `listKbBases`, so it discloses exactly what `op="list_bases"`
- * would — the same argument `ambiguousTemplate` makes. ⚠ **AND THE CONTAINER IS
+ * would — the same argument `ambiguousIdentity` makes. ⚠ **AND THE CONTAINER IS
  * NAMED BY ID, NEVER LOOKED UP.** Resolving container NAMES here would mean
  * `client.listWorkspaces()`, which walks straight past the session lock in
  * `workspace-directory.ts › getWorkspaceList` — a locked session must not learn
@@ -335,7 +335,7 @@ export function agentWriteDenied(e: unknown): ToolResponse | null {
  * mapping, so the refusal reached an agent as an unhandled throw ("the call
  * failed") over a copy that created nothing. The predicate and the code string
  * are shared; only the NOUN and the remedy differ, because a base's remedy is
- * not a template's.
+ * not an identity's.
  */
 export function sharedCredentialPrivateBaseDenied(
   e: unknown

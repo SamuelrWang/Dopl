@@ -119,7 +119,7 @@ describe("🔒 the TEAM scope read path", () => {
   // is the caller-scoped case of it.
   const TEAMS_RULE = "dopl_teams_visible_for_user"; // where the axis is resolved
   const TEAMS_HELPER = "dopl_teams_mode_visible"; // the caller-scoped case
-  const TEMPLATE_MATRIX = "can_current_user_read_agent_template";
+  const IDENTITY_MATRIX = "can_current_user_read_agent_identity";
 
   it("the team axis is resolved in ONE helper, and that helper names the scope", () => {
     const rule = liveFunctionBody(TEAMS_RULE);
@@ -143,11 +143,11 @@ describe("🔒 the TEAM scope read path", () => {
       ["chats", "chats_owner_select", "dopl_chat_readable"],
       ["chats", "chats_member_select", "dopl_chat_readable"],
       ["chat_messages", "chat_messages_select", "dopl_chat_readable"],
-      ["agent_templates", "agent_templates_member_select", TEMPLATE_MATRIX],
+      ["agent_identities", "agent_identities_member_select", IDENTITY_MATRIX],
       [
-        "agent_template_knowledge_bases",
-        "agent_template_knowledge_bases_member_select",
-        TEMPLATE_MATRIX,
+        "agent_identity_knowledge_bases",
+        "agent_identity_knowledge_bases_member_select",
+        IDENTITY_MATRIX,
       ],
     ] as const) {
       const body = livePolicies(table).get(policy);
@@ -158,8 +158,8 @@ describe("🔒 the TEAM scope read path", () => {
     // `resource_type` is the other half of each narrowing — without it a team's
     // KB grant opens that team's members' chats.
     expect(liveFunctionBody("dopl_chat_readable")).toMatch(/'chat',\s*c\.id/i);
-    const fn = liveFunctionBody(TEMPLATE_MATRIX);
-    expect(fn).toMatch(/'agent_template',\s*t\.id/i);
+    const fn = liveFunctionBody(IDENTITY_MATRIX);
+    expect(fn).toMatch(/'agent_identity',\s*t\.id/i);
     expect(fn).toMatch(new RegExp(`${TEAMS_HELPER}\\(`));
     expect(fn).toMatch(/visibility\s*=\s*'workspace'/i);
     expect(fn).toMatch(/visibility\s*=\s*'team'/i);

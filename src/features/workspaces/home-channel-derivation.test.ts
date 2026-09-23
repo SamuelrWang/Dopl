@@ -70,7 +70,7 @@ const SHAPES: ReadonlyArray<[string, RegExp]> = [
  *     module was DELETED with `dopl_home`, its lock narrowing moving into
  *     `workspace-directory.ts` and deriving the same label.
  *   • **B15** deleted its copy-target module with the copy ops, and fixed a
- *     NINTH site this scan could never see: `agent-templates/server/
+ *     NINTH site this scan could never see: `agent-identities/server/
  *     service-resolve-ref.ts › tenancyLabel` read the `home_scoped` BOOLEAN
  *     first and fell through to `!== "standard"`, so the boolean HID the shape.
  *   • **B14** repaired the one FENCE below, where the negation is right.

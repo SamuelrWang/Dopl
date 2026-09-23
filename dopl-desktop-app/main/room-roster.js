@@ -37,7 +37,7 @@
 const { diag } = require('./diag');
 
 /** ⚠ FIVE SECONDS, and the number is the launch's, not the network's. A spawn is a button click
- *  away from a human; `template-resolve.js` picks the same bound for the same reason. */
+ *  away from a human; `identity-resolve.js` picks the same bound for the same reason. */
 const ROSTER_TIMEOUT_MS = 5000;
 
 /** How many of each kind the card names before it points at the tool. ⚠ The cap is what keeps
@@ -45,7 +45,7 @@ const ROSTER_TIMEOUT_MS = 5000;
 const MAX_LISTED = 5;
 
 const NAME_MAX = 80; // a display name, at the bound every other prompt label uses
-const ROLE_MAX = 120; // `agent-templates/schema.ts › NameSchema`
+const ROLE_MAX = 120; // `agent-identities/schema.ts › NameSchema`
 
 function text(value, max) {
   return typeof value === 'string' ? value.trim().slice(0, max) : '';
@@ -64,7 +64,7 @@ function ownAgents(sessions, selfAgentId) {
     out.push({
       handle,
       name: text(s && s.displayName, NAME_MAX),
-      role: text(ctx.template && ctx.template.name, ROLE_MAX),
+      role: text(ctx.identity && ctx.identity.name, ROLE_MAX),
       mine: true,
     });
   }
@@ -77,7 +77,7 @@ function ownAgents(sessions, selfAgentId) {
  * because the local half already has it, and holds the ROLE the projection does not carry.
  *
  * ⚠ **NO ROLE FOR A PEER, AND THAT IS THE WIRE'S SHAPE RATHER THAN A CHOICE**
- * (`types-sessions.ts › ChannelSessionState`): `templateName` is on the operator-only telemetry
+ * (`types-sessions.ts › ChannelSessionState`): `identityName` is on the operator-only telemetry
  * half, so a peer's role is not ours to print. An absent role renders as an absent clause.
  */
 function peerAgents(sessions, selfUserId, nameOf) {

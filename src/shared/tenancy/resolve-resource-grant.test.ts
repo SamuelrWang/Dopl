@@ -20,7 +20,7 @@ import {
   makeAdmin,
   member,
   ME,
-  templateRow,
+  identityRow,
   T1,
   WS_A,
   WS_B,
@@ -165,9 +165,9 @@ describe("🔒 a GRANT names a row in a container the caller is not in", () => {
   it("costs no grant query when the row was nameable anyway", async () => {
     const calls = makeAdmin({
       workspace_members: [member(WS_B)],
-      agent_templates: [templateRow()],
+      agent_identities: [identityRow()],
     });
-    expect(await resolveResource(caller, "agent_template", T1)).not.toBeNull();
+    expect(await resolveResource(caller, "agent_identity", T1)).not.toBeNull();
     expect(calls.some((c) => c.table === "resource_grants")).toBe(false);
   });
 

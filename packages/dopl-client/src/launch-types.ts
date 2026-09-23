@@ -74,18 +74,18 @@ export interface LaunchDirective {
    */
   runtime?: string | null;
   /**
-   * The agent template the machine is asked to run AS, resolved SERVER-SIDE under
+   * The agent identity the machine is asked to run AS, resolved SERVER-SIDE under
    * the requester's visibility before the row was written (2026-08-23). `null`
-   * when none was named — **or when the template was deleted afterwards**.
+   * when none was named — **or when the identity was deleted afterwards**.
    *
-   * ⚠ READ IT BESIDE {@link LaunchDirective.templateName}: a null id with a live
-   * name is a DELETION, and the desktop refuses (`no-template`) rather than
+   * ⚠ READ IT BESIDE {@link LaunchDirective.identityName}: a null id with a live
+   * name is a DELETION, and the desktop refuses (`no-identity`) rather than
    * launching a blank agent.
    */
-  templateId: string | null;
-  /** The template's name AT CREATE TIME — a snapshot, never a join, so it
+  identityId: string | null;
+  /** The identity's name AT CREATE TIME — a snapshot, never a join, so it
    *  survives the id's `ON DELETE SET NULL`. */
-  templateName: string | null;
+  identityName: string | null;
   /** THE COLOUR THIS LAUNCH ASKED FOR — `agent-01 … agent-16`, or `null`.
    *  ⚠ A REQUEST, NOT A RESERVATION: by the time the machine claims this row another
    *  member's agent may hold the key, and the agent's own state push then resolves the
@@ -219,14 +219,14 @@ export interface LaunchDirectiveCreateInput {
    */
   runtime?: string;
   /**
-   * The agent template to run as — **an id OR an exact name** (2026-08-23). One
+   * The agent identity to run as — **an id OR an exact name** (2026-08-23). One
    * param for both, the same idiom `dopl_kb`'s `base` already uses.
    *
    * ⚠ RESOLVED SERVER-SIDE, under the CALLER's own visibility, before any row is
-   * written. A name matching more than one visible template is REFUSED with the
-   * list (409 `AGENT_TEMPLATE_AMBIGUOUS`, `details.matches`) — never picked.
+   * written. A name matching more than one visible identity is REFUSED with the
+   * list (409 `AGENT_IDENTITY_AMBIGUOUS`, `details.matches`) — never picked.
    */
-  template?: string;
+  identity?: string;
   /**
    * THE POSTURE THIS LAUNCH **ASKS** ITS NEW SESSION TO START ON, and whether it
    * may launch workers (T24, 2026-09-01).

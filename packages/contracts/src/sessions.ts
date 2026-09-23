@@ -46,7 +46,7 @@ export type SessionPillState = "working" | "idle" | "ended";
  * extended 2026-08-23).
  *
  * ⚠ **THE NAME SAYS "TELEMETRY" AND THE TYPE IS ABOUT AN AUDIENCE.** Seven of
- * its eight fields are measurements; `templateName` is an identity snapshot and
+ * its eight fields are measurements; `identityName` is an identity snapshot and
  * is here because it reaches the same one reader. The name is kept because it is
  * cited from four files across three trees and a rename buys a word.
  *
@@ -74,26 +74,26 @@ export type ChannelSessionTelemetry = {
   startedAt: string | null;
   lastActivityAt: string | null;
   /**
-   * THE AGENT TEMPLATE THIS SESSION WAS LAUNCHED FROM, BY NAME, AS OF SPAWN.
+   * THE AGENT IDENTITY THIS SESSION WAS LAUNCHED FROM, BY NAME, AS OF SPAWN.
    *
    * ⚠ **A SNAPSHOT, NOT A POINTER.** The column is TEXT and deliberately not an
    * FK (`20260823130000_channel_sessions_template_name.sql`): a session keeps
-   * its spawn-time template content for its whole life, so it must go on
-   * reporting what it RAN AS after the template is renamed or deleted. A stale
+   * its spawn-time identity content for its whole life, so it must go on
+   * reporting what it RAN AS after the identity is renamed or deleted. A stale
    * name here is CORRECT, not drift.
    *
    * ⚠ **OPERATOR-ONLY, on two independent arguments** (Samuel, OQ-5). It is
    * operator-authored free text, which is the exact condition `20260822150000`
-   * states for a field going private; and a private template's name on a peer's
+   * states for a field going private; and a private identity's name on a peer's
    * screen is an existence oracle for a row that carries no name uniqueness
    * precisely so it cannot be probed. ⚠ There is deliberately **no
-   * `hasTemplate` boolean** on the peer projection — a smaller oracle is still
+   * `hasIdentity` boolean** on the peer projection — a smaller oracle is still
    * one.
    *
-   * `null` = this session was not launched from a template, OR the desktop
+   * `null` = this session was not launched from an identity, OR the desktop
    * reporting it predates the field. The two are not distinguished.
    */
-  templateName: string | null;
+  identityName: string | null;
 };
 
 /**

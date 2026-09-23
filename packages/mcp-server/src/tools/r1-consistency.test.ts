@@ -62,16 +62,16 @@ describe("a create WARNS about a name already used in another container (Q3)", (
   });
 
   it("folds case, because the resolvers do", () => {
-    // `resolveTemplateRef` matches names case-insensitively and a base's slug is
+    // `resolveIdentityRef` matches names case-insensitively and a base's slug is
     // folded from its name — so "Notes" and "notes" collide in exactly the way
     // this warns about.
     const note = duplicateNameNote(
       row("new", "Notes", CHANNEL),
       [row("new", "Notes", CHANNEL), row("old", "  notes ", HOME)],
-      "agent template",
+      "agent identity",
       false,
     );
-    expect(note).toContain("agent template");
+    expect(note).toContain("agent identity");
     // ⚠ NO DESCRIPTION BRANCH when the resource has no description to put it in.
     expect(note).not.toContain("`description`");
   });

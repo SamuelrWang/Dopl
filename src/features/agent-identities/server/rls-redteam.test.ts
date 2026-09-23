@@ -1,19 +1,19 @@
 /**
- * REDTEAM — the POLICY, alone, refuses what `service-shared.ts › canSeeTemplate`
+ * REDTEAM — the POLICY, alone, refuses what `service-shared.ts › canSeeIdentity`
  * refuses (Wave B B12; Samuel's ruling B5, "RLS is the fence").
  *
  * 🔒 THE GAP THIS SUITE EXISTS TO KEEP CLOSED, and it was an OMISSION rather
- * than a divergence. `can_current_user_read_agent_template()` (`20260915120000`)
+ * than a divergence. `can_current_user_read_agent_identity()` (`20260915120000`)
  * collapsed three inline copies of the matrix into one predicate and carried
- * FIVE of `canSeeTemplate`'s six arms across — every one except **arm 2, the
+ * FIVE of `canSeeIdentity`'s six arms across — every one except **arm 2, the
  * SHARED CREDENTIAL**. So a credential that may be passed between humans read
  * the rows its minter created, by name, through PostgREST. `20260921120000`
  * replaces the function in place; no policy moves, which is the payoff of
  * having made the matrix a function in the first place.
  *
- * ⚠ ARM 1 IS OUTSIDE THAT GUARD, DELIBERATELY. `canSeeTemplate` answers `true`
+ * ⚠ ARM 1 IS OUTSIDE THAT GUARD, DELIBERATELY. `canSeeIdentity` answers `true`
  * for `visibility = 'workspace'` BEFORE asking about the credential — a
- * workspace template holds nothing personal — and the SQL keeps that order.
+ * workspace identity holds nothing personal — and the SQL keeps that order.
  * ⚠ ARM 4 BEFORE ARM 5 IS "PRIVATE MEANS PRIVATE": the admin arm stays INSIDE
  * the `team` branch. `20260915120000` says moving it out is a widening, and this
  * suite is what would notice.
@@ -41,7 +41,7 @@ import {
 const POLICIES = livePolicies();
 
 /** The matrix, stated once — `20260915120000` collapsed three copies onto it. */
-const READABLE = "can_current_user_read_agent_template";
+const READABLE = "can_current_user_read_agent_identity";
 
 /**
  * THE GRANT ARM'S WHOLE SHAPE: a `)` closing the membership group, then the arm
@@ -49,10 +49,10 @@ const READABLE = "can_current_user_read_agent_template";
  * alone. The twin of `knowledge/server/rls-redteam.test.ts › GRANT_ARM`.
  */
 const GRANT_ARM =
-  /\) OR \( NOT public\.dopl_credential_is_shared\(\) AND public\.dopl_grant_admits\(\s*'agent_template', t\.id\s*\) \)/i;
+  /\) OR \( NOT public\.dopl_credential_is_shared\(\) AND public\.dopl_grant_admits\(\s*'agent_identity', t\.id\s*\) \)/i;
 
-describe("REDTEAM agent_templates — the policy alone", () => {
-  const policy = () => POLICIES.get("agent_templates.agent_templates_member_select") ?? "";
+describe("REDTEAM agent_identities — the policy alone", () => {
+  const policy = () => POLICIES.get("agent_identities.agent_identities_member_select") ?? "";
 
   it("states the matrix ONCE — the policy is the predicate applied to the row", () => {
     expect(policy()).toContain(`${READABLE}(id)`);
@@ -66,7 +66,7 @@ describe("REDTEAM agent_templates — the policy alone", () => {
     expect(liveFunction(READABLE)).not.toMatch(/[^_]is_workspace_member\(/i);
   });
 
-  it("🔒 refuses a SHARED CREDENTIAL everything but a `workspace` template — the missing arm 2", () => {
+  it("🔒 refuses a SHARED CREDENTIAL everything but a `workspace` identity — the missing arm 2", () => {
     const fn = liveFunction(READABLE);
     // Arm 1 first, ungated…
     expect(fn).toMatch(/t\.visibility\s*=\s*'workspace'\s*OR\s*\(\s*NOT\s+public\.dopl_credential_is_shared\(\)/i);
@@ -97,11 +97,11 @@ describe("REDTEAM agent_templates — the policy alone", () => {
     // 🔒 THE ARM THE FIRST DRAFT LOST. `(membership AND …) OR grant_admits(…)`
     // put the grant ABOVE the shared-credential refusal, so a credential that
     // stands for nobody read a lent row the TS twin refuses at arm 2 —
-    // `canSeeTemplate` asks `isSharedCredential` before it consults
+    // `canSeeIdentity` asks `isSharedCredential` before it consults
     // `share.grantedIds`. A policy admitting what its twin refuses is the
     // divergence this suite exists to catch.
     expect(liveFunction(READABLE)).toMatch(
-      /NOT public\.dopl_credential_is_shared\(\) AND public\.dopl_grant_admits\(\s*'agent_template'/i,
+      /NOT public\.dopl_credential_is_shared\(\) AND public\.dopl_grant_admits\(\s*'agent_identity'/i,
     );
   });
 
@@ -137,27 +137,27 @@ describe("REDTEAM agent_templates — the policy alone", () => {
   });
 
   it("resolves the teams axis through resource_grants, scope_type and all", () => {
-    expect(liveFunction(READABLE)).toContain("'agent_template', t.id");
-    // ⚠ Without the `scope_type` term this would answer "is this team template
+    expect(liveFunction(READABLE)).toContain("'agent_identity', t.id");
+    // ⚠ Without the `scope_type` term this would answer "is this team identity
     // visible to me" with a CHANNEL grant on the same resource (F-468).
     expect(liveFunction("dopl_teams_visible_for_user")).toMatch(
       /FROM\s+public\.resource_grants\s+g\b[\s\S]*?g\.scope_type\s*=\s*'team'/i
     );
   });
 
-  it("fences the KB junction on the template it belongs to", () => {
+  it("fences the KB junction on the identity it belongs to", () => {
     const junction =
       POLICIES.get(
-        "agent_template_knowledge_bases.agent_template_knowledge_bases_member_select"
+        "agent_identity_knowledge_bases.agent_identity_knowledge_bases_member_select"
       ) ?? "";
-    expect(junction).toContain(`${READABLE}(template_id)`);
+    expect(junction).toContain(`${READABLE}(identity_id)`);
   });
 });
 
 /* ────────────────────────── the live half ────────────────────────── */
 
 describe.skipIf(!liveRedteamEnabled)(
-  "REDTEAM agent_templates (live) — the caller client, against a real policy",
+  "REDTEAM agent_identities (live) — the caller client, against a real policy",
   () => {
     let ownerId = "";
     let outsiderId = "";
@@ -166,13 +166,13 @@ describe.skipIf(!liveRedteamEnabled)(
     let workspaceId = "";
     let outsiderContainerId = "";
     let teamId = "";
-    let workspaceTemplateId = "";
-    let privateTemplateId = "";
-    let teamTemplateId = "";
+    let workspaceIdentityId = "";
+    let privateIdentityId = "";
+    let teamIdentityId = "";
 
     const seed = async (visibility: "workspace" | "private" | "team"): Promise<string> => {
       const repo = await import("./repository");
-      const row = await repo.insertTemplate({
+      const row = await repo.insertIdentity({
         workspaceId,
         name: visibility,
         description: null,
@@ -199,15 +199,15 @@ describe.skipIf(!liveRedteamEnabled)(
       outsiderContainerId = await makeWorkspace(outsiderId);
       await addMember(outsiderContainerId, ownerId, "member");
 
-      workspaceTemplateId = await seed("workspace");
-      privateTemplateId = await seed("private");
-      teamTemplateId = await seed("team");
+      workspaceIdentityId = await seed("workspace");
+      privateIdentityId = await seed("private");
+      teamIdentityId = await seed("team");
       await grantToScope({
         workspaceId,
         scopeType: "team",
         scopeId: teamId,
-        resourceType: "agent_template",
-        resourceId: teamTemplateId,
+        resourceType: "agent_identity",
+        resourceId: teamIdentityId,
         createdBy: ownerId,
       });
     }, 60_000);
@@ -218,76 +218,76 @@ describe.skipIf(!liveRedteamEnabled)(
       await deleteUsers([ownerId, outsiderId, adminId, teammateId]);
     }, 60_000);
 
-    // ⚠ `agent_template_knowledge_bases` has no live case of its own: its policy
-    // IS `can_current_user_read_agent_template`, applied to `template_id`, so
+    // ⚠ `agent_identity_knowledge_bases` has no live case of its own: its policy
+    // IS `can_current_user_read_agent_identity`, applied to `identity_id`, so
     // every verdict below is its verdict too. Seeding it would need a knowledge
     // base, i.e. another feature's fixture, for no additional evidence.
 
     it("a NON-MEMBER sees zero rows", async () => {
-      expect(await readableIds(outsiderId, "agent_templates", workspaceId)).toHaveLength(0);
+      expect(await readableIds(outsiderId, "agent_identities", workspaceId)).toHaveLength(0);
     });
 
-    it("🔒 a SHARED CREDENTIAL on the owner's id sees the WORKSPACE template and nothing else", async () => {
-      const ids = await readableIds(ownerId, "agent_templates", workspaceId, { shared: true });
-      expect(ids).toEqual([workspaceTemplateId]);
+    it("🔒 a SHARED CREDENTIAL on the owner's id sees the WORKSPACE identity and nothing else", async () => {
+      const ids = await readableIds(ownerId, "agent_identities", workspaceId, { shared: true });
+      expect(ids).toEqual([workspaceIdentityId]);
     });
 
-    it("an ADMIN sees the team template and NOT the owner's private one", async () => {
-      const ids = await readableIds(adminId, "agent_templates", workspaceId);
-      expect(ids).toContain(teamTemplateId);
-      expect(ids).not.toContain(privateTemplateId);
+    it("an ADMIN sees the team identity and NOT the owner's private one", async () => {
+      const ids = await readableIds(adminId, "agent_identities", workspaceId);
+      expect(ids).toContain(teamIdentityId);
+      expect(ids).not.toContain(privateIdentityId);
     });
 
-    it("a member of the granted team sees the team template; the grant is what does it", async () => {
-      expect(await readableIds(teammateId, "agent_templates", workspaceId)).toContain(
-        teamTemplateId
+    it("a member of the granted team sees the team identity; the grant is what does it", async () => {
+      expect(await readableIds(teammateId, "agent_identities", workspaceId)).toContain(
+        teamIdentityId
       );
     });
 
     it("🔒 GRANTED INTO A CONTAINER → visible to that container's members; REVOKED → invisible (F-604)", async () => {
-      // The whole of ruling B11 in one case: a `private` template in the
+      // The whole of ruling B11 in one case: a `private` identity in the
       // owner's workspace, lent to a container the OUTSIDER is a member of.
       // Before the grant that reader is the "sees zero rows" case above.
       const ref = {
         workspaceId,
         scopeType: "container" as const,
         scopeId: outsiderContainerId,
-        resourceType: "agent_template" as const,
-        resourceId: privateTemplateId,
+        resourceType: "agent_identity" as const,
+        resourceId: privateIdentityId,
       };
       // ⚠ THE GRANTOR IS IN BOTH ROOMS, because `enforce_resource_grant` says
       // so — cross-container reach requires a NAMED grantor who could lend it
       // OUT and lend it IN (`20260914120000` rule 4).
       await grantToScope({ ...ref, createdBy: ownerId });
       expect(
-        await readableIds(outsiderId, "agent_templates", workspaceId)
-      ).toEqual([privateTemplateId]);
+        await readableIds(outsiderId, "agent_identities", workspaceId)
+      ).toEqual([privateIdentityId]);
 
       // 🔒 AND THE OTHER HALF, WHICH IS WHERE A `true` PREDICATE WOULD SHOW.
       await revokeFromScope(ref);
       expect(
-        await readableIds(outsiderId, "agent_templates", workspaceId)
+        await readableIds(outsiderId, "agent_identities", workspaceId)
       ).toHaveLength(0);
     });
 
     it("🔒 P25 — a SHARED CREDENTIAL is not widened by that grant, live", async () => {
       // The same row, the same reader, the same grant; the ONE axis that moves
-      // is whether the credential stands for a person. `canSeeTemplate` refuses
+      // is whether the credential stands for a person. `canSeeIdentity` refuses
       // at arm 2 and the policy must refuse with it.
       const ref = {
         workspaceId,
         scopeType: "container" as const,
         scopeId: outsiderContainerId,
-        resourceType: "agent_template" as const,
-        resourceId: privateTemplateId,
+        resourceType: "agent_identity" as const,
+        resourceId: privateIdentityId,
       };
       await grantToScope({ ...ref, createdBy: ownerId });
       try {
         expect(
-          await readableIds(outsiderId, "agent_templates", workspaceId)
-        ).toEqual([privateTemplateId]);
+          await readableIds(outsiderId, "agent_identities", workspaceId)
+        ).toEqual([privateIdentityId]);
         expect(
-          await readableIds(outsiderId, "agent_templates", workspaceId, {
+          await readableIds(outsiderId, "agent_identities", workspaceId, {
             shared: true,
           })
         ).toHaveLength(0);

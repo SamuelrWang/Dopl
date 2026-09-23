@@ -270,10 +270,10 @@ function baseRecord(s) {
     counterpartyId: s.counterpartyId || null, direct: s.direct === true, bind: s.bind === 'room' ? 'room' : 'pair', agentId: s.agentId || null, // FIX L1: the other party; (H2) whether the server addresses posts for us; (D2) the binding mode + the agent this session runs as
     // v1.7.5 D1: the HEADER IDENTITY, sourced from s.context/spec at startSession. A parked record
     // is the only thing a P2 recreate (or a post-restart resume) has to rebuild the window from, so
-    // without these the reopened header fell back to a bare "Session". ⚠ AND THE TEMPLATE NAME
-    // SINCE 2026-08-23 (F-288): without it a crash resume ERASED `channel_sessions.template_name`.
+    // without these the reopened header fell back to a bare "Session". ⚠ AND THE IDENTITY NAME
+    // SINCE 2026-08-23 (F-288): without it a crash resume ERASED `channel_sessions.identity_name`.
     counterpartyName: s.counterpartyName || null, channelName: (s.context && s.context.channelName) || null,
-    taskTitle: (s.context && s.context.taskTitle) || null, templateName: (s.context && s.context.template && s.context.template.name) || null,
+    taskTitle: (s.context && s.context.taskTitle) || null, identityName: (s.context && s.context.identity && s.context.identity.name) || null,
     // FIX #9: the running cap counters, so a P2 recreate rehydrates a turn/cost-capped (or
     turns: s.state.turns, // parked) session's budget instead of resetting it to a fresh one.
     // 🔒 ⚠ **`costUsd` RODE HERE AND IS DELETED (2026-09-22, Samuel: *"we dont need cost

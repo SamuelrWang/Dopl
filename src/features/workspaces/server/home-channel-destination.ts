@@ -18,8 +18,8 @@ import { findWorkspaceById } from "./repository";
  *      section (`shared/tenancy/personal-container.ts` routes it).
  *   2. **A HOME CHANNEL** — the channel's `kind='link'` container, with the row
  *      SHARED into the channel. That is what the /home Shared section's create
- *      button makes: for a template, `visibility: 'workspace'`
- *      (`agent-templates/lib/visibility.ts › SECTIONS_CONTAINER`, which offers
+ *      button makes: for an identity, `visibility: 'workspace'`
+ *      (`agent-identities/lib/visibility.ts › SECTIONS_CONTAINER`, which offers
  *      nothing else); for a knowledge base, `shareToChannelId`
  *      (`knowledge/components/create-base-dialog.tsx`, which drops the
  *      audience picker because the grant IS the answer).
@@ -32,10 +32,10 @@ import { findWorkspaceById } from "./repository";
  *
  * ⚠ **THE FENCE IS THE SERVER'S, NOT A SURFACE'S, AND THAT IS THE WHOLE POINT
  * OF THE FILE.** The 2026-08-27 ruling was applied by trimming ONE array in the
- * desktop editor; every other door — `POST /api/agent-templates`,
+ * desktop editor; every other door — `POST /api/agent-identities`,
  * `POST /api/knowledge/bases`, and `dopl_agent` / `dopl_kb` behind them — kept
  * writing the row without a word. That is the prompt-only shape:
- * a rule enforced where the caller happens to enter. Six agent templates and
+ * a rule enforced where the caller happens to enter. Six agent identities and
  * eight knowledge bases were measured in this state on 2026-09-18.
  *
  * ⚠ **`kind === "link"` POSITIVELY, NEVER `!isStandardWorkspace`** (F-564). This
@@ -44,7 +44,7 @@ import { findWorkspaceById } from "./repository";
  * them. `authz.ts › assertWorkspacePermanent` asks positively for the same
  * reason.
  *
- * ⚠ **WORKSPACES (`kind='standard'`) ARE UNTOUCHED.** A private template or base
+ * ⚠ **WORKSPACES (`kind='standard'`) ARE UNTOUCHED.** A private identity or base
  * in a workspace is listed by that workspace's own Agents / Knowledge page, so
  * there is no orphan and nothing to refuse. Pinned by
  * `home-channel-destination.test.ts`.
@@ -61,7 +61,7 @@ import { findWorkspaceById } from "./repository";
  * ⚠ **TWO ARMS ASK THIS, NOT ONE, AND THEY ASK IT WITH ONE PROBE**
  * ({@link isHomeChannelContainer}). {@link assertHomeChannelRowIsShared} is the
  * arm a row LANDING somewhere passes — the create on both features, and the
- * template PATCH. The other is a REVOKE: `knowledge/server/
+ * identity PATCH. The other is a REVOKE: `knowledge/server/
  * service-channel-grants.ts › setChannelKnowledgeGrant`'s `"none"` branch, where
  * dropping the last channel grant re-mints exactly the orphan this file exists
  * to prevent. It throws {@link HomeChannelRowNotSharedError} directly, with its
@@ -98,10 +98,10 @@ export interface HomeChannelDestination {
    *  personal row has already been re-routed by the time this is asked. */
   workspaceId: string;
   /** Is the row shared into the channel? Each feature answers in its own terms
-   *  — the audience column for a template, a channel grant for a base — and the
+   *  — the audience column for an identity, a channel grant for a base — and the
    *  rule above them is one sentence. */
   shared: boolean;
-  /** "agent template" / "knowledge base". */
+  /** "agent identity" / "knowledge base". */
   noun: string;
   /** How this caller shares it, named exactly. ⚠ One clause, no explainer. */
   remedy: string;

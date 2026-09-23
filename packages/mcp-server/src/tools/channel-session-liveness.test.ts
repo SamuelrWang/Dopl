@@ -5,9 +5,9 @@
  * ⚠ **F-293 — A TIME-SHAPED FRAGMENT IN THE NAME SEGMENT.** One session rendered
  * `` `opus-5` `` from one call and `` `opus-5 1m` `` from another. `1m` is
  * byte-for-byte what `coarseAge` emits between 30s and 90s, it sat one clause
- * away from `started 12m ago`, and the session had NO TEMPLATE — so under
+ * away from `started 12m ago`, and the session had NO IDENTITY — so under
  * the doctrine's "two bare names" rule (once `SESSION_TELEMETRY_NOTE`'s, now
- * `CHANNEL_DOCTRINE`'s) an operator reads a WINDOW SUFFIX as a template or a
+ * `CHANNEL_DOCTRINE`'s) an operator reads a WINDOW SUFFIX as an identity or a
  * model. The leak is not in either call path: it is the
  * model id itself. The bundled CLI ships `claude-opus-5[1m]` for the explicit
  * long-context variant (`main/session-model.js › contextWindowFor` reads exactly
@@ -81,7 +81,7 @@ function rich(
     tokensSpent: 41_233,
     startedAt: new Date(NOW - 12 * 60_000).toISOString(),
     lastActivityAt: new Date(NOW - 30_000).toISOString(),
-    templateName: null,
+    identityName: null,
     ...over,
   };
 }
@@ -153,10 +153,10 @@ describe('op="status" and the holding read\'s session block render IDENTICALLY',
   const cases: Array<[string, ChannelSessionStateOwn]> = [
     ["the full rich row", rich()],
     [
-      "no template, suffixed model — the observed shape",
+      "no identity, suffixed model — the observed shape",
       rich({ model: "claude-opus-5[1m]" }),
     ],
-    ["a template AND a model", rich({ templateName: "Code Auditor" })],
+    ["an identity AND a model", rich({ identityName: "Code Auditor" })],
     [
       "every telemetry field absent — an older desktop",
       rich({
@@ -244,11 +244,11 @@ describe("F-293 — a model id can never split into two bare names", () => {
   });
 
   /**
-   * ⚠ THE PROMISE IS ONLY WORTH ANYTHING IF IT IS CHECKABLE. With no template,
-   * a two-token model span reads as `template · model` to exactly the skimming
+   * ⚠ THE PROMISE IS ONLY WORTH ANYTHING IF IT IS CHECKABLE. With no identity,
+   * a two-token model span reads as `identity · model` to exactly the skimming
    * orchestrator the doctrine's op="status" column sentence is written for.
    */
-  it("with NO template the line carries exactly ONE bare name", () => {
+  it("with NO identity the line carries exactly ONE bare name", () => {
     const line = formatSessionLine(rich({ model: "claude-opus-5[1m]" }), {
       telemetry: true,
       now: NOW,
@@ -264,7 +264,7 @@ describe("F-293 — a model id can never split into two bare names", () => {
     // ⚠ THE CLAUSE ITSELF, RESTORED AFTER B8 CUT IT — and it now carries the
     // COROLLARY the render depends on, which the old wording left implicit.
     expect(CHANNEL_DOCTRINE).toContain(
-      "The MODEL is always ONE unbroken token, so a name with a space in it is a template.",
+      "The MODEL is always ONE unbroken token, so a name with a space in it is an identity.",
     );
   });
 

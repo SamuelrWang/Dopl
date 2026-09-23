@@ -60,7 +60,7 @@ describe("HIDDEN_TOOLS — the retired surface", () => {
     // capture.
     expect(VISIBLE_TOOLS.map((t) => t.name).sort()).toEqual(
       [
-        // MCP surface v2 wave A (2026-08-28): the template family joins.
+        // MCP surface v2 wave A (2026-08-28): the identity family joins.
         // ⚠ TEN, NOT FIFTEEN, SINCE 2026-09-02: the five `_admin` companions
         // were hidden and then deleted in the same wave.
         // ⚠ **AND NINE SINCE B13**: `dopl_home` was the one META tool this

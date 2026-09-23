@@ -17,7 +17,7 @@
  * reaches a PERSON, and `DELETE .../links/[linkId]` and the claim are
  * `sessionOnly` for the same reason. Binding any of them here would publish a
  * method every MCP tool holds and no MCP caller may use — the same argument that
- * keeps `deleteAgentTemplate` unbound.
+ * keeps `deleteAgentIdentity` unbound.
  */
 import type { DoplTransport } from "./transport.js";
 import type { HomeChannelCreateResult, HomeChannelsPayload } from "./home-types.js";

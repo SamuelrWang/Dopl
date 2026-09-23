@@ -14,7 +14,7 @@
  *      snapshot of chrome and the MCP surface's `{key, value}` writes start
  *      reading as a deliberate retype.
  *
- * ⚠ **ITS OWN FILE BECAUSE `template-editor.test.tsx` HIT THE 500-LINE CAP**
+ * ⚠ **ITS OWN FILE BECAUSE `identity-editor.test.tsx` HIT THE 500-LINE CAP**
  * (§1, `eslint.config.mjs › max-lines`, error, no exemption). The seam is honest
  * rather than arbitrary: that suite is what the editor RENDERS and what it
  * SAVES; this one is one field's own vocabulary. The harness is duplicated
@@ -25,8 +25,8 @@
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { draftToCreateBody, type TemplateDraft } from "../lib/template-draft";
-import { TemplateEditor } from "./template-editor";
+import { draftToCreateBody, type IdentityDraft } from "../lib/identity-draft";
+import { IdentityEditor } from "./identity-editor";
 
 const BASES = [{ id: "kb-1", name: "Runbooks" }];
 
@@ -39,11 +39,11 @@ vi.mock("@/features/knowledge/client/hooks", async () => ({
 async function open() {
   const onSave = vi.fn();
   render(
-    <TemplateEditor
+    <IdentityEditor
       open
       workspaceId="ws-1"
       session={1}
-      template={null}
+      identity={null}
       teams={[]}
       knowledgeBases={BASES}
       saving={false}
@@ -88,7 +88,7 @@ describe("a field's type", () => {
     // how the box behaves when you type, nothing else. It has to PERSIST, or the
     // dropdown is a control whose answer is thrown away.
     const { onSave } = await open();
-    fireEvent.change(field("#agent-template-name"), { target: { value: "Scout" } });
+    fireEvent.change(field("#agent-identity-name"), { target: { value: "Scout" } });
     addField("repo", "dopl");
     addField("ships", "2026-01-02");
     // ⚠ THE SECOND ROW ONLY. The first keeps the default, and the whole point of
@@ -97,7 +97,7 @@ describe("a field's type", () => {
     fireEvent.click(await screen.findByRole("menuitem", { name: /Date/ }));
     fireEvent.click(screen.getByRole("button", { name: CREATE_VERB }));
 
-    const draft = onSave.mock.calls[0][0] as TemplateDraft;
+    const draft = onSave.mock.calls[0][0] as IdentityDraft;
     expect(draftToCreateBody(draft).fields).toEqual([
       // ⚠ NO `type` MEMBER: an untouched row puts the object on the wire it
       // always did, which is what keeps every other payload pin honest.
@@ -110,7 +110,7 @@ describe("a field's type", () => {
     // ⚠ `number` and `date` are a KEYBOARD and a picker, not a contract — the
     // browser hands back a string and nothing downstream parses it. `boolean` is
     // the one that swaps the ELEMENT, because a free-text yes/no is how three
-    // templates end up holding "yes", "Y" and "true".
+    // identities end up holding "yes", "Y" and "true".
     await open();
     addField("count", "");
     fireEvent.click(screen.getByRole("button", { name: "Field 1 type" }));

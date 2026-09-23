@@ -9,8 +9,8 @@
  * `AgentLaunchPanelView`, so the old face keeps its own pins **until Samuel rules; delete it when
  * he does, and do not let two launch forms live** (see `launch-agent-dialog.tsx`).
  *
- * ⚠ IT REPLACED THE TEMPLATE CHEVRON, which is DELETED — that menu's whole function is the
- * Template row here. **Do not re-add a chevron**: two ways to choose an identity is how the
+ * ⚠ IT REPLACED THE IDENTITY CHEVRON, which is DELETED — that menu's whole function is the
+ * Identity row here. **Do not re-add a chevron**: two ways to choose an identity is how the
  * thread panel and the Bot icon drifted into meaning the same thing in 2026-08-21.
  *
  * ⚠ THE ID ROW IS DISPLAY-ONLY AND IS NOT ALWAYS THERE. It shows the address main pre-assigned
@@ -20,14 +20,14 @@
 
 import { useMemo, useRef } from "react";
 import { X } from "lucide-react";
-import { useAgentTemplates } from "@/features/agent-templates/hooks/use-agent-templates";
+import { useAgentIdentities } from "@/features/agent-identities/hooks/use-agent-identities";
 import { useChannelLaunchPosture } from "../hooks/use-channel-launch-posture";
 import {
   descriptorFor,
   interruptRefusal,
   type RuntimeDescriptor,
 } from "../lib/runtime-capability";
-import { authorMarker } from "@/features/agent-templates/components/template-picker";
+import { authorMarker } from "@/features/agent-identities/components/identity-picker";
 import { SECTION_BOX_INSET } from "@/shared/ui/section-box";
 import { SelectMenu } from "@/shared/ui/select-menu";
 import { cn } from "@/shared/lib/utils";
@@ -46,27 +46,27 @@ import type { AgentLaunchPanel } from "./use-agent-launch";
 import { useAutoGrow } from "./use-auto-grow";
 
 /**
- * A template row as the selector needs it — the read hook's shape, narrowed.
+ * An identity row as the selector needs it — the read hook's shape, narrowed.
  *
  * 🔒 ⚠ `marker` IS A SECURITY SIGNAL, NOT DECORATION, AND IT IS WHY THIS TYPE IS
  * NOT `{id, name}` (RESTORED 2026-08-30 — ledger ASK-21, INVARIANTS §5A).
- * A `team` / `workspace` template's instructions are another member's text about
+ * A `team` / `workspace` identity's instructions are another member's text about
  * to run on this machine under this operator's credential, and §5A makes the
  * marker *"the ONLY signal shown to the human BEFORE the choice is made"*.
  *
- * ⚠ IT IS `template-picker.tsx › authorMarker`'s ANSWER, never a second copy:
+ * ⚠ IT IS `identity-picker.tsx › authorMarker`'s ANSWER, never a second copy:
  * an author the channel roster cannot name reads `by another member` rather than
  * losing the marker, because dropping it would turn UNKNOWN into MINE.
- * `null` = this operator's own template, which wears no marker (a marker over
+ * `null` = this operator's own identity, which wears no marker (a marker over
  * your own configuration is the noise that stops markers being read).
  */
-export interface LaunchTemplateOption {
+export interface LaunchIdentityOption {
   id: string;
   name: string;
   marker: string | null;
   /**
-   * THE TEMPLATE'S OWN DEFAULT MODEL, here to be NAMED rather than sent (2026-09-05). Nothing on
-   * this panel writes it — main's chain reads the template itself — but a template's model
+   * THE IDENTITY'S OWN DEFAULT MODEL, here to be NAMED rather than sent (2026-09-05). Nothing on
+   * this panel writes it — main's chain reads the identity itself — but an identity's model
    * OUTRANKS the channel's pick (`main/session-launch-op.js`), so a label computed without it
    * would name the channel's model on a launch that will not use it.
    * ⚠ OPTIONAL, AND ABSENT IS "THIS BUILD WAS NOT TOLD" rather than "no model" — the row names
@@ -76,8 +76,8 @@ export interface LaunchTemplateOption {
 }
 
 /** The blank-agent option's value. ⚠ `""` because `SelectMenu` is `<T extends string>`; it maps
- *  to `templateId: null` at the boundary, which is the wire's own spelling of "no template". */
-const BLANK_TEMPLATE = "";
+ *  to `identityId: null` at the boundary, which is the wire's own spelling of "no identity". */
+const BLANK_IDENTITY = "";
 
 /**
  * "Whatever this channel is set to" — the Runtime row's first option, and a REAL pick.
@@ -93,15 +93,15 @@ const CHANNEL_RUNTIME_LABEL = "Channel default";
 
 export function AgentLaunchPanelView({
   panel,
-  templates,
+  identities,
   runtimes = EMPTY_RUNTIMES,
   channelRuntime = "",
   defaultRuntime = "",
   channelModel = "",
 }: {
   panel: AgentLaunchPanel;
-  /** The channel's templates. ⚠ READ-ONLY here — this surface authors none. */
-  templates: ReadonlyArray<LaunchTemplateOption>;
+  /** The channel's identities. ⚠ READ-ONLY here — this surface authors none. */
+  identities: ReadonlyArray<LaunchIdentityOption>;
   /**
    * THE RUNTIME FAMILY, off the channel's launch posture (2026-08-31, design §3.1/§3.2).
    * ⚠ EMPTY RENDERS NO RUNTIME ROW AND NO WARNING — a plain browser, and every desktop older
@@ -147,34 +147,34 @@ export function AgentLaunchPanelView({
    * carried no model at all.
    *
    * ⚠ THE ORDER IS MAIN'S, LINK FOR LINK (`main/session-launch-op.js`): the operator's own pick,
-   * then the TEMPLATE's model, then the CHANNEL's — reading the channel first would be wrong on
-   * exactly the launches a template is for. When no link carries one, `agentModelSelection`
+   * then the IDENTITY's model, then the CHANNEL's — reading the channel first would be wrong on
+   * exactly the launches an identity is for. When no link carries one, `agentModelSelection`
    * answers `AGENT_MODEL_FALLBACK` (Sonnet), the back-fill Samuel ruled when he removed "Default"
    * (*"why can't we just set a value … unless they change it"*), so the row always names a real
    * model.
    */
   const effectiveModel = useMemo(() => {
-    const fromTemplate = templates.find((t) => t.id === panel.templateId)?.model;
-    return agentModelSelection(panel.model || fromTemplate || channelModel);
-  }, [panel.model, templates, panel.templateId, channelModel]);
-  // ⚠ `agentModelOptionsFor`, not the bare roster: a template or a channel may carry an id this
+    const fromIdentity = identities.find((t) => t.id === panel.identityId)?.model;
+    return agentModelSelection(panel.model || fromIdentity || channelModel);
+  }, [panel.model, identities, panel.identityId, channelModel]);
+  // ⚠ `agentModelOptionsFor`, not the bare roster: an identity or a channel may carry an id this
   // build predates, and an option list without it would render the control blank.
   const modelOptions = useMemo(
     () => agentModelOptionsFor(effectiveModel),
     [effectiveModel]
   );
-  const templateOptions = [
+  const identityOptions = [
     // ⚠ FIRST, AND NOT A PLACEHOLDER. A blank agent is a real configuration — it is what the Bot
     // icon spawned in one click for a year — so it is an option, not an empty state.
-    { value: BLANK_TEMPLATE, label: "Blank agent" },
+    { value: BLANK_IDENTITY, label: "Blank agent" },
     // 🔒 ⚠ THE MARKER RIDES `description`, WHICH IS HOW IT REACHES THE ACCESSIBLE NAME.
     // `MenuItem` renders `description` INSIDE the `role="menuitem"` button, so content-based
     // naming puts "by <member>" in the row's accessible name as well as on its face — the same
-    // two places `template-picker.tsx › TemplateRow` puts it (there via `aria-label`, because
+    // two places `identity-picker.tsx › IdentityRow` puts it (there via `aria-label`, because
     // that row hand-builds its own name). A screen-reader operator gets the same pre-choice
     // signal a sighted one does. ⚠ `undefined`, never `""`: an empty description would render an
-    // empty second line under every own-template row.
-    ...templates.map((t) => ({
+    // empty second line under every own-identity row.
+    ...identities.map((t) => ({
       value: t.id,
       label: t.name,
       description: t.marker ?? undefined,
@@ -231,20 +231,20 @@ export function AgentLaunchPanelView({
           />
         </PanelField>
 
-        <PanelField label="Template:" as="div" center line={false}>
+        <PanelField label="Identity:" as="div" center line={false}>
           <SelectMenu
-            value={panel.templateId ?? BLANK_TEMPLATE}
-            options={templateOptions}
+            value={panel.identityId ?? BLANK_IDENTITY}
+            options={identityOptions}
             onChange={(next) =>
-              panel.setTemplateId(next === BLANK_TEMPLATE ? null : next)
+              panel.setIdentityId(next === BLANK_IDENTITY ? null : next)
             }
-            ariaLabel="Agent template"
+            ariaLabel="Identity"
             variant="raisedField"
             className="min-w-0 flex-1"
           />
         </PanelField>
 
-        {/* ⚠ ABOVE Model, BELOW Template, because it decides what the two rows under it
+        {/* ⚠ ABOVE Model, BELOW Identity, because it decides what the two rows under it
             mean — the model roster and the permission vocabulary are the RUNTIME's. */}
         {runtimes.length > 0 && (
           <PanelField label="Runtime:" as="div" center line={false}>
@@ -271,7 +271,7 @@ export function AgentLaunchPanelView({
             option and a `SelectMenu` in that state renders `options[0]`: the row would read
             "Fable 5" over a launch that carries no model. The row now names what
             `session-launch-op.js`'s chain will actually resolve — the operator's pick, else the
-            template's, else the channel's, else the Sonnet back-fill. */}
+            identity's, else the channel's, else the Sonnet back-fill. */}
           <SelectMenu
             value={effectiveModel}
             options={modelOptions}
@@ -306,10 +306,10 @@ export function AgentLaunchPanelView({
 }
 
 /**
- * THE WHOLE NEW-AGENT SURFACE — the collapse region, the panel, the templates read and the
- * foreign-template question — as ONE mount.
+ * THE WHOLE NEW-AGENT SURFACE — the collapse region, the panel, the identities read and the
+ * foreign-identity question — as ONE mount.
  *
- * ⚠ IT EXISTS SO THE TEMPLATES READ IS GATED BY THE SAME `canLaunch` THE CONTROL IS. The read is a
+ * ⚠ IT EXISTS SO THE IDENTITIES READ IS GATED BY THE SAME `canLaunch` THE CONTROL IS. The read is a
  * react-query hook, so calling it from `composer.tsx`'s top level would require a
  * `QueryClientProvider` around every surface that renders a composer — the pop-out and the web
  * tree included, which have no launch affordance at all.
@@ -330,19 +330,19 @@ export function ComposerLaunch({
    *  writes (`use-channel-launch-posture.ts`), so a pick made there is live here. */
   channelId: string;
   workspaceId: string;
-  /** Whose templates wear NO marker — everyone else's wear one. */
+  /** Whose identities wear NO marker — everyone else's wear one. */
   currentUserId: string;
   /** The CHANNEL roster, for the marker's name half. ⚠ Not the workspace's: a
-   *  template shared by someone outside this channel resolves to no name and
+   *  identity shared by someone outside this channel resolves to no name and
    *  degrades to "by another member" rather than disappearing — the same
    *  argument `agents-tab.tsx` states over its own map. */
   members: ReadonlyArray<{ userId: string; displayName: string | null; email: string | null }>;
 }) {
   // ⚠ NOT REQUESTED UNTIL THE PANEL IS OPEN, and it is the SAME cache entry the Agents tab and
   // the /home Agents face mount — a stable key on `[path, workspaceId, query]` (F-331), so two
-  // mounts share one fetch. ⚠ READ-ONLY: this surface authors no template.
-  const { templates } = useAgentTemplates(workspaceId, { enabled: panel.open });
-  // ⚠ GATED BY THE SAME MOUNT THE TEMPLATES READ IS. This component renders only where a
+  // mounts share one fetch. ⚠ READ-ONLY: this surface authors no identity.
+  const { identities } = useAgentIdentities(workspaceId, { enabled: panel.open });
+  // ⚠ GATED BY THE SAME MOUNT THE IDENTITIES READ IS. This component renders only where a
   // launch is possible, so the bridge read costs nothing on a surface with no launch control.
   const posture = useChannelLaunchPosture(channelId);
 
@@ -352,19 +352,19 @@ export function ComposerLaunch({
     [members]
   );
   // 🔒 THE MARKER IS ATTACHED HERE, BESIDE THE READ, so the view takes rows that already carry
-  // the signal and there is no arm of it that renders a template without one (ledger ASK-21).
+  // the signal and there is no arm of it that renders an identity without one (ledger ASK-21).
   const options = useMemo(
     () =>
-      templates.map((t) => ({
+      identities.map((t) => ({
         id: t.id,
         name: t.name,
         marker: authorMarker(t, currentUserId, memberNames),
-        // ⚠ CARRIED FOR THE MODEL ROW'S LABEL, not for the launch — the template's model reaches
+        // ⚠ CARRIED FOR THE MODEL ROW'S LABEL, not for the launch — the identity's model reaches
         // the spawn through MAIN's own chain, and sending it from here would make this panel a
         // second authority on a precedence it only describes.
         model: t.model,
       })),
-    [templates, currentUserId, memberNames]
+    [identities, currentUserId, memberNames]
   );
 
   return (
@@ -380,7 +380,7 @@ export function ComposerLaunch({
         <div className="pb-2">
           <AgentLaunchPanelView
             panel={panel}
-            templates={options}
+            identities={options}
             // ⚠ EMPTY UNTIL THE PROBE ANSWERS, and empty forever off-desktop — which renders
             // no runtime row and no warning, the correct direction while the answer is out.
             runtimes={posture.runtimeSupported ? posture.runtimes : EMPTY_RUNTIMES}

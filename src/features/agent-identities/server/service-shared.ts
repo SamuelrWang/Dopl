@@ -7,17 +7,17 @@ import {
 } from "@/shared/tenancy/resource-grant-reach";
 import { meetsMinRole, type Role } from "@/features/workspaces/types";
 import type {
-  AgentTemplate,
-  AgentTemplateContext,
-  TemplateField,
-  TemplateKnowledgeBaseRef,
+  AgentIdentity,
+  AgentIdentityContext,
+  IdentityField,
+  IdentityKnowledgeBaseRef,
 } from "../types";
 import * as repo from "./repository";
 import type { KnowledgeBaseAccessRow } from "./repository";
 
 /**
- * Cross-cutting gates for the agent-templates service: context construction,
- * the `canSeeTemplate` visibility matrix and its batch precompute, the
+ * Cross-cutting gates for the agent-identities service: context construction,
+ * the `canSeeIdentity` visibility matrix and its batch precompute, the
  * viewer-filtered sharing/attachment decoration, and the mirrored knowledge
  * access predicate the KB-attach gate is built on.
  *
@@ -38,9 +38,9 @@ export interface AuthLike {
   credentialSubjectUserId: string | null;
 }
 
-export function buildAgentTemplateContext(
+export function buildAgentIdentityContext(
   auth: AuthLike
-): AgentTemplateContext {
+): AgentIdentityContext {
   return {
     workspaceId: auth.workspaceId,
     userId: auth.userId,
@@ -58,7 +58,7 @@ export function stripNullBytes<T extends string | null | undefined>(value: T): T
   return (typeof value === "string" ? value.replace(/\u0000/g, "") : value) as T;
 }
 
-export function isWorkspaceAdmin(ctx: AgentTemplateContext): boolean {
+export function isWorkspaceAdmin(ctx: AgentIdentityContext): boolean {
   return ctx.role !== null && meetsMinRole(ctx.role, "admin");
 }
 
@@ -83,8 +83,8 @@ export function normalizeLabel(value: string | null | undefined): string | null 
 }
 
 export function normalizeFieldsInput(
-  fields: TemplateField[] | undefined
-): TemplateField[] {
+  fields: IdentityField[] | undefined
+): IdentityField[] {
   if (!fields) return [];
   return fields.map((f) => ({
     key: stripNullBytes(f.key),
@@ -97,33 +97,33 @@ export function normalizeFieldsInput(
 /**
  * Precomputed sharing context for a row set. Same shape and same fetch
  * discipline as `skills/server/service-shared.ts › SkillGrantCtx`: a FIXED
- * number of queries per request, no matter how many templates there are.
+ * number of queries per request, no matter how many identities there are.
  */
-export interface TemplateShareCtx {
+export interface IdentityShareCtx {
   /** Teams the caller belongs to. Fetched only when some row needs it. */
   myTeamIds: Set<string>;
-  /** templateId → linked team ids. */
-  byTemplate: Map<string, string[]>;
+  /** identityId → linked team ids. */
+  byIdentity: Map<string, string[]>;
   /**
-   * Template ids lent to a channel or container the caller is in — the GRANT
+   * Identity ids lent to a channel or container the caller is in — the GRANT
    * axis, added 2026-09-02 (F-604). ⚠ It rides this context rather than a
    * second parameter precisely because a second parameter is what a caller
-   * forgets: every existing `canSeeTemplate` call already threads a
-   * `TemplateShareCtx`, so the arm arrives everywhere at once.
+   * forgets: every existing `canSeeIdentity` call already threads a
+   * `IdentityShareCtx`, so the arm arrives everywhere at once.
    */
   grantedIds: GrantedResourceIds;
 }
 
-const EMPTY_SHARE_CTX: TemplateShareCtx = {
+const EMPTY_SHARE_CTX: IdentityShareCtx = {
   myTeamIds: new Set(),
-  byTemplate: new Map(),
+  byIdentity: new Map(),
   grantedIds: NO_GRANTS,
 };
 
-export async function shareCtxForTemplates(
-  ctx: AgentTemplateContext,
-  rows: AgentTemplate[]
-): Promise<TemplateShareCtx> {
+export async function shareCtxForIdentities(
+  ctx: AgentIdentityContext,
+  rows: AgentIdentity[]
+): Promise<IdentityShareCtx> {
   const teamScoped = rows.filter((t) => t.visibility === "team");
   // ⚠ **THE `team` SHORT-CIRCUIT NO LONGER SHORT-CIRCUITS THE WHOLE CONTEXT.**
   // A grant is orthogonal to visibility — a `private` row is the ordinary thing
@@ -132,7 +132,7 @@ export async function shareCtxForTemplates(
   // grant read has its own empty-input short-circuit.
   const grantedIds = await grantedResourceIds(
     ctx.userId,
-    "agent_template",
+    "agent_identity",
     rows.filter((t) => needsGrantArm(ctx, t)).map((t) => t.id)
   );
   if (teamScoped.length === 0) {
@@ -149,19 +149,19 @@ export async function shareCtxForTemplates(
     needsMembership && !isSharedCredential(ctx)
       ? repo.listTeamIdsForUser(ctx.workspaceId, ctx.userId)
       : Promise.resolve([]),
-    repo.listTeamLinksForTemplates(
+    repo.listTeamLinksForIdentities(
       ctx.workspaceId,
       teamScoped.map((t) => t.id)
     ),
   ]);
-  const byTemplate = new Map<string, string[]>();
+  const byIdentity = new Map<string, string[]>();
   for (const link of links) {
-    byTemplate.set(link.templateId, [
-      ...(byTemplate.get(link.templateId) ?? []),
+    byIdentity.set(link.identityId, [
+      ...(byIdentity.get(link.identityId) ?? []),
       link.teamId,
     ]);
   }
-  return { myTeamIds: new Set(myTeams), byTemplate, grantedIds };
+  return { myTeamIds: new Set(myTeams), byIdentity, grantedIds };
 }
 
 /**
@@ -187,12 +187,12 @@ export async function shareCtxForTemplates(
  * lookup and states which levels admit a HUMAN read.
  *
  * ⚠ ARM 5 BEFORE ARM 6 IS THE WHOLE OF "PRIVATE MEANS PRIVATE": a workspace
- * admin administers SHARING, which is why they pass on a `team` template, and
+ * admin administers SHARING, which is why they pass on a `team` identity, and
  * that is not a licence to read a teammate's private one. `canSeeSkill` orders
  * its arms the same way (it returns false for `visibility !== "public"` before
  * reaching its admin check).
  *
- * ⚠ THIS FUNCTION AND `agent_templates_member_select` IN
+ * ⚠ THIS FUNCTION AND `agent_identities_member_select` IN
  * `supabase/migrations/20260822200000_agent_templates.sql` ARE ONE RULE WRITTEN
  * TWICE — same arms, same order, including the admin arm's placement INSIDE the
  * team branch. They must move together. `20260716150000_chats_team_aware_rls.sql`
@@ -202,7 +202,7 @@ export async function shareCtxForTemplates(
  *
  * 🔒 ⚠ ARM 2 ASKS `isSharedCredential`, NOT `ctx.apiKeyWorkspaceId` — F-333,
  * ruled by Samuel and fixed 2026-08-27. The old form made every PRIVATE
- * template invisible to the agents running in a container: layer B1 sets the
+ * identity invisible to the agents running in a container: layer B1 sets the
  * lock for every read a session in a shared container makes, so such a row could
  * not be listed, named or resolved by the very agent it was made for. ⚠ **THE
  * CASE THAT SURFACED IT WAS THE "Use in this channel" COPY**, which forced
@@ -212,8 +212,8 @@ export async function shareCtxForTemplates(
  * at their keyboard. ⚠ NO PEER EXPOSURE IS OPENED: the peer, and the peer's own
  * agent, carry the PEER's user id, so arm 3 misses and arm 5 (`private` → nobody
  * else, admins included) refuses them — unless the row was deliberately GRANTED
- * to a scope that peer is in, which is arm 4 and is the point of it. Guests never reach a template surface at
- * all — every `agent-templates` route and `POST /api/channels/launch-directives`
+ * to a scope that peer is in, which is arm 4 and is the point of it. Guests never reach an identity surface at
+ * all — every `agent-identities` route and `POST /api/channels/launch-directives`
  * sits at `withWorkspaceAuth`'s `viewer` floor and `guest` ranks below it.
  */
 /**
@@ -224,28 +224,28 @@ export async function shareCtxForTemplates(
  * `shared/tenancy/grant-read-arm.test.ts`, which drives every (credential ×
  * visibility × author) combination through both and fails if a row this says NO
  * about would have had its answer moved by a grant. It buys the case that
- * matters: a workspace whose templates are all `workspace`-visible, or all the
+ * matters: a workspace whose identities are all `workspace`-visible, or all the
  * caller's own, asks the grant table nothing.
  */
 export function needsGrantArm(
-  ctx: AgentTemplateContext,
-  template: AgentTemplate
+  ctx: AgentIdentityContext,
+  identity: AgentIdentity
 ): boolean {
   return (
-    template.visibility !== "workspace" &&
+    identity.visibility !== "workspace" &&
     !isSharedCredential(ctx) &&
-    template.createdBy !== ctx.userId
+    identity.createdBy !== ctx.userId
   );
 }
 
-export function canSeeTemplate(
-  ctx: AgentTemplateContext,
-  template: AgentTemplate,
-  share: TemplateShareCtx
+export function canSeeIdentity(
+  ctx: AgentIdentityContext,
+  identity: AgentIdentity,
+  share: IdentityShareCtx
 ): boolean {
-  if (template.visibility === "workspace") return true;
+  if (identity.visibility === "workspace") return true;
   if (isSharedCredential(ctx)) return false;
-  if (template.createdBy !== null && template.createdBy === ctx.userId) {
+  if (identity.createdBy !== null && identity.createdBy === ctx.userId) {
     return true;
   }
   // 🔒 ARM 4 IS THE GRANT (F-604, 2026-09-02), AND IT PRECEDES THE `private`
@@ -255,30 +255,30 @@ export function canSeeTemplate(
   // BELOW the shared-credential refusal for the reason `canSeeBase`'s twin
   // states: a credential standing for nobody has no membership of the granted
   // scope to read the grant through.
-  if (share.grantedIds.has(template.id)) return true;
-  if (template.visibility === "private") return false;
+  if (share.grantedIds.has(identity.id)) return true;
+  if (identity.visibility === "private") return false;
   if (isWorkspaceAdmin(ctx)) return true;
-  const linked = share.byTemplate.get(template.id) ?? [];
+  const linked = share.byIdentity.get(identity.id) ?? [];
   return linked.some((teamId) => share.myTeamIds.has(teamId));
 }
 
 /**
  * ⚠ THE SHARING SET IS FOR OWNERS AND ADMINS ONLY. A teammate who can SEE a
- * team-scoped template has no business learning which OTHER teams it is shared
- * with — that is workspace org-chart information leaking through a template.
+ * team-scoped identity has no business learning which OTHER teams it is shared
+ * with — that is workspace org-chart information leaking through an identity.
  * Same rule as `skills/server/service-shared.ts › withGrantSet`.
  */
 export function withSharingSet(
-  ctx: AgentTemplateContext,
-  template: AgentTemplate,
-  share: TemplateShareCtx
-): AgentTemplate {
-  if (template.visibility !== "team") return { ...template, teamIds: [] };
+  ctx: AgentIdentityContext,
+  identity: AgentIdentity,
+  share: IdentityShareCtx
+): AgentIdentity {
+  if (identity.visibility !== "team") return { ...identity, teamIds: [] };
   const maySee =
-    (template.createdBy !== null && template.createdBy === ctx.userId) ||
+    (identity.createdBy !== null && identity.createdBy === ctx.userId) ||
     isWorkspaceAdmin(ctx);
-  if (!maySee) return { ...template, teamIds: [] };
-  return { ...template, teamIds: share.byTemplate.get(template.id) ?? [] };
+  if (!maySee) return { ...identity, teamIds: [] };
+  return { ...identity, teamIds: share.byIdentity.get(identity.id) ?? [] };
 }
 
 // ─── Knowledge-base access (the attach gate's predicate) ────────────────
@@ -308,7 +308,7 @@ export function withSharingSet(
  * SOURCE docblock is verified by no gate. Cite carefully; it is a hand-check.
  */
 export function canSeeBaseRow(
-  ctx: AgentTemplateContext,
+  ctx: AgentIdentityContext,
   base: KnowledgeBaseAccessRow,
   grantedTeamsByBase: Map<string, string[]>,
   myTeamIds: Set<string>
@@ -327,13 +327,13 @@ export function canSeeBaseRow(
 
 /**
  * A base that survived the viewer filter, plus the two CARD facts (2026-09-18,
- * A4). ⚠ **A SUPERSET OF {@link TemplateKnowledgeBaseRef}, NOT A REPLACEMENT** —
+ * A4). ⚠ **A SUPERSET OF {@link IdentityKnowledgeBaseRef}, NOT A REPLACEMENT** —
  * that type is the DTO's `knowledgeBases` shape and widening it would push a
  * slug and a description onto every reader of it, including the SDK mirror. The
  * extra keys stay inside the service and reach the wire only where the card
  * puts them (`service-knowledge-scopes.ts`).
  */
-export interface VisibleKnowledgeBase extends TemplateKnowledgeBaseRef {
+export interface VisibleKnowledgeBase extends IdentityKnowledgeBaseRef {
   slug: string;
   description: string | null;
 }
@@ -349,7 +349,7 @@ export interface VisibleKnowledgeBase extends TemplateKnowledgeBaseRef {
  * already reads for the predicate.
  */
 export async function resolveVisibleKnowledgeBases(
-  ctx: AgentTemplateContext,
+  ctx: AgentIdentityContext,
   ids: string[]
 ): Promise<VisibleKnowledgeBase[]> {
   if (ids.length === 0) return [];

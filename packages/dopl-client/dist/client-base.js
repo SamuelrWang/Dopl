@@ -19,7 +19,7 @@
  *     → MemberMethods     client-members.ts
  *     → ChannelMethods    client-channels.ts
  *     → SkillMethods      client-skills.ts
- *     → AgentTemplateMethods client-agent-templates.ts
+ *     → AgentIdentityMethods client-agent-identities.ts
  *     → HomeMethods       client-home.ts
  *     → BillingMethods    client-billing.ts
  *     → DoplClient        client.ts

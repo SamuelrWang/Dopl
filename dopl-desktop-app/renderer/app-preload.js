@@ -306,18 +306,18 @@ contextBridge.exposeInMainWorld('dopl', {
     },
     // LAUNCH (2026-08-20): attach MY OWN agent to a thread, windowless. The payload is display
     // strings + ids; main validates and owns the posture. THE ONE OP HERE THAT FORWARDS ITS PAYLOAD
-    // RAW, and `templateId` (2026-08-22) rides that property rather than adding a coercion: main
+    // RAW, and `identityId` (2026-08-22) rides that property rather than adding a coercion: main
     // re-validates every field anyway, and a preload that half-coerced a UUID would be a second
-    // opinion about what a template id is. An absent / null / '' id is a BLANK agent.
+    // opinion about what an identity id is. An absent / null / '' id is a BLANK agent.
     launch: (payload) => ipcRenderer.invoke('sessions:launch', payload || {}),
 
-    // FIRST-USE APPROVAL FOR ANOTHER MEMBER'S AGENT TEMPLATE (2026-08-22, OQ-3). Records a
-    // MACHINE-LOCAL decision and starts nothing; call it when the operator has read that template's
+    // FIRST-USE APPROVAL FOR ANOTHER MEMBER'S AGENT IDENTITY (2026-08-22, OQ-3). Records a
+    // MACHINE-LOCAL decision and starts nothing; call it when the operator has read that identity's
     // instructions and chosen to run as it, then relaunch. It widens no containment — a launch from
-    // an approved template is contained exactly like any other. NEVER SERVER-REACHABLE, and that is
+    // an approved identity is contained exactly like any other. NEVER SERVER-REACHABLE, and that is
     // the security content: a server-writable approval would let a credential-holding agent
     // pre-approve itself on every machine the operator owns.
-    approveTemplate: (templateId) => ipcRenderer.invoke('sessions:approveTemplate', { templateId: asId(templateId) }),
+    approveIdentity: (identityId) => ipcRenderer.invoke('sessions:approveIdentity', { identityId: asId(identityId) }),
 
     // CALL THIS AFTER A THREAD DELETE SUCCEEDS (2026-08-22). Main cannot see the server's cascade,
     // so without it an ended agent's frozen history outlives its thread by up to seven days and

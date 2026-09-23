@@ -37,7 +37,7 @@ function fakeIo(answers = {}, opts = {}) {
 const ownSession = (agentId, over = {}) => ({
   agentId,
   displayName: over.displayName ?? null,
-  context: { template: over.role ? { name: over.role } : null },
+  context: { identity: over.role ? { name: over.role } : null },
 });
 
 const fakeRegistry = (sessions) => ({ liveInChannel: () => sessions });

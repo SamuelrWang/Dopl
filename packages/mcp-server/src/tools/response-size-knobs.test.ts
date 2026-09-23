@@ -148,7 +148,7 @@ describe("dopl_ontology — `response_format`", () => {
 
 /* ────────────────────────────── dopl_agent ────────────────────────────── */
 
-const TEMPLATE = {
+const IDENTITY = {
   id: "t-1",
   name: "Researcher",
   description: "",
@@ -162,8 +162,8 @@ const TEMPLATE = {
 
 const agentClient = () =>
   stub({
-    listAgentTemplates: vi.fn(async () => [TEMPLATE]),
-    getAgentTemplate: vi.fn(async () => TEMPLATE),
+    listAgentIdentities: vi.fn(async () => [IDENTITY]),
+    getAgentIdentity: vi.fn(async () => IDENTITY),
   }) as DoplClient;
 
 describe("dopl_agent(op=get) — `max_chars`", () => {

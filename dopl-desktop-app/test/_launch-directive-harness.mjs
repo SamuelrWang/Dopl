@@ -2,7 +2,7 @@
 // leaves, plus the row fixture and the ids every case spells.
 //
 // WHY IT IS ITS OWN FILE. `launch-directives.test.mjs` crossed the 500-line cap when the
-// agent-templates lane landed a resolve, a failure table, a deletion signal and a model chain on
+// agent-identities lane landed a resolve, a failure table, a deletion signal and a model chain on
 // top of it (2026-08-23). The alternative — a second copy of the boot machinery in the new file —
 // is how two suites drift into testing two different programs. Same seam and same precedent as
 // `_ipc-harness.mjs` / `_classify-harness.mjs`: THE MACHINERY IS SHARED, THE CASES ARE SPLIT BY
@@ -10,7 +10,7 @@
 //
 //   launch-directives.test.mjs           the WATCHER — toggle, owner check, claim, containment,
 //                                        goal, model, decision, backstop.
-//   launch-directive-template.test.mjs   the TEMPLATE lane — resolve at claim time, the failure
+//   launch-directive-identity.test.mjs   the IDENTITY lane — resolve at claim time, the failure
 //                                        table, E-4, the model chain's new link.
 //   launch-directive-wire.test.mjs       the CONTRACT — shapes and routes that cross to the
 //                                        server, each pinned against that lane's own source.
@@ -243,20 +243,20 @@ export function boot(over = {}) {
       };
     }
     if (id === "./session-model") return require_(join(MAIN, "session-model.js"));
-    // ⚠ THE TEMPLATE RESOLVE IS STUBBED AT ITS SEAM, not faked at the transport. The real module
-    // is `main/template-resolve.js` and it rides `api.js`, which reaches Electron — so what is
-    // controlled here is exactly its documented ANSWER SET (`{ok:true, template}` /
-    // `{ok:false, reason:'no-template'|'busy'}`), driven for real in `session-launch-template.
+    // ⚠ THE IDENTITY RESOLVE IS STUBBED AT ITS SEAM, not faked at the transport. The real module
+    // is `main/identity-resolve.js` and it rides `api.js`, which reaches Electron — so what is
+    // controlled here is exactly its documented ANSWER SET (`{ok:true, identity}` /
+    // `{ok:false, reason:'no-identity'|'busy'}`), driven for real in `session-launch-identity.
     // test.mjs`. What THIS file asks is what the WATCHER does with each answer.
-    if (id === "./template-resolve") {
+    if (id === "./identity-resolve") {
       return {
-        resolveTemplate: async (templateId, workspaceId) => {
-          resolves.push({ templateId, workspaceId });
-          return cfg.resolve || { ok: true, template: { name: "Code Auditor", model: null } };
+        resolveAgentIdentity: async (identityId, workspaceId) => {
+          resolves.push({ identityId, workspaceId });
+          return cfg.resolve || { ok: true, identity: { name: "Code Auditor", model: null } };
         },
       };
     }
-    // ⚠ THE **REAL** `templateModel`, evaluated out of its own source. It cannot be `require`d
+    // ⚠ THE **REAL** `identityModel`, evaluated out of its own source. It cannot be `require`d
     // under `node --test` (`session-launch-op.js` pulls `./diag`, which pulls Electron), and a
     // hand-written copy here would make the two lanes' model chains agree only in this file —
     // which is the drift the shared helper exists to prevent.
@@ -338,8 +338,8 @@ export function boot(over = {}) {
 
 /**
  * `session-launch-op.js`, evaluated once out of its own source with Electron's two dependencies
- * stubbed. ⚠ ONLY `templateModel` IS USED FROM IT, and it is used rather than copied because it
- * is the ONE statement of "a template's model becomes an alias, or '' so the chain continues" —
+ * stubbed. ⚠ ONLY `identityModel` IS USED FROM IT, and it is used rather than copied because it
+ * is the ONE statement of "an identity's model becomes an alias, or '' so the chain continues" —
  * the button lane reads it too, and a second copy here would let the two lanes disagree while
  * both suites stayed green.
  */

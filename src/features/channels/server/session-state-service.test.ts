@@ -58,7 +58,7 @@ function row(over: Partial<SessionStateRow> = {}): SessionStateRow {
     tokens_spent: null,
     started_at: null,
     last_activity_at: null,
-    template_name: null,
+    identity_name: null,
     // ── HEALTH (2026-09-01, 20260909120000) ─────────────────────────────
     // ⚠ `null` IS THE FIXTURE DEFAULT, and that is the honest one: a desktop
     // older than these columns reports none, so the row a test builds by default
@@ -111,7 +111,7 @@ describe("listSessionStates", () => {
         tokensSpent: null,
         startedAt: null,
         lastActivityAt: null,
-        templateName: null,
+        identityName: null,
         displayName: null,
         // ── THE HEALTH SEVEN (2026-09-01, 20260909120000) ─────────────────
         // ⚠ `null` ACROSS THE BOARD IS THE ASSERTION, not filler: the fixture
@@ -142,7 +142,7 @@ describe("listSessionStates", () => {
         tokensSpent: null,
         startedAt: null,
         lastActivityAt: null,
-        templateName: null,
+        identityName: null,
         displayName: null,
         // ── THE HEALTH SEVEN (2026-09-01, 20260909120000) ─────────────────
         // ⚠ `null` ACROSS THE BOARD IS THE ASSERTION, not filler: the fixture
@@ -173,7 +173,7 @@ describe("listSessionStates", () => {
         tokensSpent: null,
         startedAt: null,
         lastActivityAt: null,
-        templateName: null,
+        identityName: null,
         displayName: null,
         // ── THE HEALTH SEVEN (2026-09-01, 20260909120000) ─────────────────
         // ⚠ `null` ACROSS THE BOARD IS THE ASSERTION, not filler: the fixture
@@ -323,7 +323,7 @@ describe("reportSessionStates", () => {
         tokens_spent: null,
         started_at: null,
         last_activity_at: null,
-        template_name: null,
+        identity_name: null,
         // ── HEALTH (2026-09-01, 20260909120000) ─────────────────────────
         // ⚠ ABSENT ON THE WIRE BECOMES `null`, NEVER `0` AND NEVER `false`. An
         // older desktop omits all seven keys, and a `?? 0` on `denied_calls`
@@ -372,9 +372,9 @@ describe("reportSessionStates", () => {
       last_activity_at: null,
       // ⚠ 2026-08-23 — the NINTH absent key, and the one that will arrive from a
       // NEWER desktop rather than be missing from an older one. Absent and
-      // explicit-null are the same statement here ("no template"), which is why
+      // explicit-null are the same statement here ("no identity"), which is why
       // the service is allowed to collapse them with `?? null`.
-      template_name: null,
+      identity_name: null,
       // ── HEALTH (2026-09-01, 20260909120000) — the same rule, seven more
       // keys, and it bites harder because six of them are COUNTS.
       turns: null,
@@ -391,23 +391,23 @@ describe("reportSessionStates", () => {
 
   /**
    * ⚠ THE SERVER STORES WHAT THE DESKTOP REPORTED AND RESOLVES NOTHING. `main`
-   * captured the template at spawn and reports its NAME; this service does not
-   * look a template up, does not check that one still exists under that name,
+   * captured the identity at spawn and reports its NAME; this service does not
+   * look an identity up, does not check that one still exists under that name,
    * and must not — a session reports what it RAN AS, which is the whole reason
    * the column is a denormalized TEXT snapshot rather than an FK
    * (`20260823130000_channel_sessions_template_name.sql`).
    */
-  it("carries a reported template name straight to its column, unresolved", async () => {
+  it("carries a reported identity name straight to its column, unresolved", async () => {
     vi.mocked(sessionRepo.replaceSessionStates).mockResolvedValue({
       stored: 1,
       changed: 1,
       removed: 0,
     });
     await reportSessionStates(ctx, [
-      { ...entry, templateName: "Code Auditor" },
+      { ...entry, identityName: "Code Auditor" },
     ]);
     const rows = vi.mocked(sessionRepo.replaceSessionStates).mock.calls[0][2];
-    expect(rows[0].template_name).toBe("Code Auditor");
+    expect(rows[0].identity_name).toBe("Code Auditor");
   });
 
   /**

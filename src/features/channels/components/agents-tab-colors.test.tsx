@@ -23,9 +23,9 @@ import type { DesktopSessionSummary } from "@/shared/lib/spa-bridge";
 
 /** ⚠ THE PICKER'S READ IS MOCKED because the tab MOUNTS it (the split button's chevron); this stub
  *  only keeps the tab renderable, exactly as `agents-tab.test.tsx` does. */
-vi.mock("@/features/agent-templates/hooks/use-agent-templates", () => ({
-  useAgentTemplates: () => ({
-    templates: [],
+vi.mock("@/features/agent-identities/hooks/use-agent-identities", () => ({
+  useAgentIdentities: () => ({
+    identities: [],
     loading: false,
     error: null,
     refetch: () => {},

@@ -33,7 +33,7 @@ import { findPersonalContainerId } from "./personal-container";
  *     default. This is the reversed clause.
  *
  * ⚠ **AN OPEN ANSWER AUTHORISES NOTHING FURTHER.** Every row it exposes still
- * goes through `canSeeBase` / `canSeeTemplate` in its own container, exactly as
+ * goes through `canSeeBase` / `canSeeIdentity` in its own container, exactly as
  * `personal-container.ts` insists. Two fences, in that order.
  *
  * ⚠ **IT IS NOT A RE-GROWN DEFAULT-WORKSPACE FALLBACK** (invariant 1 of #1077,
@@ -79,7 +79,7 @@ export type PersonalReach =
 /**
  * Who is asking, and from where. ⚠ **STRUCTURAL ON PURPOSE, LIKE
  * {@link CredentialAxes} AND `ResourceCaller`** — `KnowledgeContext`,
- * `AgentTemplateContext` and the chats/skills contexts already carry every field
+ * `AgentIdentityContext` and the chats/skills contexts already carry every field
  * under these names, so a surface adopts the fence by passing the context it
  * already has rather than by growing a second one.
  */

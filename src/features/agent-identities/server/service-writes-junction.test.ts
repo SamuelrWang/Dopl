@@ -1,6 +1,6 @@
 /**
  * ⚠ **THE KB-ATTACH 500 (F-404).** `dopl_agent(op="update", knowledge_bases=[…])`
- * names no scalar column, so the patch handed to `updateTemplateRow` was six
+ * names no scalar column, so the patch handed to `updateIdentityRow` was six
  * `undefined`s — an empty UPDATE body PostgREST rejects, thrown raw, unmapped by
  * `http-mapping.ts`, surfacing as INTERNAL_ERROR 500 on a valid request. The
  * junction write, which was the entire point of the call, never ran.
@@ -27,16 +27,16 @@ vi.mock("@/features/workspaces/server/repository", () => ({
   findWorkspaceById: vi.fn().mockResolvedValue({ id: "ws-1", kind: "standard" }),
 }));
 vi.mock("./repository", () => ({
-  listTemplatesForWorkspace: vi.fn(),
-  findTemplateById: vi.fn(),
-  insertTemplate: vi.fn(),
-  updateTemplateRow: vi.fn(),
-  hardDeleteTemplate: vi.fn(),
-  listTeamLinksForTemplates: vi.fn(),
+  listIdentitiesForWorkspace: vi.fn(),
+  findIdentityById: vi.fn(),
+  insertIdentity: vi.fn(),
+  updateIdentityRow: vi.fn(),
+  hardDeleteIdentity: vi.fn(),
+  listTeamLinksForIdentities: vi.fn(),
   replaceTeamLinks: vi.fn(),
   listTeamIdsForUser: vi.fn(),
   filterTeamIdsInWorkspace: vi.fn(),
-  listKnowledgeLinksForTemplates: vi.fn(),
+  listKnowledgeLinksForIdentities: vi.fn(),
   replaceKnowledgeLinks: vi.fn(),
   listKnowledgeBaseAccessRows: vi.fn(),
   listKnowledgeBaseTeamGrants: vi.fn(),
@@ -45,7 +45,7 @@ vi.mock("./repository", () => ({
 }));
 
 import * as repo from "./repository";
-import { updateTemplate } from "./service";
+import { updateIdentity } from "./service";
 import {
   KB_OPEN,
   OTHER,
@@ -53,7 +53,7 @@ import {
   TEAM_A,
   ctx,
   resetRepoMocks,
-  template,
+  identity,
 } from "./service-writes-fixtures";
 
 const mockRepo = vi.mocked(repo);
@@ -71,10 +71,10 @@ describe("a junction-only patch never reaches the row write", () => {
     mockRepo.listKnowledgeBaseTeamGrants.mockResolvedValue([] as never);
 
     await expect(
-      updateTemplate(ctx(), "tpl-1", { knowledgeBaseIds: [KB_OPEN] })
+      updateIdentity(ctx(), "tpl-1", { knowledgeBaseIds: [KB_OPEN] })
     ).resolves.toBeTruthy();
 
-    expect(mockRepo.updateTemplateRow).not.toHaveBeenCalled();
+    expect(mockRepo.updateIdentityRow).not.toHaveBeenCalled();
     // ⚠ THE REPOSITORY TAKES SCOPES SINCE 2026-09-08. The older
     // `knowledgeBaseIds` key still means WHOLE BASES and is translated at one
     // seam (`service-writes.ts › requestedKnowledgeScopes`), so a client that
@@ -90,13 +90,13 @@ describe("a junction-only patch never reaches the row write", () => {
   it("a teamIds-only patch is the same shape and is skipped the same way", async () => {
     mockRepo.listTeamIdsForUser.mockResolvedValue([TEAM_A]);
     mockRepo.filterTeamIdsInWorkspace.mockResolvedValue([TEAM_A]);
-    mockRepo.findTemplateById.mockResolvedValue(
-      template({ visibility: "team", teamIds: [TEAM_A] })
+    mockRepo.findIdentityById.mockResolvedValue(
+      identity({ visibility: "team", teamIds: [TEAM_A] })
     );
 
-    await updateTemplate(ctx(), "tpl-1", { teamIds: [TEAM_A] });
+    await updateIdentity(ctx(), "tpl-1", { teamIds: [TEAM_A] });
 
-    expect(mockRepo.updateTemplateRow).not.toHaveBeenCalled();
+    expect(mockRepo.updateIdentityRow).not.toHaveBeenCalled();
     expect(mockRepo.replaceTeamLinks).toHaveBeenCalled();
   });
 
@@ -106,12 +106,12 @@ describe("a junction-only patch never reaches the row write", () => {
     ] as never);
     mockRepo.listKnowledgeBaseTeamGrants.mockResolvedValue([] as never);
 
-    await updateTemplate(ctx(), "tpl-1", {
+    await updateIdentity(ctx(), "tpl-1", {
       name: "Renamed",
       knowledgeBaseIds: [KB_OPEN],
     });
 
-    expect(mockRepo.updateTemplateRow).toHaveBeenCalledWith(
+    expect(mockRepo.updateIdentityRow).toHaveBeenCalledWith(
       "ws-1",
       "tpl-1",
       expect.objectContaining({ name: "Renamed" })
@@ -119,9 +119,9 @@ describe("a junction-only patch never reaches the row write", () => {
   });
 
   it("clearing a nullable column is a SCALAR change, not an empty patch", async () => {
-    await updateTemplate(ctx(), "tpl-1", { description: null });
+    await updateIdentity(ctx(), "tpl-1", { description: null });
 
-    expect(mockRepo.updateTemplateRow).toHaveBeenCalledWith(
+    expect(mockRepo.updateIdentityRow).toHaveBeenCalledWith(
       "ws-1",
       "tpl-1",
       expect.objectContaining({ description: null })

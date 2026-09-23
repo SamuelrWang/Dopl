@@ -3,7 +3,7 @@
 //
 // ── THE INVARIANT THE TICKET RAN INTO ───────────────────────────────────────────────────
 // `launch-directives.js`'s header states, in capitals: *"THE DIRECTIVE SUPPLIES GOAL, MODEL AND
-// WHICH TEMPLATE, AND NOTHING ELSE… A directive-driven agent is exactly as contained as a
+// WHICH IDENTITY, AND NOTHING ELSE… A directive-driven agent is exactly as contained as a
 // button-driven one, and nothing an orchestrator writes can widen it."* T24 asked for `tools`,
 // `messages` and `chain` to become directive fields, "never wider than the channel's stored
 // posture UNLESS the caller is the operator's own account".

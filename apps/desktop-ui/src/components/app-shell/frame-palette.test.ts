@@ -474,7 +474,7 @@ describe("the float geometry is shared, not copied", () => {
       "apps/desktop-ui/src/pages/settings/index.tsx",
       "src/features/channels/components/channels-core.tsx",
       "src/features/members/components/members-v2/members-v2-view.tsx",
-      "src/features/agent-templates/components/agent-templates-core.tsx",
+      "src/features/agent-identities/components/agent-identities-core.tsx",
     ]) {
       expect(code(read(page)), `${page} stopped floating on the frame`).toContain(
         "page-float"

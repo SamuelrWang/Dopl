@@ -34,7 +34,7 @@ const MESSAGE: SearchItem = {
   id: "msg-1",
   kind: "messages",
   title: "Priya Shah",
-  snippet: "pushed the <mark>orchestrator</mark> <b>template</b>",
+  snippet: "pushed the <mark>orchestrator</mark> <b>identity</b>",
   containerId: "ws-1",
   channelId: "ch-1",
   seq: 4821,
@@ -189,7 +189,7 @@ describe("the sections", () => {
     expect(mark.tagName).toBe("MARK");
     // The `<b>` arrived on the wire and must be text, not markup.
     expect(document.querySelector("[role='listbox'] b")).toBeNull();
-    expect(screen.getByText(/<b>template<\/b>/)).not.toBeNull();
+    expect(screen.getByText(/<b>identity<\/b>/)).not.toBeNull();
   });
 
   it("says `No results` in ONE line, and only once the answer is in", async () => {
@@ -351,18 +351,18 @@ describe("the fixture table, which the hosts no longer mount", () => {
     type("orchestrator");
     await card();
 
-    // A real match, its section, and the agent-template row's own colour value.
+    // A real match, its section, and the agent-identity row's own colour value.
     expect(await screen.findByText("Desktop Orchestrator Protocol")).not.toBeNull();
     expect(screen.getByText("Knowledge")).not.toBeNull();
     expect(screen.getByText("Orchestrator")).not.toBeNull();
 
     // Payload order, not a sort: the renderer walks the groups as given
     // (`contracts.ts › SEARCH_GROUP_ORDER`), so an out-of-order table shows here.
-    const labels = screen.getAllByText(/^(Messages|Knowledge|Agent templates)$/);
+    const labels = screen.getAllByText(/^(Messages|Knowledge|Agent identities)$/);
     expect(labels.map((el) => el.textContent)).toEqual([
       "Messages",
       "Knowledge",
-      "Agent templates",
+      "Agent identities",
     ]);
   });
 

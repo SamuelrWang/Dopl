@@ -110,21 +110,21 @@ export type SessionStateRow = {
   last_wake_seq: number | string | null;
   last_wake_at: string | null;
   /** ⚠ NOT TELEMETRY, AND OPERATOR-ONLY FOR ITS OWN REASONS (20260823130000,
-   *  Samuel's OQ-5 ruling). The name of the agent template this session was
+   *  Samuel's OQ-5 ruling). The name of the agent identity this session was
    *  launched from, SNAPSHOTTED AT SPAWN — deliberately not an FK, so a session
-   *  goes on reporting what it RAN AS after the template is renamed or deleted.
+   *  goes on reporting what it RAN AS after the identity is renamed or deleted.
    *  It sits in this block because the AUDIENCE is the same one, which is the
    *  only thing {@link OPERATOR_ONLY_SESSION_COLUMNS} is about: it is
    *  operator-authored free text (the `detail` ruling's own stated condition for
-   *  going private), and a private template's name on a peer's screen is an
+   *  going private), and a private identity's name on a peer's screen is an
    *  existence oracle for a row that has no name uniqueness precisely so that it
-   *  cannot be probed. NULL = no template, or a desktop older than the field. */
-  template_name: string | null;
+   *  cannot be probed. NULL = no identity, or a desktop older than the field. */
+  identity_name: string | null;
   /** THE OPERATOR-GIVEN AGENT NAME — **PEER-VISIBLE BY DESIGN** (2026-08-31,
    *  20260905120000; Samuel's ruling: the other member should see you are
    *  running a "Bug Reviewer"). ⚠ DELIBERATELY NOT in
    *  {@link OPERATOR_ONLY_SESSION_COLUMNS} — visibility is its point, and unlike
-   *  `template_name` it is an instance label with no existence-oracle behind it.
+   *  `identity_name` it is an instance label with no existence-oracle behind it.
    *  NULL = never named (render falls back to the `name` handle), or a desktop
    *  older than the field. */
   display_name: string | null;
@@ -152,7 +152,7 @@ export type SessionStateRow = {
  * added to one and not the other is a fence with a hole and a green suite.
  *
  * ⚠ **"OPERATOR-ONLY" IS AN AUDIENCE, NOT A SUBJECT.** Eight of the fifteen are
- * telemetry (what an agent runs on and what it costs); `template_name` is an
+ * telemetry (what an agent runs on and what it costs); `identity_name` is an
  * IDENTITY snapshot and joined on 2026-08-23; the seven HEALTH entries joined on
  * 2026-09-01 and are about progress rather than cost. Nothing here is about
  * measurement — the one question this array asks is "may a PEER read it", and
@@ -171,7 +171,7 @@ export const OPERATOR_ONLY_SESSION_COLUMNS = [
   "tokens_spent",
   "started_at",
   "last_activity_at",
-  "template_name",
+  "identity_name",
   "turns",
   "tokens_delta",
   "stale",
@@ -189,7 +189,7 @@ export const OPERATOR_ONLY_SESSION_FIELDS = [
   "tokensSpent",
   "startedAt",
   "lastActivityAt",
-  "templateName",
+  "identityName",
   "turns",
   "tokensDelta",
   "stale",
@@ -240,10 +240,10 @@ export type SessionStateUpsert = {
   /** 2026-08-31 (20260905120000): the operator-given agent name; peer-visible. */
   display_name: string | null;
   /** ⚠ A SNAPSHOT THE DESKTOP REPORTS, NOT A LOOKUP THE SERVER PERFORMS. The
-   *  server never resolves a template id here — main holds the resolved template
-   *  on `context.template` from spawn (spec §3d) and reports its NAME, which is
+   *  server never resolves an identity id here — main holds the resolved identity
+   *  on `context.identity` from spawn (spec §3d) and reports its NAME, which is
    *  what keeps the row true after a rename or a delete. */
-  template_name: string | null;
+  identity_name: string | null;
   /** 2026-09-13 (`20261005120000`): the agent's colour in this channel.
    *
    *  ⚠ **THE ONE FIELD ON THIS TYPE THE SERVER MAY OVERRULE.** Everything else here is
@@ -409,11 +409,11 @@ export function mapOwnSessionStateRow(
     startedAt: row.started_at,
     lastActivityAt: row.last_activity_at,
     // ⚠ THE ONLY MAPPER THAT MAY NAME THIS FIELD. A peer seeing it learns that a
-    // template with that name exists on somebody else's account — and
-    // `agent_templates` deliberately has no name uniqueness so that nothing can
+    // identity with that name exists on somebody else's account — and
+    // `agent_identities` deliberately has no name uniqueness so that nothing can
     // be probed that way. Adding it to {@link mapPeerSessionStateRow} would undo
     // both that decision and the 404-not-403 rule in one line.
-    templateName: row.template_name,
+    identityName: row.identity_name,
     // ── THE HEALTH HALF (2026-09-01, 20260909120000) ────────────────────────
     // ⚠ `bigintOrNull` ON ALL FOUR COUNTS, INCLUDING THE TWO INT4s. The two
     // BIGINTs genuinely need it (PostgREST may hand an INT8 back as a string);

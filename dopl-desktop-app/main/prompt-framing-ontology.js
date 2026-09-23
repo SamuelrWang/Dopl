@@ -11,7 +11,7 @@
 //
 // ⚠ ITS OWN MODULE, not `prompt-framing-text.js`, whose contract is that EVERY
 // block is FIXED TEXT with nothing interpolated. These lines carry caller data,
-// so they sit beside a sanitizer — `prompt-framing-template.js › knowledgeLines`'
+// so they sit beside a sanitizer — `prompt-framing-agent-identity.js › knowledgeLines`'
 // seam, copied deliberately.
 //
 // PURE: no electron / fs / path, so the truth tables `require` it directly.
@@ -63,7 +63,7 @@ function ontologyLine(o) {
  *
  * ⚠ `[]` WHEN THERE IS NOTHING TO SAY, and that emptiness is the contract: a
  * lane no ontology reaches must be BYTE-IDENTICAL to the turn before this module
- * existed, so not even a stray blank line (`prompt-framing-template.js` makes the
+ * existed, so not even a stray blank line (`prompt-framing-agent-identity.js` makes the
  * same promise).
  * ⚠ IT EMITS ITS OWN LEADING BLANK LINE when it emits anything, so the splice
  * site is exactly one line of assembly.

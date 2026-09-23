@@ -106,7 +106,7 @@ export declare function agentWriteDenied(e: unknown): ToolResponse | null;
  * mapping, so the refusal reached an agent as an unhandled throw ("the call
  * failed") over a copy that created nothing. The predicate and the code string
  * are shared; only the NOUN and the remedy differ, because a base's remedy is
- * not a template's.
+ * not an identity's.
  */
 export declare function sharedCredentialPrivateBaseDenied(e: unknown): ToolResponse | null;
 /**

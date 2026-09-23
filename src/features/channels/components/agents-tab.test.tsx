@@ -14,14 +14,14 @@ import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
 import type { DesktopSessionSummary } from "@/shared/lib/spa-bridge";
 
 /**
- * ⚠ THE TEMPLATE PICKER'S READ IS MOCKED because the tab MOUNTS the picker since
+ * ⚠ THE IDENTITY PICKER'S READ IS MOCKED because the tab MOUNTS the picker since
  * 2026-08-22 — the split button's chevron. Its own cases live in
  * `./agents-tab-launch.test.tsx` (split at the 500-line cap); this stub only
  * keeps the tab renderable here.
  */
-vi.mock("@/features/agent-templates/hooks/use-agent-templates", () => ({
-  useAgentTemplates: () => ({
-    templates: [],
+vi.mock("@/features/agent-identities/hooks/use-agent-identities", () => ({
+  useAgentIdentities: () => ({
+    identities: [],
     loading: false,
     error: null,
     refetch: () => {},

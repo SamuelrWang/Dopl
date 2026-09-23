@@ -1,9 +1,9 @@
 "use client";
 
 import { useMemo, useRef, type KeyboardEvent } from "react";
-import type { TemplateKnowledgeRef } from "../client/types";
+import type { IdentityKnowledgeRef } from "../client/types";
 import { refKey, scopeChipLabel } from "../lib/knowledge-scopes";
-import { RemovableChip } from "./template-editor-rows";
+import { RemovableChip } from "./identity-editor-rows";
 import { BaseNode, type ScopeToggle } from "./knowledge-scope-tree";
 
 /**
@@ -60,8 +60,8 @@ export function KnowledgeScopePicker({
   /** ⚠ WHAT THE CALLER WAS GIVEN. The page supplies these from its own base
    *  read; this control never fetches a list of its own. */
   bases: ReadonlyArray<KnowledgeBaseOption>;
-  selected: ReadonlyArray<TemplateKnowledgeRef>;
-  onChange: (next: TemplateKnowledgeRef[]) => void;
+  selected: ReadonlyArray<IdentityKnowledgeRef>;
+  onChange: (next: IdentityKnowledgeRef[]) => void;
   /** ⚠ A FACT about the container, not a loading state — the caller passes `[]`
    *  only once its own read has answered. */
   emptyLine: string;
@@ -154,7 +154,7 @@ export function KnowledgeScopePicker({
             zero reads — the same drill-in the popover had.
             ⚠ BOUNDED AND SCROLLABLE, because this list is the one part of the
             form whose height is the workspace's rather than the form's.
-            ⚠ FLAT FILL, NEVER PRESSED IN (`template-editor-surface.test.tsx`). */
+            ⚠ FLAT FILL, NEVER PRESSED IN (`identity-editor-surface.test.tsx`). */
         <div
           ref={treeRef}
           role="tree"

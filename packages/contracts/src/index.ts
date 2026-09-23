@@ -76,5 +76,5 @@ export type {
   MembershipStatus,
   WorkspaceKind,
   ContainerKind,
-  TemplateVisibility,
+  IdentityVisibility,
 } from "./workspaces.js";

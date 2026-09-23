@@ -11,12 +11,12 @@
  *
  * ⚠ **IT IS THE SAME DIALOG AND THE SAME LAUNCH LANE, NOT A THIRD ONE.**
  * `launch-agent-dialog.tsx › LaunchAgentDialog` is mounted here exactly as `agents-tab.tsx` mounts
- * it — same component, same `useAgentLaunch` panel, same `templateId`-not-a-snapshot payload. The
+ * it — same component, same `useAgentLaunch` panel, same `identityId`-not-a-snapshot payload. The
  * wiring is copied from that file deliberately: INVARIANTS §5A's *"there is still exactly ONE launch
  * lane"* is a rule about the LANE, and a second form for one lane is how two vocabularies start.
  *
  * ⚠ **WHAT IT DOES NOT COPY IS THE PROP CHAIN, BECAUSE THIS WINDOW HAS NO PAGE ABOVE IT.** The
- * Agents tab is handed `onLaunchAgent` / `onApproveTemplate` down from the channels page's
+ * Agents tab is handed `onLaunchAgent` / `onApproveIdentity` down from the channels page's
  * `useAgentsPanel`; the pop-out is a different `BrowserWindow` with a different React tree and
  * inherits nothing. So the controls are built HERE over `agents-controls.ts` — the same module
  * `useAgentsPanel` itself calls — rather than by mounting that hook, which would also drag a peer
@@ -34,15 +34,15 @@ import { LaunchAgentDialog } from "./launch-agent-dialog";
 import type { AgentLaunchPanel } from "./use-agent-launch";
 import type { AgentLaunchControls } from "./use-agents-panel";
 import {
-  approveTemplate,
+  approveIdentity,
   canLaunchAgents,
   launchAgentOnThread,
 } from "./agents-controls";
 
 /**
  * ⚠ **EMPTY, AND THAT IS THE MEASURED ANSWER RATHER THAN A SHORTCUT.** `members` feeds ONE thing:
- * the NAME half of a foreign template's authorship marker (`template-picker.tsx › authorMarker`).
- * With no roster, a template this operator did not create still reads **`by another member`** — the
+ * the NAME half of a foreign identity's authorship marker (`identity-picker.tsx › authorMarker`).
+ * With no roster, an identity this operator did not create still reads **`by another member`** — the
  * marker survives, which is the direction INVARIANTS §5A requires (dropping it would turn UNKNOWN
  * into MINE); only the name is lost. The alternative is mounting `useChannelMembers` here, which
  * adds a roster request AND a 60s presence backstop poll to a window that deliberately has neither
@@ -129,7 +129,7 @@ export function AgentWindowLaunch({
       // wider function type, so the operator's colour pick reached here and was DROPPED with no
       // error anywhere: the one row the popup asks this window about was the one row it threw
       // away. The same failure shape `agents-tab.tsx` records beside its own spelled-out six.
-      launchAgent: async (threadId, templateId, overrides, agentId, runtime, color) =>
+      launchAgent: async (threadId, identityId, overrides, agentId, runtime, color) =>
         launchAgentOnThread({
           channelId,
           // ⚠ THE DIALOG'S OWN ARGUMENT, PASSED THROUGH — never re-derived from `taskId` here. The
@@ -141,7 +141,7 @@ export function AgentWindowLaunch({
           threadTitle: agent?.threadTitle ?? null,
           counterpartyId: null,
           direct: false,
-          templateId,
+          identityId,
           overrides,
           agentId,
           runtime,
@@ -150,7 +150,7 @@ export function AgentWindowLaunch({
           // payload's absence IS the spelling of "pick for me".
           color,
         }),
-      approveTemplate,
+      approveIdentity,
     };
   }, [channelId, workspaceId, agent?.channelName, agent?.threadTitle]);
 

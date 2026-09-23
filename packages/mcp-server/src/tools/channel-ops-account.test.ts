@@ -83,7 +83,7 @@ function stubClient(): DoplClient {
               tokensSpent: null,
               startedAt: null,
               lastActivityAt: null,
-              templateName: null,
+              identityName: null,
             },
           ],
           waiting: [],

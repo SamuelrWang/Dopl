@@ -85,15 +85,23 @@ const WORKSPACE_PAGES = {
   skills: true,
   chats: false,
   channels: true,
-  // ⚠ `false` — AGENT TEMPLATES HAVE NO DETAIL ROUTE (2026-08-22). A template is
+  // ⚠ `false` — AGENT IDENTITIES HAVE NO DETAIL ROUTE (2026-08-22). An identity is
   // edited in a modal, not at a URL, so `routes.tsx` carries a paramless
-  // `agents` row and nothing else; a `true` here would hand the renderer a third
+  // `identities` row and nothing else; a `true` here would hand the renderer a third
   // segment that matches no route. The drift test derives this value from the
   // route table, so flipping it is a two-file change or it goes red.
-  agents: false,
+  // ⚠ WAS `agents` UNTIL 2026-09-22 (Samuel: the page is "Identities") — see `RENAMED_PAGES`.
+  identities: false,
   members: false,
   settings: false,
 };
+
+/**
+ * A page segment that was RENAMED, old → new. A bookmark or `dopl://` link naming the old
+ * segment opens the new page rather than the workspace home. Mirrors the SPA's own redirect
+ * rows (`routes.tsx › RENAMED_PAGES`), which catch an old path typed inside the app.
+ */
+const RENAMED_PAGES = { agents: 'identities' };
 
 /** SPA routes that live OUTSIDE `/:workspaceSegment` (routes.tsx). */
 // `home` = the account surface (apps/desktop-ui/src/pages/home, 2026-08-21).
@@ -242,7 +250,8 @@ function webPathToRoute(target) {
   if (segs === null) return null;
   if (segs.length === 0) return HOME_ROUTE;
 
-  const [first, page, detail] = segs;
+  const [first, rawPage, detail] = segs;
+  const page = Object.prototype.hasOwnProperty.call(RENAMED_PAGES, rawPage) ? RENAMED_PAGES[rawPage] : rawPage;
   if (ROOT_ROUTES.has(first)) return `/${first}`;
   if (WEB_ONLY_ROOTS.has(first)) return HOME_ROUTE;
 
@@ -320,6 +329,7 @@ module.exports = {
   HOME_ROUTE,
   WORKSPACE_HOME_PAGE,
   WORKSPACE_PAGES,
+  RENAMED_PAGES,
   ROOT_ROUTES,
   WEB_ONLY_ROOTS,
   MAX_TARGET_CHARS,

@@ -2,7 +2,7 @@
 //
 // ⚠ A DURABLE PER-CHANNEL PICK, AND IT IS THE `model`'S SHAPE, NOT THE POSTURE'S (2026-08-31,
 // runtime-adapter port wave D). Its own file for the same reason `orchestrator-consent.js` and
-// `template-approval.js` have theirs: `channel-prefs.js` changes when a channel PREFERENCE moves,
+// `identity-approval.js` have theirs: `channel-prefs.js` changes when a channel PREFERENCE moves,
 // and this changes when the set of registered adapters does — a different clock, and the only
 // module in this family that has to ask `main/runtime/index.js` anything.
 //

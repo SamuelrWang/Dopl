@@ -1,4 +1,4 @@
-import { TEMPLATE_NAME_TEXT } from "@/features/agent-templates/components/template-section";
+import { IDENTITY_NAME_TEXT } from "@/features/agent-identities/components/identity-section";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { SelectMenu, type SelectMenuOption } from "@/shared/ui/select-menu";
 import { NAKED_ICON_BUTTON } from "@/shared/ui/naked-icon-button";
@@ -93,13 +93,13 @@ export function UsageScopeMenu({
       onChange={onChange}
       variant="text"
       ariaLabel="Usage scope"
-      // ⚠ **THE TEMPLATE CARD'S NAME TYPE — 14px, AND IT DID NOT GO UP WITH THE
+      // ⚠ **THE IDENTITY CARD'S NAME TYPE — 14px, AND IT DID NOT GO UP WITH THE
       // PANEL HEADING** (Samuel, 2026-09-13, rejecting a pass that raised it:
       // *"You changed the font size of the credit spend, all channels, and the
       // date to the super large size, like usage. I did not ask for that."*).
-      // `TEMPLATE_NAME_TEXT_LG` is the **Usage** heading's alone; the controls
+      // `IDENTITY_NAME_TEXT_LG` is the **Usage** heading's alone; the controls
       // inside the block stay one step below it.
-      className={TEMPLATE_NAME_TEXT}
+      className={IDENTITY_NAME_TEXT}
     />
   );
 }
@@ -159,7 +159,7 @@ export function monthLabel(key: string): string {
  * THE ARROW GLYPH, AND THE ONE PLACE IT IS ALLOWED TO LEAVE `NAKED_ICON`.
  *
  * 🔒 **SAMUEL, 2026-09-13: *"Increase the size of the arrows to match."*** They
- * match the LABEL BESIDE THEM, and that label is `TEMPLATE_NAME_TEXT`'s 14px —
+ * match the LABEL BESIDE THEM, and that label is `IDENTITY_NAME_TEXT`'s 14px —
  * raised from `text-caption` (11.5px) in the same wave, which is what moved these
  * off the shared 14: a chevron the same size as its word reads as a glyph
  * standing in the text rather than a control beside it.
@@ -207,7 +207,7 @@ export function MonthStepper({
           want to change the date selector to match the credit spend and all
           channels' sizes"*). It was `text-caption`: the ask was to bring it up to
           the controls beside it, never up to **Usage**. */}
-      <span className={cn("min-w-0 truncate", TEMPLATE_NAME_TEXT)}>
+      <span className={cn("min-w-0 truncate", IDENTITY_NAME_TEXT)}>
         {monthLabel(month)}
       </span>
       <button

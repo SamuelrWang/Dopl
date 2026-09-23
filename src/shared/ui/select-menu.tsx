@@ -43,7 +43,7 @@ const TRIGGER_FACE = {
   ),
   raised: "auth-btn-3d-light h-9 px-3 text-body font-medium text-text-primary",
   /**
-   * `raised` AT FIELD-ROW HEIGHT (Samuel, 2026-08-27) — the composer panels' Template and Model
+   * `raised` AT FIELD-ROW HEIGHT (Samuel, 2026-08-27) — the composer panels' Identity and Model
    * rows.
    *
    * ⚠ A SIZE OF THE SAME FACE, NOT A FORK. It is `auth-btn-3d-light` exactly as `raised` is, so

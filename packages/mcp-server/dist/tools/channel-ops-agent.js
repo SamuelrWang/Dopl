@@ -106,7 +106,7 @@ const RETRY_ADVICE = {
     "auth-hold": "no",
     "no-bridge": "no",
     "no-counterparty": "no",
-    "no-template": "no",
+    "no-identity": "no",
     "no-session": "no",
     "bad-name": "no",
     // ⚠ NO PRODUCER ON AN END OR A RENAME — `no-chain` belongs to a launch that

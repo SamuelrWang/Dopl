@@ -35,7 +35,7 @@ const UPSERT_KEYS: Record<keyof SessionStateUpsert, true> = {
   tokens_spent: true,
   started_at: true,
   last_activity_at: true,
-  template_name: true,
+  identity_name: true,
   display_name: true,
   color: true,
   // ⚠ THE HEALTH SEVEN (2026-09-01). This declaration is the reason adding them
@@ -70,7 +70,7 @@ const upsertKeys = () => Object.keys(UPSERT_KEYS);
  *     the row's first write, while the row keeps claiming to be current.
  *
  * ⚠ **THE REPOSITORY'S OWN DOCBLOCK CLAIMED THIS TEST EXISTED AND IT DID NOT**
- * (found 2026-08-23, while adding `template_name` — the eighth operator-only
+ * (found 2026-08-23, while adding `identity_name` — the eighth operator-only
  * column and the third column added since the claim was written). The doc was
  * describing the guarantee it wanted rather than one anybody had built. Written
  * now, so the sentence is true.
@@ -157,8 +157,8 @@ describe("the reconcile's three column lists cannot drift", () => {
     // test saying the same thing as the three above.
     expect(selectedColumns().length).toBeGreaterThanOrEqual(22);
     expect(comparedColumns().length).toBeGreaterThanOrEqual(21);
-    expect(selectedColumns()).toContain("template_name");
-    expect(comparedColumns()).toContain("template_name");
+    expect(selectedColumns()).toContain("identity_name");
+    expect(comparedColumns()).toContain("identity_name");
     // ⚠ One HEALTH column named explicitly, and it is `last_wake_at` rather than
     // any of the seven at random: it is the one an orchestrator POLLS for a
     // change, so it is the one whose silent freeze would be read as "my redirect

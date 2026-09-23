@@ -60,7 +60,7 @@ export const SkillCreateSchema = z.object({
    * skill landing at `visibility: 'public'`. Everywhere else it is IGNORED,
    * never refused. `features/workspaces/server/shared-publish.ts` is the one
    * statement of both the predicate and the 400, shared with knowledge bases
-   * and agent templates so the three lanes cannot answer differently.
+   * and agent identities so the three lanes cannot answer differently.
    */
   acknowledgeShared: z.boolean().optional(),
 });
@@ -92,7 +92,7 @@ export const SkillUpdateSchema = z
      * skill landing at `visibility: 'public'`. Everywhere else it is IGNORED,
      * never refused. `features/workspaces/server/shared-publish.ts` is the one
      * statement of both the predicate and the 400, shared with knowledge bases
-     * and agent templates so the three lanes cannot answer differently.
+     * and agent identities so the three lanes cannot answer differently.
      */
     acknowledgeShared: z.boolean().optional(),
   })

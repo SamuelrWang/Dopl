@@ -222,7 +222,7 @@ describe(`every write result is one line and fits ${WRITE_RESULT_MAX_CHARS} char
             status: "launched",
             agentId: "x2sz1ztt",
             threadId: THREAD_ID,
-            templateName: "Code Auditor",
+            identityName: "Code Auditor",
             model: "claude-opus-5",
             refusalReason: null,
             expiresAt: "2026-09-02T00:00:00Z",

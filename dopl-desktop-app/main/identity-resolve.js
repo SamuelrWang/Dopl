@@ -1,6 +1,6 @@
-// THE AGENT-TEMPLATE LAUNCH RESOLVE — `GET /api/agent-templates/{id}/resolve`, at spawn.
+// THE AGENT-IDENTITY LAUNCH RESOLVE — `GET /api/agent-identities/{id}/resolve`, at spawn.
 //
-// ── 🔒 WHO FETCHES TEMPLATE CONTENT, AND WHEN: THE DESKTOP, AT SPAWN. ────────────────────────
+// ── 🔒 WHO FETCHES IDENTITY CONTENT, AND WHEN: THE DESKTOP, AT SPAWN. ────────────────────────
 //
 // The renderer passes an ID; `main` resolves it here before `launchRequesterSession`. A
 // renderer-supplied SNAPSHOT is refused, in decreasing weight:
@@ -9,9 +9,9 @@
 //      computed by main from MAIN'S OWN STATE (tool profile, start modes, model, goal). F-267 IS
 //      THE SCAR: main read a PROJECTION instead of its own DTO and every button launch silently
 //      floored to `read_only`. A renderer snapshot is that mistake with PROMPT TEXT.
-//   2. TRUST — main cannot tell a real template from a fabricated one; an ID it resolves, it can.
+//   2. TRUST — main cannot tell a real identity from a fabricated one; an ID it resolves, it can.
 //   3. THE VIEWER FILTER IS THE OPERATOR'S. `knowledgeBases` is filtered against the RESOLVING
-//      caller's KB visibility, so a shared template cannot launder access to a private base. Only
+//      caller's KB visibility, so a shared identity cannot launder access to a private base. Only
 //      this call is STRUCTURALLY the operator's, and the orchestrator lane (§3e) introduces a
 //      shape where the SELECTOR's caller and the OPERATOR are different people.
 //   4. FRESHNESS — an edit landed 200 ms ago is honoured.
@@ -32,15 +32,15 @@ const { diag } = require('./diag');
 // by a BUTTON CLICK: fifteen seconds of a dead-looking New Agent button is worse than a refusal
 // the operator can act on, and the refusal it produces (`busy`) already reads as "try again".
 // The directive lane has no human waiting and can afford the longer budget.
-const TEMPLATE_RESOLVE_TIMEOUT_MS = 5000;
+const IDENTITY_RESOLVE_TIMEOUT_MS = 5000;
 
 // Bounds on what may come back off the wire and into a prompt. The server enforces its own
-// (`agent-templates/schema.ts`) — these are the BOUNDARY's, because a boundary that trusts the
+// (`agent-identities/schema.ts`) — these are the BOUNDARY's, because a boundary that trusts the
 // far side's validation is not one.
 const MAX_INSTRUCTIONS = 32768; // the column's own CHECK
 const MAX_FIELDS = 50; // MAX_FIELD_COUNT
 const MAX_BASES = 50;
-// ⚠ 200, THE SERVER'S OWN `MAX_KNOWLEDGE_SCOPES` (`agent-templates/schema.ts`), and NOT 50. The
+// ⚠ 200, THE SERVER'S OWN `MAX_KNOWLEDGE_SCOPES` (`agent-identities/schema.ts`), and NOT 50. The
 // base cap counts BASES; this counts SCOPES, and one base can contribute many folders. A smaller
 // number here would be this module quietly deciding the operator's role names less knowledge than
 // it names — the F-287 mistake, on a different field.
@@ -66,12 +66,12 @@ const MAX_FOLDER_COUNT = 10000;
 // clipped a legal 300-character field value (schema bound: 1000) with no word to the operator at
 // any surface. Enforcing a SMALLER number than the far side is not extra caution — it is a limit
 // the operator can neither see nor satisfy, and the disagreement always resolves against them.
-const MAX_NAME = 120; // `schema.ts › NameSchema` / `agent_templates_name_charset_check`
-const MAX_FIELD_KEY = 80; // `schema.ts › TemplateFieldSchema.key`
+const MAX_NAME = 120; // `schema.ts › NameSchema` / `agent_identities_name_charset_check`
+const MAX_FIELD_KEY = 80; // `schema.ts › IdentityFieldSchema.key`
 const MAX_FIELD_VALUE = 1000; // …and its `.value`
 const MAX_MODEL = 120; // an id or an alias; `session-model.js` re-coerces it anyway
 const MAX_BASE_LABEL = 200; // a base id or slug and its display name — neither reaches a prompt
-                            // line unsanitized (`prompt-framing-template.js › knowledgeLines`)
+                            // line unsanitized (`prompt-framing-agent-identity.js › knowledgeLines`)
 const MAX_TENANCY_LABEL = 200; // a workspace name (120) or a container id in a fixed phrase — a
                                // DIAGNOSTIC string (T35), and it reaches no prompt at all
 
@@ -81,7 +81,7 @@ const MAX_TENANCY_LABEL = 200; // a workspace name (120) or a container id in a 
 // that is not inside a sliced pure block, and this module is not one.
 const { isUuid } = require('./ipc-guards');
 
-function isTemplateId(value) {
+function isIdentityId(value) {
   return isUuid(value);
 }
 
@@ -212,7 +212,7 @@ function narrow(body) {
         };
       }),
     // ⚠ HOW MANY ATTACHMENTS THIS OPERATOR CANNOT REACH HERE — see `count` above and
-    // `prompt-framing-template.js › knowledgeLines`, its one consumer.
+    // `prompt-framing-agent-identity.js › knowledgeLines`, its one consumer.
     unreachableKnowledgeBaseCount: count(b.unreachableKnowledgeBaseCount),
     // ⚠ G-1, AND IT FAILS FOREIGN. `authoredByCaller` decides which SECURITY HEADER the role
     // block wears, so anything that is not an explicit `true` — an older server that does not
@@ -240,13 +240,13 @@ async function tenancyHint(res) {
 }
 
 /**
- * Resolve a template for a spawn. Never throws.
+ * Resolve an identity for a spawn. Never throws.
  *
  * ANSWERS, and they are the F-1…F-6 table from the spec, verbatim:
- *   { ok: true, template }              a resolvable template, narrowed (F-6: a NAME-ONLY
- *                                       template is legal and launches — the role block emits
+ *   { ok: true, identity }              a resolvable identity, narrowed (F-6: a NAME-ONLY
+ *                                       identity is legal and launches — the role block emits
  *                                       the identity line and nothing else)
- *   { ok: false, reason: 'no-template' } 404. ⚠ DELETED AND INVISIBLE ARE THE SAME ANSWER
+ *   { ok: false, reason: 'no-identity' } 404. ⚠ DELETED AND INVISIBLE ARE THE SAME ANSWER
  *                                       (F-1 / F-2) and the desktop must not try to tell them
  *                                       apart: the endpoint is 404-never-403 precisely so the
  *                                       difference is not observable, and a caller that guessed
@@ -254,7 +254,7 @@ async function tenancyHint(res) {
  *   { ok: false, reason: 'busy' }        timeout, network, or 5xx (F-3 / F-4). An existing word:
  *                                       `use-agents-panel.ts` already renders it as "Busy right
  *                                       now — try again", which is exactly a momentary inability.
- *   { ok: false, reason: 'no-template' } a 2xx whose body is not a usable template. Unreachable
+ *   { ok: false, reason: 'no-identity' } a 2xx whose body is not a usable identity. Unreachable
  *                                       against the real route; the branch exists because the
  *                                       alternative is launching an agent wearing an empty
  *                                       identity, and F-1's whole argument is that a blank agent
@@ -263,27 +263,27 @@ async function tenancyHint(res) {
  * ⚠ THERE IS NO "DEGRADE TO BLANK" ANSWER ON ANY BRANCH. The operator PICKED an identity; a
  * launch that quietly drops it is not noticed for several turns.
  */
-async function resolveTemplate(templateId, workspaceId) {
-  if (!isTemplateId(templateId)) return { ok: false, reason: 'no-template' };
+async function resolveAgentIdentity(identityId, workspaceId) {
+  if (!isIdentityId(identityId)) return { ok: false, reason: 'no-identity' };
   let res;
   try {
-    res = await apiFetch(`/api/agent-templates/${templateId}/resolve`, {
+    res = await apiFetch(`/api/agent-identities/${identityId}/resolve`, {
       method: 'GET',
       workspaceId: typeof workspaceId === 'string' ? workspaceId : undefined,
-      timeoutMs: TEMPLATE_RESOLVE_TIMEOUT_MS,
+      timeoutMs: IDENTITY_RESOLVE_TIMEOUT_MS,
       noStore: true,
     });
   } catch (err) {
     // An abort (the timeout) and a dead socket land here identically, and so they should:
     // both are "this machine could not ask right now".
-    diag('template-resolve: network', String(templateId).slice(0, 8), (err && err.message) || 'error');
+    diag('identity-resolve: network', String(identityId).slice(0, 8), (err && err.message) || 'error');
     return { ok: false, reason: 'busy' };
   }
   if (!res) return { ok: false, reason: 'busy' };
   if (res.status === 404) {
     // ⚠ THREE CAUSES, ONE WORD, AND THE THIRD IS THE COMMON ONE. `workspaceId` scopes this read to
     // the CHANNEL's tenancy — a home channel's own `kind='link'` container — and the route reads
-    // `(workspace_id, id)`, so a template this operator owns in ANOTHER workspace (their personal
+    // `(workspace_id, id)`, so an identity this operator owns in ANOTHER workspace (their personal
     // shelf included) is ABSENT here, not hidden. Deleted / not visible / wrong tenancy stay ONE
     // `reason` on purpose: 404-never-403 is what stops an id being probed, and this machine must
     // not guess between them.
@@ -291,14 +291,14 @@ async function resolveTemplate(templateId, workspaceId) {
     // ⚠ BUT THE SERVER MAY HAND BACK THE THIRD ONE NAMED (T35). `details.elsewhere` is present
     // only when the row is one THIS OPERATOR could already list for themselves — their own, or
     // `workspace`-visible, in a workspace they belong to — living in another tenancy
-    // (`agent-templates/server/service-resolve-ref.ts › classifyMissingTemplateRef` is the fence).
+    // (`agent-identities/server/service-resolve-ref.ts › classifyMissingIdentityRef` is the fence).
     // It is a CLASSIFICATION THE SERVER MADE, never one this machine infers, so carrying it
     // reconstructs no oracle: absent means "nothing non-leaky to say", which is also what an older
     // server sends.
     const elsewhere = await tenancyHint(res);
     diag(
-      'template-resolve: 404',
-      String(templateId).slice(0, 8),
+      'identity-resolve: 404',
+      String(identityId).slice(0, 8),
       elsewhere ? `— lives in ${elsewhere.label}, not this channel's container` : '— deleted, not visible to this operator, or in another container'
     );
     // ⚠ THE WORD DOES NOT MOVE, AND THAT IS THE WIRE'S LIMIT RATHER THAN A CHOICE: a decide carries
@@ -306,35 +306,35 @@ async function resolveTemplate(templateId, workspaceId) {
     // orchestrator from here. What reaches it is `channel-ops-launch.ts › REFUSAL_SENTENCES` —
     // which states the same TENANCY RULE, in the same shape, for exactly this reason.
     return elsewhere
-      ? { ok: false, reason: 'no-template', elsewhere }
-      : { ok: false, reason: 'no-template' };
+      ? { ok: false, reason: 'no-identity', elsewhere }
+      : { ok: false, reason: 'no-identity' };
   }
   if (!res.ok) {
     // ⚠ EVERY OTHER NON-2xx IS `busy`, 4xx INCLUDED. A 401 that survived the shared repair, a
-    // 403 from a workspace header this machine got wrong, a 400: none of them means the template
+    // 403 from a workspace header this machine got wrong, a 400: none of them means the identity
     // is gone, and telling the operator to "reload the list" would send them to fix the wrong
     // thing. `busy` says "not now", which is true of all of them.
-    diag('template-resolve: HTTP', res.status, String(templateId).slice(0, 8));
+    diag('identity-resolve: HTTP', res.status, String(identityId).slice(0, 8));
     return { ok: false, reason: 'busy' };
   }
   let body = null;
   try { body = await res.json(); } catch (_err) { body = null; }
-  const template = narrow(body);
-  if (!template.name) {
-    diag('template-resolve: unusable payload', String(templateId).slice(0, 8));
-    return { ok: false, reason: 'no-template' };
+  const identity = narrow(body);
+  if (!identity.name) {
+    diag('identity-resolve: unusable payload', String(identityId).slice(0, 8));
+    return { ok: false, reason: 'no-identity' };
   }
-  return { ok: true, template };
+  return { ok: true, identity };
 }
 
 // ── ⚠ THE LAUNCH SHEET'S EPHEMERAL OVERRIDES, RE-VALIDATED HERE (2026-08-22, F-281) ─────────
 //
 // The launch sheet lets an operator re-point THIS SPAWN's model and custom-field VALUES without
-// touching the durable row. Nothing below is ever written back to the template.
+// touching the durable row. Nothing below is ever written back to the identity.
 //
 // ⚠ MAIN IS THE ONLY REAL VALIDATOR, AND THAT IS A MEASURED FACT RATHER THAN A POSTURE.
 // `@/shared/lib/safe-label` exports `SAFE_LABEL_RE` from a module body that imports **zod**, and
-// `agent-templates/client/types.ts` forbids a value import from that family because it "would
+// `agent-identities/client/types.ts` forbids a value import from that family because it "would
 // drag the validator into the renderer" (the desktop SPA bundles those files). So the SPA
 // enforces only the NUMBERS and relies on single-line `<input>` elements; the CHARSET rule is
 // checked here, against the one copy of it this tree has
@@ -342,17 +342,17 @@ async function resolveTemplate(templateId, workspaceId) {
 // character). F-281 records the shape and the fix.
 //
 // ⚠ THIS IS RENDERER-AUTHORED TEXT ON ITS WAY INTO A PROMPT — the one input on this lane that
-// is, and the reason the template CONTENT is resolved by main rather than snapshotted. Fields
+// is, and the reason the identity CONTENT is resolved by main rather than snapshotted. Fields
 // resolved FROM THE SERVER already passed `SAFE_LABEL_RE` at write time; these did not pass it
 // anywhere.
 //
 // ⚠ A BAD ROW IS DROPPED, NOT A REFUSED LAUNCH. It is the same answer the sheet's own
 // `boundOverrideFields` gives a row with an empty key, and the belt still runs at render
-// (`prompt-framing-template.js › fieldLines` re-sanitizes both halves). Refusing the spawn over
+// (`prompt-framing-agent-identity.js › fieldLines` re-sanitizes both halves). Refusing the spawn over
 // a pasted zero-width would be a launch the operator cannot fix from the sheet they are in.
 const { UNSAFE_LABEL_RE } = require('./session-telemetry');
 
-const MAX_OVERRIDE_KEY = 80; // `schema.ts › TemplateFieldSchema.key`
+const MAX_OVERRIDE_KEY = 80; // `schema.ts › IdentityFieldSchema.key`
 const MAX_OVERRIDE_VALUE = 1000; // …and its `value`
 
 /** The server's short-label charset, asked as a question. `''` is SAFE: an empty value is a
@@ -375,10 +375,10 @@ function isSafeLabel(value) {
  *
  * ⚠ `instructions` JOINED 2026-09-13 (Samuel: *"we should add an Instructions field in the New agent
  * popup"* — the field that replaced the deleted launch sheet's read-only disclosure). It is PROSE,
- * so unlike `fields` it takes NO charset rule: `agent-templates/schema.ts › InstructionsSchema` is
+ * so unlike `fields` it takes NO charset rule: `agent-identities/schema.ts › InstructionsSchema` is
  * `safeOptionalProse` and a newline is legal in it. What it takes is the COLUMN's own bound, and
  * `''` is "no override" — the popup sends the key only when the operator's text differs from the
- * template's own (`channels/components/use-agent-launch-run.ts › launchOverridesOf`).
+ * identity's own (`channels/components/use-agent-launch-run.ts › launchOverridesOf`).
  *
  * Answers `{ model: '' | <pick>, instructions: '' | <prose>, fields: null | [{key, value}] }` —
  * `''` meaning "the chain continues".
@@ -402,10 +402,10 @@ function narrowOverrides(overrides) {
     if (!f || typeof f !== 'object') continue;
     const key = typeof f.key === 'string' ? f.key.trim().slice(0, MAX_OVERRIDE_KEY) : '';
     const value = typeof f.value === 'string' ? f.value.trim().slice(0, MAX_OVERRIDE_VALUE) : '';
-    // A keyless row names nothing; a duplicate key is the shape `TemplateFieldsSchema` refuses.
+    // A keyless row names nothing; a duplicate key is the shape `IdentityFieldsSchema` refuses.
     if (!key || seen.has(key)) continue;
     if (!isSafeLabel(key) || !isSafeLabel(value)) {
-      diag('template-resolve: dropped an override field whose charset the server would refuse');
+      diag('identity-resolve: dropped an override field whose charset the server would refuse');
       continue;
     }
     seen.add(key);
@@ -416,43 +416,43 @@ function narrowOverrides(overrides) {
 }
 
 /**
- * The template this spawn actually runs as: the resolved row with the popup's field and
+ * The identity this spawn actually runs as: the resolved row with the popup's field and
  * instructions overrides substituted. ⚠ MODEL IS NOT APPLIED HERE — it belongs to the PRECEDENCE
  * CHAIN, which is computed once in `session-launch-op.js` and must not be half-resolved in two
  * places.
- * ⚠ `null` template in: a BLANK agent may still carry a model override (the chain's business,
+ * ⚠ `null` identity in: a BLANK agent may still carry a model override (the chain's business,
  * not this function's) — and, since F-695 was RULED on 2026-09-13, its typed `instructions`
- * come out as an INSTRUCTIONS-ONLY template (`instructionsOnly: true`, no name) that
- * `prompt-framing-template.js › instructionsOnlyFraming` frames without a role line.
+ * come out as an INSTRUCTIONS-ONLY identity (`instructionsOnly: true`, no name) that
+ * `prompt-framing-agent-identity.js › instructionsOnlyFraming` frames without a role line.
  * ⚠ **THE INSTRUCTIONS ARE SUBSTITUTED AFTER THE APPROVAL GATE — the ordering that gate's own
- * comment demands, and it is what keeps the question honest.** What a foreign template's first use
+ * comment demands, and it is what keeps the question honest.** What a foreign identity's first use
  * asks the operator to accept is the text THEY DID NOT WRITE; splicing their own edit in first
  * would put renderer text in front of that question. `authoredByCaller` is deliberately NOT flipped
  * by an edit either: it is the SERVER's boolean about the ROW, and the framing fails FOREIGN.
  */
-function applyOverrides(template, narrowed) {
+function applyOverrides(identity, narrowed) {
   const instructions = (narrowed && narrowed.instructions) || '';
-  if (!template) {
+  if (!identity) {
     // F-695 RULED (Samuel, 2026-09-13): the field starts EMPTY on a blank launch, and
     // whatever the operator types is carried as an instructions-only role — no name,
-    // no fields, no knowledge; `prompt-framing-template.js › instructionsOnlyFraming`
-    // frames it without a role line. Nothing typed → still no template.
+    // no fields, no knowledge; `prompt-framing-agent-identity.js › instructionsOnlyFraming`
+    // frames it without a role line. Nothing typed → still no identity.
     return instructions
       ? { name: null, instructions, authoredByCaller: true, instructionsOnly: true, fields: null }
       : null;
   }
   const fields = narrowed && narrowed.fields;
-  const next = fields ? { ...template, fields } : template;
+  const next = fields ? { ...identity, fields } : identity;
   return instructions ? { ...next, instructions } : next;
 }
 
 module.exports = {
-  resolveTemplate,
-  isTemplateId,
+  resolveAgentIdentity,
+  isIdentityId,
   narrow, // exported so the whitelist can be driven directly, without a fake transport
   tenancyHint, // T35: the server's own "it lives elsewhere" classification, read off a 404 body
   narrowOverrides, // 2026-08-22: the launch sheet's ephemeral re-points, re-validated main-side
   applyOverrides,
   isSafeLabel, // the server's charset, as this tree's single copy answers it
-  TEMPLATE_RESOLVE_TIMEOUT_MS,
+  IDENTITY_RESOLVE_TIMEOUT_MS,
 };

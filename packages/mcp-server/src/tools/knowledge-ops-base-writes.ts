@@ -97,7 +97,7 @@ export async function opCreateBase(
   // 🔒 **DESTINATION 2, IN ONE SERVER CALL** (Samuel, 2026-09-18; the model is
   // `container-destination.ts`'s header). A home channel holds only what is
   // SHARED into it. ⚠ **THE BASE STAYS `private` AND THE GRANT IS THE AUDIENCE**,
-  // which is why this does not touch `visibility` as the template lane does.
+  // which is why this does not touch `visibility` as the identity lane does.
   const shareToChannelId = await resolveChannelShareTarget(client, directory);
   // 🔒 **ALWAYS SENT, NEVER LEFT TO THE SERVER'S DEFAULT** (2026-09-02) — the same
   // rule and the same reason as `agent-ops-write.ts › opCreate`, which states it

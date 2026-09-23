@@ -3,7 +3,7 @@
  * workspace AND every home-channel container the caller belongs to.
  *
  * ⚠ Mirrors `src/features/channels/server/service-account.ts` — hand-synced,
- * like `home-types.ts` and `agent-template-types.ts`. No drift gate covers this
+ * like `home-types.ts` and `agent-identity-types.ts`. No drift gate covers this
  * pair; both halves move in ONE change.
  *
  * 🔒 **`workspaceId` ON EVERY ROW IS THE POINT OF THESE TYPES.** A page that

@@ -9,7 +9,7 @@
  * not run.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.textOf = exports.base = exports.TEMPLATE = exports.soloRoom = exports.sharedContainer = exports.ME = void 0;
+exports.textOf = exports.base = exports.IDENTITY = exports.soloRoom = exports.sharedContainer = exports.ME = void 0;
 exports.workspaceStub = workspaceStub;
 exports.apiError = apiError;
 exports.tokenIn = tokenIn;
@@ -43,12 +43,12 @@ exports.soloRoom = soloRoom;
 /**
  * The two rows the confirm suites write. ⚠ **ONE DEFINITION EACH, FOR THE
  * REASON `sharedContainer` HAS ONE** — `acknowledge-shared.test.ts` and
- * `confirm-class.test.ts` each carried a byte-identical copy of `TEMPLATE` and a
+ * `confirm-class.test.ts` each carried a byte-identical copy of `IDENTITY` and a
  * near-identical `BASE`, which is two definitions of the row whose AUDIENCE is
  * the subject of both files. Moved here 2026-09-17 when R-08's arms met the
  * §1 cap in both.
  */
-exports.TEMPLATE = {
+exports.IDENTITY = {
     id: "11111111-1111-4111-8111-111111111111",
     workspaceId: "ws-1",
     name: "Researcher",

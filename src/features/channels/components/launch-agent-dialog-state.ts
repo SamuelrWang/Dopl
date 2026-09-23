@@ -39,9 +39,9 @@ import {
 } from "./launch-agent-dialog-runtime";
 import type { AgentLaunchPanel } from "./use-agent-launch";
 
-/** Only what this hook reads off a template row. ⚠ A SHAPE, not `AgentTemplate` by name —
- *  `use-agent-launch.ts › AgentTemplatePrefill` states the rule and the reason. */
-export interface TemplateModelRow {
+/** Only what this hook reads off an identity row. ⚠ A SHAPE, not `AgentIdentity` by name —
+ *  `use-agent-launch.ts › AgentIdentityPrefill` states the rule and the reason. */
+export interface IdentityModelRow {
   id: string;
   model?: string | null;
 }
@@ -72,7 +72,7 @@ export interface LaunchDialogRuntime {
 export function useLaunchDialogRuntime(
   panel: AgentLaunchPanel,
   channelId: string,
-  templates: ReadonlyArray<TemplateModelRow>
+  identities: ReadonlyArray<IdentityModelRow>
 ): LaunchDialogRuntime {
   /**
    * ⚠ **THE VERSIONED, RUNTIME-KEYED RECORD, NOT THE LEGACY PAIR.** This dialog has to answer
@@ -146,7 +146,7 @@ export function useLaunchDialogRuntime(
         catalog,
         selected: effectiveRuntime,
         own: panel.model,
-        fromTemplate: templates.find((t) => t.id === panel.templateId)?.model ?? "",
+        fromIdentity: identities.find((t) => t.id === panel.identityId)?.model ?? "",
         // ⚠ ONLY WHEN THIS DESKTOP UNDERSTANDS THE FIELD. A build that drops `model` on write has
         // no remembered pick to honour, and showing one would name a value no launch reads.
         remembered: selection.modelSupported ? record.model ?? "" : "",
@@ -159,8 +159,8 @@ export function useLaunchDialogRuntime(
       record,
       effectiveRuntime,
       panel.model,
-      panel.templateId,
-      templates,
+      panel.identityId,
+      identities,
     ]
   );
 

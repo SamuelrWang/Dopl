@@ -14,7 +14,7 @@
 //
 // ── THE INCIDENT (measured 2026-09-13) ───────────────────────────────────────────────────────
 // A Dopl channel agent (`@agent-y1uun32v`, `phase: 'parked'`, sdk id present in the resume map,
-// template "Coder") was idle when Electron was hard-restarted. After the restart it was NOWHERE:
+// identity "Coder") was idle when Electron was hard-restarted. After the restart it was NOWHERE:
 // no card in the Agents tab, not even an Ended one, no `agentHistory` entry, and its
 // `channel_sessions` row gone — that row is a LIVE PROJECTION, deleted the moment the pill leaves
 // the set the push reports.
@@ -252,7 +252,7 @@ function parkedSessionFromRecord(key, rec, sdkId) {
     nativePolicy: rec.nativePolicy || null,
     usageBaseline: recordedBaseline,
     state: state,
-    context: sessionPark.contextFromRecord(rec), // channel/thread/peer names + the template NAME (F-288)
+    context: sessionPark.contextFromRecord(rec), // channel/thread/peer names + the identity NAME (F-288)
     nonce: crypto.randomBytes(8).toString('hex'),
     firstTurn: '',
     startedAt: Number(rec.startedAt) || 0,
@@ -320,7 +320,7 @@ function endInterrupted(key, rec, why, opts) {
     workspaceId: rec.workspaceId,
     channelName: rec.channelName,
     threadTitle: rec.taskTitle,
-    templateName: rec.templateName, // frozen like the rest of the identity (F-288)
+    identityName: rec.identityName, // frozen like the rest of the identity (F-288)
     startedAt: rec.startedAt,
     endedAt: Date.now(),
     // 🔒 `diag: why` STOOD HERE AND IS DELETED (2026-09-13, Samuel's ruling). The card rendered the
@@ -413,7 +413,7 @@ function reparkOne(key, rec) {
   const sdkId = store.getSdkSessionId(key);
   // ⚠ NO SDK ID IS THE ORDINARY CASE, NOT A CORRUPTION: a SPAWN-IDLE agent ("New Agent") never
   // started a query, so nothing ever reported a conversation id for it — and the record carries
-  // neither its launch goal nor its template body, so there is nothing to rebuild it from
+  // neither its launch goal nor its identity body, so there is nothing to rebuild it from
   // either. An Ended card is the honest answer; a silent disappearance is not.
   // ⚠ THE REASON STRINGS BELOW ARE ENGINEER TEXT AND REACH ONLY THE DIAG LOG (2026-09-13,
   // Samuel: "We don't need that line to be there … We can just put 'ended.'"). The one that used

@@ -9,21 +9,21 @@
  */
 
 import { describe, expect, it } from "vitest";
-import type { AgentTemplate, TemplateKnowledgeRef } from "../client/types";
+import type { AgentIdentity, IdentityKnowledgeRef } from "../client/types";
 import {
   cleanFields,
-  draftFromTemplate,
+  draftFromIdentity,
   draftToCreateBody,
   draftToPatchBody,
   emptyDraft,
   isDraftSavable,
   isEmptyPatch,
-  optimisticTemplate,
-} from "./template-draft";
+  optimisticIdentity,
+} from "./identity-draft";
 
 /** ⚠ THE THREE SHAPES, minted the way the picker mints them — a ref carries its
- *  own label, which is what removed `optimisticTemplate`'s name lookup. */
-function ref(baseId: string, baseName: string): TemplateKnowledgeRef {
+ *  own label, which is what removed `optimisticIdentity`'s name lookup. */
+function ref(baseId: string, baseName: string): IdentityKnowledgeRef {
   return { baseId, baseName, scope: "base", path: baseName };
 }
 function folderRef(
@@ -31,7 +31,7 @@ function folderRef(
   baseName: string,
   folderId: string,
   folderName: string
-): TemplateKnowledgeRef {
+): IdentityKnowledgeRef {
   return {
     baseId,
     baseName,
@@ -47,7 +47,7 @@ function entryRef(
   baseName: string,
   entryId: string,
   entryTitle: string
-): TemplateKnowledgeRef {
+): IdentityKnowledgeRef {
   return {
     baseId,
     baseName,
@@ -59,7 +59,7 @@ function entryRef(
   };
 }
 
-function template(over: Partial<AgentTemplate> = {}): AgentTemplate {
+function identity(over: Partial<AgentIdentity> = {}): AgentIdentity {
   return {
     id: "tpl-1",
     workspaceId: "ws-1",
@@ -125,7 +125,7 @@ describe("draftToCreateBody", () => {
   it("sends teamIds ONLY on the team scope", () => {
     // ⚠ Not a tidiness rule: `../schema.ts` REFUSES `teamIds` without
     // `visibility: "team"` ("teamIds requires visibility 'team'"), so a stale
-    // set on a private template is a 400, not a harmless extra key.
+    // set on a private identity is a 400, not a harmless extra key.
     const draft = { ...emptyDraft(), name: "Scout", teamIds: ["team-1"] };
     expect(draftToCreateBody({ ...draft, visibility: "private" }).teamIds).toBeUndefined();
     expect(draftToCreateBody({ ...draft, visibility: "workspace" }).teamIds).toBeUndefined();
@@ -148,14 +148,14 @@ describe("draftToCreateBody", () => {
 
 describe("draftToPatchBody", () => {
   it("sends ONLY what changed", () => {
-    const row = template();
-    const draft = { ...draftFromTemplate(row), name: "Release pilot" };
+    const row = identity();
+    const draft = { ...draftFromIdentity(row), name: "Release pilot" };
     expect(draftToPatchBody(draft, row)).toEqual({ name: "Release pilot" });
   });
 
   it("is empty when nothing was edited", () => {
-    const row = template();
-    expect(isEmptyPatch(draftToPatchBody(draftFromTemplate(row), row))).toBe(true);
+    const row = identity();
+    expect(isEmptyPatch(draftToPatchBody(draftFromIdentity(row), row))).toBe(true);
   });
 
   it("sends an EMPTIED optional as null — clearing is an edit, not an omission", () => {
@@ -163,19 +163,19 @@ describe("draftToPatchBody", () => {
     // alone, null CLEARS it), and for `model` it is not even a choice — that
     // field is a `safeLabel` carrying a `.min(1)`, so `""` is a 400 on the
     // operator picking Default.
-    const row = template();
+    const row = identity();
     expect(
-      draftToPatchBody({ ...draftFromTemplate(row), description: "   " }, row)
+      draftToPatchBody({ ...draftFromIdentity(row), description: "   " }, row)
     ).toEqual({ description: null });
-    expect(draftToPatchBody({ ...draftFromTemplate(row), model: "" }, row)).toEqual({
+    expect(draftToPatchBody({ ...draftFromIdentity(row), model: "" }, row)).toEqual({
       model: null,
     });
   });
 
   it("sends the scope and the teams together when the scope changes", () => {
-    const row = template();
+    const row = identity();
     const draft = {
-      ...draftFromTemplate(row),
+      ...draftFromIdentity(row),
       visibility: "team" as const,
       teamIds: ["team-9"],
     };
@@ -186,9 +186,9 @@ describe("draftToPatchBody", () => {
   });
 
   it("leaves teamIds OUT when the scope moved away from team", () => {
-    const row = template({ visibility: "team", teamIds: ["team-9"] });
+    const row = identity({ visibility: "team", teamIds: ["team-9"] });
     const draft = {
-      ...draftFromTemplate(row),
+      ...draftFromIdentity(row),
       visibility: "workspace" as const,
       teamIds: [],
     };
@@ -196,7 +196,7 @@ describe("draftToPatchBody", () => {
   });
 
   it("treats knowledge bases as a SET and custom fields as a LIST", () => {
-    const row = template({
+    const row = identity({
       knowledgeBases: [
         { id: "kb-1", name: "Runbooks" },
         { id: "kb-2", name: "Specs" },
@@ -207,7 +207,7 @@ describe("draftToPatchBody", () => {
         { key: "b", value: "2" },
       ],
     });
-    const before = draftFromTemplate(row);
+    const before = draftFromIdentity(row);
     // Reordered attachments are the same attachments.
     expect(
       draftToPatchBody({ ...before, knowledge: [...before.knowledge].reverse() }, row)
@@ -223,28 +223,28 @@ describe("draftToPatchBody", () => {
 });
 
 describe("isDraftSavable", () => {
-  it("refuses a nameless template", () => {
+  it("refuses a nameless identity", () => {
     expect(isDraftSavable({ ...emptyDraft(), name: "   " })).toBe(false);
   });
 
-  it("refuses a Team template with no team named", () => {
-    // A team-scoped template with no team is visible to nobody — a private
-    // template wearing the wrong label. Fail closed at the button.
+  it("refuses a Team identity with no team named", () => {
+    // A team-scoped identity with no team is visible to nobody — a private
+    // identity wearing the wrong label. Fail closed at the button.
     const draft = { ...emptyDraft(), name: "Scout", visibility: "team" as const };
     expect(isDraftSavable(draft)).toBe(false);
     expect(isDraftSavable({ ...draft, teamIds: ["team-1"] })).toBe(true);
   });
 });
 
-describe("optimisticTemplate", () => {
+describe("optimisticIdentity", () => {
   it("names a freshly attached base from the PICKER, not from the round trip", () => {
     // The wire sends ids and answers with names and paths; without the picker's
     // own label the chip would render blank for one frame, which reads as
     // "detached". ⚠ The draft holds REFS since 2026-09-08, so the label rides
     // with the pick and the `id → name` lookup this case used to take is gone.
-    const row = template({ knowledgeBases: [], knowledge: [] });
-    const draft = { ...draftFromTemplate(row), knowledge: [ref("kb-7", "Playbooks")] };
-    expect(optimisticTemplate(row, draft).knowledgeBases).toEqual([
+    const row = identity({ knowledgeBases: [], knowledge: [] });
+    const draft = { ...draftFromIdentity(row), knowledge: [ref("kb-7", "Playbooks")] };
+    expect(optimisticIdentity(row, draft).knowledgeBases).toEqual([
       { id: "kb-7", name: "Playbooks" },
     ]);
   });
@@ -253,12 +253,12 @@ describe("optimisticTemplate", () => {
     // 🔒 Listing the base because one folder of it is attached would be a WIDER
     // claim than the row makes — an older reader would be told the whole base
     // is attached. The scope is in `knowledge`; the slice stays empty.
-    const row = template({ knowledgeBases: [], knowledge: [] });
+    const row = identity({ knowledgeBases: [], knowledge: [] });
     const draft = {
-      ...draftFromTemplate(row),
+      ...draftFromIdentity(row),
       knowledge: [folderRef("kb-7", "Playbooks", "f-2", "Runbooks")],
     };
-    const next = optimisticTemplate(row, draft);
+    const next = optimisticIdentity(row, draft);
     expect(next.knowledgeBases).toEqual([]);
     expect(next.knowledge).toHaveLength(1);
     expect(next.knowledge?.[0]?.folderId).toBe("f-2");
@@ -266,27 +266,27 @@ describe("optimisticTemplate", () => {
 
   /**
    * 🔒 §8 STALE CACHE — the fixture WITHOUT the key. A row cached by the bundle
-   * before scopes shipped has no `knowledge`, and `draftFromTemplate` mapping
+   * before scopes shipped has no `knowledge`, and `draftFromIdentity` mapping
    * over `undefined` would throw and blank the editor. `EMPTY_KNOWLEDGE` is the
    * honest reading of "not sent".
    */
   it("survives a row cached before `knowledge` existed", () => {
-    const row = template({ knowledgeBases: [{ id: "kb-1", name: "Runbooks" }] });
+    const row = identity({ knowledgeBases: [{ id: "kb-1", name: "Runbooks" }] });
     delete (row as { knowledge?: unknown }).knowledge;
-    const draft = draftFromTemplate(row);
+    const draft = draftFromIdentity(row);
     expect(draft.knowledge).toEqual([]);
-    expect(optimisticTemplate(row, draft).knowledgeBases).toEqual([]);
+    expect(optimisticIdentity(row, draft).knowledgeBases).toEqual([]);
   });
 
   it("empties an emptied optional to null, and drops the teams off a non-team scope", () => {
-    const row = template({ visibility: "team", teamIds: ["team-9"] });
+    const row = identity({ visibility: "team", teamIds: ["team-9"] });
     const draft = {
-      ...draftFromTemplate(row),
+      ...draftFromIdentity(row),
       description: "",
       visibility: "private" as const,
       teamIds: [],
     };
-    const next = optimisticTemplate(row, draft);
+    const next = optimisticIdentity(row, draft);
     expect(next.description).toBeNull();
     expect(next.teamIds).toEqual([]);
     expect(next.visibility).toBe("private");
@@ -301,6 +301,6 @@ describe("optimisticTemplate", () => {
 // assertion**: the control is a GRANT now
 // (`apps/desktop-ui/src/pages/home/agent-share.tsx`), it composes no draft at
 // all, and what it writes is pinned in
-// `apps/desktop-ui/src/pages/home/agent-authoring.test.tsx › share into this
+// `apps/desktop-ui/src/pages/home/identity-authoring.test.tsx › share into this
 // channel`. The rest of this file — the shared editor draft — is untouched.
 

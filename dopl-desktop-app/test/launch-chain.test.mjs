@@ -198,7 +198,7 @@ test("the setting is LOCAL and machine-only — no route, no op, no column may w
   // this flag is one the agents it governs could flip for themselves, on every machine the
   // operator owns.
   // ⚠ THE RECORD MOVED TO `main/channel-agent-chain.js` ON 2026-09-21 (U5), at the §1 cap and on
-  // the same seam the two MCP consents and the template approval moved on — `channel-prefs.js`
+  // the same seam the two MCP consents and the identity approval moved on — `channel-prefs.js`
   // re-exports it, so no caller moved. The security property below is unchanged and is asserted
   // where the key now lives.
   const prefs = read("channel-agent-chain.js");

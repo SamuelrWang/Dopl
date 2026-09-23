@@ -1,5 +1,5 @@
 import type { WorkspaceKind } from "@dopl/contracts";
-import type { AgentTemplate, TemplateVisibility } from "../client/types";
+import type { AgentIdentity, IdentityVisibility } from "../client/types";
 
 /**
  * THE ONE PLACE the wire's visibility vocabulary meets the operator's.
@@ -26,31 +26,31 @@ import type { AgentTemplate, TemplateVisibility } from "../client/types";
  * from "everyone in your company".
  */
 
-export interface TemplateSectionDef {
-  visibility: TemplateVisibility;
+export interface IdentitySectionDef {
+  visibility: IdentityVisibility;
   /** What the panel is titled. */
   label: string;
-  /** The quiet line a section with no templates says. Absent = an empty
+  /** The quiet line a section with no identities says. Absent = an empty
    *  section says nothing under its header (the /home Agents face's shared
    *  section, Samuel 2026-09-19). */
   emptyLine?: string;
 }
 
-export const SECTIONS: ReadonlyArray<TemplateSectionDef> = [
+export const SECTIONS: ReadonlyArray<IdentitySectionDef> = [
   {
     visibility: "private",
     label: "Private",
-    emptyLine: "No private templates yet.",
+    emptyLine: "No private identities yet.",
   },
   {
     visibility: "team",
     label: "Team",
-    emptyLine: "No team templates yet.",
+    emptyLine: "No team identities yet.",
   },
   {
     visibility: "workspace",
     label: "Public",
-    emptyLine: "No public templates yet.",
+    emptyLine: "No public identities yet.",
   },
 ];
 
@@ -60,7 +60,7 @@ export const SECTIONS: ReadonlyArray<TemplateSectionDef> = [
  * 🔒 ⚠ **ONE OPTION SINCE 2026-08-27, AND THE DELETED ONE IS THE POINT.** It
  * held `workspace` AND `private`; Samuel's ruling removed the per-channel
  * private section from this pane (converging it on the Knowledge face), which
- * makes a `private` CONTAINER template **reachable from nowhere**: /home no
+ * makes a `private` CONTAINER identity **reachable from nowhere**: /home no
  * longer lists it, and a container is not navigable at all — `isStandardWorkspace`
  * keeps it off the rail, so it has no workspace Agents page of its own.
  * **Offering `private` here would create write-only rows.** The container
@@ -75,7 +75,7 @@ export const SECTIONS: ReadonlyArray<TemplateSectionDef> = [
  * ⚠ INSIDE A CONTAINER, `workspace` MEANS "THE OTHER PEOPLE IN THIS
  * RELATIONSHIP" — hence "Shared in this channel", never "Public".
  */
-export const SECTIONS_CONTAINER: ReadonlyArray<TemplateSectionDef> = [
+export const SECTIONS_CONTAINER: ReadonlyArray<IdentitySectionDef> = [
   {
     visibility: "workspace",
     label: "Shared in this channel",
@@ -95,9 +95,9 @@ export const SECTIONS_CONTAINER: ReadonlyArray<TemplateSectionDef> = [
  *
  * ⚠ ITS ROWS ALSO LIVE IN THE CALLER'S PERSONAL CONTAINER — the visibility field
  * here is the AUDIENCE axis, and the SHELF axis is a tenancy the client never
- * sees on a row (`../types.ts › TemplateShelf`).
+ * sees on a row (`../types.ts › IdentityShelf`).
  */
-export const SECTION_PRIVATE_EVERYWHERE: TemplateSectionDef = {
+export const SECTION_PRIVATE_EVERYWHERE: IdentitySectionDef = {
   visibility: "private",
   label: "Personal",
   emptyLine: "You haven't created an agent here yet.",
@@ -108,7 +108,7 @@ export const SECTION_PRIVATE_EVERYWHERE: TemplateSectionDef = {
  * else.
  *
  * ⚠ THE CLIENT DOES NOT FILTER. The server decides what the caller may see —
- * their own private templates, their teams' templates, the workspace's public
+ * their own private identities, their teams' identities, the workspace's public
  * ones — so a row arriving here has already passed that gate. A second
  * "is this mine?" test on the client would either duplicate the rule (and drift
  * from it) or hide a row the server deliberately sent.
@@ -119,16 +119,16 @@ export const SECTION_PRIVATE_EVERYWHERE: TemplateSectionDef = {
  * UNKNOWN is not EMPTY, and it is not a guess either).
  */
 export function groupByVisibility(
-  templates: ReadonlyArray<AgentTemplate>
-): Record<TemplateVisibility, AgentTemplate[]> {
-  const grouped: Record<TemplateVisibility, AgentTemplate[]> = {
+  identities: ReadonlyArray<AgentIdentity>
+): Record<IdentityVisibility, AgentIdentity[]> {
+  const grouped: Record<IdentityVisibility, AgentIdentity[]> = {
     private: [],
     team: [],
     workspace: [],
   };
-  for (const template of templates) {
-    const bucket = grouped[template.visibility];
-    if (bucket) bucket.push(template);
+  for (const identity of identities) {
+    const bucket = grouped[identity.visibility];
+    if (bucket) bucket.push(identity);
   }
   return grouped;
 }
@@ -142,7 +142,7 @@ export function groupByVisibility(
  * ⚠ **IT WAS ALREADY BROKEN ON THE WIRE, WHICH IS WHY IT IS A RULE AND NOT A
  * PREFERENCE.** The /home Agents pane's Personal mount writes with `shelf:
  * "home"`, which routes the row into the caller's PERSONAL container — and
- * `server/service-write-gates.ts › resolveTemplateCreateDestination` has
+ * `server/service-write-gates.ts › resolveIdentityCreateDestination` has
  * refused `team` on that path since the container migration. So the option was
  * a control whose only outcome was a 403 the operator could not act on. A link
  * CONTAINER is the same story from the other side: it holds members and no team
@@ -177,14 +177,14 @@ export const TEAM_SCOPE_DEAD_HINT = "workspace only";
  */
 export function teamScopeStranded(
   kind: WorkspaceKind,
-  selected: TemplateVisibility
+  selected: IdentityVisibility
 ): boolean {
   return selected === "team" && !offersTeamScope(kind);
 }
 
 /** One pill on the editor's Visibility row. */
 export interface VisibilityOption {
-  visibility: TemplateVisibility;
+  visibility: IdentityVisibility;
   /** ⚠ FROM {@link SECTIONS} / {@link SECTIONS_CONTAINER}, never hand-typed. */
   label: string;
   hint?: string;
@@ -199,9 +199,9 @@ export interface VisibilityOption {
  * standard workspace and a personal shelf alike.
  */
 export function visibilityOptions(
-  sections: ReadonlyArray<TemplateSectionDef>,
+  sections: ReadonlyArray<IdentitySectionDef>,
   kind: WorkspaceKind,
-  selected: TemplateVisibility
+  selected: IdentityVisibility
 ): ReadonlyArray<VisibilityOption> {
   return sections.flatMap((section) => {
     if (section.visibility !== "team" || offersTeamScope(kind)) {

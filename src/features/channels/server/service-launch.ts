@@ -13,7 +13,7 @@ import {
 } from "./errors";
 import { resolveDirectiveColor } from "./service-launch-color";
 // ⚠ THE CEILING IS THE CREATE'S FIFTH GATE AND ITS OWN MODULE (§1 cap, and the
-// `service-launch-template.ts` precedent one line up): it is a SECOND COPY of the
+// `service-launch-identity.ts` precedent one line up): it is a SECOND COPY of the
 // desktop's clamp across a tree boundary the two cannot import over, so it lives
 // in one place with a parity test rather than inline in a service.
 import { resolveDirectivePosture } from "./service-launch-posture";
@@ -23,9 +23,9 @@ import { loadVisibleChannel, type ChannelContext } from "./service-shared";
 // ⚠ THE RACE HALF OF G10, SHARED WITH THE DIRECTION LANE — see that module for
 // why the PROBE is not in it and this file states its own gate ordering instead.
 import { insertOrConverge } from "./service-mailbox-idempotency";
-// ⚠ THE TEMPLATE FENCE LEFT THIS FILE ON 2026-09-02 (§1 cap). It is the CREATE's
+// ⚠ THE IDENTITY FENCE LEFT THIS FILE ON 2026-09-02 (§1 cap). It is the CREATE's
 // third gate and its position in the order is argued below, where the gates are.
-import { resolveTemplateForDirective } from "./service-launch-template";
+import { resolveIdentityForDirective } from "./service-launch-identity";
 // ⚠ THE MAPPER AND THE REFUSAL VOCABULARY LEFT THIS FILE ON 2026-09-01 (§1 cap,
 // and a second service now reads both — `service-launch-agent.ts`). RE-EXPORTED
 // below so no import path outside this feature changed and there is still no
@@ -54,7 +54,7 @@ export { LAUNCH_REFUSAL_REASONS, toDirective } from "./service-launch-dto";
 
 // ⚠ **`operatorIsOnline` MOVED TO `service-launch-presence.ts` (§1 SPLIT, 2026-09-15)** — this
 // file went over the 500-line cap when the launch gained its required `agentName`. The seam is
-// the one this lane already draws five times (`-color`, `-dto`, `-posture`, `-template`,
+// the one this lane already draws five times (`-color`, `-dto`, `-posture`, `-identity`,
 // `-agent`): that file changes when what PRESENCE means changes, this one when the CREATE
 // contract does. It was already exported for `service-launch-agent.ts`, so it had two readers
 // before it had its own file. ⚠ RE-EXPORTED so no importer moved.
@@ -78,14 +78,14 @@ export type CreateLaunchInput = {
    */
   runtime?: string;
   /**
-   * The agent template to run as — **an id OR an exact name**, resolved here (2026-08-23).
+   * The agent identity to run as — **an id OR an exact name**, resolved here (2026-08-23).
    *
-   * ⚠ IT IS A REF, NOT AN ID, AND THE RESOLUTION IS THE FENCE. `channels/` never sees a template
-   * id it did not obtain by asking the agent-templates service what THIS caller can see, so "name
-   * a template you cannot see" has no spelling on this path. See {@link
-   * resolveTemplateForDirective}.
+   * ⚠ IT IS A REF, NOT AN ID, AND THE RESOLUTION IS THE FENCE. `channels/` never sees an identity
+   * id it did not obtain by asking the agent-identities service what THIS caller can see, so "name
+   * an identity you cannot see" has no spelling on this path. See {@link
+   * resolveIdentityForDirective}.
    */
-  template?: string;
+  identity?: string;
   /**
    * THE POSTURE THIS LAUNCH **ASKS** ITS NEW SESSION TO START ON, and whether it may launch
    * workers (2026-09-01, T24).
@@ -150,17 +150,17 @@ export type CreateLaunchResult =
  *     directive could stamp an agent onto an exchange in a different room —
  *     including one the caller cannot read. Refused, never silently dropped: a
  *     dropped thread id starts the agent in the wrong place and reports success.
- *  3. **THE TEMPLATE REF, IF GIVEN, MUST RESOLVE FOR THIS CALLER** (2026-08-23).
- *     Id or exact name, through the agent-templates visibility matrix; ambiguous
- *     names REFUSE and list. See {@link resolveTemplateForDirective}.
+ *  3. **THE IDENTITY REF, IF GIVEN, MUST RESOLVE FOR THIS CALLER** (2026-08-23).
+ *     Id or exact name, through the agent-identities visibility matrix; ambiguous
+ *     names REFUSE and list. See {@link resolveIdentityForDirective}.
  *  4. **PRESENCE.** See {@link operatorIsOnline} — the only gate that can pass
  *     while the answer is still "no", which is why it is last and why it does
  *     not pretend to be a decision.
  *
- * ⚠ **THE TEMPLATE GATE IS DELIBERATELY ABOVE PRESENCE, WHICH BREAKS THE
+ * ⚠ **THE IDENTITY GATE IS DELIBERATELY ABOVE PRESENCE, WHICH BREAKS THE
  * CHEAPNESS ORDER ON PURPOSE.** `offline` is a 200 that says "nothing was asked",
  * and it is the ordinary answer for a closed laptop. Checking presence first
- * would answer a MISSPELLED OR AMBIGUOUS TEMPLATE with "your machine is asleep" —
+ * would answer a MISSPELLED OR AMBIGUOUS IDENTITY with "your machine is asleep" —
  * the caller fixes the wrong thing, asks again when the machine is up, and gets
  * the real refusal a minute later. A bad ref is the caller's own error and is
  * answerable without anyone's machine.
@@ -181,13 +181,13 @@ export async function createLaunchDirective(
     throw new LaunchDirectiveNotFoundError(input.channel);
   }
 
-  // ⚠ **THE IDEMPOTENCY PROBE SITS HERE — ABOVE THE THREAD, TEMPLATE AND
+  // ⚠ **THE IDEMPOTENCY PROBE SITS HERE — ABOVE THE THREAD, IDENTITY AND
   // PRESENCE GATES — AND THE POSITION IS THE CONTRACT** (2026-09-02, A10/G10).
   // A key that has already been filed means THIS REQUEST ALREADY HAPPENED, so the
   // honest answer is the stored row and nothing else may be re-decided against
   // today's world:
-  //   • THE TEMPLATE GATE would refuse a retry of a launch that SUCCEEDED, if the
-  //     template has since been deleted or unshared. The row already names the id
+  //   • THE IDENTITY GATE would refuse a retry of a launch that SUCCEEDED, if the
+  //     identity has since been deleted or unshared. The row already names the id
   //     it resolved to.
   //   • THE PRESENCE GATE would answer `offline` — "nothing was filed" — about a
   //     directive that IS filed and may be running. That is the double-launch
@@ -218,11 +218,11 @@ export async function createLaunchDirective(
     taskId = task.id;
   }
 
-  const template = await resolveTemplateForDirective(ctx, input.template);
+  const identity = await resolveIdentityForDirective(ctx, input.identity);
 
   // ── 5. **THE POSTURE CEILING** (2026-09-02, A9 — G6, G7, G8) ──────────────
   //
-  // ⚠ **ABOVE PRESENCE, ON THE TEMPLATE GATE'S ARGUMENT.** `offline` is a 200
+  // ⚠ **ABOVE PRESENCE, ON THE IDENTITY GATE'S ARGUMENT.** `offline` is a 200
   // saying "nothing was asked", and answering a chain the channel forbids with
   // "your machine is asleep" makes the caller fix the wrong thing and ask again a
   // minute later for the real refusal — a ceiling needs nobody's machine.
@@ -258,13 +258,13 @@ export async function createLaunchDirective(
       // "did not ask" onto the column's spelling for it, which the machine reads as the
       // documented chain. ⚠ **NEVER DERIVED FROM `model` ABOVE** — that inference IS the defect.
       runtime: input.runtime ?? null,
-      // ⚠ THE PAIR, WRITTEN TOGETHER. `template_name` is a SNAPSHOT and is what
-      // survives the FK's `ON DELETE SET NULL` — without it a template deleted
-      // between here and the claim is indistinguishable from no template at all,
+      // ⚠ THE PAIR, WRITTEN TOGETHER. `identity_name` is a SNAPSHOT and is what
+      // survives the FK's `ON DELETE SET NULL` — without it an identity deleted
+      // between here and the claim is indistinguishable from no identity at all,
       // and the desktop would launch a blank agent wearing an identity the caller
       // asked for and will not notice is missing (E-4).
-      template_id: template?.id ?? null,
-      template_name: template?.name ?? null,
+      identity_id: identity?.id ?? null,
+      identity_name: identity?.name ?? null,
       // ⚠ **THE REQUESTED POSTURE, CARRIED VERBATIM AND VALIDATED NOWHERE ELSE
       // HERE.** The route's zod holds each axis to its closed enum and the column
       // CHECK says the same at rest; this path adds no opinion, because the only

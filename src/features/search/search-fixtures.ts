@@ -48,7 +48,7 @@ const ACCOUNT_ROWS: SearchItem[] = [
     kind: "messages",
     title: "Priya Shah",
     snippet:
-      "pushed the <mark>orchestrator</mark> template to the shared base — rerun the wave when you get a sec",
+      "pushed the <mark>orchestrator</mark> identity to the shared base — rerun the wave when you get a sec",
     containerId: "ws-orig",
     containerName: "q4-outbound",
     channelId: "ch-q4",
@@ -132,7 +132,7 @@ const ACCOUNT_ROWS: SearchItem[] = [
   },
   {
     id: "tpl-orch",
-    kind: "agentTemplates",
+    kind: "agentIdentities",
     title: "Orchestrator",
     subtitle: "Fable · launches workers, never researches",
     color: "var(--agent-color-03)",
@@ -141,7 +141,7 @@ const ACCOUNT_ROWS: SearchItem[] = [
   },
   {
     id: "tpl-coder",
-    kind: "agentTemplates",
+    kind: "agentIdentities",
     title: "Coder",
     subtitle: "Opus · builds and ships one branch",
     color: "var(--agent-color-09)",

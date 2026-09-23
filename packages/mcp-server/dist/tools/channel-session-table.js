@@ -68,7 +68,7 @@ const narration_1 = require("./narration");
  * sometimes an address and sometimes not, which is the one thing that column may never be.
  */
 exports.SESSION_TABLE_HEAD = [
-    `| name | handle | state | thread | channel | template | model | tool | idle |`,
+    `| name | handle | state | thread | channel | identity | model | tool | idle |`,
     `| --- | --- | --- | --- | --- | --- | --- | --- | --- |`,
 ];
 /** A cell with nothing in it. ⚠ NOT REPORTED — see the legend, and never a zero. */
@@ -122,8 +122,8 @@ function sessionRow(s, opts = {}) {
     // ⚠ TELEMETRY IS OPERATOR-ONLY and the type is the gate, exactly as in
     // `telemetryClauses`: a peer row has none of these fields, so it dashes.
     const own = opts.telemetry && "model" in s ? s : null;
-    const template = own?.templateName
-        ? (0, channel_shared_1.inlineOr)(own.templateName, "(unnamed template)")
+    const identity = own?.identityName
+        ? (0, channel_shared_1.inlineOr)(own.identityName, "(unnamed identity)")
         : NOT_REPORTED;
     const model = own?.model
         ? (0, channel_shared_1.inlineOr)((0, channel_session_render_1.shortModelLabel)(own.model), "(unnamed model)")
@@ -134,7 +134,7 @@ function sessionRow(s, opts = {}) {
     // ⚠ AN UNREADABLE OR ABSENT STAMP DASHES rather than printing `0` — the same
     // fail-safe `ageMs` and `sessionIsStale` already take.
     const idle = age === null ? NOT_REPORTED : (0, channel_session_units_1.coarseAge)(age);
-    return `| ${name} | ${handle} | ${stateFull} | ${thread} | ${channel} | ${template} | ${model} | ${tool} | ${idle} |`;
+    return `| ${name} | ${handle} | ${stateFull} | ${thread} | ${channel} | ${identity} | ${model} | ${tool} | ${idle} |`;
 }
 /**
  * THE SESSION BLOCK AN `await` RETURNS WITH ITS RESULT — the caller's own agents

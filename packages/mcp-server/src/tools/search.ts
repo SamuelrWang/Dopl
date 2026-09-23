@@ -54,7 +54,7 @@ function entryAddress(h: {
  * ⚠ THE GROUP COUNT IS A CONSTANT, NOT A LITERAL IN THREE PLACES. It is the
  * DENOMINATOR `partialRead`'s notice reports against ("2 of 4 groups could not
  * be read"), and it must move with the reads below and with the description's
- * opening word — never independently of either. Named when the templates group
+ * opening word — never independently of either. Named when the identities group
  * landed (2026-08-28), because the previous shape had the number inline and the
  * word "THREE" spelled out in prose that nothing tied to it.
  */
@@ -93,7 +93,7 @@ const SEARCH_SHAPE = {
  */
 const SEARCH_DESCRIPTION = composeDescription({
   headline:
-    "Ranked hits across FOUR domains: knowledge entries, skills, ontology objects, agent templates.",
+    "Ranked hits across FOUR domains: knowledge entries, skills, ontology objects, agent identities.",
   policy: "Read-only.",
   // ⚠ ONE ROUTING LINE, AND THE CHAT-ARCHIVE EDGE MOVED INTO THE BODY. It is
   // the same fact either way, and the body is where it belongs: the archive is
@@ -103,7 +103,7 @@ const SEARCH_DESCRIPTION = composeDescription({
     'Use dopl_kb(op="read_file"), dopl_skill(op="get"), dopl_ontology(op="get") or dopl_agent(op="get") to read a hit.',
   ],
   body: [
-    'A miss is not absence: only ENTRIES match on bodies, so a term inside a SKILL.md or a template\'s INSTRUCTIONS is lost. Members, teams, channels, the CHAT ARCHIVE: unsearched — dopl_chats(op="list") is the archive\'s own filter.',
+    'A miss is not absence: only ENTRIES match on bodies, so a term inside a SKILL.md or an identity\'s INSTRUCTIONS is lost. Members, teams, channels, the CHAT ARCHIVE: unsearched — dopl_chats(op="list") is the archive\'s own filter.',
   ],
   limits: { shape: SEARCH_SHAPE, only: ["limit"] },
   errors: SEARCH_ERRORS,
@@ -158,7 +158,7 @@ function scopeNote(limit: number, notice: string, terse: boolean): string {
       ? `_${notice}Scope: max ${limit} per group — a recall-capped sample, not a census. See this tool's description._`
       : `_Scope: max ${limit} per group — a recall-capped sample, not a census. See this tool's description._`;
   }
-  return `_${notice}Scope: max ${limit} per group, in ONE workspace — this one, with no cross-workspace fan-out. Only knowledge entries are matched on their BODIES; skills, ontology objects and agent templates on names and short metadata only, so a term living inside a SKILL.md or inside a template's instructions is not findable here. Drafts are excluded from Skills. Agent templates are the ones you can SEE, across both shelves. The CHAT ARCHIVE is not searched at all (dopl_chats(op="list", query=...)). Knowledge entries are a ranked SAMPLE: candidates are capped before ranking, distant matches are dropped, and hits in bases you cannot read are removed after ranking — so fewer hits than \`limit\` does not mean there are no others. A group whose read failed still shows "No matches" and is named with reason=partial_read opening this line; no group here is proof of absence._`;
+  return `_${notice}Scope: max ${limit} per group, in ONE workspace — this one, with no cross-workspace fan-out. Only knowledge entries are matched on their BODIES; skills, ontology objects and agent identities on names and short metadata only, so a term living inside a SKILL.md or inside an identity's instructions is not findable here. Drafts are excluded from Skills. Agent identities are the ones you can SEE, across both shelves. The CHAT ARCHIVE is not searched at all (dopl_chats(op="list", query=...)). Knowledge entries are a ranked SAMPLE: candidates are capped before ranking, distant matches are dropped, and hits in bases you cannot read are removed after ranking — so fewer hits than \`limit\` does not mean there are no others. A group whose read failed still shows "No matches" and is named with reason=partial_read opening this line; no group here is proof of absence._`;
 }
 
 /**
@@ -175,7 +175,7 @@ function scopeNote(limit: number, notice: string, terse: boolean): string {
  * "everywhere" and gets four groups will otherwise take a miss as evidence of
  * absence across its whole account rather than across four domains of it.
  */
-const SCOPE_AXIS_NOTE = `Each scope was searched the same way a single-scope call searches: knowledge entries on their BODIES, skills, ontology objects and agent templates on names and short metadata only, ACTIVE skills only, and only what you can see there. The CHAT ARCHIVE, members, teams and channels are not searched in ANY scope. A wider SCOPE is not a wider DOMAIN — no scope here is proof of absence.`;
+const SCOPE_AXIS_NOTE = `Each scope was searched the same way a single-scope call searches: knowledge entries on their BODIES, skills, ontology objects and agent identities on names and short metadata only, ACTIVE skills only, and only what you can see there. The CHAT ARCHIVE, members, teams and channels are not searched in ANY scope. A wider SCOPE is not a wider DOMAIN — no scope here is proof of absence.`;
 
 export function registerSearchTool(
   register: RegisterTool,
@@ -238,7 +238,7 @@ export function registerSearchTool(
       // ⚠ Fail-soft (one broken domain must not fail the search) but RECORD the
       // failure. Labels must match the group headings below.
       const reads = partialRead();
-      const [entryHits, skills, ontology, templates] = await Promise.all([
+      const [entryHits, skills, ontology, identities] = await Promise.all([
         reads.soft("Knowledge entries", client.searchKb(args.query, { limit }), []),
         reads.soft("Skills", client.listSkills(), []),
         // ⚠ SUMMARY PROJECTION, NOT THE GRAPH. This group uses four fields
@@ -254,8 +254,8 @@ export function registerSearchTool(
         // ⚠ NO `shelf` FILTER — absent means BOTH shelves, which is the whole
         // point of a FIND surface: a user naming "my research agent" does not
         // know or care which shelf it is on. The server has already applied
-        // `canSeeTemplate`, so this is that caller's own view.
-        reads.soft("Agent templates", client.listAgentTemplates(), []),
+        // `canSeeIdentity`, so this is that caller's own view.
+        reads.soft("Agent identities", client.listAgentIdentities(), []),
       ]);
 
       // ⚠ Caller's own argument, but a backtick still escapes this span and
@@ -317,26 +317,26 @@ export function registerSearchTool(
         );
       }
 
-      // ⚠ AGENT TEMPLATES ARE MATCHED ON NAME + DESCRIPTION ONLY, never on
+      // ⚠ AGENT IDENTITIES ARE MATCHED ON NAME + DESCRIPTION ONLY, never on
       // `instructions`. That is a deliberate omission, not an oversight: the
       // instructions block is a system prompt another member wrote, and folding
       // it into the haystack would let one member's prose decide which identity
       // a stranger's agent surfaces. `visibility` rides the row because it is
       // what makes two same-named hits distinguishable — the same reason the
       // ambiguity refusal carries it.
-      const templateMatches = templates.filter((t) =>
+      const identityMatches = identities.filter((t) =>
         matches(t.name, t.description),
       );
-      const templateHits = templateMatches.slice(0, limit);
-      lines.push("", "## Agent templates");
-      if (templateHits.length === 0) lines.push("_No matches._");
-      for (const t of templateHits) {
+      const identityHits = identityMatches.slice(0, limit);
+      lines.push("", "## Agent identities");
+      if (identityHits.length === 0) lines.push("_No matches._");
+      for (const t of identityHits) {
         const summary = inlineOr(t.description, "`(no description)`");
         lines.push(
           `- ${inlineOr(t.name, NO_NAME)} (id: \`${t.id}\` · ${t.visibility}) — ${summary}`,
         );
       }
-      lines.push(...more(templateMatches.length, templateHits.length, "agent templates"));
+      lines.push(...more(identityMatches.length, identityHits.length, "agent identities"));
 
       // ⚠ GROUPS, not domains — the denominator must move with the reads above,
       // never independently of them.

@@ -35,21 +35,21 @@ export interface ChannelContext {
    * callers and user-scoped keys (2026-08-23).
    *
    * ⚠ **CARRIED FOR EXACTLY ONE READER AND IT IS A FENCE, NOT A HINT.**
-   * `service-launch.ts › resolveTemplateForDirective` hands it to
-   * `agent-templates › canSeeTemplate`, whose SECOND arm is M-10: a
+   * `service-launch.ts › resolveIdentityForDirective` hands it to
+   * `agent-identities › canSeeIdentity`, whose SECOND arm is M-10: a
    * workspace-scoped key may be shared between humans, so it inherits nobody's
    * personal reach and sees only `visibility: 'workspace'` rows. Building that
    * context with `null` would let such a key resolve the key-owner's PRIVATE
-   * templates by name. Nothing else in channels reads it — the channel fences are
+   * identities by name. Nothing else in channels reads it — the channel fences are
    * membership rows, not per-person visibility.
    */
   apiKeyWorkspaceId?: string | null;
   /**
    * WHOSE REACH the credential inherits (`mcp_tokens.subject_user_id`), carried
    * for the SAME single reader and for the same reason (2026-08-27, F-333).
-   * ⚠ Without it `resolveTemplateForDirective` hands `canSeeTemplate` an
+   * ⚠ Without it `resolveIdentityForDirective` hands `canSeeIdentity` an
    * anonymous credential — so a launch directive naming the operator's OWN
-   * private template answers `AGENT_TEMPLATE_NOT_FOUND` from the operator's own
+   * private identity answers `AGENT_IDENTITY_NOT_FOUND` from the operator's own
    * session. Never read it directly; the reader is
    * `shared/auth/credential-audience.ts › isSharedCredential`.
    */
@@ -94,7 +94,7 @@ export function buildChannelContext(auth: AuthLike): ChannelContext {
     role: auth.role ?? null,
     // ⚠ `?? null`, so a caller that forgot the field gets the RESTRICTIVE value
     // for every *other* fence — but note this one reads backwards: `null` means
-    // "not a workspace key", which is the WIDER answer at `canSeeTemplate`'s arm
+    // "not a workspace key", which is the WIDER answer at `canSeeIdentity`'s arm
     // 2. That is why `WorkspaceAuthContext` always sets it explicitly and why
     // this line exists at all rather than the field being left off the context.
     apiKeyWorkspaceId: auth.apiKeyWorkspaceId ?? null,

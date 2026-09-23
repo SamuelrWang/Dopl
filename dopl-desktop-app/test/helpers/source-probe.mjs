@@ -163,7 +163,7 @@ export function declaredProps(css) {
 }
 
 // ── javascript ───────────────────────────────────────────────────────────────
-// Strings / templates / comments blanked, so brace matching cannot be thrown off by a
+// Strings / identities / comments blanked, so brace matching cannot be thrown off by a
 // `{` inside a literal. (The renderer files carry no regex literals.)
 function maskJs(src) {
   let out = "";

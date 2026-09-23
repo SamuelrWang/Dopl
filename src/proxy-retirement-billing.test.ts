@@ -122,7 +122,7 @@ describe("legacy billing URLs are rewritten, never landed on /get-started", () =
       "/billing?billing=upgrade",
     ],
     [
-      "an unsubstituted Stripe session template",
+      "an unsubstituted Stripe session identity",
       "/canvas?billing=success&session_id=%7BCHECKOUT_SESSION_ID%7D",
       "/billing?billing=success&session_id=%7BCHECKOUT_SESSION_ID%7D",
     ],

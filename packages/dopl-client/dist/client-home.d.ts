@@ -9,9 +9,9 @@
  * ⚠ **BOTH NOW ADDRESS `/api/channels?scope=account`** (R-26 (b)); the names are
  * kept because `client-surface.test.ts` pins them. See `home.ts`.
  */
-import { AgentTemplateMethods } from "./client-agent-templates.js";
+import { AgentIdentityMethods } from "./client-agent-identities.js";
 import type { HomeChannelCreateResult, HomeChannelsPayload } from "./home-types.js";
-export declare class HomeMethods extends AgentTemplateMethods {
+export declare class HomeMethods extends AgentIdentityMethods {
     getHomeChannels(): Promise<HomeChannelsPayload>;
     createHomeChannel(input: {
         name: string;

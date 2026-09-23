@@ -167,7 +167,7 @@ export function canManageChannelGrants(
  * 2026-09-18; `workspaces/server/home-channel-destination.ts` states the rule).
  *
  * **A create fence with no twin on the verb that UNDOES it is a fence defeated
- * in two calls** — F-289's argument, which the template lane already makes on
+ * in two calls** — F-289's argument, which the identity lane already makes on
  * its PATCH. `service-base-gates.ts › assertCreateBaseAllowed` refuses a
  * `private`, ungranted base landing in a `kind='link'` container; dropping that
  * base's LAST channel grant re-mints exactly that row, in place, with no refusal

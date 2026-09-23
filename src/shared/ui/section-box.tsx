@@ -13,7 +13,7 @@ const MIN_BODY_H = 56;
  * 2026-09-17: flat wins; the web login page keeps concave for now).** What is
  * left is a closed list — the FROZEN settings surfaces (INVARIANTS §15) and the
  * composer panel's own standing ruling — and the list is a TEST, not prose:
- * `features/agent-templates/components/template-editor-surface.test.tsx › the
+ * `features/agent-identities/components/identity-editor-surface.test.tsx › the
  * concave section recipe is off the desktop` names each entry and its reason,
  * and may only shrink. Anything else reaching for this on a desktop surface is
  * the ruling being re-broken.

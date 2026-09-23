@@ -29,26 +29,26 @@
  * ⚠ **IT REQUIRES A `QueryClientProvider` SINCE 2026-09-08**, unconditionally.
  * `launch-agent-dialog.tsx › LaunchAgentDialog` is mounted with the ROW rather
  * than with its own open state, so the popup keeps `ModalShell`'s fade-OUT; the
- * cost is that its template `useQuery` exists (disabled, fetching nothing) while
+ * cost is that its identity `useQuery` exists (disabled, fetching nothing) while
  * the form is shut, and TanStack still wants the provider.
  *
  * ⚠ "AGENTS" NAMES TWO DIFFERENT SURFACES AND BOTH NAMES STAY (Samuel's ruling
  * Q6, 2026-08-26; INVARIANTS §5A). THIS tab is the RUNNING SESSIONS — ephemeral,
  * per-operator. The /home **Agents** face (`apps/desktop-ui/src/pages/home/
- * agent-panels.tsx`) is TEMPLATE IDENTITIES, durable and authored, and has no
+ * identity-panels.tsx`) is IDENTITY IDENTITIES, durable and authored, and has no
  * launch control precisely so this side stays the only place an agent starts.
- * They join at `agent-templates/components/template-picker.tsx ›
- * TemplateLaunchPicker` below, which reads the list the /home face authors.
+ * They join at `agent-identities/components/identity-picker.tsx ›
+ * IdentityLaunchPicker` below, which reads the list the /home face authors.
  * **A rename needs Samuel's word** — §5's noun rule has tests behind it.
  */
 
 import { useMemo } from "react";
 import { ChevronDown, Plus } from "lucide-react";
 import {
-  TemplateLaunchPicker,
-  useTemplatePicker,
-} from "@/features/agent-templates/components/template-picker";
-import type { TemplateLaunchOverrides } from "@/features/agent-templates/lib/launch-overrides";
+  IdentityLaunchPicker,
+  useIdentityPicker,
+} from "@/features/agent-identities/components/identity-picker";
+import type { IdentityLaunchOverrides } from "@/features/agent-identities/lib/launch-overrides";
 import type { DesktopSessionSummary } from "@/shared/lib/spa-bridge";
 import { cn } from "@/shared/lib/utils";
 import type { ChannelPeerSession } from "../hooks/use-channel-agent-sessions";
@@ -83,7 +83,7 @@ export function AgentsTab({
   launchBusy = false,
   launchError = null,
   onLaunchAgent,
-  onApproveTemplate,
+  onApproveIdentity,
   openAgent,
   onOpenAgent,
   // ⚠ `onNewThread` IS ACCEPTED AND NOT DESTRUCTURED — binding an unused local is
@@ -93,7 +93,7 @@ export function AgentsTab({
    *  main without it. ⚠ Never collapse `null` into `[]` on the way in. */
   sessions: readonly DesktopSessionSummary[] | null;
   channelId: string;
-  /** THE TEMPLATE PICKER'S ONE INPUT. ⚠ Absent ⇒ NO CHEVRON, and the New Agent
+  /** THE IDENTITY PICKER'S ONE INPUT. ⚠ Absent ⇒ NO CHEVRON, and the New Agent
    *  button is exactly what it was — the same feature-detected degradation every
    *  bridge affordance in this family follows, applied to a READ instead of an
    *  op (a picker with no workspace to list is a control that can only be
@@ -118,7 +118,7 @@ export function AgentsTab({
    *  can be said (`use-agents-panel.ts › launchRefusalText`). */
   launchError?: string | null;
   /**
-   * ⚠ THE ZERO-TEMPLATE CALL IS THE PINNED ONE. `onLaunchAgent(threadId)` is what
+   * ⚠ THE ZERO-IDENTITY CALL IS THE PINNED ONE. `onLaunchAgent(threadId)` is what
    * the New Agent button does in ONE CLICK; the optional arguments are the
    * picker's and the popup's (Samuel's "one lane, one-click launch" ruling — the
    * picker never intercepts the button).
@@ -128,8 +128,8 @@ export function AgentsTab({
    */
   onLaunchAgent?: (
     threadId: string | null,
-    templateId?: string | null,
-    overrides?: TemplateLaunchOverrides,
+    identityId?: string | null,
+    overrides?: IdentityLaunchOverrides,
     /** ⚠ THE POPUP'S TWO EXTRA ARGUMENTS (2026-09-08) — the pre-assigned id and the
      *  per-spawn runtime `use-agents-panel.ts › launchAgent` has taken since
      *  2026-08-27/08-31. The picker's shorter calls are unchanged. */
@@ -140,10 +140,10 @@ export function AgentsTab({
      *  "no colour"; the picker's shorter calls stay unchanged. */
     color?: AgentColorKey
   ) => Promise<AgentLaunchOutcome> | void;
-  /** Store a first-use approval for another member's template, machine-locally.
+  /** Store a first-use approval for another member's identity, machine-locally.
    *  ⚠ Absent ⇒ the approval modal says the build cannot remember it, rather
    *  than looping on a refusal it can never clear. */
-  onApproveTemplate?: (templateId: string) => Promise<{ ok: boolean; reason?: string }>;
+  onApproveIdentity?: (identityId: string) => Promise<{ ok: boolean; reason?: string }>;
   /** `agentKey(session)` of the open agent view, or null. */
   openAgent: string | null;
   onOpenAgent: (key: string) => void;
@@ -164,13 +164,13 @@ export function AgentsTab({
   // ⚠ CALLED UNCONDITIONALLY, ABOVE EVERY EARLY RETURN. The tab bails out for a
   // browser (`sessions === null`) further down, and a hook behind that branch is
   // a hook-order violation on the very first desktop render.
-  const picker = useTemplatePicker();
+  const picker = useIdentityPicker();
   // ⚠ SAME RULE, SAME REASON — the popup's own state, above every early return.
   const launch = useAgentLaunch();
   // `userId → name` for the picker's authorship marker. ⚠ THE CHANNEL ROSTER,
-  // which is not the workspace's — a template shared by someone outside this
+  // which is not the workspace's — an identity shared by someone outside this
   // channel resolves to no name and the marker degrades to "by another member"
-  // rather than disappearing (`template-picker.tsx › authorMarker`).
+  // rather than disappearing (`identity-picker.tsx › authorMarker`).
   // ⚠ **NO `useMemo`**, on the precedent {@link colorOf} records below and for the
   // same measured reason: wrapping this map made the React Compiler BAIL ON THIS
   // COMPONENT — `npx eslint` reported *"Existing memoization could not be
@@ -199,10 +199,10 @@ export function AgentsTab({
       // POINT OF THE COUNT BEING IN THIS COMMENT**: a rest-spread would forward a seventh
       // argument nobody had declared, and the failure mode of this lane is a field that LOOKS
       // wired and sends nothing (2026-09-13: `color` was the sixth to be added this way).
-      launchAgent: async (threadId, templateId, overrides, agentId, runtime, color) => {
+      launchAgent: async (threadId, identityId, overrides, agentId, runtime, color) => {
         const res = await onLaunchAgent?.(
           threadId,
-          templateId,
+          identityId,
           overrides,
           agentId,
           runtime,
@@ -210,10 +210,10 @@ export function AgentsTab({
         );
         return res ?? { ok: false, reason: "no-bridge" as const };
       },
-      approveTemplate: async (templateId: string) =>
-        (await onApproveTemplate?.(templateId)) ?? { ok: false, reason: "no-bridge" },
+      approveIdentity: async (identityId: string) =>
+        (await onApproveIdentity?.(identityId)) ?? { ok: false, reason: "no-bridge" },
     }),
-    [canLaunch, launchBusy, launchError, onLaunchAgent, onApproveTemplate]
+    [canLaunch, launchBusy, launchError, onLaunchAgent, onApproveIdentity]
   );
   // Peers: other members' live rows, thread-scoped like everything on the tab.
   // Own rows are excluded — the LOCAL feed below is the richer truth for mine.
@@ -258,14 +258,14 @@ export function AgentsTab({
    * face called and the chevron used to call itself.
    *
    * ⚠ **AND SINCE 2026-09-13 THE CHEVRON OPENS THE SAME FORM** (Samuel, over the deleted
-   * `launch-sheet.tsx`): `TemplateLaunchPicker` CHOOSES a template and `launch.openWithTemplate`
+   * `launch-sheet.tsx`): `IdentityLaunchPicker` CHOOSES an identity and `launch.openWithIdentity`
    * opens this popup on it. So the split button has two hit targets, two accessible names and
    * **one form** — the zone is still distinct (never a menu in front of the button), and the
-   * template roster is what it buys.
+   * identity roster is what it buys.
    * ⚠ BOTH VIEWS GO THROUGH IT, reading `openThreadId ?? null`: thread view lands the agent on
    * that exchange, channel view on the ROOM (2026-08-31, the channel-level lane).
    * ⚠ THE ONLY GATES ARE `canLaunch` (feature detection over the bridge) and a launch already in
-   * flight. `workspaceId` gates the CHEVRON and the popup's template roster — not the button.
+   * flight. `workspaceId` gates the CHEVRON and the popup's identity roster — not the button.
    */
   const launchRow = canLaunch && onLaunchAgent && (
     <div className="mb-3">
@@ -295,8 +295,8 @@ export function AgentsTab({
             {launchBusy ? "Starting\u2026" : "New agent"}
           </button>
           {/* ⚠ THE CHEVRON IS ON BOTH VIEWS SINCE 2026-09-08 (Samuel: *"Same
-              one, that enables me to launch a template"*) — the last piece of the
-              redirect the 2026-08-31 ruling deleted. A template launch is the same
+              one, that enables me to launch an identity"*) — the last piece of the
+              redirect the 2026-08-31 ruling deleted. An identity launch is the same
               lane as a blank one, so with no thread open it starts on the ROOM.
               The only gate left is `workspaceId`: feature detection over a READ,
               since a picker with no workspace to list can only be empty. */}
@@ -314,7 +314,7 @@ export function AgentsTab({
                 // \u26a0 ITS OWN NAME, never the launch button's \u2014 two controls
                 // sharing an accessible name are one control to a screen reader,
                 // and the point of the split is that they are two.
-                aria-label="Launch from template"
+                aria-label="Launch from identity"
                 // w-8 = 32px, over the 24px floor Samuel set for this zone.
                 className="flex w-8 shrink-0 cursor-pointer items-center justify-center text-text-on-cta/75 transition-colors hover:text-text-on-cta disabled:opacity-60"
               >
@@ -331,7 +331,7 @@ export function AgentsTab({
       )}
       {/* ⚠ THE FORM ITSELF. Mounted with the ROW rather than with the button, so the popup and
           the refusal line it may print live in one place. `currentUserId ?? ""` is FAIL-CLOSED:
-          with no viewer id every template wears the authorship marker (INVARIANTS §5A) rather
+          with no viewer id every identity wears the authorship marker (INVARIANTS §5A) rather
           than none of them silently reading as mine. */}
       <LaunchAgentDialog
         panel={launch}
@@ -354,7 +354,7 @@ export function AgentsTab({
         members={members}
       />
       {workspaceId && (
-        <TemplateLaunchPicker
+        <IdentityLaunchPicker
           open={picker.open}
           at={picker.at}
           onClose={picker.close}
@@ -363,14 +363,14 @@ export function AgentsTab({
           memberNames={memberNames}
           busy={launchBusy}
           /* ⚠ **IT CHOOSES AND THE POPUP LAUNCHES (2026-09-13, Samuel's ruling over the
-             deleted launch sheet).** `openWithTemplate` opens the ONE form with the row
+             deleted launch sheet).** `openWithIdentity` opens the ONE form with the row
              preselected and its Name / Description / Instructions prefilled — so the two
              halves of the split button reach the SAME dialog and cannot disagree about where
              they launch, which is what the `openThreadId ?? null` argument used to buy by hand.
              ⚠ **`null` IS THE BLANK ROW** and lands on the popup's `None`, the same state the
              face's own click opens on. ⚠ `approve` LEFT WITH THE LAUNCH: the first-use question
              is `use-agent-launch-run.ts › useLaunchRunner`'s, on the one lane. */
-          onPick={(template) => launch.openWithTemplate?.(template)}
+          onPick={(identity) => launch.openWithIdentity?.(identity)}
         />
       )}
     </div>

@@ -57,7 +57,7 @@ import { PAGE_ACTION_BTN } from "./panel-buttons";
  * `.auth-btn-3d` fill, on the reasoning that /home forbids concave surfaces.
  * That was wrong twice over** — the reference IS the spec, and the no-concave
  * sweep now records this one file as the sanctioned exception
- * (`agent-templates/components/template-editor.test.tsx › no concave
+ * (`agent-identities/components/identity-editor.test.tsx › no concave
  * surfaces`), so the rule still binds every other /home surface.
  *
  * ⚠ **THREE FACTS, ALL THREE REQUIRED (Samuel: "it should show credits left. It

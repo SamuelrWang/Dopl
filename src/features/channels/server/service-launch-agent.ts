@@ -167,7 +167,7 @@ async function refuseForeignTarget(
  *     the answer is still "no", which is why it is last.
  *
  * ⚠ **GATE 2 SITS ABOVE PRESENCE, BREAKING THE CHEAPNESS ORDER FOR THE SAME
- * REASON THE TEMPLATE GATE DOES.** `offline` is a 200 meaning "nothing was
+ * REASON THE IDENTITY GATE DOES.** `offline` is a 200 meaning "nothing was
  * asked", the ordinary answer for a closed laptop. Answering a PEER'S AGENT ID
  * with "your machine is asleep" sends the caller to fix the wrong thing and get
  * the real refusal a minute later; a foreign id is the caller's own error and is
@@ -210,8 +210,8 @@ export async function createAgentDirective(
     task_id: null,
     goal: null,
     model: null,
-    template_id: null,
-    template_name: null,
+    identity_id: null,
+    identity_name: null,
     target_agent_id: input.agentId,
     // ⚠ `null` ON AN END, `string` (possibly '') ON A RENAME — the column CHECK
     // enforces both directions, so an end that smuggled a name and a rename that

@@ -46,7 +46,7 @@ export const PREFS = read("channel-prefs.js");
 // `channel-dir-ipc.js` was split off the 500-line cap. The record's ONE consumer did not
 // change — only the file it lives in. `channel-dir-ipc.js` is still read below, because the
 // "and by nothing else" half must keep covering the half that stayed.
-// ⚠ REPOINTED AGAIN 2026-08-22 (the agent-templates wave): the `sessions:launch` BODY moved
+// ⚠ REPOINTED AGAIN 2026-08-22 (the agent-identities wave): the `sessions:launch` BODY moved
 // to `main/session-launch-op.js` in a §1 split, so the DURABLE POSTURE READ this file is a
 // census of moved with it. `session-ipc-ops.js` still registers the op.
 export const DIRIPC = read("session-launch-op.js");

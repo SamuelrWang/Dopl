@@ -128,7 +128,7 @@ test("durableSessionRecord whitelists exactly the durable fields", () => {
     counterpartyName: "David", // D1: the header identity, persisted for a reopen
     channelName: "Ops",
     taskTitle: "Ship the invoice import",
-    templateName: "Code Auditor", // F-288: the agent's TEMPLATE identity, persisted for a resume
+    identityName: "Code Auditor", // F-288: the agent's IDENTITY identity, persisted for a resume
     turns: 7, // FIX #9: the running counter, persisted for a P2 rehydrate
     costUsd: 0.42, // ⚠ DELETED 2026-09-22 — still handed IN here, to prove the whitelist drops it
     ownPostSeq: 11, // 2026-08-22: the outbound post counter, persisted for the SAME resume
@@ -142,11 +142,11 @@ test("durableSessionRecord whitelists exactly the durable fields", () => {
     // id is persisted and RE-USED by a resume, so a counter that reset re-minted client_msg_ids
     // the server already held and its idempotency short-circuit swallowed the resumed agent's
     // replies — a silent data loss, not a cosmetic revert.
-    // "templateName" (2026-08-23, F-288) is the third of that family and the same argument again:
-    // `context.template` lives only on the live session object, so a CRASH RESUME rebuilt the
-    // context without it, reported `templateName: null`, and — because `templateName` is in
+    // "identityName" (2026-08-23, F-288) is the third of that family and the same argument again:
+    // `context.identity` lives only on the live session object, so a CRASH RESUME rebuilt the
+    // context without it, reported `identityName: null`, and — because `identityName` is in
     // `session-telemetry.js › STATE_FIELDS` and so bypasses the cadence floor — ERASED
-    // `channel_sessions.template_name` on the next push, under a still-running agent.
+    // `channel_sessions.identity_name` on the next push, under a still-running agent.
     // "runtimeId" (2026-08-31, the runtime-adapter port) is the FOURTH of that family and has
     // the sharpest version of the argument yet: `session-park.js › startResume` rebuilds the whole
     // session from this record and hands the persisted `sdkSessionId` to whatever runtime it
@@ -178,9 +178,9 @@ test("durableSessionRecord whitelists exactly the durable fields", () => {
     // keys is the proof that a record written by an older build drops the field on read rather
     // than carrying it forward — the same treatment `turnCap` got when the caps went.
     "agentId", "bind", "channelId", "channelName", "counterpartyId",
-    "counterpartyName", "direct", "key", "launchChain", "launchDepth", "mode", "model",
+    "counterpartyName", "direct", "identityName", "key", "launchChain", "launchDepth", "mode", "model",
     "ownPostSeq", "parkedAt", "phase", "profile", "runtimeId", "sdkSessionId", "sessionId",
-    "side", "startedAt", "taskId", "taskTitle", "templateName", "turns", "workspaceId",
+    "side", "startedAt", "taskId", "taskTitle", "turns", "workspaceId",
   ]);
   // ⚠ A PASSTHROUGH, AND **NULL IS OLD** — `durableSessionRecord` is in the PURE block and may not
   // read a clock; `saveRecord` / `setRecordPhase` stamp it at the two park writes.
@@ -193,14 +193,14 @@ test("durableSessionRecord whitelists exactly the durable fields", () => {
   assert.equal("turnCap" in durableSessionRecord({ turnCap: 200 }), false,
     "a record written by an OLDER build carries a cap; the whitelist must drop it, not carry it");
   assert.equal(rec.ownPostSeq, 11);
-  assert.equal(rec.templateName, "Code Auditor");
-  // ⚠ AT THE COLUMN'S OWN 120, NOT `durableName`'s 80 DISPLAY DEFAULT (F-287): a template name is
-  // an IDENTITY, and persisting a clipped one would resume reporting a name no template has.
-  assert.equal(durableSessionRecord({ templateName: "N".repeat(200) }).templateName.length, 120);
+  assert.equal(rec.identityName, "Code Auditor");
+  // ⚠ AT THE COLUMN'S OWN 120, NOT `durableName`'s 80 DISPLAY DEFAULT (F-287): an identity name is
+  // an IDENTITY, and persisting a clipped one would resume reporting a name no identity has.
+  assert.equal(durableSessionRecord({ identityName: "N".repeat(200) }).identityName.length, 120);
   assert.equal(durableSessionRecord({ channelName: "C".repeat(200) }).channelName.length, 80,
     "…and a DISPLAY string keeps the display default");
   for (const junk of [undefined, null, "", "   ", 7, {}]) {
-    assert.equal(durableSessionRecord({ templateName: junk }).templateName, null, JSON.stringify(junk));
+    assert.equal(durableSessionRecord({ identityName: junk }).identityName, null, JSON.stringify(junk));
   }
   // Same NaN discipline as `turns`: a hand-edited store lands on 0, never NaN.
   for (const junk of [undefined, null, "x", NaN, {}, -1 / 0]) {

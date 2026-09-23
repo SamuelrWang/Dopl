@@ -113,7 +113,7 @@ vi.mock("./use-agents-panel", () => ({
     launchBusy: false,
     launchError: null,
     launchAgent: async () => ({ ok: true }),
-    approveTemplate: async () => ({ ok: true }),
+    approveIdentity: async () => ({ ok: true }),
     refetch: () => {},
   }),
 }));
@@ -138,7 +138,7 @@ vi.mock("./use-desktop-sessions", () => ({
 // Imported AFTER the mock declarations for readability; `vi.mock` is hoisted.
 import { StandaloneChannelSurface } from "./channel-surface-standalone";
 import { useChannelWebView } from "./use-channel-web-view";
-import { TEMPLATE_NAME_TEXT } from "@/features/agent-templates/components/template-section";
+import { IDENTITY_NAME_TEXT } from "@/features/agent-identities/components/identity-section";
 
 const CHANNEL = channel();
 
@@ -322,21 +322,21 @@ describe("the web channel page — the URL keeps the face", () => {
  *
  * ⚠ **THE ASSERTION IS AGAINST THE CONSTANT, NOT ITS CURRENT VALUE.** A hand-typed
  * `text-title font-medium` reads identically today and drifts the day
- * `TEMPLATE_NAME_TEXT` moves — the same argument `agents-wells.test.tsx` makes for
+ * `IDENTITY_NAME_TEXT` moves — the same argument `agents-wells.test.tsx` makes for
  * the well heading, which is the type Samuel pointed at when he named it.
  */
 describe("the channel header's name and dropdown wear one type", () => {
-  it("puts `TEMPLATE_NAME_TEXT` on the channel name and on the dropdown beside it", () => {
+  it("puts `IDENTITY_NAME_TEXT` on the channel name and on the dropdown beside it", () => {
     mountWeb();
     const header = screen
       .getByRole("button", { name: "Channel view" })
       .closest("header") as HTMLElement;
     const name = within(header).getByText(CHANNEL.name);
-    expect(name.className).toContain(TEMPLATE_NAME_TEXT);
+    expect(name.className).toContain(IDENTITY_NAME_TEXT);
     // ⚠ THE TRIGGER'S PILL IS UNTOUCHED — only the type moves, so the `flat` face's
     // border and fill are still there under it.
     const trigger = screen.getByRole("button", { name: "Channel view" });
-    expect(trigger.className).toContain(TEMPLATE_NAME_TEXT);
+    expect(trigger.className).toContain(IDENTITY_NAME_TEXT);
     expect(trigger.className).toContain("bg-bg-inset");
   });
 
@@ -355,7 +355,7 @@ describe("the channel header's name and dropdown wear one type", () => {
       .getByRole("button", { name: "Channel info" })
       .closest("header") as HTMLElement;
     expect(within(header).getByText(CHANNEL.name).className).toContain(
-      TEMPLATE_NAME_TEXT
+      IDENTITY_NAME_TEXT
     );
   });
 });

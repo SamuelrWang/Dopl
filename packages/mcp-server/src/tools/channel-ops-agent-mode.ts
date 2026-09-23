@@ -105,7 +105,7 @@ const RETRY_ADVICE: Record<LaunchRefusalReason, "once" | "no"> = {
   // being made to account for it.
   cap: "no",
   "no-counterparty": "no",
-  "no-template": "no",
+  "no-identity": "no",
   "bad-name": "no",
   // ⚠ NO PRODUCER ON THIS KIND — `no-chain` is the LAUNCH lane's word for a
   // channel whose `channelAgentChain` toggle is off, and a re-posture starts

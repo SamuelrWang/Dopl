@@ -2,11 +2,11 @@
 /**
  * THE EDITOR — the fields, the controls, and the dialogs over the dialog.
  *
- * ⚠ **THE PAYLOAD HALF MOVED TO `template-editor-payload.test.tsx` ON
+ * ⚠ **THE PAYLOAD HALF MOVED TO `identity-editor-payload.test.tsx` ON
  * 2026-09-08**, at the 500-line cap, when the knowledge picker's tree mock
  * landed here. The third such cut on this file: the SOURCE READ went to
- * `template-editor-surface.test.tsx` and the attachment count to
- * `template-editor-knowledge.test.tsx`, both for the same reason.
+ * `identity-editor-surface.test.tsx` and the attachment count to
+ * `identity-editor-knowledge.test.tsx`, both for the same reason.
  *
  * ⚠ THE LAST DESCRIBE IS A SOURCE READ, NOT A RENDER. Samuel's ruling for this
  * page (2026-08-22) is that **nothing on it is pressed in** — no `FIELD_WELL`,
@@ -20,10 +20,10 @@
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
-import type { AgentTemplate } from "../client/types";
-import { draftToCreateBody, type TemplateDraft } from "../lib/template-draft";
+import type { AgentIdentity } from "../client/types";
+import { draftToCreateBody, type IdentityDraft } from "../lib/identity-draft";
 import { SECTIONS_CONTAINER } from "../lib/visibility";
-import { TemplateEditor } from "./template-editor";
+import { IdentityEditor } from "./identity-editor";
 
 const TEAMS = [
   { id: "team-1", name: "Platform" },
@@ -40,7 +40,7 @@ vi.mock("@/features/knowledge/client/hooks", async () => ({
   useKnowledgeTree: (await import("./knowledge-tree-mock")).useKnowledgeTree,
 }));
 
-function template(over: Partial<AgentTemplate> = {}): AgentTemplate {
+function identity(over: Partial<AgentIdentity> = {}): AgentIdentity {
   return {
     id: "tpl-1",
     workspaceId: "ws-1",
@@ -67,16 +67,16 @@ function template(over: Partial<AgentTemplate> = {}): AgentTemplate {
  * animates in), so nothing is in the DOM on the render that asked for it — the
  * same reason `channels/components/thread-manage.test.tsx` awaits its confirm.
  */
-async function open(over: Partial<React.ComponentProps<typeof TemplateEditor>> = {}) {
+async function open(over: Partial<React.ComponentProps<typeof IdentityEditor>> = {}) {
   const onSave = vi.fn();
   const onDelete = vi.fn();
   const onClose = vi.fn();
   render(
-    <TemplateEditor
+    <IdentityEditor
       open
       workspaceId="ws-1"
       session={1}
-      template={null}
+      identity={null}
       teams={TEAMS}
       knowledgeBases={BASES}
       saving={false}
@@ -99,8 +99,8 @@ const field = (selector: string) =>
  * ⚠ **INLINE SINCE 2026-09-22 — THERE IS NO ADD-FIELD DIALOG (Samuel).** The
  * gray "New field" box appends a BLANK row and the operator types in it, so this
  * helper fills the first empty row and only presses the box when every row on
- * screen already has a key. A new template opens holding one blank row
- * (`lib/template-draft.ts › emptyDraft`), which is why the press is conditional
+ * screen already has a key. A new identity opens holding one blank row
+ * (`lib/identity-draft.ts › emptyDraft`), which is why the press is conditional
  * rather than unconditional.
  */
 function addField(key: string, value: string) {
@@ -145,11 +145,11 @@ const scopeLabels = () =>
 afterEach(cleanup);
 
 describe("what the editor renders", () => {
-  it("carries every field a template IS", async () => {
+  it("carries every field an identity IS", async () => {
     await open();
-    expect(field("#agent-template-name")).toBeTruthy();
-    expect(field("#agent-template-description")).toBeTruthy();
-    expect(field("#agent-template-instructions")).toBeTruthy();
+    expect(field("#agent-identity-name")).toBeTruthy();
+    expect(field("#agent-identity-description")).toBeTruthy();
+    expect(field("#agent-identity-instructions")).toBeTruthy();
     expect(scopeLabels()).toEqual(["Private", "Team", "Public"]);
     expect(row("Model").getByRole("tab", { name: "Default" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "New field" })).toBeTruthy();
@@ -158,10 +158,10 @@ describe("what the editor renders", () => {
     expect(screen.getByRole("tree", { name: "Knowledge" })).toBeTruthy();
   });
 
-  it("loads an existing template's values, chips included", async () => {
-    await open({ template: template() });
-    expect(field("#agent-template-name").value).toBe("Release captain");
-    expect(field("#agent-template-instructions").value).toBe("Be terse.");
+  it("loads an existing identity's values, chips included", async () => {
+    await open({ identity: identity() });
+    expect(field("#agent-identity-name").value).toBe("Release captain");
+    expect(field("#agent-identity-instructions").value).toBe("Be terse.");
     expect(field('input[aria-label="Field 1 key"]').value).toBe("repo");
     expect(screen.getByRole("button", { name: "Detach Runbooks" })).toBeTruthy();
   });
@@ -170,14 +170,14 @@ describe("what the editor renders", () => {
     await open();
     expect(screen.queryByRole("button", { name: "Delete" })).toBeNull();
     cleanup();
-    await open({ template: template() });
+    await open({ identity: identity() });
     expect(screen.getByRole("button", { name: "Delete" })).toBeTruthy();
   });
 
   it("puts the server's own wording on the alert line", async () => {
-    await open({ error: "A template with that name already exists." });
+    await open({ error: "An identity with that name already exists." });
     expect(screen.getByRole("alert").textContent).toBe(
-      "A template with that name already exists."
+      "An identity with that name already exists."
     );
   });
 });
@@ -194,7 +194,7 @@ describe("the visibility scopes the mount offers", () => {
     // people in this relationship", not "everyone in your company".
     // 🔒 ⚠ IT WAS **TWO** UNTIL 2026-08-27. `private` went with the /home pane's
     // per-channel private section: a container is not navigable, so a private
-    // container template is now reachable from no surface at all — offering the
+    // container identity is now reachable from no surface at all — offering the
     // option would create write-only rows. The array IS the control, so the
     // array is where that door closes (`lib/visibility.ts`).
     await open({ sections: SECTIONS_CONTAINER, containerKind: "link" });
@@ -225,14 +225,14 @@ describe("the team picker", () => {
     // ⚠ MULTI, because the server's `teamIds` is a set — a single-value control
     // would drop every other grant on the next save.
     const { onSave } = await open();
-    fireEvent.change(field("#agent-template-name"), { target: { value: "Scout" } });
+    fireEvent.change(field("#agent-identity-name"), { target: { value: "Scout" } });
     pickScope("Team");
     fireEvent.click(screen.getByRole("button", { name: "Add team" }));
     fireEvent.click(screen.getByRole("menuitem", { name: "Platform" }));
     fireEvent.click(screen.getByRole("menuitem", { name: "Growth" }));
     fireEvent.click(screen.getByRole("button", { name: CREATE_VERB }));
 
-    const draft = onSave.mock.calls[0][0] as TemplateDraft;
+    const draft = onSave.mock.calls[0][0] as IdentityDraft;
     expect(draftToCreateBody(draft)).toEqual({
       name: "Scout",
       visibility: "team",
@@ -240,9 +240,9 @@ describe("the team picker", () => {
     });
   });
 
-  it("refuses Save while a Team template names no team", async () => {
+  it("refuses Save while a Team identity names no team", async () => {
     await open();
-    fireEvent.change(field("#agent-template-name"), { target: { value: "Scout" } });
+    fireEvent.change(field("#agent-identity-name"), { target: { value: "Scout" } });
     const save = screen.getByRole("button", { name: CREATE_VERB });
     expect((save as HTMLButtonElement).disabled).toBe(false);
     pickScope("Team");
@@ -282,7 +282,7 @@ describe("the popup-form kit's anatomy", () => {
     // ⚠ `.lineActive` is React state, not `:focus-within` — jsdom loads no
     // stylesheet, so this is the only layer of the sweep a render can assert.
     await open();
-    const name = field("#agent-template-name");
+    const name = field("#agent-identity-name");
     const line = name.parentElement as HTMLElement;
     expect(line.className).not.toMatch(/lineActive/);
     fireEvent.focus(name);
@@ -295,9 +295,9 @@ describe("the popup-form kit's anatomy", () => {
     // Description and Instructions are prose; `multiline` is the whole
     // difference, so Enter breaks the line instead of submitting.
     await open();
-    expect(field("#agent-template-name").tagName).toBe("INPUT");
-    expect(field("#agent-template-description").tagName).toBe("TEXTAREA");
-    expect(field("#agent-template-instructions").tagName).toBe("TEXTAREA");
+    expect(field("#agent-identity-name").tagName).toBe("INPUT");
+    expect(field("#agent-identity-description").tagName).toBe("TEXTAREA");
+    expect(field("#agent-identity-instructions").tagName).toBe("TEXTAREA");
   });
 
   it("makes every SINGLE choice a pill row, and closes on the 30px pair", async () => {
@@ -317,11 +317,11 @@ describe("the popup-form kit's anatomy", () => {
     // ⚠ `maxLength` went with the boxes; the handler clamps instead, so no save
     // can 400 on a length the operator could not see.
     const { onSave } = await open();
-    fireEvent.change(field("#agent-template-name"), {
+    fireEvent.change(field("#agent-identity-name"), {
       target: { value: "x".repeat(200) },
     });
     fireEvent.click(screen.getByRole("button", { name: CREATE_VERB }));
-    const draft = onSave.mock.calls[0][0] as TemplateDraft;
+    const draft = onSave.mock.calls[0][0] as IdentityDraft;
     expect(draft.name).toHaveLength(120);
   });
 });
@@ -352,7 +352,7 @@ describe("🔒 no Team scope outside a standard workspace", () => {
     // form they may close without saving.
     await open({
       containerKind: "personal",
-      template: template({ visibility: "team", teamIds: ["team-1"] }),
+      identity: identity({ visibility: "team", teamIds: ["team-1"] }),
     });
     const pill = row("Visibility").getByRole("tab", { name: /^Team/ });
     expect(pill.getAttribute("aria-selected")).toBe("true");
@@ -368,7 +368,7 @@ describe("🔒 no Team scope outside a standard workspace", () => {
   it("lets Save through the moment the operator picks a value the container holds", async () => {
     const { onSave } = await open({
       containerKind: "personal",
-      template: template({ visibility: "team", teamIds: ["team-1"] }),
+      identity: identity({ visibility: "team", teamIds: ["team-1"] }),
     });
     pickScope("Private");
     const save = screen.getByRole("button", { name: "Save" }) as HTMLButtonElement;
@@ -376,14 +376,14 @@ describe("🔒 no Team scope outside a standard workspace", () => {
     fireEvent.click(save);
     // ⚠ AND THE GRANTS GO WITH THE SCOPE — the schema refuses a `teamIds` key on
     // a non-team patch, so carrying them would 400 the next unrelated edit.
-    const draft = onSave.mock.calls[0][0] as TemplateDraft;
+    const draft = onSave.mock.calls[0][0] as IdentityDraft;
     expect(draft).toMatchObject({ visibility: "private", teamIds: [] });
   });
 
   it("no longer offers the pill it just dropped, once the row is off Team", async () => {
     await open({
       containerKind: "personal",
-      template: template({ visibility: "team", teamIds: ["team-1"] }),
+      identity: identity({ visibility: "team", teamIds: ["team-1"] }),
     });
     pickScope("Private");
     expect(scopeLabels()).toEqual(["Private", "Public"]);
@@ -393,16 +393,16 @@ describe("🔒 no Team scope outside a standard workspace", () => {
 describe("the save payload", () => {
   it("is the trimmed name plus the scope, and nothing the operator left empty", async () => {
     const { onSave } = await open();
-    fireEvent.change(field("#agent-template-name"), { target: { value: "  Scout  " } });
+    fireEvent.change(field("#agent-identity-name"), { target: { value: "  Scout  " } });
     fireEvent.click(screen.getByRole("button", { name: CREATE_VERB }));
-    const draft = onSave.mock.calls[0][0] as TemplateDraft;
+    const draft = onSave.mock.calls[0][0] as IdentityDraft;
     expect(draftToCreateBody(draft)).toEqual({ name: "Scout", visibility: "private" });
   });
 
   it("carries instructions, custom fields and attached bases", async () => {
     const { onSave } = await open();
-    fireEvent.change(field("#agent-template-name"), { target: { value: "Scout" } });
-    fireEvent.change(field("#agent-template-instructions"), {
+    fireEvent.change(field("#agent-identity-name"), { target: { value: "Scout" } });
+    fireEvent.change(field("#agent-identity-instructions"), {
       target: { value: "Search first." },
     });
     addField("repo", "dopl");
@@ -411,7 +411,7 @@ describe("the save payload", () => {
     fireEvent.click(screen.getByRole("treeitem", { name: "Specs" }));
     fireEvent.click(screen.getByRole("button", { name: CREATE_VERB }));
 
-    const draft = onSave.mock.calls[0][0] as TemplateDraft;
+    const draft = onSave.mock.calls[0][0] as IdentityDraft;
     expect(draftToCreateBody(draft)).toEqual({
       name: "Scout",
       visibility: "private",
@@ -425,23 +425,23 @@ describe("the save payload", () => {
 
   it("writes NO field for a row the operator opened and never typed in", async () => {
     // 🔒 **THE STARTER ROW MUST COST NOTHING (Samuel, 2026-09-22).** A new
-    // template opens holding one blank row and the gray box appends more, so an
+    // identity opens holding one blank row and the gray box appends more, so an
     // untouched row is the COMMON case rather than an edge one — and the create
     // body has to be byte-identical to what it was when adding was a dialog.
     // `cleanFields` is the backstop and it is pinned on its own in
-    // `../lib/template-draft.test.ts`; this is the face's half.
+    // `../lib/identity-draft.test.ts`; this is the face's half.
     const { onSave } = await open();
-    fireEvent.change(field("#agent-template-name"), { target: { value: "Scout" } });
+    fireEvent.change(field("#agent-identity-name"), { target: { value: "Scout" } });
     fireEvent.click(screen.getByRole("button", { name: "New field" }));
     fireEvent.click(screen.getByRole("button", { name: CREATE_VERB }));
-    const draft = onSave.mock.calls[0][0] as TemplateDraft;
+    const draft = onSave.mock.calls[0][0] as IdentityDraft;
     expect(draftToCreateBody(draft).fields).toBeUndefined();
   });
 
-  it("opens a NEW template on one blank row, and the box adds another", async () => {
-    // 🔒 Samuel, 2026-09-22: a new template *"should have an existing blank
+  it("opens a NEW identity on one blank row, and the box adds another", async () => {
+    // 🔒 Samuel, 2026-09-22: a new identity *"should have an existing blank
     // field that is already in, just have it blank"*. ⚠ The row is
-    // `emptyDraft()`'s, not the component's — a template being EDITED with no
+    // `emptyDraft()`'s, not the component's — an identity being EDITED with no
     // fields gets none, because there an empty row reads as one somebody
     // deleted.
     await open();
@@ -453,7 +453,7 @@ describe("the save payload", () => {
   });
 
   it("removes the row the X names, and leaves the rest", async () => {
-    await open({ template: template() });
+    await open({ identity: identity() });
     fireEvent.click(screen.getByRole("button", { name: "Remove field 1" }));
     expect(document.querySelector('input[aria-label="Field 1 key"]')).toBeNull();
   });
@@ -461,10 +461,10 @@ describe("the save payload", () => {
 
 describe("delete is behind the confirm, and the copy says HARD", () => {
   it("does not fire until the confirmation is taken", async () => {
-    const { onDelete } = await open({ template: template() });
+    const { onDelete } = await open({ identity: identity() });
     fireEvent.click(screen.getByRole("button", { name: "Delete" }));
     // ⚠ The confirm is its own `ModalShell`, so it too arrives a frame later.
-    const confirm = await screen.findByRole("button", { name: "Delete template" });
+    const confirm = await screen.findByRole("button", { name: "Delete identity" });
     expect(onDelete).not.toHaveBeenCalled();
     expect(document.body.textContent).toContain("permanently deletes");
     fireEvent.click(confirm);

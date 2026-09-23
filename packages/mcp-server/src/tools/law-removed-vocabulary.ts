@@ -28,6 +28,11 @@ export const REMOVED_VOCABULARY: ReadonlyArray<[string, RegExp]> = [
   ["as_agent", /as_agent/],
   ["breakout rooms", /breakout|participant set|\bparticipants\b/i],
   ["the thread-open handshake", /thread-open-|handshake/i],
+  // ── AGENT TEMPLATES ARE AGENT IDENTITIES (Samuel, 2026-09-22). The `template` argument was
+  //    renamed `identity` with NO alias, so a shipped string teaching `template=` or the old noun
+  //    teaches a call `strictInput` refuses. The ONTOLOGY keeps its own `template` (an object's
+  //    default fields) — hence the qualified forms only.
+  ["agent templates (now agent identities)", /\btemplate=|\bagent[ -]templates?\b/i],
   // ── ⚠ `rename_agent` LEFT THIS ENTRY ON 2026-09-01, AND THE REMOVAL IS A
   //    RULING RATHER THAN A RELAXATION (Samuel's external agent-management wave).
   //

@@ -149,6 +149,22 @@ describe("a removed param is REFUSED, and the refusal names the field", () => {
     expect(posted).toHaveBeenCalledTimes(1);
   });
 
+  it("the RENAMED `template` is refused, and the refusal names `identity` (2026-09-22)", async () => {
+    // ⚠ No alias: agent templates became agent IDENTITIES and the old key is gone. The
+    // refusal must say what replaced it, on every tool that ever took it.
+    for (const [name, args] of [
+      ["dopl_agent", { op: "get", template: "Researcher" }],
+      ["dopl_channel", { op: "manage", action: "launch", channel: "general", template: "Coder" }],
+    ] as const) {
+      const res = await client.callTool({ name, arguments: args });
+      expect(res.isError, name).toBe(true);
+      const text = (res.content as Array<{ text: string }>).map((c) => c.text).join("");
+      expect(text, name).toContain("-32602");
+      expect(text, name).toContain("renamed: send identity, not template");
+    }
+    expect(posted).toHaveBeenCalledTimes(1); // only the legitimate send above
+  });
+
   it("an INVENTED param is refused on the same rule (this is not a denylist)", async () => {
     const res = await client.callTool({
       name: "dopl_channel",

@@ -1,5 +1,5 @@
 /**
- * 🔓 **WHICH CONTAINER A TEMPLATE WRITE LANDS IN — Samuel's ruling, 2026-09-06**
+ * 🔓 **WHICH CONTAINER AN IDENTITY WRITE LANDS IN — Samuel's ruling, 2026-09-06**
  * (INVARIANTS §T35; the argument is in `shared/tenancy/read-resource.ts`).
  *
  * ⚠ **A SECOND FILE FOR THE SAME SERVICE, AND ONLY BECAUSE OF THE §1 LINE CAP** —
@@ -39,16 +39,16 @@ vi.mock("@/features/workspaces/server/repository-overview", () => ({
   countActiveMembers: vi.fn().mockResolvedValue(1),
 }));
 vi.mock("./repository", () => ({
-  listTemplatesForWorkspace: vi.fn(),
-  findTemplateById: vi.fn(),
-  insertTemplate: vi.fn(),
-  updateTemplateRow: vi.fn(),
-  hardDeleteTemplate: vi.fn(),
-  listTeamLinksForTemplates: vi.fn(),
+  listIdentitiesForWorkspace: vi.fn(),
+  findIdentityById: vi.fn(),
+  insertIdentity: vi.fn(),
+  updateIdentityRow: vi.fn(),
+  hardDeleteIdentity: vi.fn(),
+  listTeamLinksForIdentities: vi.fn(),
   replaceTeamLinks: vi.fn(),
   listTeamIdsForUser: vi.fn(),
   filterTeamIdsInWorkspace: vi.fn(),
-  listKnowledgeLinksForTemplates: vi.fn(),
+  listKnowledgeLinksForIdentities: vi.fn(),
   replaceKnowledgeLinks: vi.fn(),
   listKnowledgeBaseAccessRows: vi.fn(),
   listKnowledgeBaseTeamGrants: vi.fn(),
@@ -59,17 +59,17 @@ vi.mock("./repository", () => ({
 import * as repo from "./repository";
 import { findWorkspaceById } from "@/features/workspaces/server/repository";
 import { resolveResource } from "@/shared/tenancy/resolve-resource";
-import { createTemplate, deleteTemplate, updateTemplate } from "./service";
+import { createIdentity, deleteIdentity, updateIdentity } from "./service";
 import {
-  AgentTemplateNotFoundError,
-  TemplateTeamNotGrantableError,
+  AgentIdentityNotFoundError,
+  IdentityTeamNotGrantableError,
 } from "./errors";
 import {
   OTHER,
   OWNER,
   ctx,
   resetRepoMocks,
-  template,
+  identity,
 } from "./service-writes-fixtures";
 
 const mockRepo = vi.mocked(repo);
@@ -92,8 +92,8 @@ beforeEach(() => {
  * 🔓 **THE WRITE DOORS FOLLOW THE ID — SAMUEL'S RULING, 2026-09-06** (INVARIANTS
  * §T35, rewritten; the argument is in `shared/tenancy/read-resource.ts`).
  *
- * ⚠ **THE REPORTED SHAPE WAS AN AGENT THAT COULD READ A TEMPLATE ON ITS
- * OPERATOR'S PERSONAL SHELF AND COULD NOT EDIT IT** — `AGENT_TEMPLATE_NOT_FOUND`
+ * ⚠ **THE REPORTED SHAPE WAS AN AGENT THAT COULD READ AN IDENTITY ON ITS
+ * OPERATOR'S PERSONAL SHELF AND COULD NOT EDIT IT** — `AGENT_IDENTITY_NOT_FOUND`
  * from `op="update"` for the very row `op="get"` had just rendered, one call
  * earlier, in the same session. The read door followed the id from A12 onward;
  * the write door did not, and the comment on it said outright that the ruling
@@ -109,15 +109,15 @@ describe("🔓 update and delete name the id's own container", () => {
 
   /** Present in `SHELF`, absent everywhere else — the shape of a row on the
    *  caller's personal shelf, read from a channel they are standing in. */
-  function livesOnTheShelf(over: Partial<ReturnType<typeof template>> = {}) {
-    mockRepo.findTemplateById.mockImplementation(
+  function livesOnTheShelf(over: Partial<ReturnType<typeof identity>> = {}) {
+    mockRepo.findIdentityById.mockImplementation(
       (async (workspaceId: string) =>
         workspaceId === SHELF
-          ? template({ workspaceId: SHELF, ...over })
+          ? identity({ workspaceId: SHELF, ...over })
           : null) as never
     );
     mockResolve.mockResolvedValue({
-      type: "agent_template",
+      type: "agent_identity",
       id: "tpl-1",
       name: "Researcher",
       containerId: SHELF,
@@ -128,16 +128,16 @@ describe("🔓 update and delete name the id's own container", () => {
     } as never);
   }
 
-  it("PATCHes a template on the caller's shelf, and updates it THERE", async () => {
+  it("PATCHes an identity on the caller's shelf, and updates it THERE", async () => {
     livesOnTheShelf();
-    mockRepo.updateTemplateRow.mockResolvedValue(template({ workspaceId: SHELF }));
+    mockRepo.updateIdentityRow.mockResolvedValue(identity({ workspaceId: SHELF }));
     await expect(
-      updateTemplate(ctx(), "tpl-1", { name: "Renamed" })
+      updateIdentity(ctx(), "tpl-1", { name: "Renamed" })
     ).resolves.toMatchObject({ id: "tpl-1" });
     // ⚠ MUTATION CHECK. `ctx.workspaceId` here is `ws-1`, and that is what this
     // read before the ruling: the row was gated in one container and written in
     // another, which is the same UPDATE landing on zero rows.
-    expect(mockRepo.updateTemplateRow).toHaveBeenCalledWith(
+    expect(mockRepo.updateIdentityRow).toHaveBeenCalledWith(
       SHELF,
       "tpl-1",
       expect.objectContaining({ name: "Renamed" })
@@ -146,10 +146,10 @@ describe("🔓 update and delete name the id's own container", () => {
 
   it("replaces BOTH junctions in that container too", async () => {
     livesOnTheShelf();
-    mockRepo.updateTemplateRow.mockResolvedValue(template({ workspaceId: SHELF }));
-    await updateTemplate(ctx(), "tpl-1", { knowledgeBaseIds: [] });
+    mockRepo.updateIdentityRow.mockResolvedValue(identity({ workspaceId: SHELF }));
+    await updateIdentity(ctx(), "tpl-1", { knowledgeBaseIds: [] });
     // ⚠ A junction row filed under the calling room is a link the row's own
-    // container never reads back — the template would come back attachment-less.
+    // container never reads back — the identity would come back attachment-less.
     expect(mockRepo.replaceKnowledgeLinks).toHaveBeenCalledWith(
       SHELF,
       "tpl-1",
@@ -160,35 +160,35 @@ describe("🔓 update and delete name the id's own container", () => {
 
   it("DELETEs it there as well", async () => {
     livesOnTheShelf();
-    await expect(deleteTemplate(ctx(), "tpl-1")).resolves.toBeUndefined();
-    expect(mockRepo.hardDeleteTemplate).toHaveBeenCalledWith(SHELF, "tpl-1");
+    await expect(deleteIdentity(ctx(), "tpl-1")).resolves.toBeUndefined();
+    expect(mockRepo.hardDeleteIdentity).toHaveBeenCalledWith(SHELF, "tpl-1");
   });
 
   it("🔒 and the matrix still runs in the container the id named", async () => {
     // ⚠ FOLLOWING AN ID AUTHORISES NOTHING. Somebody else's private row is the
     // same single 404 it always was, and no write is attempted.
     livesOnTheShelf({ createdBy: OTHER, visibility: "private" });
-    const err = await updateTemplate(ctx(), "tpl-1", { name: "Hijacked" }).catch(
+    const err = await updateIdentity(ctx(), "tpl-1", { name: "Hijacked" }).catch(
       (e) => e
     );
-    expect(err.code).toBe("AGENT_TEMPLATE_NOT_FOUND");
-    expect(mockRepo.updateTemplateRow).not.toHaveBeenCalled();
+    expect(err.code).toBe("AGENT_IDENTITY_NOT_FOUND");
+    expect(mockRepo.updateIdentityRow).not.toHaveBeenCalled();
   });
 
   it("🔒 an id that resolves NOWHERE is still a 404, and costs one resolve", async () => {
-    mockRepo.findTemplateById.mockResolvedValue(null);
+    mockRepo.findIdentityById.mockResolvedValue(null);
     mockResolve.mockResolvedValue(null);
-    await expect(deleteTemplate(ctx(), "tpl-1")).rejects.toBeInstanceOf(
-      AgentTemplateNotFoundError
+    await expect(deleteIdentity(ctx(), "tpl-1")).rejects.toBeInstanceOf(
+      AgentIdentityNotFoundError
     );
-    expect(mockRepo.hardDeleteTemplate).not.toHaveBeenCalled();
+    expect(mockRepo.hardDeleteIdentity).not.toHaveBeenCalled();
   });
 
   it("costs NOTHING on the hit path — a row found where it was asked never resolves", async () => {
-    mockRepo.findTemplateById.mockResolvedValue(template());
-    await deleteTemplate(ctx(), "tpl-1");
+    mockRepo.findIdentityById.mockResolvedValue(identity());
+    await deleteIdentity(ctx(), "tpl-1");
     expect(mockResolve).not.toHaveBeenCalled();
-    expect(mockRepo.hardDeleteTemplate).toHaveBeenCalledWith("ws-1", "tpl-1");
+    expect(mockRepo.hardDeleteIdentity).toHaveBeenCalledWith("ws-1", "tpl-1");
   });
 });
 
@@ -200,7 +200,7 @@ describe("🔓 update and delete name the id's own container", () => {
  *
  * ⚠ **THE SUITE LIVES HERE BECAUSE IT IS A TENANCY QUESTION**: the subject is
  * the CONTAINER the row lands in, never the room the call stands in.
- * ⚠ **THE CLIENT'S PILL IS NOT THE FENCE** — `agent-templates/lib/visibility.ts
+ * ⚠ **THE CLIENT'S PILL IS NOT THE FENCE** — `agent-identities/lib/visibility.ts
  * › visibilityOptions` drops the option, and these cases are what makes that a
  * courtesy rather than the whole rule (an agent credential reaches the REST
  * route with no pill in sight).
@@ -211,9 +211,9 @@ describe("🔒 team visibility outside a standard workspace", () => {
     async (kind) => {
       containerKind(kind);
       await expect(
-        createTemplate(ctx(), { name: "Scout", visibility: "team" })
-      ).rejects.toBeInstanceOf(TemplateTeamNotGrantableError);
-      expect(mockRepo.insertTemplate).not.toHaveBeenCalled();
+        createIdentity(ctx(), { name: "Scout", visibility: "team" })
+      ).rejects.toBeInstanceOf(IdentityTeamNotGrantableError);
+      expect(mockRepo.insertIdentity).not.toHaveBeenCalled();
     }
   );
 
@@ -226,17 +226,17 @@ describe("🔒 team visibility outside a standard workspace", () => {
     // answer is about the room.
     containerKind("link");
     await expect(
-      createTemplate(ctx(), { name: "Scout", visibility: "team", teamIds: [] })
-    ).rejects.toBeInstanceOf(TemplateTeamNotGrantableError);
+      createIdentity(ctx(), { name: "Scout", visibility: "team", teamIds: [] })
+    ).rejects.toBeInstanceOf(IdentityTeamNotGrantableError);
   });
 
   it("REFUSES the PATCH too — a create fence with no update twin is defeated in two calls", async () => {
     containerKind("personal");
-    mockRepo.findTemplateById.mockResolvedValue(template({ visibility: "private" }));
+    mockRepo.findIdentityById.mockResolvedValue(identity({ visibility: "private" }));
     await expect(
-      updateTemplate(ctx(), "tpl-1", { visibility: "team" })
-    ).rejects.toBeInstanceOf(TemplateTeamNotGrantableError);
-    expect(mockRepo.updateTemplateRow).not.toHaveBeenCalled();
+      updateIdentity(ctx(), "tpl-1", { visibility: "team" })
+    ).rejects.toBeInstanceOf(IdentityTeamNotGrantableError);
+    expect(mockRepo.updateIdentityRow).not.toHaveBeenCalled();
     expect(mockRepo.replaceTeamLinks).not.toHaveBeenCalled();
   });
 
@@ -244,11 +244,11 @@ describe("🔒 team visibility outside a standard workspace", () => {
     // The gate must not be a blanket refusal — this is the case the product has.
     containerKind("standard");
     await expect(
-      createTemplate(ctx(), { name: "Scout", visibility: "team" })
+      createIdentity(ctx(), { name: "Scout", visibility: "team" })
     ).resolves.toBeTruthy();
-    mockRepo.findTemplateById.mockResolvedValue(template({ visibility: "private" }));
+    mockRepo.findIdentityById.mockResolvedValue(identity({ visibility: "private" }));
     await expect(
-      updateTemplate(ctx(), "tpl-1", { visibility: "team" })
+      updateIdentity(ctx(), "tpl-1", { visibility: "team" })
     ).resolves.toBeTruthy();
   });
 
@@ -259,7 +259,7 @@ describe("🔒 team visibility outside a standard workspace", () => {
     // vanished mid-request and the write underneath is about to fail on its own.
     containerKind(null);
     await expect(
-      createTemplate(ctx(), { name: "Scout", visibility: "team" })
+      createIdentity(ctx(), { name: "Scout", visibility: "team" })
     ).resolves.toBeTruthy();
   });
 
@@ -275,24 +275,24 @@ describe("🔒 team visibility outside a standard workspace", () => {
     // for the SHARED lane (`shared-publish.ts`), so a public create would prove
     // nothing here.
     containerKind("standard");
-    await createTemplate(ctx(), { name: "Scout", visibility: "private" });
+    await createIdentity(ctx(), { name: "Scout", visibility: "private" });
     expect(mockWorkspace).toHaveBeenCalledTimes(1);
   });
 
-  it("🔒 REFUSES a private template landing in a home channel — the destination fence", async () => {
+  it("🔒 REFUSES a private identity landing in a home channel — the destination fence", async () => {
     // ⚠ The wiring case: this feature passes `shared: visibility !== "private"`,
     // and the rule itself is pinned by
     // `workspaces/server/home-channel-destination.test.ts`.
     containerKind("link");
     await expect(
-      createTemplate(ctx(), { name: "Scout", visibility: "private" })
+      createIdentity(ctx(), { name: "Scout", visibility: "private" })
     ).rejects.toMatchObject({ code: "HOME_CHANNEL_ROW_NOT_SHARED" });
   });
 
   it("🔒 …AND ON THE UPDATE PATH TOO — a fence with no update twin is defeated in two calls", async () => {
     containerKind("link");
     await expect(
-      updateTemplate(ctx(), "tpl-1", { visibility: "private" })
+      updateIdentity(ctx(), "tpl-1", { visibility: "private" })
     ).rejects.toMatchObject({ code: "HOME_CHANNEL_ROW_NOT_SHARED" });
   });
 });

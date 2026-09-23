@@ -11,7 +11,7 @@
  * `kind === "link"` positively.
  *
  * ⚠ The per-feature wiring — which boolean each one passes for `shared` — is
- * pinned by `agent-templates/server/service-writes.test.ts` and
+ * pinned by `agent-identities/server/service-writes.test.ts` and
  * `knowledge/server/service-base-gates.test.ts`. This file is about the rule.
  */
 
@@ -36,7 +36,7 @@ const found = vi.mocked(findWorkspaceById);
 const ROW = {
   workspaceId: "ws-1",
   shared: false,
-  noun: "agent template",
+  noun: "agent identity",
   remedy: 'visibility: "workspace"',
 };
 

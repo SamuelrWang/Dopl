@@ -10,7 +10,7 @@
  *      is listed on every home channel's Personal section.
  *   2. **A HOME CHANNEL** — `container=<its slug|id>`. The row lands in that
  *      channel's `kind='link'` container AND is shared into the channel. For a
- *      template that is `visibility: "workspace"`; for a base it is
+ *      identity that is `visibility: "workspace"`; for a base it is
  *      `shareToChannelId`.
  *
  * ⚠ **THIS IS A CONVENIENCE, NEVER THE FENCE.** The fence is the server's
@@ -51,13 +51,13 @@ exports.HOME_CHANNEL_ROW_NOT_SHARED_CODE = "HOME_CHANNEL_ROW_NOT_SHARED";
  * ⚠ **"Shared in this channel", NEVER "Public"** — inside a container that
  * audience is "the other people in this relationship", not "everyone in your
  * company". It is the app's own wording
- * (`src/features/agent-templates/lib/visibility.ts › SECTIONS_CONTAINER`).
+ * (`src/features/agent-identities/lib/visibility.ts › SECTIONS_CONTAINER`).
  */
 exports.DESTINATION_HEADINGS = {
     shared: "Shared in this channel",
     personal: "Home (personal) — yours, visible in every home channel",
     /**
-     * 🚫 **THE DESTINATION THAT NO LONGER EXISTS.** Six agent templates and eight
+     * 🚫 **THE DESTINATION THAT NO LONGER EXISTS.** Six agent identities and eight
      * knowledge bases were measured in this state on 2026-09-18 and **nothing
      * migrates them** (F-735): they are RENDERED, because a row this surface drops
      * is a row an agent cannot even ask about, and they are LABELLED, because an

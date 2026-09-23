@@ -97,7 +97,7 @@ export declare function sessionIsStale(session: Pick<ChannelSessionState, "updat
  * structure. So the model clause rendered `` `opus-5 1m` `` — a bare `1m` sitting
  * in the one segment the doctrine promises holds bare NAMES,
  * one clause away from `started 12m ago` and `stale, 10m ago`. A relative time is
- * exactly what `coarseAge` emits, so an operator reads a time shard as a template
+ * exactly what `coarseAge` emits, so an operator reads a time shard as an identity
  * or a model. **Whatever the neutralizer would blank into a space is joined with
  * a HYPHEN here instead**, so no desktop-supplied id can ever split the model slot
  * into two bare names.

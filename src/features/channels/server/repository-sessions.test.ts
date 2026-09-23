@@ -56,7 +56,7 @@ function row(over: Partial<SessionStateRow> = {}): SessionStateRow {
     tokens_spent: null,
     started_at: null,
     last_activity_at: null,
-    template_name: null,
+    identity_name: null,
     // ── HEALTH (2026-09-01, 20260909120000) ─────────────────────────────
     // ⚠ `null` IS THE FIXTURE DEFAULT, and that is the honest one: a desktop
     // older than these columns reports none, so the row a test builds by default

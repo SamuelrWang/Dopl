@@ -14,7 +14,7 @@
  */
 
 import { describe, it, expect } from "vitest";
-import type { AgentTemplate, Channel, KnowledgeBase } from "@dopl/client";
+import type { AgentIdentity, Channel, KnowledgeBase } from "@dopl/client";
 
 import { isErr } from "./channel-shared";
 import type { ToolResponse } from "./respond";
@@ -43,9 +43,9 @@ describe("isErr — one declaration", () => {
 describe("🔒 isErr does not throw on a primitive", () => {
   // ⚠ Each lane instantiated as its own former copy was, so a re-introduced
   // per-lane copy fails HERE rather than in whatever op first meets a reject.
-  it("the agent-template lane (was agent-shared.ts › isErr)", () => {
+  it("the agent-identity lane (was agent-shared.ts › isErr)", () => {
     for (const p of PRIMITIVES) {
-      expect(isErr<AgentTemplate>(p as unknown as AgentTemplate)).toBe(false);
+      expect(isErr<AgentIdentity>(p as unknown as AgentIdentity)).toBe(false);
     }
   });
 

@@ -11,7 +11,7 @@ import { channelsWhereScopeIsIgnored } from "./channel-scope";
  * `dopl_agent(op="grant")` and the /home "Share into this channel" control write
  * a `resource_grants` row. B15 shipped that WRITE door and recorded that nothing
  * read it back — a lent row stayed `private` + created-by-the-grantor, so in the
- * target scope `canSeeBase`/`canSeeTemplate` refused it and the grant was a
+ * target scope `canSeeBase`/`canSeeIdentity` refused it and the grant was a
  * recorded intent. This module is the arm both predicates were missing.
  *
  * ── 🔒 THE TWIN ────────────────────────────────────────────────────────────
@@ -19,7 +19,7 @@ import { channelsWhereScopeIsIgnored } from "./channel-scope";
  * ⚠ **THIS IS ONE RULE WRITTEN TWICE AND THE HALVES MUST MOVE TOGETHER** (§5A).
  * The SQL twin is `dopl_grant_admits(text, uuid)`
  * (`20260923140000_grant_read_arm.sql`), called by
- * `dopl_knowledge_base_readable()` and `can_current_user_read_agent_template()`.
+ * `dopl_knowledge_base_readable()` and `can_current_user_read_agent_identity()`.
  * `scripts/check-rls-pair-gate.ts` proves each predicate still has its named
  * policy twin; the per-table redteam suites prove the two AGREE.
  *
@@ -38,8 +38,8 @@ import { channelsWhereScopeIsIgnored } from "./channel-scope";
  * that admits, and under which `visibility`/`access_mode` — stays in each
  * feature's own `canSee*`, which takes the answer. It exists because the
  * per-feature readers it mirrors (`teams/server/repository-grants.ts ›
- * listGrantsForResources`, `agent-templates/server/repository.ts ›
- * listTeamLinksForTemplates`) are **per-container**, and global search spans
+ * listGrantsForResources`, `agent-identities/server/repository.ts ›
+ * listTeamLinksForIdentities`) are **per-container**, and global search spans
  * every container the caller is in: calling one of them per container is the
  * per-container fan §9 forbids. Team membership is read ONCE for the caller,
  * across containers, because a team id is unique.
@@ -66,7 +66,7 @@ import { channelsWhereScopeIsIgnored } from "./channel-scope";
  * ── WHAT THIS DOES *NOT* DO, STATED SO NOBODY INFERS IT ────────────────────
  *
  * ⚠ **IT WIDENS VISIBILITY, NEVER THE CANDIDATE SET.** `listBases` /
- * `listTemplates` read `WHERE workspace_id = ctx.workspaceId`, and
+ * `listIdentities` read `WHERE workspace_id = ctx.workspaceId`, and
  * `resolve-resource.ts › listContainersForCaller` narrows the id lane the same
  * way. So a grant is honoured end to end when the row is ALREADY in the
  * caller's reach — a private row lent to a channel or to its own container —
@@ -77,7 +77,7 @@ import { channelsWhereScopeIsIgnored } from "./channel-scope";
 /** The resource kinds `resource_grants.resource_type` accepts. */
 export type GrantResourceType =
   | "knowledge_base"
-  | "agent_template"
+  | "agent_identity"
   | "skill"
   | "chat"
   | "chat_folder";
@@ -129,7 +129,7 @@ interface GrantRow {
  * read per scope kind that occurs, and — only when a CHANNEL scope occurs — the two
  * `channel-scope.ts › channelsWhereScopeIsIgnored` spends on container KIND. It was
  * three until 2026-09-17, and both new ones sit on the uncommon branch. The shape
- * `agent-templates/server/service-shared.ts › shareCtxForTemplates` established:
+ * `agent-identities/server/service-shared.ts › shareCtxForIdentities` established:
  * a batch precompute, never a query per row.
  *
  * ⚠ EMPTY `resourceIds` SHORT-CIRCUITS WITH NO QUERY. A PostgREST `.in()` on an
@@ -240,7 +240,7 @@ async function reachableChannels(
  *
  * ⚠ **IT ANSWERS MEMBERSHIP, NEVER VISIBILITY.** A row being lent to one of my
  * teams does not by itself make it readable — `skills › canSeeSkill`,
- * `chats › canSeeChat` and `agent-templates › canSeeTemplate` each decide that,
+ * `chats › canSeeChat` and `agent-identities › canSeeIdentity` each decide that,
  * and each has arms this knows nothing about. Handing a SET to a predicate is
  * the shape that keeps the rule in one place.
  *

@@ -19,7 +19,7 @@ export type GrantScopeType = "channel" | "container" | "team";
 /** What may be lent. ⚠ Mirrors `resource_grants.resource_type`'s CHECK. */
 export type GrantResourceType =
   | "knowledge_base"
-  | "agent_template"
+  | "agent_identity"
   | "skill"
   | "chat"
   | "chat_folder";

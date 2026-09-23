@@ -32,7 +32,7 @@
  * ⚠ SCOPED TO THE AUDIENCE-CHANGING WRITE CLASS AND NOTHING ELSE. A confirm on
  * every write trains the agent to skip it — the identical argument INVARIANTS
  * §10 makes for untrusted-content headers ("a header on every result trains
- * agents to skip headers"). Today the class is exactly: a template or a
+ * agents to skip headers"). Today the class is exactly: an identity or a
  * knowledge base landing at an audience BEYOND THE CALLER inside a SHARED
  * container — any container with a second member in it, i.e. the room a peer is
  * standing in (R-08, 2026-09-17; it read "a shared LINK container" until then).
@@ -291,7 +291,7 @@ async function confirmGate(client, act, opts) {
 /**
  * THE DRY RUN. ⚠ `isError`, deliberately: NOTHING was created, and an `ok`
  * result reading as a normal outcome invites an agent to report success — the
- * same reasoning `channel-ops-launch.ts › ambiguousTemplate` states for its own
+ * same reasoning `channel-ops-launch.ts › ambiguousIdentity` states for its own
  * refusal.
  */
 function preview(act, target, token) {

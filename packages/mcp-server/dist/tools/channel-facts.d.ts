@@ -21,7 +21,7 @@
  * catches a silent delivery failure (INVARIANTS §10).
  *
  * ⚠ A VALUE WITH A SPACE IS QUOTED, so the `key=value` pairs stay parseable and
- * no operator- or peer-chosen name (a template name, a tool label) can invent a
+ * no operator- or peer-chosen name (an identity name, a tool label) can invent a
  * field by containing `something=`.
  *
  * ⚠ VALUES ARE BOUNDED, SO A LINE'S LENGTH DEPENDS ONLY ON ITS FIELD COUNT.
@@ -182,7 +182,7 @@ export declare function allowedFacts(d: LaunchDirective): Record<string, FactVal
  * 🔒 **THE FACT THIS EXISTS FOR.** A live MCP launch carrying `model: "codex"`
  * was accepted and started a Claude Sonnet agent, and the result said nothing
  * that could have revealed it: there was no runtime field on the wire, so the
- * line named a model, a template and a posture while the one thing that had
+ * line named a model, an identity and a posture while the one thing that had
  * gone wrong — the VENDOR — was unprinted. `runtime=` is that missing verdict.
  *
  * ⚠ **`runtime=` IS THE APPLIED VALUE AND IS PRINTED ON EVERY LAUNCH**, exactly

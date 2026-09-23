@@ -370,7 +370,7 @@ export function ChannelsMessagePane({
         infoOpen={infoOpen}
         viewSelect={viewSelect}
         transcriptFilter={
-          // ⚠ NOTHING TO FILTER, NO CONTROL (`template-picker.tsx › SEARCH_THRESHOLD`'s
+          // ⚠ NOTHING TO FILTER, NO CONTROL (`identity-picker.tsx › SEARCH_THRESHOLD`'s
           // rule): with no agent in the loaded transcript, All and People name the same
           // set, and a dropdown offering one answer twice is chrome for nothing.
           filterAgents.length === 0 ? undefined : (

@@ -1,7 +1,7 @@
-// THE SCOPE NARROW — `template-resolve.js › narrow` over the `knowledge` key (2026-09-08).
+// THE SCOPE NARROW — `identity-resolve.js › narrow` over the `knowledge` key (2026-09-08).
 //
 // ⚠ IT DRIVES `narrow` DIRECTLY, WITHOUT THE FAKE TRANSPORT, which is what that export exists
-// for ("exported so the whitelist can be driven directly"). `session-launch-template.test.mjs`
+// for ("exported so the whitelist can be driven directly"). `session-launch-identity.test.mjs`
 // owns the LAUNCH — the resolve round trip, the approval gate, the funnel whitelist — and it is
 // already at §1's 500-line cap; what is here is the BOUNDARY's own narrowing of one new key.
 //
@@ -9,7 +9,7 @@
 // discriminator from a newer server renders the whole-base call, which is the WIDER instruction
 // and therefore the one that cannot point an agent at a document that does not exist.
 //
-// Run: `node --test dopl-desktop-app/test/launch-template-scopes.test.mjs`
+// Run: `node --test dopl-desktop-app/test/launch-identity-scopes.test.mjs`
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -18,7 +18,7 @@ import { fileURLToPath } from "node:url";
 
 const require = createRequire(import.meta.url);
 const { narrow } = require(
-  fileURLToPath(new URL("../main/template-resolve.js", import.meta.url))
+  fileURLToPath(new URL("../main/identity-resolve.js", import.meta.url))
 );
 
 const BODY = {

@@ -19,12 +19,12 @@ import { useChannelLaunchPosture } from "../hooks/use-channel-launch-posture";
 import type { RuntimeDescriptor } from "../lib/runtime-capability";
 import { noRuntimeCopy, signedOutLaunchCopy } from "../lib/runtime-copy";
 import {
-  approveTemplate,
+  approveIdentity,
   canLaunchAgents,
   launchAgentOnThread,
 } from "./agents-controls";
 import type { AgentColorKey, Channel, ChannelThread } from "../types";
-import type { TemplateLaunchOverrides } from "@/features/agent-templates/lib/launch-overrides";
+import type { IdentityLaunchOverrides } from "@/features/agent-identities/lib/launch-overrides";
 
 /**
  * `channel_sessions` is unpublished (INVARIANTS §7), so the peer projection polls.
@@ -77,28 +77,28 @@ const LAUNCH_REFUSALS: Record<string, string> = {
   // described the deleted session-window master switch and sent the operator
   // looking for a toggle that no longer exists.
   disabled: "The agent could not be started",
-  // ⚠ THE TEMPLATE PICKER'S OWN REFUSAL (2026-08-22). Main resolves the template
-  // ITSELF at spawn, so a template deleted — or narrowed out of this operator's
+  // ⚠ THE IDENTITY PICKER'S OWN REFUSAL (2026-08-22). Main resolves the identity
+  // ITSELF at spawn, so an identity deleted — or narrowed out of this operator's
   // visibility — between the picker row rendering and the click answers 404, and
   // main REFUSES rather than degrading to a blank agent: the operator picked an
   // IDENTITY, and an agent silently wearing none is worse than nothing because
   // nobody notices for several turns. The endpoint deliberately cannot tell
   // "deleted" from "invisible" (404-never-403), so neither can this copy.
-  "no-template": "That template is gone — reload the list",
+  "no-identity": "That identity is gone — reload the list",
   // 2026-09-22: the runtime does not offer the model this launch named (main sends the list).
   "no-model": "That model is not offered on this machine — pick another",
 };
 
 /**
  * ⚠ NOT A REFUSAL — A QUESTION, AND THE ONE WORD THIS MAP MUST NOT CARRY. Main
- * answers it for the FIRST launch of another member's template on this machine,
- * with `{ template: { name, instructions } }` for the approval modal to show
- * verbatim (`agent-templates/components/template-approval.tsx`). Rendering
+ * answers it for the FIRST launch of another member's identity on this machine,
+ * with `{ identity: { name, instructions } }` for the approval modal to show
+ * verbatim (`agent-identities/components/identity-approval.tsx`). Rendering
  * "could not start the agent" underneath a modal that is asking permission would
  * report the question as a failure, so `launchAgent` deliberately leaves
  * `launchError` alone for this one word and hands the outcome back to the caller.
  */
-export const LAUNCH_APPROVAL_REASON = "template-approval";
+export const LAUNCH_APPROVAL_REASON = "identity-approval";
 
 /**
  * ⚠ THE TWO RUNTIME-OWNED REFUSALS, KEYED BY THE SAME WIRE WORDS (2026-09-21, U10). They are a
@@ -157,7 +157,7 @@ export interface AgentLaunchOutcome {
    */
   agentId?: string;
   /** Rides {@link LAUNCH_APPROVAL_REASON} only. Read tolerantly. */
-  template?: { name?: string | null; instructions?: string | null } | null;
+  identity?: { name?: string | null; instructions?: string | null } | null;
 }
 
 export interface AgentLaunchControls {
@@ -170,21 +170,21 @@ export interface AgentLaunchControls {
   /**
    * `null` starts a CHANNEL-LEVEL agent; a thread id starts one on it.
    *
-   * ⚠ `templateId` AND `overrides` ARE BOTH OPTIONAL AND THE ZERO-ARGUMENT CALL
+   * ⚠ `identityId` AND `overrides` ARE BOTH OPTIONAL AND THE ZERO-ARGUMENT CALL
    * IS THE PINNED ONE (2026-08-22). `launchAgent(threadId)` still spawns a BLANK
    * agent with a byte-identical payload, because that is what the New Agent
    * button and the composer's Bot icon do in ONE CLICK and Samuel's channels-v2
    * ruling is that they keep doing it. The picker is a second, adjacent control.
    *
-   * ⚠ IT RETURNS THE OUTCOME NOW, and the reason is `template-approval`: that
+   * ⚠ IT RETURNS THE OUTCOME NOW, and the reason is `identity-approval`: that
    * word needs a MODAL rather than a line of copy, and only the caller that
    * opened the picker can own it. Every other refusal is still reported through
    * {@link AgentLaunchControls.launchError}, so nothing has two places to look.
    */
   launchAgent: (
     threadId: string | null,
-    templateId?: string | null,
-    overrides?: TemplateLaunchOverrides,
+    identityId?: string | null,
+    overrides?: IdentityLaunchOverrides,
     /**
      * ⚠ THE FOURTH PARAM, AND IT IS FOURTH ON PURPOSE (2026-08-27). The zero- and one-argument
      * calls above stay byte-identical, which is what keeps the one-click Bot icon pinned by
@@ -195,7 +195,7 @@ export interface AgentLaunchControls {
      * ⚠ THE FIFTH, ON THE FOURTH'S EXACT ARGUMENT (2026-08-31, the runtime-adapter port).
      * `''` and absent both mean NO OVERRIDE — the channel's durable pick applies — so an
      * untouched panel and a one-click launch still put the same payload on the wire.
-     * ⚠ IT IS NOT AN `overrides` MEMBER: that object is the TEMPLATE's re-points, and main
+     * ⚠ IT IS NOT AN `overrides` MEMBER: that object is the IDENTITY's re-points, and main
      * reads the runtime off the payload's top level (`agents-controls.ts ›
      * launchAgentOnThread` carries the whole argument).
      */
@@ -209,17 +209,17 @@ export interface AgentLaunchControls {
      * popup and a one-click launch both get a colour, which is the whole ruling: every live agent
      * in a channel is distinguishable. A colourless agent is a room with all sixteen out.
      * ⚠ **NOT AN `overrides` MEMBER**, on `runtime`'s argument above: that object is the
-     * TEMPLATE's re-points, and a template cannot carry a colour — the key is unique among a
+     * IDENTITY's re-points, and an identity cannot carry a colour — the key is unique among a
      * channel's live agents across every member, so a stored default would collide the second
      * time it was used. Main reads it off the payload's top level
      * (`agents-controls.ts › launchAgentOnThread`).
      */
     color?: AgentColorKey
   ) => Promise<AgentLaunchOutcome>;
-  /** Store a first-use approval for a FOREIGN template, machine-locally.
-   *  ⚠ Feature-detected inside (`agents-controls.ts › approveTemplate`); an
+  /** Store a first-use approval for a FOREIGN identity, machine-locally.
+   *  ⚠ Feature-detected inside (`agents-controls.ts › approveIdentity`); an
    *  older main answers `no-bridge` and the modal says so. */
-  approveTemplate: (templateId: string) => Promise<{ ok: boolean; reason?: string }>;
+  approveIdentity: (identityId: string) => Promise<{ ok: boolean; reason?: string }>;
 }
 
 export function useAgentsPanel({
@@ -264,8 +264,8 @@ export function useAgentsPanel({
 
   const launchAgent = async (
     threadId: string | null,
-    templateId?: string | null,
-    overrides?: TemplateLaunchOverrides,
+    identityId?: string | null,
+    overrides?: IdentityLaunchOverrides,
     agentId?: string,
     runtime?: string,
     color?: AgentColorKey
@@ -304,12 +304,12 @@ export function useAgentsPanel({
         threadTitle: thread?.title ?? null,
         counterpartyId,
         direct: channel.isDirect,
-        // ⚠ ABSENT, NOT `null`, WHEN THERE IS NO TEMPLATE — a blank launch must
+        // ⚠ ABSENT, NOT `null`, WHEN THERE IS NO IDENTITY — a blank launch must
         // put the same object on the wire it always did, so the one-click path
-        // stays byte-identical to a main that has never heard of templates.
-        ...(templateId ? { templateId } : {}),
+        // stays byte-identical to a main that has never heard of identities.
+        ...(identityId ? { identityId } : {}),
         ...(overrides ? { overrides } : {}),
-        // ⚠ ABSENT, NOT `undefined`-valued, for the same reason `templateId` is: a launch with
+        // ⚠ ABSENT, NOT `undefined`-valued, for the same reason `identityId` is: a launch with
         // no panel behind it must put the object it always did on the wire.
         ...(agentId ? { agentId } : {}),
         // ⚠ ABSENT WHEN THERE IS NO OVERRIDE, for `agentId`'s reason and one more: an
@@ -331,7 +331,7 @@ export function useAgentsPanel({
       }
       if (res.ok) refreshDesktopSessions?.();
       void refetch();
-      return { ok: res.ok, reason: res.reason, template: res.template, agentId: res.agentId };
+      return { ok: res.ok, reason: res.reason, identity: res.identity, agentId: res.agentId };
     } finally {
       setLaunchBusy(false);
     }
@@ -346,8 +346,8 @@ export function useAgentsPanel({
     // nothing here: the approval lives in the desktop's `electron-store`, and a
     // renderer-side "already approved" memo would be exactly the fence the
     // untrusted text is in a position to influence (`agents-controls.ts ›
-    // approveTemplate`).
-    approveTemplate,
+    // approveIdentity`).
+    approveIdentity,
     launchError,
     // Wave 3: the peer projection's re-read, handed to the page's `refetchAll` so
     // peer cards ride the `channel_messages` doorbell that is already paid for

@@ -13,10 +13,10 @@ import {
 } from "@/features/teams/server/access";
 import { canSeeSkill } from "@/features/skills/server/service-shared";
 import { canSeeChat } from "@/features/chats/server/service-shared";
-import { canSeeTemplate } from "@/features/agent-templates/server/service-shared";
+import { canSeeIdentity } from "@/features/agent-identities/server/service-shared";
 import type { KnowledgeBase } from "@/features/knowledge/types";
 import type { Skill } from "@/features/skills/types";
-import type { AgentTemplate } from "@/features/agent-templates/types";
+import type { AgentIdentity } from "@/features/agent-identities/types";
 
 /**
  * F-716 (resolved 2026-09-17): who may see a row is asked of the feature that
@@ -97,7 +97,7 @@ export interface CandidateRow {
  */
 async function grantSets(
   caller: SearchCaller,
-  type: "knowledge_base" | "agent_template" | "skill" | "chat",
+  type: "knowledge_base" | "agent_identity" | "skill" | "chat",
   ids: readonly string[],
   opts: { scope?: boolean; team?: boolean } = {}
 ): Promise<{ scoped: GrantedResourceIds; team: GrantedResourceIds }> {
@@ -115,7 +115,7 @@ async function grantSets(
   return { scoped, team };
 }
 
-/** teamId lists per resource, as the skill/chat/template contexts spell them. */
+/** teamId lists per resource, as the skill/chat/identity contexts spell them. */
 function teamCtx(granted: GrantedResourceIds, ids: readonly string[]) {
   const MINE = "granted";
   const byId = new Map<string, string[]>();
@@ -255,23 +255,23 @@ export async function visibleChats<T extends CandidateRow>(
   );
 }
 
-/** Agent templates the caller may see — scope grant, team share and admin. */
-export async function visibleTemplates<T extends CandidateRow>(
+/** Agent identities the caller may see — scope grant, team share and admin. */
+export async function visibleIdentities<T extends CandidateRow>(
   caller: SearchCaller,
   rows: readonly T[]
 ): Promise<T[]> {
   const ids = rows.map((r) => r.id);
-  const { scoped, team } = await grantSets(caller, "agent_template", ids);
+  const { scoped, team } = await grantSets(caller, "agent_identity", ids);
   const { myTeamIds, byId } = teamCtx(team, ids);
   return rows.filter((row) =>
-    canSeeTemplate(
+    canSeeIdentity(
       ctxFor(caller, row.workspace_id),
       {
         id: row.id,
         visibility: row.visibility,
         createdBy: row.created_by ?? null,
-      } as unknown as AgentTemplate,
-      { myTeamIds, byTemplate: byId, grantedIds: scoped }
+      } as unknown as AgentIdentity,
+      { myTeamIds, byIdentity: byId, grantedIds: scoped }
     )
   );
 }

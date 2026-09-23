@@ -2,7 +2,7 @@
  * 🔒 **G16'S THIRD RESOURCE TYPE** (closed 2026-09-02, review D2).
  *
  * A11 shipped the acknowledge-shared precondition into knowledge bases and agent
- * templates and recorded the guardrail row as closed over "all three callers".
+ * identities and recorded the guardrail row as closed over "all three callers".
  * There were three resource types and the helper reached two:
  * `dopl_skill(op="set_visibility")` published into a `kind='link'` container a
  * peer is standing in with NO preview in front of it and NO precondition behind

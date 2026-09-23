@@ -53,7 +53,7 @@ describe("R-33 — the home space has no Skills and no Chats", () => {
       "overview",
       "channels",
       "knowledge",
-      "agents",
+      "identities",
       "ontology",
     ]);
   });

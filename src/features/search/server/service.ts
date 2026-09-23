@@ -19,7 +19,7 @@ import {
 } from "./repository-channel-rows";
 import {
   listReadableBases,
-  searchAgentTemplates,
+  searchAgentIdentities,
   searchChats,
   searchKnowledgeEntries,
   searchMembers,
@@ -160,14 +160,14 @@ async function runGroupReads(
   };
 
   const bases = await listReadableBases(containerIds, caller);
-  const [channels, messages, threads, artifacts, knowledge, agentTemplates] =
+  const [channels, messages, threads, artifacts, knowledge, agentIdentities] =
     await Promise.all([
       searchChannels(channelIds, q),
       searchMessages(channelIds, q),
       searchThreads(channelIds, q),
       searchArtifacts(channelIds, q),
       searchKnowledgeEntries(bases, q),
-      searchAgentTemplates(containerIds, q, caller),
+      searchAgentIdentities(containerIds, q, caller),
     ]);
 
   const byKind = new Map<SearchGroupKind, SearchHit[]>([
@@ -176,7 +176,7 @@ async function runGroupReads(
     ["threads", threads],
     ["artifacts", artifacts],
     ["knowledge", knowledge],
-    ["agentTemplates", agentTemplates],
+    ["agentIdentities", agentIdentities],
   ]);
 
   // Rules 1 and 2: an early return, not a filter on the results, because what

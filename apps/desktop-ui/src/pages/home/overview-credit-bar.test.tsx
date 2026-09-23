@@ -1,7 +1,7 @@
 import {
-  TEMPLATE_NAME_TEXT,
-  TEMPLATE_NAME_TEXT_LG,
-} from "@/features/agent-templates/components/template-section";
+  IDENTITY_NAME_TEXT,
+  IDENTITY_NAME_TEXT_LG,
+} from "@/features/agent-identities/components/identity-section";
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { PERSONAL_MONTHLY_CREDITS } from "@/features/billing/credits";
@@ -93,10 +93,10 @@ describe("the /home credit capacity bar", () => {
    * 🔒 **TWO SCALES IN THIS BLOCK, AND THE SPLIT IS THE RULING — THE PANEL
    * HEADING IS THE BIG ONE AND EVERYTHING INSIDE IT IS NOT.**
    *
-   * **Usage** wears `template-section.tsx › TEMPLATE_NAME_TEXT_LG` (Samuel,
+   * **Usage** wears `identity-section.tsx › IDENTITY_NAME_TEXT_LG` (Samuel,
    * 2026-09-13: *"increase the font size for usage … let's bold it as well"*).
    * The scope menu, the month label and **Credit spend** wear
-   * `› TEMPLATE_NAME_TEXT` — the 14px face the agent template card's name wears.
+   * `› IDENTITY_NAME_TEXT` — the 14px face the agent identity card's name wears.
    *
    * ⚠ **THIS CASE ASSERTED ALL FOUR ON `_LG` FOR ONE PASS AND THAT WAS THE
    * DEFECT** (Samuel, same day: *"You changed the font size of the credit spend,
@@ -111,7 +111,7 @@ describe("the /home credit capacity bar", () => {
     renderHome();
     const usage = await panel("Usage");
     const heading = screen.getByRole("heading", { name: "Usage" });
-    for (const token of TEMPLATE_NAME_TEXT_LG.split(" ")) {
+    for (const token of IDENTITY_NAME_TEXT_LG.split(" ")) {
       expect(heading.className).toContain(token);
     }
     // ⚠ THE PANEL HEADING'S OWN `text-label uppercase` FACE STAYS OVERRIDDEN.
@@ -123,7 +123,7 @@ describe("the /home credit capacity bar", () => {
       await within(usage).findByRole("heading", { name: "Credit spend" }),
     ];
     for (const node of inside) {
-      for (const token of TEMPLATE_NAME_TEXT.split(" ")) {
+      for (const token of IDENTITY_NAME_TEXT.split(" ")) {
         expect(node.className).toContain(token);
       }
       // The rejected size, pinned as an absence on each of the three.

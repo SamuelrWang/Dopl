@@ -40,10 +40,10 @@ vi.mock("./service-shared", async (importOriginal) => {
   const actual = await importOriginal<typeof import("./service-shared")>();
   return { ...actual, loadVisibleChannel: vi.fn() };
 });
-// ⚠ MOCKED THOUGH THIS FILE NAMES NO TEMPLATE: `service-launch.ts` imports the agent-templates
+// ⚠ MOCKED THOUGH THIS FILE NAMES NO IDENTITY: `service-launch.ts` imports the agent-identities
 // barrel at module scope and that module is `server-only` over a live admin client.
-vi.mock("@/features/agent-templates/server/service", () => ({
-  resolveTemplateRef: vi.fn(),
+vi.mock("@/features/agent-identities/server/service", () => ({
+  resolveIdentityRef: vi.fn(),
 }));
 
 import * as launchRepo from "./repository-launch";
@@ -84,8 +84,8 @@ function row(over: Record<string, unknown> = {}) {
     operator_user_id: ME,
     goal: "ship the parser",
     model: null,
-    template_id: null,
-    template_name: null,
+    identity_id: null,
+    identity_name: null,
     color: null,
     agent_name: "Scout",
     target_agent_id: null,

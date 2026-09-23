@@ -235,9 +235,9 @@ export const WRITE_OPS: Record<string, Set<string>> = {
   // out of the SOURCE TEXT, so a quoted phrase in a comment is read as an op
   // name and fails the WRITE_OPS-subset-of-enum check.
   // ⚠ BOTH verbs write, and update is the one easiest to miss: it can raise a
-  // template to workspace visibility, which is the SHARE act itself (a template
+  // identity to workspace visibility, which is the SHARE act itself (an identity
   // has no grant table). A read-only token must be refused it.
-  // ⚠ grant LENDS THE TEMPLATE TO A SCOPE — the SHARE act by another door, and
+  // ⚠ grant LENDS THE IDENTITY TO A SCOPE — the SHARE act by another door, and
   // the widest write here for the same reason `dopl_kb`'s is.
   dopl_agent: new Set(["create", "update", "grant"]),
   dopl_chats: new Set(["export", "append", "update", "create_folder", "update_folder"]),

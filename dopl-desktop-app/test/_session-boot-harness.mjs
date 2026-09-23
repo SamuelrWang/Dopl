@@ -7,7 +7,7 @@
 // reasons, and the rig is the half a second suite would otherwise copy.
 //
 // THE DEFECT THE CASES EXIST FOR, measured on a real machine: a Dopl channel agent
-// (`@agent-y1uun32v`, `phase: 'parked'`, sdk id present in the resume map, template "Coder") was
+// (`@agent-y1uun32v`, `phase: 'parked'`, sdk id present in the resume map, identity "Coder") was
 // idle when Electron was hard-restarted, and after the restart it was NOWHERE — no card in the
 // Agents tab, not even an Ended one, no `agentHistory` entry, its `channel_sessions` row gone.
 // `session-engine.js › init` loops the stored records and `continue`s on anything whose
@@ -131,7 +131,7 @@ function parkedRecord(over = {}) {
     counterpartyName: "Samuel",
     channelName: "Dopl",
     taskTitle: null,
-    templateName: "Coder",
+    identityName: "Coder",
     turns: 7,
     costUsd: 0.42,
     ownPostSeq: 3,

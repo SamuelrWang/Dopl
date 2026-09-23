@@ -1,57 +1,57 @@
 /**
- * Agent-template method group — link 9 of the chain in `client-base.ts`
- * (`BillingMethods` extends this one). Pure delegation to `agent-templates.ts`;
+ * Agent-identity method group — link 9 of the chain in `client-base.ts`
+ * (`BillingMethods` extends this one). Pure delegation to `agent-identities.ts`;
  * no HTTP here.
  *
- * `GET`/`POST /api/agent-templates` and `GET`/`PATCH .../{id}` are all
+ * `GET`/`POST /api/agent-identities` and `GET`/`PATCH .../{id}` are all
  * agent-token reachable by design (the route docblocks carry the argument);
  * only `DELETE` is `sessionOnly`, and it is deliberately unbound.
  */
 
 import { SkillMethods } from "./client-skills.js";
-import * as templates from "./agent-templates.js";
+import * as identities from "./agent-identities.js";
 import type {
-  AgentTemplate,
-  AgentTemplateCreateInput,
-  AgentTemplateListPayload,
-  AgentTemplateUpdateInput,
-  TemplateShelf,
-} from "./agent-template-types.js";
+  AgentIdentity,
+  AgentIdentityCreateInput,
+  AgentIdentityListPayload,
+  AgentIdentityUpdateInput,
+  IdentityShelf,
+} from "./agent-identity-types.js";
 
-export class AgentTemplateMethods extends SkillMethods {
-  listAgentTemplates(
-    opts: { shelf?: TemplateShelf } = {}
-  ): Promise<AgentTemplate[]> {
-    return templates.listAgentTemplates(this.transport, opts);
+export class AgentIdentityMethods extends SkillMethods {
+  listAgentIdentities(
+    opts: { shelf?: IdentityShelf } = {}
+  ): Promise<AgentIdentity[]> {
+    return identities.listAgentIdentities(this.transport, opts);
   }
 
   /** The rows PLUS the shelf sibling key. ⚠ Same single request; read
-   *  `homeScopedTemplateIds` as `?? []` (INVARIANTS §8). */
-  listAgentTemplatesPayload(
-    opts: { shelf?: TemplateShelf } = {}
-  ): Promise<AgentTemplateListPayload> {
-    return templates.listAgentTemplatesPayload(this.transport, opts);
+   *  `homeScopedIdentityIds` as `?? []` (INVARIANTS §8). */
+  listAgentIdentitiesPayload(
+    opts: { shelf?: IdentityShelf } = {}
+  ): Promise<AgentIdentityListPayload> {
+    return identities.listAgentIdentitiesPayload(this.transport, opts);
   }
 
-  getAgentTemplate(templateId: string): Promise<AgentTemplate> {
-    return templates.getAgentTemplate(this.transport, templateId);
+  getAgentIdentity(identityId: string): Promise<AgentIdentity> {
+    return identities.getAgentIdentity(this.transport, identityId);
   }
 
-  createAgentTemplate(input: AgentTemplateCreateInput): Promise<AgentTemplate> {
-    return templates.createAgentTemplate(this.transport, input);
+  createAgentIdentity(input: AgentIdentityCreateInput): Promise<AgentIdentity> {
+    return identities.createAgentIdentity(this.transport, input);
   }
 
   /** ⚠ `expectedVersion` is TRI-STATE and OMITTING IT REFUSES — see
-   *  `agent-templates.ts › updateAgentTemplate`. Same three arms as
+   *  `agent-identities.ts › updateAgentIdentity`. Same three arms as
    *  `knowledge.ts › writeKbFileByPath`. */
-  updateAgentTemplate(
-    templateId: string,
-    patch: AgentTemplateUpdateInput,
+  updateAgentIdentity(
+    identityId: string,
+    patch: AgentIdentityUpdateInput,
     expectedVersion?: string | null
-  ): Promise<AgentTemplate> {
-    return templates.updateAgentTemplate(
+  ): Promise<AgentIdentity> {
+    return identities.updateAgentIdentity(
       this.transport,
-      templateId,
+      identityId,
       patch,
       expectedVersion
     );

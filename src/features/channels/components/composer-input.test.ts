@@ -8,7 +8,7 @@
  * STRUCTURAL: both files consume the same exported constant, so equality is not a coincidence
  * anyone can undo by re-tuning a padding at a call site. That is only assertable over the source.
  *
- * ⚠ IT IS THE SAME METHOD `template-editor-surface.test.tsx › no concave surfaces` and
+ * ⚠ IT IS THE SAME METHOD `identity-editor-surface.test.tsx › no concave surfaces` and
  * `preload-parity.test.mjs` use, and for the same reason: the invariant is about what the code
  * SAYS, not about what one render happened to produce.
  *

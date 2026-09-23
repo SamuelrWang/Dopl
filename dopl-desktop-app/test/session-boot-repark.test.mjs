@@ -1,7 +1,7 @@
 // THE BOOT PASS — main/session-boot.js › reparkDormant (F-694, 2026-09-13).
 //
 // THE DEFECT THIS FILE EXISTS FOR, measured on a real machine: a Dopl channel agent
-// (`@agent-y1uun32v`, `phase: 'parked'`, sdk id present in the resume map, template "Coder") was
+// (`@agent-y1uun32v`, `phase: 'parked'`, sdk id present in the resume map, identity "Coder") was
 // idle when Electron was hard-restarted, and after the restart it was NOWHERE — no card in the
 // Agents tab, not even an Ended one, no `agentHistory` entry, its `channel_sessions` row gone.
 // `session-engine.js › init` loops the stored records and `continue`s on anything whose
@@ -46,7 +46,7 @@ test("a parked record with an sdk id comes back as a registered PARKED session",
   assert.equal(s.bind, "pair");
   assert.equal(s.model, "opus", "the operator's model pick survives, rather than reverting to the CLI default");
   assert.equal(s.runtimeId, "claude", "the conversation handle belongs to ONE vendor");
-  assert.equal(s.context.template.name, "Coder", "F-288: a null templateName here ERASES channel_sessions.template_name");
+  assert.equal(s.context.identity.name, "Coder", "F-288: a null identityName here ERASES channel_sessions.identity_name");
   assert.equal(s.context.channelName, "Dopl");
   assert.equal(s.profile, "channel_agent", "the stored profile, through the fail-restrictive reader");
   // The counters: spent turns for display, and the post counter with its crash slack.
@@ -175,7 +175,7 @@ test("the re-parked session is RESUMABLE by the real resumeParked, through build
 // ── 2. NEVER INVISIBLE: no sdk id, or a runtime that refuses -> ENDED + history ──────────────
 
 test("a parked record with NO sdk id is ENDED with a history entry, not dropped", () => {
-  const rec = parkedRecord({ sdkSessionId: null, agentId: "sp4wnidl", templateName: null });
+  const rec = parkedRecord({ sdkSessionId: null, agentId: "sp4wnidl", identityName: null });
   const key = `${CHANNEL}::sp4wnidl`;
   rec.key = key;
   const h = harness({ records: { [key]: rec }, ids: {} }); // nothing in the resume map

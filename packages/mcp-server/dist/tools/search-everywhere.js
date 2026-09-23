@@ -74,11 +74,11 @@ function heading(leg) {
 async function searchOneLeg(client, leg, query, limit, matches) {
     return client_1.workspaceContext.run(leg.id, async () => {
         const reads = (0, partial_read_js_1.partialRead)();
-        const [entryHits, skills, ontology, templates] = await Promise.all([
+        const [entryHits, skills, ontology, identities] = await Promise.all([
             reads.soft("Knowledge entries", client.searchKb(query, { limit }), []),
             reads.soft("Skills", client.listSkills(), []),
             reads.soft("Ontology objects", client.getOntology({ view: "summary" }), EMPTY_ONTOLOGY),
-            reads.soft("Agent templates", client.listAgentTemplates(), []),
+            reads.soft("Agent identities", client.listAgentIdentities(), []),
         ]);
         const lines = [heading(leg)];
         let hits = 0;
@@ -110,13 +110,13 @@ async function searchOneLeg(client, leg, query, limit, matches) {
                 lines.push(`- ${(0, narration_js_1.inlineOr)(o.name, narration_js_1.NO_NAME)} (id: \`${o.id}\`)`);
             }
         }
-        const templateHits = templates
+        const identityHits = identities
             .filter((t) => matches(t.name, t.description))
             .slice(0, limit);
-        if (templateHits.length > 0) {
-            hits += templateHits.length;
-            lines.push("", "### Agent templates");
-            for (const t of templateHits) {
+        if (identityHits.length > 0) {
+            hits += identityHits.length;
+            lines.push("", "### Agent identities");
+            for (const t of identityHits) {
                 lines.push(`- ${(0, narration_js_1.inlineOr)(t.name, narration_js_1.NO_NAME)} (id: \`${t.id}\` · ${t.visibility})`);
             }
         }

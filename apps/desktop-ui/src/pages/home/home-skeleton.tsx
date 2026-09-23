@@ -12,7 +12,7 @@ import { HOME_TABS } from "./home-tabs";
 import { GHOST_FLAT_FACE } from "./home-ghost-face";
 import { HomeListGhost } from "./home-list-skeleton";
 import home from "./home.module.css";
-import { TEMPLATE_GRID } from "@/features/agent-templates/components/template-section";
+import { IDENTITY_GRID } from "@/features/agent-identities/components/identity-section";
 
 /**
  * /home's LOADING SHAPES — the page frame, and one per face of the record pane.
@@ -123,18 +123,18 @@ export function HomeKnowledgePanelsSkeleton({
 }
 
 /**
- * /home → Agents, while the container template list is in flight. The SAME two
- * flat sections, over the templates' own four-column grid.
+ * /home → Agents, while the container identity list is in flight. The SAME two
+ * flat sections, over the identities' own four-column grid.
  *
  * ⚠ NOT THE KNOWLEDGE GRID. The two faces really do differ here: Knowledge is
  * `home.kbCards` (3 fixed columns, 224px rows), Agents is
- * `template-section.tsx › TEMPLATE_GRID` (FOUR fixed columns since 2026-09-13 —
+ * `identity-section.tsx › IDENTITY_GRID` (FOUR fixed columns since 2026-09-13 —
  * Samuel's ruling; it was `auto-fill` at a 196px minimum) over `min-h-[92px]`
  * cards. A skeleton that shared one grid would resolve into the wrong one on
  * whichever face it did not come from.
  */
-export function HomeAgentPanelsSkeleton({
-  label = "Loading agents",
+export function HomeIdentityPanelsSkeleton({
+  label = "Loading identities",
 }: {
   label?: string;
 }) {
@@ -144,10 +144,10 @@ export function HomeAgentPanelsSkeleton({
       className="flex min-w-0 flex-1 flex-col gap-3 overflow-hidden p-3"
     >
       <PanelGhost actionWidth={132}>
-        <TemplateCardsGhost />
+        <IdentityCardsGhost />
       </PanelGhost>
       <PanelGhost actionWidth={92} caption>
-        <TemplateCardsGhost />
+        <IdentityCardsGhost />
       </PanelGhost>
     </SkeletonSurface>
   );
@@ -218,14 +218,14 @@ function KbCardsGhost() {
   );
 }
 
-/** ⚠ `TemplateGrid`'s grid class **BY IMPORT** — `TEMPLATE_GRID`, exported when
+/** ⚠ `IdentityGrid`'s grid class **BY IMPORT** — `IDENTITY_GRID`, exported when
  *  the grid became a fixed four columns (2026-09-13). The source scan in
  *  `components/skeletons/page-skeletons.test.tsx` pins the import, so the count
  *  and the gap cannot move on one surface only. It was a copied string while the
  *  value was an un-exported Tailwind arbitrary. */
-function TemplateCardsGhost() {
+function IdentityCardsGhost() {
   return (
-    <div className={TEMPLATE_GRID}>
+    <div className={IDENTITY_GRID}>
       {Array.from({ length: 4 }).map((_, i) => (
         <Skeleton key={i} className="h-[92px] rounded-[14px]" />
       ))}

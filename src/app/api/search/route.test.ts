@@ -3,7 +3,7 @@
  * auth is mocked at the wrapper so the wrapper's own configuration — that it is
  * `withUserAuth` and NOT `withWorkspaceAuth`, and that it carries neither
  * `sessionOnly` nor `writeScopeExempt` — is assertable as part of the contract.
- * Same idiom as `agent-templates/route.test.ts`.
+ * Same idiom as `agent-identities/route.test.ts`.
  *
  * The properties that fail quietly:
  *  - 🔒 **THE CREDENTIAL'S CONTAINER LOCK REACHES THE SERVICE.** This route is

@@ -267,7 +267,7 @@ describe("S40: a conflict warns that force=true at a vacated path DUPLICATES", (
 // ⚠ **THE PIN VERBS WERE THIS HELPER'S ONLY CALLER, AND THEY ARE GONE**
 // (integration, 2026-09-19 — Samuel's ruling deleted knowledge pinning). The
 // helper is kept deliberately: `sessionOnly` is a cross-cutting wrapper option
-// that the delete routes, `channel-grants` and the template delete all carry,
+// that the delete routes, `channel-grants` and the identity delete all carry,
 // so the next op to grow an arm gets this sentence rather than a second
 // wording of it. It is therefore tested DIRECTLY, against the error shape the
 // wrapper actually answers — a test that went through a removed op would have

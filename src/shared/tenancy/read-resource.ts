@@ -17,7 +17,7 @@ import {
  *
  * ⚠ **IT EXISTS BECAUSE FOUR FEATURES WERE ABOUT TO WRITE THE SAME TWELVE
  * LINES.** A12 shipped them once, by hand, in
- * `agent-templates/server/service-reads.ts › readTemplateById`; B2 adds knowledge
+ * `agent-identities/server/service-reads.ts › readIdentityById`; B2 adds knowledge
  * bases, skills and chats. Four hand copies of a tenancy dance is precisely the
  * shape **F-278** is filed against (*"the copy is the one that will not
  * notice"*) — and the half a copy gets wrong is always the same half, the
@@ -39,9 +39,9 @@ import {
  * §T35, rewritten). This docblock used to end "READS ONLY: a PATCH that followed
  * an id across a tenancy boundary is a ruling nobody has made". It has now been
  * made, and the reason it had to be is the shape the read half left behind: an
- * agent (or a person) could OPEN a base or a template on its own operator's
+ * agent (or a person) could OPEN a base or an identity on its own operator's
  * personal shelf from any container, and then could not EDIT the thing it was
- * looking at — `KNOWLEDGE_BASE_MISMATCH` / `AGENT_TEMPLATE_NOT_FOUND` for a row
+ * looking at — `KNOWLEDGE_BASE_MISMATCH` / `AGENT_IDENTITY_NOT_FOUND` for a row
  * the very same session had just rendered. A fence that opens the read and
  * closes the write on the SAME row is not a fence, it is a half-migration.
  *
@@ -71,7 +71,7 @@ import {
  * What a re-based read needs of its caller: the fence's inputs, plus the
  * container it is currently reading in and the caller's role there.
  *
- * ⚠ STRUCTURAL ON PURPOSE — `AgentTemplateContext`, `KnowledgeContext`,
+ * ⚠ STRUCTURAL ON PURPOSE — `AgentIdentityContext`, `KnowledgeContext`,
  * `SkillContext` and `ChatContext` all satisfy it already, with no import and no
  * shared base type. Four features sharing a mechanic must not become four
  * features sharing a context.

@@ -16,7 +16,7 @@ import type { ChannelContext } from "./service-shared";
  * **THE LAUNCH LANE'S COLOUR GATE** — one rule, its own module (2026-09-13;
  * docs/specs/agent-colors.md).
  *
- * ⚠ **ITS OWN FILE ON THE `service-launch-posture.ts` / `service-launch-template.ts`
+ * ⚠ **ITS OWN FILE ON THE `service-launch-posture.ts` / `service-launch-identity.ts`
  * PRECEDENT** (§1's cap forced the extraction at 562 lines, and the seam is the one
  * those two already drew): `service-launch.ts` owns the ORDER of the create's gates
  * and what each refusal is shaped like; this owns what "that colour is taken" MEANS

@@ -15,7 +15,7 @@ import { SECTION_HEADING_TEXT } from "./section-heading";
  * THE STANDARD DIALOG — one width, one heading, one footer row (Samuel's
  * ruling, 2026-08-27).
  *
- * The agent-template editor was the reference: `ModalShell size="narrow"`, a
+ * The agent-identity editor was the reference: `ModalShell size="narrow"`, a
  * scrolling `p-6` body, `RAISED_INPUT` text controls and uppercase field
  * headers. Four dialogs wore four near-copies of that recipe — New agent, New
  * knowledge base, Add person (a POPOVER at the time) and New channel — so the

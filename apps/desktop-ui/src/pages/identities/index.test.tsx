@@ -10,10 +10,10 @@ import {
   renderWithProviders,
   workspaceRoutes,
 } from "#/test-utils/bridge";
-import AgentsPage from "./index";
+import IdentitiesPage from "./index";
 
 /**
- * Agents page smoke test: the REAL `AgentTemplatesCore` over a mocked bridge, on
+ * Agents page smoke test: the REAL `AgentIdentitiesCore` over a mocked bridge, on
  * the same route row `routes.tsx` registers.
  *
  * ⚠ Stubbed at `window.dopl.apiRequest` rather than at the SPA transport, for
@@ -22,7 +22,7 @@ import AgentsPage from "./index";
  * (`useApiQuery` over `@/shared/api/api-client`, plus the knowledge and teams
  * hooks) — and in the packaged app both funnel into this one bridge.
  *
- * ⚠ THE WORKSPACE HEADER IS PART OF THE CONTRACT. `/api/agent-templates` is
+ * ⚠ THE WORKSPACE HEADER IS PART OF THE CONTRACT. `/api/agent-identities` is
  * workspace-scoped; a read that forgot `x-workspace-id` fails closed on a caller
  * with more than one workspace and works fine for everybody testing it.
  */
@@ -30,7 +30,7 @@ import AgentsPage from "./index";
 const apiRequest = vi.hoisted(() => vi.fn());
 const calls = () => bridgeCalls(apiRequest);
 
-const TEMPLATES = [
+const IDENTITIES = [
   {
     id: "tpl-1",
     name: "Release captain",
@@ -67,25 +67,25 @@ const TEMPLATES = [
  * it; a page that forgot the param falls into the "both" branch below and picks
  * it up, which is what makes the exclusion pin cost something.
  */
-const HOME_SHELF_TEMPLATE = {
-  ...TEMPLATES[0],
+const HOME_SHELF_IDENTITY = {
+  ...IDENTITIES[0],
   id: "tpl-home-shelf",
   name: "Kept on /home",
   visibility: "private" as const,
 };
 
-function agentRoutes(path: string): Promise<BridgeResponse> | null {
+function identityRoutes(path: string): Promise<BridgeResponse> | null {
   const [bare, query] = path.split("?");
-  if (bare === "/api/agent-templates") {
+  if (bare === "/api/agent-identities") {
     const shelf = new URLSearchParams(query ?? "").get("shelf");
     // ⚠ ABSENT = BOTH, mirroring the route (`?shelf=` absent means no filter).
-    const templates =
+    const identities =
       shelf === "workspace"
-        ? TEMPLATES
+        ? IDENTITIES
         : shelf === "home"
-          ? [HOME_SHELF_TEMPLATE]
-          : [...TEMPLATES, HOME_SHELF_TEMPLATE];
-    return Promise.resolve(ok({ templates }));
+          ? [HOME_SHELF_IDENTITY]
+          : [...IDENTITIES, HOME_SHELF_IDENTITY];
+    return Promise.resolve(ok({ identities }));
   }
   if (bare === "/api/knowledge/bases") {
     return Promise.resolve(ok({ bases: [{ id: "kb-1", name: "Runbooks" }] }));
@@ -96,7 +96,7 @@ function agentRoutes(path: string): Promise<BridgeResponse> | null {
 
 function renderAgents() {
   return renderWithProviders(
-    [{ path: "/:workspaceSegment/agents", element: <AgentsPage /> }],
+    [{ path: "/:workspaceSegment/agents", element: <IdentitiesPage /> }],
     [`/${SEGMENT}/agents`]
   );
 }
@@ -106,7 +106,7 @@ describe("agents page", () => {
     // ⚠ `vi.hoisted` mocks sit outside vitest's `restoreMocks` sweep.
     apiRequest.mockReset();
     apiRequest.mockImplementation((path: string) => {
-      const answer = workspaceRoutes(path) ?? agentRoutes(path);
+      const answer = workspaceRoutes(path) ?? identityRoutes(path);
       return answer ?? Promise.resolve(ok({}));
     });
     installBridge({ apiRequest });
@@ -125,7 +125,7 @@ describe("agents page", () => {
     );
     expect(screen.getByRole("region", { name: "Public" }).textContent).toContain("Docs bot");
     expect(screen.getByRole("region", { name: "Team" }).textContent).toContain(
-      "No team templates yet."
+      "No team identities yet."
     );
   });
 
@@ -134,11 +134,11 @@ describe("agents page", () => {
     await screen.findByText("Release captain");
 
     const list = calls().find(
-      (c) => c.path.split("?")[0] === "/api/agent-templates"
+      (c) => c.path.split("?")[0] === "/api/agent-identities"
     );
     expect(list).toBeTruthy();
     expect(list!.opts.workspaceId).toBe(WORKSPACE_ID);
-    // 🔒 AND THE SHELF IS ON THE WIRE. It is what excludes templates created
+    // 🔒 AND THE SHELF IS ON THE WIRE. It is what excludes identities created
     // from the /home Agents pane — a SERVER filter, so this asserts the
     // request, not the absence of a card (an absent card also happens when the
     // fixture forgets to send one).
@@ -160,10 +160,10 @@ describe("agents page", () => {
     renderAgents();
     await screen.findByText("Release captain");
 
-    fireEvent.click(screen.getByRole("button", { name: "New template" }));
+    fireEvent.click(screen.getByRole("button", { name: "Agent Identity" }));
     // ⚠ `ModalShell` mounts a FRAME after `open` flips (it animates in).
     expect(
-      await screen.findByRole("dialog", { name: "New template" })
+      await screen.findByRole("dialog", { name: "New agent identity" })
     ).toBeInTheDocument();
   });
 });

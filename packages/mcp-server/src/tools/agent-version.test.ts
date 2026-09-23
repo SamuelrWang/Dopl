@@ -3,7 +3,7 @@
  * 2026-09-18).
  *
  * ⚠ **THE SURFACE'S HALF IS THE VOCABULARY, NOT THE ATOMICITY.** Postgres does
- * the compare-and-swap (`src/features/agent-templates/server/repository.ts`);
+ * the compare-and-swap (`src/features/agent-identities/server/repository.ts`);
  * what these cases pin is that an agent can LEARN the contract from what comes
  * back — a Version on the read, the same Version on the success, and ONE
  * `reason=version_conflict` refusal naming `op="get"` whichever of the two 412s
@@ -15,7 +15,7 @@
  */
 
 import { describe, it, expect, vi } from "vitest";
-import type { AgentTemplate, DoplClient } from "@dopl/client";
+import type { AgentIdentity, DoplClient } from "@dopl/client";
 
 import { opGet } from "./agent-ops-read";
 import { opUpdate } from "./agent-ops-write";
@@ -26,7 +26,7 @@ const ME = "user-1";
 const ID = "11111111-1111-4111-8111-111111111111";
 const VERSION = "2026-01-01T00:00:00Z";
 
-function template(over: Partial<AgentTemplate> = {}): AgentTemplate {
+function identity(over: Partial<AgentIdentity> = {}): AgentIdentity {
   return {
     id: ID,
     workspaceId: "ws-1",
@@ -70,7 +70,7 @@ describe("the Version an agent needs is handed over, never hunted for", () => {
   it('op="get" prints it, ABOVE the instructions block that can be clipped', async () => {
     const text = textOf(
       await opGet(
-        stub({ listAgentTemplates: vi.fn(async () => [template()]) }) as DoplClient,
+        stub({ listAgentIdentities: vi.fn(async () => [identity()]) }) as DoplClient,
         "Researcher",
         ME,
       ),
@@ -87,8 +87,8 @@ describe("the Version an agent needs is handed over, never hunted for", () => {
     const next = "2026-01-02T00:00:00Z";
     const client = stub({
       ...solo(),
-      listAgentTemplates: vi.fn(async () => [template()]),
-      updateAgentTemplate: vi.fn(async () => template({ updatedAt: next })),
+      listAgentIdentities: vi.fn(async () => [identity()]),
+      updateAgentIdentity: vi.fn(async () => identity({ updatedAt: next })),
     }) as DoplClient;
 
     const text = textOf(
@@ -104,8 +104,8 @@ describe("the refusal is ONE string for BOTH 412s", () => {
     __resetConfirmTokensForTest();
     const client = stub({
       ...solo(),
-      listAgentTemplates: vi.fn(async () => [template()]),
-      updateAgentTemplate: vi.fn(async () => {
+      listAgentIdentities: vi.fn(async () => [identity()]),
+      updateAgentIdentity: vi.fn(async () => {
         throw thrown;
       }),
     }) as DoplClient;
@@ -115,7 +115,7 @@ describe("the refusal is ONE string for BOTH 412s", () => {
 
   it("the SERVER's stale-version 412 becomes reason=version_conflict, retry=op=\"get\"", async () => {
     const { isError, text } = await refusalFor(
-      apiError(412, "AGENT_TEMPLATE_STALE_VERSION"),
+      apiError(412, "AGENT_IDENTITY_STALE_VERSION"),
       { expected_version: VERSION },
     );
     expect(isError).toBe(true);
@@ -135,8 +135,8 @@ describe("the refusal is ONE string for BOTH 412s", () => {
     expect(text).toContain('retry=op="get"');
   });
 
-  it("names the template it did NOT write, so the agent knows which call died", async () => {
-    const { text } = await refusalFor(apiError(412, "AGENT_TEMPLATE_STALE_VERSION"), {
+  it("names the identity it did NOT write, so the agent knows which call died", async () => {
+    const { text } = await refusalFor(apiError(412, "AGENT_IDENTITY_STALE_VERSION"), {
       expected_version: VERSION,
     });
     expect(text).toContain("Researcher");
@@ -147,11 +147,11 @@ describe("the refusal is ONE string for BOTH 412s", () => {
 describe("`force` is the escape, and it is the client's `null` arm", () => {
   it("sends null rather than the version, so no precondition rides the write", async () => {
     __resetConfirmTokensForTest();
-    const update = vi.fn(async () => template());
+    const update = vi.fn(async () => identity());
     const client = stub({
       ...solo(),
-      listAgentTemplates: vi.fn(async () => [template()]),
-      updateAgentTemplate: update,
+      listAgentIdentities: vi.fn(async () => [identity()]),
+      updateAgentIdentity: update,
     }) as DoplClient;
 
     await opUpdate(client, ME, "Researcher", {
@@ -166,11 +166,11 @@ describe("`force` is the escape, and it is the client's `null` arm", () => {
 
   it("STALE PAYLOAD: neither argument passed sends `undefined` — the arm the SDK refuses", async () => {
     __resetConfirmTokensForTest();
-    const update = vi.fn(async () => template());
+    const update = vi.fn(async () => identity());
     const client = stub({
       ...solo(),
-      listAgentTemplates: vi.fn(async () => [template()]),
-      updateAgentTemplate: update,
+      listAgentIdentities: vi.fn(async () => [identity()]),
+      updateAgentIdentity: update,
     }) as DoplClient;
 
     await opUpdate(client, ME, "Researcher", { name: "Renamed" });

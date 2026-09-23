@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { Check, ChevronRight, FileText, Folder, Library } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
 import { useKnowledgeTree } from "@/features/knowledge/client/hooks";
-import type { TemplateKnowledgeRef } from "../client/types";
+import type { IdentityKnowledgeRef } from "../client/types";
 import { composeDisplayPath } from "../lib/knowledge-scopes";
 import type { KnowledgeBaseOption } from "./knowledge-scope-picker";
 
@@ -44,7 +44,7 @@ const ROOT = "";
 /** Checking a row: the scope it attaches, plus the keys that scope now IMPLIES
  *  and the picker must therefore prune. Stated once — four rows pass it on. */
 export type ScopeToggle = (
-  ref: TemplateKnowledgeRef,
+  ref: IdentityKnowledgeRef,
   impliedKeys: ReadonlyArray<string>
 ) => void;
 

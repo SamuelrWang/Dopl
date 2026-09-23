@@ -52,7 +52,7 @@ export class ChannelRecipientUnresolvedError extends ChannelError {
  * ⚠ **A REFUSAL, AND NEVER A PICK** — `lib/agent-mentions.ts ›
  * buildAgentMentionIndex` already fails closed for the TINT, and any collision
  * rule (mine wins, newest wins) wakes an identity the author did not choose and
- * says nothing about it. Same ruling `LaunchTemplateAmbiguousError` carries.
+ * says nothing about it. Same ruling `LaunchIdentityAmbiguousError` carries.
  *
  * ⚠ **IT CARRIES THE CANDIDATES, AND THEY DISCLOSE NOTHING NEW.** Every handle
  * listed is already readable through `op="read_sessions"` for any member of this

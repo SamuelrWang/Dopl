@@ -1,7 +1,7 @@
 // THE NEW AGENT BUTTON, END TO END — the body of `sessions:launch`, and its approval twin.
 //
 // ⚠ SPLIT OUT OF `main/session-ipc-ops.js` ON 2026-08-22, under the hard 500-line §1 cap. That
-// file sat at 499: it could absorb ONE line, and the agent-template wiring needs a resolve, a
+// file sat at 499: it could absorb ONE line, and the agent-identity wiring needs a resolve, a
 // refusal table, an approval gate and a model precedence chain. INVARIANTS §1's rule for a file
 // in that state is explicit — it has stopped being CORRECTABLE, so the answer is a split.
 //
@@ -78,18 +78,18 @@ function colorKey(value) {
 }
 
 /**
- * ⚠ DID THE CALLER ASK FOR A TEMPLATE AT ALL? Absent, `null` and `''` all mean NO, and a launch
- * that asks for none is BYTE-IDENTICAL to what this lane did before templates existed — no
- * resolve, no round trip, no `context.template`, and `templateRoleFraming` returns `[]`.
+ * ⚠ DID THE CALLER ASK FOR AN IDENTITY AT ALL? Absent, `null` and `''` all mean NO, and a launch
+ * that asks for none is BYTE-IDENTICAL to what this lane did before identities existed — no
+ * resolve, no round trip, no `context.identity`, and `identityRoleFraming` returns `[]`.
  *
  * ⚠ A PRESENT-BUT-MALFORMED ID IS A REFUSAL, NOT A BLANK LAUNCH. The obvious reading of "validate
- * `isUuid(p.templateId) ? p.templateId : null`" quietly turns a garbled id into a blank agent,
+ * `isUuid(p.identityId) ? p.identityId : null`" quietly turns a garbled id into a blank agent,
  * and F-1's whole argument is that a blank agent silently wearing NO IDENTITY is worse than
  * nothing: the operator picked an identity and will not notice its absence for several turns.
- * `template-resolve.js › resolveTemplate` answers `no-template` for a non-UUID, so the refusal
+ * `identity-resolve.js › resolveAgentIdentity` answers `no-identity` for a non-UUID, so the refusal
  * falls out of asking it rather than being a second rule here.
  */
-function wantsTemplate(value) {
+function wantsIdentity(value) {
   return value != null && value !== '';
 }
 
@@ -107,11 +107,11 @@ async function launchFromButton(payload) {
   // DTO off the loop entry (`channel-listener.js › watchedChannel`), never the renderer's claim
   // and ⚠ never the tray's id+name PROJECTION, which is what this read until F-267 (no profile
   // field on it, so EVERY launch here floored). Unwatched, or a DTO missing it: fails closed.
-  // ⚠ A TEMPLATE NEVER TOUCHES THIS LINE. A template widens PROMPT CONTENT ONLY: it never
+  // ⚠ AN IDENTITY NEVER TOUCHES THIS LINE. An identity widens PROMPT CONTENT ONLY: it never
   // supplies, influences or relaxes a containment input — the tool profile, the permission axes,
   // the working folder and the delivery lane stay the machine's, resolved from the machine's own
   // state. That sentence is INVARIANTS §5A's and it is enforced by this ordering: the profile is
-  // computed before the template is even fetched, from a source the payload cannot reach.
+  // computed before the identity is even fetched, from a source the payload cannot reach.
   // ⚠ …AND NARROWED FOR A SHARED ROOM ON THE WAY OUT (2026-09-02, ruling B7). The button lane
   // has a human at the keyboard, which is an argument for keeping an explicit `full` — but it is
   // an argument nobody has made, and the ruling is about the ROOM, not about who pressed. This
@@ -123,62 +123,62 @@ async function launchFromButton(payload) {
   // ── ⚠ THE LAUNCH SHEET'S EPHEMERAL OVERRIDES, NARROWED FIRST ──────────────────────────────
   //
   // The sheet may re-point THIS SPAWN's model and its custom-field VALUES. Nothing here is
-  // written back to the template. It is narrowed BEFORE the resolve because the model half
-  // applies to a BLANK launch too — the sheet opens on `Blank agent` as well as on a template —
-  // and because `template-resolve.js › narrowOverrides` is where the charset rule the RENDERER
+  // written back to the identity. It is narrowed BEFORE the resolve because the model half
+  // applies to a BLANK launch too — the sheet opens on `Blank agent` as well as on an identity —
+  // and because `identity-resolve.js › narrowOverrides` is where the charset rule the RENDERER
   // cannot reach is enforced (F-281: `@/shared/lib/safe-label` imports zod, so no SPA surface can
   // hold `SAFE_LABEL_RE`, and MAIN is the only real validator of this payload).
   // ⚠ ABSENT IS THE ONLY SPELLING OF "NO OVERRIDE", so an untouched sheet and a plain row click
   // produce byte-identical launches.
-  const overrides = require('./template-resolve').narrowOverrides(p.overrides);
+  const overrides = require('./identity-resolve').narrowOverrides(p.overrides);
 
-  // ── THE TEMPLATE, RESOLVED BY MAIN, AT SPAWN ──────────────────────────────────────────────
-  let template = null;
-  if (wantsTemplate(p.templateId)) {
-    const res = await require('./template-resolve').resolveTemplate(p.templateId, workspaceId);
+  // ── THE IDENTITY, RESOLVED BY MAIN, AT SPAWN ──────────────────────────────────────────────
+  let identity = null;
+  if (wantsIdentity(p.identityId)) {
+    const res = await require('./identity-resolve').resolveAgentIdentity(p.identityId, workspaceId);
     // F-1 / F-2 / F-3 / F-4: REFUSE. Never degrade to a blank agent.
     if (!res.ok) return { ok: false, reason: res.reason };
-    template = res.template;
-    // ── ⚠ FIRST-USE APPROVAL FOR A FOREIGN TEMPLATE (OQ-3) ────────────────────────────────
+    identity = res.identity;
+    // ── ⚠ FIRST-USE APPROVAL FOR A FOREIGN IDENTITY (OQ-3) ────────────────────────────────
     //
     // Another member's instructions are about to become standing configuration for an
     // autonomous agent running on THIS machine under THIS operator's credential. One approval,
-    // the first time, per template, machine-local (`channel-prefs.js › isTemplateApproved` —
+    // the first time, per identity, machine-local (`channel-prefs.js › isIdentityApproved` —
     // read its block for why the store may never be server-reachable).
     //
     // ⚠ IT IS A REFUSAL ROUND TRIP, NOT A MODAL RAISED FROM MAIN. The launch came from a button
     // in the SPA's own window, so the SPA is where the operator already is; main raising its own
     // dialog would put a second, differently-styled approval surface in front of them and would
     // block the IPC reply while it sat there. The renderer shows the sheet, calls
-    // `sessions.approveTemplate(templateId)`, and relaunches.
+    // `sessions.approveIdentity(identityId)`, and relaunches.
     // ⚠ THE INSTRUCTIONS RIDE BACK so the sheet shows THE TEXT MAIN RESOLVED, verbatim. An
     // approval over a body the renderer fetched separately is an approval over a different
     // document than the one that will run.
-    // ⚠ OWN TEMPLATES SKIP THIS ENTIRELY. `authoredByCaller === true` is never asked about — an
+    // ⚠ OWN IDENTITIES SKIP THIS ENTIRELY. `authoredByCaller === true` is never asked about — an
     // approval prompt over your own configuration is the noise that teaches people to click
     // through the ones that matter.
-    if (!template.authoredByCaller && !channelPrefs.isTemplateApproved(p.templateId)) {
-      diag('sessions:launch: foreign template awaiting first-use approval', String(p.templateId).slice(0, 8));
+    if (!identity.authoredByCaller && !channelPrefs.isIdentityApproved(p.identityId)) {
+      diag('sessions:launch: foreign identity awaiting first-use approval', String(p.identityId).slice(0, 8));
       return {
         ok: false,
-        reason: 'template-approval',
-        template: { name: template.name, instructions: template.instructions },
+        reason: 'identity-approval',
+        identity: { name: identity.name, instructions: identity.instructions },
       };
     }
     // ⚠ THE FIELD OVERRIDES ARE APPLIED AFTER THE APPROVAL GATE, DELIBERATELY. What the operator
-    // is asked to approve is the template's INSTRUCTIONS — the part they did not write — and
+    // is asked to approve is the identity's INSTRUCTIONS — the part they did not write — and
     // those are never overridable at launch. Applying the sheet's values first would change
     // nothing about the approval and would put renderer text in front of the question.
-    template = require('./template-resolve').applyOverrides(template, overrides);
+    identity = require('./identity-resolve').applyOverrides(identity, overrides);
   }
   // A BLANK launch with typed instructions still runs as an instructions-only role (F-695).
-  if (!template) template = require('./template-resolve').applyOverrides(null, overrides);
+  if (!identity) identity = require('./identity-resolve').applyOverrides(null, overrides);
 
   const title = typeof p.threadTitle === 'string' ? p.threadTitle.slice(0, 200) : '';
   // ⚠ THE GOAL IS DISPLAY/SEED TEXT ONLY ON THIS LANE and is never sent as a turn — a SPAWN-IDLE
   // session has no first turn at all. It survives because `startSession` builds the initiating-
   // request payload from it, and because a CHANNEL-LEVEL agent has no thread to be told to read.
-  // ⚠ A TEMPLATE DOES NOT REPLACE IT, AND IT DOES NOT SUPPRESS THE TEMPLATE. ROLE FIRST, GOAL
+  // ⚠ AN IDENTITY DOES NOT REPLACE IT, AND IT DOES NOT SUPPRESS THE IDENTITY. ROLE FIRST, GOAL
   // LAST: the role is WHO YOU ARE and the goal is WHAT TO DO NOW, and the goal reads last,
   // adjacent to FIRST ACTIONS and DELIVERY, which is what the agent acts on.
   const goal = channelLevel
@@ -228,19 +228,19 @@ async function launchFromButton(payload) {
       // the launch that KNOWS states it.
       scope: channelLevel ? 'channel' : 'thread',
       workspaceSegment: typeof p.workspaceSegment === 'string' ? p.workspaceSegment : null,
-      // ── ⚠ THE RESOLVED TEMPLATE, CAPTURED AT SPAWN AND NEVER RE-READ ────────────────────
+      // ── ⚠ THE RESOLVED IDENTITY, CAPTURED AT SPAWN AND NEVER RE-READ ────────────────────
       //
       // `session-launch.js › launch` forwards `context` on a LITERAL WHITELIST and
       // `session-engine.js › startSession` merges `spec.context` onto the session, so this costs
       // ZERO funnel changes and works identically on both launch lanes.
       //
       // ⚠ THE CONSEQUENCE IS THE RIGHT ONE AND IT IS NOT ENFORCED, IT FALLS OUT: A SESSION KEEPS
-      // ITS SPAWN-TIME TEMPLATE CONTENT. The resolve happens once, here; the role block is built
+      // ITS SPAWN-TIME IDENTITY CONTENT. The resolve happens once, here; the role block is built
       // at WAKE from what was captured now (`session-seed.js › takeFraming`, a one-shot). A
-      // template edited between spawn and wake does not change the session, and a template
+      // identity edited between spawn and wake does not change the session, and an identity
       // DELETED after spawn does not stop it — the content is on the session object, not a
-      // pointer to a row. `null` when no template was asked for, so the framing emits nothing.
-      template,
+      // pointer to a row. `null` when no identity was asked for, so the framing emits nothing.
+      identity,
     },
     toolProfile,
     mode: 'interactive',
@@ -275,13 +275,13 @@ async function launchFromButton(payload) {
     //
     //   sessions:setModel live override (post-spawn, `session-reopen.js`)
     //     > overrides.model              (the LAUNCH SHEET's deliberate per-call pick)
-    //     > template.model               (the template's DEFAULT)
+    //     > identity.model               (the identity's DEFAULT)
     //     > channelPrefs.getLaunchModel  (the channel's durable pick)
     //     > SDK default                  (`modelArg` returns null ⇒ no --model at all)
     //
-    // ⚠ THE SHEET BEATS THE TEMPLATE for the same reason the orchestrator's explicit `model`
+    // ⚠ THE SHEET BEATS THE IDENTITY for the same reason the orchestrator's explicit `model`
     // param beats it on the directive lane: one is a DELIBERATE PER-CALL CHOICE and the other is
-    // a DEFAULT. It also applies to a BLANK launch, where there is no template to outrank — the
+    // a DEFAULT. It also applies to a BLANK launch, where there is no identity to outrank — the
     // sheet opens on `Blank agent` too, and dropping the pick there would be a control that
     // silently does nothing.
     //
@@ -293,7 +293,7 @@ async function launchFromButton(payload) {
     // more; the runtime's LIVE roster is. So a named model is spent as named, and one this
     // machine's runtime does not offer is REFUSED by the funnel with the list it does offer
     // (`session-launch.js › refuseUnknownModel`, `no-model`) — the operator picks another in the
-    // sheet, whose pick outranks the template's.
+    // sheet, whose pick outranks the identity's.
     // ⚠ A legacy alias (`opus`) or an old full id still resolves: the roster carries them as
     // aliases of the row that is that model today (`runtime/claude/roster.js`).
     // ⚠ A MODEL GRANTS NOTHING AND REACHES NO GATE, which is why it may travel further than the
@@ -304,7 +304,7 @@ async function launchFromButton(payload) {
     // aliasing it answers that runtime's "no pick" member and the operator's choice is silently
     // dropped rather than spent. `channel-prefs.js › getLaunchModelLink` is the one spelling of
     // the resolution, so the three launch lanes cannot drift.
-    model: overrides.model || templateModel(sessionModel, template)
+    model: overrides.model || identityModel(sessionModel, identity)
       || channelPrefs.getLaunchModelLink(p.channelId),
     // ⚠ **THE AGENT COLOUR THE OPERATOR PICKED IN THE NEW-AGENT POPUP** (Samuel, 2026-09-13;
     // docs/specs/agent-colors.md). ⚠ IT SITS BESIDE `model` BECAUSE IT IS THE SAME KIND OF
@@ -313,7 +313,7 @@ async function launchFromButton(payload) {
     // it may travel further than the permission pair and needs none of `getLaunchPosture`'s
     // ceremony.
     // ⚠ **AND THERE IS NO PRECEDENCE CHAIN, WHICH IS THE DIFFERENCE FROM `model` ABOVE.** A
-    // template does not carry a colour and a channel has no stored default, because a colour is
+    // identity does not carry a colour and a channel has no stored default, because a colour is
     // UNIQUE among a channel's live agents across every member — a remembered pick would be a
     // pick that collides the second time it is used. So there is exactly one producer (the
     // popup) and exactly one fallback: omit it, and the server assigns the FIRST FREE key
@@ -348,34 +348,34 @@ async function launchFromButton(payload) {
 }
 
 /**
- * The template's own model as an ALIAS, or '' when it named none / named one this build does not
+ * The identity's own model as an ALIAS, or '' when it named none / named one this build does not
  * recognise. ⚠ `''` IS "THE CHAIN CONTINUES", which is why this is not `normalizeModel`'s
  * 'default': that value MEANS "the CLI's own pick" and would end the chain one link early.
  * ⚠ THE RULE ITSELF IS `session-model.js › chainModel` SINCE 2026-08-23, not restated here — the
  * DIRECTIVE lane needs the identical answer for its own link and a rule written once per lane is
  * a rule that drifts in one of them (F-285). This function is now only "which field to read".
  */
-function templateModel(sessionModel, template) {
+function identityModel(sessionModel, identity) {
   return sessionModel.chainModel(
-    template && typeof template.model === 'string' ? template.model : ''
+    identity && typeof identity.model === 'string' ? identity.model : ''
   );
 }
 
 /**
- * RECORD A FIRST-USE APPROVAL for another member's template, on THIS machine.
+ * RECORD A FIRST-USE APPROVAL for another member's identity, on THIS machine.
  *
- * ⚠ IT GRANTS NOTHING BUT THE PROMPT. Approving a template does not widen a tool profile, a
- * permission axis, a delivery lane or a working folder — it decides whether that template's TEXT
- * may become this agent's role. The containment a template runs inside is identical either way.
+ * ⚠ IT GRANTS NOTHING BUT THE PROMPT. Approving an identity does not widen a tool profile, a
+ * permission axis, a delivery lane or a working folder — it decides whether that identity's TEXT
+ * may become this agent's role. The containment an identity runs inside is identical either way.
  * ⚠ IT IS `appWindowOnly` AT THE REGISTRATION SITE, like every other op on that surface, and the
  * store it writes is machine-local and unreachable from any Dopl endpoint. Both halves matter:
  * a server-writable approval lets a credential-holding agent pre-approve itself across the fleet.
  * ⚠ IT IS NOT A LAUNCH. Approving is idempotent and starts nothing; the renderer relaunches.
  */
-function approveTemplate(payload) {
+function approveIdentity(payload) {
   const p = payload || {};
-  if (!isUuid(p.templateId)) return { ok: false };
-  return { ok: require('./channel-prefs').approveTemplate(p.templateId) === true };
+  if (!isUuid(p.identityId)) return { ok: false };
+  return { ok: require('./channel-prefs').approveIdentity(p.identityId) === true };
 }
 
-module.exports = { launchFromButton, approveTemplate, wantsTemplate, templateModel };
+module.exports = { launchFromButton, approveIdentity, wantsIdentity, identityModel };

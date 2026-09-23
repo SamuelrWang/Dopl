@@ -34,11 +34,11 @@ const descriptionForAgent = () => names.description;
 // the returned api below, so `m.pillState` / `m.PILL_STATES` / `m.listeningState` still resolve.
 const pill = req(join(MAIN, "session-pill.js"));
 const { PILL_STATES, ACTIVITY_PILL, PILL_ENDED, pillState, queryTornDown, listeningState } = pill;
-// `displayText` / `TEMPLATE_NAME_MAX` moved out 2026-09-13 (`main/session-summary-text.js`), and
+// `displayText` / `IDENTITY_NAME_MAX` moved out 2026-09-13 (`main/session-summary-text.js`), and
 // left `EXPORTED` in the same change — that list is a NAME LIST for a `new Function` return, so a
 // name the block no longer declares is a ReferenceError at LOAD.
 const summaryText = req(join(MAIN, "session-summary-text.js"));
-const { displayText, TEMPLATE_NAME_MAX } = summaryText;
+const { displayText, IDENTITY_NAME_MAX } = summaryText;
 // The held-gate projection (2026-09-17). Injected REAL; safe to `req` because that module takes NO
 // requires of its own, so it cannot drag an `electron-store` into this loader.
 const { heldGatesFor } = req(join(MAIN, "session-held-gates.js"));
@@ -85,7 +85,7 @@ export function load() {
     "displayNameFor",
     "descriptionForAgent",
     "displayText",
-    "TEMPLATE_NAME_MAX",
+    "IDENTITY_NAME_MAX",
     "heldGatesFor",
     "PILL_STATES",
     "ACTIVITY_PILL",
@@ -97,7 +97,7 @@ export function load() {
     `${BLOCK}\n return { ${EXPORTED.join(", ")} };`
   )(
     metricOrNull, metrics, noteEvent, detailFor, endReasonFor, displayNameFor, descriptionForAgent,
-    displayText, TEMPLATE_NAME_MAX, heldGatesFor,
+    displayText, IDENTITY_NAME_MAX, heldGatesFor,
     PILL_STATES, ACTIVITY_PILL, PILL_ENDED, pillState, queryTornDown, listeningState,
     (...parts) => logged.push(parts.join(" "))
   );

@@ -1,5 +1,5 @@
 /**
- * `dopl_agent` — the template family's HAPPY PATHS and its ref resolution.
+ * `dopl_agent` — the identity family's HAPPY PATHS and its ref resolution.
  *
  *   1. Each op's happy path reaches the right client method with the right body.
  *   2. THE THREE-ANSWER RULE — resolved / ambiguous-with-candidates / not-found
@@ -12,7 +12,7 @@
  */
 
 import { describe, it, expect, vi } from "vitest";
-import type { AgentTemplate, DoplClient } from "@dopl/client";
+import type { AgentIdentity, DoplClient } from "@dopl/client";
 
 import { opGet, opList } from "./agent-ops-read";
 import { opCreate, opUpdate } from "./agent-ops-write";
@@ -21,10 +21,10 @@ import { __resetConfirmTokensForTest } from "./confirm-token";
 
 const ME = "user-1";
 const PEER = "user-2";
-/** The `updatedAt` {@link template} carries — a version a caller really could have read off `op="get"` (F-747), and the client's tri-state THIRD argument rather than a body field: it rides as `X-Updated-At`. */
+/** The `updatedAt` {@link identity} carries — a version a caller really could have read off `op="get"` (F-747), and the client's tri-state THIRD argument rather than a body field: it rides as `X-Updated-At`. */
 const VERSION = "2026-01-01T00:00:00Z";
 
-function template(over: Partial<AgentTemplate> = {}): AgentTemplate {
+function identity(over: Partial<AgentIdentity> = {}): AgentIdentity {
   return {
     id: "11111111-1111-4111-8111-111111111111",
     workspaceId: "ws-1",
@@ -76,18 +76,18 @@ function standardWorkspace(over: Record<string, unknown> = {}) {
 describe("op=list", () => {
   it("groups by sharing, carries every row's id, and states whose view it is", async () => {
     const list = vi.fn(async () => ({
-      templates: [
-        template(),
-        template({ id: "22222222-2222-4222-8222-222222222222", name: "Auditor", visibility: "workspace" }),
+      identities: [
+        identity(),
+        identity({ id: "22222222-2222-4222-8222-222222222222", name: "Auditor", visibility: "workspace" }),
       ],
     }));
     const text = textOf(
-      await opList(stub({ listAgentTemplatesPayload: list }) as DoplClient),
+      await opList(stub({ listAgentIdentitiesPayload: list }) as DoplClient),
     );
 
     expect(list).toHaveBeenCalledWith();
     // ⚠ **NO `· personal` LABEL SINCE 2026-09-02 (slice B15).** It rode the
-    // `homeScopedTemplateIds` sibling key over a dropped column; every row a
+    // `homeScopedIdentityIds` sibling key over a dropped column; every row a
     // list returns is now in the same container, so a per-row shelf label says
     // nothing.
     expect(text).not.toContain("· personal");
@@ -102,22 +102,22 @@ describe("op=list", () => {
   // pinned the `personal` → `home` wire mapping and one the shelf-scoped empty
   // sentence; both described an argument this op no longer takes.
 
-  it("an empty list does not claim the workspace has no templates", async () => {
+  it("an empty list does not claim the workspace has no identities", async () => {
     const text = textOf(
       await opList(
-        stub({ listAgentTemplatesPayload: vi.fn(async () => ({ templates: [] })) }) as DoplClient,
+        stub({ listAgentIdentitiesPayload: vi.fn(async () => ({ identities: [] })) }) as DoplClient,
       ),
     );
-    expect(text).toContain("No agent templates visible to you here");
+    expect(text).toContain("No agent identities visible to you here");
     expect(text).toContain("you can SEE");
   });
 });
 
 describe("op=get", () => {
-  it("renders the instructions BARE for the caller's own template", async () => {
+  it("renders the instructions BARE for the caller's own identity", async () => {
     const text = textOf(
       await opGet(
-        stub({ listAgentTemplates: vi.fn(async () => [template()]) }) as DoplClient,
+        stub({ listAgentIdentities: vi.fn(async () => [identity()]) }) as DoplClient,
         "Researcher",
         ME,
       ),
@@ -133,7 +133,7 @@ describe("op=get", () => {
     const text = textOf(
       await opGet(
         stub({
-          listAgentTemplates: vi.fn(async () => [template({ createdBy: PEER })]),
+          listAgentIdentities: vi.fn(async () => [identity({ createdBy: PEER })]),
         }) as DoplClient,
         "Researcher",
         ME,
@@ -148,8 +148,8 @@ describe("op=get", () => {
     const text = textOf(
       await opGet(
         stub({
-          listAgentTemplates: vi.fn(async () => [
-            template({ knowledgeBases: [{ id: "kb-1", name: "Notes" }] }),
+          listAgentIdentities: vi.fn(async () => [
+            identity({ knowledgeBases: [{ id: "kb-1", name: "Notes" }] }),
           ]),
         }) as DoplClient,
         "Researcher",
@@ -169,8 +169,8 @@ describe("op=get", () => {
     const text = textOf(
       await opGet(
         stub({
-          listAgentTemplates: vi.fn(async () => [
-            template({
+          listAgentIdentities: vi.fn(async () => [
+            identity({
               knowledgeBases: [{ id: "kb-1", name: "Notes" }],
               knowledge: [
                 { baseId: "kb-1", baseName: "Notes", scope: "base", path: "Notes" },
@@ -217,8 +217,8 @@ describe("op=get", () => {
     const text = textOf(
       await opGet(
         stub({
-          listAgentTemplates: vi.fn(async () => [
-            template({ knowledgeBases: [{ id: "kb-1", name: "Notes" }] }),
+          listAgentIdentities: vi.fn(async () => [
+            identity({ knowledgeBases: [{ id: "kb-1", name: "Notes" }] }),
           ]),
         }) as DoplClient,
         "Researcher",
@@ -232,10 +232,10 @@ describe("op=get", () => {
 describe("op=create", () => {
   it("sends the body and reports where it landed", async () => {
     __resetConfirmTokensForTest();
-    const create = vi.fn(async () => template({ visibility: "workspace" }));
+    const create = vi.fn(async () => identity({ visibility: "workspace" }));
     const client = stub({
       ...standardWorkspace(),
-      createAgentTemplate: create,
+      createAgentIdentity: create,
     }) as DoplClient;
 
     const text = textOf(
@@ -257,7 +257,7 @@ describe("op=create", () => {
       knowledgeBaseIds: ["aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"],
       homeScoped: undefined,
     });
-    expect(text).toContain("Created agent template");
+    expect(text).toContain("Created agent identity");
     // ⚠ THE LIVE SPELLING, and it changed at B8: `launch_agent` retired into
     // `manage(action="launch")`. A result line naming the old one teaches a
     // caller to spend a one-release redirect (F-592).
@@ -268,9 +268,9 @@ describe("op=create", () => {
     // ⚠ The visibility half survives the shelf's deletion and is unrelated to
     // it: the server's default is credential-dependent, so an omitted value let
     // a shared credential resolve to `workspace` and trip G16 unanswerably.
-    const create = vi.fn(async () => template());
+    const create = vi.fn(async () => identity());
     await opCreate(
-      stub({ ...standardWorkspace(), createAgentTemplate: create }) as DoplClient,
+      stub({ ...standardWorkspace(), createAgentIdentity: create }) as DoplClient,
       ME,
       { name: "Researcher" },
     );
@@ -283,11 +283,11 @@ describe("op=create", () => {
 describe("op=update", () => {
   it("patches by resolved id and reports the new sharing", async () => {
     __resetConfirmTokensForTest();
-    const update = vi.fn(async () => template({ visibility: "workspace" }));
+    const update = vi.fn(async () => identity({ visibility: "workspace" }));
     const client = stub({
       ...standardWorkspace(),
-      listAgentTemplates: vi.fn(async () => [template()]),
-      updateAgentTemplate: update,
+      listAgentIdentities: vi.fn(async () => [identity()]),
+      updateAgentIdentity: update,
     }) as DoplClient;
 
     const text = textOf(await opUpdate(client, ME, "Researcher", { visibility: "workspace", expected_version: VERSION }));
@@ -303,7 +303,7 @@ describe("op=update", () => {
     const update = vi.fn();
     const text = textOf(
       await opUpdate(
-        stub({ listAgentTemplates: vi.fn(async () => [template()]), updateAgentTemplate: update }) as DoplClient,
+        stub({ listAgentIdentities: vi.fn(async () => [identity()]), updateAgentIdentity: update }) as DoplClient,
         ME,
         "Researcher",
         {},
@@ -319,10 +319,10 @@ describe("op=update", () => {
 
 describe("the three-answer resolve rule", () => {
   it("RESOLVED — an exact name, case-insensitively", async () => {
-    const get = vi.fn(async () => template());
+    const get = vi.fn(async () => identity());
     const text = textOf(
       await opGet(
-        stub({ listAgentTemplates: vi.fn(async () => [template()]), getAgentTemplate: get }) as DoplClient,
+        stub({ listAgentIdentities: vi.fn(async () => [identity()]), getAgentIdentity: get }) as DoplClient,
         "rEsEaRcHeR",
         ME,
       ),
@@ -336,23 +336,23 @@ describe("the three-answer resolve rule", () => {
     // 🔒 **AND THE ID DOOR IS ASKED FIRST (2026-09-18, the F-470 port) — its own
     // suite is `agent-id-door.test.ts`.** A 404 from it, and only a 404, is what
     // makes this a miss; 404-never-403 is preserved and the sentence is unchanged.
-    const getAgentTemplate = vi.fn(async () => {
+    const getAgentIdentity = vi.fn(async () => {
       throw Object.assign(new Error("HTTP 404"), {
         status: 404,
-        code: "AGENT_TEMPLATE_NOT_FOUND",
+        code: "AGENT_IDENTITY_NOT_FOUND",
       });
     });
     const text = textOf(
       await opGet(
         stub({
-          listAgentTemplates: vi.fn(async () => [template()]),
-          getAgentTemplate,
+          listAgentIdentities: vi.fn(async () => [identity()]),
+          getAgentIdentity,
         }) as DoplClient,
         "99999999-9999-4999-8999-999999999999",
         ME,
       ),
     );
-    expect(getAgentTemplate).toHaveBeenCalledWith(
+    expect(getAgentIdentity).toHaveBeenCalledWith(
       "99999999-9999-4999-8999-999999999999",
     );
     expect(text).toContain("resolves for you");
@@ -363,15 +363,15 @@ describe("the three-answer resolve rule", () => {
     const get = vi.fn();
     const res = await opGet(
       stub({
-        listAgentTemplates: vi.fn(async () => [
-          template(),
-          template({
+        listAgentIdentities: vi.fn(async () => [
+          identity(),
+          identity({
             id: "22222222-2222-4222-8222-222222222222",
             visibility: "workspace",
             createdBy: PEER,
           }),
         ]),
-        getAgentTemplate: get,
+        getAgentIdentity: get,
       }) as DoplClient,
       "Researcher",
       ME,
@@ -380,7 +380,7 @@ describe("the three-answer resolve rule", () => {
 
     expect(res.isError).toBe(true);
     expect(get).not.toHaveBeenCalled();
-    expect(text).toContain("matches 2 agent templates");
+    expect(text).toContain("matches 2 agent identities");
     expect(text).toContain("`11111111-1111-4111-8111-111111111111`");
     expect(text).toContain("`22222222-2222-4222-8222-222222222222`");
     // ⚠ Visibility is what makes the disambiguation actionable.
@@ -390,7 +390,7 @@ describe("the three-answer resolve rule", () => {
 
   it("NOT FOUND — one answer for absent AND invisible, so ids cannot be probed", async () => {
     const res = await opGet(
-      stub({ listAgentTemplates: vi.fn(async () => []) }) as DoplClient,
+      stub({ listAgentIdentities: vi.fn(async () => []) }) as DoplClient,
       "Nope",
       ME,
     );
@@ -403,11 +403,11 @@ describe("the three-answer resolve rule", () => {
     const update = vi.fn();
     const res = await opUpdate(
       stub({
-        listAgentTemplates: vi.fn(async () => [
-          template(),
-          template({ id: "22222222-2222-4222-8222-222222222222" }),
+        listAgentIdentities: vi.fn(async () => [
+          identity(),
+          identity({ id: "22222222-2222-4222-8222-222222222222" }),
         ]),
-        updateAgentTemplate: update,
+        updateAgentIdentity: update,
       }) as DoplClient,
       ME,
       "Researcher",
@@ -436,9 +436,9 @@ describe("knowledge scopes", () => {
 
   it("op=create translates all three shapes onto the wire's union", async () => {
     __resetConfirmTokensForTest();
-    const create = vi.fn(async () => template());
+    const create = vi.fn(async () => identity());
     await opCreate(
-      stub({ ...standardWorkspace(), createAgentTemplate: create }) as DoplClient,
+      stub({ ...standardWorkspace(), createAgentIdentity: create }) as DoplClient,
       ME,
       {
         name: "Researcher",
@@ -462,13 +462,13 @@ describe("knowledge scopes", () => {
 
   it("op=update carries them, and a `knowledge`-only patch is a real change", async () => {
     __resetConfirmTokensForTest();
-    const update = vi.fn(async () => template());
+    const update = vi.fn(async () => identity());
     const text = textOf(
       await opUpdate(
         stub({
           ...standardWorkspace(),
-          listAgentTemplates: vi.fn(async () => [template()]),
-          updateAgentTemplate: update,
+          listAgentIdentities: vi.fn(async () => [identity()]),
+          updateAgentIdentity: update,
         }) as DoplClient,
         ME,
         "Researcher",
@@ -488,7 +488,7 @@ describe("knowledge scopes", () => {
   it("names `knowledge` in the nothing-passed refusal, so the caller learns the key", async () => {
     const text = textOf(
       await opUpdate(
-        stub({ listAgentTemplates: vi.fn(async () => [template()]) }) as DoplClient,
+        stub({ listAgentIdentities: vi.fn(async () => [identity()]) }) as DoplClient,
         ME,
         "Researcher",
         {},

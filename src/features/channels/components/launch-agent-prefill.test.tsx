@@ -1,45 +1,45 @@
 // @vitest-environment jsdom
 /**
- * THE NEW-AGENT POPUP'S TEMPLATE PREFILL AND ITS INSTRUCTIONS FIELD (2026-09-13, Samuel's ruling
+ * THE NEW-AGENT POPUP'S IDENTITY PREFILL AND ITS INSTRUCTIONS FIELD (2026-09-13, Samuel's ruling
  * over the deleted `launch-sheet.tsx`).
  *
  * ⚠ ITS OWN FILE ON THE SEAM `launch-agent-dialog-runtime.test.tsx` already took: that file owns
  * the Runtime row's contract, `launch-agent-dialog.test.tsx` owns the field list, the selectors'
- * defaults, the payload parity and the two exits, and this owns **what a TEMPLATE does to the
+ * defaults, the payload parity and the two exits, and this owns **what a IDENTITY does to the
  * form**. The dialog's suite stood at 429 of the 500-line cap; these cases did not fit, and
  * shaving their comments to make them fit would have been the cap deciding what a review may say.
  *
  * Samuel, verbatim, because these cases exist for these sentences: *"we should add an Instructions
  * field in the New agent popup. That should be a field under description, but don't make it like
  * multiple lines as the default height. it will only increase in height if the user types more. So
- * basically have that, so when a user clicks a template, all of those fields would be pre-filled.
- * And instead of the popup saying New Agent, it should say New (name of template) Agent. … an
- * individual agent from that template might have a different name the user might want to set. … The
+ * basically have that, so when a user clicks an identity, all of those fields would be pre-filled.
+ * And instead of the popup saying New Agent, it should say New (name of identity) Agent. … an
+ * individual agent from that identity might have a different name the user might want to set. … The
  * agent popup will just have the name prefilled and the user can change the name if they want."*
  *
  * The four properties, all of which fail silently:
  *
- *  - **PICKING A TEMPLATE FILLS NAME, DESCRIPTION AND INSTRUCTIONS**, and the heading names it.
+ *  - **PICKING AN IDENTITY FILLS NAME, DESCRIPTION AND INSTRUCTIONS**, and the heading names it.
  *  - **AN EDITED FIELD IS NEVER OVERWRITTEN.** The only rule under which *"all of those fields
  *    would be pre-filled"* and *"the user can change the name if they want"* are both true — and
  *    the test is EDITED-SINCE-THE-LAST-PREFILL, not "non-empty", because the Name arrives holding
  *    the mint's `#<id>`.
  *  - **"None" PREFILLS NOTHING AND CLEARS NOTHING.** A selector going back to its first option may
  *    not blank three fields the operator can see.
- *  - **THE INSTRUCTIONS REACH THE WIRE ONLY WHEN THEY DIFFER FROM THE TEMPLATE'S OWN**
+ *  - **THE INSTRUCTIONS REACH THE WIRE ONLY WHEN THEY DIFFER FROM THE IDENTITY'S OWN**
  *    (`use-agent-launch-run.ts › launchOverridesOf`) — `overridesFor`'s rule, applied to a third
- *    field: the field arrives PREFILLED, so a non-empty test would send the template's own prose
- *    back on every template launch.
+ *    field: the field arrives PREFILLED, so a non-empty test would send the identity's own prose
+ *    back on every identity launch.
  */
 
 import { useEffect } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 
-const templateList = vi.hoisted(() => ({ templates: [] as unknown[] }));
-vi.mock("@/features/agent-templates/hooks/use-agent-templates", () => ({
-  useAgentTemplates: () => ({
-    templates: templateList.templates,
+const identityList = vi.hoisted(() => ({ identities: [] as unknown[] }));
+vi.mock("@/features/agent-identities/hooks/use-agent-identities", () => ({
+  useAgentIdentities: () => ({
+    identities: identityList.identities,
     loading: false,
     error: null,
     resolved: true,
@@ -47,7 +47,7 @@ vi.mock("@/features/agent-templates/hooks/use-agent-templates", () => ({
   }),
 }));
 // ⚠ THE DESKTOP REPORTS NOTHING HERE, deliberately: no Runtime row, no posture model. Every case
-// in this file is about the three TEXT fields and the Template row, and a runtime pill in the tree
+// in this file is about the three TEXT fields and the Identity row, and a runtime pill in the tree
 // would only add a way for these cases to fail for somebody else's reason.
 // ⚠ **THE DIALOG READS THE VERSIONED RECORD SINCE 2026-09-21 (U7)** — one hook, mounted inside
 // `launch-agent-dialog-state.ts`. This file is about PREFILL and says nothing about runtimes, so
@@ -85,11 +85,11 @@ function launcher(): AgentLaunchControls {
     launchBusy: false,
     launchError: null,
     launchAgent: vi.fn().mockResolvedValue({ ok: true, agentId: MINTED }),
-    approveTemplate: vi.fn().mockResolvedValue({ ok: true }),
+    approveIdentity: vi.fn().mockResolvedValue({ ok: true }),
   };
 }
 
-/** One template row as the roster hands it over. */
+/** One identity row as the roster hands it over. */
 function auditor(over: Record<string, unknown> = {}) {
   return {
     id: "tpl-9",
@@ -154,13 +154,13 @@ async function open() {
 
 beforeEach(() => {
   mintAgentId.mockReset().mockResolvedValue({ ok: true, agentId: MINTED });
-  templateList.templates = [auditor()];
+  identityList.identities = [auditor()];
   stubBridge();
 });
 afterEach(() => {
   cleanup();
   delete (window as { dopl?: unknown }).dopl;
-  templateList.templates = [];
+  identityList.identities = [];
 });
 
 // ── 1. THE INSTRUCTIONS FIELD ────────────────────────────────────────────────
@@ -171,9 +171,9 @@ describe("the Instructions field", () => {
     // ⚠ ORDER IS SAMUEL'S (*"a field under description"*) and is asserted over the rendered tree
     // rather than over the source, so a reshuffle of the JSX cannot pass.
     const labels = screen
-      .getAllByText(/^(Name|Description|Instructions|Template)$/)
+      .getAllByText(/^(Name|Description|Instructions|Identity)$/)
       .map((el) => el.textContent);
-    expect(labels).toEqual(["Name", "Description", "Instructions", "Template"]);
+    expect(labels).toEqual(["Name", "Description", "Instructions", "Identity"]);
     // ⚠ **ONE ROW, AND THE GROWTH IS CSS** (*"don't make it like multiple lines as the default
     // height. it will only increase in height if the user types more"*): `rows=1` plus the kit's
     // `field-sizing: content` (`shared/ui/form-dialog.module.css › .inputMultiline`). jsdom loads
@@ -185,7 +185,7 @@ describe("the Instructions field", () => {
 
   it("carries the operator's OWN prose onto the wire as an instructions override", async () => {
     // 🔒 MUTATION-PROOF: drop `overrides.instructions` from `launchOverridesOf` and only this case
-    // fails — the untouched and template-equal cases below both expect it ABSENT.
+    // fails — the untouched and identity-equal cases below both expect it ABSENT.
     const controls = await open();
     fireEvent.change(instrField(), { target: { value: "Only look at the migrations." } });
     fireEvent.click(screen.getByRole("button", { name: "Launch" }));
@@ -195,10 +195,10 @@ describe("the Instructions field", () => {
     });
   });
 
-  it("sends NOTHING when it was never touched, and nothing when it still equals the template's", async () => {
+  it("sends NOTHING when it was never touched, and nothing when it still equals the identity's", async () => {
     // ⚠ THE SECOND HALF IS THE ONE THAT REGRESSES. A prefilled field plus a non-empty test sends
-    // the template's own prose back on every template launch — a payload that only LOOKS like a
-    // decision, and one that goes stale the moment the template is edited between open and Launch.
+    // the identity's own prose back on every identity launch — a payload that only LOOKS like a
+    // decision, and one that goes stale the moment the identity is edited between open and Launch.
     const controls = await open();
     fireEvent.click(pill("Code auditor"));
     expect(instrField().value).toBe("Read the diff. Report findings.");
@@ -210,7 +210,7 @@ describe("the Instructions field", () => {
 
 // ── 2. THE PREFILL ───────────────────────────────────────────────────────────
 
-describe("picking a template", () => {
+describe("picking an identity", () => {
   it("fills Name, Description and Instructions, and names itself in the heading", async () => {
     await open();
     expect(screen.getByRole("dialog", { name: "New agent" })).toBeTruthy();
@@ -224,13 +224,13 @@ describe("picking a template", () => {
     expect(screen.getByRole("dialog", { name: "New Code auditor agent" })).toBeTruthy();
   });
 
-  it("DISPLAYS the template's model without stamping it — the row moves, the wire does not", async () => {
-    // ⚠ THE ONE FIELD DELIBERATELY LEFT OUT OF THE PREFILL. `effectiveModel` shows the template's
+  it("DISPLAYS the identity's model without stamping it — the row moves, the wire does not", async () => {
+    // ⚠ THE ONE FIELD DELIBERATELY LEFT OUT OF THE PREFILL. `effectiveModel` shows the identity's
     // model while `panel.model` stays `''`, so main's precedence chain
-    // (`session-launch-op.js`: overrides > template > channel > SDK) stays the one authority.
-    // 🔒 MUTATION-PROOF: add `setModel(template.model)` to `applyTemplate` and the second half
+    // (`session-launch-op.js`: overrides > identity > channel > SDK) stays the one authority.
+    // 🔒 MUTATION-PROOF: add `setModel(identity.model)` to `applyIdentity` and the second half
     // fails while the first still passes.
-    templateList.templates = [auditor({ model: "claude-opus-5" })];
+    identityList.identities = [auditor({ model: "claude-opus-5" })];
     const controls = await open();
     fireEvent.click(pill("Code auditor"));
     expect(selected("Agent model")).toBe("Opus 5");
@@ -240,10 +240,10 @@ describe("picking a template", () => {
   });
 
   it("never overwrites a field the operator EDITED — the name included", async () => {
-    // ⚠ *"an individual agent from that template might have a different name the user might want to
+    // ⚠ *"an individual agent from that identity might have a different name the user might want to
     // set."* The mint's `#<id>` is NOT an edit, which is the distinction the `touched` ref exists
     // for: a non-empty test would make the Name unprefillable, and a blind overwrite would take the
-    // operator's own name away every time they browsed a second template.
+    // operator's own name away every time they browsed a second identity.
     await open();
     fireEvent.change(nameField(), { target: { value: "Migrations reviewer" } });
     fireEvent.change(descField(), { target: { value: "Mine." } });
@@ -254,8 +254,8 @@ describe("picking a template", () => {
     expect(instrField().value).toBe("Read the diff. Report findings.");
   });
 
-  it("re-prefills from the NEXT template, because clicking past one is not editing it", async () => {
-    templateList.templates = [auditor(), auditor({ id: "tpl-2", name: "Scribe", description: "Writes it up.", instructions: "Summarise." })];
+  it("re-prefills from the NEXT identity, because clicking past one is not editing it", async () => {
+    identityList.identities = [auditor(), auditor({ id: "tpl-2", name: "Scribe", description: "Writes it up.", instructions: "Summarise." })];
     await open();
     fireEvent.click(pill("Code auditor"));
     fireEvent.click(pill("Scribe"));
@@ -272,7 +272,7 @@ describe("picking a template", () => {
  * (2026-09-14; `shared/ui/standard-dialog.tsx › DIALOG_TITLE_AS_TYPED`).
  *
  * ⚠ **THE KIT'S DEFAULT IS `text-transform: capitalize`** (Samuel's Title-Case ruling for
- * AUTHORED headings), and it rewrites the first letter of EVERY word — so a template named
+ * AUTHORED headings), and it rewrites the first letter of EVERY word — so an identity named
  * "iOS Coder" rendered "New IOS Coder Agent": the dialog misspelling the row it is about. The
  * string is never cased in JS (it is `ModalShell`'s `aria-label` too), so the fix is the opt-out
  * prop, and the pin is the CLASS rather than the text.
@@ -281,8 +281,8 @@ describe("picking a template", () => {
  * takes `DIALOG_TITLE` — which carries `capitalize` — and this fails.
  */
 describe("the heading's casing", () => {
-  it("renders the template's name as typed, never Title-Cased by CSS", async () => {
-    templateList.templates = [auditor({ id: "tpl-ios", name: "iOS Coder" })];
+  it("renders the identity's name as typed, never Title-Cased by CSS", async () => {
+    identityList.identities = [auditor({ id: "tpl-ios", name: "iOS Coder" })];
     await open();
     fireEvent.click(pill(/iOS Coder/));
     const heading = await screen.findByRole("heading", { name: "New iOS Coder agent" });
@@ -293,9 +293,9 @@ describe("the heading's casing", () => {
   });
 });
 
-describe("clearing the template", () => {
+describe("clearing the identity", () => {
   it("keeps whatever is in the three fields, and takes the heading back", async () => {
-    // 🔒 MUTATION-PROOF: make `applyTemplate(null)` prefill from an empty template (drop its early
+    // 🔒 MUTATION-PROOF: make `applyIdentity(null)` prefill from an empty identity (drop its early
     // return) and all three values blank — three fields the operator can see, cleared by a
     // selector going back to its first option, with no undo.
     const controls = await open();
@@ -306,12 +306,12 @@ describe("clearing the template", () => {
     expect(descField().value).toBe("Audits the diff.");
     expect(instrField().value).toBe("Mine now.");
     expect(screen.getByRole("dialog", { name: "New agent" })).toBeTruthy();
-    // ⚠ AND THE WIRE FOLLOWS THE SELECTOR: no template, and the typed prose is an override in its
+    // ⚠ AND THE WIRE FOLLOWS THE SELECTOR: no identity, and the typed prose is an override in its
     // own right (the BLANK lane's instructions are a known gap in MAIN, not here — F-695).
     fireEvent.click(screen.getByRole("button", { name: "Launch" }));
     await waitFor(() => expect(controls.launchAgent).toHaveBeenCalled());
-    const [, templateId, overrides] = vi.mocked(controls.launchAgent).mock.calls[0];
-    expect(templateId).toBeNull();
+    const [, identityId, overrides] = vi.mocked(controls.launchAgent).mock.calls[0];
+    expect(identityId).toBeNull();
     expect(overrides).toEqual({ instructions: "Mine now." });
   });
 });
@@ -335,12 +335,12 @@ function ToggleHarness() {
       <button type="button" onClick={panel.toggle}>
         toggle
       </button>
-      <button type="button" onClick={() => panel.applyTemplate?.(auditor())}>
+      <button type="button" onClick={() => panel.applyIdentity?.(auditor())}>
         pick
       </button>
       <output data-testid="state">
         {panel.open ? "open" : "shut"}|{panel.name}|{panel.description}|
-        {panel.instructions ?? ""}|{panel.templateId ?? ""}|{panel.agentId ?? ""}
+        {panel.instructions ?? ""}|{panel.identityId ?? ""}|{panel.agentId ?? ""}
       </output>
     </div>
   );
@@ -374,7 +374,7 @@ describe("closing the popup with the control that opened it", () => {
    * two-draw bug arriving by another road. With the state cleared, the fresh mint's `typed === ""`
    * guard fires and the panel shows ONE agent's address over that same agent's name.
    */
-  it("re-prefills from the new mint, and a template still fills the fields in", async () => {
+  it("re-prefills from the new mint, and an identity still fills the fields in", async () => {
     mintAgentId.mockResolvedValue({ ok: true, agentId: MINTED });
     render(<ToggleHarness />);
     toggle();
@@ -386,7 +386,7 @@ describe("closing the popup with the control that opened it", () => {
     await waitFor(() => expect(state()).toContain("zz99yy88"));
     // ⚠ NO TRACE OF THE FIRST DRAW: the name and the id are the SAME agent's.
     expect(state()).not.toContain(MINTED);
-    // ⚠ AND `touched` WENT WITH IT, so a template pick prefills again rather than finding a
+    // ⚠ AND `touched` WENT WITH IT, so an identity pick prefills again rather than finding a
     // field the operator is believed to have typed.
     fireEvent.click(screen.getByRole("button", { name: "pick" }));
     expect(state()).toContain("Code auditor");

@@ -2,31 +2,31 @@ import "server-only";
 import { HttpError } from "@/shared/lib/http-error";
 import { ContainerPublishUnacknowledgedError } from "@/features/workspaces/server/shared-publish";
 import {
-  AgentTemplateNotFoundError,
-  TemplateKnowledgeBaseNotFoundError,
-  TemplateStaleVersionError,
-  TemplateTeamNotGrantableError,
-  TemplateWriteForbiddenError,
-  TemplateTeamScopeAgentForbiddenError,
-  WorkspaceKeyPrivateTemplateError,
+  AgentIdentityNotFoundError,
+  IdentityKnowledgeBaseNotFoundError,
+  IdentityStaleVersionError,
+  IdentityTeamNotGrantableError,
+  IdentityWriteForbiddenError,
+  IdentityTeamScopeAgentForbiddenError,
+  WorkspaceKeyPrivateIdentityError,
 } from "./errors";
 
-/** Agent-template domain errors → `HttpError`. Null for anything
+/** Agent-identity domain errors → `HttpError`. Null for anything
  *  unrecognized, so the caller falls through to a generic 500 — same contract
  *  as `mapSkillError` / `mapKnowledgeError`. */
-export function mapAgentTemplateError(err: unknown): HttpError | null {
-  if (err instanceof AgentTemplateNotFoundError) {
+export function mapAgentIdentityError(err: unknown): HttpError | null {
+  if (err instanceof AgentIdentityNotFoundError) {
     // ⚠ `details` ONLY WHEN THERE IS SOMETHING NON-LEAKY TO SAY (T35): the key
     // is ABSENT for an ordinary miss, so its presence cannot itself be read as
     // a fact about a row the caller may not see.
     return new HttpError(
       404,
-      "AGENT_TEMPLATE_NOT_FOUND",
+      "AGENT_IDENTITY_NOT_FOUND",
       err.message,
       err.elsewhere ? { elsewhere: err.elsewhere } : undefined
     );
   }
-  if (err instanceof TemplateKnowledgeBaseNotFoundError) {
+  if (err instanceof IdentityKnowledgeBaseNotFoundError) {
     // ⚠ 404, not 403 — see the error class: a distinguishable "forbidden" here
     // would turn the attach endpoint into an existence oracle for private KBs.
     return new HttpError(404, "KNOWLEDGE_BASE_NOT_FOUND", err.message, {
@@ -37,23 +37,23 @@ export function mapAgentTemplateError(err: unknown): HttpError | null {
   // http-mapping.ts`) — the app's editor and `dopl_agent` both read `actual` to
   // say what the row moved to, and a second shape here would need a second
   // reader in each.
-  if (err instanceof TemplateStaleVersionError) {
-    return new HttpError(412, "AGENT_TEMPLATE_STALE_VERSION", err.message, {
+  if (err instanceof IdentityStaleVersionError) {
+    return new HttpError(412, "AGENT_IDENTITY_STALE_VERSION", err.message, {
       expected: err.expected,
       actual: err.actual,
     });
   }
-  if (err instanceof TemplateTeamNotGrantableError) {
+  if (err instanceof IdentityTeamNotGrantableError) {
     return new HttpError(403, "RESOURCE_ACCESS_DENIED", err.message);
   }
-  if (err instanceof TemplateWriteForbiddenError) {
+  if (err instanceof IdentityWriteForbiddenError) {
     return new HttpError(403, "RESOURCE_ACCESS_DENIED", err.message);
   }
-  if (err instanceof WorkspaceKeyPrivateTemplateError) {
+  if (err instanceof WorkspaceKeyPrivateIdentityError) {
     return new HttpError(403, "WORKSPACE_KEY_PRIVATE_VISIBILITY", err.message);
   }
-  if (err instanceof TemplateTeamScopeAgentForbiddenError) {
-    return new HttpError(403, "TEMPLATE_TEAM_SCOPE_AGENT_FORBIDDEN", err.message);
+  if (err instanceof IdentityTeamScopeAgentForbiddenError) {
+    return new HttpError(403, "IDENTITY_TEAM_SCOPE_AGENT_FORBIDDEN", err.message);
   }
   // 🔒 G16 — 400, not 403: the caller is allowed to do this, the REQUEST is
   // incomplete. Shared with the knowledge lane (`knowledge/server/

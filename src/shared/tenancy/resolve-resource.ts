@@ -13,7 +13,7 @@ import { grantedResourceIds } from "./resource-grant-reach";
  * across containers, and the thing that makes `workspace=` unnecessary on a
  * read rather than merely ignorable.
  *
- * ⚠ **GENERALISED OUT OF `features/agent-templates/server/repository-tenancy.ts`
+ * ⚠ **GENERALISED OUT OF `features/agent-identities/server/repository-tenancy.ts`
  * ON 2026-09-02.** That file was the "ONE CONSUMER" tenancy repository behind
  * the "it lives elsewhere" refusal (T35): it could say WHERE a ref lived but the
  * read could not GO there, so the product grew a classifier, three label shapes,
@@ -218,7 +218,7 @@ async function listContainersForCaller(
  * ⚠ The clause narrowed to the lock ALONE, so an agent on a home channel's
  * `container_session` credential answered `base_not_found` for a base on its own
  * operator's shelf — against the ruling the shelf-as-a-tenancy exists to serve
- * (B10 / #18): *"what lets a personal template or KB be used from ANY container
+ * (B10 / #18): *"what lets a personal identity or KB be used from ANY container
  * the user is in — the id resolves its own container."* While the shelf was a
  * `WHERE` inside a workspace the operator was already in, the lock never had to
  * name it; the moment it became a CONTAINER, the lock fenced the operator out of
@@ -326,8 +326,8 @@ const NO_MEMBERSHIPS: ReadonlyMap<string, Role> = new Map();
  *
  * ⚠ **THE TS SIDE WAS THE NARROW HALF, SO THIS IS A REPAIR AND NOT A WIDENING.**
  * `dopl_grant_admits()` has been an arm of `dopl_knowledge_base_readable()` and
- * `can_current_user_read_agent_template()` since `20260923140000`, and
- * `canSeeBase` / `canSeeTemplate` carry the same arm — policy and matrix both
+ * `can_current_user_read_agent_identity()` since `20260923140000`, and
+ * `canSeeBase` / `canSeeIdentity` carry the same arm — policy and matrix both
  * admitted a lent row while the NAMING lane refused it.
  * `resource-grant-reach.ts` recorded the gap in its own header.
  *

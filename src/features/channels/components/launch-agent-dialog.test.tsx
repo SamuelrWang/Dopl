@@ -21,7 +21,7 @@
  *  - **ESCAPE AND DISCARD LAUNCH NOTHING.** A dismissed dialog that had already spawned is the
  *    one failure here that costs the operator a running agent.
  *
- * ⚠ THE TEMPLATE MARKER'S OWN PINS ARE `composer-launch-marker.test.tsx` (§5A), which drives the
+ * ⚠ THE IDENTITY MARKER'S OWN PINS ARE `composer-launch-marker.test.tsx` (§5A), which drives the
  * same row through the composer. Asserting it here too would make that file the wrong place to
  * add the next case.
  */
@@ -30,10 +30,10 @@ import { useEffect } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 
-const templateList = vi.hoisted(() => ({ templates: [] as unknown[] }));
-vi.mock("@/features/agent-templates/hooks/use-agent-templates", () => ({
-  useAgentTemplates: () => ({
-    templates: templateList.templates,
+const identityList = vi.hoisted(() => ({ identities: [] as unknown[] }));
+vi.mock("@/features/agent-identities/hooks/use-agent-identities", () => ({
+  useAgentIdentities: () => ({
+    identities: identityList.identities,
     loading: false,
     error: null,
     resolved: true,
@@ -132,7 +132,7 @@ function launcher(over: Partial<AgentLaunchControls> = {}): AgentLaunchControls 
     launchBusy: false,
     launchError: null,
     launchAgent: vi.fn().mockResolvedValue({ ok: true, agentId: MINTED }),
-    approveTemplate: vi.fn().mockResolvedValue({ ok: true }),
+    approveIdentity: vi.fn().mockResolvedValue({ ok: true }),
     ...over,
   };
 }
@@ -154,13 +154,13 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   delete (window as { dopl?: unknown }).dopl;
-  templateList.templates = [];
+  identityList.identities = [];
 });
 
 /**
  * The dialog with a REAL `useAgentLaunch` behind it, opened on mount.
  *
- * ⚠ THE REAL HOOK, NOT A PANEL LITERAL. The defaults under test — a `null` template, an EMPTY
+ * ⚠ THE REAL HOOK, NOT A PANEL LITERAL. The defaults under test — a `null` identity, an EMPTY
  * `model`, an EMPTY `runtime` and the `#<id>` name prefill — are that hook's, and a stub panel
  * would let this file assert its own fixture rather than the state the dialog actually gets.
  */
@@ -219,12 +219,12 @@ async function open(over: Partial<React.ComponentProps<typeof Harness>> = {}) {
 // ── 1. THE FIVE FIELDS ───────────────────────────────────────────────────────
 
 describe("the popup's five fields", () => {
-  it("renders Name, Description, Template, Model and Runtime", async () => {
+  it("renders Name, Description, Identity, Model and Runtime", async () => {
     posture.runtimeSupported = true;
     await open();
     expect(nameField()).toBeTruthy();
     expect(descField()).toBeTruthy();
-    expect(screen.getByRole("tablist", { name: "Agent template" })).toBeTruthy();
+    expect(screen.getByRole("tablist", { name: "Identity" })).toBeTruthy();
     expect(screen.getByRole("tablist", { name: "Agent model" })).toBeTruthy();
     expect(screen.getByRole("tablist", { name: "Agent runtime" })).toBeTruthy();
   });
@@ -237,12 +237,12 @@ describe("the popup's five fields", () => {
   });
 
   it("gives EVERY field label the same (semi-bold) class — weight lives in the module, not per caller", async () => {
-    // ⚠ SUPERSEDED 2026-09-08 (Samuel: "All of the headers (name, description, template, etc),
+    // ⚠ SUPERSEDED 2026-09-08 (Samuel: "All of the headers (name, description, identity, etc),
     // should be bolded"). The weight is `launch-agent-dialog.module.css › .label` now, so the
     // pin is that no label carries a per-caller weight utility and all share one class (Runtime is
     // absent in this fixture — the row hides when no runtime family exists).
     await open();
-    const labels = ["Name", "Description", "Template", "Model"].map((t) =>
+    const labels = ["Name", "Description", "Identity", "Model"].map((t) =>
       screen.getByText(t)
     );
     for (const el of labels) expect(el.className).not.toMatch(/font-(semibold|medium|normal)/);
@@ -266,15 +266,15 @@ describe("the popup's five fields", () => {
 // ── 2. THE SELECTORS' DEFAULTS ───────────────────────────────────────────────
 
 describe("what the three selectors hold before anybody touches them", () => {
-  it("Template defaults to Blank agent, and that is an OPTION not a placeholder", async () => {
-    templateList.templates = [
+  it("Identity defaults to Blank agent, and that is an OPTION not a placeholder", async () => {
+    identityList.identities = [
       { id: "tpl-9", name: "Code auditor", workspaceId: "ws-1", createdBy: ME },
     ];
     await open();
     // ⚠ **"Blank agent" → "None" ON 2026-09-13** (Samuel, docs/specs/agent-colors.md item 7:
-    // *"change 'Blank Agent' to 'None' for the template"*). The WIRE is unchanged — the
-    // option still sends `templateId: null` — so this is a LABEL pin moving and nothing else.
-    expect(selected("Agent template")).toBe("None");
+    // *"change 'Blank Agent' to 'None' for the identity"*). The WIRE is unchanged — the
+    // option still sends `identityId: null` — so this is a LABEL pin moving and nothing else.
+    expect(selected("Identity")).toBe("None");
     expect(pill("Code auditor")).toBeTruthy();
   });
 
@@ -305,7 +305,7 @@ function oldPanelState(over: Partial<AgentLaunchPanel>): AgentLaunchPanel {
     agentId: MINTED,
     name: "",
     description: "",
-    templateId: null,
+    identityId: null,
     model: "",
     runtime: "",
     ready: true,
@@ -313,7 +313,7 @@ function oldPanelState(over: Partial<AgentLaunchPanel>): AgentLaunchPanel {
     setIdentityError: () => {},
     setName: () => {},
     setDescription: () => {},
-    setTemplateId: () => {},
+    setIdentityId: () => {},
     setModel: () => {},
     setRuntime: () => {},
     toggle: () => {},
@@ -324,7 +324,7 @@ function oldPanelState(over: Partial<AgentLaunchPanel>): AgentLaunchPanel {
 }
 
 describe("the payload is the slide-out's, argument for argument", () => {
-  it("matches on an UNTOUCHED dialog — no template, no override, no runtime", async () => {
+  it("matches on an UNTOUCHED dialog — no identity, no override, no runtime", async () => {
     const controls = await open({ openThreadId: "t-1" });
     fireEvent.click(launchButton());
     await waitFor(() => expect(controls.launchAgent).toHaveBeenCalled());
@@ -337,20 +337,20 @@ describe("the payload is the slide-out's, argument for argument", () => {
     );
     // ⚠ SPELLED OUT AS WELL AS COMPARED, so a parity assertion cannot pass because BOTH lanes
     // regressed together — the one way an equality test lies.
-    const [threadId, templateId, overrides, agentId, runtime] = vi.mocked(
+    const [threadId, identityId, overrides, agentId, runtime] = vi.mocked(
       controls.launchAgent
     ).mock.calls[0];
     expect(threadId).toBe("t-1");
-    expect(templateId).toBeNull();
+    expect(identityId).toBeNull();
     expect(overrides).toBeUndefined();
     expect(agentId).toBe(MINTED);
     expect(runtime).toBeUndefined();
   });
 
-  it("matches on a FULLY PICKED dialog — template, model and runtime", async () => {
+  it("matches on a FULLY PICKED dialog — identity, model and runtime", async () => {
     posture.runtimeSupported = true;
     posture.modelSupported = true;
-    templateList.templates = [
+    identityList.identities = [
       { id: "tpl-9", name: "Code auditor", workspaceId: "ws-1", createdBy: ME },
     ];
     // ⚠ A REAL ADAPTER THAT IS NOT THE DEFAULT, so `runtime` has to survive as a value rather
@@ -385,7 +385,7 @@ describe("the payload is the slide-out's, argument for argument", () => {
       oldPanelState({
         name: "Research",
         description: "Audits the diff.",
-        templateId: "tpl-9",
+        identityId: "tpl-9",
         model: "gpt-6-mini",
         runtime: other!.id,
       }),
@@ -395,8 +395,8 @@ describe("the payload is the slide-out's, argument for argument", () => {
     expect(vi.mocked(controls.launchAgent).mock.calls[0]).toEqual(
       vi.mocked(old.launchAgent).mock.calls[0]
     );
-    const [, templateId, overrides, , runtime] = vi.mocked(controls.launchAgent).mock.calls[0];
-    expect(templateId).toBe("tpl-9");
+    const [, identityId, overrides, , runtime] = vi.mocked(controls.launchAgent).mock.calls[0];
+    expect(identityId).toBe("tpl-9");
     expect(overrides).toEqual({ model: "gpt-6-mini" });
     expect(runtime).toBe(other!.id);
   });
@@ -407,14 +407,14 @@ describe("the payload is the slide-out's, argument for argument", () => {
     // nothing else in this file exercises that map: the untouched case never fires `onChange`,
     // and the fully-picked case answers a real id. **MUTATION-PROOF: drop the ternary in
     // `onChange` and only this case fails.**
-    templateList.templates = [
+    identityList.identities = [
       { id: "tpl-9", name: "Code auditor", workspaceId: "ws-1", createdBy: ME },
     ];
     const controls = await open({ openThreadId: "t-1" });
     fireEvent.click(pill("Code auditor"));
     // ⚠ **"Blank agent" → "None" ON 2026-09-13** (Samuel, docs/specs/agent-colors.md item 7:
-    // *"change 'Blank Agent' to 'None' for the template"*). The WIRE is unchanged — the
-    // option still sends `templateId: null` — so this is a LABEL pin moving and nothing else.
+    // *"change 'Blank Agent' to 'None' for the identity"*). The WIRE is unchanged — the
+    // option still sends `identityId: null` — so this is a LABEL pin moving and nothing else.
     fireEvent.click(pill("None"));
     fireEvent.click(launchButton());
     await waitFor(() => expect(controls.launchAgent).toHaveBeenCalled());

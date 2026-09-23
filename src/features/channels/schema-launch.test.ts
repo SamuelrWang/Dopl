@@ -104,7 +104,7 @@ describe("LaunchCreateSchema — the posture a launch may ASK for", () => {
    * be a nameless agent."*).
    *
    * ⚠ **THE ARGUMENT DID NOT EXIST BEFORE THIS WAVE, WHICH IS THE WHOLE DEFECT** — a launch
-   * filed over MCP could carry a goal, a model, a template, a colour and a posture, and no name,
+   * filed over MCP could carry a goal, a model, an identity, a colour and a posture, and no name,
    * so every agent an agent launched was nameless BY CONSTRUCTION and rendered on every human
    * surface as its own instance id. Adding the field as OPTIONAL would have left the defect
    * reachable by omission, and the caller is a model that omits whatever it can.
@@ -137,7 +137,7 @@ describe("LaunchCreateSchema — the posture a launch may ASK for", () => {
     }
   });
 
-  it("refuses a name past 60 — `main/agent-names.js › MAX_NAME`, not the template's 120", () => {
+  it("refuses a name past 60 — `main/agent-names.js › MAX_NAME`, not the identity's 120", () => {
     // ⚠ A name legal here that the desktop then refuses is a 200 followed by a refusal the
     // orchestrator cannot explain.
     expect(

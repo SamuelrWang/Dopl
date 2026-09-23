@@ -79,8 +79,8 @@ export function buildKnowledgeContext(auth: AuthLike): KnowledgeContext {
  * still run `resolveAgentAudience` after it.
  *
  * Mirrored, not imported, in four places: `chats › canSeeChat`,
- * `skills › canSeeSkill`, `agent-templates › canSeeTemplate` and
- * `agent-templates › canSeeBaseRow`. Splitting them is how the rule drifts.
+ * `skills › canSeeSkill`, `agent-identities › canSeeIdentity` and
+ * `agent-identities › canSeeBaseRow`. Splitting them is how the rule drifts.
  *
  * Arm 4 is the grant (F-604, 2026-09-02) and sits BELOW the shared-credential
  * refusal on purpose: a grant may only ever WIDEN, and a SHARED credential

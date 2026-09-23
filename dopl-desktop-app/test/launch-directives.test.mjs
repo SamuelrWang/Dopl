@@ -11,11 +11,11 @@
 //   2. NOT MINE MEANS NOTHING HAPPENS. The realtime filter is workspace-wide, so a colleague's
 //      directive reaches this client. RLS should stop it; the local owner check is the fence
 //      that does not depend on a policy this desktop neither owns nor evaluates.
-//   3. THE DIRECTIVE CANNOT WIDEN CONTAINMENT. It supplies a GOAL, a MODEL and WHICH TEMPLATE.
+//   3. THE DIRECTIVE CANNOT WIDEN CONTAINMENT. It supplies a GOAL, a MODEL and WHICH IDENTITY.
 //      The tool profile comes from main's own watched-channel DTO and the permission axes from
 //      the operator's own durable posture — the same two sources the Launch button reads. This is
-//      the case that matters most and it is asserted field by field. ⚠ The TEMPLATE half of it
-//      lives in `launch-directive-template.test.mjs`, which holds the same line: a template
+//      the case that matters most and it is asserted field by field. ⚠ The IDENTITY half of it
+//      lives in `launch-directive-identity.test.mjs`, which holds the same line: an identity
 //      widens PROMPT CONTENT only.
 //   4. A DIRECTIVE IS ACTIONED ONCE. Server CAS first, local dedupe behind it, because a
 //      realtime frame and the backstop poll can deliver the same row a millisecond apart and the
@@ -27,7 +27,7 @@
 // ⚠ TWO SIBLINGS, AND THE BOOT MACHINERY IS SHARED RATHER THAN COPIED
 // (`_launch-directive-harness.mjs` — read its header for the split's seam):
 //
-//   `launch-directive-template.test.mjs`  the TEMPLATE lane this file's §4 leaves out — the
+//   `launch-directive-identity.test.mjs`  the IDENTITY lane this file's §4 leaves out — the
 //                                         resolve at claim time, its failure table, the E-4
 //                                         deletion signal, the model chain's new link.
 //   `launch-directive-wire.test.mjs`      the CONTRACT — the shapes and route paths that cross
@@ -35,8 +35,8 @@
 //                                         own source. Read it for the F-273 history.
 //
 // Both were split at the 500-line cap, and the subjects change on different clocks: this one when
-// this machine's behaviour moves, the wire one when a schema or a route does, the template one
-// when agent templates do.
+// this machine's behaviour moves, the wire one when a schema or a route does, the identity one
+// when agent identities do.
 //
 // Run: `node --test dopl-desktop-app/test/launch-directives.test.mjs`
 
@@ -237,7 +237,7 @@ test("MODEL: a bare ALIAS is honoured, not collapsed to the SDK default (F-285)"
 });
 
 // ⚠ REVERSED 2026-09-22 — AN UNRECOGNISED ID NO LONGER FALLS THROUGH. It used to be replaced by
-// the channel's (or template's) model, so an orchestrator asking for a mistyped or newer id got a
+// the channel's (or identity's) model, so an orchestrator asking for a mistyped or newer id got a
 // different model and an echo of the id it asked for. The pick now COMMITS the chain and reaches
 // the funnel, which resolves it on the live roster or REFUSES it (`no-model`, with the list).
 test("MODEL: an id this build does not know is handed on — the funnel resolves or refuses it", async () => {
@@ -253,11 +253,11 @@ test("MODEL: the funnel's `no-model` reaches the decide as a REFUSAL, in its own
     "a closed-vocabulary word the orchestrator can act on — never `no-bridge`");
 });
 
-// ⚠ THE TEMPLATE'S LINK SITS BETWEEN THEM: it still beats the channel when the directive names none.
-test("MODEL: with no directive model, the TEMPLATE's comes before the channel's", async () => {
-  const h = boot({ resolve: { ok: true, template: { name: "Code Auditor", model: "claude-haiku-4-5-20251001" } } });
+// ⚠ THE IDENTITY'S LINK SITS BETWEEN THEM: it still beats the channel when the directive names none.
+test("MODEL: with no directive model, the IDENTITY's comes before the channel's", async () => {
+  const h = boot({ resolve: { ok: true, identity: { name: "Code Auditor", model: "claude-haiku-4-5-20251001" } } });
   const TPL = "77777777-7777-4777-8777-777777777777";
-  await h.api.handle(row({ model: "", template_id: TPL }), WS);
+  await h.api.handle(row({ model: "", identity_id: TPL }), WS);
   assert.equal(h.cfg.lastSpec.model, "claude-haiku-4-5-20251001");
 });
 

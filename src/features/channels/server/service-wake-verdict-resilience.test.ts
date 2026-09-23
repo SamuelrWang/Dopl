@@ -217,7 +217,7 @@ describe("RR3 — an unaddressed human message is answered by one agent", () => 
   // 🔒 "arm 2: a responder that is NOT LIVE degrades into the sole agent" STOOD HERE AND IS
   // DELETED with arm 1 (2026-09-06). It pinned that the configured handle DEGRADED rather than
   // dangled — nothing enforced that the stored handle named a live session, deliberately, because
-  // an FK to `agent_templates` would have been a cross-visibility reference. No handle is stored
+  // an FK to `agent_identities` would have been a cross-visibility reference. No handle is stored
   // any more, so there is nothing left to dangle; the sole-agent answer it degraded INTO is the
   // case immediately above, which now stands on its own.
 

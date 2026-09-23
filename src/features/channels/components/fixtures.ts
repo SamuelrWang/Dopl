@@ -11,7 +11,7 @@
  * their own work.
  *
  * ⚠ FAVORITES LEFT THIS FILE ON 2026-08-19 (Samuel), and the shape of its
- * departure is the template for the ones still here: it did NOT get a fixture
+ * departure is the identity for the ones still here: it did NOT get a fixture
  * replaced by a prettier fixture, it got a COLUMN (`channel_members.favorited_at`)
  * and a write. `HARDCODED_FAVORITE_ROWS` is deleted rather than kept "for
  * reference" — a fixture nothing renders is the next thing somebody renders.

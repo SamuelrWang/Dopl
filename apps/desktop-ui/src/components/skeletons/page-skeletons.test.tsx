@@ -4,15 +4,15 @@ import { render } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { HomePageSkeleton } from "#/pages/home/home-skeleton";
 import {
-  HomeAgentPanelsSkeleton,
+  HomeIdentityPanelsSkeleton,
   HomeKnowledgePanelsSkeleton,
 } from "#/pages/home/home-skeleton";
 import { ChannelRecordSkeleton } from "#/pages/home/channel-record-skeleton";
 import { OverviewSkeleton } from "#/pages/overview/overview-skeleton";
 import { ChannelsSkeleton } from "#/pages/channels/channels-skeleton";
-import { AgentsPageSkeleton } from "#/pages/agents/agents-skeleton";
+import { IdentitiesPageSkeleton } from "#/pages/identities/identities-skeleton";
 import { MembersPageSkeleton } from "#/pages/members/members-skeleton";
-import { TEMPLATE_GRID } from "@/features/agent-templates/components/template-section";
+import { IDENTITY_GRID } from "@/features/agent-identities/components/identity-section";
 import {
   KnowledgeBaseSkeleton,
   KnowledgeHomeSkeleton,
@@ -50,7 +50,7 @@ const code = (rel: string) =>
     .replace(/^\s*\/\/.*$/gm, "");
 
 const HOME_SKELETON = file("../../pages/home/home-skeleton.tsx");
-const AGENTS_SKELETON = file("../../pages/agents/agents-skeleton.tsx");
+const AGENTS_SKELETON = file("../../pages/identities/identities-skeleton.tsx");
 const OVERVIEW_SKELETON = file("../../pages/overview/overview-skeleton.tsx");
 const CHANNELS_SKELETON = file("../../pages/channels/channels-skeleton.tsx");
 const MEMBERS_SKELETON = file("../../pages/members/members-skeleton.tsx");
@@ -76,7 +76,7 @@ const SHAPES = [
     "home knowledge face",
     <HomeKnowledgePanelsSkeleton key="hk" label="Loading knowledge" />,
   ],
-  ["home agents face", <HomeAgentPanelsSkeleton key="ha" label="Loading agents" />],
+  ["home agents face", <HomeIdentityPanelsSkeleton key="ha" label="Loading identities" />],
   // ⚠ THE RECORD PANE'S CHANNEL FACE (2026-09-13) — the ELEVENTH shape, and the
   // last generic ghost inside /home: that gate rendered `DetailPaneSkeleton` +
   // `TranscriptSkeleton` (alternating bubbles, no composer, no info column). Its
@@ -91,7 +91,7 @@ const SHAPES = [
   ["knowledge root", <KnowledgeHomeSkeleton key="kh" label="Loading knowledge" />],
   ["overview", <OverviewSkeleton key="o" label="Loading overview" />],
   ["channels", <ChannelsSkeleton key="c" label="Loading channels" />],
-  ["agents page", <AgentsPageSkeleton key="a" label="Loading agents" />],
+  ["agents page", <IdentitiesPageSkeleton key="a" label="Loading identities" />],
   ["members page", <MembersPageSkeleton key="m" label="Loading members" />],
 ] as const;
 
@@ -150,14 +150,14 @@ describe("skeleton grids REUSE the real page's grid, they do not restate it", ()
    * ⚠ A TAILWIND ARBITRARY VALUE CANNOT BE IMPORTED, so the agents grid is one
    * copied string in two skeletons — and this is what keeps the copy honest.
    */
-  it("the Agents ghosts carry TemplateGrid's grid class verbatim", () => {
-    // 2026-09-13: the grid is an EXPORTED constant now (`TEMPLATE_GRID`), so the
+  it("the Agents ghosts carry IdentityGrid's grid class verbatim", () => {
+    // 2026-09-13: the grid is an EXPORTED constant now (`IDENTITY_GRID`), so the
     // skeletons import it instead of copying the string; the pin is that both
     // read the import and that the constant still spells a real grid.
     // 🔒 FOUR PER ROW, FIXED (Samuel, 2026-09-13) — never auto-fill.
-    expect(TEMPLATE_GRID).toBe("grid grid-cols-4 gap-2.5");
-    expect(HOME_SKELETON).toContain("className={TEMPLATE_GRID}");
-    expect(AGENTS_SKELETON).toContain("className={TEMPLATE_GRID}");
+    expect(IDENTITY_GRID).toBe("grid grid-cols-4 gap-2.5");
+    expect(HOME_SKELETON).toContain("className={IDENTITY_GRID}");
+    expect(AGENTS_SKELETON).toContain("className={IDENTITY_GRID}");
   });
 
   /**
@@ -209,7 +209,7 @@ describe("skeleton grids REUSE the real page's grid, they do not restate it", ()
 
   /**
    * ⚠ THE OVERVIEW GHOST IS THREE TAILWIND STRINGS THE PAGE ALREADY OWNS, none
-   * of which can be imported — they are arbitrary values and grid templates
+   * of which can be imported — they are arbitrary values and grid identities
    * typed inline in the modules — so the pin is a byte-share, module by module.
    * Re-tune the real grid and this fails on the same commit rather than on
    * screen three weeks later.
@@ -352,10 +352,10 @@ describe("skeleton grids REUSE the real page's grid, they do not restate it", ()
   /**
    * ⚠ THE MEMBERS GHOST IS A GRID CELL, NOT A FIXED LIST WIDTH — which is the
    * whole difference between it and the `TwoPaneListSkeleton` it replaced, and
-   * the reason the template is pinned rather than reviewed. The roster cards
+   * the reason the identity is pinned rather than reviewed. The roster cards
    * mount `SECTION_CARD` itself, so their face cannot drift at all.
    */
-  it("the members ghost mounts the page's grid template and SECTION_CARD", () => {
+  it("the members ghost mounts the page's grid identity and SECTION_CARD", () => {
     const view = shared("features/members/components/members-v2/members-v2-view.tsx");
     const GRID =
       "page-float grid grid-cols-[minmax(380px,42fr)_minmax(0,58fr)] antialiased";
@@ -391,11 +391,11 @@ describe("the wrong ghosts are gone, and only those", () => {
   const PAGES = [
     "../../pages/home/index.tsx",
     "../../pages/home/knowledge-panels.tsx",
-    "../../pages/home/agent-panels.tsx",
+    "../../pages/home/identity-panels.tsx",
     "../../pages/home/knowledge-base-view.tsx",
     "../../pages/overview/index.tsx",
     "../../pages/channels/index.tsx",
-    "../../pages/agents/index.tsx",
+    "../../pages/identities/index.tsx",
     "../../pages/knowledge/index.tsx",
     "../../pages/members/index.tsx",
   ];
@@ -413,11 +413,11 @@ describe("the wrong ghosts are gone, and only those", () => {
   it.each([
     ["../../pages/home/index.tsx", "HomePageSkeleton"],
     ["../../pages/home/knowledge-panels.tsx", "HomeKnowledgePanelsSkeleton"],
-    ["../../pages/home/agent-panels.tsx", "HomeAgentPanelsSkeleton"],
+    ["../../pages/home/identity-panels.tsx", "HomeIdentityPanelsSkeleton"],
     ["../../pages/home/knowledge-base-view.tsx", "KnowledgeBaseSkeleton"],
     ["../../pages/overview/index.tsx", "OverviewSkeleton"],
     ["../../pages/channels/index.tsx", "ChannelsSkeleton"],
-    ["../../pages/agents/index.tsx", "AgentsPageSkeleton"],
+    ["../../pages/identities/index.tsx", "IdentitiesPageSkeleton"],
     ["../../pages/knowledge/index.tsx", "KnowledgeHomeSkeleton"],
     ["../../pages/members/index.tsx", "MembersPageSkeleton"],
   ])("%s mounts %s", (rel, symbol) => {
@@ -426,22 +426,22 @@ describe("the wrong ghosts are gone, and only those", () => {
 
   /**
    * ⚠ /agents HAS TWO GATES AND ONE SHAPE (2026-08-28). The workspace resolve
-   * is this package's; the template read belongs to `agent-templates-core.tsx`,
+   * is this package's; the identity read belongs to `agent-identities-core.tsx`,
    * which is Next-free and cannot import from here — so the seam passes its
    * shape down a SLOT. Without this the second frame reverted to the shared
    * page ghost and the page swapped skeletons mid-load.
    */
   it("hands the agents core the SAME shape its page gate paints", () => {
-    const page = code("../../pages/agents/index.tsx");
-    expect(page).toContain("loadingSkeleton={<AgentsPageSkeleton");
+    const page = code("../../pages/identities/index.tsx");
+    expect(page).toContain("loadingSkeleton={<IdentitiesPageSkeleton");
 
     const core = code(
-      "../../../../../src/features/agent-templates/components/agent-templates-core.tsx"
+      "../../../../../src/features/agent-identities/components/agent-identities-core.tsx"
     );
     expect(core).toContain("loadingSkeleton");
     // ⚠ AND THE WEB TREE IS UNCHANGED: a host that passes nothing still gets
     // the shared ghost. The slot is additive, never a removal.
-    expect(core).toContain("<PageShellSkeleton label=\"Loading agents\" />");
+    expect(core).toContain("<PageShellSkeleton label=\"Loading identities\" />");
   });
 
   /**

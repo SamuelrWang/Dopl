@@ -27,6 +27,8 @@ import { readFileSync, readdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { forwardRenamed } from "@/shared/supabase/migration-renames";
+
 const MIGRATIONS = join(
   dirname(fileURLToPath(import.meta.url)),
   "..",
@@ -84,14 +86,17 @@ function stripComments(sql: string): string {
 }
 
 /** Every migration, filename-sorted (= apply order), comments removed. */
+/** ⚠ Forward-renamed: `identity_name` was CREATED as `template_name` (2026-08-23) and renamed on 2026-09-22. */
 function migrationFiles(): Array<{ name: string; sql: string }> {
-  return readdirSync(MIGRATIONS)
-    .filter((f) => f.endsWith(".sql"))
-    .sort()
-    .map((name) => ({
-      name,
-      sql: stripComments(readFileSync(join(MIGRATIONS, name), "utf8")),
-    }));
+  return forwardRenamed(
+    readdirSync(MIGRATIONS)
+      .filter((f) => f.endsWith(".sql"))
+      .sort()
+      .map((name) => ({
+        name,
+        sql: stripComments(readFileSync(join(MIGRATIONS, name), "utf8")),
+      }))
+  );
 }
 
 const FILES = migrationFiles();
@@ -118,7 +123,7 @@ function statementsMatching(re: RegExp, sql = ALL_SQL): string[] {
 
 // ───────────────────────────────────────────────────────────────────────────
 // 5. channel_sessions column privileges — the coarse projection is public,
-//    telemetry and the TEMPLATE NAME are not
+//    telemetry and the IDENTITY NAME are not
 // ───────────────────────────────────────────────────────────────────────────
 
 /**
@@ -136,7 +141,7 @@ function statementsMatching(re: RegExp, sql = ALL_SQL): string[] {
  * (`20260820200000`) lets any channel member read any member's rows for that
  * channel, so a raw `GET /rest/v1/channel_sessions?select=*` would hand a peer
  * another operator's model, token spend — and, since 2026-08-23, the NAME OF A
- * TEMPLATE THAT MAY BE PRIVATE. Nothing in `src/` makes that call, and these
+ * IDENTITY THAT MAY BE PRIVATE. Nothing in `src/` makes that call, and these
  * cases keep it that way by construction rather than by grep.
  */
 describe("channel_sessions column privileges (operator-only stays operator-only)", () => {
@@ -176,7 +181,7 @@ describe("channel_sessions column privileges (operator-only stays operator-only)
     "tokens_spent",
     "started_at",
     "last_activity_at",
-    "template_name",
+    "identity_name",
     "turns",
     "tokens_delta",
     "stale",
@@ -208,17 +213,17 @@ describe("channel_sessions column privileges (operator-only stays operator-only)
     }
   });
 
-  it("`template_name` specifically — a private template's name is an existence oracle", () => {
+  it("`identity_name` specifically — a private identity's name is an existence oracle", () => {
     // ⚠ Called out on its own line rather than left to the loop above, because
     // it is the ONE of the eight whose leak is not merely a privacy cost: a peer
     // seeing `Acme Contract Auditor` on a colleague's session learns that
-    // `agent_templates` row exists, and that table carries NO name uniqueness
+    // `agent_identities` row exists, and that table carries NO name uniqueness
     // precisely so nothing can be probed that way (INVARIANTS §5A).
     for (const stmt of grants) {
-      expect(grantedColumns(stmt)).not.toContain("template_name");
+      expect(grantedColumns(stmt)).not.toContain("identity_name");
     }
     expect(ALL_SQL).toMatch(
-      /ADD\s+COLUMN\s+IF\s+NOT\s+EXISTS\s+template_name\s+TEXT/i
+      /ADD\s+COLUMN\s+IF\s+NOT\s+EXISTS\s+identity_name\s+TEXT/i
     );
   });
 
@@ -246,24 +251,24 @@ describe("channel_sessions column privileges (operator-only stays operator-only)
     expect(tableWide.length).toBe(0);
   });
 
-  it("`template_name` is nullable with no default, and carries the label CHECK", () => {
+  it("`identity_name` is nullable with no default, and carries the label CHECK", () => {
     const file = FILES.find((f) =>
       f.name.startsWith("20260823130000")
     );
     expect(file, "20260823130000_channel_sessions_template_name.sql is missing").toBeTruthy();
-    // ⚠ NULLABLE AND UNDEFAULTED — "this session has no template" must be
+    // ⚠ NULLABLE AND UNDEFAULTED — "this session has no identity" must be
     // sayable, and it is said as NULL. A NOT NULL or a `DEFAULT ''` would make
-    // every pre-existing row claim a template named "".
-    expect(file!.sql).not.toMatch(/template_name\s+TEXT\s+NOT\s+NULL/i);
-    expect(file!.sql).not.toMatch(/template_name\s+TEXT\s+DEFAULT/i);
+    // every pre-existing row claim an identity named "".
+    expect(file!.sql).not.toMatch(/identity_name\s+TEXT\s+NOT\s+NULL/i);
+    expect(file!.sql).not.toMatch(/identity_name\s+TEXT\s+DEFAULT/i);
     // ⚠ SHAPE, NOT A REFERENCE. The column is deliberately NOT an FK: a session
-    // reports what it RAN AS after the template is renamed or deleted.
-    expect(file!.sql).not.toMatch(/template_name[\s\S]{0,120}REFERENCES/i);
-    // The four clauses `agent_templates_name_charset_check` carries, at the same
-    // length — a name legal on a template must never be refusable here.
-    expect(file!.sql).toMatch(/char_length\(template_name\)\s+BETWEEN\s+1\s+AND\s+120/i);
-    expect(file!.sql).toMatch(/template_name\s*=\s*btrim\(template_name\)/i);
-    expect(file!.sql).toMatch(/template_name\s+!~\s+'\[\[:cntrl:\]\]'/i);
+    // reports what it RAN AS after the identity is renamed or deleted.
+    expect(file!.sql).not.toMatch(/identity_name[\s\S]{0,120}REFERENCES/i);
+    // The four clauses `agent_identities_name_charset_check` carries, at the same
+    // length — a name legal on an identity must never be refusable here.
+    expect(file!.sql).toMatch(/char_length\(identity_name\)\s+BETWEEN\s+1\s+AND\s+120/i);
+    expect(file!.sql).toMatch(/identity_name\s*=\s*btrim\(identity_name\)/i);
+    expect(file!.sql).toMatch(/identity_name\s+!~\s+'\[\[:cntrl:\]\]'/i);
     // The assertion block, so a bad landing aborts rather than looking fine.
     expect(file!.sql).toMatch(/RAISE\s+EXCEPTION/i);
   });

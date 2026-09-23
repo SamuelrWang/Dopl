@@ -26,9 +26,9 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { formatChannelTimestamp } from "@/shared/lib/format-time";
 import type { DesktopSessionSummary } from "@/shared/lib/spa-bridge";
 
-/** The tab MOUNTS the template picker (the split button's chevron); this keeps it renderable. */
-vi.mock("@/features/agent-templates/hooks/use-agent-templates", () => ({
-  useAgentTemplates: () => ({ templates: [], loading: false, error: null, refetch: () => {} }),
+/** The tab MOUNTS the identity picker (the split button's chevron); this keeps it renderable. */
+vi.mock("@/features/agent-identities/hooks/use-agent-identities", () => ({
+  useAgentIdentities: () => ({ identities: [], loading: false, error: null, refetch: () => {} }),
 }));
 
 import { AgentsTab } from "./agents-tab";

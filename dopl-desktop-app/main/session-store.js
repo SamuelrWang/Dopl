@@ -107,9 +107,9 @@ function reloadDisposition(phase) {
 // (not its fence-token strip; these strings never enter a framed prompt, and every
 // framing path re-sanitizes on its own), so an identity field can never grow into a blob.
 // ⚠ THE BOUND IS A PARAMETER SINCE 2026-08-23 (F-287/F-288), and 80 is a DISPLAY default rather
-// than a rule. A field that carries a real server bound passes it — `templateName` is an IDENTITY
-// bounded at 120 by `agent_templates_name_charset_check`, and clipping it to a display default
-// would persist a name no template has, which is the same defect `session-summary.js ›
+// than a rule. A field that carries a real server bound passes it — `identityName` is an IDENTITY
+// bounded at 120 by `agent_identities_name_charset_check`, and clipping it to a display default
+// would persist a name no identity has, which is the same defect `session-summary.js ›
 // displayText(value, max)` was parameterized to avoid on the wire half.
 function durableName(value, max) {
   if (typeof value !== 'string') return null;
@@ -196,22 +196,22 @@ function durableSessionRecord(rec) {
     counterpartyName: durableName(r.counterpartyName),
     channelName: durableName(r.channelName),
     taskTitle: durableName(r.taskTitle),
-    // 2026-08-23 (F-288) — THE TEMPLATE NAME, and it is whitelisted for a REPORTING reason rather
-    // than a header one. `context.template` is a spawn-time capture that lives only on the live
+    // 2026-08-23 (F-288) — THE IDENTITY NAME, and it is whitelisted for a REPORTING reason rather
+    // than a header one. `context.identity` is a spawn-time capture that lives only on the live
     // session object; nothing on disk carried it, so `session-park.js › startResume` — a full
     // re-`startSession`, unlike `resumeParked`, which works in place — rebuilt the context without
-    // it. `session-summary.js › liveSummary` then reported `templateName: null`, and `templateName`
+    // it. `session-summary.js › liveSummary` then reported `identityName: null`, and `identityName`
     // is in `session-telemetry.js › STATE_FIELDS`, so the null bypassed the cadence floor and
-    // ERASED `channel_sessions.template_name` on the next push, under a still-running agent whose
+    // ERASED `channel_sessions.identity_name` on the next push, under a still-running agent whose
     // orchestrator was reading that name to tell six agents apart.
     // ⚠ THE NAME ALONE IS ENOUGH, and only the name is stored. `instructions` / `fields` /
-    // `knowledgeBases` are read by exactly one consumer — `prompt-framing-template.js ›
-    // templateRoleFraming`, through the one-shot `session-seed.js › takeFraming` — which a resume
+    // `knowledgeBases` are read by exactly one consumer — `prompt-framing-agent-identity.js ›
+    // identityRoleFraming`, through the one-shot `session-seed.js › takeFraming` — which a resume
     // never runs (`session-engine.js` sets `freshFraming` false whenever `resumeSdkId` is present,
     // and the SDK resume carries the original ROLE block anyway). Persisting the body would put
     // another member's prompt text on disk to answer a question nobody asks after spawn.
     // ⚠ 120, NOT THE 80 DEFAULT: this is an identity, bounded by the column's own CHECK.
-    templateName: durableName(r.templateName, 120),
+    identityName: durableName(r.identityName, 120),
     // FIX #9, now a DISPLAY rehydrate rather than a budget one (2026-09-07): this counter
     // survives a recreate so a reopened session shows what it has already run. It bounds
     // nothing — the caps are deleted — and it is still coerced to a finite number so a

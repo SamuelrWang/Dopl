@@ -56,7 +56,7 @@ export const EMPTY_PANE = "empty";
  * prefix must satisfy both halves.**
  */
 export const KNOWLEDGE_PANE = "knowledge:";
-export const AGENTS_PANE = "agents:";
+export const IDENTITIES_PANE = "identities:";
 
 /**
  * Overview's token — a WHOLE token, not a prefix (2026-09-01).

@@ -92,16 +92,16 @@ async function dispatchManageAction(action, args, client) {
                 // one from the other in either direction: a live launch carrying `model: "codex"` was
                 // accepted and started Claude Sonnet, because an unrecognised model reads as "no
                 // opinion" and there was no runtime argument to say otherwise.
-                // ⚠ PASSED THROUGH UNTOUCHED, like `template` and `color` below and for the same
+                // ⚠ PASSED THROUGH UNTOUCHED, like `identity` and `color` below and for the same
                 // reason: whether this machine has that runtime REGISTERED, and whether it would
                 // actually start, are facts only the operator's own desktop holds. It REFUSES an
                 // explicit runtime it cannot start rather than swapping vendors.
                 runtime: args.runtime,
                 // ⚠ PASSED THROUGH AS A STRING, NEVER PARSED HERE. Whether it is an
                 // id or a name — and whether a name is ambiguous — is decided
-                // SERVER-SIDE, against the caller's own template visibility, which
+                // SERVER-SIDE, against the caller's own identity visibility, which
                 // this process cannot evaluate.
-                template: args.template,
+                identity: args.identity,
                 // ⚠ **THE POSTURE ASK, AND IT WAS DROPPED HERE FOR A WHOLE RELEASE**
                 // (F-438, fixed 2026-09-02). The schema published these three, the
                 // handler accepted them, the route validated them and the table has
@@ -125,7 +125,7 @@ async function dispatchManageAction(action, args, client) {
                 // one, the server hands back the first request's directive and the
                 // result says `retry=existing`.
                 clientMsgId: args.client_msg_id,
-                // ⚠ PASSED THROUGH UNTOUCHED, like `template`: whether the key is free is a
+                // ⚠ PASSED THROUGH UNTOUCHED, like `identity`: whether the key is free is a
                 // fact about EVERY member's live agents, which this process cannot see.
                 // ⚠ NARROWED, NOT CAST — the published field IS a `z.enum` over the sixteen
                 // keys (`channel-ops-launch-color.ts › AGENT_COLOR_FIELD`; the 153-cheaper

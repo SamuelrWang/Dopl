@@ -124,10 +124,10 @@ export function bootIpc({ blocked = false } = {}) {
         // 2026-08-31, the PRIVATE DIRECT lane's own consent — same shape, separate grant.
         getOrchestratorDirect: () => true,
         setOrchestratorDirect: (on) => { writes.push({ orchestratorDirect: on }); return on === true; },
-        // The MACHINE-LOCAL template approval store; `isTemplateApproved` answers false, which is
+        // The MACHINE-LOCAL identity approval store; `isIdentityApproved` answers false, which is
         // the default-deny state a fresh Mac is in.
-        approveTemplate: (templateId) => { approvals.push(templateId); return true; },
-        isTemplateApproved: () => false,
+        approveIdentity: (identityId) => { approvals.push(identityId); return true; },
+        isIdentityApproved: () => false,
       };
     }
     // 2026-08-31 (port wave D) — the channel's RUNTIME pick and the adapter registry. They ride the

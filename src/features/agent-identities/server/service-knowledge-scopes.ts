@@ -1,13 +1,13 @@
 import "server-only";
 import { DESCRIPTION_MAX } from "@/config";
 import type {
-  AgentTemplateContext,
-  TemplateKnowledgeFolderBrief,
-  TemplateKnowledgeRef,
-  TemplateKnowledgeScope,
+  AgentIdentityContext,
+  IdentityKnowledgeFolderBrief,
+  IdentityKnowledgeRef,
+  IdentityKnowledgeScope,
 } from "../types";
 import { refKey, scopeKey } from "../lib/knowledge-scopes";
-import { TemplateKnowledgeBaseNotFoundError } from "./errors";
+import { IdentityKnowledgeBaseNotFoundError } from "./errors";
 import * as repo from "./repository";
 import {
   resolveVisibleKnowledgeBases,
@@ -16,12 +16,12 @@ import {
 
 /**
  * SCOPE RESOLUTION — a set of `{baseId, scope, folderId?, entryId?}` in, a set
- * of viewer-filtered {@link TemplateKnowledgeRef} out (2026-09-08).
+ * of viewer-filtered {@link IdentityKnowledgeRef} out (2026-09-08).
  *
  * ⚠ **ONE PREDICATE, TWO CONSUMERS**, exactly as `service-shared.ts ›
  * resolveVisibleKnowledgeBases` is for whole bases: the ATTACH GATE, where a
  * dropped scope is a 404, and the READ PATH, where it is simply omitted. An
- * attach that permitted what a read would hide is how a template becomes a
+ * attach that permitted what a read would hide is how an identity becomes a
  * laundering channel, and one function is what makes that impossible rather than
  * merely unlikely.
  *
@@ -68,15 +68,15 @@ const MAX_CARD_FOLDERS = 50;
  *  named entries.
  *
  *  ⚠ **THE FOLDER READ NOW ALSO SERVES WHOLE-BASE SCOPES (2026-09-18, A4)**, so
- *  a template attaching only whole bases pays ONE query it did not pay before —
- *  and a template with any sub-base scope pays exactly what it already did, the
+ *  an identity attaching only whole bases pays ONE query it did not pay before —
+ *  and an identity with any sub-base scope pays exactly what it already did, the
  *  base ids being unioned into the one call. That query is the card's whole
  *  cost: `slug` and `description` ride the access row, and the READ-THIS-FIRST
  *  index pointer was DROPPED rather than bought with a second one. */
 export async function resolveVisibleKnowledgeScopes(
-  ctx: AgentTemplateContext,
-  scopes: ReadonlyArray<TemplateKnowledgeScope>
-): Promise<TemplateKnowledgeRef[]> {
+  ctx: AgentIdentityContext,
+  scopes: ReadonlyArray<IdentityKnowledgeScope>
+): Promise<IdentityKnowledgeRef[]> {
   if (scopes.length === 0) return [];
   const baseIds = [...new Set(scopes.map((s) => s.baseId))];
   const visibleBases = await resolveVisibleKnowledgeBases(ctx, baseIds);
@@ -92,7 +92,7 @@ export async function resolveVisibleKnowledgeScopes(
   // see would be a probe whose result we would then have to remember to discard.
   const visibleScopes = scopes.filter((s) => visibleBaseIds.has(s.baseId));
   const entryIds = visibleScopes
-    .filter((s): s is Extract<TemplateKnowledgeScope, { scope: "entry" }> =>
+    .filter((s): s is Extract<IdentityKnowledgeScope, { scope: "entry" }> =>
       s.scope === "entry"
     )
     .map((s) => s.entryId);
@@ -116,7 +116,7 @@ export async function resolveVisibleKnowledgeScopes(
   const entryById = new Map(entries.map((e) => [e.id, e]));
   const rootFolders = rootFoldersByBase(folders);
 
-  const out: TemplateKnowledgeRef[] = [];
+  const out: IdentityKnowledgeRef[] = [];
   for (const scope of scopes) {
     if (!visibleBaseIds.has(scope.baseId)) continue;
     const baseRow = baseById.get(scope.baseId);
@@ -219,10 +219,10 @@ function rootFoldersByBase(
 function baseCard(
   base: VisibleKnowledgeBase | undefined,
   roots: repo.KnowledgeFolderRow[]
-): Partial<TemplateKnowledgeRef> {
+): Partial<IdentityKnowledgeRef> {
   if (!base) return {};
   const summary = base.description ?? "";
-  const folders: TemplateKnowledgeFolderBrief[] = roots
+  const folders: IdentityKnowledgeFolderBrief[] = roots
     .slice(0, MAX_CARD_FOLDERS)
     .map((folder) => {
       const clause = folder.description ?? "";
@@ -245,11 +245,11 @@ function baseCard(
 
 /**
  * The id a REFUSAL names, per shape. ⚠ It is the id the CALLER PASSED, never a
- * neighbouring one: `TemplateKnowledgeBaseNotFoundError` is 404-shaped precisely
+ * neighbouring one: `IdentityKnowledgeBaseNotFoundError` is 404-shaped precisely
  * so "you may not attach this" and "no such thing" are indistinguishable, and
  * echoing back anything the caller did not already hold would undo that.
  */
-export function knowledgeScopeSubjectId(scope: TemplateKnowledgeScope): string {
+export function knowledgeScopeSubjectId(scope: IdentityKnowledgeScope): string {
   if (scope.scope === "folder") return scope.folderId;
   if (scope.scope === "entry") return scope.entryId;
   return scope.baseId;
@@ -282,7 +282,7 @@ function folderSegments(
  * knowledge tools' own path separator is a bare `/` with no spaces
  * (`knowledge/server/path.ts › parsePath`), and this string is NOT that path —
  * it leads with the BASE NAME, which is not a segment of any base-relative path.
- * `TemplateKnowledgeRef.toolPath` is the addressable one; anything that splices
+ * `IdentityKnowledgeRef.toolPath` is the addressable one; anything that splices
  * THIS into a `dopl_kb` call is a bug.
  */
 function displayPath(baseName: string, segments: string[]): string {
@@ -302,10 +302,10 @@ function displayPath(baseName: string, segments: string[]): string {
  * ⚠ NO ATTACHING KNOWLEDGE YOU CANNOT READ. Every requested scope is resolved
  * through `resolveVisibleKnowledgeScopes` — the same predicate the READ path
  * uses — and anything that does not come back is reported MISSING (a 404, never
- * a distinguishable 403: see `TemplateKnowledgeBaseNotFoundError`).
+ * a distinguishable 403: see `IdentityKnowledgeBaseNotFoundError`).
  *
- * Without this, a template is a laundering channel: attach a teammate's private
- * base by id, share the template to `workspace`, and every member's spawned
+ * Without this, an identity is a laundering channel: attach a teammate's private
+ * base by id, share the identity to `workspace`, and every member's spawned
  * agent gets a pointer to it.
  *
  * ⚠ **SINCE 2026-09-08 IT ALSO PROVES TENANCY AND LIVENESS ONE LEVEL DEEPER.** A
@@ -316,10 +316,10 @@ function displayPath(baseName: string, segments: string[]): string {
  * The DB trigger restates the tenancy half as a backstop; this is the fence.
  */
 export async function assertAttachableKnowledgeScopes(
-  ctx: AgentTemplateContext,
-  requested: ReadonlyArray<TemplateKnowledgeScope>
-): Promise<TemplateKnowledgeScope[]> {
-  const unique: TemplateKnowledgeScope[] = [];
+  ctx: AgentIdentityContext,
+  requested: ReadonlyArray<IdentityKnowledgeScope>
+): Promise<IdentityKnowledgeScope[]> {
+  const unique: IdentityKnowledgeScope[] = [];
   const keys = new Set<string>();
   for (const scope of requested) {
     const key = scopeKey(scope);
@@ -332,7 +332,7 @@ export async function assertAttachableKnowledgeScopes(
   const seen = new Set(visible.map(refKey));
   const missing = unique.filter((s) => !seen.has(scopeKey(s)));
   if (missing.length > 0) {
-    throw new TemplateKnowledgeBaseNotFoundError(
+    throw new IdentityKnowledgeBaseNotFoundError(
       missing.map(knowledgeScopeSubjectId)
     );
   }
@@ -350,8 +350,8 @@ export async function assertAttachableKnowledgeScopes(
  */
 export function requestedKnowledgeScopes(input: {
   knowledgeBaseIds?: string[];
-  knowledge?: TemplateKnowledgeScope[];
-}): TemplateKnowledgeScope[] | null {
+  knowledge?: IdentityKnowledgeScope[];
+}): IdentityKnowledgeScope[] | null {
   if (input.knowledge !== undefined) return input.knowledge;
   if (input.knowledgeBaseIds !== undefined) {
     return input.knowledgeBaseIds.map((baseId) => ({

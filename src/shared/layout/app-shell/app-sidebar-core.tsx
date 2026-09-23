@@ -31,13 +31,13 @@ export type NavSection =
   | "skills"
   | "chats"
   | "channels"
-  | "agents"
+  | "identities"
   | "ontology"
   | "members";
 
 /**
  * THE RENDERED NAV ORDER — CHANNELS-FIRST (Samuel's ruling, 2026-08-30; ledger
- * ASK-6). Overview, Channels, Agents, Knowledge, Skills, Ontology, Chats,
+ * ASK-6). Overview, Channels, Identities, Knowledge, Skills, Ontology, Chats,
  * Members — then Settings, which is the foot button below and not a row here.
  *
  * ⚠ IT IS A PRODUCT STATEMENT, NOT A TIDY-UP. Channels is the lead product
@@ -57,11 +57,11 @@ export const NAV: ReadonlyArray<{
 }> = [
   { label: "Overview", icon: Home, section: "overview" },
   { label: "Channels", icon: Hash, section: "channels" },
-  // AGENT TEMPLATES (2026-08-22). ⚠ The label is "Agents" and the path segment
-  // is `agents`, NOT `agent-templates`: the operator's noun for the thing they
-  // author here is the agent (INVARIANTS §5 — the noun on every agent surface is
-  // AGENT, and a qualifier is a copy regression, not a style preference).
-  { label: "Agents", icon: Bot, section: "agents" },
+  // AGENT IDENTITIES (2026-08-22). ⚠ The label is "Identities" and the path segment
+  // is `identities` SINCE 2026-09-22 (Samuel: "I'm renaming the agents page to be named
+  // Identities") — it was "Agents"/`agents`. An identity is a ROLE OF THE USER; the
+  // noun AGENT now means only a running session in a channel (INVARIANTS §5).
+  { label: "Identities", icon: Bot, section: "identities" },
   { label: "Knowledge", icon: BookOpen, section: "knowledge" },
   { label: "Skills", icon: Sparkles, section: "skills" },
   { label: "Ontology", icon: Network, section: "ontology" },

@@ -1,7 +1,7 @@
 import { cn } from "@/shared/lib/utils";
 import {
-  TEMPLATE_NAME_TEXT,
-} from "@/features/agent-templates/components/template-section";
+  IDENTITY_NAME_TEXT,
+} from "@/features/agent-identities/components/identity-section";
 import { useState } from "react";
 import { SectionPanel } from "@/shared/ui/section-panel";
 import { Skeleton } from "@/shared/ui/skeleton";
@@ -267,7 +267,7 @@ function UsageCard({ homeWorkspaceId }: { homeWorkspaceId: string | null }) {
         {/* 🔒 **THE CARD SAYS WHAT IT IS (Samuel, 2026-09-13: *"in the panel
             above … the credit bar, put in a header that says 'Credit
             spend'"*).** Minimal copy (INVARIANTS §5): two words, no subline.
-            ⚠ **`TEMPLATE_NAME_TEXT`, THE 14px FACE — NOT THE PANEL HEADING'S
+            ⚠ **`IDENTITY_NAME_TEXT`, THE 14px FACE — NOT THE PANEL HEADING'S
             `_LG`** (Samuel, same day, rejecting a pass that raised it: *"You
             changed the font size of the credit spend, all channels, and the date
             to the super large size, like usage. I did not ask for that"*). This
@@ -279,7 +279,7 @@ function UsageCard({ homeWorkspaceId }: { homeWorkspaceId: string | null }) {
             heading rendered inside the loaded bar would arrive after it and the
             card would say nothing while it waits.
             ⚠ An `h3`: the panel's `h2` is **Usage**. */}
-        <h3 className={cn("mb-2 truncate", TEMPLATE_NAME_TEXT)}>Credit spend</h3>
+        <h3 className={cn("mb-2 truncate", IDENTITY_NAME_TEXT)}>Credit spend</h3>
         <CreditsBar
           homeWorkspaceId={homeWorkspaceId}
           ledgerPending={series.isPending && !series.data}

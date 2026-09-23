@@ -245,7 +245,7 @@ const DATED_CAPTURES = new Map([
   // what was audited.
   ['docs/CHANNELS-AUDIT-2026-08-07.md', 'audited 2026-08-07'],
   // ⚠ Added 2026-09-13, when Samuel's one-launch-surface ruling deleted
-  // `agent-templates/components/launch-sheet.tsx` and three of this ledger's references — one
+  // `agent-identities/components/launch-sheet.tsx` and three of this ledger's references — one
   // `›` anchor and two plain paths — went dead with it. It qualifies on this list's own terms
   // rather than on convenience: it is TITLED with its measurement date, its first lines name the
   // commit and the tag it read (`master` @ `6b3b1ead`, v1.22.0) and the seven audits it

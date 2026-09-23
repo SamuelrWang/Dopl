@@ -5,7 +5,7 @@
 // admitted an orchestrator's `manage(action="launch")` and then GATED the
 // `manage(action="rename")` that agent issued against the one it had just launched. A gate is not
 // a question here — a held channel-op gate has no surface to be answered on, so the orchestrator
-// waits forever — and the shipped Coder template tells every coder to rename itself on start.
+// waits forever — and the shipped Coder identity tells every coder to rename itself on start.
 //
 // §2 SPLIT, on the precedent `session-own-launch.js` set: a ruling's admission argument lives
 // beside the list it admits, and `session-profiles.js` is at the 500-line cap. PURE, with one

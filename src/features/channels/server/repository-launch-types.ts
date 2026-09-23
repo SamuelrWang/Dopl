@@ -32,20 +32,20 @@ export type LaunchDirectiveRow = {
   goal: string | null;
   model: string | null;
   /**
-   * The agent template this directive asks to run AS, resolved under the
+   * The agent identity this directive asks to run AS, resolved under the
    * ORCHESTRATOR's visibility at create time (2026-08-23).
    *
-   * ⚠ `ON DELETE SET NULL` — read it BESIDE `template_name`, never alone. A null
-   * id with a live name is a template that was DELETED after the directive was
-   * filed, and the desktop must REFUSE (`no-template`) rather than launch a
+   * ⚠ `ON DELETE SET NULL` — read it BESIDE `identity_name`, never alone. A null
+   * id with a live name is an identity that was DELETED after the directive was
+   * filed, and the desktop must REFUSE (`no-identity`) rather than launch a
    * blank agent; a null id with a null name is a directive that named none.
    * Spec E-4, and the column comment in
    * `20260823140000_channel_launch_directives_template.sql`.
    */
-  template_id: string | null;
-  /** The template's name, SNAPSHOTTED AT CREATE. ⚠ Never joined, never
+  identity_id: string | null;
+  /** The identity's name, SNAPSHOTTED AT CREATE. ⚠ Never joined, never
    *  refreshed — it is the only signal that survives the FK's SET NULL. */
-  template_name: string | null;
+  identity_name: string | null;
   /** THE COLOUR THIS LAUNCH ASKED FOR (2026-09-13, `20261005120000`) — one of
    *  `agent-01 … agent-16`, or NULL for "named none and the bank was empty".
    *  ⚠ A REQUEST AND NOT A RESERVATION: the only authority is
@@ -182,16 +182,16 @@ export type LaunchDirectiveInsert = {
    * ⚠ CALLER-SUPPLIED, UNLIKE `operator_user_id`, AND THE DIFFERENCE IS THE
    * WHOLE REASON ONE IS AN ARGUMENT AND THE OTHER IS A FIELD. An operator id
    * names WHOSE MACHINE runs the agent and is therefore the authorization story;
-   * a template id names WHAT IT WEARS and grants nothing. It is still not raw
-   * caller input: the service resolves the caller's `template` ref through the
-   * agent-templates visibility matrix and puts the RESOLVED row's id here, so a
-   * template the caller cannot see has no spelling that reaches this type.
+   * an identity id names WHAT IT WEARS and grants nothing. It is still not raw
+   * caller input: the service resolves the caller's `identity` ref through the
+   * agent-identities visibility matrix and puts the RESOLVED row's id here, so a
+   * identity the caller cannot see has no spelling that reaches this type.
    */
-  template_id: string | null;
+  identity_id: string | null;
   /** The resolved row's name, snapshotted. ⚠ Written together with
-   *  `template_id` or not at all — the pair is what makes a later deletion
+   *  `identity_id` or not at all — the pair is what makes a later deletion
    *  legible (E-4). */
-  template_name: string | null;
+  identity_name: string | null;
   /** THE RESOLVED colour (2026-09-13) — what the caller named, or the FIRST FREE key
    *  when they named nothing.
    *  ⚠ **OPTIONAL SO THE THREE NON-LAUNCH KINDS DID NOT HAVE TO LEARN A FIELD**, the
@@ -200,12 +200,12 @@ export type LaunchDirectiveInsert = {
    *  resolution and never raw caller input — `service-launch.ts` takes the free set
    *  from `repository-session-colors.ts` and 409s a taken key before reaching here. */
   color?: string | null;
-  agent_name?: string | null; // ⚠ WHAT TO CALL THE NEW AGENT (2026-09-15) — OPTIONAL on `color`'s courtesy, refused on any kind but `launch` by the CHECK, safe on `template_id`'s rule (WHAT, never WHOSE)
+  agent_name?: string | null; // ⚠ WHAT TO CALL THE NEW AGENT (2026-09-15) — OPTIONAL on `color`'s courtesy, refused on any kind but `launch` by the CHECK, safe on `identity_id`'s rule (WHAT, never WHOSE)
   /**
    * **WHICH RUNTIME TO RUN THE NEW AGENT ON — CALLER-SUPPLIED AND GRANTING NOTHING**
    * (2026-09-21, U9).
    *
-   * ⚠ SAFE ON `template_id`'s RULE: it names WHAT the session runs on, never WHOSE MACHINE runs
+   * ⚠ SAFE ON `identity_id`'s RULE: it names WHAT the session runs on, never WHOSE MACHINE runs
    * it. The authorization story is `operator_user_id`, a separate ARGUMENT precisely so no
    * caller can pass one inside an object built from a request body. ⚠ And picking a runtime
    * WIDENS NOTHING — `main/channel-runtime.js`'s header carries that argument in full: every
@@ -218,7 +218,7 @@ export type LaunchDirectiveInsert = {
    */
   runtime?: string | null;
   /**
-   * ⚠ CALLER-SUPPLIED, LIKE `template_id` AND FOR THE SAME REASON THAT IS SAFE:
+   * ⚠ CALLER-SUPPLIED, LIKE `identity_id` AND FOR THE SAME REASON THAT IS SAFE:
    * it names WHAT the verb acts on, never WHOSE MACHINE acts. The authorization
    * story is `operator_user_id`, which is a separate ARGUMENT precisely so no
    * caller can pass one inside an object built from a request body.
@@ -234,7 +234,7 @@ export type LaunchDirectiveInsert = {
    * THE POSTURE A LAUNCH **ASKS** ITS NEW SESSION TO START ON, and whether it may
    * launch workers (2026-09-01, T24).
    *
-   * ⚠ CALLER-SUPPLIED, like `template_id` and safe for the same reason: they name
+   * ⚠ CALLER-SUPPLIED, like `identity_id` and safe for the same reason: they name
    * HOW MUCH ROOM the work gets, never WHOSE MACHINE runs it. The authorization
    * story is `operator_user_id`, which is a separate ARGUMENT precisely so no
    * caller can pass one inside an object built from a request body.
@@ -269,7 +269,7 @@ export type LaunchDirectiveInsert = {
   /**
    * THE CALLER'S IDEMPOTENCY KEY, VERBATIM (2026-09-02, A10/G10).
    *
-   * ⚠ CALLER-SUPPLIED, like `template_id`, and safe for the same reason: it names
+   * ⚠ CALLER-SUPPLIED, like `identity_id`, and safe for the same reason: it names
    * WHICH GESTURE this row is, never WHOSE MACHINE runs it. The authorization
    * story is `operator_user_id`, a separate ARGUMENT precisely so no caller can
    * pass one inside an object built from a request body — and that column is also

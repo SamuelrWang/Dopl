@@ -5,7 +5,7 @@ import { installBridge, ok } from "#/test-utils/bridge";
 import { EMPTY_INFO_CARD } from "@/features/channels/info-card";
 import type { Role } from "@/features/workspaces/types";
 import type { Channel } from "@/features/channels/types";
-import { agentRoutes, openAgents } from "./agent-test-fixtures";
+import { identityRoutes, openIdentities } from "./identity-test-fixtures";
 import {
   CHANNEL,
   HOME,
@@ -28,7 +28,7 @@ import {
  *
  * ⚠ **WHAT THIS SUITE PINS IS THE PICTURE, NEVER THE FENCE.** Every write named
  * below is refused server-side today and still is — `POST /api/knowledge/bases`
- * and `POST /api/agent-templates` at `minRole: "member"`, `mintContainerLink` at
+ * and `POST /api/agent-identities` at `minRole: "member"`, `mintContainerLink` at
  * `member` plus grant-above-self, `canManageChannel` for the header lines. What
  * changed is that /home stops OFFERING what the server will refuse (INVARIANTS
  * §5's dead-control rule). **A green case here is not evidence a floor may move.**
@@ -74,7 +74,7 @@ const PEER_CHANNEL = {
 };
 
 /** Serve /home with `channels` as the payload — everything else routes normally.
- *  ⚠ `agentRoutes` rather than `routes`: it answers the template lists this file
+ *  ⚠ `identityRoutes` rather than `routes`: it answers the identity lists this file
  *  needs for the Agents face and falls through to the harness table for the rest. */
 function serve(channels: Channel[]): void {
   apiRequest.mockImplementation(
@@ -86,7 +86,7 @@ function serve(channels: Channel[]): void {
       if (bare === "/api/channels") {
         return Promise.resolve(ok({ channels: [PEER_CHANNEL] }));
       }
-      return agentRoutes(path, opts);
+      return identityRoutes(path, opts);
     }
   );
 }
@@ -226,30 +226,30 @@ describe("the Knowledge face's shared create (F-343 consequence 1)", () => {
 });
 
 describe("the Agents face's shared create (F-343 consequence 1b)", () => {
-  it("is GONE for a guest — `POST /api/agent-templates` is member+", async () => {
+  it("is GONE for a guest — `POST /api/agent-identities` is member+", async () => {
     serve(atRole("guest"));
     renderHome();
-    await openAgents();
+    await openIdentities();
     await screen.findByRole("region", { name: "Shared in this channel" });
 
-    expect(sharedCreate("Agent template")).toBeNull();
+    expect(sharedCreate("Agent Identity")).toBeNull();
   });
 
   it("is THERE for a member", async () => {
     serve(atRole("member"));
     renderHome();
-    await openAgents();
+    await openIdentities();
     await screen.findByRole("region", { name: "Shared in this channel" });
 
-    expect(sharedCreate("Agent template")).toBeTruthy();
+    expect(sharedCreate("Agent Identity")).toBeTruthy();
   });
 
   it("FAILS CLOSED on a stale cached payload", async () => {
     serve([{ ...staleCachedChannel("myWorkspaceRole"), linkOut: null }]);
     renderHome();
-    await openAgents();
+    await openIdentities();
     await screen.findByRole("region", { name: "Shared in this channel" });
 
-    expect(sharedCreate("Agent template")).toBeNull();
+    expect(sharedCreate("Agent Identity")).toBeNull();
   });
 });

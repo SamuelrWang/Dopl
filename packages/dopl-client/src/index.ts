@@ -40,18 +40,18 @@ export type {
   SubmitIngestedEntryResult,
 } from "./types.js";
 export type {
-  AgentTemplate,
-  AgentTemplateCreateInput,
-  AgentTemplateListPayload,
-  AgentTemplateUpdateInput,
-  TemplateField,
-  TemplateKnowledgeBaseRef,
-  TemplateKnowledgeRef,
-  TemplateKnowledgeScope,
-  TemplateKnowledgeScopeKind,
-  TemplateShelf,
-  TemplateVisibility,
-} from "./agent-template-types.js";
+  AgentIdentity,
+  AgentIdentityCreateInput,
+  AgentIdentityListPayload,
+  AgentIdentityUpdateInput,
+  IdentityField,
+  IdentityKnowledgeBaseRef,
+  IdentityKnowledgeRef,
+  IdentityKnowledgeScope,
+  IdentityKnowledgeScopeKind,
+  IdentityShelf,
+  IdentityVisibility,
+} from "./agent-identity-types.js";
 // 🔒 **`HomeChannel`, `HomePeer` AND `HomePendingLink` ARE RETIRED** (R-26 (b),
 // 2026-09-17): the row is `Channel`, and the link keeps the server's own name.
 export type {

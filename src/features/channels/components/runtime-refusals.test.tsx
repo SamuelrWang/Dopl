@@ -132,7 +132,7 @@ function panelStub(over: Partial<AgentLaunchPanel> = {}): AgentLaunchPanel {
     agentId: "abcd1234",
     name: "#abcd1234",
     description: "",
-    templateId: null,
+    identityId: null,
     model: "",
     runtime: "",
     ready: true,
@@ -140,7 +140,7 @@ function panelStub(over: Partial<AgentLaunchPanel> = {}): AgentLaunchPanel {
     setIdentityError: () => {},
     setName: () => {},
     setDescription: () => {},
-    setTemplateId: () => {},
+    setIdentityId: () => {},
     setModel: () => {},
     setRuntime: vi.fn(),
     toggle: () => {},
@@ -154,7 +154,7 @@ function launchView(over: Partial<AgentLaunchPanel> = {}, channelRuntime = "") {
   return render(
     <AgentLaunchPanelView
       panel={panelStub(over)}
-      templates={[]}
+      identities={[]}
       runtimes={REAL_DESCRIPTORS}
       channelRuntime={channelRuntime}
       defaultRuntime="claude"
@@ -206,7 +206,7 @@ describe("the launch surface", () => {
   });
 
   it("renders neither the row nor a warning with no adapters — the browser lane", () => {
-    render(<AgentLaunchPanelView panel={panelStub()} templates={[]} />);
+    render(<AgentLaunchPanelView panel={panelStub()} identities={[]} />);
     expect(screen.queryByLabelText("Agent runtime")).toBeNull();
     expect(screen.queryByRole("note")).toBeNull();
   });

@@ -148,7 +148,7 @@ describe("createBase with shareToChannelId", () => {
     // 🔒 Samuel's ruling, 2026-09-18: a `kind='link'` container holds only what
     // is shared into it, so `private` with no `shareToChannelId` names the
     // destination he deleted. ⚠ THE WIRING CASE — this feature answers "shared"
-    // with the GRANT where the template lane answers with the audience column;
+    // with the GRANT where the identity lane answers with the audience column;
     // the rule itself is `workspaces/server/home-channel-destination.test.ts`.
     vi.mocked(findWorkspaceById).mockResolvedValue(
       { id: WS, kind: "link" } as never

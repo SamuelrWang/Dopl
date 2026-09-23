@@ -15,7 +15,7 @@ import { describe, it, expect, vi } from "vitest";
 import type { DoplClient } from "@dopl/client";
 
 import { registerAgentTools } from "./agent";
-import { opCreate, opGrantTemplate } from "./agent-ops-write";
+import { opCreate, opGrantIdentity } from "./agent-ops-write";
 import { callTool, stub } from "./narration-fixtures";
 
 const ME = "user-1";
@@ -61,7 +61,7 @@ function apiError(status: number, code: string, apiMessage?: string): Error {
 // ── 3. 🔒 The write fences surface ──────────────────────────────────
 //
 // ⚠ **THE FOUR HOME-SHELF CASES THAT STOOD HERE ARE DELETED (2026-09-02, slice
-// B15).** They pinned `resolveTemplateHomeScope`'s 403 surfacing as an
+// B15).** They pinned `resolveIdentityHomeScope`'s 403 surfacing as an
 // actionable sentence, the `home shelf` → `personal shelf` re-spelling, and the
 // local shelf/visibility contradiction. The column, the fence, the mapper and
 // the argument are all gone (ruling B10), so those were assertions about a
@@ -69,22 +69,22 @@ function apiError(status: number, code: string, apiMessage?: string): Error {
 // no successor behaviour for them to describe.
 
 describe("what a write refuses before it reaches the server", () => {
-  it("a shared credential asking for a PRIVATE template gets the key-class sentence", async () => {
+  it("a shared credential asking for a PRIVATE identity gets the key-class sentence", async () => {
     const res = await opCreate(
       stub({
         ...standardWorkspace(),
-        createAgentTemplate: vi.fn(async () => {
+        createAgentIdentity: vi.fn(async () => {
           throw apiError(
             403,
             "WORKSPACE_KEY_PRIVATE_VISIBILITY",
-            "Workspace-scoped API keys cannot create or own private agent templates.",
+            "Workspace-scoped API keys cannot create or own private agent identities.",
           );
         }),
       }) as DoplClient,
       ME,
       { name: "Researcher", visibility: "private" },
     );
-    expect(textOf(res)).toContain("cannot create or own private agent templates");
+    expect(textOf(res)).toContain("cannot create or own private agent identities");
     expect(textOf(res)).toContain("Nothing was created");
   });
 
@@ -92,7 +92,7 @@ describe("what a write refuses before it reaches the server", () => {
     const res = await opCreate(
       stub({
         ...standardWorkspace(),
-        createAgentTemplate: vi.fn(async () => {
+        createAgentIdentity: vi.fn(async () => {
           throw apiError(404, "KNOWLEDGE_BASE_NOT_FOUND");
         }),
       }) as DoplClient,
@@ -109,12 +109,12 @@ describe("what a write refuses before it reaches the server", () => {
 
 describe("what this surface will not do", () => {
   // ⚠ **THE "op=update REFUSES A SHELF" CASE IS DELETED (2026-09-02, slice
-  // B15).** There is no shelf to refuse a move between; a template lives in one
+  // B15).** There is no shelf to refuse a move between; an identity lives in one
   // container and `dopl_agent` no longer publishes the argument.
 
   // ⚠ THE DELETE REFUSAL USED TO BE PINNED HERE, through
   // `agent-ops-admin.ts › opDelete`. Both are gone (2026-09-02): `dopl_agent`
-  // publishes no delete op, `DELETE /api/agent-templates/{id}` has been
+  // publishes no delete op, `DELETE /api/agent-identities/{id}` has been
   // `sessionOnly` since 2026-08-22, and the surviving claim — "no live `op`
   // enum contains one of these ops" — is asserted over EVERY tool at once in
   // `delete-block.test.ts`. Re-adding a per-tool copy here would be a second
@@ -123,11 +123,11 @@ describe("what this surface will not do", () => {
   it("the registrar routes every op and demands the ref where one is needed", async () => {
     const text = await callTool(
       registerAgentTools,
-      stub({ listAgentTemplates: vi.fn(async () => []) }),
+      stub({ listAgentIdentities: vi.fn(async () => []) }),
       "dopl_agent",
       { op: "get" },
     );
-    expect(text).toContain('op="get" is missing required param: template');
+    expect(text).toContain('op="get" is missing required param: identity');
   });
 
   it("the tool description sends an agent looking for RUNNING agents elsewhere", async () => {
@@ -166,7 +166,7 @@ describe("what this surface will not do", () => {
 
 describe('dopl_agent op="grant"', () => {
   const TPL_ID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa01";
-  const TEMPLATE = {
+  const IDENTITY = {
     id: TPL_ID,
     name: "Researcher",
     description: null,
@@ -190,15 +190,15 @@ describe('dopl_agent op="grant"', () => {
   function client(over: Record<string, unknown> = {}) {
     return stub({
       ...standardWorkspace(),
-      listAgentTemplates: vi.fn(async () => [TEMPLATE]),
-      getAgentTemplate: vi.fn(async () => TEMPLATE),
+      listAgentIdentities: vi.fn(async () => [IDENTITY]),
+      getAgentIdentity: vi.fn(async () => IDENTITY),
       ...over,
     }) as DoplClient;
   }
 
-  it("LENDS a template the caller created, and says the row did not move", async () => {
+  it("LENDS an identity the caller created, and says the row did not move", async () => {
     const grant = vi.fn(async () => ({}));
-    const res = await opGrantTemplate(
+    const res = await opGrantIdentity(
       client({ grantResource: grant }),
       directory,
       ME,
@@ -210,7 +210,7 @@ describe('dopl_agent op="grant"', () => {
     expect(res.isError).toBeFalsy();
     // ⚠ THE DEFAULT LEVEL IS THE NARROWER WORD IN THE CHANNEL VOCABULARY.
     expect(grant).toHaveBeenCalledWith({
-      resourceType: "agent_template",
+      resourceType: "agent_identity",
       resourceId: TPL_ID,
       scopeType: "channel",
       scopeId: "ch-1",
@@ -220,12 +220,12 @@ describe('dopl_agent op="grant"', () => {
     expect(textOf(res)).toContain("an edit reaches everyone it is lent to");
   });
 
-  it("🔒 REFUSES a template the caller did not create, and writes nothing (R2)", async () => {
+  it("🔒 REFUSES an identity the caller did not create, and writes nothing (R2)", async () => {
     const grant = vi.fn();
-    const res = await opGrantTemplate(
+    const res = await opGrantIdentity(
       client({
-        listAgentTemplates: vi.fn(async () => [{ ...TEMPLATE, createdBy: "somebody-else" }]),
-        getAgentTemplate: vi.fn(async () => ({ ...TEMPLATE, createdBy: "somebody-else" })),
+        listAgentIdentities: vi.fn(async () => [{ ...IDENTITY, createdBy: "somebody-else" }]),
+        getAgentIdentity: vi.fn(async () => ({ ...IDENTITY, createdBy: "somebody-else" })),
         grantResource: grant,
       }),
       directory,
@@ -243,10 +243,10 @@ describe('dopl_agent op="grant"', () => {
 
   it("🔒 FAILS CLOSED on an unprovable owner — an unattributed row is not yours", async () => {
     const grant = vi.fn();
-    const res = await opGrantTemplate(
+    const res = await opGrantIdentity(
       client({
-        listAgentTemplates: vi.fn(async () => [{ ...TEMPLATE, createdBy: null }]),
-        getAgentTemplate: vi.fn(async () => ({ ...TEMPLATE, createdBy: null })),
+        listAgentIdentities: vi.fn(async () => [{ ...IDENTITY, createdBy: null }]),
+        getAgentIdentity: vi.fn(async () => ({ ...IDENTITY, createdBy: null })),
         grantResource: grant,
       }),
       directory,
@@ -261,10 +261,10 @@ describe('dopl_agent op="grant"', () => {
   });
 
   it("REFUSES a level from the other scope's vocabulary, before resolving anything", async () => {
-    const list = vi.fn(async () => [TEMPLATE]);
+    const list = vi.fn(async () => [IDENTITY]);
     const grant = vi.fn();
-    const res = await opGrantTemplate(
-      client({ listAgentTemplates: list, grantResource: grant }),
+    const res = await opGrantIdentity(
+      client({ listAgentIdentities: list, grantResource: grant }),
       directory,
       ME,
       TPL_ID,
@@ -281,7 +281,7 @@ describe('dopl_agent op="grant"', () => {
 
   it("REFUSES an unresolvable container UNIFORMLY, with no fallback to the current workspace", async () => {
     const grant = vi.fn();
-    const res = await opGrantTemplate(
+    const res = await opGrantIdentity(
       client({ grantResource: grant }),
       directory,
       ME,

@@ -109,11 +109,11 @@ const UNSAFE_LABEL_RE = /[\u0000-\u001F\u007F\u200B-\u200F\u2028-\u202F\u2060-\u
 const DETAIL_MAX = 40;
 const TOOL_LABEL_MAX = 80;
 const MODEL_MAX = 120;
-// ⚠ A FOURTH BOUND, 2026-08-22 (agent templates). It is NOT a telemetry field — it rides
+// ⚠ A FOURTH BOUND, 2026-08-22 (agent identities). It is NOT a telemetry field — it rides
 // the STATE half below — but the SANITIZER it needs is `labelOrNull`, and a second copy of
 // the server's charset rule is exactly what this module exists to prevent. 120 is
-// `agent_templates.name`'s own bound and `channel_sessions.template_name`'s.
-const TEMPLATE_NAME_MAX = 120;
+// `agent_identities.name`'s own bound and `channel_sessions.identity_name`'s.
+const IDENTITY_NAME_MAX = 120;
 
 /** A display string for the wire, or null: unsafe characters removed, whitespace collapsed,
  *  bounded. Same discipline as `session-summary.js › displayText`, plus the server's charset. */
@@ -230,23 +230,23 @@ function telemetryFields(e) {
 //
 // Every member is a fact about WHICH SESSION THIS IS or what it is doing at the coarse grain.
 //
-// `templateName` joined 2026-08-22: the identity the operator configured this agent to wear. Free
-// to push past the floor, because `context.template` is a SPAWN-TIME capture that can move at most
+// `identityName` joined 2026-08-22: the identity the operator configured this agent to wear. Free
+// to push past the floor, because `context.identity` is a SPAWN-TIME capture that can move at most
 // once per session.
 // `color` joined 2026-09-13: the identity a reader uses to tell two agents apart in a transcript,
 // and it must push immediately or the box stays neutral for up to `TELEMETRY_MIN_INTERVAL_MS`
-// after the agent starts. Free for a stronger reason than `templateName`'s — the server RESOLVES
+// after the agent starts. Free for a stronger reason than `identityName`'s — the server RESOLVES
 // rather than stores it, and `session-colors.ts` rule 1 keeps whatever a session already holds, so
 // it cannot oscillate and does not inherit `session-store.js`'s durable-whitelist hazard: a resume
-// reporting no colour is overruled by rule 1, where one reporting no `templateName` NULLS it.
+// reporting no colour is overruled by rule 1, where one reporting no `identityName` NULLS it.
 // `displayName` joined 2026-09-16 (F-708), missing by oversight rather than classification — what
 // a person calls this session is a fact about which session it is. The cost was not the
 // ten-second delay: a rename moves only the FULL-row digest, so a churn-only set inside the window
 // is neither written nor digest-recorded and waits for a next projection move that a quiet machine
-// never makes. Free for `templateName`'s reason — a rename is an operator gesture, not a counter.
+// never makes. Free for `identityName`'s reason — a rename is an operator gesture, not a counter.
 const STATE_FIELDS = [
   'sessionKey', 'channelId', 'threadId', 'name', 'state', 'channelName', 'threadTitle',
-  'templateName', 'color', 'displayName',
+  'identityName', 'color', 'displayName',
 ];
 
 /** One stable string over the STATE half of a whole row set. ⚠ SET MEMBERSHIP IS PART OF IT:
@@ -279,9 +279,9 @@ module.exports = {
   DETAIL_MAX,
   TOOL_LABEL_MAX,
   MODEL_MAX,
-  TEMPLATE_NAME_MAX, // 2026-08-22: the agent-template name's bound, on both ends
+  IDENTITY_NAME_MAX, // 2026-08-22: the agent-identity name's bound, on both ends
   // THE DESKTOP'S ONE COPY OF THE SERVER'S SHORT-LABEL CHARSET, exported 2026-08-22 so
-  // `template-resolve.js` can VALIDATE renderer-supplied launch overrides against it (F-281:
+  // `identity-resolve.js` can VALIDATE renderer-supplied launch overrides against it (F-281:
   // `@/shared/lib/safe-label` imports zod, so no renderer surface can reach `SAFE_LABEL_RE` and
   // MAIN is the only real validator). Two copies of a neutralizer drift, and the copy that drifts
   // is the one that stops neutralizing.

@@ -67,7 +67,7 @@ const TOOLS = {
       registerAgentTools(r, c, undefined, DIRECTORY as never),
     retired: "copy",
     foreign: "copy_base",
-    replacement: 'dopl_agent(op="grant", template=…',
+    replacement: 'dopl_agent(op="grant", identity=…',
   },
 } as const;
 

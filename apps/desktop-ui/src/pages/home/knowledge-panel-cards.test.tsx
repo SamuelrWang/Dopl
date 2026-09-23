@@ -140,7 +140,7 @@ describe("a grant write reaches the entry the PANE mounted", () => {
  * THAT HAVE TO HOLD (Samuel, 2026-08-28: three cards per row, title not bold and
  * sized off the channel row).
  *
- * ⚠ SOURCE READ, for the reason `agent-templates/components/template-editor.
+ * ⚠ SOURCE READ, for the reason `agent-identities/components/identity-editor.
  * test.tsx › no concave surfaces` states: jsdom loads no stylesheet and CSS
  * modules arrive as opaque class names, so the only honest place to pin a CSS
  * RULING is the declaration text. Paths resolve off `import.meta.url`, not
@@ -193,8 +193,8 @@ describe("the /home card face is a rebind, not a fork", () => {
    * carries none — at 12.5px that is the difference between two words that look
    * set in different faces.
    */
-  it("🔒 the SHARED card's name is the agent template card's name type", () => {
-    // Samuel, 2026-09-13: the KB name wears `TEMPLATE_NAME_TEXT`
+  it("🔒 the SHARED card's name is the agent identity card's name type", () => {
+    // Samuel, 2026-09-13: the KB name wears `IDENTITY_NAME_TEXT`
     // (`text-title font-medium text-text-primary`) — read from ITS source, so
     // this fails if EITHER side moves. (It was the channel row's body face.)
     expect(cardCss).toContain("var(--kv-card-title-size, var(--text-title))");
@@ -204,11 +204,11 @@ describe("the /home card face is a rebind, not a fork", () => {
       cardCss.indexOf("}", cardCss.indexOf(".cardName {"))
     );
     expect(cardName).not.toContain("letter-spacing");
-    const templateCard = read(
-      "../../../../../src/features/agent-templates/components/template-section.tsx"
+    const identityCard = read(
+      "../../../../../src/features/agent-identities/components/identity-section.tsx"
     );
-    expect(templateCard).toContain(
-      'TEMPLATE_NAME_TEXT = "text-title font-medium text-text-primary"'
+    expect(identityCard).toContain(
+      'IDENTITY_NAME_TEXT = "text-title font-medium text-text-primary"'
     );
     // The clamp reads the rebindable line count. No floor (2026-09-19): the
     // description is CENTRED in its row, and a line-count floor would pin short

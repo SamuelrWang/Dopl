@@ -2,7 +2,7 @@
  * 🔒 **`dopl_kb(op="grant")` AND THE SCOPE/LEVEL PAIRING** — the op that
  * replaced `op="copy_base"` (slice B15, 2026-09-02, ruling B11).
  *
- * ⚠ **THE TEMPLATE HALF LIVES IN `agent-fences.test.ts`**, beside that tool's
+ * ⚠ **THE IDENTITY HALF LIVES IN `agent-fences.test.ts`**, beside that tool's
  * other fences, and the two are deliberately not one parameterised file: the
  * refusals they share come from `grant.ts`, and a shared driver would let a
  * regression in ONE registrar's wiring hide behind the other's.

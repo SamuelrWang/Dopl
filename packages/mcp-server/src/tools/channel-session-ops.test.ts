@@ -59,7 +59,7 @@ const NOTE_PHRASES = [
   "`delivery=` IS THE ACK AND THE ONLY ONE",
   "`idle` resolved but nothing running, filed until that machine reconciles",
   // …and the column promise (was SESSION_TELEMETRY_NOTE).
-  "Template, model, context, tokens, current tool and start time are YOUR OWN sessions only",
+  "Identity, model, context, tokens, current tool and start time are YOUR OWN sessions only",
 ] as const;
 
 const CHANNEL = {
@@ -155,7 +155,7 @@ const COL = {
   state: 2,
   thread: 3,
   channel: 4,
-  template: 5,
+  identity: 5,
   model: 6,
   tool: 7,
   idle: 8,
@@ -189,7 +189,7 @@ describe('op="status" — the summary shape (rollback §3.5)', () => {
     // in s` gate must dash every one of those columns. ⚠ A DASH, NOT A `0` AND
     // NOT A BLANK: a grid begs to be filled, and a zero in a column nobody
     // reported is a measurement nobody took, stated as fact.
-    for (const col of [COL.template, COL.model, COL.tool] as const) {
+    for (const col of [COL.identity, COL.model, COL.tool] as const) {
       expect(cells(text, "flint")[col]).toBe("—");
     }
     // ⚠ the caller's OWN sessions, never a peer's

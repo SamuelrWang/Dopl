@@ -76,7 +76,7 @@ import { NO_NAME } from "./narration";
  * sometimes an address and sometimes not, which is the one thing that column may never be.
  */
 export const SESSION_TABLE_HEAD: readonly string[] = [
-  `| name | handle | state | thread | channel | template | model | tool | idle |`,
+  `| name | handle | state | thread | channel | identity | model | tool | idle |`,
   `| --- | --- | --- | --- | --- | --- | --- | --- | --- |`,
 ];
 
@@ -140,8 +140,8 @@ export function sessionRow(
   // ⚠ TELEMETRY IS OPERATOR-ONLY and the type is the gate, exactly as in
   // `telemetryClauses`: a peer row has none of these fields, so it dashes.
   const own = opts.telemetry && "model" in s ? (s as ChannelSessionStateOwn) : null;
-  const template = own?.templateName
-    ? inlineOr(own.templateName, "(unnamed template)")
+  const identity = own?.identityName
+    ? inlineOr(own.identityName, "(unnamed identity)")
     : NOT_REPORTED;
   const model = own?.model
     ? inlineOr(shortModelLabel(own.model), "(unnamed model)")
@@ -154,7 +154,7 @@ export function sessionRow(
   // fail-safe `ageMs` and `sessionIsStale` already take.
   const idle = age === null ? NOT_REPORTED : coarseAge(age);
 
-  return `| ${name} | ${handle} | ${stateFull} | ${thread} | ${channel} | ${template} | ${model} | ${tool} | ${idle} |`;
+  return `| ${name} | ${handle} | ${stateFull} | ${thread} | ${channel} | ${identity} | ${model} | ${tool} | ${idle} |`;
 }
 
 /**

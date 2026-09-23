@@ -126,22 +126,22 @@ test("RECORD: counterparty-influenced text is bounded and single-line", () => {
 });
 
 // ⚠ **F-287 — THE ONE IDENTITY IN THIS WHITELIST IS NOT A DISPLAY STRING.** `channelName` and
-// `threadTitle` above are display text and 80 is right for them. `templateName` is an IDENTITY,
-// legal to 120 on both ends (`agent_templates_name_charset_check` and
-// `channel_sessions_template_name_charset_check`), and clipping it at the WRITE destroyed it:
+// `threadTitle` above are display text and 80 is right for them. `identityName` is an IDENTITY,
+// legal to 120 on both ends (`agent_identities_name_charset_check` and
+// `channel_sessions_identity_name_charset_check`), and clipping it at the WRITE destroyed it:
 // `session-summary.js › endedSummary` re-bounds at 120 on the way out, which is a no-op on an
-// already-80-character string, and the operator's `read_sessions` line then named a template that
+// already-80-character string, and the operator's `read_sessions` line then named an identity that
 // exists under no such spelling — with §5A's "a stale name here is correct, not drift" rule
 // telling them not to read it as an error.
-test("RECORD: the frozen TEMPLATE name keeps its own 120 bound, not the 80 display default", () => {
-  assert.equal(pure.durableHistory(rec({ templateName: "N".repeat(100) })).templateName.length, 100,
-    "a legal 100-character template name must survive the write intact");
-  assert.equal(pure.durableHistory(rec({ templateName: "N".repeat(400) })).templateName.length, 120,
+test("RECORD: the frozen IDENTITY name keeps its own 120 bound, not the 80 display default", () => {
+  assert.equal(pure.durableHistory(rec({ identityName: "N".repeat(100) })).identityName.length, 100,
+    "a legal 100-character identity name must survive the write intact");
+  assert.equal(pure.durableHistory(rec({ identityName: "N".repeat(400) })).identityName.length, 120,
     "…and 120 is still enforced — the bound moved, it did not go away");
   // The neutralization is unchanged at every bound: one line, collapsed, null for a non-string.
-  assert.equal(pure.durableHistory(rec({ templateName: "a\nb\tc" })).templateName, "a b c");
-  assert.equal(pure.durableHistory(rec({ templateName: 42 })).templateName, null);
-  assert.equal(pure.durableHistory(rec({ templateName: "   " })).templateName, null);
+  assert.equal(pure.durableHistory(rec({ identityName: "a\nb\tc" })).identityName, "a b c");
+  assert.equal(pure.durableHistory(rec({ identityName: 42 })).identityName, null);
+  assert.equal(pure.durableHistory(rec({ identityName: "   " })).identityName, null);
 });
 
 // ── 3. THE SWEEP DECISION ────────────────────────────────────────────────────

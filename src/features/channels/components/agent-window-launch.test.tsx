@@ -18,9 +18,9 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
-vi.mock("@/features/agent-templates/hooks/use-agent-templates", () => ({
-  useAgentTemplates: () => ({
-    templates: [],
+vi.mock("@/features/agent-identities/hooks/use-agent-identities", () => ({
+  useAgentIdentities: () => ({
+    identities: [],
     loading: false,
     error: null,
     resolved: true,
@@ -130,9 +130,9 @@ describe("the + opens the New agent form", () => {
     expect(payload.workspaceId).toBe("ws-1");
     expect(payload.channelName).toBe("Website");
     expect(payload.threadTitle).toBe("UI-kit design");
-    // ⚠ A BLANK LAUNCH CARRIES NO TEMPLATE AND NO OVERRIDES — absent, not `null`, which is the
-    // byte-identical payload a build predating templates sent.
-    expect(payload.templateId ?? null).toBeNull();
+    // ⚠ A BLANK LAUNCH CARRIES NO IDENTITY AND NO OVERRIDES — absent, not `null`, which is the
+    // byte-identical payload a build predating identities sent.
+    expect(payload.identityId ?? null).toBeNull();
     expect(payload.overrides).toBeUndefined();
   });
 

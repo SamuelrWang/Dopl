@@ -9,10 +9,10 @@ import {
   CHANNEL_ONLY_BASE,
   TEAMS_PATH,
   T_HOME,
-  agentRoutes,
-  openAgents,
-  templateCalls,
-} from "./agent-test-fixtures";
+  identityRoutes,
+  openIdentities,
+  identityCalls,
+} from "./identity-test-fixtures";
 
 /**
  * /home → AGENTS → THE AUTHORING FACE (plan M3, §4.5).
@@ -47,20 +47,20 @@ vi.mock(
 
 beforeEach(() => {
   apiRequest.mockReset();
-  apiRequest.mockImplementation(agentRoutes);
+  apiRequest.mockImplementation(identityRoutes);
   installBridge({ apiRequest });
 });
 
-/** Open a create editor and name a template, without saving it.
+/** Open a create editor and name an identity, without saving it.
  *  ⚠ TWO BUTTONS SINCE 2026-08-27, AND SINCE 2026-09-09 THEY READ THE SAME
- *  WORDS — "+ Agent template" in BOTH sections (Samuel). The only thing that
+ *  WORDS — "+ Agent identity" in BOTH sections (Samuel). The only thing that
  *  tells them apart is the SECTION they sit in, which is also the only thing
  *  that differs about which workspace the create hits, so this reaches them
  *  through their region. A button-name lookup would now be ambiguous. */
 function createButtonIn(section: string): HTMLButtonElement {
   return within(screen.getByRole("region", { name: section })).getByRole(
     "button",
-    { name: "Agent template" }
+    { name: "Agent Identity" }
   ) as HTMLButtonElement;
 }
 
@@ -71,7 +71,7 @@ async function startNewAgent(
   fireEvent.click(createButtonIn(section));
   await screen.findByRole("dialog");
   fireEvent.change(
-    document.querySelector<HTMLInputElement>("#agent-template-name")!,
+    document.querySelector<HTMLInputElement>("#agent-identity-name")!,
     { target: { value: name } }
   );
 }
@@ -79,11 +79,11 @@ async function startNewAgent(
 /** The create call, or `undefined` — POST only, either workspace. */
 function createCall() {
   return bridgeCalls(apiRequest).find(
-    (c) => c.path.startsWith("/api/agent-templates") && c.opts.method === "POST"
+    (c) => c.path.startsWith("/api/agent-identities") && c.opts.method === "POST"
   );
 }
 
-/** The two section headings — `agent-templates/lib/visibility.ts`'s labels,
+/** The two section headings — `agent-identities/lib/visibility.ts`'s labels,
  *  which is what `SectionPanel`'s `aria-labelledby` names the region by. */
 const SHARED_BUTTON = "Shared in this channel";
 const PERSONAL_SECTION = "Personal";
@@ -91,7 +91,7 @@ const PERSONAL_SECTION = "Personal";
 describe("each section's create writes where its section reads", () => {
   it("the SHARED button writes into THIS CHANNEL'S container, and stays out of the shelf", async () => {
     renderHome();
-    await openAgents();
+    await openIdentities();
     // ⚠ BOTH LISTS ARE ON SCREEN AT ONCE NOW, so the "warm the other entry
     // first" dance the pill version needed is free — but the REASON stands and
     // is why this waits for both: a cache entry that holds nothing cannot be
@@ -120,7 +120,7 @@ describe("each section's create writes where its section reads", () => {
 
   it("the PERSONAL button writes into the caller's OWN workspace, on the home shelf", async () => {
     renderHome();
-    await openAgents();
+    await openIdentities();
     await screen.findByText("Renewal chaser");
     await screen.findByText("Fundraise analyst");
 
@@ -148,7 +148,7 @@ describe("each section's create writes where its section reads", () => {
     // channel" and the section heading repeats it — that control IS the
     // audience statement (INVARIANTS §5, minimal UI copy).
     renderHome();
-    await openAgents();
+    await openIdentities();
     await screen.findByText("Renewal chaser");
 
     await startNewAgent("Intake triage", SHARED_BUTTON);
@@ -166,7 +166,7 @@ describe("each section's create writes where its section reads", () => {
     // `true`, and a `false` on every private save would suggest to a reader
     // that the other value is examined too — the rule `homeScoped` states.
     renderHome();
-    await openAgents();
+    await openIdentities();
     await screen.findByText("Fundraise analyst");
 
     await startNewAgent("Deck reviewer");
@@ -180,7 +180,7 @@ describe("each section's create writes where its section reads", () => {
     // `personalWriteWorkspaceId` routes on it and this create is not personal;
     // an explicit `false` would widen the contract for no reason.
     renderHome();
-    await openAgents();
+    await openIdentities();
     await screen.findByText("Renewal chaser");
 
     await startNewAgent("Intake triage", SHARED_BUTTON);
@@ -199,15 +199,15 @@ describe("each section's create writes where its section reads", () => {
             hasBody: true,
             body: bootBody({ workspace: null, segment: null, role: null }),
           })
-        : agentRoutes(path, opts)
+        : identityRoutes(path, opts)
     );
     renderHome();
-    await openAgents();
+    await openIdentities();
     await screen.findByText("Renewal chaser");
 
     // The SHARED button still writes — the container is the selected row, not
     // boot's answer. Only PERSONAL depends on there being a home workspace.
-    // ⚠ BY SECTION, not by name: both buttons read "+ Agent template" since
+    // ⚠ BY SECTION, not by name: both buttons read "+ Agent identity" since
     // 2026-09-09, so this is also the test that they are two buttons at all.
     expect(createButtonIn(SHARED_BUTTON).disabled).toBe(false);
     expect(createButtonIn(PERSONAL_SECTION).disabled).toBe(true);
@@ -217,7 +217,7 @@ describe("each section's create writes where its section reads", () => {
 describe("what the editor is allowed to ask for", () => {
   it("🔒 offers ONE visibility scope in a container, and asks for no teams", async () => {
     renderHome();
-    await openAgents();
+    await openIdentities();
     await screen.findByText("Renewal chaser");
     await startNewAgent("Intake triage", SHARED_BUTTON);
 
@@ -226,7 +226,7 @@ describe("what the editor is allowed to ask for", () => {
     // hold. The shared scope reads "Shared in this channel", NEVER "Public".
     // 🔒 ⚠ `private` WENT ON 2026-08-27, and it is the important half. The pane
     // lost its per-channel private section and a container is not navigable, so
-    // a private container template is reachable from NO surface — the option
+    // a private container identity is reachable from NO surface — the option
     // would create write-only rows. It also means the draft must OPEN on
     // `workspace` (`defaultVisibility`), or the form's selected value is one the
     // control cannot show.
@@ -237,7 +237,7 @@ describe("what the editor is allowed to ask for", () => {
 
     // 🔒 AND IT NEVER ASKED. Not "the list came back empty" — the container
     // mount has no `useTeams` call at all, which is why it is its own component
-    // (`agent-editor.tsx`).
+    // (`identity-editor.tsx`).
     expect(
       bridgeCalls(apiRequest).filter((c) => c.path.endsWith("/teams"))
     ).toHaveLength(0);
@@ -250,10 +250,10 @@ describe("what the editor is allowed to ask for", () => {
     // workspace, where a team can exist") AND IT WAS WRONG ON THE WIRE THE WHOLE
     // TIME.** This button writes with `shelf: "home"` ⇒ `homeScoped: true`,
     // which routes the row into the caller's `kind='personal'` container — and
-    // `agent-templates/server/service-write-gates.ts › resolveTemplateCreateDestination`
+    // `agent-identities/server/service-write-gates.ts › resolveIdentityCreateDestination`
     // refuses `team` there. The third pill could only ever produce a 403.
     renderHome();
-    await openAgents();
+    await openIdentities();
     await screen.findByText("Fundraise analyst");
     await startNewAgent("Deck reviewer");
 
@@ -263,7 +263,7 @@ describe("what the editor is allowed to ask for", () => {
 
     // 🔒 AND THE READ THAT FED IT IS GONE. Not "it came back empty" — the mount
     // has no `useTeams` call at all now, the same claim the container mount has
-    // carried since M3 (`agent-editor.tsx`).
+    // carried since M3 (`identity-editor.tsx`).
     expect(
       bridgeCalls(apiRequest).filter((c) => c.path === TEAMS_PATH)
     ).toHaveLength(0);
@@ -271,7 +271,7 @@ describe("what the editor is allowed to ask for", () => {
 
   it("attaches the TARGET workspace's knowledge bases, off the PLAIN key", async () => {
     renderHome();
-    await openAgents();
+    await openIdentities();
     await screen.findByText("Renewal chaser");
     await startNewAgent("Intake triage", SHARED_BUTTON);
 
@@ -286,7 +286,7 @@ describe("what the editor is allowed to ask for", () => {
     expect(screen.queryByRole("treeitem", { name: "Fundraise memos" })).toBeNull();
 
     // 🔒 PLAIN KEY vs `?channelId=`, AND THIS HALF WAS BLIND UNTIL 2026-08-26.
-    // `agent-test-fixtures.ts › agentRoutes` used to strip the query before
+    // `identity-test-fixtures.ts › identityRoutes` used to strip the query before
     // dispatching, so both entries answered with one body and the two
     // assertions above passed whichever entry the editor read. The fixture is
     // query-aware now and carries a row ONLY the channel-scoped answer has.
@@ -307,16 +307,16 @@ describe("what the editor is allowed to ask for", () => {
 describe("editing an existing row", () => {
   it("opens against the workspace the row LIVES in, not the one on screen", async () => {
     renderHome();
-    await openAgents();
+    await openIdentities();
 
     fireEvent.click(await screen.findByText("Fundraise analyst"));
     await screen.findByRole("dialog");
     expect(
-      document.querySelector<HTMLInputElement>("#agent-template-name")!.value
+      document.querySelector<HTMLInputElement>("#agent-identity-name")!.value
     ).toBe("Fundraise analyst");
 
     fireEvent.change(
-      document.querySelector<HTMLInputElement>("#agent-template-name")!,
+      document.querySelector<HTMLInputElement>("#agent-identity-name")!,
       { target: { value: "Fundraise analyst v2" } }
     );
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
@@ -333,7 +333,7 @@ describe("editing an existing row", () => {
 
   it("opens a SHARED row against the CONTAINER, with Personal on screen beside it", async () => {
     renderHome();
-    await openAgents();
+    await openIdentities();
     await screen.findByText("Renewal chaser");
     await screen.findByText("Fundraise analyst");
 
@@ -353,7 +353,7 @@ describe("editing an existing row", () => {
 describe("the writes stay in their own workspace", () => {
   it("never addresses the home workspace while creating in the container", async () => {
     renderHome();
-    await openAgents();
+    await openIdentities();
     await screen.findByText("Renewal chaser");
     await startNewAgent("Intake triage", SHARED_BUTTON);
     fireEvent.click(screen.getByRole("button", { name: "Create" }));
@@ -364,7 +364,7 @@ describe("the writes stay in their own workspace", () => {
     // pill; Personal is always on screen now, so a GET there is expected and a
     // POST/PATCH/DELETE is the actual claim.
     expect(
-      templateCalls(apiRequest, WORKSPACE_ID).filter(
+      identityCalls(apiRequest, WORKSPACE_ID).filter(
         (c) => c.opts.method !== "GET"
       )
     ).toHaveLength(0);
@@ -384,7 +384,7 @@ describe("the writes stay in their own workspace", () => {
  * carried an override, a runtime or a colour would render identically (as a
  * spinner and a toast) and would NOT be the as-is launch he asked for — and the
  * `workspaceId` is the one field that decides whether main can resolve the
- * template at all (`main/template-resolve.js` reads `(workspace_id, id)`).
+ * identity at all (`main/identity-resolve.js` reads `(workspace_id, id)`).
  */
 describe("launch from the card", () => {
   const launch = vi.fn();
@@ -411,12 +411,12 @@ describe("launch from the card", () => {
   /** Press Launch on the PERSONAL card. */
   async function pressLaunch(): Promise<void> {
     renderHome();
-    await openAgents();
+    await openIdentities();
     await screen.findByText("Fundraise analyst");
     fireEvent.click(screen.getByRole("button", { name: "Launch" }));
   }
 
-  it("🔒 launches the template AS-IS, into the selected channel", async () => {
+  it("🔒 launches the identity AS-IS, into the selected channel", async () => {
     installDesktop();
     await pressLaunch();
 
@@ -427,9 +427,9 @@ describe("launch from the card", () => {
     expect(launch.mock.calls[0][0]).toEqual({
       channelId: CHANNEL_ID,
       taskId: null,
-      // 🔒 THE TEMPLATE'S OWN WORKSPACE, never the channel's container: main
+      // 🔒 THE IDENTITY'S OWN WORKSPACE, never the channel's container: main
       // resolves the row by `(workspace_id, id)`, so the container id would 404
-      // every personal template.
+      // every personal identity.
       workspaceId: WORKSPACE_ID,
       channelName: expect.any(String),
       threadTitle: null,
@@ -438,11 +438,11 @@ describe("launch from the card", () => {
       // direct one, and main reads this to decide how the session addresses the
       // room.
       direct: true,
-      templateId: T_HOME.id,
+      identityId: T_HOME.id,
     });
   });
 
-  it("names the new agent after the template, and says so", async () => {
+  it("names the new agent after the identity, and says so", async () => {
     installDesktop();
     // ⚠ THE HOST IS MOUNTED BY HAND — `renderHome` renders the PAGE, and the
     // toast host lives at the app root (`app.tsx`), above every route.
@@ -469,7 +469,7 @@ describe("launch from the card", () => {
   it("offers no launch control on a SHARED row — that list is the container's", async () => {
     installDesktop();
     renderHome();
-    await openAgents();
+    await openIdentities();
     await screen.findByText("Renewal chaser");
     // ⚠ Scoped to the SHARED region: the control lives on every Personal card,
     // so a document-wide query would find those and prove nothing about this one.

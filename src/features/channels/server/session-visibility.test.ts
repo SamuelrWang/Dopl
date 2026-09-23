@@ -56,7 +56,7 @@ function fullRow(over: Partial<SessionStateRow> = {}): SessionStateRow {
     started_at: "2026-08-22T09:40:00.000Z",
     last_activity_at: "2026-08-22T10:04:59.000Z",
     // ⚠ 2026-08-23 — AND ADDING IT HERE IS THE ENTIRE TEST CHANGE FOR THE
-    // TEMPLATE-NAME COLUMN. Registering `template_name` / `templateName` in
+    // IDENTITY-NAME COLUMN. Registering `identity_name` / `identityName` in
     // `OPERATOR_ONLY_SESSION_COLUMNS` + `…_FIELDS` and populating it on this row
     // is what makes every property below cover it: the peer mapper must not emit
     // the KEY, must not carry the VALUE under another name, the two arrays must
@@ -65,7 +65,7 @@ function fullRow(over: Partial<SessionStateRow> = {}): SessionStateRow {
     // ⚠ The value is deliberately DISTINCTIVE prose — the value-property test
     // does a substring search, and a value like "Auditor" would be defeated by a
     // row field that legitimately contains it.
-    template_name: "Acme Contract Auditor",
+    identity_name: "Acme Contract Auditor",
     // ⚠ 2026-08-31 — populated, NOT registered as operator-only: the display
     // name is PEER-VISIBLE BY DESIGN (Samuel's ruling), so the property test
     // below must see it SURVIVE the peer mapper rather than be scrubbed.
@@ -188,7 +188,7 @@ describe("the OWN mapper carries everything — the split has two directions", (
     expect(own.tokensSpent).toBe(41_233);
     expect(own.startedAt).toBe("2026-08-22T09:40:00.000Z");
     expect(own.lastActivityAt).toBe("2026-08-22T10:04:59.000Z");
-    expect(own.templateName).toBe("Acme Contract Auditor");
+    expect(own.identityName).toBe("Acme Contract Auditor");
     // ── THE HEALTH SEVEN (2026-09-01) ──────────────────────────────────────
     expect(own.turns).toBe(47);
     expect(own.tokensDelta).toBe(8_675_309);
@@ -295,21 +295,21 @@ describe("the OWN mapper carries everything — the split has two directions", (
   });
 
   /**
-   * `templateName` IS A SNAPSHOT, NOT A LOOKUP — the mapper passes the stored
+   * `identityName` IS A SNAPSHOT, NOT A LOOKUP — the mapper passes the stored
    * string through and resolves nothing. That is what lets a session go on
-   * reporting what it RAN AS after the template was renamed or deleted
+   * reporting what it RAN AS after the identity was renamed or deleted
    * (`20260823130000`), and it is the reason the column is TEXT rather than an
    * FK. A mapper that ever "corrected" this value would be reinventing the FK.
    */
-  it("passes a template name through verbatim, and a null through as null", () => {
-    expect(mapOwnSessionStateRow(fullRow({ template_name: null })).templateName)
+  it("passes an identity name through verbatim, and a null through as null", () => {
+    expect(mapOwnSessionStateRow(fullRow({ identity_name: null })).identityName)
       .toBeNull();
-    // A template that no longer exists under that name is STILL what this
+    // An identity that no longer exists under that name is STILL what this
     // session is running, and the row must keep saying so.
     expect(
-      mapOwnSessionStateRow(fullRow({ template_name: "Deleted Template" }))
-        .templateName
-    ).toBe("Deleted Template");
+      mapOwnSessionStateRow(fullRow({ identity_name: "Deleted Identity" }))
+        .identityName
+    ).toBe("Deleted Identity");
   });
 
   it("a BIGINT arriving as a string becomes a number, and an unparseable one becomes null", () => {

@@ -103,10 +103,10 @@ describe("a DROPDOWN row", () => {
   it("centres its control against the label", () => {
     // A menu trigger is one line tall; `items-start` would hang it above the word.
     render(
-      <PanelField label="Template:" as="div" center line={false}>
+      <PanelField label="Identity:" as="div" center line={false}>
         <button type="button">Blank agent</button>
       </PanelField>
     );
-    expect(classes(screen.getByText("Template:").parentElement)).toContain("items-center");
+    expect(classes(screen.getByText("Identity:").parentElement)).toContain("items-center");
   });
 });

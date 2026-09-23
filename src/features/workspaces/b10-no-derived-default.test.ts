@@ -45,7 +45,7 @@ const SCOPE = [
   "src/shared/auth/with-workspace-auth.test.ts",
   "src/shared/auth/with-workspace-auth-mcp-logging.test.ts",
   "src/features/knowledge/server/service-base-gates.ts",
-  "src/features/agent-templates/server/service-writes.ts",
+  "src/features/agent-identities/server/service-writes.ts",
   "packages/contracts/src/workspaces.ts",
   "scripts/check-role-drift.ts",
 ];

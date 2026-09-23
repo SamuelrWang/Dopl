@@ -45,9 +45,9 @@ var __importStar = (this && this.__importStar) || (function () {
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.HomeMethods = void 0;
-const client_agent_templates_js_1 = require("./client-agent-templates.js");
+const client_agent_identities_js_1 = require("./client-agent-identities.js");
 const home = __importStar(require("./home.js"));
-class HomeMethods extends client_agent_templates_js_1.AgentTemplateMethods {
+class HomeMethods extends client_agent_identities_js_1.AgentIdentityMethods {
     getHomeChannels() {
         return home.getHomeChannels(this.transport);
     }

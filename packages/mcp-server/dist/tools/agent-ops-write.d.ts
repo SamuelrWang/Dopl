@@ -6,9 +6,9 @@
  *
  * ⚠ **THE SHELF FENCE THIS HEADER OPENED WITH IS GONE (2026-09-02, slice B15,
  * ruling B10).** It had three numbered rules; the first two were about
- * `resolveTemplateHomeScope` and about not confusing it with the credential's
+ * `resolveIdentityHomeScope` and about not confusing it with the credential's
  * container lock (F-336). The `home_scoped` column is dropped and a personal
- * template is an ordinary row in the caller's own `kind='personal'` container,
+ * identity is an ordinary row in the caller's own `kind='personal'` container,
  * so there is no shelf to fence and no contradiction to refuse before the round
  * trip. **The container LOCK is untouched** — it was always the thing doing the
  * work in rule 2 — and it is still what answers a container-locked session that
@@ -32,21 +32,21 @@
  *    reasoning is not local to this file.
  *
  * 2. 🔒 **A GRANT LENDS ONE ROW AND THE FENCE IS BOTH SIDES OF IT** — see
- *    {@link opGrantTemplate} and `grant.ts`. It replaced `op="copy"`, whose
+ *    {@link opGrantIdentity} and `grant.ts`. It replaced `op="copy"`, whose
  *    two-leg cross-tenancy create is deleted.
  */
-import type { DoplClient, TemplateField } from "@dopl/client";
+import type { DoplClient, IdentityField } from "@dopl/client";
 import type { WorkspaceDirectory } from "../workspace-directory.js";
 import { type GrantLevelArg, type GrantScopeArg } from "./grant.js";
 import { type ToolResponse } from "./respond.js";
-import { type OfferedTemplateVisibility } from "./agent-shared.js";
-export interface TemplateWriteInput {
+import { type OfferedIdentityVisibility } from "./agent-shared.js";
+export interface IdentityWriteInput {
     name?: string;
     description?: string | null;
     instructions?: string | null;
     model?: string | null;
-    fields?: TemplateField[];
-    visibility?: OfferedTemplateVisibility;
+    fields?: IdentityField[];
+    visibility?: OfferedIdentityVisibility;
     knowledge_bases?: string[];
     knowledge?: Array<{
         base: string;
@@ -59,27 +59,27 @@ export interface TemplateWriteInput {
     /** op="update" only — the `expected_version` escape. */
     force?: boolean;
 }
-export declare function opCreate(client: DoplClient, callerUserId: string | null, input: TemplateWriteInput & {
+export declare function opCreate(client: DoplClient, callerUserId: string | null, input: IdentityWriteInput & {
     name: string;
 }, 
 /** ⚠ OPTIONAL — see `container-destination.ts ›
  *  resolveHomeChannelContainer`: absent means "not known", which degrades to
  *  the pre-2026-09-18 behaviour and leaves the refusal with the server. */
 directory?: WorkspaceDirectory): Promise<ToolResponse>;
-export declare function opUpdate(client: DoplClient, callerUserId: string | null, ref: string, input: TemplateWriteInput): Promise<ToolResponse>;
+export declare function opUpdate(client: DoplClient, callerUserId: string | null, ref: string, input: IdentityWriteInput): Promise<ToolResponse>;
 /**
- * `op="grant"` — lend ONE template to a channel, container or team. The op that
+ * `op="grant"` — lend ONE identity to a channel, container or team. The op that
  * REPLACED `op="copy"` (Wave B slice B15, ruling B11).
  *
  * ⚠ **THIS IS THE `op="share"` §5A SAID WOULD NEVER EXIST, AND THE PREMISE THAT
- * REFUSED IT DIED IN THE SAME WAVE.** The argument was *"a template has no grant
+ * REFUSED IT DIED IN THE SAME WAVE.** The argument was *"an identity has no grant
  * table, so sharing into a container IS `visibility: 'workspace'` on
  * `op='update'` — a second verb would be two doors onto one write"*. Since
- * `20260914120000` a template HAS a grant table (`resource_grants` accepts
- * `resource_type='agent_template'`), and the two verbs are no longer one write:
+ * `20260914120000` an identity HAS a grant table (`resource_grants` accepts
+ * `resource_type='agent_identity'`), and the two verbs are no longer one write:
  * `visibility` says who inside THIS container may use the identity, and a grant
- * lends the row to a scope somewhere else. A personal template lives in the
+ * lends the row to a scope somewhere else. A personal identity lives in the
  * caller's own personal container, where `visibility:"workspace"` reaches an
  * audience of one — which is exactly why sharing it needs this op.
  */
-export declare function opGrantTemplate(client: DoplClient, directory: WorkspaceDirectory, selfUserId: string | null, ref: string, scope: GrantScopeArg, to: string, level: GrantLevelArg | undefined): Promise<ToolResponse>;
+export declare function opGrantIdentity(client: DoplClient, directory: WorkspaceDirectory, selfUserId: string | null, ref: string, scope: GrantScopeArg, to: string, level: GrantLevelArg | undefined): Promise<ToolResponse>;

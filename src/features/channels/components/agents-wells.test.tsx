@@ -10,7 +10,7 @@
  *  - **THE BUCKET IS TIME, NOT STATE.** An ENDED agent last active three days ago
  *    belongs in **Last 7 days**, which is exactly the case Samuel spelled out.
  *  - **THE HEADER TYPE IS THE ONE HE NAMED** — the /home Overview's *Credit spend*
- *    face, `TEMPLATE_NAME_TEXT`, reached by import. A hand-typed `text-title
+ *    face, `IDENTITY_NAME_TEXT`, reached by import. A hand-typed `text-title
  *    font-medium` here would pass a class assertion and drift the day that
  *    constant moves, so the assertion is against the CONSTANT.
  *  - **THE CARDS ARE UNCHANGED.** This ruling put a GROUND under the column; the
@@ -20,12 +20,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import type { DesktopSessionSummary } from "@/shared/lib/spa-bridge";
-import { TEMPLATE_NAME_TEXT } from "@/features/agent-templates/components/template-section";
+import { IDENTITY_NAME_TEXT } from "@/features/agent-identities/components/identity-section";
 import { PANEL_ROWS, PANEL_WELL } from "@/shared/ui/panel-well";
 
-vi.mock("@/features/agent-templates/hooks/use-agent-templates", () => ({
-  useAgentTemplates: () => ({
-    templates: [],
+vi.mock("@/features/agent-identities/hooks/use-agent-identities", () => ({
+  useAgentIdentities: () => ({
+    identities: [],
     loading: false,
     error: null,
     refetch: () => {},
@@ -277,7 +277,7 @@ describe("AgentsTab — the well's face and its collapse", () => {
     renderOne();
     const heading = screen.getByRole("heading", { name: "Recent" });
     // ⚠ THE TYPE SAMUEL NAMED: "it should be the same as … the credit spend".
-    expect(heading.className).toContain(TEMPLATE_NAME_TEXT);
+    expect(heading.className).toContain(IDENTITY_NAME_TEXT);
     // The whole header row is the control, and the heading is its accessible name.
     const row = screen.getByRole("button", { name: "Recent" });
     expect(row.contains(heading)).toBe(true);

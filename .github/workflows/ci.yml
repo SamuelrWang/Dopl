@@ -303,7 +303,7 @@ jobs:
       # 🔒 A MIGRATION THAT RE-STAMPS A PARENT'S `workspace_id` RE-STAMPS EVERY
       # CHILD THAT COPIES IT (2026-09-03, F-664). `20260920120000` moved the
       # personal rows into their author's container and left the folders,
-      # entries, chunks and template↔KB junctions on the old tenancy. Nothing
+      # entries, chunks and identity↔KB junctions on the old tenancy. Nothing
       # compares the two until a caller resolves a PATH inside a moved base, so
       # the move measured clean and the contents of that base were unreadable —
       # F-604's shape a second time, and a CLASS rather than an incident. The
@@ -439,7 +439,7 @@ jobs:
           src/features/knowledge/server/rls-redteam-personal-container.test.ts
           src/features/skills/server/rls-redteam.test.ts
           src/features/chats/server/rls-redteam.test.ts
-          src/features/agent-templates/server/rls-redteam.test.ts
+          src/features/agent-identities/server/rls-redteam.test.ts
           src/features/ontology/server/rls-redteam.test.ts
           src/shared/supabase/rls-redteam-resource-grants.test.ts
 

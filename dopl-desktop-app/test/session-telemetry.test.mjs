@@ -285,20 +285,20 @@ test("FIELDS: display strings are collapsed and bounded before they cross", () =
 // delayed. So the membership is pinned, not derived.
 test("STATE: the state half is the seven pre-orchestrator fields, plus three IDENTITIES", () => {
   assert.deepEqual([...t.STATE_FIELDS].sort(), [
-    // `templateName` (2026-08-22), `color` (2026-09-13) and `displayName` (2026-09-16, F-708) are
+    // `identityName` (2026-08-22, `templateName` until the 2026-09-22 rename), `color` (2026-09-13) and `displayName` (2026-09-16, F-708) are
     // IDENTITIES, not churn, so they sit PAST the cadence floor: each moves at most once per
     // session, so it costs nothing to put there, and `color` has to be past it or the transcript
     // paints NEUTRAL for up to `TELEMETRY_MIN_INTERVAL_MS`. F-708 was a correction —
     // `displayName` was on `reportRow` since 2026-08-31 but unclassified, so a rename moved the
     // full-row digest, missed `stateDigest`, and waited on the floor for a projection move a quiet
     // machine never makes.
-    "channelId", "channelName", "color", "displayName", "name", "sessionKey", "state",
-    "templateName", "threadId", "threadTitle",
+    "channelId", "channelName", "color", "displayName", "identityName", "name", "sessionKey",
+    "state", "threadId", "threadTitle",
   ]);
   // Stated as the RULE rather than as a member of a sorted list: every operator-authored IDENTITY
   // on the row is state, because a name a peer cannot see is a rename that did not happen.
-  for (const identity of ["displayName", "templateName", "color", "name"]) {
-    assert.equal(t.STATE_FIELDS.includes(identity), true, `${identity} is identity, not churn`);
+  for (const field of ["displayName", "identityName", "color", "name"]) {
+    assert.equal(t.STATE_FIELDS.includes(field), true, `${field} is identity, not churn`);
   }
   for (const churn of ["detail", "toolLabel", "model", "contextUsed", "contextWindow",
     "tokensSpent", "startedAt", "lastActivityAt"]) {

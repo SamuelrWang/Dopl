@@ -391,37 +391,37 @@ export class LaunchDirectiveNotClaimableError extends ChannelError {
 }
 
 /**
- * A directive named a TEMPLATE that does not resolve for the CALLER
+ * A directive named a IDENTITY that does not resolve for the CALLER
  * (2026-08-23).
  *
- * ⚠ ONE ERROR FOR "no such template" AND "not visible to you", exactly as
- * `agent-templates/server/errors.ts › AgentTemplateNotFoundError` is, and it
+ * ⚠ ONE ERROR FOR "no such identity" AND "not visible to you", exactly as
+ * `agent-identities/server/errors.ts › AgentIdentityNotFoundError` is, and it
  * carries that error's CODE rather than a channels-flavoured one: the two are
  * the same fact reached through two doors, and an agent that learned to read
- * `AGENT_TEMPLATE_NOT_FOUND` from `/resolve` must not have to learn a second
+ * `AGENT_IDENTITY_NOT_FOUND` from `/resolve` must not have to learn a second
  * spelling here. Splitting them would make this a probe primitive for other
- * people's private templates — the oracle the 404-never-403 rule closes.
+ * people's private identities — the oracle the 404-never-403 rule closes.
  *
- * ⚠ THROWN IN THE CHANNELS FEATURE RATHER THAN RE-THROWN FROM THE TEMPLATE ONE.
- * `agent-templates/server › resolveTemplateRef` answers with a union and throws
+ * ⚠ THROWN IN THE CHANNELS FEATURE RATHER THAN RE-THROWN FROM THE IDENTITY ONE.
+ * `agent-identities/server › resolveIdentityRef` answers with a union and throws
  * nothing, so this feature's error mapper does not have to import another
  * feature's error classes to know what a 404 means.
  *
  * ⚠ `elsewhere` IS THE ONE THING IT MAY ADD, AND IT IS NOT A CRACK IN THE RULE
- * ABOVE (T35). It is present only when the ref names a template the caller
+ * ABOVE (T35). It is present only when the ref names an identity the caller
  * COULD ALREADY LIST FOR THEMSELVES — their own row, or a `workspace`-visible
  * one, in a workspace they are an active member of — sitting in a DIFFERENT
- * tenancy than the channel's (`agent-templates/server/service-resolve-ref.ts ›
- * classifyMissingTemplateRef` holds the whole argument). It therefore says
- * nothing a list call would not, and `null` covers BOTH "no such template" and
+ * tenancy than the channel's (`agent-identities/server/service-resolve-ref.ts ›
+ * classifyMissingIdentityRef` holds the whole argument). It therefore says
+ * nothing a list call would not, and `null` covers BOTH "no such identity" and
  * "somebody else's, and not yours to see" — the two that must stay one answer.
  */
-export class LaunchTemplateNotFoundError extends ChannelError {
+export class LaunchIdentityNotFoundError extends ChannelError {
   constructor(
     public readonly ref: string,
     public readonly elsewhere: { name: string; label: string } | null = null
   ) {
-    super(`Agent template not found: ${ref}`);
+    super(`Agent identity not found: ${ref}`);
   }
 }
 
@@ -442,7 +442,7 @@ export class LaunchTemplateNotFoundError extends ChannelError {
  * whatever is out in a channel the caller has already proved they are a MEMBER of,
  * and every colour in it is drawn on that caller's own transcript anyway. Without it
  * the refusal forces a guess or a second tool call for facts already in hand — the
- * same argument {@link LaunchTemplateAmbiguousError} makes for its match list.
+ * same argument {@link LaunchIdentityAmbiguousError} makes for its match list.
  *
  * ⚠ IT IS NOT A RESERVATION. By the time the operator's machine claims the directive
  * a key in this list may be gone; the authority is
@@ -460,21 +460,21 @@ export class AgentColorTakenError extends ChannelError {
 }
 
 /**
- * A directive named a template by NAME and more than one visible template
+ * A directive named an identity by NAME and more than one visible identity
  * carries it (2026-08-23).
  *
- * ⚠ **A REFUSAL, AND NEVER A PICK.** `agent_templates` has no name uniqueness by
+ * ⚠ **A REFUSAL, AND NEVER A PICK.** `agent_identities` has no name uniqueness by
  * design, so two people may each keep a "Researcher" and one of them may be
  * shared with the caller. Any collision rule — mine wins, newest wins,
  * most-recently-used wins — launches an identity the caller did not choose and
  * says nothing about it.
  *
  * ⚠ THE MATCH LIST RIDES ON THE ERROR AND IS NOT AN ORACLE: every row in it
- * already passed `canSeeTemplate` for this caller, so it discloses exactly what
- * `GET /api/agent-templates` would. It carries `visibility` because that is what
+ * already passed `canSeeIdentity` for this caller, so it discloses exactly what
+ * `GET /api/agent-identities` would. It carries `visibility` because that is what
  * makes the disambiguation actionable — "the private one is mine".
  */
-export class LaunchTemplateAmbiguousError extends ChannelError {
+export class LaunchIdentityAmbiguousError extends ChannelError {
   constructor(
     public readonly ref: string,
     public readonly matches: ReadonlyArray<{
@@ -484,7 +484,7 @@ export class LaunchTemplateAmbiguousError extends ChannelError {
     }>
   ) {
     super(
-      `Agent template name is ambiguous: ${ref} matches ${matches.length} templates you can see`
+      `Agent identity name is ambiguous: ${ref} matches ${matches.length} identities you can see`
     );
   }
 }

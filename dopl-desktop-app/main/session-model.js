@@ -135,7 +135,7 @@ function normalizeModel(value) {
  * aside instead of silently spending the SDK default and discarding the rest. ⚠ F-5's old
  * corollary — "an unknown model FALLS BACK, never refuses" — is REVERSED (2026-09-22, below).
  * ⚠ IT LIVES HERE, NOT IN A LANE, because there are two lanes — the button
- * (`session-launch-op.js › templateModel`) and the directive (`launch-directives.js › spawn`) —
+ * (`session-launch-op.js › identityModel`) and the directive (`launch-directives.js › spawn`) —
  * and a rule restated once per lane is a rule that drifts in one of them.
  */
 // ⚠ **VOCABULARY-FREE SINCE 2026-09-22.** It answered `normalizeModel(value)` and so turned every
@@ -185,7 +185,7 @@ const LAUNCH_MODEL_FALLBACK = 'claude-sonnet-5';
 // ⚠ `chainModel` IS UNCHANGED AND MUST STAY UNCHANGED. It answers `''` for `'default'` so a link
 // with no opinion STEPS ASIDE and the lower links get their turn (F-285). Resolving the fallback
 // there instead would end every chain at its first link, so a channel's stored model could never
-// beat a template's — the precedence order would silently invert.
+// beat an identity's — the precedence order would silently invert.
 function modelArg(value) {
   const choice = normalizeModel(value);
   return choice === 'default' ? aliasForModelId(LAUNCH_MODEL_FALLBACK) : choice;

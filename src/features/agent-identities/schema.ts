@@ -5,10 +5,10 @@ import {
   safeLabelMessage,
   safeOptionalProse,
 } from "@/shared/lib/safe-label";
-import type { TemplateFieldType } from "./types";
+import type { IdentityFieldType } from "./types";
 
 /**
- * Zod schemas for agent templates. REST handlers parse against these, so the
+ * Zod schemas for agent identities. REST handlers parse against these, so the
  * service sees one shape whatever the entry point is — the same contract
  * `src/features/skills/schema.ts` holds for skills.
  *
@@ -27,23 +27,23 @@ import type { TemplateFieldType } from "./types";
  * a gate, which is what this file's own header used to rely on.
  */
 
-/** Rendered into the template picker and into the launch payload. Matches the
- *  `agent_templates_name_charset_check` bound in the migration. */
+/** Rendered into the identity picker and into the launch payload. Matches the
+ *  `agent_identities_name_charset_check` bound in the migration. */
 export const MAX_NAME_CHARS = 120;
-const NameSchema = safeLabel("Template name", MAX_NAME_CHARS);
+const NameSchema = safeLabel("Identity name", MAX_NAME_CHARS);
 
 /** Prose. Newline/tab allowed; empty string preserved (a cleared textarea
  *  sends one, and the service maps it to NULL). */
 export const MAX_DESCRIPTION_CHARS = 2000;
 const DescriptionSchema = safeOptionalProse(
-  "Template description",
+  "Identity description",
   MAX_DESCRIPTION_CHARS
 );
 
 /**
  * The system-prompt block. 32 KB, matching the DB CHECK.
  * ⚠ NOT bounded to 1 MB like `skills.body`: a skill body is a PROCEDURE meant
- * to be long, and a template's instructions are a system prompt that is
+ * to be long, and an identity's instructions are a system prompt that is
  * prepended to every turn of every session spawned from it. The bound is a
  * cost signal as much as a DoS floor.
  */
@@ -60,7 +60,7 @@ const InstructionsSchema = safeOptionalProse(
  * mode would be a 400 on a value the operator can see in their own picker.
  * Charset-bounded because it renders into the launch payload.
  * ⚠ Deliberately the SAME number as `MAX_NAME_CHARS`, and the migration pairs
- * them the same way (`agent_templates_model_charset_check`). Named separately
+ * them the same way (`agent_identities_model_charset_check`). Named separately
  * because they are two columns, not one shared rule.
  */
 export const MAX_MODEL_CHARS = 120;
@@ -93,15 +93,15 @@ export const MAX_FIELD_VALUE_CHARS = 1000;
 /** ⚠ THE TUPLE ZOD NEEDS, DERIVED FROM THE ONE LIST IN `types.ts` — a second
  *  hand-typed enum is how the UI and the validator come to offer different
  *  values. */
-const TEMPLATE_FIELD_TYPES_TUPLE = [
+const IDENTITY_FIELD_TYPES_TUPLE = [
   "text",
   "number",
   "date",
   "boolean",
   "url",
-] as const satisfies readonly TemplateFieldType[];
+] as const satisfies readonly IdentityFieldType[];
 
-export const TemplateFieldSchema = z.object({
+export const IdentityFieldSchema = z.object({
   key: safeLabel("Field key", MAX_FIELD_KEY_CHARS),
   /** ⚠ A LABEL, not prose: field values are spliced into the launch payload
    *  line-by-line, so a newline in one forges a line in the server's voice.
@@ -124,15 +124,15 @@ export const TemplateFieldSchema = z.object({
    * every one of those writes, and a `.default("text")` would stamp a decision
    * onto rows nobody typed it for.
    * ⚠ **IT IS NOT VALIDATED AGAINST `value`, DELIBERATELY.** The type is an INPUT
-   * affordance (`types.ts › TemplateFieldType`): the value is a string on every
+   * affordance (`types.ts › IdentityFieldType`): the value is a string on every
    * branch, and a server that refused "n/a" in a `number` field would be
    * enforcing a contract the launch splice does not read.
    */
-  type: z.enum(TEMPLATE_FIELD_TYPES_TUPLE).optional(),
+  type: z.enum(IDENTITY_FIELD_TYPES_TUPLE).optional(),
 });
 
-export const TemplateFieldsSchema = z
-  .array(TemplateFieldSchema)
+export const IdentityFieldsSchema = z
+  .array(IdentityFieldSchema)
   .max(MAX_FIELD_COUNT, `At most ${MAX_FIELD_COUNT} custom fields`)
   .refine(
     (fields) =>
@@ -157,7 +157,7 @@ export const TemplateFieldsSchema = z
  * ⚠ It stays in the enum because the value is still legal for a HUMAN: taking it
  * out of the DB is B4, and B4 has not been ruled.
  */
-export const TemplateVisibilitySchema = z.enum([
+export const IdentityVisibilitySchema = z.enum([
   "private",
   "team",
   "workspace",
@@ -167,7 +167,7 @@ export const TemplateVisibilitySchema = z.enum([
 const TeamIdsSchema = z.array(z.string().uuid()).max(50);
 
 /**
- * Attached KB ids. The set is REPLACED, never merged — see `updateTemplate`.
+ * Attached KB ids. The set is REPLACED, never merged — see `updateIdentity`.
  *
  * ⚠ **STILL ACCEPTED, AND IT MEANS WHOLE BASES** (2026-09-08). `knowledge`
  * below is the shape that can also name a folder or an entry; this one stays
@@ -184,12 +184,12 @@ const KnowledgeBaseIdsSchema = z.array(z.string().uuid()).max(50);
  * ⚠ **A DISCRIMINATED UNION, NOT THREE OPTIONAL IDS.** `{baseId, folderId?,
  * entryId?}` would make `{scope:"folder"}` with no `folderId` — and
  * `{folderId, entryId}` together — parseable shapes the service would have to
- * re-refuse, which is the DB's `agent_template_kb_scope_shape_check` restated
+ * re-refuse, which is the DB's `agent_identity_kb_scope_shape_check` restated
  * badly one layer up. Here an impossible combination cannot be typed.
  *
  * ⚠ IDS ONLY, NEVER PATHS. `knowledge_folders`/`knowledge_entries` carry no path
  * column — a path is derived by walking `parent_id` — so a path on the wire is a
- * name a rename silently falsifies. `types.ts › TemplateKnowledgeScope` carries
+ * name a rename silently falsifies. `types.ts › IdentityKnowledgeScope` carries
  * the argument.
  */
 /**
@@ -199,7 +199,7 @@ const KnowledgeBaseIdsSchema = z.array(z.string().uuid()).max(50);
  * base, silently, which is the widest possible failure of a feature whose point
  * is narrowing. `z.strictObject` turns that misunderstanding into a 400.
  */
-export const TemplateKnowledgeScopeSchema = z.discriminatedUnion("scope", [
+export const IdentityKnowledgeScopeSchema = z.discriminatedUnion("scope", [
   z.strictObject({ baseId: z.string().uuid(), scope: z.literal("base") }),
   z.strictObject({
     baseId: z.string().uuid(),
@@ -221,7 +221,7 @@ export const TemplateKnowledgeScopeSchema = z.discriminatedUnion("scope", [
  */
 export const MAX_KNOWLEDGE_SCOPES = 200;
 const KnowledgeScopesSchema = z
-  .array(TemplateKnowledgeScopeSchema)
+  .array(IdentityKnowledgeScopeSchema)
   .max(MAX_KNOWLEDGE_SCOPES, `At most ${MAX_KNOWLEDGE_SCOPES} knowledge scopes`);
 
 /**
@@ -258,23 +258,23 @@ const TEAM_IDS_MESSAGE = {
   message: "teamIds requires visibility 'team'",
 } as const;
 
-export const AgentTemplateCreateSchema = z
+export const AgentIdentityCreateSchema = z
   .object({
     name: NameSchema,
     description: DescriptionSchema.nullable().optional(),
     instructions: InstructionsSchema.nullable().optional(),
     model: ModelSchema.nullable().optional(),
-    fields: TemplateFieldsSchema.optional(),
+    fields: IdentityFieldsSchema.optional(),
     /** Omitted → the service defaults to `'private'`, matching `createSkill`
      *  and `createBase`. */
-    visibility: TemplateVisibilitySchema.optional(),
+    visibility: IdentityVisibilitySchema.optional(),
     teamIds: TeamIdsSchema.optional(),
     knowledgeBaseIds: KnowledgeBaseIdsSchema.optional(),
     /** Scoped attachments — base, folder or entry. ⚠ Not alongside
      *  `knowledgeBaseIds`: see `knowledgeFieldsExclusive`. */
     knowledge: KnowledgeScopesSchema.optional(),
     /**
-     * Put the new template on the PERSONAL SHELF (`types.ts › TemplateShelf`)
+     * Put the new identity on the PERSONAL SHELF (`types.ts › IdentityShelf`)
      * instead of the workspace Agents page. ⚠ A REQUEST, NOT A DECISION, AND IT
      * ROUTES THE ROW RATHER THAN BEING STORED ON IT (2026-09-02, slice B15) —
      * the twin of `knowledge/schema.ts › homeScoped`, which carries the
@@ -296,7 +296,7 @@ export const AgentTemplateCreateSchema = z
   })
   .refine(teamIdsMatchVisibility, TEAM_IDS_MESSAGE)
   .refine(knowledgeFieldsExclusive, KNOWLEDGE_EXCLUSIVE_MESSAGE);
-export type AgentTemplateCreateInput = z.infer<typeof AgentTemplateCreateSchema>;
+export type AgentIdentityCreateInput = z.infer<typeof AgentIdentityCreateSchema>;
 
 /**
  * All fields optional. ⚠ `null` and ABSENT differ and both are meaningful:
@@ -306,7 +306,7 @@ export type AgentTemplateCreateInput = z.infer<typeof AgentTemplateCreateSchema>
  * over a set that two clients can edit is how sets silently diverge.
  */
 /**
- * The columns and junctions `updateTemplate` can actually move. ⚠ NAMED so the
+ * The columns and junctions `updateIdentity` can actually move. ⚠ NAMED so the
  * "changes at least one field" refine cannot silently count a field that
  * changes nothing — `acknowledgeShared` is the first such field and will not be
  * the last.
@@ -323,14 +323,14 @@ const MUTABLE_UPDATE_KEYS = [
   "knowledge",
 ] as const;
 
-export const AgentTemplateUpdateSchema = z
+export const AgentIdentityUpdateSchema = z
   .object({
     name: NameSchema.optional(),
     description: DescriptionSchema.nullable().optional(),
     instructions: InstructionsSchema.nullable().optional(),
     model: ModelSchema.nullable().optional(),
-    fields: TemplateFieldsSchema.optional(),
-    visibility: TemplateVisibilitySchema.optional(),
+    fields: IdentityFieldsSchema.optional(),
+    visibility: IdentityVisibilitySchema.optional(),
     teamIds: TeamIdsSchema.optional(),
     knowledgeBaseIds: KnowledgeBaseIdsSchema.optional(),
     /** Scoped attachments — base, folder or entry. REPLACE-SET like its
@@ -358,4 +358,4 @@ export const AgentTemplateUpdateSchema = z
   )
   .refine(teamIdsMatchVisibility, TEAM_IDS_MESSAGE)
   .refine(knowledgeFieldsExclusive, KNOWLEDGE_EXCLUSIVE_MESSAGE);
-export type AgentTemplateUpdateInput = z.infer<typeof AgentTemplateUpdateSchema>;
+export type AgentIdentityUpdateInput = z.infer<typeof AgentIdentityUpdateSchema>;

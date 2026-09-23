@@ -1,14 +1,14 @@
 import "server-only";
 import type {
-  AgentTemplate,
-  TemplateField,
-  TemplateKnowledgeBaseRef,
-  TemplateKnowledgeRef,
-  TemplateVisibility,
+  AgentIdentity,
+  IdentityField,
+  IdentityKnowledgeBaseRef,
+  IdentityKnowledgeRef,
+  IdentityVisibility,
 } from "../types";
 
 /**
- * `agent_templates` row shape + snake_case → camelCase mapping. `fields`
+ * `agent_identities` row shape + snake_case → camelCase mapping. `fields`
  * arrives from PostgREST already parsed out of JSONB and is narrowed here —
  * never trusted, because a row written before a schema change is still a row.
  *
@@ -18,10 +18,10 @@ import type {
  * allowed to be told (see `withSharingSet` in `service-shared.ts`).
  */
 
-export const AGENT_TEMPLATE_COLS =
+export const AGENT_IDENTITY_COLS =
   "id, workspace_id, name, description, instructions, model, fields, visibility, created_by, created_at, updated_at";
 
-export interface AgentTemplateRow {
+export interface AgentIdentityRow {
   id: string;
   workspace_id: string;
   name: string;
@@ -43,9 +43,9 @@ export interface AgentTemplateRow {
  * is in it — a malformed element is dropped here rather than reaching a launch
  * payload as `{key: undefined}`.
  */
-export function normalizeFields(raw: unknown): TemplateField[] {
+export function normalizeFields(raw: unknown): IdentityField[] {
   if (!Array.isArray(raw)) return [];
-  const out: TemplateField[] = [];
+  const out: IdentityField[] = [];
   for (const item of raw) {
     if (!item || typeof item !== "object") continue;
     const { key, value } = item as { key?: unknown; value?: unknown };
@@ -55,20 +55,20 @@ export function normalizeFields(raw: unknown): TemplateField[] {
   return out;
 }
 
-export interface TemplateSideload {
+export interface IdentitySideload {
   teamIds?: string[];
-  knowledgeBases?: TemplateKnowledgeBaseRef[];
+  knowledgeBases?: IdentityKnowledgeBaseRef[];
   /** ⚠ SIDE-LOADED BESIDE `knowledgeBases`, NOT INSTEAD OF IT. The base-level
    *  slice keeps its own key for readers that predate scopes (`types.ts ›
-   *  AgentTemplate.knowledgeBases`), and both are produced by ONE decoration so
+   *  AgentIdentity.knowledgeBases`), and both are produced by ONE decoration so
    *  they cannot disagree. */
-  knowledge?: TemplateKnowledgeRef[];
+  knowledge?: IdentityKnowledgeRef[];
 }
 
-export function mapAgentTemplateRow(
-  row: AgentTemplateRow,
-  sideload: TemplateSideload = {}
-): AgentTemplate {
+export function mapAgentIdentityRow(
+  row: AgentIdentityRow,
+  sideload: IdentitySideload = {}
+): AgentIdentity {
   return {
     id: row.id,
     workspaceId: row.workspace_id,
@@ -78,7 +78,7 @@ export function mapAgentTemplateRow(
     model: row.model,
     fields: normalizeFields(row.fields),
     // The CHECK constraint is the guarantee; the cast is not a validation.
-    visibility: row.visibility as TemplateVisibility,
+    visibility: row.visibility as IdentityVisibility,
     teamIds: sideload.teamIds ?? [],
     knowledgeBases: sideload.knowledgeBases ?? [],
     knowledge: sideload.knowledge ?? [],

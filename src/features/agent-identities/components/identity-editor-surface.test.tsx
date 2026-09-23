@@ -4,7 +4,7 @@
  * ⚠ **A SECOND FILE FOR ONE COMPONENT, AND ONLY BECAUSE OF THE §1 LINE CAP**
  * (2026-09-08) — the same reason `server/service-writes-junction.test.ts`
  * exists. What lives HERE is every claim about CLASS STRINGS; what lives in
- * `template-editor.test.tsx` is every claim about behaviour.
+ * `identity-editor.test.tsx` is every claim about behaviour.
  *
  * Samuel's ruling for this page (2026-08-22) is that **nothing on it is pressed
  * in** — no `FIELD_WELL`, no `.concave-field`, no `.concave-track`, no
@@ -40,7 +40,7 @@ function sources(dir: string): string[] {
 describe("no concave surfaces", () => {
   // ⚠ SOURCE READ. jsdom loads no stylesheet, so the only honest place to pin a
   // SURFACE ruling is the class strings themselves.
-  const ROOT = path.join(process.cwd(), "src", "features", "agent-templates");
+  const ROOT = path.join(process.cwd(), "src", "features", "agent-identities");
   // ⚠ The UI half only. `server/` renders nothing and has no surface to get
   // wrong; sweeping it would make this suite fail for reasons that are not the
   // ruling, in a directory this page does not own.
@@ -150,7 +150,7 @@ describe("no concave surfaces", () => {
   // the derivation in the first place.
   it("derives the /home surfaces, and reaches BOTH tabs' files", () => {
     expect(HOME_FILES.length).toBeGreaterThan(10);
-    for (const name of ["knowledge-panels.tsx", "agent-panels.tsx", "link-out-panel.tsx"]) {
+    for (const name of ["knowledge-panels.tsx", "identity-panels.tsx", "link-out-panel.tsx"]) {
       expect(HOME_FILES).toContain(path.join(HOME_DIR, name));
     }
   });
@@ -266,7 +266,7 @@ describe("no concave surfaces", () => {
 
   /**
    * ⚠ THE RECIPE MOVED, THE RULE DID NOT (2026-08-27). `RAISED_INPUT` was
-   * promoted out of `template-editor-rows.tsx` into `shared/ui/wells.ts` when
+   * promoted out of `identity-editor-rows.tsx` into `shared/ui/wells.ts` when
    * the four /home dialogs standardised onto this page's face, so the assertion
    * follows it: the SHARED recipe must still be built from `RAISED_WELL`, and
    * this page's rows must still be wearing that recipe rather than a fork.
@@ -277,7 +277,7 @@ describe("no concave surfaces", () => {
       "utf8"
     );
     expect(wells).toContain("export const RAISED_INPUT = `${RAISED_WELL}");
-    const rows = readFileSync(path.join(ROOT, "components", "template-editor-rows.tsx"), "utf8");
+    const rows = readFileSync(path.join(ROOT, "components", "identity-editor-rows.tsx"), "utf8");
     expect(rows).toContain("RAISED_INPUT");
   });
 
@@ -296,7 +296,7 @@ describe("no concave surfaces", () => {
    * from every other one in the tree.
    */
   it("wears the kit's 26px pill on the buttons inside its body", () => {
-    const rows = readFileSync(path.join(ROOT, "components", "template-editor-rows.tsx"), "utf8");
+    const rows = readFileSync(path.join(ROOT, "components", "identity-editor-rows.tsx"), "utf8");
     expect(rows).toContain("OpenScaleButton");
     expect(rows).toContain("OpenScaleIconButton");
     // A hand-written pill FACE is what the ruling replaced, and the kit's

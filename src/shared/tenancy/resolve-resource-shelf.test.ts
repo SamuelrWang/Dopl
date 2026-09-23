@@ -110,12 +110,12 @@ describe("🔓 an AGENT's lock widens onto its operator's shelf, from any room",
       {
         workspaces: [personalContainer()],
         workspace_members: [member(WS_A)],
-        agent_templates: [],
+        agent_identities: [],
       },
       {},
       { workspace_members: 1 }
     );
-    await resolveResource(agent, "agent_template", T1);
+    await resolveResource(agent, "agent_identity", T1);
     expect(filters(calls, "workspace_members")).toContain(
       `in("workspace_id"=${JSON.stringify([WS_A, WS_P])})`
     );
@@ -128,9 +128,9 @@ describe("🔓 an AGENT's lock widens onto its operator's shelf, from any room",
     const calls = makeAdmin({
       workspaces: [personalContainer()],
       workspace_members: [member(WS_A)],
-      agent_templates: [],
+      agent_identities: [],
     });
-    await resolveResource(agent, "agent_template", T1);
+    await resolveResource(agent, "agent_identity", T1);
     expect(filters(calls, "workspaces")).toEqual([
       `eq("owner_id"=${JSON.stringify(ME)})`,
       `eq("kind"="personal")`,
@@ -144,9 +144,9 @@ describe("🔓 an AGENT's lock widens onto its operator's shelf, from any room",
     const calls = makeAdmin({
       workspaces: [],
       workspace_members: [member(WS_A)],
-      agent_templates: [],
+      agent_identities: [],
     });
-    await resolveResource(agent, "agent_template", T1);
+    await resolveResource(agent, "agent_identity", T1);
     expect(filters(calls, "workspace_members")).toContain(
       `in("workspace_id"=${JSON.stringify([WS_A])})`
     );

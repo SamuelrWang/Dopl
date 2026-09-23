@@ -246,25 +246,25 @@ export interface DesktopSessionSummary {
   workspaceId?: string | null;
   threadTitle: string | null;
   /**
-   * The AGENT TEMPLATE this session was launched as, by NAME (2026-08-22).
+   * The AGENT IDENTITY this session was launched as, by NAME (2026-08-22).
    *
    * ⚠ A DENORMALIZED SNAPSHOT, never a pointer, and it can never change: the
-   * template is resolved ONCE at spawn (`main/template-resolve.js`) and the
-   * session keeps what it RAN AS even after that template is renamed or deleted.
+   * identity is resolved ONCE at spawn (`main/identity-resolve.js`) and the
+   * session keeps what it RAN AS even after that identity is renamed or deleted.
    * Frozen with the rest of the identity when the agent ends.
    * ⚠ THE NAME, NEVER THE ID. An id here would be ownership information on a
    * surface that only ever wanted a label.
-   * ⚠ `null` IS A REAL ANSWER — a blank agent has no template — and optional
+   * ⚠ `null` IS A REAL ANSWER — a blank agent has no identity — and optional
    * because an older main omits the field entirely. Absent and `null` mean the
    * same thing.
    * ⚠ ON THE SERVER SIDE THE SAME FACT IS OPERATOR-ONLY. `channel_sessions
-   * .template_name` never reaches a peer's projection: a private template's name
+   * .identity_name` never reaches a peer's projection: a private identity's name
    * on a colleague's card is an existence oracle, which is exactly what
    * 404-not-403 and the deliberate absence of name uniqueness both exist to
    * close. This field is the OPERATOR's own view of their OWN machine, which is
    * a different question.
    */
-  templateName?: string | null;
+  identityName?: string | null;
   /**
    * **THIS AGENT'S COLOUR IN ITS CHANNEL — the key it ASKED FOR** (2026-09-13;
    * docs/specs/agent-colors.md), emitted by `main/session-summary.js › liveSummary`.

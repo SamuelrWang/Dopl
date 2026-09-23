@@ -143,10 +143,10 @@ describe("grantedResourceIds", () => {
 
   it("🔒 asks only for `channel` and `container`, and NEVER narrows by workspace", async () => {
     rows = { resource_grants: [] };
-    await grantedResourceIds("u-1", "agent_template", ["t-1"]);
+    await grantedResourceIds("u-1", "agent_identity", ["t-1"]);
     const [grants] = seen;
     expect(grants.in.scope_type).toEqual(["channel", "container"]);
-    expect(grants.eq.resource_type).toBe("agent_template");
+    expect(grants.eq.resource_type).toBe("agent_identity");
     // 🔒 A grant row is filed under the RESOURCE's container while the caller
     // reaches it through the SCOPE's — a `workspace_id` term would refuse the
     // cross-container lend this function exists to honour.

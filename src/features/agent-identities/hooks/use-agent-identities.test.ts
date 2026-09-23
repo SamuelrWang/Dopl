@@ -8,7 +8,7 @@
  * written while `20260822200000_agent_templates.sql` was unapplied; it is
  * applied (INVARIANTS §5A, §12), and on a link CONTAINER a 403/404 from this
  * endpoint is a NORMAL answer — so the branch had become a dev build painting
- * fabricated templates under a channel that has none. The file is **rewritten
+ * fabricated identities under a channel that has none. The file is **rewritten
  * down to the properties that survive the deletion, not removed** (INVARIANTS
  * §14): three of the four were always about the hook rather than the fixtures,
  * and the fourth — the plain error state — was the production-only case and is
@@ -24,15 +24,15 @@
  *  - **A REAL (EVEN STALE) ANSWER SURVIVES A FAILED REFETCH.**
  *
  * The transport is mocked — this file is about what the hook projects, not about
- * TanStack (the agent-templates core's rule for its own hooks).
+ * TanStack (the agent-identities core's rule for its own hooks).
  */
 
 import { describe, expect, it, vi } from "vitest";
 import { renderHook } from "@testing-library/react";
-import type { AgentTemplate } from "../client/types";
+import type { AgentIdentity } from "../client/types";
 
 interface FakeQuery {
-  data: AgentTemplate[] | undefined;
+  data: AgentIdentity[] | undefined;
   error: unknown;
   isPending: boolean;
   refetch: () => void;
@@ -49,11 +49,11 @@ vi.mock("@/shared/hooks/use-api-query", () => ({
   useApiQuery: () => query,
 }));
 
-const { useAgentTemplates } = await import("./use-agent-templates");
+const { useAgentIdentities } = await import("./use-agent-identities");
 
 function read(over: Partial<FakeQuery>) {
   Object.assign(query, { data: undefined, error: null, isPending: false }, over);
-  return renderHook(() => useAgentTemplates("ws-1")).result.current;
+  return renderHook(() => useAgentIdentities("ws-1")).result.current;
 }
 
 describe("a failed read is a failed read", () => {
@@ -66,20 +66,20 @@ describe("a failed read is a failed read", () => {
   it("renders the PLAIN error state — no rows, error intact", () => {
     const boom = new Error("forbidden");
     const result = read({ error: boom });
-    expect(result.templates).toEqual([]);
+    expect(result.identities).toEqual([]);
     expect(result.error).toBe(boom);
   });
 
   it("leaves a SUCCESSFUL empty list alone — that is a real answer", () => {
     const result = read({ data: [] });
-    expect(result.templates).toEqual([]);
+    expect(result.identities).toEqual([]);
     expect(result.error).toBeNull();
   });
 
   it("lets a real (even stale) answer win on a failed refetch", () => {
-    const rows = [{ id: "tpl-real" }] as unknown as AgentTemplate[];
+    const rows = [{ id: "tpl-real" }] as unknown as AgentIdentity[];
     const result = read({ data: rows, error: new Error("refetch failed") });
-    expect(result.templates).toBe(rows);
+    expect(result.identities).toBe(rows);
   });
 
   it("reports the read as pending while it is in flight", () => {

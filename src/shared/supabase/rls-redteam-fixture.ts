@@ -198,7 +198,7 @@ export interface GrantRef {
   workspaceId: string;
   scopeType: "team" | "container" | "channel";
   scopeId: string;
-  resourceType: "knowledge_base" | "skill" | "chat" | "agent_template";
+  resourceType: "knowledge_base" | "skill" | "chat" | "agent_identity";
   resourceId: string;
 }
 

@@ -23,8 +23,8 @@ vi.mock("./service-shared", async (importOriginal) => {
   const actual = await importOriginal<typeof import("./service-shared")>();
   return { ...actual, loadVisibleChannel: vi.fn() };
 });
-vi.mock("@/features/agent-templates/server/service", () => ({
-  resolveTemplateRef: vi.fn(),
+vi.mock("@/features/agent-identities/server/service", () => ({
+  resolveIdentityRef: vi.fn(),
 }));
 
 import * as launchRepo from "./repository-launch";

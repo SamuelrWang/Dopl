@@ -260,13 +260,13 @@ const GATED: Array<{
 
 /**
  * `dopl_agent.delete` is the tenth op and is NOT in the table above because
- * `DELETE /api/agent-templates/[templateId]` has carried `sessionOnly` since
+ * `DELETE /api/agent-identities/[identityId]` has carried `sessionOnly` since
  * 2026-08-22 — it is pinned per-method by that route's own `route.test.ts`. The
  * census below reads it from here so a rename there fails loudly rather than
  * silently shrinking the map.
  */
 const ALREADY_GATED_ELSEWHERE: Record<string, string> = {
-  "dopl_agent.delete": "agent-templates/[templateId]/route.ts",
+  "dopl_agent.delete": "agent-identities/[identityId]/route.ts",
 };
 
 function req(url: string): NextRequest {

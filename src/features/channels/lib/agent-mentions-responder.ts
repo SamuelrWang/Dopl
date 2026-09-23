@@ -31,7 +31,7 @@ export type ResponderReason =
   // agent i havent addressed"). His replacement is NOBODY: when the agent you last tagged has
   // ended, auto-address resets to none-selected and stays there until you tag someone new.
   // ⚠ **AN ORCHESTRATOR-SHAPED FALLBACK WAS BUILT AND THROWN AWAY ON THE SAME DAY, AND THE
-  // REASON IS WORTH KEEPING**: it read the asker's own `Orchestrator` template off the live
+  // REASON IS WORTH KEEPING**: it read the asker's own `Orchestrator` identity off the live
   // session and answered that. It works, but "orchestrator" is ONE OPERATOR'S SETUP, not a
   // product concept — this code ships to every user — so a rule naming it would have shipped a
   // private convention as a default. Samuel caught that after the build was green.
@@ -211,7 +211,7 @@ export function resolveDefaultResponder(
   // asker actually addressed (arm 3).
   //
   // ⚠ **AND A ROLE-BASED FALLBACK WAS REJECTED ON PRODUCT GROUNDS, NOT TECHNICAL ONES.** A
-  // version answering the asker's own `Orchestrator` template was built, green and cheap; it was
+  // version answering the asker's own `Orchestrator` identity was built, green and cheap; it was
   // thrown away because "orchestrator" is one operator's setup and this rule ships to every user.
   // Anyone re-proposing a named fallback needs a concept that exists for ALL users first.
   //

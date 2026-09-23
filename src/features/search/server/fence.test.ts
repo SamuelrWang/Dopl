@@ -167,7 +167,7 @@ describe("🔒 home scope never returns members / skills / chats", () => {
       "threads",
       "artifacts",
       "knowledge",
-      "agentTemplates",
+      "agentIdentities",
     ]);
     expect(queries.map((q) => q.table)).not.toContain("profiles");
   });

@@ -62,12 +62,12 @@ export declare const soloRoom: () => {
 /**
  * The two rows the confirm suites write. ⚠ **ONE DEFINITION EACH, FOR THE
  * REASON `sharedContainer` HAS ONE** — `acknowledge-shared.test.ts` and
- * `confirm-class.test.ts` each carried a byte-identical copy of `TEMPLATE` and a
+ * `confirm-class.test.ts` each carried a byte-identical copy of `IDENTITY` and a
  * near-identical `BASE`, which is two definitions of the row whose AUDIENCE is
  * the subject of both files. Moved here 2026-09-17 when R-08's arms met the
  * §1 cap in both.
  */
-export declare const TEMPLATE: {
+export declare const IDENTITY: {
     id: string;
     workspaceId: string;
     name: string;

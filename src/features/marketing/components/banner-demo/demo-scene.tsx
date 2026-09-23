@@ -68,7 +68,7 @@ const DEMO_LAUNCH: AgentLaunchControls = {
   launchBusy: false,
   launchError: null,
   launchAgent: () => Promise.resolve({ ok: false, reason: "demo" }),
-  approveTemplate: () => Promise.resolve({ ok: false, reason: "demo" }),
+  approveIdentity: () => Promise.resolve({ ok: false, reason: "demo" }),
 };
 
 export function DemoScene({

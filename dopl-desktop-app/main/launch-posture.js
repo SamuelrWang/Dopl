@@ -11,7 +11,7 @@
 // already pin against each other for the enums themselves.
 //
 // ⚠ **AND IT IS THE SENTENCE `launch-directives.js`'S HEADER STATES IN CAPITALS**, made
-// executable rather than left as prose: *"THE DIRECTIVE SUPPLIES GOAL, MODEL AND WHICH TEMPLATE,
+// executable rather than left as prose: *"THE DIRECTIVE SUPPLIES GOAL, MODEL AND WHICH IDENTITY,
 // AND NOTHING ELSE… A directive-driven agent is exactly as contained as a button-driven one, and
 // nothing an orchestrator writes can widen it."* T24 asked for the postures to become directive
 // fields. They did — as a REQUEST that is clamped here, never as an input that decides. The

@@ -1,11 +1,11 @@
 /**
- * 🔒 **THE TEMPLATE CREATE'S ASKING SEAM — the write half of task 11's fence,
+ * 🔒 **THE IDENTITY CREATE'S ASKING SEAM — the write half of task 11's fence,
  * which this feature was missing.** Twin of
  * `knowledge/server/service-base-gates.test.ts`, and the differences between the
  * two suites are the differences between the two gates rather than drift; read
  * `service-write-gates.ts`'s header for why one is not the other.
  *
- * 🔒 **THE HOLE IT PINS SHUT.** `createTemplate` handed `input.homeScoped`
+ * 🔒 **THE HOLE IT PINS SHUT.** `createIdentity` handed `input.homeScoped`
  * straight to the repository, and `personalWriteWorkspaceId` routes on it by
  * AUTHOR. So an agent standing in a shared room could put a row on its
  * operator's personal shelf by naming a flag — the same shelf `personal-reach.ts`
@@ -21,7 +21,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import type { AgentTemplateContext } from "../types";
+import type { AgentIdentityContext } from "../types";
 
 vi.mock("@/shared/supabase/admin", () => ({
   supabaseAdmin: () => ({ __marker: "admin-client" }),
@@ -34,8 +34,8 @@ vi.mock("@/shared/tenancy/personal-reach", () => ({
 
 import { resolvePersonalReach } from "@/shared/tenancy/personal-reach";
 import { PersonalContainerMissingError } from "@/shared/tenancy/personal-container";
-import { resolveTemplateCreateDestination } from "./service-write-gates";
-import { TemplateTeamNotGrantableError } from "./errors";
+import { resolveIdentityCreateDestination } from "./service-write-gates";
+import { IdentityTeamNotGrantableError } from "./errors";
 
 const mockReach = vi.mocked(resolvePersonalReach);
 
@@ -45,7 +45,7 @@ const ROOM = "e7998a94-d3ab-42cc-8c76-99585bcb920c";
 /** The caller's OWN personal container. ⚠ Never equal to the room. */
 const CONTAINER = "33333333-3333-4333-8333-333333333333";
 
-function ctx(over: Partial<AgentTemplateContext> = {}): AgentTemplateContext {
+function ctx(over: Partial<AgentIdentityContext> = {}): AgentIdentityContext {
   return {
     workspaceId: ROOM,
     userId: ME,
@@ -69,10 +69,10 @@ describe("⚠ a create nobody re-routed lands in the calling container", () => {
     ["false", false],
   ])("answers the room for a %s flag, without asking the fence", async (_l, flag) => {
     // 🔒 "IT CHANGES NOTHING THAT WORKS TODAY", asserted rather than claimed.
-    // ⚠ AND THE BUDGET: a fence read on every template create would price the
+    // ⚠ AND THE BUDGET: a fence read on every identity create would price the
     // Agents page and the launch picker for a question neither one asked.
     expect(
-      await resolveTemplateCreateDestination(ctx(), {
+      await resolveIdentityCreateDestination(ctx(), {
         homeScoped: flag,
         visibility: "private",
       })
@@ -85,12 +85,12 @@ describe("⚠ a create nobody re-routed lands in the calling container", () => {
     // later reader does not "restore" the missing arm. Knowledge re-routes a
     // RESTRICTED audience because F-323 is real there: a base created in a
     // shared container is filtered out of its own creator's next read. A
-    // template has no such ceiling — `canSeeTemplate` arm 3 answers for the
+    // identity has no such ceiling — `canSeeIdentity` arm 3 answers for the
     // CREATOR, and since F-333 a container session IS the operator — so there
     // is nothing to rescue, and re-routing here would move rows on a path that
     // works today.
     expect(
-      await resolveTemplateCreateDestination(ctx({ source: "agent" }), {
+      await resolveIdentityCreateDestination(ctx({ source: "agent" }), {
         visibility: "private",
       })
     ).toEqual({ homeScoped: false, workspaceId: ROOM });
@@ -105,7 +105,7 @@ describe("🔒 homeScoped — the fence decides, and it is finally asked", () =>
     mockReach.mockResolvedValue({ kind: "open", containerId: CONTAINER });
 
     expect(
-      await resolveTemplateCreateDestination(ctx(), {
+      await resolveIdentityCreateDestination(ctx(), {
         homeScoped: true,
         visibility: "private",
       })
@@ -120,7 +120,7 @@ describe("🔒 homeScoped — the fence decides, and it is finally asked", () =>
     // this is the WRITE finally agreeing with it.
     mockReach.mockResolvedValue({ kind: "closed", refusal: "unarmed_room" });
 
-    const err = await resolveTemplateCreateDestination(ctx(), {
+    const err = await resolveIdentityCreateDestination(ctx(), {
       homeScoped: true,
       visibility: "private",
     }).then(
@@ -144,7 +144,7 @@ describe("🔒 homeScoped — the fence decides, and it is finally asked", () =>
     // itself had before B15 collapsed its two copies.
     mockReach.mockResolvedValue({ kind: "closed", refusal });
 
-    const err = await resolveTemplateCreateDestination(ctx(), {
+    const err = await resolveIdentityCreateDestination(ctx(), {
       homeScoped: true,
       visibility: "private",
     }).then(
@@ -163,7 +163,7 @@ describe("🔒 homeScoped — the fence decides, and it is finally asked", () =>
     mockReach.mockResolvedValue({ kind: "closed", refusal: "unarmed_room" });
 
     await expect(
-      resolveTemplateCreateDestination(ctx(), {
+      resolveIdentityCreateDestination(ctx(), {
         homeScoped: true,
         visibility: "private",
       })
@@ -173,13 +173,13 @@ describe("🔒 homeScoped — the fence decides, and it is finally asked", () =>
   it("🔒 asks the fence about THE CALLER, exactly once", async () => {
     // ⚠ MUTATION CHECK, and the reason the composition is safe. The fence is
     // asked about the context this request already proved — never about a
-    // container the input named. `AgentTemplateContext` satisfies
+    // container the input named. `AgentIdentityContext` satisfies
     // `PersonalReachCaller` structurally, which is why it is passed whole
     // rather than re-shaped into fields that could be re-shaped wrongly.
     mockReach.mockResolvedValue({ kind: "open", containerId: CONTAINER });
     const caller = ctx();
 
-    await resolveTemplateCreateDestination(caller, {
+    await resolveIdentityCreateDestination(caller, {
       homeScoped: true,
       visibility: "private",
     });
@@ -191,7 +191,7 @@ describe("🔒 homeScoped — the fence decides, and it is finally asked", () =>
 
 // ── A `team` ROW NAMES THE ROOM ───────────────────────────────────────────
 
-describe("🔒 a TEAM template is never personal — the grant cannot follow the row", () => {
+describe("🔒 a TEAM identity is never personal — the grant cannot follow the row", () => {
   it("refuses homeScoped + team, and does not ask the fence at all", async () => {
     // 🔒 THE SAME RULE `resolveCreateDestination` APPLIES TO `shareToChannelId`
     // AND TO A TEAMS CREATE: a team belongs to the calling container and its
@@ -200,22 +200,22 @@ describe("🔒 a TEAM template is never personal — the grant cannot follow the
     //
     // ⚠ IT REPLACES AN INCOHERENCE, NOT A WORKING PATH. That combination
     // already wrote the row into the container while `replaceTeamLinks` wrote
-    // its grants to the room, and `listTeamLinksForTemplates` filters by the
-    // ROW's container — so the template came back `team`-visible with no teams,
+    // its grants to the room, and `listTeamLinksForIdentities` filters by the
+    // ROW's container — so the identity came back `team`-visible with no teams,
     // to nobody.
     await expect(
-      resolveTemplateCreateDestination(ctx({ source: "user" }), {
+      resolveIdentityCreateDestination(ctx({ source: "user" }), {
         homeScoped: true,
         visibility: "team",
       })
-    ).rejects.toBeInstanceOf(TemplateTeamNotGrantableError);
+    ).rejects.toBeInstanceOf(IdentityTeamNotGrantableError);
     expect(mockReach).not.toHaveBeenCalled();
   });
 
-  it("leaves a team template in the workspace untouched", async () => {
+  it("leaves a team identity in the workspace untouched", async () => {
     // The ordinary team create names no shelf and is not this gate's business.
     expect(
-      await resolveTemplateCreateDestination(ctx({ source: "user" }), {
+      await resolveIdentityCreateDestination(ctx({ source: "user" }), {
         visibility: "team",
       })
     ).toEqual({ homeScoped: false, workspaceId: ROOM });

@@ -186,7 +186,7 @@ test("chainModel is UNCHANGED by the fallback — a link with no opinion still s
   // ⚠ THE ONE THING THE BACK-FILL RULING MUST NOT BREAK (F-285). Every launch lane spells its
   // precedence as `chainModel(a) || chainModel(b) || …`. If `'default'` resolved to the fallback
   // HERE as well as at the argv gate, the first link would always be truthy and every lower link
-  // would be unreachable — a channel's stored model could never beat a template's, and the
+  // would be unreachable — a channel's stored model could never beat an identity's, and the
   // precedence order would invert silently. The fallback belongs at the END of the chain, which
   // is `modelArg`, and nowhere else.
   assert.equal(model.chainModel("default"), "", "no opinion keeps going");

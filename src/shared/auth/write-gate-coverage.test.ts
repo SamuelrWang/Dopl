@@ -123,16 +123,16 @@ describe("H-3 write-gate coverage", () => {
       .sort();
     expect(sessionOnlyRoutes).toEqual(
       [
-        // DELETE hard-deletes an agent template (2026-08-22). Permanent — no
-        // trash, no restore — and a `team`/`workspace` template may be what a
+        // DELETE hard-deletes an agent identity (2026-08-22). Permanent — no
+        // trash, no restore — and a `team`/`workspace` identity may be what a
         // whole team spawns from, so the blast radius is other people's
         // tooling, not the caller's own row. An agent token has no confirm
         // dialog to gate it: the same argument the team DELETE and the thread
         // DELETE below carry. ⚠ Per-METHOD, and the OTHER TWO ARE THE POINT —
         // GET and PATCH on that file stay ungated, because an ORCHESTRATOR
-        // AGENT LISTING AND EDITING TEMPLATES IS THE FEATURE. Narrowing this
+        // AGENT LISTING AND EDITING IDENTITIES IS THE FEATURE. Narrowing this
         // route to `sessionOnly` wholesale would gate the thing it exists for.
-        "agent-templates/[templateId]/route.ts",
+        "agent-identities/[identityId]/route.ts",
         // ── APP-ONLY DELETION, GIVEN A FENCE (2026-09-02) ──────────────────
         // Every `_admin` tool in `packages/mcp-server` serves the sentence
         // "Deletion is app-only … there is no MCP path to it, for any role or

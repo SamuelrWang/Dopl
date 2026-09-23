@@ -16,7 +16,7 @@
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import type { TemplateKnowledgeRef } from "../client/types";
+import type { IdentityKnowledgeRef } from "../client/types";
 import { KnowledgeScopePicker } from "./knowledge-scope-picker";
 
 const BASES = [
@@ -32,7 +32,7 @@ vi.mock("@/features/knowledge/client/hooks", async () => ({
   useKnowledgeTree: (await import("./knowledge-tree-mock")).useKnowledgeTree,
 }));
 
-function mount(selected: TemplateKnowledgeRef[] = []) {
+function mount(selected: IdentityKnowledgeRef[] = []) {
   const onChange = vi.fn();
   render(
     <KnowledgeScopePicker
@@ -56,7 +56,7 @@ function openTree() {
 }
 
 const last = (fn: ReturnType<typeof vi.fn>) =>
-  fn.mock.calls[fn.mock.calls.length - 1][0] as TemplateKnowledgeRef[];
+  fn.mock.calls[fn.mock.calls.length - 1][0] as IdentityKnowledgeRef[];
 
 afterEach(cleanup);
 
@@ -118,7 +118,7 @@ describe("the tree", () => {
  * be attached.
  */
 describe("the implied subtree", () => {
-  const folderRef: TemplateKnowledgeRef = {
+  const folderRef: IdentityKnowledgeRef = {
     baseId: "kb-1",
     baseName: "Runbooks",
     scope: "folder",
@@ -156,7 +156,7 @@ describe("the implied subtree", () => {
     // ⚠ Two rows where one suffices renders the same attachment twice in the
     // role block — and the redundant one survives when the operator later
     // unchecks the ancestor, silently keeping an attachment they removed.
-    const nested: TemplateKnowledgeRef = {
+    const nested: IdentityKnowledgeRef = {
       baseId: "kb-1",
       baseName: "Runbooks",
       scope: "entry",
@@ -174,13 +174,13 @@ describe("the implied subtree", () => {
   });
 
   it("checking a BASE prunes every scope of that base and leaves other bases alone", () => {
-    const otherBase: TemplateKnowledgeRef = {
+    const otherBase: IdentityKnowledgeRef = {
       baseId: "kb-2",
       baseName: "Specs",
       scope: "base",
       path: "Specs",
     };
-    const nested: TemplateKnowledgeRef = {
+    const nested: IdentityKnowledgeRef = {
       baseId: "kb-1",
       baseName: "Runbooks",
       scope: "folder",
@@ -199,13 +199,13 @@ describe("the implied subtree", () => {
 
 describe("the chips", () => {
   it("labels each scope by its path and removes exactly the one clicked", () => {
-    const base: TemplateKnowledgeRef = {
+    const base: IdentityKnowledgeRef = {
       baseId: "kb-1",
       baseName: "Runbooks",
       scope: "base",
       path: "Runbooks",
     };
-    const folder: TemplateKnowledgeRef = {
+    const folder: IdentityKnowledgeRef = {
       baseId: "kb-2",
       baseName: "Specs",
       scope: "folder",

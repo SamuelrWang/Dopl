@@ -73,7 +73,7 @@ const STATUSES = [STATUS_PENDING, STATUS_CLAIMED, STATUS_LAUNCHED, STATUS_DONE,
 // written before 2026-09-01 is one, and a launch is the branch that is FULLY
 // GATED. A future fourth kind reaching an older build is therefore gated rather
 // than silently dispatched — and the launch branch will refuse it anyway, because
-// a directive with no goal and no template starts a stand-by agent rather than
+// a directive with no goal and no identity starts a stand-by agent rather than
 // doing something nobody asked for.
 const KIND_LAUNCH = 'launch';
 const KIND_END = 'end';
@@ -116,8 +116,8 @@ const TOOL_MODES = ['manual', 'accept_edits', 'auto', 'bypass'];
 const MESSAGE_MODES = ['ask', 'auto_inbound', 'auto_outbound', 'auto_both'];
 
 // ⚠ THE WORDS, VERBATIM AND CLOSED. Not a guess — see the header.
-// ⚠ SEVEN SINCE 2026-08-22 (agent templates). `no-template` is what this machine answers when a
-// directive names a template its OPERATOR cannot resolve — deleted, or invisible to them though
+// ⚠ SEVEN SINCE 2026-08-22 (agent identities). `no-identity` is what this machine answers when a
+// directive names an identity its OPERATOR cannot resolve — deleted, or invisible to them though
 // visible to the orchestrator that named it. The two fences on this lane belong to DIFFERENT
 // PEOPLE, which is why that is a real state and not a bug.
 // ⚠ IT IS DECLARED HERE BEFORE IT HAS A PRODUCER, DELIBERATELY, and the direction is the safe
@@ -129,8 +129,8 @@ const MESSAGE_MODES = ['ask', 'auto_inbound', 'auto_outbound', 'auto_both'];
 // `channel_launch_directives_refusal_reason_check` for a day, which was safe only because nothing
 // produced the word. `launch-directives.js › spawn` now DOES (resolve-at-claim), and
 // `20260823140000_channel_launch_directives_template.sql` widens the CHECK in the same wave.
-// ⚠ `template-approval` IS NOT A MEMBER AND MUST NOT BECOME ONE. That word is this machine's
-// answer to its OWN RENDERER when a foreign template's first run needs one human click
+// ⚠ `identity-approval` IS NOT A MEMBER AND MUST NOT BECOME ONE. That word is this machine's
+// answer to its OWN RENDERER when a foreign identity's first run needs one human click
 // (`session-launch-op.js › launchFromButton`). There is no human at the keyboard on the directive
 // lane — the launch-over-MCP toggle IS the standing consent there (Samuel, OQ-3) — so it can never
 // be produced here, the column cannot store it, and `refusalFor` would map it to `no-bridge`
@@ -160,7 +160,7 @@ const MESSAGE_MODES = ['ask', 'auto_inbound', 'auto_outbound', 'auto_both'];
 // id fell through to the product default and the launch echoed the id it was asked for. Its CHECK
 // is `20261018120000_channel_launch_directives_no_model.sql` (written in the same wave).
 const REFUSAL_REASONS = ['cap', 'busy', 'no-sdk', 'auth-hold', 'no-bridge', 'no-counterparty',
-  'no-template', 'no-session', 'bad-name', 'no-chain', 'no-model'];
+  'no-identity', 'no-session', 'bad-name', 'no-chain', 'no-model'];
 
 // The keys this desktop puts on the wire, and the ones it reads back. Stated as data so the
 // suite can assert them without a live route, and so a route that lands with different names
@@ -241,12 +241,12 @@ function text(value, max) {
 // short of anything that could crowd a turn.
 const GOAL_MAX = 4000;
 
-// ⚠ THE TEMPLATE NAME'S BOUND — `agent_templates.name`'s own 120, and the same number
-// `channel_launch_directives.template_name`'s CHECK enforces at rest. It is not prompt input on
+// ⚠ THE IDENTITY NAME'S BOUND — `agent_identities.name`'s own 120, and the same number
+// `channel_launch_directives.identity_name`'s CHECK enforces at rest. It is not prompt input on
 // this lane (the ROLE BLOCK's name comes from the OPERATOR's own resolve, never from the wire),
 // so this is a display/diagnostic bound; it is bounded anyway because an unbounded field from a
 // server row has no business travelling into main at all.
-const TEMPLATE_NAME_MAX = 120;
+const IDENTITY_NAME_MAX = 120;
 
 module.exports = {
   DIRECTIVE_TABLE,
@@ -273,6 +273,6 @@ module.exports = {
   AGENT_ID_RE,
   RUNTIME_ID_RE,
   GOAL_MAX,
-  TEMPLATE_NAME_MAX,
+  IDENTITY_NAME_MAX,
   text,
 };

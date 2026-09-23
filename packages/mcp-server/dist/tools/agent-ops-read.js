@@ -1,7 +1,7 @@
 "use strict";
 /**
  * `dopl_agent` READ op handlers: list, get. Non-mutating — they resolve a
- * template ref (or a shelf) and render it. Routed from the registrar in
+ * identity ref (or a shelf) and render it. Routed from the registrar in
  * `agent.ts`.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
@@ -30,21 +30,21 @@ const WORKSPACE_AUDIENCES = {
     private: audience_label_js_1.AUDIENCE_LABELS.you,
     workspace: audience_label_js_1.AUDIENCE_LABELS.workspace,
 };
-const OFFERED_VISIBILITIES = new Set(agent_shared_js_1.TEMPLATE_VISIBILITY_VALUES);
+const OFFERED_VISIBILITIES = new Set(agent_shared_js_1.IDENTITY_VISIBILITY_VALUES);
 /** The heading for every OTHER stored visibility. ⚠ It names no axis on
  *  purpose: it exists so a row SHOWS, not so a retired sharing model gets taught
  *  back to the reader one heading at a time. */
 const OTHER_HEADING = "Shared";
 /** ⚠ §8 STALE-CACHE, SPELLED INLINE. A list payload from a bundle that predates
- *  the sibling key carries NO `homeScopedTemplateIds` at all, and the fail-safe
+ *  the sibling key carries NO `homeScopedIdentityIds` at all, and the fail-safe
  *  reading of "I do not know which container this row is in" is NO GROUPING —
  *  never "personal" and never "the channel's". One frozen empty, so the fallback
  *  is one allocation and cannot be mutated into a real answer. */
-const EMPTY_TEMPLATE_IDS = Object.freeze([]);
+const EMPTY_IDENTITY_IDS = Object.freeze([]);
 /**
  * ⚠ **THE `shelf` ARGUMENT AND ITS `· personal` LABEL LEFT ON 2026-09-02**
  * (slice B15, ruling B10) — the twin of `dopl_kb(op="list_bases")`'s, for the
- * same reason: a personal template is an ordinary row in the caller's own
+ * same reason: a personal identity is an ordinary row in the caller's own
  * `kind='personal'` CONTAINER, so "which shelf" is the tenancy the call is
  * already in.
  *
@@ -54,7 +54,7 @@ const EMPTY_TEMPLATE_IDS = Object.freeze([]);
  * the caller's own personal one, so this list has held rows from TWO tenancies
  * since that day while its heading still said "Private to you" over all of them
  * — one undifferentiated bucket spanning both destinations. **The container is
- * the first axis now**, off the `homeScopedTemplateIds` sibling key this op used
+ * the first axis now**, off the `homeScopedIdentityIds` sibling key this op used
  * to discard, and the visibility axis only ever splits what is left.
  */
 async function opList(client, 
@@ -62,17 +62,17 @@ async function opList(client,
  *  resolveHomeChannelContainer`: absent means "not known", and the list falls
  *  back to the workspace's own visibility headings. */
 directory) {
-    const payload = await client.listAgentTemplatesPayload();
-    const templates = payload.templates;
-    if (templates.length === 0) {
-        return (0, respond_js_1.ok)(`No agent templates visible to you here. ${agent_shared_js_1.TEMPLATES_SCOPE_NOTE}\n\nCreate one with \`dopl_agent(op='create')\`.`);
+    const payload = await client.listAgentIdentitiesPayload();
+    const identities = payload.identities;
+    if (identities.length === 0) {
+        return (0, respond_js_1.ok)(`No agent identities visible to you here. ${agent_shared_js_1.IDENTITIES_SCOPE_NOTE}\n\nCreate one with \`dopl_agent(op='create')\`.`);
     }
     // 🔒 **CONTAINER FIRST, VISIBILITY SECOND** (2026-09-18). The two destinations
     // are two CONTAINERS, so that is the axis a caller acts on; visibility only
     // says who inside one of them may use the row.
-    const personalIds = new Set(payload.homeScopedTemplateIds ?? EMPTY_TEMPLATE_IDS);
-    const personal = templates.filter((t) => personalIds.has(t.id));
-    const here = templates.filter((t) => !personalIds.has(t.id));
+    const personalIds = new Set(payload.homeScopedIdentityIds ?? EMPTY_IDENTITY_IDS);
+    const personal = identities.filter((t) => personalIds.has(t.id));
+    const here = identities.filter((t) => !personalIds.has(t.id));
     const inHomeChannel = await (0, container_destination_js_1.resolveHomeChannelContainer)(client, directory);
     // ⚠ GROUPED BY VISIBILITY **WITHIN A WORKSPACE** because that is the axis a
     // caller acts on there ("the private one is mine, the workspace one is
@@ -81,7 +81,7 @@ directory) {
     //
     // ⚠ A ROW IS NEVER DROPPED FOR HAVING A VISIBILITY THIS SURFACE NO LONGER
     // OFFERS. The write enum lost `team` (`agent-shared.ts ›
-    // TEMPLATE_VISIBILITY_VALUES`) while the column kept it, so grouping by a
+    // IDENTITY_VISIBILITY_VALUES`) while the column kept it, so grouping by a
     // fixed table of the OFFERED values would have made any surviving row
     // invisible with no error anywhere — the silent-drop shape, not a retirement.
     // Unoffered values fall through to one trailing bucket that names no axis.
@@ -101,7 +101,7 @@ directory) {
             ],
         ]
         : [
-            ...agent_shared_js_1.TEMPLATE_VISIBILITY_VALUES.map((v) => [
+            ...agent_shared_js_1.IDENTITY_VISIBILITY_VALUES.map((v) => [
                 VISIBILITY_HEADINGS[v],
                 here.filter((t) => t.visibility === v),
                 WORKSPACE_AUDIENCES[v],
@@ -122,16 +122,16 @@ directory) {
         ...hereGroups,
         [container_destination_js_1.DESTINATION_HEADINGS.personal, personal, audience_label_js_1.AUDIENCE_LABELS.you],
     ];
-    const lines = ["## Agent templates\n"];
+    const lines = ["## Agent identities\n"];
     for (const [heading, rows, audience] of groups) {
         if (rows.length === 0)
             continue;
         lines.push(`### ${heading}`);
         for (const t of rows)
-            lines.push((0, agent_shared_js_1.templateRow)(t, audience));
+            lines.push((0, agent_shared_js_1.identityRow)(t, audience));
         lines.push("");
     }
-    lines.push(agent_shared_js_1.TEMPLATES_SCOPE_NOTE);
+    lines.push(agent_shared_js_1.IDENTITIES_SCOPE_NOTE);
     return (0, respond_js_1.ok)(lines.join("\n"));
 }
 async function opGet(client, ref, 
@@ -140,32 +140,32 @@ async function opGet(client, ref,
 callerUserId = null, 
 /** A16: clip the INSTRUCTIONS body, and SAY so. */
 maxChars) {
-    const template = await (0, agent_shared_js_1.resolveTemplateOr)(client, ref);
-    if ((0, channel_shared_js_1.isErr)(template))
-        return template;
+    const identity = await (0, agent_shared_js_1.resolveIdentityOr)(client, ref);
+    if ((0, channel_shared_js_1.isErr)(identity))
+        return identity;
     const foreign = (0, narration_js_1.isForeignAuthored)(
-    // ⚠ A template row carries `createdBy` and no `lastEditedBy` column, so the
+    // ⚠ An identity row carries `createdBy` and no `lastEditedBy` column, so the
     // second author slot is genuinely absent rather than unknown — passing it
     // explicitly keeps `isForeignAuthored`'s fail-closed arms readable.
-    { createdBy: template.createdBy, lastEditedBy: null }, callerUserId);
+    { createdBy: identity.createdBy, lastEditedBy: null }, callerUserId);
     const lines = [
-        `# ${(0, narration_js_1.inlineOr)(template.name, narration_js_1.NO_NAME)}`,
-        `id: \`${template.id}\` · ${template.visibility} · model ${template.model ? (0, narration_js_1.inlineOr)(template.model, narration_js_1.NO_NAME) : "(the desktop's default)"}`,
+        `# ${(0, narration_js_1.inlineOr)(identity.name, narration_js_1.NO_NAME)}`,
+        `id: \`${identity.id}\` · ${identity.visibility} · model ${identity.model ? (0, narration_js_1.inlineOr)(identity.model, narration_js_1.NO_NAME) : "(the desktop's default)"}`,
         // ⚠ **THE VERSION IS WHY `op="update"` CAN REFUSE A STALE WRITE**, and it is
         // rendered on the HEADER rows rather than at the end: this op clips its
         // INSTRUCTIONS body (A16), and a token printed after a clipped system prompt
         // is a token the caller may never see. Same line `dopl_kb`'s read_file and
         // `dopl_skill`'s read carry, for the same contract.
-        `Version: \`${template.updatedAt}\` (pass as expected_version to op="update")`,
-        ...(template.description ? [(0, narration_js_1.inlineOr)(template.description, "")] : []),
+        `Version: \`${identity.updatedAt}\` (pass as expected_version to op="update")`,
+        ...(identity.description ? [(0, narration_js_1.inlineOr)(identity.description, "")] : []),
     ];
     // ⚠ **`knowledge` WINS AND THE BASE LIST IS THE FALLBACK** (2026-09-08). A
     // newer server sends both, the second being the base-level slice of the first,
     // so rendering both would list every whole-base attachment twice. An older one
     // sends only the base list, which is why the fallback is not dead code.
-    const scopes = (template.knowledge ?? []).length > 0
-        ? (template.knowledge ?? [])
-        : template.knowledgeBases.map((kb) => ({
+    const scopes = (identity.knowledge ?? []).length > 0
+        ? (identity.knowledge ?? [])
+        : identity.knowledgeBases.map((kb) => ({
             baseId: kb.id,
             baseName: kb.name,
             scope: "base",
@@ -189,9 +189,9 @@ maxChars) {
         // not necessarily what a launched session gets.
         lines.push("", `_Only the knowledge YOU can see is listed. At launch the operator's own machine resolves this list again under THEIR visibility, so a base you can read and they cannot is simply omitted there._`);
     }
-    if (template.fields.length > 0) {
+    if (identity.fields.length > 0) {
         lines.push("", "## Custom fields");
-        for (const f of template.fields) {
+        for (const f of identity.fields) {
             lines.push(`- ${(0, narration_js_1.inlineOr)(f.key, narration_js_1.NO_NAME)}: ${(0, narration_js_1.inlineOr)(f.value, "`(empty)`")}`);
         }
     }
@@ -209,7 +209,7 @@ maxChars) {
     // caller id at all; it used to carry its own 340-char banner and now carries
     // `untrusted-fence.ts`'s one wording plus the part a banner could never do —
     // a close tag with a per-response random suffix, so the prompt cannot end its
-    // own fence and claim the text after it. The caller's OWN templates render
+    // own fence and claim the text after it. The caller's OWN identities render
     // bare: framing every one of them is noise on the common path, and noise is
     // how a security header stops being read.
     // ⚠ **CLIPPED BEFORE THE FENCE, NEVER AFTER** (A16). `fenceBody` closes with a
@@ -218,9 +218,9 @@ maxChars) {
     // the response with nothing marking where it stops. The clip is a size knob,
     // not a licence to break the one structure that makes foreign instructions
     // safe to render at all.
-    const whole = template.instructions ?? "_No instructions set._";
+    const whole = identity.instructions ?? "_No instructions set._";
     const { body: instructions, notice } = (0, response_size_js_1.clipToMaxChars)(whole, maxChars);
-    lines.push(...(foreign && template.instructions
+    lines.push(...(foreign && identity.instructions
         ? (0, untrusted_fence_1.fenceBody)(instructions, "agent instructions by another member")
         : [instructions]));
     // ⚠ OUTSIDE the fence, so the notice is visibly this server's — a line the

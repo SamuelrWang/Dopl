@@ -9,7 +9,7 @@
  * caller depends on:
  *
  *  - **THE WEIGHT IS THE MODULE'S, NOT THE CALLER'S.** Samuel: *"All of the headers (name,
- *    description, template, etc), should be bolded"*. jsdom loads no stylesheet, so the rendered
+ *    description, identity, etc), should be bolded"*. jsdom loads no stylesheet, so the rendered
  *    half of that is "one class, no `font-*` utility" and the declaration itself is a SOURCE read —
  *    the same two-layer pin `open-scale-button.test.tsx` uses, for the same reason.
  *  - **THE SWEEP IS A CLASS THE COMPONENT TOGGLES**, so `.lineActive` is a CONTRACT and not an
@@ -50,11 +50,11 @@ function rule(selector: string): string {
 describe("FormSection — the bold label above the control", () => {
   it("carries the module's own class and NO per-caller weight utility", () => {
     render(
-      <FormSection label="Template">
+      <FormSection label="Identity">
         <span>control</span>
       </FormSection>
     );
-    const label = screen.getByText("Template");
+    const label = screen.getByText("Identity");
     expect(label.className).toMatch(/label/);
     // ⚠ THE FAILURE THIS CATCHES is a caller "fixing" a label by hand — one bold row among four
     // semi-bold ones is invisible in review and obvious on screen.

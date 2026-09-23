@@ -88,7 +88,7 @@ function load(opts = {}) {
     // than evaluated because each opens its own store handle and none of them is under test here.
     if (id === "./channel-agent-chain") return { AGENT_CHAIN_KEY: "channelAgentChain", getAgentChain: () => false, setAgentChain: () => false };
     if (id === "./orchestrator-consent") return {};
-    if (id === "./template-approval") return {};
+    if (id === "./identity-approval") return {};
     throw new Error(`unexpected require: ${id}`);
   };
   const mod = { exports: {} };

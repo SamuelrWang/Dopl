@@ -72,7 +72,7 @@ export declare const PARAM_DESCRIPTION_MAX_CHARS = 400;
 export declare const CHANNEL_INPUT_SHAPE: {
     model: z.ZodOptional<z.ZodString>;
     runtime: z.ZodOptional<z.ZodString>;
-    template: z.ZodOptional<z.ZodString>;
+    identity: z.ZodOptional<z.ZodString>;
     color: z.ZodOptional<z.ZodEnum<{
         "agent-01": "agent-01";
         "agent-02": "agent-02";

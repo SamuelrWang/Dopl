@@ -50,7 +50,7 @@ export { channelPaneTabs };
 export type { TabKey };
 import type { ChannelPeerSession } from "../hooks/use-channel-agent-sessions";
 import type { AgentLaunchOutcome } from "./use-agents-panel";
-import type { TemplateLaunchOverrides } from "@/features/agent-templates/lib/launch-overrides";
+import type { IdentityLaunchOverrides } from "@/features/agent-identities/lib/launch-overrides";
 import type { AuthorIndex } from "./view-model";
 import type {
   ChannelInfoExtras,
@@ -82,7 +82,7 @@ export function ChannelsInfoPanel({
   launchBusy = false,
   launchError = null,
   onLaunchAgent,
-  onApproveTemplate,
+  onApproveIdentity,
   openAgent,
   onOpenAgent,
   mentions,
@@ -136,14 +136,14 @@ export function ChannelsInfoPanel({
   /** The last launch refusal's copy, or null. Passed through — the tab owns
    *  where it sits. */
   launchError?: string | null;
-  /** ⚠ WIDENED FOR THE TEMPLATE PICKER (2026-08-22), and the one-argument call
+  /** ⚠ WIDENED FOR THE IDENTITY PICKER (2026-08-22), and the one-argument call
    *  is still what the New Agent button makes. Passed straight through — this
    *  panel decides nothing about launches. */
   onLaunchAgent?: (
     // ⚠ `null` = a CHANNEL-LEVEL launch (2026-08-31) — see `agents-tab.tsx`.
     threadId: string | null,
-    templateId?: string | null,
-    overrides?: TemplateLaunchOverrides,
+    identityId?: string | null,
+    overrides?: IdentityLaunchOverrides,
     /** ⚠ WIDENED WITH THE TAB'S OWN PROP (2026-09-08): the launch POPUP carries a
      *  pre-assigned instance id and a per-spawn runtime. A narrower type here would
      *  have COMPILED (a 3-arg function is assignable to a 5-arg signature) while
@@ -151,8 +151,8 @@ export function ChannelsInfoPanel({
     agentId?: string,
     runtime?: string
   ) => Promise<AgentLaunchOutcome> | void;
-  /** Machine-local first-use approval for a foreign template. Passed through. */
-  onApproveTemplate?: (templateId: string) => Promise<{ ok: boolean; reason?: string }>;
+  /** Machine-local first-use approval for a foreign identity. Passed through. */
+  onApproveIdentity?: (identityId: string) => Promise<{ ok: boolean; reason?: string }>;
   /** `agentsModel › agentKey` of the agent whose view is open — read only to
    *  mark its card "Viewing". The panel itself renders at page level, over this
    *  column. */
@@ -386,7 +386,7 @@ export function ChannelsInfoPanel({
             <AgentsTab
               sessions={agentSessions}
               channelId={channel.id}
-              // The template picker's one input — off the channel this panel is
+              // The identity picker's one input — off the channel this panel is
               // already rendering, so no new prop is needed for it.
               workspaceId={channel.workspaceId}
               openThreadId={openThreadId}
@@ -397,7 +397,7 @@ export function ChannelsInfoPanel({
               launchBusy={launchBusy}
               launchError={launchError}
               onLaunchAgent={onLaunchAgent}
-              onApproveTemplate={onApproveTemplate}
+              onApproveIdentity={onApproveIdentity}
               openAgent={openAgent}
               onOpenAgent={onOpenAgent}
               onNewThread={onNewThread}

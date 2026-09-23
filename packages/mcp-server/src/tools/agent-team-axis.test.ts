@@ -2,11 +2,11 @@
  * THE `team` AXIS IS OFF THIS SURFACE — and it stays off (A8, 2026-09-02).
  *
  * ⚠ WHAT IS BEING PINNED IS WHAT AN AGENT IS **TAUGHT**, not what the database
- * holds. `TemplateVisibility` still has three arms, the column still stores
+ * holds. `IdentityVisibility` still has three arms, the column still stores
  * `'team'`, and `team_resource_access` / `agent_template_teams` are still there
  * — dropping those is B4. What this file forbids is the MCP surface OFFERING or
  * DESCRIBING an axis with **0 live rows behind it** (measured in production
- * 2026-09-02: 0 teams-mode KBs, 0 team-visibility templates, 0
+ * 2026-09-02: 0 teams-mode KBs, 0 team-visibility identities, 0
  * `agent_template_teams` rows), because every arm of an enum and every clause of
  * a description is read, weighed and occasionally PICKED by every connected
  * client, forever, whether or not anything is behind it.
@@ -26,11 +26,11 @@
 import { describe, it, expect, vi, beforeAll, afterAll } from "vitest";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
-import type { AgentTemplate, DoplClient, WorkspaceListItem } from "@dopl/client";
+import type { AgentIdentity, DoplClient, WorkspaceListItem } from "@dopl/client";
 
 import { createServer } from "../server.js";
 import { opList } from "./agent-ops-read.js";
-import { TEMPLATE_VISIBILITY_VALUES } from "./agent-shared.js";
+import { IDENTITY_VISIBILITY_VALUES } from "./agent-shared.js";
 import { stub } from "./narration-fixtures.js";
 
 const WS: WorkspaceListItem = {
@@ -44,7 +44,7 @@ const WS: WorkspaceListItem = {
   updatedAt: "2026-01-01T00:00:00Z",
   role: "owner",
   // ⚠ **AN ABSENT `memberCount` READS AS SHARED SINCE 2026-09-17** (R-08,
-  // `shared-room.ts`), and this suite writes a template for real — so an
+  // `shared-room.ts`), and this suite writes an identity for real — so an
   // unstated count put the one write it attempts behind a confirm preview. The
   // subject here is served PROSE, not the confirm class: state the solo room.
   memberCount: 1,
@@ -80,7 +80,7 @@ function stubClient(): DoplClient {
     listKbBases: vi.fn().mockResolvedValue([]),
     listSkills: vi.fn().mockResolvedValue([]),
     getOntology: vi.fn().mockResolvedValue({ clusters: [], objects: {} }),
-    createAgentTemplate: created,
+    createAgentIdentity: created,
   } as unknown as DoplClient;
 }
 
@@ -135,7 +135,7 @@ describe("the visibility enum dopl_agent SERVES", () => {
     // ⚠ TOSTRICTLY the whole array, not `.not.toContain("team")` — a third arm
     // arriving under any other spelling is the same regression.
     expect(visibility?.enum).toEqual(["private", "workspace"]);
-    expect(visibility?.enum).toEqual([...TEMPLATE_VISIBILITY_VALUES]);
+    expect(visibility?.enum).toEqual([...IDENTITY_VISIBILITY_VALUES]);
   });
 });
 
@@ -192,14 +192,14 @@ describe("op=list RENDERS a row at a visibility the surface no longer offers", (
     // 🔒 THE SILENT-DROP GUARD. The column keeps `'team'` until B4, so a read
     // that grouped ONLY by the write enum would hide such a row with no error
     // anywhere — which is a data-loss bug wearing a simplification's clothes.
-    const rows: AgentTemplate[] = [
+    const rows: AgentIdentity[] = [
       { ...base(), id: "a", name: "Mine", visibility: "private" },
       { ...base(), id: "b", name: "Legacy", visibility: "team" },
     ];
     const text = (
       await opList(
         stub({
-          listAgentTemplatesPayload: vi.fn(async () => ({ templates: rows })),
+          listAgentIdentitiesPayload: vi.fn(async () => ({ identities: rows })),
         }) as DoplClient,
       )
     ).content
@@ -214,7 +214,7 @@ describe("op=list RENDERS a row at a visibility the surface no longer offers", (
   });
 });
 
-function base(): AgentTemplate {
+function base(): AgentIdentity {
   return {
     id: "11111111-1111-4111-8111-111111111111",
     workspaceId: WS.id,

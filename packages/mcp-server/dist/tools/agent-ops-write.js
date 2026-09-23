@@ -7,9 +7,9 @@
  *
  * ⚠ **THE SHELF FENCE THIS HEADER OPENED WITH IS GONE (2026-09-02, slice B15,
  * ruling B10).** It had three numbered rules; the first two were about
- * `resolveTemplateHomeScope` and about not confusing it with the credential's
+ * `resolveIdentityHomeScope` and about not confusing it with the credential's
  * container lock (F-336). The `home_scoped` column is dropped and a personal
- * template is an ordinary row in the caller's own `kind='personal'` container,
+ * identity is an ordinary row in the caller's own `kind='personal'` container,
  * so there is no shelf to fence and no contradiction to refuse before the round
  * trip. **The container LOCK is untouched** — it was always the thing doing the
  * work in rule 2 — and it is still what answers a container-locked session that
@@ -33,13 +33,13 @@
  *    reasoning is not local to this file.
  *
  * 2. 🔒 **A GRANT LENDS ONE ROW AND THE FENCE IS BOTH SIDES OF IT** — see
- *    {@link opGrantTemplate} and `grant.ts`. It replaced `op="copy"`, whose
+ *    {@link opGrantIdentity} and `grant.ts`. It replaced `op="copy"`, whose
  *    two-leg cross-tenancy create is deleted.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.opCreate = opCreate;
 exports.opUpdate = opUpdate;
-exports.opGrantTemplate = opGrantTemplate;
+exports.opGrantIdentity = opGrantIdentity;
 const narration_js_1 = require("./narration.js");
 const grant_js_1 = require("./grant.js");
 const respond_js_1 = require("./respond.js");
@@ -89,9 +89,9 @@ function knowledgeDigest(input) {
  * ⚠ **DECLARED, NOT HAND-WRITTEN** — `tool-errors.ts › versionConflict` is the
  * one producer of this `reason=` string, so the wire and any description that
  * teaches it move together. `op="get"` is the remedy because that is the op
- * whose result carries a template's Version.
+ * whose result carries an identity's Version.
  */
-const TEMPLATE_VERSION_CONFLICT = (0, tool_errors_js_1.versionConflict)('op="get"');
+const IDENTITY_VERSION_CONFLICT = (0, tool_errors_js_1.versionConflict)('op="get"');
 /** Map the write errors that have an actionable sentence; rethrow anything
  *  else. ⚠ ONE mapper for both verbs so the two cannot answer differently. */
 function mapWriteError(e) {
@@ -108,10 +108,10 @@ function mapWriteError(e) {
     (0, container_destination_js_1.homeChannelRowNotShared)(e) ??
         (0, agent_shared_js_1.sharedCredentialPrivateDenied)(e) ??
         (0, agent_shared_js_1.knowledgeBaseNotAttachable)(e) ??
-        (0, agent_shared_js_1.templateWriteDenied)(e));
+        (0, agent_shared_js_1.identityWriteDenied)(e));
 }
 /**
- * 🔒 **THE TWO DESTINATIONS, ON THE TEMPLATE LANE** (Samuel's ruling
+ * 🔒 **THE TWO DESTINATIONS, ON THE IDENTITY LANE** (Samuel's ruling
  * 2026-09-18) — see `container-destination.ts` for the model.
  *
  * Inside a home channel the ONLY audience that exists is the channel itself, so
@@ -127,7 +127,7 @@ function mapWriteError(e) {
  */
 function homeChannelVisibility(requested) {
     if (requested === "private") {
-        return (0, respond_js_1.err)(`Nothing was created. A home channel holds only what is shared into it, so an agent template cannot be private there. Create it with visibility="workspace" to share it with everyone in this channel, or pass container="home" to keep it to yourself in your home space.`);
+        return (0, respond_js_1.err)(`Nothing was created. A home channel holds only what is shared into it, so an agent identity cannot be private there. Create it with visibility="workspace" to share it with everyone in this channel, or pass container="home" to keep it to yourself in your home space.`);
     }
     return "workspace";
 }
@@ -140,7 +140,7 @@ directory) {
     // (2026-09-02).
     //
     // ⚠ **AN OMITTED VISIBILITY WAS AN UNESCAPABLE LOOP.** The server's default is
-    // credential-dependent (`service-writes.ts › createTemplate`: a SHARED
+    // credential-dependent (`service-writes.ts › createIdentity`: a SHARED
     // credential defaults to `workspace`, everyone else to `private`), and this
     // process cannot see which it holds. So the gate below computed
     // `publishes: false`, minted no token, and the server then resolved
@@ -165,7 +165,7 @@ directory) {
         tool: "dopl_agent",
         op: "create",
         callerUserId,
-        what: `an agent template named ${(0, narration_js_1.inlineOr)(input.name, narration_js_1.NO_NAME)}, shared with the whole home channel`,
+        what: `an agent identity named ${(0, narration_js_1.inlineOr)(input.name, narration_js_1.NO_NAME)}, shared with the whole home channel`,
         audience: `everyone in that home channel — the peer standing in it can list it, read its instructions, and launch it`,
         payload: {
             name: input.name,
@@ -196,9 +196,9 @@ directory) {
         // replaces. See `confirm-token.ts › ConfirmVerdict`.
         acknowledgeShared: verdict.acknowledgedShared || undefined,
     };
-    let template;
+    let identity;
     try {
-        template = await client.createAgentTemplate(body);
+        identity = await client.createAgentIdentity(body);
     }
     catch (e) {
         const mapped = mapWriteError(e);
@@ -212,21 +212,21 @@ directory) {
     // ⚠ **THREE ARMS SINCE 2026-09-18, AND THE THIRD IS A DIFFERENT SENTENCE**:
     // inside a home channel `workspace` means "the other people in this
     // relationship", never "everyone in your company" — the same split
-    // `src/features/agent-templates/lib/visibility.ts › SECTIONS_CONTAINER` makes,
+    // `src/features/agent-identities/lib/visibility.ts › SECTIONS_CONTAINER` makes,
     // and its heading is the wording reused here.
-    const audience = template.visibility === "private"
+    const audience = identity.visibility === "private"
         ? "Private to you — only you and your own agents can see it."
         : inHomeChannel
             ? "Shared in this channel — everyone here can list it and launch it."
             : "Shared with everyone in this workspace — every member can list it and launch it.";
     // ⚠ Q3's warning — AFTER the create, so a list that throws costs the caller
-    // nothing. A template collision is the sharper of the two: `resolveTemplateRef`
+    // nothing. An identity collision is the sharper of the two: `resolveIdentityRef`
     // REFUSES every name-addressed `get`/`update` from now on. See
     // `duplicate-name.ts`.
-    const dup = await (0, duplicate_name_js_1.duplicateNameNoteFor)(template, () => client.listAgentTemplates(), "agent template", true);
+    const dup = await (0, duplicate_name_js_1.duplicateNameNoteFor)(identity, () => client.listAgentIdentities(), "agent identity", true);
     return (0, respond_js_1.ok)([
-        `Created agent template ${(0, narration_js_1.inlineOr)(template.name, narration_js_1.NO_NAME)} (id: \`${template.id}\`). ${audience}${dup}`,
-        `Launch it into a channel with dopl_channel(op="manage", action="launch", channel=…, template="${template.id}") — which ASKS the operator's machine and does not start anything by itself.`,
+        `Created agent identity ${(0, narration_js_1.inlineOr)(identity.name, narration_js_1.NO_NAME)} (id: \`${identity.id}\`). ${audience}${dup}`,
+        `Launch it into a channel with dopl_channel(op="manage", action="launch", channel=…, identity="${identity.id}") — which ASKS the operator's machine and does not start anything by itself.`,
     ].join("\n"));
 }
 async function opUpdate(client, callerUserId, ref, input) {
@@ -243,17 +243,17 @@ async function opUpdate(client, callerUserId, ref, input) {
     if (Object.values(patch).every((v) => v === undefined)) {
         return (0, respond_js_1.err)(`op="update" changed nothing because no field was passed. Pass at least one of: name, description, instructions, model, fields, visibility, knowledge_bases, knowledge.`);
     }
-    const template = await (0, agent_shared_js_1.resolveTemplateOr)(client, ref);
-    if ((0, channel_shared_js_1.isErr)(template))
-        return template;
+    const identity = await (0, agent_shared_js_1.resolveIdentityOr)(client, ref);
+    if ((0, channel_shared_js_1.isErr)(identity))
+        return identity;
     const verdict = await (0, confirm_token_js_1.confirmGate)(client, {
         tool: "dopl_agent",
         op: "update",
         callerUserId,
-        what: `sharing the agent template ${(0, narration_js_1.inlineOr)(template.name, narration_js_1.NO_NAME)} (id: \`${template.id}\`) with the whole home channel`,
+        what: `sharing the agent identity ${(0, narration_js_1.inlineOr)(identity.name, narration_js_1.NO_NAME)} (id: \`${identity.id}\`) with the whole home channel`,
         audience: `everyone in that home channel — the peer standing in it can list it, read its instructions, and launch it`,
         payload: {
-            template: template.id,
+            identity: identity.id,
             name: patch.name ?? null,
             description: patch.description ?? null,
             instructions: patch.instructions ?? null,
@@ -271,7 +271,7 @@ async function opUpdate(client, callerUserId, ref, input) {
         // 🔒 G16 — the spent token, as the server's precondition. ⚠ SET AFTER the
         // "changed nothing" check above, which counts only fields that move a
         // column: an acknowledgement is an assertion ABOUT a change, never one.
-        updated = await client.updateAgentTemplate(template.id, {
+        updated = await client.updateAgentIdentity(identity.id, {
             ...patch,
             acknowledgeShared: verdict.acknowledgedShared || undefined,
         }, 
@@ -283,11 +283,11 @@ async function opUpdate(client, callerUserId, ref, input) {
     catch (e) {
         // ⚠ **BOTH 412s, AND THEY ARE ONE REFUSAL TO THE AGENT.** The SDK raises
         // `EXPECTED_VERSION_REQUIRED` before the wire when no version was passed;
-        // the server raises `AGENT_TEMPLATE_STALE_VERSION` when the row moved. The
+        // the server raises `AGENT_IDENTITY_STALE_VERSION` when the row moved. The
         // remedy is the same call either way, so a second wording would be a second
         // string for an agent to match on and no new fact.
         if ((0, respond_js_1.isApiError)(e, 412, "EXPECTED_VERSION_REQUIRED") || (0, respond_js_1.isConflict)(e)) {
-            return (0, respond_js_1.err)((0, tool_errors_js_1.refusal)(TEMPLATE_VERSION_CONFLICT, `Nothing was written to ${(0, narration_js_1.inlineOr)(template.name, narration_js_1.NO_NAME)} (id: \`${template.id}\`). Re-read it, reconcile your changes, and retry with that Version — or pass force=true to overwrite the other edit.`));
+            return (0, respond_js_1.err)((0, tool_errors_js_1.refusal)(IDENTITY_VERSION_CONFLICT, `Nothing was written to ${(0, narration_js_1.inlineOr)(identity.name, narration_js_1.NO_NAME)} (id: \`${identity.id}\`). Re-read it, reconcile your changes, and retry with that Version — or pass force=true to overwrite the other edit.`));
         }
         const mapped = mapWriteError(e);
         if (mapped)
@@ -300,31 +300,31 @@ async function opUpdate(client, callerUserId, ref, input) {
     // ⚠ THE NEW VERSION IS PART OF THE SUCCESS, not something to go and fetch —
     // an agent making two edits in a row would otherwise have to `op="get"`
     // between them to satisfy the precondition it just satisfied.
-    return (0, respond_js_1.ok)(`Updated agent template ${(0, narration_js_1.inlineOr)(updated.name, narration_js_1.NO_NAME)} (id: \`${updated.id}\`).${note}\nVersion: \`${updated.updatedAt}\` (pass as expected_version to the next op="update")`);
+    return (0, respond_js_1.ok)(`Updated agent identity ${(0, narration_js_1.inlineOr)(updated.name, narration_js_1.NO_NAME)} (id: \`${updated.id}\`).${note}\nVersion: \`${updated.updatedAt}\` (pass as expected_version to the next op="update")`);
 }
 /**
- * `op="grant"` — lend ONE template to a channel, container or team. The op that
+ * `op="grant"` — lend ONE identity to a channel, container or team. The op that
  * REPLACED `op="copy"` (Wave B slice B15, ruling B11).
  *
  * ⚠ **THIS IS THE `op="share"` §5A SAID WOULD NEVER EXIST, AND THE PREMISE THAT
- * REFUSED IT DIED IN THE SAME WAVE.** The argument was *"a template has no grant
+ * REFUSED IT DIED IN THE SAME WAVE.** The argument was *"an identity has no grant
  * table, so sharing into a container IS `visibility: 'workspace'` on
  * `op='update'` — a second verb would be two doors onto one write"*. Since
- * `20260914120000` a template HAS a grant table (`resource_grants` accepts
- * `resource_type='agent_template'`), and the two verbs are no longer one write:
+ * `20260914120000` an identity HAS a grant table (`resource_grants` accepts
+ * `resource_type='agent_identity'`), and the two verbs are no longer one write:
  * `visibility` says who inside THIS container may use the identity, and a grant
- * lends the row to a scope somewhere else. A personal template lives in the
+ * lends the row to a scope somewhere else. A personal identity lives in the
  * caller's own personal container, where `visibility:"workspace"` reaches an
  * audience of one — which is exactly why sharing it needs this op.
  */
-async function opGrantTemplate(client, directory, selfUserId, ref, scope, to, level) {
+async function opGrantIdentity(client, directory, selfUserId, ref, scope, to, level) {
     const chosen = (0, grant_js_1.levelForScope)(scope, level);
     if ((0, grant_js_1.isGrantRefusal)(chosen))
         return chosen;
-    const found = await (0, agent_shared_js_1.resolveTemplateOr)(client, ref);
+    const found = await (0, agent_shared_js_1.resolveIdentityOr)(client, ref);
     if ((0, channel_shared_js_1.isErr)(found))
         return found;
-    const notOwned = (0, grant_js_1.notOwnedRefusal)(found.createdBy, selfUserId, "agent template", found.name);
+    const notOwned = (0, grant_js_1.notOwnedRefusal)(found.createdBy, selfUserId, "agent identity", found.name);
     if (notOwned)
         return notOwned;
     const scopeId = await (0, grant_js_1.resolveGrantScopeId)(directory, scope, to);
@@ -332,7 +332,7 @@ async function opGrantTemplate(client, directory, selfUserId, ref, scope, to, le
         return scopeId;
     try {
         await client.grantResource({
-            resourceType: "agent_template",
+            resourceType: "agent_identity",
             resourceId: found.id,
             scopeType: scope,
             scopeId,
@@ -349,5 +349,5 @@ async function opGrantTemplate(client, directory, selfUserId, ref, scope, to, le
             return refused;
         throw e;
     }
-    return (0, grant_js_1.grantedLine)("agent template", found.name, scope, scopeId, chosen);
+    return (0, grant_js_1.grantedLine)("agent identity", found.name, scope, scopeId, chosen);
 }

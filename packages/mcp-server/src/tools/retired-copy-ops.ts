@@ -42,7 +42,7 @@ const RETIRED_COPY_OPS = {
   "dopl_kb.copy_base":
     'retired: use a grant — dopl_kb(op="grant", base=…, to=…, scope="channel"|"container"|"team", level=…). One base, lent where you name; an edit reaches everyone it is lent to, where a copy diverged.',
   "dopl_agent.copy":
-    'retired: use a grant — dopl_agent(op="grant", template=…, to=…, scope="channel"|"container"|"team", level=…). One template, lent where you name; an edit reaches everyone it is lent to, where a copy diverged.',
+    'retired: use a grant — dopl_agent(op="grant", identity=…, to=…, scope="channel"|"container"|"team", level=…). One identity, lent where you name; an edit reaches everyone it is lent to, where a copy diverged.',
 } as const satisfies Record<string, string>;
 
 type RetiredCopyKey = keyof typeof RETIRED_COPY_OPS;

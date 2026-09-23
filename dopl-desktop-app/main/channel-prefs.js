@@ -109,7 +109,7 @@ const ctx = () => runtimeRegistry.selectionContext();
 // separate send flag any more, on purpose.
 
 // ⚠ **AGENT CHAINING MOVED TO `main/channel-agent-chain.js` ON 2026-09-21 (U5)**, at the §1 cap
-// and on the same seam the two MCP consents and the template approval moved on: it changes when
+// and on the same seam the two MCP consents and the identity approval moved on: it changes when
 // the rules for how far a chain of launches may reach change, where the rest of this file changes
 // when the shape of a channel's launch settings does — and it is the only record in this family
 // that lifts a BOUND rather than storing a posture or a pick. Its header carries the whole safety
@@ -124,12 +124,12 @@ const agentChain = require('./channel-agent-chain');
 const orchestratorConsent = require('./orchestrator-consent');
 
 
-// ⚠ **THE FIRST-USE TEMPLATE APPROVAL MOVED TO `main/template-approval.js` ON 2026-08-31**, at
+// ⚠ **THE FIRST-USE IDENTITY APPROVAL MOVED TO `main/identity-approval.js` ON 2026-08-31**, at
 // the §1 cap and on the same seam the two MCP consents moved on one wave earlier: it changes when
 // the rules for trusting ANOTHER MEMBER'S standing configuration change, where the rest of this
-// file changes when a CHANNEL preference does — and its record is keyed by a TEMPLATE ID, not by
+// file changes when a CHANNEL preference does — and its record is keyed by a IDENTITY ID, not by
 // a channel at all. Re-exported below, so no caller moved.
-const templateApproval = require('./template-approval');
+const identityApproval = require('./identity-approval');
 
 // ── Storage for the durable selection ─────────────────────────────────────
 //
@@ -392,7 +392,7 @@ function getLaunchModel(channelId) {
 
 /**
  * THE CHANNEL'S MODEL AS THE LAST LINK OF A LAUNCH'S MODEL PRECEDENCE CHAIN — the value a spawn is
- * stamped with when no sheet pick and no template default outranked it.
+ * stamped with when no sheet pick and no identity default outranked it.
  *
  * ⚠ **IT EXISTS BECAUSE THE CALL SITES USED TO ALIAS THE STORED ID THROUGH THE DEFAULT RUNTIME'S
  * TABLE** (`sessionModel.aliasForModelId(channelPrefs.getLaunchModel(id))`). That was correct while
@@ -404,7 +404,7 @@ function getLaunchModel(channelId) {
  *
  * ⚠ **IT ENDS THE CHAIN RATHER THAN STEPPING ASIDE, AND THAT IS THE EXPRESSION IT REPLACED, VERB
  * FOR VERB.** `chainModel`'s `''` means "keep going" (F-285) and belongs to the links ABOVE this
- * one — a template naming a model this build does not know must fall THROUGH to the channel. This
+ * one — an identity naming a model this build does not know must fall THROUGH to the channel. This
  * is the bottom link: when nothing is stored it answers the runtime's own "no pick" member
  * (`descriptor.models.defaultMeansAbsent`), which is what every spawn got before a picker existed.
  */
@@ -436,12 +436,12 @@ module.exports = {
   ORCHESTRATOR_DIRECT_KEY: orchestratorConsent.ORCHESTRATOR_DIRECT_KEY,
   getOrchestratorDirect: orchestratorConsent.getOrchestratorDirect,
   setOrchestratorDirect: orchestratorConsent.setOrchestratorDirect,
-  // 2026-08-22 (OQ-3): FIRST-USE APPROVAL for another member's agent template. Same
+  // 2026-08-22 (OQ-3): FIRST-USE APPROVAL for another member's agent identity. Same
   // machine-local, never-server-reachable property as the toggle above, and the block over these
   // two functions says why that property is the security content.
-  TEMPLATE_APPROVAL_KEY: templateApproval.TEMPLATE_APPROVAL_KEY,
-  isTemplateApproved: templateApproval.isTemplateApproved,
-  approveTemplate: templateApproval.approveTemplate,
+  IDENTITY_APPROVAL_KEY: identityApproval.IDENTITY_APPROVAL_KEY,
+  isIdentityApproved: identityApproval.isIdentityApproved,
+  approveIdentity: identityApproval.approveIdentity,
   // The DURABLE launch selection. ⚠ THE SHAPE AND ITS VALIDATION LIVE IN
   // `main/launch-selection.js` (§1 split, 2026-09-21 — U5); the five names below are re-exported
   // from there so no caller and no suite moved, and they are the LEGACY READER for one

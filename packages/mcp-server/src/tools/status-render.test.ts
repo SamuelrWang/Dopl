@@ -215,7 +215,7 @@ describe("the status table", () => {
               tokensSpent: null,
               startedAt: null,
               lastActivityAt: null,
-              templateName: "Orchestrator",
+              identityName: "Orchestrator",
             },
           ],
         }),
@@ -223,7 +223,7 @@ describe("the status table", () => {
       NOW,
     ).join("\n");
     expect(busy).toContain("`@agent-x2sz1ztt`");
-    // The projection renderer's own output, reused verbatim — template, then
+    // The projection renderer's own output, reused verbatim — identity, then
     // model as ONE token (F-293).
     expect(busy).toContain("Orchestrator");
     expect(busy).toContain("opus-5-1m");

@@ -174,7 +174,7 @@ describe("home page", () => {
     expect(screen.queryByRole("tab", { name: /^Links/ })).not.toBeInTheDocument();
     expect(
       screen.getAllByRole("tab").slice(0, 5).map((tab) => tab.textContent)
-    ).toEqual(["Overview", "Channel", "Knowledge", "Agents", "Ontology"]);
+    ).toEqual(["Overview", "Channel", "Knowledge", "Identities", "Ontology"]);
   });
 
   it("drops link containers from the account rail", async () => {

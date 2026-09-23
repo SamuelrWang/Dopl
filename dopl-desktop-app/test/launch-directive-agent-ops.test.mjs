@@ -3,7 +3,7 @@
 // need to be able to do all that stuff").
 //
 // ⚠ SPLIT FROM `launch-directives.test.mjs` BY WHAT THE CASES ARE ABOUT, the same rule
-// `launch-directive-template.test.mjs` follows and the same shared machinery
+// `launch-directive-identity.test.mjs` follows and the same shared machinery
 // (`_launch-directive-harness.mjs`). That file is about the WATCHER — toggle, owner check, claim,
 // containment, goal, model, decision, backstop. This one is about the two new VERBS: which code
 // path each routes to, which wire word each failure becomes, and the consent asymmetry.
@@ -76,7 +76,7 @@ test("KIND: `done` is the non-launch success and `launched` is NOT reused for it
 
 test("TARGET: `target_agent_id` is shape-checked, in BOTH spellings, and never guessed", () => {
   // ⚠ TWO ROADS, TWO NAMES — a REALTIME frame is the raw row, the CLAIM's answer is the server
-  // DTO. `templateId`'s lesson one column over: missing the camelCase spelling would make every
+  // DTO. `identityId`'s lesson one column over: missing the camelCase spelling would make every
   // directive claimed through the CAS act on nothing.
   assert.equal(wire.directiveFrom(endRow(), WS).targetAgentId, "a1b2c3d4");
   assert.equal(wire.directiveFrom(row({ kind: "end", targetAgentId: "b2c3d4e5" }), WS)
@@ -275,13 +275,13 @@ test("DISPATCH: an end/rename NEVER reaches the spawn funnel", async () => {
   await h.api.handle(renameRow("Research", { id: DID.replace(/6/g, "8") }), WS);
   assert.equal(h.cfg.lastSpec, undefined,
     "no session was launched, and no containment input was ever assembled");
-  assert.deepEqual(h.resolves, [], "and no template was resolved");
+  assert.deepEqual(h.resolves, [], "and no identity was resolved");
 });
 
 test("DISPATCH: the CLAIMED row's kind decides, not the frame's", async () => {
   // ⚠ THE CAS'S ANSWER IS THE AUTHENTICATED ONE. `claim` re-narrows from what the server GRANTED,
   // and if the realtime frame disagrees the granted row wins — the same rule the goal, the model
-  // and the template already follow. A frame claiming `kind: "end"` that is granted as a LAUNCH
+  // and the identity already follow. A frame claiming `kind: "end"` that is granted as a LAUNCH
   // must launch, not end.
   const h = boot({
     live: [liveRow("a1b2c3d4")],
@@ -312,14 +312,23 @@ test("MIGRATION: the CHECK admits the two words this lane produces, and still ba
     // This wave lands the CHECK WITH the producer, and this case is what proves it.
     const sql = readFileSync(join(HERE, "..", "..", "supabase", "migrations",
       "20260907120000_channel_launch_directives_kind.sql"), "utf8");
+    // ⚠ The identity word was `no-template` in this file (2026-09-07) and moved to `no-identity`
+    // in the 2026-09-22 rename migration, which restates the CHECK whole — both are pinned.
     for (const word of ["no-session", "bad-name", "no-template", "no-bridge"]) {
       assert.ok(sql.includes(`'${word}'`), `the refusal CHECK must admit ${word}`);
     }
-    // ⚠ THE NEGATIVE PIN, CARRIED FORWARD. `template-approval` is the desktop's word to its OWN
+    const renamed = readFileSync(join(HERE, "..", "..", "supabase", "migrations",
+      "20261019120000_rename_agent_templates_to_agent_identities.sql"), "utf8");
+    for (const word of ["no-session", "bad-name", "no-identity", "no-bridge", "no-chain", "no-model"]) {
+      assert.ok(renamed.includes(`'${word}'`), `the live refusal CHECK must admit ${word}`);
+    }
+    // ⚠ THE NEGATIVE PIN, CARRIED FORWARD. `identity-approval` is the desktop's word to its OWN
     // renderer for a first-use click; this lane has no human at the keyboard, so a column that
     // could store it would tell a future reader the lane has an approval gate it does not have.
-    assert.ok(!wire.REFUSAL_REASONS.includes("template-approval"));
+    assert.ok(!wire.REFUSAL_REASONS.includes("identity-approval"));
     assert.match(sql, /ABORT: template-approval reached the DIRECTIVE refusal vocabulary/);
+    assert.equal(/'identity-approval'|'template-approval'/.test(renamed), false,
+      "the rename's CHECK must not admit the renderer-only approval word under either name");
     // The kind, its DEFAULT, and the two target columns staying OPTIONAL (a LAUNCH names none).
     assert.match(sql, /kind TEXT NOT NULL DEFAULT 'launch'/);
     assert.match(sql, /CHECK \(kind IN \('launch', 'end', 'rename'\)\)/);

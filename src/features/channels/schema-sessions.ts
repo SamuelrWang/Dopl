@@ -185,13 +185,13 @@ const SessionStateEntrySchema = z.object({
   startedAt: z.string().datetime({ offset: true }).nullable().optional(),
   lastActivityAt: z.string().datetime({ offset: true }).nullable().optional(),
 
-  // ── THE AGENT TEMPLATE (2026-08-23, migration 20260823130000) ─────────────
+  // ── THE AGENT IDENTITY (2026-08-23, migration 20260823130000) ─────────────
   /**
-   * THE TEMPLATE THIS SESSION WAS LAUNCHED FROM, BY NAME, AS OF SPAWN.
+   * THE IDENTITY THIS SESSION WAS LAUNCHED FROM, BY NAME, AS OF SPAWN.
    *
    * ⚠ **ACCEPTED HERE BEFORE ANY DESKTOP SENDS IT, AND THAT ORDER IS THE WHOLE
-   * POINT.** Phase 1 of the templates wave teaches `main/session-state-push.js`
-   * to put `templateName` on the reported row. The two trees ship separately, so
+   * POINT.** Phase 1 of the identities wave teaches `main/session-state-push.js`
+   * to put `identityName` on the reported row. The two trees ship separately, so
    * for some window a NEWER desktop pushes to an OLDER server — and zod
    * validates the ARRAY, so ONE unknown key on ONE row 400s that machine's WHOLE
    * push, `retryable(400)` is false, and every later push for that workspace
@@ -205,25 +205,25 @@ const SessionStateEntrySchema = z.object({
    *
    * ⚠ `.nullable().optional()` for the SAME two reasons the telemetry block
    * states: `optional` is the rollout contract (an older desktop sends no key),
-   * `nullable` is the semantic one (a session launched from no template says so
+   * `nullable` is the semantic one (a session launched from no identity says so
    * explicitly).
    *
-   * ⚠ **THE NAME, NEVER THE ID.** The server does not resolve a template here —
-   * main captured the resolved template at spawn and reports what it RAN AS, so
+   * ⚠ **THE NAME, NEVER THE ID.** The server does not resolve an identity here —
+   * main captured the resolved identity at spawn and reports what it RAN AS, so
    * the value survives a rename or a delete. See
    * `20260823130000_channel_sessions_template_name.sql` for why this is a
    * denormalized snapshot rather than an FK.
    *
    * ⚠ Bound is `safeLabel` at **120** — character for character the column's
    * CHECK, which is itself character for character
-   * `agent_templates_name_charset_check`. The mirror is load-bearing: a name
-   * that is LEGAL on a template must never be refusable into this projection, or
+   * `agent_identities_name_charset_check`. The mirror is load-bearing: a name
+   * that is LEGAL on an identity must never be refusable into this projection, or
    * a legitimate launch 400s the operator's entire session push. And it is
    * bounded at all because it is operator-authored free text spliced into MCP
    * narration — operator-only is not the same as trusted, and a newline in your
    * own result forges a line in your own result.
    */
-  templateName: safeLabel("Template name", 120).nullable().optional(),
+  identityName: safeLabel("Identity name", 120).nullable().optional(),
 
   // ── HEALTH (2026-09-01, migration 20260909120000) ────────────────────────
   //
@@ -297,7 +297,7 @@ const SessionStateEntrySchema = z.object({
    * desktop's local name store (`main/agent-names.js`) on every push — the
    * additive column that file's own header promised. ⚠ PEER-VISIBLE BY DESIGN
    * (Samuel's ruling: the other member should see what your agent is called),
-   * so unlike `templateName` it maps through `mapPeerSessionStateRow`.
+   * so unlike `identityName` it maps through `mapPeerSessionStateRow`.
    *
    * ⚠ `.nullable().optional()` on the telemetry block's two grounds: `optional`
    * is the rollout contract (an older desktop sends no key and its whole push

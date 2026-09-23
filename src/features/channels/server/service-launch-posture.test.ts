@@ -50,11 +50,11 @@ vi.mock("./service-shared", async (importOriginal) => {
   const actual = await importOriginal<typeof import("./service-shared")>();
   return { ...actual, loadVisibleChannel: vi.fn() };
 });
-// ⚠ MOCKED THOUGH NO TEST HERE NAMES A TEMPLATE: `service-launch.ts` pulls the
-// agent-templates barrel at module scope — `server-only`, with a live Supabase
+// ⚠ MOCKED THOUGH NO TEST HERE NAMES AN IDENTITY: `service-launch.ts` pulls the
+// agent-identities barrel at module scope — `server-only`, with a live Supabase
 // admin client under it. The same mock its own suite carries.
-vi.mock("@/features/agent-templates/server/service", () => ({
-  resolveTemplateRef: vi.fn(),
+vi.mock("@/features/agent-identities/server/service", () => ({
+  resolveIdentityRef: vi.fn(),
 }));
 
 import * as launchRepo from "./repository-launch";
@@ -94,8 +94,8 @@ function row(over: Record<string, unknown> = {}) {
     operator_user_id: ME,
     goal: null,
     model: null,
-    template_id: null,
-    template_name: null,
+    identity_id: null,
+    identity_name: null,
     target_agent_id: null,
     target_name: null,
     start_tool_mode: null,

@@ -7,7 +7,7 @@ import type { ApiMutationRequestFn } from "@/shared/hooks/use-api-mutation";
  *
  * ⚠ NO PER-VERB WRAPPERS. Every write on this page is a `useApiMutation` config
  * that owns its request AND the cache patch the same draft produces
- * (`../hooks/use-agent-template-writes.ts`); a `createTemplate()` helper beside
+ * (`../hooks/use-agent-identity-writes.ts`); a `createIdentity()` helper beside
  * them would be a SECOND place the body is built, and the two would drift the
  * first time a field was added. Whoever owns the cache owns the call — the
  * channels client's rule, for the same reason.
@@ -16,14 +16,14 @@ import type { ApiMutationRequestFn } from "@/shared/hooks/use-api-mutation";
  */
 
 /** Domain error wrapper so the editor can put the server's own wording on screen. */
-export class AgentTemplateApiError extends Error {
+export class AgentIdentityApiError extends Error {
   constructor(
     public readonly status: number,
     public readonly code: string,
     message: string
   ) {
     super(message);
-    this.name = "AgentTemplateApiError";
+    this.name = "AgentIdentityApiError";
   }
 }
 
@@ -37,7 +37,7 @@ async function request<T>(path: string, opts: RequestOpts = {}): Promise<T> {
     return await apiRequest<T>(path, opts);
   } catch (err) {
     if (err instanceof ApiError) {
-      throw new AgentTemplateApiError(err.status, err.code, err.message);
+      throw new AgentIdentityApiError(err.status, err.code, err.message);
     }
     throw err;
   }
@@ -49,12 +49,12 @@ async function request<T>(path: string, opts: RequestOpts = {}): Promise<T> {
  * ⚠ MODULE-LEVEL so the reference is stable across renders — the hook memoizes
  * its options on it, and a fresh function each render rebuilds them every time.
  *
- * ⚠ Every write driven through this throws {@link AgentTemplateApiError}, so the
- * `err instanceof AgentTemplateApiError` branch that surfaces the server's
+ * ⚠ Every write driven through this throws {@link AgentIdentityApiError}, so the
+ * `err instanceof AgentIdentityApiError` branch that surfaces the server's
  * message keeps working. A mutation wired straight to `apiRequest` silently
  * degrades every error on this page to its fallback string.
  */
-export const agentTemplateRequest: ApiMutationRequestFn = request;
+export const agentIdentityRequest: ApiMutationRequestFn = request;
 
 /**
  * Human copy for anything a write threw.
@@ -64,8 +64,8 @@ export const agentTemplateRequest: ApiMutationRequestFn = request;
  * branch is unreachable here and gets no special copy; a 403 that somehow
  * arrived would render the server's own sentence, which is the honest answer.
  */
-export function agentTemplateErrorMessage(err: unknown, fallback: string): string {
-  if (err instanceof AgentTemplateApiError) return err.message;
+export function agentIdentityErrorMessage(err: unknown, fallback: string): string {
+  if (err instanceof AgentIdentityApiError) return err.message;
   if (err instanceof Error && err.message) return err.message;
   return fallback;
 }

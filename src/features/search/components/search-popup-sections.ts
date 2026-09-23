@@ -26,7 +26,7 @@ export const GROUP_LABEL: Record<SearchGroupKind, string> = {
   threads: "Threads",
   artifacts: "Artifacts",
   knowledge: "Knowledge",
-  agentTemplates: "Agent templates",
+  agentIdentities: "Agent identities",
   members: "Members",
   skills: "Skills",
   chats: "Chats",

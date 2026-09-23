@@ -54,7 +54,7 @@ export const LAUNCH_REFUSAL_REASONS = [
   "auth-hold",
   "no-bridge",
   "no-counterparty",
-  "no-template",
+  "no-identity",
   "no-session",
   "bad-name",
   "no-chain",

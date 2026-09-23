@@ -45,7 +45,7 @@ describe("tool capture", () => {
     const names = TOOLS.map((t) => t.name).sort();
     expect(names).toEqual(
       [
-        // MCP surface v2 wave A (2026-08-28): the template family joins.
+        // MCP surface v2 wave A (2026-08-28): the identity family joins.
         // ⚠ THE FIVE `_admin` COMPANIONS LEFT ON 2026-09-02 — deleted, not
         // hidden: registrars, op handlers and descriptions are gone. The rule
         // they advertised is `sessionOnly` on the REST routes now.
@@ -92,8 +92,8 @@ const READ_OPS: Record<string, string[]> = {
   dopl_chats: ["list", "get", "folders", "guide"],
   dopl_members: ["whoami", "list", "get", "teams", "get_team", "access_matrix", "my_access"],
   dopl_ontology: ["map", "anchor", "resolve", "get"],
-  // `opList` calls only `listAgentTemplates`; `opGet` resolves a ref through
-  // the same list and then `getAgentTemplate`. Neither writes.
+  // `opList` calls only `listAgentIdentities`; `opGet` resolves a ref through
+  // the same list and then `getAgentIdentity`. Neither writes.
   dopl_agent: ["list", "get"],
   // `members` is a roster READ: `opMembers` calls only `listChannelMembers` and
   // renders it. Membership changes via op="invite" (gated as a write) and the

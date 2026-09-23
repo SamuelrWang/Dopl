@@ -61,11 +61,11 @@ test("SHAPE: a live summary carries exactly what the Agents tab and the agent vi
       model: "claude-haiku-4-5",
       channelName: "general",
       threadTitle: "Ship the thing",
-      // `templateName` (2026-08-22, agent templates) is the SPAWN-TIME capture
-      // `context.template.name` and can never move. THE NAME, never the id. Unlike the fields
-      // above it DOES reach the server, onto `channel_sessions.template_name`, which is
+      // `identityName` (2026-08-22, agent identities) is the SPAWN-TIME capture
+      // `context.identity.name` and can never move. THE NAME, never the id. Unlike the fields
+      // above it DOES reach the server, onto `channel_sessions.identity_name`, which is
       // operator-only by construction on that side (`collab-dto.ts › mapOwnSessionStateRow`).
-      templateName: null,
+      identityName: null,
       // `color` (2026-09-13, docs/specs/agent-colors.md) is THE ASK, not the assignment:
       // uniqueness is per channel across EVERY member and no machine can evaluate that, so the
       // server may substitute. It DOES reach the server (`channel_sessions.color`), peer-visible

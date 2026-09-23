@@ -140,7 +140,7 @@ function reported(over: Partial<SessionStateUpsert> = {}): SessionStateUpsert {
     // "only tokens_spent moved".
     detail: null, tool_label: null, model: null,
     context_used: null, context_window: null, tokens_spent: null,
-    started_at: null, last_activity_at: null, template_name: null, display_name: null,
+    started_at: null, last_activity_at: null, identity_name: null, display_name: null,
     // ⚠ A COLOUR IS **REQUESTED**, not reported (2026-09-13): every current desktop
     // names one, and `session-colors.ts` resolves it against the channel's taken set
     // before the diff. A fixture defaulting to `null` would make every stored row
@@ -252,7 +252,7 @@ describe("replaceSessionStates — the row lifetime", () => {
       { task_id: "44444444-e29b-41d4-a716-446655440000" },
       { channel_id: "55555555-e29b-41d4-a716-446655440000" },
       // ⚠ Never moves mid-session, and must still COUNT — see the column pin.
-      { template_name: "Code Auditor" },
+      { identity_name: "Code Auditor" },
     ];
     for (const over of fields) {
       const steps = makeSequencedAdmin([{ data: [storedOf(base)], error: null }]);

@@ -158,7 +158,7 @@ function world(): FakeTables {
         deleted_at: null,
       }
     ),
-    agent_templates: pair(
+    agent_identities: pair(
       {
         id: "tpl-mine",
         name: "zephyr bot",

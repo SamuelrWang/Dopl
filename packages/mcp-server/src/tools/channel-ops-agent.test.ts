@@ -75,8 +75,8 @@ function directive(over: Partial<LaunchDirective> = {}): LaunchDirective {
     goal: null,
     model: null,
     status: "pending",
-    templateId: null,
-    templateName: null,
+    identityId: null,
+    identityName: null,
     targetAgentId: AGENT,
     targetName: null,
     refusalReason: null,
@@ -262,7 +262,7 @@ describe("the refusal advice must NOT be the launch op's", () => {
     expect(busy).toContain("reason=busy");
     expect(busy).toContain("retry=once");
     expect(CHANNEL_DOCTRINE).toContain("`busy` mid-turn");
-    for (const reason of ["cap", "no-sdk", "auth-hold", "no-template"] as const) {
+    for (const reason of ["cap", "no-sdk", "auth-hold", "no-identity"] as const) {
       const out = await endText(settled({ status: "refused", refusalReason: reason }));
       expect(out, `${reason} earned a retry it should not have`).toContain("retry=no");
     }

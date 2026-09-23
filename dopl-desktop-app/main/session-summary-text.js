@@ -21,8 +21,8 @@
  * discipline as session-store's `durableName`: channel name and thread title are
  * counterparty-influenced text on their way to a renderer.
  * ⚠ THE BOUND IS A PARAMETER SINCE 2026-08-22, defaulting to the 80 every existing caller had.
- * `templateName` takes 120 — the COLUMN's bound on both ends — because clipping an identity to
- * fit a display default would report a name no template has.
+ * `identityName` takes 120 — the COLUMN's bound on both ends — because clipping an identity to
+ * fit a display default would report a name no identity has.
  */
 function displayText(value, max = 80) {
   if (typeof value !== 'string') return null;
@@ -30,7 +30,7 @@ function displayText(value, max = 80) {
   return s || null;
 }
 
-/** The AGENT TEMPLATE a session runs as, as a NAME and never an id. `null` for a blank agent. */
-const TEMPLATE_NAME_MAX = 120;
+/** The AGENT IDENTITY a session runs as, as a NAME and never an id. `null` for a blank agent. */
+const IDENTITY_NAME_MAX = 120;
 
-module.exports = { displayText, TEMPLATE_NAME_MAX };
+module.exports = { displayText, IDENTITY_NAME_MAX };

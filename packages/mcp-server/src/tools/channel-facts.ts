@@ -21,7 +21,7 @@
  * catches a silent delivery failure (INVARIANTS §10).
  *
  * ⚠ A VALUE WITH A SPACE IS QUOTED, so the `key=value` pairs stay parseable and
- * no operator- or peer-chosen name (a template name, a tool label) can invent a
+ * no operator- or peer-chosen name (an identity name, a tool label) can invent a
  * field by containing `something=`.
  *
  * ⚠ VALUES ARE BOUNDED, SO A LINE'S LENGTH DEPENDS ONLY ON ITS FIELD COUNT.
@@ -141,10 +141,10 @@ function renderValue(value: FactValue): string {
       ? `${bare.slice(0, FACT_VALUE_MAX - 1)}…`
       : bare;
   // ⚠ A VALUE CONTAINING A SPACE IS QUOTED, and this is not cosmetic. The line
-  // is `key=value` pairs separated by spaces, so an unquoted `template=Code
+  // is `key=value` pairs separated by spaces, so an unquoted `identity=Code
   // Auditor` gives a reader no way to tell where the value ends — and the values
   // that carry spaces are exactly the peer- and operator-authored ones (a
-  // template name, a tool label), i.e. the ones an attacker or a careless human
+  // identity name, a tool label), i.e. the ones an attacker or a careless human
   // chooses. `key=` cannot be forged inside a quoted span, so quoting is also
   // what stops a crafted name from inventing a field.
   return /\s/.test(clipped) ? `"${clipped.replace(/"/g, "'")}"` : clipped;
@@ -301,7 +301,7 @@ export function allowedFacts(d: LaunchDirective): Record<string, FactValue> {
  * 🔒 **THE FACT THIS EXISTS FOR.** A live MCP launch carrying `model: "codex"`
  * was accepted and started a Claude Sonnet agent, and the result said nothing
  * that could have revealed it: there was no runtime field on the wire, so the
- * line named a model, a template and a posture while the one thing that had
+ * line named a model, an identity and a posture while the one thing that had
  * gone wrong — the VENDOR — was unprinted. `runtime=` is that missing verdict.
  *
  * ⚠ **`runtime=` IS THE APPLIED VALUE AND IS PRINTED ON EVERY LAUNCH**, exactly

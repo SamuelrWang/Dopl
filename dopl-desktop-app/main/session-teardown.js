@@ -92,20 +92,20 @@ function settle(s, outcome, keepWindow) {
       channelId: s.channelId, taskId: s.taskId, workspaceId: s.workspaceId,
       channelName: (s.context && s.context.channelName) || null,
       threadTitle: (s.context && s.context.taskTitle) || null,
-      // ⚠ THE AGENT TEMPLATE IT RAN AS (2026-08-22), FROZEN LIKE THE REST OF THE IDENTITY.
+      // ⚠ THE AGENT IDENTITY IT RAN AS (2026-08-22), FROZEN LIKE THE REST OF THE IDENTITY.
       // A DENORMALIZED SNAPSHOT, never a pointer: the session must report what it RAN AS
-      // even after the template is renamed or deleted, which is the same rule that makes
-      // `context.template` a spawn-time capture in the first place. Without it here, an
-      // ENDED row would push `templateName: null` to `channel_sessions` and ERASE the name
+      // even after the identity is renamed or deleted, which is the same rule that makes
+      // `context.identity` a spawn-time capture in the first place. Without it here, an
+      // ENDED row would push `identityName: null` to `channel_sessions` and ERASE the name
       // the live row had been reporting all run.
-      templateName: (s.context && s.context.template && s.context.template.name) || null,
+      identityName: (s.context && s.context.identity && s.context.identity.name) || null,
       endedAt: Date.now(),
       // ⚠ WHY IT STOPPED, WHEN THE REASON IS NOT SOMETHING THE OPERATOR CHOSE (F-692, 2026-09-13).
       // `mcp-connect-guard.js › failVisibly` stamps `s.mcpDiag` when the Dopl MCP server never
       // connected; the session then ends, so the RETAINED card is the only surface left that can
       // still say so. Frozen here for the identity's reason: the registry entry is about to go.
       // ⚠ null on every ordinary ending, and `durableHistory` is a WHITELIST — a field this line
-      // omits is DROPPED at the write, which is the trap `templateName` above records.
+      // omits is DROPPED at the write, which is the trap `identityName` above records.
       diag: s.mcpDiag || null,
       // ── 2026-09-21 (U10) — THE STRUCTURED HALF OF "WHY IT STOPPED", AND WHOSE FAILURE IT WAS ──
       //
@@ -116,7 +116,7 @@ function settle(s, outcome, keepWindow) {
       // construction — and `session-detail.js › endReasonFor` rebuilds the sentence at READ time
       // from the runtime this session actually ran on. Hence both fields, and hence `runtimeId`.
       // ⚠ `durableHistory` IS A WHITELIST: a field this line omits is DROPPED at the write, which
-      // is the trap `templateName` above records. ⚠ null on every ordinary ending.
+      // is the trap `identityName` above records. ⚠ null on every ordinary ending.
       endCode: s.endCode || null,
       runtimeId: s.runtimeId || null,
       usageBaseline: s.usageBaseline || null,

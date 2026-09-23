@@ -41,7 +41,7 @@ import type { WorkspaceRole } from "./types.js";
  * `POST /api/home/links`, which is `sessionOnly` because it mints a credential
  * that reaches a PERSON; the revoke and the claim are `sessionOnly` for the same
  * reason. No SDK method binds any of them — the same omission
- * `deleteAgentTemplate` makes. See `home.ts`.
+ * `deleteAgentIdentity` makes. See `home.ts`.
  */
 export interface ChannelPendingLink {
   id: string;

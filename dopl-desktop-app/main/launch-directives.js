@@ -41,17 +41,17 @@
 //   • THE ARMING SWITCH IS NOT ON THE SERVER. If it were, an agent holding the operator's own
 //     credential could arm every machine the operator owns, and the lane would be
 //     self-authorizing. It is a local `electron-store` boolean, by ruling.
-//   • THE DIRECTIVE SUPPLIES **GOAL**, **MODEL** AND **WHICH TEMPLATE**, AND NOTHING ELSE. Not
+//   • THE DIRECTIVE SUPPLIES **GOAL**, **MODEL** AND **WHICH IDENTITY**, AND NOTHING ELSE. Not
 //     the permission axes, not the tool profile, not the working folder. Those come from the
 //     operator's own durable per-channel record and from main's own watched-channel DTO — the
 //     same two sources the Launch button reads. **A directive-driven agent is exactly as
 //     contained as a button-driven one**, and nothing an orchestrator writes can widen it.
-//     ⚠ **A TEMPLATE WIDENS PROMPT CONTENT ONLY. It never supplies, influences, or relaxes a
+//     ⚠ **AN IDENTITY WIDENS PROMPT CONTENT ONLY. It never supplies, influences, or relaxes a
 //     containment input — tool profile, permission axes, working folder and delivery lane are
 //     still the machine's, resolved from the machine's own state.** INVARIANTS §5A's sentence,
 //     enforced by `spawn`'s ORDER: the profile is computed from `watchedChannel` BEFORE any
-//     template text exists. ⚠ AND THE DIRECTIVE CARRIES AN **ID**, NEVER CONTENT — resolved here
-//     under THIS OPERATOR's credential, so one they cannot see is refused (`no-template`).
+//     identity text exists. ⚠ AND THE DIRECTIVE CARRIES AN **ID**, NEVER CONTENT — resolved here
+//     under THIS OPERATOR's credential, so one they cannot see is refused (`no-identity`).
 //   • THE ROW IS NOT THE AUTHORIZATION. The realtime frame is a prompt, not a permit: this
 //     module CLAIMS over an authenticated route before it acts on a single field. See below.
 //
@@ -81,8 +81,8 @@
 //   4. CLAIM    a CAS on the server row. ⚠ LOSING IS A NORMAL NO-OP, NOT AN ERROR: the operator
 //               may have four machines watching the same workspace and exactly one of them
 //               should launch. Whoever loses stops, quietly.
-//   5. RESOLVE  the TEMPLATE, if one was named — this operator's credential, this machine's call.
-//               404 -> `no-template`; timeout/5xx -> `busy`; a NULLED id beside a live NAME is a
+//   5. RESOLVE  the IDENTITY, if one was named — this operator's credential, this machine's call.
+//               404 -> `no-identity`; timeout/5xx -> `busy`; a NULLED id beside a live NAME is a
 //               DELETION and refuses without asking (E-4).
 //   6. LAUNCH   through `session-engine.launchRequesterSession`, the same funnel the button uses.
 //               WITH a goal it RUNS; without one it registers a spawn-idle shell (see `spawn`).
@@ -217,7 +217,7 @@ async function handle(raw, workspaceId) {
     remember(claimed.id);
     // ⚠ DISPATCH ON THE **CLAIMED** ROW'S KIND, NEVER THE FRAME'S. `claim` re-narrows from the
     // CAS's own answer, which is the authenticated one; if the two disagree, the granted row is
-    // what this machine was actually given. Same rule the goal, the model and the template
+    // what this machine was actually given. Same rule the goal, the model and the identity
     // already follow.
     // ⚠ EVERY BRANCH ANSWERS. A claimed directive nobody decides is the one outcome the
     // orchestrator cannot act on — see `apply`'s fallthrough.

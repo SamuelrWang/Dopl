@@ -127,7 +127,7 @@ vi.mock("./use-agents-panel", () => ({
     launchBusy: false,
     launchError: null,
     launchAgent: async () => ({ ok: true }),
-    approveTemplate: async () => ({ ok: true }),
+    approveIdentity: async () => ({ ok: true }),
     refetch: () => {},
   }),
 }));

@@ -7,10 +7,10 @@
  *  - **"PUBLIC" IS A LABEL OVER `workspace`.** Two vocabularies for one field,
  *    and the wire's word must never reach an operator (`../lib/visibility.ts`).
  *  - **AN EMPTY PANEL KEEPS ITS HEADER.** A section that vanished would make
- *    "you have no team templates" and "this workspace has no teams" the same
+ *    "you have no team identities" and "this workspace has no teams" the same
  *    picture.
  *  - **AN UNSET MODEL RENDERS NO CHIP, not "Default"** — a card states what a
- *    template CARRIES (INVARIANTS §5, and `agent-models.ts ›
+ *    identity CARRIES (INVARIANTS §5, and `agent-models.ts ›
  *    agentModelShortLabel`, which returns `null` for exactly this).
  *
  * Every data hook is mocked: the assertions are about the grouping this page
@@ -19,22 +19,22 @@
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import type { AgentTemplate } from "../client/types";
+import type { AgentIdentity } from "../client/types";
 
-const templates: AgentTemplate[] = [];
+const identities: AgentIdentity[] = [];
 const mutate = vi.fn();
 const mutateAsync = vi.fn(async () => ({}));
 
-vi.mock("../hooks/use-agent-templates", () => ({
-  useAgentTemplates: () => ({
-    templates,
+vi.mock("../hooks/use-agent-identities", () => ({
+  useAgentIdentities: () => ({
+    identities,
     loading: false,
     error: null,
     refetch: () => {},
   }),
 }));
-vi.mock("../hooks/use-agent-template-writes", () => ({
-  useAgentTemplateWrites: () => ({
+vi.mock("../hooks/use-agent-identity-writes", () => ({
+  useAgentIdentityWrites: () => ({
     create: { mutate, mutateAsync, pending: false, error: null },
     update: { mutate, mutateAsync, pending: false, error: null },
     remove: { mutate, mutateAsync, pending: false, error: null },
@@ -47,9 +47,9 @@ vi.mock("@/features/knowledge/client/hooks", () => ({
   useKnowledgeBaseList: () => ({ data: { bases: [] }, error: null, status: "success", refetch: () => {} }),
 }));
 
-const { AgentTemplatesCore } = await import("./agent-templates-core");
+const { AgentIdentitiesCore } = await import("./agent-identities-core");
 
-function template(over: Partial<AgentTemplate> = {}): AgentTemplate {
+function identity(over: Partial<AgentIdentity> = {}): AgentIdentity {
   return {
     id: "tpl-1",
     workspaceId: "ws-1",
@@ -68,10 +68,10 @@ function template(over: Partial<AgentTemplate> = {}): AgentTemplate {
   };
 }
 
-function renderPage(rows: AgentTemplate[]) {
-  templates.length = 0;
-  templates.push(...rows);
-  return render(<AgentTemplatesCore workspaceId="ws-1" workspaceSlug="acme-ab12cd" />);
+function renderPage(rows: AgentIdentity[]) {
+  identities.length = 0;
+  identities.push(...rows);
+  return render(<AgentIdentitiesCore workspaceId="ws-1" workspaceSlug="acme-ab12cd" />);
 }
 
 afterEach(cleanup);
@@ -84,15 +84,15 @@ describe("the three panels", () => {
   });
 
   it("never shows the wire's word for the public scope", () => {
-    renderPage([template({ id: "t-3", name: "Docs bot", visibility: "workspace" })]);
+    renderPage([identity({ id: "t-3", name: "Docs bot", visibility: "workspace" })]);
     expect(document.body.textContent).not.toContain("workspace");
   });
 
   it("files each card under its own visibility", () => {
     renderPage([
-      template({ id: "t-1", name: "Mine", visibility: "private" }),
-      template({ id: "t-2", name: "Ours", visibility: "team", teamIds: ["team-1"] }),
-      template({ id: "t-3", name: "Everyone's", visibility: "workspace" }),
+      identity({ id: "t-1", name: "Mine", visibility: "private" }),
+      identity({ id: "t-2", name: "Ours", visibility: "team", teamIds: ["team-1"] }),
+      identity({ id: "t-3", name: "Everyone's", visibility: "workspace" }),
     ]);
     for (const [label, name] of [
       ["Private", "Mine"],
@@ -105,12 +105,12 @@ describe("the three panels", () => {
   });
 
   it("keeps an empty panel's header and says ONE quiet line", () => {
-    renderPage([template({ visibility: "private" })]);
+    renderPage([identity({ visibility: "private" })]);
     expect(screen.getByRole("region", { name: "Team" }).textContent).toContain(
-      "No team templates yet."
+      "No team identities yet."
     );
     expect(screen.getByRole("region", { name: "Public" }).textContent).toContain(
-      "No public templates yet."
+      "No public identities yet."
     );
   });
 
@@ -118,7 +118,7 @@ describe("the three panels", () => {
     // A newer server may mint a fourth scope. Filing it under "Private" would be
     // this page claiming something it does not know.
     renderPage([
-      template({ id: "t-9", name: "From the future", visibility: "org" as never }),
+      identity({ id: "t-9", name: "From the future", visibility: "org" as never }),
     ]);
     expect(screen.queryByText("From the future")).toBeNull();
   });
@@ -127,7 +127,7 @@ describe("the three panels", () => {
 describe("what a card says", () => {
   it("shows the name, the description line and the model chip", () => {
     renderPage([
-      template({ description: "Runs the checklist", model: "claude-opus-5" }),
+      identity({ description: "Runs the checklist", model: "claude-opus-5" }),
     ]);
     const card = screen.getByRole("button", { name: /Release captain/ });
     expect(card.textContent).toContain("Release captain");
@@ -136,7 +136,7 @@ describe("what a card says", () => {
   });
 
   it("renders NO chip for an unset model — absence is not \"Default\" here", () => {
-    renderPage([template({ model: null })]);
+    renderPage([identity({ model: null })]);
     expect(screen.queryByText("Default")).toBeNull();
   });
 });
@@ -144,21 +144,21 @@ describe("what a card says", () => {
 describe("the create affordance", () => {
   it("is ONE page-level button, not a plus per section", () => {
     renderPage([]);
-    expect(screen.getAllByRole("button", { name: "New template" })).toHaveLength(1);
+    expect(screen.getAllByRole("button", { name: "Agent Identity" })).toHaveLength(1);
   });
 
   // ⚠ `await`ed: `ModalShell` mounts a FRAME after `open` flips (it animates in).
-  it("opens the editor in CREATE mode — no template preloaded", async () => {
-    renderPage([template()]);
-    fireEvent.click(screen.getByRole("button", { name: "New template" }));
-    expect(await screen.findByRole("dialog", { name: "New template" })).toBeTruthy();
+  it("opens the editor in CREATE mode — no identity preloaded", async () => {
+    renderPage([identity()]);
+    fireEvent.click(screen.getByRole("button", { name: "Agent Identity" }));
+    expect(await screen.findByRole("dialog", { name: "New agent identity" })).toBeTruthy();
   });
 
-  it("opens the editor on a CARD, carrying that template", async () => {
-    renderPage([template({ name: "Release captain" })]);
+  it("opens the editor on a CARD, carrying that identity", async () => {
+    renderPage([identity({ name: "Release captain" })]);
     fireEvent.click(screen.getByRole("button", { name: /Release captain/ }));
-    const dialog = await screen.findByRole("dialog", { name: "Edit template" });
-    expect(dialog.querySelector<HTMLInputElement>("#agent-template-name")?.value).toBe(
+    const dialog = await screen.findByRole("dialog", { name: "Edit agent identity" });
+    expect(dialog.querySelector<HTMLInputElement>("#agent-identity-name")?.value).toBe(
       "Release captain"
     );
   });
@@ -166,7 +166,7 @@ describe("the create affordance", () => {
 
 describe("what this page deliberately leaves out", () => {
   it("offers no launch control — launch-time selection is a later phase", () => {
-    renderPage([template()]);
+    renderPage([identity()]);
     expect(screen.queryByText(/launch/i)).toBeNull();
     expect(screen.queryByText(/run/i)).toBeNull();
   });

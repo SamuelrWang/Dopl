@@ -1,7 +1,7 @@
 /**
- * `dopl_search`'s FOURTH group — agent templates (Samuel's ruling Q6,
+ * `dopl_search`'s FOURTH group — agent identities (Samuel's ruling Q6,
  * 2026-08-28). "Use my research agent" is exactly the reference the find
- * requirement is about, so a find surface that cannot find a template the user
+ * requirement is about, so a find surface that cannot find an identity the user
  * names by nickname is the requirement half-met.
  *
  * ⚠ Three things this suite pins that a fourth group is easy to get wrong:
@@ -21,7 +21,7 @@ import { describe, it, expect, vi } from "vitest";
 import { registerSearchTool } from "./search";
 import { callTool, stub } from "./narration-fixtures";
 
-const TEMPLATE = {
+const IDENTITY = {
   id: "11111111-1111-4111-8111-111111111111",
   workspaceId: "ws-1",
   name: "Research agent",
@@ -37,24 +37,24 @@ const TEMPLATE = {
   updatedAt: "2026-01-01T00:00:00Z",
 };
 
-const searchStub = (templates: unknown[], over: Record<string, unknown> = {}) =>
+const searchStub = (identities: unknown[], over: Record<string, unknown> = {}) =>
   stub({
     searchKb: vi.fn(async () => []),
     listSkills: vi.fn(async () => []),
     getOntology: vi.fn(async () => ({ clusters: [], objects: {} })),
-    listAgentTemplates: vi.fn(async () => templates),
+    listAgentIdentities: vi.fn(async () => identities),
     ...over,
   });
 
-describe("dopl_search finds agent templates", () => {
+describe("dopl_search finds agent identities", () => {
   it("matches on the NAME the user would say, and hands back the id to read it", async () => {
     const text = await callTool(
       registerSearchTool,
-      searchStub([TEMPLATE]),
+      searchStub([IDENTITY]),
       "dopl_search",
       { query: "research agent" },
     );
-    expect(text).toContain("## Agent templates");
+    expect(text).toContain("## Agent identities");
     expect(text).toContain("`Research agent`");
     expect(text).toContain("`11111111-1111-4111-8111-111111111111`");
     // ⚠ Visibility rides the row for the same reason the ambiguity refusal
@@ -65,7 +65,7 @@ describe("dopl_search finds agent templates", () => {
   it("matches on the DESCRIPTION too", async () => {
     const text = await callTool(
       registerSearchTool,
-      searchStub([TEMPLATE]),
+      searchStub([IDENTITY]),
       "dopl_search",
       { query: "sources" },
     );
@@ -75,29 +75,29 @@ describe("dopl_search finds agent templates", () => {
   it("NEVER matches on the instructions block, and the footer says so", async () => {
     const text = await callTool(
       registerSearchTool,
-      searchStub([TEMPLATE]),
+      searchStub([IDENTITY]),
       "dopl_search",
       { query: "SECRETWORD" },
     );
-    const group = text.slice(text.indexOf("## Agent templates"));
+    const group = text.slice(text.indexOf("## Agent identities"));
     expect(group).toContain("_No matches._");
-    expect(text).toContain("inside a template's instructions is not findable here");
+    expect(text).toContain("inside an identity's instructions is not findable here");
   });
 
   it("asks for BOTH shelves — a find surface must not need the shelf up front", async () => {
     const list = vi.fn(async () => []);
     await callTool(
       registerSearchTool,
-      searchStub([], { listAgentTemplates: list }),
+      searchStub([], { listAgentIdentities: list }),
       "dopl_search",
       { query: "x" },
     );
     expect(list).toHaveBeenCalledWith();
   });
 
-  it("marks a CAPPED template group, the same way the other groups do", async () => {
+  it("marks a CAPPED identity group, the same way the other groups do", async () => {
     const many = Array.from({ length: 12 }, (_, i) => ({
-      ...TEMPLATE,
+      ...IDENTITY,
       id: `t-${i}`,
       name: `Research agent ${i}`,
     }));
@@ -107,17 +107,17 @@ describe("dopl_search finds agent templates", () => {
       "dopl_search",
       { query: "research" },
     );
-    expect(text).toContain("Showing 8 of 12 matching agent templates");
+    expect(text).toContain("Showing 8 of 12 matching agent identities");
   });
 
-  it("a FAILED template read is NAMED, and the denominator says FOUR groups", async () => {
+  it("a FAILED identity read is NAMED, and the denominator says FOUR groups", async () => {
     // ⚠ The group still renders "No matches" (one dead domain must not fail the
     // search), so the notice is the only thing separating "asked, nothing" from
     // "could not ask".
     const text = await callTool(
       registerSearchTool,
       searchStub([], {
-        listAgentTemplates: vi.fn(async () => {
+        listAgentIdentities: vi.fn(async () => {
           throw Object.assign(new Error("HTTP 500"), {
             name: "DoplApiError",
             status: 500,
@@ -127,7 +127,7 @@ describe("dopl_search finds agent templates", () => {
       "dopl_search",
       { query: "research" },
     );
-    expect(text).toContain("Agent templates (`HTTP 500`)");
+    expect(text).toContain("Agent identities (`HTTP 500`)");
     expect(text).toContain("1 of 4 groups could NOT be read");
   });
 
@@ -143,13 +143,13 @@ describe("dopl_search finds agent templates", () => {
     expect(description).toContain('dopl_agent(op="get")');
     expect(description).not.toContain("THREE domains");
     // ⚠ **THE CLAIM IS PINNED, NOT THE SENTENCE (A14, 2026-09-02).** It used to
-    // read "agent templates are matched on names and short metadata only" —
+    // read "agent identities are matched on names and short metadata only" —
     // one of four clauses enumerating what each group matches on. The house
     // style states the same limit ONCE and from the other direction ("only
     // ENTRIES match on bodies"), which is shorter and strictly more
     // informative: it tells the agent what the exception IS rather than
     // repeating the rule per group. What must not weaken is the consequence,
-    // and that is what these two assert — a term living only inside a template
+    // and that is what these two assert — a term living only inside an identity
     // is not findable here.
     expect(description).toContain("only ENTRIES match on bodies");
     expect(description).toContain("INSTRUCTIONS");

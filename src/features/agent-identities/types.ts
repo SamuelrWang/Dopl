@@ -1,5 +1,5 @@
 /**
- * Agent-template domain types. A template is a PERSISTENT agent identity —
+ * Agent-identity domain types. An identity is a PERSISTENT agent identity —
  * name, instructions, a default model, user-defined fields and referenced
  * knowledge bases — that outlives any session spawned from it. camelCase here;
  * snake_case row shapes in `server/dto.ts`.
@@ -14,16 +14,16 @@
  * there.
  */
 
-/** ⚠ {@link TemplateVisibility} is DECLARED in `@dopl/contracts › workspaces.ts`
+/** ⚠ {@link IdentityVisibility} is DECLARED in `@dopl/contracts › workspaces.ts`
  *  and re-exported here (2026-09-02) — it had an unguarded twin in
- *  `packages/dopl-client/src/agent-template-types.ts`. No import path changed. */
-import type { TemplateVisibility } from "@dopl/contracts";
+ *  `packages/dopl-client/src/agent-identity-types.ts`. No import path changed. */
+import type { IdentityVisibility } from "@dopl/contracts";
 
-export type { TemplateVisibility };
+export type { IdentityVisibility };
 
 import type { Role } from "@/features/workspaces/types";
 
-export const TEMPLATE_VISIBILITIES: readonly TemplateVisibility[] = [
+export const IDENTITY_VISIBILITIES: readonly IdentityVisibility[] = [
   "private",
   "team",
   "workspace",
@@ -54,9 +54,9 @@ export const TEMPLATE_VISIBILITIES: readonly TemplateVisibility[] = [
  * absent as anything else would retype half the rows in the product on the next
  * read (INVARIANTS §8: the wire type is what makes the optionality invisible).
  */
-export type TemplateFieldType = "text" | "number" | "date" | "boolean" | "url";
+export type IdentityFieldType = "text" | "number" | "date" | "boolean" | "url";
 
-export const TEMPLATE_FIELD_TYPES: readonly TemplateFieldType[] = [
+export const IDENTITY_FIELD_TYPES: readonly IdentityFieldType[] = [
   "text",
   "number",
   "date",
@@ -64,23 +64,23 @@ export const TEMPLATE_FIELD_TYPES: readonly TemplateFieldType[] = [
   "url",
 ];
 
-/** The fallback spelled ONCE — `?? TEMPLATE_FIELD_TYPE_DEFAULT` at every read. */
-export const TEMPLATE_FIELD_TYPE_DEFAULT: TemplateFieldType = "text";
+/** The fallback spelled ONCE — `?? IDENTITY_FIELD_TYPE_DEFAULT` at every read. */
+export const IDENTITY_FIELD_TYPE_DEFAULT: IdentityFieldType = "text";
 
-export interface TemplateField {
+export interface IdentityField {
   key: string;
   value: string;
-  /** ⚠ ABSENT IS `text` — see {@link TemplateFieldType}. */
-  type?: TemplateFieldType;
+  /** ⚠ ABSENT IS `text` — see {@link IdentityFieldType}. */
+  type?: IdentityFieldType;
 }
 
 /**
- * A knowledge base attached to a template — a REFERENCE, never a copy. Only
+ * A knowledge base attached to an identity — a REFERENCE, never a copy. Only
  * `{id, name}` is carried; the agent reads the base itself through the
  * knowledge tools, so a base that later goes private or is deleted degrades to
- * "gone" rather than to a stale snapshot living in a template.
+ * "gone" rather than to a stale snapshot living in an identity.
  */
-export interface TemplateKnowledgeBaseRef {
+export interface IdentityKnowledgeBaseRef {
   id: string;
   name: string;
 }
@@ -98,7 +98,7 @@ export interface TemplateKnowledgeBaseRef {
  * base-keyed: a folder scope narrows what the role block POINTS AT. Filed as a
  * finding; never read this union as access control.
  */
-export type TemplateKnowledgeScopeKind = "base" | "folder" | "entry";
+export type IdentityKnowledgeScopeKind = "base" | "folder" | "entry";
 
 /**
  * The WRITE shape — ids only, because ids are the stable handle. `knowledge_folders`
@@ -106,7 +106,7 @@ export type TemplateKnowledgeScopeKind = "base" | "folder" | "entry";
  * `parent_id`, `knowledge/server/path.ts › resolvePath`), so a path on the wire
  * would be a name a rename silently falsifies.
  */
-export type TemplateKnowledgeScope =
+export type IdentityKnowledgeScope =
   | { baseId: string; scope: "base" }
   | { baseId: string; scope: "folder"; folderId: string }
   | { baseId: string; scope: "entry"; entryId: string };
@@ -122,7 +122,7 @@ export type TemplateKnowledgeScope =
  * put it in. Entries are never carried at any depth — that is what makes the
  * card FIXED-SIZE rather than a function of how big the base got.
  */
-export interface TemplateKnowledgeFolderBrief {
+export interface IdentityKnowledgeFolderBrief {
   name: string;
   /**
    * `knowledge_folders.description`, the agent-facing summary (≤`DESCRIPTION_MAX`).
@@ -141,10 +141,10 @@ export interface TemplateKnowledgeFolderBrief {
  * recomputed per read, so a rename shows up rather than rotting. It is user
  * text: the desktop sanitizes it at render.
  */
-export interface TemplateKnowledgeRef {
+export interface IdentityKnowledgeRef {
   baseId: string;
   baseName: string;
-  scope: TemplateKnowledgeScopeKind;
+  scope: IdentityKnowledgeScopeKind;
   folderId?: string;
   folderName?: string;
   entryId?: string;
@@ -174,7 +174,7 @@ export interface TemplateKnowledgeRef {
    * counts of content — so a base with forty entries and a base with four
    * produce the same card. The desktop caps the RENDERED card at 400 characters
    * per base and degrades by DROPPING WHOLE FACTS
-   * (`prompt-framing-template.js › baseCard`); this payload never hands it a
+   * (`prompt-framing-agent-identity.js › baseCard`); this payload never hands it a
    * fact it would have to cut in half.
    *
    * The base's kebab-case slug. ⚠ **AN ADDRESS, NOT A LABEL** — `dopl_kb`'s
@@ -186,7 +186,7 @@ export interface TemplateKnowledgeRef {
    * One line on what the base answers — `knowledge_bases.description`.
    * ⚠ **CARRIED WHOLE OR NOT AT ALL**: a description longer than
    * `DESCRIPTION_MAX` is omitted rather than sliced, for the reason
-   * {@link TemplateKnowledgeFolderBrief.summary} gives.
+   * {@link IdentityKnowledgeFolderBrief.summary} gives.
    */
   baseSummary?: string;
   /**
@@ -194,12 +194,12 @@ export interface TemplateKnowledgeRef {
    * ⚠ **TOP LEVEL ONLY** — the whole subtree is what `get_tree` is for, and a
    * recursive list is exactly the unbounded thing this card refuses to be.
    */
-  baseFolders?: TemplateKnowledgeFolderBrief[];
+  baseFolders?: IdentityKnowledgeFolderBrief[];
   /**
    * How many top-level folders the base REALLY has.
    *
    * 🔒 ⚠ **THE COMPLETENESS SIGNAL, AND IT IS THE POINT OF THE FIELD.**
-   * {@link TemplateKnowledgeRef.baseFolders} is capped — server-side and again
+   * {@link IdentityKnowledgeRef.baseFolders} is capped — server-side and again
    * at the desktop boundary — and a capped list rendered as if it were the
    * whole list is a lie about a base's shape. The renderer prints the folder
    * line ONLY when `baseFolders.length === baseFolderCount`, so any cap, any
@@ -210,25 +210,25 @@ export interface TemplateKnowledgeRef {
 }
 
 /**
- * WHICH SHELF a template lives on — /home's "Personal" section or the workspace
+ * WHICH SHELF an identity lives on — /home's "Personal" section or the workspace
  * Agents page. Two PLACES over one table (Samuel, 2026-08-27); since 2026-09-02
  * also two CONTAINERS, the personal shelf being the caller's own
  * `kind='personal'` workspace. `features/knowledge/types.ts › KbShelf` carries
  * the argument, and this MIRRORS it rather than importing it (§1 forbids the
  * cross-feature import, as with `canSeeBase`).
  *
- * ⚠ NOT A FIELD ON `AgentTemplate`, and never make it one — it is a WRITE input
- * (`AgentTemplateCreateInput.homeScoped`, which ROUTES the row) and a READ
+ * ⚠ NOT A FIELD ON `AgentIdentity`, and never make it one — it is a WRITE input
+ * (`AgentIdentityCreateInput.homeScoped`, which ROUTES the row) and a READ
  * FILTER (`?shelf=`). Nothing shelf-shaped is projected, so §8's stale-cache
  * rule has nothing to apply to.
  * 🔒 IT IS NOT THE VISIBILITY AXIS. `visibility` says who may READ; this says
- * which surface LISTS. `canSeeTemplate` never sees it.
+ * which surface LISTS. `canSeeIdentity` never sees it.
  * ⚠ ABSENT = NO FILTER, not a third value — which is what keeps the launch
- * picker and `resolveTemplateForLaunch` seeing the whole workspace.
+ * picker and `resolveIdentityForLaunch` seeing the whole workspace.
  */
-export type TemplateShelf = "home" | "workspace";
+export type IdentityShelf = "home" | "workspace";
 
-export interface AgentTemplate {
+export interface AgentIdentity {
   id: string;
   workspaceId: string;
   name: string;
@@ -238,20 +238,20 @@ export interface AgentTemplate {
   /** Default model identifier, passed through at spawn. Null = the desktop's
    *  own default; this layer holds no model roster. */
   model: string | null;
-  fields: TemplateField[];
-  visibility: TemplateVisibility;
+  fields: IdentityField[];
+  visibility: IdentityVisibility;
   /**
-   * Teams this template is shared with. ⚠ Populated only when `visibility` is
+   * Teams this identity is shared with. ⚠ Populated only when `visibility` is
    * `'team'`, and only for the creator / workspace admins — team composition is
    * a leak otherwise, exactly as `Skill.grantedTeamIds` is gated.
    */
   teamIds: string[];
   /** Attached KBs, VIEWER-FILTERED — two callers can get different lists for
    *  one row. ⚠ **BASE-LEVEL SCOPES ONLY SINCE 2026-09-08**, kept for readers
-   *  predating {@link AgentTemplate.knowledge}; a folder/entry scope is absent
+   *  predating {@link AgentIdentity.knowledge}; a folder/entry scope is absent
    *  rather than widened into its base, which would over-report the
    *  attachment. */
-  knowledgeBases: TemplateKnowledgeBaseRef[];
+  knowledgeBases: IdentityKnowledgeBaseRef[];
   /**
    * EVERY attached scope — base, folder and entry alike (2026-09-08).
    *
@@ -260,7 +260,7 @@ export interface AgentTemplate {
    * the operator built.
    * ⚠ VIEWER-FILTERED A LEVEL DEEPER: a scope drops with its base, and also when
    * its folder or entry is gone or trashed. Base drops are counted in
-   * {@link AgentTemplate.unreachableKnowledgeBaseCount}.
+   * {@link AgentIdentity.unreachableKnowledgeBaseCount}.
    *
    * 🔒 **OPTIONAL — §8's STANDING RULE, NOT A HEDGE.** This payload is
    * IndexedDB-persisted (24h `gcTime`), so the first paint after this release
@@ -268,7 +268,7 @@ export interface AgentTemplate {
    * reader spells `?? EMPTY_KNOWLEDGE` INLINE (`lib/knowledge-scopes.ts`), and
    * this wave's tests include the fixture WITHOUT it.
    */
-  knowledge?: TemplateKnowledgeRef[];
+  knowledge?: IdentityKnowledgeRef[];
   /**
    * HOW MANY ATTACHMENTS THE VIEWER FILTER DROPPED — a COUNT and nothing else
    * (Samuel's ruling, 2026-09-05).
@@ -289,27 +289,27 @@ export interface AgentTemplate {
 
 /**
  * The flattened payload the desktop fetches at spawn time and the future launch
- * integration consumes VERBATIM. Deliberately NOT `AgentTemplate`: it carries
+ * integration consumes VERBATIM. Deliberately NOT `AgentIdentity`: it carries
  * no ids, no visibility and no timestamps, because none of them is an input to
  * starting an agent, and a launch payload that grows fields is a payload
  * whose consumer has to guess which ones matter.
  */
-export interface ResolvedAgentTemplate {
+export interface ResolvedAgentIdentity {
   name: string;
   instructions: string | null;
   model: string | null;
-  fields: TemplateField[];
-  knowledgeBases: TemplateKnowledgeBaseRef[];
+  fields: IdentityField[];
+  knowledgeBases: IdentityKnowledgeBaseRef[];
   /**
    * THE EIGHTH KEY (2026-09-08): every attached scope, base / folder / entry.
    *
    * ⚠ **IT DOES NOT REPLACE `knowledgeBases` HERE AND MUST NOT.** An older
    * desktop narrows this response through an ALLOWLIST
-   * (`main/template-resolve.js › narrow`), so dropping the base list would hand
-   * every such build a template with no knowledge at all — §13's older-peer
+   * (`main/identity-resolve.js › narrow`), so dropping the base list would hand
+   * every such build an identity with no knowledge at all — §13's older-peer
    * rule, on the one payload where the failure is silent prompt text.
    */
-  knowledge: TemplateKnowledgeRef[];
+  knowledge: IdentityKnowledgeRef[];
   /**
    * THE SEVENTH KEY (2026-09-05): how many attached bases this launch CANNOT
    * reach. Always a number here — the launch payload has one producer, so
@@ -320,13 +320,13 @@ export interface ResolvedAgentTemplate {
    * cannot report a gap it was never told about. With this, the desktop's ROLE
    * block tells it to say *"I don't have access to this knowledge base in this
    * channel"*.
-   * ⚠ **A COUNT, NEVER A LOCATION** (see {@link AgentTemplate}) — this is the
+   * ⚠ **A COUNT, NEVER A LOCATION** (see {@link AgentIdentity}) — this is the
    * one payload where a leak would land in prompt text.
    * ⚠ **IT NEVER BLOCKS A LAUNCH.** The agent starts, minus the base.
    */
   unreachableKnowledgeBaseCount: number;
   /**
-   * Did the RESOLVING caller write this template? (G-1, 2026-08-22.)
+   * Did the RESOLVING caller write this identity? (G-1, 2026-08-22.)
    *
    * ⚠ THE ONE EXCEPTION TO "no ownership in a launch payload": the desktop's
    * ROLE block wears a different SECURITY HEADER for another member's
@@ -343,18 +343,18 @@ export interface ResolvedAgentTemplate {
  * Mirrors `SkillContext` / `KnowledgeContext` field for field so the three
  * services read the same way.
  */
-export interface AgentTemplateContext {
+export interface AgentIdentityContext {
   workspaceId: string;
   userId: string;
   /** API-key callers = agent, session callers = user. */
   source: "user" | "agent";
   /** Caller's workspace role. Null when auth didn't resolve one → treated as
-   *  non-admin, so team-scoped templates require a linked team. */
+   *  non-admin, so team-scoped identities require a linked team. */
   role: Role | null;
   /**
    * Workspace this credential is fenced to. ⚠ *WHICH WORKSPACE* ONLY — it is
    * NOT the visibility answer, which is the F-333/F-336 defect (fixed
-   * 2026-08-27). See {@link AgentTemplateContext.credentialSubjectUserId}.
+   * 2026-08-27). See {@link AgentIdentityContext.credentialSubjectUserId}.
    */
   apiKeyWorkspaceId?: string | null;
   /**

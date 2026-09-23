@@ -2,7 +2,7 @@
 
 /**
  * THE TWO CARD SHAPES THE AGENTS TAB DRAWS — my own agent, and a peer's — split
- * out of `agents-tab.tsx` on 2026-08-22 at the 500-line cap, when the template
+ * out of `agents-tab.tsx` on 2026-08-22 at the 500-line cap, when the identity
  * picker landed on that file's New Agent button.
  *
  * ⚠ THE SEAM IS §1's "one file, one reason to change", not the line count that
@@ -181,7 +181,7 @@ export function AgentCard({
    * item 8).
    *
    * ⚠ **IT IS A PROP AND NOT A FIELD ON {@link agent}, WHICH IS THE OPPOSITE OF HOW
-   * `templateName` AND `diag` ABOVE WORK, AND THE REASON IS WORTH KEEPING STRAIGHT.** Those
+   * `identityName` AND `diag` ABOVE WORK, AND THE REASON IS WORTH KEEPING STRAIGHT.** Those
    * two are OWN-ONLY because the local feed is the only thing that knows them. A colour is
    * the other way round: it is the SERVER's assignment against every member's live agents
    * (`20261005120000`'s per-channel unique index), so `DesktopSessionSummary` — this
@@ -211,15 +211,15 @@ export function AgentCard({
   // ⚠ THE SESSION'S model, never the CHANNEL's stored pick — a live agent may
   // have been switched mid-run, or spawned before the posture changed.
   const modelLabel = agentModelShortLabel(agentRunningModel(agent));
-  // ⚠ WHICH IDENTITY THIS AGENT IS WEARING (2026-08-22, agent templates) — a
+  // ⚠ WHICH IDENTITY THIS AGENT IS WEARING (2026-08-22, agent identities) — a
   // SNAPSHOT of the name main resolved at spawn, never a pointer, so the session
-  // keeps what it RAN AS after the template is renamed or deleted
-  // (`spa-bridge-shapes.ts › DesktopSessionSummary.templateName`). Absent and
+  // keeps what it RAN AS after the identity is renamed or deleted
+  // (`spa-bridge-shapes.ts › DesktopSessionSummary.identityName`). Absent and
   // `null` both render nothing (INVARIANTS §11 — UNKNOWN is not EMPTY).
-  // ⚠ OPERATOR-ONLY, AND STRUCTURALLY SO: `channel_sessions.template_name` is
-  // excluded from the peer projection, because a private template's name on a
+  // ⚠ OPERATOR-ONLY, AND STRUCTURALLY SO: `channel_sessions.identity_name` is
+  // excluded from the peer projection, because a private identity's name on a
   // colleague's card is an existence oracle. Do not plumb it into `PeerCards`.
-  const templateName = agent.templateName?.trim() || null;
+  const identityName = agent.identityName?.trim() || null;
   // ⚠ NO TIMING LINE AND NO "N of yours here" SINCE 2026-09-08 (Samuel: remove
   // both); the ended PILL states the one fact that matters.
 
@@ -256,7 +256,7 @@ export function AgentCard({
           ⚠ `text-danger`, because this is the one line on the card that is a
           FAILURE rather than a measurement — and it is one line, not a paragraph
           (minimal copy, INVARIANTS §5); `title` carries the whole sentence.
-          ⚠ OWN CARDS ONLY, like `templateName` above: the field is local-only by
+          ⚠ OWN CARDS ONLY, like `identityName` above: the field is local-only by
           construction and never reaches a peer's projection. */}
       {agent.diag && (
         <p
@@ -279,13 +279,13 @@ export function AgentCard({
       <div className="flex min-w-0 items-center gap-1.5 text-caption text-text-secondary">
         <CornerDownRight size={12} aria-hidden className="shrink-0 text-text-muted" />
         <span className="min-w-0 truncate">{threadTitle}</span>
-        {/* ⚠ THE TEMPLATE READS BEFORE THE MODEL — it is WHO this agent is, the
+        {/* ⚠ THE IDENTITY READS BEFORE THE MODEL — it is WHO this agent is, the
               model only what it runs on. Both ride this detail line rather than
               earning chrome (minimal copy, INVARIANTS §5), and both render NOTHING
               when unreported: "Default" would be this build claiming to know
               (`agents-model.ts › agentRunningModel`). */}
-        {templateName && (
-          <span className="min-w-0 truncate text-text-muted">· {templateName}</span>
+        {identityName && (
+          <span className="min-w-0 truncate text-text-muted">· {identityName}</span>
         )}
         {modelLabel && (
           <span className="shrink-0 text-text-muted">· {modelLabel}</span>

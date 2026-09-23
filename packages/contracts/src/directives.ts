@@ -73,31 +73,31 @@ export type DirectionRefusalReason =
  *                        is Samuel's consent mechanism, so this reason is a
  *                        CHOICE and the render must not read as a fault.
  *  - `no-counterparty` — nothing to work with in that channel.
- *  - `no-template`     — ⚠ THE SEVENTH, 2026-08-22 (agent templates). The
- *                        directive named a TEMPLATE and the operator's machine
+ *  - `no-identity`     — ⚠ THE SEVENTH, 2026-08-22 (agent identities). The
+ *                        directive named a IDENTITY and the operator's machine
  *                        could not resolve it: DELETED, or not visible to the
  *                        OPERATOR even though it was visible to the orchestrator
  *                        that named it. Those are ONE answer on purpose — the
  *                        resolve endpoint is 404-never-403 so the difference is
  *                        not observable, and a render that guessed would rebuild
- *                        the oracle. The next action is to re-check the template
+ *                        the oracle. The next action is to re-check the identity
  *                        list as the operator, not to re-issue.
  *
  * ⚠ AN EIGHTH REASON IS A SCHEMA CHANGE IN BOTH TREES, deliberately: the column
  * carries the same CHECK, so an unknown value cannot be stored and cannot reach
  * a render as raw text.
- * ⚠ `no-template` IS FULLY LANDED SINCE 2026-08-23. It was half-landed for a day
+ * ⚠ `no-identity` IS FULLY LANDED SINCE 2026-08-23. It was half-landed for a day
  * — this list at seven while the column CHECK was at six — and the note here said
  * so, because a producer shipped in that window would have passed zod and been
  * refused AT REST. Both halves are in now:
  * `20260823140000_channel_launch_directives_template.sql` widens the CHECK
  * (⚠ WRITTEN — applied is a measurement, INVARIANTS §12) in the same wave as the
  * producer, `main/launch-directives.js › spawn`, which resolves the directive's
- * template at CLAIM time under the OPERATOR's credential.
+ * identity at CLAIM time under the OPERATOR's credential.
  *
- * ⚠ `template-approval` IS NOT A MEMBER AND MUST NOT BECOME ONE. It is an
+ * ⚠ `identity-approval` IS NOT A MEMBER AND MUST NOT BECOME ONE. It is an
  * IPC-only word: the desktop answers it to its OWN renderer when a FOREIGN
- * template's first run on that machine needs one human click. There is no human
+ * identity's first run on that machine needs one human click. There is no human
  * at the keyboard on this lane, and `orchestratorLaunchEnabled` already stands in
  * for the click here (the toggle IS the standing consent), so a directive can
  * never produce it and the column must never be able to store it.
@@ -109,7 +109,7 @@ export type LaunchRefusalReason =
   | "auth-hold"
   | "no-bridge"
   | "no-counterparty"
-  | "no-template"
+  | "no-identity"
   // ⚠ THE EIGHTH AND NINTH, 2026-09-01 (external end / rename — Samuel's "Dopl
   // MCP need to be able to do all that stuff"). Both belong to the NON-LAUNCH
   // kinds and neither can be produced by a launch, which is why the sentences in

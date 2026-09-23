@@ -29,8 +29,8 @@ import {
   LaunchDirectiveNotClaimableError,
   LaunchDirectiveNotFoundError,
   AgentColorTakenError,
-  LaunchTemplateAmbiguousError,
-  LaunchTemplateNotFoundError,
+  LaunchIdentityAmbiguousError,
+  LaunchIdentityNotFoundError,
   TaskForbiddenError,
   TaskNotFoundError,
   TaskSelfTargetError,
@@ -132,31 +132,31 @@ function mapChannelError(err: unknown): HttpError | null {
   if (err instanceof LaunchDirectiveNotClaimableError) {
     return new HttpError(409, "LAUNCH_DIRECTIVE_NOT_CLAIMABLE", err.message);
   }
-  // ⚠ 404 AND THE AGENT-TEMPLATES CODE, not a channels-flavoured one. The `/resolve`
-  // endpoint answers `AGENT_TEMPLATE_NOT_FOUND` for the same fact, and the MCP layer
-  // branches on the CODE to tell a missing TEMPLATE from a missing CHANNEL — both of
+  // ⚠ 404 AND THE AGENT-IDENTITIES CODE, not a channels-flavoured one. The `/resolve`
+  // endpoint answers `AGENT_IDENTITY_NOT_FOUND` for the same fact, and the MCP layer
+  // branches on the CODE to tell a missing IDENTITY from a missing CHANNEL — both of
   // which arrive here as a 404 from the same call.
-  if (err instanceof LaunchTemplateNotFoundError) {
+  if (err instanceof LaunchIdentityNotFoundError) {
     // ⚠ `details` ONLY WHEN THERE IS SOMETHING NON-LEAKY TO SAY (T35) — the key
     // is absent, not null, for an ordinary miss, so a client cannot read its
     // PRESENCE as a signal about a row it may not see.
     return new HttpError(
       404,
-      "AGENT_TEMPLATE_NOT_FOUND",
+      "AGENT_IDENTITY_NOT_FOUND",
       err.message,
       err.elsewhere ? { elsewhere: err.elsewhere } : undefined
     );
   }
   // ⚠ 409 WITH `details.matches`, because the REFUSAL IS ONLY USEFUL WITH THE LIST.
   // "That name is ambiguous" with nothing else forces the caller to guess or to go
-  // read the template list through another tool; the ids it needs are already in
+  // read the identity list through another tool; the ids it needs are already in
   // hand and every one of them passed this caller's own visibility check.
-  if (err instanceof LaunchTemplateAmbiguousError) {
-    return new HttpError(409, "AGENT_TEMPLATE_AMBIGUOUS", err.message, {
+  if (err instanceof LaunchIdentityAmbiguousError) {
+    return new HttpError(409, "AGENT_IDENTITY_AMBIGUOUS", err.message, {
       matches: err.matches,
     });
   }
-  // ⚠ 409 WITH `details.free`, on {@link LaunchTemplateAmbiguousError}'s own argument:
+  // ⚠ 409 WITH `details.free`, on {@link LaunchIdentityAmbiguousError}'s own argument:
   // a refusal the caller cannot act on sends them back for facts this response already
   // holds. ⚠ 409 AND NOT 400 — the payload is perfectly valid, the WORLD is the
   // problem, and a 400 would tell an orchestrator to fix its call rather than pick

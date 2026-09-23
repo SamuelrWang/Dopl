@@ -60,7 +60,7 @@ const CANONICAL = [
   "WorkspaceRole",
   "MembershipStatus",
   "WorkspaceKind",
-  "TemplateVisibility",
+  "IdentityVisibility",
 ] as const;
 
 /**

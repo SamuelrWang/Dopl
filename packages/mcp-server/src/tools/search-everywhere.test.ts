@@ -86,7 +86,7 @@ function clientStub(over: Record<string, unknown> = {}) {
     searchKb: vi.fn(async () => []),
     listSkills: vi.fn(async () => [SKILL]),
     getOntology: vi.fn(async () => ({ clusters: [], objects: {} })),
-    listAgentTemplates: vi.fn(async () => []),
+    listAgentIdentities: vi.fn(async () => []),
     getHomeChannels: vi.fn(async () => ({ channels: [], pendingLinks: [] })),
     ...over,
   } as unknown as DoplClient;

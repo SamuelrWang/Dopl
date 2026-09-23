@@ -8,8 +8,8 @@
  * base" would be a wrong sentence about what the role names.
  *
  * ⚠ **ITS OWN FILE, AND THE REASON IS THE ONE §1 STATES.**
- * `template-editor.test.tsx` sits close to the hard 500 (`wc -l` is the check;
- * its SOURCE-READ half moved to `template-editor-surface.test.tsx` on 2026-09-08
+ * `identity-editor.test.tsx` sits close to the hard 500 (`wc -l` is the check;
+ * its SOURCE-READ half moved to `identity-editor-surface.test.tsx` on 2026-09-08
  * for the same reason)
  * (`eslint.config.mjs › max-lines`, `error`, no exemption for this path), so it
  * cannot absorb two cases and their docblocks — and a file that big absorbs a
@@ -26,8 +26,8 @@
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
-import type { AgentTemplate } from "../client/types";
-import { TemplateEditor } from "./template-editor";
+import type { AgentIdentity } from "../client/types";
+import { IdentityEditor } from "./identity-editor";
 
 /** ⚠ THE PICKER READS A TREE PER BASE. This suite is about the EDITOR, not about
  *  the knowledge transport — a real fetch would make every case here depend on a
@@ -42,7 +42,7 @@ const BASES = [
   { id: "kb-2", name: "Specs" },
 ];
 
-function template(over: Partial<AgentTemplate> = {}): AgentTemplate {
+function identity(over: Partial<AgentIdentity> = {}): AgentIdentity {
   return {
     id: "tpl-1",
     workspaceId: "ws-1",
@@ -68,13 +68,13 @@ function template(over: Partial<AgentTemplate> = {}): AgentTemplate {
 }
 
 /** ⚠ `await`ed because `ModalShell` mounts its frame AFTER `open` flips. */
-async function open(tpl: AgentTemplate | null) {
+async function open(tpl: AgentIdentity | null) {
   render(
-    <TemplateEditor
+    <IdentityEditor
       open
       workspaceId="ws-1"
       session={1}
-      template={tpl}
+      identity={tpl}
       teams={[]}
       knowledgeBases={BASES}
       saving={false}
@@ -93,7 +93,7 @@ afterEach(cleanup);
 describe("attached bases this view cannot reach", () => {
   /**
    * 🔒 **A COUNT, AND ONLY A COUNT.** The launch payload has carried this since
-   * 2026-09-05 (`types.ts › ResolvedAgentTemplate`) while the surface where the
+   * 2026-09-05 (`types.ts › ResolvedAgentIdentity`) while the surface where the
    * attachment was MADE said nothing, so an author could not tell that a base
    * they attached elsewhere does not resolve here.
    *
@@ -103,7 +103,7 @@ describe("attached bases this view cannot reach", () => {
    * put a name back by cross-referencing the chip options.
    */
   it("says how many, and never which", async () => {
-    await open(template({ unreachableKnowledgeBaseCount: 2 }));
+    await open(identity({ unreachableKnowledgeBaseCount: 2 }));
     expect(
       screen.getByText(/2 attachments aren't reachable from here/)
     ).toBeTruthy();
@@ -121,20 +121,20 @@ describe("attached bases this view cannot reach", () => {
    * ⚠ ZERO AND UNDECORATED ARE BOTH SILENT, and they are different states. `0`
    * is a decided answer ("nothing was dropped"); an ABSENT field means the row
    * never went through `decorateWithKnowledgeBases` and has no answer at all.
-   * Neither is a line worth printing on every well-formed template forever
+   * Neither is a line worth printing on every well-formed identity forever
    * (INVARIANTS §5).
    */
   it("says nothing when every attached base is reachable", async () => {
-    await open(template({ unreachableKnowledgeBaseCount: 0 }));
+    await open(identity({ unreachableKnowledgeBaseCount: 0 }));
     expect(screen.queryByText(/reachable from here/)).toBeNull();
     cleanup();
-    await open(template());
+    await open(identity());
     expect(screen.queryByText(/reachable from here/)).toBeNull();
   });
 
-  /** ⚠ A NEW template has no row behind it, so there is nothing to be
+  /** ⚠ A NEW identity has no row behind it, so there is nothing to be
    *  unreachable — and reading a count off `null` must not throw. */
-  it("says nothing while creating a template", async () => {
+  it("says nothing while creating an identity", async () => {
     await open(null);
     expect(screen.queryByText(/reachable from here/)).toBeNull();
   });

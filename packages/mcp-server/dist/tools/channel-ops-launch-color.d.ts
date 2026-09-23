@@ -13,7 +13,7 @@ import { type ToolResponse } from "./respond";
  * than a new pattern.
  *
  * ⚠ **DUCK-TYPED ACROSS THE `@dopl/client` BOUNDARY**, the same discipline
- * `channel-ops-launch.ts › apiErrorCode` / `templateMatches` and `respond.ts ›
+ * `channel-ops-launch.ts › apiErrorCode` / `identityMatches` and `respond.ts ›
  * isNotFound` follow: the error's `details` is a wire shape, not a class this package
  * imports, so it is read defensively and a malformed one degrades to "no list".
  */
@@ -67,10 +67,10 @@ export declare function asAgentColorKey(value: string | undefined): AgentColorKe
 export declare function freeColors(e: unknown): string[];
 /**
  * ⚠ **`err`, BECAUSE NOTHING WAS FILED AND THERE IS NOTHING TO POLL** — the same
- * reason `ambiguousTemplate` is an error result. An `ok` here would invite a wait for a
+ * reason `ambiguousIdentity` is an error result. An `ok` here would invite a wait for a
  * directive that does not exist.
  *
- * ⚠ **THE LIST IS THE WHOLE VALUE OF THE REFUSAL** (`ambiguousTemplate`'s argument
+ * ⚠ **THE LIST IS THE WHOLE VALUE OF THE REFUSAL** (`ambiguousIdentity`'s argument
  * again): "that colour is taken" alone leaves an orchestrator guessing among sixteen,
  * and the free set is already in the response.
  *
@@ -108,7 +108,7 @@ export declare function colorTaken(wanted: string, free: string[]): ToolResponse
  * shape right here — a prose copy of the vocabulary is the one cost this field could still shed.
  * ⚠ **AND THE STANDING RULES ARE IN THE PULLED DOCTRINE** (`channel-doctrine.ts › FIELDS`, whose
  * whole subject is an argument that carries a rule): uniqueness across members, the free-on-end
- * bank, the 409 and the retry key. On `template`'s precedent they were WRITTEN there before they
+ * bank, the 409 and the retry key. On `identity`'s precedent they were WRITTEN there before they
  * were left out of here — a rule an agent needs once per launch does not belong on a surface
  * pushed to every client on every connection. `channel-schema.ts › SCHEMA_MAX_CHARS` records what
  * this field costs and what paid for it.

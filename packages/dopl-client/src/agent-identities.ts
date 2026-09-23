@@ -1,14 +1,14 @@
 /**
- * Agent-template methods for `DoplClient`. Free functions over
- * `DoplTransport`; the class-side method group is `client-agent-templates.ts`.
+ * Agent-identity methods for `DoplClient`. Free functions over
+ * `DoplTransport`; the class-side method group is `client-agent-identities.ts`.
  *
- * ⚠ FOUR VERBS AND THE OMISSION IS THE POINT. `DELETE /api/agent-templates/
+ * ⚠ FOUR VERBS AND THE OMISSION IS THE POINT. `DELETE /api/agent-identities/
  * {id}` is `sessionOnly` AND app-only by standing policy (Samuel's ruling Q9,
  * 2026-08-28), so binding it here would publish a method every MCP tool holds
  * and no MCP caller may ever use.
  *
- * ⚠ TEMPLATES ARE ADDRESSED BY UUID, never by slug — the route param validator
- * (`shared/api/agent-template-route.ts › requireTemplateId`) 400s anything
+ * ⚠ IDENTITIES ARE ADDRESSED BY UUID, never by slug — the route param validator
+ * (`shared/api/agent-identity-route.ts › requireIdentityId`) 400s anything
  * else. Name→id resolution is the MCP layer's job
  * (`packages/mcp-server/src/tools/agent-shared.ts`), over the already
  * visibility-filtered list this module returns.
@@ -17,75 +17,75 @@
 import { DoplApiError } from "./errors.js";
 import type { DoplTransport } from "./transport.js";
 import type {
-  AgentTemplate,
-  AgentTemplateCreateInput,
-  AgentTemplateListPayload,
-  AgentTemplateUpdateInput,
-  TemplateShelf,
-} from "./agent-template-types.js";
+  AgentIdentity,
+  AgentIdentityCreateInput,
+  AgentIdentityListPayload,
+  AgentIdentityUpdateInput,
+  IdentityShelf,
+} from "./agent-identity-types.js";
 
 const enc = encodeURIComponent;
 
 /**
- * The templates this caller may SEE, optionally narrowed to one shelf.
+ * The identities this caller may SEE, optionally narrowed to one shelf.
  *
  * ⚠ `shelf` ABSENT = BOTH shelves, and that is the pre-existing contract every
  * caller rides. An unrecognised value never reaches here — the MCP arg is an
  * enum and the route answers 400 — so this function never has to decide what a
  * misspelling means.
  */
-export async function listAgentTemplatesPayload(
+export async function listAgentIdentitiesPayload(
   t: DoplTransport,
-  opts: { shelf?: TemplateShelf } = {}
-): Promise<AgentTemplateListPayload> {
+  opts: { shelf?: IdentityShelf } = {}
+): Promise<AgentIdentityListPayload> {
   const qs = opts.shelf ? `?shelf=${enc(opts.shelf)}` : "";
-  return t.request<AgentTemplateListPayload>(`/api/agent-templates${qs}`, {
-    toolName: "agent_list_templates",
+  return t.request<AgentIdentityListPayload>(`/api/agent-identities${qs}`, {
+    toolName: "agent_list_identities",
   });
 }
 
-/** The rows alone. ⚠ DELEGATES to {@link listAgentTemplatesPayload} — one HTTP
+/** The rows alone. ⚠ DELEGATES to {@link listAgentIdentitiesPayload} — one HTTP
  *  call either way, and one place that knows the URL. */
-export async function listAgentTemplates(
+export async function listAgentIdentities(
   t: DoplTransport,
-  opts: { shelf?: TemplateShelf } = {}
-): Promise<AgentTemplate[]> {
-  return (await listAgentTemplatesPayload(t, opts)).templates;
+  opts: { shelf?: IdentityShelf } = {}
+): Promise<AgentIdentity[]> {
+  return (await listAgentIdentitiesPayload(t, opts)).identities;
 }
 
-export async function getAgentTemplate(
+export async function getAgentIdentity(
   t: DoplTransport,
-  templateId: string
-): Promise<AgentTemplate> {
-  const data = await t.request<{ template: AgentTemplate }>(
-    `/api/agent-templates/${enc(templateId)}`,
-    { toolName: "agent_get_template" }
+  identityId: string
+): Promise<AgentIdentity> {
+  const data = await t.request<{ identity: AgentIdentity }>(
+    `/api/agent-identities/${enc(identityId)}`,
+    { toolName: "agent_get_identity" }
   );
-  return data.template;
+  return data.identity;
 }
 
-export async function createAgentTemplate(
+export async function createAgentIdentity(
   t: DoplTransport,
-  input: AgentTemplateCreateInput
-): Promise<AgentTemplate> {
-  const data = await t.request<{ template: AgentTemplate }>(
-    "/api/agent-templates",
-    { method: "POST", body: input, toolName: "agent_create_template" }
+  input: AgentIdentityCreateInput
+): Promise<AgentIdentity> {
+  const data = await t.request<{ identity: AgentIdentity }>(
+    "/api/agent-identities",
+    { method: "POST", body: input, toolName: "agent_create_identity" }
   );
-  return data.template;
+  return data.identity;
 }
 
-export async function updateAgentTemplate(
+export async function updateAgentIdentity(
   t: DoplTransport,
-  templateId: string,
-  patch: AgentTemplateUpdateInput,
+  identityId: string,
+  patch: AgentIdentityUpdateInput,
   expectedVersion?: string | null
-): Promise<AgentTemplate> {
+): Promise<AgentIdentity> {
   // Optimistic concurrency, tri-state on `expectedVersion` — the SAME three
   // arms as `knowledge.ts › writeKbFileByPath` and `skills.ts ›
   // writeSkillBody`, which is what "matching the KB contract" means:
   //   - string    → atomic compare-and-swap (`X-Updated-At`; 412 on mismatch).
-  //   - undefined → strict: REFUSED. A template update always overwrites
+  //   - undefined → strict: REFUSED. An identity update always overwrites
   //                 something — there is no create arm here, which is why this
   //                 branch needs no existence probe where the KB one does.
   //   - null      → force: blind overwrite, no precondition.
@@ -100,19 +100,19 @@ export async function updateAgentTemplate(
         error: {
           code: "EXPECTED_VERSION_REQUIRED",
           message:
-            "Read this template first and pass its Version as expected_version (or force to overwrite).",
+            "Read this identity first and pass its Version as expected_version (or force to overwrite).",
         },
       })
     );
   }
-  const data = await t.request<{ template: AgentTemplate }>(
-    `/api/agent-templates/${enc(templateId)}`,
+  const data = await t.request<{ identity: AgentIdentity }>(
+    `/api/agent-identities/${enc(identityId)}`,
     {
       method: "PATCH",
       body: patch,
-      toolName: "agent_update_template",
+      toolName: "agent_update_identity",
       customHeaders: expectedVersion ? { "X-Updated-At": expectedVersion } : undefined,
     }
   );
-  return data.template;
+  return data.identity;
 }

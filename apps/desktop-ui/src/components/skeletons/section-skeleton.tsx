@@ -3,7 +3,7 @@ import type { NavSection } from "@/shared/layout/app-shell/app-sidebar-core";
 import { PageLoading } from "#/components/page-states";
 import { OverviewSkeleton } from "#/pages/overview/overview-skeleton";
 import { ChannelsSkeleton } from "#/pages/channels/channels-skeleton";
-import { AgentsPageSkeleton } from "#/pages/agents/agents-skeleton";
+import { IdentitiesPageSkeleton } from "#/pages/identities/identities-skeleton";
 import { MembersPageSkeleton } from "#/pages/members/members-skeleton";
 import { KnowledgeHomeSkeleton } from "./knowledge-skeletons";
 
@@ -27,8 +27,8 @@ export function sectionSkeleton(section: NavSection | null): ReactNode {
   switch (section) {
     case "channels":
       return <ChannelsSkeleton label={label} />;
-    case "agents":
-      return <AgentsPageSkeleton label={label} />;
+    case "identities":
+      return <IdentitiesPageSkeleton label={label} />;
     case "members":
       return <MembersPageSkeleton label={label} />;
     case "knowledge":

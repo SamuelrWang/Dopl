@@ -61,9 +61,9 @@ import { HOME_DEFAULT_TAB, type HomeTab } from "./home-tabs";
  * `channels` PAGE segment (`routes.tsx › WORKSPACE_PAGES`), which is a real
  * path with a hand copy in `dopl-desktop-app/main/deep-link-target.js`.
  *
- * ⚠ "AGENTS" HERE MEANS TEMPLATE IDENTITIES, not running sessions — the channel
+ * ⚠ "AGENTS" HERE MEANS IDENTITY IDENTITIES, not running sessions — the channel
  * info column has its own **Agents** tab and that one lists live sessions. Both
- * names stay (Samuel's ruling Q6, 2026-08-26); see `agent-panels.tsx` and
+ * names stay (Samuel's ruling Q6, 2026-08-26); see `identity-panels.tsx` and
  * INVARIANTS §5A.
  *
  * ⚠ THE CALLER'S ID COMES FROM `POST /api/boot`, on the SAME cache key the boot
@@ -109,9 +109,9 @@ export default function HomePage() {
    * did not ask to be.
    */
   const openSearchHit = (item: SearchItem) => {
-    if (item.kind === "knowledge" || item.kind === "agentTemplates") {
+    if (item.kind === "knowledge" || item.kind === "agentIdentities") {
       setSelectedId(channelRowId(item.containerId));
-      setTab(item.kind === "knowledge" ? "knowledge" : "agents");
+      setTab(item.kind === "knowledge" ? "knowledge" : "identities");
       return;
     }
     jump.open(

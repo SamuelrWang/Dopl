@@ -160,7 +160,7 @@ export const SALES_CHANNEL = channel(CHANNEL_ID, "q4-outbound", {
  * threads" — the Threads tab reading `0` is the ruling, not a gap.
  */
 
-/* ── Agents — templates as roles, one per member ──────────────────── */
+/* ── Agents — identities as roles, one per member ──────────────────── */
 
 /** 8-char instance ids, `^[a-z][a-z0-9]{7}$` like the desktop mints. */
 export const AGENT_IDS = {
@@ -169,7 +169,7 @@ export const AGENT_IDS = {
   analyst: "panalyst",
 } as const;
 
-/** The template names read as ROLES on a sales team. Fed into
+/** The identity names read as ROLES on a sales team. Fed into
  *  `AuthorIndex.agents` so the transcript's attribution pills name them. */
 export const AGENT_INDEX: ReadonlyMap<string, AgentRosterEntry> = new Map([
   [
@@ -199,7 +199,7 @@ export const MY_SESSION: DesktopSessionSummary = {
   state: "working",
   channelName: "q4-outbound",
   threadTitle: null,
-  templateName: "Outreach Writer",
+  identityName: "Outreach Writer",
   contextUsed: 38_000,
   contextWindow: 200_000,
   tokensSpent: 92_400,
@@ -302,15 +302,15 @@ const SCRIPT: ReadonlyArray<{ step: StepId; message: ChannelMessage }> = [
     4,
   ),
   // Launch lines — the thread narrating itself, one per member.
-  msg("launch-1", null, "Grace launched Lead Enricher from a template", 3, {
+  msg("launch-1", null, "Grace launched Lead Enricher from an identity", 3, {
     kind: "system",
     authorKind: "system",
   }),
-  msg("launch-2", null, "Samuel launched Outreach Writer from a template", 3, {
+  msg("launch-2", null, "Samuel launched Outreach Writer from an identity", 3, {
     kind: "system",
     authorKind: "system",
   }),
-  msg("launch-3", null, "Anthony launched Pipeline Analyst from a template", 3, {
+  msg("launch-3", null, "Anthony launched Pipeline Analyst from an identity", 3, {
     kind: "system",
     authorKind: "system",
   }),

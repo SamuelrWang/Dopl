@@ -130,11 +130,11 @@ describe("the picker offers the CHANNEL's live agents", () => {
     // mapPeerSessionStateRow`, pinned at nine keys by `session-visibility.test.ts`).
     // This is the RENDER half: an operator-only field handed in anyway is not drawn.
     const body = mount({
-      liveAgents: [{ ...PEER_AGENT, templateName: "Secret Template", model: "opus" } as never],
+      liveAgents: [{ ...PEER_AGENT, identityName: "Secret Identity", model: "opus" } as never],
     });
     type(body, "@res");
     const row = screen.getByRole("option", { name: /Research Bot/ });
-    expect(row.textContent).not.toContain("Secret Template");
+    expect(row.textContent).not.toContain("Secret Identity");
     expect(row.textContent).not.toContain("opus");
   });
 

@@ -6,14 +6,14 @@
 import { ModalShell } from "@/shared/layout/settings-modal/modal-shell";
 import styles from "@/shared/layout/settings-modal/settings-modal.module.css";
 import { cn } from "@/shared/lib/utils";
-import { RAISED_INPUT } from "./template-editor-rows";
+import { RAISED_INPUT } from "./identity-editor-rows";
 
 /**
- * FIRST USE OF ANOTHER MEMBER'S TEMPLATE — the one modal that stands between a
+ * FIRST USE OF ANOTHER MEMBER'S IDENTITY — the one modal that stands between a
  * teammate's prose and this operator's machine.
  *
  * ⚠ THIS IS A SECURITY SURFACE, NOT A COURTESY. A `team` or `workspace`
- * template's `instructions` are written by ANOTHER MEMBER and execute on YOUR
+ * identity's `instructions` are written by ANOTHER MEMBER and execute on YOUR
  * machine, in YOUR session, under YOUR credential, with YOUR tool profile and
  * YOUR knowledge reach. The tool profile is the only real fence and it is
  * main's; the fence stops WIDENING, not MISDIRECTION. What addresses
@@ -22,9 +22,9 @@ import { RAISED_INPUT } from "./template-editor-rows";
  * verb says what is about to happen rather than "OK".
  *
  * ⚠ IT IS MAIN THAT DECIDES WHETHER THIS APPEARS, AND MAIN THAT REMEMBERS.
- * `sessions.launch` refuses with the wire word `template-approval`, carrying the
- * template's name and instructions; the SPA renders this, and on confirm calls
- * `sessions.approveTemplate(templateId)` and relaunches. The approval is stored
+ * `sessions.launch` refuses with the wire word `identity-approval`, carrying the
+ * identity's name and instructions; the SPA renders this, and on confirm calls
+ * `sessions.approveIdentity(identityId)` and relaunches. The approval is stored
  * MACHINE-LOCALLY in the desktop's `electron-store`, beside
  * `orchestratorLaunchEnabled` and for the same reason: a server-writable
  * approval lets a credential-holding agent pre-approve itself across the fleet.
@@ -39,18 +39,18 @@ import { RAISED_INPUT } from "./template-editor-rows";
  * pair with the body in a bounded, scrolling raised well.
  *
  * ⚠ NO CONCAVE SURFACE — the ruling for this whole feature; swept by
- * `./template-editor-surface.test.tsx › no concave surfaces`.
+ * `./identity-editor-surface.test.tsx › no concave surfaces`.
  */
 
-export interface TemplateApprovalRequest {
-  templateId: string;
+export interface IdentityApprovalRequest {
+  identityId: string;
   name: string;
   instructions: string | null;
   /** `by <member>`, as the picker row said it. Absent when unresolvable. */
   authorLabel?: string | null;
 }
 
-export function TemplateApprovalDialog({
+export function IdentityApprovalDialog({
   open,
   request,
   busy = false,
@@ -60,14 +60,14 @@ export function TemplateApprovalDialog({
 }: {
   open: boolean;
   /** `null` keeps the shell mounted through its exit animation. */
-  request: TemplateApprovalRequest | null;
+  request: IdentityApprovalRequest | null;
   busy?: boolean;
-  /** Copy for a refused `approveTemplate`, or null. ⚠ Never swallowed. */
+  /** Copy for a refused `approveIdentity`, or null. ⚠ Never swallowed. */
   error?: string | null;
   onCancel: () => void;
   onConfirm: () => void;
 }) {
-  const heading = request ? `Run "${request.name}"?` : "Run this template?";
+  const heading = request ? `Run "${request.name}"?` : "Run this identity?";
   const instructions = request?.instructions?.trim() ?? "";
 
   return (
@@ -97,10 +97,10 @@ export function TemplateApprovalDialog({
           </div>
         ) : (
           // ⚠ UNKNOWN IS NOT EMPTY (INVARIANTS §11), and here EMPTY IS A FACT: a
-          // name-only template is a legal configuration, so say that rather than
+          // name-only identity is a legal configuration, so say that rather than
           // rendering a blank box the operator has to interpret.
           <p className="mb-3 text-caption text-text-muted">
-            This template carries no instructions.
+            This identity carries no instructions.
           </p>
         )}
 

@@ -5,64 +5,64 @@ import {
 } from "@/shared/auth/with-workspace-auth";
 import { parseJson } from "@/shared/api/parse-json";
 import { HttpError } from "@/shared/lib/http-error";
-import { toAgentTemplateErrorResponse } from "@/shared/api/agent-template-route";
+import { toAgentIdentityErrorResponse } from "@/shared/api/agent-identity-route";
 import {
-  buildAgentTemplateContext,
-  createTemplate,
-  listHomeScopedTemplateIds,
-  listTemplates,
-} from "@/features/agent-templates/server/service";
-import { AgentTemplateCreateSchema } from "@/features/agent-templates/schema";
-import type { TemplateShelf } from "@/features/agent-templates/types";
+  buildAgentIdentityContext,
+  createIdentity,
+  listHomeScopedIdentityIds,
+  listIdentities,
+} from "@/features/agent-identities/server/service";
+import { AgentIdentityCreateSchema } from "@/features/agent-identities/schema";
+import type { IdentityShelf } from "@/features/agent-identities/types";
 
 /**
- * `GET /api/agent-templates`  — every template the caller may see.
- * `POST /api/agent-templates` — create one.
+ * `GET /api/agent-identities`  — every identity the caller may see.
+ * `POST /api/agent-identities` — create one.
  *
  * ⚠ NOT `sessionOnly`, AND THAT IS THE POINT OF THE FEATURE. An orchestrator
- * agent holding an agent token must be able to LIST templates — asking "which
+ * agent holding an agent token must be able to LIST identities — asking "which
  * identities exist here" is the whole reason they are persistent. The
- * destructive verb is the one that is session-gated; see `[templateId]/route.ts`.
+ * destructive verb is the one that is session-gated; see `[identityId]/route.ts`.
  *
- * ⚠ `homeScopedTemplateIds` IS A SIBLING KEY (2026-08-28), not a field on the row,
+ * ⚠ `homeScopedIdentityIds` IS A SIBLING KEY (2026-08-28), not a field on the row,
  * and it outlived the `home_scoped` column: since 2026-09-02 (slice B15) it answers
  * "is this row in my `kind='personal'` container". The cached row payload gains no
  * new key either way, so §8's stale-cache rule applies to this key rather than to
  * the row, and every reader spells `?? []`. Only ever a SUBSET of the ids in
- * `templates`.
+ * `identities`.
  *
  * ⚠ EACH ROW CARRIES ITS `visibility` SO THE CLIENT CAN GROUP. The server does
  * not group: which sections a surface wants (a spawn picker vs. a settings page)
  * is a rendering decision, and a pre-grouped payload imposes one of them on
  * every consumer.
  *
- * ⚠ `?shelf=home|workspace` NARROWS THE LIST ITSELF (`features/agent-templates/
- * types.ts › TemplateShelf`, Samuel's ruling 2026-08-27). The /home Agents
+ * ⚠ `?shelf=home|workspace` NARROWS THE LIST ITSELF (`features/agent-identities/
+ * types.ts › IdentityShelf`, Samuel's ruling 2026-08-27). The /home Agents
  * pane's Personal section asks for `home`; the workspace Agents page asks for
  * `workspace`; the two exclude each other BOTH ways. ABSENT = both shelves,
  * which is every pre-existing caller — the launch picker and MCP ride this route
  * and must keep seeing the whole workspace.
  * 🔒 The narrowing is a `WHERE`, not a post-filter, and it is ORTHOGONAL to
- * `canSeeTemplate`: shelf = which surface lists it, visibility = who may read
+ * `canSeeIdentity`: shelf = which surface lists it, visibility = who may read
  * it. See `readShelf` below for why a misspelled value is a 400.
  */
 
 async function handleGet(request: NextRequest, auth: WorkspaceAuthContext) {
   try {
-    const ctx = buildAgentTemplateContext(auth);
-    const templates = await listTemplates(ctx, { shelf: readShelf(request) });
+    const ctx = buildAgentIdentityContext(auth);
+    const identities = await listIdentities(ctx, { shelf: readShelf(request) });
     // ⚠ SIBLING KEY, degrading to `[]` — an unreadable flag means an UNLABELLED
     // row, which is what every surface showed before the key existed. The unsafe
-    // direction would be calling a workspace template personal, and no failure
+    // direction would be calling a workspace identity personal, and no failure
     // mode here produces that. Never a 500: the roster is the answer, the label
     // is decoration over it.
-    const homeScopedTemplateIds = await listHomeScopedTemplateIds(
+    const homeScopedIdentityIds = await listHomeScopedIdentityIds(
       ctx,
-      templates
+      identities
     ).catch(() => [] as string[]);
-    return NextResponse.json({ templates, homeScopedTemplateIds });
+    return NextResponse.json({ identities, homeScopedIdentityIds });
   } catch (err) {
-    return toAgentTemplateErrorResponse(err);
+    return toAgentIdentityErrorResponse(err);
   }
 }
 
@@ -75,7 +75,7 @@ async function handleGet(request: NextRequest, auth: WorkspaceAuthContext) {
  * no client-side fallback to catch it: the shelf is a tenancy the client cannot
  * re-derive from a row. Fail loud, fail narrow. Mirrors `api/knowledge/bases/route.ts › readShelf`.
  */
-function readShelf(request: NextRequest): TemplateShelf | undefined {
+function readShelf(request: NextRequest): IdentityShelf | undefined {
   const raw = request.nextUrl.searchParams.get("shelf");
   if (raw === null) return undefined;
   if (raw === "home" || raw === "workspace") return raw;
@@ -84,12 +84,12 @@ function readShelf(request: NextRequest): TemplateShelf | undefined {
 
 async function handlePost(request: NextRequest, auth: WorkspaceAuthContext) {
   try {
-    const input = await parseJson(request, AgentTemplateCreateSchema);
-    const ctx = buildAgentTemplateContext(auth);
-    const template = await createTemplate(ctx, input);
-    return NextResponse.json({ template }, { status: 201 });
+    const input = await parseJson(request, AgentIdentityCreateSchema);
+    const ctx = buildAgentIdentityContext(auth);
+    const identity = await createIdentity(ctx, input);
+    return NextResponse.json({ identity }, { status: 201 });
   } catch (err) {
-    return toAgentTemplateErrorResponse(err);
+    return toAgentIdentityErrorResponse(err);
   }
 }
 

@@ -40,7 +40,7 @@ import {
  * THE SHAPE OF THE PRODUCT.** `dopl_channel` is the tool whose vocabulary keeps
  * changing, so scanning its own modules felt like the whole job — but the
  * sentences that TELL an agent to call `dopl_channel` are written in the OTHER
- * tools: `dopl_agent` says how to launch a template into a channel, `dopl_status`
+ * tools: `dopl_agent` says how to launch an identity into a channel, `dopl_status`
  * says how to wait instead of polling. Five shipped strings across four such
  * files were routing callers to op names B8 retired, and no scan looked at any
  * of them. A cross-tool pointer is exactly the string a model acts on, because

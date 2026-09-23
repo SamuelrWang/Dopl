@@ -4,7 +4,7 @@
  * value (which `personal-container.test.ts` already holds).
  *
  * ⚠ ONE FILE FOR TWO FEATURES ON PURPOSE. `knowledge_bases` and
- * `agent_templates` are hand mirrors of each other on the shelf axis — same
+ * `agent_identities` are hand mirrors of each other on the shelf axis — same
  * column, same three functions, same fence — and every previous divergence
  * between them (F-342, and the two `resolveHomeScope` copies that disagreed
  * about private-terminal vs private-floor — both DELETED in slice B15) happened
@@ -31,10 +31,10 @@ import {
   listHomeScopedBaseIds,
 } from "@/features/knowledge/server/repository-bases";
 import {
-  insertTemplate,
-  listHomeScopedTemplateIds,
-  listTemplatesForWorkspace,
-} from "@/features/agent-templates/server/repository";
+  insertIdentity,
+  listHomeScopedIdentityIds,
+  listIdentitiesForWorkspace,
+} from "@/features/agent-identities/server/repository";
 
 const USER = "11111111-1111-4111-8111-111111111111";
 const WORKSPACE = "22222222-2222-4222-8222-222222222222";
@@ -117,8 +117,8 @@ beforeEach(() => {
 describe("the personal shelf is ONE container, on both tables", () => {
   it("reads the caller's container and nothing else, on both tables", async () => {
     await listBasesForWorkspace(WORKSPACE, false, "home");
-    await listTemplatesForWorkspace(WORKSPACE, "home");
-    for (const table of ["knowledge_bases", "agent_templates"]) {
+    await listIdentitiesForWorkspace(WORKSPACE, "home");
+    for (const table of ["knowledge_bases", "agent_identities"]) {
       expect(filterFor(table, "workspace_id"), table).toEqual([CONTAINER]);
       // ⚠ MUTATION CHECK ACROSS THE DROP: a surviving `home_scoped` predicate
       // would 42703 the whole query the day the column goes.
@@ -131,9 +131,9 @@ describe("the personal shelf is ONE container, on both tables", () => {
 
   it("the WORKSPACE shelf is the calling workspace, and asks nothing", async () => {
     await listBasesForWorkspace(WORKSPACE, false, "workspace");
-    await listTemplatesForWorkspace(WORKSPACE, "workspace");
+    await listIdentitiesForWorkspace(WORKSPACE, "workspace");
     expect(filterFor("knowledge_bases", "workspace_id")).toEqual([WORKSPACE]);
-    expect(filterFor("agent_templates", "workspace_id")).toEqual([WORKSPACE]);
+    expect(filterFor("agent_identities", "workspace_id")).toEqual([WORKSPACE]);
     expect(
       queries.some((q) => q.table === "workspaces"),
       "an explicit workspace shelf must not look for a container"
@@ -148,8 +148,8 @@ describe("the personal shelf is ONE container, on both tables", () => {
     // was readable-if-known and findable nowhere. A one-sided repair here is
     // the F-342 shape all over again, so both tables are asserted side by side.
     await listBasesForWorkspace(WORKSPACE, false, undefined);
-    await listTemplatesForWorkspace(WORKSPACE, undefined);
-    for (const table of ["knowledge_bases", "agent_templates"]) {
+    await listIdentitiesForWorkspace(WORKSPACE, undefined);
+    for (const table of ["knowledge_bases", "agent_identities"]) {
       expect(filterFor(table, "workspace_id"), table).toEqual([
         WORKSPACE,
         CONTAINER,
@@ -169,15 +169,15 @@ describe("the personal shelf is ONE container, on both tables", () => {
 describe("the LABEL asks what the LIST asked", () => {
   it("the sibling-key fold reads the same container the list reads", async () => {
     await listHomeScopedBaseIds(WORKSPACE, ["kb-1"]);
-    await listHomeScopedTemplateIds(WORKSPACE, ["t-1"]);
-    for (const table of ["knowledge_bases", "agent_templates"]) {
+    await listHomeScopedIdentityIds(WORKSPACE, ["t-1"]);
+    for (const table of ["knowledge_bases", "agent_identities"]) {
       expect(filterFor(table, "workspace_id"), table).toEqual([CONTAINER]);
     }
   });
 
   it("an empty id set still costs nothing", async () => {
     expect(await listHomeScopedBaseIds(WORKSPACE, [])).toEqual([]);
-    expect(await listHomeScopedTemplateIds(WORKSPACE, [])).toEqual([]);
+    expect(await listHomeScopedIdentityIds(WORKSPACE, [])).toEqual([]);
     expect(queries).toEqual([]);
   });
 
@@ -187,7 +187,7 @@ describe("the LABEL asks what the LIST asked", () => {
     // caller was already shown; there is nothing to fold against.
     containerId = null;
     expect(await listHomeScopedBaseIds(WORKSPACE, ["kb-1"])).toEqual([]);
-    expect(await listHomeScopedTemplateIds(WORKSPACE, ["t-1"])).toEqual([]);
+    expect(await listHomeScopedIdentityIds(WORKSPACE, ["t-1"])).toEqual([]);
     expect(rowQueries()).toEqual([]);
   });
 });
@@ -199,7 +199,7 @@ describe("the personal WRITE", () => {
     slug: "notes",
     createdBy: USER,
   };
-  const templateArgs = {
+  const identityArgs = {
     workspaceId: WORKSPACE,
     name: "Researcher",
     description: null,
@@ -212,8 +212,8 @@ describe("the personal WRITE", () => {
 
   it("files a personal row in the container, and writes no shelf column", async () => {
     await insertBase({ ...baseArgs, homeScoped: true });
-    await insertTemplate({ ...templateArgs, homeScoped: true });
-    for (const table of ["knowledge_bases", "agent_templates"]) {
+    await insertIdentity({ ...identityArgs, homeScoped: true });
+    for (const table of ["knowledge_bases", "agent_identities"]) {
       const row = rowQueries().find((q) => q.table === table)?.inserted ?? {};
       expect(row.workspace_id, table).toBe(CONTAINER);
       // 🔒 MUTATION CHECK: the flag routes the row and nothing stores it.
@@ -225,8 +225,8 @@ describe("the personal WRITE", () => {
 
   it("a WORKSPACE-shelf insert is untouched, and asks no container question", async () => {
     await insertBase(baseArgs);
-    await insertTemplate(templateArgs);
-    for (const table of ["knowledge_bases", "agent_templates"]) {
+    await insertIdentity(identityArgs);
+    for (const table of ["knowledge_bases", "agent_identities"]) {
       expect(
         rowQueries().find((q) => q.table === table)?.inserted?.workspace_id,
         table
@@ -243,7 +243,7 @@ describe("the personal WRITE", () => {
       { code: "PERSONAL_CONTAINER_MISSING" }
     );
     await expect(
-      insertTemplate({ ...templateArgs, homeScoped: true })
+      insertIdentity({ ...identityArgs, homeScoped: true })
     ).rejects.toMatchObject({ code: "PERSONAL_CONTAINER_MISSING" });
     expect(
       rowQueries(),

@@ -7,7 +7,7 @@
  * SHARED by a `channel_resource_grants` row (`knowledge-ops-read.ts ›
  * opListBases`), so a base every member of the room can read rendered
  * `· private` — the column, printed faithfully, saying the opposite of the
- * truth. A template is the mirror image: `visibility="workspace"` inside a home
+ * truth. An identity is the mirror image: `visibility="workspace"` inside a home
  * channel means "the other people in this relationship", never "everyone in
  * your company".
  *
@@ -27,7 +27,7 @@ export declare const AUDIENCE_LABELS: {
     readonly you: "only you";
     /** Destination 2 — shared into the home channel this call is in. */
     readonly channel: "everyone in this channel";
-    /** `public` base / `workspace` template in a STANDARD workspace. */
+    /** `public` base / `workspace` identity in a STANDARD workspace. */
     readonly workspace: "every member of this workspace";
     /** F-735's orphans: reachable from no surface in the app. */
     readonly nobody: "nobody — not reachable in the app";

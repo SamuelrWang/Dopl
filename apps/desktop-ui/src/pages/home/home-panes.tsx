@@ -4,13 +4,13 @@ import type { BootPayload } from "#/pages/boot/use-boot-state";
 import { RelationshipRecord } from "./relationship-record";
 import { PendingLinkCard } from "./link-out-panel";
 import { HomeKnowledgePanels } from "./knowledge-panels";
-import { HomeAgentPanels } from "./agent-panels";
+import { HomeIdentityPanels } from "./identity-panels";
 import { HomeOntologyPanels } from "./ontology-panels";
 import { HomeOverviewPanels } from "./overview-panels";
 import type { ActivityJump } from "./use-activity-jump";
 import type { HomeRow } from "./home-rows";
 import {
-  AGENTS_PANE,
+  IDENTITIES_PANE,
   EMPTY_PANE,
   KNOWLEDGE_PANE,
   ONTOLOGY_PANE,
@@ -40,13 +40,13 @@ import {
  * faces — Overview, and Ontology since 2026-09-09 — carry no row at all, which
  * is the same rule read the other way: a face is keyed by what it VARIES with.
  * Keyed by the bare tab name, switching channels leaves the token frozen
- * at `"knowledge"` / `"agents"` — the crossfade never fires and the pane swaps
- * one channel's bases (or templates) for another's UNDER a token that says
+ * at `"knowledge"` / `"identities"` — the crossfade never fires and the pane swaps
+ * one channel's bases (or identities) for another's UNDER a token that says
  * nothing changed, which is the 150ms wrong-channel flash.
  */
 export function paneToken(tab: HomeTab, selectedId: string | null): string {
   if (tab === "knowledge") return `${KNOWLEDGE_PANE}${selectedId ?? EMPTY_PANE}`;
-  if (tab === "agents") return `${AGENTS_PANE}${selectedId ?? EMPTY_PANE}`;
+  if (tab === "identities") return `${IDENTITIES_PANE}${selectedId ?? EMPTY_PANE}`;
   // ⚠ ONTOLOGY CARRIES NO ROW EITHER, and for the same reason Overview does
   // not: its rows are the operator's PERSONAL ontologies, so the face does not
   // vary with the selection and re-keying it would close an open board on every
@@ -134,10 +134,10 @@ export function HomePane({
       />
     );
   }
-  if (shown.startsWith(AGENTS_PANE)) {
-    const shownRow = rowFor(shown.slice(AGENTS_PANE.length));
+  if (shown.startsWith(IDENTITIES_PANE)) {
+    const shownRow = rowFor(shown.slice(IDENTITIES_PANE.length));
     return (
-      <HomeAgentPanels
+      <HomeIdentityPanels
         // 🔒 KEYED BY THE TOKEN — one token, one instance, and it was NOT so
         // until 2026-08-26 (F-338). `Crossfade` renders `{children(shownToken)}`
         // with no key of its own and every `agents:<rowId>` token returns this
@@ -157,7 +157,7 @@ export function HomePane({
         key={shown}
         channel={shownRow?.kind === "channel" ? shownRow.channel : null}
         // ⚠ SAME BOOT QUERY AS KNOWLEDGE'S SCOPE C — the home workspace is
-        // `POST /api/boot`'s no-segment answer, so the second template list
+        // `POST /api/boot`'s no-segment answer, so the second identity list
         // costs no extra identity read. NULL until the caller is onboarded.
         // ⚠ The SEGMENT rides it too and the home-workspace editor needs it
         // (its teams read is keyed by the segment, not the id); boot's `role`

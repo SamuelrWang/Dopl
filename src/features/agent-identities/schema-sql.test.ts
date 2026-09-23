@@ -1,5 +1,5 @@
 /**
- * INVARIANT SUITE — the AGENT-TEMPLATE BOUNDS, read out of `supabase/migrations`
+ * INVARIANT SUITE — the AGENT-IDENTITY BOUNDS, read out of `supabase/migrations`
  * and compared against every place they are re-typed.
  *
  * 🔒 WHY THIS FILE EXISTS (G3, `docs/DRIFT-LEDGER-2026-08-30.md` §3). The sibling
@@ -9,22 +9,22 @@
  * the point"* — and then never opens the migration. **A comment claiming a
  * pairing is not a gate.** `schema.test.ts` would pass unchanged if a migration
  * lowered `instructions` to 4 KB tomorrow, and the first sign would be an opaque
- * 500 on a template the schema had already accepted.
+ * 500 on an identity the schema had already accepted.
  *
  * ⚠ FOUR STATEMENTS PER BOUND, IN FOUR TREES THAT CANNOT IMPORT EACH OTHER:
  *
  *   1. `supabase/migrations/…_agent_templates.sql`  — the CHECK. **It wins.**
- *   2. `src/features/agent-templates/schema.ts`     — the readable 400.
+ *   2. `src/features/agent-identities/schema.ts`     — the readable 400.
  *   3. `packages/mcp-server/src/tools/agent.ts`     — the `-32602` before a
  *      round trip. The MCP package cannot import `src/`; these were BARE
  *      LITERALS until 2026-08-30 and are named constants now, which is what
  *      makes them readable from here.
- *   4. `dopl-desktop-app/main/template-resolve.js`  — the BOUNDARY's own copy,
+ *   4. `dopl-desktop-app/main/identity-resolve.js`  — the BOUNDARY's own copy,
  *      whose header states the rule this suite enforces: *"a boundary bound must
  *      match the writer's, not undercut it"* (F-287). Its own tree cannot see
  *      `src/` either.
  *
- * …plus `agent-templates/lib/launch-overrides.ts`, whose four numbers mirror the
+ * …plus `agent-identities/lib/launch-overrides.ts`, whose four numbers mirror the
  * per-field caps so an EPHEMERAL override cannot be shaped in a way the durable
  * row could never have held.
  *
@@ -66,10 +66,11 @@ import {
   MAX_OVERRIDE_KEY_CHARS,
   MAX_OVERRIDE_VALUE_CHARS,
 } from "./lib/launch-overrides";
+import { forwardRenamed } from "@/shared/supabase/migration-renames";
 
 const ROOT = process.cwd();
 const MIGRATIONS = join(ROOT, "supabase", "migrations");
-const TABLE = "agent_templates";
+const TABLE = "agent_identities";
 
 function stripLineComments(sql: string): string {
   return sql
@@ -111,11 +112,15 @@ function liveConstraints(): Map<string, string> {
     String.raw`DROP\s+CONSTRAINT\s+(?:IF\s+EXISTS\s+)?(\w+)`,
     "gi"
   );
-  const files = readdirSync(MIGRATIONS)
-    .filter((f) => f.endsWith(".sql"))
-    .sort();
-  for (const name of files) {
-    const sql = stripLineComments(readFileSync(join(MIGRATIONS, name), "utf8"));
+  // ⚠ FORWARD-RENAMED: the table and its constraints were CREATED as `agent_templates*` and
+  // renamed on 2026-09-22; the replay reads every file under the final names.
+  const files = forwardRenamed(
+    readdirSync(MIGRATIONS)
+      .filter((f) => f.endsWith(".sql"))
+      .sort()
+      .map((name) => ({ name, sql: stripLineComments(readFileSync(join(MIGRATIONS, name), "utf8")) }))
+  );
+  for (const { sql } of files) {
     // Only files that speak about this table at all — a constraint name is
     // unique per table by convention here, but the `ALTER TABLE` is what says
     // which table an `ADD CONSTRAINT` lands on.
@@ -123,11 +128,18 @@ function liveConstraints(): Map<string, string> {
       continue;
     }
     const events: Array<{ at: number; kind: "add" | "drop"; name: string }> = [];
+    // ⚠ PER STATEMENT, NOT PER FILE, since the 2026-09-22 rename file: it also ADDs CHECKs to
+    // `resource_grants` and `channel_launch_directives`, so an `ADD`/`DROP CONSTRAINT` counts
+    // only when the nearest `ALTER TABLE` before it names THIS table.
+    const onThisTable = (at: number): boolean => {
+      const heads = [...sql.slice(0, at).matchAll(/ALTER\s+TABLE\s+(?:public\.)?(\w+)/gi)];
+      return heads.length > 0 && heads[heads.length - 1][1] === TABLE;
+    };
     for (const m of sql.matchAll(add)) {
-      if (m.index !== undefined) events.push({ at: m.index, kind: "add", name: m[1] });
+      if (m.index !== undefined && onThisTable(m.index)) events.push({ at: m.index, kind: "add", name: m[1] });
     }
     for (const m of sql.matchAll(drop)) {
-      if (m.index !== undefined) events.push({ at: m.index, kind: "drop", name: m[1] });
+      if (m.index !== undefined && onThisTable(m.index)) events.push({ at: m.index, kind: "drop", name: m[1] });
     }
     events.sort((a, b) => a.at - b.at);
     for (const e of events) {
@@ -152,7 +164,7 @@ const MCP = readFileSync(
   "utf8"
 );
 const DESKTOP = readFileSync(
-  join(ROOT, "dopl-desktop-app", "main", "template-resolve.js"),
+  join(ROOT, "dopl-desktop-app", "main", "identity-resolve.js"),
   "utf8"
 );
 
@@ -170,29 +182,29 @@ describe("the replayed CHECK constraints exist at all", () => {
 
   it("all four named bounds are live", () => {
     expect([...LIVE.keys()].sort()).toEqual([
-      "agent_templates_fields_shape_check",
-      "agent_templates_model_charset_check",
-      "agent_templates_name_charset_check",
-      "agent_templates_prose_charset_check",
+      "agent_identities_fields_shape_check",
+      "agent_identities_model_charset_check",
+      "agent_identities_name_charset_check",
+      "agent_identities_prose_charset_check",
     ]);
   });
 });
 
 describe("🔒 the zod bounds are the DATABASE's bounds", () => {
   it("name — BETWEEN 1 AND MAX_NAME_CHARS", () => {
-    expect(constraint("agent_templates_name_charset_check")).toMatch(
+    expect(constraint("agent_identities_name_charset_check")).toMatch(
       new RegExp(String.raw`char_length\(name\)\s+BETWEEN\s+1\s+AND\s+${MAX_NAME_CHARS}\b`, "i")
     );
   });
 
   it("model — BETWEEN 1 AND MAX_MODEL_CHARS", () => {
-    expect(constraint("agent_templates_model_charset_check")).toMatch(
+    expect(constraint("agent_identities_model_charset_check")).toMatch(
       new RegExp(String.raw`char_length\(model\)\s+BETWEEN\s+1\s+AND\s+${MAX_MODEL_CHARS}\b`, "i")
     );
   });
 
   it("description and instructions — the two prose caps, in one constraint", () => {
-    const prose = constraint("agent_templates_prose_charset_check");
+    const prose = constraint("agent_identities_prose_charset_check");
     expect(prose).toMatch(
       new RegExp(String.raw`char_length\(description\)\s*<=\s*${MAX_DESCRIPTION_CHARS}\b`, "i")
     );
@@ -202,7 +214,7 @@ describe("🔒 the zod bounds are the DATABASE's bounds", () => {
   });
 
   it("fields — octet_length of the SERIALIZED array, at MAX_FIELDS_BYTES", () => {
-    const fields = constraint("agent_templates_fields_shape_check");
+    const fields = constraint("agent_identities_fields_shape_check");
     // ⚠ BYTES of `fields::text`, not `pg_column_size`: zod measures the same
     // way (`new TextEncoder().encode(JSON.stringify(fields)).length`), so a CJK
     // payload cannot pass zod and then fail here as an opaque 500.
@@ -262,14 +274,14 @@ describe("🔒 the desktop BOUNDARY's copy matches the writer's, and does not un
     ["MAX_FIELD_KEY", MAX_FIELD_KEY_CHARS],
     ["MAX_FIELD_VALUE", MAX_FIELD_VALUE_CHARS],
     ["MAX_MODEL", MAX_MODEL_CHARS],
-  ])("template-resolve.js › %s", (name, expected) => {
+  ])("identity-resolve.js › %s", (name, expected) => {
     expect(declared(DESKTOP, name as string)).toBe(expected);
   });
 });
 
 describe("🔒 the launch OVERRIDE caps mirror the durable row's", () => {
   // An override that could be shaped past these would produce a prompt the
-  // durable template could never have held.
+  // durable identity could never have held.
   it("the four numbers agree with schema.ts", () => {
     expect(MAX_OVERRIDE_KEY_CHARS).toBe(MAX_FIELD_KEY_CHARS);
     expect(MAX_OVERRIDE_VALUE_CHARS).toBe(MAX_FIELD_VALUE_CHARS);
@@ -307,16 +319,19 @@ describe("the zod-only bounds, recorded as zod-only", () => {
  * of the three partial unique indexes each turn an assertion below red.
  */
 describe("🔒 the knowledge-attachment scope shape", () => {
-  const JUNCTION = "agent_template_knowledge_bases";
-  const SCOPES_SQL = readFileSync(
-    join(MIGRATIONS, "20260930150000_agent_template_knowledge_scopes.sql"),
-    "utf8"
-  );
-  const CODE = stripLineComments(SCOPES_SQL);
+  const JUNCTION = "agent_identity_knowledge_bases";
+  // ⚠ FORWARD-RENAMED: the file speaks `agent_template_knowledge_bases` / `template_id`; the
+  // shape is asserted under the names the 2026-09-22 rename gave them.
+  const CODE = forwardRenamed(
+    readdirSync(MIGRATIONS)
+      .filter((f) => f.endsWith(".sql"))
+      .sort()
+      .map((name) => ({ name, sql: stripLineComments(readFileSync(join(MIGRATIONS, name), "utf8")) }))
+  ).find((f) => f.name === "20260930150000_agent_template_knowledge_scopes.sql")?.sql ?? "";
 
   it("declares the three kinds and nothing else", () => {
     expect(CODE).toMatch(
-      /agent_template_kb_scope_kind_check[\s\S]*?CHECK\s*\(\s*scope_kind IN \('base', 'folder', 'entry'\)\s*\)/
+      /agent_identity_kb_scope_kind_check[\s\S]*?CHECK\s*\(\s*scope_kind IN \('base', 'folder', 'entry'\)\s*\)/
     );
   });
 
@@ -335,7 +350,7 @@ describe("🔒 the knowledge-attachment scope shape", () => {
   });
 
   /**
-   * ⚠ **THE OLD PK IS RESTATED PER SHAPE, NOT WIDENED.** `(template_id,
+   * ⚠ **THE OLD PK IS RESTATED PER SHAPE, NOT WIDENED.** `(identity_id,
    * knowledge_base_id)` could not stay a PK — three folders of one base share
    * that pair — and a wider composite is impossible because two of the three key
    * columns are NULL in every shape but their own. So: a surrogate `id`, and
@@ -347,9 +362,9 @@ describe("🔒 the knowledge-attachment scope shape", () => {
     );
     expect(CODE).toMatch(/PRIMARY KEY \(id\)/);
     for (const [name, key, arm] of [
-      ["agent_template_kb_base_scope_uniq", "(template_id, knowledge_base_id)", "base"],
-      ["agent_template_kb_folder_scope_uniq", "(template_id, folder_id)", "folder"],
-      ["agent_template_kb_entry_scope_uniq", "(template_id, entry_id)", "entry"],
+      ["agent_identity_kb_base_scope_uniq", "(identity_id, knowledge_base_id)", "base"],
+      ["agent_identity_kb_folder_scope_uniq", "(identity_id, folder_id)", "folder"],
+      ["agent_identity_kb_entry_scope_uniq", "(identity_id, entry_id)", "entry"],
     ]) {
       // ⚠ THE WHOLE STATEMENT, name → columns → partial predicate. Asserting
       // only that the NAME appears would pass a non-partial index (which would
@@ -393,6 +408,8 @@ describe("🔒 the knowledge-attachment scope shape", () => {
    *  asserts this itself in a closing `DO $$`; this asserts the assertion. */
   it("asserts its own RLS/grant no-op rather than trusting it", () => {
     expect(CODE).toContain("gained a non-SELECT policy");
+    // The POLICY name is not a renamed object — the rename dropped and re-created it — so the
+    // historical file still says its own.
     expect(CODE).toContain("agent_template_knowledge_bases_member_select");
     expect(CODE).toContain("authenticated/anon retain DML");
     // ⚠ It creates NO policy of its own — the twin `check-rls-pair-gate.ts`

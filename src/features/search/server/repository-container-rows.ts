@@ -14,18 +14,18 @@ import {
   visibleBases,
   visibleChats,
   visibleSkills,
-  visibleTemplates,
+  visibleIdentities,
   type CandidateRow,
   type SearchCaller,
 } from "./repository-visibility";
 
 /**
- * The five groups fenced by container membership: knowledge, agent templates,
+ * The five groups fenced by container membership: knowledge, agent identities,
  * members, skills, chats.
  *
  * F-716 (2026-09-17): container membership admits the caller to the container,
  * not to every row in it. The second fence is the owning feature's own predicate
- * (`canSeeBase` / `canSeeSkill` / `canSeeChat` / `canSeeTemplate`), called from
+ * (`canSeeBase` / `canSeeSkill` / `canSeeChat` / `canSeeIdentity`), called from
  * `repository-visibility.ts`. The SQL clause it replaced both missed lent rows
  * and leaked `access_mode='teams'` ones.
  *
@@ -166,9 +166,9 @@ interface KnowledgeRow {
   updated_at: string;
 }
 
-/** Agent templates whose name matches. `agent_templates` has no soft-delete
+/** Agent identities whose name matches. `agent_identities` has no soft-delete
  *  column; `visibility` is the only gate the row carries. */
-export async function searchAgentTemplates(
+export async function searchAgentIdentities(
   containerIds: string[],
   query: string,
   caller: SearchCaller
@@ -176,7 +176,7 @@ export async function searchAgentTemplates(
   if (containerIds.length === 0) return [];
   const db = supabaseAdmin();
   const builder = db
-    .from("agent_templates")
+    .from("agent_identities")
     .select(
       "id, name, description, workspace_id, updated_at, visibility, created_by"
     )
@@ -186,8 +186,8 @@ export async function searchAgentTemplates(
     .order("updated_at", { ascending: false })
     .limit(CANDIDATE_LIMIT);
   if (error) throw error;
-  const rows = (data ?? []) as TemplateRow[];
-  const visible = await visibleTemplates(caller, rows);
+  const rows = (data ?? []) as IdentityRow[];
+  const visible = await visibleIdentities(caller, rows);
   return visible.slice(0, SEARCH_GROUP_TOTAL_CAP).map((row) => ({
     id: row.id,
     title: row.name,
@@ -197,7 +197,7 @@ export async function searchAgentTemplates(
   }));
 }
 
-interface TemplateRow extends CandidateRow {
+interface IdentityRow extends CandidateRow {
   name: string;
   description: string | null;
   updated_at: string;

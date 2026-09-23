@@ -290,10 +290,10 @@ exports.ONTOLOGY_ERRORS = [
     notFound("cluster_not_found", "ontology", 'op="map"'),
 ];
 exports.AGENT_ERRORS = [
-    notFound("template_not_found", "template", 'op="list"'),
+    notFound("identity_not_found", "identity", 'op="list"'),
     {
         reason: "ambiguous_name",
-        meaning: "two templates share that name; both ids are in the message",
+        meaning: "two identities share that name; both ids are in the message",
         retry: "no",
     },
     {

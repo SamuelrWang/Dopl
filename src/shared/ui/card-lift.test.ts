@@ -25,7 +25,7 @@ const read = (rel: string) => readFileSync(join(HERE, rel), "utf8");
 const KNOWLEDGE_CSS = read(
   "../../features/knowledge/components/knowledge-v2/knowledge-v2.module.css"
 );
-const AGENTS_TSX = read("../../features/agent-templates/components/template-section.tsx");
+const AGENTS_TSX = read("../../features/agent-identities/components/identity-section.tsx");
 
 /** `.card:hover { … }` — the rule, without the rest of the sheet. */
 function cardHoverRule(css: string) {

@@ -4,7 +4,7 @@
  *
  * ⚠ **PINNED HERE AND NOT ON EITHER HOST**, because what this file is about is the half both
  * hosts now share. What each host ADDS is still pinned where it is decided —
- * `pages/home/agent-authoring.test.tsx` owns `homeScoped` and G16's `acknowledgeShared`.
+ * `pages/home/identity-authoring.test.tsx` owns `homeScoped` and G16's `acknowledgeShared`.
  *
  * MUTATION-VERIFY: spread `extras.patch` INTO the body before `isEmptyPatch` and the
  * no-op-with-an-acknowledgement case sends a PATCH; call `onDone` outside the `try` and the
@@ -13,22 +13,22 @@
 
 import { describe, expect, it, vi } from "vitest";
 import { act, renderHook } from "@testing-library/react";
-import { AgentTemplateApiError } from "../client/api";
-import type { AgentTemplate } from "../client/types";
-import { draftFromTemplate } from "../lib/template-draft";
+import { AgentIdentityApiError } from "../client/api";
+import type { AgentIdentity } from "../client/types";
+import { draftFromIdentity } from "../lib/identity-draft";
 
 const writes = vi.hoisted(() => ({
   create: { mutateAsync: vi.fn(), pending: false },
   update: { mutateAsync: vi.fn(), pending: false },
   remove: { mutateAsync: vi.fn(), pending: false },
 }));
-vi.mock("./use-agent-template-writes", () => ({
-  useAgentTemplateWrites: () => writes,
+vi.mock("./use-agent-identity-writes", () => ({
+  useAgentIdentityWrites: () => writes,
 }));
 
-import { useTemplateSave } from "./use-template-save";
+import { useIdentitySave } from "./use-identity-save";
 
-const TEMPLATE: AgentTemplate = {
+const IDENTITY: AgentIdentity = {
   id: "tpl-1",
   workspaceId: "ws-1",
   name: "Release captain",
@@ -45,13 +45,13 @@ const TEMPLATE: AgentTemplate = {
   updatedAt: "2026-08-01T00:00:00Z",
 };
 
-function mount(over: Partial<Parameters<typeof useTemplateSave>[0]> = {}) {
+function mount(over: Partial<Parameters<typeof useIdentitySave>[0]> = {}) {
   const onDone = vi.fn();
   const view = renderHook(() =>
-    useTemplateSave({
+    useIdentitySave({
       workspaceId: "ws-1",
       shelf: "workspace",
-      noun: "template",
+      noun: "identity",
       onDone,
       ...over,
     })
@@ -66,7 +66,7 @@ describe("creating", () => {
       extras: () => ({ create: { homeScoped: true } }),
     });
     await act(async () => {
-      await result.current.save({ ...draftFromTemplate(TEMPLATE), name: "Scout" }, null);
+      await result.current.save({ ...draftFromIdentity(IDENTITY), name: "Scout" }, null);
     });
     expect(writes.create.mutateAsync).toHaveBeenCalledWith({
       body: expect.objectContaining({ name: "Scout", homeScoped: true }),
@@ -78,7 +78,7 @@ describe("patching", () => {
   it("skips a PATCH that moves no column — Save means 'I'm done', not 'write something'", async () => {
     const { result, onDone } = mount();
     await act(async () => {
-      await result.current.save(draftFromTemplate(TEMPLATE), TEMPLATE);
+      await result.current.save(draftFromIdentity(IDENTITY), IDENTITY);
     });
     expect(writes.update.mutateAsync).not.toHaveBeenCalled();
     // ⚠ AND THE DIALOG STILL CLOSES: nothing failed.
@@ -91,7 +91,7 @@ describe("patching", () => {
       extras: () => ({ patch: { acknowledgeShared: true } }),
     });
     await act(async () => {
-      await result.current.save(draftFromTemplate(TEMPLATE), TEMPLATE);
+      await result.current.save(draftFromIdentity(IDENTITY), IDENTITY);
     });
     expect(writes.update.mutateAsync).not.toHaveBeenCalled();
   });
@@ -102,12 +102,12 @@ describe("patching", () => {
     });
     await act(async () => {
       await result.current.save(
-        { ...draftFromTemplate(TEMPLATE), name: "Renamed" },
-        TEMPLATE
+        { ...draftFromIdentity(IDENTITY), name: "Renamed" },
+        IDENTITY
       );
     });
     const call = writes.update.mutateAsync.mock.calls.at(-1)![0];
-    expect(call.templateId).toBe("tpl-1");
+    expect(call.identityId).toBe("tpl-1");
     expect(call.body).toEqual({ name: "Renamed", acknowledgeShared: true });
     expect(call.optimistic).toMatchObject({ id: "tpl-1", name: "Renamed" });
   });
@@ -121,8 +121,8 @@ describe("patching", () => {
     const { result } = mount();
     await act(async () => {
       await result.current.save(
-        { ...draftFromTemplate(TEMPLATE), name: "Renamed" },
-        TEMPLATE
+        { ...draftFromIdentity(IDENTITY), name: "Renamed" },
+        IDENTITY
       );
     });
     const call = writes.update.mutateAsync.mock.calls.at(-1)![0];
@@ -132,12 +132,12 @@ describe("patching", () => {
 
 describe("when the write fails", () => {
   it("🔒 falls back to the host's OWN noun and leaves the dialog open", async () => {
-    // ⚠ A WORDLESS REJECTION is what reaches the fallback — `agentTemplateErrorMessage`
+    // ⚠ A WORDLESS REJECTION is what reaches the fallback — `agentIdentityErrorMessage`
     // prefers the server's own sentence whenever there is one.
     writes.create.mutateAsync.mockRejectedValueOnce({});
     const { result, onDone } = mount({ noun: "agent" });
     await act(async () => {
-      await result.current.save({ ...draftFromTemplate(TEMPLATE), name: "Scout" }, null);
+      await result.current.save({ ...draftFromIdentity(IDENTITY), name: "Scout" }, null);
     });
     expect(result.current.error).toMatch(/Couldn't save the agent/);
     expect(onDone).not.toHaveBeenCalled();
@@ -151,13 +151,13 @@ describe("when the write fails", () => {
    */
   it("🔒 says the row changed elsewhere on a conflict, in the host's own noun", async () => {
     writes.update.mutateAsync.mockRejectedValueOnce(
-      new AgentTemplateApiError(412, "AGENT_TEMPLATE_STALE_VERSION", "Stale write rejected — row was modified at X.")
+      new AgentIdentityApiError(412, "AGENT_IDENTITY_STALE_VERSION", "Stale write rejected — row was modified at X.")
     );
     const { result, onDone } = mount({ noun: "agent" });
     await act(async () => {
       await result.current.save(
-        { ...draftFromTemplate(TEMPLATE), name: "Renamed" },
-        TEMPLATE
+        { ...draftFromIdentity(IDENTITY), name: "Renamed" },
+        IDENTITY
       );
     });
     expect(result.current.error).toBe(
@@ -175,9 +175,9 @@ describe("when the write fails", () => {
     expect(writes.remove.mutateAsync).not.toHaveBeenCalled();
     expect(onDone).not.toHaveBeenCalled();
     await act(async () => {
-      await result.current.remove(TEMPLATE);
+      await result.current.remove(IDENTITY);
     });
-    expect(writes.remove.mutateAsync).toHaveBeenCalledWith({ templateId: "tpl-1" });
+    expect(writes.remove.mutateAsync).toHaveBeenCalledWith({ identityId: "tpl-1" });
     expect(onDone).toHaveBeenCalled();
   });
 });

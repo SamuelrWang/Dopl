@@ -13,7 +13,7 @@
  *     `visibility !== "public"` BEFORE its admin arm, so the API has never
  *     returned those rows — the policy was alone in believing it.
  *     `20260916120000`'s probe P2 records the arm as deliberate; ruling B5 asks
- *     the policy to EQUAL the predicate, and `agent_templates` had already made
+ *     the policy to EQUAL the predicate, and `agent_identities` had already made
  *     exactly this correction (`20260915120000`: *"the admin arm is INSIDE the
  *     'team' branch … moving it out is a widening"*).
  *   * **`chats_owner_select` was an unfenced `owner_id = auth.uid()`** — no

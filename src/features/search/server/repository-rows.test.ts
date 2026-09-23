@@ -32,7 +32,7 @@ import {
 } from "./repository-channel-rows";
 import {
   listReadableBases,
-  searchAgentTemplates,
+  searchAgentIdentities,
   searchChats,
   searchKnowledgeEntries,
   searchMembers,
@@ -96,7 +96,7 @@ describe("🔒 the ilike arms escape the query", () => {
     ["channels", () => searchChannels([CH], "100%_x"), "name"],
     ["threads", () => searchThreads([CH], "100%_x"), "title"],
     ["artifacts", () => searchArtifacts([CH], "100%_x"), "name"],
-    ["agent templates", () => searchAgentTemplates([WS], "100%_x", caller()), "name"],
+    ["agent identities", () => searchAgentIdentities([WS], "100%_x", caller()), "name"],
     ["skills", () => searchSkills(WS, "100%_x", caller()), "name"],
     ["chats", () => searchChats(WS, "100%_x", caller()), "title"],
   ])("%s", async (_label, run, column) => {
@@ -111,7 +111,7 @@ describe("🔒 the ilike arms escape the query", () => {
 describe("🔒 the visibility narrowing is the PREDICATE's, not SQL's (F-716)", () => {
   it.each([
     ["knowledge bases", () => listReadableBases([WS], caller()), "visibility, created_by"],
-    ["agent templates", () => searchAgentTemplates([WS], "q", caller()), "visibility, created_by"],
+    ["agent identities", () => searchAgentIdentities([WS], "q", caller()), "visibility, created_by"],
     ["skills", () => searchSkills(WS, "q", caller()), "visibility, access_mode, created_by"],
     ["chats", () => searchChats(WS, "q", caller()), "visibility, access_mode, owner_id"],
   ])("%s: no visibility filter, and the columns the predicate reads", async (_l, run, cols) => {
@@ -130,7 +130,7 @@ describe("🔒 the visibility narrowing is the PREDICATE's, not SQL's (F-716)", 
 
   it.each([
     ["knowledge bases", () => listReadableBases([WS], caller(null))],
-    ["agent templates", () => searchAgentTemplates([WS], "q", caller(null))],
+    ["agent identities", () => searchAgentIdentities([WS], "q", caller(null))],
     ["skills", () => searchSkills(WS, "q", caller(null))],
     ["chats", () => searchChats(WS, "q", caller(null))],
   ])("%s: a SHARED credential gets NO cheaper SQL arm either", async (_l, run) => {
@@ -270,7 +270,7 @@ describe("the bounds", () => {
       searchMessages([], "q"),
       searchThreads([], "q"),
       searchArtifacts([], "q"),
-      searchAgentTemplates([], "q", caller()),
+      searchAgentIdentities([], "q", caller()),
       listReadableBases([], caller()),
       searchKnowledgeEntries(new Map(), "q"),
     ]);

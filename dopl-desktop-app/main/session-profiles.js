@@ -307,7 +307,7 @@ function grantDecision(args) {
     if (isOwnMachineLaunch(a.input, a.channelId)) return launchLaneVerdict(a, autoOutboundMode(a.messageMode));
     // ⚠ THE OWN-MACHINE DIRECT LANE (2026-08-31): SAME conjunction, SEPARATE list, NO depth question — `session-own-direct.js` carries all three arguments, including why sameness is not a reason to merge them. Its READ twin was `read_directions`, which B8 RETIRED into `status`; that op is on the inbound list above under its live name.
     if (isOwnMachineDirect(a.input, a.channelId)) return directLaneVerdict(a, autoOutboundMode(a.messageMode));
-    // ⚠ THE OWN-MACHINE MANAGE LANE (2026-09-17): `manage.rename` / `manage.end` / `manage.posture`, the SAME conjunction again and NO depth question — `session-own-manage.js` carries the argument, including why a depth question here would deny the very sessions the lane was filed for (a launched agent is AT the cap by construction, and the shipped Coder template has every coder rename itself on start).
+    // ⚠ THE OWN-MACHINE MANAGE LANE (2026-09-17): `manage.rename` / `manage.end` / `manage.posture`, the SAME conjunction again and NO depth question — `session-own-manage.js` carries the argument, including why a depth question here would deny the very sessions the lane was filed for (a launched agent is AT the cap by construction, and the shipped Coder identity has every coder rename itself on start).
     if (isOwnMachineManage(a.input, a.channelId)) return manageLaneVerdict(a, autoOutboundMode(a.messageMode));
     // Own-channel READ follows the INBOUND half: a read sends nothing, it brings the peer's
     // words into context unseen — what auto_inbound consents to. `auto_outbound` alone does

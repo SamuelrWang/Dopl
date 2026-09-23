@@ -12,9 +12,9 @@
  * reasonable is learning about the collision from a LATER read: a duplicate
  * knowledge-base name mints a duplicate slug, and `dopl-development` answered
  * "0 folders, 0 entries" from an empty shell for ten days while the real base
- * filled up elsewhere (`KB-LOSS-TRACE.md`, F-701). A template collision refuses
+ * filled up elsewhere (`KB-LOSS-TRACE.md`, F-701). An identity collision refuses
  * every name-addressed `get`/`update` from then on
- * (`agent-shared.ts › ambiguousTemplate`).
+ * (`agent-shared.ts › ambiguousIdentity`).
  *
  * ── THREE RULES THIS FOLLOWS ────────────────────────────────────────────────
  *
@@ -27,7 +27,7 @@
  *
  * ⚠ **IT DISCLOSES NOTHING A LIST WOULD NOT.** Every row it reads came back
  * from this caller's own list call, already filtered server-side — the same
- * argument `ambiguousTemplate` and `ambiguousBase` both make.
+ * argument `ambiguousIdentity` and `ambiguousBase` both make.
  *
  * ⚠ **IT RUNS AFTER THE CREATE AND IT NEVER FAILS ONE.** The row exists; this
  * is a note about it. A list that throws, a client that has no such accessor,
@@ -40,7 +40,7 @@ exports.duplicateNameNoteFor = duplicateNameNoteFor;
 /**
  * The warning line, or `""`.
  *
- * ⚠ **CASE-INSENSITIVE, BECAUSE THE RESOLVERS ARE.** `resolveTemplateRef`
+ * ⚠ **CASE-INSENSITIVE, BECAUSE THE RESOLVERS ARE.** `resolveIdentityRef`
  * matches names case-insensitively and a base's slug is folded from its name, so
  * "Notes" and "notes" collide in exactly the way this warns about.
  *

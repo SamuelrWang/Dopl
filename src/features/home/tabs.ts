@@ -15,9 +15,10 @@
 /**
  * The account surface's FIVE faces, all built.
  *
- * ⚠ `"agents"` here is the TEMPLATE face — the channel info column has a
- * different tab of the same name listing live SESSIONS, and both names stay by
- * Samuel's ruling (INVARIANTS §5A).
+ * ⚠ `"identities"` is the IDENTITY face — it was `"agents"`/"Agents" until 2026-09-22
+ * (Samuel: the tab between Knowledge and Ontology is "Identities"). The channel info
+ * column's **Agents** tab lists live SESSIONS and keeps its name — "agent" means a
+ * running session in a channel. Local state, no route, no persistence: nothing to migrate.
  *
  * ⚠ `"channels"` WAS `"chat"` UNTIL 2026-09-01 (Samuel). It is LOCAL state with
  * no route and no persistence, so the key moved with the label and there was
@@ -36,7 +37,7 @@ export type HomeTab =
   | "overview"
   | "channels"
   | "knowledge"
-  | "agents"
+  | "identities"
   | "ontology";
 
 /**
@@ -46,12 +47,13 @@ export type HomeTab =
  * lands.
  *
  * ⚠ **ORDER IS THE DATA** — the selector maps this array. ⚠ ONTOLOGY IS FIFTH
- * AND TO THE RIGHT OF AGENTS (Samuel, 2026-09-09).
+ * AND TO THE RIGHT OF IDENTITIES (Samuel, 2026-09-09;
+ * the face was "Agents" until 2026-09-22 and sits BETWEEN Knowledge and Ontology).
  */
 export const HOME_TABS = [
   { key: "overview", label: "Overview" },
   { key: "channels", label: "Channel" },
   { key: "knowledge", label: "Knowledge" },
-  { key: "agents", label: "Agents" },
+  { key: "identities", label: "Identities" },
   { key: "ontology", label: "Ontology" },
 ] as const satisfies ReadonlyArray<{ key: HomeTab; label: string }>;

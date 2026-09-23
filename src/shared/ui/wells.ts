@@ -15,14 +15,14 @@ export const RAISED_WELL =
 /**
  * THE "PILLOW" TEXT CONTROL — `RAISED_WELL` wearing type, placeholder ink and a
  * focus hairline. Samuel's reference face for EVERY text input in a standard
- * dialog (2026-08-27): the agent-template editor established it, and the four
+ * dialog (2026-08-27): the agent-identity editor established it, and the four
  * /home dialogs were standardised onto it rather than each restating a
  * `bg-surface-raised-3 border-border-strong` recipe of its own.
  *
  * ⚠ SIZE AND PADDING BELONG TO THE CALLER (`h-9 px-3` for a line, `px-3 py-2`
  * for a block) — this is the FACE, and forking it to bake in one height is how
  * a second input recipe starts. **Promoted here from
- * `features/agent-templates/components/template-editor-rows.tsx`, which
+ * `features/agent-identities/components/identity-editor-rows.tsx`, which
  * re-exports it** (the same move `ontology-bits` made for the three above).
  */
 export const RAISED_INPUT = `${RAISED_WELL} w-full text-body text-text-primary outline-none transition-colors placeholder:text-text-muted focus:border-border-highlight`;

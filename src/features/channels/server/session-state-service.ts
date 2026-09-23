@@ -156,11 +156,11 @@ function toUpsert(entry: SessionStateEntryInput): SessionStateUpsert {
     started_at: entry.startedAt ?? null,
     last_activity_at: entry.lastActivityAt ?? null,
     // ⚠ `?? null` for the same reason, and one more: absent and `null` are both
-    // "no template to report" here, so nothing is lost by collapsing them — see
+    // "no identity to report" here, so nothing is lost by collapsing them — see
     // the column comment in `20260823130000`. Do NOT try to distinguish a
     // desktop that predates the field from a blank launch; only the DIRECTIVE
     // lane needs that distinction (spec E-4) and it is a different table.
-    template_name: entry.templateName ?? null,
+    identity_name: entry.identityName ?? null,
     // ── HEALTH (2026-09-01, 20260909120000) ─────────────────────────────────
     // ⚠ `?? null` HERE TOO, AND NEVER `?? 0` / `?? false`. An older desktop
     // omits every one of these keys; the columns then store NULL, which the

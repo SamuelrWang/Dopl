@@ -17,7 +17,7 @@ import {
 } from "./ontology-test-harness";
 import { paneToken } from "./home-panes";
 import {
-  AGENTS_PANE,
+  IDENTITIES_PANE,
   KNOWLEDGE_PANE,
   ONTOLOGY_PANE,
   OVERVIEW_PANE,
@@ -103,7 +103,7 @@ beforeEach(() => {
  * BEFORE the two `startsWith` branches and reads no row out of it; nothing
  * `slice`s it and `use-activity-jump.ts` never sees a tab at all — it raises
  * Channels by name. A prefix branch claiming this token would hand
- * `HomeAgentPanels` a row id of `""`.
+ * `HomeIdentityPanels` a row id of `""`.
  */
 describe("the pane token", () => {
   it("carries NO row, whatever is selected — Overview's rule, second host", () => {
@@ -114,12 +114,12 @@ describe("the pane token", () => {
 
   it("is claimed by NO other face's branch — the disjointness rule, both ways", () => {
     expect(ONTOLOGY_PANE.startsWith(KNOWLEDGE_PANE)).toBe(false);
-    expect(ONTOLOGY_PANE.startsWith(AGENTS_PANE)).toBe(false);
+    expect(ONTOLOGY_PANE.startsWith(IDENTITIES_PANE)).toBe(false);
     expect(ONTOLOGY_PANE.startsWith(OVERVIEW_PANE)).toBe(false);
     expect(OVERVIEW_PANE.startsWith(ONTOLOGY_PANE)).toBe(false);
     // …and the row-keyed faces still key on their row, so the two rules hold
     // at once rather than one having replaced the other.
-    expect(paneToken("agents", "link:ws-1")).toBe(`${AGENTS_PANE}link:ws-1`);
+    expect(paneToken("identities", "link:ws-1")).toBe(`${IDENTITIES_PANE}link:ws-1`);
   });
 });
 

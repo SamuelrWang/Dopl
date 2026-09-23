@@ -16,7 +16,7 @@
  * No legend, no "colours already in use are dimmed" sentence, no count of what is left
  * — INVARIANTS §5's minimal-copy ruling, and the ONLY words on the row are the kit
  * label "Colour" (`shared/ui/form-dialog.tsx › FormSection`, so this row's label is
- * the same element and the same weight as Name / Template / Model / Runtime, not a
+ * the same element and the same weight as Name / Identity / Model / Runtime, not a
  * second spelling of it). What a dimmed circle means is said by its `title`, on the one
  * circle it is true of, at the moment the operator reaches for it.
  *

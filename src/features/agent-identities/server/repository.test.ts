@@ -1,5 +1,5 @@
 /**
- * `updateTemplateRow`'s QUERY SHAPE, pinned by recording what it asks the
+ * `updateIdentityRow`'s QUERY SHAPE, pinned by recording what it asks the
  * database for.
  *
  * ⚠ THE EMPTY PATCH IS THE WHOLE POINT OF THIS FILE (F-404). A KB-only patch —
@@ -21,7 +21,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 vi.mock("@/shared/supabase/admin", () => ({ supabaseAdmin: vi.fn() }));
 
 import { supabaseAdmin } from "@/shared/supabase/admin";
-import { updateTemplateRow } from "./repository";
+import { updateIdentityRow } from "./repository";
 
 const WS = "cccccccc-3333-4333-8333-333333333333";
 const ID = "dddddddd-4444-4444-8444-444444444444";
@@ -100,13 +100,13 @@ beforeEach(() => {
   primeSupabase();
 });
 
-describe("updateTemplateRow — the empty patch is a READ, not a write", () => {
+describe("updateIdentityRow — the empty patch is a READ, not a write", () => {
   it("issues NO update for a patch that names no scalar column, and still returns the row", async () => {
-    const result = await updateTemplateRow(WS, ID, {});
+    const result = await updateIdentityRow(WS, ID, {});
 
     // The bug: this used to be `[{}]` and PostgREST 500'd on it.
     expect(rec.updates).toEqual([]);
-    expect(rec.tables).toEqual(["agent_templates"]);
+    expect(rec.tables).toEqual(["agent_identities"]);
     expect(rec.select).toContain("id");
     expect(rec.single).toBe(1);
     // Total on the contract: callers still get the row back, not a throw.
@@ -117,7 +117,7 @@ describe("updateTemplateRow — the empty patch is a READ, not a write", () => {
 
   it("an all-`undefined` patch is the same empty patch — that IS how a KB-only patch arrives", async () => {
     await expect(
-      updateTemplateRow(WS, ID, {
+      updateIdentityRow(WS, ID, {
         name: undefined,
         description: undefined,
         instructions: undefined,
@@ -130,7 +130,7 @@ describe("updateTemplateRow — the empty patch is a READ, not a write", () => {
   });
 
   it("stays workspace-scoped on the read path — the fence does not lapse when the write does", async () => {
-    await updateTemplateRow(WS, ID, {});
+    await updateIdentityRow(WS, ID, {});
     expect(rec.filters).toEqual([
       ["workspace_id", WS],
       ["id", ID],
@@ -138,9 +138,9 @@ describe("updateTemplateRow — the empty patch is a READ, not a write", () => {
   });
 });
 
-describe("updateTemplateRow — a real patch still writes", () => {
+describe("updateIdentityRow — a real patch still writes", () => {
   it("sends only the named columns, and never `updated_at` (the trigger owns it)", async () => {
-    await updateTemplateRow(WS, ID, { name: "Renamed", model: null });
+    await updateIdentityRow(WS, ID, { name: "Renamed", model: null });
 
     expect(rec.updates).toEqual([{ name: "Renamed", model: null }]);
     expect(rec.updates[0]).not.toHaveProperty("updated_at");
@@ -151,7 +151,7 @@ describe("updateTemplateRow — a real patch still writes", () => {
   });
 
   it("`null` clears a column and is NOT confused with `undefined`", async () => {
-    await updateTemplateRow(WS, ID, { description: null });
+    await updateIdentityRow(WS, ID, { description: null });
     expect(rec.updates).toEqual([{ description: null }]);
   });
 });
@@ -165,9 +165,9 @@ describe("updateTemplateRow — a real patch still writes", () => {
  * rows matched is `null` — so a service-level `existing.updatedAt !== expected`
  * would pass every case here and fail the RACE case below.
  */
-describe("updateTemplateRow — the `expected_version` precondition", () => {
+describe("updateIdentityRow — the `expected_version` precondition", () => {
   it("puts the version in the WHERE clause, not in the update body", async () => {
-    await updateTemplateRow(WS, ID, { name: "Renamed" }, "2026-09-01T00:00:00Z");
+    await updateIdentityRow(WS, ID, { name: "Renamed" }, "2026-09-01T00:00:00Z");
 
     expect(rec.updates).toEqual([{ name: "Renamed" }]);
     expect(rec.filters).toEqual([
@@ -178,7 +178,7 @@ describe("updateTemplateRow — the `expected_version` precondition", () => {
   });
 
   it("answers `null` — never a throw — when the row moved under the caller", async () => {
-    const lost = await updateTemplateRow(
+    const lost = await updateIdentityRow(
       WS,
       ID,
       { name: "Renamed" },
@@ -191,19 +191,19 @@ describe("updateTemplateRow — the `expected_version` precondition", () => {
     const version = "2026-09-01T00:00:00Z";
 
     // Writer A wins and the trigger stamps a new `updated_at`.
-    const first = await updateTemplateRow(WS, ID, { name: "A" }, version);
+    const first = await updateIdentityRow(WS, ID, { name: "A" }, version);
     expect(first).not.toBeNull();
     liveUpdatedAt = "2026-09-01T00:00:05Z";
 
     // Writer B read the SAME version before A committed. A check-then-act
     // would have compared against its own stale read and written anyway.
-    const second = await updateTemplateRow(WS, ID, { name: "B" }, version);
+    const second = await updateIdentityRow(WS, ID, { name: "B" }, version);
     expect(second).toBeNull();
   });
 
   it("fences the EMPTY patch too — a junction-only write still honours a version", async () => {
     liveUpdatedAt = "2026-09-01T00:00:05Z";
-    const lost = await updateTemplateRow(WS, ID, {}, "2026-09-01T00:00:00Z");
+    const lost = await updateIdentityRow(WS, ID, {}, "2026-09-01T00:00:00Z");
 
     expect(rec.updates).toEqual([]);
     expect(rec.filters).toContainEqual(["updated_at", "2026-09-01T00:00:00Z"]);
@@ -212,7 +212,7 @@ describe("updateTemplateRow — the `expected_version` precondition", () => {
 
   it("STALE PAYLOAD: an older caller that passes no version keeps last-writer-wins", async () => {
     liveUpdatedAt = "2026-09-01T00:00:05Z";
-    const saved = await updateTemplateRow(WS, ID, { name: "Renamed" });
+    const saved = await updateIdentityRow(WS, ID, { name: "Renamed" });
 
     expect(rec.filters.map(([c]) => c)).not.toContain("updated_at");
     expect(saved.id).toBe(ID);

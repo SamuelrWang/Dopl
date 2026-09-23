@@ -39,7 +39,7 @@ interface Props {
    *
    * ⚠ A SLOT BECAUSE THIS FILE CANNOT IMPORT ONE. The desktop page's skeleton
    * lives in `apps/desktop-ui/`, which the shared tree may not reach into —
-   * same idiom as `agent-templates-core.tsx › loadingSkeleton`. It exists
+   * same idiom as `agent-identities-core.tsx › loadingSkeleton`. It exists
    * because /members has TWO gates back to back (the seam's workspace resolve,
    * then this read) and the second one painting a different ghost made one page
    * swap skeletons mid-load. Omitted, the shared two-pane ghost stands.

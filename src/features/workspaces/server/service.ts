@@ -192,7 +192,7 @@ export async function ensurePersonalContainer(userId: string): Promise<Workspace
  *
  * ⚠ EXPORTED FOR THE TWO `resolveHomeScope` FENCES —
  * `knowledge/server/service-base-gates.ts` and
- * `agent-templates/server/service-writes.ts` — which asked the same question of
+ * `agent-identities/server/service-writes.ts` — which asked the same question of
  * the derived default and must not each grow their own spelling of the new one.
  * It is stated here rather than in `shared/tenancy/personal-container.ts`
  * because it is a POLICY over that module's read, and this feature owns the

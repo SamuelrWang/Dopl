@@ -10,7 +10,7 @@ import KnowledgePage from "#/pages/knowledge";
 import KnowledgeDetailPage from "#/pages/knowledge/detail";
 import MembersPage from "#/pages/members";
 import OntologyPage from "#/pages/ontology";
-import AgentsPage from "#/pages/agents";
+import IdentitiesPage from "#/pages/identities";
 import OntologyDetailPage from "#/pages/ontology/detail";
 import SettingsPage from "#/pages/settings";
 import ChannelsPage from "#/pages/channels";
@@ -57,7 +57,7 @@ export interface PageRoute {
 
 /**
  * ⚠ CHANNELS-FIRST, ONTOLOGY LAST-BUT-TWO (Samuel's ruling, 2026-08-30 — ledger
- * ASK-6). The order is **Overview, Channels, Agents, Knowledge, Skills,
+ * ASK-6). The order is **Overview, Channels, Identities, Knowledge, Skills,
  * Ontology, Chats, Members, Settings**, and it is a product statement: channels
  * is the lead product and ontology is substrate. The shipped order said the
  * opposite — ontology second, channels sixth — which was a stale nav from before
@@ -88,14 +88,16 @@ export const WORKSPACE_PAGES: PageRoute[] = [
   // `channels: true` for exactly this row (INVARIANTS §11), and
   // `main/shell-mode.js › CHANNELS_PAGE` is the one string main navigates to.
   { path: "channels/:channelId", label: "Channel", element: <ChannelsPage /> },
-  // AGENT TEMPLATES (2026-08-22) — name, instructions, model, custom fields,
+  // AGENT IDENTITIES (2026-08-22) — name, instructions, model, custom fields,
   // attached knowledge bases and a visibility scope, authored on one page.
-  // ⚠ NO `agents/:templateId` DETAIL ROW, deliberately: a template is edited in
+  // ⚠ NO `identities/:identityId` DETAIL ROW, deliberately: an identity is edited in
   // a modal, not at a URL. The deep-link hand copy in
   // `dopl-desktop-app/main/deep-link-target.js › WORKSPACE_PAGES` therefore
-  // wants `agents: false` — a `true` there would hand the renderer a third
+  // wants `identities: false` — a `true` there would hand the renderer a third
   // segment that matches nothing.
-  { path: "agents", label: "Agents", element: <AgentsPage /> },
+  // ⚠ THE SEGMENT WAS `agents` UNTIL 2026-09-22 (Samuel: "I'm renaming the agents page to be
+  // named Identities") — the old path redirects, see `RENAMED_PAGES` below.
+  { path: "identities", label: "Identities", element: <IdentitiesPage /> },
   { path: "knowledge", label: "Knowledge", element: <KnowledgePage /> },
   { path: "knowledge/:kbSlug", label: "Knowledge base", element: <KnowledgeDetailPage /> },
   { path: "skills", label: "Skills", element: <SkillsPage /> },
@@ -106,6 +108,14 @@ export const WORKSPACE_PAGES: PageRoute[] = [
   { path: "members", label: "Members", element: <MembersPage /> },
   { path: "settings", label: "Settings", element: <SettingsPage /> },
 ];
+
+/**
+ * A page segment that was RENAMED, old → new: the old path REDIRECTS rather than falling to a
+ * placeholder, so a bookmark or a stale in-app link still lands. Not in `WORKSPACE_PAGES` —
+ * it is not a page, and the deep-link drift test reads that table alone. Main's hand copy is
+ * `dopl-desktop-app/main/deep-link-target.js › RENAMED_PAGES`.
+ */
+export const RENAMED_PAGES: Readonly<Record<string, string>> = { agents: "identities" };
 
 /** The workspace index redirect target — every "go home" funnel lands here. */
 export const WORKSPACE_HOME_PATH = "overview";
@@ -193,6 +203,10 @@ export const routes: RouteObject[] = [
       ...WORKSPACE_PAGES.map(({ path, label, element }) => ({
         path,
         element: element ?? <PlaceholderPage title={label} />,
+      })),
+      ...Object.entries(RENAMED_PAGES).map(([from, to]) => ({
+        path: from,
+        element: <Navigate to={`../${to}`} replace />,
       })),
     ],
   },

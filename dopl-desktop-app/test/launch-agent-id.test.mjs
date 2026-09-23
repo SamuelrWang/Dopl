@@ -22,7 +22,7 @@
 // "launch was called" would stay green through exactly the regression this guards.
 //
 // METHOD: the SHIPPED launch body, evaluated against a stub `require` and driven for real —
-// the same bargain `session-launch-template.test.mjs` makes, and the engine is faked at the one
+// the same bargain `session-launch-identity.test.mjs` makes, and the engine is faked at the one
 // seam that would otherwise start a process.
 //
 // Run: `node --test dopl-desktop-app/test/launch-agent-id.test.mjs`
@@ -58,19 +58,19 @@ function boot() {
       return { watchedChannel: () => ({ channel: { myAgentToolProfile: "full" } }) };
     }
     // ⚠ BOTH READS, because `session-launch-op.js` takes the LAUNCH one since ruling B7 and
-    // this file is about templates, not containment: a constant keeps the profile out of the
+    // this file is about identities, not containment: a constant keeps the profile out of the
     // way of what it does assert. `channel-agent-profile.test.mjs` drives the real rule.
     if (id === "./targeting") {
       return { resolveToolProfile: () => "full", resolveLaunchToolProfile: () => "full" };
     }
     // Real: a blank launch calls `narrowOverrides` and nothing else in it.
-    if (id === "./template-resolve") return require(join(MAIN, "template-resolve.js"));
+    if (id === "./identity-resolve") return require(join(MAIN, "identity-resolve.js"));
     if (id === "./channel-prefs") {
       return {
         launchStartModes: () => ({ tools: "manual", messages: "auto_inbound" }),
         getLaunchModel: () => null,
         getLaunchModelLink: () => "", // U5
-        isTemplateApproved: () => true,
+        isIdentityApproved: () => true,
       };
     }
     if (id === "./session-engine") {

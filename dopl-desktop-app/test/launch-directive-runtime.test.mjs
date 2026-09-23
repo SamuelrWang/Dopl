@@ -9,7 +9,7 @@
 // Both halves were real and this file drives both:
 //   · there was NO runtime field anywhere on the lane, so nothing could say which vendor to use;
 //   · `session-model.js › chainModel` answers `''` for an id it does not know, so `codex` in the
-//     MODEL slot read as "no opinion" and the chain fell through to the template's and then the
+//     MODEL slot read as "no opinion" and the chain fell through to the identity's and then the
 //     channel's model — both Claude ids — which were handed to whatever adapter ran.
 //
 // ── ⚠ THE ONE TRAP A REVIEWER SHOULD LOOK FOR FIRST ─────────────────────────────────────

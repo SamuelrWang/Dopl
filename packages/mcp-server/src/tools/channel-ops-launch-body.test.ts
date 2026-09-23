@@ -31,7 +31,7 @@ import { opLaunchAgent } from "./channel-ops-launch";
 // refusals rather than in the pulled doctrine, so the pin moved to the constant
 // itself — which is the one place a reword has to pass through either way.
 import { CHANNEL_DOCTRINE, TENANCY_RULE } from "./channel-doctrine";
-// ⚠ AND THE TWO-FENCES SENTENCE IS `template`'S OWN `.describe()` NOW: a client
+// ⚠ AND THE TWO-FENCES SENTENCE IS `identity`'S OWN `.describe()` NOW: a client
 // reads it at the moment it decides what to pass, which is closer to the
 // decision than the op paragraph was.
 import { CHANNEL_INPUT_SHAPE } from "./channel-schema";
@@ -46,8 +46,8 @@ function directive(over: Partial<LaunchDirective> = {}): LaunchDirective {
     goal: "ship the parser",
     model: null,
     status: "pending",
-    templateId: null,
-    templateName: null,
+    identityId: null,
+    identityName: null,
     refusalReason: null,
     agentId: null,
     claimedAt: null,
@@ -78,7 +78,7 @@ const polls = (over: Partial<LaunchDirective>) =>
   client({ getLaunchDirective: vi.fn(async () => directive(over)) });
 
 describe("the call itself", () => {
-  it("passes channel id, thread, goal, model and template through", async () => {
+  it("passes channel id, thread, goal, model and identity through", async () => {
     const createLaunchDirective = vi.fn(async () => ({
       offline: false,
       directive: directive({ status: "launched", agentId: "abcd1234" }),
@@ -88,9 +88,9 @@ describe("the call itself", () => {
       thread: "44444444-4444-4444-4444-444444444444",
       goal: "ship the parser",
       model: "claude-opus-5",
-      template: "Code Auditor",
+      identity: "Code Auditor",
     });
-    // ⚠ THE TEMPLATE STRING GOES OUT UNTOUCHED. Whether it is an id or a name,
+    // ⚠ THE IDENTITY STRING GOES OUT UNTOUCHED. Whether it is an id or a name,
     // and whether a name is ambiguous, is decided SERVER-SIDE against the
     // caller's own visibility — which this process cannot evaluate.
     expect(createLaunchDirective).toHaveBeenCalledWith({
@@ -98,7 +98,7 @@ describe("the call itself", () => {
       threadId: "44444444-4444-4444-4444-444444444444",
       goal: "ship the parser",
       model: "claude-opus-5",
-      template: "Code Auditor",
+      identity: "Code Auditor",
       // ⚠ **THE NAME IS ON THE BODY SINCE 2026-09-15**, and TRIMMED rather than passed raw: the
       // refusal above it measured the trimmed value, so filing the raw one would send a string
       // the check never looked at.
@@ -124,7 +124,7 @@ describe("the call itself", () => {
       // EITHER — it says which ENGINE on the caller's own machine, and that machine REFUSES a
       // runtime it cannot start rather than substituting one.
       "runtime",
-      "template",
+      "identity",
       // THE POSTURE REQUEST (2026-09-01, T24). Three keys added by a CONSCIOUS
       // edit here, which is this assertion working rather than being worked
       // around: it enumerates the whole body precisely so a field nobody
@@ -161,12 +161,12 @@ describe("the call itself", () => {
   });
 
   /**
-   * THE TEMPLATE REFUSALS AT CREATE TIME (2026-08-23).
+   * THE IDENTITY REFUSALS AT CREATE TIME (2026-08-23).
    *
    * ⚠ **THE DISCRIMINATOR IS THE ERROR CODE, NEVER THE STATUS**, and that is the
    * whole reason these cases exist. One call now has TWO ways to 404 (no such
-   * channel / membership, no such template) and one to 409. A status-only branch
-   * tells an agent its CHANNEL was wrong when its TEMPLATE NAME was — the exact
+   * channel / membership, no such identity) and one to 409. A status-only branch
+   * tells an agent its CHANNEL was wrong when its IDENTITY NAME was — the exact
    * mis-narration `channel-errors.ts` was written to stop.
    */
   const apiError = (status: number, code: string, details?: unknown) =>
@@ -180,7 +180,7 @@ describe("the call itself", () => {
     const res = await opLaunchAgent(
       client({
         createLaunchDirective: vi.fn(async () => {
-          throw apiError(409, "AGENT_TEMPLATE_AMBIGUOUS", {
+          throw apiError(409, "AGENT_IDENTITY_AMBIGUOUS", {
             matches: [
               { id: "t-1", name: "Researcher", visibility: "private" },
               { id: "t-2", name: "Researcher", visibility: "workspace" },
@@ -189,7 +189,7 @@ describe("the call itself", () => {
         }),
       }),
       "general",
-      { name: "Scout", template: "Researcher" },
+      { name: "Scout", identity: "Researcher" },
     );
     const out = res.content[0].text as string;
     expect(res.isError).toBe(true);
@@ -204,13 +204,13 @@ describe("the call itself", () => {
     expect(out).not.toContain("still PENDING");
   });
 
-  it("an UNRESOLVABLE template says so, and never says whether it EXISTS", async () => {
-    // ⚠ 404-never-403 all the way down: "no such template" and "not shared with
+  it("an UNRESOLVABLE identity says so, and never says whether it EXISTS", async () => {
+    // ⚠ 404-never-403 all the way down: "no such identity" and "not shared with
     // you" are ONE answer, or the refusal becomes an id-probe.
     const res = await opLaunchAgent(
-      client({ createLaunchDirective: vi.fn(async () => { throw apiError(404, "AGENT_TEMPLATE_NOT_FOUND"); }) }),
+      client({ createLaunchDirective: vi.fn(async () => { throw apiError(404, "AGENT_IDENTITY_NOT_FOUND"); }) }),
       "general",
-      { name: "Scout", template: "Ghost" },
+      { name: "Scout", identity: "Ghost" },
     );
     const out = res.content[0].text as string;
     expect(res.isError).toBe(true);
@@ -219,26 +219,26 @@ describe("the call itself", () => {
     expect(out).not.toContain("Channel not found");
   });
 
-  it("a channel 404 with NO template code is still a channel not-found", async () => {
+  it("a channel 404 with NO identity code is still a channel not-found", async () => {
     const res = await opLaunchAgent(
       client({ createLaunchDirective: vi.fn(async () => { throw apiError(404, "LAUNCH_DIRECTIVE_NOT_FOUND"); }) }),
       "general",
-      { name: "Scout", template: "Code Auditor" },
+      { name: "Scout", identity: "Code Auditor" },
     );
     expect(res.content[0].text).toContain("general");
-    expect(res.content[0].text).not.toContain("agent template");
+    expect(res.content[0].text).not.toContain("agent identity");
   });
 
-  it("`no-template` from the MACHINE says WHOSE visibility failed, and does not guess why", async () => {
+  it("`no-identity` from the MACHINE says WHOSE visibility failed, and does not guess why", async () => {
     // ⚠ THE OTHER END OF THE SAME FACT, AND THE WORD IS THE DISCRIMINATOR. The
-    // create-time refusals above are `isError` results naming YOUR template
+    // create-time refusals above are `isError` results naming YOUR identity
     // before any row exists; this is an `ok` FACT LINE naming the OPERATOR's
     // machine's answer after the row was filed — two fences, two people, two
     // next actions, and a caller branches on `reason=`.
-    const out = await text(created({ status: "refused", refusalReason: "no-template" }), {
+    const out = await text(created({ status: "refused", refusalReason: "no-identity" }), {
       waitMs: 0,
     });
-    expect(out).toContain("reason=no-template");
+    expect(out).toContain("reason=no-identity");
     expect(out).toContain("filed=yes");
     expect(out).not.toContain("nothing was filed");
     // It must NOT claim to know which of deleted / invisible it was: the resolve
@@ -248,24 +248,24 @@ describe("the call itself", () => {
     // visibility" names WHOSE fence failed and refuses to say which of
     // deleted/invisible it was, which is the whole property under test.
     expect(CHANNEL_DOCTRINE).toContain(
-      "`no-template` THAT machine could not resolve it under the operator's visibility",
+      "`no-identity` THAT machine could not resolve it under the operator's visibility",
     );
     // ⚠ AND THE DOCTRINE NAMES THE TENANCY (T35), which is NOT an oracle: the
     // resolve is keyed `(workspace_id, id)` against the CHANNEL's container, so
-    // a template the caller owns elsewhere is ABSENT rather than hidden. That is
+    // an identity the caller owns elsewhere is ABSENT rather than hidden. That is
     // a standing rule of the system, answerable without reading any row — which
     // is why it may be said here, where "which row" may not.
-    expect(CHANNEL_INPUT_SHAPE.template.description).toContain(
+    expect(CHANNEL_INPUT_SHAPE.identity.description).toContain(
       "THIS CHANNEL'S container",
     );
     expect(TENANCY_RULE).toContain("a home channel IS its own container");
     // 🔒 **THE RULE IS ABOUT THE NAME PATH, AND SAYING SO IS THE FIX OF
-    // 2026-09-18.** It read "A template resolves ONLY in the container the
+    // 2026-09-18.** It read "An identity resolves ONLY in the container the
     // channel lives in", which stopped being true for a UUID at B2 (2026-09-02):
-    // `src/features/agent-templates/server/service-resolve-ref.ts` follows an id
+    // `src/features/agent-identities/server/service-resolve-ref.ts` follows an id
     // through `read-resource.ts › readResourceById` to whichever container of
     // the caller's it lives in. ⚠ **BOTH HALVES ARE PINNED** — dropping the ID
-    // clause would restore a refusal that tells an agent its Home template
+    // clause would restore a refusal that tells an agent its Home identity
     // cannot launch here at the moment an id would have worked.
     expect(TENANCY_RULE).toContain(
       "A NAME resolves only in the container the channel lives in",
@@ -273,7 +273,7 @@ describe("the call itself", () => {
     expect(TENANCY_RULE).toContain("an id resolves wherever the row lives");
     // ⚠ AND IT NAMES NO PLACE, because it CANNOT: this refusal came back from a
     // DESKTOP over a closed vocabulary with no detail field, so the honest
-    // classification `template-resolve.js` made stays a local log. The RULE
+    // classification `identity-resolve.js` made stays a local log. The RULE
     // crossing instead of the ROW is the whole design.
     expect(out).not.toContain("not in this channel's own container");
   });

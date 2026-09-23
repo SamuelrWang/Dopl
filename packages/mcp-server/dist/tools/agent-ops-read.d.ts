@@ -1,6 +1,6 @@
 /**
  * `dopl_agent` READ op handlers: list, get. Non-mutating — they resolve a
- * template ref (or a shelf) and render it. Routed from the registrar in
+ * identity ref (or a shelf) and render it. Routed from the registrar in
  * `agent.ts`.
  */
 import type { DoplClient } from "@dopl/client";
@@ -9,7 +9,7 @@ import type { WorkspaceDirectory } from "../workspace-directory.js";
 /**
  * ⚠ **THE `shelf` ARGUMENT AND ITS `· personal` LABEL LEFT ON 2026-09-02**
  * (slice B15, ruling B10) — the twin of `dopl_kb(op="list_bases")`'s, for the
- * same reason: a personal template is an ordinary row in the caller's own
+ * same reason: a personal identity is an ordinary row in the caller's own
  * `kind='personal'` CONTAINER, so "which shelf" is the tenancy the call is
  * already in.
  *
@@ -19,7 +19,7 @@ import type { WorkspaceDirectory } from "../workspace-directory.js";
  * the caller's own personal one, so this list has held rows from TWO tenancies
  * since that day while its heading still said "Private to you" over all of them
  * — one undifferentiated bucket spanning both destinations. **The container is
- * the first axis now**, off the `homeScopedTemplateIds` sibling key this op used
+ * the first axis now**, off the `homeScopedIdentityIds` sibling key this op used
  * to discard, and the visibility axis only ever splits what is left.
  */
 export declare function opList(client: DoplClient, 

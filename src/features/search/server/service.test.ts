@@ -51,7 +51,7 @@ function base(): FakeTables {
     channel_artifacts: [],
     knowledge_bases: [],
     knowledge_entries: [],
-    agent_templates: [],
+    agent_identities: [],
     skills: [],
     chats: [],
     profiles: [],
@@ -203,7 +203,7 @@ describe("the group list", () => {
         deleted_at: null,
       },
     ];
-    tables.agent_templates = [
+    tables.agent_identities = [
       {
         id: "t1",
         name: "zephyr bot",

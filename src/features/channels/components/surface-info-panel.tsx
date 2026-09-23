@@ -175,13 +175,13 @@ export function SurfaceInfoPanel({
       canLaunchAgent={launchAllowedInView(agentsPanel.canLaunch, openThread, currentUserId)}
       launchBusy={agentsPanel.launchBusy}
       launchError={agentsPanel.launchError}
-      // ⚠ THE PROMISE IS HANDED THROUGH, not voided (2026-08-22): the template
+      // ⚠ THE PROMISE IS HANDED THROUGH, not voided (2026-08-22): the identity
       // picker AWAITS it to learn whether main asked for a first-use approval, and
       // a `void` wrapper would make every picker launch look like a dead bridge.
-      onLaunchAgent={(id, templateId, overrides) =>
-        agentsPanel.launchAgent(id, templateId, overrides)
+      onLaunchAgent={(id, identityId, overrides) =>
+        agentsPanel.launchAgent(id, identityId, overrides)
       }
-      onApproveTemplate={agentsPanel.approveTemplate}
+      onApproveIdentity={agentsPanel.approveIdentity}
       openAgent={sel.openAgent}
       onOpenAgent={sel.setOpenAgent}
       // ⚠ THE PILL'S SECOND PRESS ASKS THIS COLUMN TO RESET (Samuel, 2026-09-16) —

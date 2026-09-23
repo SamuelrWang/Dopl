@@ -27,7 +27,7 @@
 //   ✅ `REFUSAL_REASONS` is the same SEVEN words, in the same order, as
 //      `schema-launch.ts › LaunchRefusalReasonSchema` and the column CHECK — which
 //      `supabase/migrations/20260823140000_channel_launch_directives_template.sql` widened to
-//      admit `no-template` (⚠ WRITTEN; applied is a measurement, INVARIANTS §12).
+//      admit `no-identity` (⚠ WRITTEN; applied is a measurement, INVARIANTS §12).
 //
 //   ✅ **`ROUTES.pending` NAMES A READ THAT EXISTS. F-273 IS CLOSED (2026-08-22).**
 //      `src/app/api/channels/launch-directives/route.ts › handleGet`, exported as
@@ -72,7 +72,7 @@ const {
   STATUSES,
   KIND_LAUNCH, KIND_END, KIND_RENAME, KIND_SET_MODE, KINDS, KINDS_NEEDING_LAUNCH_CONSENT,
   TOOL_MODES, MESSAGE_MODES, REFUSAL_REASONS, REQUEST_KEYS, RESPONSE_KEYS,
-  TARGET_NAME_MAX, AGENT_ID_RE, RUNTIME_ID_RE, GOAL_MAX, TEMPLATE_NAME_MAX, text,
+  TARGET_NAME_MAX, AGENT_ID_RE, RUNTIME_ID_RE, GOAL_MAX, IDENTITY_NAME_MAX, text,
 } = vocab;
 
 // ⚠ **THE UUID RULE STAYS HERE**, with `directiveFrom`, which is its only reader. It is one of
@@ -97,17 +97,17 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
  * ⚠ `operatorUserId` IS CARRIED BUT NOT TRUSTED HERE — the caller re-checks it against the live
  * identity, because the realtime FILTER is workspace-wide (see `launch-directives.js`).
  *
- * ── ⚠ THE TEMPLATE PAIR, AND WHY BOTH HALVES HAD TO BE ADDED HERE (2026-08-23) ────────────
+ * ── ⚠ THE IDENTITY PAIR, AND WHY BOTH HALVES HAD TO BE ADDED HERE (2026-08-23) ────────────
  *
  * **THIS FUNCTION IS WHERE A FIELD SILENTLY NEVER ARRIVES.** It is a literal whitelist, so a
  * column the server adds and this list does not name is dropped without a word — which is the
- * point of the narrowing and is also the one way to ship "templates over the directive lane" and
- * have it do nothing at all. `template_id` AND `template_name` are both named below.
+ * point of the narrowing and is also the one way to ship "identities over the directive lane" and
+ * have it do nothing at all. `identity_id` AND `identity_name` are both named below.
  *
- * ⚠ AND IT IS BOTH OR NEITHER. `template_id` is `ON DELETE SET NULL`, so a directive whose
- * template was deleted between CREATE and CLAIM arrives with a NULL id — indistinguishable, on
- * the id alone, from a directive that named no template. Those two get OPPOSITE answers: no
- * template requested ⇒ launch blank; template DELETED ⇒ REFUSE `no-template`, because the
+ * ⚠ AND IT IS BOTH OR NEITHER. `identity_id` is `ON DELETE SET NULL`, so a directive whose
+ * identity was deleted between CREATE and CLAIM arrives with a NULL id — indistinguishable, on
+ * the id alone, from a directive that named no identity. Those two get OPPOSITE answers: no
+ * identity requested ⇒ launch blank; identity DELETED ⇒ REFUSE `no-identity`, because the
  * orchestrator picked an IDENTITY and an agent silently wearing none is not noticed for several
  * turns (spec E-4, F-1). The NAME is what survives the SET NULL and makes the difference legible,
  * so narrowing it away would re-create exactly the ambiguity the server added a column to close.
@@ -119,7 +119,7 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
  * server's resolved value, then its snake/camel pair, then the raw request's — and the ORDER
  * is the precedence (2026-09-02, A9). A mode this build has never heard of collapses to `''`
  * rather than travelling toward a reducer that would coerce it to the most restrictive member
- * without anybody saying so, which is `templateId`'s rule one field along.
+ * without anybody saying so, which is `identityId`'s rule one field along.
  *
  * ⚠ IT EXISTS BECAUSE THE PRECEDENCE IS NOW FOUR-DEEP AND WAS WRITTEN TWICE. Two copies of a
  * fallback chain is how the tool axis and the message axis come to disagree about which value
@@ -188,8 +188,8 @@ function directiveFrom(raw, workspaceId) {
   const channelId = String(r.channel_id || r.channelId || '');
   if (!UUID_RE.test(id) || !UUID_RE.test(channelId)) return null;
   // ⚠ BOTH SPELLINGS, for the same reason `taskId` knows three: a REALTIME frame is the raw row
-  // (`template_id`) and the CLAIM's answer is the server DTO (`templateId`).
-  const templateId = String(r.template_id || r.templateId || '');
+  // (`identity_id`) and the CLAIM's answer is the server DTO (`identityId`).
+  const identityId = String(r.identity_id || r.identityId || '');
   // ⚠ THREE SPELLINGS, AND ALL THREE ARE REAL (measured 2026-08-22). A REALTIME frame is the raw
   // row (`task_id`); the SERVER DTO renames it (`service-launch.ts › toDirective` answers
   // `threadId`, because "thread" is the domain word and "task" is the column's); `taskId` is this
@@ -199,7 +199,7 @@ function directiveFrom(raw, workspaceId) {
   const taskId = String(r.task_id || r.threadId || r.taskId || '');
   const status = String(r.status || '');
   // ⚠ THE TARGET OF AN END / RENAME — an INPUT, never `agent_id`, which is the
-  // OUTPUT a launch produced. Both spellings for `templateId`'s reason: a REALTIME
+  // OUTPUT a launch produced. Both spellings for `identityId`'s reason: a REALTIME
   // frame is the raw row and the CLAIM's answer is the server DTO.
   const targetAgentId = String(r.target_agent_id || r.targetAgentId || '');
   return {
@@ -223,7 +223,7 @@ function directiveFrom(raw, workspaceId) {
     // the frozen model list is that module's.
     model: text(r.model, 64),
     // ⚠ **WHICH RUNTIME THIS DIRECTIVE ASKED FOR** (2026-09-21, U9;
-    // `channel_launch_directives.runtime`). ⚠ BOTH SPELLINGS READ, like `template_name` and
+    // `channel_launch_directives.runtime`). ⚠ BOTH SPELLINGS READ, like `identity_name` and
     // `color` above and for the identical reason: the row reaches this machine as the CLAIM's
     // DTO (camel) and, on the realtime lane, as the raw column (snake). A field read in one
     // spelling is a field silently absent on the other lane — and THIS field's absence is the
@@ -243,15 +243,15 @@ function directiveFrom(raw, workspaceId) {
     // Claude Sonnet, because `session-model.js › chainModel` answers `''` for an id it does not
     // know — so `codex` read as silence and the chain fell through.
     runtime: runtimeId(r.runtime || r.runtimeId),
-    // ⚠ '' IS "NO TEMPLATE ID", and a non-uuid collapses to it rather than being carried: this
-    // value is about to be interpolated into `/api/agent-templates/<id>/resolve`.
-    templateId: UUID_RE.test(templateId) ? templateId : '',
+    // ⚠ '' IS "NO IDENTITY ID", and a non-uuid collapses to it rather than being carried: this
+    // value is about to be interpolated into `/api/agent-identities/<id>/resolve`.
+    identityId: UUID_RE.test(identityId) ? identityId : '',
     // ⚠ CARRIED EVEN WHEN THE ID IS EMPTY — that combination IS the deletion signal (E-4). A
     // narrowing that dropped the name whenever the id was missing would throw away the only
-    // evidence a template was ever named.
-    templateName: text(r.template_name || r.templateName, TEMPLATE_NAME_MAX),
+    // evidence an identity was ever named.
+    identityName: text(r.identity_name || r.identityName, IDENTITY_NAME_MAX),
     // ⚠ **THE AGENT COLOUR THIS DIRECTIVE ASKED FOR** (2026-09-13;
-    // `channel_launch_directives.color`). ⚠ BOTH SPELLINGS READ, like `template_name` above and
+    // `channel_launch_directives.color`). ⚠ BOTH SPELLINGS READ, like `identity_name` above and
     // for the identical reason: this row reaches the machine as the CLAIM's DTO (camel) and, on
     // some replay paths, closer to the column (snake). A field read in one spelling is a field
     // that is silently absent on the other lane.
@@ -263,7 +263,7 @@ function directiveFrom(raw, workspaceId) {
     color: colorKey(r.color || r.colorKey),
     // ⚠ **WHAT THE LAUNCH ASKED THE NEW AGENT TO BE CALLED** (Samuel, 2026-09-15;
     // `20261006120000_channel_launch_directives_agent_name.sql`).
-    // ⚠ **BOTH SPELLINGS READ**, like `template_name` and `color` above: the row reaches the
+    // ⚠ **BOTH SPELLINGS READ**, like `identity_name` and `color` above: the row reaches the
     // machine as the CLAIM's DTO (camel) and, on some replay lanes, closer to the column (snake).
     // ⚠ **`text()`-BOUNDED AND NOT SANITISED** — `agent-names.js › sanitizeName` is the authority
     // and REFUSES rather than strips. ⚠ `''` IS "NOT ASKED", which `launch-directive-spawn.js`
@@ -294,7 +294,7 @@ function directiveFrom(raw, workspaceId) {
     // `''` is "this axis was not requested", which is a REAL and common value: a
     // directive may move one axis and leave the other alone, and the caller applies
     // only what it was given. A value outside the enum collapses to `''` for
-    // `templateId`'s reason — this function is a NARROWING, and a mode this build has
+    // `identityId`'s reason — this function is a NARROWING, and a mode this build has
     // never heard of must not be carried toward a reducer that would coerce it to the
     // most restrictive member without anybody saying so.
     // ⚠ BOTH `''` MEANS THE DIRECTIVE ASKED FOR NOTHING THIS BUILD CAN DO, and the
@@ -490,7 +490,7 @@ module.exports = {
   REQUEST_KEYS,
   RESPONSE_KEYS,
   GOAL_MAX,
-  TEMPLATE_NAME_MAX,
+  IDENTITY_NAME_MAX,
   TARGET_NAME_MAX,
   directiveFrom,
   refusalFor,

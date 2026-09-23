@@ -23,7 +23,7 @@ import { LINK_WORKSPACE_ID } from "./home-test-ids";
  * would be a fixture for a request the client can no longer make.
  *
  * ⚠ A `.ts` FILE, NOT `.tsx`, DELIBERATELY. Nothing here renders, and the
- * /home no-concave sweep (`template-editor-surface.test.tsx › no concave surfaces`)
+ * /home no-concave sweep (`identity-editor-surface.test.tsx › no concave surfaces`)
  * enumerates every non-test `.tsx` in this directory — a JSX-free fixture
  * module has no surface to get wrong and does not belong in that list.
  */

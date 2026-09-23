@@ -43,7 +43,7 @@ import type { SessionStateUpsert } from "./collab-dto";
 export const SESSION_DIFF_COLUMNS =
   "session_key, channel_id, task_id, name, state, channel_name, thread_title, " +
   "detail, tool_label, model, context_used, context_window, tokens_spent, " +
-  "started_at, last_activity_at, template_name, display_name, " +
+  "started_at, last_activity_at, identity_name, display_name, " +
   // ⚠ THE HEALTH SEVEN (2026-09-01). They are the fields that move MOST OFTEN —
   // `turns` on every turn, `tokens_delta` on every quantizer step — so leaving
   // any of them out of the SELECT is the loudest version of the first failure
@@ -98,13 +98,13 @@ export function sessionRowMatches(
     sameCount(stored.tokens_spent, reported.tokens_spent) &&
     stored.started_at === reported.started_at &&
     stored.last_activity_at === reported.last_activity_at &&
-    // ⚠ In practice this never moves for a live session — a template is captured
+    // ⚠ In practice this never moves for a live session — an identity is captured
     // at spawn and a session cannot change identity mid-run. It is compared
     // anyway because the rule above admits no exceptions: a column in the SELECT
     // but not in this compare reads back as a difference nobody made on the
     // FIRST push after the field ships, and a column in neither freezes at its
     // first value while the row keeps claiming to be current.
-    stored.template_name === reported.template_name &&
+    stored.identity_name === reported.identity_name &&
     // 2026-08-31: a RENAME is exactly the change this diff must see — it is how
     // the peer-visible name propagates on the next push with nothing else moving.
     stored.display_name === reported.display_name &&

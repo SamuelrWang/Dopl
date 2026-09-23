@@ -97,7 +97,7 @@ async function searchOneLeg(
 ): Promise<LegResult> {
   return workspaceContext.run(leg.id, async () => {
     const reads = partialRead();
-    const [entryHits, skills, ontology, templates] = await Promise.all([
+    const [entryHits, skills, ontology, identities] = await Promise.all([
       reads.soft("Knowledge entries", client.searchKb(query, { limit }), []),
       reads.soft("Skills", client.listSkills(), []),
       reads.soft(
@@ -105,7 +105,7 @@ async function searchOneLeg(
         client.getOntology({ view: "summary" }),
         EMPTY_ONTOLOGY,
       ),
-      reads.soft("Agent templates", client.listAgentTemplates(), []),
+      reads.soft("Agent identities", client.listAgentIdentities(), []),
     ]);
 
     const lines: string[] = [heading(leg)];
@@ -149,13 +149,13 @@ async function searchOneLeg(
       }
     }
 
-    const templateHits = templates
+    const identityHits = identities
       .filter((t) => matches(t.name, t.description))
       .slice(0, limit);
-    if (templateHits.length > 0) {
-      hits += templateHits.length;
-      lines.push("", "### Agent templates");
-      for (const t of templateHits) {
+    if (identityHits.length > 0) {
+      hits += identityHits.length;
+      lines.push("", "### Agent identities");
+      for (const t of identityHits) {
         lines.push(
           `- ${inlineOr(t.name, NO_NAME)} (id: \`${t.id}\` · ${t.visibility})`,
         );

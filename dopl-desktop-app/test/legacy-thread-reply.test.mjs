@@ -63,7 +63,7 @@ test("legacyThreadId matches trigger.js taskIdFor / futureTaskId, byte for byte"
   // The real shape: a UUID channel id (full of hyphens) plus the opening message's seq.
   const ch = "aaaaaaaa-1111-4bbb-8ccc-dddddddddddd";
   assert.equal(legacyThreadId(ch, 42), `task-${ch}-42`);
-  assert.equal(legacyThreadId(ch, 42), `task-${ch}-${42}`); // the template trigger.js uses
+  assert.equal(legacyThreadId(ch, 42), `task-${ch}-${42}`); // the identity trigger.js uses
 });
 
 // ── what opens a thread this machine will trust ──────────────────────────────────

@@ -51,12 +51,12 @@
 import { Fragment, useEffect, useMemo, useState, type ReactNode } from "react";
 import { ChevronRight } from "lucide-react";
 // ⚠ CROSS-FEATURE, AND DELIBERATELY THE SMALLER OF TWO EVILS (F-275 records that
-// this tree has never obeyed §1's ban). `TEMPLATE_NAME_TEXT` was exported
+// this tree has never obeyed §1's ban). `IDENTITY_NAME_TEXT` was exported
 // 2026-09-13 so a second surface could read the type Samuel names by pointing at
 // it. ⚠ **AND IT IS WHY THIS FILE IS NOT IN `src/shared/ui/`** — a `shared/`
 // module importing a feature is the direction §1 forbids OUTRIGHT; /home reaches
 // it as an APP importing a feature component, as eleven other pages already do.
-import { TEMPLATE_NAME_TEXT } from "@/features/agent-templates/components/template-section";
+import { IDENTITY_NAME_TEXT } from "@/features/agent-identities/components/identity-section";
 import { cn } from "@/shared/lib/utils";
 import { NAKED_ICON, NAKED_ICON_BUTTON } from "@/shared/ui/naked-icon-button";
 import { PANEL_ROWS, PANEL_WELL } from "@/shared/ui/panel-well";
@@ -154,9 +154,9 @@ const WELL_HEADER =
  * controls for one act. ⚠ **THE HEADING IS STILL AN `h3` INSIDE THE BUTTON**, so
  * the well is reachable by role AND supplies the button's accessible name: one
  * text node, two jobs, no `aria-label` to drift from the visible word.
- * ⚠ **`TEMPLATE_NAME_TEXT`, BY IMPORT** — the type the /home Overview's **Credit
+ * ⚠ **`IDENTITY_NAME_TEXT`, BY IMPORT** — the type the /home Overview's **Credit
  * spend** heading wears, which is what Samuel named. ⚠ **NOT
- * `TEMPLATE_NAME_TEXT_LG`** (18px): he rejected its spread by name the same day
+ * `IDENTITY_NAME_TEXT_LG`** (18px): he rejected its spread by name the same day
  * (*"I only asked you to change the usage size to be bigger"*).
  * ⚠ **COLLAPSED MEANS THE CONTENT IS NOT RENDERED**, one transition late —
  * {@link useWellContent} owns the delay.
@@ -193,7 +193,7 @@ export function Well({
         aria-expanded={open}
         className={WELL_HEADER}
       >
-        <h3 className={cn("min-w-0 truncate", TEMPLATE_NAME_TEXT)}>{label}</h3>
+        <h3 className={cn("min-w-0 truncate", IDENTITY_NAME_TEXT)}>{label}</h3>
         <span aria-hidden className={NAKED_ICON_BUTTON}>
           <ChevronRight
             size={NAKED_ICON}

@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createQueryClient } from "#/lib/query-client";
 import { NAV } from "@/shared/layout/app-shell/app-sidebar-core";
 import {
+  RENAMED_PAGES,
   THREAD_WINDOW_PATH,
   WORKSPACE_HOME_PATH,
   WORKSPACE_PAGES,
@@ -86,17 +87,30 @@ describe("app routes", () => {
     );
   });
 
-  it("gives the agents page its sidebar nav row", async () => {
+  it("gives the identities page its sidebar nav row", async () => {
     // ⚠ FOUR PLACES, OR IT HALF-LANDS (the table's own docblock): the route row
     // here, the `NavSection` member + `NAV` row in
     // `src/shared/layout/app-shell/app-sidebar-core.tsx`, and the deep-link hand
     // copy. This pins the first two together — a route with no nav row is a page
     // nobody can reach, and neither half fails on its own.
-    renderAt("/acme-ab12cd/agents");
-    expect(await screen.findByRole("link", { name: "Agents" })).toHaveAttribute(
+    renderAt("/acme-ab12cd/identities");
+    expect(await screen.findByRole("link", { name: "Identities" })).toHaveAttribute(
       "href",
-      "/acme-ab12cd/agents"
+      "/acme-ab12cd/identities"
     );
+  });
+
+  it("REDIRECTS the old `agents` path to `identities` (renamed 2026-09-22)", async () => {
+    // ⚠ A bookmark or a stale link must land on the page, not on a placeholder.
+    const router = createMemoryRouter(routes, { initialEntries: ["/acme-ab12cd/agents"] });
+    render(
+      <QueryClientProvider client={createQueryClient()}>
+        <RouterProvider router={router} />
+      </QueryClientProvider>
+    );
+    await waitFor(() => expect(router.state.location.pathname).toBe("/acme-ab12cd/identities"));
+    expect(RENAMED_PAGES).toEqual({ agents: "identities" });
+    expect(WORKSPACE_PAGES.map((page) => page.path)).not.toContain("agents");
   });
 
   it("redirects the workspace root to the home page", async () => {
@@ -156,7 +170,7 @@ describe("app routes", () => {
       "overview",
       "channels",
       "channels/:channelId",
-      "agents",
+      "identities",
       "knowledge",
       "knowledge/:kbSlug",
       "skills",
@@ -187,20 +201,20 @@ describe("app routes", () => {
     expect(navOrder[1]).toBe("channels");
   });
 
-  it("registers the agents page — one row, and NO detail child", () => {
-    // ⚠ THE ABSENCE IS THE ASSERTION. A template is edited in a modal, not at a
-    // URL, so `agents` must stay paramless: an `agents/:templateId` row would
+  it("registers the identities page — one row, and NO detail child", () => {
+    // ⚠ THE ABSENCE IS THE ASSERTION. An identity is edited in a modal, not at a
+    // URL, so `identities` must stay paramless: an `identities/:identityId` row would
     // resolve to nothing, and the deep-link hand copy
     // (`dopl-desktop-app/main/deep-link-target.js › WORKSPACE_PAGES`) would then
     // want a `true` that hands the renderer a third segment matching no route.
     const paths = WORKSPACE_PAGES.map((page) => page.path);
-    expect(paths).toContain("agents");
-    expect(paths.some((p) => p.startsWith("agents/"))).toBe(false);
+    expect(paths).toContain("identities");
+    expect(paths.some((p) => p.startsWith("identities/"))).toBe(false);
 
     const router = createMemoryRouter(routes, {
-      initialEntries: ["/acme-ab12cd/agents"],
+      initialEntries: ["/acme-ab12cd/identities"],
     });
-    expect(router.state.matches.at(-1)?.route.path).toBe("agents");
+    expect(router.state.matches.at(-1)?.route.path).toBe("identities");
     // Inside the shell, like every other workspace page.
     expect(router.state.matches[0]?.route.path).toBe("/:workspaceSegment");
   });

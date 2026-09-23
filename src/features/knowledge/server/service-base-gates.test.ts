@@ -145,7 +145,7 @@ describe("🔒 homeScoped — asked for by name, so the fence alone decides", ()
     ["no_container" as const, "your personal container has not been created yet"],
   ])("carries the %s reason through verbatim", async (refusal, sentence) => {
     // One sentence per reason, written once (`personal-container.ts ›
-    // personalShelfRefusal`) and shared with the router and the agent-templates
+    // personalShelfRefusal`) and shared with the router and the agent-identities
     // twin.
     closed(refusal);
 

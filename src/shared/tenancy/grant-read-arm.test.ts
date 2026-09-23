@@ -43,14 +43,14 @@ import {
   needsGrantArm as needsBaseGrantArm,
 } from "@/features/knowledge/server/service-shared";
 import {
-  canSeeTemplate,
-  needsGrantArm as needsTemplateGrantArm,
-} from "@/features/agent-templates/server/service-shared";
+  canSeeIdentity,
+  needsGrantArm as needsIdentityGrantArm,
+} from "@/features/agent-identities/server/service-shared";
 import type { KnowledgeBase, KnowledgeContext } from "@/features/knowledge/types";
 import type {
-  AgentTemplate,
-  AgentTemplateContext,
-} from "@/features/agent-templates/types";
+  AgentIdentity,
+  AgentIdentityContext,
+} from "@/features/agent-identities/types";
 import { NO_GRANTS } from "./resource-grant-reach";
 import { liveFunction } from "@/shared/supabase/rls-policy-scan";
 
@@ -88,16 +88,16 @@ function baseCtx(cred: (typeof CREDENTIALS)[keyof typeof CREDENTIALS]): Knowledg
   } as KnowledgeContext;
 }
 
-function templateCtx(
+function identityCtx(
   cred: (typeof CREDENTIALS)[keyof typeof CREDENTIALS]
-): AgentTemplateContext {
+): AgentIdentityContext {
   return {
     workspaceId: "ws-1",
     userId: ME,
     source: "agent",
     role: "member",
     ...cred,
-  } as AgentTemplateContext;
+  } as AgentIdentityContext;
 }
 
 describe("🔒 the grant prefilter never hides a row the grant arm would admit", () => {
@@ -120,22 +120,22 @@ describe("🔒 the grant prefilter never hides a row the grant arm would admit",
   );
 
   it.each(["workspace", "private", "team"] as const)(
-    "agent_templates — %s, across every credential and author",
+    "agent_identities — %s, across every credential and author",
     (visibility) => {
       for (const [credName, cred] of Object.entries(CREDENTIALS)) {
         for (const [authorName, createdBy] of Object.entries(AUTHORS)) {
-          const ctx = templateCtx(cred);
-          const template = { id: ROW, visibility, createdBy } as AgentTemplate;
+          const ctx = identityCtx(cred);
+          const identity = { id: ROW, visibility, createdBy } as AgentIdentity;
           const share = {
             myTeamIds: new Set<string>(),
-            byTemplate: new Map<string, string[]>(),
+            byIdentity: new Map<string, string[]>(),
             grantedIds: NO_GRANTS,
           };
           const moved =
-            canSeeTemplate(ctx, template, { ...share, grantedIds: GRANTED }) !==
-            canSeeTemplate(ctx, template, share);
+            canSeeIdentity(ctx, identity, { ...share, grantedIds: GRANTED }) !==
+            canSeeIdentity(ctx, identity, share);
           expect(
-            !moved || needsTemplateGrantArm(ctx, template),
+            !moved || needsIdentityGrantArm(ctx, identity),
             `${credName} × ${visibility} × ${authorName}`
           ).toBe(true);
         }
@@ -168,12 +168,12 @@ describe("🔒 the grant prefilter never hides a row the grant arm would admit",
     } as KnowledgeBase;
     expect(canSeeBase(baseCtx(cred), peersPrivate, GRANTED)).toBe(false);
     expect(
-      canSeeTemplate(
-        templateCtx(cred),
-        { id: ROW, visibility: "private", createdBy: PEER } as AgentTemplate,
+      canSeeIdentity(
+        identityCtx(cred),
+        { id: ROW, visibility: "private", createdBy: PEER } as AgentIdentity,
         {
           myTeamIds: new Set(),
-          byTemplate: new Map(),
+          byIdentity: new Map(),
           grantedIds: GRANTED,
         }
       )
@@ -182,7 +182,7 @@ describe("🔒 the grant prefilter never hides a row the grant arm would admit",
 
   it.each([
     ["dopl_knowledge_base_readable", "'knowledge_base'"],
-    ["can_current_user_read_agent_template", "'agent_template'"],
+    ["can_current_user_read_agent_identity", "'agent_identity'"],
   ])(
     "🔒 …and %s says the same thing in SQL, which is the half that diverged",
     (fn, resourceType) => {

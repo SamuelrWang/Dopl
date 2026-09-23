@@ -140,7 +140,7 @@ describe("what the controls show", () => {
   /**
    * ALL THREE WEAR THE CONSOLIDATED DROPDOWN SIZE (Samuel, 2026-08-29) —
    * `select-menu.tsx › TRIGGER_FACE.raisedField`, the size the composer launch panel's
-   * Template/Model rows already wore, so the app has ONE small dropdown rather than two.
+   * Identity/Model rows already wore, so the app has ONE small dropdown rather than two.
    *
    * ⚠ THIS PIN IS LOAD-BEARING FOR A NUMBER IN ANOTHER TREE. `main/agent-window.js ›
    * createAgentWindow` derives the pop-out's default width (540) from THESE dimensions, and the

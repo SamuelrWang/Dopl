@@ -42,9 +42,9 @@ import { useEffect } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 
-vi.mock("@/features/agent-templates/hooks/use-agent-templates", () => ({
-  useAgentTemplates: () => ({
-    templates: [],
+vi.mock("@/features/agent-identities/hooks/use-agent-identities", () => ({
+  useAgentIdentities: () => ({
+    identities: [],
     loading: false,
     error: null,
     resolved: true,
@@ -245,7 +245,7 @@ function launcher(): AgentLaunchControls {
     launchBusy: false,
     launchError: null,
     launchAgent: vi.fn().mockResolvedValue({ ok: true, agentId: MINTED }),
-    approveTemplate: vi.fn().mockResolvedValue({ ok: true }),
+    approveIdentity: vi.fn().mockResolvedValue({ ok: true }),
   };
 }
 
@@ -325,13 +325,13 @@ describe("the popup's colour row", () => {
     await waitFor(() => expect(checkedKey()).toBe(THIRD));
   });
 
-  /** Samuel, 2026-09-13: *"change 'Blank Agent' to 'None' for the template"*. ⚠ THE KEY IS
-   *  UNCHANGED — the pill still maps to `templateId: null`, which is what
+  /** Samuel, 2026-09-13: *"change 'Blank Agent' to 'None' for the identity"*. ⚠ THE KEY IS
+   *  UNCHANGED — the pill still maps to `identityId: null`, which is what
    *  `launch-agent-dialog.test.tsx § the payload` asserts about the wire. */
-  it("names the no-template option None", async () => {
+  it("names the no-identity option None", async () => {
     await openPopup();
     const pills = Array.from(
-      screen.getByRole("tablist", { name: "Agent template" }).querySelectorAll('[role="tab"]')
+      screen.getByRole("tablist", { name: "Identity" }).querySelectorAll('[role="tab"]')
     );
     expect(pills.map((el) => el.textContent)).toEqual(["None"]);
   });

@@ -9,9 +9,9 @@ export interface SegmentedOption<K extends string = string> {
   count?: number;
   /**
    * 🔒 A MUTED SUFFIX INSIDE THE OPTION (2026-09-08) — A SECURITY SIGNAL, not
-   * decoration. INVARIANTS §5A: a foreign template's authorship marker is *"the
+   * decoration. INVARIANTS §5A: a foreign identity's authorship marker is *"the
    * ONLY signal shown to the human BEFORE the choice is made"*, and the launch
-   * dialog's Template row moved here from a `SelectMenu` that carried it as a
+   * dialog's Identity row moved here from a `SelectMenu` that carried it as a
    * `MenuItem` description. A pill row with no slot for it would have dropped the
    * marker on the surface taking the launch traffic.
    * ⚠ IT RIDES INSIDE THE BUTTON, so content-based naming puts it in the option's

@@ -242,7 +242,7 @@ describe("useAgentsPanel › launch", () => {
   // cases go where the behaviour is, and this one is the launch row's.
   /**
    * ⚠ THE PROVIDER IS THE TAB'S OWN REQUIREMENT SINCE 2026-09-08, not scaffolding. `agents-tab.tsx`
-   * mounts the New agent POPUP with its launch row, and the popup's template read is a react-query
+   * mounts the New agent POPUP with its launch row, and the popup's identity read is a react-query
    * hook — disabled while the form is shut, so nothing is fetched, but TanStack still asks for a
    * client. Every real mount of this tab is inside the app's provider.
    */
@@ -355,21 +355,21 @@ describe("useAgentsPanel › launch", () => {
 });
 
 /**
- * THE TEMPLATE HALF OF THE LAUNCH (2026-08-22).
+ * THE IDENTITY HALF OF THE LAUNCH (2026-08-22).
  *
  * ⚠ THE PINNED PROPERTY IS THAT A BLANK LAUNCH DID NOT MOVE. The one-click
  * button and the composer's Bot icon call `launchAgent(threadId)` and the
- * payload must reach main byte-identical to what it always was — a `templateId:
+ * payload must reach main byte-identical to what it always was — an `identityId:
  * null` key spelled out would be a NEW object on a wire that main and this tree
  * ship separately on.
  *
- * ⚠ AND `template-approval` IS NOT AN ERROR LINE. It is main asking a question
+ * ⚠ AND `identity-approval` IS NOT AN ERROR LINE. It is main asking a question
  * about another member's prose; the picker owns the modal
- * (`agent-templates/components/template-approval.tsx`), and a red line under the
+ * (`agent-identities/components/identity-approval.tsx`), and a red line under the
  * button saying "could not start the agent" while that modal is open would
  * report the question as a failure.
  */
-describe("useAgentsPanel › templates", () => {
+describe("useAgentsPanel › identities", () => {
   it("puts NEITHER key on the wire for a blank launch", async () => {
     const launch = bridge({ ok: true });
     const holder = mount([thread]);
@@ -377,41 +377,41 @@ describe("useAgentsPanel › templates", () => {
       await holder.value!.launchAgent("t-1");
     });
     const payload = launch.mock.calls[0][0];
-    expect("templateId" in payload).toBe(false);
+    expect("identityId" in payload).toBe(false);
     expect("overrides" in payload).toBe(false);
   });
 
-  it("carries the template id and the ephemeral overrides when given", async () => {
+  it("carries the identity id and the ephemeral overrides when given", async () => {
     const launch = bridge({ ok: true });
     const holder = mount([thread]);
     await act(async () => {
       await holder.value!.launchAgent("t-1", "tpl-9", { model: "claude-sonnet-5" });
     });
     const payload = launch.mock.calls[0][0];
-    expect(payload.templateId).toBe("tpl-9");
+    expect(payload.identityId).toBe("tpl-9");
     expect(payload.overrides).toEqual({ model: "claude-sonnet-5" });
   });
 
-  it("words a template that vanished between the picker and the click", () => {
+  it("words an identity that vanished between the picker and the click", () => {
     // ⚠ The endpoint deliberately cannot tell DELETED from INVISIBLE
     // (404-never-403), so neither does the copy.
-    const text = launchRefusalText("no-template");
-    expect(text).toBe("That template is gone — reload the list");
+    const text = launchRefusalText("no-identity");
+    expect(text).toBe("That identity is gone — reload the list");
   });
 
   it("returns the approval question WITHOUT writing an error line", async () => {
     bridge({
       ok: false,
-      reason: "template-approval",
-      template: { name: "Code auditor", instructions: "Be terse." },
+      reason: "identity-approval",
+      identity: { name: "Code auditor", instructions: "Be terse." },
     } as { ok: boolean; reason?: string });
     const holder = mount([thread]);
     let outcome: AgentLaunchOutcome | null = null;
     await act(async () => {
       outcome = await holder.value!.launchAgent("t-1", "tpl-9");
     });
-    expect(outcome!.reason).toBe("template-approval");
-    expect(outcome!.template).toEqual({
+    expect(outcome!.reason).toBe("identity-approval");
+    expect(outcome!.identity).toEqual({
       name: "Code auditor",
       instructions: "Be terse.",
     });
@@ -420,12 +420,12 @@ describe("useAgentsPanel › templates", () => {
   });
 
   it("still writes an error line for every OTHER refusal", async () => {
-    bridge({ ok: false, reason: "no-template" });
+    bridge({ ok: false, reason: "no-identity" });
     const holder = mount([thread]);
     await act(async () => {
       await holder.value!.launchAgent("t-1", "tpl-9");
     });
-    expect(holder.value!.launchError).toBe("That template is gone — reload the list");
+    expect(holder.value!.launchError).toBe("That identity is gone — reload the list");
   });
 
   it("answers `busy` rather than silence when a launch is already in flight", async () => {
@@ -451,25 +451,25 @@ describe("useAgentsPanel › templates", () => {
     expect(launch).toHaveBeenCalledTimes(1);
   });
 
-  it("feature-detects `approveTemplate` on the op it is about to use", async () => {
+  it("feature-detects `approveIdentity` on the op it is about to use", async () => {
     // An older main has the launch op and not this one — the modal must be able
     // to say so rather than looping on a refusal it can never clear.
     bridge({ ok: true });
     const holder = mount([thread]);
-    expect(await holder.value!.approveTemplate("tpl-9")).toEqual({
+    expect(await holder.value!.approveIdentity("tpl-9")).toEqual({
       ok: false,
       reason: "no-bridge",
     });
 
-    const approveTemplate = vi.fn().mockResolvedValue({ ok: true });
+    const approveIdentity = vi.fn().mockResolvedValue({ ok: true });
     (window as { dopl?: unknown }).dopl = {
       apiRequest: vi.fn(),
-      sessions: { launch: vi.fn(), approveTemplate },
+      sessions: { launch: vi.fn(), approveIdentity },
     };
-    expect(await holder.value!.approveTemplate("tpl-9")).toEqual({
+    expect(await holder.value!.approveIdentity("tpl-9")).toEqual({
       ok: true,
       reason: undefined,
     });
-    expect(approveTemplate).toHaveBeenCalledWith("tpl-9");
+    expect(approveIdentity).toHaveBeenCalledWith("tpl-9");
   });
 });

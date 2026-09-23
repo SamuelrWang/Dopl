@@ -15,7 +15,7 @@ export declare class WorkspaceMethods extends DoplClientBase {
     /**
      * Lend one resource to one scope — the write that REPLACED the copy ops
      * (Wave B ruling B11). ⚠ It lives on link 2 because a grant is cross-domain:
-     * `KnowledgeMethods` and `AgentTemplateMethods` both call it, and a method on
+     * `KnowledgeMethods` and `AgentIdentityMethods` both call it, and a method on
      * either of those would be invisible to the other.
      */
     grantResource(input: ResourceGrantInput): Promise<ResourceGrantResult>;

@@ -5,17 +5,17 @@
  * A launch passes two fences and they belong to DIFFERENT PEOPLE:
  *
  *   - the CREATE fence, under the ORCHESTRATOR's credential —
- *     `channels/server/service-launch-template.ts › resolveTemplateForDirective`
- *     → `service-resolve-ref.ts › resolveTemplateRef`;
+ *     `channels/server/service-launch-identity.ts › resolveIdentityForDirective`
+ *     → `service-resolve-ref.ts › resolveIdentityRef`;
  *   - the RESOLVE fence, on the OPERATOR's desktop at spawn —
- *     `GET /api/agent-templates/{id}/resolve` → `service-reads.ts ›
- *     resolveTemplateForLaunch` → `readTemplateById`.
+ *     `GET /api/agent-identities/{id}/resolve` → `service-reads.ts ›
+ *     resolveIdentityForLaunch` → `readIdentityById`.
  *
  * ⚠ **UNTIL B2 THEY DISAGREED ABOUT AN ID.** A12 made the second follow an id
  * into the container it names and left the first workspace-keyed, so a personal
- * template 404'd on CREATE and resolved on SPAWN. Wave A recorded that rather
+ * identity 404'd on CREATE and resolved on SPAWN. Wave A recorded that rather
  * than closing it, because closing it was a DECISION. Ruling #18 made it:
- * **a personal template launches anywhere its owner is**, and both lanes follow
+ * **a personal identity launches anywhere its owner is**, and both lanes follow
  * the id.
  *
  * ⚠ **THIS FILE ASSERTS AGREEMENT, NOT EITHER FENCE.** The fence is
@@ -27,10 +27,10 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import type { AgentTemplate, AgentTemplateContext } from "../types";
+import type { AgentIdentity, AgentIdentityContext } from "../types";
 
 // ⚠ **THE GRANT ARM IS A DB READ, SO IT IS DECLARED HERE** (F-604, 2026-09-02).
-// `canSeeBase` / `canSeeTemplate` gained an arm over `resource_grants`, and its
+// `canSeeBase` / `canSeeIdentity` gained an arm over `resource_grants`, and its
 // batch precompute is the one part of this seam that talks to Postgres. Every
 // case in this file is about the OTHER arms, so the grant set is empty — which
 // is also the pre-2026-09-02 behaviour, and therefore the right default for a
@@ -44,11 +44,11 @@ vi.mock("@/shared/tenancy/resource-grant-reach", async (importOriginal) => ({
 }));
 
 vi.mock("./repository", () => ({
-  listTemplatesForWorkspace: vi.fn(),
-  findTemplateById: vi.fn(),
-  listTeamLinksForTemplates: vi.fn(),
+  listIdentitiesForWorkspace: vi.fn(),
+  findIdentityById: vi.fn(),
+  listTeamLinksForIdentities: vi.fn(),
   listTeamIdsForUser: vi.fn(),
-  listKnowledgeLinksForTemplates: vi.fn(),
+  listKnowledgeLinksForIdentities: vi.fn(),
   listKnowledgeBaseAccessRows: vi.fn(),
   listKnowledgeBaseTeamGrants: vi.fn(),
   listLiveFoldersForBases: vi.fn(),
@@ -62,18 +62,18 @@ vi.mock("@/shared/tenancy/resolve-resource", () => ({
 import * as repo from "./repository";
 import * as tenancy from "@/shared/tenancy/resolve-resource";
 import type { ResolvedResource } from "@/shared/tenancy/resolve-resource";
-import { resolveTemplateForLaunch, resolveTemplateRef } from "./service";
-import { AgentTemplateNotFoundError } from "./errors";
+import { resolveIdentityForLaunch, resolveIdentityRef } from "./service";
+import { AgentIdentityNotFoundError } from "./errors";
 
 const ME = "user-me";
 const OTHER = "user-other";
 /** Where the caller was authorised — a channel's container, say. */
 const HERE = "11111111-1111-1111-1111-111111111111";
-/** Where the template actually lives — the caller's personal shelf. */
+/** Where the identity actually lives — the caller's personal shelf. */
 const SHELF = "22222222-2222-2222-2222-222222222222";
 const ID = "44444444-4444-4444-4444-444444444444";
 
-function ctx(over: Partial<AgentTemplateContext> = {}): AgentTemplateContext {
+function ctx(over: Partial<AgentIdentityContext> = {}): AgentIdentityContext {
   return {
     workspaceId: HERE,
     userId: ME,
@@ -85,7 +85,7 @@ function ctx(over: Partial<AgentTemplateContext> = {}): AgentTemplateContext {
   };
 }
 
-function template(over: Partial<AgentTemplate> = {}): AgentTemplate {
+function identity(over: Partial<AgentIdentity> = {}): AgentIdentity {
   return {
     id: ID,
     workspaceId: SHELF,
@@ -105,14 +105,14 @@ function template(over: Partial<AgentTemplate> = {}): AgentTemplate {
 }
 
 /** The row exists on the caller's PERSONAL SHELF and nowhere else. ⚠
- *  `findTemplateById` is workspace-keyed, so the read in `HERE` must miss or
+ *  `findIdentityById` is workspace-keyed, so the read in `HERE` must miss or
  *  there is nothing for either lane to follow. */
-function livesOnTheShelf(over: Partial<AgentTemplate> = {}) {
-  vi.mocked(repo.findTemplateById).mockImplementation(async (workspaceId) =>
-    workspaceId === SHELF ? template(over) : null
+function livesOnTheShelf(over: Partial<AgentIdentity> = {}) {
+  vi.mocked(repo.findIdentityById).mockImplementation(async (workspaceId) =>
+    workspaceId === SHELF ? identity(over) : null
   );
   vi.mocked(tenancy.resolveResource).mockResolvedValue({
-    type: "agent_template",
+    type: "agent_identity",
     id: ID,
     name: "Code Auditor",
     containerId: SHELF,
@@ -127,28 +127,28 @@ beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(tenancy.resolveResource).mockResolvedValue(null);
   vi.mocked(tenancy.resolveResourcesByName).mockResolvedValue([]);
-  vi.mocked(repo.findTemplateById).mockResolvedValue(null);
-  vi.mocked(repo.listTemplatesForWorkspace).mockResolvedValue([]);
-  vi.mocked(repo.listKnowledgeLinksForTemplates).mockResolvedValue([]);
+  vi.mocked(repo.findIdentityById).mockResolvedValue(null);
+  vi.mocked(repo.listIdentitiesForWorkspace).mockResolvedValue([]);
+  vi.mocked(repo.listKnowledgeLinksForIdentities).mockResolvedValue([]);
   vi.mocked(repo.listKnowledgeBaseAccessRows).mockResolvedValue([]);
   vi.mocked(repo.listKnowledgeBaseTeamGrants).mockResolvedValue([]);
   vi.mocked(repo.listLiveFoldersForBases).mockResolvedValue([]);
   vi.mocked(repo.listLiveEntryRows).mockResolvedValue([]);
-  vi.mocked(repo.listTeamLinksForTemplates).mockResolvedValue([]);
+  vi.mocked(repo.listTeamLinksForIdentities).mockResolvedValue([]);
   vi.mocked(repo.listTeamIdsForUser).mockResolvedValue([]);
 });
 
-describe("🔒 ruling #18 — a personal template launches anywhere its owner is", () => {
+describe("🔒 ruling #18 — a personal identity launches anywhere its owner is", () => {
   it("BOTH lanes resolve an id living in another container of the caller's", async () => {
     livesOnTheShelf();
     // The CREATE lane (orchestrator).
-    await expect(resolveTemplateRef(ctx(), ID)).resolves.toEqual({
+    await expect(resolveIdentityRef(ctx(), ID)).resolves.toEqual({
       kind: "found",
       id: ID,
       name: "Code Auditor",
     });
     // The SPAWN lane (operator's desktop).
-    await expect(resolveTemplateForLaunch(ctx(), ID)).resolves.toMatchObject({
+    await expect(resolveIdentityForLaunch(ctx(), ID)).resolves.toMatchObject({
       name: "Code Auditor",
       instructions: "Audit the diff.",
       authoredByCaller: true,
@@ -157,48 +157,48 @@ describe("🔒 ruling #18 — a personal template launches anywhere its owner is
 
   it("BOTH lanes miss an id that is nameable nowhere", async () => {
     // ⚠ The probe-proof arm, on both doors at once. Somebody else's private
-    // template is exactly this: the resolver names nothing, so neither lane can.
-    await expect(resolveTemplateRef(ctx(), ID)).resolves.toEqual({
+    // identity is exactly this: the resolver names nothing, so neither lane can.
+    await expect(resolveIdentityRef(ctx(), ID)).resolves.toEqual({
       kind: "not-found",
     });
-    await expect(resolveTemplateForLaunch(ctx(), ID)).rejects.toBeInstanceOf(
-      AgentTemplateNotFoundError
+    await expect(resolveIdentityForLaunch(ctx(), ID)).rejects.toBeInstanceOf(
+      AgentIdentityNotFoundError
     );
   });
 
   it("🔒 BOTH lanes still refuse what the MATRIX refuses in the container it named", async () => {
     // 🔒 RESOLUTION IS NOT AUTHORISATION, on either door. The resolver is
-    // strictly narrower than `canSeeTemplate` and cannot have named this row —
+    // strictly narrower than `canSeeIdentity` and cannot have named this row —
     // and even handed the address, both lanes re-run the matrix and answer the
     // same single miss.
     livesOnTheShelf({ createdBy: OTHER });
-    await expect(resolveTemplateRef(ctx(), ID)).resolves.toEqual({
+    await expect(resolveIdentityRef(ctx(), ID)).resolves.toEqual({
       kind: "not-found",
     });
-    await expect(resolveTemplateForLaunch(ctx(), ID)).rejects.toBeInstanceOf(
-      AgentTemplateNotFoundError
+    await expect(resolveIdentityForLaunch(ctx(), ID)).rejects.toBeInstanceOf(
+      AgentIdentityNotFoundError
     );
   });
 
-  it("neither lane pays for the follow when the template is where it was asked for", async () => {
-    vi.mocked(repo.findTemplateById).mockImplementation(async (workspaceId) =>
-      workspaceId === HERE ? template({ workspaceId: HERE }) : null
+  it("neither lane pays for the follow when the identity is where it was asked for", async () => {
+    vi.mocked(repo.findIdentityById).mockImplementation(async (workspaceId) =>
+      workspaceId === HERE ? identity({ workspaceId: HERE }) : null
     );
-    await resolveTemplateRef(ctx(), ID);
-    await resolveTemplateForLaunch(ctx(), ID);
+    await resolveIdentityRef(ctx(), ID);
+    await resolveIdentityForLaunch(ctx(), ID);
     expect(tenancy.resolveResource).not.toHaveBeenCalled();
   });
 });
 
 describe("⚠ a NAME does not follow, on either lane, and that is deliberate", () => {
   it("labels the tenancy instead of picking one", async () => {
-    // `agent_templates` has no name uniqueness, so a name matching in two
+    // `agent_identities` has no name uniqueness, so a name matching in two
     // containers has no non-arbitrary answer — every tie-break launches an
     // identity the caller did not choose. The CREATE lane says WHERE instead;
     // the SPAWN lane never sees a name at all (the directive stores the ID).
     vi.mocked(tenancy.resolveResourcesByName).mockResolvedValue([
       {
-        type: "agent_template",
+        type: "agent_identity",
         id: ID,
         name: "Code Auditor",
         containerId: SHELF,
@@ -209,9 +209,9 @@ describe("⚠ a NAME does not follow, on either lane, and that is deliberate", (
         containerRole: "admin",
       },
     ]);
-    await expect(resolveTemplateRef(ctx(), "Code Auditor")).resolves.toEqual({
+    await expect(resolveIdentityRef(ctx(), "Code Auditor")).resolves.toEqual({
       kind: "elsewhere",
-      template: { name: "Code Auditor", label: "your personal container" },
+      identity: { name: "Code Auditor", label: "your personal container" },
     });
   });
 });

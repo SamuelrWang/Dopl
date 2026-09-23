@@ -6,7 +6,7 @@
  * `shared/tenancy/read-resource.test.ts`. This file owns only that the feature's
  * read door re-runs its own two gates on top — the M-10 matrix and the agent
  * audience ceiling. Sibling of
- * `agent-templates/server/service-resolve.test.ts`; the pair must move together.
+ * `agent-identities/server/service-resolve.test.ts`; the pair must move together.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";

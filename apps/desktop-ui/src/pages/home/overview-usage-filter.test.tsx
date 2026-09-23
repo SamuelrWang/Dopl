@@ -1,6 +1,6 @@
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { TEMPLATE_NAME_TEXT } from "@/features/agent-templates/components/template-section";
+import { IDENTITY_NAME_TEXT } from "@/features/agent-identities/components/identity-section";
 import { NAKED_ICON_BUTTON } from "@/shared/ui/naked-icon-button";
 import type { BridgeRequestOpts } from "#/lib/dopl-bridge";
 import { USER_ID, bridgeCalls, installBridge } from "#/test-utils/bridge";
@@ -200,7 +200,7 @@ describe("the /home Usage histogram controls", () => {
   /**
    * 🔒 **THE ARROWS SCALE WITH THE LABEL BESIDE THEM (Samuel, 2026-09-13:
    * *"Increase the size of the arrows to match"*).** That label went from
-   * `text-caption` to `template-section.tsx › TEMPLATE_NAME_TEXT`'s 14px — the
+   * `text-caption` to `identity-section.tsx › IDENTITY_NAME_TEXT`'s 14px — the
    * size the scope menu and **Credit spend** wear — so the glyph is 16,
    * `overview-usage-filter.tsx › MONTH_ARROW_ICON`, one notch over the shared
    * `NAKED_ICON` 14 this face otherwise uses.
@@ -231,7 +231,7 @@ describe("the /home Usage histogram controls", () => {
     // The label they sit beside — the type both were raised to match, and the
     // one they were NOT raised to.
     const label = within(card).getByText(monthLabel(monthKey()));
-    for (const token of TEMPLATE_NAME_TEXT.split(" ")) {
+    for (const token of IDENTITY_NAME_TEXT.split(" ")) {
       expect(label.className).toContain(token);
     }
     expect(label.className).not.toContain("text-display");

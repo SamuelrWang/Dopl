@@ -24,7 +24,7 @@ export type SearchGroupKind =
   | "threads"
   | "artifacts"
   | "knowledge"
-  | "agentTemplates"
+  | "agentIdentities"
   | "members"
   | "skills"
   | "chats";
@@ -36,7 +36,7 @@ export const SEARCH_GROUP_ORDER = [
   "threads",
   "artifacts",
   "knowledge",
-  "agentTemplates",
+  "agentIdentities",
   "members",
   "skills",
   "chats",

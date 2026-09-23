@@ -2,10 +2,10 @@ import "server-only";
 import { supabaseAdmin } from "@/shared/supabase/admin";
 import { readClient } from "@/shared/supabase/caller-client";
 import { scopeKey } from "../lib/knowledge-scopes";
-import type { TemplateKnowledgeScope } from "../types";
+import type { IdentityKnowledgeScope } from "../types";
 
 /**
- * Raw I/O for the KNOWLEDGE-BASE ATTACHMENTS on an agent template — the third
+ * Raw I/O for the KNOWLEDGE-BASE ATTACHMENTS on an agent identity — the third
  * section of `repository.ts`, lifted into a sibling when that file reached the
  * 500-line cap (F-562, 2026-09-02). `repository.ts` re-exports every name here,
  * so no caller moved; this is the move `knowledge/server/repository.ts` already
@@ -19,34 +19,34 @@ import type { TemplateKnowledgeScope } from "../types";
 
 /**
  * ONE ATTACHMENT ROW, flat. ⚠ `scopeKind` decides which of the two id columns
- * is populated and the DB's `agent_template_kb_scope_shape_check` guarantees
+ * is populated and the DB's `agent_identity_kb_scope_shape_check` guarantees
  * exactly one is — this shape is deliberately NOT the domain union
- * (`types.ts › TemplateKnowledgeScope`), because a row read back is evidence and
+ * (`types.ts › IdentityKnowledgeScope`), because a row read back is evidence and
  * the narrowing belongs where the predicate runs, not in the mapper.
  */
-export interface TemplateKnowledgeLinkRow {
-  templateId: string;
+export interface IdentityKnowledgeLinkRow {
+  identityId: string;
   knowledgeBaseId: string;
   scopeKind: "base" | "folder" | "entry";
   folderId: string | null;
   entryId: string | null;
 }
 
-export async function listKnowledgeLinksForTemplates(
+export async function listKnowledgeLinksForIdentities(
   workspaceId: string,
-  templateIds: string[]
-): Promise<TemplateKnowledgeLinkRow[]> {
-  if (templateIds.length === 0) return [];
+  identityIds: string[]
+): Promise<IdentityKnowledgeLinkRow[]> {
+  if (identityIds.length === 0) return [];
   const db = readClient();
   const { data, error } = await db
-    .from("agent_template_knowledge_bases")
-    .select("template_id, knowledge_base_id, scope_kind, folder_id, entry_id")
+    .from("agent_identity_knowledge_bases")
+    .select("identity_id, knowledge_base_id, scope_kind, folder_id, entry_id")
     .eq("workspace_id", workspaceId)
-    .in("template_id", templateIds);
+    .in("identity_id", identityIds);
   if (error) throw error;
   return (
     (data ?? []) as Array<{
-      template_id: string;
+      identity_id: string;
       knowledge_base_id: string;
       // ⚠ `?? EMPTY_X`-shaped defaulting, one layer down: a row written before
       // `20260930150000` and read through a stale PostgREST schema cache has no
@@ -57,7 +57,7 @@ export async function listKnowledgeLinksForTemplates(
       entry_id?: string | null;
     }>
   ).map((r) => ({
-    templateId: r.template_id,
+    identityId: r.identity_id,
     knowledgeBaseId: r.knowledge_base_id,
     scopeKind:
       r.scope_kind === "folder" || r.scope_kind === "entry"
@@ -80,16 +80,16 @@ export async function listKnowledgeLinksForTemplates(
  */
 export async function replaceKnowledgeLinks(
   workspaceId: string,
-  templateId: string,
-  scopes: ReadonlyArray<TemplateKnowledgeScope>,
+  identityId: string,
+  scopes: ReadonlyArray<IdentityKnowledgeScope>,
   addedBy: string | null
 ): Promise<void> {
   const db = supabaseAdmin();
   const del = await db
-    .from("agent_template_knowledge_bases")
+    .from("agent_identity_knowledge_bases")
     .delete()
     .eq("workspace_id", workspaceId)
-    .eq("template_id", templateId);
+    .eq("identity_id", identityId);
   if (del.error) throw del.error;
   if (scopes.length === 0) return;
   const seen = new Set<string>();
@@ -99,7 +99,7 @@ export async function replaceKnowledgeLinks(
     if (seen.has(key)) continue;
     seen.add(key);
     rows.push({
-      template_id: templateId,
+      identity_id: identityId,
       knowledge_base_id: scope.baseId,
       workspace_id: workspaceId,
       added_by_user_id: addedBy,
@@ -109,7 +109,7 @@ export async function replaceKnowledgeLinks(
     });
   }
   const { error } = await db
-    .from("agent_template_knowledge_bases")
+    .from("agent_identity_knowledge_bases")
     .insert(rows);
   if (error) throw error;
 }
@@ -123,7 +123,7 @@ export async function replaceKnowledgeLinks(
  * named would answer "what is this folder called" and never "where does it
  * live" — and fetching the ancestors one at a time is a query per level. The
  * folder count of a base is small and the read is bounded by the bases the
- * template actually attaches.
+ * identity actually attaches.
  *
  * ⚠ SOFT-DELETED FOLDERS ARE EXCLUDED, which is what makes a trashed folder
  * disappear from the payload rather than render a path through a folder nobody
@@ -289,7 +289,7 @@ export async function listKnowledgeBaseAccessRows(
  * ⚠ The two lanes now share ONE TABLE (`20260914120000`) where they used to
  * share only a shape, so the `resource_type` term stopped being a narrowing and
  * became the fence: without it this would answer "which teams reach this KB"
- * with the template links three functions above.
+ * with the identity links three functions above.
  */
 export async function listKnowledgeBaseTeamGrants(
   workspaceId: string,

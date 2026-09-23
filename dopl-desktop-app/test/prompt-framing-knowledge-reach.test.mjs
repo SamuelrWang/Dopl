@@ -1,14 +1,14 @@
-// THE UNREACHABLE-KNOWLEDGE LINES (main/prompt-framing-template.js, 2026-09-05, Samuel's ruling).
+// THE UNREACHABLE-KNOWLEDGE LINES (main/prompt-framing-agent-identity.js, 2026-09-05, Samuel's ruling).
 //
 // WHAT MATTERS HERE, in the order the risk runs:
 //   - NO LEAK. The role block may say the agent lacks access; it may NEVER say where the base
-//     lives. Only a COUNT crosses the wire (`template-resolve.js › narrow`), so the only way a
+//     lives. Only a COUNT crosses the wire (`identity-resolve.js › narrow`), so the only way a
 //     location could appear in a prompt is if this module invented one.
 //   - THE SENTENCE IS THE OPERATOR'S, VERBATIM: "I don't have access to this knowledge base in
 //     this channel." Quoted in the prompt so it is repeated rather than paraphrased into a guess.
 //   - ABSENT IS ABSENT. No unreachable attachments ⇒ the block is BYTE-IDENTICAL to what it was
 //     before this landed. A garbled or missing count reads 0, never "something is missing".
-//   - IT IS ADDITIVE. The reachable section is untouched, and a template with both gets both.
+//   - IT IS ADDITIVE. The reachable section is untouched, and an identity with both gets both.
 //
 // Run: `node --test dopl-desktop-app/test/prompt-framing-knowledge-reach.test.mjs`
 
@@ -19,7 +19,7 @@ import { createRequire } from "node:module";
 
 const require = createRequire(import.meta.url);
 const M = (f) => require(fileURLToPath(new URL(`../main/${f}`, import.meta.url)));
-const { templateRoleFraming } = M("prompt-framing-template.js");
+const { identityRoleFraming } = M("prompt-framing-agent-identity.js");
 
 const N = "n1";
 const KB = "cccccccc-3333-4ddd-8eee-ffffffffffff";
@@ -35,7 +35,7 @@ const tpl = (over = {}) => ({
   ...over,
 });
 const block = (over = {}, ctx = {}) =>
-  templateRoleFraming({ template: tpl(over), ...ctx }, N).join("\n");
+  identityRoleFraming({ identity: tpl(over), ...ctx }, N).join("\n");
 
 // ── 1. ABSENT IS ABSENT ──────────────────────────────────────────────────────
 
@@ -79,7 +79,7 @@ test("says nothing about WHERE — no id, no name, no workspace, no container", 
 
 // ── 4. ADDITIVE, NEVER A REPLACEMENT ─────────────────────────────────────────
 
-test("a template with one reachable and one unreachable base gets BOTH sections", () => {
+test("an identity with one reachable and one unreachable base gets BOTH sections", () => {
   // ⚠ TWO SECTIONS, NOT ONE. "Here is what to open" and "here is what to say when something is
   // missing" are different instructions, and folding the refusal under the list of live bases
   // would put it beside the very thing it is not about.
@@ -95,7 +95,7 @@ test("a template with one reachable and one unreachable base gets BOTH sections"
 });
 
 test("the refusal stands alone when NOTHING resolved — the ruled case", () => {
-  // The shared base on a personal template, launched where it does not resolve: the reachable
+  // The shared base on a personal identity, launched where it does not resolve: the reachable
   // section is empty and would have been the whole story before today.
   const text = block({ knowledgeBases: [], unreachableKnowledgeBaseCount: 1 });
   assert.ok(!text.includes("ATTACHED KNOWLEDGE:"), "no list heading with nothing to list");

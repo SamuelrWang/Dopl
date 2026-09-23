@@ -104,7 +104,7 @@ function TranscriptColumnGhost() {
     <div className="flex min-w-0 flex-1 flex-col [contain:inline-size]">
       {/* ⚠ `message-pane-header.tsx`'s PAGE chrome (`gap-1`), not the pop-out
           window's (`gap-1.5`): the hash glyph, the channel name at
-          `TEMPLATE_NAME_TEXT`'s size, the 24px bookmark, then the BARE 32px info
+          `IDENTITY_NAME_TEXT`'s size, the 24px bookmark, then the BARE 32px info
           toggle off the spacer. */}
       <div className="flex h-[56px] shrink-0 items-center gap-1 border-b border-border-default px-4">
         <Skeleton className="h-3.5 w-3.5 shrink-0 rounded-sm" />

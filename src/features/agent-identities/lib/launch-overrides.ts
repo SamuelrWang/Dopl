@@ -1,4 +1,4 @@
-import type { AgentTemplate, TemplateField } from "../client/types";
+import type { AgentIdentity, IdentityField } from "../client/types";
 
 /**
  * WHAT AN OPERATOR MAY CHANGE AT LAUNCH — the shape, the bounds, and the
@@ -6,10 +6,10 @@ import type { AgentTemplate, TemplateField } from "../client/types";
  * here reaches the bridge (INVARIANTS §1: one file, one reason to change).
  *
  * ⚠ OVERRIDES ARE EPHEMERAL AND THIS MODULE IS WHY THAT IS CHEAP. Nothing
- * written here is ever PATCHed back onto the template: the launch sheet builds
+ * written here is ever PATCHed back onto the identity: the launch sheet builds
  * one of these, `sessions.launch` carries it, main splices it into that one
- * spawn's ROLE block, and the durable row is untouched. The template's own
- * editor is the only authoring surface (`../components/template-editor.tsx`).
+ * spawn's ROLE block, and the durable row is untouched. The identity's own
+ * editor is the only authoring surface (`../components/identity-editor.tsx`).
  *
  * ⚠ MODEL **AND** FIELDS, both (Samuel, 2026-08-22 — this RESOLVES the spec's
  * OQ-2, which recommended model-only for the first wave). The product statement
@@ -17,14 +17,14 @@ import type { AgentTemplate, TemplateField } from "../client/types";
  * second form and a second wave for the half already designed.
  * ⚠ **AND INSTRUCTIONS SINCE 2026-09-13** (Samuel, over the launch sheet), which
  * is the field the 2026-08-22 wave explicitly refused. See
- * {@link TemplateLaunchOverrides.instructions}.
+ * {@link IdentityLaunchOverrides.instructions}.
  *
  * ⚠ **THE ONE PRODUCER IS `channels/components/use-agent-launch.ts › launchOverridesOf`
  * SINCE THE LAUNCH SHEET WAS DELETED (2026-09-13).** It builds `model` and
  * `instructions`; **nothing in the renderer produces `fields` any more**, and
  * {@link overridesFor} / {@link boundOverrideFields} therefore have no component
  * caller left. They are KEPT rather than deleted for two measured reasons: the
- * `fields` key is still honoured end-to-end by `main/template-resolve.js ›
+ * `fields` key is still honoured end-to-end by `main/identity-resolve.js ›
  * narrowOverrides`, so the wire contract is live whether or not a form produces
  * it; and the four `MAX_OVERRIDE_*` numbers are mirror-pinned against the schema's
  * own bounds by `../schema-sql.test.ts`. **Deleting them is a ruling about the
@@ -41,16 +41,16 @@ import type { AgentTemplate, TemplateField } from "../client/types";
  * below** — and MAIN RE-VALIDATES the whole payload before any of it reaches a
  * prompt. Filed as F-281.
  *
- * The four numbers mirror `../schema.ts` exactly (`TemplateFieldSchema`,
+ * The four numbers mirror `../schema.ts` exactly (`IdentityFieldSchema`,
  * `MAX_FIELDS_BYTES`, `MAX_FIELD_COUNT`) so an override cannot be shaped in a
  * way the durable row could never have held.
  */
 
 /**
  * The instructions bound, mirroring `../schema.ts › MAX_INSTRUCTIONS_CHARS` and
- * `main/template-resolve.js › MAX_INSTRUCTIONS` — the COLUMN's own CHECK.
+ * `main/identity-resolve.js › MAX_INSTRUCTIONS` — the COLUMN's own CHECK.
  *
- * ⚠ **THE SAME NUMBER, DELIBERATELY.** `main/prompt-framing-template.js`'s F-287
+ * ⚠ **THE SAME NUMBER, DELIBERATELY.** `main/prompt-framing-agent-identity.js`'s F-287
  * block is the argument: a smaller bound at a later layer is not extra safety, it
  * is one layer quietly deciding the operator's configuration says less than it
  * says while every other surface keeps showing the whole thing.
@@ -66,16 +66,16 @@ export const MAX_OVERRIDE_FIELDS_BYTES = 8192;
  *
  * ⚠ ABSENT IS THE ONLY SPELLING OF "NO OVERRIDE". There is no `null` sentinel
  * and no empty-object-means-default: `undefined` on either key means main reads
- * the template's own value, which is the same rule
+ * the identity's own value, which is the same rule
  * `channels/lib/agent-models.ts › AGENT_MODEL_DEFAULT` follows for the durable
  * posture row — one vocabulary, three surfaces.
  */
-export interface TemplateLaunchOverrides {
-  /** An SDK model id. Absent ⇒ the template's `model`, or the desktop's own
-   *  default when the template carries none. */
+export interface IdentityLaunchOverrides {
+  /** An SDK model id. Absent ⇒ the identity's `model`, or the desktop's own
+   *  default when the identity carries none. */
   model?: string;
   /**
-   * WHAT THIS RUN IS TOLD TO DO, REPLACING the template's own `instructions` for
+   * WHAT THIS RUN IS TOLD TO DO, REPLACING the identity's own `instructions` for
    * this spawn alone (2026-09-13, Samuel: *"we should add an Instructions field
    * in the New agent popup"*).
    *
@@ -84,40 +84,40 @@ export interface TemplateLaunchOverrides {
    * FIELDS, both … an editable instructions box at launch is a SECOND AUTHORING
    * SURFACE for the durable thing"* — Samuel overruled the second half on
    * 2026-09-13 and the first half is untouched: nothing here is written back, so
-   * the durable template is exactly as unaffected as a model re-point leaves it.
+   * the durable identity is exactly as unaffected as a model re-point leaves it.
    * The editor is still the only AUTHORING surface; this is one run's copy.
    * ⚠ **ABSENT IS STILL THE ONLY SPELLING OF "NO OVERRIDE"**, and the popup
-   * measures against the TEMPLATE'S OWN PROSE rather than against empty
+   * measures against the IDENTITY'S OWN PROSE rather than against empty
    * (`channels/components/use-agent-launch.ts › launchOverridesOf`) — otherwise every
-   * template launch would carry a redundant copy of text main is about to read
+   * identity launch would carry a redundant copy of text main is about to read
    * from the row anyway.
    * ⚠ **NO CLIENT-SIDE CHARSET RULE, AND NOT AN OVERSIGHT** — the module header's
    * F-281 note: instructions are PROSE (`../schema.ts › InstructionsSchema` is
    * `safeOptionalProse`, newlines legal), the `<textarea>` bound is the length
-   * cap below, and MAIN re-validates (`main/template-resolve.js ›
+   * cap below, and MAIN re-validates (`main/identity-resolve.js ›
    * narrowOverrides`) before any of it reaches a prompt.
-   * ⚠ **A LAUNCH CARRYING THIS AND NO `templateId` IS NOT HONOURED TODAY** —
-   * `main/template-resolve.js › applyOverrides` answers `null` for a null
-   * template, so a BLANK agent's instructions are dropped in main. Filed as
+   * ⚠ **A LAUNCH CARRYING THIS AND NO `identityId` IS NOT HONOURED TODAY** —
+   * `main/identity-resolve.js › applyOverrides` answers `null` for a null
+   * identity, so a BLANK agent's instructions are dropped in main. Filed as
    * F-695; Samuel owes the ruling on what a nameless role block says.
    */
   instructions?: string;
-  /** REPLACES the template's `fields` for this spawn — never merged. A partial
+  /** REPLACES the identity's `fields` for this spawn — never merged. A partial
    *  merge over a set the operator can edit is how two field lists silently
    *  diverge (`../schema.ts`'s replace-set rule, same argument). */
-  fields?: TemplateField[];
+  fields?: IdentityField[];
 }
 
 /** UTF-8 bytes, measured the way `../schema.ts` and the DB CHECK measure. */
-function serializedBytes(fields: ReadonlyArray<TemplateField>): number {
+function serializedBytes(fields: ReadonlyArray<IdentityField>): number {
   return new TextEncoder().encode(JSON.stringify(fields)).length;
 }
 
 /**
- * Bring a sheet's working rows inside the bounds a template row could hold.
+ * Bring a sheet's working rows inside the bounds an identity row could hold.
  *
  * ⚠ A ROW WITH AN EMPTY KEY IS DROPPED, NOT REJECTED — the same answer
- * `../lib/template-draft.ts › cleanFields` gives the editor, so a half-typed row
+ * `../lib/identity-draft.ts › cleanFields` gives the editor, so a half-typed row
  * does not block a launch. An empty VALUE is kept: a key with no value is a
  * legitimate half-filled form and the schema allows it.
  *
@@ -126,9 +126,9 @@ function serializedBytes(fields: ReadonlyArray<TemplateField>): number {
  * is at least visibly missing.
  */
 export function boundOverrideFields(
-  fields: ReadonlyArray<TemplateField>
-): TemplateField[] {
-  const cleaned: TemplateField[] = [];
+  fields: ReadonlyArray<IdentityField>
+): IdentityField[] {
+  const cleaned: IdentityField[] = [];
   const seen = new Set<string>();
   for (const field of fields) {
     const key = field.key.trim().slice(0, MAX_OVERRIDE_KEY_CHARS);
@@ -144,8 +144,8 @@ export function boundOverrideFields(
 }
 
 function sameFields(
-  a: ReadonlyArray<TemplateField>,
-  b: ReadonlyArray<TemplateField>
+  a: ReadonlyArray<IdentityField>,
+  b: ReadonlyArray<IdentityField>
 ): boolean {
   return (
     a.length === b.length &&
@@ -159,24 +159,24 @@ function sameFields(
  * ⚠ AN UNTOUCHED SHEET LAUNCHES BYTE-IDENTICALLY TO A ROW CLICK, and that is the
  * property this function exists for. Opening the sheet and pressing Launch must
  * not put a payload on the wire that clicking the row would not have — otherwise
- * two paths the operator reads as "launch this template" reach main as two
+ * two paths the operator reads as "launch this identity" reach main as two
  * different requests, and only one of them is covered by the row-click test.
  */
 export function overridesFor(
-  template: AgentTemplate,
+  identity: AgentIdentity,
   model: string,
-  fields: ReadonlyArray<TemplateField>
-): TemplateLaunchOverrides | undefined {
-  const overrides: TemplateLaunchOverrides = {};
+  fields: ReadonlyArray<IdentityField>
+): IdentityLaunchOverrides | undefined {
+  const overrides: IdentityLaunchOverrides = {};
   const trimmedModel = model.trim();
-  // `""` IS "template default" on this surface, never "the SDK default" — the
-  // sheet's first option says so in words. A pick equal to what the template
+  // `""` IS "identity default" on this surface, never "the SDK default" — the
+  // sheet's first option says so in words. A pick equal to what the identity
   // already carries is not an override either.
-  if (trimmedModel && trimmedModel !== (template.model ?? "")) {
+  if (trimmedModel && trimmedModel !== (identity.model ?? "")) {
     overrides.model = trimmedModel;
   }
   const bounded = boundOverrideFields(fields);
-  if (!sameFields(bounded, template.fields)) overrides.fields = bounded;
+  if (!sameFields(bounded, identity.fields)) overrides.fields = bounded;
   return overrides.model === undefined && overrides.fields === undefined
     ? undefined
     : overrides;

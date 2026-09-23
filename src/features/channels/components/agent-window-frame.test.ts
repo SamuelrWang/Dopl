@@ -254,7 +254,7 @@ describe("a tab label and a rail row are one type SIZE, in two weights", () => {
   it("is `text-body`, regular — the row step, not the 14px heading face", () => {
     expect(AGENT_NAME_TEXT).toContain("text-body");
     expect(AGENT_NAME_TEXT).toContain("font-normal");
-    // ⚠ `TEMPLATE_NAME_TEXT`'s `text-title` is the candidate he rejected here.
+    // ⚠ `IDENTITY_NAME_TEXT`'s `text-title` is the candidate he rejected here.
     expect(AGENT_NAME_TEXT).not.toContain("text-title");
     // ⚠ AND NO INK: an active tab and an idle one are two colours of one recipe.
     expect(AGENT_NAME_TEXT).not.toContain("text-text-");

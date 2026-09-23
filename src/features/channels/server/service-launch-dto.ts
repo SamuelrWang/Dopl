@@ -20,13 +20,13 @@ import type { LaunchDirectiveRow } from "./repository-launch";
 
 /** The refusal contract, as a value. ⚠ ONE DECLARATION — the column's CHECK, the
  *  route schema and the MCP render all point at this.
- *  ⚠ SEVEN SINCE 2026-08-22: `no-template` is the agent-templates word — a directive
- *  named a template the OPERATOR's machine could not resolve (deleted, or invisible
+ *  ⚠ SEVEN SINCE 2026-08-22: `no-identity` is the agent-identities word — a directive
+ *  named an identity the OPERATOR's machine could not resolve (deleted, or invisible
  *  to them though visible to the orchestrator). ⚠ THE COLUMN CHECK CAUGHT UP ON
  *  2026-08-23 (`20260823140000_channel_launch_directives_template.sql`, WRITTEN —
  *  applied is a measurement, §12), in the same wave as the producer that makes the
  *  word reachable: `main/launch-directives.js › spawn` resolves the directive's
- *  template at CLAIM time. This list and that CHECK are back in agreement.
+ *  identity at CLAIM time. This list and that CHECK are back in agreement.
  *  ⚠ NINE SINCE 2026-09-01 (external end / rename — Samuel's ruling). `no-session`
  *  and `bad-name` are the words the in-process `dopl_agents` server already
  *  answers for these exact verbs, lifted onto the wire so the same fact reads the
@@ -41,7 +41,7 @@ export const LAUNCH_REFUSAL_REASONS = [
   "auth-hold",
   "no-bridge",
   "no-counterparty",
-  "no-template",
+  "no-identity",
   "no-session",
   "bad-name",
 ] as const;
@@ -113,14 +113,14 @@ export function toDirective(
     // ⚠ `?? null` on this file's stale-cache rule, and `null` here means DID NOT ASK — never
     // "claude", never "codex", and never inferred from `model` one line up.
     runtime: row.runtime ?? null,
-    // ⚠ BOTH, ALWAYS, AND NEVER ONE. `template_id` is `ON DELETE SET NULL`, so a
-    // null id ALONE cannot say whether no template was named or the named one was
+    // ⚠ BOTH, ALWAYS, AND NEVER ONE. `identity_id` is `ON DELETE SET NULL`, so a
+    // null id ALONE cannot say whether no identity was named or the named one was
     // deleted — and the desktop's answer to those two is opposite (launch blank
-    // vs refuse `no-template`, spec E-4). Mapping only the id would make the DTO
+    // vs refuse `no-identity`, spec E-4). Mapping only the id would make the DTO
     // the place the signal was lost, one layer above the wire narrowing that gets
     // blamed for it.
-    templateId: row.template_id,
-    templateName: row.template_name,
+    identityId: row.identity_id,
+    identityName: row.identity_name,
     // ⚠ ON THE DTO OR THE DESKTOP NEVER SEES IT — the CLAIM's answer IS this mapper's
     // output, so a colour mapped nowhere is a parameter the spawn cannot read (the
     // exact failure the eight posture columns below record). ⚠ `?? null` on the
@@ -133,7 +133,7 @@ export function toDirective(
     // PostgREST schema arrives without the field, and `undefined` would reach `sanitizeName` as
     // a non-string and be refused as if the caller had sent rubbish.
     agentName: row.agent_name ?? null,
-    // ⚠ THE INPUT PAIR, beside the template pair and never confused with
+    // ⚠ THE INPUT PAIR, beside the identity pair and never confused with
     // `agentId` below, which is the OUTPUT. `?? null` rather than a bare read for
     // the stale-cache reason the `kind` note above states: a cached payload from
     // an older schema can arrive without the field, and `undefined` would render

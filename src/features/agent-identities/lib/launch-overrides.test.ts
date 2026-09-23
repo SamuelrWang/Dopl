@@ -3,14 +3,14 @@
  *
  *  - **AN UNTOUCHED SHEET IS NOT AN OVERRIDE.** Opening the launch sheet and
  *    pressing Launch must put the SAME payload on the wire that clicking the row
- *    puts there. Otherwise two paths an operator reads as "launch this template"
+ *    puts there. Otherwise two paths an operator reads as "launch this identity"
  *    reach main as two different requests, and only one of them is covered.
  *  - **THE BOUNDS ARE `../schema.ts`'s NUMBERS**, so an override cannot be
  *    shaped in a way the durable row could never have held.
  */
 
 import { describe, expect, it } from "vitest";
-import type { AgentTemplate } from "../client/types";
+import type { AgentIdentity } from "../client/types";
 import {
   MAX_OVERRIDE_FIELD_COUNT,
   MAX_OVERRIDE_KEY_CHARS,
@@ -18,7 +18,7 @@ import {
   overridesFor,
 } from "./launch-overrides";
 
-function template(over: Partial<AgentTemplate> = {}): AgentTemplate {
+function identity(over: Partial<AgentIdentity> = {}): AgentIdentity {
   return {
     id: "tpl-1",
     workspaceId: "ws-1",
@@ -39,24 +39,24 @@ function template(over: Partial<AgentTemplate> = {}): AgentTemplate {
 
 describe("overridesFor", () => {
   it("answers undefined when the sheet changed nothing", () => {
-    const t = template();
+    const t = identity();
     expect(overridesFor(t, "", t.fields)).toBeUndefined();
   });
 
-  it("treats picking the template's OWN model as no override", () => {
-    const t = template();
+  it("treats picking the identity's OWN model as no override", () => {
+    const t = identity();
     expect(overridesFor(t, "claude-opus-5", t.fields)).toBeUndefined();
   });
 
   it("carries a model the operator actually moved", () => {
-    const t = template();
+    const t = identity();
     expect(overridesFor(t, "claude-haiku-4-5-20251001", t.fields)).toEqual({
       model: "claude-haiku-4-5-20251001",
     });
   });
 
   it("carries fields as a REPLACEMENT set, never a merge", () => {
-    const t = template({
+    const t = identity({
       fields: [
         { key: "repo", value: "~/src/dopl" },
         { key: "severity", value: "high" },
@@ -68,7 +68,7 @@ describe("overridesFor", () => {
   });
 
   it("does not report a field override for a value that only gained whitespace", () => {
-    const t = template();
+    const t = identity();
     expect(overridesFor(t, "", [{ key: " repo ", value: " ~/src/dopl " }])).toBeUndefined();
   });
 });

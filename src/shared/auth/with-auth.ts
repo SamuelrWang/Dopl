@@ -116,7 +116,7 @@ async function runAndLog5xx(
  *     whole chain as "dead scaffolding; preserved".)
  *   - `credentialSubjectUserId` — WHOSE REACH, from `mcp_tokens.subject_user_id`.
  *     The M-10 gates — `knowledge/server/service-shared.ts › canSeeBase`, the
- *     same predicate in chats, skills and agent-templates, and the
+ *     same predicate in chats, skills and agent-identities, and the
  *     `fromWorkspaceKey` branches in the three write services — read this axis
  *     and ONLY this axis, through `credential-audience.ts › isSharedCredential`.
  *

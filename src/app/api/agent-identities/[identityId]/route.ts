@@ -5,22 +5,22 @@ import {
 } from "@/shared/auth/with-workspace-auth";
 import { parseJson } from "@/shared/api/parse-json";
 import {
-  requireTemplateId,
-  toAgentTemplateErrorResponse,
-} from "@/shared/api/agent-template-route";
+  requireIdentityId,
+  toAgentIdentityErrorResponse,
+} from "@/shared/api/agent-identity-route";
 import {
-  buildAgentTemplateContext,
-  deleteTemplate,
-  readTemplateById,
-  updateTemplate,
-} from "@/features/agent-templates/server/service";
-import { AgentTemplateUpdateSchema } from "@/features/agent-templates/schema";
+  buildAgentIdentityContext,
+  deleteIdentity,
+  readIdentityById,
+  updateIdentity,
+} from "@/features/agent-identities/server/service";
+import { AgentIdentityUpdateSchema } from "@/features/agent-identities/schema";
 
 /**
- * `GET | PATCH | DELETE /api/agent-templates/{templateId}`.
+ * `GET | PATCH | DELETE /api/agent-identities/{identityId}`.
  *
  * ⚠ `sessionOnly` IS PER-METHOD AND ONLY `DELETE` CARRIES IT. GET and PATCH
- * stay reachable by an agent token on purpose — an orchestrator reads templates,
+ * stay reachable by an agent token on purpose — an orchestrator reads identities,
  * and letting it fix a typo in one is not a containment question. A DELETE is
  * permanent (no trash, no restore), it destroys something a whole team may be
  * spawning from, and an agent token has no confirm dialog to gate it — the same
@@ -28,50 +28,50 @@ import { AgentTemplateUpdateSchema } from "@/features/agent-templates/schema";
  * with that reasoning in `src/shared/auth/write-gate-coverage.test.ts`.
  *
  * ⚠ **AND THE READ AND THE WRITES NO LONGER RESOLVE THE ID THE SAME WAY (A12).**
- * GET goes through `readTemplateById`, so the id names its own container and a
+ * GET goes through `readIdentityById`, so the id names its own container and a
  * `workspace=` that contradicts it is IGNORED. PATCH and DELETE stay on
- * `getTemplateById`, keyed to the workspace the caller was authorised in — a
+ * `getIdentityById`, keyed to the workspace the caller was authorised in — a
  * write that followed an id across a tenancy boundary is a ruling nobody has
  * made.
  */
 
 async function handleGet(_request: NextRequest, auth: WorkspaceAuthContext) {
   try {
-    const ctx = buildAgentTemplateContext(auth);
-    const template = await readTemplateById(
+    const ctx = buildAgentIdentityContext(auth);
+    const identity = await readIdentityById(
       ctx,
-      requireTemplateId(auth.params)
+      requireIdentityId(auth.params)
     );
-    return NextResponse.json({ template });
+    return NextResponse.json({ identity });
   } catch (err) {
-    return toAgentTemplateErrorResponse(err);
+    return toAgentIdentityErrorResponse(err);
   }
 }
 
 async function handlePatch(request: NextRequest, auth: WorkspaceAuthContext) {
   try {
-    const ctx = buildAgentTemplateContext(auth);
-    const id = requireTemplateId(auth.params);
-    const patch = await parseJson(request, AgentTemplateUpdateSchema);
+    const ctx = buildAgentIdentityContext(auth);
+    const id = requireIdentityId(auth.params);
+    const patch = await parseJson(request, AgentIdentityUpdateSchema);
     // Optional `X-Updated-At` precondition — the same wire convention the KB,
     // skills and ontology writes carry. Mismatch → 412
-    // AGENT_TEMPLATE_STALE_VERSION; absent → last-writer-wins, which is what an
+    // AGENT_IDENTITY_STALE_VERSION; absent → last-writer-wins, which is what an
     // older bundled client still sends.
     const expectedUpdatedAt = request.headers.get("x-updated-at") ?? undefined;
-    const template = await updateTemplate(ctx, id, patch, expectedUpdatedAt);
-    return NextResponse.json({ template });
+    const identity = await updateIdentity(ctx, id, patch, expectedUpdatedAt);
+    return NextResponse.json({ identity });
   } catch (err) {
-    return toAgentTemplateErrorResponse(err);
+    return toAgentIdentityErrorResponse(err);
   }
 }
 
 async function handleDelete(_request: NextRequest, auth: WorkspaceAuthContext) {
   try {
-    const ctx = buildAgentTemplateContext(auth);
-    await deleteTemplate(ctx, requireTemplateId(auth.params));
+    const ctx = buildAgentIdentityContext(auth);
+    await deleteIdentity(ctx, requireIdentityId(auth.params));
     return new NextResponse(null, { status: 204 });
   } catch (err) {
-    return toAgentTemplateErrorResponse(err);
+    return toAgentIdentityErrorResponse(err);
   }
 }
 

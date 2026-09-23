@@ -1,9 +1,9 @@
 import "server-only";
 import type {
-  AgentTemplate,
-  AgentTemplateContext,
-  TemplateKnowledgeRef,
-  TemplateKnowledgeScope,
+  AgentIdentity,
+  AgentIdentityContext,
+  IdentityKnowledgeRef,
+  IdentityKnowledgeScope,
 } from "../types";
 import * as repo from "./repository";
 import { refKey, scopeKey } from "../lib/knowledge-scopes";
@@ -23,7 +23,7 @@ import { resolveVisibleKnowledgeScopes } from "./service-knowledge-scopes";
  * ⚠ **SCOPED SINCE 2026-09-08.** The junction now carries base / folder / entry
  * rows, so the resolution moved one file over
  * (`service-knowledge-scopes.ts › resolveVisibleKnowledgeScopes`) and this file
- * kept the part that is genuinely about a ROW SET: grouping by template,
+ * kept the part that is genuinely about a ROW SET: grouping by identity,
  * counting what the viewer filter dropped, and deriving the base-level slice the
  * older readers still take.
  */
@@ -41,7 +41,7 @@ import { resolveVisibleKnowledgeScopes } from "./service-knowledge-scopes";
  * a role naming no knowledge and could not report a gap it was never told about.
  * `unreachableKnowledgeBaseCount` is that trace, and it is A COUNT AND NOTHING
  * ELSE — no id, no name, no container — because the desktop turns it into prompt
- * text (`prompt-framing-template.js › unreachableKnowledgeLines`) and a location
+ * text (`prompt-framing-agent-identity.js › unreachableKnowledgeLines`) and a location
  * would land there. It never blocks a launch: the agent starts, minus the base.
  *
  * ⚠ **A DROPPED FOLDER OR ENTRY COUNTS THE SAME WAY AND THE NAME DID NOT
@@ -51,58 +51,58 @@ import { resolveVisibleKnowledgeScopes } from "./service-knowledge-scopes";
  * a trashed entry is exactly as unreportable as a private base.
  */
 export async function decorateWithKnowledgeBases(
-  ctx: AgentTemplateContext,
-  templates: AgentTemplate[]
-): Promise<AgentTemplate[]> {
-  if (templates.length === 0) return [];
-  const links = await repo.listKnowledgeLinksForTemplates(
+  ctx: AgentIdentityContext,
+  identities: AgentIdentity[]
+): Promise<AgentIdentity[]> {
+  if (identities.length === 0) return [];
+  const links = await repo.listKnowledgeLinksForIdentities(
     ctx.workspaceId,
-    templates.map((t) => t.id)
+    identities.map((t) => t.id)
   );
   // ⚠ NO LINKS IS A DECIDED ZERO, not an absence. The row went through the
   // decoration and the answer is "nothing was dropped"; leaving the field
-  // undefined here would make an unattached template indistinguishable from an
+  // undefined here would make an unattached identity indistinguishable from an
   // undecorated one for every consumer downstream.
   if (links.length === 0) {
-    return templates.map((t) => ({
+    return identities.map((t) => ({
       ...t,
       knowledgeBases: [],
       knowledge: [],
       unreachableKnowledgeBaseCount: 0,
     }));
   }
-  // ⚠ ONE RESOLUTION FOR EVERY TEMPLATE IN THE SET, then split back by template.
-  // Resolving per template would multiply the base/folder/entry reads by the row
+  // ⚠ ONE RESOLUTION FOR EVERY IDENTITY IN THE SET, then split back by identity.
+  // Resolving per identity would multiply the base/folder/entry reads by the row
   // count on a page that already reads them once.
   const scopes = links.map(linkToScope);
   const resolved = await resolveVisibleKnowledgeScopes(ctx, scopes);
-  const byKey = new Map<string, TemplateKnowledgeRef>(
+  const byKey = new Map<string, IdentityKnowledgeRef>(
     resolved.map((ref) => [refKey(ref), ref])
   );
 
-  const byTemplate = new Map<string, TemplateKnowledgeRef[]>();
+  const byIdentity = new Map<string, IdentityKnowledgeRef[]>();
   // ⚠ COUNTED HERE, WHERE THE DROP HAPPENS, AND NOWHERE ELSE. This loop is the
   // only place that knows both numbers; asking "how many did I lose" anywhere
   // downstream would mean a second read against the base rows, which is the
   // probe the no-location rule forbids.
-  const droppedByTemplate = new Map<string, number>();
+  const droppedByIdentity = new Map<string, number>();
   for (let i = 0; i < links.length; i++) {
     const ref = byKey.get(scopeKey(scopes[i]));
-    const templateId = links[i].templateId;
+    const identityId = links[i].identityId;
     if (!ref) {
-      droppedByTemplate.set(
-        templateId,
-        (droppedByTemplate.get(templateId) ?? 0) + 1
+      droppedByIdentity.set(
+        identityId,
+        (droppedByIdentity.get(identityId) ?? 0) + 1
       );
       continue;
     }
-    byTemplate.set(templateId, [...(byTemplate.get(templateId) ?? []), ref]);
+    byIdentity.set(identityId, [...(byIdentity.get(identityId) ?? []), ref]);
   }
-  return templates.map((t) => {
+  return identities.map((t) => {
     // ⚠ SORTED BY THE DISPLAY PATH, which puts a base and its own folders
     // together and is stable across reads. The junction has no ordering column,
     // so an unsorted list would reorder between two reads of one unchanged row.
-    const knowledge = (byTemplate.get(t.id) ?? []).sort((a, b) =>
+    const knowledge = (byIdentity.get(t.id) ?? []).sort((a, b) =>
       a.path.localeCompare(b.path)
     );
     return {
@@ -116,17 +116,17 @@ export async function decorateWithKnowledgeBases(
         .filter((ref) => ref.scope === "base")
         .map((ref) => ({ id: ref.baseId, name: ref.baseName })),
       knowledge,
-      unreachableKnowledgeBaseCount: droppedByTemplate.get(t.id) ?? 0,
+      unreachableKnowledgeBaseCount: droppedByIdentity.get(t.id) ?? 0,
     };
   });
 }
 
 /** A junction row read back, narrowed to the domain union. ⚠ The DB's
- *  `agent_template_kb_scope_shape_check` guarantees the id column its
+ *  `agent_identity_kb_scope_shape_check` guarantees the id column its
  *  `scope_kind` names is populated; the fallbacks here exist so a row written
  *  before that constraint cannot produce `folderId: undefined` inside a
  *  `"folder"` scope — it degrades to the base scope it effectively is. */
-function linkToScope(link: repo.TemplateKnowledgeLinkRow): TemplateKnowledgeScope {
+function linkToScope(link: repo.IdentityKnowledgeLinkRow): IdentityKnowledgeScope {
   if (link.scopeKind === "folder" && link.folderId) {
     return { baseId: link.knowledgeBaseId, scope: "folder", folderId: link.folderId };
   }

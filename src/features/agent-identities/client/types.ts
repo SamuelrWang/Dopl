@@ -1,5 +1,5 @@
 /**
- * AGENT TEMPLATES — the wire shapes this client reads and writes.
+ * AGENT IDENTITIES — the wire shapes this client reads and writes.
  *
  * ⚠ NOT A SECOND DEFINITION. The domain types are the FEATURE's
  * (`../types.ts`) and the request bodies are the SCHEMA's inferred types
@@ -17,35 +17,35 @@
  */
 
 import type {
-  AgentTemplate,
-  TemplateField,
-  TemplateFieldType,
-  TemplateKnowledgeBaseRef,
-  TemplateKnowledgeRef,
-  TemplateKnowledgeScope,
-  TemplateKnowledgeScopeKind,
-  TemplateShelf,
-  TemplateVisibility,
+  AgentIdentity,
+  IdentityField,
+  IdentityFieldType,
+  IdentityKnowledgeBaseRef,
+  IdentityKnowledgeRef,
+  IdentityKnowledgeScope,
+  IdentityKnowledgeScopeKind,
+  IdentityShelf,
+  IdentityVisibility,
 } from "../types";
 import type {
-  AgentTemplateCreateInput,
-  AgentTemplateUpdateInput,
+  AgentIdentityCreateInput,
+  AgentIdentityUpdateInput,
 } from "../schema";
 
 export type {
-  AgentTemplate,
-  TemplateField,
-  TemplateFieldType,
-  TemplateKnowledgeBaseRef,
-  TemplateKnowledgeRef,
-  TemplateKnowledgeScope,
-  TemplateKnowledgeScopeKind,
-  TemplateShelf,
-  TemplateVisibility,
+  AgentIdentity,
+  IdentityField,
+  IdentityFieldType,
+  IdentityKnowledgeBaseRef,
+  IdentityKnowledgeRef,
+  IdentityKnowledgeScope,
+  IdentityKnowledgeScopeKind,
+  IdentityShelf,
+  IdentityVisibility,
 };
 
 /** POST body. `visibility` omitted → the service defaults to `private`. */
-export type AgentTemplateCreateBody = AgentTemplateCreateInput;
+export type AgentIdentityCreateBody = AgentIdentityCreateInput;
 
 /**
  * PATCH body.
@@ -54,14 +54,14 @@ export type AgentTemplateCreateBody = AgentTemplateCreateInput;
  * leaves the column alone, `null` CLEARS it. `fields`, `teamIds` and
  * `knowledgeBaseIds` are REPLACE-SET — absent = untouched, `[]` = emptied.
  */
-export type AgentTemplateUpdateBody = AgentTemplateUpdateInput;
+export type AgentIdentityUpdateBody = AgentIdentityUpdateInput;
 
-/** `GET /api/agent-templates`. */
-export interface AgentTemplateListResponse {
-  templates: AgentTemplate[];
+/** `GET /api/agent-identities`. */
+export interface AgentIdentityListResponse {
+  identities: AgentIdentity[];
 }
 
-/** `POST /api/agent-templates` and `GET|PATCH /api/agent-templates/{id}`. */
-export interface AgentTemplateResponse {
-  template: AgentTemplate;
+/** `POST /api/agent-identities` and `GET|PATCH /api/agent-identities/{id}`. */
+export interface AgentIdentityResponse {
+  identity: AgentIdentity;
 }

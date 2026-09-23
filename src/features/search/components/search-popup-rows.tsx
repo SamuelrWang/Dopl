@@ -36,14 +36,14 @@ import type { SearchGroupKind, SearchItem, SearchScope } from "../contracts";
 import { sanitizeSnippet } from "./search-popup-sections";
 
 /** The entry glyph, per kind — the same glyph vocabulary the product already
- *  uses for these objects (a channel is a hash, a template is a bot). */
+ *  uses for these objects (a channel is a hash, an identity is a bot). */
 const GLYPH: Record<SearchGroupKind, LucideIcon> = {
   channels: Hash,
   messages: MessageSquare,
   threads: MessagesSquare,
   artifacts: FileText,
   knowledge: BookOpen,
-  agentTemplates: Bot,
+  agentIdentities: Bot,
   members: User,
   skills: Wrench,
   chats: MessageCircle,
@@ -132,7 +132,7 @@ export function SearchResultRow({
     >
       <span
         className="flex h-5 w-5 shrink-0 items-center justify-center rounded-[5px] bg-surface-raised-2 text-text-secondary"
-        // The agent's own hue when the row has one: a template's colour arrives
+        // The agent's own hue when the row has one: an identity's colour arrives
         // as a value, so it cannot be a Tailwind class.
         style={item.color ? { color: item.color } : undefined}
         aria-hidden
