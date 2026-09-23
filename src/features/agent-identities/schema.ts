@@ -17,7 +17,7 @@ export { MAX_DESCRIPTION_CHARS, MAX_NAME_CHARS };
 /**
  * Zod schemas for agent identities. A label (name, model, both halves of every field) is spliced into
  * lines the server writes, so it is charset-bounded; prose (description, instructions) is not.
- * Every bound is an exported constant `schema-sql.test.ts` pins against its migration CHECK.
+ * Bounds are exported constants; `schema-sql.test.ts` pins them against the CHECKs and the desktop.
  */
 
 const NameSchema = safeLabel("Identity name", MAX_NAME_CHARS);
