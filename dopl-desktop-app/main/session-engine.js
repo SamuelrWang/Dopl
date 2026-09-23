@@ -152,8 +152,15 @@ function runEffect(s, eff) {
       noteSiblings(s);
       if (s.pushIterator) s.pushIterator.push(io.userMessage(io.withSeed(s, io.frameContinuation(s.nonce, eff.message, eff.authorName, eff.addressing, eff.authorNote))));
       break;
-    case 'interruptQuery': // ⚠ ON A RUNTIME THAT DECLARES NO INTERRUPT THIS SILENTLY DOES NOTHING, and the honest two-line log for it DID NOT FIT — this file is AT the 500-line cap with no headroom, which is F-388 demonstrated rather than asserted. `main/runtime/capability.js › interruptRefusal` holds the sentence; the SPA hides the control and the launch surface warns with it (design §3.2). Add the log when this file splits.
-      try { if (s.query && s.query.interrupt) s.query.interrupt().catch(() => {}); } catch (_) { /* best effort */ }
+    case 'interruptQuery':
+      // The interrupted turn still ends with a `result`; a direction it was answering lapses rather
+      // than reporting the half-written text (P4-08).
+      sessionDirected.resetDirected(s);
+      if (s.query && typeof s.query.interrupt === 'function') {
+        try { s.query.interrupt().catch(() => {}); } catch (_) { /* best effort */ }
+      } else if (s.query) {
+        diag('session-engine: interrupt ignored — this runtime declares none', String(s.runtimeId || ''));
+      }
       break;
     // BOTH OF THESE ALSO CLOSE THE PRIVATE WINDOW (2026-08-22). The depth is spent by a turn's
     // `result`, and a TORN-DOWN QUERY OWES NO RESULTS — its consume loop is superseded by the

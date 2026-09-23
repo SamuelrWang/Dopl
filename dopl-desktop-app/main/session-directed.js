@@ -214,14 +214,15 @@ function closeDirected(s) {
 }
 
 /**
- * A QUERY WAS TORN DOWN: every capture is DROPPED and NOTHING IS REPORTED.
+ * A QUERY WAS TORN DOWN OR INTERRUPTED: every capture is DROPPED and NOTHING IS REPORTED.
  *
  * ⚠ **DROPPED, NOT FLUSHED, AND THE DIRECTION IS THE WRONG PLACE TO BE CLEVER.** A park, an
- * auth hold, a crash or an operator End means the turn owes no `result` — so any text captured
- * so far is a PARTIAL answer to a question that was never finished. The row lazy-expires, and
- * "it lapsed" is the honest thing to tell a caller about a turn nobody finished.
- * ⚠ Called from the same three edges `session-private.js › resetPrivateTurn` is: the
- * `abortQuery` and `denyPending` effects, and `session-park.js › resumeParked`.
+ * auth hold, a crash, an operator End or a Pause means the turn was never finished — so any text
+ * captured so far is a PARTIAL answer. The row lazy-expires, and "it lapsed" is the honest thing
+ * to tell a caller about a turn nobody finished.
+ * ⚠ Called from the edges `session-private.js › resetPrivateTurn` is — the `abortQuery` and
+ * `denyPending` effects, and `session-park.js › resumeParked` — plus `interruptQuery` (P4-08):
+ * an interrupted turn still ends with a `result`, which would otherwise close the capture.
  */
 function resetDirected(s) {
   if (!s) return null;
