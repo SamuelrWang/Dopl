@@ -7,10 +7,8 @@
  * MECHANISM WHOSE WORD SURVIVES IN A DESCRIPTION IS WORSE THAN ONE THAT NEVER
  * SHIPPED**: an agent reads the word, spends a call on the argument, and gets a
  * `-32602` naming a field the surface no longer has — or, on `shelf`, gets a
- * SILENT ANSWER over a scope nobody applied. The retired copy names PARSE for
- * one release and are answered with a redirect (`tools/retired-copy-ops.ts`),
- * which is the opposite of appearing in a description: they are reachable and
- * invisible on purpose.
+ * SILENT ANSWER over a scope nobody applied. The retired copy names are refused
+ * by the op enum like any unknown op.
  *
  * ⚠ **MEASURED AS SERVED, over a real `listTools()` on a real transport**, for
  * the reason `tool-budget.test.ts` and `agent-team-axis.test.ts` both give: the
@@ -42,10 +40,6 @@
  *      pulled on demand or spliced into a result, never served;
  *   3. results DRIVEN out of the renderers that build them, because a template
  *      literal only becomes a sentence when something calls it.
- *
- * ⚠ **`tools/retired-copy-ops.ts` IS DELIBERATELY NOT A SOURCE.** Its whole job
- * is to NAME a retired op back to the caller that tried it; scanning it would
- * fail the suite on the one file that is supposed to say those words.
  */
 
 import { describe, it, expect, vi, beforeAll, afterAll } from "vitest";
@@ -225,11 +219,7 @@ describe("no served string names a retired copy or shelf", () => {
     });
   }
 
-  it("🔒 but the retired OP NAMES still parse, which is the opposite property", () => {
-    // ⚠ ASSERTED HERE, beside the ban, because the two are one decision and a
-    // reader who sees only the ban will conclude the names were removed from the
-    // runtime too. They are hidden from the PUBLISHED enum and answered with one
-    // redirect line; `tools/retired-copy-ops.test.ts` drives both halves.
+  it("🔒 no published schema names a retired copy op, and grant replaces it", () => {
     const names = served
       .filter(([where]) => where.endsWith(".inputSchema"))
       .map(([, body]) => body);

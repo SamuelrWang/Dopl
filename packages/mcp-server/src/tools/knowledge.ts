@@ -51,10 +51,6 @@ import {
   type GrantLevelArg,
   type GrantScopeArg,
 } from "./grant";
-import {
-  RETIRED_COPY_OP_NAMES,
-  retiredCopyRedirect,
-} from "./retired-copy-ops";
 import type { WorkspaceDirectory } from "../workspace-directory";
 
 /**
@@ -91,15 +87,8 @@ const KB_INPUT_SHAPE = {
     .describe(
       'op="read_file": stop after this many characters of the BODY; omitted, the whole entry. A clip always SAYS it clipped and names this argument, so a prefix cannot pass as the document.',
     ),
-  // ⚠ **THE RUNTIME ENUM IS WIDER THAN THE PUBLISHED ONE.** `.meta()` overrides
-  // the `enum` keyword `z.toJSONSchema` emits, so the retired copy name still
-  // PARSES (and is answered with one redirect line) while no client can SEE it.
-  // Same construction and same argument as `channel-schema.ts`'s.
   offset: OFFSET_FIELD,
-  op: z
-    .enum([...KB_OPS, ...RETIRED_COPY_OP_NAMES])
-    .meta({ enum: [...KB_OPS] })
-    .describe("Operation to perform."),
+  op: z.enum(KB_OPS).describe("Operation to perform."),
   base: z.string().optional().describe("Base slug or id. Required for get_tree/list_dir/update_base/grant/create_folder/move_folder/read_file/write_file/move_file; optional scope for search."),
   section: z.string().max(300).optional().describe('read_file: only this HEADING\'s section, down to the next heading of the same or higher level — case-insensitive; an unknown one answers with the outline. write_file: replace that section (`body` is its new content), appended at "##" if absent.'),
   path: z.string().optional().describe("Path within the base. list_dir: '/' or '' for root. create_folder: required, e.g. 'projects/foo'. outline/read_file: required entry path. write_file: entry path — required unless you pass `title` (then the title becomes the path). There is no delete op — deletion is app-only."),
@@ -420,21 +409,6 @@ export function registerKnowledgeTools(
             args.base as string,
             args.visibility as string,
             args.confirm_token as string | undefined,
-          );
-        }
-        // ── THE ONE-RELEASE MIGRATION WINDOW ──────────────────────────────
-        //
-        // ⚠ **THE `default` IS EXHAUSTIVE, NOT A FALLBACK** — the same shape and
-        // the same argument as `channel.ts`'s. `args.op` is the union of the
-        // fifteen published names and the retired copy ones; the fifteen are
-        // handled above, so this arm is the retired set, and the guard is the
-        // belt for a bypassed build: an op that is neither must not fall through
-        // as a success.
-        default: {
-          const op: string = args.op;
-          return (
-            retiredCopyRedirect("dopl_kb", op) ??
-            err(`dopl_kb has no op "${op}".`)
           );
         }
       }

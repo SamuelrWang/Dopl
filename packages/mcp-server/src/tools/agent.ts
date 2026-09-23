@@ -23,7 +23,7 @@ import { z } from "zod";
 import { MAX_CHARS_FIELD } from "./response-size";
 import type { DoplClient } from "@dopl/client";
 import { UNKNOWN_CALLER, type CallerIdentity } from "./identity.js";
-import { err, missingParams, type RegisterTool, type ToolResponse } from "./respond.js";
+import { missingParams, type RegisterTool, type ToolResponse } from "./respond.js";
 import {
   IDENTITY_VISIBILITY_VALUES,
   VISIBILITY_ENUM_MESSAGE,
@@ -42,10 +42,6 @@ import {
   type GrantLevelArg,
   type GrantScopeArg,
 } from "./grant.js";
-import {
-  RETIRED_COPY_OP_NAMES,
-  retiredCopyRedirect,
-} from "./retired-copy-ops.js";
 import type { WorkspaceDirectory } from "../workspace-directory.js";
 
 /**
@@ -120,12 +116,7 @@ const FIELD_SHAPE = z.object({
 const AGENT_OPS = ["list", "get", "create", "update", "grant"] as const;
 
 const AGENT_INPUT_SHAPE = {
-  // ⚠ **THE RUNTIME ENUM IS WIDER THAN THE PUBLISHED ONE** — see
-  // `retired-copy-ops.ts` and the identical construction in `knowledge.ts`.
-  op: z
-    .enum([...AGENT_OPS, ...RETIRED_COPY_OP_NAMES])
-    .meta({ enum: [...AGENT_OPS] })
-    .describe("Operation to perform."),
+  op: z.enum(AGENT_OPS).describe("Operation to perform."),
   identity: z
     .string()
     .optional()
@@ -419,16 +410,6 @@ export function registerAgentTools(
             expected_version: args.expected_version,
             force: args.force,
           });
-        }
-
-        // ── THE ONE-RELEASE MIGRATION WINDOW ──────────────────────────────
-        // ⚠ Exhaustive, not a fallback — see `knowledge.ts`'s twin.
-        default: {
-          const op: string = args.op;
-          return (
-            retiredCopyRedirect("dopl_agent", op) ??
-            err(`dopl_agent has no op "${op}".`)
-          );
         }
       }
     },
