@@ -142,7 +142,7 @@ async function startSession(spec, rt) {
   const armedModes = spec.startModes;
   const operatorArmed = spec.operatorArmed === true;
   const startModes = armedModes && (!spec.parkedShell || operatorArmed)
-    ? { toolMode: armedModes.tools, messageMode: spec.windowless === true ? floorWindowlessMessage(armedModes.messages) : armedModes.messages, native: armedModes.native, pinned: armedModes.pinned === true }
+    ? { toolMode: armedModes.tools, messageMode: spec.windowless === true ? floorWindowlessMessage(armedModes.messages) : armedModes.messages, native: armedModes.native, pinned: armedModes.pinned }
     : {};
   const state = initialSessionState({ mode: spec.mode, side: spec.side, ...readCaps(spec), ...startModes, toolModes: toolModesFor(rt && rt.id) });
   // The windowless message floor at the one construction site, for shapes that hand in nothing (F-236).

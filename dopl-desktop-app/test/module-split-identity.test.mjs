@@ -142,20 +142,20 @@ test("SPLIT: the listener's identity + name-cache names are re-exported, never r
   // plus the four re-export lines, which is the object-identity claim one level out — each value
   // is `identity.<name>`, so a body copied back here would read as a second spelling on sight.
   const io = read("listener-io.js");
-  const moved = read("listener-identity.js");
-  assert.match(io, /const identity = require\('\.\/listener-identity'\);/);
-  for (const n of ["resolveIdentity", "displayNameFor", "refreshNameCache"]) {
-    assert.match(io, new RegExp(`\\n  ${n}: identity\\.${n},`), `${n} is not re-exported from the split`);
+  const moved = read("listener-people.js");
+  assert.match(io, /const people = require\('\.\/listener-people'\);/);
+  for (const n of ["resolveOperatorUserId", "displayNameFor", "refreshNameCache"]) {
+    assert.match(io, new RegExp(`\\n  ${n}: people\\.${n},`), `${n} is not re-exported from the split`);
     assert.equal(new RegExp(`function ${n}\\(`).test(io), false,
       `${n}'s body is back in listener-io.js — that is a second answer, not a split`);
-    assert.match(moved, new RegExp(`function ${n}\\(`), `${n} must live in listener-identity.js`);
+    assert.match(moved, new RegExp(`function ${n}\\(`), `${n} must live in listener-people.js`);
   }
   // ⚠ THE TWO MEMBER CACHES ARE ONE INSTANCE, and that is what the re-export buys: a copy of
   // either Map here would bound nothing and answer 'A teammate' for members the other had.
   assert.equal(/new Map\(\)/.test(io), false, "the caches went with their bound");
   assert.match(moved, /const MAX_CACHED_MEMBERS = \d+;/);
   // Both sides are back under the cap the split was for.
-  for (const f of ["listener-io.js", "listener-identity.js"]) {
+  for (const f of ["listener-io.js", "listener-people.js"]) {
     const lines = read(f).split("\n").length;
     assert.ok(lines <= 500, `main/${f} is ${lines} lines — over the §2 cap again`);
   }

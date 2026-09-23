@@ -68,7 +68,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { prefs, CH_A, CH_B } from "./_channel-prefs-block.mjs";
+import { legacyPreset, mapPrefs, RESTRICTIVE, CH_A, CH_B } from "./_channel-prefs-block.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const M = (p) => readFileSync(join(HERE, "..", "main", p), "utf8");
@@ -76,7 +76,10 @@ const M = (p) => readFileSync(join(HERE, "..", "main", p), "utf8");
 // ⚠ THE SLICER LIVES IN `_channel-prefs-block.mjs` (2026-08-20) — same block, one copy, two
 // suites. This one keeps the shared VALIDATOR and the IPC surface;
 // `channel-launch-posture.test.mjs` takes the durable posture's own map ops.
-const { TOOL_MODES, MESSAGE_MODES, DEFAULT_PRESET, normalizePreset, defaultPreset } = prefs;
+// The words a pre-U5 record was written in (the default runtime's) and Dopl's messaging axis.
+const TOOL_MODES = ["manual", "accept_edits", "auto", "bypass"];
+const MESSAGE_MODES = ["ask", "auto_inbound", "auto_outbound", "auto_both"];
+const normalizePreset = legacyPreset;
 
 const OK = { tools: "accept_edits", messages: "auto_inbound" };
 
@@ -109,7 +112,6 @@ const FAKE_RUNTIMES = Object.freeze([
 // its ABSENCE is what makes the SPA's own-key probe draw no Model row.
 const onWire = (pair) => ({
   ...pair,
-  selectionVersion: 2,
   selection: { v: 2, runtime: "", messages: pair.messages, byRuntime: {} },
   needsReview: [],
   runtime: "",
@@ -120,24 +122,6 @@ const onWire = (pair) => ({
   // version. `{}` is the stubbed catalog layer — `test/runtime-model-catalog.test.mjs` owns it.
   catalogVersion: 1,
   catalogs: {},
-});
-
-// ── The frozen enums ─────────────────────────────────────────────────────────
-
-test("the enums are exactly the desktop's real modes, in both axes", () => {
-  assert.deepEqual(TOOL_MODES, ["manual", "accept_edits", "auto", "bypass"]);
-  assert.deepEqual(MESSAGE_MODES, ["ask", "auto_inbound", "auto_outbound", "auto_both"]);
-});
-
-test("the default pair is the most restrictive one on both axes", () => {
-  assert.deepEqual(DEFAULT_PRESET, { tools: "manual", messages: "ask" });
-  assert.deepEqual(defaultPreset(), { tools: "manual", messages: "ask" });
-});
-
-test("defaultPreset never hands back the shared DEFAULT_PRESET object", () => {
-  const out = defaultPreset();
-  out.tools = "bypass";
-  assert.equal(DEFAULT_PRESET.tools, "manual", "the default must not be mutable through a caller");
 });
 
 // ── normalizePreset: unknown values are REJECTED, never coerced ──────────────
@@ -157,6 +141,7 @@ test("an unknown mode on EITHER axis rejects the whole pair", () => {
     { tools: "BYPASS", messages: "ask" }, // case-sensitive on purpose
     { tools: "manual ", messages: "ask" }, // no trimming: an exact member or nothing
     { tools: "bypass", messages: "" },
+    { tools: "on-request", messages: "ask" }, // another runtime's word was never a legacy value
   ];
   for (const raw of bad) {
     assert.equal(normalizePreset(raw), null, `must reject ${JSON.stringify(raw)}`);
@@ -243,7 +228,7 @@ function bootIpc() {
   const SELECTION = (channelId) => ({
     v: 2,
     runtime: runtimePicks[channelId] || "",
-    messages: prefs.effectivePosture(map, channelId).messages,
+    messages: mapPrefs.read(map, channelId).messages,
     byRuntime: {},
   });
   const prefsStub = {
@@ -252,11 +237,7 @@ function bootIpc() {
     // read `readPostureFrom(...) || defaultPreset()` — which is what `getLaunchPosture` did at
     // the time — and that duplication is precisely what let main's wire shape change underneath
     // a green suite. One spelling, in the module under test.
-    getLaunchPosture: (channelId) => prefs.effectivePosture(map, channelId),
-    setLaunchPosture: (channelId, raw) => {
-      const res = prefs.postureInto(map, channelId, raw);
-      return res.ok ? { ok: true } : { ok: false };
-    },
+    getLaunchPosture: (channelId) => mapPrefs.read(map, channelId),
     // ⚠ **THE ONE VALIDATING WRITER SINCE 2026-09-21 (U5)** — `channels:setLaunchPosture` calls
     // this, not `setLaunchPosture`, because the runtime pick is a FIELD of the same versioned
     // record now rather than a second store write issued after the pair. Backed by the SAME real
@@ -264,7 +245,7 @@ function bootIpc() {
     // validator: a rejected write must store nothing, and a non-UUID id must be refused before the
     // store is touched at all.
     setLaunchSelection: (channelId, raw) => {
-      const res = prefs.postureInto(map, channelId, raw);
+      const res = mapPrefs.write(map, channelId, raw);
       return res.ok
         ? { ok: true, preset: res.preset, selection: SELECTION(channelId), review: [] }
         : { ok: false };
@@ -431,7 +412,6 @@ test("round trip: set then get returns the stored pair", async () => {
     review: [],
     applied: 0,
     runtime: "",
-    selectionVersion: 2,
   });
   assert.deepEqual(await handlers["channels:getLaunchPosture"](event, CH_A), onWire(OK));
 });
@@ -443,13 +423,13 @@ test("get before any set is the restrictive default, never a neighbour's pair", 
   // Settings tab would render nothing for a null). Same fail-closed direction, stated as the
   // pair rather than as an absence.
   const { handlers, event } = bootIpc();
-  assert.deepEqual(await handlers["channels:getLaunchPosture"](event, CH_A), onWire(DEFAULT_PRESET));
+  assert.deepEqual(await handlers["channels:getLaunchPosture"](event, CH_A), onWire(RESTRICTIVE));
 });
 
 test("the round trip is per channel: setting A leaves B at the default", async () => {
   const { handlers, event } = bootIpc();
   await handlers["channels:setLaunchPosture"](event, { channelId: CH_A, preset: OK });
-  assert.deepEqual(await handlers["channels:getLaunchPosture"](event, CH_B), onWire(DEFAULT_PRESET));
+  assert.deepEqual(await handlers["channels:getLaunchPosture"](event, CH_B), onWire(RESTRICTIVE));
 });
 
 test("an unknown mode over IPC is rejected and stores nothing", async () => {

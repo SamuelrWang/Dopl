@@ -160,19 +160,3 @@ test("decideBody omits an ABSENT echo rather than sending null — that is the o
     { directiveId: "d1", status: "launched", agentId: "a1b2c3d4" });
 });
 
-test("REQUEST_KEYS names every key the decide really sends", () => {
-  // ⚠ A LIST THAT OMITS A FIELD THAT REALLY CROSSES IS WORSE THAN NO LIST. Driven against the
-  // real builder rather than eyeballed: every key `decideBody` can emit must be declared.
-  const emitted = new Set([
-    ...Object.keys(wire.decideBody("d1", {
-      agentId: "a1b2c3d4", appliedTools: "auto", appliedMessages: "ask", appliedChain: true,
-    })),
-    ...Object.keys(wire.decideBody("d1", { refused: "cap" })),
-    ...Object.keys(wire.decideBody("d1", {
-      done: true, appliedTools: "auto", appliedMessages: "ask",
-    })),
-  ]);
-  for (const k of emitted) {
-    assert.ok(wire.REQUEST_KEYS.decide.indexOf(k) !== -1, `REQUEST_KEYS.decide is missing ${k}`);
-  }
-});

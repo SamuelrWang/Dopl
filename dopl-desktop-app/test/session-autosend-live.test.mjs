@@ -226,12 +226,9 @@ test("SOURCE: the one consumer is the live Axis-B read, and it reads the POSTURE
     "session-private.js holds the live read of the channel's Messaging value");
   // …the launch-time derivation bakes in no frozen copy…
   const prefs = read("channel-prefs.js");
-  const rule = prefs.slice(
-    prefs.indexOf("function windowlessMessageMode("),
-    prefs.indexOf("function launchStartModes(")
-  );
+  const rule = prefs.slice(prefs.indexOf("function launchStartModes("));
   assert.ok(!/getAutoSend/.test(rule.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "")),
-    "windowlessMessageMode must not bake a frozen copy into state");
+    "the launch-time message axis must not bake a frozen copy into state");
   // …and the gate's argument builder routes Axis B through the one derivation.
   assert.match(read("session-io.js"), /messageMode: sessionPrivate\.effectiveMessageMode\(s\)/,
     "grantArgs reads Axis B through effectiveMessageMode and nothing else");

@@ -63,8 +63,8 @@ const req = createRequire(import.meta.url);
 // ⚠ SLICED BY THE FENCE, NOT BY LINE NUMBERS — a comment added above the block must not move
 // this suite onto a different program.
 const block = sentinelBlock(SRC, "AGENT-DEFAULTS-VALIDATE");
-const { MESSAGE_MODES, FACTORY_DEFAULTS, normalizeDefaults, effectiveDefaults } = new Function(
-  `${block}\n return { MESSAGE_MODES, FACTORY_DEFAULTS, normalizeDefaults, effectiveDefaults };`
+const { normalizeDefaults, effectiveDefaults, defaultsRejections } = new Function(
+  `${block}\n return { normalizeDefaults, effectiveDefaults, defaultsRejections };`
 )();
 
 // ⚠ THE REAL SHAPE MODULE AND THE REAL ADAPTER VOCABULARY. `launch-selection.js` reaches nothing
@@ -80,19 +80,9 @@ const wire = (stored) => effectiveDefaults(sel, ctx, stored);
 
 const OK = { messages: "auto_inbound" };
 
-test("the messaging enum is exactly Dopl's own four, and it does NOT move with the runtime", () => {
-  // ⚠ SPELLED OUT rather than compared to another module's copy: these lists must AGREE, and a
-  // test that derived one from the other could not notice them drifting apart together.
-  // ⚠ AND THERE IS NO `TOOL_MODES` HERE ANY MORE (U5). Dopl — not either vendor — gates channel
-  // delivery, so messaging is core's on every adapter; the TOOL axis belongs to the selected
-  // runtime and is validated against its own declared options.
-  assert.deepEqual(MESSAGE_MODES, ["ask", "auto_inbound", "auto_outbound", "auto_both"]);
-});
-
 test("the factory answer is the MOST RESTRICTIVE one, and chaining is off", () => {
   // A machine that has never opened the Agents tab must seed nothing different from what a
   // channel got before this feature existed.
-  assert.deepEqual(FACTORY_DEFAULTS, { messages: "ask", agentChain: false });
   assert.deepEqual(wire(null), {
     tools: ctx.narrowestToolFor(""),
     messages: "ask",
@@ -275,6 +265,16 @@ test("the WIRE always carries the legacy keys; STORAGE keeps them per runtime", 
     byRuntime: {},
     native: {},
   });
+});
+
+test("a WRITE naming a tool setting its runtime does not offer is REJECTED; a read floors it (P3-29)", () => {
+  const bad = { v: 2, runtime: "codex", messages: "ask", byRuntime: { codex: { tools: "bypass" } } };
+  assert.equal(defaultsRejections(sel, ctx, bad).length, 1, "the write is refused with a sentence");
+  assert.equal(norm(bad).byRuntime.codex.tools, ctx.narrowestToolFor("codex"), "…a stored one floors");
+  const ok = { v: 2, runtime: "codex", messages: "ask", byRuntime: { codex: { tools: "never" }, claude: { tools: "auto" } } };
+  assert.deepEqual(defaultsRejections(sel, ctx, ok), []);
+  assert.deepEqual(defaultsRejections(sel, ctx, { byRuntime: { "some-future-runtime": { tools: "x" } } }), [],
+    "an unregistered runtime's record is carried, not judged");
 });
 
 test("the pure block really is pure — it is sliced and evaluated, so it may not reach out", () => {

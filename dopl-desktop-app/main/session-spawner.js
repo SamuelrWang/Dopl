@@ -11,7 +11,7 @@
 //
 // ⚠ WHAT SURVIVES IS A FACADE, AND IT IS LOAD-BEARING FOR SIX CALLERS. `claudeAvailable`,
 // `getClaudeBinPath` and `cliEnv` come from `claude-resolve.js`; `sessionSpawnAvailable` from
-// `claude-runtime.js`; the four `build*` helpers from `tool-profiles.js`. Nothing here computes
+// `claude-runtime.js`. Nothing here computes
 // them — this module is the NAME those callers already import (`mcp-config.js`,
 // `mcp-cli-add.js`, `claude-auth.js`, `session-auth.js`, `channel-listener.js`, `trigger.js`),
 // and collapsing it into six direct imports is a rename with no other effect. If that is worth
@@ -24,12 +24,6 @@
 
 const { claudeAvailable, getClaudeBinPath, cliEnv } = require('./claude-resolve');
 const { sessionSpawnAvailable } = require('./claude-runtime');
-const {
-  buildAllowedTools,
-  buildDeniedTools,
-  buildBuiltinTools,
-  buildRestrictionArgs,
-} = require('./tool-profiles');
 
 module.exports = {
   // "can a session RUN at all" (any registered runtime) — the gate every trigger asks.
@@ -38,9 +32,4 @@ module.exports = {
   claudeAvailable,
   getClaudeBinPath,
   cliEnv,
-  // The containment table (tool-profiles.js) — unchanged API.
-  buildAllowedTools,
-  buildDeniedTools,
-  buildBuiltinTools,
-  buildRestrictionArgs,
 };

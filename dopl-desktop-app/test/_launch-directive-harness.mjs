@@ -215,11 +215,6 @@ export function boot(over = {}) {
         // that nothing an orchestrator writes may exceed it. The default here is the WIDEST pair
         // so an unrelated case never trips the clamp; `cfg.ceiling` is how a clamp case sets one.
         getLaunchPosture: () => cfg.ceiling || { tools: "bypass", messages: "auto_both", model: null },
-        // ⚠ THE WINDOWLESS MESSAGE FLOOR, REAL RATHER THAN STUBBED (2026-09-01, T24). It is the
-        // rule the clamp composes with — clamp, THEN floor — and a fake would let this suite go
-        // green about an order that is the contract. The real function is pure.
-        windowlessMessageMode: (_c, picked) => (picked === "auto_outbound" || picked === "auto_both"
-          ? "auto_both" : "auto_inbound"),
       };
     }
     if (id === "./targeting") {

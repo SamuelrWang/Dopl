@@ -252,8 +252,8 @@ test("THE busy defer announces, ahead of the RESEND bubble, and nothing else doe
   }
 
   // NOT on the declined / auth-held / fyi paths — those are answers, not defers.
-  const held = trigger.slice(trigger.indexOf("AUTH_HELD_REPLY)"));
-  assert.ok(!held.slice(0, 200).includes("queued.announce"));
+  const held = trigger.slice(trigger.indexOf("AUTH_HELD_REPLY)"), trigger.indexOf("skipped === 'busy'"));
+  assert.ok(held.length > 0 && !held.includes("queued.announce"));
   // ⚠ NOR ON THE CANNOT-RUN TERMINAL (new 2026-08-20). `cap` / `no-sdk` / `disabled` used to
   // fall through to the headless lane and are now terminals — and a terminal must NOT announce,
   // because "queued, I'll pick it up when that frees" would be a promise nothing intends to

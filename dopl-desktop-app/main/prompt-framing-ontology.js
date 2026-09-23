@@ -1,33 +1,14 @@
-// WHICH ONTOLOGIES THIS SESSION REACHES, AND AT WHAT LEVEL (2026-09-09,
-// `docs/specs/home-ontology.md` §4.9 / S5).
-//
-// ⚠ **THIS IS A COMPENSATING CONTROL, NOT A GATE** (INVARIANTS §4A). The FENCE
-// is the ontology service's, inherited by `dopl_ontology` through the HTTP
-// routes. These lines exist so an agent knows what it may open and stops guessing
-// — never so that omitting a line stops it.
-//
-// ⚠ IT BOUNDS FUTURE READS, NEVER CONTEXT ALREADY IN THE WINDOW (I7, INVARIANTS
-// §11): a level that narrows mid-session narrows the NEXT call.
-//
-// ⚠ ITS OWN MODULE, not `prompt-framing-text.js`, whose contract is that EVERY
-// block is FIXED TEXT with nothing interpolated. These lines carry caller data,
-// so they sit beside a sanitizer — `prompt-framing-agent-identity.js › knowledgeLines`'
-// seam, copied deliberately.
-//
-// PURE: no electron / fs / path, so the truth tables `require` it directly.
+// Which ontologies this session reaches, and at what level. A compensating control, not a gate: the
+// fence is the ontology service's (INVARIANTS §4A), and a level bounds FUTURE calls only. Pure; its
+// own module because these lines carry caller data (the text module is fixed text only).
 
 const { idToken, sanitizeName } = require('./prompt-sanitize');
 
-// The two rungs an agent can be told about. ⚠ `none` IS NOT ONE OF THEM and
-// neither is an unknown word: this filter FAILS CLOSED, so a level the desktop
-// does not recognise names no ontology at all rather than being printed raw.
+// Fails closed: `none` or an unknown level names no ontology at all.
 const LEVELS = { view: 'VIEW', edit: 'EDIT' };
 
-// ⚠ THE ID GOES THROUGH `idToken` AND THE NAME THROUGH `sanitizeName`, never the
-// other way (`knowledgeLines`' split): an id is spliced VERBATIM into a call the
-// agent is told to make, a name is display text that must not open a line of its
-// own. ⚠ `idToken` STRIPS rather than refuses, so the filter below fires on the
-// EMPTY RESULT and drops such an entry WHOLE.
+// The id through `idToken` (spliced verbatim into a call), the name through `sanitizeName` (display);
+// `idToken` strips rather than refuses, so an entry whose id comes out empty is dropped whole.
 function reachable(ontologies) {
   return (Array.isArray(ontologies) ? ontologies : [])
     .map((o) => ({
@@ -38,31 +19,19 @@ function reachable(ontologies) {
     .filter((o) => o.id && o.name && o.level);
 }
 
-// One ontology's line: what it is called, what this session may do with it, and
-// the EXACT call. No `workspace` argument: `dopl_ontology` refuses it (strictInput);
-// the cluster id resolves its own container.
-// ⚠ `cluster "<id>"` IS THE ARGUMENT NAME, NOT THE READER'S WORD. The 2026-09-11
-// vocabulary ruling (INVARIANTS §4A) respells every string a person or an agent
-// READS — but this one is a CALL SHAPE, and `dopl_ontology`'s parameter is
-// `cluster`. Respelling it hands the agent a call it cannot make.
+// One line with the EXACT call. `cluster` is the tool's argument name (not respelled), and there is
+// no `workspace` argument: `dopl_ontology` refuses it; the cluster id resolves its own container.
 function ontologyLine(o) {
   const verb =
     o.level === 'EDIT'
       ? 'you may also write to it with the write ops.'
-      : 'READ ONLY — a write to it is refused, and that refusal is the fence working.';
-  return `- "${o.name}" (${o.level}) — read it with mcp__dopl__dopl_ontology op "map", cluster "${o.id}"; ${verb}`;
+      : 'READ ONLY: a write to it is refused, and that refusal is the fence working.';
+  return `- "${o.name}" (${o.level}): read it with mcp__dopl__dopl_ontology op "map", cluster "${o.id}"; ${verb}`;
 }
 
 /**
- * The ONTOLOGY REACH block, as plain lines the caller splices into a turn.
- *
- * ⚠ `[]` WHEN THERE IS NOTHING TO SAY, and that emptiness is the contract: a
- * lane no ontology reaches must be BYTE-IDENTICAL to the turn before this module
- * existed, so not even a stray blank line (`prompt-framing-agent-identity.js` makes the
- * same promise).
- * ⚠ IT EMITS ITS OWN LEADING BLANK LINE when it emits anything, so the splice
- * site is exactly one line of assembly.
- *
+ * The block, with its own leading blank line; `[]` when nothing is reached, so that turn stays
+ * byte-identical.
  * @param {object} ctx the session context; reads `ctx.ontologies`
  */
 function ontologyReachLines(ctx) {
@@ -72,7 +41,7 @@ function ontologyReachLines(ctx) {
     '',
     'ONTOLOGIES YOU CAN REACH IN THIS CHANNEL:',
     ...list.map(ontologyLine),
-    'These are your operator\'s ontologies, LENT into this channel — one row, not a copy, so an',
+    'These are your operator\'s ontologies, LENT into this channel as one row, not a copy, so an',
     'edit you make is seen by everyone it is lent to. The level above is enforced on the server and',
     'bounds what you may do NEXT; it does not retract anything already in this window. An ontology',
     'that is not named here is one this session does not reach: do not go looking for it.',

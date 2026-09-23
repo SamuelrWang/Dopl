@@ -151,6 +151,20 @@ test("migration EQUIVALENCE: the legacy wire answers exactly what it answered be
   }
 });
 
+test("a HALF-VALID legacy pair is no pair: nothing migrates and the channel reads unconfigured (P3-34)", () => {
+  for (const legacy of [
+    { tools: "garbage", messages: "auto_both" },
+    { tools: "bypass", messages: "garbage" },
+    { tools: "on-request", messages: "ask" }, // never a pre-U5 word
+    { messages: "auto_both" },
+  ]) {
+    const res = sel.fromLegacy(ctx, legacy, "");
+    assert.equal(res.stored, false, JSON.stringify(legacy));
+    assert.deepEqual(res.selection, sel.emptySelection());
+    assert.equal(sel.legacyPreset(ctx, legacy), null, "…and presence agrees (`hasLaunchPosture`)");
+  }
+});
+
 // ── 3. A CODEX RECORD, WITHOUT PASSING THROUGH ANOTHER RUNTIME'S ENUMS ───────────────────────
 
 test("a Codex record accepts Codex values — its mode and its CONTAINMENT native axis", () => {

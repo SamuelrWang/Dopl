@@ -295,7 +295,6 @@ test("EVERY BOUND SENDER gets the real behaviour — the shell and the pop-out a
     assert.deepEqual(await ipc.handlers["channels:getLaunchPosture"](sender, CH),
       {
         ...PRESET,
-        selectionVersion: 2,
         selection: SELECTION,
         needsReview: [],
         runtime: "",
@@ -309,7 +308,7 @@ test("EVERY BOUND SENDER gets the real behaviour — the shell and the pop-out a
     // This harness binds no session engine, so a bound sender's write succeeds with nothing to
     // apply it to; what is being driven HERE is the sender binding, not the fan-out.
     assert.deepEqual(await ipc.handlers["channels:setLaunchPosture"](sender, { channelId: CH, preset: PRESET }),
-      { ok: true, preset: PRESET, selection: SELECTION, review: [], applied: 0, runtime: "", selectionVersion: 2 }, which);
+      { ok: true, preset: PRESET, selection: SELECTION, review: [], applied: 0, runtime: "" }, which);
     assert.deepEqual(ipc.writes, [{ channelId: CH, preset: PRESET }], `${which}: the legitimate write lands`);
     await ipc.handlers["channels:chooseFolder"](sender, CH);
     assert.equal(ipc.dialogs.length, 1, `${which}: the operator's own picker still opens`);

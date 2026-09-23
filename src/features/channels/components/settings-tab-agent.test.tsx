@@ -68,22 +68,14 @@ describe("Tool access — every profile says what it means, in a few words", () 
     expect(text).toContain("Everything, including connected apps");
     expect(text).toContain("Files, web, and Dopl");
     expect(text).toContain("Local files only");
-    expect(TOOL_PROFILES).toContain("full: [],");
-    // ⚠ REPOINTED 2026-09-02 (Wave B batch 1). `full`'s one flag used to be spelled inline as
-    // `if (p === 'full') return ['--disallowedTools', UNIVERSAL_HARD_DENY…`. The fourth profile
-    // (`channel_agent`) takes the SAME one-flag shape over a longer list, so that branch became
-    // a predicate plus the shared deny builder. What this case is about is unchanged and is
-    // asserted over both lines: `full` is granted everything except the deny floor.
-    expect(TOOL_PROFILES).toMatch(
-      /if \(isUnboundedProfile\(p\)\) return \['--disallowedTools', buildDeniedTools\(p\)/
-    );
-    expect(TOOL_PROFILES).toMatch(
-      /if \(p === 'full'\) return \[\.\.\.UNIVERSAL_HARD_DENY\];/
-    );
-    expect(TOOL_PROFILES).toContain(
-      "dopl_only: [...READ_BUILTINS, ...WEB_TOOLS, ...DOPL_SAFE_TOOLS]"
-    );
-    expect(TOOL_PROFILES).toContain("read_only: [...READ_BUILTINS]");
+    // What each profile GRANTS is the adapter's tool config (the headless CLI builders are gone):
+    // `full` everything but the deny floor, `dopl_only` reads + web + Dopl, `read_only` reads.
+    const CLAUDE_TOOLS = desktopSource("runtime/claude/tools.js");
+    expect(CLAUDE_TOOLS).toContain("const SESSION_HARD_DENY = UNIVERSAL_HARD_DENY.slice();");
+    expect(CLAUDE_TOOLS).toContain("disallowedTools: SESSION_HARD_DENY.slice(),");
+    expect(CLAUDE_TOOLS).toContain("builtinTools: READ_BUILTINS.concat(WEB_TOOLS),");
+    expect(CLAUDE_TOOLS).toContain("doplToolsPolicy: DOPL_SAFE_TOOLS.map(shortDoplName).concat([channelShort]),");
+    expect(CLAUDE_TOOLS).toContain("builtinTools: READ_BUILTINS.slice(),");
   });
 
   it("does not generalize the deny floor, which differs between the two lanes", () => {

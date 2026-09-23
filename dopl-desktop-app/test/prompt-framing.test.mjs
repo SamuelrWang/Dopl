@@ -404,21 +404,21 @@ test("a task id cannot forge a fence or open a line, and never half-states the c
   }
 });
 
-test("the delivery copy carries no em dash (§H-13 house voice)", () => {
+test("no built line of the turn carries an em dash (§H-13 house voice, every block)", () => {
+  const roster = { agents: [{ handle: "flint", mine: false, owner: "Dana" }], agentsMore: 0, people: [], peopleMore: 0, read: "failed" };
+  const ontologies = [{ id: "11111111-1111-4111-8111-111111111111", name: "Pipeline", level: "view" }];
+  const context = { ...ids(), channelName: "Ops", authorName: "Alice", authorKind: "agent", taskTitle: "Ship it",
+    agentId: "a1b2c3d4", agentName: "Bug Reviewer", ontologies, roster };
   for (const side of ["responder", "requester"]) {
-    const out = buildFencedTurn({ side, message: "x", nonce: "n7", context: ids() });
-    const delivery = out.split("\n").filter((l) => /dopl_channel|op "send"|op "rooms", action "list"/.test(l));
-    assert.ok(delivery.length, `${side}: found the delivery lines`);
-    for (const line of delivery) assert.ok(!line.includes("—"), `${side}: em dash in ${JSON.stringify(line)}`);
+    for (const line of buildFencedTurn({ side, message: "x", nonce: "n8", context }).split("\n")) {
+      assert.ok(!line.includes("—"), `${side}: em dash in ${JSON.stringify(line)}`);
+    }
   }
 });
 
 // ── NO PROMPT TEXT MAY TEACH A PARAMETER THAT DOES NOT EXIST (FIX S1) ────────────
-// The residual this catches is not one string: `task=<id>` was ALSO taught in the v3.0
-// VOCABULARY block and in the milestone line, so an agent that ignored the delivery call
-// still had two other places telling it the wrong argument name. dopl_channel's post op
-// takes `thread`; `taskId` is the storage key it folds that into, and `task_*` are message
-// KINDS. A `task=`/`task "` anywhere in a built turn is the F-081 residual coming back.
+// dopl_channel's post op takes `thread` (`taskId` is storage, `task_*` are message KINDS), so a
+// `task=`/`task "` anywhere in a built turn teaches a parameter that does not exist (F-081).
 
 test("no built turn teaches a `task` ARGUMENT anywhere (kinds are still allowed)", () => {
   for (const side of ["responder", "requester"]) {

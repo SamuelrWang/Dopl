@@ -44,7 +44,8 @@ function initialSessionState(opts) {
   const o = opts || {};
   const toolModes = toolModesOf(o).slice();
   // C2: a PINNED start posture is the session's own pick (a directive's narrower ask); the caller clamps it.
-  const pinned = o.pinned === true;
+  const pinTools = o.pinned === true || !!(o.pinned && o.pinned.tools === true);
+  const pinMessages = o.pinned === true || !!(o.pinned && o.pinned.messages === true);
   const toolMode = coerceMode(toolModes, o.toolMode);
   const messageMode = coerceMode(MESSAGE_MODES, o.messageMode);
   const idleMs = Number.isFinite(o.idleMs) && o.idleMs > 0 ? o.idleMs : DEFAULT_IDLE_MS;
@@ -61,11 +62,11 @@ function initialSessionState(opts) {
     toolModes: toolModes,
     toolMode: toolMode,
     // C2 "narrower sticks": `*ModeSet` marks a per-agent pick held in `*Pick`; a channel fan-out never sets it.
-    toolModeSet: pinned,
-    toolPick: pinned ? toolMode : '',
+    toolModeSet: pinTools,
+    toolPick: pinTools ? toolMode : '',
     messageMode: messageMode,
-    messageModeSet: pinned,
-    messagePick: pinned ? messageMode : '',
+    messageModeSet: pinMessages,
+    messagePick: pinMessages ? messageMode : '',
     // Stamped at spawn, never read live: a sandbox that could change under a running turn is not a fence.
     native: nativeBag(o.native),
     // The standing inbound grant ("Accept for this session"); never persisted.

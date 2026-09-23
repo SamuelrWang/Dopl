@@ -295,8 +295,22 @@ test("WORDS: a Codex launch asking `untrusted` against a `never` ceiling gets `u
   const h = boot({ channelRuntime: "codex", ceilings: { codex: { tools: "never", messages: "auto_both" } } });
   await h.api.handle(launchRow({ start_tool_mode: "untrusted" }), WS);
   assert.equal(handedModes(h).tools, "untrusted");
-  assert.equal(handedModes(h).pinned, true, "an asked posture sticks as the session's own pick (C2)");
+  assert.deepEqual(handedModes(h).pinned, { tools: true, messages: false },
+    "only the ASKED axis sticks as the session's own pick; messaging follows the channel (C2)");
   assert.equal(decided(h)[0].appliedTools, "untrusted");
+});
+
+test("PIN: a directive asking only MESSAGING pins only messaging; the tool axis follows the channel", async () => {
+  const h = boot({ channelRuntime: "codex", ceilings: { codex: { tools: "never", messages: "auto_both" } } });
+  await h.api.handle(launchRow({ start_message_mode: "auto_inbound" }), WS);
+  assert.deepEqual(handedModes(h).pinned, { tools: false, messages: true });
+});
+
+test("MODEL: a model id up to the server's 120-character bound reaches the funnel untruncated", async () => {
+  const id = "m" + "x".repeat(99);
+  const h = boot();
+  await h.api.handle(launchRow({ model: id }), WS);
+  assert.equal(handedModel(h), id);
 });
 
 test("WORDS: a wider Codex ask clamps in CODEX order to the Codex ceiling", async () => {

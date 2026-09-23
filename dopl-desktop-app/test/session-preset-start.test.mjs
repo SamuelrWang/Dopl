@@ -226,7 +226,7 @@ test("H2: the peer-triggered launch consumes NOTHING, and carries no stored post
   // restrictive value": there is no stored pair on this path at all for a future edit to widen.
   const body = TRIGGER.slice(TRIGGER.indexOf("async function launchResponderSession("));
   assert.ok(body.length > 0, "the lane still exists — an empty slice passes every negative below");
-  assert.match(body, /startModes: \{ tools: registry\.capability\.narrowestToolMode\(registry\.descriptorFor\(runtimeId\)\), messages \}/,
+  assert.match(body, /startModes: \{ tools: registry\.capability\.narrowestToolMode\(registry\.descriptorFor\(runtimeId\)\), messages: 'ask' \}/,
     "pinned to THIS runtime's most restrictive member, not merely absent");
   const code = stripComments(body);
   assert.ok(!/channelPrefs\.getLaunchPosture|channelPrefs\.launchStartModes|consumePermissionPreset/.test(code),
@@ -299,26 +299,16 @@ test("H2/split: the RESPONDER lane reads NO stored record, and its tool axis flo
   // inherit a setting the operator left on a tab. That is what separates the two lanes, and with
   // one record left it is the ONLY thing separating them — so it matters more, not less.
   const body = TRIGGER.slice(TRIGGER.indexOf("async function launchResponderSession("));
-  assert.match(body, /startModes: \{ tools: registry\.capability\.narrowestToolMode\(registry\.descriptorFor\(runtimeId\)\), messages \}/,
+  assert.match(body, /startModes: \{ tools: registry\.capability\.narrowestToolMode\(registry\.descriptorFor\(runtimeId\)\), messages: 'ask' \}/,
     "the tool axis is the runtime's most restrictive member for anything a peer can trigger");
   assert.ok(!/getLaunchPosture|launchStartModes/.test(stripComments(body)),
     "a peer-driven launch must not inherit a setting the operator left on a tab");
-  // ⚠ THE `picked` PARAMETER OF THE SHARED DERIVATION STAYS, and this lane passes an EXPLICIT
-  // null rather than omitting it: the REQUESTER lane still passes a real value, and one
-  // derivation with two inputs is the design. An omitted argument reads as an oversight; a
-  // written `null` reads as "this lane has no pick", which is the fact.
-  assert.match(body, /channelPrefs\.windowlessMessageMode\(entry\.channel\.id, null\)/);
 });
 
-test("H2/split: ONE derivation of the windowless message axis, shared by both lanes", () => {
-  // Two copies of "does this pick mean auto-out" is how one lane starts posting
-  // without the other. The rule lives in channel-prefs; both lanes call it.
-  assert.match(PREFS, /function windowlessMessageMode\(channelId, picked\)/);
-  assert.match(TRIGGER, /channelPrefs\.windowlessMessageMode\(/);
+test("H2/split: ONE windowless message floor — the launch read defers to session-profiles", () => {
   assert.match(PREFS, /function launchStartModes\(channelId, runtimeId\)/);
-  const rule = PREFS.slice(PREFS.indexOf("function windowlessMessageMode("));
-  assert.match(rule.slice(0, 260), /autoOut \? 'auto_both' : 'auto_inbound'/,
-    "WIDEN-ONLY: there is no return below the auto_inbound floor");
+  assert.match(PREFS, /require\('\.\/session-profiles'\)\.floorWindowlessMessage\(r\.sel\.messages\)/);
+  assert.ok(!/function windowlessMessageMode/.test(PREFS), "no second spelling of the floor");
 });
 
 test("H2: the AMBIENT read is gone — channel-context no longer exposes startingModes", () => {

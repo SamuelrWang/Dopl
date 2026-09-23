@@ -80,10 +80,10 @@ test("ONE LINE PER ONTOLOGY: name, LEVEL, and the exact dopl_ontology call", () 
   assert.equal(lines[1], "ONTOLOGIES YOU CAN REACH IN THIS CHANNEL:");
   assert.equal(
     lines[2],
-    `- "Pipeline" (EDIT) — read it with mcp__dopl__dopl_ontology op "map", cluster "${PIPELINE.id}"; you may also write to it with the write ops.`
+    `- "Pipeline" (EDIT): read it with mcp__dopl__dopl_ontology op "map", cluster "${PIPELINE.id}"; you may also write to it with the write ops.`
   );
   assert.match(lines[3], /^- "Roster" \(VIEW\)/);
-  assert.match(lines[3], /READ ONLY — a write to it is refused/);
+  assert.match(lines[3], /READ ONLY: a write to it is refused/);
 });
 
 test("NO WORKSPACE CLAUSE, known id or not — dopl_ontology refuses `workspace=`", () => {

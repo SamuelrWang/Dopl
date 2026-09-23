@@ -67,11 +67,7 @@ async function launchFromButton(payload) {
 
   const title = typeof p.threadTitle === 'string' ? p.threadTitle.slice(0, 200) : '';
   // Display/seed text only (a spawn-idle session has no first turn); the identity's role comes first, the goal last.
-  const goal = channelLevel
-    ? 'Stand by in this channel as my agent: watch the main room and answer what is addressed to you.'
-    : title
-      ? `Join the thread "${title}" as my agent: read it with dopl_channel (op "read", thread=<id>) and carry the work forward.`
-      : 'Join this thread as my agent: read it with dopl_channel (op "read", thread=<id>) and carry the work forward.';
+  const goal = defaultGoal(channelLevel, title);
 
   // The runtime first (pick -> identity's -> channel's -> default; an unusable pick or identity runtime refuses
   // `no-sdk`), because the identity's model counts only if THAT runtime offers it.
@@ -138,4 +134,10 @@ function approveIdentity(payload) {
   return { ok: require('./channel-prefs').approveIdentity(p.identityId) === true };
 }
 
-module.exports = { launchFromButton, approveIdentity, wantsIdentity };
+function defaultGoal(channelLevel, title) {
+  if (channelLevel) return 'Stand by in this channel as my agent: watch the main room and answer what is addressed to you.';
+  const which = title ? `the thread "${title}"` : 'this thread';
+  return `Join ${which} as my agent: read it with dopl_channel (op "read", thread=<id>) and carry the work forward.`;
+}
+
+module.exports = { launchFromButton, approveIdentity, wantsIdentity, defaultGoal };

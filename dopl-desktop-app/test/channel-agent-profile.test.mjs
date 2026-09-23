@@ -109,29 +109,6 @@ test("G18: WebFetch / WebSearch SURVIVE — the residual is narrowed, not closed
   }
 });
 
-// ── 2. THE HEADLESS LANE ─────────────────────────────────────────────────────────────────────
-
-test("HEADLESS: `channel_agent` is `full`'s ONE FLAG over `full`'s floor plus the shell", () => {
-  const args = PROFILES.buildRestrictionArgs("channel_agent", "/tmp/scoped.json");
-  assert.deepEqual(args.slice(0, 1), ["--disallowedTools"],
-    "one flag, exactly like full: no --tools, no --allowedTools, no --settings, no --strict-mcp-config");
-  assert.equal(args.length, 2);
-  const denied = args[1].split(",");
-  for (const name of SHELL) assert.ok(denied.includes(name), `headless must deny ${name}`);
-  for (const name of PROFILES.UNIVERSAL_HARD_DENY) {
-    assert.ok(denied.includes(name), `the universal floor still applies: ${name}`);
-  }
-  assert.deepEqual(minus(denied, PROFILES.buildRestrictionArgs("full").slice(1)[0].split(",")),
-    SHELL.slice().sort(), "and the delta from full's flag is exactly the shell");
-});
-
-test("HEADLESS: it emits NO positive bound and NO allow list — it narrows by deny", () => {
-  // ⚠ Pre-approving a subset would SHADOW those names past the gate, which is a widening dressed
-  // as a restriction. `full`'s shape, deliberately.
-  assert.deepEqual(PROFILES.buildBuiltinTools("channel_agent"), []);
-  assert.deepEqual(PROFILES.buildAllowedTools("channel_agent"), []);
-});
-
 // ── 3. THE FLOOR AND THE OTHER THREE PROFILES ARE UNCHANGED ──────────────────────────────────
 
 test("the hard-deny floor did not move: 9 names, and `full` still carries exactly them", () => {
@@ -139,22 +116,20 @@ test("the hard-deny floor did not move: 9 names, and `full` still carries exactl
   assert.equal(PROFILES.UNIVERSAL_HARD_DENY.length, 9);
   assert.deepEqual(CLAUDE.buildSessionToolConfig("full").disallowedTools,
     PROFILES.UNIVERSAL_HARD_DENY.slice());
-  assert.deepEqual(PROFILES.buildDeniedTools("full"), PROFILES.UNIVERSAL_HARD_DENY.slice());
 });
 
 test("`read_only` and `dopl_only` are untouched by the fourth profile", () => {
   for (const p of ["read_only", "dopl_only"]) {
-    const denied = PROFILES.buildDeniedTools(p);
+    const denied = CLAUDE.buildSessionToolConfig(p).disallowedTools;
     for (const name of PROFILES.DENIED_BUILTINS) {
       assert.ok(denied.includes(name), `${p} still hard-denies ${name}`);
     }
     for (const name of SHELL) assert.ok(denied.includes(name), `${p} still hard-denies ${name}`);
   }
-  assert.deepEqual(PROFILES.buildBuiltinTools("read_only"), PROFILES.READ_BUILTINS.slice());
-  assert.deepEqual(PROFILES.buildBuiltinTools("dopl_only"),
+  assert.deepEqual(CLAUDE.buildSessionToolConfig("read_only").builtinTools, PROFILES.READ_BUILTINS.slice());
+  assert.deepEqual(CLAUDE.buildSessionToolConfig("dopl_only").builtinTools,
     PROFILES.READ_BUILTINS.concat(PROFILES.WEB_TOOLS));
 });
-
 test("the shell group is spelled ONCE and every reader derives from it", () => {
   // ⚠ THE ANTI-DUPLICATION PIN. `DENIED_BUILTINS`, `CHANNEL_AGENT_HARD_DENY` and the Claude
   // adapter's `ESCALATION_TOOLS` all compose `SHELL_BUILTINS`; a fourth shell verb must be one

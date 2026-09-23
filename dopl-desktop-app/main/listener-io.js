@@ -1,6 +1,6 @@
 // The channels listener's I/O layer: cursor/seed persistence, the authenticated fetch, and workspace/channel
 // enumeration. It owns the two HTTP-status flags those helpers set and never imports channel-listener.js back;
-// `listener-identity.js` reaches `apiFetch`/`normalizeList` back lazily. Auth is forwarded Supabase cookies.
+// `listener-people.js` reaches `apiFetch`/`normalizeList` back lazily. Auth is forwarded Supabase cookies.
 
 const { Notification } = require('electron');
 const Store = require('electron-store');
@@ -13,7 +13,7 @@ const budget = require('./listener-budget');
 const { API_BASE, LISTENER, REALTIME } = require('./config');
 const { diag } = require('./diag');
 // Who the operator is and who the peers are (display names), re-exported below as its own function objects.
-const identity = require('./listener-identity');
+const people = require('./listener-people');
 
 const store = new Store();
 
@@ -266,8 +266,8 @@ module.exports = {
   listWorkspaces,
   listChannels,
   listChannelsWithRetry,
-  // listener-identity.js's OWN function objects (one instance of the member caches).
-  resolveIdentity: identity.resolveIdentity,
-  displayNameFor: identity.displayNameFor,
-  refreshNameCache: identity.refreshNameCache,
+  // listener-people.js's OWN function objects (one instance of the member caches).
+  resolveOperatorUserId: people.resolveOperatorUserId,
+  displayNameFor: people.displayNameFor,
+  refreshNameCache: people.refreshNameCache,
 };

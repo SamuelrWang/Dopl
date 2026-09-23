@@ -36,108 +36,11 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { prefs, SRC, LEGACY_SRC, SELECTION_SRC, CH_A, CH_B } from "./_channel-prefs-block.mjs";
+import { SRC, SELECTION_SRC } from "./_channel-prefs-block.mjs";
 
-const { readPostureFrom, postureInto } = prefs;
-
-const OK = { tools: "accept_edits", messages: "auto_inbound" };
-const NOW = 1_700_000_000_000;
-
-test("an unset channel's posture is the most restrictive pair, not a neighbour's", () => {
-  const map = {};
-  assert.equal(readPostureFrom(map, CH_A), null, "nothing stored reads as nothing");
-  postureInto(map, CH_A, { tools: "bypass", messages: "auto_both" });
-  assert.equal(readPostureFrom(map, CH_B), null, "per-channel isolation");
-  assert.deepEqual(readPostureFrom(map, CH_A), { tools: "bypass", messages: "auto_both" });
-});
-
-test("the posture does NOT expire — reading it is not a clock question at all", () => {
-  // ⚠ REWRITTEN, NOT REMOVED (2026-08-20; INVARIANTS §14). This case used to prove the
-  // asymmetry by applying the ARM's own liveness rule to this record's shape:
-  // `armIsLive(map[CH_A], NOW)` answered false (no `at` stamp) while `readPostureFrom`
-  // answered with the pair — one map, two readers, opposite verdicts, which was the whole
-  // point. `armIsLive` is deleted, so the contrast has nothing to contrast against.
-  //
-  // The PROPERTY is unchanged and is what the Settings tab rests on: this reader takes no
-  // clock, so there is no value of "now" at which a stored posture stops reading back. The
-  // absence of a time argument is asserted structurally below, because a reader that GAINED
-  // one would still pass the behavioural half on the day it was added.
-  const map = {};
-  postureInto(map, CH_A, OK);
-  assert.deepEqual(readPostureFrom(map, CH_A), OK);
-  // …and a year of calls later it is still the same answer.
-  for (let i = 0; i < 5; i += 1) assert.deepEqual(readPostureFrom(map, CH_A), OK);
-  assert.equal(readPostureFrom.length, 2, "(map, channelId) — no clock, so no expiry to have");
-  // ⚠ THE SHIPPED SIGNATURE LIVES IN `main/launch-posture-legacy.js` SINCE 2026-09-21 (U5) —
-  // the pre-U5 posture is the LEGACY READER now and moved to its own file, which is deleted whole
-  // when the compatibility window closes. The property is unchanged: no clock, so no expiry.
-  assert.match(LEGACY_SRC, /function readPostureFrom\(map, channelId\) \{/,
-    "the shipped signature, not just the sliced one");
-});
-
-test("the posture is never SPENT by reading it", () => {
-  // ⚠ THE ONE PROPERTY THE ARM'S DELETION MAKES MORE IMPORTANT, NOT LESS. `consumePermissionPreset`
-  // was a read that DELETED, and it lived one function away from this one in the same module. The
-  // asymmetry is gone from the source, so the only thing left saying "this half must not grow a
-  // consume twin" is this case and the block in `channel-prefs.js`.
-  const map = {};
-  postureInto(map, CH_A, OK);
-  for (let i = 0; i < 5; i += 1) assert.deepEqual(readPostureFrom(map, CH_A), OK);
-  assert.ok(Object.prototype.hasOwnProperty.call(map, CH_A), "reading must not delete");
-  assert.ok(!/function consumeLaunchPosture|takePostureFrom/.test(SRC + LEGACY_SRC + SELECTION_SRC),
-    "no take-and-remove twin has appeared beside it, in any of the three files the record now spans");
-});
-
-test("no `at` is ever written — nothing bookkeeping-shaped rides in on a valid pair", () => {
-  const map = {};
-  postureInto(map, CH_A, { ...OK, at: NOW });
-  assert.deepEqual(Object.keys(map[CH_A]).sort(), ["messages", "tools"],
-    "extra properties are dropped, `at` included");
-});
-
-test("an unknown value on EITHER axis writes nothing at all", () => {
-  for (const bad of [
-    { tools: "root", messages: "ask" },
-    { tools: "manual", messages: "auto_everything" },
-    { tools: "bypass" },
-    { messages: "auto_both" },
-    null,
-    [],
-    "bypass",
-  ]) {
-    const map = {};
-    assert.deepEqual(postureInto(map, CH_A, bad), { ok: false }, JSON.stringify(bad));
-    assert.deepEqual(map, {}, "a rejected write must leave no half-applied posture");
-  }
-});
-
-test("a missing channel id is refused on both halves", () => {
-  const map = {};
-  assert.deepEqual(postureInto(map, "", OK), { ok: false });
-  assert.deepEqual(postureInto(null, CH_A, OK), { ok: false });
-  assert.equal(readPostureFrom(map, ""), null);
-  assert.equal(readPostureFrom(null, CH_A), null);
-  assert.deepEqual(map, {});
-});
-
-test("two channels hold independent postures, and one write never reaches the other", () => {
-  // ⚠ REWRITTEN FROM "the two records do not share storage" (2026-08-20; INVARIANTS §14). The
-  // original drove `armInto` into one map and `postureInto` into another and asserted neither
-  // reader saw the other's record — the pure half of "one store key for both would make every
-  // consent arm a permanent channel setting, which IS H2". With the arm deleted there is one
-  // record and the cross-reader case cannot be written.
-  //
-  // What is kept is the isolation the original was built on top of, now stated within the
-  // surviving record: this is the property that stops a `bypass` chosen for one channel from
-  // becoming the posture the operator's agent starts on in another.
-  const map = {};
-  postureInto(map, CH_A, { tools: "bypass", messages: "auto_both" });
-  postureInto(map, CH_B, { tools: "manual", messages: "ask" });
-  assert.deepEqual(readPostureFrom(map, CH_A), { tools: "bypass", messages: "auto_both" });
-  assert.deepEqual(readPostureFrom(map, CH_B), { tools: "manual", messages: "ask" });
-  // …and overwriting one leaves the other byte-identical.
-  postureInto(map, CH_A, OK);
-  assert.deepEqual(readPostureFrom(map, CH_B), { tools: "manual", messages: "ask" });
+test("the posture is never SPENT by reading it — no take-and-remove twin exists", () => {
+  assert.ok(!/function consumeLaunchPosture|takePostureFrom/.test(SRC + SELECTION_SRC),
+    "no take-and-remove twin has appeared beside the record");
 });
 
 test("the module keys the posture under its own store key, and the arm's is gone", () => {
