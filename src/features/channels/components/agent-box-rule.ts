@@ -120,7 +120,7 @@ export function agentPostAccent(box: AgentBox): AuthoredRowAccent {
  * already left the poll's answer must still wear the neutral frame rather than
  * silently demote to a person's row.
  *
- * ⚠ **THE COLOUR IS READ AT RENDER AND IS NEVER ON THE ROW.** `AgentIdentity.color`
+ * ⚠ **THE COLOUR IS READ AT RENDER AND IS NEVER ON THE ROW.** `AgentRosterEntry.color`
  * carries the argument in full: the key returns to the channel's bank when the session
  * ends, so a stamped colour would keep painting a hue another member now owns.
  */

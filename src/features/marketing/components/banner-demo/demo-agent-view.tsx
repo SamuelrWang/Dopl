@@ -60,7 +60,7 @@ export function DemoAgentView({
   currentUserId: string;
   viewer: AvatarPerson;
   /** This agent's identity colour, resolved by the mount off the channel's own
-   *  bank (`view-model.ts › AgentIdentity.color`) — never stamped on a row. */
+   *  bank (`view-model.ts › AgentRosterEntry.color`) — never stamped on a row. */
   color: AgentColorKey | null;
   onClose: () => void;
 }) {

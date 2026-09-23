@@ -50,7 +50,7 @@
 import { afterEach, describe, it, expect } from "vitest";
 import { cleanup } from "@testing-library/react";
 import { AGENT_ACCENT_NEUTRAL, agentBoxOf, agentPostAccent } from "./agent-box-rule";
-import { indexAgents, indexMembers, type AgentIdentity } from "./view-model";
+import { indexAgents, indexMembers, type AgentRosterEntry } from "./view-model";
 import type { MessageRow } from "./view-model-rows";
 
 /** ⚠ **EXPLICIT, BECAUSE THIS PROJECT DOES NOT CONFIGURE testing-library's AUTO-CLEANUP.**
@@ -87,7 +87,7 @@ function row(over: Partial<MessageRow> = {}): MessageRow {
   } as unknown as MessageRow;
 }
 
-const indexWith = (identities: Array<[string, AgentIdentity]>) =>
+const indexWith = (identities: Array<[string, AgentRosterEntry]>) =>
   indexMembers([], ME, new Map(identities));
 
 describe("agentBoxOf — the three-way split", () => {

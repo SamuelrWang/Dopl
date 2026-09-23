@@ -54,7 +54,7 @@ export interface RecipientTag {
 
 /** Structural, on `agent-mentions.ts`'s own rule: this module answers a question
  *  ABOUT the identity map without importing `view-model.ts`. */
-type AgentIdentities = ReadonlyMap<string, { displayName?: string | null }>;
+type AgentRosterMap = ReadonlyMap<string, { displayName?: string | null }>;
 type MemberIdentities = ReadonlyMap<
   string,
   { displayName?: string | null; email?: string | null }
@@ -116,7 +116,7 @@ export function recipientTags(
     agentIds?: readonly string[] | null;
     userIds?: readonly string[] | null;
   },
-  agents: AgentIdentities,
+  agents: AgentRosterMap,
   members: MemberIdentities
 ): RecipientTag[] {
   const out: RecipientTag[] = [];

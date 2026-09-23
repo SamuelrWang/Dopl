@@ -109,7 +109,7 @@ export const TRANSCRIPT_FILTER_PEOPLE: TranscriptFilter = {
 
 /** ONE agent's entry in the dropdown — the id it filters by, the face it wears, and
  *  the colour it is wearing RIGHT NOW. ⚠ The colour is READ, never stored: it returns
- *  to the channel's bank when the session ends (`view-model.ts › AgentIdentity.color`). */
+ *  to the channel's bank when the session ends (`view-model.ts › AgentRosterEntry.color`). */
 export interface TranscriptFilterAgent {
   agentId: string;
   label: string;

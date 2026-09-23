@@ -272,7 +272,7 @@ export function AttributionPill({
    * ⚠ **THE CALLER RESOLVES IT, EXACTLY AS IT RESOLVES {@link agentName}**, and for
    * the same reason: the colour is read at render off the live projection and is
    * NEVER on the message row, because the key goes back to the channel's bank when
-   * the session ends (`view-model.ts › AgentIdentity.color`). This component takes
+   * the session ends (`view-model.ts › AgentRosterEntry.color`). This component takes
    * no index and must not learn to read one.
    * ⚠ **IT IS `agent-box-rule.ts › agentPostAccent`'S `paint`, THE SAME VALUE THE
    * ROW'S BAR AND RING WEAR** — one agent, one hue, resolved once by the caller.

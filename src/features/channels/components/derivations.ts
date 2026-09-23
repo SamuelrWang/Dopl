@@ -108,7 +108,7 @@ export function useChannelsDerivations({
    * ⚠ **`state` IS READ, AND ONLY FOR "HAS IT ENDED"** (2026-09-06). This feed is live sessions
    * PLUS seven days of RETAINED ENDED ones (`main/session-summary.js › reportList`), which is why
    * a dead agent's tag used to tint blue as though it could still be reached. `indexAgents` turns
-   * it into the terminal `AgentIdentity.ended` flag; nothing here filters the feed, because the
+   * it into the terminal `AgentRosterEntry.ended` flag; nothing here filters the feed, because the
    * ended rows are exactly what ATTRIBUTION needs.
    */
   agentSessions?: ReadonlyArray<{

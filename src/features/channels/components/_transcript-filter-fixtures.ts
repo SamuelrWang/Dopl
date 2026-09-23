@@ -15,7 +15,7 @@ import { indexMembers } from "./view-model";
 import { channelRows } from "./view-model-rows";
 import { CHANNEL_ID, ME, PEER, member, message, thread } from "./test-fixtures";
 import { TRANSCRIPT_FILTER_PEOPLE, type TranscriptFilter } from "./transcript-filter";
-import type { AgentIdentity } from "./view-model";
+import type { AgentRosterEntry } from "./view-model";
 import type { TranscriptRow } from "./view-model-rows";
 import type { ChannelMessage } from "../types";
 
@@ -26,7 +26,7 @@ export const ROVER = "a1b2c3d4";
 /** In the machine's index and has posted NOTHING in this room. */
 export const IDLE = "z9y8x7w6";
 
-export const AGENTS: ReadonlyMap<string, AgentIdentity> = new Map([
+export const AGENTS: ReadonlyMap<string, AgentRosterEntry> = new Map([
   [SCOUT, { displayName: "Scout", description: null, ended: false, color: "agent-03" }],
   [ROVER, { displayName: "Rover", description: null, ended: true, color: null }],
   [IDLE, { displayName: "Idle hands", description: null, ended: false, color: "agent-07" }],

@@ -144,7 +144,7 @@ export function AgentStream({
    */
   agentNameFor?: (agentId: string) => string | null;
   /** THE SENT BANNER'S FILL (2026-09-13) — the SAME key the transcript boxes with, because the two
-   *  are one post; resolved by the MOUNT off `view-model.ts › AgentIdentity.color`. Rule: §5. */
+   *  are one post; resolved by the MOUNT off `view-model.ts › AgentRosterEntry.color`. Rule: §5. */
   color?: AgentColorKey | null;
   /**
    * WHAT THIS AGENT IS DOING RIGHT NOW, from `agents-model.ts › agentLiveness` —

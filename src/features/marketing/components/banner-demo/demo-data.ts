@@ -27,7 +27,7 @@ import type {
   DesktopNarrationEntry,
   DesktopSessionSummary,
 } from "@/shared/lib/spa-bridge";
-import type { AgentIdentity } from "@/features/channels/components/view-model";
+import type { AgentRosterEntry } from "@/features/channels/components/view-model";
 import { reached, type StepId } from "./demo-steps";
 
 export const WORKSPACE_ID = "demo-workspace";
@@ -171,7 +171,7 @@ export const AGENT_IDS = {
 
 /** The template names read as ROLES on a sales team. Fed into
  *  `AuthorIndex.agents` so the transcript's attribution pills name them. */
-export const AGENT_INDEX: ReadonlyMap<string, AgentIdentity> = new Map([
+export const AGENT_INDEX: ReadonlyMap<string, AgentRosterEntry> = new Map([
   [
     AGENT_IDS.enricher,
     { displayName: "Lead Enricher", description: "Cleans and enriches lead lists" },

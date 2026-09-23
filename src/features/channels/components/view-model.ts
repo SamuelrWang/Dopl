@@ -95,12 +95,12 @@ export interface AuthorIndex {
    * area" — `attribution-pill.tsx › attributionName` had hardcoded `Agent #<id>`, which is also
    * what an empty map (web tree, pop-out — no desktop feed) still reads.
    */
-  agents: ReadonlyMap<string, AgentIdentity>;
+  agents: ReadonlyMap<string, AgentRosterEntry>;
 }
 
 /** What the operator calls one of their agents, and what they said it is for. Both `null` when
  *  never set — the ordinary case, and the caller renders the ABSENCE (INVARIANTS §11). */
-export interface AgentIdentity {
+export interface AgentRosterEntry {
   displayName: string | null;
   description: string | null;
   /**
@@ -144,13 +144,13 @@ export interface AgentIdentity {
 
 /** ⚠ ONE EMPTY MAP, not a fresh `new Map()` per call: `AuthorIndex` is a `useMemo` dependency of
  *  the transcript's row build, and a new identity every render would re-derive every row. */
-const NO_AGENTS: ReadonlyMap<string, AgentIdentity> = new Map();
+const NO_AGENTS: ReadonlyMap<string, AgentRosterEntry> = new Map();
 
 export function indexMembers(
   members: ChannelMember[],
   currentUserId: string,
   /** ⚠ OPTIONAL, so the surfaces with no desktop feed (`thread-window.tsx`) are unchanged. */
-  agents: ReadonlyMap<string, AgentIdentity> = NO_AGENTS
+  agents: ReadonlyMap<string, AgentRosterEntry> = NO_AGENTS
 ): AuthorIndex {
   return { currentUserId, byId: new Map(members.map((m) => [m.userId, m])), agents };
 }
@@ -170,7 +170,7 @@ const KEY_ROW_SEP = "\u0001";
  * this string; `lastActivityAt` / `tokensSpent` / `contextUsed` do not. Whole argument:
  * `derivations.ts › useChannelsDerivations`, its only caller.
  */
-export function agentIndexKey(agents: ReadonlyMap<string, AgentIdentity>): string {
+export function agentIndexKey(agents: ReadonlyMap<string, AgentRosterEntry>): string {
   const parts: string[] = [];
   for (const [agentId, identity] of agents) {
     parts.push(
@@ -179,7 +179,7 @@ export function agentIndexKey(agents: ReadonlyMap<string, AgentIdentity>): strin
         identity.displayName ?? "",
         identity.description ?? "",
         // ⚠ IT MUST RIDE THE KEY OR THE ROUND TRIP DROPS IT (a dead agent's tag tinting again) —
-        // the transcript's map is rebuilt FROM this string. Churn-safe: {@link AgentIdentity.ended}.
+        // the transcript's map is rebuilt FROM this string. Churn-safe: {@link AgentRosterEntry.ended}.
         identity.ended ? "1" : "",
         // ⚠ THE COLOUR RIDES IT FOR THE IDENTICAL REASON, and it is the field that makes
         // the round trip VISIBLE when it breaks: a dropped colour is a whole transcript
@@ -199,9 +199,9 @@ export function agentIndexKey(agents: ReadonlyMap<string, AgentIdentity>): strin
  * across telemetry pushes that touched no name, with no render-phase cache (`react-hooks/refs`
  * forbids those). An empty key is {@link NO_AGENTS}, the shared instance.
  */
-export function agentIndexFromKey(key: string): ReadonlyMap<string, AgentIdentity> {
+export function agentIndexFromKey(key: string): ReadonlyMap<string, AgentRosterEntry> {
   if (key === "") return NO_AGENTS;
-  const out = new Map<string, AgentIdentity>();
+  const out = new Map<string, AgentRosterEntry>();
   for (const row of key.split(KEY_ROW_SEP)) {
     const [agentId, displayName, description, ended, color] = row.split(KEY_FIELD_SEP);
     if (!agentId) continue;
@@ -231,7 +231,7 @@ export function indexAgents(
     displayName?: string | null;
     description?: string | null;
     /** The pill (`spa-bridge-shapes.ts › DesktopSessionSummary.state`), read ONLY for
-     *  {@link AgentIdentity.ended}. Optional on the same widened-local-type rule as the rest. */
+     *  {@link AgentRosterEntry.ended}. Optional on the same widened-local-type rule as the rest. */
     state?: string | null;
     /** THE COLOUR KEY off the projection (2026-09-13). ⚠ `unknown` RATHER THAN
      *  `AgentColorKey | null | undefined`, ALONE AMONG THESE FIELDS, and deliberately:
@@ -242,9 +242,9 @@ export function indexAgents(
      *  itself about. Both host trees (desktop feed, peer projection) satisfy it. */
     color?: unknown;
   }> | null
-): ReadonlyMap<string, AgentIdentity> {
+): ReadonlyMap<string, AgentRosterEntry> {
   if (!sessions || sessions.length === 0) return NO_AGENTS;
-  const out = new Map<string, AgentIdentity>();
+  const out = new Map<string, AgentRosterEntry>();
   for (const session of sessions) {
     const id = typeof session.agentId === "string" ? session.agentId.trim() : "";
     if (!id) continue;

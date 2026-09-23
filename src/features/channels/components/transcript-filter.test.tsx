@@ -54,7 +54,7 @@ import {
 describe("§ People — the complement of the coloured box", () => {
   it("excludes EVERY boxed post, the ENDED agent's included", () => {
     // ⚠ **THE MUTATION THIS CATCHES**: make `agentBoxOf` return plain `null` instead of
-    // `{ color: null }` when `AgentIdentity.color` is absent — i.e. conflate "no box"
+    // `{ color: null }` when `AgentRosterEntry.color` is absent — i.e. conflate "no box"
     // with "a neutral box". `rover line` then joins this list and the assertion fails.
     // A second mutation it catches: dropping the `agentId === null` guard, which would
     // pull `desktop line` OUT of People and into a box of its own.
