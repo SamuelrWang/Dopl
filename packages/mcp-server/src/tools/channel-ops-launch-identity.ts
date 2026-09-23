@@ -1,37 +1,16 @@
 /**
- * **THE TWO CREATE-TIME IDENTITY REFUSALS** — `AGENT_IDENTITY_AMBIGUOUS` and
- * `AGENT_IDENTITY_NOT_FOUND`, as sentences a caller can act on.
- *
- * ⚠ **ITS OWN MODULE BECAUSE `channel-ops-launch.ts` IS AT THE CAP** (§1's hard 500 over
- * `packages/`, a CI job) — the seam is the one `channel-ops-launch-color.ts` and
- * `channel-ops-launch-name.ts` already draw: ONE FIELD, its rule and its refusal prose,
- * beside the op rather than inside it. Here the field is `identity`, and the two arms below
- * are everything the launch lane says about it that is not a pass-through.
- *
- * ⚠ **THE PROSE IS UNCHANGED BY THE MOVE.** Both sentences are pinned by
- * `channel-ops-launch-identity.test.ts` through `opLaunchAgent`, which is what proves a file
- * split did not become a reword.
- *
- * ⚠ `channel-` filename prefix required by the parity split-scan (`parity.test.ts`) and the
- * removed-vocabulary source scan (`channel-law.test.ts`, `law-scan.test.ts`) — both read every
- * non-test `channel-*.ts` in this directory.
+ * The two create-time identity refusals of `manage action="launch"` (`AGENT_IDENTITY_AMBIGUOUS`,
+ * `AGENT_IDENTITY_NOT_FOUND`). `channel-` filename prefix is required by the parity split-scan (`tool-group-files.ts`).
  */
 
 import { err, type ToolResponse } from "./respond";
 import { inlineOr } from "./channel-shared";
-// ⚠ THE TENANCY SENTENCES LIVE WITH THE OTHER PROSE (T35), and the import
-// direction is ops → description because the description imports nothing from
-// here. FOUR surfaces state this one rule — this file's two create-time
-// refusals, `channel-doctrine.ts`'s `no-identity` entry, and the home-channel
-// paragraph — and four hand-written copies is how two of them end up describing
-// a system the other two do not.
+// One wording of the tenancy rule, shared with the doctrine.
 import { TENANCY_FIX, TENANCY_RULE } from "./channel-doctrine";
 import { NO_NAME } from "./narration";
 import { identityChoiceLines } from "./agent-shared";
 
-/** One row of the ambiguity refusal, as the server's `details.matches` carries
- *  it. ⚠ Every row already passed the CALLER's own `canSeeIdentity`, so nothing
- *  here is an oracle — it is what `GET /api/agent-identities` would have said. */
+/** One `details.matches` row; each already passed the caller's `canSeeIdentity`, so listing it is not an oracle. */
 type IdentityMatch = { id: string; name: string; visibility: string };
 
 export function identityMatches(e: unknown): IdentityMatch[] {
@@ -49,22 +28,8 @@ export function identityMatches(e: unknown): IdentityMatch[] {
 }
 
 /**
- * THE AMBIGUOUS-NAME REFUSAL — **it lists, and it does not pick.**
- *
- * ⚠ `agent_identities` HAS NO NAME UNIQUENESS, DELIBERATELY: a unique index
- * across a visibility boundary would leak the existence of somebody's private
- * row through a conflict error, and two people may each keep a "Researcher". So
- * two visible identities sharing a name is a LEGITIMATE state, and every natural
- * tie-break ("yours wins", "newest wins") silently starts an identity the caller
- * did not choose and reports success.
- *
- * ⚠ THE LIST IS THE WHOLE VALUE OF THE REFUSAL. "That name is ambiguous" alone
- * sends the agent to another tool to fetch ids it was already holding. Each row
- * carries the ID (what to re-issue with) and the VISIBILITY (what makes the
- * choice obvious — "the private one is mine").
- * ⚠ `isError`, because nothing was filed and there is nothing pending. An `ok`
- * result reading as a normal outcome would invite a poll for a directive that
- * does not exist.
+ * Lists the matches and never picks: identity names are deliberately not unique (a unique index would
+ * leak private rows). `err`, because nothing was filed.
  */
 export function launchIdentityAmbiguous(ref: string, matches: IdentityMatch[]): ToolResponse {
   const label = inlineOr(ref, NO_NAME);
@@ -83,9 +48,7 @@ export function launchIdentityAmbiguous(ref: string, matches: IdentityMatch[]): 
   );
 }
 
-/** An identity the caller holds in another tenancy of their own, as the server's
- *  `details.elsewhere` carries it. ⚠ Duck-typed across the @dopl/client
- *  boundary, the same discipline `identityMatches` and `apiErrorCode` follow. */
+/** `details.elsewhere`: an identity the caller holds in another of their own tenancies; duck-typed. */
 type IdentityElsewhere = { name: string; label: string };
 
 export function identityElsewhere(e: unknown): IdentityElsewhere | null {
@@ -99,35 +62,10 @@ export function identityElsewhere(e: unknown): IdentityElsewhere | null {
 }
 
 /**
- * THE UNRESOLVABLE-IDENTITY REFUSAL, at CREATE time.
- *
- * ⚠ DISTINCT FROM `no-identity`, WHICH IS THE SAME FACT ON THE OTHER MACHINE.
- * This one is YOUR visibility failing, before any row exists; `no-identity` is
- * the OPERATOR's failing, after the request was filed. The next actions differ —
- * here you fix the name, there you share the identity or drop it — so they are
- * two sentences and not one.
- * ⚠ IT DOES NOT SAY WHETHER THE IDENTITY EXISTS. The whole read surface is
- * 404-never-403 so an id cannot be probed, and a sentence that guessed would
- * rebuild that oracle.
- *
- * ⚠ BUT IT NAMES THE TENANCY RULE, WHICH IS NOT AN ORACLE (T35). The server
- * resolves the ref against THE CHANNEL'S workspace — `ctx.workspaceId` is the
- * container (`channels/server/service-shared.ts`), and every identity read is
- * keyed `(workspace_id, id)` (`agent-identities/server/repository.ts`), so
- * `canSeeIdentity` is never even reached: the row is filtered by tenancy BEFORE
- * visibility runs. That is a STANDING RULE OF THE SYSTEM, true before this call
- * and answerable from the caller's own knowledge — withholding it is what made
- * this the most-misread refusal on the surface, since an agent re-checks the
- * spelling forever for a name that was never wrong.
- *
- * ⚠ AND WHEN THE SERVER SAYS WHERE, IT SAYS WHERE. `details.elsewhere` arrives
- * ONLY for an identity the caller could already list for themselves — their own
- * row, or a `workspace`-visible one, in a workspace they are a member of
- * (`agent-identities/server/service-resolve-ref.ts › classifyMissingIdentityRef`
- * is the fence and holds the argument). A stranger's private identity produces
- * no `elsewhere` in any workspace, so the arm below cannot name one and the
- * bare arm still answers "no such identity" and "not shared with you"
- * identically.
+ * The caller's own visibility failing at create time (`no-identity` is the operator's, after filing).
+ * Never says whether the identity exists (404-never-403). A NAME resolves only in the channel's
+ * container, while an ID resolves wherever it lives (`src/features/agent-identities/server/service-resolve-ref.ts ›
+ * resolveIdentityRef`); `details.elsewhere` is fenced by `classifyMissingIdentityRef` to identities the caller could already list.
  */
 export function launchIdentityNotFound(
   ref: string,
@@ -136,9 +74,7 @@ export function launchIdentityNotFound(
   if (elsewhere) {
     return err(
       [
-        // ⚠ `inlineOr` ALREADY RETURNS A CODE SPAN — no backticks of our own
-        // around it. Both halves are peer-authored in principle (an identity
-        // name, a workspace name) and neither may pose as structure.
+        // `inlineOr` already returns a code span, so no backticks of our own.
         `No agent was requested, and **nothing was filed** — identity ${inlineOr(elsewhere.name, NO_NAME)} lives in ${inlineOr(elsewhere.label, "another tenancy of yours")}, not in this channel's own container.`,
         `⚠ ${TENANCY_RULE} Owning it is not enough; it has to live here. ${TENANCY_FIX}`,
       ].join("\n"),
@@ -146,8 +82,7 @@ export function launchIdentityNotFound(
   }
   return err(
     [
-      // ⚠ THE ID CLAUSE RIDES `TENANCY_RULE` BELOW (2026-09-18): this sentence
-      // is true of a NAME and was never true of a UUID.
+      // True of a name; the ID case is stated by `TENANCY_RULE`.
       `No agent was requested — no agent identity ${inlineOr(ref, NO_NAME)} resolves in THIS CHANNEL'S container, and **nothing was filed**. Either there is no such identity, or it is not shared with you; those are ONE answer here on purpose, so ids cannot be probed.`,
       `⚠ CHECK THE TENANCY BEFORE THE SPELLING. ${TENANCY_RULE} If it really should resolve here, the NAME is the other suspect — matching is exact, not fuzzy. ${TENANCY_FIX}`,
     ].join("\n"),
