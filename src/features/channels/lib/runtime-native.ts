@@ -31,6 +31,7 @@
 import {
   dimensionDefaultFor,
   dimensionOptionsFor,
+  REASONING_EFFORT,
   type ModelCatalog,
 } from "./model-catalog";
 import {
@@ -57,9 +58,6 @@ export interface NativeDimension {
 }
 
 const NO_DIMENSIONS: ReadonlyArray<NativeDimension> = [];
-
-/** The model-scoped dimension every runtime that has one spells the same way. */
-export const REASONING_EFFORT = "reasoningEffort";
 
 /** ⚠ Dopl owns the CATEGORY NAME for the model-scoped dimension, because the platforms do not
  *  ship one — the runtime owns the OPTIONS below it. */
@@ -119,7 +117,8 @@ export function nativeDimensions(
  * THE VALUE A DIMENSION WILL ACTUALLY LAUNCH WITH, given what is stored.
  *
  * ⚠ **IT IS THE SAME FAIL-CLOSED ANSWER MAIN GIVES THE SAME VALUE** — an unrecognised containment
- * value resolves to `options[0]`, a model dimension to the declared default and then to absence.
+ * value resolves to `options[0]` (`selection-vocabulary.js › normalizeNative`), an absent one to the
+ * declared default; a model dimension to the declared default and then to absence.
  * A row that showed the stored word while main floored it would be the control lying about what
  * it does, which is the whole class of defect U8 exists to remove.
  * ⚠ `""` MEANS "NO PICK, THE PLATFORM DECIDES" on a model dimension and can never be the answer
@@ -133,7 +132,7 @@ export function effectiveNative(
   if (asked && dimension.options.some((o) => o.value === asked)) return asked;
   if (dimension.kind === "containment") {
     const declared = dimension.default;
-    if (declared && dimension.options.some((o) => o.value === declared)) return declared;
+    if (!asked && declared && dimension.options.some((o) => o.value === declared)) return declared;
     return dimension.options[0]?.value ?? "";
   }
   return dimension.default && dimension.options.some((o) => o.value === dimension.default)
