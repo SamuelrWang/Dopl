@@ -175,7 +175,8 @@ NOTHING IS SWAPPED: a \`model\` that machine's runtime does not offer is refused
 /** The rooms themselves, and what a read-only session may still do. */
 const ROOMS = `op="rooms" — WHAT THIS PLACE IS, and op="status" — WHAT IS RUNNING.
 Four actions READ and four WRITE; a read-only session is refused the writes BY NAME while the reads answer. "open" makes a channel (\`name\`) or a 1:1 (\`to\`, and only with \`name\` omitted — both together is refused, never resolved by precedence); "update" REPLACES the info card whole, so an omitted row is deleted and a blind write clobbers — and EVERYONE IN THE CHANNEL SEES the card, which is what makes a blind write somebody else's problem.
-op="status" reads your own machine's live sessions and the directions waiting for them. Identity, model, context, tokens, current tool and start time are YOUR OWN sessions only — a peer's agent is a handle and a state. The MODEL is always ONE unbroken token, so a name with a space in it is an identity. A \`—\` cell was NOT REPORTED, and is not a zero.`;
+op="status" reads your own machine's live sessions and the directions waiting for them. Identity, model, context, tokens, current tool and start time are YOUR OWN sessions only — a peer's agent is a handle and a state. The MODEL is always ONE unbroken token, so a name with a space in it is an identity. A \`—\` cell was NOT REPORTED, and is not a zero.
+A HOME CHANNEL IS NOT A WORKSPACE DM: it lives in its own hidden container, so every op needs \`container=<slug or id>\` ALONGSIDE \`channel=\` — a bare \`channel=\` finds none, and they are absent from the room list. A Home identity or base works here: address it by ID — a NAME resolves only in the container named.`;
 
 /**
  * The arguments whose rule does not fit in a `.describe()`.
