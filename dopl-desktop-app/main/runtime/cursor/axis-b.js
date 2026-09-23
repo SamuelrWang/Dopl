@@ -241,6 +241,6 @@ const descriptor = {
 };
 
 module.exports = {
-  axisBTools, makeGate, buildTool, allowRegister, callIdOf,
+  axisBTools, makeGate, callIdOf,
   closeSession, isClosed, descriptor,
 };

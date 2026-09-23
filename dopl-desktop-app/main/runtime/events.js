@@ -9,6 +9,10 @@
 // precisely because everything below is a value, and that is what makes a Codex or Cursor adapter
 // testable from a recorded transcript with nothing installed.
 
+// The synthetic frame type core mints for a stream REJECTION (`session-query.js`), so every
+// normalizer decides what the error text means rather than core.
+const ERROR_FRAME = 'error';
+
 // ── RENDER EVENTS — dispatched straight through, shapes owned by the renderer ────────────────
 const assistant = (text) => ({ type: 'assistant', payload: { type: 'turn', role: 'assistant', text } });
 const thinking = (text) => ({ type: 'thinking', payload: { type: 'thinking', text } });
@@ -148,6 +152,6 @@ const context = (tokens, model, window) => ({
 const authHold = (text) => ({ type: 'auth_hold', text: String(text == null ? '' : text) });
 
 module.exports = {
-  assistant, thinking, toolUse, toolResult, outboundPost, toolCallEvents,
-  launched, result, context, authHold,
+  assistant, thinking, toolUse, toolResult, toolCallEvents,
+  launched, result, context, authHold, ERROR_FRAME,
 };

@@ -145,4 +145,4 @@ const descriptor = {
   dimensionOptions: null,
 };
 
-module.exports = { models, forget, descriptor, idsFrom, listFn, LIST_TIMEOUT_MS };
+module.exports = { models, forget, descriptor, LIST_TIMEOUT_MS };

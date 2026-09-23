@@ -28,7 +28,7 @@ const io = require('../../session-io');
 // consume loop only ever sees an iterable of messages. So `launch-spec.js` mints these two frames
 // itself: one carrying the conversation handle every resume depends on, one carrying a rejection.
 const THREAD_STARTED = 'dopl/threadStarted';
-const ERROR_MESSAGE_TYPE = 'error';
+const ERROR_MESSAGE_TYPE = events.ERROR_FRAME;
 
 // ── AUTH SENTINELS ───────────────────────────────────────────────────────────────────────────
 //
@@ -302,6 +302,6 @@ function normalize(msg, ctx) {
 
 module.exports = {
   normalize,
-  startedEvents, completedEvents, tokensFrom, usageOf, promptUsageOf, windowFrom, isAuthShaped,
-  unauthorizedInfo, THREAD_STARTED, ERROR_MESSAGE_TYPE,
+  tokensFrom, usageOf, isAuthShaped,
+  THREAD_STARTED, ERROR_MESSAGE_TYPE,
 };

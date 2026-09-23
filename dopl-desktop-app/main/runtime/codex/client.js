@@ -307,7 +307,6 @@ function initializeParams(version) {
 module.exports = {
   probe, connect, initializeParams,
   makeLineReader, // the framing fixtures
-  CLIENT_NAME,
   REQUIRED_METHODS: protocol.REQUIRED_METHODS,
   SUPPORTED_CLI: protocol.SUPPORTED_CLI,
   versionGate: protocol.versionGate,

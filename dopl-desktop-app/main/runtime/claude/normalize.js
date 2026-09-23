@@ -45,7 +45,7 @@ const detect = require('../../session-auth-detect');
 // has two ways to learn about an auth failure — a message and a thrown error — and both are
 // platform-shaped, so both come through here. Core does not decide which errors mean "no
 // credential"; it hands the text over and reads the answer.
-const ERROR_MESSAGE_TYPE = 'error';
+const ERROR_MESSAGE_TYPE = events.ERROR_FRAME;
 
 // ── THE RENDER MAPPING ───────────────────────────────────────────────────────────────────────
 //

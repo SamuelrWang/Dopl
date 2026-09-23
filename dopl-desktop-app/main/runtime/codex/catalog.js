@@ -126,4 +126,4 @@ function catalogArgs(file) {
   return ['-c', `model_catalog_json=${JSON.stringify(file)}`];
 }
 
-module.exports = { writeDelegationFreeCatalog, catalogArgs, delegationFree, readCache, CATALOG_FILE, CACHE_FILE };
+module.exports = { writeDelegationFreeCatalog, catalogArgs, readCache, CATALOG_FILE, CACHE_FILE };

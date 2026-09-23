@@ -181,4 +181,4 @@ const descriptor = {
   hardDeny: require('../../tool-profiles').UNIVERSAL_HARD_DENY.slice(),
 };
 
-module.exports = { makeCanUseTool, axisBTools, makeAgentOpsServer, applyRename, descriptor };
+module.exports = { makeCanUseTool, axisBTools, makeAgentOpsServer, descriptor };

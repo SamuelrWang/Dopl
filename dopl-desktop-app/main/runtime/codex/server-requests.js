@@ -134,6 +134,6 @@ const descriptor = {
 
 module.exports = {
   answer, decisionReply, doplElicitation, descriptor,
-  approvalInput, elicitationAnswer, rpcError,
-  DOPL_TOOL_SURFACE, MCP_ELICITATION, EMPTY_PERMISSIONS,
+  approvalInput, rpcError,
+  DOPL_TOOL_SURFACE,
 };

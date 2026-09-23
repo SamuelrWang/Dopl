@@ -94,4 +94,4 @@ function observeQuery(query, observe) {
   });
 }
 
-module.exports = { makeFoldWatch, observeQuery, PENDING_MAX };
+module.exports = { makeFoldWatch, observeQuery };

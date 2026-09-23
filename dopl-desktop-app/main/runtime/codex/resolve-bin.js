@@ -406,13 +406,11 @@ const BIN_NAME = BIN;
 module.exports = {
   resolveCodexBin,
   resolveWith,
-  writableByOthers,
   nodeNeighbours,
   bundledCandidate,
   rewriteAsarUnpacked,
   forget,
   BIN_NAME,
   OVERRIDE_ENV,
-  WELL_KNOWN,
   VENDOR_TRIPLE,
 };

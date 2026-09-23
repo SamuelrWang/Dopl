@@ -141,6 +141,6 @@ async function resumeAgent(agentId, options) {
 
 module.exports = {
   SDK_PKG, BIN, PROBE_TIMEOUT_MS,
-  loadSdk, peekSdk, probe, probeBinary,
-  agentNamespace, createAgent, resumeAgent,
+  loadSdk, peekSdk, probe,
+  createAgent, resumeAgent,
 };

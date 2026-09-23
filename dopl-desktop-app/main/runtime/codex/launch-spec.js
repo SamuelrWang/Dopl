@@ -485,7 +485,6 @@ const appVersion = () => require('../../app-version').appVersion();
 
 module.exports = {
   buildLaunchSpec, start, resume,
-  buildScrubbedEnv, nativePair, approvalPolicy, makeFrameQueue, makeApprovalHandler,
+  buildScrubbedEnv, nativePair, approvalPolicy, makeFrameQueue,
   assertPolicyTook, boundedInterrupt,
-  DEFAULT_SANDBOX, SANDBOX_MODES, INTERRUPT_TIMEOUT_MS,
 };

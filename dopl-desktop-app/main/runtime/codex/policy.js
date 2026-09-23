@@ -123,6 +123,6 @@ function assertPolicyTook(sent, response) {
 }
 
 module.exports = {
-  nativeApprovalPolicy, placePolicy, assertPolicyTook, sentPolicy,
-  NEVER_NATIVE, GRANULAR_NATIVE, GRANULAR_KEYS,
+  nativeApprovalPolicy, placePolicy, assertPolicyTook,
+  NEVER_NATIVE, GRANULAR_KEYS,
 };

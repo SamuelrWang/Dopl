@@ -335,7 +335,7 @@ module.exports = {
   // The elicitation allow path's two structural inputs: WHICH server is Dopl's, and which tool an
   // ask from it can be. Both are read off this file so neither can drift from the entry.
   SERVER_KEY, askingToolsIn, soleAskingTool,
-  DEFAULT_TOOL_APPROVAL_MODE, TOOL_APPROVAL_MODES, ASKING_MODES,
+  DEFAULT_TOOL_APPROVAL_MODE, ASKING_MODES,
   BEARER_ENV, WORKSPACE_ENV, SESSION_ENV, RUNTIME_HEADERS, CHANNEL_TOOL,
-  TOOL_PROFILE_HEADER, SHELL_ENV_EXCLUDE, shellEnvironmentPolicy,
+  TOOL_PROFILE_HEADER, shellEnvironmentPolicy,
 };

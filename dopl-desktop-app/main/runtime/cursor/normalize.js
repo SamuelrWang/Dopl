@@ -34,7 +34,7 @@ const io = require('../../session-io');
 //                        pure normalizer cannot reach `run.usage` after the stream has ended.
 const AGENT_CREATED = 'dopl/agentCreated';
 const TURN_COMPLETED = 'dopl/turnCompleted';
-const ERROR_MESSAGE_TYPE = 'error';
+const ERROR_MESSAGE_TYPE = events.ERROR_FRAME;
 
 // ── AUTH SENTINELS ───────────────────────────────────────────────────────────────────────────
 //

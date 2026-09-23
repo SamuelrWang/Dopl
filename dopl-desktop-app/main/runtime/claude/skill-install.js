@@ -183,4 +183,4 @@ function ensureDoplSkills() {
   }
 }
 
-module.exports = { ensureDoplSkills, bundledSkillsDir, targetSkillsDir, SIDECAR };
+module.exports = { ensureDoplSkills };

@@ -280,5 +280,5 @@ function resume(spec, _priorHandle) {
 }
 
 module.exports = {
-  buildLaunchSpec, start, resume, frames, turnFrame, nativePair, SANDBOX_DEFAULT,
+  buildLaunchSpec, start, resume, frames, nativePair,
 };
