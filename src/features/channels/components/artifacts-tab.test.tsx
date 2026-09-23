@@ -72,7 +72,12 @@ function folded(over: Partial<ChannelFoldedArtifact> = {}): ChannelFoldedArtifac
       createdBy: ME,
       createdByAgent: null,
       dissolvedAt: null,
-      createdAt: "2026-09-16T00:00:00.000Z",
+      // ⚠ **FRESH, NOT A FIXED DATE (2026-09-20).** The list files cards into the
+      // four recency wells now (`artifactFoldedAt`), and only **Recent** is open
+      // on a device that has never chosen — so a hard-coded stamp aged out of
+      // every assertion below the moment the calendar passed it. The WELLS have
+      // their own case; these read the card.
+      createdAt: new Date(Date.now() - 60_000).toISOString(),
     },
     count: 3,
     firstSeq: 11,

@@ -31,10 +31,35 @@ import {
   useChannelArtifacts,
 } from "../hooks/use-channel-artifacts";
 import { CARD_BUTTON, PANEL_CARD } from "./bits";
+import { RecencyWells, type RecencyWellItem } from "./recency-wells";
 import { ArtifactCard, artifactSpanLabel } from "./artifact-card";
 import { labelFor, type AuthorIndex } from "./view-model";
 import type { ArtifactMember } from "./view-model-artifacts";
 import type { ChannelFoldedArtifact, ChannelMessage } from "../types";
+
+/**
+ * THIS TAB'S PERSISTED OPEN STATE — per device, and **NOT the Threads tab's
+ * `dopl.threads.wells`**: collapsing **Earlier** over artifacts is not a
+ * statement about threads (`well-state.ts` carries the one-key-per-surface rule).
+ */
+export const ARTIFACT_WELLS_STORAGE_KEY = "dopl.artifacts.wells";
+
+/**
+ * WHEN THIS ARTIFACT WAS FOLDED, as the wells' epoch stamp — or `null`.
+ *
+ * ⚠ **`createdAt` IS THE ONLY DATE AN ARTIFACT HAS, AND THAT IS THE POINT.** The
+ * Threads tab files a row by its LAST ACTIVITY because a thread keeps moving; a
+ * folded run does not, so this dates the FOLD. `null` files it under **Earlier**
+ * (`recency-wells.tsx › wellFor`), which is the honest place for a row whose
+ * stamp is missing or unparseable — never **Recent**.
+ * ⚠ **THE SAME SHAPE AS `threads-tab.tsx › threadActivityAt`**, deliberately: one
+ * date, parsed once, `NaN` treated as absent.
+ */
+export function artifactFoldedAt(folded: ChannelFoldedArtifact): number | null {
+  if (!folded.artifact.createdAt) return null;
+  const ts = new Date(folded.artifact.createdAt).getTime();
+  return Number.isNaN(ts) ? null : ts;
+}
 
 /**
  * THE LIST'S CLIP WORDING — the family's fourth, beside `threads-tab.tsx ›
@@ -133,19 +158,40 @@ export function ArtifactsTab({
               {ARTIFACTS_EMPTY_NOTE}
             </p>
           ) : (
-            /* ⚠ A FLAT COLUMN, NOT `RecencyWells`. The Threads tab buckets by last
-               ACTIVITY because a thread keeps moving; an artifact is a record of a
-               run that already happened and never moves again, so recency wells
-               would file a card by the day somebody folded it and call that news. */
-            <div className="flex flex-col gap-2">
-              {artifacts.map((folded) => (
-                <ArtifactListCard
-                  key={folded.artifact.id}
-                  folded={folded}
-                  onOpen={() => setOpenId(folded.artifact.id)}
-                />
-              ))}
-            </div>
+            /* 🔒 **THE FOUR WELLS, LIKE THE THREADS TAB** (Samuel, 2026-09-20:
+               *"We should be adding the same Recent, Last 7 Days, and Last 30 Days
+               boxes into the artifacts page as well and doing the same thing
+               there"*).
+               🔒 **IT WAS A FLAT COLUMN, AND THE ARGUMENT AGAINST WELLS IS
+               ANSWERED RATHER THAN FORGOTTEN.** This branch read: *an artifact is a
+               record of a run that already happened and never moves again, so
+               recency wells would file a card by the day somebody folded it and
+               call that news.* True about the CARD and beside the point about the
+               LIST — the operator is asking "what has been folded lately", and the
+               fold date is exactly the answer to it. A well is about TIME, never
+               about state (`recency-wells.tsx`), and "when this was folded" is a
+               time.
+               ⚠ **`artifact.createdAt` IS THE STAMP** — when the fold happened,
+               which is the only date an artifact has. The Threads tab dates its
+               rows by last activity because a thread keeps moving; this one cannot
+               and must not pretend to.
+               ⚠ **ITS OWN `localStorage` KEY**: collapsing Earlier here is not a
+               statement about the Threads tab (`well-state.ts`). */
+            <RecencyWells
+              storageKey={ARTIFACT_WELLS_STORAGE_KEY}
+              items={artifacts.map(
+                (folded): RecencyWellItem => ({
+                  key: folded.artifact.id,
+                  at: artifactFoldedAt(folded),
+                  node: (
+                    <ArtifactListCard
+                      folded={folded}
+                      onOpen={() => setOpenId(folded.artifact.id)}
+                    />
+                  ),
+                })
+              )}
+            />
           )}
         </>
       )}

@@ -109,7 +109,10 @@ vi.mock("../hooks/use-channel-artifacts", () => ({
             createdBy: ME,
             createdByAgent: null,
             dissolvedAt: null,
-            createdAt: "2026-09-16T10:00:00.000Z",
+            // ⚠ FRESH: the artifacts list files cards into the four recency wells
+            // now (2026-09-20) and only **Recent** is open by default, so a fixed
+            // stamp ages out of this assertion as the calendar passes it.
+            createdAt: new Date(Date.now() - 60_000).toISOString(),
           },
           count: 3,
           firstSeq: 10,

@@ -44,6 +44,8 @@ import {
   type TranscriptFilter,
 } from "./transcript-filter";
 import { ChannelsComposer } from "./composer";
+import { FadeSwap } from "./fade-swap";
+import { transcriptFilterViewKey } from "./transcript-view-key";
 import { ThreadSendBox } from "./thread-consent";
 import type { AgentLaunchControls } from "./use-agents-panel";
 import {
@@ -58,34 +60,25 @@ import type {
   ChannelThread,
 } from "../types";
 
-/**
- * The Tags inbox's scroll-to-message signal. NONCED: clicking the same mention
- * twice must re-scroll, and a plain `{messageId}` object would be swallowed the
- * moment somebody "optimizes" the state update with an equality check.
- */
-export interface ScrollTarget {
-  messageId: string;
-  nonce: number;
-}
+// ⚠ THE SCROLL-TARGET CONTRACT MOVED TO `message-pane-scroll-target.ts` AT THE
+// §1 CAP (2026-09-22) — that file's docblock carries the seam. RE-EXPORTED here
+// so no caller moved: `use-channels-selection.ts` still imports `ScrollTarget`
+// from this module.
+import type { ScrollTarget } from "./message-pane-scroll-target";
+import {
+  SCROLL_TARGET_MISSING_NOTE,
+  FLASH_MS,
+  MISSING_NOTICE_MS,
+} from "./message-pane-scroll-target";
+// ⚠ The TYPE is both imported (this file annotates a prop with it) and re-exported
+// (`use-channels-selection.ts` reads it from here) — `export type { … } from` alone
+// would re-export without binding it locally.
+export type { ScrollTarget };
+export { SCROLL_TARGET_MISSING_NOTE };
 
 /** ⚠ ONE REFERENCE for the default — the composer's recipient line memoizes on
  *  it, and a fresh `[]` per render would re-run that memo forever. */
 const EMPTY_RECENT_AGENT_IDS: readonly string[] = [];
-
-/**
- * What a scroll target that is NOT IN THE LOADED TRANSCRIPT says out loud. The
- * click still marks the mention read and navigates; silently doing two of three
- * things is the failure. ⚠ IT PROMISES NO REMEDY, because there is none: this
- * pane has no page argument and no deeper read (INVARIANTS §9).
- */
-export const SCROLL_TARGET_MISSING_NOTE =
-  "That message is older than the loaded history, so the transcript did not move.";
-
-/** How long the flash tint stands on a row that WAS found. */
-const FLASH_MS = 1600;
-/** How long the "older than the loaded history" line stands. Longer than the
- *  flash: a tint is glanced at, a sentence is read. */
-const MISSING_NOTICE_MS = 6000;
 
 /** The default for the callbacks only the `"page"` chrome can fire — the pop-out
  *  window has no info panel, no channel view and no thread cards. */
@@ -297,14 +290,10 @@ export function ChannelsMessagePane({
     () => resolveTranscriptFilter(stored, filterAgents),
     [stored, filterAgents]
   );
-  /**
-   * ⚠ **ONLY `Transcript` SEES THIS — THE PIN, THE PAGING AND THE SCROLL TARGET ALL
-   * STAY ON THE FULL `rows`, DELIBERATELY.** The filter is a VIEW; those three are about
-   * the loaded transcript itself. `use-load-older.ts` pages on what was LOADED (a filter
-   * that hid the top row would ask for the page above the wrong message), and
-   * `use-stick-to-bottom.ts` cannot be fooled by a hidden arrival: nothing visible grew,
-   * so its scroll-to-bottom moves nothing.
-   */
+  /** ⚠ **ONLY `Transcript` SEES THIS — the pin, the paging and the scroll target
+   *  all stay on the FULL `rows`.** The filter is a VIEW; `use-load-older.ts` pages
+   *  on what was LOADED, and `use-stick-to-bottom.ts` cannot be fooled by a hidden
+   *  arrival because nothing visible grew. */
   const visibleRows = useMemo(
     () => filterTranscriptRows(rows, index, filter),
     [rows, index, filter]
@@ -314,13 +303,11 @@ export function ChannelsMessagePane({
    * **THE CITATION CEILING — THE NEWEST SEQ THIS PANE HOLDS** (2026-09-15).
    *
    * ⚠ **`rows`, NOT `visibleRows`**: the ceiling is what the pane HOLDS, not what
-   * the filter shows. Keying it to the filtered view would make a citation stop
-   * being a pill the moment somebody picked "People" — a claim about the message
-   * that the filter has no business making.
-   * ⚠ **ASCENDING, so the LAST row is the newest** (`use-stick-to-bottom.ts` reads
-   * the same order): reversed, this would hand back the oldest seq and gate every
-   * real citation out. ⚠ **`null` when empty** — an empty pane knows no ceiling,
-   * and `message-refs.ts` reads that as "cannot say" and draws nothing.
+   * the filter shows — keying it to the filtered view would make a citation stop
+   * being a pill the moment somebody picked "People".
+   * ⚠ **ASCENDING, so the LAST row is the newest**; reversed, this hands back the
+   * oldest and gates every real citation out. ⚠ **`null` when empty** — an empty
+   * pane knows no ceiling and `message-refs.ts` draws nothing.
    */
   const newestSeq = rows.length > 0 ? (rows[rows.length - 1]?.seq ?? null) : null;
 
@@ -441,6 +428,10 @@ export function ChannelsMessagePane({
             Loading transcript
           </p>
         ) : (
+          /* **THE FILTER SWAP FADES** (2026-09-20) — keyed on the FILTER, never the
+             rows (`transcript-view-key.ts`), and around the TRANSCRIPT, not the
+             scroller, so paging and stick-to-bottom are untouched. */
+          <FadeSwap viewKey={transcriptFilterViewKey(channelId, filter)}>
           <Transcript
             // ⚠ THE FILTERED VIEW, and the ONLY consumer of it — see `visibleRows`.
             rows={visibleRows}
@@ -463,6 +454,7 @@ export function ChannelsMessagePane({
             newestSeq={newestSeq}
             onJumpToSeq={onJumpToSeq}
           />
+          </FadeSwap>
         )}
       </div>
       <ThreadSendBox

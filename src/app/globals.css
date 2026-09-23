@@ -1714,3 +1714,17 @@ body.landing-active::after {
   background: rgba(255, 255, 255, 0.18);
 }
 
+/* ── Fade-swap: the view under a control changes (Samuel, 2026-09-20) ──────────
+   ⚠ ONE RECIPE, TWO STYLESHEETS — `channels/components/fade-swap.tsx` mounts it
+   on a keyed element so the animation replays on every view change. The reduced
+   -motion arm is the whole accessibility story: no JS branch decides this. */
+@keyframes doplFadeSwapIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.fade-swap-in {
+  animation: doplFadeSwapIn 140ms ease-out both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .fade-swap-in { animation: none; }
+}

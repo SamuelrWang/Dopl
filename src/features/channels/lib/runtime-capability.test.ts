@@ -47,6 +47,23 @@ const CLAUDE = realDescriptor("claude");
 const CODEX = realDescriptor("codex");
 const CURSOR = realDescriptor("cursor");
 
+/**
+ * A SYNTHETIC descriptor carrying only the `session` keys a case is about.
+ *
+ * ⚠ **IT EXISTS BECAUSE `vitest` DOES NOT TYPECHECK AND `tsc --noEmit` DOES**
+ * (2026-09-22). These cases passed an object literal straight to `canResume`,
+ * which is green under the runner and `TS2345` under the root typecheck — a gate
+ * that runs separately, so the drift shipped invisible. The cast lives HERE, once,
+ * rather than at eight call sites.
+ *
+ * ⚠ **PARTIAL IS THE POINT, NOT A SHORTCUT.** The predicates are written to answer
+ * for a descriptor whose keys are ABSENT — that is the "an older desktop sent no
+ * declaration" case they exist to get right — so a fixture that filled the whole
+ * shape would stop testing the thing. `as unknown as` states that deliberately.
+ */
+const partial = (session: Record<string, unknown>) =>
+  ({ session }) as unknown as Parameters<typeof canResume>[0];
+
 describe("hasRuntimeKey — the own-key capability probe", () => {
   it("reads a MISSING key as 'this desktop has no runtime concept'", () => {
     expect(hasRuntimeKey({ tools: "manual", messages: "ask" })).toBe(false);
@@ -190,7 +207,7 @@ describe("the REFUSALS — a sentence, never a control that vanished", () => {
     expect(resumeRefusal(CURSOR)).toMatch(/usage accounting on resume is unverified/);
     expect(resumeRefusal(CURSOR)).toMatch(/stops the cost cap firing/);
     // ⚠ AND ABSENT READS LIKE `'unverified'`, never like a measurement.
-    expect(canResume({ session: { resume: true } })).toBe(false);
+    expect(canResume(partial({ resume: true }))).toBe(false);
   });
 
   it("the web mirror and main's `capability.js` answer resume with ONE rule", () => {
@@ -199,10 +216,10 @@ describe("the REFUSALS — a sentence, never a control that vanished", () => {
     // did not, which is a drift that fails NOWHERE — the two just disagree. Driven
     // off the three synthetic shapes rather than the three registered adapters, so
     // the rule is pinned for an adapter nobody has written yet.
-    expect(canResume({ session: { resume: true, usageResetsOnResume: true } })).toBe(true);
-    expect(canResume({ session: { resume: true, usageResetsOnResume: false } })).toBe(true);
-    expect(canResume({ session: { resume: true, usageResetsOnResume: "unverified" } })).toBe(false);
-    expect(canResume({ session: { resume: false, usageResetsOnResume: true } })).toBe(false);
+    expect(canResume(partial({ resume: true, usageResetsOnResume: true }))).toBe(true);
+    expect(canResume(partial({ resume: true, usageResetsOnResume: false }))).toBe(true);
+    expect(canResume(partial({ resume: true, usageResetsOnResume: "unverified" }))).toBe(false);
+    expect(canResume(partial({ resume: false, usageResetsOnResume: true }))).toBe(false);
   });
 
   it("a profile with a deny list launches; one without is refused BY NAME", () => {
@@ -231,7 +248,12 @@ describe("hide-on-absent — §3.2's table, over the shipped descriptors", () =>
     // the sort of declaration a later adapter copies from an old example, and it would arrive
     // here as a field nothing on this side defines.
     for (const d of [CLAUDE, CODEX, CURSOR]) {
-      expect(d.meter?.cost, d.id).toBeUndefined();
+      // ⚠ READ THROUGH A CAST, BECAUSE THE TYPE NO LONGER DECLARES IT — which is the
+      // strongest half of this pin: `RuntimeDescriptor['meter']` has no `cost`, so a
+      // descriptor that grew one back would not compile at its declaration either.
+      // Without the cast this line is a `TS2339` and the case could not be written at all.
+      const meter = d.meter as Record<string, unknown> | undefined;
+      expect(meter?.cost, d.id).toBeUndefined();
     }
   });
 

@@ -35,7 +35,8 @@
 import type { ReactNode } from "react";
 import { Avatar } from "@/shared/ui/avatar";
 import { cn } from "@/shared/lib/utils";
-import { CARD_BUTTON, PANEL_CARD, TAB_ACTION } from "./bits";
+import { CARD_BUTTON, PANEL_CARD, TAB_ACTION, TAB_ACTION_LIGHT } from "./bits";
+import { FadeSwap } from "./fade-swap";
 import { RecencyWells, type RecencyWellItem } from "./recency-wells";
 import { shortName, threadParties, type AuthorIndex } from "./view-model";
 import { formatRelativeTime } from "@/shared/lib/format-time";
@@ -164,17 +165,23 @@ export function ThreadsTab({
     <button
       type="button"
       onClick={onToggleFace}
-      // ⚠ **THE SWITCHER'S FACE, BY REFERENCE AND NOT BY EYE** — Samuel asked for
-      // the /home Overview / Channel / Knowledge pills, which are
-      // `shared/ui/segmented-control.tsx`'s `plain` form at `lg`
-      // (`pages/home/home-header.tsx`). The PRIMITIVE cannot be reused whole here:
-      // it is a `role="tablist"` over a controlled value, and this is ONE button
-      // whose label is the face you are going TO. So the two lines it actually
-      // paints are taken from that form verbatim — `--seg-fill`, the same variable
-      // the pill and the track read, and its `h-9 px-3 text-small` option scale.
-      // ⚠ A LOCAL GRAY HERE WOULD BE THE DRIFT: the fill is read through the token,
-      // so a palette change moves this control with the pills it is meant to match.
-      className="flex h-9 shrink-0 cursor-pointer items-center justify-center rounded-full bg-[var(--seg-fill)] px-3 text-small font-normal text-text-secondary transition-colors hover:text-text-primary"
+      // 🔒 **THE WHITE ELEVATED BUTTON, BOLD, BESIDE "New thread"** (Samuel,
+      // 2026-09-20: *"can we bold the text that says 'Artifacts'? When I switch
+      // over the word for Threads also needs to be bolded … Change it into a
+      // white elevated button and move it to the right. Put it directly to the
+      // left of the New Thread button"*).
+      //
+      // ⚠ **IT IS `TAB_ACTION`, THE FACE ITS NEIGHBOUR ALREADY WEARS** — the same
+      // constant "New thread" takes one line down (`bits.tsx`), so the pair cannot
+      // drift in height, radius or elevation, and a palette change moves both.
+      // 🔒 **IT WAS THE GRAY `--seg-fill` PILL UNTIL TODAY** — the /home switcher's
+      // fill, chosen 2026-09-16 when this control sat at the LEFT end of the row and
+      // read as a switcher. Moved next to the create, that gray read as the disabled
+      // twin of the button beside it; the ruling above is what replaces it.
+      // ⚠ **THE LABEL IS STILL THE FACE YOU ARE GOING TO**, unchanged: this is one
+      // button, not a two-value control, so bolding is a WEIGHT change and never a
+      // selected state.
+      className={TAB_ACTION_LIGHT}
     >
       {artifactsFace ? THREADS_FACE_LABEL : ARTIFACTS_FACE_LABEL}
     </button>
@@ -186,18 +193,38 @@ export function ThreadsTab({
         {/* ⚠ THE FACE'S TOP GAP LIVES ON THIS ROW, not on the body below it —
             `ArtifactsTab`'s root carries no `pt` for exactly that reason, or the
             two would stack into a gap twice the thread face's. */}
-        <div className="flex items-center px-3.5 pb-3 pt-4">{toggle}</div>
-        {artifacts}
+        {/* ⚠ RIGHT-ALIGNED, matching the thread face's row (2026-09-20). The
+            spacer is the whole of it: this face has no create button, so the
+            toggle lands exactly where "New thread" sits one face over and the
+            control does not jump across the panel when you switch. */}
+        <div className="flex items-center px-3.5 pb-3 pt-4">
+          <span className="flex-1" />
+          {toggle}
+        </div>
+        {/* **THE FACE SWAP FADES** (Samuel, 2026-09-20: *"when I switch between
+            artifact and thread views, the inside panel should not switch so
+            choppy. It should be fading out and fading in"*). ⚠ THE KEY IS THE
+            FACE, so the body fades when you switch and never when a thread or an
+            artifact arrives. ⚠ THE ROW ABOVE IS OUTSIDE IT: the control you just
+            pressed must not fade under your cursor. */}
+        <FadeSwap viewKey="artifacts" className="flex min-h-0 flex-1 flex-col">
+          {artifacts}
+        </FadeSwap>
       </div>
     );
   }
 
   return (
     <div className="min-h-0 flex-1 overflow-y-auto px-3.5 pb-6 pt-4">
+      {/* ⚠ **TOGGLE RIGHT, DIRECTLY LEFT OF THE CREATE** (Samuel, 2026-09-20),
+          reversing the 2026-09-16 *"toggle LEFT"* placement: wearing the button
+          face's white twin they read as one pair of actions in the corner every
+          tab's action lives in, where a lone gray pill at the far left read as
+          orphaned. The spacer leads now; the two buttons are the row's tail. */}
       {(toggle || showNewThread) && (
         <div className="mb-3 flex items-center gap-2">
-          {toggle}
           <span className="flex-1" />
+          {toggle}
           {showNewThread && (
             <button type="button" onClick={onNewThread} className={TAB_ACTION}>
               New thread
@@ -205,6 +232,10 @@ export function ThreadsTab({
           )}
         </div>
       )}
+      {/* ⚠ THE SAME FADE, THE OTHER FACE — one `viewKey` vocabulary across the
+          pair ("threads" / "artifacts"), so switching either way is one motion.
+          The toggle row above stays outside it for the same reason. */}
+      <FadeSwap viewKey="threads">
       {truncated && (
         <p className="mb-3 rounded-[8px] border border-border-default bg-card-surface-subtle px-2.5 py-2 text-caption text-text-secondary">
           {THREADS_CLIPPED_NOTE}
@@ -265,6 +296,7 @@ export function ThreadsTab({
           No threads in this channel yet.
         </p>
       )}
+      </FadeSwap>
     </div>
   );
 }

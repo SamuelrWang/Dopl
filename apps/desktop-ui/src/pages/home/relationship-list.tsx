@@ -112,6 +112,16 @@ export function RelationshipList({
           wells={HOME_CHANNEL_WELLS}
           items={filed}
           storageKey={HOME_CHANNEL_WELLS_KEY}
+          // 🔒 **THIS LIST FORGETS ITS COLLAPSES ON A RESTART** (Samuel,
+          // 2026-09-20: *"if a user closes the recent, pinned, or whatever
+          // dropdowns, have it so that it resets to being open when they open and
+          // reopen the app or if the app gets hard reloaded … Not when they change
+          // the page"*). `"session"` is exactly that lifetime — a module map that
+          // survives navigation and dies with the JS context (`well-state.ts`).
+          // ⚠ THE TABS KEEP `"device"`: nothing was ruled about them, and a
+          // collapsed **Earlier** over threads is a reading posture somebody chose
+          // once.
+          store="session"
           // 🔒 THE AGENTS TAB'S WELL, EXACTLY (Samuel, 2026-09-15: *"just make
           // the gray dropdowns match exactly those instead"*) — same full-width
           // header inside the box, same chevron, same collapse. ⚠ **ONLY THE FILL

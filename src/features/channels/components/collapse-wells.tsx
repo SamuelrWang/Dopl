@@ -62,7 +62,7 @@ import { NAKED_ICON, NAKED_ICON_BUTTON } from "@/shared/ui/naked-icon-button";
 import { PANEL_ROWS, PANEL_WELL } from "@/shared/ui/panel-well";
 // ⚠ THE WELL SET AND ITS PERSISTED OPEN STATE ARE `well-state.ts` SINCE 2026-09-15
 // — that file carries the seam and why. This one owns the BOX.
-import { useWells, type WellSpec } from "./well-state";
+import { useWells, type WellSpec, type WellStore } from "./well-state";
 
 /** One item, already filed. ⚠ **THE BUCKETING IS THE CALLER'S** — this module
  *  groups and renders, and owns neither a clock nor a row shape. */
@@ -287,6 +287,7 @@ export function WellsColumn<Id extends string>({
   wells,
   items,
   storageKey,
+  store,
   face,
   showEmpty = false,
   forceOpen = false,
@@ -294,8 +295,12 @@ export function WellsColumn<Id extends string>({
   /** ⚠ ORDER IS THE DATA — this array IS the render order. */
   wells: readonly WellSpec<Id>[];
   items: readonly WellItem<Id>[];
-  /** This surface's `localStorage` key — see {@link useWells}. */
+  /** This surface's storage key — see {@link useWells}. */
   storageKey: string;
+  /** ⚠ WHERE THAT KEY'S CHOICE LIVES. `"device"` (default) outlives a restart;
+   *  `"session"` is gone on a hard reload and on a relaunch, and survives a page
+   *  change — the channel picker's lifetime (Samuel, 2026-09-20). */
+  store?: WellStore;
   /** The box recipe, handed to every well — see {@link Well}. */
   face?: string;
   /**
@@ -322,7 +327,7 @@ export function WellsColumn<Id extends string>({
    */
   forceOpen?: boolean;
 }) {
-  const { isOpen, toggle } = useWells(storageKey, wells);
+  const { isOpen, toggle } = useWells(storageKey, wells, store);
   const grouped = useMemo(() => {
     const out = new Map<Id, WellItem<Id>[]>();
     for (const item of items) {

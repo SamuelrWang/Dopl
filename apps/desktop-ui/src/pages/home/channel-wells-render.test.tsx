@@ -4,6 +4,12 @@ import { installBridge } from "#/test-utils/bridge";
 import type { Channel, ChannelListPayload } from "@/features/channels/types";
 import { PANEL_WELL, PANEL_WELL_ON_PANEL } from "@/shared/ui/panel-well";
 import { channelKeys } from "@/features/channels/client/query-keys";
+// ⚠ **A FRESH APP CONTEXT PER CASE (2026-09-20).** This column's wells remember
+// their collapses in a MODULE map rather than `localStorage`, because Samuel ruled
+// they reset when the app restarts and survive a page change (`well-state.ts`). A
+// module map outlives `cleanup()`, so without this a case that opens **Earlier**
+// leaves it open for the next one.
+import { resetSessionWells } from "@/features/channels/components/well-state";
 import { HOME, openChannels, renderHome, withHome } from "./home-test-harness";
 
 /**
@@ -27,6 +33,7 @@ vi.mock(
 beforeEach(() => {
   apiRequest.mockReset();
   installBridge({ apiRequest });
+  resetSessionWells();
 });
 
 /**

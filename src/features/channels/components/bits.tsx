@@ -14,7 +14,7 @@ import type { ReactNode } from "react";
 import { Bot, Check, ChevronDown, ChevronRight, X, type LucideIcon } from "lucide-react";
 import { CHIP } from "@/shared/ui/wells";
 import { SMALL_TEXT_BUTTON } from "@/shared/ui/small-action-button";
-import { PAGE_ACTION_BTN } from "@/shared/ui/page-action-button";
+import { PAGE_ACTION_BTN, PAGE_ACTION_BTN_LIGHT } from "@/shared/ui/page-action-button";
 import { cn } from "@/shared/lib/utils";
 
 /**
@@ -62,6 +62,10 @@ export const CARD_BUTTON = cn(
  * express. `bits-tab-action.test.ts` pins the halves against the whole.
  */
 export const TAB_ACTION = cn(PAGE_ACTION_BTN, "shrink-0 gap-1");
+/** {@link TAB_ACTION}'S WHITE TWIN — `page-action-button.ts ›
+ *  PAGE_ACTION_BTN_LIGHT`, with this file's own `shrink-0 gap-1`. The Threads
+ *  tab's face switcher wears it beside "New thread" (Samuel, 2026-09-20). */
+export const TAB_ACTION_LIGHT = cn(PAGE_ACTION_BTN_LIGHT, "shrink-0 gap-1");
 /** The face and the box: elevation, 36px height, stadium ends. */
 export const TAB_ACTION_SHELL = "auth-btn-3d flex h-9 rounded-full";
 /** The label's own type, pad and ink — everything inside the shell. */

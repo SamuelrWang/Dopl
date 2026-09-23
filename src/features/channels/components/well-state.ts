@@ -104,21 +104,82 @@ function storedWells<Id extends string>(
  * stored value after it.
  * ⚠ The read itself, its `try` and its key filtering are {@link storedWells}.
  */
+/**
+ * 🔒 **THE CHANNEL PICKER FORGETS ITS COLLAPSES WHEN THE APP RESTARTS** (Samuel,
+ * 2026-09-20: *"if a user closes the recent, pinned, or whatever dropdowns, have
+ * it so that it resets to being open when they open and reopen the app or if the
+ * app gets hard reloaded … Not when they change the page"*).
+ *
+ * ⚠ **THAT LIFETIME IS NEITHER `localStorage` NOR COMPONENT STATE, WHICH IS WHY
+ * IT IS A MODULE MAP.** `localStorage` outlives a restart, which is the thing he
+ * does not want; `useState` alone dies when the list UNMOUNTS, which is every
+ * page change — the thing he explicitly does want kept. A module-scope map lives
+ * exactly as long as the JS context: it survives navigation and it is gone on a
+ * hard reload, on a quit and on a relaunch.
+ * ⚠ **`sessionStorage` WAS THE OBVIOUS ALTERNATIVE AND IT IS WRONG HERE.** It
+ * SURVIVES a reload, so the reset would never fire on the half of the ruling that
+ * names one.
+ * ⚠ **KEYED BY THE SAME `storageKey`**, so a surface cannot accidentally read
+ * another's memory, and the one-key-per-surface rule above covers both stores.
+ */
+const sessionWells = new Map<string, Record<string, boolean>>();
+
+/**
+ * **DROP EVERY REMEMBERED SESSION CHOICE — what a relaunch does, on demand.**
+ *
+ * ⚠ **IT EXISTS FOR TESTS AND IT IS NOT A BACK DOOR.** A module map lives as long
+ * as the JS context, which in the product is exactly one app run and in a test
+ * FILE is every case in it — so a suite that collapses a well in one case would
+ * otherwise start the next one collapsed, which is a shared-state bug wearing a
+ * feature's clothes. A runner has no other way to get a fresh context.
+ * ⚠ **NOTHING IN THE APP MAY CALL IT.** Resetting mid-run is precisely the
+ * surprise the ruling forbids for a page change.
+ */
+export function resetSessionWells(): void {
+  sessionWells.clear();
+}
+
+/** Which store a surface's choice lives in — see {@link sessionWells}. */
+export type WellStore = "device" | "session";
+
 export function useWells<Id extends string>(
   storageKey: string,
-  wells: readonly WellSpec<Id>[]
+  wells: readonly WellSpec<Id>[],
+  /** ⚠ `"device"` IS THE DEFAULT so every existing caller is byte-for-byte
+   *  unchanged; only the channel picker asks for `"session"`. */
+  store: WellStore = "device"
 ): {
   isOpen: (id: Id) => boolean;
   toggle: (id: Id) => void;
 } {
   const [open, setOpen] = useState<OpenMap<Id>>(() =>
-    storedWells(storageKey, wells)
+    store === "session"
+      ? // ⚠ THE MAP, NEVER `localStorage`, AND THE DEFAULTS WHEN IT IS EMPTY —
+        // which is exactly the first render after a launch or a hard reload.
+        // An unknown key in a stale entry is ignored on the same terms
+        // `storedWells` ignores one, because both are filtered through `wells`.
+        (() => {
+          const remembered = sessionWells.get(storageKey);
+          const defaults = wellDefaults(wells);
+          if (!remembered) return defaults;
+          const next = { ...defaults };
+          for (const well of wells) {
+            const value = remembered[well.id];
+            if (typeof value === "boolean") next[well.id] = value;
+          }
+          return next;
+        })()
+      : storedWells(storageKey, wells)
   );
 
   const toggle = useCallback(
     (id: Id) => {
       setOpen((prev) => {
         const next = { ...prev, [id]: !prev[id] };
+        if (store === "session") {
+          sessionWells.set(storageKey, next);
+          return next;
+        }
         try {
           window.localStorage.setItem(storageKey, JSON.stringify(next));
         } catch {
@@ -127,7 +188,7 @@ export function useWells<Id extends string>(
         return next;
       });
     },
-    [storageKey]
+    [storageKey, store]
   );
 
   const isOpen = useCallback((id: Id) => open[id], [open]);
