@@ -107,7 +107,9 @@ function sse(res, items) {
   ev('response.completed', { response: { id, usage: { input_tokens: 1, input_tokens_details: { cached_tokens: 0 }, output_tokens: 1, output_tokens_details: { reasoning_tokens: 0 }, total_tokens: 2 } } });
   res.end();
 }
-async function scriptedModel() {
+async function scriptedModel(call) {
+  const want = (call && call.fn) || mcp.CHANNEL_TOOL;
+  const args = (call && call.args) || { op: 'rooms' };
   const requests = [];
   const srv = await listen((req, res, body) => {
     if (!req.url.endsWith('/responses')) { res.writeHead(404); res.end('{}'); return; }
@@ -120,9 +122,9 @@ async function scriptedModel() {
     }
     if (!input.some((i) => i.type === 'function_call_output')) {
       const ns = (out.tools || []).find((x) => x.type === 'namespace') || {};
-      const fn = (ns.tools || []).find((x) => x.name === mcp.CHANNEL_TOOL);
+      const fn = (ns.tools || []).find((x) => x.name === want);
       if (!fn) return sse(res, [{ type: 'message', role: 'assistant', id: 'm0', content: [{ type: 'output_text', text: 'NOT FOUND' }] }]);
-      return sse(res, [{ type: 'function_call', id: 'fc_1', call_id: 'fc_call_1', namespace: ns.name, name: fn.name, arguments: JSON.stringify({ op: 'rooms' }) }]);
+      return sse(res, [{ type: 'function_call', id: 'fc_1', call_id: 'fc_call_1', namespace: ns.name, name: fn.name, arguments: JSON.stringify(args) }]);
     }
     return sse(res, [{ type: 'message', role: 'assistant', id: 'm1', content: [{ type: 'output_text', text: 'done' }] }]);
   });
@@ -139,7 +141,7 @@ const mentionsChannelTool = (body) => JSON.stringify(body.tools || []).includes(
 const OPERATOR_AUTH = join(process.env.CODEX_HOME || join(homedir(), '.codex'), 'auth.json');
 async function scriptedTurn(profile, verdict, opts) {
   const o = opts || {};
-  const model = await scriptedModel();
+  const model = await scriptedModel(o.call);
   const dopl = await standInDopl();
   const home = mkdtempSync(join(tmpdir(), 'dopl-codex-discovery-'));
   writeFileSync(join(home, 'config.toml'), [
@@ -156,6 +158,7 @@ async function scriptedTurn(profile, verdict, opts) {
     const cfg = tools.buildSessionToolConfig(profile);
     const entry = mcp.buildDoplServerEntry(cfg.doplToolsPolicy);
     entry.url = dopl.url;
+    if (o.defaultMode) entry.default_tools_approval_mode = o.defaultMode;
     let finish = null;
     const finished = new Promise((r) => { finish = r; });
     await withAppServer({
@@ -260,6 +263,32 @@ describe('TIER 1 — the real app-server defers Dopl, and `tool_search` is the w
       assert.deepEqual(out.tools.filter((x) => x.type === 'namespace').map((n) => n.name), ['mcp__dopl']);
     });
   }
+
+  // 🔒 §5 C1b — THE PREMISE `approval.js › doplElicitation` NAMES ASKS BY. Every ask from Dopl's
+  // server is named `dopl_channel`, so NO other Dopl tool may ask. Measured 2026-09-22: under
+  // `'auto'` a `dopl_kb` call DID ask (and would have been gated as a channel call with a KB
+  // call's arguments); under `'approve'` it runs with no request at all.
+  test('C1b: a NON-channel Dopl tool raises no request under the shipped default, and did under `auto`', async (t) => {
+    if (skipLive(t, GATE)) return;
+    const call = { fn: 'dopl_kb', args: { op: 'list' } };
+    const control = await scriptedTurn('dopl_only', 'deny', { call, defaultMode: 'auto' });
+    assert.ok(control.serverReqs.includes('mcpServer/elicitation/request'), 'control: `auto` asks');
+    assert.equal(control.calls.length, 0);
+    assert.equal(mcp.DEFAULT_TOOL_APPROVAL_MODE, 'approve');
+    const run = await scriptedTurn('dopl_only', 'deny', { call });
+    assert.deepEqual(run.serverReqs, [], 'the shipped default raised a request for a non-channel tool');
+    assert.deepEqual(run.asked, []);
+    assert.deepEqual(run.calls.map((c) => c.name), ['dopl_kb'], 'it ran, once, with no card');
+  });
+
+  test('C1b: a channel POST hands the gate its FULL arguments — op-scoped, not whole-tool', async (t) => {
+    if (skipLive(t, GATE)) return;
+    const args = { op: 'send', channel: 'chan-1', thread: 'task-1', kind: 'message', body: 'CXP3A-MARKER' };
+    const run = await scriptedTurn('read_only', 'deny', { call: { fn: mcp.CHANNEL_TOOL, args } });
+    assert.deepEqual(run.asked, [{ name: mcp.CHANNEL_TOOL, input: args }]);
+    assert.equal(run.calls.length, 0);
+    assert.equal(runtime.capability.axisBOpScoped(runtime.descriptorFor('codex')), true);
+  });
 
   test('DENY at the held approval prevents execution', async (t) => {
     if (skipLive(t, GATE)) return;

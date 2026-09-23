@@ -326,8 +326,8 @@ test("Axis B declares a real enforcement point and an UNVERIFIED op scope", () =
   // ⚠ `capability.axisBOpScoped` reads anything but `true` as NOT op-scoped — the fail-closed
   // direction, and the one that is true today (§5 item C1). Declaring `true` would assume the
   // answer to the item that changes step 7's design rather than one field.
-  assert.equal(D.axisB.opScoped, "unverified");
-  assert.equal(capability.axisBOpScoped(D), false);
+  assert.equal(D.axisB.opScoped, true, "measured 2026-09-22 (CXP-3A): op + args reach the gate");
+  assert.equal(capability.axisBOpScoped(D), true);
   assert.equal(capability.inputRewrite(D), "hook-updatedInput");
 });
 
@@ -421,7 +421,8 @@ test("the Dopl MCP entry pins the channel tool and keeps the bearer OFF ARGV", (
   // entry: exactly one tool on it may raise an ask. A default that can ask puts every tool in that
   // set, the derivation stops, and every Dopl call declines — which was the release blocker. The
   // cost is written out at `mcp.js › TOOL_APPROVAL_MODES`.
-  assert.equal(entry.default_tools_approval_mode, "auto");
+  // 🔒 `approve`, not `auto`: `auto` was MEASURED to ask (CXP-3A, 2026-09-22) — `approve` never does.
+  assert.equal(entry.default_tools_approval_mode, "approve");
   assert.deepEqual(mcp.askingToolsIn(entry), [mcp.CHANNEL_TOOL], "exactly ONE tool may ask");
   assert.equal(mcp.soleAskingTool(entry), mcp.CHANNEL_TOOL);
   assert.deepEqual(entry.enabled_tools, ["dopl_channel"]);

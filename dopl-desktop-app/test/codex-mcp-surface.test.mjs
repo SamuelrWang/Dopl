@@ -229,7 +229,7 @@ describe('a Dopl MCP call reaches Dopl\'s gate, resolved by SERVER', () => {
     assert.equal(p.itemId, undefined, 'and no itemId either, so it cannot be joined to the item by id');
     assert.equal(p._meta.codex_approval_kind, 'mcp_tool_call', 'the only structured discriminator');
     // ⚠ §5 C1 ANSWERED YES: the ARGUMENTS ride `_meta.tool_params` and reach the gate since
-    // 2026-09-22. `opScoped` still reads `'unverified'` — a deliberate UNDER-claim (§5 C1b).
+    // 2026-09-22. `opScoped` is `true` since CXP-3A measured C1b (`codex-mcp-discovery.test.mjs`).
     assert.deepEqual(p._meta.tool_params, { op: 'rooms' });
   });
 
