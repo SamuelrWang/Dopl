@@ -27,12 +27,8 @@ const PACKAGED = new Set([...Object.keys(PKG.dependencies || {}), "electron"]);
 const OPTIONAL_PACKAGES = new Map([
   ["undici", "main/api.js › a fresh dispatcher when undici is present; falls back without it"],
 ]);
-// Relative paths known dead on this branch and owned by another fix. Keyed by file + specifier so
-// an entry can never excuse a different require. Delete an entry when its fix lands.
-const KNOWN_DEAD = new Map([
-  ["main/claude-runtime.js ./sdk-loader", "P3-01 (deleted module; the fix asks the runtime registry)"],
-  ["main/claude-signin-op.js ./sdk-loader", "P3-01"],
-]);
+// Relative requires known dead, keyed by file + specifier. Empty: every relative require resolves.
+const KNOWN_DEAD = new Map();
 
 function walk(dir, out = []) {
   for (const e of readdirSync(dir, { withFileTypes: true })) {

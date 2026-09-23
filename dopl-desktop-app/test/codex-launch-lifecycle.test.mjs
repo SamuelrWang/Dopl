@@ -98,7 +98,7 @@ const isTurnEnd = (f) => f && f.method === "turn/completed";
 test("CX-02: an interrupted turn keeps the thread's cumulative baseline — the next turn bills only itself", async () => {
   const h = run();
   try {
-    const s = { tokensSpent: 0, lastTotalTokens: 0, turns: 0, state: {} };
+    const s = { tokensSpent: 0, lastTotalTokens: 0, state: {} };
     h.prompts.push(io.userMessage("go"));
     await until(() => h.calls.some((c) => c.method === "turn/start"), "no turn started");
     const usage = (last, total) => h.notify("thread/tokenUsage/updated", {
@@ -122,15 +122,14 @@ test("CX-02: an interrupted turn keeps the thread's cumulative baseline — the 
     h.notify("turn/completed", { turn: { id: "tu-3", status: "completed" } });
     await drain(h, s, isTurnEnd);
     assert.equal(s.tokensSpent, 42429, "the thread's total, counted once — not 18,838 + 42,429");
-    assert.equal(s.turns, 3);
   } finally { h.handle.close(); h.restore(); }
 });
 
-test("P4-04: core skips an UNMEASURED result (null) — spend and baseline stay, the turn still counts", () => {
-  const s = { tokensSpent: 71194, lastTotalTokens: 71194, turns: 3, state: {} };
+test("P4-04: core skips an UNMEASURED result (null) — spend and baseline stay", () => {
+  const s = { tokensSpent: 71194, lastTotalTokens: 71194, state: {} };
   const dispatched = [];
   io.applyCoreEvents(s, [{ type: "result", sessionTokens: null, model: "gpt-x" }], (_s, ev) => dispatched.push(ev.type), fakeStore);
-  assert.deepEqual([s.tokensSpent, s.lastTotalTokens, s.turns], [71194, 71194, 4]);
+  assert.deepEqual([s.tokensSpent, s.lastTotalTokens], [71194, 71194]);
   assert.ok(dispatched.includes("result"), "the turn still ends for the reducer");
   io.applyCoreEvents(s, [{ type: "result", sessionTokens: 99000 }], () => {}, fakeStore);
   assert.equal(s.tokensSpent, 99000, "the next measured turn bills only its delta");

@@ -31,7 +31,7 @@ function world(runtimeId) {
     s.state = next.state;
   };
   sessionAuth.bind({
-    sessions, dispatch, emit: () => {}, denyPending: () => {},
+    sessions, dispatch, emit: () => {}, denyPending: () => {}, teardown: () => {},
     acquireRuntime: async () => ({}), startQuery: async () => {},
   });
   sessionReopen.bind({ sessions, dispatch, refreshTray: () => {} });
