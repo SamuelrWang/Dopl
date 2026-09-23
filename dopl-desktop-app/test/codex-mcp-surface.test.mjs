@@ -35,7 +35,6 @@
 
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import http from 'node:http';
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
@@ -43,6 +42,7 @@ import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 
 import { client, liveGate, announceGate, skipLive, skipTurn, withAppServer, leakedPids, LIVE_THREAD, LIVE_TURN } from './_codex-app-server.mjs';
+import { standInDopl } from './_codex-stub.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
@@ -59,55 +59,8 @@ const TURN_BUDGET_MS = 180000;
 /** The quota gate, on top of the live gate. */
 const skipLiveTurn = (t) => skipLive(t, GATE) || skipTurn(t);
 
-// ── THE STAND-IN DOPL ENDPOINT ───────────────────────────────────────────────────────────────
-//
-// ⚠ IT IMPERSONATES DOPL'S MCP SERVER, NOT CODEX. Inventing an app-server is what
-// `test/_codex-app-server.mjs` forbids and nothing here does it: the `codex app-server` on the
-// other end of every assertion below is the real installed binary. This is the far side of an
-// HTTP hop, standing in for `usedopl.com/api/mcp` because its bearer is not reachable from a
-// plain-Node test (see the header).
-function standInDopl(tools) {
-  const seen = [];
-  const server = http.createServer((req, res) => {
-    let body = '';
-    req.on('data', (c) => { body += c; });
-    req.on('end', () => {
-      let msg = null;
-      try { msg = JSON.parse(body); } catch (_) { /* GET has no body */ }
-      seen.push({ method: req.method, headers: req.headers, rpc: msg });
-      if (!msg || msg.id === undefined) { res.writeHead(202); res.end(); return; }
-      const reply = (result) => {
-        res.writeHead(200, { 'content-type': 'application/json', 'mcp-session-id': 'dopl-standin' });
-        res.end(JSON.stringify({ jsonrpc: '2.0', id: msg.id, result }));
-      };
-      if (msg.method === 'initialize') {
-        return reply({
-          protocolVersion: '2025-06-18',
-          capabilities: { tools: { listChanged: false } },
-          serverInfo: { name: 'dopl-standin', version: '0.0.1' },
-        });
-      }
-      if (msg.method === 'tools/list') return reply({ tools });
-      if (msg.method === 'tools/call') return reply({ content: [{ type: 'text', text: 'STANDIN-OK' }], isError: false });
-      return reply({});
-    });
-  });
-  return {
-    seen,
-    listen: () => new Promise((r) => server.listen(0, '127.0.0.1', () => r(`http://127.0.0.1:${server.address().port}/api/mcp`))),
-    close: () => new Promise((r) => server.close(r)),
-    rpcNames: () => seen.filter((s) => s.rpc && s.rpc.method).map((s) => s.rpc.method),
-  };
-}
-
-const CHANNEL_TOOL_SCHEMA = [{
-  name: mcp.CHANNEL_TOOL,
-  description: 'Read or post in a Dopl channel.',
-  inputSchema: { type: 'object', properties: { op: { type: 'string' } }, required: ['op'] },
-}];
-
 const BEARER = 'u4-stand-in-bearer-not-a-real-token';
-function childEnv(extra) {
+function childEnv() {
   const home = mkdtempSync(join(tmpdir(), 'dopl-codex-mcphome-'));
   return {
     home,
@@ -116,7 +69,7 @@ function childEnv(extra) {
       [mcp.BEARER_ENV]: BEARER,
       [mcp.WORKSPACE_ENV]: 'ws-u4',
       [mcp.SESSION_ENV]: 'slot-u4',
-    }, extra || {}),
+    }),
   };
 }
 
@@ -326,13 +279,12 @@ describe('the real app-server accepts the entry Dopl builds', () => {
 
   test('the server connects over HTTP, the tool surface appears, and the bearer rides the ENV', async (t) => {
     if (skipLive(t, GATE)) return;
-    const dopl = standInDopl(CHANNEL_TOOL_SCHEMA);
-    const url = await dopl.listen();
+    const dopl = await standInDopl();
     const { home, env } = childEnv();
     try {
       const states = [];
       const entry = mcp.buildDoplServerEntry(null);
-      entry.url = url;
+      entry.url = dopl.url;
       // 🔒 THE TOKEN IS NOT IN THE ENTRY, therefore not in any `-c` override, therefore not on a
       // command line every `ps` on the machine can read. It is only a VARIABLE NAME here.
       assert.equal(JSON.stringify(entry).includes(BEARER), false);
@@ -388,8 +340,7 @@ describe('the real app-server accepts the entry Dopl builds', () => {
 
   test('a MODEL-INITIATED Dopl tool call produces the two measured shapes', async (t) => {
     if (skipLiveTurn(t)) return;
-    const dopl = standInDopl(CHANNEL_TOOL_SCHEMA);
-    const url = await dopl.listen();
+    const dopl = await standInDopl();
     // ⚠ THIS ARM GOES THROUGH `isolatedEnv`, AND IT HAS TO. A bare temp `CODEX_HOME` holds no
     // `auth.json`, so the app-server accepts the turn and completes it having produced NOTHING —
     // a signed-out session looks exactly like a model that chose not to call the tool. Linking
@@ -405,7 +356,7 @@ describe('the real app-server accepts the entry Dopl builds', () => {
     const requests = [];
     try {
       const entry = mcp.buildDoplServerEntry(null);
-      entry.url = url;
+      entry.url = dopl.url;
       let finish = null;
       const finished = new Promise((r) => { finish = r; });
       await withAppServer({

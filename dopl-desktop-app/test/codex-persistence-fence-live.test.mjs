@@ -16,7 +16,6 @@
 
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import http from 'node:http';
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync, readdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
@@ -24,88 +23,25 @@ import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 
 import { client, liveGate, announceGate, skipLive, withAppServer, leakedPids } from './_codex-app-server.mjs';
+import { STUB_MODEL, standInDopl, scriptedModel, stubHome, doplThreadStart, fc, exec, toolSearch } from './_codex-stub.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
 const CODEX = join(HERE, '..', 'main', 'runtime', 'codex');
 const mcp = require(join(CODEX, 'mcp.js'));
-const launchSpec = require(join(CODEX, 'launch-spec.js'));
 const catalog = require(join(CODEX, 'catalog.js'));
 const configHome = require(join(CODEX, 'config-home.js'));
 const serverRequests = require(join(CODEX, 'server-requests.js'));
 const resolveBin = require(join(CODEX, 'resolve-bin.js'));
 
 const GATE = announceGate(liveGate());
-const CH = '11111111-1111-4111-8111-111111111111';
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
-
-function listen(handler) {
-  const server = http.createServer((req, res) => {
-    let body = '';
-    req.on('data', (c) => { body += c; });
-    req.on('end', () => handler(req, res, body));
-  });
-  return new Promise((r) => server.listen(0, '127.0.0.1', () => r({
-    port: server.address().port, close: () => new Promise((d) => server.close(d)),
-  })));
-}
-
-// THE SCRIPTED MODEL: `rounds[i](body)` answers the i-th Responses request; past the end it stops.
-async function scriptedModel(rounds) {
-  const requests = [];
-  const srv = await listen((req, res, body) => {
-    if (!req.url.endsWith('/responses')) { res.writeHead(404); res.end('{}'); return; }
-    const b = JSON.parse(body);
-    requests.push(b);
-    const fn = rounds[requests.length - 1];
-    const items = (fn && fn(b)) || [{ type: 'message', role: 'assistant', id: 'mf', content: [{ type: 'output_text', text: 'done' }] }];
-    const id = `resp_${requests.length}`;
-    const ev = (type, obj) => res.write(`event: ${type}\ndata: ${JSON.stringify({ type, ...obj })}\n\n`);
-    res.writeHead(200, { 'content-type': 'text/event-stream' });
-    ev('response.created', { response: { id } });
-    for (const item of items) ev('response.output_item.done', { item });
-    ev('response.completed', { response: { id, usage: { input_tokens: 1, input_tokens_details: { cached_tokens: 0 }, output_tokens: 1, output_tokens_details: { reasoning_tokens: 0 }, total_tokens: 2 } } });
-    res.end();
-  });
-  return { ...srv, requests };
-}
-
-// Dopl's own server, one tool — so `tool_search` exists on gpt-5.5 exactly as in a real launch.
-async function standInDopl() {
-  const srv = await listen((req, res, body) => {
-    let m = null; try { m = JSON.parse(body); } catch (_) { /* GET */ }
-    if (!m || m.id === undefined) { res.writeHead(202); res.end(); return; }
-    const reply = (result) => {
-      res.writeHead(200, { 'content-type': 'application/json', 'mcp-session-id': 'dopl-standin' });
-      res.end(JSON.stringify({ jsonrpc: '2.0', id: m.id, result }));
-    };
-    if (m.method === 'initialize') return reply({ protocolVersion: '2025-06-18', capabilities: { tools: {} }, serverInfo: { name: 'dopl-standin', version: '0' } });
-    if (m.method === 'tools/list') return reply({ tools: [{ name: mcp.CHANNEL_TOOL, description: 'Read or post in a Dopl channel.', inputSchema: { type: 'object', properties: { op: { type: 'string' } }, required: ['op'] } }] });
-    return reply({});
-  });
-  return { ...srv, url: `http://127.0.0.1:${srv.port}/api/mcp` };
-}
-
-/** Dopl's real `thread/start` for `full`, with `drop` (a dotted `config` key) removed for a control. */
-function doplThreadStart(drop) {
-  const ts = JSON.parse(JSON.stringify(launchSpec.buildLaunchSpec({
-    session: { profile: 'full', channelId: CH, state: { toolMode: 'on-request' }, workspaceId: 'ws', model: '', containerToken: { token: 't' } },
-    dispatch: () => {}, emitQuiet: () => {},
-  }).threadStart));
-  if (drop) { const [a, b] = drop.split('.'); if (b) delete ts.config[a][b]; else delete ts.config[a]; }
-  return ts;
-}
 
 /** One scripted turn; `o.after(conn, threadId, notes)` runs once the first turn completes. */
 async function turn(o) {
   const model = await scriptedModel(o.rounds || []);
   const dopl = await standInDopl();
-  const home = mkdtempSync(join(tmpdir(), 'dopl-codex-c26-'));
-  writeFileSync(join(home, 'config.toml'), [
-    'model_provider = "stub"', `model = "${o.model || 'gpt-5.5'}"`, ...(o.homeToml || []), '[model_providers.stub]', 'name = "stub"',
-    `base_url = "http://127.0.0.1:${model.port}/v1"`, 'wire_api = "responses"',
-    'requires_openai_auth = false', 'stream_max_retries = 0', 'request_max_retries = 0', '',
-  ].join('\n'));
+  const home = stubHome({ port: model.port, model: o.model, homeToml: o.homeToml });
   const cwd = join(home, 'cwd');
   mkdirSync(cwd, { recursive: true });
   if (o.plant) o.plant(home);
@@ -141,8 +77,6 @@ async function turn(o) {
   }
 }
 
-const fc = (name, args, ns) => [{ type: 'function_call', id: 'fc_p', call_id: 'c_p', ...(ns ? { namespace: ns } : {}), name, arguments: JSON.stringify(args) }];
-const exec = (js) => [{ type: 'custom_tool_call', id: 'ct_p', call_id: 'c_p', name: 'exec', input: js }];
 const outputOf = (run) => JSON.stringify((run.requests[1].input || []).filter((i) => /_output$/.test(i.type)).map((i) => i.output));
 const settle = (ms) => async () => { await wait(ms); return null; };
 const GOAL = { objective: 'C26-GOAL-MARKER', token_budget: 100000 };
@@ -153,7 +87,7 @@ describe('1 — goals: the app-server continues a goal thread BY ITSELF; the fen
   test('control (Dopl minus `goals`): a forced create_goal starts turns Dopl never sent', async (t) => {
     if (skipLive(t, GATE)) return;
     const run = await turn({
-      threadStart: doplThreadStart('features.goals'), rounds: [() => fc('create_goal', GOAL)],
+      threadStart: doplThreadStart({ drop: 'features.goals' }), rounds: [() => fc('p', 'create_goal', GOAL)],
       // Bounded: stop watching after the third self-started turn (it ran ~500 in 8s unbounded).
       after: async (_c, _id, notes) => { for (let i = 0; i < 100 && notes.filter((n) => n === 'turn/started').length < 3; i++) await wait(100); return null; },
     });
@@ -163,7 +97,7 @@ describe('1 — goals: the app-server continues a goal thread BY ITSELF; the fen
 
   test('Dopl (gpt-5.5): no goal tool offered, a forced create_goal is unsupported, ONE turn', async (t) => {
     if (skipLive(t, GATE)) return;
-    const run = await turn({ threadStart: doplThreadStart(), rounds: [() => fc('create_goal', GOAL)], after: settle(2500) });
+    const run = await turn({ threadStart: doplThreadStart(), rounds: [() => fc('p', 'create_goal', GOAL)], after: settle(2500) });
     const names = (run.requests[0].tools || []).map((x) => x.name || x.type);
     assert.equal(names.some((n) => /goal/.test(n)), false, `offered: ${names}`);
     assert.match(outputOf(run), /unsupported call: create_goal/);
@@ -174,22 +108,22 @@ describe('1 — goals: the app-server continues a goal thread BY ITSELF; the fen
   test('Dopl (code mode, gpt-6-astra): no goal verb in ALL_TOOLS, and `tools.create_goal` does not exist', async (t) => {
     if (skipLive(t, GATE)) return;
     const js = 'try { await tools.create_goal({ objective: "C26" }); text("CALLED"); } catch (e) { text("ERR " + (e && e.message)); }';
-    const run = await turn({ model: 'gpt-6-astra', threadStart: doplThreadStart(), rounds: [() => exec(js)], after: settle(2500) });
+    const run = await turn({ model: STUB_MODEL.codeMode, threadStart: doplThreadStart(), rounds: [() => exec(js)], after: settle(2500) });
     assert.match(outputOf(run), /ERR tools\.create_goal is not a function/);
     assert.equal(run.turns, 1);
   });
 });
 
 describe('2 — clock.sleep: a timed wake on code-mode models, fenced', () => {
-  const nap = [() => fc('sleep', { duration_ms: 300 }, 'clock')];
+  const nap = [() => fc('p', 'sleep', { duration_ms: 300 }, 'clock')];
   test('control (Dopl minus `sleep_tool`): the call sleeps', async (t) => {
     if (skipLive(t, GATE)) return;
-    const run = await turn({ model: 'gpt-6-astra', threadStart: doplThreadStart('features.sleep_tool'), rounds: nap });
+    const run = await turn({ model: STUB_MODEL.codeMode, threadStart: doplThreadStart({ drop: 'features.sleep_tool' }), rounds: nap });
     assert.match(outputOf(run), /Sleep completed/);
   });
   test('Dopl: no `clock` namespace offered, and a forced call is unsupported', async (t) => {
     if (skipLive(t, GATE)) return;
-    const run = await turn({ model: 'gpt-6-astra', threadStart: doplThreadStart(), rounds: nap });
+    const run = await turn({ model: STUB_MODEL.codeMode, threadStart: doplThreadStart(), rounds: nap });
     const ns = (run.requests[0].input || []).filter((i) => i.type === 'additional_tools').flatMap((i) => i.tools).map((x) => x.name);
     assert.equal(ns.includes('clock'), false, `namespaces: ${ns}`);
     assert.match(outputOf(run), /unsupported call/);
@@ -231,7 +165,7 @@ describe('4 — hooks: a planted user hook never fires under Dopl, trusted or no
     if (skipLive(t, GATE)) return;
     const dir = marks();
     try {
-      const ts = doplThreadStart('features.hooks');
+      const ts = doplThreadStart({ drop: 'features.hooks' });
       const run = await turn({ threadStart: ts, plant: plantIn(dir), after: trustedSecondThread(ts) });
       assert.ok(run.extra.length >= 3 && run.extra.every((h) => h.source === 'user' && h.trustStatus === 'untrusted'));
       assert.ok(readdirSync(dir).includes('Stop'), `fired: ${readdirSync(dir)}`);
@@ -260,7 +194,7 @@ describe('5 — notify: Dopl\'s thread-level `[]` silences a lower layer', () =>
   };
   test('control (Dopl minus `notify`): the home-layer program runs after the turn', async (t) => {
     if (skipLive(t, GATE)) return;
-    assert.deepEqual(await withNotify(doplThreadStart('notify')), ['fired']);
+    assert.deepEqual(await withNotify(doplThreadStart({ drop: 'notify' })), ['fired']);
   });
   test('Dopl: it does not run', async (t) => {
     if (skipLive(t, GATE)) return;
@@ -273,7 +207,7 @@ describe('6 — nothing persistence-shaped is offered, on either tool path', () 
     if (skipLive(t, GATE)) return;
     // The first query is the positive control: the search works, and finds Dopl's own tool.
     const words = ['dopl channel', 'goal', 'schedule', 'automation', 'cron reminder', 'memory', 'sleep wake later', 'queue', 'hook notify'];
-    const rounds = [() => words.map((q, i) => ({ type: 'tool_search_call', id: `ts${i}`, call_id: `ts_${i}`, status: 'completed', execution: 'client', arguments: { query: q, limit: 8 } }))];
+    const rounds = [() => words.map((q, i) => toolSearch(q, String(i)))];
     const run = await turn({ threadStart: doplThreadStart(), rounds });
     const top = (run.requests[0].tools || []).map((x) => x.name || x.type);
     assert.equal(top.some((n) => PERSISTENCE_RE.test(n)), false, `offered: ${top}`);
@@ -285,7 +219,7 @@ describe('6 — nothing persistence-shaped is offered, on either tool path', () 
 
   test('code mode (gpt-6-astra): the namespaces and ALL_TOOLS carry no persistence verb', async (t) => {
     if (skipLive(t, GATE)) return;
-    const run = await turn({ model: 'gpt-6-astra', threadStart: doplThreadStart(), rounds: [() => exec(ALL_TOOLS_JS)] });
+    const run = await turn({ model: STUB_MODEL.codeMode, threadStart: doplThreadStart(), rounds: [() => exec(ALL_TOOLS_JS)] });
     const extra = (run.requests[0].input || []).filter((i) => i.type === 'additional_tools').flatMap((i) => i.tools);
     const offered = extra.flatMap((ns) => [ns.name].concat((ns.tools || []).map((x) => x.name)));
     assert.equal(offered.some((n) => PERSISTENCE_RE.test(n)), false, `offered: ${offered}`);

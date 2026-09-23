@@ -236,12 +236,12 @@ test("Codex: a named model NO catalog source knows REFUSES the launch rather tha
 
 // ── 8. LIVE — THE REAL SDK, OPT-IN ───────────────────────────────────────────────────────────
 
-function liveSkip() {
-  if (process.env.CLAUDE_SDK_LIVE !== "1") return "SKIPPED, NOT PASSED — set CLAUDE_SDK_LIVE=1 to read the real CLI's roster";
-  return false;
-}
-
-test("LIVE: the bundled CLI lists its models with NO model turn (zero SDK messages)", { skip: liveSkip() }, async () => {
+test("LIVE: the bundled CLI lists its models with NO model turn (zero SDK messages)", async (t) => {
+  if (process.env.CLAUDE_SDK_LIVE !== "1") {
+    t.diagnostic("SKIPPED, NOT PASSED — set CLAUDE_SDK_LIVE=1 to read the real CLI's roster");
+    t.skip("CLAUDE_SDK_LIVE is not 1");
+    return;
+  }
   const sdk = await import("@anthropic-ai/claude-agent-sdk");
   const bin = require.resolve(`@anthropic-ai/claude-agent-sdk-${process.platform}-${process.arch}/package.json`).replace(/package\.json$/, "claude");
   let messages = 0;

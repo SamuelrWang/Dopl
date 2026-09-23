@@ -12,14 +12,16 @@
 
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import http from 'node:http';
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync, readFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync, readFileSync, readdirSync } from 'node:fs';
 import { tmpdir, homedir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 
-import { client, liveGate, announceGate, skipLive, skipTurn, withAppServer, leakedPids } from './_codex-app-server.mjs';
+import {
+  client, liveGate, announceGate, skipLive, skipTurn, withAppServer, leakedPids, LIVE_THREAD, LIVE_TURN, LIVE_MODEL,
+} from './_codex-app-server.mjs';
+import { CH, STUB_MODEL, standInDopl, scriptedModel, stubHome, doplThreadStart, fc, toolSearch } from './_codex-stub.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
@@ -35,68 +37,12 @@ const profiles = require(join(HERE, '..', 'main', 'session-profiles.js'));
 
 const GATE = announceGate(liveGate());
 const BUDGET_MS = 60000;
-const CH = '11111111-1111-4111-8111-111111111111';
-
-function listen(handler) {
-  const server = http.createServer((req, res) => {
-    let body = '';
-    req.on('data', (c) => { body += c; });
-    req.on('end', () => handler(req, res, body));
-  });
-  return new Promise((r) => server.listen(0, '127.0.0.1', () => r({
-    port: server.address().port, close: () => new Promise((d) => server.close(d)),
-  })));
-}
-
-async function standInDopl() {
-  const calls = [];
-  const srv = await listen((req, res, body) => {
-    let m = null; try { m = JSON.parse(body); } catch (_) { /* GET */ }
-    if (!m || m.id === undefined) { res.writeHead(202); res.end(); return; }
-    const reply = (result) => {
-      res.writeHead(200, { 'content-type': 'application/json', 'mcp-session-id': 'dopl-standin' });
-      res.end(JSON.stringify({ jsonrpc: '2.0', id: m.id, result }));
-    };
-    if (m.method === 'initialize') return reply({ protocolVersion: '2025-06-18', capabilities: { tools: {} }, serverInfo: { name: 'dopl-standin', version: '0' } });
-    if (m.method === 'tools/list') {
-      return reply({ tools: [{ name: mcp.CHANNEL_TOOL, description: 'Read or post in a Dopl channel.', inputSchema: { type: 'object', properties: { op: { type: 'string' } }, required: ['op'] } }] });
-    }
-    if (m.method === 'tools/call') { calls.push(m.params); return reply({ content: [{ type: 'text', text: 'STANDIN-OK' }], isError: false }); }
-    return reply({});
-  });
-  return { ...srv, calls, url: `http://127.0.0.1:${srv.port}/api/mcp` };
-}
-
-// THE SCRIPTED MODEL: `rounds[i](body)` answers the i-th Responses request; past the end it stops.
-async function scriptedModel(rounds) {
-  const requests = [];
-  const srv = await listen((req, res, body) => {
-    if (!req.url.endsWith('/responses')) { res.writeHead(404); res.end('{}'); return; }
-    const b = JSON.parse(body);
-    requests.push(b);
-    const fn = rounds[requests.length - 1];
-    const items = (fn && fn(b)) || [{ type: 'message', role: 'assistant', id: 'mf', content: [{ type: 'output_text', text: 'done' }] }];
-    const id = `resp_${requests.length}`;
-    const ev = (type, obj) => res.write(`event: ${type}\ndata: ${JSON.stringify({ type, ...obj })}\n\n`);
-    res.writeHead(200, { 'content-type': 'text/event-stream' });
-    ev('response.created', { response: { id } });
-    for (const item of items) ev('response.output_item.done', { item });
-    ev('response.completed', { response: { id, usage: { input_tokens: 1, input_tokens_details: { cached_tokens: 0 }, output_tokens: 1, output_tokens_details: { reasoning_tokens: 0 }, total_tokens: 2 } } });
-    res.end();
-  });
-  return { ...srv, requests };
-}
 
 /** One scripted turn. `o.threadStart` is sent as-is (with the stand-in's URL spliced in). */
 async function turn(o) {
   const model = await scriptedModel(o.rounds || []);
   const dopl = await standInDopl();
-  const home = mkdtempSync(join(tmpdir(), 'dopl-codex-parity-'));
-  writeFileSync(join(home, 'config.toml'), [
-    'model_provider = "stub"', `model = "${o.model || 'gpt-5.5'}"`, '[model_providers.stub]', 'name = "stub"',
-    `base_url = "http://127.0.0.1:${model.port}/v1"`, 'wire_api = "responses"',
-    'requires_openai_auth = false', 'stream_max_retries = 0', 'request_max_retries = 0', '',
-  ].join('\n'));
+  const home = stubHome({ port: model.port, model: o.model });
   const cwd = o.cwd || join(home, 'cwd');
   mkdirSync(cwd, { recursive: true });
   const env = { ...process.env, CODEX_HOME: home, [mcp.BEARER_ENV]: 'parity-bearer', [mcp.WORKSPACE_ENV]: 'ws', [mcp.SESSION_ENV]: 'slot', ...(o.env || {}) };
@@ -136,15 +82,10 @@ async function turn(o) {
   }
 }
 
-const fullSpec = (toolMode) => launchSpec.buildLaunchSpec({
-  session: { profile: 'full', channelId: CH, state: { toolMode }, workspaceId: 'ws', model: '', containerToken: { token: 't' } },
-  dispatch: () => {}, emitQuiet: () => {},
-}).threadStart;
 const outputs = (run) => {
   const last = run.requests[run.requests.length - 1];
   return Object.fromEntries((last.input || []).filter((i) => /_output$/.test(i.type) && i.call_id).map((i) => [i.call_id, JSON.stringify(i.output)]));
 };
-const fc = (id, name, args, ns) => [{ type: 'function_call', id: `fc_${id}`, call_id: `c_${id}`, ...(ns ? { namespace: ns } : {}), name, arguments: JSON.stringify(args) }];
 
 describe('1 — the operator\'s `never` is sent as a narrower granular, and nothing but the channel call changes', () => {
   // A path OUTSIDE every writable root: not the cwd, not $TMPDIR, not /tmp.
@@ -156,7 +97,7 @@ describe('1 — the operator\'s `never` is sent as a narrower granular, and noth
     () => [{ type: 'custom_tool_call', id: 'ct2', call_id: 'c_2', name: 'apply_patch', input: '*** Begin Patch\n*** Add File: patched.txt\n+hi\n*** End Patch\n' }],
     () => [{ type: 'custom_tool_call', id: 'ct3', call_id: 'c_3', name: 'apply_patch', input: `*** Begin Patch\n*** Add File: ${outside}/outside.txt\n+hi\n*** End Patch\n` }],
     () => fc(4, 'exec_command', { cmd: 'curl -sS -m 4 -o /dev/null https://example.com; echo " rc=$?"' }),
-    () => [{ type: 'tool_search_call', id: 'ts', call_id: 'ts_c', status: 'completed', execution: 'client', arguments: { query: 'dopl channel', limit: 8 } }],
+    () => [toolSearch('dopl channel')],
     (b) => {
       const ns = b.input.find((i) => i.type === 'tool_search_output').tools.find((x) => x.type === 'namespace');
       return [{ type: 'function_call', id: 'fc7', call_id: 'c_7', namespace: ns.name, name: mcp.CHANNEL_TOOL, arguments: JSON.stringify(post) }];
@@ -169,8 +110,8 @@ describe('1 — the operator\'s `never` is sent as a narrower granular, and noth
   test('1a/1b: same shell/file/escalation/network outcomes as native `never`; the post reaches Dopl\'s gate and runs ONCE', async (t) => {
     if (skipLive(t, GATE)) return;
     try {
-      const control = await turn({ rounds, threadStart: { ...fullSpec('on-request'), approvalPolicy: 'never' } });
-      const ts = fullSpec('never');
+      const control = await turn({ rounds, threadStart: { ...doplThreadStart(), approvalPolicy: 'never' } });
+      const ts = doplThreadStart({ toolMode: 'never' });
       const run = await turn({ rounds, threadStart: ts, decide: gate('auto_outbound') });
 
       // 1b: the echo IS the intent — the granular object, on the sandbox Dopl asked for.
@@ -202,7 +143,7 @@ describe('1 — the operator\'s `never` is sent as a narrower granular, and noth
 
   test('1a: under `ask` the same post is a GATE (a human card), and a decline means it never runs', async (t) => {
     if (skipLive(t, GATE)) return;
-    const run = await turn({ rounds, threadStart: fullSpec('never'), decide: gate('ask') });
+    const run = await turn({ rounds, threadStart: doplThreadStart({ toolMode: 'never' }), decide: gate('ask') });
     assert.deepEqual(run.asked.map((a) => a.name), [mcp.CHANNEL_TOOL]);
     assert.equal(run.calls.length, 0);
     rmSync(join(homedir(), 'Library', 'Caches', `dopl-codex-parity-${process.pid}`), { recursive: true, force: true });
@@ -219,14 +160,14 @@ describe('2 — native delegation cannot run, on a code-mode model too', () => {
 
   test('2d: gpt-6-astra (code_mode_only, multi_agent_version v2) — the fence removes `collaboration` and a forced spawn starts NO child', async (t) => {
     if (skipLive(t, GATE)) return;
-    const ts = fullSpec('on-request');
+    const ts = doplThreadStart();
     // Control: Dopl's features flag ALONE — measured insufficient on a code-mode model.
-    const control = await turn({ model: 'gpt-6-astra', rounds: spawn('collaboration'), threadStart: ts });
+    const control = await turn({ model: STUB_MODEL.codeMode, rounds: spawn('collaboration'), threadStart: ts });
     assert.ok(offered(control).includes('collaboration'), `control: ${offered(control)}`);
     assert.ok(control.items.some((i) => i.type === 'subAgentActivity'), 'control: the spawn started a child');
     assert.equal(control.loaded.data.length, 2, 'control: two loaded threads');
 
-    const run = await turn({ model: 'gpt-6-astra', rounds: spawn('collaboration'), threadStart: ts, catalog: true });
+    const run = await turn({ model: STUB_MODEL.codeMode, rounds: spawn('collaboration'), threadStart: ts, catalog: true });
     assert.equal(offered(run).includes('collaboration'), false, `offered: ${offered(run)}`);
     assert.equal(JSON.stringify(run.requests[0]).includes('spawn_agent'), false, 'no delegation instructions either');
     assert.match(outputs(run).c_s, /unsupported call/);
@@ -237,7 +178,7 @@ describe('2 — native delegation cannot run, on a code-mode model too', () => {
 
   test('2a: gpt-5.5 — no delegation tool offered, and a forced spawn is unsupported', async (t) => {
     if (skipLive(t, GATE)) return;
-    const run = await turn({ model: 'gpt-5.5', rounds: spawn(), threadStart: fullSpec('on-request'), catalog: true });
+    const run = await turn({ model: STUB_MODEL.searchPath, rounds: spawn(), threadStart: doplThreadStart(), catalog: true });
     assert.equal(offered(run).some((n) => /spawn_agent|collaboration/.test(n)), false);
     assert.match(outputs(run).c_s, /unsupported call/);
     assert.equal(run.loaded.data.length, 1);
@@ -256,34 +197,34 @@ describe('3 — no personal skill reaches the prompt, listed or mentioned', () =
   test('3b: a skill in $HOME/.agents/skills — listed and injected without the fence, absent with it', async (t) => {
     if (skipLive(t, GATE)) return;
     const home = withSkill();
+    const cwd = mkdtempSync(join(tmpdir(), 'dopl-codex-parity-cwd-'));
     try {
-      const base = fullSpec('on-request');
-      const bare = JSON.parse(JSON.stringify(base)); delete bare.config.skills;
-      const control = await turn({ threadStart: bare, env: { HOME: home }, text: MENTION });
+      const control = await turn({ threadStart: doplThreadStart({ drop: 'skills' }), env: { HOME: home }, text: MENTION });
       const c = JSON.stringify(control.requests[0]);
       assert.ok(c.includes('PROBE-SKILL-DESCRIPTION') && c.includes('PROBE-SKILL-BODY-7f3a'), 'control: listed and injected');
       assert.ok(c.includes('skills/.system'), 'control: the bundled root is listed too');
 
-      const fenced = JSON.parse(JSON.stringify(base));
-      const cwd = mkdtempSync(join(tmpdir(), 'dopl-codex-parity-cwd-'));
+      const fenced = doplThreadStart();
       fenced.config.skills = skillsFence.skillsFence({ home, cwd });
       const run = await turn({ threadStart: fenced, env: { HOME: home }, text: MENTION, cwd });
       const r = JSON.stringify(run.requests[0]);
       for (const s of ['PROBE-SKILL-DESCRIPTION', 'PROBE-SKILL-BODY-7f3a', '<skills_instructions>', 'skills/.system']) {
         assert.equal(r.includes(s), false, `fenced prompt still carries ${s}`);
       }
+    } finally {
+      rmSync(home, { recursive: true, force: true });
       rmSync(cwd, { recursive: true, force: true });
-    } finally { rmSync(home, { recursive: true, force: true }); }
+    }
   });
 
   test('3b: the OPERATOR\'s real ~/.agents/skills (when present) — none listed, a $mention injects nothing', async (t) => {
     if (skipLive(t, GATE)) return;
     const root = join(homedir(), '.agents', 'skills');
-    const names = existsSync(root) ? require('node:fs').readdirSync(root).filter((n) => existsSync(join(root, n, 'SKILL.md'))) : [];
+    const names = existsSync(root) ? readdirSync(root).filter((n) => existsSync(join(root, n, 'SKILL.md'))) : [];
     if (!names.length) { t.diagnostic(`SKIPPED, NOT PASSED — no skills under ${root}`); t.skip('no operator skills'); return; }
     const name = names[0];
     const body = readFileSync(join(root, name, 'SKILL.md'), 'utf8').split('\n').find((l) => l.length > 40 && !/^(name|description):/.test(l)) || '';
-    const run = await turn({ threadStart: fullSpec('on-request'), text: `please use $${name} now` });
+    const run = await turn({ threadStart: doplThreadStart(), text: `please use $${name} now` });
     const r = JSON.stringify(run.requests[0]);
     assert.equal(r.includes('<skills_instructions>'), false);
     assert.equal(r.includes(root), false, 'the operator root is not named');
@@ -300,7 +241,6 @@ describe('TIER 2 — a real model on `never` posts through the gate, with the fe
     const configHome = require(join(CODEX, 'config-home.js'));
     const framing = require(join(HERE, '..', 'main', 'prompt-framing.js'));
     const runtime = require(join(HERE, '..', 'main', 'runtime'));
-    const { LIVE_THREAD, LIVE_TURN, LIVE_MODEL } = await import('./_codex-app-server.mjs');
     const dopl = await standInDopl();
     const root = mkdtempSync(join(tmpdir(), 'dopl-codex-parity-turn-'));
     const cwd = join(root, 'cwd');
@@ -309,7 +249,7 @@ describe('TIER 2 — a real model on `never` posts through the gate, with the fe
     const MARKER = `PARITY-${Date.now().toString(36)}`;
     const items = []; const asked = [];
     try {
-      const ts = JSON.parse(JSON.stringify(fullSpec('never')));
+      const ts = doplThreadStart({ toolMode: 'never' });
       ts.config.mcp_servers.dopl.url = dopl.url;
       const text = framing.buildFencedTurn({
         side: 'responder', nonce: 'parity',
