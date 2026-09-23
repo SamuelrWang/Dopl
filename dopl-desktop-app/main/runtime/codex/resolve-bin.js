@@ -1,70 +1,6 @@
-// WHERE `codex` IS ON THIS MACHINE — the ONE answer the probe, the credential check, the model
-// roster and the session spawn all ask for.
-//
-// ⚠ **THIS RELEASE BUNDLES ONE** (Samuel's ruling, 2026-09-22 — `packaging.js` holds the decision
-// and what it cost). The header below was written while `delivery` was `path` and said a bundled
-// binary "simply becomes the first thing `available()` finds". That is now TRUE, with one
-// deliberate exception, and the order is stated here because it is a POLICY and not an
-// implementation detail:
-//
-//   1. `DOPL_CODEX_BIN`  — THE OPERATOR'S OWN ANSWER, AND IT STILL OUTRANKS THE BUNDLE.
-//      Bundling does not make the override less necessary; it makes it MORE. It is the only lever
-//      that points a shipped build at a different CLI — a support session reproducing a skew, a
-//      developer testing an unreleased Codex, an operator on a build whose platform package did
-//      not install. An operator who names a file must get THAT file or an error, never a quiet
-//      substitution, and that rule predates the ruling and survives it.
-//   2. THE BUNDLED BINARY — the one this release PINNED, SIGNED and NOTARISED.
-//      ⚠ **IT OUTRANKS `PATH`, AND THAT IS THE POINT OF BUNDLING.** If a stray `codex` on PATH
-//      won, `packaging.versionPin` would be a false claim on every machine that happens to have
-//      one, and "two operators, two Codex versions" — the cost `path` accepted — would survive the
-//      decision taken to end it. A release that ships a protocol build must RUN that protocol
-//      build by default.
-//   3. `PATH`, then 4. the WELL-KNOWN prefixes — UNCHANGED, AND KEPT ON PURPOSE.
-//      The bundled candidate can legitimately be absent: `@openai/codex-<platform>-<arch>` is an
-//      OPTIONAL dependency gated on `os`/`cpu`, so a build produced where it did not install has
-//      no bundle at all. Degrading to the v1 behaviour is strictly better than degrading to
-//      nothing, and it costs one `require.resolve` that already failed.
-//
-// ⚠ **THE BUNDLED CANDIDATE IS NOT TRUSTED FOR BEING OURS.** It goes through `inspectCandidate`
-// like every other — same executability, same writable-by-others walk over the file, its canonical
-// target and every ancestor. An app bundle an attacker can rewrite is an attacker's binary no
-// matter whose build produced it.
-//
-// 🔒 ⚠ **A FINDER-LAUNCHED APP HAS NEARLY NO `PATH`, AND THAT IS THE WHOLE REASON THIS FILE
-// EXISTS** (U2, `docs/plans/2026-09-21-001-fix-codex-runtime-parity-plan.md`). macOS gives a GUI
-// app `launchd`'s environment — roughly `/usr/bin:/bin:/usr/sbin:/sbin` — and NOT the `PATH` the
-// operator's shell builds from `.zshrc`. Every install location Codex actually lands in
-// (`/opt/homebrew/bin`, a Volta/bun/npm prefix under `$HOME`) is therefore invisible to
-// `spawn('codex')` unless Dopl looks for it, so a machine with a working `codex` in Terminal
-// reports "not on this Mac's PATH" the moment Dopl is opened from the Dock. `delivery: 'path'`
-// (`packaging.js`) made the operator's install the supply chain; it did not make the operator's
-// SHELL the way to find it. ⚠ **AND THE BUNDLE DOES NOT RETIRE THIS FILE**: candidates 3 and 4 are
-// still reached whenever the bundled candidate is absent or refused, on exactly the machines whose
-// PATH is `launchd`'s.
-//
-// ⚠ **IT RESOLVES, IT DOES NOT EXEC.** Nothing here spawns `codex` — `client.js` is still the only
-// module that touches a child process. This answers "which file", and every caller asks it.
-//
-// 🔒 ⚠ **A FILE NAMED `codex` IS NOT A REASON TO RUN IT.** A candidate is accepted only when it is
-// a regular file the current user may execute AND neither it nor any directory that resolves its
-// candidate or canonical path is writable BY OTHER USERS. A safe-looking symlink into a writable
-// tree is still a code-execution hole, because anything that can replace the target chooses what
-// Dopl runs. Rejections are reported with the reason, never silently skipped, so an operator whose
-// install sits in a writable prefix is told why it was refused instead of being told Codex is
-// missing.
-// ⚠ **"BY OTHER USERS" IS NOT `& 0o022` — see `writableByOthers`.** Homebrew's own directories are
-// group-writable by design, so the flat reading refused `brew install codex` AND
-// `npm i -g @openai/codex` on this very machine (measured 2026-09-22) and reported them as NOT
-// INSTALLED. World-writable is always refused; group-writable is refused only when the owner is
-// neither this user nor root.
-//
-// ⚠ **SOURCE IS PART OF THE ANSWER, AND IT MATTERS MORE NOW THAN IT DID.** Diagnostics have to be
-// able to say WHICH file was resolved and HOW it was found (`override` / `bundled` / `path` /
-// `well-known`). Under `delivery: 'path'` that was how a support session told two operators'
-// Codexes apart; under `delivery: 'bundled'` it is how it tells THE SHIPPED ONE from a machine's
-// own — the single fact that decides whether `packaging.versionPin` describes what actually ran.
-// ⚠ The path is a filesystem path, never an auth material — `credential.js` still owns sign-in
-// state and nothing here reads a token.
+// Which `codex` file every caller runs; resolves only, never spawns. Order is policy: `DOPL_CODEX_BIN` >
+// bundled (so `packaging.versionPin` is what runs) > PATH > well-known prefixes (a Finder-launched app gets
+// launchd's bare PATH). Every candidate, the bundle included, must pass `inspectCandidate`.
 
 const fs = require('node:fs');
 const path = require('node:path');
@@ -73,17 +9,10 @@ const { rewriteAsarUnpacked } = require('../cli-spawn');
 
 const BIN = 'codex';
 
-// ⚠ THE OPERATOR'S OWN ANSWER, AND IT OUTRANKS EVERY SEARCH. A machine with two installs, or one
-// in a prefix this file does not know, needs a way to say which — and a support conversation needs
-// a lever that does not require a new release. It is still validated like any other candidate.
+// The operator's pick; outranks the bundle (support/dev lever) and is still validated.
 const OVERRIDE_ENV = 'DOPL_CODEX_BIN';
 
-// ⚠ SEARCHED IN ORDER, AND THE ORDER IS "MOST DELIBERATE FIRST". `$HOME`-relative entries are
-// expanded per call rather than at require time, because the tests drive a fake home.
-// ⚠ NOT A PROMISE THAT ANY OF THESE EXIST — it is where the macOS installers put a CLI: Homebrew
-// (arm64 then Intel), a user-level prefix, then the JS toolchain prefixes.
-// ⚠ **AND IT IS NOT SUFFICIENT ON ITS OWN**: `npm i -g` lands beside the RUNNING NODE, which is a
-// version-carrying path no constant can name — `nodeNeighbours` below supplies it.
+// Where macOS installers put a CLI, searched in order; `~` expands per call (tests drive a fake home).
 const WELL_KNOWN = [
   '/opt/homebrew/bin',
   '/usr/local/bin',
@@ -93,39 +22,18 @@ const WELL_KNOWN = [
   '~/.npm-global/bin',
 ];
 
-// ⚠ **THE VENDOR LAYOUT, MIRRORED FROM THE LAUNCHER WE DO NOT RUN.** `@openai/codex`'s own
-// `bin/codex.js` maps `{platform, arch}` → a Rust target triple → `vendor/<triple>/bin/codex`, and
-// Dopl reproduces that mapping rather than executing the launcher: the launcher is a Node process
-// whose entire job is to `spawn` the same file, and `client.js` already owns the one child process
-// this runtime is allowed. ⚠ **DARWIN ONLY, DELIBERATELY** (Samuel's macOS-only ruling): the four
-// linux/win32 triples the launcher knows are omitted rather than carried as arms that can never be
-// taken, and an unmapped platform answers `null` so the search falls through to `PATH`.
-// ⚠ **`CODEX_MANAGED_PACKAGE_ROOT` IS NOT REPRODUCED AND MUST NOT BE.** The launcher sets it to
-// advertise which package manager owns the install, so the CLI can offer to update itself. A
-// bundled binary is updated by shipping a Dopl release; telling it otherwise would offer an
-// operator an update that our own `versionPin` then contradicts.
+// The `@openai/codex` launcher's triple map, so Dopl runs the vendor binary, not a Node launcher. Darwin
+// only. Its `CODEX_MANAGED_PACKAGE_ROOT` is deliberately not set: the bundle updates with Dopl releases.
 const VENDOR_TRIPLE = {
   'darwin-arm64': 'aarch64-apple-darwin',
   'darwin-x64': 'x86_64-apple-darwin',
 };
 
-// ⚠ THE PLATFORM PACKAGE IS AN ALIAS DIRECTORY, NOT A PACKAGE NAME. Every one of them declares
-// `"name": "@openai/codex"` with the triple in its VERSION (`0.155.1-darwin-arm64`); npm installs
-// them under the alias `@openai/codex-<platform>-<arch>`, which is what `require.resolve` walks and
-// what `package.json › build.asarUnpack` globs. Resolving by the declared name would find the
-// launcher instead.
+// An alias dir: every platform package declares `"name": "@openai/codex"`, so that name finds the launcher.
 const PLATFORM_PKG = (platform, arch) => `@openai/codex-${platform}-${arch}`;
 
-/**
- * The bundled `codex` this release ships, or `null` when this build has none.
- *
- * `resolvePackage` — `require.resolve`, injected so a test can drive both a dev tree and a packaged
- * one without one existing on disk.
- *
- * ⚠ **`null` IS A NORMAL ANSWER, NOT A FAILURE.** `@openai/codex-<platform>-<arch>` is an OPTIONAL
- * dependency gated on `os`/`cpu`, so it is absent by design on every platform but the build host's.
- * The caller falls through to `PATH`; nothing is logged as an error.
- */
+// The bundled binary via the alias dir, `app.asar` → `app.asar.unpacked`; `null` is normal (the platform
+// package is an optional dep gated on os/cpu). `resolvePackage` = `require.resolve`, injected for tests.
 function bundledCandidate({ platform, arch, resolvePackage }) {
   const triple = VENDOR_TRIPLE[`${platform}-${arch}`];
   if (!triple || typeof resolvePackage !== 'function') return null;
@@ -140,18 +48,8 @@ function bundledCandidate({ platform, arch, resolvePackage }) {
   return path.join(root, 'vendor', triple, 'bin', BIN);
 }
 
-/**
- * ⚠ **`npm i -g` DOES NOT INSTALL INTO ANY OF THE ABOVE, AND THAT IS HOW THE FIRST REAL INSTALL
- * WENT MISSING** (measured 2026-09-22). With Homebrew's node, `npm prefix -g` is the KEG —
- * `/opt/homebrew/Cellar/node/<version>/bin` — a path that carries the node version in it and so
- * cannot be a constant. `/opt/homebrew/bin` holds symlinks for FORMULA binaries, and an
- * `npm i -g` package is not one, so nothing there points at it either.
- *
- * ⚠ **DERIVED FROM THE RUNNING NODE, NEVER SHELLED OUT FOR.** `process.execPath` is this process's
- * own interpreter; its `bin` directory is the same one `npm -g` writes to for that install, and
- * reading it costs nothing. Running `npm prefix -g` here would mean spawning a process inside the
- * module whose whole contract is that it resolves without executing anything.
- */
+// `npm i -g` under Homebrew node lands in the versioned keg, which no constant can name. Only helps under
+// plain node (scripts/tests): in Electron main `execPath` is the Dopl binary, not an interpreter.
 function nodeNeighbours(execPath) {
   const out = [];
   const bin = execPath ? path.dirname(execPath) : '';
@@ -164,59 +62,24 @@ function nodeNeighbours(execPath) {
 
 // ─── BEGIN CODEX-RESOLVE-PURE (no electron, no spawn; unit-tested directly) ───
 
-/** `~/x` → `<home>/x`. Anything else is returned untouched. */
 function expandHome(entry, home) {
   if (entry === '~') return home;
   if (entry.startsWith('~/')) return path.join(home, entry.slice(2));
   return entry;
 }
 
-/**
- * Is this path a file Dopl may execute, and is the place it sits in trustworthy?
- *
- * Returns `{ ok: true, path }` or `{ ok: false, reason }` — the reason is for an operator.
- *
- * ⚠ **BOTH PATHS AND EVERY ANCESTOR ARE CHECKED.** `stat` follows symlinks. Checking only the
- * candidate's immediate directory therefore accepts `/safe/bin/codex -> /shared/codex`, where an
- * attacker can replace the target from `/shared`. Return the canonical path too, so the later
- * `spawn` executes the file whose full chain was inspected rather than resolving the symlink again.
- */
-/**
- * 🔒 **WHO CAN REWRITE THIS, OTHER THAN ME?** — the question the mode bits are asked, and the one
- * a bare `& 0o022` gets wrong on macOS.
- *
- * ⚠ **MEASURED 2026-09-22, AND IT REFUSED THE TWO COMMONEST INSTALLS.** Homebrew ships
- * `/opt/homebrew` as `drwxrwxr-x samuelwang:admin` — GROUP-WRITABLE BY DESIGN, so that an admin
- * can `brew install` without `sudo`. A flat group-write refusal therefore rejected
- * `/opt/homebrew/bin/codex` AND the npm-global prefix under `/opt/homebrew/Cellar`, i.e. `brew
- * install codex` and `npm i -g @openai/codex` both, telling the operator Codex was not installed
- * while it sat on their PATH. A security check that no real install can pass is not a security
- * check; it is an outage.
- *
- * THE RULE, and the threat model behind it:
- *   - **WORLD-WRITABLE IS ALWAYS REFUSED.** Any local account could swap the binary. No exceptions,
- *     sticky bit included — `/tmp` is exactly the case this exists for.
- *   - **GROUP-WRITABLE IS REFUSED ONLY WHEN THE OWNER IS SOMEONE ELSE.** If the thing is owned by
- *     ME, group-write grants nobody a power I do not already have: I can rewrite my own files, and
- *     an attacker running as me has already won. If it is owned by ROOT, group-write is the
- *     platform's own arrangement (`admin`), which is the posture the operator's package manager
- *     chose. If it is owned by a THIRD party, group-write is a real hole and is refused.
- *
- * ⚠ **THIS IS A DELIBERATE NARROWING OF THE 2026-09-22 HARDENING, NOT A REVERT OF IT.** The
- * symlink-and-ancestor walk it added stays exactly as it was — that caught a real hole (a safe
- * name pointing into a writable tree). What changed is the PREDICATE at each step.
- *
- * `uid` absent (a platform with no `getuid`) falls back to the strict `& 0o022`: unknown identity
- * is not a reason to widen.
- */
+// Not `& 0o022` (Homebrew dirs are group-writable by design): world-writable is always refused;
+// group-writable only when the owner is neither `uid` nor root. No `uid` → strict.
 function writableByOthers(stat, uid) {
   if (!stat) return true;
-  if ((stat.mode & 0o002) !== 0) return true; // world-writable, always
-  if ((stat.mode & 0o020) === 0) return false; // not group-writable, nothing more to ask
-  if (typeof uid !== 'number') return true; // unknown identity → the strict reading
-  return !(stat.uid === uid || stat.uid === 0); // group-writable is fine only if mine or root's
+  if ((stat.mode & 0o002) !== 0) return true;
+  if ((stat.mode & 0o020) === 0) return false;
+  if (typeof uid !== 'number') return true;
+  return !(stat.uid === uid || stat.uid === 0);
 }
 
+// Walks every ancestor of the candidate AND its symlink target (a safe name into a writable tree is a hole);
+// returns the canonical path so spawn runs the inspected file. `missing` (not found) is never reported.
 function inspectCandidate(file, io, uid) {
   let resolved;
   try {
@@ -270,25 +133,8 @@ function inspectCandidate(file, io, uid) {
   return { ok: true, path: resolved, reason: '' };
 }
 
-/**
- * THE SEARCH, as a pure function of an environment and a filesystem.
- *
- * `io` — `{ realpathSync, statSync, accessSync }`, so a test drives a fake tree without touching
- * this machine's.
- *
- * Returns `{ ok, path, source, reason, rejected }`:
- *   `source`   `override` | `bundled` | `path` | `well-known` — how it was found, for diagnostics,
- *              and searched in that order. The argument for the order is in this file's header;
- *              it is a policy, so it is written down once and not re-litigated here.
- *   `rejected` every candidate that EXISTED and was refused, with its reason. ⚠ It is the
- *              difference between "you have no Codex" and "you have one Dopl will not run", and an
- *              operator who cannot tell those apart reinstalls the wrong thing.
- */
-/**
- * An npm install's `codex` resolves to `@openai/codex/bin/codex.js`, a `#!/usr/bin/env node`
- * launcher that dies under a Finder launch's PATH (no `node`). The vendor binary it would spawn,
- * resolved from that package's own dependencies, or `null` (CX-07).
- */
+// An npm install's `codex` is `bin/codex.js`, a `#!/usr/bin/env node` launcher that dies under a Finder
+// PATH (no `node`): return the vendor binary it would spawn, from that package's own deps, or `null` (CX-07).
 function launcherVendor(resolved, { platform, arch, resolvePackage }) {
   if (typeof resolvePackage !== 'function' || path.basename(resolved) !== 'codex.js'
     || path.basename(path.dirname(resolved)) !== 'bin') return null;
@@ -296,6 +142,11 @@ function launcherVendor(resolved, { platform, arch, resolvePackage }) {
   return bundledCandidate({ platform, arch, resolvePackage: (req) => resolvePackage(req, { paths: [pkgRoot] }) });
 }
 
+/**
+ * The search, pure over `env` and `io` (`{ realpathSync, statSync, accessSync }`) for tests.
+ * @returns {{ ok, path, source, reason, rejected }} `source` override|bundled|path|well-known; `rejected`
+ *   = candidates that exist but were refused, so "no Codex" and "a Codex Dopl won't run" read differently.
+ */
 function resolveWith({ env, home, io, uid, execPath, platform, arch, resolvePackage }) {
   const rejected = [];
   const consider = (file, source) => {
@@ -312,8 +163,7 @@ function resolveWith({ env, home, io, uid, execPath, platform, arch, resolvePack
 
   const override = String((env && env[OVERRIDE_ENV]) || '').trim();
   if (override) {
-    // ⚠ AN OVERRIDE THAT DOES NOT RESOLVE IS AN ERROR, NOT A FALLBACK. The operator named a file;
-    // quietly running a different one is how a support session measures the wrong binary.
+    // A failing override is an error, never a fallback: the operator named this file.
     const verdict = inspectCandidate(override, io, uid);
     if (verdict.ok) return { ok: true, path: verdict.path, source: 'override', reason: '', rejected };
     return {
@@ -325,9 +175,7 @@ function resolveWith({ env, home, io, uid, execPath, platform, arch, resolvePack
     };
   }
 
-  // ⚠ SECOND, AND ABOVE `PATH` — see the header. A bundled candidate that is REFUSED lands in
-  // `rejected` like any other and the search continues: a tampered app bundle must not be the only
-  // thing the operator is told about when a perfectly good `codex` sits on their PATH.
+  // A refused bundle lands in `rejected` and the search continues to PATH.
   const bundled = bundledCandidate({ platform, arch, resolvePackage });
   if (bundled) {
     const hit = consider(bundled, 'bundled');
@@ -342,7 +190,7 @@ function resolveWith({ env, home, io, uid, execPath, platform, arch, resolvePack
 
   for (const dir of WELL_KNOWN.concat(nodeNeighbours(execPath))) {
     const expanded = expandHome(dir, home);
-    // ⚠ Skip what `PATH` already covered — the same file refused twice reads as two problems.
+    // Skip what PATH already covered: the same file refused twice reads as two problems.
     if (entries.includes(expanded) || entries.includes(dir)) continue;
     const hit = consider(path.join(expanded, BIN), 'well-known');
     if (hit) return hit;
@@ -354,12 +202,7 @@ function resolveWith({ env, home, io, uid, execPath, platform, arch, resolvePack
     source: null,
     reason: rejected.length
       ? `A \`${BIN}\` was found but Dopl will not run it — ${rejected[0].reason}. Move it to a directory only you can write to, or set \`${OVERRIDE_ENV}\`.`
-      // ⚠ **THE SECOND CLAUSE STOPPED BEING TRUE ON 2026-09-22 AND WAS REWRITTEN RATHER THAN
-      // DROPPED.** It read "this release does not bundle it". This release DOES — so reaching here
-      // means the bundled candidate was ABSENT, which on a `bundled` delivery is itself the news:
-      // the build's optional platform package did not install, or the app bundle is missing its
-      // unpacked half. Telling the operator only "install the CLI" would hide a broken build
-      // behind a workaround that happens to work.
+      // No bundle on a `bundled` build means a broken build (platform package or unpacked half missing).
       : `\`${BIN}\` is not installed where Dopl can find it, and this build carries no bundled copy. Install the Codex CLI and re-open Dopl, or reinstall Dopl.`,
     rejected,
   };
@@ -367,11 +210,10 @@ function resolveWith({ env, home, io, uid, execPath, platform, arch, resolvePack
 
 // ─── END CODEX-RESOLVE-PURE ───
 
-// A HIT is cached for the process; a miss is not, so a Codex installed (or a prefix repaired) while
-// Dopl runs is found on the next probe (CX-08). A miss costs a few `stat`s.
+// Only a HIT is cached; a miss re-walks, so a Codex installed while Dopl runs is found next probe (CX-08).
 let cached = null;
 
-/** The resolved binary for this process. See `resolveWith` for the shape. */
+/** The resolved binary for this process (`resolveWith` shape). */
 function resolveCodexBin() {
   if (cached) return cached;
   const found = resolveWith({
@@ -382,25 +224,19 @@ function resolveCodexBin() {
     execPath: process.execPath,
     platform: process.platform,
     arch: process.arch,
-    // ⚠ THIS MODULE'S OWN `require.resolve`, not the caller's. Resolution is relative to the file
-    // doing it, and `main/runtime/codex/` is inside the same package tree as the vendored binary
-    // in both a dev checkout and a packaged app — which is exactly what makes the derivation work
-    // without knowing which of the two it is standing in.
+    // This module's own `require.resolve`: it shares the vendored binary's package tree, dev or packaged.
     resolvePackage: require.resolve,
   });
   if (found.ok) cached = found;
   return found;
 }
 
-/** Drop the cache. ⚠ For tests and for an explicit operator-driven re-probe, nothing else. */
+/** Drop the cache (tests, explicit re-probe). */
 function forget() {
   cached = null;
 }
 
-/**
- * The bare name, for the one case that still wants it: an error message. ⚠ NEVER pass this to
- * `spawn` — that is the bug this module exists to fix.
- */
+// The bare name, for error messages only; never pass it to `spawn`.
 const BIN_NAME = BIN;
 
 module.exports = {

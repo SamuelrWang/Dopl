@@ -1,31 +1,8 @@
-// THE SKILLS FENCE — no skill catalogue, personal or bundled, reaches a Dopl-launched Codex agent.
-//
-// 🔒 ⚠ **THE CLAUDE LANE STRIPS THE OPERATOR'S PERSONAL SKILL CATALOGUE ON PURPOSE** (`runtime/
-// claude/tools.js › FULL_BUILTIN_BOUND`, `Skill` removed): an agent in a SHARED channel could
-// repeat it to other members (the F-268 privacy class), it is ~8k characters of context on every
-// turn, and it breaks prompt-cache identity across machines. An isolated CODEX_HOME did not do
-// the same here: MEASURED 2026-09-22 (codex-cli 0.155.1) Codex lists skills from
-//   `~/.agents/skills`                       — the operator's own (Samuel's ce-* etc.)
-//   `$CODEX_HOME/skills/.system`             — Codex's bundled five, installed into the private home
-//   `<cwd>/.codex/skills`
-//   `<dir>/.agents/skills` for every dir from the project root (the `.git` marker) down to cwd
-// — independent of the project-trust fence — ~23k characters of prompt with Samuel's set, and a
-// `$skill-name` mention in the turn text INJECTED that skill's whole body into the model input.
-//
-// ⚠ THREE LEVERS, EACH MEASURED, BECAUSE ONE IS NOT ENOUGH:
-//   `skills.include_instructions = false`   the listing section leaves the prompt — but a
-//                                           `$mention` STILL injected the body.
-//   `skills.bundled.enabled = false`        the bundled `.system` root leaves. They are dropped,
-//                                           not kept: `skill-installer` / `skill-creator` /
-//                                           `plugin-creator` WRITE persistent skills or plugins,
-//                                           and Claude's lane has no skills at all.
-//   `skills.config = [{ path|name, enabled = false }]`  per SKILL.md — the only selector that
-//                                           stopped a `$mention`. A ROOT directory path does
-//                                           nothing, so the roots above are ENUMERATED at launch.
-// ⚠ `features.skip_host_skill_discovery` WAS MEASURED AND DOES NOTHING on this build (it is
-// "under development"). A HOME override was NOT used: HOME reaches the agent's shell, its login
-// rc files, git config and the shell snapshot — a much wider change than a skills fence.
-// ⚠ RESIDUAL, STATED: a skill written into one of these roots AFTER launch is not in this list.
+// No skill catalogue (`~/.agents/skills`, bundled `.system`, project roots) reaches a Dopl-launched Codex
+// agent; Claude strips `Skill` too (shared-channel privacy, F-268). `include_instructions=false` drops the
+// listing, `bundled.enabled=false` the bundled set, and only per-SKILL.md `{path}`/`{name}` `enabled:false`
+// entries stop a `$mention` (a root path does nothing, so roots are enumerated at launch).
+// `features.skip_host_skill_discovery` does nothing (measured). Residual: a skill added after launch.
 
 const fs = require('fs');
 const os = require('os');
@@ -47,7 +24,7 @@ function ancestors(dir) {
   }
 }
 
-/** Every root Codex reads skills from, as a SUPERSET: every ancestor of cwd is scanned, not only the project's. */
+/** Every root Codex reads skills from, as a superset: every ancestor of cwd, not only the project's. */
 function skillRoots(opts) {
   const o = opts || {};
   const home = o.home || os.homedir();
@@ -101,7 +78,7 @@ function skillsFence(opts) {
     const n = skillName(f);
     if (n) names.add(n);
   }
-  // ⚠ SEPARATE ENTRIES: Codex ignores an entry carrying both a path and a name selector.
+  // Separate entries, deliberately: Codex ignores one carrying both a path and a name selector.
   const config = Array.from(paths).sort().map((p) => ({ path: p, enabled: false }))
     .concat(Array.from(names).sort().map((n) => ({ name: n, enabled: false })));
   return { include_instructions: false, bundled: { enabled: false }, config };
