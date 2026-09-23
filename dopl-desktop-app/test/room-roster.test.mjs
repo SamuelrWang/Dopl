@@ -36,9 +36,11 @@ function fakeIo(answers = {}, opts = {}) {
 
 const ownSession = (agentId, over = {}) => ({
   agentId,
-  displayName: over.displayName ?? null,
   context: { identity: over.role ? { name: over.role } : null },
 });
+/** The rename store's names for this machine's own agents. */
+const NAMES = { landingc: 'Landing Coder' };
+const agentNameOf = (id) => NAMES[id] || '';
 
 const fakeRegistry = (sessions) => ({ liveInChannel: () => sessions });
 
@@ -49,6 +51,7 @@ test('a SOLO channel makes no network call at all', async () => {
   const out = await roster.fetchRoomRoster({
     io,
     registry: fakeRegistry([ownSession('landingc')]),
+    agentNameOf,
     channelId: 'chan-1',
     memberCount: 1,
     selfAgentId: 'selfagnt',
@@ -56,7 +59,7 @@ test('a SOLO channel makes no network call at all', async () => {
   assert.equal(io.calls.length, 0);
   assert.equal(out.read, 'skipped');
   // ⚠ And the LOCAL half still answers: the operator's own other agents are in memory here.
-  assert.deepEqual(out.agents.map((a) => a.handle), ['landingc']);
+  assert.deepEqual(out.agents.map((a) => a.handle), ['landing-coder']);
 });
 
 test('a MULTI-member channel reads once for each half, under one bounded timeout', async () => {
@@ -66,7 +69,8 @@ test('a MULTI-member channel reads once for each half, under one bounded timeout
   });
   const out = await roster.fetchRoomRoster({
     io,
-    registry: fakeRegistry([ownSession('landingc', { displayName: 'Landing Coder', role: 'Coder' })]),
+    registry: fakeRegistry([ownSession('landingc', { role: 'Coder' })]),
+    agentNameOf,
     channelId: 'chan-1',
     workspaceId: 'ws-1',
     memberCount: 3,
@@ -77,7 +81,7 @@ test('a MULTI-member channel reads once for each half, under one bounded timeout
   for (const c of io.calls) assert.equal(c.timeoutMs, roster.ROSTER_TIMEOUT_MS);
   assert.equal(out.read, 'ok');
   // ⚠ SAME-OPERATOR FIRST, and the flag is on every row: it is the one fact a handle cannot carry.
-  assert.deepEqual(out.agents.map((a) => `${a.handle}:${a.mine}`), ['landingc:true', 'Flint:false']);
+  assert.deepEqual(out.agents.map((a) => `${a.handle}:${a.mine}`), ['landing-coder:true', 'flint:false']);
   assert.equal(out.agents[0].role, 'Coder');
   // ⚠ The operator is not in their own people line, and a peer's handle is the channel's own rule.
   assert.deepEqual(out.people, [{ handle: 'dana-lee', name: 'Dana Lee' }]);
@@ -90,12 +94,13 @@ test('🔒 a read that FAILS is said out loud, and the launch still gets the loc
   const out = await roster.fetchRoomRoster({
     io,
     registry: fakeRegistry([ownSession('landingc')]),
+    agentNameOf,
     channelId: 'chan-1',
     memberCount: 4,
     selfAgentId: 'selfagnt',
   });
   assert.equal(out.read, 'failed');
-  assert.deepEqual(out.agents.map((a) => a.handle), ['landingc']);
+  assert.deepEqual(out.agents.map((a) => a.handle), ['landing-coder']);
   assert.match(roomRosterLines(out).join('\n'), /others: not read/);
 });
 
@@ -106,7 +111,7 @@ test('one half failing costs that half and nothing else', async () => {
   });
   assert.equal(out.read, 'ok', 'the peer half answered');
   assert.deepEqual(out.people, [], 'the members half did not, and takes only the people line with it');
-  assert.deepEqual(out.agents.map((a) => a.handle), ['flint']);
+  assert.deepEqual(out.agents.map((a) => a.handle), ['agent-flint'], 'an unnamed peer is its id door, never the bare id');
 });
 
 test('the session being LAUNCHED is not in its own roster, and an ENDED peer is not in the room', async () => {
@@ -117,18 +122,19 @@ test('the session being LAUNCHED is not in its own roster, and an ENDED peer is 
   const out = await roster.fetchRoomRoster({
     io,
     registry: fakeRegistry([ownSession('selfagnt'), ownSession('landingc')]),
+    agentNameOf,
     channelId: 'chan-1',
     memberCount: 2,
     selfUserId: SELF_USER,
     selfAgentId: 'selfagnt',
   });
-  assert.deepEqual(out.agents.map((a) => a.handle), ['landingc']);
+  assert.deepEqual(out.agents.map((a) => a.handle), ['landing-coder']);
 });
 
 test('🔒 more than five agents renders five and a POINTER, never the room', async () => {
   const own = Array.from({ length: 9 }, (_, i) => ownSession(`agent${i}x`));
   const out = await roster.fetchRoomRoster({
-    io: fakeIo(), registry: fakeRegistry(own), channelId: 'chan-1', memberCount: 1,
+    io: fakeIo(), registry: fakeRegistry(own), agentNameOf, channelId: 'chan-1', memberCount: 1,
   });
   assert.equal(out.agents.length, roster.MAX_LISTED);
   assert.equal(out.agentsMore, 4);
@@ -210,8 +216,21 @@ test('an agent the launch snapshot never named introduces itself on its own turn
 });
 
 test('the handle rule matches the channel resolver the tag is read by', () => {
-  // ⚠ `main/` cannot import `src/features/channels/lib/mentions.ts › mentionSlug`, so this pins
-  // the hand-copy against the rule as stated there: lowercase, whitespace runs to one `-`.
-  assert.equal(roster.handleOf('Samuel Wang'), 'samuel-wang');
-  assert.equal(roster.handleOf('  Dana   Lee '), 'dana-lee');
+  // `agent-handles.js › agentSlug` (the pinned copy of `mentions.ts › mentionSlug`): lowercase,
+  // whitespace runs to one `-`.
+  const out = roster.buildRoster({ members: [{ name: 'Samuel Wang' }, { name: '  Dana   Lee ' }] });
+  assert.deepEqual(out.people.map((p) => p.handle), ['samuel-wang', 'dana-lee']);
+});
+
+test('P3-17: an own agent is listed by its NAME tag, never its instance id', () => {
+  const own = roster.ownAgents([ownSession('landingc'), ownSession('unnamedx')], 'selfagnt', agentNameOf);
+  assert.deepEqual(own.map((a) => a.handle), ['landing-coder', 'agent-unnamedx']);
+  const throwing = roster.ownAgents([ownSession('landingc')], '', () => { throw new Error('no store'); });
+  assert.deepEqual(throwing.map((a) => a.handle), ['agent-landingc'], 'a failed name lookup costs the name only');
+});
+
+test('P3-17: a listed agent posting later is KNOWN — its display name slugs to its roster tag', () => {
+  const session = { context: { roster: { agents: [{ handle: 'landing-coder' }] } } };
+  assert.equal(roster.agentAuthorNote(session, { authorKind: 'agent', authorAgentName: 'Landing Coder' },
+    SELF_USER, { displayNameFor: () => '' }), null);
 });

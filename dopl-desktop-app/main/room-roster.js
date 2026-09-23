@@ -35,6 +35,7 @@
 // those.
 
 const { diag } = require('./diag');
+const { agentSlug } = require('./agent-handles');
 
 /** ⚠ FIVE SECONDS, and the number is the launch's, not the network's. A spawn is a button click
  *  away from a human; `identity-resolve.js` picks the same bound for the same reason. */
@@ -51,19 +52,27 @@ function text(value, max) {
   return typeof value === 'string' ? value.trim().slice(0, max) : '';
 }
 
+/** An agent's @-tag: its slugged name, else its `agent-<id>` door — never the bare instance id. */
+function agentHandle(name, id) {
+  return agentSlug(name) || (id ? `agent-${id}` : '');
+}
+
 /**
  * THE LOCAL HALF — the operator's OWN live agents in this channel, minus the session being
- * launched. ⚠ Injected rather than required, so the truth table drives it with no electron.
+ * launched. ⚠ `sessions` and `nameOf` (the rename store) are injected, so the truth table drives
+ * it with no electron; a name lookup that throws costs the name, never the roster.
  */
-function ownAgents(sessions, selfAgentId) {
+function ownAgents(sessions, selfAgentId, nameOf) {
   const out = [];
   for (const s of sessions || []) {
-    const handle = text(s && s.agentId, NAME_MAX);
-    if (!handle || handle === selfAgentId) continue;
+    const id = text(s && s.agentId, NAME_MAX);
+    if (!id || id === selfAgentId) continue;
+    let name = '';
+    try { name = text(nameOf ? nameOf(id) : '', NAME_MAX); } catch (_) { name = ''; }
     const ctx = (s && s.context) || {};
     out.push({
-      handle,
-      name: text(s && s.displayName, NAME_MAX),
+      handle: agentHandle(name, id),
+      name,
       role: text(ctx.identity && ctx.identity.name, ROLE_MAX),
       mine: true,
     });
@@ -86,7 +95,7 @@ function peerAgents(sessions, selfUserId, nameOf) {
     if (!row || typeof row !== 'object') continue;
     const userId = text(row.userId, NAME_MAX);
     if (!userId || userId === selfUserId) continue;
-    const handle = text(row.displayName, NAME_MAX) || text(row.name, NAME_MAX);
+    const handle = agentHandle(text(row.displayName, NAME_MAX), text(row.name, NAME_MAX));
     if (!handle) continue;
     // ⚠ ENDED SESSIONS ARE NOT IN THE ROOM. `state` is the three-word wire vocabulary; anything
     // this build does not recognise is kept, because "unknown" is not "gone".
@@ -111,17 +120,6 @@ function people(members, selfUserId) {
 }
 
 /**
- * ⚠ **THE HANDLE RULE IS THE CHANNEL'S OWN, AND IT IS NOT RE-SPELLED HERE.**
- * `src/features/channels/lib/mentions.ts › mentionSlug` is the one slugger (lowercase, whitespace
- * runs to a single `-`), and `packages/*` / `main/` cannot import the app's `src/`. This is the
- * hand-copy that pairing forces, kept to ONE line so a drift is visible, and
- * `room-roster.test.mjs` pins it against the rule as stated.
- */
-function handleOf(name) {
-  return String(name || '').trim().toLowerCase().replace(/\s+/g, '-');
-}
-
-/**
  * Build the roster object the framing renders. PURE — every input is handed in.
  *
  * ⚠ `read` IS THREE-VALUED AND EVERY VALUE IS A DIFFERENT FACT: `'ok'` (the peer half was read),
@@ -134,7 +132,7 @@ function buildRoster({ own = [], peers = [], members = [], read = 'skipped' } = 
   return {
     agents: agents.slice(0, MAX_LISTED),
     agentsMore: Math.max(0, agents.length - MAX_LISTED),
-    people: members.slice(0, MAX_LISTED).map((p) => ({ handle: handleOf(p.name), name: p.name })),
+    people: members.slice(0, MAX_LISTED).map((p) => ({ handle: agentSlug(p.name), name: p.name })),
     peopleMore: Math.max(0, members.length - MAX_LISTED),
     read,
   };
@@ -190,6 +188,7 @@ async function fetchRoomRoster(a = {}) {
   const own = ownAgents(
     channelId ? registry.liveInChannel(channelId) : [],
     String(a.selfAgentId || ''),
+    a.agentNameOf || ((id) => require('./agent-names').displayNameFor(id)),
   );
   if (!channelId || a.memberCount === 1) {
     return buildRoster({ own, read: 'skipped' });
@@ -234,7 +233,7 @@ async function fetchRoomRoster(a = {}) {
 // produces prose — F-579's rule that a roster must never become the fan-out's input, honoured.
 function agentAuthorNote(s, m, myUserId, io) {
   if (!m || m.authorKind !== 'agent') return null;
-  const handle = String((m && m.authorAgentName) || '').replace(/[\r\n]+/g, ' ').trim().slice(0, 80);
+  const handle = agentSlug(String((m && m.authorAgentName) || '').replace(/[\r\n]+/g, ' ').trim().slice(0, 80));
   if (!handle) return null;
   const roster = (s && s.context && s.context.roster) || null;
   const known = roster && Array.isArray(roster.agents)
@@ -255,7 +254,6 @@ module.exports = {
   peerAgents,
   people,
   buildRoster,
-  handleOf,
   MAX_LISTED,
   ROSTER_TIMEOUT_MS,
 };
