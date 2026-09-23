@@ -465,7 +465,8 @@ Rows 6–11 and 15–16 are `packages/mcp-server`'s and the SPA's: **B13's**, un
 can no longer emit `WORKSPACE_REQUIRED`, so B13 deletes a constant with no producer.
 
 **Outside B14's ownership, and each is one line or one comment:** the two `resolveHomeScope` fences
-(B15's) each swap an import for `isOwnPersonalContainer`; `home-channel-derivation.test.ts` grows a
+(B15's) each swap an import for `isOwnPersonalContainer` (never adopted: it had no caller anywhere and was deleted
+2026-09-23); `home-channel-derivation.test.ts` grows a
 second map (F-632); `server/authz.ts` branches one message on the kind; `apps/desktop-ui/src/pages/boot/use-boot-state.ts`
 stops naming a deleted route; six billing/SPA comments lose the phrase.
 

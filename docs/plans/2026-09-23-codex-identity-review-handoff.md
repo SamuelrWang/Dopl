@@ -79,3 +79,35 @@ lint `--max-warnings 0`, root vitest, `apps/desktop-ui` tests + typecheck, `pack
 `dopl-desktop-app` `npm test` + `CODEX_APP_SERVER_LIVE=1 npm test` + lint, root `npm run build`,
 500-line cap. Rebuild committed `packages/*/dist` if a package changes. Don't open the app or take
 screenshots as verification.
+
+## Resolved by the 2026-09-23 cleanup (re-verified against the tree at `e9fa9285`)
+
+Known open items above, one by one:
+
+- **Fixed — the private-turn depth on a steered push.** `session-private.js › privatePushJoined`, called
+  from `session-directed.js › steerJoined` when a runtime joins a push into the running turn (Codex
+  `turn/steer`, and Claude's measured mid-turn fold, `runtime/claude/fold.js`), pays back the unit the
+  push opened. Pinned by `dopl-desktop-app/test/private-turn-join.test.mjs`.
+- **Fixed — Cursor's model ids coerced to Claude aliases.** `session-reopen.js › setModelByTask` resolves
+  a pick on the session's OWN runtime (`rt.modelArg`); no Claude table is consulted (the core
+  session-model module is deleted).
+- **Still open — Codex reads a stored reasoning effort nothing can set** (`runtime/codex/launch-spec.js`
+  reads `state.native.reasoningEffort`; the Settings effort row left with the model row), so Codex uses
+  the per-model default.
+- **Still open — a `turn/steer` racing a turn's end** has no `turn/start` fallback.
+- **Still open — a skill added to a fenced folder after launch** is not covered (`skills-fence.js` says so).
+- **Still open — Codex `never`-shell can schedule via `crontab` / `launchd`** (the shell fence's job).
+- **Still open — the native `spawn_agent` block depends on the catalog override**, and a model missing
+  from every catalog source refuses the launch (deliberate; `catalog.js › pickModels`).
+- **Still open — reasoning-effort option lists are fixed per runtime** (`codex/models.js › REASONING_EFFORTS`).
+- **Cursor stays out of scope.**
+
+Migrations: `20261018120000_channel_launch_directives_no_model.sql` is **DELETED** (never applied
+anywhere; `20261019120000` §7 restates the whole refusal CHECK with `no-identity` and `no-model`).
+The release set is now, applied by NAME in this order: `20261019120000_rename_agent_templates_to_agent_identities`,
+`20261020120000_channel_launch_directives_runtime_tool_words`, `20261021120000_agent_identities_runtime`
+— record the measurement (`supabase migration list --linked`, joined on the name), not a claim
+(INVARIANTS §12).
+
+New debt the cleanup deferred is filed as F-755–F-762 in `docs/REFACTOR-FINDINGS.md`; the one
+visibility bug among them is F-757 (knowledge search reads no `access_mode`).

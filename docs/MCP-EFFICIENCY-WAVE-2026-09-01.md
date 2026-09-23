@@ -43,7 +43,7 @@ Integration commits on top: `f5c045b9` (chain honesty, committed onto tier 5 bef
 | T70 "needs you" ping | **done** | `a333dd30` → `db4bd51f` |
 | T81 pinned startup context | **done** (framing closed in integration) | `09c1ea2f`, `be1fe1dc`, + GAP B |
 | T85 await refused on a desktop session | **done** | `11f8a527` |
-| **T82 description budget** | **PARTIAL — ratcheted, not met** | seven descriptions exceed the 1,200-char cap and sit on a **downward-only ratchet** in `tool-budget.test.ts`. Each is at its smallest *honest* size; getting under the cap means deleting a headline, an op line, a pinned security phrase, or `channel-description.ts › HOME_CHANNEL_ADDRESSING` (~650 chars the P3 tier asked to keep verbatim). **That is a decision, not a trim — Samuel's to take.** |
+| **T82 description budget** | **PARTIAL — ratcheted, not met** | seven descriptions exceed the 1,200-char cap and sit on a **downward-only ratchet** in `tool-budget.test.ts`. Each is at its smallest *honest* size; getting under the cap means deleting a headline, an op line, a pinned security phrase, or the home-channel addressing paragraph (~650 chars the P3 tier asked to keep verbatim; since 2026-09-23 it is pulled from `channel-doctrine.ts › ROOMS`, and the description carries only `channel-description.ts › HOME_CHANNEL_POINTER`). **That is a decision, not a trim — Samuel's to take.** |
 | **T84 SDK cache TTL** | **SKIPPED** | `@anthropic-ai/claude-agent-sdk@^0.3.220` exposes no cache-TTL option. Nothing to build against. |
 
 ## What the integration itself had to decide

@@ -540,7 +540,7 @@ The SPA suite was absent from the previous baseline entirely, which is its own s
 - Found during: contract v2.9 Tier 1 fixes C1-C7 (2026-07-30)
 - Severity: smell (the shipped fixes close the primary paths)
 - Description: all four residuals re-verified 2026-08-08.
-  - **(i) ✅ RESOLVED 2026-08-26 — the plaintext `mcp-spawn.json` is no longer written, and the file is DELETED on the next signed-in launch.** It said: the headless/CLI spawn path wrote `Authorization: Bearer ${token}` at mode 600 only, `tool-profiles.js › buildRestrictionArgs` returned `[]` for `full` and emitted no path-deny for any profile, so a headless spawn's pre-approved `Read` could open it.
+  - **(i) ✅ RESOLVED 2026-08-26 — the plaintext `mcp-spawn.json` is no longer written, and the file is DELETED on the next signed-in launch.** It said: the headless/CLI spawn path wrote `Authorization: Bearer ${token}` at mode 600 only, `tool-profiles.js`'s `buildRestrictionArgs` (deleted 2026-09-23 with the headless-lane argv builders) returned `[]` for `full` and emitted no path-deny for any profile, so a headless spawn's pre-approved `Read` could open it.
     - ⚠ **AND ITS PROPOSED FIX SHAPE WAS WRONG — recorded because the next round would otherwise implement it.** It read *"thread `extraDenyRules` … into `buildRestrictionArgs` + `writeScopedSettings`, and emit `--disallowedTools` for `full` too"*. That closes the `Read` door and **not the `Bash` one**, which is the door that matters: Claude Code `Bash(...)` permission rules match COMMAND patterns, never path globs, so no deny rule of that family can fence a path against a shell. **A deny rule that cannot fire is worse than none, because it reads as coverage.**
     - **What was done instead:** stop writing the file. Nothing in the app had read it since `session-spawner.js › runForChannel` — the headless `claude -p` executor — was deleted 2026-08-20; the SDK path takes the bearer in memory from `mcp-config.js › deviceTokenForSpawn` (safeStorage) and manual `claude` runs are served by the user-scope CLI entry `ensureMcpConfig` adds. `removeSpawnConfig()` runs where the write used to, so existing installs shed the token. Mutation-verified in `dopl-desktop-app/test/sdk-mcp-token.test.mjs` (9 mutations).
     - ⚠ **Residuals (iii) and (iv) below are the same CLASS and are still open**, and F-329 residual #3 is the audience-ceiling consequence of it.
@@ -865,7 +865,7 @@ COMMIT;
   - **(b) `task_finished` leaves the requester strip unchanged.** `main/session-dispatch.js:269` — `REQUEST_MILESTONES = { task_started: 'accepted', task_failed: 'declined' }`. The comment above it states the reasoning: a `task_failed` with no `declined` flag is a real error, not a decline, and v1 has no word for it, so the strip holds rather than say the wrong thing. `task_finished` is absent entirely.
   - **(c) is the same fact as F-112 and is tracked there** — four `kind === 'message'` gates in `session-dispatch.js`, now the whole rule rather than a lane-priority question.
   - **(e) `BYPASS_READS`' MCP read tools reach ANY configured server under `full`.** `main/session-profiles.js:342-346` (`ListMcpResources` / `ReadMcpResource`), folded into `BYPASS_TOOLS` at `:348`; under `full` `doplToolsPolicy` is `null` (`:167`), so there is no per-server bound. Reads only.
-  - **(f) The model context-window table does not cover every id the CLI can report.** `main/session-model.js:92-106` handles the `[1m]` suffix, an exact table hit and a dated `-\d{8}$` strip; anything else — `-fast`, `-v1` — returns `null` at `:105`, so `:126` emits tokens with no window. Fail-safe: **tokens only, never a made-up percentage.**
+  - **(f) The model context-window table does not cover every id the CLI can report.** `main/runtime/claude/model-table.js › contextWindowFor` (the table's home since 2026-09-23, when the session-model module was deleted) handles the `[1m]` suffix, an exact table hit and a dated `-\d{8}$` strip; anything else — `-fast`, `-v1` — returns `null`, so the Claude normalizer's `context` reading carries tokens with no window and `session-metrics.js › metrics` reports none. Fail-safe: **tokens only, never a made-up percentage.**
   - **(g) Each typed request opens a real window.** `session-dispatch.js:170-177` → `launchRequesterSession` (`main/session-engine.js:419-421`); `getWindowMode()` defaults ON (`main/settings.js:34-37`). Self-inflicted, evictable, N requests = N windows.
 - **The blocker this wave's review caught is worth restating, because it is a trap the codebase can re-enter:** the consent arm was keyed to the `(channel, thread)` SLOT and consumed unconditionally by EVERY spawn shape, so a peer-driven parked-shell wake racing a pending armed card started at bypass/auto_both while the real Accept spawned manual/ask. Fixed with `adoptsConsent`, threaded from `launch()`'s own adopt test and pinned as a SINGLE SETTER. Do not add a second setter.
 - Status: open (residuals)
@@ -1727,7 +1727,7 @@ COMMIT;
 - ⚠ **THE DOC-vs-CODE DISAGREEMENT IS THE FINDING.** INVARIANTS §6 says the launch settings are "`components/permission-preset-row.tsx › RequestPermissionRow` … reused verbatim", and §11's two-record table gives THE ARM's "Web surface" as "the request card (`launch-panel.tsx › RequestPermissionRow`)". Neither is reachable. §6 simultaneously and CORRECTLY states the panel has one consumer, `ThreadSendBox` — so the two halves of §6 contradict each other. A third copy of the same claim sits in `channels/components/settings-agent.tsx`'s docblock ("It still renders on the request card")
 - **Where an inbound decision REALLY renders**, and why this went unnoticed: `thread-consent.tsx › ThreadAwaitingStrip`, `channels/components/transcript.tsx › ThreadCardMessage` and the Inbox pane's `InboxRow` each hand-roll their own Launch agent / Decline buttons. The product works; it is the ARM's controls that have no surface. ⚠ **All three are gone since** — the first two with the inbound retirement (2026-08-22) and the Inbox pane itself on 2026-08-25 (INVARIANTS §6); the anchor was de-linked when its file was deleted, not because the record changed
 - ⚠ **FILED, NOT FIXED, per CLAUDE.md's precedence rule** — because the two available fixes were opposite product decisions and neither was a cleanup: (a) the arm is genuinely dead, so delete it and its store key; (b) the arm is intended and its surface regressed, so re-mount `RequestPermissionRow` on the inbound surfaces that do render
-- **✅ SAMUEL RULED (a), 2026-08-20, AND IT IS EXECUTED.** Deleted: `channelPermissionPresets` and its whole family in `main/channel-prefs.js` (`ARM_TTL_MS`, `armIsLive`, `resolveArm`, `readArmFrom`, `armInto`, `takeArmFrom`, `sweepExpired`, `getAllPresets`, `writeAll`, and the four public arm fns), the two `channels.*PermissionPreset` preload ops and their `channel-dir-ipc.js` handlers, the consumption in `trigger.js › inboundApproved`, both `clearPermissionPreset` teardowns in `trigger-outcomes.js`, `hooks/use-channel-permission-preset.ts`, `components/request-folder-row.tsx`, `permission-preset-row.tsx › RequestPermissionRow`, and `launch-panel.tsx`'s entire inbound half
+- **✅ SAMUEL RULED (a), 2026-08-20, AND IT IS EXECUTED.** Deleted: `channelPermissionPresets` and its whole family in `main/channel-prefs.js` (`ARM_TTL_MS`, `armIsLive`, `resolveArm`, `readArmFrom`, `armInto`, `takeArmFrom`, `sweepExpired`, `getAllPresets`, `writeAll`, and the four public arm fns), the two `channels.*PermissionPreset` preload ops and their `channel-dir-ipc.js` handlers, the consumption in `trigger.js`'s `inboundApproved` (the function itself went later, with the inbound consent lane), both `clearPermissionPreset` teardowns in `trigger-outcomes.js`, `hooks/use-channel-permission-preset.ts`, `components/request-folder-row.tsx`, `permission-preset-row.tsx › RequestPermissionRow`, and `launch-panel.tsx`'s entire inbound half
 - ⚠ **H2 SURVIVES THE ARM AND THAT IS THE POINT OF THE ENTRY.** The rule was never the TTL — it is that a stored posture may only reach a launch a human is approving in that moment, and what enforces it is the **CONSUMER COUNT**, which `test/session-preset-start.test.mjs` has pinned all along. One record remains (`channelLaunchPosture`), read at one call site (`sessions:launch`). **An inbound request now carries no tool posture at all** and starts at `manual` — strictly more restrictive than before
 - **What SURVIVED the deletion, because it was never the arm:** the per-channel working folder (`use-channel-folder.ts`, still mounted on the Settings tab), the `TOOL_OPTIONS` / `MESSAGE_OPTIONS` copy (the only surviving statement of what each posture grants, now that the session window's labels are gone), and `RequestPermissionRowView` — the presentation both surfaces share
 - Status: **RESOLVED**
@@ -1752,7 +1752,7 @@ COMMIT;
 
 - Found during: the read-only audit of `dopl-desktop-app/` that F-234 and F-235 were verified in — sweeping for "two code paths answering one question". This is the one that turned out to be a live defect rather than debt
 - **THE DEFECT, reachable in ONE gesture from the shipped UI.** A windowless session has NO ACCEPT SURFACE. `session-gate.js › enqueue` HOLDS an inbound reply whenever `autoInbound(s)` is false, and the whole family that released one — `decideInbound`, `drainQueue`, `drainInbound` — was deleted with the session window (F-228), **on the stated grounds that "a windowless session's message axis is FLOORED at `auto_inbound`, so the queue never holds"**
-- ⚠ **THAT WAS TRUE OF THE LAUNCH LANES AND OF NOTHING ELSE.** `channel-prefs.js › windowlessMessageMode` floors both spawn paths. Nothing floored a mode set on a session ALREADY RUNNING: `session-reopen.js › setModeByTask` accepted all four values, `session-reducer.js` coerced against the full table, and `agent-posture.tsx` renders `MESSAGE_OPTIONS` — which includes `"ask"` — on every live agent
+- ⚠ **THAT WAS TRUE OF THE LAUNCH LANES AND OF NOTHING ELSE.** `windowlessMessageMode` (then in `channel-prefs.js`; deleted 2026-09-23, both launch lanes now call `session-profiles.js › floorWindowlessMessage` directly) floors both spawn paths. Nothing floored a mode set on a session ALREADY RUNNING: `session-reopen.js › setModeByTask` accepted all four values, `session-reducer.js` coerced against the full table, and `agent-posture.tsx` renders `MESSAGE_OPTIONS` — which includes `"ask"` — on every live agent
 - **THE CONSEQUENCE, traced end to end.** Pick "Ask each time" → `autoInbound` false → `enqueue` gates → `session-io.js › queueInbound(…, true)` holds. The head emits `inbound_pending`, which `session-windowless.js › claimGate` does NOT claim (it handles `outbound_gate` and `permission_request` only) and `session-engine.js › emit` drops on the null `win`. The accept events have no caller. **The session parks at `awaiting_inbound` forever, `io.noteGatedBody` records the body, and session-seed and session-history both filter it out — so the peer's message is invisible to the agent permanently, with no error anywhere.** That is the AUDIT D2 failure `session-gate.js` was written to prevent, reached from the far end
 - **WHY IT WAS INVISIBLE.** Every gate here was green: the launch lanes really do floor, the reducer really does coerce fail-closed, the axes suite really does pin the truth tables. **The missing thing was not a check on a value — it was a check that the two WRITERS of one field agreed**, and there was no test that named both lanes in one place. The audit found it by asking who writes `messageMode`, not by asking whether any writer was wrong
 - **THE FIX (Samuel's ruling: floor the live axis).** `session-profiles.js › floorWindowlessMessage` is the ONE statement of the rule; `setModeByTask` applies it when the resolved session is windowless. It lives at that layer and not at the IPC boundary **because only that layer has resolved the SESSION and can see whether it has a surface**
@@ -1903,7 +1903,7 @@ COMMIT;
 ## F-255 — `SESSION_REPORT_MAX`'s derivation cited `MAX_ENDED`, a constant that has been deleted (2026-08-21) — ✅ RESOLVED 2026-08-22
 
 - Found during: the same adversarial read
-- **The claim.** `src/features/channels/schema-sessions.ts` justified its 32-row array bound as "`MAX_CONCURRENT_SESSIONS` (6) live plus `session-summary.js › MAX_ENDED` (12) retained". **`MAX_ENDED` no longer exists anywhere in the desktop tree**: ended-agent retention moved to a DURABLE seven-day history (`dopl-desktop-app/main/agent-history.js`), which no in-memory 12 bounds
+- **The claim.** `src/features/channels/schema-sessions.ts` justified its 32-row array bound as "`MAX_CONCURRENT_SESSIONS` (6) live plus `session-summary.js`'s `MAX_ENDED` (12) retained". **`MAX_ENDED` no longer exists anywhere in the desktop tree**: ended-agent retention moved to a DURABLE seven-day history (`dopl-desktop-app/main/agent-history.js`), which no in-memory 12 bounds
 - ⚠ **THE BOUND IS STILL RIGHT AND THE HEADROOM IS NOT SLACK.** `main/session-state-push.js › liveForWire` drops ended rows before the schema ever sees them, and that filter exists to protect **this number**: a machine holding hundreds of durable ended cards would overflow the array bound, and because zod validates the ARRAY, one oversized payload 400s the WHOLE push — `retryable(400)` is false, the digest is never recorded, and every later push for that workspace fails identically, leaving `read_sessions` answering `[]` for LIVE sessions too with stale rows never cleared
 - **RESOLVED 2026-08-22** — the docblock now derives 32 from the LIVE cap alone (`main/session-windowless.js › MAX_CONCURRENT_SESSIONS`, **6, measured 2026-08-22**), explains why ended rows are deliberately off the wire, and states that re-deriving the bound from "how many ended agents might a machine hold" is the mistake to refuse. The `MAX_SESSION_WINDOWS` paragraph is kept — it is a second dead reference this docblock has already survived once
 - Status: **RESOLVED** (2026-08-22)
@@ -1959,7 +1959,7 @@ COMMIT;
 ## F-261 — New Agent on a signed-out machine answered SUCCESS, and the auth-hold refusal was unreachable (2026-08-22) — ✅ RESOLVED 2026-08-22
 
 - Found during: the same review, reading `startSession`'s tail in the order the statements actually execute
-- **THE SHAPE.** The SPAWN-IDLE branch (`if (spec.parkedShell) { scheduleIdle(s); return s; }`) sat IN FRONT of `session-auth.js › holdIfNoCredential`. So a machine with no Claude Code sign-in answered `{sessionId, agentId}` — a success — and registered an agent holding a slot against `MAX_CONCURRENT_SESSIONS` that could never start a query
+- **THE SHAPE.** The SPAWN-IDLE branch (`if (spec.parkedShell) { scheduleIdle(s); return s; }`) sat IN FRONT of `holdIfNoCredential` (now `session-auth.js › holdIfNoRuntimeCredential`). So a machine with no Claude Code sign-in answered `{sessionId, agentId}` — a success — and registered an agent holding a slot against `MAX_CONCURRENT_SESSIONS` that could never start a query
 - ⚠ **THE REFUSAL SHAPE EXISTED AND WAS SIMPLY UNREACHABLE ON THAT LANE.** `session-launch.js › launch` translates `{authHold:true}` into `{skipped:'auth-hold'}`, and `use-agents-panel.ts › launchRefusalText` has copy for it — on the one lane an operator reaches by CLICKING, neither could fire
 - ⚠ **"IT STARTS NO QUERY" IS NOT AN ARGUMENT FOR SKIPPING THE PREFLIGHT.** The whole point of registering is that a later message wakes it; on a signed-out Mac that wake produces a dead session with a peer waiting on it. The credential question is about the MACHINE, not about the first turn
 - **RESOLVED.** The windowless rollback branch and the Q6 preflight both run before the spawn-idle return. Nothing else moved — spawn-idle still starts no query, and the abandonment timer is still armed at the spawn
@@ -2051,7 +2051,7 @@ COMMIT;
 ## F-268 — the SDK session loaded NINE claude.ai account connectors from a lane no option covers, and `settingSources: []` is what removed the off switch (2026-08-22) — ✅ RESOLVED 2026-08-22
 
 - Found during: the read-only investigation that ran alongside F-267's fix, asking whether claude.ai connector tools reach a windowless session despite `settingSources: []`. Samuel approved R1 + R3a; his veto window passed.
-- **THE MECHANISM, verified against the bundled binary.** The CLI has a **THIRD MCP LANE** beside the two `session-query.js › buildSdkOptions` controls. When the session's OAuth credential carries the `user:mcp_servers` scope, it fetches `GET /v1/mcp_servers` with that Bearer and connects **every claude.ai ACCOUNT CONNECTOR** as `mcp__claude_ai_<Name>__*`. `mcpServers` does not cover it (that field adds servers, it does not bound the set) and neither does `settingSources`.
+- **THE MECHANISM, verified against the bundled binary.** The CLI has a **THIRD MCP LANE** beside the two SDK-option controls (`mcpServers` and `settingSources`, set today in `main/runtime/claude/launch-spec.js › buildOptions`). When the session's OAuth credential carries the `user:mcp_servers` scope, it fetches `GET /v1/mcp_servers` with that Bearer and connects **every claude.ai ACCOUNT CONNECTOR** as `mcp__claude_ai_<Name>__*`. `mcpServers` does not cover it (that field adds servers, it does not bound the set) and neither does `settingSources`.
 - ⚠ **THE IRONY IS THE FINDING.** The CLI ships an off switch — the `disableClaudeAiConnectors` **setting** — and `settingSources: []`, our own isolation, is exactly what makes it unreadable. **Tightening the sandbox deleted the control.** A hardening measure removed the mechanism that would have prevented the leak it was hardening against.
 - ⚠ **INVARIANTS §11's SDK-LANE COLUMN SAID "DO NOT LOAD" WHILE NINE SERVERS LOADED**, and the prose called the lane "narrowed by construction". Both claims are enumerations of the options WE SET, presented as a description of the child's whole world. **A construction argument is only as wide as the constructor.** Corrected in the same change, with the measurement.
 
@@ -2081,7 +2081,7 @@ The nine were Slack, Figma, Dopl, Attio, Notion, Granola, Google Drive, Google C
 ## F-269 — `SESSION_ROWS_LIMIT`'s derivation still cited `MAX_ENDED`, the constant F-255 deleted (2026-08-22) — ✅ RESOLVED 2026-08-22
 
 - Found during: the orchestrator-surface wave, adding eight telemetry columns to `channel_sessions` — which meant reading every bound on that table's reads and writes before widening the row.
-- **THE DEFECT IS A DUPLICATE OF ONE ALREADY FIXED, IN A FILE THE FIX DID NOT VISIT.** F-255 corrected `src/features/channels/schema-sessions.ts › SESSION_REPORT_MAX`, whose derivation read "6 live plus `session-summary.js › MAX_ENDED` (12) retained". `src/features/channels/server/repository-sessions.ts › SESSION_ROWS_LIMIT` carried **the same retained-ended term, in the same words**, and was left standing: "Far above the desktop's live ceiling (… `MAX_CONCURRENT_SESSIONS`, 6, plus `main/session-summary.js › MAX_ENDED`, 12)".
+- **THE DEFECT IS A DUPLICATE OF ONE ALREADY FIXED, IN A FILE THE FIX DID NOT VISIT.** F-255 corrected `src/features/channels/schema-sessions.ts › SESSION_REPORT_MAX`, whose derivation read "6 live plus `session-summary.js`'s `MAX_ENDED` (12) retained". `src/features/channels/server/repository-sessions.ts › SESSION_ROWS_LIMIT` carried **the same retained-ended term, in the same words**, and was left standing: "Far above the desktop's live ceiling (… `MAX_CONCURRENT_SESSIONS`, 6, plus `main/session-summary.js`'s `MAX_ENDED`, 12)".
 - **`MAX_ENDED` DOES NOT EXIST.** Ended-agent retention moved to a durable seven-day history (`dopl-desktop-app/main/agent-history.js`), which no in-memory 12 bounds. ⚠ And the term never belonged in EITHER file: **the wire set is LIVE ONLY** — `main/session-state-push.js › liveForWire` drops ended rows before the report is built — so no quantity of retained ended agents has ever reached this table.
 - ⚠ **WHY A DEAD DERIVATION IS WORTH AN ID RATHER THAN A QUIET EDIT.** A bound justified against a constant nobody can find is a bound nobody can re-derive, so the next person to need headroom either invents a new justification or moves the number on vibes. That is exactly the failure this file's `MAX_SESSION_WINDOWS` note (one paragraph up in the same comment) was written to prevent — **the same comment block had already been corrected once for citing a deleted constant, and shipped still citing a different one.**
 - ⚠ **NOT CAUGHT BY `check-doc-refs`**, and that is a general hole worth stating: the checker resolves `path › symbol` anchors inside `docs/` and scans source trees for `F-NNN` ids only. **A `path › symbol` anchor in a SOURCE comment is unchecked** — the same blind spot F-267 recorded from the other direction (six stale anchors surviving a two-day-old file split).
@@ -2204,6 +2204,7 @@ The nine were Slack, Figma, Dopl, Attio, Notion, Granola, Google Drive, Google C
 - **What holds it today.** `src/features/agent-identities/server/service-writes.test.ts › KB attach validation` pins each arm separately rather than testing the happy path, so a *change* to the original is at least visible as a difference in what the two files assert. ⚠ **That is a tripwire on the copy, not a link to the original** — nothing fails when `canSeeBase` gains an arm, because nothing compares them.
 - Proposed resolution, in preference order: (a) move the predicate to `src/shared/` as the one statement both features import, which is what §1 actually prescribes for a symbol two features need (see also F-275's argument that §1's absolute no-cross-feature-imports rule is already contradicted by the tree, and that the enforceable rule is probably about WHICH layer may be imported); (b) add a cross-feature test that constructs the same row set and asserts `canSeeBase` and `canSeeBaseRow` agree on every cell, which links them without moving either; (c) leave the copy and rely on the comment, which is the state this entry records.
 - Proposed resolution: defer (prefer (a), but it is a knowledge-feature change).
+- ⚠ **RESOLVED IN PART 2026-09-23 (review P7-09).** The copy had silently MISSED the grant arm (F-604) that `canSeeBase` gained — exactly the drift this entry predicted — and it is now added to `src/features/agent-identities/server/service-shared.ts › canSeeBaseRow`, pinned by `service-knowledge-grant.test.ts`. The mirror itself (option (a), one shared predicate) stays open.
 - Status: open.
 
 ## F-279 — the agent-templates SPA client encodes team sharing as a SINGLE `teamId`; the server ships MANY (2026-08-22)
@@ -2293,13 +2294,13 @@ A read-only review wave over the uncommitted agent-templates + launch-over-MCP t
 
 ## F-285 — the directive lane coerced `model` with an IDS-ONLY function, so a legitimate alias silently discarded the template's AND the channel's picks (2026-08-23)
 
-- Location: `dopl-desktop-app/main/launch-directives.js › spawn` (the model precedence chain); the rule now lives at `dopl-desktop-app/main/session-model.js › chainModel`.
+- Location: `dopl-desktop-app/main/launch-directives.js › spawn` (the model precedence chain); the rule now lives at `dopl-desktop-app/main/runtime/selection-vocabulary.js › pickOf` (`chainModel`, its behaviour-identical twin, was deleted with the session-model module 2026-09-23).
 - Found during: the 2026-08-23 verifier wave (`edges`).
 - Severity: major. A silent wrong-model launch, on the lane with no human watching.
-- **The mechanism.** The chain was a ternary: `d.model ? aliasForModelId(d.model) : identityModel(...) || aliasForModelId(getLaunchModel(...))`. `aliasForModelId` accepts **full ids only** — `MODEL_IDS`, not `MODEL_CHOICES`. An orchestrator calling `dopl_channel(op="launch_agent", model="opus")` is doing the ordinary thing (`packages/mcp-server/src/tools/channel-schema.ts › model` is an unconstrained string that names no vocabulary, and the bundled CLI documents `--model` as an alias OR a full name), but `aliasForModelId('opus')` answered `'default'` — the ternary was already committed, so the template's model and the channel's durable pick were both skipped and the agent ran on the SDK default. Every other caller-supplied-model lane uses `normalizeModel`, which exists precisely so a caller need not know which vocabulary the layer below wants.
-- **And the doc half.** `channel-schema.ts › model` promises the orchestrator, in the same uncommitted diff, that an unrecognized id "is NOT refused — it silently FALLS BACK to whatever the channel is set to", and INVARIANTS §10's `launch_agent` bullet records that sentence as the corrected one. The code did not do that: it ended the chain at `'default'`. Doc and code disagreed inside one wave.
-- **✅ RESOLVED, by extracting the rule rather than restating it.** `session-model.js › chainModel(value)` is now the single statement of "one link of a precedence chain: the alias this value asks for, or `''` meaning KEEP GOING". `session-launch-op.js › identityModel` delegates to it (it is now only "which field to read"), and the directive lane spells its chain `chainModel(d.model) || identityModel(…) || aliasForModelId(getLaunchModel(…))`. An alias is honoured; an unknown id falls THROUGH, which is what the schema promises and what F-5's tree-wide rule ("unknown model falls back, never refuses") already required of the other links.
-- **Pinned by** `dopl-desktop-app/test/launch-directives.test.mjs` (all four aliases honoured; an unknown id reaching the CHANNEL's pick rather than the SDK default; an unknown directive model falling to the TEMPLATE's before the channel's) and `test/agent-model-selection.test.mjs` (the rule lives in `session-model.js`; NEITHER lane restates it).
+- **The mechanism.** The chain was a ternary: `d.model ? aliasForModelId(d.model) : identityModel(...) || aliasForModelId(getLaunchModel(...))`. `aliasForModelId` accepts **full ids only** — `MODEL_IDS`, not `MODEL_CHOICES`. An orchestrator calling `dopl_channel(op="launch_agent", model="opus")` is doing the ordinary thing (the `model` field, then in `packages/mcp-server/src/tools/channel-schema.ts` and today in `packages/mcp-server/src/tools/channel-schema-launch-fields.ts › LAUNCH_INPUT_FIELDS`, was an unconstrained string that named no vocabulary, and the bundled CLI documents `--model` as an alias OR a full name), but `aliasForModelId('opus')` answered `'default'` — the ternary was already committed, so the template's model and the channel's durable pick were both skipped and the agent ran on the SDK default. Every other caller-supplied-model lane uses `normalizeModel`, which exists precisely so a caller need not know which vocabulary the layer below wants.
+- **And the doc half.** The `model` field's description (then in `channel-schema.ts`) promises the orchestrator, in the same uncommitted diff, that an unrecognized id "is NOT refused — it silently FALLS BACK to whatever the channel is set to", and INVARIANTS §10's `launch_agent` bullet records that sentence as the corrected one. The code did not do that: it ended the chain at `'default'`. Doc and code disagreed inside one wave.
+- **✅ RESOLVED, by extracting the rule rather than restating it.** `chainModel(value)` (then in the session-model module; since 2026-09-23 its behaviour-identical twin `main/runtime/selection-vocabulary.js › pickOf`) is now the single statement of "one link of a precedence chain: the alias this value asks for, or `''` meaning KEEP GOING". `session-launch-op.js › identityModel` delegates to it (it is now only "which field to read"), and the directive lane spells its chain `chainModel(d.model) || identityModel(…) || aliasForModelId(getLaunchModel(…))`. An alias is honoured; an unknown id falls THROUGH, which is what the schema promises and what F-5's tree-wide rule ("unknown model falls back, never refuses") already required of the other links.
+- **Pinned by** `dopl-desktop-app/test/launch-directives.test.mjs` (all four aliases honoured; an unknown id reaching the CHANNEL's pick rather than the SDK default; an unknown directive model falling to the TEMPLATE's before the channel's) and `test/agent-model-selection.test.mjs` (the rule lives in `runtime/selection-vocabulary.js`, as `pickOf` since 2026-09-23; NEITHER lane restates it).
 - Status: **closed**; entry kept as the record.
 
 ## F-286 — losing the claim CAS, the designed outcome for every machine but one, was logged as a failure that asserted the opposite of the row's state (2026-08-23)
@@ -2378,7 +2379,7 @@ A read-only review wave over the uncommitted agent-templates + launch-over-MCP t
 - Location: `docs/AGENT-TEMPLATES-SPEC.md`, throughout.
 - Found during: the 2026-08-23 verifier wave (`bloat`).
 - Severity: minor by blast radius, but it violates a rule this repo states TWICE in identical words — `CLAUDE.md` standing doc rule 2 and `docs/INVARIANTS.md`'s preamble: *"Code references use symbol anchors — `path › symbolName`, or a grep pattern. **Never a bare line number.**"*
-- **They had already rotted, on day one.** Measured against the tree: `service-launch.ts › LAUNCH_REFUSAL_REASONS` was cited at 35 and is at 56; `schema-launch.ts › LaunchRefusalReasonSchema` at 57, actually 90; `launch-directive-wire.js › REFUSAL_REASONS` at 82, actually 101; and in §3e's own *"miss any one and the field silently never arrives"* wire table, four of five entries were wrong. The worst is the one the spec leans on hardest: `main/session-ipc-ops.js:136`, cited as the `sessions:launch` handler where `identityId` must be UUID-validated, lands **inside the `agents:forgetThread` docblock** — `sessions:launch` is at 110.
+- **They had already rotted, on day one.** Measured against the tree: `LAUNCH_REFUSAL_REASONS` (then a copy in `service-launch.ts`, since deleted; the one declaration is `src/features/channels/schema-launch-modes.ts › LAUNCH_REFUSAL_REASONS`) was cited at 35 and is at 56; `schema-launch.ts › LaunchRefusalReasonSchema` at 57, actually 90; `launch-directive-wire.js › REFUSAL_REASONS` at 82, actually 101; and in §3e's own *"miss any one and the field silently never arrives"* wire table, four of five entries were wrong. The worst is the one the spec leans on hardest: `main/session-ipc-ops.js:136`, cited as the `sessions:launch` handler where `identityId` must be UUID-validated, lands **inside the `agents:forgetThread` docblock** — `sessions:launch` is at 110.
 - **⚠ AND THE HYBRID FORM IS WORSE THAN A BARE NUMBER.** Several refs were written `path.ext:NN › symbolName`, which READS as a verified anchor. `scripts/check-doc-refs.mjs › SYMBOL_ANCHOR_RE` requires `path.ext` followed by optional whitespace and `›`; the `:NN` in between means the regex never fires, so the string is silently downgraded to a class-(a) file-EXISTENCE ref and the symbol half is discarded. **The doc was green precisely because its anchors were written in a form the checker does not read.**
 - **✅ RESOLVED** — every `path:NN` converted to `path › symbol`, each symbol verified against the file it names, with `node scripts/check-doc-refs.mjs` green afterwards (it now actually validates them) and `grep -nE '\.(ts|tsx|js|mjs|sql|md):[0-9]+' docs/AGENT-TEMPLATES-SPEC.md` returning nothing.
 - ⚠ **The checker ceiling worth knowing:** a bare `path:NN` is not invisible to `check-doc-refs.mjs` — it is seen as a file-exists assertion and passes. That is the script's own documented ceiling, and it is why this class needs the rule rather than the gate.
@@ -2409,13 +2410,13 @@ table held against the presence table.
 ## F-293 — a long-context model id split into two bare names, one of them shaped exactly like a relative time (2026-08-23)
 
 - Location: `packages/mcp-server/src/tools/channel-session-render.ts › shortModelLabel`, against
-  `packages/mcp-server/src/tools/narration.ts › neutralizeInline` and `dopl-desktop-app/main/session-model.js › contextWindowFor`.
+  `packages/mcp-server/src/tools/narration.ts › neutralizeInline` and `dopl-desktop-app/main/runtime/claude/model-table.js › contextWindowFor`.
 - Found during: live use. Two test agents independently read a session line whose model segment said `opus-5 1m`
   where another call had said `opus-5`. The session had **no template**, which is what made it dangerous.
 - Severity: moderate. Nothing crashes; a surface that promises "two bare names = template, then model" printed one
   value as two, one clause away from `started 12m ago` and `stale, 10m ago`.
 - **The mechanism, in three hops.** The bundled CLI marks its 200k models `supports_1m_suffix` and ships ids like
-  `claude-opus-5[1m]`; `session-model.js › contextWindowFor` reads that exact suffix as the window, and
+  `claude-opus-5[1m]`; `runtime/claude/model-table.js › contextWindowFor` reads that exact suffix as the window, and
   `session-telemetry.js › telemetryFields` puts `s.liveModel` — the SDK's OWN reported id — on the wire. Then
   `shortModelLabel` strips the vendor prefix (`opus-5[1m]`), and `neutralizeInline` turns `[` and `]` into SPACES
   because they are markdown structure. `` `opus-5 1m` ``. **`1m` is byte-for-byte what `coarseAge` emits between 30s
@@ -3066,7 +3067,7 @@ constraint moves, and nothing connects the two.
   missing or expired, EVERY agent is unreachable and the product's own copy names a remedy the
   product has no way to run.
 - **THE SHAPE, and it is worth naming because nothing in the tree could have caught it.** Every
-  DETECTING part of Q6 shipped and worked: `session-auth.js › holdIfNoCredential` preflights a
+  DETECTING part of Q6 shipped and worked: `holdIfNoCredential` (now `session-auth.js › holdIfNoRuntimeCredential`) preflights a
   windowless launch and HOLDS it rather than burning the session, `session-query.js` turns an
   auth-shaped mid-session failure or the CLI's own `/login` bubble into the same hold, and the
   composer renders "Your agent is waiting for you to sign in to Claude Code." Every REMEDYING part
@@ -3117,7 +3118,7 @@ constraint moves, and nothing connects the two.
 - Severity: **low**, and the entry exists for the SHAPE rather than for a live defect — see the
   bound below.
 - **WHY THERE IS NO ID TO JOIN ON, measured rather than assumed.** The `post` narration frame is
-  pushed from the SDK's `tool_use` block (`session-io.js › sdkRenderEvents`), which is strictly
+  pushed from the SDK's `tool_use` block (`main/runtime/claude/normalize.js › renderEvents` today), which is strictly
   BEFORE `bridgeOutbound` creates the `channel_consent_requests` row — so at frame time there is no
   row id to carry. Symmetrically, the row carries `(channel_id, message_seq)` and **nothing that
   names an agent**: `message_seq` is the TRIGGERING message's, which is why
@@ -3228,7 +3229,7 @@ constraint moves, and nothing connects the two.
 
 ## F-314 — nothing observes a FAILED dopl MCP tool call: the delivery lane can be broken and no surface says so (2026-08-25)
 
-- Location: `dopl-desktop-app/main/session-io.js › sdkRenderEvents` (where `ok: !b.is_error` is
+- Location: `dopl-desktop-app/main/runtime/claude/normalize.js › renderEvents` (where `ok: !b.is_error` is
   computed) and `dopl-desktop-app/main/session-query.js › consume` (the raw SDK stream loop).
 - Severity: medium — no data loss, but the failure is invisible to the operator AND to the agent's
   supervisor, so the only symptom is tokens.
@@ -4023,7 +4024,7 @@ the former `recordCreditUsageEvent` in `src/features/billing/server/credit-ledge
   answer: the audience ceiling's B1 does reach templates, and it reaches them in a direction nobody
   costed. **Nothing here is a behaviour change. This entry states the interaction and asks.**
 - Location: `src/features/agent-identities/server/service-shared.ts › canSeeIdentity` against
-  `src/features/agent-identities/lib/identity-draft.ts › containerCopyDraft`, with
+  `containerCopyDraft` (then in `src/features/agent-identities/lib/identity-draft.ts`; deleted in B15), with
   `› buildAgentIdentityContext` as the join.
 - **The trace, in four hops, each re-derivable:**
   1. `canSeeIdentity` reads, in order: `visibility === "workspace"` → **true**; then
@@ -4363,7 +4364,7 @@ visibility gate has already answered 404. Plan RULING 2 (Samuel, confirmed) says
 
 - ⚠ **Id note:** see F-338's; same read, same race.
 - Location: `apps/desktop-ui/src/pages/home/identity-panels.tsx` — `containerList.error` was read,
-  `homeList.error` was not — against `identity-panel-cards.tsx › PrivateIdentitySection`.
+  `homeList.error` was not — against `identity-panels.tsx › PrivateIdentitySection` (the card half merged back into that file 2026-09-23).
 - **The mechanism, and it compounds.** `useAgentIdentities` reports `resolved: query.data !== undefined`,
   so a FAILED read is unresolved **forever**. `scopePending` was `!homeList.resolved`, so:
   1. the section body rendered a bare `<div className="h-10" />` — no sentence, no error, no retry;
@@ -4529,8 +4530,8 @@ visibility gate has already answered 404. Plan RULING 2 (Samuel, confirmed) says
   is no template equivalent of item 2** — templates have no search surface — so that half of this
   finding stays a knowledge-only question.
 - ⚠ **A FOURTH UNFILTERED TEMPLATE READER, ADDED 2026-08-27 — THE SAME DAY THE SHELF SPLIT SHIPPED
-  (recorded 2026-08-30).** `src/features/channels/components/composer-launch-panel.tsx`
-  calls `useAgentIdentities(workspaceId, { enabled: panel.open })` with no shelf. **The same answer
+  (recorded 2026-08-30).** The launch slide-out (composer-launch-panel.tsx, deleted 2026-09-23)
+  called `useAgentIdentities(workspaceId, { enabled: panel.open })` with no shelf. **The same answer
   applies** — the launch panel lives inside a CHANNEL, and a container has no shelves, so the param
   would be meaningless there — but the enumeration above was one short, and an enumeration that
   claims to be complete is the thing a later reader trusts. **Re-derive, never quote:**
@@ -5045,7 +5046,7 @@ abort-churn path rather than by file order. All through the same shared helper; 
 |---|---|---|
 | `main/channel-post.js › postTaskEvent` / `› postWithRetry` | `return res.ok === true` — no branch reads | per agent message posted, × up to 3 retries |
 | `main/consent.js › createConsentRequest` / `› patchDecision` | 404 / `!res.ok` / 409 — **every** exit of `patchDecision` | per gated post, per operator decision, and on every session settle (`watchRow`'s teardown deny) |
-| `main/listener-io.js › resolveIdentity` / `refreshNameCache` | 401 / `!res.ok` | per workspace per reconcile |
+| `main/listener-people.js › resolveOperatorUserId` / `refreshNameCache` | 401 / `!res.ok` | per workspace per reconcile |
 | `main/launch-directives.js › pollWorkspace` / `› post` | `if (!res \|\| !res.ok) return` — and the 404 self-disable does NOT fire for 401 | per workspace per 60s |
 | `main/session-credential.js › findWorkspace` / `ensureContainerCredential` / `releaseContainerCredential` | `!res.ok` | ~3 per session launch + teardown, cumulative for the process lifetime |
 | `main/mcp-config.js › obtainDeviceToken` / `› revokeDeviceToken` | 404 / `!res.ok` / non-JSON / missing-token | per launch, per sign-out |
@@ -5786,8 +5787,8 @@ or read it —
   `{ behavior: 'allow' }` / `{ behavior: 'deny', message }`, and its pause path with the same;
 - `main/session-outbound-tag.js › allowResult` / `› wrapAllow` build the tagged allow around that
   shape;
-- `main/session-outbound.js › wrapGate` observes `verdict.behavior === 'allow'` to resolve the
-  inline card an auto-allowed post painted.
+- `wrapGate` (then in the session-outbound module, deleted 2026-09-23 — see the closing line) observed
+  `verdict.behavior === 'allow'` to resolve the inline card an auto-allowed post painted.
 
 — and none of them is an adapter. So `{ behavior }` **is** core's verdict vocabulary at the
 parked-resolver boundary. That is defensible; what is not is that `wrapGate`'s own header says
@@ -5821,6 +5822,8 @@ not to pick a side. Two candidate fixes, both real work:
 ⚠ **`test/core-vocabulary.test.mjs` cannot catch this class and that is worth stating.** It scans
 for VENDOR NAMES and one platform's API SHAPES (`sdk.query`, `canUseTool`, `permissionMode`). A
 field name that a platform happens to share with core reads as neither.
+
+- ⚠ **2026-09-23: `wrapGate` AND ITS MODULE ARE DELETED** (the w3-left leftovers pass — dead since P4-12, when the engine's quiet emit lost its last receiver), and the Codex wire translation moved to `main/runtime/codex/server-requests.js › answer`. The held callback is the shared `main/runtime/held-gate.js › makeHeldGate` on all three runtimes (`› settledVerdict` is the one allow/deny shape). The contract itself is still undeclared: it now stands on `session-permissions.js › resolvePerm`, `session-outbound-tag.js` and `session-gate-bridge.js` reading `verdict.behavior`. Status: open (declare it in `runtime/contract.js`).
 
 ### F-383 — three desktop files are over the 500-line cap AT HEAD, so `npm run lint` in the desktop job is red on master (2026-08-31)
 
@@ -5947,8 +5950,9 @@ from scope — so a `windowSource` naming a hook this adapter does not install w
 measurement nobody takes. That is the "declared but not applied" failure the Codex `triage` cell was
 made `null` to avoid.
 
-The consequence is visible and correct rather than hidden: `main/session-model.js › contextWindowFor`
-answers `null` for an unknown window, so the meter shows tokens with no percentage — the
+The consequence is visible and correct rather than hidden: Cursor's `context` reading carries no window and
+`main/session-metrics.js › metrics` answers `contextWindow: null` for it (core has held no model table since
+2026-09-23), so the meter shows tokens with no percentage — the
 null-never-zero rule doing its job on a denominator instead of a numerator.
 
 ⚠ **Not a gap to fill by writing the hook.** Filling it means either taking the hook shim back into
@@ -5980,8 +5984,8 @@ the security model, not a refactor**, which is why this wave did not.
 **What it cost, concretely.** The runtime picker needed a bridge surface. `main/channel-dir-ipc.js`
 had room for three new ops; the preload did not have room for a NAMESPACE. So the runtime pick and
 the descriptor table ride the EXISTING `channels:get/setLaunchPosture` pair — which is defensible on
-its own terms (it is the `model` field's documented idiom: `src/features/channels/lib/permission-modes.ts › hasModelKey`
-says the model rides that pair "because there is no new op to feature-detect on, which is what the
+its own terms (it is the `model` field's documented idiom: the `hasModelKey` probe, deleted 2026-09-23 from `src/features/channels/lib/permission-modes.ts`,
+said the model rides that pair "because there is no new op to feature-detect on, which is what the
 rest of this family does") **but it was not chosen on those terms, it was forced.** The next
 capability that genuinely needs its own namespace has no move left.
 
@@ -6062,7 +6066,7 @@ ENTRY IS NOT THEORETICAL.** `runEffect` case `interruptQuery` is the tree's only
 on a runtime that declares none (Cursor today, smoke item X0) it finds a handle, calls a method that
 resolves without stopping anything, and reports nothing — a stop that silently did not happen, which
 is worse than a refusal because a timeout then looks handled. The fix is two lines: ask
-`main/runtime/capability.js › canInterrupt` and log `› interruptRefusal`'s sentence. **It did not
+`canInterrupt` and log `interruptRefusal`'s sentence (both then in `main/runtime/capability.js`; both deleted 2026-09-23, and `session-engine.js › runEffect` now logs the ignored interrupt itself). **It did not
 fit.** What landed instead is a one-line comment appended to the existing `case` — net zero — saying
 so. **A file at the cap does not stop growing; it stops being CORRECTABLE, and this is what that
 looks like from the inside.** The refusal is still SAID (the SPA hides the control and the launch
@@ -6070,7 +6074,7 @@ surface warns, design §3.2); what is lost is the main-process record when the e
 
 ### F-389 — an adapter comment cited a test file that has never existed (2026-08-31, port wave D)
 
-`main/runtime/codex/approval.js` claimed that a suite named codex-approval.test.mjs (spelled out
+The Codex approval module (approval.js, deleted 2026-09-23; its live half is `main/runtime/codex/server-requests.js`) claimed that a suite named codex-approval.test.mjs (spelled out
 rather than cited, because the whole point is that the path resolves to nothing and
 `scripts/check-doc-refs.mjs` would refuse a citation of it) *"pins that no verdict, however wide,
 produces the other word"* — the guarantee that `acceptForSession` is a declared
@@ -6102,7 +6106,7 @@ one line of the desktop's own:
 grep -n "^const TOOL_MODES" dopl-desktop-app/main/channel-prefs.js
 ```
 
-`main/channel-prefs.js › normalizePreset` validates the durable posture's TOOLS axis against a frozen
+`normalizePreset` (then in `main/channel-prefs.js`; deleted 2026-09-23, the pre-U5 pair is now only read, as a migration source, by `main/launch-selection.js › legacyPreset` against the default runtime's own words) validates the durable posture's TOOLS axis against a frozen
 `['manual','accept_edits','auto','bypass']` and **rejects the WHOLE write** on anything else (the two
 axes validate hard; only `model` and `runtime` validate soft). That list is the DEFAULT runtime's
 vocabulary — `main/session-profiles.js › TOOL_MODES` is literally `cap.toolModes(descriptorFor(null))`
@@ -6200,7 +6204,7 @@ and the `sessions` namespace — the `launch` payload alone is ~90 lines of fiel
 next extraction. Not done here: this wave's business is the runtime port, and a bridge-surface split
 is its own review.
 
-### F-393 — `DesktopSessionSummary` carries no runtime, so a per-spawn override is invisible to the Stop control (2026-08-31, port wave D, the SPA half)
+### F-393 — `DesktopSessionSummary` carries no runtime, so a per-spawn override is invisible to the Stop control (2026-08-31, port wave D, the SPA half) — ✅ RESOLVED 2026-09-23
 
 §3.2 says an unverified `session.interrupt` disables the Stop control. The control is
 `src/features/channels/components/agent-panel-controls.tsx`, and it is about **one running
@@ -6220,6 +6224,9 @@ running agent, and `main/session-profiles.js › normalizeToolMode(mode, runtime
 runtime — so the per-agent lane is the ONE place §3.1's control could be fully live today (unlike
 F-390's durable lane). It still renders Dopl's hardcoded four, because this side cannot name the
 agent's runtime. **One field on the summary closes both.**
+
+- ✅ **RESOLVED 2026-09-23 (review P6-04/P6-05).** `src/shared/lib/spa-bridge-shapes.ts › DesktopSessionSummary.runtimeId` now carries `main/session-summary.js`'s spawn stamp, and every running-agent surface reads the AGENT's runtime through `use-channel-launch-posture.ts › descriptorOf` / `› catalogOf`: the Stop refusal (`agent-panel-controls.tsx`), the sign-in gate and held copy (`agent-composer.tsx`), and the live Tools/Model pickers (`agent-posture.tsx`, Tools in that runtime's own words, no frozen Claude table). INVARIANTS §11.0f carries the rule.
+- Status: RESOLVED.
 
 ### F-394 — the Cursor adapter cites a findings entry that was never written, for the one §3.1 control it declines to render (2026-08-31, port wave D)
 
@@ -6310,7 +6317,7 @@ absent from `toolMode.options` refuses identically — neither is orderable.
 
 ⚠ **THE REFUSAL RIDES `{skipped:'disabled'}` AND MUST NOT MINT AN EIGHTH WIRE WORD.**
 `launch-directive-wire.js › REFUSAL_REASONS` is the same seven words as `schema-launch.ts`,
-`service-launch.ts › LAUNCH_REFUSAL_REASONS`, `use-agents-panel.ts › launchRefusalText` and a
+the then `service-launch.ts` copy of `LAUNCH_REFUSAL_REASONS` (one declaration today: `src/features/channels/schema-launch-modes.ts › LAUNCH_REFUSAL_REASONS`), `use-agents-panel.ts › launchRefusalText` and a
 **deployed column CHECK** — a new word here would be a refusal the database refuses to record. The
 specific sentence rides the diag, the one surface allowed to name a runtime. **`launch-directive-wire
 .test.mjs` caught this attempt; the pin works.**
@@ -6336,7 +6343,7 @@ and names no vendor. **It fires on the shipped tree today.**
 
 ### F-398 — `sealAdapter` validated a MIRROR of the thing it protects, and accepted an empty deny list (2026-09-01) — ✅ RESOLVED 2026-09-01
 
-`main/runtime/contract.js › descriptorProblems`; `main/runtime/capability.js › canLaunchProfile`. Two
+`main/runtime/contract.js › descriptorProblems`; `canLaunchProfile` (then in `main/runtime/capability.js`; that launch-time predicate was deleted 2026-09-23, leaving `descriptorProblems` the only enforcement). Two
 holes, one shape:
 
 1. Both checked only `Array.isArray(p.denyList)`. **An empty array is a list**, so `denyList: []` —
@@ -6389,7 +6396,7 @@ verb on that server that WRITES, ADDRESSES or SENDS belongs on the gate, not on 
 
 ### F-400 — the moved context dispatch lost its `try/catch`, turning a swallowed error into a session crash (2026-09-01) — ✅ RESOLVED 2026-09-01
 
-HEAD wrapped the turn-end context dispatch in `try/catch` inside `session-model.js › observe` and
+HEAD wrapped the turn-end context dispatch in `try/catch` inside `observe` (the session-model watcher, since deleted; usage is read in `main/runtime/claude/normalize.js` and the gauge in `session-metrics.js › metrics`) and
 swallowed to one diag line. The port left a bare `if (context) dispatch(s, context)` in
 `session-io.js › applyCoreEvents`. **That function runs inside `session-query.js › consume`'s
 `for await`, so a throw escapes to that loop's catch, is read as a query error, and dispatches
@@ -6829,8 +6836,8 @@ columns and neither is one; re-derive with
 So **the server cannot know a session's current posture, and therefore cannot enforce "never wider"**
 — the only layer that can is `dopl-desktop-app/main/session-reducer.js`, whose `set_tool_mode` /
 `set_message_mode` already coerce fail-closed through `coerceMode(TOOL_MODES, …)` /
-`coerceMode(MESSAGE_MODES, …)` (`channel-prefs.js › TOOL_MODES` = manual/accept_edits/auto/bypass,
-`› MESSAGE_MODES` = ask/auto_inbound/auto_outbound/auto_both).
+`coerceMode(MESSAGE_MODES, …)` (then `channel-prefs.js`'s `TOOL_MODES` = manual/accept_edits/auto/bypass and
+`MESSAGE_MODES` = ask/auto_inbound/auto_outbound/auto_both; neither list lives in that file today).
 
 ⚠ **SO SHIPPING THE OP WITHOUT THE DESKTOP HALF IS NOT "PARTIAL", IT IS THE WIDENING.** An MCP op
 whose only bound is unimplemented is a posture-widening primitive with a docblock. This wave shipped
@@ -7041,7 +7048,7 @@ one; a widening that turns out to be wrong produces nothing anybody sees.
 
 ### F-418 — `dopl_channel(op="direct_agent")` PROMISES "refused outright and no request is filed" for a peer's agent id; the server files the row and lets the desktop answer `no-session` (2026-09-02)
 
-- Location: the promise is `packages/mcp-server/src/tools/channel-schema.ts › agent_id` (*"⚠ YOUR OWN OPERATOR'S AGENTS ONLY. An id belonging to another member is REFUSED outright and no request is filed"*); the code is `src/features/channels/server/service-directions.ts › createAgentDirection`, whose own docblock states the opposite in as many words: *"⚠ THE AGENT ID IS NOT VALIDATED HERE AND CANNOT BE."*
+- Location: the promise was the `agent_id` param's description in `packages/mcp-server/src/tools/channel-schema.ts` (the param is gone; a manage op addresses its agent with `to`) (*"⚠ YOUR OWN OPERATOR'S AGENTS ONLY. An id belonging to another member is REFUSED outright and no request is filed"*); the code is `src/features/channels/server/service-directions.ts › createAgentDirection`, whose own docblock states the opposite in as many words: *"⚠ THE AGENT ID IS NOT VALIDATED HERE AND CANNOT BE."*
 - Found during: the app-only-deletion fence wave, auditing served prose against the code behind it (Samuel's ruling, 2026-09-02 — a rule an agent is TOLD must have a fence in the code).
 - Severity: conflict (two statements of one rule), NOT a leak — see the next bullet before acting.
 - 🔒 **THE OUTCOME THE PROMISE DESCRIBES IS REAL; THE MECHANISM IT NAMES IS NOT.** A peer's agent is genuinely unreachable, but by SCOPE rather than by refusal: the row is inserted with `directionRepo.insertAgentDirection(ctx.userId, …)`, the presence check is `operatorIsOnline(ctx)`, and the desktop's backstop read is `listPendingAgentDirections(ctx.userId, ctx.workspaceId)` — so a foreign `agent_id` lands in the CALLER'S OWN operator's queue, on the caller's own machine, and is answered `no-session` there. It never reaches the peer. Structurally identical to the bound INVARIANTS §6 records for `channels/launch-directives/claim` + `/decide`: *"The bound is SCOPE, in the SQL predicate."*
@@ -7185,7 +7192,7 @@ one; a widening that turns out to be wrong produces nothing anybody sees.
 - Status: **resolved** — no gate change was needed, and none was made.
 ### F-440 — ✅ RESOLVED 2026-09-02 — INVARIANTS §5A stated the "Use in this channel" copy's visibility BOTH WAYS, six days apart, in one section
 
-- Location: `docs/INVARIANTS.md` §5A — the bullet *"USE IN THIS CHANNEL NOW COPIES AT `workspace`, NOT `private` (2026-08-27)"* and, nineteen bullets later in the same section, *"`visibility` IS FORCED TO `private`, NEVER CARRIED"*. The code is `src/features/agent-identities/lib/identity-draft.ts › containerCopyDraft`.
+- Location: `docs/INVARIANTS.md` §5A — the bullet *"USE IN THIS CHANNEL NOW COPIES AT `workspace`, NOT `private` (2026-08-27)"* and, nineteen bullets later in the same section, *"`visibility` IS FORCED TO `private`, NEVER CARRIED"*. The code was `containerCopyDraft` in `src/features/agent-identities/lib/identity-draft.ts` (deleted in B15).
 - Found during: A11 (the MCP/architecture v2 spec's G16 row — that spec is NOT in this tree, so it is named and never cited as a path), reading §5A's copy/publish semantics before adding the `acknowledgeShared` precondition.
 - Severity: doc-vs-doc, resolved in place per `CLAUDE.md` (*"INVARIANTS is wrong → fix INVARIANTS in the same change"*). **No code was touched for it.**
 - **Which side was right, measured not remembered:** `containerCopyDraft` returns `visibility: "workspace"` and says so in a docblock naming the 2026-08-27 reversal; the deleted `containerCopyDraft` block pins it. So the LATER bullet was the stale one — it survived the reversal because the reversal edited the bullet ABOVE it and nothing linked the two.
@@ -7235,7 +7242,7 @@ one; a widening that turns out to be wrong produces nothing anybody sees.
 
 ### F-438 — `op="launch_agent"` publishes `tools`, `messages` and `chain`, and the dispatcher never passes them: a posture request is accepted, described at length, and silently dropped (2026-09-02)
 
-- Location: `packages/mcp-server/src/tools/channel-dispatch-agents.ts › dispatchManageAction`, the `case "launch_agent"` arm — it builds `{ thread, goal, model, template, waitMs }` and reads none of `args.tools` / `args.messages` / `args.chain`. Every other layer of the lane implements them: `channel-schema.ts › tools|messages|chain` publishes them (~2,000 chars of description across the three), `channel-ops-launch.ts › opLaunchAgent` accepts them, `schema-launch.ts › LaunchCreateSchema` validates them, `service-launch.ts › createLaunchDirective` stores them, and `20260910120000_channel_launch_directives_posture.sql` gives them columns and CHECKs.
+- Location: `packages/mcp-server/src/tools/channel-dispatch-agents.ts › dispatchManageAction`, the `case "launch_agent"` arm — it builds `{ thread, goal, model, template, waitMs }` and reads none of `args.tools` / `args.messages` / `args.chain`. Every other layer of the lane implements them: the `tools|messages|chain` fields of `channel-schema.ts` published them (today under `posture` in `channel-schema-launch-fields.ts › LAUNCH_INPUT_FIELDS`) (~2,000 chars of description across the three), `channel-ops-launch.ts › opLaunchAgent` accepts them, `schema-launch.ts › LaunchCreateSchema` validates them, `service-launch.ts › createLaunchDirective` stores them, and `20260910120000_channel_launch_directives_posture.sql` gives them columns and CHECKs.
 - Found during: A10 (launch/direct idempotency), while plumbing `client_msg_id` through that exact object literal.
 - Severity: real defect, and the failure mode is the invisible one — the caller is told nothing, the row records "did not ask", and the desktop resolves to the operator's stored ceiling, which is also what an honest omission produces. **Nothing anywhere reports the difference.**
 - ⚠ **THE SAME OP'S `set_agent_mode` SIBLING DOES PASS THEM** (`case "set_agent_mode"` reads `args.tools` / `args.messages`), so this is an omission in one arm rather than a design.
@@ -7514,7 +7521,7 @@ one; a widening that turns out to be wrong produces nothing anybody sees.
 - Location: `apps/desktop-ui/src/pages/home/identity-panels.tsx` (the scope-C section caption) and the deleted /home copy dialog (B15) (the "Use in this channel" affordance).
 - Found during: B2, correcting the INVARIANTS bullet that claimed a home-workspace template cannot launch into a home channel.
 - **THE SHAPE.** The caption — *"Yours alone. Use one here to make a copy in this channel."* — is the operator-facing statement of a 404 that no longer happens. Both launch lanes follow an id now, so a scope-C template launches into a container directly; the copy is a workaround for a restriction that is gone, and it still costs a divergent snapshot (no FK, no sync) plus a dropped KB list every time it is used.
-- ⚠ **THE COPY MACHINERY IS NOT THIS FINDING'S TO DELETE.** `lib/identity-draft.ts › containerCopyDraft` and the deleted /home copy dialog (B15) are named in Wave B's B15 (`v2/b-copies-off`), which removes the copy ops wholesale. Deleting them here would take a file that slice owns.
+- ⚠ **THE COPY MACHINERY IS NOT THIS FINDING'S TO DELETE.** `containerCopyDraft` (`lib/identity-draft.ts`, since deleted in B15) and the deleted /home copy dialog (B15) are named in Wave B's B15 (`v2/b-copies-off`), which removes the copy ops wholesale. Deleting them here would take a file that slice owns.
 - ⚠ **AND THE CAPTION IS UI COPY**, which this tree treats as a ruling surface rather than a refactor. It is recorded rather than rewritten.
 - Proposed resolution: B15 deletes the affordance; whoever lands it rewrites the caption in the same change, or the pane keeps explaining a workaround for a problem the product no longer has.
 
@@ -7592,7 +7599,7 @@ one; a widening that turns out to be wrong produces nothing anybody sees.
 
 ### F-501 — the wave B spec's `read_only` row offers `dopl_channel`, which that profile's own deny list refuses (2026-09-02)
 
-- Location: the wave B plan's §1.2 profile table — row `read_only`, *"local reads; `dopl_channel` op-scoped"*; it lives on branch `v2/wave-b-plan` and not in this tree, which is why no path is cited — vs `dopl-desktop-app/main/tool-profiles.js › buildDeniedTools`.
+- Location: the wave B plan's §1.2 profile table — row `read_only`, *"local reads; `dopl_channel` op-scoped"*; it lives on branch `v2/wave-b-plan` and not in this tree, which is why no path is cited — vs `buildDeniedTools` (a `dopl-desktop-app/main/tool-profiles.js` headless-lane builder, deleted 2026-09-23 with the others).
 - Found during: MCP v2 wave B slice B5, writing the `PROFILE_TOOLS` rows.
 - **THE CONTRADICTION.** A `read_only` spawn's deny list opens with the bare `mcp__dopl` server prefix (`denied.unshift(DOPL_SERVER_PREFIX)`), so **every Dopl tool is refused locally, `dopl_channel` included** — the profile is the zero-outbound one. Serving it `dopl_channel` would publish ~11,600 characters of schema for a tool the machine denies, which is exactly the "offer wider than the deny list" the header exists to avoid.
 - **SHIPPED AS ∅** (`PROFILE_TOOLS.read_only = new Set([])`), on the rule that the offer may never be wider than the containment already applied. The spec row reads as a description of the profile across BOTH layers (local reads on the desktop; `dopl_channel` op-scoped where a read-only *credential* is what narrows) rather than as this server's offer — recorded here so the row is not read back later as the contract.
@@ -7614,7 +7621,7 @@ one; a widening that turns out to be wrong produces nothing anybody sees.
 - Location: `dopl-desktop-app/main/runtime/cursor/tools.js` › `buildSessionToolConfig` (the shape; `codex/tools.js` and `claude/tools.js` have it too).
 - Found during: the same slice, freezing the Cursor adapter at three profiles under ruling X0.
 - **THE SHAPE.** Every adapter's `buildSessionToolConfig` is a chain of `if (p === …)` with `full` as the FALL-THROUGH. `normalizeProfile` accepts `channel_agent` on every runtime, so an adapter that has not implemented it hands back `full`'s config — the WIDEST one — under a narrower label. Asserted out loud in `test/channel-agent-profile.test.mjs` rather than left to be discovered.
-- ⚠ **NOTHING SHIPS THROUGH IT TODAY, AND THAT IS THE ONLY REASON IT IS A FINDING RATHER THAN A BUG.** Cursor is held (X0) and its descriptor names three profiles, so `capability.js › canLaunchProfile` refuses `channel_agent` there with a sentence. ⚠ **But that refusal has NO PRODUCTION CONSUMER** — `canLaunchProfile` / `profileRefusal` are read by tests only (`grep -rn canLaunchProfile main/`), so the thing standing between this fall-through and a real launch is that Cursor does not ship at all.
+- ⚠ **NOTHING SHIPS THROUGH IT TODAY, AND THAT IS THE ONLY REASON IT IS A FINDING RATHER THAN A BUG.** Cursor is held (X0) and its descriptor names three profiles, so the launch predicate `canLaunchProfile` refused `channel_agent` there with a sentence. ⚠ **But that refusal had NO PRODUCTION CONSUMER** — `canLaunchProfile` / `profileRefusal` were read by tests only, and both left `capability.js` 2026-09-23 (the descriptor trim), so the thing standing between this fall-through and a real launch is that Cursor does not ship at all.
 - ⚠ **THE DEFAULT DIRECTION IS THE DEFECT, NOT THE MISSING BRANCH.** A profile chain whose default is the widest member fails open by construction; `normalizeProfile`, one file over, fails closed for exactly this reason.
 - Proposed resolution: (a) give `canLaunchProfile` a real consumer at `session-launch.js`, beside `windowlessFloorRefusal`, which is the refusal that already reads a descriptor there; or (b) make the adapters' fall-through the NARROWEST profile and name `full` explicitly. (b) alone is not enough — a silently-narrowed session is a session that reports it cannot do its work.
 - Status: open.
@@ -7761,7 +7768,7 @@ one; a widening that turns out to be wrong produces nothing anybody sees.
 
 ### F-551 — the thread's "other party" is derived in two places, from two different sources (2026-09-02)
 
-- Location: `src/features/channels/lib/draft-recipients.ts › threadOtherPartyOf` (new, for the composer's recipient line) and `src/features/channels/components/use-agents-panel.ts › launchAgent` (the launch's `counterpartyId`). The SERVER's third copy — `server/service-wake-verdict-resilience.ts › threadOtherParty` — reads the metadata fold's stamps rather than the thread row and is deliberately separate.
+- Location: `src/features/channels/lib/draft-recipients.ts › threadOtherPartyOf` (new, for the composer's recipient line) and `src/features/channels/components/use-agents-panel.ts › useAgentsPanel` (its `site.thread` lookup; `use-launch-controls.ts › buildLaunchPayload` carries the result as the launch's `counterpartyId`). The SERVER's third copy — `server/service-wake-verdict-resilience.ts › threadOtherParty` — reads the metadata fold's stamps rather than the thread row and is deliberately separate.
 - Found during: v2 wave B slice B10, wiring RR1 into the composer's recipient line.
 - **THE SHAPE.** Both client copies answer "given this thread and me, who is the other member", and both spell it as a two-arm conditional over `createdBy` / `targetUserId`. They agree today. They are one edit apart from disagreeing, and the disagreement would be silent in exactly the way F-266's parser split was: the LINE would name one person and the LAUNCH would hand the agent another counterparty.
 - ⚠ **NOT FOLDED HERE.** `use-agents-panel.ts` is not in this slice's `Owns` column, and its copy carries an extra arm this one does not need (a channel-level launch has no thread at all, which is a legitimate `null` rather than a non-participant's). Folding them is a small change to a file this slice may not touch.
@@ -7892,7 +7899,7 @@ one; a widening that turns out to be wrong produces nothing anybody sees.
 ### F-579 — the sibling roster survives its only reader, and `agentIdsInChannel` is now a dead export (2026-09-02)
 
 - Location: `dopl-desktop-app/main/session-registry.js › agentIdsInChannel`, re-exported by `main/session-engine.js`. Re-derive: `grep -rn "agentIdsInChannel" dopl-desktop-app/main dopl-desktop-app/test`.
-- Found during: the batch-2 integration, deleting G13's other half — `prompt-framing.js › agentIdentityFraming`'s ~870-character voluntary claim protocol.
+- Found during: the batch-2 integration, deleting G13's other half — `agentIdentityFraming`'s ~870-character voluntary claim protocol (that function is `prompt-framing-self.js › agentSelfFraming` since 2026-09-23).
 - **THE SHAPE.** `noteSiblings` stamped two fields: `context.agentId` (the identity line, still read) and `context.siblingAgentIds` — every other agent live in the same channel — whose ONLY reader was the deleted paragraph. The field went with the paragraph; the function that computed it, `agentIdsInChannel`, did not, because it is an exported registry read and B9 had already stopped calling it from the delivery core (`test/_wake-dispatch-harness.mjs`: *"TWO METHODS, NOT THREE"*).
 - ⚠ **IT IS DEAD RATHER THAN WRONG.** Nothing calls it in `main/`; two test harnesses still supply a fake for it. Deleting it is an edit to `session-registry.js` and `session-engine.js`'s re-export list, which is the desktop delivery core — **B9's ownership**, in a batch that is already integrated.
 - Proposed resolution: delete the function and its two re-exports with the batch-3 desktop pass, together with the harness fakes. A registry read that answers a question nobody asks is the shape a future paragraph gets written around.
@@ -9095,7 +9102,7 @@ Behavioural tests for `handleMcpStatus` / `relaunch` / `failVisibly` (cold + res
 2. `service-launch-color.ts › resolveDirectiveColor` read only live sessions, so two launches seconds apart could pick one key with no 409 — pending directives now hold their key (same follow-up).
 3. `use-agent-launch.ts › toggle` closed without `reset()` (typed state + `touched` survived, a new id was minted over a standing name) — one `close()` path now (same follow-up).
 4. `pages/agent-window/index.tsx › onOpenSession` routed a rail row for another workspace to THIS window's segment; `DesktopSessionSummary` gains `workspaceId` (desktop + SPA) and the page resolves the segment (same follow-up + the desktop split).
-5. `home-skeleton.tsx › PanelGhost` header ghost is ~3px shorter than the loaded `text-display` heading — below the threshold of restating a number; left.
+5. `PanelGhost` (then `home-skeleton.tsx`'s; since 2026-09-23 `section-panel-ghost.tsx › SectionPanelGhost`) header ghost is ~3px shorter than the loaded `text-display` heading — below the threshold of restating a number; left.
 
 - **F-668 — RESOLVED 2026-09-14 via the WIRE.** `credits-service.ts › upgradeCreditsFor` reads
   `SEAT_MONTHLY_CREDITS.team` / `PERSONAL_MONTHLY_CREDITS.pro`; the figure rides
@@ -10217,6 +10224,7 @@ The claim had been restated in five places from one sentence, which is how it su
 ### F-730 — the `deleted_at` COLUMNS outlive the soft-delete that used them, and removing them is a two-sided change (2026-09-18)
 
 - Location: `knowledge_bases.deleted_at`, `knowledge_entries.deleted_at`, `knowledge_folders.deleted_at`, `skills.deleted_at` and the eighteen indexes whose predicate names one of them (`SELECT tablename, indexname FROM pg_indexes WHERE schemaname='public' AND indexdef ILIKE '%deleted_at%'`); the `deleted_at IS NULL` read filters in `knowledge/server/repository-{bases,entries,folders,pins}.ts` and `skills/server/repository.ts`; `deletedAt` on `knowledge/types.ts`, `skills/types.ts` and their `@dopl/client` mirrors (`packages/dopl-client/src/{knowledge,skill}-types.ts`).
+- Location, the IDENTITY side (added 2026-09-23, review P7-17): `src/features/agent-identities/server/repository-knowledge-links.ts › listLiveFoldersForBases`, `› listLiveEntryRows` and `› listKnowledgeBaseAccessRows` each keep `.is("deleted_at", null)` (inert today; the source now says so), and the `20261019120000_rename_agent_templates_to_agent_identities.sql` §5 knowledge-scope trigger body reads `fld_deleted` / `ent_deleted` — plpgsql re-parses at call, so dropping the columns without restating that trigger makes EVERY junction insert raise. The filters were kept because the columns exist and knowledge's own reads keep theirs.
 - Found during: Samuel's 2026-09-18 ruling — *"for deleting the KB software, we don't have that anymore. When a user deletes a KB, it's just gone. There's no soft deletion, so please address and fix that as well."* — and the `20261013120000_drop_knowledge_soft_delete.sql` audit it bought.
 - **THE BEHAVIOURAL HALF IS DONE; THIS IS THE RESIDUE.** `20261013120000` drops the six functions and two triggers that STAMPED or CLEARED the column — including the two whose bodies wrote `workflow_knowledge_bases` / `workflow_skills`, tables dropped on 2026-08-11. After it, nothing in the database or the tree writes `deleted_at`: re-derive with `grep -rn --include='*.ts' --include='*.tsx' deleted_at src packages apps`, where every hit is a read filter, a projection column, or a `deletedAt: null` fixture. `includeDeleted` is `false` at every call site. **The columns are inert, not dangerous** — which is why this is a finding and not part of that migration.
 - ⚠ **ZERO TOMBSTONES, AND THAT IS A MEASUREMENT.** All eight `deleted_at`-bearing tables read `count(*) FILTER (WHERE deleted_at IS NOT NULL) = 0` on 2026-09-18 (`knowledge_bases` 0/36, `knowledge_entries` 0/260, `knowledge_folders` 0/36, `skills` 0/23, `channels` 0/18, `chats` 0/5, `ontology_clusters` 0/8, `ontology_objects` 0/40). Re-derive before acting; `20260807110000_purge_soft_deleted_rows.sql` is what made it true.
@@ -10281,7 +10289,7 @@ The claim had been restated in five places from one sentence, which is how it su
 
 ### F-739 — the outside-session author label ships ahead of the mechanism that sets it (2026-09-18)
 
-- Location: `packages/mcp-server/src/tools/channel-render-identity.ts › isOutsideSession` / `OUTSIDE_SESSION_HANDLE`, and the two lines it is read by in `dopl-desktop-app/main/prompt-framing-identity.js`.
+- Location: `packages/mcp-server/src/tools/channel-render-identity.ts › isOutsideSession` / `OUTSIDE_SESSION_HANDLE`, and the lines it is read by in `dopl-desktop-app/main/prompt-framing-self.js` (named prompt-framing-identity.js until 2026-09-23).
 - Found during: the Round-1 fix wave, batch A, building the "who asked + how to reply" half of the start card while the `@desktop` group handle was being built on a sibling branch (`fix/r1-desktop-tag`).
 - **THE SEAM IS ONE HELPER, AND IT ANSWERS FALSE FOR EVERY ROW WRITTEN TODAY.** The marker is NOT a new `authorKind` (that union is drift-gated against the column's own `CHECK`, `scripts/check-message-kind-drift.ts`) and NOT a DTO field either — both `ChannelMessage` declarations sit at the 500-line cap. It is server-owned `metadata.external_session`, exposed on the sibling branch as a FUNCTION, `authorViewOf(message)` → `MessageAuthorKind | "external"`. This tier asks the question in exactly one place, `isOutsideSession`, which today reads the metadata key directly; at merge its body becomes `authorViewOf(m) === "external"` and nothing else in the package moves. An old payload carries no marker, so the honest answer for it is false.
 - ⚠ **THE TWO HALVES MUST MERGE TOGETHER OR THE PROMPT LINE IS A RULE ABOUT A LABEL THE TRANSCRIPT NEVER CARRIES.** The spawn prompt tells an agent what an `outside session` line means and that its reply address is `@desktop`; that is true only once the projection and the handle exist.
@@ -10450,3 +10458,69 @@ already wrong — `channel-dispatch-agents.ts` does pass `waitMs` — so do not 
 - ⚠ **NEITHER DEFECT COULD FAIL A TEST AT THE TIME**: main was correct, the renderer was correct, and only the record between them was wrong — the seam no suite crossed. It is now pinned by `dopl-desktop-app/test/launch-selection-bridge.test.mjs`.
 - Resolution: both records send own-keys only; the file is 488 lines, under the cap. FIXED in the U7/U8 commit.
 - Status: RESOLVED.
+
+### F-755 — the Settings "Tool use" help says the setting does not move a running agent, and since 2026-09-16 it does (2026-09-23)
+
+- Location: `src/features/channels/components/settings-help.tsx › SETTINGS_HELP` — the `"Tool use"` body (*"Set when the agent launches; changing it does not move a running agent."*) and the comment above `Messaging` (*"Messaging is read live at the gate; the other launch rows once, at launch"*).
+- Found during: the 2026-09-23 cleanup's docs pass, re-verifying INVARIANTS §11's live-posture bullets against the tree.
+- **What the code does.** Axis A is read LIVE at decision time (`dopl-desktop-app/main/session-private.js › effectiveToolMode`, the channel's value for the session's runtime, 2026-09-16), and a Settings write fans out to running sessions of that runtime (`main/channel-dir-ipc.js › applyPostureToLive`). So a Tools change DOES move a running agent — narrowed only by a per-agent pick. The copy states the pre-2026-09-16 behaviour.
+- Severity: copy bug on a permission control (the operator is told a widening is inert when it is not).
+- Proposed resolution: reword under the minimal-copy ruling (one short clause), matching `Messaging`'s "applies immediately to agents already running"; the help-copy test pins the wording, so it moves with it. Needs Samuel's wording call, so not done in a docs pass.
+- Status: OPEN.
+
+### F-756 — runtime-seam leftovers the cleanup did not reach (2026-09-23)
+
+- Location: `dopl-desktop-app/main/session-reopen.js › setModelByTask` and `dopl-desktop-app/main/launch-directive-spawn.js › appliedModelId` (both still probe `typeof rt.modelArg === 'function'`); `packages/mcp-server/src/tools/respond.ts › sessionRequired`.
+- Found during: the 2026-09-23 review's Wave 2 (w2-runtime, w2-pkgs), deferred because the files belonged to other partitions or needed a ruling.
+- **The two probes are dead guards.** `modelArg` (and `rosterKey`) are contract methods since 2026-09-23 (`main/runtime/contract.js › RUNTIME_METHODS`), and `sealAdapter` refuses an adapter that lacks one, so the `typeof` branch can never be false for a registered runtime — it only hides a contract violation behind a silent pass-through.
+- **`sessionRequired` has no production caller** since knowledge pinning left, and is kept deliberately by its own test. Deleting it needs a ruling, not a sweep.
+- Proposed resolution: call `rt.modelArg` directly in both places; rule on `sessionRequired`.
+- Status: OPEN (low).
+
+### F-757 — knowledge SEARCH still admits `access_mode='teams'` bases to non-members: the base read never selects `access_mode` (2026-09-23)
+
+- Location: `src/features/search/server/repository-container-rows.ts › listReadableBases` selects `id, name, workspace_id, visibility, created_by` — no `access_mode`. `src/features/search/server/repository-visibility.ts › teamsModeVisible` reads `row.access_mode ?? "workspace"`.
+- Found during: the w2-spa comment pass of the 2026-09-23 review (D12), verified by reading both files at `e9fa9285`.
+- Severity: **bug, over-permissive (visibility).** Against the real database every base reads as workspace-mode, so a public `access_mode='teams'` base — and its entries, which `searchKnowledgeEntries` bounds by this same map — is searchable by a member in none of its teams. INVARIANTS §9 ("THE RESIDUAL IS CLOSED", F-716) states the intended rule; the code disagrees, so per CLAUDE.md the doc is left alone and this entry records the disagreement.
+- **Why every test is green.** Skills and chats select `access_mode` (pinned in `repository-rows.test.ts`); the fake DB in `_fake-world.ts` ignores the column list, so the knowledge half never exercised the missing column.
+- Proposed resolution: add `access_mode` to that select, and add the `knowledge_bases` row to `repository-rows.test.ts`'s column pin so the fake cannot hide it again.
+- Status: OPEN — not fixed in the cleanup (docs pass; code was out of scope).
+
+### F-758 — a Codex auth hold is re-probed only on an operator or direction message, never on a peer-inbound wake (2026-09-23)
+
+- Location: `dopl-desktop-app/main/session-auth.js › reprobeHeld` / `› reprobesOnWake`, called only from `main/session-reopen.js › messageByTask`.
+- Found during: the 2026-09-23 review's c-codex fix for P4-06 (auth holds are runtime-scoped; a runtime with no in-app sign-in re-probes its credential on the next wake).
+- **The gap.** After `codex login`, a held Codex agent resumes on the operator's next message, but a PEER's message into its thread still meets the hold: the inbound wake path does not ask `reprobeHeld`, so a multiplayer room can sit on a held agent until the operator happens to address it.
+- Proposed resolution: ask `reprobeHeld` on the inbound wake path too, once per wake, with the same fail-closed probe semantics.
+- Status: OPEN.
+
+### F-759 — `mcp_events` has had NO WRITER since `withMcpAccess` stopped wrapping any route; two surfaces still read it (2026-09-23)
+
+- Location: readers `src/features/analytics/server/health.ts` (the admin health page) and `src/features/skills/server/service-insights.ts` (skill read insights); the last writer, `logMcpEvent` (its module under `analytics/server/`), was deleted 2026-09-23 (no caller), after the `withMcpAccess` wrapper in `shared/auth/with-auth.ts` was deleted in Wave 2 because no route used it.
+- Found during: the w3-left dead-code pass of the 2026-09-23 cleanup.
+- **The effect.** Both readers now report only rows written before the wrapper fell out of use, so the health page and skill insights are quietly frozen rather than empty or erroring. Per-call MCP telemetry lives in `mcp_tool_calls` (`analytics/server/mcp-tool-calls.ts`) instead.
+- Proposed resolution: either re-point both readers at `mcp_tool_calls` or retire them and the table together (a ruling about what those surfaces are for).
+- Status: OPEN.
+
+### F-760 — two stale comments survived the comment skeleton (2026-09-23)
+
+- Location: `dopl-desktop-app/main/session-private.js › channelMessageMode`'s docblock ("COERCED BY THE STORE, NOT HERE" still names the deleted `normalizePreset`; the store validates through `launch-selection.js › patchRejections` / `› legacyPreset` now), and the header of the unapplied `supabase/migrations/20261021120000_agent_identities_runtime.sql`, which names the deleted core session-model module as the home of the Claude aliases (they are `main/runtime/claude/model-table.js`'s now).
+- Found during: the 2026-09-23 docs pass, re-grepping every deleted symbol after the w3-left merge.
+- Proposed resolution: repoint both comments (the migration is unapplied, so its header can still change before release).
+- Status: OPEN (trivial).
+
+### F-761 — `.fade-swap-in` sits outside `@layer components` in both stylesheets, so the kit drift gate cannot see it (2026-09-23)
+
+- Location: `src/app/globals.css` and `apps/desktop-ui/src/styles/kit.css` (`.fade-swap-in` and its reduced-motion twin); `scripts/check-css-token-drift.ts` compares only selectors INSIDE `@layer components` (INVARIANTS §14).
+- Found during: the w2-spa pass of the 2026-09-23 review (P9-09/P9-10).
+- **Same class, second site:** `apps/desktop-ui/src/components/skeletons/knowledge-skeletons.tsx › InfoPanelGhost` is a fourth hand copy of the section-panel ghost that `components/skeletons/section-panel-ghost.tsx › SectionPanelGhost` now owns for home, identities and members.
+- Proposed resolution: move the fade-swap rule into the layer in both files (needs `fade-swap.tsx`'s owner), and have the knowledge skeleton wear `SectionPanelGhost`.
+- Status: OPEN (low).
+
+### F-762 — two older `identity` names still mean something other than an agent identity (2026-09-23)
+
+- Location: `dopl-desktop-app/main/prompt-framing-agent-identity.js` (the identity's ROLE block — the planned rename to a `prompt-framing-role` module was deferred, P3-18's second half) and `packages/mcp-server/src/tools/identity.ts` (`CallerIdentity`, the caller — the planned rename to a `caller` module was skipped, P8-15: 18 doc anchors and 17 source files cite the path).
+- Found during: the 2026-09-23 review's Wave 2, which renamed the other two (`prompt-framing-self.js › agentSelfFraming`, `listener-people.js › resolveOperatorUserId`).
+- Why it matters: CLAUDE.md's glossary has to carry an exception list for the word; each remaining name is a place a reader confuses "the caller" or "the role block" with the durable agent identity.
+- Proposed resolution: rename both in one change that also moves every doc anchor.
+- Status: OPEN (low, naming).

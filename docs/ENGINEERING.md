@@ -70,7 +70,7 @@ setup-intelligence-engine/
 │   │   ├── prompts/               # Claude prompt templates
 │   │   ├── hooks/                 # Generic hooks
 │   │   ├── api/                   # parse-json, error-handler (shared route helpers)
-│   │   ├── auth/                  # Route wrappers (withUserAuth, withMcpAccess, withWorkspaceAuth)
+│   │   ├── auth/                  # Route wrappers (withUserAuth, withWorkspaceAuth)
 │   │   ├── supabase/              # Supabase client factories (admin/browser/server)
 │   │   └── types/                 # Truly shared types (ApiError, Result)
 │   ├── config/                    # Environment, flags, constants
@@ -511,7 +511,7 @@ src/features/<name>/
 └── ...
 ```
 
-And API routes — use the auth wrappers in `src/shared/auth/` (`withUserAuth` / `withMcpAccess` in `with-auth.ts`, `withWorkspaceAuth` in `with-workspace-auth.ts`). Do not invent a new `requireUser`. ⚠ This sentence named `withExternalAuth` and `withAdminAuth` for months — neither ever existed in the repo (corrected 2026-08-11; the fiction was found because INVARIANTS.md refused to copy an unverified claim). `docs/INVARIANTS.md` §3 is the verified wrapper list.
+And API routes — use the auth wrappers in `src/shared/auth/` (`withUserAuth` in `with-auth.ts`, `withWorkspaceAuth` in `with-workspace-auth.ts`). Do not invent a new `requireUser`. ⚠ This sentence named `withExternalAuth` and `withAdminAuth` for months — neither ever existed in the repo (corrected 2026-08-11; the fiction was found because INVARIANTS.md refused to copy an unverified claim). `docs/INVARIANTS.md` §3 is the verified wrapper list.
 
 ```ts
 // src/app/api/<feature>/<action>/route.ts
@@ -586,7 +586,7 @@ Applying that ruling required a line, because the mock had more unbacked pieces 
 - A hardcoded HEATMAP claims nothing about any person. It is scenery, and a reader who sees it under a `// HARDCODED — no backing data yet` marker loses nothing true.
 - A hardcoded REACTION says a named colleague reacted to a real message. A hardcoded APPROVAL says a named colleague consented to run their agent. A hardcoded MENTION says somebody tagged you. Each is a fabricated record of a real person's action, attached to real rows, on a surface whose entire job is reporting what people did.
 
-So the four named pieces kept their fixtures, and the person-claiming pieces were DROPPED from the port rather than faked or zeroed — including two components (`ReactionPill`, `PendingChip`) that were not carried over at all, with the absence stated in the file that would otherwise hold them. ⚠ **`PendingChip` CAME BACK ONE PHASE LATER (Phase 3, 2026-08-18) and `ReactionPill` did not — the difference is the whole rule.** Phase 3 found a real derivation for the viewer's OWN unanswered ask (`channels/components/view-model-requested.ts › requestedThreadIds`, off their own consent inbox), so the chip stopped being a claim about somebody else and became a statement about the reader; it lives in `channels/components/bits.tsx › PendingChip`. What is STILL dropped is the requester-side half — "N of M agents approved" — because no read can answer it (F-206). A reaction still asserts that a real person reacted, so it is still absent. **The line was never "no chip"; it was "no fabricated claim about a person".** The Tags/mentions inbox is the exception that proves the shape: it is fixture-driven by the plan (its read-state column does not exist yet), so it kept fixture CONTENT while every CONTROL on it — the disclosure, the badge, mark-read, mark-all — was made real, and its fixture authors were given ids belonging to nobody.
+So the four named pieces kept their fixtures, and the person-claiming pieces were DROPPED from the port rather than faked or zeroed — including two components (`ReactionPill`, `PendingChip`) that were not carried over at all, with the absence stated in the file that would otherwise hold them. ⚠ **`PendingChip` CAME BACK ONE PHASE LATER (Phase 3, 2026-08-18) and `ReactionPill` did not — the difference is the whole rule.** Phase 3 found a real derivation for the viewer's OWN unanswered ask (`channels/components/view-model-requested.ts › requestedThreadIds`, off their own consent inbox), so the chip stopped being a claim about somebody else and became a statement about the reader; it lived in `channels/components/bits.tsx` as `PendingChip` until 2026-08-22, when it was deleted with the whole inbound-consent vocabulary. What is STILL dropped is the requester-side half — "N of M agents approved" — because no read can answer it (F-206). A reaction still asserts that a real person reacted, so it is still absent. **The line was never "no chip"; it was "no fabricated claim about a person".** The Tags/mentions inbox is the exception that proves the shape: it is fixture-driven by the plan (its read-state column does not exist yet), so it kept fixture CONTENT while every CONTROL on it — the disclosure, the badge, mark-read, mark-all — was made real, and its fixture authors were given ids belonging to nobody.
 
 The general form: **when a designed surface outruns its data, ask what the placeholder ASSERTS. Scenery may wait; an attributed action may not.** The second kind is not a rendering decision, it is a false record, and the fact that a reviewer knows it is a mock does not travel with the screenshot.
 
@@ -1032,7 +1032,6 @@ export const POST = withUserAuth(async (req, { userId }) => {
 Auth wrappers live in `src/shared/auth/`:
 
 - `withUserAuth(handler)` (`with-auth.ts`) — same, plus injects `{ userId, agentTokenId?, apiKeyWorkspaceId?, params }`.
-- `withMcpAccess(action, handler)` (`with-auth.ts`) — composes `withUserAuth`; paywall-gates MCP (bearer) callers, logs analytics.
 - `withWorkspaceAuth(handler, { minRole, workspaceIdFromQuery, writeScopeExempt, sessionOnly })` (`with-workspace-auth.ts`) — composes `withUserAuth`; resolves the active workspace **fail-closed** (MCP-2, see §Workspace resolution below), verifies membership + `meetsMinRole`. The default for workspace-scoped content routes. `workspaceIdFromQuery: true` lets `?workspaceId=` participate in resolution for header-less `<a download>` export routes. Both wrappers also take `writeScopeExempt` / `sessionOnly` — the OAuth caller-type gates (see "OAuth write-scope & session-only gating" below).
 - `isAdmin(userId)` (`with-auth.ts`) — site-admin check vs `ADMIN_USER_ID` env.
 - `requireCronSecret(request)` (`require-cron-secret.ts`) — bearer gate for `/api/cron/*`, fail-closed 503 when unset.
@@ -1859,7 +1858,7 @@ The full story, root causes and residuals live in **F-119 in REFACTOR-FINDINGS.m
 - **Posture has exactly TWO write surfaces and ONE reader.** The web card's channel-keyed single-use arm (compat path) and the CONSENT-ENTRY arm (`session-consent.armModes`/`takeStartModes`, primary) both feed `s.state.toolMode`/`messageMode`, which is the ONLY thing the gate reads, per call. The consent arm is consumed ONLY by the launch that adopts that card — `spec.adoptsConsent` is threaded from `launch()`'s own adopt test and NOTHING else may set it (single-setter pinned): an unconditional read here was a shipped BLOCKER (a peer-driven wake racing an armed card started at bypass/auto_both).
 - **The idle timer means idle.** It re-arms on permission_request/decision, steer, feed, and inbound-accept — never park a session that has an open card or a running turn. **Superseded in part by THE POSTURE LIFETIME CONTRACT below (2026-08-05, F-138):** an `awaiting_peer` turn is not idle either, and the idle park no longer resets posture at all, so there is nothing left for it to say.
 - **Gate verdicts carry a closed reason-code enum** (`grantDecisionDetail` wraps a byte-unchanged `grantDecision`; `session-gate-reason.js` explains, never decides). Copy lives in the renderer's own-property-guarded table — a wire payload can never put its own words on screen. Same rule for the requester strip's status words.
-- **The model value becomes child argv.** Frozen enum (`session-model.js`), coerced at every boundary (preload, ipc, durable-record read, spawn, `modelArg`), no silent `fallbackModel`, survives park (a model is not a permission). The CONTEXT METER never reads `result.usage` (session-cumulative — a tripwire test enforces this); it measures the raw stream's last main-lane turn against the frozen window map, unknown model → tokens with no percentage.
+- **The model value becomes child argv.** Frozen enum (`main/runtime/claude/model-table.js`, the Claude table's home since the session-model module was deleted 2026-09-23), coerced at every boundary (preload, ipc, durable-record read, spawn, `modelArg`), no silent `fallbackModel`, survives park (a model is not a permission). The CONTEXT METER never reads `result.usage` (session-cumulative — a tripwire test enforces this); it measures the raw stream's last main-lane turn against the frozen window map, unknown model → tokens with no percentage.
 - **A peer's FOLLOW-UP to an answered exchange reopens the window that answered it** — route (6), the ONE post-classify route (F-120): at the listener's `trigger` branch, an addressed message carrying an exchange tag with a reopenable durable record (this channel, this tag, no agentId, counterparty === author) is fed through the IN-WINDOW inbound gate — live session fed, settled one recreated agent-not-started; every miss falls through to today's fresh consent. Classify is never widened; a recreate is not an adoption (no consent-arm read).
 - ~~**A human-typed request auto-opens a PINNED requester shell**~~ — **SUPERSEDED AND DELETED 2026-08-05 (F-140, rollback plan §3.4); see "ONE INITIATING BEHAVIOUR" below.** The shell existed because the app's own UI posted with NO runtime stamp, so `requesterShellOpen` had to route on a caller-asserted `authorKind` and only something inert was safe to open on that. The app stamps its own posts now, the operator's typed request opens a FULL requester session, and `requesterShellOpen` / `maybeOpenRequesterShell` / `session-park.openRequesterShell` are gone. What SURVIVES from this bullet: the Sent/Accepted/Declined/Replied strip, still a display-only observation that dispatches nothing, now armed by the requester route's `desktop-ui` arm; and Q3b — an external-created thread opens NOTHING — pinned in both remaining directions.
 
@@ -2008,7 +2007,7 @@ Both suites pin the copy: the root suite static-renders the pure panel and cross
 
 - ⚠ **SUPERSEDED 2026-08-20: THE ARM IS DELETED (Samuel's ruling, F-233) — read what follows as the record of a rule that no longer has a subject.** **"The arm may never be presented as a stored preference"** — the RULE was untouched, its EVIDENCE narrowed. The section heading (*"For the next request you allow"*, never *"this channel"*, never *"Always"*) is now the whole of what says so; the "…expires after 30 minutes. Every other session starts at Ask each time." sentence under it is deleted. **The 30-minute TTL did not change** (`ARM_TTL_MS` (the arm's 30-minute TTL, deleted 2026-08-20)) and `settings-tab.test.tsx` still cross-checks it against that source — a test about the desktop, not about rendered text. The margin here is thin on purpose: **a heading edit on this surface is a containment-copy edit.**
 - **"Per-profile copy says what a profile GRANTS, never what it withholds"** — **SURVIVES, at a fifth of the length.** Tools keeps a line per option because it is the containment pick, now ≤5 words: `full` still NAMES the connected apps ("Everything, including connected apps") rather than hedging them, and no line ranks a restricted profile as safe or recommended. The no-generalized-deny-floor rule is unchanged and is easier to keep at this length, not harder.
-- **"Trust is WORKSPACE-WIDE and the copy carries the scope"** — ⚠ **SUPERSEDED IN PART.** The SCOPE half survives as one short line (`settings-agent.tsx › TRUST_SCOPE_HINT`), because a toggle living in a per-CHANNEL tab over a row keyed `(operator, trusted, workspace)` cannot leave that implicit. **The EFFECT half is no longer rendered**: that an auto-allowed request raises no card and that the session it starts gets whatever this channel's Tools setting allows — still true, still the reason the two controls share a tab, no longer printed. The EMPTY STATE requirement stands (one short line, never a vanished section).
+- **"Trust is WORKSPACE-WIDE and the copy carries the scope"** — ⚠ **SUPERSEDED IN PART.** The SCOPE half survived as one short line (`TRUST_SCOPE_HINT`, deleted 2026-08-22 with the whole Always-allow section of `settings-agent.tsx`), because a toggle living in a per-CHANNEL tab over a row keyed `(operator, trusted, workspace)` cannot leave that implicit. **The EFFECT half is no longer rendered**: that an auto-allowed request raises no card and that the session it starts gets whatever this channel's Tools setting allows — still true, still the reason the two controls share a tab, no longer printed. The EMPTY STATE requirement stands (one short line, never a vanished section).
 - **The two suites still "pin the copy", but pin LESS of it, and one pins a SHAPE instead.** `settings-tab.test.tsx › minimal copy — the tab is a settings panel, not documentation` bounds every `text-caption` node at 8 words and refuses a mid-string sentence break — **a measurement of the ruling rather than a list of blessed sentences**, so a new explainer under any control turns it red. The old assertions became absence pins.
 
 **The deleted sentences are not lost: they are DOCBLOCKS in `settings-agent.tsx`, addressed to developers.** ⚠ Do not read one as a claim about what the UI shows, and do not restore one to the surface in order to "restore" a rule above — every rule here is still enforced by a test, in code, or by the desktop source it describes. **The `launch-panel.tsx` consent card was NOT touched** by any of this; only the Settings tab's rendering changed. **Current state: INVARIANTS §5.**
@@ -2181,7 +2180,7 @@ A repo-wide comment sweep ran on **2026-08-15** across 18 scopes (`src/features/
 - The desktop MAIN process still implements the op (`dopl-desktop-app/main/auth-password.js`, reachable over the bridge). What went is the login form's USE of it, not the capability.
 - The absence is pinned, not just documented: `src/features/auth/components/login-form-core.test.tsx` asserts no "sign-in link" text and no `/link/i` button, and a host that still passed `sendMagicLink` would not type-check against `LoginActions` (`src/features/auth/hooks/use-login-core.ts`).
 
-- **The desktop SPA host lost the same control in the same edit** (`apps/desktop-ui/src/pages/boot/signed-out-screen.tsx`). The bridge op and main's `sendMagicLink` handler are untouched and still implemented; nothing in the renderer calls them, and the SPA cannot wire the op back without restoring the `LoginActions` member. The covering assertion in `apps/desktop-ui/src/pages/boot/index.test.tsx` went with it. Password recovery has never had a bridge op, so the desktop form's conditional "Forgot password?" link stays hidden and recovery ends on the public site's `/auth/reset-password`.
+- **The desktop SPA host lost the same control in the same edit** (`apps/desktop-ui/src/pages/boot/signed-out-screen.tsx`). The bridge op and main's `sendMagicLink` handler were left implemented with nothing in the renderer calling them — ⚠ **both are DELETED since 2026-09-23** (the preload member, `ui-bridge.js`'s `dopl:magic-link` handler and the `sendMagicLink` function in `auth-password.js`, in the pre-release cleanup's dead-code pass). The emailed-link return path (`/auth/desktop-handoff` → `dopl://auth`) is still the OAuth leg's. The covering assertion in `apps/desktop-ui/src/pages/boot/index.test.tsx` went with it. Password recovery has never had a bridge op, so the desktop form's conditional "Forgot password?" link stays hidden and recovery ends on the public site's `/auth/reset-password`.
 
 *Relocated from* `src/features/auth/hooks/use-login-core.ts › LoginActions`, `apps/desktop-ui/src/pages/boot/signed-out-screen.tsx › SignedOutScreen`
 
@@ -2817,7 +2816,7 @@ its surviving caller is server-side validation rather than a renderer.
 
 The Agents tab wants both **occupancy** (how full is the context window) and
 **spend** (what has this run cost). They come from the same SDK `usage` shapes and
-they are different functions on purpose — `main/session-model.js › promptTokens`
+they are different functions on purpose — `main/runtime/claude/model-table.js › promptTokens`
 vs `› sessionTokens`:
 
 - **Occupancy excludes output tokens and comes from the LAST ASSISTANT MESSAGE.**
@@ -6167,7 +6166,7 @@ goes away and the caller pinned to an older desktop gets exactly the opaque refu
 exercise was avoiding, just further from the change that caused it.
 
 **The answer is that the REFUSAL carries the sentence.** `z.enum(CHANNEL_OPS, { error })` puts
-`channel-schema.ts › unknownOpRefusal` — *"dopl_channel has no op `post` — it takes "send", "read",
+`channel-vocab.ts › unknownOpRefusal` — *"dopl_channel has no op `post` — it takes "send", "read",
 "status", "manage" or "rooms". Nothing was done."* — into the validation failure itself. The same
 function is the registrar's exhaustive `default`, so the two answers cannot drift, and the whole
 compatibility surface is now one line instead of a module, a type, a map and an arm. **What a
@@ -6881,3 +6880,53 @@ agent — a session launched FROM an identity. Current state is INVARIANTS §5A'
   table never existing and the old one never dying. `shared/supabase/migration-renames.ts ›
   forwardRenamed` rewrites each migration with the renames LATER files perform; every downstream rule
   then replays as if the object had always carried its final name, which is the question each gate asks.
+
+## 2026-09-23 — The pre-release cleanup: one defect family, and why the rulings went the way they did
+
+**What was reviewed.** The 78 commits from the first Codex-runtime fix through the pin-model removal
+(`docs/plans/2026-09-23-codex-identity-review-handoff.md`), by twelve read-only reviewers, then fixed in
+three waves (behaviour, hardcode/dup/dead + comment skeleton, tests). Current state is INVARIANTS
+§11.0b–§11.0f, §5A's identity-runtime bullets, §12's release list and §14's sentinel and live-tier
+rules; open debt is F-755–F-762.
+
+**The one defect family.** Most of the P0/P1 findings were the same mistake in different files: code
+written when Claude was the only runtime treated Claude's words as THE vocabulary. Session state
+coerced every Axis-A word to Claude's four, so a Codex `never` became `manual` → `untrusted`; the
+Settings fan-out pushed the selected runtime's word into every live session; the directive lane
+clamped in Claude's order; the picker offered Claude's four on a Codex agent; core re-tested Codex auth
+errors with Claude regexes; and `sessionSpawnAvailable` asked for a Claude-only loader that no longer
+existed. Each was locally reasonable and each was invisible to a suite that built its state by hand.
+
+**Why "each runtime's own words" (ruling 2) and not a translation.** There is no honest mapping:
+`granular` has no Claude equivalent, Codex splits approval from sandboxing, and the clamp ORDER differs
+per runtime. A translated word is a guess the operator never made. So the wire carries the UNION as a
+SET, the machine validates against the RESOLVED runtime, and a word that runtime does not offer is not
+applied — which costs a DB CHECK migration and an orchestrator that must know vendor words, both
+accepted.
+
+**Why "narrower sticks" (ruling 3), per axis.** An orchestrator narrowing a worker is a containment
+decision, and the old fan-out erased it the next time anyone touched Settings — while also stamping a
+pick nobody made. Making the pick the session's own, clamped to the live channel value on every read,
+keeps "never wider than the channel" true in both directions. Pinning only the axes a directive asked
+(a follow-up in Wave 2) stops an unasked axis from freezing at launch.
+
+**Why identities got a runtime (rulings 4–6).** A model id belongs to a runtime; an identity that
+names only a model forced the editor to guess which roster to show (it showed the default runtime's,
+i.e. Claude's) and let a launch on another runtime silently drop or mis-resolve it. Launcher pick →
+identity runtime → channel runtime is the order that lets an identity mean "run me as Codex" without
+overriding an explicit choice; the backfill infers only what a Claude model id proves.
+
+**Process lessons worth keeping.**
+- **A comment can keep a dead doc anchor alive.** `check-doc-refs` resolves `path › symbol` by text
+  containment, comments included, so ~50 anchors to long-deleted symbols "passed" only because a
+  history comment still spelled the name; the comment skeleton exposed all of them at once. Write a
+  deleted symbol as prose in the doc; never keep it resolvable through a tombstone.
+- **Comments were load-bearing in two places nobody listed**: the `// ─── BEGIN/END` sentinels tests
+  slice (blanking comments made 102 test files fail to load) and two `schema-sessions.ts` comment lines
+  a drift script locates by text. Both are now stated as contracts (INVARIANTS §14).
+- **Behaviour fixes were driven through real entry points** (`initialSessionState`, the engine harness),
+  because the suites that hand-built "impossible" state were exactly the ones that had pinned the bugs.
+- ⚠ **The 2026-09-22 Codex runbook above is partly superseded**: the CLI floor lives in
+  `main/runtime/codex/protocol.js › SUPPORTED_CLI` and is ENFORCED at `available()`; delivery is
+  `bundled` with a real `versionPin`; `checkProtocol` is deleted; `mcp.toolNamePrefix` and resume were
+  measured (bare names; resume continues the total, so it is allowed). Read INVARIANTS §11.0d first.

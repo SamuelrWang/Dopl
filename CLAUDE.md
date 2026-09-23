@@ -46,12 +46,14 @@ opening the file it names is how a fiction gets promoted into INVARIANTS.**
 - **Agent identity** = a ROLE OF THE USER, one piece of their digital twin (a "Coder" identity is the
   user as a coder). It was called an **agent template** until 2026-09-22; code, API, DB, MCP (`identity=`)
   and UI ("Identities", "+ Agent Identity") all say identity now. `src/features/agent-identities/`,
-  table `agent_identities`.
+  table `agent_identities`. Since 2026-09-23 an identity carries a **runtime** (`agent_identities.runtime`,
+  null = the channel decides); a launch runs on the launcher's pick → the identity's runtime → the channel's.
 - **Agent** = a RUNNING SESSION in a channel, launched FROM an identity (or blank). The channel page still
   says "agents" and must keep saying it.
 - Not the same word: the ontology's object `template` (an object's default fields), "template literal",
-  and the older `identity` names that mean a caller or a running agent's id (`CallerIdentity`,
-  `agentIdentityFraming`). Details: docs/INVARIANTS.md §5A.
+  and the older `identity` names that mean a caller (`CallerIdentity`) or an identity's role block
+  (`prompt-framing-agent-identity.js`; F-762). A running agent's own id line is `agentSelfFraming` since
+  2026-09-23. Details: docs/INVARIANTS.md §5A.
 
 ## Standing rules for writing docs
 
@@ -167,13 +169,16 @@ is a TYPECHECK and not one of the twelve:
     that a policy NAME survived, so `USING (true)`, a second permissive policy, `DISABLE ROW
     LEVEL SECURITY` and a `FOR SELECT` → `FOR INSERT` flip all passed. It now replays
     `DROP TABLE`, asserts RLS is on per table, asserts the live SELECT set EQUALS the declared
-    set, and asserts each policy is `FOR SELECT` and reaches its predicate.
+    set, and asserts each policy is `FOR SELECT` and reaches its predicate. Since 2026-09-23 it replays
+    through `shared/supabase/rls-policy-scan.ts` (forward-renamed), so a renamed table keeps its
+    policies and RLS state without the rename restating `ENABLE ROW LEVEL SECURITY`.
 11. 🔒 **the `rls-redteam` CI job** — the only gate that starts a database, and therefore the only
     one that can say POSTGRES agrees. `supabase start && supabase db reset`, then
-    `RLS_REDTEAM_LIVE=1 vitest run` over the redteam files — **SEVEN since 2026-09-14**, when the review of the 2026-09-13 wave found `src/features/knowledge/server/rls-redteam-personal-container.test.ts` on disk since `fee04723` but never in the job's list (its live half had never run) and added it; SIX had been the count since 2026-09-09's `src/features/ontology/server/rls-redteam.test.ts`. ⚠ **THE LIST IN
-    `ci.yml` IS NAMED FILES, NOT A GLOB**, so a suite that is not added there has a live half that
-    never executes — re-derive it rather than trusting this number
-    (`grep -n 'rls-redteam' .github/workflows/ci.yml`). Before the job, every behavioural RLS
+    `RLS_REDTEAM_LIVE=1 npx vitest run rls-redteam` — a vitest PATH FILTER since 2026-09-23, so a new
+    `*rls-redteam*.test.ts` joins the live run without a CI edit (re-derive the set with
+    `find src -name '*rls-redteam*.test.ts'`). It was a list of named files until then, and
+    `src/features/knowledge/server/rls-redteam-personal-container.test.ts` sat on disk and off that list
+    (its live half never ran) until 2026-09-14 — the failure the filter removes. Before the job, every behavioural RLS
     case in two waves was green having never executed a statement, because the flag was set
     nowhere. `db reset` makes it the migration REPLAY gate too. ⚠ It cannot run on a machine
     without Docker; the local skip-with-reason stays.
