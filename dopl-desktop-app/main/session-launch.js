@@ -357,21 +357,10 @@ function isAuthHeldSession(a) {
   return !!(s && !s.settled && s.state && s.state.authHeld === true);
 }
 
-// FIX L1: the counterparty this session was launched against. ⚠ IT NO LONGER FENCES THE FEED
-// (2026-08-21, the fan-out ruling — see `session-dispatch.js`); it survives as the session's
-// DISPLAY binding (the outbound card's recipient line) and because a resume persists it.
-function counterpartyFor(a) {
-  const s = deps.sessionOn(a);
-  return s ? (s.counterpartyId || null) : null;
-}
-
 module.exports = {
   bind,
   launch,
-  refuseUnknownModel, // 2026-09-22: also asked by the live model switch
   launchResponderSession,
   launchRequesterSession,
   hasLiveSession,
-  isAuthHeldSession,
-  counterpartyFor,
 };

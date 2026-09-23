@@ -9,7 +9,6 @@
 // object (never logged, never on argv, never on disk since C1).
 
 const crypto = require('crypto');
-const { newAgentId, isAgentId } = require('./agent-id'); // 2026-08-21: one random id per INSTANCE
 const { diag } = require('./diag');
 const io = require('./session-io');
 const store = require('./session-store');
@@ -38,11 +37,10 @@ const sessionWindowless = require('./session-windowless'); // §2 split: the win
 // operator's agents, and an empty thread id names the CHANNEL-LEVEL ones. Pure reads over the
 // registry this file owns; bound below like every other injected helper.
 const agentHistory = require('./agent-history'); // 2026-08-22: what an ended agent leaves, for 7 days
-const sessionMetrics = require('./session-metrics'); // ...and what it cost, frozen with it
 const sessionPrivate = require('./session-private'); // 2026-08-22: the 1:1 turn's window
 const sessionDirected = require('./session-directed'); // 2026-08-31: the DIRECTED turn's capture
 const sessionRegistry = require('./session-registry');
-const { liveOnThread, agentIdsOnThread, sessionOn, noteSiblings } = sessionRegistry;
+const { liveOnThread, sessionOn, noteSiblings } = sessionRegistry;
 // §2 SPLIT (2026-08-22): the TERMINAL — teardown order, the history freeze, and the read of a
 // dead agent's ring. Injected below like every other engine handle; it never requires back.
 const sessionTeardown = require('./session-teardown');
@@ -55,7 +53,7 @@ const { denyPendingPermissions, resolvePerm } = sessionPermissions;
 // ...and the SPAWN FUNNEL: what happens before a session exists (mint an id, ask the three
 // refusal questions, hand to startSession). Split off this file at the §2 cap on 2026-08-21.
 const sessionLaunch = require('./session-launch');
-const { launch, launchResponderSession, launchRequesterSession, hasLiveSession, counterpartyFor } = sessionLaunch;
+const { launchResponderSession, launchRequesterSession, hasLiveSession } = sessionLaunch;
 
 // ⚠ THE HOST SEAMS — the settings read (`readCaps`), the tray rebuild and the LIFECYCLE ECHO
 // (`runLifecycle` / `setLifecycleHandlers`, and the handler pair they hold) — live in
@@ -442,10 +440,8 @@ module.exports = {
   launchResponderSession,
   launchRequesterSession,
   hasLiveSession,
-  counterpartyFor,
   // 2026-08-21 multiplayer: (channel, thread) names a GROUP of sessions, not one.
   liveOnThread,
-  agentIdsOnThread,
   sessionOn,
   // The three session-team.js exports went with summoning (docs/ENGINEERING.md §18 F-141). The last
   // of them left its line behind here, and `module.exports` is EVALUATED, so requiring this module
