@@ -315,3 +315,15 @@ test("DIRECTION: 🔒 one that NAMES NO AGENT is refused, and dispatches nothing
   assert.deepEqual(out, { ok: false, reason: "no-session" });
   assert.equal(h.calls.dispatch.length, 0);
 });
+
+test("DIRECTION: the capture remembers the FRAMED prompt it pushed (CXP-3B)", () => {
+  // ⚠ The Codex adapter matches a `turn/steer` to its capture by this text; a capture armed
+  // without it could never learn its push JOINED a live turn, and would strand `claimed`.
+  const h = harness();
+  const s = fakeSession({ nonce: "abc123" });
+  h.sessions.set(KEY, s);
+  h.messageByTask({ ...task, agentId: AGENT, text: "x", directed: { id: "d-1", workspaceId: "w", operatorUserId: "op-1" } });
+  const [, event] = h.calls.dispatch[0];
+  assert.equal(s.directed.length, 1);
+  assert.equal(s.directed[0].prompt, event.text);
+});
