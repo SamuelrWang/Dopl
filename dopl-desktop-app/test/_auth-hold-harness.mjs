@@ -52,10 +52,10 @@ export const HOLD_BLOCK = sentinelBlock(AUTH_SRC, "SESSION-AUTH-HOLD");
 // await left in the resume, so that is where a re-entrancy race is made now.
 export function harness(over = {}) {
   const cfg = { usable: false, gate: null, ...over };
-  const calls = { emit: [], dispatch: [], effects: [], startQuery: [], denyPending: [], phase: [], sdk: 0 };
+  const calls = { emit: [], dispatch: [], effects: [], startQuery: [], denyPending: [], phase: [], sdk: 0, acquired: [] };
   const state = { usable: cfg.usable };
   const deps = {
-    acquireRuntime: async () => { calls.sdk += 1; if (cfg.gate) await cfg.gate; return { __runtime: true }; },
+    acquireRuntime: async (id) => { calls.sdk += 1; calls.acquired.push(id); if (cfg.gate) await cfg.gate; return { __runtime: true }; },
     startQuery: async (s, rt) => calls.startQuery.push({ s, rt }),
     dispatch: (s, ev) => {
       calls.dispatch.push(ev);
@@ -65,6 +65,7 @@ export function harness(over = {}) {
     },
     emit: (s, payload) => calls.emit.push(payload),
     denyPending: (s, message) => calls.denyPending.push(message),
+    teardown: require(M("session-handles.js")).teardownHandles,
   };
   // ⚠ `floorWindowlessMessage` JOINED THE INJECTED SET ON 2026-08-22 (F-236's last hole). The
   // AUTH HOLD is the one park that RESETS the posture, so `resumeAfterSignIn` has to put AXIS B's

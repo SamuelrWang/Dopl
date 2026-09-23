@@ -137,9 +137,9 @@ test("H1 startQuery SUPERSEDES before it assembles — the real backstop for two
   assert.ok(abortFirst !== -1, "startQuery tears down before it builds");
   assert.ok(abortFirst < newController, "and it does so BEFORE overwriting the handles");
   const teardown = QUERY.slice(QUERY.indexOf("function abortInFlight("), QUERY.indexOf("async function startQuery("));
-  assert.match(teardown, /s\.abortController\.abort\(\)/, "the previous child is really killed");
-  assert.match(teardown, /s\.pushIterator\.close\(\)/, "its prompt stream is closed");
-  assert.match(teardown, /s\.query = null;/, "and its consume loop is superseded (s.query !== q)");
+  // The kill, the stream close, the handle close and the supersede are `session-handles.js`'s,
+  // driven in test/session-handles.test.mjs.
+  assert.match(teardown, /teardownHandles\(s, \{ supersede: true \}\);/, "the previous child is torn down and superseded");
 });
 
 // ⚠ "H1 an auth-held session refuses an inbound ACCEPT at the gate, keeping the card live" STOOD HERE

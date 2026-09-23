@@ -34,6 +34,7 @@ const runtimeRegistry = require('./runtime');
 // adapter owns how a server is MOUNTED, this owns whether the route is awake before a child asks.
 const mcpConnect = require('./mcp-connect');
 const config = require('./config');
+const { teardownHandles } = require('./session-handles'); // P4-14
 
 let deps = null; // { dispatch, emitQuiet, scheduleIdle }
 
@@ -60,13 +61,11 @@ function buildLaunchSpec(s) {
 
 // H1 — SUPERSEDE the live query handles without touching lifecycle state. The consume
 // loop below is tagged by its own `q`, so nulling `s.query` makes the previous loop inert
-// (`s.query !== q` returns immediately, dropping its tail AND any late rejection); the
-// abort stops the child process; closing the iterator ends the prompt stream it blocks on.
+// (`s.query !== q` returns immediately, dropping its tail AND any late rejection). The handle
+// is closed BEFORE it is nulled, or a Codex child outlives the relaunch (P4-14).
 // Safe on a cold session, where every field is already null.
 function abortInFlight(s) {
-  try { if (s.abortController) s.abortController.abort(); } catch (_) { /* best effort */ }
-  try { if (s.pushIterator) s.pushIterator.close(); } catch (_) { /* best effort */ }
-  s.query = null;
+  teardownHandles(s, { supersede: true });
 }
 
 async function startQuery(s, rt) {
@@ -160,11 +159,7 @@ async function consume(s, q, rt) {
     // holdIfAuthFailure(...)`), which never lost it. The two auth lanes now agree again.
     for await (const msg of q) {
       if (s.query !== q) return;
-      // ⚠ `diag` RIDES THE CALL (D7.3). `session-io.js` may not require it — it is required in
-      // plain Node by a dozen suites and `diag.js` pulls electron — so the swallowed context
-      // dispatch's log line is supplied from here, exactly as the option assembly supplies the
-      // gate bridge's. This file already requires `diag` at its top for the query-error line.
-      const signal = io.applyCoreEvents(s, rt.normalize(msg, normalizeCtx(s)), deps.dispatch, store, diag);
+      const signal = io.applyCoreEvents(s, rt.normalize(msg, normalizeCtx(s)), deps.dispatch, store);
       // ⚠ TWO SIGNALS SHARE THIS RETURN AND ARE BRANCHED APART BY `type` (F-692). The auth hold is
       // an EVENT (`{type:'auth_hold', text}`); the MCP-connect answer is `{type:'mcp_status',
       // status}`. Passing the wrong one to `holdIfAuthFailure` would test an undefined against the

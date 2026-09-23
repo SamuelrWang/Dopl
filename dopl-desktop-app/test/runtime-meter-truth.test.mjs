@@ -181,13 +181,10 @@ test("🔒 no adapter declares a cost, and no result event carries one", () => {
 
 test("a FOURTH runtime gets a percentage by REPORTING a window, never by being named", () => {
   // ⚠ THE RULE THIS WAVE IS MOST LIKELY TO LOSE (`session-runtime-truth.test.mjs § CXP-4`'s
-  // idiom). Nothing in `session-model.js › contextEvent` or `session-metrics.js › metrics` may
-  // know the word `codex`: an adapter nobody has written yet must get its denominator purely by
-  // putting one on the wire, and a model id from no vendor this build has heard of must still
-  // meter. Driven off exactly those — a made-up id and a made-up window.
-  const ev = sessionModel.contextEvent(4096, "borg-3-turbo", 32768);
-  assert.deepEqual(ev, { type: "context", tokens: 4096, window: 32768, model: "borg-3-turbo" });
-
+  // idiom). Nothing in `session-metrics.js › metrics` may know the word `codex`: an adapter nobody
+  // has written yet must get its denominator purely by putting one on the wire, and a model id from
+  // no vendor this build has heard of must still meter. Driven off exactly those — a made-up id and
+  // a made-up window.
   const m = metrics({ promptTokens: 4096, promptWindow: 32768, liveModel: "borg-3-turbo", runtimeId: "borg" });
   assert.equal(m.contextUsed, 4096);
   assert.equal(m.contextWindow, 32768, "the reported window is the denominator, whoever reported it");
@@ -197,18 +194,16 @@ test("…and a FOURTH runtime that reports NO window gets `null`, not a made-up 
   // ⚠ INVARIANTS: UNKNOWN STAYS DISTINCT FROM EMPTY. `contextWindowFor` answers null for a model
   // off every table, and the renderer draws raw tokens with no percentage. A `0` here is the lie —
   // a full meter on an empty session, or "0 tokens available" on a live one.
-  const ev = sessionModel.contextEvent(4096, "borg-3-turbo", undefined);
-  assert.equal(ev.window, null);
   const m = metrics({ promptTokens: 4096, liveModel: "borg-3-turbo", runtimeId: "borg" });
   assert.equal(m.contextWindow, null, "⚠ null — a zero denominator is a division nobody may do");
   assert.equal(m.contextUsed, 4096, "the numerator is still honest: measured, just undividable");
   // A window of 0 or junk on the wire falls THROUGH to the table rather than being spent.
   for (const junk of [0, -1, NaN, null, undefined, {}, [], "wide"]) {
-    assert.equal(sessionModel.contextEvent(4096, "borg-3-turbo", junk).window, null, String(junk));
+    assert.equal(metrics({ promptTokens: 4096, promptWindow: junk, liveModel: "borg-3-turbo" }).contextWindow, null, String(junk));
   }
   // ⚠ A NUMERIC STRING IS STOPPED AT THE SEAM, NOT DOWNSTREAM, AND IT MATTERS WHICH LAYER DOES IT.
-  // `contextEvent` and `session-metrics.js › reportedWindow` both take `Number(x)`, so `'32768'`
-  // WOULD be spent by either — it never reaches them, because the adapter boundary is TYPED:
+  // `session-metrics.js › reportedWindow` takes `Number(x)`, so `'32768'` WOULD be spent there —
+  // it never reaches it, because the adapter boundary is TYPED:
   // `runtime/events.js › context` demands `typeof window === 'number'`. A string denominator
   // reaching a percentage untouched by anything that checks its type is what that line prevents,
   // and `session-io.js › applyCoreEvents` re-coerces once more before remembering it.
@@ -219,9 +214,8 @@ test("REGRESSION: the reported window BEATS the table, and Claude's table lookup
   // ⚠ PRECEDENCE, DRIVEN: a runtime that states its own denominator wins over a frozen
   // transcription of one vendor's registry, because the table is current by MAINTENANCE and the
   // wire is current by CONSTRUCTION.
-  assert.equal(sessionModel.contextEvent(10, "claude-sonnet-5", 12345).window, 12345);
+  assert.equal(metrics({ promptTokens: 10, promptWindow: 12345, liveModel: "claude-sonnet-5" }).contextWindow, 12345);
   // …and with nothing reported, every Claude session reads exactly what it always did.
-  assert.equal(sessionModel.contextEvent(10, "claude-sonnet-5").window, 1000000);
   assert.equal(metrics({ promptTokens: 10, liveModel: "claude-haiku-4-5" }).contextWindow, 200000);
   assert.equal(metrics({ promptTokens: 10, liveModel: "claude-sonnet-5" }).contextWindow, 1000000);
 });

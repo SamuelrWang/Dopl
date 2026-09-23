@@ -338,7 +338,7 @@ test("the consume loop routes an auth failure to the hold before it can dispatch
   // TWO kinds of answer now — the `auth_hold` event this test is about, and `{type:'mcp_status'}`
   // after a `launched` — and the loop branches on `type` so neither can be fed to the other's
   // handler. The property pinned here is unchanged: the bubble is consumed, never rendered.
-  assert.match(QUERY, /const signal = io\.applyCoreEvents\(s, rt\.normalize\(msg, normalizeCtx\(s\)\), deps\.dispatch, store, diag\);/,
+  assert.match(QUERY, /const signal = io\.applyCoreEvents\(s, rt\.normalize\(msg, normalizeCtx\(s\)\), deps\.dispatch, store\);/,
     "the message path consumes the bubble instead of rendering it");
   // ⚠ D7.4 (restored 2026-09-01): THE SENTINEL'S ANSWER IS THE STOP CONDITION, not the fact that
   // it was asked. HEAD read `if (sessionAuth.holdIfAuthMessage(s, msg)) return;`; the port dropped
@@ -388,7 +388,7 @@ test("the engine injects its OWN startQuery + denyPending (no second query assem
   // the denial-copy ruling) and is destructured at the engine's module scope, so this bind reads
   // exactly as it did. What must stay true is that the auth hold is handed the REAL fail-closed
   // sweep and not a stub — a hold that leaves a resolver dangling blocks the SDK child forever.
-  assert.match(ENGINE, /sessionAuth\.bind\(\{ sessions, acquireRuntime, startQuery, dispatch, emit, denyPending: denyPendingPermissions \}\)/);
+  assert.match(ENGINE, /sessionAuth\.bind\(\{ sessions, acquireRuntime, startQuery, dispatch, emit, denyPending: denyPendingPermissions, teardown: teardownHandles \}\)/);
   assert.match(ENGINE, /const \{ denyPendingPermissions, resolvePerm \} = sessionPermissions;/,
     "…and it is the shared one, not a local re-declaration");
   assert.ok(!/getSessionBySender/.test(ENGINE), "no sender-keyed session lookup survives anywhere in the engine");

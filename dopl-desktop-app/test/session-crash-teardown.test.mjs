@@ -46,6 +46,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { fnOf, codeOf } from "./helpers/source-probe.mjs";
+import { createRequire } from "node:module";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const TEARDOWN = readFileSync(join(HERE, "..", "main", "session-teardown.js"), "utf8");
@@ -80,7 +81,7 @@ function harness(over = {}) {
   const sessionMetrics = { metrics: () => ({ contextUsed: null, contextWindow: null, tokensSpent: null, startedAt: null, lastActivityAt: null }) };
   const api = new Function(
     "store", "deps", "sessionSummary",
-    "agentHistory", "sessionMetrics", "sessionNarration", "diag",
+    "agentHistory", "sessionMetrics", "sessionNarration", "diag", "teardownHandles",
     `${fnOf(PERMS, "denyPendingPermissions")}
      ${fnOf(TEARDOWN, "settle")}
      return { settle, denyPendingPermissions };`
@@ -95,7 +96,8 @@ function harness(over = {}) {
       refreshTray: () => { calls.tray += 1; },
       sessionOn: () => null,
     },
-    sessionSummary, agentHistory, sessionMetrics, { ringFor: () => [] }, () => {}
+    sessionSummary, agentHistory, sessionMetrics, { ringFor: () => [] }, () => {},
+    createRequire(import.meta.url)(join(HERE, "..", "main", "session-handles.js")).teardownHandles
   );
   // ⚠ The real sweep, wired through the injected handle: `settle` calls it as
   // `deps.denyPendingPermissions`, and the function it must call is the engine's own.
@@ -175,7 +177,7 @@ test("C3: a session with no live handles settles without throwing (parked shell 
 
 test("C3: the shipped settle really runs the teardown BEFORE it drops the handles", () => {
   const body = codeOf(fnOf(TEARDOWN, "settle"));
-  const order = ["deps.denyPendingPermissions(s, 'Session ended')", "s.pushIterator.close()", "s.abortController.abort()", "deps.sessions.delete(s.key)"];
+  const order = ["deps.denyPendingPermissions(s, 'Session ended')", "teardownHandles(s);", "deps.sessions.delete(s.key)"];
   let at = -1;
   for (const needle of order) {
     const i = body.indexOf(needle);

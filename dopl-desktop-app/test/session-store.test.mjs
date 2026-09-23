@@ -179,7 +179,7 @@ test("durableSessionRecord whitelists exactly the durable fields", () => {
     // than carrying it forward — the same treatment `turnCap` got when the caps went.
     "agentId", "bind", "channelId", "channelName", "counterpartyId",
     "counterpartyName", "direct", "identityName", "key", "launchChain", "launchDepth", "mode", "model",
-    "ownPostSeq", "parkedAt", "phase", "profile", "runtimeId", "sdkSessionId", "sessionId",
+    "ownPostSeq", "parkedAt", "phase", "profile", "runtimeId", "sessionId",
     "side", "startedAt", "taskId", "taskTitle", "turns", "workspaceId",
   ]);
   // ⚠ A PASSTHROUGH, AND **NULL IS OLD** — `durableSessionRecord` is in the PURE block and may not
@@ -288,9 +288,9 @@ test("durableSessionRecord drops any live handle passed in an enriched record", 
   }
 });
 
-test("durableSessionRecord defaults sdkSessionId->null and taskId->'' for a taskless responder", () => {
-  const rec = durableSessionRecord({ key: "c1:", channelId: "c1", phase: "launching" });
-  assert.equal(rec.sdkSessionId, null);
+test("durableSessionRecord defaults taskId->'' and never carries the conversation id (the resume map does)", () => {
+  const rec = durableSessionRecord({ key: "c1:", channelId: "c1", phase: "launching", sdkSessionId: "sdk1" });
+  assert.equal("sdkSessionId" in rec, false, "P4-18: the record's copy had no reader");
   assert.equal(rec.taskId, "");
 });
 

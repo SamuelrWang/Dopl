@@ -75,6 +75,19 @@ function slice(src, label) {
 const BOOT_BLOCK = slice(BOOT_SRC, "SESSION-BOOT-PURE");
 const PARK_BLOCK = slice(PARK_SRC, "SESSION-PARK-PURE");
 
+// Every free var the block is handed below must be a name the module itself binds above its
+// sentinel. Injecting one it never declares is how a ReferenceError shipped green (P4-01).
+const BOOT_INJECTED = [
+  "crypto", "store", "initialSessionState", "floorWindowlessMessage",
+  "sessionPark", "toolProfiles", "sessionSummary", "agentHistory", "sessionEffects",
+  "runtimeRegistry", "runtimeCapability", "runtimeTruth", "diag",
+];
+const BOOT_HEADER = BOOT_SRC.slice(0, BOOT_SRC.indexOf("// ─── BEGIN SESSION-BOOT-PURE"));
+for (const name of BOOT_INJECTED) {
+  assert.match(BOOT_HEADER, new RegExp(`^const (${name}\\b|\\{[^}]*\\b${name}\\b[^}]*\\})`, "m"),
+    `session-boot.js must bind ${name} above SESSION-BOOT-PURE — the harness may inject only what the module declares`);
+}
+
 // The purity assertion is what makes the block sliceable at all — and it matters more here than
 // almost anywhere, because this code runs BEFORE anything else in a restarted app.
 for (const banned of ["require(", "electron", "process.", "child_process", "@anthropic"]) {
@@ -174,9 +187,7 @@ function harness(over = {}) {
     },
   };
   const boot = new Function(
-    "crypto", "store", "initialSessionState", "floorWindowlessMessage",
-    "sessionPark", "toolProfiles", "sessionSummary", "agentHistory", "sessionEffects",
-    "runtimeRegistry", "runtimeCapability", "runtimeTruth", "diag",
+    ...BOOT_INJECTED,
     `${BOOT_BLOCK}\n return { bind, parkedSessionFromRecord, endInterrupted, reparkDormant, withinReparkWindow, REPARK_WINDOW_MS };`
   )(crypto, store, initialSessionState, PROFILES.floorWindowlessMessage,
     parkReaders, TOOL_PROFILES, sessionSummary, agentHistory, EFFECTS,

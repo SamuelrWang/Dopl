@@ -24,8 +24,6 @@
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
-const claudeAuth = require('./claude-auth');
-const spawner = require('./session-spawner');
 const { getStoredOAuthToken } = require('./claude-token');
 const detect = require('./session-auth-detect');
 const store = require('./session-store');
@@ -135,7 +133,7 @@ function withStoredCredential(env) {
 }
 
 // ─── BEGIN SESSION-AUTH-HOLD (injectable; unit-tested via source extraction) ──
-// The block below references its leaf deps (deps / detect / store / claudeAuth / spawner / diag)
+// The block below references its leaf deps (deps / detect / store / diag)
 // and the two probe helpers as free vars, so test/session-auth-recovery.test.mjs slices it,
 // proves it holds no electron require, and drives it with fakes — the session-park idiom.
 
@@ -226,8 +224,7 @@ function holdIfAuthFailure(s, text) {
   // teardown, so no resolver dangles on a session that is about to stop consuming. (parkEffects
   // denies again via the reducer; both are idempotent.)
   try { if (deps.denyPending) deps.denyPending(s, runtimeCopy.heldToolDenial(copyFor(s))); } catch (_) { /* best effort */ } // U10: the AGENT reads this, and it must name the runtime the AGENT is running on
-  try { if (s.pushIterator) s.pushIterator.close(); } catch (_) { /* best effort */ }
-  try { if (s.abortController) s.abortController.abort(); } catch (_) { /* best effort */ }
+  deps.teardown(s); // `session-handles.js`: the converge case gets no reducer abort, so the handle closes here (P4-14)
   if (s.idleTimer) { clearTimeout(s.idleTimer); s.idleTimer = null; }
   dispatchHold(s);
   if (already) return true; // converged
@@ -295,7 +292,7 @@ async function resumeAfterSignIn(s) {
   try {
     if (hold.kind === 'preflight') {
       if (s.state) { s.state.phase = 'launching'; s.state.parked = false; s.state.activity = 'working'; }
-      const rt = await deps.acquireRuntime();
+      const rt = await deps.acquireRuntime(s.runtimeId); // the session's own runtime, never the default (P4-15)
       await deps.startQuery(s, rt);
       return;
     }

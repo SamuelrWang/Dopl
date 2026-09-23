@@ -10,7 +10,8 @@
 // ⚠ NOTHING HERE STARTS A COUNTER, exactly as `session-metrics.js` says of itself. Every value is
 // read from where it already lives on the session object; four writers stamp them and each is at
 // the one site that knows the fact:
-//   `s.turns`             `session-io.js › applyCoreEvents` (the `result` event IS a turn)
+//   `s.state.turns`       the reducer's `result` branch — persisted in the durable record and
+//                          rehydrated by every rebuild, so the card survives a restart (P4-10)
 //   `s.tokensAtLastPost`  `session-outbound-tag.js › markOwnPost`, called from
 //   `s.lastOwnPostAt`      `session-gate-bridge.js › gateCall` ON THE ALLOW BRANCHES ONLY
 //                          ⚠ It lived inside `nextOwnPostId` until 2026-09-02, and the minter
@@ -150,7 +151,8 @@ function isStale(s, now) {
  */
 function health(s, now) {
   return {
-    turns: countOrNull(s && s.turns),
+    // Zero completed turns reads as not-yet-measured, like every other count here.
+    turns: countOrNull(s && s.state && s.state.turns) || null,
     tokensDelta: tokensSinceLastPost(s),
     stale: isStale(s, now),
     deniedCalls: countOrNull(s && s.deniedCalls),

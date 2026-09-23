@@ -305,17 +305,10 @@ test("the park door closes the runtime handle, exactly as the resume door does",
   const abortCase = engine.slice(engine.indexOf("case 'abortQuery':"));
   const body = abortCase.slice(0, abortCase.indexOf("case 'denyPending'"));
 
-  assert.match(body, /s\.query && typeof s\.query\.close === 'function'/,
+  // The close and its typeof guard are `session-handles.js › teardownHandles` (P4-14), driven in
+  // test/session-handles.test.mjs; the park door must go through it.
+  assert.match(body, /teardownHandles\(s\);/,
     "abortQuery must close the runtime's own handle, not only the abort signal");
-  // ⚠ THE GUARD IS THE PORTABILITY TEST, NOT DEFENSIVENESS: Claude's query is an async generator
-  // with no `close`, so the call is a no-op there and that lane is unchanged. An unguarded call
-  // would throw on every Claude park — so the guard and the call must be ONE statement, which is
-  // what this asserts rather than merely that both strings appear somewhere in the case.
-  assert.match(
-    body,
-    /if \(s\.query && typeof s\.query\.close === 'function'\) s\.query\.close\(\);/,
-    "the close must sit behind its typeof guard, in the same statement"
-  );
 
   // The same shape, at the other door — `session-park.js › reapPriorChild`.
   assert.match(SRC, /typeof prior\.close === 'function'/,

@@ -79,17 +79,11 @@ test("SHAPE: a live summary carries exactly what the Agents tab and the agent vi
       // PROJECTION of `state.pendingPermissions`, never a second set. It does not reach the
       // server: an entry carries a one-line summary of a TOOL INPUT, nobody else's business.
       heldGates: [],
-      // ── 2026-09-21 (U10) — THE RUNTIME-HONEST TRIPLE ────────────────────────────────────
-      // `runtimeId` says WHO is answering where `model` says WHAT: without it a Codex agent and
-      // a Claude agent on one thread were two identical pills. `''` is a session from before the
-      // spawn stamp and is a REAL value, not a gap. `usageBaseline` is this runtime's three-word
-      // answer to "would a resume keep the cost cap honest" — `'unverified'` is the one
-      // `capability.js › canResume` refuses on, so null here is "the session said nothing".
-      // `endReason` is null on a LIVE row by construction (a running agent has not stopped) and
-      // is stated rather than omitted so no reader branches on absence. All three are LOCAL-ONLY:
-      // `session-state-push.js › reportRow` picks columns BY NAME, so none widens the table.
+      // `runtimeId` says WHO is answering where `model` says WHAT; `''` is a session from before the
+      // spawn stamp. `endReason` is null on a LIVE row by construction. Both are LOCAL-ONLY:
+      // `session-state-push.js › reportRow` picks columns BY NAME. (`usageBaseline` left the row:
+      // it lives on the durable record only, P4-18.)
       runtimeId: "",
-      usageBaseline: null,
       endReason: null,
       contextUsed: 84000,
       contextWindow: 200000, // the frozen table's row for claude-haiku-4-5
@@ -156,7 +150,7 @@ test("SHAPE: a RETAINED ENDED pill keeps the measurement it settled with", () =>
   // simply finished must never grow a line claiming it failed.
   assert.equal(row.endReason, null, "an ordinary ending has no failure to report");
   assert.equal(row.runtimeId, "");
-  assert.equal(row.usageBaseline, null);
+  assert.equal("usageBaseline" in row, false);
 });
 
 // ── U10 (2026-09-21): WHY A RUN STOPPED, RE-SAID IN THE OWNING RUNTIME'S OWN WORDS ───────────

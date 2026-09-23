@@ -161,7 +161,6 @@ test("HEALTH: every count is null until something measures it, and `stale` is a 
 
 test("HEALTH: it carries the six facts off the session object, unchanged", () => {
   const s = working({
-    turns: 12,
     tokensSpent: 90_000,
     tokensAtLastPost: 50_000,
     deniedCalls: 4,
@@ -169,6 +168,7 @@ test("HEALTH: it carries the six facts off the session object, unchanged", () =>
     lastWakeSeq: 861,
     lastWakeAt: NOW - MINUTE,
   });
+  s.state.turns = 12; // the reducer's counter (P4-10)
   assert.deepEqual(h.health(s, NOW), {
     turns: 12,
     tokensDelta: 40_000,
@@ -204,8 +204,9 @@ test("NULL: `countOrNull` agrees with `session-metrics.js › metricOrNull` valu
 
 test("WRITERS: each of the four stamps has exactly one producer, at the site that knows the fact", () => {
   const src = (f) => readFileSync(join(MAIN, f), "utf8");
-  // A `result` IS a completed turn — the normalizer's own vocabulary.
-  assert.match(src("session-io.js"), /s\.turns = \(Number\(s\.turns\) \|\| 0\) \+ 1;/);
+  // A `result` IS a completed turn, counted once, by the reducer (P4-10).
+  assert.match(src("session-reducer.js"), /const turns = state\.turns \+ 1;/);
+  assert.doesNotMatch(src("session-io.js"), /s\.turns\b/, "no second counter beside it");
   // ⚠ THE STAMP IS ITS OWN FUNCTION AND IT IS CALLED ON THE VERDICT (2026-09-02). It used to
   // sit at the bottom of `nextOwnPostId`, which the gate runs BEFORE it knows the verdict — so
   // a DENIED post reset this clock and a session wedged against a tool it is refused looked

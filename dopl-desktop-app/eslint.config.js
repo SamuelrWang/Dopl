@@ -26,6 +26,11 @@ const MAX_LINES = ['error', { max: 500, skipBlankLines: false, skipComments: fal
 // here for is a duplicate declaration inside one file.
 const NO_REDECLARE = ['error', { builtinGlobals: false }];
 
+// `no-undef` (P4-01): `session-boot.js` read `runtimeTruth` without requiring it, and every resume
+// after a restart threw. The source-extraction suites inject free vars, so only lint sees the
+// module as Node loads it. Globals are the node + browser union each block declares.
+const NO_UNDEF = 'error';
+
 module.exports = [
   { ignores: ['renderer/app/**', 'node_modules/**', 'dist/**', 'build/**'] },
 
@@ -40,6 +45,7 @@ module.exports = [
     rules: {
       'max-lines': MAX_LINES,
       'no-redeclare': NO_REDECLARE,
+      'no-undef': NO_UNDEF,
     },
   },
 
@@ -62,6 +68,7 @@ module.exports = [
     rules: {
       'max-lines': MAX_LINES,
       'no-redeclare': NO_REDECLARE,
+      'no-undef': NO_UNDEF,
     },
   },
 
@@ -76,6 +83,7 @@ module.exports = [
     rules: {
       'max-lines': MAX_LINES,
       'no-redeclare': NO_REDECLARE,
+      'no-undef': NO_UNDEF,
     },
   },
 ];

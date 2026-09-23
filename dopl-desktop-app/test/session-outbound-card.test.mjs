@@ -211,11 +211,14 @@ test("L3 PARK: the reducer really does emit that echo for the post's own request
 //   - "the card's recipe is a full-width sibling of the inbound gate card" read session.css.
 // All three files are deleted.
 //
-// ⚠ KEPT ON PURPOSE (INVARIANTS §14): RESHOW_TYPES is not renderer code. It is a live constant in
-// main/session-engine.js, this is its ONLY pin in the suite, and `emit()` still consults it
-// against `s.windowHidden` before calling `s.win.show()`. Deleting it with the renderer block it
-// sat next to would have taken an unrelated live guard out — the exact failure §14 names.
-test("a hidden window RESHOWS for an outbound decision (it needs the operator)", () => {
+// Every session is windowless: the engine's `emit` reaches only the held-gate bridge, and no
+// session carries a window handle to show or reshow (P4-12).
+test("the engine's emit is the held-gate bridge alone — no window handle is read or stored", () => {
   const ENGINE = readFileSync(join(HERE, "..", "main", "session-engine.js"), "utf8");
-  assert.match(ENGINE, /RESHOW_TYPES = new Set\(\['permission_request', 'counterparty', 'inbound_pending', 'outbound_gate'\]\)/);
+  const BOOT = readFileSync(join(HERE, "..", "main", "session-boot.js"), "utf8");
+  const emitFn = ENGINE.slice(ENGINE.indexOf("function emit(s, payload) {"), ENGINE.indexOf("function scheduleIdle("));
+  assert.match(emitFn, /sessionWindowless\.claimGate\(s, payload,/);
+  for (const src of [ENGINE, BOOT]) {
+    assert.doesNotMatch(src, /\bs\.win\b|\bwin: null|windowHidden|RESHOW_TYPES|avatarCache/);
+  }
 });

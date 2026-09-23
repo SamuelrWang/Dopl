@@ -344,7 +344,7 @@ test("LEAK: the three teardown sites really call it, in the shipped source", () 
   const engine = readFileSync(join(MAIN, "session-engine.js"), "utf8");
   const park = readFileSync(join(MAIN, "session-park.js"), "utf8");
   const abort = engine.slice(engine.indexOf("case 'abortQuery':"), engine.indexOf("case 'clearIdle':"));
-  assert.match(abort, /sessionPrivate\.resetPrivateTurn\(s\);[\s\S]*s\.abortController\.abort\(\)/,
+  assert.match(abort, /sessionPrivate\.resetPrivateTurn\(s\);[\s\S]*teardownHandles\(s\);/,
     "abortQuery closes the window before it tears the query down");
   assert.match(abort, /case 'denyPending':[\s\S]*sessionPrivate\.resetPrivateTurn\(s\);/);
   assert.match(park, /privateTurn\.resetPrivateTurn\(s\);/, "and resumeParked, for the crash path");

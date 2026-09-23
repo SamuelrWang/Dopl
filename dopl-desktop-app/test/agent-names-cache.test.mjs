@@ -22,8 +22,8 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
 const SRC = readFileSync(join(HERE, "..", "main", "agent-names.js"), "utf8");
 
-/** The real module, over a store that counts `get`s. `env` drives the kill switch. */
-function load(env = {}) {
+/** The real module, over a store that counts `get`s. */
+function load() {
   const state = { reads: 0, writes: 0, map: {} };
   class CountingStore {
     get() {
@@ -36,11 +36,10 @@ function load(env = {}) {
     }
   }
   const mod = { exports: {} };
-  new Function("require", "module", "exports", "process", SRC)(
+  new Function("require", "module", "exports", SRC)(
     (id) => (id === "electron-store" ? CountingStore : require(id)),
     mod,
-    mod.exports,
-    { env }
+    mod.exports
   );
   return { names: mod.exports, state };
 }
@@ -89,8 +88,6 @@ test("🔒 the memo does NOT survive the tick — the name is read live across f
   assert.equal(state.reads, afterFirst + 1, "the next flush must re-read");
 });
 
-test("`DOPL_NAMES_CACHE=0` restores the old read-every-time behaviour", () => {
-  const { names, state } = load({ DOPL_NAMES_CACHE: "0" });
-  projection(names, ROWS.slice(0, 5));
-  assert.equal(state.reads, 10, `the kill switch must not cache (was ${state.reads})`);
+test("there is no switch back to a read per lookup (P4-29)", () => {
+  assert.doesNotMatch(SRC, /DOPL_NAMES_CACHE|process\.env/);
 });

@@ -68,6 +68,7 @@ const agentHistory = require('./agent-history'); // what an ended agent leaves, 
 const sessionEffects = require('./session-effects'); // `terminalBody` — a terminal says why
 const runtimeRegistry = require('./runtime');
 const runtimeCapability = runtimeRegistry.capability; // the ONE module allowed to read a descriptor's nulls
+const runtimeTruth = require('./session-runtime-truth'); // requires nothing; the record's usage baseline (P4-01)
 const { diag } = require('./diag');
 
 // ─── BEGIN SESSION-BOOT-PURE (injectable; unit-tested via source extraction) ──────
@@ -145,8 +146,8 @@ function withinReparkWindow(rec, now) {
  * throw; (2) its windowless credential preflight ROLLS BACK — `sessions.delete(s.key)` — on a
  * signed-out machine, which is the invisibility this module exists to end, arriving by a second
  * door; (3) it mints a fresh `sessionId` and restamps `startedAt`, so the record's own identity
- * and its Agents-tab time bucket would be destroyed by the act of restoring it; (4) it resolves
- * avatars and emits, i.e. network and I/O, per record, at app start.
+ * and its Agents-tab time bucket would be destroyed by the act of restoring it; (4) it writes a
+ * fresh record and probes the runtime credential, per record, at app start.
  *
  * ⚠ SO THE FIELDS ARE COPIED FROM THE RECORD, and the three that cannot be are said out loud:
  *   `nonce`      MINTED FRESH. It is deliberately not persisted, and `startResume` — the other
@@ -237,19 +238,8 @@ function parkedSessionFromRecord(key, rec, sdkId) {
     model: runtimeCapability.launchModelPick(
       runtimeRegistry.descriptorFor(rec.runtimeId || null), rec.model
     ), // the operator's pick, re-coerced in the stored runtime's own vocabulary
-    // ── 2026-09-21 (U10) — THE RUNTIME TRUTH, RESTORED AND NOT RE-DERIVED ────────────────────
-    //
-    // ⚠ THE RECORD'S ANSWER WINS OVER TODAY'S DESCRIPTOR, DELIBERATELY. Re-deriving
-    // `usageBaseline` here would read the CURRENT build's `session.usageResetsOnResume` and
-    // silently re-interpret a conversation that already happened under the old one — a build that
-    // later flips `'unverified'` to `true` would be claiming a measurement about a run nobody
-    // measured. A record states what was true when it was written. ⚠ IT DECIDES NOTHING:
-    // `reparkDormant` below still asks `capability.js › resumeRefusal` of the LIVE descriptor, so
-    // a runtime whose resume is refused is ENDED here exactly as before, and this weakens nothing.
-    // ⚠ `session-runtime-truth.js › durableRuntimeTruth` coerced these on the way out, so a
-    // hand-edited store lands on `null` / `'unverified'` — the fail-closed members.
-    effectiveModel: rec.effectiveModel || null,
-    nativePolicy: rec.nativePolicy || null,
+    // The RECORD's word, restored and not re-derived (`session-runtime-truth.js` header); a
+    // hand-edited store lands on `'unverified'`. `reparkDormant` still asks the live descriptor.
     usageBaseline: recordedBaseline,
     state: state,
     context: sessionPark.contextFromRecord(rec), // channel/thread/peer names + the identity NAME (F-288)
@@ -271,7 +261,6 @@ function parkedSessionFromRecord(key, rec, sdkId) {
     awaitingDirective: false,
     idleTimer: null,
     settled: false,
-    windowHidden: false,
     lastInboundSeq: null,
     ownPostIds: new Set(),
     // ⚠ SLACK ON TOP OF THE STORED COUNTER. The record is written at spawn / init / park / settle,
@@ -279,7 +268,6 @@ function parkedSessionFromRecord(key, rec, sdkId) {
     // idempotency short-circuit answer the old row and silently discard this agent's reply.
     ownPostSeq: store.resumedPostSeq(rec.ownPostSeq),
     operatorUserId: null, // see the docblock: fail-closed, never invented
-    win: null,
     query: null,
     abortController: null,
     pushIterator: null,
@@ -341,7 +329,6 @@ function endInterrupted(key, rec, why, opts) {
     // when BOTH `endCode` and `diag` are absent, so this line adds identity to the row without
     // reviving the reason line that ruling deleted.
     runtimeId: rec.runtimeId || null,
-    usageBaseline: rec.usageBaseline || null,
     entries: [],
   });
   diag('session-boot: ended dormant agent —', why, '| agent', String(rec.agentId || ''), 'channel', String(rec.channelId || '').slice(0, 8), 'thread', String(rec.taskId || '').slice(0, 8));

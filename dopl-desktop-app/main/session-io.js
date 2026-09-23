@@ -26,10 +26,6 @@ const { isOutboundPost } = outboundTag;
 // bookkeeping, the one-shot fresh-shell framing) lives in session-seed.js — the §2
 // 500-line split. Re-exported verbatim at the bottom, so every caller is unchanged.
 const seed = require('./session-seed');
-// The two token derivations live with the frozen model/window tables that give them meaning
-// (session-model.js). Required, never re-implemented: a second copy of "which usage fields
-// count" is how the context meter and the spend line come to disagree about the same block.
-const sessionModel = require('./session-model');
 // F-692: the PURE read of the init message's `mcp_servers` list. ⚠ `mcp-connect.js` has no
 // electron/fs require, which is what lets this file keep the property a dozen suites rely on
 // (`session-outbound-tag.test.mjs` pins it: `diag` requires electron; this file must not).
@@ -243,7 +239,6 @@ function baseRecord(s) {
   return {
     key: s.key,
     sessionId: s.sessionId,
-    sdkSessionId: s.sdkSessionId || null,
     channelId: s.channelId,
     taskId: s.taskId,
     workspaceId: s.workspaceId,
@@ -297,18 +292,8 @@ function baseRecord(s) {
     // platform's conversation handle on another platform's adapter. `runtime/index.js › resolve`
     // turns an unknown id into the default, which is the runtime every pre-port record ran on.
     runtimeId: s.runtimeId || null,
-    // ── 2026-09-21 (U10) — AND WHAT IT WAS RUNNING AS, beside WHICH ADAPTER ran it ───────────
-    //
-    // ⚠ `runtimeId` ALONE CANNOT ANSWER A RESUME'S REAL QUESTIONS. It says which adapter owns the
-    // handle; it does not say which model actually answered (the operator's pick is usually "no
-    // pick"), what native policy the spawn was made under, or — the one that decides something —
-    // whether this runtime's cumulative usage RESETS on a resume, which is the bet
-    // `session-park.js › resumeParked` makes when it zeroes both delta baselines. A record that
-    // cannot state its own baseline is a record a later build re-interprets under a newer answer.
-    // ⚠ THE DESCRIPTOR IS READ OFF `s.runtimeId`, THE SPAWN STAMP, AND NEVER RE-CHOSEN HERE
-    // (INVARIANTS §11): an unknown id resolves to the default, which is the runtime such a session
-    // really ran on. ⚠ PLAIN VALUES — coerced on the way OUT by `session-store.js › saveRecord`
-    // through `session-runtime-truth.js › durableRuntimeTruth`, the division `model` above uses.
+    // Whether this conversation's usage resets on a resume — the record's own word once it has one
+    // (`session-runtime-truth.js`), coerced on the way out by `session-store.js › saveRecord`.
     ...runtimeTruth.runtimeTruthFields(runtimeRegistry.descriptorFor(s.runtimeId), s),
   };
 }
@@ -318,13 +303,9 @@ function baseRecord(s) {
 // fixture test without a session". Returns the `auth_hold` event when the stream must stop being
 // read, else `null`; the caller owns what stopping means.
 //
-// ORDER IS PRESERVED AND OBSERVABLE: `result` dispatches BEFORE the turn's `context`, the order the
-// two consumers ran in. Nothing here reorders a stream.
-//
-// `log` IS INJECTED, NOT REQUIRED — `diag.js` requires electron at its top and this module must not
-// (`session-outbound-tag.test.mjs` pins exactly that), because a dozen suites require this file in
-// plain Node. OPTIONAL BY CONTRACT: a caller that passes nothing loses the LINE, never the SWALLOW.
-function applyCoreEvents(s, list, dispatch, store, log) {
+// Nothing here reorders a stream. ⚠ This module may not require `diag.js` (electron): a dozen
+// suites require it in plain Node (`session-outbound-tag.test.mjs` pins that).
+function applyCoreEvents(s, list, dispatch, store) {
   // F-692: the MCP-connect signal this message produced, if any. ⚠ RETURNED AT THE END rather than
   // short-circuiting like `auth_hold`: the bookkeeping for `launched` (the conversation handle, the
   // durable record, the reducer's own `launched`) must all land FIRST, because the guard's retry
@@ -385,34 +366,9 @@ function applyCoreEvents(s, list, dispatch, store, log) {
       const tokenTotal = Number(ev.sessionTokens) || 0;
       s.tokensSpent = (s.tokensSpent || 0) + Math.max(0, tokenTotal - (s.lastTotalTokens || 0));
       s.lastTotalTokens = tokenTotal;
-      // THE TURN COUNT (2026-09-01, T83). A `result` IS one completed turn on every runtime, so
-      // this is the one honest place to count them. It survives a park/resume for `tokensSpent`'s
-      // reason: both accumulate on the session object rather than reading a per-run cumulative total
-      // back, which is what makes "12 turns and nothing posted" a readable sentence.
-      s.turns = (Number(s.turns) || 0) + 1;
+      // The turn count is the reducer's `state.turns`, persisted with the record (P4-10). The gauge
+      // is read off the session by `session-metrics.js › metrics`; no meter event is dispatched (P4-11).
       dispatch(s, { type: 'result', model: ev.model });
-      // ⚠ AFTER the result, and only when something was measured: say nothing rather than paint a
-      // zero (`session-model.js › contextEvent`).
-      // ⚠ THE REPORTED WINDOW IS HANDED IN AND BEATS THE TABLE — the precedence rule and its
-      // argument are written down at `session-model.js › contextEvent`, once, rather than restated
-      // at this call site.
-      const context = sessionModel.contextEvent(s.promptTokens, s.liveModel, s.promptWindow);
-      // THE METER MAY NOT KILL THE SESSION, and this `try/catch` is the whole of that rule (it came
-      // over from `session-model.js › observe` and was LOST in the port; restored 2026-09-01, D7.3).
-      // The context event is a GAUGE READING dispatched from inside the consume loop's `for await`,
-      // so a throw here escapes to `session-query.js › consume`'s catch, which reads it as a query
-      // error and dispatches `crash` -> settle + destroy + `task_failed{interrupted}`: a reducer bug
-      // on a COSMETIC row would tear down a session mid-turn and report it to the peer as an
-      // interruption. The diag line is kept VERBATIM (`session-model:` prefix included) so the
-      // existing `listener.log` grep still finds it. Swallowed only HERE — every other dispatch in
-      // this loop is a state transition whose failure must still reach `crash`.
-      if (context) {
-        try {
-          dispatch(s, context);
-        } catch (err) {
-          if (typeof log === 'function') log('session-model: context dispatch failed', err && err.message);
-        }
-      }
       continue;
     }
     dispatch(s, ev); // every render event, unchanged
@@ -434,12 +390,6 @@ function launchedPayload(s, model) {
     channelName: (s.context && s.context.channelName) || null,
     taskTitle: (s.context && s.context.taskTitle) || null,
     from: s.counterpartyName || null,
-    // Item 1/5/6 (§B.1): bounded data: URIs (or null) — the operator's photo for my-agent/
-    // operator/outbound bubbles, the peer's for counterparty bubbles + the header. Warm here
-    // when the cache is hot; else null + a follow-up `avatars` event from
-    // avatar-cache.resolveForSession. NEVER a remote URL.
-    selfAvatar: s.selfAvatar || null,
-    fromAvatar: s.peerAvatar || null,
     // NEVER the platform's absolute cwd (label-only rule) — emitFolder() feeds the chip its label.
     cwdLabel: null,
   };
@@ -452,8 +402,8 @@ module.exports = {
   shiftInbound,
   // ── re-exported VERBATIM from session-seed.js (the §2 split) ────────────────
   frameContinuation: seed.frameContinuation,
-  frameHistorySeed: seed.frameHistorySeed, // v2.5 D3 (initialRequestPayload is re-exported below,
-  historyTranscript: seed.historyTranscript, // beside the display-only helpers) — the lazy seed, FIX F1
+  frameHistorySeed: seed.frameHistorySeed, // v2.5 D3
+  historyTranscript: seed.historyTranscript, // the lazy seed, FIX F1
   noteGatedBody: seed.noteGatedBody, // FIX F1: a gated message never rides the seed as well
   // FIX F4: session-history dropped those rows from the ENTRIES too; that renderer is deleted,
   isGatedEntry: seed.isGatedEntry, // and the SEED still filters them — the half that mattered.
@@ -471,7 +421,6 @@ module.exports = {
   summarizeInput,
   safeInput,
   summarizeResult,
-  initialRequestPayload: seed.initialRequestPayload, // the initiating ask, display-only (§2 split)
   isOutboundPost,
   baseRecord,
   applyCoreEvents, // 2026-08-31: successor to `handleSdkMessage` — the bookkeeping half

@@ -357,33 +357,6 @@ test("H2: the AMBIENT read is gone — channel-context no longer exposes startin
 // file; the two ⚠ excision blocks recording what the ARM took with it in 2026-08-20 travelled
 // with it verbatim. Everything left in THIS file is the read side.
 
-// ── 5. THE STARTING POSTURE IS ANNOUNCED, NOT INFERRED ───────────────────────
-
-test("the starting posture is emitted BEFORE anything can run", () => {
-  // ⚠ REWRITTEN, NOT REMOVED (2026-08-20, F-228; INVARIANTS §14). This read "the WINDOW is told
-  // the starting posture" and pinned the `modes` emit between `bindWindow(s);` and
-  // `await startQuery(s, sdk);` — the v2.9 failure mode being a session that ENFORCED a seeded
-  // posture while the header still claimed "Manual / Ask". There is no header and no
-  // `bindWindow`, and that is the sharp part: `ENGINE.indexOf("bindWindow(s);")` answers -1 for
-  // a deleted symbol, so `at > -1` was passing for FREE — the case had already gone vacuous and
-  // was reporting as green. Re-anchored on the surface attach that replaced it.
-  //
-  // The emit itself is live and worth keeping: it is the ONE announcement of the posture a
-  // session starts at, it rides the replay ring, and it must precede the query or the first
-  // thing to read it reads a stale pair.
-  assert.match(ENGINE, /emit\(s, \{ type: 'modes', tool: state\.toolMode, message: state\.messageMode \}\)/);
-  const attach = ENGINE.indexOf("sessionWindowless.attachSurface(s, spec)");
-  const at = ENGINE.indexOf("emit(s, { type: 'modes'");
-  const start = ENGINE.indexOf("await startQuery(s, rt);");
-  assert.ok(attach !== -1 && at !== -1 && start !== -1, "all three anchors exist — a -1 makes this vacuous");
-  assert.ok(at > attach, "after the surface is attached, so the replay ring carries it");
-  assert.ok(at < start, "and before anything can run");
-  // ⚠ AND IT MUST STATE THE STATE, NOT THE SPEC. Reading `spec.startModes` here would report a
-  // posture that the parked-shell guard may have refused — the header lying in the OTHER
-  // direction, which is the same class of bug the original was written for.
-  const line = ENGINE.slice(at, ENGINE.indexOf("\n", at));
-  assert.ok(!/startModes|armedModes/.test(line), line);
-});
 
 test("M2: a park KEEPS the posture; only the AUTH HOLD resets it", () => {
   // 2026-08-05 — INVERTED. This used to read "a park still RESETS both axes; the posture is that

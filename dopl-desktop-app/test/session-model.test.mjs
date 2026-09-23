@@ -79,16 +79,12 @@ test("the frozen tables evaluate standalone, with nothing in scope but themselve
   const block = SRC.slice(from, to);
   assert.ok(!/require\(|electron|process\.|require\b/.test(block), "the block reaches nothing");
   const pure = new Function(`${block}
-    return { MODEL_CHOICES, normalizeModel, modelArg, contextWindowFor, promptTokens, contextEvent };`)();
+    return { MODEL_CHOICES, normalizeModel, modelArg, contextWindowFor, promptTokens };`)();
   assert.deepEqual(pure.MODEL_CHOICES, model.MODEL_CHOICES);
   // 2026-09-06: `modelArg` resolves an unresolvable value through 'default' to the PRODUCT
   // fallback, so what a shell-shaped string reaches argv as is Sonnet's alias — never itself.
   assert.equal(pure.modelArg("rm -rf /"), model.aliasForModelId(model.LAUNCH_MODEL_FALLBACK));
   assert.equal(pure.contextWindowFor("claude-opus-5"), 1000000);
-  assert.deepEqual(pure.contextEvent(0, "claude-opus-5"), null, "nothing measured, nothing said");
-  // 2026-09-22: THE PRECEDENCE, pinned in the pure slice (`session-model.js › contextEvent`).
-  assert.equal(pure.contextEvent(2, "claude-opus-5", 258400).window, 258400); // the server wins
-  assert.equal(pure.contextEvent(2, "claude-opus-5").window, 1000000); // the table is the fallback
 });
 
 // ── 1. the enum, and the argv it produces ────────────────────────────────────

@@ -95,11 +95,8 @@ function sessionReducer(state, event) {
   // the idle timer, run the cap endEffects, or stash a resolver on a query-less session. Only the
   // wake triggers (inbound_arrived/inbound_released/steer), idle_timeout and the operator /
   // terminal controls act.
-  // `context` joins that list for the same reason `result` is on it: the meter describes a turn
-  // this session is running, and a parked shell is not running one — a measurement arriving from
-  // the drained tail would repaint a gauge for a query that no longer exists.
   if (state.parked === true && (type === 'assistant' || type === 'thinking' || type === 'tool_use' || type === 'tool_result'
-      || type === 'outbound_post' || type === 'result' || type === 'context' || type === 'permission_request')) {
+      || type === 'outbound_post' || type === 'result' || type === 'permission_request')) {
     return { state: state, effects: [] };
   }
 
@@ -227,12 +224,7 @@ function sessionReducer(state, event) {
     // against `s.lastTotalCost` — and added it to `state.costUsd`. Both ends of that arithmetic
     // are gone, so the event no longer carries the field and nothing here reads one.
     const turns = state.turns + 1;
-    // 2026-08-02: `event.model` was computed by session-io and then thrown away here. It is the
-    // model that really served this turn, so a mid-session Query.setModel shows up on the header
-    // and in the meter's denominator at the NEXT turn end rather than waiting for a fresh `init`
-    // that a live switch never produces. Absent (an older event) keeps what we had.
-    const model = typeof event.model === 'string' && event.model ? event.model : state.model;
-    const ns = clone(state, { turns: turns, model: model, postedThisTurn: false, postedToolUseIds: [] });
+    const ns = clone(state, { turns: turns, postedThisTurn: false, postedToolUseIds: [] });
     // THE TWO CAP CHECKS STOOD HERE AND ARE DELETED (2026-09-07, Samuel's ruling). A `result` event
     // no longer ends a session for turn count or spend; it only updates the counters and arms the
     // idle timer. The SDK's `maxTurns` backstop in `runtime/claude/launch-spec.js` is the only
@@ -246,33 +238,6 @@ function sessionReducer(state, event) {
         { type: 'emit', payload: { type: 'status', phase: gatePhase(ns, 'running'), activity: activity } },
         { type: 'scheduleIdle' },
       ],
-    };
-  }
-
-  if (type === 'context') {
-    // THE CONTEXT METER (2026-08-02) — "how full is this session's window". session-model
-    // measured the prompt the model last saw and, when it knows that model, its window size.
-    // It is a SEPARATE event from `result` on purpose: the cost path is load-bearing for the
-    // caps, and a measurement that fails to arrive (an unknown usage shape, a turn with no
-    // assistant message) must change nothing about it. Coerced here as well as there, so a
-    // junk number can never reach the renderer as a percentage.
-    const tokens = Number(event.tokens) > 0 ? Number(event.tokens) : 0;
-    // ⚠ **A CONTEXT EVENT WITH NO MEASUREMENT CHANGES NOTHING** (2026-09-22). This branch used to
-    // write `contextTokens` and `contextWindow` UNCONDITIONALLY, so a reading of zero emptied a
-    // live gauge — the shape that wiped the meter on every Codex interrupt (`runtime/codex/
-    // normalize.js`'s `turn/completed` note). Both producers now refuse to emit one
-    // (`session-model.js › contextEvent` answers null for a zero, the normalizers guard on
-    // `tokens > 0`), and this is the third guard, at the layer that OWNS the stored value: no
-    // numerator means no news, so the last real reading and its denominator both stand. An
-    // unmeasured turn is UNKNOWN, and unknown is not empty.
-    if (!tokens) return { state: state, effects: [] };
-    const window = Number(event.window) > 0 ? Number(event.window) : null;
-    const model = typeof event.model === 'string' && event.model ? event.model : state.model;
-    // After Claude Code auto-compacts, the next turn's prompt is SMALLER and this simply
-    // reports the smaller number: the meter corrects itself with no special handling.
-    return {
-      state: clone(state, { contextTokens: tokens, contextWindow: window, model: model }),
-      effects: [{ type: 'emit', payload: { type: 'context', tokens: tokens, window: window, model: model || null } }],
     };
   }
 
