@@ -195,6 +195,30 @@ describe("the implied subtree", () => {
     const next = last(onChange);
     expect(next.map((r) => r.path).sort()).toEqual(["Runbooks", "Specs"]);
   });
+
+  it("prunes the base's scopes when the base is checked COLLAPSED — the tree is unread (P7-04)", () => {
+    const nested: IdentityKnowledgeRef = {
+      baseId: "kb-1",
+      baseName: "Runbooks",
+      scope: "folder",
+      folderId: "f-1",
+      folderName: "Deploys",
+      path: "Runbooks / Deploys",
+      toolPath: "Deploys",
+    };
+    const otherEntry: IdentityKnowledgeRef = {
+      baseId: "kb-2",
+      baseName: "Specs",
+      scope: "entry",
+      entryId: "e-9",
+      entryTitle: "API",
+      path: "Specs / API",
+      toolPath: "API.md",
+    };
+    const onChange = mount([nested, otherEntry]);
+    fireEvent.click(screen.getByRole("treeitem", { name: "Runbooks" }));
+    expect(last(onChange).map((r) => r.path).sort()).toEqual(["Runbooks", "Specs / API"]);
+  });
 });
 
 describe("the chips", () => {

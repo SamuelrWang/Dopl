@@ -87,7 +87,11 @@ export function KnowledgeScopePicker({
       return;
     }
     const pruned = new Set(impliedKeys);
-    onChange([...selected.filter((s) => !pruned.has(refKey(s))), ref]);
+    // A base covers every scope of that base. Pruned off the SELECTION, not the lazy
+    // tree, which is empty while the base is collapsed (P7-04).
+    const covered = (s: IdentityKnowledgeRef) =>
+      pruned.has(refKey(s)) || (ref.scope === "base" && s.baseId === ref.baseId);
+    onChange([...selected.filter((s) => !covered(s)), ref]);
   };
 
   /**
