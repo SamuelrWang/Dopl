@@ -29,10 +29,8 @@ import { channelPeople } from "./home-rows";
  * (`agent-identities/components/identity-editor.test.tsx › no concave surfaces`)
  * reaches these files too — see that suite's `HOME_FILES`.
  *
- * ⚠ NO LAUNCH CONTROL ON EITHER SECTION, and its absence is tested
- * (`identity-panels.test.tsx`). This is the AUTHORING face; the Channels face's
- * `IdentityLaunchPicker` is already wired to the same container list (plan
- * §0.2), and a second launch surface fights `resolve`'s singularity (§5A).
+ * ⚠ THE SHARED SECTION HAS NO LAUNCH CONTROL; a PERSONAL card carries one
+ * (`identity-card-launch.tsx`), shown only where the launch op exists (P9-09).
  */
 
 /**

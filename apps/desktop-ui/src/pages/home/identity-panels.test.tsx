@@ -190,7 +190,7 @@ describe("empty scopes", () => {
 
     expect(
       await screen.findByText(
-        "Finish setting up your home space to keep agents there."
+        "Finish setting up your home space to keep identities there."
       )
     ).toBeInTheDocument();
     // ⚠ AND NO UNADDRESSED READ. With no home workspace the query is disabled;
@@ -426,12 +426,13 @@ describe("🔒 with no channels, PERSONAL still renders", () => {
     expect(create).toBeEnabled();
   });
 
-  it("says the sentence about the CHANNEL section, and only there", async () => {
+  it("says the title about the CHANNEL section, and only there — no explainer (P9-05)", async () => {
     renderHome();
     await openIdentities();
     await screen.findByText("Fundraise analyst");
 
-    expect(await screen.findByText(/pick one on the left/)).toBeInTheDocument();
+    expect(await screen.findByText("No channel selected")).toBeInTheDocument();
+    expect(screen.queryByText(/pick one on the left/)).not.toBeInTheDocument();
     // 🔒 ONE SECTION LEFT, NOT TWO AND NOT ZERO. The shared section is replaced
     // by the sentence; Personal is a region as before.
     expect(screen.getAllByRole("region").length).toBe(1);
@@ -466,12 +467,9 @@ describe("🔒 with no channels, PERSONAL still renders", () => {
 
 describe("what this pane deliberately leaves out", () => {
   it("launches as-is from the PERSONAL card, and keeps every launch CHOICE in the popup", async () => {
-    // 🔒 **THE RULING MOVED, THE BOUNDARY DID NOT (Samuel, 2026-09-22).** This
-    // pane used to carry no launch at all; the personal card launches now, and
-    // what is still kept out is the launch FORM — a second place to pick a
-    // model, a runtime or a colour is how the two come to disagree.
-    // ⚠ SCOPED TO THE PANELS, never the document: /home's own empty states say
-    // "launch an agent into it".
+    // The personal card launches; the launch FORM stays out (a second place to pick a model,
+    // runtime or colour). Scoped to the panels: /home's empty states say "launch an agent".
+    installBridge({ apiRequest, sessions: { launch: vi.fn() } });
     renderHome();
     await openIdentities();
     await screen.findByText("Fundraise analyst");
@@ -487,6 +485,14 @@ describe("what this pane deliberately leaves out", () => {
     for (const row of ["Agent model", "Agent runtime", "Agent instructions"]) {
       expect(screen.queryByLabelText(row)).toBeNull();
     }
+  });
+
+  it("offers NO Launch button where this build has no launch op (P9-09)", async () => {
+    renderHome();
+    await openIdentities();
+    await screen.findByText("Fundraise analyst");
+    const personal = screen.getByRole("region", { name: SECTION_PRIVATE_EVERYWHERE.label });
+    expect(within(personal).queryByRole("button", { name: "Launch" })).toBeNull();
   });
 });
 
