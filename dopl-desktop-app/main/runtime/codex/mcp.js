@@ -31,7 +31,7 @@ const BEARER_ENV = 'DOPL_MCP_TOKEN';
 const WORKSPACE_ENV = 'DOPL_MCP_WORKSPACE_ID';
 const SESSION_ENV = 'DOPL_MCP_SESSION_ID';
 
-// 🔒 Codex builds every shell command's env from its own, so the bearer above would be readable by
+// Codex builds every shell command's env from its own, so the bearer above would be readable by
 // `env` in any command (CX-03). Measured on codex-cli 0.155.1 with no model turn: with no policy a
 // thread shell sees every var (the KEY/TOKEN/SECRET default exclude is OFF by default); this
 // thread-level `exclude` removes the `DOPL_MCP_*` set.

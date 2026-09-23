@@ -150,7 +150,7 @@ function buildLaunchSpec(request) {
     // ⚠ …AND NO `notify` PROGRAM FROM ANY LAYER (`tools.js › NOTIFY_FENCE`, C26): measured, a
     // thread-level `[]` silences one set lower down.
     notify: tools.NOTIFY_FENCE.slice(),
-    // 🔒 …AND NO DOPL BEARER IN ANY SHELL COMMAND'S ENV (`mcp.js › shellEnvironmentPolicy`, CX-03).
+    // No Dopl bearer in any shell command's env (`mcp.js › shellEnvironmentPolicy`, CX-03).
     shell_environment_policy: mcp.shellEnvironmentPolicy(),
   };
   if (wired.usable) threadStart.config.mcp_servers = { [mcp.SERVER_KEY]: server };
@@ -257,7 +257,7 @@ function makeApprovalHandler(s, dispatch, emitQuiet) {
 }
 
 /**
- * Start a run. ⚠ SYNCHRONOUS BY CONTRACT — see the handle note above. Boot order: the fenced
+ * Start a run. Synchronous by contract (see the handle note above). Boot order: the fenced
  * catalog (async, CX-09), `initialize` + `initialized`, `thread/start` | `thread/resume`, then the
  * first push is `turn/start` and every later one `turn/steer`.
  */
@@ -331,7 +331,7 @@ function start(spec) {
   }
 
   (async () => {
-    // 🔒 The delegation fence (`catalog.js`): process config, so argv; no catalog fails the launch.
+    // The delegation fence (`catalog.js`): process config, so argv; no catalog fails the launch.
     const fenced = await catalog.writeDelegationFreeCatalog(env.CODEX_HOME, {
       bin: codexBin(), env, model: (spec.threadStart && spec.threadStart.model) || '',
     });

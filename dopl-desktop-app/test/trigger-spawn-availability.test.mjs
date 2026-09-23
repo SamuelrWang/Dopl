@@ -70,9 +70,9 @@ function extractFn(src, name) {
  * Build the REAL `sessionSpawnAvailable` with the runtime registry injected.
  *
  * `require` and `diag` are free variables inside the extracted body, so they are supplied here.
- * ⚠ SINCE P3-01 THE ONLY THING IT MAY REQUIRE IS THE REGISTRY: it required `./sdk-loader`, a
- * module deleted with the adapter port, and this harness pinned that dead name (the injected
- * `require` answered it) — so every case passed while the real probe always threw.
+ * The only thing it may require is the registry (P3-01): it required `./sdk-loader`, a module
+ * deleted with the adapter port, and this harness pinned that dead name (the injected `require`
+ * answered it), so every case passed while the real probe always threw.
  */
 function buildProbe({ connected }) {
   const calls = { asked: 0 };

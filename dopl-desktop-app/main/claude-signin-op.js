@@ -40,7 +40,7 @@ const { diag } = require('./diag');
 // WHICH `claude` THE SIGN-IN DRIVES — the BUNDLED binary first (`runtime/claude/loader.js ›
 // resolveClaudeExecutable`, asar-unpacked and signed; most machines never installed a `claude` on
 // PATH), then the external CLI (`claude-resolve.js › getClaudeBinPath`, through the spawner facade).
-// ⚠ Both requires are lazy and both failures degrade: the loader pulls `electron.app`, and a throw
+// Both requires are lazy and both failures degrade: the loader pulls `electron.app`, and a throw
 // must mean "no bundled binary". A null from both goes straight to the Terminal tier.
 async function resolveClaudeBin() {
   try {

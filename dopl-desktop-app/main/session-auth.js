@@ -316,7 +316,7 @@ async function resumeAfterSignIn(s) {
 // EVERY SESSION THIS MAC IS HOLDING ON ONE RUNTIME, RELEASED ONCE — the fan-out half of an in-app
 // sign-in (`main/claude-signin-op.js`, its ONE caller). The per-session behaviour is
 // `resumeAfterSignIn` above and is UNCHANGED; this only decides WHICH sessions get one.
-// ⚠ SCOPED BY RUNTIME (P4-06): one runtime's sign-in says nothing about another's credential, so
+// Scoped by runtime (P4-06): one runtime's sign-in says nothing about another's credential, so
 // a Claude sign-in releases only Claude sessions (an un-stamped one resolves to the default).
 //
 // ⚠ IT SITS OUTSIDE THE BLOCK ABOVE ON PURPOSE. That block is sliced and evaluated with a fixed

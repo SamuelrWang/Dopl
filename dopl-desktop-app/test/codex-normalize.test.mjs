@@ -239,7 +239,7 @@ test("an INTERRUPTED turn is ONE terminal result and does NOT zero the context m
   // pressed Stop. The model still reaches the reducer — on the `result` below.
   assert.deepEqual(types(out), ["result"]);
   assert.equal(out[0].model, "gpt-6-astra");
-  // 🔒 NOT 0 (P4-04): a zero here reset core's cumulative baseline, and the next turn then re-billed
+  // Not 0 (P4-04): a zero here reset core's cumulative baseline, and the next turn then re-billed
   // the whole thread total. `null` = unmeasured, which `session-io.js` skips.
   assert.equal(out[0].sessionTokens, null);
 });
