@@ -21,9 +21,14 @@ import { describe, it, expect } from "vitest";
 import {
   CHANNEL_DESCRIPTION,
   DESCRIPTION_MAX_CHARS,
-  HOME_CHANNEL_ADDRESSING,
+  HOME_CHANNEL_POINTER,
 } from "./channel-description";
-import { CHANNEL_DOCTRINE, CHANNEL_LAW, DOCTRINE_URI } from "./channel-doctrine";
+import {
+  CHANNEL_DOCTRINE,
+  CHANNEL_LAW,
+  DOCTRINE_SECTIONS,
+  DOCTRINE_URI,
+} from "./channel-doctrine";
 import { ARG_PROSE, DESCRIPTION, SHIPPED_PROSE } from "./law-shipped-prose";
 
 /**
@@ -43,29 +48,22 @@ describe("the DESCRIPTION is a pointer, and has to stay one", () => {
     expect(DESCRIPTION).toBe(CHANNEL_DESCRIPTION);
   });
 
-  it("stays inside its budget, once the paragraph P3 owns is set aside", () => {
-    // ⚠ **THIS FILE GUARDS THE PART A PERSON WROTE, AND ONLY THAT.** Two halves
-    // are set aside, each because it is a DECISION somebody took rather than
-    // drift: `HOME_CHANNEL_ADDRESSING`, the tenancy paragraph the P3 tier asked
-    // to keep and which is interpolated by REFERENCE so it stays something
-    // somebody chooses to drop; and (A14) the GENERATED `Limits:`/`Errors:`/
-    // `e.g.` tail, derived from the zod shape and `tool-errors.ts`, which
-    // cannot drift or be padded and is enforced elsewhere — counting it would
-    // buy this number by deleting an op gloss to pay for the error codes an
-    // agent matches on. `tool-budget.test.ts` owns the absolute per-tool
-    // ceiling; restating it here would give the repo two budgets. What is left
-    // is what stops 35,000 chars of law growing back a sentence at a time.
+  it("stays inside its budget", () => {
+    // The generated `Limits:`/`Errors:`/`e.g.` tail is derived from the zod shape and
+    // `tool-errors.ts` and is budgeted by `tool-budget.test.ts`; this gates the written part.
     const tailAt = DESCRIPTION.search(/\n\n(?:Limits: |Errors: |e\.g\. )/);
     expect(tailAt, "the generated tail is gone — no error codes taught").toBeGreaterThan(-1);
-    const p1Summary = DESCRIPTION.slice(0, tailAt).replace(HOME_CHANNEL_ADDRESSING, "");
     expect(
-      DESCRIPTION,
-      "HOME_CHANNEL_ADDRESSING is no longer interpolated — re-derive this gate",
-    ).toContain(HOME_CHANNEL_ADDRESSING);
-    expect(
-      p1Summary.length,
-      `the description is ${p1Summary.length} chars beyond the paragraph P3 owns — move prose into channel-doctrine.ts, which is PULLED`,
+      tailAt,
+      `the description is ${tailAt} chars before its generated tail — move prose into channel-doctrine.ts, which is PULLED`,
     ).toBeLessThanOrEqual(DESCRIPTION_MAX_CHARS);
+  });
+
+  it("points at home-channel addressing and pulls the rule (P8-23)", () => {
+    expect(DESCRIPTION).toContain(HOME_CHANNEL_POINTER);
+    expect(DESCRIPTION).not.toContain("A HOME CHANNEL IS NOT A WORKSPACE DM");
+    expect(DOCTRINE_SECTIONS.rooms).toContain("A HOME CHANNEL IS NOT A WORKSPACE DM");
+    expect(DOCTRINE_SECTIONS.rooms).toContain("`container=<slug or id>` ALONGSIDE `channel=`");
   });
 
   it("names BOTH doors to the doctrine", () => {

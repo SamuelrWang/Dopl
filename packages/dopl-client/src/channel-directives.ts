@@ -1,16 +1,6 @@
 /**
- * THE DIRECTIVE LANES — what a channel client can ASK AN OPERATOR'S OWN DESKTOP to do:
- * the LAUNCH mailbox (launch / end / rename, 2026-08-22) and the PRIVATE DIRECT lane
- * (2026-08-31).
- *
- * ⚠ **ITS OWN MODULE BECAUSE `channel.ts` IS AT THE 500-LINE CAP** (§1; the `size-check`
- * CI job and `max-lines` in `eslint.config.mjs`, F-689). The seam is the one the file
- * already drew with a banner comment: everything above it is a channel's OWN rows —
- * messages, threads, artifacts, members — and everything here is a REQUEST TO A MACHINE
- * that the server only files.
- *
- * ⚠ **RE-EXPORTED UNCHANGED FROM `channel.ts`, SO NO CALLER MOVED**, the same discipline
- * `channel-artifact-types.ts` follows on the type side.
+ * Requests to an operator's own desktop that the server only files: the launch mailbox (launch / end /
+ * rename / set_agent_mode) and the private direct lane. Re-exported from `channel.ts`.
  */
 
 import type { DoplTransport } from "./transport.js";
@@ -29,16 +19,7 @@ import type {
 
 const enc = encodeURIComponent;
 
-// ─── Launch directives (launch-over-MCP, 2026-08-22) ────────────────
-
-/**
- * ASK THE OPERATOR'S OWN DESKTOP TO START AN AGENT.
- *
- * ⚠ A REQUEST, NOT A COMMAND. The server files a row; the machine decides. The
- * `offline` branch means the machine is not listening and NOTHING WAS FILED.
- * ⚠ There is no operator argument, by design — see
- * {@link LaunchDirectiveCreateInput}.
- */
+/** File a launch request; `offline` means nothing was filed. No operator argument, by design. */
 export async function createLaunchDirective(
   t: DoplTransport,
   input: LaunchDirectiveCreateInput
@@ -50,20 +31,8 @@ export async function createLaunchDirective(
   });
 }
 
-/**
- * ASK THE OPERATOR'S OWN DESKTOP TO **END** OR **RENAME** ONE OF ITS AGENTS
- * (2026-09-01).
- *
- * ⚠ **THE SAME MAILBOX, A DIFFERENT KIND — so the result is a `LaunchDirective`
- * and `getLaunchDirective` polls it.** There is no second lane and no second poll
- * endpoint; only the CREATE body differs, because a launch's shape (goal, model,
- * identity) and an end's (which agent) have nothing in common.
- * ⚠ A REQUEST, NOT A COMMAND, exactly as a launch is. `offline` means the machine
- * is not listening and NOTHING WAS FILED.
- * ⚠ **NO LAUNCH TOGGLE APPLIES TO THESE TWO.** The desktop's launch-over-MCP
- * setting gates `launch_agent` and neither of these; do not tell a caller to turn
- * it on because an end was refused.
- */
+/** File an end / rename / set_agent_mode on the same mailbox (`getLaunchDirective` polls it).
+ *  The launch toggle does not gate end/rename, so never advise turning it on for their refusal. */
 export async function createAgentDirective(
   t: DoplTransport,
   input: AgentDirectiveCreateInput
@@ -78,14 +47,7 @@ export async function createAgentDirective(
   );
 }
 
-/**
- * POLL ONE DIRECTIVE — what a bounded hold reads while the desktop decides.
- *
- * ⚠ COARSE POLLING ONLY (1-2s). A directive lives at most two minutes and the
- * decision is a human-scale toggle plus a process spawn; polling faster buys
- * nothing and multiplies requests across every armed launch.
- * ⚠ Another operator's directive answers 404, indistinguishable from absent.
- */
+/** Poll one directive. Coarse polling only (1-2s); another operator's directive answers 404. */
 export async function getLaunchDirective(
   t: DoplTransport,
   id: string
@@ -97,14 +59,8 @@ export async function getLaunchDirective(
   return data.directive;
 }
 
-// ── THE PRIVATE DIRECT LANE (2026-08-31) ───────────────────────────────────
-//
-// ⚠ THE SIBLING OF THE LAUNCH MAILBOX ABOVE, AND NOT A MODE OF IT. A launch asks
-// for a PROCESS; a direction asks an EXISTING one to hear something privately.
-// ⚠ `claim` AND `decide` ARE DELIBERATELY ABSENT, exactly as they are for
-// launches: those two routes are consumed only by the DESKTOP, which addresses
-// them by path from `main/agent-direction-wire.js`. Binding them on this client
-// would publish verbs the MCP surface must never be able to reach.
+// The private direct lane. `claim`/`decide` are deliberately unbound: only the desktop calls them,
+// by path, and the MCP surface must never reach those verbs.
 
 export async function createAgentDirection(
   t: DoplTransport,
@@ -128,9 +84,7 @@ export async function getAgentDirection(
   return data.direction;
 }
 
-/** The caller's own recent directions — what `op="read_directions"` renders.
- *  ⚠ TERMINAL ROWS INCLUDED, unlike the desktop's backstop read: the `reply` is
- *  the whole reason this op exists. */
+/** The caller's own recent directions, terminal rows included (the `reply` is the point). */
 export async function listAgentDirections(
   t: DoplTransport,
   query: { channel?: string; agent?: string } = {}

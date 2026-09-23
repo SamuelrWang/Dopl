@@ -326,7 +326,7 @@ describe("the `sessions` block is ADDITIVE on both holds", () => {
       })
     );
     expect(out).toContain("### Your agents — 1");
-    expect(out).toContain("| `Code Auditor` | `opus-5` | `Bash` |");
+    expect(out).toContain("| `Code Auditor` | `claude-opus-5` | `Bash` |");
     expect(out).not.toContain("900");
     // ⚠ **ADDITIVE MEANS THE HOLD'S OWN RESULT IS UNTOUCHED.** The block rides
     // UNDER the messages and their cursor, never in place of them — a caller

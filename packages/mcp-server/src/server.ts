@@ -232,6 +232,7 @@ export function createServer(
         // one surface read before the first call stops teaching the one call
         // this server refuses to that caller.
         desktopRun: isDesktopRun(caller),
+        vendor: caller.vendor,
       }),
     },
   );
@@ -292,7 +293,7 @@ export function createServer(
   registerMembersTool(registerTool, client, caller); // dopl_members — membership/teams/access (read-only)
   // 🔒 `directory` is the THIRD argument and it is what draws R-32's three
   // container nodes — Home space, Home channels, Workspaces — off the boot list.
-  registerMapTool(registerTool, client, directory); // dopl_map — compact workspace manifest
+  registerMapTool(registerTool, client, directory, caller); // dopl_map — compact workspace manifest
   // ⚠ `directory` + `chargeCredit` are what make `scope="everywhere"` possible
   // AT ALL: the leg list must be the LOCKED list (B3), and a fan-out charges
   // per leg (ruling Q3). Built without them the tool answers the single-scope

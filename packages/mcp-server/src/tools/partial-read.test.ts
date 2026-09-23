@@ -54,7 +54,7 @@ const healthySearch = (over: Record<string, unknown> = {}) =>
     getOntology: vi.fn(async () => ({ clusters: [], objects: {} })),
     // FOURTH group since 2026-08-28 — a new domain is a new read the stub has
     // to model, or the group renders as a failure nobody meant to test.
-    listAgentIdentities: vi.fn(async () => []),
+    listAgentIdentitiesPayload: vi.fn(async () => ({ identities: [] })),
     ...over,
   });
 
@@ -146,11 +146,11 @@ describe("dopl_map names the domains it could not read", () => {
         "",
         '_Scope: ACTIVE items visible to you. Draft skills and team-scoped items you have no grant on are not listed, so these counts are not workspace totals; a domain that could not be read is named with reason=partial_read opening this line, so with no such notice every section above was read. Authoritative inventory across every status and visibility: dopl_members(op="access_matrix")._',
         "",
-        // ⚠ STATIC routing line (`CHANNELS_ROUTING` in map.ts): not a domain,
+        // ⚠ STATIC routing line (`channelsRouting` in map.ts): not a domain,
         // costs no read, and sits BELOW the scope note because that note's
         // "every section above was read" speaks only for fanned-out domains.
         // Its presence in this byte pin stops it growing into a fetched section.
-        '**Reaching a member or their agent: dopl_channel.** Channels are this workspace\'s live member-to-member and agent-to-agent messaging, and this manifest does not query them, so nothing above is a count of them. If dopl_channel is not in your tool list, load it with ToolSearch, then call dopl_channel(op="rooms", action="list") for the channels and DMs this account can post into.',
+        '**Reaching a member or their agent: dopl_channel.** Channels are this workspace\'s live member-to-member and agent-to-agent messaging, and this manifest does not query them, so nothing above is a count of them. If dopl_channel is not in your tool list, load it with your client\'s tool search, then call dopl_channel(op="rooms", action="list") for the channels and DMs this account can post into.',
       ].join("\n"),
     );
     // ⚠ Said twice on purpose — the substring check fails loudly if the byte

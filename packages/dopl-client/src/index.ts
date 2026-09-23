@@ -20,8 +20,6 @@ export type {
 } from "./grant-types.js";
 export type {
   BuildResult,
-  // 🔒 THE CHANNEL ROW'S CONTAINER (R-26 (b)) — declared beside `WorkspaceKind`
-  // because `channel-types.ts` is at §1's cap; see its docblock.
   ChannelContainer,
   CreditConsumeResponse,
   CreditWalletKind,
@@ -52,8 +50,6 @@ export type {
   IdentityShelf,
   IdentityVisibility,
 } from "./agent-identity-types.js";
-// 🔒 **`HomeChannel`, `HomePeer` AND `HomePendingLink` ARE RETIRED** (R-26 (b),
-// 2026-09-17): the row is `Channel`, and the link keeps the server's own name.
 export type {
   ChannelPendingLink,
   HomeChannelCreateResult,
@@ -126,8 +122,7 @@ export type {
   AwaitMessagesOptions,
   AwaitResult,
   Channel,
-  // THE ARTIFACT TYPES (#1220, 2026-09-06) — hand mirrors of
-  // `src/features/channels/types.ts`; both halves move in ONE change.
+  // Artifact types hand-mirror `src/features/channels/types.ts`; move both halves together.
   ChannelArtifact,
   ChannelArtifactAction,
   ChannelArtifactResult,
@@ -162,10 +157,6 @@ export type {
   WorkspaceChannelMessage,
   ThreadStatus,
 } from "./channel-types.js";
-// ⚠ The HEALTH half of an own-scoped session — its own module because
-// `channel-types.ts` is at the 500-line cap, and a HAND MIRROR of
-// `src/features/channels/types-sessions.ts › ChannelSessionHealth` with no drift
-// gate: both halves move in ONE change.
 export type { ChannelSessionHealth } from "./session-health-types.js";
 export type {
   AccountChannelMessage,
@@ -202,29 +193,20 @@ export type {
   OntologyTemplateField,
 } from "./ontology-types.js";
 
-// LAUNCH-OVER-MCP types — their own module since 2026-08-22 (`channel-types.ts`
-// hit the 500-line cap). ⚠ Re-exported here unchanged, so no consumer moved.
 export type {
-  // ⚠ THE AGENT COLOUR KEY (2026-09-13) — sixteen names, unique per channel among
-  // LIVE agents across members, freed when an agent ends. A KEY, never a colour value.
   AgentColorKey,
-  // ⚠ THE AGENT-MANAGEMENT KINDS (2026-09-01) live in the SAME module because
-  // they are the same mailbox — `end` / `rename` directives, not a second lane.
   AgentDirectiveCreateInput,
   AgentDirectiveCreated,
   LaunchDirective,
   LaunchDirectiveCreateInput,
   LaunchDirectiveCreated,
   LaunchDirectiveKind,
-  // ⚠ THE TWO POSTURE AXES (2026-09-01, T24). ORDERED unions — the clamp on the
-  // machine indexes into them, so their order is contract, not presentation.
+  LaunchDirectiveStatus,
   LaunchToolMode,
   LaunchMessageMode,
   LaunchRefusalReason,
 } from "./launch-types.js";
 
-// THE PRIVATE DIRECT LANE's types — their own module since 2026-08-31, for the
-// same reason. ⚠ Re-exported here unchanged, so no consumer moved.
 export type {
   AgentDirection,
   AgentDirectionCreateInput,
@@ -232,8 +214,6 @@ export type {
   DirectionRefusalReason,
 } from "./direction-types.js";
 
-// STRUCTURED ESCALATION types — their own module since 2026-08-31, for the same
-// reason. ⚠ Re-exported here unchanged, so no consumer moved.
 export type {
   ChannelEscalationAnswerInput,
   ChannelEscalationFields,

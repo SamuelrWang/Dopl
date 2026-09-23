@@ -11,7 +11,7 @@ import type { AgentIdentity, DoplClient } from "@dopl/client";
 import { opGet, opList } from "./agent-ops-read";
 import { opCreate, opUpdate } from "./agent-ops-write";
 import { stub } from "./narration-fixtures";
-import { launchIdentityAmbiguous } from "./channel-ops-launch-identity";
+import { launchIdentityAmbiguous } from "./channel-ops-launch";
 
 const ME = "user-1";
 const VERSION = "2026-01-01T00:00:00Z";

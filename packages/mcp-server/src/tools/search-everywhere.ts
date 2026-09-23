@@ -1,81 +1,42 @@
 /**
- * search-everywhere.ts — `dopl_search(scope="everywhere")`: THE FAN-OUT.
- *
- * ── THE FOUR PROPERTIES THIS SHAPE EXISTS TO BUY (plan §4.2) ───────────────
- *
- * 1. 🔒 **NO NEW FENCE.** Each leg is N ORDINARY, ALREADY-FENCED CALLS — the
- *    exact request a single-scope search makes, run inside that leg's own
- *    `workspaceContext.run(...)`. Layer A, B1, `canSeeBase` and the guest floors
- *    all apply per leg with no re-statement, and a re-statement is what F-336 and
- *    the `service-shared.ts` mirror-list exist to warn about. **Never widen this
- *    into one query over a workspace set.**
- * 2. **PROVENANCE IS STRUCTURAL.** A hit cannot render without its scope
- *    heading, so "which room is this from" is answered by construction rather
- *    than by a label somebody can forget. ⚠ NO RESULT MAY MERGE TWO SCOPES UNDER
- *    ONE HEADING — a "flat, deduplicated" convenience rendering would silently
- *    delete the design.
- * 3. **A FAILED LEG IS NAMED, NEVER RENDERED AS EMPTY.** "No matches in Acme"
- *    and "Acme could not be read" must never look alike.
- * 4. 🔒 **B3 IS RESPECTED BECAUSE THE LEG LIST *IS* THE LOCKED LIST**
- *    (`workspace-directory.ts › searchLegs`). A locked session searches its container and
- *    learns nothing about the existence of anything else.
- *
- * ── THE TWO COSTS, PAID RATHER THAN HIDDEN ────────────────────────────────
- *
- * **CREDITS.** `registrar.ts` charges ONCE, for the resolved workspace, before
- * the handler runs. So this module charges the ADDITIONAL legs explicitly
- * (Samuel's ruling Q3 (b), 2026-08-28) and the total equals the number of scopes
- * searched. ⚠ Legs run SEQUENTIALLY for exactly this reason: the meter has to
- * gate the work, which is the same "charge, then run" ordering the registrar
- * keeps. Out of credits STOPS the fan-out and is NAMED — it never silently
- * shortens the answer.
- *
- * **LATENCY.** N × the per-leg fan of four soft reads, bounded by
- * {@link MAX_SCOPES}. The result states the scope count it ACTUALLY searched and
- * never promises exhaustiveness — `search.ts › scopeNote`'s discipline ("no
- * group here is proof of absence") extended to scopes verbatim.
+ * `dopl_search(scope="everywhere")`: the fan-out. Each leg is an ordinary fenced single-scope
+ * search inside its own `workspaceContext.run` — never one query over a workspace set (no new
+ * fence). Every hit renders under its scope's heading (provenance is structural; never merge
+ * scopes), a failed leg is named, and the leg list IS the locked list (`searchLegs`), so a locked
+ * session searches its container alone. The registrar charged one scope; the rest are charged here,
+ * sequentially, before each leg runs, and running out stops the fan-out and is named.
  */
 
 import { workspaceContext } from "@dopl/client";
-import type { DoplClient, OntologySummary } from "@dopl/client";
+import type { DoplClient } from "@dopl/client";
 import type { ChargeCredit } from "../registrar.js";
 import { inlineOr, NO_NAME } from "./narration.js";
-import { partialRead } from "./partial-read.js";
 import type { SearchLeg } from "../workspace-directory.js";
 import type { ToolResponse } from "./respond.js";
+import {
+  entryAddress,
+  more,
+  ONTOLOGY_CLIPPED_NOTE,
+  searchScope,
+  snippet,
+  type Matcher,
+} from "./search-scope.js";
 
-/**
- * The hard cap on scopes one call fans out over.
- *
- * ⚠ SIX, AND THE NUMBER IS A LATENCY BUDGET RATHER THAN A TASTE. Each leg is
- * four concurrent reads and the legs are sequential (the meter gates them), so
- * six is ~24 loopback requests on one tool call. Raising it makes a speculative
- * search a hold; lowering it makes the truncation the common case. ⚠ Whatever it
- * is, the truncation is NAMED — a cap the result does not mention is a silent
- * lie about coverage.
- */
+/** A latency budget (each leg is four reads, legs are sequential); a truncation is always named. */
 export const MAX_SCOPES = 6;
 
-const EMPTY_ONTOLOGY: OntologySummary = { clusters: [], objects: {} };
-
-/** One leg's hits, already capped. */
 interface LegResult {
   leg: SearchLeg;
   lines: string[];
 }
 
-/** Why the fan-out stopped short of the leg list. */
 type Truncation =
   | { kind: "none" }
   | { kind: "cap"; searched: number; total: number }
   | { kind: "credits"; searched: number; total: number; refusal: ToolResponse };
 
-/**
- * ⚠ THE HEADING IS THE PROVENANCE, so it says WHAT the scope is as well as which.
- * A container rendered as "workspace" would advertise it as one, which INVARIANTS
- * §4A forbids everywhere else on this surface; a workspace rendered without its
- * slug loses the handle a follow-up single-scope call needs.
- */
+/** The heading is the provenance: what the scope is (never "workspace" for a container) plus the
+ *  slug/id a single-scope follow-up needs. */
 function heading(leg: SearchLeg): string {
   const where = leg.slug
     ? `${leg.kind} · slug \`${leg.slug}\` · id \`${leg.id}\``
@@ -83,103 +44,74 @@ function heading(leg: SearchLeg): string {
   return `## ${inlineOr(leg.label, NO_NAME)} (${where})`;
 }
 
-/**
- * Search ONE leg. ⚠ Runs inside that leg's own AsyncLocalStorage scope so every
- * `client.*` call carries the right `X-Workspace-Id` — this, and nothing else,
- * is what makes each leg an ordinary fenced request.
- */
+/** One leg, inside its own AsyncLocalStorage scope so every call carries that `X-Workspace-Id`. */
 async function searchOneLeg(
   client: DoplClient,
   leg: SearchLeg,
   query: string,
   limit: number,
-  matches: (...fields: Array<string | null | undefined>) => boolean,
+  matches: Matcher,
 ): Promise<LegResult> {
   return workspaceContext.run(leg.id, async () => {
-    const reads = partialRead();
-    const [entryHits, skills, ontology, identities] = await Promise.all([
-      reads.soft("Knowledge entries", client.searchKb(query, { limit }), []),
-      reads.soft("Skills", client.listSkills(), []),
-      reads.soft(
-        "Ontology objects",
-        client.getOntology({ view: "summary" }),
-        EMPTY_ONTOLOGY,
-      ),
-      reads.soft("Agent identities", client.listAgentIdentities(), []),
-    ]);
+    const found = await searchScope(client, {
+      query,
+      limit,
+      matches,
+      inHomeChannel: leg.kind === "home_channel",
+    });
 
     const lines: string[] = [heading(leg)];
     let hits = 0;
 
-    const entries = entryHits.slice(0, limit);
-    if (entries.length > 0) {
-      hits += entries.length;
+    if (found.entries.length > 0) {
+      hits += found.entries.length;
       lines.push("", "### Knowledge entries");
-      for (const h of entries) {
-        lines.push(
-          `- ${inlineOr(h.title, NO_NAME)} (entry id: \`${h.entryId}\`) — ${inlineOr(
-            h.snippet.replace(/<\/?b>/g, ""),
-            "`(no snippet)`",
-          )}`,
-        );
+      for (const h of found.entries) {
+        lines.push(`- ${inlineOr(h.title, NO_NAME)} (${entryAddress(h)}) — ${snippet(h.snippet)}`);
       }
     }
 
-    const skillHits = skills
-      .filter((s) => s.status === "active" && matches(s.name, s.description, s.whenToUse))
-      .slice(0, limit);
-    if (skillHits.length > 0) {
-      hits += skillHits.length;
+    if (found.skills.hits.length > 0) {
+      hits += found.skills.hits.length;
       lines.push("", "### Skills");
-      for (const s of skillHits) {
+      for (const s of found.skills.hits) {
         lines.push(
           `- ${inlineOr(s.name, NO_NAME)} \`${s.slug}\` — ${inlineOr(s.whenToUse || s.description, "`(no trigger described)`")}`,
         );
       }
+      lines.push(...more(found.skills, "skills"));
     }
 
-    const objectHits = Object.values(ontology.objects)
-      .filter((o) => matches(o.name, o.subtitle))
-      .slice(0, limit);
-    if (objectHits.length > 0) {
-      hits += objectHits.length;
+    if (found.objects.hits.length > 0) {
+      hits += found.objects.hits.length;
       lines.push("", "### Ontology objects");
-      for (const o of objectHits) {
+      for (const o of found.objects.hits) {
         lines.push(`- ${inlineOr(o.name, NO_NAME)} (id: \`${o.id}\`)`);
       }
+      lines.push(...more(found.objects, "ontology objects"));
     }
+    if (found.ontologyTruncated) lines.push(ONTOLOGY_CLIPPED_NOTE);
 
-    const identityHits = identities
-      .filter((t) => matches(t.name, t.description))
-      .slice(0, limit);
-    if (identityHits.length > 0) {
-      hits += identityHits.length;
+    if (found.identities.hits.length > 0) {
+      hits += found.identities.hits.length;
       lines.push("", "### Agent identities");
-      for (const t of identityHits) {
+      for (const ident of found.identities.hits) {
         lines.push(
-          `- ${inlineOr(t.name, NO_NAME)} (id: \`${t.id}\` · ${t.visibility})`,
+          `- ${inlineOr(ident.name, NO_NAME)} (id: \`${ident.id}\` · seen by ${found.audienceOf(ident)})`,
         );
       }
+      lines.push(...more(found.identities, "agent identities"));
     }
 
-    // ⚠ AN EMPTY SCOPE STILL GETS ITS HEADING. Dropping it would make "searched,
-    // nothing here" and "not searched" the same picture, which is the exact
-    // failure `partialRead` exists to prevent, one level up.
-    const notice = reads.notice(4, "groups");
+    // An empty scope keeps its heading: "searched, nothing" must not look like "not searched".
     if (hits === 0) lines.push("", "_No matches in this scope._");
-    if (notice) lines.push("", `_${notice}_`);
+    if (found.notice) lines.push("", `_${found.notice}_`);
     return { leg, lines };
   });
 }
 
-/**
- * THE FAN-OUT. Returns the rendered body plus the coverage sentence.
- *
- * ⚠ `alreadyCharged` IS THE LEG THE REGISTRAR ALREADY PAID FOR. Charging it
- * again is the double-count this argument exists to prevent; it is matched by
- * ID, not by position, because the resolved workspace is not always the first
- * leg.
- */
+/** The fan-out: body lines plus the coverage sentence. `alreadyCharged` is matched by id, so the
+ *  registrar's leg is never charged twice. */
 export async function fanOut(
   client: DoplClient,
   charge: ChargeCredit,
@@ -188,7 +120,7 @@ export async function fanOut(
     query: string;
     limit: number;
     alreadyCharged: string | null;
-    matches: (...fields: Array<string | null | undefined>) => boolean;
+    matches: Matcher;
   },
 ): Promise<{ lines: string[]; coverage: string; refusal: ToolResponse | null }> {
   const total = opts.legs.length;
@@ -203,10 +135,7 @@ export async function fanOut(
     if (leg.id !== opts.alreadyCharged) {
       const denied = await charge(leg.id);
       if (denied) {
-        // ⚠ STOP, KEEP WHAT WAS SEARCHED, AND SAY SO. Discarding the completed
-        // legs would waste credits already spent; continuing unpaid would make
-        // the meter and the work disagree, which is the whole reason per-leg
-        // billing was ruled in.
+        // Stop, keep what was searched and paid for, and say so.
         truncation = {
           kind: "credits",
           searched: results.length,
@@ -224,8 +153,7 @@ export async function fanOut(
   const lines: string[] = [];
   for (const r of results) lines.push(...r.lines, "");
 
-  // ⚠ THE COUNT IS WHAT WAS ACTUALLY SEARCHED, never the leg list's length, and
-  // never a promise of exhaustiveness.
+  // The count is what was actually searched, never the leg list's length.
   const searched = results.length;
   const scopeWord = searched === 1 ? "scope" : "scopes";
   let coverage = `Searched ${searched} ${scopeWord} of ${total} you can reach, each one an ordinary search of that scope alone.`;

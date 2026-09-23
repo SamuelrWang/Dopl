@@ -27,10 +27,10 @@ import { createServer } from "../server.js";
 import { CHANNEL_DOCTRINE } from "./channel-doctrine.js";
 import {
   CHANNEL_INPUT_SHAPE,
-  CHANNEL_OPS,
   PARAM_DESCRIPTION_MAX_CHARS,
   SCHEMA_MAX_CHARS,
 } from "./channel-schema.js";
+import { CHANNEL_OPS } from "./channel-vocab.js";
 
 const WS: WorkspaceListItem = {
   id: "11111111-1111-1111-1111-111111111111",

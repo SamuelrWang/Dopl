@@ -1,25 +1,14 @@
 /**
- * LAUNCH-OVER-MCP types — asking an operator's OWN desktop to start an agent.
- *
- * ⚠ SPLIT OUT OF `channel-types.ts` on 2026-08-22, at the 500-line cap (that
- * file measured 505 with these in it). Re-exported from `index.ts` exactly as
- * before, so no consumer import changed.
- *
- * ⚠ THE ONE THING TO CARRY AWAY: **a directive is a REQUEST, not a command, and
- * it is NOT A MESSAGE.** It never touches `channel_messages` (the loop brake and
- * transcript purity), so it has no `seq` and can never end an `await`.
- *
- * ⚠ **THE FOUR CLOSED SETS ARE DECLARED IN `@dopl/contracts › directives.ts`
- * AND RE-EXPORTED HERE** (2026-09-02, v2 slice A13) — they were hand mirrors of
- * `src/features/channels/types-launch.ts` with no script between them. No
- * consumer import changed. ⚠ {@link LaunchToolMode} is every runtime's own words (a set; the
- * desktop clamps in the launch runtime's order), {@link LaunchMessageMode} is ordered narrowest
- * first — read the declaration before re-spelling either.
+ * Launch-over-MCP types: asking an operator's own desktop to start (or end, rename, re-posture) an
+ * agent. A directive is a request, and not a message — it never touches `channel_messages` (loop
+ * brake, transcript purity), so it has no `seq` and can never end an `await`. The closed sets are
+ * `@dopl/contracts › directives.ts`, re-exported here.
  */
 import type {
   AgentColorKey,
   LaunchRefusalReason,
   LaunchDirectiveKind,
+  LaunchDirectiveStatus,
   LaunchToolMode,
   LaunchMessageMode,
 } from "@dopl/contracts";
@@ -28,157 +17,68 @@ export type {
   AgentColorKey,
   LaunchRefusalReason,
   LaunchDirectiveKind,
+  LaunchDirectiveStatus,
   LaunchToolMode,
   LaunchMessageMode,
 };
 
 /**
- * ONE LAUNCH REQUEST from an operator's external agent to that operator's own
- * desktop.
- *
- * ⚠ **NOT A MESSAGE.** It never touches `channel_messages` — the loop brake (an
- * agent-authored addressed message triggers a listener, so "start an agent" as a
- * message would be a self-feeding cycle) and transcript purity. **So it has no
- * `seq` and can never end an `await`**: hold on the directive itself, or find the
- * result in `read_sessions`.
- *
- * ⚠ `status` has LAZY EXPIRY already applied by the server and may differ from
- * what is stored. `expired` means nothing claimed it in time — not that anything
- * failed.
+ * One directive row. Optional fields are absent on an older server (INVARIANTS §13). `status` has
+ * lazy expiry applied server-side; `expired` means nothing claimed it in time, not a failure.
  */
 export interface LaunchDirective {
   id: string;
-  /** Which verb this asks for. ⚠ `launch` on every row that names no kind. */
+  /** `launch` on every row that names no kind. */
   kind: LaunchDirectiveKind;
-  /**
-   * The operator whose machine was asked — **always your own id** (2026-08-23).
-   * The read is fenced on it server-side, so it echoes the caller back rather
-   * than telling you anything new. It exists because the desktop re-checks
-   * ownership locally before it acts on a directive.
-   */
+  /** Always the caller's own id (the read is fenced on it); the desktop re-checks ownership locally. */
   operatorUserId: string;
   channelId: string;
   threadId: string | null;
   goal: string | null;
   model: string | null;
-  /**
-   * **THE RUNTIME THIS LAUNCH ASKED FOR — THE REQUEST, AND NOTHING ELSE** (2026-09-21, U9).
-   *
-   * ⚠ **`null` IS "DID NOT ASK", WHICH IS NOT "claude" AND EMPHATICALLY NOT "codex".** It means
-   * the documented chain applies on the machine (the channel's stored runtime, then the registry
-   * default), and what that came to is {@link LaunchDirective.appliedRuntime}.
-   * ⚠ **NEVER DERIVE IT FROM `model` ABOVE.** `runtime` picks the ADAPTER, `model` picks a model
-   * INSIDE it — a live launch carrying `model: "codex"` was accepted and started Claude Sonnet,
-   * which is the defect this field closes.
-   * ⚠ Absent on a server older than 2026-09-21, and on every kind but `launch`.
-   */
+  /** The runtime ASKED for; `null` = did not ask (the machine's chain decides — see
+   *  `appliedRuntime`). Never derived from `model`: runtime picks the adapter, model a model in it. */
   runtime?: string | null;
-  /**
-   * The agent identity the machine is asked to run AS, resolved SERVER-SIDE under
-   * the requester's visibility before the row was written (2026-08-23). `null`
-   * when none was named — **or when the identity was deleted afterwards**.
-   *
-   * ⚠ READ IT BESIDE {@link LaunchDirective.identityName}: a null id with a live
-   * name is a DELETION, and the desktop refuses (`no-identity`) rather than
-   * launching a blank agent.
-   */
+  /** Resolved server-side under the requester's visibility. A null id beside a live `identityName`
+   *  is a deletion, and the desktop refuses `no-identity` rather than launching a blank agent. */
   identityId: string | null;
-  /** The identity's name AT CREATE TIME — a snapshot, never a join, so it
-   *  survives the id's `ON DELETE SET NULL`. */
+  /** Snapshot at create time; survives the id's `ON DELETE SET NULL`. */
   identityName: string | null;
-  /** THE COLOUR THIS LAUNCH ASKED FOR — `agent-01 … agent-16`, or `null`.
-   *  ⚠ A REQUEST, NOT A RESERVATION: by the time the machine claims this row another
-   *  member's agent may hold the key, and the agent's own state push then resolves the
-   *  collision to the next free one. Absent on a server older than 2026-09-13. */
+  /** The colour asked for — a request, not a reservation (a collision resolves to the next free key). */
   color?: AgentColorKey | null;
-  /** WHAT THE LAUNCH ASKED THE NEW AGENT TO BE CALLED (Samuel, 2026-09-15).
-   *  ⚠ An agent that launches an agent NAMES it — the tool refuses a nameless launch. `null`
-   *  here is an older client's row, which the claiming machine names `New Agent`.
-   *  ⚠ Absent on a server older than 2026-09-15, and on every kind but `launch`. */
+  /** The name asked for; `null` on an older client's row (the machine names it `New Agent`). */
   agentName?: string | null;
-  /** WHAT THE AGENT IS ACTUALLY CALLED — the machine's own answer (2026-09-15).
-   *  ⚠ **THIS, NOT `agentName`, IS THE TAG TO ADDRESS IT BY.** A second agent asking for "Coder"
-   *  is stored as `Coder-1`, and `@coder` would reach the first one. `null` = not reported. */
+  /** The name the machine actually gave it — the tag to address it by (`Coder` may be stored
+   *  `Coder-1`). `null` = not reported. */
   appliedAgentName?: string | null;
-  /**
-   * **WHAT THE MACHINE ACTUALLY STARTED ON — RUNTIME AND MODEL** (2026-09-21, U9).
-   *
-   * ⚠ **READ THIS, NOT {@link LaunchDirective.runtime}, WHEN YOU MEAN "which vendor ran".** They
-   * agree on an explicit honoured request and DIFFER on the ordinary launch that asked for
-   * nothing; a request that could not be honoured produces no `launched` row at all, because the
-   * machine REFUSES (`no-sdk`) rather than swapping vendors.
-   * ⚠ `null` = NOT REPORTED (an older desktop, or a non-launch kind), never "the default". And
-   * on `appliedModel`, `null` also legitimately means "no model argument at all" — the resolved
-   * runtime's own default, which is what a dropped cross-vendor model correctly becomes.
-   */
+  /** What the machine actually started on. `null` = not reported, never "the default"; an
+   *  unusable requested runtime is refused (`no-sdk`), never swapped. `appliedModel: null` can also
+   *  mean the runtime's own default. */
   appliedRuntime?: string | null;
   appliedModel?: string | null;
-  /** ⚠ `done` IS THE NON-LAUNCH KINDS' SUCCESS and `launched` IS THE LAUNCH'S.
-   *  They are two words because this row is rendered into an agent-facing
-   *  sentence, and "launched" on the record of an agent being STOPPED is the one
-   *  kind of wrong nothing downstream can detect. */
-  status: "pending" | "claimed" | "launched" | "done" | "refused" | "expired";
+  status: LaunchDirectiveStatus;
   /** Set iff `status` is `refused`. */
   refusalReason: LaunchRefusalReason | null;
-  /** WHICH AGENT an `end` / `rename` acts on — an INPUT you named. `null` on a
-   *  launch. ⚠ Never confuse it with `agentId` below, which is the OUTPUT a
-   *  launch produced. */
+  /** The agent an `end` / `rename` / `set_agent_mode` acts on (an input); `null` on a launch. */
   targetAgentId: string | null;
-  /** The rename's new display name. Non-null iff `kind` is `rename`, where `""`
-   *  is legal and means CLEAR (back to `Agent #<id>`). ⚠ Display only, on one
-   *  machine — nothing resolves an agent by it. */
+  /** The rename's new name; non-null iff `kind` is `rename`, where `""` means clear. Display only. */
   targetName: string | null;
-  /**
-   * THE POSTURE A **LAUNCH** ASKED ITS NEW SESSION TO START ON (T24). `null` on
-   * an axis is "not asked", which resolves to the operator's own stored channel
-   * value. `null` on every kind but `launch`.
-   * ⚠ SEPARATE FROM {@link LaunchDirective.targetToolMode} — one is the posture a
-   * NEW session starts on, the other the posture a RUNNING one moves to.
-   */
+  /** The posture a LAUNCH asked its new session to start on; `null` = not asked (the operator's
+   *  stored channel value applies). Not `target*`, which moves a running session. */
   startToolMode: LaunchToolMode | null;
   startMessageMode: LaunchMessageMode | null;
-  /** MAY THE LAUNCHED AGENT LAUNCH FURTHER AGENTS? **A TRUE TRI-STATE** (fixed
-   *  2026-09-01): `true` ASKED IT ON, `false` ASKED IT OFF, `null` did not ask and
-   *  inherits the channel setting. ⚠ `true` is REFUSED rather than clamped when
-   *  the channel forbids it — the one asymmetry with the two axes. ⚠ `false` is
-   *  ALWAYS granted and WINS over a channel set to ON: it only ever narrows, so
-   *  there is nothing for the operator setting to protect.
-   *  ⚠ This said `false` was indistinguishable from `null`, which was true while
-   *  the desktop's narrower read only `true`/`"true"`. It no longer does. */
+  /** Tri-state: `true` asks chaining on (refused where the channel forbids it), `false` asks it off
+   *  (always granted, wins over ON), `null` inherits the channel setting. */
   chain: boolean | null;
-  /** THE POSTURE A `set_agent_mode` ASKED A **RUNNING** AGENT TO MOVE TO. `null`
-   *  on an axis means it was not requested, which is ordinary; at least one is
-   *  non-null on that kind and both are `null` on every other. */
+  /** The posture a `set_agent_mode` asked a running agent to move to; `null` = that axis not asked. */
   targetToolMode: LaunchToolMode | null;
   targetMessageMode: LaunchMessageMode | null;
-  /**
-   * **THE ECHO — what the machine says it actually applied, after its clamp** — in the launch
-   * (or running) runtime's own words; a `set_agent_mode` reports it on its `done`.
-   *
-   * ⚠ **`null` MEANS "NOT REPORTED". NOT "unclamped", and NEVER the requested
-   * value echoed back.** The writer is the DECIDE and it landed on 2026-09-01,
-   * but `null` is still the live value on every row written before that wave and
-   * on every row decided by a desktop older than it — the decide's echo fields
-   * are optional so such a machine can still report. A reader that treats `null`
-   * as agreement tells its caller the posture landed on the strength of a field
-   * nobody filled in.
-   * ⚠ `appliedChain: null` IS NOT `false` — reading it as "no chaining" is wrong
-   * in the direction that makes an orchestrator do the work itself for no reason.
-   */
+  /** What the machine says it applied after its clamp, in the runtime's own words. `null` = not
+   *  reported — never agreement with the request, and `appliedChain: null` is not `false`. */
   appliedToolMode: LaunchToolMode | null;
   appliedMessageMode: LaunchMessageMode | null;
   appliedChain: boolean | null;
-  /**
-   * ⚠ **RETIRED GROUP: `null` on every row filed now.** The server clamps nothing and resolves
-   * no model, so these only ever carried a copy of the request (and a Claude-table model id on
-   * every runtime). Read `start*` for the ask and `applied*` for what the machine ran.
-   */
-  resolvedToolMode?: LaunchToolMode | null;
-  resolvedMessageMode?: LaunchMessageMode | null;
-  resolvedChain?: boolean | null;
-  resolvedModel?: string | null;
-  /** The agent instance started. Set iff `status` is `launched` — it is what a
-   *  requester types as `@<agentId>` to direct it. */
+  /** The agent instance started; set iff `status` is `launched`. */
   agentId: string | null;
   claimedAt: string | null;
   decidedAt: string | null;
@@ -186,151 +86,56 @@ export interface LaunchDirective {
   createdAt: string;
 }
 
-/** What `createLaunchDirective` asks for. ⚠ THERE IS NO OPERATOR FIELD AND THERE
- *  MUST NEVER BE ONE — the server stamps the authenticated caller, because the
- *  only machine an agent may ask to start something is its own operator's. */
+/** What `createLaunchDirective` asks for. No operator field, ever: the server stamps the caller, so
+ *  the only machine an agent can ask is its own operator's. */
 export interface LaunchDirectiveCreateInput {
   channel: string;
   threadId?: string;
   goal?: string;
   model?: string;
-  /**
-   * **WHICH RUNTIME TO RUN THE AGENT ON — SEPARATE FROM `model`, ALWAYS** (2026-09-21, U9).
-   *
-   * ⚠ `runtime` picks the ADAPTER (`claude`, `codex`, …); `model` picks a model INSIDE it.
-   * **Never send a runtime name as a model.** A launch that did was accepted and started the
-   * default vendor, which is the defect this field exists to close.
-   * ⚠ **OMIT IT UNLESS THE CALLER GENUINELY CARES.** Omitted follows the operator's own chain:
-   * the channel's stored runtime, then their machine's default adapter. Omitted is NEVER read as
-   * a particular vendor.
-   * ⚠ **A RUNTIME THE OPERATOR'S MACHINE CANNOT START IS REFUSED (`no-sdk`), NEVER SWAPPED.**
-   * That refusal is the contract: an explicit request is honoured or it is declined.
-   */
+  /** Which adapter (`claude`, `codex`, …); never a runtime name sent as `model`. Omitted follows the
+   *  operator's chain; a runtime their machine cannot start is refused (`no-sdk`), never swapped. */
   runtime?: string;
-  /**
-   * The agent identity to run as — **an id OR an exact name** (2026-08-23). One
-   * param for both, the same idiom `dopl_kb`'s `base` already uses.
-   *
-   * ⚠ RESOLVED SERVER-SIDE, under the CALLER's own visibility, before any row is
-   * written. A name matching more than one visible identity is REFUSED with the
-   * list (409 `AGENT_IDENTITY_AMBIGUOUS`, `details.matches`) — never picked.
-   */
+  /** An identity id OR exact name, resolved server-side under the caller's visibility; an ambiguous
+   *  name is a 409 `AGENT_IDENTITY_AMBIGUOUS` listing `details.matches`, never a pick. */
   identity?: string;
-  /**
-   * THE POSTURE THIS LAUNCH **ASKS** ITS NEW SESSION TO START ON, and whether it
-   * may launch workers (T24, 2026-09-01).
-   *
-   * ⚠ **ASKS, NEVER WIDENS.** The operator's machine clamps both axes to that
-   * operator's own stored channel posture and REFUSES a chain the channel
-   * forbids. Omitting all three is the pre-T24 behaviour exactly: the operator's
-   * own stored pair, and the channel's own chain setting.
-   * ⚠ **`chain` IS A TRI-STATE AND `false` DOES TURN CHAINING OFF** (fixed
-   * 2026-09-01). `true` asks it on and is REFUSED where the channel forbids it;
-   * `false` asks it off, is always granted, and WINS over a channel set to ON;
-   * OMITTING it inherits the channel setting. ⚠ This said `false` did nothing,
-   * which was true while the desktop's narrower read only `true` — it no longer
-   * does, and omitting is still not the same as sending `false`.
-   */
+  /** Posture the new session is ASKED to start on — clamped to the operator's stored channel
+   *  posture, never widened. `chain` is a tri-state (see {@link LaunchDirective.chain}). */
   tools?: LaunchToolMode;
   messages?: LaunchMessageMode;
   chain?: boolean;
-  /**
-   * **AN IDEMPOTENCY KEY — "a retry may not queue a SECOND agent"** (2026-09-02,
-   * A10/G10).
-   *
-   * ⚠ **SEND ONE WHENEVER A RETRY IS POSSIBLE, WHICH ON THIS OP IS ALWAYS.** The
-   * create holds for the operator's machine and then returns PENDING; a timeout
-   * is indistinguishable from a lost response, so without a key the caller has to
-   * choose between an unknown outcome and a second agent on the same work.
-   * Re-sending the same key returns the FIRST request's directive
-   * ({@link LaunchDirectiveCreated}'s `existing`).
-   * ⚠ Any stable string of the caller's own, 1-200 chars. Uniqueness is scoped to
-   * `(channel, this operator)` server-side, so another member's key cannot
-   * collide with yours.
-   */
+  /** Idempotency key, 1-200 chars, scoped to (channel, this operator): re-sending it returns the
+   *  first request's directive (`existing`) instead of queuing a second agent. */
   clientMsgId?: string;
-  /**
-   * **THE COLOUR THE NEW AGENT SHOULD WEAR IN THIS CHANNEL** — one of `agent-01 …
-   * agent-16` (2026-09-13).
-   *
-   * ⚠ **OMIT IT UNLESS THE CALLER GENUINELY CARES.** Omitted means "pick for me" and
-   * the server takes the first free key, which is what every launch got before this
-   * field existed. It does NOT mean "no colour".
-   * ⚠ **A KEY THAT IS ALREADY OUT IN THE CHANNEL IS A 409 `AGENT_COLOR_TAKEN` CARRYING
-   * `details.free`** — never a silent substitution, because the caller was specific.
-   * Pick from that list and retry (with the SAME `clientMsgId`, which converges rather
-   * than filing twice).
-   * ⚠ **A COLOUR IS IDENTITY, NOT STATUS.** It exists so a reader can tell two agents
-   * apart in one transcript; nothing infers health or priority from which key an agent
-   * holds.
-   * ⚠ **UNIQUE PER CHANNEL ACROSS MEMBERS, AND IT RETURNS TO THE BANK WHEN THE AGENT
-   * ENDS.** Another member's live agent can hold the key you want, and yours can hold
-   * one they want.
-   */
+  /** Omitted = the first free key. A taken key is a 409 `AGENT_COLOR_TAKEN` with `details.free`,
+   *  never a silent substitution — retry with the same `clientMsgId`. */
   color?: AgentColorKey;
-  /**
-   * **WHAT TO CALL THE AGENT YOU ARE LAUNCHING — REQUIRED** (Samuel, 2026-09-15).
-   *
-   * ⚠ An agent that spins up an agent names it. A nameless launch is REFUSED rather than
-   * silently filed, and the id is not a name: one to sixty visible characters on one line.
-   * ⚠ It is DISPLAY, not an address — but it is what every human surface shows and what other
-   * agents @-tag (`@<name>` slugged: "Bug Reviewer" → `@bug-reviewer`). Two ACTIVE agents with
-   * the same name are addressable only by their id forms, so pick names that differ.
-   */
+  /** Required: an agent that launches an agent names it (1-60 visible chars, one line). Display, but
+   *  what others @-tag (slugged), so two live agents should not share one. */
   agentName: string;
 }
 
 /**
- * ⚠ `offline: true` IS A NORMAL 200, NOT AN ERROR. The operator's machine is not
- * listening, **no row was created**, and nothing was asked. Render the caveat;
- * do not retry, and do not classify it as a failure.
- *
- * ⚠ **`existing: true` MEANS THIS CALL FILED NOTHING** (2026-09-02, A10/G10) —
- * the `clientMsgId` had been used before and this is the FIRST request's
- * directive. Render it as a converged retry, never as a fresh launch: the two are
- * the same shape and only this flag separates "your retry was absorbed" from "a
- * second agent was requested".
- * ⚠ **OPTIONAL, BECAUSE A SERVER OLDER THAN THIS WAVE SENDS NO SUCH KEY** and
- * this client is deployed against both (INVARIANTS §13). Absent reads as `false`
- * — "a row was filed" — which is the safe direction against an old server,
- * because an old server also stored no key and every call there really was fresh.
+ * `offline: true` is a normal 200: nothing was filed and nothing is pending. `existing: true` means
+ * this call filed nothing (a converged `clientMsgId` retry); absent (an older server) means "filed".
  */
 export type LaunchDirectiveCreated =
   | { offline: true; directive: null }
   | { offline: false; directive: LaunchDirective; existing?: boolean };
 
 /**
- * WHAT `createAgentDirective` ASKS FOR — END or RENAME one of the operator's own
- * running agents (2026-09-01).
- *
- * ⚠ A DISCRIMINATED UNION: a rename REQUIRES a name and an end must not carry
- * one, which the column CHECK also says at rest.
- * ⚠ **THERE IS NO OPERATOR FIELD AND THERE MUST NEVER BE ONE** — the server
- * stamps the authenticated caller, because the only machine an agent may reach is
- * its own operator's.
- * ⚠ `channel` IS REQUIRED even though `agentId` addresses the target on its own:
- * the create proves a MEMBERSHIP ROW in that channel, which is what stops this
- * being a bare "end agent `abcdefgh`" primitive with no room the caller had to be
- * in first.
+ * What `createAgentDirective` asks for — end, rename or re-posture one of the operator's own
+ * running agents. No operator field (the server stamps the caller). `channel` is required so the
+ * create proves a membership row, not a bare "end agent X" primitive.
  */
 export type AgentDirectiveCreateInput =
   | { kind: "end"; channel: string; agentId: string }
-  /** ⚠ `name: ""` IS LEGAL AND MEANS CLEAR. A separate "unname" verb would be a
-   *  second way to say one thing. Bounded at 60 — the desktop store's own cap. */
+  /** `name: ""` means clear; bounded at 60 (the desktop store's cap). */
   | { kind: "rename"; channel: string; agentId: string; name: string }
   /**
-   * **RE-POSTURE A RUNNING AGENT** (2026-09-01).
-   *
-   * ⚠ **BOTH AXES OPTIONAL, AT LEAST ONE REQUIRED** — the route's schema refuses
-   * the empty ask with a 400 rather than filing a row nothing could answer.
-   * ⚠ **ASKS, NEVER WIDENS.** The machine clamps each axis to the operator's own
-   * stored channel posture; there is no operator carve-out, because every caller
-   * on this lane already IS the operator's own account.
-   * ⚠ **NO MODEL FIELD, AND THERE MUST NEVER BE ONE** — the desktop's narrower
-   * has no column for one, so it would be accepted and silently dropped.
-   * ⚠ **THIS ONE IS BEHIND THE MACHINE'S LAUNCH TOGGLE** while `end` and `rename`
-   * are not, so `no-bridge` here CAN mean the toggle is off — the opposite of what
-   * that word means on the other two kinds.
+   * At least one axis required (the route 400s an empty ask); asks, never widens. No model field —
+   * the desktop's narrower has nowhere to put one. Behind the machine's launch toggle, so `no-bridge`
+   * here can mean the toggle is off.
    */
   | {
       kind: "set_agent_mode";
@@ -340,11 +145,7 @@ export type AgentDirectiveCreateInput =
       messages?: LaunchMessageMode;
     };
 
-/**
- * ⚠ `offline: true` IS A NORMAL 200, NOT AN ERROR — the launch create's rule
- * verbatim. The operator's machine is not listening, **no row was created**, and
- * nothing was asked.
- */
+/** `offline: true` is a normal 200: nothing was filed. */
 export type AgentDirectiveCreated =
   | { offline: true; directive: null }
   | { offline: false; directive: LaunchDirective };

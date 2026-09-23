@@ -22,11 +22,8 @@
 import type { DoplClient } from "@dopl/client";
 import { err, missingParams, ok, type ToolResponse } from "./respond";
 import { CHANNEL_DOCTRINE, doctrineSection } from "./channel-doctrine";
-import {
-  CHANNEL_ACTIONS,
-  CHANNEL_INPUT_SHAPE,
-  type RoomsAction,
-} from "./channel-schema";
+import { CHANNEL_INPUT_SHAPE } from "./channel-schema";
+import { CHANNEL_ACTIONS, type RoomsAction } from "./channel-vocab";
 import { opList, opListThreads, opMembers } from "./channel-ops-read";
 import { opInvite, opOpen } from "./channel-ops-open";
 import { opSetThreadMode } from "./channel-ops-threads";

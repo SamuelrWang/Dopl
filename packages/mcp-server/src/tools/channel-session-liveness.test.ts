@@ -219,15 +219,15 @@ describe("F-293 — a model id can never split into two bare names", () => {
       now: NOW,
     });
     expect(line).not.toContain("opus-5 1m");
-    expect(line).toContain("`opus-5-1m`");
+    expect(line).toContain("`claude-opus-5-1m`");
   });
 
   it("the long-context suffix is KEPT, not dropped — it is a real fact about the run", () => {
     // ⚠ Dropping it would be the other kind of lie: two different models (200k
     // and 1M variants of one id) rendering as the same name.
-    expect(shortModelLabel("claude-sonnet-4-6[1m]")).toBe("sonnet-4-6-1m");
-    expect(shortModelLabel("claude-opus-4-6[1m]")).toBe("opus-4-6-1m");
-    expect(shortModelLabel("claude-opus-4-6")).toBe("opus-4-6");
+    expect(shortModelLabel("claude-sonnet-4-6[1m]")).toBe("claude-sonnet-4-6-1m");
+    expect(shortModelLabel("claude-opus-4-6[1m]")).toBe("claude-opus-4-6-1m");
+    expect(shortModelLabel("claude-opus-4-6")).toBe("claude-opus-4-6");
   });
 
   it("no whitespace survives into the model slot, from any desktop-supplied id", () => {
@@ -257,7 +257,7 @@ describe("F-293 — a model id can never split into two bare names", () => {
     // code spans; the model is the only bare NAME clause.
     const clauses = line.split(" · ");
     const bareNames = clauses.filter((c) => /^`[^`]+`$/.test(c));
-    expect(bareNames).toEqual(["`opus-5-1m`"]);
+    expect(bareNames).toEqual(["`claude-opus-5-1m`"]);
     // ⚠ RE-POINTED, NOT DROPPED (T13). The promise this render keeps used to be
     // a constant printed under every page; it is doctrine now, so the words are
     // asserted where a reader is actually served them.
@@ -269,11 +269,10 @@ describe("F-293 — a model id can never split into two bare names", () => {
   });
 
   it("still never invents a name, and still renders an unknown id as itself", () => {
-    expect(shortModelLabel("claude-opus-5")).toBe("opus-5");
-    expect(shortModelLabel("claude-opus-4-5-20251101")).toBe("opus-4-5");
+    expect(shortModelLabel("claude-opus-5")).toBe("claude-opus-5");
+    expect(shortModelLabel("claude-opus-4-5-20251101")).toBe("claude-opus-4-5");
     expect(shortModelLabel("some-future-model")).toBe("some-future-model");
-    // ⚠ A strip that would EMPTY the label falls back to the original — both
-    // strips, the old vendor-prefix one and the new one-token join.
+    // ⚠ A strip that would EMPTY the label falls back to the original.
     expect(shortModelLabel("claude-")).toBe("claude-");
     expect(shortModelLabel("[[[")).toBe("[[[");
   });

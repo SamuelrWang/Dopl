@@ -240,7 +240,7 @@ describe("dopl_search carries its own scope", () => {
         })),
       ),
       getOntology: vi.fn(async () => ({ clusters: [], objects: {} })),
-      listAgentIdentities: vi.fn(async () => []),
+      listAgentIdentitiesPayload: vi.fn(async () => ({ identities: [] })),
     });
 
   it("marks a capped group, and states the metadata-only matching + archive gap", async () => {

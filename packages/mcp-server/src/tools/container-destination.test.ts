@@ -30,6 +30,10 @@ import { opList } from "./agent-ops-read";
 import { opCreate } from "./agent-ops-write";
 import { opListBases } from "./knowledge-ops-read";
 import { opCreateBase } from "./knowledge-ops-base-writes";
+import { registerAgentTools } from "./agent";
+import { registerKnowledgeTools } from "./knowledge";
+import { UNKNOWN_CALLER } from "./identity";
+import type { RegisterTool, ToolResponse } from "./respond";
 import { stub } from "./narration-fixtures";
 import type { WorkspaceDirectory } from "../workspace-directory";
 
@@ -381,5 +385,60 @@ describe("🔒 §8 — a cached payload missing the sibling keys", () => {
     );
     expect(text).toContain("Handover");
     expect(text).not.toContain("Legacy — not visible anywhere in the app");
+  });
+});
+
+// ── 4. THE REGISTRARS HAND THE CREATE OPS THEIR DIRECTORY ───────────────────
+
+/** Drive one tool's real registrar with the channel-bound directory. */
+async function viaRegistrar(
+  register: (r: RegisterTool) => void,
+  tool: string,
+  args: Record<string, unknown>,
+): Promise<ToolResponse> {
+  let handler: ((a: unknown) => Promise<ToolResponse>) | null = null;
+  register(((name: string, _d: string, _s: unknown, h: unknown) => {
+    if (name === tool) handler = h as (a: unknown) => Promise<ToolResponse>;
+  }) as RegisterTool);
+  if (!handler) throw new Error(`${tool} was not registered`);
+  return (handler as (a: unknown) => Promise<ToolResponse>)(args);
+}
+
+describe("the create ops reach their destination through the registrar, not only when called directly", () => {
+  it("dopl_kb create_base in a home channel files the channel share", async () => {
+    const createKbBase = vi.fn(async () => base());
+    const client = stub({
+      getWorkspaceId: () => ROOM,
+      listWorkspaces: async () => ({ workspaces: [{ id: ROOM, name: "Room", memberCount: 1 }] }),
+      getHomeChannels: async () => CHANNELS,
+      createKbBase,
+    }) as DoplClient;
+    await viaRegistrar(
+      (r) => registerKnowledgeTools(r, client, UNKNOWN_CALLER, ROOM_IS_CHANNEL),
+      "dopl_kb",
+      { op: "create_base", name: "Handover" },
+    );
+    expect(createKbBase).toHaveBeenCalledWith(
+      expect.objectContaining({ shareToChannelId: CHANNEL }),
+    );
+  });
+
+  it("dopl_agent create in a home channel lands shared with the room", async () => {
+    const createAgentIdentity = vi.fn(async (body: { visibility?: string }) =>
+      identity({ visibility: body.visibility as AgentIdentity["visibility"] }),
+    );
+    const client = stub({
+      getWorkspaceId: () => ROOM,
+      listWorkspaces: async () => ({ workspaces: [{ id: ROOM, name: "Room", memberCount: 1 }] }),
+      createAgentIdentity,
+    }) as DoplClient;
+    await viaRegistrar(
+      (r) => registerAgentTools(r, client, UNKNOWN_CALLER, ROOM_IS_CHANNEL),
+      "dopl_agent",
+      { op: "create", name: "Researcher" },
+    );
+    expect(createAgentIdentity).toHaveBeenCalledWith(
+      expect.objectContaining({ visibility: "workspace" }),
+    );
   });
 });

@@ -167,6 +167,17 @@ describe("a removed param is REFUSED, and the refusal names the field", () => {
     expect(posted).not.toHaveBeenCalled();
   });
 
+  it("the renamed-arg hint is per tool: a tool that takes no `identity` never suggests it (P8-17)", async () => {
+    const res = await client.callTool({
+      name: "dopl_kb",
+      arguments: { op: "list_bases", template: "Researcher" },
+    });
+    expect(res.isError).toBe(true);
+    const text = (res.content as Array<{ text: string }>).map((c) => c.text).join("");
+    expect(text).toContain("template");
+    expect(text).not.toContain("renamed: send identity");
+  });
+
   it("an INVENTED param is refused on the same rule (this is not a denylist)", async () => {
     const res = await client.callTool({
       name: "dopl_channel",

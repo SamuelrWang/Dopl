@@ -26,10 +26,15 @@ vi.mock("@modelcontextprotocol/sdk/server/mcp.js", () => ({
 
 import type { WorkspaceListItem } from "@dopl/client";
 import { buildInstructions } from "../server.js";
-import { registerMapFixture } from "./narration-fixtures";
+import { EMPTY_DIRECTORY, callTool, registerMapFixture, stub } from "./narration-fixtures";
 import { registerMembersTool } from "./members";
-import { CONTACT_POINTER } from "./members-render";
-import { callTool, stub } from "./narration-fixtures";
+import { contactPointer } from "./members-render";
+import { registerMapTool } from "./map";
+import { UNKNOWN_CALLER, type CallerIdentity } from "./identity";
+
+/** The unstamped (vendor-unknown) caller every default fixture is. */
+const CONTACT_POINTER = contactPointer(null);
+const withVendor = (vendor: string): CallerIdentity => ({ ...UNKNOWN_CALLER, vendor });
 
 /** One membership, so the workspace-targeting half of the instructions is the simple one. */
 const WS: WorkspaceListItem = {
@@ -70,7 +75,15 @@ describe("the server instructions route 'ask X's agent' to dopl_channel", () => 
     // ⚠ The agent cannot find the tool by reading its description, because the
     // description is not loaded — "load it with ToolSearch" closes that gap.
     expect(OUT).toContain("DEFERRED");
-    expect(OUT).toContain("ToolSearch");
+    expect(OUT).toContain("load it with your client's tool search");
+  });
+
+  it("names the caller's OWN loader when the vendor stamp says which client it is", () => {
+    // X-09: Claude's loader is `ToolSearch`, Codex's is `tool_search`; an unknown vendor gets neither.
+    expect(buildInstructions([WS], { vendor: "claude" })).toContain("load it with ToolSearch");
+    expect(buildInstructions([WS], { vendor: "codex" })).toContain("load it with tool_search");
+    expect(OUT).not.toContain("ToolSearch");
+    expect(OUT).not.toContain("tool_search");
   });
 
   it("the routing line separates LISTING people from REACHING them", () => {
@@ -107,7 +120,19 @@ describe("dopl_map names the destination it cannot list", () => {
     // the enum accepts, and `dopl_map` is one of the three surfaces that carry
     // one before an agent has ever listed a tool.
     expect(text).toContain('dopl_channel(op="rooms", action="list")');
-    expect(text).toContain("ToolSearch");
+    expect(text).toContain("load it with your client's tool search");
+  });
+
+  it("names the caller's own loader by vendor", async () => {
+    const as = (vendor: string) =>
+      callTool(
+        (r, c) => registerMapTool(r, c, EMPTY_DIRECTORY, withVendor(vendor)),
+        MAP_CLIENT(),
+        "dopl_map",
+        {},
+      );
+    expect(await as("claude")).toContain("load it with ToolSearch");
+    expect(await as("codex")).toContain("load it with tool_search");
   });
 
   it("says it did not query them, so the line is never read as a count", async () => {
@@ -197,7 +222,19 @@ describe("dopl_members answers 'who is here' with a way to reach them", () => {
     // something in it. A pointer naming a retired op is a dead first call.
     expect(CONTACT_POINTER).toContain('op="rooms"');
     expect(CONTACT_POINTER).toContain('op="send"');
-    expect(CONTACT_POINTER).toContain("ToolSearch");
+    expect(CONTACT_POINTER).toContain("load it with your client's tool search");
+    expect(contactPointer("claude")).toContain("load it with ToolSearch");
+    expect(contactPointer("codex")).toContain("load it with tool_search");
+  });
+
+  it("op=whoami names the caller's own loader", async () => {
+    const text = await callTool(
+      (r, c) => registerMembersTool(r, c, withVendor("codex")),
+      MEMBERS_CLIENT(),
+      "dopl_members",
+      { op: "whoami" },
+    );
+    expect(text).toContain(contactPointer("codex"));
   });
 
   it("op=get on a DEACTIVATED row does NOT offer the route", async () => {

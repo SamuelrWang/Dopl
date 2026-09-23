@@ -1,75 +1,30 @@
 /**
- * Shared resolution + rendering for `dopl_agent`. The registrar (`agent.ts`)
- * routes; the op modules render.
- *
- * ⚠ THE `agent-` FILENAME PREFIX IS THE CONTRACT — `tool-group-files.ts` groups
- * a tool's files on the registrar's stem, and a handler in an unprefixed file is
- * invisible to every parity scan.
- *
- * ── THE THREE-ANSWER RULE (spec §7.1) ─────────────────────────────────────
- * A ref resolves to exactly one of RESOLVED / AMBIGUOUS / NOT FOUND, and the
- * middle one REFUSES with every candidate listed. The shipped precedent is
- * `src/features/agent-identities/server/service-resolve-ref.ts ›
- * resolveIdentityRef`, which the launch lane already uses — so an agent learns
- * ONE rule for naming an identity, whichever door it comes through.
- *
- * ⚠ THIS IS NOT A SECOND COPY OF `canSeeIdentity`, and it must never become
- * one. It matches NAMES over the rows `GET /api/agent-identities` already
- * returned, which the server filtered through the visibility matrix before they
- * crossed the wire — the same shape `knowledge-shared.ts › resolveBase` uses
- * over `listKbBases`. A predicate re-implemented here would be the F-278 shape:
- * "the copy is the one that will not notice".
- *
- * ⚠ 404-NEVER-403. "No such identity" and "not visible to you" are ONE answer,
- * because the difference between the two is an existence oracle (INVARIANTS
- * §5A), and this surface must not rebuild on a new door what the route closed.
+ * Shared ref resolution + rendering for `dopl_agent`; `agent.ts` routes, the op modules render.
+ * The `agent-` filename prefix is load-bearing: `tool-group-files.ts` groups a tool's files on it for the parity scans.
  */
 
-import type { AgentIdentity, DoplClient } from "@dopl/client";
-import type { AudienceLabel } from "./audience-label.js";
-import { inlineOr, NO_NAME } from "./narration.js";
+import type { AgentIdentity, DoplClient, IdentityKnowledgeRef } from "@dopl/client";
+import { AUDIENCE_LABELS, type AudienceLabel } from "./audience-label.js";
+import { inlineOr, NO_NAME, UUID_RE } from "./narration.js";
 import { apiMessage, err, isApiError, type ToolResponse } from "./respond.js";
 import { AGENT_ERRORS, refusal } from "./tool-errors.js";
 
-/**
- * The server's 403 code for "a credential that may be shared between humans
- * cannot own a PRIVATE row". ⚠ ONE SPELLING, shared with the knowledge surface
- * (`knowledge-shared.ts › sharedCredentialPrivateBaseDenied`) — both create
- * paths can raise it and neither may guess at the string.
- */
+/** The server's 403 for a shared credential owning a private row. */
 export const PRIVATE_VISIBILITY_DENIED_CODE = "WORKSPACE_KEY_PRIVATE_VISIBILITY";
 
-/** The server's 404 code for an identity this caller cannot name — the one
- *  refusal {@link resolveIdentityRef}'s id door swallows. ⚠ ONE SPELLING, and it
- *  is `src/features/agent-identities/server/http-mapping.ts`'s. */
+/** The server's 404 for an identity this caller cannot name — the only refusal the id door swallows. */
 export const IDENTITY_NOT_FOUND_CODE = "AGENT_IDENTITY_NOT_FOUND";
 /** The server's code for a name matching several visible identities (the launch lane's 409). */
 export const IDENTITY_AMBIGUOUS_CODE = "AGENT_IDENTITY_AMBIGUOUS";
 
-/** The advertised codes, by reason, so a refusal cannot render one the description lacks (P8-02). */
+/** The advertised codes, by reason, so a refusal cannot render one the description lacks. */
 const AGENT_ERRORS_BY_REASON = Object.fromEntries(
   AGENT_ERRORS.map((e) => [e.reason, e]),
 ) as Record<"identity_not_found" | "ambiguous_name", (typeof AGENT_ERRORS)[number]>;
 
 /**
- * 🔒 THE VISIBILITY AXIS THIS SURFACE OFFERS — **TWO values, not three.**
- *
- * `IdentityVisibility` in `src/features/agent-identities/types.ts` still carries
- * `'team'`, the column still stores it and the route still accepts it from the
- * app. A8 takes the axis off the MCP SURFACE ONLY, so no agent is ever TAUGHT a
- * third option: measured in production 2026-09-02 there are **0 team-visibility
- * identities and 0 `agent_template_teams` rows**, and an axis nothing uses is an
- * enum arm a model still has to read, weigh and occasionally pick. Dropping the
- * column, the two tables, the trigger and the app's second editor is B4.
- *
- * ⚠ ONE DECLARATION, read by the tool's enum ({@link agent.ts}), the list
- * grouping ({@link agent-ops-read.ts}) and the write input type
- * ({@link agent-ops-write.ts}) — a second list is how an enum and its headings
- * drift apart in silence.
- *
- * ⚠ IT NARROWS WHAT IS OFFERED, NOT WHAT EXISTS. A row the server hands back at
- * a visibility absent from this list is still RENDERED (see `opList`); filtering
- * the read to match the write enum would drop rows instead of retiring an axis.
+ * The MCP surface offers two visibility values; `team` survives in the column and is still rendered.
+ * Narrows what is OFFERED, not what exists. One declaration for the tool enum, the list grouping and the write input.
  */
 export const IDENTITY_VISIBILITY_VALUES = ["private", "workspace"] as const;
 
@@ -77,21 +32,9 @@ export const IDENTITY_VISIBILITY_VALUES = ["private", "workspace"] as const;
 export type OfferedIdentityVisibility =
   (typeof IDENTITY_VISIBILITY_VALUES)[number];
 
-/**
- * The one-line refusal for a retired `visibility`, raised by zod as `-32602`
- * before any round trip — the same argument `shelf.ts` makes for its enum.
- *
- * ⚠ IT NAMES THE RETIRED VALUE. zod's own "Invalid option: expected one of …"
- * reads as a typo and invites a retry with the same word; saying the option is
- * gone is what stops the second call.
- */
+/** zod's refusal for an unoffered `visibility`; it names the retired value so it does not read as a typo. */
 export const VISIBILITY_ENUM_MESSAGE =
   'visibility must be "private" or "workspace", and nothing was written — "team" is no longer a sharing option on this surface.';
-
-/** ⚠ Local, like `channel-addressing.ts` and `ontology-ops-write.ts` — three
- *  copies already exist in this package and unifying them is not this wave. */
-const UUID_RE =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export type IdentityRefResolution =
   | { kind: "found"; identity: AgentIdentity }
@@ -99,36 +42,11 @@ export type IdentityRefResolution =
   | { kind: "ambiguous"; matches: AgentIdentity[] };
 
 /**
- * Resolve `ref` — an identity ID or an exact NAME — against what this caller may
- * see.
- *
- *   1. UUID → id match over the visible list, then **the server's own id door**.
- *      ⚠ NEVER falls back to a name lookup on a miss: a fallback would make "no
- *      such id" and "no such name" answer through each other.
- *   2. Otherwise → CASE-INSENSITIVE EXACT match on `name`. Not a prefix, not
- *      fuzzy: an orchestrator naming "Auditor" must not silently get "Contract
- *      Auditor".
- *   3. More than one → AMBIGUOUS, listing each. 4. Zero → not found.
- *
- * 🔒 **THE ID DOOR IS THE PORT OF F-470, WHICH THE KNOWLEDGE LANE HAS HAD SINCE
- * 2026-09-06 AND THIS ONE DID NOT (2026-09-18).** `listAgentIdentities` answers
- * for the container this call is in plus the caller's own personal one, so
- * matching a ref against that list made `get` and `update` CONTAINER-KEYED —
- * including the two ops whose whole argument is an id. An identity in another
- * home channel the caller is a member of answered "no such identity" for an id
- * that `GET /api/agent-identities/<id>` resolves, which is the wave's headline
- * claim ("an id resolves its own container") being untrue on this surface, and
- * it is why `get`/`update` are not in `workspace-arg.ts › WORKSPACE_ARG_OPS`:
- * there is nothing for a `container=` to fix once the id answers for itself.
- *
- * ⚠ **THE SECOND LOOKUP IS NOT A SECOND FENCE AND ADDS NO REACH.** It is the
- * server's own id door, which runs `canSeeIdentity` in the container the id
- * names. A ref this caller may not name comes back a 404 and is reported as
- * not-found — the same answer as before, and 404-never-403 is preserved.
- *
- * ⚠ **UUID ONLY, AND ONLY AN API REFUSAL IS SWALLOWED.** A transport failure
- * must not read as "no such identity" — that is how an outage becomes a deletion
- * in an agent's notes (`knowledge-shared.ts › resolveBaseRef`'s own rule).
+ * Resolve `ref` (an identity id or exact name) against what this caller may see.
+ * Names match exact and case-insensitive over rows the server already filtered — NOT a second copy of `canSeeIdentity`.
+ * A UUID missing from the visible list goes to the server's id door and never falls back to a name lookup.
+ * Only an API 404 `AGENT_IDENTITY_NOT_FOUND` is swallowed; transport errors rethrow (an outage must not read as "no such identity").
+ * Unseen and nonexistent are one answer: 404-never-403, no existence oracle (INVARIANTS §5A).
  */
 export async function resolveIdentityRef(
   client: DoplClient,
@@ -136,12 +54,10 @@ export async function resolveIdentityRef(
 ): Promise<IdentityRefResolution> {
   const needle = ref.trim();
   if (needle === "") return { kind: "not-found" };
-  // ⚠ NO `shelf` FILTER. A ref must resolve wherever the row lives — narrowing
-  // here would make a personal-shelf identity unaddressable from an op that
-  // never mentioned a shelf.
+  // No shelf filter: a ref resolves wherever the row lives.
   const all = await client.listAgentIdentities();
   if (UUID_RE.test(needle)) {
-    const byId = all.find((t) => t.id === needle);
+    const byId = all.find((ident) => ident.id === needle);
     if (byId) return { kind: "found", identity: byId };
     try {
       return { kind: "found", identity: await client.getAgentIdentity(needle) };
@@ -151,22 +67,17 @@ export async function resolveIdentityRef(
     }
   }
   const matches = all.filter(
-    (t) => t.name.toLocaleLowerCase() === needle.toLocaleLowerCase(),
+    (ident) => ident.name.toLocaleLowerCase() === needle.toLocaleLowerCase(),
   );
   if (matches.length === 0) return { kind: "not-found" };
   if (matches.length === 1) return { kind: "found", identity: matches[0] };
-  // ⚠ Name-ordered so a caller re-reading the refusal sees a stable list and can
-  // act on "the second one".
   return {
     kind: "ambiguous",
     matches: [...matches].sort((a, b) => a.name.localeCompare(b.name)),
   };
 }
 
-/**
- * `resolveIdentityRef` + the two refusals, so an op body is one `isErr` check.
- * Returns the row, or the tool error to return verbatim.
- */
+/** {@link resolveIdentityRef} plus its two refusals: the row, or the tool error to return verbatim. */
 export async function resolveIdentityOr(
   client: DoplClient,
   ref: string,
@@ -178,20 +89,8 @@ export async function resolveIdentityOr(
 }
 
 /**
- * THE AMBIGUOUS-NAME REFUSAL — **it lists, and it does not pick.**
- *
- * ⚠ `agent_identities` HAS NO NAME UNIQUENESS, DELIBERATELY: a unique index
- * across a visibility boundary would leak the existence of somebody's private
- * row through a conflict error, and two people may each keep a "Researcher". So
- * two visible identities sharing a name is a LEGITIMATE state, and every natural
- * tie-break ("mine wins", "newest wins") silently acts on an identity the caller
- * did not choose and reports success.
- *
- * ⚠ THE LIST IS NOT AN ORACLE. Every row in it already passed this caller's own
- * visibility predicate server-side, so it discloses exactly what op="list"
- * would. ⚠ And the list is the whole VALUE of the refusal — "that name is
- * ambiguous" alone sends the agent to another tool for ids it was already
- * holding.
+ * Identity names are not unique by design, so an ambiguous name refuses with every candidate listed and never picks.
+ * The list discloses only what op="list" would.
  */
 export function ambiguousIdentity(
   ref: string,
@@ -209,8 +108,7 @@ export function ambiguousIdentity(
   );
 }
 
-/** One `- \`id\` — name (visibility)` line per candidate — the ONE rendering both
- *  identity lanes (`dopl_agent`, `dopl_channel` launch) list an ambiguous name with (P8-09). */
+/** One line per candidate — the one rendering both identity lanes (`dopl_agent`, `dopl_channel` launch) use. */
 export function identityChoiceLines(
   matches: ReadonlyArray<{ id: string; name: string; visibility: string }>,
 ): string[] {
@@ -227,29 +125,16 @@ export function identityNotFound(ref: string): ToolResponse {
 }
 
 export function identityWriteDenied(e: unknown): ToolResponse | null {
-  if (
-    typeof e !== "object" ||
-    e === null ||
-    (e as { status?: number }).status !== 403 ||
-    (e as { code?: unknown }).code !== "RESOURCE_ACCESS_DENIED"
-  ) {
-    return null;
-  }
-  const msg = (e as { apiMessage?: unknown }).apiMessage;
+  if (!isApiError(e, 403, "RESOURCE_ACCESS_DENIED")) return null;
+  const msg = apiMessage(e);
   return err(
-    typeof msg === "string" && msg
+    msg
       ? `${msg} Nothing was changed.`
       : `Only the identity's creator or a workspace admin can change it. Nothing was changed.`,
   );
 }
 
-/**
- * A knowledge base named in `knowledge_bases` is not visible to the caller
- * (404 `KNOWLEDGE_BASE_NOT_FOUND`). ⚠ 404-SHAPED ON PURPOSE server-side —
- * "you may not attach this" and "no such base" must be the same answer, or the
- * attach endpoint becomes an existence oracle for other people's private bases.
- * The refusal here must not soften that into a "forbidden".
- */
+/** 404 `KNOWLEDGE_BASE_NOT_FOUND` on attach; kept 404-shaped so attach is not an existence oracle for private bases. */
 export function knowledgeBaseNotAttachable(e: unknown): ToolResponse | null {
   if (!isApiError(e, 404, "KNOWLEDGE_BASE_NOT_FOUND")) return null;
   return err(
@@ -257,12 +142,7 @@ export function knowledgeBaseNotAttachable(e: unknown): ToolResponse | null {
   );
 }
 
-/**
- * A shared/service credential tried to own a PRIVATE identity (403
- * `WORKSPACE_KEY_PRIVATE_VISIBILITY`). ⚠ Surfaced with the server's own
- * sentence: it names the key class and the fix, and this layer cannot tell which
- * credential is in play.
- */
+/** 403 `WORKSPACE_KEY_PRIVATE_VISIBILITY`, surfaced with the server's own sentence (this layer cannot tell which credential is in play). */
 export function sharedCredentialPrivateDenied(e: unknown): ToolResponse | null {
   if (!isApiError(e, 403, PRIVATE_VISIBILITY_DENIED_CODE)) return null;
   return err(
@@ -270,51 +150,49 @@ export function sharedCredentialPrivateDenied(e: unknown): ToolResponse | null {
   );
 }
 
-/** One identity rendered as a list row. ⚠ Every displayed field is a VALUE
- *  spliced into a line we wrote — name and description are length-bounded only,
- *  so a newline in either would otherwise start a row of its own.
- *
- *  ⚠ **`audience` IS PASSED IN, NOT READ OFF `t.visibility` (S21/S23,
- *  2026-09-18).** The column answers "what is in the visibility field"; a
- *  caller asks "who can see this", and inside a home channel `workspace` means
- *  the room rather than the company. The GROUP the caller put this row in is
- *  the only place that distinction exists — see `audience-label.ts`. */
-export function identityRow(t: AgentIdentity, audience: AudienceLabel): string {
-  const desc = t.description ? `\n  ${inlineOr(t.description, "")}` : "";
-  const runtime = t.runtime ? ` · runtime ${inlineOr(t.runtime, NO_NAME)}` : "";
-  const model = t.model ? ` · model ${inlineOr(t.model, NO_NAME)}` : "";
-  // ⚠ **"knowledge scope(s)", NOT "knowledge base(s)" (2026-09-08).** An
-  // attachment is a base, a FOLDER or an ENTRY now, and counting three folders
-  // of one base as "3 knowledge bases" is a false sentence about what the
-  // identity names. ⚠ `knowledge` first, the base list as the §8/older-server
-  // FALLBACK — never their sum, which would double-count every whole base.
-  const scopeCount =
-    (t.knowledge ?? []).length > 0 ? (t.knowledge ?? []).length : t.knowledgeBases.length;
+/** An identity's knowledge attachments: `knowledge` wins, the base list is the older-server fallback, never their sum. */
+export function identityScopes(
+  ident: Pick<AgentIdentity, "knowledge" | "knowledgeBases">,
+): IdentityKnowledgeRef[] {
+  const scoped = ident.knowledge ?? [];
+  if (scoped.length > 0) return scoped;
+  return ident.knowledgeBases.map((kb) => ({
+    baseId: kb.id,
+    baseName: kb.name,
+    scope: "base" as const,
+    path: kb.name,
+  }));
+}
+
+/** A stored visibility this surface does not offer (`team`): the audience is not stated, never guessed. */
+const UNSTATED_AUDIENCE = "an audience this surface cannot state" as AudienceLabel;
+
+/** "Who can see this": the container decides, the column only splits within it; in a home channel `workspace` means the room. */
+export function identityAudience(
+  ident: Pick<AgentIdentity, "visibility">,
+  where: { personal: boolean; inHomeChannel: boolean },
+): AudienceLabel {
+  if (where.personal) return AUDIENCE_LABELS.you;
+  if (where.inHomeChannel) {
+    return ident.visibility === "workspace" ? AUDIENCE_LABELS.channel : AUDIENCE_LABELS.nobody;
+  }
+  if (ident.visibility === "private") return AUDIENCE_LABELS.you;
+  if (ident.visibility === "workspace") return AUDIENCE_LABELS.workspace;
+  return UNSTATED_AUDIENCE;
+}
+
+/** One identity as a list row; `audience` comes from the caller's grouping, not `ident.visibility` (`audience-label.ts`). */
+export function identityRow(ident: AgentIdentity, audience: AudienceLabel): string {
+  const desc = ident.description ? `\n  ${inlineOr(ident.description, "")}` : "";
+  const runtime = ident.runtime ? ` · runtime ${inlineOr(ident.runtime, NO_NAME)}` : "";
+  const model = ident.model ? ` · model ${inlineOr(ident.model, NO_NAME)}` : "";
+  const scopeCount = identityScopes(ident).length;
   const kbs =
     scopeCount > 0
       ? ` · ${scopeCount} knowledge scope${scopeCount === 1 ? "" : "s"}`
       : "";
-  return `- ${inlineOr(t.name, NO_NAME)} (id: \`${t.id}\` · seen by ${audience}${runtime}${model}${kbs})${desc}`;
+  return `- ${inlineOr(ident.name, NO_NAME)} (id: \`${ident.id}\` · seen by ${audience}${runtime}${model}${kbs})${desc}`;
 }
 
-/**
- * ⚠ WHOSE VIEW THIS IS, stated ON THE RESULT and not only in the description.
- * `listIdentities` is filtered server-side by `canSeeIdentity`, so another
- * member's private identities, and any the caller has no grant on, are simply
- * absent — an untraced filter makes a four-row heading read as the workspace's
- * roster.
- *
- * ⚠ **THE `· personal` MARKER LEFT ON 2026-09-02 (slice B15, ruling B10)** on the
- * argument that *"every row a single list returns is on the same shelf, so a
- * per-row label says nothing"*.
- *
- * 🔒 **THAT ARGUMENT WAS FALSE FROM 2026-09-06, AND THE CORRECTION IS A
- * HEADING RATHER THAN A MARKER (2026-09-18).** Gap 1 of #1077 widened
- * `personal-container.ts › resolveShelfScope` so an UNFILTERED read returns the
- * calling container PLUS the caller's own personal one — two shelves in one
- * list, twelve days after the sentence above was written, and the footer names
- * only the container the call was ADDRESSED to. `agent-ops-read.ts › opList`
- * groups by the `homeScopedIdentityIds` sibling key this note's argument had
- * retired; the key never went anywhere, only its reader did.
- */
+/** Whose view a list is, stated on the result: the server filters it by `canSeeIdentity`. */
 export const IDENTITIES_SCOPE_NOTE = `_Agent identities you can SEE here. Another member's private identities, and any you have no grant on, are not listed — this is your view, not the workspace's roster._`;

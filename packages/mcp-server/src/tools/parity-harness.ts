@@ -19,7 +19,7 @@ import { z, type ZodRawShape } from "zod";
 import type { DoplClient } from "@dopl/client";
 
 import type { RegisterTool } from "./respond.js";
-import { CHANNEL_ACTIONS } from "./channel-schema.js";
+import { CHANNEL_ACTIONS } from "./channel-vocab.js";
 import { registerKnowledgeTools } from "./knowledge.js";
 import { registerSkillTools } from "./skills.js";
 import { registerChatTools } from "./chats.js";

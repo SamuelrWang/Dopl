@@ -1,9 +1,7 @@
 /**
- * THE MAILBOX OPS' SHARED PLUMBING — one bounded hold on a directive (or direction) row and one
- * retry map, for `launch`, `end` / `rename` / `posture` and `direct` (P8-07, P8-08). What each op
- * SAYS stays in its own module; how long it waits and whether a refusal may be retried do not.
- *
- * ⚠ `channel-` filename prefix required by the parity split-scan (`tool-group-files.ts`).
+ * Shared mailbox-op plumbing: one bounded hold on a directive (or direction) row and one retry map,
+ * for `launch`, `end` / `rename` / `posture` and `direct`. What each op says stays in its own module.
+ * `channel-` filename prefix is required by the parity split-scan (`tool-group-files.ts`).
  */
 
 import type { LaunchRefusalReason } from "@dopl/client";
@@ -19,10 +17,8 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 /**
  * Poll one mailbox row until it leaves `pending` / `claimed` or the capped wait lapses.
- *
- * ⚠ POLLS THE ROW, never an `await`: a directive is not a message and has no `seq`.
- * ⚠ A FAILED POLL ENDS THE HOLD WITH THE LAST ROW, never a throw: the request is filed and the
- * machine may still take it, so the PENDING ending (which says where to look) is the honest one.
+ * Polls the row, never an `await`: a directive is not a message and has no `seq`.
+ * A failed poll ends the hold with the last row, never a throw — the request is filed and may still be taken.
  */
 export async function holdRow<T extends { id: string; status: string }>(
   row: T,
@@ -47,10 +43,9 @@ export async function holdRow<T extends { id: string; status: string }>(
 }
 
 /**
- * MAY THE CALLER ASK AGAIN? — one map over the closed refusal vocabulary for every directive
- * kind. `busy` is the only temporary word; every other answer will not change by re-issuing the
- * same ask (`no-model`: re-issue WITHOUT `model` — the doctrine's MANAGE section says so).
- * ⚠ A `Record` over the enum, so a new word cannot enter without this map accounting for it.
+ * May the caller ask again? One map over the closed refusal vocabulary for every directive kind.
+ * `busy` is the only temporary word (`no-model`: re-issue without `model`, per `channel-doctrine.ts › MANAGE`).
+ * A `Record` over the enum, so a new word cannot enter without this map accounting for it.
  */
 export const LAUNCH_RETRY_ADVICE: Record<LaunchRefusalReason, "once" | "no"> = {
   cap: "no",

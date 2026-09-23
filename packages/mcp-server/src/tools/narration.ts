@@ -17,6 +17,9 @@
  * itself, under framing that says what it is).
  */
 
+/** Shape only: a uuid names a row to look up, never a proven one (one copy for every tool, P8-22). */
+export const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 /** Longest untrusted value carried inline into a result — one terse span, no dump. */
 export const INLINE_TEXT_MAX = 160;
 

@@ -4,7 +4,7 @@
  *
  * ⚠ Reconciles two conflicting sources: the Agent Skills spec wants
  * descriptions carrying both *what* + *when*, while empirical work shows a
- * description that SUMMARIZES the workflow makes Claude skip the body. So: lead
+ * description that SUMMARIZES the workflow makes the agent skip the body. So: lead
  * with concrete *what*, then heavy *when*-triggers, and NEVER summarize the
  * workflow/steps in the description.
  */
@@ -38,13 +38,13 @@ Every SKILL.md MUST contain, in order:
 
 The description is loaded into context for *every* session. It's the only thing the agent sees when deciding whether to invoke the skill. Treat it as a search-and-trigger string, not a marketing tagline.
 
-- **Hard cap: 1024 characters.** Combined with \`when_to_use\` it's truncated at ~1,536 chars in Claude Code's listing — front-load the key use case.
+- **Hard cap: 1024 characters.** Combined with \`when_to_use\` a client's skill listing may truncate it (Claude Code at ~1,536 chars) — front-load the key use case.
 - **State both *what it does* and *when to use it*** in the same field.
-- **Be "pushy" — Claude under-triggers skills.** Anthropic's own \`skill-creator\` instructs authors to add phrases like *"Make sure to use this skill whenever the user mentions X, Y, or Z, even if they don't explicitly ask for it"*.
+- **Be "pushy" — agents under-trigger skills.** Anthropic's own \`skill-creator\` instructs authors to add phrases like *"Make sure to use this skill whenever the user mentions X, Y, or Z, even if they don't explicitly ask for it"*.
 - **Front-load concrete trigger keywords**: file extensions (.pdf, .xlsx), tool names, error messages, domain nouns the user would actually type.
 - **Write in third person**, present tense ("Extracts...", "Use when..."). Never first person.
 - **Include near-miss disambiguation** if a sibling skill is similar.
-- **Never summarize the skill's internal workflow** — that creates a shortcut Claude takes instead of reading the body. Empirical failure mode documented in obra/superpowers.
+- **Never summarize the skill's internal workflow** — that creates a shortcut the agent takes instead of reading the body. Empirical failure mode documented in obra/superpowers.
 
 Bad: \`Helps with PDFs.\`
 Good: \`Extracts text and tables from PDF files, fills PDF forms, merges and splits PDFs, OCRs scanned PDFs. Use whenever the user mentions a .pdf file, asks to produce or read a PDF, mentions forms, or wants document extraction — even if they don't explicitly say "PDF".\`
@@ -91,7 +91,7 @@ Link Dopl resources via \`[label](dopl://kb/<slug>)\` and \`[label](dopl://conne
 ## Common anti-patterns
 
 - **Vague description** ("Helps with X") — fails the trigger test.
-- **Description that summarizes the workflow** — Claude follows the description and skips the body.
+- **Description that summarizes the workflow** — the agent follows the description and skips the body.
 - **First-person narration** ("I will help you…") — descriptions are injected into a system prompt.
 - **Workflow narratives** ("In session 2025-10-03 we discovered…") instead of reusable instructions.
 - **Heavy MUST/NEVER walls** without explaining why — the model rationalizes around them.

@@ -20,6 +20,7 @@ import { describe, it, expect, vi } from "vitest";
 
 import { registerSearchTool } from "./search";
 import { callTool, stub } from "./narration-fixtures";
+import type { WorkspaceDirectory } from "../workspace-directory";
 
 const IDENTITY = {
   id: "11111111-1111-4111-8111-111111111111",
@@ -42,7 +43,7 @@ const searchStub = (identities: unknown[], over: Record<string, unknown> = {}) =
     searchKb: vi.fn(async () => []),
     listSkills: vi.fn(async () => []),
     getOntology: vi.fn(async () => ({ clusters: [], objects: {} })),
-    listAgentIdentities: vi.fn(async () => identities),
+    listAgentIdentitiesPayload: vi.fn(async () => ({ identities })),
     ...over,
   });
 
@@ -85,10 +86,10 @@ describe("dopl_search finds agent identities", () => {
   });
 
   it("asks for BOTH shelves — a find surface must not need the shelf up front", async () => {
-    const list = vi.fn(async () => []);
+    const list = vi.fn(async () => ({ identities: [] }));
     await callTool(
       registerSearchTool,
-      searchStub([], { listAgentIdentities: list }),
+      searchStub([], { listAgentIdentitiesPayload: list }),
       "dopl_search",
       { query: "x" },
     );
@@ -117,7 +118,7 @@ describe("dopl_search finds agent identities", () => {
     const text = await callTool(
       registerSearchTool,
       searchStub([], {
-        listAgentIdentities: vi.fn(async () => {
+        listAgentIdentitiesPayload: vi.fn(async () => {
           throw Object.assign(new Error("HTTP 500"), {
             name: "DoplApiError",
             status: 500,
@@ -153,5 +154,40 @@ describe("dopl_search finds agent identities", () => {
     // is not findable here.
     expect(description).toContain("only ENTRIES match on bodies");
     expect(description).toContain("INSTRUCTIONS");
+  });
+});
+
+describe("an identity hit says WHO can see it, from its container (P8-16)", () => {
+  const homeDirectory = {
+    containerKindIndex: async () => new Map([["ws-1", "home_channel"]]),
+  } as unknown as WorkspaceDirectory;
+  const run = (payload: unknown, directory?: WorkspaceDirectory) =>
+    callTool(
+      (r, c) => registerSearchTool(r, c, directory),
+      searchStub([], {
+        getWorkspaceId: () => "ws-1",
+        listAgentIdentitiesPayload: vi.fn(async () => payload),
+      }),
+      "dopl_search",
+      { query: "research" },
+    );
+
+  it("inside a home channel a `workspace` row is the room, not the company", async () => {
+    const text = await run({ identities: [IDENTITY] }, homeDirectory);
+    expect(text).toContain("seen by everyone in this channel");
+    expect(text).not.toContain("every member of this workspace");
+  });
+
+  it("a row off the caller's personal shelf is theirs alone", async () => {
+    const text = await run(
+      { identities: [IDENTITY], homeScopedIdentityIds: [IDENTITY.id] },
+      homeDirectory,
+    );
+    expect(text).toContain("seen by only you");
+  });
+
+  it("in a standard workspace a `workspace` row is every member", async () => {
+    const text = await run({ identities: [IDENTITY] });
+    expect(text).toContain("seen by every member of this workspace");
   });
 });

@@ -79,7 +79,7 @@ const searchStub = (over: Record<string, unknown> = {}) =>
     getOntology: vi.fn(async () => SUMMARY),
     // FOURTH group since 2026-08-28 — modelled so the group renders as a
     // genuine miss rather than as a partial-read failure.
-    listAgentIdentities: vi.fn(async () => []),
+    listAgentIdentitiesPayload: vi.fn(async () => ({ identities: [] })),
     ...over,
   });
 

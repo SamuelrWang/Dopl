@@ -86,7 +86,7 @@ function clientStub(over: Record<string, unknown> = {}) {
     searchKb: vi.fn(async () => []),
     listSkills: vi.fn(async () => [SKILL]),
     getOntology: vi.fn(async () => ({ clusters: [], objects: {} })),
-    listAgentIdentities: vi.fn(async () => []),
+    listAgentIdentitiesPayload: vi.fn(async () => ({ identities: [] })),
     getHomeChannels: vi.fn(async () => ({ channels: [], pendingLinks: [] })),
     ...over,
   } as unknown as DoplClient;
@@ -384,5 +384,64 @@ describe("🔒 the fan-out obeys the container lock", () => {
     );
     expect(text).toContain("Searched 1 scope of 1");
     expect(charge).toHaveBeenCalledTimes(1);
+  });
+});
+
+// ── One per-scope path (P8-10) and a home-channel audience (P8-16) ───
+
+describe("an everywhere leg reads and reports exactly like a single-scope search", () => {
+  const IDENT = {
+    id: "id-1",
+    workspaceId: "home-1",
+    name: "shipper",
+    description: "Ships.",
+    instructions: null,
+    model: null,
+    fields: [],
+    visibility: "workspace" as const,
+    teamIds: [],
+    knowledgeBases: [],
+    createdBy: "u-1",
+    createdAt: "2026-01-01T00:00:00Z",
+    updatedAt: "2026-01-01T00:00:00Z",
+  };
+
+  it("a clipped ontology read is named on the leg even when nothing matched", async () => {
+    const text = await search(
+      clientStub({
+        getOntology: vi.fn(async () => ({ clusters: [], objects: {}, truncated: true })),
+      }),
+      directoryStub([wsItem("ws-a", "acme")]),
+      noopCharge,
+      { query: "nothing-here", scope: "everywhere" },
+    );
+    expect(text).toContain("_No matches in this scope._");
+    expect(text).toContain("the ontology group searched a prefix of the graph");
+  });
+
+  it("a capped group says how many matched", async () => {
+    const skills = Array.from({ length: 3 }, (_, i) => ({ ...SKILL, id: `sk-${i}`, slug: `ship-${i}` }));
+    const text = await search(
+      clientStub({ listSkills: vi.fn(async () => skills) }),
+      directoryStub([wsItem("ws-a", "acme")]),
+      noopCharge,
+      { query: "ship", scope: "everywhere", limit: 1 },
+    );
+    expect(text).toContain("Showing 1 of 3 matching skills");
+  });
+
+  it("a `workspace` identity in a home-channel leg is seen by the channel, not the company", async () => {
+    const text = await search(
+      clientStub({
+        listAgentIdentitiesPayload: vi.fn(async () => ({ identities: [IDENT] })),
+      }),
+      directoryStub([homeContainer("home-1", "With Dana"), wsItem("ws-a", "acme")]),
+      noopCharge,
+      { query: "shipper", scope: "everywhere" },
+    );
+    const home = text.slice(text.indexOf("With Dana"), text.indexOf("acme workspace"));
+    const ws = text.slice(text.indexOf("acme workspace"));
+    expect(home).toContain("seen by everyone in this channel");
+    expect(ws).toContain("seen by every member of this workspace");
   });
 });
