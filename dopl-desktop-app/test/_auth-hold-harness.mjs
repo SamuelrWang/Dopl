@@ -51,10 +51,10 @@ export const HOLD_BLOCK = AUTH_SRC.slice(AUTH_SRC.indexOf(H_BEGIN), AUTH_SRC.ind
 // await left in the resume, so that is where a re-entrancy race is made now.
 export function harness(over = {}) {
   const cfg = { usable: false, gate: null, ...over };
-  const calls = { emit: [], dispatch: [], effects: [], startQuery: [], denyPending: [], phase: [], sdk: 0 };
+  const calls = { emit: [], dispatch: [], effects: [], startQuery: [], denyPending: [], phase: [], sdk: 0, acquired: [] };
   const state = { usable: cfg.usable };
   const deps = {
-    acquireRuntime: async () => { calls.sdk += 1; if (cfg.gate) await cfg.gate; return { __runtime: true }; },
+    acquireRuntime: async (id) => { calls.sdk += 1; calls.acquired.push(id); if (cfg.gate) await cfg.gate; return { __runtime: true }; },
     startQuery: async (s, rt) => calls.startQuery.push({ s, rt }),
     dispatch: (s, ev) => {
       calls.dispatch.push(ev);
