@@ -18,7 +18,7 @@ import { describe, it, expect, vi } from "vitest";
 import type { DoplClient } from "@dopl/client";
 
 import { registerChannelTool } from "./channel";
-import { CHANNEL_ACTIONS } from "./channel-schema";
+import { CHANNEL_ACTIONS } from "./channel-vocab";
 import { callTool, stub } from "./narration-fixtures";
 
 const CHANNEL = {

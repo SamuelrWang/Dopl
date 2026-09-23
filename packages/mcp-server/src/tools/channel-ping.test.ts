@@ -21,7 +21,8 @@
 import { describe, it, expect } from "vitest";
 
 import { CHANNEL_DESCRIPTION } from "./channel-description";
-import { CHANNEL_INPUT_SHAPE, CHANNEL_OPS } from "./channel-schema";
+import { CHANNEL_INPUT_SHAPE } from "./channel-schema";
+import { CHANNEL_OPS } from "./channel-vocab";
 
 describe("🔒 the ping lane is gone, and may not come back", () => {
   it("neither name parses, and neither is in the enum a model can SEE", () => {

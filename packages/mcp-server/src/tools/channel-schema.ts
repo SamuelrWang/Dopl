@@ -51,32 +51,7 @@ import { ROOMS_INPUT_FIELDS } from "./channel-schema-rooms-fields";
 import { DECISION_INPUT_FIELDS } from "./channel-schema-decision-fields";
 import { HOLD_CAP_MS } from "./channel-hold-budget";
 
-/**
- * ⚠ **THE OP / ACTION VOCABULARY AND ITS TWO REFUSALS MOVED TO `channel-vocab.ts`
- * (2026-09-14)** and are re-exported here unchanged, so **NO IMPORTER MOVED**. The seam is a
- * REASON TO CHANGE — a word in those lists moves when an OP does, this file when a PARAMETER
- * does — and what forced it was the 500-line cap (§1, the `size-check` CI job, F-689).
- */
-// ⚠ IMPORTED **AND** RE-EXPORTED: the shape below spends three of these, and every
-// existing importer reads them off this module.
-import {
-  CHANNEL_OPS,
-  CHANNEL_ACTION_NAMES,
-  unknownOpRefusal,
-} from "./channel-vocab";
-export {
-  CHANNEL_OPS,
-  CHANNEL_ACTIONS,
-  CHANNEL_ACTION_NAMES,
-  unknownOpRefusal,
-  unknownActionRefusal,
-} from "./channel-vocab";
-export type {
-  ChannelOp,
-  ManageAction,
-  RoomsAction,
-  ArtifactAction,
-} from "./channel-vocab";
+import { CHANNEL_OPS, CHANNEL_ACTION_NAMES, unknownOpRefusal } from "./channel-vocab";
 
 /**
  * THE INPUT-SCHEMA BUDGET, and it is the same budget as the description's (A6, 2026-09-02). A

@@ -50,11 +50,8 @@ import { err, missingParams, type RegisterTool, type ToolResponse } from "./resp
 // The tool's two declared halves: PROSE (what a channel is, which ops exist)
 // and published input SHAPE. This file is mechanism only.
 import { CHANNEL_DESCRIPTION } from "./channel-description";
-import {
-  CHANNEL_INPUT_SHAPE,
-  unknownActionRefusal,
-  unknownOpRefusal,
-} from "./channel-schema";
+import { CHANNEL_INPUT_SHAPE } from "./channel-schema";
+import { unknownActionRefusal, unknownOpRefusal } from "./channel-vocab";
 // ⚠ THE TWO DISPATCHERS, in siblings — see each module's header for why its
 // group is one lane and why its parameter list is as narrow as it is.
 import {

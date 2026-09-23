@@ -38,7 +38,8 @@ import { opEndAgent, opRenameAgent } from "./channel-ops-agent";
 import { opSetAgentMode } from "./channel-ops-agent-mode";
 import type { z } from "zod";
 import type { ZodObject } from "zod";
-import { CHANNEL_ACTIONS, CHANNEL_INPUT_SHAPE, type ManageAction } from "./channel-schema";
+import { CHANNEL_INPUT_SHAPE } from "./channel-schema";
+import { CHANNEL_ACTIONS, type ManageAction } from "./channel-vocab";
 
 /** The validated argument bag, exactly as `channel.ts`'s handler receives it. */
 type ChannelArgs = z.infer<ZodObject<typeof CHANNEL_INPUT_SHAPE>>;

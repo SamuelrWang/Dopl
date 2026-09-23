@@ -25,11 +25,8 @@
 import { describe, it, expect } from "vitest";
 import { z } from "zod";
 
-import {
-  CHANNEL_INPUT_SHAPE,
-  CHANNEL_OPS,
-  unknownOpRefusal,
-} from "./channel-schema";
+import { CHANNEL_INPUT_SHAPE } from "./channel-schema";
+import { CHANNEL_OPS, unknownOpRefusal } from "./channel-vocab";
 import { RETIRED_CHANNEL_OPS } from "./law-removed-vocabulary";
 
 /** The `op` enum as an MCP client receives it. */

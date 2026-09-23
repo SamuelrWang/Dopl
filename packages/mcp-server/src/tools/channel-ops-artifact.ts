@@ -36,11 +36,8 @@ import type {
 import { inlineOr, NO_NAME } from "./narration";
 import { err, missingParams, ok, type ToolResponse } from "./respond";
 import { isErr, resolveChannelOr } from "./channel-shared";
-import {
-  CHANNEL_ACTIONS,
-  CHANNEL_INPUT_SHAPE,
-  type ArtifactAction,
-} from "./channel-schema";
+import { CHANNEL_INPUT_SHAPE } from "./channel-schema";
+import { CHANNEL_ACTIONS, type ArtifactAction } from "./channel-vocab";
 import type { z } from "zod";
 import type { ZodObject } from "zod";
 
