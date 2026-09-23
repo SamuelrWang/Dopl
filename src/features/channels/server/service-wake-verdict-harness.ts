@@ -8,21 +8,10 @@ import * as repoMessages from "./repository-messages";
 import * as repoSessions from "./repository-sessions";
 
 /**
- * **THE WAKE-VERDICT FIXTURES, SHARED BY THE TWO SUITES THAT DRIVE IT.**
- *
- * ⚠ **ONE HARNESS, BECAUSE THE SUBTLE HALF IS THE PROJECTION SEEDING.**
- * `channel_sessions` is ONE table read through TWO fences — the caller's own rows
- * and the room's — and {@link projection} seeds both because the first is a
- * subset of the second. A second copy of that rule is a second place for the two
- * to drift apart, which is exactly the class of defect these suites exist for.
- *
- * ⚠ **EACH SUITE STILL DECLARES ITS OWN `vi.mock("./repository-sessions")`.**
- * Those calls are hoisted per module by vitest and cannot be shared; what is
- * shared is the seeding, which is the part with a rule in it.
- *
- * ⚠ NOT A `*.test.ts` NAME ON PURPOSE — `vitest.config.ts` collects exactly
- * `src/**\/*.test.ts(x)`, so this file is imported and never collected. Same
- * arrangement `lib/runtime-descriptors-harness.ts` is in.
+ * Wake-verdict fixtures shared by the suites that drive it. Shared because `channel_sessions` is
+ * one table read through two fences (own, room) and {@link projection} must seed both alike.
+ * Each suite still declares its own `vi.mock(...)` calls: vitest hoists them per module.
+ * Not a `*.test.ts` name on purpose, so vitest imports it and never collects it.
  */
 
 export const NOW = Date.parse("2026-09-02T12:00:00Z");
@@ -67,51 +56,27 @@ export function sessionRow(over: Partial<SessionStateRow>): SessionStateRow {
 }
 
 /**
- * The CALLER'S OWN live sessions — the own-scoped door an AGENT author's body
- * parse reads.
- *
- * ⚠ **IT SEEDS THE ROOM READ TOO, AND THAT IS FIDELITY RATHER THAN CONVENIENCE.**
- * `channel_sessions` is one table: a caller's own rows are IN the channel-wide
- * answer, so a fixture that seeded only the own read would describe a database
- * that cannot exist — and since 2026-09-04 a HUMAN's body parse reads the
- * channel-wide door, so such a fixture would silently test nothing.
- * ⚠ Call {@link roomProjection} AFTER this to make the two DIVERGE, which is
- * exactly the peer's-agent case the carve is about.
+ * The caller's own live sessions (an agent author's own-scoped read). Seeds the room read too:
+ * own rows are always in the channel-wide answer. Call {@link roomProjection} after this to make
+ * the two diverge (a peer's agent).
  */
 export function projection(...rows: SessionStateRow[]): void {
   vi.mocked(repoSessions.listSessionStates).mockResolvedValue(rows);
   vi.mocked(repoSessions.listChannelSessionStates).mockResolvedValue(rows);
 }
 
-/** EVERY member's sessions in the room — RR3's candidate set, and a HUMAN's
- *  body parse. ⚠ A DIFFERENT read from the own-scoped one, and asserting on the
- *  wrong one is how the same-account carve would appear to hold while being
- *  widened. */
+/** Every member's sessions in the room: RR3's candidates and a human author's body parse. A
+ *  different read from the own-scoped one; asserting on the wrong one hides a widened carve. */
 export function roomProjection(...rows: SessionStateRow[]): void {
   vi.mocked(repoSessions.listChannelSessionStates).mockResolvedValue(rows);
 }
 
 /**
- * RR3 ARM 3's ONE READ — **the rows where THIS AUTHOR tagged an agent here**, newest first
- * (2026-09-04, Samuel's ruling; it was "the room's recent agent POSTS" until then, and an agent
- * tagging another agent moved every member's default responder).
- *
- * ⚠ SEEDED EMPTY BY DEFAULT AND NEVER LEFT UNSEEDED: `vi.mock` automocks it to
- * `undefined`, and the arm is reached by every multi-agent room with no
- * configured responder — a suite that forgot it would fail on a TypeError
- * rather than on the rule it was measuring.
- *
- * ⚠ THE DEFAULTS ARE AN AUTHOR-TYPED TAG: `author_user_id` is the caller, `author_kind` is
- * `"user"`, and `metadata` is EMPTY so no `wake_reason` rides along. A case that wants the other
- * half — a row the SERVER aimed, which must NOT count as evidence — passes
- * `metadata: { wake_reason: … }` explicitly.
- *
- * ⚠ **`author_kind` IS DEFAULTED HERE AS OF 2026-09-15 (F-704) SO THE FOURTH-ROUND BUG IS
- * EXPRESSIBLE AT ALL.** It was absent from the projection, so `RecentAuthorTagRow`'s `Pick<>`
- * FORBADE the field and **no fixture in this tree could describe a history row written by the
- * author's own AGENT** — which is precisely the row that stomped the default responder, and why
- * a regression test written for each of the three prior fixes was blind to it by construction.
- * Pass `author_kind: "agent"` to seed one now; it must NOT count as the author's own addressing.
+ * RR3's recency read: the rows where this author tagged an agent here, newest first. Seed it in
+ * every multi-agent case: automocked, it resolves `undefined` and the case fails on a TypeError.
+ * Defaults are an author-typed tag (`author_user_id` = caller, `author_kind: "user"`, empty
+ * `metadata`). Pass `metadata: { wake_reason: … }` for a server-aimed row, or
+ * `author_kind: "agent"` for the author's own agent (F-704); neither counts as addressing.
  */
 export function recentAgentPosts(
   ...rows: Array<Partial<ChannelMessageRow>>
@@ -122,11 +87,9 @@ export function recentAgentPosts(
         ({
           seq: 100 + i,
           created_at: new Date(NOW - 1_000).toISOString(),
-          // ⚠ `CTX.userId` — the arm reads the ROUTED MESSAGE'S AUTHOR, and every case here
-          // resolves as that context. A row authored by anyone else is correctly invisible.
+          // The arm reads the routed message's author, and every case resolves as `CTX`.
           author_user_id: CTX.userId,
-          // ⚠ A PERSON BY DEFAULT — an agent shares the `author_user_id` above, so this is the
-          // only field that says whose act the row was. See the header.
+          // An agent shares `author_user_id`, so this is the only field saying whose act it was.
           author_kind: "user",
           recipient_agent_ids: [],
           metadata: {},
@@ -136,10 +99,6 @@ export function recentAgentPosts(
   );
 }
 
-// 🔴 **`lastAddress` IS DELETED (2026-09-18)** — it seeded RR2's one read, and RR2 is gone with
-// the repair it performed. A seeder for a deleted arm is how a suite keeps testing a product
-// that is not there.
-
 export function channelRow(over: Partial<ChannelRow> = {}): ChannelRow {
   return { id: "chan-1", workspace_id: "ws-1", ...over } as ChannelRow;
 }
@@ -147,48 +106,32 @@ export function channelRow(over: Partial<ChannelRow> = {}): ChannelRow {
 export interface ResolveOpts {
   kind?: "message" | "task_progress";
   authorKind?: string;
-  /** ⚠ THE SINGULAR FORM IS THE FIXTURE'S CONVENIENCE, NOT THE CONTRACT
-   *  (2026-09-18). `WakeVerdictContext` takes `toAgentIds: string[]`; every case
-   *  written before the multi-recipient ruling names one agent, so this keeps
-   *  reading as it did and folds into a one-element list below. */
+  /** Fixture convenience; the contract is `toAgentIds` (folds into a one-element list). */
   toAgentId?: string | null;
   toAgentIds?: string[];
   toUserIds?: string[];
-  /** The operators whose OUTSIDE SESSIONS `to=@desktop` named (2026-09-18).
-   *  Defaults to `[]`, so every case written before the group tag existed
-   *  resolves exactly as it did. */
+  /** The operators whose outside sessions `to=@desktop` named. Defaults to `[]`. */
   toDesktopOperatorIds?: string[];
   /** `"chat"` is the RECORD marker — the MCP surface's `kind="record"`. */
   intent?: "chat" | "request";
   threadTagStripped?: boolean;
   clientMsgId?: string;
   channel?: Partial<ChannelRow>;
-  /** The room's MEMBER handles, as the metadata fold hands them down
-   *  (`PostMetadataResult.memberHandles`). Empty is "no member namespace to respect". */
+  /** The room's member handles (`PostMetadataResult.memberHandles`). Empty = no member
+   *  namespace to respect. */
   reservedHandles?: readonly string[];
 }
 
-/** One post, resolved. `metadata` is the fold's OUTPUT, which is what the
- *  resolver reads — never the caller's raw input. */
 /**
- * **THE AUTHOR'S OWN `channel_members.unaddressed_responder`** — RR3's third input since
- * 2026-09-07 (Samuel's ruling on items 10 and 11), read through `./repository`.
- *
- * ⚠ **IT ANSWERS THE RAW COLUMN, NOT THE COERCED VALUE**, because that is what the repository
- * returns and `normalizeUnaddressedResponder` is the caller's job — seeding the coerced value
- * would lift the coercion out of the path these suites drive.
- *
- * ⚠ **EACH SUITE STILL DECLARES ITS OWN `vi.mock("./repository", …)`, PARTIAL**, for the reason
- * the other two mocks are declared per suite (hoisting) and for one more: `./repository` is a
- * module these suites also need whole, so a flat mock would replace every other read with it.
- * Without the mock the read reaches for a database that is not there and every case in the file
- * TIMES OUT — and if it failed fast instead, the cases would go green through
- * `unaddressedResponderFor`'s catch rather than through the setting, which is worse.
+ * The author's own `channel_members.unaddressed_responder`, as the raw column (the coercion is
+ * the code under test). Each suite needs a partial `vi.mock("./repository", …)`: unmocked, the
+ * read times out, or passes through `unaddressedResponderFor`'s catch instead of the setting.
  */
 export function unaddressedResponder(value: string | null = "last_addressed"): void {
   vi.mocked(repo.findUnaddressedResponder).mockResolvedValue(value);
 }
 
+/** One post, resolved. `metadata` is the fold's output, which is what the resolver reads. */
 export function resolve(
   body: string,
   metadata: Record<string, unknown> = {},

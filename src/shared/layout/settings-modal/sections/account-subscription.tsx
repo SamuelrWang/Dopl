@@ -11,29 +11,13 @@ import { formatDate } from "@/shared/lib/format-time";
 import { ConfirmDialog } from "@/shared/ui/confirm-dialog";
 
 /**
- * Account → Subscription (Samuel, 2026-09-19: "if a user is on a subscription,
- * have the option to cancel subscription"). Next-free, so the web and desktop
- * Account panes mount the same block.
- *
- * TWO SUBSCRIPTIONS CAN BE THE CALLER'S, and each is a `workspace_billing` row:
- *   - Pro on their `kind='personal'` container — read and cancelled with NO
- *     `workspaceId`, which the server resolves to that container;
- *   - Team (or legacy Pro) on the STANDARD workspace whose settings are open —
- *     only when the caller is admin/owner, the same floor the route enforces.
- * The open workspace can itself be the personal container; the second row is
- * `containerKind === "standard"` only, so one subscription never draws twice.
- *
- * Renders NOTHING when neither is live — free users see no block at all.
- *
- * Wire: `POST /api/billing/cancel` via `useCancelPlan` — the same hook the
- * billing page's `BillingCancelPlan` uses. It sets Stripe's
- * `cancel_at_period_end` (paid features stay until the period ends, then the
- * webhook reverts the row to free), writes the local row in the same request,
- * and awaits the billing-status invalidation, so the row flips to "Cancels
- * <date>" + Resume without a reload.
- *
- * ⚠ MINIMAL COPY (INVARIANTS §5): label + control. The one sentence is in the
- * confirm dialog, because the end date is the whole decision.
+ * Account → Subscription: cancel or resume the caller's live subscriptions; renders nothing when
+ * none is live. Next-free, so web and desktop mount the same block. Two rows are possible: Pro on
+ * the caller's personal container (no `workspaceId`; the server resolves it), and Team / legacy
+ * Pro on the open standard workspace for admin/owner only (the route's own floor). The second row
+ * is `containerKind === "standard"` only, so one subscription never draws twice.
+ * `useCancelPlan` sets Stripe's `cancel_at_period_end` and awaits the status refresh, so the row
+ * flips without a reload.
  */
 export function AccountSubscription({
   workspaceId,
@@ -69,8 +53,7 @@ export function AccountSubscription({
           Subscription
         </span>
       </div>
-      {/* ⚠ Flat body, NOT `SECTION_BOX_INSET`: the concave recipe is retired off
-          new surfaces (`identity-editor-surface.test.tsx` census). */}
+      {/* Flat body, not `SECTION_BOX_INSET`: concave is off new surfaces. */}
       <div className="divide-y divide-border-default">
         {showPersonal && (
           <SubscriptionRow ent={personal} workspaceId={undefined} />

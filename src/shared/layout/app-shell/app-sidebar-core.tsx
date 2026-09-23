@@ -15,15 +15,13 @@ import {
 import type { LucideIcon } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
 import type { LinkLike } from "@/shared/ui/link-like";
-// ⚠ Type-only import — erased at compile time, so the Next-coupled settings
-// modal never enters the SPA's import graph.
+// Type-only: the Next-coupled settings modal must never enter the SPA's import graph.
 import type { SettingsSection } from "@/shared/layout/settings-modal";
 import styles from "./app-shell.module.css";
 
 /**
- * ⚠ Adding a section = a member here + a `NAV` row + a route row in
- * `apps/desktop-ui/src/routes.tsx` + the hand copy in
- * `dopl-desktop-app/main/deep-link-target.js`. All four, or it half-lands.
+ * Adding a section = a member here + a `NAV` row + a route row in `apps/desktop-ui/src/routes.tsx`
+ * + the hand copy in `dopl-desktop-app/main/deep-link-target.js`. All four, or it half-lands.
  */
 export type NavSection =
   | "overview"
@@ -36,19 +34,9 @@ export type NavSection =
   | "members";
 
 /**
- * THE RENDERED NAV ORDER — CHANNELS-FIRST (Samuel's ruling, 2026-08-30; ledger
- * ASK-6). Overview, Channels, Identities, Knowledge, Skills, Ontology, Chats,
- * Members — then Settings, which is the foot button below and not a row here.
- *
- * ⚠ IT IS A PRODUCT STATEMENT, NOT A TIDY-UP. Channels is the lead product
- * (2026-08-03 pivot) and ontology is substrate; the shipped rail said the
- * opposite — ontology second, channels sixth — because nothing had ever
- * reordered it. No doc recorded a demotion, so this line is the record.
- *
- * ⚠ `apps/desktop-ui/src/routes.tsx › WORKSPACE_PAGES` CARRIES THE SAME ORDER
- * BY HAND and must be edited with this list. That table cannot be imported here
- * (this core is shared with the web tree, which does not build the SPA), and
- * the SPA cannot own the order either, because this file is what draws the rail.
+ * The rendered nav order, channels first (channels is the lead product; Settings is the foot
+ * button, not a row). `apps/desktop-ui/src/routes.tsx › WORKSPACE_PAGES` carries the same order by
+ * hand: this core is shared with the web tree and cannot import it. Edit both.
  */
 export const NAV: ReadonlyArray<{
   label: string;
@@ -57,10 +45,7 @@ export const NAV: ReadonlyArray<{
 }> = [
   { label: "Overview", icon: Home, section: "overview" },
   { label: "Channels", icon: Hash, section: "channels" },
-  // AGENT IDENTITIES (2026-08-22). ⚠ The label is "Identities" and the path segment
-  // is `identities` SINCE 2026-09-22 (Samuel: "I'm renaming the agents page to be named
-  // Identities") — it was "Agents"/`agents`. An identity is a ROLE OF THE USER; the
-  // noun AGENT now means only a running session in a channel (INVARIANTS §5).
+  // An identity is a role of the user; "agent" means only a running session (INVARIANTS §5).
   { label: "Identities", icon: Bot, section: "identities" },
   { label: "Knowledge", icon: BookOpen, section: "knowledge" },
   { label: "Skills", icon: Sparkles, section: "skills" },
@@ -74,10 +59,8 @@ export function sectionPath(segment: string, section: NavSection): string {
 }
 
 /**
- * Which nav row a path highlights (null = none). Path shape
- * `/{wsSegment}/{section}/...`. Bare workspace root → Overview; a non-nav route
- * like /settings → NOTHING (falling back to the home row made Settings look
- * like it lived under that page). Shared so both routers derive it identically.
+ * Which nav row a path (`/{wsSegment}/{section}/...`) highlights. Bare workspace root → Overview;
+ * a non-nav route like /settings → null, so Settings never looks like it lives under a page.
  */
 export function activeSectionFromPath(pathname: string): NavSection | null {
   const segments = pathname.split("/").filter(Boolean);
@@ -91,12 +74,6 @@ export interface AppSidebarCoreProps {
   workspaceSegment: string;
   /** `activeSectionFromPath(currentPath)`; null on non-nav routes. */
   activeSection: NavSection | null;
-  // ⚠ `consentCount` STOOD HERE AND IS DELETED (Samuel, 2026-08-25). It badged
-  // the Channels row with the drafts this operator's agent was holding, and it
-  // pointed at the consent Inbox — a pane that no longer exists. The outbound
-  // review is the work stream's own card (`agent-stream.tsx ›
-  // SentToChannelBox`); a badge in the app nav would be a claim about a
-  // destination there is no longer any way to reach.
   onOpenSettings: (section: SettingsSection) => void;
   /** Workspace switcher — injected because it routes. */
   brand: ReactNode;
@@ -125,8 +102,7 @@ export function AppSidebarCore({
             key={section}
             href={sectionPath(workspaceSegment, section)}
             className={cn(
-              // Kit's ONE nav-chip recipe (globals.css / kit.css); the module
-              // contributes column layout only.
+              // The kit's nav-chip recipe; the module contributes column layout only.
               "nav-chip",
               section === activeSection && "nav-chip-active raised-tab"
             )}
@@ -137,15 +113,9 @@ export function AppSidebarCore({
         ))}
       </nav>
 
-      {/* ⚠ **TEAM, AND IT STAYS TEAM (checked 2026-09-08).** The personal `pro`
-          plan does not belong here: this sidebar has exactly one mount — the
-          WORKSPACE shell (`apps/desktop-ui/src/components/app-shell/
-          app-shell.tsx`), which requires a resolved `workspaceSegment` and a
-          `workspaces` row — and /home renders no sidebar at all
-          (`apps/desktop-ui/src/pages/home/index.tsx` is one panel wide). So this
-          card can only ever be read inside a standard workspace. If it ever
-          mounts on a home space, the copy and `onOpenSettings("billing")` target
-          must both become kind-aware. */}
+      {/* Team copy is right: this sidebar mounts only in the workspace shell (/home has none).
+          If it ever mounts on a home space, the copy and the billing target must become
+          kind-aware. */}
       <div className={styles.wordsCard}>
         <div className={styles.wcTitle}>
           <b>Team</b> unlocks more
