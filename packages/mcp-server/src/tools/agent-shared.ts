@@ -29,6 +29,7 @@ import type { AgentIdentity, DoplClient } from "@dopl/client";
 import type { AudienceLabel } from "./audience-label.js";
 import { inlineOr, NO_NAME } from "./narration.js";
 import { apiMessage, err, isApiError, type ToolResponse } from "./respond.js";
+import { AGENT_ERRORS, refusal } from "./tool-errors.js";
 
 /**
  * The server's 403 code for "a credential that may be shared between humans
@@ -42,6 +43,13 @@ export const PRIVATE_VISIBILITY_DENIED_CODE = "WORKSPACE_KEY_PRIVATE_VISIBILITY"
  *  refusal {@link resolveIdentityRef}'s id door swallows. ⚠ ONE SPELLING, and it
  *  is `src/features/agent-identities/server/http-mapping.ts`'s. */
 export const IDENTITY_NOT_FOUND_CODE = "AGENT_IDENTITY_NOT_FOUND";
+/** The server's code for a name matching several visible identities (the launch lane's 409). */
+export const IDENTITY_AMBIGUOUS_CODE = "AGENT_IDENTITY_AMBIGUOUS";
+
+/** The advertised codes, by reason, so a refusal cannot render one the description lacks (P8-02). */
+const AGENT_ERRORS_BY_REASON = Object.fromEntries(
+  AGENT_ERRORS.map((e) => [e.reason, e]),
+) as Record<"identity_not_found" | "ambiguous_name", (typeof AGENT_ERRORS)[number]>;
 
 /**
  * 🔒 THE VISIBILITY AXIS THIS SURFACE OFFERS — **TWO values, not three.**
@@ -192,34 +200,32 @@ export function ambiguousIdentity(
   const label = inlineOr(ref, NO_NAME);
   return err(
     [
-      `Nothing was read or written — the name ${label} matches ${matches.length} agent identities you can see, and this call refuses rather than picking one. Identity names are deliberately NOT unique (two members may each keep a "Researcher").`,
-      `Re-issue with the ID of the one you meant:`,
-      ...matches.map(
-        (m) =>
-          `- \`${m.id}\` — ${inlineOr(m.name, NO_NAME)} (${m.visibility})`,
+      refusal(
+        AGENT_ERRORS_BY_REASON.ambiguous_name,
+        `Nothing was read or written — the name ${label} matches ${matches.length} agent identities you can see, and this call refuses rather than picking one. Identity names are deliberately NOT unique (two members may each keep a "Researcher"). Re-issue with the ID of the one you meant:`,
       ),
+      ...identityChoiceLines(matches),
     ].join("\n"),
   );
 }
 
-/**
- * THE NOT-FOUND REFUSAL. ⚠ It does not say whether the identity EXISTS: the
- * whole read surface is 404-never-403 so an id cannot be probed, and a sentence
- * that guessed would rebuild that oracle.
- */
+/** One `- \`id\` — name (visibility)` line per candidate — the ONE rendering both
+ *  identity lanes (`dopl_agent`, `dopl_channel` launch) list an ambiguous name with (P8-09). */
+export function identityChoiceLines(
+  matches: ReadonlyArray<{ id: string; name: string; visibility: string }>,
+): string[] {
+  return matches.map((m) => `- \`${m.id}\` — ${inlineOr(m.name, NO_NAME)} (${m.visibility})`);
+}
+
 export function identityNotFound(ref: string): ToolResponse {
   return err(
-    `No agent identity ${inlineOr(ref, NO_NAME)} resolves for you, and nothing was read or written. Either there is no such identity or it is not shared with you — those are ONE answer here on purpose, so ids cannot be probed. Matching on a name is EXACT (case-insensitive), never fuzzy; list what you can see with dopl_agent(op="list").`,
+    refusal(
+      AGENT_ERRORS_BY_REASON.identity_not_found,
+      `No agent identity ${inlineOr(ref, NO_NAME)} resolves for you, and nothing was read or written. Either there is no such identity or it is not shared with you — those are ONE answer here on purpose, so ids cannot be probed. Matching on a name is EXACT (case-insensitive), never fuzzy; list what you can see with dopl_agent(op="list").`,
+    ),
   );
 }
 
-/**
- * An identity write refused because the caller is neither its creator nor a
- * workspace admin (403 `RESOURCE_ACCESS_DENIED`). Null so the caller rethrows.
- *
- * ⚠ Only ever reachable for an identity the caller CAN SEE — an invisible one
- * 404s first, so surfacing this never confirms existence.
- */
 export function identityWriteDenied(e: unknown): ToolResponse | null {
   if (
     typeof e !== "object" ||
@@ -275,6 +281,7 @@ export function sharedCredentialPrivateDenied(e: unknown): ToolResponse | null {
  *  the only place that distinction exists — see `audience-label.ts`. */
 export function identityRow(t: AgentIdentity, audience: AudienceLabel): string {
   const desc = t.description ? `\n  ${inlineOr(t.description, "")}` : "";
+  const runtime = t.runtime ? ` · runtime ${inlineOr(t.runtime, NO_NAME)}` : "";
   const model = t.model ? ` · model ${inlineOr(t.model, NO_NAME)}` : "";
   // ⚠ **"knowledge scope(s)", NOT "knowledge base(s)" (2026-09-08).** An
   // attachment is a base, a FOLDER or an ENTRY now, and counting three folders
@@ -287,7 +294,7 @@ export function identityRow(t: AgentIdentity, audience: AudienceLabel): string {
     scopeCount > 0
       ? ` · ${scopeCount} knowledge scope${scopeCount === 1 ? "" : "s"}`
       : "";
-  return `- ${inlineOr(t.name, NO_NAME)} (id: \`${t.id}\` · seen by ${audience}${model}${kbs})${desc}`;
+  return `- ${inlineOr(t.name, NO_NAME)} (id: \`${t.id}\` · seen by ${audience}${runtime}${model}${kbs})${desc}`;
 }
 
 /**

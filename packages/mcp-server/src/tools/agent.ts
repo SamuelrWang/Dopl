@@ -69,6 +69,9 @@ const MAX_NAME_CHARS = 120;
 const MAX_DESCRIPTION_CHARS = 2000;
 const MAX_INSTRUCTIONS_CHARS = 32_768;
 const MAX_MODEL_CHARS = 120;
+/** The runtime-id grammar — `src/features/channels/schema-launch-modes.ts ›
+ *  LAUNCH_RUNTIME_ID_RE`, pinned by `agent-identities/schema-sql.test.ts`. */
+const RUNTIME_ID_RE = /^[a-z][a-z0-9_-]{0,31}$/;
 const MAX_FIELD_COUNT = 50;
 const MAX_FIELD_KEY_CHARS = 80;
 const MAX_FIELD_VALUE_CHARS = 1000;
@@ -158,7 +161,15 @@ const AGENT_INPUT_SHAPE = {
     .nullable()
     .optional()
     .describe(
-      "op=create / op=update: default model identifier passed through at spawn — not an enum, and null means the desktop's own default.",
+      "op=create / op=update: default model id from `runtime`'s roster; null = its default.",
+    ),
+  runtime: z
+    .string()
+    .regex(RUNTIME_ID_RE, "runtime is a lowercase runtime id, e.g. claude or codex")
+    .nullable()
+    .optional()
+    .describe(
+      "op=create / op=update: preferred runtime, e.g. claude or codex; null = the channel's.",
     ),
   fields: z
     .array(FIELD_SHAPE)
@@ -233,8 +244,9 @@ const AGENT_INPUT_SHAPE = {
  * twice. The ref-resolution rule ("id or exact name, case-insensitive; an
  * ambiguous name is REFUSED with both ids") is `identity`'s describe and is now
  * also the `ambiguous_name` row of {@link AGENT_ERRORS}; the home-channel
- * preview is `confirm_token`'s describe AND the `confirm_required` error row;
- * the grant scope/level pairing is `scope`'s and `level`'s.
+ * preview is `confirm_token`'s describe (the shared preview emits no `reason=`,
+ * so no error row advertises one — P8-02); the grant scope/level pairing is
+ * `scope`'s and `level`'s.
  *
  * ⚠ WHAT MAY NOT LEAVE: the op="list" bullet's three disclosures, pinned by
  * phrase in `tool-scope-claims.test.ts` because that op is visibility-filtered,
@@ -369,6 +381,7 @@ export function registerAgentTools(
             description: args.description,
             instructions: args.instructions,
             model: args.model,
+            runtime: args.runtime,
             fields: args.fields,
             visibility: args.visibility,
             knowledge_bases: args.knowledge_bases,
@@ -397,6 +410,7 @@ export function registerAgentTools(
             description: args.description,
             instructions: args.instructions,
             model: args.model,
+            runtime: args.runtime,
             fields: args.fields,
             visibility: args.visibility,
             knowledge_bases: args.knowledge_bases,

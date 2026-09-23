@@ -336,11 +336,6 @@ export const AGENT_ERRORS: readonly ToolError[] = [
     meaning: "two identities share that name; both ids are in the message",
     retry: "no",
   },
-  {
-    reason: "confirm_required",
-    meaning: "publishing into a peer's room previews first, returning a token",
-    retry: "re-issue with confirm_token",
-  },
 ];
 
 /**

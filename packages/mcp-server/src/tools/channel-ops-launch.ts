@@ -43,11 +43,12 @@ import { colorTaken, freeColors } from "./channel-ops-launch-color";
 // ⚠ AND SO ARE THE TWO IDENTITY REFUSALS (`channel-ops-launch-identity.ts`, 2026-09-18) —
 // same seam, same reason: ONE FIELD's prose beside the op rather than inside it.
 import {
-  ambiguousIdentity,
   identityElsewhere,
   identityMatches,
-  identityNotFound,
+  launchIdentityAmbiguous,
+  launchIdentityNotFound,
 } from "./channel-ops-launch-identity";
+import { IDENTITY_AMBIGUOUS_CODE, IDENTITY_NOT_FOUND_CODE } from "./agent-shared";
 import { isNameRefusal, launchName, launchedName } from "./channel-ops-launch-name";
 // ⚠ AND SO IS THE GOAL CAP (`channel-ops-launch-goal.ts`, 2026-09-18, S50) — the ONE
 // pre-flight this lane owns, because the cap it enforces is the launch route's alone.
@@ -259,11 +260,11 @@ export async function opLaunchAgent(
     if (apiErrorCode(e) === "AGENT_COLOR_TAKEN") {
       return colorTaken(opts.color ?? "", freeColors(e));
     }
-    if (apiErrorCode(e) === "AGENT_IDENTITY_AMBIGUOUS") {
-      return ambiguousIdentity(opts.identity ?? "", identityMatches(e));
+    if (apiErrorCode(e) === IDENTITY_AMBIGUOUS_CODE) {
+      return launchIdentityAmbiguous(opts.identity ?? "", identityMatches(e));
     }
-    if (apiErrorCode(e) === "AGENT_IDENTITY_NOT_FOUND") {
-      return identityNotFound(opts.identity ?? "", identityElsewhere(e));
+    if (apiErrorCode(e) === IDENTITY_NOT_FOUND_CODE) {
+      return launchIdentityNotFound(opts.identity ?? "", identityElsewhere(e));
     }
     // ⚠ **AND A 400 IS CLASSIFIED RATHER THAN LEFT BARE** (S50, 2026-09-18) — `opPost`'s
     // worked example, which this lane lacked. The pre-flight above catches the one cap this

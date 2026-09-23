@@ -372,7 +372,7 @@ export async function confirmGate(
 /**
  * THE DRY RUN. ⚠ `isError`, deliberately: NOTHING was created, and an `ok`
  * result reading as a normal outcome invites an agent to report success — the
- * same reasoning `channel-ops-launch.ts › ambiguousIdentity` states for its own
+ * same reasoning `channel-ops-launch-identity.ts › launchIdentityAmbiguous` states for its own
  * refusal.
  */
 function preview(

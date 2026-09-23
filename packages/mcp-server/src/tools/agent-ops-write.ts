@@ -81,6 +81,7 @@ export interface IdentityWriteInput {
   description?: string | null;
   instructions?: string | null;
   model?: string | null;
+  runtime?: string | null;
   fields?: IdentityField[];
   visibility?: OfferedIdentityVisibility;
   knowledge_bases?: string[];
@@ -142,6 +143,14 @@ function knowledgeDigest(input: IdentityWriteInput): string[] {
  * whose result carries an identity's Version.
  */
 const IDENTITY_VERSION_CONFLICT = versionConflict('op="get"');
+
+function withStoredTypes(fields: IdentityField[], stored: IdentityField[]): IdentityField[] {
+  const types = new Map(stored.map((f) => [f.key, f.type]));
+  return fields.map((f) => {
+    const type = f.type ?? types.get(f.key);
+    return type ? { ...f, type } : f;
+  });
+}
 
 /** Map the write errors that have an actionable sentence; rethrow anything
  *  else. ⚠ ONE mapper for both verbs so the two cannot answer differently. */
@@ -235,6 +244,7 @@ export async function opCreate(
         description: input.description ?? null,
         instructions: input.instructions ?? null,
         model: input.model ?? null,
+        runtime: input.runtime ?? null,
         visibility,
         knowledge_bases: [...(input.knowledge_bases ?? [])].sort(),
         knowledge: knowledgeDigest(input),
@@ -250,6 +260,7 @@ export async function opCreate(
     description: input.description,
     instructions: input.instructions,
     model: input.model,
+    runtime: input.runtime,
     fields: input.fields,
     visibility,
     knowledgeBaseIds: input.knowledge_bases,
@@ -287,10 +298,12 @@ export async function opCreate(
   // nothing. An identity collision is the sharper of the two: `resolveIdentityRef`
   // REFUSES every name-addressed `get`/`update` from now on. See
   // `duplicate-name.ts`.
+  // Same-container clashes count: identity names are not unique anywhere (P8-06).
   const dup = await duplicateNameNoteFor(
     identity,
     () => client.listAgentIdentities(),
     "agent identity",
+    true,
     true,
   );
   return ok(
@@ -312,6 +325,7 @@ export async function opUpdate(
     description: input.description,
     instructions: input.instructions,
     model: input.model,
+    runtime: input.runtime,
     fields: input.fields,
     visibility: input.visibility,
     knowledgeBaseIds: input.knowledge_bases,
@@ -319,12 +333,15 @@ export async function opUpdate(
   };
   if (Object.values(patch).every((v) => v === undefined)) {
     return err(
-      `op="update" changed nothing because no field was passed. Pass at least one of: name, description, instructions, model, fields, visibility, knowledge_bases, knowledge.`,
+      `op="update" changed nothing because no field was passed. Pass at least one of: name, description, instructions, model, runtime, fields, visibility, knowledge_bases, knowledge.`,
     );
   }
 
   const identity = await resolveIdentityOr(client, ref);
   if (isErr(identity)) return identity;
+  // `fields` is a REPLACE-SET and this surface cannot say a field's `type`, so each
+  // one keeps the type its stored twin (same key) carries — never reset to text (P8-01).
+  if (patch.fields) patch.fields = withStoredTypes(patch.fields, identity.fields);
 
   const verdict = await confirmGate(
     client,
@@ -340,6 +357,7 @@ export async function opUpdate(
         description: patch.description ?? null,
         instructions: patch.instructions ?? null,
         model: patch.model ?? null,
+        runtime: patch.runtime ?? null,
         visibility: patch.visibility ?? null,
         knowledge_bases: [...(input.knowledge_bases ?? [])].sort(),
         knowledge: knowledgeDigest(input),

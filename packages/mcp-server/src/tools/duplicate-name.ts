@@ -54,19 +54,23 @@ export interface NamedRow {
  * @param noun      what to call the thing, e.g. `knowledge base`.
  * @param canDescribe whether the resource takes a description the agent could
  *                  use to tell the two apart (Samuel's "or" branch).
+ * @param sameContainer count a clash in the created row's OWN container too — true for
+ *                  identities, which have no per-container name uniqueness and resolve names
+ *                  across every visible row (P8-06); a base slug is unique per container.
  */
 export function duplicateNameNote(
   created: NamedRow,
   all: readonly NamedRow[],
   noun: string,
   canDescribe: boolean,
+  sameContainer = false,
 ): string {
   const needle = created.name.trim().toLocaleLowerCase();
   if (needle === "") return "";
   const clashes = all.filter(
     (r) =>
       r.id !== created.id &&
-      r.workspaceId !== created.workspaceId &&
+      (sameContainer || r.workspaceId !== created.workspaceId) &&
       r.name.trim().toLocaleLowerCase() === needle,
   );
   if (clashes.length === 0) return "";
@@ -91,9 +95,10 @@ export async function duplicateNameNoteFor(
   list: () => Promise<readonly NamedRow[]>,
   noun: string,
   canDescribe: boolean,
+  sameContainer = false,
 ): Promise<string> {
   try {
-    return duplicateNameNote(created, await list(), noun, canDescribe);
+    return duplicateNameNote(created, await list(), noun, canDescribe, sameContainer);
   } catch {
     return "";
   }

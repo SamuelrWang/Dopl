@@ -27,6 +27,7 @@ import { inlineOr } from "./channel-shared";
 // a system the other two do not.
 import { TENANCY_FIX, TENANCY_RULE } from "./channel-doctrine";
 import { NO_NAME } from "./narration";
+import { identityChoiceLines } from "./agent-shared";
 
 /** One row of the ambiguity refusal, as the server's `details.matches` carries
  *  it. ⚠ Every row already passed the CALLER's own `canSeeIdentity`, so nothing
@@ -65,7 +66,7 @@ export function identityMatches(e: unknown): IdentityMatch[] {
  * result reading as a normal outcome would invite a poll for a directive that
  * does not exist.
  */
-export function ambiguousIdentity(ref: string, matches: IdentityMatch[]): ToolResponse {
+export function launchIdentityAmbiguous(ref: string, matches: IdentityMatch[]): ToolResponse {
   const label = inlineOr(ref, NO_NAME);
   if (matches.length === 0) {
     return err(
@@ -76,7 +77,7 @@ export function ambiguousIdentity(ref: string, matches: IdentityMatch[]): ToolRe
     [
       `No agent was requested — the identity name \`${label}\` matches ${matches.length} identities you can see, and **nothing was filed**. Identity names are deliberately NOT unique (two members may each keep a "Researcher"), so this call refuses rather than picking one for you.`,
       `Re-issue with the ID of the one you meant:`,
-      ...matches.map((m) => `- \`${m.id}\` — ${m.name} (${m.visibility})`),
+      ...identityChoiceLines(matches),
       `⚠ Every identity listed is one YOU can see. Whether the OPERATOR whose machine runs the agent can see it is a separate question, answered on their machine at start time.`,
     ].join("\n"),
   );
@@ -128,7 +129,7 @@ export function identityElsewhere(e: unknown): IdentityElsewhere | null {
  * bare arm still answers "no such identity" and "not shared with you"
  * identically.
  */
-export function identityNotFound(
+export function launchIdentityNotFound(
   ref: string,
   elsewhere: IdentityElsewhere | null,
 ): ToolResponse {

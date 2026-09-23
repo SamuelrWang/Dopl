@@ -257,6 +257,12 @@ describe("🔒 the MCP tool's re-typed bounds are the server's", () => {
     expect(declared(MCP, name as string)).toBe(expected);
   });
 
+  it("the runtime-id grammar is the launch lane's", () => {
+    const m = /const RUNTIME_ID_RE = \/(.+)\/;/.exec(MCP);
+    expect(m, "no `const RUNTIME_ID_RE = /…/;` in the tool").toBeTruthy();
+    expect((m as RegExpExecArray)[1]).toBe(LAUNCH_RUNTIME_ID_RE.source);
+  });
+
   it("no bare numeric `.max()` is left in the tool schema", () => {
     // The whole point of naming them: a literal reintroduced beside a named
     // constant is invisible to the assertions above.

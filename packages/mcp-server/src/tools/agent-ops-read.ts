@@ -176,7 +176,7 @@ export async function opGet(
   );
   const lines = [
     `# ${inlineOr(identity.name, NO_NAME)}`,
-    `id: \`${identity.id}\` · ${identity.visibility} · model ${identity.model ? inlineOr(identity.model, NO_NAME) : "(the desktop's default)"}`,
+    `id: \`${identity.id}\` · ${identity.visibility} · runtime ${identity.runtime ? inlineOr(identity.runtime, NO_NAME) : "(the channel's)"} · model ${identity.model ? inlineOr(identity.model, NO_NAME) : "(the runtime's default)"}`,
     // ⚠ **THE VERSION IS WHY `op="update"` CAN REFUSE A STALE WRITE**, and it is
     // rendered on the HEADER rows rather than at the end: this op clips its
     // INSTRUCTIONS body (A16), and a token printed after a clipped system prompt
