@@ -5,25 +5,12 @@ import { scopeKey } from "../lib/knowledge-scopes";
 import type { IdentityKnowledgeScope } from "../types";
 
 /**
- * Raw I/O for the KNOWLEDGE-BASE ATTACHMENTS on an agent identity — the third
- * section of `repository.ts`, lifted into a sibling when that file reached the
- * 500-line cap (F-562, 2026-09-02). `repository.ts` re-exports every name here,
- * so no caller moved; this is the move `knowledge/server/repository.ts` already
- * made, where the named file is a barrel over five.
- *
- * ⚠ **IT IS A SECTION, NOT A LAYER.** The same two-client rule `repository.ts`
- * states in its header holds unchanged: a read that answers *what may this
- * caller see* takes `readClient()`, a write stays on `supabaseAdmin()` until RLS
- * plan phase 4. Read that header before adding a function here.
+ * Raw I/O for an identity's knowledge attachments, re-exported by `repository.ts` (same two-client
+ * rule). The `deleted_at IS NULL` filters are inert — knowledge has no soft delete since
+ * `20261013120000` — and leave with the columns (F-730).
  */
 
-/**
- * ONE ATTACHMENT ROW, flat. ⚠ `scopeKind` decides which of the two id columns
- * is populated and the DB's `agent_identity_kb_scope_shape_check` guarantees
- * exactly one is — this shape is deliberately NOT the domain union
- * (`types.ts › IdentityKnowledgeScope`), because a row read back is evidence and
- * the narrowing belongs where the predicate runs, not in the mapper.
- */
+/** One attachment row, flat; the service narrows it to the domain union. */
 export interface IdentityKnowledgeLinkRow {
   identityId: string;
   knowledgeBaseId: string;
@@ -48,10 +35,7 @@ export async function listKnowledgeLinksForIdentities(
     (data ?? []) as Array<{
       identity_id: string;
       knowledge_base_id: string;
-      // ⚠ `?? EMPTY_X`-shaped defaulting, one layer down: a row written before
-      // `20260930150000` and read through a stale PostgREST schema cache has no
-      // `scope_kind`, and `undefined` reaching the union would take every
-      // default branch silently. `'base'` is what such a row IS.
+      // A stale PostgREST schema cache omits `scope_kind`; such a row is a base scope.
       scope_kind?: string | null;
       folder_id?: string | null;
       entry_id?: string | null;
@@ -69,14 +53,8 @@ export async function listKnowledgeLinksForIdentities(
 }
 
 /**
- * REPLACE-SET, same argument as `replaceTeamLinks`.
- *
- * ⚠ **SCOPED SINCE 2026-09-08**, and the DEDUPE key had to move with it: it used
- * to be the base id, which now collides across shapes — a whole-base scope and
- * a folder scope of that base are two different attachments that share it. The
- * key is the SHAPE plus its own id, which is exactly what the three partial
- * unique indexes in the migration enforce; keying on the base alone would have
- * dropped every folder but the first, silently.
+ * Replace-set. The dedupe key is shape + its own id (the three partial unique indexes), never the
+ * base id — a base scope and a folder scope of that base are different attachments.
  */
 export async function replaceKnowledgeLinks(
   workspaceId: string,
@@ -115,34 +93,15 @@ export async function replaceKnowledgeLinks(
 }
 
 /**
- * EVERY LIVE FOLDER of a set of bases — the ancestor chain a path is derived
- * from, and the validation set a folder scope is checked against, in ONE query.
- *
- * ⚠ WHOLE BASES RATHER THAN THE NAMED FOLDER IDS, on purpose. A path is walked
- * up `parent_id` (`knowledge/server/path.ts`), so fetching only the folders
- * named would answer "what is this folder called" and never "where does it
- * live" — and fetching the ancestors one at a time is a query per level. The
- * folder count of a base is small and the read is bounded by the bases the
- * identity actually attaches.
- *
- * ⚠ SOFT-DELETED FOLDERS ARE EXCLUDED, which is what makes a trashed folder
- * disappear from the payload rather than render a path through a folder nobody
- * can open.
+ * Every folder of a set of bases in one query — whole bases, because a path is walked up
+ * `parent_id` and per-ancestor reads would be a query per level.
  */
 export interface KnowledgeFolderRow {
   id: string;
   knowledgeBaseId: string;
   parentId: string | null;
   name: string;
-  /**
-   * `knowledge_folders.description` — the folder's own agent-facing summary,
-   * added to this read on 2026-09-18 (A4) so the base CARD can carry a clause
-   * per top-level folder without a second query.
-   *
-   * ⚠ **OPTIONAL FOR THE `scope_kind` REASON STATED ABOVE**, one layer up: a
-   * response served through a stale PostgREST schema cache has no such key, and
-   * a row type that swears it is present is the lie. Read it `?? null`.
-   */
+  /** The folder's agent-facing summary (base card). Optional: a stale schema cache omits it. */
   description?: string | null;
 }
 
@@ -176,9 +135,7 @@ export async function listLiveFoldersForBases(
   }));
 }
 
-/** The named entries, live only. ⚠ BY ID rather than by base: an entry needs no
- *  siblings to be described, only its own folder, which the folder read above
- *  already carries. */
+/** The named entries, by id (an entry needs only its own folder, which the folder read carries). */
 export interface KnowledgeEntryRow {
   id: string;
   knowledgeBaseId: string;
@@ -214,34 +171,14 @@ export async function listLiveEntryRows(
   }));
 }
 
-/**
- * The visibility facts needed to decide whether the CALLER may attach or see a
- * KB. ⚠ Read from `knowledge_bases` HERE rather than imported from
- * `features/knowledge`, mirroring `skills/server/repository.ts ›
- * listWorkspaceKnowledgeBases` — the same cross-feature-dependency argument.
- * The PREDICATE over these fields lives in `service-shared.ts › canSeeBaseRow`,
- * which is where the knowledge feature's `canSeeBase` rule is mirrored.
- * Soft-deleted bases are EXCLUDED: an attachment to a trashed base is an
- * attachment to nothing.
- */
+/** The facts `service-shared.ts › canSeeBaseRow` judges, read here rather than imported (§1). */
 export interface KnowledgeBaseAccessRow {
   id: string;
   name: string;
   visibility: "public" | "private";
   accessMode: "workspace" | "teams";
   createdBy: string | null;
-  /**
-   * ── THE CARD FACTS (2026-09-18, A4) ──────────────────────────────────────
-   *
-   * `slug` and `description`, read HERE rather than in a second query: this
-   * row is already fetched for every attached base on every resolve, so the
-   * base CARD's two cheapest facts cost nothing at all.
-   *
-   * ⚠ **OPTIONAL, AND NOT AS A HEDGE.** The predicate above
-   * (`service-shared.ts › canSeeBaseRow`) is the row's REASON for existing and
-   * neither key participates in it, so every existing caller and every test
-   * fixture constructs this row without them. Read `?? ""` / `?? null`.
-   */
+  /** Base-card facts riding the access read; optional (the predicate ignores them). */
   slug?: string;
   description?: string | null;
 }
@@ -280,17 +217,7 @@ export async function listKnowledgeBaseAccessRows(
   }));
 }
 
-/**
- * Teams granted on a set of knowledge bases. ⚠ THIS ONE READS ANOTHER FEATURE'S
- * SLICE of `resource_grants`, because mirroring the knowledge access predicate
- * means reading the rows that predicate reads. It is a READ of a fixed
- * `resource_type`, and this file never writes there.
- *
- * ⚠ The two lanes now share ONE TABLE (`20260914120000`) where they used to
- * share only a shape, so the `resource_type` term stopped being a narrowing and
- * became the fence: without it this would answer "which teams reach this KB"
- * with the identity links three functions above.
- */
+/** Teams granted on a set of knowledge bases — the knowledge slice of `resource_grants` (read only). */
 export async function listKnowledgeBaseTeamGrants(
   workspaceId: string,
   knowledgeBaseIds: string[]

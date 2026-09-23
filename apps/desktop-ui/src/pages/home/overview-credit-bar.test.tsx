@@ -1,5 +1,4 @@
-import { IDENTITY_NAME_TEXT } from "@/features/agent-identities/components/identity-section";
-import { SECTION_HEADING_TEXT } from "@/shared/ui/section-heading";
+import { IDENTITY_NAME_TEXT, SECTION_HEADING_TEXT } from "@/shared/ui/section-heading";
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { PERSONAL_MONTHLY_CREDITS } from "@/features/billing/credits";

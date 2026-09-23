@@ -1,82 +1,36 @@
-// THE AGENT-IDENTITY LAUNCH RESOLVE — `GET /api/agent-identities/{id}/resolve`, at spawn.
-//
-// ── 🔒 WHO FETCHES IDENTITY CONTENT, AND WHEN: THE DESKTOP, AT SPAWN. ────────────────────────
-//
-// The renderer passes an ID; `main` resolves it here before `launchRequesterSession`. A
-// renderer-supplied SNAPSHOT is refused, in decreasing weight:
-//
-//   1. IT IS THIS LANE'S ARCHITECTURE — every security-relevant input on the button lane is
-//      computed by main from MAIN'S OWN STATE (tool profile, start modes, model, goal). F-267 IS
-//      THE SCAR: main read a PROJECTION instead of its own DTO and every button launch silently
-//      floored to `read_only`. A renderer snapshot is that mistake with PROMPT TEXT.
-//   2. TRUST — main cannot tell a real identity from a fabricated one; an ID it resolves, it can.
-//   3. THE VIEWER FILTER IS THE OPERATOR'S. `knowledgeBases` is filtered against the RESOLVING
-//      caller's KB visibility, so a shared identity cannot launder access to a private base. Only
-//      this call is STRUCTURALLY the operator's, and the orchestrator lane (§3e) introduces a
-//      shape where the SELECTOR's caller and the OPERATOR are different people.
-//   4. FRESHNESS — an edit landed 200 ms ago is honoured.
-//
-// ⚠ The SPA may still render the name optimistically from its list cache: that render is a LABEL,
-// this resolve is the PROMPT.
-//
-// ⚠ IT RIDES `api.js › apiFetch`, which is COOKIE-authed and carries the shared 401 repair
-// (`api-repair.js`; a second copy of that repair produced the 1.8.x Channels outage) plus the
-// app-version stamp. Never a raw fetch. ⚠ AND NOT THE DEVICE TOKEN: `mcp-config.js ›
-// deviceTokenForSpawn` is the MCP bearer and nothing else. Both resolve to the same `userId`, so
-// the BEHAVIOUR the route's docblock describes is right; the mechanism it names is not (G-2).
+// The agent-identity launch resolve: `GET /api/agent-identities/{id}/resolve`, at spawn.
+// The renderer passes an ID and main fetches the content — never a renderer snapshot — so the prompt
+// text is fresh, trusted and filtered by the operator's knowledge visibility.
+// Rides `api.js › apiFetch` (cookie-authed, the shared 401 repair); never a raw fetch.
 
 const { apiFetch } = require('./api');
 const { diag } = require('./diag');
 
-// ⚠ FIVE SECONDS, NOT `launch-directives.js`'s `HTTP_TIMEOUT_MS = 15000`. This one is held open
-// by a BUTTON CLICK: fifteen seconds of a dead-looking New Agent button is worse than a refusal
-// the operator can act on, and the refusal it produces (`busy`) already reads as "try again".
-// The directive lane has no human waiting and can afford the longer budget.
+// Short: a button click waits on it, and the `busy` refusal already reads as "try again".
 const IDENTITY_RESOLVE_TIMEOUT_MS = 5000;
 
-// Bounds on what may come back off the wire and into a prompt. The server enforces its own
-// (`agent-identities/schema.ts`) — these are the BOUNDARY's, because a boundary that trusts the
-// far side's validation is not one.
+// The boundary's own bounds, each the server's number — never smaller (F-287): a lower bound is a
+// limit the operator can neither see nor satisfy. `schema-sql.test.ts` pins the `MAX_*` literals.
 const MAX_INSTRUCTIONS = 32768; // the column's own CHECK
 const MAX_FIELDS = 50; // MAX_FIELD_COUNT
 const MAX_BASES = 50;
-// ⚠ 200, THE SERVER'S OWN `MAX_KNOWLEDGE_SCOPES` (`agent-identities/schema.ts`), and NOT 50. The
-// base cap counts BASES; this counts SCOPES, and one base can contribute many folders. A smaller
-// number here would be this module quietly deciding the operator's role names less knowledge than
-// it names — the F-287 mistake, on a different field.
-const MAX_SCOPES = 200;
-// A base id, a folder/entry id, a display name, or a `/`-joined knowledge path. ⚠ The PATH is the
-// long one: `knowledge_folders.name` and `knowledge_entries.title` are each bounded server-side and
-// a path is several of them, so this is deliberately roomier than `MAX_BASE_LABEL`.
-const MAX_SCOPE_PATH = 500;
-
-// ── THE BASE CARD'S BOUNDS (2026-09-18, A4), EACH THE SERVER'S OWN ──────────
+const MAX_SCOPES = 200; // `schema.ts › MAX_KNOWLEDGE_SCOPES` (scopes, not bases)
+const MAX_SCOPE_PATH = 500; // a `/`-joined path of several server-bounded segments
 const MAX_BASE_SLUG = 80; // `knowledge/schema.ts` — the slug column's own max
 const MAX_CARD_SUMMARY = 300; // `@/config › DESCRIPTION_MAX`, the bound the card is SENT at
 const MAX_FOLDER_NAME = 200; // `knowledge/schema.ts › KnowledgeFolder.name`
 const MAX_CARD_FOLDERS = 50; // `service-knowledge-scopes.ts › MAX_CARD_FOLDERS`
-// ⚠ A CEILING ON THE *COUNT*, AND IT MUST STAY WELL ABOVE `MAX_CARD_FOLDERS`. The renderer proves a
-// folder list is COMPLETE by comparing the two, so a ceiling at or below the list cap would clamp a
-// truncated list into agreement and turn the completeness check into a rubber stamp.
+// Must stay well above `MAX_CARD_FOLDERS`, or clamping would fake the renderer's completeness check.
 const MAX_FOLDER_COUNT = 10000;
 
-// ── 🔒 ONE BOUND PER FIELD, EACH THE SERVER'S OWN (F-287, 2026-08-23) ───────────────────────
-//
-// ⚠ A BOUNDARY BOUND MUST MATCH THE WRITER'S, NOT UNDERCUT IT. One shared `MAX_LABEL = 200`
-// clipped a legal 300-character field value (schema bound: 1000) with no word to the operator at
-// any surface. Enforcing a SMALLER number than the far side is not extra caution — it is a limit
-// the operator can neither see nor satisfy, and the disagreement always resolves against them.
 const MAX_NAME = 120; // `schema.ts › NameSchema` / `agent_identities_name_charset_check`
 const MAX_FIELD_KEY = 80; // `schema.ts › IdentityFieldSchema.key`
 const MAX_FIELD_VALUE = 1000; // …and its `.value`
-const MAX_MODEL = 120; // an id or an alias; `session-model.js` re-coerces it anyway
+const MAX_MODEL = 120; // `schema.ts › MAX_MODEL_CHARS`; the launch funnel resolves or refuses the id
 const MAX_BASE_LABEL = 200; // a base id or slug and its display name — neither reaches a prompt
                             // line unsanitized (`prompt-framing-agent-identity.js › knowledgeLines`)
 
-// ⚠ THE SHARED UUID RULE, NEVER A LOCAL COPY. `test/uuid-rule-parity.test.mjs` is a CENSUS of
-// every file in `main/` that spells the rule itself, and its standing instruction is that a new
-// entry is a REVIEW rather than a rename: `ipc-guards.js › isUuid` is importable by anything
-// that is not inside a sliced pure block, and this module is not one.
+// The shared UUID rule, never a local copy (`test/uuid-rule-parity.test.mjs` counts copies).
 const { isUuid } = require('./ipc-guards');
 const { RUNTIME_ID_RE } = require('./launch-directive-vocab');
 
@@ -84,36 +38,19 @@ function isIdentityId(value) {
   return isUuid(value);
 }
 
-/** Bounded text, at the bound the CALLER names. ⚠ There is no default: every call site above has
- *  a real server bound and picking one for it is how the 200 got here. */
+/** Bounded text at the caller's bound (no default — every field has its own server bound). */
 function label(value, max) {
   return typeof value === 'string' ? value.slice(0, max) : '';
 }
 
-/**
- * A CARD FACT: whole, or gone. ⚠ **THE ONE PLACE THIS BOUNDARY MUST NOT `slice`.**
- *
- * Every other bounded value here is prose or a label, where a clip costs the tail of a sentence.
- * A card fact is read as a COMPLETE statement about a base — its slug is an ADDRESS, its summary
- * is "what this base answers" — so the half that survives a slice reads exactly like the whole
- * thing and is wrong in a way the agent cannot detect. The server already sends these
- * all-or-nothing (`service-knowledge-scopes.ts › baseCard`); this is the same rule, restated at
- * the boundary, because a boundary that trusts the far side's discipline is not one.
- */
+/** A card fact: whole or gone, never sliced — half a slug or summary reads like the whole thing. */
 function whole(value, max) {
   return typeof value === 'string' && value.length <= max ? value : '';
 }
 
 /**
- * The card's TOP-LEVEL FOLDERS, narrowed to `{name, summary}` and nothing else.
- *
- * ⚠ **A MALFORMED ROW IS DROPPED, AND DROPPING IT IS SAFE ONLY BECAUSE `baseFolderCount` NOTICES.**
- * A folder this loop refuses leaves the list SHORTER than the count the server sent, and the
- * renderer prints the folder line only when the two agree — so a dropped row costs the whole line
- * rather than producing a list that silently omits one.
- * ⚠ AND NO ENTRIES, EVER. The allowlist is what makes "the card lists zero entries" a property of
- * the shape rather than a promise about the server: a future payload carrying `entries` beside
- * these keys is dropped here and cannot reach a line of prompt text.
+ * The card's top-level folders narrowed to `{name, summary}` (never entries). A dropped malformed
+ * row is safe only because the renderer then sees `length !== baseFolderCount` and drops the line.
  */
 function cardFolders(value) {
   if (!Array.isArray(value)) return [];
@@ -127,20 +64,13 @@ function cardFolders(value) {
   return out;
 }
 
-/** The identity's runtime id, or `''` for none (C4). Grammar only — the registry decides at launch. */
+/** The identity's runtime id, or `''` for none. Grammar only — the registry decides at launch. */
 function runtimeId(value) {
   const v = typeof value === 'string' ? value.trim() : '';
   return RUNTIME_ID_RE.test(v) ? v : '';
 }
 
-/**
- * A COUNT OFF THE WIRE — a non-negative integer or 0, never NaN and never a float.
- *
- * ⚠ 0 IS THE FAIL DIRECTION ON PURPOSE. An older server does not send the key, a proxy may drop
- * it, and a garbled one must not become a prompt line claiming knowledge is missing. A wrong
- * guess here costs a sentence the agent did not say; the opposite would be a role block telling
- * an agent it has been denied something nobody attached.
- */
+/** A non-negative integer off the wire; anything garbled is 0 (never a false "knowledge is missing"). */
 function count(value, max) {
   const n = Number(value);
   if (!Number.isFinite(n) || n <= 0) return 0;
@@ -148,27 +78,9 @@ function count(value, max) {
 }
 
 /**
- * Narrow the wire payload to the keys a launch reads — the ROLE BLOCK's, plus `runtime` (C4:
- * `''` = no preference, read by the launch-runtime order) — and nothing else.
- *
- * ⚠ EACH `knowledge` SCOPE GAINED THE FOUR BASE-CARD KEYS ON 2026-09-18 (A4) — `baseSlug`,
- * `baseSummary`, `baseFolders` and `baseFolderCount`. They are NOT a ninth top-level key: a card
- * describes ONE attachment, so it rides the scope it is about. See `whole` / `cardFolders` above
- * for why two of them refuse to `slice`.
- *
- * ⚠ THE EIGHTH IS `knowledge` (2026-09-08) — every attached scope, base / folder / entry — and it
- * rides BESIDE `knowledgeBases` rather than replacing it: an older SERVER sends only the base
- * list. `knowledgeLines` prefers `knowledge` when non-empty and falls back, so one of the two
- * always answers and neither is rendered twice.
- * ⚠ THE SEVENTH IS `unreachableKnowledgeBaseCount` (2026-09-05), a COUNT BY CONTRACT: the server
- * withholds the id, name and container of an unreachable base, and this narrow is the second gate
- * on that — anything added beside the number is dropped before it reaches prompt text.
- *
- * ⚠ A LITERAL WHITELIST, NOT A SPREAD (the reason `session-launch.js › launch` gives for its own):
- * an omitted key is DROPPED, so a field the server adds later cannot start being depended on by
- * accident — and a future `createdBy` cannot reach a launch payload it has no business in.
- * ⚠ NULLS ARE PRESERVED AS NULLS — a consumer distinguishing "absent" from "null" is a consumer
- * with two code paths for one state.
+ * Narrow the payload to the keys a launch reads — a literal allowlist, never a spread, so a key the
+ * server adds later cannot reach prompt text by accident. Nulls stay null. `knowledge` rides beside
+ * `knowledgeBases`; the four card keys ride base scopes only; `unreachableKnowledgeBaseCount` is a count.
  */
 function narrow(body) {
   const b = body && typeof body === 'object' ? body : {};
@@ -186,19 +98,8 @@ function narrow(body) {
     knowledgeBases: bases
       .filter((k) => k && typeof k === 'object')
       .map((k) => ({ id: label(k.id, MAX_BASE_LABEL), name: label(k.name, MAX_BASE_LABEL) })),
-    // ⚠ A LITERAL WHITELIST INSIDE THE WHITELIST, for the reason the outer one exists: the server's
-    // ref also carries `folderId`, `entryId`, `folderName`, `entryTitle` and a DISPLAY `path`, and
-    // none of them is read here. `scope`, `baseId`, `baseName` and `toolPath` are what the four
-    // rendered forms need; anything else the server adds is dropped rather than reaching a line of
-    // prompt text by accident.
-    // ⚠ `scope` FAILS TO `'base'`, never to a folder or an entry. An unknown discriminator from a
-    // newer server renders the whole-base call, which is the WIDER instruction and therefore the one
-    // that cannot point an agent at a document that does not exist.
-    // ⚠ THE FOUR CARD KEYS JOINED 2026-09-18 (A4) AND THEY RIDE THE BASE SCOPE ALONE. A folder or
-    // entry scope already names the exact thing it points at, so a card over one would be noise on
-    // top of an answer — and a key that reaches no renderer is a key a later reader starts
-    // depending on. The server sends them only on a whole-base scope; this narrow enforces it
-    // rather than trusting it, which is the reason the outer whitelist exists at all.
+    // An allowlist inside the allowlist. An unknown `scope` fails to `'base'` (the wider call, which
+    // cannot point at a document that does not exist); card keys ride base scopes only.
     knowledge: scopes
       .filter((k) => k && typeof k === 'object')
       .map((k) => {
@@ -218,40 +119,17 @@ function narrow(body) {
           baseFolderCount: count(k.baseFolderCount, MAX_FOLDER_COUNT),
         };
       }),
-    // ⚠ HOW MANY ATTACHMENTS THIS OPERATOR CANNOT REACH HERE — see `count` above and
-    // `prompt-framing-agent-identity.js › knowledgeLines`, its one consumer.
     unreachableKnowledgeBaseCount: count(b.unreachableKnowledgeBaseCount),
-    // ⚠ G-1, AND IT FAILS FOREIGN. `authoredByCaller` decides which SECURITY HEADER the role
-    // block wears, so anything that is not an explicit `true` — an older server that does not
-    // send the field, a malformed body, a proxy that dropped it — gets the STRONGER header.
-    // The failure direction of a wrong guess here is a redundant caution, never a missing one.
+    // Fails foreign: anything but an explicit `true` gets the stronger security header.
     authoredByCaller: b.authoredByCaller === true,
   };
 }
 
 /**
- * Resolve an identity for a spawn. Never throws.
- *
- * ANSWERS, and they are the F-1…F-6 table from the spec, verbatim:
- *   { ok: true, identity }              a resolvable identity, narrowed (F-6: a NAME-ONLY
- *                                       identity is legal and launches — the role block emits
- *                                       the identity line and nothing else)
- *   { ok: false, reason: 'no-identity' } 404. ⚠ DELETED AND INVISIBLE ARE THE SAME ANSWER
- *                                       (F-1 / F-2) and the desktop must not try to tell them
- *                                       apart: the endpoint is 404-never-403 precisely so the
- *                                       difference is not observable, and a caller that guessed
- *                                       would be reconstructing the oracle.
- *   { ok: false, reason: 'busy' }        timeout, network, or 5xx (F-3 / F-4). An existing word:
- *                                       `use-agents-panel.ts` already renders it as "Busy right
- *                                       now — try again", which is exactly a momentary inability.
- *   { ok: false, reason: 'no-identity' } a 2xx whose body is not a usable identity. Unreachable
- *                                       against the real route; the branch exists because the
- *                                       alternative is launching an agent wearing an empty
- *                                       identity, and F-1's whole argument is that a blank agent
- *                                       silently wearing no identity is worse than a refusal.
- *
- * ⚠ THERE IS NO "DEGRADE TO BLANK" ANSWER ON ANY BRANCH. The operator PICKED an identity; a
- * launch that quietly drops it is not noticed for several turns.
+ * Resolve an identity for a spawn. Never throws, and never degrades to a blank agent.
+ * @returns {Promise<{ok: true, identity: object} | {ok: false, reason: 'no-identity' | 'busy'}>}
+ *   404 (deleted, invisible or elsewhere — one answer, 404-never-403) and an unusable 2xx body are
+ *   `no-identity`; timeout, network and every other non-2xx are `busy`. A name-only identity is legal.
  */
 async function resolveAgentIdentity(identityId, workspaceId) {
   if (!isIdentityId(identityId)) return { ok: false, reason: 'no-identity' };
@@ -264,15 +142,13 @@ async function resolveAgentIdentity(identityId, workspaceId) {
       noStore: true,
     });
   } catch (err) {
-    // An abort (the timeout) and a dead socket land here identically, and so they should:
-    // both are "this machine could not ask right now".
+    // The timeout's abort and a dead socket are the same "could not ask right now".
     diag('identity-resolve: network', String(identityId).slice(0, 8), (err && err.message) || 'error');
     return { ok: false, reason: 'busy' };
   }
   if (!res) return { ok: false, reason: 'busy' };
   if (res.status === 404) {
-    // Deleted, not visible, or unreachable from here: ONE word. 404-never-403 is what stops an id
-    // being probed, and this machine must not guess between them (P7-13: the server sends no hint).
+    // Deleted, not visible, or elsewhere: one word; this machine must not guess between them.
     diag(
       'identity-resolve: 404',
       String(identityId).slice(0, 8),
@@ -281,10 +157,7 @@ async function resolveAgentIdentity(identityId, workspaceId) {
     return { ok: false, reason: 'no-identity' };
   }
   if (!res.ok) {
-    // ⚠ EVERY OTHER NON-2xx IS `busy`, 4xx INCLUDED. A 401 that survived the shared repair, a
-    // 403 from a workspace header this machine got wrong, a 400: none of them means the identity
-    // is gone, and telling the operator to "reload the list" would send them to fix the wrong
-    // thing. `busy` says "not now", which is true of all of them.
+    // Every other non-2xx (4xx included) is `busy`: none of them means the identity is gone.
     diag('identity-resolve: HTTP', res.status, String(identityId).slice(0, 8));
     return { ok: false, reason: 'busy' };
   }
@@ -298,65 +171,27 @@ async function resolveAgentIdentity(identityId, workspaceId) {
   return { ok: true, identity };
 }
 
-// ── ⚠ THE LAUNCH SHEET'S EPHEMERAL OVERRIDES, RE-VALIDATED HERE (2026-08-22, F-281) ─────────
-//
-// The launch sheet lets an operator re-point THIS SPAWN's model and custom-field VALUES without
-// touching the durable row. Nothing below is ever written back to the identity.
-//
-// ⚠ MAIN IS THE ONLY REAL VALIDATOR, AND THAT IS A MEASURED FACT RATHER THAN A POSTURE.
-// `@/shared/lib/safe-label` exports `SAFE_LABEL_RE` from a module body that imports **zod**, and
-// `agent-identities/client/types.ts` forbids a value import from that family because it "would
-// drag the validator into the renderer" (the desktop SPA bundles those files). So the SPA
-// enforces only the NUMBERS and relies on single-line `<input>` elements; the CHARSET rule is
-// checked here, against the one copy of it this tree has
-// (`session-telemetry.js › UNSAFE_LABEL_RE`, the complement of the server's own, character for
-// character). F-281 records the shape and the fix.
-//
-// ⚠ THIS IS RENDERER-AUTHORED TEXT ON ITS WAY INTO A PROMPT — the one input on this lane that
-// is, and the reason the identity CONTENT is resolved by main rather than snapshotted. Fields
-// resolved FROM THE SERVER already passed `SAFE_LABEL_RE` at write time; these did not pass it
-// anywhere.
-//
-// ⚠ A BAD ROW IS DROPPED, NOT A REFUSED LAUNCH. It is the same answer the sheet's own
-// `boundOverrideFields` gives a row with an empty key, and the belt still runs at render
-// (`prompt-framing-agent-identity.js › fieldLines` re-sanitizes both halves). Refusing the spawn over
-// a pasted zero-width would be a launch the operator cannot fix from the sheet they are in.
+// The New agent popup's per-launch overrides, re-validated here — main is the only real validator:
+// the SPA cannot import the zod-backed charset rule, so it bounds only lengths (F-281). A bad field
+// row is dropped, not a refused launch; `prompt-framing-agent-identity.js › fieldLines` re-sanitizes.
 const { UNSAFE_LABEL_RE } = require('./session-telemetry');
 
 const MAX_OVERRIDE_KEY = 80; // `schema.ts › IdentityFieldSchema.key`
 const MAX_OVERRIDE_VALUE = 1000; // …and its `value`
 
-/** The server's short-label charset, asked as a question. `''` is SAFE: an empty value is a
- *  legitimate half-filled form and the schema allows it. */
+/** The server's short-label charset (`''` is safe: a half-filled form). */
 function isSafeLabel(value) {
   if (typeof value !== 'string') return false;
-  UNSAFE_LABEL_RE.lastIndex = 0; // ⚠ the shared regex carries /g; a stale index answers wrongly
+  UNSAFE_LABEL_RE.lastIndex = 0; // the shared regex carries /g; a stale index answers wrongly
   return !UNSAFE_LABEL_RE.test(value);
 }
 
 /**
- * Narrow the renderer's override object to what may reach a spawn.
- *
- * ⚠ ABSENT IS THE ONLY SPELLING OF "NO OVERRIDE", on both keys — the sheet's own contract. An
- * untouched sheet and a plain row click therefore produce BYTE-IDENTICAL launches, which is what
- * keeps the one-click lane one click.
- * ⚠ `fields` REPLACES, never merges. The sheet edits values over a fixed key set, so a merge
- * would be a second reconciliation rule for a set that already agrees; and a partial merge over
- * a set the operator can edit is how two field lists silently diverge.
- *
- * ⚠ `instructions` JOINED 2026-09-13 (Samuel: *"we should add an Instructions field in the New agent
- * popup"* — the field that replaced the deleted launch sheet's read-only disclosure). It is PROSE,
- * so unlike `fields` it takes NO charset rule: `agent-identities/schema.ts › InstructionsSchema` is
- * `safeOptionalProse` and a newline is legal in it. What it takes is the COLUMN's own bound, and
- * `''` is "no override" — the popup sends the key only when the operator's text differs from the
- * identity's own (`channels/components/use-agent-launch-run.ts › launchOverridesOf`).
- *
- * Answers `{ model: '' | <pick>, instructions: '' | <prose>, fields: null | [{key, value}] }` —
- * `''` meaning "the chain continues".
- * ⚠ THE MODEL IS BOUNDED, NOT COERCED (2026-09-22). It was `normalizeModel` — the FROZEN Claude
- * table — so a model the live picker offered that this build predates was dropped to `''` here
- * and the launch silently ran the next link's model. The funnel resolves it on the live roster or
- * refuses it (`session-launch.js`); `chainModel` is the one rule for "no opinion".
+ * Narrow the renderer's overrides to what may reach a spawn. Absent is the only "no override";
+ * `fields` replaces, never merges; `instructions` is prose (the column's bound, no charset rule).
+ * The model is bounded, not coerced — the launch funnel resolves it on the live roster or refuses.
+ * @returns {{model: string, instructions: string, fields: null | Array<{key: string, value: string}>}}
+ *   `''` = "the chain continues".
  */
 function narrowOverrides(overrides) {
   const o = overrides && typeof overrides === 'object' ? overrides : {};
@@ -373,7 +208,7 @@ function narrowOverrides(overrides) {
     if (!f || typeof f !== 'object') continue;
     const key = typeof f.key === 'string' ? f.key.trim().slice(0, MAX_OVERRIDE_KEY) : '';
     const value = typeof f.value === 'string' ? f.value.trim().slice(0, MAX_OVERRIDE_VALUE) : '';
-    // A keyless row names nothing; a duplicate key is the shape `IdentityFieldsSchema` refuses.
+    // A keyless row names nothing; a duplicate key is what `IdentityFieldsSchema` refuses.
     if (!key || seen.has(key)) continue;
     if (!isSafeLabel(key) || !isSafeLabel(value)) {
       diag('identity-resolve: dropped an override field whose charset the server would refuse');
@@ -387,27 +222,15 @@ function narrowOverrides(overrides) {
 }
 
 /**
- * The identity this spawn actually runs as: the resolved row with the popup's field and
- * instructions overrides substituted. ⚠ MODEL IS NOT APPLIED HERE — it belongs to the PRECEDENCE
- * CHAIN, which is computed once in `session-launch-op.js` and must not be half-resolved in two
- * places.
- * ⚠ `null` identity in: a BLANK agent may still carry a model override (the chain's business,
- * not this function's) — and, since F-695 was RULED on 2026-09-13, its typed `instructions`
- * come out as an INSTRUCTIONS-ONLY identity (`instructionsOnly: true`, no name) that
- * `prompt-framing-agent-identity.js › instructionsOnlyFraming` frames without a role line.
- * ⚠ **THE INSTRUCTIONS ARE SUBSTITUTED AFTER THE APPROVAL GATE — the ordering that gate's own
- * comment demands, and it is what keeps the question honest.** What a foreign identity's first use
- * asks the operator to accept is the text THEY DID NOT WRITE; splicing their own edit in first
- * would put renderer text in front of that question. `authoredByCaller` is deliberately NOT flipped
- * by an edit either: it is the SERVER's boolean about the ROW, and the framing fails FOREIGN.
+ * The identity this spawn runs as: the resolved row with the popup's fields/instructions substituted.
+ * Never sets the model (the precedence chain in `session-launch-op.js` owns it). Applied after the
+ * approval gate, so a foreign identity's approval shows the text the operator did not write, and
+ * `authoredByCaller` stays the server's. A blank launch with typed instructions becomes an
+ * instructions-only identity (F-695).
  */
 function applyOverrides(identity, narrowed) {
   const instructions = (narrowed && narrowed.instructions) || '';
   if (!identity) {
-    // F-695 RULED (Samuel, 2026-09-13): the field starts EMPTY on a blank launch, and
-    // whatever the operator types is carried as an instructions-only role — no name,
-    // no fields, no knowledge; `prompt-framing-agent-identity.js › instructionsOnlyFraming`
-    // frames it without a role line. Nothing typed → still no identity.
     return instructions
       ? { name: null, instructions, authoredByCaller: true, instructionsOnly: true, fields: null }
       : null;
@@ -420,9 +243,8 @@ function applyOverrides(identity, narrowed) {
 module.exports = {
   resolveAgentIdentity,
   isIdentityId,
-  narrow, // exported so the whitelist can be driven directly, without a fake transport
-  narrowOverrides, // 2026-08-22: the launch sheet's ephemeral re-points, re-validated main-side
+  narrow,
+  narrowOverrides,
   applyOverrides,
-  isSafeLabel, // the server's charset, as this tree's single copy answers it
   IDENTITY_RESOLVE_TIMEOUT_MS,
 };

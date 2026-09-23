@@ -205,7 +205,7 @@ describe("the /home card face is a rebind, not a fork", () => {
     );
     expect(cardName).not.toContain("letter-spacing");
     const identityCard = read(
-      "../../../../../src/features/agent-identities/components/identity-section.tsx"
+      "../../../../../src/shared/ui/section-heading.ts"
     );
     expect(identityCard).toContain(
       'IDENTITY_NAME_TEXT = "text-title font-medium text-text-primary"'

@@ -34,10 +34,7 @@
  */
 
 import type { ReactNode } from "react";
-// ⚠ CROSS-FEATURE, on the same recorded exception `message-pane-header.tsx` and
-// `agents-wells.tsx` carry (INVARIANTS §1, F-275): the type Samuel names is read
-// by POINTING AT IT rather than re-typed.
-import { IDENTITY_NAME_TEXT } from "@/features/agent-identities/components/identity-section";
+import { IDENTITY_NAME_TEXT } from "@/shared/ui/section-heading";
 import { cn } from "@/shared/lib/utils";
 import { SelectMenu, type SelectMenuOption } from "@/shared/ui/select-menu";
 import type { DesktopSessionSummary } from "@/shared/lib/spa-bridge";

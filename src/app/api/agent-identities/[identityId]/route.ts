@@ -17,22 +17,8 @@ import {
 import { AgentIdentityUpdateSchema } from "@/features/agent-identities/schema";
 
 /**
- * `GET | PATCH | DELETE /api/agent-identities/{identityId}`.
- *
- * ⚠ `sessionOnly` IS PER-METHOD AND ONLY `DELETE` CARRIES IT. GET and PATCH
- * stay reachable by an agent token on purpose — an orchestrator reads identities,
- * and letting it fix a typo in one is not a containment question. A DELETE is
- * permanent (no trash, no restore), it destroys something a whole team may be
- * spawning from, and an agent token has no confirm dialog to gate it — the same
- * argument that session-gates the team DELETE and the thread DELETE. Recorded
- * with that reasoning in `src/shared/auth/write-gate-coverage.test.ts`.
- *
- * ⚠ **AND THE READ AND THE WRITES NO LONGER RESOLVE THE ID THE SAME WAY (A12).**
- * GET goes through `readIdentityById`, so the id names its own container and a
- * `workspace=` that contradicts it is IGNORED. PATCH and DELETE stay on
- * `getIdentityById`, keyed to the workspace the caller was authorised in — a
- * write that followed an id across a tenancy boundary is a ruling nobody has
- * made.
+ * `GET | PATCH | DELETE /api/agent-identities/{identityId}` — all three follow the id to its own
+ * container. `sessionOnly` is per-method and only DELETE carries it: a permanent delete gets a human.
  */
 
 async function handleGet(_request: NextRequest, auth: WorkspaceAuthContext) {
@@ -53,10 +39,7 @@ async function handlePatch(request: NextRequest, auth: WorkspaceAuthContext) {
     const ctx = buildAgentIdentityContext(auth);
     const id = requireIdentityId(auth.params);
     const patch = await parseJson(request, AgentIdentityUpdateSchema);
-    // Optional `X-Updated-At` precondition — the same wire convention the KB,
-    // skills and ontology writes carry. Mismatch → 412
-    // AGENT_IDENTITY_STALE_VERSION; absent → last-writer-wins, which is what an
-    // older bundled client still sends.
+    // Optional `X-Updated-At` precondition: mismatch → 412, absent → last writer wins.
     const expectedUpdatedAt = request.headers.get("x-updated-at") ?? undefined;
     const identity = await updateIdentity(ctx, id, patch, expectedUpdatedAt);
     return NextResponse.json({ identity });

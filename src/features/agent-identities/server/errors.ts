@@ -1,12 +1,8 @@
 import "server-only";
 
-/** Agent-identity domain errors, mapped to `HttpError` at the route boundary
- *  via `mapAgentIdentityError`. Same shape as `skills/server/errors.ts`. */
+/** Agent-identity domain errors, mapped to `HttpError` by `http-mapping.ts › mapAgentIdentityError`. */
 
-/**
- * ⚠ ONE ERROR FOR "no such row" AND "not visible to you" — the 404-never-403
- * rule, so an id cannot be probed.
- */
+/** One error for "no such row" and "not visible to you" — 404, never 403, so an id cannot be probed. */
 export class AgentIdentityNotFoundError extends Error {
   readonly code = "AGENT_IDENTITY_NOT_FOUND";
   constructor(identifier: string) {
@@ -16,13 +12,8 @@ export class AgentIdentityNotFoundError extends Error {
 }
 
 /**
- * A KB id in the attach set is not visible to the CALLER.
- *
- * ⚠ 404-SHAPED ON PURPOSE, and this is a security choice rather than an
- * ergonomic one: "you may not attach this" and "no such base" must be the same
- * answer, or the endpoint becomes an existence oracle for other people's
- * private knowledge bases — probe ids, read the difference between the two
- * error codes. `KnowledgeBaseNotFoundError` makes the same trade.
+ * A requested knowledge scope the caller cannot read. 404-shaped on purpose: "may not attach" and
+ * "no such base" must be one answer, or the attach gate is an existence oracle for private bases.
  */
 export class IdentityKnowledgeBaseNotFoundError extends Error {
   readonly code = "KNOWLEDGE_BASE_NOT_FOUND";
@@ -38,8 +29,7 @@ export class IdentityKnowledgeBaseNotFoundError extends Error {
   }
 }
 
-/** A team id in the share set is not a team of this workspace, or (for a
- *  non-admin owner) not one the caller belongs to. */
+/** A team id is not a team of this workspace, or (for a non-admin owner) not one the caller is in. */
 export class IdentityTeamNotGrantableError extends Error {
   readonly code = "RESOURCE_ACCESS_DENIED";
   constructor(message: string) {
@@ -48,9 +38,7 @@ export class IdentityTeamNotGrantableError extends Error {
   }
 }
 
-/** Write attempted by someone who is neither the creator nor a workspace
- *  admin. ⚠ Only ever thrown for an identity the caller CAN SEE — an invisible
- *  one 404s first, so this never confirms existence. */
+/** Neither creator nor workspace admin. Only thrown for a visible row — the 404 fires first. */
 export class IdentityWriteForbiddenError extends Error {
   readonly code = "RESOURCE_ACCESS_DENIED";
   constructor(action: string) {
@@ -59,11 +47,7 @@ export class IdentityWriteForbiddenError extends Error {
   }
 }
 
-/**
- * Workspace-scoped API key tried to create or own a private identity. Mirrors
- * `WorkspaceKeyPrivateSkillError` — such a key may be shared between humans, so
- * it must not be able to mint content only "it" can see.
- */
+/** A shared credential may not create or own a private identity (it can pass between humans). */
 export class WorkspaceKeyPrivateIdentityError extends Error {
   readonly code = "WORKSPACE_KEY_PRIVATE_VISIBILITY";
   constructor() {
@@ -76,26 +60,8 @@ export class WorkspaceKeyPrivateIdentityError extends Error {
 }
 
 /**
- * 🔒 **THE TEAM AXIS IS HUMAN-ONLY ON THE WRITE PATH** (2026-09-02, A8's server
- * half).
- *
- * A8 took `team` off the MCP enum, so `dopl_agent` refuses it in zod before any
- * round trip (`agent-shared.ts › VISIBILITY_ENUM_MESSAGE`). That is a fence on
- * ONE surface: the REST route's schema still accepts `visibility: "team"` and
- * `teamIds`, and an agent credential reaches that route directly. A rule enforced
- * only where the caller happens to enter is the prompt-only shape this wave
- * exists to remove.
- *
- * ⚠ **IT REFUSES THE CREDENTIAL, NOT THE VALUE.** `team` stays a legal
- * visibility for a human — B4 is the ruling that would take it out of the DB, and
- * it has not been taken. So the web UI's sharing panel is untouched and every
- * stored `team` row keeps working; what an agent may no longer do is CREATE or
- * MOVE a row into it. `knowledge/server/service-base-writes.ts` states the same
- * rule in one sentence for its own teams mode, and this is that sentence applied
- * to the second resource type that has the axis.
- *
- * ⚠ 403, not 400: the request is well-formed and the value is real. What is
- * missing is a human.
+ * An agent credential may not create or move a row into `team` (the REST schema
+ * still accepts the value for humans). Refuses the credential, not the value — 403, not 400.
  */
 export class IdentityTeamScopeAgentForbiddenError extends Error {
   readonly code = "IDENTITY_TEAM_SCOPE_AGENT_FORBIDDEN";
@@ -109,15 +75,7 @@ export class IdentityTeamScopeAgentForbiddenError extends Error {
   }
 }
 
-/**
- * `expectedUpdatedAt` precondition ≠ the row's `updated_at`. → 412; the caller
- * re-reads, reconciles and retries with the version it saw.
- *
- * ⚠ **WORDED AS THE KB LANE'S TWIN** (`knowledge/server/errors.ts ›
- * KnowledgeStaleVersionError`), deliberately: the two are one contract with two
- * nouns, and an agent that learned `expected_version` on `dopl_kb` must not have
- * to learn a second vocabulary to use it here.
- */
+/** `expectedUpdatedAt` ≠ the row's `updated_at` → 412. Worded as `KnowledgeStaleVersionError`'s twin. */
 export class IdentityStaleVersionError extends Error {
   readonly code = "AGENT_IDENTITY_STALE_VERSION";
   readonly expected: string;

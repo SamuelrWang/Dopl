@@ -4,20 +4,12 @@ import {
   type AgentIdentity,
   type IdentityField,
   type IdentityFieldType,
-  type IdentityKnowledgeBaseRef,
-  type IdentityKnowledgeRef,
   type IdentityVisibility,
 } from "../types";
 
 /**
- * `agent_identities` row shape + snake_case → camelCase mapping. `fields`
- * arrives from PostgREST already parsed out of JSONB and is narrowed here —
- * never trusted, because a row written before a schema change is still a row.
- *
- * ⚠ `teamIds` and `knowledgeBases` are NOT columns. They are side-loaded by the
- * repository from the two junctions and passed in, so the mapper stays a pure
- * row→domain function with no IO and the caller decides what a given reader is
- * allowed to be told (see `withSharingSet` in `service-shared.ts`).
+ * `agent_identities` row shape and its mapping. `teamIds` / `knowledge*` are not columns: the
+ * service decorates them per viewer (`service-shared.ts › withSharingSet`, `decorateWithKnowledgeBases`).
  */
 
 export const AGENT_IDENTITY_COLS =
@@ -30,7 +22,7 @@ export interface AgentIdentityRow {
   description: string | null;
   instructions: string | null;
   model: string | null;
-  /** Optional: a stale PostgREST schema cache (or a pre-column fixture) omits it. */
+  /** Optional: a stale PostgREST schema cache omits it. */
   runtime?: string | null;
   fields: unknown;
   visibility: string;
@@ -39,15 +31,8 @@ export interface AgentIdentityRow {
   updated_at: string;
 }
 
-/**
- * ⚠ DEFENSIVE, and the reason is the DB CHECK's own scope: the migration
- * asserts `jsonb_typeof(fields) = 'array'` and a SIZE, and deliberately leaves
- * ELEMENT shape to zod (a per-write jsonb walk is the cost `20260731110000`
- * declined to pay). So the database guarantees an array and nothing about what
- * is in it — a malformed element is dropped here rather than reaching a launch
- * payload as `{key: undefined}`.
- */
-export function normalizeFields(raw: unknown): IdentityField[] {
+/** The DB CHECK guarantees only an array ≤ 8192 bytes, never element shape — malformed elements drop. */
+function normalizeFields(raw: unknown): IdentityField[] {
   if (!Array.isArray(raw)) return [];
   const out: IdentityField[] = [];
   for (const item of raw) {
@@ -61,20 +46,7 @@ export function normalizeFields(raw: unknown): IdentityField[] {
   return out;
 }
 
-export interface IdentitySideload {
-  teamIds?: string[];
-  knowledgeBases?: IdentityKnowledgeBaseRef[];
-  /** ⚠ SIDE-LOADED BESIDE `knowledgeBases`, NOT INSTEAD OF IT. The base-level
-   *  slice keeps its own key for readers that predate scopes (`types.ts ›
-   *  AgentIdentity.knowledgeBases`), and both are produced by ONE decoration so
-   *  they cannot disagree. */
-  knowledge?: IdentityKnowledgeRef[];
-}
-
-export function mapAgentIdentityRow(
-  row: AgentIdentityRow,
-  sideload: IdentitySideload = {}
-): AgentIdentity {
+export function mapAgentIdentityRow(row: AgentIdentityRow): AgentIdentity {
   return {
     id: row.id,
     workspaceId: row.workspace_id,
@@ -84,11 +56,11 @@ export function mapAgentIdentityRow(
     model: row.model,
     runtime: row.runtime ?? null,
     fields: normalizeFields(row.fields),
-    // The CHECK constraint is the guarantee; the cast is not a validation.
+    // The column CHECK is the guarantee; the cast is not a validation.
     visibility: row.visibility as IdentityVisibility,
-    teamIds: sideload.teamIds ?? [],
-    knowledgeBases: sideload.knowledgeBases ?? [],
-    knowledge: sideload.knowledge ?? [],
+    teamIds: [],
+    knowledgeBases: [],
+    knowledge: [],
     createdBy: row.created_by,
     createdAt: row.created_at,
     updatedAt: row.updated_at,

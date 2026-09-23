@@ -9,41 +9,9 @@ import { RemovableChip } from "./identity-editor-rows";
 import { BaseNode, type ScopeToggle } from "./knowledge-scope-tree";
 
 /**
- * THE KNOWLEDGE PICKER — chips for what is attached, over a CHECKABLE TREE that
- * is rendered IN THE FORM (Samuel, 2026-09-08: *"right now, you can only
- * select entire bases, but I want to be able to specific folders or
- * entries/files. also i dont think a dropdown is the best way to do it"*).
- *
- * ⚠ **IT REPLACES `ChipMultiSelect` FOR KNOWLEDGE AND LEAVES IT TO THE TEAMS.**
- * That component's docblock argues teams and KBs share one REPLACE-SET shape and
- * therefore one control; **that argument ends here.** A team set is FLAT — a
- * list of names with no inside — and a knowledge set is a forest three levels
- * deep. A flat menu cannot express "this folder", which is the whole request,
- * and Samuel's own sentence rules out the dropdown by name.
- *
- * ⚠ **`TreeRows` IS NOT REUSED** (`knowledge/components/knowledge-v2/list/
- * tree-rows.tsx`): its eight props are the base EDITOR's authoring callbacks and
- * none is about selection, so reusing it means giving each a "not here" branch
- * inside a picker. Shared instead: the read (`useKnowledgeTree`) and the
- * parent-indexing idiom.
- *
- * ⚠ **A FOLDER MEANS ITS SUBTREE, INCLUDING LATER ADDITIONS** (the Desktop
- * Agent's assumption, unopposed). So checking a folder does not check its
- * children into the set — it makes them IMPLIED: they render checked and
- * disabled, and the set holds ONE row. An expansion here would be a snapshot,
- * and an entry filed tomorrow would silently not be attached.
- *
- * ⚠ **SCOPED TO THE EDITOR'S CONTAINER**, exactly as the base list already was:
- * `workspaceId` is the mount's, every tree read carries it, and this component
- * resolves no visibility of its own — a second opinion about which knowledge a
- * member may attach is the two-readers-one-fact defect with an ACCESS GRANT as
- * the thing that drifts. The server refuses an unreadable scope with a 404.
- *
- * 🔒 **IT IS RENDERED IN PLACE SINCE 2026-09-22 (Samuel)** — no Add button and
- * no `Popover`. The old note here argued for COORDINATE mode *"because the
- * editor is a scrolling, overflow-clipping modal body, where a trigger-anchored
- * panel renders as a clipped sliver"*: an argument against ANCHORING a panel,
- * which an inline list does not do. See the render for the rest.
+ * The knowledge picker: chips for what is attached over a checkable tree rendered in the form. A folder
+ * means its subtree including later additions — its children render checked-and-locked, never expanded
+ * into the set. It resolves no visibility of its own; the server 404s an unreadable scope.
  */
 
 export interface KnowledgeBaseOption {
@@ -62,12 +30,11 @@ export function KnowledgeScopePicker({
   renderSelected,
 }: {
   workspaceId: string;
-  /** ⚠ WHAT THE CALLER WAS GIVEN. The page supplies these from its own base
-   *  read; this control never fetches a list of its own. */
+  /** The caller's own base read; this control never fetches the list. */
   bases: ReadonlyArray<KnowledgeBaseOption>;
   selected: ReadonlyArray<IdentityKnowledgeRef>;
   onChange: (next: IdentityKnowledgeRef[]) => void;
-  /** Shown only when the base read has ANSWERED with nothing (`state` ready). */
+  /** Shown only when the base read has answered with nothing (`state` ready). */
   emptyLine: string;
   /** The base read's state (`hooks/use-attachable-bases.ts`); pending and failed are not empty. */
   state?: AttachableBasesState;
@@ -82,13 +49,7 @@ export function KnowledgeScopePicker({
     [selected]
   );
 
-  /**
-   * ⚠ ADD-OR-REMOVE PLUS A PRUNE, IN ONE CALL. Checking a base or a folder
-   * removes every scope it now IMPLIES, because two rows where one suffices is
-   * a set that renders the same attachment twice in the role block — and the
-   * redundant one survives when the operator later unchecks the ancestor,
-   * silently keeping an attachment they thought they had removed.
-   */
+  /** Add-or-remove plus a prune: checking an ancestor removes every scope it now implies. */
   const toggle: ScopeToggle = (ref, impliedKeys) => {
     const key = refKey(ref);
     if (selectedKeys.has(key)) {
@@ -96,20 +57,13 @@ export function KnowledgeScopePicker({
       return;
     }
     const pruned = new Set(impliedKeys);
-    // A base covers every scope of that base. Pruned off the SELECTION, not the lazy
-    // tree, which is empty while the base is collapsed (P7-04).
+    // A base covers all its scopes, pruned off the selection (the lazy tree is empty while collapsed).
     const covered = (s: IdentityKnowledgeRef) =>
       pruned.has(refKey(s)) || (ref.scope === "base" && s.baseId === ref.baseId);
     onChange([...selected.filter((s) => !covered(s)), ref]);
   };
 
-  /**
-   * ARROWS AND SPACE, over whatever is currently rendered. ⚠ THE ROW SET IS READ
-   * FROM THE DOM rather than mirrored in state: the tree is assembled by three
-   * components and lazily, so a state mirror would be a second answer to "what
-   * is on screen" that goes stale the moment a base finishes loading.
-   * Space/Enter are handled by the row itself, which is where the scope is.
-   */
+  /** Arrow keys over the rendered rows, read from the DOM (the tree loads lazily); rows own Space/Enter. */
   function onTreeKeyDown(event: KeyboardEvent<HTMLDivElement>) {
     if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
     const root = treeRef.current;
@@ -129,10 +83,6 @@ export function KnowledgeScopePicker({
 
   return (
     <div className="flex flex-col gap-1.5">
-      {/* THE PICKED ONES, ABOVE THE LIST THEY CAME FROM. ⚠ They stay CHIPS and
-          keep their own X: the tree row below is the same attachment and toggles
-          it too, but a scope whose base is collapsed (or whose base the operator
-          has scrolled past) has no visible row to uncheck. */}
       {renderSelected ? (
         renderSelected(selected)
       ) : selected.length > 0 && (
@@ -166,21 +116,7 @@ export function KnowledgeScopePicker({
       ) : bases.length === 0 ? (
         <span className="text-caption text-text-muted">{emptyLine}</span>
       ) : (
-        /* 🔒 **THE TREE IS IN THE FORM, NOT BEHIND A BUTTON (Samuel, 2026-09-22:
-            *"for knowledge, instead of it being a dropdown add button, put the
-            knowledge/items directly into there"*).** ⚠ **THE POPOVER IS GONE AND
-            SO IS THE ADD PILL** — the argument that put them there was about the
-            editor being *"a scrolling, overflow-clipping modal body, where a
-            trigger-anchored panel renders as a clipped sliver"*, and that is an
-            argument against ANCHORING a panel, not against listing the bases.
-            Rendered in place there is nothing to anchor and nothing to clip.
-            ⚠ **STILL LAZY, AND THAT IS WHAT MAKES IT AFFORDABLE**: `BaseNode`
-            holds its own `open` and asks `useKnowledgeTree` for nothing until it
-            is expanded, so an inline list of twenty bases is twenty rows and
-            zero reads — the same drill-in the popover had.
-            ⚠ BOUNDED AND SCROLLABLE, because this list is the one part of the
-            form whose height is the workspace's rather than the form's.
-            ⚠ FLAT FILL, NEVER PRESSED IN (`identity-editor-surface.test.tsx`). */
+        // Inline (Samuel's ruling) and lazy: an unexpanded base reads nothing.
         <div
           ref={treeRef}
           role="tree"

@@ -330,6 +330,7 @@ export function AgentsTab({
           currentUserId={currentUserId}
           memberNames={memberNames}
           busy={launchBusy}
+          catalogs={catalogs}
           /* ⚠ **IT CHOOSES AND THE POPUP LAUNCHES (2026-09-13, Samuel's ruling over the
              deleted launch sheet).** `openWithIdentity` opens the ONE form with the row
              preselected and its Name / Description / Instructions prefilled — so the two

@@ -1,6 +1,6 @@
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { IDENTITY_NAME_TEXT } from "@/features/agent-identities/components/identity-section";
+import { IDENTITY_NAME_TEXT } from "@/shared/ui/section-heading";
 import { NAKED_ICON_BUTTON } from "@/shared/ui/naked-icon-button";
 import type { BridgeRequestOpts } from "#/lib/dopl-bridge";
 import { USER_ID, bridgeCalls, installBridge } from "#/test-utils/bridge";

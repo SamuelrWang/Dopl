@@ -1,4 +1,4 @@
-import { IDENTITY_NAME_TEXT } from "@/features/agent-identities/components/identity-section";
+import { IDENTITY_NAME_TEXT } from "@/shared/ui/section-heading";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { SelectMenu, type SelectMenuOption } from "@/shared/ui/select-menu";
 import { NAKED_ICON_BUTTON } from "@/shared/ui/naked-icon-button";

@@ -1,70 +1,21 @@
-// FIRST-USE APPROVAL FOR ANOTHER MEMBER'S AGENT IDENTITY (2026-08-22, OQ-3).
-//
-// ⚠ **SPLIT OUT OF `channel-prefs.js` ON 2026-08-31**, at the §1 cap and on a REASON rather than
-// the count that forced it — the same seam and the same precedent as `orchestrator-consent.js`
-// one wave earlier. This file changes when the rules for trusting ANOTHER MEMBER'S standing
-// configuration change; `channel-prefs.js` changes when a CHANNEL preference does. The record it
-// holds is not keyed by a channel at all, which is the tell: it is keyed by an IDENTITY ID, and a
-// identity is a workspace-scoped thing that outlives every channel it is launched into.
-// Re-exported from `channel-prefs.js`, so no caller moved.
-//
-// A `team` or `workspace` identity's `instructions` are written by ANOTHER WORKSPACE MEMBER and
-// they execute ON THIS MACHINE, in this operator's session, under this operator's credential,
-// with this operator's tool profile and KB reach. That is a materially different exposure from
-// every other shared-content surface in the product: a shared SKILL is pulled per call and read
-// as a procedure, while a shared IDENTITY is STANDING CONFIGURATION for an autonomous agent.
-//
-// The fence (`prompt-framing-agent-identity.js`) stops WIDENING. It does not stop MISDIRECTION, and
-// nothing text-shaped can. What addresses misdirection is INFORMING A HUMAN, once, before the
-// first run: the selector's authorship marker, and this — ONE approval, the first time a given
-// FOREIGN identity launches on THIS MACHINE, with its instructions shown verbatim.
-//
-// ⚠ IT LIVES IN electron-store BESIDE `orchestratorLaunchEnabled`, AND FOR THAT TOGGLE'S EXACT
-// REASON. A spawned session has `Bash` and this operator's Dopl credential is on disk, so any
-// surface a Dopl credential can address is disqualified: a server-stored approval lets a
-// credential-holding agent PRE-APPROVE ITSELF ACROSS THE FLEET, which is the escalation this
-// whole family has to not have. No request, from any credential, to any Dopl endpoint, can write
-// this. `Bash` on this machine could rewrite the store file directly — true of every local
-// setting, and not what this defends against; the REMOTE path is.
-//
-// ⚠ KEYED BY IDENTITY ID, AND APPROVAL IS PER IDENTITY, NOT PER AUTHOR. Approving Ada's
-// "Code Auditor" says nothing about Ada's next identity, because the thing the operator read and
-// consented to was a specific body of instructions.
-// ⚠ IT IS NOT A RECORD OF THE INSTRUCTIONS THEY READ. An edited identity keeps its approval,
-// deliberately: re-prompting on every edit would train the operator to click through, and the
-// author could already have edited it between the approval and the launch. The approval is
-// "I have decided to trust this identity", which is a decision about a THING, not a diff.
-// ⚠ DEFAULT DENY — an absent, corrupt or non-boolean record reads false, the same fail-closed
-// rule auto-send and the orchestrator toggle both follow.
-//
-// ⚠ NOTHING HERE APPLIES TO THE OPERATOR'S OWN IDENTITIES. `authoredByCaller === true` never
-// reaches this store: an approval prompt over your own configuration is the noise that teaches
-// people to stop reading approval prompts.
-// ⚠ NOR TO THE DIRECTIVE LANE. There is no human at the keyboard there, and the answer is
-// already written down in `orchestrator-consent.js`: `orchestratorLaunchEnabled` STANDS IN FOR
-// THE CLICK. A second machine-local gate for the same threat, guarding the same lane, is a fence
-// nobody reads.
+// First-use approval for another member's agent identity: their instructions run on this machine as
+// this operator, so a human approves each foreign identity once, before its first run.
+// Machine-local in electron-store and never server-writable — a credential-holding agent must not be
+// able to pre-approve itself across the fleet. Keyed by identity id (a decision about a thing, so an
+// edit keeps it); default deny. Own identities and the directive lane never reach this store.
+// Re-exported from `channel-prefs.js`.
 
 const Store = require('electron-store');
 const { diag } = require('./diag');
 
-// ⚠ THE SAME `electron-store` INSTANCE SHAPE `channel-prefs.js` USES — `electron-store` is
-// backed by ONE JSON file per app, so two instances read and write the same document. Keeping
-// its own handle is what lets this module stand alone without importing the file it was split
-// out of (which imports it back, through the re-export). Same idiom as `orchestrator-consent.js`.
+// Its own handle on the one electron-store document (channel-prefs imports this module back).
 const store = new Store();
 
-// ⚠ THE DIAG PREFIX STAYS `channel-prefs:` AFTER THE MOVE, exactly as `orchestrator-consent.js`
-// kept it. A support log is a vocabulary an operator and a reader grep against; renaming it
-// inside a split that changes no behaviour would make one release's logs unfindable from the
-// next one's, which is a cost with no buyer.
 const IDENTITY_APPROVAL_KEY = 'approvedAgentIdentities'; // { [identityId]: true }
-// The key before the template→identity rename, READ as a fallback so an approval given on ≤1.35
-// survives the upgrade (P3-10). Never written.
+// The pre-rename key, read as a fallback so older approvals survive; never written.
 const LEGACY_APPROVAL_KEY = 'approvedAgentTemplates';
 
-// Bounded, because the map is written from a launch path and an unbounded local store is the
-// shape that has bitten this tree before. Oldest key out; a re-approval is one click.
+// Bounded (written from a launch path); oldest key out.
 const MAX_APPROVED_IDENTITIES = 200;
 
 function isIdentityApproved(identityId) {
@@ -79,6 +30,7 @@ function isIdentityApproved(identityId) {
   }
 }
 
+// Diag lines keep the `channel-prefs:` prefix so support logs stay greppable across releases.
 function approveIdentity(identityId) {
   if (!identityId) return false;
   try {
@@ -98,8 +50,6 @@ function approveIdentity(identityId) {
 
 module.exports = {
   IDENTITY_APPROVAL_KEY,
-  LEGACY_APPROVAL_KEY,
-  MAX_APPROVED_IDENTITIES,
   isIdentityApproved,
   approveIdentity,
 };

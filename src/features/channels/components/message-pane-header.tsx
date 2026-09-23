@@ -13,11 +13,7 @@
 
 import type { ReactNode } from "react";
 import { ChevronRight, PanelRight, Pin } from "lucide-react";
-// ⚠ CROSS-FEATURE, AND THE SAME "SMALLER OF TWO EVILS" `agents-wells.tsx` RECORDS
-// (INVARIANTS §1 forbids it; F-275 records that this tree has never obeyed the
-// rule). `IDENTITY_NAME_TEXT` was exported on 2026-09-13 so a second surface could
-// read the type Samuel names by POINTING AT IT; this header is the fourth reader.
-import { IDENTITY_NAME_TEXT } from "@/features/agent-identities/components/identity-section";
+import { IDENTITY_NAME_TEXT } from "@/shared/ui/section-heading";
 import { cn } from "@/shared/lib/utils";
 import { IconButton } from "./bits";
 

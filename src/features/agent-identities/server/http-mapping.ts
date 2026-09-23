@@ -11,26 +11,19 @@ import {
   WorkspaceKeyPrivateIdentityError,
 } from "./errors";
 
-/** Agent-identity domain errors → `HttpError`. Null for anything
- *  unrecognized, so the caller falls through to a generic 500 — same contract
- *  as `mapSkillError` / `mapKnowledgeError`. */
+/** Agent-identity domain errors → `HttpError`; `null` for anything else (the caller's generic 500). */
 export function mapAgentIdentityError(err: unknown): HttpError | null {
   if (err instanceof AgentIdentityNotFoundError) {
-    // No `details`: a key's presence would itself be a fact about a row the
-    // caller may not see.
+    // No `details`: a key's presence would itself be a fact about a row the caller may not see.
     return new HttpError(404, "AGENT_IDENTITY_NOT_FOUND", err.message);
   }
   if (err instanceof IdentityKnowledgeBaseNotFoundError) {
-    // ⚠ 404, not 403 — see the error class: a distinguishable "forbidden" here
-    // would turn the attach endpoint into an existence oracle for private KBs.
+    // 404, never 403 — a distinguishable "forbidden" would be an existence oracle for private KBs.
     return new HttpError(404, "KNOWLEDGE_BASE_NOT_FOUND", err.message, {
       knowledgeBaseIds: err.missingIds,
     });
   }
-  // ⚠ 412 AND THE SAME `details` PAIR THE KB LANE SENDS (`knowledge/server/
-  // http-mapping.ts`) — the app's editor and `dopl_agent` both read `actual` to
-  // say what the row moved to, and a second shape here would need a second
-  // reader in each.
+  // Same `details` pair as the KB lane's 412 — the editor and `dopl_agent` read `actual`.
   if (err instanceof IdentityStaleVersionError) {
     return new HttpError(412, "AGENT_IDENTITY_STALE_VERSION", err.message, {
       expected: err.expected,
@@ -49,9 +42,7 @@ export function mapAgentIdentityError(err: unknown): HttpError | null {
   if (err instanceof IdentityTeamScopeAgentForbiddenError) {
     return new HttpError(403, "IDENTITY_TEAM_SCOPE_AGENT_FORBIDDEN", err.message);
   }
-  // 🔒 G16 — 400, not 403: the caller is allowed to do this, the REQUEST is
-  // incomplete. Shared with the knowledge lane (`knowledge/server/
-  // http-mapping.ts`) — one error class, one code, two feature mappers.
+  // G16: 400, not 403 — the caller may do this; the request is incomplete. Shared with knowledge.
   if (err instanceof ContainerPublishUnacknowledgedError) {
     return new HttpError(400, "CONTAINER_PUBLISH_UNACKNOWLEDGED", err.message);
   }

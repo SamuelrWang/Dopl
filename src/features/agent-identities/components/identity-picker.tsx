@@ -4,103 +4,31 @@ import { useMemo, useState } from "react";
 import { Search } from "lucide-react";
 import { MenuDivider, Popover } from "@/shared/ui/popover-menu";
 import { agentModelShortLabel } from "@/features/channels/lib/agent-models";
+import type { ModelCatalogs } from "@/features/channels/lib/model-catalog";
 import { agentIdentityErrorMessage } from "../client/api";
 import type { AgentIdentity } from "../client/types";
 import { useAgentIdentities } from "../hooks/use-agent-identities";
 import { SECTIONS, groupByVisibility } from "../lib/visibility";
 
 /**
- * WHICH IDENTITY THE NEXT AGENT WEARS — one popover, with ONE live mount:
- * `channels/components/agents-tab.tsx`'s New Agent split button.
- *
- * ⚠ **IT CHOOSES; IT NO LONGER LAUNCHES (2026-09-13, Samuel's ruling over the
- * deleted `launch-sheet.tsx`).** A pick closes this popover and OPENS
- * `channels/components/launch-agent-dialog.tsx › LaunchAgentDialog` with the identity
- * preselected and its fields prefilled — *"the popup should essentially be the
- * same as that of a normal agent launch, except the identity is pre-selected"*.
- * So `sessions.launch` is not reached from this file at all, the row CHEVRON is
- * gone with the sheet it opened, and the first-use approval question belongs to
- * the popup's runner (`channels/components/use-agent-launch-run.ts › useLaunchRunner`).
- * ⚠ **THE ONE-CLICK IDENTITY LAUNCH WENT WITH IT**, which SUPERSEDES the
- * *one lane, one-click launch* half of the 2026-08-22 ruling exactly as the
- * popup already superseded it for the BLANK lane on 2026-09-08 (INVARIANTS §5A):
- * it is still one LANE — the popup submits through the same `onLaunchAgent` —
- * and it is now one FORM for both.
- *
- * ⚠ THIS DOCBLOCK SAID "mounted by BOTH launch surfaces … and
- * `channels/components/composer.tsx`'s Bot icon" UNTIL 2026-08-30, AND THAT MOUNT WAS
- * RETIRED ON 2026-08-27. The composer's Bot icon and the chevron beside it are
- * both replaced by `channels/components/composer-launch-panel.tsx`, whose **Identity
- * row is this picker's whole function**; `composer.tsx` imports
- * `IdentityApprovalDialog` and `ComposerLaunch` and no picker at all. INVARIANTS
- * §5A carried the same stale sentence and is corrected in the same change.
- * Re-derive rather than trusting this line: `grep -rn IdentityLaunchPicker src apps`.
- *
- * ⚠ THIS COMPONENT IS NOT IN FRONT OF THE NEW AGENT BUTTON, which is the half
- * of the 2026-08-22 ruling that survives: it opens from a DISTINCT adjacent
- * chevron zone beside that button (RESOLVING the spec's OQ-4 against its own
- * recommendation). A popover that intercepted the click would put a keystroke in
- * front of the most common action in the product.
- *
- * ⚠ THE READ IS SHAREABLE, AND THAT IS DIFFERENT FROM `useAgentsPanel` — kept
- * because it is the rule for the NEXT surface that wants this picker, not a
- * claim that a second mount exists today. The "never mount it twice" rule there
- * is about a POLL INTERVAL (`PEER_SESSIONS_POLL_MS` — two mounts are two answers
- * to "how fresh is fresh enough"). `useAgentIdentities` is a react-query read on
- * a stable key, so two mounts would share one in-flight fetch and one cache
- * entry. ⚠ And the hook lives in {@link PickerBody}, which `Popover` mounts only
- * while the popover is OPEN — so a channel the operator never opens the picker
- * in costs no request at all.
- *
- * ⚠ THE AUTHORSHIP MARKER IS A SECURITY SIGNAL, NOT DECORATION (§4's injection
- * surface). A `team` / `workspace` identity's instructions are another member's
- * text about to run on this machine under this operator's credential, and this
- * marker is the ONLY signal shown to the human BEFORE the choice is made — so it
- * is in the row's accessible name as well as on its face. `createdBy` is already
- * on the list DTO; this costs no server change.
- *
- * ⚠ NO COUNT CAP. The server returns only what the caller may see, and a cap
- * would hide an identity with no way to reach it. The popover is bounded by
- * height and scrolls; a search input appears past {@link SEARCH_THRESHOLD}.
- *
- * ⚠ NO CONCAVE SURFACE (Samuel, 2026-08-22) — swept by
- * `./identity-editor-surface.test.tsx › no concave surfaces`, which reads every source
- * under `features/agent-identities/{components,lib,hooks,client}`.
+ * Which identity the next agent wears — a popover on the Agents tab's New Agent split button. It
+ * chooses and hands the row up; the New agent popup launches (one launch lane, INVARIANTS §5A).
+ * The authorship marker is a security signal (another member's instructions run as this operator),
+ * so it is in the row's accessible name too.
  */
 
 /** Below this the search field is chrome for nothing. */
 export const SEARCH_THRESHOLD = 8;
 
-/**
- * WHAT THE SURFACE DOES WITH A PICK — **open the New agent popup on it, and nothing else**
- * (Samuel, 2026-09-13).
- *
- * ⚠ **THIS INTERFACE WAS `launch` + `approve` AND THE PICKER RAN A LAUNCH ITSELF UNTIL
- * 2026-09-13.** Samuel's ruling over the deleted launch sheet — *"the popup should essentially be
- * the same as that of a normal agent launch, except the identity is pre-selected"* — makes a
- * identity launch the POPUP's act, so this popover chooses and the popup launches. What left with
- * the launch: `IdentityLaunchOutcome`, the row CHEVRON (its only job was the sheet; the popup's
- * Model and Instructions rows are what it opened for), the held overrides, and the FIRST-USE
- * APPROVAL modal — `channels/components/use-agent-launch-run.ts › useLaunchRunner` owns that question now,
- * on the one lane, so it cannot be asked two ways.
- * ⚠ **ONE HANDLER, NOT TWO.** `null` is a BLANK agent and is the first row's own act; there is no
- * second entry point for "with options", because the popup IS the options.
- */
+/** What the surface does with a pick: open the New agent popup on it, and nothing else. */
 export interface IdentityPickerHandlers {
-  /** ⚠ `null` OPENS THE POPUP ON None — a blank agent is a real configuration, and the first row
-   *  is redundant with the surface's own button ON PURPOSE (see {@link PickerBody}). */
+  /** `null` opens the popup on a blank agent. */
   onPick: (identity: AgentIdentity | null) => void;
 }
 
 /**
- * `by <member>` for an identity this operator did not write, else `null`.
- *
- * ⚠ AN UNRESOLVABLE AUTHOR IS STILL FOREIGN. `createdBy` is a WORKSPACE member
- * and the map is the CHANNEL's roster, so an identity shared by someone who is
- * not in this channel resolves to no name; `created_by` is also nulled when its
- * author leaves the workspace. Both answer "somebody else wrote this", which is
- * the security-relevant half — dropping the marker because the name is missing
- * would turn UNKNOWN into MINE (INVARIANTS §11).
+ * `by <member>` for an identity this operator did not write, else `null`. An unresolvable author is
+ * still foreign ("by another member") — unknown must never read as mine (INVARIANTS §11).
  */
 export function authorMarker(
   identity: AgentIdentity,
@@ -113,19 +41,8 @@ export function authorMarker(
 }
 
 /**
- * The chevron zone's own state, so both surfaces spell the trigger the same way
- * while wearing different chrome (a split button; an icon pair).
- *
- * ⚠ COORDINATE MODE, like `SelectMenu` and the editor's pickers: both launch
- * surfaces sit inside scrolling, overflow-clipping panes where a
- * trigger-anchored panel renders as a clipped sliver.
- *
- * ⚠ NO REF, AND THAT IS NOT AN ACCIDENT. The obvious shape returns a
- * `triggerRef` for the surface to attach — but every read of the returned object
- * during render then trips `react-hooks/refs` ("cannot access refs during
- * render"), and the root lint runs `--max-warnings 0`. The click event already
- * carries the element that was clicked, so {@link openAt} takes it and the hook
- * holds nothing but coordinates.
+ * The picker's anchor state (coordinate mode: the hosts are clipping panes). It takes the clicked
+ * element instead of returning a ref, which `react-hooks/refs` would flag on every render read.
  */
 export function useIdentityPicker() {
   const [at, setAt] = useState<{ x: number; y: number } | null>(null);
@@ -153,6 +70,7 @@ export function IdentityLaunchPicker({
   currentUserId = null,
   memberNames,
   busy = false,
+  catalogs,
   onPick,
 }: {
   open: boolean;
@@ -164,12 +82,10 @@ export function IdentityLaunchPicker({
   memberNames?: ReadonlyMap<string, string>;
   /** A launch already in flight — the same double-submit guard the surfaces use. */
   busy?: boolean;
+  /** The live model catalogs the host holds, for the rows' model chips. */
+  catalogs?: ModelCatalogs | null;
 } & IdentityPickerHandlers) {
-  /**
-   * ⚠ **CHOOSING CLOSES THE POPOVER AND HANDS THE ROW UP — IT STARTS NOTHING.** Both halves
-   * matter: a popover left standing over the dialog it just opened would put a menu in front of the
-   * form, and a launch from here would be the second lane INVARIANTS §5A forbids.
-   */
+  /** Choosing closes the popover and hands the row up; it starts nothing. */
   function choose(identity: AgentIdentity | null) {
     onClose();
     onPick(identity);
@@ -187,6 +103,7 @@ export function IdentityLaunchPicker({
         currentUserId={currentUserId}
         memberNames={memberNames}
         busy={busy}
+        catalogs={catalogs}
         onBlank={() => choose(null)}
         onPick={choose}
       />
@@ -194,16 +111,13 @@ export function IdentityLaunchPicker({
   );
 }
 
-/**
- * The popover's contents. ⚠ SEPARATE COMPONENT BECAUSE OF THE HOOK: `Popover`
- * renders nothing while closed, so mounting the read here is what keeps a picker
- * the operator never opens from costing a request.
- */
+/** The popover body — the list read mounts here, so a closed picker costs no request. */
 function PickerBody({
   workspaceId,
   currentUserId,
   memberNames,
   busy,
+  catalogs,
   onBlank,
   onPick,
 }: {
@@ -211,15 +125,14 @@ function PickerBody({
   currentUserId: string | null;
   memberNames?: ReadonlyMap<string, string>;
   busy: boolean;
+  catalogs?: ModelCatalogs | null;
   onBlank: () => void;
   onPick: (identity: AgentIdentity) => void;
 }) {
   const list = useAgentIdentities(workspaceId);
   const [query, setQuery] = useState("");
 
-  // ⚠ THE THRESHOLD READS THE WHOLE LIST, NEVER THE FILTERED ONE. A field that
-  // disappeared once its own filter narrowed the list past 8 would take the
-  // operator's cursor with it mid-word.
+  // The threshold reads the whole list, so the field never vanishes mid-search.
   const searchable = list.identities.length > SEARCH_THRESHOLD;
   const needle = query.trim().toLowerCase();
   const visible = useMemo(
@@ -230,17 +143,11 @@ function PickerBody({
     [list.identities, needle]
   );
   const grouped = useMemo(() => groupByVisibility(visible), [visible]);
-  // ⚠ HEADERS ONLY WHEN THERE IS SOMETHING TO TELL APART. One non-empty group
-  // means the header labels every row on screen, which is a word that carries no
-  // information (INVARIANTS §5, minimal copy).
+  // Group headers only when more than one group is filled (minimal copy, INVARIANTS §5).
   const filled = SECTIONS.filter((s) => grouped[s.visibility].length > 0);
 
   return (
     <div className="flex flex-col">
-      {/* ⚠ FIRST ROW, AND IT IS THE SAME ACT AS THE SURFACE'S MAIN CLICK. It is
-          redundant on purpose: an operator who opened the picker to browse must
-          be able to back out into the default without hunting for the button
-          behind the backdrop. */}
       <button
         type="button"
         role="menuitem"
@@ -273,8 +180,7 @@ function PickerBody({
       {list.loading ? (
         <p className="px-2.5 py-2 text-caption text-text-muted">Loading identities…</p>
       ) : list.error != null ? (
-        // ⚠ "COULD NOT ASK" IS NOT "NOTHING TO SHOW". An empty list under a
-        // failed read would read as "you have no identities" (INVARIANTS §11).
+        // A failed read is not an empty list (INVARIANTS §11).
         <p role="alert" className="px-2.5 py-2 text-caption text-danger">
           {agentIdentityErrorMessage(list.error, "Couldn't load identities")}
         </p>
@@ -296,6 +202,7 @@ function PickerBody({
                 identity={identity}
                 marker={authorMarker(identity, currentUserId, memberNames)}
                 busy={busy}
+                catalogs={catalogs}
                 onPick={onPick}
               />
             ))}
@@ -306,38 +213,28 @@ function PickerBody({
   );
 }
 
-/**
- * ONE IDENTITY, ONE ACT — the row OPENS THE NEW AGENT POPUP on it.
- *
- * ⚠ **THE TRAILING CHEVRON IS DELETED (2026-09-13) AND SO IS THE "TWO ACTS" RULE ABOVE IT.** Its
- * only job was `launch-sheet.tsx`, and that sheet's whole function — re-point the model, read the
- * instructions — is the popup's Model and **Instructions** rows now. A second control opening the
- * same form would be two ways to do one thing, which is the drift Samuel's *one launch surface*
- * ruling closes (INVARIANTS §5A).
- * ⚠ **ONE `<button>`, SO THE ROW IS ONE `menuitem`.** The pair it replaced needed `role="none"` on
- * a wrapper to keep the popover's `role="menu"` adjacent to its children; a single row needs no
- * wrapper at all.
- */
+/** One identity, one act: the row opens the New agent popup on it. */
 function IdentityRow({
   identity,
   marker,
   busy,
+  catalogs,
   onPick,
 }: {
   identity: AgentIdentity;
   marker: string | null;
   busy: boolean;
+  catalogs?: ModelCatalogs | null;
   onPick: (identity: AgentIdentity) => void;
 }) {
-  const model = agentModelShortLabel(identity.model);
+  const model = agentModelShortLabel(identity.model, catalogs);
   return (
     <button
       type="button"
       role="menuitem"
       onClick={() => onPick(identity)}
       disabled={busy}
-      // ⚠ THE MARKER IS IN THE ACCESSIBLE NAME. A screen-reader operator gets
-      // the same security signal a sighted one does, before the choice.
+      // The marker is in the accessible name: the security signal reaches screen readers too.
       aria-label={["Launch", identity.name, marker ? `(${marker})` : null]
         .filter(Boolean)
         .join(" ")}
@@ -349,9 +246,6 @@ function IdentityRow({
       {marker && (
         <span className="shrink-0 text-caption text-text-muted">{marker}</span>
       )}
-      {/* ⚠ NO CHIP ON AN UNSET MODEL. `agentModelShortLabel` returns null for
-          exactly that, and a chip reading "Default" on every unset row would
-          be three words of chrome per row saying nothing. */}
       {model && (
         <span className="shrink-0 rounded-full border border-border-strong bg-bg-inset px-1.5 py-px text-micro font-medium text-text-secondary">
           {model}

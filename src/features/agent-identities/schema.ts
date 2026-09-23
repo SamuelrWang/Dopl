@@ -9,64 +9,33 @@ import {
   LAUNCH_RUNTIME_ID_MESSAGE,
   LAUNCH_RUNTIME_ID_RE,
 } from "@/features/channels/schema-launch-modes";
-import type { IdentityFieldType } from "./types";
+import { IDENTITY_FIELD_TYPES, type IdentityVisibility } from "./types";
 import { MAX_DESCRIPTION_CHARS, MAX_NAME_CHARS } from "./lib/bounds";
 
 export { MAX_DESCRIPTION_CHARS, MAX_NAME_CHARS };
 
 /**
- * Zod schemas for agent identities. REST handlers parse against these, so the
- * service sees one shape whatever the entry point is — the same contract
- * `src/features/skills/schema.ts` holds for skills.
- *
- * ⚠ THE LABEL/PROSE SPLIT IS THE WHOLE DESIGN HERE, and it is not about
- * length. A LABEL is spliced into a line the server writes (the launch payload
- * an agent reads back, a picker row); PROSE is rendered as itself. So `name`,
- * `model` and BOTH HALVES OF EVERY CUSTOM FIELD are charset-bounded, while
- * `description` and `instructions` are not — instructions is a system prompt
- * and multi-line markdown in it is the point.
+ * Zod schemas for agent identities. A label (name, model, both halves of every field) is spliced into
+ * lines the server writes, so it is charset-bounded; prose (description, instructions) is not.
+ * Bounds are exported constants; `schema-sql.test.ts` pins them against the CHECKs and the desktop.
  */
 
-/**
- * ⚠ THE BOUNDS ARE NAMED CONSTANTS, NOT LITERALS, AND EVERY ONE IS EXPORTED
- * (2026-08-30, G3). `schema-sql.test.ts` reads the migration and pins each of
- * these against the `CHECK` it pairs with — a comment claiming a pairing is not
- * a gate, which is what this file's own header used to rely on.
- */
-
-/** Rendered into the identity picker and into the launch payload. */
 const NameSchema = safeLabel("Identity name", MAX_NAME_CHARS);
 
-/** Prose. Newline/tab allowed; empty string preserved (a cleared textarea
- *  sends one, and the service maps it to NULL). */
+/** Empty string preserved: a cleared textarea sends one and the service maps it to NULL. */
 const DescriptionSchema = safeOptionalProse(
   "Identity description",
   MAX_DESCRIPTION_CHARS
 );
 
-/**
- * The system-prompt block. 32 KB, matching the DB CHECK.
- * ⚠ NOT bounded to 1 MB like `skills.body`: a skill body is a PROCEDURE meant
- * to be long, and an identity's instructions are a system prompt that is
- * prepended to every turn of every session spawned from it. The bound is a
- * cost signal as much as a DoS floor.
- */
+/** Matches the DB CHECK; prepended to every turn, so the bound is a cost signal too. */
 export const MAX_INSTRUCTIONS_CHARS = 32_768;
 const InstructionsSchema = safeOptionalProse(
   "Instructions",
   MAX_INSTRUCTIONS_CHARS
 );
 
-/**
- * Model identifier. ⚠ DELIBERATELY NOT AN ENUM. The model roster lives in the
- * desktop and moves faster than this repo deploys; an enum here would mean a
- * server release to accept a model the desktop already runs, and the failure
- * mode would be a 400 on a value the operator can see in their own picker.
- * Charset-bounded because it renders into the launch payload.
- * ⚠ Deliberately the SAME number as `MAX_NAME_CHARS`, and the migration pairs
- * them the same way (`agent_identities_model_charset_check`). Named separately
- * because they are two columns, not one shared rule.
- */
+/** Not an enum — the model roster is the desktop's and moves faster than this repo deploys. */
 export const MAX_MODEL_CHARS = 120;
 const ModelSchema = safeLabel("Model", MAX_MODEL_CHARS);
 
@@ -77,47 +46,20 @@ const RuntimeSchema = z.string().trim().regex(LAUNCH_RUNTIME_ID_RE, LAUNCH_RUNTI
 // ─── Custom fields ──────────────────────────────────────────────────────
 
 /**
- * ⚠ THE SERIALIZED SIZE CAP IS THE REAL BOUND AND IT LIVES IN TWO PLACES ON
- * PURPOSE. Per-field lengths below stop one absurd value; this stops a
- * thousand reasonable ones. It is re-asserted as a CHECK in the migration
- * (`octet_length(fields::text) <= 8192`) because the service is the only
- * writer and a schema is a fence the DB cannot see.
- * ⚠ Measured the same way the CHECK measures — UTF-8 BYTES of the serialized
- * array, not `.length` — so a CJK or emoji payload cannot pass zod and then
- * fail the constraint as an opaque 500.
+ * The real bound, also a DB CHECK (`octet_length(fields::text) <= 8192`): UTF-8 bytes of the
+ * serialized array, measured with TextEncoder — the same bytes the CHECK measures.
  */
 export const MAX_FIELDS_BYTES = 8192;
 
-/** Bounds chosen so `MAX_FIELD_COUNT` fields at max size lands ABOVE the byte
- *  cap — the count is a sanity rail, the bytes are the contract.
- *  ⚠ NO SQL COUNTERPART, on purpose: the migration bounds the SERIALIZED size
- *  and the array-ness, and leaves element shape to zod. */
+/** Sanity rails below the byte cap; zod-only (the DB bounds only size and array-ness). */
 export const MAX_FIELD_COUNT = 50;
-
-/** Per-field halves. ⚠ Also zod-only — see `MAX_FIELD_COUNT`. */
 export const MAX_FIELD_KEY_CHARS = 80;
 export const MAX_FIELD_VALUE_CHARS = 1000;
 
-/** ⚠ THE TUPLE ZOD NEEDS, DERIVED FROM THE ONE LIST IN `types.ts` — a second
- *  hand-typed enum is how the UI and the validator come to offer different
- *  values. */
-const IDENTITY_FIELD_TYPES_TUPLE = [
-  "text",
-  "number",
-  "date",
-  "boolean",
-  "url",
-] as const satisfies readonly IdentityFieldType[];
-
 export const IdentityFieldSchema = z.object({
   key: safeLabel("Field key", MAX_FIELD_KEY_CHARS),
-  /** ⚠ A LABEL, not prose: field values are spliced into the launch payload
-   *  line-by-line, so a newline in one forges a line in the server's voice.
-   *  Empty is legal — a key with no value yet is a legitimate half-filled
-   *  form, and `safeLabel` would reject `""` (it carries a `.min(1)`).
-   *  ⚠ `SAFE_LABEL_RE` is IMPORTED, never re-typed: `@/shared/lib/safe-label`
-   *  is explicit that two copies of a neutralizer drift, and the copy that
-   *  drifts is the one that stops neutralizing. */
+  /** A label, not prose: a newline would forge a launch-payload line. `""` is legal (a half-filled
+   *  form) — `safeLabel` has `.min(1)`, so `SAFE_LABEL_RE` is applied directly, never re-typed. */
   value: z
     .string()
     .trim()
@@ -125,18 +67,8 @@ export const IdentityFieldSchema = z.object({
     .refine((v) => v === "" || SAFE_LABEL_RE.test(v), {
       message: safeLabelMessage("Field value"),
     }),
-  /**
-   * 🔒 **THE VALUE'S SHAPE (Samuel, 2026-09-22), AND IT IS OPTIONAL BECAUSE
-   * ABSENT IS `text`.** Every row written before today carries none, and the MCP
-   * surface still writes `{key, value}` — so a required member here would refuse
-   * every one of those writes, and a `.default("text")` would stamp a decision
-   * onto rows nobody typed it for.
-   * ⚠ **IT IS NOT VALIDATED AGAINST `value`, DELIBERATELY.** The type is an INPUT
-   * affordance (`types.ts › IdentityFieldType`): the value is a string on every
-   * branch, and a server that refused "n/a" in a `number` field would be
-   * enforcing a contract the launch splice does not read.
-   */
-  type: z.enum(IDENTITY_FIELD_TYPES_TUPLE).optional(),
+  /** Optional because absent is `text` (older rows, MCP writes); never validated against `value`. */
+  type: z.enum(IDENTITY_FIELD_TYPES).optional(),
 });
 
 export const IdentityFieldsSchema = z
@@ -155,59 +87,23 @@ export const IdentityFieldsSchema = z
 
 // ─── Visibility ─────────────────────────────────────────────────────────
 
-/**
- * ⚠ **`team` IS STILL ACCEPTED HERE AND IS REFUSED FOR AN AGENT ONE LAYER DOWN**
- * (2026-09-02). A8 took the value off `dopl_agent`'s enum, so the MCP surface
- * refuses it in zod before any round trip — but this schema is the REST route's,
- * an agent credential reaches that route directly, and a rule enforced only where
- * the caller happens to enter is not enforced. `server/service-writes.ts ›
- * assertTeamScopeIsHuman` is the fence, on the create AND the update path.
- * ⚠ It stays in the enum because the value is still legal for a HUMAN: taking it
- * out of the DB is B4, and B4 has not been ruled.
- */
-export const IdentityVisibilitySchema = z.enum([
+/** `team` stays legal for a human; an agent credential is refused one layer down (`assertTeamScopeIsHuman`). */
+const IdentityVisibilitySchema = z.enum([
   "private",
   "team",
   "workspace",
-]);
+] as const satisfies readonly IdentityVisibility[]);
 
-/** Same bound `SkillUpdateSchema.teamIds` uses. */
 const TeamIdsSchema = z.array(z.string().uuid()).max(50);
 
-/**
- * Attached KB ids. The set is REPLACED, never merged — see `updateIdentity`.
- *
- * ⚠ **STILL ACCEPTED, AND IT MEANS WHOLE BASES** (2026-09-08). `knowledge`
- * below is the shape that can also name a folder or an entry; this one stays
- * because an older SPA bundle and the MCP surface's `knowledge_bases` argument
- * both still send it, and a field removed from a schema is a 400 for every
- * client that has not shipped yet (§13).
- */
+/** Whole bases (older clients, MCP `knowledge_bases`). A replace-set, like `knowledge`. */
 const KnowledgeBaseIdsSchema = z.array(z.string().uuid()).max(50);
 
 /**
- * THE SCOPED ATTACHMENT SET — base, folder, or entry (2026-09-08, Samuel:
- * *"I want to be able to specific folders or entries/files"*).
- *
- * ⚠ **A DISCRIMINATED UNION, NOT THREE OPTIONAL IDS.** `{baseId, folderId?,
- * entryId?}` would make `{scope:"folder"}` with no `folderId` — and
- * `{folderId, entryId}` together — parseable shapes the service would have to
- * re-refuse, which is the DB's `agent_identity_kb_scope_shape_check` restated
- * badly one layer up. Here an impossible combination cannot be typed.
- *
- * ⚠ IDS ONLY, NEVER PATHS. `knowledge_folders`/`knowledge_entries` carry no path
- * column — a path is derived by walking `parent_id` — so a path on the wire is a
- * name a rename silently falsifies. `types.ts › IdentityKnowledgeScope` carries
- * the argument.
+ * A discriminated union of strict objects: zod strips unknown keys by default, so
+ * `{scope:"base", folderId}` would silently widen to the whole base — strict makes it a 400.
  */
-/**
- * ⚠ **STRICT, AND THAT IS THE OTHER HALF OF THE FENCE.** zod strips unknown keys
- * by default, so `{scope:"base", folderId}` would parse as a plain base scope and
- * the caller would be told nothing — they asked for a folder and got the whole
- * base, silently, which is the widest possible failure of a feature whose point
- * is narrowing. `z.strictObject` turns that misunderstanding into a 400.
- */
-export const IdentityKnowledgeScopeSchema = z.discriminatedUnion("scope", [
+const IdentityKnowledgeScopeSchema = z.discriminatedUnion("scope", [
   z.strictObject({ baseId: z.string().uuid(), scope: z.literal("base") }),
   z.strictObject({
     baseId: z.string().uuid(),
@@ -221,24 +117,13 @@ export const IdentityKnowledgeScopeSchema = z.discriminatedUnion("scope", [
   }),
 ]);
 
-/**
- * ⚠ 200, NOT 50. The base cap counts BASES and a workspace has few; this counts
- * SCOPES and one base can contribute many folders. It is a DoS floor, not a
- * product opinion — the row cost is one junction row per scope, the same row the
- * base cap already priced.
- */
+/** Counts scopes (one base can contribute many folders); a DoS floor. */
 export const MAX_KNOWLEDGE_SCOPES = 200;
 const KnowledgeScopesSchema = z
   .array(IdentityKnowledgeScopeSchema)
   .max(MAX_KNOWLEDGE_SCOPES, `At most ${MAX_KNOWLEDGE_SCOPES} knowledge scopes`);
 
-/**
- * ⚠ **THE TWO KNOWLEDGE FIELDS ARE MUTUALLY EXCLUSIVE IN ONE REQUEST, REFUSED
- * RATHER THAN MERGED.** Both are REPLACE-SETs over the same junction, so a body
- * carrying both is a caller asking for two different final states and there is
- * no honest reading of it — merging would silently pick one, and applying them
- * in order would make the answer depend on key order in a JSON object.
- */
+/** `knowledge` and `knowledgeBaseIds` are two replace-sets over one junction: both at once is a 400, never a merge. */
 const KNOWLEDGE_EXCLUSIVE_MESSAGE = {
   message:
     "Send knowledgeBaseIds or knowledge, not both — they are two REPLACE-SETs over one attachment set",
@@ -251,14 +136,9 @@ const knowledgeFieldsExclusive = (patch: {
 
 // ─── Create / update ────────────────────────────────────────────────────
 
-/**
- * ⚠ `teamIds` REQUIRES `visibility: 'team'`, refused rather than ignored.
- * Mirrors `SkillUpdateSchema`'s refine: silently dropping the field would
- * return a 2xx while the grant set never moved, and the client would render a
- * sharing state the server does not hold.
- */
+/** `teamIds` without `visibility: 'team'` is refused, not ignored (a 2xx that moved nothing would lie). */
 const teamIdsMatchVisibility = (patch: {
-  visibility?: "private" | "team" | "workspace";
+  visibility?: IdentityVisibility;
   teamIds?: string[];
 }) => patch.teamIds === undefined || patch.visibility === "team";
 
@@ -274,52 +154,21 @@ export const AgentIdentityCreateSchema = z
     model: ModelSchema.nullable().optional(),
     runtime: RuntimeSchema.nullable().optional(),
     fields: IdentityFieldsSchema.optional(),
-    /** Omitted → the service defaults to `'private'`, matching `createSkill`
-     *  and `createBase`. */
+    /** Omitted → the service's default (`private`, or `workspace` for a shared credential). */
     visibility: IdentityVisibilitySchema.optional(),
     teamIds: TeamIdsSchema.optional(),
     knowledgeBaseIds: KnowledgeBaseIdsSchema.optional(),
-    /** Scoped attachments — base, folder or entry. ⚠ Not alongside
-     *  `knowledgeBaseIds`: see `knowledgeFieldsExclusive`. */
     knowledge: KnowledgeScopesSchema.optional(),
-    /**
-     * Put the new identity on the PERSONAL SHELF (`types.ts › IdentityShelf`)
-     * instead of the workspace Agents page. ⚠ A REQUEST, NOT A DECISION, AND IT
-     * ROUTES THE ROW RATHER THAN BEING STORED ON IT (2026-09-02, slice B15) —
-     * the twin of `knowledge/schema.ts › homeScoped`, which carries the
-     * argument. `shared/tenancy/personal-container.ts › personalWriteWorkspaceId`
-     * is the fence and it 403s rather than downgrading. Omitted/false = the
-     * container the call is in, which is every existing caller.
-     */
+    /** A request to file the row in the caller's personal container; routes, never stored. */
     homeScoped: z.boolean().optional(),
-    /**
-     * 🔒 "I know this publishes into a room somebody else is standing in."
-     *
-     * ⚠ A PRECONDITION, NOT A PERMISSION, AND IT IS REQUIRED ONLY ON THE NARROW
-     * PREDICATE — `kind='link'` container, two or more active members, and the
-     * row landing at `visibility: 'workspace'`. Everywhere else it is IGNORED,
-     * never refused: see `features/workspaces/server/shared-publish.ts`, which
-     * is the one statement of both the predicate and the 400.
-     */
+    /** G16's precondition (`workspaces/server/shared-publish.ts`); ignored where it does not apply. */
     acknowledgeShared: z.boolean().optional(),
   })
   .refine(teamIdsMatchVisibility, TEAM_IDS_MESSAGE)
   .refine(knowledgeFieldsExclusive, KNOWLEDGE_EXCLUSIVE_MESSAGE);
 export type AgentIdentityCreateInput = z.infer<typeof AgentIdentityCreateSchema>;
 
-/**
- * All fields optional. ⚠ `null` and ABSENT differ and both are meaningful:
- * absent leaves the column alone, `null` CLEARS it. `fields`,
- * `knowledgeBaseIds` and `teamIds` are REPLACE-SET (absent = untouched,
- * `[]` = empty it) — there is no add/remove verb, because a partial mutation
- * over a set that two clients can edit is how sets silently diverge.
- */
-/**
- * The columns and junctions `updateIdentity` can actually move. ⚠ NAMED so the
- * "changes at least one field" refine cannot silently count a field that
- * changes nothing — `acknowledgeShared` is the first such field and will not be
- * the last.
- */
+/** What `updateIdentity` can move; `acknowledgeShared` changes nothing, so it cannot satisfy the refine. */
 const MUTABLE_UPDATE_KEYS = [
   "name",
   "description",
@@ -333,6 +182,7 @@ const MUTABLE_UPDATE_KEYS = [
   "knowledge",
 ] as const;
 
+/** Absent leaves a column alone, `null` clears it; `fields` / `teamIds` / knowledge are replace-sets. */
 export const AgentIdentityUpdateSchema = z
   .object({
     name: NameSchema.optional(),
@@ -344,26 +194,11 @@ export const AgentIdentityUpdateSchema = z
     visibility: IdentityVisibilitySchema.optional(),
     teamIds: TeamIdsSchema.optional(),
     knowledgeBaseIds: KnowledgeBaseIdsSchema.optional(),
-    /** Scoped attachments — base, folder or entry. REPLACE-SET like its
-     *  sibling, and refused alongside it (`knowledgeFieldsExclusive`). */
     knowledge: KnowledgeScopesSchema.optional(),
-    /**
-     * 🔒 "I know this publishes into a room somebody else is standing in."
-     *
-     * ⚠ A PRECONDITION, NOT A PERMISSION, AND IT IS REQUIRED ONLY ON THE NARROW
-     * PREDICATE — `kind='link'` container, two or more active members, and the
-     * row landing at `visibility: 'workspace'`. Everywhere else it is IGNORED,
-     * never refused: see `features/workspaces/server/shared-publish.ts`, which
-     * is the one statement of both the predicate and the 400.
-     */
     acknowledgeShared: z.boolean().optional(),
   })
   .refine(
-    // ⚠ `acknowledgeShared` IS NOT A FIELD THIS PATCH CHANGES, so it may not
-    // satisfy the "at least one" rule on its own. It is an assertion ABOUT the
-    // change, and a PATCH carrying nothing but an acknowledgement changes no
-    // column — which is exactly the empty-body 500 class `service-writes.ts`
-    // guards (F-404), reached one layer earlier.
+    // An acknowledgement alone moves no column (the F-404 empty-body class).
     (patch) => MUTABLE_UPDATE_KEYS.some((key) => patch[key] !== undefined),
     { message: "Patch must change at least one field" }
   )

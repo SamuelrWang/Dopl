@@ -1,16 +1,8 @@
 import type { KnowledgeEntry, KnowledgeFolder } from "@/features/knowledge/types";
 
 /**
- * ONE FAKE KNOWLEDGE TREE for the three suites that render the knowledge picker.
- *
- * ⚠ **A HELPER, NOT A `vi.mock` FACTORY.** Vitest hoists `vi.mock` above the
- * imports, so a factory cannot close over a module-scope value — each suite
- * writes its own two-line factory that `await import`s this. What is shared is
- * the SHAPE of the tree, which three files would otherwise re-type and drift on.
- *
- * ⚠ TWO LEVELS DEEP ON PURPOSE (`Deploys/Nightly`): a one-level tree cannot tell
- * a path composed by walking `parentId` from one that concatenates a folder's
- * own name, which is the bug the picker's path derivation exists to avoid.
+ * One fake knowledge tree for the suites that render the knowledge picker (each `vi.mock` factory
+ * `await import`s it). Two levels deep so a path must be walked up `parentId`.
  */
 const TREE: Record<
   string,
@@ -33,9 +25,7 @@ const TREE: Record<
 
 const EMPTY = { folders: [], entries: [] };
 
-/** The hook's own `Result<T>` shape — `data` held, never thrown. ⚠ A null base
- *  id is the LAZY case and stays `idle`, which is what makes an unexpanded base
- *  cost no request. */
+/** The hook's `Result<T>` shape; a null base id stays `idle` (the lazy case). */
 export function useKnowledgeTree(baseId: string | null | undefined) {
   return {
     data: baseId ? (TREE[baseId] ?? EMPTY) : null,

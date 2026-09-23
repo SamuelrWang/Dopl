@@ -16,13 +16,8 @@ import * as repo from "./repository";
 import type { KnowledgeBaseAccessRow } from "./repository";
 
 /**
- * Cross-cutting gates for the agent-identities service: context construction,
- * the `canSeeIdentity` visibility matrix and its batch precompute, the
- * viewer-filtered sharing/attachment decoration, and the mirrored knowledge
- * access predicate the KB-attach gate is built on.
- *
- * ⚠ `./repository.ts` bypasses RLS via the service-role client — every caller
- * MUST filter by `ctx.workspaceId` or workspaces leak into each other.
+ * Cross-cutting gates: context, the `canSeeIdentity` matrix and its batch precompute, the sharing-set
+ * filter, and the mirrored knowledge access predicate the attach gate uses.
  */
 
 // ─── Context ────────────────────────────────────────────────────────────
@@ -33,8 +28,7 @@ export interface AuthLike {
   role?: Role | null;
   agentTokenId?: string | null;
   apiKeyWorkspaceId?: string | null;
-  /** WHOSE REACH the credential inherits; `null` = nobody in particular.
-   *  ⚠ REQUIRED — this axis has no safe default (F-336). */
+  /** Whose reach the credential inherits; `null` = nobody. Required: no safe default (F-336). */
   credentialSubjectUserId: string | null;
 }
 
@@ -51,9 +45,7 @@ export function buildAgentIdentityContext(
   };
 }
 
-/** ⚠ Postgres `text` cannot store U+0000 — a stray NUL from a paste or raw
- *  agent output surfaces as an opaque INTERNAL_ERROR at the DB boundary.
- *  Strip from every written string. Undefined/null pass through. */
+/** Postgres `text` cannot store U+0000; strip it from every written string. */
 export function stripNullBytes<T extends string | null | undefined>(value: T): T {
   return (typeof value === "string" ? value.replace(/\u0000/g, "") : value) as T;
 }
@@ -63,23 +55,12 @@ export function isWorkspaceAdmin(ctx: AgentIdentityContext): boolean {
 }
 
 // ─── Write normalizers ──────────────────────────────────────────────────
-// ⚠ MOVED HERE FROM `service-writes.ts` (2026-09-18) FOR THE 500-LINE CAP, and
-// for nothing else: they were private to that file, they are pure, and the
-// alternative to moving them was splitting the create/update pair that the
-// F-289 fence argument reads as one document.
 
-/** Empty / whitespace-only prose becomes NULL — one "absent" spelling in the
- *  column, so a cleared textarea and an omitted field read the same. */
+/** Empty / whitespace-only text becomes NULL — one "absent" spelling in the column. */
 export function normalizeProse(value: string | null | undefined): string | null {
   if (value == null) return null;
   const trimmed = stripNullBytes(value).trim();
   return trimmed === "" ? null : trimmed;
-}
-
-/** Same for a short label. Separate function so the two can diverge if a label
- *  ever needs different treatment; today they agree. */
-export function normalizeLabel(value: string | null | undefined): string | null {
-  return normalizeProse(value);
 }
 
 export function normalizeFieldsInput(
@@ -95,23 +76,13 @@ export function normalizeFieldsInput(
 
 // ─── Visibility ─────────────────────────────────────────────────────────
 
-/**
- * Precomputed sharing context for a row set. Same shape and same fetch
- * discipline as `skills/server/service-shared.ts › SkillGrantCtx`: a FIXED
- * number of queries per request, no matter how many identities there are.
- */
+/** Precomputed sharing context for a row set — a fixed query count per request (cf. `SkillGrantCtx`). */
 export interface IdentityShareCtx {
   /** Teams the caller belongs to. Fetched only when some row needs it. */
   myTeamIds: Set<string>;
   /** identityId → linked team ids. */
   byIdentity: Map<string, string[]>;
-  /**
-   * Identity ids lent to a channel or container the caller is in — the GRANT
-   * axis, added 2026-09-02 (F-604). ⚠ It rides this context rather than a
-   * second parameter precisely because a second parameter is what a caller
-   * forgets: every existing `canSeeIdentity` call already threads a
-   * `IdentityShareCtx`, so the arm arrives everywhere at once.
-   */
+  /** Identity ids lent to a channel or container the caller is in (the grant arm, F-604). */
   grantedIds: GrantedResourceIds;
 }
 
@@ -126,11 +97,7 @@ export async function shareCtxForIdentities(
   rows: AgentIdentity[]
 ): Promise<IdentityShareCtx> {
   const teamScoped = rows.filter((t) => t.visibility === "team");
-  // ⚠ **THE `team` SHORT-CIRCUIT NO LONGER SHORT-CIRCUITS THE WHOLE CONTEXT.**
-  // A grant is orthogonal to visibility — a `private` row is the ordinary thing
-  // to lend — so returning `EMPTY_SHARE_CTX` for a row set with no team-scoped
-  // member would have dropped the grant arm on exactly the rows it is for. The
-  // grant read has its own empty-input short-circuit.
+  // The grant read runs even with no team-scoped row: a lent row is usually `private`.
   const grantedIds = await grantedResourceIds(
     ctx.userId,
     "agent_identity",
@@ -141,10 +108,7 @@ export async function shareCtxForIdentities(
       ? EMPTY_SHARE_CTX
       : { ...EMPTY_SHARE_CTX, grantedIds };
   }
-  // The caller's own team-scoped rows are visible without a membership lookup,
-  // and a SHARED credential never gets one (it has no person behind it).
-  // ⚠ `isSharedCredential`, not the lock: a container session HAS a person
-  // behind it, so it resolves teams like the human it acts for (F-336).
+  // Own rows need no membership lookup; a shared credential never gets one (F-336).
   const needsMembership = teamScoped.some((t) => t.createdBy !== ctx.userId);
   const [myTeams, links] = await Promise.all([
     needsMembership && !isSharedCredential(ctx)
@@ -166,67 +130,8 @@ export async function shareCtxForIdentities(
 }
 
 /**
- * THE VISIBILITY MATRIX. Arms in evaluation order, and the order is
- * load-bearing:
- *   1. `workspace`                      → every member, including agents.
- *   2. a SHARED credential              → NOTHING further (M-10: such a
- *                                         credential may be shared between
- *                                         humans, so it never inherits one
- *                                         person's reach).
- *   3. creator                          → always.
- *   4. a GRANT into a channel or container the caller is in → yes.
- *   5. `private`                        → nobody else, ADMINS INCLUDED.
- *   6. workspace admin, `team`          → always.
- *   7. `team` + a shared team in common → yes.
- *
- * ⚠ **ARM 4 IS NEW ON 2026-09-02 (F-604) AND ITS POSITION IS THE DECISION.** A
- * lent row is `private` — that is the ordinary thing to lend — so anywhere
- * below arm 5 it would be unreachable and B15's write door would go on writing
- * rows nothing reads. It is BELOW arm 2 for the reason arm 2 exists: a
- * credential that stands for nobody has no membership of the granted scope to
- * read the grant through. `shared/tenancy/resource-grant-reach.ts` holds the
- * lookup and states which levels admit a HUMAN read.
- *
- * ⚠ ARM 5 BEFORE ARM 6 IS THE WHOLE OF "PRIVATE MEANS PRIVATE": a workspace
- * admin administers SHARING, which is why they pass on a `team` identity, and
- * that is not a licence to read a teammate's private one. `canSeeSkill` orders
- * its arms the same way (it returns false for `visibility !== "public"` before
- * reaching its admin check).
- *
- * ⚠ THIS FUNCTION AND `agent_identities_member_select` IN
- * `supabase/migrations/20260822200000_agent_templates.sql` ARE ONE RULE WRITTEN
- * TWICE — same arms, same order, including the admin arm's placement INSIDE the
- * team branch. They must move together. `20260716150000_chats_team_aware_rls.sql`
- * is the record of what it costs when they do not: RLS stayed permissive after
- * the service tightened, and a team-scoped transcript leaked through PostgREST
- * to every member for as long as nobody compared them.
- *
- * 🔒 ⚠ ARM 2 ASKS `isSharedCredential`, NOT `ctx.apiKeyWorkspaceId` — F-333,
- * ruled by Samuel and fixed 2026-08-27. The old form made every PRIVATE
- * identity invisible to the agents running in a container: layer B1 sets the
- * lock for every read a session in a shared container makes, so such a row could
- * not be listed, named or resolved by the very agent it was made for. ⚠ **THE
- * CASE THAT SURFACED IT WAS THE "Use in this channel" COPY**, which forced
- * `private` and is deleted in B15; the arm is unchanged and the population it
- * covers is now every personal row. **A container-session credential is the operator's own session**,
- * so arm 3 (creator) now answers for it exactly as it answers for the operator
- * at their keyboard. ⚠ NO PEER EXPOSURE IS OPENED: the peer, and the peer's own
- * agent, carry the PEER's user id, so arm 3 misses and arm 5 (`private` → nobody
- * else, admins included) refuses them — unless the row was deliberately GRANTED
- * to a scope that peer is in, which is arm 4 and is the point of it. Guests never reach an identity surface at
- * all — every `agent-identities` route and `POST /api/channels/launch-directives`
- * sits at `withWorkspaceAuth`'s `viewer` floor and `guest` ranks below it.
- */
-/**
- * Rows whose answer arm 4 could still CHANGE — the negation of arms 1-3, and
- * the twin of `knowledge/server/service-shared.ts › needsGrantArm`.
- *
- * ⚠ **A DELIBERATE MIRROR OF THE ARMS BELOW, PINNED AS ONE** by
- * `shared/tenancy/grant-read-arm.test.ts`, which drives every (credential ×
- * visibility × author) combination through both and fails if a row this says NO
- * about would have had its answer moved by a grant. It buys the case that
- * matters: a workspace whose identities are all `workspace`-visible, or all the
- * caller's own, asks the grant table nothing.
+ * Rows whose answer the grant arm could still change (the negation of arms 1-3) — twin of
+ * `knowledge/server/service-shared.ts › needsGrantArm`, pinned by `shared/tenancy/grant-read-arm.test.ts`.
  */
 export function needsGrantArm(
   ctx: AgentIdentityContext,
@@ -239,6 +144,13 @@ export function needsGrantArm(
   );
 }
 
+/**
+ * The visibility matrix. Arm order is load-bearing and must match SQL
+ * `can_current_user_read_agent_identity` (INVARIANTS §5A):
+ *   1. `workspace` → every member   2. shared credential → nothing more (M-10)   3. creator
+ *   4. a grant into a scope the caller is in (F-604)   5. `private` → nobody else, admins included
+ *   6. workspace admin (on `team`)   7. `team` + a shared team.
+ */
 export function canSeeIdentity(
   ctx: AgentIdentityContext,
   identity: AgentIdentity,
@@ -249,13 +161,7 @@ export function canSeeIdentity(
   if (identity.createdBy !== null && identity.createdBy === ctx.userId) {
     return true;
   }
-  // 🔒 ARM 4 IS THE GRANT (F-604, 2026-09-02), AND IT PRECEDES THE `private`
-  // REFUSAL RATHER THAN FOLLOWING IT. A lent row is `private` — that is the
-  // ordinary thing to lend — so an arm below arm 5 would never be reached, and
-  // the write door B15 shipped would go on writing rows nothing reads. It stays
-  // BELOW the shared-credential refusal for the reason `canSeeBase`'s twin
-  // states: a credential standing for nobody has no membership of the granted
-  // scope to read the grant through.
+  // Above the `private` refusal (a lent row is private), below the shared-credential one.
   if (share.grantedIds.has(identity.id)) return true;
   if (identity.visibility === "private") return false;
   if (isWorkspaceAdmin(ctx)) return true;
@@ -263,12 +169,7 @@ export function canSeeIdentity(
   return linked.some((teamId) => share.myTeamIds.has(teamId));
 }
 
-/**
- * ⚠ THE SHARING SET IS FOR OWNERS AND ADMINS ONLY. A teammate who can SEE a
- * team-scoped identity has no business learning which OTHER teams it is shared
- * with — that is workspace org-chart information leaking through an identity.
- * Same rule as `skills/server/service-shared.ts › withGrantSet`.
- */
+/** The team set is shown to the creator and admins only — org-chart facts otherwise (cf. `withGrantSet`). */
 export function withSharingSet(
   ctx: AgentIdentityContext,
   identity: AgentIdentity,
@@ -285,14 +186,9 @@ export function withSharingSet(
 // ─── Knowledge-base access (the attach gate's predicate) ────────────────
 
 /**
- * `canSeeBase` + `assertBaseVisible` MIRRORED over this feature's own rows (§1 forbids importing
- * `@/features/knowledge`); the SQL twin is `dopl_knowledge_base_readable()`:
- *   public                   → any member
- *   private                  → creator, or a grant into a scope the caller is in (F-604);
- *                              never via a SHARED credential (F-336)
- *   teams mode (after above) → creator, workspace admin, or a granted team
- * Over-permissive if it drifts; `service-writes.test.ts` and
- * `service-knowledge-grant.test.ts` pin the arms.
+ * Hand mirror of knowledge's `canSeeBase` (§1; SQL twin `dopl_knowledge_base_readable()`, F-278):
+ *   public → any member · private → creator or a grant (never a shared credential) ·
+ *   teams mode → creator, workspace admin, or a granted team.
  */
 export function canSeeBaseRow(
   ctx: AgentIdentityContext,
@@ -315,29 +211,15 @@ export function canSeeBaseRow(
   return teams.some((teamId) => myTeamIds.has(teamId));
 }
 
-/**
- * A base that survived the viewer filter, plus the two CARD facts (2026-09-18,
- * A4). ⚠ **A SUPERSET OF {@link IdentityKnowledgeBaseRef}, NOT A REPLACEMENT** —
- * that type is the DTO's `knowledgeBases` shape and widening it would push a
- * slug and a description onto every reader of it, including the SDK mirror. The
- * extra keys stay inside the service and reach the wire only where the card
- * puts them (`service-knowledge-scopes.ts`).
- */
+/** A visible base plus its two card facts; service-internal (the DTO's shape stays `{id, name}`). */
 export interface VisibleKnowledgeBase extends IdentityKnowledgeBaseRef {
   slug: string;
   description: string | null;
 }
 
 /**
- * Resolve KB ids to visible base refs, dropping every base the CALLER cannot
- * currently read. Used by BOTH the attach gate (where a dropped id is an
- * error) and the read path (where it is simply omitted) — one predicate, two
- * consumers, so an attach can never permit what a read would hide.
- *
- * Fixed query count regardless of how many bases: the access rows, two team
- * reads, and `grantedResourceIds`' bounded fan-out (none when no base is
- * grantable). ⚠ **THE CARD FACTS ADDED NONE** — `slug` and `description` ride
- * the access row this already reads for the predicate.
+ * KB ids → the bases the caller can read. One predicate for the attach gate (a drop is a 404) and the
+ * read path (a drop is omitted), so an attach never permits what a read hides. Fixed query count.
  */
 export async function resolveVisibleKnowledgeBases(
   ctx: AgentIdentityContext,
@@ -387,10 +269,7 @@ export async function resolveVisibleKnowledgeBases(
   const myTeamIds = new Set(myTeams);
   return bases
     .filter((b) => canSeeBaseRow(ctx, b, grantedTeamsByBase, myTeamIds, granted))
-    // ⚠ `?? ""` / `?? null` PER KEY: the access row's two card fields are
-    // optional (a stale PostgREST schema cache, and every fixture built before
-    // 2026-09-18), and an `undefined` reaching the wire is a key a consumer
-    // cannot tell from a decided empty.
+    // The card fields are optional on the row; never let `undefined` reach the wire.
     .map((b) => ({
       id: b.id,
       name: b.name,

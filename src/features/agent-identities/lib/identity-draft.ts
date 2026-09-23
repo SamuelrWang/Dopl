@@ -14,69 +14,30 @@ import {
 } from "./knowledge-scopes";
 
 /**
- * THE EDITOR'S FORM STATE, and the two bodies it becomes.
- *
- * ⚠ PURE — no React, no transport. The editor holds one `IdentityDraft` in
- * state and this module answers every question about it, so the payload shape is
- * testable without rendering a modal and cannot be re-derived differently by a
- * second call site (INVARIANTS §1: one file, one reason to change).
- *
- * ⚠ THE DRAFT IS ALL-STRINGS BY DESIGN. A `<textarea>` hands back `""`, never
- * `null`, so the draft mirrors the CONTROL and the mapping to "absent" or
- * "cleared" happens once, here, at the boundary.
- *
- * ⚠ CLEARING SENDS `null`, NOT `""` — the schema's own rule (`../schema.ts`:
- * "`null` and ABSENT differ and both are meaningful: absent leaves the column
- * alone, `null` CLEARS it"). It is not a style choice for `model`: that field is
- * a `safeLabel`, which carries a `.min(1)`, so an emptied model sent as `""`
- * would be a 400 on the operator picking Default.
+ * The editor's form state and the two bodies it becomes — pure, so the payload is testable without a
+ * modal. The draft is all strings (a control hands back `""`); the mapping to absent/cleared is here:
+ * a create omits empties, a patch sends `null` to clear (model `""` would 400 on `safeLabel`'s min 1).
  */
 
 export interface IdentityDraft {
   name: string;
   description: string;
   instructions: string;
-  /** `""` = Default (`channels/lib/agent-models.ts › AGENT_MODEL_DEFAULT`). */
+  /** `""` = the runtime's default. */
   model: string;
   /** `""` = no runtime preference (the channel decides). */
   runtime: string;
   fields: IdentityField[];
   visibility: IdentityVisibility;
-  /**
-   * ⚠ PLURAL, because the server's is (`../types.ts › AgentIdentity.teamIds`,
-   * `../schema.ts › TeamIdsSchema`). A single-team draft would have to pick one
-   * on read and silently drop the rest on the next save.
-   */
+  /** Plural like the server's set — a single-team draft would drop the rest on save. */
   teamIds: string[];
-  /**
-   * THE ATTACHED SCOPES, AS RESOLVED REFS (2026-09-08) — **replacing
-   * `knowledgeBaseIds`, which this draft no longer has.**
-   *
-   * ⚠ **REFS AND NOT SCOPES, because a chip needs a LABEL.** The wire carries
-   * ids (`refToScope` is the conversion, applied at the two body builders); the
-   * draft carries the name and the path beside them so the editor can render
-   * `Base / Folder / Entry` without a second read. The picker composes the path
-   * from the tree it already loaded for that base; the server's own `path` wins
-   * on the next read, exactly as the base NAME already did.
-   * ⚠ IT IS A SET, ORDER-INSENSITIVE — see `sameScopes`.
-   */
+  /** Attached scopes as resolved refs (a chip needs a label); the bodies send `refToScope` ids. A set. */
   knowledge: IdentityKnowledgeRef[];
 }
 
 /**
- * A BRAND-NEW IDENTITY'S DRAFT.
- *
- * 🔒 **IT OPENS WITH ONE BLANK FIELD ROW (Samuel, 2026-09-22: a new identity
- * *"should have an existing blank field that is already in, just have it
- * blank"*).** The row is a DRAFT fact and lives here rather than in
- * `CustomFieldRows`, which renders both a create and an EDIT: a starter row
- * painted by the component would also appear over a saved identity whose fields
- * were all removed, where an empty row reads as a field somebody deleted.
- *
- * ⚠ **IT COSTS NOTHING IF IT IS NEVER TYPED IN.** `cleanFields` drops a row with
- * a blank key at both body builders, so an untouched starter row is not in the
- * POST — the create still writes `fields: []`, byte for byte what it wrote
- * before this ruling.
+ * A new identity's draft opens with one blank field row (Samuel's ruling) — a draft fact, not the
+ * component's; `cleanFields` drops it again if it is never typed in.
  */
 export function emptyDraft(): IdentityDraft {
   return {
@@ -98,60 +59,26 @@ export function draftFromIdentity(identity: AgentIdentity): IdentityDraft {
     description: identity.description ?? "",
     instructions: identity.instructions ?? "",
     model: identity.model ?? "",
-    // §8: a cached row predating the column has no `runtime` key.
+    // §8: a cached row may predate the column.
     runtime: identity.runtime ?? "",
     fields: identity.fields.map((f) => ({
       key: f.key,
       value: f.value,
-      // ⚠ §8's FALLBACK, SPELLED INLINE AT THE READ: a row written before
-      // 2026-09-22 carries no `type`, and the dropdown has to show something.
+      // §8: older rows carry no `type`.
       type: f.type ?? IDENTITY_FIELD_TYPE_DEFAULT,
     })),
     visibility: identity.visibility,
     teamIds: [...identity.teamIds],
-    // 🔒 §8 STALE-CACHE FALLBACK, SPELLED INLINE. A row cached by the bundle
-    // before scopes shipped has no `knowledge` key at all, and mapping over
-    // `undefined` throws and blanks the editor — the exact failure §8 was
-    // written for. `EMPTY_KNOWLEDGE` is the honest reading of "not sent".
+    // §8 stale-cache fallback, inline.
     knowledge: [...(identity.knowledge ?? EMPTY_KNOWLEDGE)],
   };
 }
 
-/**
- * ⚠ **`containerCopyDraft` STOOD HERE UNTIL 2026-09-02 (wave B slice B15,
- * Samuel's ruling B11: *grants replace copies*).** It composed the "Use in this
- * channel" copy: `draftFromIdentity` with `visibility` forced to `workspace` and
- * both id sets cleared, because a home-workspace KB id meant nothing in the
- * container and carrying it turned a copy into a failed write.
- *
- * **Nothing replaced it in this module.** The control is a GRANT now
- * (`apps/desktop-ui/src/pages/home/agent-share.tsx`), which writes a
- * `resource_grants` row and composes no draft at all — there is no second
- * identity to build.
- *
- * ⚠ **THE REST OF THIS FILE IS THE SHARED EDITOR DRAFT AND IS UNTOUCHED.** The
- * wave-B spec's B15 row counted this file whole as copy code (F-600); 250 of its
- * lines are `IdentityDraft` and its eight helpers, imported by
- * `components/identity-editor.tsx`, `apps/desktop-ui/src/pages/home/identity-editor.tsx`
- * and `components/agent-identities-core.tsx`.
- */
-
-/**
- * Custom fields worth sending: a row whose KEY is blank carries nothing, and the
- * editor's add-row starts blank — so an operator who clicked "Add field" and
- * changed their mind must not get an empty pair written to their identity.
- * A blank VALUE is kept: the schema allows it ("a key with no value yet is a
- * legitimate half-filled form"), and it is a thing an operator can mean.
- */
+/** Fields worth sending: a blank key drops the row; a blank value is kept (a legal half-filled form). */
 export function cleanFields(fields: ReadonlyArray<IdentityField>): IdentityField[] {
   return (
     fields
-      // ⚠ **THE TYPE RIDES ONLY WHEN IT IS NOT THE DEFAULT (2026-09-22).** A row
-      // the operator never touched the dropdown on must put the object on the
-      // wire it always did — `{key, value}` — so `text` is spelled by ABSENCE,
-      // exactly as it is read (`types.ts › IdentityFieldType`). Without this the
-      // create body gains a member on every field in the product and every
-      // payload pin in the suites becomes a snapshot of chrome.
+      // `type` travels only when it is not `text` — the default is spelled by absence.
       .map((f) => ({
         key: f.key.trim(),
         value: f.value.trim(),
@@ -164,28 +91,15 @@ export function cleanFields(fields: ReadonlyArray<IdentityField>): IdentityField
 /** Save is refused on a nameless identity; everything else is optional. */
 export function isDraftSavable(draft: IdentityDraft): boolean {
   if (draft.name.trim() === "") return false;
-  // A Team identity with no team named would be visible to nobody, which is a
-  // private identity wearing the wrong label. Fail closed at the button.
+  // A Team identity with no team would be visible to nobody.
   if (draft.visibility === "team" && draft.teamIds.length === 0) return false;
-  // The schema refuses a duplicate key with a 400; the button is a cheaper place
-  // to say so than the alert line after a round trip.
+  // The schema refuses duplicate keys; refuse at the button instead of after a round trip.
   const keys = cleanFields(draft.fields).map((f) => f.key);
   if (new Set(keys).size !== keys.length) return false;
   return true;
 }
 
-/**
- * POST body.
- *
- * ⚠ AN EMPTY OPTIONAL IS OMITTED on a create — "never written" and "written,
- * then emptied" are the same state on a row that does not exist yet, and
- * `model: ""` is the Default sentinel this tree deliberately does not have
- * (absence IS Default).
- *
- * ⚠ `teamIds` RIDES ONLY THE TEAM SCOPE, and the schema REFUSES it otherwise
- * ("teamIds requires visibility 'team'") rather than ignoring it — so sending it
- * on a private identity is a 400, not a harmless extra key.
- */
+/** POST body: empty optionals are omitted; `teamIds` only with `team` (the schema refuses it otherwise). */
 export function draftToCreateBody(draft: IdentityDraft): AgentIdentityCreateBody {
   const body: AgentIdentityCreateBody = {
     name: draft.name.trim(),
@@ -202,10 +116,7 @@ export function draftToCreateBody(draft: IdentityDraft): AgentIdentityCreateBody
   if (draft.visibility === "team" && draft.teamIds.length > 0) {
     body.teamIds = [...draft.teamIds];
   }
-  // ⚠ `knowledge`, NEVER `knowledgeBaseIds`: the schema refuses both in one
-  // request, and this client can express a folder scope that the older key
-  // cannot. The older key stays on the SCHEMA for older clients, not for this
-  // one.
+  // `knowledge`, never `knowledgeBaseIds` (the schema refuses both in one request).
   if (draft.knowledge.length > 0) {
     body.knowledge = draft.knowledge.map(refToScope);
   }
@@ -213,18 +124,8 @@ export function draftToCreateBody(draft: IdentityDraft): AgentIdentityCreateBody
 }
 
 /**
- * PATCH body — the CHANGED keys only, compared against the row on screen.
- *
- * ⚠ PARTIAL IS THE POINT, and the diff is why. This editor is not the only
- * writer of an identity (`PATCH` is reachable by an agent token too), so PATCHing
- * every field back would silently revert whatever moved under an open modal.
- *
- * ⚠ THE CREATE BODY'S OMIT-WHEN-EMPTY RULE INVERTS HERE: clearing a description
- * is a real edit, and it travels as `null`.
- *
- * ⚠ `teamIds` IS SENT ONLY ALONGSIDE `visibility: "team"`. Leaving the team
- * scope sends the visibility alone — the server drops the grants with it, and a
- * `teamIds` key on a non-team patch is refused by the schema.
+ * PATCH body — the changed keys only (agents write identities too; a full body would revert them).
+ * Clearing travels as `null`; `teamIds` only alongside `team`.
  */
 export function draftToPatchBody(
   draft: IdentityDraft,
@@ -258,19 +159,12 @@ export function draftToPatchBody(
   return patch;
 }
 
-/** Nothing to send = nothing was edited; the editor closes instead of writing.
- *  ⚠ The schema refuses an empty patch outright ("Patch must change at least one
- *  field"), so this is the check that keeps a no-op Save off the wire. */
+/** Nothing changed: the schema would refuse the empty patch, so Save closes instead. */
 export function isEmptyPatch(patch: AgentIdentityUpdateBody): boolean {
   return Object.keys(patch).length === 0;
 }
 
-/** ⚠ ORDER-SENSITIVE: rows are a list an operator arranged, not a set.
- *  ⚠ **AND THE TYPE IS PART OF THE ROW SINCE 2026-09-22** — both sides come from
- *  `cleanFields`, where `text` is spelled by ABSENCE, so an untyped row compares
- *  equal to an untyped row and a retyped one is a real change the PATCH has to
- *  carry. Comparing only the pair would make the dropdown a control whose edits
- *  are silently dropped by the empty-patch skip. */
+/** Order-sensitive (the operator arranged the rows), and the type is part of the row. */
 function sameFields(
   a: ReadonlyArray<IdentityField>,
   b: ReadonlyArray<IdentityField>
@@ -281,26 +175,14 @@ function sameFields(
   );
 }
 
-/** ⚠ ORDER-INSENSITIVE: the pick order of a multi-select is not a fact. */
+/** Order-insensitive: pick order is not a fact. */
 function sameIds(a: ReadonlyArray<string>, b: ReadonlyArray<string>): boolean {
   if (a.length !== b.length) return false;
   const set = new Set(b);
   return a.every((id) => set.has(id));
 }
 
-/**
- * The optimistic row a PATCH produces, so the card behind the modal updates on
- * the click rather than on the round trip.
- *
- * ⚠ KNOWLEDGE IS PATCHED FROM THE PICKER'S OWN LABELS, which is why the draft
- * carries REFS: the wire sends ids and answers with names and paths, and a chip
- * that went blank for one frame would read as "detached".
- * ⚠ **THE `knowledgeBaseName` LOOKUP PARAMETER LEFT ON 2026-09-08** and both
- * call sites dropped the `useMemo` that built it. It existed because the draft
- * held BARE IDS and the name had to be recovered from the picker's options; a
- * ref carries its own name, so the lookup was a third place a label could
- * disagree with the two that already had it.
- */
+/** The optimistic row a PATCH produces; knowledge keeps the picker's own labels. */
 export function optimisticIdentity(
   original: AgentIdentity,
   draft: IdentityDraft
@@ -316,9 +198,7 @@ export function optimisticIdentity(
     visibility: draft.visibility,
     teamIds: draft.visibility === "team" ? [...draft.teamIds] : [],
     knowledge: [...draft.knowledge],
-    // ⚠ THE BASE-LEVEL SLICE, derived from the same list the server derives it
-    // from — a folder scope contributes nothing here, because listing its base
-    // would claim the whole base is attached.
+    // The base-level slice, as the server derives it — a folder scope never claims its base.
     knowledgeBases: draft.knowledge
       .filter((ref) => ref.scope === "base")
       .map((ref) => ({ id: ref.baseId, name: ref.baseName })),

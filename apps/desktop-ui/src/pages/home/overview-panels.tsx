@@ -1,7 +1,5 @@
 import { cn } from "@/shared/lib/utils";
-import {
-  IDENTITY_NAME_TEXT,
-} from "@/features/agent-identities/components/identity-section";
+import { IDENTITY_NAME_TEXT } from "@/shared/ui/section-heading";
 import { useState } from "react";
 import { SectionPanel } from "@/shared/ui/section-panel";
 import { Skeleton } from "@/shared/ui/skeleton";

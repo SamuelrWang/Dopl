@@ -5,30 +5,18 @@ import { Check, ChevronRight, FileText, Folder, Library } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
 import { useKnowledgeTree } from "@/features/knowledge/client/hooks";
 import type { IdentityKnowledgeRef } from "../client/types";
-import { composeDisplayPath } from "../lib/knowledge-scopes";
+import { composeDisplayPath, scopeKey } from "../lib/knowledge-scopes";
 import type { KnowledgeBaseOption } from "./knowledge-scope-picker";
 
 /**
- * THE TREE INSIDE THE KNOWLEDGE PICKER — one node component per level, plus the
- * flat-arrays-to-hierarchy index the rows read.
- *
- * ⚠ **ITS OWN FILE, AND THE REASON IS §1's 500-LINE CAP** (`eslint.config.mjs ›
- * max-lines`, `error`, no exemption for this path). `knowledge-scope-picker.tsx`
- * with the tree inline measured 627 lines. The seam is the honest one rather
- * than an arbitrary cut: that file owns the CHIPS, the popover and the selection
- * set; this one owns WHAT A BASE LOOKS LIKE WHEN YOU OPEN IT. The arrow points
- * one way — this imports the picker's option type, and the picker imports
- * {@link BaseNode}.
- *
- * ⚠ The folder-means-its-subtree rule is stated once, on
- * `knowledge-scope-picker.tsx`'s docblock; the rows here render it (checked +
- * `implied`, never expanded into the set).
+ * The tree inside the knowledge picker: one node component per level plus the flat-to-hierarchy
+ * index. Rows render a folder scope's descendants checked-and-locked (`implied`), never in the set.
  */
 
 // ─── Nodes ──────────────────────────────────────────────────────────────
 
 interface TreeIndex {
-  /** folderId → its own ancestor chain, root-first, INCLUDING itself. */
+  /** folderId → its own ancestor chain, root-first, including itself. */
   chain: Map<string, string[]>;
   /** folderId → child folder ids, and `""` for the base root. */
   childFolders: Map<string, string[]>;
@@ -41,8 +29,7 @@ interface TreeIndex {
 
 const ROOT = "";
 
-/** Checking a row: the scope it attaches, plus the keys that scope now IMPLIES
- *  and the picker must therefore prune. Stated once — four rows pass it on. */
+/** Checking a row: the scope it attaches plus the keys it now implies (the picker prunes them). */
 export type ScopeToggle = (
   ref: IdentityKnowledgeRef,
   impliedKeys: ReadonlyArray<string>
@@ -71,16 +58,12 @@ export function BaseNode({
   onToggle: ScopeToggle;
 }) {
   const [open, setOpen] = useState(false);
-  // ⚠ LAZY, AND THE NULL ID IS THE MECHANISM. `useKnowledgeTree` is a keyed
-  // query that stays IDLE on a null id, so an unexpanded base costs no request
-  // — the same drill-in discipline `ontology/components/knowledge-pick-menu.tsx`
-  // already runs, expressed through the knowledge feature's own hook rather than
-  // a hand-rolled fetch.
+  // Lazy: a null id keeps the query idle, so an unexpanded base costs no request.
   const tree = useKnowledgeTree(open ? base.id : null, workspaceId);
 
   const index = useMemo<TreeIndex>(() => buildIndex(tree.data), [tree.data]);
 
-  const baseChecked = selectedKeys.has(`base:${base.id}`);
+  const baseChecked = selectedKeys.has(scopeKey({ baseId: base.id, scope: "base" }));
   const rootFolders = index.childFolders.get(ROOT) ?? [];
   const rootEntries = index.childEntries.get(ROOT) ?? [];
 
@@ -103,12 +86,8 @@ export function BaseNode({
               scope: "base",
               path: base.name,
             },
-            // ⚠ EVERY SCOPE OF THIS BASE, by key. The base now covers all of
-            // them, and the prune is what stops a stale folder row outliving it.
-            [
-              ...[...index.folderName.keys()].map((id) => `folder:${id}`),
-              ...[...index.entryTitle.keys()].map((id) => `entry:${id}`),
-            ]
+            // The picker prunes a base's own scopes off the selection itself.
+            []
           )
         }
       />
@@ -116,7 +95,7 @@ export function BaseNode({
         (tree.status === "loading" ? (
           <p className="py-1.5 pr-2 pl-8 text-caption text-text-muted">Loading…</p>
         ) : tree.status === "error" ? (
-          // A failed read is not an empty base (INVARIANTS §11, P7-06).
+          // A failed read is not an empty base (INVARIANTS §11).
           <p role="alert" className="py-1.5 pr-2 pl-8 text-caption text-danger">
             {tree.error?.message || "Couldn't load this base."}{" "}
             <button type="button" className="underline" onClick={() => tree.refetch()}>
@@ -167,7 +146,7 @@ function FolderNode({
   onToggle,
 }: NodeContext & { folderId: string }) {
   const [open, setOpen] = useState(false);
-  const checked = selectedKeys.has(`folder:${folderId}`);
+  const checked = selectedKeys.has(scopeKey({ baseId: base.id, scope: "folder", folderId }));
   const covered = ancestorChecked || checked;
   const children = index.childFolders.get(folderId) ?? [];
   const entries = index.childEntries.get(folderId) ?? [];
@@ -180,9 +159,7 @@ function FolderNode({
         icon={<Folder size={12} aria-hidden="true" />}
         label={index.folderName.get(folderId) ?? folderId}
         checked={covered}
-        // ⚠ IMPLIED = checked AND not togglable. The row says "this IS attached"
-        // and refuses to be the place you detach it, because the row that owns
-        // the attachment is the ancestor above it.
+        // Implied = checked but not togglable here; the ancestor owns the attachment.
         implied={ancestorChecked}
         expandable={children.length > 0 || entries.length > 0}
         expanded={open}
@@ -203,7 +180,7 @@ function FolderNode({
                 .map((id) => index.folderName.get(id) ?? "")
                 .join("/"),
             },
-            descendantKeys(folderId, index)
+            descendantKeys(base.id, folderId, index)
           )
         }
       />
@@ -261,7 +238,7 @@ function EntryRow({
       depth={depth}
       icon={<FileText size={12} aria-hidden="true" />}
       label={title}
-      checked={ancestorChecked || selectedKeys.has(`entry:${entryId}`)}
+      checked={ancestorChecked || selectedKeys.has(scopeKey({ baseId: base.id, scope: "entry", entryId }))}
       implied={ancestorChecked}
       expandable={false}
       expanded={false}
@@ -285,11 +262,8 @@ function EntryRow({
 }
 
 /**
- * ONE ROW. ⚠ `role="treeitem"` ON THE ROW, not on a nested button: the tree owns
- * arrow navigation and the row owns Space/Enter, so the focusable thing and the
- * checkable thing must be one element. The chevron is a separate control for the
- * MOUSE and stops propagation; the keyboard reaches expansion through
- * ArrowRight/ArrowLeft on the row itself.
+ * One row: `role="treeitem"` on the row itself (focusable and checkable are one element); the
+ * chevron is a mouse-only control, and the keyboard expands with ArrowRight/ArrowLeft.
  */
 function TreeRow({
   depth,
@@ -316,10 +290,7 @@ function TreeRow({
     <div
       role="treeitem"
       tabIndex={0}
-      // ⚠ AN EXPLICIT NAME, because the row CONTAINS a labelled button. Name
-      // computation from contents would fold the chevron's "Expand Deploys" into
-      // the row's own name and produce "Expand Deploys Deploys" — a name no
-      // operator hears as the folder and no `getByRole` can address.
+      // Explicit name: computed from contents it would absorb the chevron's "Expand …" label.
       aria-label={label}
       aria-selected={checked}
       aria-disabled={implied || undefined}
@@ -370,9 +341,6 @@ function TreeRow({
       </button>
       <span className="shrink-0 text-text-muted">{icon}</span>
       <span className="min-w-0 flex-1 truncate text-left">{label}</span>
-      {/* ⚠ A GLYPH, NOT AN `<input type="checkbox">`. The row already carries the
-          checked state for assistive tech through `aria-selected`, and a real
-          input inside a `treeitem` would be a second focus stop on every row. */}
       <span
         aria-hidden="true"
         className={cn("shrink-0", checked ? "text-text-primary" : "opacity-0")}
@@ -385,10 +353,7 @@ function TreeRow({
 
 // ─── Index ──────────────────────────────────────────────────────────────
 
-/** ⚠ Built from the FLAT arrays the tree read returns (`KnowledgeTreeSnapshot`
- *  is explicit that hierarchy is the UI's to assemble), and cycle-guarded on the
- *  `parentId` walk for the same reason the server's own path derivation is: a
- *  loop would hang a render rather than draw a wrong name. */
+/** Built from the tree read's flat arrays; the `parentId` walk is cycle-guarded. */
 function buildIndex(
   data: {
     folders: Array<{ id: string; parentId: string | null; name: string; position: number }>;
@@ -437,9 +402,8 @@ function buildIndex(
   return index;
 }
 
-/** Every scope key a folder now COVERS — its descendant folders and every entry
- *  under any of them. ⚠ Used for the PRUNE, never to write rows. */
-function descendantKeys(folderId: string, index: TreeIndex): string[] {
+/** Every scope key a folder now covers (descendant folders and entries) — for the prune only. */
+function descendantKeys(baseId: string, folderId: string, index: TreeIndex): string[] {
   const keys: string[] = [];
   const stack = [folderId];
   const seen = new Set<string>();
@@ -447,9 +411,9 @@ function descendantKeys(folderId: string, index: TreeIndex): string[] {
     const current = stack.pop() as string;
     if (seen.has(current)) continue;
     seen.add(current);
-    if (current !== folderId) keys.push(`folder:${current}`);
+    if (current !== folderId) keys.push(scopeKey({ baseId, scope: "folder", folderId: current }));
     for (const entryId of index.childEntries.get(current) ?? []) {
-      keys.push(`entry:${entryId}`);
+      keys.push(scopeKey({ baseId, scope: "entry", entryId }));
     }
     stack.push(...(index.childFolders.get(current) ?? []));
   }

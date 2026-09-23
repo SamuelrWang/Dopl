@@ -5,6 +5,7 @@ import { Plus } from "lucide-react";
 import { PageShellSkeleton } from "@/shared/ui/skeleton";
 import { useAttachableBases } from "../hooks/use-attachable-bases";
 import { useTeams } from "@/features/members/hooks/use-teams";
+import { useLaunchSelection } from "@/features/channels/hooks/use-launch-selection";
 import { agentIdentityErrorMessage } from "../client/api";
 import type { AgentIdentity, IdentityShelf } from "../client/types";
 import { useAgentIdentities } from "../hooks/use-agent-identities";
@@ -14,50 +15,15 @@ import { IdentitySection } from "./identity-section";
 import { IdentityEditor } from "./identity-editor";
 
 /**
- * THE AGENTS PAGE — persistent agent IDENTITIES, created and managed here.
- *
- * Next-free and ROUTER-FREE by construction (the rule every shared page core in
- * this tree follows), so the SPA seam at `apps/desktop-ui/src/pages/identities/`
- * resolves the workspace and hands over, and the web tree could mount the same
- * component unchanged.
- *
- * ⚠ THREE PANELS, ONE READ. `useAgentIdentities` returns everything the caller
- * may see and `../lib/visibility.ts` groups it; the panels never fetch per
- * scope — three requests are three chances for the sections to disagree about a
- * identity that moved between them mid-load.
- *
- * ⚠ ONE CREATE AFFORDANCE, AT PAGE LEVEL. Samuel left the choice open between a
- * header button and a per-section "+"; the header wins because an identity's
- * scope is a FIELD IN THE EDITOR — a per-section plus would pre-decide it from
- * the panel that was clicked, and then disagree with the control the operator
- * changes two seconds later.
- *
- * ⚠ NO LAUNCH UI. Selecting an identity AT LAUNCH is a later phase.
+ * The Identities page — Next-free and router-free, so the SPA route mounts it unchanged. One list read
+ * grouped into the three scope panels; one page-level create (scope is a field in the editor).
  */
 
 export interface AgentIdentitiesCoreProps {
   workspaceId: string;
   /** Canonical `{slug}-{publicId}` segment — the teams read is keyed by it. */
   workspaceSlug: string;
-  /**
-   * THE HOST'S OWN LOADING SHAPE for the identity read, or the shared page
-   * ghost when a host has none.
-   *
-   * ⚠ A SLOT, NOT AN IMPORT, AND IT HAS TO BE. This core is Next-free and
-   * router-free so BOTH trees mount it, which means it cannot reach into
-   * `apps/desktop-ui/` — the desktop's per-page skeleton lives there. Same
-   * idiom as `channels-core.tsx`'s `Link` and `shared/ui/skeleton.tsx ›
-   * TwoPaneListSkeleton`'s `detail`: the host supplies what only the host can
-   * know.
-   *
-   * ⚠ WHY THE DESKTOP PASSES ONE. Its page gate already paints
-   * `pages/identities/identities-skeleton.tsx › IdentitiesPageSkeleton` while the workspace
-   * resolves, and THIS read is the very next frame — so leaving the default
-   * here swapped that shape for a different one mid-load, which is the "five
-   * flickers in five positions" `apps/desktop-ui/src/components/page-states.tsx`
-   * argues against, arriving inside one page. One shape across both gates reads
-   * as a single surface resolving.
-   */
+  /** The host's loading shape for the list read (a slot: this core cannot import `apps/desktop-ui`). */
   loadingSkeleton?: ReactNode;
 }
 
@@ -70,12 +36,7 @@ interface EditorState {
 
 const CLOSED: EditorState = { open: false, identity: null, session: 0 };
 
-/**
- * 🔒 WHICH SHELF THIS PAGE IS. ⚠ FORGETTING IT WIDENS: an omitted `shelf` means
- * BOTH shelves, which is the pre-ruling behaviour and looks exactly like working
- * code. There is no client-side fallback filter anywhere in this chain — the
- * shelf is a TENANCY the client is never handed on the row.
- */
+/** This page's shelf; omitting it would widen the list to both shelves. */
 const WORKSPACE_SHELF: IdentityShelf = "workspace";
 
 export function AgentIdentitiesCore({
@@ -83,19 +44,11 @@ export function AgentIdentitiesCore({
   workspaceSlug,
   loadingSkeleton,
 }: AgentIdentitiesCoreProps) {
-  // 🔒 THE WORKSPACE SHELF, AND THE EXCLUSION RUNS BOTH WAYS (Samuel's ruling
-  // 2026-08-27; structural since 2026-09-02, when the shelf became a separate
-  // CONTAINER rather than a boolean beside one). This page and
-  // /home → Agents → Personal are two PLACES over one table: an identity created
-  // from the /home pane does not appear here, and this page's creates do not
-  // appear there. A shelf that is its own place in one direction only is just a
-  // filter.
-  // ⚠ THE SHELF ALSO KEYS THE CACHE ENTRY, so the WRITES hook must be handed
-  // the same value — a read on `[path, ws, {shelf:"workspace"}]` patched by a
-  // writer on `[path, ws, undefined]` is F-331 with a new axis.
+  // The shelf keys the cache entry, so the writes hook gets the same value (F-331).
   const list = useAgentIdentities(workspaceId, { shelf: WORKSPACE_SHELF });
   const { teams } = useTeams(workspaceSlug);
   const attachable = useAttachableBases(workspaceId);
+  const { catalogs } = useLaunchSelection({ kind: "defaults" });
 
   const [editor, setEditor] = useState<EditorState>(CLOSED);
   const {
@@ -156,6 +109,7 @@ export function AgentIdentitiesCore({
               section={section}
               identities={grouped[section.visibility]}
               onOpen={openEditor}
+              catalogs={catalogs}
             />
           ))}
         </div>
