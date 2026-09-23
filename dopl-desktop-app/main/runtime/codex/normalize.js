@@ -7,7 +7,7 @@ const io = require('../../session-io');
 
 // ── SYNTHETIC FRAMES ─────────────────────────────────────────────────────────────────────────
 // `launch-spec.js` mints THREAD_STARTED (Dopl's own, `dopl/`-namespaced: handle + model into core) and
-// the turn-failure error frame; core mints the rejection one.
+// the turn-failure and MCP-startup error frames; core mints the rejection one.
 const THREAD_STARTED = 'dopl/threadStarted';
 const ERROR_MESSAGE_TYPE = events.ERROR_FRAME;
 
@@ -29,6 +29,18 @@ function unauthorizedInfo(info) {
 }
 
 const turnFailureLine = (text) => `Codex could not finish this turn${text ? `: ${text}` : '.'}`;
+
+// Dopl's MCP server missed the first turn (`mcp-ready.js`). The key is its startup outcome.
+const MCP_STARTUP_WHY = Object.freeze({
+  timeout: 'no answer in time',
+  failed: 'the connection failed',
+  cancelled: 'the connection was cancelled',
+  reauthenticationRequired: 'sign-in required',
+});
+const mcpStartupLine = (key) => {
+  const why = Object.prototype.hasOwnProperty.call(MCP_STARTUP_WHY, key) ? MCP_STARTUP_WHY[key] : MCP_STARTUP_WHY.failed;
+  return `Dopl's tools did not connect (${why}), so this turn runs without them.`;
+};
 
 function itemOf(params) {
   const p = params && typeof params === 'object' ? params : {};
@@ -154,6 +166,8 @@ function normalize(msg, ctx) {
 
   // Core's rejection frame and launch-spec's failed-turn frame: platform text, so classified here.
   if (msg.type === ERROR_MESSAGE_TYPE) {
+    // Dopl's own bearer, not the Codex sign-in, so never a hold.
+    if (msg.mcpStartup) return [events.assistant(mcpStartupLine(String(msg.mcpStartup)))];
     const text = String(msg.text == null ? '' : msg.text);
     if (isAuthShaped(text) || unauthorizedInfo(msg.codexErrorInfo)) return [events.authHold(text)];
     // A failed TURN (not a rejected stream, which core's crash path reports) is shown in the lane.

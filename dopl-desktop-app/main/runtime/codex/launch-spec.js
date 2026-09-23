@@ -11,6 +11,7 @@ const catalog = require('./catalog');
 const skillsFence = require('./skills-fence');
 const resolveBin = require('./resolve-bin');
 const mcp = require('./mcp');
+const mcpReady = require('./mcp-ready');
 const normalizer = require('./normalize');
 const channelDirs = require('../../channel-dirs');
 const store = require('../../session-store');
@@ -153,12 +154,20 @@ function makeApprovalHandler(s, dispatch) {
 }
 
 // Start a run. Synchronous by contract (two-children bug). Boot: fenced catalog (async, CX-09),
-// `initialize` + `initialized`, `thread/start|resume`; first push `turn/start`, later ones `turn/steer`.
+// `initialize` + `initialized`, `thread/start|resume`; first push waits for Dopl's MCP server, then
+// `turn/start`; later ones `turn/steer`.
 function start(spec) {
   const s = spec.session;
   const frames = makeFrameQueue();
+  const log = typeof spec.log === 'function' ? spec.log : diag;
   // The child is spawned after the catalog step; `close()` before then means it never is.
-  const link = { conn: null, closed: false };
+  const link = {
+    conn: null,
+    closed: false,
+    // Tracks Dopl's MCP startup from the first frame (a status can beat the `thread/start` answer).
+    ready: mcpReady.makeReadyWait(mcpReady.doplConfigured(spec.threadStart)),
+    interruptPending: false,
+  };
   let threadId = spec.resumeThreadId || null;
   let activeTurnId = null;
   let selectedModel = null;
@@ -182,8 +191,21 @@ function start(spec) {
     });
   };
 
+  // A turn that will run without Dopl's tools says so in the lane; one diag line per launch either way.
+  const firstTurnReady = async (conn) => {
+    const outcome = await link.ready.wait(conn, threadId);
+    const line = ['codex: dopl mcp', outcome.status, `(${outcome.source})`, `first turn waited ${outcome.waitedMs}ms`];
+    if (outcome.failureReason) line.push(`reason=${outcome.failureReason}`);
+    // Codex's own startup error (never the bearer, which rides the env), one line and bounded.
+    if (outcome.error) line.push(`error=${String(outcome.error).replace(/\s+/g, ' ').slice(0, 200)}`);
+    log(...line);
+    if (link.closed || !mcpReady.missedTools(outcome)) return;
+    frames.push({ type: normalizer.ERROR_MESSAGE_TYPE, text: '', mcpStartup: outcome.failureReason || outcome.status });
+  };
+
   // Usage arrives on `thread/tokenUsage/updated`; it is attached to the `turn/completed` frame.
   const onNotification = (msg) => {
+    link.ready.observe(msg);
     const method = msg && msg.method;
     const params = (msg && msg.params && typeof msg.params === 'object') ? msg.params : {};
     if (method === 'thread/tokenUsage/updated') {
@@ -235,7 +257,7 @@ function start(spec) {
       args: (spec.args || []).concat(catalog.catalogArgs(fenced)),
       env,
       cwd: spec.cwd,
-      log: typeof spec.log === 'function' ? spec.log : diag,
+      log,
       onNotification,
       onServerRequest: makeApprovalHandler(s, spec.dispatch),
       // An exit is never a clean end-of-stream for a live session; the spawn error is the cause.
@@ -261,16 +283,27 @@ function start(spec) {
     // Dopl's own synthetic frame: carries the thread handle + selected model into core (`launched`).
     frames.push({ method: normalizer.THREAD_STARTED, params: { threadId, model: selectedModel } });
     // A second `turn/start` would open a concurrent turn, so a push during one steers it.
+    let firstTurn = true;
     for await (const m of spec.prompt) {
       const text = String((m && m.message && m.message.content) || '');
       if (!text) continue;
       const input = [{ type: 'text', text }];
       if (!activeTurnId) {
+        if (firstTurn) {
+          firstTurn = false;
+          await firstTurnReady(conn);
+          if (link.closed) return;
+        }
         const turn = await conn.request('turn/start', Object.assign(
           { threadId, input }, spec.turnStart || {}
         ));
         activeTurnId = turn && turn.turn && turn.turn.id ? String(turn.turn.id) : null;
         if (!activeTurnId) throw new Error('Codex turn/start returned no turn id');
+        // A stop pressed during the wait lands on the turn it was meant for (core still gets its `result`).
+        if (link.interruptPending) {
+          link.interruptPending = false;
+          void boundedInterrupt(conn.request('turn/interrupt', { threadId, turnId: activeTurnId }));
+        }
       } else {
         const steered = await conn.request('turn/steer', {
           threadId, expectedTurnId: activeTurnId, input,
@@ -316,6 +349,12 @@ function handleFor(link, frames, threadIdOf, turnIdOf) {
     interrupt() {
       const conn = link.conn;
       if (!conn) return Promise.resolve();
+      // During the first turn's wait: cut it short; the pump interrupts the turn once it has an id.
+      if (link.ready.isWaiting()) {
+        link.interruptPending = true;
+        link.ready.release('interrupted');
+        return Promise.resolve();
+      }
       const threadId = threadIdOf();
       const turnId = turnIdOf();
       // No active turn (cleared on `turn/completed`), no request: an interrupted turn never answers one.
@@ -324,6 +363,7 @@ function handleFor(link, frames, threadIdOf, turnIdOf) {
     },
     close() {
       link.closed = true;
+      link.ready.release('closed');
       frames.close();
       if (link.conn) link.conn.close();
     },

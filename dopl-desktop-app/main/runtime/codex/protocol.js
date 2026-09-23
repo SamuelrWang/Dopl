@@ -5,7 +5,7 @@
 // contract suite checks the installed CLI declares every one.
 const REQUIRED_METHODS = Object.freeze([
   'initialize', 'thread/start', 'thread/resume',
-  'turn/start', 'turn/steer', 'turn/interrupt', 'model/list',
+  'turn/start', 'turn/steer', 'turn/interrupt', 'model/list', 'mcpServerStatus/list',
 ]);
 
 // Measured from `codex-cli 0.155.1` (`npm run codex:schema`); re-measure, never edit by hand. A floor
