@@ -18,77 +18,37 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { useEffect } from "react";
 import { act, cleanup, render } from "@testing-library/react";
+import { installSpaBridge } from "@/shared/testing/spa-bridge";
 import {
   useChannelLaunchPosture,
   type ChannelLaunchPostureState,
 } from "./use-channel-launch-posture";
-import { CATALOG_VERSION, selectableModels } from "../lib/model-catalog";
+import { CATALOG_VERSION, selectableModels, type ModelCatalog } from "../lib/model-catalog";
+import { AGENT_MODELS } from "../lib/agent-models";
+import { REAL_DEFAULT_RUNTIME, REAL_DESCRIPTORS } from "../lib/runtime-descriptors-harness";
+import { wireCatalog } from "./launch-selection-harness";
 import { MAIN_ROSTER_SETTLE_MS, MAX_RELOADS, RELOAD_DELAY_MS } from "./use-runtime-catalogs";
 
 afterEach(() => {
   cleanup();
   vi.useRealTimers();
-  delete (window as { dopl?: unknown }).dopl;
 });
 
 const CH = "44444444-4444-4444-8444-444444444444";
 
-const CLAUDE_IDS = [
-  "claude-fable-5",
-  "claude-opus-5",
-  "claude-sonnet-5",
-  "claude-haiku-4-5-20251001",
-];
+const CLAUDE_IDS = AGENT_MODELS.map((m) => m.id);
 
-/** Two minimal descriptors — enough for `normalizeRuntimes` / `descriptorFor`. */
-const RUNTIMES = [
-  { id: "claude", label: "Claude Code" },
-  { id: "codex", label: "Codex", models: { source: "live", dimensions: ["reasoningEffort"] } },
-];
+const codexCatalog = (over: Partial<ModelCatalog> = {}) =>
+  wireCatalog(
+    "codex",
+    [{ id: "gpt-a", label: "GPT Alpha", isDefault: true, efforts: ["medium"] }],
+    over
+  );
 
-const codexCatalog = (over: Record<string, unknown> = {}) => ({
-  runtime: "codex",
-  source: "live",
-  status: "ready",
-  reason: "",
-  models: [
-    {
-      id: "gpt-a",
-      label: "GPT Alpha",
-      short: "GPT Alpha",
-      isDefault: true,
-      hidden: false,
-      dimensions: {
-        reasoningEffort: {
-          options: [{ value: "medium", label: "medium", description: null }],
-          default: "medium",
-        },
-      },
-    },
-  ],
-  defaultId: "gpt-a",
-  dimensions: ["reasoningEffort"],
-  truncated: false,
-  ...over,
-});
-
-const claudeCatalog = {
-  runtime: "claude",
-  source: "frozen",
-  status: "ready",
-  reason: "",
-  models: CLAUDE_IDS.map((id) => ({
-    id,
-    label: id,
-    short: id,
-    isDefault: id === "claude-sonnet-5",
-    hidden: false,
-    dimensions: {},
-  })),
-  defaultId: "claude-sonnet-5",
-  dimensions: [],
-  truncated: false,
-};
+const claudeCatalog = wireCatalog(
+  "claude",
+  CLAUDE_IDS.map((id) => ({ id, isDefault: id === "claude-sonnet-5" }))
+);
 
 /** Install a bridge whose posture read answers `reply`. A function is called per read. */
 function installBridge(reply: unknown | (() => unknown)) {
@@ -97,10 +57,9 @@ function installBridge(reply: unknown | (() => unknown)) {
   const setLaunchPosture = vi.fn().mockResolvedValue({ ok: true });
   const getAgentDefaults = vi.fn().mockImplementation(async () => read());
   const setAgentDefaults = vi.fn().mockResolvedValue({ ok: true });
-  (window as { dopl?: unknown }).dopl = {
-    apiRequest: vi.fn(),
+  installSpaBridge({
     channels: { getLaunchPosture, setLaunchPosture, getAgentDefaults, setAgentDefaults },
-  };
+  });
   return { getLaunchPosture, getAgentDefaults };
 }
 
@@ -126,8 +85,8 @@ const mountPosture = () =>
 const reply = (over: Record<string, unknown> = {}) => {
   const row: Record<string, unknown> = {
     runtime: "codex",
-    runtimes: RUNTIMES,
-    defaultRuntime: "claude",
+    runtimes: REAL_DESCRIPTORS,
+    defaultRuntime: REAL_DEFAULT_RUNTIME,
     connected: ["claude"],
     catalogVersion: CATALOG_VERSION,
     catalogs: { claude: claudeCatalog, codex: codexCatalog() },
@@ -137,7 +96,7 @@ const reply = (over: Record<string, unknown> = {}) => {
   return { ...row, selection: { v: 2, runtime: row.runtime, messages: "ask", byRuntime: {} } };
 };
 
-describe("🔒 the selected runtime's catalog is what the model row gets", () => {
+describe("the selected runtime's catalog is what the model row gets", () => {
   it("Codex selected ⇒ Codex models, and NOT ONE Claude id", async () => {
     installBridge(reply());
     const holder = await mountPosture();
@@ -150,7 +109,7 @@ describe("🔒 the selected runtime's catalog is what the model row gets", () =>
   it("no pick ⇒ the DEFAULT runtime's catalog, because that is what a launch would use", async () => {
     installBridge(reply({ runtime: "" }));
     const holder = await mountPosture();
-    expect(holder.value.catalog?.runtime).toBe("claude");
+    expect(holder.value.catalog?.runtime).toBe(REAL_DEFAULT_RUNTIME);
     expect(selectableModels(holder.value.catalog).map((m) => m.id)).toEqual(CLAUDE_IDS);
   });
 
@@ -179,15 +138,15 @@ describe("a runtime with no catalog reads null, never another runtime's list", (
   it("no `catalogs` key ⇒ even the DEFAULT runtime gets no catalog (no frozen substitute)", async () => {
     installBridge({
       tools: "manual", messages: "ask",
-      runtime: "", runtimes: RUNTIMES, defaultRuntime: "claude", connected: [],
+      runtime: "", runtimes: REAL_DESCRIPTORS, defaultRuntime: REAL_DEFAULT_RUNTIME, connected: [],
     });
     const holder = await mountPosture();
     expect(holder.value.catalog).toBeNull();
   });
 
-  it("🔒 a NON-default runtime with no catalog gets NOTHING, never Claude's list", async () => {
+  it("a NON-default runtime with no catalog gets NOTHING, never Claude's list", async () => {
     installBridge({
-      runtimes: RUNTIMES, defaultRuntime: "claude", connected: [],
+      runtimes: REAL_DESCRIPTORS, defaultRuntime: REAL_DEFAULT_RUNTIME, connected: [],
       selection: { v: 2, runtime: "codex", messages: "ask", byRuntime: {} },
     });
     const holder = await mountPosture();
@@ -225,7 +184,7 @@ describe("a `loading` roster is re-read, boundedly", () => {
 
     settled = true;
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(1500);
+      await vi.advanceTimersByTimeAsync(RELOAD_DELAY_MS + 300);
     });
     expect(holder.value.catalog?.status).toBe("ready");
     expect(getLaunchPosture.mock.calls.length).toBeGreaterThan(first);
@@ -256,7 +215,7 @@ describe("a `loading` roster is re-read, boundedly", () => {
     expect(getLaunchPosture.mock.calls.length).toBeLessThanOrEqual(1 + MAX_RELOADS + 1);
   });
 
-  it("F3: the re-read budget outlasts main's own roster leash (probe + model/list)", () => {
+  it("the re-read budget outlasts main's own roster leash (probe + model/list)", () => {
     expect(MAX_RELOADS * RELOAD_DELAY_MS).toBeGreaterThan(MAIN_ROSTER_SETTLE_MS);
   });
 
@@ -269,7 +228,7 @@ describe("a `loading` roster is re-read, boundedly", () => {
     }
   }
 
-  it("F3: a roster that settles at ~12s (past the old 7.2s budget) still reaches the picker", async () => {
+  it("a roster that settles at ~12s (past the old 7.2s budget) still reaches the picker", async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     let settled = false;
     installBridge(() =>
@@ -282,11 +241,11 @@ describe("a `loading` roster is re-read, boundedly", () => {
     await advance(12000);
     expect(holder.value.catalog?.status).toBe("loading");
     settled = true;
-    await advance(2400);
+    await advance(2 * RELOAD_DELAY_MS);
     expect(holder.value.catalog?.status).toBe("ready");
   });
 
-  it("F3: once the budget is spent, window focus re-reads a catalog that is STILL loading", async () => {
+  it("once the budget is spent, window focus re-reads a catalog that is STILL loading", async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     let settled = false;
     const { getLaunchPosture } = installBridge(() =>
@@ -312,7 +271,7 @@ describe("a `loading` roster is re-read, boundedly", () => {
   });
 });
 
-describe("🔒 a SETTLED failure recovers after repair, with no restart (CXP-5)", () => {
+describe("a SETTLED failure recovers after repair, with no restart", () => {
   const failed = () =>
     codexCatalog({
       status: "unavailable",
@@ -364,7 +323,7 @@ describe("🔒 a SETTLED failure recovers after repair, with no restart (CXP-5)"
 
     phase = "ready";
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(1500);
+      await vi.advanceTimersByTimeAsync(RELOAD_DELAY_MS + 300);
     });
     expect(holder.value.catalog?.status).toBe("ready");
     expect(selectableModels(holder.value.catalog).map((m) => m.id)).toEqual(["gpt-a"]);

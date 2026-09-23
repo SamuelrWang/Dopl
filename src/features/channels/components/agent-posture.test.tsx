@@ -21,14 +21,12 @@ import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
 import type { DesktopSessionSummary } from "@/shared/lib/spa-bridge";
 import { POSTURE_REFUSED, PostureControls } from "./agent-posture";
 import { CHANNEL_ID } from "./test-fixtures";
-import { REAL_DESCRIPTORS } from "../lib/runtime-descriptors-harness";
-import { catalog } from "../hooks/launch-selection-harness";
+import { AGENT_MODELS } from "../lib/agent-models";
+import { catalog, channelRecordBridge } from "../hooks/launch-selection-harness";
+import { installSpaBridge } from "@/shared/testing/spa-bridge";
 
 const TASK = "t-1";
-afterEach(() => {
-  cleanup();
-  delete (window as { dopl?: unknown }).dopl;
-});
+afterEach(cleanup);
 
 function agent(over: Partial<DesktopSessionSummary> = {}): DesktopSessionSummary {
   return {
@@ -45,35 +43,29 @@ function agent(over: Partial<DesktopSessionSummary> = {}): DesktopSessionSummary
   };
 }
 
-/** The channel's launch record: every real adapter, one catalog each, the channel on `runtime`. */
-function channelsBridge(runtime = "claude") {
-  return {
-    getLaunchPosture: vi.fn().mockResolvedValue({
-      runtimes: REAL_DESCRIPTORS,
-      defaultRuntime: "claude",
-      connected: ["claude", "codex"],
-      catalogVersion: 1,
-      catalogs: {
-        claude: catalog("claude", [
-          { id: "claude-opus-5", label: "Opus 5" },
-          { id: "claude-sonnet-5", label: "Sonnet 5", isDefault: true },
-        ]),
-        codex: catalog("codex", [{ id: "gpt-6-sol", label: "GPT-6 Sol", isDefault: true }]),
-      },
-      selection: { v: 2, runtime, messages: "ask", byRuntime: {} },
-    }),
-    setLaunchPosture: vi.fn(),
-  };
-}
+const CATALOGS = {
+  claude: catalog("claude", [
+    { id: "claude-opus-5", label: "Opus 5" },
+    { id: "claude-sonnet-5", label: "Sonnet 5", isDefault: true },
+  ]),
+  codex: catalog("codex", [{ id: "gpt-6-sol", label: "GPT-6 Sol", isDefault: true }]),
+  cursor: catalog("cursor", [
+    { id: "composer-2", label: "Composer 2", isDefault: true },
+    { id: "gpt-6-sol", label: "GPT-6 Sol" },
+  ]),
+};
 
-function install(setMode?: ReturnType<typeof vi.fn>, sessions: Record<string, unknown> = {}) {
+function install(
+  setMode?: ReturnType<typeof vi.fn>,
+  sessions: Record<string, unknown> = {},
+  channelRuntime = "claude"
+) {
   const api: Record<string, unknown> = { ...sessions };
   if (setMode) api.setMode = setMode;
-  (window as unknown as { dopl?: unknown }).dopl = {
-    apiRequest: () => Promise.resolve({ status: 200, statusText: "", hasBody: false }),
+  installSpaBridge({
     sessions: api,
-    channels: channelsBridge(),
-  };
+    channels: channelRecordBridge({ runtime: channelRuntime, catalogs: CATALOGS }),
+  });
 }
 
 /** Renders, then lets the channel's launch-record read answer. */
@@ -405,11 +397,24 @@ describe("a running agent on a runtime other than the channel's", () => {
   });
 
   it("offers a Claude agent Claude's models on a Codex channel", async () => {
-    install(vi.fn(), { setModel: vi.fn() });
-    (window as unknown as { dopl: { channels: unknown } }).dopl.channels = channelsBridge("codex");
+    install(vi.fn(), { setModel: vi.fn() }, "codex");
     await mount({ runtimeId: "claude", model: "claude-sonnet-5" });
     fireEvent.click(screen.getByLabelText("Model for this agent"));
     expect(screen.getByRole("menuitem", { name: /^Opus 5/ })).toBeTruthy();
     expect(screen.queryByRole("menuitem", { name: /GPT-6 Sol/ })).toBeNull();
+  });
+
+  it("offers a non-Claude agent its own catalog's models and no Claude one", async () => {
+    install(vi.fn(), { setModel: vi.fn() });
+    await mount({ runtimeId: "cursor", model: "composer-2" });
+    fireEvent.click(screen.getByLabelText("Model for this agent"));
+    const offered = screen.getAllByRole("menuitem").map((el) => el.textContent ?? "");
+    expect(offered).toHaveLength(2);
+    expect(offered[0]).toMatch(/^Composer 2/);
+    expect(offered[1]).toMatch(/^GPT-6 Sol/);
+    for (const m of AGENT_MODELS) {
+      expect(offered.join(" ")).not.toContain(m.label);
+      expect(offered.join(" ")).not.toContain(m.id);
+    }
   });
 });

@@ -26,7 +26,6 @@
  * `settings-agent-harness.tsx` for why it is a file rather than a copy.
  */
 
-import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { cleanup, fireEvent, screen } from "@testing-library/react";
@@ -46,6 +45,7 @@ import {
 // the CLAIMS are unchanged.
 import { launchSelectionStub } from "../hooks/launch-selection-harness";
 import { SETTINGS_HELP } from "./settings-help";
+import { readSource } from "@/shared/testing/source-text";
 
 afterEach(cleanup);
 
@@ -249,7 +249,7 @@ describe("the two permission axes agree across both trees", () => {
   // ⚠ THE WEB HALF IS WHAT THE SPA OFFERS — the option lists, in order. `permission-modes.ts` holds
   // types only since F5, so the offering is the one literal left on this side.
   const WEB_MODULE = "src/features/channels/components/permission-preset-row.tsx";
-  const web = readFileSync(resolve(process.cwd(), WEB_MODULE), "utf8");
+  const web = readSource(resolve(process.cwd(), WEB_MODULE));
   const offered = (name: string): string[] => {
     const list = name === "TOOL_MODES" ? "TOOL_OPTIONS" : "MESSAGE_OPTIONS";
     const m = new RegExp(`export const ${list}[^=]*=\\s*\\[([\\s\\S]*?)\\n\\];`).exec(web);

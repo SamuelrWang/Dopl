@@ -32,6 +32,7 @@ import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
 import type { DesktopSessionSummary } from "@/shared/lib/spa-bridge";
 import {
   AGENT_MODEL_DEFAULT,
+  AGENT_MODELS,
   agentModelLabel,
   agentModelShortLabel,
   normalizeAgentModel,
@@ -40,13 +41,15 @@ import { agentRunningModel } from "./agents-model";
 import { ChannelAgentSettingsView } from "./settings-agent";
 import { PostureControls } from "./agent-posture";
 import { CHANNEL_ID } from "./test-fixtures";
-import { catalog, launchSelectionStub } from "../hooks/launch-selection-harness";
-import { REAL_DESCRIPTORS } from "../lib/runtime-descriptors-harness";
+import type { ModelCatalogs } from "../lib/model-catalog";
+import {
+  catalog,
+  channelRecordBridge,
+  launchSelectionStub,
+} from "../hooks/launch-selection-harness";
+import { installSpaBridge } from "@/shared/testing/spa-bridge";
 
-afterEach(() => {
-  cleanup();
-  delete (window as { dopl?: unknown }).dopl;
-});
+afterEach(cleanup);
 
 const noop = () => {};
 
@@ -64,40 +67,19 @@ function summary(over: Partial<DesktopSessionSummary> = {}): DesktopSessionSumma
   };
 }
 
-/**
- * Stand up just enough bridge for the LIVE controls' two capability probes.
- *
- * ⚠ `apiRequest` IS THE SPA MARKER (`spa-bridge.ts › getSpaBridge`) — without it
- * the whole bridge reads as absent and every probe answers false, which looks
- * exactly like the capability being missing.
- */
-function stubBridge(over: Record<string, unknown> = {}) {
-  (window as { dopl?: unknown }).dopl = {
-    apiRequest: () => Promise.resolve({ status: 200, statusText: "", hasBody: false }),
-    sessions: {
-      setMode: vi.fn(async () => ({ ok: true })),
-      ...over,
-    },
-    // The channel's launch record — the agent's runtime descriptor and its live roster.
-    channels: {
-      getLaunchPosture: vi.fn(async () => ({
-        runtimes: REAL_DESCRIPTORS,
-        defaultRuntime: "claude",
-        connected: ["claude"],
-        catalogVersion: 1,
-        catalogs: {
-          claude: catalog("claude", [
-            { id: "claude-fable-5", label: "Fable 5" },
-            { id: "claude-opus-5", label: "Opus 5" },
-            { id: "claude-sonnet-5", label: "Sonnet 5", isDefault: true },
-            { id: "claude-haiku-4-5-20251001", label: "Haiku 4.5" },
-          ]),
-        },
-        selection: { v: 2, runtime: "", messages: "ask", byRuntime: {} },
-      })),
-      setLaunchPosture: vi.fn(),
-    },
-  };
+const CLAUDE_CATALOGS: ModelCatalogs = {
+  claude: catalog(
+    "claude",
+    AGENT_MODELS.map(({ id, label }) => ({ id, label, isDefault: id === "claude-sonnet-5" }))
+  ),
+};
+
+/** Just enough bridge for the live controls' two capability probes and the channel's launch record. */
+function stubBridge(sessions: Record<string, unknown> = {}, catalogs = CLAUDE_CATALOGS) {
+  installSpaBridge({
+    sessions: { setMode: vi.fn(async () => ({ ok: true })), ...sessions },
+    channels: channelRecordBridge({ catalogs }),
+  });
 }
 
 /** Renders the live strip and lets the channel's launch record answer. */
@@ -158,7 +140,7 @@ describe("the model vocabulary — one map, four surfaces", () => {
  * agent … or you can just have it go to the default model."* Its capability probe (`hasModelKey`)
  * went with it. What is pinned now is the ABSENCE, on a desktop that would once have drawn it.
  */
-describe("NO model row on the Settings tab (2026-09-23)", () => {
+describe("NO model row on the Settings tab", () => {
   const view = (over: Partial<Parameters<typeof ChannelAgentSettingsView>[0]> = {}) =>
     render(
       <ChannelAgentSettingsView
@@ -255,16 +237,7 @@ describe("the LIVE model selector on a running agent", () => {
 
   /** 🔒 NO CATALOG, NO PICKER — never a frozen Claude list in its place (P6-04). */
   it("renders no selector when the desktop sent no catalog for the agent's runtime", async () => {
-    stubBridge({ setModel: vi.fn(async () => ({ ok: true })) });
-    const channels = (window as unknown as { dopl: { channels: { getLaunchPosture: ReturnType<typeof vi.fn> } } }).dopl.channels;
-    channels.getLaunchPosture.mockResolvedValue({
-      runtimes: REAL_DESCRIPTORS,
-      defaultRuntime: "claude",
-      connected: ["claude"],
-      catalogVersion: 1,
-      catalogs: {},
-      selection: { v: 2, runtime: "", messages: "ask", byRuntime: {} },
-    });
+    stubBridge({ setModel: vi.fn(async () => ({ ok: true })) }, {});
     await renderLive(summary());
     expect(live()).toBeNull();
   });

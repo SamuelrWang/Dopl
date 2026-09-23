@@ -21,23 +21,15 @@ import {
 } from "./model-catalog";
 import { agentModelLabel, agentModelShortLabel } from "./agent-models";
 import { modelBelongsTo } from "./model-affinity";
+import { wireCatalog } from "../hooks/launch-selection-harness";
 
 // ⚠ The shape the desktop sends for the MEASURED roster (2026-09-22), plus one model no table has.
 const WIRE = {
-  claude: {
-    runtime: "claude",
-    source: "live",
-    status: "ready",
-    reason: "",
-    models: [
-      { id: "claude-opus-5[1m]", label: "Opus (1M context)", short: "Opus", isDefault: false, hidden: false, dimensions: {}, aliases: ["opus[1m]", "claude-opus-5", "opus"] },
-      { id: "claude-sonnet-5", label: "Sonnet", short: "Sonnet", isDefault: true, hidden: false, dimensions: {}, aliases: ["sonnet"] },
-      { id: "claude-opus-6[1m]", label: null, short: null, isDefault: false, hidden: false, dimensions: {} },
-    ],
-    defaultId: "claude-sonnet-5",
-    dimensions: [],
-    truncated: false,
-  },
+  claude: wireCatalog("claude", [
+    { id: "claude-opus-5[1m]", label: "Opus (1M context)", short: "Opus", aliases: ["opus[1m]", "claude-opus-5", "opus"] },
+    { id: "claude-sonnet-5", label: "Sonnet", isDefault: true, aliases: ["sonnet"] },
+    { id: "claude-opus-6[1m]", label: null },
+  ]),
 };
 const catalog = normalizeCatalogs(WIRE).claude;
 

@@ -29,57 +29,23 @@ import {
   normalizeCatalogs,
   selectableModels,
 } from "./model-catalog";
+import { AGENT_MODELS } from "./agent-models";
+import { catalog, wireCatalog } from "../hooks/launch-selection-harness";
 
-const CLAUDE_IDS = [
-  "claude-fable-5",
-  "claude-opus-5",
-  "claude-sonnet-5",
-  "claude-haiku-4-5-20251001",
-];
-
-const effort = (values: string[], fallback: string | null) => ({
-  reasoningEffort: {
-    options: values.map((v) => ({ value: v, label: v, description: null })),
-    default: fallback,
-  },
-});
+const CLAUDE_IDS = AGENT_MODELS.map((m) => m.id);
 
 const wire = (over: Record<string, unknown> = {}) => ({
-  version: CATALOG_VERSION,
-  runtime: "codex",
-  source: "live",
-  status: "ready",
-  reason: "",
-  key: "/opt/homebrew/bin/codex@1.0.0",
-  models: [
+  ...wireCatalog("codex", [
     {
       id: "gpt-a",
       label: "GPT Alpha",
-      short: "GPT Alpha",
       isDefault: true,
-      hidden: false,
-      dimensions: effort(["low", "medium", "high"], "medium"),
+      efforts: ["low", "medium", "high"],
+      effortDefault: "medium",
     },
-    {
-      id: "gpt-b",
-      label: "GPT Beta",
-      short: "GPT Beta",
-      isDefault: false,
-      hidden: false,
-      dimensions: effort(["high"], "high"),
-    },
-    {
-      id: "gpt-hidden",
-      label: "GPT Hidden",
-      short: null,
-      isDefault: false,
-      hidden: true,
-      dimensions: {},
-    },
-  ],
-  defaultId: "gpt-a",
-  dimensions: ["reasoningEffort"],
-  truncated: false,
+    { id: "gpt-b", label: "GPT Beta", efforts: ["high"] },
+    { id: "gpt-hidden", label: "GPT Hidden", short: null, hidden: true },
+  ]),
   ...over,
 });
 
@@ -122,7 +88,7 @@ describe("the wire, narrowed", () => {
   });
 });
 
-describe("🔒 no runtime borrows another's models", () => {
+describe("no runtime borrows another's models", () => {
   it("a MISS answers null — there is no 'else' arm and no merge", () => {
     const list = catalogs();
     expect(catalogFor(list, "cursor")).toBeNull();
@@ -237,18 +203,18 @@ describe("reasoning effort follows the MODEL, not the runtime", () => {
     expect(dimensionOptionsFor(codex(), "").map((o) => o.value)).toEqual(["low", "medium", "high"]);
   });
 
-  it("an ALIAS of a model gets that model's efforts (F20)", () => {
+  it("an ALIAS of a model gets that model's efforts", () => {
     const c = codex({
-      models: [
+      models: catalog("codex", [
         {
           id: "gpt-a",
           label: "A",
           isDefault: true,
-          hidden: false,
           aliases: ["gpt-a-legacy"],
-          dimensions: effort(["low", "high"], "high"),
+          efforts: ["low", "high"],
+          effortDefault: "high",
         },
-      ],
+      ]).models,
     });
     expect(dimensionOptionsFor(c, "gpt-a-legacy").map((o) => o.value)).toEqual(["low", "high"]);
     expect(dimensionDefaultFor(c, "gpt-a-legacy")).toBe("high");

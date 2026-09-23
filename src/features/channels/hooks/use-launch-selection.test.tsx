@@ -24,6 +24,8 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
+import { installSpaBridge } from "@/shared/testing/spa-bridge";
+import { REAL_DEFAULT_RUNTIME, REAL_DESCRIPTORS } from "../lib/runtime-descriptors-harness";
 import { useLaunchSelection } from "./use-launch-selection";
 
 const CHANNEL = "11111111-2222-3333-4444-555555555555";
@@ -40,8 +42,8 @@ const postureReply = (over: Record<string, unknown> = {}) => ({
   tools: "accept_edits",
   messages: "ask",
   runtime: "",
-  runtimes: [{ id: "claude", label: "Claude Code" }, { id: "codex", label: "Codex" }],
-  defaultRuntime: "claude",
+  runtimes: REAL_DESCRIPTORS,
+  defaultRuntime: REAL_DEFAULT_RUNTIME,
   connected: ["claude"],
   selectionVersion: 2,
   needsReview: [],
@@ -68,8 +70,8 @@ const defaultsReply = (over: Record<string, unknown> = {}) => ({
     claude: { tools: "accept_edits" },
     codex: { native: { sandbox_mode: "read-only" } },
   },
-  runtimes: [{ id: "claude", label: "Claude Code" }, { id: "codex", label: "Codex" }],
-  defaultRuntime: "claude",
+  runtimes: REAL_DESCRIPTORS,
+  defaultRuntime: REAL_DEFAULT_RUNTIME,
   connected: ["claude"],
   ...over,
 });
@@ -79,15 +81,11 @@ beforeEach(() => {
   setLaunchPosture.mockReset().mockResolvedValue({ ok: true });
   getAgentDefaults.mockReset().mockResolvedValue(defaultsReply());
   setAgentDefaults.mockReset().mockResolvedValue({ ok: true });
-  (window as { dopl?: unknown }).dopl = {
-    apiRequest: () => Promise.resolve({ status: 200, statusText: "OK", hasBody: false }),
+  installSpaBridge({
     channels: { getLaunchPosture, setLaunchPosture, getAgentDefaults, setAgentDefaults },
-  };
+  });
 });
-afterEach(() => {
-  cleanup();
-  delete (window as { dopl?: unknown }).dopl;
-});
+afterEach(cleanup);
 
 async function channelHook() {
   const hook = renderHook(() => useLaunchSelection({ kind: "channel", channelId: CHANNEL }));
@@ -213,7 +211,7 @@ describe("the DEFAULTS scope", () => {
     expect(setLaunchPosture).not.toHaveBeenCalled();
   });
 
-  it("with NO runtime picked, files the edit under the DEFAULT runtime's key main reads (F1)", async () => {
+  it("with NO runtime picked, files the edit under the DEFAULT runtime's key main reads", async () => {
     // Main's `activeRecord` reads `byRuntime[runtime || defaultId]`; a `byRuntime[""]` key is
     // kept verbatim and never read, so the write returned ok and the value never changed.
     const { result } = await defaultsHook();
@@ -223,7 +221,7 @@ describe("the DEFAULTS scope", () => {
     });
     const sent = setAgentDefaults.mock.calls[0][0];
     expect(sent.runtime).toBe("");
-    expect(sent.byRuntime.claude.tools).toBe("auto");
+    expect(sent.byRuntime[REAL_DEFAULT_RUNTIME].tools).toBe("auto");
     expect(Object.keys(sent.byRuntime)).not.toContain("");
     expect(sent.byRuntime.codex).toEqual({ native: { sandbox_mode: "read-only" } });
   });

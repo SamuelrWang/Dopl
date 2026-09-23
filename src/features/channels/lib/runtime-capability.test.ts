@@ -47,7 +47,7 @@ describe("normalizeRuntimeId / descriptorFor — fail toward the DEFAULT, never 
     expect(descriptorFor([], "codex", "claude")).toBeNull();
   });
 
-  it("answers null with no reported default, never registry order (F23)", () => {
+  it("answers null with no reported default, never registry order", () => {
     expect(descriptorFor(REAL_DESCRIPTORS, "", "")).toBeNull();
     expect(descriptorFor(REAL_DESCRIPTORS, "gemini", undefined)).toBeNull();
   });

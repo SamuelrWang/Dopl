@@ -29,6 +29,7 @@ import { agentView, disabled, postureTools } from "./settings-agent-harness";
 import {
   catalog,
   launchSelectionStub,
+  type SelectionStubInput,
 } from "../hooks/launch-selection-harness";
 
 afterEach(cleanup);
@@ -40,17 +41,6 @@ const CURSOR = realDescriptor("cursor");
 const RUNTIME_ROW = "Runtime for agents you launch";
 
 /**
- * A stored Axis-A value in a RUNTIME's vocabulary.
- *
- * ⚠ THE CAST IS THE FINDING, NOT A CONVENIENCE (F-390). `PermissionPreset.tools` is
- * Dopl's own closed enum because `main/channel-prefs.js › normalizePreset` still
- * validates the durable write against exactly those four words — so "the posture holds
- * `granular`" is a state the TYPE says cannot exist and the UI must nonetheless render.
- * When main's step-5 lands, this cast is what goes.
- */
-const stored = (tools: string) => ({ tools });
-
-/**
  * The Settings tab with a desktop that HAS the runtime concept.
  *
  * ⚠ **`record` AND `byRuntime` ARE ONE FACT HERE, NOT TWO.** The stub derives `record` from
@@ -58,39 +48,13 @@ const stored = (tools: string) => ({ tools });
  * set "what is selected" and "what that runtime remembers" to disagree — which is exactly the
  * state the switch-away-and-back cases are about.
  */
-function withRuntime(
-  descriptorId: string,
-  over: {
-    byRuntime?: Record<string, { tools?: string; native?: Record<string, string> }>;
-    catalogs?: Record<string, ReturnType<typeof catalog>>;
-    busy?: boolean;
-    review?: string[];
-    rejected?: string[];
-  } = {}
-) {
-  const { byRuntime, catalogs, busy, review, rejected } = over;
-  return agentView({
-    selection: launchSelectionStub({
-      runtimeSupported: true,
-      runtimes: REAL_DESCRIPTORS,
-      runtime: descriptorId,
-      defaultRuntime: REAL_DEFAULT_RUNTIME,
-      descriptor: realDescriptor(descriptorId || REAL_DEFAULT_RUNTIME),
-      byRuntime: byRuntime ?? {},
-      catalogs: catalogs as never,
-      busy: busy ?? false,
-      review: review ?? [],
-      rejected: rejected ?? [],
-    }),
-  });
-}
-
-/** The same, but answering the stub back so a case can assert the payload. */
-function withSelection(over: Parameters<typeof launchSelectionStub>[0] = {}) {
+function withRuntime(runtime: string, over: SelectionStubInput = {}) {
   const selection = launchSelectionStub({
     runtimeSupported: true,
     runtimes: REAL_DESCRIPTORS,
+    runtime,
     defaultRuntime: REAL_DEFAULT_RUNTIME,
+    descriptor: realDescriptor(runtime || REAL_DEFAULT_RUNTIME),
     ...over,
   });
   return { selection, ...agentView({ selection }) };
@@ -153,7 +117,7 @@ describe("the runtime picker", () => {
   });
 
   it("writes the pick on the `runtime` key alone", () => {
-    const { selection } = withSelection({ runtime: "", descriptor: CLAUDE });
+    const { selection } = withRuntime("");
     fireEvent.click(screen.getByLabelText(RUNTIME_ROW));
     fireEvent.click(screen.getByRole("menuitem", { name: "Codex" }));
     // ⚠ NO OTHER KEY. Main branches on `hasOwnProperty(preset,'runtime')`, so a
@@ -218,18 +182,14 @@ describe("Axis A renders each runtime's OWN vocabulary and nothing else's", () =
     // so an uncoerced `manual` would still READ "untrusted" — and then clicking
     // "untrusted" would fire `onChange` (because `"untrusted" !== "manual"`) and
     // write a posture the operator never picked.
-    const { selection } = withSelection({
-      runtime: "codex",
-      descriptor: CODEX,
-      byRuntime: { codex: { tools: "manual" } },
-    });
+    const { selection } = withRuntime("codex", { byRuntime: { codex: { tools: "manual" } } });
     fireEvent.click(postureTools());
     fireEvent.click(screen.getByRole("menuitem", { name: /^untrusted/ }));
     expect(selection.update).not.toHaveBeenCalled();
   });
 
   it("writes the runtime's own word back on the tools axis", () => {
-    const { selection } = withSelection({ runtime: "cursor", descriptor: CURSOR });
+    const { selection } = withRuntime("cursor");
     fireEvent.click(postureTools());
     fireEvent.click(screen.getByRole("menuitem", { name: /^Run Everything/ }));
     expect(selection.update).toHaveBeenCalledWith({ tools: "run-everything" });
@@ -253,12 +213,12 @@ describe("the SECOND axis exists only where the platform declares one", () => {
     expect(container.textContent).not.toContain("Enabled");
   });
 
-  it("IS A CONTROL NOW, AND IT WRITES (F-390 closed)", () => {
+  it("IS A CONTROL NOW, AND IT WRITES", () => {
     // ⚠ **THIS ROW WAS A VALUE PILL FOR A REASON THAT STOPPED BEING TRUE.** The wire had no
     // field for it, so rendering a picker would have been an operator choosing and every agent
     // launching on something else. U5 gave the containment axis a validated, per-runtime write
     // path and `session-engine.js` stamps the bag at spawn, so the pick reaches the launch.
-    const { selection } = withSelection({ runtime: "codex", descriptor: CODEX });
+    const { selection } = withRuntime("codex");
     fireEvent.click(screen.getByLabelText("Sandbox for agents you launch"));
     fireEvent.click(screen.getByRole("menuitem", { name: /^danger-full-access/ }));
     // ⚠ THE WHOLE BAG, not one key — main REPLACES `native` wholesale.
@@ -297,7 +257,7 @@ describe("the five approval categories, under `granular` and nowhere else", () =
 
   it("appear when Codex is at `granular`, in Codex's own words", () => {
     const { container } = withRuntime("codex", {
-      byRuntime: { codex: stored("granular") },
+      byRuntime: { codex: { tools: "granular" } },
     });
     expect(FIVE).toHaveLength(5);
     for (const c of FIVE) expect(container.textContent).toContain(c);
@@ -306,7 +266,7 @@ describe("the five approval categories, under `granular` and nowhere else", () =
   it("are absent at every OTHER Codex mode", () => {
     for (const mode of ["untrusted", "on-request", "never"]) {
       const { container, unmount } = withRuntime("codex", {
-        byRuntime: { codex: stored(mode) },
+        byRuntime: { codex: { tools: mode } },
       });
       expect(container.textContent).not.toContain("mcp_elicitations");
       unmount();
@@ -317,7 +277,7 @@ describe("the five approval categories, under `granular` and nowhere else", () =
     for (const d of [CLAUDE, CURSOR]) {
       for (const opt of d.toolMode?.options ?? []) {
         const { container, unmount } = withRuntime(d.id, {
-          byRuntime: { [d.id]: stored(opt.value) },
+          byRuntime: { [d.id]: { tools: opt.value } },
         });
         expect(container.textContent).not.toContain("sandbox_approval");
         expect(container.textContent).not.toContain("skill_approval");
@@ -331,7 +291,7 @@ describe("the five approval categories, under `granular` and nowhere else", () =
 // pin model in the settings … We don't need this model, channel, and profile settings"). A launch's
 // model is the launcher's pick, the identity's, or the runtime default — so what is pinned is the
 // ABSENCE, on every runtime, with a live catalog that once would have filled both rows.
-describe("NO model row and NO reasoning-effort row, on any runtime (2026-09-23)", () => {
+describe("NO model row and NO reasoning-effort row, on any runtime", () => {
   const CLAUDE_MODELS = catalog("claude", [
     { id: "claude-fable-5", label: "Fable 5" },
     { id: "claude-sonnet-5", label: "Sonnet 5", isDefault: true },
