@@ -4,408 +4,88 @@ import { closedEnum } from "@/shared/lib/closed-enum";
 import { AGENT_COLOR_KEYS } from "./lib/agent-colors";
 import type { AgentColorKey, MachineDelivery, SessionPillState } from "./types";
 
-/**
- * ⚠ **THE `INT4` CEILING, AND IT EXISTS BECAUSE TWO OF THE HEALTH COLUMNS ARE
- * `INTEGER` WHERE EVERY OTHER COUNT ON THIS ROW IS `BIGINT`** (2026-09-02).
- * `20260909120000_channel_sessions_health.sql` declares `turns` and
- * `denied_calls` as `INTEGER`; a value past this bound passes `.nonnegative()`,
- * passes the route, and 22003s AT REST — which on this lane is the failure the
- * whole two-half rule exists to avoid, because a rejected push blanks a
- * machine's entire session set rather than dropping one field.
- * ⚠ It bounds only the two `INT4` columns. `tokensDelta` and `lastWakeSeq` are
- * `BIGINT` and are deliberately NOT capped here — a bound tighter than the
- * column is `20260909120000`'s own footgun in the other direction.
- */
+// Bounds only the two INTEGER health columns (`turns`, `denied_calls`); past it, a 22003 fails the whole push.
 const INT4_MAX = 2_147_483_647;
 
-/**
- * READ-SESSION-STATE's two schemas — the `?channelId=` of the READ and the body
- * of the WRITE. `schema.ts` re-exports both names, so every existing import path
- * is unchanged.
- */
-
-/** `?channelId=<uuid>` for read-session-state.
- *
- * ⚠ Must stay validated: handed straight to `.eq("channel_id", …)`, an
- * unvalidated `?channelId=oops` reaches Postgres as a uuid cast and returns a
- * raw driver error `mapChannelError` does not own — a 500 for a malformed
- * request. Same shape as the consent inbox's `ConsentListQuerySchema`.
- */
+/** Validated: an unchecked value reaches `.eq("channel_id", …)` as a uuid cast and 500s. */
 export const SessionStateQuerySchema = z.object({
   channelId: z.string().uuid().optional(),
 });
 export type SessionStateQuery = z.infer<typeof SessionStateQuerySchema>;
 
-/**
- * THE DESKTOP'S SESSION KEY — `<channelId>:<taskId>:<agentId>`, with an empty
- * middle segment for a responder with no first-class thread
- * (`main/session-store.js#sessionKey`).
- *
- * ⚠ THE THIRD SEGMENT JOINED ON 2026-08-21 (Samuel's multiplayer ruling) and it
- * is the reason this regex changed at all. One operator may now run SEVERAL
- * agents on one thread, so `<channel>:<thread>` stopped identifying a session
- * and the desktop appended the AGENT INSTANCE id
- * (`dopl-desktop-app/main/agent-id.js`, `^[a-z][a-z0-9]{7}$` — no colon, so the
- * key stays unambiguous). Without this widening every push from a current
- * desktop 400s on `Invalid session key`, `retryable(400)` is false, and
- * `read_sessions` answers `[]` for that machine forever.
- *
- * ⚠ CARRIED, never re-derived: composing it from `channelId` + `threadId` here
- * is a SECOND derivation of a key format owned by another process in another
- * language. The desktop owns what a session key IS; this only bounds what it may
- * LOOK like — which is also why the third segment is `{0,64}` rather than an
- * exact 8: bounding it tighter would make this file an authority on the id
- * format, and it is not.
- *
- * ⚠ Charset deliberately tighter than "any text" — the reconcile DELETES BY KEY,
- * so a key carrying a quote or comma is a filter-injection question every time
- * someone touches the repository. Hex, dashes, two colons.
- *
- * ⚠ THE TWO-SEGMENT FORM IS STILL ACCEPTED, deliberately: an older desktop is a
- * supported peer during a rollout (INVARIANTS §13), and refusing its keys would
- * blank its whole workspace's session rows rather than degrade.
- */
-// ⚠ ONE LINE, DELIBERATELY. `dopl-desktop-app/test/session-state-push.test.mjs` lifts this
-// literal out of this file by regex and drives the desktop's real keys through it, so the two
-// trees cannot drift about what a key may look like. A wrapped declaration is invisible to it,
-// and the case fails LOUDLY rather than silently passing — keep it on one line.
+// The desktop's `<channelId>:<taskId>:<agentId>` (`main/session-store.js › sessionKey`), never re-derived here.
+// Tight charset: the reconcile deletes by key. Two-segment form kept for older desktops (INVARIANTS §13).
+// Keep on one line: `dopl-desktop-app/test/session-state-push.test.mjs` lifts this literal by regex.
 const SESSION_KEY_RE = /^[0-9a-fA-F-]{1,64}:[0-9a-fA-F-]{0,64}(?::[0-9a-zA-Z-]{0,64})?$/;
 
-/**
- * Friendly handle. ⚠ Matches `channel_sessions.name`'s CHECK character for
- * character (`^[a-z][a-z0-9-]{1,30}$`) so a bad value is a 400 that NAMES the
- * field rather than a constraint violation surfacing as an opaque 500.
- *
- * ⚠ WHAT FILLS IT CHANGED ON 2026-08-21 AND THE BOUND DID NOT HAVE TO. It was a
- * handle from a curated pool ("flint", "onyx"); it is now the agent instance id,
- * whose charset (`^[a-z][a-z0-9]{7}$`) was chosen as a strict SUBSET of this one
- * precisely so no migration and no schema change were needed to ship the
- * multiplayer wave.
- */
+/** Mirrors `channel_sessions.name`'s CHECK so a bad handle is a named 400, not an opaque 500. */
 const SESSION_NAME_RE = /^[a-z][a-z0-9-]{1,30}$/;
 
-/**
- * ONE SESSION, as the desktop reports it. Field names are the
- * `ChannelSessionState` ones, not the column names, so both halves of this
- * endpoint speak one vocabulary.
- *
- * ⚠ `channelName` / `threadTitle` are COUNTERPARTY-INFLUENCED text on their way
- * into a `dopl_channel` result. Bounds are the migration's CHECKs: `safeLabel`'s
- * class at 120 and 200 — the lengths `channels.name` and `channel_tasks.title`
- * carry, so a legitimate name can never be refused into this projection.
- * `.nullable()` rather than optional because `null` is legitimate.
- */
+/** One reported session. Added fields are `.nullable().optional()` so an older desktop's push still
+ *  parses (INVARIANTS §13); `null` means unknown — never default it to 0. */
 const SessionStateEntrySchema = z.object({
   sessionKey: z.string().regex(SESSION_KEY_RE, "Invalid session key"),
   channelId: z.string().uuid(),
   threadId: z.string().uuid().nullable().optional(),
   name: z.string().regex(SESSION_NAME_RE, "Invalid session handle"),
-  // ⚠ The closed set the `state` CHECK carries — deliberately no `thinking`.
-  /** ⚠ Annotated so TS-side drift breaks the build — see
-   *  `schema.ts › VisibilitySchema`. ⚠ AND THE COST OF DRIFT IS UNUSUAL HERE: zod
-   *  validates the ARRAY, so one row carrying a fourth value 400s the WHOLE push,
-   *  `retryable(400)` is false, and every later push for that workspace fails
-   *  identically (INVARIANTS §11). The SQL `CHECK` is a third statement of this
-   *  same set and no TypeScript reaches it. */
+  // The `state` CHECK's closed set (deliberately no `thinking`); typed so TS drift breaks the build.
   state: closedEnum<SessionPillState>()(["working", "idle", "ended"]),
-  /**
-   * THE COLOUR THIS MACHINE IS **ASKING** FOR (2026-09-13, `20261005120000`).
-   *
-   * ⚠ **A REQUEST, AND THE SERVER MAY OVERRULE IT** — `server/session-colors.ts`
-   * carries the four rules. A machine cannot see another member's live set, so it
-   * cannot know whether its pick is free; the index can, and a push that hit the
-   * index would discard the whole projection.
-   * ⚠ **`closedEnum` OVER THE SIXTEEN KEYS, AND THAT IS SAFE HERE IN A WAY IT IS NOT
-   * FOR `detail`.** The set is CLOSED BY CONSTRUCTION — the palette is ours, in two
-   * CSS files, and nothing on a newer desktop can invent a seventeenth key without
-   * this repo minting it first. Contrast `detail`, deliberately loose because the
-   * DESKTOP owns that vocabulary and a newer key there must not 400 a whole payload.
-   * ⚠ `.nullable().optional()` on the standing rollout contract: every installed
-   * desktop older than this wave omits the field, and a required one would 400 its
-   * entire report for the life of the run (INVARIANTS §11, §13).
-   */
+  /** A request the server may overrule (`server/session-colors.ts`); closed because the palette is ours. */
   color: closedEnum<AgentColorKey>()(AGENT_COLOR_KEYS).nullable().optional(),
+  // Counterparty text headed for MCP narration; bounds mirror the column CHECKs.
   channelName: safeLabel("Channel name", 120).nullable().optional(),
   threadTitle: safeLabel("Thread title", 200).nullable().optional(),
 
-  // ── TELEMETRY (2026-08-22, migration 20260822150000) ──────────────────────
-  //
-  // ⚠ EVERY ONE IS `.nullable().optional()`, AND BOTH HALVES ARE LOAD-BEARING.
-  // `optional` is the ROLLOUT contract: a desktop older than this wave sends no
-  // such key, and a REQUIRED field here would 400 its whole report — `retryable
-  // (400)` is false, so that machine's `read_sessions` answers `[]` forever
-  // (INVARIANTS §11, §13). `nullable` is the SEMANTIC one: a desktop that HAS
-  // this build and genuinely does not know a number sends `null`, which is a
-  // different statement from omitting the key and must survive as `null` all
-  // the way to the render.
-  //
-  // ⚠ **NULL IS UNKNOWN. NEVER COERCE ONE TO 0** — see `types.ts ›
-  // ChannelSessionTelemetry`. There is no `.default()` anywhere below and there
-  // must not be.
-  //
-  // ⚠ `SESSION_REPORT_MAX` IS UNTOUCHED (still 32) — these are columns on a row
-  // that already existed, not more rows. Widening the array bound because rows
-  // got wider is the mistake its docblock exists to refuse.
-  /**
-   * WHICH OF SIX SITUATIONS the session is in — the CLOSED key vocabulary
-   * `dopl-desktop-app/main/session-detail.js › detailFor` derives
-   * (`thinking` / `tool` / `posting` / `permission` / `awaiting_peer` /
-   * `awaiting_inbound`). ⚠ **THE ONE REFINEMENT THAT CROSSES TO A PEER**, and it
-   * crosses only because the vocabulary is closed and coarse.
-   *
-   * ⚠ **NOT A `z.enum`, DELIBERATELY, AND THE REASON IS THE SAME ONE
-   * `SESSION_REPORT_MAX` CARRIES.** zod validates the ARRAY: a desktop shipping a
-   * SEVENTH key would 400 its ENTIRE push, `retryable(400)` is false, and every
-   * later push for that workspace fails identically — leaving `read_sessions`
-   * answering `[]` for that machine forever (INVARIANTS §11, §13). An older or
-   * NEWER desktop must both degrade, not fail. So the write bound is SHAPE
-   * (`safeLabel`, 40 chars — it is spliced into MCP narration and must not be
-   * able to open a line), and the closed-VALUE test lives on the READ side in
-   * `collab-dto.ts › narrowSessionDetail`, where an unknown key becomes `null`
-   * instead of poisoning a push.
-   * ⚠ 40 rather than 200: this field is a KEY. A bound that comfortably fits a
-   * sentence is a bound that invites one, and a sentence here is operator-only
-   * material on a peer-visible column.
-   */
+  /** Six closed keys (`main/session-detail.js › detailFor`), but a label rather than an enum so a newer
+   *  desktop's key cannot 400 the push; `collab-dto.ts › narrowSessionDetail` narrows it on read. */
   detail: safeLabel("Session detail", 40).nullable().optional(),
-  /** The tool running right now. Same charset class, much shorter. */
   toolLabel: safeLabel("Tool label", 80).nullable().optional(),
-  /** Model id/label. ⚠ Operator-only on the way OUT, still neutralized on the
-   *  way IN — the operator's own result is narration too. */
   model: safeLabel("Model", 120).nullable().optional(),
-  // ⚠ `.int().nonnegative()` and NO `.default(0)`. A negative or fractional
-  // count is a reporting bug, and refusing it here is a 400 that names the
-  // field rather than a nonsense number rendered as fact.
   contextUsed: z.number().int().nonnegative().nullable().optional(),
   contextWindow: z.number().int().nonnegative().nullable().optional(),
   tokensSpent: z.number().int().nonnegative().nullable().optional(),
-  /** ⚠ `.datetime()` — these land in TIMESTAMPTZ columns, and an unparseable
-   *  string reaches Postgres as a cast error, i.e. an opaque 500 for a
-   *  malformed request (the same rule `SessionStateQuerySchema` states). */
+  /** `.datetime()`: these land in TIMESTAMPTZ, where an unparseable string is a cast-error 500. */
   startedAt: z.string().datetime({ offset: true }).nullable().optional(),
   lastActivityAt: z.string().datetime({ offset: true }).nullable().optional(),
 
-  // ── THE AGENT IDENTITY (2026-08-23, migration 20260823130000) ─────────────
-  /**
-   * THE IDENTITY THIS SESSION WAS LAUNCHED FROM, BY NAME, AS OF SPAWN.
-   *
-   * ⚠ **ACCEPTED HERE BEFORE ANY DESKTOP SENDS IT, AND THAT ORDER IS THE WHOLE
-   * POINT.** Phase 1 of the identities wave teaches `main/session-state-push.js`
-   * to put `identityName` on the reported row. The two trees ship separately, so
-   * for some window a NEWER desktop pushes to an OLDER server — and zod
-   * validates the ARRAY, so ONE unknown key on ONE row 400s that machine's WHOLE
-   * push, `retryable(400)` is false, and every later push for that workspace
-   * fails identically, leaving `read_sessions` answering `[]` for it forever
-   * (INVARIANTS §11, §13). ⚠ **A 400 HERE POISONS THE WORKSPACE; IT DOES NOT
-   * DROP A FIELD.** So the field lands on the server FIRST and stays inert.
-   * (zod objects strip unknown keys rather than refusing them, which would make
-   * this merely belt — but the belt is what the additive-fields discipline is,
-   * and relying on a parser's default mode for a wire contract is how the
-   * default gets changed under you.)
-   *
-   * ⚠ `.nullable().optional()` for the SAME two reasons the telemetry block
-   * states: `optional` is the rollout contract (an older desktop sends no key),
-   * `nullable` is the semantic one (a session launched from no identity says so
-   * explicitly).
-   *
-   * ⚠ **THE NAME, NEVER THE ID.** The server does not resolve an identity here —
-   * main captured the resolved identity at spawn and reports what it RAN AS, so
-   * the value survives a rename or a delete. See
-   * `20260823130000_channel_sessions_template_name.sql` for why this is a
-   * denormalized snapshot rather than an FK.
-   *
-   * ⚠ Bound is `safeLabel` at **120** — character for character the column's
-   * CHECK, which is itself character for character
-   * `agent_identities_name_charset_check`. The mirror is load-bearing: a name
-   * that is LEGAL on an identity must never be refusable into this projection, or
-   * a legitimate launch 400s the operator's entire session push. And it is
-   * bounded at all because it is operator-authored free text spliced into MCP
-   * narration — operator-only is not the same as trusted, and a newline in your
-   * own result forges a line in your own result.
-   */
+  /** The identity's name as of spawn. 120 mirrors the `agent_identities` name CHECK; operator-only,
+   *  never in the peer projection (`collab-dto.ts › OPERATOR_ONLY_SESSION_COLUMNS`). */
   identityName: safeLabel("Identity name", 120).nullable().optional(),
 
   // ── HEALTH (2026-09-01, migration 20260909120000) ────────────────────────
-  //
-  // ⚠ THE SAME TWO-HALF RULE THE TELEMETRY BLOCK STATES, AND IT IS THE REASON
-  // THIS BLOCK IS SAFE TO SHIP AHEAD OF ANY DESKTOP. `optional` is the rollout
-  // contract — an older desktop sends none of these keys, and a required field
-  // would 400 its WHOLE push, unretryably, leaving `read_sessions` answering
-  // `[]` for that machine forever (INVARIANTS §11, §13). `nullable` is the
-  // semantic half — `main/session-health.js` sends an explicit `null` for a
-  // count nothing has measured, and that must survive as `null` to the render.
-  // ⚠ **ABSENT MUST STAY ABSENT.** There is no `.default()` below and there must
-  // not be: a `.default(0)` on `deniedCalls` would turn an older desktop's
-  // silence into "nothing has been refused to this agent", which is the exact
-  // claim these columns were added to stop the surface making.
-  /** Turns taken. ⚠ `.int().nonnegative()` and NOT quantized by the desktop —
-   *  the difference between 1 turn and 4 IS the signal
-   *  (`main/session-telemetry.js`'s own note).
-   *  ⚠ **`.max(INT4_MAX)`, BECAUSE THE COLUMN IS `INTEGER` AND NOT `BIGINT`.**
-   *  See {@link INT4_MAX}. */
+  // (The sentinel above is read verbatim by `scripts/check-session-health-drift.ts`.)
   turns: z.number().int().nonnegative().max(INT4_MAX).nullable().optional(),
-  /** Tokens burned SINCE THIS SESSION LAST POSTED — not per turn, and not since
-   *  the last row push (`main/session-health.js › tokensSinceLastPost`). Same
-   *  `.int().nonnegative()` bound as `tokensSpent`, whose bucket it shares. */
+  /** Tokens since this session last posted (`main/session-health.js › tokensSinceLastPost`). */
   tokensDelta: z.number().int().nonnegative().nullable().optional(),
-  /**
-   * THE MACHINE'S OWN WEDGED FLAG — `working` AND silent past ten minutes AND
-   * still spending (`main/session-health.js › isStale`).
-   *
-   * ⚠ 🔒 **NOT THE SERVER'S `sessionIsStale`, WHICH IS ABOUT THE ROW.** That one
-   * is derived here from `updated_at` and means "nobody has said anything";
-   * this one is derived THERE and means "this live session is getting nowhere".
-   * The wire name is the desktop's and is deliberately not renamed on the way
-   * in — a server that renamed a reported field would make the two trees stop
-   * agreeing about what was reported. The RENDER keeps them apart
-   * (`packages/mcp-server/src/tools/channel-session-health.ts`).
-   * ⚠ `z.boolean()`, never `z.coerce.boolean()`: `Boolean("false")` is `true`,
-   * so a coercion here would read a stringified `false` as an assertion that
-   * somebody's agent is wedged.
-   */
+  /** The machine's wedged flag (`main/session-health.js › isStale`), not the server's row-freshness
+   *  `sessionIsStale`. Never coerce: `Boolean("false")` is `true`. */
   stale: z.boolean().nullable().optional(),
-  /** Tool calls REFUSED to this session, and the last tool that was
-   *  (`main/session-windowless.js › noteDenied`). ⚠ A `null` count is "nothing
-   *  counted", NEVER "nothing was denied". */
   deniedCalls: z
     .number()
     .int()
     .nonnegative()
-    // ⚠ `INTEGER`, like `turns` — see {@link INT4_MAX}.
     .max(INT4_MAX)
     .nullable()
     .optional(),
-  /** ⚠ Bound is `safeLabel` at **80** — character for character `toolLabel`'s,
-   *  which is character for character the desktop's own `TOOL_LABEL_MAX`. A tool
-   *  name can come from the operator's OWN MCP servers, so the charset is not
-   *  ours to assume, and it is spliced into narration in the operator's own
-   *  result — where a forged line is still a forged line. */
   lastDeniedTool: safeLabel("Last denied tool", 80).nullable().optional(),
-  /** The `seq` the last ENQUEUED wake was carrying, and when
-   *  (`main/session-gate.js › enqueue`). ⚠ A report of what the machine DID —
-   *  never a delivery guarantee, and the render says so in those words.
-   *  ⚠ `.int().nonnegative()` because it is a `channel_messages.seq`, which is a
-   *  monotonic positive counter; `.datetime({ offset: true })` on the stamp for
-   *  the reason `startedAt` carries it — it lands in a TIMESTAMPTZ column and an
-   *  unparseable string reaches Postgres as a cast error, i.e. an opaque 500. */
+  /** What the machine enqueued (`main/session-gate.js › enqueue`) — never a delivery guarantee. */
   lastWakeSeq: z.number().int().nonnegative().nullable().optional(),
   lastWakeAt: z.string().datetime({ offset: true }).nullable().optional(),
 
   // ── THE OPERATOR-GIVEN AGENT NAME (2026-08-31, migration 20260905120000) ──
-  /**
-   * WHAT THE OPERATOR CALLS THIS AGENT ("Bug Reviewer"), snapshotted from the
-   * desktop's local name store (`main/agent-names.js`) on every push — the
-   * additive column that file's own header promised. ⚠ PEER-VISIBLE BY DESIGN
-   * (Samuel's ruling: the other member should see what your agent is called),
-   * so unlike `identityName` it maps through `mapPeerSessionStateRow`.
-   *
-   * ⚠ `.nullable().optional()` on the telemetry block's two grounds: `optional`
-   * is the rollout contract (an older desktop sends no key and its whole push
-   * must not 400 — INVARIANTS §11, §13); `nullable` is semantic (never named).
-   * ⚠ Bound is `safeLabel` at **60** — character for character the column's
-   * CHECK, which is itself `main/agent-names.js › MAX_NAME`. Operator-authored
-   * free text on a PEER's screen; the newline/zero-width strip is load-bearing.
-   */
+  /** Peer-visible by design, unlike `identityName`; 60 mirrors the column CHECK and `main/agent-names.js › MAX_NAME`. */
   displayName: safeLabel("Agent name", 60).nullable().optional(),
 });
 export type SessionStateEntryInput = z.infer<typeof SessionStateEntrySchema>;
 
-/**
- * The desktop's own ceiling with a lot of room: **the wire set is LIVE ONLY**, so
- * a machine can offer at most
- * `dopl-desktop-app/main/session-windowless.js › MAX_CONCURRENT_SESSIONS` rows
- * (**15 since 2026-09-01**; it was 6 when this was measured on 2026-08-22) and
- * this bound is a little over TWICE that. ⚠ Low enough that a caller cannot use
- * this endpoint to write a table.
- *
- * ⚠ **THE HEADROOM NARROWED AND THE NUMBER DELIBERATELY DID NOT MOVE
- * (2026-09-01).** This docblock read "over five times that" against a cap of 6;
- * the cap's raise to 15 spends most of that margin, and 32 is kept because the
- * bound's JOB is unchanged — it is the "a caller cannot write a table here"
- * fence, not a mirror of the desktop ceiling, and doubling it to preserve a
- * ratio would weaken the only thing it enforces. ⚠ **What DOES have to hold is
- * `SESSION_REPORT_MAX > MAX_CONCURRENT_SESSIONS`**, because the wire set is
- * live-only and zod validates the ARRAY: a cap raised past this bound would
- * 400 the WHOLE push for a busy machine, unretryably (see below). A future
- * raise of the desktop ceiling past ~30 must raise this number in the same
- * change.
- *
- * ⚠ THE OLD DERIVATION ADDED A RETAINED-ENDED TERM, AND THAT TERM IS GONE
- * (2026-08-22, F-255). It read "6 live plus `session-summary.js › MAX_ENDED`
- * (12) retained", and `MAX_ENDED` is DELETED: ended-agent retention moved to a
- * DURABLE seven-day history (`main/agent-history.js`), which no in-memory 12
- * bounds. **The push does not send ended rows at all** —
- * `main/session-state-push.js › liveForWire` drops them before
- * `SessionStateReportSchema` ever sees them — and that filter exists to protect
- * exactly THIS number: a machine holding hundreds of durable ended cards would
- * overflow the array bound, and because zod validates the ARRAY, one oversized
- * payload 400s the WHOLE push, `retryable(400)` is false, and every later push
- * for that workspace fails identically — leaving `read_sessions` answering `[]`
- * for LIVE sessions too, with stale rows never cleared.
- *
- * ⚠ SO THE HEADROOM IS NOT SLACK TO SPEND. Re-deriving this bound from "how many
- * ended agents might a machine hold" is the mistake to refuse; the only term is
- * the live cap, and the answer to a bigger set is to keep it off the wire.
- *
- * ⚠ IT USED TO CITE `MAX_SESSION_WINDOWS`, WHICH IS ALSO DELETED. That was the
- * WINDOW budget, and the v1 session window is gone — the ceiling that survives
- * counts RUNNING sessions, not open windows. The NUMBER did not change on that
- * move (both 6), so this bound was unaffected; the reference had to, because a
- * bound justified against a constant nobody can find is a bound nobody can
- * re-derive.
- */
+/** A "cannot write a table here" fence, but it must stay above `main/session-windowless.js ›
+ *  MAX_CONCURRENT_SESSIONS`: only live rows go on the wire, and an oversized array 400s the whole push. */
 const SESSION_REPORT_MAX = 32;
 
-/**
- * POST body — ⚠ THE WHOLE LIVE SET for one workspace, never a delta. The row
- * lifetime is "as long as the pill", and a delta protocol needs an explicit
- * removal message a crashed or quit desktop never sends, so rows accumulate. A
- * full set makes removal implicit: anything not listed is gone.
- *
- * ⚠ DUPLICATE KEYS ARE REFUSED, not deduped — two entries for one key hit
- * `ON CONFLICT` twice in one statement (Postgres 21000 → opaque 500), and there
- * is no honest way to pick which contradictory state is true.
- */
-/**
- * **ONE MACHINE'S RECEIPT FOR ONE MESSAGE** (2026-09-02, A9).
- *
- * ⚠ **FOUR VALUES, NOT SIX**, and `MachineDelivery` is what proves it: the two
- * the subset omits (`none`, `unreachable`) are the SERVER'S write-time answers
- * about a message it resolved, and a delivery attempt does not observe "nobody
- * was addressed". A desktop reports only what it did: fed and woke (`woken`),
- * fed a running session (`delivered`), reached sessions that took no wake
- * (`idle`), or declined to feed at all (`refused`).
- *
- * ⚠ **`seq`, NOT the message id.** The seq is what the desktop's listener holds
- * (`main/listener-io.js`'s cursor) and what it already stamps on the turn it
- * feeds (`session-gate.js › lastInboundSeq`); making it name a UUID would mean
- * carrying an id the dispatch path has no reason to keep.
- */
+/** One machine's receipt for one message, keyed by `seq` — only what the machine itself did. */
 export const DeliveryAckSchema = z.object({
-  /**
-   * 🔒 **WHICH OF THIS MACHINE'S SESSIONS IS REPORTING** — the fence, not a
-   * label (2026-09-02, review D3).
-   *
-   * ⚠ **WITHOUT IT THE ONLY FENCE WAS CHANNEL MEMBERSHIP**, so any member of a
-   * room could post `delivery: "woken"` for any `seq` in it, and the write is
-   * MONOTONIC — `woken` is the top rank, so the lie is permanent and no later
-   * receipt from the machine that actually handled the message can correct it.
-   * A receipt is a claim about what a MACHINE did; the claimant must therefore
-   * hold a live session on that machine, in that room.
-   *
-   * ⚠ **CHECKED AGAINST THE SESSION SET IN THIS SAME PUSH**, which
-   * `reportSessionStates` has already reconciled into `channel_sessions` under
-   * this caller's own id — so the binding costs no read and cannot name a
-   * session belonging to somebody else. `service-writes-delivery.ts` states the
-   * arms.
-   *
-   * ⚠ **REQUIRED, NOT OPTIONAL, AND THAT IS ONLY SAFE BECAUSE `acks` IS NEW.**
-   * The compatibility rule everywhere else on this body is that a required
-   * field 400s the whole push from an installed desktop; nothing in the field
-   * sends `acks` at all (A9 ships the first writer, `main/delivery-ack.js`), so
-   * there is no older payload to break. A LATER field on this object must be
-   * optional again.
-   */
+  /** The fence: must name a session in this same push (`service-writes-delivery.ts`), or any room
+   *  member could forge a monotonic `woken`. Required is safe only because no older desktop sends `acks`. */
   sessionKey: z.string().regex(SESSION_KEY_RE, "Invalid session key"),
   channelId: z.string().uuid(),
   seq: z.number().int().positive(),
@@ -418,17 +98,11 @@ export const DeliveryAckSchema = z.object({
 });
 export type DeliveryAckInput = z.infer<typeof DeliveryAckSchema>;
 
-/**
- * ⚠ **THE SAME ARRAY BOUND AS THE SESSION SET, AND FOR THE SAME REASON.** Zod
- * validates the ARRAY, so one oversized payload 400s the WHOLE push — sessions
- * included — and `retryable(400)` is false, which is the failure mode
- * {@link SESSION_REPORT_MAX} is written around. A machine with more receipts than
- * this drops the excess rather than losing its whole report; the ack is a
- * convenience for an orchestrator, and the session set is the projection an
- * entire tool reads.
- */
+/** Same bound as the session set: an oversized array 400s the whole push, sessions included. */
 const DELIVERY_ACK_MAX = SESSION_REPORT_MAX;
 
+/** POST body: the whole live set for one workspace, never a delta — anything not listed is gone.
+ *  Duplicate keys are refused, not deduped: two `ON CONFLICT` hits in one statement are a 21000. */
 export const SessionStateReportSchema = z.object({
   sessions: z
     .array(SessionStateEntrySchema)
@@ -437,17 +111,7 @@ export const SessionStateReportSchema = z.object({
       (list) => new Set(list.map((s) => s.sessionKey)).size === list.length,
       { message: "Duplicate session keys in one report" }
     ),
-  /**
-   * **THE WAKE ACK, RIDING THE LANE THAT ALREADY EXISTS.**
-   *
-   * ⚠ **OPTIONAL, AND THAT IS THE WHOLE COMPATIBILITY STORY.** Every desktop in
-   * the field posts this body without the key, and must go on doing so — a
-   * required field here would 400 every push from every installed build, which
-   * is the unretryable failure this schema's other bounds exist to avoid.
-   * ⚠ NOT deduped and not ordered: two receipts for one seq are two real
-   * observations, and `service-writes-delivery.ts` resolves them by RANK rather
-   * than by arrival, so nothing depends on which came first.
-   */
+  /** Optional: installed desktops omit it. Not deduped — `service-writes-delivery.ts` resolves by rank. */
   acks: z.array(DeliveryAckSchema).max(DELIVERY_ACK_MAX).optional(),
 });
 export type SessionStateReportInput = z.infer<typeof SessionStateReportSchema>;

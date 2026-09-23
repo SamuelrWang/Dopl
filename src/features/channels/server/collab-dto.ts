@@ -12,17 +12,8 @@ import type {
 import type { ProfileRef } from "./dto";
 
 /**
- * DB row shapes + mappers for the v1.2 collaboration tables
- * (`channel_consent_requests`, `agent_presence`).
- * Hand-written rather than pulled from the generated `Database` type — the
- * same cast-at-the-boundary pattern the rest of the channels feature uses,
- * since the repository talks to the untyped `supabaseAdmin()` client.
- *
- * ⚠ THERE WAS A THIRD TABLE, `agent_trust_rules`, and `TrustRuleRow` /
- * `mapTrustRow` are DELETED with it (2026-08-22 — the table is dropped in
- * `20260822140000_retire_inbound_consent_and_trust.sql`). It only ever auto-allowed
- * INBOUND consent requests, and that lane is retired; a row shape for a relation
- * that does not exist is a type that compiles and can never be satisfied.
+ * Row shapes + mappers for `channel_consent_requests`, `agent_presence` and `channel_sessions`;
+ * hand-written because the repository talks to the untyped `supabaseAdmin()` client.
  */
 
 export type ConsentRequestRow = {
@@ -50,12 +41,7 @@ export type PresenceRow = {
   status: string;
 };
 
-/**
- * `channel_sessions` row — the desktop's per-session projection at rest (rollback
- * §3.5, read-session-state). One row per live session the operator's machine is
- * running; `mapSessionStateRow` turns it into the {@link ChannelSessionState}
- * the MCP read returns.
- */
+/** `channel_sessions` row: one per live session the operator's machine reports. */
 export type SessionStateRow = {
   id: string;
   channel_id: string;
@@ -69,15 +55,9 @@ export type SessionStateRow = {
   thread_title: string | null;
   created_at: string;
   updated_at: string;
-  /** One of six CLOSED situation keys (`session-detail.js › detailFor`).
-   *  Peer-visible — and peer-visible ONLY because the vocabulary is closed.
-   *  ⚠ Typed `string | null` at the ROW because the column is TEXT and a newer
-   *  desktop may store a seventh key; `narrowSessionDetail` is what turns it
-   *  into a value a surface may render. */
+  /** TEXT: a newer desktop may store an unknown key; `narrowSessionDetail` makes it renderable. */
   detail: string | null;
-  // ── OPERATOR-ONLY TELEMETRY (20260822150000, Samuel's ruling) ────────────
-  // ⚠ NULL IS "UNKNOWN", NEVER ZERO. A desktop that does not report a number
-  // has not reported that its agent spent nothing; the render says so.
+  // Operator-only telemetry. NULL is unknown, never zero.
   tool_label: string | null;
   model: string | null;
   context_used: number | string | null;
@@ -85,23 +65,9 @@ export type SessionStateRow = {
   tokens_spent: number | string | null;
   started_at: string | null;
   last_activity_at: string | null;
-  // ── OPERATOR-ONLY HEALTH (20260909120000) ───────────────────────────────
-  // "Is this agent GETTING ANYWHERE", as the seven facts
-  // `dopl-desktop-app/main/session-health.js` derives. ⚠ SAME NULL RULE, and it
-  // bites harder because six of the seven are counts: a `0` here would report
-  // that nothing was denied to an agent whose every call is being refused.
-  // ⚠ `stale` IS THE MACHINE'S OWN WEDGED FLAG (working + silent + still
-  // spending) and is NOT the row-freshness fact
-  // `packages/mcp-server/src/tools/channel-session-render.ts › sessionIsStale`
-  // derives from `updated_at`. Same word, two facts — see
-  // `channel-session-health.ts`, which renders them as different clauses.
-  //
-  // ⚠ `| string` ON THE TWO BIGINTS AND NOT ON THE TWO INTEGERS, DELIBERATELY.
-  // PostgREST hands an INT8 back as a STRING when it will not fit a JS number,
-  // which is why {@link bigintOrNull} exists; INT4 always arrives as a number.
-  // The column types are the migration's (`20260909120000`) and this restates
-  // them rather than widening everything "just in case" — a union that admits a
-  // value the column cannot hold is a type that has stopped describing the row.
+  // Operator-only health (`main/session-health.js`), same null rule. `stale` is the machine's wedged
+  // flag, not `channel-session-render.ts › sessionIsStale` (row freshness from `updated_at`).
+  // `| string` only on the BIGINTs: PostgREST may return an INT8 as a string; INT4 is always a number.
   turns: number | null;
   tokens_delta: number | string | null;
   stale: boolean | null;
@@ -109,59 +75,19 @@ export type SessionStateRow = {
   last_denied_tool: string | null;
   last_wake_seq: number | string | null;
   last_wake_at: string | null;
-  /** ⚠ NOT TELEMETRY, AND OPERATOR-ONLY FOR ITS OWN REASONS (20260823130000,
-   *  Samuel's OQ-5 ruling). The name of the agent identity this session was
-   *  launched from, SNAPSHOTTED AT SPAWN — deliberately not an FK, so a session
-   *  goes on reporting what it RAN AS after the identity is renamed or deleted.
-   *  It sits in this block because the AUDIENCE is the same one, which is the
-   *  only thing {@link OPERATOR_ONLY_SESSION_COLUMNS} is about: it is
-   *  operator-authored free text (the `detail` ruling's own stated condition for
-   *  going private), and a private identity's name on a peer's screen is an
-   *  existence oracle for a row that has no name uniqueness precisely so that it
-   *  cannot be probed. NULL = no identity, or a desktop older than the field. */
+  /** Identity name snapshotted at spawn (not an FK). Operator-only: on a peer's screen it is an
+   *  existence oracle for a private identity. NULL = no identity, or an older desktop. */
   identity_name: string | null;
-  /** THE OPERATOR-GIVEN AGENT NAME — **PEER-VISIBLE BY DESIGN** (2026-08-31,
-   *  20260905120000; Samuel's ruling: the other member should see you are
-   *  running a "Bug Reviewer"). ⚠ DELIBERATELY NOT in
-   *  {@link OPERATOR_ONLY_SESSION_COLUMNS} — visibility is its point, and unlike
-   *  `identity_name` it is an instance label with no existence-oracle behind it.
-   *  NULL = never named (render falls back to the `name` handle), or a desktop
-   *  older than the field. */
+  /** Operator-given agent name, peer-visible by design. NULL = never named (render falls back to `name`). */
   display_name: string | null;
-  /** THE AGENT'S COLOUR IN THIS CHANNEL — **PEER-VISIBLE BY DESIGN** (2026-09-13,
-   *  `20261005120000`; Samuel: the colour categorizes *"also … other users' agents"*).
-   *  ⚠ DELIBERATELY NOT in {@link OPERATOR_ONLY_SESSION_COLUMNS}: every member of the
-   *  room draws it, so hiding it from peers would delete the feature.
-   *  ⚠ Typed `string | null` at the ROW because the column is TEXT and the CHECK is the
-   *  database's, not this file's — `narrowSessionColor` is what turns it into a value a
-   *  surface may reference, exactly as `narrowSessionDetail` does for `detail`. */
+  /** Peer-visible by design (every member draws it); TEXT, so `narrowSessionColor` narrows it. */
   color: string | null;
 };
 
 /**
- * THE FENCE, AS DATA — the columns a PEER may never read, and the DTO fields
- * they map to.
- *
- * ⚠ Exported so the visibility split is TESTABLE AS A PROPERTY rather than as a
- * list of examples: `session-visibility.test.ts` asserts that no key in the
- * peer mapper's output is one of these, for every row it is handed. A new
- * telemetry column is added HERE first, and the property test then covers it
- * without anyone remembering to write a case for it.
- *
- * ⚠ The two arrays are parallel by construction and pinned as such — a column
- * added to one and not the other is a fence with a hole and a green suite.
- *
- * ⚠ **"OPERATOR-ONLY" IS AN AUDIENCE, NOT A SUBJECT.** Eight of the fifteen are
- * telemetry (what an agent runs on and what it costs); `identity_name` is an
- * IDENTITY snapshot and joined on 2026-08-23; the seven HEALTH entries joined on
- * 2026-09-01 and are about progress rather than cost. Nothing here is about
- * measurement — the one question this array asks is "may a PEER read it", and
- * the answer for every entry is no.
- *
- * ⚠ THE HEALTH SEVEN ARE NOT A CLOSE CALL. `denied_calls` / `last_denied_tool`
- * are the sharpest of the whole set: they publish what an operator's tool policy
- * REFUSES, which is a map of that operator's machine, and no peer has any claim
- * on it.
+ * Columns a peer may never read (telemetry, health, the identity snapshot) and their parallel DTO
+ * fields; everything else on the row is peer-visible. The peer projection must never carry one —
+ * `session-visibility.test.ts` asserts it as a property, so add a new operator-only column here first.
  */
 export const OPERATOR_ONLY_SESSION_COLUMNS = [
   "tool_label",
@@ -200,13 +126,8 @@ export const OPERATOR_ONLY_SESSION_FIELDS = [
 ] as const;
 
 /**
- * ONE ROW AS THE DESKTOP REPORTS IT (rollback §3.5, the write half). Column
- * names, because this is what goes to the database — the API's camelCase shape
- * is `SessionStateEntryInput` and the service maps between them.
- *
- * `user_id` and `workspace_id` are ABSENT ON PURPOSE: they come from the
- * authenticated context and never from a caller's payload, so there is no field
- * here for a caller to put someone else's id in. The repository stamps both.
+ * One reported row, in column names. `user_id` / `workspace_id` are absent on purpose: the repository
+ * stamps them from the authenticated context, never from the caller's payload.
  */
 export type SessionStateUpsert = {
   session_key: string;
@@ -224,12 +145,6 @@ export type SessionStateUpsert = {
   tokens_spent: number | null;
   started_at: string | null;
   last_activity_at: string | null;
-  // ── HEALTH (2026-09-01, 20260909120000) ─────────────────────────────────
-  // ⚠ NUMBERS ONLY ON THE WRITE SIDE — the reported value has already been
-  // through zod, so there is no `string` case here the way there is on
-  // {@link SessionStateRow}: that union describes what PostgREST HANDS BACK, and
-  // this one describes what the service WRITES. ⚠ Every one is nullable and
-  // never defaulted; see `session-state-service.ts › toUpsert`.
   turns: number | null;
   tokens_delta: number | null;
   stale: boolean | null;
@@ -237,47 +152,16 @@ export type SessionStateUpsert = {
   last_denied_tool: string | null;
   last_wake_seq: number | null;
   last_wake_at: string | null;
-  /** 2026-08-31 (20260905120000): the operator-given agent name; peer-visible. */
   display_name: string | null;
-  /** ⚠ A SNAPSHOT THE DESKTOP REPORTS, NOT A LOOKUP THE SERVER PERFORMS. The
-   *  server never resolves an identity id here — main holds the resolved identity
-   *  on `context.identity` from spawn (spec §3d) and reports its NAME, which is
-   *  what keeps the row true after a rename or a delete. */
+  /** A snapshot the desktop reports; the server never resolves an identity here. */
   identity_name: string | null;
-  /** 2026-09-13 (`20261005120000`): the agent's colour in this channel.
-   *
-   *  ⚠ **THE ONE FIELD ON THIS TYPE THE SERVER MAY OVERRULE.** Everything else here is
-   *  the machine's report, written as sent; a colour is subject to a UNIQUENESS RULE the
-   *  reporting machine cannot see (another member may hold the key), so
-   *  `server/session-colors.ts › resolveReportedColors` rewrites it to the first free key
-   *  before the upsert. The desktop's value is a REQUEST — see that file's header. */
+  /** The one field the server may overrule (`session-colors.ts › resolveReportedColors`). */
   color: AgentColorKey | null;
 };
 
 /**
- * THE SIX KEYS `channel_sessions.detail` MAY RENDER AS — a MEMBERSHIP TEST, not
- * a cast.
- *
- * ⚠ **THIS IS WHAT KEEPS `detail` PEER-SAFE, AND IT IS THE WHOLE ARGUMENT FOR
- * LETTING THE COLUMN CROSS TO A PEER AT ALL.** The field is peer-visible ONLY
- * because it is one of six fixed, coarse words. Free-form prose in it — "reading
- * 4 files in ~/clients/acme" — is operator-only material, and a mapper that
- * passed the column through would ship it to every member of the channel. So the
- * column is narrowed HERE, on the way out, and anything outside the set becomes
- * `null` (= "no refinement reported").
- *
- * ⚠ **THE WRITE PATH IS DELIBERATELY LOOSER THAN THIS, AND THAT ASYMMETRY IS ON
- * PURPOSE.** `schema-sessions.ts` accepts any short safe label rather than a
- * `z.enum`, because zod validates the ARRAY: a desktop shipping a SEVENTH key
- * would otherwise 400 its entire push, `retryable(400)` is false, and that
- * machine's `read_sessions` would answer `[]` forever (INVARIANTS §11, §13). So
- * a newer key STORES fine and simply renders as nothing until the server learns
- * it — which is exactly what `agents-model.ts › agentDetailLabel` already does
- * with an unknown key, and the fail-CLOSED direction either way.
- *
- * ⚠ The set is DERIVED from the shared type, so it cannot drift from
- * `spa-bridge-shapes.ts`; `session-visibility.test.ts` pins the array against
- * that file's declaration.
+ * The six keys `detail` may render as — a membership test, not a cast: `detail` is peer-visible only
+ * because it is closed, so anything else (free-form text) becomes `null` before it can reach a peer.
  */
 const SESSION_DETAIL_KEYS: ReadonlySet<string> = new Set<SessionDetailKey>([
   "thinking",
@@ -288,16 +172,7 @@ const SESSION_DETAIL_KEYS: ReadonlySet<string> = new Set<SessionDetailKey>([
   "awaiting_inbound",
 ]);
 
-/**
- * A STORED COLOUR → A KEY A SURFACE MAY DRAW, or `null`.
- *
- * ⚠ **THE SAME NARROW-NEVER-CAST RULE `narrowSessionDetail` ABOVE FOLLOWS**, and here
- * the failure it prevents is silent rather than loud: an unrecognised key becomes
- * `var(--agent-color-99)`, which resolves to nothing, and an inline `borderColor` of
- * nothing paints an INVISIBLE border — a box the reader cannot see over a post that is
- * supposed to be boxed. `null` draws the neutral box instead, which is the honest
- * reading of "this row's colour means nothing to me".
- */
+/** Narrowed, never cast: an unknown key would be an empty `var()` and an invisible border. */
 export function narrowSessionColor(
   value: string | null | undefined
 ): AgentColorKey | null {
@@ -311,13 +186,7 @@ export function narrowSessionDetail(
   return SESSION_DETAIL_KEYS.has(value) ? (value as SessionDetailKey) : null;
 }
 
-/**
- * A BIGINT off PostgREST, as a number — or `null`.
- *
- * ⚠ `null` MEANS UNKNOWN AND MUST SURVIVE AS `null`. `Number(null)` is `0`, and
- * a 0 here renders as "this agent has spent no tokens", which is a claim the
- * row never made. Same rule for a value that does not parse: unknown, not zero.
- */
+/** A BIGINT off PostgREST as a number; `null` and unparseable values stay `null`, never 0. */
 function bigintOrNull(value: number | string | null): number | null {
   if (value === null || value === undefined) return null;
   const n = typeof value === "number" ? value : Number(value);
@@ -325,29 +194,8 @@ function bigintOrNull(value: number | string | null): number | null {
 }
 
 /**
- * THE PEER PROJECTION — what a member of the channel may see of ANOTHER
- * member's session (Samuel's ruling, 2026-08-22: telemetry is OPERATOR-ONLY,
- * peers keep coarse).
- *
- * ⚠ THIS FUNCTION IS THE FENCE, and it is a fence because it BUILDS a narrow
- * object rather than deleting keys from a wide one. A `delete`-based or
- * `omit`-based scrub fails OPEN when a column is added; construction fails
- * CLOSED, because a new field reaches a peer only when somebody types its name
- * here. The column-privilege GRANT in `20260822150000` is the belt; **this is
- * the load-bearing half**, because every read in `repository-sessions.ts` runs
- * on the RLS- and grant-bypassing admin client.
- *
- * ⚠ THERE IS DELIBERATELY NO `mapSessionStateRow` ANY MORE. One mapper with an
- * audience argument has a default, and a default is how the rich shape reaches
- * a peer surface that forgot to pass the argument. Two names, no default: a
- * call site must say whose eyes it is rendering for.
- *
- * ⚠ `channelId` IS KEPT even though it is not in the coarse projection's
- * charter. It is the ROUTING KEY the caller already supplied (this read is
- * channel-scoped by construction), not a fact about anybody's machine, and
- * `hooks/use-channel-agent-sessions.ts › ChannelPeerSession` is typed on it.
- * ⚠ The wire name stays `threadId`, not `taskId` — the §5 boundary rule
- * (storage says `task`, the wire and the domain say `thread`).
+ * The peer projection, and the fence: it builds a narrow object (fails closed when a column is added)
+ * because every read runs on the RLS-bypassing admin client. Two mappers, no default audience.
  */
 export function mapPeerSessionStateRow(
   row: SessionStateRow
@@ -356,46 +204,21 @@ export function mapPeerSessionStateRow(
     channelId: row.channel_id,
     threadId: row.task_id,
     name: row.name,
-    // The column carries a CHECK constraint on exactly these three values, and
-    // this is the same cast the rest of this file makes for the untyped admin
-    // client.
-    //
-    // F-145 — IT IS AN ASSERTION, NOT A CHECK, and the migration it leans on is
-    // still UNAPPLIED (Samuel's gate), so today it leans on nothing. F-147's
-    // writer validates `state` against the same closed set on the way IN, which
-    // is a second layer and not a replacement for this one. The value
-    // ends up spliced into `dopl_channel(op="read_sessions")`'s SERVER
-    // NARRATION, so the layer that actually holds is the render's closed-set
-    // test (`channel-ops-read.formatSessionLine`), which says
-    // "(unrecognized state)" rather than emitting whatever the row carried.
-    // Named here so the next reader does not take this cast for a guarantee.
+    // A cast, not a check: the render's closed-set test (`channel-session-render.ts › formatSessionLine`) holds.
     state: row.state as SessionPillState,
-    // ⚠ NARROWED, NEVER PASSED THROUGH — see `narrowSessionDetail`. This is the
-    // one line that keeps a free-form value in the column from reaching a peer.
+    // Narrowed, never passed through: a free-form value must not reach a peer.
     detail: narrowSessionDetail(row.detail),
     channelName: row.channel_name,
     threadTitle: row.thread_title,
-    // ⚠ PEER-VISIBLE BY DESIGN (2026-08-31, Samuel's ruling) — the operator-given
-    // agent name IS for the other member's eyes; bounded at the schema and the
-    // column CHECK both. `?? null` covers a row read before the migration.
+    // Peer-visible by design; bounded at the schema and the column CHECK.
     displayName: row.display_name ?? null,
-    // ⚠ PEER-VISIBLE BY DESIGN and NARROWED, never passed through — `narrowSessionColor`
-    // carries why an unknown key must not reach a `var()`. `?? null` covers a row read
-    // before the migration.
+    // Peer-visible, and narrowed rather than passed through.
     color: narrowSessionColor(row.color),
     updatedAt: row.updated_at,
   };
 }
 
-/**
- * THE OWNER PROJECTION — the caller's OWN sessions, telemetry included.
- *
- * ⚠ Reachable from exactly two places, both own-scoped by the repository's
- * `user_id` fence: `listSessionStates` (→ `GET /api/channels/sessions` →
- * `read_sessions`) and the await route's return-time session block. If a third
- * call site appears, the question to answer first is whether its fence is
- * `ctx.userId`; if it is not, it wants {@link mapPeerSessionStateRow}.
- */
+/** The owner projection, telemetry included — only for reads fenced on `ctx.userId`. */
 export function mapOwnSessionStateRow(
   row: SessionStateRow
 ): ChannelSessionStateOwn {
@@ -408,29 +231,12 @@ export function mapOwnSessionStateRow(
     tokensSpent: bigintOrNull(row.tokens_spent),
     startedAt: row.started_at,
     lastActivityAt: row.last_activity_at,
-    // ⚠ THE ONLY MAPPER THAT MAY NAME THIS FIELD. A peer seeing it learns that a
-    // identity with that name exists on somebody else's account — and
-    // `agent_identities` deliberately has no name uniqueness so that nothing can
-    // be probed that way. Adding it to {@link mapPeerSessionStateRow} would undo
-    // both that decision and the 404-not-403 rule in one line.
+    // Only this mapper may name it: a peer would learn a private identity exists (404-not-403 rule).
     identityName: row.identity_name,
-    // ── THE HEALTH HALF (2026-09-01, 20260909120000) ────────────────────────
-    // ⚠ `bigintOrNull` ON ALL FOUR COUNTS, INCLUDING THE TWO INT4s. The two
-    // BIGINTs genuinely need it (PostgREST may hand an INT8 back as a string);
-    // the two INTEGERs are run through the same helper because its OTHER
-    // guarantee is the one that matters everywhere — `null` survives as `null`
-    // and an unparseable value becomes `null` rather than `0`. A bare
-    // `Number(row.turns)` would turn "this machine counted nothing" into "this
-    // agent has taken no turns", which is the one lie this whole wave is about.
+    // `bigintOrNull` on the INT4s too: what matters there is `null` surviving as `null`.
     turns: bigintOrNull(row.turns),
     tokensDelta: bigintOrNull(row.tokens_delta),
-    // ⚠ NOT COERCED, AND NOT DEFAULTED TO `false`. The desktop always sends a
-    // boolean (`session-telemetry.js` writes `x.stale === true`), so a NULL here
-    // means the column predates the writer — "nothing has evaluated whether this
-    // session is wedged", which is not the same claim as "it is not wedged".
-    // `?? false` here would state the second on behalf of a machine that said
-    // neither. ⚠ It is the MACHINE's wedged flag and never the row-freshness
-    // fact of the same name; see {@link SessionStateRow}.
+    // Not defaulted to `false`: NULL means nothing evaluated it, not "not wedged".
     stale: row.stale,
     deniedCalls: bigintOrNull(row.denied_calls),
     lastDeniedTool: row.last_denied_tool,

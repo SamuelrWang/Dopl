@@ -12,104 +12,39 @@ import type { ChannelContext } from "./service-shared";
 import { loadVisibleChannel } from "./service-shared";
 
 /**
- * THE OWN-SCOPED SESSION READ'S WHOLE ANSWER — the rows, AND whether the machine
- * that would have written them is still there (2026-08-23, F-294).
- *
- * ⚠ **THE SECOND FIELD EXISTS BECAUSE THE FIRST ONE CANNOT ANSWER "IS IT ALIVE".**
- * `channel_sessions` is pushed on state CHANGE, so an idle-but-alive agent and a
- * crashed desktop produce the SAME quiet row, and the MCP render had to hedge
- * both as "may be offline" — a lie about the idle one, told within ~2 minutes.
- * `agent_presence` DOES beat unconditionally (~120/hr, `main/presence.js`), so
- * joining it here separates the two without touching the push contract and
- * without a single new write. ⚠ **The renderer must never re-derive freshness
- * from a stamp of its own** — see the boolean note in {@link listSessionStates}.
- * ⚠ **IT IS PER-(USER, WORKSPACE), NOT PER-MACHINE**, exactly like the
- * `launch_agent` pre-check (`service-launch.ts › operatorIsOnline`), so it can
- * only ever soften a hedge into "unchanged" and never harden one into a claim.
+ * The own-scoped read's answer: the rows plus presence, because rows are pushed on change and a quiet
+ * row cannot tell idle from crashed (F-294). Presence is per (user, workspace), never per machine.
  */
 export interface OwnSessionsReport {
   sessions: ChannelSessionStateOwn[];
-  /** ⚠ `false` covers no row, no stamp and an unreadable stamp alike. The
-   *  "not reported" case is the WIRE KEY being absent, which is the routes'
-   *  fail-soft branch — never a `false` here. */
+  /** `false` covers no row, no stamp and an unreadable stamp; "not reported" is the wire key being absent. */
   operatorOnline: boolean;
 }
 
 /**
- * SESSION-STATE SERVICE — the read half of "what is flint doing?" over MCP. A
- * SESSION is the only agent identity there is, and its live state lives in the
- * DESKTOP main process. This reads the projection the desktop pushes to
- * `channel_sessions` and returns the {@link ChannelSessionState} shape the MCP
- * op renders. ⚠ The SAME derivation the pills show — the server stores and
- * returns, and adds no second derivation.
- *
- * ⚠ TWO READS, TWO SCOPES (2026-08-20): {@link listSessionStates} stays scoped
- * to the CALLER (`ctx.userId`) — "what are MY agents doing" — while
- * {@link listChannelSessions} is CHANNEL-scoped for the Agents tab's peer
- * cards, fenced by `loadVisibleChannel` — ⚠ which admits a PUBLIC channel's
- * non-member readers (§5's channel-visible rule); the member SELECT policy
- * (20260820200000) is the PostgREST belt, not this admin-client path's fence.
- *
- * ⚠ **AND SINCE 2026-08-22 THE TWO SCOPES CARRY TWO SHAPES** (Samuel: telemetry
- * is OPERATOR-ONLY, peers keep coarse). The row got seven operator-only columns
- * — model, current tool, context used/window, tokens, started/last-activity —
- * and **THIS SERVICE IS WHERE THE SPLIT IS ENFORCED**, because both reads run on
- * the RLS- and grant-bypassing admin client and neither RLS nor the column
- * GRANT can see them. The mechanism is two mappers with two return types
- * (`collab-dto.ts › mapOwnSessionStateRow` / `mapPeerSessionStateRow`) and NO
- * default audience: a call site must name whose eyes it renders for, and TypeScript
- * refuses a peer surface that assigns the rich shape. The GRANT in migration
- * `20260822150000` is the belt for the PostgREST/CDC doors this path never uses.
- *
- * Delivery is PUSH ON STATE CHANGE ({@link reportSessionStates}, called by
- * `main/session-state-push.js`), never a heartbeat. An empty answer is reported
- * honestly as "no live sessions", never as a claim about the caller's machine —
- * see `listSessionStates` for the one PostgREST code degraded to `[]`.
+ * The caller's own sessions (`ctx.userId`). Both reads here run on the RLS-bypassing admin client, so
+ * the own/peer mapper split in this file is what keeps telemetry operator-only.
  */
 export async function listSessionStates(
   ctx: ChannelContext,
   channelId?: string
 ): Promise<OwnSessionsReport> {
-  // ⚠ **CONCURRENT, AND BOTH READS ARE THE CALLER'S OWN.** The presence lookup is
-  // a PK hit on a tiny table (`repository-collab.ts › presenceForUser`), so this
-  // adds latency only if it is serialized behind the session read — which on the
-  // await route would be one extra round trip on the one path the feature's whole
-  // egress budget is written around.
+  // Concurrent: serialized, the presence lookup would add a round trip to the await route.
   const [rows, presence] = await Promise.all([
     sessionRepo.listSessionStates(ctx.userId, ctx.workspaceId, channelId),
     collab.presenceForUser(ctx.userId, ctx.workspaceId),
   ]);
   return {
-    // ⚠ THE OWN MAPPER, and the licence for it is the `ctx.userId` fence one line
-    // up — not this function's name. Every row here belongs to the caller's own
-    // machine, which is the only condition under which telemetry may be rendered.
+    // The own mapper is licensed by the `ctx.userId` fence above, not by this function's name.
     sessions: rows.map(mapOwnSessionStateRow),
-    // ⚠ A BOOLEAN, NOT THE STAMP. The stamp is the operator's own so nothing
-    // leaks, but it is also a second liveness number on the wire that a client
-    // could re-derive against a window of its own — which is exactly the drift
-    // `SESSION_STALE_WINDOW_MS`'s duplicate-plus-pin exists to prevent. The
-    // SERVER owns the window; the wire carries the answer.
+    // A boolean, not the stamp: the server owns the freshness window.
     operatorOnline: presence?.online === true,
   };
 }
 
 /**
- * EVERY member's sessions in ONE channel — the Agents tab's PEER CARDS
- * (Samuel, 2026-08-20). ⚠ NOT caller-scoped, and that is deliberate and
- * bounded: the reader must be able to READ the channel (`loadVisibleChannel`,
- * the same fence every channel read uses), and what comes back is the COARSE
- * projection alone.
- *
- * ⚠ **ITS DOCBLOCK USED TO SAY "no transcript, no tools, no tokens EXIST IN THE
- * TABLE to leak", AND THAT SENTENCE EXPIRED ON 2026-08-22.** They exist now
- * (migration `20260822150000`). The absence of a thing to leak was doing the
- * security work, and the replacement for it is {@link mapPeerSessionStateRow},
- * which cannot emit them because it never names them. ⚠ Do not "simplify" this
- * to spreading the row: the read is deliberately `select("*")`, so the wide row
- * IS in memory here and only the mapper stands between it and a peer.
- *
- * ⚠ THE READER MAY BE A NON-MEMBER of a PUBLIC channel — that is §5's rule and
- * this fence inherits it, which is a second reason the projection is coarse.
+ * Every member's sessions in one channel, fenced by `loadVisibleChannel` (public non-members too). The
+ * read is `select("*")`: only {@link mapPeerSessionStateRow} stands between the wide row and a peer.
  */
 export async function listChannelSessions(
   ctx: ChannelContext,
@@ -120,24 +55,15 @@ export async function listChannelSessions(
     ctx.workspaceId,
     channel.id
   );
-  // ⚠ `userId` rides so the card can wear its owner's avatar. It is the ONE
-  // field added on top of the coarse projection, and it is an identity the
-  // roster already publishes — not a fact about the machine.
+  // `userId` rides for the owner's avatar — an identity the roster already publishes.
   return rows.map((row) => ({
     ...mapPeerSessionStateRow(row),
     userId: row.user_id,
   }));
 }
 
-/** API shape → column shape. ⚠ The one place the two vocabularies meet, and
- *  where `undefined` becomes the `null` the column stores — the schema lets a
- *  field be absent, the database has no such value.
- *
- *  ⚠ `?? null` ON EVERY TELEMETRY FIELD, AND NEVER `?? 0`. An older desktop
- *  omits the key; the column then stores NULL, which the read renders as
- *  "unknown". Defaulting a count to 0 here would manufacture a measurement
- *  nobody took, and it would do it in the one place where the absence is still
- *  visible. */
+/** API shape → column shape. Absent becomes `null` (unknown), never `0` / `false`: a default would
+ *  manufacture a measurement nobody took. */
 function toUpsert(entry: SessionStateEntryInput): SessionStateUpsert {
   return {
     session_key: entry.sessionKey,
@@ -155,19 +81,7 @@ function toUpsert(entry: SessionStateEntryInput): SessionStateUpsert {
     tokens_spent: entry.tokensSpent ?? null,
     started_at: entry.startedAt ?? null,
     last_activity_at: entry.lastActivityAt ?? null,
-    // ⚠ `?? null` for the same reason, and one more: absent and `null` are both
-    // "no identity to report" here, so nothing is lost by collapsing them — see
-    // the column comment in `20260823130000`. Do NOT try to distinguish a
-    // desktop that predates the field from a blank launch; only the DIRECTIVE
-    // lane needs that distinction (spec E-4) and it is a different table.
     identity_name: entry.identityName ?? null,
-    // ── HEALTH (2026-09-01, 20260909120000) ─────────────────────────────────
-    // ⚠ `?? null` HERE TOO, AND NEVER `?? 0` / `?? false`. An older desktop
-    // omits every one of these keys; the columns then store NULL, which the
-    // render prints nothing for. A `?? 0` on `denied_calls` would manufacture
-    // "nothing has been refused to this agent" — the precise claim these columns
-    // exist to stop the surface making — and `?? false` on `stale` would assert
-    // a health verdict on behalf of a machine that never ran the check.
     turns: entry.turns ?? null,
     tokens_delta: entry.tokensDelta ?? null,
     stale: entry.stale ?? null,
@@ -175,38 +89,16 @@ function toUpsert(entry: SessionStateEntryInput): SessionStateUpsert {
     last_denied_tool: entry.lastDeniedTool ?? null,
     last_wake_seq: entry.lastWakeSeq ?? null,
     last_wake_at: entry.lastWakeAt ?? null,
-    // 2026-08-31 (20260905120000): the operator-given agent name — peer-visible
-    // by design, `?? null` on the rollout contract every optional field here has.
     display_name: entry.displayName ?? null,
-    // ⚠ **THE ONE FIELD HERE THAT IS A REQUEST RATHER THAN A REPORT** (2026-09-13).
-    // Everything above is stored as sent; this one goes through
-    // `session-colors.ts › resolveReportedColors` inside the reconcile, because
-    // whether the key is free is a fact about OTHER MEMBERS' rows that the machine
-    // that reported it cannot see. `?? null` is "did not ask" — which resolves to
-    // the first free key, not to "no colour".
+    // A request, resolved in the reconcile (`session-colors.ts › resolveReportedColors`); `null` = first free key.
     color: entry.color ?? null,
   };
 }
 
 /**
- * THE WRITE HALF — the operator's desktop reporting its whole live session set
- * for one workspace.
- *
- * ⚠ PUSH ON STATE CHANGE, NOT A HEARTBEAT: called only when
- * `session-summary.js`'s digest actually moves — a handful of writes per session
- * lifetime, against `agent_presence`'s 120/hour per listener. That difference is
- * the entire reason this table exists rather than a column on the presence row.
- *
- * ⚠ SCOPED TO THE CALLER, exactly as the read is. `ctx.userId` /
- * `ctx.workspaceId` are the only identity the repository sees; the payload
- * carries neither, so a caller cannot write a row answering someone else's
- * `read_sessions`. Membership floor is `withWorkspaceAuth`'s (viewer), and
- * `channel_child_workspace_guard` refuses a channel from another workspace.
- *
- * ⚠ NO CREDENTIAL BOUND, deliberately: the rows are the caller's own and only
- * the caller reads them, so narrowing to a runtime stamp or cookie session
- * refuses a future desktop lane and buys no boundary. The bound is the identity
- * pair plus token custody.
+ * The desktop's whole live set for one workspace, pushed on state change (not a heartbeat). Scoped to
+ * `ctx.userId` / `ctx.workspaceId` — the payload carries neither, so a caller cannot write someone
+ * else's rows; `channel_child_workspace_guard` refuses a channel from another workspace.
  */
 export async function reportSessionStates(
   ctx: ChannelContext,

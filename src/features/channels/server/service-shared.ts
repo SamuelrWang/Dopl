@@ -18,10 +18,8 @@ import * as repo from "./repository";
 import * as repoSessions from "./repository-sessions";
 
 /**
- * Shared internals for the channels service: the `ChannelContext`
- * construction plus the cross-cutting resolvers + visibility / management
- * gates used by more than one of the per-domain service modules
- * (`service-reads`, `service-writes`).
+ * Shared internals for the channels service: `ChannelContext` construction plus the cross-cutting
+ * resolvers and visibility / management gates the per-domain service modules use.
  */
 
 export interface ChannelContext {
@@ -30,43 +28,17 @@ export interface ChannelContext {
   source: "user" | "agent";
   /** Caller's workspace role; null when the auth layer didn't resolve one. */
   role: Role | null;
-  /**
-   * Workspace a workspace-scoped API key is locked to; `null` for session
-   * callers and user-scoped keys (2026-08-23).
-   *
-   * ⚠ **CARRIED FOR EXACTLY ONE READER AND IT IS A FENCE, NOT A HINT.**
-   * `service-launch.ts › resolveIdentityForDirective` hands it to
-   * `agent-identities › canSeeIdentity`, whose SECOND arm is M-10: a
-   * workspace-scoped key may be shared between humans, so it inherits nobody's
-   * personal reach and sees only `visibility: 'workspace'` rows. Building that
-   * context with `null` would let such a key resolve the key-owner's PRIVATE
-   * identities by name. Nothing else in channels reads it — the channel fences are
-   * membership rows, not per-person visibility.
-   */
+  /** Container a locked credential is fenced to (`mcp_tokens.container_id`), `null` when unfenced.
+   *  A fence, never a request field (`service-account.ts` applies it as the B1 ceiling). */
   apiKeyWorkspaceId?: string | null;
-  /**
-   * WHOSE REACH the credential inherits (`mcp_tokens.subject_user_id`), carried
-   * for the SAME single reader and for the same reason (2026-08-27, F-333).
-   * ⚠ Without it `resolveIdentityForDirective` hands `canSeeIdentity` an
-   * anonymous credential — so a launch directive naming the operator's OWN
-   * private identity answers `AGENT_IDENTITY_NOT_FOUND` from the operator's own
-   * session. Never read it directly; the reader is
-   * `shared/auth/credential-audience.ts › isSharedCredential`.
-   */
+  /** Whose reach the credential inherits (`mcp_tokens.subject_user_id`); read only via `isSharedCredential`.
+   *  `service-launch-identity.ts › resolveIdentityForDirective` needs it for `canSeeIdentity` (F-333). */
   credentialSubjectUserId: string | null;
-  /** Which Dopl runtime the request speaks for: `desktop-session` (spawned
-   *  session), `desktop-ui` (operator typing in the app), undefined for
-   *  everything else. ⚠ Server-resolved from `X-Dopl-Runtime` and bounded by the
-   *  credential; stamped as the reserved `metadata.runtime` key. */
+  /** Server-resolved from `X-Dopl-Runtime`, bounded by the credential; stamped as `metadata.runtime`. */
   runtime?: DoplRuntime;
-  /** Which BUILD of the desktop app the request speaks for. Server-resolved from
-   *  `X-Dopl-App-Version`; stamped as reserved `metadata.appVersion` so the OTHER
-   *  machine can explain a behaviour gap instead of guessing. */
+  /** Server-resolved from `X-Dopl-App-Version`; stamped as `metadata.appVersion`. */
   appVersion?: string;
-  /** Which SESSION this request speaks for (the desktop's slot key), undefined
-   *  when unstamped. Server-resolved from `X-Dopl-Session-Id`; stamped as
-   *  reserved `metadata.session_id` so a reader can tell two concurrent sessions
-   *  of ONE handle apart. ⚠ A LABEL, never a lock. */
+  /** The desktop's slot key from `X-Dopl-Session-Id`, stamped as `metadata.session_id` — a label, never a lock. */
   sessionId?: string;
 }
 
@@ -75,11 +47,9 @@ export interface AuthLike {
   workspaceId: string;
   role?: Role | null;
   agentTokenId?: string | null;
-  /** ⚠ See {@link ChannelContext.apiKeyWorkspaceId} — the M-10 fence, and the
-   *  one field on this context whose ABSENCE widens rather than narrows. */
+  /** The container fence — its absence widens rather than narrows. */
   apiKeyWorkspaceId?: string | null;
-  /** ⚠ See {@link ChannelContext.credentialSubjectUserId} — REQUIRED, because
-   *  this axis has no safe default (F-336). */
+  /** Required: this axis has no safe default (F-336). */
   credentialSubjectUserId: string | null;
   runtime?: string | null;
   appVersion?: string | null;
@@ -92,29 +62,16 @@ export function buildChannelContext(auth: AuthLike): ChannelContext {
     userId: auth.userId,
     source: auth.agentTokenId ? "agent" : "user",
     role: auth.role ?? null,
-    // ⚠ `?? null`, so a caller that forgot the field gets the RESTRICTIVE value
-    // for every *other* fence — but note this one reads backwards: `null` means
-    // "not a workspace key", which is the WIDER answer at `canSeeIdentity`'s arm
-    // 2. That is why `WorkspaceAuthContext` always sets it explicitly and why
-    // this line exists at all rather than the field being left off the context.
+    // `null` means unfenced — the wider answer — so auth contexts must pass the lock when there is one.
     apiKeyWorkspaceId: auth.apiKeyWorkspaceId ?? null,
-    // ⚠ NO `?? null` HERE, AND THAT IS THE POINT OF THE AXIS BEING ITS OWN
-    // FIELD: the caller must SAY whose reach this credential carries. A default
-    // would have to pick between "the caller" (which widens) and "nobody"
-    // (which silently 404s an operator on their own rows), and neither is a
-    // thing a context builder may decide.
+    // No default: the caller must say whose reach this credential carries.
     credentialSubjectUserId: auth.credentialSubjectUserId,
-    // ⚠ Re-narrowed rather than trusted: a second check through the SAME
-    // predicate means no other construction path can widen what counts as a
-    // desktop runtime — no ctx off an agent token can claim `desktop-ui`.
+    // Re-narrowed rather than trusted: no ctx off an agent token can claim `desktop-ui`.
     runtime: narrowRuntime(auth.runtime, {
       agentCredential: !!auth.agentTokenId,
     }),
-    // Same shape: re-run the header's own predicate so a version reaching an
-    // operator's screen IS a version, whatever built this ctx.
+    // Re-narrowed too: both stamps below are rendered on another member's screen.
     appVersion: narrowAppVersion(auth.appVersion),
-    // And again for the session stamp — rendered into a message line on the
-    // OTHER member's screen, so it is id-shaped or it is nothing.
     sessionId: narrowSessionId(auth.sessionId),
   };
 }
@@ -123,11 +80,7 @@ export const UNIQUE_VIOLATION = "23505";
 
 const NUL = String.fromCharCode(0);
 
-/**
- * ⚠ Strip NUL (U+0000) from every string before it reaches Postgres — text/jsonb
- * reject the code point, so a stray one 500s the whole write. Stripped rather
- * than rejected: NUL carries no meaning in a channel message.
- */
+/** Strip NUL (U+0000) before Postgres: text/jsonb reject it, so one stray NUL 500s the whole write. */
 export function stripNulDeep<T>(value: T): T {
   if (typeof value === "string") {
     return value.includes(NUL)
@@ -145,13 +98,11 @@ export function stripNulDeep<T>(value: T): T {
   return value;
 }
 
-// ⚠ MODULE-PRIVATE. Keeping the RAW resolve — the one that SKIPS the visibility
-// gate — unexported is what stops it being reachable outside this file.
 function isWorkspaceAdmin(ctx: ChannelContext): boolean {
   return ctx.role !== null && meetsMinRole(ctx.role, "admin");
 }
 
-/** Resolve a `channel` ref (UUID id or slug) to its row, or throw not-found. */
+/** Ref (id or slug) → row, or not-found. Skips the visibility gate, so it stays module-private. */
 async function resolveChannelRef(
   ctx: ChannelContext,
   ref: string
@@ -164,64 +115,18 @@ async function resolveChannelRef(
 }
 
 /**
- * 🔒 MAY THIS CALLER REACH A CHANNEL ON THE `visibility='public'` ARM ALONE —
- * that is, WITHOUT a `channel_members` row? (2026-08-26.)
- *
- * ⚠ A GUEST MAY NOT, AND THAT IS THE ONE ASYMMETRY IN THE READ MODEL. "Public"
- * means *any workspace member can see and join*, which is a statement about a
- * TENANCY. A guest has no tenancy: they were admitted to ONE channel by a
- * single-use link, and §4A's whole claim is that their reach is that channel.
- *
- * WHAT THIS CLOSES, measured: nothing stops a `visibility='public'` channel
- * being created inside a `kind='link'` container — `createChannel` never reads
- * `workspace.kind`, `POST /api/channels` is `member`+ (the container's owner
- * clears it), the MCP `dopl_channel(op="open")` schema offers `visibility` and
- * no DB constraint exists. FIFTEEN of the eighteen guest-floored CHANNEL-PATH
- * routes compose `loadVisibleChannel` — re-measured 2026-08-26 after the knowledge
- * lane's four pairs; the three that do not are
- * `channels/route.ts` GET, `channels/await/route.ts` GET and
- * `channels/presence/route.ts` POST, none of which takes a channel ref. ⚠ This
- * comment has now been wrong three times ("twelve", "eleven of fourteen", and
- * elsewhere "seven"), so RE-DERIVE rather than quote: walk each pair in
- * `guest-route-floor.test.ts › GUEST_ALLOWED` to the service function its route
- * calls, and check that function against
- * `grep -rn loadVisibleChannel src/features/channels/server src/shared/api`.
- * ⚠ THE FOUR NEWEST CALLERS ARE NOT IN THIS DIRECTORY. The channel KNOWLEDGE lane
- * (`src/app/api/channels/[channelId]/knowledge/**`, INVARIANTS §4A) reaches this
- * function through `shared/api/channel-knowledge-lane.ts` — the first caller
- * outside `features/channels/server`, and why this gate is on the service barrel.
- * It REQUIRES `membership !== null` on top, so the public arm below never admits
- * it: its payload is a whole knowledge base rather than the channel's own content.
- * Before this fence an operator opening a second, public channel in their
- * container silently handed the guest its header, its whole transcript, its
- * thread list, its roster and a long-poll on it. A lowered floor plus an
- * inherited public arm is exactly how a narrow grant becomes a cross-channel
- * read.
- *
- * ⚠ IT MIRRORS THE DATABASE, WHICH IS WHY IT IS SPELLED THIS WAY.
- * `20260826120000_guest_channel_realtime_rls.sql`'s guest arm requires
- * `is_channel_member(...)` and deliberately drops the `visibility='public'`
- * disjunct. Service and RLS now state the SAME rule; a future edit to one that
- * forgets the other is a disagreement a reader can find.
- *
- * ⚠ NOTHING CHANGES FOR ANY OTHER ROLE. `meetsMinRole(role,'viewer')` is true
- * for viewer/member/admin/owner, so the public arm is exactly what it was.
+ * May this caller reach a `visibility='public'` channel without a `channel_members` row? Not a guest:
+ * its reach is the one channel it was admitted to (INVARIANTS §4A). Mirrors the guest arm of
+ * `20260826120000_guest_channel_realtime_rls.sql`, which drops the public disjunct.
  */
 export function mayReadPublicChannels(ctx: ChannelContext): boolean {
-  // ⚠ `null` FAILS CLOSED, the same shape `isWorkspaceAdmin` uses. A null role
-  // means the auth layer resolved none; every guest-reachable route is
-  // `withWorkspaceAuth`-wrapped and therefore always carries one, and every
-  // internal builder passes `role: "owner"` explicitly — so null is the
-  // unexpected case, and the unexpected case must not be the wider one.
+  // A `null` role fails closed.
   return ctx.role !== null && meetsMinRole(ctx.role, "viewer");
 }
 
 /**
- * Resolve a channel the caller may READ. Public = any workspace member at
- * `viewer` or above (see {@link mayReadPublicChannels} — a guest is fenced to
- * channels it actually belongs to);
- * ⚠ a private channel reads as NOT-FOUND to a non-member, so its existence never
- * leaks. Returns the row plus membership (null for a public-channel non-member).
+ * Resolve a channel the caller may read (public arm: {@link mayReadPublicChannels}). A private channel
+ * reads as not-found to a non-member; membership is null for a public-channel non-member.
  */
 export async function loadVisibleChannel(
   ctx: ChannelContext,
@@ -231,48 +136,16 @@ export async function loadVisibleChannel(
   const membership = await repo.findMembership(channel.id, ctx.userId);
   const viaPublic = channel.visibility === "public" && mayReadPublicChannels(ctx);
   if (!viaPublic && membership === null) {
-    // ⚠ NOT-FOUND, never FORBIDDEN — same answer a private channel gives a
-    // non-member, so a guest cannot use the refusal to enumerate the container.
+    // Not-found, never forbidden, so the refusal cannot enumerate the container.
     throw new ChannelNotFoundError(ref);
   }
   return { channel, membership };
 }
 
 /**
- * 🔒 **THE SAME GATE, PLUS "AND YOU ARE IN THE ROOM"** — resolve a channel the
- * caller may read, then refuse a caller with no `channel_members` row.
- *
- * ⚠ **ONE COPY, PROMOTED 2026-09-06 FROM NINE.** `loadVisibleChannel` followed
- * by `if (!membership) throw new ChannelForbiddenError(…)` was written out at
- * nine write sites across seven files, identical but for the action noun. Nine
- * copies of a fence are nine places for one of them to be edited alone, and the
- * public-channel arm is exactly the subtlety that makes the omission silent:
- * `membership: null` is NOT a refusal from `loadVisibleChannel`, so a site that
- * forgets this line admits a public channel's non-member to a WRITE.
- *
- * ⚠ **`action` IS THE NOUN THE REFUSAL SAYS**, and it is a parameter rather
- * than one sentence for all nine because the message reaches a person: "post to
- * this channel" and "delete a thread in this channel" are what makes a 403
- * legible. It is server-written text at every call site — never caller input.
- *
- * ⚠ **IT RETURNS THE MEMBERSHIP, NON-NULL**, because two callers need the row
- * itself (`service-tasks-delete.ts`'s deleter check) and a helper that threw the
- * proof away would send them back to the raw gate — which is how the ninth copy
- * appeared.
- *
- * ⚠ **NOT THE MANAGEMENT GATE.** {@link canManageChannel} answers a different
- * question (owner-or-admin) and the two sites that ask it — `updateChannel`,
- * `deleteChannel` — deliberately do not use this.
- *
- * ⚠ **PROMOTING A SITE ONTO THIS HELPER CAN REACH `supabaseAdmin` FROM A TEST,
- * SILENTLY.** Several suites mock this module with `importOriginal` and a spread
- * (`{ ...actual, loadVisibleChannel: vi.fn() }`): they get the REAL
- * `requireMemberChannel`, which resolves `loadVisibleChannel` through the
- * module's own binding and therefore calls the REAL one — their double is never
- * consulted. A site moved onto this helper thus stops honouring the very stub
- * its test set up, and hits the live client instead of failing loudly. Check the
- * suites covering any site you promote, and double THIS function where they
- * doubled `loadVisibleChannel`.
+ * {@link loadVisibleChannel} plus a membership row — the write gate, since a null membership is not a
+ * refusal there. `action` is the server-written noun the 403 shows.
+ * A suite that spread-mocks `loadVisibleChannel` still hits the real one through here; double this too.
  */
 export async function requireMemberChannel(
   ctx: ChannelContext,
@@ -293,21 +166,8 @@ export function canManageChannel(
 }
 
 /**
- * **THE OPERATOR-GIVEN AGENT NAMES A PAGE OF MESSAGES NEEDS** — agent id → name,
- * one read for the whole page (2026-09-04).
- *
- * ⚠ **THE ANALOGUE OF {@link profilesById}, AND IT IS DELIBERATELY SHAPED LIKE
- * IT.** Every read path that hydrates author DISPLAY already resolves profiles
- * this way; a name for the agent BEHIND an agent-authored row is the same
- * question about the other half of the identity, and giving it a second shape is
- * how one of the three read paths comes to answer it and the others not to.
- *
- * ⚠ **WORKSPACE IDS ARE THE CALLER'S**, because a page can span channels (the
- * workspace hold) or workspaces (the account-wide read), and a read fenced on
- * agent id alone would answer with rows from tenancies nobody proved.
- *
- * ⚠ **NO IDS ⇒ NO READ.** A page of purely human messages pays nothing, which is
- * most pages.
+ * Agent id → operator-given name for a page of messages, in one read. Fenced on the caller's
+ * workspace ids, since agent id alone would answer from tenancies nobody proved.
  */
 export async function agentNamesFor(
   workspaceIds: readonly string[],
@@ -342,25 +202,8 @@ export async function profilesById(
 }
 
 /**
- * **ROWS → MESSAGE DTOs, WITH BOTH HALVES OF THE AUTHOR RESOLVED** — the profile
- * read answers who an agent acts FOR, `agentNamesFor` answers WHICH of that
- * operator's agents wrote the row. Two page-wide joins, in parallel, neither
- * per-row; a page of purely human messages pays for the second not at all.
- *
- * ⚠ **IT LIVES HERE, ONE LEVEL DOWN, AND THAT PLACEMENT IS THE CYCLE FIX**
- * (2026-09-06, A4 second slice). It was `service-reads.ts`'s, exported for
- * `service-artifacts.ts`; then the fold was wired INTO the read and
- * `service-reads` had to import the artifact service back — a cycle between the
- * read service and the artifact service. `service-artifacts.ts` documented the
- * remedy at both ends before it could happen: **move the hydrator DOWN into
- * `service-shared.ts`, do NOT reverse the arrow.** Both services now depend on
- * this file and neither on the other, which is the shape `service-shared`
- * already had for `loadVisibleChannel`.
- *
- * ⚠ **STILL EXACTLY ONE HYDRATOR.** A second one would be a second answer to
- * "who wrote this row", which is the drift `agentNamesFor` was centralized to
- * stop — so the members of an artifact and the transcript they came out of
- * produce byte-identical DTOs.
+ * Rows → message DTOs with both halves of the author resolved (profile + agent name). The only
+ * hydrator; it lives here so the read and artifact services both depend down, never on each other.
  */
 export async function hydrateMessages(
   rows: ChannelMessageRow[],
