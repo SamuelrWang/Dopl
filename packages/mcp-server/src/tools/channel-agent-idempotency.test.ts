@@ -1,35 +1,5 @@
-/**
- * **`client_msg_id` ON `manage action="launch"` AND `manage action="direct"`** —
- * the wire half of
- * G10 (2026-09-02, MCP/architecture v2 slice A10).
- *
- * ⚠ **WHAT WAS PROMISED AND BY WHAT.** The doctrine tells a caller that a
- * timed-out request is still pending and must not be re-issued, because a second
- * launch starts a SECOND agent on the same work and a second direction says the
- * same thing to a live agent twice. Until this wave that was the entire
- * mechanism. These cases assert the three things that replace it on this side of
- * the wire:
- *
- *  1. **THE KEY REACHES THE SERVER** on both ops, out of the SHARED
- *     `client_msg_id` param the tool already publishes for `send` and
- *     `send thread="new"` — not a per-op spelling, which would be a second
- *     idempotency vocabulary on one tool.
- *  2. **A CONVERGED RETRY SAYS SO**, as `retry=existing`, on every terminal
- *     shape. A converged retry and a fresh request are otherwise the same line,
- *     and a caller that cannot tell them apart is back to guessing exactly what
- *     the key removed.
- *  3. **A CALLER THAT SENDS NO KEY SEES NO NEW FIELD.** The fact is added by
- *     spread, so nothing grows a `retry=-` it never had — which is also what
- *     keeps `tool-budget.test.ts`'s measured results honest.
- *
- * ⚠ AND `existing` WINS ANY `retry` VERDICT ALREADY PRINTED. On a pending row
- * the line used to end `retry=no`; "this call filed nothing" is the stronger and
- * more actionable statement, because it says the id printed beside it is the
- * FIRST request's rather than a second agent's.
- *
- * ⚠ `channel-` filename prefix, like every other file in this directory that the
- * parity split-scan and the removed-vocabulary source scan walk.
- */
+// `client_msg_id` on `manage action="launch"` / `"direct"`: the shared param reaches the server, a
+// converged retry says `retry=existing` (winning any other verdict), and a keyless call gains no field.
 
 import { describe, it, expect, vi } from "vitest";
 import type { DoplClient, LaunchDirective } from "@dopl/client";
@@ -93,9 +63,7 @@ describe("the key reaches the server, out of the tool's SHARED client_msg_id par
   });
 
   it("omitting it sends `undefined`, never an invented key", async () => {
-    // ⚠ A KEY THIS PROCESS MINTED WOULD BE THE WORST OF BOTH: it dedupes nothing
-    // across calls (a fresh one per invocation) while making every row carry a
-    // uniqueness constraint nobody asked for.
+    // A key minted here would dedupe nothing across calls.
     const create = vi.fn(async () => ({ offline: false, directive: directive() }));
     await run(agentStub({ createLaunchDirective: create }), LAUNCH);
     expect(create.mock.calls[0][0]).toMatchObject({ clientMsgId: undefined });
@@ -198,10 +166,7 @@ describe("a caller that sent no key sees a byte-identical result", () => {
   });
 
   it("an OLDER SERVER that sends no `existing` key reads as a fresh request", async () => {
-    // ⚠ INVARIANTS §13 — this client is deployed against both. Absent is `false`,
-    // which is right there: a server without the column stored no key, so every
-    // call really was fresh, and claiming otherwise would be the one lie that
-    // makes a caller stop retrying something that never landed.
+    // A server without the column stored no key, so absent `existing` reads as fresh (INVARIANTS §13).
     const out = await run(
       agentStub({
         createLaunchDirective: vi.fn(async () => ({
@@ -215,22 +180,7 @@ describe("a caller that sent no key sees a byte-identical result", () => {
   });
 });
 
-/**
- * **`op="send"` — A CONVERGED RETRY OPENS BY SAYING NOTHING WAS WRITTEN**
- * (2026-09-04, follow-up 4 to the self-wake investigation).
- *
- * ⚠ **THE SEND LANE HAD NO SUCH NOTICE AT ALL.** `service-writes.ts`'s
- * idempotency short-circuit returns the STORED row and writes nothing, with an
- * ack byte-identical to a first post — which is why the agent's own transcript
- * in the Mobile Command Center incident showed the 3:48 PM message posted twice
- * over ONE row (seq 963). The launch and direct lanes above have carried
- * `retry=existing` since A10; this is the same fact on the op every agent calls
- * most.
- *
- * ⚠ **IT IS THE HEAD, NOT A FIELD, AND THAT IS THE ONE DIFFERENCE FROM THOSE
- * LANES.** The word `posted` is itself the wrong claim on a replay, and a caller
- * that reads no further than the first word must not take one for the other.
- */
+// On `send` a replay changes the HEAD word: `posted` is itself the wrong claim when nothing was written.
 describe('op="send" — a replayed post says so in its first words', () => {
   const posted = (over: Record<string, unknown> = {}) =>
     ({
@@ -246,9 +196,7 @@ describe('op="send" — a replayed post says so in its first words', () => {
       })),
     }) as unknown as DoplClient;
 
-  // ⚠ `to` IS ON THE FIXTURE SINCE 2026-09-18: a send that addresses nobody and
-  // marks no record is refused before the wire, so a bare one would drive the
-  // REFUSAL rather than the replay lane these cases are about.
+  // `to` is required: a send that addresses nobody is refused before the wire.
   const send = { op: "send", channel: "general", body: "the answer", to: "u-peer" };
 
   it("names the seq the FIRST call wrote, and that it was not re-sent", async () => {
@@ -264,8 +212,7 @@ describe('op="send" — a replayed post says so in its first words', () => {
   });
 
   it("an OLDER SERVER that sends no `replayed` key reads as a fresh post", async () => {
-    // ⚠ ABSENT IS "not reported", never "it was a replay" — the same rule the
-    // launch lane's own older-server case pins.
+    // Absent is "not reported", never "it was a replay".
     const text = await run(posted({ replayed: undefined }), send);
     expect(text).not.toContain("idempotent replay");
   });

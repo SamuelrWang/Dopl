@@ -1,40 +1,18 @@
-/**
- * `op="manage" action="launch"` — **THE IDENTITY REF, AND THE FOUR THINGS A MISS CAN MEAN.**
- *
- * ⚠ SPLIT OUT OF `channel-ops-launch.test.ts` ON 2026-09-01, AT THE 500-LINE CAP
- * AND ON A REAL SEAM. That file drives the op's FOUR TERMINAL SHAPES (offline,
- * launched, refused, pending); this one drives the ONE argument whose failure
- * modes are a subject of their own — and they move on different clocks, this one
- * when agent-identity tenancy does.
- *
- * THE TWO PROPERTIES EVERY CASE HERE SERVES:
- *
- *   1. **AN AMBIGUOUS NAME REFUSES AND LISTS, AND NEVER PICKS.**
- *      `agent_identities` has no name uniqueness on purpose, so two visible
- *      "Researcher"s is a legitimate state and every tie-break silently starts
- *      an identity the caller did not choose.
- *   2. **A MISS NAMES THE RULE, AND NAMES A PLACE ONLY WHEN THE SERVER DID.**
- *      "No such identity" and "not shared with you" are ONE answer here, or the
- *      refusal is an id probe (T35). `details.elsewhere` is the single exception,
- *      and it is not a crack in that: the server produces it only over rows the
- *      caller could already list for themselves.
- */
+// `manage action="launch"` create-time identity refusals: an ambiguous name is refused and listed,
+// never picked; a miss names the rule, and a place only when the server supplied `details.elsewhere`.
 
 import { describe, it, expect, vi } from "vitest";
 import { opLaunchAgent } from "./channel-ops-launch";
 import { launchClient as client } from "./launch-fixtures";
 
-/** ⚠ Duck-typed exactly as `channel-ops-launch.ts` reads it across the
- *  @dopl/client boundary — `status`, `code`, `details` and nothing else. */
+/** Duck-typed as `channel-ops-launch.ts` reads it across the @dopl/client boundary. */
 const apiError = (status: number, code: string, details?: unknown) =>
   Object.assign(new Error(code), { status, code, details });
 
 describe("the identity ref", () => {
   it("an AMBIGUOUS name is refused and EVERY match is listed with its id and visibility", async () => {
-    // ⚠ REFUSES AND LISTS, NEVER PICKS. Names are deliberately not unique — a
-    // unique index across a visibility boundary would leak the existence of a
-    // private row through a conflict error — so two visible "Researcher"s is a
-    // legitimate state and any tie-break silently starts the wrong identity.
+    // Names are not unique (an index across visibility would leak private rows), so any tie-break
+    // would silently start the wrong identity.
     const res = await opLaunchAgent(
       client({
         createLaunchDirective: vi.fn(async () => {
@@ -56,15 +34,12 @@ describe("the identity ref", () => {
     expect(out).toContain("`t-2`");
     expect(out).toContain("(private)");
     expect(out).toContain("(workspace)");
-    // ⚠ It must not read as a CHANNEL problem, and it must not tell the agent to
-    // wait for a machine: nothing was asked of one.
     expect(out).not.toContain("Channel not found");
     expect(out).not.toContain("still PENDING");
   });
 
   it("an UNRESOLVABLE identity says so, and never says whether it EXISTS", async () => {
-    // ⚠ 404-never-403 all the way down: "no such identity" and "not shared with
-    // you" are ONE answer, or the refusal becomes an id-probe.
+    // 404-never-403: "no such identity" and "not shared with you" are one answer, or it is an id probe.
     const res = await opLaunchAgent(
       client({
         createLaunchDirective: vi.fn(async () => {
@@ -79,16 +54,9 @@ describe("the identity ref", () => {
     expect(out).toContain("`Ghost`");
     expect(out).toContain("nothing was filed");
     expect(out).not.toContain("Channel not found");
-    // ⚠ THE TENANCY RULE IS STATED, AND IT IS NOT THE ORACLE (T35). The row is
-    // filtered by `workspace_id` BEFORE visibility runs, so "you own it" and
-    // "it resolves here" are different questions — an agent that does not know
-    // that re-checks the spelling of a name that was never wrong. Naming the
-    // RULE reveals nothing about which rows exist.
+    // The row is filtered by `workspace_id` before visibility; naming that rule reveals no row.
     expect(out).toContain("CHECK THE TENANCY BEFORE THE SPELLING");
     expect(out).toContain("a home channel IS its own container");
-    // ⚠ AND WITH NO `details.elsewhere` IT NAMES NO PLACE. This is the arm that
-    // covers "no such identity" AND "somebody else's, not yours to see", and
-    // those must stay ONE answer or the refusal becomes an id probe.
     expect(out).toContain("ONE answer here on purpose");
     expect(out).not.toContain("not in this channel's own container");
   });
@@ -104,11 +72,7 @@ describe("the identity ref", () => {
   });
 
   it("an identity that lives in ANOTHER tenancy of the caller's is NAMED, with the place", async () => {
-    // ⚠ THE MISS THAT IS NOT A MYSTERY. `details.elsewhere` is produced ONLY for
-    // a row this caller could already list for themselves — their own, or
-    // `workspace`-visible, in a workspace they belong to — so naming the place
-    // discloses nothing a list call would not, and the sentence that used to be
-    // withheld is the one the agent needed: the NAME was never wrong.
+    // `details.elsewhere` only covers rows the caller could already list, so naming the place discloses nothing.
     const out = (await opLaunchAgent(
       client({
         createLaunchDirective: vi.fn(async () => {
@@ -123,20 +87,13 @@ describe("the identity ref", () => {
     expect(out).toContain("`Code Auditor`");
     expect(out).toContain("lives in `your personal shelf`, not in this channel's own container");
     expect(out).toContain("nothing was filed");
-    // The fix, and it is a MOVE rather than a re-spelling.
     expect(out).toContain("Owning it is not enough");
     expect(out).toContain("create it there");
-    // ⚠ IT MUST NOT ALSO RECITE THE PROBE-PROOF DISJUNCTION. There is nothing
-    // ambiguous left to hedge: the server said where it is.
     expect(out).not.toContain("ONE answer here on purpose");
   });
 
   it("ANOTHER MEMBER'S private identity elsewhere is never named — the arm simply does not fire", async () => {
-    // 🔒 THE PROPERTY, PINNED AT THIS END TOO. The classifier answers over the
-    // caller's OWN rows and `workspace`-visible ones only
-    // (`agent-identities/server/service-resolve-ref.ts › classifyMissingIdentityRef`),
-    // so a stranger's private identity produces NO `details.elsewhere` in any
-    // workspace — and this surface has no other way to invent one.
+    // `service-resolve-ref.ts › classifyMissingIdentityRef` never classifies a stranger's private row.
     const out = (await opLaunchAgent(
       client({
         createLaunchDirective: vi.fn(async () => {
@@ -151,9 +108,7 @@ describe("the identity ref", () => {
   });
 
   it("a malformed `elsewhere` is ignored rather than rendered", async () => {
-    // ⚠ FAILS TO THE PROBE-PROOF ARM, never to a half-sentence: the payload is
-    // duck-typed across the @dopl/client boundary, so anything that is not two
-    // non-empty strings is nothing at all.
+    // Anything but two non-empty strings falls back to the probe-proof arm.
     for (const bad of [{}, { name: "x" }, { name: "", label: "y" }, "elsewhere", 7]) {
       const out = (await opLaunchAgent(
         client({

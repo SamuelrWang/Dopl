@@ -1,59 +1,10 @@
-/**
- * `op="manage" action="end"` / `action="rename"` — the terminal shapes and what
- * each one teaches (2026-09-01, Samuel's external agent-management ruling).
- *
- * ⚠ **EVERY CASE HERE IS ABOUT WHAT THE RESULT TEACHES, not about plumbing.** A
- * tool RESULT is read by the same model at the moment it chooses its next action
- * and outvotes a description read once at connection (INVARIANTS §10). The
- * readings these two ops must prevent, and each has a case:
- *   1. `no-session` on an END read as a FAILURE → the agent re-issues, or worse
- *      re-launches, when the truthful reading is that the work already finished.
- *   2. A REFUSAL read as "the launch toggle is off" → the agent asks its operator
- *      to grant a permission that has nothing to do with what failed. This is the
- *      one that would have been introduced by copying the launch op's copy, and it
- *      is the sharpest case in the file.
- *   3. A RENAME read as ADDRESSABLE → the agent starts writing `@research` and
- *      reaches nobody, because the name lives on one desktop and reaches no server.
- *   4. A TIMEOUT read as a failure → a second request for the same change, with no
- *      way to tell which one acted.
- *
- * ⚠ **THE SENTENCES BECAME FIELDS (T10, 2026-09-02), AND THE READINGS DID NOT
- * MOVE.** Both ops closed on paragraphs — four on a successful end, two on every
- * rename, one per refusal word out of a nine-entry `REFUSAL_SENTENCES` map. All
- * of it was STANDING doctrine, re-transmitted per call, and it is now stated once
- * in `channel-doctrine.ts`. So each case below is pinned TWICE: the VERDICT is a
- * field on this call's line, and the paragraph it replaced is still somewhere a
- * reader can reach in one call. A guard that only checked the absence would pass
- * just as happily the day the text was deleted outright.
- *
- * ⚠ **THE SECOND HALF OF THAT PAIR IS `channel-ops-agent-doctrine.test.ts`**
- * (split off at the 500-line cap, INVARIANTS §1 — this file stood at 585). THE
- * SEAM IS THE INSTRUMENT: what a RESULT teaches is here, what the DOCUMENT still
- * says is there, and the two fail for different reasons — this file when
- * `channel-facts.ts`'s fields move, that one when `channel-doctrine.ts` is
- * reworded. It also holds the group's one `RETIRED_BY_RULING` list, the prose
- * wave B cut outright (`docs/specs/mcp-v2-wave-b.md` §4, contracts only), pinned
- * there as an ABSENCE. ⚠ A new case about the DOCUMENT goes there; a new case
- * about one of these two verbs' own results goes here.
- *
- * ⚠ `foreignAgent()` STAYS PROSE and its case is unchanged. A refusal to a call
- * that was never filed is not narration under a write that happened, and it has
- * to CLOSE A DOOR ("do not look for another route"), which is an instruction
- * rather than a fact about a row. ⚠ That it may say so HERE while the doctrine
- * may not is the ruling working as written: this text answers ONE call that was
- * refused before any row existed, and a document read under a token budget
- * carries contracts.
- */
+// `manage action="end"` / `"rename"`: what each terminal result teaches. Each case pins the field on
+// this call's line and the rule in `CHANNEL_DOCTRINE`; the doctrine-only half is
+// `channel-ops-agent-doctrine.test.ts`.
 
 import { describe, it, expect, vi } from "vitest";
 import { opEndAgent, opRenameAgent } from "./channel-ops-agent";
-// ⚠ THE OTHER HALF OF EVERY PIN BELOW. The paragraph a result stopped carrying
-// has to still EXIST, or the tersening deleted doctrine instead of moving it.
 import { CHANNEL_DOCTRINE } from "./channel-doctrine";
-// ⚠ THE CLEAR-TO-DEFAULT WORDING LANDED ON THE ARGUMENT THAT TAKES IT rather
-// than in the doctrine — `name`'s own `.describe()` is what a client reads at the
-// moment it decides what to pass, which is closer to the decision than the op
-// paragraph was.
 import { CHANNEL_INPUT_SHAPE } from "./channel-schema";
 import {
   AGENT,
@@ -72,40 +23,23 @@ describe('manage action="end" — the success line', () => {
   const done = settled({ status: "done" });
 
   it("says what an end DOES NOT touch, because 'end' over-reads as 'remove'", async () => {
-    // ⚠ **THE FACT REPLACED THREE SENTENCES AND KEPT THE READING.** `was ENDED`,
-    // `thread it was working (if any) is untouched` and `stays in the channel`
-    // were true of EVERY end, so they moved; `ended … filed=yes` says this call
-    // reached a machine and the machine did it — the half only this call knows.
-    // The reading they prevented is still guarded, in the sibling suite
-    // (`channel-ops-agent-doctrine.test.ts`).
+    // What an end leaves untouched is doctrine (`channel-ops-agent-doctrine.test.ts`); the line says
+    // only that this call reached a machine and it acted.
     const out = await endText(done);
     expect(out).toContain("ended agent=@agent-");
     expect(out).toContain("filed=yes");
     expect(out).not.toContain("not ended");
   });
 
-  /**
-   * ⚠ INSTANCE IDS ARE NEVER REUSED, so a handle after an end addresses nothing.
-   * Without this an orchestrator keeps posting `@agent-<id>` into silence — the
-   * exact failure `channel-session-handle.ts` documents one namespace over.
-   */
+  // Instance ids are never reused, so after an end the handle addresses nothing.
   it("says the handle is SPENT — the one paragraph that had to survive as a FACT", async () => {
-    // ⚠ A FIELD RATHER THAN A POINTER BECAUSE IT IS ABOUT THIS ID. "ids are
-    // never reused" is a rule; "the handle in your hand is now spent" is a fact
-    // about this call's value, and dropping it deletes the only signal that
-    // catches an orchestrator talking to nobody. The route on — a new
-    // `manage action="launch"` — is the rule half.
     const out = await endText(done);
     expect(out).toContain("handle=spent");
     expect(CHANNEL_DOCTRINE).toContain('op="manage" action="launch"');
   });
 
   it("does not claim more than a machine can prove", async () => {
-    // ⚠ **`THE MACHINE SAID SO` IS NOT IN THE DOCTRINE VERBATIM** — the nearest
-    // standing statement is that all of these verbs ASK, which is the same
-    // property said the other way round, and it is pinned rather than the
-    // missing headline. The result's own half is that it reports what came back
-    // (`filed=yes` + a status word), never an outcome it did not observe.
+    // The result reports what came back and never an outcome it did not observe.
     expect(CHANNEL_DOCTRINE).toContain(
       "Every action files a request on your own operator's machine and holds for its answer",
     );
@@ -116,89 +50,46 @@ describe('manage action="end" — the success line', () => {
 describe('manage action="end" — no-session is NOT a fault', () => {
   const gone = settled({ status: "refused", refusalReason: "no-session" });
 
-  /**
-   * ⚠ **THE COMMONEST OUTCOME, AND THE ONE MOST EASILY MISREAD.** An agent that
-   * finished is the ordinary cause, and for an END that is the outcome the caller
-   * wanted, reached without them. A result that read as a failure would send an
-   * orchestrator to re-launch the very work it was trying to stop.
-   */
+  // The commonest outcome of an end (the agent already finished); read as a failure it sends an
+  // orchestrator to re-launch the work it meant to stop.
   it("names the word, and the doctrine calls it the outcome you wanted", async () => {
     const out = await endText(gone);
-    // ⚠ THE WIRE WORD IS STILL THE RESULT'S OWN — the doctrine is keyed on it,
-    // so a result that dropped it would leave a reader with no way in.
+    // The wire word stays on the result: the doctrine is keyed on it.
     expect(out).toContain("reason=no-session");
-    // ⚠ RE-POINTED to the word's own entry in the refusal table — the CONTRACT,
-    // which is all a caller needs to read `retry=no` correctly. ⚠ THE GLOSS
-    // ("on an END this is usually GOOD NEWS") WAS RETIRED BY RULING: it is a
-    // consequence of the word plus the verb, not a contract, and it is pinned
-    // ABSENT in `RETIRED_BY_RULING` above so a re-expansion is a decision.
+    // The "usually good news" gloss is pinned absent in `channel-ops-agent-doctrine.test.ts › RETIRED_BY_RULING`.
     expect(CHANNEL_DOCTRINE).toContain("`no-session` no such agent");
   });
 
   it('sends the caller to op="status" rather than to a retry', async () => {
-    // ⚠ `retry=no` IS THE WHOLE OF "DO NOT ASK AGAIN", and it is the one decision
-    // the nine paragraphs were all leading to. The surface that answers instead
-    // is named in the doctrine, not re-stated on every refusal.
+    // `retry=no` is the whole of "do not ask again"; the surface that answers instead is in the doctrine.
     expect(await endText(gone)).toContain("retry=no");
-    // ⚠ RE-POINTED: `read_sessions` and `read_directions` collapsed into ONE op,
-    // which is why the doctrine can name both halves of the answer in one clause.
     expect(CHANNEL_DOCTRINE).toContain(
       'op="status" reads your own machine\'s live sessions and the directions waiting for them',
     );
   });
 
   it("and never reads as an error", async () => {
-    // ⚠ THE READING, PINNED DIRECTLY: an ordinary answer must not arrive dressed
-    // as a fault, in any wording, or the orchestrator re-launches.
     const out = await endText(gone);
     expect(out).not.toMatch(/\berror\b|\bfailed\b|\bfailure\b/i);
   });
 });
 
 describe("the refusal advice must NOT be the launch op's", () => {
-  /**
-   * ⚠ **THE SHARPEST CASE IN THIS FILE.** `no-bridge` on the LAUNCH lane means the
-   * operator's launch-over-MCP toggle is off, and its paragraph tells the caller
-   * to ask for it to be turned on. **THAT TOGGLE DOES NOT GATE THESE TWO VERBS** —
-   * `main/launch-directives.js › handle` tests the kind, and
-   * `directive-agent-ops.js`'s header carries the ruling. Copying the launch
-   * sentence here would send an orchestrator to request a permission unrelated to
-   * what failed, and to conclude its operator had denied it something they never
-   * denied.
-   *
-   * ⚠ **ONE TEXT NOW SERVES ALL THREE MAILBOXES, so the carve-out moved INTO it.**
-   * The doctrine's refusal section closes on the launch toggle governing starting
-   * agents only — which is what stops the shared paragraph from teaching the
-   * launch answer to an end.
-   */
+  // The launch toggle does not gate end/rename (`main/launch-directives.js › handle` tests the kind),
+  // so this lane must never send a caller to ask for it.
   it("no-bridge on an end never sends the caller to a permission toggle", async () => {
     const out = await endText(settled({ status: "refused", refusalReason: "no-bridge" }));
     expect(out).toContain("reason=no-bridge");
     expect(out).toContain("retry=no");
-    // ⚠ The launch lane's own wording may not ride along on this lane's result.
     expect(out).not.toContain("TURNED OFF on that machine");
     expect(out).not.toMatch(/turn(ed)? (it )?on/i);
-    // ⚠ …and the carve-out is in the text the reader is sent to. ⚠ **ONE CLAUSE
-    // CARRIES BOTH HALVES NOW** — whose toggle it is, which two actions it gates,
-    // and which two it explicitly does not — so the asymmetry cannot be
-    // half-deleted by a reword of either side, which is exactly how it was lost
-    // once already.
+    // One clause carries both halves, so a reword of either side cannot delete the asymmetry.
     expect(CHANNEL_DOCTRINE).toContain("`no-bridge` the operator's LAUNCH toggle is off");
     expect(CHANNEL_DOCTRINE).toContain('it gates "launch" and "posture", never "end" or "rename"');
   });
 
-  /**
-   * ⚠ `cap` on a launch means "wait for a running agent to finish". Telling a
-   * caller that BEFORE ENDING ONE is advice that contradicts the request.
-   *
-   * ⚠ **THE END-SPECIFIC SENTENCE IS GONE AND `retry=no` IS WHAT CARRIES IT.**
-   * The old copy said `cap` is "not a state an end or a rename can be blocked
-   * by"; the shared doctrine paragraph is written for the launch lane and still
-   * says "either wait for one to finish or ask your operator to end one". The
-   * FIELD is what keeps the two lanes apart on this call — `busy` is the only
-   * word in the whole table that answers `once`, and `cap` answers `no`, so the
-   * result never tells an end-caller to wait for a slot.
-   */
+  // `cap` on a launch means "wait for a slot"; on an end that contradicts the request, and `retry=no`
+  // is what keeps the lanes apart.
   it("cap on an end does not tell the caller to wait for a slot", async () => {
     const out = await endText(settled({ status: "refused", refusalReason: "cap" }));
     expect(out).toContain("reason=cap");
@@ -208,9 +99,7 @@ describe("the refusal advice must NOT be the launch op's", () => {
   });
 
   it("busy is the ONE word that earns a second ask, and it says so as a field", async () => {
-    // ⚠ THE TABLE'S ONLY `once`, PINNED AGAINST ITS NEIGHBOURS. A retry verdict
-    // that drifted to `once` across the board would turn every refusal into a
-    // loop, and the map is the only thing standing between the two readings.
+    // The table's only `once`: a verdict drifting to `once` everywhere turns every refusal into a loop.
     const busy = await endText(settled({ status: "refused", refusalReason: "busy" }));
     expect(busy).toContain("reason=busy");
     expect(busy).toContain("retry=once");
@@ -222,9 +111,7 @@ describe("the refusal advice must NOT be the launch op's", () => {
   });
 
   it("a refusal with NO word named guesses no verdict", async () => {
-    // ⚠ `-` IS "THE MACHINE NAMED NOTHING", never an invented `retry=no`: a
-    // guessed verdict on an unreported reason is a claim about a machine we did
-    // not hear from, which is the class of lie this whole lane is built against.
+    // `-` is "the machine named nothing"; a guessed verdict is a claim about a machine we did not hear from.
     const out = await endText(settled({ status: "refused" }));
     expect(out).toContain("reason=- retry=-");
     expect(out).toContain("filed=yes");
@@ -235,44 +122,23 @@ describe('manage action="rename" — display only, on one machine', () => {
   const done = settled({ kind: "rename", status: "done", targetName: "Research" });
 
   it("says the handle is unchanged, which is the ONLY address", async () => {
-    // ⚠ **`handle=unchanged` IS NOT DECORATION**, and it is why the DISPLAY-ONLY
-    // paragraph could leave. `@agent-<id>` stays the only address — nothing
-    // resolves an agent by its name, which is exactly what stops a rename
-    // silently re-pointing a running instruction.
+    // A rename never changes the agent's id handle.
     const out = await renameText(done);
     expect(out).toContain(`renamed agent=@agent-${AGENT}`);
     expect(out).toContain("handle=unchanged");
     expect(out).toContain("name=Research");
-    // ⚠ And the boundary a caller needs before believing a peer can see it.
-    // ⚠ RE-POINTED 2026-09-15 — 2026-09-15: the rename clause's three FALSE claims (it reaches no server / is invisible to every other member / is never addressable from here) are DELETED — `channel_sessions.display_name` is peer-visible by design (`20260905120000`) and the name door has resolved in all three trees since 2026-08-28. The doctrine now says what is true: the name is what people see and what agents tag it by.
     expect(CHANNEL_DOCTRINE).toContain("what people see and what agents tag it by");
   });
 
-  /**
-   * ⚠ THE LINE THAT PREVENTS A POLLING LOOP. The name is stored on the operator's
-   * desktop and reaches no server, so `op="status"` keeps printing the id. An
-   * agent that expected the listing to change would re-issue forever.
-   */
   it('warns that op="status" will NOT show the name, and that this is correct', async () => {
-    // ⚠ **`confirm=none` IS THAT WARNING AS A FIELD, AND IT MUST NEVER BECOME THE
-    // END'S CONFIRM SURFACE.** There is no surface here that can confirm a rename
-    // landed; a caller told to go and look would loop on a listing that is
-    // CORRECTLY still printing the id.
+    // Nothing here can confirm a rename landed, so the caller is not sent to poll a listing.
     const out = await renameText(done);
     expect(out).toContain("confirm=none");
-    // ⚠ RE-POINTED onto the rename clause that gives the REASON the listing
-    // cannot change: the label never leaves that machine, so nothing server-side
-    // — the session table included — could ever show it. 🔴 The "and that is
-    // correct rather than a stale read" half was RETIRED BY RULING and is pinned
-    // ABSENT in `channel-ops-agent-doctrine.test.ts › RETIRED_BY_RULING`.
     expect(CHANNEL_DOCTRINE).toContain("what people see and what agents tag it by");
   });
 
   it("a name with a SPACE is quoted, so it cannot invent a field", async () => {
-    // ⚠ OPERATOR-AUTHORED TEXT ON A `key=value` LINE. `name=Code Auditor` would
-    // read as a value plus a stray token, and a name containing `confirm=` could
-    // forge one — quoting is the fence, and this is the op that takes the most
-    // obviously human string.
+    // Operator-authored text on a `key=value` line: unquoted, a name could forge a field.
     const out = await renameText(
       settled({ kind: "rename", status: "done", targetName: "Code Auditor" }),
       "Code Auditor",
@@ -285,18 +151,8 @@ describe('manage action="rename" — display only, on one machine', () => {
     const cleared = settled({ kind: "rename", status: "done", targetName: "" });
     const out = (await opRenameAgent(cleared, "general", AGENT, "", { waitMs: 0 }))
       .content[0].text as string;
-    // ⚠ CLEARED IS ITS OWN OUTCOME rather than an empty value: `name=-` would say
-    // "nothing was reported", which is a different claim from "the display fell
-    // back to its default". ⚠ THE DEFAULT ITSELF (`Agent #<id>`) IS NOT IN THE
-    // DOCTRINE — it is on the `name` argument, which is where a caller reads it
-    // at the moment it decides what to send.
+    // `name=-` would mean "not reported"; `cleared` means the display fell back to its default.
     expect(out).toContain("name=cleared");
-    // ⚠ RE-POINTED: `name`'s `.describe()` states the gesture and its meaning; the
-    // default it falls back to is spelled out in the rename arm's own missing-param
-    // refusal (`channel-dispatch-agents.ts`), which is where a caller that omitted
-    // it reads it.
-    // ⚠ RE-SPELLED 2026-09-15 when `name` gained the LAUNCH clause and the describe was
-    // tightened to pay for it: the CLEAR gesture is unchanged and is still stated.
     expect(ARG_PROSE).toContain('"" clears');
   });
 
@@ -305,15 +161,9 @@ describe('manage action="rename" — display only, on one machine', () => {
       settled({ kind: "rename", status: "refused", refusalReason: "bad-name" }),
     );
     expect(out).toContain("reason=bad-name");
-    // ⚠ **`agentChanged=no` IS THE HALF THAT WAS PROSE** ("Nothing else about the
-    // agent changed"): a refused rename is COSMETIC — the agent is still running
-    // and still addressed the same way — and a caller that read a refusal as
-    // damage would end and re-launch a healthy agent.
+    // A refused rename is cosmetic: the agent still runs, so a caller must not end and re-launch it.
     expect(out).toContain("agentChanged=no");
-    // ⚠ …and the accepted shape, which is the one thing a caller needs to fix it.
-    // ⚠ **BOTH HOMES, AND THEY ANSWER DIFFERENT MOMENTS**: the doctrine explains
-    // the WORD a refusal came back with, and `name`'s own `.describe()` states
-    // the bound where a client decides what to send in the first place.
+    // The doctrine explains the word; `name`'s own `.describe()` states the bound where a client decides.
     expect(CHANNEL_DOCTRINE).toContain(
       "`bad-name` the label was not one line of 1-60 visible characters",
     );
@@ -322,16 +172,8 @@ describe('manage action="rename" — display only, on one machine', () => {
 });
 
 describe("the foreign-agent refusal — answered here, before any row exists", () => {
-  /**
-   * ⚠ IT NAMES THE FACT PLAINLY RATHER THAN 404-ING. The caller has already proved
-   * channel membership, inside which `rooms(action="members")` and `op="status"`
-   * are readable anyway, so nothing is disclosed — while a 404 would tell an
-   * orchestrator its OWN agent had vanished and send it to re-launch.
-   *
-   * ⚠ **DELIBERATELY STILL PROSE** (T10). Everything else on this lane became a
-   * fact line; this did not, because it answers a call that was never filed and
-   * has to close a door — an instruction, not a fact about a row.
-   */
+  // Plain prose rather than a 404 (the caller is already a member, so nothing leaks); a 404 would
+  // read as its own agent vanishing and send it to re-launch.
   const foreign = client({
     createAgentDirective: vi.fn(async () => {
       throw Object.assign(new Error("forbidden"), {
@@ -352,12 +194,7 @@ describe("the foreign-agent refusal — answered here, before any row exists", (
 });
 
 describe("the handle a caller pasted", () => {
-  /**
-   * ⚠ `op="status"` PRINTS `@agent-<id>`, so that is what a model copies.
-   * Refusing the pasted form would 400 a caller for doing exactly what the
-   * neighbouring op taught — the same reason `action="direct"` accepts both, and the
-   * reason the parser is now one shared function.
-   */
+  // `op="status"` prints `@agent-<id>`, so that is the form a model pastes.
   it("accepts @agent-<id> and sends the bare id", async () => {
     const c = settled({ status: "done" });
     await opEndAgent(c, "general", `@agent-${AGENT}`, { waitMs: 0 });
@@ -373,47 +210,27 @@ describe("offline and pending — nothing filed, versus filed and unanswered", (
       createAgentDirective: vi.fn(async () => ({ offline: true, directive: null })),
     });
     const out = await endText(off);
-    // ⚠ **`filed=no` IS THE LOAD-BEARING HALF** and it is the field that keeps
-    // this shape apart from the PENDING one below: nothing was written, so
-    // nothing is outstanding and there is nothing to cancel.
+    // `filed=no` separates this from PENDING: nothing is outstanding or cancellable.
     expect(out).toContain("reason=offline");
     expect(out).toContain("filed=no");
     expect(out).not.toContain("filed=yes");
     expect(out).not.toContain("directive=");
   });
 
-  /**
-   * ⚠ A TIMEOUT IS NOT A REFUSAL. The row stays pending and the machine may still
-   * take it; a second request for the same change leaves the caller unable to say
-   * which one acted.
-   */
   it("pending names the row, says NOT to re-issue, and says where to look", async () => {
     const out = await endText(settled({ status: "pending" }));
     expect(out).toContain("pending agent=@agent-");
-    // ⚠ THE ROW ID IS THE FACT ONLY THIS CALL HAS — it is what makes the outcome
-    // findable later, and it is why a pending result is not simply "unknown".
+    // The row id is the fact only this call has: it makes the outcome findable later.
     expect(out).toContain("directive=55555555-5555-5555-5555-555555555555");
     expect(out).toContain("claimed=no");
-    // ⚠ **`retry=no` IS THE ONE INSTRUCTION THAT COULD NOT BECOME A BARE FACT AND
-    // DID NOT.** A second directive is a second request for the same change, and
-    // on an END nothing afterwards could tell you which one acted.
     expect(out).toContain("retry=no");
-    // ⚠ AND AN END IS CONFIRMABLE: the agent disappearing from that listing IS
-    // the answer, which is why `confirm=` is a field rather than one sentence.
-    // ⚠ **IT NAMES A LIVE OP AGAIN.** It shipped `confirm=read_sessions` — a
-    // retired name, and one the shared neutralizer additionally blanked the `_`
-    // out of — until `PENDING_CONFIRM` was moved to `status` (2026-09-02). Pinned
-    // as the EXACT token a caller copies, which is what the old regex could not
-    // be while the value was being mangled.
+    // An end is confirmable: the agent disappearing from `op="status"` is the answer.
     expect(out).toContain("confirm=status");
     expect(out).not.toContain("confirm=none");
   });
 
   it("a pending RENAME says the opposite — nothing here can confirm it landed", async () => {
-    // ⚠ **THE ASYMMETRY IS THE REASON `confirm=` EXISTS.** One pending line for
-    // both verbs would promise the rename a confirmation that does not exist,
-    // and the caller would poll `op="status"` forever against a listing that
-    // correctly still prints the id.
+    // One pending line for both verbs would promise the rename a confirmation that does not exist.
     const out = await renameText(settled({ kind: "rename", status: "pending" }));
     expect(out).toContain("confirm=none");
     expect(out).not.toMatch(/confirm="?read/);
@@ -421,9 +238,7 @@ describe("offline and pending — nothing filed, versus filed and unanswered", (
   });
 
   it("expired is LAPSED, not refused — no machine ever answered", async () => {
-    // ⚠ NOTHING IS OUTSTANDING, so this is not the pending shape; and no machine
-    // refused, so it is not a refusal either — which is why it carries neither a
-    // `retry=` verdict nor a refusal word beyond `expired`.
+    // Nothing outstanding and nobody refused, so neither `retry=` nor a refusal word.
     const out = await endText(settled({ status: "expired" }));
     expect(out).toContain("not ended");
     expect(out).toContain("reason=expired");

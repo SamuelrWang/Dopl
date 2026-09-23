@@ -1,23 +1,6 @@
-/**
- * **THE INPUT-SCHEMA BUDGET FOR `dopl_channel`** — the gate that keeps the
- * doctrine out of the published shape (A6, 2026-09-02).
- *
- * ⚠ **WHY IT IS A SECOND BUDGET AND NOT A LINE IN THE FIRST ONE.** T82 capped
- * tool DESCRIPTIONS and `tool-budget.test.ts` has enforced that since. It reads
- * `t.description` and nothing else — so while `dopl_channel`'s description sat
- * on a 1,775-char ratchet, its input schema shipped **21,778 characters** on the
- * same connection, to the same clients, unmeasured. A budget with an unmeasured
- * neighbour is a budget prose walks around.
- *
- * ⚠ **AND WHY IT IS A DIFFERENT FILE.** `tool-budget.test.ts` is owned by the
- * budget-gates slice; every other slice asserts in its own new file, so the two
- * cannot collide on merge.
- *
- * ⚠ **MEASURED AS SERVED**, through a real `Client.listTools()` over a real
- * transport — the SDK renders the JSON Schema and the registrar injects a
- * `container`/`workspace` arguments, so a shape measured at its source is not what an agent
- * receives. Same boot shape as `tool-budget.test.ts`, for the same reason.
- */
+// `dopl_channel`'s input-schema budget, measured as served through a real `listTools()` (the SDK
+// renders JSON Schema and the registrar injects args), beside the description budget in
+// `tool-budget.test.ts`, which never reads the schema.
 
 import { describe, it, expect, vi, beforeAll, afterAll } from "vitest";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
@@ -44,7 +27,7 @@ const WS: WorkspaceListItem = {
   role: "owner",
 };
 
-/** Enough of the client for registration. ⚠ No handler runs on this path. */
+/** Enough of the client for registration; no handler runs on this path. */
 function stubClient(): DoplClient {
   return {
     listWorkspaces: vi.fn().mockResolvedValue({ workspaces: [WS] }),
@@ -58,7 +41,7 @@ function stubClient(): DoplClient {
 }
 
 let client: Client;
-/** The served properties, minus the registrar's injected `workspace` arg. */
+/** The served properties, minus the registrar's injected `container`/`workspace` args. */
 let served: Record<string, unknown>;
 
 beforeAll(async () => {
@@ -79,9 +62,8 @@ beforeAll(async () => {
   const properties = (tool?.inputSchema as { properties?: Record<string, unknown> })
     ?.properties;
   if (!properties) throw new Error("dopl_channel served no input schema");
-  // ⚠ `container` and its deprecated alias `workspace` are `registrar.ts`'s,
-  // injected into every domain tool (R-32 made it two args, not one). Counting
-  // it would move this number on an edit made in another file by another slice.
+  // `container`/`workspace` are injected by `registrar.ts`; counting them would move this number on
+  // an edit in another file.
   served = Object.fromEntries(
     Object.entries(properties).filter(
       ([name]) => name !== "workspace" && name !== "container",
@@ -108,9 +90,7 @@ describe("the served input schema fits its budget", () => {
   });
 
   it("the ratchet only ever moves DOWN — a shrunk schema must lower its ceiling", () => {
-    // ⚠ THE OTHER HALF OF A RATCHET, and the half `tool-budget.test.ts` shipped
-    // asserting NOTHING until 2026-09-02: without it, headroom somebody spent
-    // effort removing is silently regained by the next honest sentence.
+    // The other half of the ratchet: removed headroom must not be silently regained.
     const size = JSON.stringify(served).length;
     expect(
       size,
@@ -119,8 +99,7 @@ describe("the served input schema fits its budget", () => {
   });
 
   it(`no single field's prose exceeds ${PARAM_DESCRIPTION_MAX_CHARS} chars`, () => {
-    // ⚠ THE HALF A TOTAL CANNOT ENFORCE: one field's paragraph paid for by
-    // trimming nine others is exactly the trade this diet undid.
+    // One field's paragraph paid for by trimming nine others is the trade a total cannot catch.
     const over = Object.entries(served)
       .map(([name, schema]) => ({
         name,
@@ -135,18 +114,8 @@ describe("the served input schema fits its budget", () => {
   });
 
   it("every declared field still names at least one op that takes it", () => {
-    // ⚠ A CAP ALONE WOULD BE SATISFIED BY DELETING THE CONTRACT. This is the
-    // floor: the one thing a shortened `.describe()` may never lose is the
-    // answer to "does this op want this argument". `op` itself is the
-    // discriminator and names none.
-    // ⚠ ANY QUOTED OP NAME COUNTS, not just the `op="x"` form — `channel` is
-    // taken by all but three actions and lists the exceptions instead, which is
-    // shorter AND the thing a caller needs.
-    // ⚠ **THE FIVE PUBLISHED OPS** (B8, 2026-09-02). They were once a subset of
-    // what the enum accepted — twenty-two retired names parsed for one release
-    // so their redirects could run — and a `.describe()` naming one would have
-    // taught a call no client could see. Slice B16 made the two sets one; the
-    // constant stays the source because it is the SERVED set either way.
+    // The floor a shortened `.describe()` may never lose: which op takes this argument.
+    // Any quoted op name counts; `CHANNEL_OPS` is the served set.
     const ops: readonly string[] = CHANNEL_OPS;
     const anonymous = Object.entries(served)
       .filter(([name]) => name !== "op")
@@ -161,30 +130,9 @@ describe("the served input schema fits its budget", () => {
 
 describe("what the schema stopped carrying, the doctrine carries", () => {
   it("the FIELDS section exists and states each moved rule once", () => {
-    // ⚠ THE MOVE, ASSERTED AS A MOVE. Every line below was a paragraph inside a
-    // `.describe()` on 2026-09-02. If a future trim deletes one instead of
-    // relocating it, this fails — which a size cap on its own never could.
+    // A move, not a delete: each line was once a paragraph inside a `.describe()`.
     expect(CHANNEL_DOCTRINE).toContain("THE ARGUMENTS THAT CARRY A RULE:");
-    // ⚠ **THREE OF THESE NINE LINES ARE GONE AND THE FIELDS THEY WERE ABOUT ARE
-    // GONE WITH THEM** (B8): `recipient`, `handoff` and the standalone `chain`
-    // left the shape, so a doctrine line about any of them would teach a phantom
-    // — which is exactly what the pair test below exists to catch.
-    // ⚠ **AND `to`, `model`, `info_card` AND `recommendation` HAVE NO LINE HERE,
-    // DELIBERATELY.** This
-    // section is for a rule that had NOWHERE ELSE TO LIVE once the `.describe()`
-    // could only carry a contract — and both of those rules fit in their own
-    // describe (`to`: one party, two namespaces; `model`: an unrecognised id
-    // FALLS BACK silently). `to`'s refusal is additionally stated in the doctrine's
-    // `send` section. A third copy in FIELDS is the repetition this budget exists
-    // to stop, not a relocation.
-    // ⚠ **TWO MORE LINES SINCE 2026-09-22 (Samuel's ruling, *"fund it"*), AND
-    // THE PIN IS THE POINT.** `kind`'s record CHOOSER (his ruling Q5) and
-    // `artifact`'s DEFINITION were written into `channel-schema.ts`'s PUSHED
-    // `.describe()` text at the 2026-09-18/19 merge, which raised
-    // `SCHEMA_MAX_CHARS` and recorded the move as OWED. Moving them is the
-    // sanctioned fix — a chooser and a definition are standing RULES, not one
-    // argument's contract — and pinning them HERE is what makes it a relocation
-    // rather than a deletion dressed as a budget win.
+    // Only rules with nowhere else to live belong here; one that fits its own `.describe()` stays there.
     for (const rule of [
       "OMITTING `channel` IS A WIDER READ",
       "ONE CURSOR SPACE, ONE `since`",
@@ -194,9 +142,7 @@ describe("what the schema stopped carrying, the doctrine carries", () => {
       "`posture.chain` NAMES ITS THREE STATES",
     ])
       expect(CHANNEL_DOCTRINE, rule).toContain(rule);
-    // ⚠ AND THE OTHER DIRECTION: neither may come BACK onto the pushed schema.
-    // A fact in both places is the repetition this whole budget exists to stop,
-    // and re-pasting one is how a raise gets re-taken without an argument.
+    // And the other direction: neither may come back onto the pushed schema.
     const prose = Object.values(served)
       .map((schema) => (schema as { description?: string }).description ?? "")
       .join("\n");
@@ -205,8 +151,7 @@ describe("what the schema stopped carrying, the doctrine carries", () => {
   });
 
   it("and the shape declares every field those rules are about", () => {
-    // The pair: a doctrine line about an argument that no longer exists teaches
-    // a phantom, which is the failure mode of moving prose out of its own file.
+    // A doctrine line about an argument that no longer exists teaches a phantom.
     for (const field of [
       "channel",
       "since",

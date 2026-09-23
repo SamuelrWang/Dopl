@@ -1,20 +1,5 @@
-/**
- * THE ROUTING SWITCH FOR THE TWO ACCOUNT-WIDE READS (T21/T22).
- *
- * ⚠ **`account-scope.test.ts` PINS THE SEAM AND `status-render.test.ts` PINS THE
- * RENDER; NEITHER PINS THAT ANYTHING REACHES THEM.** The whole feature is one
- * `if` in `channel.ts`'s switch, and a mutation that sent a channel-less `read`
- * back to the per-channel handler would leave both of those suites green while
- * the op answered a 404 for a channel nobody named. §14: a pin on a symbol is
- * not a pin — so every case here drives the REAL registered `dopl_channel`
- * callback and asserts WHICH CLIENT METHOD it reached.
- *
- * The four rules:
- *   1. `op="read"` with no `channel` → the ACCOUNT page, and `since` is required.
- *   2. `op="read"` WITH a `channel` → the per-channel read, unchanged.
- *   3. `op="status"` with no `channel` → every session, everywhere.
- *   4. `op="status"` WITH a `channel` → the per-channel list, unchanged.
- */
+// The routing switch for the two account-wide reads, driven through the REAL registered callback:
+// `account-scope.test.ts` and `status-render.test.ts` pass even if nothing reaches them.
 
 import { describe, expect, it, vi } from "vitest";
 import type { DoplClient } from "@dopl/client";
@@ -27,7 +12,7 @@ const DIRECTORY: WorkspaceDirectory = {
   getWorkspaceList: async () => [],
   resolveWorkspaceRef: async () => null,
   noWorkspaceError: async () => ({ content: [], isError: true }),
-  // Unlocked — the lock's own behaviour is `account-scope.test.ts`'s subject.
+  // Unlocked: the lock's own behaviour is `account-scope.test.ts`'s subject.
   resolveContainerRef: async () => null,
   homeContainer: async () => null,
   containerKindIndex: async () => new Map(),
@@ -97,10 +82,7 @@ function stubClient(): DoplClient {
     listChannelSessions: vi
       .fn()
       .mockResolvedValue({ sessions: [], operatorOnline: true }),
-    // ⚠ `op="status"` ANSWERS IN TWO BLOCKS (B8): the session table AND the
-    // direction mailbox, joined by a blank line. A stub that answers only the
-    // sessions half makes every status call throw, so the second half is stubbed
-    // empty — the mailbox's own content is `channel-directions.test.ts`'s.
+    // `op="status"` renders the session table AND the direction mailbox; without this stub every call throws.
     listAgentDirections: vi.fn().mockResolvedValue([]),
     listChannels: vi
       .fn()
@@ -110,7 +92,7 @@ function stubClient(): DoplClient {
   } as unknown as DoplClient;
 }
 
-/** Register the REAL tool and hand back its callback plus the stub it closed over. */
+/** Register the real tool and hand back its callback plus the stub it closed over. */
 function tool() {
   const client = stubClient();
   let handler:
@@ -146,16 +128,14 @@ describe('op="read" with no channel', () => {
       since: 10,
       limit: undefined,
     });
-    // ⚠ The mutation this exists to catch: falling through to the per-channel
-    // handler, which would resolve a channel nobody named.
+    // The mutation this catches: falling through to the per-channel handler.
     expect(t.client.readChannelMessages).not.toHaveBeenCalled();
     expect(text).toContain("Everywhere");
   });
 
   it("tags every group with the `container=` handle that reaches it", async () => {
     const text = await tool().call({ op: "read", since: 10 });
-    // ⚠ Without this a home channel's rows name a room the reader cannot
-    // address: the CONTAINER id appears here, in dopl_home and nowhere else.
+    // The container id is how a reader addresses a home channel's room.
     expect(text).toContain("container=`ws-container-1`");
     expect(text).toContain("`dopl-main`");
   });
@@ -197,10 +177,8 @@ describe('op="status"', () => {
       view: "sessions",
     });
     expect(t.client.listChannelSessions).not.toHaveBeenCalled();
-    // Grouped by room, with the handle to reach that room.
     expect(text).toContain("container=`ws-container-1`");
-    // The projection renderer, reused verbatim — the handle is an AUDIENCE
-    // decision and this read is own-scoped.
+    // The handle is an audience decision, and this read is own-scoped.
     expect(text).toContain("`@agent-x2sz1ztt`");
   });
 
@@ -220,8 +198,7 @@ describe('op="status"', () => {
       truncated: { channels: false, unread: false, waiting: false },
     });
     const text = await t.call({ op: "status" });
-    // ⚠ "No sessions are being REPORTED" — never "you have none". An asleep,
-    // signed-out or older-build machine reports nothing.
+    // "Being reported", never "you have none": an asleep or older machine reports nothing.
     expect(text).toMatch(/being reported/i);
     expect(text).toContain("YOUR OWN machine");
   });
