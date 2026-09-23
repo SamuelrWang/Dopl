@@ -29,8 +29,8 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { readFileSync } from "node:fs";
-import path from "node:path";
+import { stripSqlLineComments } from "@/shared/supabase/migration-files";
+import { readCode, readSource } from "@/shared/testing/source-text";
 import { LaunchCreateSchema, LaunchDecideSchema } from "./schema-launch";
 import { LAUNCH_RUNTIME_ID_RE } from "./schema-launch-modes";
 
@@ -152,37 +152,34 @@ describe("the grammar is the SAME four statements", () => {
   // ⚠ SOURCE-READ RATHER THAN IMPORTED, the seam `agent-color-schema.test.ts` takes for trees
   // this one cannot import: `dopl-desktop-app/main` is CommonJS reaching Electron, and the
   // migration is SQL.
-  const read = (rel: string) => readFileSync(path.join(process.cwd(), rel), "utf8");
+  const repoFile = (rel: string) => new URL(`../../../${rel}`, import.meta.url);
+  const MIGRATION = readSource(
+    repoFile("supabase/migrations/20261017120000_channel_launch_directives_runtime.sql"),
+  );
 
   it("the desktop's `RUNTIME_ID_RE` is this file's pattern, character for character", () => {
-    const vocab = read("dopl-desktop-app/main/launch-directive-vocab.js");
+    const vocab = readCode(repoFile("dopl-desktop-app/main/launch-directive-vocab.js"));
     const m = /const RUNTIME_ID_RE = (\/.*\/);/.exec(vocab);
     expect(m, "the desktop still declares RUNTIME_ID_RE").not.toBeNull();
     expect(m![1]).toBe(String(LAUNCH_RUNTIME_ID_RE));
   });
 
   it("the column CHECK admits exactly the same grammar, on BOTH columns", () => {
-    const sql = read(
-      "supabase/migrations/20261017120000_channel_launch_directives_runtime.sql",
-    );
     // ⚠ THE SQL SPELLING OF THE SAME PATTERN. `~` is anchored by the `^…$` in the literal, which
     // is what stops a newline-bearing value passing at rest that zod refused on the way in.
     const body = String(LAUNCH_RUNTIME_ID_RE).slice(1, -1);
-    expect(sql).toContain(`runtime ~ '${body}'`);
-    expect(sql).toContain(`applied_runtime ~ '${body}'`);
+    expect(MIGRATION).toContain(`runtime ~ '${body}'`);
+    expect(MIGRATION).toContain(`applied_runtime ~ '${body}'`);
   });
 
   // ⚠ **ADDITIVE, NULLABLE, NO BACKFILL** — the standing rule for a column an OLDER desktop must
   // keep working against. A `NOT NULL` would refuse the row every current client writes.
   it("the migration is additive and nullable, so an older desktop keeps working", () => {
-    const sql = read(
-      "supabase/migrations/20261017120000_channel_launch_directives_runtime.sql",
-    );
     for (const col of ["runtime", "applied_runtime", "applied_model"]) {
-      expect(sql).toContain(`ADD COLUMN IF NOT EXISTS ${col} TEXT`);
+      expect(MIGRATION).toContain(`ADD COLUMN IF NOT EXISTS ${col} TEXT`);
     }
-    expect(sql).not.toMatch(/ADD COLUMN[^;]*NOT NULL/);
-    expect(sql, "a backfill would invent a request nobody made").not.toMatch(
+    expect(MIGRATION).not.toMatch(/ADD COLUMN[^;]*NOT NULL/);
+    expect(MIGRATION, "a backfill would invent a request nobody made").not.toMatch(
       /UPDATE\s+public\.channel_launch_directives/i,
     );
   });
@@ -190,15 +187,8 @@ describe("the grammar is the SAME four statements", () => {
   // ⚠ NO VALUE `CHECK`, AND IT IS THE SAME DECISION AS THE zod SHAPE. A `runtime IN ('claude',…)`
   // would make this table the thing blocking a runtime a newer desktop already ships.
   it("the migration does NOT close the runtime set", () => {
-    const sql = read(
-      "supabase/migrations/20261017120000_channel_launch_directives_runtime.sql",
-    );
     // ⚠ COMMENT LINES ARE STRIPPED FIRST — this migration's header EXPLAINS the enum it is
     // declining to write, and a whole-file scan would fail on the argument for the rule.
-    const statements = sql
-      .split("\n")
-      .filter((l) => !l.trimStart().startsWith("--"))
-      .join("\n");
-    expect(statements).not.toMatch(/runtime\s+IN\s*\(/i);
+    expect(stripSqlLineComments(MIGRATION)).not.toMatch(/runtime\s+IN\s*\(/i);
   });
 });

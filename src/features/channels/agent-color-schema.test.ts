@@ -46,17 +46,14 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
 import { AGENT_COLOR_KEYS } from "./lib/agent-colors";
+import { stripSqlLineComments } from "@/shared/supabase/migration-files";
+import { readCode, readSource } from "@/shared/testing/source-text";
 
-const read = (...p: string[]) => readFileSync(join(process.cwd(), ...p), "utf8");
+/** Repo-root-relative path, resolved from this file rather than the working directory. */
+const repoFile = (rel: string) => new URL(`../../../${rel}`, import.meta.url);
 
-const MIGRATION = read(
-  "supabase",
-  "migrations",
-  "20261005120000_agent_session_colors.sql"
-);
+const MIGRATION = readSource(repoFile("supabase/migrations/20261005120000_agent_session_colors.sql"));
 
 /** ⚠ NORMALIZED WHITESPACE, so a re-indent or a wrapped line cannot fail these — the
  *  assertions are about which CLAUSES are present, never about formatting. */
@@ -73,10 +70,7 @@ const sql = MIGRATION.replace(/\s+/g, " ");
  * in prose would pass the latter, which is fine: those cases are proving a clause IS present,
  * and the index and CHECK bodies are quoted nowhere but their own statements.
  */
-const executable = MIGRATION.split("\n")
-  .filter((line) => !line.trimStart().startsWith("--"))
-  .join(" ")
-  .replace(/\s+/g, " ");
+const executable = stripSqlLineComments(MIGRATION).replace(/\s+/g, " ");
 
 describe("the migration — the column, on both tables", () => {
   it("adds `color` to `channel_sessions` and to `channel_launch_directives`", () => {
@@ -142,7 +136,7 @@ describe("the CHECKs — the key set, character for character on both tables", (
   });
 });
 
-describe("🔒 the UNIQUE INDEX — the only statement of the rule that both machines pass through", () => {
+describe("the UNIQUE INDEX — the only statement of the rule that both machines pass through", () => {
   it("is UNIQUE on `(channel_id, color)`", () => {
     expect(sql).toContain(
       "CREATE UNIQUE INDEX channel_sessions_channel_color_live_key ON public.channel_sessions (channel_id, color)"
@@ -188,13 +182,7 @@ describe("the set, in the two trees that cannot import `src/`", () => {
     // ⚠ ORDER, NOT JUST MEMBERSHIP: the refusal lists what is FREE, and the first entry has to
     // be the key the server would itself have picked, or the advice and the assignment
     // disagree on the caller's retry.
-    const src = read(
-      "packages",
-      "mcp-server",
-      "src",
-      "tools",
-      "channel-ops-launch-color.ts"
-    );
+    const src = readCode(repoFile("packages/mcp-server/src/tools/channel-ops-launch-color.ts"));
     const listed = [...src.matchAll(/"(agent-\d\d)"/g)].map((m) => m[1]);
     expect(listed).toEqual([...AGENT_COLOR_KEYS]);
   });
@@ -215,7 +203,7 @@ describe("the set, in the two trees that cannot import `src/`", () => {
       "session-state-push-wire.js",
       "launch-directive-wire.js",
     ]) {
-      const src = read("dopl-desktop-app", "main", file);
+      const src = readCode(repoFile(`dopl-desktop-app/main/${file}`));
       expect(src, file).toContain(`const AGENT_COLOR_RE = ${expected};`);
     }
   });

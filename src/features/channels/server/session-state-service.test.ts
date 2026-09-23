@@ -76,6 +76,39 @@ function row(over: Partial<SessionStateRow> = {}): SessionStateRow {
   };
 }
 
+/** The own-session DTO `row()` maps to. Every telemetry and health field is `null`: the mapper must
+ *  carry "not reported" through as unknown, never as `0`. */
+function session(over: Record<string, unknown> = {}) {
+  return {
+    channelId: CHAN,
+    threadId: TASK,
+    name: "flint",
+    state: "working",
+    detail: null,
+    channelName: "General",
+    threadTitle: "Deploy check",
+    color: null,
+    updatedAt: "2026-08-05T12:00:05.000Z",
+    model: null,
+    toolLabel: null,
+    contextUsed: null,
+    contextWindow: null,
+    tokensSpent: null,
+    startedAt: null,
+    lastActivityAt: null,
+    identityName: null,
+    displayName: null,
+    turns: null,
+    tokensDelta: null,
+    stale: null,
+    deniedCalls: null,
+    lastDeniedTool: null,
+    lastWakeSeq: null,
+    lastWakeAt: null,
+    ...over,
+  };
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(collab.presenceForUser).mockResolvedValue(null);
@@ -92,101 +125,9 @@ describe("listSessionStates", () => {
     const out = await listSessionStates(ctx);
 
     expect(out.sessions).toEqual([
-      {
-        channelId: CHAN,
-        threadId: TASK,
-        name: "flint",
-        state: "working",
-        detail: null,
-        channelName: "General",
-        threadTitle: "Deploy check",
-        // 2026-09-13 — peer-visible by design, so the COARSE projection carries it and
-        // the own one inherits it. `null` is the fixture's row, not a default.
-        color: null,
-        updatedAt: "2026-08-05T12:00:05.000Z",
-        model: null,
-        toolLabel: null,
-        contextUsed: null,
-        contextWindow: null,
-        tokensSpent: null,
-        startedAt: null,
-        lastActivityAt: null,
-        identityName: null,
-        displayName: null,
-        // ── THE HEALTH SEVEN (2026-09-01, 20260909120000) ─────────────────
-        // ⚠ `null` ACROSS THE BOARD IS THE ASSERTION, not filler: the fixture
-        // rows report none, and the mapper must carry that through as UNKNOWN.
-        // A `0` on any of the four counts would be a measurement nobody took.
-        turns: null,
-        tokensDelta: null,
-        stale: null,
-        deniedCalls: null,
-        lastDeniedTool: null,
-        lastWakeSeq: null,
-        lastWakeAt: null,
-      },
-      {
-        channelId: CHAN,
-        threadId: null,
-        name: "onyx",
-        state: "idle",
-        detail: null,
-        channelName: "General",
-        threadTitle: null,
-        color: null,
-        updatedAt: "2026-08-05T12:00:05.000Z",
-        model: null,
-        toolLabel: null,
-        contextUsed: null,
-        contextWindow: null,
-        tokensSpent: null,
-        startedAt: null,
-        lastActivityAt: null,
-        identityName: null,
-        displayName: null,
-        // ── THE HEALTH SEVEN (2026-09-01, 20260909120000) ─────────────────
-        // ⚠ `null` ACROSS THE BOARD IS THE ASSERTION, not filler: the fixture
-        // rows report none, and the mapper must carry that through as UNKNOWN.
-        // A `0` on any of the four counts would be a measurement nobody took.
-        turns: null,
-        tokensDelta: null,
-        stale: null,
-        deniedCalls: null,
-        lastDeniedTool: null,
-        lastWakeSeq: null,
-        lastWakeAt: null,
-      },
-      {
-        channelId: CHAN,
-        threadId: TASK,
-        name: "quartz",
-        state: "ended",
-        detail: null,
-        channelName: "General",
-        threadTitle: "Deploy check",
-        color: null,
-        updatedAt: "2026-08-05T12:00:05.000Z",
-        model: null,
-        toolLabel: null,
-        contextUsed: null,
-        contextWindow: null,
-        tokensSpent: null,
-        startedAt: null,
-        lastActivityAt: null,
-        identityName: null,
-        displayName: null,
-        // ── THE HEALTH SEVEN (2026-09-01, 20260909120000) ─────────────────
-        // ⚠ `null` ACROSS THE BOARD IS THE ASSERTION, not filler: the fixture
-        // rows report none, and the mapper must carry that through as UNKNOWN.
-        // A `0` on any of the four counts would be a measurement nobody took.
-        turns: null,
-        tokensDelta: null,
-        stale: null,
-        deniedCalls: null,
-        lastDeniedTool: null,
-        lastWakeSeq: null,
-        lastWakeAt: null,
-      },
+      session(),
+      session({ threadId: null, name: "onyx", state: "idle", threadTitle: null }),
+      session({ name: "quartz", state: "ended" }),
     ]);
   });
 
@@ -285,6 +226,28 @@ describe("listSessionStates — the operator's own presence rides beside the row
  * writes are REVOKEd from `authenticated` and therefore run with RLS bypassed.
  */
 describe("reportSessionStates", () => {
+  /** The columns an entry that reports no telemetry or health writes: `null`, never `0` or `false`. */
+  const UNREPORTED = {
+    detail: null,
+    tool_label: null,
+    model: null,
+    context_used: null,
+    context_window: null,
+    tokens_spent: null,
+    started_at: null,
+    last_activity_at: null,
+    identity_name: null,
+    turns: null,
+    tokens_delta: null,
+    stale: null,
+    denied_calls: null,
+    last_denied_tool: null,
+    last_wake_seq: null,
+    last_wake_at: null,
+    display_name: null,
+    color: null,
+  };
+
   const entry = {
     sessionKey: `${CHAN}:${TASK}`,
     channelId: CHAN,
@@ -295,12 +258,15 @@ describe("reportSessionStates", () => {
     threadTitle: "Deploy check",
   };
 
-  it("keys the write on the CALLER, never on anything in the payload", async () => {
+  beforeEach(() => {
     vi.mocked(sessionRepo.replaceSessionStates).mockResolvedValue({
       stored: 1,
       changed: 1,
       removed: 0,
     });
+  });
+
+  it("keys the write on the CALLER, never on anything in the payload", async () => {
     // A caller-supplied user id has nowhere to go: the entry type has no such
     // field, and the two ids the repository fences on come from `ctx` alone.
     await reportSessionStates(ctx, [
@@ -315,38 +281,12 @@ describe("reportSessionStates", () => {
         state: "working",
         channel_name: "General",
         thread_title: "Deploy check",
-        detail: null,
-        tool_label: null,
-        model: null,
-        context_used: null,
-        context_window: null,
-        tokens_spent: null,
-        started_at: null,
-        last_activity_at: null,
-        identity_name: null,
-        // ── HEALTH (2026-09-01, 20260909120000) ─────────────────────────
-        // ⚠ ABSENT ON THE WIRE BECOMES `null`, NEVER `0` AND NEVER `false`. An
-        // older desktop omits all seven keys, and a `?? 0` on `denied_calls`
-        // here would store "nothing has been refused to this agent" as fact.
-        turns: null,
-        tokens_delta: null,
-        stale: null,
-        denied_calls: null,
-        last_denied_tool: null,
-        last_wake_seq: null,
-        last_wake_at: null,
-        display_name: null,
-        color: null,
+        ...UNREPORTED,
       },
     ]);
   });
 
   it("absent optional text becomes the NULL the column stores", async () => {
-    vi.mocked(sessionRepo.replaceSessionStates).mockResolvedValue({
-      stored: 1,
-      changed: 1,
-      removed: 0,
-    });
     await reportSessionStates(ctx, [
       { sessionKey: `${CHAN}:`, channelId: CHAN, name: "onyx", state: "idle" },
     ]);
@@ -359,33 +299,7 @@ describe("reportSessionStates", () => {
       state: "idle",
       channel_name: null,
       thread_title: null,
-      // ⚠ EVERY TELEMETRY FIELD ABSENT ON THE WIRE BECOMES `null`, NEVER `0`.
-      // An older desktop omits all eight keys, and a count defaulted to zero
-      // here would be a measurement nobody took, stored as fact.
-      detail: null,
-      tool_label: null,
-      model: null,
-      context_used: null,
-      context_window: null,
-      tokens_spent: null,
-      started_at: null,
-      last_activity_at: null,
-      // ⚠ 2026-08-23 — the NINTH absent key, and the one that will arrive from a
-      // NEWER desktop rather than be missing from an older one. Absent and
-      // explicit-null are the same statement here ("no identity"), which is why
-      // the service is allowed to collapse them with `?? null`.
-      identity_name: null,
-      // ── HEALTH (2026-09-01, 20260909120000) — the same rule, seven more
-      // keys, and it bites harder because six of them are COUNTS.
-      turns: null,
-      tokens_delta: null,
-      stale: null,
-      denied_calls: null,
-      last_denied_tool: null,
-      last_wake_seq: null,
-      last_wake_at: null,
-      display_name: null,
-      color: null,
+      ...UNREPORTED,
     });
   });
 
@@ -398,11 +312,6 @@ describe("reportSessionStates", () => {
    * (`20260823130000_channel_sessions_template_name.sql`).
    */
   it("carries a reported identity name straight to its column, unresolved", async () => {
-    vi.mocked(sessionRepo.replaceSessionStates).mockResolvedValue({
-      stored: 1,
-      changed: 1,
-      removed: 0,
-    });
     await reportSessionStates(ctx, [
       { ...entry, identityName: "Code Auditor" },
     ]);
@@ -419,11 +328,6 @@ describe("reportSessionStates", () => {
    * comfortable non-zero numbers.
    */
   it("carries a reported health set to its columns, zero and false included", async () => {
-    vi.mocked(sessionRepo.replaceSessionStates).mockResolvedValue({
-      stored: 1,
-      changed: 1,
-      removed: 0,
-    });
     await reportSessionStates(ctx, [
       {
         ...entry,

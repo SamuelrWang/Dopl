@@ -160,7 +160,7 @@ describe("SessionStateReportSchema — the counterparty-influenced text", () => 
  * some new opinion about how long an identity name should be: a name that is
  * legal on an identity must never be refusable into this projection.
  */
-describe("SessionStateReportSchema — the agent identity (2026-08-23)", () => {
+describe("SessionStateReportSchema — the agent identity", () => {
   it("accepts an identity name, a null, and an ABSENT key", () => {
     expect(parse([entry({ identityName: "Code Auditor" })]).success).toBe(true);
     // An explicit null — a session launched from no identity, said out loud.
@@ -222,7 +222,7 @@ describe("SessionStateReportSchema — the agent identity (2026-08-23)", () => {
  * here would refuse an older machine's WHOLE push; `retryable(400)` is false, so
  * `read_sessions` would answer `[]` for it forever (INVARIANTS §11, §13).
  */
-describe("SessionStateReportSchema — the session health half (2026-09-01)", () => {
+describe("SessionStateReportSchema — the session health half", () => {
   const health = {
     turns: 12,
     tokensDelta: 8_700,

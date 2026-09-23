@@ -62,7 +62,8 @@ beforeEach(() => {
 type Step = { op: string; args: unknown[] };
 
 /** Chainable stub answering a QUEUE — the write path issues select, upsert,
- *  delete, each with its own answer.
+ *  delete, each with its own answer. Once one answer is left it repeats, unless
+ *  `repeatTail` is off (then a drained queue answers `{ data: null, error: null }`).
  *
  *  ⚠ **THE COLOUR READ IS OFF THE QUEUE, DELIBERATELY** (2026-09-13). The reconcile
  *  gained a second SELECT — the per-channel taken set
@@ -70,12 +71,10 @@ type Step = { op: string; args: unknown[] };
  *  through the queue would have renumbered the answers in all nine cases below, none
  *  of which are about colours. It is identified by the ONE builder member no other
  *  statement on this path uses (`.not`), answers a fixed empty set ("nobody holds a
- *  colour"), and consumes nothing. A case that wants to drive it uses
- *  {@link colorsHeld}. */
+ *  colour"), and consumes nothing. */
 function makeSequencedAdmin(
   results: Array<{ data: unknown; error: unknown }>,
-  /** Rows the taken-set read answers with — `{ channel_id, color, state }`. */
-  colorsHeld: unknown[] = []
+  { repeatTail = true } = {}
 ) {
   const steps: Step[] = [];
   const queue = [...results];
@@ -107,10 +106,10 @@ function makeSequencedAdmin(
     then: (resolve: (r: unknown) => void) => {
       if (colorRead) {
         colorRead = false;
-        resolve({ data: colorsHeld, error: null });
+        resolve({ data: [], error: null });
         return;
       }
-      resolve(queue.length > 1 ? queue.shift() : queue[0]);
+      resolve(repeatTail && queue.length === 1 ? queue[0] : (queue.shift() ?? { data: null, error: null }));
     },
   });
   vi.mocked(supabaseAdmin).mockReturnValue(builder as never);
@@ -302,54 +301,14 @@ describe("replaceSessionStates — failures are LOUD", () => {
  * live agent, in this channel, in this state — is still true, and a null
  * `task_id` is exactly what the column's own `ON DELETE SET NULL` leaves.
  */
-describe("replaceSessionStates — a thread deleted under a live peer agent (F-241)", () => {
+describe("replaceSessionStates — a thread deleted under a live peer agent", () => {
   const DEAD = "44444444-e29b-41d4-a716-446655440000";
   const LIVE = "55555555-e29b-41d4-a716-446655440000";
   const FK = { code: "23503", message: "insert or update on table \"channel_sessions\" violates foreign key constraint" };
 
-  /** Answers each awaited step from a queue, in order (no repeat of the tail).
-   *  ⚠ THE COLOUR READ IS OFF THE QUEUE for the reason
-   *  {@link makeSequencedAdmin} states — identified by `.not`, answering an empty
-   *  taken set, consuming nothing, so this describe's four-step scripts are the
-   *  same four steps they were before agent colours. */
-  function makeScriptedAdmin(results: Array<{ data: unknown; error: unknown }>) {
-    const steps: Step[] = [];
-    const queue = [...results];
-    const builder: Record<string, unknown> = {};
-    let colorRead = false;
-    const rec = (op: string, args: unknown[]) => {
-      steps.push({ op, args });
-      return builder;
-    };
-    Object.assign(builder, {
-      from: (t: string) => {
-        colorRead = false;
-        return rec("from", [t]);
-      },
-      select: (c: string) => rec("select", [c]),
-      upsert: (rows: unknown, opts: unknown) => rec("upsert", [rows, opts]),
-      delete: () => rec("delete", []),
-      eq: (c: string, v: unknown) => rec("eq", [c, v]),
-      neq: (c: string, v: unknown) => rec("neq", [c, v]),
-      in: (c: string, v: unknown) => rec("in", [c, v]),
-      not: (c: string, o: string, v: unknown) => {
-        colorRead = true;
-        return rec("not", [c, o, v]);
-      },
-      order: (c: string, o: unknown) => rec("order", [c, o]),
-      limit: (n: number) => rec("limit", [n]),
-      then: (resolve: (r: unknown) => void) => {
-        if (colorRead) {
-          colorRead = false;
-          resolve({ data: [], error: null });
-          return;
-        }
-        resolve(queue.length > 0 ? queue.shift() : { data: null, error: null });
-      },
-    });
-    vi.mocked(supabaseAdmin).mockReturnValue(builder as never);
-    return steps;
-  }
+  /** Each awaited step takes the next answer; the tail is not repeated. */
+  const makeScriptedAdmin = (results: Array<{ data: unknown; error: unknown }>) =>
+    makeSequencedAdmin(results, { repeatTail: false });
 
   it("REPLACE SUCCEEDS when one row's task_id is dead, and only that row is nulled", async () => {
     const deadRow = reported({ session_key: `${CHAN}:${DEAD}:a1b2c3d4`, task_id: DEAD });

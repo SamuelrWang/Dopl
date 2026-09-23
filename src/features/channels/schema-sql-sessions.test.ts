@@ -23,95 +23,12 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { readFileSync, readdirSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
 
-import { forwardRenamed } from "@/shared/supabase/migration-renames";
+import { readMigrations, statementAt } from "@/shared/supabase/migration-files";
 
-const MIGRATIONS = join(
-  dirname(fileURLToPath(import.meta.url)),
-  "..",
-  "..",
-  "..",
-  "supabase",
-  "migrations"
-);
-
-/**
- * Strip `--` line comments without eating one inside a string literal or a
- * `$$…$$` body. ⚠ Hand scanner, not a regex — a regex is how a header's quoted
- * rollback SQL gets mistaken for a statement.
- */
-function stripComments(sql: string): string {
-  let out = "";
-  let i = 0;
-  let inSingle = false;
-  let dollarTag: string | null = null;
-  while (i < sql.length) {
-    if (dollarTag) {
-      if (sql.startsWith(dollarTag, i)) {
-        out += dollarTag;
-        i += dollarTag.length;
-        dollarTag = null;
-        continue;
-      }
-      out += sql[i++];
-      continue;
-    }
-    if (inSingle) {
-      if (sql[i] === "'") inSingle = false;
-      out += sql[i++];
-      continue;
-    }
-    if (sql[i] === "'") {
-      inSingle = true;
-      out += sql[i++];
-      continue;
-    }
-    const dollar = /^\$[A-Za-z_]*\$/.exec(sql.slice(i, i + 40));
-    if (dollar) {
-      dollarTag = dollar[0];
-      out += dollarTag;
-      i += dollarTag.length;
-      continue;
-    }
-    if (sql.startsWith("--", i)) {
-      while (i < sql.length && sql[i] !== "\n") i++;
-      continue;
-    }
-    out += sql[i++];
-  }
-  return out;
-}
-
-/** Every migration, filename-sorted (= apply order), comments removed. */
-/** ⚠ Forward-renamed: `identity_name` was CREATED as `template_name` (2026-08-23) and renamed on 2026-09-22. */
-function migrationFiles(): Array<{ name: string; sql: string }> {
-  return forwardRenamed(
-    readdirSync(MIGRATIONS)
-      .filter((f) => f.endsWith(".sql"))
-      .sort()
-      .map((name) => ({
-        name,
-        sql: stripComments(readFileSync(join(MIGRATIONS, name), "utf8")),
-      }))
-  );
-}
-
-const FILES = migrationFiles();
+/** Forward-renamed: `identity_name` was created as `template_name`. */
+const FILES = readMigrations();
 const ALL_SQL = FILES.map((f) => f.sql).join("\n");
-
-/** The statement starting at `from`, up to the first `;` at paren depth 0. */
-function statementAt(sql: string, from: number): string {
-  let depth = 0;
-  for (let i = from; i < sql.length; i++) {
-    if (sql[i] === "(") depth++;
-    else if (sql[i] === ")") depth--;
-    else if (sql[i] === ";" && depth === 0) return sql.slice(from, i + 1);
-  }
-  return sql.slice(from);
-}
 
 function statementsMatching(re: RegExp, sql = ALL_SQL): string[] {
   const found: string[] = [];

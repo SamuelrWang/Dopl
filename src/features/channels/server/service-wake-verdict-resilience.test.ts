@@ -131,7 +131,7 @@ describe("RR1 — a thread reply with no `to` goes to the thread's other party",
   });
 });
 
-describe("🔴 RR2 IS DELETED — an unaddressed AGENT post reaches nobody", () => {
+describe("RR2 IS DELETED — an unaddressed AGENT post reaches nobody", () => {
   // **THIS BLOCK REPLACES TWELVE CASES** (2026-09-18, Samuel: *"agree with stopping that. Agents
   // should only be woken up when addressed (besides the logic for a user with no @ in their
   // message)"*). They drove the arm that re-addressed an unaddressed agent post back to whoever
@@ -227,7 +227,7 @@ describe("RR3 — an unaddressed human message is answered by one agent", () => 
     expect(out.reason).toBeNull();
   });
 
-  it("🔒 THE ASYMMETRY: a STALE but PRESENT room row IS a live agent and IS woken (2026-09-05)", async () => {
+  it("THE ASYMMETRY: a STALE but PRESENT room row IS a live agent and IS woken", async () => {
     // ⚠ **THE CASE THIS ARM EXISTS FOR, AND IT ASSERTED THE OPPOSITE UNTIL
     // 2026-09-05.** It is paired, deliberately, with "no live agent at all is
     // `none`" above: STALE must resolve and ABSENT must not, because a filter

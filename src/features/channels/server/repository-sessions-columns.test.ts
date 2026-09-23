@@ -7,8 +7,8 @@
  * a different kind of test and reads better on its own.
  */
 
-import { readFileSync } from "node:fs";
 import { describe, it, expect } from "vitest";
+import { readCode } from "@/shared/testing/source-text";
 import type { SessionStateUpsert } from "./collab-dto";
 
 /**
@@ -86,10 +86,7 @@ const upsertKeys = () => Object.keys(UPSERT_KEYS);
  * so the "exporting a constant makes it public surface" rule is unbroken.
  */
 describe("the reconcile's three column lists cannot drift", () => {
-  const SOURCE = readFileSync(
-    new URL("./repository-sessions-columns.ts", import.meta.url),
-    "utf8"
-  );
+  const SOURCE = readCode(new URL("./repository-sessions-columns.ts", import.meta.url));
 
   /** Every column named by the `SESSION_DIFF_COLUMNS` string concatenation. */
   function selectedColumns(): string[] {

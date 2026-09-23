@@ -21,9 +21,8 @@
  *     channel's setting and can be the opposite.
  */
 
-import { readFileSync } from "node:fs";
-import path from "node:path";
 import { describe, it, expect } from "vitest";
+import { readCode, readSource } from "@/shared/testing/source-text";
 import {
   AgentDirectiveCreateSchema,
   LAUNCH_MESSAGE_MODES,
@@ -35,13 +34,13 @@ import { LAUNCH_TOOL_MODES_BY_RUNTIME } from "./schema-launch-modes";
 const AGENT = "a1b2c3d4";
 const BASE = { channel: "general", agentId: AGENT } as const;
 
+/** Repo-root-relative path, resolved from this file rather than the working directory. */
+const repoFile = (rel: string) => new URL(`../../../${rel}`, import.meta.url);
+
 // Axis A is EACH RUNTIME'S OWN WORDS (Samuel ruling R3): per-runtime lists narrowest first, pinned
 // against the desktop adapters' own `tools.js`, and the wire accepts their union.
 function desktopToolModes(runtime: string): string[] {
-  const src = readFileSync(
-    path.join(process.cwd(), "dopl-desktop-app", "main", "runtime", runtime, "tools.js"),
-    "utf8",
-  );
+  const src = readCode(repoFile(`dopl-desktop-app/main/runtime/${runtime}/tools.js`));
   const m = /const TOOL_MODES = \[([^\]]*)\]/.exec(src);
   expect(m, `${runtime}/tools.js declares TOOL_MODES`).not.toBeNull();
   return [...m![1].matchAll(/'([^']+)'/g)].map((x) => x[1]);
@@ -74,8 +73,9 @@ describe("the mode vocabularies", () => {
   // C5: the column CHECKs must admit exactly the words the route accepts, or a legal decide is
   // refused AT REST for a launch that really happened.
   it("the latest tool-mode CHECKs admit exactly the wire union", () => {
-    const sql = readFileSync(path.join(process.cwd(), "supabase", "migrations",
-      "20261020120000_channel_launch_directives_runtime_tool_words.sql"), "utf8");
+    const sql = readSource(
+      repoFile("supabase/migrations/20261020120000_channel_launch_directives_runtime_tool_words.sql"),
+    );
     for (const col of ["start_tool_mode", "target_tool_mode", "applied_tool_mode", "resolved_tool_mode"]) {
       const m = new RegExp(`${col} IN \\(([^)]*)\\)`).exec(sql);
       expect(m, col).not.toBeNull();
@@ -109,7 +109,7 @@ describe("LaunchCreateSchema — the posture a launch may ASK for", () => {
     expect(parsed.chain).toBe(true);
   });
 
-  it("omitting all three is legal — the pre-T24 shape still parses", () => {
+  it("omitting all three is legal", () => {
     const parsed = LaunchCreateSchema.parse({
       // ⚠ REQUIRED SINCE 2026-09-15 — an agent that launches an agent NAMES it.
       agentName: "Scout", channel: "general" });
@@ -118,7 +118,7 @@ describe("LaunchCreateSchema — the posture a launch may ASK for", () => {
     expect(parsed.chain).toBeUndefined();
   });
 
-  it("⚠ `chain: false` PARSES as false — the row records what was sent", () => {
+  it("`chain: false` PARSES as false — the row records what was sent", () => {
     // ⚠ AND IT IS A BEHAVIOURAL PROPERTY SINCE 2026-09-01, NOT MERELY A
     // RECORD-KEEPING ONE. `main/launch-directive-wire.js › directiveFrom` used to
     // read only `true`/`"true"`, so a stored `false` resolved on the desktop
@@ -144,7 +144,7 @@ describe("LaunchCreateSchema — the posture a launch may ASK for", () => {
    * `packages/mcp-server/src/tools/channel-ops-launch-name.ts`. A zod message cannot say what to
    * pass instead, and a refusal an orchestrator cannot act on is a retry loop.
    */
-  it("🔒 REFUSES a launch with no name, and a whitespace-only one", () => {
+  it("REFUSES a launch with no name, and a whitespace-only one", () => {
     expect(LaunchCreateSchema.safeParse({ channel: "general" }).success).toBe(false);
     expect(
       LaunchCreateSchema.safeParse({ channel: "general", agentName: "" }).success,
@@ -220,7 +220,7 @@ describe("AgentDirectiveCreateSchema — the set_agent_mode arm", () => {
     ).toBe(true);
   });
 
-  it("🔒 REFUSES an ask with NEITHER axis — the union arm that could express nothing", () => {
+  it("REFUSES an ask with NEITHER axis — the union arm that could express nothing", () => {
     const res = AgentDirectiveCreateSchema.safeParse({
       kind: "set_agent_mode",
       ...BASE,
@@ -256,7 +256,7 @@ describe("AgentDirectiveCreateSchema — the set_agent_mode arm", () => {
     ).toBe(false);
   });
 
-  it("⚠ HAS NO `model` FIELD — the desktop's narrower has no column to read one into", () => {
+  it("HAS NO `model` FIELD — the desktop's narrower has no column to read one into", () => {
     // A model accepted here would be stored and silently dropped on the way in,
     // i.e. the caller told its request landed while nothing carried it.
     const parsed = AgentDirectiveCreateSchema.parse({
@@ -268,7 +268,7 @@ describe("AgentDirectiveCreateSchema — the set_agent_mode arm", () => {
     expect(parsed).not.toHaveProperty("model");
   });
 
-  it("⚠ HAS NO OPERATOR FIELD, on any arm — the whole cross-member story", () => {
+  it("HAS NO OPERATOR FIELD, on any arm — the whole cross-member story", () => {
     const parsed = AgentDirectiveCreateSchema.parse({
       kind: "set_agent_mode",
       ...BASE,

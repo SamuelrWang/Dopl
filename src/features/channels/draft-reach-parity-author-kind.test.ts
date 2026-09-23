@@ -115,11 +115,59 @@ const TRANSCRIPT = [
 /** `PRIME` launched first, so `WORKER` is arm 4's answer — see {@link TRANSCRIPT}. */
 const SESSIONS = [sessionRow(PRIME, NOW - 60 * 60_000), sessionRow(WORKER, NOW)];
 
+/** The client half: the composer line over a derived feed. */
+function clientReach(recentAgentIds: string[], sessions: SessionStateRow[]) {
+  return draftReach({
+    body: "what is left to do?",
+    members: MEMBERS,
+    sessions: sessions.map((s) => ({
+      name: s.name,
+      displayName: s.display_name,
+    })),
+    currentUserId: ME,
+    unaddressedResponder: "last_addressed",
+    recentAgentIds,
+    threadOtherParty: null,
+  });
+}
+
+/** The server half: the same rows through its own reads. */
+async function serverVerdict(
+  rows: typeof TRANSCRIPT,
+  sessions: SessionStateRow[],
+  body = "what is left to do?"
+) {
+  vi.mocked(repoSessions.listSessionStates).mockResolvedValue(sessions);
+  vi.mocked(repoSessions.listChannelSessionStates).mockResolvedValue(sessions);
+  vi.mocked(repo.findUnaddressedResponder).mockResolvedValue("last_addressed");
+  vi.mocked(repoMessages.listRecentRoomTagsBy).mockResolvedValue(
+    rows.map(
+      (row) =>
+        ({
+          seq: row.seq,
+          created_at: row.createdAt,
+          author_user_id: row.authorUserId,
+          author_kind: row.authorKind,
+          recipient_agent_ids: row.recipientAgentIds,
+          metadata: row.metadata,
+        }) as never
+    )
+  );
+  return resolveWakeVerdict(
+    CTX,
+    { id: CHAN, workspace_id: WS } as ChannelRow,
+    { body, kind: "message" } as ChannelMessageCreateInput,
+    {},
+    { authorKind: "user", toAgentIds: [], toUserIds: [], toDesktopOperatorIds: [] },
+    NOW
+  );
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
 });
 
-describe("F-704 — my own agent's tag moves neither the line nor the verdict", () => {
+describe("my own agent's tag moves neither the line nor the verdict", () => {
   /**
    * Channel `bb0f57db`, exactly as reported: Samuel addresses Prime, Prime posts to a worker, and
    * Samuel's next UNTAGGED message must still reach Prime.
@@ -132,23 +180,12 @@ describe("F-704 — my own agent's tag moves neither the line nor the verdict", 
    * removed the 15-minute window, which did not cause the stomp but made it permanent instead of
    * self-healing. The rule wants BOTH halves: this person, and this person themselves.
    */
-  it("🔒 the client's line and the server's verdict both still name PRIME", async () => {
+  it("the client's line and the server's verdict both still name PRIME", async () => {
     // ── the CLIENT half — the feed is DERIVED, not handed in ──────────────
     const recentAgentIds = recentAgentsAddressedBy(ME, TRANSCRIPT);
     expect(recentAgentIds, "derived feed").toEqual([PRIME]);
 
-    const client = draftReach({
-      body: "what is left to do?",
-      members: MEMBERS,
-      sessions: SESSIONS.map((s) => ({
-        name: s.name,
-        displayName: s.display_name,
-      })),
-      currentUserId: ME,
-      unaddressedResponder: "last_addressed",
-      recentAgentIds,
-      threadOtherParty: null,
-    });
+    const client = clientReach(recentAgentIds, SESSIONS);
     expect(client.reason, "client reason").toBe("most recent");
     expect(
       client.recipients.filter((r) => r.kind === "agent").map((r) => r.agentId),
@@ -156,31 +193,7 @@ describe("F-704 — my own agent's tag moves neither the line nor the verdict", 
     ).toEqual([PRIME]);
 
     // ── the SERVER half — the same rows, through its own read ─────────────
-    vi.mocked(repoSessions.listSessionStates).mockResolvedValue(SESSIONS);
-    vi.mocked(repoSessions.listChannelSessionStates).mockResolvedValue(SESSIONS);
-    vi.mocked(repo.findUnaddressedResponder).mockResolvedValue("last_addressed");
-    vi.mocked(repoMessages.listRecentRoomTagsBy).mockResolvedValue(
-      TRANSCRIPT.map(
-        (row) =>
-          ({
-            seq: row.seq,
-            created_at: row.createdAt,
-            author_user_id: row.authorUserId,
-            author_kind: row.authorKind,
-            recipient_agent_ids: row.recipientAgentIds,
-            metadata: row.metadata,
-          }) as never
-      )
-    );
-
-    const server = await resolveWakeVerdict(
-      CTX,
-      { id: CHAN, workspace_id: WS } as ChannelRow,
-      { body: "what is left to do?", kind: "message" } as ChannelMessageCreateInput,
-      {},
-      { authorKind: "user", toAgentIds: [], toUserIds: [], toDesktopOperatorIds: [] },
-      NOW
-    );
+    const server = await serverVerdict(TRANSCRIPT, SESSIONS);
     expect(server.reason, "server reason").toBe("most recent");
     expect(server.recipientAgentIds ?? [], "server agents").toEqual([PRIME]);
   });
@@ -191,7 +204,7 @@ describe("F-704 — my own agent's tag moves neither the line nor the verdict", 
    * reading recency altogether. Samuel tags the WORKER himself after Prime's handoff, so the
    * answer moves to the worker on both ends.
    */
-  it("🔒 a human tag AFTER the agent's still moves the default", async () => {
+  it("a human tag AFTER the agent's still moves the default", async () => {
     const rows = [
       ...TRANSCRIPT,
       {
@@ -206,31 +219,7 @@ describe("F-704 — my own agent's tag moves neither the line nor the verdict", 
 
     expect(recentAgentsAddressedBy(ME, rows)).toEqual([WORKER, PRIME]);
 
-    vi.mocked(repoSessions.listSessionStates).mockResolvedValue(SESSIONS);
-    vi.mocked(repoSessions.listChannelSessionStates).mockResolvedValue(SESSIONS);
-    vi.mocked(repo.findUnaddressedResponder).mockResolvedValue("last_addressed");
-    vi.mocked(repoMessages.listRecentRoomTagsBy).mockResolvedValue(
-      rows.map(
-        (row) =>
-          ({
-            seq: row.seq,
-            created_at: row.createdAt,
-            author_user_id: row.authorUserId,
-            author_kind: row.authorKind,
-            recipient_agent_ids: row.recipientAgentIds,
-            metadata: row.metadata,
-          }) as never
-      )
-    );
-
-    const server = await resolveWakeVerdict(
-      CTX,
-      { id: CHAN, workspace_id: WS } as ChannelRow,
-      { body: "and now?", kind: "message" } as ChannelMessageCreateInput,
-      {},
-      { authorKind: "user", toAgentIds: [], toUserIds: [], toDesktopOperatorIds: [] },
-      NOW
-    );
+    const server = await serverVerdict(rows, SESSIONS, "and now?");
     expect(server.reason).toBe("most recent");
     expect(server.recipientAgentIds ?? []).toEqual([WORKER]);
   });
@@ -252,7 +241,7 @@ describe("F-704 — my own agent's tag moves neither the line nor the verdict", 
  * operator's setup and this rule ships to every user. Re-proposing a named fallback needs a
  * concept that exists for all users first.
  */
-describe("F-705 — nobody I addressed is alive, so nobody answers", () => {
+describe("nobody I addressed is alive, so nobody answers", () => {
   /** One human tag, naming whoever the case wants, plus nothing else. */
   const taggedBy = (agentId: string) => [
     {
@@ -270,44 +259,8 @@ describe("F-705 — nobody I addressed is alive, so nobody answers", () => {
     rows: ReturnType<typeof taggedBy>,
     sessions: SessionStateRow[]
   ) {
-    const recentAgentIds = recentAgentsAddressedBy(ME, rows);
-    const client = draftReach({
-      body: "what is left to do?",
-      members: MEMBERS,
-      sessions: sessions.map((s) => ({
-        name: s.name,
-        displayName: s.display_name,
-      })),
-      currentUserId: ME,
-      unaddressedResponder: "last_addressed",
-      recentAgentIds,
-      threadOtherParty: null,
-    });
-    vi.mocked(repoSessions.listSessionStates).mockResolvedValue(sessions);
-    vi.mocked(repoSessions.listChannelSessionStates).mockResolvedValue(sessions);
-    vi.mocked(repo.findUnaddressedResponder).mockResolvedValue("last_addressed");
-    vi.mocked(repoMessages.listRecentRoomTagsBy).mockResolvedValue(
-      rows.map(
-        (row) =>
-          ({
-            seq: row.seq,
-            created_at: row.createdAt,
-            author_user_id: row.authorUserId,
-            author_kind: row.authorKind,
-            recipient_agent_ids: row.recipientAgentIds,
-            metadata: row.metadata,
-          }) as never
-      )
-    );
-    const server = await resolveWakeVerdict(
-      CTX,
-      { id: CHAN, workspace_id: WS } as ChannelRow,
-      { body: "what is left to do?", kind: "message" } as ChannelMessageCreateInput,
-      {},
-      { authorKind: "user", toAgentIds: [], toUserIds: [], toDesktopOperatorIds: [] },
-      NOW
-    );
-    return { client, server };
+    const client = clientReach(recentAgentsAddressedBy(ME, rows), sessions);
+    return { client, server: await serverVerdict(rows, sessions) };
   }
 
   /**
@@ -320,7 +273,7 @@ describe("F-705 — nobody I addressed is alive, so nobody answers", () => {
    * the asker's last-tagged agent is alive and well. That would break the primary rule while
    * every "fallback is nobody" test stayed green. `WORKER` is live and addressed; it must win.
    */
-  it("🔒 a LIVE last-tagged agent still wins — the tertiary arm never outranks it", async () => {
+  it("a LIVE last-tagged agent still wins — the tertiary arm never outranks it", async () => {
     const { client, server } = await bothEnds(taggedBy(WORKER), [
       sessionRow(PRIME, NOW - 60 * 60_000),
       sessionRow(WORKER, NOW),
@@ -342,7 +295,7 @@ describe("F-705 — nobody I addressed is alive, so nobody answers", () => {
    * makes the silence honest: a composer line naming an agent the server will not wake is the
    * overstatement this suite exists to catch.
    */
-  it("🔒 last-tagged agent ended → nobody, on both ends", async () => {
+  it("last-tagged agent ended → nobody, on both ends", async () => {
     const { client, server } = await bothEnds(taggedBy("deadbeef"), [
       sessionRow(PRIME, NOW - 60 * 60_000),
       sessionRow(WORKER, NOW),
@@ -362,7 +315,7 @@ describe("F-705 — nobody I addressed is alive, so nobody answers", () => {
    * case, "the fallback is nobody" could be read as "untagged messages never route", and the
    * next change would implement that.
    */
-  it("🔒 a room with ONE live agent still answers, tag or no tag", async () => {
+  it("a room with ONE live agent still answers, tag or no tag", async () => {
     const { client, server } = await bothEnds(taggedBy("deadbeef"), [
       sessionRow(PRIME, NOW - 60 * 60_000),
     ]);

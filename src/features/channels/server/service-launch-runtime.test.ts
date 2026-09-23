@@ -22,98 +22,35 @@
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-vi.mock("./repository-launch", () => ({
-  insertLaunchDirective: vi.fn(),
-  findLaunchDirectiveByClientMsgId: vi.fn(),
-  decideLaunchDirective: vi.fn(),
-  findLaunchDirective: vi.fn(),
-}));
-vi.mock("./repository-collab", () => ({ presenceForWorkspace: vi.fn() }));
-vi.mock("./repository-tasks", () => ({ findTaskByChannelAndId: vi.fn() }));
-// ⚠ MOCKED IN EVERY LAUNCH SUITE THOUGH NONE OF THEM NAMES A COLOUR: the create's colour gate
-// makes two live `supabaseAdmin()` reads. The POLICY stays real; only the READS are stubbed.
-vi.mock("./repository-session-colors", () => ({
-  foreignLiveColorsByChannel: vi.fn(async () => new Map()),
-  pendingDirectiveColors: vi.fn(async () => []),
-}));
-vi.mock("./service-shared", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("./service-shared")>();
-  return { ...actual, loadVisibleChannel: vi.fn() };
-});
-// ⚠ MOCKED THOUGH THIS FILE NAMES NO IDENTITY: `service-launch.ts` imports the agent-identities
-// barrel at module scope and that module is `server-only` over a live admin client.
-vi.mock("@/features/agent-identities/server/service", () => ({
-  resolveIdentityRef: vi.fn(),
-}));
+const fx = await vi.hoisted(() => import("./service-launch-fixtures"));
+vi.mock("./repository-launch", () => fx.mocks.launchRepo);
+vi.mock("./repository-collab", () => fx.mocks.collab);
+vi.mock("./repository-tasks", () => fx.mocks.tasks);
+vi.mock("./repository-session-colors", () => fx.mocks.sessionColors);
+vi.mock("./service-shared", (importOriginal) => fx.serviceSharedMock(importOriginal));
+vi.mock("@/features/agent-identities/server/service", () => fx.mocks.identities);
 
 import * as launchRepo from "./repository-launch";
-import * as collab from "./repository-collab";
-import { loadVisibleChannel, type ChannelContext } from "./service-shared";
 import { createLaunchDirective, decideLaunchDirective } from "./service-launch";
-import { LAUNCH_DIRECTIVE_TTL_MS } from "../constants";
-
-const WS = "22222222-2222-2222-2222-222222222222";
-const ME = "33333333-3333-3333-3333-333333333333";
-const CHAN = "11111111-1111-1111-1111-111111111111";
-const DIR = "55555555-5555-4555-8555-555555555555";
-
-const ctx: ChannelContext = {
-  workspaceId: WS,
-  userId: ME,
-  credentialSubjectUserId: ME,
-  source: "agent",
-  role: "member",
-};
+import {
+  CHAN,
+  DIR,
+  ME,
+  ctx,
+  echoInserts,
+  inserted,
+  row as directiveRow,
+  wireLaunchDefaults,
+} from "./service-launch-fixtures";
 
 const LAUNCH = { channel: "general", agentName: "Scout" } as const;
 
-function inserted(call = 0): Record<string, unknown> {
-  return vi.mocked(launchRepo.insertLaunchDirective).mock.calls[call][1] as unknown as Record<
-    string,
-    unknown
-  >;
-}
-
-function row(over: Record<string, unknown> = {}) {
-  return {
-    id: DIR,
-    kind: "launch",
-    workspace_id: WS,
-    channel_id: CHAN,
-    task_id: null,
-    operator_user_id: ME,
-    goal: "ship the parser",
-    model: null,
-    identity_id: null,
-    identity_name: null,
-    color: null,
-    agent_name: "Scout",
-    target_agent_id: null,
-    target_name: null,
-    status: "pending",
-    refusal_reason: null,
-    agent_id: null,
-    claimed_at: null,
-    decided_at: null,
-    expires_at: new Date(Date.now() + LAUNCH_DIRECTIVE_TTL_MS).toISOString(),
-    created_at: new Date().toISOString(),
-    ...over,
-  } as never;
-}
+const row = (over: Record<string, unknown> = {}) =>
+  directiveRow({ color: null, agent_name: "Scout", ...over });
 
 beforeEach(() => {
-  vi.clearAllMocks();
-  vi.mocked(loadVisibleChannel).mockResolvedValue({
-    channel: { id: CHAN, slug: "general", name: "General", visibility: "private" },
-    membership: { channel_id: CHAN, user_id: ME, role: "member" },
-  } as never);
-  vi.mocked(collab.presenceForWorkspace).mockResolvedValue(
-    new Map([[ME, { online: true, lastSeenAt: new Date().toISOString() }]]) as never,
-  );
-  vi.mocked(launchRepo.findLaunchDirectiveByClientMsgId).mockResolvedValue(null);
-  vi.mocked(launchRepo.insertLaunchDirective).mockImplementation(
-    async (_op, input) => row(input as unknown as Record<string, unknown>),
-  );
+  wireLaunchDefaults();
+  echoInserts();
 });
 
 describe("create — the runtime is CARRIED, never resolved", () => {

@@ -94,6 +94,10 @@ function makeAdmin(result: { data: unknown; error: unknown }) {
   return calls;
 }
 
+/** Every `.eq(column, value)` the chain applied, as `{ column: value }`. */
+const eqFilters = (calls: Call[]) =>
+  Object.fromEntries(calls.filter((c) => c.op === "eq").map((c) => [c.args[0], c.args[1]]));
+
 /** The exact envelope PostgREST returns for an unknown relation. */
 const MISSING_RELATION = {
   code: "PGRST205",
@@ -113,9 +117,7 @@ describe("listSessionStates — the happy path is unchanged", () => {
     const out = await listSessionStates(USER, WS);
     expect(out).toHaveLength(1);
     expect(out[0].name).toBe("flint");
-    const eqs = Object.fromEntries(
-      calls.filter((c) => c.op === "eq").map((c) => [c.args[0], c.args[1]])
-    );
+    const eqs = eqFilters(calls);
     expect(eqs).toEqual({ user_id: USER, workspace_id: WS });
     expect(calls.find((c) => c.op === "from")?.args[0]).toBe("channel_sessions");
   });
@@ -123,9 +125,7 @@ describe("listSessionStates — the happy path is unchanged", () => {
   it("narrows to one channel when asked", async () => {
     const calls = makeAdmin({ data: [], error: null });
     await listSessionStates(USER, WS, CHAN);
-    const eqs = Object.fromEntries(
-      calls.filter((c) => c.op === "eq").map((c) => [c.args[0], c.args[1]])
-    );
+    const eqs = eqFilters(calls);
     expect(eqs.channel_id).toBe(CHAN);
   });
 });
@@ -159,9 +159,7 @@ describe("the peer read is CHANNEL-fenced, never user-fenced", () => {
   it("filters on workspace + channel and NOT on user_id", async () => {
     const calls = makeAdmin({ data: [], error: null });
     await listChannelSessionStates(WS, CHAN);
-    const eqs = Object.fromEntries(
-      calls.filter((c) => c.op === "eq").map((c) => [c.args[0], c.args[1]])
-    );
+    const eqs = eqFilters(calls);
     expect(eqs.workspace_id).toBe(WS);
     expect(eqs.channel_id).toBe(CHAN);
     expect(eqs.user_id).toBeUndefined();

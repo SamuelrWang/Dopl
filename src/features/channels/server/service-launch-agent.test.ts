@@ -22,95 +22,39 @@
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-vi.mock("./repository-launch", () => ({ insertLaunchDirective: vi.fn() }));
+const fx = await vi.hoisted(() => import("./service-launch-fixtures"));
+vi.mock("./repository-launch", () => fx.mocks.launchRepo);
 // ⚠ THE MOCK MOVED TO THE PREDICATE ON 2026-09-02 (A9 / F-418). `refuseForeignTarget`
 // now asks `agentIsAnotherMembers`, which bounds the projection row's AGE before it will
 // say anything — the raw owner read is its detail, and mocking that would let this suite
 // assert a refusal the freshness rule may no longer make.
-vi.mock("./repository-agent-owner", () => ({ agentIsAnotherMembers: vi.fn() }));
-vi.mock("./repository-collab", () => ({ presenceForWorkspace: vi.fn() }));
-vi.mock("./repository-tasks", () => ({ findTaskByChannelAndId: vi.fn() }));
-vi.mock("./service-shared", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("./service-shared")>();
-  return { ...actual, loadVisibleChannel: vi.fn() };
-});
-// ⚠ MOCKED THOUGH THIS FILE NAMES NO IDENTITY: `service-launch-agent.ts` imports
-// `operatorIsOnline` from `service-launch.ts`, which pulls the agent-identities
-// barrel at module scope — `server-only`, with a live Supabase admin client under
-// it. The same mock `service-launch.test.ts` carries, for the same reason.
-vi.mock("@/features/agent-identities/server/service", () => ({
-  resolveIdentityRef: vi.fn(),
-}));
+vi.mock("./repository-agent-owner", () => fx.mocks.agentOwner);
+vi.mock("./repository-collab", () => fx.mocks.collab);
+vi.mock("./repository-tasks", () => fx.mocks.tasks);
+vi.mock("./service-shared", (importOriginal) => fx.serviceSharedMock(importOriginal));
+vi.mock("@/features/agent-identities/server/service", () => fx.mocks.identities);
 
 import * as launchRepo from "./repository-launch";
 import * as collab from "./repository-collab";
 import { agentIsAnotherMembers } from "./repository-agent-owner";
-import { loadVisibleChannel, type ChannelContext } from "./service-shared";
+import { loadVisibleChannel } from "./service-shared";
 import {
   AgentDirectiveForeignError,
   LaunchDirectiveNotFoundError,
 } from "./errors";
 import { createAgentDirective } from "./service-launch-agent";
 import { LAUNCH_DIRECTIVE_TTL_MS } from "../constants";
+import { CHANNEL_ROW, ME, WS, ctx, online, row, wireLaunchDefaults } from "./service-launch-fixtures";
 
-const WS = "22222222-2222-2222-2222-222222222222";
-const ME = "33333333-3333-3333-3333-333333333333";
-const CHAN = "11111111-1111-1111-1111-111111111111";
-const DIR = "55555555-5555-5555-5555-555555555555";
 const AGENT = "a1b2c3d4";
 
-const ctx: ChannelContext = {
-  workspaceId: WS,
-  userId: ME,
-  credentialSubjectUserId: ME,
-  source: "agent",
-  role: "member",
-};
-
-const CHANNEL_ROW = { id: CHAN, slug: "general", name: "General", visibility: "private" };
-const MEMBERSHIP = { channel_id: CHAN, user_id: ME, role: "member" };
-
-function row(over: Record<string, unknown> = {}) {
-  return {
-    id: DIR,
-    kind: "end",
-    workspace_id: WS,
-    channel_id: CHAN,
-    task_id: null,
-    operator_user_id: ME,
-    goal: null,
-    model: null,
-    identity_id: null,
-    identity_name: null,
-    target_agent_id: AGENT,
-    target_name: null,
-    status: "pending",
-    refusal_reason: null,
-    agent_id: null,
-    claimed_at: null,
-    decided_at: null,
-    expires_at: new Date(Date.now() + LAUNCH_DIRECTIVE_TTL_MS).toISOString(),
-    created_at: new Date().toISOString(),
-    ...over,
-  };
-}
-
-/** Online, and recently — the ordinary case. */
-function online() {
-  vi.mocked(collab.presenceForWorkspace).mockResolvedValue(
-    new Map([[ME, { lastSeenAt: new Date().toISOString(), online: true }]]) as never
-  );
-}
+/** A pending `end` directive aimed at {@link AGENT}. */
+const endRow = (over: Record<string, unknown> = {}) =>
+  row({ kind: "end", goal: null, target_agent_id: AGENT, ...over });
 
 beforeEach(() => {
-  vi.clearAllMocks();
-  vi.mocked(loadVisibleChannel).mockResolvedValue({
-    channel: CHANNEL_ROW,
-    membership: MEMBERSHIP,
-  } as never);
-  vi.mocked(agentIsAnotherMembers).mockResolvedValue(false);
-  vi.mocked(launchRepo.insertLaunchDirective).mockResolvedValue(row() as never);
-  online();
+  wireLaunchDefaults();
+  vi.mocked(launchRepo.insertLaunchDirective).mockResolvedValue(endRow());
 });
 
 describe("createAgentDirective — the operator stamp", () => {
@@ -313,7 +257,7 @@ describe("createAgentDirective — the DTO it answers with", () => {
     // fallback, or it renders as `undefined` in a sentence naming the agent to be
     // ended. `kind` falls back to `launch` — the branch that is fully gated — and
     // both targets to `null`.
-    const stale = { ...row() } as Record<string, unknown>;
+    const stale = endRow() as Record<string, unknown>;
     delete stale.kind;
     delete stale.target_agent_id;
     delete stale.target_name;

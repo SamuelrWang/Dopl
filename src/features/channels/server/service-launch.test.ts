@@ -14,43 +14,18 @@
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-vi.mock("./repository-launch", () => ({
-  insertLaunchDirective: vi.fn(),
-  findLaunchDirective: vi.fn(),
-  claimLaunchDirective: vi.fn(),
-  decideLaunchDirective: vi.fn(),
-}));
-vi.mock("./repository-collab", () => ({ presenceForWorkspace: vi.fn() }));
-vi.mock("./repository-tasks", () => ({ findTaskByChannelAndId: vi.fn() }));
-// ⚠ MOCKED IN EVERY LAUNCH SUITE THOUGH NONE OF THEM NAMES A COLOUR: the create's
-// SIXTH gate (`service-launch-color.ts`) reads the channel's taken set, and that read
-// is a live `supabaseAdmin()` client. The POLICY stays real — only the READ is
-// stubbed — so these suites still execute the gate rather than skipping it, on the
-// `repository-collab` precedent one line up. The colour cases are in
-// `service-launch-color.test.ts`.
-vi.mock("./repository-session-colors", () => ({
-  foreignLiveColorsByChannel: vi.fn(async () => new Map()),
-  // ⚠ THE SECOND READ THE GATE MAKES SINCE 2026-09-14 (pending directives hold their key
-  // too). Stubbed for the same reason as the first: the POLICY stays real here, the READS
-  // do not. Its own cases are in `service-launch-color.test.ts`.
-  pendingDirectiveColors: vi.fn(async () => []),
-}));
-vi.mock("./service-shared", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("./service-shared")>();
-  return { ...actual, loadVisibleChannel: vi.fn() };
-});
-// ⚠ MOCKED THOUGH THIS FILE NAMES NO IDENTITY: `service-launch.ts` imports the
-// agent-identities barrel at module scope, and that module is `server-only` with a
-// live Supabase admin client under it. The IDENTITY cases are next door, in
-// `service-launch-identity.test.ts`.
-vi.mock("@/features/agent-identities/server/service", () => ({
-  resolveIdentityRef: vi.fn(),
-}));
+const fx = await vi.hoisted(() => import("./service-launch-fixtures"));
+vi.mock("./repository-launch", () => fx.mocks.launchRepo);
+vi.mock("./repository-collab", () => fx.mocks.collab);
+vi.mock("./repository-tasks", () => fx.mocks.tasks);
+vi.mock("./repository-session-colors", () => fx.mocks.sessionColors);
+vi.mock("./service-shared", (importOriginal) => fx.serviceSharedMock(importOriginal));
+vi.mock("@/features/agent-identities/server/service", () => fx.mocks.identities);
 
 import * as launchRepo from "./repository-launch";
 import * as collab from "./repository-collab";
 import * as repoTasks from "./repository-tasks";
-import { loadVisibleChannel, type ChannelContext } from "./service-shared";
+import { loadVisibleChannel } from "./service-shared";
 import {
   LaunchDirectiveNotClaimableError,
   LaunchDirectiveNotFoundError,
@@ -62,65 +37,15 @@ import {
   getLaunchDirective,
 } from "./service-launch";
 import { LAUNCH_DIRECTIVE_TTL_MS } from "../constants";
+import { CHANNEL_ROW, DIR, ME, WS, ctx, row, wireLaunchDefaults } from "./service-launch-fixtures";
 
-const WS = "22222222-2222-2222-2222-222222222222";
-const ME = "33333333-3333-3333-3333-333333333333";
 const OTHER = "99999999-9999-9999-9999-999999999999";
-const CHAN = "11111111-1111-1111-1111-111111111111";
 const TASK = "44444444-4444-4444-4444-444444444444";
-const DIR = "55555555-5555-5555-5555-555555555555";
 
-const ctx: ChannelContext = {
-  workspaceId: WS,
-  userId: ME,
-  credentialSubjectUserId: ME,
-  source: "agent",
-  role: "member",
-};
-
-const CHANNEL_ROW = { id: CHAN, slug: "general", name: "General", visibility: "private" };
-const MEMBERSHIP = { channel_id: CHAN, user_id: ME, role: "member" };
-
-function row(over: Record<string, unknown> = {}) {
-  return {
-    id: DIR,
-    workspace_id: WS,
-    channel_id: CHAN,
-    task_id: null,
-    operator_user_id: ME,
-    goal: "ship the parser",
-    model: null,
-    identity_id: null,
-    identity_name: null,
-    status: "pending",
-    refusal_reason: null,
-    agent_id: null,
-    claimed_at: null,
-    decided_at: null,
-    expires_at: new Date(Date.now() + LAUNCH_DIRECTIVE_TTL_MS).toISOString(),
-    created_at: new Date().toISOString(),
-    ...over,
-  } as never;
-}
-
-function online() {
-  vi.mocked(collab.presenceForWorkspace).mockResolvedValue(
-    new Map([[ME, { online: true, lastSeenAt: new Date().toISOString() }]]) as never
-  );
-}
-
-beforeEach(() => {
-  vi.clearAllMocks();
-  vi.mocked(loadVisibleChannel).mockResolvedValue({
-    channel: CHANNEL_ROW,
-    membership: MEMBERSHIP,
-  } as never);
-  vi.mocked(launchRepo.insertLaunchDirective).mockResolvedValue(row());
-});
+beforeEach(wireLaunchDefaults);
 
 describe("create — the three gates, in order", () => {
   it("stamps the CALLER as operator, and there is nowhere for a payload to say otherwise", async () => {
-    online();
     // ⚠ A caller-supplied operator has nowhere to go — the input TYPE has no such
     // field, which is the real enforcement. The cast is how a test drives the
     // shape a compiler already refuses, so the runtime behaviour is pinned too.
@@ -138,7 +63,6 @@ describe("create — the three gates, in order", () => {
     // ⚠ `loadVisibleChannel` admits a non-member to a PUBLIC channel (§5). A
     // launch is not a read: starting an agent in a room you never joined is not
     // something the room agreed to.
-    online();
     vi.mocked(loadVisibleChannel).mockResolvedValue({
       channel: { ...CHANNEL_ROW, visibility: "public" },
       membership: null,
@@ -152,7 +76,6 @@ describe("create — the three gates, in order", () => {
   it("REFUSES a thread that is not in that channel — never silently drops it", async () => {
     // ⚠ A dropped thread id starts the agent in the wrong place and reports
     // success, which is worse than a refusal.
-    online();
     vi.mocked(repoTasks.findTaskByChannelAndId).mockResolvedValue(null);
     await expect(
       createLaunchDirective(ctx, { channel: "general", threadId: TASK })
@@ -161,14 +84,12 @@ describe("create — the three gates, in order", () => {
   });
 
   it("carries a valid thread id through", async () => {
-    online();
     vi.mocked(repoTasks.findTaskByChannelAndId).mockResolvedValue({ id: TASK } as never);
     await createLaunchDirective(ctx, { channel: "general", threadId: TASK });
     expect(vi.mocked(launchRepo.insertLaunchDirective).mock.calls[0][1].task_id).toBe(TASK);
   });
 
   it("sets expires_at from LAUNCH_DIRECTIVE_TTL_MS", async () => {
-    online();
     const before = Date.now();
     await createLaunchDirective(ctx, { channel: "general" });
     const expires = Date.parse(

@@ -24,80 +24,34 @@
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-// ⚠ `decideLaunchDirective` JOINED THE MOCK ON 2026-09-01 — the echo trio's writer is the
-// DECIDE, so the second half of this file drives it.
-vi.mock("./repository-launch", () => ({
-  insertLaunchDirective: vi.fn(),
-  decideLaunchDirective: vi.fn(),
-}));
-vi.mock("./repository-agent-owner", () => ({ agentIsAnotherMembers: vi.fn() }));
-vi.mock("./repository-collab", () => ({ presenceForWorkspace: vi.fn() }));
-vi.mock("./repository-tasks", () => ({ findTaskByChannelAndId: vi.fn() }));
-// ⚠ MOCKED IN EVERY LAUNCH SUITE THOUGH NONE OF THEM NAMES A COLOUR: the create's
-// SIXTH gate (`service-launch-color.ts`) reads the channel's taken set, and that read
-// is a live `supabaseAdmin()` client. The POLICY stays real — only the READ is
-// stubbed — so these suites still execute the gate rather than skipping it, on the
-// `repository-collab` precedent one line up. The colour cases are in
-// `service-launch-color.test.ts`.
-vi.mock("./repository-session-colors", () => ({
-  foreignLiveColorsByChannel: vi.fn(async () => new Map()),
-  // ⚠ THE SECOND READ THE GATE MAKES SINCE 2026-09-14 (pending directives hold their key
-  // too). Stubbed for the same reason as the first: the POLICY stays real here, the READS
-  // do not. Its own cases are in `service-launch-color.test.ts`.
-  pendingDirectiveColors: vi.fn(async () => []),
-}));
-vi.mock("./service-shared", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("./service-shared")>();
-  return { ...actual, loadVisibleChannel: vi.fn() };
-});
-// ⚠ MOCKED THOUGH NO TEST HERE NAMES AN IDENTITY: `service-launch.ts` pulls the
-// agent-identities barrel at module scope — `server-only`, with a live Supabase
-// admin client under it. The same mock its own suite carries.
-vi.mock("@/features/agent-identities/server/service", () => ({
-  resolveIdentityRef: vi.fn(),
-}));
+const fx = await vi.hoisted(() => import("./service-launch-fixtures"));
+vi.mock("./repository-launch", () => fx.mocks.launchRepo);
+vi.mock("./repository-agent-owner", () => fx.mocks.agentOwner);
+vi.mock("./repository-collab", () => fx.mocks.collab);
+vi.mock("./repository-tasks", () => fx.mocks.tasks);
+vi.mock("./repository-session-colors", () => fx.mocks.sessionColors);
+vi.mock("./service-shared", (importOriginal) => fx.serviceSharedMock(importOriginal));
+vi.mock("@/features/agent-identities/server/service", () => fx.mocks.identities);
 
 import * as launchRepo from "./repository-launch";
-import * as collab from "./repository-collab";
-import { agentIsAnotherMembers } from "./repository-agent-owner";
-import { loadVisibleChannel, type ChannelContext } from "./service-shared";
 import { createLaunchDirective, decideLaunchDirective } from "./service-launch";
 import { createAgentDirective } from "./service-launch-agent";
 import { toDirective } from "./service-launch-dto";
-import { LAUNCH_DIRECTIVE_TTL_MS } from "../constants";
 import { LaunchDecideSchema } from "../schema-launch";
+import {
+  DIR,
+  ctx,
+  inserted,
+  row as directiveRow,
+  wireLaunchDefaults,
+} from "./service-launch-fixtures";
 
-const WS = "22222222-2222-2222-2222-222222222222";
-const ME = "33333333-3333-3333-3333-333333333333";
-const CHAN = "11111111-1111-1111-1111-111111111111";
-const DIR = "55555555-5555-5555-5555-555555555555";
 const AGENT = "a1b2c3d4";
 
-const ctx: ChannelContext = {
-  workspaceId: WS,
-  userId: ME,
-  credentialSubjectUserId: ME,
-  source: "agent",
-  role: "member",
-};
-
-const CHANNEL_ROW = { id: CHAN, slug: "general", name: "General", visibility: "private" };
-const MEMBERSHIP = { channel_id: CHAN, user_id: ME, role: "member" };
-
+/** A directive row carrying all eight posture columns, each null. */
 function row(over: Record<string, unknown> = {}) {
-  return {
-    id: DIR,
-    kind: "launch",
-    workspace_id: WS,
-    channel_id: CHAN,
-    task_id: null,
-    operator_user_id: ME,
+  return directiveRow({
     goal: null,
-    model: null,
-    identity_id: null,
-    identity_name: null,
-    target_agent_id: null,
-    target_name: null,
     start_tool_mode: null,
     start_message_mode: null,
     chain: null,
@@ -106,39 +60,13 @@ function row(over: Record<string, unknown> = {}) {
     applied_tool_mode: null,
     applied_message_mode: null,
     applied_chain: null,
-    status: "pending",
-    refusal_reason: null,
-    agent_id: null,
-    claimed_at: null,
-    decided_at: null,
-    expires_at: new Date(Date.now() + LAUNCH_DIRECTIVE_TTL_MS).toISOString(),
-    created_at: new Date().toISOString(),
     ...over,
-  };
+  });
 }
 
-/** The one insert this suite inspects. */
-function inserted(): Record<string, unknown> {
-  const call = vi.mocked(launchRepo.insertLaunchDirective).mock.calls[0];
-  return call[1] as unknown as Record<string, unknown>;
-}
+beforeEach(wireLaunchDefaults);
 
-beforeEach(() => {
-  vi.clearAllMocks();
-  vi.mocked(loadVisibleChannel).mockResolvedValue({
-    channel: CHANNEL_ROW,
-    membership: MEMBERSHIP,
-  } as never);
-  // ONLINE: presence is the last gate and every case here is about what is
-  // written, not about whether anything is.
-  vi.mocked(collab.presenceForWorkspace).mockResolvedValue(
-    new Map([[ME, { lastSeenAt: new Date().toISOString() }]]) as never,
-  );
-  vi.mocked(agentIsAnotherMembers).mockResolvedValue(false);
-  vi.mocked(launchRepo.insertLaunchDirective).mockResolvedValue(row() as never);
-});
-
-describe("createLaunchDirective persists the T24 request", () => {
+describe("createLaunchDirective persists the request", () => {
   it("writes both axes and the chain under their column names", async () => {
     await createLaunchDirective(ctx, {
       channel: "general",
@@ -152,7 +80,7 @@ describe("createLaunchDirective persists the T24 request", () => {
     expect(ins.chain).toBe(true);
   });
 
-  it("⚠ `chain: false` IS WRITTEN AS false, never rewritten to null", async () => {
+  it("`chain: false` IS WRITTEN AS false, never rewritten to null", async () => {
     // ⚠ `|| null` here would rewrite what the caller sent, in the one place that
     // exists to record it faithfully — and since 2026-09-01 it would also DELETE
     // A REAL REQUEST: `main/launch-directive-wire.js › directiveFrom` carries all
@@ -163,7 +91,7 @@ describe("createLaunchDirective persists the T24 request", () => {
     expect(inserted().chain).toBe(false);
   });
 
-  it("a launch that asks for nothing writes null on all three — the pre-T24 row", async () => {
+  it("a launch that asks for nothing writes null on all three", async () => {
     await createLaunchDirective(ctx, { channel: "general", goal: "do a thing" });
     const ins = inserted();
     expect(ins.start_tool_mode).toBeNull();
@@ -171,14 +99,14 @@ describe("createLaunchDirective persists the T24 request", () => {
     expect(ins.chain).toBeNull();
   });
 
-  it("⚠ NEVER writes the SET-MODE pair — the column CHECK refuses it at rest", async () => {
+  it("NEVER writes the SET-MODE pair — the column CHECK refuses it at rest", async () => {
     await createLaunchDirective(ctx, { channel: "general", tools: "bypass" });
     const ins = inserted();
     expect(ins.target_tool_mode).toBeUndefined();
     expect(ins.target_message_mode).toBeUndefined();
   });
 
-  it("⚠ NEVER writes an ECHO column — the machine reports those, not the asker", async () => {
+  it("NEVER writes an ECHO column — the machine reports those, not the asker", async () => {
     await createLaunchDirective(ctx, { channel: "general", tools: "auto" });
     const ins = inserted();
     expect(ins.applied_tool_mode).toBeUndefined();
@@ -219,7 +147,7 @@ describe("createAgentDirective persists the set_agent_mode request", () => {
     expect(inserted().target_message_mode).toBeNull();
   });
 
-  it("⚠ an END writes NO posture at all, on either pair", async () => {
+  it("an END writes NO posture at all, on either pair", async () => {
     vi.mocked(launchRepo.insertLaunchDirective).mockResolvedValue(
       row({ kind: "end", target_agent_id: AGENT }) as never,
     );
@@ -261,7 +189,7 @@ describe("toDirective hands back all eight columns", () => {
     expect(d.targetMessageMode).toBe("auto_both");
   });
 
-  it("🔒 the ECHO trio comes back as null, NOT defaulted from the request", () => {
+  it("the ECHO trio comes back as null, NOT defaulted from the request", () => {
     const d = toDirective(
       row({ start_tool_mode: "bypass", start_message_mode: "auto_both", chain: true }) as never,
       now,
@@ -281,7 +209,7 @@ describe("toDirective hands back all eight columns", () => {
     expect(toDirective(row({ kind: "teleport" }) as never, now).kind).toBe("launch");
   });
 
-  it("⚠ a STALE CACHED PAYLOAD missing every new column maps to null, never undefined", () => {
+  it("a STALE CACHED PAYLOAD missing every new column maps to null, never undefined", () => {
     // A payload cached against an older PostgREST schema arrives without the
     // fields; `undefined` renders as the string "undefined" inside a sentence
     // naming what an agent was allowed to do.
@@ -355,7 +283,7 @@ describe("decideLaunchDirective writes the applied echo", () => {
     expect(d.applied_chain).toBe(true);
   });
 
-  it("🔒 `appliedChain: false` is written as false, NOT collapsed to null", async () => {
+  it("`appliedChain: false` is written as false, NOT collapsed to null", async () => {
     // ⚠ `|| null` here would delete the one fact that stops an orchestrator planning for workers.
     // `false` is a REPORT ("this session may not launch further agents"); `null` is a SILENCE.
     await decideLaunchDirective(ctx, DIR, {
@@ -366,7 +294,7 @@ describe("decideLaunchDirective writes the applied echo", () => {
     expect(decided().applied_chain).toBe(false);
   });
 
-  it("🔒 an OLDER DESKTOP reports nothing, and all three land as null — never as the request", async () => {
+  it("an OLDER DESKTOP reports nothing, and all three land as null — never as the request", async () => {
     // ⚠ THE OLDER-PEER CASE, WHICH IS ALSO THE ONLY REASON THE SCHEMA FIELDS ARE OPTIONAL. Such a
     // machine posts `{ directiveId, status, agentId }` and nothing else. Filling the columns from
     // `start_tool_mode` / `chain` here would make the row assert that the machine applied exactly
@@ -441,12 +369,7 @@ describe("decideLaunchDirective writes the applied echo", () => {
  * never a constraint violation surfacing as an opaque 500.
  */
 describe("LaunchDecideSchema carries the echo, optionally", () => {
-  // ⚠ NOT `DIR`. That constant is a plausible-looking uuid the REPOSITORY mock never validates;
-  // this schema really does (`z.string().uuid()`), and zod refuses it on the variant nibble. A
-  // fixture that fails the field under test for a reason unrelated to the test is a case that can
-  // only ever be red, so this one spells a v4 uuid.
-  const DECIDE_ID = "55555555-5555-4555-8555-555555555555";
-  const launched = { directiveId: DECIDE_ID, status: "launched" as const, agentId: AGENT };
+  const launched = { directiveId: DIR, status: "launched" as const, agentId: AGENT };
 
   it("parses a full echo", () => {
     const parsed = LaunchDecideSchema.parse({
@@ -462,7 +385,7 @@ describe("LaunchDecideSchema carries the echo, optionally", () => {
     });
   });
 
-  it("🔒 parses a decide with NO echo at all — the older desktop must still be able to report", () => {
+  it("parses a decide with NO echo at all — the older desktop must still be able to report", () => {
     // ⚠ MAKING ANY OF THE THREE REQUIRED WOULD 400 EVERY DECIDE SUCH A MACHINE POSTS, turning
     // "I cannot tell you what I applied" into "I could not report at all" — and the row would then
     // expire with a running agent behind it. INVARIANTS §13: an older peer is supported.
@@ -482,16 +405,16 @@ describe("LaunchDecideSchema carries the echo, optionally", () => {
   // 🔒 F2: zod stripped these from `done`, so a `set_agent_mode` clamp was stored as "not reported".
   it("`done` keeps a re-posture's applied pair (a Codex word too), and drops a chain", () => {
     const parsed = LaunchDecideSchema.parse({
-      directiveId: DECIDE_ID,
+      directiveId: DIR,
       status: "done",
       appliedTools: "on-request",
       appliedMessages: "auto_both",
       appliedChain: true,
     });
     expect(parsed).toEqual({
-      directiveId: DECIDE_ID, status: "done", appliedTools: "on-request", appliedMessages: "auto_both",
+      directiveId: DIR, status: "done", appliedTools: "on-request", appliedMessages: "auto_both",
     });
-    expect(LaunchDecideSchema.safeParse({ directiveId: DECIDE_ID, status: "done", appliedTools: "yolo" })
+    expect(LaunchDecideSchema.safeParse({ directiveId: DIR, status: "done", appliedTools: "yolo" })
       .success).toBe(false);
   });
 });
