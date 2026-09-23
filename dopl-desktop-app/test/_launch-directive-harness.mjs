@@ -122,6 +122,7 @@ export function boot(over = {}) {
   const identityAsks = []; // every runtime the identity link was asked of (2026-09-23)
   const runtimeAsks = []; // every C3 `resolveLaunchRuntime` call ({ pick, identity, channelId })
   const startAsks = []; // every C1 `launchStartModes(channelId, runtimeId)` read — the runtime asked
+  const ceilingAsks = []; // every C1 `launchPostureFor(channelId, runtimeId)` read — the ceiling's runtime
   const stub = (id) => {
     if (id === "./api") {
       return {
@@ -165,6 +166,13 @@ export function boot(over = {}) {
         getOrchestratorLaunch: () => cfg.enabled === true,
         // C1 (a1's contract), stubbed at its seam: THAT runtime's record, messages windowless-
         // floored, native bag verbatim. `cfg.ceilings[rid]` beats `cfg.ceiling` for one runtime.
+        // C1's ceiling helper: the same record, messages NOT floored.
+        launchPostureFor: (channelId, rid) => {
+          ceilingAsks.push(rid);
+          const c = (cfg.ceilings && cfg.ceilings[rid]) || cfg.ceiling
+            || { tools: "bypass", messages: "auto_both" };
+          return { tools: c.tools, messages: c.messages };
+        },
         launchStartModes: (channelId, rid) => {
           startAsks.push(rid);
           const c = (cfg.ceilings && cfg.ceilings[rid]) || cfg.ceiling
@@ -396,7 +404,7 @@ export function boot(over = {}) {
   // was actually asked about. Nothing about the module is wrapped — `handle` is the real one.
   const handle = (frame, ws) => { cfg.lastFrame = frame; return api.handle(frame, ws); };
   return { api: { ...api, handle }, cfg, posts, gets, arms, logged, resolves, controls, names,
-    flushes, modes, acquires, rosters, identityAsks, runtimeAsks, startAsks };
+    flushes, modes, acquires, rosters, identityAsks, runtimeAsks, startAsks, ceilingAsks };
 }
 
 /**

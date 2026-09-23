@@ -272,7 +272,8 @@ function setAgentMode(d) {
   };
 
   // The SESSION's runtime decides the words (ruling R3): a tool word it does not offer is not
-  // applied, and the clamp runs in its own descriptor order against its own channel record (C1).
+  // applied, and the clamp runs in its own descriptor order against its own channel record (C1). The
+  // engine re-clamps a pinned mode itself (C2); this is the belt, and it names the clamp in the log.
   const runtimeId = sessionRuntimeId(target);
   const order = require('./launch-directive-runtime').toolOrderFor(runtimeId);
   const askedTools = d.targetToolMode && order.indexOf(d.targetToolMode) !== -1 ? d.targetToolMode : '';
@@ -286,7 +287,7 @@ function setAgentMode(d) {
   // posture while a directive is in flight. An unreadable record narrows to the floor, never opens.
   let ceiling = { tools: order[0] || '', messages: 'ask' };
   try {
-    ceiling = require('./channel-prefs').launchStartModes(d.channelId, runtimeId) || ceiling;
+    ceiling = require('./channel-prefs').launchPostureFor(d.channelId, runtimeId) || ceiling;
   } catch (err) {
     diag('directive-agent-ops: set_agent_mode — posture ceiling unreadable, using the floor:',
       (err && err.message) || String(err));

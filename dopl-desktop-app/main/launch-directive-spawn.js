@@ -76,10 +76,11 @@ async function resolveModel(runtimeId, d, identity) {
 
 /**
  * The posture a new session starts on, in the LAUNCH runtime's own words (rulings R3/R4).
- * Ceiling + native bag: that runtime's record (`channel-prefs.js › launchStartModes`, C1). A tool
- * word the runtime does not offer is not applied (that axis runs at the channel posture); the clamp
- * order is the runtime's descriptor order. An asked axis is PINNED as the session's own pick (C2),
- * so the gate keeps the narrower of it and the live channel value — the echo is what it enforces.
+ * Ceiling: that runtime's record (`channel-prefs.js › launchPostureFor`, C1); native bag:
+ * `launchStartModes`. A tool word the runtime does not offer is not applied (that axis runs at the
+ * channel posture); the clamp order is the runtime's descriptor order, then the windowless floor.
+ * An ask is PINNED as the session's own pick (C2: both axes), so the gate keeps the narrower of it
+ * and the live channel value — the echo is what it enforces.
  */
 function planPosture(d, runtimeId, chainAllowed) {
   const order = require('./launch-directive-runtime').toolOrderFor(runtimeId);
@@ -88,10 +89,9 @@ function planPosture(d, runtimeId, chainAllowed) {
     diag('launch-directive: tool mode', d.startToolMode, 'is not a', runtimeId || 'default-runtime',
       'word — that axis launches at the channel posture');
   }
-  const start = channelPrefs.launchStartModes(d.channelId, runtimeId) || {};
   const plan = launchPosture.resolveLaunch({
     requested: { tools: askedTools, messages: d.startMessageMode },
-    ceiling: { tools: start.tools, messages: start.messages },
+    ceiling: channelPrefs.launchPostureFor(d.channelId, runtimeId),
     chainRequested: d.chain,
     chainAllowed,
     floorMessages: (m) => channelPrefs.windowlessMessageMode(d.channelId, m),
@@ -102,6 +102,7 @@ function planPosture(d, runtimeId, chainAllowed) {
       String(d.startToolMode || '-') + '/' + String(d.startMessageMode || '-'),
       'applied', plan.modes.tools + '/' + plan.modes.messages);
   }
+  const start = channelPrefs.launchStartModes(d.channelId, runtimeId) || {};
   const hand = { tools: plan.modes.tools, messages: plan.modes.messages, native: { ...(start.native || {}) } };
   if (askedTools || d.startMessageMode) hand.pinned = true;
   return { hand, chain: plan.chain };

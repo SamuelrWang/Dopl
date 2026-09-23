@@ -168,11 +168,11 @@ test("CLAMP: a request NARROWER than the ceiling is applied as asked", async () 
 });
 
 test("CLAMP: an UNSET channel posture is the restrictive default, so nothing widens", async () => {
-  // ⚠ An unset or unreadable record IS the narrowest tool word and `ask` — the message ceiling
-  // arrives windowless-floored (`launchStartModes`), which is what the engine enforces anyway.
+  // ⚠ An unset or unreadable record IS the narrowest tool word and `ask`; the engine then applies
+  // the windowless message floor.
   const h = boot({ live: live(), ceiling: { tools: "manual", messages: "ask" } });
   await h.api.handle(modeRow({ target_tool_mode: "bypass", target_message_mode: "auto_both" }), WS);
-  assert.deepEqual(h.modes.map((m) => m.mode), ["manual", "auto_inbound"]);
+  assert.deepEqual(h.modes.map((m) => m.mode), ["manual", "ask"]);
 });
 
 test("CLAMP: the comparison is an index, so an unknown CEILING clamps to itself", async () => {
@@ -238,7 +238,7 @@ const codexLive = () => [liveRow("a1b2c3d4", { runtimeId: "codex" })];
 test("RUNTIME: a Codex agent is re-postured in Codex words, against the CODEX record", async () => {
   const h = boot({ live: codexLive(), ceilings: { codex: { tools: "on-request", messages: "auto_both" } } });
   await h.api.handle(modeRow({ target_tool_mode: "never" }), WS);
-  assert.deepEqual(h.startAsks, ["codex"], "the ceiling is the SESSION runtime's record (C1)");
+  assert.deepEqual(h.ceilingAsks, ["codex"], "the ceiling is the SESSION runtime's record (C1)");
   assert.deepEqual(h.modes.map((m) => [m.axis, m.mode, m.pinned]), [["tools", "on-request", true]],
     "`never` is wider than `on-request` in CODEX order, so it clamps there");
   assert.deepEqual(decided(h), [{ directiveId: DID, status: "done", appliedTools: "on-request" }]);

@@ -281,7 +281,8 @@ test("RECORD: a Codex launch reads the CODEX record — its sandbox reaches the 
     codex: { tools: "on-request", messages: "auto_both", native: { sandbox_mode: "read-only" } },
   } });
   await h.api.handle(launchRow({ runtime: "codex" }), WS);
-  assert.deepEqual(h.startAsks, ["codex"], "C1 is asked for the LAUNCH runtime's record");
+  assert.deepEqual(h.ceilingAsks, ["codex"], "C1: the ceiling is the LAUNCH runtime's record");
+  assert.deepEqual(h.startAsks, ["codex"], "…and so is the native bag");
   assert.deepEqual(handedModes(h),
     { tools: "on-request", messages: "auto_both", native: { sandbox_mode: "read-only" } });
   assert.equal(decided(h)[0].appliedTools, "on-request", "the echo is a CODEX word (C5)");
