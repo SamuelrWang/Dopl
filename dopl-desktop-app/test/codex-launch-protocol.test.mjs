@@ -29,12 +29,12 @@ const launchSpec = require(join(CODEX, "launch-spec.js"));
 // `CODEX_LIVE_TURN=1` because it spends a real model turn. Both skip loudly.
 const GATE = announceGate(liveGate());
 
-const tick = () => new Promise((resolve) => setImmediate(resolve));
-
+// Time-bounded: the fenced catalog is read ASYNCHRONOUSLY before the child exists (CX-09), and
+// that read may spawn the bundled binary.
 async function waitFor(predicate, message) {
-  for (let i = 0; i < 100; i += 1) {
+  for (const until = Date.now() + 10000; Date.now() < until;) {
     if (predicate()) return;
-    await tick();
+    await new Promise((resolve) => setTimeout(resolve, 5));
   }
   assert.fail(message);
 }
@@ -69,6 +69,7 @@ test("start drives the measured v2 thread/turn state machine", async () => {
       if (method === "turn/steer") return { turnId: "turn-1" };
       return {};
     },
+    notify(method) { calls.push({ method, notification: true }); },
     close() {},
   };
 
@@ -87,6 +88,9 @@ test("start drives the measured v2 thread/turn state machine", async () => {
     await waitFor(() => calls.some((c) => c.method === "turn/steer"), "prompt pump never steered");
     const launched = await handle.next();
     assert.equal(launched.value.method, "dopl/threadStarted");
+    // CX-14: the protocol's `initialized` notification follows the `initialize` answer.
+    assert.deepEqual(calls.slice(0, 2).map((c) => [c.method, !!c.notification]),
+      [["initialize", false], ["initialized", true]]);
     assert.deepEqual(launched.value.params, { threadId: "thread-1", model: "gpt-6-astra" });
     assert.deepEqual(calls.find((c) => c.method === "thread/start").params, {
       cwd: HERE,

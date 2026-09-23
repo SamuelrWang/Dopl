@@ -269,6 +269,7 @@ function noteSettled(id, status) {
 function due(entry, now, adapter) {
   if (!entry) return true;
   if (entry.inflight) return false;
+  if (entry.due === true) return true; // invalidated while holding models (RC-02)
   // ⚠ A GOOD ROSTER IS CACHED FOR THE PROCESS — UNLESS ITS KEY MOVED (2026-09-22). An adapter that
   // can name its roster's key synchronously (`runtime.rosterKey`, e.g. binary + account) gets a
   // re-read the first look after a sign-in or an upgrade, with no timer and no invalidation hook.
@@ -440,10 +441,9 @@ function catalogs(adapters) {
 /**
  * MARK A RUNTIME'S CATALOG FOR RE-READ — the reconnect / repair / version-change hook.
  *
- * ⚠ A CATALOG THAT HOLDS MODELS BECOMES `stale`: it keeps the models and changes the status,
- * which is the whole difference between this and `forget`. A reconnect does not make the old
- * labels wrong; it makes them unconfirmed. Until the re-read answers, a stale id still renders
- * and still cannot be picked.
+ * A catalog that holds models keeps them AND its status, and is only marked due: the next look
+ * re-reads while answering what it held. Flipping READY to `stale` here left the picker
+ * unselectable, because the renderer re-polls only `loading` (RC-02).
  * ⚠ **A CATALOG THAT HOLDS NONE BECOMES `loading` (CXP-5, 2026-09-22).** An `unavailable` verdict
  * that has been invalidated is no longer a verdict — the failure it measured is the thing the
  * operator just changed — and `stale` with no models would be a status with nothing to label.
@@ -451,7 +451,7 @@ function catalogs(adapters) {
  * `codex app-server` beside the first; instead it is marked dirty, so if IT fails its answer is
  * due again at the very next look (`refresh`).
  */
-function invalidate(runtimeId, reason) {
+function invalidate(runtimeId, _reason) {
   const id = str(runtimeId);
   const held = snapshots.get(id);
   if (!held || !held.catalog) return false;
@@ -459,12 +459,11 @@ function invalidate(runtimeId, reason) {
     held.dirty = true;
     return true;
   }
-  const catalog = held.catalog.models.length
-    ? Object.assign({}, held.catalog, {
-      status: STATUS.STALE,
-      reason: str(reason) || 'this runtime reconnected, so its model list has not been re-read yet',
-    })
-    : makeCatalog(id, held.catalog.source, STATUS.LOADING, { dimensions: held.catalog.dimensions.slice() });
+  if (held.catalog.models.length) {
+    snapshots.set(id, { catalog: held.catalog, at: 0, inflight: null, dirty: false, due: true });
+    return true;
+  }
+  const catalog = makeCatalog(id, held.catalog.source, STATUS.LOADING, { dimensions: held.catalog.dimensions.slice() });
   snapshots.set(id, { catalog, at: 0, inflight: null, dirty: false });
   return true;
 }

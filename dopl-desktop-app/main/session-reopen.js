@@ -40,6 +40,11 @@ const directedTurn = require('./session-directed'); // 2026-08-31: attribution +
 const runtimeRegistry = require('./runtime');
 const runtimeCapability = runtimeRegistry.capability;
 const runtimeCopy = runtimeRegistry.copy;
+// The auth re-probe (P4-06): a free var inside the PURE block, required lazily.
+const authReprobe = {
+  reprobesOnWake: (s) => require('./session-auth').reprobesOnWake(s),
+  reprobeHeld: (s) => require('./session-auth').reprobeHeld(s),
+};
 
 // ─── BEGIN SESSION-REOPEN-PURE (injectable; unit-tested via source extraction) ────
 
@@ -387,7 +392,11 @@ function messageByTask(a) {
   // H1: a session HELD on the sign-in action has no query to feed — the push would land on
   // a closed iterator and the operator's words would vanish. Refuse and say which, so the
   // composer can tell them to sign in rather than silently eating the message.
-  if (s.state && s.state.authHeld === true) return { ok: false, reason: 'auth-hold' };
+  if (s.state && s.state.authHeld === true) {
+    // P4-06: a runtime with no in-app sign-in re-probes its credential on the next message.
+    if (!authReprobe.reprobesOnWake(s)) return { ok: false, reason: 'auth-hold' };
+    return authReprobe.reprobeHeld(s).then((released) => (released ? messageByTask(a) : { ok: false, reason: 'auth-hold' }));
+  }
   try {
     // OPEN THE PRIVATE WINDOW BEFORE THE DISPATCH (2026-08-22, Samuel's ruling), and read the
     // in-flight state while it is still THIS turn's: `openPrivateTurn` looks at `s.state.activity`

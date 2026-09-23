@@ -162,7 +162,9 @@ function resolveLaunchModel(value) {
       ? { ok: true, arg: fb.value, id: fb.id, reason: '' }
       : { ok: true, arg: modelTable.aliasForModelId(modelTable.LAUNCH_MODEL_FALLBACK), id: modelTable.LAUNCH_MODEL_FALLBACK, reason: '' };
   }
-  const row = roster.match(r.models, v);
+  // By exact id or alias only: `baseId` strips `[1m]`, so a long-context pick matched the short row
+  // of the frozen table and resumed a 1M conversation on a 200k model (RC-01).
+  const row = roster.matchExact(r.models, v);
   if (row) return { ok: true, arg: row.value, id: row.id, reason: '' };
   const offered = r.models.filter((m) => !m.hidden).map((m) => m.label || m.id).join(', ');
   return { ok: false, arg: '', id: '', reason: `Claude Code does not offer the model "${v}" on this machine${offered ? ` (it offers: ${offered})` : ''}.` };

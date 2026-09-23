@@ -43,6 +43,20 @@ const AUTH_SHAPED_RE = /\b(401|403)\b|unauthor(?:ised|ized)|not\s+logged\s+in|lo
 
 const isAuthShaped = (text) => AUTH_SHAPED_RE.test(String(text == null ? '' : text));
 
+// The server's own classification on a turn error (`TurnError.codexErrorInfo`): the string
+// `unauthorized`, or an HTTP-failure variant carrying `httpStatusCode` 401/403.
+function unauthorizedInfo(info) {
+  if (info === 'unauthorized') return true;
+  if (!info || typeof info !== 'object') return false;
+  return Object.keys(info).some((k) => {
+    const code = info[k] && info[k].httpStatusCode;
+    return code === 401 || code === 403;
+  });
+}
+
+// The visible line a non-auth failed turn leaves in the agent's lane (CX-04).
+const turnFailureLine = (text) => `Codex could not finish this turn${text ? `: ${text}` : '.'}`;
+
 // ── TOLERANT READERS ─────────────────────────────────────────────────────────────────────────
 //
 // Every one of these exists because the payload shape is §5-unverified. They read the spellings
@@ -61,14 +75,17 @@ const itemId = (item) => {
 };
 
 /** The human text on an item, under any of the spellings an item might carry it. */
-function textOf(item) {
+function textOf(item, keys) {
   const i = item && typeof item === 'object' ? item : {};
-  for (const key of ['text', 'message', 'content', 'delta']) {
+  for (const key of keys || ['text', 'message', 'content', 'delta']) {
     const v = i[key];
     if (typeof v === 'string' && v) return v;
     if (Array.isArray(v)) {
-      const joined = v.map((b) => (b && typeof b.text === 'string' ? b.text : '')).join('');
-      if (joined) return joined;
+      // v2 reasoning `summary`/`content` are string arrays; message content blocks carry `.text`.
+      const joined = v.every((b) => typeof b === 'string')
+        ? v.join('\n')
+        : v.map((b) => (b && typeof b.text === 'string' ? b.text : '')).join('');
+      if (joined.trim()) return joined;
     }
   }
   return '';
@@ -77,6 +94,8 @@ function textOf(item) {
 /** The arguments an item carries, if any — the thing a card is painted from. */
 function argsOf(item) {
   const i = item && typeof item === 'object' ? item : {};
+  // A v2 `commandExecution` carries its command line as a STRING (CX-13).
+  if (typeof i.command === 'string' && i.command) return { command: i.command };
   for (const key of ['arguments', 'args', 'input', 'params', 'command', 'changes']) {
     if (i[key] && typeof i[key] === 'object') return i[key];
   }
@@ -231,7 +250,7 @@ function completedEvents(item, ctx) {
     return text ? [events.assistant(text)] : [];
   }
   if (THINKING_TYPES.indexOf(type) !== -1) {
-    const text = textOf(item);
+    const text = textOf(item, ['summary', 'text', 'content']);
     return text ? [events.thinking(text)] : []; // work lane, bounded downstream
   }
   const id = itemId(item);
@@ -239,14 +258,15 @@ function completedEvents(item, ctx) {
   // ⚠ `ok` IS FALSE ONLY ON AN EXPLICIT FAILURE. An item that reports no status at all reads as
   // SUCCESS, because a false negative here retracts an `outbound_post` the operator already saw
   // sent (the reducer un-counts a post on a failing result) — claiming a delivered message failed
-  // is worse than missing a failure.
+  // is worse than missing a failure. A `declined` command/patch did not run.
   const status = String((item && (item.status || item.outcome)) || '');
-  const ok = !(item && item.error) && status !== 'failed' && status !== 'error';
+  const ok = !(item && item.error) && status !== 'failed' && status !== 'error' && status !== 'declined';
+  const errorText = item && item.error && typeof item.error.message === 'string' ? item.error.message : '';
   return [events.toolResult({
     type: 'tool_result',
     toolUseId: id,
     ok: ok,
-    resultSummary: io.summarizeResult(textOf(item) || item.result || item.output),
+    resultSummary: io.summarizeResult(textOf(item) || item.aggregatedOutput || item.result || item.output || errorText),
   })];
 }
 
@@ -266,7 +286,9 @@ function normalize(msg, ctx) {
   // through the normalizer rather than core deciding what "no credential" looks like.
   if (msg.type === ERROR_MESSAGE_TYPE) {
     const text = String(msg.text == null ? '' : msg.text);
-    return isAuthShaped(text) ? [events.authHold(text)] : [];
+    if (isAuthShaped(text) || unauthorizedInfo(msg.codexErrorInfo)) return [events.authHold(text)];
+    // A failed TURN (not a rejected stream, which core's crash path reports) is shown in the lane.
+    return msg.turnFailed === true ? [events.assistant(turnFailureLine(text))] : [];
   }
 
   const method = typeof msg.method === 'string' ? msg.method : '';
@@ -311,7 +333,9 @@ function normalize(msg, ctx) {
     // here and core's `Math.max(0, total - last)` are both correct on a LIVE session. ⚠ The same
     // measurement continued the total ACROSS a `thread/resume` in a fresh child, which is why
     // `usageResetsOnResume` is now `false` and resume stays refused — for a measured reason.
-    out.push(events.result(t.session, model));
+    // No usage at all is NO MEASUREMENT (`null`), which core skips rather than reading as a total
+    // of zero (CX-02 / P4-04).
+    out.push(events.result(usage ? t.session : null, model));
     return out;
   }
 
@@ -323,5 +347,5 @@ function normalize(msg, ctx) {
 module.exports = {
   normalize,
   startedEvents, completedEvents, tokensFrom, usageOf, promptUsageOf, windowFrom, isAuthShaped,
-  THREAD_STARTED, ERROR_MESSAGE_TYPE,
+  unauthorizedInfo, THREAD_STARTED, ERROR_MESSAGE_TYPE,
 };

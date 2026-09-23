@@ -85,7 +85,7 @@ export function harness(over = {}) {
   const api = new Function(
     "deps", "detect", "store", "diag", "credentialState", "floorWindowlessMessage",
     "runtimeCopy", "copyFor",
-    `${HOLD_BLOCK}\n return { holdIfNoCredential, holdIfNoRuntimeCredential, holdIfAuthFailure, holdIfAuthMessage, resumeAfterSignIn };`
+    `${HOLD_BLOCK}\n return { holdIfNoCredential, holdIfNoRuntimeCredential, holdIfAuthFailure, resumeAfterSignIn };`
   )(deps, detect, { setRecordPhase: (key, phase) => calls.phase.push({ key, phase }) }, () => {},
     () => ({ usable: state.usable, source: state.usable ? "cli-store" : null }),
     require(M("session-profiles.js")).floorWindowlessMessage,

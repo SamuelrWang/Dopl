@@ -57,11 +57,14 @@ function liveSkipReason() {
 // ── 1. THE HAPPY PATH ────────────────────────────────────────────────────────────────────────
 
 test("the roster keeps the server's ORDER and marks EXACTLY the reported default", async () => {
-  const codex = loadCodexModels(fakeClient([
+  const client = fakeClient([
     { data: [row("gpt-z"), row("gpt-a", { isDefault: true }), row("gpt-m")], nextCursor: null },
-  ]));
+  ]);
+  const codex = loadCodexModels(client);
   const roster = await codex.models();
   assert.deepEqual(roster.ids, ["gpt-z", "gpt-a", "gpt-m"], "the server's order, un-sorted");
+  // CX-14: the protocol's `initialized` notification follows `initialize`, before any request.
+  assert.deepEqual(client.asked.slice(0, 3).map(([m]) => m), ["initialize", "initialized", "model/list"]);
   const catalog = loadCatalog().catalogFromRoster("codex", CODEX_DESCRIPTOR, roster);
   assert.equal(catalog.status, "ready");
   assert.deepEqual(catalog.models.map((m) => m.id), ["gpt-z", "gpt-a", "gpt-m"]);
@@ -161,6 +164,7 @@ test("a cursor is FOLLOWED, and a server that never advances it does not loop fo
       let n = 0;
       return {
         close: () => {},
+        notify: () => {},
         request: async (method) => {
           if (method === "initialize") return {};
           n += 1;
@@ -208,6 +212,7 @@ test("the roster is cached by BINARY AND VERSION, and a change re-reads", async 
     catalogGate: () => ({ ok: true, reason: "" }),
     connect: () => ({
       close: () => {},
+      notify: () => {},
       request: async (method) => {
         if (method === "initialize") return {};
         calls += 1;
@@ -237,6 +242,7 @@ test("a FAILED read is NOT cached — an operator who fixes their install with D
     catalogGate: () => ({ ok: true, reason: "" }),
     connect: () => ({
       close: () => {},
+      notify: () => {},
       request: async (method) => {
         if (method === "initialize") return {};
         calls += 1;

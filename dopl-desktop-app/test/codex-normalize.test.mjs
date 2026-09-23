@@ -159,7 +159,7 @@ test("…and an unmeasured usage spelling still meters rather than reading as ze
   assert.equal(cachedOnly[1].sessionTokens, 1010);
   const empty = normalize.normalize({ method: "turn/completed", params: {} }, CTX);
   assert.deepEqual(types(empty), ["result"], "no usage at all paints no context row");
-  assert.equal(empty[0].sessionTokens, 0);
+  assert.equal(empty[0].sessionTokens, null, "no usage is NO measurement, never a total of zero (P4-04)");
 });
 
 // ══ THE DENOMINATOR (2026-09-22) — the server reports the window it is metering against ══════
@@ -239,7 +239,9 @@ test("an INTERRUPTED turn is ONE terminal result and does NOT zero the context m
   // pressed Stop. The model still reaches the reducer — on the `result` below.
   assert.deepEqual(types(out), ["result"]);
   assert.equal(out[0].model, "gpt-6-astra");
-  assert.equal(out[0].sessionTokens, 0);
+  // Not 0 (P4-04): a zero here reset core's cumulative baseline, and the next turn then re-billed
+  // the whole thread total. `null` = unmeasured, which `session-io.js` skips.
+  assert.equal(out[0].sessionTokens, null);
 });
 
 test("an own-channel post becomes ONE outbound_post, and the generic tool card is suppressed", () => {
@@ -301,4 +303,34 @@ test("the JSON-RPC line framing survives split chunks, and drops nothing it rece
   assert.deepEqual(seen, ['{"a":1}'], "a half-line is buffered, never emitted");
   feed('2}\n\n  \n{"c":3}\n');
   assert.deepEqual(seen, ['{"a":1}', '{"b":2}', '{"c":3}'], "blank lines contribute nothing");
+});
+
+test("CX-13: v2 item shapes — a string command, `aggregatedOutput`, `declined`, string-array reasoning", () => {
+  // Measured on codex-cli 0.155.1 (`thread/shellCommand`, no model turn): the command is a STRING
+  // and the output rides `aggregatedOutput`; reasoning `summary`/`content` are string arrays.
+  const started = normalize.normalize({ method: "item/started", params: { item: {
+    id: "cmd_1", type: "commandExecution", command: "/bin/zsh -lc 'npm test'", status: "inProgress",
+  } } }, CTX);
+  assert.deepEqual(types(started), ["tool_use"]);
+  assert.match(started[0].payload.inputSummary, /npm test/, "the card names the command");
+  const done = normalize.normalize({ method: "item/completed", params: { item: {
+    id: "cmd_1", type: "commandExecution", command: "/bin/zsh -lc 'npm test'",
+    status: "completed", exitCode: 0, aggregatedOutput: "12 passing\n",
+  } } }, CTX);
+  assert.equal(done[0].payload.ok, true);
+  assert.match(done[0].payload.resultSummary, /12 passing/, "and shows what it printed");
+  const declined = normalize.normalize({ method: "item/completed", params: { item: {
+    id: "cmd_2", type: "commandExecution", command: "rm -rf x", status: "declined", aggregatedOutput: null,
+  } } }, CTX);
+  assert.equal(declined[0].payload.ok, false, "a declined command did not run");
+  const thought = normalize.normalize({ method: "item/completed", params: { item: {
+    id: "r_1", type: "reasoning", summary: ["Checking the tests", "then the build"], content: [],
+  } } }, CTX);
+  assert.deepEqual(types(thought), ["thinking"]);
+  assert.equal(thought[0].payload.text, "Checking the tests\nthen the build");
+  const mcpFail = normalize.normalize({ method: "item/completed", params: { item: {
+    id: "m_1", type: "mcpToolCall", server: "dopl", tool: "dopl_kb", status: "failed", error: { message: "denied" },
+  } } }, CTX);
+  assert.equal(mcpFail[0].payload.ok, false);
+  assert.match(mcpFail[0].payload.resultSummary, /denied/);
 });

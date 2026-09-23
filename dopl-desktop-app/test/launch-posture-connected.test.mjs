@@ -167,6 +167,26 @@ test("dropping the cache makes the next read probe again — and it can CHANGE",
   assert.deepEqual(await c.connectedIds(list), ["codex"]);
 });
 
+test("RC-14: an `expire` during an in-flight sweep is not lost — the stale answer is not cached", async () => {
+  // A sweep that began BEFORE the change it is told about (a catalog settled `ready`) used to land
+  // and stand for the full TTL, contradicting the picker for a minute.
+  const c = loadConnectivity();
+  let installed = false;
+  let probes = 0;
+  let release;
+  const gate = new Promise((r) => { release = r; });
+  // The probe measures the machine when it STARTS, then takes its time answering.
+  const list = [adapter("codex", async () => { probes += 1; const seen = installed; if (probes === 1) await gate; return { ok: seen }; })];
+  const first = c.connectedIds(list);
+  await new Promise((r) => setImmediate(r)); // the probe has started (and seen "not installed")
+  installed = true;
+  c.expire(); // the change lands while the first probe is still out
+  release();
+  assert.deepEqual(await first, [], "the in-flight sweep still answers its own callers");
+  assert.deepEqual(await c.connectedIds(list), ["codex"], "the next read re-probes instead of the stale answer");
+  assert.equal(probes, 2);
+});
+
 // ── 3. THE REGISTRY WIRING, AND THE ROSTER IT MUST NOT SHORTEN ───────────────────────────────
 
 test("`runtime/index.js › connectedIds` answers a SUBSET of `all()`, never a replacement for it", async () => {

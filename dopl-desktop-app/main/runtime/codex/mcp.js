@@ -23,11 +23,26 @@
 // already by being restated.
 
 const { MCP_URL } = require('../../config');
+const { normalizeProfile } = require('../../tool-profiles');
 
 // The env vars the spawned child carries. ⚠ NAMES ONLY IN ARGV; the values are in the child's env.
-const BEARER_ENV = 'DOPL_MCP_BEARER';
+// `*_TOKEN` so Codex's own `*TOKEN*` default exclude also matches it where that exclude is on.
+const BEARER_ENV = 'DOPL_MCP_TOKEN';
 const WORKSPACE_ENV = 'DOPL_MCP_WORKSPACE_ID';
 const SESSION_ENV = 'DOPL_MCP_SESSION_ID';
+
+// Codex builds every shell command's env from its own, so the bearer above would be readable by
+// `env` in any command (CX-03). Measured on codex-cli 0.155.1 with no model turn: with no policy a
+// thread shell sees every var (the KEY/TOKEN/SECRET default exclude is OFF by default); this
+// thread-level `exclude` removes the `DOPL_MCP_*` set.
+const SHELL_ENV_EXCLUDE = Object.freeze(['DOPL_MCP_*']);
+function shellEnvironmentPolicy() {
+  return { exclude: SHELL_ENV_EXCLUDE.slice() };
+}
+
+// Same header and value Claude stamps (`claude/loader.js › withToolProfileStamp`): the server offers
+// this session only its profile's tools; it may only narrow (CX-12).
+const TOOL_PROFILE_HEADER = 'X-Dopl-Tool-Profile';
 
 // ⚠ CUSTODY, NOT VENDOR — two headers, two facts, and step 1 of the port exists because they were
 // nearly fused. `desktop-session` means "the desktop app spawned this" and stays TRUE for a
@@ -186,11 +201,11 @@ function doplBearer() {
  * full beside `TOOL_APPROVAL_MODES` above; the short form is that a second asking tool makes every
  * ask un-nameable on this runtime, and an un-nameable ask can only be declined.
  */
-function buildDoplServerEntry(doplToolsPolicy) {
+function buildDoplServerEntry(doplToolsPolicy, profile) {
   const entry = {
     url: MCP_URL,
     bearer_token_env_var: BEARER_ENV,
-    http_headers: Object.assign({}, RUNTIME_HEADERS),
+    http_headers: Object.assign({}, RUNTIME_HEADERS, { [TOOL_PROFILE_HEADER]: normalizeProfile(profile) }),
     env_http_headers: {
       'X-Workspace-Id': WORKSPACE_ENV,
       'X-Dopl-Session-Id': SESSION_ENV,
@@ -324,4 +339,5 @@ module.exports = {
   SERVER_KEY, askingToolsIn, soleAskingTool,
   DEFAULT_TOOL_APPROVAL_MODE, TOOL_APPROVAL_MODES, ASKING_MODES,
   BEARER_ENV, WORKSPACE_ENV, SESSION_ENV, RUNTIME_HEADERS, CHANNEL_TOOL,
+  TOOL_PROFILE_HEADER, SHELL_ENV_EXCLUDE, shellEnvironmentPolicy,
 };

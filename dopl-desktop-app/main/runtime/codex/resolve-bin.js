@@ -301,11 +301,28 @@ function inspectCandidate(file, io, uid) {
  *              difference between "you have no Codex" and "you have one Dopl will not run", and an
  *              operator who cannot tell those apart reinstalls the wrong thing.
  */
+/**
+ * An npm install's `codex` resolves to `@openai/codex/bin/codex.js`, a `#!/usr/bin/env node`
+ * launcher that dies under a Finder launch's PATH (no `node`). The vendor binary it would spawn,
+ * resolved from that package's own dependencies, or `null` (CX-07).
+ */
+function launcherVendor(resolved, { platform, arch, resolvePackage }) {
+  if (typeof resolvePackage !== 'function' || path.basename(resolved) !== 'codex.js'
+    || path.basename(path.dirname(resolved)) !== 'bin') return null;
+  const pkgRoot = path.dirname(path.dirname(resolved));
+  return bundledCandidate({ platform, arch, resolvePackage: (req) => resolvePackage(req, { paths: [pkgRoot] }) });
+}
+
 function resolveWith({ env, home, io, uid, execPath, platform, arch, resolvePackage }) {
   const rejected = [];
   const consider = (file, source) => {
     const verdict = inspectCandidate(file, io, uid);
-    if (verdict.ok) return { ok: true, path: verdict.path, source, reason: '', rejected };
+    if (verdict.ok) {
+      const vendor = launcherVendor(verdict.path, { platform, arch, resolvePackage });
+      const direct = vendor ? inspectCandidate(vendor, io, uid) : null;
+      const found = direct && direct.ok ? direct.path : verdict.path;
+      return { ok: true, path: found, source, reason: '', rejected };
+    }
     if (verdict.reason !== 'not found') rejected.push({ path: file, reason: verdict.reason });
     return null;
   };
@@ -367,17 +384,14 @@ function resolveWith({ env, home, io, uid, execPath, platform, arch, resolvePack
 
 // ─── END CODEX-RESOLVE-PURE ───
 
-// ⚠ CACHED FOR THE PROCESS, AND `forget()` IS THE ONLY WAY BACK. Four callers ask this on every
-// probe, roster read and spawn; re-walking the filesystem each time buys nothing, and a Codex
-// installed WHILE Dopl runs is what "re-open Dopl" in the refusal already tells the operator to do.
-// ⚠ A FAILURE IS CACHED TOO: the miss is the expensive one (it walks the whole list), and a machine
-// with no Codex must not pay for it on every render of the runtime picker.
+// A HIT is cached for the process; a miss is not, so a Codex installed (or a prefix repaired) while
+// Dopl runs is found on the next probe (CX-08). A miss costs a few `stat`s.
 let cached = null;
 
 /** The resolved binary for this process. See `resolveWith` for the shape. */
 function resolveCodexBin() {
   if (cached) return cached;
-  cached = resolveWith({
+  const found = resolveWith({
     env: process.env,
     home: os.homedir(),
     io: { realpathSync: fs.realpathSync, statSync: fs.statSync, accessSync: fs.accessSync },
@@ -391,7 +405,8 @@ function resolveCodexBin() {
     // without knowing which of the two it is standing in.
     resolvePackage: require.resolve,
   });
-  return cached;
+  if (found.ok) cached = found;
+  return found;
 }
 
 /** Drop the cache. ⚠ For tests and for an explicit operator-driven re-probe, nothing else. */

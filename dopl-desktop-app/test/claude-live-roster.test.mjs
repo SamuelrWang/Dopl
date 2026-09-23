@@ -137,6 +137,24 @@ test("resolution: ids, legacy ids, aliases and undated spellings all find their 
   } finally { models.inject(); }
 });
 
+test("RC-01: a long-context pick resumes as ITSELF before any roster read — never the short row", async () => {
+  // A parked session on `claude-opus-5[1m]` is resumed after a restart, before anything read the
+  // live roster: the frozen table answers, and its base-id match stripped `[1m]` → `--model opus`
+  // (200k) under a 1M conversation. Launch resolution is exact id / alias only.
+  fakeCli([], { fail: "not read yet" });
+  models.forget();
+  try {
+    assert.equal(models.launchArg("claude-opus-5[1m]"), "claude-opus-5[1m]");
+    assert.equal(models.launchArg("claude-fable-5[1m]"), "claude-fable-5[1m]");
+    // A live switch on the frozen table refuses with a sentence rather than moving to the short row.
+    assert.equal(models.resolveLaunchModel("claude-opus-5[1m]").ok, false);
+    assert.equal(models.launchArg("claude-opus-5"), "opus", "an exact frozen id still finds its row");
+    assert.equal(models.launchArg("opus --print"), "sonnet", "what could not BE an id never reaches argv");
+    // Labelling keeps the base-id step: `[1m]` still names the Opus row for a card.
+    assert.equal(roster.match(models.frozenRoster().models, "claude-opus-5[1m]").id, "claude-opus-5");
+  } finally { models.inject(); }
+});
+
 test("the day a newer Sonnet ships, an unpicked channel still gets `the Sonnet` — the alias row", async () => {
   fakeCli([{ value: "sonnet", resolvedModel: "claude-sonnet-6", displayName: "Sonnet" }]);
   try {
@@ -195,15 +213,15 @@ test("the funnel FAILS OPEN when the roster cannot be read — never a refusal o
 
 // ── 7. CODEX: THE DELEGATION FENCE NEVER DEGRADES A NAMED MODEL ──────────────────────────────
 
-test("Codex: a named model NO catalog source knows REFUSES the launch rather than run on generic defaults", () => {
+test("Codex: a named model NO catalog source knows REFUSES the launch rather than run on generic defaults", async () => {
   const catalog = require("../main/runtime/codex/catalog.js");
   const home = mkdtempSync(join(tmpdir(), "dopl-cat-"));
   try {
     writeFileSync(join(home, catalog.CACHE_FILE), JSON.stringify({ models: [{ slug: "gpt-5.5" }] }));
-    assert.throws(() => catalog.writeDelegationFreeCatalog(home, { bin: null, model: "gpt-7" }),
+    await assert.rejects(catalog.writeDelegationFreeCatalog(home, { bin: null, model: "gpt-7" }),
       /no entry for "gpt-7".*refusing the launch/);
-    assert.ok(catalog.writeDelegationFreeCatalog(home, { bin: null, model: "gpt-5.5" }), "a model the cache knows still launches");
-    assert.ok(catalog.writeDelegationFreeCatalog(home, { bin: null }), "and so does the platform's own pick");
+    assert.ok(await catalog.writeDelegationFreeCatalog(home, { bin: null, model: "gpt-5.5" }), "a model the cache knows still launches");
+    assert.ok(await catalog.writeDelegationFreeCatalog(home, { bin: null }), "and so does the platform's own pick");
   } finally { rmSync(home, { recursive: true, force: true }); }
 });
 

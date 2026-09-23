@@ -363,9 +363,14 @@ function applyCoreEvents(s, list, dispatch, store) {
       // baseline to carry across every resume and its own field in the durable record. Samuel
       // deleted the column (*"we dont need cost tracking"*); the TOKEN half is untouched, and it
       // is the half that has a reader — `tokensSpent` is on the agent card and on the wire.
-      const tokenTotal = Number(ev.sessionTokens) || 0;
-      s.tokensSpent = (s.tokensSpent || 0) + Math.max(0, tokenTotal - (s.lastTotalTokens || 0));
-      s.lastTotalTokens = tokenTotal;
+      // An unmeasured turn (`sessionTokens: null`) moves neither the spend nor the baseline: a zero
+      // baseline would re-bill a runtime's whole cumulative total on the next turn (P4-04).
+      const measured = ev.sessionTokens != null && Number.isFinite(Number(ev.sessionTokens));
+      if (measured) {
+        const tokenTotal = Number(ev.sessionTokens);
+        s.tokensSpent = (s.tokensSpent || 0) + Math.max(0, tokenTotal - (s.lastTotalTokens || 0));
+        s.lastTotalTokens = tokenTotal;
+      }
       // The turn count is the reducer's `state.turns`, persisted with the record (P4-10). The gauge
       // is read off the session by `session-metrics.js › metrics`; no meter event is dispatched (P4-11).
       dispatch(s, { type: 'result', model: ev.model });

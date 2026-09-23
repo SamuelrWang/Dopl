@@ -130,7 +130,7 @@ function buildLaunchSpec(request) {
   const s = req.session;
   const cfg = tools.buildSessionToolConfig(s.profile);
   const pair = nativePair(s, cfg);
-  const server = mcp.buildDoplServerEntry(cfg.doplToolsPolicy);
+  const server = mcp.buildDoplServerEntry(cfg.doplToolsPolicy, s.profile);
   const wired = mcp.buildMcpEnv(s.workspaceId, sessionCredential.sessionBearer(s), store.slotKey(s));
 
   // ⚠ NO DOPL SERVER WITHOUT A TOKEN, and the session still launches. A half-built entry that 401s
@@ -150,8 +150,10 @@ function buildLaunchSpec(request) {
     // ⚠ …AND NO `notify` PROGRAM FROM ANY LAYER (`tools.js › NOTIFY_FENCE`, C26): measured, a
     // thread-level `[]` silences one set lower down.
     notify: tools.NOTIFY_FENCE.slice(),
+    // No Dopl bearer in any shell command's env (`mcp.js › shellEnvironmentPolicy`, CX-03).
+    shell_environment_policy: mcp.shellEnvironmentPolicy(),
   };
-  if (wired.usable) threadStart.config.mcp_servers = { dopl: server };
+  if (wired.usable) threadStart.config.mcp_servers = { [mcp.SERVER_KEY]: server };
   // An OBJECT policy rides `config.approval_policy` (the typed field needs the experimental API).
   policy.placePolicy(threadStart, pair.approval_policy);
   const model = typeof s.model === 'string' ? s.model.trim() : '';
@@ -209,8 +211,9 @@ function makeFrameQueue() {
     // An intentional `handle.close()` closes the queue before the child exits. Ignore the later
     // exit callback in that state; otherwise a normal shutdown is reclassified as a crash on the
     // consumer's next read.
+    // The FIRST failure is the cause; a later one (the exit that follows it) must not replace it.
     fail(err) {
-      if (closed) return;
+      if (closed || failure) return;
       failure = err instanceof Error ? err : new Error(String(err));
       settle();
     },
@@ -254,48 +257,60 @@ function makeApprovalHandler(s, dispatch, emitQuiet) {
 }
 
 /**
- * Start a run. ⚠ SYNCHRONOUS BY CONTRACT — see the handle note above.
- *
- * The boot sequence is the research's own build order: `initialize` (mandatory, with
- * `clientInfo.name = 'dopl'` — the ONLY forensic join between a Codex turn and a Dopl session),
- * then `thread/start` or `thread/resume`, then the first `turn/start`. Every later push from
- * core's prompt iterator becomes `turn/steer`, which is exactly what the composer's "inject
- * instructions while working" behaviour wants.
+ * Start a run. Synchronous by contract (see the handle note above). Boot order: the fenced
+ * catalog (async, CX-09), `initialize` + `initialized`, `thread/start` | `thread/resume`, then the
+ * first push is `turn/start` and every later one `turn/steer`.
  */
 function start(spec) {
   const s = spec.session;
   const frames = makeFrameQueue();
-  let conn = null;
+  // The child is spawned after the catalog step; `close()` before then means it never is.
+  const link = { conn: null, closed: false };
   let threadId = spec.resumeThreadId || null;
   let activeTurnId = null;
   let selectedModel = null;
   let latestUsage = null;
+  // `total` is cumulative per thread; an interrupted turn gets no update, so it carries this (CX-02).
+  let lastTotal = null;
+  const failedTurns = new Set();
 
-  // Token usage is reported on its own notification in the current v2 protocol, while core
-  // expects usage to travel with the terminal turn event. Hold the latest snapshot and attach it
-  // to `turn/completed`; the synthetic fields are namespaced by ownership rather than pretending
-  // the app-server put usage on that frame itself.
+  // A failed turn becomes the synthetic error frame (auth → hold, else a visible line; CX-04).
+  const pushTurnError = (turnId, error) => {
+    const id = turnId ? String(turnId) : '';
+    if (id && failedTurns.has(id)) return;
+    if (id) failedTurns.add(id);
+    const e = (error && typeof error === 'object') ? error : {};
+    frames.push({
+      type: normalizer.ERROR_MESSAGE_TYPE,
+      text: String(e.message || ''),
+      codexErrorInfo: e.codexErrorInfo == null ? null : e.codexErrorInfo,
+      turnFailed: true,
+    });
+  };
+
+  // Usage arrives on `thread/tokenUsage/updated`; it is attached to the `turn/completed` frame.
   const onNotification = (msg) => {
     const method = msg && msg.method;
     const params = (msg && msg.params && typeof msg.params === 'object') ? msg.params : {};
     if (method === 'thread/tokenUsage/updated') {
       latestUsage = (params.tokenUsage && typeof params.tokenUsage === 'object')
         ? params.tokenUsage : null;
+      if (latestUsage && latestUsage.total) lastTotal = latestUsage.total;
+      return;
+    }
+    if (method === 'error') {
+      // `willRetry: true` is the server retrying the same request; only a final error ends the turn.
+      if (params.willRetry !== true) pushTurnError(params.turnId, params.error);
       return;
     }
     if (method === 'turn/completed') {
-      const terminalTurn = params.turn && params.turn.id ? String(params.turn.id) : null;
+      const turn = (params.turn && typeof params.turn === 'object') ? params.turn : {};
+      const terminalTurn = turn.id ? String(turn.id) : null;
+      if (turn.status === 'failed') pushTurnError(terminalTurn, turn.error);
       const enriched = Object.assign({}, params, {
-        usage: latestUsage && latestUsage.total ? latestUsage.total : null,
+        usage: latestUsage && latestUsage.total ? latestUsage.total : lastTotal,
         promptUsage: latestUsage && latestUsage.last ? latestUsage.last : null,
-        // ⚠ **A SIBLING OF `last`/`total`, NOT A MEMBER OF EITHER** — and forwarding only those two
-        // is what left a Codex session with no context DENOMINATOR (2026-09-22). The server reports
-        // `tokenUsage.modelContextWindow` on every one of these notifications (measured: 258400 on
-        // `codex-cli 0.155.1`); dropping it here meant `normalize.js › windowFrom` never saw a
-        // window to read and the gauge showed used tokens over nothing.
-        // ⚠ ABSENT STAYS ABSENT: `null` here means "this runtime reported no window", which
-        // `session-model.js › contextEvent` answers by falling back to its table. It is NOT zero,
-        // and a `0` denominator would render as a full meter on an empty session.
+        // A sibling of `last`/`total`; absent stays `null` (never a 0 denominator).
         contextWindow: latestUsage ? latestUsage.modelContextWindow : null,
         model: selectedModel,
       });
@@ -307,53 +322,50 @@ function start(spec) {
     frames.push(msg);
   };
 
+  let env;
   try {
-    const env = configHome.isolatedEnv(spec.env);
-    // 🔒 THE DELEGATION FENCE A CODE-MODE MODEL OBEYS (`catalog.js`) — process config, so argv.
-    // ⚠ A catalog Dopl cannot build THROWS here, and the session fails rather than delegating.
-    const fenced = catalog.writeDelegationFreeCatalog(env.CODEX_HOME, {
+    env = configHome.isolatedEnv(spec.env);
+  } catch (err) {
+    frames.fail(err);
+    return handleFor(link, frames, () => threadId, () => activeTurnId);
+  }
+
+  (async () => {
+    // The delegation fence (`catalog.js`): process config, so argv; no catalog fails the launch.
+    const fenced = await catalog.writeDelegationFreeCatalog(env.CODEX_HOME, {
       bin: codexBin(), env, model: (spec.threadStart && spec.threadStart.model) || '',
     });
-    conn = client.connect({
+    if (link.closed) return;
+    const conn = client.connect({
       args: (spec.args || []).concat(catalog.catalogArgs(fenced)),
       env,
       cwd: spec.cwd,
       log: typeof spec.log === 'function' ? spec.log : diag,
       onNotification,
       onServerRequest: makeApprovalHandler(s, spec.dispatch, spec.emitQuiet),
-      // An app-server exit is never a successful end-of-stream for a live session. Failing the
-      // queue keeps clap/config/protocol errors visible instead of resolving a waiting consumer
-      // with `done: true` before the rejected initialize request can arrive.
-      onExit: (code, signal) => frames.fail(
-        new Error(`Codex app-server exited (code ${code}, signal ${signal})`)
+      // An exit is never a clean end-of-stream for a live session; the spawn error is the cause.
+      onExit: (code, signal, spawnError) => frames.fail(
+        spawnError || new Error(`Codex app-server exited (code ${code}, signal ${signal})`)
       ),
     });
-  } catch (err) {
-    frames.fail(err);
-    return handleFor(null, frames, () => threadId, () => activeTurnId);
-  }
-
-  (async () => {
+    link.conn = conn;
     await conn.request('initialize', client.initializeParams(appVersion()));
+    conn.notify('initialized');
     const method = spec.resumeThreadId ? 'thread/resume' : 'thread/start';
     const params = spec.resumeThreadId
       ? Object.assign({ threadId: spec.resumeThreadId, cwd: spec.cwd }, spec.threadStart || {})
       : Object.assign({ cwd: spec.cwd }, spec.threadStart || {});
     const thread = await conn.request(method, params);
-    const threadValue = thread && thread.thread && typeof thread.thread === 'object' ? thread.thread : thread;
-    threadId = (threadValue && (threadValue.threadId || threadValue.thread_id || threadValue.id))
-      || spec.resumeThreadId || null;
-    selectedModel = (thread && thread.model) || (threadValue && threadValue.model) || null;
+    const handle = (thread && thread.thread && typeof thread.thread === 'object') ? thread.thread : {};
+    const startedId = handle.id ? String(handle.id) : '';
+    // A fresh thread with no id has no conversation to run a turn in (CX-14).
+    if (!startedId && !spec.resumeThreadId) throw new Error(`Codex ${method} returned no thread id`);
+    threadId = startedId || spec.resumeThreadId;
+    selectedModel = (thread && thread.model) || handle.model || null;
     assertPolicyTook(params, thread);
-    // ⚠ SYNTHETIC, AND NAMESPACED `dopl/` SO NOBODY MISTAKES IT FOR PROTOCOL. The app-server
-    // documents no `thread/started` notification — the conversation handle arrives as a RESULT —
-    // and core's consume loop only ever sees frames. This is where `launched` comes from, and
-    // `launched.sessionId` is the whole resume story: `session-store.js` persists nothing else
-    // about a running query.
+    // Synthetic `dopl/` frame: the thread id is the only thing a resume has (`launched`).
     frames.push({ method: normalizer.THREAD_STARTED, params: { threadId, model: selectedModel } });
-    // The prompt pump. ⚠ THE FIRST PUSH IS A TURN, EVERY LATER ONE IS A STEER — an unconditional
-    // `turn/start` would begin a second turn while the first was live, which is the shape
-    // `turn/steer` exists to replace.
+    // A second `turn/start` would open a concurrent turn, so a push during one steers it.
     for await (const m of spec.prompt) {
       const text = String((m && m.message && m.message.content) || '');
       if (!text) continue;
@@ -362,9 +374,7 @@ function start(spec) {
         const turn = await conn.request('turn/start', Object.assign(
           { threadId, input }, spec.turnStart || {}
         ));
-        const turnValue = turn && turn.turn && typeof turn.turn === 'object' ? turn.turn : turn;
-        activeTurnId = turnValue && (turnValue.turnId || turnValue.turn_id || turnValue.id)
-          ? String(turnValue.turnId || turnValue.turn_id || turnValue.id) : null;
+        activeTurnId = turn && turn.turn && turn.turn.id ? String(turn.turn.id) : null;
         if (!activeTurnId) throw new Error('Codex turn/start returned no turn id');
       } else {
         const steered = await conn.request('turn/steer', {
@@ -378,7 +388,7 @@ function start(spec) {
     }
   })().catch((err) => frames.fail(err));
 
-  return handleFor(conn, frames, () => threadId, () => activeTurnId);
+  return handleFor(link, frames, () => threadId, () => activeTurnId);
 }
 
 // 🔒 THE POLICY ACTUALLY TOOK — `policy.js › assertPolicyTook`, which since 2026-09-22 compares the
@@ -423,7 +433,7 @@ function boundedInterrupt(pending) {
   });
 }
 
-function handleFor(conn, frames, threadIdOf, turnIdOf) {
+function handleFor(link, frames, threadIdOf, turnIdOf) {
   return {
     [Symbol.asyncIterator]() { return frames[Symbol.asyncIterator](); },
     next() { return frames.next(); },
@@ -433,6 +443,7 @@ function handleFor(conn, frames, threadIdOf, turnIdOf) {
      * `abandon_timeout` effects have no other actuator. `turn/interrupt` is the documented verb.
      */
     interrupt() {
+      const conn = link.conn;
       if (!conn) return Promise.resolve();
       const threadId = threadIdOf();
       const turnId = turnIdOf();
@@ -442,8 +453,9 @@ function handleFor(conn, frames, threadIdOf, turnIdOf) {
       return boundedInterrupt(conn.request('turn/interrupt', { threadId, turnId }));
     },
     close() {
+      link.closed = true;
       frames.close();
-      if (conn) conn.close();
+      if (link.conn) link.conn.close();
     },
   };
 }
@@ -474,9 +486,7 @@ function resume(spec, _priorHandle) {
   return start(spec);
 }
 
-function appVersion() {
-  try { return require('electron').app.getVersion(); } catch (_) { return '0.0.0'; }
-}
+const appVersion = () => require('../../app-version').appVersion();
 
 module.exports = {
   buildLaunchSpec, start, resume,

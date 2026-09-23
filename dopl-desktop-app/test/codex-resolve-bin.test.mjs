@@ -14,6 +14,8 @@ import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
+import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
@@ -227,15 +229,27 @@ test("skips a non-executable and keeps looking", () => {
   assert.equal(found.rejected[0].reason, "not executable by this user");
 });
 
-test("the process-wide answer is cached until it is forgotten", () => {
-  const first = resolver.resolveCodexBin();
-  assert.equal(resolver.resolveCodexBin(), first, "same object, not a second filesystem walk");
-  resolver.forget();
-  assert.notEqual(resolver.resolveCodexBin(), first, "forget() re-asks");
-  // ⚠ NO ASSERTION ON `ok` — this runs on a real machine, which may or may not have a Codex. The
-  // shape is what is pinned; the answer is the machine's.
-  assert.equal(typeof resolver.resolveCodexBin().ok, "boolean");
-  resolver.forget();
+test("CX-08: a HIT is cached for the process; a MISS is re-walked, so a Codex installed with Dopl open is found", () => {
+  const prior = process.env.DOPL_CODEX_BIN;
+  const dir = mkdtempSync(join(tmpdir(), "dopl-codex-bin-"));
+  const bin = join(dir, "codex");
+  try {
+    process.env.DOPL_CODEX_BIN = bin; // named, not there yet
+    resolver.forget();
+    assert.equal(resolver.resolveCodexBin().ok, false);
+    writeFileSync(bin, "#!/bin/sh\necho codex-cli 0.155.1\n");
+    chmodSync(bin, 0o755);
+    const hit = resolver.resolveCodexBin();
+    assert.equal(hit.ok, true, `the install is found without a restart: ${hit.reason}`);
+    assert.equal(resolver.resolveCodexBin(), hit, "same object, not a second filesystem walk");
+    resolver.forget();
+    assert.notEqual(resolver.resolveCodexBin(), hit, "forget() re-asks");
+  } finally {
+    if (prior === undefined) delete process.env.DOPL_CODEX_BIN;
+    else process.env.DOPL_CODEX_BIN = prior;
+    resolver.forget();
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 test("no caller spawns the bare name any more", () => {
@@ -461,4 +475,25 @@ test("THIS checkout's bundled codex is the one that resolves", () => {
   assert.equal(real.ok, true, real.reason);
   assert.equal(real.source, "bundled", `resolved ${real.path} instead of the shipped binary`);
   assert.match(real.path, /@openai\/codex-darwin-arm64\/vendor\/aarch64-apple-darwin\/bin\/codex$/);
+});
+
+test("CX-07: an npm-installed `codex` (a node launcher) resolves to the vendor binary it would spawn", () => {
+  const PKG = "/opt/homebrew/lib/node_modules/@openai/codex";
+  const LAUNCHER = `${PKG}/bin/codex.js`;
+  const VENDOR_JSON = `${PKG}/node_modules/@openai/codex-darwin-arm64/package.json`;
+  const VENDOR = `${PKG}/node_modules/@openai/codex-darwin-arm64/vendor/aarch64-apple-darwin/bin/codex`;
+  // `require.resolve(req, { paths: [pkgRoot] })` — only the launcher's own package root finds it.
+  const resolvePackage = (req, opts) => {
+    if (opts && opts.paths && opts.paths[0] === PKG && req.endsWith("/package.json")) return VENDOR_JSON;
+    return resolveMissing();
+  };
+  const files = { "/opt/homebrew/bin/codex": { real: LAUNCHER }, [VENDOR]: {} };
+  const found = run({ PATH: SHELL_PATH }, files, {}, { platform: "darwin", arch: "arm64", resolvePackage });
+  assert.equal(found.ok, true);
+  assert.equal(found.path, VENDOR, "the Rust binary, not a script that needs `node` on PATH");
+  assert.equal(found.source, "path");
+  // No vendor binary beside it: the launcher is still the answer (it works where node is on PATH).
+  const bare = run({ PATH: SHELL_PATH }, { "/opt/homebrew/bin/codex": { real: LAUNCHER } }, {},
+    { platform: "darwin", arch: "arm64", resolvePackage });
+  assert.equal(bare.path, LAUNCHER);
 });

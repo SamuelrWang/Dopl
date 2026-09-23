@@ -65,9 +65,11 @@ const launched = (sessionId, model, mcpServers) => ({
  * cost and the model as a token count — so the three call sites moved in the same change and
  * `test/runtime-contract.test.mjs` pins the shape this now produces.
  */
+// `sessionTokens: null` = this turn carried NO measurement (e.g. an interrupted Codex turn); core
+// then leaves the delta baseline alone. It is not a total of zero.
 const result = (sessionTokens, model) => ({
   type: 'result',
-  sessionTokens: typeof sessionTokens === 'number' && Number.isFinite(sessionTokens) ? sessionTokens : 0,
+  sessionTokens: typeof sessionTokens === 'number' && Number.isFinite(sessionTokens) ? sessionTokens : null,
   model: model || null,
 });
 

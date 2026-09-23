@@ -38,6 +38,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { codeOf } from "./helpers/source-probe.mjs";
@@ -67,75 +68,71 @@ function extractFn(src, name) {
 }
 
 /**
- * Build the REAL `sessionSpawnAvailable` with its two probes injected.
+ * Build the REAL `sessionSpawnAvailable` with the runtime registry injected.
  *
- * `require` and `diag` are free variables inside the extracted body (the module
- * requires them at its own scope), so they are supplied here — which is also how
- * the bundled probe's THROW path gets exercised without a real sdk-loader.
+ * `require` and `diag` are free variables inside the extracted body, so they are supplied here.
+ * The only thing it may require is the registry (P3-01): it required `./sdk-loader`, a module
+ * deleted with the adapter port, and this harness pinned that dead name (the injected `require`
+ * answered it), so every case passed while the real probe always threw.
  */
-function buildProbe({ bundled, external }) {
-  const calls = { bundled: 0, external: 0 };
+function buildProbe({ connected }) {
+  const calls = { asked: 0 };
   const fakeRequire = (name) => {
-    assert.equal(name, "./sdk-loader", "the bundled probe must come from sdk-loader");
-    calls.bundled++;
+    assert.equal(name, "./runtime", "the spawn question is the runtime registry's");
     return {
-      resolveClaudeExecutable: () => {
-        if (bundled === "throw") throw new Error("electron.app unavailable");
-        return bundled;
+      connectedIds: async () => {
+        calls.asked++;
+        if (connected === "throw") throw new Error("probe exploded");
+        return connected;
       },
     };
-  };
-  const claudeAvailable = async () => {
-    calls.external++;
-    return external;
   };
   const fn = new Function(
     "require",
     "diag",
-    "claudeAvailable",
     `${extractFn(RUNTIME, "sessionSpawnAvailable")}\n return sessionSpawnAvailable;`
-  )(fakeRequire, () => {}, claudeAvailable);
+  )(fakeRequire, () => {});
   return { fn, calls };
 }
 
 // ── 1. the regression itself ───────────────────────────────────────────────────
 
-test("THE BUG: no external CLI, bundled binary present -> a session CAN be spawned", async () => {
-  // This is the fresh-install machine. Before the fix `handleTrigger` returned on
-  // exactly this shape and the operator received nothing at all.
-  const { fn, calls } = buildProbe({
-    bundled: "/Applications/Dopl.app/…/app.asar.unpacked/…/claude",
-    external: false,
-  });
+test("THE BUG: no external CLI, the bundled runtime loads -> a session CAN be spawned", async () => {
+  // This is the fresh-install machine. The registry's Claude adapter answers `available()` from
+  // the bundled SDK; an external `claude` on PATH is not asked at all.
+  const { fn, calls } = buildProbe({ connected: ["claude"] });
   assert.equal(await fn(), true);
-  // …and the external probe is never even consulted: it is a login-shell exec
-  // with a 6s timeout, on the inbound path of every trigger.
-  assert.equal(calls.external, 0, "the external probe should not run once the bundled one answers");
+  assert.equal(calls.asked, 1);
 });
 
-test("no bundled binary, external CLI present -> still true (the headless fallback)", async () => {
-  // A dev tree, or a build whose optional platform package did not install. The
-  // headless spawner runs the external CLI, so a request is still answerable.
-  const { fn, calls } = buildProbe({ bundled: null, external: true });
+test("P3-01: NOT Claude-only — a Mac whose only usable runtime is Codex answers requests", async () => {
+  const { fn } = buildProbe({ connected: ["codex"] });
   assert.equal(await fn(), true);
-  assert.equal(calls.external, 1);
 });
 
-test("NEITHER -> false. The gate is narrowed, not deleted", async () => {
-  // The half that keeps this a fix rather than a removal: with nothing that can
-  // run a session, a consent row would promise an answer that cannot come.
-  const { fn } = buildProbe({ bundled: null, external: false });
+test("NOTHING usable -> false. The gate is narrowed, not deleted", async () => {
+  // With nothing that can run a session, a notification would promise an answer that cannot come.
+  const { fn } = buildProbe({ connected: [] });
   assert.equal(await fn(), false);
 });
 
-test("a THROWING bundled probe degrades to the external one, never to a crash", async () => {
-  // sdk-loader pulls `electron.app` at module scope. A harness (or a launch order
-  // that has not created the app yet) must not take the whole trigger path down —
-  // which is the failure mode this function exists to remove.
-  const present = buildProbe({ bundled: "throw", external: true });
-  assert.equal(await present.fn(), true);
-  const absent = buildProbe({ bundled: "throw", external: false });
-  assert.equal(await absent.fn(), false);
+test("a THROWING probe answers false (the trigger defers), never a crash", async () => {
+  const { fn } = buildProbe({ connected: "throw" });
+  assert.equal(await fn(), false);
+});
+
+test("SMOKE: every module the spawn and sign-in paths require really exists", () => {
+  // The dead `./sdk-loader` name survived because every suite injected `require`. This one does
+  // not: each lazy `require('./…')` in the two files is resolved from `main/` for real.
+  const req = createRequire(join(HERE, "..", "main", "index.js"));
+  for (const file of ["claude-runtime.js", "claude-signin-op.js"]) {
+    const src = read(file);
+    const names = [...src.matchAll(/require\('(\.\/[^']+)'\)/g)].map((m) => m[1]);
+    assert.ok(names.length > 0, file);
+    for (const name of names) assert.doesNotThrow(() => req.resolve(name), `${file} requires ${name}`);
+  }
+  assert.equal(typeof req("./claude-runtime.js").sessionSpawnAvailable, "function");
+  assert.equal(typeof req("./claude-signin-op.js").signIn, "function");
 });
 
 // ── 2. the call sites, so the right question stays asked ───────────────────────
@@ -162,8 +159,9 @@ test("the startup notice fires on the spawn question, not on the PATH probe", ()
     !/Claude CLI not found on PATH\. Channel auto-responses stay off/.test(src + RUNTIME),
     "the old, false notice copy is gone"
   );
-  // …and the surviving copy does not claim the CLI is what channels needs.
-  assert.match(RUNTIME, /No Claude Code runtime was found on this Mac/);
+  // …and the surviving copy names no one vendor: any runtime can answer (P3-01).
+  assert.match(RUNTIME, /copy\.noRuntimeCopy\(null\)/);
+  assert.ok(!/No Claude Code runtime was found/.test(RUNTIME));
 });
 
 test("the two questions keep two names", () => {

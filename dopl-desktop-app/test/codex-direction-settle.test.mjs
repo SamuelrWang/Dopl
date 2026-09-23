@@ -32,6 +32,7 @@ const { floorWindowlessMessage } = require_(join(MAIN, "session-profiles.js"));
 const io = require_(join(MAIN, "session-io.js"));
 const client = require_(join(CODEX, "client.js"));
 const launchSpec = require_(join(CODEX, "launch-spec.js"));
+const catalog = require_(join(CODEX, "catalog.js"));
 const { normalize } = require_(join(CODEX, "normalize.js"));
 
 const WS = "11111111-2222-3333-4444-555555555555";
@@ -162,15 +163,22 @@ function codexSession(serverOpts = {}) {
       }
       return {};
     },
+    notify() {},
     close() {},
   };
-  const original = client.connect;
-  client.connect = (o) => { hooks = o; return fake; };
+  // The child is spawned after the async catalog step (CX-09): both stand-ins restore themselves
+  // on first use rather than right after `start` returns.
+  const originalConnect = client.connect;
+  client.connect = (o) => { hooks = o; client.connect = originalConnect; return fake; };
+  const originalCatalog = catalog.writeDelegationFreeCatalog;
+  catalog.writeDelegationFreeCatalog = async (home) => {
+    catalog.writeDelegationFreeCatalog = originalCatalog;
+    return join(home, catalog.CATALOG_FILE);
+  };
   const handle = launchSpec.start({
     session: s, args: [], env: {}, cwd: MAIN, prompt: prompts,
     dispatch: () => {}, emitQuiet: () => {},
   });
-  client.connect = original;
   // The consume loop: the engine's funnel reduced to what the capture reads.
   void (async () => {
     for await (const msg of handle) {

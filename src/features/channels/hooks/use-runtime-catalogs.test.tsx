@@ -23,6 +23,7 @@ import {
   type ChannelLaunchPostureState,
 } from "./use-channel-launch-posture";
 import { CATALOG_VERSION, selectableModels } from "../lib/model-catalog";
+import { MAIN_ROSTER_SETTLE_MS, MAX_RELOADS, RELOAD_DELAY_MS } from "./use-runtime-catalogs";
 
 afterEach(() => {
   cleanup();
@@ -257,7 +258,62 @@ describe("a `loading` roster is re-read, boundedly", () => {
     // ⚠ "NOTHING CAME BACK YET" IS THE TRUE STATEMENT. Flipping to `unavailable` here would put
     // words in the desktop's mouth about a read it never reported failing (INVARIANTS §11).
     expect(holder.value.catalog?.status).toBe("loading");
-    expect(getLaunchPosture.mock.calls.length).toBeLessThanOrEqual(1 + 6 + 1);
+    expect(getLaunchPosture.mock.calls.length).toBeLessThanOrEqual(1 + MAX_RELOADS + 1);
+  });
+
+  it("F3: the re-read budget outlasts main's own roster leash (probe + model/list)", () => {
+    expect(MAX_RELOADS * RELOAD_DELAY_MS).toBeGreaterThan(MAIN_ROSTER_SETTLE_MS);
+  });
+
+  /** Advance in small steps, each its own `act`, so every reload's state lands before the next. */
+  async function advance(ms: number) {
+    for (let t = 0; t < ms; t += 300) {
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(300);
+      });
+    }
+  }
+
+  it("F3: a roster that settles at ~12s (past the old 7.2s budget) still reaches the picker", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    let settled = false;
+    installBridge(() =>
+      reply({
+        catalogs: {
+          codex: settled ? codexCatalog() : codexCatalog({ status: "loading", models: [], defaultId: null }),
+        },
+      }));
+    const holder = await mountPosture();
+    await advance(12000);
+    expect(holder.value.catalog?.status).toBe("loading");
+    settled = true;
+    await advance(2400);
+    expect(holder.value.catalog?.status).toBe("ready");
+  });
+
+  it("F3: once the budget is spent, window focus re-reads a catalog that is STILL loading", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    let settled = false;
+    const { getLaunchPosture } = installBridge(() =>
+      reply({
+        catalogs: {
+          codex: settled ? codexCatalog() : codexCatalog({ status: "loading", models: [], defaultId: null }),
+        },
+      }));
+    const holder = await mountPosture();
+    await advance(MAX_RELOADS * RELOAD_DELAY_MS + 3000);
+    expect(holder.value.catalog?.status).toBe("loading");
+    const spent = getLaunchPosture.mock.calls.length;
+    expect(spent, "the whole budget was spent, then it stopped").toBe(1 + MAX_RELOADS);
+    await advance(5000);
+    expect(getLaunchPosture.mock.calls.length, "no standing timer after the budget").toBe(spent);
+    settled = true;
+    await act(async () => {
+      window.dispatchEvent(new Event("focus"));
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(getLaunchPosture.mock.calls.length).toBeGreaterThan(spent);
+    expect(holder.value.catalog?.status).toBe("ready");
   });
 });
 
