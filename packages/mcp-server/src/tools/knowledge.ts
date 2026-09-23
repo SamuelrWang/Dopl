@@ -141,8 +141,8 @@ export function registerKnowledgeTools(
   // Used for the untrusted-body header, binding a confirm token to the previewer, and `op="grant"`'s ownership
   // fence — never for visibility, which the server already filtered.
   caller: CallerIdentity = UNKNOWN_CALLER,
-  // Resolves grant scopes and the list's channel. Required with no default: a default would silently un-narrow
-  // the grant scope under a container lock.
+  // Resolves grant scopes, the list's channel and create_base's destination. Required with no default:
+  // a default would silently un-narrow the grant scope under a container lock.
   directory: WorkspaceDirectory,
 ): void {
   register(
@@ -166,13 +166,18 @@ export function registerKnowledgeTools(
         case "create_base": {
           const miss = missingParams("create_base", args, ["name"]);
           if (miss) return miss;
-          return opCreateBase(client, caller.userId, {
-            name: args.name as string,
-            description: args.description,
-            visibility: args.visibility,
-            confirm_token: args.confirm_token,
-            client_write_id: args.client_write_id,
-          });
+          return opCreateBase(
+            client,
+            caller.userId,
+            {
+              name: args.name as string,
+              description: args.description,
+              visibility: args.visibility,
+              confirm_token: args.confirm_token,
+              client_write_id: args.client_write_id,
+            },
+            directory,
+          );
         }
         case "update_base": {
           const miss = missingParams("update_base", args, ["base"]);

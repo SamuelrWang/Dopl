@@ -202,7 +202,8 @@ export function registerAgentTools(
   client: DoplClient,
   // Read only for instruction framing and confirm-token binding; visibility is the server's decision.
   caller: CallerIdentity = UNKNOWN_CALLER,
-  // Scope resolver for op="grant". Required with no default: a default would un-narrow the grant scope.
+  // Resolves op="grant"'s scope and create's destination. Required with no default: a default would
+  // un-narrow the grant scope.
   directory: WorkspaceDirectory,
 ): void {
   register(
@@ -221,18 +222,23 @@ export function registerAgentTools(
         case "create": {
           const miss = missingParams("create", args, ["name"]);
           if (miss) return miss;
-          return opCreate(client, caller.userId, {
-            name: args.name as string,
-            description: args.description,
-            instructions: args.instructions,
-            model: args.model,
-            runtime: args.runtime,
-            fields: args.fields,
-            visibility: args.visibility,
-            knowledge_bases: args.knowledge_bases,
-            knowledge: args.knowledge,
-            confirm_token: args.confirm_token,
-          });
+          return opCreate(
+            client,
+            caller.userId,
+            {
+              name: args.name as string,
+              description: args.description,
+              instructions: args.instructions,
+              model: args.model,
+              runtime: args.runtime,
+              fields: args.fields,
+              visibility: args.visibility,
+              knowledge_bases: args.knowledge_bases,
+              knowledge: args.knowledge,
+              confirm_token: args.confirm_token,
+            },
+            directory,
+          );
         }
         case "grant": {
           const miss = missingParams("grant", args, ["identity", "scope", "to"]);
