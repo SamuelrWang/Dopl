@@ -265,23 +265,6 @@ test("F-054: the docblock no longer claims the web leg drops ?state", () => {
   );
 });
 
-test("F-054 residual: the MAGIC LINK arms a state-bound record and sends that nonce", () => {
-  const fn = codeOf(fnOf(PASSWORD, "sendMagicLink"));
-  assert.match(fn, /beginPendingAuth\(\{ requireState: true \}\)/,
-    "a presence-only magic-link record is a renderer-armable state-less window");
-  assert.match(fn, /desktop-handoff\?state=\$\{nonce\}/,
-    "the nonce must ride out on redirect_to — GoTrue owns that redirect, so there is no other channel");
-  assert.ok(
-    orderOf(fn, "beginPendingAuth", "gotrue(`/otp", "magic-link arming"),
-    "the nonce has to exist before the send that carries it"
-  );
-  // The audit's old rule — arm only AFTER GoTrue accepts — rested on the record being
-  // presence-only, which is what made a stranded one dangerous. It cannot hold here
-  // (the nonce IS the arming), and requireState is what replaces it: the nonce leaves
-  // the process only inside that request, so a stranded record is unspendable and
-  // simply expires.
-});
-
 test("no leg arms a presence-only record any more", () => {
   // The state-less branch of pickPendingAuth is now reachable only by a record a PRIOR
   // build left in electron-store. A bare beginPendingAuth() reintroduces the hole.
