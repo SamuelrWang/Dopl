@@ -94,12 +94,6 @@ const FORBIDDEN = [
 // startup runtime probe — which is a step-6 module. Its row is corrected below rather than
 // closed, because a census that mis-describes a row is how the next reader closes the wrong one.
 const DEFERRED = {
-  // ── step 5 — THE MODEL ROSTER AS A CAPABILITY. Owner: the step-5 wave.
-  // 24 code hits @ 2026-08-31, and every one is a frozen table entry (the id vocabulary, the
-  // alias map, the context-window table). Not closeable by rewording: `descriptor.models` has to
-  // become the source and `main/runtime/claude/models.js` the only copy, which is a data move
-  // with six duplicated vocabularies behind it.
-  "session-model.js": "step 5: the frozen model + context-window tables move to the adapter's models.js",
   // ── step 6 — THE CREDENTIAL + IPC DE-NAMING. Owner: the step-6 wave, and the design says to do
   // it ALONE. It is a wire rename across preload, bridge and SPA (`claude:signIn` ->
   // `runtime:signIn`, `claude` bridge namespace -> `runtime`) with THREE test pins that move in

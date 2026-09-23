@@ -189,7 +189,8 @@ export function session(over = {}) {
     // Defaulted to MEASURED values so the shape cases see the widened row; the absence cases
     // override them to undefined, which is what an unmeasured session and an older engine look like.
     promptTokens: 84000,
-    liveModel: "claude-haiku-4-5", // 200k in the frozen table — a real denominator
+    liveModel: "claude-haiku-4-5",
+    promptWindow: 200000, // the window the runtime reported with its last reading
     tokensSpent: 1200000,
     startedAt: 1700000000000,
     lastActivityAt: 1700000600000,

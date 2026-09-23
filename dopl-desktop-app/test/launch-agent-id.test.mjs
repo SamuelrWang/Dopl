@@ -54,7 +54,7 @@ function boot() {
     // are accepted, and a fake that said yes to everything would assert nothing.
     if (id === "./agent-id") return require(join(MAIN, "agent-id.js"));
     if (id === "./diag") return { diag: () => {} };
-    if (id === "./session-model") return require(join(MAIN, "session-model.js"));
+    if (id === "./runtime/selection-vocabulary") return require(join(MAIN, "runtime/selection-vocabulary.js"));
     if (id === "./channel-listener") {
       return { watchedChannel: () => ({ channel: { myAgentToolProfile: "full" } }) };
     }

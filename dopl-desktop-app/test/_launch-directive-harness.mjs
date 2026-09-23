@@ -295,7 +295,7 @@ export function boot(over = {}) {
         },
       };
     }
-    if (id === "./session-model") return require_(join(MAIN, "session-model.js"));
+    if (id === "./runtime/selection-vocabulary") return require_(join(MAIN, "runtime/selection-vocabulary.js"));
     // ⚠ THE IDENTITY RESOLVE IS STUBBED AT ITS SEAM, not faked at the transport. The real module
     // is `main/identity-resolve.js` and it rides `api.js`, which reaches Electron — so what is
     // controlled here is exactly its documented ANSWER SET (`{ok:true, identity}` /
@@ -309,11 +309,6 @@ export function boot(over = {}) {
         },
       };
     }
-    // ⚠ THE **REAL** `identityModel`, evaluated out of its own source. It cannot be `require`d
-    // under `node --test` (`session-launch-op.js` pulls `./diag`, which pulls Electron), and a
-    // hand-written copy here would make the two lanes' model chains agree only in this file —
-    // which is the drift the shared helper exists to prevent.
-    if (id === "./session-launch-op") return launchOp;
     // ── ⚠ THE AGENT-MANAGEMENT KINDS (2026-09-01) ───────────────────────────────────────────
     if (id === "./launch-directive-spawn") {
       const m = { exports: {} };
@@ -402,26 +397,6 @@ export function boot(over = {}) {
   return { api: { ...api, handle }, cfg, posts, gets, arms, logged, resolves, controls, names,
     flushes, modes, acquires, rosters, identityAsks, runtimeAsks, startAsks, ceilingAsks };
 }
-
-/**
- * `session-launch-op.js`, evaluated once out of its own source with Electron's two dependencies
- * stubbed. ⚠ ONLY `identityModel` IS USED FROM IT, and it is used rather than copied because it
- * is the ONE statement of "an identity's model becomes an alias, or '' so the chain continues" —
- * the button lane reads it too, and a second copy here would let the two lanes disagree while
- * both suites stayed green.
- */
-export const launchOp = (() => {
-  const src = readFileSync(join(MAIN, "session-launch-op.js"), "utf8");
-  const mod = { exports: {} };
-  const stub = (id) => {
-    if (id === "./ipc-guards") return require_(join(MAIN, "ipc-guards.js"));
-    if (id === "./agent-id") return require_(join(MAIN, "agent-id.js"));
-    if (id === "./diag") return { diag: () => {} };
-    throw new Error(`session-launch-op asked for ${id} at module scope`);
-  };
-  new Function("require", "module", "exports", src)(stub, mod, mod.exports);
-  return mod.exports;
-})();
 
 export const claimPosts = (h) => h.posts.filter((p) => p.path === wire.ROUTES.claim);
 export const decidePosts = (h) => h.posts.filter((p) => p.path === wire.ROUTES.decide);

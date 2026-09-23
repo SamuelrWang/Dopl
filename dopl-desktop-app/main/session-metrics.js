@@ -15,7 +15,6 @@
 // the same reason: `session-summary.js` requires it ABOVE its own sentinel and its harness
 // injects the real thing, so one program is under test rather than a slice plus a stub.
 
-const { contextWindowFor } = require('./session-model');
 // ⚠ THE HEALTH HALF IS ITS OWN MODULE (2026-09-01, `session-health.js`) AND IS SPREAD IN BELOW.
 // It is required HERE rather than in `session-summary.js` for a reason that is a measurement, not
 // a preference: that file stands at exactly 500 lines, which is the §1 cap with NO exemptions, so
@@ -28,7 +27,7 @@ const { contextWindowFor } = require('./session-model');
 const sessionHealth = require('./session-health');
 
 // ─── BEGIN SESSION-METRICS-PURE (injectable; unit-tested via source extraction) ──────
-// `contextWindowFor` and `sessionHealth` are free vars from here down.
+// `sessionHealth` is a free var from here down.
 
 /**
  * A NUMBER OR NOTHING. `null` is the honest answer for "this build cannot say" and for "nothing
@@ -72,22 +71,18 @@ function metricOrNull(value) {
  * bucketed, because `lastActivityAt` moves on every dispatch and an unquantized wire would turn
  * the state-change writer into a per-event one.
  */
-// The window `session-io.js` remembered off the runtime's own usage report, or 0 for "it reported
-// none" — which falls through to the table. ⚠ 0 RATHER THAN null so the `||` below reads as one
-// precedence chain; `metricOrNull` is what turns a final absence into the wire's null.
+// The window the runtime reported (`session-io.js` remembers it), or null — never 0 (P4-11).
 function reportedWindow(s) {
   const w = Number(s && s.promptWindow);
-  return Number.isFinite(w) && w > 0 ? w : 0;
+  return Number.isFinite(w) && w > 0 ? w : null;
 }
 
 function metrics(s, now) {
   return {
     contextUsed: metricOrNull(s && s.promptTokens),
-    // THE ONE STATEMENT OF THE DENOMINATOR RULE (P4-11): the window the RUNTIME reported wins — it
-    // is current by construction and is the one the platform compacts against — and the frozen
-    // table is the fallback. A missing, junk or zero report falls through; an unknown model is
-    // null, so the gauge shows raw tokens rather than a made-up percentage.
-    contextWindow: metricOrNull(reportedWindow(s) || contextWindowFor(s && s.liveModel)),
+    // Only the runtime's own report is a denominator (an adapter with a frozen table puts it on its
+    // context event); unknown is null, so the gauge shows raw tokens, never a made-up percentage.
+    contextWindow: reportedWindow(s),
     tokensSpent: metricOrNull(s && s.tokensSpent),
     startedAt: metricOrNull(s && s.startedAt),
     lastActivityAt: metricOrNull(s && s.lastActivityAt),

@@ -17,7 +17,7 @@
 
 const channelPrefs = require('./channel-prefs');
 const wire = require('./launch-directive-wire');
-const sessionModel = require('./session-model');
+const { pickOf } = require('./runtime/selection-vocabulary');
 // ⚠ THE POSTURE BOUND (2026-09-01, T24), SHARED WITH THE `set_agent_mode` KIND and pure. A
 // directive may now ASK for a start posture and for chaining; `resolveLaunch` is where the asking
 // is clamped to the operator's own stored channel pair, and its header carries why the ticket's
@@ -69,9 +69,8 @@ function appliedModelId(runtimeId, modelArg) {
  * is unreadable (the pick is never dropped), and spends the runtime default for `''`.
  */
 async function resolveModel(runtimeId, d, identity) {
-  const fromIdentity = require('./session-launch-op').identityModel(sessionModel, identity);
-  return sessionModel.chainModel(d.model)
-    || require('./runtime/launch-default').identityModelFor(runtimeId, fromIdentity);
+  return pickOf(d.model)
+    || require('./runtime/launch-default').identityModelFor(runtimeId, identity && identity.model);
 }
 
 /**

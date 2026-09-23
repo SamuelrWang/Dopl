@@ -30,7 +30,7 @@ const require = createRequire(import.meta.url);
 const HERE = dirname(fileURLToPath(import.meta.url));
 const MAIN = join(HERE, "..", "main");
 const read = (f) => readFileSync(join(MAIN, f), "utf8");
-const model = require(join(MAIN, "session-model.js"));
+const model = require(join(MAIN, "runtime", "claude", "model-table.js"));
 // U10 (2026-09-21): `setModelByTask`'s new free vars. REAL, never stubbed — `main/runtime/index.js`
 // is electron-free by contract, so the live-switch refusal is asked of the SHIPPED descriptors.
 const RUNTIME_REGISTRY = require(join(MAIN, "runtime/index.js"));
@@ -128,18 +128,15 @@ test("LAUNCH: the spawn funnel FORWARDS the resolved model — launcher/identity
 test("LAUNCH: every lane's chain is launcher pick > identity model, and nothing below it", () => {
   const OPS = read("session-launch-op.js");
   assert.match(OPS,
-    /const model = overrides\.model \|\| await launchDefault\.identityModelFor\(runtimeId, identityModel\(sessionModel, identity\)\);/,
+    /const model = overrides\.model \|\| await launchDefault\.identityModelFor\(runtimeId, identity && identity\.model\);/,
     "the operator's own Launch: the sheet, then the identity default ON THE LAUNCH RUNTIME — the funnel does the rest");
-  assert.match(read("session-model.js"), /return !v \|\| v === 'default' \? '' : v;/,
-    "absent and `default` step aside; everything else is the pick as given");
-  assert.equal(model.chainModel("claude-opus-6[1m]"), "claude-opus-6[1m]", "a model this build predates commits the chain");
-  assert.equal(model.chainModel("default"), "");
-  assert.equal(model.chainModel("  "), "");
-  assert.match(OPS, /return sessionModel\.chainModel\(/,
-    "the button lane must not restate the rule — it delegates");
+  const { pickOf } = require(join(MAIN, "runtime", "selection-vocabulary.js"));
+  assert.equal(pickOf("claude-opus-6[1m]"), "claude-opus-6[1m]", "a model this build predates commits the chain");
+  assert.equal(pickOf("default"), "");
+  assert.equal(pickOf("  "), "");
   const DIRECTIVE = read("launch-directive-spawn.js");
   assert.match(DIRECTIVE,
-    /return sessionModel\.chainModel\(d\.model\)\s*\|\| require\('\.\/runtime\/launch-default'\)\.identityModelFor\(runtimeId, fromIdentity\);/,
+    /return pickOf\(d\.model\)\s*\|\| require\('\.\/runtime\/launch-default'\)\.identityModelFor\(runtimeId, identity && identity\.model\);/,
     "the directive lane, ONE path for every runtime: the directive's `model`, then the identity's on the launch runtime");
   // P3-09: no second model check on the directive lane — no roster spawn, no pre-resolved default.
   assert.doesNotMatch(DIRECTIVE, /\.models\(\)|withRuntimeDefault/,
@@ -148,16 +145,13 @@ test("LAUNCH: every lane's chain is launcher pick > identity model, and nothing 
 
 test("LAUNCH: an unknown stored model degrades to the PRODUCT FALLBACK, never to argv", () => {
   // Driven rather than asserted from source: the whole chain, id -> alias -> argv.
-  // The degradation target moved 2026-09-06 (back-fill ruling): an unpicked channel launches
-  // `LAUNCH_MODEL_FALLBACK` rather than leaving `--model` off. What the case is about is unchanged:
-  // the junk itself must never reach argv.
+  const CLAUDE_MODELS = require(join(MAIN, "runtime", "claude", "models.js"));
   const fallback = model.aliasForModelId(model.LAUNCH_MODEL_FALLBACK);
   for (const junk of JUNK) {
-    assert.equal(model.modelArg(model.aliasForModelId(junk)), fallback, JSON.stringify(junk));
+    assert.equal(CLAUDE_MODELS.launchArg(model.aliasForModelId(junk)), fallback, JSON.stringify(junk));
   }
   for (const id of model.MODEL_IDS) {
-    const arg = model.modelArg(model.aliasForModelId(id));
-    assert.match(arg, /^[a-z]+$/, id);
+    assert.match(CLAUDE_MODELS.launchArg(model.aliasForModelId(id)), /^[a-z]+$/, id);
   }
 });
 

@@ -102,7 +102,6 @@ async function launchFromButton(payload) {
   const channelPrefs = require('./channel-prefs');
   const targeting = require('./targeting');
   const listener = require('./channel-listener');
-  const sessionModel = require('./session-model');
   // ⚠ CONTAINMENT: the profile comes from MAIN's own watched-channel record — the FULL server
   // DTO off the loop entry (`channel-listener.js › watchedChannel`), never the renderer's claim
   // and ⚠ never the tray's id+name PROJECTION, which is what this read until F-267 (no profile
@@ -201,7 +200,7 @@ async function launchFromButton(payload) {
     return { ok: false, reason: resolved.reason };
   }
   const runtimeId = resolved.runtimeId;
-  const model = overrides.model || await launchDefault.identityModelFor(runtimeId, identityModel(sessionModel, identity));
+  const model = overrides.model || await launchDefault.identityModelFor(runtimeId, identity && identity.model);
 
   const res = await engine.launchRequesterSession({
     channelId: p.channelId,
@@ -351,20 +350,6 @@ async function launchFromButton(payload) {
 }
 
 /**
- * The identity's own model as an ALIAS, or '' when it named none / named one this build does not
- * recognise. ⚠ `''` IS "THE CHAIN CONTINUES", which is why this is not `normalizeModel`'s
- * 'default': that value MEANS "the CLI's own pick" and would end the chain one link early.
- * ⚠ THE RULE ITSELF IS `session-model.js › chainModel` SINCE 2026-08-23, not restated here — the
- * DIRECTIVE lane needs the identical answer for its own link and a rule written once per lane is
- * a rule that drifts in one of them (F-285). This function is now only "which field to read".
- */
-function identityModel(sessionModel, identity) {
-  return sessionModel.chainModel(
-    identity && typeof identity.model === 'string' ? identity.model : ''
-  );
-}
-
-/**
  * RECORD A FIRST-USE APPROVAL for another member's identity, on THIS machine.
  *
  * ⚠ IT GRANTS NOTHING BUT THE PROMPT. Approving an identity does not widen a tool profile, a
@@ -381,4 +366,4 @@ function approveIdentity(payload) {
   return { ok: require('./channel-prefs').approveIdentity(p.identityId) === true };
 }
 
-module.exports = { launchFromButton, approveIdentity, wantsIdentity, identityModel };
+module.exports = { launchFromButton, approveIdentity, wantsIdentity };

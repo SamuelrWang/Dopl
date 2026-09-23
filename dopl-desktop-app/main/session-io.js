@@ -332,6 +332,7 @@ function applyCoreEvents(s, list, dispatch, store) {
       // `contextEvent` and then a percentage untouched by anything that checks its type.
       const win = Number(ev.window);
       if (Number.isFinite(win) && win > 0) s.promptWindow = win;
+      else if (ev.model && ev.model !== s.liveModel) s.promptWindow = null; // another model's window does not carry over
       if (ev.model) s.liveModel = ev.model; // a mid-session model switch
       continue;
     }

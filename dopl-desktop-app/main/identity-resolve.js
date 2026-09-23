@@ -69,7 +69,7 @@ const MAX_FOLDER_COUNT = 10000;
 const MAX_NAME = 120; // `schema.ts › NameSchema` / `agent_identities_name_charset_check`
 const MAX_FIELD_KEY = 80; // `schema.ts › IdentityFieldSchema.key`
 const MAX_FIELD_VALUE = 1000; // …and its `.value`
-const MAX_MODEL = 120; // an id or an alias; `session-model.js` re-coerces it anyway
+const MAX_MODEL = 120; // an id or an alias; the launch funnel resolves or refuses it
 const MAX_BASE_LABEL = 200; // a base id or slug and its display name — neither reaches a prompt
                             // line unsanitized (`prompt-framing-agent-identity.js › knowledgeLines`)
 const MAX_TENANCY_LABEL = 200; // a workspace name (120) or a container id in a fixed phrase — a
@@ -385,16 +385,15 @@ function isSafeLabel(value) {
  * ⚠ THE MODEL IS BOUNDED, NOT COERCED (2026-09-22). It was `normalizeModel` — the FROZEN Claude
  * table — so a model the live picker offered that this build predates was dropped to `''` here
  * and the launch silently ran the next link's model. The funnel resolves it on the live roster or
- * refuses it (`session-launch.js`); `chainModel` is the one rule for "no opinion".
+ * refuses it (`session-launch.js`); `selection-vocabulary.js › pickOf` is the one rule for "no opinion".
  */
 function narrowOverrides(overrides) {
   const o = overrides && typeof overrides === 'object' ? overrides : {};
-  const sessionModel = require('./session-model');
   const asked = typeof o.model === 'string' ? o.model.slice(0, MAX_MODEL) : '';
   const instructions = typeof o.instructions === 'string'
     ? o.instructions.slice(0, MAX_INSTRUCTIONS).trim()
     : '';
-  const out = { model: sessionModel.chainModel(asked), instructions, fields: null };
+  const out = { model: require('./runtime/selection-vocabulary').pickOf(asked), instructions, fields: null };
   if (!Array.isArray(o.fields)) return out;
   const kept = [];
   const seen = new Set();

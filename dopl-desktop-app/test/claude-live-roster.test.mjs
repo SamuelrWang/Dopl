@@ -31,7 +31,7 @@ const MAIN = join(HERE, "..", "main");
 const require = createRequire(import.meta.url);
 const roster = require("../main/runtime/claude/roster.js");
 const models = require("../main/runtime/claude/models.js");
-const table = require("../main/session-model.js");
+const table = require("../main/runtime/claude/model-table.js");
 
 // ⚠ MEASURED 2026-09-22 on this Mac (SDK 0.3.220, signed in, Max) — `roster.js`'s header.
 const MEASURED = [

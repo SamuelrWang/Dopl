@@ -51,7 +51,7 @@ function boot(api = {}, opts = {}) {
     if (id === "./ipc-guards") return require(join(MAIN, "ipc-guards.js"));
     if (id === "./agent-id") return require(join(MAIN, "agent-id.js"));
     if (id === "./diag") return { diag: () => {} };
-    if (id === "./session-model") return require(join(MAIN, "session-model.js"));
+    if (id === "./runtime/selection-vocabulary") return require(join(MAIN, "runtime/selection-vocabulary.js"));
     if (id === "./session-telemetry") return require(join(MAIN, "session-telemetry.js"));
     if (id === "./api") {
       return {
@@ -453,7 +453,7 @@ test("`context.identity` rides the funnel's LITERAL WHITELIST and survives park/
   const resume = park.slice(park.indexOf("function resumeParked("), park.indexOf("async function startResumedConsumer("));
   assert.equal(/s\.context/.test(resume), false, "a park/resume never rewrites the context");
   // …and the framing reads it from there, with the session's OWN profile spread on at wake.
-  assert.match(read("session-seed.js"), /context: \{ \.\.\.\(\(s && s\.context\) \|\| \{\}\), profile: s\.profile, mcpDiscovery: discoveryOf\(s\) \}/);
+  assert.match(read("session-seed.js"), /context: \{ \.\.\.\(\(s && s\.context\) \|\| \{\}\), profile: s\.profile, mcpDiscovery: discoveryFor\(s && s\.runtimeId\) \}/);
 });
 
 // ⚠ **AND A CRASH RESUME IS THE OTHER HALF, NOT FREE** (F-288, 2026-08-23). Above is `resumeParked`,
