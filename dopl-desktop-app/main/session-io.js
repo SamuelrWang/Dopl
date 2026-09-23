@@ -394,6 +394,7 @@ module.exports = {
   // FIX F4: session-history dropped those rows from the ENTRIES too; that renderer is deleted,
   isGatedEntry: seed.isGatedEntry, // and the SEED still filters them — the half that mattered.
   withSeed: seed.withSeed,
+  discoveryFor: seed.discoveryFor,
   frameOperatorTurn: seed.frameOperatorTurn, // 2026-08-20: the direct 1:1 lane (F-212)
   postWillGate, // v2.7 L3: does an own-channel post stop on an operator decision?
   grantArgs, // v2.9: the ONE argument builder both the prediction and the gate use

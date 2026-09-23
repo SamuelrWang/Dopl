@@ -264,7 +264,7 @@ async function startSession(spec, rt) {
   // ⚠ `profile` SPREAD AT THE CALL, NEVER ONTO `s.context` — `session-seed.js › takeFraming` owns that argument, and the 2026-08-31 half about why THIS site lacked it.
   const firstTurn = spec.parkedShell ? ''
     : spec.rawFirstTurn ? spec.rawFirstTurn
-      : framing.buildFencedTurn({ side: spec.side, message: spec.firstMessage, context: { ...context, profile: spec.profile, mcpDiscovery: runtimeRegistry.capability.mcpDiscovery(runtimeRegistry.descriptorFor((rt && rt.id) || null)) }, nonce }); // CXP-3A: how this runtime reaches deferred Dopl tools, or null when eager-loaded
+      : framing.buildFencedTurn({ side: spec.side, message: spec.firstMessage, context: { ...context, profile: spec.profile, mcpDiscovery: io.discoveryFor(rt && rt.id) }, nonce });
   const s = {
     key: spec.key,
     sessionId,

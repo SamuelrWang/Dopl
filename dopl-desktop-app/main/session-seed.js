@@ -291,8 +291,9 @@ function pendingTranscript(s) {
 // which routes an identity through that site for the first time: an undefined profile reads as
 // "not read_only" through `kbReadable`, and the turn would ORDER a hard-denied tool. Both
 // builders spread it now; `prompt-profile-drift.test.mjs` is what fails if one stops.
-// CXP-3A: the SESSION's runtime decides whether the turn orders a Dopl-tool search. ⚠ Lazy: `./runtime` reaches adapters that reach session modules.
-function discoveryOf(s) { const rt = require('./runtime'); return rt.capability.mcpDiscovery(rt.descriptorFor((s && s.runtimeId) || null)); }
+// CXP-3A: the runtime decides whether a first turn orders a Dopl-tool search (null = eager-loaded).
+// Lazy: `./runtime` reaches adapters that reach session modules.
+function discoveryFor(runtimeId) { const rt = require('./runtime'); return rt.capability.mcpDiscovery(rt.descriptorFor(runtimeId || null)); }
 function takeFraming(s, transcript) {
   if (!s || s.freshFraming !== true) return '';
   s.freshFraming = false;
@@ -300,7 +301,7 @@ function takeFraming(s, transcript) {
   // (identity + the room model + THE LAW) instead of the pair-bound responder framing.
   return framing.buildFencedTurn({
     side: s.side, bind: s.bind, message: transcript || s.launchGoal || '',
-    context: { ...((s && s.context) || {}), profile: s.profile, mcpDiscovery: discoveryOf(s) }, nonce: s.nonce,
+    context: { ...((s && s.context) || {}), profile: s.profile, mcpDiscovery: discoveryFor(s && s.runtimeId) }, nonce: s.nonce,
   });
 }
 
@@ -461,6 +462,7 @@ function frameDirectedTurn(nonce, text) {
 }
 
 module.exports = {
+  discoveryFor, // the one reader of `capability.mcpDiscovery` for a first turn (engine + wake)
   frameContinuation,
   addressingLines, // 2026-08-22: exported so the verdict's branches are unit-testable alone
   frameOperatorTurn, // 2026-08-20: the direct 1:1 lane (F-212)

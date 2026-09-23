@@ -128,7 +128,7 @@ function harness(cfg = {}) {
       calls.acquired.push(runtimeId);
       if (cfg.sdkThrows) throw new Error("no agent runtime on this machine");
       if (cfg.duringSdk) cfg.duringSdk(sessions);
-      return {};
+      return cfg.rtId ? { id: cfg.rtId } : {};
     },
     startSession: async (spec) => {
       calls.started.push(spec);
@@ -223,6 +223,18 @@ test("AUTH-HOLD: a held agent on the thread is answered honestly, never as busy"
   const res = await h.launch(call({ channelId: CH, taskId: TASK, side: "responder" }));
   assert.deepEqual(res, { skipped: "auth-hold" }, "the caller can post the truth, not a busy lie");
   assert.deepEqual(h.calls.started, []);
+});
+
+test("AUTH-HOLD is scoped to the launch runtime, and any held agent on the thread counts (P4-22)", async () => {
+  const other = harness({ rtId: "claude" });
+  other.sessions.set(...live(slotKey({ channelId: CH, taskId: TASK, agentId: AGENT }), { agentId: AGENT, runtimeId: "codex", state: { authHeld: true } }));
+  const res = await other.launch(call({ channelId: CH, taskId: TASK, side: "responder" }));
+  assert.ok(res.sessionId, "a held Codex agent does not refuse a Claude launch");
+  const second = harness({ rtId: "claude" });
+  second.sessions.set(...live(slotKey({ channelId: CH, taskId: TASK, agentId: "b2c3d4e5" }), { agentId: "b2c3d4e5", runtimeId: "claude", state: {} }));
+  second.sessions.set(...live(slotKey({ channelId: CH, taskId: TASK, agentId: AGENT }), { agentId: AGENT, runtimeId: "claude", state: { authHeld: true } }));
+  assert.deepEqual(await second.launch(call({ channelId: CH, taskId: TASK })), { skipped: "auth-hold" },
+    "a held SECOND agent on the thread is not missed");
 });
 
 test("CHANNEL-LEVEL: a launch with no thread keys on an EMPTY middle segment", async () => {

@@ -67,11 +67,6 @@ async function launch(a) {
   const agentId = isAgentId(a.agentId) ? a.agentId : newAgentId();
   const slot = { channelId: a.channelId, taskId: a.taskId, agentId: agentId };
   const key = store.slotKey(slot);
-  // H1 (LOW): a HELD slot (sign-in wait) answers auth-hold, never busy — post the truth.
-  // ⚠ IT ASKS ABOUT THE THREAD, NOT THIS SLOT, AND THAT IS THE POINT. A fresh instance id can
-  // never collide with a live slot, so a slot-scoped auth check would answer false forever and
-  // the caller would launch a second doomed session on a machine with no Claude credential.
-  if (isAuthHeldSession({ channelId: a.channelId, taskId: a.taskId, agentId: (deps.liveOnThread(slot)[0] || {}).agentId || null })) return { skipped: 'auth-hold' };
   // ⚠ THERE IS NO `busy` REFUSAL ANY MORE (2026-08-21, ruling 2). It read `hasLiveSession(slot)`
   // and it WAS the one-agent-per-thread law: a peer's follow-up on a thread this machine was
   // already working got "I'm still finishing a previous request, please resend", and the
@@ -121,6 +116,7 @@ async function launch(a) {
     return { skipped: 'no-sdk' };
   }
   if (hasLiveSession(slot)) return { skipped: 'busy' }; // FIX #7: re-check after await — a slot-scoped check now, so only an id collision (unreachable) trips it
+  if (isAuthHeldSession(slot, rt && rt.id)) return { skipped: 'auth-hold' };
   // Asked before anything registers: a hold raised after registration left a parked record that
   // the next boot ended as a card for an agent that never started (P4-07).
   if (await credentialMissing(rt)) return { skipped: 'auth-hold' };
@@ -348,13 +344,11 @@ function hasLiveSession(a) {
   return deps.liveOnThread(a).length > 0;
 }
 
-// H1 (LOW) — is the session occupying this (channel, task) slot HELD on the sign-in action
-// rather than actually working? The registry cannot tell the difference on its own, and the
-// caller's "busy" copy ("I'm still finishing a previous request") is a lie when the truth is
-// "nothing is running and nobody can start it until someone signs in on that Mac".
-function isAuthHeldSession(a) {
-  const s = deps.sessions.get(store.slotKey(a));
-  return !!(s && !s.settled && s.state && s.state.authHeld === true);
+// H1 — is any agent on this THREAD held on the sign-in action for the runtime this launch uses?
+// A thread, not the slot: a fresh instance id never collides. Scoped by runtime (P4-22): a held
+// Codex agent says nothing about a Claude launch's credential.
+function isAuthHeldSession(slot, runtimeId) {
+  return deps.liveOnThread(slot).some((s) => s.state && s.state.authHeld === true && s.runtimeId === runtimeId);
 }
 
 module.exports = {
