@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { Search } from "lucide-react";
 import { MenuDivider, Popover } from "@/shared/ui/popover-menu";
 import { agentModelShortLabel } from "@/features/channels/lib/agent-models";
+import type { ModelCatalogs } from "@/features/channels/lib/model-catalog";
 import { agentIdentityErrorMessage } from "../client/api";
 import type { AgentIdentity } from "../client/types";
 import { useAgentIdentities } from "../hooks/use-agent-identities";
@@ -153,6 +154,7 @@ export function IdentityLaunchPicker({
   currentUserId = null,
   memberNames,
   busy = false,
+  catalogs,
   onPick,
 }: {
   open: boolean;
@@ -164,6 +166,8 @@ export function IdentityLaunchPicker({
   memberNames?: ReadonlyMap<string, string>;
   /** A launch already in flight — the same double-submit guard the surfaces use. */
   busy?: boolean;
+  /** The live model catalogs the host holds, for the rows' model chips. */
+  catalogs?: ModelCatalogs | null;
 } & IdentityPickerHandlers) {
   /**
    * ⚠ **CHOOSING CLOSES THE POPOVER AND HANDS THE ROW UP — IT STARTS NOTHING.** Both halves
@@ -187,6 +191,7 @@ export function IdentityLaunchPicker({
         currentUserId={currentUserId}
         memberNames={memberNames}
         busy={busy}
+        catalogs={catalogs}
         onBlank={() => choose(null)}
         onPick={choose}
       />
@@ -204,6 +209,7 @@ function PickerBody({
   currentUserId,
   memberNames,
   busy,
+  catalogs,
   onBlank,
   onPick,
 }: {
@@ -211,6 +217,7 @@ function PickerBody({
   currentUserId: string | null;
   memberNames?: ReadonlyMap<string, string>;
   busy: boolean;
+  catalogs?: ModelCatalogs | null;
   onBlank: () => void;
   onPick: (identity: AgentIdentity) => void;
 }) {
@@ -296,6 +303,7 @@ function PickerBody({
                 identity={identity}
                 marker={authorMarker(identity, currentUserId, memberNames)}
                 busy={busy}
+                catalogs={catalogs}
                 onPick={onPick}
               />
             ))}
@@ -322,14 +330,16 @@ function IdentityRow({
   identity,
   marker,
   busy,
+  catalogs,
   onPick,
 }: {
   identity: AgentIdentity;
   marker: string | null;
   busy: boolean;
+  catalogs?: ModelCatalogs | null;
   onPick: (identity: AgentIdentity) => void;
 }) {
-  const model = agentModelShortLabel(identity.model);
+  const model = agentModelShortLabel(identity.model, catalogs);
   return (
     <button
       type="button"

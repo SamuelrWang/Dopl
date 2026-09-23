@@ -236,15 +236,15 @@ export function IdentityEditor({
   // runtime's live models ("Default" first — the draft's own "no model"). No runtime, or no
   // catalog for it, is "Default" plus the stored value as itself (F11, P7-12, X-03).
   const defaults = useLaunchSelection({ kind: "defaults" });
-  const { catalogFor, runtimes } = defaults;
+  const { catalogFor, catalogs, runtimes } = defaults;
   const catalog = draft.runtime ? catalogFor(draft.runtime) : null;
   const runtimeOptions = useMemo(
     () => identityRuntimeOptions(runtimes, draft.runtime),
     [runtimes, draft.runtime]
   );
   const models = useMemo(
-    () => identityModelOptions(draft.runtime, catalog, draft.model),
-    [draft.runtime, catalog, draft.model]
+    () => identityModelOptions(draft.runtime, catalog, draft.model, catalogs),
+    [draft.runtime, catalog, draft.model, catalogs]
   );
   const pickRuntime = (runtime: string) =>
     edit({

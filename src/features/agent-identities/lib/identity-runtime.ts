@@ -10,20 +10,21 @@ import {
   findModel,
   modelOptionsFor,
   type ModelCatalog,
+  type ModelCatalogs,
 } from "@/features/channels/lib/model-catalog";
 import { modelBelongsTo } from "@/features/channels/lib/model-affinity";
 import type { RuntimeDescriptor } from "@/features/channels/lib/runtime-capability";
 
-export interface RowOption {
+interface RowOption {
   key: string;
   label: string;
 }
 
 /** `""` on the draft = no runtime preference; the channel decides at launch. */
-export const NO_RUNTIME = "";
-export const NO_RUNTIME_LABEL = "Any";
+const NO_RUNTIME = "";
+const NO_RUNTIME_LABEL = "Any";
 /** `""` on the draft = no model; the runtime's own default. */
-export const NO_MODEL = "";
+const NO_MODEL = "";
 
 /** Registered runtimes; a stored id this desktop does not register is kept, as itself. */
 export function identityRuntimeOptions(
@@ -40,16 +41,18 @@ export function identityRuntimeOptions(
   return options;
 }
 
+/** `catalogs` only LABELS a stored value the runtime's own catalog cannot offer; it never selects. */
 export function identityModelOptions(
   runtime: string,
   catalog: ModelCatalog | null,
-  stored: string
+  stored: string,
+  catalogs?: ModelCatalogs | null
 ): RowOption[] {
   const head = { key: NO_MODEL, label: agentModelLabel(NO_MODEL) };
   if (runtime && catalog) {
     return [head, ...modelOptionsFor(catalog, stored).map((o) => ({ key: o.value, label: o.label }))];
   }
-  return stored ? [head, { key: stored, label: agentModelLabel(stored) }] : [head];
+  return stored ? [head, { key: stored, label: agentModelLabel(stored, catalogs) }] : [head];
 }
 
 /** The option key a stored model selects — an alias resolves to its catalog id. */

@@ -5,6 +5,7 @@ import { Plus } from "lucide-react";
 import { PageShellSkeleton } from "@/shared/ui/skeleton";
 import { useAttachableBases } from "../hooks/use-attachable-bases";
 import { useTeams } from "@/features/members/hooks/use-teams";
+import { useLaunchSelection } from "@/features/channels/hooks/use-launch-selection";
 import { agentIdentityErrorMessage } from "../client/api";
 import type { AgentIdentity, IdentityShelf } from "../client/types";
 import { useAgentIdentities } from "../hooks/use-agent-identities";
@@ -96,6 +97,7 @@ export function AgentIdentitiesCore({
   const list = useAgentIdentities(workspaceId, { shelf: WORKSPACE_SHELF });
   const { teams } = useTeams(workspaceSlug);
   const attachable = useAttachableBases(workspaceId);
+  const { catalogs } = useLaunchSelection({ kind: "defaults" });
 
   const [editor, setEditor] = useState<EditorState>(CLOSED);
   const {
@@ -156,6 +158,7 @@ export function AgentIdentitiesCore({
               section={section}
               identities={grouped[section.visibility]}
               onOpen={openEditor}
+              catalogs={catalogs}
             />
           ))}
         </div>
