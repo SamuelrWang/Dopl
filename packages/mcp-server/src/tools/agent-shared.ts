@@ -9,7 +9,7 @@ import { inlineOr, NO_NAME, UUID_RE } from "./narration.js";
 import { apiMessage, err, isApiError, type ToolResponse } from "./respond.js";
 import { AGENT_ERRORS, refusal } from "./tool-errors.js";
 
-/** The server's 403 for a shared credential owning a private row; one spelling, shared with `knowledge-shared.ts › sharedCredentialPrivateBaseDenied`. */
+/** The server's 403 for a shared credential owning a private row. */
 export const PRIVATE_VISIBILITY_DENIED_CODE = "WORKSPACE_KEY_PRIVATE_VISIBILITY";
 
 /** The server's 404 for an identity this caller cannot name — the only refusal the id door swallows. */

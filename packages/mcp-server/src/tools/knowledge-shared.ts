@@ -3,7 +3,6 @@
 import type { DoplClient, KnowledgeBase } from "@dopl/client";
 import { inlineOr, NO_NAME, NO_PATH, UUID_RE } from "./narration";
 import { apiMessage, err, isApiError, type ToolResponse } from "./respond";
-import { PRIVATE_VISIBILITY_DENIED_CODE } from "./agent-shared";
 import { KB_ENTRY_NOT_FOUND, KB_ERRORS, refusal } from "./tool-errors";
 import { FENCE_HEADER } from "./untrusted-fence";
 
@@ -159,17 +158,6 @@ export function agentWriteDenied(e: unknown): ToolResponse | null {
   return err(
     apiMessage(e) ??
       "This knowledge base is read-only to agents — delete it from the Dopl web UI."
-  );
-}
-
-/** Maps 403 `WORKSPACE_KEY_PRIVATE_VISIBILITY` for a base (mirrors `agent-shared.ts › sharedCredentialPrivateDenied`).
- *  No caller since the copy ops were removed. */
-export function sharedCredentialPrivateBaseDenied(
-  e: unknown
-): ToolResponse | null {
-  if (!isApiError(e, 403, PRIVATE_VISIBILITY_DENIED_CODE)) return null;
-  return err(
-    `${apiMessage(e) ?? "This credential cannot own a private knowledge base."} NOTHING was created — the copy stopped at the base itself, so there is no partial tree to clean up. A credential that may be shared between humans has no "private to me" to write to, and this op only ever creates PRIVATE bases: reconnect with a personal credential, or ask the user to copy it in the Dopl app.`
   );
 }
 
