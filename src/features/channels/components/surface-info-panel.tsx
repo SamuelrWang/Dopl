@@ -1,15 +1,8 @@
 "use client";
 
 /**
- * THE TAB COLUMN, WIRED TO A SURFACE — `info-panel.tsx` plus every fact it
- * needs, the Settings slot, and the two mention actions taken only from inside
- * it. Extracted from `channel-surface.tsx` at the 500-line cap (2026-09-04):
- * the surface owns WHICH panes it shows, this owns how each is wired.
- *
- * ⚠ Two widths from one definition (`fullTab`): absent is the desktop's 380px
- * column with its tab row, present is ONE face as the main area.
- * ⚠ It FETCHES NOTHING — every read is `ChannelSurfaceData`, mounted once by
- * the HOST (INVARIANTS §7).
+ * `info-panel.tsx` wired to a channel surface: facts, writes, the Settings slot and mention actions.
+ * Fetches nothing — every read is the host's `ChannelSurfaceData` (INVARIANTS §7).
  */
 
 import { useState } from "react";
@@ -49,7 +42,7 @@ export function SurfaceInfoPanel({
   fullTab,
 }: {
   channel: Channel;
-  /** Already derived by the surface — `peerNamedHeader` decides it, not this file. */
+  /** Derived by the surface (`peerNamedHeader`). */
   channelName: string;
   workspaceId: string;
   workspaceSlug: string;
@@ -61,29 +54,21 @@ export function SurfaceInfoPanel({
   capabilities?: ChannelSurfaceCapabilities;
   onDeselect?: () => void;
   onRosterChanged?: () => void;
-  /** Present on the WEB's single column — see `showChannel` below. */
+  /** Present on the web's single column. */
   webView?: ChannelWebView;
-  /** ONE face as the main area, or absent for the desktop's tab column. */
+  /** One tab as the main area, or absent for the desktop's tab column. */
   fullTab?: TabKey;
 }) {
   const { members, threads, mentions, agentSessions, agentsPanel, index, openThread, gate } =
     data;
 
-  /**
-   * ⚠ THE SURFACE'S ONE `gate` (INVARIANTS §7/§8), like every write wired here:
-   * a second coordinator would let the realtime doorbell repaint the old name
-   * mid-write. No new endpoint — `PATCH /api/channels/[channelId]`.
-   */
+  // Every write shares the surface's one `gate` so realtime can't repaint the old value mid-write (INVARIANTS §7/§8).
   const headerWrite = useChannelHeaderWrite({
     channelId: channel.id,
     workspaceId,
     gate,
   });
-  /**
-   * THE INFO TAB'S CLICK-TO-EDIT NAME + DESCRIPTION (Samuel, 2026-09-16).
-   * ⚠ The DERIVED-NAME half is the card's (`info-tab-card.tsx ›
-   * headerEditable`) — a fact about the ROW, not about the reader.
-   */
+  // The derived-name half is `info-tab-card.tsx › headerEditable`.
   const canManage = canManageChannelHere(channel, role);
   const headerEdit = {
     canEdit: canManage,
@@ -91,40 +76,21 @@ export function SurfaceInfoPanel({
     onSaveTopic: headerWrite.saveTopic,
     busy: headerWrite.pending,
   };
-  /**
-   * THE CURATED INFO CARD'S WRITE (Samuel's ruling R-19, 2026-09-17).
-   * ⚠ MEMBERSHIP-gated, not MANAGE-gated (Samuel, 2026-08-25;
-   * `service-writes.ts › updateChannel`): the card is content the room carries,
-   * not part of its lifecycle — so there is no `canEdit` half to mirror here.
-   */
+  // Membership-gated, not manage-gated (`service-writes-channel.ts › updateChannel`), so no `canEdit`.
   const infoCardWrite = useChannelInfoCardWrite({
     channelId: channel.id,
     workspaceId,
     gate,
   });
 
-  /**
-   * 🔒 ADD MEMBER, ON THE Members HEADING — F-721 RESOLVED (Samuel, 2026-09-17,
-   * answering R-46's option (b) yes).
-   * ⚠ It rides `memberManagement`, which is what makes it absent on /home and
-   * the guest lane: a link container's roster cannot be added to this way at ANY
-   * size (§4A — every workspace-level add answers `LINK_CONTAINER_CLOSED`), so
-   * the control would name an operation that always fails.
-   * ⚠ HIDDEN, NOT DISABLED (INVARIANTS §5), and the dialog is mounted only while
-   * open — it opens two reads and the add/remove writes.
-   */
+  // Absent without `memberManagement` (link containers refuse adds, §4A); hidden, not disabled (INVARIANTS §5).
   const canAddMembers = capabilities?.memberManagement !== false && canManage;
   const [inviteOpen, setInviteOpen] = useState(false);
 
-  // ⚠ ON ONE COLUMN, OPENING A TRANSCRIPT HAS TO MOVE THE FACE TOO — a picked
-  // thread, a jumped-to mention and a new-thread ask all land in the
-  // CONVERSATION, which is a different face there and the pane next door on the
-  // desktop. A no-op without `webView`, so every desktop mount is unchanged.
+  // Single column: opening a transcript also switches the face. No-op on desktop.
   const showChannel = () => webView?.setView("channel");
 
-  // The Tags inbox's click: mark read, land the center pane on the right
-  // transcript, then signal the scroll (the effect runs POST-render, so the
-  // swapped transcript is in the DOM first). The mark-read is optimistic.
+  // Optimistic mark-read, then jump (the scroll signal runs post-render).
   const openMention = (mention: ChannelMention) => {
     if (!mention.read) {
       data.markRead.mutate({
@@ -136,10 +102,7 @@ export function SurfaceInfoPanel({
     showChannel();
   };
 
-  // ⚠ MARK-ALL SENDS THE IDS IT IS DISPLAYING, never a flag. The list is bounded
-  // and says when it clipped, so "all" can only honestly mean the page — naming
-  // the ids makes that true by construction (INVARIANTS §9). Already-read rows are
-  // filtered out, so a no-op click sends no request.
+  // Sends the displayed unread ids, never an "all" flag: the list is bounded (INVARIANTS §9).
   const markAllMentionsRead = () => {
     const unread = mentions.filter((m) => !m.read).map((m) => m.messageId);
     if (unread.length === 0) return;
@@ -169,39 +132,26 @@ export function SurfaceInfoPanel({
       }}
       agentSessions={agentSessions}
       peerSessions={agentsPanel.peerSessions}
-      // ⚠ CHANNEL VIEW LAUNCHES TOO (fixed 2026-09-08) — `launch-view-gate.ts ›
-      // launchAllowedInView` carries the rule and its test; it used to require an
-      // open thread, which left channel view with no launch control at all.
       canLaunchAgent={launchAllowedInView(agentsPanel.canLaunch, openThread, currentUserId)}
       launchBusy={agentsPanel.launchBusy}
       launchError={agentsPanel.launchError}
-      // ⚠ THE FUNCTION ITSELF, NEVER A WRAPPER (P6-01): a 3-argument lambda here dropped the
-      // popup's agent id, runtime and colour. The prop's `LaunchAgentFn` type refuses one.
+      // Passed unwrapped (branded `LaunchAgentFn`): a narrower wrapper dropped agentId/runtime/colour (P6-01).
       onLaunchAgent={agentsPanel.launchAgent}
       onApproveIdentity={agentsPanel.approveIdentity}
       openAgent={sel.openAgent}
       onOpenAgent={sel.setOpenAgent}
-      // ⚠ THE PILL'S SECOND PRESS ASKS THIS COLUMN TO RESET (Samuel, 2026-09-16) —
-      // `use-channels-selection.ts › toggleAgent` bumps it when it closes the view.
+      // Bumped by `use-channels-selection.ts › toggleAgent` when it closes the agent view.
       infoTabSignal={sel.infoTabSignal}
       mentions={mentions}
       mentionsTruncated={data.mentionsTruncated}
       mentionsLoading={data.mentionsLoading}
       onOpenMention={openMention}
       onMarkAllMentionsRead={markAllMentionsRead}
-      // THE ARTIFACTS FACE (Samuel, 2026-09-16) — opt-in; /home and the
-      // workspace channels page since R-16 (2026-09-17).
       artifacts={capabilities?.artifacts}
       headerEdit={headerEdit}
-      // THE CURATED `channels.info_card` ROWS (Samuel's ruling R-19, 2026-09-17).
       infoCardEdit={{ onSave: infoCardWrite.save }}
-      // WHICH OF THE TWO RULED MENTIONS FACES (Samuel, 2026-09-15) — the
-      // capability's docblock carries the ruling.
       mentionsLayout={capabilities?.mentionsLayout}
-      // 🔒 "No members in this channel." IS DERIVED, NOT A NEW FLAG: the hosts
-      // that pass `memberManagement: false` are exactly the ones whose roster
-      // always holds the reader, so the sentence could only ever flash falsely
-      // there. `info-tab.tsx › rosterEmptyLine` carries the rest.
+      // Hosts without member management always include the reader, so the empty line would only flash falsely.
       rosterEmptyLine={capabilities?.memberManagement !== false}
       membersAction={
         canAddMembers ? (
@@ -209,8 +159,7 @@ export function SurfaceInfoPanel({
             <button
               type="button"
               onClick={() => setInviteOpen(true)}
-              // The shared recipe is FACE AND SCALE ONLY, so spacing stays at
-              // the call site (`page-action-button.ts`).
+              // The recipe is face and scale only; spacing stays at the call site.
               className={cn(PAGE_ACTION_BTN, "ml-auto")}
             >
               Add member
@@ -224,8 +173,6 @@ export function SurfaceInfoPanel({
                 canManage
                 open
                 onOpenChange={setInviteOpen}
-                // The roster the surface holds, and the host's channel list —
-                // the same pair `settings-slot.tsx` settles this dialog into.
                 onChanged={() => {
                   onRosterChanged?.();
                   data.refetchMembers();
@@ -235,10 +182,7 @@ export function SurfaceInfoPanel({
           </>
         ) : null
       }
-      // ⚠ CALLED, not passed: the extras are a render function so they can be
-      // handed THIS surface's refetch gate. This was `infoTab` and it REPLACED
-      // the body (deleted wave 1A, 2026-09-17) — `ChannelInfoExtras` and
-      // `ChannelInfoTabContext` carry why, and what each field costs.
+      // Called, not passed: the extras render function receives this surface's gate.
       infoExtras={slots?.infoExtras?.({
         gate,
         headerEdit,
@@ -256,8 +200,6 @@ export function SurfaceInfoPanel({
           onMarkAllRead: markAllMentionsRead,
         },
       })}
-      // THE SETTINGS TAB (Samuel, 2026-08-19), thread-scoped while a thread is
-      // open (2026-08-21) — the branch is `settings-slot.tsx`.
       settings={
         <ChannelsSettingsSlot
           channel={channel}
@@ -275,9 +217,7 @@ export function SurfaceInfoPanel({
             sel.selectChannel(null);
             onDeselect?.();
           }}
-          // ⚠ Fires on a thread DELETE and nothing else, so it is where the
-          // scroll-back window is told — the cache's half is the optimistic
-          // patch in `use-thread-lifecycle-writes.ts`, which the window is not in.
+          // Fires only on thread delete; drops it from the scroll-back window (the cache is patched elsewhere).
           onExitThread={() => {
             if (openThread) data.dropThreadFromHistory(openThread.id);
             sel.openThread(null);

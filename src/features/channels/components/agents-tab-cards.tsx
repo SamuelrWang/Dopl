@@ -1,34 +1,8 @@
 "use client";
 
 /**
- * THE TWO CARD SHAPES THE AGENTS TAB DRAWS — my own agent, and a peer's — split
- * out of `agents-tab.tsx` on 2026-08-22 at the 500-line cap, when the identity
- * picker landed on that file's New Agent button.
- *
- * ⚠ THE SEAM IS §1's "one file, one reason to change", not the line count that
- * forced the question: `agents-tab.tsx` moves when the LAUNCH surface moves, a
- * CARD moves when the session feed's shape moves.
- *
- * ⚠ ONE CARD FACE FOR BOTH, AND FOR THREAD CARDS TOO (`bits.tsx › PANEL_CARD`).
- * The two tabs are one column and a second card shape would read as a second
- * surface.
- *
- * ⚠ EVERY NUMBER IS OPTIONAL AND EVERY ABSENCE IS RENDERED AS ONE — no "Started"
- * without a stamp, no `0` standing in for "not measured yet" (INVARIANTS §11 —
- * UNKNOWN is not EMPTY).
- *
- * 🔒 ⚠ **WITH ONE RULED EXCEPTION: THE CONTEXT METER, WHICH DRAWS AT ZERO**
- * (Samuel, 2026-08-27 *"the bar at zero, always"*, re-affirmed 2026-09-22 when
- * asked whether an unmeasured readout should print `0` or `—`: *"have it show
- * 0"*). This card USED TO HIDE the meter whenever either half was null, while
- * `agent-stats.tsx` drew it at zero — so one spawn-idle agent looked different
- * depending on which surface you read it on. The two agree now.
- * ⚠ **IT IS A RENDERING CHOICE, NOT A DATA ONE.** The fact stays `null` the whole
- * way back: the desktop push, the wire and the DTO all preserve it, and
- * `schema-sessions.ts` carries no `.default()` on any telemetry field. **Do not
- * let this `?? 0` leak backwards into a default** — that would make "measured
- * zero" and "never measured" the same value everywhere, which is the thing
- * INVARIANTS §11 is about. Here they differ only in what the eye is shown.
+ * The Agents tab's two card shapes: my own agent and a peer's, on the shared `PANEL_CARD` face.
+ * Every absent number renders as absent, never `0` (INVARIANTS §11) — except the context meter.
  */
 
 import { Bot, CornerDownRight } from "lucide-react";
@@ -58,21 +32,7 @@ import { metric } from "./agent-metrics";
 import { agentModelShortLabel } from "../lib/agent-models";
 import type { ModelCatalogs } from "../lib/model-catalog";
 
-/**
- * WHAT THE OPERATOR SAID THIS AGENT IS FOR, or `null` (2026-08-27).
- *
- * ⚠ ADDITIVE AND OPTIONAL, read off a widened LOCAL type rather than declared on
- * `spa-bridge.ts › DesktopSessionSummary` — the rule `agents-model.ts › agentRunningModel` and
- * `› agentEndedAt` follow: the bridge type is the DESKTOP's to widen, the two trees ship
- * separately, and this side must behave against either version. Absent is the ORDINARY answer,
- * so the card renders nothing rather than an empty line (INVARIANTS §11).
- *
- * ⚠ IT LIVES HERE AND NOT IN `agents-model.ts`, WHICH IS AT THE 500-LINE CAP. This card is its
- * ONE consumer; move it to the projection the moment a second surface reads it.
- *
- * ⚠ MY OWN AGENTS ONLY, structurally: `main/agent-names.js` is machine-local and never reaches
- * `channel_sessions`, so a PEER row has no description to carry.
- */
+/** The operator's description, read off a widened local type (older desktops omit it); own agents only. */
 function agentDescription(
   session: DesktopSessionSummary & { description?: string | null }
 ): string | null {
@@ -81,18 +41,8 @@ function agentDescription(
 }
 
 /**
- * Other members' agents — STATE ONLY, never openable (Samuel, 2026-08-20): the
- * card exists so the operator can see who else has an agent on the exchange
- * and whether it is working; nothing private is reachable from it.
- *
- * ⚠ A QUIET ROW IS DIMMED, NEVER DROPPED (Samuel, 2026-08-22): *"the card STAYS
- * until the session actually goes away."* The row's PRESENCE is the liveness
- * signal — the desktop's push replaces its whole set, so an ended session leaves
- * by omission (`agents-model.ts › peerCardsFor`). `agents-model.ts › peerRowStale`
- * answers only that the row has not MOVED lately, a weaker claim than "gone" and
- * so a weaker treatment: `opacity-60` plus the `data-stale` hook the test reads.
- * ⚠ **It is not a heartbeat** — `updated_at` moves on a state CHANGE — so a
- * perfectly live idle agent dims after 90 s.
+ * Other members' agents: state only, never openable. A quiet row is dimmed (`peerRowStale`), never
+ * dropped — `updated_at` moves on state change, not a heartbeat, so an idle agent dims too.
  */
 export function PeerCards({
   peers,
@@ -120,25 +70,12 @@ export function PeerCards({
               ) : (
                 <Bot size={14} aria-hidden className="shrink-0 text-text-secondary" />
               )}
-              {/* ⚠ **BEFORE THE NAME, AND OFF THE PROJECTION THIS CARD ALREADY HAS**
-                  (Samuel, 2026-09-13; docs/specs/agent-colors.md item 8). `peer.color` rides
-                  `ChannelSessionState` — peer-visible by design, which is the entire ruling:
-                  *"this will be categorized not only for the own users' agents, but also for
-                  other users' agents."* No new read, and no colour is derived here.
-                  ⚠ NO GATE ON LIVENESS: an ended peer row never reaches the wire at all
-                  (`main/session-state-push.js › liveForWire`), so every row on this card is
-                  live by construction and a `state` test would be dead code. */}
+              {/* No liveness gate: ended rows never reach the wire. */}
               <AgentColorDot color={agentColorOrNull(peer.color)} />
               <span className="min-w-0 flex-1 truncate text-body font-semibold text-text-primary">
-                {/* ⚠ THE PEER'S OWN NAME FOR IT, when their desktop reported one
-                    (2026-08-31, `channel_sessions.display_name` — Samuel's ruling:
-                    you should see a teammate is running a "Bug Reviewer").
-                    Falls back to the id handle exactly as before. */}
                 {peer.displayName?.trim() || peer.name}
               </span>
-              {/* ⚠ A PEER ROW HAS NO `detail` AND NO `listening` — the
-                  cross-machine wire carries the coarse state alone (INVARIANTS
-                  §11) — so the SAME mapping degrades it to Running / Idle. */}
+              {/* Peer rows carry coarse state only (INVARIANTS §11), so this degrades to Running / Idle. */}
               <AgentLiveness {...agentLiveness(peer)} />
             </div>
             <div className="flex min-w-0 items-center gap-1.5 text-caption text-text-secondary">
@@ -146,12 +83,7 @@ export function PeerCards({
               <span className="min-w-0 truncate">
                 {ownerName}&apos;s agent
                 {peer.threadTitle ? ` · ${peer.threadTitle}` : ""}
-                {/* ⚠ NO TIMESTAMP ON A PEER CARD (Samuel, 2026-09-04): *"the
-                    profile image of the user they belong to, plus status only —
-                    thinking / working / idle / ended. No timestamp, no other
-                    metadata."* THE DIMMING STAYS AND SO DOES `peerRowStale` — the
-                    ruling is about what the card SAYS, not what it knows. Do not
-                    re-derive a clause from `updatedAt` here. */}
+                {/* No timestamp on a peer card, by ruling; don't derive one from `updatedAt`. */}
               </span>
             </div>
           </div>
@@ -161,14 +93,7 @@ export function PeerCards({
   );
 }
 
-/**
- * One agent rectangle, on the shared `bits.tsx › PANEL_CARD` face (see the file
- * docblock, which also states the every-absence rule this card follows).
- *
- * The meter is the shared `UsageMeter` at `tone="ramp"`: a context window is
- * GLANCED at, not read. `over` is not passed — it is an entitlement verdict the
- * caller owns, and a full context window is not an entitlement event.
- */
+/** One own-agent card. `UsageMeter` gets no `over`: a full context window is not an entitlement event. */
 export function AgentCard({
   agent,
   owner = null,
@@ -178,54 +103,25 @@ export function AgentCard({
   onOpen,
 }: {
   agent: DesktopSessionSummary;
-  /** The desktop's model rosters, for the runtime's own model name on the chip (F15). */
+  /** Model catalogs, so the chip uses the runtime's own model name. */
   catalogs?: ModelCatalogs | null;
-  /**
-   * **THIS AGENT'S COLOUR, SUPPLIED BY THE HOST** (2026-09-13; docs/specs/agent-colors.md
-   * item 8).
-   *
-   * ⚠ **IT IS A PROP AND NOT A FIELD ON {@link agent}, WHICH IS THE OPPOSITE OF HOW
-   * `identityName` AND `diag` ABOVE WORK, AND THE REASON IS WORTH KEEPING STRAIGHT.** Those
-   * two are OWN-ONLY because the local feed is the only thing that knows them. A colour is
-   * the other way round: it is the SERVER's assignment against every member's live agents
-   * (`20261005120000`'s per-channel unique index), so `DesktopSessionSummary` — this
-   * machine's own feed — is the one source that CANNOT know it. The host reads it off the
-   * peer ∪ own union (`channel-surface-data.ts › liveAgents`).
-   *
-   * ⚠ `null` DRAWS NOTHING, never a placeholder — `agent-color-dot.tsx` argues why an
-   * ended agent gets no grey mark on a list like this one.
-   */
+  /** Server-assigned colour from the host (this machine's feed can't know it); `null` draws nothing. */
   color?: AgentColorKey | null;
-  /** The card's owner (me) — every card wears its member's avatar (2026-08-20). */
   owner?: ChannelMember | null;
   viewing: boolean;
   onOpen: () => void;
 }) {
-  // ⚠ THE PLACE, NOT A MISSING FIELD (Samuel, 2026-08-27) — `agents-model.ts › NO_THREAD_LABEL`.
-  // This card read "No thread title" until 2026-08-28, describing an absent column, while the
-  // panel that opens FROM it already said "in main channel": one agent, two answers, in two
-  // surfaces the operator moves between with a click. A channel-level agent is on the ROOM on
-  // purpose (`agents-controls.ts`: `taskId: null`), which is a place and has a name.
+  // A channel-level agent is on the room: a place with a name, not a missing field.
   const threadTitle = agent.threadTitle ?? NO_THREAD_LABEL;
   const contextUsed = metric(agent.contextUsed);
   const contextWindow = metric(agent.contextWindow);
   const tokensSpent = metric(agent.tokensSpent);
   const ended = agent.state === "ended";
   const description = agentDescription(agent);
-  // ⚠ THE SESSION'S model, never the CHANNEL's stored pick — a live agent may
-  // have been switched mid-run, or spawned before the posture changed.
+  // The session's running model, never the channel's stored pick; labelled from the runtime's catalog.
   const modelLabel = agentModelShortLabel(agentRunningModel(agent), catalogs);
-  // ⚠ WHICH IDENTITY THIS AGENT IS WEARING (2026-08-22, agent identities) — a
-  // SNAPSHOT of the name main resolved at spawn, never a pointer, so the session
-  // keeps what it RAN AS after the identity is renamed or deleted
-  // (`spa-bridge-shapes.ts › DesktopSessionSummary.identityName`). Absent and
-  // `null` both render nothing (INVARIANTS §11 — UNKNOWN is not EMPTY).
-  // ⚠ OPERATOR-ONLY, AND STRUCTURALLY SO: `channel_sessions.identity_name` is
-  // excluded from the peer projection, because a private identity's name on a
-  // colleague's card is an existence oracle. Do not plumb it into `PeerCards`.
+  // Spawn-time snapshot; own cards only — on a peer card a private identity's name is an existence oracle.
   const identityName = agent.identityName?.trim() || null;
-  // ⚠ NO TIMING LINE AND NO "N of yours here" SINCE 2026-09-08 (Samuel: remove
-  // both); the ended PILL states the one fact that matters.
 
   return (
     // `group/card` is the pencil's hover scope — see `AgentName`.
@@ -236,32 +132,14 @@ export function AgentCard({
         ) : (
           <Bot size={14} aria-hidden className="shrink-0 text-text-secondary" />
         )}
-        {/* ⚠ BEFORE THE NAME, exactly as on the peer cards above — the mark has to sit in
-            the same place on both shapes or it stops being one mark. ⚠ AND IT IS NOT GATED
-            ON `ended` HERE EITHER, for a different reason than the peer block's: an ENDED
-            agent's key is already back in the bank, so the host resolves `null` for it
-            (`view-model.ts › indexAgents` forces it) and the dot is absent WITHOUT this file
-            re-deciding the bank rule. */}
+        {/* Ended agents get `null` from the host (`view-model.ts › indexAgents`), so no gate here. */}
         <AgentColorDot color={color} />
-        {/* ⚠ THE OWN card renames; the PEER cards above do not and must not. A colleague's
-            agent is named on THEIR machine, and this write reaches only this one. */}
+        {/* Own cards only: the rename reaches only this machine. */}
         <AgentName agentId={agent.agentId} name={agentDisplayName(agent)} />
-        {/* ⚠ THE PILL REPLACES THE LIVENESS ON AN ENDED CARD (2026-08-22) rather
-            than joining it. MY OWN cards get the finer sentence; the peer cards
-            above do not — the cross-machine wire carries the coarse state alone. */}
         {ended ? <AgentEndedPill /> : <AgentLiveness {...agentLiveness(agent)} />}
       </div>
 
-      {/* ⚠ WHY THIS AGENT CANNOT WORK — rendered only when main says so
-          (2026-09-13, F-692; `spa-bridge-shapes.ts › DesktopSessionSummary.diag`).
-          The pill cannot carry it: `state` is the server's three-value vocabulary,
-          so an agent whose Dopl MCP server never connected read `working` for its
-          whole run and then `Ended`, with the reason nowhere on this surface.
-          ⚠ `text-danger`, because this is the one line on the card that is a
-          FAILURE rather than a measurement — and it is one line, not a paragraph
-          (minimal copy, INVARIANTS §5); `title` carries the whole sentence.
-          ⚠ OWN CARDS ONLY, like `identityName` above: the field is local-only by
-          construction and never reaches a peer's projection. */}
+      {/* Main's failure reason (F-692); `state` can't carry it. Own cards only. */}
       {agent.diag && (
         <p
           className="min-w-0 truncate text-caption text-danger"
@@ -271,9 +149,6 @@ export function AgentCard({
         </p>
       )}
 
-      {/* ⚠ WHAT IT IS FOR, under what it is CALLED — one line, truncated, no label and no pill
-          (minimal copy, INVARIANTS §5; a 380px card cannot afford chrome for this). `title`
-          carries the whole thing for a description that does not fit. */}
       {description && (
         <p className="min-w-0 truncate text-caption text-text-secondary" title={description}>
           {description}
@@ -283,11 +158,7 @@ export function AgentCard({
       <div className="flex min-w-0 items-center gap-1.5 text-caption text-text-secondary">
         <CornerDownRight size={12} aria-hidden className="shrink-0 text-text-muted" />
         <span className="min-w-0 truncate">{threadTitle}</span>
-        {/* ⚠ THE IDENTITY READS BEFORE THE MODEL — it is WHO this agent is, the
-              model only what it runs on. Both ride this detail line rather than
-              earning chrome (minimal copy, INVARIANTS §5), and both render NOTHING
-              when unreported: "Default" would be this build claiming to know
-              (`agents-model.ts › agentRunningModel`). */}
+        {/* Unreported renders nothing — never "Default". */}
         {identityName && (
           <span className="min-w-0 truncate text-text-muted">· {identityName}</span>
         )}
@@ -296,17 +167,7 @@ export function AgentCard({
         )}
       </div>
 
-      {/* ⚠ THE BAR AT ZERO, ALWAYS — the SAME rule `agent-stats.tsx` states (Samuel, 2026-08-27,
-          re-affirmed 2026-09-22: *"have it show 0"*). This surface USED TO HIDE the meter whenever
-          either half was null, so the two agent surfaces disagreed about one absence: the card
-          rendered an empty bar and this one rendered nothing, and a spawn-idle agent looked
-          different depending on where you looked at it.
-          ⚠ IT IS NOT A GUESS AT THE DATA. `?? 0` here is a RENDERING choice about an unmeasured
-          fact; the fact itself stays `null` everywhere upstream — the desktop push, the wire and
-          the DTO all preserve it (`schema-sessions.ts` carries no `.default()` on any telemetry
-          field). Do not let this shape leak backwards into a default.
-          ⚠ `UsageMeter` owns the no-denominator case itself — an empty track, never a division —
-          which is what makes one unconditional call safe. */}
+      {/* Draws at 0 when unmeasured (matches `agent-stats.tsx`); a rendering choice — never default the data. */}
       <UsageMeter
         label="Context tokens"
         used={contextUsed ?? 0}
@@ -322,12 +183,7 @@ export function AgentCard({
             ? "Tokens spent: not measured yet"
             : `Tokens spent: ${formatTokens(tokensSpent)}`}
         </span>
-        {/* ⚠ DELETE SITS LEFT OF OPEN, ON EVERY OWN CARD — running, idle and
-            retained-ended alike (Samuel, 2026-08-25). A NAKED GLYPH revealed by
-            this card's hover (`agent-delete.tsx`), never a second button face: a
-            permanent trash beside every agent is a destructive control the eye has
-            to keep declining. ⚠ THE PEER CARDS ABOVE HAVE NONE AND MUST NOT — this
-            op reaches only local stores, so there it would control nothing. */}
+        {/* Own cards only: the delete reaches only local stores. */}
         <AgentDeleteButton agent={agent} />
         <button
           type="button"

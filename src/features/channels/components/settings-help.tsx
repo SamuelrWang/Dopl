@@ -1,36 +1,8 @@
 "use client";
 
 /**
- * THE SETTINGS TAB'S PER-ITEM EYE — a small popover that explains ONE setting and
- * what each of its options does (2026-09-06, Samuel's settings overhaul, item 15).
- *
- * ── ⚠ WHY THIS IS NOT THE POPOVER THE 2026-08-19 RULING DELETED ──────────────
- *
- * That ruling killed `channel-settings-popover.tsx` and `channel-folder-control.tsx`
- * because **every setting on this surface was behind a click** — a drill-down inside
- * a tab, a menu hiding inside a menu — and its replacement rule is that *"every
- * control below is visible and operable where it sits"*. That rule is intact here
- * and this file must never be used to weaken it: **the CONTROL stays on the row.**
- * What moves behind the eye is the EXPLANATION, which was never a control.
- *
- * It is also the other half of the MINIMAL-COPY ruling of the same day (INVARIANTS
- * §5 — *"We should not be explaining everything to the user"*, a row is a NAME and a
- * CONTROL). That ruling deleted the explainer paragraphs and left the meanings in
- * docblocks *for developers*; Samuel's 2026-09-06 direction is that an OPERATOR
- * should be able to reach the same meanings **on demand** — "that way the actual
- * dropdown will look a lot cleaner". So the sublines go, and this is where they go
- * to. Do not read the deleted `Note` recipe as re-opened: there is still no way to
- * hang a standing third line under a row, and adding one is still the regression.
- *
- * ⚠ SMALL, AND THE BOUND IS THE POINT (Samuel: *"This shouldn't be too big or too
- * long"*). One short paragraph, then at most one line per option. A popover that
- * grows into documentation is the paragraph block this tab already refused, moved
- * one click away.
- *
- * ⚠ KIT ONLY. It composes the same `Popover` in COORDINATE mode that
- * `shared/ui/select-menu.tsx` opens, for that file's stated reason: these rows sit
- * inside scrolling, overflow-clipping panes where a trigger-anchored panel renders
- * as a clipped sliver. No hand-rolled positioning, no hex, no raw px.
+ * Per-setting eye popover. It explains; the control stays on the row (minimal copy, INVARIANTS §5).
+ * Keep it small: one short paragraph, at most one line per option.
  */
 
 import { useRef, useState } from "react";
@@ -40,25 +12,16 @@ import { Popover } from "@/shared/ui/popover-menu";
 
 /** One setting's explanation: what it is, then what each option does. */
 export interface SettingHelpCopy {
-  /** ONE short paragraph. What this setting governs, and its SCOPE. */
+  /** One short paragraph: what this setting governs, and its scope. */
   body: string;
-  /** At most one line per option — the sublines the dropdowns no longer carry. */
+  /** At most one line per option. */
   options?: ReadonlyArray<{ label: string; text: string }>;
 }
 
-/**
- * The eye, and the panel it opens.
- *
- * ⚠ IT IS A REAL `<button>` WITH A REAL NAME. The eye is an icon with no text, so
- * without `aria-label` it announces as "button" — and this is the only affordance
- * on the row that a screen-reader user could not otherwise discover. The name says
- * WHICH setting it explains, because a tab of nine identical "About this setting"
- * buttons is no better than nine unlabelled ones.
- *
- * ⚠ THE PANEL IS `role="note"`, NOT A MENU. It contains nothing selectable;
- * `role="menu"` would promise arrow-key traversal to exactly one option and is the
- * idiom `settings-agent.tsx` records a standing rule against.
- */
+/** How far the panel opens left of the eye: the popover's `min-w-[240px]` less the trigger. */
+const PANEL_PULL_LEFT = 220;
+
+/** The eye button (named for its setting) and its `role="note"` panel — nothing in it is selectable. */
 export function SettingHelp({ name, copy }: { name: string; copy: SettingHelpCopy }) {
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const [anchor, setAnchor] = useState<{ x: number; y: number } | null>(null);
@@ -69,10 +32,9 @@ export function SettingHelp({ name, copy }: { name: string; copy: SettingHelpCop
       return;
     }
     const rect = triggerRef.current?.getBoundingClientRect();
-    // ⚠ COORDINATE MODE, and the panel is pulled LEFT of the trigger's right edge
-    // so a row near the panel's right rail does not open off-surface. Same reason
-    // `select-menu.tsx` measures rather than anchors.
-    if (rect) setAnchor({ x: rect.left - 220, y: rect.bottom + 4 });
+    // Coordinate mode, like `select-menu.tsx`: these rows sit in overflow-clipping panes. Pulled
+    // left so a row near the right rail does not open off-surface.
+    if (rect) setAnchor({ x: rect.left - PANEL_PULL_LEFT, y: rect.bottom + 4 });
   }
 
   return (
@@ -116,29 +78,13 @@ export function SettingHelp({ name, copy }: { name: string; copy: SettingHelpCop
   );
 }
 
-/**
- * ── THE COPY, IN ONE TABLE ───────────────────────────────────────────────────
- *
- * ⚠ ONE PLACE, for the reason `lib/agent-models.ts` states about model names: an
- * explanation that disagrees with the control it explains is worse than none, and
- * two tables is how that happens. Every entry is keyed by the row's own rendered
- * name, so a renamed row with no popover is a visible omission rather than a stale
- * sentence under a new label.
- *
- * ⚠ EACH ENTRY STATES SCOPE, BECAUSE THIS TAB DELETED ITS GROUP HEADINGS (item 2).
- * "On this Mac, every channel", "For every session on this channel" and "When you
- * launch an agent" used to carry scope for the rows beneath them. They are gone —
- * so a row whose scope is not obvious from its name MUST say it here, or the tab
- * has quietly stopped stating who a setting governs.
- */
+/** All popover copy, keyed by each row's rendered name. Every entry states its scope: the tab has
+ *  no group headings to carry it. */
 export const SETTINGS_HELP: Readonly<Record<string, SettingHelpCopy>> = {
   Runtime: {
     body: "Which agent platform a launch in this channel runs on. Applies to agents you launch here.",
   },
-  // ⚠ `LAUNCH_POSTURE_HEADING`'s sentence, rehomed (item 2): this is the scope the
-  // deleted heading used to carry for this row and the two under it.
-  // ⚠ NO OPTION LIST: the words are the selected runtime's, and its dropdown already describes
-  // each one in them (P6-12).
+  // No option list: the options are the selected runtime's, and its dropdown describes them.
   "Tool use": {
     body:
       "How much freedom an agent you launch here starts with over its tools. Set when the agent launches; changing it does not move a running agent.",
@@ -152,9 +98,7 @@ export const SETTINGS_HELP: Readonly<Record<string, SettingHelpCopy>> = {
       { label: "Read only", text: "local files only, with no way to post out" },
     ],
   },
-  // ⚠ THE ASYMMETRY IS STATED HERE BY RULING (2026-09-06, item 8). Messaging is read
-  // LIVE at the gate while every other row in this group is read once at launch, and
-  // the operator cannot discover that from the control. Do not shorten this line.
+  // Keep the asymmetry: Messaging is read live at the gate; the other launch rows once, at launch.
   Messaging: {
     body:
       "Whether an agent's messages cross without you pressing anything — inbound, outbound, or both. Unlike the rows above it, this one applies immediately to agents already running.",
@@ -169,8 +113,7 @@ export const SETTINGS_HELP: Readonly<Record<string, SettingHelpCopy>> = {
     body:
       "Where this channel's agents run on your Mac. It is context, not a sandbox — it does not change what an agent may do. Click the folder name to change it.",
   },
-  // ⚠ THE MACHINE-WIDE FACT IS VERBATIM BY RULING (2026-09-06, item 9), because the
-  // heading that used to say it ("On this Mac, every channel") is deleted.
+  // Keep the machine-wide sentence: no heading states that scope.
   "Launch agents": {
     body:
       "Whether agents can start further agents for you, and where. In every channel flips a machine-wide switch — it is not limited to this room.",
@@ -180,18 +123,7 @@ export const SETTINGS_HELP: Readonly<Record<string, SettingHelpCopy>> = {
       { label: "In every channel", text: "also lets an outside session launch on this Mac" },
     ],
   },
-  // ⚠ THE MACHINE-WIDE FACT IS VERBATIM HERE TOO, for the reason above: this row's
-  // only scope statement is its option text, and the popover is where the tab is
-  // allowed to spend a sentence (INVARIANTS §5 keeps the row itself to a name and a
-  // control, so there is no sub-line under the dropdown and must not be one).
-  // ⚠ IT NAMES WHAT A DIRECTION *IS* — a private turn inside an agent that is
-  // already running — because the operator is granting something different from a
-  // launch, and "directions" alone does not say that.
-  // ⚠ "your other Claude sessions" UNTIL 2026-09-21 (U10). The sessions this setting is ABOUT are
-  // whatever runs on this Mac's device token — `service-writes-metadata-recipient.ts` enumerates
-  // them as "a Claude Code, Codex or Cursor run" — so naming one vendor told a Codex operator the
-  // switch was not about them. The option text one line down already said "your outside sessions";
-  // the body now agrees with it.
+  // Machine-wide, like "Launch agents"; vendor-neutral because any runtime on this Mac can direct.
   "Direct agents": {
     body:
       "Whether your other coding sessions on this Mac can send private instructions to agents already running here. It starts a turn inside an agent that exists; it never launches one. In every channel flips a machine-wide switch — it is not limited to this room.",

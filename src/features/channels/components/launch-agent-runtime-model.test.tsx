@@ -407,3 +407,23 @@ describe("an identity model the launch runtime's ready roster lacks (X-03)", () 
     expect(modelPills().join(" ")).not.toContain("claude-opus-4-1");
   });
 });
+
+describe("a ready roster that declares no default (P6-23)", () => {
+  it("selects a Platform default pill and sends no model until the operator picks one", async () => {
+    posture.connected = ["codex"];
+    posture.stored = "codex";
+    posture.catalogs = {
+      codex: catalog("codex", [
+        { id: "gpt-6-astra", label: "GPT-6 Astra" },
+        { id: "gpt-6-mini", label: "GPT-6 Mini" },
+      ]),
+    };
+    const controls = await open();
+    await waitFor(() => expect(modelSelected()).toBe("Platform default"));
+    expect(modelPills()).toEqual(["Platform default", "GPT-6 Astra", "GPT-6 Mini"]);
+    fireEvent.click(launchButton());
+    await waitFor(() => expect(controls.launchAgent).toHaveBeenCalled());
+    expect(runtimeArg(controls)).toBe("codex");
+    expect(overridesArg(controls)).toBeUndefined();
+  });
+});

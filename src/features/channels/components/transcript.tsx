@@ -1,43 +1,9 @@
 "use client";
 
 /**
- * Channels — THE TRANSCRIPT: the rows of one channel or one thread.
- *
- * Authorship is a SIDE, not a style: peers left, the viewer right, and an agent
- * hangs on its OPERATOR's side — never in a third column (INVARIANTS §5).
- *
- * ⚠ ATTRIBUTION IS ONE PILL SINCE 2026-08-22 (Samuel, from two reference
- * screenshots). Every message group is headed by `attribution-pill.tsx ›
- * AttributionPill` — a capsule holding the author's avatar, their name and the
- * message timestamp stacked beside it — and the message blocks render BELOW it
- * at full width. **The grey `Agent · <id>` chip is DELETED**; an agent row says
- * so in its NAME LINE instead, reading `Agent #<agentId>` for a stamped post and
- * plain `Agent` for an unstamped one (`agents-model.ts › parseAgentPostStamp`).
- * The per-agent accent survives on the pill's BORDER.
- *
- * ⚠ THE RUN-GROUPING IS UNCHANGED AND STILL LOAD-BEARING (F-251). A continuation
- * has no pill to put an id in, so `view-model-rows.ts › isContinuation` breaks on
- * a different agent id — two of one operator's agents collapsing into a single
- * run under one name is the defect that bought all of this
- * (*"it looks like one agent sending"*).
- *
- * ⚠ THE SIDE COMES FROM `author_user_id`, NEVER FROM `authorKind`.
- * `authorKind` is CALLER-ASSERTABLE — an explicit body value wins over
- * `ctx.source`, which is load-bearing because the desktop posts agent results
- * over the operator's own cookie session (INVARIANTS §5). It is a DISPLAY
- * CLAIM scoped to one user, so it earns a chip and nothing more.
- * `author_user_id` is always `ctx.userId`, server-stamped and not assertable,
- * which is why the layout hangs off it. Reversing that would let a caller
- * choose which side of somebody else's screen their words land on.
- *
- * Split out of `message-pane.tsx` at design time (INVARIANTS §1): the pane owns
- * the breadcrumb, the scroller and the composer slot; this owns what a row
- * looks like.
- *
- * ⚠ TWO OF ITS ROW SHAPES LEFT ON 2026-08-28, at the 500-line cap: the shared shell is
- * `authored-row.tsx › AuthoredRow` and the posted-request card is
- * `thread-card-row.tsx › ThreadCardMessage`. Both moved VERBATIM, and each file carries why
- * it is the seam. What stayed is the LIST, the receipt line and the message row.
+ * Channels — the rows of one channel or one thread. The side comes from the server-stamped
+ * `author_user_id`, never the caller-assertable `authorKind`; an agent hangs on its operator's
+ * side (INVARIANTS §5).
  */
 
 import { cn } from "@/shared/lib/utils";
@@ -47,7 +13,6 @@ import { agentBoxOf, agentPostAccent } from "./agent-box-rule";
 import { ThreadCardMessage } from "./thread-card-row";
 import { EscalationCardMessage } from "./escalation-card-row";
 import { MessageMarkdown } from "./message-markdown";
-// ⚠ IDS → WORDS, IN ONE PLACE (2026-09-22) — the delivered-to faces beside the pill.
 import { recipientTags } from "../lib/recipient-tags";
 import type { AuthorIndex } from "./view-model";
 import type { MessageRow, ReceiptRow, TranscriptRow } from "./view-model-rows";
@@ -70,74 +35,26 @@ export function Transcript({
   index: AuthorIndex;
   /** Briefly set right after a Tags-inbox click lands on a row. */
   flashId: string | null;
-  /**
-   * The direct-launch bridge op exists on this build (`use-agents-panel.ts ›
-   * AgentLaunchControls.canLaunch`). ⚠ FALSE RENDERS NO BUTTON AT ALL, never a
-   * disabled one — the feature-detection rule the whole bridge family follows,
-   * and a plain browser has no agent to start.
-   */
+  /** The direct-launch bridge op exists; false renders no button, not a disabled one. */
   canLaunchAgent?: boolean;
   /** A launch is in flight — the double-submit guard, not a capability. */
   launchBusy?: boolean;
-  /**
-   * Start MY OWN agent on this card's thread (Samuel, 2026-08-22). ⚠ NOT A
-   * CONSENT DECISION — it raises no row, answers no request and asks nobody. It
-   * is the same direct launch the composer's Bot icon and the Agents tab's New
-   * Agent button fire.
-   */
+  /** Start my own agent on this card's thread — a direct launch, not a consent decision. */
   onLaunchAgent?: (threadId: string) => void;
-  /**
-   * Open ONE of my agents' panes from its sender pill (Samuel, 2026-08-28).
-   *
-   * ⚠ IT IS THE HOST'S OWN OPEN MECHANISM, NOT A SECOND PIPE. The key it takes is
-   * `agents-model.ts › agentKey`'s — the same string the Agents tab's card hands
-   * `onOpenAgent` (`agents-tab.tsx`) and the same one `agent-panel.tsx` resolves back to a
-   * session, which for any stamped row IS the agent id. `channel-surface.tsx` wires both to
-   * `use-channels-selection.ts › setOpenAgent`.
-   *
-   * ⚠ ABSENT RENDERS AN INERT PILL, never a dead button — the pop-out thread window and any
-   * other host with no agent pane beside it hand none. Same absent-not-disabled rule
-   * `canLaunchAgent` above follows.
-   */
+  /** Open an agent's pane from its pill (`agents-model.ts › agentKey`); absent = inert pill. */
   onOpenAgent?: (agentId: string) => void;
   /**
-   * ANSWER an escalation card — post the pressed option back into this channel,
-   * which is what routes it to the asking agent.
-   *
-   * ⚠ ABSENT RENDERS NO BUTTONS AT ALL, never disabled ones (the rule
-   * `canLaunchAgent` above follows). The pop-out thread window and any other
-   * host with no write path hand none, and a card there reads as the record of a
-   * question rather than as a broken control.
-   *
-   * ⚠ IT TAKES THE ESCALATION'S OWN MESSAGE ID, not a thread or an agent. Who
-   * gets woken is the SERVER's derivation off that message's stamp — the client
-   * never names an agent, or this key would be a wake aimed anywhere.
+   * Answer an escalation by its message id — the server derives who is woken, never the client.
+   * Absent renders no buttons, not disabled ones.
    */
   onAnswerEscalation?: (escalationMessageId: string, optionIndex: number) => void;
   /** An answer is in flight — the double-submit guard, not a capability. */
   answerBusy?: boolean;
   onOpenThread: (id: string) => void;
-  /**
-   * **THE CEILING A MESSAGE CITATION IS CHECKED AGAINST** — the newest seq the
-   * PANE has loaded (`lib/message-refs.ts › isCitableSeq`).
-   *
-   * ⚠ **`null`/ABSENT DRAWS NO PILLS AT ALL, AND THAT IS THE FIRST GATE**: a host
-   * that cannot say what the newest message is cannot say whether `#1759` names
-   * one, and a pill that might jump nowhere teaches a reader to distrust every
-   * pill. Handed down rather than derived here — `message-pane.tsx` owns the page
-   * and is the only thing that knows what "loaded" means.
-   */
+  /** The newest loaded seq — the citation ceiling (`lib/message-refs.ts › isCitableSeq`); null
+   *  draws no citation pills. */
   newestSeq?: number | null;
-  /**
-   * **JUMP TO A CITED MESSAGE — THE SECOND GATE, AND THE ADDRESS HALF OF THE
-   * CONTRACT.** The pill hands up a SEQ, which is its FACE; the host resolves it
-   * to a message ID, which is the address. This component never navigates by
-   * number and must not learn to.
-   *
-   * ⚠ **ABSENT MAKES A CITATION PLAIN TEXT**, the same absent-not-disabled rule
-   * `onOpenAgent` and `onAnswerEscalation` above follow: the pop-out thread window
-   * has no transcript of its own to move, so it hands none.
-   */
+  /** Jump to a cited seq (the host resolves it to a message id); absent makes citations plain. */
   onJumpToSeq?: (seq: number) => void;
 }) {
   if (rows.length === 0) {
@@ -178,11 +95,6 @@ export function Transcript({
             />
           );
         }
-        // ⚠ ONE CARD PER ARTIFACT PER PAGE, and it arrives already built
-        // (`view-model-artifacts.ts`) — this branch renders it and decides
-        // nothing. A row of this kind exists only where the server folded, so a
-        // page with `entries === null` never reaches here and renders exactly as
-        // it did before artifacts existed (the envelope is still additive).
         if (row.kind === "artifact") {
           return (
             <ArtifactCard
@@ -222,9 +134,6 @@ export function Transcript({
             index={index}
             flash={row.id === flashId}
             onOpenAgent={onOpenAgent}
-            // ⚠ BOTH GATES TRAVEL TOGETHER AND NEITHER IS RE-DERIVED HERE — see
-            // the two props' docblocks. A row decides nothing about citability;
-            // it only carries the pane's answer down to the body.
             newestSeq={newestSeq}
             onJumpToSeq={onJumpToSeq}
           />
@@ -234,24 +143,7 @@ export function Transcript({
   );
 }
 
-/**
- * HOW THE EXCHANGE ENDED — one slim, centred, muted line.
- *
- * ⚠ **NOT A MESSAGE BUBBLE, and the restraint is the design.** A receipt is the
- * transcript narrating itself, so it wears the `SystemRow` treatment (centred,
- * `text-caption`, `text-text-muted`) rather than a side, an avatar or a name:
- * nobody said this. The dot is the whole ornament.
- *
- * ⚠ **ONLY A REAL `failed` GETS ALARM INK.** Every other terminal is an ending
- * somebody CHOSE — declined, cancelled, interrupted, capped, ended — and
- * painting those red would report an operator's decision as a fault. That
- * distinction is the entire reason the desktop stores a calm flag beside the
- * `task_failed` kind (INVARIANTS §5; `lib/calm-terminal.ts`).
- *
- * ⚠ **The LABEL is flag-derived** (`lib/message-receipt.ts › RECEIPT_LABEL`),
- * never the row's own body — body copy is caller-influenceable and an outcome
- * is not a thing a caller may assert.
- */
+/** How the exchange ended — one centred muted line; only a real `failed` gets alarm ink. */
 function Receipt({ row }: { row: ReceiptRow }) {
   return (
     <p
@@ -273,81 +165,15 @@ function Receipt({ row }: { row: ReceiptRow }) {
 }
 
 /**
- * THE BODY PARAGRAPH's face — one recipe, both views and both chromes.
- *
- * ⚠ `wrap-anywhere` (`overflow-wrap: anywhere`) IS THE WHOLE FIX, and it is not
- * interchangeable with `break-words` (Samuel, 2026-08-19: a run of
- * "segwegwtestets…" escaped the pane and clipped at its edge). `anywhere`
- * shrinks the element's MIN-CONTENT width, which `break-word` does not — and
- * min-content is exactly what an `items-end` (fit-content) own-message column
- * sizes itself from, so `break-word` would leave the block as wide as the
- * unbroken run and only wrap inside it. `break-all` is the other wrong answer:
- * it breaks ordinary prose mid-word too.
- *
- * ⚠ NO `text-right` ON OWN MESSAGES (same ruling; re-affirmed on a fourth look
- * after briefly flipping the other way). The BLOCK stays anchored right — that
- * is `items-end` on the column in `AuthoredRow` and it is unchanged, so a short
- * message still sits on the viewer's side (INVARIANTS §5, side comes from
- * `author_user_id`). The TEXT inside it reads left-aligned like every other
- * paragraph in the app once it wraps.
- *
- * ⚠ THE CAP IS 92%, DOWN FROM 75% AND UP FROM SAMUEL'S THIRD LOOK (2026-08-19):
- * text runs (nearly) the pane's full width, symmetric margins, matching the
- * pane border gutters — the transcript column's old 720px cap left with the
- * same ruling. The residual 8% is not taste: `items-end` alone does NOT
- * right-anchor a long body (align-self sizes a child to
- * `fit-content(available)`; once max-content exceeds the column it collapses
- * to FULL width and a wrapped own message reads as a full-width peer row), so
- * SOME cap below the column is what leaves `items-end` something to pull. 92%
- * keeps the anchoring legible at one line-indent's cost.
- *
- * ⚠ A PERCENTAGE, not a px measure, and BOTH SIDES wear it — a fixed cap stops
- * capping wherever the column is narrower (the pop-out thread window). Peer
- * rows keep hugging left either way.
- *
- * ⚠ IT IS NOW SPLIT IN TWO, AND THE SPLIT IS NOT COSMETIC (2026-08-21).
- * `message-markdown.tsx` renders EVERY block into this same column, so each one
- * needs the LAYOUT half — a list, a quote and a code fence must be capped and
- * anchored exactly like a paragraph. The TYPE half is a different question: a
- * heading and a code fence set their own size and weight, and handing them the
- * body's would be two `text-*` classes racing on one element.
- *
- * ⚠ AND `cn` COULD NOT ARBITRATE THAT RACE — measured 2026-08-21, not assumed.
- * `tailwind-merge` groups `text-lead` (this tree's SIZE scale) with
- * `text-text-primary` (a colour) because a custom `text-*` scale is
- * indistinguishable from a colour by name, so `cn(MESSAGE_BODY, "text-body …")`
- * silently drops the COLOUR. Passing the two halves separately means no block
- * ever receives a class it has to win against.
- *
- * A paragraph still gets both, in this order, so it is byte-for-byte the `<p>`
- * `transcript-body.test.tsx`'s layout pins measure.
+ * The body's layout and type halves, kept separate: `tailwind-merge` mistakes the `text-*` size
+ * scale for a colour, so a heading or code fence must never out-race the body's classes.
+ * `wrap-anywhere`, not `break-words`: only `anywhere` shrinks min-content, which the `items-end`
+ * own-message column sizes from; the sub-100% cap is what lets `items-end` anchor a long body.
  */
 const MESSAGE_BLOCK = "wrap-anywhere max-w-[92%]";
 const MESSAGE_TEXT = "text-lead text-text-primary";
 
-/**
- * ⚠ THE OPENABLE GATE LIVES HERE, AND IT IS `AuthorIndex.agents` (Samuel, 2026-08-28).
- *
- * A pill only becomes a button when THIS MACHINE knows the agent it names — which is exactly
- * the condition under which `agent-panel.tsx` can resolve `openAgent` back to a session and
- * slide open. The map is the desktop feed, indexed by instance id
- * (`view-model.ts › indexAgents`), so the gate falls out of context this transcript is
- * already handed rather than a new capability prop:
- *
- *  - **the guest web lane** (`app/c/[workspaceId]`) and any plain browser — no bridge, so no
- *    feed, so the map is empty and every agent pill stays a `<span>`;
- *  - **the pop-out thread window** (`thread-window.tsx`) — `indexMembers` with no agents AND
- *    no `onOpenAgent`, doubly inert, which is right: it has no pane to slide;
- *  - **a PEER's agent** — it runs on their machine and never reaches this map, so the
- *    "state only, never openable" rule the peer CARDS already keep
- *    (`agents-tab-cards.tsx`) holds here for free;
- *  - **an UNSTAMPED agent post** — `row.agentId` is null, "cannot say which agent", and
- *    there is no pane a click could honestly open.
- *
- * ⚠ IT IS THE SAME KEY, NOT A PARALLEL ONE. `agents-model.ts › agentKey` answers the instance
- * id whenever a session has one, so a row this map knows is a row whose `agentId` IS that
- * session's key — the string the Agents tab's Open button sends down the identical path.
- */
+/** A message row; its pill opens the agent's pane only when `index.agents` knows the agent. */
 function Message({
   row,
   index,
@@ -360,8 +186,7 @@ function Message({
   index: AuthorIndex;
   flash: boolean;
   onOpenAgent?: (agentId: string) => void;
-  /** The citation ceiling and the jump, both handed straight to the body — see
-   *  `Transcript`'s own props for the two gates they express. */
+  /** Passed straight through to the body — see `Transcript`'s props. */
   newestSeq?: number | null;
   onJumpToSeq?: (seq: number) => void;
 }) {
@@ -370,15 +195,11 @@ function Message({
     onOpenAgent && agentId && index.agents.has(agentId)
       ? () => onOpenAgent(agentId)
       : undefined;
-  // ⚠ RESOLVED AT RENDER from the live feed, never read off the row (2026-08-27). A rename
-  // reaches every message an agent has ever posted the moment main pushes the next summary.
+  // Resolved at render off the live index, never stored on the row, so a rename re-faces history.
   const agentName = row.agentId
     ? (index.agents.get(row.agentId)?.displayName ?? null)
     : null;
-  // ⚠ **WHO IT REACHED, RESOLVED HERE FOR THE SAME REASON THE NAME ABOVE IS** (2026-09-22,
-  // decision #2200 option 1): the row carries the stamped IDS and the words are read off the
-  // live index at render, so a rename re-faces every tag with nothing stored rewritten. The
-  // agent-row gate is the ROW's (`view-model-rows.ts › toMessageRow`), not a second one here.
+  // Recipient ids named at render for the same reason; the agent-row gate is `toMessageRow`'s.
   const recipients = recipientTags(
     { agentIds: row.recipientAgentIds, userIds: row.recipientUserIds },
     index.agents,
@@ -391,43 +212,12 @@ function Message({
       mentionsMe={row.mentionsMe}
       blockClassName={MESSAGE_BLOCK}
       textClassName={MESSAGE_TEXT}
-      // 🔒 **THE CITATION PILL'S TWO GATES, WIRED (2026-09-15)** — until this line
-      // `message-markdown.tsx` defaulted both to nothing and every `#1759` in a
-      // body rendered as the text the author typed. The leaf, the parser and the
-      // refusal rules all landed in a553a9ff; this is the host finally answering
-      // the two questions it alone can answer.
-      // ⚠ **PASSED THROUGH, NEVER DECIDED HERE.** Whether a seq is citable is
-      // `lib/message-refs.ts › isCitableSeq`'s call against the ceiling, and the
-      // ceiling is the PANE's (`message-pane.tsx`). A row that started guessing —
-      // "this seq looks recent enough" — is exactly the confident-wrong-jump the
-      // whole design refuses.
+      // Passed through, never decided here: `isCitableSeq` checks against the pane's ceiling.
       newestSeq={newestSeq}
       onJumpToSeq={onJumpToSeq}
     />
   );
-  /**
-   * **THE AGENT'S COLOUR ON THIS POST (Samuel, 2026-09-13; restyled 2026-09-14;
-   * docs/specs/agent-colors.md).**
-   *
-   * ⚠ **THE PREDICATE IS `agent-box-rule.ts`'s AND IS NOT RE-SPELLED HERE**, because
-   * `transcript-filter.tsx` asks the identical question to build its "People" option —
-   * Samuel defined that option as *"all of the messages that don't have a colored box
-   * around them"*, which makes the filter the literal complement of this line. Two
-   * spellings is the filter disagreeing with the paint, and each side would be
-   * self-consistent so neither's tests would notice.
-   *
-   * ⚠ **AND THERE IS ONE ROW SHAPE AGAIN, NOT TWO** (2026-09-14). The 2026-09-13 wave
-   * dispatched an agent's post to its own component — a full frame with the pill inside a
-   * coloured top bar — which meant a second layout that had to hard-code the side and ignore
-   * the continuation rule. Samuel's restyle (*"instead of it being an entire box … a vertical
-   * bar … move the agent/user identification pill to the right again"*) makes an agent's post
-   * a person's post plus an ACCENT, so the fork is gone and `AuthoredRow` answers the side
-   * (§5) and the run-grouping for every author exactly once.
-   *
-   * ⚠ **THE ROUTED TAG IS THE SHELL'S, FOR EVERY ROW.** It used to be passed as a CHILD on
-   * the boxed arm because that component had no `routedTo` prop — one address, drawn by two
-   * files, which is how a transcript ends up showing one fact two ways.
-   */
+  // The same predicate `transcript-filter.tsx` uses for "People", so filter and paint agree.
   const box = agentBoxOf(row, index);
   return (
     <AuthoredRow
@@ -446,11 +236,7 @@ function Message({
       accent={box && agentPostAccent(box)}
       onOpenAgent={openAgent}
     >
-      {/* ⚠ THE WHOLE BODY GOES IN AT ONCE, not line by line (2026-08-21). The
-          old split-on-`\n` loop could not see a fenced block or a list: it
-          handed the renderer one line at a time, which is exactly the shape
-          markdown is not. Blank lines still separate blocks — that is the
-          paragraph rule, now the lexer's rather than this loop's. */}
+      {/* The whole body at once: markdown blocks (fences, lists) span lines. */}
       {body}
     </AuthoredRow>
   );

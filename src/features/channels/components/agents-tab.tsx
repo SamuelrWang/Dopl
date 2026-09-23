@@ -1,45 +1,9 @@
 "use client";
 
 /**
- * Channels — the right panel's AGENTS tab: THE ROOM'S live agents, one card
- * each, the operator's own with a way into the agent view.
- *
- * ⚠ **TWO SOURCES, ONE LIST** (Samuel's ruling R-25, 2026-09-17: *"show
- * EVERYONE's live agents; ended agents hidden"*). MY cards come from this
- * machine's own session projection (`agents-model.ts`, over `spa-bridge.ts ›
- * DesktopSessionSummary`) and carry the context and token numbers, which the
- * desktop measures and the server stores none of (INVARIANTS §5's Agents-tab
- * bullet). A PEER's card comes from the channel-wide server read
- * (`hooks/use-channel-agent-sessions.ts`, fenced by `loadVisibleChannel`) and is
- * the COARSE projection alone — state, owner, thread — so it is read-only and
- * never openable. ⚠ **The telemetry split is the reason there are two lanes and
- * not one**, and it is enforced in `server/session-state-service.ts`, not here.
- * ⚠ **THIS DOCBLOCK SAID *"another member's agent cannot appear here"* UNTIL
- * 2026-09-17** and had been wrong since the peer cards landed on 2026-08-20.
- *
- * ⚠ DESKTOP-ONLY, AND IT SAYS SO RATHER THAN SHOWING NOTHING. "Could not ask" and
- * "asked, nothing is running" are different facts and are worded differently — an
- * empty list under a browser would read as "you have no agents", which is a claim
- * this surface cannot make.
- *
- * ⚠ COPY RULE (INVARIANTS §5): the noun on this surface is the AGENT. Inside one
- * member's window there is exactly ONE session, so nothing here writes "agent
- * session" or "channel session".
- *
- * ⚠ **IT REQUIRES A `QueryClientProvider` SINCE 2026-09-08**, unconditionally.
- * `launch-agent-dialog.tsx › LaunchAgentDialog` is mounted with the ROW rather
- * than with its own open state, so the popup keeps `ModalShell`'s fade-OUT; the
- * cost is that its identity `useQuery` exists (disabled, fetching nothing) while
- * the form is shut, and TanStack still wants the provider.
- *
- * ⚠ "AGENTS" NAMES TWO DIFFERENT SURFACES AND BOTH NAMES STAY (Samuel's ruling
- * Q6, 2026-08-26; INVARIANTS §5A). THIS tab is the RUNNING SESSIONS — ephemeral,
- * per-operator. The /home **Agents** face (`apps/desktop-ui/src/pages/home/
- * identity-panels.tsx`) is AGENT IDENTITIES, durable and authored, and has no
- * launch control precisely so this side stays the only place an agent starts.
- * They join at `agent-identities/components/identity-picker.tsx ›
- * IdentityLaunchPicker` below, which reads the list the /home face authors.
- * **A rename needs Samuel's word** — §5's noun rule has tests behind it.
+ * The right panel's Agents tab: every member's live agents. Mine come from this machine's session feed
+ * (with context/token numbers the server never stores); peers' from the server projection, read-only.
+ * Copy says "agent", never "session" (INVARIANTS §5). Needs a `QueryClientProvider`.
  */
 
 import { useMemo } from "react";
@@ -70,10 +34,9 @@ import { LaunchAgentDialog } from "./launch-agent-dialog";
 import { useAgentLaunch } from "./use-agent-launch";
 import type { AgentLaunchControls, LaunchAgentFn } from "./use-launch-controls";
 
-/** A tab with no launch act answers `no-bridge`, never an invented success. */
+/** With no launch act the tab answers `no-bridge`, never an invented success. */
 const refuseNoBridge = async () => ({ ok: false, reason: "no-bridge" });
 const approveNoBridge = async () => ({ ok: false, reason: "no-bridge" });
-
 
 export function AgentsTab({
   sessions,
@@ -90,89 +53,43 @@ export function AgentsTab({
   onApproveIdentity,
   openAgent,
   onOpenAgent,
-  // ⚠ `onNewThread` IS ACCEPTED AND NOT DESTRUCTURED — binding an unused local is
-  // an ERROR under the SPA's `noUnusedLocals`. See its docblock below.
 }: {
-  /** The whole machine's feed, or `null` for "could not ask" — no bridge, or a
-   *  main without it. ⚠ Never collapse `null` into `[]` on the way in. */
+  /** This machine's feed, or `null` for "could not ask" (no bridge) — never collapse to `[]`. */
   sessions: readonly DesktopSessionSummary[] | null;
   channelId: string;
-  /** THE IDENTITY PICKER'S ONE INPUT. ⚠ Absent ⇒ NO CHEVRON, and the New Agent
-   *  button is exactly what it was — the same feature-detected degradation every
-   *  bridge affordance in this family follows, applied to a READ instead of an
-   *  op (a picker with no workspace to list is a control that can only be
-   *  empty). */
+  /** The identity picker's input; absent ⇒ no chevron. */
   workspaceId?: string | null;
-  /** The OPEN thread (2026-08-20): scopes the tab — thread view shows that
-   *  thread's agents alone; channel view shows the whole channel's. */
+  /** Scopes the tab: a thread's agents, or (null) the whole channel's. */
   openThreadId?: string | null;
-  /** The roster, for the owner avatar every card wears. */
   members?: ChannelMember[];
   currentUserId?: string | null;
-  /** EVERY member's session STATE for this channel (the server projection) —
-   *  peers render as state-only cards, never openable. */
+  /** The unfiltered channel projection (my own rows included); peers render read-only. */
   peers?: readonly ChannelPeerSession[];
-  /** The New Agent button — BOTH views, desktop only (the "thread view only"
-   *  claim died with the redirect on 2026-08-31; the chevron beside it joined
-   *  it on 2026-09-08). */
   canLaunch?: boolean;
   launchBusy?: boolean;
-  /** Copy for the last launch main REFUSED, or null. ⚠ A refusal is not a
-   *  push — nothing announces it, so the button's own row is the only place it
-   *  can be said (`use-agents-panel.ts › launchRefusalText`). */
+  /** Copy for the last refused launch (`use-launch-controls.ts › launchRefusalText`), or null. */
   launchError?: string | null;
-  /**
-   * The launch act (`use-launch-controls.ts`). `null` as the thread is a CHANNEL-LEVEL launch.
-   * ⚠ `LaunchAgentFn` refuses a narrower wrapper (P6-01).
-   */
+  /** Branded `LaunchAgentFn`, passed through unwrapped: a narrower wrapper dropped agentId/runtime/colour (P6-01). */
   onLaunchAgent?: LaunchAgentFn;
-  /** Store a first-use approval for another member's identity, machine-locally.
-   *  ⚠ Absent ⇒ the approval modal says the build cannot remember it, rather
-   *  than looping on a refusal it can never clear. */
+  /** Stores a first-use approval of another member's identity; absent ⇒ the modal says it can't be remembered. */
   onApproveIdentity?: (identityId: string) => Promise<{ ok: boolean; reason?: string }>;
   /** `agentKey(session)` of the open agent view, or null. */
   openAgent: string | null;
   onOpenAgent: (key: string) => void;
-  /**
-   * Opens the composer's new-thread panel.
-   *
-   * 🔒 **INERT ON THIS TAB SINCE 2026-08-31 AND DELIBERATELY STILL ACCEPTED.** It
-   * was the launch button's "make a thread first" redirect, which Samuel's
-   * channel-level-launch ruling deleted. ⚠ **Do not "finish the job" by removing
-   * the prop**: `info-panel.tsx` passes it to both mounts, and
-   * `agents-tab-launch.test.tsx` pins that it is NOT called — the assertion that
-   * would go silent if the prop stopped being accepted.
-   */
-  onNewThread?: () => void;
 }) {
   const byUser = new Map(members.map((m) => [m.userId, m]));
   const me = currentUserId ? (byUser.get(currentUserId) ?? null) : null;
-  // ⚠ CALLED UNCONDITIONALLY, ABOVE EVERY EARLY RETURN. The tab bails out for a
-  // browser (`sessions === null`) further down, and a hook behind that branch is
-  // a hook-order violation on the very first desktop render.
+  // Hooks stay above the `sessions === null` early return.
   const picker = useIdentityPicker();
-  // ⚠ SAME RULE, SAME REASON — the popup's own state, above every early return.
   const launch = useAgentLaunch();
-  // The desktop's model rosters, so a card names a live model the way its runtime does (F15).
   const { catalogs } = useChannelLaunchPosture(channelId);
-  // `userId → name` for the picker's authorship marker. ⚠ THE CHANNEL ROSTER,
-  // which is not the workspace's — an identity shared by someone outside this
-  // channel resolves to no name and the marker degrades to "by another member"
-  // rather than disappearing (`identity-picker.tsx › authorMarker`).
-  // ⚠ **NO `useMemo`**, on the precedent {@link colorOf} records below and for the
-  // same measured reason: wrapping this map made the React Compiler BAIL ON THIS
-  // COMPONENT — `npx eslint` reported *"Existing memoization could not be
-  // preserved"* against the `[members]` dependency (2026-09-14). The compiler
-  // memoizes it on its own, and `byUser` two lines up has always been written
-  // this way.
+  // Channel roster, not workspace: an outside author degrades to "by another member" (`identity-picker.tsx › authorMarker`).
+  // No `useMemo`: it makes the React Compiler bail on this component.
   const memberNames = new Map(
     members.map((m) => [m.userId, m.displayName || m.email || ""] as const)
   );
 
-  /**
-   * THE POPUP'S CONTROLS, ASSEMBLED FROM THE FLAT PROPS THIS TAB ALREADY TAKES. ⚠ NOT A SECOND
-   * LAUNCH PATH — `onLaunchAgent` is `use-launch-controls.ts`'s act itself, never re-wrapped.
-   */
+  // Not a second launch path: `onLaunchAgent` is passed through, never re-wrapped.
   const launchControls: AgentLaunchControls = useMemo(
     () => ({
       canLaunch,
@@ -183,65 +100,18 @@ export function AgentsTab({
     }),
     [canLaunch, launchBusy, launchError, onLaunchAgent, onApproveIdentity]
   );
-  // Peers: other members' live rows, thread-scoped like everything on the tab.
-  // Own rows are excluded — the LOCAL feed below is the richer truth for mine.
-  // ⚠ THE PREDICATE IS `agents-model.ts › peerCardsFor`, NOT AN INLINE FILTER
-  // (2026-08-20): the tab-row badge counts the same rows this list draws, and a
-  // second copy of the rule is how a badge comes to say 3 over a list of 2.
+  // Shared with the tab badge's count — never inline this filter.
   const peerCards = peerCardsFor(peers, currentUserId, openThreadId);
 
-  /**
-   * **WHICH COLOUR EACH OF MY OWN AGENTS IS WEARING** (2026-09-14; docs/specs/agent-colors.md
-   * item 8: *"the Agents-tab card … show a small colour dot before the name for live agents"*).
-   *
-   * ⚠ **THE OWN CARDS HAD NO DOT AT ALL UNTIL THIS**, and the peer cards beside them did — the
-   * one shape a reader compares them against. `agents-tab-cards.tsx › AgentCard.color` was
-   * declared and nothing passed it, so the half of the ruling about the operator's own agents
-   * rendered nothing while the half about everybody else's rendered a dot: one list, two answers.
-   * ⚠ **OFF `peers`, WHICH IS THE UNFILTERED CHANNEL PROJECTION AND THEREFORE CARRIES MY OWN
-   * ROWS TOO** — the same source the colour circles fence against two screens up, and the same
-   * reason: only the SERVER assigns a key, so `sessions` (this machine's own feed) is the one
-   * source that cannot answer. `peerCardsFor` is where the own-exclusion happens, downstream.
-   * ⚠ **KEYED BY THE MINTED INSTANCE ID** (`ChannelSessionState.name`), which is what
-   * `DesktopSessionSummary.agentId` holds — the pairing `lib/live-agents.ts` already dedupes on.
-   * ⚠ **AN ENDED ROW NEVER REACHES THE WIRE** (`main/session-state-push.js › liveForWire`), so an
-   * ended agent simply has no entry here and draws no dot — the bank rule, without this file
-   * re-deciding it.
-   * ⚠ **A LINEAR SCAN AND NO `useMemo`**, which is `surface-agent-view.tsx`'s own precedent for
-   * the same lookup: both arrays are bounded by the agent cap (15 per workspace, 2026-09-01), and
-   * a `useMemo` here makes the React Compiler BAIL ON THIS COMPONENT — `npx eslint` reports it as
-   * *"Existing memoization could not be preserved"*, which is a NEW error in a tree that measures
-   * only new ones.
-   */
+  // Server-assigned colour off the unfiltered projection, keyed by minted instance id; no `useMemo` (compiler bail).
   const colorOf = (agentId: string | null | undefined): AgentColorKey | null =>
     (agentId && peers.find((p) => p.name === agentId)?.color) || null;
 
-  /**
-   * NEW AGENT — the 36px page button that OPENS THE POPUP (2026-09-08).
-   *
-   * ⚠ **THIS SUPERSEDES THE ONE-CLICK FACE OF 2026-08-22.** Samuel, verbatim: *"i want to make a
-   * pop up for the threads creation as well. And put in the new agent button in the agents tab."*
-   * The popup is preselected to None, so the same launch is one click plus one Launch.
-   * **There is still exactly ONE launch lane**: it submits through `onLaunchAgent`, the prop the
-   * face called and the chevron used to call itself.
-   *
-   * ⚠ **AND SINCE 2026-09-13 THE CHEVRON OPENS THE SAME FORM** (Samuel, over the deleted
-   * `launch-sheet.tsx`): `IdentityLaunchPicker` CHOOSES an identity and `launch.openWithIdentity`
-   * opens this popup on it. So the split button has two hit targets, two accessible names and
-   * **one form** — the zone is still distinct (never a menu in front of the button), and the
-   * identity roster is what it buys.
-   * ⚠ BOTH VIEWS GO THROUGH IT, reading `openThreadId ?? null`: thread view lands the agent on
-   * that exchange, channel view on the ROOM (2026-08-31, the channel-level lane).
-   * ⚠ THE ONLY GATES ARE `canLaunch` (feature detection over the bridge) and a launch already in
-   * flight. `workspaceId` gates the CHEVRON and the popup's identity roster — not the button.
-   */
+  // Split button: "New agent" opens the form; the chevron picks an identity and opens the same form.
   const launchRow = canLaunch && onLaunchAgent && (
     <div className="mb-3">
       <div className="flex justify-end">
-        {/* ⚠ IT CANNOT BE `TAB_ACTION` — a split button is a wrapper plus two hit
-            targets, and one class string cannot express that. It COMPOSES that
-            constant's two halves (`bits.tsx › TAB_ACTION_SHELL` / `TAB_ACTION_INK`)
-            rather than re-cutting the geometry, so the two cannot drift. */}
+        {/* Composes `TAB_ACTION`'s halves: one class string can't express a split button. */}
         <div className={cn(TAB_ACTION_SHELL, "items-stretch overflow-hidden")}>
           <button
             type="button"
@@ -251,8 +121,7 @@ export function AgentsTab({
                 ? undefined
                 : "Starts an agent on the channel"
             }
-            // ⚠ IT OPENS THE FORM; IT DOES NOT LAUNCH (2026-09-08 — see the block above).
-            // `toggle` is the opener because it is what MINTS the instance id the form shows.
+            // `toggle` mints the instance id the form shows.
             onClick={() => launch.toggle()}
             className={cn(
               "flex min-w-0 cursor-pointer items-center disabled:opacity-60",
@@ -262,16 +131,8 @@ export function AgentsTab({
             <Plus size={13} aria-hidden />
             {launchBusy ? "Starting\u2026" : "New agent"}
           </button>
-          {/* ⚠ THE CHEVRON IS ON BOTH VIEWS SINCE 2026-09-08 (Samuel: *"Same
-              one, that enables me to launch an identity"*) — the last piece of the
-              redirect the 2026-08-31 ruling deleted. An identity launch is the same
-              lane as a blank one, so with no thread open it starts on the ROOM.
-              The only gate left is `workspaceId`: feature detection over a READ,
-              since a picker with no workspace to list can only be empty. */}
           {workspaceId && (
             <>
-              {/* The hairline is what makes the pair read as ONE control with two
-                  zones rather than two buttons that happen to touch. */}
               <span aria-hidden className="w-px shrink-0 self-stretch bg-white/25" />
               <button
                 type="button"
@@ -279,11 +140,9 @@ export function AgentsTab({
                 onClick={(e) => picker.toggleFrom(e.currentTarget)}
                 aria-haspopup="menu"
                 aria-expanded={picker.open}
-                // \u26a0 ITS OWN NAME, never the launch button's \u2014 two controls
-                // sharing an accessible name are one control to a screen reader,
-                // and the point of the split is that they are two.
+                // Distinct name: two controls sharing one read as one to a screen reader.
                 aria-label="Launch from identity"
-                // w-8 = 32px, over the 24px floor Samuel set for this zone.
+                // w-8: over the 24px hit-target floor.
                 className="flex w-8 shrink-0 cursor-pointer items-center justify-center text-text-on-cta/75 transition-colors hover:text-text-on-cta disabled:opacity-60"
               >
                 <ChevronDown size={13} aria-hidden />
@@ -297,23 +156,11 @@ export function AgentsTab({
           {launchError}
         </p>
       )}
-      {/* ⚠ THE FORM ITSELF. Mounted with the ROW rather than with the button, so the popup and
-          the refusal line it may print live in one place. `currentUserId ?? ""` is FAIL-CLOSED:
-          with no viewer id every identity wears the authorship marker (INVARIANTS §5A) rather
-          than none of them silently reading as mine. */}
+      {/* `currentUserId ?? ""` fails closed: every identity wears the authorship marker (INVARIANTS §5A). */}
       <LaunchAgentDialog
         panel={launch}
         newAgent={launchControls}
-        /* ⚠ **THE TAKEN SET, AND `peers` IS THE RIGHT SOURCE PRECISELY BECAUSE IT IS NOT
-           FILTERED** (2026-09-13; docs/specs/agent-colors.md item 7). This prop is the WHOLE
-           channel projection — every member's live rows, the operator's own included — and the
-           own-exclusion this tab applies happens downstream, in `peerCardsFor` for the CARDS.
-           A colour is unique across members AND across one operator's own agents, so the
-           unfiltered set is exactly what the circles must grey out; handing `peerCards` here
-           would let the operator pick the key their own other agent is already wearing.
-           ⚠ ITS `color` RIDES `ChannelSessionState` (peer-visible by design), so this costs no
-           new read — and the popup's answer is advisory either way: uniqueness is decided by
-           `20261005120000`'s index, never by this list. */
+        /* Unfiltered `peers`: colours are unique across my own agents too (advisory; the DB index decides). */
         liveSessions={peers}
         openThreadId={openThreadId ?? null}
         channelId={channelId}
@@ -331,14 +178,7 @@ export function AgentsTab({
           memberNames={memberNames}
           busy={launchBusy}
           catalogs={catalogs}
-          /* ⚠ **IT CHOOSES AND THE POPUP LAUNCHES (2026-09-13, Samuel's ruling over the
-             deleted launch sheet).** `openWithIdentity` opens the ONE form with the row
-             preselected and its Name / Description / Instructions prefilled — so the two
-             halves of the split button reach the SAME dialog and cannot disagree about where
-             they launch, which is what the `openThreadId ?? null` argument used to buy by hand.
-             ⚠ **`null` IS THE BLANK ROW** and lands on the popup's `None`, the same state the
-             face's own click opens on. ⚠ `approve` LEFT WITH THE LAUNCH: the first-use question
-             is `use-agent-launch-run.ts › useLaunchRunner`'s, on the one lane. */
+          /* Picks only; the form opens preselected (`null` = blank) and launches. */
           onPick={(identity) => launch.openWithIdentity?.(identity)}
         />
       )}
@@ -348,18 +188,7 @@ export function AgentsTab({
   if (sessions === null) {
     return (
       <div className="min-h-0 flex-1 overflow-y-auto px-3.5 pb-6 pt-4">
-        {/* ⚠ THE SAME WELLS HERE — a peer card is an agent card and Samuel's
-            ruling is about the PAGE, so the one list this branch can show sits on
-            the same gray ground. With no peers nothing renders and the sentence
-            below stands alone, exactly as before.
-            🔒 ⚠ **AND THIS GUARD SURVIVES THE 2026-09-17 "keep the gray boxes"
-            RULING, WHICH IS THE ONE PLACE IT DOES.** That ruling is about a
-            MEASURED empty list; this branch is `sessions === null` — no desktop
-            app, so this build has measured NOTHING about the operator's own agents
-            (§11: UNKNOWN is not EMPTY). Four empty time-span boxes under a browser
-            would read as *"you have no agents"*, which is the claim this file's
-            header comment exists to prevent. Every well still draws once there IS
-            a list, peers included. */}
+        {/* No bridge = own agents unknown (§11), so no empty wells here — they'd read as "no agents". */}
         {peerCards.length > 0 && (
           <AgentWells items={peerWellItems(peerCards, byUser)} />
         )}
@@ -371,24 +200,14 @@ export function AgentsTab({
     );
   }
 
-  // ⚠ Same one-derivation rule as `peerCards` above — `ownAgentsFor` is what the
-  // tab row's badge counts, so the list and the number are one function.
+  // Shared with the tab badge's count.
   const mine = ownAgentsFor(sessions, channelId, openThreadId);
 
   return (
     <div className="min-h-0 flex-1 overflow-y-auto px-3.5 pb-6 pt-4">
       {launchRow}
       {
-        // ⚠ THE FOUR GRAY WELLS (Samuel, 2026-09-13) — `agents-wells.tsx` owns the
-        // buckets, the collapse and the ground; this call owns only the ORDER, which
-        // is unchanged: my own agents first (§5), then the peer rows, each card
-        // exactly the component it was.
-        // 🔒 ⚠ **AND THEY DRAW WITH AN EMPTY FEED TOO, SINCE 2026-09-17 (Samuel,
-        // verbatim):** *"in the Threads and Agents view, i want to have the gray
-        // boxes kept there even if there's nothing in them. Same as the channel
-        // picker"* — an empty list used to render the sentence INSTEAD of the wells.
-        // The `showEmpty` that keeps the individually-empty boxes lives one file
-        // down, in `recency-wells.tsx`, so both tabs take the ruling from one call.
+        // Order is the data: my own agents first (§5), then peers.
         <AgentWells
           items={[
             ...mine.map((agent) => ({
@@ -397,9 +216,7 @@ export function AgentsTab({
               node: (
                 <AgentCard
                   agent={agent}
-                  // ⚠ THE PROJECTION'S KEY, NEVER `agent.color` — that field is this machine's
-                  // ASK and the server may have substituted the next free one, so reading it
-                  // here would paint a card in a hue the transcript's boxes do not use.
+                  // Server's key, never `agent.color` (that is only this machine's request).
                   color={colorOf(agent.agentId)}
                   catalogs={catalogs}
                   owner={me}
@@ -412,13 +229,7 @@ export function AgentsTab({
           ]}
         />
       }
-      {/* ⚠ THE SENTENCE IS A SIBLING OF THE WELLS NOW, NOT THE OTHER HALF OF A
-          TERNARY — /home's channel column's shape exactly (`relationship-list.tsx`,
-          whose "No channels yet" has stood beside its empty wells since 2026-09-15).
-          **IT IS NOT DUPLICATE COPY AND IS NOT DROPPED:** the four headings are TIME
-          SPANS, so four empty boxes cannot say whether this channel has no agents or
-          this THREAD has none — which is the whole of what this line distinguishes.
-          ⚠ And it is not the placeholder copy minimal-copy forbids INSIDE a well. */}
+      {/* Time-span headings can't say whether the channel or the thread is empty; this line does. */}
       {mine.length === 0 && peerCards.length === 0 && (
         <p className="py-6 text-center text-caption text-text-muted">
           {openThreadId
@@ -430,18 +241,7 @@ export function AgentsTab({
   );
 }
 
-/**
- * THE PEER ROWS AS WELL ITEMS.
- *
- * ⚠ **`PeerCards` IS CALLED WITH ONE ROW AT A TIME RATHER THAN SPLIT INTO A
- * SINGLE-CARD EXPORT.** That component owns the peer card's whole face — the
- * avatar fallback, the staleness dimming and its `data-stale` hook, the
- * no-timestamp rule (Samuel, 2026-09-04) — and a second entry point into it is a
- * second place for that face to drift. A one-element list renders one card and
- * nothing else.
- * ⚠ **THE KEY IS THE ONE `PeerCards` ALREADY MINTS** (`user:name:thread`), so a
- * peer row keeps its React identity across a regroup.
- */
+/** One `PeerCards` per row, so the peer card's face keeps one entry point; key matches `PeerCards`'. */
 function peerWellItems(
   peers: readonly ChannelPeerSession[],
   byUser: ReadonlyMap<string, ChannelMember>

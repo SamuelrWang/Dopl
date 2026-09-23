@@ -1,18 +1,6 @@
 // @vitest-environment jsdom
-/**
- * SHARED RENDER HARNESS for the Settings tab's AGENT half.
- *
- * WHY IT IS ITS OWN FILE. `settings-tab.test.tsx` crossed the 500-line cap when the
- * 2026-08-20 arm-vs-durable-posture split landed, and the alternative — copying
- * `agentView` into a second file — is how two suites drift into rendering two
- * different components. Same seam and same precedent as `_channel-prefs-block.mjs`
- * on the desktop side: the machinery is shared, the cases split by what they are
- * ABOUT. `settings-tab.test.tsx` keeps the tab (rows, profiles, folder, trust);
- * `settings-agent-posture.test.tsx` takes the launch posture.
- *
- * ⚠ NOT a `*.test.tsx` name on purpose — `vitest.config.ts` includes exactly
- * `src/**​/*.test.ts(x)`, so this file is imported, never collected.
- */
+/** Shared render harness for the Settings tab's agent-half suites. Not a `*.test.tsx` name, so vitest
+ *  imports it but never collects it. */
 
 import { readdirSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
@@ -23,35 +11,14 @@ import {
 } from "./settings-agent";
 import { launchSelectionStub } from "../hooks/launch-selection-harness";
 
-/** The desktop modules these claims are ABOUT. ⚠ Off `process.cwd()` (the vitest
- *  root), not `import.meta.url`: under the jsdom environment these files declare, a
- *  module-relative URL misses the tree. */
+/** A `dopl-desktop-app/main` file, off `process.cwd()`: under jsdom a module-relative URL misses the tree. */
 export function desktopSource(file: string) {
   return readFileSync(resolve(process.cwd(), "dopl-desktop-app/main", file), "utf8");
 }
 
 /**
- * HOW MANY FILES IN `dopl-desktop-app/main/` CONTAIN `needle` — for pinning a
- * CONSUMER COUNT rather than a filename.
- *
- * ⚠ IT EXISTS BECAUSE A FILENAME PIN BROKE ON A PURE MOVE (F-237). The launch
- * posture's one-consumer rule was asserted as `desktopSource("channel-dir-ipc.js")
- * .toContain(...)`; the desktop split that file and the read moved to
- * `session-ipc-ops.js`, so a refactor that changed NOTHING about the rule turned a
- * `src/` suite red — and the desktop's own gates could not see it, because the
- * assertion lives over here.
- *
- * ⚠ COUNT, NOT LOCATION, IS THE ACTUAL INVARIANT. H2 is enforced by there being
- * exactly ONE reader of the stored posture; WHICH file holds it is an
- * implementation detail the desktop is free to move. This survives the move and
- * still fails on the thing that matters — a second reader appearing.
- *
- * ⚠ RECURSIVE SINCE 2026-08-31, AND THE FLAT VERSION HAD JUST BECOME WRONG. `main/`
- * grew its first subdirectory that day — `main/runtime/`, the adapter tree of the
- * runtime port — so a flat scan would have answered a CONSUMER COUNT that silently
- * excluded every module the port moved. A count that cannot see part of the tree is
- * the F-237 failure this helper exists to prevent, one directory deeper. Paths come
- * back relative to `main/`, so `desktopSource` takes them unchanged.
+ * Files under `dopl-desktop-app/main/` (recursive) containing `needle`, relative to `main/` — pins a
+ * consumer COUNT, which survives a pure move where a filename pin breaks (F-237).
  */
 export function desktopMainFilesContaining(needle: string): string[] {
   const root = resolve(process.cwd(), "dopl-desktop-app/main");
@@ -70,20 +37,14 @@ export function desktopMainFilesContaining(needle: string): string[] {
 
 const noop = () => {};
 
-/** The agent half on its own, with the two desktop-only halves injected — the view
- *  renders with no window and no bridge, which is the whole reason it is split from
- *  `ChannelAgentSettings`. */
+/** The view alone, with no window and no bridge. */
 export function agentView(over: Partial<ChannelAgentSettingsViewProps> = {}) {
   return render(
     <ChannelAgentSettingsView
       profile="full"
       onSetToolProfile={noop}
       toolProfileBusy={false}
-      // ⚠ **A STUB, NOT A DEFAULT** (2026-09-21, U8). The launch group reads the versioned,
-      // runtime-keyed record now (`hooks/use-launch-selection.ts`), so a suite that renders the
-      // tab has to hand one — and a suite that cares about it overrides this. The stub's own
-      // defaults are the RESTRICTIVE, no-runtime-concept ones, which is the lane every pre-runtime
-      // case in these files was already written against.
+      // The stub's defaults are the restrictive, no-runtime lane; suites that care override it.
       selection={launchSelectionStub()}
       folder={null}
       {...over}
@@ -95,17 +56,11 @@ export function agentView(over: Partial<ChannelAgentSettingsViewProps> = {}) {
 export const copy = (over: Partial<ChannelAgentSettingsViewProps> = {}) =>
   agentView(over).container.textContent ?? "";
 
-/** ⚠ The root suite has no jest-dom — `toBeDisabled` does not exist here. */
+/** The root suite has no jest-dom — `toBeDisabled` does not exist here. */
 export const disabled = (el: HTMLElement) => (el as HTMLButtonElement).disabled;
 
-// ⚠ NAMED FOR THE RECORD THEY READ — the channel's DURABLE LAUNCH record.
-// ⚠ THE ACCESSIBLE NAMES MOVED 2026-09-06 (settings overhaul, items 5 and 7):
-// "Permissions" → "Tool use", "Sends" → "Messaging". The HELPERS keep their names —
-// they are named for the RECORD they read (`posture.tools` / `posture.messages`),
-// which did not change, and renaming them to follow a label is how a helper stops
-// describing what it reads. `postureSends` is the one to watch: its row is called
-// Messaging now precisely because the axis covers BOTH directions, and a future
-// reader must not take the helper's name as evidence that it is outbound-only.
+// Named for the record fields they read (`tools` / `messages`), not the row labels; Messaging
+// covers both directions.
 export const postureTools = () =>
   screen.getByLabelText("Tool use for agents you launch");
 export const postureSends = () =>

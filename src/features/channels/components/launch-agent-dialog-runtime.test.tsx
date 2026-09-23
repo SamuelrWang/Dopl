@@ -24,7 +24,7 @@
  *    capability the platform lacks, and `runtime/index.js › acquire` is what refuses at spawn.
  *
  * ⚠ SPLIT OUT OF `launch-agent-dialog.test.tsx` at the §1 cap, on the same seam as
- * `launch-agent-dialog-runtime.ts`. The dialog's own file keeps the five fields, the payload
+ * `launch-agent-dialog-state.ts`. The dialog's own file keeps the five fields, the payload
  * parity and the two exits; the runtime row's whole contract is here.
  */
 
