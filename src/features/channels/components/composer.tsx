@@ -1,40 +1,9 @@
 "use client";
 
 /**
- * Channels — the composer card, with the @-mention autocomplete floating
- * above its left edge.
- *
- * ⚠ ONE SEND, ONE ACT, SINCE 2026-09-08. This card posts a plain chat message
- * (`intent:"chat"` — the wire value tells the receiving side this reaches
- * nobody's agent) and does nothing else. **THREAD CREATION LEFT THE CARD:** both
- * entries — the Threads tab's "New thread" and this toolbar's
- * `MessageSquarePlus` glyph — open {@link NewThreadDialog}, a modal carrying its
- * own Create. The INLINE request panel and `use-thread-request.ts` are DELETED
- * rather than disarmed (Samuel, 2026-09-08: *"look there is an icon in the text
- * input bar that is supposed to spawn new threads. Why wasn't that wired in"*).
- *
- * ⚠ TWO SOURCES, ONE DIALOG, AND THEY ARE ADDED. `newThreadSignal` is the
- * Threads tab's nonce and `threadDialogNonce` is this glyph's; their SUM is what
- * the dialog watches, so neither source can shut the other's.
- *
- * ⚠ THE CHAT TEXTAREA IS ALWAYS MOUNTED NOW. "One edit surface at a time"
- * (Samuel, 2026-08-26) unmounted it because the request form stood ON this card;
- * a dialog draws its own scrim. **Nothing on this card branches on a panel any
- * more** — `panelOpen`, its unmounts and `composer-submit-state.ts`'s three-act
- * derivation went with the panel, and the submit has one face.
- *
- * ⚠ THE FAN-OUT WRITE IS STILL THIS FILE'S. `fanOutThreads` lives here and the
- * dialog is its CALLER — one `channel_tasks` row per addressee (INVARIANTS §5 —
- * a thread is one requester + one target) rendered as ONE card
- * (`transcript.tsx › ThreadCardMessage`), base idempotency key minted at the
- * press inside the dialog (§8).
- *
- * ⚠ THE BOT ICON AND THE THREAD GLYPH ARE TWO CONTROLS SINCE 2026-08-21
- * (Samuel) — different layers: a thread raises a REQUEST at another member over
- * the write layer; the Bot icon spawns MY OWN agent over the bridge, posting
- * nothing. It is CONTEXT-SENSITIVE, taking its target from the OPEN THREAD
- * (channel view = `taskId: null`), on the same op, hook and refusal copy as the
- * Agents tab's button — a second BUTTON, never a second launch path.
+ * Channels composer card: one plain chat send (`intent:"chat"`) plus the @-mention popover. New thread and
+ * New Agent open dialogs (`new-thread-dialog.tsx`, `launch-agent-dialog.tsx`); `fanOutThreads` stays here and
+ * the thread dialog calls it — one `channel_tasks` row per addressee (INVARIANTS §5).
  */
 
 import { useRef, useState, type ReactNode } from "react";
@@ -45,7 +14,6 @@ import { ComposerToolbar } from "./composer-toolbar";
 import { NewThreadDialog } from "./new-thread-dialog";
 import { MentionPopover } from "./composer-mentions";
 import { ComposerRecipients } from "./composer-recipients";
-// ⚠ THE SAME RULE THE LINE DRAWS, ASKED ONCE MORE AT SEND TIME — see `autoTag`.
 import { draftReach, viewerUnaddressedResponder } from "../lib/draft-recipients";
 import { ComposerTint } from "./composer-tint";
 import { useComposerMentions } from "./use-composer-mentions";
@@ -59,8 +27,7 @@ import { useThreadWrites } from "../hooks/use-thread-writes";
 import { newClientMsgId } from "../lib/optimistic-cache";
 import type { ChannelMember } from "../types";
 
-/** ⚠ A STABLE EMPTY ARRAY, not `[]` at the call site: an agents prop that is a fresh object every
- *  render re-derives the whole @-picker shortlist on a surface that has no sessions read. */
+/** Stable empties: a fresh array per render re-derives the @-picker shortlist. */
 const EMPTY_LIVE_AGENTS: readonly LiveAgentSession[] = [];
 const EMPTY_RECENT: readonly string[] = [];
 
@@ -80,59 +47,36 @@ export function ChannelsComposer({
   recentAgentIds = EMPTY_RECENT,
   threadOtherParty = null,
 }: {
-  /** ⚠ CAPTURED AT SUBMIT into every draft — never re-read from the selection
-   *  while a write is in flight (INVARIANTS §8, rule 4). */
+  /** Captured at submit into every draft, never re-read mid-write (INVARIANTS §8, rule 4). */
   channelId: string;
   workspaceId: string;
   members: ChannelMember[];
   currentUserId: string;
   currentUserName?: string | null;
   currentUserAvatarUrl?: string | null;
-  /** The page's refetch coordinator — the SAME gate the reads register. */
+  /** The page's refetch coordinator — the same gate the reads register. */
   gate: MutationGate;
-  /**
-   * THE BOT ICON'S WIRING — the page's own `use-agents-panel.ts` instance,
-   * handed down. ⚠ ABSENT MEANS NO BUTTON, not a dead one — the feature-detected
-   * rule every bridge affordance in this family follows (INVARIANTS §11).
-   */
+  /** The Bot icon's wiring (`use-agents-panel.ts`), handed down; absent renders no button. */
   newAgent?: AgentLaunchControls;
-  /** Which exchange a new agent lands on; `null` is a CHANNEL-LEVEL agent. */
+  /** Which exchange a new agent lands on; `null` is a channel-level agent. */
   openThreadId?: string | null;
-  /** Nonced ask from the Threads tab to open the new-thread POPUP. ⚠ A COUNTER,
-   *  not a boolean: the dialog's open state stays OWNED THERE, so there is no
-   *  mirror to drift. Each increment is one request; the default is nobody
-   *  asking, and this composer ADDS the toolbar glyph's own nonce to it. */
+  /** Nonced ask from the Threads tab to open the new-thread dialog; a counter, so the dialog owns its open state. */
   newThreadSignal?: number;
-  /**
-   * **THE CHANNEL'S LIVE AGENTS — every member's, not this machine's** (2026-09-02, slice B10).
-   * The peer projection the Agents tab already polls (`use-channel-agent-sessions.ts`), the same
-   * set the server resolves a person's `to=` against. Empty where a surface has no sessions read.
-   */
+  /** Every member's live agents (`use-channel-agent-sessions.ts`); empty where a surface has no sessions read. */
   liveAgents?: readonly LiveAgentSession[];
-  /** **MY OWN AGENTS MID-TURN**, drawn at the END of the recipient line since
-   *  2026-09-20 (Samuel: *"put agents working to the right"*). ⚠ A NODE BUILT BY
-   *  `channel-surface.tsx` — it was its own band above this card, under a
-   *  hairline; both are gone. This card states WHERE it sits, never what it says. */
+  /** My agents mid-turn, drawn at the end of the recipient line. */
   working?: ReactNode;
-  // ⚠ **`defaultResponderAgentName` IS GONE FROM THIS PROP CHAIN (2026-09-07, items 10 and
-  // 11).** The question is PER MEMBER now, so `ComposerRecipients` reads it off the VIEWER'S OWN
-  // roster row and no host has to remember to hand it over.
-  /** RR3 arm 3's input — the room's recent agent posters, newest first. */
+  /** The room's recent agent posters, newest first (RR3). */
   recentAgentIds?: readonly string[];
-  /** RR1's answer for a thread composer: the exchange's OTHER party. `null` in the main room. */
+  /** A thread's other party (RR1); `null` in the main room. */
   threadOtherParty?: ChannelMember | null;
 }) {
   const [draft, setDraft] = useState("");
   const draftRef = useRef<HTMLTextAreaElement>(null);
-  // AUTO-GROW to three visible lines, then scroll (Samuel, 2026-08-20 — the second line was
-  // clipping invisibly at rows={1}). ⚠ SHARED VIA `use-auto-grow.ts` SINCE 2026-08-27, so the
-  // panels' Description fields cannot grow to a different ceiling.
   useAutoGrow(draftRef, draft);
-  // WHO THE NEW AGENT IS — the Bot icon's form. ⚠ ONLY THE STATE lives here; the dialog that
-  // draws it is `launch-agent-dialog.tsx`, mounted only where a launch is possible.
+  // Only the launch form's state lives here; `launch-agent-dialog.tsx` draws it.
   const launch = useAgentLaunch();
-  // ⚠ THE TOOLBAR GLYPH'S OWN NONCE (Samuel, 2026-09-08: *"there is an icon in the text input bar
-  // that is supposed to spawn new threads"*), ADDED to the Threads tab's signal below.
+  // The toolbar glyph's own nonce, summed with `newThreadSignal`.
   const [threadDialogNonce, setThreadDialogNonce] = useState(0);
   const { send, fanOutThreads, pending } = useThreadWrites({
     workspaceId,
@@ -142,43 +86,18 @@ export function ChannelsComposer({
     gate,
   });
 
-  /**
-   * **ESCAPE DECLINED THE DEFAULT ADDRESS FOR THIS DRAFT** (Samuel, 2026-09-20).
-   *
-   * ⚠ **IT IS PER MESSAGE AND IT IS NOT A SETTING.** `channel_members
-   * .unaddressed_responder = "none"` is the standing opt-out and lives in
-   * Settings; this is one keystroke about one draft, cleared on send. Conflating
-   * them would let a reflex turn the feature off for good.
-   */
+  // Escape declined the auto-address for this draft only — not the standing
+  // `unaddressed_responder` setting; cleared on send.
   const [addressOff, setAddressOff] = useState(false);
 
-  // THE @-PICKER — `use-composer-mentions.ts` (the §1 split at the cap, 2026-08-27).
   const mentions = useComposerMentions({ draft, setDraft, members, sessions: liveAgents, currentUserId });
 
-  /**
-   * THE TINT (2026-09-07, Samuel: blue = *"will route to an agent"*) — the SAME question
-   * `ComposerRecipients` answers in words one row down, asked per token. Same roster, same live
-   * agents, same index (`lib/draft-recipients.ts › draftAgentIndex`), so the line and the colour
-   * cannot disagree. The RULE is `composer-tint.tsx`'s.
-   *
-   * ⚠ **NAMED HERE RATHER THAN INLINED AT THE PROP, AND NOT FOR TIDINESS.**
-   * `composer-input.test.ts` pins the bare mount by matching `<ComposerInputRow …/>` up to the
-   * FIRST `/>`, so a self-closing element inside that JSX would truncate the slice it reads.
-   */
+  // Named, not inlined: `composer-input.test.ts` slices `<ComposerInputRow …/>` to the first `/>`.
   const tintDraft = (value: string) => (
     <ComposerTint text={value} members={members} sessions={liveAgents} />
   );
 
-  /**
-   * DICTATION — the Mic glyph's engine (`use-dictation.ts`, which owns every rule about it).
-   *
-   * ⚠ IT ONLY EVER APPENDS, WHICH IS WHAT MAKES "the text stays" TRUE BY CONSTRUCTION — no stop
-   * path anywhere can clear the draft.
-   * ⚠ THE FUNCTIONAL UPDATE IS LOAD-BEARING. A phrase can land while the operator is still typing,
-   * and reading `draft` from this render's closure would overwrite the characters typed since.
-   * ⚠ ONE SPACE, NEVER TWO, and none at all into an empty box — dictation should read as if it
-   * were typed there.
-   */
+  // Append-only, via a functional update so a phrase landing mid-typing keeps what was typed since.
   const dictation = useDictation((text) =>
     setDraft((prev) => {
       const kept = prev.replace(/\s+$/, "");
@@ -187,14 +106,7 @@ export function ChannelsComposer({
   );
 
   const body = draft.trim();
-  /**
-   * ONE CONTROL, ONE ACT, AND THE DERIVATION IS THREE LINES AGAIN (2026-09-08).
-   *
-   * ⚠ `composer-submit-state.ts` IS DELETED, NOT STUBBED: both forms are modals with their own
-   * submit now, so "which of the three acts is this press" has one answer.
-   * ⚠ A DISABLED SEND STILL SAYS WHY (INVARIANTS §8, rule 4) — a disabled control with no reason
-   * is indistinguishable from a broken one.
-   */
+  // A disabled send still says why (INVARIANTS §8, rule 4).
   const canSend = !pending && body.length > 0;
   const hint = canSend ? "Send" : pending ? "Sending…" : "Write a message first";
 
@@ -203,41 +115,11 @@ export function ChannelsComposer({
     launch.reset();
   };
 
-  /**
-   * ⚠ THE COMPOSER CLEARS BEFORE THE AWAIT and the drafts carry everything the
-   * write needs — the optimistic layer owns the rollback, and re-reading state
-   * after the round trip would read a composer the user has since typed into.
-   */
+  // Clears before the await: drafts carry everything the write needs and the optimistic layer owns rollback.
   const submit = () => {
     if (!canSend) return;
-    // ⚠ THE LAUNCH AND REQUEST ARMS ARE BOTH GONE FROM HERE (2026-09-08) — each dialog owns its
-    // own act and its own submit.
-    /**
-     * 🔒 **AN AUTO-ADDRESS IS WRITTEN INTO THE MESSAGE, AS A REAL TAG** (Samuel,
-     * 2026-09-20: *"if a user sends a message but didn't tag, but it has an auto
-     * address agent resolved, can we make it so that a tag is put in the text,
-     * before their message, and it just gets auto added? That way it makes it
-     * more clear too who it sent to, and we can consolidate to one surface"*).
-     *
-     * ⚠ **IT REPLACES THE GREY ARROW UNDER THE BADGE, IT DOES NOT JOIN IT.** The
-     * transcript used to FACE a server pick as chrome under the pill
-     * (`authored-row.tsx › routedTo`, deleted the same day) precisely because the
-     * body could not be touched. Writing the tag HERE, before the post leaves,
-     * makes the address a thing the author sent rather than a thing the server
-     * reports — one surface, and the same words in the notification, the MCP read
-     * and the quote.
-     * ⚠ **AND IT IS NOT A BODY REWRITE.** The old rule — *the stored body is never
-     * touched, a rewrite would put words in somebody's mouth* — is about the
-     * SERVER editing a post at rest. Nothing edits anything at rest: the draft
-     * gains the tag in the composer, on this machine, from the line the author is
-     * already reading, and Escape declines it.
-     * ⚠ **SO THE SERVER SEES A TYPED ADDRESS AND RR3 NEVER RUNS FOR THIS POST.**
-     * That is the consolidation: one path (a named agent), one stored shape, and
-     * `metadata.wake_reason` stays empty because nobody guessed.
-     * ⚠ **AGENTS ONLY, AND `responder` ONLY.** RR1's thread party is a MEMBER and
-     * is the thread's own address, not a default — there is no handle to insert
-     * and nothing to cancel.
-     */
+    // An auto-addressed agent is written into the body as a real `@handle` tag, so the server sees a
+    // typed address and RR3 never runs for this post. Agents via `responder` only.
     const reach = draftReach({
       body,
       members,
@@ -255,45 +137,23 @@ export function ChannelsComposer({
       channelId,
       clientMsgId: newClientMsgId(),
       body: tagged,
-      // ⚠ EXPLICIT, never omitted. Absence reads as `request` on the wire
-      // (`schema.ts › MessageIntentSchema`), and the plain composer is human chat.
+      // Explicit: absence reads as a request on the wire (`schema.ts › MessageIntentSchema`).
       intent: "chat" as const,
-      // ⚠ **ONLY EVER `false`, AND ONLY WHEN THE AUTHOR PRESSED ESCAPE.** Absent
-      // is the wire's default and every other client's behaviour; sending `true`
-      // would be asking for a repair this composer has just done itself.
+      // Only ever `false`, only after Escape; absent is the wire default.
       ...(addressOff ? { autoAddress: false as const } : {}),
     };
     clear();
-    // ⚠ **THE CANCEL IS FOR ONE MESSAGE** (*"esc just removes it for that message
-    // currently"*). Cleared with the draft, so the next message starts from the
-    // default again — and addressing an agent by hand meanwhile simply moves what
-    // that default resolves to.
     setAddressOff(false);
     send.mutate(message);
   };
 
-  // ⚠ THE BOTTOM OFFSET IS `COMPOSER_BOTTOM`, shared with the agent composer: the two boxes sit
-  // side by side across the pane divider and any difference reads as one floating higher than the
-  // other (Samuel, live review 2026-08-27).
+  // `COMPOSER_BOTTOM` is shared with the agent composer so the two boxes sit level across the divider.
   return (
     <div className={cn("relative shrink-0 px-4 pt-1", COMPOSER_BOTTOM)}>
-      {/* ⚠ NO `!panelOpen` GUARD ANY MORE (2026-09-08): the popover belongs to the chat textarea,
-          and the textarea no longer goes anywhere. */}
       {mentions.query !== null && (
         <MentionPopover suggestions={mentions.suggestions} active={mentions.active} onPick={mentions.pick} />
       )}
-      {/* WHO THIS DRAFT REACHES (2026-09-02, slice B10, Samuel's ruling) — `→ @handle`,
-          `→ <the default responder>` or `→ nobody`, restated on every keystroke.
-          ⚠ OUTSIDE THE CARD SINCE 2026-09-08, ABOVE IT AND HARD LEFT (Samuel: *"let's move
-          this: → nobody to be outside the bar, above it, on the top left. instead of right."*)
-          — a caption over the box, so it stops reading as a toolbar control without spending a
-          line of the card's height. **Nothing else in the card moved up.**
-          ⚠ THE ALIGNMENT IS THE COMPONENT'S OWN (`composer-recipients.tsx`, `justify-start`),
-          not a wrapper here: this file states WHERE the line sits, never how it draws.
-          ⚠ `px-0.5` MATCHES THE CARD'S OWN CONTENT INSET as closely as a caption outside a
-          13px-padded box can — the tag's `→` hangs over the card's left edge.
-          ⚠ UNCONDITIONAL SINCE 2026-09-08, with the panel that used to hide it: a thread form is
-          a modal stating its own addressing behind a scrim. */}
+      {/* Who this draft reaches — a caption above the card; alignment is `composer-recipients.tsx`'s. */}
       <ComposerRecipients
         body={body}
         members={members}
@@ -304,25 +164,13 @@ export function ChannelsComposer({
         cancelled={addressOff}
         working={working}
       />
-      {/* ⚠ THE CARD WEARS THE WHOLE FACE THE AGENT PILL WEARS, VERBATIM (Samuel, live review
-          2026-08-27) — not `.bento`, and not an extracted layer of it: a lone 1px ring read FLAT
-          beside the agent bar's dimensional material. The class IS the shared source.
-          ⚠ NO `bg-*`, EVER: the kit supplies the gradient fill and a utility would flatten it to
-          a solid. ⚠ THE RADIUS IS THE CARD'S OWN — the kit sets none, so `rounded-[14px]`
-          restates `.bento`'s, unchanged.
-          ⚠ THE 1px MOVED INTO THE PADDING AND THE BOX IS THE SAME BOX: the face must sit on a
-          BORDERLESS element (docs/DESIGN-SYSTEM.md), so `px-3 py-2.5` became `px-[13px]
-          py-[11px]` — same outer size, same content position, same HEIGHT. Tidying these back to
-          the scale values shrinks the card 2px.
-          ⚠ AND STILL NO ROW GAP: a `gap-2` here once grew the card visibly. */}
+      {/* The agent pill's face; no `bg-*` (it would flatten the kit gradient). The 1px ring lives in the
+          `13px`/`11px` padding — scale values shrink the card 2px. No row gap. */}
       <div className="raised-tab flex flex-col rounded-[14px] px-[13px] py-[11px]">
         <div className="flex flex-col gap-2">
 
           <ComposerInputRow
-            // ⚠ BARE: no ring, no fill, NO INSET AND NO SEND WIRING — the CARD is the box and
-            // pays that inset once, and the arrow is in the toolbar row below. Paying it twice
-            // sat the field 12px right of and 6px below those icons (Samuel, live review
-            // 2026-08-28). Row shape stays `composer-input.tsx › ROW_GEOMETRY`, unbranched.
+            // Bare: the card pays the inset once and the send arrow is in the toolbar row.
             face="bare"
             value={draft}
             inputRef={draftRef}
@@ -331,15 +179,8 @@ export function ChannelsComposer({
               // A new token is a new shortlist — start at the top of it.
               mentions.setHighlight(0);
             }}
-            // ⚠ THE HANDLER IS THE PICKER'S (`use-composer-mentions.ts › keyDown`, moved
-            // there 2026-09-02 at the cap): four of its five branches are about the shortlist,
-            // and what stays this file's is the one act it owns — send.
             onKeyDown={(e) => {
-              // ⚠ **ESCAPE IS THIS ROW'S ONLY NEW KEY, AND IT IS READ BEFORE THE
-              // PICKER'S HANDLER** — which ignores it, so nothing is intercepted.
-              // ⚠ IME-SAFE for `keyDown`'s own reason: a composition Escape is
-              // the input method cancelling a candidate, not the author
-              // declining an address.
+              // Escape first (`use-composer-mentions.ts › keyDown` ignores it); an IME Escape is not a decline.
               if (e.key === "Escape" && !e.nativeEvent.isComposing) {
                 setAddressOff(true);
               }
@@ -354,8 +195,7 @@ export function ChannelsComposer({
             newAgent={newAgent}
             launchOpen={launch.open}
             onToggleLaunch={launch.toggle}
-            // ⚠ IT OPENS THE POPUP, IT DOES NOT TOGGLE A PANEL (2026-09-08). `launch.close()`
-            // rides along so two forms never stand at once — the 2026-08-27 rule, kept.
+            // Closes the launch form so two forms never stand at once.
             onNewThread={() => { launch.close(); setThreadDialogNonce((n) => n + 1); }}
             onMention={() => { mentions.openFromButton(); draftRef.current?.focus(); }}
             dictation={dictation}
@@ -366,33 +206,20 @@ export function ChannelsComposer({
             onSubmit={submit}
           />
 
-          {/* ⚠ A REFUSED LAUNCH IS SAID OUT LOUD HERE because nothing else will: main answering
-              `{ok:false}` pushes nothing to explain the button that visibly did nothing
-              (`use-agents-panel.ts › LAUNCH_REFUSALS`). `role="alert"` because it appears only
-              AFTER the operator acted. */}
+          {/* A refused launch is said here: main's `{ok:false}` pushes nothing else
+              (`use-launch-controls.ts › LAUNCH_REFUSALS`). */}
           {newAgent?.launchError && (
             <p role="alert" className="px-0.5 text-caption text-danger">
               {newAgent.launchError}
             </p>
           )}
 
-          {/* ⚠ A CENTERED POPUP SINCE 2026-09-08 (Samuel: *"scrap that and unwire it from the
-              text input bar … make it a pop up panel"*). Only WHERE the form is drawn moved —
-              taking the Discard/Launch pair and the foreign-identity question off this card. */}
           {newAgent?.canLaunch && (
             <LaunchAgentDialog
               panel={launch}
               newAgent={newAgent}
-              /* ⚠ **THE TAKEN SET, OFF THE SET THIS CARD ALREADY HOLDS** (2026-09-13;
-                 docs/specs/agent-colors.md item 7). `liveAgents` is `lib/live-agents.ts ›
-                 liveAgentsKey`'s peer ∪ own union — the same rows the @-picker, the recipient
-                 line and the tint read — so the circles answer the same question the composer's
-                 other three surfaces do, one push later than nothing. ⚠ **THE UNION, NOT
-                 `peerSessions`**: a colour is unique across members AND across this operator's
-                 own agents, and the projection alone lags a launch by up to a 30s poll (the bug
-                 that union exists to fix). ⚠ Its rows carry NO `state` because that function has
-                 already dropped every ended one; `agentColorsTaken` reads an absent state as
-                 LIVE, which is the same answer. */
+              /* Taken colours come from the peer ∪ own union (`lib/live-agents.ts › liveAgentsKey`);
+                 the peer projection alone lags a launch. */
               liveSessions={liveAgents}
               openThreadId={openThreadId ?? null}
               channelId={channelId}
@@ -402,10 +229,7 @@ export function ChannelsComposer({
             />
           )}
 
-          {/* ⚠ THE ONLY THREAD FORM SINCE 2026-09-08 (Samuel: *"i want to make a pop up for the
-              threads creation as well"*, then *"why wasn't that wired in"* about the glyph). Both
-              openers land here and their SUM is the signal, so neither swallows the other's ask.
-              A MODAL carrying its own Create; the WRITE is this composer's `fanOutThreads`. */}
+          {/* Both openers' nonces are summed so neither swallows the other's ask. */}
           <NewThreadDialog
             signal={newThreadSignal + threadDialogNonce}
             channelId={channelId}

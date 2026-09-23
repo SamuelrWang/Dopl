@@ -1,35 +1,5 @@
 /**
- * THE NEW-AGENT POPUP'S MODEL ROW — what it shows, what it offers, what it SUBMITS, and the one
- * sentence it says when an identity's model belongs to another runtime (2026-09-21, U7).
- *
- * ⚠ ITS OWN FILE past the §1 cap, on the seam `launch-agent-dialog-runtime.ts` already set: that
- * one answers what the RUNTIME row offers and which pill it opens on, this one answers what the
- * MODEL row does once a runtime is selected. The dialog keeps the JSX, the identity fields and
- * the launch lane.
- *
- * ⚠ NO REACT, NO HOOK, NO BRIDGE — `lib/runtime-capability.ts`'s rule. Everything answers off the
- * catalog and the descriptor table the desktop already handed over.
- *
- * ── ⚠ **WHAT CHANGED, AND WHY THE OLD CHAIN COULD NOT SURVIVE A SECOND RUNTIME** ─────────────
- *
- * The row used to read `agentModelSelection(panel.model || identity.model || channel.model)` —
- * one chain over ONE frozen Claude table, mirroring main's precedence link for link. With a
- * second runtime every link in it became wrong in a different way:
- *
- *   · the CHANNEL's model became per-runtime, and then (2026-09-23, Samuel: *"We don't need a pin
- *     model in the settings"*) stopped existing at all — the link is gone from this chain and
- *     from main's;
- *   · the IDENTITY's model belongs to whichever runtime offers it, and an identity authored on
- *     Claude must not silently re-point a Codex launch — {@link modelRowFor} surfaces that as a
- *     MISMATCH rather than translating the id, which is the plan's U7 rule verbatim;
- *   · the BACK-FILL was Sonnet, which is a Claude id and may never be shown on a Codex surface.
- *     The runtime's own catalog default replaces it, and an absent one shows the platform default.
- *
- * ⚠ **DISPLAY IS NOT SUBMISSION, AND THAT DISTINCTION IS OLDER THAN THIS FILE.** The row DISPLAYS
- * the resolved id while `panel.model` stays `''` until the operator touches the control, so an
- * untouched dialog puts no model on the wire at all and main's precedence chain stays the one
- * authority. The wire carries `panel.model`; the clear-effect in `launch-agent-dialog-state.ts`
- * drops a pick the selected runtime positively lacks.
+ * The New Agent dialog's Model row: what it shows, offers and submits. Pure — no React, no bridge.
  */
 
 import {
@@ -49,53 +19,36 @@ import {
 } from "../lib/model-affinity";
 import type { RuntimeDescriptor } from "../lib/runtime-capability";
 
-/** What a launch that names no model shows when the runtime's catalog cannot say: the platform picks. */
+/** Shown when a launch names no model and the catalog has no default: the platform picks. */
 const PLATFORM_DEFAULT_LABEL = "Platform default";
 
 export interface ModelRowInput {
-  /** Every reported runtime, for deciding which one an identity's model belongs to. */
   runtimes: ReadonlyArray<RuntimeDescriptor>;
   catalogs: ModelCatalogs | null | undefined;
-  /** The catalog of the SELECTED runtime, or `null` when there is none. */
   catalog: ModelCatalog | null;
-  /** The runtime this spawn will run on, or `null` where nothing was reported. */
   selected: RuntimeDescriptor | null;
-  /** The operator's own per-launch pick — `''` until they touch the control. */
+  /** The operator's per-launch pick — `''` until they touch the control. */
   own: string;
-  /** The selected identity's model, or `''`. */
   fromIdentity: string;
 }
 
 export interface ModelRow {
-  /** What the control displays. ⚠ `''` means "the platform's own pick" and renders as a fact. */
+  /** `''` means "the platform's own pick". */
   shown: string;
-  /** {@link shown}'s label — the catalog's name, the raw id, or {@link PLATFORM_DEFAULT_LABEL}. */
   shownLabel: string;
   options: ReadonlyArray<{ key: string; label: string }>;
-  /** May the operator pick? ⚠ `false` RENDERS A FACT, NOT A GREYED CONTROL (design §3.2). */
+  /** `false` renders a single-pill fact, not a greyed control. */
   selectable: boolean;
-  /** The identity's model belongs to another runtime. ⚠ `null` when it does not, or when this
-   *  build cannot say — "I cannot tell" must never read as "it belongs to somebody else". */
+  /** Identity model owned by another runtime; `null` when it is not OR ownership is unknown. */
   mismatch: ModelMismatch | null;
   /** The desktop's own sentence about the roster, or `null`. */
   reason: string | null;
 }
 
 /**
- * THE WHOLE ROW, IN ONE FUNCTION.
- *
- * ⚠ **THE CHAIN IS MAIN'S, LINK FOR LINK, WITH THE IDENTITY LINK GATED** — own pick > identity >
- * the catalog's declared default (which, for Codex, is Dopl's own launch default `gpt-6-sol` when
- * the account's roster carries it — `main/runtime/model-catalog.js › catalogFromRoster`). The gate is the only
- * addition and it is the one the plan asks for: an identity model this build can positively see
- * belongs to another runtime is DROPPED FROM THE CHAIN and explained, rather than shown as this
- * launch's model and then silently coerced by main.
- *
- * ⚠ **THE OPERATOR'S OWN PICK IS GATED TOO, AND IT IS A DIFFERENT GATE.**
- * `modelSubmittableForRuntime` consults the selected catalog first, then positive ownership facts
- * from the other ready catalogs. Thus a Claude pick cannot cross into Codex merely because the
- * Codex catalog is loading/unavailable, while a genuinely unknown id still travels under the
- * tree's standing *"unknown model falls back, never refuses"* rule (`session-launch-op.js`, F-5).
+ * Main's order — own pick > identity > the catalog's default. An identity model positively owned by
+ * ANOTHER ready catalog is dropped and explained (`mismatch`), never translated. An own pick the
+ * runtime's catalog lacks is refused `no-model` by main (`session-launch.js › refuseUnknownModel`).
  */
 export function modelRowFor(input: ModelRowInput): ModelRow {
   const { catalog, selected, runtimes, catalogs } = input;
@@ -105,8 +58,7 @@ export function modelRowFor(input: ModelRowInput): ModelRow {
     selected,
     input.fromIdentity
   );
-  // Main skips an identity model the launch runtime's READY roster positively lacks (a
-  // retired id, X-03); the row must not show it as the model that will run.
+  // Main skips an identity model the READY roster lacks (`launch-default.js › identityModelFor`).
   const usableIdentityModel =
     mismatch || modelBelongsTo(catalog, input.fromIdentity) === false ? "" : input.fromIdentity;
   const usableOwn = modelSubmittableForRuntime(
@@ -120,8 +72,7 @@ export function modelRowFor(input: ModelRowInput): ModelRow {
     : "";
   const resolved = usableOwn || usableIdentityModel;
   const shown = catalogSelection(catalog, resolved);
-  // The effective id is appended when the roster lacks it, and `''` gets its own pill (a ready
-  // roster may declare no default): a pill row whose value matches no option selects nothing.
+  // A pill row whose value matches no option selects nothing, so `''` gets its own pill.
   const options = modelOptionsFor(catalog, shown).map((o) => ({ key: o.value, label: o.label }));
   return {
     shown,
@@ -134,17 +85,8 @@ export function modelRowFor(input: ModelRowInput): ModelRow {
 }
 
 /**
- * IS THE OPERATOR'S OWN PICK STILL MEANINGFUL ON THIS RUNTIME?
- *
- * ⚠ **IT IS WHAT CLEARS A STALE PER-LAUNCH PICK ON A RUNTIME SWITCH.** The plan: *"on runtime
- * change, show that runtime's REMEMBERED model or its reported platform default"* — and since
- * 2026-09-23 nothing is remembered, so it is the default (or the identity's model). A pick the
- * operator made while Claude was selected is not a pick they made for Codex, and carrying it
- * across would put a Claude id in front of them under a Codex heading — the exact substitution
- * the whole unit exists to remove.
- * ⚠ **IT ONLY CLEARS WHAT IT CAN SEE IS FOREIGN.** A selected roster this build has not read
- * can still reject a pick when another READY roster positively owns it. With no positive owner,
- * the pick survives: unknown remains distinct from empty.
+ * False only for a pick the selected catalog or another READY catalog positively rejects/owns;
+ * genuinely unknown ids survive in the renderer (main may still refuse them `no-model`).
  */
 export function ownPickSurvives(
   runtimes: ReadonlyArray<RuntimeDescriptor>,

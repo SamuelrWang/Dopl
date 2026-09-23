@@ -1,42 +1,12 @@
 "use client";
 
 /**
- * THE CHANNEL ON ONE COLUMN — the **WEB** layout of the surface
- * `channel-surface.tsx` renders as two columns on the desktop (Samuel,
- * 2026-09-04).
- *
- * ⚠ THE DESKTOP APP IS THE REFERENCE AND NOTHING IN IT IS REDRAWN. Every face
- * here is the SAME component the desktop's tab column renders — `info-tab.tsx`,
- * `threads-tab.tsx`, the agent cards of `agents-tab.tsx`, the Settings slot,
- * `agent-panel.tsx` — at a different WIDTH and behind a different SWITCHER.
- * What changed is the switcher and the geometry, and only those:
- *
- *   · the slide-out column is GONE, so the chat area is the whole page;
- *   · the info TOGGLE in the header (`PanelRight`) is a DROPDOWN in the same
- *     spot, listing **Channel · Info · Threads · Agents · Settings**;
- *   · "Channel" is the transcript itself, which is the switcher's whole point:
- *     on a phone the conversation and the column cannot both be on screen, so
- *     the conversation has to be one of the choices.
- *
- * ⚠ NO KNOWLEDGE FACE, ANYWHERE ON THIS PAGE (Samuel's word, 2026-09-04). The
- * capability is not merely unpassed by the host — this layout builds its option
- * list with `knowledge` FALSE by construction, so a host that turned the
- * capability on could not put the tab back on a phone by accident.
- *
- * ⚠ THE OPEN AGENT IS A FACE OF THE SAME DROPDOWN. Tapping an agent box opens
- * that agent in the main area and the dropdown then READS ITS NAME, so the way
- * back to the conversation is the control the reader already used to get here —
- * there is no other navigation on this page to offer them.
- *
- * ⚠ IT RENDERS NOTHING OF ITS OWN. The three bodies arrive as nodes from the
- * surface that already wired them; this file owns the switcher, the header and
- * which body is on screen.
+ * The web's one-column layout of `channel-surface.tsx`: the desktop's tab faces, full width, behind a header
+ * dropdown (Channel · Info · Threads · Agents · Settings, plus the open agent). It renders no body of its own.
  */
 
 import type { ReactNode } from "react";
-// ⚠ CROSS-FEATURE, on the same recorded exception `message-pane-header.tsx` and
-// `agents-wells.tsx` carry (INVARIANTS §1, F-275): the type Samuel names is read
-// by POINTING AT IT rather than re-typed.
+// Cross-feature import by recorded exception (INVARIANTS §1, F-275).
 import { IDENTITY_NAME_TEXT } from "@/features/agent-identities/components/identity-section";
 import { cn } from "@/shared/lib/utils";
 import { SelectMenu, type SelectMenuOption } from "@/shared/ui/select-menu";
@@ -68,8 +38,7 @@ export function ChannelSingleColumn({
   channelName: string;
   /** The open thread's title, or `null` in channel view — the crumb's second half. */
   threadTitle: string | null;
-  /** ⚠ THREADS LEAVES THE LIST WITH A THREAD OPEN, exactly as it leaves the
-   *  desktop's tab row (`channelPaneTabs` owns that rule — one derivation). */
+  /** Threads leaves the list with a thread open (`channelPaneTabs` owns that rule). */
   threadView: boolean;
   favorited: boolean;
   onToggleFavorite: () => void;
@@ -81,11 +50,7 @@ export function ChannelSingleColumn({
   /** This machine's session feed — read ONLY to name the open agent. */
   sessions: readonly DesktopSessionSummary[] | null;
   onCloseAgent: () => void;
-  /**
-   * The transcript + composer, ASKED FOR THE DROPDOWN. A function because the
-   * control belongs INSIDE that pane's own header when the channel is the face
-   * on screen — the header is the pane's, and there must not be two of them.
-   */
+  /** Transcript + composer, given the dropdown to place in its own header — one header, not two. */
   messagePane: (viewSelect: ReactNode) => ReactNode;
   /** The Info / Threads / Agents / Settings body for `view`, full width. */
   tabBody: ReactNode;
@@ -94,9 +59,7 @@ export function ChannelSingleColumn({
 }) {
   const openSession =
     (openAgent && sessions?.find((s) => agentKey(s) === openAgent)) || null;
-  // ⚠ THE AGENT WINS OVER `view`, and it has to: an agent can be opened from the
-  // TRANSCRIPT's sender pill as well as from an agent box, so "an agent is open"
-  // is the more specific answer to what is on screen.
+  // The open agent wins over `view`: it can also be opened from a transcript sender pill.
   const face: Face = openSession ? "agent" : view;
 
   const options: ReadonlyArray<SelectMenuOption<Face>> = [
@@ -105,8 +68,7 @@ export function ChannelSingleColumn({
       value: t.key as Face,
       label: t.label,
     })),
-    // The open agent, so the trigger can READ ITS NAME. Listing it is what makes
-    // "where am I" and "where can I go" one control instead of two.
+    // Listed so the trigger reads the open agent's name.
     ...(openSession
       ? [{ value: "agent" as Face, label: agentDisplayName(openSession) }]
       : []),
@@ -117,15 +79,8 @@ export function ChannelSingleColumn({
       value={face}
       options={options}
       ariaLabel="Channel view"
-      // ⚠ THE `flat` FACE, which is what this control wears everywhere else in
-      // the app (`select-menu.tsx`) — the header gets no bespoke trigger.
-      // ⚠ **THE TYPE IS THE CHANNEL NAME'S SINCE 2026-09-13** (Samuel: *"the
-      // dropdown and the name of the channel should be that font styling"*) —
-      // `IDENTITY_NAME_TEXT` by import, the /home **Credit spend** face, which
-      // `message-pane-header.tsx` puts on the name this trigger sits beside. A
-      // caller `className` outranks `TRIGGER_FACE.flat`'s `text-caption` /
-      // `text-text-secondary` inside `cn` (`tailwind-merge`, later wins), so the
-      // PILL — border, fill, padding, hover — is untouched and only the type moves.
+      // The channel name's `IDENTITY_NAME_TEXT` by import, never re-typed (docs/DESIGN-SYSTEM.md);
+      // a caller `className` outranks `select-menu.tsx › TRIGGER_FACE.flat`'s type in `cn`.
       className={cn("max-w-[45%]", IDENTITY_NAME_TEXT)}
       onChange={(next) => {
         // Picking the agent you are already looking at is not a navigation.
@@ -140,15 +95,10 @@ export function ChannelSingleColumn({
 
   return (
     <section className="flex min-w-0 flex-1 flex-col">
-      {/* ⚠ THE SAME HEADER THE TRANSCRIPT WEARS — crumb, bookmark, dropdown —
-          so switching faces moves the body and nothing else. A second header
-          shape here would make the page appear to navigate. */}
+      {/* The transcript's own header, so switching faces moves only the body. */}
       <PaneHeader
         channelName={channelName}
-        // ⚠ ONE FACE ONLY. The info face carries its own "Name" row now, so the
-        // crumb above it was the same string twice; every other face here —
-        // conversation included — still needs the crumb to say which room this
-        // is. In a thread the prop is ignored: that crumb is the way back out.
+        // The info face names the channel itself.
         hideChannelCrumb={view === "info"}
         threadTitle={threadTitle}
         favorited={favorited}

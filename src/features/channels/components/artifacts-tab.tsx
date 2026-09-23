@@ -1,27 +1,8 @@
 "use client";
 
 /**
- * Channels — the threads panel's ARTIFACTS FACE: this channel's folded runs as
- * named cards, each openable read-only (Samuel, 2026-09-16: *"list shows this
- * channel's artifacts (named cards, openable — clicking one opens the folded run,
- * read-only)"*).
- *
- * ⚠ **IT IS THE OTHER FACE OF THE THREADS TAB, NOT A SIXTH TAB.** The tab row is
- * on a measured width budget for four options (`info-panel.tsx`), and an artifact
- * is a thread formed after the fact — the two lists answer the same question
- * ("what runs happened here") from opposite ends, so they share one slot and one
- * toggle. `threads-tab.tsx` owns the toggle control; this file owns the face.
- *
- * ⚠ **NO WRITES ON THIS SURFACE, AND NOT BECAUSE NOBODY GOT TO THEM.** Folding is
- * a decision made over messages in the transcript (`op="artifact"`), so there is
- * nothing here to create FROM — which is also why the New thread button hides
- * behind this face rather than sitting over a list it cannot add to. Dissolve is
- * creator-only and destructive-looking; neither belongs in a browse list.
- *
- * ⚠ **THE CARD IS `artifact-card.tsx`, THE SAME ONE THE TRANSCRIPT DRAWS.** An
- * artifact that read one way inline and another way here would be two answers about
- * one row; what differs is only WHERE the members come from — the transcript can
- * show just the page's, this face reads the whole run.
+ * The Threads tab's artifacts face: this channel's folded runs as cards, each openable read-only.
+ * No writes here — folding happens over messages in the transcript (`op="artifact"`).
  */
 
 import { useState } from "react";
@@ -37,68 +18,29 @@ import { labelFor, type AuthorIndex } from "./view-model";
 import type { ArtifactMember } from "./view-model-artifacts";
 import type { ChannelFoldedArtifact, ChannelMessage } from "../types";
 
-/**
- * THIS TAB'S PERSISTED OPEN STATE — per device, and **NOT the Threads tab's
- * `dopl.threads.wells`**: collapsing **Earlier** over artifacts is not a
- * statement about threads (`well-state.ts` carries the one-key-per-surface rule).
- */
+/** This face's own wells key — never shared with `dopl.threads.wells`. */
 export const ARTIFACT_WELLS_STORAGE_KEY = "dopl.artifacts.wells";
 
-/**
- * WHEN THIS ARTIFACT WAS FOLDED, as the wells' epoch stamp — or `null`.
- *
- * ⚠ **`createdAt` IS THE ONLY DATE AN ARTIFACT HAS, AND THAT IS THE POINT.** The
- * Threads tab files a row by its LAST ACTIVITY because a thread keeps moving; a
- * folded run does not, so this dates the FOLD. `null` files it under **Earlier**
- * (`recency-wells.tsx › wellFor`), which is the honest place for a row whose
- * stamp is missing or unparseable — never **Recent**.
- * ⚠ **THE SAME SHAPE AS `threads-tab.tsx › threadActivityAt`**, deliberately: one
- * date, parsed once, `NaN` treated as absent.
- */
+/** Fold time (epoch ms) from `createdAt`, an artifact's only date; `null` (absent/unparseable) lands in Recent. */
 export function artifactFoldedAt(folded: ChannelFoldedArtifact): number | null {
   if (!folded.artifact.createdAt) return null;
   const ts = new Date(folded.artifact.createdAt).getTime();
   return Number.isNaN(ts) ? null : ts;
 }
 
-/**
- * THE LIST'S CLIP WORDING — the family's fourth, beside `threads-tab.tsx ›
- * THREADS_CLIPPED_NOTE`, and its own for the same reason that one is: the REMEDY
- * differs. This face has no page argument and no deeper read, so it may state only
- * what IS on screen — the newest cards, and that the order is when they were made.
- *
- * ⚠ IT MAY NOT ASSERT IN EITHER DIRECTION (INVARIANTS §9): not "that is all of
- * them", because a page AT the ceiling is indistinguishable from one over it.
- */
+/** Clip note: asserts neither direction — a page at the ceiling counts as clipped (INVARIANTS §9). */
 export const ARTIFACTS_CLIPPED_NOTE =
   "Showing the most recently created artifacts, up to this list's limit. Nothing here was deleted; anything not listed is simply below the cut.";
 
-/** Nothing folded here yet. ⚠ Says how one is MADE, because there is no control
- *  on this face that makes one — see the file's docblock. */
+/** Says how an artifact is made, since this face has no control that makes one. */
 export const ARTIFACTS_EMPTY_NOTE =
   "No artifacts in this channel yet. An artifact is made by folding messages in the transcript.";
 
-/**
- * THE READ DID NOT ANSWER — one line for BOTH arms, and the reason it exists at all.
- *
- * ⚠ **"COULD NOT ASK" AND "ASKED, NOTHING IS THERE" ARE DIFFERENT FACTS** (the rule
- * `agents-tab.tsx` states for its own surface, and INVARIANTS §9's no-silent-assertion
- * half). Both hooks return an `error` and this face dropped it, so a 403 — a reader
- * whose access went away mid-session — an offline desktop and a 500 all rendered
- * `ARTIFACTS_EMPTY_NOTE`: a positive claim about the channel, made from a failure to
- * ask it. Found reviewing wave 2, which put this face on a SECOND host (R-16).
- * ⚠ IT NAMES NO REMEDY, because there is no control here that retries; the face
- * re-reads when the panel does.
- */
+/** A failed read, kept distinct from "asked, nothing there" (INVARIANTS §9). */
 export const ARTIFACTS_UNREAD_NOTE =
   "Could not load this channel's artifacts.";
 
-/**
- * ⚠ A DISSOLVED CARD IS ABSENT, AND SO IS ONE THAT FOLDED NOTHING — the SERVER's
- * rule (`service-artifacts-list.ts › listChannelArtifacts`, which carries why). Named
- * here because it explains a face that never renders a member-less card; it is
- * NOT re-applied below, because a second copy of a rule is a second thing to drift.
- */
+/** Dissolved and member-less artifacts are dropped server-side (`service-artifacts-list.ts › listChannelArtifacts`). */
 export function ArtifactsTab({
   channelId,
   workspaceId,
@@ -106,8 +48,7 @@ export function ArtifactsTab({
 }: {
   channelId: string;
   workspaceId: string;
-  /** The roster index the transcript uses — so a folded message's author reads
-   *  "You" here exactly as it does one row up. */
+  /** The transcript's roster index, so authors read the same ("You") here. */
   index: AuthorIndex;
 }) {
   const [openId, setOpenId] = useState<string | null>(null);
@@ -119,8 +60,7 @@ export function ArtifactsTab({
   const open = artifacts.find((a) => a.artifact.id === openId) ?? null;
 
   return (
-    /* ⚠ NO TOP PADDING, DELIBERATELY: the toggle row above this body owns the
-       face's top gap (`threads-tab.tsx`), and a `pt-4` here would stack with it. */
+    /* No top padding: the toggle row in `threads-tab.tsx` owns the face's top gap. */
     <div className="min-h-0 flex-1 overflow-y-auto px-3.5 pb-6">
       {open ? (
         <OpenArtifact
@@ -132,8 +72,6 @@ export function ArtifactsTab({
         />
       ) : (
         <>
-          {/* ⚠ THE CLIP NOTE SITS ABOVE THE ROWS, never in a footer a skimmer
-              drops — the same placement `threads-tab.tsx` argues for. */}
           {truncated && (
             <p className="mb-3 rounded-[8px] border border-border-default bg-card-surface-subtle px-2.5 py-2 text-caption text-text-secondary">
               {ARTIFACTS_CLIPPED_NOTE}
@@ -144,9 +82,7 @@ export function ArtifactsTab({
               Loading artifacts
             </p>
           ) : error && artifacts.length === 0 ? (
-            /* ⚠ THE FAILURE BEATS THE EMPTY CLAIM, and only when there is nothing
-               to show: a refetch that fails over a list already on screen must
-               not replace it with a sentence (`keepPreviousData`). */
+            /* Only with nothing on screen: a failed refetch keeps the previous list. */
             <p
               role="status"
               className="px-1 pt-4 text-center text-caption text-text-muted"
@@ -158,25 +94,6 @@ export function ArtifactsTab({
               {ARTIFACTS_EMPTY_NOTE}
             </p>
           ) : (
-            /* 🔒 **THE FOUR WELLS, LIKE THE THREADS TAB** (Samuel, 2026-09-20:
-               *"We should be adding the same Recent, Last 7 Days, and Last 30 Days
-               boxes into the artifacts page as well and doing the same thing
-               there"*).
-               🔒 **IT WAS A FLAT COLUMN, AND THE ARGUMENT AGAINST WELLS IS
-               ANSWERED RATHER THAN FORGOTTEN.** This branch read: *an artifact is a
-               record of a run that already happened and never moves again, so
-               recency wells would file a card by the day somebody folded it and
-               call that news.* True about the CARD and beside the point about the
-               LIST — the operator is asking "what has been folded lately", and the
-               fold date is exactly the answer to it. A well is about TIME, never
-               about state (`recency-wells.tsx`), and "when this was folded" is a
-               time.
-               ⚠ **`artifact.createdAt` IS THE STAMP** — when the fold happened,
-               which is the only date an artifact has. The Threads tab dates its
-               rows by last activity because a thread keeps moving; this one cannot
-               and must not pretend to.
-               ⚠ **ITS OWN `localStorage` KEY**: collapsing Earlier here is not a
-               statement about the Threads tab (`well-state.ts`). */
             <RecencyWells
               storageKey={ARTIFACT_WELLS_STORAGE_KEY}
               items={artifacts.map(
@@ -199,14 +116,7 @@ export function ArtifactsTab({
   );
 }
 
-/**
- * ONE ROW IN THE LIST — name, summary, and the span the card carries.
- *
- * ⚠ THE ACTION IS THE LAST ROW, RIGHT-ALIGNED, in the same corner the thread card
- * and the agent card put theirs (Samuel, 2026-08-24). ⚠ THE SPAN IS THE SHARED
- * DERIVATION (`artifact-card.tsx › artifactSpanLabel`), never re-spelled: the list
- * and the opened card must print one artifact's numbers identically.
- */
+/** One list row; the span is `artifactSpanLabel`, shared with the opened card. */
 function ArtifactListCard({
   folded,
   onOpen,
@@ -237,18 +147,7 @@ function ArtifactListCard({
   );
 }
 
-/**
- * THE OPENED CARD — the folded run, READ-ONLY.
- *
- * ⚠ **READ-ONLY IS A PROPERTY OF WHAT IS RENDERED, NOT A FLAG PASSED DOWN.**
- * `ArtifactCard` takes no handler and mounts no control but its own Show more, so
- * there is nothing here that could write; a `readOnly` prop would imply the other
- * mode exists.
- *
- * ⚠ THE MEMBER CEILING IS THE SERVER'S AND IS SAID OUT LOUD — a clipped run that
- * renders like a whole one is the bug (INVARIANTS §9). It is a DIFFERENT bound from
- * the list's, so it gets its own sentence rather than the list's note.
- */
+/** The opened run, read-only by construction (`ArtifactCard` mounts no write control). */
 function OpenArtifact({
   folded,
   channelId,
@@ -296,10 +195,7 @@ function OpenArtifact({
           shown.
         </p>
       )}
-      {/* ⚠ THE CARD STILL DRAWS — its name, summary and SPAN are the LIST's payload
-          and are not in doubt. What failed is the members read, and a card printing
-          "3 messages" over an empty body without saying so is the same false claim
-          the list note is written against. */}
+      {/* The card's list payload still draws; only the members read failed, so say so. */}
       {error && messages.length === 0 && (
         <p role="status" className="text-caption text-text-muted">
           {ARTIFACTS_UNREAD_NOTE}
@@ -309,16 +205,7 @@ function OpenArtifact({
   );
 }
 
-/**
- * THE WIRE'S MESSAGES → THE CARD'S MEMBERS.
- *
- * ⚠ **IT IS THE TRANSCRIPT'S OWN TWO DERIVATIONS, ASKED RATHER THAN RE-WRITTEN** —
- * `view-model.ts › labelFor` for the author ("You" for the viewer) and
- * `format-time.ts › formatChannelTimestamp` for the stamp. A local spelling of
- * either is how the same message comes to read differently in two places.
- * ⚠ The server already returns them in seq order (`listMessagesByArtifact`), so
- * this does not re-sort: a second ordering is a second thing to disagree.
- */
+/** Wire messages → card members via the transcript's own `labelFor`/`formatChannelTimestamp`; server seq order kept. */
 function members(
   messages: ChannelMessage[],
   index: AuthorIndex

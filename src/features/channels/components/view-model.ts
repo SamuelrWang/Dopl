@@ -1,13 +1,5 @@
-/**
- * Channels — the PURE derivations behind the three columns: functions of what
- * the read hooks already return. No fetching, no React, which is what lets the
- * sidebar, transcript and thread list be asserted without mounting a tree.
- *
- * The BASE layer: metadata readers, roster index, presence, display names, the
- * sidebar's channel split. Built ON it — `view-model-rows.ts` (the transcript's
- * row union) and `view-model-requested.ts`; both import from here, nothing here
- * from either.
- */
+/** Channels — pure base readers for the three columns (no fetching, no React). Built on by
+ *  `view-model-rows.ts` and `view-model-requested.ts`; nothing here imports either. */
 
 import { PRESENCE_ONLINE_WINDOW_MS } from "../constants";
 import { isSpaRenderer } from "@/shared/lib/spa-bridge";
@@ -19,9 +11,6 @@ import {
   type ChannelEscalation,
   type ChannelEscalationAnswer,
 } from "../escalation";
-// ⚠ THE ONE MEMBERSHIP TEST FOR A COLOUR KEY, imported rather than re-spelled: the
-// value reaches this file off a peer's machine and out of a serialized memo key, and
-// `lib/agent-colors.ts` states what "a key" means once.
 import { agentColorOrNull } from "../lib/agent-colors";
 import type {
   AgentColorKey,
@@ -32,50 +21,26 @@ import type {
 } from "../types";
 import type { AvatarPerson } from "@/shared/ui/avatar";
 
-/**
- * The thread a message belongs to, or null for a channel-level post.
- *
- * ⚠ Deliberately a LOCAL reader, not an import from the session-card machinery,
- * which was DELETED in wiring plan Phase 5 (2026-08-18). The `metadata.taskId`
- * key is the storage-boundary name (INVARIANTS §5).
- */
+/** A message's thread, or null; `metadata.taskId` is its storage key (INVARIANTS §5). */
 export function threadIdOf(message: ChannelMessage): string | null {
   const value = message.metadata.taskId;
   return typeof value === "string" && value.length > 0 ? value : null;
 }
 
-/**
- * The REQUEST FAN-OUT group a thread's opening message belongs to, or null.
- *
- * ⚠ Reserved, server-stamped metadata (`server/service-writes-metadata.ts ›
- * resolvePostMetadata`) — a caller-settable group id would let a member draw
- * their own thread inside somebody else's request.
- *
- * ⚠ Absent means "a group of one", never "unknown" — one thread, one card.
- */
+/** A thread opener's fan-out group, or null (a group of one). Server-stamped and reserved
+ *  (`server/service-writes-metadata.ts › resolvePostMetadata`), so no member can forge one. */
 export function fanoutGroupOf(message: ChannelMessage): string | null {
   const value = message.metadata.fanoutGroup;
   return typeof value === "string" && value.length > 0 ? value : null;
 }
 
-/**
- * THE STRUCTURED ESCALATION on a message, or `null` for every other row.
- *
- * ⚠ RESERVED, SERVER-STAMPED metadata (`server/service-writes-metadata.ts ›
- * resolvePostMetadata`, fold 10) — a caller-settable value would let any member
- * hang a working control, and a wake behind it, off any words at all.
- *
- * ⚠ `null` IS THE ORDINARY ANSWER: the caller renders the row's BODY, which
- * carries the same four fields in prose (`escalation.ts › escalationBody`).
- * §8's stale-cache rule holds by construction — it reads `message.metadata[key]`,
- * never a nested field.
- */
+/** The structured escalation on a message, or null (the body carries it in prose). Reserved and
+ *  server-stamped: a caller-set value would hang a working control, and a wake, off any words. */
 export function escalationOf(message: ChannelMessage): ChannelEscalation | null {
   return parseEscalation(message.metadata[ESCALATION_METADATA_KEY]);
 }
 
-/** THE ANSWER on a message, or `null`. Same reserved terms, same never-throws
- *  parse; `agentId` on it is the server's derivation and is never rendered. */
+/** The escalation answer on a message, or null; its `agentId` is server-derived, never rendered. */
 export function escalationAnswerOf(
   message: ChannelMessage
 ): ChannelEscalationAnswer | null {
@@ -86,90 +51,42 @@ export function escalationAnswerOf(
 export interface AuthorIndex {
   currentUserId: string;
   byId: ReadonlyMap<string, ChannelMember>;
-  /**
-   * MY OWN LIVE AGENTS, by instance id — what each is CALLED right now and what it is FOR
-   * (2026-08-27, Samuel's rename-propagation ruling).
-   *
-   * ⚠ RESOLVED AT RENDER, NEVER STAMPED AT SEND: a name is machine-local (`main/agent-names.js`)
-   * and mutable, and no message row carries one. The fix for "a rename does not reach the chat
-   * area" — `attribution-pill.tsx › attributionName` had hardcoded `Agent #<id>`, which is also
-   * what an empty map (web tree, pop-out — no desktop feed) still reads.
-   */
+  /** Agents by instance id (own desktop feed + peer projection); names resolve at render,
+   *  never stamped at send. */
   agents: ReadonlyMap<string, AgentRosterEntry>;
 }
 
-/** What the operator calls one of their agents, and what they said it is for. Both `null` when
- *  never set — the ordinary case, and the caller renders the ABSENCE (INVARIANTS §11). */
+/** An agent's name and purpose; `null` when never set — render the absence (INVARIANTS §11). */
 export interface AgentRosterEntry {
   displayName: string | null;
   description: string | null;
-  /**
-   * HAS THIS SESSION STOPPED — decides whether its handle still TINTS (Samuel, 2026-09-06: an
-   * un-highlighted tag is how a reader learns nobody is there).
-   *
-   * ⚠ **THE ROW STAYS IN THIS MAP EITHER WAY** — ended agents are kept for ATTRIBUTION
-   * (`transcript.tsx`'s openable gate is `index.agents.has(...)`). Only the HANDLE namespace
-   * narrows: {@link addressableAgents} in `lib/agent-mentions.ts`.
-   *
-   * ⚠ **A BOOLEAN, NEVER THE THREE-VALUED `state`, BECAUSE THIS RIDES THE MEMO KEY** —
-   * `working` ⇄ `idle` churn must not move it (the 2026-08-28 re-render fix); ending is
-   * terminal. ⚠ **ABSENT IS NOT ENDED**: a host with no `state` on its rows reads live.
-   */
+  /** The session stopped (its handle stops tinting; the entry stays for attribution). A boolean,
+   *  not `state`, because it rides the memo key; absent is live. */
   ended?: boolean;
-  /**
-   * **THE COLOUR THIS AGENT WEARS IN THIS CHANNEL** (Samuel, 2026-09-13;
-   * docs/specs/agent-colors.md) — the key, never paint. `agent-box-rule.ts ›
-   * agentPostAccent` turns it into a `var(--agent-color-NN)` and nothing else does.
-   *
-   * ⚠ **RESOLVED AT RENDER OFF THE LIVE PROJECTION, EXACTLY LIKE {@link displayName}**,
-   * and for a STRONGER version of the same reason: a colour is not merely mutable, it is
-   * RECLAIMED. The key returns to the channel's bank when the session ends
-   * (`20261005120000_agent_session_colors.sql`'s index predicate), so a colour stamped
-   * on a message would keep painting a hue another member's agent now owns — two
-   * different agents in one transcript wearing one colour, which is the single thing
-   * Samuel's ruling forbids. Nothing writes a colour onto a message row, ever.
-   *
-   * ⚠ **SO AN ENDED AGENT READS AS `null` HERE AND ITS OLD POSTS GO NEUTRAL**, which is
-   * the ruling rather than a side effect: *"once the agent has ended, that color needs to
-   * be returned to the color bank"*. The row STAYS in this map for attribution (see
-   * {@link ended}); only the colour leaves.
-   *
-   * ⚠ **IT RIDES THE MEMO KEY** ({@link agentIndexKey}) because the map is rebuilt FROM
-   * that string — a colour left off it would be dropped on the round trip, the same bug
-   * {@link ended} carries a warning about. Churn-safe for the same reason: a colour moves
-   * on assignment and on ending, never on `working` ⇄ `idle`.
-   */
+  /** Colour key in this channel, resolved at render and never stamped on a message: it returns
+   *  to the channel's bank when the session ends, so an ended agent reads `null`. */
   color?: AgentColorKey | null;
 }
 
-/** ⚠ ONE EMPTY MAP, not a fresh `new Map()` per call: `AuthorIndex` is a `useMemo` dependency of
- *  the transcript's row build, and a new identity every render would re-derive every row. */
+/** Shared empty map: `AuthorIndex` is a memo dependency, so a fresh map would re-derive rows. */
 const NO_AGENTS: ReadonlyMap<string, AgentRosterEntry> = new Map();
 
 export function indexMembers(
   members: ChannelMember[],
   currentUserId: string,
-  /** ⚠ OPTIONAL, so the surfaces with no desktop feed (`thread-window.tsx`) are unchanged. */
+  /** Omitted by surfaces with no desktop feed (`thread-window.tsx`). */
   agents: ReadonlyMap<string, AgentRosterEntry> = NO_AGENTS
 ): AuthorIndex {
   return { currentUserId, byId: new Map(members.map((m) => [m.userId, m])), agents };
 }
 
-/** The field and row separators, written as ESCAPES — never as literal bytes in this file.
- *
- *  ⚠ CONTROL CHARACTERS ON PURPOSE, not `|` or `:`. A display name is operator prose, so any
- *  printable delimiter is forgeable (`"a"` + `"|b"` vs `"a|"` + `"b"`). These two are refused at
- *  the WRITE end by `main/agent-names.js › sanitizeName` and `› sanitizeDescription`. */
+/** Control-character separators: any printable one is forgeable in a display name. The desktop
+ *  refuses these at write (`main/agent-names.js › sanitizeName` / `› sanitizeDescription`). */
 const KEY_FIELD_SEP = "\u0000";
 const KEY_ROW_SEP = "\u0001";
 
-/**
- * THE IDENTITY CONTENT OF AN AGENT INDEX, as one comparable string.
- *
- * ⚠ THE FEED IS PACED BY TELEMETRY AND THIS INDEX HOLDS ONLY NAMES — a rename or a describe moves
- * this string; `lastActivityAt` / `tokensSpent` / `contextUsed` do not. Whole argument:
- * `derivations.ts › useChannelsDerivations`, its only caller.
- */
+/** An agent index as one comparable string, so a memo keyed on it survives telemetry pushes;
+ *  fields that churn (`lastActivityAt`, `tokensSpent`, `contextUsed`) must never ride it. */
 export function agentIndexKey(agents: ReadonlyMap<string, AgentRosterEntry>): string {
   const parts: string[] = [];
   for (const [agentId, entry] of agents) {
@@ -178,12 +95,9 @@ export function agentIndexKey(agents: ReadonlyMap<string, AgentRosterEntry>): st
         agentId,
         entry.displayName ?? "",
         entry.description ?? "",
-        // ⚠ IT MUST RIDE THE KEY OR THE ROUND TRIP DROPS IT (a dead agent's tag tinting again) —
-        // the transcript's map is rebuilt FROM this string. Churn-safe: {@link AgentRosterEntry.ended}.
+        // `ended` and `color` must ride the key: the transcript's agent map is rebuilt FROM this
+        // string, and dropping them re-tints dead agents / loses colours.
         entry.ended ? "1" : "",
-        // ⚠ THE COLOUR RIDES IT FOR THE IDENTICAL REASON, and it is the field that makes
-        // the round trip VISIBLE when it breaks: a dropped colour is a whole transcript
-        // of neutral boxes, where a dropped `ended` is one tag tinted wrong.
         entry.color ?? "",
       ].join(KEY_FIELD_SEP)
     );
@@ -191,14 +105,8 @@ export function agentIndexKey(agents: ReadonlyMap<string, AgentRosterEntry>): st
   return parts.join(KEY_ROW_SEP);
 }
 
-/**
- * {@link agentIndexKey}'S INVERSE — the map back out of the key.
- *
- * ⚠ THE PAIR MAKES THE MAP'S IDENTITY A FUNCTION OF ITS CONTENT — the fix `derivations.ts ›
- * useChannelsDerivations` describes: a `useMemo` keyed on that string is referentially stable
- * across telemetry pushes that touched no name, with no render-phase cache (`react-hooks/refs`
- * forbids those). An empty key is {@link NO_AGENTS}, the shared instance.
- */
+/** {@link agentIndexKey}'s inverse, so the map's identity is a function of its content without a
+ *  render-phase cache (`react-hooks/refs`). An empty key is the shared {@link NO_AGENTS}. */
 export function agentIndexFromKey(key: string): ReadonlyMap<string, AgentRosterEntry> {
   if (key === "") return NO_AGENTS;
   const out = new Map<string, AgentRosterEntry>();
@@ -209,37 +117,24 @@ export function agentIndexFromKey(key: string): ReadonlyMap<string, AgentRosterE
       displayName: displayName || null,
       description: description || null,
       ended: ended === "1",
-      // ⚠ NARROWED, NOT TRUSTED — this half of the round trip parses a STRING that was
-      // built from a peer's projection, so an unknown key must read as "no colour" (the
-      // neutral box) rather than reach a `var(--agent-color-…)` that resolves to nothing
-      // and paints an INVISIBLE border. `lib/agent-colors.ts › agentColorOrNull` is the
-      // one membership test, stated once.
+      // Narrowed, not trusted: an unknown peer key reads as no colour, not an invisible border.
       color: agentColorOrNull(color),
     });
   }
   return out;
 }
 
-/**
- * The desktop feed -> {@link AuthorIndex.agents}. ⚠ Reads off a WIDENED LOCAL type, not
- * `spa-bridge.ts › DesktopSessionSummary`: that type is the DESKTOP's to widen and this side must
- * behave against either version — the rule `agents-model.ts › agentRunningModel` follows.
- */
+/** Agent feeds → {@link AuthorIndex.agents}, last write wins per id. A widened local type, not
+ *  `spa-bridge-shapes.ts › DesktopSessionSummary`, so either desktop version works. */
 export function indexAgents(
   sessions: ReadonlyArray<{
     agentId?: string | null;
     displayName?: string | null;
     description?: string | null;
-    /** The pill (`spa-bridge-shapes.ts › DesktopSessionSummary.state`), read ONLY for
-     *  {@link AgentRosterEntry.ended}. Optional on the same widened-local-type rule as the rest. */
+    /** Read only for {@link AgentRosterEntry.ended}. */
     state?: string | null;
-    /** THE COLOUR KEY off the projection (2026-09-13). ⚠ `unknown` RATHER THAN
-     *  `AgentColorKey | null | undefined`, ALONE AMONG THESE FIELDS, and deliberately:
-     *  the other four are strings this function only trims, while this one is narrowed
-     *  against a CLOSED SET — typing it as the union here would make
-     *  {@link agentColorOrNull}'s refusal branch unreachable to the compiler and delete
-     *  it at the first cleanup, which is the bug the widened-local-type rule above is
-     *  itself about. Both host trees (desktop feed, peer projection) satisfy it. */
+    /** `unknown` on purpose: a union type would make {@link agentColorOrNull}'s refusal
+     *  branch look unreachable to the compiler. */
     color?: unknown;
   }> | null
 ): ReadonlyMap<string, AgentRosterEntry> {
@@ -249,78 +144,36 @@ export function indexAgents(
     const id = typeof session.agentId === "string" ? session.agentId.trim() : "";
     if (!id) continue;
     const ended = session.state === "ended";
-    // ⚠ **AN INCOMING ROW THAT REPORTS NO COLOUR MUST NOT DELETE ONE ALREADY INDEXED**,
-    // and this is the SAME precedence rule `lib/live-agents.ts › liveAgentsKey` states for
-    // `displayName` (`||`, never `??`) — applied to the field where getting it wrong is
-    // invisible rather than merely wrong. `derivations.ts` feeds this PEERS FIRST, OWN
-    // LAST on last-write-wins, because the local feed's NAME is the fresher one; but the
-    // local feed is `spa-bridge-shapes.ts › DesktopSessionSummary`, which does not carry
-    // a colour at all (the desktop's own half of this wave is owed — see
-    // `main/session-state-push.js › reportRow`). Without this line the operator's OWN
-    // agents would be the only ones with no colour, because their peer-projection row —
-    // the one the SERVER assigned a key to — is overwritten by a local row that has
-    // never heard of colours. ⚠ AND IT IS SCOPED TO ABSENCE: an ENDED row still clears
-    // the key below, which is the bank rule and must beat any incumbent.
+    // A row with no colour must not clear one already indexed: the local feed (merged last)
+    // carries none, and would wipe the server-assigned key of the operator's own agents.
     const carried = out.get(id)?.color ?? null;
     out.set(id, {
       displayName: session.displayName?.trim() || null,
       description: session.description?.trim() || null,
       ended,
-      // ⚠ **AN ENDED SESSION IS FORCED TO `null` HERE RATHER THAN TRUSTED**, and this is
-      // the ruling's enforcement point rather than a tidy-up. The key is back in the
-      // channel's bank the moment the session stops, so a host that still reports one on
-      // an ended row (a desktop mid-teardown, a cached payload) would paint a hue another
-      // member's agent may already own. Dropping it here means the NEUTRAL box is what an
-      // ended agent's history wears, in every tree, whatever the feed says.
+      // An ended session's key is back in the bank, whatever the feed still reports.
       color: ended ? null : (agentColorOrNull(session.color) ?? carried),
     });
   }
   return out;
 }
 
-/**
- * Presence — **THE SERVER'S VERDICT, READ OFF THE DTO** (2026-09-08, Samuel).
- *
- * ⚠ **RE-DERIVING IT HERE WAS ONE OF THE FOUR CAUSES OF THE REPORTED FLICKER.**
- * `lastSeenAt` goes stale at exactly the rate `agentOnline` does (same payload),
- * so re-deriving only re-decides an old fact on a NEWER clock; and `away` is never
- * on the wire, so a client cannot agree with the server's `online` at all.
- *
- * ⚠ **THE `lastSeenAt` ARM IS FOR ONE CASE ONLY: A STALE CACHED PAYLOAD WITH NO
- * `agentOnline` FIELD** (INVARIANTS §8) — never for a row that HAS the flag.
- * ⚠ **`now` STAYS A PARAMETER** so that arm is testable without faking a clock.
- */
+/** The server's `agentOnline` verdict; the `lastSeenAt` arm is only for a stale cached payload
+ *  without the flag (INVARIANTS §8). */
 export function isPresent(
-  /** ⚠ WIDENED LOCAL TYPE, not `Pick<ChannelMember, …>`: `agentOnline` is
-   *  non-optional in the DTO, so typing it as required would make the fallback
-   *  branch unreachable to the compiler and delete it at the first cleanup. */
+  /** Widened local type: `agentOnline` is required in the DTO, which would hide the fallback. */
   member: { agentOnline?: boolean | null; lastSeenAt?: string | null },
   now: number = Date.now()
 ): boolean {
   if (typeof member.agentOnline === "boolean") return member.agentOnline;
-  // ── stale-cache fallback only, per the docblock ──
   if (!member.lastSeenAt) return false;
   const ts = new Date(member.lastSeenAt).getTime();
   if (Number.isNaN(ts)) return false;
   return now - ts < PRESENCE_ONLINE_WINDOW_MS;
 }
 
-/**
- * PRESENCE FOR ONE ROSTER ROW, WITH THE VIEWER'S OWN ROW FORCED ONLINE IN THE
- * DESKTOP APP (2026-09-08, Samuel: *"slack's active versus inactive is based on
- * whether or not the user's desktop app is open and their device is on … we
- * should mirror that"*).
- *
- * ⚠ **THE APP BEING OPEN *IS* THE DEFINITION, SO THE VIEWER'S OWN DOT MUST NOT
- * BE A NETWORK ROUND TRIP** — if this SPA is rendering, the app is open and the
- * machine unlocked, so a late refetch can no longer make the operator watch
- * THEMSELF blink.
- *
- * ⚠ **DESKTOP ONLY, AND CAPABILITY-KEYED** (`isSpaRenderer()`, §7's rule — never
- * a truthiness check on `window.dopl`, whose partial legacy-wrapper form must
- * take the WEB path). ⚠ **IT LIES ABOUT NOBODY ELSE** — keyed on
- * `index.currentUserId`, one row.
- */
+/** Presence, with the viewer's own row always online in the desktop app (the app being open is
+ *  the definition). Keyed on `isSpaRenderer()`, never `window.dopl` truthiness (§7). */
 export function isPresentForViewer(
   member: {
     userId: string;
@@ -346,21 +199,8 @@ export function memberPerson(member: ChannelMember): AvatarPerson {
   };
 }
 
-/**
- * THE VIEWER AS AN `AvatarPerson`, RESOLVED OFF THE TRANSCRIPT THEY ARE ALREADY
- * READING (Samuel, 2026-08-27 — the agent stream's own turns wear their face).
- *
- * ⚠ IT IS THE TRANSCRIPT AND NOT THE ROSTER: its two callers — `agent-panel.tsx`
- * and `agent-window.tsx` — hold `messages` and no roster, so a roster read there
- * would be a new fetch and a new way for a pop-out to disagree with the page.
- *
- * ⚠ `null` IS "CANNOT SAY", AND THE CALLER MUST RENDER IT AS ABSENCE
- * (INVARIANTS §11 — unknown is not empty).
- *
- * ⚠ THE NAME COMES ONLY FROM A `user` ROW: `authorName` on an AGENT row is the
- * agent's display and would give the wrong initial. The avatar URL is safe from
- * either, hydration being by user id.
- */
+/** The viewer, read off the transcript (callers hold no roster); `null` is "cannot say"
+ *  (INVARIANTS §11). The name comes only from a `user` row — an agent row's is the agent's. */
 export function viewerPerson(
   messages: readonly ChannelMessage[],
   currentUserId: string
@@ -381,15 +221,7 @@ export function viewerPerson(
   return { userId: currentUserId, email: null, displayName, avatarUrl };
 }
 
-/**
- * An `AvatarPerson` for a message author, from the roster when it is there and
- * from the message's own hydrated display fields when it is not (a departed
- * member still owns their history).
- *
- * ⚠ MOVED HERE FROM `view-model-rows.ts` ON 2026-08-31, when the escalation card
- * split that file at the §1 cap — which is what lets `view-model-escalation.ts`
- * build a row without importing back through the rows module (a cycle).
- */
+/** An author's `AvatarPerson`: roster first, else the row's own fields (a departed member). */
 export function personFor(
   message: ChannelMessage,
   index: AuthorIndex
@@ -405,8 +237,7 @@ export function personFor(
   };
 }
 
-/** "You" for the viewer, else the roster name, else whatever the row carried.
- *  Moved here with {@link personFor}, for the same reason. */
+/** "You" for the viewer, else the roster name, else whatever the row carried. */
 export function labelFor(message: ChannelMessage, index: AuthorIndex): string {
   if (message.authorUserId === index.currentUserId) return "You";
   const member = message.authorUserId
@@ -417,8 +248,7 @@ export function labelFor(message: ChannelMessage, index: AuthorIndex): string {
   );
 }
 
-/** The two parties of a thread (INVARIANTS §5: one requester + one target),
- *  resolved through the roster; unknown ids are dropped rather than faked. */
+/** A thread's two parties (INVARIANTS §5), via the roster; unknown ids are dropped, not faked. */
 export function threadParties(
   thread: ChannelThread,
   index: AuthorIndex
@@ -435,11 +265,7 @@ export function threadParties(
 /** "Diana Taylor" → "Diana T."; the viewer is always "you". */
 export function shortName(person: AvatarPerson, currentUserId: string): string {
   if (person.userId === currentUserId) return "you";
-  // ⚠ `??` IS NOT ENOUGH. Both fields are free text a profile may legitimately
-  // carry BLANK, and `""` is not nullish — so `displayName ?? email ?? ""` kept
-  // the empty string and the row rendered as NOTHING: a party silently missing
-  // from a thread's byline. Pick the first source that actually SAYS something,
-  // and only then shorten it.
+  // First non-blank source: `""` is not nullish, so `??` would render nothing.
   const source = [person.displayName, person.email]
     .map((value) => (value ?? "").trim())
     .find((value) => value.length > 0);

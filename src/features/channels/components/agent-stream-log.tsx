@@ -1,35 +1,8 @@
 "use client";
 
 /**
- * THE QUIET LANE OF THE WORK STREAM — tool runs, status notes, and the agent's
- * own words (Samuel, 2026-08-27).
- *
- * ⚠ §1 SPLIT OUT OF `agent-stream.tsx`, and the seam is a real one rather than a
- * line count: that file owns WHICH LANE a row is in and what the two loud faces
- * look like (the sent box, the private exchange); this one owns the BULK — the
- * rows nobody reads most of the time — and its whole reason to change is how
- * much of that bulk is showing. The container file was at 470 of the 500-line
- * cap when the collapsed group landed, which is the cap doing its job: it named
- * a seam that was already there.
- *
- * ── THE RULING (Samuel, live review 2026-08-27) ──
- *
- * ⚠ CONSECUTIVE TOOL ACTIVITY IS **ONE GRAY ROW**, and the detail is behind it.
- * The stream rendered every tool call as its own row of raw JSON — `ToolSearch
- * {…}`, `dopl_channel {…}`, `runs […]` — so an agent doing ordinary work buried
- * the one thing the operator opened the panel to read. The Claude-Code-desktop
- * pattern is the answer: a muted "Used 4 tools" with a chevron, collapsed by
- * default, opening onto exactly the rows that used to be there.
- *
- * ⚠ COLLAPSED IS THE DEFAULT AND THE STATE IS PER GROUP. Not persisted: this is
- * a live log, the groups are keyed on frame identity, and a remembered "open"
- * for a run that has scrolled a thousand lines up answers nobody's question.
- *
- * ⚠ NOTHING IS DROPPED, AND THE EXPANDED ROW IS THE OLD ROW UNCHANGED — same
- * tool name, same payload, same "Show more" ceiling. A summary that hid a failed
- * call would be worse than the noise it replaced, which is why the count is real
- * (`agent-stream-model.ts › groupStreamItems`) and why a FAILURE still says so
- * on the row inside.
+ * The quiet lane of the work stream: log lines, with each run of consecutive tool activity collapsed
+ * into one "Used N tools" row that expands onto the unchanged rows (count from `groupStreamItems`).
  */
 
 import { useState } from "react";
@@ -37,51 +10,17 @@ import { ChevronDown, ChevronRight } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
 import { shortToolName, type StreamGroup, type StreamItem } from "./agent-stream-model";
 
-/** How much of a log line shows before the operator asks for more, and the
- *  ceiling on what asking gets them. ⚠ BOTH BOUNDED: a tool result can be a
- *  megabyte of JSON, and an "expand" that pastes all of it into a 380px column
- *  destroys the very stream it was meant to explain. */
+/** Collapsed preview length. Both bounds exist because a tool result can be megabytes of JSON. */
 const COLLAPSED_CHARS = 140;
-/**
- * THE EXPANDED CEILING — **and main is cut to the same number** (2026-08-27,
- * `main/session-narration.js › PROSE_CAP`; both 8000 since 2026-08-31).
- *
- * ⚠ THAT PAIRING IS THE FIX FOR A REAL BUG, not tidiness. Main used to cap the
- * agent's prose at 300 (`TEXT_CAP`, its CAPTION bound), so this clamp was being
- * raised over a string that had already been cut upstream, mid-word and with no
- * marker: pressing "Show more" revealed nothing and left the reader on
- * "…or I'll pi". With the two equal, **every frame arrives whole as far as this
- * component is willing to show**, and the clip below can only fire on a future
- * frame from a main that caps higher — where it still SAYS it clipped
- * (INVARIANTS §9). ⚠ Raise this and main's cap together, or the silent cut is
- * back.
- *
- * ⚠ AND EQUALITY HAS A BLIND SPOT THE FLAG COVERS (2026-08-31, Samuel's cutoff
- * report). A line main cut at its cap arrives at EXACTLY this ceiling, so the
- * `length >` check below is false on every such line — the one string that most
- * needs a marker is the one string that cannot earn it by arithmetic. Main now
- * stamps `truncated: true` on the frames it cut (`DesktopNarrationEntry`), and
- * the clip row reads that flag as a second trigger.
- */
+/** Kept equal to `main/narration-text.js › PROSE_CAP` — raise both together. */
 const EXPANDED_CHARS = 8000;
 
-/** What the collapsed run says. ⚠ Exported for the test: the COUNT is the whole
- *  claim this row makes, and a summary that miscounts is a log lying about how
- *  much it is hiding. */
+/** The collapsed run's label; exported for the test. */
 export function toolRunLabel(count: number): string {
   return `Used ${count} ${count === 1 ? "tool" : "tools"}`;
 }
 
-/**
- * ONE RUN OF TOOL ACTIVITY, COLLAPSED.
- *
- * ⚠ MUTED AND SMALLER THAN THE MESSAGE TEXT, on purpose. It is chrome over the
- * log, not a line of it: `text-micro` on `text-text-muted` sits a step below the
- * `text-caption` the stream's rows use, so the eye skips it exactly as it should
- * until it wants the detail.
- * ⚠ ONE BUTTON, AND THE CHEVRON IS ITS ONLY DECORATION (Samuel's minimal-UI
- * ruling) — no count badge, no "expand" verb beside the chevron.
- */
+/** One run of tool activity; collapsed by default, state per group and not persisted. */
 export function ToolRunGroup({ group }: { group: StreamGroup }) {
   const [open, setOpen] = useState(false);
   const Chevron = open ? ChevronDown : ChevronRight;
@@ -97,9 +36,6 @@ export function ToolRunGroup({ group }: { group: StreamGroup }) {
         <span className="truncate">{toolRunLabel(group.tools ?? group.items.length)}</span>
       </button>
       {open && (
-        // ⚠ INDENTED UNDER THE SUMMARY, not replacing it: the row that opened
-        // the run stays on screen, so closing it again is where the operator
-        // left off rather than a hunt back up the column.
         <ol className="flex min-w-0 flex-col gap-2.5 pl-3.5">
           {group.items.map((item) => (
             <LogLine key={item.key} item={item} />
@@ -110,31 +46,8 @@ export function ToolRunGroup({ group }: { group: StreamGroup }) {
   );
 }
 
-/**
- * ONE LINE OF WORK — the agent's own words, or a tool it ran.
- *
- * ⚠ TRUNCATED AND COLLAPSED BY DEFAULT (Samuel, 2026-08-22). This lane is the
- * BULK of the stream and almost never the answer: a full tool result pushes the
- * post the operator opened the panel to read off the screen. The first line is
- * enough to recognise, and the row expands when it is not.
- *
- * ⚠ THE EXPANSION IS BOUNDED TOO. A tool result can be a megabyte of JSON, and
- * "expand" pasting all of it into a 380px column destroys the stream it was meant
- * to explain. Past the ceiling the row SAYS it clipped rather than pretending
- * that was the whole thing (INVARIANTS §9 — a clipped read says so).
- *
- * The tool name is shortened HERE, at render, through the same helper the pill's
- * detail uses — main sends the raw name so one call is never named two different
- * ways on one screen.
- *
- * ⚠ THE AGENT'S OWN WORDS CARRY **NO LABEL** SINCE 2026-08-27 (Samuel). A
- * `thinking` row wore a bold "says" in the label column — a speech verb attached
- * to a machine, restating what the lane already is, in front of every line it
- * said. The text stands alone now, in `text-primary`: it is the one thing in
- * this lane a person actually reads, so it reads as message text and not as a
- * quoted log line. **Only the two rows that name something else keep a label** —
- * the tool's own name, and `failed`.
- */
+/** One log line: clamped to two lines, expandable up to {@link EXPANDED_CHARS}, and says when clipped
+ *  (INVARIANTS §9). Only tool rows carry a label (the tool's short name, or `failed`). */
 export function LogLine({ item }: { item: StreamItem }) {
   const [open, setOpen] = useState(false);
   const text = item.text ?? "";
@@ -154,11 +67,7 @@ export function LogLine({ item }: { item: StreamItem }) {
           : "text-text-secondary";
 
   const long = text.length > COLLAPSED_CHARS;
-  // ⚠ TWO TRIGGERS, AND THE FLAG IS THE ONE THAT CAN ACTUALLY FIRE TODAY: main's
-  // cap equals this ceiling, so a main-cut line arrives at exactly
-  // EXPANDED_CHARS and the arithmetic alone would call it whole (INVARIANTS §9 —
-  // a clipped read says so). `mainCut` also decides the WORDING below: a
-  // renderer clip has a fuller copy to go read; a main cut does not.
+  // A main-cut line arrives at exactly EXPANDED_CHARS, so the length check alone would call it whole.
   const mainCut = item.truncated === true;
   const clipped = open && (text.length > EXPANDED_CHARS || mainCut);
   const shown = open
@@ -166,12 +75,6 @@ export function LogLine({ item }: { item: StreamItem }) {
     : text.slice(0, COLLAPSED_CHARS);
 
   return (
-    // ⚠ STACKED, NOT SIDE BY SIDE (Samuel, 2026-09-22). The label used to sit in
-    // a left column with the payload beside it, which spent the width the payload
-    // needs on a name that is never longer than one word — in a 380px panel the
-    // JSON then wrapped to a ragged two-line block next to a one-line label. The
-    // name reads as a heading over its own line of work now: same rows, same
-    // label, one axis.
     <li className="flex min-w-0 flex-col gap-0.5 text-caption">
       {label && (
         <span className="min-w-0 truncate font-medium text-text-primary">{label}</span>
@@ -189,10 +92,7 @@ export function LogLine({ item }: { item: StreamItem }) {
         </span>
         {clipped && (
           <span className="text-micro text-text-muted">
-            {/* ⚠ Two different truths. A renderer clip is a DISPLAY bound over a
-                string this component holds whole; a main cut means the tail was
-                never kept anywhere, and pointing the reader at a fuller log
-                would be pointing at text that does not exist. */}
+            {/* A main cut kept no tail anywhere; a renderer clip has a fuller copy in the agent's log. */}
             {mainCut
               ? "Clipped — the message was longer than the panel keeps."
               : "Clipped — open the agent's own log for the rest."}
