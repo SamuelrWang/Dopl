@@ -23,7 +23,7 @@
  * slice is not allowed to do.
  */
 
-import { describe, it, expect, vi, beforeAll, afterAll } from "vitest";
+import { describe, it, expect, vi, beforeAll, beforeEach, afterAll } from "vitest";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import type { AgentIdentity, DoplClient, WorkspaceListItem } from "@dopl/client";
@@ -69,6 +69,7 @@ const OWNED_TOOLS = ["dopl_agent", "dopl_kb"];
 const TEAM_AXIS = /\bteam\w*\b/i;
 
 const created = vi.fn();
+beforeEach(() => created.mockReset());
 
 /** Enough of the client for registration + the one write we actually attempt. */
 function stubClient(): DoplClient {

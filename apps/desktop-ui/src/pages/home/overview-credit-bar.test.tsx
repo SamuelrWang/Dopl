@@ -65,22 +65,24 @@ const panel = (name: string) => screen.findByRole("region", { name });
  */
 const histogram = () => screen.findByRole("region", { name: "Usage histogram" });
 
-describe("the /home credit capacity bar", () => {
-  beforeEach(() => {
-    apiRequest.mockReset();
-    apiRequest.mockImplementation(
-      (path: string, opts: BridgeRequestOpts = {}) =>
-        routes(path, opts) ??
-        Promise.reject(new Error(`unexpected request: ${path}`))
-    );
-    installBridge({
-      apiRequest: (path: string, opts: BridgeRequestOpts = {}) =>
-        apiRequest(path, opts),
-      getAuthState: () => Promise.resolve({ signedIn: true, userId: USER_ID }),
-      onAuthState: () => () => {},
-      openExternal: () => Promise.resolve({ ok: true }),
-    });
+// File scope: every describe below renders against this bridge, in any order.
+beforeEach(() => {
+  apiRequest.mockReset();
+  apiRequest.mockImplementation(
+    (path: string, opts: BridgeRequestOpts = {}) =>
+      routes(path, opts) ??
+      Promise.reject(new Error(`unexpected request: ${path}`))
+  );
+  installBridge({
+    apiRequest: (path: string, opts: BridgeRequestOpts = {}) =>
+      apiRequest(path, opts),
+    getAuthState: () => Promise.resolve({ signedIn: true, userId: USER_ID }),
+    onAuthState: () => () => {},
+    openExternal: () => Promise.resolve({ ok: true }),
   });
+});
+
+describe("the /home credit capacity bar", () => {
 
   /**
    * The capacity bar is a PERIOD TOTAL with its denominator and its reset date.
