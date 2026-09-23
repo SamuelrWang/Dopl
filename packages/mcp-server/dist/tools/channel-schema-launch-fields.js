@@ -29,8 +29,8 @@ exports.LAUNCH_INPUT_FIELDS = {
         .max(120)
         .optional()
         .describe(
-    // ⚠ Its silent-fallback sentence moved to `channel-doctrine.ts › MANAGE` (2026-09-13; why:
-    // `SCHEMA_MAX_CHARS`).
+    // ⚠ What happens to an id the machine's runtime does not offer is in `channel-doctrine.ts ›
+    // MANAGE` (why: `SCHEMA_MAX_CHARS`) — REFUSED `no-model` since 2026-09-22, never swapped.
     'op="manage" action="launch" (optional): the model to run the agent on. Omit it for whatever the operator set for that channel.'),
     /**
      * **WHICH RUNTIME — A SECOND, SEPARATE FIELD, AND THE SEPARATION IS THE POINT** (2026-09-21,

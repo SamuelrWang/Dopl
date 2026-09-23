@@ -115,6 +115,8 @@ const RETRY_ADVICE = {
     // one toggle, and asking again before they have is the retry loop the split
     // off `no-bridge` exists to make avoidable rather than to invite.
     "no-chain": "no",
+    // ⚠ 2026-09-22: re-issue with a model that machine lists (or none) — the SAME ask never changes.
+    "no-model": "no",
 };
 /** The line a PENDING (or expired) directive ends on. ⚠ Says the id, because the
  *  id is the only handle the agent has left, and says NOT to re-issue. */

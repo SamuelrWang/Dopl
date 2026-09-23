@@ -137,6 +137,13 @@ export type LaunchRefusalReason =
   // another route. ⚠ Its CHECK lands in the SAME wave
   // (`20260910120000_channel_launch_directives_posture.sql` §3A).
   | "no-chain"
+  // ⚠ THE ELEVENTH, 2026-09-22, and a LAUNCH word. The launch named a model the
+  // resolved runtime's LIVE roster does not offer (`main/session-launch.js ›
+  // refuseUnknownModel`). It used to be no refusal at all: the id fell through to
+  // the product default and the launch echoed the id it was asked for. Re-issue
+  // with a model that machine lists, or with none. ⚠ Its CHECK is
+  // `20261018120000_channel_launch_directives_no_model.sql` (same wave).
+  | "no-model"
   | "bad-name";
 
 /**

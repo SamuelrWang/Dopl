@@ -112,6 +112,7 @@ const RETRY_ADVICE: Record<LaunchRefusalReason, "once" | "no"> = {
   // nothing. Arriving here IS the anomaly, so `no`: re-issuing over a word
   // nothing could have produced re-issues forever.
   "no-chain": "no",
+  "no-model": "no", // a LAUNCH word (2026-09-22); a re-posture names no model
 };
 
 

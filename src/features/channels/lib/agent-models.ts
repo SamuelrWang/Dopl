@@ -41,7 +41,29 @@
  * model" (INVARIANTS §11 — UNKNOWN is not EMPTY).
  */
 
-import type { ModelCatalog } from "./model-catalog";
+import { findModel, type CatalogModel, type ModelCatalog, type ModelCatalogs } from "./model-catalog";
+
+/**
+ * **THE LAST CATALOGS ANY SURFACE READ, FOR LABELLING ONLY** (2026-09-22).
+ *
+ * ⚠ THE CLAUDE ROSTER WENT LIVE (`dopl-desktop-app/main/runtime/claude/roster.js`), so a model the
+ * CLI started offering after this bundle shipped has a DISPLAY NAME on the desktop and none in
+ * {@link AGENT_MODELS}. The glance surfaces below (cards, chips) render with no catalog of their
+ * own, so `use-runtime-catalogs.ts` hands every catalog it adopts to {@link rememberCatalogs} and
+ * the two label functions prefer the runtime's own name. ⚠ LABELLING IS NOT SELECTING: nothing
+ * here is offered or submitted — pickers read a catalog, never this.
+ */
+let remembered: ModelCatalogs = {};
+export function rememberCatalogs(catalogs: ModelCatalogs): void {
+  if (catalogs && Object.keys(catalogs).length) remembered = catalogs;
+}
+function liveEntry(id: string): CatalogModel | null {
+  for (const c of Object.values(remembered)) {
+    const hit = findModel(c, id);
+    if (hit) return hit;
+  }
+  return null;
+}
 
 /**
  * ⚠ ABSENCE IS STILL "NO PICK ON THE WIRE" — but it is no longer OFFERED (2026-09-06,
@@ -172,7 +194,7 @@ export function agentModelOptionsFor(
 export function agentModelLabel(id: string | null | undefined): string {
   const trimmed = typeof id === "string" ? id.trim() : "";
   if (!trimmed) return "Default";
-  return AGENT_MODELS.find((m) => m.id === trimmed)?.label ?? trimmed;
+  return liveEntry(trimmed)?.label || (AGENT_MODELS.find((m) => m.id === trimmed)?.label ?? trimmed);
 }
 
 /**
@@ -190,7 +212,8 @@ export function agentModelLabel(id: string | null | undefined): string {
 export function agentModelShortLabel(id: string | null | undefined): string | null {
   const trimmed = typeof id === "string" ? id.trim() : "";
   if (!trimmed) return null;
-  return AGENT_MODELS.find((m) => m.id === trimmed)?.short ?? trimmed;
+  const live = liveEntry(trimmed);
+  return live?.short || live?.label || (AGENT_MODELS.find((m) => m.id === trimmed)?.short ?? trimmed);
 }
 
 /**
@@ -298,6 +321,7 @@ export function defaultRuntimeFallbackCatalog(runtimeId: string): ModelCatalog {
       // ⚠ NO MODEL-SCOPED DIMENSIONS: this runtime declares none, so an empty
       // record is the same statement made twice and cannot disagree with it.
       dimensions: {},
+      aliases: [],
     })),
     defaultId: AGENT_MODEL_FALLBACK,
     dimensions: [],

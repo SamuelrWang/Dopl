@@ -112,6 +112,7 @@ const RETRY_ADVICE = {
     // ⚠ NO PRODUCER ON AN END OR A RENAME — `no-chain` belongs to a launch that
     // asked to chain. Arriving here means the machines disagree; still `no`.
     "no-chain": "no",
+    "no-model": "no", // a LAUNCH word (2026-09-22); an end or a rename names no model
 };
 /**
  * THE PENDING FACTS. ⚠ **`retry=no` IS THE ONE INSTRUCTION THAT COULD NOT BECOME

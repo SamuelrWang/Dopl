@@ -32,7 +32,12 @@ export const LAUNCH_MESSAGE_MODES = [
 ] as const;
 
 /**
- * THE TEN REFUSAL WORDS ONE DIRECTIVE CAN COME BACK WITH.
+ * THE ELEVEN REFUSAL WORDS ONE DIRECTIVE CAN COME BACK WITH.
+ *
+ * ⚠ **ELEVEN SINCE 2026-09-22.** `no-model`: the launch named a model the resolved runtime's LIVE
+ * roster does not offer (`main/session-launch.js › refuseUnknownModel`). It used to fall through
+ * to the product default and echo the id it was asked for. The CHECK is
+ * `20261018120000_channel_launch_directives_no_model.sql`, written in the same wave.
  *
  * ⚠ **TEN SINCE 2026-09-02.** `no-chain` splits a fact off `no-bridge`: a directive that asked to
  * CHAIN in a channel where the operator has not enabled it answered the SAME word this machine
@@ -53,6 +58,7 @@ export const LAUNCH_REFUSAL_REASONS = [
   "no-session",
   "bad-name",
   "no-chain",
+  "no-model",
 ] as const;
 
 /**

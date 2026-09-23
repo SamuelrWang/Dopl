@@ -32,7 +32,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { defaultRuntimeFallbackCatalog } from "../lib/agent-models";
+import { defaultRuntimeFallbackCatalog, rememberCatalogs } from "../lib/agent-models";
 import {
   catalogFor,
   hasCatalogKey,
@@ -76,7 +76,9 @@ export function useRuntimeCatalogs(): RuntimeCatalogsState {
     if (!hasCatalogKey(reply)) return; // an older desktop: leave `catalogsKnown` false
     setCatalogsKnown(true);
     const row = reply as { catalogs?: unknown; catalogVersion?: unknown };
-    setCatalogs(normalizeCatalogs(row.catalogs, row.catalogVersion));
+    const next = normalizeCatalogs(row.catalogs, row.catalogVersion);
+    rememberCatalogs(next); // 2026-09-22: glance labels (cards, chips) prefer the runtime's own names
+    setCatalogs(next);
   }, []);
 
   const loading = useMemo(

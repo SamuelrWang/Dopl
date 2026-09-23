@@ -85,6 +85,8 @@ const LAUNCH_REFUSALS: Record<string, string> = {
   // nobody notices for several turns. The endpoint deliberately cannot tell
   // "deleted" from "invisible" (404-never-403), so neither can this copy.
   "no-template": "That template is gone — reload the list",
+  // 2026-09-22: the runtime does not offer the model this launch named (main sends the list).
+  "no-model": "That model is not offered on this machine — pick another",
 };
 
 /**
@@ -325,7 +327,7 @@ export function useAgentsPanel({
       });
       // ⚠ THE APPROVAL WORD IS NOT AN ERROR LINE — see LAUNCH_APPROVAL_REASON.
       if (!res.ok && res.reason !== LAUNCH_APPROVAL_REASON) {
-        setLaunchError(launchRefusalText(res.reason, runtimeDescriptor));
+        setLaunchError(res.reason === "no-model" && res.detail ? res.detail : launchRefusalText(res.reason, runtimeDescriptor));
       }
       if (res.ok) refreshDesktopSessions?.();
       void refetch();

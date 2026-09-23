@@ -188,7 +188,7 @@ export async function setAgentModel(payload: {
   agentId?: string;
   /** An SDK model id, or `""` for the SDK default. */
   model: string;
-}): Promise<{ ok: boolean; reason?: string }> {
+}): Promise<{ ok: boolean; reason?: string; detail?: string }> {
   const sessions = getSpaBridge()?.sessions;
   if (typeof sessions?.setModel !== "function") {
     return { ok: false, reason: "no-bridge" };
@@ -199,7 +199,7 @@ export async function setAgentModel(payload: {
     payload.model,
     payload.agentId
   );
-  return { ok: res?.ok === true, reason: res?.reason };
+  return { ok: res?.ok === true, reason: res?.reason, detail: res?.detail };
 }
 
 /**
@@ -353,7 +353,7 @@ export async function launchAgentOnThread(payload: {
 }): Promise<{
   ok: boolean;
   agentId?: string;
-  reason?: string;
+  reason?: string; detail?: string; // `detail`: main's `no-model` sentence (2026-09-22)
   template?: { name?: string | null; instructions?: string | null } | null;
 }> {
   const sessions = getSpaBridge()?.sessions;
@@ -363,7 +363,7 @@ export async function launchAgentOnThread(payload: {
   return {
     ok: res?.ok === true || agentId !== undefined,
     agentId,
-    reason: res?.reason,
+    reason: res?.reason, detail: res?.detail,
     template: res?.template ?? null,
   };
 }

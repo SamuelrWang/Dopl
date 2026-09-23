@@ -30,6 +30,7 @@
 import {
   catalogFor,
   catalogReady,
+  findModel,
   type ModelCatalog,
   type ModelCatalogs,
 } from "./model-catalog";
@@ -49,7 +50,8 @@ export function modelBelongsTo(
   const id = typeof modelId === "string" ? modelId.trim() : "";
   if (!id) return null;
   if (!catalogReady(catalog) || !catalog) return null;
-  return catalog.models.some((m) => m.id === id);
+  // ⚠ 2026-09-22: an ALIAS the runtime declares (a legacy stored id) is membership too.
+  return findModel(catalog, id) !== null;
 }
 
 /**
