@@ -1,53 +1,22 @@
-// THE SPAWN FUNNEL — `launch`, its two lanes, and the three questions asked before one.
-//
-// ⚠ SPLIT OUT OF `main/session-engine.js` ON 2026-08-21, under the hard 500-line §2 cap. The
-// multiplayer wave gave that file the agent-id mint, the SPAWN-IDLE branch and the fan-out
-// bookkeeping, and it went over — and a file at the cap does not just stop growing, it stops
-// being CORRECTABLE, which is the state F-226 was taken out of one wave earlier.
-//
-// THE SEAM IS REASON-TO-CHANGE. `session-engine.js` is the imperative shell: it owns the SDK
-// query, the effect table, the reducer dispatch and the teardown, and it changes when a session's
-// RUNTIME changes. This file owns what happens BEFORE one exists — who may spawn, what id it
-// wears, which refusals a caller gets and in what shape — and it changes when the spawn POLICY
-// changes. They shared a file because `launch` calls `startSession`, and that is an injected
-// handle now, exactly as `session-park.js` takes it.
-//
-// ⚠ THE REFUSAL SHAPES ARE THE CONTRACT AND THEY ARE UNCHANGED. `{skipped:'disabled'}`,
-// `{skipped:'auth-hold'}`, `{skipped:'busy'}`, `{skipped:'cap'}`, `{skipped:'no-sdk'}` — every
-// one has a caller that answers the peer with it (`trigger.js`) or reports it to the operator
-// (`session-ipc-ops.js`). Deleting a shape here turns a refusal into a peer waiting forever.
-//
-// ⚠ NO ELECTRON, NO SDK HANDLE. Everything the funnel cannot compute is injected via `bind()`:
-// the registry, `acquireRuntime`, `startSession`, and the two registry reads. `test/session-engine-slot
-// .test.mjs` slices `launch` out of THIS file and drives the real control flow against fakes.
+// The spawn funnel: `launch`, its two lanes, and every question asked BEFORE a session exists (who may spawn,
+// what id it wears, which refusal a caller gets). The refusal shapes are a wire contract — `trigger.js` and the
+// directive lane answer peers with them. No electron: the engine's handles arrive via bind().
 
 const store = require('./session-store');
-const { newAgentId, isAgentId } = require('./agent-id'); // one random id per INSTANCE
-const sessionWindowless = require('./session-windowless'); // the concurrency + cost ceiling
-const launchBudget = require('./launch-budget'); // 2026-08-31: the CHAINED-launch ceiling over TIME
-// 2026-09-01 (D1): `windowlessFloorRefusal` — the ONE launch-blocking question this funnel asks of
-// the runtime's own declaration (`contract.js › LAUNCH_BLOCKING[3]`). ⚠ PURE: `session-profiles.js`
-// is the electron-free module two suites slice standalone, so this pulls nothing new into the
-// funnel and `test/session-engine-slot.test.mjs` injects it like every other module binding.
+const { newAgentId, isAgentId } = require('./agent-id');
+const sessionWindowless = require('./session-windowless');
+const launchBudget = require('./launch-budget');
+// Pure: the windowless-floor refusal and the Axis-B warning, both asked of the runtime's own declaration.
 const profiles = require('./session-profiles');
-// 2026-09-09 (F-681): the PRODUCER for `context.ontologies`. ⚠ Its own module and lazily-required
-// inside, so this funnel keeps the "no electron at load" property its header claims; it is passed
-// to `test/session-engine-slot.test.mjs`'s slice as an injected handle like `profiles`.
+// Producers for `context.ontologies` / `context.roster`; each requires lazily and never throws (F-681).
 const ontologyReach = require('./ontology-reach');
 const { diag } = require('./diag');
-// ⚠ Lazily-required like `ontology-reach`, and for the same reason: `main/` truth tables load
-// this module directly and must not pull the IPC/electron surface in behind it.
 const roomRoster = require('./room-roster');
-const launchDefault = require('./runtime/launch-default'); // 2026-09-23: a no-pick launch's model
+const launchDefault = require('./runtime/launch-default');
 
 let deps = { sessions: null, acquireRuntime: null, startSession: null, liveOnThread: null, sessionOn: null };
 
-/**
- * The engine binds its registry and the two handles this file may not require here at load.
- * ⚠ `bind` REBUILDS `deps` FROM A LITERAL, so a handle the engine passes and this list omits is
- * DROPPED SILENTLY — the same trap `session-reopen.js › bind` records, where the drop wore the
- * face of a guard firing correctly. Add the field HERE whenever the engine's call grows one.
- */
+// `bind` rebuilds `deps` from a literal: a handle the engine passes and this list omits is dropped silently.
 function bind(d) {
   deps = {
     sessions: (d && d.sessions) || null,
@@ -59,154 +28,54 @@ function bind(d) {
 }
 
 async function launch(a) {
-  if (!a.windowless) return { skipped: 'disabled' }; // ⚠ THE ONLY SPAWN SHAPE LEFT IS WINDOWLESS (F-228)
-  // ⚠ MINT THE INSTANCE ID HERE, AT THE ONE SPAWN FUNNEL (2026-08-21). Every lane goes through
-  // `launch`, so minting here guarantees no session can exist without an address. A caller may
-  // hand one in (a resume re-uses its own) but may not invent a shape: `isAgentId` refuses
-  // anything that is not `agent-id.js`'s charset and a fresh one is minted instead.
+  // The only spawn shape is windowless (F-228).
+  if (!a.windowless) return { skipped: 'disabled' };
+  // Mint the instance id at the one funnel: a caller may hand one in (a resume) but not invent a shape.
   const agentId = isAgentId(a.agentId) ? a.agentId : newAgentId();
   const slot = { channelId: a.channelId, taskId: a.taskId, agentId: agentId };
   const key = store.slotKey(slot);
-  // ⚠ THERE IS NO `busy` REFUSAL ANY MORE (2026-08-21, ruling 2). It read `hasLiveSession(slot)`
-  // and it WAS the one-agent-per-thread law: a peer's follow-up on a thread this machine was
-  // already working got "I'm still finishing a previous request, please resend", and the
-  // operator could not put a second agent on their own thread at all. Multiplayer is exactly the
-  // removal of that law; MAX_CONCURRENT_SESSIONS below is what still bounds the machine.
-  // ⚠ `trigger.js` STILL HANDLES `skipped: 'busy'` and must keep doing so — the cap and the
-  // post-await re-check both land there, and deleting it leaves a peer waiting forever.
-  // THE CONCURRENCY CEILING. ⚠ ONE BRANCH, because there is one spawn shape (the early return
-  // above). It used to be two: a WINDOW budget that an adoptable pre-consent card was net-zero
-  // against and that freed an untouched parked shell before refusing (AUDIT D4), and this one.
-  // Both the adopt and the eviction went with the window (F-228), so a refusal here is plain —
-  // there is nothing to reclaim, and `MAX_CONCURRENT_SESSIONS` is a COST ceiling as much as a
-  // concurrency one (INVARIANTS §11: every per-session bound multiplies against it).
+  // No `busy` law: several agents per thread is normal; the concurrency ceiling bounds the machine. `trigger.js`
+  // still handles `busy` (the post-await re-check below).
   if (sessionWindowless.liveCount(deps.sessions) >= sessionWindowless.MAX_CONCURRENT_SESSIONS) return { skipped: 'cap' };
-  // ── ⚠ THE CHAINED-LAUNCH BUDGET (2026-08-31, Samuel's agent-chaining ruling) ────────────────
-  // ⚠ SPENT ONLY BY A CHAINED SPAWN, AND THE CONDITION IS THE WHOLE SCOPE STATEMENT: the operator's
-  // own New Agent button, a peer-triggered responder, a resume and a recreate all pass no flag and
-  // are not counted. It bounds the ONE lane that can grow without a generation bound — see
-  // `launch-budget.js` for why the concurrency ceiling directly above is not a bound over TIME.
-  // ⚠ AFTER THE CONCURRENCY CHECK AND BEFORE THE SDK AWAIT, so a refused chained launch spends no
-  // budget, no SDK handle and no slot; `cap` is the same word both ceilings answer with, on
-  // purpose (the seven-word wire vocabulary is closed).
+  // The chained-launch budget over TIME, spent only by a chained spawn and before any await (same `cap` word).
   if (a.launchChain === true && !launchBudget.spend(a.channelId)) {
     diag('session-launch: chained launch over budget', String(a.channelId || '').slice(0, 8));
     return { skipped: 'cap' };
   }
   let rt;
-  // ── ⚠ THE RUNTIME THIS SPAWN RUNS ON (2026-08-31, port wave D) ────────────────────────────
-  //
-  // ⚠ IT IS FORWARDED, NEVER INVENTED, exactly like `model` and `launchDepth` below. Absent —
-  // and every lane except the operator's own button passes nothing — resolves to the DEFAULT
-  // adapter (`main/runtime/index.js › DEFAULT_ID`, the first registered), so a session record
-  // written before the port and every wake, resume and recreate lands on the runtime it always
-  // ran on. That is what makes "behaviour byte-identical for existing sessions" a property of
-  // the funnel rather than a hope.
-  // ⚠ IT IS NOT A CONTAINMENT INPUT, and that is why it may travel this way where `toolProfile`
-  // may not. `main/channel-runtime.js`'s header carries the whole argument: every adapter
-  // re-derives its own deny lists and Axis-A vocabulary, `contract.js › sealAdapter` refuses to
-  // register one that cannot, and the four gate steps before Axis A are core's on all of them.
-  // ⚠ AN UNKNOWN ID IS THE DEFAULT, NOT A REFUSAL — `resolve` fails closed toward "the runtime
-  // this build actually ships" rather than stranding a session with no way to end it.
+  // The runtime is forwarded, never invented: absent (or unknown) is the default adapter. `no-sdk` is a wire
+  // word meaning "no agent runtime on this machine" on every runtime.
   try { rt = await deps.acquireRuntime(a.runtime); } catch (err) {
-    // ⚠ THE SKIP CODE IS THE WIRE AND DOES NOT CHANGE. `trigger.js` and the directive lane both
-    // branch on `'no-sdk'`, and it means "this machine has no agent runtime" on every runtime —
-    // renaming it would be a vocabulary change dressed as a cleanup.
     diag('session-engine: agent runtime unavailable', err && err.message);
     return { skipped: 'no-sdk' };
   }
-  if (hasLiveSession(slot)) return { skipped: 'busy' }; // FIX #7: re-check after await — a slot-scoped check now, so only an id collision (unreachable) trips it
+  // FIX #7: re-check after the await (slot-scoped, so only an id collision trips it).
+  if (hasLiveSession(slot)) return { skipped: 'busy' };
   if (isAuthHeldSession(slot, rt && rt.id)) return { skipped: 'auth-hold' };
-  // Asked before anything registers: a hold raised after registration left a parked record that
-  // the next boot ended as a card for an agent that never started (P4-07).
+  // Asked before anything registers, so a signed-out launch leaves no record behind (P4-07).
   if (await credentialMissing(rt)) return { skipped: 'auth-hold' };
-  // ── ⚠ A MODEL THIS RUNTIME DOES NOT OFFER IS REFUSED, NEVER SWAPPED (2026-09-22) ─────────────
-  // Every lane's pick arrives here, so the refusal sits here. It used to fall through to the
-  // product default: an MCP launch naming a mistyped or unknown id started Sonnet and echoed the
-  // id it was asked for. `no-model` is a wire word (`launch-directive-vocab.js`), and `detail` is
-  // the sentence — which models this machine DOES offer.
-  // ⚠ BEFORE `startSession`, like the floor refusal below: nothing is registered yet, so there is
-  // no rollback to get wrong.
+  // A model the runtime does not offer is REFUSED with a sentence, never swapped; before `startSession`, so
+  // there is nothing to roll back.
   const modelRefusal = await refuseUnknownModel(a.runtime, a.model);
   if (modelRefusal) {
     diag('session-launch: model refused —', modelRefusal);
     return { skipped: 'no-model', detail: modelRefusal };
   }
-  // ── 🔒 NO PICK → THE RUNTIME'S OWN DEFAULT, HERE AND ONLY HERE (2026-09-23) ──────────────────
-  // The last link of every lane's model order (launcher > identity > runtime default); the
-  // channel/profile "pin model" link is deleted. `runtime/launch-default.js` carries the rule —
-  // Codex names `gpt-6-sol` only when this account's live catalog offers it, and otherwise NO model,
-  // so a default can never become a `no-model` refusal. AFTER the refusal on purpose: it only ever
-  // names a model the catalog just proved.
+  // No pick -> the runtime's own default, here and only here (and only a model its catalog just proved).
   const model = await launchDefault.withRuntimeDefault(rt, a.model);
-  // ── ⚠ THE WINDOWLESS TOOL FLOOR, AS A LAUNCH REFUSAL (2026-09-01, D1) ─────────────────────
-  //
-  // `contract.js › LAUNCH_BLOCKING[3]`. `capability.js › floorWindowlessTool`'s header has always
-  // said `windowlessFloor: null` REFUSES THE WINDOWLESS LAUNCH — but nothing anywhere refused it:
-  // the predicate silently handed back the session's own stored mode, which starts at the
-  // NARROWEST member and resets to it on park, on a session with no gate surface. Every tool call
-  // denied, no error, and the agent reporting it cannot read files the prompt told it to read.
-  //
-  // ⚠ HERE, AND HERE IS THE POINT. It is after `acquireRuntime` (so the runtime is known and
-  // usable) and BEFORE `startSession` (so nothing is registered, no id is spent, no slot is held,
-  // and there is no rollback to get wrong — contrast the auth hold below, which must
-  // `sessions.delete`). This whole file is the "what happens before a session exists" seam.
-  // ⚠ EVERY LAUNCH THROUGH THIS FUNNEL IS WINDOWLESS (`a.windowless` is checked at the top, F-228),
-  // so no windowed shape is caught by this; the refusal is still asked of the windowless question
-  // rather than of the adapter, because a runtime with no floor is perfectly launchable WITH a gate.
-  // ⚠ `'disabled'` AND NOT AN EIGHTH WIRE WORD, AND THAT IS A DECISION RATHER THAN A SHORTCUT.
-  // `launch-directive-wire.js › REFUSAL_REASONS` is not a local list: the SAME seven words are
-  // `schema-launch.ts › LaunchRefusalReasonSchema`, `schema-launch-modes.ts › LAUNCH_REFUSAL_REASONS`,
-  // `use-agents-panel.ts › launchRefusalText`'s copy map, and a column CHECK in a deployed
-  // migration. Minting a word here would put this tree one word ahead of a constraint that
-  // REJECTS it at rest — a refusal that fails to record itself. `'disabled'` is the existing
-  // local-only code for "this build will not run this spawn shape", it is the documented
-  // exception in `launch-directive-wire.test.mjs`, and `refusalFor` maps it to `no-bridge`.
-  // ⚠ THE SPECIFIC SENTENCE IS THEREFORE THE DIAG'S JOB, and that is where it belongs anyway:
-  // the diag is local-only, so it is the one surface allowed to name a runtime (`trigger.js ›
-  // skippedHint`'s header carries that rule). ⚠ IF A FUTURE WAVE WANTS THIS DISTINGUISHABLE ON
-  // THE WIRE, the change is five files plus a migration, not this line.
+  // A runtime with no orderable windowless tool floor would deny every read: refused before registration.
+  // `disabled`, not a new wire word — the refusal set is closed (schema, service, copy map, migration CHECK).
   const floorRefusal = profiles.windowlessFloorRefusal(a.runtime);
   if (floorRefusal) {
     diag('session-launch: windowless launch refused —', floorRefusal);
     return { skipped: 'disabled' };
   }
-  // ── ⚠ AXIS B'S COLLAPSE WARNING (2026-09-01, D3) ──────────────────────────────────────────
-  //
-  // `capability.js › axisBOpScoped` was DECLARED, documented in the strongest terms, and read by
-  // nothing: no core branch, no UI warning, no launch refusal. This is its consumer.
-  // ⚠ A WARNING AND NOT A REFUSAL, DELIBERATELY. The failure direction is CLOSED — input the gate
-  // cannot read fails `postFieldsOk`, `grantDecision` answers `'gate'`, and a windowless gate is a
-  // DENY — so the agent is broken and the boundary holds. Refusing here would take a registered
-  // adapter off the only spawn shape this tree has over a failure that cannot leak anything;
-  // whether such a runtime may SHIP is a release decision, exactly like `interruptRefusal`'s.
-  // ⚠ AND IT IS NOT AN `if` AROUND THE LAUNCH. The line goes out and the spawn continues.
+  // A WARNING, not a refusal: an unreadable op fails closed at the gate, so the boundary holds.
   const opScopedWarning = profiles.axisBOpScopedWarning(a.runtime);
   if (opScopedWarning) diag('session-launch: Axis B is not op-scoped on this runtime —', opScopedWarning);
-  // ── ⚠ WHICH ONTOLOGIES THIS SPAWN REACHES (2026-09-09, F-681) ────────────────────────────
-  //
-  // ONE FUNNEL, THREE LANES. The New Agent button, the directive spawn and the peer-triggered
-  // responder all arrive here, so the producer sits here rather than beside any one of them —
-  // the mistake F-510 records for the tool profile, which was spelled at one lane and forgotten
-  // by the other two.
-  // ⚠ IT CANNOT REFUSE THE LAUNCH. `fetchOntologyReach` answers `[]` on every failure and never
-  // throws; its docblock carries the whole argument, and the shape of the difference is the
-  // missing `if (!…) return { skipped }` right here (`launch-directive-spawn.js`'s startup
-  // context makes the same promise for the same reason).
-  // ⚠ AND THE KEY IS ADDED ONLY WHEN THERE IS SOMETHING TO SAY. A lane reaching no ontology
-  // hands `startSession` the caller's context OBJECT ITSELF, unchanged and possibly undefined,
-  // so its turn stays byte-identical to what it was before this module existed — which is
-  // exactly the contract `prompt-framing-ontology.js › ontologyReachLines` makes about its `[]`.
+  // One funnel, three lanes, so the producers sit here (F-510). Neither can refuse a launch, and a key is added
+  // only when there is something to say, so an unreached context stays byte-identical.
   const ontologies = await ontologyReach.fetchOntologyReach(a.workspaceId);
-  // ── ⚠ WHO ELSE IS IN THIS ROOM (2026-09-18) — THE SAME FUNNEL, FOR THE SAME REASON ────────
-  //
-  // Three lanes arrive here, so the producer sits here rather than beside one of them (F-510's
-  // lesson, applied once more). `room-roster.js` never throws and never refuses a launch: the
-  // operator's OWN agents come from the registry with no network at all, the rest is one bounded
-  // read phase that fails open, and a solo room skips it entirely.
-  // ⚠ THE KEY IS ADDED ONLY WHEN THERE IS SOMETHING TO SAY, exactly as `ontologies` is — a lane
-  // that reaches nobody hands `startSession` the caller's context unchanged, so its turn stays
-  // byte-identical to what it was before this module existed.
   const roster = await roomRoster.fetchRoomRoster({
     channelId: a.channelId,
     workspaceId: a.workspaceId,
@@ -230,77 +99,33 @@ async function launch(a) {
     profile: a.toolProfile,
     mode: a.mode,
     context,
-    counterpartyId: a.counterpartyId, // FIX L1: bind the feed to the task's other party
-    direct: a.direct, // H2: the server's is_direct flag, for the outbound card's recipient line
-    firstMessage: a.firstMessage, // startSession frames it inside the per-session nonce fence
-    // H2: the posture a HUMAN chose for THIS launch, and the only way one reaches a spawn.
-    // `trigger.js` passes the arm it consumed on a consent-approved responder launch;
-    // `session-ipc-ops.js › sessions:launch` passes the channel's durable posture. Anything
-    // that passes nothing inherits the reducer's manual/ask.
-    // ⚠ `adoptsConsent` RODE HERE and is gone (F-228): it named the ONE spawn allowed to spend
-    // the pre-consent card's entry-keyed arm, and there is no card.
+    counterpartyId: a.counterpartyId,
+    direct: a.direct,
+    firstMessage: a.firstMessage,
+    // The posture a HUMAN chose for this launch — the only way one reaches a spawn (H2).
     startModes: a.startModes,
-    // ⚠ THE MODEL, FORWARDED AND NEVER INVENTED (2026-08-22, Samuel's model-selection ruling).
-    // The funnel had no `model` field at all, so `startSession`'s `sessionModel.normalizeModel
-    // (spec.model)` could only ever answer 'default' on every lane that goes through here — the
-    // per-session picker's value had one producer left (a resume's stored record) and no way in
-    // from a launch. It is coerced at the construction site and again at `buildSdkOptions`, the
-    // last step before a child process can see it, so a bad value here is 'default', never argv.
-    // ⚠ SINCE 2026-09-23 IT IS `a.model` OR THE RUNTIME DEFAULT resolved above — still invented by
-    // no lane.
     model,
-    // ⚠ **THE AGENT COLOUR, FORWARDED AND NEVER INVENTED** (Samuel, 2026-09-13;
-    // docs/specs/agent-colors.md). It rides `model`'s exact argument one line up: a colour
-    // GRANTS NOTHING and reaches NO GATE, so it may travel the funnel without the ceremony the
-    // permission pair needs — and it is the caller's value, normalized where it is read
-    // (`session-launch-op.js › colorKey`), never fabricated here.
-    // ⚠ **IT IS A REQUEST, NOT THE ASSIGNMENT, AND THIS IS THE ONE FIELD ON THIS LITERAL THAT
-    // THE SERVER MAY OVERRULE.** Uniqueness is per channel across EVERY member
-    // (`20261005120000_agent_session_colors.sql`'s live unique index), which no machine can
-    // evaluate — two desktops cannot see each other's registries. So the push carries the ask
-    // and `src/features/channels/server/session-colors.ts` resolves it: the key is granted if
-    // free, and silently replaced by the next free one if another member took it in between.
-    // Nothing here waits for that answer, and nothing here retries.
-    // ⚠ **AND IT MUST BE ON THIS LITERAL OR IT IS DROPPED IN SILENCE** — the `bind()` note at
-    // the top of this file: a field the engine passes and this whitelist omits does not reach
-    // `startSession` and produces no error anywhere. That is F-510's shape exactly.
+    // A colour grants nothing; the server may overrule it (unique per channel). It must be on this literal or it
+    // is dropped silently (the bind() trap, F-510).
     color: a.color,
-    windowless: a.windowless === true, // 2026-08-20: no window, ever, on this shape
-    // ⚠ THE LAUNCH DEPTH — F-320's RECURSION BOUND, and this funnel FORWARDS it without inventing
-    // one (2026-08-25). Exactly ONE caller passes `0` and it is the New Agent button
-    // (`session-launch-op.js › launchFromButton`, where a human is at the keyboard); the directive
-    // lane and the peer-triggered responder pass nothing and land at
-    // `session-own-launch.js › MAX_LAUNCH_DEPTH`, which is the fail-CLOSED direction: a lane that
-    // forgets this field loses the right to launch agents rather than gaining it. ⚠ DO NOT give it
-    // a `|| 0` default here — that inverts the whole bound in one character.
+    windowless: a.windowless === true,
+    // F-320's bound, forwarded, never defaulted: only the New Agent button passes 0; a `|| 0` here would invert it.
     launchDepth: a.launchDepth,
-    // ⚠ …AND THE CHANNEL'S CHAINING SETTING, FORWARDED THE SAME WAY AND WITH THE SAME RULE
-    // (2026-08-31). Exactly ONE caller passes it — `launch-directives.js › spawn`, which reads
-    // `channel-prefs.js › getAgentChain` per directive — and every other lane passes nothing,
-    // which reads FALSE and keeps the one-generation bound. ⚠ DO NOT give it a `|| true` or read
-    // the store here: an ambient read at the funnel would hand the flag to the peer-triggered
-    // wake as well, which is precisely the re-arming shape `channel-prefs.js`'s H2 block exists to
-    // refuse. ⚠ A RECREATE IS NO LONGER ON THAT LIST and does not pass through this funnel either:
-    // it RESTORES the flag its own record carries (2026-09-18), which is not an ambient read.
+    // The channel's chaining setting, passed by the directive lane alone; never an ambient store read (H2).
     launchChain: a.launchChain === true,
-    // 2026-08-21 ruling 3: SPAWN IDLE. Registers the agent with prepared context and starts no
-    // query; the first inbound message for this agent is what launches it.
+    // Spawn idle: registered with prepared context, no query until the first message.
     parkedShell: a.idle === true,
     operatorArmed: a.operatorArmed === true,
-    triggerSeq: a.triggerSeq, // the ask's seq — the outbound bridge's seq-join floor
+    triggerSeq: a.triggerSeq,
   }, rt);
   if (!s) return { skipped: 'disabled' };
   if (s.authHold === true) return { skipped: 'auth-hold' };
-  // ⚠ THE AGENT ID IS PART OF THE ANSWER (2026-08-21): a SPAWN-IDLE launch has no work in
-  // flight, so what the caller needs back is the ADDRESS it just created.
-  return { sessionId: s.sessionId, agentId: agentId, model }; // `model`: what it launched with (directive echo)
+  // The answer is the ADDRESS (and the model it launched with, for the directive echo).
+  return { sessionId: s.sessionId, agentId: agentId, model };
 }
 
-/**
- * The sentence refusing `model` on `runtimeId`, or `null`. ⚠ It waits for the runtime's roster
- * (`model-catalog.js › settle`) ONLY when a model was actually named, and it FAILS OPEN on any
- * error: a roster Dopl cannot read is not evidence that a model does not exist.
- */
+/** The sentence refusing `model` on `runtimeId`, or null. Waits for the roster only when a model was named;
+ *  fails OPEN — a roster Dopl cannot read is not evidence a model does not exist. */
 async function refuseUnknownModel(runtimeId, model) {
   const v = typeof model === 'string' ? model.trim() : '';
   if (!v || v === 'default') return null;
@@ -333,9 +158,7 @@ function launchRequesterSession(a) {
   return launch({ ...a, side: 'requester', firstMessage: a.goal });
 }
 
-// ⚠ WITH NO `agentId` THIS ASKS ABOUT THE THREAD, NOT A SLOT (2026-08-21). Its production
-// readers want "is anything already running here"; `launch()` re-checks the exact slot, because
-// a fresh instance id can never collide and a second agent on a busy thread must not read busy.
+// With no `agentId` this asks about the THREAD; `launch()` re-checks its exact slot.
 function hasLiveSession(a) {
   if (a && a.agentId) {
     const s = deps.sessions.get(store.slotKey(a));
@@ -344,9 +167,8 @@ function hasLiveSession(a) {
   return deps.liveOnThread(a).length > 0;
 }
 
-// H1 — is any agent on this THREAD held on the sign-in action for the runtime this launch uses?
-// A thread, not the slot: a fresh instance id never collides. Scoped by runtime (P4-22): a held
-// Codex agent says nothing about a Claude launch's credential.
+// H1: is any agent on this THREAD held on the sign-in for the runtime this launch uses? A thread, not the slot
+// (a fresh instance id never collides); scoped by runtime (P4-22). The caller posts auth-hold, not a busy lie.
 function isAuthHeldSession(slot, runtimeId) {
   return deps.liveOnThread(slot).some((s) => s.state && s.state.authHeld === true && s.runtimeId === runtimeId);
 }
