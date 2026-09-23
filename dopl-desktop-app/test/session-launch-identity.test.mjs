@@ -14,12 +14,10 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { launchDefaultStub } from "./_launch-runtime-stub.mjs";
+import { bootLaunchOp } from "./_session-launch-op-harness.mjs";
 
-const require = createRequire(import.meta.url);
 const HERE = dirname(fileURLToPath(import.meta.url));
 const MAIN = join(HERE, "..", "main");
 const read = (f) => readFileSync(join(MAIN, f), "utf8");
@@ -39,62 +37,24 @@ const RESOLVED = {
   authoredByCaller: true,
 };
 
-/**
- * Boot the REAL launch body over a faked transport and a faked engine.
- * `api` decides what `/resolve` answers; `approved` is the machine-local store's verdict.
- */
+/** `api` decides what `/resolve` answers; `opts.approved` is the machine-local store's verdict. */
 function boot(api = {}, opts = {}) {
-  const launches = [];
   const approvals = [];
   const requests = [];
-  const stub = (id) => {
-    if (id === "./ipc-guards") return require(join(MAIN, "ipc-guards.js"));
-    if (id === "./launch-directive-vocab") return require(join(MAIN, "launch-directive-vocab.js"));
-    if (id === "./agent-id") return require(join(MAIN, "agent-id.js"));
-    if (id === "./diag") return { diag: () => {} };
-    if (id === "./runtime/selection-vocabulary") return require(join(MAIN, "runtime/selection-vocabulary.js"));
-    if (id === "./session-telemetry") return require(join(MAIN, "session-telemetry.js"));
-    if (id === "./api") {
-      return {
-        apiFetch: async (path, o) => {
-          requests.push({ path, ...o });
-          if (typeof api.throws === "function") throw api.throws();
-          return {
-            ok: api.status === undefined || (api.status >= 200 && api.status < 300),
-            status: api.status === undefined ? 200 : api.status,
-            json: async () => (api.body === undefined ? RESOLVED : api.body),
-          };
-        },
-      };
-    }
-    if (id === "./identity-resolve") return resolveMod.exports;
-    if (id === "./channel-listener") return { watchedChannel: () => ({ channel: { myAgentToolProfile: "full" } }) };
-    if (id === "./targeting") return { resolveToolProfile: () => "full", resolveLaunchToolProfile: () => "full" }; // ⚠ BOTH READS — the lane takes the LAUNCH one since ruling B7; `channel-agent-profile.test.mjs` drives the real rule
-    if (id === "./channel-prefs") {
-      return {
-        launchStartModes: () => ({ tools: "manual", messages: "auto_inbound" }),
-        isIdentityApproved: () => opts.approved === true,
-        approveIdentity: (t) => { approvals.push(t); return opts.storeWrites !== false; },
-      };
-    }
-    if (id === "./session-engine") {
-      return {
-        launchRequesterSession: async (spec) => {
-          launches.push(spec);
-          return { agentId: "ag-1", sessionId: "s-1" };
-        },
-      };
-    }
-    if (id === "./runtime/launch-default") return launchDefaultStub(); // the REAL runtime order, a passthrough model link
-    throw new Error("unexpected require: " + id);
+  const apiFetch = async (path, o) => {
+    requests.push({ path, ...o });
+    if (typeof api.throws === "function") throw api.throws();
+    return {
+      ok: api.status === undefined || (api.status >= 200 && api.status < 300),
+      status: api.status === undefined ? 200 : api.status,
+      json: async () => (api.body === undefined ? RESOLVED : api.body),
+    };
   };
-  const resolveMod = { exports: {} };
-  new Function("require", "module", "exports", read("identity-resolve.js"))(
-    stub, resolveMod, resolveMod.exports
-  );
-  const mod = { exports: {} };
-  new Function("require", "module", "exports", read("session-launch-op.js"))(stub, mod, mod.exports);
-  return { ...mod.exports, resolve: resolveMod.exports, launches, approvals, requests };
+  const prefs = {
+    isIdentityApproved: () => opts.approved === true,
+    approveIdentity: (t) => { approvals.push(t); return opts.storeWrites !== false; },
+  };
+  return { ...bootLaunchOp({ apiFetch, prefs }), approvals, requests };
 }
 
 const payload = (over = {}) => ({

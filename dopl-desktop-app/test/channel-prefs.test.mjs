@@ -69,6 +69,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { legacyPreset, mapPrefs, RESTRICTIVE, CH_A, CH_B } from "./_channel-prefs-block.mjs";
+import { evalModule } from "./helpers/module-sandbox.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const M = (p) => readFileSync(join(HERE, "..", "main", p), "utf8");
@@ -353,27 +354,14 @@ function bootIpc() {
     const block = g.slice(g.indexOf("// ─── BEGIN IPC-GUARDS"), g.indexOf("// ─── END IPC-GUARDS"));
     return new Function(`${block}\n return { isAppWindowSender, isUuid, UUID_RE };`)();
   })();
-  const runtimeReply = (() => {
-    const m = { exports: {} };
-    new Function("require", "module", "exports", M("channel-runtime-reply.js"))(stubRequire, m, m.exports);
-    return m.exports;
-  })();
-  const ops = (() => {
-    const m = { exports: {} };
-    new Function("require", "module", "exports", M("session-ipc-ops.js"))(stubRequire, m, m.exports);
-    return m.exports;
-  })();
-  const mod = { exports: {} };
-  new Function("require", "module", "exports", M("channel-dir-ipc.js"))(
-    stubRequire,
-    mod,
-    mod.exports
-  );
+  const runtimeReply = evalModule(M("channel-runtime-reply.js"), stubRequire);
+  const ops = evalModule(M("session-ipc-ops.js"), stubRequire);
+  const mod = evalModule(M("channel-dir-ipc.js"), stubRequire);
   const mainFrame = { name: "top" };
   const webContents = { id: 1, mainFrame, isDestroyed: () => false };
   // ⚠ THE BINDING'S SUBJECT WIDENED 2026-08-18 (wiring plan Phase 10): handlers are bound
   // to the set of `webContents` ids main registered at window creation, not to one window.
-  mod.exports.register({ getSenderIds: () => new Set([webContents.id]) });
+  mod.register({ getSenderIds: () => new Set([webContents.id]) });
   const event = { sender: webContents, senderFrame: mainFrame };
   return { handlers, map, event };
 }

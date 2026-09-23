@@ -5,29 +5,12 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
-
-const SRC = readFileSync(
-  join(dirname(fileURLToPath(import.meta.url)), "..", "main", "identity-approval.js"),
-  "utf8"
-);
+import { loadWithStubs } from "./helpers/module-sandbox.mjs";
 
 /** The module over a fake electron-store document. */
 function load(doc) {
-  const store = {
-    get: (k) => doc[k],
-    set: (k, v) => { doc[k] = v; },
-  };
-  const stub = (id) => {
-    if (id === "electron-store") return function Store() { return store; };
-    if (id === "./diag") return { diag: () => {} };
-    throw new Error("unexpected require: " + id);
-  };
-  const mod = { exports: {} };
-  new Function("require", "module", "exports", SRC)(stub, mod, mod.exports);
-  return mod.exports;
+  const store = { get: (k) => doc[k], set: (k, v) => { doc[k] = v; } };
+  return loadWithStubs("identity-approval.js", { "electron-store": function Store() { return store; }, "./diag": { diag: () => {} } });
 }
 
 test("an approval stored under the pre-rename key is honoured", () => {

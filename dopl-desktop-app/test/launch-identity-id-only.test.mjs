@@ -30,15 +30,7 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
-import { createRequire } from "node:module";
-import { fileURLToPath } from "node:url";
-import { dirname, join } from "node:path";
-
-const require = createRequire(import.meta.url);
-const HERE = dirname(fileURLToPath(import.meta.url));
-const MAIN = join(HERE, "..", "main");
-const read = (f) => readFileSync(join(MAIN, f), "utf8");
+import { bootIdentityResolve } from "./_session-launch-op-harness.mjs";
 
 const TPL = "33333333-3333-4333-8333-333333333333";
 const WS = "ws-1";
@@ -52,28 +44,14 @@ const RESOLVED = {
   authoredByCaller: true,
 };
 
-/** The REAL `identity-resolve.js`, over a transport that records every call. */
+/** The real `identity-resolve.js`, over a transport that records every call. */
 function boot() {
   const requests = [];
-  const stub = (id) => {
-    if (id === "./ipc-guards") return require(join(MAIN, "ipc-guards.js"));
-    if (id === "./launch-directive-vocab") return require(join(MAIN, "launch-directive-vocab.js"));
-    if (id === "./diag") return { diag: () => {} };
-    if (id === "./runtime/selection-vocabulary") return require(join(MAIN, "runtime/selection-vocabulary.js"));
-    if (id === "./session-telemetry") return require(join(MAIN, "session-telemetry.js"));
-    if (id === "./api") {
-      return {
-        apiFetch: async (path, o) => {
-          requests.push({ path, ...o });
-          return { ok: true, status: 200, json: async () => RESOLVED };
-        },
-      };
-    }
-    throw new Error("unexpected require: " + id);
+  const apiFetch = async (path, o) => {
+    requests.push({ path, ...o });
+    return { ok: true, status: 200, json: async () => RESOLVED };
   };
-  const mod = { exports: {} };
-  new Function("require", "module", "exports", read("identity-resolve.js"))(stub, mod, mod.exports);
-  return { ...mod.exports, requests };
+  return { ...bootIdentityResolve(apiFetch), requests };
 }
 
 test("an ID resolves, and it is the only thing that reaches the network", async () => {

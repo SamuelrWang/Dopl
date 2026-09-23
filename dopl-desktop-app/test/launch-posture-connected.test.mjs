@@ -30,6 +30,7 @@ import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
+import { evalModule, loadWithStubs } from "./helpers/module-sandbox.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const MAIN = join(HERE, "..", "main");
@@ -37,11 +38,7 @@ const requireMain = createRequire(import.meta.url);
 
 /** A fresh module instance — the cache is module-level, so each case gets its own. */
 function loadConnectivity() {
-  const src = readFileSync(join(MAIN, "runtime", "connectivity.js"), "utf8");
-  const mod = { exports: {} };
-  const stub = (id) => { throw new Error(`unexpected require: ${id}`); };
-  new Function("require", "module", "exports", src)(stub, mod, mod.exports);
-  return mod.exports;
+  return loadWithStubs("runtime/connectivity.js", {});
 }
 
 /** One fake sealed adapter. `answer` is whatever `available()` does. */
@@ -296,26 +293,12 @@ function bootIpc(opts = {}) {
     if (id === "./runtime/model-catalog") return { CATALOG_VERSION: 1, catalogs: () => ({}) };
     throw new Error(`unexpected require: ${id}`);
   };
-  const runtimeReply = (() => {
-    const m = { exports: {} };
-    new Function("require", "module", "exports", readFileSync(join(MAIN, "channel-runtime-reply.js"), "utf8"))(
-      stub, m, m.exports
-    );
-    return m.exports;
-  })();
-  const ops = (() => {
-    const m = { exports: {} };
-    new Function("require", "module", "exports", readFileSync(join(MAIN, "session-ipc-ops.js"), "utf8"))(
-      stub, m, m.exports
-    );
-    return m.exports;
-  })();
-  const mod = { exports: {} };
-  new Function("require", "module", "exports", readFileSync(join(MAIN, "channel-dir-ipc.js"), "utf8"))(
-    stub, mod, mod.exports
-  );
+  const evalMain = (file) => evalModule(readFileSync(join(MAIN, file), "utf8"), stub);
+  const runtimeReply = evalMain("channel-runtime-reply.js");
+  const ops = evalMain("session-ipc-ops.js");
+  const mod = evalMain("channel-dir-ipc.js");
   const mainFrame = { name: "top" };
   const webContents = { id: 1, mainFrame, isDestroyed: () => false };
-  mod.exports.register({ getSenderIds: () => new Set([webContents.id]) });
+  mod.register({ getSenderIds: () => new Set([webContents.id]) });
   return { handlers, event: { sender: webContents, senderFrame: mainFrame } };
 }

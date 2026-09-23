@@ -18,6 +18,7 @@ import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { join } from "node:path";
 import { sentinelBlock } from "./helpers/source-probe.mjs";
+import { evalModule } from "./helpers/module-sandbox.mjs";
 
 const require_ = createRequire(import.meta.url);
 const MAIN = join(import.meta.dirname, "..", "main");
@@ -69,16 +70,13 @@ function directionsLane(direct) {
     if (id === "./diag") return { diag: () => {} };
     throw new Error(`unexpected require: ${id}`);
   };
-  const mod = { exports: {} };
-  new Function("require", "module", "exports", readFileSync(join(MAIN, "agent-directions.js"), "utf8"))(
-    stub, mod, mod.exports
-  );
-  mod.exports.start({ getUserId: () => ME, direct, workspaces: () => [WS] });
+  const mod = evalModule(readFileSync(join(MAIN, "agent-directions.js"), "utf8"), stub);
+  mod.start({ getUserId: () => ME, direct, workspaces: () => [WS] });
   // ⚠ `session-directed.js` lazy-requires `./agent-directions` to report; hand it THIS instance.
   const path = join(MAIN, "agent-directions.js");
-  require_.cache[path] = { id: path, filename: path, loaded: true, exports: mod.exports };
+  require_.cache[path] = { id: path, filename: path, loaded: true, exports: mod };
   const decides = () => posts.filter((p) => p.path === wire.ROUTES.decide).map((p) => p.body);
-  return { api: mod.exports, decides };
+  return { api: mod, decides };
 }
 
 function row(id, status = "pending") {

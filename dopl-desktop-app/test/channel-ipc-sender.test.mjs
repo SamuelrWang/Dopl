@@ -246,9 +246,7 @@ test("every op REFUSES when no registry accessor was supplied (an unbound surfac
   const guards = new Function(`${BLOCK}\n return { isAppWindowSender, isUuid, UUID_RE };`)();
   const agentId = { isAgentId: (v) => typeof v === "string" && /^[a-z][a-z0-9]{7}$/.test(v) };
   const ops = evalModule(OPS_SRC, stub);
-  const mod = { exports: {} };
-  new Function("require", "module", "exports", SRC)(stub, mod, mod.exports);
-  mod.exports.register({}); // no getSenderIds — and the split half inherits the same absence
+  evalModule(SRC, stub).register({}); // no getSenderIds — and the split half inherits the same absence
   const { webContents, mainFrame } = mkWin();
   for (const [name, payload, refusal] of OPS) {
     assert.deepEqual(await handlers[name](evt(webContents, mainFrame), payload), refusal, name);

@@ -19,9 +19,10 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import {
-  loadCatalog, loadCodexModels, claudeModels, claudeTable, CLAUDE_IDS, noClaude,
+  loadCatalog, loadCodexModels, claudeTable, CLAUDE_IDS, noClaude,
   fakeClient, row, adapter, CODEX_DESCRIPTOR, settle,
 } from "./_model-catalog-harness.mjs";
+import { evalModule } from "./helpers/module-sandbox.mjs";
 
 const MAIN = join(dirname(fileURLToPath(import.meta.url)), "..", "main");
 
@@ -159,10 +160,7 @@ function loadReply({ catalog, adapters, connected }) {
     if (id === "./diag") return { diag: () => {} };
     throw new Error(`unexpected require: ${id}`);
   };
-  const m = { exports: {} };
-  new Function("require", "module", "exports", readFileSync(join(MAIN, "channel-runtime-reply.js"), "utf8"))(
-    stub, m, m.exports);
-  return { reply: m.exports.runtimeReply, expired: () => expired };
+  return { reply: evalModule(readFileSync(join(MAIN, "channel-runtime-reply.js"), "utf8"), stub).runtimeReply, expired: () => expired };
 }
 
 test("🔒 end to end: repair shows up on the SAME process's settings reads, and Codex never shows a Claude id", async () => {
