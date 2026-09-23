@@ -79,6 +79,7 @@ const RESOLVED = {
   name: "Researcher",
   instructions: "You are a researcher. Cite sources.",
   model: "opus",
+  runtime: "claude",
   fields: [
     { key: "tone", value: "terse" },
     { key: "repo", value: "acme/api" },
@@ -119,7 +120,7 @@ beforeEach(() => {
 });
 
 describe("the launch payload", () => {
-  it("is EXACTLY {name, instructions, model, fields, knowledgeBases, knowledge, authoredByCaller, unreachableKnowledgeBaseCount} — flat, no envelope", async () => {
+  it("is EXACTLY {name, instructions, model, runtime, fields, knowledgeBases, knowledge, authoredByCaller, unreachableKnowledgeBaseCount} — flat, no envelope", async () => {
     const res = await GET(req(), { params: Promise.resolve({}) });
     expect(res.status).toBe(200);
     const body = await res.json();
@@ -136,6 +137,8 @@ describe("the launch payload", () => {
       "knowledgeBases",
       "model",
       "name",
+      // The identity's runtime ('' / null = no preference; C4).
+      "runtime",
       // ⚠ THE SEVENTH KEY (2026-09-05 type, pin moved 2026-09-06): how many attached
       // bases this launch cannot reach. Predicted at #1461; the pin follows the type.
       "unreachableKnowledgeBaseCount",
@@ -170,6 +173,7 @@ describe("the launch payload", () => {
       name: "Bare",
       instructions: null,
       model: null,
+      runtime: null,
       fields: [],
       knowledgeBases: [],
       authoredByCaller: false,
@@ -181,6 +185,7 @@ describe("the launch payload", () => {
       name: "Bare",
       instructions: null,
       model: null,
+      runtime: null,
       fields: [],
       knowledgeBases: [],
       authoredByCaller: false,

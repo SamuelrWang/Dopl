@@ -126,6 +126,21 @@ describe("updateIdentity — the version is a PRECONDITION, not a comparison", (
     expect(mockRepo.replaceKnowledgeLinks).not.toHaveBeenCalled();
   });
 
+  it("a JUNCTION-ONLY patch with a version is an UPDATE, so the CAS also BUMPS the version (P7-03)", async () => {
+    mockRepo.updateIdentityRow.mockResolvedValue(identity({ updatedAt: MOVED }));
+
+    await updateIdentity(ctx(), "tpl-1", { knowledgeBaseIds: [KB_OPEN] }, VERSION);
+
+    // A same-value rename: an empty patch would be a SELECT and leave `updated_at` alone,
+    // so a second writer holding VERSION would pass and silently replace this set.
+    expect(mockRepo.updateIdentityRow).toHaveBeenCalledWith(
+      "ws-1",
+      "tpl-1",
+      expect.objectContaining({ name: identity().name }),
+      VERSION
+    );
+  });
+
   it("fences a JUNCTION-ONLY patch too — the F-404 skip yields to a stated version", async () => {
     mockRepo.updateIdentityRow.mockResolvedValue(null);
 
@@ -158,10 +173,15 @@ describe("updateIdentity — STALE PAYLOAD: a caller that sends no version", () 
     expect(mockRepo.updateIdentityRow.mock.calls[0]).toHaveLength(3);
   });
 
-  it("still SKIPS the row write for a junction-only patch (F-404 is untouched)", async () => {
+  it("still bumps the row for a junction-only patch, with a non-empty body (F-404, P7-03)", async () => {
     await updateIdentity(ctx(), "tpl-1", { knowledgeBaseIds: [KB_OPEN] });
 
-    expect(mockRepo.updateIdentityRow).not.toHaveBeenCalled();
+    expect(mockRepo.updateIdentityRow).toHaveBeenCalledWith(
+      "ws-1",
+      "tpl-1",
+      expect.objectContaining({ name: identity().name })
+    );
+    expect(mockRepo.updateIdentityRow.mock.calls[0]).toHaveLength(3);
     expect(mockRepo.replaceKnowledgeLinks).toHaveBeenCalled();
   });
 });

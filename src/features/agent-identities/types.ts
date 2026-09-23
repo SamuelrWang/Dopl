@@ -238,6 +238,12 @@ export interface AgentIdentity {
   /** Default model identifier, passed through at spawn. Null = the desktop's
    *  own default; this layer holds no model roster. */
   model: string | null;
+  /**
+   * The runtime this identity prefers (`claude`, `codex`, …); `null` = no
+   * preference, the channel's runtime decides. `model` is read against THIS
+   * runtime's catalog. Optional per §8 (cached payloads predate it): read `?? null`.
+   */
+  runtime?: string | null;
   fields: IdentityField[];
   visibility: IdentityVisibility;
   /**
@@ -298,6 +304,8 @@ export interface ResolvedAgentIdentity {
   name: string;
   instructions: string | null;
   model: string | null;
+  /** The identity's runtime, or `null` for no preference (C4). */
+  runtime: string | null;
   fields: IdentityField[];
   knowledgeBases: IdentityKnowledgeBaseRef[];
   /**

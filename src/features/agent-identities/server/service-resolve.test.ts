@@ -196,7 +196,7 @@ describe("the payload, and the door it comes through", () => {
   // this payload through an allowlist that drops keys it does not know, so a
   // build that predates scopes would otherwise launch a role naming no knowledge
   // at all (§13's older-peer rule, on the payload where the failure is silent).
-  it("carries EXACTLY the eight launch keys — no id, no visibility, no ownership", async () => {
+  it("carries EXACTLY the nine launch keys — no id, no visibility, no ownership", async () => {
     mockRepo.findIdentityById.mockResolvedValue(identity());
     const resolved = await resolveIdentityForLaunch(ctx(), "tpl-1");
     expect(Object.keys(resolved).sort()).toEqual([
@@ -207,6 +207,7 @@ describe("the payload, and the door it comes through", () => {
       "knowledgeBases",
       "model",
       "name",
+      "runtime",
       "unreachableKnowledgeBaseCount",
     ]);
     expect(resolved).not.toHaveProperty("createdBy");

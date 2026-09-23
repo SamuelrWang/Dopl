@@ -38,6 +38,8 @@ export interface IdentityDraft {
   instructions: string;
   /** `""` = Default (`channels/lib/agent-models.ts › AGENT_MODEL_DEFAULT`). */
   model: string;
+  /** `""` = no runtime preference (the channel decides). */
+  runtime: string;
   fields: IdentityField[];
   visibility: IdentityVisibility;
   /**
@@ -82,6 +84,7 @@ export function emptyDraft(): IdentityDraft {
     description: "",
     instructions: "",
     model: "",
+    runtime: "",
     fields: [{ key: "", value: "", type: IDENTITY_FIELD_TYPE_DEFAULT }],
     visibility: "private",
     teamIds: [],
@@ -95,6 +98,8 @@ export function draftFromIdentity(identity: AgentIdentity): IdentityDraft {
     description: identity.description ?? "",
     instructions: identity.instructions ?? "",
     model: identity.model ?? "",
+    // §8: a cached row predating the column has no `runtime` key.
+    runtime: identity.runtime ?? "",
     fields: identity.fields.map((f) => ({
       key: f.key,
       value: f.value,
@@ -191,6 +196,7 @@ export function draftToCreateBody(draft: IdentityDraft): AgentIdentityCreateBody
   const instructions = draft.instructions.trim();
   if (instructions) body.instructions = instructions;
   if (draft.model) body.model = draft.model;
+  if (draft.runtime) body.runtime = draft.runtime;
   const fields = cleanFields(draft.fields);
   if (fields.length > 0) body.fields = fields;
   if (draft.visibility === "team" && draft.teamIds.length > 0) {
@@ -234,6 +240,7 @@ export function draftToPatchBody(
   const instructions = draft.instructions.trim();
   if (instructions !== before.instructions) patch.instructions = instructions || null;
   if (draft.model !== before.model) patch.model = draft.model || null;
+  if (draft.runtime !== before.runtime) patch.runtime = draft.runtime || null;
 
   const fields = cleanFields(draft.fields);
   if (!sameFields(fields, cleanFields(before.fields))) patch.fields = fields;
@@ -304,6 +311,7 @@ export function optimisticIdentity(
     description: draft.description.trim() || null,
     instructions: draft.instructions.trim() || null,
     model: draft.model || null,
+    runtime: draft.runtime || null,
     fields: cleanFields(draft.fields),
     visibility: draft.visibility,
     teamIds: draft.visibility === "team" ? [...draft.teamIds] : [],

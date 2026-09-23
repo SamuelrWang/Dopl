@@ -208,6 +208,7 @@ describe("what it must NOT do", () => {
       "knowledgeBases",
       "model",
       "name",
+      "runtime",
       "unreachableKnowledgeBaseCount",
     ]);
   });

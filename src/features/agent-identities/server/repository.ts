@@ -128,6 +128,7 @@ export interface InsertIdentityArgs {
   description: string | null;
   instructions: string | null;
   model: string | null;
+  runtime?: string | null;
   fields: IdentityField[];
   visibility: IdentityVisibility;
   /**
@@ -159,6 +160,7 @@ export async function insertIdentity(
       description: args.description,
       instructions: args.instructions,
       model: args.model,
+      runtime: args.runtime ?? null,
       fields: args.fields,
       visibility: args.visibility,
       created_by: args.createdBy,
@@ -178,6 +180,7 @@ export interface UpdateIdentityPatch {
   description?: string | null;
   instructions?: string | null;
   model?: string | null;
+  runtime?: string | null;
   fields?: IdentityField[];
   /** ⚠ The repo trusts whatever it gets — the service decides who may
    *  re-scope, exactly as `updateSkillRow` documents. */
@@ -218,6 +221,7 @@ export async function updateIdentityRow(
   if (patch.description !== undefined) update.description = patch.description;
   if (patch.instructions !== undefined) update.instructions = patch.instructions;
   if (patch.model !== undefined) update.model = patch.model;
+  if (patch.runtime !== undefined) update.runtime = patch.runtime;
   if (patch.fields !== undefined) update.fields = patch.fields;
   if (patch.visibility !== undefined) update.visibility = patch.visibility;
   // ⚠ NO `updated_at` HERE. §12: it is stamped by

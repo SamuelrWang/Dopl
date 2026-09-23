@@ -5,6 +5,10 @@ import {
   safeLabelMessage,
   safeOptionalProse,
 } from "@/shared/lib/safe-label";
+import {
+  LAUNCH_RUNTIME_ID_MESSAGE,
+  LAUNCH_RUNTIME_ID_RE,
+} from "@/features/channels/schema-launch-modes";
 import type { IdentityFieldType } from "./types";
 
 /**
@@ -65,6 +69,10 @@ const InstructionsSchema = safeOptionalProse(
  */
 export const MAX_MODEL_CHARS = 120;
 const ModelSchema = safeLabel("Model", MAX_MODEL_CHARS);
+
+/** The runtime an identity prefers. Grammar only (the roster is the desktop's);
+ *  paired with `agent_identities_runtime_shape_check`. */
+const RuntimeSchema = z.string().trim().regex(LAUNCH_RUNTIME_ID_RE, LAUNCH_RUNTIME_ID_MESSAGE);
 
 // ─── Custom fields ──────────────────────────────────────────────────────
 
@@ -264,6 +272,7 @@ export const AgentIdentityCreateSchema = z
     description: DescriptionSchema.nullable().optional(),
     instructions: InstructionsSchema.nullable().optional(),
     model: ModelSchema.nullable().optional(),
+    runtime: RuntimeSchema.nullable().optional(),
     fields: IdentityFieldsSchema.optional(),
     /** Omitted → the service defaults to `'private'`, matching `createSkill`
      *  and `createBase`. */
@@ -316,6 +325,7 @@ const MUTABLE_UPDATE_KEYS = [
   "description",
   "instructions",
   "model",
+  "runtime",
   "fields",
   "visibility",
   "teamIds",
@@ -329,6 +339,7 @@ export const AgentIdentityUpdateSchema = z
     description: DescriptionSchema.nullable().optional(),
     instructions: InstructionsSchema.nullable().optional(),
     model: ModelSchema.nullable().optional(),
+    runtime: RuntimeSchema.nullable().optional(),
     fields: IdentityFieldsSchema.optional(),
     visibility: IdentityVisibilitySchema.optional(),
     teamIds: TeamIdsSchema.optional(),

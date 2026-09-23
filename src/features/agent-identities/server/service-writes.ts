@@ -167,6 +167,7 @@ export async function createIdentity(
     description: normalizeProse(input.description),
     instructions: normalizeProse(input.instructions),
     model: normalizeLabel(input.model),
+    runtime: input.runtime ?? null,
     fields: normalizeFieldsInput(input.fields),
     visibility,
     // 🔒 A ROUTING FLAG, NOT A COLUMN (B15) — see `insertIdentity`.
@@ -333,20 +334,7 @@ export async function updateIdentity(
       ? null
       : await assertAttachableKnowledgeScopes(tplCtx, requestedScopes);
 
-  // ⚠ A JUNCTION-ONLY PATCH TOUCHES NO SCALAR COLUMN, so it must not reach the
-  // row write at all (F-404, 2026-09-02). `knowledgeBaseIds`-only and
-  // `teamIds`-only patches are both legal — `packages/mcp-server/src/tools/
-  // agent-ops-write.ts › opUpdate` refuses only the patch that names NOTHING,
-  // and `agent-identities/schema.ts › UpdateIdentitySchema` marks every field
-  // optional — and both used to arrive at `updateIdentityRow` as an
-  // all-`undefined` patch, i.e. an empty UPDATE body, which PostgREST rejects
-  // and `http-mapping.ts` had no arm for: the agent got a bare INTERNAL_ERROR
-  // 500 for a request that was entirely valid. The repo is now total on the
-  // empty patch too, so this is the round trip we skip rather than the guard we
-  // depend on. Mirrors `workspaces/server/service.ts › renameWorkspace`.
-  // ⚠ TYPED AS THE REPOSITORY'S OWN PATCH, so the emptiness test and the column
-  // set cannot drift: a seventh scalar column added to `UpdateIdentityPatch` and
-  // forgotten here is a compile-time absence to notice, not a silent skip.
+  // ⚠ Typed as the repository's own patch, so a new scalar column is a compile-time absence here.
   const rowPatch: repo.UpdateIdentityPatch = {
     name: patch.name === undefined ? undefined : stripNullBytes(patch.name),
     description:
@@ -356,20 +344,20 @@ export async function updateIdentity(
         ? undefined
         : normalizeProse(patch.instructions),
     model: patch.model === undefined ? undefined : normalizeLabel(patch.model),
+    runtime: patch.runtime,
     fields: patch.fields === undefined ? undefined : normalizeFieldsInput(patch.fields),
     visibility: patch.visibility,
   };
-  // ⚠ **THE PRECONDITION IS WHAT MAKES THE SKIP CONDITIONAL.** A junction-only
-  // patch still has a version to honour, so a caller that passed one gets the
-  // round trip; a caller that passed none keeps the F-404 skip byte for byte.
-  // 🔒 **BEFORE BOTH JUNCTION WRITES** — there is no transaction across these
-  // three statements (the create path says the same), so a refusal must land
-  // first or a lost race moves the row's LINKS and not its columns.
-  // ⚠ TWO CALL SHAPES, NOT A FOURTH ARGUMENT THAT IS SOMETIMES `undefined`: the
-  // 3-arg overload is TOTAL (it throws or returns a row) and the 4-arg one is
-  // the CAS, and a caller that reads one of them should not have to know the
-  // other exists. The un-versioned path is therefore byte-identical to what it
-  // was before F-747.
+  // A junction-only write still UPDATEs the row (a same-value rename, never an empty
+  // body — F-404) so the touch trigger versions it and the CAS guards attachments too (P7-03).
+  if (
+    (teamIds !== null || knowledgeScopes !== null) &&
+    !Object.values(rowPatch).some((value) => value !== undefined)
+  ) {
+    rowPatch.name = existing.name;
+  }
+  // 🔒 The CAS runs BEFORE both junction writes (no transaction spans them), so a
+  // lost race moves neither the links nor the columns.
   const touchesRow = Object.values(rowPatch).some((value) => value !== undefined);
   if (expectedUpdatedAt !== undefined) {
     const saved = await repo.updateIdentityRow(

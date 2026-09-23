@@ -89,6 +89,7 @@ export function normalizeFieldsInput(
   return fields.map((f) => ({
     key: stripNullBytes(f.key),
     value: stripNullBytes(f.value),
+    ...(f.type ? { type: f.type } : {}),
   }));
 }
 

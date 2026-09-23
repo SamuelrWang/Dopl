@@ -36,6 +36,11 @@ vi.mock("./repository", () => ({
   replaceTeamLinks: vi.fn(),
   replaceKnowledgeLinks: vi.fn(),
   listKnowledgeLinksForIdentities: vi.fn(),
+  listKnowledgeBaseAccessRows: vi.fn(),
+  listKnowledgeBaseTeamGrants: vi.fn(),
+  listTeamIdsForUser: vi.fn(),
+  listLiveFoldersForBases: vi.fn(),
+  listLiveEntryRows: vi.fn(),
 }));
 
 // ⚠ **NEW ON THE A2 CLEANUP SLICE, AND IT IS WHY THE WRITE BLOCK BELOW MOVED.**
@@ -120,6 +125,9 @@ beforeEach(() => {
   // folds them; a Map here throws inside `decorateWithKnowledgeBases`.
   mockRepo.listTeamLinksForIdentities.mockResolvedValue([]);
   mockRepo.listKnowledgeLinksForIdentities.mockResolvedValue([]);
+  mockRepo.listKnowledgeBaseAccessRows.mockResolvedValue([]);
+  mockRepo.listLiveFoldersForBases.mockResolvedValue([]);
+  mockRepo.listLiveEntryRows.mockResolvedValue([]);
   // `createIdentity` returns through `getIdentityById`, so the row has to be
   // findable afterwards — the write is asserted on `insertIdentity`'s args.
   mockRepo.findIdentityById.mockImplementation((_ws, id) =>
@@ -180,6 +188,37 @@ describe("listing one shelf", () => {
 
     expect(narrowed.map((t) => t.id)).toEqual(["pub"]);
     expect(unfiltered.map((t) => t.id)).toEqual(["pub"]);
+  });
+});
+
+describe("decorating a list that spans containers (P7-02)", () => {
+  const KB_PERSONAL = "kb-personal";
+
+  it("reads each row's knowledge in ITS OWN container, so a personal row keeps its set", async () => {
+    mockRepo.listIdentitiesForWorkspace.mockResolvedValue([
+      tpl({ id: "here", workspaceId: HOME_WS }),
+      tpl({ id: "personal", workspaceId: PERSONAL_WS }),
+    ]);
+    // Junction and base rows are filed under the row's container: asked under the
+    // calling one, the personal row's links are simply not there.
+    mockRepo.listKnowledgeLinksForIdentities.mockImplementation(async (ws) =>
+      ws === PERSONAL_WS
+        ? [{ identityId: "personal", knowledgeBaseId: KB_PERSONAL, scopeKind: "base", folderId: null, entryId: null }]
+        : []
+    );
+    mockRepo.listKnowledgeBaseAccessRows.mockImplementation(async (ws) =>
+      ws === PERSONAL_WS
+        ? ([{ id: KB_PERSONAL, name: "Notes", visibility: "private", accessMode: "workspace", createdBy: USER }] as never)
+        : []
+    );
+
+    const rows = await listIdentities(personCtx());
+    const personal = rows.find((t) => t.id === "personal");
+
+    expect(mockRepo.listKnowledgeLinksForIdentities).toHaveBeenCalledWith(PERSONAL_WS, ["personal"]);
+    expect(personal?.knowledgeBases).toEqual([{ id: KB_PERSONAL, name: "Notes" }]);
+    expect(personal?.unreachableKnowledgeBaseCount).toBe(0);
+    expect(rows.map((t) => t.id)).toEqual(["here", "personal"]);
   });
 });
 
