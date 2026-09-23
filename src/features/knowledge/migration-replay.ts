@@ -21,6 +21,8 @@ import { readFileSync, readdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { forwardRenamed } from "@/shared/supabase/migration-renames";
+
 const MIGRATIONS = join(
   dirname(fileURLToPath(import.meta.url)),
   "..",
@@ -40,14 +42,20 @@ export function stripLineComments(sql: string): string {
     .join("\n");
 }
 
-/** Every migration, filename-sorted (= apply order), comments removed. */
-export const FILES = readdirSync(MIGRATIONS)
-  .filter((f) => f.endsWith(".sql"))
-  .sort()
-  .map((name) => ({
-    name,
-    sql: stripLineComments(readFileSync(join(MIGRATIONS, name), "utf8")),
-  }));
+/**
+ * Every migration, filename-sorted (= apply order), comments removed — and FORWARD-RENAMED, so an
+ * object a later file `ALTER … RENAME`d reads under its final name throughout
+ * (`shared/supabase/migration-renames.ts`).
+ */
+export const FILES = forwardRenamed(
+  readdirSync(MIGRATIONS)
+    .filter((f) => f.endsWith(".sql"))
+    .sort()
+    .map((name) => ({
+      name,
+      sql: stripLineComments(readFileSync(join(MIGRATIONS, name), "utf8")),
+    }))
+);
 
 /** The statement starting at `from`, up to the first `;` at paren depth 0. */
 export function statementAt(sql: string, from: number): string {

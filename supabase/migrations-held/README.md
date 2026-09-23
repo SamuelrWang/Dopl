@@ -55,7 +55,7 @@ order it was written in, and `db push` compares stamps against
 
 **Held on ONE unmeasured row count. ⚠ The CODE precondition is met and the old
 rationale is gone (re-measured 2026-09-10).** The file drops
-`knowledge_bases.home_scoped` and `agent_templates.home_scoped`; its `DO $$`
+`knowledge_bases.home_scoped` and `agent_identities.home_scoped`; its `DO $$`
 block RAISEs while any row still carries `home_scoped = true` outside a
 `kind='personal'` container, because dropping it there would **publish a personal
 row to its whole workspace** — and a `RAISE` inside `db push` aborts the batch
@@ -87,7 +87,7 @@ rests entirely on step 3's count. **Deploy state is a measurement, not a claim**
     WHERE k.home_scoped IS TRUE
       AND NOT EXISTS (SELECT 1 FROM public.workspaces p
                        WHERE p.id = k.workspace_id AND p.kind = 'personal');
-   -- and the same for public.agent_templates
+   -- and the same for public.agent_identities
    ```
 
 4. Only then `git mv` it back and push.

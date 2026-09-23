@@ -4,10 +4,10 @@
  *
  * ⚠ **THE DEFECT THIS EXISTS TO CATCH, AND IT SHIPPED.**
  * `20260920120000_workspace_kind_personal.sql` moved every personal knowledge
- * base and agent template into its author's container with two
+ * base and agent identity into its author's container with two
  * `UPDATE … SET workspace_id` statements, and left `knowledge_folders`,
  * `knowledge_entries`, `knowledge_entry_chunks` and
- * `agent_template_knowledge_bases` stamped with the OLD tenancy. Nothing
+ * `agent_identity_knowledge_bases` stamped with the OLD tenancy. Nothing
  * compares the two until a caller resolves a path inside the moved base
  * (`path.ts › assertSameWorkspace`), so the move measured as clean and the
  * contents of one base were unreadable — F-604's shape a second time.
@@ -35,6 +35,7 @@
 
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
+import { forwardRenamed } from "../src/shared/supabase/migration-renames";
 
 const MIGRATIONS = join(process.cwd(), "supabase", "migrations");
 
@@ -47,15 +48,15 @@ const MIGRATIONS = join(process.cwd(), "supabase", "migrations");
  * tenancy; check 2 will not tell you (it only measures the parents named here),
  * so the addition is a judgement and this comment is where it is recorded.
  */
-const PARENTS = ["knowledge_bases", "agent_templates"] as const;
+const PARENTS = ["knowledge_bases", "agent_identities"] as const;
 type Parent = (typeof PARENTS)[number];
 
 /**
  * Child table → the parent it derives its `workspace_id` from.
  *
- * ⚠ `agent_template_knowledge_bases` HAS TWO PARENTS AND ONLY ONE OF THEM IS
+ * ⚠ `agent_identity_knowledge_bases` HAS TWO PARENTS AND ONLY ONE OF THEM IS
  * THIS ONE. It references `knowledge_bases` as well, but the junction is the
- * TEMPLATE's attachment list — that is the key `repository-knowledge-links.ts`
+ * IDENTITY's attachment list — that is the key `repository-knowledge-links.ts`
  * reads and writes it by — and an attached base may legitimately live in
  * another container, because an attachment is a reference and not a copy. So
  * the ambiguity is resolved HERE, once, rather than by whichever `UPDATE` a
@@ -65,7 +66,7 @@ const DERIVES_FROM: Record<string, Parent> = {
   knowledge_folders: "knowledge_bases",
   knowledge_entries: "knowledge_bases",
   knowledge_entry_chunks: "knowledge_bases",
-  agent_template_knowledge_bases: "agent_templates",
+  agent_identity_knowledge_bases: "agent_identities",
 };
 
 /**
@@ -116,8 +117,13 @@ function stripComments(sql: string): string {
     .join("\n");
 }
 
+// ⚠ FORWARD-RENAMED (2026-09-22): a table that was `ALTER … RENAME`d reads under its FINAL
+// name in every file, so `agent_identity_knowledge_bases` is discovered from the file that
+// created it as `agent_template_knowledge_bases` (`shared/supabase/migration-renames.ts`).
 const sources = new Map(
-  files.map((name) => [name, stripComments(readFileSync(join(MIGRATIONS, name), "utf8"))])
+  forwardRenamed(
+    files.map((name) => ({ name, sql: stripComments(readFileSync(join(MIGRATIONS, name), "utf8")) }))
+  ).map((f) => [f.name, f.sql])
 );
 
 const problems: string[] = [];

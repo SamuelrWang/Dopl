@@ -39,10 +39,10 @@
 -- ═══ ROLLBACK ═══════════════════════════════════════════════════════════════
 --
 --   ALTER TABLE public.knowledge_bases ADD COLUMN IF NOT EXISTS home_scoped BOOLEAN NOT NULL DEFAULT false;
---   ALTER TABLE public.agent_templates ADD COLUMN IF NOT EXISTS home_scoped BOOLEAN NOT NULL DEFAULT false;
+--   ALTER TABLE public.agent_identities ADD COLUMN IF NOT EXISTS home_scoped BOOLEAN NOT NULL DEFAULT false;
 --   UPDATE public.knowledge_bases k SET home_scoped = true
 --     FROM public.workspaces p WHERE p.id = k.workspace_id AND p.kind = 'personal';
---   UPDATE public.agent_templates t SET home_scoped = true
+--   UPDATE public.agent_identities t SET home_scoped = true
 --     FROM public.workspaces p WHERE p.id = t.workspace_id AND p.kind = 'personal';
 --
 -- ⚠ **THE ROLLBACK IS LOSSLESS ONLY BECAUSE THE CONTAINER CARRIES THE FACT.**
@@ -84,11 +84,11 @@ BEGIN
 
   IF EXISTS (
     SELECT 1 FROM information_schema.columns
-     WHERE table_schema = 'public' AND table_name = 'agent_templates'
+     WHERE table_schema = 'public' AND table_name = 'agent_identities'
        AND column_name = 'home_scoped'
   ) THEN
     EXECUTE $q$
-      SELECT count(*) FROM public.agent_templates t
+      SELECT count(*) FROM public.agent_identities t
        WHERE t.home_scoped IS TRUE
          AND NOT EXISTS (
            SELECT 1 FROM public.workspaces p
@@ -97,7 +97,7 @@ BEGIN
     $q$ INTO stranded;
     IF stranded > 0 THEN
       RAISE EXCEPTION
-        'drop_home_scoped: % agent_templates still carry home_scoped=true outside a personal container. See the knowledge_bases branch above for the remedy.',
+        'drop_home_scoped: % agent_identities still carry home_scoped=true outside a personal container. See the knowledge_bases branch above for the remedy.',
         stranded;
     END IF;
   END IF;
@@ -110,4 +110,4 @@ END $$;
 -- THE READ SHAPE" in as many words. A `DROP COLUMN` cascade would have taken one
 -- silently, which is why this is stated instead of left to the reader.
 ALTER TABLE public.knowledge_bases DROP COLUMN IF EXISTS home_scoped;
-ALTER TABLE public.agent_templates DROP COLUMN IF EXISTS home_scoped;
+ALTER TABLE public.agent_identities DROP COLUMN IF EXISTS home_scoped;

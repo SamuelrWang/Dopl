@@ -38,14 +38,14 @@
  *
  * ⚠ IT STILL DOES NOT CLAIM THE TWO AGREE. Equality of MEANING is what the
  * redteam suites prove, per table, one table at a time
- * (`{knowledge,skills,chats,agent-templates}/server/rls-redteam.test.ts` and
+ * (`{knowledge,skills,chats,agent-identities}/server/rls-redteam.test.ts` and
  * `shared/supabase/rls-redteam-resource-grants.test.ts`). This gate proves that
  * nothing is unpaired and that the SELECT surface is the declared one. Say it
  * that way in any doc that cites it.
  *
  * ⚠ AND A COVERED TABLE NEED NOT HAVE A PREDICATE. Five of the nine tables
  * phases 1–2 cover are fenced by a PARENT's rule (`knowledge_folders`,
- * `knowledge_entries`, `chat_messages`, `agent_template_knowledge_bases`) or by
+ * `knowledge_entries`, `chat_messages`, `agent_identity_knowledge_bases`) or by
  * no TS predicate at all (`resource_grants`) — hence `predicates: []`.
  *
  * ⚠ **`skill_files` IS NOT ONE OF THEM AND NEVER WAS (F-586).** It was declared
@@ -115,17 +115,17 @@ const COVERED: Record<string, Covered> = {
     predicates: [],
     select: { chat_messages_select: "dopl_chat_readable" },
   },
-  agent_templates: {
-    predicates: ["canSeeTemplate"],
+  agent_identities: {
+    predicates: ["canSeeIdentity"],
     select: {
-      agent_templates_member_select: "can_current_user_read_agent_template",
+      agent_identities_member_select: "can_current_user_read_agent_identity",
     },
   },
-  agent_template_knowledge_bases: {
+  agent_identity_knowledge_bases: {
     predicates: [],
     select: {
-      agent_template_knowledge_bases_member_select:
-        "can_current_user_read_agent_template",
+      agent_identity_knowledge_bases_member_select:
+        "can_current_user_read_agent_identity",
     },
   },
   // ── ontology (2026-09-09, `docs/specs/home-ontology.md` §3.3, slice S1) ────

@@ -2,6 +2,8 @@ import { readFileSync, readdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { forwardRenamed } from "./migration-renames";
+
 /**
  * THE MIGRATION REPLAY, AS A SCANNER — the shared half of every RLS redteam
  * suite (Wave B B7's `knowledge/server/rls-redteam.test.ts`, B12's three more).
@@ -51,14 +53,16 @@ function stripLineComments(sql: string): string {
     .join("\n");
 }
 
-/** Every migration, filename-sorted (= apply order), comments removed. */
-const FILES = readdirSync(MIGRATIONS)
-  .filter((f) => f.endsWith(".sql"))
-  .sort()
-  .map((name) => ({
-    name,
-    sql: stripLineComments(readFileSync(join(MIGRATIONS, name), "utf8")),
-  }));
+/** Every migration, filename-sorted (= apply order), comments removed, forward-renamed. */
+const FILES = forwardRenamed(
+  readdirSync(MIGRATIONS)
+    .filter((f) => f.endsWith(".sql"))
+    .sort()
+    .map((name) => ({
+      name,
+      sql: stripLineComments(readFileSync(join(MIGRATIONS, name), "utf8")),
+    }))
+);
 
 /** The statement starting at `from`, up to the first `;` at paren depth 0. */
 function statementAt(sql: string, from: number): string {
