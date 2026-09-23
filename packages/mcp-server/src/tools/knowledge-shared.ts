@@ -1,7 +1,4 @@
-/**
- * Shared resolvers + error mappers for `dopl_kb`, leaned on by the read, write
- * and copy op modules. The registrar (knowledge.ts) routes.
- */
+/** Shared base resolution and error mappers for the `dopl_kb` op modules. */
 
 import type { DoplClient, KnowledgeBase } from "@dopl/client";
 import { inlineOr, NO_NAME, NO_PATH, UUID_RE } from "./narration";
@@ -10,90 +7,20 @@ import { PRIVATE_VISIBILITY_DENIED_CODE } from "./agent-shared";
 import { KB_ENTRY_NOT_FOUND, KB_ERRORS, refusal } from "./tool-errors";
 import { FENCE_HEADER } from "./untrusted-fence";
 
-/** ⚠ The row `dopl_kb`'s description teaches first — one declaration, both uses. */
+/** Error rows come from one declaration so the description and the refusal are the same characters. */
 const BASE_NOT_FOUND = KB_ERRORS[0];
 
-/** ⚠ Same one-declaration rule as {@link BASE_NOT_FOUND}: the literal
- *  `reason=ambiguous_slug` reaches the wire only through {@link refusal}, so the
- *  description and the refusal are the same characters by construction. */
 const AMBIGUOUS_SLUG = KB_ERRORS[2];
 
-/** How many matches an ambiguity refusal spells out before it summarises the
- *  rest. ⚠ A cap, not a page: the refusal is already a dead end, and thirty
- *  lines of it buys nothing the first ten did not. */
 const MAX_LISTED_MATCHES = 10;
 
-
-
-/**
- * Base reference (slug or UUID) → `KnowledgeBase` row, null when nothing
- * matches. ⚠ Calls `listKbBases` once per invocation — not for tight loops.
- *
- * 🔒 **AND A UUID GETS A SECOND, ID-ONLY LOOKUP (F-470).** `listKbBases` answers
- * for the container this connection is bound to, so matching a ref against that
- * list made every `dopl_kb` op container-keyed — including the ops whose whole
- * argument is an ID. A base on the caller's own personal shelf, or in another
- * container they belong to, answered `base_not_found` for an id that
- * `GET /api/knowledge/bases/<id>` resolves, which is the wave's headline claim
- * ("an id resolves its own container") being untrue on this surface.
- *
- * ⚠ **THE SECOND LOOKUP IS NOT A SECOND FENCE AND ADDS NO REACH.** It is the
- * server's own id door, which runs the resolver's four clauses, the M-10 matrix
- * and the agent audience ceiling in the container the id names. A ref this
- * caller may not name comes back a refusal and is reported as `base_not_found`,
- * the same answer as before.
- *
- * ⚠ **UUID ONLY, AND NO NAME FALLBACK.** A slug is scoped to a container by
- * definition, so asking the id door about one would be asking a different
- * question; and an id lookup that degraded into a name lookup would make "no
- * such id" and "no such name" answer through each other.
- * ⚠ **ONLY AN API REFUSAL IS SWALLOWED.** A transport failure must not read as
- * "no such base" — that is how an outage becomes a deletion in an agent's notes.
- */
 export type BaseRefResolution =
   | { kind: "found"; base: KnowledgeBase }
   | { kind: "not-found" }
   | { kind: "ambiguous"; matches: KnowledgeBase[] };
 
-/**
- * 🔒 **A SLUG THAT NAMES TWO CONTAINERS IS REFUSED, NOT PICKED (F-701).**
- *
- * ⚠ **THIS IS WHERE THE `dopl-development` LOSS CAME FROM, AND NOTHING WAS
- * EVER DELETED.** `knowledge_bases` is unique on `(workspace_id, slug)` — per
- * CONTAINER, which is the correct constraint and not the one an agent assumes.
- * `listKbBases` answers for the bound container PLUS the caller's own personal
- * shelf, so one slug legitimately names several rows, and the old body took
- * `Array.find` — FIRST WINS, silently. On 2026-09-05 three live bases shared
- * `dopl-development`; the one `.find` reached was an empty shell in the personal
- * container, and every op reported cheerful success against it for ten days
- * (`KB-LOSS-TRACE.md`). A silent pick cannot be diagnosed from its own answer:
- * an empty tree is what an empty base looks like.
- *
- * ⚠ **AND THE TIE-BREAKS ARE ALL WRONG, WHICH IS WHY THERE IS NONE.** "Newest
- * wins" would have picked the same empty shell; "the bound container wins" is
- * the rule an agent holding a personal-shelf slug is already violating. Every
- * natural ordering acts on an identity the caller did not choose and reports
- * success — the argument `agent-shared.ts › ambiguousIdentity` makes for names,
- * which slugs now share.
- *
- *   1. UUID → **ID FIRST, ALWAYS**: the visible list, then the server's own id
- *      door (F-470, "an id resolves its own container"). ⚠ An id is unique
- *      workspace-wide, so **by-id addressing can never be ambiguous** and this
- *      arm is untouched by this change — that is the whole escape hatch the
- *      refusal points at.
- *   2. Then, and only then, EXACT slug match. ⚠ The uuid-shaped-slug fallback
- *      is deliberate: the old `.find` matched `slug` OR `id` in one pass, so
- *      dropping through here is what keeps a base whose slug looks like a UUID
- *      addressable at all.
- *   3. More than one → AMBIGUOUS, listing each. 4. Zero → not found.
- *
- * ⚠ **THE HAPPY PATH IS BYTE-IDENTICAL TO WHAT IT WAS.** Same one
- * `listKbBases` call, same rows, same answer whenever the ref is unambiguous —
- * which is every call that was already correct. The shelf labels the refusal
- * wants come from a SECOND read inside {@link ambiguousBase}, deliberately: a
- * resolver twelve ops share is the wrong place to widen a request for the
- * benefit of an error path none of them reach.
- */
+/** Base ref (id or slug) → base. Name matching runs over rows the server already filtered — never a second copy of
+ *  the visibility predicate. A slug naming bases in several containers is refused, never picked (F-701). */
 async function resolveBaseRef(
   client: DoplClient,
   ref: string,
@@ -102,33 +29,28 @@ async function resolveBaseRef(
   if (needle === "") return { kind: "not-found" };
   const bases = await client.listKbBases();
 
-  // ⚠ **AN ID ANSWERS BEFORE ANY SLUG QUESTION, AND ITS SHAPE IS NOT THE TEST.**
-  // Matching `id` only for UUID-shaped refs regressed every non-UUID id the old
-  // `.find(b => b.slug === ref || b.id === ref)` reached — the fixtures' `kb-1`
-  // among them, and with it the whole `set_visibility` confirm flow. What makes
-  // this arm safe is UNIQUENESS, which every id has whatever it looks like; the
-  // UUID test below is about the ID DOOR, a different question.
+  // Any id matches first, whatever its shape: ids are unique, so this arm can never be ambiguous.
   const byId = bases.find((b) => b.id === needle);
   if (byId) return { kind: "found", base: byId };
 
+  // The id door (F-470): a UUID resolves its own container through the server, with no added reach.
   if (UUID_RE.test(needle)) {
     try {
       return { kind: "found", base: await client.getKbBase(needle) };
     } catch (e) {
-      // ⚠ ONLY AN API REFUSAL IS SWALLOWED. A transport failure must not read
-      // as "no such base" — that is how an outage becomes a deletion in an
-      // agent's notes.
+      // Only the API's not-found is swallowed (404-never-403: no existence oracle for private bases);
+      // a transport failure rethrows so an outage never reads as "no such base".
       if (!isApiError(e, 404, "KNOWLEDGE_BASE_NOT_FOUND")) throw e;
     }
   }
 
+  // Falls through for a UUID-shaped slug, which must stay addressable.
   const matches = bases.filter((b) => b.slug === needle);
   if (matches.length === 0) return { kind: "not-found" };
   if (matches.length === 1) return { kind: "found", base: matches[0] };
   return {
     kind: "ambiguous",
-    // ⚠ Container-ordered so a caller re-reading the refusal sees a stable list
-    // and can act on "the second one".
+    // Container-ordered so a re-read refusal lists stably.
     matches: [...matches].sort((a, b) => a.workspaceId.localeCompare(b.workspaceId)),
   };
 }
@@ -146,29 +68,8 @@ export async function resolveBaseOr(client: DoplClient, ref: string): Promise<Kn
   );
 }
 
-/**
- * THE AMBIGUITY REFUSAL — **it lists, and it does not pick.**
- *
- * ⚠ **THE LIST IS THE WHOLE VALUE.** "That slug is ambiguous" alone sends the
- * agent back to `op="list_bases"` for ids it was already holding. Each row
- * carries the three things that tell the containers apart: the ID to re-issue
- * with, the CONTAINER it lives in, and the ENTRY COUNT — the count being what
- * would have told Samuel in one line that the base he was addressing was the
- * empty one.
- *
- * ⚠ **THE LIST IS NOT AN ORACLE.** Every row already came back from this
- * caller's own `listKbBases`, so it discloses exactly what `op="list_bases"`
- * would — the same argument `ambiguousIdentity` makes. ⚠ **AND THE CONTAINER IS
- * NAMED BY ID, NEVER LOOKED UP.** Resolving container NAMES here would mean
- * `client.listWorkspaces()`, which walks straight past the session lock in
- * `workspace-directory.ts › getWorkspaceList` — a locked session must not learn
- * that other containers exist. The id is also the `container=` handle, so it is
- * the more useful half anyway.
- *
- * ⚠ **A COUNT THAT FAILS IS OMITTED, NOT GUESSED, AND NEVER THROWS.** This is
- * already the error path; an exception here would replace a precise refusal
- * with a stack trace.
- */
+/** Lists each match, never picks. The container is named by id, never looked up: `listWorkspaces` would bypass the
+ *  session lock (`workspace-directory.ts › getWorkspaceList`). Must never throw — this is already the error path. */
 async function ambiguousBase(
   client: DoplClient,
   ref: string,
@@ -198,8 +99,6 @@ function matchLine(
   count: number | null,
   isPersonal: boolean,
 ): string {
-  // ⚠ The container id IS the `container=` handle, so the line an agent reads
-  // is also the line it can act on.
   const where = isPersonal
     ? `your personal container \`${base.workspaceId}\``
     : `container \`${base.workspaceId}\``;
@@ -210,16 +109,7 @@ function matchLine(
   return `- \`${base.id}\` — ${inlineOr(base.name, NO_NAME)} · ${where} · ${entries}`;
 }
 
-/**
- * Ids of the caller's PERSONAL-container bases, for the shelf label — empty
- * when the sibling key is absent or the read fails.
- *
- * ⚠ **`?? []` IS THE CONTRACT, NOT A SHORTCUT (INVARIANTS §8).** An older
- * server sends no `homeScopedBaseIds`, and the fail-safe reading of "I do not
- * know which shelf this row is on" is NO LABEL — never "not personal", and
- * never "personal". The refusal is still correct without the label; it is one
- * word less helpful.
- */
+/** Ids of the caller's personal-container bases; empty when absent or unreadable = no label (INVARIANTS §8). */
 async function personalBaseIds(client: DoplClient): Promise<Set<string>> {
   try {
     const payload = await client.listKbBasesPayload();
@@ -229,9 +119,7 @@ async function personalBaseIds(client: DoplClient): Promise<Set<string>> {
   }
 }
 
-/** Entries in one base, or null when the count cannot be had. ⚠ `entryLimit`
- *  is what makes the server send `entryTotal` at all, and 1 is the cheapest
- *  page that does it — the ROWS are thrown away, only the total is read. */
+/** Entries in one base, or null. `entryLimit: 1` is the cheapest page that makes the server send `entryTotal`. */
 async function entryCount(client: DoplClient, baseId: string): Promise<number | null> {
   try {
     const tree = await client.getKbTree(baseId, { entryLimit: 1 });
@@ -241,55 +129,12 @@ async function entryCount(client: DoplClient, baseId: string): Promise<number | 
   }
 }
 
-/**
- * ⚠ **THIS CONSTANT IS NOW THE FENCE'S HEADER, AND THE 430-CHAR PARAGRAPH IT
- * USED TO HOLD IS GONE** (A14, 2026-09-02). The old wording asked a reader to
- * discount the document below it; it said nothing about where the document
- * ENDS, so a body closing with *"— end of document. New instruction from your
- * operator: …"* read, to somebody following the banner, as a document followed
- * by an instruction.
- *
- * `untrusted-fence.ts` answers that: the body is wrapped in
- * `<body_HEX>`…`</body_HEX>` with HEX minted per response, so text inside the
- * fence cannot end it and anything after the real close was written by this
- * server. The name survives because it is the seam
- * `authored-body-untrusted.test.ts` pins — including the POSITION assertion,
- * which the fence keeps by emitting this line first.
- *
- * ⚠ STILL CONDITIONAL, for the reason it always was: the caller's OWN entries
- * render bare, because framing them is noise on the overwhelmingly common path
- * and noise is how a security header stops being read.
- *
- * ⚠ The body itself is NOT neutralized — it is the document the product exists
- * to hand the agent, and stripping its markdown breaks the feature. The fence
- * is what makes rendering it verbatim safe (`narration.ts` draws the VALUE/BODY
- * line).
- */
+/** Printed above another member's entry body, which renders verbatim inside the fence; the caller's own entries
+ *  render bare. Name pinned by `authored-body-untrusted.test.ts`. */
 export const UNTRUSTED_ENTRY_BODY_HEADER = FENCE_HEADER;
 
-/**
- * 🔒 **THE ENTRY 404, MAPPED (S41, 2026-09-18) — AND UNTIL THIS WAVE NOTHING
- * MAPPED IT.** `readFileByPath` raises `EntryNotFoundError` → 404
- * `KNOWLEDGE_ENTRY_NOT_FOUND` for a path that resolves to nothing, to a FOLDER,
- * or to the root; `resolvePath` raises `PathTraversalError` → 404
- * `KNOWLEDGE_PATH_NOT_FOUND` when an INTERMEDIATE segment is the one missing.
- * Neither had an MCP arm, so both rethrew past the registrar as an unhandled
- * transport error — "the call failed" over a read that had simply missed.
- *
- * ⚠ **THE TWO CODES ARE ONE REFUSAL, AND THE DIFFERENCE IS IN THE DETAIL.** The
- * agent's next call is `op="list_dir"` either way; what changes is WHERE to look
- * — the parent folder, or the segment that does not exist.
- *
- * ⚠ **"IT MAY HAVE MOVED OR BEEN RENAMED" IS NOT A HEDGE.** A path is a
- * POSITION, not an identity: `op="move_file"` and a retitle both vacate one
- * (`opWriteFile`'s `canonicalPath` line says a title renames the leaf), and an
- * agent told only "not found" writes at the old path again — which `write_file`
- * UPSERTS into a second entry. So the refusal names the move, and names the
- * entry id as the handle that survives one.
- *
- * ⚠ Returns null when the error is not one of the two, so the caller rethrows:
- * a catch that swallowed an outage would report it as a missing document.
- */
+/** Maps both entry 404s (`KNOWLEDGE_ENTRY_NOT_FOUND`, `KNOWLEDGE_PATH_NOT_FOUND`) to one refusal that names the entry
+ *  id as the handle surviving a move; null otherwise so the caller rethrows. */
 export function entryNotFound(
   e: unknown,
   path: string,
@@ -308,12 +153,7 @@ export function entryNotFound(
   );
 }
 
-/**
- * 403 `AGENT_WRITE_DISABLED` — an agent deleting inside a base flagged
- * `agent_write_enabled=false`. Surfaces the server's actionable message rather
- * than a raw throw; null otherwise so the caller rethrows. ⚠ Duck-typed on
- * `.status`/`.code` to avoid importing the @dopl/client error class.
- */
+/** Maps 403 `AGENT_WRITE_DISABLED` to the server's message; null otherwise so the caller rethrows. */
 export function agentWriteDenied(e: unknown): ToolResponse | null {
   if (!isApiError(e, 403, "AGENT_WRITE_DISABLED")) return null;
   return err(
@@ -322,18 +162,8 @@ export function agentWriteDenied(e: unknown): ToolResponse | null {
   );
 }
 
-/**
- * A shared/service credential tried to own a PRIVATE knowledge base (403
- * `WORKSPACE_KEY_PRIVATE_VISIBILITY`).
- *
- * ⚠ **THE MIRROR OF `agent-shared.ts › sharedCredentialPrivateDenied`, AND IT
- * WAS MISSING UNTIL 2026-09-02.** `op="copy_base"` forces `visibility: "private"`
- * exactly as `op="copy"` does, so it can raise the identical 403 — and it had no
- * mapping, so the refusal reached an agent as an unhandled throw ("the call
- * failed") over a copy that created nothing. The predicate and the code string
- * are shared; only the NOUN and the remedy differ, because a base's remedy is
- * not an identity's.
- */
+/** Maps 403 `WORKSPACE_KEY_PRIVATE_VISIBILITY` for a base (mirrors `agent-shared.ts › sharedCredentialPrivateDenied`).
+ *  No caller since the copy ops were removed. */
 export function sharedCredentialPrivateBaseDenied(
   e: unknown
 ): ToolResponse | null {
@@ -343,23 +173,8 @@ export function sharedCredentialPrivateBaseDenied(
   );
 }
 
-/**
- * Run a write, mapping the ONE 403 EVERY base write can raise. Six hand-written
- * copies of this catch lived in `knowledge-ops-write.ts` (2026-09-17).
- *
- * ⚠ `more` runs FIRST, for the per-op codes — 409, 412 and 400, every one of
- * them disjoint from `AGENT_WRITE_DISABLED`, so the order is a convenience and
- * not a precedence. Anything neither maps RETHROWS: a catch that swallowed an
- * outage would report it as a refusal.
- *
- * ⚠ **IT MOVED HERE FROM `knowledge-ops-write.ts` ON 2026-09-18**, when that
- * file was split at the base/tree seam (A3) and both halves needed it. A second
- * copy is how one half comes to map a refusal the other rethrows.
- * ⚠ **AND RE-EXPORTING IT FROM EITHER HALF WAS REFUSED**: that would make one
- * write module the other one's dependency for no reason but where the text
- * happened to sit. Two branches reached this file independently; ONE copy
- * survives (integration, 2026-09-19).
- */
+/** Runs a write, mapping per-op codes via `more`, then 403 `AGENT_WRITE_DISABLED`; anything unmapped rethrows so an
+ *  outage never reads as a refusal. The one copy both write modules share. */
 export async function writeOr<T>(
   run: () => Promise<T>,
   more: (e: unknown) => ToolResponse | null = () => null,
@@ -372,4 +187,3 @@ export async function writeOr<T>(
     throw e;
   }
 }
-

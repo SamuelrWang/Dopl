@@ -1,18 +1,6 @@
 /**
- * `dopl_kb` — the user's editable knowledge bases, addressed like a filesystem
- * (bases by slug or id, folders/entries by `/`-separated path): reads plus
- * non-destructive writes. ⚠ THERE IS NO DELETE OP AND NO `dopl_kb_admin`
- * (deleted 2026-09-02) — deletion is app-only, fenced by `sessionOnly` on the
- * REST routes, and `delete-policy.ts` is where that rule now lives.
- *
- * Thin registrar: one tool schema + op routing, delegating to
- *   - `knowledge-shared.ts`    — base resolution + error/validation mappers
- *   - `knowledge-ops-read.ts`  — list_bases/get_tree/list_dir/outline/read_file
- *   - `knowledge-ops-search.ts` — search
- *   - `knowledge-ops-write.ts` — folder + entry writes, and their authoring rules
- *   - `knowledge-ops-base-writes.ts` — create/update/publish a BASE
- *   - `knowledge-ops-grant.ts`  — lend one base to a channel, container or team
- *   - `knowledge-entity-titles.ts` — the `&amp;`-in-a-title rule, both lanes
+ * `dopl_kb` registrar: knowledge bases addressed like a filesystem, reads plus non-destructive writes, routed to the
+ * `knowledge-ops-*` modules. There is no delete op — deletion is app-only (`delete-policy.ts`).
  */
 
 import { z } from "zod";
@@ -30,13 +18,9 @@ import {
   opOutline,
   opReadFile,
 } from "./knowledge-ops-read";
-// ⚠ The one read op whose result is a RANKING — split out for the 500-line cap.
 import { opSearch } from "./knowledge-ops-search";
-// ⚠ The GRANT has its own file: it writes no base content, it lends one
-// (S52, 2026-09-18). Pinning's ops left the surface entirely on the same day.
 import { opGrantBase } from "./knowledge-ops-grant";
 import { opCreateFolder, opMove, opWriteFile } from "./knowledge-ops-write";
-// ⚠ Base-level writes split out for the 500-line cap (2026-09-18).
 import {
   opCreateBase,
   opSetVisibility,
@@ -53,30 +37,18 @@ import {
 } from "./grant";
 import type { WorkspaceDirectory } from "../workspace-directory";
 
-/**
- * The THIRTEEN published ops. ⚠ Hoisted so the runtime enum can be the union of
- * this and the retired name while `.meta()` publishes only this — see the `op`
- * field.
- */
+/** The one op list and the published `op` enum. The desktop's `test/knowledge-read-ops.test.mjs` parses this
+ *  array literal and requires `KB_INPUT_SHAPE` to reference it — keep both declarations' shape. */
 const KB_OPS = [
   "list_bases", "get_tree", "list_dir", "create_base", "update_base",
   "grant", "create_folder", "move_folder", "outline", "read_file",
   "write_file", "move_file", "search", "set_visibility",
 ] as const;
 
-/**
- * 🔒 THE PUBLISHED ARGUMENT SHAPE, HOISTED SO THERE IS ONE COPY OF IT (A14).
- * `register(...)` publishes it and {@link KB_DESCRIPTION} renders its LIMITS
- * block from the very same object through `tool-style.ts › renderLimits`, so a
- * bound cannot be raised here and left stale in prose. ⚠ Pass the object, never
- * a spread — a copy is a second declaration wearing one name.
- */
+/** The published argument shape: registered, and rendered into the description's limits by
+ *  `tool-style.ts › renderLimits`. Pass the object, never a spread. */
 const KB_INPUT_SHAPE = {
-  // ⚠ THE TWO READ KNOBS (A14). `response_format` is the shared field every
-  // read surface takes, so `concise` cannot come to mean five things; the
-  // `max_chars` bound is `op="read_file"`'s alone, because it is the only op
-  // here that returns a whole DOCUMENT as itself. Both are applied in the
-  // RENDERER — see `response-size.ts` for why neither is a wire parameter.
+  // Both read knobs are applied in the renderer, not on the wire (`response-size.ts`).
   response_format: RESPONSE_FORMAT_FIELD,
   max_chars: z.coerce
     .number()
@@ -102,12 +74,6 @@ const KB_INPUT_SHAPE = {
   excerpt: z.string().optional().describe("write_file: the entry's agent-facing summary (max 300), shown in get_tree/list_dir; on an update it changes only when provided."),
   expected_version: z.string().optional().describe("write_file: the entry's Version from a prior read_file — required when overwriting (412 without it, and only force=true skips the check); creates need none."),
   force: z.boolean().optional().describe("write_file: overwrite even if the entry changed since you read it. Discards the other edit. REFUSED if the entry moved — a forced write at a vacated path would duplicate it."),
-  // 🔒 **THE ONE PUSHED COST OF THIS WAVE, AND IT BUYS THE ANSWER TO "DID MY
-  // WRITE LAND"** (S53). Without a key, a timed-out write leaves an agent with
-  // `force=true` as its only recovery — a blind overwrite aimed at a row it
-  // cannot verify. ⚠ THE DESCRIBE STATES THE CONTRACT AND NOT THE MECHANISM:
-  // author-scoping, the partial unique index and the race arm are server facts
-  // the caller cannot act on.
   client_write_id: z
     .string()
     .min(1)
@@ -117,12 +83,8 @@ const KB_INPUT_SHAPE = {
       'write_file/create_base: your idempotency key. Re-sending the same call with the same key returns the FIRST write instead of writing twice. Use after a timeout, never force=true.',
     ),
   query: z.string().optional().describe("search: required free-text query."),
-  // ⚠ coerce: MCP clients sometimes send numbers as strings, which strict
-  // z.number() rejects with an opaque -32602.
-  // ⚠ THE RANGES LEFT THESE TWO DESCRIBES ON 2026-09-02 (A14). `renderLimits`
-  // reads them off this shape into the description's LIMITS line, and the JSON
-  // Schema publishes them again as `minimum`/`maximum` — a third hand-typed copy
-  // was the one that went stale. The DEFAULT stays: no schema keyword carries it.
+  // coerce: some MCP clients send numbers as strings. Ranges live only in the zod bounds (`renderLimits` reads
+  // them); the default stays in the describe because no schema keyword carries it.
   limit: z.coerce.number().int().min(1).max(100).optional().describe("search: max hits (default 20)."),
   entry_limit: z.coerce.number().int().min(1).max(1000).optional().describe("get_tree: max entries per page (default 400). Folders always ship in full."),
   entry_cursor: z.string().optional().describe("get_tree: opaque cursor from a prior page's 'more entries' notice — fetches the next page."),
@@ -138,102 +100,14 @@ const KB_INPUT_SHAPE = {
     ),
 };
 
-/**
- * ⚠ THE PROSE BUDGET FOR THIS TOOL, AND IT IS ABOVE
- * `tool-style.ts › DESCRIPTION_MAX_CHARS` (1,200) BY DECISION — 15 ops, and
- * `parity.test.ts` requires each to appear as a quoted `"op_name"`, three of them
- * with a bullet whose exact disclosures `tool-scope-claims.test.ts` pins by
- * phrase. Fifteen glosses plus those three disclosures do not fit 1,200, and the
- * honest way to buy the difference is a PULLED doctrine resource of the kind
- * `channel-doctrine.ts` already is — not a shorter disclosure. ⚠ A RISE IS A
- * DECISION RECORDED IN CODE; it is measured against the hand-written half only
- * (headline + policy + routing + body), and the whole served string still has to
- * clear `HARD_DESCRIPTION_CEILING`.
- */
-// ⚠ **1,450 → 1,586 ON 2026-09-02, AND THE 136 IS A FENCE RATHER THAN PROSE.**
-// `FENCE_DESCRIPTION_NOTE` joined the SECURITY line: `op="read_file"` returns a
-// whole document another member wrote, rendered as itself, and the fence's close
-// tag is worthless to a reader who has not been told the suffix is random per
-// response. That sentence cannot move into a pulled doctrine — an agent that has
-// not read the doctrine is exactly the one that needs it — which is the argument
-// `tool-budget.test.ts` already licensed for `dopl_skill`'s `confirm_token`.
-// ⚠ Against it, this description FELL 3,359 → ~1,960 in the same change. **A
-// fence costs served characters and is worth them; prose is what these budgets
-// exist to refuse, and the distinction is the only thing keeping them honest.**
-// ⚠ **1,586 → 1,760 ON 2026-09-03, AND THE RISE IS ONE OP PLUS TWO ROUTING
-// SENTENCES.** `op="outline"` has to be glossed (`parity.test.ts` requires a
-// quoted `"op_name"` per op), and the two sentences are the ROUTING this whole
-// wave exists to teach: read the excerpt, then the outline, then the section,
-// then the body — and write entries that can be read that way. ⚠ **A ROUTING
-// LINE CANNOT MOVE INTO THE PULLED DOCTRINE**, on the same argument the fence
-// rides: the agent that has not read `dopl://doctrine/knowledge` is exactly the
-// one still reading whole documents. Against the rise, one section read of a
-// 2,559-char entry costs 839 rendered characters where the whole entry costs
-// 2,760 — the description is paid once per connection, the saving per read.
-// ⚠ **2026-09-06: THE SERVED DESCRIPTION WAS 2,028 AND `HARD_DESCRIPTION_CEILING`
-// IS 2,000, SO THIS TOOL THREW AT MODULE LOAD AND TOOK THE WHOLE SERVER WITH IT.**
-// The prose half was inside its cap; the tail (`Limits:`/`Errors:`/`e.g.`) is what
-// carried it over, and a generated tail cannot be trimmed by hand — so the relief
-// had to come out of the prose.
-// ⚠ **WHAT LEFT WAS DUPLICATION, NOT DISCLOSURE, AND THE RULE IS THIS FILE'S OWN**
-// (see the paragraph above on what left in A14): a description carries nothing its
-// own `.describe()` already says, because both are pushed on the SAME connection.
-// Three glosses were exactly that — `read_file`'s (`section`, `offset`, `max_chars`
-// and `expected_version` each describe their own half) and `grant`'s scope list
-// (`scope`'s and `level`'s own describes). The op NAMES all stayed quoted, which is
-// what `parity.test.ts` reads.
-// ⚠ **NOTHING PINNED WAS TOUCHED, AND THAT WAS THE CONSTRAINT RATHER THAN A
-// PREFERENCE.** `tool-scope-claims.test.ts` greps the DESCRIPTION for the three
-// filtered-op bullets — `list_bases` (can READ / private / no grant on), `get_tree`
-// (ENTRIES are paged / 400 / entry_cursor) and `search` (you can read / not an
-// exhaustive scan / not proof of absence) — so those bullets stay here whole; a
-// sentence a pin greps for cannot move into a pulled document. The SECURITY line,
-// the fence and BOTH routing sentences (the read order, and the write duty in
-// `write_file`'s gloss) stayed for the reasons the paragraphs above give.
-// ⚠ **THE CEILING IN `tool-budget.test.ts` IS NOW STALE BY CONSTRUCTION and must be
-// LOWERED to the measured size in this same change — never raised.** That ratchet
-// fails on a SHRINK as loudly as on a growth, which is how the win gets banked.
-const KB_PROSE_BUDGET = 1_294; // ⚠ 13 ops glossed for parity.test.ts, plus the fence // ⚠ 16 ops glossed for parity.test.ts, plus the fence
-// ⚠ **1,586 → 1,294 (2026-09-18, −292): PINNING LEFT, AND THE WHOLE FALL IS BANKED
-// RATHER THAN HELD AS HEADROOM.** Samuel's ruling deleted knowledge pinning (the
-// feature, not just its two ops), so the op list lost the bullet that glossed them and
-// two `.describe()`s lost the op names and the target rule.
-// ⚠ **THE DELETED BULLET IS NOT QUOTED HERE, AND THAT COST ONE REVISION** — the removal
-// gate (`src/features/knowledge/pinning-stays-removed.test.ts`) scans this file, and the
-// first draft of this comment reintroduced the very string it was recording the loss of. ⚠ **MEASURED, NOT ARITHMETIC** — 1,294 is what `composeDescription`
-// reports for the composed prose, read back off its own over-cap throw.
-// ⚠ **AND 1,586 WAS ALREADY HEADROOM, WHICH IS WHY THE FALL IS BIGGER THAN THE CUT.**
-// The block above used to note that its narrative described a rise to 1,760 this
-// constant never took and that the prose had fitted under 1,586 the whole time. A
-// budget kept above the measurement is a licence for the next sentence, and the rule
-// three lines up — lower to the MEASURED size, never to a round number — applies to a
-// removal exactly as it applies to a trim.
+/** Above `tool-style.ts › DESCRIPTION_MAX_CHARS` by decision: the excess is the untrusted-content fence, not prose.
+ *  Measured via `composeDescription`'s over-cap throw; lower it on a shrink, never raise it for prose. */
+const KB_PROSE_BUDGET = 1_294;
 
 /**
- * ⚠ RENDERED, NOT WRITTEN (A14, 2026-09-02) — `tool-style.ts › composeDescription`
- * holds the house order (what it returns and what it does NOT, the capability
- * class, routing, the tool's own body, then limits / errors / examples generated
- * from declarations) so a model can SKIM this surface instead of reading each of
- * thirteen shapes whole. It THROWS at import on a violation, so an over-budget
- * description cannot be registered at all.
- *
- * ⚠ WHAT LEFT THE PROSE HERE (3,359 chars before): every sentence an argument's
- * own `.describe()` already carries, because a description and its arg
- * descriptions are pushed on the SAME connection and a fact in both is paid for
- * twice. The `expected_version`/412 rule and the `force` escape are
- * `expected_version`'s and `force`'s; the
- * grant scope/level pairing is `scope`'s and `level`'s; the home-channel preview is
- * `confirm_token`'s AND the errors table. ⚠ AND EVERY BOUND: `limit` and
- * `entry_limit` stopped hand-typing their ranges into their own describes on the
- * same day, because `renderLimits` reads them off this tool's zod shape — one
- * source, and the JSON Schema already publishes them a third time as keywords.
- *
- * ⚠ WHAT MAY NOT LEAVE: the three bullets in `tool-scope-claims.test.ts`'s
- * filtered-op ledger — "list_bases" (visibility-filtered),
- * "get_tree" (paged at 400) and "search" (recall-capped, then visibility-dropped)
- * — and the SECURITY sentence, which governs how every result this tool returns
- * is read. A DEFAULT stays in prose where a BOUND does not: the JSON Schema
- * publishes `maximum`, never `default 20`.
+ * Rendered by `tool-style.ts › composeDescription`, which throws at import when over budget. Carries nothing an
+ * argument's `.describe()` already says; the list_bases/get_tree/search bullets are pinned by
+ * `tool-scope-claims.test.ts`, and every op must appear quoted (`parity.test.ts`).
  */
 const KB_DESCRIPTION = composeDescription({
   headline: `The caller's knowledge bases as a filesystem: bases by id or slug, folders and entries by \`/\`-path.`,
@@ -264,27 +138,13 @@ const KB_DESCRIPTION = composeDescription({
 export function registerKnowledgeTools(
   register: RegisterTool,
   client: DoplClient,
-  // ⚠ Read for exactly THREE things: whether an entry BODY is somebody else's,
-  // which decides `UNTRUSTED_ENTRY_BODY_HEADER`; binding a confirm token to the
-  // identity that previewed (2026-08-28), so one caller's preview cannot be
-  // spent by another; and 🔒 R2's OWNERSHIP fence on `op="grant"` (2026-09-02),
-  // which lends bases the caller CREATED rather than any base they can read.
-  // Nothing about visibility is decided from it — the server already filtered.
+  // Used for the untrusted-body header, binding a confirm token to the previewer, and `op="grant"`'s ownership
+  // fence — never for visibility, which the server already filtered.
   caller: CallerIdentity = UNKNOWN_CALLER,
-  // 🔒 THE SCOPE RESOLVER FOR op="grant", AND NOTHING ELSE READS IT HERE.
-  // `workspace-directory.ts › resolveContainerRef` is the ONE resolver that
-  // takes the reserved word `home` and a home-channel CONTAINER id (§4A: it
-  // deliberately does not filter), REFUSES an ambiguous slug rather than picking
-  // (F-719), and answers `null` for every ref but the locked one under a
-  // CONTAINER LOCK.
-  // ⚠ **REQUIRED, WITH NO DEFAULT, DELIBERATELY** — even though it follows a
-  // defaulted parameter. A default would silently un-narrow the grant scope for
-  // any caller that forgot it, which is the enumeration B3 exists to deny;
-  // `channel.ts` and `home.ts` take the same argument the same way, and
-  // `parity-harness.ts` passes a stub because capture never runs a handler.
+  // Resolves grant scopes and the list's channel. Required with no default: a default would silently un-narrow
+  // the grant scope under a container lock.
   directory: WorkspaceDirectory,
 ): void {
-  // ── dopl_kb — read + non-destructive writes ──────────────────────
   register(
     "dopl_kb",
     KB_DESCRIPTION,
@@ -364,8 +224,7 @@ export function registerKnowledgeTools(
         case "write_file": {
           const miss = missingParams("write_file", args, ["base"]);
           if (miss) return miss;
-          // Title-only creation: the op doc says a new entry's title becomes
-          // its addressable path, so derive it when `path` is omitted.
+          // Title-only creation: the title becomes the path.
           const path =
             args.path !== undefined && args.path !== ""
               ? args.path
@@ -375,8 +234,7 @@ export function registerKnowledgeTools(
               `op="write_file" is missing required param: path (pass path, or a title to derive it).`
             );
           }
-          // ⚠ An empty-string body is a real value the caller can fix, not a
-          // "missing param" — keep the two messages distinct.
+          // An empty body is a fixable value, not a missing param: keep the two messages distinct.
           if (args.body === undefined) {
             return err(`op="write_file" is missing required param: body.`);
           }
@@ -400,9 +258,7 @@ export function registerKnowledgeTools(
         case "set_visibility": {
           const miss = missingParams("set_visibility", args, ["base", "visibility"]);
           if (miss) return miss;
-          // 🔒 F-441 — the caller id and the confirm token, which this arm used
-          // to drop. Without them `opSetVisibility` could not preview and a
-          // shared-container publish answered with a refusal instead.
+          // Caller id and token are what let `opSetVisibility` preview (F-441).
           return opSetVisibility(
             client,
             caller.userId,
