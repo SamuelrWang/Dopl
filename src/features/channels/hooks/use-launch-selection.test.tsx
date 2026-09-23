@@ -151,6 +151,28 @@ describe("the CHANNEL scope", () => {
     expect(result.current.rejected).toEqual(['"accept_edits" is not a tool setting Codex offers']);
     expect(result.current.recordFor("claude").tools).toBe("accept_edits");
   });
+
+  // F22: a failed re-read after a write that landed flipped every reader to "no desktop".
+  it("keeps the last good reply when the re-read after a write fails", async () => {
+    const { result } = await channelHook();
+    getLaunchPosture.mockRejectedValueOnce(new Error("ipc down"));
+    await act(async () => {
+      await result.current.update({ tools: "auto" });
+    });
+    expect(result.current.runtimeSupported).toBe(true);
+    expect(result.current.recordFor("claude").tools).toBe("accept_edits");
+    expect(result.current.busy).toBe(false);
+  });
+
+  it("a THROWING write settles as not applied rather than rejecting the caller", async () => {
+    setLaunchPosture.mockRejectedValueOnce(new Error("ipc down"));
+    const { result } = await channelHook();
+    await act(async () => {
+      await expect(result.current.update({ tools: "auto" })).resolves.toBeUndefined();
+    });
+    expect(result.current.busy).toBe(false);
+    expect(result.current.recordFor("claude").tools).toBe("accept_edits");
+  });
 });
 
 describe("the DEFAULTS scope", () => {

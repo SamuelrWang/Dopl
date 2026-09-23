@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { HttpError } from "@/shared/lib/http-error";
 import { mapAgentIdentityError } from "@/features/agent-identities/server/http-mapping";
 import { toHttpErrorResponse } from "@/shared/api/http-error-response";
+import { isUuid } from "@/shared/lib/id/uuid";
 
 /** Agent-identity route catch-block helper: `mapAgentIdentityError`, then
  *  HttpError, then a generic 500. The fifth feature wrapper around
@@ -11,9 +12,6 @@ import { toHttpErrorResponse } from "@/shared/api/http-error-response";
 export function toAgentIdentityErrorResponse(err: unknown): NextResponse {
   return toHttpErrorResponse("agent-identity-route", err, mapAgentIdentityError);
 }
-
-const UUID_RE =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
  * Validates the `[identityId]` route param.
@@ -30,7 +28,7 @@ export function requireIdentityId(
   params: Record<string, string> | undefined
 ): string {
   const raw = params?.identityId;
-  if (!raw || !UUID_RE.test(raw)) {
+  if (!raw || !isUuid(raw)) {
     throw HttpError.badRequest("Invalid agent identity id");
   }
   return raw;

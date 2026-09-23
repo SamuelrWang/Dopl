@@ -3,7 +3,6 @@ import { createServerClient } from "@supabase/ssr";
 import { touchMcpStatus, checkAndRecordRateLimitSubject } from "./mcp-session";
 import { isOAuthAccessToken, validateAccessToken } from "./mcp-oauth";
 import { getBearerJwtUser } from "./bearer-jwt";
-import { logMcpEvent } from "@/features/analytics/server/mcp-events";
 import { logSystemEvent } from "@/features/analytics/server/system-events";
 import { HttpError } from "@/shared/lib/http-error";
 import { runWithCallerScope } from "@/shared/supabase/caller-scope";
@@ -325,121 +324,6 @@ export function withUserAuth(
       { status: 401 }
     );
   };
-}
-
-/**
- * Wraps an MCP-reachable endpoint. Does NOT paywall (billing is
- * workspace-level). Auth + per-token rate limiting via withUserAuth; OAuth-token
- * callers are logged to mcp_events; session (UI) calls pass straight through,
- * unmetered and unlogged. `action` is a tool-name hint for logMcpEvent.
- * ⚠ These are the read-only knowledge packs — workspace-scoped tool traffic goes
- * through withWorkspaceAuth, which records per-op usage to mcp_tool_calls.
- */
-export function withMcpAccess(
-  action: string,
-  handler: (
-    request: NextRequest,
-    context: {
-      userId: string;
-      agentTokenId?: string;
-      params?: Record<string, string>;
-    }
-  ) => Promise<Response | NextResponse>
-) {
-  return withUserAuth(async (request, ctx) => {
-    // ⚠ Key off token KIND, never header presence: a bare "has Authorization"
-    // test misclassifies desktop Supabase-JWT sessions as MCP and writes their
-    // request bodies into mcp_events.
-    const bearerForKind = (request.headers.get("authorization") ?? "")
-      .replace(/^Bearer\s+/i, "")
-      .trim();
-    const isMcpCaller = isOAuthAccessToken(bearerForKind);
-
-    if (!isMcpCaller) {
-      return handler(request, ctx);
-    }
-
-    const endpoint = `${request.method} ${request.nextUrl.pathname}`;
-    const toolName = request.headers.get("x-mcp-tool") || action;
-    // Loopback always sends the workspace UUID; ignore slugs/garbage.
-    const rawWorkspace = request.headers.get("x-workspace-id");
-    const eventWorkspaceId =
-      rawWorkspace &&
-      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(rawWorkspace)
-        ? rawWorkspace
-        : null;
-    const queryParams = Object.fromEntries(request.nextUrl.searchParams.entries());
-    let argsPayload: unknown = Object.keys(queryParams).length > 0 ? queryParams : null;
-    if (request.method !== "GET" && request.method !== "DELETE") {
-      try {
-        const bodyJson = await request.clone().json();
-        argsPayload = bodyJson ?? argsPayload;
-      } catch {
-        // Empty/non-JSON body — fall back to query params (or null)
-      }
-    }
-    const startedAt = Date.now();
-
-    let response: Response | NextResponse;
-    try {
-      response = await handler(request, ctx);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      logMcpEvent({
-        userId: ctx.userId,
-        workspaceId: eventWorkspaceId,
-        agentTokenId: ctx.agentTokenId ?? null,
-        toolName,
-        endpoint,
-        arguments: argsPayload,
-        responseStatus: 500,
-        latencyMs: Date.now() - startedAt,
-        source: "mcp",
-        error: message,
-      }).catch(() => {});
-      throw err;
-    }
-
-    let responseSummary: unknown = null;
-    let errorMessage: string | null = null;
-    try {
-      const clone = response.clone();
-      const text = await clone.text();
-      if (text) {
-        try {
-          responseSummary = JSON.parse(text);
-          if (
-            !response.ok &&
-            responseSummary &&
-            typeof responseSummary === "object" &&
-            "error" in responseSummary
-          ) {
-            errorMessage = String((responseSummary as { error: unknown }).error);
-          }
-        } catch {
-          responseSummary = { _nonJson: true, preview: text.slice(0, 500) };
-        }
-      }
-    } catch {
-      // clone/read failed — skip summary
-    }
-
-    logMcpEvent({
-      userId: ctx.userId,
-      workspaceId: eventWorkspaceId,
-      agentTokenId: ctx.agentTokenId ?? null,
-      toolName,
-      endpoint,
-      arguments: argsPayload,
-      responseStatus: response.status,
-      responseSummary,
-      latencyMs: Date.now() - startedAt,
-      source: "mcp",
-      error: errorMessage,
-    }).catch(() => {});
-
-    return response;
-  });
 }
 
 /** Admin is a single Supabase auth UUID, bound via the ADMIN_USER_ID env var. */

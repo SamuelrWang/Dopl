@@ -48,20 +48,24 @@ function setCurrent(t: ToastData | null) {
   for (const l of listeners) l(t);
 }
 
-export function toast(opts: {
-  title: string;
-  description?: string;
-  action?: ToastAction;
-  durationMs?: number;
-  /** ⚠ ADDITIVE AND OPTIONAL — every existing caller omits it and is unchanged. */
-  variant?: ToastVariant;
-}) {
+/** ⚠ The `invert` face renders only the title, so its options carry nothing else (F25). */
+export type ToastOptions =
+  | {
+      title: string;
+      description?: string;
+      action?: ToastAction;
+      durationMs?: number;
+      variant?: "default";
+    }
+  | { title: string; durationMs?: number; variant: "invert" };
+
+export function toast(opts: ToastOptions) {
   const id = nextId++;
   setCurrent({
     id,
     title: opts.title,
-    description: opts.description,
-    action: opts.action,
+    description: opts.variant === "invert" ? undefined : opts.description,
+    action: opts.variant === "invert" ? undefined : opts.action,
     durationMs: opts.durationMs ?? 4000,
     variant: opts.variant ?? "default",
   });

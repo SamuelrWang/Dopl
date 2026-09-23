@@ -177,6 +177,6 @@ export function addressKey(recipients: {
   userIds?: readonly string[] | null;
 }): string {
   const part = (ids: readonly string[] | null | undefined): string =>
-    ids === null || ids === undefined ? "?" : [...ids].sort().join(",");
+    ids === null || ids === undefined ? "?" : [...new Set(ids)].sort().join(",");
   return `${part(recipients.agentIds)}|${part(recipients.userIds)}`;
 }

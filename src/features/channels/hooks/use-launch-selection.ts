@@ -287,7 +287,8 @@ export function useLaunchSelection(scope: LaunchSelectionScope): LaunchSelection
             });
       setBusy(true);
       try {
-        const res = await bridge.write(payload);
+        // ⚠ A throwing bridge is a write that did not land, never an unhandled rejection (F22).
+        const res = await bridge.write(payload).catch(() => null);
         if (!res || res.ok !== true) {
           // ⚠ NOTHING WAS APPLIED AND NOTHING IS RE-RENDERED. Main fails closed BEFORE the store
           // on a refusal, so the values on screen are still the stored ones — there is no
@@ -302,6 +303,9 @@ export function useLaunchSelection(scope: LaunchSelectionScope): LaunchSelection
         // ⚠ RE-READ, NEVER ECHO. Main validates SOFT in three directions, so the only honest
         // answer to "what is stored now" is to ask.
         const next = await bridge.read().catch(() => null);
+        // ⚠ A failed re-read keeps the last good reply: adopting `null` would drop every row on a
+        // write that landed (F22).
+        if (next === null) return;
         adopt(next);
         broadcast(key, next);
       } finally {
