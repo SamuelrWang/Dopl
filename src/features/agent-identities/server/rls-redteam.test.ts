@@ -1,26 +1,7 @@
 /**
- * REDTEAM — the POLICY, alone, refuses what `service-shared.ts › canSeeIdentity`
- * refuses (Wave B B12; Samuel's ruling B5, "RLS is the fence").
- *
- * 🔒 THE GAP THIS SUITE EXISTS TO KEEP CLOSED, and it was an OMISSION rather
- * than a divergence. `can_current_user_read_agent_identity()` (`20260915120000`)
- * collapsed three inline copies of the matrix into one predicate and carried
- * FIVE of `canSeeIdentity`'s six arms across — every one except **arm 2, the
- * SHARED CREDENTIAL**. So a credential that may be passed between humans read
- * the rows its minter created, by name, through PostgREST. `20260921120000`
- * replaces the function in place; no policy moves, which is the payoff of
- * having made the matrix a function in the first place.
- *
- * ⚠ ARM 1 IS OUTSIDE THAT GUARD, DELIBERATELY. `canSeeIdentity` answers `true`
- * for `visibility = 'workspace'` BEFORE asking about the credential — a
- * workspace identity holds nothing personal — and the SQL keeps that order.
- * ⚠ ARM 4 BEFORE ARM 5 IS "PRIVATE MEANS PRIVATE": the admin arm stays INSIDE
- * the `team` branch. `20260915120000` says moving it out is a widening, and this
- * suite is what would notice.
- *
- * ⚠ TWO HALVES; see `shared/supabase/rls-policy-scan.ts` (what a structural
- * assertion proves, F-523) and `shared/supabase/rls-redteam-fixture.ts` (why the
- * live half is skipped, and the command that runs it).
+ * The policy alone refuses what `service-shared.ts › canSeeIdentity` refuses, arm for arm: arm 1
+ * (`workspace`) before the shared-credential guard, the admin arm inside the `team` branch. Structural
+ * half: `shared/supabase/rls-policy-scan.ts` (F-523); live half: `shared/supabase/rls-redteam-fixture.ts`.
  */
 
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
@@ -40,14 +21,10 @@ import {
 
 const POLICIES = livePolicies();
 
-/** The matrix, stated once — `20260915120000` collapsed three copies onto it. */
+/** The matrix as one SQL predicate. */
 const READABLE = "can_current_user_read_agent_identity";
 
-/**
- * THE GRANT ARM'S WHOLE SHAPE: a `)` closing the membership group, then the arm
- * — and the arm is the shared-credential refusal AND the grant, never the grant
- * alone. The twin of `knowledge/server/rls-redteam.test.ts › GRANT_ARM`.
- */
+/** The membership group closed, then the shared-credential refusal AND the grant (twin of `knowledge/server/rls-redteam.test.ts › GRANT_ARM`). */
 const GRANT_ARM =
   /\) OR \( NOT public\.dopl_credential_is_shared\(\) AND public\.dopl_grant_admits\(\s*'agent_identity', t\.id\s*\) \)/i;
 
@@ -68,54 +45,36 @@ describe("REDTEAM agent_identities — the policy alone", () => {
 
   it("refuses a SHARED CREDENTIAL everything but a `workspace` identity — the missing arm 2", () => {
     const fn = liveFunction(READABLE);
-    // Arm 1 first, ungated…
     expect(fn).toMatch(/t\.visibility\s*=\s*'workspace'\s*OR\s*\(\s*NOT\s+public\.dopl_credential_is_shared\(\)/i);
-    // …and the creator arm strictly INSIDE the guard, which is the whole repair:
-    // a credential standing for nobody in particular inherits no one's reach.
+    // The creator arm inside the guard: a credential standing for nobody inherits no one's reach.
     expect(fn).toMatch(
       /NOT\s+public\.dopl_credential_is_shared\(\)[\s\S]*t\.created_by\s*=\s*\(\s*SELECT auth\.uid\(\)\s*\)/i
     );
   });
 
   it("carries the GRANT arm BESIDE the membership branch, never inside it", () => {
-    // ⚠ THE POSITION IS THE ASSERTION. A grantee is typically NOT a member of
-    // the resource's container, so an arm nested under
-    // `is_current_workspace_member` would be unreachable and the write door
-    // B15 shipped would go on writing rows nothing reads.
+    // A grantee is typically not a member of the resource's container, so a nested arm is unreachable.
     const fn = liveFunction(READABLE);
-    // It is OR-ed onto a CLOSED membership group…
     expect(fn).toMatch(GRANT_ARM);
-    // …and never conjoined with the membership test, which is the nesting
-    // failure mode: an arm AND-ed onto it can only ever narrow, so the grant
-    // would do nothing for the caller it is written for.
     expect(fn).not.toMatch(
       /is_current_workspace_member\([^)]*\)\s*AND\s+public\.dopl_grant_admits/i,
     );
   });
 
   it("…and the arm carries arm 2 with it — a SHARED credential is not widened", () => {
-    // 🔒 THE ARM THE FIRST DRAFT LOST. `(membership AND …) OR grant_admits(…)`
-    // put the grant ABOVE the shared-credential refusal, so a credential that
-    // stands for nobody read a lent row the TS twin refuses at arm 2 —
-    // `canSeeIdentity` asks `isSharedCredential` before it consults
-    // `share.grantedIds`. A policy admitting what its twin refuses is the
-    // divergence this suite exists to catch.
+    // `canSeeIdentity` asks `isSharedCredential` before it consults grants; the policy must too.
     expect(liveFunction(READABLE)).toMatch(
       /NOT public\.dopl_credential_is_shared\(\) AND public\.dopl_grant_admits\(\s*'agent_identity'/i,
     );
   });
 
   it("`dopl_grant_admits` answers CHANNEL and CONTAINER, and refuses `team`", () => {
-    // ⚠ `team` is FALSE here BY DESIGN, not by omission: it is already an arm of
-    // `dopl_teams_mode_visible()`, and two rules for one grant is how the second
-    // rots. Ruling B4 made team a scope, not a second mechanism.
+    // `team` is false by design: it is already an arm of `dopl_teams_mode_visible()`.
     const admits = liveFunction("dopl_grant_admits");
     expect(admits).toMatch(/WHEN\s+'container'\s+THEN[\s\S]*?is_current_workspace_member\(\s*g\.scope_id,\s*'viewer'\s*\)/i);
     expect(admits).toMatch(/WHEN\s+'channel'\s+THEN[\s\S]*?level\s*=\s*'visible'[\s\S]*?is_channel_member\(\s*g\.scope_id\s*\)/i);
     expect(admits).toMatch(/ELSE\s+false/i);
-    // 🔒 NO `workspace_id` TERM. The row is filed under the RESOURCE's
-    // container and the caller reaches it through the SCOPE's — a tenancy term
-    // here would refuse exactly the cross-container lend it exists to honour.
+    // No `workspace_id` term: the caller reaches the resource's container through the scope's.
     expect(admits).not.toMatch(/g\.workspace_id/i);
   });
 
@@ -124,13 +83,9 @@ describe("REDTEAM agent_identities — the policy alone", () => {
     expect(fn).toMatch(
       /t\.visibility\s*=\s*'team'\s*AND\s*public\.dopl_teams_mode_visible\(/i
     );
-    // The admin arm now lives in the shared teams helper rather than being
-    // spelled a fourth time here; it is unreachable for a `private` row because
-    // the `'team'` term guards the call.
+    // The admin arm lives in the teams helper, guarded by the `'team'` term.
     expect(fn).not.toMatch(/'admin'::text/i);
-    // ⚠ Follow the chain: the axis is stated in `dopl_teams_visible_for_user`
-    // since F-583 made it answer for a NAMED user, and `dopl_teams_mode_visible`
-    // is the caller-scoped case of it.
+    // `dopl_teams_mode_visible` is the caller-scoped case of `dopl_teams_visible_for_user` (F-583).
     expect(liveFunction("dopl_teams_visible_for_user")).toMatch(
       /is_workspace_member\(p_workspace_id, p_user_id, 'admin'\)/i
     );
@@ -138,8 +93,7 @@ describe("REDTEAM agent_identities — the policy alone", () => {
 
   it("resolves the teams axis through resource_grants, scope_type and all", () => {
     expect(liveFunction(READABLE)).toContain("'agent_identity', t.id");
-    // ⚠ Without the `scope_type` term this would answer "is this team identity
-    // visible to me" with a CHANNEL grant on the same resource (F-468).
+    // Without `scope_type`, a channel grant on the same resource would answer the team question (F-468).
     expect(liveFunction("dopl_teams_visible_for_user")).toMatch(
       /FROM\s+public\.resource_grants\s+g\b[\s\S]*?g\.scope_type\s*=\s*'team'/i
     );
@@ -153,8 +107,6 @@ describe("REDTEAM agent_identities — the policy alone", () => {
     expect(junction).toContain(`${READABLE}(identity_id)`);
   });
 });
-
-/* ────────────────────────── the live half ────────────────────────── */
 
 describe.skipIf(!liveRedteamEnabled)(
   "REDTEAM agent_identities (live) — the caller client, against a real policy",
@@ -203,8 +155,7 @@ describe.skipIf(!liveRedteamEnabled)(
       await addMember(workspaceId, adminId, "admin");
       await addMember(workspaceId, teammateId, "member");
       teamId = await makeTeam(workspaceId, teammateId);
-      // The BORROWING container: the outsider owns it, and the grantor is a
-      // member so the validity trigger will accept a grant into it.
+      // The borrowing container; the grantor must be a member for the validity trigger to accept a grant.
       outsiderContainerId = await makeWorkspace(outsiderId);
       await addMember(outsiderContainerId, ownerId, "member");
 
@@ -227,10 +178,7 @@ describe.skipIf(!liveRedteamEnabled)(
       await deleteUsers([ownerId, outsiderId, adminId, teammateId]);
     }, 60_000);
 
-    // ⚠ `agent_identity_knowledge_bases` has no live case of its own: its policy
-    // IS `can_current_user_read_agent_identity`, applied to `identity_id`, so
-    // every verdict below is its verdict too. Seeding it would need a knowledge
-    // base, i.e. another feature's fixture, for no additional evidence.
+    // The KB junction's policy is the same predicate on `identity_id`, so these verdicts are its verdicts.
 
     it("a NON-MEMBER sees zero rows", async () => {
       expect(await readableIds(outsiderId, "agent_identities", workspaceId)).toHaveLength(0);
@@ -254,19 +202,14 @@ describe.skipIf(!liveRedteamEnabled)(
     });
 
     it("GRANTED INTO A CONTAINER → visible to that container's members; REVOKED → invisible", async () => {
-      // The whole of ruling B11 in one case: a `private` identity in the
-      // owner's workspace, lent to a container the OUTSIDER is a member of.
-      // Before the grant that reader is the "sees zero rows" case above.
       const ref = lendToOutsider();
-      // ⚠ THE GRANTOR IS IN BOTH ROOMS, because `enforce_resource_grant` says
-      // so — cross-container reach requires a NAMED grantor who could lend it
-      // OUT and lend it IN (`20260914120000` rule 4).
+      // `enforce_resource_grant` requires a grantor in both containers (`20260914120000` rule 4).
       await grantToScope({ ...ref, createdBy: ownerId });
       expect(
         await readableIds(outsiderId, "agent_identities", workspaceId)
       ).toEqual([privateIdentityId]);
 
-      // 🔒 AND THE OTHER HALF, WHICH IS WHERE A `true` PREDICATE WOULD SHOW.
+      // Revocation is where a constant-`true` predicate would show.
       await revokeFromScope(ref);
       expect(
         await readableIds(outsiderId, "agent_identities", workspaceId)
@@ -274,9 +217,7 @@ describe.skipIf(!liveRedteamEnabled)(
     });
 
     it("a SHARED CREDENTIAL is not widened by that grant, live", async () => {
-      // The same row, the same reader, the same grant; the ONE axis that moves
-      // is whether the credential stands for a person. `canSeeIdentity` refuses
-      // at arm 2 and the policy must refuse with it.
+      // Only the credential kind moves; `canSeeIdentity` refuses at arm 2.
       const ref = lendToOutsider();
       await grantToScope({ ...ref, createdBy: ownerId });
       try {

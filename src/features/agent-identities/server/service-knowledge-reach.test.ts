@@ -1,22 +1,7 @@
 /**
- * `unreachableKnowledgeBaseCount` — WHAT A LAUNCH IS TOLD ABOUT AN ATTACHMENT IT
- * CANNOT REACH (Samuel's ruling, 2026-09-05).
- *
- * ⚠ THE RULING IN ONE LINE: a user MAY attach a shared base to a personal
- * identity, and launching it where the base is out of reach must START THE AGENT
- * ANYWAY and let it say *"I don't have access to this knowledge base in this
- * channel"* — WITHOUT saying where the base lives.
- *
- * So the two halves this file pins are:
- *   1. the COUNT is honest (it is the junction rows the viewer filter dropped),
- *      and it never blocks the launch;
- *   2. the payload carries NOTHING ELSE about a dropped base — no id, no name,
- *      no container — because the prompt line the desktop writes from it is the
- *      one place a location leak would land in text an agent reads.
- *
- * ⚠ SIBLING OF `service-resolve.test.ts`, same seam and same mocks: this file
- * owns the REACH arithmetic, that one owns `authoredByCaller` and the 404.
- * Through the public service with the repository mocked: no Supabase, no network.
+ * The launch payload's knowledge reach: an attachment the viewer filter drops still launches, is
+ * counted in `unreachableKnowledgeBaseCount`, and discloses nothing else (the desktop writes the count
+ * into text an agent reads).
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -80,8 +65,6 @@ beforeEach(() => {
 
 describe("the count", () => {
   it("is 0 when the identity attaches nothing", async () => {
-    // ⚠ A DECIDED ZERO, not an absence: this row went through the decoration and
-    // the answer is "nothing was dropped".
     const resolved = await resolveIdentityForLaunch(ctx(), "id-1");
     expect(resolved.unreachableKnowledgeBaseCount).toBe(0);
     expect(resolved.knowledgeBases).toEqual([]);
@@ -98,8 +81,7 @@ describe("the count", () => {
   });
 
   it("counts the attachment the viewer filter dropped — THE RULED CASE", async () => {
-    // The shared base attached to a personal identity, launched where the base
-    // does not resolve: the junction row exists, the base row does not come back.
+    // The junction row exists; the base row does not come back.
     mockRepo.listKnowledgeLinksForIdentities.mockResolvedValue([link(OUT_OF_REACH)]);
     mockRepo.listKnowledgeBaseAccessRows.mockResolvedValue([]);
     const resolved = await resolveIdentityForLaunch(ctx(), "id-1");
@@ -122,8 +104,6 @@ describe("the count", () => {
 
 describe("what it must NOT do", () => {
   it("does not block the launch — the payload is whole, minus the base", async () => {
-    // ⚠ THE HALF OF THE RULING A REFUSAL WOULD BREAK. An unreachable attachment
-    // is a thing to SAY, never a reason to refuse to start.
     mockRepo.listKnowledgeLinksForIdentities.mockResolvedValue([link(OUT_OF_REACH)]);
     const resolved = await resolveIdentityForLaunch(ctx(), "id-1");
     expect(resolved.name).toBe("Code Auditor");
@@ -133,8 +113,7 @@ describe("what it must NOT do", () => {
   });
 
   it("says NOTHING about the dropped base beyond the count — no id, no name, no container", async () => {
-    // 🔒 The leak test. Serialised, because a location could hide in any key: the
-    // payload may not contain the dropped id anywhere, at any depth.
+    // Serialised: the dropped id may not appear at any depth.
     mockRepo.listKnowledgeLinksForIdentities.mockResolvedValue([link(OUT_OF_REACH)]);
     const resolved = await resolveIdentityForLaunch(ctx(), "id-1");
     expect(JSON.stringify(resolved)).not.toContain(OUT_OF_REACH);
@@ -152,9 +131,7 @@ describe("what it must NOT do", () => {
   });
 
   it("issues NO second read to find out where the base went", async () => {
-    // ⚠ THE ARITHMETIC IS OVER ROWS ALREADY READ. A probe for a base outside the
-    // caller's reach is precisely what the no-location rule forbids, so the count
-    // must cost exactly the queries the decoration already made.
+    // The count is over rows already read; a probe for the missing base is what the rule forbids.
     mockRepo.listKnowledgeLinksForIdentities.mockResolvedValue([link(OUT_OF_REACH)]);
     await resolveIdentityForLaunch(ctx(), "id-1");
     expect(mockRepo.listKnowledgeLinksForIdentities).toHaveBeenCalledTimes(1);
@@ -165,15 +142,7 @@ describe("what it must NOT do", () => {
   });
 });
 
-/**
- * SUB-BASE SCOPES, THROUGH THE SAME DECORATION (2026-09-08).
- *
- * ⚠ **A SCOPE DROPS WITH ITS BASE, AND ALSO ON ITS OWN.** The base predicate is
- * the ceiling — a folder is reachable exactly when its base is — but a folder
- * that has been TRASHED, or that turns out to live in a different base than the
- * scope names, drops too, and drops into the SAME count. Splitting that count
- * would put the disclosure decision on four surfaces instead of one.
- */
+/** A scope drops with its base, or on its own (trashed, or in another base), into the same count. */
 describe("folder and entry scopes", () => {
   const FOLDER = "f-1";
   const ENTRY = "e-1";
@@ -197,16 +166,12 @@ describe("folder and entry scopes", () => {
         scope: "folder",
         folderId: FOLDER,
         folderName: "Deploys",
-        // ⚠ THE WHOLE CHAIN, root-first, led by the BASE NAME — display.
         path: "Ops Notes / Runbooks / Deploys",
-        // …and the base-relative address a `dopl_kb` call takes. The two are
-        // never interchangeable: a base named "Ops / Legal" makes splitting one
-        // back into the other silently wrong.
+        // The base-relative `dopl_kb` address; a base named "Ops / Legal" makes splitting `path` wrong.
         toolPath: "Runbooks/Deploys",
       },
     ]);
-    // 🔒 A folder scope is NOT in the base-level slice — listing its base would
-    // tell an older reader the whole base is attached.
+    // Listing the base here would tell an older reader the whole base is attached.
     expect(resolved.knowledgeBases).toEqual([]);
     expect(resolved.unreachableKnowledgeBaseCount).toBe(0);
   });
@@ -230,8 +195,7 @@ describe("folder and entry scopes", () => {
   });
 
   it("drops a TRASHED entry into the same count, naming nothing", async () => {
-    // The live-entry read simply does not return it, which is how a soft delete
-    // reaches this layer.
+    // A soft delete reaches this layer as the live-entry read not returning the row.
     mockRepo.listKnowledgeLinksForIdentities.mockResolvedValue([
       entryLink(REACHABLE, ENTRY),
     ]);
@@ -246,9 +210,7 @@ describe("folder and entry scopes", () => {
   });
 
   it("drops a folder that lives in ANOTHER base — the row is not evidence", async () => {
-    // 🔒 The trigger refuses this write; this refuses the READ of a row written
-    // before the trigger existed. A path naming one base beside a tool call
-    // naming another is an agent pointed at the wrong document.
+    // The trigger refuses this write; this refuses reading a row written before the trigger.
     mockRepo.listKnowledgeLinksForIdentities.mockResolvedValue([
       folderLink(REACHABLE, FOLDER),
     ]);
@@ -271,22 +233,11 @@ describe("folder and entry scopes", () => {
     const resolved = await resolveIdentityForLaunch(ctx(), "id-1");
     expect(resolved.knowledge).toEqual([]);
     expect(resolved.unreachableKnowledgeBaseCount).toBe(1);
-    // ⚠ NO PROBE. Reading the folders of a base the caller cannot see is a
-    // result we would then have to remember to discard.
     expect(mockRepo.listLiveFoldersForBases).not.toHaveBeenCalled();
   });
 });
 
-/**
- * **THE ATTACHED-BASE CARD** (A4, 2026-09-18) — the four facts a `scope: "base"`
- * ref now carries so a role block can name a base well enough to open the right
- * thing without a `get_tree`-and-guess round trip.
- *
- * ⚠ **THE VIEWER FILTER IS UNCHANGED AND IS ASSERTED HERE TOO.** The card is
- * more detail about a base, so the case that matters most is the one where the
- * base is not visible: nothing about it may appear, and the disclosure stays the
- * bare COUNT this file's other half pins.
- */
+/** The card a `scope: "base"` ref carries (slug, summary, top folders, count); an invisible base gets none. */
 describe("the base card", () => {
   const folder = (id: string, name: string, description: string | null = null) => ({
     id,
@@ -312,9 +263,7 @@ describe("the base card", () => {
     mockRepo.listLiveFoldersForBases.mockResolvedValue([
       folder("f-1", "Runbooks", "one per incident class"),
       folder("f-2", "Postmortems"),
-      // ⚠ A CHILD FOLDER IS NOT A CARD FOLDER — the whole subtree is what
-      // `get_tree` is for, and a recursive list is the unbounded thing the card
-      // refuses to be.
+      // A child folder is not a card folder: the subtree is `get_tree`'s job, and the card stays bounded.
       { ...folder("f-3", "2026"), parentId: "f-2" },
     ]);
 
@@ -329,9 +278,6 @@ describe("the base card", () => {
   });
 
   it("says NOTHING about a base the viewer cannot see — not even its shape", async () => {
-    // ⚠ The ruling's line: a dropped attachment discloses a COUNT and nothing
-    // else. A card would be a name, a slug and a folder list — the exact
-    // location information the filter exists to withhold.
     mockRepo.listKnowledgeLinksForIdentities.mockResolvedValue([link(OUT_OF_REACH)]);
     mockRepo.listKnowledgeBaseAccessRows.mockResolvedValue([]);
 

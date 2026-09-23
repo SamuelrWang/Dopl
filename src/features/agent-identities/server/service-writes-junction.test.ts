@@ -1,19 +1,6 @@
 /**
- * ⚠ **THE KB-ATTACH 500 (F-404).** `dopl_agent(op="update", knowledge_bases=[…])`
- * names no scalar column, so the patch handed to `updateIdentityRow` was six
- * `undefined`s — an empty UPDATE body PostgREST rejects, thrown raw, unmapped by
- * `http-mapping.ts`, surfacing as INTERNAL_ERROR 500 on a valid request. The
- * junction write, which was the entire point of the call, never ran.
- *
- * ⚠ A SIBLING OF `service-writes.test.ts`, sharing its harness through
- * `service-writes-fixtures.ts` — the two are separate files because one was over
- * the 500-line cap, and a second copy of the harness would have been a
- * duplicate made for a formatting reason.
- *
- * ⚠ THE REPOSITORY IS MOCKED HERE, so what this file proves is that the SERVICE
- * never hands it an empty patch: a junction-only write sends the row's own name,
- * which versions the row (P7-03). That the repository is ALSO total on an empty
- * patch is proved against a recording client in `repository.test.ts`.
+ * A junction-only patch never reaches `updateIdentityRow` as an empty body, which PostgREST rejects as a
+ * raw 500 (F-404). The repository's own empty-patch handling is `repository.test.ts`.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -43,8 +30,7 @@ beforeEach(() => {
   resetRepoMocks(mockRepo);
 });
 
-/** The only scalar a junction-only write sends: the row's own name, so the UPDATE
- *  fires the touch trigger (P7-03) and is never an empty body (F-404). */
+/** The row's own name: the UPDATE fires the touch trigger and is never an empty body. */
 const SAME_NAME_ONLY = {
   name: "Researcher",
   description: undefined,
@@ -64,10 +50,6 @@ describe("a junction-only patch versions the row with a same-value UPDATE", () =
     ).resolves.toBeTruthy();
 
     expect(mockRepo.updateIdentityRow).toHaveBeenCalledWith("ws-1", "id-1", SAME_NAME_ONLY);
-    // ⚠ THE REPOSITORY TAKES SCOPES SINCE 2026-09-08. The older
-    // `knowledgeBaseIds` key still means WHOLE BASES and is translated at one
-    // seam (`service-writes.ts › requestedKnowledgeScopes`), so a client that
-    // never learns about folders sends exactly what it always sent.
     expect(mockRepo.replaceKnowledgeLinks).toHaveBeenCalledWith(
       "ws-1",
       "id-1",

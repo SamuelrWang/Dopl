@@ -1,12 +1,6 @@
 /**
- * `GET|PATCH|DELETE /api/agent-identities/{identityId}`.
- *
- * ⚠ THE LOAD-BEARING ASSERTION IN THIS FILE IS THE PER-METHOD GATE. `DELETE` is
- * `sessionOnly` and `GET`/`PATCH` are deliberately NOT — an orchestrator agent
- * listing and editing identities is the entire point of making them persistent,
- * and gating the whole route would gate the feature. The pin in
- * `src/shared/auth/write-gate-coverage.test.ts` sees only that the FILE contains
- * `sessionOnly: true`; only this file can say WHICH method carries it.
+ * `GET|PATCH|DELETE /api/agent-identities/{identityId}`. Only `DELETE` is `sessionOnly`: agents list and
+ * edit identities. `write-gate-coverage.test.ts` sees the file; only this sees which method.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -28,13 +22,7 @@ const AUTH: Omit<WorkspaceAuthContext, "params"> = {
   apiKeyWorkspaceId: null,
 };
 
-/** Options captured PER EXPORT, in module-evaluation order: GET, PATCH, DELETE. */
-// ⚠ `vi.hoisted` IS REQUIRED HERE AND NOT IN THE COLLECTION-ROUTE TEST.
-// `vi.mock` factories are hoisted above every `const`, and this factory
-// captures the options AT WRAPPER-CONSTRUCTION TIME (module evaluation of
-// `./route`) rather than per request — which is the only way to see which
-// METHOD carries `sessionOnly`. A plain `const` is in its TDZ at that
-// moment and the whole suite fails to import.
+// Captured per export when `./route` evaluates, before any plain `const` exists; hence `vi.hoisted`.
 const wrapperOptions = vi.hoisted(
   () => [] as Array<Record<string, unknown> | undefined>
 );
@@ -102,7 +90,6 @@ function req(method: string, body?: unknown, expectedVersion?: string): NextRequ
           body: JSON.stringify(body),
           headers: {
             "content-type": "application/json",
-            // 🔒 F-747's precondition, when a case states one.
             ...(expectedVersion ? { "x-updated-at": expectedVersion } : {}),
           },
         }),
@@ -159,9 +146,7 @@ describe("PATCH", () => {
   it("passes the parsed patch through and answers `{ identity }`", async () => {
     const res = await PATCH(req("PATCH", { name: "Renamed" }), { params: Promise.resolve({}) });
     expect(res.status).toBe(200);
-    // ⚠ FOUR ARGUMENTS SINCE F-747, and the fourth is `undefined` here: this
-    // request sends no `X-Updated-At`, which is last-writer-wins and is exactly
-    // what an older bundled client still does.
+    // No `X-Updated-At`: last-writer-wins, what an older bundled client sends.
     expect(mockUpdate).toHaveBeenCalledWith(
       expect.objectContaining({ workspaceId: "ws-1" }),
       ID,
@@ -170,7 +155,7 @@ describe("PATCH", () => {
     );
   });
 
-  /** 🔒 F-747 — the header is the precondition, and the route only relays it. */
+  // The header is the precondition (F-747); the route only relays it.
   it("relays `X-Updated-At` as the update's expected version", async () => {
     const res = await PATCH(
       req("PATCH", { name: "Renamed" }, "2026-01-01T00:00:00Z"),

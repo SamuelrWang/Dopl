@@ -1,8 +1,4 @@
-/**
- * An identity's `runtime` (rulings 4–6) and a field's `type` (P7-01) survive the
- * write AND the read. Before P7-01 both normalizers mapped a field to
- * `{key, value}`, so every retype reverted on the next read.
- */
+/** An identity's `runtime` and a field's `type` survive the write and the read. */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 

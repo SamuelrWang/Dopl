@@ -1,17 +1,6 @@
 /**
- * `GET /api/agent-identities/{identityId}/resolve` — THE LAUNCH CONTRACT.
- *
- * ⚠ THIS FILE IS THE CONTRACT PIN, not a smoke test. The launch integration
- * codes against these keys verbatim, so the assertions are deliberately EXACT
- * (`toEqual`, and an explicit key-set check) rather than `toMatchObject`: a field
- * quietly added to the payload is a field a consumer will start depending on, and
- * a field quietly removed is a broken spawn.
- *
- * ⚠ FIVE KEYS BECAME SIX ON 2026-08-22, AND THIS FILE GOING RED WAS THE POINT
- * (G-1). `authoredByCaller` is what lets the desktop's ROLE block choose between
- * the operator posture and the `UNTRUSTED_SKILL_BODY_HEADER`-shaped one; the pin
- * is exact precisely so that widening had to be a deliberate, reviewed edit here
- * rather than something a consumer discovered at runtime.
+ * `GET /api/agent-identities/{identityId}/resolve`, the launch contract. Exact on purpose (`toEqual` and a
+ * key set): an added key becomes a dependency, a removed one a broken spawn.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -29,19 +18,12 @@ const AUTH: Omit<WorkspaceAuthContext, "params"> = {
   workspaceSlug: "acme",
   workspacePublicId: "pub-1",
   role: "viewer",
-  // ⚠ A DEVICE TOKEN IS AN AGENT CREDENTIAL. The desktop is the caller this
-  // endpoint exists for, so the fixture carries one — a route that only ever
-  // worked for a session would fail in exactly the deployment that needs it.
+  // The desktop presents a device token, an agent credential.
   agentTokenId: "at-desktop-1",
   apiKeyWorkspaceId: null,
 };
 
-// ⚠ `vi.hoisted` IS REQUIRED HERE AND NOT IN THE COLLECTION-ROUTE TEST.
-// `vi.mock` factories are hoisted above every `const`, and this factory
-// captures the options AT WRAPPER-CONSTRUCTION TIME (module evaluation of
-// `./route`) rather than per request — which is the only way to see which
-// METHOD carries `sessionOnly`. A plain `const` is in its TDZ at that
-// moment and the whole suite fails to import.
+// Captured when `./route` evaluates, before any plain `const` exists; hence `vi.hoisted`.
 const wrapperOptions = vi.hoisted(
   () => [] as Array<Record<string, unknown> | undefined>
 );
@@ -73,8 +55,7 @@ import { resolveIdentityForLaunch } from "@/features/agent-identities/server/ser
 
 const mockResolve = vi.mocked(resolveIdentityForLaunch);
 
-/** ⚠ THE PAYLOAD, WRITTEN OUT. If this literal changes, the integration
- *  builder's consumer changes with it — that is the whole reason it is here. */
+/** The payload, written out: the desktop consumer changes with it. */
 const RESOLVED = {
   name: "Researcher",
   instructions: "You are a researcher. Cite sources.",
@@ -85,11 +66,7 @@ const RESOLVED = {
     { key: "repo", value: "acme/api" },
   ],
   knowledgeBases: [{ id: "kb-1", name: "Handbook" }],
-  // ⚠ THE EIGHTH KEY (2026-09-08) — every attached scope, base / folder / entry.
-  // It rides BESIDE the base list rather than replacing it: an older desktop
-  // narrows this payload through an allowlist that drops keys it does not know
-  // (§13's older-peer rule), so removing the base list would hand every such
-  // build a role naming no knowledge at all.
+  // Beside `knowledgeBases`, not replacing it: an older desktop's allowlist drops unknown keys (INVARIANTS §13).
   knowledge: [
     { baseId: "kb-1", baseName: "Handbook", scope: "base" as const, path: "Handbook" },
     {
@@ -124,34 +101,24 @@ describe("the launch payload", () => {
     const res = await GET(req(), { params: Promise.resolve({}) });
     expect(res.status).toBe(200);
     const body = await res.json();
-    // ⚠ Unwrapped on purpose. The record endpoints answer `{ identity }`; this
-    // one is consumed by a launcher that wants the payload, not a container.
+    // Unwrapped on purpose, unlike the `{ identity }` record endpoints.
     expect(body).toEqual(RESOLVED);
     expect(Object.keys(body).sort()).toEqual([
       "authoredByCaller",
       "fields",
       "instructions",
-      // ⚠ THE EIGHTH KEY (2026-09-08): the SCOPED attachment list, base / folder
-      // / entry. `knowledgeBases` stays beside it as the base-level slice.
       "knowledge",
       "knowledgeBases",
       "model",
       "name",
-      // The identity's runtime ('' / null = no preference; C4).
       "runtime",
-      // ⚠ THE SEVENTH KEY (2026-09-05 type, pin moved 2026-09-06): how many attached
-      // bases this launch cannot reach. Predicted at #1461; the pin follows the type.
       "unreachableKnowledgeBaseCount",
     ]);
   });
 
   it("carries NO id, visibility, ownership or timestamps", async () => {
     const body = await GET(req(), { params: Promise.resolve({}) }).then((r) => r.json());
-    // ⚠ `createdBy` STAYS ON THIS LIST even though `authoredByCaller` is derived
-    // from it. The boolean is the whole point: a raw creator id in a launch
-    // payload is ownership information the launcher has no use for, and the
-    // derived answer discloses nothing the caller cannot already read off the
-    // list endpoint.
+    // `createdBy` too: the payload carries only the derived `authoredByCaller`.
     for (const key of [
       "id",
       "visibility",
@@ -167,8 +134,6 @@ describe("the launch payload", () => {
   });
 
   it("nullable fields travel as NULL, never omitted", async () => {
-    // A launcher distinguishing "absent" from "null" is a launcher with two
-    // code paths for one state.
     mockResolve.mockResolvedValue({
       name: "Bare",
       instructions: null,

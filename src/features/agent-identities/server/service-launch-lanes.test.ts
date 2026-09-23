@@ -1,29 +1,7 @@
 /**
- * 🔒 **THE TWO LANES OF ONE LAUNCH, DRIVEN OVER ONE FIXTURE — SAMUEL'S RULING
- * #18** (B2, 2026-09-02).
- *
- * A launch passes two fences and they belong to DIFFERENT PEOPLE:
- *
- *   - the CREATE fence, under the ORCHESTRATOR's credential —
- *     `channels/server/service-launch-identity.ts › resolveIdentityForDirective`
- *     → `service-resolve-ref.ts › resolveIdentityRef`;
- *   - the RESOLVE fence, on the OPERATOR's desktop at spawn —
- *     `GET /api/agent-identities/{id}/resolve` → `service-reads.ts ›
- *     resolveIdentityForLaunch` → `readIdentityById`.
- *
- * ⚠ **UNTIL B2 THEY DISAGREED ABOUT AN ID.** A12 made the second follow an id
- * into the container it names and left the first workspace-keyed, so a personal
- * identity 404'd on CREATE and resolved on SPAWN. Wave A recorded that rather
- * than closing it, because closing it was a DECISION. Ruling #18 made it:
- * **a personal identity launches anywhere its owner is**, and both lanes follow
- * the id.
- *
- * ⚠ **THIS FILE ASSERTS AGREEMENT, NOT EITHER FENCE.** The fence is
- * `shared/tenancy/resolve-resource.test.ts` (un-mocked); the follow is
- * `shared/tenancy/read-resource.test.ts`; the matrix is
- * `service-visibility.test.ts`. What only this file can say is that two doors
- * give the SAME answer about the SAME id — a property that has no home in either
- * door's own suite, which is exactly why it drifted for a wave.
+ * The two lanes of one launch agree about an id: CREATE (`resolveIdentityRef`, orchestrator's credential)
+ * and SPAWN (`resolveIdentityForLaunch`, operator's desktop). Each fence has its own suite; only the
+ * agreement lives here.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -60,9 +38,7 @@ const ctx = (over: Partial<AgentIdentityContext> = {}) => baseCtx({ workspaceId:
 const identity = (over: Partial<AgentIdentity> = {}) =>
   baseIdentity({ ...AUDITOR, id: ID, workspaceId: SHELF, ...over });
 
-/** The row exists on the caller's PERSONAL SHELF and nowhere else. ⚠
- *  `findIdentityById` is workspace-keyed, so the read in `HERE` must miss or
- *  there is nothing for either lane to follow. */
+/** Only on the caller's shelf: the workspace-keyed read in `HERE` must miss, or there is nothing to follow. */
 function livesOnTheShelf(over: Partial<AgentIdentity> = {}) {
   vi.mocked(repo.findIdentityById).mockImplementation(async (workspaceId) =>
     workspaceId === SHELF ? identity(over) : null
@@ -106,8 +82,6 @@ describe("a personal identity launches anywhere its owner is", () => {
   });
 
   it("BOTH lanes miss an id that is nameable nowhere", async () => {
-    // ⚠ The probe-proof arm, on both doors at once. Somebody else's private
-    // identity is exactly this: the resolver names nothing, so neither lane can.
     await expect(resolveIdentityRef(ctx(), ID)).resolves.toEqual({
       kind: "not-found",
     });
@@ -117,10 +91,7 @@ describe("a personal identity launches anywhere its owner is", () => {
   });
 
   it("BOTH lanes still refuse what the MATRIX refuses in the container it named", async () => {
-    // 🔒 RESOLUTION IS NOT AUTHORISATION, on either door. The resolver is
-    // strictly narrower than `canSeeIdentity` and cannot have named this row —
-    // and even handed the address, both lanes re-run the matrix and answer the
-    // same single miss.
+    // Resolving is not authorising: handed the address, both lanes re-run the matrix.
     livesOnTheShelf({ createdBy: OTHER });
     await expect(resolveIdentityRef(ctx(), ID)).resolves.toEqual({
       kind: "not-found",
@@ -142,10 +113,7 @@ describe("a personal identity launches anywhere its owner is", () => {
 
 describe("a NAME does not follow, on either lane, and that is deliberate", () => {
   it("labels the tenancy instead of picking one", async () => {
-    // `agent_identities` has no name uniqueness, so a name matching in two
-    // containers has no non-arbitrary answer — every tie-break launches an
-    // identity the caller did not choose. The CREATE lane says WHERE instead;
-    // the SPAWN lane never sees a name at all (the directive stores the ID).
+    // Names are not unique, so any tie-break is arbitrary; SPAWN never sees a name (the directive stores the id).
     vi.mocked(tenancy.resolveResourcesByName).mockResolvedValue([
       {
         type: "agent_identity",
@@ -153,7 +121,6 @@ describe("a NAME does not follow, on either lane, and that is deliberate", () =>
         name: "Code Auditor",
         containerId: SHELF,
         containerName: "",
-        // ⚠ **THE PERSONAL SHELF IS A CONTAINER KIND SINCE 2026-09-02 (B15).**
         containerKind: "personal",
         ownedByCaller: true,
         containerRole: "admin",

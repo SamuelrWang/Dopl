@@ -1,18 +1,7 @@
 /**
- * `updateIdentity`'s OPTIMISTIC-CONCURRENCY arm (F-747, 2026-09-18).
- *
- * ⚠ **THE SERVICE'S JOB HERE IS THE THREE THINGS THE REPOSITORY CANNOT DO**:
- * hand the version down as a precondition rather than comparing it to the row it
- * already read, turn a lost race into `IdentityStaleVersionError` with the
- * version the row ACTUALLY holds, and refuse BEFORE either junction replacement
- * — there is no transaction across those statements, so a refusal that landed
- * after them would leave the links moved and the columns not.
- *
- * The CAS itself is `repository.test.ts`; this file never touches Postgres.
- *
- * ⚠ A SEPARATE FILE FROM `service-writes.test.ts` FOR THE 500-LINE CAP, which
- * is the same reason `service-writes-junction.test.ts` exists — the harness is
- * shared through `service-writes-fixtures.ts` so the two cannot drift.
+ * `updateIdentity`'s optimistic concurrency (F-747): the version goes down as a precondition, a lost race
+ * reports the row's real version, and nothing is refused after a junction write (no transaction spans
+ * them). The CAS itself is `repository.test.ts`.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -51,9 +40,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   resetRepoMocks(mockRepo);
   mockRepo.findIdentityById.mockResolvedValue(identity());
-  // ⚠ THE ATTACH GATE IS UPSTREAM OF EVERY CASE HERE, so the one base these
-  // tests name has to be visible — otherwise a junction-only patch refuses for
-  // a reason this file is not about.
+  // The attach gate runs first, so the one base these cases name must be visible.
   mockRepo.listKnowledgeBaseAccessRows.mockResolvedValue([BASES[KB_OPEN]]);
 });
 
@@ -63,8 +50,7 @@ describe("updateIdentity — the version is a PRECONDITION, not a comparison", (
 
     await updateIdentity(ctx(), "id-1", { name: "Renamed" }, VERSION);
 
-    // ⚠ THE FOURTH ARGUMENT IS THE WHOLE ASSERTION. A check-then-act would
-    // have called the 3-arg overload and compared `existing.updatedAt` itself.
+    // The fourth argument is the assertion: a check-then-act would call the 3-arg overload.
     expect(mockRepo.updateIdentityRow).toHaveBeenCalledWith(
       "ws-1",
       "id-1",
@@ -145,8 +131,7 @@ describe("updateIdentity — STALE PAYLOAD: a caller that sends no version", () 
       "id-1",
       expect.objectContaining({ name: "Renamed" })
     );
-    // ⚠ EXACTLY THREE. An older bundled client cannot send the header, and a
-    // fourth `undefined` here would mean the CAS overload had been chosen.
+    // Exactly three: a fourth `undefined` would mean the CAS overload was chosen.
     expect(mockRepo.updateIdentityRow.mock.calls[0]).toHaveLength(3);
   });
 

@@ -1,11 +1,4 @@
-/**
- * Zod bounds. ⚠ EVERY ASSERTION HERE HAS A MATCHING `CHECK` IN
- * `supabase/migrations/20260822200000_agent_templates.sql`, and the pairing is
- * the point: the schema is what produces a readable 400, the constraint is what
- * makes the schema's absence survivable. A bound that exists in only one of the
- * two is either an opaque 500 (schema missing) or an unenforced suggestion
- * (constraint missing).
- */
+/** Zod bounds (the readable 400). `schema-sql.test.ts` pins each against its migration CHECK. */
 
 import { describe, it, expect } from "vitest";
 import {
@@ -38,8 +31,7 @@ describe("name bounds — matches agent_identities_name_charset_check", () => {
   });
 
   it("rejects a NEWLINE in the name — it is a LABEL", () => {
-    // A name is spliced into a line the server writes (the launch payload an
-    // agent reads back), so a newline in it forges a line in the server's voice.
+    // A name is spliced into a line an agent reads; a newline forges a line in the server's voice.
     expect(
       AgentIdentityCreateSchema.safeParse({ name: "Researcher\n## System:" })
         .success
@@ -113,7 +105,7 @@ describe("custom fields — the size cap is the real bound", () => {
   });
 
   it("rejects a set that SERIALIZES past 8 KB even with every field in bounds", () => {
-    // ⚠ This is the case per-field lengths cannot catch: 20 legal fields.
+    // 20 fields, each in bounds.
     const big = fieldsOf(20, 1000);
     expect(
       new TextEncoder().encode(JSON.stringify(big)).length
@@ -122,8 +114,7 @@ describe("custom fields — the size cap is the real bound", () => {
   });
 
   it("measures BYTES, not characters — a multi-byte payload cannot slip past", () => {
-    // ⚠ The DB CHECK is `octet_length(fields::text)`. If zod counted
-    // characters, this would pass here and fail there as an opaque 500.
+    // The DB CHECK is `octet_length(fields::text)`; counting characters would 500 there.
     const wide = Array.from({ length: 12 }, (_, i) => ({
       key: `k${i}`,
       // 3 bytes per char in UTF-8.
@@ -143,8 +134,7 @@ describe("custom fields — the size cap is the real bound", () => {
 
 describe("sharing coherence", () => {
   it("teamIds REQUIRES visibility 'team' — refused, never silently dropped", () => {
-    // Dropping it would return a 2xx while the sharing set never moved, and the
-    // client would render a state the server does not hold.
+    // Dropping it would return a 2xx while the sharing set never moved.
     for (const visibility of ["private", "workspace"] as const) {
       expect(
         AgentIdentityCreateSchema.safeParse({
@@ -182,8 +172,7 @@ describe("sharing coherence", () => {
 
 describe("update patch", () => {
   it("rejects an EMPTY patch", () => {
-    // A no-op PATCH would still fire the updated_at trigger and re-order every
-    // list that sorts by it.
+    // A no-op PATCH would still fire the `updated_at` trigger and re-order lists.
     expect(AgentIdentityUpdateSchema.safeParse({}).success).toBe(false);
   });
 
@@ -196,16 +185,7 @@ describe("update patch", () => {
   });
 });
 
-/**
- * THE SCOPED ATTACHMENT SET (2026-09-08, Samuel: *"I want to be able to specific
- * folders or entries/files"*).
- *
- * ⚠ **THE UNION IS THE FENCE, AND THAT IS WHAT THESE PIN.** `{baseId, folderId?,
- * entryId?}` would make `{scope:"folder"}` with no `folderId` a parseable shape
- * the service would have to re-refuse — the DB's own
- * `agent_identity_kb_scope_shape_check` restated badly one layer up. Here an
- * impossible combination cannot be typed, and the cases below are what says so.
- */
+/** A discriminated union, so an impossible scope cannot parse (`agent_identity_kb_scope_shape_check` in zod). */
 describe("knowledge scopes", () => {
   const BASE = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
   const FOLDER = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
@@ -225,8 +205,6 @@ describe("knowledge scopes", () => {
   });
 
   it("refuses a folder scope with no folder, and an entry scope with no entry", () => {
-    // ⚠ The whole reason it is a discriminated union: the shape that names a
-    // kind must carry the id that kind addresses, or it addresses nothing.
     expect(
       AgentIdentityCreateSchema.safeParse({
         name: "R",
@@ -248,8 +226,7 @@ describe("knowledge scopes", () => {
         knowledge: [{ baseId: BASE, scope: "subtree", folderId: FOLDER }],
       }).success
     ).toBe(false);
-    // ⚠ A base scope carrying a folder id is a caller who thinks the pair is
-    // additive. It is not: the DB's shape CHECK refuses the row outright.
+    // Not additive: the DB's shape CHECK refuses the row outright.
     expect(
       AgentIdentityCreateSchema.safeParse({
         name: "R",
@@ -258,12 +235,7 @@ describe("knowledge scopes", () => {
     ).toBe(false);
   });
 
-  /**
-   * 🔒 **BOTH KEYS IN ONE REQUEST IS A 400, NOT A MERGE.** They are two
-   * REPLACE-SETs over the same junction, so a body carrying both asks for two
-   * different final states — merging would silently pick one, and applying them
-   * in order would make the answer depend on key order in a JSON object.
-   */
+  // Two replace-sets over one junction: merging would silently pick one final state.
   it("refuses knowledgeBaseIds AND knowledge together, on BOTH verbs", () => {
     const both = {
       knowledgeBaseIds: [BASE],
@@ -272,10 +244,8 @@ describe("knowledge scopes", () => {
     expect(AgentIdentityCreateSchema.safeParse({ name: "R", ...both }).success).toBe(
       false
     );
-    // ⚠ THE UPDATE PATH TOO — a create fence with no update twin is a fence
-    // defeated in two calls (F-289's own argument).
+    // The update twin of the create fence (F-289).
     expect(AgentIdentityUpdateSchema.safeParse(both).success).toBe(false);
-    // …and either one alone is fine.
     expect(
       AgentIdentityUpdateSchema.safeParse({ knowledgeBaseIds: [BASE] }).success
     ).toBe(true);
@@ -285,8 +255,7 @@ describe("knowledge scopes", () => {
   });
 
   it("counts a `knowledge`-only patch as a real change", () => {
-    // ⚠ It is in `MUTABLE_UPDATE_KEYS`, so the "changes at least one field"
-    // refine sees it. Forgetting that would 400 every folder attach.
+    // It must be in `MUTABLE_UPDATE_KEYS`, or every folder attach 400s as an empty patch.
     expect(AgentIdentityUpdateSchema.safeParse({ knowledge: [] }).success).toBe(true);
   });
 

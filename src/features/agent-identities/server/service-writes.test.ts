@@ -1,15 +1,7 @@
 /**
- * Write invariants: the creator-or-admin gate, the KB attach fence, team-share
- * grantability, replace-set semantics, and the permanent delete.
- *
- * ⚠ THE KB ATTACH BLOCK IS THE SECURITY-CRITICAL ONE. Without it an identity is
- * a laundering channel — attach a teammate's private base by id, flip the
- * identity to `workspace`, and every member's spawned agent gets a pointer to
- * it. Each arm of the mirrored `canSeeBase` predicate is pinned separately
- * because that predicate is a COPY of the knowledge feature's rule and the copy
- * is the one that will not notice when the original moves.
- *
- * Repository mocked; no Supabase, no network.
+ * Write invariants. The KB attach fence is the security-critical block: without it an identity launders
+ * a private base to every member's agent. Each arm of the mirrored `canSeeBase` is pinned because the
+ * copy will not notice when the original moves.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -60,8 +52,6 @@ beforeEach(() => {
   resetRepoMocks(mockRepo);
 });
 
-// ── Create defaults ──────────────────────────────────────────────────
-
 describe("createIdentity — visibility defaults by caller kind", () => {
   it("a session caller gets 'private' by default", async () => {
     await createIdentity(ctx(), { name: "Researcher" });
@@ -81,12 +71,7 @@ describe("createIdentity — visibility defaults by caller kind", () => {
     ).rejects.toBeInstanceOf(WorkspaceKeyPrivateIdentityError);
   });
 
-  // ⚠ **F-289 — THE CREATE FENCE WAS DEFEATED IN TWO CALLS.** `updateIdentity` had no API-key
-  // check at all, so a workspace-scoped key could POST `workspace` (accepted, `created_by` = the
-  // key's user) and then PATCH to `private`: the re-read passes (the row is still `workspace` at
-  // read time), `assertMayWrite` passes (the key IS the creator), and the row lands `private` —
-  // the exact state the create guard exists to prevent, invisible to the key itself and to every
-  // workspace admin. This case is pinned BESIDE the create one deliberately: they are one rule.
+  // The create fence's update twin: POST `workspace` then PATCH `private` must not work (F-289).
   it("…and it cannot reach 'private' by PATCHing afterwards either", async () => {
     const keyCtx = ctx({ apiKeyWorkspaceId: "ws-1", credentialSubjectUserId: null });
     const owned = identity({ visibility: "workspace", createdBy: OWNER });
@@ -97,11 +82,7 @@ describe("createIdentity — visibility defaults by caller kind", () => {
     expect(mockRepo.updateIdentityRow).not.toHaveBeenCalled();
   });
 
-  // ⚠ THE GUARD IS ON `nextVisibility` — THE STATE THE ROW LANDS IN — not on the patch key, so a
-  // key that already owned a private row could not keep it by patching something else either.
-  // In practice it never gets that far: a workspace key cannot READ a private row back (arm 2 of
-  // `service-shared.ts › canSeeBaseRow`'s identity twin), so `getIdentityById` 404s BEFORE the
-  // fence. Pinned as the 404 it really is, rather than as a fence firing where it cannot.
+  // A workspace key cannot read a private row (arm 2), so this is the 404, before the fence.
   it("a workspace key cannot even SEE an already-private identity to PATCH it", async () => {
     const keyCtx = ctx({ apiKeyWorkspaceId: "ws-1", credentialSubjectUserId: null });
     mockRepo.findIdentityById.mockResolvedValue(
@@ -111,7 +92,6 @@ describe("createIdentity — visibility defaults by caller kind", () => {
     expect(mockRepo.updateIdentityRow).not.toHaveBeenCalled();
   });
 
-  // …and the fence stops exactly there: widening is what a shared key is FOR.
   it("a workspace key may still PATCH a workspace identity", async () => {
     const keyCtx = ctx({ apiKeyWorkspaceId: "ws-1", credentialSubjectUserId: null });
     mockRepo.findIdentityById.mockResolvedValue(
@@ -121,7 +101,6 @@ describe("createIdentity — visibility defaults by caller kind", () => {
     expect(mockRepo.updateIdentityRow).toHaveBeenCalled();
   });
 
-  // …and a HUMAN session is untouched by any of it.
   it("a session caller may still make an identity private", async () => {
     mockRepo.findIdentityById.mockResolvedValue(
       identity({ visibility: "workspace", createdBy: OWNER })
@@ -146,8 +125,6 @@ describe("createIdentity — visibility defaults by caller kind", () => {
   });
 });
 
-// ── The KB attach fence ──────────────────────────────────────────────
-
 describe("KB attach validation — a base you cannot read, you cannot attach", () => {
   it("attaches a workspace-visible base", async () => {
     mockRepo.listKnowledgeBaseAccessRows.mockResolvedValue([BASES[KB_OPEN]]);
@@ -155,9 +132,7 @@ describe("KB attach validation — a base you cannot read, you cannot attach", (
       name: "R",
       knowledgeBaseIds: [KB_OPEN],
     });
-    // ⚠ SCOPES SINCE 2026-09-08. `knowledgeBaseIds` still means WHOLE BASES and
-    // is translated at one seam, so a client that never learns about folders
-    // sends exactly what it always sent.
+    // `knowledgeBaseIds` still means whole bases, translated to scopes at one seam.
     expect(mockRepo.replaceKnowledgeLinks).toHaveBeenCalledWith(
       "ws-1",
       "id-1",
@@ -172,8 +147,7 @@ describe("KB attach validation — a base you cannot read, you cannot attach", (
       name: "R",
       knowledgeBaseIds: [KB_PRIVATE],
     }).catch((e) => e);
-    // ⚠ 404-shaped on purpose: a distinguishable "forbidden" would make this
-    // endpoint an existence oracle for other people's private bases.
+    // A distinguishable "forbidden" would be an existence oracle for private bases.
     expect(err).toBeInstanceOf(IdentityKnowledgeBaseNotFoundError);
     expect(err.missingIds).toEqual([KB_PRIVATE]);
     expect(mockRepo.replaceKnowledgeLinks).not.toHaveBeenCalled();
@@ -223,8 +197,7 @@ describe("KB attach validation — a base you cannot read, you cannot attach", (
       name: "R",
       knowledgeBaseIds: [KB_PRIVATE],
     }).catch(() => undefined);
-    // There is no transaction across insert + two junction writes, so the
-    // ORDER is the atomicity story and it is worth pinning.
+    // No transaction spans insert + two junction writes, so order is the atomicity.
     expect(mockRepo.insertIdentity).not.toHaveBeenCalled();
   });
 
@@ -236,8 +209,6 @@ describe("KB attach validation — a base you cannot read, you cannot attach", (
     expect(mockRepo.updateIdentityRow).not.toHaveBeenCalled();
   });
 });
-
-// ── Team sharing ─────────────────────────────────────────────────────
 
 describe("team sharing — grantability", () => {
   it("a non-admin owner may share only with teams they belong to", async () => {
@@ -270,18 +241,12 @@ describe("team sharing — grantability", () => {
       teamIds: [TEAM_A],
     }).catch((e) => e);
     expect(err).toBeInstanceOf(IdentityTeamNotGrantableError);
-    // The junction's workspace-guard trigger would also catch this, as an
-    // opaque 500. Catching it here is what makes the error sayable.
+    // The junction trigger would catch it too, as an opaque 500.
     expect(err.message).toMatch(/Not a team in this workspace/);
   });
 
   it("SECURITY: an AGENT credential cannot create into `team`, on either path", async () => {
-    // 🔒 A8's SERVER HALF (2026-09-02). A8 took `team` off `dopl_agent`'s enum,
-    // so the MCP surface refuses it in zod — but the REST route's schema still
-    // accepts it and an agent credential reaches that route directly, so the rule
-    // held on one road only. It refuses the CREDENTIAL, not the value: `team`
-    // stays legal for a human until B4 is ruled, and every stored row keeps
-    // working.
+    // The REST schema still accepts `team` (legal for humans), so the service refuses the credential.
     mockRepo.listTeamIdsForUser.mockResolvedValue([TEAM_A]);
     await expect(
       createIdentity(ctx({ source: "agent" }), {
@@ -290,14 +255,10 @@ describe("team sharing — grantability", () => {
         teamIds: [TEAM_A],
       })
     ).rejects.toBeInstanceOf(IdentityTeamScopeAgentForbiddenError);
-    // ⚠ REFUSED BEFORE THE ROW, not after: an identity that exists with the wrong
-    // sharing is worse than one that was never created.
     expect(mockRepo.insertIdentity).not.toHaveBeenCalled();
   });
 
   it("SECURITY: …and cannot MOVE a row into `team` in a second call", async () => {
-    // ⚠ A create fence with no update twin is a fence defeated in two calls —
-    // F-289's own argument on this very service.
     mockRepo.findIdentityById.mockResolvedValue(identity({ visibility: "private" }));
     mockRepo.listTeamIdsForUser.mockResolvedValue([TEAM_A]);
     await expect(
@@ -310,8 +271,7 @@ describe("team sharing — grantability", () => {
   });
 
   it("SECURITY: a teamIds-only patch on an ALREADY-team row is the same act", async () => {
-    // ⚠ It moves the audience without naming a visibility, which is why the fence
-    // reads the LANDING value rather than `patch.visibility`.
+    // It moves the audience without naming a visibility, so the fence reads the landing value.
     mockRepo.findIdentityById.mockResolvedValue(identity({ visibility: "team" }));
     mockRepo.listTeamLinksForIdentities.mockResolvedValue([
       { identityId: "id-1", teamId: TEAM_A },
@@ -384,8 +344,6 @@ describe("visibility transitions and replace-set semantics", () => {
   });
 });
 
-// ── The write gate + the permanent delete ────────────────────────────
-
 describe("write gate — creator or workspace admin, and nobody else", () => {
   const shared = identity({ visibility: "workspace", createdBy: OWNER });
 
@@ -428,10 +386,7 @@ describe("delete is PERMANENT and the junctions ride the FK", () => {
   it("issues one workspace-scoped DELETE and no junction cleanup of its own", async () => {
     await deleteIdentity(ctx(), "id-1");
     expect(mockRepo.hardDeleteIdentity).toHaveBeenCalledWith("ws-1", "id-1");
-    // ⚠ THE ABSENCE IS THE ASSERTION. Both junctions cascade via a real FK
-    // (`20260822200000`); a hand-written cascade here is one that acquires a
-    // new child table and forgets it. If these ever start being called, the FK
-    // was dropped and this test is the thing that says so.
+    // Both junctions cascade via a real FK (`20260822200000`); a hand cascade would miss a new child table.
     expect(mockRepo.replaceTeamLinks).not.toHaveBeenCalled();
     expect(mockRepo.replaceKnowledgeLinks).not.toHaveBeenCalled();
   });
