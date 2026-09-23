@@ -189,7 +189,7 @@ describe("the payload, and the door it comes through", () => {
   // a visibility or an ownership fact riding a launch payload, which the two
   // `not.toHaveProperty` lines below still state. ⚠ The seventh is a COUNT and
   // nothing else: the base's id, name and container are withheld on purpose
-  // (`service-knowledge-decoration.ts`), so a key that ever arrives beside it
+  // (`service-reads.ts › decorateWithKnowledgeBases`), so a key that ever arrives beside it
   // must fail here.
   // ⚠ EIGHT SINCE 2026-09-08 — `knowledge`, the scoped attachment list. It rides
   // BESIDE `knowledgeBases` rather than replacing it: an older desktop narrows

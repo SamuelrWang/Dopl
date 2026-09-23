@@ -13,10 +13,8 @@
  * for the same reason)
  * (`eslint.config.mjs › max-lines`, `error`, no exemption for this path), so it
  * cannot absorb two cases and their docblocks — and a file that big absorbs a
- * COMMENT badly too. The seam is the same one the server already cut on:
- * `service-knowledge-decoration.ts` was lifted out of `service-reads.ts` at this
- * exact cap, and for the same division of labour — that file owns WHAT THE
- * EDITOR IS, this one owns WHAT ITS ATTACHMENTS RESOLVE TO.
+ * COMMENT badly too. That file owns WHAT THE EDITOR IS; this one owns WHAT ITS
+ * ATTACHMENTS RESOLVE TO.
  *
  * ⚠ THE FIXTURE AND THE `open()` HELPER ARE LOCAL AND DELIBERATELY MINIMAL. A
  * second suite importing the first one's harness couples two files that were
