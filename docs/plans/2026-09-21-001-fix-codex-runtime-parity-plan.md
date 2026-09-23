@@ -44,22 +44,22 @@ The recommended permissions UX uses stable Dopl category labels—`Tool use`, `M
 
 This table is the implementation index. Every row is independently assignable once its dependencies are complete; the detailed acceptance criteria live in the matching implementation unit.
 
-⚠ **THE `STATUS` COLUMN IS THE 2026-09-22 STATE.** “Live” below means the explicitly named private
-alpha smoke unless it says “supported standalone CLI.”
+⚠ **THE `STATUS` COLUMN IS THE 2026-09-22 (evening) STATE, master `ef9c6381`, re-derived from git log.**
+Remaining: Samuel live test in dev app; CXP-7 packaged matrix at release. Cursor out of scope.
 
 | ID | Status | Ticket | Objective | Depends on | Exit signal |
 |---|---|---|---|---|---|
-| U1 | 🟡 **PART** — generated-schema shapes and a private-alpha live turn now agree; the fixture generator refuses `.app` bundle binaries and the live gate compares fixture/CLI versions. **A supported standalone CLI fixture and `SUPPORTED_CLI` pin remain open.** | Freeze the live Codex protocol contract | Replace speculative fixtures with generated-schema and live-process evidence | None | Compatibility suite fails against old Dopl shapes and passes against supported Codex CLI |
-| U2 | 🟡 **PART** — resolver now validates symlink candidate and canonical ancestor chains; credential preflight asks the selected adapter. **Distribution/trust decision, structured readiness state, and packaged Finder smoke remain open.** | Resolve Codex binary and credentials per runtime | Make Finder-launched Dopl locate Codex and gate on Codex login, not Claude login | U1 | Connected/launchable state is correct with normal, missing, and signed-out Codex installs |
-| U3 | 🟡 **COLD PATH DONE** — nested thread id, typed input items, active turn id, steer, interrupt, usage notifications, lifecycle errors, and one real start→complete turn are proven. **Live steer/interrupt and resume remain open.** | Modernize the Codex app-server client | Fix start, turn, steer, interrupt, usage, and lifecycle handling | U1, U2 | A real Codex turn launches, streams, completes, steers, and interrupts through Dopl |
-| U4 | 🟡 **ISOLATION/SCHEMAS DONE; MCP PROOF OPEN** — isolated `CODEX_HOME`, thread-native policy fields, structured granular policy, and method-valid server replies landed. **Hostile live config and real Dopl-MCP allow/deny/audit are not yet proven.** | Prove security isolation and Dopl MCP approvals | Replace the removed config-isolation flag without widening permissions | U1, U3 | Ambient config cannot silently widen a Dopl session; a Dopl MCP call is observed and gated end-to-end |
+| U1 | 🟢 **DONE** — supported `codex-cli 0.155.1` pinned (`SUPPORTED_CLI` min), measured fixture committed (`f6f3db55`). | Freeze the live Codex protocol contract | Replace speculative fixtures with generated-schema and live-process evidence | None | Compatibility suite fails against old Dopl shapes and passes against supported Codex CLI |
+| U2 | 🟡 **CODE DONE** — binary bundled per Samuel's ruling (`4c45b1fa`), resolver order override→bundled→PATH, credential preflight per runtime. **Signed-DMG Finder smoke rides the release.** | Resolve Codex binary and credentials per runtime | Make Finder-launched Dopl locate Codex and gate on Codex login, not Claude login | U1 | Connected/launchable state is correct with normal, missing, and signed-out Codex installs |
+| U3 | 🟢 **DONE** — steer/interrupt/resume measured live (`e490908d`); steer-joined direction capture (`139832a1`). | Modernize the Codex app-server client | Fix start, turn, steer, interrupt, usage, and lifecycle handling | U1, U2 | A real Codex turn launches, streams, completes, steers, and interrupts through Dopl |
+| U4 | 🟢 **DONE (dev, live app-server)** — hostile config isolated (`ff79311d`); approvals by server + op-scoped Axis B (`5658e292`, `4a8ed3a9`); runtime-aware MCP discovery (`52299535`, `ad894c9a`); apps/plugins fenced; project trust fixed (`496dcd98`); `never` → granular underneath so channel calls reach the gate; native delegation off on every model via catalog override; operator skills fenced (`ef9c6381`). **Real Dopl server + app verified only by Samuel's live test.** | Prove security isolation and Dopl MCP approvals | Replace the removed config-isolation flag without widening permissions | U1, U3 | Ambient config cannot silently widen a Dopl session; a Dopl MCP call is observed and gated end-to-end |
 | U5 | 🟢 **DONE** (`683d4fe6`, seam fix `51f6f410`) | Introduce runtime-neutral launch settings | Remove Claude enums and model coercion from shared session/default state | U1 | Shared state carries Dopl semantics plus runtime-keyed native settings without cross-runtime coercion |
-| U6 | 🟡 **FUNCTIONAL** — live first-page `model/list` works, per-model effort/default/hidden fields flow, and runtime picks persist. **Pagination request spelling and in-app refresh after a settled failure remain open.** | Deliver runtime-scoped model catalogs | Expose live Codex models, defaults, reasoning effort, and per-runtime remembered picks | U2, U5 | Switching runtime immediately shows a valid roster and preserves each runtime's prior choice |
-| U7 | 🟢 **DONE** — runtime drives the roster/copy/payload; the immediate-switch race now rejects a positively Claude-owned pick even while the Codex catalog is loading/unavailable. | Finish the New Agent dialog | Make runtime drive model, permission, default, template, and refusal behavior | U5, U6 | Codex selection never shows or submits a Claude model or Claude-only term |
-| U8 | 🟢 **DONE WITH A DEFINED GRANULAR MODE** — profile/channel runtime, model, sandbox, reasoning, and tool mode write. `granular` maps to all five measured categories asking; per-category toggles are intentionally absent because no persistence contract exists. | Finish profile and channel settings | Make default runtime/model/permissions editable and persistent at both scopes | U5, U6 | New channels inherit the chosen runtime-aware profile defaults; existing channels remain unchanged |
-| U9 | 🟢 **DONE** (`7964ea17`). ⚠ **Migration written, NOT APPLIED.** | Add runtime to MCP launch directives | Allow an MCP caller to deliberately launch Claude or Codex | U5 | `manage launch` with `runtime: codex` produces a Codex session and records the applied runtime |
-| U10 | 🟡 **COLD PATH DONE** — active turn, cumulative/last usage, runtime copy, selected-runtime credentials, rehydrated model vocabulary, and crash visibility are fixed. **Resume stays deliberately refused until token baseline behavior is measured.** | Make lifecycle, telemetry, and refusals runtime-honest | Fix usage, active-turn state, resume, errors, and user-visible copy | U3, U5 | No Codex failure is reported as a Claude sign-in or generic SDK problem |
-| U11 | 🟡 **AUTOMATED MATRIX PARTIAL** — desktop full suite, focused web suites, typecheck, lint, and one private-alpha full turn pass. **Packaged app, supported CLI, mixed runtime, live MCP, migration, and runbook remain.** | Run the release matrix and update the contract docs | Prove packaged desktop behavior and Claude regression safety | U2-U10 | All automated, live, packaging, UI, and MCP checks pass on a clean supported machine |
+| U6 | 🟢 **DONE** — cursor pagination measured (`5d15823c`); failed roster recovers in-process (`e63fc3c1`). | Deliver runtime-scoped model catalogs | Expose live Codex models, defaults, reasoning effort, and per-runtime remembered picks | U2, U5 | Switching runtime immediately shows a valid roster and preserves each runtime's prior choice |
+| U7 | 🟢 **DONE** | Finish the New Agent dialog | Make runtime drive model, permission, default, template, and refusal behavior | U5, U6 | Codex selection never shows or submits a Claude model or Claude-only term |
+| U8 | 🟢 **DONE WITH A DEFINED GRANULAR MODE** — granular now launches (was rejected without experimentalApi; `ef9c6381`). | Finish profile and channel settings | Make default runtime/model/permissions editable and persistent at both scopes | U5, U6 | New channels inherit the chosen runtime-aware profile defaults; existing channels remain unchanged |
+| U9 | 🟢 **DONE** (`7964ea17`); migration APPLIED (`20260922180210_channel_launch_directives_runtime`). | Add runtime to MCP launch directives | Allow an MCP caller to deliberately launch Claude or Codex | U5 | `manage launch` with `runtime: codex` produces a Codex session and records the applied runtime |
+| U10 | 🟢 **DONE** — resume enabled with usage baseline carried (`db6278e5`); park kills child (`ab39cc32`). | Make lifecycle, telemetry, and refusals runtime-honest | Fix usage, active-turn state, resume, errors, and user-visible copy | U3, U5 | No Codex failure is reported as a Claude sign-in or generic SDK problem |
+| U11 | 🟡 **AUTOMATED GREEN** — desktop 3667/0/46, live tier 3710/0/3, lints clean. **Packaged signed mixed-runtime matrix (CXP-7) remains, at release.** | Run the release matrix and update the contract docs | Prove packaged desktop behavior and Claude regression safety | U2-U10 | All automated, live, packaging, UI, and MCP checks pass on a clean supported machine |
 
 ---
 
@@ -918,6 +918,79 @@ logging tokens or prompt contents.
 **Accept when:** only the Dopl MCP server is visible, sandbox/policy equal the selected settings,
 every outbound post reaches the Dopl gate, deny prevents execution, allow executes once, and the
 audit record identifies runtime/thread/turn without secrets.
+
+**Live evidence, 2026-09-22:** a newly negotiated external Codex client exposed the new `runtime`
+field and `manage launch` returned
+`agent=@agent-bvi9avs7 model=gpt-6-sol runtime=codex`. The desktop created a real child
+`codex app-server`, and direct turns completed in the agent view. The agent did **not** post the
+requested channel marker: its transcript says `mcp__dopl__dopl_channel` was unavailable. A second
+direct instruction explicitly told it to use dynamic tool search, but it correctly refused because
+the session's higher-priority framing tells it *"do not go looking for it and do not test for it"*.
+This narrows CXP-3 to the two tickets below; do not re-investigate runtime selection or process
+spawn while fixing them.
+
+##### CXP-3A — Make Dopl MCP discovery runtime-aware for spawned Codex sessions
+
+**Objective:** ensure a Dopl-launched Codex agent can discover and call the per-session Dopl MCP
+mount without exposing unrelated deferred tools or weakening the selected tool posture.
+
+**Confirmed causal chain:**
+1. `runtime/codex/launch-spec.js` sends the `mcp_servers.dopl` entry on `thread/start`; the live
+   child launches and completes ordinary turns, so process startup and runtime selection are good.
+2. Current Codex defers MCP tools behind dynamic tool discovery. A fresh standalone Codex session
+   only exposed `dopl_channel` after being told to use dynamic tool search.
+3. `runtime/codex/index.js` still declares `prose.toolSearchVerb: null` on the old assumption that
+   Codex does not defer MCP tools.
+4. `prompt-framing.js > firstActions` is shared across runtimes and explicitly orders the agent not
+   to search or test for the Dopl tool. The spawned Codex agent quoted that instruction when it
+   refused the tester's search request.
+5. Therefore the mount may exist, but the model is prevented from loading its deferred schema and
+   truthfully reports the channel tool unavailable; no Dopl read/post or approval can occur.
+
+**Work:** characterize the supported app-server's dynamic-tool discovery surface and the exact
+capability name Codex exposes; replace Codex's `toolSearchVerb: null` with measured runtime data;
+make `firstActions` runtime-aware instead of preserving Claude's `alwaysLoad` assumption globally;
+permit only the narrow Dopl discovery needed by restricted profiles, or document and enforce the
+smallest available native bound if Codex cannot scope discovery by server/tool. Preserve the rule
+that a genuinely missing mount is reported rather than hidden.
+
+**Tests:** add a prompt-contract test proving Claude keeps its existing `alwaysLoad` wording while
+Codex receives a discovery instruction and no contradictory `do not go looking` sentence; add a
+live app-server test that starts from an unexpanded tool catalog, discovers `dopl_channel`, calls a
+safe read, and posts one unique marker; assert no foreign MCP server becomes callable in
+`read_only`/`dopl_only`.
+
+**Accept when:** a fresh Dopl-launched Codex agent, with no manual preloading, discovers
+`dopl_channel`, completes a safe read, posts exactly one marker to its own channel, and the post
+passes through the existing approval/audit path. Removing the contradiction from the prompt alone
+is insufficient without the live call.
+
+##### CXP-3B — Settle asynchronous direct-agent directions after Codex completion
+
+**Objective:** make an MCP `manage direct` request converge from `pending/claimed` to `delivered`
+when the Codex turn has already produced final text.
+
+**Live reproduction:** direction `73c88154-121a-4a1e-a95b-8fd153ee5661` returned `pending`, was
+claimed by `@agent-bvi9avs7`, and produced two visible `Reply to your agent` transcript entries in
+the desktop. `dopl_channel(op="status")` continued to report that original direction as `claimed`
+minutes later. A subsequent direction to the same idle agent returned `delivered` normally, so the
+agent, direct lane, and final-text capture are not generally broken.
+
+**Work:** trace `agent-directions.js > deliverTo` through
+`session-reopen.js > messageByTask`, `session-directed.js > armAndOpen`, and the Codex
+`turn/completed` normalization path. Verify whether a requester-side MCP timeout, a completion
+arriving before the capture is armed, or a later direction replacing capture state prevents
+`agentDirections.report` from writing the terminal result. Preserve exactly-once reporting and do
+not re-send a claimed direction as recovery.
+
+**Tests:** reproduce a direct request whose MCP call returns `pending` before the Codex turn ends;
+then emit the real normalized completion and assert the same direction row becomes `delivered`
+with its final reply. Add ordering variants for completion-before-waiter and a second later
+direction; assert neither overwrites nor strands the first capture.
+
+**Accept when:** every completed Codex direct turn reaches `delivered` exactly once, including when
+the initiating MCP call already returned `pending`; status never shows `claimed` alongside a final
+reply visible in the agent transcript.
 
 #### CXP-4 — Measure and enable resume safely
 
