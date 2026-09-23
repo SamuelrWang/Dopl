@@ -1,10 +1,7 @@
 import { cn } from "@/shared/lib/utils";
-import {
-  SECTION_PANEL_GROUND,
-  SECTION_PANEL_SHELL,
-} from "@/shared/ui/section-panel";
 import { Skeleton, SkeletonLine, SkeletonText } from "@/shared/ui/skeleton";
 import { SECTION_CARD } from "@/features/members/components/members-v2/bits";
+import { SectionPanelGhost } from "#/components/skeletons/section-panel-ghost";
 import { SkeletonSurface } from "#/components/skeletons/skeleton-surface";
 
 /**
@@ -176,8 +173,8 @@ function MemberDetailGhost() {
           {/* `member-facts.tsx` — the Role and Teams sections, each a flat
               14px-radius gray well since R-39 (2026-09-17). */}
           <div className="flex flex-col gap-3">
-            <SectionPanelGhost lines={2} />
-            <SectionPanelGhost lines={1} />
+            <SectionPanelLinesGhost lines={2} />
+            <SectionPanelLinesGhost lines={1} />
           </div>
         </div>
       </div>
@@ -195,25 +192,14 @@ function StatBlockGhost() {
   );
 }
 
-/**
- * One `shared/ui/section-panel.tsx › SectionPanel` — heading row over the body,
- * on ONE flat ground since R-39 (2026-09-17). ⚠ NOT `SectionPanel` itself: it
- * prints its `label` as an `<h2>`, which a loading state must not do — so this
- * keeps the GROUND and the BOX by name and draws a bar instead.
- */
-function SectionPanelGhost({ lines }: { lines: number }) {
+/** One `SectionPanel`: heading bar over a few text lines. */
+function SectionPanelLinesGhost({ lines }: { lines: number }) {
   return (
-    <div
-      data-section-panel
-      className={cn(SECTION_PANEL_SHELL, SECTION_PANEL_GROUND)}
-    >
-      <div className="flex min-h-[22px] items-center px-1 pb-2.5">
-        <SkeletonLine w={58} h={10} />
-      </div>
+    <SectionPanelGhost headingWidth={58}>
       <div className="px-1">
         <SkeletonText lines={lines} />
       </div>
-    </div>
+    </SectionPanelGhost>
   );
 }
 

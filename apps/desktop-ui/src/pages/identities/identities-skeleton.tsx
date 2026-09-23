@@ -1,8 +1,9 @@
-import { cn } from "@/shared/lib/utils";
 import { Skeleton, SkeletonBar, SkeletonLine } from "@/shared/ui/skeleton";
-import { SECTION_PANEL_GROUND } from "@/shared/ui/section-panel";
+import {
+  IdentityCardsGhost,
+  SectionPanelGhost,
+} from "#/components/skeletons/section-panel-ghost";
 import { SkeletonSurface } from "#/components/skeletons/skeleton-surface";
-import { IDENTITY_GRID } from "@/features/agent-identities/components/identity-section";
 
 /**
  * `/:workspaceSegment/agents`'s loading shape — the identities page's OWN
@@ -53,31 +54,14 @@ export function IdentitiesPageSkeleton({
   );
 }
 
-/**
- * One `IdentityPanel` — `SectionPanel`'s box on the workspace default ground,
- * over `IdentityGrid`'s four-column card grid (`IDENTITY_GRID`).
- *
- * ⚠ NOT `SectionPanel` ITSELF: it takes a `label` STRING and paints it as an
- * `<h2>`, and a skeleton must carry no text. What it keeps is the box
- * (`rounded-[14px] p-3`), the `data-section-panel` hook and
- * `SECTION_PANEL_GROUND` — the constant the two real consumers share, so the
- * ghost's fill and hairline cannot drift from theirs.
- */
+/** One `IdentityPanel` over `IdentityGrid`'s cards. */
 function IdentityPanelGhost({ cards }: { cards: number }) {
   return (
-    <div
-      data-section-panel
-      className={cn("rounded-[14px] p-3", SECTION_PANEL_GROUND)}
+    <SectionPanelGhost
+      headingWidth={128}
+      action={<SkeletonBar h={22} w={64} className="rounded-full" />}
     >
-      <div className="flex min-h-[22px] items-center justify-between gap-2 px-1 pb-2.5">
-        <SkeletonLine w={128} h={10} />
-        <SkeletonBar h={22} w={64} className="rounded-full" />
-      </div>
-      <div className={IDENTITY_GRID}>
-        {Array.from({ length: cards }).map((_, i) => (
-          <Skeleton key={i} className="h-[92px] rounded-[14px]" />
-        ))}
-      </div>
-    </div>
+      <IdentityCardsGhost count={cards} />
+    </SectionPanelGhost>
   );
 }

@@ -1,8 +1,10 @@
-import type { ReactNode } from "react";
 import { cn } from "@/shared/lib/utils";
-import { Skeleton, SkeletonBar, SkeletonLine } from "@/shared/ui/skeleton";
-import { SECTION_PANEL_GROUND } from "@/shared/ui/section-panel";
+import { Skeleton, SkeletonBar } from "@/shared/ui/skeleton";
 import shell from "@/shared/layout/app-shell/app-shell.module.css";
+import {
+  IdentityCardsGhost,
+  SectionPanelGhost,
+} from "#/components/skeletons/section-panel-ghost";
 import { SkeletonSurface } from "#/components/skeletons/skeleton-surface";
 import { AccountRailSkeleton } from "#/components/skeletons/shell-skeleton";
 import { PLOT_HEIGHT_CLASS } from "#/components/charts/bar-series";
@@ -12,7 +14,6 @@ import { HOME_TABS } from "./home-tabs";
 import { GHOST_FLAT_FACE } from "./home-ghost-face";
 import { HomeListGhost } from "./home-list-skeleton";
 import home from "./home.module.css";
-import { IDENTITY_GRID } from "@/features/agent-identities/components/identity-section";
 
 /**
  * /home's LOADING SHAPES — the page frame, and one per face of the record pane.
@@ -111,13 +112,13 @@ export function HomeKnowledgePanelsSkeleton({
       className="flex min-w-0 flex-1 flex-col gap-3 overflow-hidden p-3"
     >
       {/* SHARED IN THIS CHANNEL */}
-      <PanelGhost actionWidth={122}>
+      <SectionPanelGhost headingWidth={HEADING_W} action={<CreateGhost w={122} />}>
         <KbCardsGhost />
-      </PanelGhost>
+      </SectionPanelGhost>
       {/* PERSONAL — the one caption line under the heading. */}
-      <PanelGhost actionWidth={140} caption>
+      <SectionPanelGhost headingWidth={HEADING_W} action={<CreateGhost w={140} />} caption>
         <KbCardsGhost />
-      </PanelGhost>
+      </SectionPanelGhost>
     </SkeletonSurface>
   );
 }
@@ -143,65 +144,24 @@ export function HomeIdentityPanelsSkeleton({
       label={label}
       className="flex min-w-0 flex-1 flex-col gap-3 overflow-hidden p-3"
     >
-      <PanelGhost actionWidth={132}>
-        <IdentityCardsGhost />
-      </PanelGhost>
-      <PanelGhost actionWidth={92} caption>
-        <IdentityCardsGhost />
-      </PanelGhost>
+      <SectionPanelGhost headingWidth={HEADING_W} action={<CreateGhost w={132} />}>
+        <IdentityCardsGhost count={4} />
+      </SectionPanelGhost>
+      <SectionPanelGhost headingWidth={HEADING_W} action={<CreateGhost w={92} />} caption>
+        <IdentityCardsGhost count={4} />
+      </SectionPanelGhost>
     </SkeletonSurface>
   );
 }
 
 
 
-/**
- * One `SectionPanel`-shaped region: heading row, optional caption, body.
- *
- * ⚠ IT IS NOT `SectionPanel` ITSELF, and the reason is the no-text rule: that
- * component takes a `label` STRING and paints it as an `<h2>`, which is the one
- * thing a loading state must not do (a heading that says "Personal" over a
- * shimmering grid asserts a section the read has not confirmed). What it DOES
- * keep is the three things the page depends on — `data-section-panel`, the
- * `rounded-[14px] p-3` box and, since R-38 (2026-09-17), `SECTION_PANEL_GROUND`
- * by default — so the ghost stands on the same panel gray as its loaded
- * counterpart and needs no palette of its own.
- */
-function PanelGhost({
-  children,
-  ground = SECTION_PANEL_GROUND,
-  actionWidth,
-  caption = false,
-}: {
-  children: ReactNode;
-  /** ⚠ DEFAULTED since R-38 (2026-09-17): the loaded `SectionPanel` paints the
-   *  ground itself, so a ghost passing nothing would flash white and resolve
-   *  into gray. Pass one only to say something else. */
-  ground?: string;
-  /**
-   * The header-right create button's ghost width. ⚠ OMITTED = NO BUTTON, and
-   * that is the Overview face: its two `SectionPanel`s take a `label` and no
-   * `action`, so a bar there would ghost an affordance the panel never grows.
-   */
-  actionWidth?: number;
-  caption?: boolean;
-}) {
-  return (
-    <div data-section-panel className={cn("rounded-[14px] p-3", ground)}>
-      <div className="flex min-h-[22px] items-center justify-between gap-2 px-1 pb-2.5">
-        <SkeletonLine w={148} h={10} />
-        {actionWidth !== undefined && (
-          <SkeletonBar h={28} w={actionWidth} className="rounded-lg" />
-        )}
-      </div>
-      {caption && (
-        <div className="px-1 pb-2.5">
-          <SkeletonLine w="58%" h={9} />
-        </div>
-      )}
-      {children}
-    </div>
-  );
+/** Every /home section heading ghost is one width. */
+const HEADING_W = 148;
+
+/** A section header's create-button ghost. */
+function CreateGhost({ w }: { w: number }) {
+  return <SkeletonBar h={28} w={w} className="rounded-lg" />;
 }
 
 /** ⚠ `home.kbCards` ITSELF — see the file docblock. The 224px row height and
@@ -213,21 +173,6 @@ function KbCardsGhost() {
         <div key={i} className={home.kbCell}>
           <Skeleton className="h-full w-full rounded-[14px]" />
         </div>
-      ))}
-    </div>
-  );
-}
-
-/** ⚠ `IdentityGrid`'s grid class **BY IMPORT** — `IDENTITY_GRID`, exported when
- *  the grid became a fixed four columns (2026-09-13). The source scan in
- *  `components/skeletons/page-skeletons.test.tsx` pins the import, so the count
- *  and the gap cannot move on one surface only. It was a copied string while the
- *  value was an un-exported Tailwind arbitrary. */
-function IdentityCardsGhost() {
-  return (
-    <div className={IDENTITY_GRID}>
-      {Array.from({ length: 4 }).map((_, i) => (
-        <Skeleton key={i} className="h-[92px] rounded-[14px]" />
       ))}
     </div>
   );
@@ -351,7 +296,7 @@ function OverviewFaceGhost() {
             `!bg-home-card` here to mirror the page, and BOTH are reverted — the
             ghost takes `PanelGhost`'s default ground, the same as the rails
             panel below. */}
-        <PanelGhost>
+        <SectionPanelGhost headingWidth={HEADING_W}>
           <div className="flex flex-col gap-3">
             <div className={cn(GHOST_FLAT_FACE, "p-3.5")}>
               <Skeleton className="h-[46px] w-full rounded-[10px]" />
@@ -362,16 +307,16 @@ function OverviewFaceGhost() {
               />
             </div>
           </div>
-        </PanelGhost>
+        </SectionPanelGhost>
 
         {/* ALL CHANNELS — the two rows of two rails. */}
-        <PanelGhost>
+        <SectionPanelGhost headingWidth={HEADING_W}>
           <div className="grid grid-cols-2 gap-3">
             {Array.from({ length: 4 }).map((_, i) => (
               <Skeleton key={i} className="h-40 rounded-[14px]" />
             ))}
           </div>
-        </PanelGhost>
+        </SectionPanelGhost>
       </div>
     </div>
   );

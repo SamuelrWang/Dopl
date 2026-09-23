@@ -156,8 +156,10 @@ describe("skeleton grids REUSE the real page's grid, they do not restate it", ()
     // read the import and that the constant still spells a real grid.
     // 🔒 FOUR PER ROW, FIXED (Samuel, 2026-09-13) — never auto-fill.
     expect(IDENTITY_GRID).toBe("grid grid-cols-4 gap-2.5");
-    expect(HOME_SKELETON).toContain("className={IDENTITY_GRID}");
-    expect(AGENTS_SKELETON).toContain("className={IDENTITY_GRID}");
+    expect(file("./section-panel-ghost.tsx")).toContain("className={IDENTITY_GRID}");
+    for (const skeleton of [HOME_SKELETON, AGENTS_SKELETON]) {
+      expect(skeleton).toContain("<IdentityCardsGhost count={");
+    }
   });
 
   /**
