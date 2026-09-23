@@ -71,9 +71,7 @@ function nativePair(s, cfg) {
   return { runMode: tools.normalizeToolMode(st.toolMode), sandbox };
 }
 
-function appVersion() {
-  try { return require('electron').app.getVersion(); } catch (_) { return '0.0.0'; }
-}
+const appVersion = () => require('../../app-version').appVersion();
 
 function userDataDir() {
   try { return require('electron').app.getPath('userData'); } catch (_) { return ''; }

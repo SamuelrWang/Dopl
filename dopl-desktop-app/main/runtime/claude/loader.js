@@ -26,6 +26,7 @@
 const path = require('path');
 const { app } = require('electron');
 const { MCP_URL } = require('../../config');
+const cliSpawn = require('../cli-spawn');
 const { diag } = require('../../diag');
 // ⚠ The one fail-closed read of a profile name, shared with the deny list this session was
 // spawned under — see `withToolProfileStamp`. `tool-profiles.js` is electron/fs/path-free.
@@ -52,14 +53,6 @@ function peekSdk() {
   return _sdk;
 }
 
-// In-asar path -> its asar.unpacked twin. Pure string transform (testable without electron).
-// No `app.asar` segment => unchanged; an already-`.unpacked` path is left alone by the
-// negative lookahead.
-function rewriteAsarUnpacked(p) {
-  if (typeof p !== 'string') return p;
-  return p.replace(/app\.asar(?!\.unpacked)/, 'app.asar.unpacked');
-}
-
 // Absolute path to the bundled `claude` executable, or null (engine falls back to headless).
 // The platform binary ships as `@anthropic-ai/claude-agent-sdk-<platform>-<arch>` (an
 // optionalDependency, host-arch only) with a `claude` file at its package root.
@@ -68,7 +61,7 @@ function resolveClaudeExecutable() {
   try {
     const pkgJson = require.resolve(`${platformPkg}/package.json`);
     const bin = path.join(path.dirname(pkgJson), 'claude');
-    return rewriteAsarUnpacked(bin);
+    return cliSpawn.rewriteAsarUnpacked(bin);
   } catch (err) {
     diag('sdk-loader: platform binary unresolved', platformPkg, err && err.message);
     return null;
@@ -333,12 +326,7 @@ const PERMISSION_ENV_RE = /PERMISSION|BYPASS|ACCEPT_EDITS|DONT_ASK|SKIP_PERMISSI
 const CLAUDEAI_MCP_ENV = 'ENABLE_CLAUDEAI_MCP_SERVERS';
 const CLAUDEAI_MCP_OFF = '0';
 function buildScrubbedEnv() {
-  const src = process.env || {};
-  const out = {};
-  for (const k of Object.keys(src)) {
-    if (/^(CLAUDE_CODE_|ANTHROPIC_)/.test(k) && PERMISSION_ENV_RE.test(k)) continue; // drop permission knobs
-    out[k] = src[k];
-  }
+  const out = cliSpawn.scrubPermissionEnv(process.env, /^(CLAUDE_CODE_|ANTHROPIC_)/, PERMISSION_ENV_RE);
   out[CLAUDEAI_MCP_ENV] = CLAUDEAI_MCP_OFF; // last word, always — see the block above
   // ── ⚠ THE MCP CONNECT BUDGET (F-692, 2026-09-13) ─────────────────────────────────────────────
   //

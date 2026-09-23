@@ -50,6 +50,7 @@ const sessionOutbound = require('../../session-outbound');
 const sessionCredential = require('../../session-credential');
 const sessionDirected = require('../../session-directed');
 const capability = require('../capability');
+const cliSpawn = require('../cli-spawn');
 const { diag } = require('../../diag');
 
 // ── THE ENVIRONMENT ──────────────────────────────────────────────────────────────────────────
@@ -69,13 +70,7 @@ const { diag } = require('../../diag');
 const PERMISSION_ENV_RE = /PERMISSION|BYPASS|APPROVAL|DONT_ASK|SKIP|AUTO_APPROVE|DANGEROUS|YOLO/i;
 
 function buildScrubbedEnv(extra) {
-  const src = process.env || {};
-  const out = {};
-  for (const k of Object.keys(src)) {
-    if (/^(CODEX_|OPENAI_)/.test(k) && PERMISSION_ENV_RE.test(k)) continue;
-    out[k] = src[k];
-  }
-  return Object.assign(out, extra || {});
+  return Object.assign(cliSpawn.scrubPermissionEnv(process.env, /^(CODEX_|OPENAI_)/, PERMISSION_ENV_RE), extra || {});
 }
 
 // ── THE NATIVE PAIR ──────────────────────────────────────────────────────────────────────────

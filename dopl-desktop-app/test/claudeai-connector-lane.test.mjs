@@ -82,10 +82,11 @@ const SCRUB = (() => {
   // sets the CLI's MCP connect budget (`MCP_CONNECT_TIMEOUT_MS`, default 5000 — the number the
   // F-692 incident blew against a cold `/api/mcp`). The REAL module is injected rather than a
   // fake, so the name and the value stay this suite's `mcp-connect.js` and not a local copy.
-  return new Function("process", "mcpConnect", `${body}\n return buildScrubbedEnv;`);
+  return new Function("process", "mcpConnect", "cliSpawn", `${body}\n return buildScrubbedEnv;`);
 })();
 const MCP_CONNECT = require(join(MAIN, "mcp-connect.js"));
-const scrubWith = (env) => SCRUB({ env }, MCP_CONNECT)();
+const CLI_SPAWN = require(join(MAIN, "runtime", "cli-spawn.js")); // the shared scrub loop
+const scrubWith = (env) => SCRUB({ env }, MCP_CONNECT, CLI_SPAWN)();
 
 // ── 1. THE SUPPRESSION REACHES THE CHILD ENV ─────────────────────────────────────────────────
 

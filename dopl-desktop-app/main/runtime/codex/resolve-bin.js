@@ -69,6 +69,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const os = require('node:os');
+const { rewriteAsarUnpacked } = require('../cli-spawn');
 
 const BIN = 'codex';
 
@@ -114,24 +115,6 @@ const VENDOR_TRIPLE = {
 // what `package.json › build.asarUnpack` globs. Resolving by the declared name would find the
 // launcher instead.
 const PLATFORM_PKG = (platform, arch) => `@openai/codex-${platform}-${arch}`;
-
-/**
- * An in-asar path → its `app.asar.unpacked` twin. Pure string transform, no electron.
- *
- * ⚠ **THIS IS WHY THE BUNDLED PATH IS DERIVED AND NEVER HARDCODED.** `require.resolve` reports the
- * IN-ASAR path in a packaged app (`…/Dopl.app/Contents/Resources/app.asar/node_modules/@openai/…`)
- * even though `asarUnpack` put the real bytes beside it under `app.asar.unpacked`, and reports an
- * ordinary `node_modules` path in a dev tree, which has no `app.asar` segment at all. One
- * expression covers both, and a dev tree is left untouched because the regex matches nothing.
- * ⚠ VERBATIM the transform `../claude/loader.js › rewriteAsarUnpacked` has used since the desktop
- * shipped, negative lookahead included — an already-`.unpacked` path must be left alone, or a
- * second rewrite produces `app.asar.unpacked.unpacked`. It is copied rather than imported because
- * that module requires `electron` at load time and this one must stay spawn-free and electron-free.
- */
-function rewriteAsarUnpacked(p) {
-  if (typeof p !== 'string') return p;
-  return p.replace(/app\.asar(?!\.unpacked)/, 'app.asar.unpacked');
-}
 
 /**
  * The bundled `codex` this release ships, or `null` when this build has none.
