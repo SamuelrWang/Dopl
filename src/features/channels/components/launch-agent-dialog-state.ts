@@ -20,7 +20,7 @@
  * two-readers-one-fact defect with the LAUNCH RUNTIME as the thing that drifts.
  */
 
-import { useEffect, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   useLaunchSelection,
   type LaunchSelectionState,
@@ -44,6 +44,8 @@ import type { AgentLaunchPanel } from "./use-agent-launch";
 export interface IdentityModelRow {
   id: string;
   model?: string | null;
+  /** The identity's runtime; absent/null/`''` = no preference. */
+  runtime?: string | null;
 }
 
 export interface LaunchDialogRuntime {
@@ -67,6 +69,8 @@ export interface LaunchDialogRuntime {
   stopWarning: string | null;
   /** The whole record, for a caller that needs more than the above. */
   selection: LaunchSelectionState;
+  /** The Runtime row's writer: an OPERATOR pick, which outranks the identity's runtime. */
+  chooseRuntime: (runtimeId: string) => void;
 }
 
 export function useLaunchDialogRuntime(
@@ -105,9 +109,24 @@ export function useLaunchDialogRuntime(
    * read another's refusals is what `runtime-capability.ts › descriptorFor` exists to prevent.
    * {@link pickRuntime} is the whole four-link chain and its argument.
    */
+  // Ruling 5: launcher's explicit pick → the identity's runtime → the channel's. `panel.runtime`
+  // is also written back by the effect below, so only a Runtime-row click counts as a pick; the
+  // flag resets with the dialog (derived during render, never in an effect).
+  const [explicit, setExplicit] = useState({ open: panel.open, picked: false });
+  if (explicit.open !== panel.open) setExplicit({ open: panel.open, picked: false });
+  const chooseRuntime = useCallback(
+    (runtimeId: string) => {
+      setExplicit({ open: true, picked: true });
+      setRuntime(runtimeId);
+    },
+    [setRuntime]
+  );
+  const identityRuntime =
+    identities.find((t) => t.id === panel.identityId)?.runtime ?? "";
+  const ownPick = explicit.picked ? panel.runtime : identityRuntime;
   const effectiveRuntime = useMemo(
-    () => pickRuntime(runtimes, panel.runtime, selection.runtime, connected, connectedKnown),
-    [runtimes, panel.runtime, selection.runtime, connected, connectedKnown]
+    () => pickRuntime(runtimes, ownPick, selection.runtime, connected, connectedKnown),
+    [runtimes, ownPick, selection.runtime, connected, connectedKnown]
   );
   const selectedRuntime = effectiveRuntime?.id ?? "";
   const scopeId = selectedRuntime || selection.defaultRuntime;
@@ -264,5 +283,6 @@ export function useLaunchDialogRuntime(
     // operator is told what this runtime cannot do BEFORE they start it.
     stopWarning: runtimes.length ? interruptRefusal(effectiveRuntime) : null,
     selection,
+    chooseRuntime,
   };
 }

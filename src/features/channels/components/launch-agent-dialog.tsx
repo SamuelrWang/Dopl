@@ -166,9 +166,6 @@ export function LaunchAgentDialog({
   // ⚠ THE RUNNER LIVES HERE NOW, beside the button that fires it — see the header's note on the
   // submit moving back inside the form. It reaches `launchWithIdentity` unchanged.
   const runner = useLaunchRunner({ newAgent, panel, openThreadId });
-  // ⚠ DESTRUCTURED so the sync effect below can DEPEND on it: `panel` is a fresh object every
-  // render, while `setRuntime` is `useAgentLaunch`'s own setState function and is stable.
-  const { setRuntime } = panel;
 
   const memberNames = useMemo(
     () => new Map(members.map((m) => [m.userId, m.displayName || m.email || ""] as const)),
@@ -220,6 +217,7 @@ export function LaunchAgentDialog({
     nativeLine,
     connectionNote,
     stopWarning,
+    chooseRuntime,
   } = runtime;
 
   /**
@@ -425,7 +423,7 @@ export function LaunchAgentDialog({
             label="Runtime"
             options={runtimeOptions}
             value={selectedRuntime}
-            onChange={setRuntime}
+            onChange={chooseRuntime}
             ariaLabel="Agent runtime"
             className="flex-wrap"
           />
