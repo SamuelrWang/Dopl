@@ -3,16 +3,8 @@ import type { ApiRequestOpts } from "@/shared/api/api-envelope";
 import type { ApiMutationRequestFn } from "@/shared/hooks/use-api-mutation";
 
 /**
- * THE feature's transport, and nothing else.
- *
- * ⚠ NO PER-VERB WRAPPERS. Every write on this page is a `useApiMutation` config
- * that owns its request AND the cache patch the same draft produces
- * (`../hooks/use-agent-identity-writes.ts`); a `createIdentity()` helper beside
- * them would be a SECOND place the body is built, and the two would drift the
- * first time a field was added. Whoever owns the cache owns the call — the
- * channels client's rule, for the same reason.
- *
- * ⚠ Paths and cache keys live in `./query-keys.ts`, never here.
+ * The feature's transport only. No per-verb wrappers: each write's mutation config owns its request
+ * and its cache patch (`../hooks/use-agent-identity-writes.ts`); paths and keys are `./query-keys.ts`.
  */
 
 /** Domain error wrapper so the editor can put the server's own wording on screen. */
@@ -44,26 +36,12 @@ async function request<T>(path: string, opts: RequestOpts = {}): Promise<T> {
 }
 
 /**
- * The transport as `useApiMutationWith` consumes it.
- *
- * ⚠ MODULE-LEVEL so the reference is stable across renders — the hook memoizes
- * its options on it, and a fresh function each render rebuilds them every time.
- *
- * ⚠ Every write driven through this throws {@link AgentIdentityApiError}, so the
- * `err instanceof AgentIdentityApiError` branch that surfaces the server's
- * message keeps working. A mutation wired straight to `apiRequest` silently
- * degrades every error on this page to its fallback string.
+ * The transport as `useApiMutationWith` consumes it — module-level so the reference is stable, and
+ * throwing {@link AgentIdentityApiError} so the server's wording reaches the screen.
  */
 export const agentIdentityRequest: ApiMutationRequestFn = request;
 
-/**
- * Human copy for anything a write threw.
- *
- * ⚠ DELETE MAY 403 FOR AN AGENT TOKEN (the route is session-only). This page is
- * always a session — the SPA authenticates with the user's session JWT — so that
- * branch is unreachable here and gets no special copy; a 403 that somehow
- * arrived would render the server's own sentence, which is the honest answer.
- */
+/** Human copy for anything a write threw — the server's own sentence when there is one. */
 export function agentIdentityErrorMessage(err: unknown, fallback: string): string {
   if (err instanceof AgentIdentityApiError) return err.message;
   if (err instanceof Error && err.message) return err.message;

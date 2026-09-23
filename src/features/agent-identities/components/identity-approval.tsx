@@ -1,52 +1,22 @@
 "use client";
 
-// ⚠ Deep import, NOT the `settings-modal` barrel — the barrel re-exports
-// SettingsModal, whose section tree reaches `next/navigation`, and any `next/*`
-// module in the graph fails the desktop SPA build.
+// Deep import, not the `settings-modal` barrel: that barrel reaches `next/navigation`, which breaks the SPA build.
 import { ModalShell } from "@/shared/layout/settings-modal/modal-shell";
 import styles from "@/shared/layout/settings-modal/settings-modal.module.css";
 import { cn } from "@/shared/lib/utils";
 import { RAISED_INPUT } from "@/shared/ui/wells";
 
 /**
- * FIRST USE OF ANOTHER MEMBER'S IDENTITY — the one modal that stands between a
- * teammate's prose and this operator's machine.
- *
- * ⚠ THIS IS A SECURITY SURFACE, NOT A COURTESY. A `team` or `workspace`
- * identity's `instructions` are written by ANOTHER MEMBER and execute on YOUR
- * machine, in YOUR session, under YOUR credential, with YOUR tool profile and
- * YOUR knowledge reach. The tool profile is the only real fence and it is
- * main's; the fence stops WIDENING, not MISDIRECTION. What addresses
- * misdirection is showing a human the text before it runs — so the instructions
- * are rendered **verbatim**, never summarised, never truncated, and the confirm
- * verb says what is about to happen rather than "OK".
- *
- * ⚠ IT IS MAIN THAT DECIDES WHETHER THIS APPEARS, AND MAIN THAT REMEMBERS.
- * `sessions.launch` refuses with the wire word `identity-approval`, carrying the
- * identity's name and instructions; the SPA renders this, and on confirm calls
- * `sessions.approveIdentity(identityId)` and relaunches. The approval is stored
- * MACHINE-LOCALLY in the desktop's `electron-store`, beside
- * `orchestratorLaunchEnabled` and for the same reason: a server-writable
- * approval lets a credential-holding agent pre-approve itself across the fleet.
- * **Never add a remotely-addressable writer for it**, and never let this
- * component remember an answer of its own — a renderer-side "already approved"
- * cache would be exactly that fence, in the process that the untrusted text is
- * trying to influence.
- *
- * ⚠ IT IS THE `ConfirmDialog` IDIOM, not that component. `ConfirmDialog` takes a
- * `description` STRING and renders it in a compact shell; instructions run to
- * 32 KB (`../schema.ts`), so this uses the same `ModalShell` + confirm button
- * pair with the body in a bounded, scrolling raised well.
- *
- * ⚠ NO CONCAVE SURFACE — the ruling for this whole feature; swept by
- * `./identity-editor-surface.test.tsx › no concave surfaces`.
+ * First use of another member's identity — a security surface: their instructions run on this
+ * machine as this operator, so they are shown verbatim before the first run. Main decides when this
+ * appears and stores the approval machine-locally; the renderer must never cache an approval.
  */
 
 export interface IdentityApprovalRequest {
   identityId: string;
   name: string;
   instructions: string | null;
-  /** `by <member>`, as the picker row said it. Absent when unresolvable. */
+  /** `by <member>`, the picker row's own string (it carries the preposition). */
   authorLabel?: string | null;
 }
 
@@ -62,7 +32,7 @@ export function IdentityApprovalDialog({
   /** `null` keeps the shell mounted through its exit animation. */
   request: IdentityApprovalRequest | null;
   busy?: boolean;
-  /** Copy for a refused `approveIdentity`, or null. ⚠ Never swallowed. */
+  /** Copy for a refused `approveIdentity`, or null — never swallowed. */
   error?: string | null;
   onCancel: () => void;
   onConfirm: () => void;
@@ -74,13 +44,7 @@ export function IdentityApprovalDialog({
     <ModalShell open={open} onClose={onCancel} label={heading} size="narrow">
       <div className={styles.confirmBody}>
         <h2 className={styles.confirmTitle}>{heading}</h2>
-        {/* ⚠ THE AUTHOR IS THE POINT OF THE SENTENCE. "Another member wrote
-            these instructions" is the fact the operator is being asked to accept
-            — a generic "are you sure" would be chrome. */}
         <p className={styles.confirmDesc}>
-          {/* ⚠ `authorLabel` ALREADY CARRIES THE PREPOSITION ("by Diana
-              Taylor") — it is the picker row's own string, verbatim, so the
-              modal and the row cannot word the same fact two ways. */}
           {request?.authorLabel
             ? `Written ${request.authorLabel}. It runs on this Mac, as you.`
             : "Written by another member. It runs on this Mac, as you."}
@@ -96,9 +60,7 @@ export function IdentityApprovalDialog({
             {instructions}
           </div>
         ) : (
-          // ⚠ UNKNOWN IS NOT EMPTY (INVARIANTS §11), and here EMPTY IS A FACT: a
-          // name-only identity is a legal configuration, so say that rather than
-          // rendering a blank box the operator has to interpret.
+          // A name-only identity is legal; say so rather than render an empty box.
           <p className="mb-3 text-caption text-text-muted">
             This identity carries no instructions.
           </p>

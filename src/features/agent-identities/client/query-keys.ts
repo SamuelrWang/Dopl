@@ -8,26 +8,10 @@ import {
 import type { IdentityShelf } from "../types";
 
 /**
- * The feature's URLs and the cache keys built from them, in ONE module — so a
- * write and the read it patches cannot disagree about either (the channels
- * client's rule, `features/channels/client/query-keys.ts`).
- *
- * ⚠ Never hand-type the tuple at a call site. `useApiQuery` registers
- * `[path, workspaceId, query]`; a key that drifts by one character is a SILENT
- * no-op — the patch lands in an entry no observer is subscribed to, the screen
- * does not change, and nothing fails.
- *
- * ⚠ **WRITES ON THIS PATH PATCH THE `entry({workspaceId})` KEY, NOT THE `.all`
- * PREFIX — F-331, and it is the opposite of the tree's usual default.** The
- * prefix is right when a writer cannot know which VARIANTS of its own workspace
- * a reader mounted (`?include=archived`); it is WRONG here, because the variant
- * axis on this path is the WORKSPACE ITSELF and one surface mounts two of them
- * (the /home Agents tab: a channel container and the home workspace, side by
- * side). A prefix patch reaches both, so an identity created in one appears
- * under the other. `useAgentIdentities` passes `{workspaceId, select}` and no
- * `query`, so `entry({workspaceId})` is `[path, workspaceId, undefined]` —
- * EXACTLY the tuple the read registers. See `../hooks/use-agent-identity-writes.ts`
- * and INVARIANTS §8.
+ * The feature's URLs and cache keys in one module, so a write and the read it patches agree.
+ * Writes patch the `entry({workspaceId})` key, not the `.all` prefix: one surface mounts two
+ * workspaces' lists, and a prefix patch would leak a row into the other (F-331, INVARIANTS §8).
+ * The shelf is part of the key and must match between the read and the write hooks.
  */
 
 export function agentIdentitiesPath(): string {
@@ -38,23 +22,13 @@ export function agentIdentityPath(identityId: string): string {
   return `${agentIdentitiesPath()}/${encodeURIComponent(identityId)}`;
 }
 
-/**
- * The `query` half of the list read, for one shelf. ⚠ `undefined` (NOT `{}`) for
- * "both shelves" — that is what `useApiQuery` registers when no `query` is
- * passed, and `{}` would be a different tuple element and therefore a different
- * cache entry.
- */
+/** The list read's `query` for one shelf; "both shelves" is `undefined`, never `{}` (another cache entry). */
 export function identityListQuery(shelf?: IdentityShelf): ApiQueryParams {
   return shelf ? { shelf } : undefined;
 }
 
 export const agentIdentityKeys = {
-  /**
-   * The list read every section on the page renders from, for ONE shelf.
-   * ⚠ `entry()` here IGNORES a caller-supplied `query` on purpose: the shelf
-   * argument is the only variant axis this path has, and letting a call site
-   * pass its own would put the two spellings back in two places.
-   */
+  /** The list read for one shelf; `entry()` ignores a caller `query` — the shelf is the only variant. */
   list: (shelf?: IdentityShelf): ApiResourceKeys => {
     const path = agentIdentitiesPath();
     const query = identityListQuery(shelf);

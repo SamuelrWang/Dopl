@@ -13,71 +13,10 @@ import {
 } from "@/features/agent-identities/server/service";
 
 /**
- * `GET /api/agent-identities/{identityId}/resolve` — THE LAUNCH CONTRACT.
- *
- * The desktop calls this at spawn time, as the operator, and gets back the
- * flattened payload it needs to start an agent, and nothing else:
- *
- *   200 → { name, instructions, model, runtime, fields: [{key,value,type?}],
- *           knowledgeBases: [{id,name}], knowledge, authoredByCaller,
- *           unreachableKnowledgeBaseCount }
- *   404 → { error: { code: "AGENT_IDENTITY_NOT_FOUND", message } }
- *
- * ⚠ THE MECHANISM, CORRECTED 2026-08-22 (G-2). This said the desktop calls it
- * "with its device token". It cannot: `dopl-desktop-app/main/api.js › apiFetch`
- * is COOKIE-authed, and the device token
- * (`main/mcp-config.js › deviceTokenForSpawn`) is the MCP bearer and nothing
- * else. Both resolve to the same `userId`, so the BEHAVIOUR the rest of this
- * block describes was right and only the mechanism was wrong.
- *
- * ⚠ WHY IT IS NOT JUST `GET /{id}`, since it returns a subset of that. A launch
- * payload and an identity RECORD are different contracts with different lifetimes:
- * the record grows fields as the product does (sharing state, timestamps,
- * ownership, whatever the settings UI needs next), and the launcher must not have
- * to re-decide which of them matter every time. This endpoint is the promise that
- * those keys are what starting an agent needs — a field added to
- * `AgentIdentity` does not appear here unless someone decides it belongs in a
- * launch.
- *
- * ⚠ `authoredByCaller` IS THE SIXTH, ADDED 2026-08-22 (G-1), AND IT IS THE ONE
- * OWNERSHIP-SHAPED FACT ON THIS PAYLOAD. The desktop's ROLE block wears a
- * different SECURITY HEADER for another member's instructions than for the
- * operator's own, and that gate cannot be built without it. A COMPUTED BOOLEAN,
- * never `createdBy`: the boolean discloses nothing the caller does not already
- * know from the list endpoint, and a raw creator id in a launch payload is a fact
- * the launcher has no use for. Full argument at
- * `service-reads.ts › resolveIdentityForLaunch`.
- *
- * ⚠ NOT `sessionOnly`, and it must not become so. The caller is a desktop that
- * may be presenting either credential this user holds; session-gating this would
- * refuse the only caller it exists for on the OAuth half.
- *
- * ⚠ IT IS GATED BY THE SAME VISIBILITY MATRIX AS EVERY OTHER READ (it composes
- * `service-reads.ts › readIdentityById`), so it is not a second, weaker door onto
- * the row. ⚠ **THAT IS THE ID-RESOLVING READ SINCE 2026-09-02 (A12)**: the id
- * names the container the matrix runs in, so an identity of the operator's own
- * living in another workspace of theirs RESOLVES rather than 404-ing with the
- * `details.elsewhere` label the desktop could only log. The refusal is unchanged
- * where it still bites. Two consequences the integration builder should expect
- * rather than debug:
- *   1. an identity the caller may not see is a 404 here, exactly as it is on the
- *      record endpoint — never a 403, which would confirm it exists;
- *   2. `knowledgeBases` is VIEWER-FILTERED, so two people resolving the SAME
- *      identity can legitimately get different arrays. A shared identity cannot
- *      be used to hand someone a pointer to a base they cannot read.
- *
- * ⚠ `unreachableKnowledgeBaseCount` IS THE SEVENTH KEY, ADDED 2026-09-05
- * (Samuel's ruling). The filter in consequence 2 used to be SILENT: an agent
- * launched where an attached base is out of reach read a role naming no
- * knowledge at all, and could not tell anyone that something was missing. The
- * count is what lets the desktop's ROLE block say *"I don't have access to this
- * knowledge base in this channel"*.
- * 🔒 ⚠ **A COUNT, NEVER A LOCATION.** Not the id, not the name, not the
- * container — those are exactly what consequence 2 withholds, and this key must
- * never grow into a way of asking where a base lives. It also does not gate the
- * launch: the agent starts, minus the base, and says so.
- *
- * `viewer` is enough: resolving is a read.
+ * `GET /api/agent-identities/{identityId}/resolve` — the launch contract the desktop fetches at spawn
+ * (cookie-authed, as the operator): `ResolvedAgentIdentity`, or 404 for missing/invisible (never 403).
+ * Gated by the same matrix via `readIdentityById`; knowledge is viewer-filtered and what it drops is a
+ * count, never a location. Not `sessionOnly`: the desktop may present either credential.
  */
 
 async function handleGet(_request: NextRequest, auth: WorkspaceAuthContext) {

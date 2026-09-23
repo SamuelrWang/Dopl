@@ -1,10 +1,6 @@
 "use client";
 
-/**
- * The knowledge bases an identity can attach, with the read's state kept apart
- * (P9-04): `pending` is not "no knowledge here", and a failed read is neither.
- * The editor's picker and the /home card popup read it the same way.
- */
+/** The knowledge bases an identity can attach, with the read's state apart: pending and failed are not empty. */
 
 import { useMemo } from "react";
 import { useKnowledgeBaseList } from "@/features/knowledge/client/hooks";

@@ -1,8 +1,6 @@
 /**
- * The identity editor's Runtime and Model rows (rulings 4–6): the Model row
- * offers THE IDENTITY'S RUNTIME's live models and nobody else's. No runtime, or
- * no catalog for it, offers "Default" plus the stored value as itself — never
- * another runtime's list (F11, P7-12, X-03).
+ * The identity editor's Runtime and Model rows: the Model row offers the identity's runtime's live
+ * models and nobody else's; with no runtime or no catalog, "Default" plus the stored value as itself.
  */
 
 import { agentModelLabel } from "@/features/channels/lib/agent-models";
@@ -41,7 +39,7 @@ export function identityRuntimeOptions(
   return options;
 }
 
-/** `catalogs` only LABELS a stored value the runtime's own catalog cannot offer; it never selects. */
+/** `catalogs` only labels a stored value the runtime's own catalog cannot offer; it never selects. */
 export function identityModelOptions(
   runtime: string,
   catalog: ModelCatalog | null,
