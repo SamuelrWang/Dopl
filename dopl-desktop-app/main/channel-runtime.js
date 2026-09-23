@@ -54,15 +54,6 @@
 const { diag } = require('./diag');
 const runtimeRegistry = require('./runtime');
 
-// ⚠ **THE LEGACY KEY, AND IT IS NO LONGER THE AUTHORITY (2026-09-21, U5).** The pick now rides
-// the channel's VERSIONED LAUNCH SELECTION (`main/launch-selection.js`), beside the per-runtime
-// model and native settings it selects between — which is what makes "switch to Codex and back
-// and find your Claude model still there" expressible at all. This key survives as
-// `channel-prefs.js`'s MIGRATION SOURCE (a channel with no selection record seeds its runtime from
-// here) and as its DOWNGRADE MIRROR (every selection write re-stamps it), so an older build reads
-// the pick actually in force. Nothing in this file reads it directly any more.
-const CHANNEL_RUNTIME_KEY = 'channelRuntime'; // LEGACY MIRROR: { [channelId]: '<runtime id>' }
-
 // ⚠ LAZY, the idiom this tree uses at every module edge that touches `channel-prefs.js`: that
 // module instantiates an electron-store at load, it requires THIS file's sibling registry, and
 // plain-node callers of this file must keep working.
@@ -120,8 +111,6 @@ function getChannelRuntime(channelId) {
 // { runtime })`. It is own-key, so it leaves every other field alone.
 
 module.exports = {
-
-  CHANNEL_RUNTIME_KEY,
   normalizeRuntimeId,
   getChannelRuntime,
 };

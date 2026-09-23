@@ -49,8 +49,8 @@ function ontologyLine(o) {
   const verb =
     o.level === 'EDIT'
       ? 'you may also write to it with the write ops.'
-      : 'READ ONLY — a write to it is refused, and that refusal is the fence working.';
-  return `- "${o.name}" (${o.level}) — read it with mcp__dopl__dopl_ontology op "map", cluster "${o.id}"; ${verb}`;
+      : 'READ ONLY: a write to it is refused, and that refusal is the fence working.';
+  return `- "${o.name}" (${o.level}): read it with mcp__dopl__dopl_ontology op "map", cluster "${o.id}"; ${verb}`;
 }
 
 /**
@@ -72,7 +72,7 @@ function ontologyReachLines(ctx) {
     '',
     'ONTOLOGIES YOU CAN REACH IN THIS CHANNEL:',
     ...list.map(ontologyLine),
-    'These are your operator\'s ontologies, LENT into this channel — one row, not a copy, so an',
+    'These are your operator\'s ontologies, LENT into this channel as one row, not a copy, so an',
     'edit you make is seen by everyone it is lent to. The level above is enforced on the server and',
     'bounds what you may do NEXT; it does not retract anything already in this window. An ontology',
     'that is not named here is one this session does not reach: do not go looking for it.',

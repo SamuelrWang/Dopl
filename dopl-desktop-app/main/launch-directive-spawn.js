@@ -95,7 +95,7 @@ function planPosture(d, runtimeId, chainAllowed) {
     chainRequested: d.chain,
     chainAllowed,
     floorMessages: profiles.floorWindowlessMessage,
-    toolOrder: order, messageOrder: wire.MESSAGE_MODES,
+    toolOrder: order,
   });
   if (plan.clamped) {
     diag('launch-directive: posture CLAMPED to this channel\'s stored pair — asked',

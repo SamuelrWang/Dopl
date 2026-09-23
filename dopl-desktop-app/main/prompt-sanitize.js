@@ -116,10 +116,8 @@ function stripFence(text, ...delimiters) {
 }
 
 module.exports = {
-  stripFenceTokens,
   sanitizeText, // 2026-08-23: the same neutralizer, at the caller's own field bound (F-287)
   sanitizeName, // …and its display-name default of 80
-  DISPLAY_MAX,
   idToken,
   stripFence,
 };

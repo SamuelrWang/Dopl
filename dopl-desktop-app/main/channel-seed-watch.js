@@ -273,12 +273,4 @@ function observeChannels(desired, complete, selfUserId) {
   return { installed: false, seeded: seeded };
 }
 
-module.exports = {
-  WATERMARK_KEY,
-  WATERMARK_V,
-  stampMs,
-  readWatermark,
-  seenRows,
-  decidePass,
-  observeChannels,
-};
+module.exports = { observeChannels };

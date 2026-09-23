@@ -140,6 +140,22 @@ function effectiveDefaults(sel, ctx, stored) {
   };
 }
 
+/**
+ * The HARD failures in a defaults WRITE: a registered runtime's non-empty `tools` that runtime
+ * does not offer. A read floors such a value; a write refuses it, like a channel write (P3-29).
+ */
+function defaultsRejections(sel, ctx, raw) {
+  const by = raw && raw.byRuntime && typeof raw.byRuntime === 'object' && !Array.isArray(raw.byRuntime)
+    ? raw.byRuntime : {};
+  const out = [];
+  for (const id of Object.keys(by)) {
+    const tools = by[id] && typeof by[id].tools === 'string' ? by[id].tools.trim() : '';
+    if (!tools || !ctx.known(id)) continue;
+    for (const line of sel.patchRejections(ctx, { runtime: id }, { tools: tools })) out.push(line);
+  }
+  return out;
+}
+
 // ─── END AGENT-DEFAULTS-VALIDATE ─────
 
 const DEFAULTS_KEY = 'agentDefaults'; // { v, runtime, messages, byRuntime, agentChain }
@@ -175,6 +191,11 @@ function getAgentDefaults() {
  * about. If a second writer ever appears, port the `hasOwnProperty` idiom before it ships.
  */
 function setAgentDefaults(raw) {
+  const rejected = defaultsRejections(selection, ctx(), raw);
+  if (rejected.length) {
+    diag('agent-defaults: refused a write —', rejected.join('; '));
+    return { ok: false, rejected: rejected };
+  }
   const next = normalizeStored(raw);
   if (!next) return { ok: false };
   try {

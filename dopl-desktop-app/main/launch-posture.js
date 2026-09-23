@@ -112,15 +112,10 @@ function narrowMessageMode(requested, ceiling) {
  * silently — a clamp nobody reports is the "surface showing a posture main is not enforcing" lie
  * that this tree has paid for twice.
  */
-function resolvePosture(requested, ceiling, toolOrder, messageOrder) {
+function resolvePosture(requested, ceiling, toolOrder) {
   const req = requested || {};
   const max = ceiling || {};
   const tools = narrowTo(req.tools, max.tools, toolOrder) || max.tools;
-  // ⚠ `messageOrder` is still TAKEN and still unused here on purpose — the parameter is the
-  // caller's statement of which vocabulary this is, and dropping it would let a caller pass the
-  // TOOL order and be silently answered on the message axis. {@link narrowMessageMode} owns the
-  // rule; see its header for why an index comparison was the wrong shape for this axis.
-  void messageOrder;
   const messages = narrowMessageMode(req.messages, max.messages) || max.messages;
   return {
     tools: tools,
@@ -197,7 +192,7 @@ function resolveChain(requested, allowed) {
 function resolveLaunch(a) {
   const o = a || {};
   const chainRule = resolveChain(o.chainRequested, o.chainAllowed);
-  const pair = resolvePosture(o.requested, o.ceiling, o.toolOrder, o.messageOrder);
+  const pair = resolvePosture(o.requested, o.ceiling, o.toolOrder);
   return {
     modes: { tools: pair.tools, messages: o.floorMessages(pair.messages) },
     chain: chainRule.chain,

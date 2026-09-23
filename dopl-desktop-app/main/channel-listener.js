@@ -337,16 +337,15 @@ async function reconcileInner() {
       existing.workspaceSegment = d.workspaceSegment;
     }
   }
-  // A pass used to end by reading every watched channel's agent roster and starting any of
-  // this operator's rows that were still `summoned`. Summoning is gone (channels rollback
-  // §1), and with it the only reason this listener ever read that table.
   // ⚠ THE INHERITANCE POINT FOR A CREATION NO RENDERER EXECUTED (2026-09-22, Samuel's ruling). It
   // WRITES a new channel's own posture and reads none at any spawn; the first-seen watermark, the
   // membership/creator gates and the H2 argument live in `channel-seed-watch.js`'s header.
-  seedWatch.observeChannels(desired, failedWorkspaces.size === 0, myUserId);
   // One bounded follow-up pass when a workspace never answered; no-op otherwise.
   healer.onEnumerationFailure(failedWorkspaces.size);
   setStatus();
+  // Last, and guarded: a seed failure must not skip the healer or the status line (P3-36).
+  try { seedWatch.observeChannels(desired, failedWorkspaces.size === 0, myUserId); }
+  catch (err) { diag('seed-watch: pass failed —', err && err.message); }
 }
 
 function stopLoops() {

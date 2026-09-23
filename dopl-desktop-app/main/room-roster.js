@@ -243,7 +243,7 @@ function agentAuthorNote(s, m, myUserId, io) {
   const names = io || require('./listener-io');
   const person = String((names.displayNameFor(m && m.authorUserId)) || '').trim();
   const whose = mine ? 'one of YOUR operator\'s agents' : `${person || 'another member'}'s agent`;
-  return `NEW IN THIS ROOM since your launch: @${handle} — ${whose}.`;
+  return `NEW IN THIS ROOM since your launch: @${handle}, ${whose}.`;
 }
 
 module.exports = {

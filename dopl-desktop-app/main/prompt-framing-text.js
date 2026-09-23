@@ -78,11 +78,11 @@ const VOCABULARY = [
   // addressed to. Same wording as `packages/mcp-server/src/tools/channel-doctrine.ts` (the LAW's
   // "@-TAG A HUMAN YOU DID NOT ADDRESS" and THE MODEL's rule), so the spawn prompt and the
   // pulled doctrine teach one rule rather than two.
-  '- @-TAG A PERSON when you need one — a person you did NOT address. Who a post is FOR is',
+  '- @-TAG A PERSON when you need one: a person you did NOT address. Who a post is FOR is',
   '  `to=`, and the app renders them from it, so a body never opens with a routing header',
   '  (`FROM→TO | KIND |`), your own name, or the recipient\'s handle written out again.',
   '  Write `@` and then their handle, in the BODY of the',
-  '  post: their display name, lowercased, with spaces as dashes — "Samuel Wang" is',
+  '  post: their display name, lowercased, with spaces as dashes, so "Samuel Wang" is',
   '  `@samuel-wang`. That is the handle the app itself inserts and tints, so it is the one to',
   '  write. (The squashed form `@samuelwang`, the first word `@samuel`, and the same three',
   '  forms of an email\'s local part all still resolve, but they are fallbacks, not the',
@@ -261,8 +261,8 @@ const ADDRESSING = [
   // ⚠ SAME RULING, ON THE OTHER SURFACE THAT TEACHES TAGGING (2026-09-22): the sentence was
   // true and unscoped, and an agent reading it while filling in `to=` read it as licence to
   // repeat the recipient in the body. The capability is unchanged; its audience is named.
-  `  @-tagging a PERSON YOU DID NOT ADDRESS still works and still puts it in their Tags inbox —`,
-  `  never the recipient you just named in to=, whom the app already renders.`,
+  `  @-tagging a PERSON YOU DID NOT ADDRESS still works and still puts it in their Tags inbox,`,
+  `  but never the recipient you just named in to=, whom the app already renders.`,
 ];
 
 module.exports = { THREAD_TAG, VOCABULARY, PROSE_RULE, CONCISION, LANE_EXCLUSIVITY, REPLY_ROUTING, PERSONAL_KNOWLEDGE_CONFIDENTIALITY, ADDRESSING };

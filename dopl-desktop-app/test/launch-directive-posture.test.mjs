@@ -80,17 +80,17 @@ test("NARROW MESSAGES: the axis is TWO capabilities, not a ladder", () => {
 
 test("RESOLVE: an axis nobody asked for takes the ceiling — the pre-T24 behaviour, exactly", () => {
   const p = posture.resolvePosture({ tools: "", messages: "" },
-    { tools: "bypass", messages: "auto_both" }, CLAUDE, wire.MESSAGE_MODES);
+    { tools: "bypass", messages: "auto_both" }, CLAUDE);
   assert.deepEqual(p, { tools: "bypass", messages: "auto_both", clamped: false });
 });
 
 test("RESOLVE: `clamped` is true only when a REQUEST was cut, never for an absent one", () => {
   const ceiling = { tools: "auto", messages: "auto_inbound" };
   const cut = posture.resolvePosture({ tools: "bypass", messages: "" }, ceiling,
-    CLAUDE, wire.MESSAGE_MODES);
+    CLAUDE);
   assert.equal(cut.clamped, true);
   const none = posture.resolvePosture({ tools: "", messages: "" }, ceiling,
-    CLAUDE, wire.MESSAGE_MODES);
+    CLAUDE);
   assert.equal(none.clamped, false, "inheriting the ceiling is not being clamped to it");
 });
 
@@ -109,7 +109,7 @@ test("ORDER: the clamp runs BEFORE the windowless floor, which is the contract",
     ceiling: { tools: "manual", messages: "ask" },
     chainRequested: null, chainAllowed: false,
     floorMessages: (m) => (m === "ask" ? "auto_inbound" : "auto_both"),
-    toolOrder: CLAUDE, messageOrder: wire.MESSAGE_MODES,
+    toolOrder: CLAUDE,
   });
   assert.deepEqual(plan.modes, { tools: "manual", messages: "auto_inbound" });
   assert.equal(plan.clamped, true);

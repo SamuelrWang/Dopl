@@ -150,9 +150,8 @@ function notifyAsk({ channelName, requesterName, summary, bodyPreview, runsIn, t
     ? `${requesterName}'s agent asks: ${targeting.truncate(summary, 200)}`
     : `${requesterName}'s agent: ${targeting.truncate(bodyPreview, 120)}`;
   const where = runsIn || 'the sandbox folder';
-  const tools = toolLabel || 'Full-access';
   const hint = capabilityHint ? `\n${capabilityHint}` : '';
-  const body = `${ask}\nRuns in ${where} with ${tools} tools${hint}`;
+  const body = `${ask}\nRuns in ${where} with ${toolLabel} tools${hint}`;
   return buildActionNotification({
     title: channelName, body, actionText: 'Launch agent', onAffirm: onLaunch, onOpen,
   });

@@ -401,14 +401,7 @@ function patchSelection(ctx, selection, patch) {
         + 'applies');
     }
   }
-  if (has('messages')) {
-    const asked = typeof p.messages === 'string' ? p.messages : '';
-    if (SELECTION_MESSAGE_MODES.indexOf(asked) === -1) {
-      review.push(`"${asked}" is not a messaging setting this build knows; it was not applied`);
-    } else {
-      next.messages = asked;
-    }
-  }
+  if (has('messages') && SELECTION_MESSAGE_MODES.indexOf(p.messages) !== -1) next.messages = p.messages;
 
   if (has('byRuntime')) {
     // ⚠ **A WHOLE-MAP REPLACE, AND IT HAS EXACTLY ONE PRODUCER: THE NEW-CHANNEL SEED**

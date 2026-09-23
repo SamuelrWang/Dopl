@@ -189,7 +189,7 @@ test('an agent the launch snapshot never named introduces itself on its own turn
   const unknown = roster.agentAuthorNote(
     session, { authorKind: 'agent', authorAgentName: 'nova', authorUserId: 'u-peer' }, SELF_USER, io
   );
-  assert.match(unknown, /NEW IN THIS ROOM since your launch: @nova — Dana Lee's agent\./);
+  assert.match(unknown, /NEW IN THIS ROOM since your launch: @nova, Dana Lee's agent\./);
 
   // ⚠ Whose it is, on the other branch.
   const mine = roster.agentAuthorNote(

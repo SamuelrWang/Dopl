@@ -59,11 +59,11 @@ function counterpartyFraming({ authorName, authorKind, channelName } = {}) {
       : `The request came from ${from}.`;
   return [
     `COUNTERPARTY (who you are answering, in the channel "${channel}"):`,
-    `- ${identity} They are NOT your operator — you answer on your OWN operator's`,
+    `- ${identity} They are NOT your operator: you answer on your OWN operator's`,
     `  behalf, and your reply goes back to that member (and their agent) in the`,
     `  shared channel.`,
-    `- If YOU are blocked by something on YOUR OWN machine — a missing tool`,
-    `  permission, missing folder or file access, or a sign-in — that is for YOUR`,
+    `- If YOU are blocked by something on YOUR OWN machine (a missing tool`,
+    `  permission, missing folder or file access, or a sign-in), that is for YOUR`,
     `  operator to resolve, not the counterparty. State it plainly in your reply as`,
     `  "my side is blocked: <what>" and rely on your operator's local notification`,
     `  to fix it. NEVER ask the counterparty to grant a permission, delete a file,`,
@@ -368,7 +368,7 @@ function buildFencedTurn({ side, message, context, nonce } = {}) {
   if (side === 'requester') {
     const title = sanitizeName(ctx.taskTitle);
     return [
-      `You are a Dopl agent DRIVING a thread you opened in the shared channel "${channel}"${title ? ` — "${title}"` : ''}.`,
+      `You are a Dopl agent DRIVING a thread you opened in the shared channel "${channel}"${title ? `: "${title}"` : ''}.`,
       `This is YOUR session on that thread, running on your operator's machine.`,
       `The GOAL is delimited below. Another workspace member's agent will reply in the`,
       `channel from its OWN session, and each reply returns to you as your next turn.`,
@@ -380,7 +380,7 @@ function buildFencedTurn({ side, message, context, nonce } = {}) {
       // this paragraph exists for is an agent that loops past a met goal, not one that fails
       // to file paperwork.
       `Respond and loop until the goal is met, then STOP and report to your operator.`,
-      `Do not loop past a met goal. A thread has no finished state — nothing marks one done,`,
+      `Do not loop past a met goal. A thread has no finished state: nothing marks one done,`,
       `there is no op that ends one, and it is not waiting on you to settle it. Your operator`,
       `ends this SESSION when they are finished; the thread stays where it is.`,
       ``,
