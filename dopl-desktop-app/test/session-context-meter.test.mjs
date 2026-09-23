@@ -104,25 +104,32 @@ test("a missing or junk usage block reads as 0, never as NaN", () => {
 
 // ── 3. the observer, against a real SDK-shaped stream ────────────────────────
 
-// ⚠ 2026-08-31 (runtime-adapter port, step 4): `session-model.js › observe` was a SECOND
-// normalizer — it parsed the platform's own message schema directly and sat in the consume loop
-// beside the render mapping — so it split. The ADAPTER extracts the numbers per message
-// (`runtime/claude/normalize.js` -> a `context` CoreEvent) and CORE remembers the last one and
-// turns it into the reducer's event when the turn ends (`session-io.js › applyCoreEvents`).
-// This helper drives BOTH halves, exactly as the consume loop does, and filters to the events
-// this file is about — every assertion below is unchanged.
+// The ADAPTER extracts the numbers per message (`runtime/claude/normalize.js` -> a `context`
+// CoreEvent), CORE remembers the last one on the session (`session-io.js › applyCoreEvents`), and
+// the gauge is `session-metrics.js › metrics` over the session (P4-11: no meter event is dispatched).
+// `gaugeAt` samples that gauge at each turn's `result`, which is when a reader sees the turn's
+// reading; a turn that measured nothing yields no sample.
 const io = require("../main/session-io.js");
 const normalize = require("../main/runtime/claude/normalize.js").normalize;
+const { metrics } = require("../main/session-metrics.js");
 const NO_STORE = { setSdkSessionId() {}, saveRecord() {} };
 
+function gaugeAt(s, samples) {
+  return (_s, e) => {
+    if (!e || e.type !== "result") return;
+    const m = metrics(s);
+    if (m.contextUsed !== null) samples.push({ type: "context", tokens: m.contextUsed, window: m.contextWindow, model: s.liveModel || null });
+  };
+}
+
 function stream(session, messages) {
-  const dispatched = [];
+  const samples = [];
   const s = session;
-  if (!s.state) s.state = { phase: "running", turns: 0, costUsd: 0 };
+  if (!s.state) s.state = { phase: "running", turns: 0 };
   for (const msg of messages) {
-    io.applyCoreEvents(s, normalize(msg, {}), (_s, e) => dispatched.push(e), NO_STORE);
+    io.applyCoreEvents(s, normalize(msg, {}), gaugeAt(s, samples), NO_STORE);
   }
-  return dispatched.filter((e) => e && e.type === "context");
+  return samples;
 }
 
 const init = (m) => ({ type: "system", subtype: "init", model: m, session_id: "sdk-1" });
@@ -178,54 +185,13 @@ test("a turn that measured NOTHING says nothing rather than painting a zero", ()
   assert.deepEqual(stream({}, [init("claude-opus-5"), { type: "assistant", message: {} }, result()]), []);
 });
 
-// ── ⚠ D7.3: A THROWING CONTEXT DISPATCH IS SWALLOWED, AND A THROWING `result` IS NOT ──────────
+// ── A THROWING `result` DISPATCH ESCAPES ─────────────────────────────────────────────────────
 //
-// The pin for the `try/catch` that came over from `session-model.js › observe` with the dispatch
-// it wraps, was LOST in the 2026-08-31 port, and was restored 2026-09-01. Written as a PAIR
-// because only the pair states the rule: the meter is a cosmetic gauge and may not kill a
-// session, while every other dispatch in the loop is a state transition whose failure must still
-// reach `crash`. A single "it does not throw" test would pass just as well over a blanket
-// try/catch around the whole loop, which is the wrong fix and the one worth failing on.
-//
-// The escape route is what makes this MEDIUM rather than cosmetic: `applyCoreEvents` runs inside
-// `session-query.js › consume`'s `for await`, so a throw here is caught by that loop's `catch`,
-// read as a query error, and dispatched as `crash` — settle + destroy + `task_failed{interrupted}`.
-// A reducer bug on the context row would therefore tear the session down mid-turn and report it
-// to the waiting peer as an interruption.
+// `applyCoreEvents` runs inside `session-query.js › consume`'s `for await`; a state-transition
+// dispatch that throws must reach that loop's catch and `crash`, never be swallowed.
 
-test("D7.3: a throwing CONTEXT dispatch is swallowed — the meter may not crash the session", () => {
-  const s = { state: { phase: "running", turns: 0, costUsd: 0 } };
-  const seen = [];
-  const logged = [];
-  const hostile = (_s, e) => {
-    seen.push(e.type);
-    if (e.type === "context") throw new Error("reducer blew up on the gauge row");
-  };
-  for (const msg of [init("claude-opus-5"), assistant(120000), result()]) {
-    // ⚠ NOT wrapped in assert.doesNotThrow around the whole stream: the assertion is that THIS
-    // call returns normally, which is what the consume loop depends on.
-    // ⚠ THE LOG IS THE FIFTH ARGUMENT AND IS INJECTED. `session-io.js` may not require `diag`
-    // (electron); `session-query.js › consume` supplies the real one.
-    io.applyCoreEvents(s, normalize(msg, {}), hostile, NO_STORE, (...a) => logged.push(a.join(" ")));
-  }
-  assert.ok(seen.includes("context"), "the context dispatch was still attempted");
-  assert.ok(seen.includes("result"), "and the result still went out ahead of it");
-  // ⚠ SWALLOWED IS NOT SILENT. HEAD's line is kept VERBATIM, `session-model:` prefix included, so
-  // an existing `listener.log` grep still finds it.
-  assert.deepEqual(logged.length, 1, "exactly one line");
-  assert.match(logged[0], /^session-model: context dispatch failed reducer blew up on the gauge row$/);
-});
-
-test("D7.3: with NO log injected the swallow still holds — the line is optional, the catch is not", () => {
-  const s = { state: { phase: "running", turns: 0, costUsd: 0 } };
-  const hostile = (_s, e) => { if (e.type === "context") throw new Error("boom"); };
-  for (const msg of [init("claude-opus-5"), assistant(120000), result()]) {
-    io.applyCoreEvents(s, normalize(msg, {}), hostile, NO_STORE); // four args, as every other caller
-  }
-});
-
-test("D7.3: a throwing RESULT dispatch still escapes — only the meter is swallowed", () => {
-  const s = { state: { phase: "running", turns: 0, costUsd: 0 } };
+test("a throwing RESULT dispatch still escapes to the consume loop", () => {
+  const s = { state: { phase: "running", turns: 0 } };
   const hostile = (_s, e) => { if (e.type === "result") throw new Error("boom"); };
   assert.throws(
     () => {
@@ -273,7 +239,7 @@ test("AUTO-COMPACTION needs no special handling: the next turn simply measures s
 // ⚠ THE FIX IS DELIBERATELY *NOT* CODEX ROWS IN §1'S TABLE. A table is a claim this build has to
 // re-earn every time a vendor ships a model; a number that arrives on the wire each turn cannot go
 // stale. So the rule is: THE SERVER WINS WHEN PRESENT, THE TABLE IS THE FALLBACK — stated at
-// `main/session-model.js › contextEvent` and driven here, through the shipped `applyCoreEvents`.
+// `main/session-metrics.js › metrics` and driven here, through the shipped `applyCoreEvents`.
 
 const reported = (win) => ({ type: "context", tokens: 23586, model: "gpt-5.6-terra", window: win });
 const NO_STORE_2 = NO_STORE;
@@ -281,10 +247,10 @@ const NO_STORE_2 = NO_STORE;
 // Drive core with hand-built CoreEvents — the adapter-neutral half, so this asserts the RULE and
 // not one normalizer's spelling. `result` is what makes core dispatch the turn's reading.
 function core(evs) {
-  const s = { state: { phase: "running", turns: 0, costUsd: 0 } };
-  const out = [];
-  io.applyCoreEvents(s, evs, (_s, e) => out.push(e), NO_STORE_2);
-  return { s, context: out.filter((e) => e.type === "context") };
+  const s = { state: { phase: "running", turns: 0 } };
+  const context = [];
+  io.applyCoreEvents(s, evs, gaugeAt(s, context), NO_STORE_2);
+  return { s, context };
 }
 const RESULT_EV = { type: "result", sessionTokens: 23591, model: "gpt-5.6-terra" };
 
@@ -323,9 +289,8 @@ test("a reported window that is JUNK or ZERO falls through — absent is never a
   const { context } = core([reported(0), RESULT_EV]);
   assert.equal(context[0].window, null);
   assert.notEqual(context[0].window, 0);
-  // ⚠ A NUMERIC STRING IS A NUMBER, deliberately: `session-reducer.js` has always coerced this
-  // field with `Number(…)`, and a second, stricter rule one layer up is how the two come apart.
-  // What it must NOT stay is a STRING — `session-io.js` coerces before it remembers.
+  // ⚠ A NUMERIC STRING IS A NUMBER, deliberately: the gauge coerces with `Number(…)`. What it must
+  // NOT stay is a STRING — `session-io.js` coerces before it remembers.
   const coerced = core([reported("258400"), RESULT_EV]);
   assert.equal(coerced.context[0].window, 258400);
   assert.equal(typeof coerced.s.promptWindow, "number");
@@ -334,21 +299,20 @@ test("a reported window that is JUNK or ZERO falls through — absent is never a
 test("a later reading with NO window keeps the last reported one — it does not blank it", () => {
   // The numerator's rule, applied to the denominator: "told me nothing this turn" must not become
   // "this session has no window".
-  const s = { state: { phase: "running", turns: 0, costUsd: 0 } };
-  const out = [];
-  const push = (evs) => io.applyCoreEvents(s, evs, (_s, e) => out.push(e), NO_STORE_2);
+  const s = { state: { phase: "running", turns: 0 } };
+  const ctx = [];
+  const push = (evs) => io.applyCoreEvents(s, evs, gaugeAt(s, ctx), NO_STORE_2);
   push([reported(258400), RESULT_EV]);
   push([{ type: "context", tokens: 51000, model: "gpt-5.6-terra", window: null }, RESULT_EV]);
-  const ctx = out.filter((e) => e.type === "context");
   assert.deepEqual(ctx.map((e) => e.window), [258400, 258400]);
   assert.equal(ctx[1].tokens, 51000);
 });
 
-test("the CODEX lane end to end: the window on the wire reaches the reducer's event", () => {
+test("the CODEX lane end to end: the window on the wire reaches the gauge", () => {
   // The normalizer's own output, through core, with nothing hand-built — the seam both halves of
   // this change meet at.
   const codex = require("../main/runtime/codex/normalize.js").normalize;
-  const s = { state: { phase: "running", turns: 0, costUsd: 0 } };
+  const s = { state: { phase: "running", turns: 0 } };
   const out = [];
   io.applyCoreEvents(s, codex({
     method: "turn/completed",
@@ -358,75 +322,22 @@ test("the CODEX lane end to end: the window on the wire reaches the reducer's ev
       promptUsage: { inputTokens: 23586, outputTokens: 5, totalTokens: 23591 },
       contextWindow: 258400,
     },
-  }, {}), (_s, e) => out.push(e), NO_STORE_2);
-  assert.deepEqual(out.filter((e) => e.type === "context"), [
+  }, {}), gaugeAt(s, out), NO_STORE_2);
+  assert.deepEqual(out, [
     { type: "context", tokens: 23586, window: 258400, model: "gpt-5.6-terra" },
   ]);
 });
 
-// ── 4. the reducer holds it, and tells the window ────────────────────────────
+// ── 4. the reducer's `result` is a turn end, and nothing more ────────────────
 
 const running = () => sessionReducer(initialSessionState({}), { type: "launched", payload: {} }).state;
-const emits = (r) => r.effects.filter((e) => e.type === "emit").map((e) => e.payload);
 
-test("a context event stores the measurement and emits exactly one payload", () => {
-  const r = sessionReducer(running(), { type: "context", tokens: 412200, window: 1000000, model: "claude-opus-5" });
-  assert.equal(r.state.contextTokens, 412200);
-  assert.equal(r.state.contextWindow, 1000000);
-  assert.equal(r.state.model, "claude-opus-5");
-  assert.deepEqual(emits(r), [{ type: "context", tokens: 412200, window: 1000000, model: "claude-opus-5" }]);
-  assert.deepEqual(r.effects.map((e) => e.type), ["emit"], "it touches no timer, no cap, no query");
-});
-
-test("the reducer coerces junk too — a bad number can never reach the window as a percentage", () => {
-  for (const junk of [undefined, null, "lots", NaN, -1, {}]) {
-    const r = sessionReducer(running(), { type: "context", tokens: junk, window: junk });
-    assert.equal(r.state.contextTokens, 0, JSON.stringify(junk));
-    assert.equal(r.state.contextWindow, null, JSON.stringify(junk));
-  }
-});
-
-test("NO MEASUREMENT DOES NOT CLOBBER: a zero-token event leaves the gauge exactly as it was", () => {
-  // 🔒 THE SIBLING DEFECT THIS MUST NOT REINTRODUCE: an interrupted Codex turn ends on
-  // `turn/completed` with NO usage at all, and this branch used to write `contextTokens` and
-  // `contextWindow` UNCONDITIONALLY — so pressing Stop emptied a full window gauge. Three guards
-  // now stand between that and the state; this is the one at the layer that OWNS the value.
-  const full = sessionReducer(
-    sessionReducer(running(), { type: "context", tokens: 23586, window: 258400, model: "gpt-5.6-terra" }).state,
-    { type: "context", tokens: 0, window: 258400, model: "gpt-5.6-terra" },
-  );
-  assert.equal(full.state.contextTokens, 23586, "the last real reading stands");
-  assert.equal(full.state.contextWindow, 258400, "and so does its denominator");
-  assert.deepEqual(full.effects, [], "no news is not a repaint");
-  // ⚠ AND A MEASUREMENT-FREE EVENT MUST NOT BLANK A WINDOW BY CARRYING NONE EITHER.
-  const blank = sessionReducer(full.state, { type: "context", tokens: 0, window: null });
-  assert.equal(blank.state.contextWindow, 258400);
-  assert.equal(blank.state.contextTokens, 23586);
-});
-
-test("the RESULT path is untouched: a result still emits exactly status + scheduleIdle", () => {
-  // The meter rides its own event precisely so it cannot perturb the turn accounting.
-  // ⚠ THIS CASE READ "the COST path is untouched" and asserted `state.costUsd === 0.02` off an
-  // `event.turnCostUsd`. The cost column is deleted (2026-09-22, Samuel: *"we dont need cost
-  // tracking"*); the EFFECT SHAPE it really guards — a result emits exactly these two and never a
-  // third — is what it was for, and that is unchanged.
-  const r = sessionReducer(running(), { type: "result" });
+test("a result emits exactly status + scheduleIdle and moves the turn counter", () => {
+  const r = sessionReducer(running(), { type: "result", model: "claude-opus-5" });
   assert.deepEqual(r.effects.map((e) => e.type), ["emit", "scheduleIdle"]);
   assert.equal(r.state.turns, running().turns + 1, "and the turn counter is the one that moves");
-});
-
-test("a result DOES now capture the model that served it (it was computed and discarded)", () => {
-  const r = sessionReducer(running(), { type: "result", model: "claude-haiku-4-5" });
-  assert.equal(r.state.model, "claude-haiku-4-5");
-  // ...and an older event with no model keeps whatever we had, never blanks it.
-  assert.equal(sessionReducer(r.state, { type: "result" }).state.model, "claude-haiku-4-5");
-});
-
-test("a PARKED session is inert to a late measurement from its drained tail", () => {
-  const parked = { ...running(), parked: true, phase: "parked", activity: "parked" };
-  const r = sessionReducer(parked, { type: "context", tokens: 500000, window: 1000000 });
-  assert.equal(r.state, parked, "no state change");
-  assert.deepEqual(r.effects, [], "and nothing repaints a gauge for a query that is gone");
+  // The reducer holds no meter state (P4-11): the gauge is `session-metrics.js › metrics`.
+  for (const gone of ["model", "contextTokens", "contextWindow"]) assert.equal(gone in r.state, false, gone);
 });
 
 // ── ⚠ 5. THE COPY — REMOVED 2026-08-20, the formatter it drove is deleted ─────
@@ -449,9 +360,8 @@ test("a PARKED session is inert to a late measurement from its drained tail", ()
 // really defended are all still enforced, one section up, at the layer that crosses the process
 // boundary rather than the one that renders it:
 //   - "an unknown model gets NO denominator" is §1's last test (`contextWindowFor` -> null).
-//   - "junk never reaches a percentage" is §4's `sessionReducer` coercion test — a bad number is
-//     flattened to `contextTokens: 0` / `contextWindow: null` BEFORE anything downstream sees it,
-//     which is the guard that actually matters and the only one a new UI cannot skip.
+//   - "junk never reaches a percentage" is §3b's junk-window test — a bad number never reaches
+//     `session-metrics.js › metrics` as a denominator, the guard a new UI cannot skip.
 //   - the CLAMP had no main-side twin and is the one thing that genuinely left with the copy.
 // A replacement meter re-earns the rounding, the thresholds and the clamp with its own tests.
 // Do not resurrect these against a new module by find-and-replace: the thresholds (75 / 90) were

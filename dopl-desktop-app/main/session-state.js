@@ -162,17 +162,6 @@ function initialSessionState(opts) {
     // records whether the agent posted this turn, so turn-end can pick `awaiting_peer` vs `idle`.
     activity: 'working',
     postedThisTurn: false,
-    // ── THE CONTEXT METER (2026-08-02) ──────────────────────────────────────────────────
-    // What the last finished turn measured, so a window RELOAD and a P2 recreate repaint from one
-    // place. `model` is what the SDK says is really running (never the operator's PICK, which lives
-    // on the session object as `s.model`) and moves mid-session when the picker calls
-    // Query.setModel. `contextWindow` is the window the RUNTIME reported when it reports one and
-    // the frozen table's row otherwise; it is null whenever NEITHER can say that model's size,
-    // and the renderer then shows tokens with NO percentage — a made-up denominator on the gauge
-    // that decides "start a fresh session" is worse than no gauge. None of the three is persisted.
-    model: null,
-    contextTokens: 0,
-    contextWindow: null,
     // FIX F3: the tool_use ids of the posts that streamed THIS turn. The outbound bubble is
     // emitted BEFORE canUseTool resolves, so a denied post must be un-counted when its failing
     // tool_result lands; else the turn ends "Waiting for reply" on a message that never left.

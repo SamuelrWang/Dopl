@@ -26,10 +26,6 @@ const { isOutboundPost } = outboundTag;
 // bookkeeping, the one-shot fresh-shell framing) lives in session-seed.js — the §2
 // 500-line split. Re-exported verbatim at the bottom, so every caller is unchanged.
 const seed = require('./session-seed');
-// The two token derivations live with the frozen model/window tables that give them meaning
-// (session-model.js). Required, never re-implemented: a second copy of "which usage fields
-// count" is how the context meter and the spend line come to disagree about the same block.
-const sessionModel = require('./session-model');
 // F-692: the PURE read of the init message's `mcp_servers` list. ⚠ `mcp-connect.js` has no
 // electron/fs require, which is what lets this file keep the property a dozen suites rely on
 // (`session-outbound-tag.test.mjs` pins it: `diag` requires electron; this file must not).
@@ -318,13 +314,9 @@ function baseRecord(s) {
 // fixture test without a session". Returns the `auth_hold` event when the stream must stop being
 // read, else `null`; the caller owns what stopping means.
 //
-// ORDER IS PRESERVED AND OBSERVABLE: `result` dispatches BEFORE the turn's `context`, the order the
-// two consumers ran in. Nothing here reorders a stream.
-//
-// `log` IS INJECTED, NOT REQUIRED — `diag.js` requires electron at its top and this module must not
-// (`session-outbound-tag.test.mjs` pins exactly that), because a dozen suites require this file in
-// plain Node. OPTIONAL BY CONTRACT: a caller that passes nothing loses the LINE, never the SWALLOW.
-function applyCoreEvents(s, list, dispatch, store, log) {
+// Nothing here reorders a stream. ⚠ This module may not require `diag.js` (electron): a dozen
+// suites require it in plain Node (`session-outbound-tag.test.mjs` pins that).
+function applyCoreEvents(s, list, dispatch, store) {
   // F-692: the MCP-connect signal this message produced, if any. ⚠ RETURNED AT THE END rather than
   // short-circuiting like `auth_hold`: the bookkeeping for `launched` (the conversation handle, the
   // durable record, the reducer's own `launched`) must all land FIRST, because the guard's retry
@@ -385,30 +377,9 @@ function applyCoreEvents(s, list, dispatch, store, log) {
       const tokenTotal = Number(ev.sessionTokens) || 0;
       s.tokensSpent = (s.tokensSpent || 0) + Math.max(0, tokenTotal - (s.lastTotalTokens || 0));
       s.lastTotalTokens = tokenTotal;
-      // The turn count is the reducer's `state.turns`, persisted with the record (P4-10).
+      // The turn count is the reducer's `state.turns`, persisted with the record (P4-10). The gauge
+      // is read off the session by `session-metrics.js › metrics`; no meter event is dispatched (P4-11).
       dispatch(s, { type: 'result', model: ev.model });
-      // ⚠ AFTER the result, and only when something was measured: say nothing rather than paint a
-      // zero (`session-model.js › contextEvent`).
-      // ⚠ THE REPORTED WINDOW IS HANDED IN AND BEATS THE TABLE — the precedence rule and its
-      // argument are written down at `session-model.js › contextEvent`, once, rather than restated
-      // at this call site.
-      const context = sessionModel.contextEvent(s.promptTokens, s.liveModel, s.promptWindow);
-      // THE METER MAY NOT KILL THE SESSION, and this `try/catch` is the whole of that rule (it came
-      // over from `session-model.js › observe` and was LOST in the port; restored 2026-09-01, D7.3).
-      // The context event is a GAUGE READING dispatched from inside the consume loop's `for await`,
-      // so a throw here escapes to `session-query.js › consume`'s catch, which reads it as a query
-      // error and dispatches `crash` -> settle + destroy + `task_failed{interrupted}`: a reducer bug
-      // on a COSMETIC row would tear down a session mid-turn and report it to the peer as an
-      // interruption. The diag line is kept VERBATIM (`session-model:` prefix included) so the
-      // existing `listener.log` grep still finds it. Swallowed only HERE — every other dispatch in
-      // this loop is a state transition whose failure must still reach `crash`.
-      if (context) {
-        try {
-          dispatch(s, context);
-        } catch (err) {
-          if (typeof log === 'function') log('session-model: context dispatch failed', err && err.message);
-        }
-      }
       continue;
     }
     dispatch(s, ev); // every render event, unchanged
