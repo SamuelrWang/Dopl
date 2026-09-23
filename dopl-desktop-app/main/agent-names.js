@@ -172,8 +172,6 @@ function patched(map, agentId, field, value) {
 // 🔒 **THIS MODULE IS THE ONLY WRITER OF `NAMES_KEY`** and every one of its writes invalidates
 // below, so a rename is visible to the very next read. A writer added anywhere else must call
 // `invalidateNames()` or names go stale for a tick.
-// KILL SWITCH: `DOPL_NAMES_CACHE=0` restores the old read-every-time behaviour.
-const NAMES_CACHE_ON = process.env.DOPL_NAMES_CACHE !== '0';
 let cachedNames = null;
 let cacheArmed = false;
 
@@ -183,16 +181,14 @@ function invalidateNames() {
 }
 
 function all() {
-  if (NAMES_CACHE_ON && cachedNames) return cachedNames;
+  if (cachedNames) return cachedNames;
   const map = store.get(NAMES_KEY);
   const out = map && typeof map === 'object' ? map : {};
-  if (NAMES_CACHE_ON) {
-    cachedNames = out;
-    if (!cacheArmed) {
-      cacheArmed = true;
-      const t = setImmediate(() => { cachedNames = null; cacheArmed = false; });
-      if (t && typeof t.unref === 'function') t.unref();
-    }
+  cachedNames = out;
+  if (!cacheArmed) {
+    cacheArmed = true;
+    const t = setImmediate(() => { cachedNames = null; cacheArmed = false; });
+    if (t && typeof t.unref === 'function') t.unref();
   }
   return out;
 }
