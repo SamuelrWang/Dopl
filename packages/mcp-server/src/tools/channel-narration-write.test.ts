@@ -231,6 +231,14 @@ describe("Q1-D write · a hostile display_name", () => {
     expectNoForgedStructure(res.content[0].text);
     expect(res.content[0].text).toContain("pending invite");
   });
+
+  it("an unknown member points at a dopl_members op that exists", async () => {
+    const client = stubClient({ listWorkspaceMembers: vi.fn(async () => []) });
+    const res = await opInvite(client, "public-sync", "nobody@example.com");
+    expect(res.isError).toBe(true);
+    expect(res.content[0].text).toContain('dopl_members(op="list")');
+    expect(res.content[0].text).not.toContain('op="rooms"');
+  });
 });
 
 // ── The thread TITLE, on the ops that render one ────────────────────────
