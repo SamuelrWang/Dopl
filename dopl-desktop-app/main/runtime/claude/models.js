@@ -203,9 +203,6 @@ const descriptor = {
   // what may be NEWLY SELECTED (the renderer) and what may LAUNCH (`session-launch.js` refuses
   // an unknown pick with a sentence).
   pick: {
-    kind: 'open',
-    accepted: null,
-    canonical: null,
     absent: '',
     pattern: PICK_PATTERN,
   },

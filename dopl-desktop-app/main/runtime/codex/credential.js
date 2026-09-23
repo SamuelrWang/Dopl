@@ -98,16 +98,6 @@ const descriptor = {
   // ⚠ null => no sign-in button; the UI shows a settings pointer instead (hide-on-absent).
   interactiveSignIn: null,
   probe: 'cli-status',
-  // The sentinels that mean "no credential", in the two shapes they arrive in. ⚠ The in-stream
-  // one is a PATTERN and is declared unverified: `normalize.js` owns the matcher, and what a
-  // signed-out `codex app-server` actually puts in the stream is §5 item C20.
-  sentinels: ['login-status-nonzero', 'auth-shaped-error'],
-  // ⚠ EMPTY BECAUSE THE RESEARCH NAMES NONE, NOT BECAUSE NONE EXISTS. `codex-research.md` §3
-  // documents `--with-api-key` and `--with-access-token` reading from STDIN, and no environment
-  // variable at all. Writing `OPENAI_API_KEY` here would be a guess dressed as a declaration, and
-  // this list is read as "the vars a scrub must PRESERVE" — a wrong entry would either preserve
-  // something irrelevant or, worse, imply the scrub had been reasoned about when it had not.
-  envKeys: [],
 };
 
 module.exports = { credentialState, signIn, descriptor };

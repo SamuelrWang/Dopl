@@ -196,7 +196,6 @@ describe('the measured MCP tool-name shape', () => {
     assert.notEqual(mcp.descriptor.toolNamePrefix, null,
       'toolNamePrefix was `null` for "unmeasured"; it is measured now');
     assert.equal(mcp.descriptor.toolNamePrefix, '<tool>');
-    assert.equal(mcp.descriptor.toolNameServerField, 'server');
   });
 });
 

@@ -61,14 +61,6 @@ const descriptor = {
   // names inside the descriptor whose whole purpose is to enforce NATIVE vocabulary is the exact
   // failure the no-synthesised-modes rule exists to prevent.
   categories: null,
-  // ⚠ false: the "stop asking for the rest of this task" affordance here is DOPL'S OWN, a scoped
-  // grant key over the shape the operator was shown. Declaring a native one too would invite the
-  // double-count class of defect — one click recorded twice, on two ledgers.
-  sessionGrant: false,
-  // ⚠ false: a mode change takes effect on the NEXT call because the gate reads both axes live at
-  // decision time, but the platform's own mode is pinned for the life of the child and is not
-  // hot-swappable. Nothing in this product needs it to be; declared so the UI offers no live-swap.
-  hotSwapModes: false,
 };
 
 module.exports = { answerApproval, stampOutbound, descriptor };

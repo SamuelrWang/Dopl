@@ -133,21 +133,10 @@ const descriptor = {
   // a control; declaring one whose values are really part of the id would render a control that
   // multiplies the roster by nothing. Absent, not `[]`, which would render an EMPTY control.
   dimensions: null,
-  defaultMeansAbsent: '',
-  // ⚠ TRUE, AND IT IS THE ONLY `true` IN THIS FIELD ACROSS ALL THREE ADAPTERS. `cursor-research.md`
-  // is explicit: `agent.model` is `undefined` after `Agent.resume(agentId)` unless respecified. So
-  // a resumed session that did not re-stamp would silently run on the platform's default instead
-  // of the model the operator chose — a posture change nobody made. `launch-spec.js › frames`
-  // re-stamps from the session's own pick, and the `dopl/agentCreated` frame carries it so the
-  // meter's denominator and the transcript agree about which model ran.
-  reStampOnResume: true,
   // ⚠ THE PICK RULE (2026-09-21, U5) — `open`, for the live-roster reason the Codex lane states in
   // full. Shared storage keeps the operator's pick as an opaque string after a SHAPE check and
   // interprets nothing; the value becomes an argument to the platform, so the alphabet is a gate.
   pick: {
-    kind: 'open',
-    accepted: null,
-    canonical: null,
     absent: '',
     pattern: '^[A-Za-z0-9][A-Za-z0-9._:/-]{0,63}$',
   },

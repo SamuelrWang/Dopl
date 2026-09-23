@@ -53,7 +53,7 @@ const profiles = require(join(HERE, '..', 'main', 'session-profiles.js'));
 const GATE = announceGate(liveGate());
 const BUDGET_MS = 45000;
 const TURN_BUDGET_MS = 180000;
-const VERB = runtime.capability.toolSearchVerb(runtime.descriptorFor('codex'));
+const VERB = runtime.descriptorFor('codex').prose.toolSearchVerb;
 const DISCOVERY = runtime.capability.mcpDiscovery(runtime.descriptorFor('codex'));
 
 const skipLiveTurn = (t) => skipLive(t, GATE) || skipTurn(t);
@@ -296,7 +296,7 @@ describe('TIER 1 — the real app-server defers Dopl, and `tool_search` is the w
     const run = await scriptedTurn('read_only', 'deny', { call: { fn: mcp.CHANNEL_TOOL, args } });
     assert.deepEqual(run.asked, [{ name: mcp.CHANNEL_TOOL, input: args }]);
     assert.equal(run.calls.length, 0);
-    assert.equal(runtime.capability.axisBOpScoped(runtime.descriptorFor('codex')), true);
+    assert.equal(runtime.descriptorFor('codex').axisB.opScoped, true);
   });
 
   // 🔒 THE CODE-MODE WAY IN (measured 2026-09-22): no `tool_search` at all — one `exec` tool, and a

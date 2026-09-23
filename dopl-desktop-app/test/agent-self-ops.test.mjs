@@ -136,18 +136,13 @@ test("WIRE PIN: the launch spec passes the PROFILE'S list through and mounts the
   assert.match(opts, /const agentOpsServer = axisB\.makeAgentOpsServer\(s\);/);
 });
 
-test("D7.2: the two verbs are pre-approved on EVERY profile, and the DECLARATION is what says so", () => {
-  // The table is the single source: the launch reads it, the descriptor mirrors it, and
-  // `grantDecision` consults it. Before this fix, none of those three could see the shadow.
+test("D7.2: the two verbs are pre-approved on EVERY profile, and the TABLE is what says so", () => {
+  // The table is the single source: the launch reads it and `grantDecision` consults it.
   const claudeTools = require("../main/runtime/claude/tools.js");
-  const { descriptor } = require("../main/runtime/claude/index.js");
   for (const p of ["read_only", "dopl_only", "full"]) {
     const cfg = claudeTools.buildSessionToolConfig(p);
     for (const name of ops.AGENT_OPS_TOOL_NAMES) {
       assert.ok(cfg.preApproved.includes(name), `${p} must DECLARE ${name} as pre-approved`);
-      // …and the descriptor's mirror carries it, which is what a UI and a reviewer read.
-      assert.ok(descriptor.containment.profiles[p].allowList.includes(name),
-        `${p}'s declared allowList must show ${name} — a shadow the descriptor hides is the defect`);
       // ⚠ NOT hard-denied anywhere: step 1 runs BEFORE step 2, so a deny would win. The point of
       // moving the declaration here is that a future profile CAN refuse one; today none does.
       assert.ok(!cfg.disallowedTools.includes(name), `${p} does not deny ${name}`);

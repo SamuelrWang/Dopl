@@ -94,7 +94,7 @@ test("the WINDOWLESS FLOOR resolves to a CODEX mode that really reaches a tool",
   // ⚠ THE FAILURE THIS DECLARATION EXISTS TO PREVENT: a mode that fail-closes to a vocabulary the
   // runtime does not speak allows NOTHING, and on a surface-less session a gated tool is a silent
   // DENY — including the reads the prompt ORDERS the agent to make.
-  const floor = capability.windowlessToolFloor(D);
+  const floor = D.toolMode.windowlessFloor;
   assert.equal(floor, "on-request");
   assert.ok(!["manual", "auto", "bypass"].includes(floor), "the floor must be this runtime's word");
   assert.equal(RT.axisAAllows(floor, capability.toolTaxonomy(D).auto[0]), true);
@@ -265,11 +265,9 @@ test("an approval method this build does not know is refused -32601 and never re
 });
 
 test("Axis B declares a real enforcement point and a MEASURED op scope", () => {
-  assert.equal(capability.axisBEnforcement(D), "held-callback");
-  // `capability.axisBOpScoped` reads anything but `true` as NOT op-scoped (fail-closed).
+  assert.equal(D.axisB.enforcementPoint, "held-callback");
   assert.equal(D.axisB.opScoped, true, "measured 2026-09-22 (CXP-3A): op + args reach the gate");
-  assert.equal(capability.axisBOpScoped(D), true);
-  assert.equal(capability.inputRewrite(D), null, "no route carries a rewritten input on this runtime");
+  assert.equal(D.axisB.inputRewrite, null, "no route carries a rewritten input on this runtime");
 });
 
 // ── THE LAUNCH SHAPE ─────────────────────────────────────────────────────────────────────────
@@ -411,20 +409,13 @@ test("resume is ALLOWED on the measured baseline, and the adapter's own door ope
   assert.equal(typeof launchSpec.resume, "function");
 });
 
-test("the sign-in button and the deep link are HIDDEN, never grayed; the tool-search verb is MEASURED", () => {
-  // ⚠ THE COST CAP WAS THE FIRST ASSERTION HERE AND IS DELETED WITH THE COLUMN (2026-09-22,
-  // Samuel: *"we dont need cost tracking"*). It read `showsCostCap(D) === false` — a control
-  // hidden because this runtime emits no cost — and there is no control, no predicate and no
-  // `meter.cost` on any descriptor now. The HIDE-NEVER-GRAY rule the case belonged to is still
-  // exercised by the four assertions below it.
-  assert.equal(capability.hasInteractiveSignIn(D), false);
+test("the sign-in button is HIDDEN, never grayed; the tool-search verb is MEASURED", () => {
+  assert.equal(D.credential.interactiveSignIn, null);
   assert.equal(RT.signIn(), null, "a method whose capability is absent still EXISTS and answers null");
-  assert.equal(capability.hasDeepLink(D), false);
   // 🔒 CXP-3A (2026-09-22, 0.155.1): MEASURED, no longer null — Codex defers every MCP tool.
-  assert.equal(capability.toolSearchVerb(D), "tool_search", "the measured verb, never Claude's");
+  assert.equal(D.prose.toolSearchVerb, "tool_search", "the measured verb, never Claude's");
   // …and code-mode models reach the same tool through `exec`'s `ALL_TOOLS` (measured, same day).
   assert.deepEqual(capability.mcpDiscovery(D), { verb: "tool_search", catalog: "ALL_TOOLS" }, "no eager-load flag");
-  assert.equal(capability.entryFile(D), "AGENTS.md");
 });
 
 test("packaging is `bundled`, so the release makes a version claim it can keep", () => {

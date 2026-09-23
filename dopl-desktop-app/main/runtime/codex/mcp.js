@@ -316,9 +316,6 @@ const descriptor = {
   // non-Dopl `serverName`, a missing `_meta`, a different `codex_approval_kind` and a
   // non-singleton asking set all still fail closed.
   toolNamePrefix: '<tool>',
-  // The companion half of the shape above — named so a reader cannot take `toolNamePrefix` for a
-  // claim that the server is absent from the wire. It is present, on its own field.
-  toolNameServerField: 'server',
   // ⚠ GENUINELY PER-TOOL, AND IT IS AXIS B'S PIN. See `buildDoplServerEntry`.
   // 🔒 MEASURED 2026-09-22: the real app-server retains `mcp_servers.dopl.tools.dopl_channel.
   // approval_mode` through `config/read` EVEN UNDER `--strict-config`, which errors on any field

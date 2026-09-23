@@ -95,7 +95,7 @@ test("the WINDOWLESS FLOOR resolves to a CURSOR mode that really reaches a tool"
   // (§5 item X1) — so a session left at `allowlist` can stall on a question nobody can answer.
   // Raising every unattended session to `auto-review` is what stands between this runtime and
   // that stall.
-  const floor = capability.windowlessToolFloor(D);
+  const floor = D.toolMode.windowlessFloor;
   assert.equal(floor, "auto-review");
   assert.ok(!["manual", "auto", "bypass", "on-request"].includes(floor), "the floor must be this runtime's word");
   assert.equal(RT.axisAAllows(floor, capability.toolTaxonomy(D).auto[0]), true);
@@ -189,7 +189,6 @@ test("NOTHING is pre-approved, so nothing is shadowed past the in-process bounda
   // on every profile is what makes the shadow unavailable rather than merely unused.
   for (const profile of ["read_only", "dopl_only", "full"]) {
     assert.deepEqual(RT.toolConfigFor(profile).preApproved, [], profile);
-    assert.deepEqual(D.containment.profiles[profile].allowList, [], profile);
   }
 });
 
@@ -254,13 +253,13 @@ test("the thread tag is applied NATIVELY, and a tag that does not apply leaves t
 });
 
 test("Axis B declares the only IN-PROCESS enforcement point of the three", () => {
-  assert.equal(capability.axisBEnforcement(D), "in-process");
+  assert.equal(D.axisB.enforcementPoint, "in-process");
   // ⚠ `true` BY CONSTRUCTION, NOT BY MEASUREMENT — Dopl writes `execute()`, so the arguments are
   // the model's own in full. The other native runtime declares `'unverified'` here because it
   // depends on whether the PLATFORM hands its callback the call's arguments (§5 item C1).
   assert.equal(D.axisB.opScoped, true);
-  assert.equal(capability.axisBOpScoped(D), true);
-  assert.equal(capability.inputRewrite(D), "native");
+  assert.equal(D.axisB.opScoped, true);
+  assert.equal(D.axisB.inputRewrite, "native");
 });
 
 // ── THE LAUNCH SHAPE ─────────────────────────────────────────────────────────────────────────
@@ -330,14 +329,6 @@ test("⚠ THE SHIP GATE: there is no interrupt, the Stop control is refused, and
   // design's step 8 says a runtime Dopl cannot stop is a runtime that does not ship.
   assert.equal(D.session.interrupt, "unverified");
   assert.equal(D.session.steer, "unverified");
-  assert.equal(capability.canInterrupt(D), false, "the Stop control must not be offered");
-  assert.equal(capability.canSteer(D), false);
-  assert.match(String(capability.interruptRefusal(D)), /unverified|cannot stop/,
-    "a control that vanishes with no reason is one the operator works around");
-  // …and the refusal is a CONTROL refusal, not a launch refusal: whether this runtime may SHIP is
-  // a release decision, and encoding it as a launch block would hide a ship gate where nobody looks.
-  assert.equal(capability.interruptRefusal(registry.descriptorFor("claude")), null,
-    "a runtime that CAN interrupt is not refused");
 });
 
 test("resume is REFUSED with a readable reason, and a cold launch is unaffected", () => {
@@ -347,7 +338,7 @@ test("resume is REFUSED with a readable reason, and a cold launch is unaffected"
     "the adapter refuses at its own door rather than declaring a block nothing enforces");
 });
 
-test("no adapter declares a cost any more, and the denominator is honestly absent", () => {
+test("no adapter declares a cost any more", () => {
   // 🔒 ⚠ **THIS CASE USED TO READ "the cost cap is SHOWN here and HIDDEN on the other native
   // runtime — the field earns its keep".** It did earn its keep: this was the ONE runtime
   // declaring `meter.cost: {currency:'usd', billed:true}`, off a real `agent.getUsage()` ->
@@ -356,19 +347,14 @@ test("no adapter declares a cost any more, and the denominator is honestly absen
   // is gone from the contract and from all three descriptors — asserted here in the NEGATIVE
   // rather than deleted, because this is the adapter the field would most plausibly come back on.
   for (const id of ["claude", "codex", "cursor"]) {
-    assert.equal(registry.descriptorFor(id).meter.cost, undefined, id);
+    assert.equal((registry.descriptorFor(id).meter || {}).cost, undefined, id);
   }
-  // ⚠ AND THE DENOMINATOR IS HONESTLY ABSENT. The design's §1.4 predicts `windowSource: 'hook'`;
-  // §7 ships no hooks on this runtime, so naming one would declare a measurement nobody takes.
-  assert.equal(D.meter.windowSource, null);
 });
 
-test("the sign-in button, the deep link and the tool-search verb are all HIDDEN, not grayed", () => {
-  assert.equal(capability.hasInteractiveSignIn(D), false);
+test("the sign-in button and the tool-search verb are HIDDEN, not grayed", () => {
+  assert.equal(D.credential.interactiveSignIn, null);
   assert.equal(RT.signIn(), null, "a method whose capability is absent still EXISTS and answers null");
-  assert.equal(capability.hasDeepLink(D), false);
-  assert.equal(capability.toolSearchVerb(D), null, "the sentence is omitted, never translated");
-  assert.equal(capability.entryFile(D), ".cursorrules");
+  assert.equal(D.prose.toolSearchVerb, null, "the sentence is omitted, never translated");
   // ⚠ THE CLASSIFIER-INSTRUCTION CONTROL IS HIDDEN TOO, and that is a DIVERGENCE FROM DESIGN §3.1
   // taken deliberately: its documented home is `permissions.json`, a file the operator also owns,
   // and §5 item X9 settles neither where the keys are written nor whether Cursor re-reads them.

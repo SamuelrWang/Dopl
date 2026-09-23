@@ -94,17 +94,6 @@ const descriptor = {
   // ⚠ null, not []. No category vocabulary at all; inventing one inside the descriptor whose whole
   // purpose is to enforce NATIVE vocabulary is the exact failure decision (1) exists to prevent.
   categories: null,
-  // ⚠ FALSE, AND THE REASON IS A TRANSPORT FACT RATHER THAN A PREFERENCE. `allow-always` is an ACP
-  // outcome (`allow-once` | `allow-always` | `reject-once`) and step 8 ships the SDK path, which
-  // has no approval channel to answer at all — so there is no native session grant to double-count
-  // against. Dopl's own scoped grant key is the only "stop asking" ledger here, which is the state
-  // the never-double-count invariant wants and gets for free.
-  sessionGrant: false,
-  // ⚠ false: the run mode is fixed for the life of the agent handle (`Agent.create()` takes it),
-  // and nothing in the research shows it changing mid-session. Dopl's OWN gate reads both axes
-  // live at decision time either way, so a posture change is never stale where it matters — it
-  // takes effect on the next launch for CURSOR's half and immediately for Dopl's.
-  hotSwapModes: false,
 };
 
 module.exports = { answerApproval, stampOutbound, descriptor };

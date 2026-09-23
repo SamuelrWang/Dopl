@@ -50,7 +50,7 @@ test("every adapter declares an Axis-B ENFORCEMENT POINT, and a null one is REFU
     // channel call; and no posture field crosses the wire, so the server cannot refuse the post
     // either. With neither, an agent posts with NO outbound consent card at all.
     assert.ok(
-      ["held-callback", "in-process"].includes(capability.axisBEnforcement(descriptor)),
+      ["held-callback", "in-process"].includes(descriptor.axisB.enforcementPoint),
       `${descriptor.id}: axisB.enforcementPoint must name a real mechanism`
     );
   }
@@ -68,18 +68,13 @@ test("every Dopl profile carries a deny list IN THAT RUNTIME'S VOCABULARY, or th
   // delegation, exfil and persistence built-ins those lists exist for.
   for (const { descriptor } of ADAPTERS) {
     for (const profile of ["read_only", "dopl_only", "full"]) {
-      assert.ok(capability.canLaunchProfile(descriptor, profile),
-        `${descriptor.id}: ${profile} has no deny list — ${capability.profileRefusal(descriptor, profile)}`);
-      assert.equal(capability.profileRefusal(descriptor, profile), null);
+      assert.ok(Array.isArray(descriptor.containment.profiles[profile].denyList),
+        `${descriptor.id}: ${profile} has no deny list`);
     }
   }
   const broken = clone(ADAPTERS[0]);
   broken.descriptor.containment.profiles.read_only.denyList = null;
   assert.throws(() => contract.sealAdapter(broken), /denyList is not a list/);
-  // …and the REFUSAL is readable, because a refusal an operator cannot read is one they work around.
-  const hidden = clone(ADAPTERS[0]);
-  delete hidden.descriptor.containment.profiles.dopl_only;
-  assert.match(String(capability.profileRefusal(hidden.descriptor, "dopl_only")), /no deny list/);
 });
 
 // ── ⚠ 1b. D2 — AN EMPTY LIST IS A LIST, AND THE DECLARATION IS NOT THE ENFORCEMENT ───────────
@@ -106,9 +101,6 @@ test("D2: an EMPTY deny list is refused on a restricted profile, and allowed on 
     empty.descriptor.containment.profiles[profile].denyList = [];
     assert.throws(() => contract.sealAdapter(empty), /denyList is EMPTY/,
       `${profile}: a restricted profile that denies nothing must not register`);
-    // …and the same rule one step later, at the launch question, with a readable sentence.
-    assert.equal(capability.canLaunchProfile(empty.descriptor, profile), false, profile);
-    assert.match(String(capability.profileRefusal(empty.descriptor, profile)), /denies nothing/, profile);
   }
   // ⚠ `full` IS EXEMPT AND IT IS NOT A LOOPHOLE. `full` is the profile whose supervision IS Axis A
   // rather than a list, so an empty floor there is a posture somebody chose. Every OTHER profile
@@ -124,7 +116,6 @@ test("D2: an EMPTY deny list is refused on a restricted profile, and allowed on 
   };
   assert.doesNotThrow(() => contract.sealAdapter(looseFull),
     "an empty deny list on `full` is a declared posture, not an absent control");
-  assert.equal(capability.canLaunchProfile(looseFull.descriptor, "full"), true);
 });
 
 test("D2: the seal reads the ENFORCED structure — a declaration that lies is REFUSED", () => {
@@ -249,8 +240,6 @@ test("an absent capability is null — an empty array would render an empty cont
     ["toolMode.secondaryAxis", (d) => d.toolMode.secondaryAxis],
     ["toolMode.freeform", (d) => d.toolMode.freeform],
     ["approval.categories", (d) => d.approval.categories],
-    ["containment.nativeControls", (d) => d.containment.nativeControls],
-    ["deepLink", (d) => d.deepLink],
     ["prose.toolSearchVerb", (d) => d.prose.toolSearchVerb], ["prose.deferredCatalog", (d) => d.prose.deferredCatalog],
     ["mcp.perToolApproval", (d) => d.mcp.perToolApproval],
     ["mcp.eagerLoadFlag", (d) => d.mcp.eagerLoadFlag],
@@ -274,7 +263,7 @@ test("the Axis-A modes are ordered NARROWEST FIRST, and the windowless floor is 
     assert.equal(capability.normalizeToolMode(descriptor, "not-a-mode"), modes[0], "unknown fail-closes to the narrowest");
     assert.equal(capability.narrowestToolMode(descriptor), descriptor.toolMode.default,
       "the default IS the narrowest — a session starts asking, and park resets it there");
-    const floor = capability.windowlessToolFloor(descriptor);
+    const floor = descriptor.toolMode.windowlessFloor;
     assert.ok(modes.includes(floor), `${descriptor.id}: windowlessFloor '${floor}' is not one of its modes`);
     // WIDEN-ONLY, driven rather than asserted: every mode floors to one at or above the floor,
     // and the widest is never narrowed.
@@ -384,28 +373,16 @@ test("every adapter declares a usable model PICK RULE, and a malformed one is RE
   for (const { descriptor } of ADAPTERS) {
     const pick = capability.pickRule(descriptor);
     assert.ok(pick, `${descriptor.id}: declares no models.pick`);
-    assert.ok(pick.kind === "closed" || pick.kind === "open", `${descriptor.id}: models.pick.kind`);
     assert.equal("stored" in pick, false, `${descriptor.id}: models.pick.stored is deleted (2026-09-23)`);
-    if (pick.kind === "closed") {
-      assert.ok(Array.isArray(pick.accepted) && pick.accepted.length, `${descriptor.id}: closed roster, no accepted list`);
-    } else {
-      // ⚠ A SHAPE CHECK REPLACES MEMBERSHIP ON A LIVE ROSTER, AND IT IS A GATE: the stored value
-      // becomes a launch argument, so the alphabet is what stands in for the list.
-      assert.ok(typeof pick.pattern === "string" && pick.pattern, `${descriptor.id}: open roster, no pattern`);
-      // ⚠ ASKED OF THE STAMP SINCE 2026-09-23 (`storeModelPick` is deleted with the stored model).
-      assert.equal(capability.launchModelPick(descriptor, "a; rm -rf /"), pick.absent, `${descriptor.id}: shell metacharacters`);
-      assert.equal(capability.launchModelPick(descriptor, "a b"), pick.absent, `${descriptor.id}: whitespace`);
-      assert.equal(capability.launchModelPick(descriptor, "x".repeat(200)), pick.absent, `${descriptor.id}: length`);
-    }
+    // ⚠ A SHAPE CHECK REPLACES MEMBERSHIP ON A LIVE ROSTER, AND IT IS A GATE: the stored value
+    // becomes a launch argument, so the alphabet is what stands in for the list.
+    assert.ok(typeof pick.pattern === "string" && pick.pattern, `${descriptor.id}: no pattern`);
+    assert.equal(capability.launchModelPick(descriptor, "a; rm -rf /"), pick.absent, `${descriptor.id}: shell metacharacters`);
+    assert.equal(capability.launchModelPick(descriptor, "a b"), pick.absent, `${descriptor.id}: whitespace`);
+    assert.equal(capability.launchModelPick(descriptor, "x".repeat(200)), pick.absent, `${descriptor.id}: length`);
     // ⚠ AND FAIL-CLOSED IN BOTH DIRECTIONS on every adapter: nothing this runtime cannot vouch
     // for is ever stored, and a launch that cannot resolve one lands on the runtime's OWN "no pick"
     // member — never on another runtime's.
-    // ⚠ `pick.absent` IS NOT `models.defaultMeansAbsent`, AND THE DIFFERENCE IS REAL RATHER THAN A
-    // SLIP. `defaultMeansAbsent` is the CHAIN's spelling of "this link has no opinion, keep going"
-    // (`session-model.js › chainModel`, F-285); `pick.absent` is what a SESSION is stamped with
-    // when nothing resolved, which on a closed roster is that platform's own "no pick" WORD and is
-    // resolved one step later by the adapter's launch spec. Collapsing them would end every chain
-    // at its first link.
     for (const junk of [null, undefined, 7, {}, [], "   "]) {
       assert.equal(capability.launchModelPick(descriptor, junk), pick.absent,
         `${descriptor.id}: ${JSON.stringify(junk)}`);

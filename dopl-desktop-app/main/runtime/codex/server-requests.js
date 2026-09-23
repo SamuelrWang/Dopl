@@ -130,9 +130,6 @@ const descriptor = {
   // Codex gates a shell command, a file change, an escalation — not a named built-in.
   granularity: 'category',
   categories: tools.GRANULAR_CATEGORIES.slice(),
-  // Codex has a native session grant; Dopl never sends it (see `decisionReply`).
-  sessionGrant: true,
-  hotSwapModes: 'unverified',
 };
 
 module.exports = {

@@ -263,16 +263,12 @@ const descriptor = {
   // what makes the control render at all (`§3.2`: absent -> no reasoning-effort control). `null`
   // elsewhere, a list here — never `[]`, which would render an empty control instead of none.
   dimensions: [DIMENSION],
-  defaultMeansAbsent: '',
   // ⚠ **THE MODEL A LAUNCH THAT NAMED NONE STARTS ON (2026-09-23, Samuel: *"I think we should do
   // Sol"*)** — spent ONLY when this account's live `model/list` is `ready` and carries it, and
   // otherwise NO model is sent and Codex picks (`runtime/launch-default.js`; the catalog shows it as
   // the default for the same reason, `model-catalog.js › catalogFromRoster`). A preference, never a
   // refusal: an account without Sol launches exactly as it did before this line.
   launchDefault: 'gpt-6-sol',
-  // ⚠ false: the thread carries its model through a resume by itself (`thread/resume` reopens the
-  // conversation, it does not re-specify it), so nothing re-stamps it.
-  reStampOnResume: false,
   // ── ⚠ THE PICK RULE (2026-09-21, U5) — `open`, WHICH IS THE OPPOSITE OF THE CLAUDE LANE'S ────
   //
   // That runtime's roster is FROZEN, so membership is the check. This one is `source: 'live'`:
@@ -293,9 +289,6 @@ const descriptor = {
   // ⚠ IT IS STILL A GATE, BECAUSE THE VALUE BECOMES `thread/start.model` in `launch-spec.js`.
   // `[A-Za-z0-9]` first, then the id alphabet, and nothing else.
   pick: {
-    kind: 'open',
-    accepted: null,
-    canonical: null,
     absent: '', // `defaultMeansAbsent` — no `model` field at all, i.e. the platform's own pick
     pattern: '^[A-Za-z0-9][A-Za-z0-9._:/-]{0,63}$',
   },

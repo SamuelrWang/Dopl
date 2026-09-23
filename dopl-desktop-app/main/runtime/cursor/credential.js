@@ -1,7 +1,6 @@
 // THE CREDENTIAL LANE — is this machine signed in to THIS runtime, and can we fix it in place?
 //
-// ⚠ THIS RUNTIME HAS TWO CREDENTIAL SHAPES AND THE RESEARCH NAMES BOTH, which is why this is the
-// one adapter whose `envKeys` is not empty. `cursor-research.md` documents `CURSOR_API_KEY` (user
+// ⚠ THIS RUNTIME HAS TWO CREDENTIAL SHAPES AND THE RESEARCH NAMES BOTH. `cursor-research.md` documents `CURSOR_API_KEY` (user
 // keys OR service-account keys), an `--api-key` flag, and `agent login` / `logout` / `status`. An
 // environment key is a first-class, documented credential here — on the other native runtime the
 // research named none, and writing one there would have been a guess dressed as a declaration.
@@ -39,9 +38,7 @@ const STATUS_TIMEOUT_MS = 5000;
 // one fact.
 const CACHE_MS = 5000;
 
-// The documented environment credential. ⚠ ALSO `descriptor.envKeys`, so the ambient-fence note in
-// `launch-spec.js` and this probe cannot disagree about which name is a credential rather than a
-// permission knob.
+// The documented environment credential.
 const API_KEY_ENV = 'CURSOR_API_KEY';
 
 let cached = null; // { at, value }
@@ -109,13 +106,6 @@ const descriptor = {
   // ⚠ null => no sign-in button; the UI shows a settings pointer instead (hide-on-absent).
   interactiveSignIn: null,
   probe: 'env-or-cli-status',
-  // The sentinels that mean "no credential", in the two shapes they arrive in. ⚠ The in-stream one
-  // is a PATTERN and is declared unverified: `normalize.js` owns the matcher, and what a
-  // signed-out SDK actually throws is §5 item X18.
-  sentinels: ['status-nonzero', 'auth-shaped-error'],
-  // ⚠ NOT EMPTY, AND THAT IS A MEASUREMENT RATHER THAN A PREFERENCE — see the header. This list is
-  // read as "the vars a scrub must PRESERVE", and on this runtime there is a documented one.
-  envKeys: [API_KEY_ENV],
 };
 
 module.exports = { credentialState, signIn, descriptor, API_KEY_ENV, STATUS_TIMEOUT_MS };
