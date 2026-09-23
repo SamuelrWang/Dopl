@@ -79,13 +79,6 @@ test("a live roster reads `loading` FIRST and `ready` after the background read 
   assert.equal(calls, 1, "a settled roster is not re-read on every look");
 });
 
-test("a frozen roster is read INLINE and is never `loading`", () => {
-  const catalog = loadCatalog();
-  const claude = adapter({ id: "claude", label: "Claude Code", models: { source: "frozen", dimensions: null } },
-    () => claudeTable());
-  assert.equal(catalog.snapshot(claude).status, "ready", "a table lookup has no loading state");
-});
-
 test("RC-02: `invalidate` on a READY catalog keeps it READY (still selectable) and re-reads it", async () => {
   // It used to flip READY to `stale`; the renderer re-polls only `loading`, so the picker stayed
   // unselectable until the window lost and regained focus. The look that starts the re-read now
@@ -206,24 +199,17 @@ test("🔒 the desktop's label table AGREES WITH THE WEB'S, because the two tree
 
 // ── 6. THE MAP ITSELF ────────────────────────────────────────────────────────────────────────
 
-test("one adapter that THROWS becomes one `unavailable` entry, and takes nobody with it", () => {
+test("one adapter that THROWS becomes one `unavailable` entry, and takes nobody with it", async () => {
   const catalog = loadCatalog();
-  const good = adapter({ id: "claude", label: "Claude Code", models: { source: "frozen", dimensions: null } },
+  const good = adapter({ id: "claude", label: "Claude Code", models: { source: "live", dimensions: null } },
     () => claudeTable());
-  const bad = adapter({ id: "boom", label: "Boom", models: { source: "frozen", dimensions: null } },
+  const bad = adapter({ id: "boom", label: "Boom", models: { source: "live", dimensions: null } },
     () => { throw new Error("the model table could not be read"); });
+  catalog.catalogs([good, bad]);
+  await settle();
   const all = catalog.catalogs([good, bad]);
   assert.equal(all.claude.status, "ready");
   assert.equal(all.boom.status, "unavailable");
   assert.match(all.boom.reason, /could not be read/);
   noClaude(all.boom, "the throwing adapter");
-});
-
-test("a frozen adapter that answers ASYNCHRONOUSLY is a mis-declared adapter, not a loading one", () => {
-  const catalog = loadCatalog();
-  const wrong = adapter({ id: "wrong", label: "Wrong", models: { source: "frozen", dimensions: null } },
-    async () => ({ source: "frozen", models: [{ id: "x" }] }));
-  const c = catalog.snapshot(wrong);
-  assert.equal(c.status, "unavailable");
-  assert.match(c.reason, /frozen model table but answered asynchronously/);
 });

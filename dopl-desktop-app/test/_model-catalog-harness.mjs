@@ -35,6 +35,7 @@ export function evalModule(path, stub) {
 /** A fresh `model-catalog.js` — the snapshot cache is module-level, so each case gets its own. */
 export const loadCatalog = () =>
   evalModule(join(MAIN, "runtime", "model-catalog.js"), (id) => {
+    if (id === "./selection-vocabulary") return requireMain(join(MAIN, "runtime", "selection-vocabulary.js")); // pure
     throw new Error(`unexpected require: ${id}`);
   });
 

@@ -23,6 +23,8 @@
 
 const modelTable = require('../../session-model');
 const roster = require('./roster');
+const { pickOf } = require('../selection-vocabulary');
+const { notOfferedSentence } = require('../model-catalog');
 
 // ── THE FALLBACK'S DISPLAY NAMES — the web twin is `agent-models.ts › AGENT_MODELS` ──────────
 // ⚠ PINNED, NOT TRUSTED: `test/runtime-model-catalog.test.mjs` reads the web file and fails when
@@ -48,7 +50,7 @@ const legacyAliases = () => modelTable.MODEL_IDS.reduce((m, id) => {
 
 /** The table this build shipped with, in the live roster's own shape. */
 function frozenRoster(reason) {
-  const fallback = modelTable.LAUNCH_MODEL_FALLBACK;
+  const fallback = descriptor.launchDefault;
   const models = modelTable.MODEL_IDS.map((id) => {
     const alias = modelTable.aliasForModelId(id);
     return {
@@ -115,8 +117,8 @@ async function readLive(key) {
   return roster.rosterFrom(rows, {
     key,
     legacy: legacyAliases(),
-    fallbackId: modelTable.LAUNCH_MODEL_FALLBACK,
-    fallbackAlias: modelTable.aliasForModelId(modelTable.LAUNCH_MODEL_FALLBACK),
+    fallbackId: descriptor.launchDefault,
+    fallbackAlias: modelTable.aliasForModelId(descriptor.launchDefault),
   });
 }
 
@@ -154,20 +156,20 @@ function current() {
  */
 function resolveLaunchModel(value) {
   const r = current();
-  const v = typeof value === 'string' ? value.trim() : '';
-  if (!v || v === 'default') {
-    const fb = roster.match(r.models, modelTable.LAUNCH_MODEL_FALLBACK)
-      || roster.match(r.models, modelTable.aliasForModelId(modelTable.LAUNCH_MODEL_FALLBACK));
+  const v = pickOf(value);
+  if (!v) {
+    const fallback = descriptor.launchDefault;
+    const alias = modelTable.aliasForModelId(fallback);
+    const fb = roster.match(r.models, fallback) || roster.match(r.models, alias);
     return fb
       ? { ok: true, arg: fb.value, id: fb.id, reason: '' }
-      : { ok: true, arg: modelTable.aliasForModelId(modelTable.LAUNCH_MODEL_FALLBACK), id: modelTable.LAUNCH_MODEL_FALLBACK, reason: '' };
+      : { ok: true, arg: alias, id: fallback, reason: '' };
   }
   // By exact id or alias only: `baseId` strips `[1m]`, so a long-context pick matched the short row
   // of the frozen table and resumed a 1M conversation on a 200k model (RC-01).
   const row = roster.matchExact(r.models, v);
   if (row) return { ok: true, arg: row.value, id: row.id, reason: '' };
-  const offered = r.models.filter((m) => !m.hidden).map((m) => m.label || m.id).join(', ');
-  return { ok: false, arg: '', id: '', reason: `Claude Code does not offer the model "${v}" on this machine${offered ? ` (it offers: ${offered})` : ''}.` };
+  return { ok: false, arg: '', id: '', reason: notOfferedSentence(require('./index').descriptor.label, v, r.models) };
 }
 
 /**
@@ -192,8 +194,8 @@ const descriptor = {
   source: 'live',
   // ⚠ null, not []: no second dimension renders here (the CLI's effort levels are not wired).
   dimensions: null,
-  defaultMeansAbsent: '',
-  reStampOnResume: false,
+  // The model a no-pick launch runs on; this adapter spends it itself (`resolveLaunchModel('')`).
+  launchDefault: modelTable.LAUNCH_MODEL_FALLBACK,
   // ── ⚠ THE PICK RULE IS `open` SINCE 2026-09-22 — IT WAS `closed` OVER THE FROZEN IDS ────────
   // A closed rule is a picker that can never offer a model this build predates, which is the
   // defect Samuel named. Storage keeps a SHAPE-CHECKED string (a durable record written while the
@@ -211,6 +213,6 @@ const descriptor = {
 };
 
 module.exports = {
-  models, current, rosterKey, resolveLaunchModel, launchArg, frozenRoster, forget, inject,
-  descriptor, LABELS, PICK_PATTERN,
+  models, rosterKey, resolveLaunchModel, launchArg, frozenRoster, forget, inject,
+  descriptor, PICK_PATTERN,
 };

@@ -201,7 +201,8 @@ async function launchFromButton(payload) {
     return { ok: false, reason: resolved.reason };
   }
   const runtimeId = resolved.runtimeId;
-  const model = overrides.model || await launchDefault.identityModelFor(runtimeId, identityModel(sessionModel, identity));
+  const model = overrides.model
+    || await launchDefault.identityModelFor(runtimeId, identityModel(sessionModel, identity), identity && identity.runtime);
 
   const res = await engine.launchRequesterSession({
     channelId: p.channelId,

@@ -81,6 +81,18 @@ function renderEvents(msg, ctx) {
   return out;
 }
 
+// The turn's main model: `SDKResultSuccess` carries no `model`, and `modelUsage` lists every model
+// the turn called (a helper model included), so the one that read the most prompt wins (RC-06).
+function mainModelOf(modelUsage) {
+  let best = null;
+  let most = -1;
+  for (const [id, u] of Object.entries(modelUsage && typeof modelUsage === 'object' ? modelUsage : {})) {
+    const read = ((u && u.inputTokens) || 0) + ((u && u.cacheReadInputTokens) || 0);
+    if (read > most) { best = id; most = read; }
+  }
+  return best;
+}
+
 /**
  * ONE raw platform message -> the CoreEvents it means.
  *
@@ -135,10 +147,7 @@ function normalize(msg, ctx) {
     // ⚠ `total_cost_usd` IS ON THIS MESSAGE AND IS DELIBERATELY NOT READ (2026-09-22). It was the
     // first argument to `events.result` and it fed an accumulator no surface ever showed; Samuel's
     // ruling deleted the whole column, so the field the platform offers is simply not taken.
-    return [events.result(
-      sessionModel.sessionTokens(msg.usage),
-      msg.model || (msg.modelUsage && Object.keys(msg.modelUsage)[0]) || null
-    )];
+    return [events.result(sessionModel.sessionTokens(msg.usage), mainModelOf(msg.modelUsage))];
   }
 
   return []; // unknown types ignored

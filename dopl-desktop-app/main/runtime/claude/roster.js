@@ -29,6 +29,8 @@
 // PURE BELOW THE PROBE: `rosterFrom` / `match` / `baseId` take data and return data, so the suite
 // drives them without an SDK.
 
+const { findModel } = require('../model-catalog');
+
 const PROBE_TIMEOUT_MS = 10000;
 
 const str = (v) => (typeof v === 'string' ? v.trim() : '');
@@ -77,11 +79,7 @@ function entryFrom(row, legacy) {
 
 /** The row a pick names EXACTLY — its id, then any alias. What a LAUNCH resolves by (RC-01). */
 function matchExact(models, pick) {
-  const v = str(pick);
-  if (!v || !Array.isArray(models)) return null;
-  return models.find((m) => m.id === v)
-    || models.find((m) => Array.isArray(m.aliases) && m.aliases.indexOf(v) !== -1)
-    || null;
+  return Array.isArray(models) ? findModel({ models }, pick) : null;
 }
 
 /** For labelling and the default marker: exact, then the same model under its base spelling. */
@@ -136,7 +134,8 @@ async function probe(o) {
   async function* prompt() { await idle; } // yields nothing: no user message, so no model turn
   const q = sdk.query({
     prompt: prompt(),
-    options: Object.assign({
+    // The caller's options (env, binary) first and the pins last, so no caller can lift a pin.
+    options: Object.assign({}, (o && o.options) || {}, {
       settingSources: [],
       permissionMode: 'default',
       mcpServers: {},
@@ -144,7 +143,7 @@ async function probe(o) {
       // ⚠ NO `maxTurns`: this is not a session and no turn can start (nothing is ever pushed), and
       // `launch-spec.js › SESSION_MAX_TURNS` is pinned as the ONE producer of that option.
       canUseTool: async () => ({ behavior: 'deny', message: 'model roster probe' }),
-    }, (o && o.options) || {}),
+    }),
   });
   // ⚠ DRAINED IN THE BACKGROUND so an early exit surfaces as a rejection here, not as an
   // unhandled one. Nothing is expected on it.
@@ -166,4 +165,4 @@ async function probe(o) {
   }
 }
 
-module.exports = { probe, rosterFrom, entryFrom, match, matchExact, baseId, shortOf, PROBE_TIMEOUT_MS };
+module.exports = { probe, rosterFrom, match, matchExact, baseId };

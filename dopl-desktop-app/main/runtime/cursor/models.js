@@ -60,7 +60,7 @@ function listFn(sdk) {
 // ⚠ THIS PLATFORM NAMES NOTHING. `models.list()` answers ids, so every entry's `label` is `null`
 // and the picker renders the raw id — which is the honest answer, not a missing one.
 const failure = (reason) =>
-  ({ source: 'live', key: null, ids: [], aliases: [], models: [], defaultId: null, reason, truncated: false });
+  ({ source: 'live', key: null, ids: [], models: [], defaultId: null, reason, truncated: false });
 
 function withTimeout(promise, ms, onTimeout) {
   return new Promise((resolve) => {
@@ -88,10 +88,6 @@ async function fetchRoster() {
     Promise.resolve().then(list).then((result) => {
       const ids = idsFrom(result);
       if (!ids.length) return failure('this runtime answered models.list() with no models Dopl could read');
-      // ⚠ `aliases[0]` IS THE EMPTY STRING AND IT SETS NO MODEL AT ALL — the platform's own pick.
-      // `descriptor.models.defaultMeansAbsent` is the convention the whole launch precedence chain
-      // rests on: a link naming nothing this build knows STEPS ASIDE rather than spending the
-      // platform default and discarding the rest.
       return {
         source: 'live',
         // ⚠ THE SDK IS LOADED IN-PROCESS, so there is no binary path or CLI version to key on —
@@ -99,7 +95,6 @@ async function fetchRoster() {
         // key that never changes. `model-catalog.js › invalidate` is the reconnect hook instead.
         key: null,
         ids,
-        aliases: [''].concat(ids),
         // ⚠ NO `isDefault`: this platform declares none, and marking one would be Dopl inventing
         // a default it cannot back (INVARIANTS §11 — unknown is not empty).
         models: ids.map((id) => ({ id, label: null, short: null, isDefault: false, hidden: false, dimensions: {} })),

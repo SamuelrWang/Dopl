@@ -71,7 +71,7 @@ function appliedModelId(runtimeId, modelArg) {
 async function resolveModel(runtimeId, d, identity) {
   const fromIdentity = require('./session-launch-op').identityModel(sessionModel, identity);
   return sessionModel.chainModel(d.model)
-    || require('./runtime/launch-default').identityModelFor(runtimeId, fromIdentity);
+    || require('./runtime/launch-default').identityModelFor(runtimeId, fromIdentity, identity && identity.runtime);
 }
 
 /**

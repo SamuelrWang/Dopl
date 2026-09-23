@@ -177,6 +177,15 @@ test("🔒 no runtime borrows another's roster: each catalog refuses the other's
     "a roster Dopl could not read is not evidence a model does not exist");
 });
 
+test("RC-03: the build's fallback table LABELS only — a pick it lacks is not refused", () => {
+  // The probe failed, so Dopl could not read the roster; that is not evidence the model is absent.
+  const catalog = loadCatalog();
+  const fallback = catalog.catalogFromRoster("claude", DESCRIPTOR, models.frozenRoster("the probe timed out"));
+  assert.equal(fallback.status, "stale");
+  assert.equal(catalog.modelRefusal(fallback, "claude-opus-5[1m]", "Claude Code"), null);
+  assert.equal(catalog.vouches(fallback), false);
+});
+
 // ── 6. THE FUNNEL ────────────────────────────────────────────────────────────────────────────
 
 const LAUNCH_SRC = readFileSync(join(MAIN, "session-launch.js"), "utf8");
@@ -195,7 +204,7 @@ test("the funnel REFUSES before constructing anything, and asks only when a mode
   const asked = [];
   const h = refuser({
     "./runtime": { resolve: (id) => ({ descriptor: { id, label: "Claude Code" } }) },
-    "./runtime/model-catalog": { settle: async (a) => { asked.push(a.descriptor.id); return { models: [{ id: "claude-sonnet-5", aliases: [] }] }; },
+    "./runtime/model-catalog": { settle: async (a) => { asked.push(a.descriptor.id); return { status: "ready", models: [{ id: "claude-sonnet-5", aliases: [] }] }; },
       modelRefusal: loadCatalog().modelRefusal },
   });
   assert.match(await h.fn("claude", "claude-fable-5-1"), /does not offer the model "claude-fable-5-1"/);

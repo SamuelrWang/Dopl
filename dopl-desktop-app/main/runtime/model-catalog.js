@@ -34,6 +34,8 @@
 // binary. So `snapshot()` answers from cache and kicks a BACKGROUND refresh, and the first answer
 // on a cold process is `loading` — which is exactly what `loading` is for.
 
+const { pickOf } = require('./selection-vocabulary');
+
 const CATALOG_VERSION = 1;
 
 const STATUS = Object.freeze({
@@ -175,8 +177,7 @@ function catalogFromRoster(runtimeId, descriptor, roster) {
   }
   const reason = str(roster.reason);
   const key = str(roster.key) || null;
-  const rows = Array.isArray(roster.models) ? roster.models
-    : (Array.isArray(roster.ids) ? roster.ids : []);
+  const rows = Array.isArray(roster.models) ? roster.models : [];
   const models = [];
   for (const row of rows) {
     const entry = normalizeEntry(row);
@@ -196,10 +197,10 @@ function catalogFromRoster(runtimeId, descriptor, roster) {
   // ⚠ DOPL'S OWN LAUNCH DEFAULT OUTRANKS THE SERVER'S MARKER WHEN THIS ROSTER CARRIES IT
   // (2026-09-23): a no-pick launch spends it (`launch-default.js`), so a picker showing the
   // server's marker instead would name a model the launch will not use. Current rosters only.
-  const preferred = str(declared.launchDefault);
-  if (preferred && roster.stale !== true && models.some((m) => m.id === preferred)) {
-    defaultId = preferred;
-    for (const m of models) m.isDefault = m.id === preferred;
+  const preferred = roster.stale === true ? null : findModel({ models }, declared.launchDefault);
+  if (preferred) {
+    defaultId = preferred.id;
+    for (const m of models) m.isDefault = m === preferred;
   }
   if (!models.length) {
     // ⚠ THE EMPTY ROSTER IS ALWAYS A FAILURE STATE, NEVER A `ready` ONE. See the header: no
@@ -280,10 +281,14 @@ function due(entry, now, adapter) {
   return now - entry.at >= FAILURE_TTL_MS;
 }
 
+// A runtime answering no key (null) keeps its READY roster for the process.
 function keyMoved(entry, adapter) {
   const fn = adapter && adapter.runtime && adapter.runtime.rosterKey;
   if (typeof fn !== 'function' || !entry.catalog.key) return false;
-  try { return str(fn.call(adapter.runtime)) !== entry.catalog.key; } catch (_) { return false; }
+  try {
+    const now = str(fn.call(adapter.runtime));
+    return !!now && now !== entry.catalog.key;
+  } catch (_) { return false; }
 }
 
 const loadingCatalog = (id, declared) => makeCatalog(id, (declared && str(declared.source)) || null, STATUS.LOADING, {
@@ -354,19 +359,6 @@ function snapshot(adapter) {
   if (!descriptor) return null;
   const id = descriptor.id;
   const declared = descriptor.models || {};
-  if (str(declared.source) === 'frozen') {
-    let roster = null;
-    try { roster = adapter.runtime.models(); } catch (err) {
-      return makeCatalog(id, 'frozen', STATUS.UNAVAILABLE, { reason: (err && err.message) || 'the model table could not be read' });
-    }
-    // ⚠ A FROZEN ROSTER THAT ANSWERED A PROMISE IS A MIS-DECLARED ADAPTER, not a loading one.
-    if (roster && typeof roster.then === 'function') {
-      return makeCatalog(id, 'frozen', STATUS.UNAVAILABLE, {
-        reason: 'this runtime declares a frozen model table but answered asynchronously',
-      });
-    }
-    return catalogFromRoster(id, descriptor, roster);
-  }
   const now = Date.now();
   const entry = snapshots.get(id) || null;
   if (due(entry, now, adapter)) refresh(adapter, now);
@@ -382,7 +374,6 @@ function snapshot(adapter) {
 async function settle(adapter) {
   const descriptor = adapter && adapter.descriptor;
   if (!descriptor) return null;
-  if (str((descriptor.models || {}).source) === 'frozen') return snapshot(adapter);
   const held = snapshots.get(descriptor.id) || null;
   if (held && held.inflight) return held.inflight;
   if (due(held, Date.now(), adapter)) return refresh(adapter, Date.now());
@@ -411,12 +402,27 @@ function findModel(catalog, pick) {
  * last answer, or the adapter's own table), so it refuses what it cannot vouch for.
  * ⚠ ABSENT and the legacy word `default` are "no pick" and are never refused here.
  */
+/** Can this catalog vouch for a model's presence OR absence? Only a READY read can (RC-03). */
+function vouches(catalog) {
+  return !!catalog && catalog.status === STATUS.READY && Array.isArray(catalog.models) && catalog.models.length > 0;
+}
+
+/** Does this catalog prove `id` is offered? */
+function offers(catalog, id) {
+  return vouches(catalog) && !!findModel(catalog, id);
+}
+
 function modelRefusal(catalog, pick, label) {
-  const v = str(pick);
-  if (!v || v === 'default' || !catalog || !Array.isArray(catalog.models) || !catalog.models.length) return null;
+  const v = pickOf(pick);
+  if (!v || !vouches(catalog)) return null;
   if (findModel(catalog, v)) return null;
-  const offered = catalog.models.filter((m) => !m.hidden).map((m) => m.label || m.id).join(', ');
-  return `${label || 'This runtime'} does not offer the model "${v}" on this machine`
+  return notOfferedSentence(label, v, catalog.models);
+}
+
+/** The refusal sentence for a pick `models` lacks, listing what is offered (hidden rows omitted). */
+function notOfferedSentence(label, pick, models) {
+  const offered = (models || []).filter((m) => !m.hidden).map((m) => m.label || m.id).join(', ');
+  return `${label || 'This runtime'} does not offer the model "${pick}" on this machine`
     + (offered ? ` — it offers: ${offered}` : '') + '.';
 }
 
@@ -477,16 +483,16 @@ function forget(runtimeId) {
 
 module.exports = {
   CATALOG_VERSION,
-  STATUS,
   FAILURE_TTL_MS,
   catalogFromRoster,
-  normalizeEntry,
-  normalizeDimensions,
   makeCatalog,
   snapshot,
-  settle, // 2026-09-22: the launch funnel's one awaited read
+  settle,
   findModel,
+  vouches,
+  offers,
   modelRefusal,
+  notOfferedSentence,
   catalogs,
   invalidate,
   onSettled,

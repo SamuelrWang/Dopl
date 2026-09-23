@@ -70,6 +70,10 @@ const RUNTIME_METHODS = {
   toolConfigFor: 1,
   axisAAllows: 2,
   models: 0,
+  // The roster's cache key (`model-catalog.js` re-reads when it moves), or null for none.
+  rosterKey: 0,
+  // A model pick → `{ ok, arg, id, reason }` on this runtime's own roster (the launch argument).
+  modelArg: 1,
   registerMcp: 1,
   probeMcp: 0,
   credentialState: 0,

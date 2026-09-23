@@ -33,6 +33,7 @@ const models = require('./models');
 const mcp = require('./mcp');
 const credential = require('./credential');
 const { packaging } = require('./packaging');
+const { pickOf } = require('../selection-vocabulary');
 
 // ⚠ ELECTRON-FREE AT LOAD, BY CONTRACT. `main/session-profiles.js` is a PURE module two suites
 // slice and evaluate standalone, and it asks the registry for every gate decision — so requiring
@@ -347,6 +348,13 @@ const runtime = {
   axisAAllows(mode, toolName) { return tools.axisAAllows(mode, toolName); },
 
   models() { return models.models(); },
+  // No synchronous roster key: a READY catalog is kept for the process.
+  rosterKey() { return null; },
+  // Picks pass as given (the funnel already refused an unknown one on the live catalog).
+  modelArg(value) {
+    const v = pickOf(value);
+    return { ok: true, arg: v, id: v, reason: '' };
+  },
   registerMcp(cfg) { return mcp.registerMcp(cfg); },
   probeMcp() { return mcp.probeMcp(); },
   credentialState() { return credential.credentialState(); },
