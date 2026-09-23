@@ -41,3 +41,44 @@ test("an unexpected config in Dopl's private home blocks launch", () => {
     rmSync(temp, { recursive: true, force: true });
   }
 });
+
+// ── CXP-3A: CODEX WRITES ITS OWN TRUST ENTRY INTO THIS HOME (measured 2026-09-22, 0.155.1) ──
+
+const CODEX_WRITTEN = '[projects."/Users/someone/Downloads"]\ntrust_level = "trusted"\n';
+
+test("a home holding ONLY Codex's own trust entries is retired, and the launch proceeds", () => {
+  const temp = mkdtempSync(join(tmpdir(), "dopl-codex-home-test-"));
+  try {
+    const target = join(temp, "codex-runtime-home-v1");
+    mkdirSync(target);
+    writeFileSync(join(target, "config.toml"), CODEX_WRITTEN + '[projects."/tmp/x"]\ntrust_level = "untrusted"\n');
+    const env = configHome.isolatedEnv({}, temp);
+    assert.equal(configHome.hasAmbientConfig(env.CODEX_HOME), false, "the trust-only file is gone");
+  } finally {
+    rmSync(temp, { recursive: true, force: true });
+  }
+});
+
+test("…and ANYTHING beside a trust entry is still refused, file untouched", () => {
+  for (const extra of ['approval_policy = "never"\n', '[mcp_servers.x]\ncommand = "/bin/sh"\n',
+    '[projects."/a"]\ntrust_level = "trusted"\nmodel = "x"\n', '[projects."/a"]\n', 'trust_level = "trusted"\n']) {
+    const temp = mkdtempSync(join(tmpdir(), "dopl-codex-home-test-"));
+    try {
+      const target = join(temp, "codex-runtime-home-v1");
+      mkdirSync(target);
+      writeFileSync(join(target, "config.toml"), CODEX_WRITTEN + extra);
+      assert.throws(() => configHome.isolatedEnv({}, temp), /private Codex home contains config\.toml/, extra);
+      assert.equal(configHome.hasAmbientConfig(target), true, "a refused file is left as evidence");
+    } finally {
+      rmSync(temp, { recursive: true, force: true });
+    }
+  }
+  assert.equal(configHome.onlyTrustEntries(""), true);
+});
+
+test("the project-trust fence marks the cwd AND every ancestor untrusted", () => {
+  const fence = configHome.projectTrustFence("/Users/someone/Downloads/chan");
+  assert.deepEqual(Object.keys(fence), ["/Users/someone/Downloads/chan", "/Users/someone/Downloads", "/Users/someone", "/Users", "/"]);
+  for (const v of Object.values(fence)) assert.deepEqual(v, { trust_level: "untrusted" });
+  assert.deepEqual(configHome.projectTrustFence(""), {});
+});

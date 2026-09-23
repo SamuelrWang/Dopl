@@ -35,6 +35,48 @@ function hasAmbientConfig(home) {
   }
 }
 
+// 🔒 ⚠ CODEX WRITES ITS OWN `config.toml` HERE (MEASURED 2026-09-22, codex-cli 0.155.1). A
+// `thread/start` with `sandbox: 'workspace-write'` and no trust decision for its cwd AUTO-TRUSTS
+// that cwd and persists `[projects."<cwd>"] trust_level = "trusted"` into THIS home — after which
+// `isolatedEnv` refused every later launch — and the auto-trust also LOADED `<cwd>/.codex/config.toml`
+// (a hostile `mcp_servers` entry there STARTED). `projectTrustFence` below stops both at the
+// source; this reader retires a file that is ONLY such entries, so a home polluted before the
+// fence shipped launches again. Anything else in it is still refused, unchanged.
+const TRUST_TABLE_RE = /^\[projects\."(?:[^"\\]|\\.)*"\]$/;
+const TRUST_VALUE_RE = /^trust_level\s*=\s*"(?:trusted|untrusted)"$/;
+function onlyTrustEntries(text) {
+  const lines = String(text).split(/\r?\n/).map((l) => l.trim()).filter((l) => l && !l.startsWith('#'));
+  if (!lines.length) return true;
+  if (lines.length % 2) return false;
+  for (let i = 0; i < lines.length; i += 2) {
+    if (!TRUST_TABLE_RE.test(lines[i]) || !TRUST_VALUE_RE.test(lines[i + 1])) return false;
+  }
+  return true;
+}
+function retireCodexTrustFile(home) {
+  const file = path.join(home, 'config.toml');
+  let text;
+  try { text = fs.readFileSync(file, 'utf8'); } catch (_) { return; }
+  if (onlyTrustEntries(text)) fs.unlinkSync(file);
+}
+
+/**
+ * The `thread/start.config.projects` fence: the cwd AND every ancestor marked `untrusted`, so Codex
+ * neither persists a trust entry nor loads a project `.codex/config.toml` (ancestors too, because a
+ * project root found by marker can sit above the cwd). Thread-scoped; nothing is written.
+ */
+function projectTrustFence(cwd) {
+  const out = {};
+  if (typeof cwd !== 'string' || !cwd) return out;
+  let dir = path.resolve(cwd);
+  for (;;) {
+    out[dir] = { trust_level: 'untrusted' };
+    const up = path.dirname(dir);
+    if (up === dir) return out;
+    dir = up;
+  }
+}
+
 function linkAuth(source, target) {
   if (!fs.existsSync(source)) return;
   try {
@@ -57,6 +99,7 @@ function isolatedEnv(env, userDataRoot) {
   const target = path.join(root, PRIVATE_HOME);
   fs.mkdirSync(target, { recursive: true, mode: 0o700 });
   try { fs.chmodSync(target, 0o700); } catch (_) { /* best effort on non-POSIX filesystems */ }
+  retireCodexTrustFile(target);
   if (hasAmbientConfig(target)) {
     throw new Error('Dopl private Codex home contains config.toml; refusing an unisolated launch');
   }
@@ -67,4 +110,4 @@ function isolatedEnv(env, userDataRoot) {
   return input;
 }
 
-module.exports = { isolatedEnv, hasAmbientConfig, PRIVATE_HOME };
+module.exports = { isolatedEnv, hasAmbientConfig, onlyTrustEntries, projectTrustFence, PRIVATE_HOME };

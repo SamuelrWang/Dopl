@@ -245,6 +245,11 @@ test("CXP-3A: every launch carries the `features` fence — apps off always, del
   const bare = specFor("read_only", null).threadStart.config;
   assert.equal(bare.mcp_servers, undefined);
   assert.equal(bare.features.apps, false);
+  // …AND THE PROJECT-TRUST FENCE for the spawn cwd (`codex-project-trust.test.mjs` measures why).
+  const full = specFor("full", { token: "t" });
+  const fence = require(join(CODEX, "config-home.js")).projectTrustFence(full.cwd);
+  assert.deepEqual(full.threadStart.config.projects, fence);
+  assert.equal(full.threadStart.config.projects[full.cwd].trust_level, "untrusted");
 });
 
 test("a Dopl elicitation reaches AXIS B with the call's own op — the blocker, end to end", () => {
