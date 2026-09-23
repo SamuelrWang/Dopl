@@ -378,8 +378,7 @@ export function ChannelsComposer({
 
           {/* ⚠ A CENTERED POPUP SINCE 2026-09-08 (Samuel: *"scrap that and unwire it from the
               text input bar … make it a pop up panel"*). Only WHERE the form is drawn moved —
-              taking the Discard/Launch pair and the foreign-identity question off this card.
-              `composer-launch-panel.tsx` stays, unreferenced from here. */}
+              taking the Discard/Launch pair and the foreign-identity question off this card. */}
           {newAgent?.canLaunch && (
             <LaunchAgentDialog
               panel={launch}

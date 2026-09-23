@@ -5,7 +5,7 @@
  * ruling; ledger ASK-21).
  *
  * WHAT WAS LOST AND WHY IT MATTERED. On 2026-08-27 the composer's identity
- * chevron was replaced by `composer-launch-panel.tsx`'s Identity row, and that
+ * chevron was replaced by the retired slide-out's Identity row, and that
  * row narrowed the list to `{id, name}` — no `authorMarker`, no visibility,
  * nothing in the accessible name. INVARIANTS §5A calls the marker *"a SECURITY
  * SIGNAL, NOT DECORATION… the ONLY signal shown to the human BEFORE the choice
@@ -30,7 +30,6 @@
  *
  * ⚠ MUTATION-VERIFY — MEASURED 2026-08-30, 5 tests baseline, 5 reverts,
  *   0 vacuous:
- *   - `marker: null` in `ComposerLaunch`'s option map ............. 3 red
  *   - `description` dropped from the option (marker computed, never
  *     rendered — the 2026-08-27 regression exactly) ............... 3 red
  *   - `authorMarker`'s nameless arm returns `null` instead of

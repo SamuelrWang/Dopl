@@ -256,10 +256,6 @@ describe("no concave surfaces", () => {
         "src/features/mcp-connect/components/remote-connect.tsx",
         "src/shared/layout/settings-modal/sections/delete-account.tsx",
         "apps/desktop-ui/src/components/settings-modal/account-actions.tsx",
-        // 🔒 A COMPOSER PANEL, where the pressed-in stack is its own standing
-        // ruling (2026-08-26: "FILL ONLY. The concave shadow stack is
-        // deliberate and stays").
-        "src/features/channels/components/composer-launch-panel.tsx",
       ].sort());
     });
   });

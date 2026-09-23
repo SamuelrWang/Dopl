@@ -109,7 +109,7 @@ export function AgentToolModeRows({
         value: o.value,
         label: o.label,
         // ⚠ `undefined`, NEVER `""` — an empty description renders an empty second line under
-        // the row (`composer-launch-panel.tsx` states the same rule over its identity options).
+        // the row.
         description: o.description ?? undefined,
       }))
     : TOOL_OPTIONS;
