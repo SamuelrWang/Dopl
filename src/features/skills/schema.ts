@@ -33,7 +33,6 @@ export const SkillSlugSchema = z
   .min(1)
   .max(80)
   .regex(slugRegex, "Slug must be kebab-case");
-export type SkillSlugInput = z.infer<typeof SkillSlugSchema>;
 
 export const SkillStatusSchema = z.enum(["active", "draft"]);
 

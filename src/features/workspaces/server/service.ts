@@ -23,7 +23,6 @@ import {
   updateWorkspace,
   ensurePersonalContainerRow,
 } from "./repository";
-import { findPersonalContainerId } from "@/shared/tenancy/personal-container";
 import { assertWorkspacePermanent } from "./authz";
 import { scrubHiddenPresence } from "./dto";
 
@@ -185,27 +184,6 @@ export async function resolveActiveWorkspace(
 export async function ensurePersonalContainer(userId: string): Promise<Workspace> {
   const { workspace } = await ensurePersonalContainerRow(userId);
   return workspace;
-}
-
-/**
- * Is `workspaceId` this user's OWN home?
- *
- * ⚠ EXPORTED FOR THE TWO `resolveHomeScope` FENCES —
- * `knowledge/server/service-base-gates.ts` and
- * `agent-identities/server/service-writes.ts` — which asked the same question of
- * the derived default and must not each grow their own spelling of the new one.
- * It is stated here rather than in `shared/tenancy/personal-container.ts`
- * because it is a POLICY over that module's read, and this feature owns the
- * policy; that module answers WHERE a row lives and holds no opinion about who.
- *
- * ⚠ FALSE, never null: "not minted yet" and "not yours" are the same refusal to
- * a fence, and a fence that distinguishes them leaks whether a container exists.
- */
-export async function isOwnPersonalContainer(
-  userId: string,
-  workspaceId: string
-): Promise<boolean> {
-  return (await findPersonalContainerId(userId)) === workspaceId;
 }
 
 /**
