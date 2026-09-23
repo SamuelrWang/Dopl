@@ -32,6 +32,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
+import { createRequire } from "node:module";
 import { fnOf } from "./helpers/source-probe.mjs";
 import { loadReducer } from "./_reducer-block.mjs";
 
@@ -43,10 +44,18 @@ const APPLY = fnOf(IPC, "applyPostureToLive");
 
 const CH = "1c44bbdf-1965-4bea-af60-5e9e5aedaf57";
 const OTHER = "0b018509-f29d-4e49-b1b5-1e2463db1829";
-const WIDE = { tools: "bypass", messages: "auto_both" };
+const require = createRequire(import.meta.url);
+const REGISTRY = require(join(HERE, "..", "main", "runtime", "index.js"));
+const SELECTION = require(join(HERE, "..", "main", "launch-selection.js"));
+
+// Two stored selections: what the record was, and what the write made it.
+const SEL = (over = {}) => ({ v: 2, runtime: "", messages: "ask", byRuntime: {}, ...over });
+const BEFORE = SEL();
+const WIDE = SEL({ messages: "auto_both", byRuntime: { claude: { tools: "bypass" } } });
 
 // ── the driver ───────────────────────────────────────────────────────────────
-// The REAL `applyPostureToLive`, with the engine faked at the `require` seam it uses.
+// The REAL `applyPostureToLive`, with the engine faked at the `require` seam it uses; the
+// registry and the selection shape are the real modules.
 function runApply(opts) {
   const calls = [];
   const diags = [];
@@ -60,20 +69,22 @@ function runApply(opts) {
   const body = `
     const require = (name) => {
       if (name === './session-engine') { if (THROWS) throw new Error("boom"); return ENGINE; }
+      if (name === './runtime') return REGISTRY;
       throw new Error("unexpected require: " + name);
     };
     const diag = (...a) => { DIAGS.push(a.map(String).join(" ")); };
     ${APPLY}
-    return applyPostureToLive(CHANNEL, PRESET);
+    return applyPostureToLive(CHANNEL, BEFORE_SEL, AFTER_SEL);
   `;
-  const applied = new Function("ENGINE", "THROWS", "DIAGS", "CHANNEL", "PRESET", body)(
+  const applied = new Function("ENGINE", "THROWS", "DIAGS", "CHANNEL", "BEFORE_SEL", "AFTER_SEL", "REGISTRY", "selectionShape", body)(
     engine, opts.throws === true, diags, opts.channelId === undefined ? CH : opts.channelId,
-    opts.preset === undefined ? WIDE : opts.preset
+    opts.before === undefined ? BEFORE : opts.before, opts.after === undefined ? WIDE : opts.after,
+    REGISTRY, SELECTION
   );
   return { applied, calls, diags };
 }
 
-const row = (agentId, channelId = CH, taskId = "") => ({ channelId, taskId, agentId });
+const row = (agentId, channelId = CH, taskId = "", runtimeId = "claude") => ({ channelId, taskId, agentId, runtimeId });
 
 // ── 1. THE FAN-OUT ───────────────────────────────────────────────────────────
 
@@ -81,11 +92,8 @@ test("every live session in the channel takes BOTH axes of the new posture", () 
   const r = runApply({ rows: [row("nu8ywb1s"), row("qkve5cr8"), row("q8tilt6l")] });
   assert.equal(r.applied, 3, "all three pre-flip agents moved");
   assert.equal(r.calls.length, 6, "two axes each — a tools-only apply is half a fix");
-  for (const axis of ["tools", "messages"]) {
-    const sent = r.calls.filter((c) => c.axis === axis);
-    assert.equal(sent.length, 3);
-    assert.deepEqual(sent.map((c) => c.mode), [WIDE[axis], WIDE[axis], WIDE[axis]]);
-  }
+  assert.deepEqual(r.calls.filter((c) => c.axis === "tools").map((c) => c.mode), ["bypass", "bypass", "bypass"]);
+  assert.deepEqual(r.calls.filter((c) => c.axis === "messages").map((c) => c.mode), ["auto_both", "auto_both", "auto_both"]);
 });
 
 test("⚠ agents are addressed BY AGENT ID, never by (channel, thread)", () => {
@@ -117,6 +125,43 @@ test("no live sessions is a clean zero, not a failure", () => {
   assert.equal(runApply({ rows: [] }).applied, 0);
 });
 
+// ── 1b. ONLY WHAT CHANGED, ONLY WHERE IT APPLIES (P3-02) ─────────────────────
+
+test("P3-02: Axis A reaches only sessions whose OWN runtime's record moved — Axis B reaches all", () => {
+  // The Claude record moved to bypass. A Codex agent in the same room must not be handed a Claude
+  // word (it used to be, coerced to `untrusted` and pinned there); it takes the messaging change.
+  const r = runApply({ rows: [row("claude1"), row("codex1", CH, "", "codex")] });
+  assert.deepEqual(r.calls.filter((c) => c.axis === "tools").map((c) => [c.agentId, c.mode]), [["claude1", "bypass"]]);
+  assert.deepEqual(r.calls.filter((c) => c.axis === "messages").map((c) => c.agentId), ["claude1", "codex1"]);
+});
+
+test("P3-02: a Codex record write reaches Codex sessions in CODEX words", () => {
+  const after = SEL({ runtime: "codex", byRuntime: { codex: { tools: "never" } } });
+  const r = runApply({ rows: [row("claude1"), row("codex1", CH, "", "codex")], after });
+  assert.deepEqual(r.calls.map((c) => [c.agentId, c.axis, c.mode]), [["codex1", "tools", "never"]]);
+});
+
+test("P3-02: a runtime SWITCH moves no running session at all", () => {
+  // Claude -> Codex with neither record touched: no session's own-runtime record moved, and the
+  // messaging axis did not either. It used to stamp every Claude agent `manual` + pinned.
+  const before = SEL({ byRuntime: { claude: { tools: "bypass" } } });
+  const after = SEL({ runtime: "codex", byRuntime: { claude: { tools: "bypass" } } });
+  const r = runApply({ rows: [row("claude1"), row("codex1", CH, "", "codex")], before, after });
+  assert.equal(r.calls.length, 0);
+  assert.equal(r.applied, 0);
+});
+
+test("P3-02: a session with no stamped runtime reads the DEFAULT runtime's record", () => {
+  const r = runApply({ rows: [row("old", CH, "", null)] });
+  assert.deepEqual(r.calls.filter((c) => c.axis === "tools").map((c) => c.mode), ["bypass"]);
+});
+
+test("C2: the fan-out never stamps a per-agent pick", () => {
+  const r = runApply({ rows: [row("a"), row("b", CH, "", "codex")] });
+  assert.ok(r.calls.length > 0);
+  assert.ok(r.calls.every((c) => c.pinned !== true), "a channel write is the channel's value, not an agent's pick");
+});
+
 // ── 2. THE DURABLE WRITE MUST NEVER BE TAKEN DOWN BY THE FAN-OUT ─────────────
 
 test("a throwing engine returns what landed and does NOT propagate", () => {
@@ -132,9 +177,9 @@ test("an engine without the two ops is a no-op, not a crash", () => {
   assert.equal(runApply({ rows: [row("a")], setModeByTask: null }).applied, 0);
 });
 
-test("a half-formed preset applies NOTHING — never one axis of a rejected pair", () => {
-  for (const bad of [null, undefined, {}, { tools: "bypass" }, { messages: "auto_both" }]) {
-    const r = runApply({ preset: bad });
+test("a missing record on either side applies NOTHING", () => {
+  for (const [before, after] of [[null, WIDE], [BEFORE, null], [undefined, undefined]]) {
+    const r = runApply({ before: before === undefined ? null : before, after: after === undefined ? null : after });
     assert.equal(r.applied, 0);
     assert.equal(r.calls.length, 0);
   }

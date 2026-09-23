@@ -119,6 +119,7 @@ function listLiveSessions() {
       taskId: s.taskId || '',
       // 2026-08-21: with N agents per thread, (channel, thread) no longer identifies a row.
       agentId: s.agentId || null,
+      runtimeId: s.runtimeId || null, // whose Axis-A words this session speaks (null = the default runtime)
       channelName: (s.context && s.context.channelName) || null,
       taskTitle: (s.context && s.context.taskTitle) || null,
       status: (s.state && s.state.phase) || null,
@@ -243,22 +244,22 @@ function setModeByTask(a) {
   if (axis !== 'tools' && axis !== 'messages') return { ok: false, reason: 'bad-axis' };
   const s = resolveSession(a, channelId, taskId);
   if (!s || s.settled) return { ok: false, reason: 'no-session' };
-  // THE WINDOWLESS FLOOR, applied here because only here is the session resolved (F-236). A
-  // windowless session has no Accept surface and nothing left that can release a held inbound turn,
-  // so the IN half may not drop below auto. It CLAMPS rather than refusing: a refusal would leave
-  // the select showing a value main is not enforcing. What comes back is main's post-dispatch truth
-  // either way, so the UI renders the floored value rather than the requested one.
-  const mode = axis === 'messages' && s.windowless === true ? floorWindowlessMessage(a && a.mode) : (a && a.mode);
+  // C2: the mode is read in THIS session's words (its runtime's Axis-A list, never another
+  // runtime's), and a `pinned` pick is clamped to the channel's value for that runtime first.
+  const pinned = !!a && a.pinned === true;
+  const pick = privateTurn.pickForSession(s, axis, a && a.mode, pinned);
+  // THE WINDOWLESS FLOOR, AFTER the clamp (F-236): a windowless session has no Accept surface, so
+  // the IN half may not drop below auto. It CLAMPS rather than refusing, and the answer below is
+  // main's post-dispatch truth either way.
+  const mode = axis === 'messages' && s.windowless === true ? floorWindowlessMessage(pick.mode) : pick.mode;
   try {
-    deps.dispatch(s, { type: axis === 'tools' ? 'set_tool_mode' : 'set_message_mode', mode: mode });
+    deps.dispatch(s, { type: axis === 'tools' ? 'set_tool_mode' : 'set_message_mode', mode: mode, pinned: pinned });
   } catch (_) {
     return { ok: false };
   }
-  // ANSWER WITH MAIN'S OWN POST-DISPATCH VALUES, never an echo of what was asked for. The reducer
-  // coerces fail-closed, so a renderer that stamped its own request would show a posture nothing is
-  // enforcing.
+  // ANSWER WITH MAIN'S OWN POST-DISPATCH VALUES, never an echo of what was asked for.
   const st = s.state || {};
-  return { ok: true, tools: st.toolMode, messages: st.messageMode };
+  return { ok: true, tools: st.toolMode, messages: st.messageMode, clamped: pick.clamped };
 }
 
 // ── THE LIVE MODEL: SWITCH A RUNNING AGENT'S MODEL (2026-08-22, Samuel's ruling) ─────────────

@@ -74,14 +74,19 @@ const ABANDONED_MS = 12 * 60 * 60 * 1000; // 12 hours
 // a session that DID start.
 const LAUNCHING_MS = 5 * 60 * 1000; // 5 minutes
 
-// v2.9 THE MODE TABLES, duplicated ON PURPOSE: session-profiles.js is canonical, but this block is
-// evaluated standalone (source extraction) and is the STATE OWNER, so it defends its own field
-// fail-closed — for a mid-session change AND for the v3.1 preset it starts from.
-// test/session-permission-axes pins the copies (here, session-profiles, the preload, the renderer).
+// THE MODE TABLES. Axis A is the SESSION RUNTIME's own list, handed in at spawn as `toolModes`
+// (narrowest first) and kept on state so the reducer can coerce without a require. `TOOL_MODES` is
+// only the fallback for a caller that names no runtime: the default runtime's list, pinned against
+// session-profiles by test/session-permission-axes. Axis B is Dopl's on every runtime.
 const TOOL_MODES = ['manual', 'accept_edits', 'auto', 'bypass'];
 const MESSAGE_MODES = ['ask', 'auto_inbound', 'auto_outbound', 'auto_both'];
 function coerceMode(list, value) {
   return list.indexOf(value) === -1 ? list[0] : value; // [0] is the most restrictive
+}
+/** This session's Axis-A words, narrowest first. */
+function toolModesOf(state) {
+  const list = state && state.toolModes;
+  return Array.isArray(list) && list.length ? list : TOOL_MODES;
 }
 
 // Fresh state for a launching session. `mode` is the task's declared engagement mode (display + the
@@ -100,6 +105,12 @@ function nativeBag(raw) {
 
 function initialSessionState(opts) {
   const o = opts || {};
+  const toolModes = toolModesOf(o).slice();
+  // C2: a PINNED start posture is the session's own pick (a directive's narrower ask), not a start
+  // value that follows the channel. Both axes, and never wider than the channel: the caller clamps.
+  const pinned = o.pinned === true;
+  const toolMode = coerceMode(toolModes, o.toolMode);
+  const messageMode = coerceMode(MESSAGE_MODES, o.messageMode);
   // 2026-09-07: `o.turnCap` / `o.costCapUsd` from an older persisted record are ignored rather than
   // migrated, because nothing reads them any more.
   const idleMs = Number.isFinite(o.idleMs) && o.idleMs > 0 ? o.idleMs : DEFAULT_IDLE_MS;
@@ -119,19 +130,21 @@ function initialSessionState(opts) {
     idleMs: idleMs,
     pendingPermissions: [], // requestIds awaiting a button (models a Set)
     allowForTask: [], // scoped grant KEYS granted for the task (models a Set); cleared on park
-    // v2.9 THE TWO AXES (session-profiles owns the tables + the resolution). toolMode = AXIS A
-    // (manual|accept_edits|auto|bypass): what MY agent may do on THIS machine, NEVER a message op.
-    // messageMode = AXIS B (ask|auto_inbound|auto_outbound|auto_both): what crosses between
-    // machines, NEVER a work tool. Per-session, never persisted, RESET on park (v2.3 FIX #3). v3.1:
-    // the START may come from the channel preset, coerced fail-closed here.
-    toolMode: coerceMode(TOOL_MODES, o.toolMode),
-    // 2026-09-16: FALSE AT EVERY SPAWN, including one handed a posture. `spec.startModes` is a
-    // launch DEFAULT (the operator's stored pair, or a directive's narrower request); this flag
-    // marks only a LIVE `set_tool_mode` from the agent view, which is what makes an inherited
-    // posture re-readable from the channel record and a deliberate per-agent pick sticky. The
-    // reducer's `set_tool_mode` arm is its one producer. Never persisted, like both axes.
-    toolModeSet: false,
-    messageMode: coerceMode(MESSAGE_MODES, o.messageMode),
+    // v2.9 THE TWO AXES. toolMode = AXIS A, in the session runtime's own words: what MY agent may
+    // do on THIS machine, NEVER a message op. messageMode = AXIS B (ask|auto_inbound|auto_outbound|
+    // auto_both): what crosses between machines, NEVER a work tool. Per-session, never persisted.
+    // Each is the session's STAMPED value: its own pick narrowed by the last channel value it was
+    // told, or the channel's value when it has no pick. The gate reads live on top
+    // (`session-private.js › effectiveToolMode` / `effectiveMessageMode`).
+    toolModes: toolModes,
+    toolMode: toolMode,
+    // C2 "narrower sticks": `*ModeSet` marks a per-agent pick (`*Pick` holds it). Set by a pinned
+    // start posture or a pinned `set_*_mode`; a channel fan-out never sets it. Never persisted.
+    toolModeSet: pinned,
+    toolPick: pinned ? toolMode : '',
+    messageMode: messageMode,
+    messageModeSet: pinned,
+    messagePick: pinned ? messageMode : '',
     // ⚠ **THE SELECTED RUNTIME'S OWN LAUNCH SETTINGS, AS AN OPAQUE BAG (2026-09-21, U5).** Core
     // stores it, stamps it and NEVER looks inside: every key and every value was validated by the
     // adapter that declared it (`runtime/selection-vocabulary.js › normalizeNative`), and the
@@ -222,6 +235,7 @@ module.exports = {
   TOOL_MODES,
   MESSAGE_MODES,
   coerceMode,
+  toolModesOf,
   initialSessionState,
   nextIdleMs,
   nextAbandonMs,

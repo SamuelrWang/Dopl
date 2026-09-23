@@ -106,9 +106,9 @@ function nativePolicySummary(descriptor, session) {
   if (primary) parts.push(primary);
   const secondary = toolMode.secondaryAxis;
   if (secondary && secondary.key) {
-    // The runtime-keyed native record the launch stamped, when there is one. Read defensively:
-    // this shape belongs to the launch-selection lane and a session predating it carries none.
-    const native = (s.native && typeof s.native === 'object') ? s.native : {};
+    // The native bag the spawn stamped on STATE (`session-state.js › nativeBag`), when there is
+    // one. Read defensively: a session predating it carries none (P4-09).
+    const native = (state.native && typeof state.native === 'object') ? state.native : {};
     const picked = native[secondary.key];
     if (!absent(picked) && picked !== '') {
       parts.push(optionLabel(secondary.options, picked));

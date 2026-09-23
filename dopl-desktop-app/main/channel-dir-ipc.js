@@ -91,19 +91,28 @@ const { diag } = require('./diag');
 // the incident above is most of the room.
 // ⚠ BEST-EFFORT, AND THE DURABLE WRITE HAS ALREADY LANDED: a session that settles mid-dispatch is
 // not counted, and an engine throw must never turn a successful setting write into a failed one.
-// Returns HOW MANY live sessions took the new pair.
-function applyPostureToLive(channelId, preset) {
-  if (!preset || !preset.tools || !preset.messages) return 0;
+// ⚠ ONLY WHAT CHANGED, ONLY WHERE IT APPLIES (P3-02): Axis A goes to a session only when ITS
+// runtime's record moved, in that runtime's words (a runtime switch moves no session's record);
+// Axis B, channel-wide, goes to every session when it moved. Never a per-agent pick: the fan-out
+// is unpinned, so a picked session keeps its pick and narrows to the channel (C2).
+// Returns HOW MANY live sessions took a change.
+function applyPostureToLive(channelId, before, after) {
+  if (!before || !after) return 0;
   let applied = 0;
   try {
     const engine = require('./session-engine');
     if (typeof engine.listLiveSessions !== 'function' || typeof engine.setModeByTask !== 'function') return 0;
+    const c = require('./runtime').selectionContext();
+    const toolsOf = (sel, rt) => selectionShape.activeRecord(c, { ...sel, runtime: rt }).tools || c.narrowestToolFor(rt);
     for (const row of engine.listLiveSessions()) {
       if (!row || row.channelId !== channelId) continue;
       const target = { channelId: channelId, taskId: row.taskId || '', agentId: row.agentId || '' };
-      const tools = engine.setModeByTask(Object.assign({ axis: 'tools', mode: preset.tools }, target));
-      const messages = engine.setModeByTask(Object.assign({ axis: 'messages', mode: preset.messages }, target));
-      if ((tools && tools.ok) || (messages && messages.ok)) applied += 1;
+      const rt = row.runtimeId || c.defaultId;
+      const tools = toolsOf(after, rt);
+      const results = [];
+      if (tools !== toolsOf(before, rt)) results.push(engine.setModeByTask({ axis: 'tools', mode: tools, ...target }));
+      if (after.messages !== before.messages) results.push(engine.setModeByTask({ axis: 'messages', mode: after.messages, ...target }));
+      if (results.some((r) => r && r.ok)) applied += 1;
     }
   } catch (err) {
     diag('channel-dir ipc: live posture fan-out failed', err && err.message);
@@ -197,16 +206,12 @@ function register(opts = {}) {
   //
   // Same `appWindowOnly` + UUID gating as everything here; both modes are re-validated in
   // channel-prefs against the frozen enums, so an unknown value on either axis writes nothing.
-  // → the EFFECTIVE pair, never null (an unset channel really is manual/ask).
+  // → the EFFECTIVE pair, never null (an unset channel is the selected runtime's narrowest / ask).
   // ── ⚠ THE RUNTIME RIDES THIS PAIR, AND IT DOES NOT GET AN OP OF ITS OWN (2026-08-31) ────────
   //
-  // ⚠ THIS IS THE `model` FIELD'S IDIOM, RESTATED FOR A REASON THE TREE ALREADY WROTE DOWN.
-  // `src/features/channels/lib/permission-modes.ts › hasModelKey` is an OWN-KEY capability probe
-  // precisely because the model "rides the EXISTING getLaunchPosture / setLaunchPosture pair —
-  // there is no new op to feature-detect on, which is what the rest of this family does". The
-  // runtime is the same shape of decision (what MY agent starts as when I press Launch), it is
-  // read and written from the same Settings surface, and giving it its own op would add a fourth
-  // thing for the SPA to probe for one more field on a record it already reads.
+  // The runtime is the same shape of decision as the pair (what MY agent starts as when I press
+  // Launch), read and written from the same Settings surface, so it is an OWN KEY on this record:
+  // a new op would be one more thing for the SPA to feature-detect for a record it already reads.
   // ⚠ AND THERE IS A HARD CONSTRAINT BEHIND THAT PREFERENCE, NOT ONLY AN AESTHETIC ONE:
   // `renderer/app-preload.js` is AT the 500-line §1 cap and `test/preload-parity.test.mjs`
   // asserts that NO preload requires anything but `electron` — so it has no split seam, and a new
@@ -268,6 +273,7 @@ function register(opts = {}) {
     // write cannot half-apply a runtime and a successful one cannot leave the two disagreeing.
     // `setLaunchSelection` is own-key throughout, so a patch that omits `runtime` still leaves the
     // pick alone — which is the contract this op already had.
+    const before = channelPrefs.getLaunchSelection(p.channelId);
     const res = channelPrefs.setLaunchSelection(p.channelId, p.preset);
     if (!res || res.ok !== true) return res || { ok: false };
     // ⚠ THE RUNTIME IS WRITTEN AFTER THE PAIR AND ONLY ON A SUCCESSFUL ONE, so a rejected posture
@@ -286,7 +292,7 @@ function register(opts = {}) {
     // argument. ADDITIVE on the wire — `applied` is a new field beside the existing
     // `{ok, preset}`, so a renderer that does not read it is unaffected.
     return Object.assign({}, res, {
-      applied: applyPostureToLive(p.channelId, res.preset),
+      applied: applyPostureToLive(p.channelId, before, res.selection),
       runtime,
       selectionVersion: selectionShape.SELECTION_VERSION,
     });

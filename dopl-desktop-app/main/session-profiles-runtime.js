@@ -47,12 +47,9 @@ const axisBOpScopedWarning = (runtimeId) => cap.axisBOpScopedWarning(descriptorF
 const isClassifiedTool = (toolName, runtimeId) =>
   runtimeFor(runtimeId).axisAAllows(cap.widestToolMode(descriptorFor(runtimeId)), toolName);
 
-// ⚠ THE AXIS-A MODE ENUM, READ OFF THE DEFAULT RUNTIME. The three core copies this is pinned
-// against (`session-state.js`'s reducer coercion, `channel-prefs.js`'s durable WRITE validator,
-// and the SPA's `permission-modes.ts` re-validated here on arrival) all coerce a posture stored
-// BEFORE a runtime is chosen, so there is one answer to give them today. When a second adapter
-// registers, the UI renders `descriptor.toolMode.options` per agent (§3.1) and these coercions
-// take the agent's runtime — a step-5 change, not a step-3 one.
+// A session's Axis-A words, narrowest first. Every coercion of a SESSION's mode asks this with the
+// session's own runtime (`session-engine.js › startSession` copies it into state at spawn).
+const toolModesFor = (runtimeId) => cap.toolModes(descriptorFor(runtimeId));
 // ⚠ **THE MODEL PICK AND THE NATIVE LAUNCH SETTINGS, DELEGATED THE SAME WAY (2026-09-21, U5).**
 // They are here for the reason every other delegate above is: these questions used to be answered
 // in core by importing the DEFAULT runtime's frozen enums, which meant a Codex launch was
@@ -67,7 +64,10 @@ const normalizeNative = (raw, runtimeId) => cap.normalizeNative(descriptorFor(ru
 // concept" — never `{}` (INVARIANTS §11: UNKNOWN is not EMPTY).
 const nativeDimensions = (runtimeId) => cap.nativeDimensions(descriptorFor(runtimeId));
 
-const TOOL_MODES = cap.toolModes(descriptorFor(null));
+// ⚠ THE DEFAULT RUNTIME'S MODE LIST, FOR SUITES ONLY. No decision about a session reads it or the
+// taxonomy below: a session's words come from `toolModesFor(s.runtimeId)`, and a gate
+// decision asks `toolModeAllows` / `isClassifiedTool` with the session's runtime.
+const TOOL_MODES = toolModesFor(null);
 
 // ⚠ THE AXIS-A TAXONOMY, READ OFF THE DEFAULT RUNTIME'S DESCRIPTOR — NOT A COPY AND NOT A
 // MODULE REFERENCE. Every list below is a spelling of ONE runtime's built-in tool names; core
@@ -92,7 +92,7 @@ const EDIT_TOOLS = cap.editScopedTools(descriptorFor(null));
 
 module.exports = {
   runtimeFor, descriptorFor, cap,
-  buildSessionToolConfig, toolModeAllows, normalizeToolMode, floorWindowlessTool,
+  buildSessionToolConfig, toolModeAllows, normalizeToolMode, floorWindowlessTool, toolModesFor,
   windowlessFloorRefusal, axisBOpScopedWarning, isClassifiedTool,
   launchModelPick, normalizeNative, nativeDimensions, // U5
   TOOL_MODES, TAXONOMY, AUTO_TOOLS, BYPASS_TOOLS, BYPASS_READS, ESCALATION_TOOLS, EDIT_TOOLS,

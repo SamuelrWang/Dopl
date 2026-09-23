@@ -127,7 +127,7 @@ test("LAUNCH: the spawn funnel FORWARDS the resolved model — launcher/identity
 test("LAUNCH: every lane's chain is launcher pick > identity model, and nothing below it", () => {
   const OPS = read("session-launch-op.js");
   assert.match(OPS,
-    /const model = overrides\.model \|\| await require\('\.\/runtime\/launch-default'\)\s*\.identityModelFor\(runtimeId, identityModel\(sessionModel, identity\)\);/,
+    /const model = overrides\.model \|\| await launchDefault\.identityModelFor\(runtimeId, identityModel\(sessionModel, identity\)\);/,
     "the operator's own Launch: the sheet, then the identity default ON THE LAUNCH RUNTIME — the funnel does the rest");
   assert.match(read("session-model.js"), /return !v \|\| v === 'default' \? '' : v;/,
     "absent and `default` step aside; everything else is the pick as given");
@@ -274,8 +274,12 @@ test("REPORT: the summary reports the SDK's own model over the operator's pick",
   const SUMMARY = read("session-summary.js");
   assert.match(SUMMARY, /model: \(s && s\.liveModel\) \|\| modelPick\(s\),/);
   const pick = SUMMARY.slice(SUMMARY.indexOf("function modelPick(s) {"), SUMMARY.indexOf("/** One LIVE session"));
-  assert.match(pick, /pick !== 'default' \? pick : null/,
-    "'default' names no model and must not be rendered as one");
+  assert.match(pick, /return pickOf\(s && s\.model\) \|\| null;/, "the ONE spelling of 'no pick' (RC-15)");
+  const { pickOf } = require(join(MAIN, "runtime", "selection-vocabulary.js"));
+  for (const none of ["default", " default ", "", "  ", null, undefined, 7]) {
+    assert.equal(pickOf(none), "", `'default' names no model and must not be rendered as one (${String(none)})`);
+  }
+  assert.equal(pickOf(" gpt-6-sol "), "gpt-6-sol");
 });
 
 test("REPORT: the bridge declares the field and the op, in BOTH trees", () => {

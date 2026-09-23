@@ -78,7 +78,7 @@
 // says". That file's docblock carries the read-side/write-side seam.
 import {
   test, assert, read, ENGINE, LAUNCH, PARK, TRIGGER, CONTEXT, PREFS, DIRIPC, CHANIPC,
-  initialSessionState, WIDE, stripComments,
+  initialSessionState, WIDE, stripComments, startedStateFor,
 } from "./_session-preset-harness.mjs";
 
 // ── 1. THE CONSTRUCTION SITE, driven ─────────────────────────────────────────
@@ -96,13 +96,7 @@ import {
 // now and there is ONE source: `spec.startModes`, handed in per launch. Fewer free variables,
 // and the shape H2 always wanted — the card was the exception to it.
 function startModesFor(spec) {
-  const src = ENGINE.slice(ENGINE.indexOf("const armedModes = spec.startModes;"),
-    ENGINE.indexOf("const context = { ...(spec.context || {})"));
-  assert.ok(src.includes("initialSessionState("), "the construction site moved — reslice it");
-  assert.ok(!/sessionConsent|consentModes|adoptsConsent/.test(src),
-    "a second posture source is back at the construction site — that is H2, re-opened");
-  const state = new Function("spec", "initialSessionState", "readCaps",
-    `${src}\n return state;`)(spec, initialSessionState, () => ({}));
+  const state = startedStateFor(spec);
   return { toolMode: state.toolMode, messageMode: state.messageMode };
 }
 
@@ -232,8 +226,8 @@ test("H2: the peer-triggered launch consumes NOTHING, and carries no stored post
   // restrictive value": there is no stored pair on this path at all for a future edit to widen.
   const body = TRIGGER.slice(TRIGGER.indexOf("async function launchResponderSession("));
   assert.ok(body.length > 0, "the lane still exists — an empty slice passes every negative below");
-  assert.match(body, /startModes: \{ tools: 'manual', messages \}/,
-    "pinned to the most restrictive member, not merely absent");
+  assert.match(body, /startModes: \{ tools: registry\.capability\.narrowestToolMode\(registry\.descriptorFor\(runtimeId\)\), messages \}/,
+    "pinned to THIS runtime's most restrictive member, not merely absent");
   const code = stripComments(body);
   assert.ok(!/channelPrefs\.getLaunchPosture|channelPrefs\.launchStartModes|consumePermissionPreset/.test(code),
     "the peer-triggered path reaches no stored posture on ANY path — an ambient read here IS H2");
@@ -273,7 +267,7 @@ test("H2/split: the DURABLE posture is read by sessions:launch and by nothing el
   // `launchStartModes` anywhere in this module is still the only read, and there is nothing
   // else in it for one to hide behind.
   const body = DIRIPC.slice(DIRIPC.indexOf("async function launchFromButton("));
-  assert.match(body, /channelPrefs\.launchStartModes\(p\.channelId\)/, "consumed here");
+  assert.match(body, /channelPrefs\.launchStartModes\(p\.channelId, runtimeId\)/, "consumed here, on the LAUNCH runtime's record (C1)");
   assert.equal(stripComments(DIRIPC).match(/launchStartModes/g).length, 1, "read exactly once");
   // ...and the pinned 'manual' it replaced is really gone from this handler.
   assert.ok(!/tools: 'manual'/.test(body), "the hard-pinned tool axis that ignored the operator's pick is gone");
@@ -305,8 +299,8 @@ test("H2/split: the RESPONDER lane reads NO stored record, and its tool axis flo
   // inherit a setting the operator left on a tab. That is what separates the two lanes, and with
   // one record left it is the ONLY thing separating them — so it matters more, not less.
   const body = TRIGGER.slice(TRIGGER.indexOf("async function launchResponderSession("));
-  assert.match(body, /startModes: \{ tools: 'manual', messages \}/,
-    "the tool axis is the most restrictive member for anything a peer can trigger");
+  assert.match(body, /startModes: \{ tools: registry\.capability\.narrowestToolMode\(registry\.descriptorFor\(runtimeId\)\), messages \}/,
+    "the tool axis is the runtime's most restrictive member for anything a peer can trigger");
   assert.ok(!/getLaunchPosture|launchStartModes/.test(stripComments(body)),
     "a peer-driven launch must not inherit a setting the operator left on a tab");
   // ⚠ THE `picked` PARAMETER OF THE SHARED DERIVATION STAYS, and this lane passes an EXPLICIT
@@ -321,7 +315,7 @@ test("H2/split: ONE derivation of the windowless message axis, shared by both la
   // without the other. The rule lives in channel-prefs; both lanes call it.
   assert.match(PREFS, /function windowlessMessageMode\(channelId, picked\)/);
   assert.match(TRIGGER, /channelPrefs\.windowlessMessageMode\(/);
-  assert.match(PREFS, /function launchStartModes\(channelId\)/);
+  assert.match(PREFS, /function launchStartModes\(channelId, runtimeId\)/);
   const rule = PREFS.slice(PREFS.indexOf("function windowlessMessageMode("));
   assert.match(rule.slice(0, 260), /autoOut \? 'auto_both' : 'auto_inbound'/,
     "WIDEN-ONLY: there is no return below the auto_inbound floor");
@@ -404,6 +398,6 @@ test("M2: a park KEEPS the posture; only the AUTH HOLD resets it", () => {
   assert.doesNotMatch(idle, /toolMode: 'manual'/, "the idle park writes no posture at all");
   assert.match(idle, /resetPosture: false/);
   const hold = REDUCER.slice(REDUCER.indexOf("if (type === 'auth_hold')"), REDUCER.indexOf("if (type === 'auth_release')"));
-  assert.match(hold, /toolMode: 'manual', messageMode: 'ask', inboundForTask: false/,
-    "a session with no credential still hard-resets to the restrictive pair");
+  assert.match(hold, /toolMode: toolModesOf\(state\)\[0\], messageMode: MESSAGE_MODES\[0\], inboundForTask: false/,
+    "a session with no credential still hard-resets to the restrictive pair, in ITS runtime's words");
 });

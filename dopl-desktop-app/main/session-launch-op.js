@@ -191,10 +191,17 @@ async function launchFromButton(payload) {
   // (2026-09-23): an identity's model counts only if THIS runtime offers it
   // (`runtime/launch-default.js › identityModelFor`). The sheet's own pick is not filtered here —
   // it is the launcher's explicit choice, and the funnel refuses it with a sentence if unknown.
-  const runtimeId = require('./channel-runtime').normalizeRuntimeId(p.runtime)
-    || require('./channel-runtime').getChannelRuntime(p.channelId);
-  const model = overrides.model || await require('./runtime/launch-default')
-    .identityModelFor(runtimeId, identityModel(sessionModel, identity));
+  // Runtime order (Samuel's ruling 5): the sheet's pick -> the identity's runtime -> the channel's
+  // -> the default. A pick or identity runtime this Mac cannot run is refused (`no-sdk`), never
+  // swapped for another vendor (`launch-default.js › resolveLaunchRuntime`).
+  const launchDefault = require('./runtime/launch-default');
+  const resolved = await launchDefault.resolveLaunchRuntime({ pick: p.runtime, identity, channelId: p.channelId });
+  if (!resolved.ok) {
+    diag('sessions:launch: runtime', resolved.runtimeId, 'is not usable here — refusing (no-sdk)');
+    return { ok: false, reason: resolved.reason };
+  }
+  const runtimeId = resolved.runtimeId;
+  const model = overrides.model || await launchDefault.identityModelFor(runtimeId, identityModel(sessionModel, identity));
 
   const res = await engine.launchRequesterSession({
     channelId: p.channelId,
@@ -254,30 +261,20 @@ async function launchFromButton(payload) {
     toolProfile,
     mode: 'interactive',
     windowless: true,
-    // THE DURABLE POSTURE, CONSUMED HERE AND NOWHERE ELSE (2026-08-20). ⚠ `tools` was PINNED to
-    // 'manual' and the operator's Settings-tab pick was never read on this lane at all. It is a
-    // real read now — and this is the ONLY call site, which is what keeps H2 intact: the click on
-    // Launch is the human decision this posture applies to. A peer wake, a resume and a recreate
-    // still pass nothing and still inherit manual/ask.
+    // THE DURABLE POSTURE, CONSUMED HERE AND NOWHERE ELSE (2026-08-20) — this is the ONLY call
+    // site, which is what keeps H2 intact: the click on Launch is the human decision this posture
+    // applies to. A peer wake, a resume and a recreate still pass nothing and start narrowest.
+    // ⚠ THE LAUNCH RUNTIME'S RECORD (C1), not the channel's selected one: a dialog pick of another
+    // runtime starts on THAT runtime's stored words and native bag (X-02 / P3-04).
     // ⚠ MESSAGES WIDENS, NEVER NARROWS, and it is floored at auto_inbound for the windowless
     // reason (no Accept UI exists).
-    startModes: channelPrefs.launchStartModes(p.channelId),
-    // ── ⚠ THE RUNTIME PRECEDENCE CHAIN, COMPUTED IN MAIN AND ONLY IN MAIN (2026-08-31) ────────
-    //
-    //   p.runtime                          the LAUNCH SHEET's deliberate per-spawn pick
-    //     > channelRuntime.getChannelRuntime  the channel's durable pick (its Settings row)
-    //     > ''                             the DEFAULT adapter (`runtime/index.js › DEFAULT_ID`)
-    //
-    // ⚠ THE SHEET BEATS THE CHANNEL for the model's exact reason: one is a deliberate per-call
-    // choice and the other is a default. And the whole chain fails toward the DEFAULT rather than
-    // refusing, which is the tree's rule for every unknown enum that grants nothing.
-    // ⚠ THE RENDERER'S VALUE IS ACCEPTED, NOT TRUSTED, AND THIS IS THE LINE THAT DOES IT.
-    // `normalizeRuntimeId` answers `''` for anything not in `runtime/index.js › ids()`, so a
-    // version-skewed page can only ever select an adapter this build already registered — and a
-    // registered adapter is one `contract.js › sealAdapter` has already proved can enforce every
-    // Dopl profile it declares. That is why a runtime may come off the payload where the TOOL
-    // PROFILE, three fields down, may never: picking a runtime widens nothing (see
-    // `main/channel-runtime.js`'s header), and picking a profile is containment itself.
+    startModes: channelPrefs.launchStartModes(p.channelId, runtimeId),
+    // THE RUNTIME, resolved above. ⚠ THE RENDERER'S VALUE IS ACCEPTED, NOT TRUSTED: an id this
+    // build does not register is refused before this point, and a registered adapter is one
+    // `contract.js › sealAdapter` has already proved can enforce every Dopl profile it declares.
+    // That is why a runtime may come off the payload where the TOOL PROFILE, three fields down, may
+    // never: picking a runtime widens nothing (`main/channel-runtime.js`'s header), and picking a
+    // profile is containment itself.
     runtime: runtimeId,
     // ── ⚠ THE MODEL PRECEDENCE CHAIN, COMPUTED IN MAIN AND ONLY IN MAIN ───────────────────
     //

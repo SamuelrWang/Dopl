@@ -49,6 +49,7 @@ function slice(src, name) {
 const REDUCER = [
   slice(read("session-effects.js"), "SESSION-EFFECTS"),
   slice(read("session-state.js"), "SESSION-STATE"),
+  slice(read("launch-posture.js"), "LAUNCH-POSTURE"),
   slice(read("session-reducer.js"), "SESSION-REDUCER"),
 ].join("\n");
 

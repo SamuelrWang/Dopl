@@ -26,12 +26,14 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
+import { createRequire } from "node:module";
 import { loadReducer } from "./_reducer-block.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const M = (p) => readFileSync(join(HERE, "..", "main", p), "utf8");
 
 const ENGINE = M("session-engine.js");
+const profiles = createRequire(import.meta.url)(join(HERE, "..", "main", "session-profiles.js"));
 
 const { initialSessionState } = loadReducer();
 
@@ -69,12 +71,13 @@ const WIDE = { tools: "bypass", messages: "auto_both" };
 // and closes on the same `const context =` line, so the harness lost a parameter and nothing
 // else. A renamed head must fail LOUDLY (the assert below), never slice to "".
 
-function startedState(spec) {
+function startedState(spec, rt = { id: "claude" }) {
   const src = ENGINE.slice(ENGINE.indexOf("const armedModes = spec.startModes;"),
     ENGINE.indexOf("const context = { ...(spec.context || {})"));
   assert.ok(src.includes("initialSessionState("), "the construction site moved — reslice it");
-  return new Function("spec", "initialSessionState", "readCaps", `${src}\n return state;`)(
-    spec, initialSessionState, () => ({}));
+  return new Function("spec", "rt", "initialSessionState", "readCaps", "toolModesFor", "floorWindowlessMessage",
+    `${src}\n return state;`)(
+    spec, rt, initialSessionState, () => ({}), profiles.toolModesFor, profiles.floorWindowlessMessage);
 }
 
 test("a spawn handed NO posture seeds nothing: it starts at manual/ask", () => {

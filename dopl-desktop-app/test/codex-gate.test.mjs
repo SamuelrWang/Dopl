@@ -13,6 +13,7 @@ import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
+import { startedStateFor } from "./_session-preset-harness.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
@@ -31,6 +32,8 @@ const launchSpec = require(join(CODEX, "launch-spec.js"));
 const client = require(join(CODEX, "client.js"));
 
 const D = registry.descriptorFor("codex");
+// A Codex session's state as `session-engine.js › startSession` builds it for the button lane.
+const codexState = (startModes) => ({ state: startedStateFor({ windowless: true, startModes: { messages: "ask", ...startModes } }, { id: "codex" }) });
 const RT = registry.runtimeFor("codex");
 const CHANNEL = "mcp__dopl__dopl_channel";
 
@@ -315,23 +318,18 @@ test("Axis B declares a real enforcement point and an UNVERIFIED op scope", () =
 // ── THE LAUNCH SHAPE ─────────────────────────────────────────────────────────────────────────
 
 test("a RESTRICTED profile pins the native pair; `full` rides the operator's own picks", () => {
-  // ⚠ **THE PICK ARRIVES ON `state.native` SINCE 2026-09-21 (U5), AND `state.sandboxMode` NEVER
-  // HAD A PRODUCER.** The field this case used to drive was read by `nativePair` and written by
-  // nothing anywhere in the tree — F-390's shape exactly, a declared control with no write path —
-  // so every `full` Codex session launched at `workspace-write` whatever the operator picked. The
-  // bag is validated against the options THIS descriptor declares
-  // (`runtime/selection-vocabulary.js › normalizeNative`) and stamped at spawn by
-  // `session-engine.js`. What this case is about — containment is not the operator's to widen from
-  // the mode picker, and an unreadable pick lands on Codex's own default rather than the widest —
-  // is unchanged.
+  // The pick arrives on `state.native`, stamped at spawn (F-390: `state.sandboxMode` never had a
+  // producer). Containment is not the operator's to widen from the mode picker, and an unreadable
+  // pick lands on Codex's own default rather than the widest.
   const restricted = launchSpec.nativePair(
     { state: { toolMode: "never", native: { sandbox_mode: "danger-full-access" } } },
     RT.toolConfigFor("read_only")
   );
   assert.deepEqual(restricted, { approval_policy: "untrusted", sandbox_mode: "read-only" },
     "containment is not the operator's to widen from the mode picker");
+  // The state production builds (a hand-built `toolMode: 'on-request'` hid X-01 / P4-02).
   const full = launchSpec.nativePair(
-    { state: { toolMode: "on-request", native: { sandbox_mode: "danger-full-access" } } },
+    codexState({ tools: "on-request", native: { sandbox_mode: "danger-full-access" } }),
     RT.toolConfigFor("full")
   );
   assert.deepEqual(full, { approval_policy: "on-request", sandbox_mode: "danger-full-access" },
@@ -343,7 +341,7 @@ test("a RESTRICTED profile pins the native pair; `full` rides the operator's own
   assert.deepEqual(bare, { approval_policy: "untrusted", sandbox_mode: "workspace-write" });
   // ⚠ AND A SESSION STAMPED WITH NO BAG AT ALL IS THE SAME ANSWER — every spawn shape that hands
   // in no posture (a peer wake, a crash resume, a woken shell) keeps exactly today's behaviour.
-  assert.deepEqual(launchSpec.nativePair({ state: { toolMode: "on-request" } }, RT.toolConfigFor("full")),
+  assert.deepEqual(launchSpec.nativePair(codexState({ tools: "on-request" }), RT.toolConfigFor("full")),
     { approval_policy: "on-request", sandbox_mode: "workspace-write" });
   // ⚠ THE OLD FIELD NAME IS DEAD AND MUST STAY DEAD: reading it again would restore a control
   // whose value nothing writes.

@@ -8,7 +8,7 @@
 //                       (`channelAutoSend`, default OFF).
 //
 // THE TWO AXES (session-profiles.js is the authority on what each mode allows):
-//   AXIS A  tools    = manual | accept_edits | auto | bypass
+//   AXIS A  tools    = each runtime's own words, stored per runtime (`byRuntime[id].tools`)
 //   AXIS B  messages = ask | auto_inbound | auto_outbound | auto_both
 // The default for a channel with nothing stored is the MOST RESTRICTIVE pair,
 // { tools: 'manual', messages: 'ask' } — an absent or corrupt record can never read as more
@@ -339,22 +339,34 @@ function windowlessMessageMode(channelId, picked) {
 }
 
 /**
- * The `spec.startModes` for the OPERATOR'S OWN windowless launch (the Agents
- * tab's button) — the durable posture's tool axis, and the shared message
- * derivation above. The one place the durable posture becomes a spawn.
+ * The channel's posture for ONE runtime — `{ tools, messages }`, messages UNFLOORED. The ceiling a
+ * directive or a per-agent pick is clamped to, and the live Axis-A value a running session of that
+ * runtime reads. `runtimeId` `''`/unregistered = the channel's selected runtime, else the default.
+ * ⚠ Never null: an unconfigured channel is that runtime's narrowest word and `ask`.
  */
-function launchStartModes(channelId) {
+function launchPostureFor(channelId, runtimeId) {
+  const r = runtimeRecord(channelId, runtimeId);
+  return { tools: r.tools, messages: r.sel.messages };
+}
+
+function runtimeRecord(channelId, runtimeId) {
   const c = ctx();
   const sel = getLaunchSelection(channelId);
-  const rec = selection.activeRecord(c, sel);
+  const rt = c.known(runtimeId) ? runtimeId : (sel.runtime || c.defaultId);
+  const rec = selection.activeRecord(c, { ...sel, runtime: rt });
+  return { sel: sel, rec: rec, tools: rec.tools || c.narrowestToolFor(rt) };
+}
+
+/**
+ * The `spec.startModes` for a launch on `runtimeId` (C1) — that runtime's own tool word and native
+ * bag, and the shared windowless message derivation above. `runtimeId` resolves as in
+ * `launchPostureFor`, so a dialog pick of Codex in a Claude room starts on the CODEX record (X-02).
+ */
+function launchStartModes(channelId, runtimeId) {
+  const r = runtimeRecord(channelId, runtimeId);
   return {
-    // ⚠ IN THE SELECTED RUNTIME'S OWN WORDS SINCE 2026-09-21 (U5), where this used to hand over
-    // the DEFAULT runtime's vocabulary on every runtime. Nothing observable changed for a launch:
-    // the gate already coerced the value through `capability.js › normalizeToolMode` against the
-    // session's own descriptor, so `manual` on a Codex channel already fail-closed to Codex's
-    // narrowest. What changed is that the operator can now STORE the Codex word.
-    tools: rec.tools || c.narrowestToolFor(sel.runtime),
-    messages: windowlessMessageMode(channelId, sel.messages),
+    tools: r.tools,
+    messages: windowlessMessageMode(channelId, r.sel.messages),
     // ⚠ **THE NATIVE SETTINGS, AND THIS IS THE ONE PLACE THEY BECOME A SPAWN** (U5). Codex's
     // `sandbox_mode` had a READER (`runtime/codex/launch-spec.js › nativePair`) and **no producer
     // anywhere in the tree** — F-390's shape exactly, a control that writes nowhere. ⚠ CONTAINMENT
@@ -365,7 +377,7 @@ function launchStartModes(channelId) {
     // declared defaults, exactly as it does for the pair.
     // ⚠ CORE NEVER LOOKS INSIDE THIS BAG. It is `{ <declared key>: <declared value> }` validated
     // by the selected adapter and stamped verbatim; the adapter's launch spec is its only reader.
-    native: rec.native ? { ...rec.native } : {},
+    native: r.rec.native ? { ...r.rec.native } : {},
   };
 }
 
@@ -425,4 +437,5 @@ module.exports = {
   setLaunchPosture,
   windowlessMessageMode,
   launchStartModes,
+  launchPostureFor, // C1: the ceiling / live Axis-A value for ONE runtime
 };

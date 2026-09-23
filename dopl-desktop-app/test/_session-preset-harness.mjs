@@ -30,6 +30,7 @@ import assert from "node:assert/strict";
 import { readFileSync, readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
+import { createRequire } from "node:module";
 import { loadReducer } from "./_reducer-block.mjs";
 
 export const HERE = dirname(fileURLToPath(import.meta.url));
@@ -53,6 +54,21 @@ export const DIRIPC = read("session-launch-op.js");
 export const CHANIPC = read("channel-dir-ipc.js");
 
 export const { initialSessionState } = loadReducer();
+const PROFILES = createRequire(import.meta.url)(M("session-profiles.js"));
+
+/**
+ * The REAL `startSession` head — the one expression that decides a new session's axes — sliced
+ * from the shipped engine and evaluated against the real initialSessionState, for runtime `rt`.
+ */
+export function startedStateFor(spec, rt = { id: "claude" }) {
+  const src = ENGINE.slice(ENGINE.indexOf("const armedModes = spec.startModes;"),
+    ENGINE.indexOf("const context = { ...(spec.context || {})"));
+  assert.ok(src.includes("initialSessionState("), "the construction site moved — reslice it");
+  assert.ok(!/sessionConsent|consentModes|adoptsConsent/.test(src),
+    "a second posture source is back at the construction site — that is H2, re-opened");
+  return new Function("spec", "rt", "initialSessionState", "readCaps", "toolModesFor", "floorWindowlessMessage",
+    `${src}\n return state;`)(spec, rt, initialSessionState, () => ({}), PROFILES.toolModesFor, PROFILES.floorWindowlessMessage);
+}
 
 export const WIDE = { tools: "bypass", messages: "auto_both" };
 
