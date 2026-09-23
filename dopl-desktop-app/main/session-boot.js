@@ -68,6 +68,7 @@ const agentHistory = require('./agent-history'); // what an ended agent leaves, 
 const sessionEffects = require('./session-effects'); // `terminalBody` — a terminal says why
 const runtimeRegistry = require('./runtime');
 const runtimeCapability = runtimeRegistry.capability; // the ONE module allowed to read a descriptor's nulls
+const runtimeTruth = require('./session-runtime-truth'); // requires nothing; the record's usage baseline (P4-01)
 const { diag } = require('./diag');
 
 // ─── BEGIN SESSION-BOOT-PURE (injectable; unit-tested via source extraction) ──────
