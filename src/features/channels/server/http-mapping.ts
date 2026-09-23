@@ -35,11 +35,8 @@ import {
   TaskSelfTargetError,
 } from "./errors";
 
-/**
- * Maps channel domain errors to `HttpError`. Returns `null` for anything
- * it doesn't own so the shared tail (`toHttpErrorResponse`) can fall
- * through to the generic 500.
- */
+/** Maps channel domain errors to `HttpError`; `null` for anything else, so the shared tail
+ *  (`toHttpErrorResponse`) falls through to the generic 500. */
 function mapChannelError(err: unknown): HttpError | null {
   if (err instanceof ChannelNotFoundError) {
     return new HttpError(404, "CHANNEL_NOT_FOUND", err.message);
@@ -62,75 +59,54 @@ function mapChannelError(err: unknown): HttpError | null {
   if (err instanceof ChannelAddresseeNotMemberError) {
     return new HttpError(400, "CHANNEL_ADDRESSEE_NOT_MEMBER", err.message);
   }
-  // ⚠ 400, and it is the LOUD half of ruling B1: with the fan-out narrowed, a
-  // `to` that resolves to nobody must never come back as a quiet
-  // `delivery=none`. The message carries the live handles and the roster, which
-  // is what the MCP side renders (`channel-errors.ts`).
+  // 400, never a quiet `delivery=none`; the message carries the handles and roster the MCP renders.
   if (err instanceof ChannelRecipientUnresolvedError) {
     return new HttpError(400, "CHANNEL_RECIPIENT_UNRESOLVED", err.message);
   }
-  // ⚠ THE SAME CODE, DELIBERATELY. An ambiguous `@<name>` and a `to=` that
-  // named nobody are one fact to the caller — nothing was written and the
-  // address needs fixing — and the error's own message carries the candidates
-  // that tell the two apart. A second code buys a client nothing.
+  // Same code: to the caller both mean nothing was written and the address needs fixing.
   if (err instanceof ChannelAgentHandleAmbiguousError) {
     return new HttpError(400, "CHANNEL_RECIPIENT_UNRESOLVED", err.message);
   }
   if (err instanceof ChannelTaskNotInChannelError) {
     return new HttpError(400, "CHANNEL_TASK_NOT_IN_CHANNEL", err.message);
   }
-  // ⚠ 404 FOR ALL FOUR CAUSES — see the error's own docblock. Distinguishing
-  // them would make an answer a probe for which message ids are escalations.
+  // 404 for all four causes: distinguishing them would probe which message ids are escalations.
   if (err instanceof EscalationNotFoundError) {
     return new HttpError(404, "CHANNEL_ESCALATION_NOT_FOUND", err.message);
   }
-  // ⚠ 403, and it is REACHED ONLY AFTER the 404 above has passed, so it
-  // discloses nothing that error was protecting. It is loud rather than a silent
-  // strip because a button that reports success over an answer nobody received
-  // is the failure the card exists to remove.
+  // 403, reached only after the 404 above passed, so it discloses nothing; loud, not a silent strip.
   if (err instanceof EscalationForbiddenError) {
     return new HttpError(403, "CHANNEL_ESCALATION_FORBIDDEN", err.message);
   }
-  // ⚠ 409 from the index's 23505, so a second click loses cleanly rather than
-  // posting a second answer that would wake the agent twice.
+  // 409 from the index's 23505: a second click loses cleanly instead of waking the agent twice.
   if (err instanceof EscalationAlreadyAnsweredError) {
     return new HttpError(409, "CHANNEL_ESCALATION_ANSWERED", err.message);
   }
-  // ⚠ 404 FOR ALL THREE CAUSES, and on this lane the probe it denies would return
-  // another operator's PRIVATE TURN text — see the error's own docblock.
+  // 404 for all three causes: the probe it denies would expose another operator's private turn.
   if (err instanceof DirectionNotFoundError) {
     return new HttpError(404, "CHANNEL_DIRECTION_NOT_FOUND", err.message);
   }
-  // ⚠ 409, and the desktop lane reads it as "stand down", NOT as a fault.
+  // 409: the desktop reads it as "stand down", not a fault.
   if (err instanceof DirectionNotClaimableError) {
     return new HttpError(409, "CHANNEL_DIRECTION_NOT_CLAIMABLE", err.message);
   }
-  // ⚠ 403, AND IT IS THE ONE 403 ON THIS LANE — the error's own docblock argues
-  // why the 404-never-403 rule does not apply to it: the caller has already
-  // proved channel membership, inside which the roster and the live agent set are
-  // readable anyway, so nothing is disclosed. A 404 here would tell an
-  // orchestrator its own agent had vanished and send it to re-launch.
+  // The one 403 on this lane: the caller proved membership, where the roster and live agents are
+  // readable anyway, and a 404 would send an orchestrator to re-launch its own agent.
   if (err instanceof AgentDirectiveForeignError) {
     return new HttpError(403, "CHANNEL_AGENT_FOREIGN", err.message);
   }
-  // ⚠ 404 FOR "not yours", not 403 — see the error's own docblock. A 403 would
-  // confirm the id exists, which is exactly the probe the single error prevents.
+  // 404 for "not yours", not 403: a 403 would confirm the id exists.
   if (err instanceof LaunchDirectiveNotFoundError) {
     return new HttpError(404, "LAUNCH_DIRECTIVE_NOT_FOUND", err.message);
   }
-  // ⚠ 409, and the desktop lane reads it as "stand down", NOT as a fault: losing
-  // the claim CAS is the designed outcome for every machine but one.
+  // 409 "stand down": losing the claim CAS is the designed outcome for every machine but one.
   if (err instanceof LaunchDirectiveNotClaimableError) {
     return new HttpError(409, "LAUNCH_DIRECTIVE_NOT_CLAIMABLE", err.message);
   }
-  // ⚠ 404 AND THE AGENT-IDENTITIES CODE, not a channels-flavoured one. The `/resolve`
-  // endpoint answers `AGENT_IDENTITY_NOT_FOUND` for the same fact, and the MCP layer
-  // branches on the CODE to tell a missing IDENTITY from a missing CHANNEL — both of
-  // which arrive here as a 404 from the same call.
+  // The agent-identities code, not a channels one: MCP branches on the code to tell a missing
+  // identity from a missing channel, both 404s from the same call.
   if (err instanceof LaunchIdentityNotFoundError) {
-    // ⚠ `details` ONLY WHEN THERE IS SOMETHING NON-LEAKY TO SAY (T35) — the key
-    // is absent, not null, for an ordinary miss, so a client cannot read its
-    // PRESENCE as a signal about a row it may not see.
+    // `details` only for a non-leaky fact; absent (not null) otherwise, so its presence signals nothing.
     return new HttpError(
       404,
       "AGENT_IDENTITY_NOT_FOUND",
@@ -138,44 +114,24 @@ function mapChannelError(err: unknown): HttpError | null {
       err.elsewhere ? { elsewhere: err.elsewhere } : undefined
     );
   }
-  // ⚠ 409 WITH `details.matches`, because the REFUSAL IS ONLY USEFUL WITH THE LIST.
-  // "That name is ambiguous" with nothing else forces the caller to guess or to go
-  // read the identity list through another tool; the ids it needs are already in
-  // hand and every one of them passed this caller's own visibility check.
+  // 409 with `details.matches`: the refusal is only actionable with the list, and every match
+  // already passed this caller's visibility check.
   if (err instanceof LaunchIdentityAmbiguousError) {
     return new HttpError(409, "AGENT_IDENTITY_AMBIGUOUS", err.message, {
       matches: err.matches,
     });
   }
-  // ⚠ 409 WITH `details.free`, on {@link LaunchIdentityAmbiguousError}'s own argument:
-  // a refusal the caller cannot act on sends them back for facts this response already
-  // holds. ⚠ 409 AND NOT 400 — the payload is perfectly valid, the WORLD is the
-  // problem, and a 400 would tell an orchestrator to fix its call rather than pick
-  // again. ⚠ `free` MAY BE EMPTY (a room with all sixteen out), which is the honest
-  // answer and not an error shape of its own.
+  // 409, not 400, with `details.free`: the payload is valid and the world moved, so pick again.
+  // `free` may be empty (all sixteen out).
   if (err instanceof AgentColorTakenError) {
     return new HttpError(409, "AGENT_COLOR_TAKEN", err.message, {
       free: err.free,
     });
   }
-  // SIX ARMS ENDED HERE (channels rollback §1) and each was a named-agent or
-  // breakout-room refusal: CHANNEL_AGENT_NOT_FOUND / _NOT_IN_CHANNEL /
-  // _NAME_CONFLICT / _FORBIDDEN, CHANNEL_TOO_MANY_AGENTS and
-  // CHANNEL_PARTICIPANT_NOT_MEMBER. Nothing raises them now, and the MCP side
-  // dropped the classifier kinds that read them. A caller that still sends a
-  // removed PARAM gets VALIDATION_FAILED from the route schema, which names the
-  // field — see `schema.ts#removedParam`.
   if (err instanceof ChannelChatAddressedError) {
     return new HttpError(400, "CHANNEL_CHAT_ADDRESSED", err.message);
   }
-  // P0-2 (2026-08-04). A 403 about WHO may make a statement rather than about
-  // whether the payload parses, carrying a code the MCP side reads to narrate
-  // the refusal in the agent's own terms (`channel-errors.ts`) instead of
-  // guessing from the status.
-  //
-  // ⚠ `CHANNEL_CLOSE_IS_HUMAN_ONLY` was its twin (DECISION 2) and went with
-  // thread closing (wiring plan Phase 4, 2026-08-18) — no close, so no
-  // human-only close lane to refuse an agent from.
+  // 403 about who may state a lifecycle fact; the MCP side narrates it by code (`channel-errors.ts`).
   if (err instanceof ChannelLifecycleKindForbiddenError) {
     return new HttpError(403, "CHANNEL_LIFECYCLE_KIND_FORBIDDEN", err.message);
   }
