@@ -23,12 +23,6 @@ export type { IdentityVisibility };
 
 import type { Role } from "@/features/workspaces/types";
 
-export const IDENTITY_VISIBILITIES: readonly IdentityVisibility[] = [
-  "private",
-  "team",
-  "workspace",
-] as const;
-
 /**
  * One user-defined custom field. Free-form by design — the product does not
  * know what an operator wants to carry into a session (a persona's tone, a
@@ -54,15 +48,9 @@ export const IDENTITY_VISIBILITIES: readonly IdentityVisibility[] = [
  * absent as anything else would retype half the rows in the product on the next
  * read (INVARIANTS §8: the wire type is what makes the optionality invisible).
  */
-export type IdentityFieldType = "text" | "number" | "date" | "boolean" | "url";
+export const IDENTITY_FIELD_TYPES = ["text", "number", "date", "boolean", "url"] as const;
 
-export const IDENTITY_FIELD_TYPES: readonly IdentityFieldType[] = [
-  "text",
-  "number",
-  "date",
-  "boolean",
-  "url",
-];
+export type IdentityFieldType = (typeof IDENTITY_FIELD_TYPES)[number];
 
 /** The fallback spelled ONCE — `?? IDENTITY_FIELD_TYPE_DEFAULT` at every read. */
 export const IDENTITY_FIELD_TYPE_DEFAULT: IdentityFieldType = "text";

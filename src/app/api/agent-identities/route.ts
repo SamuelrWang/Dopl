@@ -59,7 +59,10 @@ async function handleGet(request: NextRequest, auth: WorkspaceAuthContext) {
     const homeScopedIdentityIds = await listHomeScopedIdentityIds(
       ctx,
       identities
-    ).catch(() => [] as string[]);
+    ).catch((err: unknown) => {
+      console.warn("agent-identities: homeScopedIdentityIds failed", err);
+      return [] as string[];
+    });
     return NextResponse.json({ identities, homeScopedIdentityIds });
   } catch (err) {
     return toAgentIdentityErrorResponse(err);

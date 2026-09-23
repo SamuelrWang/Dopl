@@ -100,7 +100,7 @@ export const SECTIONS_CONTAINER: ReadonlyArray<IdentitySectionDef> = [
 export const SECTION_PRIVATE_EVERYWHERE: IdentitySectionDef = {
   visibility: "private",
   label: "Personal",
-  emptyLine: "You haven't created an agent here yet.",
+  emptyLine: "You haven't created an identity here yet.",
 };
 
 /**
@@ -158,12 +158,12 @@ export function groupByVisibility(
  * `server/service-write-gates.ts › assertTeamScopeGrantable`, on the create AND
  * the update path.
  */
-export function offersTeamScope(kind: WorkspaceKind): boolean {
+function offersTeamScope(kind: WorkspaceKind): boolean {
   return kind === "standard";
 }
 
 /** ⚠ A WORD OR TWO, on the STRANDED pill only (INVARIANTS §5, minimal copy). */
-export const TEAM_SCOPE_DEAD_HINT = "workspace only";
+const TEAM_SCOPE_DEAD_HINT = "workspace only";
 
 /**
  * A row that is ALREADY `team` inside a container that has no teams.
@@ -183,7 +183,7 @@ export function teamScopeStranded(
 }
 
 /** One pill on the editor's Visibility row. */
-export interface VisibilityOption {
+interface VisibilityOption {
   visibility: IdentityVisibility;
   /** ⚠ FROM {@link SECTIONS} / {@link SECTIONS_CONTAINER}, never hand-typed. */
   label: string;

@@ -5,13 +5,10 @@ import {
   resolveResourcesByName,
   type ResolvedResource,
 } from "@/shared/tenancy/resolve-resource";
-import type {
-  AgentIdentity,
-  AgentIdentityContext,
-  IdentityVisibility,
-} from "../types";
+import type { AgentIdentityContext, IdentityVisibility } from "../types";
 import * as repo from "./repository";
 import { canSeeIdentity, shareCtxForIdentities } from "./service-shared";
+import { loadVisibleIdentityRow } from "./service-reads";
 
 /**
  * ID-OR-NAME IDENTITY RESOLUTION — the narrow export the LAUNCH DIRECTIVE lane
@@ -154,19 +151,6 @@ export async function resolveIdentityRef(
   // about to hand a human a sentence they have to act on.
   const identity = await classifyMissingIdentityRef(ctx, needle);
   return identity ? { kind: "elsewhere", identity } : { kind: "not-found" };
-}
-
-/** One identity, in ONE named container, through the matrix. ⚠ UNDECORATED on
- *  purpose — this lane resolves a REF and never reads the identity's CONTENT,
- *  which is `service-reads.ts`'s single door and stays that way. */
-async function loadVisibleIdentityRow(
-  ctx: AgentIdentityContext,
-  id: string
-): Promise<AgentIdentity | null> {
-  const identity = await repo.findIdentityById(ctx.workspaceId, id);
-  if (!identity) return null;
-  const share = await shareCtxForIdentities(ctx, [identity]);
-  return canSeeIdentity(ctx, identity, share) ? identity : null;
 }
 
 /** {@link resolveIdentityRef}'s NAME steps, inside `ctx.workspaceId` and nowhere

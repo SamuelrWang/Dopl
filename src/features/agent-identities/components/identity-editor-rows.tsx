@@ -10,7 +10,6 @@ import {
   OpenScaleButton,
   OpenScaleIconButton,
 } from "@/shared/ui/open-scale-button";
-import { DialogField } from "@/shared/ui/standard-dialog";
 import { MenuItem, Popover } from "@/shared/ui/popover-menu";
 import { SelectMenu, type SelectMenuOption } from "@/shared/ui/select-menu";
 import type { IdentityField, IdentityFieldType } from "../client/types";
@@ -46,8 +45,6 @@ import {
  * the New agent popup wears the POPUP kit's underline instead
  * (`shared/ui/form-dialog.tsx › UnderlineField`), which is a different recipe.
  */
-export { RAISED_INPUT };
-export { DialogField as Field };
 
 /**
  * CUSTOM FIELDS — the pairs listed, added and edited INLINE.

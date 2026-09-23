@@ -6,7 +6,7 @@ import type {
   IdentityKnowledgeRef,
   IdentityKnowledgeScope,
 } from "../types";
-import { refKey, scopeKey } from "../lib/knowledge-scopes";
+import { composeDisplayPath, refKey, scopeKey } from "../lib/knowledge-scopes";
 import { IdentityKnowledgeBaseNotFoundError } from "./errors";
 import * as repo from "./repository";
 import {
@@ -148,7 +148,7 @@ export async function resolveVisibleKnowledgeScopes(
         scope: "folder",
         folderId: folder.id,
         folderName: folder.name,
-        path: displayPath(base, segments),
+        path: composeDisplayPath(base, segments),
         toolPath: segments.join("/"),
       });
       continue;
@@ -165,7 +165,7 @@ export async function resolveVisibleKnowledgeScopes(
       scope: "entry",
       entryId: entry.id,
       entryTitle: entry.title,
-      path: displayPath(base, segments),
+      path: composeDisplayPath(base, segments),
       toolPath: segments.join("/"),
     });
   }
@@ -249,7 +249,7 @@ function baseCard(
  * so "you may not attach this" and "no such thing" are indistinguishable, and
  * echoing back anything the caller did not already hold would undo that.
  */
-export function knowledgeScopeSubjectId(scope: IdentityKnowledgeScope): string {
+function knowledgeScopeSubjectId(scope: IdentityKnowledgeScope): string {
   if (scope.scope === "folder") return scope.folderId;
   if (scope.scope === "entry") return scope.entryId;
   return scope.baseId;
@@ -275,18 +275,6 @@ function folderSegments(
     current = folder.parentId;
   }
   return segments;
-}
-
-/**
- * `Base / Folder / Entry`. ⚠ **DISPLAY ONLY, AND SPACED ON PURPOSE.** The
- * knowledge tools' own path separator is a bare `/` with no spaces
- * (`knowledge/server/path.ts › parsePath`), and this string is NOT that path —
- * it leads with the BASE NAME, which is not a segment of any base-relative path.
- * `IdentityKnowledgeRef.toolPath` is the addressable one; anything that splices
- * THIS into a `dopl_kb` call is a bug.
- */
-function displayPath(baseName: string, segments: string[]): string {
-  return [baseName, ...segments].join(" / ");
 }
 
 // ─── The attach gate ────────────────────────────────────────────────────

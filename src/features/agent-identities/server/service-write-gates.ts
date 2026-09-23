@@ -56,7 +56,7 @@ import { IdentityTeamNotGrantableError } from "./errors";
  * refusal sentences are ITS ({@link personalShelfRefusal}), shared with the
  * router and the knowledge gate so three doors cannot disagree about the remedy.
  */
-export interface IdentityCreateDestination {
+interface IdentityCreateDestination {
   /** ⚠ THE ROUTING FLAG, PASSED STRAIGHT TO THE REPOSITORY — `insertIdentity`
    *  resolves the container from it through `personalWriteWorkspaceId`, by the
    *  same owner this gate asked the fence about, so the two cannot disagree. */
@@ -90,7 +90,7 @@ export async function resolveIdentityCreateDestination(
   // the destination instead of about the team id.
   if (input.visibility === "team") {
     throw new IdentityTeamNotGrantableError(
-      "A personal agent cannot be shared with a team. It lives in your own " +
+      "A personal identity cannot be shared with a team. It lives in your own " +
         "personal container and a team grant belongs to the workspace the team " +
         "is in. Create it in the workspace and share it there, or keep it " +
         "personal and lend it with a grant."
@@ -144,7 +144,7 @@ export async function assertTeamScopeGrantable(workspaceId: string): Promise<voi
   const workspace = await findWorkspaceById(workspaceId);
   if (workspace === null || isStandardWorkspace(workspace)) return;
   throw new IdentityTeamNotGrantableError(
-    "This agent lives outside a workspace, and a team grant belongs to the " +
+    "This identity lives outside a workspace, and a team grant belongs to the " +
       "workspace the team is in. Create it in the workspace and share it there, " +
       "or keep it here and lend it with a grant."
   );

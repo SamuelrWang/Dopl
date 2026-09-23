@@ -48,7 +48,7 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { readFileSync, readdirSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import {
   MAX_DESCRIPTION_CHARS,
@@ -60,33 +60,16 @@ import {
   MAX_MODEL_CHARS,
   MAX_NAME_CHARS,
 } from "./schema";
-import { forwardRenamed } from "@/shared/supabase/migration-renames";
+import {
+  readMigrations,
+  statementAt,
+  stripSqlLineComments,
+} from "@/shared/supabase/migration-files";
 import { LAUNCH_RUNTIME_ID_RE } from "@/features/channels/schema-launch-modes";
 
 const ROOT = process.cwd();
 const MIGRATIONS = join(ROOT, "supabase", "migrations");
 const TABLE = "agent_identities";
-
-function stripLineComments(sql: string): string {
-  return sql
-    .split("\n")
-    .map((line) => {
-      const at = line.indexOf("--");
-      return at === -1 ? line : line.slice(0, at);
-    })
-    .join("\n");
-}
-
-/** The statement starting at `from`, up to the first `;` at paren depth 0. */
-function statementAt(sql: string, from: number): string {
-  let depth = 0;
-  for (let i = from; i < sql.length; i++) {
-    if (sql[i] === "(") depth++;
-    else if (sql[i] === ")") depth--;
-    else if (sql[i] === ";" && depth === 0) return sql.slice(from, i + 1);
-  }
-  return sql.slice(from);
-}
 
 /**
  * REPLAY the migrations and answer with the CHECK constraints LIVE on the table
@@ -109,12 +92,7 @@ function liveConstraints(): Map<string, string> {
   );
   // ⚠ FORWARD-RENAMED: the table and its constraints were CREATED as `agent_templates*` and
   // renamed on 2026-09-22; the replay reads every file under the final names.
-  const files = forwardRenamed(
-    readdirSync(MIGRATIONS)
-      .filter((f) => f.endsWith(".sql"))
-      .sort()
-      .map((name) => ({ name, sql: stripLineComments(readFileSync(join(MIGRATIONS, name), "utf8")) }))
-  );
+  const files = readMigrations();
   for (const { sql } of files) {
     // Only files that speak about this table at all — a constraint name is
     // unique per table by convention here, but the `ALTER TABLE` is what says
@@ -231,7 +209,7 @@ describe("🔒 the zod bounds are the DATABASE's bounds", () => {
   it("the visibility set is the schema's, and 'public' is not in it", () => {
     // ⚠ A COLUMN-LEVEL CHECK, not one of the four named ones — it is written
     // inline in `CREATE TABLE`, so it is read out of that statement.
-    const create = stripLineComments(
+    const create = stripSqlLineComments(
       readFileSync(join(MIGRATIONS, "20260822200000_agent_templates.sql"), "utf8")
     );
     const m = /visibility\s+TEXT[\s\S]*?CHECK\s*\(visibility\s+IN\s*\(([^)]*)\)\)/i.exec(create);
@@ -323,12 +301,7 @@ describe("🔒 the knowledge-attachment scope shape", () => {
   const JUNCTION = "agent_identity_knowledge_bases";
   // ⚠ FORWARD-RENAMED: the file speaks `agent_template_knowledge_bases` / `template_id`; the
   // shape is asserted under the names the 2026-09-22 rename gave them.
-  const CODE = forwardRenamed(
-    readdirSync(MIGRATIONS)
-      .filter((f) => f.endsWith(".sql"))
-      .sort()
-      .map((name) => ({ name, sql: stripLineComments(readFileSync(join(MIGRATIONS, name), "utf8")) }))
-  ).find((f) => f.name === "20260930150000_agent_template_knowledge_scopes.sql")?.sql ?? "";
+  const CODE = readMigrations().find((f) => f.name === "20260930150000_agent_template_knowledge_scopes.sql")?.sql ?? "";
 
   it("declares the three kinds and nothing else", () => {
     expect(CODE).toMatch(

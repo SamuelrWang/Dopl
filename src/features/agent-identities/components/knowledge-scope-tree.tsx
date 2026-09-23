@@ -5,7 +5,7 @@ import { Check, ChevronRight, FileText, Folder, Library } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
 import { useKnowledgeTree } from "@/features/knowledge/client/hooks";
 import type { IdentityKnowledgeRef } from "../client/types";
-import { composeDisplayPath } from "../lib/knowledge-scopes";
+import { composeDisplayPath, scopeKey } from "../lib/knowledge-scopes";
 import type { KnowledgeBaseOption } from "./knowledge-scope-picker";
 
 /**
@@ -80,7 +80,7 @@ export function BaseNode({
 
   const index = useMemo<TreeIndex>(() => buildIndex(tree.data), [tree.data]);
 
-  const baseChecked = selectedKeys.has(`base:${base.id}`);
+  const baseChecked = selectedKeys.has(scopeKey({ baseId: base.id, scope: "base" }));
   const rootFolders = index.childFolders.get(ROOT) ?? [];
   const rootEntries = index.childEntries.get(ROOT) ?? [];
 
@@ -103,12 +103,8 @@ export function BaseNode({
               scope: "base",
               path: base.name,
             },
-            // ⚠ EVERY SCOPE OF THIS BASE, by key. The base now covers all of
-            // them, and the prune is what stops a stale folder row outliving it.
-            [
-              ...[...index.folderName.keys()].map((id) => `folder:${id}`),
-              ...[...index.entryTitle.keys()].map((id) => `entry:${id}`),
-            ]
+            // The picker prunes a base's own scopes off the selection itself (P7-04).
+            []
           )
         }
       />
@@ -167,7 +163,7 @@ function FolderNode({
   onToggle,
 }: NodeContext & { folderId: string }) {
   const [open, setOpen] = useState(false);
-  const checked = selectedKeys.has(`folder:${folderId}`);
+  const checked = selectedKeys.has(scopeKey({ baseId: base.id, scope: "folder", folderId }));
   const covered = ancestorChecked || checked;
   const children = index.childFolders.get(folderId) ?? [];
   const entries = index.childEntries.get(folderId) ?? [];
@@ -203,7 +199,7 @@ function FolderNode({
                 .map((id) => index.folderName.get(id) ?? "")
                 .join("/"),
             },
-            descendantKeys(folderId, index)
+            descendantKeys(base.id, folderId, index)
           )
         }
       />
@@ -261,7 +257,7 @@ function EntryRow({
       depth={depth}
       icon={<FileText size={12} aria-hidden="true" />}
       label={title}
-      checked={ancestorChecked || selectedKeys.has(`entry:${entryId}`)}
+      checked={ancestorChecked || selectedKeys.has(scopeKey({ baseId: base.id, scope: "entry", entryId }))}
       implied={ancestorChecked}
       expandable={false}
       expanded={false}
@@ -439,7 +435,7 @@ function buildIndex(
 
 /** Every scope key a folder now COVERS — its descendant folders and every entry
  *  under any of them. ⚠ Used for the PRUNE, never to write rows. */
-function descendantKeys(folderId: string, index: TreeIndex): string[] {
+function descendantKeys(baseId: string, folderId: string, index: TreeIndex): string[] {
   const keys: string[] = [];
   const stack = [folderId];
   const seen = new Set<string>();
@@ -447,9 +443,9 @@ function descendantKeys(folderId: string, index: TreeIndex): string[] {
     const current = stack.pop() as string;
     if (seen.has(current)) continue;
     seen.add(current);
-    if (current !== folderId) keys.push(`folder:${current}`);
+    if (current !== folderId) keys.push(scopeKey({ baseId, scope: "folder", folderId: current }));
     for (const entryId of index.childEntries.get(current) ?? []) {
-      keys.push(`entry:${entryId}`);
+      keys.push(scopeKey({ baseId, scope: "entry", entryId }));
     }
     stack.push(...(index.childFolders.get(current) ?? []));
   }

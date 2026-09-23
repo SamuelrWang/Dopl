@@ -44,7 +44,6 @@ import {
 import {
   isWorkspaceAdmin,
   normalizeFieldsInput,
-  normalizeLabel,
   normalizeProse,
   stripNullBytes,
 } from "./service-shared";
@@ -141,7 +140,7 @@ export async function createIdentity(
     workspaceId: destination.workspaceId,
     publishes: visibility === "workspace",
     acknowledged: input.acknowledgeShared,
-    noun: "agent",
+    noun: "agent identity",
   });
 
   // 🔒 **THE THIRD DESTINATION DOES NOT EXIST** (Samuel, 2026-09-18) — a
@@ -166,7 +165,7 @@ export async function createIdentity(
     name: stripNullBytes(input.name),
     description: normalizeProse(input.description),
     instructions: normalizeProse(input.instructions),
-    model: normalizeLabel(input.model),
+    model: normalizeProse(input.model),
     runtime: input.runtime ?? null,
     fields: normalizeFieldsInput(input.fields),
     visibility,
@@ -284,7 +283,7 @@ export async function updateIdentity(
     workspaceId: tplCtx.workspaceId,
     publishes: patch.visibility === "workspace",
     acknowledged: patch.acknowledgeShared,
-    noun: "agent",
+    noun: "agent identity",
   });
 
   // 🔒 **THE UPDATE TWIN OF THE CREATE'S HOME-CHANNEL FENCE** (Samuel,
@@ -343,7 +342,7 @@ export async function updateIdentity(
       patch.instructions === undefined
         ? undefined
         : normalizeProse(patch.instructions),
-    model: patch.model === undefined ? undefined : normalizeLabel(patch.model),
+    model: patch.model === undefined ? undefined : normalizeProse(patch.model),
     runtime: patch.runtime,
     fields: patch.fields === undefined ? undefined : normalizeFieldsInput(patch.fields),
     visibility: patch.visibility,

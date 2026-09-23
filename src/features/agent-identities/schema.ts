@@ -9,7 +9,7 @@ import {
   LAUNCH_RUNTIME_ID_MESSAGE,
   LAUNCH_RUNTIME_ID_RE,
 } from "@/features/channels/schema-launch-modes";
-import type { IdentityFieldType } from "./types";
+import { IDENTITY_FIELD_TYPES, type IdentityVisibility } from "./types";
 import { MAX_DESCRIPTION_CHARS, MAX_NAME_CHARS } from "./lib/bounds";
 
 export { MAX_DESCRIPTION_CHARS, MAX_NAME_CHARS };
@@ -98,17 +98,6 @@ export const MAX_FIELD_COUNT = 50;
 export const MAX_FIELD_KEY_CHARS = 80;
 export const MAX_FIELD_VALUE_CHARS = 1000;
 
-/** ⚠ THE TUPLE ZOD NEEDS, DERIVED FROM THE ONE LIST IN `types.ts` — a second
- *  hand-typed enum is how the UI and the validator come to offer different
- *  values. */
-const IDENTITY_FIELD_TYPES_TUPLE = [
-  "text",
-  "number",
-  "date",
-  "boolean",
-  "url",
-] as const satisfies readonly IdentityFieldType[];
-
 export const IdentityFieldSchema = z.object({
   key: safeLabel("Field key", MAX_FIELD_KEY_CHARS),
   /** ⚠ A LABEL, not prose: field values are spliced into the launch payload
@@ -136,7 +125,7 @@ export const IdentityFieldSchema = z.object({
    * branch, and a server that refused "n/a" in a `number` field would be
    * enforcing a contract the launch splice does not read.
    */
-  type: z.enum(IDENTITY_FIELD_TYPES_TUPLE).optional(),
+  type: z.enum(IDENTITY_FIELD_TYPES).optional(),
 });
 
 export const IdentityFieldsSchema = z
@@ -165,11 +154,11 @@ export const IdentityFieldsSchema = z
  * ⚠ It stays in the enum because the value is still legal for a HUMAN: taking it
  * out of the DB is B4, and B4 has not been ruled.
  */
-export const IdentityVisibilitySchema = z.enum([
+const IdentityVisibilitySchema = z.enum([
   "private",
   "team",
   "workspace",
-]);
+] as const satisfies readonly IdentityVisibility[]);
 
 /** Same bound `SkillUpdateSchema.teamIds` uses. */
 const TeamIdsSchema = z.array(z.string().uuid()).max(50);
@@ -207,7 +196,7 @@ const KnowledgeBaseIdsSchema = z.array(z.string().uuid()).max(50);
  * base, silently, which is the widest possible failure of a feature whose point
  * is narrowing. `z.strictObject` turns that misunderstanding into a 400.
  */
-export const IdentityKnowledgeScopeSchema = z.discriminatedUnion("scope", [
+const IdentityKnowledgeScopeSchema = z.discriminatedUnion("scope", [
   z.strictObject({ baseId: z.string().uuid(), scope: z.literal("base") }),
   z.strictObject({
     baseId: z.string().uuid(),
@@ -258,7 +247,7 @@ const knowledgeFieldsExclusive = (patch: {
  * sharing state the server does not hold.
  */
 const teamIdsMatchVisibility = (patch: {
-  visibility?: "private" | "team" | "workspace";
+  visibility?: IdentityVisibility;
   teamIds?: string[];
 }) => patch.teamIds === undefined || patch.visibility === "team";
 

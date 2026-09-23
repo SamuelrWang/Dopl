@@ -35,18 +35,16 @@ export const EMPTY_KNOWLEDGE: readonly IdentityKnowledgeRef[] = Object.freeze([]
  * whole-base scope and a folder scope of that base share it, so keying on it
  * would make removing one chip remove the other.
  */
-export function scopeKey(scope: IdentityKnowledgeScope): string {
+export function scopeKey(
+  scope: Pick<IdentityKnowledgeRef, "scope" | "baseId" | "folderId" | "entryId">
+): string {
   if (scope.scope === "folder") return `folder:${scope.folderId}`;
   if (scope.scope === "entry") return `entry:${scope.entryId}`;
   return `base:${scope.baseId}`;
 }
 
 /** The same identity over a RESOLVED ref. */
-export function refKey(ref: IdentityKnowledgeRef): string {
-  if (ref.scope === "folder") return `folder:${ref.folderId}`;
-  if (ref.scope === "entry") return `entry:${ref.entryId}`;
-  return `base:${ref.baseId}`;
-}
+export const refKey: (ref: IdentityKnowledgeRef) => string = scopeKey;
 
 /** A resolved ref, back to the scope that would re-request it. ⚠ The draft holds
  *  SCOPES, not refs: names and paths are the server's answer and re-sending them

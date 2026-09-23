@@ -203,20 +203,25 @@ export async function getIdentityForWrite(
   return readIdentityInContext(ctx, id);
 }
 
-/** The read every door shares: one row, in ONE named container, through the
- *  matrix and the viewer-filtered decoration. `null` = not visible, which the
- *  callers turn into the single 404. */
-async function loadVisibleIdentity(
+/** One row in ONE named container through the matrix, undecorated; `null` = not visible. */
+export async function loadVisibleIdentityRow(
   ctx: AgentIdentityContext,
   id: string
 ): Promise<AgentIdentity | null> {
   const identity = await repo.findIdentityById(ctx.workspaceId, id);
   if (!identity) return null;
   const share = await shareCtxForIdentities(ctx, [identity]);
-  if (!canSeeIdentity(ctx, identity, share)) return null;
-  const [decorated] = await decorateWithKnowledgeBases(ctx, [
-    withSharingSet(ctx, identity, share),
-  ]);
+  return canSeeIdentity(ctx, identity, share) ? withSharingSet(ctx, identity, share) : null;
+}
+
+/** {@link loadVisibleIdentityRow} plus the viewer-filtered knowledge decoration. */
+async function loadVisibleIdentity(
+  ctx: AgentIdentityContext,
+  id: string
+): Promise<AgentIdentity | null> {
+  const row = await loadVisibleIdentityRow(ctx, id);
+  if (!row) return null;
+  const [decorated] = await decorateWithKnowledgeBases(ctx, [row]);
   return decorated;
 }
 

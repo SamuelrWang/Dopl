@@ -167,7 +167,7 @@ describe("empty scopes", () => {
     await openIdentities();
 
     expect(
-      await screen.findByText("You haven't created an agent here yet.")
+      await screen.findByText("You haven't created an identity here yet.")
     ).toBeInTheDocument();
     // Samuel, 2026-09-19: the shared section's empty line and the Personal
     // caption are removed, not reworded.
@@ -343,7 +343,7 @@ describe("a failed PERSONAL read", () => {
     expect(await screen.findByText("You can't read that.")).toBeInTheDocument();
     // It is not the pending state and it is not the empty sentence.
     expect(
-      screen.queryByText("You haven't created an agent here yet.")
+      screen.queryByText("You haven't created an identity here yet.")
     ).not.toBeInTheDocument();
   });
 

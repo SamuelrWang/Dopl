@@ -4,8 +4,6 @@ import {
   type AgentIdentity,
   type IdentityField,
   type IdentityFieldType,
-  type IdentityKnowledgeBaseRef,
-  type IdentityKnowledgeRef,
   type IdentityVisibility,
 } from "../types";
 
@@ -47,7 +45,7 @@ export interface AgentIdentityRow {
  * is in it — a malformed element is dropped here rather than reaching a launch
  * payload as `{key: undefined}`.
  */
-export function normalizeFields(raw: unknown): IdentityField[] {
+function normalizeFields(raw: unknown): IdentityField[] {
   if (!Array.isArray(raw)) return [];
   const out: IdentityField[] = [];
   for (const item of raw) {
@@ -61,20 +59,7 @@ export function normalizeFields(raw: unknown): IdentityField[] {
   return out;
 }
 
-export interface IdentitySideload {
-  teamIds?: string[];
-  knowledgeBases?: IdentityKnowledgeBaseRef[];
-  /** ⚠ SIDE-LOADED BESIDE `knowledgeBases`, NOT INSTEAD OF IT. The base-level
-   *  slice keeps its own key for readers that predate scopes (`types.ts ›
-   *  AgentIdentity.knowledgeBases`), and both are produced by ONE decoration so
-   *  they cannot disagree. */
-  knowledge?: IdentityKnowledgeRef[];
-}
-
-export function mapAgentIdentityRow(
-  row: AgentIdentityRow,
-  sideload: IdentitySideload = {}
-): AgentIdentity {
+export function mapAgentIdentityRow(row: AgentIdentityRow): AgentIdentity {
   return {
     id: row.id,
     workspaceId: row.workspace_id,
@@ -86,9 +71,9 @@ export function mapAgentIdentityRow(
     fields: normalizeFields(row.fields),
     // The CHECK constraint is the guarantee; the cast is not a validation.
     visibility: row.visibility as IdentityVisibility,
-    teamIds: sideload.teamIds ?? [],
-    knowledgeBases: sideload.knowledgeBases ?? [],
-    knowledge: sideload.knowledge ?? [],
+    teamIds: [],
+    knowledgeBases: [],
+    knowledge: [],
     createdBy: row.created_by,
     createdAt: row.created_at,
     updatedAt: row.updated_at,

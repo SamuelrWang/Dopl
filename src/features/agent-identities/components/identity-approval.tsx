@@ -6,7 +6,7 @@
 import { ModalShell } from "@/shared/layout/settings-modal/modal-shell";
 import styles from "@/shared/layout/settings-modal/settings-modal.module.css";
 import { cn } from "@/shared/lib/utils";
-import { RAISED_INPUT } from "./identity-editor-rows";
+import { RAISED_INPUT } from "@/shared/ui/wells";
 
 /**
  * FIRST USE OF ANOTHER MEMBER'S IDENTITY — the one modal that stands between a

@@ -76,12 +76,6 @@ export function normalizeProse(value: string | null | undefined): string | null 
   return trimmed === "" ? null : trimmed;
 }
 
-/** Same for a short label. Separate function so the two can diverge if a label
- *  ever needs different treatment; today they agree. */
-export function normalizeLabel(value: string | null | undefined): string | null {
-  return normalizeProse(value);
-}
-
 export function normalizeFieldsInput(
   fields: IdentityField[] | undefined
 ): IdentityField[] {
