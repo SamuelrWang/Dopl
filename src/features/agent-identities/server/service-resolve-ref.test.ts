@@ -100,6 +100,10 @@ beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(repo.listTeamIdsForUser).mockResolvedValue([]);
   vi.mocked(repo.listTeamLinksForIdentities).mockResolvedValue([]);
+  // `clearAllMocks` keeps implementations, so re-install the "nothing to say" defaults a
+  // case below overrides — else the order of cases decides the answer (T2-04).
+  vi.mocked(tenancy.resolveResource).mockResolvedValue(null);
+  vi.mocked(tenancy.resolveResourcesByName).mockResolvedValue([]);
 });
 
 describe("the ID path", () => {

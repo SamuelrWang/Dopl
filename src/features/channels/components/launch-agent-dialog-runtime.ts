@@ -57,7 +57,8 @@ export function runtimeRowOptions(
  * WHICH RUNTIME THE ROW OPENS ON — the whole chain, in one place, so no reader has to assemble it
  * from three `??`s at a call site:
  *
- *   1. the OPERATOR'S own pick, whatever its connectivity;
+ *   1. the OPERATOR'S own pick, whatever its connectivity — else the chosen IDENTITY's runtime
+ *      (ruling 5; `launch-agent-dialog-state.ts` decides which of the two it passes);
  *   2. the CHANNEL'S stored pick, if it is connected — or if this desktop did not say;
  *   3. the first REPORTED runtime that is connected;
  *   4. the first REPORTED runtime.

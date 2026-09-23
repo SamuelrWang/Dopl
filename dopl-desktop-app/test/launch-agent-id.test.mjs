@@ -50,6 +50,7 @@ function boot() {
   const launches = [];
   const stub = (id) => {
     if (id === "./ipc-guards") return require(join(MAIN, "ipc-guards.js"));
+    if (id === "./launch-directive-vocab") return require(join(MAIN, "launch-directive-vocab.js"));
     // ⚠ THE REAL PREDICATE, never a permissive fake: this file's whole subject is which ids
     // are accepted, and a fake that said yes to everything would assert nothing.
     if (id === "./agent-id") return require(join(MAIN, "agent-id.js"));

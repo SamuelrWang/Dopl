@@ -9,7 +9,6 @@
  * ink, normal case — no uppercase label strip any more.
  *
  * ⚠ ONE constant, read by `shared/ui/section-panel.tsx › SectionPanel` (so no
- * caller restates it) and re-exported by `identity-section.tsx ›
- * IDENTITY_NAME_TEXT_LG` for the readers that took it by that name first.
+ * caller restates it).
  */
 export const SECTION_HEADING_TEXT = "text-display font-semibold text-text-primary";

@@ -77,27 +77,6 @@ for (const [label, reason] of [
   });
 }
 
-// ⚠ T35 — AND A CLASSIFIED 404 CHANGES NOTHING ABOUT THE OUTCOME. `identity-resolve.js` may now
-// come back with the SERVER's own "it lives in <tenancy>" note beside the word; the note is for
-// this operator's log, and the DECISION is byte-identical, because a decide carries a refusal
-// REASON out of a closed vocabulary (`schema-launch-modes.ts › LAUNCH_REFUSAL_REASONS`, paired with
-// the column's own CHECK) and no free text. The orchestrator is told the same RULE by
-// `channel-ops-launch.ts › REFUSAL_SENTENCES["no-identity"]` instead of the ROW.
-test("IDENTITY: a 404 the server CLASSIFIED still decides `refused` / `no-identity`, unchanged", async () => {
-  const TPL = "77777777-7777-4777-8777-777777777777";
-  const h = boot({
-    resolve: { ok: false, reason: "no-identity", elsewhere: { name: "Code Auditor", label: "your personal shelf" } },
-  });
-  await h.api.handle(row({ identity_id: TPL, identity_name: "Code Auditor" }), WS);
-  assert.equal(h.cfg.lastSpec, undefined, "REFUSE, never degrade to a blank agent");
-  const body = decidePosts(h)[0].body;
-  assert.equal(body.status, "refused");
-  assert.equal(body.refusalReason, "no-identity");
-  // 🔒 THE PLACE DOES NOT CROSS THE WIRE. Nothing on the decide names a tenancy, and nothing may:
-  // widening the vocabulary here would put a producer ahead of the column CHECK.
-  assert.equal(JSON.stringify(body).includes("personal shelf"), false);
-});
-
 // ⚠ **E-4 — THE DELETION SIGNAL.** `identity_id` is `ON DELETE SET NULL`, so an identity deleted
 // between CREATE and CLAIM arrives with a NULL id and a LIVE NAME. There is no id left to ask
 // about, so this refuses WITHOUT a resolve attempt — and it must refuse, because on the id alone

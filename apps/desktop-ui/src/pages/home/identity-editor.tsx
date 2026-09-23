@@ -1,4 +1,3 @@
-import { useMemo } from "react";
 import type { WorkspaceKind } from "@dopl/contracts";
 import type {
   AgentIdentity,
@@ -6,14 +5,13 @@ import type {
   IdentityVisibility,
 } from "@/features/agent-identities/client/types";
 import { IdentityEditor } from "@/features/agent-identities/components/identity-editor";
-import type { PickerOption } from "@/features/agent-identities/components/identity-editor-rows";
+import { useAttachableBases } from "@/features/agent-identities/hooks/use-attachable-bases";
 import { useIdentitySave } from "@/features/agent-identities/hooks/use-identity-save";
 import {
   SECTIONS,
   SECTIONS_CONTAINER,
   type IdentitySectionDef,
 } from "@/features/agent-identities/lib/visibility";
-import { useKnowledgeBaseList } from "@/features/knowledge/client/hooks";
 
 /**
  * /home → Agents → THE AUTHORING HALF. The workspace page's editor, mounted
@@ -70,9 +68,6 @@ import { useKnowledgeBaseList } from "@/features/knowledge/client/hooks";
  * cheaper than a second copy of the draft-reset rule.
  */
 
-/** Shared frozen empty list — a container has no teams to offer, ever. */
-const NO_TEAMS: ReadonlyArray<PickerOption> = Object.freeze([]);
-
 export interface HomeIdentityEditorProps {
   /** `null` = create. Anything else edits that row IN ITS OWN WORKSPACE. */
   identity: AgentIdentity | null;
@@ -99,7 +94,6 @@ export function ContainerIdentityEditor({
     <IdentityEditorMount
       workspaceId={workspaceId}
       identity={identity}
-      teams={NO_TEAMS}
       sections={SECTIONS_CONTAINER}
       containerKind="link"
       defaultVisibility="workspace"
@@ -129,21 +123,16 @@ export function ContainerIdentityEditor({
  * sends `homeScoped: true`, which routes the row into the caller's
  * `kind='personal'` container — so `containerKind` names where the row LANDS,
  * which is the only container whose rules apply to it.
- * ⚠ `workspaceSegment` STAYS ON THE PROPS. It is the pane's own contract with
- * `HomeIdentityPanels` (boot's `segment`, threaded down beside the id), and taking
- * it off would be a second change to a second file for a value the caller
- * already holds.
  */
 export function HomeWorkspaceIdentityEditor({
   workspaceId,
   identity,
   onClose,
-}: HomeIdentityEditorProps & { workspaceId: string; workspaceSegment: string }) {
+}: HomeIdentityEditorProps & { workspaceId: string }) {
   return (
     <IdentityEditorMount
       workspaceId={workspaceId}
       identity={identity}
-      teams={NO_TEAMS}
       sections={SECTIONS}
       containerKind="personal"
       // 🔒 THE SHELF THE PERSONAL SECTION READS. It does two things and both
@@ -179,7 +168,6 @@ export function HomeWorkspaceIdentityEditor({
 function IdentityEditorMount({
   workspaceId,
   identity,
-  teams,
   sections,
   containerKind,
   defaultVisibility,
@@ -188,7 +176,6 @@ function IdentityEditorMount({
   onClose,
 }: HomeIdentityEditorProps & {
   workspaceId: string;
-  teams: ReadonlyArray<PickerOption>;
   sections: ReadonlyArray<IdentitySectionDef>;
   /** 🔒 WHERE THE ROW LANDS, so the editor can drop a scope that container
    *  cannot hold — never the room the call happens to stand in. */
@@ -203,11 +190,11 @@ function IdentityEditorMount({
    *  every optimistic patch below lands on a key nobody is subscribed to. */
   shelf?: IdentityShelf;
 }) {
-  const baseList = useKnowledgeBaseList(workspaceId);
+  const attachable = useAttachableBases(workspaceId);
   const { save, remove, error, saving, deleting } = useIdentitySave({
     workspaceId,
     shelf,
-    noun: "agent",
+    noun: "identity",
     onDone: onClose,
     // 🔒 G16 — `acknowledgeShared` is sent ONLY when this mount named the
     // audience AND the row is landing at the shared visibility. ⚠ `undefined`,
@@ -229,10 +216,6 @@ function IdentityEditorMount({
     },
   });
 
-  const knowledgeBases = useMemo(
-    () => (baseList.data?.bases ?? []).map((b) => ({ id: b.id, name: b.name })),
-    [baseList.data]
-  );
 
   return (
     <IdentityEditor
@@ -241,8 +224,10 @@ function IdentityEditorMount({
       session={1}
       defaultVisibility={defaultVisibility}
       identity={identity}
-      teams={teams}
-      knowledgeBases={knowledgeBases}
+      teams={[]}
+      knowledgeBases={attachable.bases}
+      knowledgeState={attachable.state}
+      onKnowledgeRetry={attachable.retry}
       sections={sections}
       containerKind={containerKind}
       saving={saving}

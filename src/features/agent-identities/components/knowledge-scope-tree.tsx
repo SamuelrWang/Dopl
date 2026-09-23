@@ -115,6 +115,14 @@ export function BaseNode({
       {open &&
         (tree.status === "loading" ? (
           <p className="py-1.5 pr-2 pl-8 text-caption text-text-muted">Loading…</p>
+        ) : tree.status === "error" ? (
+          // A failed read is not an empty base (INVARIANTS §11, P7-06).
+          <p role="alert" className="py-1.5 pr-2 pl-8 text-caption text-danger">
+            {tree.error?.message || "Couldn't load this base."}{" "}
+            <button type="button" className="underline" onClick={() => tree.refetch()}>
+              Retry
+            </button>
+          </p>
         ) : rootFolders.length === 0 && rootEntries.length === 0 ? (
           <p className="py-1.5 pr-2 pl-8 text-caption text-text-muted">Empty</p>
         ) : (

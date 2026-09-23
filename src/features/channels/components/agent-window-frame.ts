@@ -115,8 +115,8 @@ export const CHROME_ROW = "h-[44px]";
  *
  * ⚠ **SIZE AND WEIGHT ONLY — THE INK IS STATE AND STAYS AT THE CALL SITE.** An active tab is
  * `text-text-primary` and an idle one `text-text-secondary`; baking either in would make one of the
- * two impossible to express without fighting this constant (the mistake `IDENTITY_NAME_TEXT_LG`'s
- * docblock records at its own call site).
+ * two impossible to express without fighting this constant (the mistake the Usage heading's
+ * scale split records — `shared/ui/section-heading.ts › SECTION_HEADING_TEXT`).
  */
 export const AGENT_NAME_TEXT = "text-body font-normal";
 

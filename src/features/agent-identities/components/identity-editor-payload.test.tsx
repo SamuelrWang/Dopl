@@ -27,6 +27,32 @@ vi.mock("@/features/knowledge/client/hooks", async () => ({
   useKnowledgeTree: (await import("./knowledge-tree-mock")).useKnowledgeTree,
 }));
 
+/** The desktop's registered runtimes and Claude's live roster — the Model row
+ *  offers the IDENTITY'S runtime's models, so a runtime is picked first. */
+vi.mock("@/features/channels/hooks/use-launch-selection", async () => {
+  const { catalog, launchSelectionStub } = await import(
+    "@/features/channels/hooks/launch-selection-harness"
+  );
+  const { REAL_DEFAULT_RUNTIME, REAL_DESCRIPTORS } = await import(
+    "@/features/channels/lib/runtime-descriptors-harness"
+  );
+  const claude = catalog("claude", [
+    { id: "claude-fable-5", label: "Fable 5" },
+    { id: "claude-opus-5", label: "Opus 5" },
+    { id: "claude-sonnet-5", label: "Sonnet 5", isDefault: true },
+    { id: "claude-haiku-4-5-20251001", label: "Haiku 4.5" },
+  ]);
+  return {
+    useLaunchSelection: () =>
+      launchSelectionStub({
+        runtimeSupported: true,
+        runtimes: REAL_DESCRIPTORS,
+        defaultRuntime: REAL_DEFAULT_RUNTIME,
+        catalogs: { claude },
+      }),
+  };
+});
+
 const TEAMS = [
   { id: "team-1", name: "Platform" },
   { id: "team-2", name: "Growth" },
@@ -45,6 +71,7 @@ function identity(over: Partial<AgentIdentity> = {}): AgentIdentity {
     description: "Runs the checklist",
     instructions: "Be terse.",
     model: "claude-opus-5",
+    runtime: "claude",
     fields: [{ key: "repo", value: "dopl" }],
     visibility: "private",
     teamIds: [],
@@ -116,6 +143,10 @@ function addField(key: string, value: string) {
  *  is deliberately not about. */
 const row = (name: string) => within(screen.getByRole("tablist", { name }));
 
+function pickRuntime(label: string) {
+  fireEvent.click(row("Runtime").getByRole("tab", { name: label }));
+}
+
 function pickModel(label: string) {
   fireEvent.click(row("Model").getByRole("tab", { name: label }));
 }
@@ -146,6 +177,7 @@ describe("the payload survives the face", () => {
     fireEvent.change(field("#agent-identity-instructions"), {
       target: { value: "  Search first.  " },
     });
+    pickRuntime("Claude Code");
     pickModel("Opus 5");
     pickScope("Public");
     addField("repo", "dopl");
@@ -161,6 +193,7 @@ describe("the payload survives the face", () => {
       description: "Finds things",
       instructions: "Search first.",
       model: "claude-opus-5",
+      runtime: "claude",
       fields: [{ key: "repo", value: "dopl" }],
       knowledge: [{ baseId: "kb-2", scope: "base" }],
     });

@@ -54,7 +54,32 @@ export async function listIdentities(
   const visible = all
     .filter((t) => canSeeIdentity(ctx, t, share))
     .map((t) => withSharingSet(ctx, t, share));
-  return decorateWithKnowledgeBases(ctx, visible);
+  return decorateByContainer(ctx, visible);
+}
+
+/**
+ * Decorate each row against ITS OWN container (P7-02): an unfiltered or `home`
+ * list spans the calling container and the caller's personal one, and junction
+ * rows are filed under the row's container. Keyed to `ctx` alone, a personal
+ * row read `knowledge: []` and an editor save replaced the hidden set.
+ * ⚠ The foreign container is the caller's personal one (`resolveShelfScope`),
+ * which holds no team-scoped rows, so `role: null` neither widens nor narrows.
+ */
+async function decorateByContainer(
+  ctx: AgentIdentityContext,
+  rows: AgentIdentity[]
+): Promise<AgentIdentity[]> {
+  const groups = new Map<string, AgentIdentity[]>();
+  for (const row of rows) {
+    groups.set(row.workspaceId, [...(groups.get(row.workspaceId) ?? []), row]);
+  }
+  const byId = new Map<string, AgentIdentity>();
+  for (const [workspaceId, group] of groups) {
+    const here =
+      workspaceId === ctx.workspaceId ? ctx : { ...ctx, workspaceId, role: null };
+    for (const row of await decorateWithKnowledgeBases(here, group)) byId.set(row.id, row);
+  }
+  return rows.map((row) => byId.get(row.id) ?? row);
 }
 
 /**
@@ -258,6 +283,7 @@ export async function resolveIdentityForLaunch(
     name: identity.name,
     instructions: identity.instructions,
     model: identity.model,
+    runtime: identity.runtime ?? null,
     fields: identity.fields,
     knowledgeBases: identity.knowledgeBases,
     // ⚠ **BESIDE `knowledgeBases`, NEVER INSTEAD OF IT** (2026-09-08). The

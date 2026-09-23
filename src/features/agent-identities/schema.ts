@@ -5,7 +5,14 @@ import {
   safeLabelMessage,
   safeOptionalProse,
 } from "@/shared/lib/safe-label";
+import {
+  LAUNCH_RUNTIME_ID_MESSAGE,
+  LAUNCH_RUNTIME_ID_RE,
+} from "@/features/channels/schema-launch-modes";
 import type { IdentityFieldType } from "./types";
+import { MAX_DESCRIPTION_CHARS, MAX_NAME_CHARS } from "./lib/bounds";
+
+export { MAX_DESCRIPTION_CHARS, MAX_NAME_CHARS };
 
 /**
  * Zod schemas for agent identities. REST handlers parse against these, so the
@@ -27,14 +34,11 @@ import type { IdentityFieldType } from "./types";
  * a gate, which is what this file's own header used to rely on.
  */
 
-/** Rendered into the identity picker and into the launch payload. Matches the
- *  `agent_identities_name_charset_check` bound in the migration. */
-export const MAX_NAME_CHARS = 120;
+/** Rendered into the identity picker and into the launch payload. */
 const NameSchema = safeLabel("Identity name", MAX_NAME_CHARS);
 
 /** Prose. Newline/tab allowed; empty string preserved (a cleared textarea
  *  sends one, and the service maps it to NULL). */
-export const MAX_DESCRIPTION_CHARS = 2000;
 const DescriptionSchema = safeOptionalProse(
   "Identity description",
   MAX_DESCRIPTION_CHARS
@@ -65,6 +69,10 @@ const InstructionsSchema = safeOptionalProse(
  */
 export const MAX_MODEL_CHARS = 120;
 const ModelSchema = safeLabel("Model", MAX_MODEL_CHARS);
+
+/** The runtime an identity prefers. Grammar only (the roster is the desktop's);
+ *  paired with `agent_identities_runtime_shape_check`. */
+const RuntimeSchema = z.string().trim().regex(LAUNCH_RUNTIME_ID_RE, LAUNCH_RUNTIME_ID_MESSAGE);
 
 // ─── Custom fields ──────────────────────────────────────────────────────
 
@@ -264,6 +272,7 @@ export const AgentIdentityCreateSchema = z
     description: DescriptionSchema.nullable().optional(),
     instructions: InstructionsSchema.nullable().optional(),
     model: ModelSchema.nullable().optional(),
+    runtime: RuntimeSchema.nullable().optional(),
     fields: IdentityFieldsSchema.optional(),
     /** Omitted → the service defaults to `'private'`, matching `createSkill`
      *  and `createBase`. */
@@ -316,6 +325,7 @@ const MUTABLE_UPDATE_KEYS = [
   "description",
   "instructions",
   "model",
+  "runtime",
   "fields",
   "visibility",
   "teamIds",
@@ -329,6 +339,7 @@ export const AgentIdentityUpdateSchema = z
     description: DescriptionSchema.nullable().optional(),
     instructions: InstructionsSchema.nullable().optional(),
     model: ModelSchema.nullable().optional(),
+    runtime: RuntimeSchema.nullable().optional(),
     fields: IdentityFieldsSchema.optional(),
     visibility: IdentityVisibilitySchema.optional(),
     teamIds: TeamIdsSchema.optional(),

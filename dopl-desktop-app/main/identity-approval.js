@@ -59,6 +59,9 @@ const store = new Store();
 // inside a split that changes no behaviour would make one release's logs unfindable from the
 // next one's, which is a cost with no buyer.
 const IDENTITY_APPROVAL_KEY = 'approvedAgentIdentities'; // { [identityId]: true }
+// The key before the template→identity rename, READ as a fallback so an approval given on ≤1.35
+// survives the upgrade (P3-10). Never written.
+const LEGACY_APPROVAL_KEY = 'approvedAgentTemplates';
 
 // Bounded, because the map is written from a launch path and an unbounded local store is the
 // shape that has bitten this tree before. Oldest key out; a re-approval is one click.
@@ -67,8 +70,10 @@ const MAX_APPROVED_IDENTITIES = 200;
 function isIdentityApproved(identityId) {
   if (!identityId) return false;
   try {
-    const map = store.get(IDENTITY_APPROVAL_KEY);
-    return !!(map && typeof map === 'object' && map[identityId] === true);
+    return [IDENTITY_APPROVAL_KEY, LEGACY_APPROVAL_KEY].some((key) => {
+      const map = store.get(key);
+      return !!(map && typeof map === 'object' && map[identityId] === true);
+    });
   } catch (_err) {
     return false; // an unreadable store is not a grant
   }
@@ -93,6 +98,7 @@ function approveIdentity(identityId) {
 
 module.exports = {
   IDENTITY_APPROVAL_KEY,
+  LEGACY_APPROVAL_KEY,
   MAX_APPROVED_IDENTITIES,
   isIdentityApproved,
   approveIdentity,

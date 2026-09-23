@@ -18,8 +18,8 @@ import {
  * The desktop calls this at spawn time, as the operator, and gets back the
  * flattened payload it needs to start an agent, and nothing else:
  *
- *   200 → { name, instructions, model, fields: [{key,value}],
- *           knowledgeBases: [{id,name}], authoredByCaller,
+ *   200 → { name, instructions, model, runtime, fields: [{key,value,type?}],
+ *           knowledgeBases: [{id,name}], knowledge, authoredByCaller,
  *           unreachableKnowledgeBaseCount }
  *   404 → { error: { code: "AGENT_IDENTITY_NOT_FOUND", message } }
  *
@@ -35,7 +35,7 @@ import {
  * the record grows fields as the product does (sharing state, timestamps,
  * ownership, whatever the settings UI needs next), and the launcher must not have
  * to re-decide which of them matter every time. This endpoint is the promise that
- * those SIX keys are what starting an agent needs — a field added to
+ * those keys are what starting an agent needs — a field added to
  * `AgentIdentity` does not appear here unless someone decides it belongs in a
  * launch.
  *

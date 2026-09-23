@@ -156,7 +156,7 @@ const WELL_HEADER =
  * text node, two jobs, no `aria-label` to drift from the visible word.
  * ⚠ **`IDENTITY_NAME_TEXT`, BY IMPORT** — the type the /home Overview's **Credit
  * spend** heading wears, which is what Samuel named. ⚠ **NOT
- * `IDENTITY_NAME_TEXT_LG`** (18px): he rejected its spread by name the same day
+ * `SECTION_HEADING_TEXT`** (18px): he rejected its spread by name the same day
  * (*"I only asked you to change the usage size to be bigger"*).
  * ⚠ **COLLAPSED MEANS THE CONTENT IS NOT RENDERED**, one transition late —
  * {@link useWellContent} owns the delay.

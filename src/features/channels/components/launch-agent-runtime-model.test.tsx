@@ -321,3 +321,89 @@ describe("an IDENTITY whose model belongs to another runtime", () => {
     expect(overridesArg(controls)).toBeUndefined();
   });
 });
+
+describe("an IDENTITY with a runtime (rulings 4, 5)", () => {
+  const pickIdentity = (name: string) =>
+    fireEvent.click(
+      Array.from(
+        screen.getByRole("tablist", { name: "Identity" }).querySelectorAll('[role="tab"]')
+      ).find((el) => (el.textContent || "").startsWith(name))!
+    );
+  const selectedRuntime = () => row().querySelector('[aria-selected="true"]')?.textContent ?? "";
+  const codexCoder = { id: "tpl-2", name: "Coder", workspaceId: "ws-1", createdBy: ME, model: "gpt-6-mini", runtime: "codex" };
+
+  it("defaults the launch runtime to the identity's, with that runtime's model", async () => {
+    bothRuntimes();
+    posture.stored = "claude";
+    identityList.identities = [codexCoder];
+    const controls = await open();
+    expect(selectedRuntime()).toContain(CLAUDE.label);
+    pickIdentity("Coder");
+    await waitFor(() => expect(selectedRuntime()).toContain(CODEX.label));
+    expect(modelSelected()).toContain("GPT-6 Mini");
+    fireEvent.click(launchButton());
+    await waitFor(() => expect(controls.launchAgent).toHaveBeenCalled());
+    expect(runtimeArg(controls)).toBe("codex");
+    // The identity's model is DISPLAYED, never stamped as a per-spawn pick.
+    expect(overridesArg(controls)).toBeUndefined();
+  });
+
+  it("an explicit Runtime pick outranks the identity's runtime", async () => {
+    bothRuntimes();
+    posture.stored = "codex";
+    identityList.identities = [codexCoder];
+    const controls = await open();
+    fireEvent.click(pillFor(CLAUDE.label));
+    pickIdentity("Coder");
+    await waitFor(() => expect(document.body.textContent ?? "").toContain("gpt-6-mini"));
+    expect(selectedRuntime()).toContain(CLAUDE.label);
+    fireEvent.click(launchButton());
+    await waitFor(() => expect(controls.launchAgent).toHaveBeenCalled());
+    expect(runtimeArg(controls)).toBe("claude");
+  });
+
+  it("falls back to the channel's runtime when the identity is cleared", async () => {
+    bothRuntimes();
+    posture.stored = "claude";
+    identityList.identities = [codexCoder];
+    await open();
+    pickIdentity("Coder");
+    await waitFor(() => expect(selectedRuntime()).toContain(CODEX.label));
+    pickIdentity("None");
+    await waitFor(() => expect(selectedRuntime()).toContain(CLAUDE.label));
+  });
+
+  it("summarises the LAUNCH runtime's stored record, not the channel's selected one (X-02)", async () => {
+    bothRuntimes();
+    posture.stored = "claude";
+    posture.byRuntime = {
+      claude: { tools: "bypass" },
+      codex: { tools: "on-request", native: { sandbox_mode: "read-only" } },
+    };
+    identityList.identities = [codexCoder];
+    await open();
+    pickIdentity("Coder");
+    await waitFor(() => expect(selectedRuntime()).toContain(CODEX.label));
+    const notes = screen.getAllByRole("note").map((n) => n.textContent ?? "").join(" ");
+    expect(notes).toContain("on-request");
+    expect(notes).not.toContain("Bypass");
+  });
+});
+
+describe("an identity model the launch runtime's ready roster lacks (X-03)", () => {
+  it("is not shown as the model that will run — the runtime default is", async () => {
+    bothRuntimes();
+    posture.stored = "claude";
+    identityList.identities = [
+      { id: "tpl-3", name: "Veteran", workspaceId: "ws-1", createdBy: ME, model: "claude-opus-4-1", runtime: "claude" },
+    ];
+    await open();
+    fireEvent.click(
+      Array.from(
+        screen.getByRole("tablist", { name: "Identity" }).querySelectorAll('[role="tab"]')
+      ).find((el) => (el.textContent || "").startsWith("Veteran"))!
+    );
+    await waitFor(() => expect(modelSelected()).toContain("Fable 5"));
+    expect(modelPills().join(" ")).not.toContain("claude-opus-4-1");
+  });
+});

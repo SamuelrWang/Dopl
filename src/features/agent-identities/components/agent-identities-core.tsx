@@ -3,7 +3,7 @@
 import { useMemo, useState, type ReactNode } from "react";
 import { Plus } from "lucide-react";
 import { PageShellSkeleton } from "@/shared/ui/skeleton";
-import { useKnowledgeBaseList } from "@/features/knowledge/client/hooks";
+import { useAttachableBases } from "../hooks/use-attachable-bases";
 import { useTeams } from "@/features/members/hooks/use-teams";
 import { agentIdentityErrorMessage } from "../client/api";
 import type { AgentIdentity, IdentityShelf } from "../client/types";
@@ -95,7 +95,7 @@ export function AgentIdentitiesCore({
   // writer on `[path, ws, undefined]` is F-331 with a new axis.
   const list = useAgentIdentities(workspaceId, { shelf: WORKSPACE_SHELF });
   const { teams } = useTeams(workspaceSlug);
-  const baseList = useKnowledgeBaseList(workspaceId);
+  const attachable = useAttachableBases(workspaceId);
 
   const [editor, setEditor] = useState<EditorState>(CLOSED);
   const {
@@ -114,16 +114,6 @@ export function AgentIdentitiesCore({
 
   const grouped = useMemo(() => groupByVisibility(list.identities), [list.identities]);
 
-  // ⚠ THE TREE ROOTS. The picker reads each base's folders and entries lazily
-  // for itself; this list is only what it opens with.
-  // ⚠ **THE `id → name` LOOKUP THAT STOOD HERE LEFT ON 2026-09-08** with the
-  // third argument of `optimisticIdentity`: the draft holds resolved REFS now,
-  // so a chip carries its own label and the lookup was a third place a name
-  // could disagree with the two that already had it.
-  const knowledgeBases = useMemo(
-    () => (baseList.data?.bases ?? []).map((b) => ({ id: b.id, name: b.name })),
-    [baseList.data]
-  );
   function openEditor(identity: AgentIdentity | null) {
     setWriteError(null);
     setEditor((prev) => ({ open: true, identity, session: prev.session + 1 }));
@@ -177,7 +167,9 @@ export function AgentIdentitiesCore({
         session={editor.session}
         identity={editor.identity}
         teams={teams ?? []}
-        knowledgeBases={knowledgeBases}
+        knowledgeBases={attachable.bases}
+        knowledgeState={attachable.state}
+        onKnowledgeRetry={attachable.retry}
         saving={saving}
         deleting={deleting}
         error={writeError}

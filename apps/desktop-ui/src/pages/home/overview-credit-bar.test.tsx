@@ -1,7 +1,5 @@
-import {
-  IDENTITY_NAME_TEXT,
-  IDENTITY_NAME_TEXT_LG,
-} from "@/features/agent-identities/components/identity-section";
+import { IDENTITY_NAME_TEXT } from "@/features/agent-identities/components/identity-section";
+import { SECTION_HEADING_TEXT } from "@/shared/ui/section-heading";
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { PERSONAL_MONTHLY_CREDITS } from "@/features/billing/credits";
@@ -95,7 +93,7 @@ describe("the /home credit capacity bar", () => {
    * 🔒 **TWO SCALES IN THIS BLOCK, AND THE SPLIT IS THE RULING — THE PANEL
    * HEADING IS THE BIG ONE AND EVERYTHING INSIDE IT IS NOT.**
    *
-   * **Usage** wears `identity-section.tsx › IDENTITY_NAME_TEXT_LG` (Samuel,
+   * **Usage** wears `shared/ui/section-heading.ts › SECTION_HEADING_TEXT` (Samuel,
    * 2026-09-13: *"increase the font size for usage … let's bold it as well"*).
    * The scope menu, the month label and **Credit spend** wear
    * `› IDENTITY_NAME_TEXT` — the 14px face the agent identity card's name wears.
@@ -113,7 +111,7 @@ describe("the /home credit capacity bar", () => {
     renderHome();
     const usage = await panel("Usage");
     const heading = screen.getByRole("heading", { name: "Usage" });
-    for (const token of IDENTITY_NAME_TEXT_LG.split(" ")) {
+    for (const token of SECTION_HEADING_TEXT.split(" ")) {
       expect(heading.className).toContain(token);
     }
     // ⚠ THE PANEL HEADING'S OWN `text-label uppercase` FACE STAYS OVERRIDDEN.

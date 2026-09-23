@@ -22,11 +22,17 @@ import type { IdentityVisibility } from "@dopl/contracts";
 export type { IdentityVisibility };
 
 
+/** How a field's value is TYPED in the editor; absent = `text`. Mirrors
+ *  `src/features/agent-identities/types.ts › IdentityFieldType`. */
+export type IdentityFieldType = "text" | "number" | "date" | "boolean" | "url";
+
 /** One user-defined custom field. Both halves are short LABELS: they are
  *  spliced into the launch payload an agent reads back line by line. */
 export interface IdentityField {
   key: string;
   value: string;
+  /** Absent = `text`. An update copies it from the stored row when omitted (P8-01). */
+  type?: IdentityFieldType;
 }
 
 /** A knowledge base attached to an identity — a REFERENCE, never a copy. */
@@ -95,6 +101,9 @@ export interface AgentIdentity {
   /** Default model identifier, passed through at spawn. Null = the desktop's
    *  own default; this layer holds no model roster. */
   model: string | null;
+  /** The runtime `model` belongs to (`claude`, `codex`, …); null = no
+   *  preference. Optional: an older server omits it. */
+  runtime?: string | null;
   fields: IdentityField[];
   visibility: IdentityVisibility;
   /** ⚠ Populated only when `visibility` is `'team'`, and only for the creator /
@@ -138,6 +147,7 @@ export interface AgentIdentityCreateInput {
   description?: string | null;
   instructions?: string | null;
   model?: string | null;
+  runtime?: string | null;
   fields?: IdentityField[];
   visibility?: IdentityVisibility;
   /** ⚠ Requires `visibility: 'team'`; the server refuses the pair otherwise
@@ -184,6 +194,7 @@ export interface AgentIdentityUpdateInput {
   description?: string | null;
   instructions?: string | null;
   model?: string | null;
+  runtime?: string | null;
   fields?: IdentityField[];
   visibility?: IdentityVisibility;
   teamIds?: string[];

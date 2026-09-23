@@ -86,7 +86,8 @@ function contextFromRecord(rec) {
     authorName: r.counterpartyName || null,
     channelId: r.channelId || null,
     workspaceId: r.workspaceId || null,
-    identity: r.identityName ? { name: r.identityName } : null,
+    // `templateName`: a record parked before the template→identity rename (P3-10).
+    identity: (r.identityName || r.templateName) ? { name: r.identityName || r.templateName } : null,
   };
 }
 

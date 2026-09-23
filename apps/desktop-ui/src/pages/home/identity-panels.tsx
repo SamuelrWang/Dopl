@@ -86,7 +86,6 @@ import { HomeIdentityPanelsSkeleton } from "./home-skeleton";
 export function HomeIdentityPanels({
   channel,
   homeWorkspaceId,
-  homeWorkspaceSegment,
   currentUserId,
 }: {
   /** `null` when the selected row is a legacy unbound LINK, or when there is
@@ -95,16 +94,6 @@ export function HomeIdentityPanels({
   /** ⚠ `POST /api/boot`'s `workspace`, which is NULL until the caller is
    *  onboarded. Scope C is UNAVAILABLE, not empty, when it is. */
   homeWorkspaceId: string | null;
-  /** Same payload's `segment` — the canonical `{slug}-{publicId}` the home
-   *  workspace's TEAMS read is keyed by, and the only reason this face needs it.
-   *  Null with `homeWorkspaceId`.
-   *  ⚠ Boot's `role` is STILL deliberately not taken, and the reason narrowed
-   *  2026-09-17 (F-343): the PERSONAL section is the caller's own home shelf,
-   *  where a role prop would be a second, weaker copy of the server's floor. The
-   *  SHARED section is a different container and a different reader — its gate
-   *  rides on `channel.myWorkspaceRole`, which is the row the server itself
-   *  reads — NOT `channel.role`, which is the CHANNEL role. */
-  homeWorkspaceSegment: string | null;
   currentUserId: string;
 }) {
   const [editing, setEditing] = useState<EditorTarget | null>(null);
@@ -218,9 +207,7 @@ export function HomeIdentityPanels({
   // which is the "not onboarded yet" case and disables the button rather than
   // writing into the container the section is not about.
   const personalCreateTarget: EditorTarget | null =
-    homeWorkspaceId !== null && homeWorkspaceSegment !== null
-      ? { where: "home", identity: null }
-      : null;
+    homeWorkspaceId !== null ? { where: "home", identity: null } : null;
 
   return (
     <div className="flex min-w-0 flex-1 flex-col gap-3 overflow-y-auto p-3">
@@ -230,7 +217,6 @@ export function HomeIdentityPanels({
         <EmptyState
           icon={Bot}
           title="No channel selected"
-          description="Agents shared in a channel are per channel — pick one on the left."
         />
       ) : (
       <SharedIdentitySection
@@ -277,7 +263,7 @@ export function HomeIdentityPanels({
             ? {
                 message: agentIdentityErrorMessage(
                   homeList.error,
-                  "Couldn't load your own agents."
+                  "Couldn't load your own identities."
                 ),
                 onRetry: () => homeList.refetch(),
               }
@@ -317,17 +303,18 @@ export function HomeIdentityPanels({
                   {/* ⚠ BOTTOM-RIGHT (Samuel, 2026-09-22). The row is what puts
                       it there; the slot itself is full-width and bottom-anchored
                       in `IdentityCard`. */}
-                  <div className="flex justify-end">
-                    <LaunchIntoChannelButton
-                      busy={cardLaunch.busyId === identity.id}
-                      // ⚠ EVERY OTHER ROW IS INERT WHILE ONE LAUNCHES — the
-                      // double-submit guard is the pane's, so the cards say so.
-                      disabled={
-                        !cardLaunch.canLaunch || cardLaunch.busyId !== null
-                      }
-                      onClick={() => cardLaunch.launch(identity)}
-                    />
-                  </div>
+                  {/* No launch op on this build (a plain browser) = no button (P9-09). */}
+                  {cardLaunch.canLaunch && (
+                    <div className="flex justify-end">
+                      <LaunchIntoChannelButton
+                        busy={cardLaunch.busyId === identity.id}
+                        // ⚠ EVERY OTHER ROW IS INERT WHILE ONE LAUNCHES — the
+                        // double-submit guard is the pane's, so the cards say so.
+                        disabled={cardLaunch.busyId !== null}
+                        onClick={() => cardLaunch.launch(identity)}
+                      />
+                    </div>
+                  )}
                 </div>
               )
         }
@@ -351,10 +338,9 @@ export function HomeIdentityPanels({
           onClose={() => setEditing(null)}
         />
       )}
-      {editing?.where === "home" && homeWorkspaceId && homeWorkspaceSegment && (
+      {editing?.where === "home" && homeWorkspaceId && (
         <HomeWorkspaceIdentityEditor
           workspaceId={homeWorkspaceId}
-          workspaceSegment={homeWorkspaceSegment}
           identity={editing.identity}
           onClose={() => setEditing(null)}
         />
@@ -406,5 +392,5 @@ interface EditorTarget {
 }
 
 /** No home workspace yet — a different sentence from "none here". */
-const SCOPE_UNAVAILABLE = "Finish setting up your home space to keep agents there.";
+const SCOPE_UNAVAILABLE = "Finish setting up your home space to keep identities there.";
 

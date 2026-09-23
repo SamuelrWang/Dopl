@@ -1,10 +1,12 @@
 import "server-only";
-import type {
-  AgentIdentity,
-  IdentityField,
-  IdentityKnowledgeBaseRef,
-  IdentityKnowledgeRef,
-  IdentityVisibility,
+import {
+  IDENTITY_FIELD_TYPES,
+  type AgentIdentity,
+  type IdentityField,
+  type IdentityFieldType,
+  type IdentityKnowledgeBaseRef,
+  type IdentityKnowledgeRef,
+  type IdentityVisibility,
 } from "../types";
 
 /**
@@ -19,7 +21,7 @@ import type {
  */
 
 export const AGENT_IDENTITY_COLS =
-  "id, workspace_id, name, description, instructions, model, fields, visibility, created_by, created_at, updated_at";
+  "id, workspace_id, name, description, instructions, model, runtime, fields, visibility, created_by, created_at, updated_at";
 
 export interface AgentIdentityRow {
   id: string;
@@ -28,6 +30,8 @@ export interface AgentIdentityRow {
   description: string | null;
   instructions: string | null;
   model: string | null;
+  /** Optional: a stale PostgREST schema cache (or a pre-column fixture) omits it. */
+  runtime?: string | null;
   fields: unknown;
   visibility: string;
   created_by: string | null;
@@ -48,9 +52,11 @@ export function normalizeFields(raw: unknown): IdentityField[] {
   const out: IdentityField[] = [];
   for (const item of raw) {
     if (!item || typeof item !== "object") continue;
-    const { key, value } = item as { key?: unknown; value?: unknown };
+    const { key, value, type } = item as { key?: unknown; value?: unknown; type?: unknown };
     if (typeof key !== "string" || typeof value !== "string") continue;
-    out.push({ key, value });
+    // An unknown `type` reads as absent (= text), never as a refusal of the field.
+    const known = IDENTITY_FIELD_TYPES.includes(type as IdentityFieldType);
+    out.push(known ? { key, value, type: type as IdentityFieldType } : { key, value });
   }
   return out;
 }
@@ -76,6 +82,7 @@ export function mapAgentIdentityRow(
     description: row.description,
     instructions: row.instructions,
     model: row.model,
+    runtime: row.runtime ?? null,
     fields: normalizeFields(row.fields),
     // The CHECK constraint is the guarantee; the cast is not a validation.
     visibility: row.visibility as IdentityVisibility,

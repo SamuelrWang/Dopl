@@ -97,7 +97,7 @@ export function UsageScopeMenu({
       // PANEL HEADING** (Samuel, 2026-09-13, rejecting a pass that raised it:
       // *"You changed the font size of the credit spend, all channels, and the
       // date to the super large size, like usage. I did not ask for that."*).
-      // `IDENTITY_NAME_TEXT_LG` is the **Usage** heading's alone; the controls
+      // `SECTION_HEADING_TEXT` is the **Usage** heading's alone; the controls
       // inside the block stay one step below it.
       className={IDENTITY_NAME_TEXT}
     />

@@ -154,6 +154,12 @@ describe("updateIdentityRow — a real patch still writes", () => {
     await updateIdentityRow(WS, ID, { description: null });
     expect(rec.updates).toEqual([{ description: null }]);
   });
+
+  it("writes the runtime column, and selects it back", async () => {
+    await updateIdentityRow(WS, ID, { runtime: "codex" });
+    expect(rec.updates).toEqual([{ runtime: "codex" }]);
+    expect(rec.select).toMatch(/\bruntime\b/);
+  });
 });
 
 /**

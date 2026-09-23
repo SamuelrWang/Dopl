@@ -9,10 +9,15 @@ import {
   UnderlineField,
 } from "@/shared/ui/form-dialog";
 import { ConfirmDialog } from "@/shared/ui/confirm-dialog";
-import { agentModelLabel, agentModelOptionsFor } from "@/features/channels/lib/agent-models";
-import { modelOptionsFor } from "@/features/channels/lib/model-catalog";
 import { useLaunchSelection } from "@/features/channels/hooks/use-launch-selection";
 import type { AgentIdentity, IdentityVisibility } from "../client/types";
+import { MAX_DESCRIPTION_CHARS, MAX_NAME_CHARS } from "../lib/bounds";
+import {
+  identityModelKey,
+  identityModelOptions,
+  identityRuntimeOptions,
+  modelAfterRuntimeChange,
+} from "../lib/identity-runtime";
 import {
   draftFromIdentity,
   emptyDraft,
@@ -31,6 +36,7 @@ import {
   type PickerOption,
 } from "./identity-editor-rows";
 import { KnowledgeScopePicker } from "./knowledge-scope-picker";
+import type { AttachableBasesState } from "../hooks/use-attachable-bases";
 
 /**
  * CREATE AND EDIT, in ONE surface — and since 2026-09-08 it is a
@@ -90,6 +96,9 @@ export interface IdentityEditorProps {
   /** ⚠ THE BASES ONLY — the ROOTS of the picker's tree. Folders and entries are
    *  read lazily per base by the picker itself. */
   knowledgeBases: ReadonlyArray<PickerOption>;
+  /** The base read's state (`useAttachableBases`); absent = answered. */
+  knowledgeState?: AttachableBasesState;
+  onKnowledgeRetry?: () => void;
   /**
    * Which visibility scopes this mount offers, IN ORDER. Defaults to the
    * workspace page's three (`SECTIONS`); the /home Agents face's container mount
@@ -128,15 +137,6 @@ export interface IdentityEditorProps {
   onSave: (draft: IdentityDraft) => void;
   onDelete: () => void;
 }
-
-/** ⚠ THE SCHEMA'S OWN BOUNDS (`../schema.ts`), CLAMPED IN THE HANDLER because
- *  the kit's field takes no `maxLength` — same effect, one keystroke later:
- *  the value can never exceed the cap, so no save can 400 on length. */
-const MAX_NAME = 120;
-const MAX_DESCRIPTION = 280;
-
-/** The blank model — `""` on the wire, "Default" in front of an operator. */
-const NO_MODEL = "";
 
 /**
  * "SOME OF THIS ROLE'S KNOWLEDGE IS NOT HERE" — a COUNT, under the chips
@@ -189,6 +189,8 @@ export function IdentityEditor({
   identity,
   teams,
   knowledgeBases,
+  knowledgeState,
+  onKnowledgeRetry,
   sections = SECTIONS,
   containerKind = "standard",
   defaultVisibility,
@@ -230,34 +232,25 @@ export function IdentityEditor({
     [sections, containerKind, draft.visibility]
   );
 
-  /**
-   * ⚠ **"Default" IS PREPENDED, AND IT IS THE DRAFT'S OWN VALUE RATHER THAN A
-   * NEW PICK.** `IdentityDraft.model` has always spelled "this identity pins no
-   * model" as `""` (the create body OMITS the key, the patch sends `null`), and
-   * `AGENT_MODEL_OPTIONS` stopped carrying that state on 2026-09-06 — so the
-   * retired `SelectMenu` rendered BLANK on every new identity and could never be
-   * put back once a model was chosen. A pill row needs one option selected, and
-   * the honest one is the value the draft is actually holding (INVARIANTS §11 —
-   * a back-filled "Sonnet" here would claim a pin the row does not have).
-   * ⚠ `agentModelOptionsFor`, not the bare roster: a stored id this build does
-   * not know is APPENDED rather than dropped, so an older identity keeps its
-   * selection instead of showing none.
-   */
-  // ⚠ 2026-09-22: AN IDENTITY'S MODEL IS THE DEFAULT RUNTIME'S (the directive chain reads it only
-  // there), so the row offers THAT runtime's live catalog — a model the CLI added after this bundle
-  // shipped included. The frozen list is the plain-browser / older-desktop fallback.
+  // The Runtime row offers the desktop's registered runtimes; the Model row offers THAT
+  // runtime's live models ("Default" first — the draft's own "no model"). No runtime, or no
+  // catalog for it, is "Default" plus the stored value as itself (F11, P7-12, X-03).
   const defaults = useLaunchSelection({ kind: "defaults" });
-  const catalog = defaults.catalogFor(defaults.defaultRuntime);
-  const models = useMemo(
-    () => [
-      { key: NO_MODEL, label: agentModelLabel(NO_MODEL) },
-      ...(catalog ? modelOptionsFor(catalog, draft.model) : agentModelOptionsFor(draft.model)).map((o) => ({
-        key: o.value,
-        label: o.label,
-      })),
-    ],
-    [catalog, draft.model]
+  const { catalogFor, runtimes } = defaults;
+  const catalog = draft.runtime ? catalogFor(draft.runtime) : null;
+  const runtimeOptions = useMemo(
+    () => identityRuntimeOptions(runtimes, draft.runtime),
+    [runtimes, draft.runtime]
   );
+  const models = useMemo(
+    () => identityModelOptions(draft.runtime, catalog, draft.model),
+    [draft.runtime, catalog, draft.model]
+  );
+  const pickRuntime = (runtime: string) =>
+    edit({
+      runtime,
+      model: modelAfterRuntimeChange(runtime, runtime ? catalogFor(runtime) : null, draft.model),
+    });
 
   // 🔒 A STORED `team` ROW INSIDE A CONTAINER THAT HAS NO TEAMS. Shown, hinted,
   // and refused at Save — never rewritten on the operator's behalf.
@@ -285,7 +278,7 @@ export function IdentityEditor({
         label="Name"
         ariaLabel="Name"
         value={draft.name}
-        onChange={(name) => edit({ name: name.slice(0, MAX_NAME) })}
+        onChange={(name) => edit({ name: name.slice(0, MAX_NAME_CHARS) })}
       />
 
       <UnderlineField
@@ -296,7 +289,7 @@ export function IdentityEditor({
         multiline
         value={draft.description}
         onChange={(description) =>
-          edit({ description: description.slice(0, MAX_DESCRIPTION) })
+          edit({ description: description.slice(0, MAX_DESCRIPTION_CHARS) })
         }
       />
 
@@ -311,11 +304,22 @@ export function IdentityEditor({
         onChange={(instructions) => edit({ instructions })}
       />
 
+      {runtimeOptions.length > 1 && (
+        <PillChoice
+          label="Runtime"
+          ariaLabel="Runtime"
+          options={runtimeOptions}
+          value={draft.runtime}
+          onChange={pickRuntime}
+          className="flex-wrap"
+        />
+      )}
+
       <PillChoice
         label="Model"
         ariaLabel="Model"
         options={models}
-        value={draft.model}
+        value={identityModelKey(catalog, draft.model)}
         onChange={(model) => edit({ model })}
         className="flex-wrap"
       />
@@ -375,6 +379,8 @@ export function IdentityEditor({
           selected={draft.knowledge}
           onChange={(knowledge) => edit({ knowledge })}
           emptyLine="No knowledge here yet."
+          state={knowledgeState}
+          onRetry={onKnowledgeRetry}
         />
         <UnreachableBasesRow count={identity?.unreachableKnowledgeBaseCount ?? 0} />
       </FormSection>

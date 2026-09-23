@@ -11,9 +11,9 @@
  * duplicate made for a formatting reason.
  *
  * ⚠ THE REPOSITORY IS MOCKED HERE, so what this file proves is that the SERVICE
- * does not issue the write. That the repository is ALSO total on an empty patch
- * — the half that actually reached PostgREST — is proved against a recording
- * client in `repository.test.ts`.
+ * never hands it an empty patch: a junction-only write sends the row's own name,
+ * which versions the row (P7-03). That the repository is ALSO total on an empty
+ * patch is proved against a recording client in `repository.test.ts`.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -63,8 +63,20 @@ beforeEach(() => {
   resetRepoMocks(mockRepo);
 });
 
-describe("a junction-only patch never reaches the row write", () => {
-  it("a knowledgeBaseIds-only attach round-trips and issues NO row update", async () => {
+/** The only scalar a junction-only write sends: the row's own name, so the UPDATE
+ *  fires the touch trigger (P7-03) and is never an empty body (F-404). */
+const SAME_NAME_ONLY = {
+  name: "Researcher",
+  description: undefined,
+  instructions: undefined,
+  model: undefined,
+  runtime: undefined,
+  fields: undefined,
+  visibility: undefined,
+};
+
+describe("a junction-only patch versions the row with a same-value UPDATE", () => {
+  it("a knowledgeBaseIds-only attach round-trips and bumps the row, never an empty body", async () => {
     mockRepo.listKnowledgeBaseAccessRows.mockResolvedValue([
       { id: KB_OPEN, workspaceId: "ws-1", visibility: "workspace", createdBy: OTHER },
     ] as never);
@@ -74,7 +86,7 @@ describe("a junction-only patch never reaches the row write", () => {
       updateIdentity(ctx(), "tpl-1", { knowledgeBaseIds: [KB_OPEN] })
     ).resolves.toBeTruthy();
 
-    expect(mockRepo.updateIdentityRow).not.toHaveBeenCalled();
+    expect(mockRepo.updateIdentityRow).toHaveBeenCalledWith("ws-1", "tpl-1", SAME_NAME_ONLY);
     // ⚠ THE REPOSITORY TAKES SCOPES SINCE 2026-09-08. The older
     // `knowledgeBaseIds` key still means WHOLE BASES and is translated at one
     // seam (`service-writes.ts › requestedKnowledgeScopes`), so a client that
@@ -87,7 +99,7 @@ describe("a junction-only patch never reaches the row write", () => {
     );
   });
 
-  it("a teamIds-only patch is the same shape and is skipped the same way", async () => {
+  it("a teamIds-only patch is the same shape and bumps the row the same way", async () => {
     mockRepo.listTeamIdsForUser.mockResolvedValue([TEAM_A]);
     mockRepo.filterTeamIdsInWorkspace.mockResolvedValue([TEAM_A]);
     mockRepo.findIdentityById.mockResolvedValue(
@@ -96,7 +108,7 @@ describe("a junction-only patch never reaches the row write", () => {
 
     await updateIdentity(ctx(), "tpl-1", { teamIds: [TEAM_A] });
 
-    expect(mockRepo.updateIdentityRow).not.toHaveBeenCalled();
+    expect(mockRepo.updateIdentityRow).toHaveBeenCalledWith("ws-1", "tpl-1", SAME_NAME_ONLY);
     expect(mockRepo.replaceTeamLinks).toHaveBeenCalled();
   });
 
