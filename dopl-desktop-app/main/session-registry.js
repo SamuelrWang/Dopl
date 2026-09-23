@@ -61,17 +61,6 @@ function agentIdsOnThread(a) {
   return liveOnThread(a).map((s) => String(s.agentId || '')).filter(Boolean);
 }
 
-// ⚠ `agentIdsInChannel` WAS DELETED HERE ON 2026-09-02 (F-579, closed in the batch-2 review).
-// It answered "every live agent id in this CHANNEL" for ONE reader: the ~870-character voluntary
-// claim protocol in `prompt-framing.js › agentIdentityFraming`, which B9 deleted whole with the
-// triage tier. `noteSiblings` stopped stamping `context.siblingAgentIds` in the same change; this
-// function computed that field and nothing else ever called it, so it survived as an exported
-// registry read answering a question nobody asks — the shape a future paragraph gets written
-// around. ⚠ THE THREAD-SCOPED `agentIdsOnThread` IS LIVE AND STAYS: it is a different question.
-// ⚠ AND THE OLD DOCTRINE IT CARRIED IS NOT LOST, because it is the delivery core's rule and is
-// stated there: knowing a sibling exists is not the same as hearing it, and the FEED is strictly
-// scoped in `session-dispatch.js`. A channel-wide roster must never become the fan-out's input.
-
 /**
  * EVERY LIVE SESSION OF THIS OPERATOR'S IN ONE CHANNEL, thread-scoped or not —
  * the ROOM ROSTER's local half (2026-09-18).
@@ -131,13 +120,7 @@ function sessionOn(a) {
  * ⚠ IT WRITES ONTO `s.context` rather than being read at framing time because `session-seed.js`
  * assembles the turn and holds no registry handle (it is required BY the engine, never back into
  * it).
- *
- * ⚠ **THE SIBLING ROSTER IS GONE (2026-09-02, G13).** This also stamped
- * `context.siblingAgentIds` — every other agent live in the channel — and
- * `prompt-framing.js › agentIdentityFraming` was its only reader, for the voluntary claim
- * protocol that narrowed delivery deleted. Nothing else ever read it, so the field went with the
- * paragraph rather than staying as a value nobody consumes. ⚠ The NAME survives because what it
- * stamps now — the id — was always half of what it did.
+ * The name predates the sibling roster's removal; only the session's own id is stamped now.
  */
 function noteSiblings(s) {
   if (!s || !s.context) return;

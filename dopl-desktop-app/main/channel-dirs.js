@@ -119,7 +119,7 @@ function defaultSessionDir() {
   return isDir(downloads) ? downloads : os.homedir();
 }
 
-// ── THE SPAWN CWD (main/session-query.js › buildSdkOptions) ──────────────────
+// ── THE SPAWN CWD (every runtime's launch-spec.js) ────────────────────────────
 // The stored per-channel dir when it still exists, else ~/Downloads. Only the LOCATION is
 // decided; the tool profile still bounds the spawn (cwd is context, not a fence).
 //

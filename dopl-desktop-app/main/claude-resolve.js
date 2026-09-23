@@ -127,8 +127,8 @@ function augmentedEnv(binPath) {
 //
 //   spawnEnv     built the channel-answering spawn's env — PATH-augmented plus a
 //                CLAUDE_CODE_OAUTH_TOKEN when `claude setup-token` had printed one for us to
-//                hold. The SDK lane does not use it: `session-query.js › buildSdkOptions` is
-//                the only spawn left and it does not go through this module at all.
+//                hold. The SDK lane does not use it: `runtime/claude/launch-spec.js` is the only
+//                spawn left and it does not go through this module at all.
 //   channelCwd   minted a per-channel SCRATCH dir under userData for that spawn to run in.
 //                The surviving cwd rule is `channel-dirs.js › sessionSpawnDir` — the
 //                operator's chosen folder, else ~/Downloads — which is a different answer to

@@ -2,8 +2,8 @@
 // every desktop-spawned session carries: RENAME any of this operator's agents (itself
 // included, and the common case: an orchestrator labelling its workers by role), and END
 // another of them. Exposed to the model as `mcp__dopl_agents__rename_agent` /
-// `mcp__dopl_agents__end_agent` via `session-query.js › buildSdkOptions`, which mounts the
-// server beside the dopl HTTP entry and rides both names on `allowedTools`.
+// `mcp__dopl_agents__end_agent` via `runtime/claude/launch-spec.js › buildOptions`, which mounts
+// the server beside the dopl HTTP entry; both names ride `allowedTools` through the profile table.
 //
 // ⚠ OWN-AGENTS-ONLY IS FREE HERE, NOT ENFORCED — the same sentence `session-ipc-ops.js`
 // writes over `sessions:end`. Names live in the LOCAL electron-store (`agent-names.js`,
@@ -45,7 +45,7 @@
 const SERVER_KEY = 'dopl_agents';
 const RENAME_TOOL = 'mcp__' + SERVER_KEY + '__rename_agent';
 const END_TOOL = 'mcp__' + SERVER_KEY + '__end_agent';
-// The two names buildSdkOptions rides on allowedTools. ⚠ ORDER AND SPELLING ARE THE WIRE:
+// The two names the profile table (`runtime/claude/tools.js`) rides on allowedTools. ⚠ ORDER AND SPELLING ARE THE WIRE:
 // the SDK prefixes with the mcpServers KEY, so SERVER_KEY and these literals must agree —
 // derived, so they cannot drift apart.
 const AGENT_OPS_TOOL_NAMES = [RENAME_TOOL, END_TOOL];
@@ -139,7 +139,7 @@ module.exports = {
   SERVER_KEY,
   RENAME_TOOL,
   END_TOOL,
-  AGENT_OPS_TOOL_NAMES, // ridden on allowedTools by buildSdkOptions — SHADOWED, see header
+  AGENT_OPS_TOOL_NAMES, // ridden on allowedTools via runtime/claude/tools.js — SHADOWED, see header
   // pure core (unit-tested directly; electron-free)
   renameTargetFor,
   applyRenameTo,

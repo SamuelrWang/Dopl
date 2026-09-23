@@ -86,7 +86,7 @@ function promptUsageOf(params) {
 }
 
 // `params.contextWindow` is launch-spec's copy of `tokenUsage.modelContextWindow`; the server's number
-// beats any Dopl table (`session-model.js › contextEvent`).
+// beats any Dopl table (`runtime/events.js › context`).
 function windowFrom(params) {
   const v = params && params.contextWindow;
   return typeof v === 'number' && Number.isFinite(v) && v > 0 ? v : null; // null, never a 0 window

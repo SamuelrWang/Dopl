@@ -241,7 +241,7 @@ const {
 
 
 // ── The two DESKTOP runtime stamps (src/shared/auth/runtime-header.ts) ───────
-// `desktop-session` — a session THIS APP spawned (sdk-loader / mcp-config send the header on
+// `desktop-session` — a session THIS APP spawned (runtime/claude/loader.js / mcp-config send the header on
 //   the device token).
 // `desktop-ui` — the operator typing in this app's own UI window. Posts leave main, not the
 //   renderer (main/ui-bridge.js builds every header; the preload exposes none), on the

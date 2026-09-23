@@ -257,7 +257,7 @@ function signedInSource() {
 // is null (it caches the id for the life of the process), so a machine whose two
 // credentials disagree would keep classifying traffic under whichever identity it
 // happened to resolve first. This lets reconcile drop that cache each pass while the
-// conflict lasts, so `resolveIdentity` re-derives it every time instead of trusting a
+// conflict lasts, so `resolveOperatorUserId` re-derives it every time instead of trusting a
 // value it can no longer justify.
 function identityMismatch() {
   return signedInState().mismatch;
