@@ -9,58 +9,20 @@ import { resolvePersonalReach } from "./personal-reach";
 import { grantedResourceIds } from "./resource-grant-reach";
 
 /**
- * 🔒 **AN ID RESOLVES ITS OWN TENANCY** — the one read in the tree that looks
- * across containers, and the thing that makes `workspace=` unnecessary on a
- * read rather than merely ignorable.
- *
- * ⚠ **GENERALISED OUT OF `features/agent-identities/server/repository-tenancy.ts`
- * ON 2026-09-02.** That file was the "ONE CONSUMER" tenancy repository behind
- * the "it lives elsewhere" refusal (T35): it could say WHERE a ref lived but the
- * read could not GO there, so the product grew a classifier, three label shapes,
- * a desktop duck-type and an MCP doctrine paragraph to explain a miss. The query
- * is the same query; what changed is that its answer is now an ADDRESS a read
- * follows instead of a sentence a human reads.
- *
- * ── 🔒 THE FENCE, WHICH IS THE WHOLE MODULE ───────────────────────────────
- *
- * `supabaseAdmin()` bypasses RLS, so the four clauses below ARE the fence and
- * they must be read together. A row is nameable here only when ALL of:
- *   1. **the caller is somebody.** A SHARED credential (one that may be passed
- *      between humans) resolves NOTHING — it inherits no one person's reach.
- *      Arm 2 of every `canSee*` predicate, restated rather than re-decided.
- *   2. **the container is one the caller ACTIVELY belongs to**, at or above
- *      {@link CONTAINER_READ_FLOOR}. A pending invitation is not a membership
- *      and a revoked one is not either.
- *   3. **the credential's own workspace lock**, when it carries one — a locked
- *      credential resolves inside its lock, **plus its own operator's PERSONAL
- *      container WHEN THAT SHELF IS IN REACH FROM THE ROOM IT IS STANDING IN**,
- *      and nowhere else (§4 layer B1 + rulings B10/#18, NARROWED by task 11 /
- *      #1077 clause (a), approved #1080). ⚠ This module NARROWS on the lock; it
- *      never widens it past that one container and never removes it. See
- *      {@link lockedCandidates}.
- *   4. **the caller could already list the row for themselves** — `created_by`
- *      is the caller, or the row is visible to every member of its container.
- *
- * ⚠ **CLAUSE 4 IS WHY THIS IS NOT AN EXISTENCE ORACLE.** Another member's
- * private (or team-scoped) row matches neither arm in any container, so no
- * answer built on this read can name one, and probing an id you do not own
- * returns exactly what a nonexistent id returns: `null`. That is the property
- * the 404-never-403 surface is built on, not a side effect of the query.
- *
- * ⚠ **RESOLUTION IS NOT AUTHORISATION.** It is strictly NARROWER than any
- * feature's visibility matrix (it cannot see a team-scoped row an admin can), so
- * a caller must still put the row through that matrix in the container this
- * answers. Two fences, in that order; neither is sufficient alone.
- *
- * ⚠ **NO FALLBACK ACROSS TENANCY.** One query, one answer. An id lookup never
- * degrades into a name lookup, and a name lookup never picks — both would make
- * "no such id" and "no such name" answer through each other.
+ * Resolves an id (or name) to the container it lives in — the one read that looks across containers.
+ * `supabaseAdmin()` bypasses RLS, so these clauses ARE the fence; a row is nameable only when all hold:
+ *   1. the caller is a person: a shared credential resolves nothing (arm 2 of every `canSee*`).
+ *   2. the container is one the caller actively belongs to, at or above {@link CONTAINER_READ_FLOOR}.
+ *   3. a locked credential resolves inside its lock plus its operator's personal container, never
+ *      wider ({@link lockedCandidates}).
+ *   4. the caller could already list the row: they created it, or it is shared with the whole
+ *      container — or, by id only, it is lent to a scope they are in ({@link findGrantedResource}).
+ * Clause 4 is why this is no existence oracle: another member's private row answers `null`, exactly
+ * like a missing id (404-never-403).
+ * Resolution is not authorisation: callers still run the feature's visibility matrix in the resolved
+ * container. No fallback: an id lookup never degrades into a name lookup, and a name lookup never picks.
  */
 
-// ⚠ THE TABLE REGISTRY MOVED TO `resolve-resource-tables.ts` (2026-09-14,
-// 500-line cap) — the four rows, their shared arm, and the container read
-// floor. `ResourceType` is re-exported here because that is the name every
-// caller already imports from this module (§1).
 import {
   CONTAINER_READ_FLOOR,
   RESOURCE_TABLES,
@@ -69,41 +31,23 @@ import {
 } from "./resolve-resource-tables";
 export type { ResourceType } from "./resolve-resource-tables";
 
-/** The two credential AXES the fence reads (clauses 1 and 3), plus who is
- *  asking. Structural on purpose: every feature context already satisfies it
- *  without importing this module. */
+/** The credential axes the fence reads (clauses 1 and 3) plus the asker; structural, so every
+ *  feature context satisfies it without importing this module. */
 export interface ResourceCaller extends CredentialAxes {
   userId: string;
-  /** WHICH CONTAINER the credential is fenced to (`mcp_tokens.container_id`);
-   *  `null`/absent = unfenced. Clause 3 narrows on it and never widens. */
+  /** The container the credential is locked to (`mcp_tokens.container_id`); `null`/absent =
+   *  unlocked. Clause 3 narrows on it and never widens. */
   apiKeyWorkspaceId?: string | null;
-  /**
-   * WHO is asking — the two fields `personal-reach.ts` needs to decide whether
-   * clause 3's personal-container half is in reach from this room.
-   *
-   * ⚠ **OPTIONAL BECAUSE THE CONTEXTS ALREADY CARRY THEM UNDER THESE NAMES**
-   * (`KnowledgeContext.source` / `.sessionId` and their four siblings), so every
-   * agent lane states them by construction and no call site changed. ⚠ ABSENT
-   * READS AS A PERSON, which is the ungated answer BY RULING and the one place
-   * this pair does not fail closed — see `personal-reach.ts ›
-   * PersonalReachCaller.source` for why, and do not "fix" it into a refusal.
-   */
+  /** Forwarded to {@link resolvePersonalReach}, which does not branch on them; optional because
+   *  feature contexts already carry them under these names. */
   source?: string | null;
   sessionId?: string | null;
 }
 
 /**
- * WHERE an id lives, and the caller's standing there — an ADDRESS, never row
- * content.
- *
- * ⚠ `name` IS THE ONE EXCEPTION and it earns it: a caller who resolved by id
- * has not been told anything (they named it), and a caller who resolved by name
- * supplied it. It is what lets a refusal say *which* row without a second read.
- * ⚠ `containerRole` IS CARRIED SO THE READ THAT FOLLOWS IS THE SAME READ. A
- * caller re-based into the resolved container with a guessed role would silently
- * lose the rows their real role can see (a team-scoped attachment, a sharing
- * set) — the same read answering two ways depending on which door it came
- * through is the confusion this whole slice removes.
+ * Where an id lives and the caller's standing there — an address, never row content. `name` is safe:
+ * the caller supplied the id or the name. `containerRole` is carried so the follow-up read uses the
+ * caller's real role, not a guess that would drop rows that role can see.
  */
 export interface ResolvedResource {
   type: ResourceType;
@@ -112,31 +56,15 @@ export interface ResolvedResource {
   containerId: string;
   containerName: string;
   containerKind: string;
-  /**
-   * 🔒 **DID THIS CALLER CREATE THE ROW?** ⚠ **REPLACED `homeScoped` ON
-   * 2026-09-02 (slice B15)**, when the `home_scoped` column was dropped and the
-   * personal shelf became a CONTAINER (`containerKind === "personal"`) rather
-   * than a boolean beside one.
-   *
-   * ⚠ **IT IS AN AUTHORISATION INPUT, NOT A LABEL, AND IT IS THE ONE FIELD HERE
-   * THAT IS.** `resolveResource` answers what the caller may NAME; lending a row
-   * to somebody else needs the narrower question, and the copy ops' R2 fence
-   * (`copy-target.ts › notOwnedRefusal`, deleted with them) is where it comes
-   * from. ⚠ `=== true` against a NULLABLE owner column, so a row whose author
-   * left the workspace (`created_by` is `SET NULL`) fails closed.
-   */
+  /** Did this caller create the row? An authorisation input, not a label: lending needs it
+   *  (`shared/grants/service.ts › assertGrantableResource`). Compared against a nullable owner
+   *  column, so an orphaned row (owner SET NULL) fails closed. */
   ownedByCaller: boolean;
   containerRole: Role;
 }
 
-/**
- * 🔒 **RESOLVE ONE ID TO THE CONTAINER IT LIVES IN.** `null` = "not nameable by
- * you", which covers "no such row", "somebody else's private row" and "outside
- * your lock" as ONE answer, deliberately.
- *
- * ⚠ At most one row can match: an id is a primary key and is globally unique,
- * which is the property that makes `workspace=` redundant on a read.
- */
+/** Resolve one id to its container. `null` = not nameable by you — no such row, someone else's
+ *  private row, or outside your lock — one answer, deliberately. */
 export async function resolveResource(
   caller: ResourceCaller,
   type: ResourceType,
@@ -147,18 +75,9 @@ export async function resolveResource(
 }
 
 /**
- * The NAME half of the same fence — every clause identical, many answers
- * possible.
- *
- * ⚠ **IT RETURNS THEM ALL AND PICKS NONE.** Names are not unique (a unique
- * index across a visibility boundary would leak a private row's existence
- * through a conflict error), so the caller decides what a tie means: the launch
- * lane refuses and lists, the "it lives elsewhere" label takes one
- * deterministically. A pick made here would make both of those a lie.
- *
- * ⚠ MATCHING IS CASE-INSENSITIVE **EXACT**, never a prefix or a pattern: the
- * `ilike` argument is an escaped literal, so a `%` in a caller-supplied name
- * matches a `%` and not "anything".
+ * The name half of the same fence. Returns every match and picks none: names are not unique (a unique
+ * index across a visibility boundary would leak a private row via a conflict error), so the caller
+ * decides a tie. Case-insensitive exact match — the `ilike` argument is an escaped literal.
  */
 export async function resolveResourcesByName(
   caller: ResourceCaller,
@@ -169,14 +88,8 @@ export async function resolveResourcesByName(
 }
 
 /**
- * Containers the caller may name rows in → their role in each. Clauses 1–3 of
- * the fence, and the ONLY place they are decided.
- *
- * ⚠ `status='active'` — `workspaces/server/repository.ts › findMembership`
- * carries the scar of omitting it (a removed admin still measured as one).
- * ⚠ `workspace_members` is read here rather than imported from
- * `features/workspaces`: §1 forbids the cross-feature import and this is two
- * columns of one table. The same argument `listTeamIdsForUser` makes.
+ * Containers the caller may name rows in → their role in each: clauses 1–3, decided only here.
+ * `status='active'` is required: a pending or revoked membership is not one.
  */
 async function listContainersForCaller(
   caller: ResourceCaller
@@ -187,10 +100,8 @@ async function listContainersForCaller(
     .select("workspace_id, role")
     .eq("user_id", caller.userId)
     .eq("status", "active");
-  // 🔒 Clause 3, the CONTAINER axis. It is a tenancy fence and is applied as
-  // one — it narrows the candidate set and answers nothing about which rows
-  // inside it the caller may see. That second question is clause 1's SUBJECT
-  // axis (F-333/F-336: reading one off the other is the defect).
+  // Clause 3, the container axis: narrows the candidate set only. Which rows inside it are visible
+  // is clause 1's subject axis — reading one off the other is F-333/F-336.
   if (caller.apiKeyWorkspaceId) {
     query = query.in(
       "workspace_id",
@@ -212,39 +123,10 @@ async function listContainersForCaller(
 }
 
 /**
- * 🔒 **THE CONTAINERS A LOCKED CREDENTIAL MAY STILL NAME ROWS IN: ITS LOCK, AND
- * THE OPERATOR'S OWN PERSONAL CONTAINER** (found in the 1.26.0 smoke).
- *
- * ⚠ The clause narrowed to the lock ALONE, so an agent on a home channel's
- * `container_session` credential answered `base_not_found` for a base on its own
- * operator's shelf — against the ruling the shelf-as-a-tenancy exists to serve
- * (B10 / #18): *"what lets a personal identity or KB be used from ANY container
- * the user is in — the id resolves its own container."* While the shelf was a
- * `WHERE` inside a workspace the operator was already in, the lock never had to
- * name it; the moment it became a CONTAINER, the lock fenced the operator out of
- * their own notes.
- *
- * ⚠ **IT WIDENS BY EXACTLY ONE CONTAINER, WHICH IS WHY IT IS A LIST AND NOT A
- * SECOND QUERY.** The ids go into the SAME `workspace_members` read, so clause 2
- * still decides and clause 4 still refuses; every OTHER container stays fenced.
- * ⚠ **A SHARED CREDENTIAL REACHES THIS NOWHERE, AND CLAUSE 1 IS WHY** — it
- * points at no one person's shelf, so {@link findResources} has already returned
- * `[]`. Restating the refusal here would be a second copy of the arm the two
- * axes exist to keep apart (F-333/F-336).
- * ⚠ ONE INDEXED PROBE (`workspaces_personal_owner_uidx`), on the LOCKED lane
- * only: an unfenced credential never asks.
- *
- * 🔓 ⚠ **THE WIDENING IS UNCONDITIONAL AGAIN (2026-09-06, Samuel's reversal of
- * task 11).** The task-11 package briefly made this conditional on the owner
- * having armed the shared room; that narrowing is undone. `personal-reach.ts` is
- * the one fence that decides and it is now DEFAULT-ON, so a locked agent
- * credential in ANY room — shared or solo — widens by its operator's personal
- * container, exactly as a person does. The confidentiality of that shelf's
- * contents is held by the session's prompt framing, not by refusing to resolve
- * here. ⚠ A closed answer (a shared credential, or an operator with no personal
- * container) still stays a `[lock]` list and never a refusal: the id then
- * resolves to nothing and takes the same 404-never-403 path another member's
- * private row takes.
+ * Containers a locked credential may still name rows in: its lock, plus the operator's personal
+ * container when `personal-reach.ts` answers open. Widens by exactly one container, inside the same
+ * `workspace_members` read, so clauses 2 and 4 still apply and every other container stays fenced.
+ * A closed answer stays `[lock]`, never a refusal, so the id takes the ordinary 404 path.
  */
 async function lockedCandidates(
   caller: ResourceCaller,
@@ -253,9 +135,7 @@ async function lockedCandidates(
   const reach = await resolvePersonalReach({
     userId: caller.userId,
     credentialSubjectUserId: caller.credentialSubjectUserId,
-    // 🔒 THE ROOM IS THE LOCK. A locked credential acts in exactly one
-    // container, so the room half of (room, owner) is a DB fact off the token
-    // row — never a header, and never the container the caller asked about.
+    // The room is the lock: a DB fact off the token row, never a header or the container asked about.
     workspaceId: lockedWorkspaceId,
     source: caller.source,
     sessionId: caller.sessionId,
@@ -266,25 +146,16 @@ async function lockedCandidates(
 }
 
 /**
- * THE ONE QUERY. Clause 4 is the `.or()`; clauses 1–3 are the guard and the
- * `.in()` above it.
- *
- * ⚠ **THE `workspaces!inner` EMBED IS THE CHILD→PARENT DIRECTION AND IS NOT THE
- * ONE `app/api/user/delete/route.ts` WARNS ABOUT** (asked and answered
- * 2026-09-02). That note is about joining OUT of `workspaces` after the May 2026
- * denormalizations; this embeds a row's own parent by FK — the identical shape
- * `workspaces/server/repository.ts › listWorkspacesForUser` and
- * `home/server/repository-containers.ts › listLinkContainers` run on every
- * workspace list in the product. Query shape pinned, un-mocked, in
- * `resolve-resource.test.ts`; every service suite above it mocks this module, so
- * that file is the only thing that ever asserts a filter here.
+ * The one query: clause 4 is the `.or()`, clauses 1–3 the guard and the `.in()`. The
+ * `workspaces!inner` embed is child→parent by FK, not the join `app/api/user/delete/route.ts` warns
+ * about. Filters are pinned un-mocked only in `resolve-resource.test.ts`.
  */
 async function findResources(
   caller: ResourceCaller,
   type: ResourceType,
   ref: { id: string } | { name: string }
 ): Promise<ResolvedResource[]> {
-  // 🔒 Clause 1, and it costs nothing: a shared credential never even asks.
+  // Clause 1: a shared credential never even queries.
   if (isSharedCredential(caller)) return [];
   const containers = await listContainersForCaller(caller);
   if (containers.size === 0) return [];
@@ -295,10 +166,7 @@ async function findResources(
     .select(selectList(spec))
     .in("workspace_id", [...containers.keys()])
     .or(`${spec.ownerColumn}.eq.${orLiteral(caller.userId)},${spec.sharedArm}`);
-  // 🔒 A TRASHED ROW IS NOT NAMEABLE. It is absent from every list the caller
-  // could run, so naming it would break clause 4 in the one direction nothing
-  // else notices — the read that follows this address finds nothing and 404s,
-  // and the ADDRESS is what leaked.
+  // A trashed row is on no list, so naming it would break clause 4 and leak its address.
   if (spec.deletedColumn) query = query.is(spec.deletedColumn, null);
   query =
     "id" in ref
@@ -315,30 +183,17 @@ async function findResources(
   return findGrantedResource(caller, type, spec, ref.id);
 }
 
-/** ⚠ A grantee holds no membership of the row's container, so the map they are
- *  resolved against is empty and {@link toResolved} takes its fail-closed floor.
- *  Shared and frozen — it is the same empty answer every time. */
+/** A grantee holds no membership in the row's container, so {@link toResolved} takes its
+ *  fail-closed role floor. */
 const NO_MEMBERSHIPS: ReadonlyMap<string, Role> = new Map();
 
 /**
- * 🔒 **A ROW LENT TO A SCOPE THE CALLER IS IN IS NAMEABLE BY THEM — CLAUSE 4's
- * THIRD ARM** (F-662).
- *
- * ⚠ **THE TS SIDE WAS THE NARROW HALF, SO THIS IS A REPAIR AND NOT A WIDENING.**
- * `dopl_grant_admits()` has been an arm of `dopl_knowledge_base_readable()` and
- * `can_current_user_read_agent_identity()` since `20260923140000`, and
- * `canSeeBase` / `canSeeIdentity` carry the same arm — policy and matrix both
- * admitted a lent row while the NAMING lane refused it.
- * `resource-grant-reach.ts` recorded the gap in its own header.
- *
- * ⚠ **A SECOND QUERY, NOT A THIRD ARM ON THE FIRST.** A grantee fails the
- * container `.in()` AND both `.or()` arms by construction, so an arm inside that
- * group is unreachable — the mistake `20260923140000` §3b had to undo on the
- * knowledge child policies.
- * ⚠ **ON A MISS, AND FOR AN ID ONLY.** A name is not a global handle, and an id
- * lookup that degraded into a name lookup is the fallback this module forbids.
- * 🔒 **NOT AN EXISTENCE ORACLE**: `grantedResourceIds` answers from the CALLER's
- * own memberships, so an ungranted id returns `null` with no read of the row.
+ * Clause 4's third arm: a row lent to a scope the caller is in is nameable (F-662), matching
+ * `dopl_grant_admits()` inside `dopl_knowledge_base_readable()` / `can_current_user_read_agent_identity()`
+ * and `canSeeBase` / `canSeeIdentity`. A second query, because a grantee fails the container `.in()`
+ * and both `.or()` arms by construction. Id only, on a miss — a name is not a global handle.
+ * Not an oracle: `grantedResourceIds` answers from the caller's own memberships, so an ungranted id
+ * reads no row.
  */
 async function findGrantedResource(
   caller: ResourceCaller,
@@ -348,9 +203,8 @@ async function findGrantedResource(
 ): Promise<ResolvedResource[]> {
   const granted = await grantedResourceIds(caller.userId, type, [id]);
   if (!granted.has(id)) return [];
-  // ⚠ NO CONTAINER FILTER AND NO `.or()`: the grant IS the standing, and both
-  // of those are the fence the grant is reached AROUND. The soft-delete filter
-  // stays — a trashed row is listable by nobody, grantee included.
+  // No container filter and no `.or()`: the grant is the standing. The soft-delete filter stays —
+  // a trashed row is listable by nobody, grantee included.
   let query = supabaseAdmin()
     .from(spec.table)
     .select(selectList(spec))
@@ -363,9 +217,8 @@ async function findGrantedResource(
   );
 }
 
-/** The row shape `select` asks for. ⚠ Supabase types a 1:1 embed as an array;
- *  the flatten below goes through `unknown` exactly as
- *  `workspaces/server/repository.ts › listWorkspacesForUser` does. */
+/** The row `select` asks for. Supabase may type the 1:1 embed as an array; {@link toResolved}
+ *  flattens it. */
 interface ResourceRow {
   id: string;
   name: string;
@@ -373,20 +226,17 @@ interface ResourceRow {
   workspace:
     | { name: string; kind: string }
     | Array<{ name: string; kind: string }>;
-  /** ⚠ The OWNER column, whose NAME differs per table (`created_by` /
-   *  `owner_id`), so it is read through `spec.ownerColumn` rather than declared. */
+  /** The owner column; its name differs per table, so it is read via `spec.ownerColumn`. */
   [ownerColumn: string]: unknown;
 }
 
 function selectList(spec: ResourceTable): string {
   return [
     "id",
-    // ⚠ ALIASED, ALWAYS. `name:name` is the identity case and is written the
-    // same way as `name:title` so no reader has to check which table is which.
+    // Always aliased, so `chats.title` and every `name` share one row shape.
     `name:${spec.nameColumn}`,
     "workspace_id",
-    // 🔒 PROJECTED FOR THE OWNERSHIP ANSWER, never for a DTO — see
-    // `ResolvedResource.ownedByCaller`.
+    // Projected for `ownedByCaller` only, never for a DTO.
     spec.ownerColumn,
     "workspace:workspaces!inner(name, kind)",
   ].join(", ");
@@ -407,41 +257,26 @@ function toResolved(
     id: row.id,
     name: row.name,
     containerId: row.workspace_id,
-    // ⚠ Never `undefined` into a rendered refusal, and never a guessed `link`:
-    // a blank name and `standard` are the answers that claim the least.
+    // Never `undefined` in a refusal, never a guessed kind: blank and `standard` claim the least.
     containerName: container?.name ?? "",
     containerKind: container?.kind ?? "standard",
-    // ⚠ Both halves may be null (an unattributed row, an unresolved caller) and
-    // neither is evidence of ownership, so neither passes.
+    // A null on either side is not evidence of ownership, so it never passes.
     ownedByCaller: row[spec.ownerColumn] === callerUserId,
-    // ⚠ Non-null by construction: the row's container came out of `.in()` over
-    // this very map. `viewer` is the fail-closed floor if that ever stops
-    // holding.
+    // Present for member lookups (the row came from `.in()` over this map); `viewer` is the
+    // fail-closed floor otherwise, including for a grantee.
     containerRole: containers.get(row.workspace_id) ?? CONTAINER_READ_FLOOR,
   };
 }
 
-/** `%`, `_` and `\` are LITERALS in a name. Unescaped, a caller-supplied `%`
- *  turns an exact match into "anything". */
+/** `%`, `_` and `\` are literals in a name; unescaped, a caller's `%` would match anything. */
 function escapeLikeLiteral(value: string): string {
   return value.replace(/[%_\\]/g, "\\$&");
 }
 
 /**
- * A value going into a RAW `.or()` filter string, quoted.
- *
- * ⚠ **THE NAME PATH ESCAPED AND THE ID PATH DID NOT, WHICH IS THE ASYMMETRY THIS
- * REMOVES** (2026-09-02). `.or()` takes a filter STRING that PostgREST parses:
- * `,` splits the arms, `.` splits column-operator-value, and `)` closes a group,
- * so a value carrying any of them changes the query's SHAPE rather than its
- * subject. `caller.userId` is a `auth.users` UUID today and cannot carry one —
- * which is a fact about the CALLER, not about this function, and it is the kind
- * of fact that changes when an id type does. The clause it sits in is the
- * tenancy fence, so it is escaped where it is written and not where it is
- * proved.
- *
- * ⚠ DOUBLE-QUOTED, not stripped: PostgREST reads a quoted value literally, and
- * dropping characters would silently resolve a DIFFERENT row.
+ * Quote a value for a raw `.or()` filter string, where `,` `.` `)` would change the query's shape.
+ * This clause is the tenancy fence, so it is escaped where written even though a UUID cannot carry
+ * them. Quoted, not stripped — stripping would resolve a different row.
  */
 function orLiteral(value: string): string {
   return `"${value.replace(/["\\]/g, "\\$&")}"`;

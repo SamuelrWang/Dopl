@@ -5,25 +5,13 @@ import { mapAgentIdentityError } from "@/features/agent-identities/server/http-m
 import { toHttpErrorResponse } from "@/shared/api/http-error-response";
 import { isUuid } from "@/shared/lib/id/uuid";
 
-/** Agent-identity route catch-block helper: `mapAgentIdentityError`, then
- *  HttpError, then a generic 500. The fifth feature wrapper around
- *  `toHttpErrorResponse`, alongside `toKnowledgeErrorResponse`,
- *  `toChatErrorResponse`, `toSkillErrorResponse` and `toChannelErrorResponse`. */
+/** Route catch-block helper: `mapAgentIdentityError`, then `HttpError`, then a generic 500. */
 export function toAgentIdentityErrorResponse(err: unknown): NextResponse {
   return toHttpErrorResponse("agent-identity-route", err, mapAgentIdentityError);
 }
 
-/**
- * Validates the `[identityId]` route param.
- *
- * ⚠ IDENTITIES ARE ADDRESSED BY UUID, NOT BY SLUG, AND THAT IS A DEPARTURE FROM
- * `skills` WORTH ONE SENTENCE: a skill's slug is part of its agent-facing
- * contract (`dopl://kb/<slug>` refs, `skill_get` by name), so it earns a
- * human-readable, renameable, collision-managed identifier. An identity is
- * selected from a picker and then referenced by id forever; a slug would add a
- * uniqueness constraint whose only job is to make two people's private
- * "Researcher" identities collide.
- */
+/** Validates `[identityId]`. Identities are addressed by UUID, not slug (unlike skills): a slug's
+ *  uniqueness would only make two people's same-named private identities collide. */
 export function requireIdentityId(
   params: Record<string, string> | undefined
 ): string {

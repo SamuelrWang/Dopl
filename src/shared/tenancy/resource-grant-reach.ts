@@ -4,77 +4,21 @@ import { meetsMinRole, type Role } from "@/features/workspaces/types";
 import { channelsWhereScopeIsIgnored } from "./channel-scope";
 
 /**
- * 🔒 **"IS THIS ROW LENT TO A SCOPE I AM IN?" — the READ half of a grant, and
- * the one place it is answered** (F-604, 2026-09-02, wave B batch 3).
- *
- * B11 replaced the copy ops with grants: `dopl_kb(op="grant")` /
- * `dopl_agent(op="grant")` and the /home "Share into this channel" control write
- * a `resource_grants` row. B15 shipped that WRITE door and recorded that nothing
- * read it back — a lent row stayed `private` + created-by-the-grantor, so in the
- * target scope `canSeeBase`/`canSeeIdentity` refused it and the grant was a
- * recorded intent. This module is the arm both predicates were missing.
- *
- * ── 🔒 THE TWIN ────────────────────────────────────────────────────────────
- *
- * ⚠ **THIS IS ONE RULE WRITTEN TWICE AND THE HALVES MUST MOVE TOGETHER** (§5A).
- * The SQL twin is `dopl_grant_admits(text, uuid)`
- * (`20260923140000_grant_read_arm.sql`), called by
- * `dopl_knowledge_base_readable()` and `can_current_user_read_agent_identity()`.
- * `scripts/check-rls-pair-gate.ts` proves each predicate still has its named
- * policy twin; the per-table redteam suites prove the two AGREE.
- *
- * ── SCOPES: TWO HERE, THE THIRD SOMEWHERE ELSE ─────────────────────────────
- *
- * {@link grantedResourceIds} answers `channel` and `container` only. **`team` is
- * deliberately absent from IT**: it is already an arm of
- * `dopl_teams_mode_visible()` / `filterTeamVisibleBases`, reached through
- * `access_mode='teams'` and `visibility='team'`, and answering it there as well
- * would be a second copy of a rule that has a home (ruling B4 made team a SCOPE,
- * not a second mechanism). It is also off the MCP surface entirely (A8).
- *
- * ⚠ **{@link teamGrantedResourceIds} IS A SECOND DOOR ON THE SAME TABLE, NOT A
- * SECOND COPY OF THE RULE (F-716, 2026-09-17).** It reads the team scope and
- * answers only *"which of these ids is lent to a team I am in"*; the RULE — who
- * that admits, and under which `visibility`/`access_mode` — stays in each
- * feature's own `canSee*`, which takes the answer. It exists because the
- * per-feature readers it mirrors (`teams/server/repository-grants.ts ›
- * listGrantsForResources`, `agent-identities/server/repository.ts ›
- * listTeamLinksForIdentities`) are **per-container**, and global search spans
- * every container the caller is in: calling one of them per container is the
- * per-container fan §9 forbids. Team membership is read ONCE for the caller,
- * across containers, because a team id is unique.
- *
- * ── LEVEL IS NOT ONE LADDER, AND THIS IS WHERE THAT BITES ──────────────────
- *
- * 🔒 A `container` grant carries `read | edit` and BOTH admit reading. A
- * `channel` grant carries `agent_only | visible` — two AUDIENCES, not a high/low
- * pair (`20260827120000`) — and only `visible` names a HUMAN audience, so
- * `agent_only` must not widen a person's read. That is the same split
- * `resource_grants_member_select` makes about the grant ROW's own existence, and
- * the inverse of the one `repository-audience.ts ›
- * listGrantedBaseIdsForChannels` makes for the AGENT's ceiling, where both
- * levels count. Three lanes, one table, and each states which audience it is.
- *
- * ── 🔒 AND A CHANNEL SCOPE IS FENCED BY CONTAINER KIND (2026-09-17) ────────
- *
- * Samuel's ruling: channel scope is a HOME-channel mechanism, so
- * {@link grantedResourceIds} IGNORES every `scope_type='channel'` row whose channel
- * lives in a `kind='standard'` container. The rule is stated once, in
- * `./channel-scope.ts`. ⚠ **IGNORED, NOT ABSENT** — the write doors refuse NEW rows and
- * `20261011120000` converts the OLD ones, so this arm cannot assume a clean table.
- *
- * ── WHAT THIS DOES *NOT* DO, STATED SO NOBODY INFERS IT ────────────────────
- *
- * ⚠ **IT WIDENS VISIBILITY, NEVER THE CANDIDATE SET.** `listBases` /
- * `listIdentities` read `WHERE workspace_id = ctx.workspaceId`, and
- * `resolve-resource.ts › listContainersForCaller` narrows the id lane the same
- * way. So a grant is honoured end to end when the row is ALREADY in the
- * caller's reach — a private row lent to a channel or to its own container —
- * and a row lent ACROSS containers is still not listed. Widening the fetch is a
- * TENANCY change, not a visibility one (F-662).
+ * The read half of a grant: which rows are lent to a scope the caller is in, decided only here (F-604).
+ * One rule written twice (INVARIANTS §5A): the SQL twin is `dopl_grant_admits(text, uuid)`, called by
+ * `dopl_knowledge_base_readable()` and `can_current_user_read_agent_identity()`; move them together.
+ * Levels are not one ladder: a `container` grant (`read | edit`) always admits reading; a `channel`
+ * grant admits a person only at `visible` — `agent_only` must not widen a human's read.
+ * A channel-scoped row whose channel sits in a `kind='standard'` container is ignored
+ * (`./channel-scope.ts`); old rows may still exist, so this cannot assume a clean table.
+ * `team` scope is not answered by {@link grantedResourceIds}: `dopl_teams_mode_visible()` /
+ * `filterTeamVisibleBases` own it. {@link teamGrantedResourceIds} is a batched membership door for
+ * cross-container search, not a second copy of that rule (F-716).
+ * Widens visibility, never a list's candidate set: a row lent across containers resolves by id
+ * (`resolve-resource.ts › findGrantedResource`) but is not listed (F-662).
  */
 
-/** The resource kinds `resource_grants.resource_type` accepts. */
+/** Mirrors `resource_grants.resource_type`. */
 export type GrantResourceType =
   | "knowledge_base"
   | "agent_identity"
@@ -82,36 +26,17 @@ export type GrantResourceType =
   | "chat"
   | "chat_folder";
 
-/** Resource ids the caller reaches through a grant. Membership is the question;
- *  the set is the answer, so the predicates stay synchronous and total. */
+/** A set, so the `canSee*` predicates that take it stay synchronous. */
 export type GrantedResourceIds = ReadonlySet<string>;
 
-/** ⚠ Shared, frozen, and the value every no-grant path returns — a fresh `Set`
- *  per call would allocate on the hot list path for nothing. */
+/** Shared by every no-grant path, so the hot list path allocates nothing. */
 export const NO_GRANTS: GrantedResourceIds = new Set<string>();
 
-/**
- * 🔒 **THE CEILING ON A `resource_grants` FAN-OUT, AND IT IS ONE CONSTANT.**
- * PostgREST truncates an unlimited select SILENTLY, and a truncation on either
- * lane fails in the SAFE direction (fewer rows admitted) — but invisibly, so
- * the bound is stated rather than inherited.
- *
- * ⚠ **IT WAS TWO CONSTANTS UNTIL 2026-09-02** — this one and
- * `knowledge/server/repository-audience.ts › AUDIENCE_GRANT_LIMIT`, both 500,
- * each documented as *"the same number for the same reason"* as the other.
- * Two names for one number is how they stop being the same number: whichever
- * is retuned first, the other keeps its old value and the two grant lanes
- * silently start truncating at different points. `AUDIENCE_GRANT_LIMIT` is
- * deleted and that reader imports this.
- *
- * ⚠ NOT `CHANNEL_GRANT_LIMIT` (200) OR `CONTAINER_CHANNEL_LIMIT` (200), which
- * are deliberately different numbers over different tables — a per-base grant
- * page and a container's channel list. Only the two grant FAN-OUTS share this.
- */
+/** Ceiling on a `resource_grants` fan-out, shared with `knowledge/server/repository-audience.ts` so
+ *  both grant lanes truncate at the same point. PostgREST truncates silently, in the safe direction. */
 export const GRANT_REACH_LIMIT = 500;
 
-/** The minimum workspace role that reads a container grant. Same floor as every
- *  other read in this system; a `guest` ranks below it by construction. */
+/** Same floor as every read; `guest` ranks below it. */
 const CONTAINER_READ_FLOOR: Role = "viewer";
 
 interface GrantRow {
@@ -122,23 +47,11 @@ interface GrantRow {
 }
 
 /**
- * Which of `resourceIds` are lent to a channel or container the caller is in.
- *
- * ⚠ **A FIXED NUMBER OF QUERIES PER REQUEST — at most five, and none at all
- * when nothing is granted.** One read of the grants for this row set, one membership
- * read per scope kind that occurs, and — only when a CHANNEL scope occurs — the two
- * `channel-scope.ts › channelsWhereScopeIsIgnored` spends on container KIND. It was
- * three until 2026-09-17, and both new ones sit on the uncommon branch. The shape
- * `agent-identities/server/service-shared.ts › shareCtxForIdentities` established:
- * a batch precompute, never a query per row.
- *
- * ⚠ EMPTY `resourceIds` SHORT-CIRCUITS WITH NO QUERY. A PostgREST `.in()` on an
- * empty array is a syntax hazard, and "no rows to ask about" is a real state.
- *
- * ⚠ **NOT FILTERED BY THE CALLER'S CONTAINER, AND THAT IS THE POINT.** A grant
- * row is filed under the RESOURCE's container (`20260914120000` rule 3) while
- * the caller reaches it through the SCOPE's. A `workspace_id` term here would
- * refuse exactly the grant this function exists to honour.
+ * Which of `resourceIds` are lent to a channel or container the caller is in. A batch precompute, never
+ * a query per row: at most five queries, none when `resourceIds` is empty (an empty `.in()` is a
+ * PostgREST hazard) or nothing is granted.
+ * Not filtered by the caller's container: a grant is filed under the resource's container but reached
+ * through the scope's, so a `workspace_id` term would refuse exactly the grants this honours.
  */
 export async function grantedResourceIds(
   userId: string,
@@ -156,8 +69,7 @@ export async function grantedResourceIds(
     .limit(GRANT_REACH_LIMIT);
   if (error) throw error;
   const rows = (data ?? []) as unknown as GrantRow[];
-  // 🔒 The level filter runs BEFORE the membership reads, so an `agent_only`
-  // channel grant does not even cause a lookup — and cannot be widened by one.
+  // Before the membership reads, so an `agent_only` channel grant never causes (or widens via) a lookup.
   const admitting = rows.filter(
     (r) => r.scope_type === "container" || r.level === "visible"
   );
@@ -169,7 +81,7 @@ export async function grantedResourceIds(
   const [containers, channels, ignoredChannels] = await Promise.all([
     reachableContainers(db, userId, scopeIds("container")),
     reachableChannels(db, userId, scopeIds("channel")),
-    // 🔒 A channel-scoped row in a STANDARD workspace widens nobody's read (2026-09-17).
+    // A channel-scoped row in a standard workspace widens nobody's read.
     channelsWhereScopeIsIgnored(scopeIds("channel")),
   ]);
 
@@ -184,11 +96,7 @@ export async function grantedResourceIds(
   return granted.size === 0 ? NO_GRANTS : granted;
 }
 
-/**
- * ⚠ `status='active'` AND a role floor, both. `workspaces/server/repository.ts ›
- * findMembership` carries the scar of omitting the first (a removed admin still
- * measured as one), and `guest` is exactly the rank the second keeps out.
- */
+/** `status='active'` and the role floor, both: a removed member is not one, and `guest` stays out. */
 async function reachableContainers(
   db: ReturnType<typeof supabaseAdmin>,
   userId: string,
@@ -213,8 +121,7 @@ async function reachableContainers(
   );
 }
 
-/** ⚠ `channel_members` has no status column and no rank — presence IS the
- *  membership, exactly as `is_channel_member()` reads it. */
+/** `channel_members` has no status or rank: presence is membership, as in `is_channel_member()`. */
 async function reachableChannels(
   db: ReturnType<typeof supabaseAdmin>,
   userId: string,
@@ -235,23 +142,10 @@ async function reachableChannels(
 }
 
 /**
- * 🔒 **WHICH OF `resourceIds` IS LENT TO A TEAM THE CALLER BELONGS TO** — the
- * `scope_type='team'` door, batched across every container at once (F-716).
- *
- * ⚠ **IT ANSWERS MEMBERSHIP, NEVER VISIBILITY.** A row being lent to one of my
- * teams does not by itself make it readable — `skills › canSeeSkill`,
- * `chats › canSeeChat` and `agent-identities › canSeeIdentity` each decide that,
- * and each has arms this knows nothing about. Handing a SET to a predicate is
- * the shape that keeps the rule in one place.
- *
- * ⚠ **NO `workspace_id` TERM, AND THAT IS DELIBERATE — THE FENCE IS THE INPUT.**
- * `resourceIds` is always a page the caller's container membership already
- * proved (`search/server/repository-reach.ts`), and a team id is unique, so a
- * container term would only re-state what the caller already narrowed. **Never
- * call this with ids a membership read did not produce.**
- *
- * ⚠ TWO QUERIES, ALWAYS: the caller's teams, then the grants over them. Neither
- * runs when there is nothing to ask about.
+ * Which of `resourceIds` are lent to a team the caller is in, batched across containers (F-716).
+ * Answers membership, never visibility: each feature's `canSee*` takes the set and decides.
+ * No `workspace_id` term — the fence is the input: pass only ids a membership read produced
+ * (`search/server/repository-reach.ts`).
  */
 export async function teamGrantedResourceIds(
   userId: string,

@@ -1,12 +1,5 @@
-/**
- * The recording query builder both `resolve-resource` suites drive, and the ids
- * they share.
- *
- * ⚠ **EXTRACTED WHEN THE GRANT LANE ARRIVED (2026-09-03)** — two suites over one
- * module, and a second hand-written builder is the F-278 shape: the copy is the
- * one that stops applying a filter, and this builder is the only thing in the
- * tree that ever asserts what reaches PostgREST.
- */
+/** The recording query builder and shared ids for the `resolve-resource` suites — one builder, so no
+ *  suite's copy silently stops applying a filter (F-278). */
 
 import { vi } from "vitest";
 import { supabaseAdmin } from "@/shared/supabase/admin";
@@ -21,34 +14,14 @@ export const T1 = "44444444-4444-4444-4444-444444444444";
 
 export type Call = { table: string; op: string; args: unknown[] };
 
-/**
- * A recording query builder. `results` is keyed by table, so each read answers
- * independently and every filter it applied is inspectable afterwards.
- *
- * ⚠ **ONE BUILDER PER `.from()`, EXACTLY AS POSTGREST GIVES YOU** — a single
- * shared builder with a mutable `table` answered the MEMBERSHIP query out of
- * whichever table was named LAST, which the personal-container probe (issued
- * between building that query and awaiting it) is the first caller to notice.
- */
+/** `results` is keyed by table, so each read answers independently and every filter is inspectable.
+ *  One builder per `.from()`, as PostgREST gives: a built, unawaited query keeps its own table. */
 export function makeAdmin(
   results: Record<string, unknown[]>,
-  /**
-   * ⚠ **RESULT SETS CONSUMED IN ORDER, PER TABLE — AND THE GRANT LANE IS WHY
-   * THIS EXISTS.** The builder applies no filters, so a table with ONE result
-   * set answers both of `findResources`' queries identically and a case meant
-   * to prove the SECOND one passes on the first. A sequence makes the two
-   * queries distinguishable: `[[], [row]]` is "nameable by no clause, reached
-   * by a grant". ⚠ Exhausting it falls back to `results[table]`.
-   */
+  /** Per-table result sets consumed in order, so the grant lane's second query is distinguishable:
+   *  `[[], [row]]` = nameable by no clause, reached by a grant. Exhausted → `results[table]`. */
   sequences: Record<string, unknown[][]> = {},
-  /**
-   * ⚠ **THE `head:true` COUNT, PER TABLE — the task 11 fence is why this
-   * exists.** `personal-reach.ts` counts a container's active members off the
-   * SAME `workspace_members` table the membership read uses, and PostgREST
-   * returns that on `count` with no rows. ⚠ ABSENT IS `null`, NOT ZERO, and
-   * that is the fail-closed reading the fence depends on: "I could not count
-   * the people in this room" must never pass for "there is one".
-   */
+  /** Per-table `head:true` count; absent is `null`, not zero. */
   counts: Record<string, number | null> = {}
 ) {
   const calls: Call[] = [];

@@ -7,103 +7,32 @@ import {
 } from "./resolve-resource";
 
 /**
- * 🔒 **FOLLOWING THE ADDRESS — the composition every id-resolving read is, and
- * the one place it is written** (B2, 2026-09-02).
- *
- * `resolve-resource.ts` answers WHERE an id lives. This answers what a read then
- * DOES about it: try the container the caller was authorised in, and only on a
- * miss ask the resolver and re-run **the caller's own read** in the container the
- * id named.
- *
- * ⚠ **IT EXISTS BECAUSE FOUR FEATURES WERE ABOUT TO WRITE THE SAME TWELVE
- * LINES.** A12 shipped them once, by hand, in
- * `agent-identities/server/service-reads.ts › readIdentityById`; B2 adds knowledge
- * bases, skills and chats. Four hand copies of a tenancy dance is precisely the
- * shape **F-278** is filed against (*"the copy is the one that will not
- * notice"*) — and the half a copy gets wrong is always the same half, the
- * `containerRole` on the re-based context.
- *
- * ── 🔒 WHAT IT IS NOT ─────────────────────────────────────────────────────
- *
- * ⚠ **IT IS NOT A FENCE AND IT READS NOTHING.** Both fences belong to somebody
- * else: the resolver's four clauses decide what may be NAMED, and `load` — the
- * feature's own visibility-checked read — decides what may be SEEN. This module
- * only refuses to invent a third answer between them.
- *
- * ⚠ **`load` MUST BE THE SAME READ IN BOTH CONTAINERS**, which is why it is one
- * callback and not two. A read that applied a narrower matrix on the "elsewhere"
- * lane would make the same row answer two ways depending on which door the
- * caller came through — the confusion this whole slice removes.
- *
- * 🔓 **WRITES FOLLOW THE ADDRESS TOO — SAMUEL'S RULING, 2026-09-06** (INVARIANTS
- * §T35, rewritten). This docblock used to end "READS ONLY: a PATCH that followed
- * an id across a tenancy boundary is a ruling nobody has made". It has now been
- * made, and the reason it had to be is the shape the read half left behind: an
- * agent (or a person) could OPEN a base or an identity on its own operator's
- * personal shelf from any container, and then could not EDIT the thing it was
- * looking at — `KNOWLEDGE_BASE_MISMATCH` / `AGENT_IDENTITY_NOT_FOUND` for a row
- * the very same session had just rendered. A fence that opens the read and
- * closes the write on the SAME row is not a fence, it is a half-migration.
- *
- * ⚠ **WHAT THE RULING DOES NOT CHANGE, AND THIS IS THE WHOLE SAFETY ARGUMENT:**
- *   1. **BOTH FENCES STILL RUN, IN ORDER.** The resolver is strictly narrower
- *      than any feature's matrix, and `load` — the feature's own
- *      visibility-checked read — runs AGAIN in the container the id named, with
- *      the caller's REAL role there. Following an id authorises nothing.
- *   2. **THE EDIT GATE IS UNTOUCHED.** `assertBaseWritable` / `assertMayWrite` /
- *      `agent_write_enabled` all still have to pass, and they now pass or refuse
- *      in the row's OWN container instead of in a container the row is not in.
- *   3. **THE WRITE LANDS WHERE THE ROW IS.** A write gate returns the re-based
- *      {@link ContainerRead} and every workspace-keyed call after it — slugs,
- *      grants, junctions, `hardDelete*`, path resolution — takes THAT context.
- *      A caller that followed an id and then composed against the ORIGINAL ctx
- *      would gate in one container and write in another, which is worse than
- *      the refusal it replaces. That is why the gates hand back a context
- *      instead of a row.
- *
- * ⚠ **A FEATURE OPTS IN BY MIGRATING ITS CALL SITES, NOT BY FLIPPING A FLAG.**
- * Every write gate that has NOT been given the re-based context keeps its
- * workspace-keyed lookup and keeps refusing, because rule 3 is the dangerous
- * half and it cannot be applied from here.
+ * Follows a resolved address: read in the caller's container, and only on a miss re-run the caller's
+ * own read in the container `resolve-resource.ts` names. Written once so no feature hand-copies it (F-278).
+ * Not a fence and reads nothing itself: the resolver decides what may be named, `load` what may be
+ * seen — and `load` must be the same read in both containers.
+ * Writes follow the address too (INVARIANTS §5A): the edit gate runs in the row's own container, and
+ * every workspace-keyed call after it must use the returned {@link ContainerRead} context — gating in
+ * one container and writing in another is worse than refusing. A write gate not given that context
+ * keeps its workspace-keyed lookup and refuses.
  */
 
-/**
- * What a re-based read needs of its caller: the fence's inputs, plus the
- * container it is currently reading in and the caller's role there.
- *
- * ⚠ STRUCTURAL ON PURPOSE — `AgentIdentityContext`, `KnowledgeContext`,
- * `SkillContext` and `ChatContext` all satisfy it already, with no import and no
- * shared base type. Four features sharing a mechanic must not become four
- * features sharing a context.
- */
+/** The fence's inputs plus the container being read and the caller's role there; structural, so
+ *  feature contexts satisfy it without a shared base type. */
 export interface ContainerScopedCaller extends ResourceCaller {
   workspaceId: string;
   role: Role | null;
 }
 
-/**
- * A row, and **the context it was actually read in**.
- *
- * ⚠ **THE CONTEXT IS RETURNED BECAUSE THE READ IS RARELY ONE QUERY.** A skill
- * has a body and its references; a chat has its messages and its container's
- * retention window; a base has entries. Every one of those is workspace-keyed,
- * and a caller that composed them against the ORIGINAL context after following
- * an id would read the row from one container and its contents from another.
- */
+/** A row and the context it was actually read in. Its children (entries, messages, references) are
+ *  workspace-keyed, so they must be read with this `ctx`, not the original. */
 export interface ContainerRead<Ctx, T> {
   ctx: Ctx;
   value: T;
 }
 
-/**
- * 🔒 **READ ONE ROW BY ID, WHEREVER THE CALLER MAY NAME IT.** `null` = the
- * single 404 every caller already throws: no such row, not visible to you, or
- * outside your reach — one answer, deliberately.
- *
- * ⚠ IT COSTS ONE EXTRA READ **ONLY ON A MISS IN THIS TENANCY**, plus the
- * resolver's two. A row that is where it was asked for is byte-identical to
- * before, and pays nothing.
- */
+/** Read one row by id wherever the caller may name it. `null` = the single 404: missing, not visible,
+ *  or out of reach. Extra reads happen only on a miss in the caller's container. */
 export async function readResourceById<Ctx extends ContainerScopedCaller, T>(
   ctx: Ctx,
   type: ResourceType,
@@ -113,15 +42,12 @@ export async function readResourceById<Ctx extends ContainerScopedCaller, T>(
   const here = await load(ctx, id);
   if (here) return { ctx, value: here };
   const resolved = await resolveResource(ctx, type, id);
-  // ⚠ Resolving back into the tenancy that just missed means the caller's own
-  // matrix refused it — re-reading there would spend a query to say so again.
+  // Resolving back to the container that just missed means the caller's own matrix refused it.
   if (!resolved || resolved.containerId === ctx.workspaceId) return null;
   const there: Ctx = {
     ...ctx,
     workspaceId: resolved.containerId,
-    // ⚠ THE CALLER'S REAL ROLE IN THE CONTAINER THE ID NAMED, never a guess.
-    // `null` here would silently drop the rows that role can see — a
-    // team-scoped attachment, an admin's sharing set — on the id lane only.
+    // The caller's real role there, never a guess: `null` would drop rows that role can see.
     role: resolved.containerRole,
   };
   const value = await load(there, id);

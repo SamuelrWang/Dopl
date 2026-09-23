@@ -12,53 +12,19 @@ import { assertChannelScopeAllowedInContainer } from "@/shared/tenancy/channel-s
 import type { ResourceGrantWrite } from "./schema";
 
 /**
- * 🔒 **THE GRANT WRITE — the door that REPLACED the two copy ops** (Wave B slice
- * B15, Samuel's ruling B11: *grants replace copies*; F-419 disposed by
- * deletion). `dopl_kb(op="grant")`, `dopl_agent(op="grant")` and the /home
- * "Share into this channel" control all land here.
- *
- * ── 🔒 THE FOUR FENCES, IN ORDER, AND WHY THERE ARE FOUR ────────────────────
- *
- *  1. **THE ROUTE'S `withWorkspaceAuth`** — the caller is an authenticated
- *     member of *some* workspace. It resolves ONE workspace and is deliberately
- *     NOT the fence for either side of a grant: a grant names two containers.
- *  2. **THE RESOURCE RESOLVES *AND* IS THE CALLER'S OWN**
- *     ({@link assertGrantableResource}). `resolveResource` answers `null` for
- *     "no such row", "somebody else's private row" and "outside your lock" as
- *     ONE answer, and this then narrows that answer to rows the caller CREATED.
- *     ⚠ **THAT SECOND HALF IS R2, CARRIED OVER FROM THE COPY OPS RATHER THAN
- *     INVENTED** (`copy-target.ts › notOwnedRefusal`, deleted with them): being
- *     able to READ a row is not being able to LEND it, and a grant widens an
- *     audience in exactly the direction a copy did.
- *  3. **THE SCOPE IS ONE THE CALLER REACHES** ({@link assertGrantableScope}).
- *     The scope resolves to its container by the SAME `CASE` the trigger uses,
- *     the caller must be an active `member` of that container, and a CHANNEL
- *     must additionally be visible to them — the `?channelId=` precedent, 404 on
- *     a miss so the write is never a room oracle. 🔒 **AND SINCE 2026-09-17 a
- *     CHANNEL scope must be a HOME channel** — `shared/tenancy/channel-scope.ts`, a
- *     400 `SCOPE_NOT_ALLOWED_IN_WORKSPACE` and not a 404, because it runs after the
- *     visibility fence has already admitted the room.
- *  4. **`enforce_resource_grant()`** — the database's own "the grantor may share
- *     this" (`20260914120000`). It is defense in depth here rather than the only
- *     fence, and its eight RAISE branches are translated to ONE 400: refused,
- *     not broken.
- *
- * ⚠ **404-NEVER-403 ON BOTH SIDES.** A foreign resource and an unreachable
- * scope answer exactly what a nonexistent one answers. The difference between
- * the codes would be an existence oracle over other people's private rows and
- * over rooms the caller is not in.
- *
- * ⚠ **THIS SLICE SHIPS THE LEND, NOT THE REVOKE.** There is no `level: "none"`:
- * the copy ops it replaces had no un-copy either, and a delete surface is a
- * separate decision about who may take something back. `PUT
- * /api/knowledge/bases/{id}/channel-grants` still owns the three-state
- * channel×KB write the app's own sharing panel drives.
+ * The grant write (`dopl_kb` / `dopl_agent` `op="grant"`, the /home share control). Fences, in order:
+ *  1. the route's `withWorkspaceAuth` — authenticated, but not the fence for either side of a grant;
+ *  2. the resource resolves and the caller created it ({@link assertGrantableResource}): reading a
+ *     row is not lending it;
+ *  3. the caller reaches the scope ({@link assertGrantableScope}): active `member` of its container, a
+ *     visible channel, and a channel must be a home channel (`shared/tenancy/channel-scope.ts`);
+ *  4. `enforce_resource_grant()` in the database — defense in depth, its RAISEs mapped to one 400.
+ * 404-never-403 on both sides: a foreign resource or unreachable scope answers as a missing one.
+ * Lend only, no revoke; `PUT /api/knowledge/bases/{id}/channel-grants` owns the channel×KB write.
  */
 
-/** The rows this write may touch, keyed the way `resolve-resource.ts` keys
- *  them. ⚠ `chat_folder` is a legal `resource_grants` value with no resolver, so
- *  it is refused HERE rather than reaching a `null` resolution and 404ing with a
- *  sentence about ownership. */
+/** Keyed as `resolve-resource.ts` keys them. `chat_folder` is a legal grant type with no resolver, so
+ *  it is refused here instead of 404ing as not-owned. */
 const RESOLVABLE = new Set([
   "knowledge_base",
   "agent_identity",
@@ -66,9 +32,7 @@ const RESOLVABLE = new Set([
   "chat",
 ]);
 
-/** Fence 2 — resolves the resource and returns the container the grant is FILED
- *  under (rule 3 of the migration header: the RESOURCE's container, never the
- *  scope's). */
+/** Fence 2. Returns the container the grant is filed under: the resource's, never the scope's. */
 async function assertGrantableResource(
   caller: ResourceCaller,
   input: ResourceGrantWrite
@@ -83,17 +47,15 @@ async function assertGrantableResource(
     input.resourceType as "knowledge_base" | "agent_identity" | "skill" | "chat",
     input.resourceId
   );
-  // ⚠ ONE ANSWER for "no such row", "not yours to lend" and "outside your lock".
+  // One answer for "no such row", "not yours to lend" and "outside your lock".
   if (resolved === null || !resolved.ownedByCaller) {
     throw HttpError.notFound("Resource not found");
   }
   return resolved.containerId;
 }
 
-/** The container a scope belongs to — the SAME `CASE` `enforce_resource_grant()`
- *  runs, restated in TypeScript so the refusal is a 404 at the door instead of a
- *  `P0001` from a trigger. ⚠ If the trigger's arms change, this changes with
- *  them; `resource-grants.test.ts` drives both. */
+/** The scope's container by the same `CASE` as `enforce_resource_grant()`, so a miss is a 404 at the
+ *  door, not a trigger `P0001`. `service.test.ts` checks the arms still match the trigger's. */
 async function scopeContainerId(
   scopeType: ResourceGrantWrite["scopeType"],
   scopeId: string
@@ -110,7 +72,7 @@ async function scopeContainerId(
   return (data as Record<string, string> | null)?.[column] ?? null;
 }
 
-/** Fence 3 — the caller reaches the scope. */
+/** Fence 3. */
 async function assertGrantableScope(
   caller: { userId: string },
   input: ResourceGrantWrite
@@ -118,8 +80,7 @@ async function assertGrantableScope(
   const scopeWorkspaceId = await scopeContainerId(input.scopeType, input.scopeId);
   if (scopeWorkspaceId === null) throw HttpError.notFound("Scope not found");
   const membership = await findMembership(scopeWorkspaceId, caller.userId);
-  // ⚠ `member`, not `viewer`: lending is a WRITE about other people's reach, and
-  // a viewer administers nothing. `guest` and a revoked row fail the same way.
+  // `member`, not `viewer`: lending changes other people's reach. `guest` and revoked rows fail too.
   if (membership === null || !meetsMinRole(membership.role, "member")) {
     throw HttpError.notFound("Scope not found");
   }
@@ -127,22 +88,15 @@ async function assertGrantableScope(
   if (!(await isChannelVisibleTo(scopeWorkspaceId, caller.userId, input.scopeId))) {
     throw HttpError.notFound("Scope not found");
   }
-  // 🔒 FENCE 3b (2026-09-17). ⚠ **AFTER the visibility fence, and a 400 not a 404**:
-  // the caller has already PROVED they can see this channel, so naming the rule tells
-  // them nothing new — the ordering `ontology/server/service-shares.ts` uses for Q5.
+  // Fence 3b, after visibility: the caller can already see the channel, so a 400 naming the rule
+  // (`SCOPE_NOT_ALLOWED_IN_WORKSPACE`) tells them nothing new.
   await assertChannelScopeAllowedInContainer(scopeWorkspaceId);
 }
 
 /**
- * Did `enforce_resource_grant()` (or one of the `CHECK`s it stands beside)
- * refuse this write?
- *
- * ⚠ **THE PREFIX IS CHECKED, NOT ONLY THE CODE.** `RAISE EXCEPTION` with no
- * `ERRCODE` is `P0001`, which is also what any other `plpgsql` RAISE in the
- * write path would be, so a bare code match would relabel an unrelated trigger's
- * failure as a refused grant and hand the caller a confident wrong explanation.
- * `23514` (the per-scope `level` CHECK) and `23503` (the container row vanishing
- * between fence 3 and this statement) ride along: same class of answer.
+ * Did `enforce_resource_grant()` or a `CHECK` beside it refuse this write? The `resource_grants:`
+ * prefix is checked, not just `P0001`, so an unrelated trigger's RAISE is not relabelled; `23514`
+ * (level CHECK) and `23503` (container vanished after fence 3) count too.
  */
 export function isGrantValidityViolation(err: unknown): boolean {
   if (!err || typeof err !== "object") return false;
@@ -155,13 +109,7 @@ export interface GrantedResource extends ResourceGrantWrite {
   workspaceId: string;
 }
 
-/**
- * Lend one resource to one scope. ⚠ **UPSERT ON THE PRIMARY KEY**
- * `(scope_type, scope_id, resource_type, resource_id)`, so the write states an
- * END STATE and a retry after an ambiguous failure changes nothing — the same
- * contract the channel-grants PUT keeps, and the property an agent lane needs
- * more than a browser does.
- */
+/** Lend one resource to one scope. Upserts on the primary key, so a retry changes nothing. */
 export async function grantResource(
   caller: ResourceCaller,
   input: ResourceGrantWrite
@@ -178,9 +126,7 @@ export async function grantResource(
         resource_id: input.resourceId,
         workspace_id: workspaceId,
         level: input.level,
-        // 🔒 THE GRANTOR IS NAMED. `enforce_resource_grant()` reads it for the
-        // cross-container arm — an unattributed row falls back to the narrower
-        // same-container equality — and this door always has a person.
+        // `enforce_resource_grant()` reads the grantor for its cross-container arm.
         created_by: caller.userId,
       },
       { onConflict: "scope_type,scope_id,resource_type,resource_id" }
