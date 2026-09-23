@@ -392,7 +392,7 @@ describe("decideLaunchDirective writes the applied echo", () => {
     expect(d.agent_id).toBeNull();
   });
 
-  it("a non-launch kind's `done` writes null on all three too", async () => {
+  it("an `end` / `rename` `done` reports nothing, so all three land as null", async () => {
     vi.mocked(launchRepo.decideLaunchDirective).mockResolvedValue(
       row({ kind: "rename", status: "done" }) as never,
     );
@@ -400,6 +400,16 @@ describe("decideLaunchDirective writes the applied echo", () => {
     const d = decided();
     expect(d.applied_tool_mode).toBeNull();
     expect(d.applied_message_mode).toBeNull();
+    expect(d.applied_chain).toBeNull();
+  });
+
+  // 🔒 F2: a `set_agent_mode`'s echo rides `done`; it used to be written null ("not reported").
+  it("a `set_agent_mode` `done` writes the applied pair — and never a chain", async () => {
+    vi.mocked(launchRepo.decideLaunchDirective).mockResolvedValue(row({ kind: "set_agent_mode", status: "done" }) as never);
+    await decideLaunchDirective(ctx, DIR, { status: "done", appliedTools: "on-request", appliedMessages: "auto_inbound" });
+    const d = decided();
+    expect(d.applied_tool_mode).toBe("on-request");
+    expect(d.applied_message_mode).toBe("auto_inbound");
     expect(d.applied_chain).toBeNull();
   });
 
@@ -469,14 +479,19 @@ describe("LaunchDecideSchema carries the echo, optionally", () => {
     ).toBe(false);
   });
 
-  it("⚠ the echo is the LAUNCHED arm's alone — `done` resolves no posture", () => {
-    // A `done` is an `end` or a `rename`; neither starts a session, so a machine reporting an
-    // applied posture on one would be asserting a fact about a session it did not start.
+  // 🔒 F2: zod stripped these from `done`, so a `set_agent_mode` clamp was stored as "not reported".
+  it("`done` keeps a re-posture's applied pair (a Codex word too), and drops a chain", () => {
     const parsed = LaunchDecideSchema.parse({
       directiveId: DECIDE_ID,
       status: "done",
-      appliedTools: "bypass",
+      appliedTools: "on-request",
+      appliedMessages: "auto_both",
+      appliedChain: true,
     });
-    expect(parsed).toEqual({ directiveId: DECIDE_ID, status: "done" });
+    expect(parsed).toEqual({
+      directiveId: DECIDE_ID, status: "done", appliedTools: "on-request", appliedMessages: "auto_both",
+    });
+    expect(LaunchDecideSchema.safeParse({ directiveId: DECIDE_ID, status: "done", appliedTools: "yolo" })
+      .success).toBe(false);
   });
 });

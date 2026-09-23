@@ -8,9 +8,6 @@
  */
 
 import { EMPTY_INFO_CARD } from "../info-card";
-// ⚠ `EMPTY_AGENT_POSTURE` no longer imported (2026-09-06) — `Channel.agentPosture` is
-// deleted with the channel ceiling (items 12, 13, 14). The constant still EXISTS: it is
-// used by `lib/agent-posture-parity.test.ts`, which pins the desktop clamp.
 import type {
   Channel,
   ChannelMember,

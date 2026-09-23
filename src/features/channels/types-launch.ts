@@ -260,35 +260,15 @@ export type LaunchDirective = {
    * "Claude". The echo trio's rule, for the echo trio's reason: a render that read `null` as
    * the default runtime would tell an orchestrator which vendor ran on the strength of a
    * column nobody filled in.
-   * ⚠ **`appliedModel` IS NOT {@link LaunchDirective.resolvedModel}.** That is the SERVER's
-   * create-time echo of an id it recognised, from a Claude-shaped table. This is what the
-   * MACHINE handed its launch funnel inside the resolved runtime, and `null` there legitimately
-   * means "no model argument at all — that runtime's own default", which is what a dropped
-   * cross-vendor model correctly becomes.
+   * ⚠ **`appliedModel` is what the MACHINE launched with inside the resolved runtime** (the
+   * funnel's runtime default when no model was named); `null` is "not reported".
    */
   appliedRuntime: string | null;
   appliedModel: string | null;
   /**
-   * **WHAT THE SERVER PERMITTED** (2026-09-02, A9 — G6/G7/G8), decided at
-   * creation from the request and `Channel.agentPosture`.
-   *
-   * ⚠ **A THIRD GROUP, NOT A SPELLING OF EITHER OTHER ONE.** `startToolMode` is
-   * what was ASKED, `appliedToolMode` is what the MACHINE says it did, and this
-   * is what the SERVER allowed to be asked. G6's *"your operator's machine
-   * narrows what you ask; it never widens"* was enforced on the desktop only, so
-   * an offline or older one narrowed nothing at all — this is the half that
-   * happens whether or not a machine is listening.
-   * ⚠ **`null` STILL MEANS "DID NOT ASK" AND SURVIVES THE CLAMP.** A request that
-   * named no posture must stay unnamed all the way to the machine, which then
-   * applies the OPERATOR's own stored pair. Substituting the ceiling here would
-   * turn "whatever the operator chose" into "whatever this channel allows".
-   * ⚠ **`resolvedModel` IS AN ECHO, NOT A GATE.** It carries the canonical id a
-   * recognised request resolved to and `null` for one this build does not know —
-   * which is NOT a refusal: the raw value still reaches the machine, and a newer
-   * desktop may run a model this server predates. Read it BESIDE {@link model}:
-   * both null = nothing asked; `model` set and this null = asked and
-   * unrecognised, i.e. the machine will use its own default and now the caller is
-   * told (guardrail G8, whose whole complaint was the silence).
+   * ⚠ **RETIRED GROUP: `null` ON EVERY ROW FILED NOW (F7/F10).** The server clamps nothing and
+   * resolves no model, so these carried a byte copy of the request and a Claude-table model id.
+   * Kept on the DTO for rows filed before; read `start*` for the ask and `applied*` for the truth.
    */
   resolvedToolMode: LaunchToolMode | null;
   resolvedMessageMode: LaunchMessageMode | null;

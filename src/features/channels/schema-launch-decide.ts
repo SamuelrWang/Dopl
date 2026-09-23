@@ -32,12 +32,6 @@ const LaunchRefusalReasonSchema =
  * arguments do. This is the other direction, and it changes when the ECHO does: it gained
  * `appliedTools`/`appliedMessages`/`appliedChain` on 2026-09-01 (T24) and `appliedAgentName` on
  * 2026-09-15 (Samuel's name-uniqueness ruling), neither of which is a thing anybody asks for.
- *
- * ⚠ **IT IMPORTS THE THREE SHARED ENUMS BACK FROM `schema-launch.ts`, AND THE DIRECTION IS
- * DELIBERATE.** The frozen vocabularies belong to the lane, not to one end of it; re-declaring
- * `ToolModeSchema` here would be the drift those declarations exist to prevent, and the cycle is
- * a TYPE-and-const one that both trees already carry elsewhere (`agents-model.ts` ↔
- * `agents-model-identity.ts`).
  */
 
 /**
@@ -78,9 +72,8 @@ export const LaunchDecideSchema = z.discriminatedUnion("status", [
      * declarations: a second literal here is the drift {@link LAUNCH_TOOL_MODES}
      * exists to prevent, and the column CHECK holds the echo columns to the same
      * members at rest.
-     * ⚠ NOT ON THE `done` ARM. Only a LAUNCH resolves a start posture; an `end`
-     * or a `rename` applies none, and a machine that reported one would be
-     * asserting a fact about a session it did not start.
+     * ⚠ The `done` arm carries the same pair for `set_agent_mode` (F2); only this arm
+     * carries `appliedChain`.
      */
     appliedTools: ToolModeSchema.optional(),
     appliedMessages: MessageModeSchema.optional(),
@@ -143,6 +136,11 @@ export const LaunchDecideSchema = z.discriminatedUnion("status", [
   z.object({
     directiveId: z.string().uuid(),
     status: z.literal("done"),
+    // `set_agent_mode`'s echo (F2): zod strips unknown keys, so without these the machine's
+    // report was dropped and stored as "not reported". Absent on `end` / `rename`. No chain: a
+    // re-posture decides none. The columns are not kind-scoped (`20260910120000` §5).
+    appliedTools: ToolModeSchema.optional(),
+    appliedMessages: MessageModeSchema.optional(),
   }),
   z.object({
     directiveId: z.string().uuid(),

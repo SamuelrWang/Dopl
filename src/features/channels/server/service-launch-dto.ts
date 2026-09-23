@@ -18,34 +18,6 @@ import type { LaunchDirectiveRow } from "./repository-launch";
  * a row somebody already proved they may read.
  */
 
-/** The refusal contract, as a value. ⚠ ONE DECLARATION — the column's CHECK, the
- *  route schema and the MCP render all point at this.
- *  ⚠ SEVEN SINCE 2026-08-22: `no-identity` is the agent-identities word — a directive
- *  named an identity the OPERATOR's machine could not resolve (deleted, or invisible
- *  to them though visible to the orchestrator). ⚠ THE COLUMN CHECK CAUGHT UP ON
- *  2026-08-23 (`20260823140000_channel_launch_directives_template.sql`, WRITTEN —
- *  applied is a measurement, §12), in the same wave as the producer that makes the
- *  word reachable: `main/launch-directives.js › spawn` resolves the directive's
- *  identity at CLAIM time. This list and that CHECK are back in agreement.
- *  ⚠ NINE SINCE 2026-09-01 (external end / rename — Samuel's ruling). `no-session`
- *  and `bad-name` are the words the in-process `dopl_agents` server already
- *  answers for these exact verbs, lifted onto the wire so the same fact reads the
- *  same way from outside. ⚠ THE COLUMN CHECK LANDS IN THE SAME WAVE this time
- *  (`20260907120000_channel_launch_directives_kind.sql`) — the 2026-08-22 window,
- *  where this list ran one word ahead of the CHECK and four files carried a
- *  standing "do not ship a producer yet", is exactly what that sequencing avoids. */
-export const LAUNCH_REFUSAL_REASONS = [
-  "cap",
-  "busy",
-  "no-sdk",
-  "auth-hold",
-  "no-bridge",
-  "no-counterparty",
-  "no-identity",
-  "no-session",
-  "bad-name",
-] as const;
-
 /** ⚠ `done` JOINED 2026-09-01 — the non-launch kinds' success. Missing it here
  *  would make a completed end lazily REPORT as `expired` two minutes later, i.e.
  *  the one function that decides liveness would say an answered directive was

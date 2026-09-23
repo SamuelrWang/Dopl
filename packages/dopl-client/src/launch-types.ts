@@ -12,9 +12,9 @@
  * ⚠ **THE FOUR CLOSED SETS ARE DECLARED IN `@dopl/contracts › directives.ts`
  * AND RE-EXPORTED HERE** (2026-09-02, v2 slice A13) — they were hand mirrors of
  * `src/features/channels/types-launch.ts` with no script between them. No
- * consumer import changed. ⚠ {@link LaunchToolMode} and {@link LaunchMessageMode}
- * are ORDERED NARROWEST FIRST and the desktop's clamp is an index comparison
- * over that order, so read the declaration before re-spelling either.
+ * consumer import changed. ⚠ {@link LaunchToolMode} is every runtime's own words (a set; the
+ * desktop clamps in the launch runtime's order), {@link LaunchMessageMode} is ordered narrowest
+ * first — read the declaration before re-spelling either.
  */
 import type {
   AgentColorKey,
@@ -152,7 +152,8 @@ export interface LaunchDirective {
   targetToolMode: LaunchToolMode | null;
   targetMessageMode: LaunchMessageMode | null;
   /**
-   * **THE ECHO — what the machine says it actually applied, after its clamp.**
+   * **THE ECHO — what the machine says it actually applied, after its clamp** — in the launch
+   * (or running) runtime's own words; a `set_agent_mode` reports it on its `done`.
    *
    * ⚠ **`null` MEANS "NOT REPORTED". NOT "unclamped", and NEVER the requested
    * value echoed back.** The writer is the DECIDE and it landed on 2026-09-01,
@@ -168,21 +169,9 @@ export interface LaunchDirective {
   appliedMessageMode: LaunchMessageMode | null;
   appliedChain: boolean | null;
   /**
-   * **WHAT THE SERVER PERMITTED** (2026-09-02, A9 — G6/G7/G8), decided at
-   * creation from the request and the channel's own ceiling.
-   *
-   * ⚠ **A THIRD GROUP, NOT A SPELLING OF EITHER OTHER ONE.** `startToolMode` is
-   * what was ASKED, `applied*` is what the MACHINE says it did, and this is what
-   * the SERVER allowed to be asked — the half that happens whether or not a
-   * machine is listening. ⚠ `null` STILL MEANS "DID NOT ASK" and survives the
-   * clamp: a request that named no posture stays unnamed all the way to the
-   * machine, which then applies the OPERATOR's own stored pair.
-   * ⚠ **`resolvedModel` IS AN ECHO, NOT A GATE** — the canonical id a recognised
-   * request resolved to, `null` for one this server does not know. Read it beside
-   * `model`: both null = nothing asked; `model` set and this null = asked and
-   * unrecognised, so the machine will use its own default (G8).
-   * ⚠ Hand mirror of `src/features/channels/types-launch.ts › LaunchDirective`,
-   * which carries the full argument.
+   * ⚠ **RETIRED GROUP: `null` on every row filed now.** The server clamps nothing and resolves
+   * no model, so these only ever carried a copy of the request (and a Claude-table model id on
+   * every runtime). Read `start*` for the ask and `applied*` for what the machine ran.
    */
   resolvedToolMode?: LaunchToolMode | null;
   resolvedMessageMode?: LaunchMessageMode | null;

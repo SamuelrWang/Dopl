@@ -13,8 +13,8 @@ import {
 
 /**
  * **THE DESKTOP LANE — DECIDE.** The machine reports what it did: `launched`
- * with the agent instance id (a LAUNCH), `done` (an `end` or a `rename` that
- * landed, 2026-09-01), or `refused` with one of the nine words.
+ * with the agent instance id (a LAUNCH), `done` (an `end`, `rename` or
+ * `set_agent_mode` that landed), or `refused` with one of the closed words.
  *
  * ⚠ **ONE ROUTE FOR EVERY KIND, DELIBERATELY.** A directive's LIFECYCLE does not
  * depend on which verb it carries, so claim, decide, the by-id poll and the
@@ -42,61 +42,20 @@ import {
  *
  * ⚠ THE SHAPE IS A DISCRIMINATED UNION: `launched` requires `agentId`, `refused`
  * requires `refusalReason`, and the column CHECK says the same at rest. There is
- * no way to report a refusal without saying why. ⚠ `done` REQUIRES NOTHING BESIDE
- * ITSELF and must not grow an id: an end and a rename already NAME their target
- * in the row, so a second id here would be a field the machine could get wrong
- * about a row it did not write.
+ * no way to report a refusal without saying why. ⚠ `done` carries only
+ * `set_agent_mode`'s optional posture echo and must not grow an id: an end and a
+ * rename already NAME their target in the row, so a second id here would be a field
+ * the machine could get wrong about a row it did not write.
  */
 async function handlePost(request: NextRequest, auth: WorkspaceAuthContext) {
   try {
     const input = await parseJson(request, LaunchDecideSchema);
     const ctx = buildChannelContext(auth);
-    // ⚠ RE-BUILT PER ARM RATHER THAN PASSED THROUGH, so the discriminated union
-    // survives into the service signature. THREE ARMS SINCE 2026-09-01: `done` is
-    // the AGENT-MANAGEMENT kinds' success and carries no agent id (the row already
-    // NAMES its target), while `launched` is the launch's and requires one. The
-    // column CHECK pairs each with its kind, so a machine reporting the wrong one
-    // is refused AT REST rather than recording an incoherent outcome.
-    const directive = await decideLaunchDirective(
-      ctx,
-      input.directiveId,
-      input.status === "launched"
-        ? {
-            status: "launched",
-            agentId: input.agentId,
-            // ⚠ **THE ECHO, CARRIED THROUGH UNTOUCHED AND NEVER DEFAULTED**
-            // (2026-09-01, T24's second half). An older desktop sends none of
-            // these three; `undefined` must reach the service as `undefined` so
-            // it maps to `null` = "not reported". Substituting anything here —
-            // in particular the row's own REQUEST columns — would make the row
-            // assert that the machine applied exactly what was asked, which is
-            // the single claim this lane cannot make about a value it clamps.
-            appliedTools: input.appliedTools,
-            appliedMessages: input.appliedMessages,
-            appliedChain: input.appliedChain,
-            // ⚠ **`appliedAgentName` WAS MISSING FROM THIS ENUMERATION UNTIL 2026-09-21, WHICH
-            // IS F-708 A THIRD TIME ON THE OTHER END OF THE SAME LANE.** The field reached
-            // `LaunchDecideSchema`, `DecideLaunchInput`, the column and the DTO — every layer
-            // built — and this handler never mentioned it, so the machine's real name for the
-            // agent was validated, typed, and dropped here. The MCP result then rendered
-            // `name=(not reported)` for an agent that HAD been named, on the one field Samuel's
-            // ruling makes the address. A missing optional property is not a type error
-            // anywhere, which is why the guard is a SOURCE-READING test
-            // (`launch-directives-route-forwards.test.ts`) and now covers this handler too.
-            appliedAgentName: input.appliedAgentName,
-            // ⚠ WHICH RUNTIME AND MODEL THE MACHINE ACTUALLY STARTED ON (2026-09-21, U9) —
-            // carried through UNTOUCHED and never defaulted, on the echo trio's rule directly
-            // above: an older desktop sends neither, and `undefined` must reach the service as
-            // `undefined` so it maps to `null` = "not reported" rather than being filled in from
-            // the row's own REQUEST column, which would make the row assert the machine ran the
-            // vendor that was asked for.
-            appliedRuntime: input.appliedRuntime,
-            appliedModel: input.appliedModel,
-          }
-        : input.status === "done"
-          ? { status: "done" }
-          : { status: "refused", refusalReason: input.refusalReason }
-    );
+    // ⚠ PASSED THROUGH, NEVER RE-BUILT PER ARM: a hand-copied arm silently drops a validated
+    // field (F2). An absent echo field stays `undefined`, which the service writes as `null` =
+    // "not reported" — never the row's request columns.
+    const { directiveId, ...decision } = input;
+    const directive = await decideLaunchDirective(ctx, directiveId, decision);
     return NextResponse.json({ directive });
   } catch (err) {
     return toChannelErrorResponse(err);

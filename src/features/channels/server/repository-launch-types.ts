@@ -118,17 +118,9 @@ export type LaunchDirectiveRow = {
   applied_runtime?: string | null;
   applied_model?: string | null;
   /**
-   * **THE SERVER'S RESOLVED POSTURE — the request clamped to the channel's
-   * stored ceiling, decided at CREATION** (2026-09-02, A9 — G6/G7/G8).
-   *
-   * ⚠ **THREE GROUPS ON ONE TABLE AND THEY ARE NOT INTERCHANGEABLE**:
-   * `start_*`/`chain` is what was ASKED, `applied_*` is what the MACHINE says it
-   * did, and this is what the SERVER permitted. Reading one as another is the
-   * defect the migration's section 3 exists to prevent.
-   * ⚠ `?` for the same stale-cache reason as the two groups above.
-   * ⚠ `resolved_model` is `null` for a model this server does not recognise, and
-   * that is NOT a refusal — the requested value is carried to the machine
-   * unchanged. See `lib/agent-models.ts › resolveAgentModelId`.
+   * ⚠ **RETIRED GROUP (F7/F10)**: written `null` by every create now — the server clamps
+   * nothing and resolves no model. Older rows carry a copy of the request. `?` for the
+   * stale-cache reason as the groups above.
    */
   resolved_tool_mode?: string | null;
   resolved_message_mode?: string | null;
@@ -278,20 +270,7 @@ export type LaunchDirectiveInsert = {
    * ⚠ ABSENT IS THE ORDINARY CASE and dedupes nothing: the index is partial.
    */
   client_msg_id?: string | null;
-  /**
-   * **THE SERVER'S RESOLVED POSTURE** (2026-09-02, A9 — G6/G7/G8), and it is the
-   * one posture group on this table the CREATE writes.
-   *
-   * ⚠ **NOT CALLER-SUPPLIED, unlike `start_*` beside it.** `service-launch.ts`
-   * computes these from the request AND `channels.agent_*_ceiling`; a caller that
-   * could pass one would be writing its own clamp. The type cannot enforce that
-   * (the object is built in one place), so the rule is stated where it is
-   * computed and pinned by `service-launch-posture.test.ts`.
-   * ⚠ **AND THEY ARE NOT `applied_*`.** That trio is the MACHINE's report and
-   * still has no writer; this is what the SERVER permitted. See
-   * `20260912120000_channel_delivery_verdict.sql` section 3, which states all
-   * three groups together.
-   */
+  /** ⚠ RETIRED GROUP (F7/F10): `createLaunchDirective` writes all four as `null`. */
   resolved_tool_mode?: string | null;
   resolved_message_mode?: string | null;
   resolved_chain?: boolean | null;
