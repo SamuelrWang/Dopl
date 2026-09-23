@@ -37,7 +37,7 @@ UPDATE public.agent_identities
    AND model IS NOT NULL
    AND (
      model ~ '^claude-'
-     OR model ~ '^(opus|sonnet|haiku|fable)(\[[A-Za-z0-9]{1,8}\])?$'
+     OR model ~ '^(opus|sonnet|haiku|fable)([[][A-Za-z0-9]{1,8}[]])?$'
    );
 
 COMMENT ON COLUMN public.agent_identities.runtime IS
@@ -72,7 +72,7 @@ BEGIN
      AND model IS NOT NULL
      AND (
        model ~ '^claude-'
-       OR model ~ '^(opus|sonnet|haiku|fable)(\[[A-Za-z0-9]{1,8}\])?$'
+       OR model ~ '^(opus|sonnet|haiku|fable)([[][A-Za-z0-9]{1,8}[]])?$'
      );
   IF n <> 0 THEN
     RAISE EXCEPTION 'ABORT: % identity row(s) with a Claude model still have no runtime', n;
