@@ -49,7 +49,7 @@ function build(routes) {
   };
   const api = new Function(
     "fetch",
-    `${BLOCK}\n return { getDataUri, cached, isHttpsUrl, isImageContentType, isSafeAvatarHost, sizeWithinLimit, assembleDataUri };`
+    `${BLOCK}\n return { getDataUri, isHttpsUrl, isImageContentType, isSafeAvatarHost, sizeWithinLimit, assembleDataUri };`
   )(mockFetch);
   return { ...api, get fetchCount() { return fetchCount; }, calls };
 }
@@ -204,20 +204,4 @@ test("cache: a NEGATIVE result is memoized — a broken avatar does not re-fetch
   assert.equal(await c.getDataUri(url), null);
   assert.equal(await c.getDataUri(url), null);
   assert.equal(c.fetchCount, 1, "the null is cached; no re-fetch");
-});
-
-test("cached(url): sync — undefined before fetch, the data URI after, null for a negative", async () => {
-  const good = "https://host/g.png";
-  const bad = "https://host/b";
-  const c = build(
-    new Map([
-      [good, imgRes([2, 2])],
-      [bad, imgRes([1], { ct: "text/plain" })],
-    ])
-  );
-  assert.equal(c.cached(good), undefined, "not yet fetched -> undefined (init falls back to initials)");
-  const uri = await c.getDataUri(good);
-  assert.equal(c.cached(good), uri, "warm -> the data URI (init fast path)");
-  await c.getDataUri(bad);
-  assert.equal(c.cached(bad), null, "a known-bad url is a cached null");
 });

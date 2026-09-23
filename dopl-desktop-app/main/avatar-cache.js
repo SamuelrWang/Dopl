@@ -1,7 +1,6 @@
-// Avatar cache — the ONLY new remote-fetch surface (v2.2 Session Window, item 1/5/6).
+// Avatar cache — main's bounded avatar fetch behind `avatar-policy.js` (the `dopl:avatar` bridge).
 //
-// The session window's CSP is `img-src 'self' data:` (no remote image ever loads),
-// so a member's Google avatar URL cannot be rendered directly. Main fetches it once,
+// The renderer's CSP admits no remote avatar host, so main fetches a member's avatar once,
 // bounds it HARD, and encodes it to a `data:` URI the renderer can set as img.src.
 //
 // SECURITY (contract §H-3): getDataUri is a ONE-SHOT bounded GET — https-only,
@@ -124,12 +123,6 @@ async function getDataUri(url) {
   remember(url, result);
   return result;
 }
-
-// Sync warm-cache accessor for the init fast path: the resolved data URI if already
-// fetched, else undefined (a not-yet-fetched url is a cache miss).
-function cached(url) {
-  return cache.get(url);
-}
 // ─── END AVATAR-CACHE-PURE ─────────────────────────────────────────────────────
 
-module.exports = { getDataUri, cached };
+module.exports = { getDataUri };
