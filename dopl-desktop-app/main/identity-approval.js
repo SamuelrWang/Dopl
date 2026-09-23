@@ -98,8 +98,6 @@ function approveIdentity(identityId) {
 
 module.exports = {
   IDENTITY_APPROVAL_KEY,
-  LEGACY_APPROVAL_KEY,
-  MAX_APPROVED_IDENTITIES,
   isIdentityApproved,
   approveIdentity,
 };

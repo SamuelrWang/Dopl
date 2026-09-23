@@ -399,11 +399,11 @@ function knowledgeLines(bases, profile, scopes) {
  * body inside the same ROLE fence `stripFence` guards. Nothing else — no fields, no
  * knowledge — because a blank launch carries none.
  */
-function instructionsOnlyFraming(t, nonce) {
+function instructionsOnlyFraming(role, nonce) {
   const begin = `BEGIN-ROLE-${nonce}`;
   const end = `END-ROLE-${nonce}`;
   const body = stripFence(
-    t.instructions == null ? '' : String(t.instructions),
+    role.instructions == null ? '' : String(role.instructions),
     begin, end, `BEGIN-REQUEST-${nonce}`, `END-REQUEST-${nonce}`
   );
   if (!body.trim()) return [];
@@ -441,16 +441,16 @@ function instructionsOnlyFraming(t, nonce) {
  * @param {string} nonce the session's own nonce, minted by the engine with crypto
  */
 function identityRoleFraming(ctx, nonce) {
-  const t = ctx && ctx.identity;
-  if (!t || typeof t !== 'object') return [];
-  if (t.instructionsOnly === true) return instructionsOnlyFraming(t, nonce);
+  const role = ctx && ctx.identity;
+  if (!role || typeof role !== 'object') return [];
+  if (role.instructionsOnly === true) return instructionsOnlyFraming(role, nonce);
   // ⚠ 120, THE NAME'S OWN BOUND — NOT the display default (F-287). An identity name is an
   // IDENTITY, and `session-summary.js › displayText(value, max)` already takes a per-field bound
   // for exactly this reason: "clipping an identity to fit a display default would report a name
   // no identity has." The role line said `YOUR ROLE FOR THIS RUN IS "<first 80 chars>"` while
   // `channel-session-render.ts › telemetryClauses` and the Agents-tab card reported the same
   // agent's identity at its full 120 — two surfaces disagreeing about one identity.
-  const name = sanitizeText(t.name, NAME_MAX);
+  const name = sanitizeText(role.name, NAME_MAX);
   if (!name) return []; // an identity with no renderable name names no role
   const begin = `BEGIN-ROLE-${nonce}`;
   const end = `END-ROLE-${nonce}`;
@@ -459,14 +459,14 @@ function identityRoleFraming(ctx, nonce) {
   // attack and the one `session-seed.js › frameOperatorTurn` strips for. `stripFence` is
   // variadic for exactly this call.
   const body = stripFence(
-    t.instructions == null ? '' : t.instructions,
+    role.instructions == null ? '' : role.instructions,
     begin, end, `BEGIN-REQUEST-${nonce}`, `END-REQUEST-${nonce}`
   );
   // ⚠ AUTHORSHIP IS A SERVER-COMPUTED BOOLEAN (`/resolve › authoredByCaller`, G-1), never a
   // creator id: a raw creator id in a launch payload is ownership information the launcher does
   // not need. FAIL FOREIGN — anything that is not an explicit `true` gets the stronger header,
   // because an older server that does not send the field must not silently downgrade it.
-  const own = t.authoredByCaller === true;
+  const own = role.authoredByCaller === true;
   const header = own ? OWN_HEADER : FOREIGN_HEADER;
   const lines = [
     `YOUR ROLE FOR THIS RUN IS "${name}".`,
@@ -478,12 +478,12 @@ function identityRoleFraming(ctx, nonce) {
   ];
   if (body) lines.push(body);
   lines.push(
-    ...fieldLines(t.fields),
-    ...knowledgeLines(t.knowledgeBases, ctx && ctx.profile, t.knowledge),
+    ...fieldLines(role.fields),
+    ...knowledgeLines(role.knowledgeBases, ctx && ctx.profile, role.knowledge),
     // ⚠ A SECTION OF ITS OWN, AFTER the reachable one. The two say different things to the agent
     // — here is what to open, and here is what to say when something is missing — and folding the
     // second into the first would put a refusal sentence under a heading listing live bases.
-    ...unreachableKnowledgeLines(t.unreachableKnowledgeBaseCount),
+    ...unreachableKnowledgeLines(role.unreachableKnowledgeBaseCount),
     end,
     ''
   );
@@ -494,5 +494,4 @@ module.exports = {
   identityRoleFraming,
   kbReadable, // the read_only hard gate, exported so the profile join is testable alone
   FOREIGN_HEADER, // the UNTRUSTED_SKILL_BODY_HEADER-shaped posture (INVARIANTS §10 family)
-  OWN_HEADER,
 };

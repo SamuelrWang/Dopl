@@ -423,6 +423,5 @@ module.exports = {
   narrow, // exported so the whitelist can be driven directly, without a fake transport
   narrowOverrides, // 2026-08-22: the launch sheet's ephemeral re-points, re-validated main-side
   applyOverrides,
-  isSafeLabel, // the server's charset, as this tree's single copy answers it
   IDENTITY_RESOLVE_TIMEOUT_MS,
 };
