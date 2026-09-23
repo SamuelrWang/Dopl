@@ -167,7 +167,11 @@ test("a Codex record accepts Codex values — mode, model and both native dimens
   // point: before U5 the mode rejected the whole write, the model was silently dropped, and the
   // sandbox had nowhere to be stored at all.
   assert.equal(ctx.toolModeFor(DEFAULT_ID, "on-request"), NARROW(DEFAULT_ID));
-  assert.equal(ctx.storeModelFor(DEFAULT_ID, "gpt-5-codex"), "");
+  // ⚠ 2026-09-22: the default runtime's STORAGE is shape-only now (its roster is live), so it no
+  // longer answers "not mine" for a well-formed foreign id — a malformed one is still refused. The
+  // vendor boundary moved to where it can be KNOWN: its picker offers only its own live catalog,
+  // and a launch naming an id its roster lacks is REFUSED (`claude-live-roster.test.mjs`).
+  assert.equal(ctx.storeModelFor(DEFAULT_ID, "gpt 5; codex"), "");
 });
 
 test("Claude → Codex → Claude restores BOTH remembered model choices and BOTH native sets", () => {

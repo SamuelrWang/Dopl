@@ -285,15 +285,17 @@ async function launchFromButton(payload) {
     // sheet opens on `Blank agent` too, and dropping the pick there would be a control that
     // silently does nothing.
     //
-    // ⚠ EACH LINK IS CONSULTED IN TURN AND THE FIRST ONE THAT YIELDS A REAL MODEL WINS. A
-    // template naming a model THIS BUILD DOES NOT KNOW yields nothing and falls through to the
-    // channel's pick — it does not throw the operator's own default away, and it does not
-    // REFUSE. That is F-5: the whole tree's rule is "unknown model falls back, never refuses",
-    // because refusing would make a template unusable on a machine running an older desktop
-    // build, which is the common case and not the rare one.
-    // ⚠ `normalizeModel` accepts BOTH vocabularies (a full id or an alias) and answers exactly
-    // one, so a template author may write either. `buildSdkOptions` re-coerces at the last step
-    // before argv, so nothing here is trusted downstream either.
+    // ⚠ EACH LINK IS CONSULTED IN TURN AND THE FIRST ONE THAT NAMES A MODEL WINS.
+    // ⚠ **F-5 IS REVERSED (2026-09-22).** A link naming a model used to fall through when THIS
+    // BUILD'S FROZEN TABLE did not know it ("unknown model falls back, never refuses") — which is
+    // also how a model the CLI started offering after this build shipped could never be launched,
+    // and how a mistyped one silently became the next link's. The table is not the authority any
+    // more; the runtime's LIVE roster is. So a named model is spent as named, and one this
+    // machine's runtime does not offer is REFUSED by the funnel with the list it does offer
+    // (`session-launch.js › refuseUnknownModel`, `no-model`) — the operator picks another in the
+    // sheet, whose pick outranks the template's.
+    // ⚠ A legacy alias (`opus`) or an old full id still resolves: the roster carries them as
+    // aliases of the row that is that model today (`runtime/claude/roster.js`).
     // ⚠ A MODEL GRANTS NOTHING AND REACHES NO GATE, which is why it may travel further than the
     // permission pair. `getLaunchModelLink` is deliberately not `getLaunchPosture`.
     // ⚠ **THE CHANNEL LINK RESOLVES ON THE CHANNEL'S OWN RUNTIME SINCE 2026-09-21 (U5).** It read
@@ -339,7 +341,10 @@ async function launchFromButton(payload) {
   });
   // THE ANSWER IS THE ADDRESS. `agentId` is present on every successful launch.
   if (res && res.agentId) return { ok: true, agentId: res.agentId, sessionId: res.sessionId || null };
-  return { ok: false, reason: (res && res.skipped) || 'unknown' };
+  // ⚠ `detail` IS THE SENTENCE WHEN THERE IS ONE (2026-09-22, `no-model`: which models this
+  // machine DOES offer). Optional on the wire — an older renderer reads `reason` alone.
+  return Object.assign({ ok: false, reason: (res && res.skipped) || 'unknown' },
+    res && typeof res.detail === 'string' && res.detail ? { detail: res.detail } : {});
 }
 
 /**

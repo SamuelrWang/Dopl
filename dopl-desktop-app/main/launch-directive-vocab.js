@@ -155,8 +155,12 @@ const MESSAGE_MODES = ['ask', 'auto_inbound', 'auto_outbound', 'auto_both'];
 // refusal explainable without opening the repo — applied to the one refusal that named nothing.
 // ⚠ Its CHECK lands in the SAME wave (`20260910120000_channel_launch_directives_posture.sql`
 // §3A), which is the 2026-08-22 sequencing lesson applied rather than re-learned.
+// ⚠ ELEVEN SINCE 2026-09-22. `no-model` is what `session-launch.js` answers when a launch names a
+// model the resolved runtime's LIVE roster does not offer. It used to be no refusal at all: the
+// id fell through to the product default and the launch echoed the id it was asked for. Its CHECK
+// is `20261018120000_channel_launch_directives_no_model.sql` (written in the same wave).
 const REFUSAL_REASONS = ['cap', 'busy', 'no-sdk', 'auth-hold', 'no-bridge', 'no-counterparty',
-  'no-template', 'no-session', 'bad-name', 'no-chain'];
+  'no-template', 'no-session', 'bad-name', 'no-chain', 'no-model'];
 
 // The keys this desktop puts on the wire, and the ones it reads back. Stated as data so the
 // suite can assert them without a live route, and so a route that lands with different names

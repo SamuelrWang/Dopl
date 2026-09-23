@@ -117,6 +117,12 @@ const CURSOR_PREDICTIONS = [
 // adapter count, because a fourth adapter would not answer it and X5/C14 would. The stale case
 // below fails the moment the field starts varying, so nobody has to remember to come back.
 const DEFERRED_BY_DESIGN = {
+  // ⚠ 2026-09-22: Claude's roster went LIVE (`runtime/claude/roster.js` reads `supportedModels()`
+  // off a turn-free handshake), so all three shipped adapters answer `live`. `frozen` stays a
+  // contract value — `model-catalog.js` reads such a roster inline, and
+  // `runtime-model-catalog.test.mjs` drives that path — for a platform with no roster call.
+  "models.source": "live on all three since Claude's roster went live (2026-09-22); `frozen` is "
+    + "kept for a platform with no roster call, and its inline-read path has its own suite.",
   deepLink: "null on all three: §7 ships no rung in v1, and both live ceilings are unbisected "
     + "(§5 C14 / X5). Answering either is what makes this field describe a difference.",
 };

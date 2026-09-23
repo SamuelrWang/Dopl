@@ -142,7 +142,7 @@ function harness(cfg = {}) {
   };
   const api = new Function(
     "deps", "store", "sessionWindowless", "diag", "newAgentId", "isAgentId", "profiles",
-    "ontologyReach", "roomRoster",
+    "ontologyReach", "roomRoster", "refuseUnknownModel", // 2026-09-22: faked; `launch-model-refusal.test.mjs` drives it
     `${LAUNCH_SRC}\n${fnOf(ENGINE, "hasLiveSession")}\n${fnOf(ENGINE, "isAuthHeldSession")}\n` +
       ` return { launch, hasLiveSession, isAuthHeldSession };`
   )(
@@ -177,7 +177,7 @@ function harness(cfg = {}) {
     // HTTP routes, and `room-roster.test.mjs` pins its own promises (no call in a solo room, one
     // bounded read otherwise, fail-open). Here the funnel only has to AWAIT it and survive a throw.
     { fetchRoomRoster: async () => { if (cfg.rosterThrows) throw new Error("roster exploded"); return cfg.roster || { agents: [], agentsMore: 0, people: [], peopleMore: 0, read: 'skipped' };
-    } }
+    } }, async () => cfg.modelRefusal || null
   );
   return { ...api, sessions, calls };
 }

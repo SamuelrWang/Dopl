@@ -241,7 +241,13 @@ const runtime = {
   toolConfigFor(profile) { return tools.buildSessionToolConfig(profile); },
   axisAAllows(mode, toolName) { return tools.toolModeAllows(mode, toolName); },
 
+  // ⚠ LIVE SINCE 2026-09-22 (`models.js`): `supportedModels()` off a turn-free CLI handshake.
   models() { return models.models(); },
+  // ⚠ OPTIONAL, NOT CONTRACT METHODS. `rosterKey` lets `model-catalog.js` notice a sign-in or an
+  // upgrade on an ordinary look; `modelArg` is the live model switch's argument for a pick, off the
+  // same roster the launch resolves against (`session-reopen.js › setModelByTask`).
+  rosterKey() { return models.rosterKey(); },
+  modelArg(value) { return models.resolveLaunchModel(value); },
   registerMcp(cfg) { return mcp.registerMcp(cfg); },
   probeMcp() { return mcp.probeMcp(); },
   credentialState() { return credential.credentialState(); },

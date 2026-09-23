@@ -49,6 +49,15 @@ export function loadCodexModels(client) {
 
 export const claudeModels = requireMain(join(MAIN, "runtime", "claude", "models.js"));
 
+/**
+ * THE CLAUDE ADAPTER'S BUILD-TIME TABLE, AS A PLAIN SYNCHRONOUS ROSTER (2026-09-22). The adapter is
+ * `live` now (`claude/models.js`), and this table is its FALLBACK — which it marks `stale`. These
+ * suites use it as "a runtime with a fixed table" to drive the CONTRACT (inline reads, isolation,
+ * labels), so the stale flag is dropped here and the live adapter has its own suite
+ * (`claude-live-roster.test.mjs`).
+ */
+export const claudeTable = () => Object.assign({}, claudeModels.frozenRoster(), { stale: false, source: "frozen" });
+
 /** The four ids that must never appear on another runtime's surface. */
 export const CLAUDE_IDS = ["claude-fable-5", "claude-opus-5", "claude-sonnet-5", "claude-haiku-4-5-20251001"];
 

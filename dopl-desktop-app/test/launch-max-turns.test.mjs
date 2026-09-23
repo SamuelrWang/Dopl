@@ -68,7 +68,7 @@ function assembled(s) {
   const src = `${fnOf(SPEC, "buildOptions")}\n return buildOptions;`;
   return new Function(
     "tools", "channelDirs", "loader", "sessionAuth", "sessionOutbound", "axisB", "diag",
-    "store", "sessionModel", "sessionCredential", "agentOps", "SESSION_MAX_TURNS", src
+    "store", "models", "sessionCredential", "agentOps", "SESSION_MAX_TURNS", src
   )(
     { buildSessionToolConfig: () => ({ preApproved: [], disallowedTools: [], doplToolsPolicy: "full", builtinTools: [] }) },
     { sessionSpawnDir: () => "/tmp" },
@@ -87,7 +87,7 @@ function assembled(s) {
     { makeCanUseTool: () => () => {}, makeAgentOpsServer: () => null },
     () => {},
     { slotKey: () => "c1:t1" },
-    require("../main/session-model.js"),
+    require("../main/runtime/claude/models.js"), // 2026-09-22: the adapter's live-roster resolver
     { sessionBearer: () => "" },
     { AGENT_OPS_TOOL_NAMES: [], SERVER_KEY: "dopl_agents" },
     SESSION_MAX_TURNS

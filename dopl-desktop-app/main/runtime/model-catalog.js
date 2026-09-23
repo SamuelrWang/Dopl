@@ -71,7 +71,7 @@ const str = (v) => (typeof v === 'string' ? v.trim() : '');
 function normalizeEntry(row) {
   if (typeof row === 'string') {
     const id = str(row);
-    return id ? { id, label: null, short: null, isDefault: false, hidden: false, dimensions: {} } : null;
+    return id ? { id, label: null, short: null, isDefault: false, hidden: false, aliases: [], dimensions: {} } : null;
   }
   if (!row || typeof row !== 'object') return null;
   const id = str(row.id);
@@ -87,8 +87,21 @@ function normalizeEntry(row) {
     // ⚠ HIDDEN MODELS STAY IN THE CATALOG AND OUT OF ORDINARY PICKERS (Decision #2). They are
     // carried rather than dropped so a session ALREADY on one can still be LABELLED.
     hidden: row.hidden === true,
+    // ⚠ OTHER SPELLINGS THE ADAPTER ACCEPTS FOR THIS SAME MODEL (2026-09-22) — a legacy stored id,
+    // the launch alias, an undated form. MATCHED, never offered: a picker lists `id`, and a stored
+    // value that is an alias still finds its row (`findModel`), so an old pick keeps its label.
+    aliases: aliasesOf(row.aliases, id),
     dimensions: normalizeDimensions(row.dimensions),
   };
+}
+
+function aliasesOf(raw, id) {
+  const out = [];
+  for (const v of Array.isArray(raw) ? raw : []) {
+    const a = str(v);
+    if (a && a !== id && out.indexOf(a) === -1) out.push(a);
+  }
+  return out;
 }
 
 /** `{ <dimensionKey>: { options: [{value,label,description}], default } }`, or `{}`. */
@@ -189,7 +202,10 @@ function catalogFromRoster(runtimeId, descriptor, roster) {
       reason: reason || 'Dopl could not read this runtime\'s model list.',
     });
   }
-  return makeCatalog(runtimeId, source, STATUS.READY, {
+  // ⚠ A ROSTER THAT SAYS IT IS STALE IS `stale` (2026-09-22): an adapter whose live read failed and
+  // answered its build's own table instead. The models LABEL; they are not newly selectable.
+  const status = roster.stale === true ? STATUS.STALE : STATUS.READY;
+  return makeCatalog(runtimeId, source, status, {
     dimensions: dims,
     key,
     models,
@@ -242,14 +258,23 @@ function noteSettled(id, status) {
   }
 }
 
-function due(entry, now) {
+function due(entry, now, adapter) {
   if (!entry) return true;
   if (entry.inflight) return false;
-  if (entry.catalog.status === STATUS.READY) return false; // a good roster is cached for the process
+  // ⚠ A GOOD ROSTER IS CACHED FOR THE PROCESS — UNLESS ITS KEY MOVED (2026-09-22). An adapter that
+  // can name its roster's key synchronously (`runtime.rosterKey`, e.g. binary + account) gets a
+  // re-read the first look after a sign-in or an upgrade, with no timer and no invalidation hook.
+  if (entry.catalog.status === STATUS.READY) return keyMoved(entry, adapter);
   // ⚠ `stale` AND `unavailable` SHARE THE FLOOR. `invalidate` stamps `at: 0`, so an invalidated
   // catalog is due at the very next look; a refresh that FAILED into `stale` is not re-spawned on
   // every look after it.
   return now - entry.at >= FAILURE_TTL_MS;
+}
+
+function keyMoved(entry, adapter) {
+  const fn = adapter && adapter.runtime && adapter.runtime.rosterKey;
+  if (typeof fn !== 'function' || !entry.catalog.key) return false;
+  try { return str(fn.call(adapter.runtime)) !== entry.catalog.key; } catch (_) { return false; }
 }
 
 const loadingCatalog = (id, declared) => makeCatalog(id, (declared && str(declared.source)) || null, STATUS.LOADING, {
@@ -335,9 +360,55 @@ function snapshot(adapter) {
   }
   const now = Date.now();
   const entry = snapshots.get(id) || null;
-  if (due(entry, now)) refresh(adapter, now);
+  if (due(entry, now, adapter)) refresh(adapter, now);
   const held = snapshots.get(id);
   return (held && held.catalog) || loadingCatalog(id, declared);
+}
+
+/**
+ * THIS RUNTIME'S CATALOG ONCE A READ HAS SETTLED — the ONE caller that may wait is a LAUNCH that
+ * names a model (`session-launch.js`), because refusing an unknown pick needs an answer, not
+ * `loading`. ⚠ Everything else stays on `snapshot`, which never blocks.
+ */
+async function settle(adapter) {
+  const descriptor = adapter && adapter.descriptor;
+  if (!descriptor) return null;
+  if (str((descriptor.models || {}).source) === 'frozen') return snapshot(adapter);
+  const held = snapshots.get(descriptor.id) || null;
+  if (held && held.inflight) return held.inflight;
+  if (due(held, Date.now(), adapter)) return refresh(adapter, Date.now());
+  return held.catalog;
+}
+
+/** The catalog entry a pick names — its `id`, else one of its `aliases`. `null` when none does. */
+function findModel(catalog, pick) {
+  const v = str(pick);
+  const models = (catalog && Array.isArray(catalog.models)) ? catalog.models : [];
+  if (!v) return null;
+  return models.find((m) => m.id === v)
+    || models.find((m) => Array.isArray(m.aliases) && m.aliases.indexOf(v) !== -1)
+    || null;
+}
+
+/**
+ * WHY A LAUNCH NAMING `pick` IS REFUSED ON THIS CATALOG, or `null` (2026-09-22).
+ *
+ * ⚠ **AN UNKNOWN MODEL IS REFUSED WITH A SENTENCE, NEVER SWAPPED FOR ANOTHER.** It used to fall
+ * through to the product default — an MCP launch asking for a mistyped id started Sonnet and
+ * echoed the id it was asked for.
+ * ⚠ **ONLY A CATALOG THAT HOLDS MODELS CAN REFUSE.** `loading` / `unavailable` hold none, and
+ * refusing there would turn "Dopl could not read the list" into "that model does not exist" —
+ * the launch goes ahead and the runtime itself answers. A `stale` catalog DOES hold models (the
+ * last answer, or the adapter's own table), so it refuses what it cannot vouch for.
+ * ⚠ ABSENT and the legacy word `default` are "no pick" and are never refused here.
+ */
+function modelRefusal(catalog, pick, label) {
+  const v = str(pick);
+  if (!v || v === 'default' || !catalog || !Array.isArray(catalog.models) || !catalog.models.length) return null;
+  if (findModel(catalog, v)) return null;
+  const offered = catalog.models.filter((m) => !m.hidden).map((m) => m.label || m.id).join(', ');
+  return `${label || 'This runtime'} does not offer the model "${v}" on this machine`
+    + (offered ? ` — it offers: ${offered}` : '') + '.';
 }
 
 /**
@@ -406,6 +477,9 @@ module.exports = {
   normalizeDimensions,
   makeCatalog,
   snapshot,
+  settle, // 2026-09-22: the launch funnel's one awaited read
+  findModel,
+  modelRefusal,
   catalogs,
   invalidate,
   onSettled,

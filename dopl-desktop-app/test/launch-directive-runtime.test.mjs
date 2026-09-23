@@ -161,10 +161,11 @@ test("REFUSE: only the EXPLICIT ask fails closed — an unreachable CHANNEL pick
 
 // ── 4. THE MODEL, INSIDE THE RESOLVED RUNTIME ────────────────────────────────────────────
 
-test("MODEL: the default adapter keeps the Claude chain byte for byte", async () => {
+test("MODEL: the default adapter keeps the Claude chain — the pick handed on as given", async () => {
   const h = boot();
   await h.api.handle(launchRow({ model: "claude-opus-5" }), WS);
-  assert.equal(handedModel(h), "opus");
+  // 2026-09-22: resolved on the LIVE roster at the launch spec, not aliased here.
+  assert.equal(handedModel(h), "claude-opus-5");
   assert.deepEqual(h.rosters, [], "and it never spends a roster read to do it");
 });
 
@@ -187,18 +188,22 @@ test("MODEL: a model IN the resolved runtime's roster is passed through raw", as
   assert.deepEqual(h.rosters, ["codex"], "asked the RESOLVED runtime, not the default one");
 });
 
-// ⚠ REJECTED OR IGNORED — NEVER RE-ROUTED. The plan's own wording, and the asymmetry that
-// matters: a model is dropped, a runtime is not changed.
-test("MODEL: a CLAUDE model on a CODEX launch is dropped and the runtime is untouched", async () => {
+// ⚠ REFUSED — NEVER RE-ROUTED, AND SINCE 2026-09-22 NEVER DROPPED EITHER. A roster that ANSWERED
+// and lacks the id is definitive, so the pick goes on to the funnel and the funnel refuses it
+// (`no-model`); launching on the platform default instead is the silent substitution this wave
+// removes. The runtime is still never changed by a model it cannot run.
+test("MODEL: a CLAUDE model on a CODEX launch is REFUSED and the runtime is untouched", async () => {
   const h = boot({
     channelRuntime: "codex",
     rosters: { codex: { source: "live", ids: ["gpt-6-astra"], aliases: ["", "gpt-6-astra"] } },
+    // what `session-launch.js › refuseUnknownModel` answers for an id Codex's catalog lacks
+    launch: async () => ({ skipped: "no-model" }),
   });
   await h.api.handle(launchRow({ model: "claude-opus-5" }), WS);
   assert.equal(handedRuntime(h), "codex", "the runtime is NOT changed by a model it cannot run");
-  assert.equal(handedModel(h), "", "and the Claude id is dropped, not smuggled in");
-  assert.equal(decided(h)[0].status, "launched");
-  assert.ok(h.logged.some((l) => l.includes("DROPPING the model")));
+  assert.equal(handedModel(h), "claude-opus-5", "handed on so the funnel can refuse it with a sentence");
+  assert.deepEqual(decided(h), [{ directiveId: DID, status: "refused", refusalReason: "no-model" }]);
+  assert.ok(h.logged.some((l) => l.includes("will be refused (no-model)")));
 });
 
 // ⚠ R11: A CATALOG FAILURE MUST NOT SUBSTITUTE ANOTHER RUNTIME'S MODELS. The honest answer is the
@@ -217,12 +222,12 @@ test("AUDIT: the decide reports the APPLIED runtime and model, never the request
     channelRuntime: "codex",
     rosters: { codex: { source: "live", ids: ["gpt-6-astra"], aliases: ["", "gpt-6-astra"] } },
   });
-  await h.api.handle(launchRow({ runtime: "codex", model: "claude-opus-5" }), WS);
+  await h.api.handle(launchRow({ runtime: "codex", model: "" }), WS);
   const body = decided(h)[0];
   assert.equal(body.appliedRuntime, "codex");
-  // ⚠ ABSENT, NOT `claude-opus-5`. The request is on the ROW; this body is what the machine did,
-  // and echoing the request back would be right whenever it was honoured and confidently wrong
-  // exactly when it was not.
+  // ⚠ ABSENT: the directive asked for no model and Codex's own default ran. The request is on the
+  // ROW; this body is what the machine did. (A model the roster lacks is now REFUSED — above — so
+  // "asked X, applied nothing" can no longer be a LAUNCHED body at all.)
   assert.ok(!("appliedModel" in body), "no model argument was applied, so none is reported");
 });
 

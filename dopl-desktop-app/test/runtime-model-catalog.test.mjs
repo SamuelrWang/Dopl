@@ -27,7 +27,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import {
-  loadCatalog, loadCodexModels, claudeModels, CLAUDE_IDS, noClaude,
+  loadCatalog, loadCodexModels, claudeModels, claudeTable, CLAUDE_IDS, noClaude,
   fakeClient, row, adapter, CODEX_DESCRIPTOR, settle,
 } from "./_model-catalog-harness.mjs";
 
@@ -36,7 +36,7 @@ const WEB = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "src", "fe
 test("🔒 a failed Codex catalog contains NO Claude model, on any path, including the whole map", async () => {
   const catalog = loadCatalog();
   const claude = adapter({ id: "claude", label: "Claude Code", models: { source: "frozen", dimensions: null } },
-    () => claudeModels.models());
+    () => claudeTable());
   const codex = adapter(CODEX_DESCRIPTOR,
     () => loadCodexModels(fakeClient([], { probeOk: false, probeReason: "not installed" })).models());
   const all = catalog.catalogs([claude, codex]);
@@ -82,7 +82,7 @@ test("a live roster reads `loading` FIRST and `ready` after the background read 
 test("a frozen roster is read INLINE and is never `loading`", () => {
   const catalog = loadCatalog();
   const claude = adapter({ id: "claude", label: "Claude Code", models: { source: "frozen", dimensions: null } },
-    () => claudeModels.models());
+    () => claudeTable());
   assert.equal(catalog.snapshot(claude).status, "ready", "a table lookup has no loading state");
 });
 
@@ -159,11 +159,17 @@ test("the frozen roster delivers the SAME normalized contract, with its labels a
   const catalog = loadCatalog().catalogFromRoster(
     "claude",
     { id: "claude", label: "Claude Code", models: { source: "frozen", dimensions: null } },
-    claudeModels.models()
+    claudeTable()
   );
   assert.equal(catalog.status, "ready");
   assert.equal(catalog.source, "frozen");
   assert.deepEqual(catalog.models.map((m) => m.id), CLAUDE_IDS, "the roster order is unchanged");
+  // ⚠ 2026-09-22: and the adapter's OWN fallback marks the same table `stale` — see
+  // `claude-live-roster.test.mjs` for the live roster it stands in for.
+  const fallback = loadCatalog().catalogFromRoster("claude",
+    { id: "claude", label: "Claude Code", models: { source: "live", dimensions: null } }, claudeModels.frozenRoster());
+  assert.equal(fallback.status, "stale", "a fallback table is never presented as a live answer");
+  assert.ok(fallback.reason.length > 0, "and it says why");
   assert.deepEqual(catalog.models.map((m) => m.label),
     ["Fable 5", "Opus 5", "Sonnet 5", "Haiku 4.5"], "the labels are unchanged");
   assert.equal(catalog.defaultId, "claude-sonnet-5", "the product's back-fill is the default marker");
@@ -183,12 +189,12 @@ test("🔒 the desktop's label table AGREES WITH THE WEB'S, because the two tree
   const rows = [...block[0].matchAll(/id:\s*"([^"]+)",\s*label:\s*"([^"]+)",\s*short:\s*"([^"]+)"/g)]
     .map(([, id, label, short]) => ({ id, label, short }));
   assert.equal(rows.length, 4, "the web table moved — re-derive this pin");
-  const desktop = claudeModels.models().models;
+  const desktop = claudeTable().models;
   assert.deepEqual(desktop.map((m) => ({ id: m.id, label: m.label, short: m.short })), rows);
 
   const fallback = /export const AGENT_MODEL_FALLBACK = "([^"]+)"/.exec(web);
   assert.ok(fallback, "agent-models.ts › AGENT_MODEL_FALLBACK was not found");
-  assert.equal(claudeModels.models().defaultId, fallback[1],
+  assert.equal(claudeTable().defaultId, fallback[1],
     "the catalog's default marker and the web's back-fill are one decision");
 });
 
@@ -197,7 +203,7 @@ test("🔒 the desktop's label table AGREES WITH THE WEB'S, because the two tree
 test("one adapter that THROWS becomes one `unavailable` entry, and takes nobody with it", () => {
   const catalog = loadCatalog();
   const good = adapter({ id: "claude", label: "Claude Code", models: { source: "frozen", dimensions: null } },
-    () => claudeModels.models());
+    () => claudeTable());
   const bad = adapter({ id: "boom", label: "Boom", models: { source: "frozen", dimensions: null } },
     () => { throw new Error("the model table could not be read"); });
   const all = catalog.catalogs([good, bad]);

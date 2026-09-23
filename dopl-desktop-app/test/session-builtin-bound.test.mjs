@@ -166,7 +166,8 @@ const DEPS = {
   store: { slotKey: () => "slot" },
   sessionAuth: { withStoredCredential: (env) => env },
   sessionOutbound: { wrapGate: (_s, gate) => gate },
-  sessionModel: { modelArg: () => "" },
+  // 2026-09-22: the launch spec resolves the model on the adapter's live roster (`models.js`).
+  models: { launchArg: () => "" },
   sessionCredential: { sessionBearer: () => "" },
   diag: () => {},
   // ⚠ A MODULE-LEVEL CONSTANT THE SLICED FUNCTION CANNOT SEE. `buildOptions` is

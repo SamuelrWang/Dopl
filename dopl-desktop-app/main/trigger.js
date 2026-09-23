@@ -338,6 +338,8 @@ function skippedHint(skipped) {
   // id into a copy helper. The state is what the operator can act on; §3.3's per-runtime prose is
   // step 9's and needs the id, not a second guess here.
   if (skipped === 'no-sdk') return 'No agent runtime is available on this machine.';
+  // 2026-09-22: the channel's stored model is not one this machine's runtime offers any more.
+  if (skipped === 'no-model') return 'This channel\'s model is not offered on this machine — pick another in the channel Settings.';
   return 'The agent could not be started.';
 }
 

@@ -208,9 +208,10 @@ function register(opts = {}) {
   // THE LIVE MODEL SWITCH (2026-08-22, Samuel's ruling). It moves ONE running session onto another
   // model and RECORDS the pick, so a later park/resume keeps it; the bundled SDK supports it in
   // streaming input mode (`Query.setModel`), the only mode this tree uses. Full argument at
-  // `main/session-reopen.js › setModelByTask`. The value is the ID vocabulary (`session-model.js ›
-  // MODEL_IDS`), coerced HERE and again inside; an unknown value lands on 'default', which CLEARS
-  // the override rather than refusing, because the CLI's own pick is a legitimate thing to ask for.
+  // `main/session-reopen.js › setModelByTask`. ⚠ SINCE 2026-09-22 THE VALUE IS BOUNDED HERE AND
+  // RESOLVED INSIDE, on the session's own runtime's LIVE roster: it was coerced to the frozen
+  // `MODEL_IDS` here, so a model the CLI offers that this build predates could never be picked, and
+  // an unknown one silently reset the session. Unknown is now refused there, with a sentence.
   ipcMain.handle('sessions:setModel', appWindowOnly('sessions:setModel', { ok: false }, async (_event, payload) => {
     const p = payload || {};
     if (!isUuid(p.channelId)) return { ok: false };
@@ -220,7 +221,7 @@ function register(opts = {}) {
       channelId: p.channelId,
       taskId: String(p.taskId || ''),
       agentId: asAgentId(p.agentId),
-      model: require('./session-model').normalizeModelId(p.model),
+      model: typeof p.model === 'string' ? p.model.trim().slice(0, 120) : '',
     });
   }));
 
