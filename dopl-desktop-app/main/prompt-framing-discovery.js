@@ -1,20 +1,9 @@
-// THE GRANT SENTENCE OF `prompt-framing.js › firstActions`, PER RUNTIME (CXP-3A, 2026-09-22).
-//
-// PURE — no electron / fs / path. Split out of `prompt-framing.js` for the §2 500-line cap, and
-// on a real seam: this is the one part of the first turn whose wording depends on HOW THE RUNTIME
-// EXPOSES DOPL'S TOOLS, and it changes when a runtime's tool surface is re-measured.
-//
-// 🔒 MEASURED (codex-cli 0.155.1; `test/codex-mcp-discovery.test.mjs`): Codex defers every MCP
-// tool. A non-code-mode model (gpt-5.5) reaches it through a client-executed `tool_search`; a
-// `code_mode_only` model (every gpt-6-* / gpt-5.6-* in the 2026-09-22 catalog) runs tools inside
-// `exec`, where a deferred tool is listed in `ALL_TOOLS` as `mcp__dopl__dopl_channel` and called
-// as `tools.mcp__dopl__dopl_channel(...)`. Both land on the same held approval.
+// The grant sentence of `prompt-framing.js › firstActions`, per runtime (CXP-3A). Pure.
+// `ctx.mcpDiscovery` (`capability.mcpDiscovery`) is null on Claude (tools always loaded; wording
+// byte-identical). Codex defers every MCP tool: measured (`test/codex-mcp-discovery.test.mjs`), a
+// model reaches it through `tool_search`, or in code mode lists it in `ALL_TOOLS` inside `exec` —
+// so it is told both ways in rather than "do not go looking for it".
 
-// ⚠ RUNTIME-AWARE SINCE CXP-3A (2026-09-22). `ctx.mcpDiscovery` is `capability.mcpDiscovery`'s
-// answer: null (Claude — `alwaysLoad`, ToolSearch denied) keeps the wording BYTE-IDENTICAL; Codex
-// (deferred MCP tools; neither way in is on Dopl's deny list) gets the two MEASURED ways in —
-// `tool_search`, and code-mode's `ALL_TOOLS` inside `exec` — instead of "do not go looking for it",
-// which a spawned Codex agent QUOTED when it refused to search.
 const WORD = /^[A-Za-z_]+$/;
 function grantLines(disc) {
   const verb = disc && WORD.test(disc.verb || '') ? disc.verb : null;
