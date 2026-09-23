@@ -5,7 +5,7 @@
 
 import { z } from "zod";
 import { MAX_CHARS_FIELD } from "./response-size";
-import type { DoplClient } from "@dopl/client";
+import type { DoplClient, IdentityField } from "@dopl/client";
 import { UNKNOWN_CALLER, type CallerIdentity } from "./identity.js";
 import { missingParams, type RegisterTool, type ToolResponse } from "./respond.js";
 import {
@@ -57,9 +57,15 @@ const KNOWLEDGE_SCOPE_SHAPE = z
     message: "Name a folder OR an entry, not both",
   });
 
+/** `src/features/agent-identities/types.ts › IDENTITY_FIELD_TYPES`, pinned by `schema-sql.test.ts`. */
+const IDENTITY_FIELD_TYPES = ["text", "number", "date", "boolean", "url"] as const satisfies readonly NonNullable<
+  IdentityField["type"]
+>[];
+
 const FIELD_SHAPE = z.object({
   key: z.string().min(1).max(MAX_FIELD_KEY_CHARS),
   value: z.string().max(MAX_FIELD_VALUE_CHARS),
+  type: z.enum(IDENTITY_FIELD_TYPES).optional(),
 });
 
 const AGENT_OPS = ["list", "get", "create", "update", "grant"] as const;
@@ -117,7 +123,7 @@ const AGENT_INPUT_SHAPE = {
     .max(MAX_FIELD_COUNT)
     .optional()
     .describe(
-      "op=create / op=update: custom {key, value} pairs carried into the launch payload — a REPLACE-SET, so [] empties it and omitting leaves it alone.",
+      "op=create / op=update: custom {key, value, type?} fields carried into the launch payload — a REPLACE-SET, so [] empties it and omitting leaves it alone; an omitted type keeps the stored one.",
     ),
   // Two arms: see `agent-shared.ts › IDENTITY_VISIBILITY_VALUES`.
   visibility: z

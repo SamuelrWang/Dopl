@@ -38,6 +38,7 @@ import {
 } from "./agent-shared.js";
 import { isErr } from "./channel-shared.js";
 import { duplicateNameNoteFor } from "./duplicate-name.js";
+import { fieldTypeRefusal } from "./agent-field-types.js";
 import {
   homeChannelRowNotShared,
   resolveHomeChannelContainer,
@@ -130,6 +131,8 @@ export async function opCreate(
   /** Optional: absent means "not known" and leaves the refusal to the server. */
   directory?: WorkspaceDirectory,
 ): Promise<ToolResponse> {
+  const badType = fieldTypeRefusal(input.fields);
+  if (badType) return badType;
   // Visibility is always sent, never the server's credential-dependent default: an omitted one looped the shared-publish preview.
   const inHomeChannel = await resolveHomeChannelContainer(client, directory);
   const chosen: OfferedIdentityVisibility | ToolResponse = inHomeChannel
@@ -155,7 +158,7 @@ export async function opCreate(
         visibility,
         knowledge_bases: [...(input.knowledge_bases ?? [])].sort(),
         knowledge: knowledgeDigest(input),
-        fields: (input.fields ?? []).map((f) => [f.key, f.value]),
+        fields: (input.fields ?? []).map((f) => [f.key, f.value, f.type ?? ""]),
       },
     },
     { publishes: visibility === "workspace", token: input.confirm_token },
@@ -231,8 +234,12 @@ export async function opUpdate(
 
   const identity = await resolveIdentityOr(client, ref);
   if (isErr(identity)) return identity;
-  // `fields` is a REPLACE-SET that cannot carry `type`: each keeps its stored twin's type by key, never reset to text.
-  if (patch.fields) patch.fields = withStoredTypes(patch.fields, identity.fields);
+  // `fields` is a REPLACE-SET: an omitted `type` keeps the stored twin's by key, never reset to text.
+  if (patch.fields) {
+    patch.fields = withStoredTypes(patch.fields, identity.fields);
+    const badType = fieldTypeRefusal(patch.fields, identity.fields);
+    if (badType) return badType;
+  }
 
   const verdict = await confirmGate(
     client,
@@ -252,7 +259,7 @@ export async function opUpdate(
         visibility: patch.visibility ?? null,
         knowledge_bases: [...(input.knowledge_bases ?? [])].sort(),
         knowledge: knowledgeDigest(input),
-        fields: (input.fields ?? []).map((f) => [f.key, f.value]),
+        fields: (input.fields ?? []).map((f) => [f.key, f.value, f.type ?? ""]),
       },
     },
     { publishes: patch.visibility === "workspace", token: input.confirm_token },

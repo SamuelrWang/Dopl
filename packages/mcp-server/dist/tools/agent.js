@@ -43,9 +43,12 @@ const KNOWLEDGE_SCOPE_SHAPE = zod_1.z
     .refine((s) => s.folder === undefined || s.entry === undefined, {
     message: "Name a folder OR an entry, not both",
 });
+/** `src/features/agent-identities/types.ts › IDENTITY_FIELD_TYPES`, pinned by `schema-sql.test.ts`. */
+const IDENTITY_FIELD_TYPES = ["text", "number", "date", "boolean", "url"];
 const FIELD_SHAPE = zod_1.z.object({
     key: zod_1.z.string().min(1).max(MAX_FIELD_KEY_CHARS),
     value: zod_1.z.string().max(MAX_FIELD_VALUE_CHARS),
+    type: zod_1.z.enum(IDENTITY_FIELD_TYPES).optional(),
 });
 const AGENT_OPS = ["list", "get", "create", "update", "grant"];
 /** The one argument shape: published by `register` and rendered into the Limits block. Pass the object, never a spread. */
@@ -92,7 +95,7 @@ const AGENT_INPUT_SHAPE = {
         .array(FIELD_SHAPE)
         .max(MAX_FIELD_COUNT)
         .optional()
-        .describe("op=create / op=update: custom {key, value} pairs carried into the launch payload — a REPLACE-SET, so [] empties it and omitting leaves it alone."),
+        .describe("op=create / op=update: custom {key, value, type?} fields carried into the launch payload — a REPLACE-SET, so [] empties it and omitting leaves it alone; an omitted type keeps the stored one."),
     // Two arms: see `agent-shared.ts › IDENTITY_VISIBILITY_VALUES`.
     visibility: zod_1.z
         .enum(agent_shared_js_1.IDENTITY_VISIBILITY_VALUES, { error: agent_shared_js_1.VISIBILITY_ENUM_MESSAGE })

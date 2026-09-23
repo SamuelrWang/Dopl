@@ -15,6 +15,7 @@ const confirm_token_js_1 = require("./confirm-token.js");
 const agent_shared_js_1 = require("./agent-shared.js");
 const channel_shared_js_1 = require("./channel-shared.js");
 const duplicate_name_js_1 = require("./duplicate-name.js");
+const agent_field_types_js_1 = require("./agent-field-types.js");
 const container_destination_js_1 = require("./container-destination.js");
 /** Agent-facing `{base, folder?, entry?}` → the wire's union; total even for the both-set shape zod already refuses. */
 function toKnowledgeScopes(scopes) {
@@ -66,6 +67,9 @@ function homeChannelVisibility(requested) {
 async function opCreate(client, callerUserId, input, 
 /** Optional: absent means "not known" and leaves the refusal to the server. */
 directory) {
+    const badType = (0, agent_field_types_js_1.fieldTypeRefusal)(input.fields);
+    if (badType)
+        return badType;
     // Visibility is always sent, never the server's credential-dependent default: an omitted one looped the shared-publish preview.
     const inHomeChannel = await (0, container_destination_js_1.resolveHomeChannelContainer)(client, directory);
     const chosen = inHomeChannel
@@ -89,7 +93,7 @@ directory) {
             visibility,
             knowledge_bases: [...(input.knowledge_bases ?? [])].sort(),
             knowledge: knowledgeDigest(input),
-            fields: (input.fields ?? []).map((f) => [f.key, f.value]),
+            fields: (input.fields ?? []).map((f) => [f.key, f.value, f.type ?? ""]),
         },
     }, { publishes: visibility === "workspace", token: input.confirm_token });
     if (verdict.kind === "halt")
@@ -148,9 +152,13 @@ async function opUpdate(client, callerUserId, ref, input) {
     const identity = await (0, agent_shared_js_1.resolveIdentityOr)(client, ref);
     if ((0, channel_shared_js_1.isErr)(identity))
         return identity;
-    // `fields` is a REPLACE-SET that cannot carry `type`: each keeps its stored twin's type by key, never reset to text.
-    if (patch.fields)
+    // `fields` is a REPLACE-SET: an omitted `type` keeps the stored twin's by key, never reset to text.
+    if (patch.fields) {
         patch.fields = withStoredTypes(patch.fields, identity.fields);
+        const badType = (0, agent_field_types_js_1.fieldTypeRefusal)(patch.fields, identity.fields);
+        if (badType)
+            return badType;
+    }
     const verdict = await (0, confirm_token_js_1.confirmGate)(client, {
         tool: "dopl_agent",
         op: "update",
@@ -167,7 +175,7 @@ async function opUpdate(client, callerUserId, ref, input) {
             visibility: patch.visibility ?? null,
             knowledge_bases: [...(input.knowledge_bases ?? [])].sort(),
             knowledge: knowledgeDigest(input),
-            fields: (input.fields ?? []).map((f) => [f.key, f.value]),
+            fields: (input.fields ?? []).map((f) => [f.key, f.value, f.type ?? ""]),
         },
     }, { publishes: patch.visibility === "workspace", token: input.confirm_token });
     if (verdict.kind === "halt")

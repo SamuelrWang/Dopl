@@ -20,6 +20,7 @@ import { statementAt } from "@/shared/supabase/migration-files";
 import { FILES } from "@/features/knowledge/migration-replay";
 import { readCode } from "@/shared/testing/source-text";
 import { LAUNCH_RUNTIME_ID_RE } from "@/features/channels/schema-launch-modes";
+import { IDENTITY_FIELD_TYPES } from "./types";
 
 const TABLE = "agent_identities";
 
@@ -166,6 +167,13 @@ describe("the MCP tool's re-typed bounds are the server's", () => {
     const m = /const RUNTIME_ID_RE = \/(.+)\/;/.exec(MCP);
     expect(m, "no `const RUNTIME_ID_RE = /…/;` in the tool").toBeTruthy();
     expect((m as RegExpExecArray)[1]).toBe(LAUNCH_RUNTIME_ID_RE.source);
+  });
+
+  it("the field-type vocabulary is the product's (DMP-009)", () => {
+    const m = /const IDENTITY_FIELD_TYPES = \[([^\]]*)\]/.exec(MCP);
+    expect(m, "no `const IDENTITY_FIELD_TYPES = [...]` in the tool").toBeTruthy();
+    const listed = [...(m as RegExpExecArray)[1].matchAll(/"([a-z]+)"/g)].map((x) => x[1]);
+    expect(listed).toEqual([...IDENTITY_FIELD_TYPES]);
   });
 
   it("no bare numeric `.max()` is left in the tool schema", () => {

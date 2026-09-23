@@ -100,7 +100,9 @@ maxChars) {
     if (identity.fields.length > 0) {
         lines.push("", "## Custom fields");
         for (const f of identity.fields) {
-            lines.push(`- ${(0, narration_js_1.inlineOr)(f.key, narration_js_1.NO_NAME)}: ${(0, narration_js_1.inlineOr)(f.value, "`(empty)`")}`);
+            // The type is shown only when it is not the default, so a text-only identity reads as before.
+            const typed = f.type && f.type !== "text" ? ` (${f.type})` : "";
+            lines.push(`- ${(0, narration_js_1.inlineOr)(f.key, narration_js_1.NO_NAME)}${typed}: ${(0, narration_js_1.inlineOr)(f.value, "`(empty)`")}`);
         }
     }
     lines.push("", "## Instructions");

@@ -132,7 +132,9 @@ export async function opGet(
   if (identity.fields.length > 0) {
     lines.push("", "## Custom fields");
     for (const f of identity.fields) {
-      lines.push(`- ${inlineOr(f.key, NO_NAME)}: ${inlineOr(f.value, "`(empty)`")}`);
+      // The type is shown only when it is not the default, so a text-only identity reads as before.
+      const typed = f.type && f.type !== "text" ? ` (${f.type})` : "";
+      lines.push(`- ${inlineOr(f.key, NO_NAME)}${typed}: ${inlineOr(f.value, "`(empty)`")}`);
     }
   }
   lines.push("", "## Instructions");
