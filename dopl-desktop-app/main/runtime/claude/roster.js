@@ -1,33 +1,7 @@
-// THE LIVE CLAUDE MODEL ROSTER — `Query.supportedModels()`, read WITHOUT SPENDING A TURN
-// (2026-09-22, Samuel: *"can we make sure the models aren't hard coded? … if claude or codex add a
-// new model, would dopl auto mark those as options"*).
-//
-// ⚠ **HOW IT IS READ, AND WHY IT COSTS NO MODEL TURN (MEASURED 2026-09-22, SDK 0.3.220 / bundled
-// CLI on this Mac).** `query()` is started with a STREAMING prompt that never yields. The SDK
-// spawns the bundled CLI and sends only the `initialize` control request; `supportedModels()`
-// answers from that handshake, and `close()` ends the child. No user message is ever pushed, so
-// no API request is made: the probe saw ZERO SDK messages, in ~1.3s signed in and ~0.3s signed out.
-// ⚠ IT IS NOT A SESSION. No MCP server, no tools, no setting sources, a deny-everything gate —
-// the same pins a real launch carries, so a roster read cannot pick up the operator's own config.
-//
-// ⚠ **WHAT IT ANSWERS (MEASURED, signed in on a Max account):**
-//   value 'default'            resolvedModel claude-opus-5[1m]           "Default (recommended)"
-//   value 'opus[1m]'           resolvedModel claude-opus-5[1m]           "Opus (1M context)"
-//   value 'claude-fable-5[1m]' resolvedModel claude-fable-5              "Fable"
-//   value 'sonnet'             resolvedModel claude-sonnet-5             "Sonnet"
-//   value 'haiku'              resolvedModel claude-haiku-4-5-20251001   "Haiku"
-// Signed OUT the Fable row is absent — THE ROSTER IS PER ACCOUNT, which is why the cache key in
-// `models.js` includes the credential source.
-//
-// ⚠ **THE CATALOG ID IS `resolvedModel`, AND THE LAUNCH ARGUMENT IS `value`.** Samuel's 2026-08-22
-// ruling names the values an operator picks as FULL IDS, and `resolvedModel` is the SDK's own
-// "canonical wire model id this row's value resolves to". `value` is what `--model` accepts for
-// that row, so a pick launches as exactly the model the row describes.
-// ⚠ `'default'` IS NOT A MODEL, it is the CLI's own pick pointing at another row, and Samuel
-// removed "Default" as an option on 2026-09-06 — so it is dropped here rather than offered.
-//
-// PURE BELOW THE PROBE: `rosterFrom` / `match` / `baseId` take data and return data, so the suite
-// drives them without an SDK.
+// THE LIVE CLAUDE MODEL ROSTER — `Query.supportedModels()` read WITHOUT spending a turn: the CLI is
+// started with a streaming prompt that never yields, so only the `initialize` handshake runs (zero
+// API requests), under the same pins a launch carries. Signed out, the Fable row is absent — the
+// roster is per account. Pure below `probe`.
 
 const { findModel } = require('../model-catalog');
 
@@ -35,11 +9,7 @@ const PROBE_TIMEOUT_MS = 10000;
 
 const str = (v) => (typeof v === 'string' ? v.trim() : '');
 
-/**
- * The same model under its plainest spelling: no `[1m]` long-context suffix, no `-YYYYMMDD` date.
- * ⚠ FOR MATCHING ONLY, never for launching — `claude-opus-5` and `claude-opus-5[1m]` may be two
- * rows one day, and the launch argument always comes off the row that matched.
- */
+/** The plainest spelling (no `[1m]`, no `-YYYYMMDD`) — for matching only, never for launching. */
 function baseId(id) {
   return str(id).replace(/\[[^\]]*\]$/, '').replace(/-\d{8}$/, '');
 }
@@ -51,11 +21,9 @@ function shortOf(label) {
 }
 
 /**
- * One `ModelInfo` row → one catalog entry, or `null`.
- *
- * ⚠ `legacy` IS THE FROZEN id→alias TABLE, and it only ever ADDS SPELLINGS. A channel stored
- * `claude-opus-5` and a parked session stored `opus` before this roster existed; both must still
- * find the row that is that model today. They are aliases — never ids, never offered.
+ * One `ModelInfo` row → one catalog entry, or `null`. The catalog id is `resolvedModel` and the launch
+ * argument is `value`; the CLI's `'default'` row is dropped (Samuel removed Default). `legacy` (the
+ * build's id→alias table) only adds aliases, so older stored picks still find their row.
  */
 function entryFrom(row, legacy) {
   if (!row || typeof row !== 'object') return null;
@@ -92,10 +60,8 @@ function match(models, pick) {
 }
 
 /**
- * `supportedModels()` rows → the adapter's roster. ⚠ ORDER IS THE CLI'S, UNTOUCHED.
- * `fallback` is the PRODUCT's default id (`session-model.js › LAUNCH_MODEL_FALLBACK`) and its
- * alias: the default marker lands on the row that is that model, or on the row that now carries
- * its alias (the day a newer Sonnet ships, `sonnet` still names "the Sonnet").
+ * `supportedModels()` rows → the adapter's roster, in the CLI's order. The default marker lands on
+ * the row that is `fallbackId`, else the row now carrying its alias (a newer Sonnet keeps `sonnet`).
  */
 function rosterFrom(rows, opts) {
   const o = opts || {};
@@ -121,11 +87,8 @@ function rosterFrom(rows, opts) {
   };
 }
 
-/**
- * Start the CLI, read its model list, stop it. ⚠ NEVER A TURN — see the header.
- * `o.sdk` is the loaded SDK namespace; `o.options` the spawn pins (env, binary). Resolves to the
- * raw rows or rejects with an operator-readable reason.
- */
+/** Start the CLI, read its model list, stop it — never a turn. `o.sdk` is the loaded namespace,
+ *  `o.options` the spawn env/binary. Resolves to the raw rows or rejects with a readable reason. */
 async function probe(o) {
   const sdk = o && o.sdk;
   if (!sdk || typeof sdk.query !== 'function') throw new Error('the Claude Agent SDK could not be loaded');
@@ -140,13 +103,11 @@ async function probe(o) {
       permissionMode: 'default',
       mcpServers: {},
       tools: [],
-      // ⚠ NO `maxTurns`: this is not a session and no turn can start (nothing is ever pushed), and
-      // `launch-spec.js › SESSION_MAX_TURNS` is pinned as the ONE producer of that option.
+      // No `maxTurns`: no turn can start, and `launch-spec.js` is its one producer.
       canUseTool: async () => ({ behavior: 'deny', message: 'model roster probe' }),
     }),
   });
-  // ⚠ DRAINED IN THE BACKGROUND so an early exit surfaces as a rejection here, not as an
-  // unhandled one. Nothing is expected on it.
+  // Drained in the background so an early exit rejects here rather than going unhandled.
   const drained = (async () => { try { for await (const _m of q) { /* nothing arrives */ } } catch (_) { /* reported below */ } })();
   const timeoutMs = (o && o.timeoutMs) || PROBE_TIMEOUT_MS;
   let timer = null;
@@ -158,6 +119,7 @@ async function probe(o) {
       }),
     ]);
   } finally {
+    // Always: close the child and release the idle prompt, whatever the race answered.
     if (timer) clearTimeout(timer);
     try { q.close(); } catch (_) { /* best effort */ }
     release();

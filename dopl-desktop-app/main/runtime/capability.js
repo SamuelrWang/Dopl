@@ -6,11 +6,10 @@ const selection = require('./selection-vocabulary');
 
 // ── SESSION LIFECYCLE ────────────────────────────────────────────────────────────────────────
 
-// Measured in either direction. `'unverified'` and absent are not: zeroing the baseline re-bills a
-// runtime whose totals continue, and keeping it zeroes every later turn of one that restarts.
+// `'unverified'` / absent is no measurement: neither baseline direction is safe, so resume refuses.
 const usageBaselineMeasured = (d) => d.usageResetsOnResume === true || d.usageResetsOnResume === false;
 
-/** May a parked conversation be resumed? Refuses (not hides) when the usage baseline is unmeasured. */
+/** May a parked conversation be resumed? (`LAUNCH_BLOCKING[2]` refuses rather than hides.) */
 function canResume(descriptor) {
   const d = (descriptor && descriptor.session) || {};
   return d.resume === true && usageBaselineMeasured(d);
@@ -24,16 +23,12 @@ function resumeRefusal(descriptor) {
   return 'this runtime\'s usage accounting on resume is unverified, so a resume could not bill it honestly';
 }
 
-// `session-runtime-truth.js`'s two measured words, restated because the runtime layer may not
-// depend on core; `test/session-runtime-truth.test.mjs` holds them equal.
+// `session-runtime-truth.js`'s words, restated (the runtime layer may not depend on core); held equal by test.
 const USAGE_BASELINE_RESETS = 'resets';
 const USAGE_BASELINE_CONTINUES = 'continues';
 
-/**
- * Must a resume zero the cumulative-usage delta baseline? The durable record's word (`recorded`)
- * beats today's descriptor; only a measured `true` zeroes, because zeroing a runtime whose totals
- * continue re-bills the whole thread.
- */
+/** Must a resume zero the usage delta baseline? The durable record's word beats the descriptor; only
+ *  a measured `true` zeroes (zeroing a runtime whose totals continue re-bills the whole thread). */
 function resumeZeroesBaseline(descriptor, recorded) {
   if (recorded === USAGE_BASELINE_RESETS) return true;
   if (recorded === USAGE_BASELINE_CONTINUES) return false;
@@ -46,8 +41,7 @@ const canSwitchModelLive = (d) => !!(d && d.session && d.session.liveModelSwitch
 
 const windowlessToolFloorValue = (d) => (d && d.toolMode && d.toolMode.windowlessFloor) || null;
 
-/** This runtime's Axis-A modes, narrowest first. The order is load-bearing: `[0]` is where every
- *  unknown value fail-closes and the last entry is the widest. */
+/** Axis-A modes, narrowest first — load-bearing: `[0]` is the fail-closed member, the last the widest. */
 const toolModes = (d) => ((d && d.toolMode && d.toolMode.options) || []).map((o) => o.value);
 
 const narrowestToolMode = (d) => toolModes(d)[0] || null;
@@ -65,10 +59,9 @@ function normalizeToolMode(d, mode) {
 }
 
 /**
- * Axis A's windowless floor, widen-only: a session below the floor is raised, never narrowed. A
- * windowless session has no gate surface, so a gated tool there is a silent deny of the reads its
- * prompt orders. `null` (no orderable floor) refuses the windowless launch — never a guessed mode;
- * a `null` mode fail-closes at `axisAAllows`, where a throw would crash the query.
+ * Axis A's windowless floor, widen-only (a windowless session has no gate surface, so a gated read is
+ * a silent deny). `null` refuses the windowless launch rather than guessing a mode, and fail-closes
+ * at `axisAAllows` where a throw would crash the query.
  */
 function floorWindowlessTool(d, mode) {
   const floor = windowlessToolFloorValue(d);
@@ -97,7 +90,7 @@ function windowlessFloorRefusal(descriptor) {
 /** The tools whose grant key is scoped to a resolved directory (`session-grant-keys.js`). */
 const editScopedTools = (d) => ((d && d.toolMode && d.toolMode.editScopedTools) || []).slice();
 
-/** The Axis-A taxonomy as declared data, for pinning. A gate decision asks `axisAAllows`, never these. */
+/** The Axis-A taxonomy as declared data; a gate decision asks `axisAAllows`, never these. */
 function toolTaxonomy(d) {
   const t = (d && d.toolMode && d.toolMode.taxonomy) || {};
   const copy = (v) => (Array.isArray(v) ? v.slice() : []);
@@ -107,11 +100,8 @@ function toolTaxonomy(d) {
   };
 }
 
-/**
- * The warning a launch carries when this runtime's Axis B is not op-scoped (`null` when it is).
- * Unreadable input gates every channel call as a whole tool — over-restrictive, never open — so it
- * warns rather than refuses.
- */
+/** The warning a launch carries when Axis B is not op-scoped (`null` when it is): over-restrictive,
+ *  never open, so it warns rather than refuses. */
 function axisBOpScopedWarning(descriptor) {
   const scoped = descriptor && descriptor.axisB && descriptor.axisB.opScoped;
   if (scoped === true) return null;
@@ -126,11 +116,8 @@ function axisBOpScopedWarning(descriptor) {
 
 // ── PROSE ────────────────────────────────────────────────────────────────────────────────────
 
-/**
- * How a turn tells the agent to reach Dopl's deferred tools: `{ verb, catalog }`, or `null`. Null
- * when the entry is eager-loaded even though a verb exists (Claude's `alwaysLoad`), because ordering
- * the lookup there would order a denied call.
- */
+/** How a turn tells the agent to reach Dopl's deferred tools — `{ verb, catalog }`, or `null` when the
+ *  entry is eager-loaded (ordering a lookup there would order a denied call). */
 function mcpDiscovery(d) {
   if (d && d.mcp && d.mcp.eagerLoadFlag) return null;
   const verb = (d && d.prose && d.prose.toolSearchVerb) || null;

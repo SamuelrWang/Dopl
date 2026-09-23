@@ -1,38 +1,12 @@
-// THE MODEL CATALOG — ONE NORMALIZED SHAPE FOR EVERY RUNTIME'S ROSTER, AND THE FOUR STATES A
-// PICKER IS ALLOWED TO BE IN (2026-09-21, U6).
-//
-// ⚠ **IT EXISTS BECAUSE THE RENDERER HAD A HARDCODED CLAUDE TABLE AND EVERY RUNTIME READ IT.**
-// `src/features/channels/lib/agent-models.ts` is four Claude ids with four labels, and the New
-// Agent dialog, the channel Settings row, the profile defaults row and the agent cards all read
-// it — so selecting Codex showed Fable/Opus/Sonnet/Haiku and submitted one of them. The plan's R1
-// and its hardest invariant ("catalog failure must never substitute another runtime's models")
-// cannot be satisfied by a second hardcoded table; they need the roster to arrive FROM the runtime
-// that owns it, in one shape, with its own status.
-//
-// ⚠ **FOUR STATES, AND COLLAPSING ANY TWO IS THE BUG** (INVARIANTS §11 — UNKNOWN is not EMPTY):
-//
-//   ready        the roster was read and is current. `models` is what an operator may pick from.
-//   loading      nothing has been read YET. `models` is EMPTY and that emptiness means NOTHING.
-//                ⚠ A picker must render the platform default here, never "no models".
-//   unavailable  a read was ATTEMPTED and FAILED, and `reason` says why in an operator's words.
-//                `models` is empty, and that emptiness is a MEASUREMENT of a failure, not of a
-//                roster. It is a different sentence and a different operator action from loading.
-//   stale        we hold models read from a DIFFERENT binary/version than the one resolved now,
-//                or a refresh failed while we still held a prior answer. `models` is the OLD list:
-//                it still LABELS a historical id, and it may NOT be newly selected.
-//
-// ⚠ **EMPTY IS NEVER "THIS RUNTIME HAS NO MODELS".** No adapter can answer that, so no status
-// spells it. A `ready` catalog with zero models is refused below and becomes `unavailable`.
-//
-// ⚠ **NOTHING HERE NAMES A VENDOR AND NOTHING HERE HOLDS A MODEL ID.** The whole module is keyed
-// by the runtime id the registry hands it, and every entry comes off the adapter's own
-// `models()`. That is what makes "no Fable may reach a Codex surface" a structural property
-// rather than a rule somebody has to remember — there is no list here to leak.
-//
-// ⚠ **IT NEVER BLOCKS A READ ON A CHILD PROCESS.** A live roster costs a `codex app-server`
-// spawn; a settings page that awaited one would take seconds to open and would hang on a wedged
-// binary. So `snapshot()` answers from cache and kicks a BACKGROUND refresh, and the first answer
-// on a cold process is `loading` — which is exactly what `loading` is for.
+// THE MODEL CATALOG — one normalized shape for every runtime's roster, in one of four states
+// (INVARIANTS §11 — unknown is not empty; collapsing any two is the bug):
+//   ready        read and current; `models` is what may be picked.
+//   loading      nothing read yet; the empty list means NOTHING (render the platform default).
+//   unavailable  a read was attempted and failed; `reason` says why.
+//   stale        holds old models (a failed refresh, or an adapter's build-time fallback): they
+//                LABEL, they cannot be newly selected, and they prove nothing present or absent.
+// A `ready` catalog with zero models is coerced to `unavailable`. Nothing here names a vendor or
+// holds a model id. `snapshot` never blocks on a child process; `settle` is the only awaited read.
 
 const { pickOf } = require('./selection-vocabulary');
 
@@ -45,30 +19,14 @@ const STATUS = Object.freeze({
   STALE: 'stale',
 });
 
-// ⚠ A FAILED READ IS RETRIED, A SUCCESSFUL ONE IS NOT. The roster changes when the operator
-// upgrades their CLI, which they cannot do while it is running; a FAILURE, though, is routinely
-// the operator fixing an install with Dopl open, so it must not be cached for the life of the
-// process.
-// ⚠ **FIVE SECONDS, NOT SIXTY (CXP-5, 2026-09-22), BECAUSE THIS IS A FLOOR, NOT A CADENCE.**
-// Nothing here runs on a timer: a failed roster is re-read only at the next LOOK — a picker
-// mounting, or the renderer re-reading when its window regains focus after a settled failure
-// (`use-runtime-catalogs.ts`). Sixty seconds meant an operator who ran `codex login` in a terminal
-// and came straight back saw the old failure and had nothing left to trigger another look. The
-// floor only collapses a burst of looks into one probe.
+// A failed read is retried at the next LOOK past this floor (never on a timer); a good one is kept.
 const FAILURE_TTL_MS = 5000;
 
 const str = (v) => (typeof v === 'string' ? v.trim() : '');
 
 /**
- * ONE MODEL, NORMALIZED. ⚠ EVERY FIELD BUT `id` IS OPTIONAL AND ABSENT IS `null`, NEVER `''`:
- * a runtime that does not name its models (Cursor's `models.list()` answers bare ids) must be
- * told apart from one that named it with an empty string.
- *
- * ⚠ `dimensions` IS PER MODEL, NOT PER RUNTIME, and that is the whole reason the entry is an
- * object rather than an id. Codex reports `supportedReasoningEfforts` on each model and they
- * DIFFER between models, so a reasoning-effort control sourced from the runtime would offer an
- * effort the selected model refuses. The plan's U6 scenario ("effort options change with the
- * selected model") is only satisfiable from here.
+ * One model, normalized. Every field but `id` is optional and absent is `null`, never `''`.
+ * `dimensions` is per MODEL (Codex's supported efforts differ between models).
  */
 function normalizeEntry(row) {
   if (typeof row === 'string') {
@@ -82,16 +40,12 @@ function normalizeEntry(row) {
   return {
     id,
     label,
-    // ⚠ A GLANCE LABEL FALLS BACK TO THE FULL ONE, NEVER TO A TRUNCATION. A card chip that
-    // invented "Fab…" would be this surface making up a model name.
+    // Falls back to the full label, never to a truncation.
     short: str(row.short) || label,
     isDefault: row.isDefault === true,
-    // ⚠ HIDDEN MODELS STAY IN THE CATALOG AND OUT OF ORDINARY PICKERS (Decision #2). They are
-    // carried rather than dropped so a session ALREADY on one can still be LABELLED.
+    // Kept (out of ordinary pickers) so a session already on a hidden model is still labelled.
     hidden: row.hidden === true,
-    // ⚠ OTHER SPELLINGS THE ADAPTER ACCEPTS FOR THIS SAME MODEL (2026-09-22) — a legacy stored id,
-    // the launch alias, an undated form. MATCHED, never offered: a picker lists `id`, and a stored
-    // value that is an alias still finds its row (`findModel`), so an old pick keeps its label.
+    // Other spellings of this model (legacy id, launch alias): matched by `findModel`, never offered.
     aliases: aliasesOf(row.aliases, id),
     dimensions: normalizeDimensions(row.dimensions),
   };
@@ -133,10 +87,7 @@ function normalizeDimensions(raw) {
   return out;
 }
 
-/**
- * THE CATALOG A RENDERER RECEIVES. ⚠ ALWAYS THE SAME KEYS, ON EVERY STATUS — a shape that grows
- * fields when it succeeds is a shape every consumer has to feature-probe.
- */
+/** The catalog a renderer receives: the same keys on every status. */
 function makeCatalog(runtimeId, source, status, extra) {
   return Object.assign({
     version: CATALOG_VERSION,
@@ -153,17 +104,8 @@ function makeCatalog(runtimeId, source, status, extra) {
 }
 
 /**
- * AN ADAPTER'S OWN ROSTER REPLY, TURNED INTO A CATALOG.
- *
- * ⚠ **THE ADAPTER IS NOT TRUSTED TO HAVE GOT THE SHAPE RIGHT.** It crossed no process boundary,
- * but it is the one piece of this contract each vendor directory writes for itself — so a
- * malformed row is dropped here rather than rendered, and a roster that claims `ready` with no
- * models becomes `unavailable` with a sentence instead of a picker that says nothing.
- *
- * ⚠ **EXACTLY ONE DEFAULT, AND A SECOND ONE IS NOT A TIE-BREAK.** `codex/client.js › catalogGate`
- * already treats "two defaults" as an unsupported protocol; here the catalog keeps the FIRST and
- * clears the flag on the rest, because a picker cannot render two defaults and a runtime that
- * reports two has already told us its answer is unreliable.
+ * An adapter's roster reply as a catalog. Malformed rows are dropped; exactly one default survives
+ * (the first `isDefault` wins).
  */
 function catalogFromRoster(runtimeId, descriptor, roster) {
   const declared = (descriptor && descriptor.models) || {};
@@ -194,25 +136,21 @@ function catalogFromRoster(runtimeId, descriptor, roster) {
     defaultId = asked;
     for (const m of models) m.isDefault = m.id === asked;
   }
-  // ⚠ DOPL'S OWN LAUNCH DEFAULT OUTRANKS THE SERVER'S MARKER WHEN THIS ROSTER CARRIES IT
-  // (2026-09-23): a no-pick launch spends it (`launch-default.js`), so a picker showing the
-  // server's marker instead would name a model the launch will not use. Current rosters only.
+  // The declared launch default outranks the server's marker (non-stale rosters only), so the
+  // picker names what a no-pick launch spends (`launch-default.js`).
   const preferred = roster.stale === true ? null : findModel({ models }, declared.launchDefault);
   if (preferred) {
     defaultId = preferred.id;
     for (const m of models) m.isDefault = m === preferred;
   }
   if (!models.length) {
-    // ⚠ THE EMPTY ROSTER IS ALWAYS A FAILURE STATE, NEVER A `ready` ONE. See the header: no
-    // adapter can say "this platform has no models", so no status is allowed to spell it.
     return makeCatalog(runtimeId, source, STATUS.UNAVAILABLE, {
       dimensions: dims,
       key,
       reason: reason || 'Dopl could not read this runtime\'s model list.',
     });
   }
-  // ⚠ A ROSTER THAT SAYS IT IS STALE IS `stale` (2026-09-22): an adapter whose live read failed and
-  // answered its build's own table instead. The models LABEL; they are not newly selectable.
+  // An adapter that answered its build's own table after a failed live read marks it stale.
   const status = roster.stale === true ? STATUS.STALE : STATUS.READY;
   return makeCatalog(runtimeId, source, status, {
     dimensions: dims,
@@ -220,34 +158,23 @@ function catalogFromRoster(runtimeId, descriptor, roster) {
     models,
     defaultId,
     truncated: roster.truncated === true,
-    // ⚠ A `ready` CATALOG MAY STILL CARRY A REASON, AND THAT IS NOT A CONTRADICTION. A roster can
-    // arrive COMPLETE and still be worth a sentence — pagination stopped at the page cap, or the
-    // server declared no single default. `reason` is a note here and a FAILURE only on the two
-    // statuses that have no models; a consumer reads the status, never the string.
+    // On `ready` the reason is a note (truncated, no single default); consumers read the status.
     reason,
   });
 }
 
-// ── THE SNAPSHOT CACHE ───────────────────────────────────────────────────────────────────────
-//
-// ⚠ KEYED BY RUNTIME ID AND NOTHING ELSE, so one runtime's outage cannot reach another's picker.
-// ⚠ ONE REFRESH IN FLIGHT PER RUNTIME: opening a settings page in two windows must not spawn two
-// app-servers, and a peek during a refresh answers the PRIOR state rather than starting a second.
+// ── THE SNAPSHOT CACHE ── keyed by runtime id; one refresh in flight per runtime (never two app-servers).
 
 const snapshots = new Map();
 
-// ⚠ SETTLED VERDICTS, PER RUNTIME, FOR THE TRANSITION HOOK BELOW. `loading` is never recorded —
-// it is "no verdict yet", so a retry in flight is not a transition.
+// Settled verdicts for `onSettled`; `loading` is never recorded (a retry in flight is no transition).
 const settledStatus = new Map();
 const listeners = [];
 
 /**
- * CALL `fn(runtimeId, from, to)` WHEN A RUNTIME'S SETTLED VERDICT CHANGES (CXP-5, 2026-09-22) —
- * `unavailable` → `ready` after a repair, `ready` → `unavailable` after a loss. The first verdict a
- * process reaches is not a transition and fires nothing.
- * ⚠ IT EXISTS SO THIS MODULE CAN STAY REQUIRE-FREE: `channel-runtime-reply.js` subscribes and
- * expires the connectivity sweep, which is the one layer that knows both halves.
- * ⚠ A LISTENER THAT THROWS TAKES NOTHING WITH IT — a settings read must not fail over a hook.
+ * Call `fn(runtimeId, from, to)` when a runtime's settled verdict changes; the first verdict is not a
+ * transition. A hook, so this module need not require the connectivity layer
+ * (`channel-runtime-reply.js` subscribes). A listener that throws never fails a read.
  */
 function onSettled(fn) {
   if (typeof fn !== 'function') return () => {};
@@ -271,13 +198,9 @@ function due(entry, now, adapter) {
   if (!entry) return true;
   if (entry.inflight) return false;
   if (entry.due === true) return true; // invalidated while holding models (RC-02)
-  // ⚠ A GOOD ROSTER IS CACHED FOR THE PROCESS — UNLESS ITS KEY MOVED (2026-09-22). An adapter that
-  // can name its roster's key synchronously (`runtime.rosterKey`, e.g. binary + account) gets a
-  // re-read the first look after a sign-in or an upgrade, with no timer and no invalidation hook.
+  // READY is cached for the process unless `runtime.rosterKey()` moved (a sign-in, an upgrade).
   if (entry.catalog.status === STATUS.READY) return keyMoved(entry, adapter);
-  // ⚠ `stale` AND `unavailable` SHARE THE FLOOR. `invalidate` stamps `at: 0`, so an invalidated
-  // catalog is due at the very next look; a refresh that FAILED into `stale` is not re-spawned on
-  // every look after it.
+  // `stale` and `unavailable` share the floor; `invalidate` stamps `at: 0` (due at the next look).
   return now - entry.at >= FAILURE_TTL_MS;
 }
 
@@ -296,16 +219,9 @@ const loadingCatalog = (id, declared) => makeCatalog(id, (declared && str(declar
 });
 
 /**
- * ⚠ THE ONLY PLACE A LIVE ROSTER IS CALLED, AND IT IS NEVER AWAITED BY A CALLER. A rejected
- * `models()` becomes an `unavailable` catalog with the thrown message; it never escapes, because
- * every caller of this module is a settings read and a settings page that will not open is a
- * worse answer than a picker that says why it is empty.
- *
- * ⚠ **A RETRY OVER A FAILURE READS `loading`, NOT THE OLD FAILURE (CXP-5).** A catalog holding no
- * models has nothing to label, so while its re-read is in flight the true statement is "nothing
- * read yet" — and `loading` is the one status the renderer keeps re-reading on. Answering the old
- * `unavailable` would settle the picker on a verdict the read in flight is about to replace.
- * A catalog that HOLDS models keeps them (and its status) while it re-reads.
+ * The only place `runtime.models()` is called; a rejection becomes an `unavailable` catalog and never
+ * escapes. A retry over a model-less catalog reads `loading` (the renderer re-polls only on
+ * `loading`); a catalog that holds models keeps them, and its status, while it re-reads.
  */
 function refresh(adapter, now) {
   const id = adapter.descriptor.id;
@@ -328,15 +244,11 @@ function refresh(adapter, now) {
     .then((next) => {
       const held = snapshots.get(id);
       const kept = held && held.catalog && held.catalog.models.length ? held.catalog : null;
-      // ⚠ A FAILED REFRESH OVER A ROSTER WE ALREADY HAVE IS `stale`, NOT `unavailable`. The old
-      // models still LABEL a running session's model honestly; what they may no longer do is be
-      // newly SELECTED, which is what `stale` means and `unavailable` does not.
+      // A failed refresh over held models is `stale` (they still label), not `unavailable`.
       const settled = next.status === STATUS.UNAVAILABLE && kept
         ? Object.assign({}, kept, { status: STATUS.STALE, reason: next.reason })
         : next;
-      // ⚠ INVALIDATED WHILE IN FLIGHT: this read may have started before the repair it is being
-      // asked about, so a FAILED answer is due again at the very next look rather than after the
-      // floor. A `ready` one is simply kept.
+      // Invalidated while in flight: the read may predate the repair, so a failure is due at once.
       const dirty = !!(held && held.dirty);
       snapshots.set(id, { catalog: settled, at: dirty && settled.status !== STATUS.READY ? 0 : Date.now(), inflight: null, dirty: false });
       noteSettled(id, settled.status);
@@ -346,14 +258,8 @@ function refresh(adapter, now) {
   return entry.inflight;
 }
 
-/**
- * THIS RUNTIME'S CATALOG, RIGHT NOW, WITHOUT WAITING FOR ANYTHING.
- *
- * ⚠ A FROZEN ROSTER IS READ INLINE AND IS ALWAYS `ready` — it is a table lookup, so making the
- * settings page wait a render for it would be inventing a loading state nobody has to be in.
- * ⚠ A LIVE ROSTER ANSWERS FROM CACHE AND KICKS A BACKGROUND READ. The first answer on a cold
- * process is `loading`; the renderer re-reads and gets `ready` or `unavailable`.
- */
+/** This runtime's catalog now, never blocking: answers from cache and kicks a background read (the
+ *  first answer on a cold process is `loading`). */
 function snapshot(adapter) {
   const descriptor = adapter && adapter.descriptor;
   if (!descriptor) return null;
@@ -366,11 +272,7 @@ function snapshot(adapter) {
   return (held && held.catalog) || loadingCatalog(id, declared);
 }
 
-/**
- * THIS RUNTIME'S CATALOG ONCE A READ HAS SETTLED — the ONE caller that may wait is a LAUNCH that
- * names a model (`session-launch.js`), because refusing an unknown pick needs an answer, not
- * `loading`. ⚠ Everything else stays on `snapshot`, which never blocks.
- */
+/** This runtime's catalog once a read has settled — only a launch may wait on it (`session-launch.js`). */
 async function settle(adapter) {
   const descriptor = adapter && adapter.descriptor;
   if (!descriptor) return null;
@@ -390,18 +292,6 @@ function findModel(catalog, pick) {
     || null;
 }
 
-/**
- * WHY A LAUNCH NAMING `pick` IS REFUSED ON THIS CATALOG, or `null` (2026-09-22).
- *
- * ⚠ **AN UNKNOWN MODEL IS REFUSED WITH A SENTENCE, NEVER SWAPPED FOR ANOTHER.** It used to fall
- * through to the product default — an MCP launch asking for a mistyped id started Sonnet and
- * echoed the id it was asked for.
- * ⚠ **ONLY A CATALOG THAT HOLDS MODELS CAN REFUSE.** `loading` / `unavailable` hold none, and
- * refusing there would turn "Dopl could not read the list" into "that model does not exist" —
- * the launch goes ahead and the runtime itself answers. A `stale` catalog DOES hold models (the
- * last answer, or the adapter's own table), so it refuses what it cannot vouch for.
- * ⚠ ABSENT and the legacy word `default` are "no pick" and are never refused here.
- */
 /** Can this catalog vouch for a model's presence OR absence? Only a READY read can (RC-03). */
 function vouches(catalog) {
   return !!catalog && catalog.status === STATUS.READY && Array.isArray(catalog.models) && catalog.models.length > 0;
@@ -412,6 +302,11 @@ function offers(catalog, id) {
   return vouches(catalog) && !!findModel(catalog, id);
 }
 
+/**
+ * Why a launch naming `pick` is refused, or `null`. An unknown model is refused with a sentence,
+ * never swapped. Only a catalog that vouches can refuse ("could not read the list" is not "that
+ * model does not exist"); no pick (absent / `'default'`) is never refused.
+ */
 function modelRefusal(catalog, pick, label) {
   const v = pickOf(pick);
   if (!v || !vouches(catalog)) return null;
@@ -426,10 +321,8 @@ function notOfferedSentence(label, pick, models) {
     + (offered ? ` — it offers: ${offered}` : '') + '.';
 }
 
-/**
- * EVERY REGISTERED RUNTIME'S CATALOG, KEYED BY ID — what a settings read puts on the wire.
- * ⚠ ONE ADAPTER'S THROW TAKES NOTHING ELSE WITH IT.
- */
+/** Every runtime's catalog, keyed by id (what a settings read sends). One adapter's throw takes
+ *  nothing else with it. */
 function catalogs(adapters) {
   const out = {};
   for (const adapter of Array.isArray(adapters) ? adapters : []) {
@@ -445,17 +338,9 @@ function catalogs(adapters) {
 }
 
 /**
- * MARK A RUNTIME'S CATALOG FOR RE-READ — the reconnect / repair / version-change hook.
- *
- * A catalog that holds models keeps them AND its status, and is only marked due: the next look
- * re-reads while answering what it held. Flipping READY to `stale` here left the picker
- * unselectable, because the renderer re-polls only `loading` (RC-02).
- * ⚠ **A CATALOG THAT HOLDS NONE BECOMES `loading` (CXP-5, 2026-09-22).** An `unavailable` verdict
- * that has been invalidated is no longer a verdict — the failure it measured is the thing the
- * operator just changed — and `stale` with no models would be a status with nothing to label.
- * ⚠ **A READ ALREADY IN FLIGHT IS KEPT, NOT RACED.** Replacing it would spawn a second
- * `codex app-server` beside the first; instead it is marked dirty, so if IT fails its answer is
- * due again at the very next look (`refresh`).
+ * Mark a runtime's catalog for re-read (reconnect / repair / version change). One that holds models
+ * keeps them and its status, only marked due (the renderer re-polls only `loading`, RC-02); one that
+ * holds none becomes `loading`. A read in flight is marked dirty, never raced (one app-server).
  */
 function invalidate(runtimeId, _reason) {
   const id = str(runtimeId);
@@ -474,7 +359,7 @@ function invalidate(runtimeId, _reason) {
   return true;
 }
 
-/** Drop everything cached. ⚠ For tests and for an explicit operator-driven re-probe only. */
+/** Drop everything cached — for tests and an explicit re-probe only. */
 function forget(runtimeId) {
   if (runtimeId === undefined) { snapshots.clear(); settledStatus.clear(); return; }
   snapshots.delete(str(runtimeId));
