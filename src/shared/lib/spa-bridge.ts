@@ -49,6 +49,9 @@ export interface SpaBridgeSurface {
   appOrigin?: string;
   syncWatch?(workspaceId: string | null): Promise<unknown>;
   onSyncEvent?(cb: (e: { workspaceId: string; table: string }) => void): () => void;
+  /** The machine woke or unlocked (`main/wake.js`); the SPA refetches errored queries.
+   *  Optional — an older main never pushes it. */
+  onWake?(cb: () => void): () => void;
   /**
    * THE ORCHESTRATOR LAUNCH TOGGLE (2026-08-22, Samuel's launch-over-MCP ruling) — may another
    * agent cause THIS MACHINE to spawn a session, with no click?

@@ -1,3 +1,4 @@
+import { transportFailure } from "@/shared/api/api-envelope";
 import { getBridge, type BridgeResponse } from "./dopl-bridge";
 
 /**
@@ -10,9 +11,10 @@ import { getBridge, type BridgeResponse } from "./dopl-bridge";
  *   fetch (dev-in-browser, no bridge): `VITE_API_BASE_URL` names the API
  *         origin; empty = same-origin.
  *
- * Both return `BridgeResponse`; both throw a plain `Error` (never `ApiError`)
- * when the request does not complete. `../lib/api.ts` owns everything above
- * that line.
+ * Both return `BridgeResponse`. A request that does not complete throws a
+ * `NetworkError` or a generic `ApiError(0)` (`transportFailure`), never raw
+ * transport text; the caller's own abort passes through. `../lib/api.ts` owns
+ * everything above that line.
  */
 
 export interface TransportRequest {
@@ -33,15 +35,20 @@ async function fetchTransport(req: TransportRequest): Promise<BridgeResponse> {
   if (req.body !== undefined) headers["content-type"] = "application/json";
   if (req.expectedUpdatedAt) headers["x-updated-at"] = req.expectedUpdatedAt;
 
-  const res = await fetch(API_BASE_URL + req.path, {
-    method: req.method,
-    headers,
-    body: req.body !== undefined ? JSON.stringify(req.body) : undefined,
-    // Cross-origin dev needs the cookie sent explicitly; same-origin keeps the
-    // stricter default.
-    credentials: API_BASE_URL ? "include" : "same-origin",
-    signal: req.signal,
-  });
+  let res: Response;
+  try {
+    res = await fetch(API_BASE_URL + req.path, {
+      method: req.method,
+      headers,
+      body: req.body !== undefined ? JSON.stringify(req.body) : undefined,
+      // Cross-origin dev needs the cookie sent explicitly; same-origin keeps the
+      // stricter default.
+      credentials: API_BASE_URL ? "include" : "same-origin",
+      signal: req.signal,
+    });
+  } catch (err) {
+    throw transportFailure(err, req.signal);
+  }
 
   if (res.status === 204) {
     return { status: res.status, statusText: res.statusText, hasBody: false };
@@ -59,17 +66,22 @@ async function fetchTransport(req: TransportRequest): Promise<BridgeResponse> {
  * the main-process request runs to completion and its result is dropped.
  */
 function ipcTransport(req: TransportRequest): Promise<BridgeResponse> {
-  const bridge = getBridge();
-  if (!bridge) throw new Error("Dopl bridge unavailable");
-
-  const invocation = bridge.apiRequest(req.path, {
-    method: req.method,
-    body: req.body,
-    workspaceId: req.workspaceId,
-    expectedUpdatedAt: req.expectedUpdatedAt,
-  });
-
   const signal = req.signal;
+  const bridge = getBridge();
+  if (!bridge) return Promise.reject(transportFailure(new Error("Dopl bridge unavailable")));
+
+  // An older main rejects a failed fetch with Electron's wrapper text; it is mapped here too.
+  const invocation = bridge
+    .apiRequest(req.path, {
+      method: req.method,
+      body: req.body,
+      workspaceId: req.workspaceId,
+      expectedUpdatedAt: req.expectedUpdatedAt,
+    })
+    .catch((err: unknown) => {
+      throw transportFailure(err, signal);
+    });
+
   if (!signal) return invocation;
   if (signal.aborted) return Promise.reject(signal.reason ?? new Error("Aborted"));
 

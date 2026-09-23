@@ -22,6 +22,7 @@
 //                  one updater interval out (30m since 2026-08-22; it was 4h,
 //                  which is what made waking a load-bearing signal here)
 //   guard          (2a) renderer pool + (2c) retry a hung load
+//   spa            tell every app window, so queries that errored while asleep refetch
 //
 // COALESCED. `resume` and `unlock-screen` fire together, and reconcile is
 // single-flight, so a resume+unlock pair does ONE pass rather than two. Every
@@ -32,8 +33,18 @@ const { powerMonitor } = require('electron');
 const { diag } = require('./diag');
 
 const COALESCE_MS = 3000;
+// Mirrored as a literal in renderer/app-preload.js › onWake.
+const WAKE_EVENT = 'dopl:wake';
 
-// `deps`: listener, api, authTokens, uiSync, versionGate.
+function notifyWindows(getWindows) {
+  const wins = typeof getWindows === 'function' ? getWindows() : null;
+  for (const win of Array.isArray(wins) ? wins : []) {
+    if (!win || typeof win.isDestroyed !== 'function' || win.isDestroyed()) continue;
+    try { win.webContents.send(WAKE_EVENT); } catch (_err) { /* window closing */ }
+  }
+}
+
+// `deps`: listener, api, authTokens, uiSync, versionGate, getAppWindows.
 // Returns the handler, so a caller (or a test) can drive a wake directly.
 // powerMonitor is only valid after the app is ready.
 function arm(deps) {
@@ -53,6 +64,8 @@ function arm(deps) {
     kick('token', () => deps.authTokens.onWake());
     kick('ui-sync', () => deps.uiSync.onWake());
     kick('version-gate', () => deps.versionGate.onWake());
+    // Last, so the refetch it triggers rides the pool reset above.
+    kick('spa', () => notifyWindows(deps.getAppWindows));
   };
 
   try {
@@ -64,4 +77,4 @@ function arm(deps) {
   return onWake;
 }
 
-module.exports = { arm, COALESCE_MS };
+module.exports = { arm, COALESCE_MS, WAKE_EVENT };

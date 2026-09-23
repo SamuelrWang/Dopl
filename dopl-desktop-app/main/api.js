@@ -98,9 +98,17 @@ function apiFetch(pathname, opts = {}) {
 // socket, so the worst case is today's behavior).
 const UNDICI_GLOBAL_DISPATCHER = Symbol.for('undici.globalDispatcher.1');
 
-function resetPool() {
+/** The dispatcher a request is about to ride, for `resetPool({ ifCurrent })`. */
+function currentPool() {
+  return globalThis[UNDICI_GLOBAL_DISPATCHER] || null;
+}
+
+// `ifCurrent`: reset only if that pool is still the live one, so a burst of sibling failures swaps
+// once. `graceful`: close the old pool (in-flight requests finish) instead of destroying it.
+function resetPool(opts = {}) {
   try {
     const current = globalThis[UNDICI_GLOBAL_DISPATCHER];
+    if (opts.ifCurrent !== undefined && opts.ifCurrent !== (current || null)) return false;
     let fresh = null;
     if (current && typeof current.constructor === 'function') {
       try { fresh = new current.constructor(); } catch (_) { fresh = null; }
@@ -111,8 +119,9 @@ function resetPool() {
     if (!fresh) return false;
     globalThis[UNDICI_GLOBAL_DISPATCHER] = fresh;
     // Tear down the old pool's (now dead) sockets; harmless if already draining.
-    if (current && current !== fresh && typeof current.destroy === 'function') {
-      Promise.resolve(current.destroy()).catch(() => {});
+    const retire = opts.graceful ? 'close' : 'destroy';
+    if (current && current !== fresh && typeof current[retire] === 'function') {
+      Promise.resolve(current[retire]()).catch(() => {});
     }
     return true;
   } catch (_) {
@@ -120,4 +129,4 @@ function resetPool() {
   }
 }
 
-module.exports = { apiFetch, resetPool };
+module.exports = { apiFetch, resetPool, currentPool };

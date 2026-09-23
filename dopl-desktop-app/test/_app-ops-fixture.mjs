@@ -68,6 +68,9 @@ export const APP_OPS = [
   "onAuthState",
   "onNavigate",
   "onSyncEvent",
+  // `onWake`: a listener only — main pushes `dopl:wake` after a resume/unlock (main/wake.js) and the
+  // SPA refetches its errored queries. No payload, no reply, nothing the renderer can send.
+  "onWake",
   "openExternal",
   // 2026-08-22 (launch-over-MCP ruling): `orchestratorLaunch.get` / `.set` — the MACHINE-WIDE
   // standing consent for the `channel_launch_directives` lane. No id to UUID-gate; the payload is a
