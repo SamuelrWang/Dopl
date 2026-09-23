@@ -10,6 +10,8 @@ import {
   HomePageSkeleton,
 } from "#/pages/home/home-skeleton";
 import { HOME_DEFAULT_TAB, HOME_TABS } from "#/pages/home/home-tabs";
+// ⚠ THE WELL SET THE CHANNEL COLUMN'S GHOST MAPS (2026-09-22) — read, never re-typed.
+import { HOME_CHANNEL_WELLS } from "#/pages/home/channel-wells";
 import { AccountRailSkeleton, ShellChromeSkeleton } from "./shell-skeleton";
 import { sectionSkeleton } from "./section-skeleton";
 
@@ -290,6 +292,44 @@ describe("the /home shapes are /home's own geometry", () => {
     expect(container.querySelectorAll("a")).toHaveLength(0);
   });
 
+  /**
+   * 🔒 **THE CHANNEL COLUMN GHOSTS THE THREE GRAY WELLS, ONE PER
+   * `HOME_CHANNEL_WELLS` ENTRY (Samuel, 2026-09-22):** *"it doesn't include the
+   * gray boxes for Pin[ned], Recent and Earlier. It also doesn't include any
+   * component or skeleton for an actual channel. It just looks like little things
+   * are directly on the background color, which is bad."*
+   *
+   * ⚠ **THE SET IS READ, NOT RE-TYPED** — same argument as the selector pills
+   * above: a fourth well or a renamed one moves the ghost with it.
+   * ⚠ **STILL NOTHING TO PRESS** (the assertion above covers it for the whole
+   * page): the loaded well's header is a real `<button>` and the ghost's is a box.
+   * ⚠ **A GRAY FILL IS NOT ELEVATION** — the well wears the loaded column's own
+   * `PANEL_WELL_ON_PANEL`, which has no hairline and no shadow, and the rows inside
+   * stand on the flat `bg-home-card` rather than on `HOME_CARD_FACE`'s gradient.
+   * That is the 2026-09-21 flatness ruling kept, and the second half of this pin.
+   */
+  it("ghosts one gray well per channel well, flat and inert", () => {
+    const { container } = render(<HomePageSkeleton />);
+    const wells = container.querySelectorAll("section.bg-\\[var\\(--seg-fill\\)\\]");
+    expect(wells).toHaveLength(HOME_CHANNEL_WELLS.length);
+    // The two OPEN wells draw rows; the closed one draws its header alone.
+    expect(container.querySelectorAll(".bg-home-card.rounded-\\[14px\\]").length)
+      .toBeGreaterThan(0);
+    const ghost = file("../../pages/home/home-list-skeleton.tsx");
+    expect(ghost).toContain('from "@/shared/ui/panel-well"');
+    expect(ghost).toContain("HOME_CHANNEL_WELLS.map");
+    // 🚫 BIDIRECTIONAL: the raised row face stays on the PAGE and out of the ghost.
+    // ⚠ COMMENT-STRIPPED, on this suite's stated rule — the ghost's docblock NAMES
+    // the face it does not wear, and a raw scan would make the repair "delete the
+    // explanation".
+    const ghostCode = code("../../pages/home/home-list-skeleton.tsx");
+    expect(ghostCode).not.toContain("HOME_CARD_FACE");
+    expect(ghostCode).not.toContain("auth-btn-3d");
+    expect(file("../../../../../src/shared/ui/home-channel-row.tsx")).toContain(
+      "auth-btn-3d"
+    );
+  });
+
   /** ⚠ THE LANDING FACE IS OVERVIEW (`home-tabs.ts › HOME_DEFAULT_TAB`), so the
    *  ghost's pane is Overview's — TWO `.bento` Usage cards (the bar, then the plot
    *  at the real plot height) over the 2×2 rails. It ghosted the CHANNELS face (a
@@ -330,8 +370,17 @@ describe("the /home shapes are /home's own geometry", () => {
       expect(panels).toContain(face);
       expect(HOME_SKELETON).not.toContain(face);
     }
+    // ⚠ **THE CONSTANT MOVED TO `home-ghost-face.ts` ON 2026-09-22** — a §1 split,
+    // because the channel-column ghost left `home-skeleton.tsx` the same day and
+    // both wear this face; a constant in either file would have the other importing
+    // THROUGH it. The pin follows the split and is otherwise unchanged: the face is
+    // still spelled ONCE, and the frame ghost still reads it rather than re-typing
+    // a `rounded-[14px]` of its own.
+    expect(file("../../pages/home/home-ghost-face.ts")).toContain(
+      'export const GHOST_FLAT_FACE = "rounded-[14px] border border-transparent"'
+    );
     expect(HOME_SKELETON).toContain(
-      'const GHOST_FLAT_FACE = "rounded-[14px] border border-transparent"'
+      'import { GHOST_FLAT_FACE } from "./home-ghost-face"'
     );
     // The plot height is IMPORTED, the way the Overview page's ghost takes it.
     expect(HOME_SKELETON).toContain(

@@ -7,6 +7,10 @@ import { SkeletonSurface } from "#/components/skeletons/skeleton-surface";
 import { AccountRailSkeleton } from "#/components/skeletons/shell-skeleton";
 import { PLOT_HEIGHT_CLASS } from "#/components/charts/bar-series";
 import { HOME_TABS } from "./home-tabs";
+// ⚠ THE FLAT FACE AND THE CHANNEL COLUMN ARE THEIR OWN MODULES (§1 splits,
+// 2026-09-22) — see each file's own docblock for the seam.
+import { GHOST_FLAT_FACE } from "./home-ghost-face";
+import { HomeListGhost } from "./home-list-skeleton";
 import home from "./home.module.css";
 import { TEMPLATE_GRID } from "@/features/agent-templates/components/template-section";
 
@@ -31,9 +35,6 @@ import { TEMPLATE_GRID } from "@/features/agent-templates/components/template-se
  * ⚠ NO TEXT ANYWHERE. The label goes to `SkeletonSurface`'s `sr-only` status
  * line and nowhere else.
  */
-
-/** Rows the list column stands in for. Enough to fill the column, no more. */
-const LIST_ROWS = 7;
 
 /**
  * THE WHOLE /home FRAME while the three page reads are in flight — account rail,
@@ -152,26 +153,7 @@ export function HomeAgentPanelsSkeleton({
   );
 }
 
-/**
- * 🔒 THE ONLY FACE A GHOST ON THIS PAGE DRAWS — radius and the border BOX, and
- * nothing that can be seen (Samuel, 2026-09-21: the skeletons are FLAT,
- * *"we basically just shouldn't have elevated components"*, which he defined as
- * SHIMMER BLOCKS ONLY: a skeleton container keeps its geometry and loses its
- * fill, its hairline and its shadow).
- *
- * ⚠ `border border-transparent`, NEVER a dropped border: `.bento` and
- * `auth-btn-3d-light` both carry a 1px line, the background paints under the
- * border box, and removing it would pull every block inside in by a pixel. The
- * same spelling `shared/ui/section-panel.tsx › SECTION_PANEL_GROUND` uses, and
- * the same one `pages/overview/overview-skeleton.tsx › FLAT_PANEL` uses for the
- * workspace face.
- *
- * ⚠ **`SECTION_PANEL_GROUND` IS NOT ELEVATION AND STAYS.** It is
- * `border border-transparent bg-home-panel` — a flat panel gray, which is
- * exactly what the Knowledge and Agents ghosts Samuel named as the REFERENCE
- * already stand on.
- */
-const GHOST_FLAT_FACE = "rounded-[14px] border border-transparent";
+
 
 /**
  * One `SectionPanel`-shaped region: heading row, optional caption, body.
@@ -247,74 +229,6 @@ function TemplateCardsGhost() {
       {Array.from({ length: 4 }).map((_, i) => (
         <Skeleton key={i} className="h-[92px] rounded-[14px]" />
       ))}
-    </div>
-  );
-}
-
-/** The relationship list — floating raised rows in the 290px column. */
-function HomeListGhost() {
-  return (
-    <div className="flex w-[var(--home-list-w)] shrink-0 flex-col">
-      <div className="flex flex-1 flex-col gap-2 overflow-hidden px-3 pb-3 pt-1">
-        {Array.from({ length: LIST_ROWS }).map((_, i) => (
-          <HomeRowGhost key={i} />
-        ))}
-      </div>
-    </div>
-  );
-}
-
-/**
- * One channel row. ⚠ It is a `<div>`, not a `<button>`: a skeleton offers
- * nothing to press.
- *
- * 🔒 ⚠ **THE FACE IS FLAT SINCE 2026-09-21 (Samuel's ruling).** *"On the left
- * side, where the [rails] are for the channel, that is also elevated … we
- * basically just shouldn't have elevated components."* This row wore
- * `channel-row-marks.tsx › HOME_CARD_FACE` (`auth-btn-3d-light` — the gradient,
- * its line and its shadows) so the swap to real rows was a content change and
- * not a change of surface; the ghost now trades that parity for flatness and
- * wears `GHOST_FLAT_FACE`, which restates only the radius and the border BOX.
- * ⚠ **THE LOADED ROW KEEPS ITS RAISED FACE** — do not "restore parity" by
- * putting the constant back here, and do not flatten the constant itself.
- *
- * 🔒 **REDRAWN 2026-09-13 AND IT WAS TWO RULINGS BEHIND.** It drew a 32px LEADING
- * AVATAR — deleted from the real row on 2026-09-01 with the roster-derived
- * identity — and THREE stacked text lines, the second and third being the
- * last-message preview Samuel removed on 2026-09-13. So the ghost resolved into a
- * row of a different height with a face in a slot that no longer exists, which is
- * the "way off" defect §1A exists to refuse. It is now the real row's own two
- * lines: title + time, then the 20px peer stack.
- *
- * ⚠ **THE HEIGHTS ARE THE ROW'S, STATED AS THE ROW STATES THEM** — two `h-5`
- * lines (a `text-body` title's box, and `AvatarStack`'s `2xs` face) with the row's
- * own `mt-0.5` between, inside its `py-2.5`. A ghost one text line off shifts the
- * content the operator is already reading toward.
- *
- * ⚠ **NO GHOST FOR THE UNREAD MARKS, deliberately.** A dot or an `@ N` pill is
- * present on SOME rows, so ghosting one would promise a notification that the
- * loaded row usually does not have — the same argument `OverviewFaceGhost` below
- * makes for ghosting neither of the Overview face's folding panels.
- */
-function HomeRowGhost() {
-  return (
-    <div
-      aria-hidden
-      className={cn(
-        GHOST_FLAT_FACE,
-        "flex w-full items-start gap-2.5 px-2.5 py-2.5"
-      )}
-    >
-      <div className="min-w-0 flex-1">
-        <div className="flex h-5 items-center justify-between gap-2">
-          <SkeletonLine w="58%" h={11} />
-          <SkeletonLine w={30} h={8} />
-        </div>
-        <div className="mt-0.5 flex h-5 items-center gap-1.5">
-          <Skeleton className="h-5 w-5 rounded-full" />
-          <Skeleton className="h-5 w-5 rounded-full" />
-        </div>
-      </div>
     </div>
   );
 }
