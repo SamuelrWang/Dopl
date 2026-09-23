@@ -157,8 +157,7 @@ describe("the Launch agent split button", () => {
     // 🔒 THE TAB'S OWN WIRING, END TO END: the face opens the form and the form's Launch carries
     // THIS TAB's thread. `openThreadId ?? null` is read the same way by all three controls, and a
     // popup that fabricated or dropped a thread id would be worse than the redirect it replaced.
-    const onNewThread = vi.fn();
-    const { onLaunchAgent } = mountLaunch({ openThreadId: null, onNewThread });
+    const { onLaunchAgent } = mountLaunch({ openThreadId: null });
 
     fireEvent.click(screen.getByRole("button", { name: "New agent" }));
     const name = (await screen.findByLabelText("Agent name")) as HTMLInputElement;
@@ -168,7 +167,6 @@ describe("the Launch agent split button", () => {
     await waitFor(() => expect(onLaunchAgent).toHaveBeenCalled());
     expect(onLaunchAgent.mock.calls[0][0]).toBeNull();
     expect(onLaunchAgent.mock.calls[0][1]).toBeNull();
-    expect(onNewThread).not.toHaveBeenCalled();
   });
 
   // 🔒 THE WHOLE SPLIT BUTTON IS IN CHANNEL VIEW, NOT HALF OF IT. The face
@@ -178,13 +176,6 @@ describe("the Launch agent split button", () => {
     mountLaunch({ openThreadId: null });
     expect(screen.getByRole("button", { name: "New agent" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Launch from identity" })).toBeTruthy();
-  });
-
-  it("still renders WITHOUT a new-thread lane — the launch no longer needs one", () => {
-    // The old case pinned "no thread + no way to make one = no control"; the
-    // channel-level lane means the control stands on `canLaunch` alone now.
-    mountLaunch({ openThreadId: null, onNewThread: undefined });
-    expect(screen.getByRole("button", { name: "New agent" })).toBeTruthy();
   });
 
   it("renders neither half when the bridge cannot launch", () => {

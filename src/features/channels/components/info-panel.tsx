@@ -237,7 +237,6 @@ export function ChannelsInfoPanel({
               onApproveIdentity={onApproveIdentity}
               openAgent={openAgent}
               onOpenAgent={onOpenAgent}
-              onNewThread={onNewThread}
             />
           ) : (
             settings

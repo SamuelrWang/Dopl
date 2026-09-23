@@ -38,7 +38,6 @@ import type { AgentLaunchControls, LaunchAgentFn } from "./use-launch-controls";
 const refuseNoBridge = async () => ({ ok: false, reason: "no-bridge" });
 const approveNoBridge = async () => ({ ok: false, reason: "no-bridge" });
 
-
 export function AgentsTab({
   sessions,
   channelId,
@@ -54,7 +53,6 @@ export function AgentsTab({
   onApproveIdentity,
   openAgent,
   onOpenAgent,
-  // `onNewThread` is accepted but not destructured (SPA `noUnusedLocals`).
 }: {
   /** This machine's feed, or `null` for "could not ask" (no bridge) — never collapse to `[]`. */
   sessions: readonly DesktopSessionSummary[] | null;
@@ -78,8 +76,6 @@ export function AgentsTab({
   /** `agentKey(session)` of the open agent view, or null. */
   openAgent: string | null;
   onOpenAgent: (key: string) => void;
-  /** Inert here but kept: `agents-tab-launch.test.tsx` asserts it is never called. */
-  onNewThread?: () => void;
 }) {
   const byUser = new Map(members.map((m) => [m.userId, m]));
   const me = currentUserId ? (byUser.get(currentUserId) ?? null) : null;
