@@ -65,11 +65,44 @@ export interface RuntimeDescriptor {
 const NO_OPTIONS: ReadonlyArray<RuntimeModeOption> = [];
 const NO_CATEGORIES: ReadonlyArray<string> = [];
 
-export {
-  normalizeRuntimes,
-  normalizeRuntimeId,
-  descriptorFor,
-} from "./runtime-registry";
+/** A bridge reply's `runtimes` as descriptors; an entry without a string `id` is dropped. */
+export function normalizeRuntimes(raw: unknown): RuntimeDescriptor[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.filter(
+    (d): d is RuntimeDescriptor =>
+      !!d &&
+      typeof d === "object" &&
+      typeof (d as RuntimeDescriptor).id === "string" &&
+      !!(d as RuntimeDescriptor).id
+  );
+}
+
+/**
+ * A registered runtime id, or `''` for the default (`main/channel-runtime.js › normalizeRuntimeId`).
+ * ⚠ `''` is the only spelling of "no pick". The list is what this desktop reported, never a
+ * hardcoded roster.
+ */
+export function normalizeRuntimeId(
+  runtimes: ReadonlyArray<RuntimeDescriptor>,
+  raw: unknown
+): string {
+  const id = typeof raw === "string" ? raw.trim() : "";
+  if (!id) return "";
+  return runtimes.some((d) => d.id === id) ? id : "";
+}
+
+/**
+ * The descriptor a launch would use: the pick if registered, else the reported default (main
+ * resolves an unknown stored id to the default too). `null` = no adapters or no reported default.
+ */
+export function descriptorFor(
+  runtimes: ReadonlyArray<RuntimeDescriptor>,
+  id: unknown,
+  defaultRuntime: unknown
+): RuntimeDescriptor | null {
+  const picked = normalizeRuntimeId(runtimes, id) || normalizeRuntimeId(runtimes, defaultRuntime);
+  return picked ? runtimes.find((d) => d.id === picked) ?? null : null;
+}
 
 /**
  * Why the Stop control is not offered, or `null` when it is. It refuses the CONTROL, never the
