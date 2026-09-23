@@ -42,6 +42,8 @@ const sessionAuth = require('../../session-auth');
 const sessionOutbound = require('../../session-outbound');
 const models = require('./models');
 const sessionCredential = require('../../session-credential');
+const sessionDirected = require('../../session-directed');
+const fold = require('./fold');
 const { diag } = require('../../diag');
 
 // ── THE LOOP BRAKE — ⚠ ONE CONSTANT, EVERY PROFILE, EVERY SPAWN SHAPE ────────
@@ -206,7 +208,7 @@ function buildOptions(s, dispatch, emitQuiet) {
 function buildLaunchSpec(request) {
   const req = request || {};
   const s = req.session;
-  return { prompt: s.pushIterator, options: buildOptions(s, req.dispatch, req.emitQuiet) };
+  return { prompt: s.pushIterator, options: buildOptions(s, req.dispatch, req.emitQuiet), session: s };
 }
 
 /**
@@ -217,7 +219,9 @@ function buildLaunchSpec(request) {
  */
 function start(spec) {
   const sdk = loader.peekSdk();
-  return sdk.query({ prompt: spec.prompt, options: spec.options });
+  // A push the CLI folds into the running turn is a join of that turn (`fold.js`, P4-05).
+  const watch = fold.makeFoldWatch((text) => sessionDirected.steerJoined(spec.session, text));
+  return fold.observeQuery(sdk.query({ prompt: watch.stamp(spec.prompt), options: spec.options }), watch.observe);
 }
 
 /**

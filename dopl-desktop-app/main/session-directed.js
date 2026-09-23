@@ -90,8 +90,8 @@ function readDirected(a) {
 /** Arm a capture for a direction just pushed and open its window, in one call. ⚠ ONE CALL so
  *  a caller cannot arm without opening — a capture at depth zero would be spent by the FIRST
  *  `result` to arrive, which may be a channel turn's.
- *  `prompt` is the FRAMED text that was pushed; the Codex adapter matches it to say the push
- *  JOINED a live turn ({@link noteSteerJoined}). Absent, the capture can never be joined. */
+ *  `prompt` is the FRAMED text that was pushed; an adapter matches it to say the push JOINED a
+ *  live turn ({@link noteSteerJoined}). Absent, the capture can never be joined. */
 function armAndOpen(s, directed, turnInFlight, prompt) {
   if (!s || !directed || !directed.id) return 0;
   const id = String(directed.id);
@@ -105,8 +105,9 @@ function armAndOpen(s, directed, turnInFlight, prompt) {
     // The last assistant text seen while this capture is armed.
     text: '',
     // ⚠ A DEPTH, exactly like the private window's: +1 when the agent is idle (the pushed
-    // message IS the next turn), +2 when a turn is already in flight and the runtime QUEUES the
-    // push behind it (Claude, `priority: 'next'`) — that turn's `result` spends one. It is its
+    // message IS the next turn), +2 when a turn is already in flight and the push may run as its
+    // own later turn — that turn's `result` spends one. When the runtime instead JOINS the push
+    // into the running turn, its adapter pays the surplus back through `steerJoined`. It is its
     // own counter because `privateDepth` is also moved by the OPERATOR's messages.
     depth: turnInFlight ? 2 : 1,
     inFlight: !!turnInFlight,
@@ -148,14 +149,15 @@ function noteDirectedText(s, text) {
 }
 
 /**
- * 🔒 **THE PUSH JOINED THE TURN ALREADY RUNNING — CODEX'S `turn/steer` (CXP-3B, 2026-09-22).**
+ * 🔒 **THE PUSH JOINED THE TURN ALREADY RUNNING (CXP-3B, P4-05).**
  *
- * The `+2` assumes a push while a turn is in flight becomes its OWN later turn, which is true on
- * Claude and false on Codex: `turn/steer` appends the input to the ACTIVE turn, so ONE
- * `turn/completed` answers both, the depth stopped at 1 with its text cleared, and the direction
- * never reported. Called by the Codex adapter only AFTER the app-server accepted the steer, and
- * only for the capture whose own framed prompt it carried — a join of some other push must not
- * spend this one, or an in-flight channel turn's text would be reported as the answer.
+ * The `+2` assumes a push while a turn is in flight becomes its OWN later turn. Both runtimes can
+ * instead join it to the ACTIVE turn — Codex's `turn/steer` always, Claude's CLI when it folds a
+ * queued message in after a tool batch (`runtime/claude/fold.js`) — so ONE `result` answers both,
+ * and without this the depth stopped at 1 with its text cleared and the capture stayed armed for
+ * the next, unrelated turn. Called by an adapter only once the runtime confirmed the join, and only
+ * for the capture whose own framed prompt it carried — a join of some other push must not spend
+ * this one, or an in-flight channel turn's text would be reported as the answer.
  *
  * TWO ORDERS, ONE ANSWER. Usually the join lands BEFORE the joined turn's `result` and simply
  * pays off the surplus unit (2 → 1). But the steer's response and `turn/completed` race on the
@@ -254,7 +256,7 @@ function observe(s, event) {
   report(closeDirected(s));
 }
 
-/** THE CODEX ADAPTER'S HOOK — its `turn/steer` was accepted (CXP-3B). See `noteSteerJoined`. */
+/** AN ADAPTER'S HOOK — the runtime joined a push into the running turn. See `noteSteerJoined`. */
 function steerJoined(s, pushedText) {
   report(noteSteerJoined(s, pushedText));
 }
@@ -290,13 +292,13 @@ function report(closed) {
  */
 module.exports = {
   observe, // the engine's one hook
-  steerJoined, // CXP-3B: the Codex adapter's one hook
+  steerJoined, // CXP-3B / P4-05: the adapters' join hook (Codex steer, Claude fold)
   readDirected,
   armAndOpen,
   REPLY_CAP,
   safeReply,
   isDirectedTurn,
-  noteSteerJoined, // CXP-3B: the Codex adapter's `turn/steer` joined the live turn
+  noteSteerJoined, // CXP-3B / P4-05: a push joined the live turn
   noteDirectedText,
   closeDirected,
   resetDirected,
