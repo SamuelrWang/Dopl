@@ -26,7 +26,7 @@ import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { boot, claimPosts } from "./_launch-directive-harness.mjs";
+import { boot, claimPosts, IDENTITY_ID } from "./_launch-directive-harness.mjs";
 import { between, codeOf, sliceFrom } from "./helpers/source-probe.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -378,9 +378,8 @@ test("IDENTITY: `identity_id` survives the narrowing, in BOTH spellings", () => 
   // is the server DTO (`identityId`, `service-launch.ts › toDirective`). The module re-narrows
   // from the CLAIM, so missing the camelCase spelling would make every identity launch blank —
   // a success that wears no identity.
-  const TPL = "77777777-7777-4777-8777-777777777777";
-  assert.equal(wire.directiveFrom(row({ identity_id: TPL }), WS).identityId, TPL);
-  assert.equal(wire.directiveFrom(row({ identityId: TPL }), WS).identityId, TPL);
+  assert.equal(wire.directiveFrom(row({ identity_id: IDENTITY_ID }), WS).identityId, IDENTITY_ID);
+  assert.equal(wire.directiveFrom(row({ identityId: IDENTITY_ID }), WS).identityId, IDENTITY_ID);
   const service = readFileSync(
     join(HERE, "..", "..", "src", "features", "channels", "server", DTO_FILE), "utf8"
   );
@@ -466,17 +465,20 @@ test("IDENTITY: the column CHECK admits `no-identity`, and the producer exists",
     "the producer this migration was landed for must be in launch-directive-spawn.js");
 });
 
-test("IDENTITY: the migration NEVER touches the replica identity", () => {
+test("IDENTITY: the directive migrations NEVER touch the replica identity", () => {
   // ⚠ `REPLICA IDENTITY USING INDEX` requires its index to keep existing: drop it and the table
   // falls to replica identity NOTHING, at which point every UPDATE on a published table FAILS —
   // which here means claim and decide both stop working.
-  const sql = readFileSync(join(HERE, "..", "..", "supabase", "migrations",
-    "20260823140000_channel_launch_directives_template.sql"), "utf8");
-  // ⚠ The DDL form only. The file's trailing assertion block READS `pg_index.indisreplident` to
-  // check the identity SURVIVED, and naming it there is the opposite of touching it.
-  const code = sql.split("\n").filter((l) => !l.trim().startsWith("--")).join("\n");
-  assert.equal(/REPLICA IDENTITY\s+(DEFAULT|FULL|NOTHING|USING)/i.test(code), false);
-  assert.equal(/DROP INDEX/i.test(code), false);
+  for (const file of [
+    "20260823140000_channel_launch_directives_template.sql",
+    "20261019120000_rename_agent_templates_to_agent_identities.sql",
+  ]) {
+    const sql = readFileSync(join(HERE, "..", "..", "supabase", "migrations", file), "utf8");
+    // The DDL form only: a trailing check that READS `pg_index.indisreplident` is not a change.
+    const code = sql.split("\n").filter((l) => !l.trim().startsWith("--")).join("\n");
+    assert.equal(/REPLICA IDENTITY\s+(DEFAULT|FULL|NOTHING|USING)/i.test(code), false, file);
+    assert.equal(/DROP INDEX/i.test(code), false, file);
+  }
 });
 
 test("CONTRACT: an id or channel that is not a UUID is not a directive at all", () => {

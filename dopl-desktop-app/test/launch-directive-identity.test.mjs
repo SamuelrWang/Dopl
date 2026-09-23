@@ -28,7 +28,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-  boot, decidePosts, row, SRC, WS, CH,
+  boot, decidePosts, row, SRC, WS, CH, IDENTITY_ID,
 } from "./_launch-directive-harness.mjs";
 import { codeOf } from "./helpers/source-probe.mjs";
 
@@ -39,10 +39,9 @@ import { codeOf } from "./helpers/source-probe.mjs";
 // and the operator is not is created fine and refused here.
 
 test("IDENTITY: the directive's id is resolved by THIS machine, and lands on context.identity", async () => {
-  const TPL = "77777777-7777-4777-8777-777777777777";
   const h = boot({ resolve: { ok: true, identity: { name: "Code Auditor", model: null, instructions: "audit" } } });
-  await h.api.handle(row({ identity_id: TPL, identity_name: "Code Auditor" }), WS);
-  assert.deepEqual(h.resolves, [{ identityId: TPL, workspaceId: WS }],
+  await h.api.handle(row({ identity_id: IDENTITY_ID, identity_name: "Code Auditor" }), WS);
+  assert.deepEqual(h.resolves, [{ identityId: IDENTITY_ID, workspaceId: WS }],
     "resolved once, by id, in this directive's workspace");
   // ⚠ `context.identity` IS THE WHOLE CARRIAGE. `session-launch.js › launch` forwards `context`
   // on a literal whitelist and `startSession` merges it, so this is the same key and the same
@@ -69,9 +68,8 @@ for (const [label, reason] of [
   ["a 5xx", "busy"],
 ]) {
   test(`IDENTITY: ${label} → refused \`${reason}\`, and NOTHING is launched`, async () => {
-    const TPL = "77777777-7777-4777-8777-777777777777";
     const h = boot({ resolve: { ok: false, reason } });
-    await h.api.handle(row({ identity_id: TPL, identity_name: "Code Auditor" }), WS);
+    await h.api.handle(row({ identity_id: IDENTITY_ID, identity_name: "Code Auditor" }), WS);
     assert.equal(h.cfg.lastSpec, undefined, "no spawn — refuse, never degrade to a blank agent");
     assert.equal(decidePosts(h)[0].body.status, "refused");
     assert.equal(decidePosts(h)[0].body.refusalReason, reason);
@@ -96,7 +94,6 @@ test("IDENTITY: E-4 — a nulled id beside a live NAME refuses `no-identity`, wi
 // the ORDER in `spawn` is what enforces it — the profile is computed before any identity text
 // exists in the function.
 test("CONTAINMENT: an IDENTITY supplies prompt content and NOT ONE containment input", async () => {
-  const TPL = "77777777-7777-4777-8777-777777777777";
   const h = boot({
     watched: { id: CH, name: "General", toolProfile: "dopl_only" },
     resolve: {
@@ -113,7 +110,7 @@ test("CONTAINMENT: an IDENTITY supplies prompt content and NOT ONE containment i
       },
     },
   });
-  await h.api.handle(row({ identity_id: TPL }), WS);
+  await h.api.handle(row({ identity_id: IDENTITY_ID }), WS);
   const spec = h.cfg.lastSpec;
   assert.equal(spec.toolProfile, "dopl_only", "main's own watched-channel DTO, unchanged");
   assert.deepEqual(spec.startModes, { tools: "bypass", messages: "auto_both", native: {} },
@@ -129,26 +126,25 @@ test("CONTAINMENT: an IDENTITY supplies prompt content and NOT ONE containment i
 
 // ⚠ THE CHAIN'S NAMED POSITION: directive.model > identity.model > the runtime default (no channel link since 2026-09-23).
 test("MODEL: the identity's default slots in BELOW the directive's param, and nothing sits below it", async () => {
-  const TPL = "77777777-7777-4777-8777-777777777777";
   const withIdentity = (model) => boot({
     resolve: { ok: true, identity: { name: "Code Auditor", model } },
   });
 
   // 1. The orchestrator's EXPLICIT param wins — a deliberate per-call choice beats a default.
   const explicit = withIdentity("claude-haiku-5");
-  await explicit.api.handle(row({ model: "claude-opus-5", identity_id: TPL }), WS);
+  await explicit.api.handle(row({ model: "claude-opus-5", identity_id: IDENTITY_ID }), WS);
   // 2026-09-22: handed on as given; the launch spec resolves it on the live roster.
   assert.equal(explicit.cfg.lastSpec.model, "claude-opus-5");
 
   // 2. With no param, the IDENTITY's default is the pick.
   const fromIdentity = withIdentity("claude-opus-5");
-  await fromIdentity.api.handle(row({ model: "", identity_id: TPL }), WS);
+  await fromIdentity.api.handle(row({ model: "", identity_id: IDENTITY_ID }), WS);
   assert.equal(fromIdentity.cfg.lastSpec.model, "claude-opus-5");
 
   // 3. An identity naming NO model leaves no pick (2026-09-23: the channel link is deleted) — the
   //    funnel then spends the runtime's own default.
   const noModel = withIdentity(null);
-  await noModel.api.handle(row({ model: "", identity_id: TPL }), WS);
+  await noModel.api.handle(row({ model: "", identity_id: IDENTITY_ID }), WS);
   assert.equal(noModel.cfg.lastSpec.model, "");
 
   // 4. ⚠ F-5 REVERSED (2026-09-22): an identity naming a model this build's frozen table does not
@@ -156,7 +152,7 @@ test("MODEL: the identity's default slots in BELOW the directive's param, and no
   //    the CLI started offering after this build shipped launches) or refuses it with `no-model`
   //    and the list it does offer — never a silent swap for the channel's pick.
   const unknown = withIdentity("claude-from-the-future-9");
-  await unknown.api.handle(row({ model: "", identity_id: TPL }), WS);
+  await unknown.api.handle(row({ model: "", identity_id: IDENTITY_ID }), WS);
   assert.equal(unknown.cfg.lastSpec.model, "claude-from-the-future-9");
 });
 
@@ -165,11 +161,10 @@ test("MODEL: the identity's default slots in BELOW the directive's param, and no
 // the launch-over-MCP toggle stands in for the click (Samuel, OQ-3), so this lane must never
 // produce it, never check an approval store, and never be able to write the word.
 test("IDENTITY: this lane has NO first-use approval gate, and cannot answer `identity-approval`", async () => {
-  const TPL = "77777777-7777-4777-8777-777777777777";
   const h = boot({
     resolve: { ok: true, identity: { name: "Foreign", model: null, authoredByCaller: false } },
   });
-  await h.api.handle(row({ identity_id: TPL }), WS);
+  await h.api.handle(row({ identity_id: IDENTITY_ID }), WS);
   assert.equal(h.cfg.lastSpec.idle, false, "a FOREIGN identity launches here with no click");
   assert.equal(decidePosts(h)[0].body.status, "launched");
   assert.equal(/identity-approval|isIdentityApproved|approveIdentity/.test(codeOf(SRC)), false,

@@ -396,7 +396,7 @@ test("resume is ALLOWED on the measured baseline, and the adapter's own door ope
   // `session-park.js › resumeParked` ZEROED the delta baseline unconditionally and would have
   // re-billed the whole thread. The baseline is runtime-aware now — a `false` runtime has it
   // CARRIED FORWARD — so `false` is a resumable answer and only `'unverified'` still refuses.
-  // `codex-live-session.test.mjs` holds the measurement; `session-park-resume-refusal.test.mjs`
+  // `codex-live-session.test.mjs` holds the measurement; `session-park-resume-baseline.test.mjs`
   // holds the billing arithmetic and the argument for the change.
   assert.equal(D.session.usageResetsOnResume, false, "the MEASUREMENT has not moved and must not");
   assert.equal(capability.canResume(D), true);

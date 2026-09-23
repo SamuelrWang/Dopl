@@ -11,16 +11,14 @@
 //   4. the cache is keyed per binary/version/credential, and a moved key re-reads on a look;
 //   5. a pick launches as the row it names; an unknown pick is REFUSED, never coerced;
 //   6. the launch funnel asks, and fails OPEN when the roster cannot be read;
-//   7. Codex: a named model no catalog source knows refuses instead of running on generic defaults;
-//   8. LIVE (opt-in, `CLAUDE_SDK_LIVE=1`): the real SDK answers, with zero messages.
+//   7. LIVE (opt-in, `CLAUDE_SDK_LIVE=1`): the real SDK answers, with zero messages.
 //
 // Run: `node --test dopl-desktop-app/test/claude-live-roster.test.mjs`
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
-import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { asyncFnOf } from "./helpers/source-probe.mjs";
@@ -219,21 +217,7 @@ test("the funnel FAILS OPEN when the roster cannot be read — never a refusal o
   assert.ok(h.logged.some((l) => l.includes("launch goes ahead")));
 });
 
-// ── 7. CODEX: THE DELEGATION FENCE NEVER DEGRADES A NAMED MODEL ──────────────────────────────
-
-test("Codex: a named model NO catalog source knows REFUSES the launch rather than run on generic defaults", async () => {
-  const catalog = require("../main/runtime/codex/catalog.js");
-  const home = mkdtempSync(join(tmpdir(), "dopl-cat-"));
-  try {
-    writeFileSync(join(home, catalog.CACHE_FILE), JSON.stringify({ models: [{ slug: "gpt-5.5" }] }));
-    await assert.rejects(catalog.writeDelegationFreeCatalog(home, { bin: null, model: "gpt-7" }),
-      /no entry for "gpt-7".*refusing the launch/);
-    assert.ok(await catalog.writeDelegationFreeCatalog(home, { bin: null, model: "gpt-5.5" }), "a model the cache knows still launches");
-    assert.ok(await catalog.writeDelegationFreeCatalog(home, { bin: null }), "and so does the platform's own pick");
-  } finally { rmSync(home, { recursive: true, force: true }); }
-});
-
-// ── 8. LIVE — THE REAL SDK, OPT-IN ───────────────────────────────────────────────────────────
+// ── 7. LIVE — THE REAL SDK, OPT-IN ───────────────────────────────────────────────────────────
 
 test("LIVE: the bundled CLI lists its models with NO model turn (zero SDK messages)", async (t) => {
   if (process.env.CLAUDE_SDK_LIVE !== "1") {

@@ -32,7 +32,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { bootIdentityResolve } from "./_session-launch-op-harness.mjs";
 
-const TPL = "33333333-3333-4333-8333-333333333333";
+const IDENTITY_ID = "33333333-3333-4333-8333-333333333333";
 const WS = "ws-1";
 
 const RESOLVED = {
@@ -56,11 +56,11 @@ function boot() {
 
 test("an ID resolves, and it is the only thing that reaches the network", async () => {
   const m = boot();
-  const res = await m.resolveAgentIdentity(TPL, WS);
+  const res = await m.resolveAgentIdentity(IDENTITY_ID, WS);
   assert.equal(res.ok, true);
   assert.equal(res.identity.name, "Code Auditor");
   assert.equal(m.requests.length, 1);
-  assert.equal(m.requests[0].path, `/api/agent-identities/${TPL}/resolve`);
+  assert.equal(m.requests[0].path, `/api/agent-identities/${IDENTITY_ID}/resolve`);
 });
 
 test("🔒 a NAME is REFUSED, and costs no round trip — there is no second resolution", async () => {
@@ -83,8 +83,8 @@ test("the id-only predicate is the SHARED uuid rule, never a local copy", async 
   // must be refused by the same predicate everything else uses.
   const m = boot();
   const { isIdentityId } = m;
-  assert.equal(isIdentityId(TPL), true);
-  for (const bad of ["33333333-3333-4333-8333-33333333333", `${TPL} `, "Code Auditor", "", null, 7]) {
+  assert.equal(isIdentityId(IDENTITY_ID), true);
+  for (const bad of ["33333333-3333-4333-8333-33333333333", `${IDENTITY_ID} `, "Code Auditor", "", null, 7]) {
     assert.equal(isIdentityId(bad), false, JSON.stringify(bad));
   }
 });

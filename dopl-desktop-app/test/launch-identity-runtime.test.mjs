@@ -74,7 +74,7 @@ test("RULE: no identity model, or the legacy `default` word, is no pick", async 
 // ── 2. THE BUTTON LANE ───────────────────────────────────────────────────────────────────────
 
 const CH = "11111111-1111-4111-8111-111111111111";
-const TPL = "33333333-3333-4333-8333-333333333333";
+const IDENTITY_ID = "33333333-3333-4333-8333-333333333333";
 
 function bootButton(identityModel) {
   const apiFetch = async () => ({ ok: true, status: 200, json: async () => ({
@@ -83,7 +83,7 @@ function bootButton(identityModel) {
   // The real model rule over fake catalogs, not a passthrough.
   const op = bootLaunchOp({ apiFetch, launchDefault: launchDefaultStub({ identityModelFor: (rid, m, own) => identityOn(rid, m, own) }) });
   const launch = (extra = {}) => op.launchFromButton({
-    channelId: CH, taskId: "", workspaceId: "ws-1", identityId: TPL, ...extra,
+    channelId: CH, taskId: "", workspaceId: "ws-1", identityId: IDENTITY_ID, ...extra,
   });
   return { launch, launches: op.launches };
 }
@@ -120,7 +120,7 @@ const withIdentity = (model, extra = {}) => bootDirective({
   resolve: { ok: true, identity: { name: "Coder", model } }, identityOffered: OFFERED, ...extra,
 });
 const spec = async (h, over = {}) => {
-  await h.api.handle(row({ goal: "go", identity_id: TPL, identity_name: "Coder", ...over }), WS);
+  await h.api.handle(row({ goal: "go", identity_id: IDENTITY_ID, identity_name: "Coder", ...over }), WS);
   return h.cfg.lastSpec;
 };
 

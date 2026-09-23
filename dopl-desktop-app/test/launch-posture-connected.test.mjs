@@ -70,31 +70,17 @@ test("all three adapters are probed, and only the ones that answered `ok` are co
   assert.deepEqual(connected, ["claude", "cursor"]);
 });
 
-test("a probe that NEVER ANSWERS reads as not connected, and does not hold up the ones that did", async () => {
-  // ⚠ THE LEASH. `codex/client.js` already refuses to let a hung binary become a stuck session;
-  // this is the same rule one layer up, where the thing waiting is a dialog opening.
+test("a probe that NEVER ANSWERS reads as not connected, and does not hold up the ones that did", async (t) => {
+  // Mocked time: the leash fires on `tick`, so the sweep resolving there proves it cannot outlast it.
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"] });
   const c = loadConnectivity();
-  // ⚠ A REF'D KEEP-ALIVE, IN THE TEST ONLY (2026-09-16). `connectivity.js › leashed` unref's its
-  // leash — correct in production, where a probe still running must never hold the app open at
-  // quit — but under Node 22's `node --test` an unref'd timer lets the event loop drain, so this
-  // case was `cancelledByParent` before the leash could fire, taking the rest of the file with it
-  // (Node 24 keeps the loop alive differently, which is why it was green locally and red in CI).
-  // ⚠ SOURCE IS UNTOUCHED AND SO IS THE WALL-CLOCK CLAIM BELOW: this timer only holds the loop
-  // open for as long as the leash itself needs, and it is cleared the moment the sweep lands.
-  const keepAlive = setTimeout(() => {}, c.LEASH_MS + 250);
-  const started = Date.now();
-  try {
-    const connected = await c.connectedIds([
-      adapter("claude", ok),
-      adapter("codex", never),
-      adapter("cursor", ok),
-    ]);
-    assert.deepEqual(connected, ["claude", "cursor"]);
-    // The leash is the ceiling, not the wait: two adapters answered at once.
-    assert.ok(Date.now() - started < c.LEASH_MS + 750, "the sweep must not outlast the leash");
-  } finally {
-    clearTimeout(keepAlive);
-  }
+  let settled = null;
+  const sweep = c.connectedIds([adapter("claude", ok), adapter("codex", never), adapter("cursor", ok)])
+    .then((ids) => { settled = ids; return ids; });
+  await new Promise((r) => setImmediate(r));
+  assert.equal(settled, null, "the hung probe holds the sweep until the leash");
+  t.mock.timers.tick(c.LEASH_MS);
+  assert.deepEqual(await sweep, ["claude", "cursor"]);
 });
 
 test("a REJECTION, a SYNCHRONOUS THROW and a missing `available` are all just not connected", async () => {
