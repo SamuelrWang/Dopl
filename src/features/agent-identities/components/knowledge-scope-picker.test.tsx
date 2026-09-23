@@ -1,18 +1,6 @@
 // @vitest-environment jsdom
-/**
- * THE KNOWLEDGE PICKER — the tree, the implied subtree, and the payload a pick
- * becomes (2026-09-08, Samuel: *"right now, you can only select entire bases,
- * but I want to be able to specific folders or entries/files. also i dont think
- * a dropdown is the best way to do it"*).
- *
- * ⚠ **THE COMPONENT IS RENDERED DIRECTLY, NOT THROUGH THE EDITOR.** The editor's
- * own suites own the PAYLOAD and are already near the 500-line cap; what is
- * under test here is the SELECTION RULE, which the editor cannot exercise
- * without a whole dialog around it.
- *
- * ⚠ THE TREE READ IS MOCKED. `useKnowledgeTree` is a lazy keyed query and this
- * file is about what the picker does with a tree, never about how it gets one.
- */
+// The picker rendered directly: the selection rule (tree, implied subtree, the ref a pick
+// becomes). The editor suites own the save payload.
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
@@ -24,10 +12,8 @@ const BASES = [
   { id: "kb-2", name: "Specs" },
 ];
 
-/** ⚠ THE TREE READ IS MOCKED — this file is about what the picker DOES with a
- *  tree, never about how it gets one. `./knowledge-tree-mock` holds the shape
- *  (kb-1: Deploys/ → Nightly/ → "Rollback", plus "Loose" at the base root);
- *  `vi.mock` is hoisted, so the factory imports rather than closes over it. */
+// kb-1: Deploys/ → Nightly/ → "Rollback", plus "Loose" at the base root (`./knowledge-tree-mock`);
+// the factory imports it because `vi.mock` is hoisted.
 vi.mock("@/features/knowledge/client/hooks", async () => ({
   useKnowledgeTree: (await import("./knowledge-tree-mock")).useKnowledgeTree,
 }));
@@ -46,9 +32,7 @@ function mount(selected: IdentityKnowledgeRef[] = []) {
   return onChange;
 }
 
-/** Expand down to `Nightly`. ⚠ THERE IS NOTHING TO OPEN SINCE 2026-09-22: the
- *  tree is rendered IN the form (Samuel), so a suite that clicked its way in is
- *  a suite pinning a control that no longer exists. */
+/** Expand down to `Nightly`. */
 function openTree() {
   fireEvent.click(screen.getByRole("button", { name: "Expand Runbooks" }));
   fireEvent.click(screen.getByRole("button", { name: "Expand Deploys" }));
@@ -63,8 +47,7 @@ afterEach(cleanup);
 describe("the tree", () => {
   it("opens on the BASES and drills into folders and entries", () => {
     mount();
-    // ⚠ Bases at the root, and nothing beneath them until asked — the read is
-    // lazy, so an unexpanded base costs no request.
+    // Nothing beneath a base until it is expanded: the read is lazy.
     expect(screen.getByRole("treeitem", { name: "Runbooks" })).toBeTruthy();
     expect(screen.getByRole("treeitem", { name: "Specs" })).toBeTruthy();
     expect(screen.queryByRole("treeitem", { name: "Deploys" })).toBeNull();
@@ -73,7 +56,6 @@ describe("the tree", () => {
     expect(screen.getByRole("treeitem", { name: "Deploys" })).toBeTruthy();
     // A base-root entry is a sibling of the base's top-level folders.
     expect(screen.getByRole("treeitem", { name: "Loose" })).toBeTruthy();
-    // …and a nested folder still needs its own expansion.
     expect(screen.queryByRole("treeitem", { name: "Nightly" })).toBeNull();
   });
 
@@ -88,11 +70,9 @@ describe("the tree", () => {
         scope: "folder",
         folderId: "f-2",
         folderName: "Nightly",
-        // ⚠ THE DISPLAY PATH — base name first, `" / "`-joined.
         path: "Runbooks / Deploys / Nightly",
-        // …and the base-relative address a `dopl_kb` call takes. Never the same
-        // string: a base named "Ops / Legal" makes splitting one back into the
-        // other silently wrong.
+        // The base-relative `dopl_kb` address, never derived from `path`: a base named
+        // "Ops / Legal" breaks a split.
         toolPath: "Deploys/Nightly",
       },
     ]);
@@ -111,12 +91,8 @@ describe("the tree", () => {
   });
 });
 
-/**
- * 🔒 **A FOLDER MEANS ITS SUBTREE, AND THE SET HOLDS ONE ROW.** Checking a
- * folder does not check its children into the set — it makes them IMPLIED. An
- * expansion would be a SNAPSHOT, and an entry filed tomorrow would silently not
- * be attached.
- */
+// A folder means its live subtree and the set holds one row; expanding it into children would be a
+// snapshot that misses an entry filed tomorrow.
 describe("the implied subtree", () => {
   const folderRef: IdentityKnowledgeRef = {
     baseId: "kb-1",
@@ -136,8 +112,7 @@ describe("the implied subtree", () => {
     expect(nested.getAttribute("aria-selected")).toBe("true");
     expect(nested.getAttribute("aria-disabled")).toBe("true");
     expect(entry.getAttribute("aria-selected")).toBe("true");
-    // ⚠ THE ROW THAT OWNS THE ATTACHMENT IS THE ANCESTOR, so this one is not the
-    // place you detach it. A click here must change nothing at all.
+    // The ancestor owns the attachment, so a click on a descendant changes nothing.
     fireEvent.click(nested);
     fireEvent.click(entry);
     expect(onChange).not.toHaveBeenCalled();
@@ -153,9 +128,7 @@ describe("the implied subtree", () => {
   });
 
   it("PRUNES the scopes a newly checked ancestor now covers", () => {
-    // ⚠ Two rows where one suffices renders the same attachment twice in the
-    // role block — and the redundant one survives when the operator later
-    // unchecks the ancestor, silently keeping an attachment they removed.
+    // A redundant row would survive unchecking the ancestor, keeping an attachment the operator removed.
     const nested: IdentityKnowledgeRef = {
       baseId: "kb-1",
       baseName: "Runbooks",
@@ -221,15 +194,10 @@ describe("the chips", () => {
       toolPath: "API",
     };
     const onChange = mount([base, folder]);
-    // ⚠ **BY THE CHIP'S OWN DETACH NAME, NOT BY TEXT (2026-09-22).** The tree
-    // is rendered in the form now, so a whole-base chip and that base's tree ROW
-    // carry the same words — `getByText("Runbooks")` matched both and proved
-    // neither. The detach label is the chip's and the chip's alone.
+    // By the chip's detach name: the base's tree row carries the same text.
     expect(screen.getByRole("button", { name: "Detach Runbooks" })).toBeTruthy();
     expect(screen.getByText("Specs / API")).toBeTruthy();
-    // 🔒 THE IDENTITY IS THE SHAPE PLUS ITS OWN ID, never the base id — a
-    // whole-base scope and a folder scope of that base share the base id, so
-    // keying on it would make removing one chip remove the other.
+    // A chip is keyed by shape + own id, never the base id, which a base scope and its folder scope share.
     fireEvent.click(screen.getByRole("button", { name: "Detach Specs / API" }));
     expect(last(onChange)).toEqual([base]);
   });
@@ -245,10 +213,7 @@ describe("the chips", () => {
       />
     );
     expect(screen.getByText("No knowledge here yet.")).toBeTruthy();
-    // ⚠ **THE SENTENCE STANDS IN FOR THE TREE, and there is no disabled Add to
-    // assert on any more (2026-09-22).** An empty container renders NO tree at
-    // all — a `role="tree"` with nothing in it is a control that looks live and
-    // holds nothing, which is the same defect the disabled button was avoiding.
+    // An empty `role="tree"` would be a control that looks live and holds nothing.
     expect(screen.queryByRole("tree")).toBeNull();
   });
 });

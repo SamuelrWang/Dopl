@@ -1,12 +1,5 @@
-/**
- * THE SAVE PAYLOAD, pinned away from the modal.
- *
- * These are the properties that fail QUIETLY: a body that carries `model: ""`
- * instead of omitting it, a stale `teamIds` grant riding a scope the operator
- * left (which the schema REFUSES with a 400, not a shrug), a
- * PATCH that sends every field back and reverts whatever moved under an open
- * editor. None of them throws, and all three are wrong on the server.
- */
+// The save payload away from the modal: each failure here throws nothing client-side and is wrong
+// on the server (a 400, or a PATCH that reverts what moved under an open editor).
 
 import { describe, expect, it } from "vitest";
 import type { AgentIdentity, IdentityKnowledgeRef } from "../client/types";
@@ -21,8 +14,7 @@ import {
   optimisticIdentity,
 } from "./identity-draft";
 
-/** ⚠ THE THREE SHAPES, minted the way the picker mints them — a ref carries its
- *  own label, which is what removed `optimisticIdentity`'s name lookup. */
+/** The three ref shapes as the picker mints them: each carries its own label. */
 function ref(baseId: string, baseName: string): IdentityKnowledgeRef {
   return { baseId, baseName, scope: "base", path: baseName };
 }
@@ -81,8 +73,7 @@ function identity(over: Partial<AgentIdentity> = {}): AgentIdentity {
 
 describe("draftToCreateBody", () => {
   it("sends the name and the scope, and OMITS every empty optional", () => {
-    // ⚠ `model: ""` is the Default sentinel this tree deliberately does not
-    // have — absence IS Default (channels/lib/agent-models.ts).
+    // Absence is Default; there is no `model: ""` sentinel (`channels/lib/agent-models.ts`).
     expect(draftToCreateBody({ ...emptyDraft(), name: "  Scout  " })).toEqual({
       name: "Scout",
       visibility: "private",
@@ -97,9 +88,7 @@ describe("draftToCreateBody", () => {
       instructions: "Search first.",
       model: "claude-sonnet-5",
       fields: [{ key: "repo", value: "dopl" }],
-      // ⚠ ONE OF EACH SHAPE. The body must carry `knowledge` and NEVER
-      // `knowledgeBaseIds` — the schema refuses both keys in one request, and a
-      // folder scope cannot be spelled in the older one at all.
+      // One of each shape. Never `knowledgeBaseIds`: the schema refuses both keys in one request.
       knowledge: [
         ref("kb-1", "Runbooks"),
         folderRef("kb-1", "Runbooks", "f-1", "Deploys"),
@@ -123,9 +112,7 @@ describe("draftToCreateBody", () => {
   });
 
   it("sends teamIds ONLY on the team scope", () => {
-    // ⚠ Not a tidiness rule: `../schema.ts` REFUSES `teamIds` without
-    // `visibility: "team"` ("teamIds requires visibility 'team'"), so a stale
-    // set on a private identity is a 400, not a harmless extra key.
+    // `../schema.ts` refuses `teamIds` without `visibility: "team"`, so a stale set is a 400.
     const draft = { ...emptyDraft(), name: "Scout", teamIds: ["team-1"] };
     expect(draftToCreateBody({ ...draft, visibility: "private" }).teamIds).toBeUndefined();
     expect(draftToCreateBody({ ...draft, visibility: "workspace" }).teamIds).toBeUndefined();
@@ -159,10 +146,7 @@ describe("draftToPatchBody", () => {
   });
 
   it("sends an EMPTIED optional as null — clearing is an edit, not an omission", () => {
-    // ⚠ `null`, not `""`: the schema's own split (absent leaves the column
-    // alone, null CLEARS it), and for `model` it is not even a choice — that
-    // field is a `safeLabel` carrying a `.min(1)`, so `""` is a 400 on the
-    // operator picking Default.
+    // Absent leaves a column alone and null clears it; `model: ""` would 400 on `safeLabel`'s `.min(1)`.
     const row = identity();
     expect(
       draftToPatchBody({ ...draftFromIdentity(row), description: "   " }, row)
@@ -228,8 +212,7 @@ describe("isDraftSavable", () => {
   });
 
   it("refuses a Team identity with no team named", () => {
-    // A team-scoped identity with no team is visible to nobody — a private
-    // identity wearing the wrong label. Fail closed at the button.
+    // A team identity with no team is visible to nobody; fail closed at the button.
     const draft = { ...emptyDraft(), name: "Scout", visibility: "team" as const };
     expect(isDraftSavable(draft)).toBe(false);
     expect(isDraftSavable({ ...draft, teamIds: ["team-1"] })).toBe(true);
@@ -238,10 +221,7 @@ describe("isDraftSavable", () => {
 
 describe("optimisticIdentity", () => {
   it("names a freshly attached base from the PICKER, not from the round trip", () => {
-    // The wire sends ids and answers with names and paths; without the picker's
-    // own label the chip would render blank for one frame, which reads as
-    // "detached". ⚠ The draft holds REFS since 2026-09-08, so the label rides
-    // with the pick and the `id → name` lookup this case used to take is gone.
+    // The wire answers with names only after the round trip; a blank chip for a frame reads as "detached".
     const row = identity({ knowledgeBases: [], knowledge: [] });
     const draft = { ...draftFromIdentity(row), knowledge: [ref("kb-7", "Playbooks")] };
     expect(optimisticIdentity(row, draft).knowledgeBases).toEqual([
@@ -250,9 +230,7 @@ describe("optimisticIdentity", () => {
   });
 
   it("keeps a folder scope out of the BASE-LEVEL slice", () => {
-    // 🔒 Listing the base because one folder of it is attached would be a WIDER
-    // claim than the row makes — an older reader would be told the whole base
-    // is attached. The scope is in `knowledge`; the slice stays empty.
+    // Listing the base for one of its folders would tell an older reader the whole base is attached.
     const row = identity({ knowledgeBases: [], knowledge: [] });
     const draft = {
       ...draftFromIdentity(row),
@@ -264,12 +242,7 @@ describe("optimisticIdentity", () => {
     expect(next.knowledge?.[0]?.folderId).toBe("f-2");
   });
 
-  /**
-   * 🔒 §8 STALE CACHE — the fixture WITHOUT the key. A row cached by the bundle
-   * before scopes shipped has no `knowledge`, and `draftFromIdentity` mapping
-   * over `undefined` would throw and blank the editor. `EMPTY_KNOWLEDGE` is the
-   * honest reading of "not sent".
-   */
+  // Stale cache (INVARIANTS §8): a row cached before `knowledge` existed must not blank the editor.
   it("survives a row cached before `knowledge` existed", () => {
     const row = identity({ knowledgeBases: [{ id: "kb-1", name: "Runbooks" }] });
     delete (row as { knowledge?: unknown }).knowledge;
@@ -292,15 +265,3 @@ describe("optimisticIdentity", () => {
     expect(next.visibility).toBe("private");
   });
 });
-
-// ⚠ **THE `containerCopyDraft` BLOCK (FIVE CASES) IS DELETED HERE, 2026-09-02**
-// (wave B slice B15, Samuel's ruling B11: *grants replace copies*). It pinned
-// what the "Use in this channel" COPY carried and dropped — the forced
-// `workspace` visibility, the cleared teams and knowledge bases, the unsuffixed
-// name, and the absence of any back-pointer. **None of it has a successor
-// assertion**: the control is a GRANT now
-// (`apps/desktop-ui/src/pages/home/agent-share.tsx`), it composes no draft at
-// all, and what it writes is pinned in
-// `apps/desktop-ui/src/pages/home/identity-authoring.test.tsx › share into this
-// channel`. The rest of this file — the shared editor draft — is untouched.
-

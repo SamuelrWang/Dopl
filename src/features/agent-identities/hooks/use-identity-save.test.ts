@@ -1,15 +1,6 @@
 // @vitest-environment jsdom
-/**
- * **THE ONE SAVE ORCHESTRATION BEHIND BOTH AUTHORING SURFACES** (P18, collapsed 2026-09-17).
- *
- * ⚠ **PINNED HERE AND NOT ON EITHER HOST**, because what this file is about is the half both
- * hosts now share. What each host ADDS is still pinned where it is decided —
- * `pages/home/identity-authoring.test.tsx` owns `homeScoped` and G16's `acknowledgeShared`.
- *
- * MUTATION-VERIFY: spread `extras.patch` INTO the body before `isEmptyPatch` and the
- * no-op-with-an-acknowledgement case sends a PATCH; call `onDone` outside the `try` and the
- * failure case closes the dialog.
- */
+// The save orchestration both authoring surfaces share; what each host adds (`homeScoped`,
+// `acknowledgeShared`) is pinned in `apps/desktop-ui/src/pages/home/identity-authoring.test.tsx`.
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { act, renderHook } from "@testing-library/react";
@@ -28,8 +19,7 @@ vi.mock("./use-agent-identity-writes", () => ({
 
 import { useIdentitySave } from "./use-identity-save";
 
-// The hoisted mocks outlive a case; without a reset the "no PATCH" cases pass only
-// when they happen to run first (T2-03).
+// Hoisted mocks outlive a case; without a reset the "no PATCH" cases pass only when they run first.
 beforeEach(() => {
   for (const w of Object.values(writes)) w.mutateAsync.mockReset();
 });
@@ -87,11 +77,11 @@ describe("patching", () => {
       await result.current.save(draftFromIdentity(IDENTITY), IDENTITY);
     });
     expect(writes.update.mutateAsync).not.toHaveBeenCalled();
-    // ⚠ AND THE DIALOG STILL CLOSES: nothing failed.
+    // The dialog still closes: nothing failed.
     expect(onDone).toHaveBeenCalled();
   });
 
-  /** 🔒 F-404's CLASS, and the rule that lived in ONE of the two copies until P18. */
+  // F-404: the acknowledgement is spread in only after `isEmptyPatch`.
   it("an acknowledgement alone is NOT a change — still no PATCH", async () => {
     const { result } = mount({
       extras: () => ({ patch: { acknowledgeShared: true } }),
@@ -118,11 +108,7 @@ describe("patching", () => {
     expect(call.optimistic).toMatchObject({ id: "id-1", name: "Renamed" });
   });
 
-  /**
-   * 🔒 **THE EDITOR SAVES UNDER THE VERSION IT WAS OPENED ON** (F-747,
-   * 2026-09-18). Both authoring surfaces run through this one function, so this
-   * case is what makes the app's half of the precondition true on BOTH of them.
-   */
+  // F-747: both surfaces save under the version they opened on.
   it("carries the loaded row's `updatedAt` as the write's precondition", async () => {
     const { result } = mount();
     await act(async () => {
@@ -138,8 +124,7 @@ describe("patching", () => {
 
 describe("when the write fails", () => {
   it("falls back to the host's OWN noun and leaves the dialog open", async () => {
-    // ⚠ A WORDLESS REJECTION is what reaches the fallback — `agentIdentityErrorMessage`
-    // prefers the server's own sentence whenever there is one.
+    // Wordless, because `agentIdentityErrorMessage` prefers the server's sentence when there is one.
     writes.create.mutateAsync.mockRejectedValueOnce({});
     const { result, onDone } = mount({ noun: "agent" });
     await act(async () => {
@@ -149,12 +134,8 @@ describe("when the write fails", () => {
     expect(onDone).not.toHaveBeenCalled();
   });
 
-  /**
-   * ⚠ **THE 412 GETS THE EDITOR'S OWN SENTENCE**, not the server's — that one
-   * ("Stale write rejected — row was modified at …") is written for an agent
-   * reconciling two bodies. ⚠ AND THE DIALOG STAYS OPEN, because the operator's
-   * typing is the only copy of it left once the optimistic patch rolled back.
-   */
+  // The server's 412 sentence is written for an agent; the dialog stays open because the typing is
+  // the only copy left once the optimistic patch rolls back.
   it("says the row changed elsewhere on a conflict, in the host's own noun", async () => {
     writes.update.mutateAsync.mockRejectedValueOnce(
       new AgentIdentityApiError(412, "AGENT_IDENTITY_STALE_VERSION", "Stale write rejected — row was modified at X.")

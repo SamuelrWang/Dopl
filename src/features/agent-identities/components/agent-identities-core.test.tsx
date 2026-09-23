@@ -1,21 +1,6 @@
 // @vitest-environment jsdom
-/**
- * THE AGENTS PAGE — the three scope panels, and what a card is allowed to say.
- *
- * These are the properties that go quiet rather than loud when they break:
- *
- *  - **"PUBLIC" IS A LABEL OVER `workspace`.** Two vocabularies for one field,
- *    and the wire's word must never reach an operator (`../lib/visibility.ts`).
- *  - **AN EMPTY PANEL KEEPS ITS HEADER.** A section that vanished would make
- *    "you have no team identities" and "this workspace has no teams" the same
- *    picture.
- *  - **AN UNSET MODEL RENDERS NO CHIP, not "Default"** — a card states what a
- *    identity CARRIES (INVARIANTS §5, and `agent-models.ts ›
- *    agentModelShortLabel`, which returns `null` for exactly this).
- *
- * Every data hook is mocked: the assertions are about the grouping this page
- * computes, not about the transport underneath it (the channels core's rule).
- */
+// The identities page's scope panels and cards. Data hooks are mocked: the grouping is under test,
+// not the transport. An unset model renders no chip (`agent-models.ts › agentModelShortLabel` → null).
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
@@ -97,8 +82,7 @@ describe("the three panels", () => {
   });
 
   it("drops a row whose scope this build does not know, rather than guessing", () => {
-    // A newer server may mint a fourth scope. Filing it under "Private" would be
-    // this page claiming something it does not know.
+    // A newer server may mint a fourth scope; filing it under "Private" would be a guess.
     renderPage([
       identity({ id: "t-9", name: "From the future", visibility: "org" as never }),
     ]);
@@ -129,7 +113,7 @@ describe("the create affordance", () => {
     expect(screen.getAllByRole("button", { name: "Agent Identity" })).toHaveLength(1);
   });
 
-  // ⚠ `await`ed: `ModalShell` mounts a FRAME after `open` flips (it animates in).
+  // Awaited: `ModalShell` mounts its frame a render after `open` flips.
   it("opens the editor in CREATE mode — no identity preloaded", async () => {
     renderPage([identity()]);
     fireEvent.click(screen.getByRole("button", { name: "Agent Identity" }));

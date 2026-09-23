@@ -1,20 +1,18 @@
 // @vitest-environment jsdom
-/**
- * The identity editor's Runtime and Model rows (rulings 4–6; F11, P7-12, X-03):
- * the Model row offers the IDENTITY's runtime's live models and nobody else's.
- * Before, it offered the registry default's (Claude's) catalog whatever the
- * operator meant, and a plain browser fell back to Claude's frozen four.
- */
+// The Model row offers the identity runtime's live models and nobody else's — never the
+// default runtime's catalog, and no frozen Claude list without a desktop.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, screen } from "@testing-library/react";
 import { draftToCreateBody, draftToPatchBody } from "../lib/identity-draft";
 import { field, identity, open, pick, press, row, tabLabels } from "./identity-editor-harness";
 
+// The form renders the knowledge tree; the factory imports the fake because `vi.mock` is hoisted.
 vi.mock("@/features/knowledge/client/hooks", async () => ({
   useKnowledgeTree: (await import("./knowledge-tree-mock")).useKnowledgeTree,
 }));
 
+// `present: false` = a plain browser: the stub answers with no runtimes and no catalogs.
 const desktop = vi.hoisted(() => ({ present: true }));
 vi.mock("@/features/channels/hooks/use-launch-selection", async () => {
   const { catalog, launchSelectionStub } = await import(

@@ -1,15 +1,6 @@
 // @vitest-environment jsdom
-/**
- * ⚠ **ITS OWN FILE SINCE 2026-09-08, AND THE REASON IS §1's 500-LINE CAP.**
- * `identity-editor.test.tsx` crossed it when the knowledge picker's tree mock
- * landed beside these cases (`eslint.config.mjs › max-lines`, `error`, no
- * exemption for this path). It is the same seam that file has already been cut
- * on twice — the SOURCE-READ half went to `identity-editor-surface.test.tsx` and
- * the attachment half to `identity-editor-knowledge.test.tsx`. What is here is
- * the PAYLOAD, whole; the fixture and the `open()` helper are local and
- * deliberately minimal, because a suite importing another's harness couples two
- * files that were split to be independent.
- */
+// The whole save payload with a desktop present; `identity-editor.test.tsx` runs the editor with
+// no bridge.
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, screen } from "@testing-library/react";
@@ -24,14 +15,12 @@ import {
   press,
 } from "./identity-editor-harness";
 
-/** ⚠ THE PICKER READS A TREE PER BASE. Shape in `./knowledge-tree-mock`; the
- *  factory imports it because `vi.mock` is hoisted above every binding. */
+// The form renders the knowledge tree; the factory imports the fake because `vi.mock` is hoisted.
 vi.mock("@/features/knowledge/client/hooks", async () => ({
   useKnowledgeTree: (await import("./knowledge-tree-mock")).useKnowledgeTree,
 }));
 
-/** The desktop's registered runtimes and Claude's live roster — the Model row
- *  offers the IDENTITY'S runtime's models, so a runtime is picked first. */
+// Real runtime descriptors plus Claude's live catalog: the Model row lists the identity runtime's models.
 vi.mock("@/features/channels/hooks/use-launch-selection", async () => {
   const { catalog, launchSelectionStub } = await import(
     "@/features/channels/hooks/launch-selection-harness"
@@ -58,16 +47,8 @@ vi.mock("@/features/channels/hooks/use-launch-selection", async () => {
 
 afterEach(cleanup);
 
-/**
- * 🔒 **THE PAYLOAD IS THE PRE-KIT EDITOR'S, FIELD FOR FIELD** (2026-09-08, the
- * popup-form conversion). Written and green BEFORE the markup moved onto
- * `shared/ui/form-dialog.tsx`, so the literals below are a snapshot of what the
- * `StandardDialog`/`RAISED_INPUT` editor sent — not a restatement of what the
- * new one happens to send. The two helpers above ({@link pickModel},
- * {@link pickScope}) are the ONLY things the conversion was allowed to touch:
- * a face change that reaches `draftToCreateBody` / `draftToPatchBody` fails
- * here, which is the whole point of pinning it first.
- */
+// The literals are a fixed snapshot of the wire body: a face change that reaches
+// `draftToCreateBody` / `draftToPatchBody` fails here.
 describe("the payload survives the face", () => {
   it("CREATE — every control the editor has, in ONE body", async () => {
     const { draft } = await open();
@@ -82,8 +63,6 @@ describe("the payload survives the face", () => {
     pick("Model", "Opus 5");
     pick("Visibility", "Public");
     addField("repo", "dopl");
-    // ⚠ NO ADD BUTTON TO PRESS SINCE 2026-09-22 — the tree is in the form, so
-    // the base is checked where it is listed (Samuel).
     fireEvent.click(screen.getByRole("treeitem", { name: "Specs" }));
     press(CREATE_VERB);
 

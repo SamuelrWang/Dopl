@@ -1,4 +1,5 @@
-/** Identity fixtures and the editor mount for the agent-identities suites. Not a `*.test.tsx` name, so vitest imports it and never collects it. */
+// Identity fixtures and the editor mount for the agent-identities suites. Deliberately not a
+// `*.test.tsx` name: vitest imports it and never collects it.
 
 import type { ComponentProps } from "react";
 import { vi } from "vitest";
@@ -91,7 +92,7 @@ export const tabLabels = (rowName: string) =>
     .getAllByRole("tab")
     .map((t) => t.textContent);
 
-/** Fill the first empty field row; "New field" is pressed only when none is empty (a new identity opens on one). */
+/** Fill the first empty field row, pressing "New field" only when none is (a new identity opens on one). */
 export function addField(key: string, value: string) {
   const keys = () =>
     Array.from(document.querySelectorAll<HTMLInputElement>('input[aria-label$=" key"]'));
