@@ -43,6 +43,7 @@ export function loadCodexModels(client) {
   return evalModule(join(MAIN, "runtime", "codex", "models.js"), (id) => {
     if (id === "./client") return client;
     if (id === "./config-home") return { isolatedEnv: (env) => env };
+    if (id === "../../app-version") return { appVersion: () => "" };
     throw new Error(`unexpected require: ${id}`);
   });
 }
@@ -91,6 +92,7 @@ export function fakeClient(pages, opts = {}) {
       let page = 0;
       return {
         close: () => {},
+        notify: (method) => asked.push([method]),
         request: async (method, params) => {
           asked.push([method, params]);
           if (method === "initialize") {

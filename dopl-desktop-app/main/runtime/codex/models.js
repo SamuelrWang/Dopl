@@ -205,7 +205,7 @@ async function fetchRoster(gate) {
     try {
       conn = client.connect({ args: [], env: configHome.isolatedEnv(process.env) });
       conn.request('initialize', client.initializeParams(appVersion()))
-        .then(() => listPages(conn))
+        .then(() => { conn.notify('initialized'); return listPages(conn); })
         .then(({ rows, truncated }) => {
           clearTimeout(timer);
           finish(rosterFrom(key, rows, truncated));
@@ -260,9 +260,7 @@ function rosterFrom(key, rows, truncated) {
   };
 }
 
-function appVersion() {
-  try { return require('electron').app.getVersion(); } catch (_) { return '0.0.0'; }
-}
+const appVersion = () => require('../../app-version').appVersion();
 
 /**
  * The offerable roster. ⚠ Unknown ids still render raw and round-trip — only the PICKS are closed.
