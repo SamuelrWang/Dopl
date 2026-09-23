@@ -8,6 +8,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.registerMapTool = registerMapTool;
 const workspace_directory_js_1 = require("../workspace-directory.js");
+const identity_1 = require("./identity");
 const narration_1 = require("./narration");
 const ontology_clipped_1 = require("./ontology-clipped");
 const ontology_render_1 = require("./ontology-render");
@@ -69,8 +70,8 @@ const DOMAIN_COUNT = 3;
 const SCOPE_NOTE = `Scope: ACTIVE items visible to you. Draft skills and team-scoped items you have no grant on are not listed, so these counts are not workspace totals; a domain that could not be read is named with reason=partial_read opening this line, so with no such notice every section above was read. Authoritative inventory across every status and visibility: dopl_members(op="access_matrix").`;
 /**
  * The one destination this manifest cannot list, named anyway. `dopl_channel`
- * is DEFERRED in some clients, so its description is invisible until ToolSearch
- * loads it and the NAME is the only pre-discovery signal — a name does not say
+ * is DEFERRED in some clients, so its description is invisible until the
+ * client's tool search loads it and the NAME is the only pre-discovery signal — a name does not say
  * "this is how you reach a person".
  *
  * ⚠ STATIC, deliberately NOT a count: channels are a different service
@@ -83,7 +84,7 @@ const SCOPE_NOTE = `Scope: ACTIVE items visible to you. Draft skills and team-sc
  * queries must not inherit it. Routes and nothing more; cost and permissions
  * are `dopl_channel`'s to state.
  */
-const CHANNELS_ROUTING = `**Reaching a member or their agent: dopl_channel.** Channels are this workspace's live member-to-member and agent-to-agent messaging, and this manifest does not query them, so nothing above is a count of them. If dopl_channel is not in your tool list, load it with ToolSearch, then call dopl_channel(op="rooms", action="list") for the channels and DMs this account can post into.`;
+const channelsRouting = (vendor) => `**Reaching a member or their agent: dopl_channel.** Channels are this workspace's live member-to-member and agent-to-agent messaging, and this manifest does not query them, so nothing above is a count of them. If dopl_channel is not in your tool list, load it with ${(0, identity_1.toolLoaderFor)(vendor)}, then call dopl_channel(op="rooms", action="list") for the channels and DMs this account can post into.`;
 /**
  * 🔒 **THE CONTAINER NODES — "Home space" IS ITS OWN TOP-LEVEL NODE** (R-32,
  * Samuel 2026-09-17: *home must be structurally distinct, never just a prompt
@@ -133,7 +134,7 @@ function containerNodes(list) {
 }
 function registerMapTool(register, client, 
 /** 🔒 The boot directory, for the three container nodes above. */
-directory) {
+directory, caller = identity_1.UNKNOWN_CALLER) {
     register("dopl_map", MAP_DESCRIPTION, {}, async () => {
         // ⚠ Fail-soft — one broken domain must not fail the manifest — but record
         // the failure, never swallow it. Labels must match the section headings
@@ -207,7 +208,7 @@ directory) {
         // One footer line, not two — the partial-read notice PREFIXES the scope
         // note. On the healthy path `notice()` is "" and this is the note alone.
         lines.push("", `_${reads.notice(DOMAIN_COUNT, "domains")}${SCOPE_NOTE}_`);
-        lines.push("", CHANNELS_ROUTING);
+        lines.push("", channelsRouting(caller.vendor));
         return (0, respond_1.ok)(lines.join("\n"));
     });
 }

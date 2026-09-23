@@ -34,7 +34,7 @@ exports.dispatchArtifactAction = dispatchArtifactAction;
 const narration_1 = require("./narration");
 const respond_1 = require("./respond");
 const channel_shared_1 = require("./channel-shared");
-const channel_schema_1 = require("./channel-schema");
+const channel_vocab_1 = require("./channel-vocab");
 /**
  * True for an action this module answers. ⚠ **THE THIRD VOCABULARY**, and the
  * pairing is checked in `channel.ts` for the same reason the other two are:
@@ -43,7 +43,7 @@ const channel_schema_1 = require("./channel-schema");
  * be refused before it reaches a switch with no arm for it.
  */
 function isArtifactAction(action) {
-    return channel_schema_1.CHANNEL_ACTIONS.artifact.includes(action);
+    return channel_vocab_1.CHANNEL_ACTIONS.artifact.includes(action);
 }
 /**
  * ⚠ **ONE `messages` PARAM FOR ALL THREE ACTIONS THAT NAME MESSAGES**, and the

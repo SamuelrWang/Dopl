@@ -46,17 +46,8 @@ const channel_agent_id_1 = require("./channel-agent-id");
 // answers an empty list rather than filing anything — there is nothing there to refuse.
 const channel_agent_target_1 = require("./channel-agent-target");
 const narration_1 = require("./narration");
-/** Default and cap for the bounded hold. ⚠ Mirrors `channel-schema.ts › wait_ms`;
- *  the schema is what an MCP client sees, this is what runs. */
-const WAIT_DEFAULT_MS = 15_000;
-const WAIT_CAP_MS = 30_000;
-/**
- * ⚠ COARSE, AND DELIBERATELY SO. What is being waited on is a TURN on another
- * machine; polling faster buys nothing and multiplies requests across every armed
- * direction in the workspace. Same tick the launch hold and the await hold use.
- */
-const POLL_INTERVAL_MS = 1_500;
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+// The mailbox ops' one bounded hold (P8-08) — the launch and agent-management ops spend it too.
+const channel_directive_hold_1 = require("./channel-directive-hold");
 /**
  * THE REFUSAL CONTRACT, AS SENTENCES AN AGENT CAN ACT ON.
  *
@@ -151,23 +142,7 @@ async function opDirectAgent(client, ref, agentId, body, opts = {}) {
     // no key sees a byte-identical result, and spread LAST so `existing` wins any
     // `retry` verdict already printed.
     const converged = created.existing ? { retry: "existing" } : {};
-    const waitMs = Math.min(opts.waitMs ?? WAIT_DEFAULT_MS, WAIT_CAP_MS);
-    const deadline = Date.now() + waitMs;
-    // ⚠ POLLS THE ROW, never an `await`: a direction is not a message, has no `seq`,
-    // and can never end a message hold.
-    while ((direction.status === "pending" || direction.status === "claimed") &&
-        Date.now() < deadline) {
-        await sleep(Math.min(POLL_INTERVAL_MS, Math.max(0, deadline - Date.now())));
-        try {
-            direction = await client.getAgentDirection(direction.id);
-        }
-        catch {
-            // ⚠ A FAILED POLL DOES NOT DESTROY THE HOLD OR THE DIRECTION. The row is
-            // filed and the machine may still deliver, so the honest ending is the
-            // PENDING one — which tells the agent where to look.
-            break;
-        }
-    }
+    direction = await (0, channel_directive_hold_1.holdRow)(direction, (id) => client.getAgentDirection(id), opts.waitMs);
     if (direction.status === "delivered") {
         // ── THE RESULT: A FACT LINE, PLUS THE REPLY IF THERE IS ONE ──────────────
         //

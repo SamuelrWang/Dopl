@@ -18,11 +18,13 @@
  * itself, under framing that says what it is).
  */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.NO_PATH = exports.NO_NAME = exports.INLINE_TEXT_MAX = void 0;
+exports.NO_PATH = exports.NO_NAME = exports.INLINE_TEXT_MAX = exports.UUID_RE = void 0;
 exports.neutralizeInline = neutralizeInline;
 exports.flattenFenced = flattenFenced;
 exports.inlineOr = inlineOr;
 exports.isForeignAuthored = isForeignAuthored;
+/** Shape only: a uuid names a row to look up, never a proven one (one copy for every tool, P8-22). */
+exports.UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 /** Longest untrusted value carried inline into a result — one terse span, no dump. */
 exports.INLINE_TEXT_MAX = 160;
 /**

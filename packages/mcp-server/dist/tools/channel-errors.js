@@ -21,6 +21,7 @@ exports.classifyBadRequest = classifyBadRequest;
 exports.classifyForbidden = classifyForbidden;
 exports.serverDetail = serverDetail;
 const channel_shared_1 = require("./channel-shared");
+const respond_1 = require("./respond");
 /** Duck-typed HTTP 400 from the Dopl API (across the @dopl/client boundary). */
 function isBadRequest(e) {
     return (typeof e === "object" && e !== null && e.status === 400);
@@ -29,15 +30,8 @@ function isBadRequest(e) {
 function isForbidden(e) {
     return (typeof e === "object" && e !== null && e.status === 403);
 }
-/** The `code` a DoplApiError carries, or null when the body had none. */
-function apiErrorCode(e) {
-    if (typeof e !== "object" || e === null)
-        return null;
-    const code = e.code;
-    return typeof code === "string" && code.length > 0 ? code : null;
-}
 function classifyBadRequest(e) {
-    switch (apiErrorCode(e)) {
+    switch ((0, respond_1.apiErrorCode)(e)) {
         case "CHANNEL_ADDRESSEE_NOT_MEMBER":
             return "addressee_not_member";
         // ⚠ **THE UNION RESOLVER'S OWN REFUSAL** (2026-09-02, B4/B8). `to` names one
@@ -64,7 +58,7 @@ function classifyBadRequest(e) {
     }
 }
 function classifyForbidden(e) {
-    switch (apiErrorCode(e)) {
+    switch ((0, respond_1.apiErrorCode)(e)) {
         case "CHANNEL_FORBIDDEN":
             return "not_a_member";
         case "TASK_FORBIDDEN":
@@ -85,10 +79,23 @@ function serverDetail(e) {
     if (typeof e !== "object" || e === null)
         return "";
     const raw = e.apiMessage;
-    if (typeof raw !== "string" || raw.trim() === "")
+    const message = typeof raw === "string" ? raw.trim() : "";
+    // P8-04: a VALIDATION_FAILED names no field; its first zod issue does (`field: why`).
+    const issue = firstIssue(e.details);
+    const text = [message, issue && `(${issue})`].filter(Boolean).join(" ");
+    if (!text)
         return "";
-    const safe = (0, channel_shared_1.neutralizeInline)(raw);
+    const safe = (0, channel_shared_1.neutralizeInline)(text);
     return safe ? ` The server said: ${safe}.` : "";
+}
+/** The first zod issue in a 400's `details`, as `path: message`, or "". */
+function firstIssue(details) {
+    if (!Array.isArray(details) || details.length === 0)
+        return "";
+    const issue = details[0];
+    const path = Array.isArray(issue?.path) ? issue.path.map(String).join(".") : "";
+    const message = typeof issue?.message === "string" ? issue.message : "";
+    return [path, message].filter(Boolean).join(": ");
 }
 /**
  * Route-enforced caps, quoted in invalid-request messages so an agent has a

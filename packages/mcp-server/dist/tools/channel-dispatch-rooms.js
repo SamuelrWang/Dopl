@@ -24,7 +24,7 @@ exports.isRoomsAction = isRoomsAction;
 exports.dispatchRoomsAction = dispatchRoomsAction;
 const respond_1 = require("./respond");
 const channel_doctrine_1 = require("./channel-doctrine");
-const channel_schema_1 = require("./channel-schema");
+const channel_vocab_1 = require("./channel-vocab");
 const channel_ops_read_1 = require("./channel-ops-read");
 const channel_ops_open_1 = require("./channel-ops-open");
 const channel_ops_threads_1 = require("./channel-ops-threads");
@@ -36,7 +36,7 @@ const channel_ops_update_1 = require("./channel-ops-update");
  * `open`. The two lists are disjoint, so membership settles the pair.
  */
 function isRoomsAction(action) {
-    return channel_schema_1.CHANNEL_ACTIONS.rooms.includes(action);
+    return channel_vocab_1.CHANNEL_ACTIONS.rooms.includes(action);
 }
 async function dispatchRoomsAction(action, args, client, selfUserId, isAdmin) {
     switch (action) {

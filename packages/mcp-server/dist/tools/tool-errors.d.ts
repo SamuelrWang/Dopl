@@ -1,219 +1,50 @@
 /**
- * NAMED ERROR → NAMED REMEDY — ⚠ **the codes an agent matches on, in ONE
- * table** (A14, 2026-09-02).
- *
- * ⚠ THE MECHANISM IS STRING EQUALITY, AND EVERYTHING ELSE HERE SERVES IT.
- * Slack's whole reliability trick is one clause — *"If 'channel_not_found', try
- * slack_search_channels first"* — and it works only because the literal that
- * comes back on the wire is the literal the description taught. So a code is
- * declared ONCE, here; {@link renderErrors} puts it in the description and
- * {@link refusal} puts it on the wire, so the two are the same characters by
- * construction. A paraphrase on either side is a silent break — the agent reads
- * a remedy it can never match.
- *
- * ⚠ WHY OUR OWN LITERALS RATHER THAN THE API's, EXCEPT WHERE THEY ARE THE
- * API's. Most refusals on this surface are raised by THIS layer — a missing
- * param, a read-only scope, an unresolvable base — and never touch the API at
- * all, so there is no upstream code to quote. Where a refusal IS an API code
- * classified by `channel-errors.ts`, the row names that code verbatim
- * (`CHANNEL_FORBIDDEN`, not `not_a_member`), because the agent may also see it
- * echoed in a server detail line and the two must not look like two errors.
- *
- * ⚠ THREE PER TOOL IN THE DESCRIPTION, AND THAT IS A CEILING ON WHAT GETS
- * PUSHED, not on what this table may hold. `renderErrors` takes the first
- * three; order the array by how often the failure actually happens, because
- * position here is what decides which remedy an agent is told about.
+ * Named error → named remedy: the `reason=` codes an agent matches on, declared once. Every
+ * advertised `reason=` must be one a refusal actually renders (string equality with the
+ * description's Errors line, `tool-style.test.ts`); a code taught but never emitted is the defect
+ * these tables prevent.
  */
-/**
- * ONE NAMED ERROR, AND THE THREE THINGS AN AGENT NEEDS ABOUT IT.
- *
- * ⚠ `reason` IS THE SERVER'S OWN LITERAL CODE AND IS NEVER PARAPHRASED. That
- * is the whole mechanism: the agent string-matches what came back on the wire
- * against what the description told it, so the two must be the same characters.
- * ⚠ `tool-style.test.ts › its Errors block quotes only literals from
- * tool-errors.ts` checks ONE direction — a description may teach only a code
- * this table declares. The other direction is held by CONSTRUCTION rather than
- * by a test: every refusal renders through {@link refusal}, so a renamed
- * `reason` moves the wire and the description together. Hand-writing a
- * `reason=` string anywhere else is the one way to break that.
- */
+/** One named error. Render it only through {@link refusal}; never hand-write a `reason=` string. */
 export interface ToolError {
-    /** The literal `reason=` code, exactly as a refusal renders it. */
+    /** The literal wire code, never paraphrased. */
     reason: string;
-    /** One line: what it means. Not what to do — that is `retry`. */
+    /** What it means (not what to do), without terminal punctuation. */
     meaning: string;
-    /**
-     * `"no"` when re-issuing the same call cannot help, else the op that produces
-     * the missing input. ⚠ Slack's `channel_not_found` line is the model: naming
-     * the remedy is what turns a dead end into one more call.
-     */
+    /** `"no"` when re-issuing cannot help, else the op that produces the missing input. */
     retry: string;
 }
-/**
- * THE REFUSAL LINE ITSELF — ⚠ the one renderer, so a refusal on the wire and
- * the description that predicts it are produced by the same code.
- *
- * ⚠ `reason=` FIRST, because it is the half a model can match on; the sentence
- * after it is for a human reading a transcript. `retry=` last and always
- * present: "do not retry with the same input" is a fact an agent otherwise has
- * to infer, and it infers it wrong under pressure.
- */
+/** The one refusal renderer, so the wire and the description that predicts it cannot drift. */
 export declare function refusal(error: ToolError, detail?: string): string;
-/**
- * ⚠ THE CROSS-CUTTING FOUR — raised by the gates and the registrar, so they can
- * arrive from ANY tool and are declared apart from any one tool's table. They
- * are deliberately NOT pushed into all thirteen descriptions: a rule that
- * applies everywhere belongs in the `instructions` briefing, which states the
- * deletion rule and the `workspace=` contract once, and a tool names one of
- * these only when it is among its own top three.
- */
 export declare const MISSING_PARAMS: ToolError;
 export declare const READ_ONLY_SESSION: ToolError;
 export declare const DELETE_IS_APP_ONLY: ToolError;
-/**
- * 🔒 **THE SAME `ambiguous_slug` LITERAL `KB_ERRORS` DECLARES, ONE TABLE OVER**
- * (F-719) — a `container=` slug naming two rows the caller can SEE is refused
- * rather than picked, exactly as a base slug is. Declaring it HERE rather than
- * inventing `ambiguous_container` is what lets an agent match the same characters.
- *
- * ⚠ **CROSS-CUTTING, SO IT IS PUSHED INTO NO DESCRIPTION** — raised by the
- * registrar's address resolver for every tool that takes an address, like the four
- * above it; the remedy is in the refusal, which names every candidate's id.
- */
 export declare const AMBIGUOUS_CONTAINER: ToolError;
 export declare const CREDITS_EXHAUSTED: ToolError;
-/**
- * ⚠ THE OPTIMISTIC-CONCURRENCY REFUSAL, PARAMETERIZED BY ITS REMEDY. The code
- * is one fact — somebody else wrote after your read — but the op that produces
- * a fresh `expected_version` differs per tool, and a remedy naming the wrong op
- * is worse than none: it sends the agent to a call that cannot help and it will
- * make it twice.
- */
+/** HTTP 412; `retry` is the op that yields a fresh `expected_version`, which differs per tool. */
 export declare function versionConflict(readOp: string): ToolError;
 /**
- * ⚠ **A FIELD OVER ITS CAP, AND THE TWO NUMBERS AN AGENT NEEDS ARE IN THE
- * `meaning` RATHER THAN IN THE DETAIL** (B3, 2026-09-18). The refusal these
- * produce reads `reason=field_too_long · field=excerpt limit=300 …`, so WHICH
- * field and WHAT bound are on the same line as the code a model matches on.
- *
- * ⚠ **A FACTORY, BECAUSE A SHARED ROW WOULD HAVE TO DROP THE NUMBERS.** One
- * static `field_too_long` would say "a field is over its cap" — which is what
- * `VALIDATION_FAILED` already said, and the whole defect S52 records is a
- * refusal that named the field and then printed the rule for a DIFFERENT one.
- * ⚠ **EMIT-ONLY: it is deliberately in no per-tool table.** `renderErrors`
- * pushes three rows per tool and `dopl_kb` has ~112 characters of headroom
- * before `HARD_DESCRIPTION_CEILING` throws at import; a fourth row there would
- * silently drop `ambiguous_slug`, which is the one KB failure an agent cannot
- * diagnose from the answer it gets instead.
+ * Emit-only (`dopl_kb` has no description headroom for a fourth row). Field and bound sit in
+ * `meaning`, on the line an agent matches.
  */
 export declare function fieldTooLong(field: string, limit: number): ToolError;
-/**
- * ⚠ **A FIELD THAT BREAKS ITS OWN RULE RATHER THAN ITS LENGTH** — the sibling of
- * {@link fieldTooLong}, and emit-only for the same headroom reason. The RULE
- * itself goes in the detail, because it differs per field and a shared `meaning`
- * that tried to cover all of them is how a refusal ends up printing a title rule
- * over an excerpt failure (S52).
- */
+/** Emit-only sibling of {@link fieldTooLong}; the rule differs per field, so it is in the detail. */
 export declare const KB_INVALID_FIELD: ToolError;
 /**
- * 🔒 **THE ENTRY 404, AND IT IS EMIT-ONLY FOR THE REASON DIRECTLY BELOW** (S41,
- * 2026-09-18). `src/features/knowledge/server/errors.ts › EntryNotFoundError`
- * becomes a 404 `KNOWLEDGE_ENTRY_NOT_FOUND`; until this wave NO MCP module
- * mapped it, so it rethrew past the registrar as an unhandled transport error
- * over a read that had simply missed.
- *
- * ⚠ **"MAY HAVE MOVED" IS THE LOAD-BEARING HALF, NOT A HEDGE.** A path is a
- * position, not an identity: `move_file` and a retitle both vacate one, and an
- * agent told only "not found" re-writes at the old path — which `write_file`
- * upserts into a SECOND entry. The remedy therefore names the op that lists,
- * and the detail names the entry id as the handle that survives a move.
+ * Emit-only; maps 404 `KNOWLEDGE_ENTRY_NOT_FOUND`. "May have moved" is load-bearing: `write_file`
+ * upserts, so re-writing at a vacated path creates a second entry.
  */
 export declare const KB_ENTRY_NOT_FOUND: ToolError;
-/**
- * 🔒 **THE UPSERT'S OWN HAZARD, NAMED (S40, 2026-09-18).** The entry this write
- * meant to overwrite is no longer at that path — and because `write_file` is an
- * UPSERT, the obvious "recovery" (re-issue with `force=true`) writes a SECOND
- * entry at the vacated position rather than failing. So the remedy is the op
- * that says where it went, and the detail spells the duplicate out.
- * Emit-only, like its neighbours here.
- */
+/** Emit-only. `write_file` upserts, so `force=true` here would write a duplicate at that path. */
 export declare const KB_TARGET_VANISHED: ToolError;
-/**
- * ⚠ **AN MCP-REFUSED OP, ANSWERED AS A REFUSAL RATHER THAN AS A THROW** (S43).
- * `shared/auth/with-auth.ts`'s `sessionOnly` answers a 403 `SESSION_REQUIRED`
- * to every OAuth caller, and every MCP caller is one — so this is not a
- * permission an agent can be granted and `retry` says so. Emit-only for the
- * same headroom reason as {@link KB_ENTRY_NOT_FOUND}; making the OP LIST itself
- * honest about the refusal is a separate change (Q2, pending Samuel).
- */
+/** Emit-only. 403 `SESSION_REQUIRED` = an app-only route, not a grantable permission. */
 export declare const SESSION_REQUIRED: ToolError;
-/**
- * THE PER-TOOL TABLES. ⚠ Each is ordered by FREQUENCY, because
- * {@link renderErrors} pushes the first three and drops the rest — the order is
- * an editorial decision about which failure an agent is warned about, not a
- * list.
- */
-/**
- * ⚠ **THREE ROWS, AND `entry_not_found` IS STILL NOT ONE OF THEM — BUT THE
- * REASON IN THIS DOCBLOCK WAS WRONG AND IS CORRECTED (S41, 2026-09-18).** It
- * said *"no code path emits that literal — a missing PATH comes back through
- * the same resolver that answers `base_not_found`"*. That described the absence
- * of a MAPPER, not the absence of an error: the server has always raised
- * `EntryNotFoundError` → 404 `KNOWLEDGE_ENTRY_NOT_FOUND` for a path that
- * resolves to nothing, and with nothing mapping it the refusal reached the
- * agent as an unhandled throw. {@link KB_ENTRY_NOT_FOUND} maps it now, so the
- * literal IS emitted — it stays off this table because `renderErrors` pushes
- * exactly three and a fourth row would silently drop `ambiguous_slug`, which is
- * the one KB failure an agent cannot diagnose from the answer it gets instead.
- * ⚠ `MISSING_PARAMS` is not here either: it is raised by `respond.ts` for every
- * op on every tool, so pushing it into one description buys nothing an agent
- * could act on differently.
- *
- * ⚠ **`ambiguous_slug` IS THIRD AND LAST, WHICH PUTS IT EXACTLY ON THE CUT.**
- * `renderErrors` pushes three, so it is taught — and it must be, because it is
- * the one KB failure an agent CANNOT diagnose from the successful-looking
- * answer it used to get instead (`knowledge-shared.ts › resolveBaseRef`). A
- * fourth row added here silently drops it.
- */
 export declare const KB_ERRORS: readonly ToolError[];
 export declare const SKILL_ERRORS: readonly ToolError[];
-/**
- * ⚠ **`bad_session_date` IS FIRST BECAUSE IT REPLACED A SCHEMA REGEX** (A14,
- * item 10). The published `pattern` failed as an opaque `-32602` naming neither
- * the field nor the format; a named code plus the example that works is the
- * whole reason the validator moved into the handler.
- */
 export declare const BAD_SESSION_DATE: ToolError;
 export declare const CHATS_ERRORS: readonly ToolError[];
 export declare const MEMBERS_ERRORS: readonly ToolError[];
 export declare const ONTOLOGY_ERRORS: readonly ToolError[];
 export declare const AGENT_ERRORS: readonly ToolError[];
-/**
- * ⚠ THE THREE HERE ARE API CODES, VERBATIM. `channel-errors.ts` classifies them
- * off `DoplApiError.code` and the server also echoes its own message beside
- * them, so a paraphrase would put two spellings of one failure in front of the
- * agent in a single response.
- */
 export declare const CHANNEL_ERRORS: readonly ToolError[];
-export declare const HOME_ERRORS: readonly ToolError[];
 export declare const SEARCH_ERRORS: readonly ToolError[];
-/**
- * ⚠ **ONE ROW, AND `no_cursor` IS NOT THE SECOND.** It was drafted as one and
- * removed before it shipped: `since` omitted makes every unread count render
- * "no cursor" rather than 0, which is a RESULT the tool returns and not a
- * refusal any code path emits. Teaching it as `reason=no_cursor` would put a
- * literal in the description that never arrives on the wire — the exact break
- * this table exists to prevent, pointed the other way. The fact itself is where
- * it belongs: on `since`'s own `.describe()`.
- */
 export declare const STATUS_ERRORS: readonly ToolError[];
-/**
- * ⚠ **`WORKSPACE_REQUIRED` AND `WORKSPACE_ERRORS` ARE DELETED (2026-09-02,
- * batch-3 integration).** B10 removed the default workspace and B14 removed the
- * refusal with it: `workspaces/server/service.ts › WorkspaceResolutionError` is
- * ONE CODE now — `WORKSPACE_INVALID`, *"you named something that is not a
- * workspace id"* — and naming NOTHING stopped being a question. **No server path
- * emits `WORKSPACE_REQUIRED`**, so the constant taught a refusal that could not
- * arrive, which is the exact break the error tables exist to prevent, pointed
- * the other way. `WORKSPACE_ERRORS` had lost its last consumer with `dopl_home`.
- */

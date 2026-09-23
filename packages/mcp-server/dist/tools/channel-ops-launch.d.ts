@@ -1,82 +1,60 @@
 /**
- * `dopl_channel` op="manage" action="launch" — ASK THE OPERATOR'S OWN DESKTOP TO START AN
- * AGENT (Samuel's ruling, 2026-08-22: launch-over-MCP approved, with a LOCAL
- * DESKTOP TOGGLE as the consent).
- *
- * ⚠ `channel-` filename prefix required by the parity split-scan
- * (parity.test.ts) — a handler in an unprefixed file is invisible to the
- * declared-param drift guards.
- *
- * ── THE ONE THING EVERY LINE IN HERE HAS TO RESPECT ────────────────────────
- * **THIS OP ASKS. IT DOES NOT START ANYTHING.** Agents live in a desktop main
- * process no server can reach; what crosses the wire is a row in a mailbox that
- * the operator's machine polls, decides, and answers. Three consequences the
- * copy must carry rather than paper over:
- *   1. A REFUSAL IS A NORMAL OUTCOME, not an error — and one of the seven reasons
- *      (`no-bridge`) is the OPERATOR SAYING NO. It must never read as a fault or
- *      as something to retry.
- *   2. A TIMEOUT IS NOT A FAILURE. The directive stays pending and the machine
- *      may still take it. Re-issuing queues a SECOND agent, so the result says
- *      so in the strongest terms available.
- *   3. "launched" MEANS A MACHINE SAID SO. There is no third party to check it
- *      against, and the sentence does not pretend otherwise.
- *
- * ⚠ A DIRECTIVE IS NOT A MESSAGE (INVARIANTS §5) — no `seq`, so it can never end
- * an `await`. That is why this op holds on the ROW rather than telling the agent
- * to arm a wait.
+ * `dopl_channel` op="manage" action="launch" — asks the operator's own desktop to start an agent.
+ * This op asks, it starts nothing: a refusal is a normal answer, and a timeout is not a failure
+ * (re-issuing without the same `client_msg_id` queues a second agent).
+ * A directive is not a message (no `seq`, INVARIANTS §5), so the op holds on the row (`holdRow`).
+ * `channel-` filename prefix is required by the parity split-scan (`tool-group-files.ts`).
  */
 import type { AgentColorKey, DoplClient, LaunchMessageMode, LaunchToolMode } from "@dopl/client";
 import { type ToolResponse } from "./respond";
-/** The line a PENDING (or expired) directive ends on. ⚠ Says the id, because the
- *  id is the only handle the agent has left, and says NOT to re-issue. */
 /**
- * ASK FOR AN AGENT, then hold briefly for the answer.
- *
- * ⚠ FOUR TERMINAL SHAPES, and each one ends in a different next action:
- * OFFLINE (nothing filed), LAUNCHED (an id to address), REFUSED (one of seven
- * sentences), PENDING/EXPIRED (the id, and an instruction not to re-issue).
+ * Ask for an agent, then hold briefly for the answer.
+ * Terminal shapes: offline (nothing filed), launched, refused (reason + `retry=`), pending / expired.
  */
 export declare function opLaunchAgent(client: DoplClient, ref: string, opts?: {
     thread?: string;
     goal?: string;
     model?: string;
-    /**
-     * **WHICH RUNTIME — ASKED FOR, AND REFUSED RATHER THAN SUBSTITUTED** (2026-09-21, U9).
-     *
-     * ⚠ **A SEPARATE FIELD FROM `model` ABOVE, ALWAYS.** `runtime` picks the ADAPTER, `model`
-     * picks a model inside it; neither is ever derived from the other. A live launch carrying
-     * `model: "codex"` was accepted and started Claude Sonnet, which is the defect this closes.
-     * ⚠ PASSED THROUGH UNTOUCHED, like `identity` and `color`: the roster is the operator's own
-     * desktop registry and this process cannot see it. Omitted means the documented chain (the
-     * channel's runtime, then that machine's default) — never a particular vendor.
-     */
+    /** The runtime (adapter); a separate field from `model`, neither derived from the other. */
     runtime?: string;
-    /** Identity id OR exact name. ⚠ Passed through untouched — the id/name
-     *  disambiguation and the visibility check both happen server-side. */
+    /** Identity id or exact name; disambiguation and visibility are checked server-side. */
     identity?: string;
-    /** ⚠ **ASKED FOR, NEVER SET.** The operator's machine clamps each axis to
-     *  that operator's own stored ceiling; omitting both is the pre-T24
-     *  behaviour. Passed through untouched — this process cannot see the
-     *  ceiling and must not pretend to. */
+    /** Asked for, never set: the operator's machine clamps each axis to its own ceiling. */
     tools?: LaunchToolMode;
     messages?: LaunchMessageMode;
-    /** ⚠ REFUSED rather than clamped when the channel forbids it, which is why
-     *  it is a separate field and not a third axis. Omitted is NOT `false`. */
+    /** Refused (not clamped) when the channel forbids it; omitted is not `false`. */
     chain?: boolean;
-    /** ⚠ **THE IDEMPOTENCY KEY, AND IT IS WHAT MAKES A TIMED-OUT LAUNCH SAFE TO
-     *  RETRY** (2026-09-02, A10/G10). Passed through untouched: the server
-     *  probes it against `(channel, this operator)` and returns the stored
-     *  directive rather than filing a second one. */
+    /** Idempotency key: a repeat on `(channel, operator)` returns the stored directive. */
     clientMsgId?: string;
-    /** ⚠ **ASKED FOR, AND REFUSED RATHER THAN SUBSTITUTED WHEN TAKEN.** Passed through
-     *  untouched — the taken set spans every member's live agents and only the server
-     *  can see it. Omitted means "first free", never "no colour". */
+    /** Refused, never substituted, when taken; omitted means first free. */
     color?: AgentColorKey;
-    /** **WHAT TO CALL THE NEW AGENT — REQUIRED** (Samuel, 2026-09-15: *"if agents are spinning
-     *  up agents, they should be the ones that are naming the agent … certainly shouldn't be an
-     *  agent with the id as the name."*). ⚠ OPTIONAL IN THE TYPE AND REFUSED AT RUNTIME: the
-     *  argument arrives off an MCP wire as unvalidated JSON, so the type says what may ARRIVE and
-     *  the refusal below is what the caller is TOLD — and only that layer can say what to pass. */
+    /** Required; optional in the type because it arrives as unvalidated JSON and `launchName` refuses it. */
     name?: string;
     waitMs?: number;
 }): Promise<ToolResponse>;
+/** One `details.matches` row; each already passed the caller's `canSeeIdentity`, so listing it is not an oracle. */
+type IdentityMatch = {
+    id: string;
+    name: string;
+    visibility: string;
+};
+export declare function identityMatches(e: unknown): IdentityMatch[];
+/**
+ * Lists the matches and never picks: identity names are deliberately not unique (a unique index would
+ * leak private rows). `err`, because nothing was filed.
+ */
+export declare function launchIdentityAmbiguous(ref: string, matches: IdentityMatch[]): ToolResponse;
+/** `details.elsewhere`: an identity the caller holds in another of their own tenancies; duck-typed. */
+type IdentityElsewhere = {
+    name: string;
+    label: string;
+};
+export declare function identityElsewhere(e: unknown): IdentityElsewhere | null;
+/**
+ * The caller's own visibility failing at create time (`no-identity` is the operator's, after filing).
+ * Never says whether the identity exists (404-never-403). A NAME resolves only in the channel's
+ * container, while an ID resolves wherever it lives (`src/features/agent-identities/server/service-resolve-ref.ts ›
+ * resolveIdentityRef`); `details.elsewhere` is fenced by `classifyMissingIdentityRef` to identities the caller could already list.
+ */
+export declare function launchIdentityNotFound(ref: string, elsewhere: IdentityElsewhere | null): ToolResponse;
+export {};

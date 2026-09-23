@@ -16,6 +16,8 @@
  * label, error echo — spliced into a line we wrote) and a BODY (rendered as
  * itself, under framing that says what it is).
  */
+/** Shape only: a uuid names a row to look up, never a proven one (one copy for every tool, P8-22). */
+export declare const UUID_RE: RegExp;
 /** Longest untrusted value carried inline into a result — one terse span, no dump. */
 export declare const INLINE_TEXT_MAX = 160;
 /**

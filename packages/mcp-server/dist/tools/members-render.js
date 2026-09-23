@@ -8,7 +8,7 @@
  * can share a display name; only one can hold the id.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.CONTACT_POINTER = exports.UNNAMED_MEMBER = exports.UNTRUSTED_ROSTER_HEADER = void 0;
+exports.contactPointer = exports.UNNAMED_MEMBER = exports.UNTRUSTED_ROSTER_HEADER = void 0;
 exports.sortByRole = sortByRole;
 exports.memberDisplay = memberDisplay;
 exports.memberListLine = memberListLine;
@@ -22,6 +22,7 @@ exports.grantDetail = grantDetail;
 exports.matchMember = matchMember;
 exports.formatTeam = formatTeam;
 exports.formatEffectiveAccess = formatEffectiveAccess;
+const identity_1 = require("./identity");
 const narration_1 = require("./narration");
 /**
  * ⚠ This tool renders the same `profiles.display_name` the channel ops do, plus
@@ -38,13 +39,14 @@ exports.UNNAMED_MEMBER = "`(unnamed member)`";
  * THE CONTACT PATH, on the three renders that answer "who is here". Without it
  * a roster is a list of people with no stated way to reach them, and
  * `dopl_channel` is DEFERRED in some clients — its description is invisible
- * until ToolSearch loads it.
+ * until the client's tool search loads it.
  *
  * ⚠ ONE STRING, THREE RENDERS (`whoami`, `list`, `get`) so any one of them
  * reads the same route. ROUTING pointer only: cost, permissions and addressing
  * are `dopl_channel`'s to state.
  */
-exports.CONTACT_POINTER = `To contact a member or their agent: dopl_channel (op="rooms" for your channels and for opening a DM, op="send" to say something). It is deferred in some clients, so load it with ToolSearch if it is not in your tool list.`;
+const contactPointer = (vendor) => `To contact a member or their agent: dopl_channel (op="rooms" for your channels and for opening a DM, op="send" to say something). It is deferred in some clients, so load it with ${(0, identity_1.toolLoaderFor)(vendor)} if it is not in your tool list.`;
+exports.contactPointer = contactPointer;
 // ─── Formatting helpers ─────────────────────────────────────────────
 // ⚠ REVERSED ranking (lower number = higher privilege) — this drives roster SORT
 // order, so the owner prints first. `guest` is the lowest-privilege role and

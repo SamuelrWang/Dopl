@@ -45,7 +45,10 @@ export declare function threadsClippedNote(ref: string): string;
  * side — the body cannot tell them apart.
  */
 export declare function threadIdOf(m: ChannelMessage): string | undefined;
-/** True when this id names a real, shared `channel_tasks` thread. */
+/**
+ * True when this id names a real, shared `channel_tasks` thread. Must stay the uuid test the
+ * product gates on (`resolvePostMetadata › isUuid`, desktop `targeting.firstClassTaskId`).
+ */
 export declare function isFirstClassThreadId(id: string): boolean;
 /**
  * A SHORT, STABLE stand-in for an id — the half that distinguishes it.

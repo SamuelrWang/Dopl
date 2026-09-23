@@ -26,6 +26,7 @@ exports.sessionSlotRef = sessionSlotRef;
 exports.threadTagOf = threadTagOf;
 exports.threadLegend = threadLegend;
 const channel_shared_1 = require("./channel-shared");
+const narration_1 = require("./narration");
 /** Tell for an id that neutralized to nothing — empty backticks read as a glitch. */
 exports.UNREADABLE_ID = "(unreadable id)";
 /**
@@ -56,15 +57,6 @@ const THREAD_TAG_LEN = 8;
 /** Distinct exchanges named in a listing's legend before it truncates. */
 const THREAD_LEGEND_MAX = 6;
 /**
- * A FIRST-CLASS thread id — a `channel_tasks` uuid, the only shape naming a real
- * thread. ⚠ Must stay the same test the rest of the product gates on:
- * `resolvePostMetadata` validates and 403-gates ONLY inside `isUuid`, and the
- * desktop's `targeting.firstClassTaskId` lets nothing else select the thread
- * lane. Anything failing it has no row: no title, no recorded parties, and
- * nothing to join.
- */
-const UUID_RE = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
-/**
  * SYNTHETIC id a receiving desktop mints for an untagged request:
  * `task-<channel uuid>-<seq>`, deterministic from (channel, seq)
  * (`main/trigger.js › taskIdFor`, mirrored in `main/legacy-threads.js`). ⚠ Must
@@ -80,9 +72,12 @@ const SYNTHETIC_THREAD_RE = /^task-[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-
 function threadIdOf(m) {
     return (0, channel_shared_1.metaString)(m, "taskId");
 }
-/** True when this id names a real, shared `channel_tasks` thread. */
+/**
+ * True when this id names a real, shared `channel_tasks` thread. Must stay the uuid test the
+ * product gates on (`resolvePostMetadata › isUuid`, desktop `targeting.firstClassTaskId`).
+ */
 function isFirstClassThreadId(id) {
-    return UUID_RE.test(id);
+    return narration_1.UUID_RE.test(id);
 }
 /**
  * A SHORT, STABLE stand-in for an id — the half that distinguishes it.

@@ -69,14 +69,7 @@ function failureDetail(e) {
  * ⚠ Duck-typed to avoid importing the @dopl/client error class.
  */
 function agentWriteDenied(e) {
-    if (typeof e !== "object" ||
-        e === null ||
-        e.status !== 403 ||
-        e.code !== "SKILL_AGENT_WRITE_DISABLED") {
+    if (!(0, respond_1.isApiError)(e, 403, "SKILL_AGENT_WRITE_DISABLED"))
         return null;
-    }
-    const msg = e.apiMessage;
-    return (0, respond_1.err)(typeof msg === "string" && msg
-        ? msg
-        : "This skill is read-only to agents — delete it from the Dopl web UI.");
+    return (0, respond_1.err)((0, respond_1.apiMessage)(e) ?? "This skill is read-only to agents — delete it from the Dopl web UI.");
 }

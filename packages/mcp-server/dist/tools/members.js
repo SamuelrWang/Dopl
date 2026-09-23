@@ -86,7 +86,7 @@ caller = identity_1.UNKNOWN_CALLER) {
                 const miss = (0, respond_1.missingParams)("get", args, ["member"]);
                 if (miss)
                     return miss;
-                return opGet(client, args.member);
+                return opGet(client, caller, args.member);
             }
             case "teams":
                 return opTeams(client);
@@ -136,7 +136,7 @@ async function opWhoami(client, caller) {
     if (me.role === "owner" || me.role === "admin") {
         lines.push(`- As ${me.role} you have edit access to everything, and can inspect any member's effective access (op="get").`);
     }
-    lines.push(``, members_render_1.CONTACT_POINTER);
+    lines.push(``, (0, members_render_1.contactPointer)(caller.vendor));
     lines.push(``, identity_1.LOCUS_NOTE);
     return (0, respond_1.ok)(lines.join("\n"));
 }
@@ -166,10 +166,10 @@ async function opList(client, caller, fields) {
     // per-row status.
     lines.push(`\n_Every membership row, INCLUDING invited-but-not-joined and deactivated ones — the count above is rows, not active people. Read the status on each._`);
     lines.push(`\nUse dopl_members(op="get", member=...) for one member's teams + effective access.`);
-    lines.push(`\n${members_render_1.CONTACT_POINTER}`);
+    lines.push(`\n${(0, members_render_1.contactPointer)(caller.vendor)}`);
     return (0, respond_1.ok)(lines.join("\n"));
 }
-async function opGet(client, ref) {
+async function opGet(client, caller, ref) {
     const members = await client.listWorkspaceMembers();
     const match = (0, members_render_1.matchMember)(members, ref);
     if ("error" in match)
@@ -188,7 +188,7 @@ async function opGet(client, ref) {
     lines.push(`- Role: **${m.role}** — default access level: **${(0, members_render_1.defaultLevel)(m.role)}**`);
     lines.push(`- Status: ${(0, members_render_1.statusLabel)(m)}`);
     lines.push(`- Teams: ${(0, members_render_1.teamChips)(m.teams)}`);
-    // ⚠ CONTACT_POINTER deliberately NOT on this path: a DM and a channel invite
+    // ⚠ The contact pointer deliberately NOT on this path: a DM and a channel invite
     // both require an ACTIVE member, so offering it on an
     // invited-but-not-joined or deactivated row names a call the server refuses.
     if (m.status !== "active") {
@@ -210,7 +210,7 @@ async function opGet(client, ref) {
             throw e;
         }
     }
-    lines.push(``, members_render_1.CONTACT_POINTER);
+    lines.push(``, (0, members_render_1.contactPointer)(caller.vendor));
     return (0, respond_1.ok)(lines.join("\n"));
 }
 async function opTeams(client) {

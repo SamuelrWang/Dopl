@@ -1,8 +1,5 @@
 "use strict";
-/**
- * Workspace method group — link 2 of the chain documented in
- * `client-base.ts`. Pure delegation to `workspaces.ts`; no HTTP here.
- */
+/** Workspace method group (chain in `client-base.ts`); pure delegation. */
 var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
     if (k2 === undefined) k2 = k;
     var desc = Object.getOwnPropertyDescriptor(m, k);
@@ -52,12 +49,8 @@ class WorkspaceMethods extends client_base_js_1.DoplClientBase {
     async getActiveWorkspace() {
         return workspaces.getActiveWorkspace(this.transport);
     }
-    /**
-     * Lend one resource to one scope — the write that REPLACED the copy ops
-     * (Wave B ruling B11). ⚠ It lives on link 2 because a grant is cross-domain:
-     * `KnowledgeMethods` and `AgentIdentityMethods` both call it, and a method on
-     * either of those would be invisible to the other.
-     */
+    /** Lend one resource to one scope. On this early link because it is cross-domain (knowledge and
+     *  identities both call it). */
     async grantResource(input) {
         return grants.grantResource(this.transport, input);
     }

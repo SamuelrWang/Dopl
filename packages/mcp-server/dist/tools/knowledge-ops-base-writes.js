@@ -1,18 +1,8 @@
 "use strict";
 /**
- * `dopl_kb` BASE writes — create, update, publish, grant. ⚠ Split out of
- * `knowledge-ops-write.ts` on 2026-09-18 (A3), which was AT §1's 500-line hard
- * cap and could not take the two lines A3 adds.
- *
- * ⚠ **THE SEAM IS THE SUBJECT, NOT THE LINE COUNT.** A BASE is a container with
- * an audience: every op here answers to the publish gate, the destination fence
- * and the grant model, and every one of them returns a handle the NEXT call is
- * addressed by. The sibling file owns the TREE inside a base — folders and
- * entries, path-addressed, where the audience question is already settled.
- *
- * ⚠ Errors map exactly as they did: conflict (412), already-exists (409),
- * agent-write-denied (403) and validation (400) become actionable tool
- * messages; anything unmapped rethrows.
+ * `dopl_kb` base writes (create, update, publish); the tree inside a base is `knowledge-ops-write.ts`.
+ * Errors map to actionable messages — 403 agent-write-denied, 400 validation/unshared/unacknowledged here, 412/409 in
+ * the tree writes — and anything unmapped rethrows. Confirmations read back the STORED value and neutralize it.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.opCreateBase = opCreateBase;
@@ -21,70 +11,25 @@ exports.opSetVisibility = opSetVisibility;
 const narration_1 = require("./narration");
 const respond_1 = require("./respond");
 const knowledge_shared_1 = require("./knowledge-shared");
-// ⚠ THE `zod` → SENTENCE TRANSLATION LIVES APART (S52, 2026-09-18) — see
-// `knowledge-validation.ts`'s header for the seam and for the rule it enforces.
 const knowledge_validation_1 = require("./knowledge-validation");
 const channel_shared_1 = require("./channel-shared");
 const confirm_token_1 = require("./confirm-token");
 const container_destination_1 = require("./container-destination");
-/*
- * ⚠ Write confirmations read back the STORED value, not the argument (a
- * canonicalised base name), spliced into our own narration — and a name can
- * carry a backtick, since `NAME_RE` bans control and zero-width characters, NOT
- * markdown. A name is a VALUE. The fallbacks are `narration.ts › NO_NAME`.
- */
-/**
- * A 403 `AGENT_WRITE_DISABLED` off `create_base` — ⚠ duck-typed on the CODE, the
- * shape every mapper in this file follows, so no new error class crosses the
- * package boundary. Returns the server's own sentence, which is the one
- * place this refusal is worded.
- */
+/** Maps 403 `AGENT_WRITE_DISABLED` off `create_base` to the server's own sentence (duck-typed on the code). */
 function agentCreateForbidden(e) {
-    if (typeof e !== "object" || e === null)
+    if (!(0, respond_1.isApiError)(e, 403, "AGENT_WRITE_DISABLED"))
         return null;
-    if (e.status !== 403)
-        return null;
-    if (e.code !== "AGENT_WRITE_DISABLED")
-        return null;
-    const msg = e.apiMessage;
-    const detail = typeof msg === "string" && msg
-        ? msg
-        : "An agent cannot create a knowledge base here.";
+    const detail = (0, respond_1.apiMessage)(e) ?? "An agent cannot create a knowledge base here.";
     return `${detail} Nothing was created — no row, no slug taken, so retrying the same call will fail the same way.`;
 }
-/**
- * 🔒 CREATE, WITH THE ONE GATE THE SPEC PUTS AROUND IT.
- *
- * ⚠ **THE TWO SHELF RULES THIS DOCBLOCK OPENED WITH ARE GONE (2026-09-02, slice
- * B15, ruling B10)** — the local shelf/visibility contradiction and the server's
- * `resolveHomeScope`. The `home_scoped` column is dropped and a personal base is
- * an ordinary row in the caller's own `kind='personal'` container, so there is
- * no second shelf for a `public` base to contradict.
- *
- * ⚠ **THE CONFIRM GATE IS A TRIPWIRE** (see `confirm-token.ts`). It fires
- *    only for `visibility: "public"` inside a SHARED link container — a base
- *    published into the room a peer is standing in, which is the knowledge half
- *    of the audience-changing class. It does NOT fire in a standard workspace:
- *    `set_visibility` has published bases workspace-wide with no confirm since
- *    long before this wave, and gating one door and not the other would be
- *    theatre.
- */
+/** The confirm gate (a tripwire, `confirm-token.ts`) fires only for `public` inside a shared container — any
+ *  container with a second member, whatever its kind. */
 async function opCreateBase(client, callerUserId, input, 
-/** ⚠ OPTIONAL — absent means "not known": the create goes out unshared and
- *  the SERVER refuses it (`container-destination.ts`). */
+/** Optional: absent = not known, so the create goes out unshared and the server refuses it in a home channel. */
 directory) {
-    // 🔒 **DESTINATION 2, IN ONE SERVER CALL** (Samuel, 2026-09-18; the model is
-    // `container-destination.ts`'s header). A home channel holds only what is
-    // SHARED into it. ⚠ **THE BASE STAYS `private` AND THE GRANT IS THE AUDIENCE**,
-    // which is why this does not touch `visibility` as the identity lane does.
+    // A home channel holds only what is shared into it: the base stays `private` and the channel grant is the audience.
     const shareToChannelId = await (0, container_destination_1.resolveChannelShareTarget)(client, directory);
-    // 🔒 **ALWAYS SENT, NEVER LEFT TO THE SERVER'S DEFAULT** (2026-09-02) — the same
-    // rule and the same reason as `agent-ops-write.ts › opCreate`, which states it
-    // in full: the server's default is credential-dependent, this process cannot
-    // see which credential it holds, and an omitted value let a SHARED credential
-    // resolve to `public`, trip G16 and answer a 400 whose remedy was "preview
-    // again" — the thing the caller had just done. `"private"` is what this tool's
-    // `visibility` description already promises as the default.
+    // Always sent: the server's default is credential-dependent, which this process cannot see (as `agent-ops-write.ts › opCreate`).
     const visibility = input.visibility ?? "private";
     const verdict = await (0, confirm_token_1.confirmGate)(client, {
         tool: "dopl_kb",
@@ -96,52 +41,29 @@ directory) {
             name: input.name,
             description: input.description ?? null,
             visibility,
-            // ⚠ ON THE DIGEST: a token is bound to what LANDS, grant included.
+            // On the digest: a token binds what lands, grant included.
             shareToChannelId: shareToChannelId ?? null,
         },
     }, {
         publishes: visibility === "public",
         token: input.confirm_token,
-        // 🔒 **THE PREVIEW RUNS THE SAME GATE AS THE CONFIRMED CALL** (task 11's
-        // missing pin). Observed live: this op previewed a public create in a
-        // shared home channel, handed back a token, and the echoed call was then
-        // refused by the server's create gate — the preview promised an act the
-        // gate forbids.
-        //
-        // ⚠ **THE SERVER ANSWERS, BECAUSE THE SERVER REFUSES.** Whether a create
-        // may land depends on the audience ceiling and on whether the operator
-        // has armed this room for their personal shelf — grant rows and arming
-        // rows this process cannot see. So the precheck asks the create's OWN
-        // gate chain (`assertCreateBaseAllowed` behind `?dryRun=1`) rather than
-        // re-deciding here, which is the only version of "the same gate" that
-        // stays true after the next gate is added.
-        //
-        // ⚠ **THE BODY IS THE ONE THE CONFIRM WILL SEND**, `acknowledgeShared`
-        // included: the confirmed call carries it from the spent token, and
-        // asking without it would refuse on the missing acknowledgement — the
-        // very thing this preview exists to obtain.
+        // The preview asks the server's own create gate chain (`?dryRun=1`) with the body the confirm will send,
+        // `acknowledgeShared` included, so no token is minted for an act the gate forbids.
         precheck: async () => {
             try {
                 await client.dryRunKbBase({
                     name: input.name,
                     description: input.description,
                     visibility,
-                    // ⚠ PART OF THE CONFIRMED BODY: without it a dry run previews an
-                    // act the gate forbids (2026-09-18).
                     shareToChannelId,
                     acknowledgeShared: true,
                 });
             }
             catch (e) {
-                // The server's own sentence, which already names the room, the cause
-                // and the remedy — and it is TRUE of a dry run word for word:
-                // nothing was created, no slug taken.
                 const ceiling = agentCreateForbidden(e);
                 if (ceiling)
                     return (0, respond_1.err)(ceiling);
-                // ⚠ ANYTHING ELSE RETHROWS RATHER THAN MINTING. "I could not check"
-                // is not "it is allowed", and the caller loses nothing by retrying:
-                // no row was written and no token was spent.
+                // Anything else rethrows rather than minting: "could not check" is not "allowed".
                 throw e;
             }
             return null;
@@ -156,47 +78,34 @@ directory) {
             clientWriteId: input.client_write_id,
             description: input.description,
             visibility,
-            // 🔒 DESTINATION 2, ATOMIC — the base rolls back if the grant fails.
+            // Atomic: the base rolls back if the grant fails.
             shareToChannelId,
-            // 🔒 G16 — THE TOKEN, SPENT, BECOMES THE SERVER'S PRECONDITION. Only ever
-            // `true`, and only from a token this call actually consumed. See
-            // `confirm-token.ts › ConfirmVerdict`.
+            // Only ever `true`, and only from a token this call actually spent.
             acknowledgeShared: verdict.acknowledgedShared || undefined,
         });
     }
     catch (e) {
-        // ⚠ THE AUDIENCE CEILING'S CREATE REFUSAL, RENDERED AS A REFUSAL rather
-        // than rethrown as a transport-shaped error (F-323's authoring half). The
-        // server's message already names the room, the cause and the remedy —
-        // `knowledge/server/service-base-gates.ts › resolveCreateDestination` —
-        // and this is the one path where an agent MUST be able to act on it without
-        // opening the repo, because the alternative it used to get was a SUCCESS
-        // string over a row it could never see again.
+        // The audience ceiling's create refusal, rendered as a refusal rather than a transport error (F-323).
         const ceiling = agentCreateForbidden(e);
         if (ceiling)
             return (0, respond_1.err)(ceiling);
-        // 🔒 The destination fence (2026-09-18): the probe fails open, so this is
-        const unshared = (0, container_destination_1.homeChannelRowNotShared)(e); // the SERVER refusing.
+        // The destination probe fails open, so this is the server refusing an unshared home-channel create.
+        const unshared = (0, container_destination_1.homeChannelRowNotShared)(e);
         if (unshared)
             return unshared;
-        // 🔒 G16 — only ever a RACE here: the gate above already previewed and spent
-        // a token, so reaching this means the room gained a member in between.
+        // Only a race here: the room gained a member between the preview and the act.
         const unacknowledged = (0, confirm_token_1.containerPublishUnacknowledged)(e, confirm_token_1.RECONFIRM_REMEDY);
         if (unacknowledged)
             return unacknowledged;
         throw e;
     }
-    // ⚠ THE GRANT IS THE AUDIENCE (2026-09-18): a shared base is stored `private`.
+    // The grant is the audience: a shared base is stored `private`.
     const visNote = shareToChannelId
         ? "Shared in this channel — everyone here can read it."
         : base.visibility === "private"
             ? "Private to you — only you and your agent can see it."
             : "Visible to the whole workspace.";
-    // ⚠ **THE ID, BESIDE THE SLUG (A3/S30, 2026-09-18).** The create used to hand
-    // back a slug alone, so an agent that wanted the id — to grant the base, to
-    // attach it, or to address it from a container where the slug is ambiguous —
-    // spent a `list_bases` call finding the row it had just made. `opListBases`
-    // has printed both for exactly this reason; this is that line, one op earlier.
+    // The id beside the slug: it survives renames and ambiguous slugs.
     return (0, respond_1.ok)(`Created knowledge base ${(0, narration_1.inlineOr)(base.name, narration_1.NO_NAME)} (slug: \`${base.slug}\`, id: \`${base.id}\`). ${visNote}`);
 }
 async function opUpdateBase(client, ref, name, description, slug) {
@@ -206,38 +115,11 @@ async function opUpdateBase(client, ref, name, description, slug) {
     const updated = await (0, knowledge_shared_1.writeOr)(() => client.updateKbBase(base.id, { name, description, slug }), knowledge_validation_1.updateBaseValidationError);
     if ((0, channel_shared_1.isErr)(updated))
         return updated;
-    // ⚠ THE ID HERE TOO (A3/S30): an update can CHANGE the slug, so the result of
-    // the one op most likely to invalidate a caller's handle must hand back the
-    // handle that cannot go stale.
+    // The id too: an update can change the slug.
     return (0, respond_1.ok)(`Updated ${(0, narration_1.inlineOr)(updated.name, narration_1.NO_NAME)} (slug: \`${updated.slug}\`, id: \`${updated.id}\`).`);
 }
-/**
- * ⚠ **THE OTHER PUBLISHING DOOR, AND IT IS NOT PREVIEWED HERE — DELIBERATELY,
- * AND ONLY FOR NOW.** This file used to argue that gating `create_base` and not
- * `set_visibility` "would be theatre". Since G16 the SERVER gates both
- * (`src/features/knowledge/server/service-base-writes.ts › updateBase` →
- * `features/workspaces/server/shared-publish.ts`), so the asymmetry moved: an
- * agent publishing into a shared home channel is now REFUSED here rather than
- * silently allowed, and {@link containerPublishUnacknowledged} is what makes
- * that refusal legible.
- *
- * ⚠ **THE PREVIEW IS HERE SINCE 2026-09-02 (F-441, integration of A3 × A11).**
- * It was a cross-slice request while `tools/knowledge.ts` belonged to another
- * slice: `confirmGate` needs the caller's user id and the call's
- * `confirm_token`, and that arm passed neither, so a shared-container publish
- * answered with a refusal-plus-remedy instead of a preview. Both are plumbed
- * now, and this op previews and confirms exactly as `create_base` does — one
- * mechanism for one act, which is the whole of G16.
- *
- * ⚠ **THE REFUSAL PATH BELOW STAYS AND IS NOT DEAD CODE.** `confirmGate` fires
- * on the SHAPE this process can see (a shared link container); the server's own
- * predicate is the authority and includes facts this process cannot check. A
- * 400 from it still has to be legible, and {@link containerPublishUnacknowledged}
- * is what makes it so. Removing either half leaves one door unguarded.
- *
- * ⚠ NOTHING CHANGES IN A STANDARD WORKSPACE — the server's predicate is
- * `kind='link'` ∧ ≥2 members, and publishing to colleagues costs no extra call.
- */
+/** Publishes a base, previewing and confirming as `create_base` does (F-441). The 400 mapping is not dead code: the
+ *  server's predicate (`shared-publish.ts`) is the authority and can refuse on facts this process cannot see. */
 async function opSetVisibility(client, callerUserId, ref, visibility, confirmToken) {
     if (visibility !== "public") {
         return (0, respond_1.err)(`set_visibility only publishes (visibility="public") a base you created. Un-publishing is human-only — use the Dopl web UI.`);
@@ -245,9 +127,7 @@ async function opSetVisibility(client, callerUserId, ref, visibility, confirmTok
     const base = await (0, knowledge_shared_1.resolveBaseOr)(client, ref);
     if ((0, channel_shared_1.isErr)(base))
         return base;
-    // 🔒 G16 — PREVIEW, THEN PUBLISH. Resolved AFTER the base, deliberately: the
-    // name the preview shows the operator has to be the base this call is about,
-    // and a token minted over a base that does not resolve confirms nothing.
+    // Gated after the base resolves, so the preview names the base this call is about.
     const verdict = await (0, confirm_token_1.confirmGate)(client, {
         tool: "dopl_kb",
         op: "set_visibility",
@@ -258,12 +138,9 @@ async function opSetVisibility(client, callerUserId, ref, visibility, confirmTok
     }, { publishes: true, token: confirmToken });
     if (verdict.kind === "halt")
         return verdict.response;
-    // 🔒 G16 — the server's publish precondition. See the docblock above for why
-    // this op answers with a REMEDY rather than a preview.
+    // A 400 here comes after the gate passed, so the remedy is the operator, not a re-preview.
     const updated = await (0, knowledge_shared_1.writeOr)(() => client.updateKbBase(base.id, {
         visibility: "public",
-        // 🔒 The token, SPENT, becomes the server's precondition — the same
-        // mapping `create_base` makes, one op over.
         acknowledgeShared: verdict.acknowledgedShared || undefined,
     }), (e) => (0, confirm_token_1.containerPublishUnacknowledged)(e, `This call already previewed and confirmed, so the server is refusing on a fact this process cannot see — re-previewing would answer the same. Ask your operator to publish the base from the Dopl app, where the audience change is stated before they press.`));
     if ((0, channel_shared_1.isErr)(updated))

@@ -20,7 +20,8 @@
  */
 import type { DoplClient } from "@dopl/client";
 import { type ToolResponse } from "./respond";
-import { CHANNEL_INPUT_SHAPE, type RoomsAction } from "./channel-schema";
+import { CHANNEL_INPUT_SHAPE } from "./channel-schema";
+import { type RoomsAction } from "./channel-vocab";
 import type { z } from "zod";
 import type { ZodObject } from "zod";
 /** The validated argument bag, exactly as `channel.ts`'s handler receives it. */

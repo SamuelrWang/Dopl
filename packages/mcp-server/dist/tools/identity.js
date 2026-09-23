@@ -15,7 +15,8 @@
  * one that knows it cannot tell.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.LOCUS_NOTE = exports.UNKNOWN_CALLER = exports.CURSOR_VENDOR = exports.CODEX_VENDOR = exports.CLAUDE_VENDOR = exports.DESKTOP_SESSION_RUNTIME = void 0;
+exports.LOCUS_NOTE = exports.UNKNOWN_CALLER = exports.CODEX_VENDOR = exports.CLAUDE_VENDOR = exports.DESKTOP_SESSION_RUNTIME = void 0;
+exports.toolLoaderFor = toolLoaderFor;
 exports.isDesktopRuntime = isDesktopRuntime;
 exports.isDesktopRun = isDesktopRun;
 exports.callerStatusLine = callerStatusLine;
@@ -31,21 +32,19 @@ const narration_1 = require("./narration");
  */
 exports.DESKTOP_SESSION_RUNTIME = "desktop-session";
 /**
- * Recognized `X-Dopl-Vendor` values — WHICH AGENT RUNTIME drives the session
- * the stamp above says the desktop spawned. ⚠ HAND-COPIED from
- * `src/shared/auth/runtime-header.ts` for the same reason as the constant
- * above, and pinned against it by
- * `dopl-desktop-app/test/runtime-stamp-literals.test.mjs`.
- *
- * ⚠ A SECOND DIMENSION, NOT A RUNTIME VALUE (2026-08-31). `runtimeWord` below
- * compares `runtime` strictly against `DESKTOP_SESSION_RUNTIME`, and so does
- * `channel-wake-guidance.ts`; a Codex or Cursor session spawned by the desktop
- * is still `desktop-session` and must keep answering true there. What differs
- * between vendors is what this server may TEACH, which reads `vendor` instead.
+ * Recognized `X-Dopl-Vendor` words, hand-copied from `src/shared/auth/runtime-header.ts`. A second
+ * dimension beside `runtime`: a desktop-spawned Codex session is still `desktop-session`.
  */
 exports.CLAUDE_VENDOR = "claude";
 exports.CODEX_VENDOR = "codex";
-exports.CURSOR_VENDOR = "cursor";
+/** The loader a deferred tool is fetched with, in the caller's own client; unknown vendor → neutral. */
+function toolLoaderFor(vendor) {
+    if (vendor === exports.CLAUDE_VENDOR)
+        return "ToolSearch";
+    if (vendor === exports.CODEX_VENDOR)
+        return "tool_search";
+    return "your client's tool search";
+}
 /** No identity at all — the shape every test-constructed server gets by default. */
 exports.UNKNOWN_CALLER = {
     userId: null,
@@ -181,7 +180,5 @@ function identityLine(identity, self) {
  */
 function boundChannelId(identity) {
     const head = identity.sessionId?.split(":")[0];
-    return head && UUID_RE.test(head) ? head : null;
+    return head && narration_1.UUID_RE.test(head) ? head : null;
 }
-/** ⚠ Shape only — a uuid here is a ROUTING hint, never a proven channel. */
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;

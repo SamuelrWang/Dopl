@@ -52,6 +52,7 @@ const respond_1 = require("./respond");
 // and published input SHAPE. This file is mechanism only.
 const channel_description_1 = require("./channel-description");
 const channel_schema_1 = require("./channel-schema");
+const channel_vocab_1 = require("./channel-vocab");
 // ⚠ THE TWO DISPATCHERS, in siblings — see each module's header for why its
 // group is one lane and why its parameter list is as narrow as it is.
 const channel_dispatch_agents_1 = require("./channel-dispatch-agents");
@@ -330,7 +331,7 @@ directory) {
                     return missA;
                 const action = args.action;
                 if (!(0, channel_dispatch_agents_1.isManageAction)(action)) {
-                    return (0, respond_1.err)((0, channel_schema_1.unknownActionRefusal)("manage", action));
+                    return (0, respond_1.err)((0, channel_vocab_1.unknownActionRefusal)("manage", action));
                 }
                 return (0, channel_dispatch_agents_1.dispatchManageAction)(action, args, client);
             }
@@ -340,7 +341,7 @@ directory) {
                     return missA;
                 const action = args.action;
                 if (!(0, channel_dispatch_rooms_1.isRoomsAction)(action)) {
-                    return (0, respond_1.err)((0, channel_schema_1.unknownActionRefusal)("rooms", action));
+                    return (0, respond_1.err)((0, channel_vocab_1.unknownActionRefusal)("rooms", action));
                 }
                 return (0, channel_dispatch_rooms_1.dispatchRoomsAction)(action, args, client, selfUserId, isAdmin);
             }
@@ -356,7 +357,7 @@ directory) {
                     return missA;
                 const action = args.action;
                 if (!(0, channel_ops_artifact_1.isArtifactAction)(action)) {
-                    return (0, respond_1.err)((0, channel_schema_1.unknownActionRefusal)("artifact", action));
+                    return (0, respond_1.err)((0, channel_vocab_1.unknownActionRefusal)("artifact", action));
                 }
                 return (0, channel_ops_artifact_1.dispatchArtifactAction)(action, args, client);
             }
@@ -369,7 +370,7 @@ directory) {
             // it covers is a build where that validation did not happen: an
             // unrecognized op must be REFUSED, never fall through as a success.
             default:
-                return (0, respond_1.err)((0, channel_schema_1.unknownOpRefusal)(args.op));
+                return (0, respond_1.err)((0, channel_vocab_1.unknownOpRefusal)(args.op));
         }
     });
 }

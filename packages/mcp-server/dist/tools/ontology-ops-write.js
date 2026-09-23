@@ -294,7 +294,6 @@ function resolveObjectValues(snapshot, refs) {
     }
     return { ids };
 }
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 async function resolveResourceValues(client, kind, refs) {
     const resources = kind === "knowledge"
         ? (await client.listKbBases().catch(() => [])).map((b) => ({
@@ -360,7 +359,7 @@ async function resolveKbEntryRef(client, bases, ref) {
             };
         }
     }
-    if (!UUID_RE.test(ref))
+    if (!narration_1.UUID_RE.test(ref))
         return { id: null };
     const trees = await Promise.all(bases.map((b) => client.getKbTree(b.id).catch(() => null)));
     for (const tree of trees) {

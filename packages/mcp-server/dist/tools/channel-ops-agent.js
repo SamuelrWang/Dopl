@@ -1,159 +1,34 @@
 "use strict";
 /**
- * `dopl_channel` op="manage" action="end" / op="manage" action="rename" — **MANAGE THE OPERATOR'S OWN
- * RUNNING AGENTS** (2026-09-01, Samuel: *"I need you to build out dopl mcp being
- * able to end agents. Dopl MCP need to be able to do all that stuff"*).
- *
- * ⚠ `channel-` filename prefix required by the parity split-scan
- * (parity.test.ts) — a handler in an unprefixed file is invisible to the declared-
- * param drift guards.
- *
- * ── THE ONE THING EVERY LINE IN HERE HAS TO RESPECT ─────────────────────────
- *
- * **THESE OPS ASK. THEY DO NOT DO ANYTHING THEMSELVES.** Agents live in a desktop
- * main process no server can reach; what crosses the wire is a row in the SAME
- * mailbox `op="manage" action="launch"` writes, which the operator's machine polls, claims
- * and answers. `channel-ops-launch.ts` states the three consequences at length
- * and all three hold here — a refusal is a normal outcome, a timeout is not a
- * failure, and "ended" means A MACHINE SAID SO.
- *
- * ── ⚠ WHERE THESE TWO DIFFER FROM `launch_agent`, AND IT IS WORTH SAYING ────
- *
- *  1. **NO CONSENT TOGGLE APPLIES.** `launch_agent`'s `no-bridge` is the operator
- *     saying no via a per-machine setting. That setting gates LAUNCHES ONLY. An
- *     end or a rename is not refused by it and **the copy below must never tell a
- *     caller to ask for it to be turned on** — that would send an orchestrator to
- *     request a permission that has nothing to do with what failed.
- *  2. **THE COMMONEST REFUSAL IS NOT AN ERROR.** `no-session` means that agent is
- *     not running any more, and an agent that finished is the ordinary cause. For
- *     an END that is the outcome the caller wanted, reached by another route, and
- *     the sentence says so rather than reading as a fault.
- *  3. **THERE IS NOTHING TO POLL AFTERWARDS EXCEPT `status`**, which is
- *     also where the caller got the id — so every terminal sentence points back
- *     at it.
+ * `dopl_channel` op="manage" action="end" / "rename" for the operator's own running agents.
+ * Management ops are directives: they ask, the operator's machine answers, and the row is held via `holdRow`.
+ * The launch-consent toggle does not gate end/rename, so no copy here may tell a caller to turn it on.
+ * The `channel-` filename prefix is load-bearing for the parity scans (`tool-group-files.ts`).
  */
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.pendingFacts = pendingFacts;
 exports.fileAndHold = fileAndHold;
 exports.opEndAgent = opEndAgent;
 exports.opRenameAgent = opRenameAgent;
-// ⚠ NO `err` HERE SINCE 2026-09-18 — every refusal this file used to WRITE now lives in
-// `channel-agent-target.ts` (the not-an-id arm and `foreignAgent`), so this module builds
-// only `ok` fact lines and returns refusals its neighbour composed.
 const respond_1 = require("./respond");
+const channel_directive_hold_1 = require("./channel-directive-hold");
 const channel_shared_1 = require("./channel-shared");
 const agent_display_name_1 = require("./agent-display-name");
-// ⚠ **THE TWO "WHICH AGENT IS THIS" REFUSALS ARE A NEIGHBOUR** (`channel-agent-target.ts`,
-// 2026-09-18) — this file was at the §1 cap, and the seam is the one
-// `channel-ops-launch-name.ts` draws for the launch lane: the STRIP plus the CHECK plus the
-// sentence, in one module the four manage verbs share. `foreignAgent` moved with them because
-// it answers the same question one step later ("that id is not yours").
 const channel_agent_target_1 = require("./channel-agent-target");
-// ⚠ ONE write-result renderer, shared with post / create_thread / launch / direct.
 const channel_facts_1 = require("./channel-facts");
-/** Peer-influenced display text, neutralized — never an empty span. */
-/** ⚠ MIRRORS `channel-ops-launch.ts`. The schema is what an MCP client sees;
- *  these are what run. Deliberately the same numbers: three ops holding on one
- *  mailbox that disagreed about how long to wait would be three answers to one
- *  question. */
-const WAIT_DEFAULT_MS = 15_000;
-const WAIT_CAP_MS = 30_000;
-const POLL_INTERVAL_MS = 1_500;
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-/** The `code` a DoplApiError carries, or null. ⚠ Duck-typed rather than imported
- *  — the discipline `respond.ts`'s `isNotFound` follows across the @dopl/client
- *  boundary. */
-function apiErrorCode(e) {
-    if (typeof e !== "object" || e === null)
-        return null;
-    const code = e.code;
-    return typeof code === "string" && code.length > 0 ? code : null;
-}
-/**
- * THE REFUSAL CONTRACT FOR THESE TWO VERBS, AS SENTENCES AN AGENT CAN ACT ON.
- *
- * ⚠ **A SEPARATE MAP FROM THE LAUNCH ONE, OVER THE SAME NINE-WORD ENUM, AND THAT
- * IS THE POINT RATHER THAN DUPLICATION.** The wire word is shared; what it MEANS
- * TO DO NEXT is not. `cap` on a launch means "wait for a slot"; on an end it can
- * only mean the machine is in a state it cannot act from at all, and telling a
- * caller to "wait for one of the running agents to finish" before ENDING one is
- * advice that contradicts the request. Sharing the map would have made every one
- * of these sentences hedge.
- *
- * ⚠ EACH SENTENCE ENDS IN WHAT TO DO, because a reason with no next action gets
- * an agent to retry the same call.
- */
-/**
- * MAY THE CALLER ASK AGAIN? — ⚠ the ONE thing a refusal is read for, kept as a
- * field where the sentence became doctrine (T10, 2026-09-02).
- *
- * ⚠ THE NINE WORDS ARE STILL THE WIRE CONTRACT and the result still renders the
- * one it got. The paragraph per word is in `channel-doctrine.ts`'s WHY A LAUNCH,
- * END, DIRECTION OR RENAME IS REFUSED section, which covers all three mailboxes
- * with ONE text — this lane, the launch lane and the direction lane overlap on
- * most of the vocabulary, and three copies of one explanation is how they drift.
- *
- * ⚠ `no-session` ON AN END IS USUALLY GOOD NEWS and the doctrine says so: the
- * agent already finished and there was nothing left to stop. That is why it is
- * `no` here rather than `once` — there is nothing to retry, not because a retry
- * would fail. ⚠ `no-bridge` is the LAUNCH toggle and does NOT gate these two
- * verbs, so arriving here on it means the machines disagree; still `no`.
- */
-const RETRY_ADVICE = {
-    cap: "no",
-    busy: "once",
-    "no-sdk": "no",
-    "auth-hold": "no",
-    "no-bridge": "no",
-    "no-counterparty": "no",
-    "no-identity": "no",
-    "no-session": "no",
-    "bad-name": "no",
-    // ⚠ NO PRODUCER ON AN END OR A RENAME — `no-chain` belongs to a launch that
-    // asked to chain. Arriving here means the machines disagree; still `no`.
-    "no-chain": "no",
-    "no-model": "no", // a LAUNCH word (2026-09-22); an end or a rename names no model
-};
-/**
- * THE PENDING FACTS. ⚠ **`retry=no` IS THE ONE INSTRUCTION THAT COULD NOT BECOME
- * A BARE FACT AND DID NOT**: a second directive is a second request for the same
- * change, and on an END nothing could tell you afterwards which one acted.
- *
- * ⚠ `confirm=` NAMES THE SURFACE THAT ANSWERS, AND IT IS A MAP OVER THE KIND
- * RATHER THAN A TERNARY. That stopped being cosmetic at the THIRD verb:
- * `kind === "end" ? … : …` is correct for two kinds and silently gives a
- * RE-POSTURE the RENAME's answer for three — a conditional over a closed set is
- * the shape that goes wrong the day the set grows, failing nothing on the way.
- * ⚠ AND THE THREE ANSWERS GENUINELY DIFFER. An END is confirmable: the agent
- * disappearing from `status` is the answer. A RENAME is not — it is
- * display-only and lives on the operator's machine, so that listing keeps
- * printing the id. A POSTURE is not either, for the same reason, and it is the
- * one where believing otherwise is dangerous: an agent whose re-posture never
- * landed is still running at its old permissions.
- */
-/**
- * THE PAST-TENSE WORD FOR EACH KIND, IN ONE PLACE — used by the one render that
- * still needs prose (a FOREIGN agent id, which is an error, not a fact line).
- *
- * ⚠ A MAP RATHER THAN A TERNARY, and it stopped being cosmetic at the third
- * verb: `kind === "end" ? "ended" : "renamed"` is CORRECT for two kinds and
- * silently reports a RE-POSTURE as a RENAME for three. A conditional over a
- * closed set is the shape that goes wrong the day the set grows, failing nothing
- * on the way.
- */
+/** Past-tense verb per kind — a map over the kind, never a ternary (F-413). */
 const VERB_PAST = {
     end: "ended",
     rename: "renamed",
     set_agent_mode: "re-postured",
 };
+/** The surface that can confirm each kind: only an end shows in `status`; rename and posture live on the operator's machine. */
 const PENDING_CONFIRM = {
     end: "status",
     rename: "none",
     set_agent_mode: "none",
 };
-/** ⚠ TAKES THE **KIND**, NOT A DISPLAY WORD: the surface it names is a claim
- *  about what a later read can prove, and keying that off prose is how a third
- *  verb inherits the second one's answer. */
+/** Keyed on the kind, never a display word. `retry=no`: a second directive is a second request for the same change. */
 function pendingFacts(d, kind) {
     return {
         directive: d.id,
@@ -163,58 +38,17 @@ function pendingFacts(d, kind) {
         confirm: PENDING_CONFIRM[kind],
     };
 }
-/** Shared hold: poll the directive row until it settles or the deadline passes.
- *  ⚠ POLLS THE ROW, never an `await` — a directive is not a message, has no
- *  `seq`, and can never end a message hold. */
-async function holdFor(client, directive, waitMs) {
-    let d = directive;
-    const deadline = Date.now() + Math.min(waitMs, WAIT_CAP_MS);
-    while ((d.status === "pending" || d.status === "claimed") && Date.now() < deadline) {
-        await sleep(Math.min(POLL_INTERVAL_MS, Math.max(0, deadline - Date.now())));
-        try {
-            d = await client.getLaunchDirective(d.id);
-        }
-        catch {
-            // ⚠ A FAILED POLL DESTROYS NEITHER THE HOLD NOR THE DIRECTIVE. The request
-            // is filed and the machine may still take it, so the honest ending is the
-            // PENDING one — which tells the caller where to look.
-            break;
-        }
-    }
-    return d;
-}
 /**
- * FILE THE DIRECTIVE AND HOLD — the half `end_agent` and `rename_agent` share.
- *
- * ⚠ THE CREATE'S TWO NON-MACHINE FAILURES ARE SORTED ON THE **CODE**, NOT THE
- * STATUS, the discipline `channel-ops-launch.ts` adopted when one call gained two
- * ways to 404. Here a 403 is unambiguous, but the 404 is not: it may be the
- * CHANNEL (unknown, or one the caller never joined) and nothing else, so it
- * renders as a channel error rather than as anything about the agent.
+ * File the directive and hold it (`holdRow`) — plumbing shared with `channel-ops-agent-mode.ts`, which writes its own sentences.
+ * A 404 on create is the channel, never the agent.
  */
-/**
- * ⚠ EXPORTED FOR `channel-ops-agent-mode.ts` (2026-09-01), and for that ONE
- * caller. It is the whole hold protocol — file the row, poll it, give up — and a
- * second copy would be a second answer to "how long do we wait", which is the
- * drift the shared `WAIT_*` constants above exist to prevent. ⚠ What is shared
- * is the PLUMBING; every sentence a caller reads is written in its own module,
- * because the three verbs' consent stories differ.
- */
-async function fileAndHold(client, ref, 
-// ⚠ THE UNION IS {@link AgentDirectiveInput}, DECLARED ABOVE AND NOT INLINED.
-// The THIRD kind rides this same hold and shares nothing else with the other
-// two (2026-09-01): its sentences, its refusal map and its consent story live
-// in `channel-ops-agent-mode.ts`, because it is the one agent verb still gated
-// by the operator's launch toggle. "Both axes optional, at least one required"
-// is enforced at the tool boundary and again by the column CHECK, never here —
-// this function files a row, it does not judge one.
-input, waitMs) {
+async function fileAndHold(client, ref, input, waitMs) {
     let created;
     try {
         created = await client.createAgentDirective(input);
     }
     catch (e) {
-        if (apiErrorCode(e) === "CHANNEL_AGENT_FOREIGN") {
+        if ((0, respond_1.apiErrorCode)(e) === "CHANNEL_AGENT_FOREIGN") {
             return {
                 done: true,
                 response: (0, channel_agent_target_1.foreignAgent)(input.agentId, VERB_PAST[input.kind]),
@@ -228,17 +62,9 @@ input, waitMs) {
         return {
             done: true,
             offline: true,
-            // ⚠ `filed=no` IS THE LOAD-BEARING HALF — nothing was written, so there is
-            // nothing pending and nothing to cancel, the opposite of the PENDING
-            // shape. ⚠ PRESENCE IS A HINT, NOT A VERDICT: a per-(user, workspace)
-            // heartbeat cannot say WHICH machine is up. The doctrine says so.
+            // filed=no: nothing was written, so nothing is pending. Presence is a hint, not a verdict.
             response: (0, respond_1.ok)(
-            // ⚠ **THE VERB COMES FROM {@link VERB_PAST}, NOT FROM A TERNARY.** This
-            // line read `input.kind === "end" ? "not ended" : "not renamed"` — the
-            // exact shape `VERB_PAST` and `PENDING_CONFIRM` were both made into
-            // `Record<AgentDirectiveKind, …>` maps to avoid, and their docblocks say
-            // so in as many words. It was correct for two kinds and silently told a
-            // `set_agent_mode` caller its POSTURE request was a RENAME. F-413.
+            // The verb comes from VERB_PAST, never a ternary (F-413).
             (0, channel_facts_1.factsLine)(`not ${VERB_PAST[input.kind]}`, {
                 agent: `@agent-${input.agentId}`,
                 reason: "offline",
@@ -246,26 +72,14 @@ input, waitMs) {
             })),
         };
     }
-    return { done: false, directive: await holdFor(client, created.directive, waitMs ?? WAIT_DEFAULT_MS) };
+    return {
+        done: false,
+        directive: await (0, channel_directive_hold_1.holdRow)(created.directive, (id) => client.getLaunchDirective(id), waitMs),
+    };
 }
-/**
- * END ONE OF THE OPERATOR'S OWN RUNNING AGENTS.
- *
- * ⚠ **A STOP VERB. IT TOUCHES NO THREAD AND DELETES NO MESSAGE** — everything the
- * agent posted stays in the channel, attributed exactly as before. The sentence
- * says so, because "end" is the word an orchestrator is most likely to over-read
- * as "remove".
- * ⚠ **YOU CANNOT END YOURSELF FROM HERE AND THE QUESTION DOES NOT ARISE**: the
- * caller of this op is an EXTERNAL session, which is not a desktop agent and has
- * no instance id. The in-process twin refuses self-end because the dispatch would
- * abort the calling turn; nothing on this lane can be in that position.
- */
+/** End one of the operator's own running agents. A stop verb: no thread or message is touched. */
 async function opEndAgent(client, ref, agentId, opts = {}) {
-    // ⚠ **THE TARGET IS CHECKED BEFORE THE CHANNEL LOOKUP** (S51, 2026-09-18): a refusal that
-    // needs no round trip must not cost one. ⚠ STRIPPED **AND NOW VALIDATED** — the pasted
-    // `@agent-<id>` form is still accepted, exactly as before; what is refused is a NAME HANDLE,
-    // which `to`'s describe used to offer flatly and which nothing on this lane can resolve. It
-    // used to reach the create schema and die as a bare `VALIDATION_FAILED` naming no field.
+    // Target checked before the channel lookup: a refusal needing no round trip must not cost one.
     const target = (0, channel_agent_target_1.agentTarget)(agentId);
     if ((0, channel_agent_target_1.isAgentTargetRefusal)(target))
         return target;
@@ -273,24 +87,11 @@ async function opEndAgent(client, ref, agentId, opts = {}) {
     const channel = await (0, channel_shared_1.resolveChannelOr)(client, ref);
     if ((0, channel_shared_1.isErr)(channel))
         return channel;
-    // ⚠ THE CHANNEL NAME IS NO LONGER RENDERED. Every result on this lane is a
-    // fact line keyed on the AGENT, which is what the caller acts on; the channel
-    // is the caller's own argument from this call and echoing it bought nothing.
     const filed = await fileAndHold(client, ref, { kind: "end", channel: channel.id, agentId: agent }, opts.waitMs);
     if (filed.done)
         return filed.response;
     const d = filed.directive;
-    // ── THE RESULT: ONE LINE OF FACTS (T10, 2026-09-02) ──────────────────────
-    //
-    // ⚠ WHAT LEFT. Four paragraphs rode on every successful end: that nothing else
-    // changed, that the handle is spent, that ids are never reused, and that
-    // "ended" means the machine said so. All four are true of EVERY end and are in
-    // `channel-doctrine.ts` under YOUR OWN AGENTS.
-    //
-    // ⚠ `handle=spent` IS THE ONE THAT HAD TO SURVIVE AS A FACT. Instance ids are
-    // never reused, so `@agent-<id>` now addresses nothing and there is no undo and
-    // no resume — an orchestrator that keeps writing that handle is talking to
-    // nobody, silently, which is the failure this lane exists inside.
+    // handle=spent: instance ids are never reused, so the handle now addresses nobody.
     if (d.status === "done") {
         return (0, respond_1.ok)((0, channel_facts_1.factsLine)("ended", { agent: `@agent-${agent}`, handle: "spent", filed: true }));
     }
@@ -298,15 +99,13 @@ async function opEndAgent(client, ref, agentId, opts = {}) {
         return (0, respond_1.ok)((0, channel_facts_1.factsLine)("not ended", {
             agent: `@agent-${agent}`,
             reason: d.refusalReason ?? undefined,
-            // ⚠ `-` WHEN THE MACHINE NAMED NO REASON, never a guessed verdict.
-            retry: d.refusalReason ? RETRY_ADVICE[d.refusalReason] : undefined,
+            // `-` when the machine named no reason, never a guessed verdict.
+            retry: d.refusalReason ? channel_directive_hold_1.LAUNCH_RETRY_ADVICE[d.refusalReason] : undefined,
             filed: true,
         }));
     }
     if (d.status === "expired") {
-        // ⚠ LAPSED IS NOT REFUSED: no machine ever answered, so nothing is
-        // outstanding — but check `read_sessions` before asking again, because an
-        // agent that has since finished needs no end at all.
+        // Lapsed is not refused: nothing is outstanding. Check op="status" before asking again.
         return (0, respond_1.ok)((0, channel_facts_1.factsLine)("not ended", {
             agent: `@agent-${agent}`,
             directive: d.id,
@@ -316,21 +115,9 @@ async function opEndAgent(client, ref, agentId, opts = {}) {
     }
     return (0, respond_1.ok)((0, channel_facts_1.factsLine)("pending", { agent: `@agent-${agent}`, ...pendingFacts(d, "end") }));
 }
-/**
- * RENAME ONE OF THE OPERATOR'S OWN AGENTS.
- *
- * ⚠ **DISPLAY ONLY, ON ONE MACHINE, AND EVERY SENTENCE HERE HAS TO CARRY THAT.**
- * The name lives in `main/agent-names.js`'s local store; nothing resolves an agent
- * by it, no server holds it, and `read_sessions` will never show it. A caller that
- * believed otherwise would start addressing `@research` and reach nobody — the
- * exact failure `channel-session-handle.ts` documents at length for the same
- * reason.
- * ⚠ AN EMPTY `name` CLEARS, back to `Agent #<id>`. One verb, not two.
- */
+/** Rename one of the operator's own agents: display-only, on one machine; nothing resolves an agent by name. An empty name clears. */
 async function opRenameAgent(client, ref, agentId, name, opts = {}) {
-    // ⚠ **THE SAME TARGET CHECK `opEndAgent` MAKES, AND FOR THE SAME REASON** (S51): a rename
-    // addressed to a name handle reached the create schema and came back as a bare
-    // `VALIDATION_FAILED`. The pasted `@agent-<id>` form is still accepted.
+    // Same target check as opEndAgent.
     const target = (0, channel_agent_target_1.agentTarget)(agentId);
     if ((0, channel_agent_target_1.isAgentTargetRefusal)(target))
         return target;
@@ -338,37 +125,18 @@ async function opRenameAgent(client, ref, agentId, name, opts = {}) {
     const channel = await (0, channel_shared_1.resolveChannelOr)(client, ref);
     if ((0, channel_shared_1.isErr)(channel))
         return channel;
-    // ⚠ THE CHANNEL NAME IS NO LONGER RENDERED. Every result on this lane is a
-    // fact line keyed on the AGENT, which is what the caller acts on; the channel
-    // is the caller's own argument from this call and echoing it bought nothing.
-    // ⚠ A SLUG IS NORMALIZED TO A DISPLAY NAME HERE — `agent-display-name.ts`, Samuel
-    // 2026-09-17. It files and reports the string it measured, never the raw argument.
+    // A slug is normalized to a display name; the measured string is filed and reported.
     const display = (0, agent_display_name_1.agentDisplayName)(name);
     const clearing = display === "";
     const filed = await fileAndHold(client, ref, { kind: "rename", channel: channel.id, agentId: agent, name: display }, opts.waitMs);
     if (filed.done)
         return filed.response;
     const d = filed.directive;
-    // ── THE RESULT: ONE LINE OF FACTS (T10, 2026-09-02) ──────────────────────
-    //
-    // ⚠ THE TWO PARAGRAPHS THAT LEFT ARE THE SAME TWO ON EVERY RENAME — that the
-    // name is display-only on one machine, and that `read_sessions` keeps printing
-    // the id. They are in `channel-doctrine.ts`; what stays is the pair of fields
-    // that carry the SAME warning without the prose.
-    //
-    // ⚠ `handle=unchanged` IS NOT DECORATION. `@agent-<id>` stays the ONLY address
-    // — nothing resolves an agent by its name, which is exactly what stops a
-    // rename silently re-pointing a running instruction — and an orchestrator that
-    // believes otherwise starts addressing a name that reaches nobody.
-    // ⚠ `confirm=none` IS THE HONEST ANSWER and must not become `read_sessions`:
-    // the name lives on the operator's desktop and reaches no server, so that
-    // listing keeps printing the id. That is correct rather than a stale read, and
-    // there is no surface here that can confirm a rename landed.
+    // handle=unchanged: `@agent-<id>` stays the only address. confirm=none: the name never reaches a server.
     if (d.status === "done") {
         return (0, respond_1.ok)((0, channel_facts_1.factsLine)("renamed", {
             agent: `@agent-${agent}`,
-            // ⚠ CLEARED IS ITS OWN OUTCOME, not an empty name: the display falls
-            // back to `Agent #<id>`, which is a different thing from "unnamed".
+            // Cleared falls back to `Agent #<id>`, which is not "unnamed".
             name: clearing ? "cleared" : display,
             handle: "unchanged",
             confirm: "none",
@@ -378,9 +146,7 @@ async function opRenameAgent(client, ref, agentId, name, opts = {}) {
         return (0, respond_1.ok)((0, channel_facts_1.factsLine)("not renamed", {
             agent: `@agent-${agent}`,
             reason: d.refusalReason ?? undefined,
-            retry: d.refusalReason ? RETRY_ADVICE[d.refusalReason] : undefined,
-            // ⚠ NOTHING ABOUT THE AGENT CHANGED — it is still running and still
-            // addressed the same way. A refused rename is cosmetic, not a fault.
+            retry: d.refusalReason ? channel_directive_hold_1.LAUNCH_RETRY_ADVICE[d.refusalReason] : undefined,
             agentChanged: false,
         }));
     }

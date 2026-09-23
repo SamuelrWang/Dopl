@@ -1,9 +1,7 @@
 "use strict";
 /**
- * Shared resolvers for `dopl_channel`: channel-reference (slug or id) and
- * member-reference (email or user id) resolution, leaned on by both the read
- * and write op modules. ⚠ `channel-` filename prefix required by the parity
- * split-scan (parity.test.ts).
+ * Shared resolvers for `dopl_channel` (channel by slug/id, member by email/id). The `channel-`
+ * filename prefix is required by the parity split-scan.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.neutralizeInline = exports.inlineOr = exports.INLINE_TEXT_MAX = void 0;
@@ -15,37 +13,20 @@ exports.resolveChannelOr = resolveChannelOr;
 exports.resolveMemberOr = resolveMemberOr;
 const narration_1 = require("./narration");
 const respond_1 = require("./respond");
-/**
- * A non-empty string field of a message's metadata, or undefined. ⚠ ONE
- * definition — both the read and write lanes key thread linkage off it
- * (`taskId` / `taskTitle`), so a second copy silently drifts and one lane
- * renders a thread tag the other reported as absent.
- */
+/** A non-empty string metadata field; one definition, since both lanes key thread linkage off it. */
 function metaString(m, key) {
     const value = m.metadata?.[key];
     return typeof value === "string" && value.trim().length > 0
         ? value.trim()
         : undefined;
 }
-/**
- * ⚠ THE NEUTRALIZER LIVES IN `narration.ts` — re-exported here, never
- * re-declared. Tools with no channel in them need it too (`dopl_members`
- * renders the same `profiles.display_name`, `dopl_chats` a member-typed title,
- * `server.ts` the workspace name in the instructions block and every
- * `_dopl_status` footer), so there is exactly ONE definition.
- */
+/** The one neutralizer lives in `narration.ts`; re-exported, never re-declared. */
 var narration_2 = require("./narration");
 Object.defineProperty(exports, "INLINE_TEXT_MAX", { enumerable: true, get: function () { return narration_2.INLINE_TEXT_MAX; } });
 Object.defineProperty(exports, "inlineOr", { enumerable: true, get: function () { return narration_2.inlineOr; } });
 Object.defineProperty(exports, "neutralizeInline", { enumerable: true, get: function () { return narration_2.neutralizeInline; } });
-/**
- * Channel roster as `userId → display name`, for the ids a thread row carries
- * (`createdBy`, `targetUserId`). ⚠ RAW names — the render side neutralizes
- * exactly once, in {@link memberRef}.
- *
- * ⚠ FAIL-SOFT: enrichment only. A roster that 404s, 403s or times out degrades
- * to ids, never turns a successful thread read into an error the agent retries.
- */
+/** Roster as `userId → raw name` (the render neutralizes once). Fail-soft: enrichment only, ids
+ *  still render. */
 async function memberNames(client, ref) {
     const names = new Map();
     try {
@@ -56,42 +37,23 @@ async function memberNames(client, ref) {
         }
     }
     catch {
-        // Enrichment only — ids still render, and they are the half that matters.
+        // Enrichment only.
     }
     return names;
 }
-/**
- * ⚠ **THE ONE `isErr`, FOR EVERY LANE** — channel, member, agent identity and
- * knowledge base (2026-09-17). Two further copies tested `"isError" in x` with
- * no object guard, so a resolver that rejected with a STRING or a NUMBER threw
- * `TypeError: Cannot use 'in' operator` instead of narrowing.
- */
+/** The one `isErr` for every lane; object-guarded, so a non-object rejection never throws on `in`. */
 function isErr(x) {
     return (typeof x === "object" &&
         x !== null &&
         "isError" in x &&
         x.isError === true);
 }
-/**
- * Uniform not-found for a channel reference. Shared by `resolveChannelOr` and
- * by the hot read and hold handlers, which skip the pre-resolve and map a route
- * 404 to this same copy.
- */
+/** Uniform channel not-found, also used by the hot read/hold paths that map a route 404. */
 function channelNotFound(ref) {
     return (0, respond_1.err)(`Channel not found: "${ref}". Use dopl_channel(op="rooms", action="list") to see channels you can access (pass a slug or id from there).`);
 }
-/**
- * Resolve a channel reference (slug or UUID) to a `Channel` row, or a not-found
- * error. Lists channels once and matches on id or slug. ⚠ **It passed
- * `includeArchived: true` until 2026-09-17** so an archived channel stayed
- * addressable; the archive feature is gone (R-21) and the plain list already
- * carries every channel.
- *
- * Used by the write ops so a confirmation can name the channel and a bad ref is
- * caught before the mutation. ⚠ The hot read and hold shapes must NOT call this —
- * they pass the ref straight to the route (which resolves slug-or-id and
- * enforces visibility), avoiding a listChannels() round-trip per poll.
- */
+/** Channel by id or slug, or not-found. For write ops only: hot read/hold paths pass the ref to the
+ *  route (which resolves and enforces visibility) to avoid a list per poll. */
 async function resolveChannelOr(client, ref) {
     const channels = await client.listChannels();
     const match = channels.find((c) => c.id === ref || c.slug === ref);
@@ -100,29 +62,12 @@ async function resolveChannelOr(client, ref) {
     }
     return match;
 }
-/**
- * How a workspace member is NAMED in tool output — ⚠ neutralized AT THE SOURCE.
- * `displayName` is self-set `profiles.display_name`, spliced into ten-odd
- * write-op lines carrying no untrusted framing at all.
- *
- * ⚠ Here rather than per call site because `label` is the ONLY thing callers do
- * with a `ResolvedMember` besides `userId`: safe by construction means a later
- * call site cannot reintroduce the defect. `userId` stays raw — server-issued
- * UUID, the half a member does not control.
- *
- * ⚠ The route bound (`src/app/api/user/profile/route.ts`) and the DB CHECK are
- * not reasons to render raw: RLS lets a user PATCH the column straight through
- * PostgREST, the CHECK is written but NOT APPLIED, and the `email` fallback is
- * bounded by no charset rule either.
- */
+/** A member's name, neutralized at the source (self-set display names reach many write-op lines;
+ *  the route bound and DB CHECK are not a reason to render raw). */
 function memberLabel(m) {
     return (0, narration_1.inlineOr)(m.displayName || m.email || m.userId, "(unnamed member)");
 }
-/**
- * Resolve a member reference (email or user id) to an ACTIVE workspace member,
- * or an error. ⚠ Invites are in-workspace only, so a pending/revoked match is
- * rejected with a stated reason. Reads the same listing `dopl_members` does.
- */
+/** Member by email or user id; only an ACTIVE member resolves (pending/revoked refused, with why). */
 async function resolveMemberOr(client, ref) {
     const trimmed = ref.trim();
     const lower = trimmed.toLowerCase();
@@ -136,7 +81,7 @@ async function resolveMemberOr(client, ref) {
     }
     const match = byId ?? (byEmail.length === 1 ? byEmail[0] : undefined);
     if (!match) {
-        return (0, respond_1.err)(`No workspace member matching "${ref}". Invites are in-workspace only — pass the email or user id of an ACTIVE member (see dopl_members(op="rooms" action="list")).`);
+        return (0, respond_1.err)(`No workspace member matching "${ref}". Invites are in-workspace only — pass the email or user id of an ACTIVE member (dopl_members lists them).`);
     }
     if (match.status !== "active") {
         const state = match.status === "pending"

@@ -1,13 +1,6 @@
 /**
- * Home-surface method group — link 10 of the chain in `client-base.ts`
- * (`BillingMethods` extends this one). Pure delegation to `home.ts`; no HTTP
- * here.
- *
- * ⚠ TWO METHODS, and the omissions are the point — link MINT, link REVOKE and
- * the CLAIM are all `sessionOnly`, so none of them is bound. See `home.ts`.
- *
- * ⚠ **BOTH NOW ADDRESS `/api/channels?scope=account`** (R-26 (b)); the names are
- * kept because `client-surface.test.ts` pins them. See `home.ts`.
+ * Home-surface method group (`BillingMethods` extends this one; chain in `client-base.ts`). Pure
+ * delegation to `home.ts`; the method names are pinned by `client-surface.test.ts`.
  */
 import { AgentIdentityMethods } from "./client-agent-identities.js";
 import type { HomeChannelCreateResult, HomeChannelsPayload } from "./home-types.js";

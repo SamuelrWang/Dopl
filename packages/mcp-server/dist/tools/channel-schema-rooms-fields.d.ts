@@ -41,8 +41,8 @@ export declare const ROOMS_INPUT_FIELDS: {
         fields: "fields";
         send: "send";
         manage: "manage";
-        law: "law";
         model: "model";
+        law: "law";
         waiting: "waiting";
         rooms: "rooms";
     }>>;

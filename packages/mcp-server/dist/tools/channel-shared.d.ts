@@ -1,73 +1,27 @@
 /**
- * Shared resolvers for `dopl_channel`: channel-reference (slug or id) and
- * member-reference (email or user id) resolution, leaned on by both the read
- * and write op modules. ⚠ `channel-` filename prefix required by the parity
- * split-scan (parity.test.ts).
+ * Shared resolvers for `dopl_channel` (channel by slug/id, member by email/id). The `channel-`
+ * filename prefix is required by the parity split-scan.
  */
 import type { Channel, ChannelMessage, DoplClient } from "@dopl/client";
 import { type ToolResponse } from "./respond";
-/**
- * A non-empty string field of a message's metadata, or undefined. ⚠ ONE
- * definition — both the read and write lanes key thread linkage off it
- * (`taskId` / `taskTitle`), so a second copy silently drifts and one lane
- * renders a thread tag the other reported as absent.
- */
+/** A non-empty string metadata field; one definition, since both lanes key thread linkage off it. */
 export declare function metaString(m: ChannelMessage, key: string): string | undefined;
-/**
- * ⚠ THE NEUTRALIZER LIVES IN `narration.ts` — re-exported here, never
- * re-declared. Tools with no channel in them need it too (`dopl_members`
- * renders the same `profiles.display_name`, `dopl_chats` a member-typed title,
- * `server.ts` the workspace name in the instructions block and every
- * `_dopl_status` footer), so there is exactly ONE definition.
- */
+/** The one neutralizer lives in `narration.ts`; re-exported, never re-declared. */
 export { INLINE_TEXT_MAX, inlineOr, neutralizeInline } from "./narration";
-/**
- * Channel roster as `userId → display name`, for the ids a thread row carries
- * (`createdBy`, `targetUserId`). ⚠ RAW names — the render side neutralizes
- * exactly once, in {@link memberRef}.
- *
- * ⚠ FAIL-SOFT: enrichment only. A roster that 404s, 403s or times out degrades
- * to ids, never turns a successful thread read into an error the agent retries.
- */
+/** Roster as `userId → raw name` (the render neutralizes once). Fail-soft: enrichment only, ids
+ *  still render. */
 export declare function memberNames(client: DoplClient, ref: string): Promise<Map<string, string>>;
-/**
- * ⚠ **THE ONE `isErr`, FOR EVERY LANE** — channel, member, agent identity and
- * knowledge base (2026-09-17). Two further copies tested `"isError" in x` with
- * no object guard, so a resolver that rejected with a STRING or a NUMBER threw
- * `TypeError: Cannot use 'in' operator` instead of narrowing.
- */
+/** The one `isErr` for every lane; object-guarded, so a non-object rejection never throws on `in`. */
 export declare function isErr<T>(x: T | ToolResponse): x is ToolResponse;
-/**
- * Uniform not-found for a channel reference. Shared by `resolveChannelOr` and
- * by the hot read and hold handlers, which skip the pre-resolve and map a route
- * 404 to this same copy.
- */
+/** Uniform channel not-found, also used by the hot read/hold paths that map a route 404. */
 export declare function channelNotFound(ref: string): ToolResponse;
-/**
- * Resolve a channel reference (slug or UUID) to a `Channel` row, or a not-found
- * error. Lists channels once and matches on id or slug. ⚠ **It passed
- * `includeArchived: true` until 2026-09-17** so an archived channel stayed
- * addressable; the archive feature is gone (R-21) and the plain list already
- * carries every channel.
- *
- * Used by the write ops so a confirmation can name the channel and a bad ref is
- * caught before the mutation. ⚠ The hot read and hold shapes must NOT call this —
- * they pass the ref straight to the route (which resolves slug-or-id and
- * enforces visibility), avoiding a listChannels() round-trip per poll.
- */
+/** Channel by id or slug, or not-found. For write ops only: hot read/hold paths pass the ref to the
+ *  route (which resolves and enforces visibility) to avoid a list per poll. */
 export declare function resolveChannelOr(client: DoplClient, ref: string): Promise<Channel | ToolResponse>;
 export interface ResolvedMember {
     userId: string;
-    /**
-     * ⚠ RENDER-SAFE already — one inline code span, never a bare name (see
-     * {@link memberLabel}). Splice directly; neutralizing again strips the span's
-     * own backticks and hands back a bare name, i.e. the bug.
-     */
+    /** Already render-safe (one code span); neutralizing again strips its backticks. */
     label: string;
 }
-/**
- * Resolve a member reference (email or user id) to an ACTIVE workspace member,
- * or an error. ⚠ Invites are in-workspace only, so a pending/revoked match is
- * rejected with a stated reason. Reads the same listing `dopl_members` does.
- */
+/** Member by email or user id; only an ACTIVE member resolves (pending/revoked refused, with why). */
 export declare function resolveMemberOr(client: DoplClient, ref: string): Promise<ResolvedMember | ToolResponse>;

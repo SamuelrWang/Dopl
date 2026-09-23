@@ -1,39 +1,6 @@
 /**
- * `dopl_agent` WRITE op handlers: create, update, grant. Routed from the
- * registrar in `agent.ts`.
- *
- * ── THE TWO THINGS EVERY LINE IN HERE RESPECTS ────────────────────────────
- *
- * ⚠ **THE SHELF FENCE THIS HEADER OPENED WITH IS GONE (2026-09-02, slice B15,
- * ruling B10).** It had three numbered rules; the first two were about
- * `resolveIdentityHomeScope` and about not confusing it with the credential's
- * container lock (F-336). The `home_scoped` column is dropped and a personal
- * identity is an ordinary row in the caller's own `kind='personal'` container,
- * so there is no shelf to fence and no contradiction to refuse before the round
- * trip. **The container LOCK is untouched** — it was always the thing doing the
- * work in rule 2 — and it is still what answers a container-locked session that
- * reaches for a tenancy it is not in.
- *
- * 1. ⚠ **THE CONFIRM GATE IS A TRIPWIRE, AND SINCE G16 IT FEEDS A FENCE.** See
- *    `confirm-token.ts`'s header for the tripwire half — nothing here stops an
- *    agent previewing and echoing the token back without showing a human. What
- *    is new is that a SPENT token now sets `acknowledgeShared: true` on the
- *    write body, and `src/features/workspaces/server/shared-publish.ts` 400s
- *    the write WITHOUT it: an agent that skips the preview no longer skips the
- *    refusal, because the refusal belongs to the server that owns the rows.
- *    It fires only for a row landing at `visibility: "workspace"` inside a SHARED
- *    link container — publishing the operator's agent identity into the room a
- *    peer is standing in.
- *    ⚠ IT READS THE EXPLICIT `visibility` ONLY. An OMITTED visibility takes the
- *    server's default, which is `private` for every credential that stands for a
- *    person and `workspace` for one that does not — and a credential that does
- *    not is `isSharedCredential`, which B1 keeps out of containers entirely. So
- *    the omitted case cannot publish into a shared room; said here because the
- *    reasoning is not local to this file.
- *
- * 2. 🔒 **A GRANT LENDS ONE ROW AND THE FENCE IS BOTH SIDES OF IT** — see
- *    {@link opGrantIdentity} and `grant.ts`. It replaced `op="copy"`, whose
- *    two-leg cross-tenancy create is deleted.
+ * `dopl_agent` write ops: create, update, grant.
+ * The confirm gate is a tripwire (`confirm-token.ts`); the fence is the server's shared-publish check, fed by `acknowledgeShared`.
  */
 import type { DoplClient, IdentityField } from "@dopl/client";
 import type { WorkspaceDirectory } from "../workspace-directory.js";
@@ -45,6 +12,7 @@ export interface IdentityWriteInput {
     description?: string | null;
     instructions?: string | null;
     model?: string | null;
+    runtime?: string | null;
     fields?: IdentityField[];
     visibility?: OfferedIdentityVisibility;
     knowledge_bases?: string[];
@@ -54,32 +22,19 @@ export interface IdentityWriteInput {
         entry?: string;
     }>;
     confirm_token?: string;
-    /** op="update" only — the Version from `op="get"`. See {@link opUpdate}. */
+    /** op="update" only — the Version from `op="get"`. */
     expected_version?: string;
-    /** op="update" only — the `expected_version` escape. */
+    /** op="update" only — skip the version check. */
     force?: boolean;
 }
 export declare function opCreate(client: DoplClient, callerUserId: string | null, input: IdentityWriteInput & {
     name: string;
 }, 
-/** ⚠ OPTIONAL — see `container-destination.ts ›
- *  resolveHomeChannelContainer`: absent means "not known", which degrades to
- *  the pre-2026-09-18 behaviour and leaves the refusal with the server. */
+/** Optional: absent means "not known" and leaves the refusal to the server. */
 directory?: WorkspaceDirectory): Promise<ToolResponse>;
 export declare function opUpdate(client: DoplClient, callerUserId: string | null, ref: string, input: IdentityWriteInput): Promise<ToolResponse>;
 /**
- * `op="grant"` — lend ONE identity to a channel, container or team. The op that
- * REPLACED `op="copy"` (Wave B slice B15, ruling B11).
- *
- * ⚠ **THIS IS THE `op="share"` §5A SAID WOULD NEVER EXIST, AND THE PREMISE THAT
- * REFUSED IT DIED IN THE SAME WAVE.** The argument was *"an identity has no grant
- * table, so sharing into a container IS `visibility: 'workspace'` on
- * `op='update'` — a second verb would be two doors onto one write"*. Since
- * `20260914120000` an identity HAS a grant table (`resource_grants` accepts
- * `resource_type='agent_identity'`), and the two verbs are no longer one write:
- * `visibility` says who inside THIS container may use the identity, and a grant
- * lends the row to a scope somewhere else. A personal identity lives in the
- * caller's own personal container, where `visibility:"workspace"` reaches an
- * audience of one — which is exactly why sharing it needs this op.
+ * op="grant": lend one identity to a channel, container or team — one `resource_grants` row, so an edit reaches every grantee.
+ * `visibility` says who inside this container may use it; a grant lends it to a scope elsewhere.
  */
 export declare function opGrantIdentity(client: DoplClient, directory: WorkspaceDirectory, selfUserId: string | null, ref: string, scope: GrantScopeArg, to: string, level: GrantLevelArg | undefined): Promise<ToolResponse>;
