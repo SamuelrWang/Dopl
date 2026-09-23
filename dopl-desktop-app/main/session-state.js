@@ -106,9 +106,11 @@ function nativeBag(raw) {
 function initialSessionState(opts) {
   const o = opts || {};
   const toolModes = toolModesOf(o).slice();
-  // C2: a PINNED start posture is the session's own pick (a directive's narrower ask), not a start
-  // value that follows the channel. Both axes, and never wider than the channel: the caller clamps.
-  const pinned = o.pinned === true;
+  // C2: a PINNED start axis is the session's own pick (a directive's narrower ask), not a start
+  // value that follows the channel; never wider than the channel (the caller clamps). `pinned` is
+  // `true` (both axes) or `{ tools, messages }` (only the axes the directive asked).
+  const pinTools = o.pinned === true || !!(o.pinned && o.pinned.tools === true);
+  const pinMessages = o.pinned === true || !!(o.pinned && o.pinned.messages === true);
   const toolMode = coerceMode(toolModes, o.toolMode);
   const messageMode = coerceMode(MESSAGE_MODES, o.messageMode);
   // 2026-09-07: `o.turnCap` / `o.costCapUsd` from an older persisted record are ignored rather than
@@ -140,11 +142,11 @@ function initialSessionState(opts) {
     toolMode: toolMode,
     // C2 "narrower sticks": `*ModeSet` marks a per-agent pick (`*Pick` holds it). Set by a pinned
     // start posture or a pinned `set_*_mode`; a channel fan-out never sets it. Never persisted.
-    toolModeSet: pinned,
-    toolPick: pinned ? toolMode : '',
+    toolModeSet: pinTools,
+    toolPick: pinTools ? toolMode : '',
     messageMode: messageMode,
-    messageModeSet: pinned,
-    messagePick: pinned ? messageMode : '',
+    messageModeSet: pinMessages,
+    messagePick: pinMessages ? messageMode : '',
     // ⚠ **THE SELECTED RUNTIME'S OWN LAUNCH SETTINGS, AS AN OPAQUE BAG (2026-09-21, U5).** Core
     // stores it, stamps it and NEVER looks inside: every key and every value was validated by the
     // adapter that declared it (`runtime/selection-vocabulary.js › normalizeNative`), and the

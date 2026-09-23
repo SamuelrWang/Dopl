@@ -69,9 +69,8 @@ function appliedModelId(runtimeId, modelArg) {
  * is unreadable (the pick is never dropped), and spends the runtime default for `''`.
  */
 async function resolveModel(runtimeId, d, identity) {
-  const fromIdentity = require('./session-launch-op').identityModel(sessionModel, identity);
   return sessionModel.chainModel(d.model)
-    || require('./runtime/launch-default').identityModelFor(runtimeId, fromIdentity);
+    || require('./runtime/launch-default').identityModelFor(runtimeId, identity && identity.model);
 }
 
 /**
@@ -105,7 +104,7 @@ function planPosture(d, runtimeId, chainAllowed) {
   }
   const start = channelPrefs.launchStartModes(d.channelId, runtimeId) || {};
   const hand = { tools: plan.modes.tools, messages: plan.modes.messages, native: { ...(start.native || {}) } };
-  if (askedTools || d.startMessageMode) hand.pinned = true;
+  if (askedTools || d.startMessageMode) hand.pinned = { tools: !!askedTools, messages: !!d.startMessageMode };
   return { hand, chain: plan.chain };
 }
 
@@ -224,7 +223,7 @@ async function spawn(d, deps) {
     taskId: d.taskId,
     workspaceId: d.workspaceId || null,
     runtime: runtime.id, // `launchRuntime` above: pick → identity → channel → default (C3)
-    goal: d.goal || defaultGoal(channelLevel),
+    goal: d.goal || require('./session-launch-op').defaultGoal(channelLevel, ''),
     counterpartyId: null,
     direct: false,
     context: {
@@ -354,12 +353,4 @@ async function spawn(d, deps) {
  */
 const NEW_AGENT_NAME = 'New Agent';
 
-/** The goal a directive with none falls back to — the same sentence the New Agent button
- *  composes, because a directive with no goal is asking for exactly that agent. */
-function defaultGoal(channelLevel) {
-  return channelLevel
-    ? 'Stand by in this channel as my agent: watch the main room and answer what is addressed to you.'
-    : 'Join this thread as my agent: read it with dopl_channel (op "read", thread=<id>) and carry the work forward.';
-}
-
-module.exports = { spawn, defaultGoal };
+module.exports = { spawn };

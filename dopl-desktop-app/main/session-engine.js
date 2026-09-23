@@ -231,7 +231,7 @@ async function startSession(spec, rt) {
   // decision a human is making right now, and a parked shell still refuses a posture no human
   // armed. A shape that passes nothing inherits the runtime's own declared defaults.
   const startModes = armedModes && (!spec.parkedShell || operatorArmed)
-    ? { toolMode: armedModes.tools, messageMode: spec.windowless === true ? floorWindowlessMessage(armedModes.messages) : armedModes.messages, native: armedModes.native, pinned: armedModes.pinned === true } // C2: `pinned` = a per-agent pick; floored first so the pick is too
+    ? { toolMode: armedModes.tools, messageMode: spec.windowless === true ? floorWindowlessMessage(armedModes.messages) : armedModes.messages, native: armedModes.native, pinned: armedModes.pinned } // C2: `pinned` = a per-agent pick (all axes or `{ tools, messages }`); floored first so the pick is too
     : {};
   const state = initialSessionState({ mode: spec.mode, side: spec.side, ...readCaps(spec), ...startModes, toolModes: toolModesFor(rt && rt.id) }); // Axis A in THIS runtime's words, never another's (X-01)
   // THE WINDOWLESS MESSAGE FLOOR, AT THE ONE CONSTRUCTION SITE (2026-08-22, F-236's last hole).

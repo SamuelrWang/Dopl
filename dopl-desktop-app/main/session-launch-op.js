@@ -181,11 +181,7 @@ async function launchFromButton(payload) {
   // ⚠ AN IDENTITY DOES NOT REPLACE IT, AND IT DOES NOT SUPPRESS THE IDENTITY. ROLE FIRST, GOAL
   // LAST: the role is WHO YOU ARE and the goal is WHAT TO DO NOW, and the goal reads last,
   // adjacent to FIRST ACTIONS and DELIVERY, which is what the agent acts on.
-  const goal = channelLevel
-    ? 'Stand by in this channel as my agent: watch the main room and answer what is addressed to you.'
-    : title
-      ? `Join the thread "${title}" as my agent: read it with dopl_channel (op "read", thread=<id>) and carry the work forward.`
-      : 'Join this thread as my agent: read it with dopl_channel (op "read", thread=<id>) and carry the work forward.';
+  const goal = defaultGoal(channelLevel, title);
 
   // ⚠ THE RUNTIME IS RESOLVED BEFORE THE MODEL, BECAUSE THE IDENTITY LINK IS ASKED OF IT
   // (2026-09-23): an identity's model counts only if THIS runtime offers it
@@ -358,6 +354,13 @@ async function launchFromButton(payload) {
  * DIRECTIVE lane needs the identical answer for its own link and a rule written once per lane is
  * a rule that drifts in one of them (F-285). This function is now only "which field to read".
  */
+/** The stand-by / join goal a launch with none gets; the directive lane uses the same sentences. */
+function defaultGoal(channelLevel, title) {
+  if (channelLevel) return 'Stand by in this channel as my agent: watch the main room and answer what is addressed to you.';
+  const which = title ? `the thread "${title}"` : 'this thread';
+  return `Join ${which} as my agent: read it with dopl_channel (op "read", thread=<id>) and carry the work forward.`;
+}
+
 function identityModel(sessionModel, identity) {
   return sessionModel.chainModel(
     identity && typeof identity.model === 'string' ? identity.model : ''
@@ -381,4 +384,4 @@ function approveIdentity(payload) {
   return { ok: require('./channel-prefs').approveIdentity(p.identityId) === true };
 }
 
-module.exports = { launchFromButton, approveIdentity, wantsIdentity, identityModel };
+module.exports = { launchFromButton, approveIdentity, wantsIdentity, identityModel, defaultGoal };

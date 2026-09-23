@@ -157,25 +157,6 @@ const MESSAGE_MODES = ['ask', 'auto_inbound', 'auto_outbound', 'auto_both'];
 const REFUSAL_REASONS = ['cap', 'busy', 'no-sdk', 'auth-hold', 'no-bridge', 'no-counterparty',
   'no-identity', 'no-session', 'bad-name', 'no-chain', 'no-model'];
 
-// The keys this desktop puts on the wire, and the ones it reads back. Stated as data so the
-// suite can assert them without a live route, and so a route that lands with different names
-// fails in ONE place.
-// ⚠ THE THREE `applied*` KEYS JOINED THE DECIDE ON 2026-09-01 (T24's echo) and are the LAUNCHED
-// branch's only. They do not GATE the body — `decideBody` builds it — but this list is the
-// module's stated answer to "what crosses", and one that omits a field that really does is worse
-// than none.
-// ⚠ AND `appliedRuntime` / `appliedModel` JOINED THE LAUNCHED BRANCH ON 2026-09-21 (U9) — WHICH
-// RUNTIME AND MODEL THIS MACHINE ACTUALLY STARTED ON, the `applied` half of a requested/applied
-// pair whose request half is the row's own `runtime` column. They are here for this list's stated
-// purpose: it is the module's answer to "what crosses", and one that omits a field that really
-// does is worse than none.
-const REQUEST_KEYS = {
-  claim: ['directiveId'],
-  decide: ['directiveId', 'status', 'agentId', 'refusalReason',
-    'appliedTools', 'appliedMessages', 'appliedChain',
-    'appliedRuntime', 'appliedModel'],
-};
-
 // ⚠ `agent-names.js › MAX_NAME`, RESTATED AS A WIRE BOUND. It is the SAME number
 // and it is checked TWICE on purpose: here because an unbounded string from a
 // server row has no business travelling into main at all, and there because that
@@ -183,7 +164,6 @@ const REQUEST_KEYS = {
 // rather than refused would be stored silently altered, so `directiveFrom` keeps
 // the raw value's length and lets `sanitizeName` refuse it — see its note.
 const TARGET_NAME_MAX = 60;
-const RESPONSE_KEYS = { claim: ['ok', 'directive', 'reason'] };
 
 // ⚠ **`UUID_RE` IS NOT HERE, AND THAT IS A DECISION.** It stays in
 // `launch-directive-wire.js` beside `directiveFrom`, its only reader — the census in
@@ -243,6 +223,9 @@ const GOAL_MAX = 4000;
 // server row has no business travelling into main at all.
 const IDENTITY_NAME_MAX = 120;
 
+// A model id's bound: the server's `schema-launch.ts` `safeLabel("Model", 120)` and `identity-resolve.js › MAX_MODEL`.
+const MODEL_MAX = 120;
+
 module.exports = {
   DIRECTIVE_TABLE,
   ROUTES,
@@ -262,12 +245,11 @@ module.exports = {
   TOOL_MODES,
   MESSAGE_MODES,
   REFUSAL_REASONS,
-  REQUEST_KEYS,
-  RESPONSE_KEYS,
   TARGET_NAME_MAX,
   AGENT_ID_RE,
   RUNTIME_ID_RE,
   GOAL_MAX,
   IDENTITY_NAME_MAX,
+  MODEL_MAX,
   text,
 };

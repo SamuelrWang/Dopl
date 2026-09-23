@@ -116,7 +116,7 @@ test("LAUNCH: every lane's chain is launcher pick > identity model, and nothing 
     "the button lane must not restate the rule — it delegates");
   const DIRECTIVE = read("launch-directive-spawn.js");
   assert.match(DIRECTIVE,
-    /return sessionModel\.chainModel\(d\.model\)\s*\|\| require\('\.\/runtime\/launch-default'\)\.identityModelFor\(runtimeId, fromIdentity\);/,
+    /return sessionModel\.chainModel\(d\.model\)\s*\|\| require\('\.\/runtime\/launch-default'\)\.identityModelFor\(runtimeId, identity && identity\.model\);/,
     "the directive lane, ONE path for every runtime: the directive's `model`, then the identity's on the launch runtime");
   // P3-09: no second model check on the directive lane — no roster spawn, no pre-resolved default.
   assert.doesNotMatch(DIRECTIVE, /\.models\(\)|withRuntimeDefault/,

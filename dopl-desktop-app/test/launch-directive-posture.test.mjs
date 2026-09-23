@@ -149,14 +149,14 @@ test("LANE: a directive naming NO posture launches exactly as it did before T24"
 test("LANE: a NARROWER request is honoured — asking is the point of the ticket", async () => {
   const h = boot({ ceiling: { tools: "bypass", messages: "auto_both" } });
   await h.api.handle(launchRow({ start_tool_mode: "auto", start_message_mode: "auto_inbound" }), WS);
-  assert.deepEqual(handed(h), { tools: "auto", messages: "auto_inbound", native: {}, pinned: true },
+  assert.deepEqual(handed(h), { tools: "auto", messages: "auto_inbound", native: {}, pinned: { tools: true, messages: true } },
     "an ASKED posture is pinned as the session's own pick, so the narrower ask sticks (C2)");
 });
 
 test("LANE: a WIDER request is CLAMPED to the operator's stored pair, and still launches", async () => {
   const h = boot({ ceiling: { tools: "accept_edits", messages: "auto_inbound" } });
   await h.api.handle(launchRow({ start_tool_mode: "bypass", start_message_mode: "auto_both" }), WS);
-  assert.deepEqual(handed(h), { tools: "accept_edits", messages: "auto_inbound", native: {}, pinned: true });
+  assert.deepEqual(handed(h), { tools: "accept_edits", messages: "auto_inbound", native: {}, pinned: { tools: true, messages: true } });
   // ⚠ **AND THE CLAMP IS NOW REPORTED TO THE CALLER, WHICH IS F-410 CLOSED.** The decide echoes
   // the APPLIED pair — `accept_edits`/`auto_inbound` — never the `bypass`/`auto_both` that was
   // asked for. Before 2026-09-01 the clamp existed only in the `diag` line below, so an
@@ -178,7 +178,7 @@ test("LANE: an UNSET channel posture is manual/ask, so no directive can widen th
   await h.api.handle(launchRow({ start_tool_mode: "bypass", start_message_mode: "auto_both" }), WS);
   // ⚠ The tool axis lands at `manual`; the MESSAGE axis is floored to `auto_inbound` afterwards,
   // because a windowless session has no Accept surface and `ask` would strand every inbound turn.
-  assert.deepEqual(handed(h), { tools: "manual", messages: "auto_inbound", native: {}, pinned: true });
+  assert.deepEqual(handed(h), { tools: "manual", messages: "auto_inbound", native: {}, pinned: { tools: true, messages: true } });
 });
 
 // ── 3. THE CHAIN REQUEST ─────────────────────────────────────────────────────────────────

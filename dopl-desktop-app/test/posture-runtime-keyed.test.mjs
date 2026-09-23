@@ -139,6 +139,13 @@ test("C2: a pinned START posture is the agent's own pick on both axes", () => {
   assert.equal(floored.messagePick, "auto_inbound", "a windowless pick is floored with the axis (F-236)");
 });
 
+test("C2: a START posture pinned on ONE axis pins only that axis; the other follows the channel", () => {
+  const tools = startedStateFor({ windowless: true, startModes: { tools: "granular", messages: "auto_inbound", pinned: { tools: true, messages: false } } }, { id: "codex" });
+  assert.deepEqual([tools.toolModeSet, tools.toolPick, tools.messageModeSet, tools.messagePick], [true, "granular", false, ""]);
+  const messages = startedStateFor({ windowless: true, startModes: { tools: "granular", messages: "auto_inbound", pinned: { tools: false, messages: true } } }, { id: "codex" });
+  assert.deepEqual([messages.toolModeSet, messages.toolPick, messages.messageModeSet, messages.messagePick], [false, "", true, "auto_inbound"]);
+});
+
 // ── 3. THE LAUNCH READS THE LAUNCH RUNTIME'S RECORD (C1 / X-02 / P3-04) ───────────────────────
 
 test("C1: launchStartModes reads byRuntime[launch runtime], in that runtime's words, with its native bag", () => {

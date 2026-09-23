@@ -71,8 +71,8 @@ const {
   STATUS_PENDING, STATUS_CLAIMED, STATUS_LAUNCHED, STATUS_DONE, STATUS_REFUSED, STATUS_EXPIRED,
   STATUSES,
   KIND_LAUNCH, KIND_END, KIND_RENAME, KIND_SET_MODE, KINDS, KINDS_NEEDING_LAUNCH_CONSENT,
-  TOOL_MODES, MESSAGE_MODES, REFUSAL_REASONS, REQUEST_KEYS, RESPONSE_KEYS,
-  TARGET_NAME_MAX, AGENT_ID_RE, RUNTIME_ID_RE, GOAL_MAX, IDENTITY_NAME_MAX, text,
+  TOOL_MODES, MESSAGE_MODES, REFUSAL_REASONS,
+  TARGET_NAME_MAX, AGENT_ID_RE, RUNTIME_ID_RE, GOAL_MAX, IDENTITY_NAME_MAX, MODEL_MAX, text,
 } = vocab;
 
 // ⚠ **THE UUID RULE STAYS HERE**, with `directiveFrom`, which is its only reader. It is one of
@@ -221,7 +221,7 @@ function directiveFrom(raw, workspaceId) {
     goal: text(r.goal, GOAL_MAX),
     // Coerced by `session-model.js` at the call site, not here — this module owns the WIRE, and
     // the frozen model list is that module's.
-    model: text(r.model, 64),
+    model: text(r.model, MODEL_MAX),
     // ⚠ **WHICH RUNTIME THIS DIRECTIVE ASKED FOR** (2026-09-21, U9;
     // `channel_launch_directives.runtime`). ⚠ BOTH SPELLINGS READ, like `identity_name` and
     // `color` above and for the identical reason: the row reaches this machine as the CLAIM's
@@ -324,10 +324,8 @@ function directiveFrom(raw, workspaceId) {
     // rule, and the machine's is the finer one (it also holds the windowless message floor).
     // ⚠ **AN OLDER SERVER SENDS NO `resolved_*` AND THE `||` CHAIN FALLS THROUGH TO
     // `start_*`**, which is exactly today's behaviour. Same shape as every other field here.
-    startToolMode: pickMode(TOOL_MODES, r.resolved_tool_mode, r.resolvedToolMode,
-      r.start_tool_mode, r.startToolMode),
-    startMessageMode: pickMode(MESSAGE_MODES, r.resolved_message_mode, r.resolvedMessageMode,
-      r.start_message_mode, r.startMessageMode),
+    startToolMode: pickMode(TOOL_MODES, r.start_tool_mode, r.startToolMode),
+    startMessageMode: pickMode(MESSAGE_MODES, r.start_message_mode, r.startMessageMode),
     // ⚠ A TRI-STATE, NOT A BOOLEAN, AND **ALL THREE VALUES ARE LOAD-BEARING**. `true` is "I need
     // this agent to be able to launch workers"; `false` is "run it with chaining OFF, whatever
     // the channel allows"; `null` is "I did not ask", which inherits the channel's setting
@@ -347,9 +345,7 @@ function directiveFrom(raw, workspaceId) {
     // ⚠ **THE SERVER'S RESOLVED CHAIN FIRST, ON `startToolMode`'S ARGUMENT** — it can only
     // narrow (a `chain: true` the channel forbids is REFUSED at creation, never silently
     // turned off), and an older server sends none, which falls through to the raw request.
-    chain: triState(r.resolved_chain !== undefined && r.resolved_chain !== null
-      ? r.resolved_chain
-      : r.resolvedChain !== undefined && r.resolvedChain !== null ? r.resolvedChain : r.chain),
+    chain: triState(r.chain),
     status: STATUSES.indexOf(status) === -1 ? '' : status,
     agentId: String(r.agent_id || r.agentId || ''),
   };
@@ -432,7 +428,7 @@ function decideBody(directiveId, outcome) {
       body.appliedRuntime = String(o.appliedRuntime);
     }
     if (typeof o.appliedModel === 'string' && o.appliedModel.trim() !== '') {
-      body.appliedModel = o.appliedModel.trim().slice(0, 120);
+      body.appliedModel = o.appliedModel.trim().slice(0, MODEL_MAX);
     }
     return body;
   }
@@ -487,8 +483,6 @@ module.exports = {
   AGENT_ID_RE,
   RUNTIME_ID_RE,
   REFUSAL_REASONS,
-  REQUEST_KEYS,
-  RESPONSE_KEYS,
   GOAL_MAX,
   IDENTITY_NAME_MAX,
   TARGET_NAME_MAX,

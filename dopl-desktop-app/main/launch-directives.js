@@ -242,17 +242,6 @@ function deliver(workspaceId, row) {
 
 // ── The breaker-open backstop ────────────────────────────────────────────────────────────
 
-// ⚠ THE READ EXISTS — F-273 IS CLOSED (measured 2026-08-23). `ROUTES.pending` resolves to
-// `src/app/api/channels/launch-directives/route.ts › handleGet`, an authed collection GET over
-// `service-launch.ts › listPendingLaunchDirectives` answering `{ directives }` and fenced on
-// `operator_user_id`. This is a working recovery path, not a stub.
-// ⚠ THE 404 SELF-DISABLE STAYS, AND NOT AS A LEFTOVER: it is the OLDER-DEPLOYMENT degradation
-// (INVARIANTS §13 — an older peer is supported). Such a server still 404s, and standing down
-// after the first is still right — one dead request per run instead of one per minute, visible
-// in `listener.log`. Against it realtime is the only path and a missed directive expires, which
-// the orchestrator already handles (a closed laptop produces it too).
-let pollUnavailable = false;
-
 /** Workspaces currently logged as push-DOWN. ⚠ EDGE-TRIGGERED, not per tick: the whole point of
  *  the line is that an operator reading `listener.log` sees the transition, and one line a
  *  minute for the life of an outage buries it. */
@@ -263,13 +252,6 @@ async function pollWorkspace(wsId) {
     const res = await apiFetch(wire.ROUTES.pending, {
       method: 'GET', workspaceId: wsId, timeoutMs: HTTP_TIMEOUT_MS, noStore: true,
     });
-    if (res && res.status === 404 && !pollUnavailable) {
-      pollUnavailable = true;
-      // ⚠ NOT A FILED GAP — an OLDER SERVER. Worded as the deployment fact it is, so an operator
-      // reading `listener.log` is not sent to a finding that closed on 2026-08-22.
-      diag('launch-directives: this server has no pending-directives read (it predates it) —',
-        'the backstop is disabled for this run; realtime is the only path, and a miss expires');
-    }
     if (!res || !res.ok) return;
     const body = await res.json().catch(() => null);
     const rows = (body && (body.directives || body.rows)) || [];
@@ -283,7 +265,7 @@ async function poll() {
   // the breaker made realtime miss, and two of the three kinds are answerable with the toggle
   // off — a poll that stood down would make the recovery path the one place an end silently
   // expires. `handle` still refuses every launch, per kind.
-  if (!armed || pollUnavailable) return;
+  if (!armed) return;
   const list = (deps.workspaces && deps.workspaces()) || [];
   for (const wsId of list) {
     // ⚠ **EVERY WORKSPACE, HEALTHY OR NOT (2026-09-18, S18/S56).** The `continue` that used to
@@ -372,7 +354,6 @@ function refresh() {
 
 function stop() {
   armed = false;
-  pollUnavailable = false; // a new run may reach a newer server
   pollDegraded.clear();
   if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
   decided.clear();
