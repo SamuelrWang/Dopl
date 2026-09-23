@@ -48,8 +48,6 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
 import {
   MAX_DESCRIPTION_CHARS,
   MAX_FIELDS_BYTES,
@@ -60,16 +58,15 @@ import {
   MAX_MODEL_CHARS,
   MAX_NAME_CHARS,
 } from "./schema";
-import {
-  readMigrations,
-  statementAt,
-  stripSqlLineComments,
-} from "@/shared/supabase/migration-files";
+import { statementAt } from "@/shared/supabase/migration-files";
+import { FILES } from "@/features/knowledge/migration-replay";
+import { readCode } from "@/shared/testing/source-text";
 import { LAUNCH_RUNTIME_ID_RE } from "@/features/channels/schema-launch-modes";
 
-const ROOT = process.cwd();
-const MIGRATIONS = join(ROOT, "supabase", "migrations");
 const TABLE = "agent_identities";
+
+/** One migration's replay text (comment-stripped, forward-renamed). */
+const migration = (name: string): string => FILES.find((f) => f.name === name)?.sql ?? "";
 
 /**
  * REPLAY the migrations and answer with the CHECK constraints LIVE on the table
@@ -92,8 +89,7 @@ function liveConstraints(): Map<string, string> {
   );
   // ⚠ FORWARD-RENAMED: the table and its constraints were CREATED as `agent_templates*` and
   // renamed on 2026-09-22; the replay reads every file under the final names.
-  const files = readMigrations();
-  for (const { sql } of files) {
+  for (const { sql } of FILES) {
     // Only files that speak about this table at all — a constraint name is
     // unique per table by convention here, but the `ALTER TABLE` is what says
     // which table an `ADD CONSTRAINT` lands on.
@@ -132,14 +128,8 @@ function constraint(name: string): string {
   return body as string;
 }
 
-const MCP = readFileSync(
-  join(ROOT, "packages", "mcp-server", "src", "tools", "agent.ts"),
-  "utf8"
-);
-const DESKTOP = readFileSync(
-  join(ROOT, "dopl-desktop-app", "main", "identity-resolve.js"),
-  "utf8"
-);
+const MCP = readCode(new URL("../../../packages/mcp-server/src/tools/agent.ts", import.meta.url));
+const DESKTOP = readCode(new URL("../../../dopl-desktop-app/main/identity-resolve.js", import.meta.url));
 
 /** `const NAME = 123;` / `const NAME = 32_768;` → 123. Underscores dropped. */
 function declared(source: string, name: string): number {
@@ -164,7 +154,7 @@ describe("the replayed CHECK constraints exist at all", () => {
   });
 });
 
-describe("🔒 the zod bounds are the DATABASE's bounds", () => {
+describe("the zod bounds are the DATABASE's bounds", () => {
   it("name — BETWEEN 1 AND MAX_NAME_CHARS", () => {
     expect(constraint("agent_identities_name_charset_check")).toMatch(
       new RegExp(String.raw`char_length\(name\)\s+BETWEEN\s+1\s+AND\s+${MAX_NAME_CHARS}\b`, "i")
@@ -209,9 +199,7 @@ describe("🔒 the zod bounds are the DATABASE's bounds", () => {
   it("the visibility set is the schema's, and 'public' is not in it", () => {
     // ⚠ A COLUMN-LEVEL CHECK, not one of the four named ones — it is written
     // inline in `CREATE TABLE`, so it is read out of that statement.
-    const create = stripSqlLineComments(
-      readFileSync(join(MIGRATIONS, "20260822200000_agent_templates.sql"), "utf8")
-    );
+    const create = migration("20260822200000_agent_templates.sql");
     const m = /visibility\s+TEXT[\s\S]*?CHECK\s*\(visibility\s+IN\s*\(([^)]*)\)\)/i.exec(create);
     expect(m, "no inline visibility CHECK in the create statement").toBeTruthy();
     const sqlSet = [...(m as RegExpExecArray)[1].matchAll(/'([^']+)'/g)].map((x) => x[1]);
@@ -219,7 +207,7 @@ describe("🔒 the zod bounds are the DATABASE's bounds", () => {
   });
 });
 
-describe("🔒 the MCP tool's re-typed bounds are the server's", () => {
+describe("the MCP tool's re-typed bounds are the server's", () => {
   // ⚠ `packages/mcp-server` cannot import from `src/` (INVARIANTS §1), so every
   // number in its tool schema is a hand copy. Named since 2026-08-30 so this
   // comparison is possible at all.
@@ -244,14 +232,11 @@ describe("🔒 the MCP tool's re-typed bounds are the server's", () => {
   it("no bare numeric `.max()` is left in the tool schema", () => {
     // The whole point of naming them: a literal reintroduced beside a named
     // constant is invisible to the assertions above.
-    const code = MCP.split("\n")
-      .filter((line) => !/^\s*(\/\/|\*|\/\*)/.test(line))
-      .join("\n");
-    expect(code).not.toMatch(/\.max\(\s*[0-9]/);
+    expect(MCP).not.toMatch(/\.max\(\s*[0-9]/);
   });
 });
 
-describe("🔒 the desktop BOUNDARY's copy matches the writer's, and does not undercut it", () => {
+describe("the desktop BOUNDARY's copy matches the writer's, and does not undercut it", () => {
   // F-287's rule, in an executable form: a boundary that enforces a SMALLER
   // number than the far side enforces is this module inventing a limit the
   // operator can neither see nor satisfy.
@@ -297,11 +282,11 @@ describe("the zod-only bounds, recorded as zod-only", () => {
  * deleting either of the two sub-base arms of the trigger, and dropping any one
  * of the three partial unique indexes each turn an assertion below red.
  */
-describe("🔒 the knowledge-attachment scope shape", () => {
+describe("the knowledge-attachment scope shape", () => {
   const JUNCTION = "agent_identity_knowledge_bases";
   // ⚠ FORWARD-RENAMED: the file speaks `agent_template_knowledge_bases` / `template_id`; the
   // shape is asserted under the names the 2026-09-22 rename gave them.
-  const CODE = readMigrations().find((f) => f.name === "20260930150000_agent_template_knowledge_scopes.sql")?.sql ?? "";
+  const CODE = migration("20260930150000_agent_template_knowledge_scopes.sql");
 
   it("declares the three kinds and nothing else", () => {
     expect(CODE).toMatch(

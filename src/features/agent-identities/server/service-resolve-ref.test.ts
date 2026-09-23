@@ -21,45 +21,26 @@
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-// ⚠ **THE GRANT ARM IS A DB READ, SO IT IS DECLARED HERE** (F-604, 2026-09-02).
-// `canSeeBase` / `canSeeIdentity` gained an arm over `resource_grants`, and its
-// batch precompute is the one part of this seam that talks to Postgres. Every
-// case in this file is about the OTHER arms, so the grant set is empty — which
-// is also the pre-2026-09-02 behaviour, and therefore the right default for a
-// suite that predates the arm. The cases that exercise a GRANT live in
-// `service-shared-grant-arm.test.ts` and the redteam suites.
-vi.mock("@/shared/tenancy/resource-grant-reach", async (importOriginal) => ({
-  ...(await importOriginal<
-    typeof import("@/shared/tenancy/resource-grant-reach")
-  >()),
-  grantedResourceIds: vi.fn(async () => new Set<string>()),
-}));
-
-vi.mock("./repository", () => ({
-  findIdentityById: vi.fn(),
-  listIdentitiesForWorkspace: vi.fn(),
-  listTeamIdsForUser: vi.fn(),
-  listTeamLinksForIdentities: vi.fn(),
-}));
-
-// ⚠ THE CROSS-TENANCY READ LIVES IN `shared/tenancy/`, and is mocked EMPTY so
-// the default is "nothing to say" — every assertion in this file is about the
-// answer THIS workspace gives, and a classifier that answered would change the
-// error's DETAIL, never its visibility.
-// 🔒 ⚠ THE FENCE ITSELF IS NOT RE-TESTED HERE. Shared credentials, the viewer
-// floor, the container lock and the two-arm `.or()` are asserted un-mocked in
-// `shared/tenancy/resolve-resource.test.ts`; what this file owns is that the
-// classifier COMPOSES that answer rather than re-deciding any of it.
-vi.mock("@/shared/tenancy/resolve-resource", () => ({
-  resolveResource: vi.fn(async () => null),
-  resolveResourcesByName: vi.fn(async () => []),
-}));
+vi.mock("@/shared/tenancy/resource-grant-reach", async (orig) =>
+  (await import("./service-writes-fixtures")).noGrantsMock(orig)
+);
+vi.mock("./repository", async () => (await import("./service-writes-fixtures")).repoMock());
+// The fence itself is `shared/tenancy/resolve-resource.test.ts`; this file owns that the classifier composes it.
+vi.mock("@/shared/tenancy/resolve-resource", async (orig) =>
+  (await import("./service-writes-fixtures")).resolveNowhereMock(orig)
+);
 
 import * as repo from "./repository";
 import * as tenancy from "@/shared/tenancy/resolve-resource";
 import type { ResolvedResource } from "@/shared/tenancy/resolve-resource";
 import { resolveIdentityRef } from "./service-resolve-ref";
 import type { AgentIdentity, AgentIdentityContext } from "../types";
+import {
+  AUDITOR,
+  ctx as baseCtx,
+  identity as baseIdentity,
+  resetReadMocks,
+} from "./service-writes-fixtures";
 
 const WS = "11111111-1111-1111-1111-111111111111";
 const ME = "22222222-2222-2222-2222-222222222222";
@@ -68,40 +49,20 @@ const T1 = "44444444-4444-4444-4444-444444444444";
 const T2 = "55555555-5555-5555-5555-555555555555";
 const TEAM = "66666666-6666-6666-6666-666666666666";
 
-const ctx: AgentIdentityContext = {
+const ctx: AgentIdentityContext = baseCtx({
   workspaceId: WS,
   userId: ME,
   credentialSubjectUserId: ME,
   source: "agent",
-  role: "member",
-  apiKeyWorkspaceId: null,
-};
+});
 
-function identity(over: Partial<AgentIdentity> = {}): AgentIdentity {
-  return {
-    id: T1,
-    workspaceId: WS,
-    name: "Code Auditor",
-    description: null,
-    instructions: "audit it",
-    model: null,
-    fields: [],
-    visibility: "private",
-    teamIds: [],
-    knowledgeBases: [],
-    createdBy: ME,
-    createdAt: "2026-08-23T00:00:00.000Z",
-    updatedAt: "2026-08-23T00:00:00.000Z",
-    ...over,
-  };
-}
+const identity = (over: Partial<AgentIdentity> = {}) =>
+  baseIdentity({ ...AUDITOR, id: T1, workspaceId: WS, createdBy: ME, ...over });
 
 beforeEach(() => {
   vi.clearAllMocks();
-  vi.mocked(repo.listTeamIdsForUser).mockResolvedValue([]);
-  vi.mocked(repo.listTeamLinksForIdentities).mockResolvedValue([]);
-  // `clearAllMocks` keeps implementations, so re-install the "nothing to say" defaults a
-  // case below overrides — else the order of cases decides the answer (T2-04).
+  resetReadMocks(vi.mocked(repo));
+  // `clearAllMocks` keeps implementations; re-install what a case below overrides, or case order decides.
   vi.mocked(tenancy.resolveResource).mockResolvedValue(null);
   vi.mocked(tenancy.resolveResourcesByName).mockResolvedValue([]);
 });
@@ -243,7 +204,7 @@ describe("AMBIGUITY — it refuses, and it lists", () => {
   });
 });
 
-describe("M-10 — a workspace-scoped API key inherits nobody's reach", () => {
+describe("a workspace-scoped API key inherits nobody's reach", () => {
   /**
    * ⚠ ARM 2 OF THE MATRIX, AND THE REASON THE LAUNCH LANE HAD TO START CARRYING
    * `apiKeyWorkspaceId` ON ITS CONTEXT (2026-08-23). Such a key may be shared

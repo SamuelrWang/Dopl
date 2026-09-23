@@ -14,86 +14,27 @@
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { meetsMinRole } from "@/features/workspaces/types";
-import type { AgentIdentity, AgentIdentityContext } from "../types";
 
-// ⚠ **THE GRANT ARM IS A DB READ, SO IT IS DECLARED HERE** (F-604, 2026-09-02).
-// `canSeeBase` / `canSeeIdentity` gained an arm over `resource_grants`, and its
-// batch precompute is the one part of this seam that talks to Postgres. Every
-// case in this file is about the OTHER arms, so the grant set is empty — which
-// is also the pre-2026-09-02 behaviour, and therefore the right default for a
-// suite that predates the arm. The cases that exercise a GRANT live in
-// `service-shared-grant-arm.test.ts` and the redteam suites.
-vi.mock("@/shared/tenancy/resource-grant-reach", async (importOriginal) => ({
-  ...(await importOriginal<
-    typeof import("@/shared/tenancy/resource-grant-reach")
-  >()),
-  grantedResourceIds: vi.fn(async () => new Set<string>()),
-}));
-
-vi.mock("./repository", () => ({
-  listIdentitiesForWorkspace: vi.fn(),
-  findIdentityById: vi.fn(),
-  listTeamLinksForIdentities: vi.fn(),
-  listTeamIdsForUser: vi.fn(),
-  listKnowledgeLinksForIdentities: vi.fn(),
-  listKnowledgeBaseAccessRows: vi.fn(),
-  listKnowledgeBaseTeamGrants: vi.fn(),
-  listLiveFoldersForBases: vi.fn(),
-  listLiveEntryRows: vi.fn(),
-}));
+vi.mock("@/shared/tenancy/resource-grant-reach", async (orig) =>
+  (await import("./service-writes-fixtures")).noGrantsMock(orig)
+);
+vi.mock("./repository", async () => (await import("./service-writes-fixtures")).repoMock());
 
 import * as repo from "./repository";
 import { getIdentityById, listIdentities } from "./service";
 import { AgentIdentityNotFoundError } from "./errors";
+import { OWNER as CREATOR, ctx, identity, resetReadMocks } from "./service-writes-fixtures";
 
 const mockRepo = vi.mocked(repo);
 
-const CREATOR = "user-creator";
 const TEAMMATE = "user-teammate";
 const OUTSIDER = "user-outsider";
 const ADMIN = "user-admin";
 const SHARED_TEAM = "team-shared";
 
-function ctx(overrides: Partial<AgentIdentityContext> = {}): AgentIdentityContext {
-  return {
-    workspaceId: "ws-1",
-    userId: CREATOR,
-    source: "user",
-    role: "member",
-    apiKeyWorkspaceId: null,
-    credentialSubjectUserId: CREATOR,
-    ...overrides,
-  };
-}
-
-function identity(overrides: Partial<AgentIdentity> = {}): AgentIdentity {
-  return {
-    id: "tpl-1",
-    workspaceId: "ws-1",
-    name: "Researcher",
-    description: null,
-    instructions: null,
-    model: null,
-    fields: [],
-    visibility: "private",
-    teamIds: [],
-    knowledgeBases: [],
-    createdBy: CREATOR,
-    createdAt: "2026-01-01T00:00:00Z",
-    updatedAt: "2026-01-01T00:00:00Z",
-    ...overrides,
-  };
-}
-
 beforeEach(() => {
   vi.clearAllMocks();
-  mockRepo.listKnowledgeLinksForIdentities.mockResolvedValue([]);
-  mockRepo.listKnowledgeBaseAccessRows.mockResolvedValue([]);
-  mockRepo.listKnowledgeBaseTeamGrants.mockResolvedValue([]);
-  mockRepo.listLiveFoldersForBases.mockResolvedValue([]);
-  mockRepo.listLiveEntryRows.mockResolvedValue([]);
-  mockRepo.listTeamLinksForIdentities.mockResolvedValue([]);
-  mockRepo.listTeamIdsForUser.mockResolvedValue([]);
+  resetReadMocks(mockRepo);
 });
 
 // ── The grid ─────────────────────────────────────────────────────────
@@ -251,7 +192,7 @@ describe("canSeeIdentity — 3 visibilities × 7 callers, every cell", () => {
  * Together: a guest never reaches an identity surface at all, so widening
  * `canSeeIdentity` for a container session cannot expose one to a guest.
  */
-describe("the guest floor — why F-333 has no guest arm", () => {
+describe("the guest floor — why the container-session arm has no guest arm", () => {
   it("guest does not clear the viewer floor every identity route sits at", () => {
     expect(meetsMinRole("guest", "viewer")).toBe(false);
     expect(meetsMinRole("viewer", "viewer")).toBe(true);
@@ -277,7 +218,7 @@ describe("cross-workspace isolation", () => {
 
   it("a missing row 404s exactly like an invisible one", async () => {
     mockRepo.findIdentityById.mockResolvedValue(null);
-    await expect(getIdentityById(ctx(), "tpl-gone")).rejects.toBeInstanceOf(
+    await expect(getIdentityById(ctx(), "id-gone")).rejects.toBeInstanceOf(
       AgentIdentityNotFoundError
     );
   });

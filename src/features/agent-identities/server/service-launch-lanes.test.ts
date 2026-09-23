@@ -29,80 +29,36 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { AgentIdentity, AgentIdentityContext } from "../types";
 
-// ⚠ **THE GRANT ARM IS A DB READ, SO IT IS DECLARED HERE** (F-604, 2026-09-02).
-// `canSeeBase` / `canSeeIdentity` gained an arm over `resource_grants`, and its
-// batch precompute is the one part of this seam that talks to Postgres. Every
-// case in this file is about the OTHER arms, so the grant set is empty — which
-// is also the pre-2026-09-02 behaviour, and therefore the right default for a
-// suite that predates the arm. The cases that exercise a GRANT live in
-// `service-shared-grant-arm.test.ts` and the redteam suites.
-vi.mock("@/shared/tenancy/resource-grant-reach", async (importOriginal) => ({
-  ...(await importOriginal<
-    typeof import("@/shared/tenancy/resource-grant-reach")
-  >()),
-  grantedResourceIds: vi.fn(async () => new Set<string>()),
-}));
-
-vi.mock("./repository", () => ({
-  listIdentitiesForWorkspace: vi.fn(),
-  findIdentityById: vi.fn(),
-  listTeamLinksForIdentities: vi.fn(),
-  listTeamIdsForUser: vi.fn(),
-  listKnowledgeLinksForIdentities: vi.fn(),
-  listKnowledgeBaseAccessRows: vi.fn(),
-  listKnowledgeBaseTeamGrants: vi.fn(),
-  listLiveFoldersForBases: vi.fn(),
-  listLiveEntryRows: vi.fn(),
-}));
-vi.mock("@/shared/tenancy/resolve-resource", () => ({
-  resolveResource: vi.fn(async () => null),
-  resolveResourcesByName: vi.fn(async () => []),
-}));
+vi.mock("@/shared/tenancy/resource-grant-reach", async (orig) =>
+  (await import("./service-writes-fixtures")).noGrantsMock(orig)
+);
+vi.mock("./repository", async () => (await import("./service-writes-fixtures")).repoMock());
+vi.mock("@/shared/tenancy/resolve-resource", async (orig) =>
+  (await import("./service-writes-fixtures")).resolveNowhereMock(orig)
+);
 
 import * as repo from "./repository";
 import * as tenancy from "@/shared/tenancy/resolve-resource";
 import type { ResolvedResource } from "@/shared/tenancy/resolve-resource";
 import { resolveIdentityForLaunch, resolveIdentityRef } from "./service";
 import { AgentIdentityNotFoundError } from "./errors";
+import {
+  AUDITOR,
+  OTHER,
+  ctx as baseCtx,
+  identity as baseIdentity,
+  resetReadMocks,
+} from "./service-writes-fixtures";
 
-const ME = "user-me";
-const OTHER = "user-other";
 /** Where the caller was authorised — a channel's container, say. */
 const HERE = "11111111-1111-1111-1111-111111111111";
 /** Where the identity actually lives — the caller's personal shelf. */
 const SHELF = "22222222-2222-2222-2222-222222222222";
 const ID = "44444444-4444-4444-4444-444444444444";
 
-function ctx(over: Partial<AgentIdentityContext> = {}): AgentIdentityContext {
-  return {
-    workspaceId: HERE,
-    userId: ME,
-    source: "user",
-    role: "member",
-    apiKeyWorkspaceId: null,
-    credentialSubjectUserId: ME,
-    ...over,
-  };
-}
-
-function identity(over: Partial<AgentIdentity> = {}): AgentIdentity {
-  return {
-    id: ID,
-    workspaceId: SHELF,
-    name: "Code Auditor",
-    description: null,
-    instructions: "Audit the diff.",
-    model: null,
-    fields: [],
-    visibility: "private",
-    teamIds: [],
-    knowledgeBases: [],
-    createdBy: ME,
-    createdAt: "2026-01-01T00:00:00Z",
-    updatedAt: "2026-01-01T00:00:00Z",
-    ...over,
-  };
-}
+const ctx = (over: Partial<AgentIdentityContext> = {}) => baseCtx({ workspaceId: HERE, ...over });
+const identity = (over: Partial<AgentIdentity> = {}) =>
+  baseIdentity({ ...AUDITOR, id: ID, workspaceId: SHELF, ...over });
 
 /** The row exists on the caller's PERSONAL SHELF and nowhere else. ⚠
  *  `findIdentityById` is workspace-keyed, so the read in `HERE` must miss or
@@ -129,16 +85,10 @@ beforeEach(() => {
   vi.mocked(tenancy.resolveResourcesByName).mockResolvedValue([]);
   vi.mocked(repo.findIdentityById).mockResolvedValue(null);
   vi.mocked(repo.listIdentitiesForWorkspace).mockResolvedValue([]);
-  vi.mocked(repo.listKnowledgeLinksForIdentities).mockResolvedValue([]);
-  vi.mocked(repo.listKnowledgeBaseAccessRows).mockResolvedValue([]);
-  vi.mocked(repo.listKnowledgeBaseTeamGrants).mockResolvedValue([]);
-  vi.mocked(repo.listLiveFoldersForBases).mockResolvedValue([]);
-  vi.mocked(repo.listLiveEntryRows).mockResolvedValue([]);
-  vi.mocked(repo.listTeamLinksForIdentities).mockResolvedValue([]);
-  vi.mocked(repo.listTeamIdsForUser).mockResolvedValue([]);
+  resetReadMocks(vi.mocked(repo));
 });
 
-describe("🔒 ruling #18 — a personal identity launches anywhere its owner is", () => {
+describe("a personal identity launches anywhere its owner is", () => {
   it("BOTH lanes resolve an id living in another container of the caller's", async () => {
     livesOnTheShelf();
     // The CREATE lane (orchestrator).
@@ -166,7 +116,7 @@ describe("🔒 ruling #18 — a personal identity launches anywhere its owner is
     );
   });
 
-  it("🔒 BOTH lanes still refuse what the MATRIX refuses in the container it named", async () => {
+  it("BOTH lanes still refuse what the MATRIX refuses in the container it named", async () => {
     // 🔒 RESOLUTION IS NOT AUTHORISATION, on either door. The resolver is
     // strictly narrower than `canSeeIdentity` and cannot have named this row —
     // and even handed the address, both lanes re-run the matrix and answer the
@@ -190,7 +140,7 @@ describe("🔒 ruling #18 — a personal identity launches anywhere its owner is
   });
 });
 
-describe("⚠ a NAME does not follow, on either lane, and that is deliberate", () => {
+describe("a NAME does not follow, on either lane, and that is deliberate", () => {
   it("labels the tenancy instead of picking one", async () => {
     // `agent_identities` has no name uniqueness, so a name matching in two
     // containers has no non-arbitrary answer — every tie-break launches an

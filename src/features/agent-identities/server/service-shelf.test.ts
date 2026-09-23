@@ -28,20 +28,7 @@ vi.mock("@/shared/supabase/admin", () => ({
   supabaseAdmin: () => ({ __marker: "admin-client" }),
 }));
 
-vi.mock("./repository", () => ({
-  listIdentitiesForWorkspace: vi.fn(),
-  findIdentityById: vi.fn(),
-  insertIdentity: vi.fn(),
-  listTeamLinksForIdentities: vi.fn(),
-  replaceTeamLinks: vi.fn(),
-  replaceKnowledgeLinks: vi.fn(),
-  listKnowledgeLinksForIdentities: vi.fn(),
-  listKnowledgeBaseAccessRows: vi.fn(),
-  listKnowledgeBaseTeamGrants: vi.fn(),
-  listTeamIdsForUser: vi.fn(),
-  listLiveFoldersForBases: vi.fn(),
-  listLiveEntryRows: vi.fn(),
-}));
+vi.mock("./repository", async () => (await import("./service-writes-fixtures")).repoMock());
 
 // ⚠ **NEW ON THE A2 CLEANUP SLICE, AND IT IS WHY THE WRITE BLOCK BELOW MOVED.**
 // `createIdentity` now RESOLVES where the row lands before inserting it
@@ -78,67 +65,35 @@ import * as repo from "./repository";
 import { readResourceById } from "@/shared/tenancy/read-resource";
 import { listIdentities } from "./service-reads";
 import { createIdentity } from "./service-writes";
+import { OWNER as USER, ctx, identity, resetReadMocks } from "./service-writes-fixtures";
 
 const mockRepo = vi.mocked(repo);
 const mockFollow = vi.mocked(readResourceById);
 
 const HOME_WS = "ws-home";
 const PERSONAL_WS = "ws-personal";
-const USER = "u-operator";
 
 /** A signed-in person in their own default standard workspace. */
-function personCtx(over: Partial<AgentIdentityContext> = {}): AgentIdentityContext {
-  return {
-    workspaceId: HOME_WS,
-    userId: USER,
-    source: "user",
-    role: "owner",
-    apiKeyWorkspaceId: null,
-    credentialSubjectUserId: USER,
-    ...over,
-  };
-}
-
-function tpl(over: Partial<AgentIdentity> = {}): AgentIdentity {
-  return {
-    id: "tpl-1",
-    workspaceId: HOME_WS,
-    name: "Scout",
-    description: null,
-    instructions: null,
-    model: null,
-    fields: [],
-    visibility: "private",
-    teamIds: [],
-    knowledgeBases: [],
-    createdBy: USER,
-    createdAt: "2026-08-27T00:00:00Z",
-    updatedAt: "2026-08-27T00:00:00Z",
-    ...over,
-  };
-}
+const personCtx = (over: Partial<AgentIdentityContext> = {}) =>
+  ctx({ workspaceId: HOME_WS, role: "owner", ...over });
+const homeIdentity = (over: Partial<AgentIdentity> = {}) =>
+  identity({ workspaceId: HOME_WS, ...over });
 
 beforeEach(() => {
   vi.clearAllMocks();
   mockRepo.listIdentitiesForWorkspace.mockResolvedValue([]);
-  // ⚠ ARRAYS, not Maps — the repository returns flat link rows and the service
-  // folds them; a Map here throws inside `decorateWithKnowledgeBases`.
-  mockRepo.listTeamLinksForIdentities.mockResolvedValue([]);
-  mockRepo.listKnowledgeLinksForIdentities.mockResolvedValue([]);
-  mockRepo.listKnowledgeBaseAccessRows.mockResolvedValue([]);
-  mockRepo.listLiveFoldersForBases.mockResolvedValue([]);
-  mockRepo.listLiveEntryRows.mockResolvedValue([]);
+  resetReadMocks(mockRepo);
   // `createIdentity` returns through `getIdentityById`, so the row has to be
   // findable afterwards — the write is asserted on `insertIdentity`'s args.
   mockRepo.findIdentityById.mockImplementation((_ws, id) =>
-    Promise.resolve(tpl({ id })) as never
+    Promise.resolve(homeIdentity({ id })) as never
   );
   mockRepo.insertIdentity.mockImplementation(
-    (args) => Promise.resolve(tpl({ name: args.name, visibility: args.visibility })) as never
+    (args) => Promise.resolve(homeIdentity({ name: args.name, visibility: args.visibility })) as never
   );
   // The A12 follow, for a row that landed outside the calling container.
   mockFollow.mockImplementation(
-    async () => ({ value: tpl({ workspaceId: PERSONAL_WS }) }) as never
+    async () => ({ value: homeIdentity({ workspaceId: PERSONAL_WS }) }) as never
   );
 });
 
@@ -169,13 +124,13 @@ describe("listing one shelf", () => {
     );
   });
 
-  it("🔒 does NOT become a visibility gate — F-333/F-336 answer the same either way", async () => {
+  it("does NOT become a visibility gate — the credential arms answer the same either way", async () => {
     // 🔒 THE ORTHOGONALITY PIN. A shelf read still runs `canSeeIdentity` after
     // it, and that predicate neither reads nor is passed the shelf. Here a
     // SHARED credential asks for its own shelf: arm 2 refuses the private row
     // exactly as it would on the unfiltered read, and the `workspace` row is
     // returned exactly as it would be. Narrowing can only ever SUBSET.
-    const rows = [tpl({ id: "mine", visibility: "private" }), tpl({ id: "pub", visibility: "workspace" })];
+    const rows = [homeIdentity({ id: "mine", visibility: "private" }), homeIdentity({ id: "pub", visibility: "workspace" })];
     mockRepo.listIdentitiesForWorkspace.mockResolvedValue(rows);
     const shared = personCtx({
       source: "agent",
@@ -191,13 +146,13 @@ describe("listing one shelf", () => {
   });
 });
 
-describe("decorating a list that spans containers (P7-02)", () => {
+describe("decorating a list that spans containers", () => {
   const KB_PERSONAL = "kb-personal";
 
   it("reads each row's knowledge in ITS OWN container, so a personal row keeps its set", async () => {
     mockRepo.listIdentitiesForWorkspace.mockResolvedValue([
-      tpl({ id: "here", workspaceId: HOME_WS }),
-      tpl({ id: "personal", workspaceId: PERSONAL_WS }),
+      homeIdentity({ id: "here", workspaceId: HOME_WS }),
+      homeIdentity({ id: "personal", workspaceId: PERSONAL_WS }),
     ]);
     // Junction and base rows are filed under the row's container: asked under the
     // calling one, the personal row's links are simply not there.
@@ -260,7 +215,7 @@ describe("creating onto the personal shelf", () => {
     );
   });
 
-  it("🔒 re-reads a row that LEFT the room through the resolving read", async () => {
+  it("re-reads a row that LEFT the room through the resolving read", async () => {
     // 🔒 THE 404-AFTER-A-SUCCESSFUL-CREATE, CLOSED. The response re-read was
     // keyed to `ctx.workspaceId` while the row had just been routed into the
     // personal container, so `findIdentityById(room, id)` answered null and the
@@ -271,7 +226,7 @@ describe("creating onto the personal shelf", () => {
     expect(mockRepo.findIdentityById).not.toHaveBeenCalled();
   });
 
-  it("🔒 invents NO shelf when nobody asked — the calling container, still", async () => {
+  it("invents NO shelf when nobody asked — the calling container, still", async () => {
     // ⚠ THE ASSERTION MOVED FROM `undefined` TO `false` AND THE BEHAVIOUR DID
     // NOT: the router tests `homeScoped !== true`, so absent and `false` are
     // one instruction. 🔒 The load-bearing halves are the CONTAINER — a create

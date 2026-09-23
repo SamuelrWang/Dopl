@@ -215,7 +215,7 @@ describe("GET /api/agent-identities?shelf=", () => {
     expect(mockList).toHaveBeenCalledWith(expect.anything(), { shelf: undefined });
   });
 
-  it("🔒 400s an UNRECOGNISED shelf instead of widening to the mixed list", async () => {
+  it("400s an UNRECOGNISED shelf instead of widening to the mixed list", async () => {
     const res = await GET(shelfReq("hom"), { params: Promise.resolve({}) });
     expect(res.status).toBe(400);
     // And it never reached the service — no list was built, wide or narrow.

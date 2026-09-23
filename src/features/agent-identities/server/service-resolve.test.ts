@@ -15,45 +15,16 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import type { AgentIdentity, AgentIdentityContext } from "../types";
+import type { AgentIdentity } from "../types";
 
-// ⚠ **THE GRANT ARM IS A DB READ, SO IT IS DECLARED HERE** (F-604, 2026-09-02).
-// `canSeeBase` / `canSeeIdentity` gained an arm over `resource_grants`, and its
-// batch precompute is the one part of this seam that talks to Postgres. Every
-// case in this file is about the OTHER arms, so the grant set is empty — which
-// is also the pre-2026-09-02 behaviour, and therefore the right default for a
-// suite that predates the arm. The cases that exercise a GRANT live in
-// `service-shared-grant-arm.test.ts` and the redteam suites.
-vi.mock("@/shared/tenancy/resource-grant-reach", async (importOriginal) => ({
-  ...(await importOriginal<
-    typeof import("@/shared/tenancy/resource-grant-reach")
-  >()),
-  grantedResourceIds: vi.fn(async () => new Set<string>()),
-}));
-
-vi.mock("./repository", () => ({
-  listIdentitiesForWorkspace: vi.fn(),
-  findIdentityById: vi.fn(),
-  listTeamLinksForIdentities: vi.fn(),
-  listTeamIdsForUser: vi.fn(),
-  listKnowledgeLinksForIdentities: vi.fn(),
-  listKnowledgeBaseAccessRows: vi.fn(),
-  listKnowledgeBaseTeamGrants: vi.fn(),
-  listLiveFoldersForBases: vi.fn(),
-  listLiveEntryRows: vi.fn(),
-}));
-
-// ⚠ THE CROSS-CONTAINER READ LIVES IN `shared/tenancy/`, and is mocked EMPTY so
-// the default is "this id names nowhere else" — every assertion above the A12
-// block is about the answer THIS container gives.
-// 🔒 ⚠ THE FENCE ITSELF IS NOT RE-TESTED HERE. Shared credentials, the `viewer`
-// floor, the container lock and the two-arm "rows you could already list for
-// yourself" `.or()` are asserted un-mocked in
-// `shared/tenancy/resolve-resource.test.ts`; what this file owns is that the
-// launch door COMPOSES that answer and re-runs the matrix on top of it.
-vi.mock("@/shared/tenancy/resolve-resource", () => ({
-  resolveResource: vi.fn(async () => null),
-}));
+vi.mock("@/shared/tenancy/resource-grant-reach", async (orig) =>
+  (await import("./service-writes-fixtures")).noGrantsMock(orig)
+);
+vi.mock("./repository", async () => (await import("./service-writes-fixtures")).repoMock());
+// The fence itself is `shared/tenancy/resolve-resource.test.ts`; this file owns that the launch door composes it.
+vi.mock("@/shared/tenancy/resolve-resource", async (orig) =>
+  (await import("./service-writes-fixtures")).resolveNowhereMock(orig)
+);
 
 import * as repo from "./repository";
 import * as tenancy from "@/shared/tenancy/resolve-resource";
@@ -61,44 +32,27 @@ import type { ResolvedResource } from "@/shared/tenancy/resolve-resource";
 import { resolveIdentityForLaunch } from "./service";
 import { AgentIdentityNotFoundError } from "./errors";
 import { mapAgentIdentityError } from "./http-mapping";
+import {
+  AUDITOR,
+  OTHER,
+  OWNER as CREATOR,
+  ctx,
+  identity as baseIdentity,
+  resetReadMocks,
+} from "./service-writes-fixtures";
 
 const mockRepo = vi.mocked(repo);
 const mockTenancy = vi.mocked(tenancy);
 
-const CREATOR = "user-creator";
-const OTHER = "user-other";
 const ADMIN = "user-admin";
 
-function ctx(overrides: Partial<AgentIdentityContext> = {}): AgentIdentityContext {
-  return {
-    workspaceId: "ws-1",
-    userId: CREATOR,
-    source: "user",
-    role: "member",
-    apiKeyWorkspaceId: null,
-    credentialSubjectUserId: CREATOR,
-    ...overrides,
-  };
-}
-
-function identity(overrides: Partial<AgentIdentity> = {}): AgentIdentity {
-  return {
-    id: "tpl-1",
-    workspaceId: "ws-1",
-    name: "Code Auditor",
-    description: "ignored by the launch payload",
-    instructions: "Audit the diff.",
-    model: "claude-opus-5",
+const identity = (over: Partial<AgentIdentity> = {}) =>
+  baseIdentity({
+    ...AUDITOR,
     fields: [{ key: "repo", value: "acme/api" }],
     visibility: "workspace",
-    teamIds: [],
-    knowledgeBases: [],
-    createdBy: CREATOR,
-    createdAt: "2026-01-01T00:00:00Z",
-    updatedAt: "2026-01-01T00:00:00Z",
-    ...overrides,
-  };
-}
+    ...over,
+  });
 
 /** WHERE an id lives, when the read has to follow it out of `ctx.workspaceId`. */
 function resolvedIn(
@@ -107,7 +61,7 @@ function resolvedIn(
 ): ResolvedResource {
   return {
     type: "agent_identity",
-    id: "tpl-1",
+    id: "id-1",
     name: "Code Auditor",
     containerId,
     containerName: "Acme",
@@ -121,19 +75,13 @@ function resolvedIn(
 beforeEach(() => {
   vi.clearAllMocks();
   mockTenancy.resolveResource.mockResolvedValue(null);
-  mockRepo.listKnowledgeLinksForIdentities.mockResolvedValue([]);
-  mockRepo.listKnowledgeBaseAccessRows.mockResolvedValue([]);
-  mockRepo.listKnowledgeBaseTeamGrants.mockResolvedValue([]);
-  mockRepo.listLiveFoldersForBases.mockResolvedValue([]);
-  mockRepo.listLiveEntryRows.mockResolvedValue([]);
-  mockRepo.listTeamLinksForIdentities.mockResolvedValue([]);
-  mockRepo.listTeamIdsForUser.mockResolvedValue([]);
+  resetReadMocks(mockRepo);
 });
 
-describe("authoredByCaller (G-1)", () => {
+describe("authoredByCaller", () => {
   it("is TRUE for the caller who wrote it", async () => {
     mockRepo.findIdentityById.mockResolvedValue(identity());
-    const resolved = await resolveIdentityForLaunch(ctx(), "tpl-1");
+    const resolved = await resolveIdentityForLaunch(ctx(), "id-1");
     expect(resolved.authoredByCaller).toBe(true);
   });
 
@@ -142,7 +90,7 @@ describe("authoredByCaller (G-1)", () => {
     // people, gets two different SECURITY HEADERS on the desktop — the operator
     // posture for its author, the untrusted-skill-body posture for everyone else.
     mockRepo.findIdentityById.mockResolvedValue(identity());
-    const resolved = await resolveIdentityForLaunch(ctx({ userId: OTHER }), "tpl-1");
+    const resolved = await resolveIdentityForLaunch(ctx({ userId: OTHER }), "id-1");
     expect(resolved.authoredByCaller).toBe(false);
   });
 
@@ -154,7 +102,7 @@ describe("authoredByCaller (G-1)", () => {
     );
     const resolved = await resolveIdentityForLaunch(
       ctx({ userId: ADMIN, role: "admin" }),
-      "tpl-1"
+      "id-1"
     );
     expect(resolved.authoredByCaller).toBe(false);
   });
@@ -165,7 +113,7 @@ describe("authoredByCaller (G-1)", () => {
     // downgrade this field exists to prevent. Fail-closed direction: nobody left
     // can vouch for it.
     mockRepo.findIdentityById.mockResolvedValue(identity({ createdBy: null }));
-    const resolved = await resolveIdentityForLaunch(ctx(), "tpl-1");
+    const resolved = await resolveIdentityForLaunch(ctx(), "id-1");
     expect(resolved.authoredByCaller).toBe(false);
   });
 
@@ -173,7 +121,7 @@ describe("authoredByCaller (G-1)", () => {
     mockRepo.findIdentityById.mockResolvedValue(identity());
     const resolved = await resolveIdentityForLaunch(
       ctx({ userId: CREATOR, apiKeyWorkspaceId: "ws-1", source: "agent" }),
-      "tpl-1"
+      "id-1"
     );
     // The key's bearer id happens to equal the creator's; it is still not the
     // author, and the matrix would have refused a non-`workspace` row outright.
@@ -198,7 +146,7 @@ describe("the payload, and the door it comes through", () => {
   // at all (§13's older-peer rule, on the payload where the failure is silent).
   it("carries EXACTLY the nine launch keys — no id, no visibility, no ownership", async () => {
     mockRepo.findIdentityById.mockResolvedValue(identity());
-    const resolved = await resolveIdentityForLaunch(ctx(), "tpl-1");
+    const resolved = await resolveIdentityForLaunch(ctx(), "id-1");
     expect(Object.keys(resolved).sort()).toEqual([
       "authoredByCaller",
       "fields",
@@ -220,7 +168,7 @@ describe("the payload, and the door it comes through", () => {
     // failure is indistinguishable from "deleted" by construction.
     mockRepo.findIdentityById.mockResolvedValue(identity({ visibility: "private" }));
     await expect(
-      resolveIdentityForLaunch(ctx({ userId: OTHER }), "tpl-1")
+      resolveIdentityForLaunch(ctx({ userId: OTHER }), "id-1")
     ).rejects.toBeInstanceOf(AgentIdentityNotFoundError);
   });
 
@@ -241,7 +189,7 @@ describe("the payload, and the door it comes through", () => {
       workspaceId === "ws-2" ? identity({ workspaceId: "ws-2" }) : null
     );
     mockTenancy.resolveResource.mockResolvedValue(resolvedIn("ws-2"));
-    const resolved = await resolveIdentityForLaunch(ctx(), "tpl-1");
+    const resolved = await resolveIdentityForLaunch(ctx(), "id-1");
     expect(resolved.name).toBe("Code Auditor");
     expect(resolved.authoredByCaller).toBe(true);
   });
@@ -255,7 +203,7 @@ describe("the payload, and the door it comes through", () => {
     );
     mockTenancy.resolveResource.mockResolvedValue(resolvedIn("ws-2"));
     await expect(
-      resolveIdentityForLaunch(ctx({ workspaceId: "ws-9" }), "tpl-1")
+      resolveIdentityForLaunch(ctx({ workspaceId: "ws-9" }), "id-1")
     ).resolves.toMatchObject({ name: "Code Auditor" });
   });
 
@@ -270,7 +218,7 @@ describe("the payload, and the door it comes through", () => {
     );
     mockTenancy.resolveResource.mockResolvedValue(resolvedIn("ws-2"));
     await expect(
-      resolveIdentityForLaunch(ctx(), "tpl-1")
+      resolveIdentityForLaunch(ctx(), "id-1")
     ).rejects.toBeInstanceOf(AgentIdentityNotFoundError);
   });
 
@@ -287,7 +235,7 @@ describe("the payload, and the door it comes through", () => {
       resolvedIn("ws-2", { containerRole: "admin" })
     );
     await expect(
-      resolveIdentityForLaunch(ctx({ userId: ADMIN, role: null }), "tpl-1")
+      resolveIdentityForLaunch(ctx({ userId: ADMIN, role: null }), "id-1")
     ).resolves.toMatchObject({ name: "Code Auditor" });
   });
 
@@ -297,7 +245,7 @@ describe("the payload, and the door it comes through", () => {
     // the resolver returns null and the refusal carries nothing.
     mockRepo.findIdentityById.mockResolvedValue(null);
     mockTenancy.resolveResource.mockResolvedValue(null);
-    const err = await resolveIdentityForLaunch(ctx(), "tpl-1").catch((e) => e);
+    const err = await resolveIdentityForLaunch(ctx(), "id-1").catch((e) => e);
     expect(err).toBeInstanceOf(AgentIdentityNotFoundError);
   });
 
@@ -312,23 +260,23 @@ describe("the payload, and the door it comes through", () => {
       apiKeyWorkspaceId: "ws-1",
       credentialSubjectUserId: CREATOR,
     });
-    await resolveIdentityForLaunch(locked, "tpl-1").catch(() => {});
+    await resolveIdentityForLaunch(locked, "id-1").catch(() => {});
     expect(mockTenancy.resolveResource).toHaveBeenCalledWith(
       locked,
       "agent_identity",
-      "tpl-1"
+      "id-1"
     );
   });
 
   it("costs NOTHING on the hit path — an identity found where it was asked never resolves", async () => {
     mockRepo.findIdentityById.mockResolvedValue(identity());
-    await resolveIdentityForLaunch(ctx(), "tpl-1");
+    await resolveIdentityForLaunch(ctx(), "id-1");
     expect(mockTenancy.resolveResource).not.toHaveBeenCalled();
   });
 
   it("404s for a row that does not exist at all — the same error, deliberately", async () => {
     mockRepo.findIdentityById.mockResolvedValue(null);
-    await expect(resolveIdentityForLaunch(ctx(), "tpl-1")).rejects.toBeInstanceOf(
+    await expect(resolveIdentityForLaunch(ctx(), "id-1")).rejects.toBeInstanceOf(
       AgentIdentityNotFoundError
     );
   });
@@ -341,7 +289,7 @@ describe("the payload, and the door it comes through", () => {
 // may not see. `HttpError.toResponseBody` omits `undefined` details.
 describe("the 404 the desktop reads", () => {
   it("carries no details at all for an ordinary miss", () => {
-    const http = mapAgentIdentityError(new AgentIdentityNotFoundError("tpl-1"));
+    const http = mapAgentIdentityError(new AgentIdentityNotFoundError("id-1"));
     expect(http?.status).toBe(404);
     expect(http?.details).toBeUndefined();
   });

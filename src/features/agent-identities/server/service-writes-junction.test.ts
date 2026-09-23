@@ -18,37 +18,17 @@
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-// 🔒 THE TEAM-SCOPE CONTAINER CHECK IS A DB READ (Samuel's ruling 2026-09-08,
-// `service-write-gates.ts › assertTeamScopeGrantable`) — unmocked it reaches
-// Supabase and hangs. Every case here is a STANDARD workspace, which is what
-// this suite has always meant by "ws-1".
-vi.mock("@/features/workspaces/server/repository", () => ({
-  findDefaultWorkspaceForUser: vi.fn().mockResolvedValue(null),
-  findWorkspaceById: vi.fn().mockResolvedValue({ id: "ws-1", kind: "standard" }),
-}));
-vi.mock("./repository", () => ({
-  listIdentitiesForWorkspace: vi.fn(),
-  findIdentityById: vi.fn(),
-  insertIdentity: vi.fn(),
-  updateIdentityRow: vi.fn(),
-  hardDeleteIdentity: vi.fn(),
-  listTeamLinksForIdentities: vi.fn(),
-  replaceTeamLinks: vi.fn(),
-  listTeamIdsForUser: vi.fn(),
-  filterTeamIdsInWorkspace: vi.fn(),
-  listKnowledgeLinksForIdentities: vi.fn(),
-  replaceKnowledgeLinks: vi.fn(),
-  listKnowledgeBaseAccessRows: vi.fn(),
-  listKnowledgeBaseTeamGrants: vi.fn(),
-  listLiveFoldersForBases: vi.fn(),
-  listLiveEntryRows: vi.fn(),
-}));
+// The team-scope gate reads the workspace row (`service-write-gates.ts › assertTeamScopeGrantable`).
+vi.mock("@/features/workspaces/server/repository", async () =>
+  (await import("./service-writes-fixtures")).workspaceRepoMock()
+);
+vi.mock("./repository", async () => (await import("./service-writes-fixtures")).repoMock());
 
 import * as repo from "./repository";
 import { updateIdentity } from "./service";
 import {
+  BASES,
   KB_OPEN,
-  OTHER,
   OWNER,
   TEAM_A,
   ctx,
@@ -77,23 +57,20 @@ const SAME_NAME_ONLY = {
 
 describe("a junction-only patch versions the row with a same-value UPDATE", () => {
   it("a knowledgeBaseIds-only attach round-trips and bumps the row, never an empty body", async () => {
-    mockRepo.listKnowledgeBaseAccessRows.mockResolvedValue([
-      { id: KB_OPEN, workspaceId: "ws-1", visibility: "workspace", createdBy: OTHER },
-    ] as never);
-    mockRepo.listKnowledgeBaseTeamGrants.mockResolvedValue([] as never);
+    mockRepo.listKnowledgeBaseAccessRows.mockResolvedValue([BASES[KB_OPEN]]);
 
     await expect(
-      updateIdentity(ctx(), "tpl-1", { knowledgeBaseIds: [KB_OPEN] })
+      updateIdentity(ctx(), "id-1", { knowledgeBaseIds: [KB_OPEN] })
     ).resolves.toBeTruthy();
 
-    expect(mockRepo.updateIdentityRow).toHaveBeenCalledWith("ws-1", "tpl-1", SAME_NAME_ONLY);
+    expect(mockRepo.updateIdentityRow).toHaveBeenCalledWith("ws-1", "id-1", SAME_NAME_ONLY);
     // ⚠ THE REPOSITORY TAKES SCOPES SINCE 2026-09-08. The older
     // `knowledgeBaseIds` key still means WHOLE BASES and is translated at one
     // seam (`service-writes.ts › requestedKnowledgeScopes`), so a client that
     // never learns about folders sends exactly what it always sent.
     expect(mockRepo.replaceKnowledgeLinks).toHaveBeenCalledWith(
       "ws-1",
-      "tpl-1",
+      "id-1",
       [{ baseId: KB_OPEN, scope: "base" }],
       OWNER
     );
@@ -106,36 +83,33 @@ describe("a junction-only patch versions the row with a same-value UPDATE", () =
       identity({ visibility: "team", teamIds: [TEAM_A] })
     );
 
-    await updateIdentity(ctx(), "tpl-1", { teamIds: [TEAM_A] });
+    await updateIdentity(ctx(), "id-1", { teamIds: [TEAM_A] });
 
-    expect(mockRepo.updateIdentityRow).toHaveBeenCalledWith("ws-1", "tpl-1", SAME_NAME_ONLY);
+    expect(mockRepo.updateIdentityRow).toHaveBeenCalledWith("ws-1", "id-1", SAME_NAME_ONLY);
     expect(mockRepo.replaceTeamLinks).toHaveBeenCalled();
   });
 
   it("but ANY scalar in the patch still writes the row", async () => {
-    mockRepo.listKnowledgeBaseAccessRows.mockResolvedValue([
-      { id: KB_OPEN, workspaceId: "ws-1", visibility: "workspace", createdBy: OTHER },
-    ] as never);
-    mockRepo.listKnowledgeBaseTeamGrants.mockResolvedValue([] as never);
+    mockRepo.listKnowledgeBaseAccessRows.mockResolvedValue([BASES[KB_OPEN]]);
 
-    await updateIdentity(ctx(), "tpl-1", {
+    await updateIdentity(ctx(), "id-1", {
       name: "Renamed",
       knowledgeBaseIds: [KB_OPEN],
     });
 
     expect(mockRepo.updateIdentityRow).toHaveBeenCalledWith(
       "ws-1",
-      "tpl-1",
+      "id-1",
       expect.objectContaining({ name: "Renamed" })
     );
   });
 
   it("clearing a nullable column is a SCALAR change, not an empty patch", async () => {
-    await updateIdentity(ctx(), "tpl-1", { description: null });
+    await updateIdentity(ctx(), "id-1", { description: null });
 
     expect(mockRepo.updateIdentityRow).toHaveBeenCalledWith(
       "ws-1",
-      "tpl-1",
+      "id-1",
       expect.objectContaining({ description: null })
     );
   });

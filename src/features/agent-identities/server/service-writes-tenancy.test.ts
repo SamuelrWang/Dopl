@@ -12,49 +12,20 @@
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-// ⚠ THE GRANT ARM IS A DB READ (F-604) — empty here, as in the sibling suites.
-vi.mock("@/shared/tenancy/resource-grant-reach", async (importOriginal) => ({
-  ...(await importOriginal<
-    typeof import("@/shared/tenancy/resource-grant-reach")
-  >()),
-  grantedResourceIds: vi.fn(async () => new Set<string>()),
-}));
-
-// 🔓 THE FOLLOW ITSELF. ⚠ The FENCE is not re-tested here — `shared/tenancy/
-// resolve-resource.test.ts` owns its four clauses un-mocked, and this file owns
-// only what the WRITE does with the address it is handed.
-vi.mock("@/shared/tenancy/resolve-resource", async (importOriginal) => ({
-  ...(await importOriginal<
-    typeof import("@/shared/tenancy/resolve-resource")
-  >()),
-  resolveResource: vi.fn(async () => null),
-}));
-
-// 🔒 G16's two reads — unmocked they reach Supabase and hang.
-vi.mock("@/features/workspaces/server/repository", () => ({
-  findDefaultWorkspaceForUser: vi.fn().mockResolvedValue(null),
-  findWorkspaceById: vi.fn().mockResolvedValue({ id: "ws-1", kind: "standard" }),
-}));
+vi.mock("@/shared/tenancy/resource-grant-reach", async (orig) =>
+  (await import("./service-writes-fixtures")).noGrantsMock(orig)
+);
+// The fence is `shared/tenancy/resolve-resource.test.ts`; this file owns what a write does with the address.
+vi.mock("@/shared/tenancy/resolve-resource", async (orig) =>
+  (await import("./service-writes-fixtures")).resolveNowhereMock(orig)
+);
+vi.mock("@/features/workspaces/server/repository", async () =>
+  (await import("./service-writes-fixtures")).workspaceRepoMock()
+);
 vi.mock("@/features/workspaces/server/repository-overview", () => ({
   countActiveMembers: vi.fn().mockResolvedValue(1),
 }));
-vi.mock("./repository", () => ({
-  listIdentitiesForWorkspace: vi.fn(),
-  findIdentityById: vi.fn(),
-  insertIdentity: vi.fn(),
-  updateIdentityRow: vi.fn(),
-  hardDeleteIdentity: vi.fn(),
-  listTeamLinksForIdentities: vi.fn(),
-  replaceTeamLinks: vi.fn(),
-  listTeamIdsForUser: vi.fn(),
-  filterTeamIdsInWorkspace: vi.fn(),
-  listKnowledgeLinksForIdentities: vi.fn(),
-  replaceKnowledgeLinks: vi.fn(),
-  listKnowledgeBaseAccessRows: vi.fn(),
-  listKnowledgeBaseTeamGrants: vi.fn(),
-  listLiveFoldersForBases: vi.fn(),
-  listLiveEntryRows: vi.fn(),
-}));
+vi.mock("./repository", async () => (await import("./service-writes-fixtures")).repoMock());
 
 import * as repo from "./repository";
 import { findWorkspaceById } from "@/features/workspaces/server/repository";
@@ -108,7 +79,7 @@ beforeEach(() => {
  * container and mutate another — strictly worse than the refusal it replaces —
  * so what each case pins is the ARGUMENT the repository received.
  */
-describe("🔓 update and delete name the id's own container", () => {
+describe("update and delete name the id's own container", () => {
   const SHELF = "ws-personal";
 
   /** Present in `SHELF`, absent everywhere else — the shape of a row on the
@@ -122,7 +93,7 @@ describe("🔓 update and delete name the id's own container", () => {
     );
     mockResolve.mockResolvedValue({
       type: "agent_identity",
-      id: "tpl-1",
+      id: "id-1",
       name: "Researcher",
       containerId: SHELF,
       containerName: "Samuel's Workspace",
@@ -136,14 +107,14 @@ describe("🔓 update and delete name the id's own container", () => {
     livesOnTheShelf();
     mockRepo.updateIdentityRow.mockResolvedValue(identity({ workspaceId: SHELF }));
     await expect(
-      updateIdentity(ctx(), "tpl-1", { name: "Renamed" })
-    ).resolves.toMatchObject({ id: "tpl-1" });
+      updateIdentity(ctx(), "id-1", { name: "Renamed" })
+    ).resolves.toMatchObject({ id: "id-1" });
     // ⚠ MUTATION CHECK. `ctx.workspaceId` here is `ws-1`, and that is what this
     // read before the ruling: the row was gated in one container and written in
     // another, which is the same UPDATE landing on zero rows.
     expect(mockRepo.updateIdentityRow).toHaveBeenCalledWith(
       SHELF,
-      "tpl-1",
+      "id-1",
       expect.objectContaining({ name: "Renamed" })
     );
   });
@@ -151,12 +122,12 @@ describe("🔓 update and delete name the id's own container", () => {
   it("replaces BOTH junctions in that container too", async () => {
     livesOnTheShelf();
     mockRepo.updateIdentityRow.mockResolvedValue(identity({ workspaceId: SHELF }));
-    await updateIdentity(ctx(), "tpl-1", { knowledgeBaseIds: [] });
+    await updateIdentity(ctx(), "id-1", { knowledgeBaseIds: [] });
     // ⚠ A junction row filed under the calling room is a link the row's own
     // container never reads back — the identity would come back attachment-less.
     expect(mockRepo.replaceKnowledgeLinks).toHaveBeenCalledWith(
       SHELF,
-      "tpl-1",
+      "id-1",
       [],
       OWNER
     );
@@ -164,25 +135,25 @@ describe("🔓 update and delete name the id's own container", () => {
 
   it("DELETEs it there as well", async () => {
     livesOnTheShelf();
-    await expect(deleteIdentity(ctx(), "tpl-1")).resolves.toBeUndefined();
-    expect(mockRepo.hardDeleteIdentity).toHaveBeenCalledWith(SHELF, "tpl-1");
+    await expect(deleteIdentity(ctx(), "id-1")).resolves.toBeUndefined();
+    expect(mockRepo.hardDeleteIdentity).toHaveBeenCalledWith(SHELF, "id-1");
   });
 
-  it("🔒 and the matrix still runs in the container the id named", async () => {
+  it("and the matrix still runs in the container the id named", async () => {
     // ⚠ FOLLOWING AN ID AUTHORISES NOTHING. Somebody else's private row is the
     // same single 404 it always was, and no write is attempted.
     livesOnTheShelf({ createdBy: OTHER, visibility: "private" });
-    const err = await updateIdentity(ctx(), "tpl-1", { name: "Hijacked" }).catch(
+    const err = await updateIdentity(ctx(), "id-1", { name: "Hijacked" }).catch(
       (e) => e
     );
     expect(err.code).toBe("AGENT_IDENTITY_NOT_FOUND");
     expect(mockRepo.updateIdentityRow).not.toHaveBeenCalled();
   });
 
-  it("🔒 an id that resolves NOWHERE is still a 404, and costs one resolve", async () => {
+  it("an id that resolves NOWHERE is still a 404, and costs one resolve", async () => {
     mockRepo.findIdentityById.mockResolvedValue(null);
     mockResolve.mockResolvedValue(null);
-    await expect(deleteIdentity(ctx(), "tpl-1")).rejects.toBeInstanceOf(
+    await expect(deleteIdentity(ctx(), "id-1")).rejects.toBeInstanceOf(
       AgentIdentityNotFoundError
     );
     expect(mockRepo.hardDeleteIdentity).not.toHaveBeenCalled();
@@ -190,9 +161,9 @@ describe("🔓 update and delete name the id's own container", () => {
 
   it("costs NOTHING on the hit path — a row found where it was asked never resolves", async () => {
     mockRepo.findIdentityById.mockResolvedValue(identity());
-    await deleteIdentity(ctx(), "tpl-1");
+    await deleteIdentity(ctx(), "id-1");
     expect(mockResolve).not.toHaveBeenCalled();
-    expect(mockRepo.hardDeleteIdentity).toHaveBeenCalledWith("ws-1", "tpl-1");
+    expect(mockRepo.hardDeleteIdentity).toHaveBeenCalledWith("ws-1", "id-1");
   });
 });
 
@@ -209,7 +180,7 @@ describe("🔓 update and delete name the id's own container", () => {
  * courtesy rather than the whole rule (an agent credential reaches the REST
  * route with no pill in sight).
  */
-describe("🔒 team visibility outside a standard workspace", () => {
+describe("team visibility outside a standard workspace", () => {
   it.each(["personal", "link"] as const)(
     "REFUSES a create landing at `team` in a %s container",
     async (kind) => {
@@ -238,7 +209,7 @@ describe("🔒 team visibility outside a standard workspace", () => {
     containerKind("personal");
     mockRepo.findIdentityById.mockResolvedValue(identity({ visibility: "private" }));
     await expect(
-      updateIdentity(ctx(), "tpl-1", { visibility: "team" })
+      updateIdentity(ctx(), "id-1", { visibility: "team" })
     ).rejects.toBeInstanceOf(IdentityTeamNotGrantableError);
     expect(mockRepo.updateIdentityRow).not.toHaveBeenCalled();
     expect(mockRepo.replaceTeamLinks).not.toHaveBeenCalled();
@@ -252,7 +223,7 @@ describe("🔒 team visibility outside a standard workspace", () => {
     ).resolves.toBeTruthy();
     mockRepo.findIdentityById.mockResolvedValue(identity({ visibility: "private" }));
     await expect(
-      updateIdentity(ctx(), "tpl-1", { visibility: "team" })
+      updateIdentity(ctx(), "id-1", { visibility: "team" })
     ).resolves.toBeTruthy();
   });
 
@@ -283,7 +254,7 @@ describe("🔒 team visibility outside a standard workspace", () => {
     expect(mockWorkspace).toHaveBeenCalledTimes(1);
   });
 
-  it("🔒 REFUSES a private identity landing in a home channel — the destination fence", async () => {
+  it("REFUSES a private identity landing in a home channel — the destination fence", async () => {
     // ⚠ The wiring case: this feature passes `shared: visibility !== "private"`,
     // and the rule itself is pinned by
     // `workspaces/server/home-channel-destination.test.ts`.
@@ -293,10 +264,10 @@ describe("🔒 team visibility outside a standard workspace", () => {
     ).rejects.toMatchObject({ code: "HOME_CHANNEL_ROW_NOT_SHARED" });
   });
 
-  it("🔒 …AND ON THE UPDATE PATH TOO — a fence with no update twin is defeated in two calls", async () => {
+  it("…AND ON THE UPDATE PATH TOO — a fence with no update twin is defeated in two calls", async () => {
     containerKind("link");
     await expect(
-      updateIdentity(ctx(), "tpl-1", { visibility: "private" })
+      updateIdentity(ctx(), "id-1", { visibility: "private" })
     ).rejects.toMatchObject({ code: "HOME_CHANNEL_ROW_NOT_SHARED" });
   });
 });

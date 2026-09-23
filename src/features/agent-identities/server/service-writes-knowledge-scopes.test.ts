@@ -25,40 +25,19 @@
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-vi.mock("@/shared/tenancy/resource-grant-reach", async (importOriginal) => ({
-  ...(await importOriginal<
-    typeof import("@/shared/tenancy/resource-grant-reach")
-  >()),
-  grantedResourceIds: vi.fn(async () => new Set<string>()),
-}));
-vi.mock("@/shared/tenancy/resolve-resource", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@/shared/tenancy/resolve-resource")>()),
-  resolveResource: vi.fn(async () => null),
-}));
-vi.mock("@/features/workspaces/server/repository", () => ({
-  findDefaultWorkspaceForUser: vi.fn().mockResolvedValue(null),
-  findWorkspaceById: vi.fn().mockResolvedValue({ id: "ws-1", kind: "standard" }),
-}));
+vi.mock("@/shared/tenancy/resource-grant-reach", async (orig) =>
+  (await import("./service-writes-fixtures")).noGrantsMock(orig)
+);
+vi.mock("@/shared/tenancy/resolve-resource", async (orig) =>
+  (await import("./service-writes-fixtures")).resolveNowhereMock(orig)
+);
+vi.mock("@/features/workspaces/server/repository", async () =>
+  (await import("./service-writes-fixtures")).workspaceRepoMock()
+);
 vi.mock("@/features/workspaces/server/repository-overview", () => ({
   countActiveMembers: vi.fn().mockResolvedValue(1),
 }));
-vi.mock("./repository", () => ({
-  listIdentitiesForWorkspace: vi.fn(),
-  findIdentityById: vi.fn(),
-  insertIdentity: vi.fn(),
-  updateIdentityRow: vi.fn(),
-  hardDeleteIdentity: vi.fn(),
-  listTeamLinksForIdentities: vi.fn(),
-  replaceTeamLinks: vi.fn(),
-  listTeamIdsForUser: vi.fn(),
-  filterTeamIdsInWorkspace: vi.fn(),
-  listKnowledgeLinksForIdentities: vi.fn(),
-  replaceKnowledgeLinks: vi.fn(),
-  listKnowledgeBaseAccessRows: vi.fn(),
-  listKnowledgeBaseTeamGrants: vi.fn(),
-  listLiveFoldersForBases: vi.fn(),
-  listLiveEntryRows: vi.fn(),
-}));
+vi.mock("./repository", async () => (await import("./service-writes-fixtures")).repoMock());
 
 import * as repo from "./repository";
 import { createIdentity } from "./service";
@@ -132,8 +111,9 @@ describe("a folder or an entry you cannot read, you cannot attach", () => {
     // attached.
     expect(mockRepo.replaceKnowledgeLinks).toHaveBeenCalledWith(
       "ws-1",
-      "tpl-1",
+      "id-1",
       [{ baseId: KB_OPEN, scope: "folder", folderId: FOLDER }],
       OWNER
     );
-  });});
+  });
+});

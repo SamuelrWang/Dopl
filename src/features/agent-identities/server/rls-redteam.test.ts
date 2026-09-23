@@ -66,7 +66,7 @@ describe("REDTEAM agent_identities — the policy alone", () => {
     expect(liveFunction(READABLE)).not.toMatch(/[^_]is_workspace_member\(/i);
   });
 
-  it("🔒 refuses a SHARED CREDENTIAL everything but a `workspace` identity — the missing arm 2", () => {
+  it("refuses a SHARED CREDENTIAL everything but a `workspace` identity — the missing arm 2", () => {
     const fn = liveFunction(READABLE);
     // Arm 1 first, ungated…
     expect(fn).toMatch(/t\.visibility\s*=\s*'workspace'\s*OR\s*\(\s*NOT\s+public\.dopl_credential_is_shared\(\)/i);
@@ -77,7 +77,7 @@ describe("REDTEAM agent_identities — the policy alone", () => {
     );
   });
 
-  it("🔒 carries the GRANT arm BESIDE the membership branch, never inside it (F-604)", () => {
+  it("carries the GRANT arm BESIDE the membership branch, never inside it", () => {
     // ⚠ THE POSITION IS THE ASSERTION. A grantee is typically NOT a member of
     // the resource's container, so an arm nested under
     // `is_current_workspace_member` would be unreachable and the write door
@@ -93,7 +93,7 @@ describe("REDTEAM agent_identities — the policy alone", () => {
     );
   });
 
-  it("🔒 …and the arm carries arm 2 with it — a SHARED credential is not widened (P25)", () => {
+  it("…and the arm carries arm 2 with it — a SHARED credential is not widened", () => {
     // 🔒 THE ARM THE FIRST DRAFT LOST. `(membership AND …) OR grant_admits(…)`
     // put the grant ABOVE the shared-credential refusal, so a credential that
     // stands for nobody read a lent row the TS twin refuses at arm 2 —
@@ -105,7 +105,7 @@ describe("REDTEAM agent_identities — the policy alone", () => {
     );
   });
 
-  it("🔒 `dopl_grant_admits` answers CHANNEL and CONTAINER, and refuses `team`", () => {
+  it("`dopl_grant_admits` answers CHANNEL and CONTAINER, and refuses `team`", () => {
     // ⚠ `team` is FALSE here BY DESIGN, not by omission: it is already an arm of
     // `dopl_teams_mode_visible()`, and two rules for one grant is how the second
     // rots. Ruling B4 made team a scope, not a second mechanism.
@@ -185,6 +185,15 @@ describe.skipIf(!liveRedteamEnabled)(
       return row.id;
     };
 
+    /** The owner's private identity, lent into a container the outsider is a member of. */
+    const lendToOutsider = () => ({
+      workspaceId,
+      scopeType: "container" as const,
+      scopeId: outsiderContainerId,
+      resourceType: "agent_identity" as const,
+      resourceId: privateIdentityId,
+    });
+
     beforeAll(async () => {
       ownerId = await makeUser("owner");
       outsiderId = await makeUser("outsider");
@@ -227,7 +236,7 @@ describe.skipIf(!liveRedteamEnabled)(
       expect(await readableIds(outsiderId, "agent_identities", workspaceId)).toHaveLength(0);
     });
 
-    it("🔒 a SHARED CREDENTIAL on the owner's id sees the WORKSPACE identity and nothing else", async () => {
+    it("a SHARED CREDENTIAL on the owner's id sees the WORKSPACE identity and nothing else", async () => {
       const ids = await readableIds(ownerId, "agent_identities", workspaceId, { shared: true });
       expect(ids).toEqual([workspaceIdentityId]);
     });
@@ -244,17 +253,11 @@ describe.skipIf(!liveRedteamEnabled)(
       );
     });
 
-    it("🔒 GRANTED INTO A CONTAINER → visible to that container's members; REVOKED → invisible (F-604)", async () => {
+    it("GRANTED INTO A CONTAINER → visible to that container's members; REVOKED → invisible", async () => {
       // The whole of ruling B11 in one case: a `private` identity in the
       // owner's workspace, lent to a container the OUTSIDER is a member of.
       // Before the grant that reader is the "sees zero rows" case above.
-      const ref = {
-        workspaceId,
-        scopeType: "container" as const,
-        scopeId: outsiderContainerId,
-        resourceType: "agent_identity" as const,
-        resourceId: privateIdentityId,
-      };
+      const ref = lendToOutsider();
       // ⚠ THE GRANTOR IS IN BOTH ROOMS, because `enforce_resource_grant` says
       // so — cross-container reach requires a NAMED grantor who could lend it
       // OUT and lend it IN (`20260914120000` rule 4).
@@ -270,17 +273,11 @@ describe.skipIf(!liveRedteamEnabled)(
       ).toHaveLength(0);
     });
 
-    it("🔒 P25 — a SHARED CREDENTIAL is not widened by that grant, live", async () => {
+    it("a SHARED CREDENTIAL is not widened by that grant, live", async () => {
       // The same row, the same reader, the same grant; the ONE axis that moves
       // is whether the credential stands for a person. `canSeeIdentity` refuses
       // at arm 2 and the policy must refuse with it.
-      const ref = {
-        workspaceId,
-        scopeType: "container" as const,
-        scopeId: outsiderContainerId,
-        resourceType: "agent_identity" as const,
-        resourceId: privateIdentityId,
-      };
+      const ref = lendToOutsider();
       await grantToScope({ ...ref, createdBy: ownerId });
       try {
         expect(

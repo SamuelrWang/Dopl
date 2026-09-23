@@ -20,103 +20,47 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import type { AgentIdentity, AgentIdentityContext } from "../types";
+import type { AgentIdentity } from "../types";
 
-// ⚠ THE GRANT ARM IS A DB READ (F-604) — empty here, exactly as the sibling
-// suite declares it: every case below is about the viewer filter's OTHER arms.
-vi.mock("@/shared/tenancy/resource-grant-reach", async (importOriginal) => ({
-  ...(await importOriginal<
-    typeof import("@/shared/tenancy/resource-grant-reach")
-  >()),
-  grantedResourceIds: vi.fn(async () => new Set<string>()),
-}));
-
-vi.mock("./repository", () => ({
-  listIdentitiesForWorkspace: vi.fn(),
-  findIdentityById: vi.fn(),
-  listTeamLinksForIdentities: vi.fn(),
-  listTeamIdsForUser: vi.fn(),
-  listKnowledgeLinksForIdentities: vi.fn(),
-  listKnowledgeBaseAccessRows: vi.fn(),
-  listKnowledgeBaseTeamGrants: vi.fn(),
-  listLiveFoldersForBases: vi.fn(),
-  listLiveEntryRows: vi.fn(),
-}));
-
-vi.mock("@/shared/tenancy/resolve-resource", () => ({
-  resolveResource: vi.fn(async () => null),
-}));
+vi.mock("@/shared/tenancy/resource-grant-reach", async (orig) =>
+  (await import("./service-writes-fixtures")).noGrantsMock(orig)
+);
+vi.mock("./repository", async () => (await import("./service-writes-fixtures")).repoMock());
+vi.mock("@/shared/tenancy/resolve-resource", async (orig) =>
+  (await import("./service-writes-fixtures")).resolveNowhereMock(orig)
+);
 
 import * as repo from "./repository";
 import * as tenancy from "@/shared/tenancy/resolve-resource";
 import { resolveIdentityForLaunch } from "./service";
+import {
+  AUDITOR,
+  OWNER as CREATOR,
+  ctx,
+  identity as baseIdentity,
+  resetReadMocks,
+} from "./service-writes-fixtures";
 
 const mockRepo = vi.mocked(repo);
 const mockTenancy = vi.mocked(tenancy);
 
-const CREATOR = "user-creator";
 const REACHABLE = "kb-reachable";
 const OUT_OF_REACH = "kb-out-of-reach";
 
-function ctx(overrides: Partial<AgentIdentityContext> = {}): AgentIdentityContext {
-  return {
-    workspaceId: "ws-1",
-    userId: CREATOR,
-    source: "user",
-    role: "member",
-    apiKeyWorkspaceId: null,
-    credentialSubjectUserId: CREATOR,
-    ...overrides,
-  };
-}
+const identity = (over: Partial<AgentIdentity> = {}) => baseIdentity({ ...AUDITOR, ...over });
 
-function identity(overrides: Partial<AgentIdentity> = {}): AgentIdentity {
-  return {
-    id: "tpl-1",
-    workspaceId: "ws-1",
-    name: "Code Auditor",
-    description: "ignored by the launch payload",
-    instructions: "Audit the diff.",
-    model: "claude-opus-5",
-    fields: [],
-    visibility: "private",
-    teamIds: [],
-    knowledgeBases: [],
-    createdBy: CREATOR,
-    createdAt: "2026-01-01T00:00:00Z",
-    updatedAt: "2026-01-01T00:00:00Z",
-    ...overrides,
-  };
-}
-
-/** A junction row: the identity NAMES this base, whatever the reader can see.
- *  ⚠ SCOPED SINCE 2026-09-08 — `scope_kind` defaults to `'base'`, which is what
- *  every row written before that migration IS. */
+/** A junction row: the identity NAMES this base, whatever the reader can see. */
 const link = (knowledgeBaseId: string) => ({
-  identityId: "tpl-1",
+  identityId: "id-1",
   knowledgeBaseId,
   scopeKind: "base" as const,
   folderId: null,
   entryId: null,
 });
-
-/** A junction row naming ONE FOLDER of a base. */
-const folderLink = (knowledgeBaseId: string, folderId: string) => ({
-  identityId: "tpl-1",
-  knowledgeBaseId,
-  scopeKind: "folder" as const,
-  folderId,
-  entryId: null,
-});
-
-/** …and one naming a single ENTRY. */
-const entryLink = (knowledgeBaseId: string, entryId: string) => ({
-  identityId: "tpl-1",
-  knowledgeBaseId,
-  scopeKind: "entry" as const,
-  folderId: null,
-  entryId,
-});
+const folderLink = (knowledgeBaseId: string, folderId: string) =>
+  ({ ...link(knowledgeBaseId), scopeKind: "folder" as const, folderId });
+const entryLink = (knowledgeBaseId: string, entryId: string) =>
+  ({ ...link(knowledgeBaseId), scopeKind: "entry" as const, entryId });
 
 /** A base row the viewer filter WILL keep — public, workspace-wide. */
 const visibleBase = (id: string, name: string) => ({
@@ -131,20 +75,14 @@ beforeEach(() => {
   vi.clearAllMocks();
   mockTenancy.resolveResource.mockResolvedValue(null);
   mockRepo.findIdentityById.mockResolvedValue(identity());
-  mockRepo.listKnowledgeLinksForIdentities.mockResolvedValue([]);
-  mockRepo.listKnowledgeBaseAccessRows.mockResolvedValue([]);
-  mockRepo.listKnowledgeBaseTeamGrants.mockResolvedValue([]);
-  mockRepo.listLiveFoldersForBases.mockResolvedValue([]);
-  mockRepo.listLiveEntryRows.mockResolvedValue([]);
-  mockRepo.listTeamLinksForIdentities.mockResolvedValue([]);
-  mockRepo.listTeamIdsForUser.mockResolvedValue([]);
+  resetReadMocks(mockRepo);
 });
 
 describe("the count", () => {
   it("is 0 when the identity attaches nothing", async () => {
     // ⚠ A DECIDED ZERO, not an absence: this row went through the decoration and
     // the answer is "nothing was dropped".
-    const resolved = await resolveIdentityForLaunch(ctx(), "tpl-1");
+    const resolved = await resolveIdentityForLaunch(ctx(), "id-1");
     expect(resolved.unreachableKnowledgeBaseCount).toBe(0);
     expect(resolved.knowledgeBases).toEqual([]);
   });
@@ -154,7 +92,7 @@ describe("the count", () => {
     mockRepo.listKnowledgeBaseAccessRows.mockResolvedValue([
       visibleBase(REACHABLE, "Ops Notes"),
     ]);
-    const resolved = await resolveIdentityForLaunch(ctx(), "tpl-1");
+    const resolved = await resolveIdentityForLaunch(ctx(), "id-1");
     expect(resolved.unreachableKnowledgeBaseCount).toBe(0);
     expect(resolved.knowledgeBases).toEqual([{ id: REACHABLE, name: "Ops Notes" }]);
   });
@@ -164,7 +102,7 @@ describe("the count", () => {
     // does not resolve: the junction row exists, the base row does not come back.
     mockRepo.listKnowledgeLinksForIdentities.mockResolvedValue([link(OUT_OF_REACH)]);
     mockRepo.listKnowledgeBaseAccessRows.mockResolvedValue([]);
-    const resolved = await resolveIdentityForLaunch(ctx(), "tpl-1");
+    const resolved = await resolveIdentityForLaunch(ctx(), "id-1");
     expect(resolved.unreachableKnowledgeBaseCount).toBe(1);
   });
 
@@ -176,7 +114,7 @@ describe("the count", () => {
     mockRepo.listKnowledgeBaseAccessRows.mockResolvedValue([
       visibleBase(REACHABLE, "Ops Notes"),
     ]);
-    const resolved = await resolveIdentityForLaunch(ctx(), "tpl-1");
+    const resolved = await resolveIdentityForLaunch(ctx(), "id-1");
     expect(resolved.unreachableKnowledgeBaseCount).toBe(1);
     expect(resolved.knowledgeBases).toEqual([{ id: REACHABLE, name: "Ops Notes" }]);
   });
@@ -187,7 +125,7 @@ describe("what it must NOT do", () => {
     // ⚠ THE HALF OF THE RULING A REFUSAL WOULD BREAK. An unreachable attachment
     // is a thing to SAY, never a reason to refuse to start.
     mockRepo.listKnowledgeLinksForIdentities.mockResolvedValue([link(OUT_OF_REACH)]);
-    const resolved = await resolveIdentityForLaunch(ctx(), "tpl-1");
+    const resolved = await resolveIdentityForLaunch(ctx(), "id-1");
     expect(resolved.name).toBe("Code Auditor");
     expect(resolved.instructions).toBe("Audit the diff.");
     expect(resolved.knowledgeBases).toEqual([]);
@@ -198,7 +136,7 @@ describe("what it must NOT do", () => {
     // 🔒 The leak test. Serialised, because a location could hide in any key: the
     // payload may not contain the dropped id anywhere, at any depth.
     mockRepo.listKnowledgeLinksForIdentities.mockResolvedValue([link(OUT_OF_REACH)]);
-    const resolved = await resolveIdentityForLaunch(ctx(), "tpl-1");
+    const resolved = await resolveIdentityForLaunch(ctx(), "id-1");
     expect(JSON.stringify(resolved)).not.toContain(OUT_OF_REACH);
     expect(Object.keys(resolved).sort()).toEqual([
       "authoredByCaller",
@@ -218,7 +156,7 @@ describe("what it must NOT do", () => {
     // caller's reach is precisely what the no-location rule forbids, so the count
     // must cost exactly the queries the decoration already made.
     mockRepo.listKnowledgeLinksForIdentities.mockResolvedValue([link(OUT_OF_REACH)]);
-    await resolveIdentityForLaunch(ctx(), "tpl-1");
+    await resolveIdentityForLaunch(ctx(), "id-1");
     expect(mockRepo.listKnowledgeLinksForIdentities).toHaveBeenCalledTimes(1);
     expect(mockRepo.listKnowledgeBaseAccessRows).toHaveBeenCalledTimes(1);
     expect(mockRepo.listKnowledgeBaseAccessRows).toHaveBeenCalledWith("ws-1", [
@@ -251,7 +189,7 @@ describe("folder and entry scopes", () => {
       { id: "f-0", knowledgeBaseId: REACHABLE, parentId: null, name: "Runbooks" },
       { id: FOLDER, knowledgeBaseId: REACHABLE, parentId: "f-0", name: "Deploys" },
     ]);
-    const resolved = await resolveIdentityForLaunch(ctx(), "tpl-1");
+    const resolved = await resolveIdentityForLaunch(ctx(), "id-1");
     expect(resolved.knowledge).toEqual([
       {
         baseId: REACHABLE,
@@ -286,7 +224,7 @@ describe("folder and entry scopes", () => {
     mockRepo.listLiveEntryRows.mockResolvedValue([
       { id: ENTRY, knowledgeBaseId: REACHABLE, folderId: "f-0", title: "Rollback" },
     ]);
-    const resolved = await resolveIdentityForLaunch(ctx(), "tpl-1");
+    const resolved = await resolveIdentityForLaunch(ctx(), "id-1");
     expect(resolved.knowledge[0]?.path).toBe("Ops Notes / Runbooks / Rollback");
     expect(resolved.knowledge[0]?.toolPath).toBe("Runbooks/Rollback");
   });
@@ -301,7 +239,7 @@ describe("folder and entry scopes", () => {
       visibleBase(REACHABLE, "Ops Notes"),
     ]);
     mockRepo.listLiveEntryRows.mockResolvedValue([]);
-    const resolved = await resolveIdentityForLaunch(ctx(), "tpl-1");
+    const resolved = await resolveIdentityForLaunch(ctx(), "id-1");
     expect(resolved.knowledge).toEqual([]);
     expect(resolved.unreachableKnowledgeBaseCount).toBe(1);
     expect(JSON.stringify(resolved)).not.toContain(ENTRY);
@@ -320,7 +258,7 @@ describe("folder and entry scopes", () => {
     mockRepo.listLiveFoldersForBases.mockResolvedValue([
       { id: FOLDER, knowledgeBaseId: OUT_OF_REACH, parentId: null, name: "Elsewhere" },
     ]);
-    const resolved = await resolveIdentityForLaunch(ctx(), "tpl-1");
+    const resolved = await resolveIdentityForLaunch(ctx(), "id-1");
     expect(resolved.knowledge).toEqual([]);
     expect(resolved.unreachableKnowledgeBaseCount).toBe(1);
   });
@@ -330,7 +268,7 @@ describe("folder and entry scopes", () => {
       folderLink(OUT_OF_REACH, FOLDER),
     ]);
     mockRepo.listKnowledgeBaseAccessRows.mockResolvedValue([]);
-    const resolved = await resolveIdentityForLaunch(ctx(), "tpl-1");
+    const resolved = await resolveIdentityForLaunch(ctx(), "id-1");
     expect(resolved.knowledge).toEqual([]);
     expect(resolved.unreachableKnowledgeBaseCount).toBe(1);
     // ⚠ NO PROBE. Reading the folders of a base the caller cannot see is a
@@ -380,7 +318,7 @@ describe("the base card", () => {
       { ...folder("f-3", "2026"), parentId: "f-2" },
     ]);
 
-    const [ref] = (await resolveIdentityForLaunch(ctx(), "tpl-1")).knowledge;
+    const [ref] = (await resolveIdentityForLaunch(ctx(), "id-1")).knowledge;
     expect(ref.baseSlug).toBe("deploys");
     expect(ref.baseSummary).toBe("How this service is released.");
     expect(ref.baseFolders).toEqual([
@@ -390,14 +328,14 @@ describe("the base card", () => {
     expect(ref.baseFolderCount).toBe(2);
   });
 
-  it("🔒 says NOTHING about a base the viewer cannot see — not even its shape", async () => {
+  it("says NOTHING about a base the viewer cannot see — not even its shape", async () => {
     // ⚠ The ruling's line: a dropped attachment discloses a COUNT and nothing
     // else. A card would be a name, a slug and a folder list — the exact
     // location information the filter exists to withhold.
     mockRepo.listKnowledgeLinksForIdentities.mockResolvedValue([link(OUT_OF_REACH)]);
     mockRepo.listKnowledgeBaseAccessRows.mockResolvedValue([]);
 
-    const resolved = await resolveIdentityForLaunch(ctx(), "tpl-1");
+    const resolved = await resolveIdentityForLaunch(ctx(), "id-1");
     expect(resolved.knowledge).toEqual([]);
     expect(resolved.unreachableKnowledgeBaseCount).toBe(1);
     expect(JSON.stringify(resolved)).not.toContain(OUT_OF_REACH);
@@ -409,7 +347,7 @@ describe("the base card", () => {
     ]);
     mockRepo.listLiveFoldersForBases.mockResolvedValue([folder("f-1", "Runbooks")]);
 
-    const [ref] = (await resolveIdentityForLaunch(ctx(), "tpl-1")).knowledge;
+    const [ref] = (await resolveIdentityForLaunch(ctx(), "id-1")).knowledge;
     expect(ref.scope).toBe("folder");
     expect(ref.baseSlug).toBeUndefined();
     expect(ref.baseFolders).toBeUndefined();
@@ -418,7 +356,7 @@ describe("the base card", () => {
 
   it("a base with no folders carries a count of 0, which is an ANSWER", async () => {
     mockRepo.listLiveFoldersForBases.mockResolvedValue([]);
-    const [ref] = (await resolveIdentityForLaunch(ctx(), "tpl-1")).knowledge;
+    const [ref] = (await resolveIdentityForLaunch(ctx(), "id-1")).knowledge;
     expect(ref.baseFolders).toEqual([]);
     expect(ref.baseFolderCount).toBe(0);
   });

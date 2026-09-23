@@ -63,7 +63,7 @@ beforeEach(() => {
 
 // ── NOBODY ASKED FOR A SHELF ──────────────────────────────────────────────
 
-describe("⚠ a create nobody re-routed lands in the calling container", () => {
+describe("a create nobody re-routed lands in the calling container", () => {
   it.each([
     ["absent", undefined],
     ["false", false],
@@ -80,7 +80,7 @@ describe("⚠ a create nobody re-routed lands in the calling container", () => {
     expect(mockReach).not.toHaveBeenCalled();
   });
 
-  it("🔒 …including an AGENT in a shared room, which has no twin of the KB re-route", async () => {
+  it("…including an AGENT in a shared room, which has no twin of the KB re-route", async () => {
     // 🔒 THE DELIBERATE ASYMMETRY WITH `resolveCreateDestination`, pinned so a
     // later reader does not "restore" the missing arm. Knowledge re-routes a
     // RESTRICTED audience because F-323 is real there: a base created in a
@@ -100,7 +100,7 @@ describe("⚠ a create nobody re-routed lands in the calling container", () => {
 
 // ── THE CALLER ASKED FOR THE SHELF ────────────────────────────────────────
 
-describe("🔒 homeScoped — the fence decides, and it is finally asked", () => {
+describe("homeScoped — the fence decides, and it is finally asked", () => {
   it("lands on the caller's OWN container when the fence is open", async () => {
     mockReach.mockResolvedValue({ kind: "open", containerId: CONTAINER });
 
@@ -112,7 +112,7 @@ describe("🔒 homeScoped — the fence decides, and it is finally asked", () =>
     ).toEqual({ homeScoped: true, workspaceId: CONTAINER });
   });
 
-  it("🔒 REFUSES an agent in an UNARMED shared room — the hole this gate closes", async () => {
+  it("REFUSES an agent in an UNARMED shared room — the hole this gate closes", async () => {
     // 🔒 THE REGRESSION CASE. Before this gate the same call wrote the row: the
     // flag reached `personalWriteWorkspaceId`, which resolves the container by
     // AUTHOR and asks nobody whether this caller may reach it from here. The
@@ -156,7 +156,7 @@ describe("🔒 homeScoped — the fence decides, and it is finally asked", () =>
     expect(err!.message).toContain(sentence);
   });
 
-  it("🔒 REFUSES, NEVER DOWNGRADES to the workspace shelf", async () => {
+  it("REFUSES, NEVER DOWNGRADES to the workspace shelf", async () => {
     // 🔒 `personal-container.ts`'s own rule. The workspace shelf is a DIFFERENT
     // audience, not a lesser one: silently landing there would put a row the
     // caller meant to keep personal into a container a peer is standing in.
@@ -170,7 +170,7 @@ describe("🔒 homeScoped — the fence decides, and it is finally asked", () =>
     ).rejects.toBeInstanceOf(PersonalContainerMissingError);
   });
 
-  it("🔒 asks the fence about THE CALLER, exactly once", async () => {
+  it("asks the fence about THE CALLER, exactly once", async () => {
     // ⚠ MUTATION CHECK, and the reason the composition is safe. The fence is
     // asked about the context this request already proved — never about a
     // container the input named. `AgentIdentityContext` satisfies
@@ -191,7 +191,7 @@ describe("🔒 homeScoped — the fence decides, and it is finally asked", () =>
 
 // ── A `team` ROW NAMES THE ROOM ───────────────────────────────────────────
 
-describe("🔒 a TEAM identity is never personal — the grant cannot follow the row", () => {
+describe("a TEAM identity is never personal — the grant cannot follow the row", () => {
   it("refuses homeScoped + team, and does not ask the fence at all", async () => {
     // 🔒 THE SAME RULE `resolveCreateDestination` APPLIES TO `shareToChannelId`
     // AND TO A TEAMS CREATE: a team belongs to the calling container and its

@@ -1,20 +1,12 @@
 /**
- * SHARED FIXTURES for the agent-identity write suites — ⚠ NOT a test file, and
- * not a place for assertions.
- *
- * `service-writes.test.ts` and `service-writes-junction.test.ts` drive the same
- * service against the same mocked repository, and both need the same context,
- * the same identity row and the same knowledge-base rows. They are two files
- * only because one file was over the 500-line cap, so a second copy of this
- * harness would be a copy made for a formatting reason — the worst kind, since
- * nothing would ever tell you the two had drifted.
- *
- * ⚠ **`vi.mock` STAYS IN EACH TEST FILE.** It is hoisted above imports by the
- * transform, so it cannot live here; what CAN live here is everything that runs
- * afterwards — the row fixtures and the per-test reset ({@link resetRepoMocks}).
+ * Builders and `vi.mock` factories shared by the agent-identity service suites. Deliberately not
+ * `*.test.ts`: imported, never run. `vi.mock` is hoisted, so each suite keeps its own call and reaches
+ * the factories here through `await import`.
  */
 
-import type { MockedObject } from "vitest";
+import { vi, type MockedObject } from "vitest";
+import type * as GrantReach from "@/shared/tenancy/resource-grant-reach";
+import type * as Resolver from "@/shared/tenancy/resolve-resource";
 import type * as Repo from "./repository";
 import type { AgentIdentity, AgentIdentityContext } from "../types";
 
@@ -44,7 +36,7 @@ export function identity(
   overrides: Partial<AgentIdentity> = {}
 ): AgentIdentity {
   return {
-    id: "tpl-1",
+    id: "id-1",
     workspaceId: "ws-1",
     name: "Researcher",
     description: null,
@@ -60,6 +52,14 @@ export function identity(
     ...overrides,
   };
 }
+
+/** Every field the launch payload carries, populated. */
+export const AUDITOR = {
+  name: "Code Auditor",
+  description: "ignored by the launch payload",
+  instructions: "Audit the diff.",
+  model: "claude-opus-5",
+} satisfies Partial<AgentIdentity>;
 
 /** Knowledge-base rows as the repository hands them over. */
 export const BASES = {
@@ -86,34 +86,67 @@ export const BASES = {
   },
 };
 
-/**
- * The per-test reset both suites run.
- *
- * ⚠ The insert mock ECHOES the visibility it was asked for, and
- * `findIdentityById` returns the same row. Both writes re-read through
- * `getIdentityById` so the response is the gated shape a GET returns — a
- * fixture that answered a fixed `private` row would make every create by a
- * non-owner 404 on its own result, which is a fixture bug that reads exactly
- * like a gate bug.
- *
- * ⚠ Takes the mocked module as an ARGUMENT rather than importing it: the
- * `vi.mock` factory lives in the calling test file, so this module must not
- * bind to one. The parameter is `MockedObject<typeof Repo>`, so a repository
- * function that changes shape fails HERE rather than in whichever suite runs
- * first.
- */
-export function resetRepoMocks(mockRepo: MockedObject<typeof Repo>): void {
+/** `./repository`: every function the service suites reach. */
+export function repoMock() {
+  return {
+    listIdentitiesForWorkspace: vi.fn(),
+    findIdentityById: vi.fn(),
+    insertIdentity: vi.fn(),
+    updateIdentityRow: vi.fn(),
+    hardDeleteIdentity: vi.fn(),
+    listTeamLinksForIdentities: vi.fn(),
+    replaceTeamLinks: vi.fn(),
+    listTeamIdsForUser: vi.fn(),
+    filterTeamIdsInWorkspace: vi.fn(),
+    listKnowledgeLinksForIdentities: vi.fn(),
+    replaceKnowledgeLinks: vi.fn(),
+    listKnowledgeBaseAccessRows: vi.fn(),
+    listKnowledgeBaseTeamGrants: vi.fn(),
+    listLiveFoldersForBases: vi.fn(),
+    listLiveEntryRows: vi.fn(),
+  };
+}
+
+/** The grant arm is a DB read (F-604); these suites test the other arms, so the grant set is empty. */
+export async function noGrantsMock(importOriginal: () => Promise<typeof GrantReach>) {
+  return { ...(await importOriginal()), grantedResourceIds: vi.fn(async () => new Set<string>()) };
+}
+
+/** The resolver names nothing elsewhere; unmocked it reaches Supabase and hangs. */
+export async function resolveNowhereMock(importOriginal: () => Promise<typeof Resolver>) {
+  return {
+    ...(await importOriginal()),
+    resolveResource: vi.fn(async () => null),
+    resolveResourcesByName: vi.fn(async () => []),
+  };
+}
+
+/** A standard "ws-1": the create gates read the workspace row, and unmocked they hang. */
+export function workspaceRepoMock() {
+  return {
+    findDefaultWorkspaceForUser: vi.fn().mockResolvedValue(null),
+    findWorkspaceById: vi.fn().mockResolvedValue({ id: "ws-1", kind: "standard" }),
+  };
+}
+
+/** Every list read answers empty; an unset sub-base read is `undefined`, a `TypeError` rather than a refusal. */
+export function resetReadMocks(mockRepo: MockedObject<typeof Repo>): void {
   mockRepo.listTeamLinksForIdentities.mockResolvedValue([]);
   mockRepo.listTeamIdsForUser.mockResolvedValue([]);
   mockRepo.listKnowledgeLinksForIdentities.mockResolvedValue([]);
   mockRepo.listKnowledgeBaseAccessRows.mockResolvedValue([]);
   mockRepo.listKnowledgeBaseTeamGrants.mockResolvedValue([]);
-  // ⚠ THE SUB-BASE READS (2026-09-08). Empty is the honest default: a base with
-  // no live folders and no live entries, which is what makes every folder/entry
-  // scope in a suite that does not set them up resolve to NOTHING rather than to
-  // `undefined` — the second is a `TypeError`, not a refusal.
   mockRepo.listLiveFoldersForBases.mockResolvedValue([]);
   mockRepo.listLiveEntryRows.mockResolvedValue([]);
+}
+
+/**
+ * {@link resetReadMocks} plus the write defaults. Takes the mocked module as an argument because the
+ * `vi.mock` factory lives in the caller. `insertIdentity` re-points `findIdentityById` at the inserted
+ * row; otherwise a non-owner's create 404s on its own result.
+ */
+export function resetRepoMocks(mockRepo: MockedObject<typeof Repo>): void {
+  resetReadMocks(mockRepo);
   mockRepo.filterTeamIdsInWorkspace.mockImplementation(async (_ws, ids) => ids);
   mockRepo.insertIdentity.mockImplementation(async (args) => {
     const row = identity({ visibility: args.visibility, createdBy: args.createdBy });
