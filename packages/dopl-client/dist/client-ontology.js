@@ -49,14 +49,14 @@ class OntologyMethods extends client_knowledge_js_1.KnowledgeMethods {
     getOntologyAnchor() {
         return ontology.getOntologyAnchor(this.transport);
     }
-    createOntologyCluster(input) {
-        return ontology.createOntologyCluster(this.transport, input);
+    createOntology(input) {
+        return ontology.createOntology(this.transport, input);
     }
-    updateOntologyCluster(clusterId, patch) {
-        return ontology.updateOntologyCluster(this.transport, clusterId, patch);
+    updateOntology(ontologyId, patch) {
+        return ontology.updateOntology(this.transport, ontologyId, patch);
     }
-    deleteOntologyCluster(clusterId) {
-        return ontology.deleteOntologyCluster(this.transport, clusterId);
+    deleteOntology(ontologyId) {
+        return ontology.deleteOntology(this.transport, ontologyId);
     }
     createOntologyObject(input) {
         return ontology.createOntologyObject(this.transport, input);

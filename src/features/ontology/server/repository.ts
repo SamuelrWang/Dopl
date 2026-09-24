@@ -3,12 +3,12 @@ import { mergeStoredLayout, type GraphLayout } from "@/shared/graph";
 import { supabaseAdmin } from "@/shared/supabase/admin";
 import type { OntologyObject, OntologyWriteSource } from "../types";
 import {
-  ONTOLOGY_CLUSTER_COLS,
+  ONTOLOGY_COLS,
   ONTOLOGY_MEMBERSHIP_COLS,
   ONTOLOGY_OBJECT_COLS,
   ONTOLOGY_READ_LIMITS,
   ONTOLOGY_RELATIONSHIP_COLS,
-  type OntologyClusterRow,
+  type OntologyRow,
   type OntologyMembershipRow,
   type OntologyObjectRow,
   type OntologyRelationshipRow,
@@ -22,9 +22,9 @@ import {
  * a reference, never a copy, so the row stays in the LENDER's container while
  * the reader stands in the channel's. The set
  * is `service-audience.ts › OntologyAudience.workspaceIds`, and it is a READ
- * SCOPE — never an authorization; clusters stay filtered by `levelForCluster`,
+ * SCOPE — never an authorization; ontologies stay filtered by `levelForOntology`,
  * and object reads take ids from the membership walk over ALREADY-ADMITTED
- * clusters (Q8). Same shape, same reason, as
+ * ontologies (Q8). Same shape, same reason, as
  * `shared/tenancy/personal-container.ts › resolveShelfScope`.
  */
 
@@ -48,54 +48,54 @@ export function stripNullBytes<T>(value: T): T {
   return value;
 }
 
-export async function listClusters(
+export async function listOntologies(
   workspaceIds: readonly string[]
-): Promise<OntologyClusterRow[]> {
+): Promise<OntologyRow[]> {
   if (workspaceIds.length === 0) return [];
   const db = supabaseAdmin();
   const { data, error } = await db
-    .from("ontology_clusters")
-    .select(ONTOLOGY_CLUSTER_COLS)
+    .from("ontologies")
+    .select(ONTOLOGY_COLS)
     .in("workspace_id", workspaceIds)
     .is("deleted_at", null)
     .order("position")
     .order("created_at")
-    .limit(ONTOLOGY_READ_LIMITS.clusters);
+    .limit(ONTOLOGY_READ_LIMITS.ontologies);
   if (error) throw error;
-  return (data ?? []) as OntologyClusterRow[];
+  return (data ?? []) as OntologyRow[];
 }
 
-export async function findClusterById(
+export async function findOntologyById(
   workspaceIds: readonly string[],
   id: string
-): Promise<OntologyClusterRow | null> {
+): Promise<OntologyRow | null> {
   if (workspaceIds.length === 0) return null;
   const db = supabaseAdmin();
   const { data, error } = await db
-    .from("ontology_clusters")
-    .select(ONTOLOGY_CLUSTER_COLS)
+    .from("ontologies")
+    .select(ONTOLOGY_COLS)
     .in("workspace_id", workspaceIds)
     .eq("id", id)
     .is("deleted_at", null)
     .maybeSingle();
   if (error) throw error;
-  return data as OntologyClusterRow | null;
+  return data as OntologyRow | null;
 }
 
-export async function insertCluster(input: {
+export async function insertOntology(input: {
   workspaceId: string;
   slug: string;
   name: string;
   purpose: string;
   position: number;
   createdBy: string;
-  /** Q6 attribution, on the cluster as well as the object — the columns
+  /** Q6 attribution, on the ontology as well as the object — the columns
    *  `20261001120000` adds to BOTH tables. */
   source: OntologyWriteSource;
-}): Promise<OntologyClusterRow> {
+}): Promise<OntologyRow> {
   const db = supabaseAdmin();
   const { data, error } = await db
-    .from("ontology_clusters")
+    .from("ontologies")
     .insert(
       stripNullBytes({
         workspace_id: input.workspaceId,
@@ -108,10 +108,10 @@ export async function insertCluster(input: {
         last_edited_source: input.source,
       })
     )
-    .select(ONTOLOGY_CLUSTER_COLS)
+    .select(ONTOLOGY_COLS)
     .single();
   if (error) throw error;
-  return data as OntologyClusterRow;
+  return data as OntologyRow;
 }
 
 /**
@@ -119,7 +119,7 @@ export async function insertCluster(input: {
  * current row first: layout is one blob, so partial write must fold in
  * untouched nodes itself. Reset (`{}`) skips the read.
  */
-async function mergeClusterLayout(
+async function mergeOntologyLayout(
   db: ReturnType<typeof supabaseAdmin>,
   workspaceId: string,
   id: string,
@@ -127,7 +127,7 @@ async function mergeClusterLayout(
 ): Promise<GraphLayout> {
   if (Object.keys(patch).length === 0) return {};
   const { data } = await db
-    .from("ontology_clusters")
+    .from("ontologies")
     .select("layout")
     .eq("workspace_id", workspaceId)
     .eq("id", id)
@@ -136,7 +136,7 @@ async function mergeClusterLayout(
   return mergeStoredLayout((data?.layout ?? null) as GraphLayout | null, patch);
 }
 
-export async function updateCluster(
+export async function updateOntology(
   workspaceId: string,
   id: string,
   patch: {
@@ -148,7 +148,7 @@ export async function updateCluster(
     agentsMayEdit?: boolean;
   },
   editor: { userId: string; source: OntologyWriteSource }
-): Promise<OntologyClusterRow | null> {
+): Promise<OntologyRow | null> {
   const db = supabaseAdmin();
   // Q3/Q6 — stamped beside the fields, never in a second statement that an
   // edit can reorder past the write it describes.
@@ -163,43 +163,43 @@ export async function updateCluster(
   // cards must not clobber). Empty `{}` = reset signal: REPLACES, wiping every
   // stored position back to auto-layout.
   if (patch.layout !== undefined) {
-    update.layout = await mergeClusterLayout(db, workspaceId, id, patch.layout);
+    update.layout = await mergeOntologyLayout(db, workspaceId, id, patch.layout);
   }
   const { data, error } = await db
-    .from("ontology_clusters")
+    .from("ontologies")
     .update(update)
     .eq("workspace_id", workspaceId)
     .eq("id", id)
     .is("deleted_at", null)
-    .select(ONTOLOGY_CLUSTER_COLS)
+    .select(ONTOLOGY_COLS)
     .maybeSingle();
   if (error) throw error;
-  return data as OntologyClusterRow | null;
+  return data as OntologyRow | null;
 }
 
 /**
- * Cascade HARD-delete cluster + every object it owns in ONE atomic RPC.
+ * Cascade HARD-delete ontology + every object it owns in ONE atomic RPC.
  * Permanent, no trash. Must stay one transaction: partial failure could
- * delete objects and leave the cluster behind. Memberships/relationships
- * cascade via FK. Returns objects deleted, or null when no LIVE cluster
+ * delete objects and leave the ontology behind. Memberships/relationships
+ * cascade via FK. Returns objects deleted, or null when no LIVE ontology
  * matched (service → 404).
- * Returns objects deleted, or null when no LIVE cluster matched (service → 404).
+ * Returns objects deleted, or null when no LIVE ontology matched (service → 404).
  */
-export async function cascadeHardDeleteCluster(
+export async function cascadeHardDeleteOntology(
   workspaceId: string,
-  clusterId: string
+  ontologyId: string
 ): Promise<number | null> {
   const db = supabaseAdmin();
-  // DEPLOY-BLOCKING migration 20260807120000_ontology_cluster_hard_delete_rpc.sql.
-  // Sole path for `deleteCluster`; missing → every cluster delete fails at
+  // DEPLOY-BLOCKING migration 20261022120000_ontology_vocabulary_rename.sql.
+  // Sole path for `deleteOntology`; missing → every ontology delete fails at
   // runtime. `as never` = house convention for a not-yet-generated RPC (see
   // `chats/server/repository.ts` → `chat_create_with_messages`) and why tsc
   // can't catch it — track by hand.
   const { data, error } = await db.rpc(
-    "cascade_hard_delete_cluster" as never,
+    "cascade_hard_delete_ontology" as never,
     {
       p_workspace_id: workspaceId,
-      p_cluster_id: clusterId,
+      p_ontology_id: ontologyId,
     } as never
   );
   if (error) throw error;
@@ -207,7 +207,7 @@ export async function cascadeHardDeleteCluster(
 }
 
 /**
- * The objects of the ADMITTED clusters, addressed by the ids the membership
+ * The objects of the ADMITTED ontologies, addressed by the ids the membership
  * walk produced. By id, not by container (R1): a whole-container read leaves
  * the narrowing to whatever assembles the graph afterwards, which is a fence
  * only until a second consumer of the rows appears. The walk is the boundary
@@ -359,7 +359,7 @@ export async function listMemberships(
 
 export async function insertMembership(input: {
   workspaceId: string;
-  clusterId: string | null;
+  ontologyId: string | null;
   parentObjectId: string | null;
   childObjectId: string;
   position: number;
@@ -369,7 +369,7 @@ export async function insertMembership(input: {
     .from("ontology_memberships")
     .insert({
       workspace_id: input.workspaceId,
-      cluster_id: input.clusterId,
+      ontology_id: input.ontologyId,
       parent_object_id: input.parentObjectId,
       child_object_id: input.childObjectId,
       position: input.position,
@@ -382,7 +382,7 @@ export async function insertMembership(input: {
 
 export async function countMembershipSiblings(
   workspaceId: string,
-  parent: { clusterId: string } | { parentObjectId: string }
+  parent: { ontologyId: string } | { parentObjectId: string }
 ): Promise<number> {
   const db = supabaseAdmin();
   let query = db
@@ -390,8 +390,8 @@ export async function countMembershipSiblings(
     .select("id", { count: "exact", head: true })
     .eq("workspace_id", workspaceId);
   query =
-    "clusterId" in parent
-      ? query.eq("cluster_id", parent.clusterId)
+    "ontologyId" in parent
+      ? query.eq("ontology_id", parent.ontologyId)
       : query.eq("parent_object_id", parent.parentObjectId);
   const { count, error } = await query;
   if (error) throw error;
@@ -399,7 +399,7 @@ export async function countMembershipSiblings(
 }
 
 /** Outbound edges of the WALKED object set, sourced by id for the reason
- *  {@link listObjectsByIds} is: an edge from an object no admitted cluster
+ *  {@link listObjectsByIds} is: an edge from an object no admitted ontology
  *  reaches is not this reader's edge. Targets outside the set are dropped
  *  during assembly. */
 export async function listRelationshipsForSources(

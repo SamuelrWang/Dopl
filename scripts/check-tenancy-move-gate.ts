@@ -29,7 +29,6 @@ const DERIVES_FROM: Record<string, Parent> = {
 const NOT_DERIVED: Record<string, string> = {
   // Filed under the RESOURCE's container; the caller reaches it through the SCOPE's.
   resource_grants: "filed under the resource's container by rule, not copied",
-  cluster_knowledge_bases: "keyed on the cluster, which has its own tenancy",
 };
 
 /** An applied migration is never edited, so a move that shipped without its children is

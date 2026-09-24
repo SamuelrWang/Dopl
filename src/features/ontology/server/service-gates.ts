@@ -1,12 +1,12 @@
 import "server-only";
 import { HttpError } from "@/shared/lib/http-error";
 import type { OntologyContext } from "../types";
-import type { OntologyClusterRow, OntologyObjectRow } from "./dto";
+import type { OntologyRow, OntologyObjectRow } from "./dto";
 import * as repo from "./repository";
 import { listMembershipParents } from "./repository-projections";
 import {
   audienceAdmits,
-  levelForCluster,
+  levelForOntology,
   resolveOntologyAudience,
   type OntologyAudience,
 } from "./service-audience";
@@ -28,17 +28,17 @@ import {
  * `row.workspace_id` — `ctx.workspaceId` would silently update nothing.
  */
 
-/** Depth ceiling on the upward membership walk (the board is cluster → column
+/** Depth ceiling on the upward membership walk (the board is ontology → column
  *  → card). `seen` already terminates a CYCLE — this bounds COST. */
-const CLUSTER_WALK_DEPTH = 8;
+const ONTOLOGY_WALK_DEPTH = 8;
 
-/** The clusters this object belongs to, walking `ontology_memberships` UP.
- *  Empty = reachable from no cluster, which every gate below reads as "no". */
-export async function clustersOfObject(
+/** The ontologies this object belongs to, walking `ontology_memberships` UP.
+ *  Empty = reachable from no ontology, which every gate below reads as "no". */
+export async function ontologiesOfObject(
   audience: OntologyAudience,
   objectId: string
 ): Promise<Set<string>> {
-  return (await clustersOfObjects(audience, [objectId])).get(objectId) ?? new Set();
+  return (await ontologiesOfObjects(audience, [objectId])).get(objectId) ?? new Set();
 }
 
 /**
@@ -47,12 +47,12 @@ export async function clustersOfObject(
  * Batched because the caller is a list: `service.ts › sanitizeEdges`
  * validates every target of an edge payload, so a per-object walk would be an
  * N+1 keyed on how many edges a client sent. The bound is
- * {@link CLUSTER_WALK_DEPTH} queries whatever the batch size.
+ * {@link ONTOLOGY_WALK_DEPTH} queries whatever the batch size.
  *
  * Each object keeps its OWN answer — the frontier carries the ROOT it
  * descends from.
  */
-export async function clustersOfObjects(
+export async function ontologiesOfObjects(
   audience: OntologyAudience,
   objectIds: readonly string[]
 ): Promise<Map<string, Set<string>>> {
@@ -60,14 +60,14 @@ export async function clustersOfObjects(
     objectIds.map((id) => [id, new Set<string>()])
   );
   // node id → the roots this node is an ancestor of. `seen` per ROOT, not
-  // global: two roots sharing a parent must both collect that parent's clusters.
+  // global: two roots sharing a parent must both collect that parent's ontologies.
   let frontier = new Map<string, Set<string>>(
     objectIds.map((id) => [id, new Set([id])])
   );
   const seen = new Map<string, Set<string>>(
     objectIds.map((id) => [id, new Set([id])])
   );
-  for (let depth = 0; depth < CLUSTER_WALK_DEPTH && frontier.size > 0; depth++) {
+  for (let depth = 0; depth < ONTOLOGY_WALK_DEPTH && frontier.size > 0; depth++) {
     const rows = await listMembershipParents(audience.workspaceIds, [
       ...frontier.keys(),
     ]);
@@ -76,8 +76,8 @@ export async function clustersOfObjects(
       const roots = frontier.get(row.child_object_id);
       if (!roots) continue;
       for (const root of roots) {
-        if (row.cluster_id) {
-          answer.get(root)?.add(row.cluster_id);
+        if (row.ontology_id) {
+          answer.get(root)?.add(row.ontology_id);
         } else if (row.parent_object_id) {
           const visited = seen.get(root) as Set<string>;
           if (visited.has(row.parent_object_id)) continue;
@@ -95,9 +95,9 @@ export async function clustersOfObjects(
 
 /**
  * Which of these object ids may this caller see — Q8's boundary over a SET.
- * Visible when ANY cluster it belongs to admits the caller at `view`
+ * Visible when ANY ontology it belongs to admits the caller at `view`
  * (Q9's read half), the same sentence `./service-reads.ts ›
- * walkAdmittedClusters` says about the board.
+ * walkAdmittedOntologies` says about the board.
  *
  * It is NOT `repository.ts › filterObjectIds`, and confusing the two is the
  * one way to leak: that one answers "is this a live row inside my READ SCOPE",
@@ -112,24 +112,24 @@ export async function admittedObjectIds(
   const unique = [...new Set(objectIds)];
   if (unique.length === 0) return new Set();
   if (audience.kind === "unrestricted") return new Set(unique);
-  const byObject = await clustersOfObjects(audience, unique);
-  const clusters = await repo.listClusters(audience.workspaceIds);
+  const byObject = await ontologiesOfObjects(audience, unique);
+  const ontologies = await repo.listOntologies(audience.workspaceIds);
   const admitted = new Set(
-    clusters
+    ontologies
       .filter((c) => audienceAdmits(ctx, audience, c, "view"))
       .map((c) => c.id)
   );
   return new Set(
     unique.filter((id) => {
-      for (const clusterId of byObject.get(id) ?? []) {
-        if (admitted.has(clusterId)) return true;
+      for (const ontologyId of byObject.get(id) ?? []) {
+        if (admitted.has(ontologyId)) return true;
       }
       return false;
     })
   );
 }
 
-function clusterNotFound(): HttpError {
+function ontologyNotFound(): HttpError {
   return HttpError.notFound("Ontology not found");
 }
 
@@ -137,27 +137,27 @@ function objectNotFound(): HttpError {
   return HttpError.notFound("Object not found");
 }
 
-/** One cluster, fenced at `min`. The read runs over the AUDIENCE's container
- *  set, so it FINDS a lent cluster in the lender's container and then
+/** One ontology, fenced at `min`. The read runs over the AUDIENCE's container
+ *  set, so it FINDS a lent ontology in the lender's container and then
  *  `audienceAdmits` decides: resolution is not authorization. */
-export async function requireCluster(
+export async function requireOntology(
   ctx: OntologyContext,
-  clusterId: string,
+  ontologyId: string,
   min: "view" | "edit"
-): Promise<OntologyClusterRow> {
+): Promise<OntologyRow> {
   const audience = await resolveOntologyAudience(ctx);
-  const row = await repo.findClusterById(audience.workspaceIds, clusterId);
-  if (!row || !audienceAdmits(ctx, audience, row, min)) throw clusterNotFound();
+  const row = await repo.findOntologyById(audience.workspaceIds, ontologyId);
+  if (!row || !audienceAdmits(ctx, audience, row, min)) throw ontologyNotFound();
   return row;
 }
 
 /**
- * Q9 — a WRITE needs `edit` on EVERY cluster the object belongs to; a READ
+ * Q9 — a WRITE needs `edit` on EVERY ontology the object belongs to; a READ
  * needs `view` on ANY. Samuel's ruling, and the sharpest consequence of R5.
  * With `some` on the write, `members_level='edit'` in one channel would silently
  * edit an ontology that channel cannot see.
  *
- * An object in NO cluster is refused on both — `every` over nothing is
+ * An object in NO ontology is refused on both — `every` over nothing is
  * vacuously true and would admit exactly the rows nothing authorises.
  */
 export async function requireObject(
@@ -170,14 +170,14 @@ export async function requireObject(
   if (!row) throw objectNotFound();
   if (audience.kind === "unrestricted") return row;
 
-  const clusterIds = await clustersOfObject(audience, objectId);
-  if (clusterIds.size === 0) throw objectNotFound();
-  const clusters = await repo.listClusters(audience.workspaceIds);
-  const owning = clusters.filter((c) => clusterIds.has(c.id));
-  // A cluster the walk named but the read did not return is invisible to this
+  const ontologyIds = await ontologiesOfObject(audience, objectId);
+  if (ontologyIds.size === 0) throw objectNotFound();
+  const ontologies = await repo.listOntologies(audience.workspaceIds);
+  const owning = ontologies.filter((c) => ontologyIds.has(c.id));
+  // An ontology the walk named but the read did not return is invisible to this
   // caller and must still COUNT against a write (Q9): a short list is a refusal,
   // never a smaller `every`.
-  if (owning.length !== clusterIds.size) {
+  if (owning.length !== ontologyIds.size) {
     if (min === "edit") throw objectNotFound();
   }
   const admits =
@@ -193,13 +193,13 @@ export async function requireObject(
  * AGENT the solo toggle's answer (`agents_may_edit`), i.e. Samuel's *"toggle it
  * so that their agents can only view"*.
  *
- * It asks the audience about a cluster that does not exist yet, using the
+ * It asks the audience about an ontology that does not exist yet, using the
  * facts the row WILL carry (`knowledge › resolveCreateDestination`'s shape): a
  * create must not produce a row its own author cannot then edit.
  */
-export async function assertCanCreateCluster(ctx: OntologyContext): Promise<void> {
+export async function assertCanCreateOntology(ctx: OntologyContext): Promise<void> {
   const audience = await resolveOntologyAudience(ctx);
-  const level = levelForCluster(ctx, audience, {
+  const level = levelForOntology(ctx, audience, {
     id: "(new)",
     workspace_id: ctx.workspaceId,
     created_by: ctx.userId,

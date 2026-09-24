@@ -10,8 +10,8 @@ import {
   type GraphAction,
   type GraphState,
 } from "./graph-state";
-import { NEW_CLUSTER_NAME, type OntologyCreateApi, type OntologyCreateSink } from "./optimistic-create";
-import type { OntologyCluster, OntologyObject } from "./types";
+import { NEW_ONTOLOGY_NAME, type OntologyCreateApi, type OntologyCreateSink } from "./optimistic-create";
+import type { Ontology, OntologyObject } from "./types";
 
 interface Deferred<T> {
   promise: Promise<T>;
@@ -33,10 +33,10 @@ export function deferred<T>(): Deferred<T> {
 /** Drains the microtask queue so an awaited step has actually run. */
 export const flush = (): Promise<void> => new Promise((r) => setTimeout(r, 0));
 
-export const savedCluster = (over: Partial<OntologyCluster> = {}): OntologyCluster => ({
-  id: "cluster-real",
-  slug: "new-cluster",
-  name: NEW_CLUSTER_NAME,
+export const savedOntology = (over: Partial<Ontology> = {}): Ontology => ({
+  id: "ontology-real",
+  slug: "new-ontology",
+  name: NEW_ONTOLOGY_NAME,
   purpose: "",
   columnIds: [],
   layout: {},
@@ -63,8 +63,8 @@ export function harness() {
   const order: string[] = [];
   const failures: Array<{ what: string; err: unknown }> = [];
   const sent: Array<{ op: string; input: unknown; board: GraphState }> = [];
-  const deletedClusters: string[] = [];
-  const clusterCalls: Array<Deferred<OntologyCluster>> = [];
+  const deletedOntologies: string[] = [];
+  const ontologyCalls: Array<Deferred<Ontology>> = [];
   const objectCalls: Array<Deferred<OntologyObject>> = [];
   const patchCalls: Array<Deferred<OntologyObject>> = [];
   let writesInFlight = 0;
@@ -74,10 +74,10 @@ export function harness() {
   const record = (op: string, input: unknown) => sent.push({ op, input, board: state });
 
   const api: OntologyCreateApi = {
-    createCluster: (input) => {
-      record("createCluster", input);
-      const call = deferred<OntologyCluster>();
-      clusterCalls.push(call);
+    createOntology: (input) => {
+      record("createOntology", input);
+      const call = deferred<Ontology>();
+      ontologyCalls.push(call);
       return call.promise;
     },
     createObject: (input) => {
@@ -92,8 +92,8 @@ export function harness() {
       patchCalls.push(call);
       return call.promise;
     },
-    deleteCluster: (clusterId) => {
-      deletedClusters.push(clusterId);
+    deleteOntology: (ontologyId) => {
+      deletedOntologies.push(ontologyId);
       return Promise.resolve();
     },
   };
@@ -138,8 +138,8 @@ export function harness() {
     order,
     failures,
     sent,
-    deletedClusters,
-    clusterCalls,
+    deletedOntologies,
+    ontologyCalls,
     objectCalls,
     patchCalls,
     pending,
@@ -161,9 +161,9 @@ export function harness() {
   };
 }
 
-/** The column + card a cluster is born with, read back off the board. */
-export function seededOf(board: GraphState, cluster: OntologyCluster) {
-  const column = board.objects[board.clusters.find((c) => c.id === cluster.id)!.columnIds[0]!]!;
+/** The column + card an ontology is born with, read back off the board. */
+export function seededOf(board: GraphState, ontology: Ontology) {
+  const column = board.objects[board.ontologies.find((c) => c.id === ontology.id)!.columnIds[0]!]!;
   return { column, card: board.objects[column.childIds[0]!]! };
 }
 

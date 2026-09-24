@@ -13,7 +13,7 @@ import {
   isPendingOntologyId,
   NEW_COLUMN_NAME,
 } from "./optimistic-create";
-import { flush, harness, savedCluster, savedObject } from "./optimistic-create-harness";
+import { flush, harness, savedOntology, savedObject } from "./optimistic-create-harness";
 
 /**
  * The claim under test is what LEAVES, not what renders: this is the one create
@@ -21,8 +21,8 @@ import { flush, harness, savedCluster, savedObject } from "./optimistic-create-h
  * `h.sent` is the whole proof.
  */
 describe("the object draft — begin / discard", () => {
-  const cluster = savedCluster({ id: "c1", slug: "c1", columnIds: [] });
-  const board: GraphState = { clusters: [cluster], objects: {} };
+  const ontology = savedOntology({ id: "c1", slug: "c1", columnIds: [] });
+  const board: GraphState = { ontologies: [ontology], objects: {} };
 
   /**
    * Mutation-verified: pointing `beginColumnDraft` at `createObjectOptimistic`
@@ -33,7 +33,7 @@ describe("the object draft — begin / discard", () => {
     h.seed(board);
     const row = beginColumnDraft(h.sink, "c1");
 
-    expect(h.board.clusters[0]!.columnIds).toEqual([row.id]);
+    expect(h.board.ontologies[0]!.columnIds).toEqual([row.id]);
     expect(row.name).toBe(NEW_COLUMN_NAME);
     expect(isPendingOntologyId(row.id)).toBe(true);
     expect(h.pending.has(row.id)).toBe(true);
@@ -52,13 +52,13 @@ describe("the object draft — begin / discard", () => {
     expect(h.board).toEqual(board);
     expect(h.pending.size).toBe(0);
     expect(h.sent).toEqual([]);
-    expect(h.deletedClusters).toEqual([]);
+    expect(h.deletedOntologies).toEqual([]);
   });
 });
 
 describe("the object draft — commit", () => {
-  const cluster = savedCluster({ id: "c1", slug: "c1", columnIds: [] });
-  const board: GraphState = { clusters: [cluster], objects: {} };
+  const ontology = savedOntology({ id: "c1", slug: "c1", columnIds: [] });
+  const board: GraphState = { ontologies: [ontology], objects: {} };
   const patch = {
     name: "Deal",
     subtitle: "One live opportunity",
@@ -78,7 +78,7 @@ describe("the object draft — commit", () => {
     expect(h.sent).toHaveLength(1);
     expect(h.sent[0]).toMatchObject({
       op: "createObject",
-      input: { clusterId: "c1", name: "Deal" },
+      input: { ontologyId: "c1", name: "Deal" },
     });
     expect(h.sent[0]!.board.objects[row.id]!.name).toBe("Deal");
     expect(h.writesInFlight).toBe(1);
@@ -104,7 +104,7 @@ describe("the object draft — commit", () => {
     h.patchCalls[0]!.settle(savedObject("object-real"));
     await done;
 
-    expect(h.board.clusters[0]!.columnIds).toEqual(["object-real"]);
+    expect(h.board.ontologies[0]!.columnIds).toEqual(["object-real"]);
     expect(h.pending.size).toBe(0);
     expect(h.createdCount).toBe(1);
   });
@@ -157,7 +157,7 @@ describe("the object draft — commit", () => {
     h.patchCalls[0]!.fail(boom);
     await done;
 
-    expect(h.board.clusters[0]!.columnIds).toEqual(["object-real"]);
+    expect(h.board.ontologies[0]!.columnIds).toEqual(["object-real"]);
     expect(h.failures).toEqual([{ what: "object", err: boom }]);
     expect(h.writesInFlight).toBe(0);
   });

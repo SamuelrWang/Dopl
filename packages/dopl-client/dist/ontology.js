@@ -7,9 +7,9 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.getOntology = getOntology;
 exports.getOntologySummary = getOntologySummary;
 exports.getOntologyAnchor = getOntologyAnchor;
-exports.createOntologyCluster = createOntologyCluster;
-exports.updateOntologyCluster = updateOntologyCluster;
-exports.deleteOntologyCluster = deleteOntologyCluster;
+exports.createOntology = createOntology;
+exports.updateOntology = updateOntology;
+exports.deleteOntology = deleteOntology;
 exports.createOntologyObject = createOntologyObject;
 exports.updateOntologyObject = updateOntologyObject;
 exports.deleteOntologyObject = deleteOntologyObject;
@@ -34,18 +34,18 @@ async function getOntologyAnchor(t) {
     const data = await t.request("/api/ontology/anchor", { toolName: "ontology_anchor" });
     return data.object;
 }
-async function createOntologyCluster(t, input) {
-    const data = await t.request("/api/ontology/clusters", { toolName: "ontology_create_cluster", method: "POST", body: input });
-    return data.cluster;
+async function createOntology(t, input) {
+    const data = await t.request("/api/ontology/ontologies", { toolName: "ontology_create_ontology", method: "POST", body: input });
+    return data.ontology;
 }
-async function updateOntologyCluster(t, clusterId, patch) {
-    const data = await t.request(`/api/ontology/clusters/${enc(clusterId)}`, { toolName: "ontology_update_cluster", method: "PATCH", body: patch });
-    return data.cluster;
+async function updateOntology(t, ontologyId, patch) {
+    const data = await t.request(`/api/ontology/ontologies/${enc(ontologyId)}`, { toolName: "ontology_update_ontology", method: "PATCH", body: patch });
+    return data.ontology;
 }
-async function deleteOntologyCluster(t, clusterId) {
+async function deleteOntology(t, ontologyId) {
     // ⚠ Route replies 204 — request<T>() chokes on the empty body ("Unexpected
     // end of JSON input") AFTER the delete applied.
-    await t.requestNoContent(`/api/ontology/clusters/${enc(clusterId)}`, "DELETE", "ontology_delete_cluster");
+    await t.requestNoContent(`/api/ontology/ontologies/${enc(ontologyId)}`, "DELETE", "ontology_delete_ontology");
 }
 async function createOntologyObject(t, input) {
     const data = await t.request("/api/ontology/objects", { toolName: "ontology_create_object", method: "POST", body: input });
@@ -65,7 +65,7 @@ async function updateOntologyObject(t, objectId, patch, expectedVersion) {
     return data.object;
 }
 async function deleteOntologyObject(t, objectId) {
-    // 204 route — see deleteOntologyCluster.
+    // 204 route — see deleteOntology.
     await t.requestNoContent(`/api/ontology/objects/${enc(objectId)}`, "DELETE", "ontology_delete_object");
 }
 async function claimOntologyAnchor(t, objectId) {

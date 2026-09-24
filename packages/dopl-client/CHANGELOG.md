@@ -4,6 +4,22 @@ All notable changes to `@dopl/client` are documented here. Format follows [Keep 
 
 ## [Unreleased]
 
+## [0.14.0] — 2026-09-23
+
+### Renamed — BREAKING: the ontology speaks one word
+
+The graph's top level is an **ontology** everywhere, so the ontology surface
+drops its old second noun:
+
+- Methods: `createOntology`, `updateOntology`, `deleteOntology`.
+- Types: `Ontology`, `OntologyCreateInput`, `OntologyPatch`, and
+  `OntologyListItem` (the summary row).
+- Payload keys: `OntologySnapshot.ontologies`, `OntologySummary.ontologies`,
+  `personalOntologyIds`; a created or updated ontology comes back under
+  `ontology`.
+- Routes: `/api/ontology/ontologies` and `/api/ontology/ontologies/{id}`.
+- Object create names its parent ontology as `ontologyId`.
+
 ### Removed — BREAKING: trash / restore surface
 
 Dopl's soft delete is gone (delete is permanent and app-only), so the routes

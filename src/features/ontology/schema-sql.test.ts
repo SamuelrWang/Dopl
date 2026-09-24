@@ -106,7 +106,7 @@ describe("ontology_channel_shares — the row", () => {
   });
 
   it.each([
-    ["ontology_id", "ontology_clusters"],
+    ["ontology_id", "ontologies"],
     ["channel_id", "channels"],
     ["workspace_id", "workspaces"],
   ])("🔒 %s CASCADEs to %s — Q4, both delete directions", (column, parent) => {
@@ -199,7 +199,7 @@ describe("the two columns on the ontology tables", () => {
     // A third word here would be a third answer to one question (Q6). Naming
     // which agent is deferred: a template id on an ontology row is a second
     // identity model.
-    for (const table of ["ontology_clusters", "ontology_objects"]) {
+    for (const table of ["ontologies", "ontology_objects"]) {
       expect(REPLAYED, table).toMatch(
         new RegExp(
           String.raw`ADD CONSTRAINT ${table}_last_edited_source_check\s+CHECK \(last_edited_source IN \('user', 'agent'\)\)`,
@@ -225,7 +225,7 @@ describe("the two columns on the ontology tables", () => {
 describe("the predicates — SECURITY DEFINER, pinned, and caller-subject-free", () => {
   const FUNCTIONS = [
     "dopl_ontology_share_level",
-    "dopl_ontology_object_clusters",
+    "dopl_ontology_object_ontologies",
     "dopl_ontology_readable",
     "dopl_ontology_writable",
   ] as const;

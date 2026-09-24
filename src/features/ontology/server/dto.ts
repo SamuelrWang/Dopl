@@ -9,17 +9,17 @@ import type { OntologyObject, OntologyWriteSource } from "../types";
  */
 
 /** `created_by` and `agents_may_edit` are AUDIENCE INPUTS, not display
- *  fields — `service-audience.ts › levelForCluster` reads both off the row, so
+ *  fields — `service-audience.ts › levelForOntology` reads both off the row, so
  *  every projection that a gate is applied to must carry them or the gate
- *  silently answers about a cluster with no owner and no toggle. */
-export const ONTOLOGY_CLUSTER_COLS =
+ *  silently answers about an ontology with no owner and no toggle. */
+export const ONTOLOGY_COLS =
   "id, workspace_id, slug, name, purpose, layout, position, created_by, agents_may_edit, created_at, updated_at, deleted_at";
 
 export const ONTOLOGY_OBJECT_COLS =
   "id, workspace_id, name, subtitle, attributes, methods, template, user_id, last_edited_by, last_edited_source, created_at, updated_at, deleted_at";
 
 export const ONTOLOGY_MEMBERSHIP_COLS =
-  "id, workspace_id, cluster_id, parent_object_id, child_object_id, position";
+  "id, workspace_id, ontology_id, parent_object_id, child_object_id, position";
 
 export const ONTOLOGY_RELATIONSHIP_COLS =
   "id, workspace_id, source_object_id, label, target_object_id, position";
@@ -36,7 +36,7 @@ export const ONTOLOGY_RELATIONSHIP_COLS =
  * `position`/`created_at` absent on purpose: PostgREST orders on columns it
  * doesn't have to return.
  */
-export const ONTOLOGY_CLUSTER_SUMMARY_COLS =
+export const ONTOLOGY_SUMMARY_COLS =
   "id, workspace_id, slug, name, purpose, created_by, agents_may_edit";
 
 export const ONTOLOGY_OBJECT_SUMMARY_COLS = "id, name, subtitle";
@@ -52,13 +52,13 @@ export const ONTOLOGY_OBJECT_SUMMARY_COLS = "id, name, subtitle";
  * identically to an exhausted list is the bug.
  */
 export const ONTOLOGY_READ_LIMITS = {
-  clusters: 500,
+  ontologies: 500,
   objects: 5_000,
   memberships: 20_000,
   relationships: 20_000,
 } as const;
 
-export interface OntologyClusterRow {
+export interface OntologyRow {
   id: string;
   workspace_id: string;
   slug: string;
@@ -94,7 +94,7 @@ export interface OntologyObjectRow {
 export interface OntologyMembershipRow {
   id: string;
   workspace_id: string;
-  cluster_id: string | null;
+  ontology_id: string | null;
   parent_object_id: string | null;
   child_object_id: string;
   position: number;
@@ -109,7 +109,7 @@ export interface OntologyRelationshipRow {
   position: number;
 }
 
-export interface OntologyClusterSummaryRow {
+export interface OntologyListItemRow {
   id: string;
   /** An audience input, like `created_by` — `service-shared.ts ›
    *  canSeeOntology` asks which container the row lives in. */
@@ -129,7 +129,7 @@ export interface OntologyObjectSummaryRow {
 
 /**
  * Summary wire shapes. Structurally a SUBSET of `OntologyObject` /
- * `OntologyCluster` so the same render code reads either, but a DISTINCT type
+ * `Ontology` so the same render code reads either, but a DISTINCT type
  * on purpose — an empty array claims "no attributes", an absent field says
  * "this view didn't ask".
  * Mirror lives in `packages/dopl-client/src/ontology-types.ts` — sync both.
@@ -141,7 +141,7 @@ export interface OntologyObjectSummary {
   childIds: string[];
 }
 
-export interface OntologyClusterSummary {
+export interface OntologyListItem {
   id: string;
   slug: string;
   name: string;
@@ -150,21 +150,21 @@ export interface OntologyClusterSummary {
 }
 
 export interface OntologySummary {
-  clusters: OntologyClusterSummary[];
+  ontologies: OntologyListItem[];
   objects: Record<string, OntologyObjectSummary>;
   /** True when an `ONTOLOGY_READ_LIMITS` ceiling clipped this view — caller
    *  must say "there is more", not present a partial graph as the whole. */
   truncated: boolean;
   /**
-   * 🔒 **WHICH CLUSTERS CAME OFF THE CALLER'S OWN PERSONAL SHELF** (S29c,
-   * 2026-09-18) — `service-reads.ts › personalClusterIds`.
+   * 🔒 **WHICH ONTOLOGIES CAME OFF THE CALLER'S OWN PERSONAL SHELF** (S29c,
+   * 2026-09-18) — `service-reads.ts › personalOntologyIds`.
    *
    * ⚠ **REQUIRED HERE, OPTIONAL ON THE WIRE.** This is the SERVER's own shape
    * and it always measures the answer; `@dopl/client › OntologySummary` marks it
    * optional because a payload cached against an older server carries no such
    * key, and absent must read as "not answered" rather than "none".
    */
-  personalClusterIds: string[];
+  personalOntologyIds: string[];
 }
 
 /**

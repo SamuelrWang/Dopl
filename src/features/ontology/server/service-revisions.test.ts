@@ -1,5 +1,5 @@
 /**
- * ONTOLOGY → REVISIONS — the CAPTURE COUNT, the actor, the cluster roll-up and
+ * ONTOLOGY → REVISIONS — the CAPTURE COUNT, the actor, the ontology roll-up and
  * the per-field restore (2026-09-09, the CHANGELOG lane part 2).
  *
  * The claim is a COUNT, and that is the only thing that catches either
@@ -17,7 +17,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import type { OntologyClusterRow, OntologyObjectRow } from "./dto";
+import type { OntologyRow, OntologyObjectRow } from "./dto";
 import { ontologyContextFactory } from "./test-fixtures";
 import type { Revision } from "@/features/revisions/types";
 
@@ -45,19 +45,19 @@ vi.mock("./repository-shares", () => ({
   countActiveWorkspaceMembers: vi.fn(async () => 1),
   listChannelIdsForWorkspace: vi.fn(async () => ["ch-1"]),
   listSharesForChannels: vi.fn(async () => []),
-  listSharesForCluster: vi.fn(async () => []),
+  listSharesForOntology: vi.fn(async () => []),
   upsertShare: vi.fn(),
   deleteShare: vi.fn(async () => {}),
   findChannelContainer: vi.fn(),
   findActiveMemberRole: vi.fn(),
-  countSharesForClusters: vi.fn(async () => new Map()),
+  countSharesForOntologies: vi.fn(async () => new Map()),
 }));
 
 vi.mock("./repository-projections", () => ({
-  listClusterSlugs: vi.fn(async () => []),
+  listOntologySlugs: vi.fn(async () => []),
   listMembershipParents: vi.fn(async () => []),
   listRelationshipsForSource: vi.fn(async () => []),
-  listClusterSummaries: vi.fn(async () => []),
+  listOntologySummaries: vi.fn(async () => []),
   listObjectSummariesByIds: vi.fn(async () => []),
 }));
 
@@ -66,20 +66,20 @@ vi.mock("@/shared/tenancy/personal-reach", () => ({
 }));
 
 vi.mock("./repository", () => ({
-  listClusters: vi.fn(async () => []),
+  listOntologies: vi.fn(async () => []),
   listMemberships: vi.fn(async () => []),
   listObjectsByIds: vi.fn(async () => []),
   listRelationshipsForSources: vi.fn(async () => []),
   filterObjectIds: vi.fn(async () => new Set<string>()),
   replaceRelationshipsForSource: vi.fn(async () => {}),
-  insertCluster: vi.fn(),
+  insertOntology: vi.fn(),
   updateObject: vi.fn(),
-  findClusterById: vi.fn(),
+  findOntologyById: vi.fn(),
   insertObject: vi.fn(),
   countMembershipSiblings: vi.fn(async () => 0),
   insertMembership: vi.fn(async () => ({})),
-  updateCluster: vi.fn(),
-  cascadeHardDeleteCluster: vi.fn(async () => 3),
+  updateOntology: vi.fn(),
+  cascadeHardDeleteOntology: vi.fn(async () => 3),
   findObjectById: vi.fn(),
   hardDeleteObject: vi.fn(async () => {}),
 }));
@@ -89,9 +89,9 @@ import * as shareRepo from "./repository-shares";
 import * as repo from "./repository";
 import {
   createObject,
-  deleteCluster,
+  deleteOntology,
   deleteObject,
-  updateCluster,
+  updateOntology,
   updateObject,
 } from "./service";
 import { changedFields, objectFields } from "./service-revisions";
@@ -102,14 +102,14 @@ const mockRepo = vi.mocked(repo);
 const mockShares = vi.mocked(shareRepo);
 
 const WS = "ws-1";
-const CLUSTER_ID = "11111111-1111-4111-8111-111111111111";
+const ONTOLOGY_ID = "11111111-1111-4111-8111-111111111111";
 const OBJECT_ID = "22222222-2222-4222-8222-222222222222";
 
 const ctxOf = ontologyContextFactory({ workspaceId: WS });
 
-function clusterRow(over: Partial<OntologyClusterRow> = {}): OntologyClusterRow {
+function ontologyRow(over: Partial<OntologyRow> = {}): OntologyRow {
   return {
-    id: CLUSTER_ID,
+    id: ONTOLOGY_ID,
     workspace_id: WS,
     slug: "sales",
     name: "Sales",
@@ -156,7 +156,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   mockShares.findWorkspaceKind.mockResolvedValue("standard");
   mockShares.listSharesForChannels.mockResolvedValue([]);
-  mockRepo.findClusterById.mockResolvedValue(clusterRow());
+  mockRepo.findOntologyById.mockResolvedValue(ontologyRow());
   mockRepo.findObjectById.mockResolvedValue(objectRow());
 });
 
@@ -216,7 +216,7 @@ describe("capture — one row per CHANGED field", () => {
 
   it("a create is ONE bundle row plus ONE membership row", async () => {
     mockRepo.insertObject.mockResolvedValue(objectRow());
-    await createObject(ctxOf(), { clusterId: CLUSTER_ID, name: "Acme" });
+    await createObject(ctxOf(), { ontologyId: ONTOLOGY_ID, name: "Acme" });
     expect(rows().map((r) => [r.op, r.resourceType])).toEqual([
       ["create", "ontology_object"],
       ["edit", "ontology_object"],
@@ -224,7 +224,7 @@ describe("capture — one row per CHANGED field", () => {
     expect(rows()[0].payload.fields).toMatchObject({ name: "Acme" });
     expect(rows()[1].payload).toMatchObject({
       association: "membership",
-      after: { clusterId: CLUSTER_ID, parentObjectId: null },
+      after: { ontologyId: ONTOLOGY_ID, parentObjectId: null },
     });
   });
 
@@ -255,21 +255,21 @@ describe("capture — one row per CHANGED field", () => {
     expect(rows()[0].op).toBe("edit");
   });
 
-  it("a cluster rename records on the CLUSTER; a layout drag records nothing", async () => {
-    mockRepo.updateCluster.mockResolvedValue(clusterRow({ name: "Pipeline" }));
-    await updateCluster(ctxOf(), CLUSTER_ID, { name: "Pipeline" });
+  it("an ontology rename records on the ONTOLOGY; a layout drag records nothing", async () => {
+    mockRepo.updateOntology.mockResolvedValue(ontologyRow({ name: "Pipeline" }));
+    await updateOntology(ctxOf(), ONTOLOGY_ID, { name: "Pipeline" });
     expect(rows().map((r) => [r.resourceType, r.op, r.payload.field])).toEqual([
-      ["ontology_cluster", "rename", "name"],
+      ["ontology", "rename", "name"],
     ]);
 
     append.mockClear();
-    mockRepo.updateCluster.mockResolvedValue(clusterRow({ layout: { a: { x: 1, y: 2 } } }));
-    await updateCluster(ctxOf(), CLUSTER_ID, { layout: { a: { x: 1, y: 2 } } });
+    mockRepo.updateOntology.mockResolvedValue(ontologyRow({ layout: { a: { x: 1, y: 2 } } }));
+    await updateOntology(ctxOf(), ONTOLOGY_ID, { layout: { a: { x: 1, y: 2 } } });
     expect(append).not.toHaveBeenCalled();
   });
 
-  it("a cluster delete records one row carrying the cascade count", async () => {
-    await deleteCluster(ctxOf(), CLUSTER_ID);
+  it("an ontology delete records one row carrying the cascade count", async () => {
+    await deleteOntology(ctxOf(), ONTOLOGY_ID);
     expect(append).toHaveBeenCalledTimes(1);
     expect(rows()[0].payload.fields).toMatchObject({ cascadedObjects: 3 });
   });

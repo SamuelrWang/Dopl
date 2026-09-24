@@ -34,7 +34,7 @@ import { generatePublicId } from "@/shared/lib/id/public-id";
 const POLICIES = livePolicies();
 
 const SELECT_POLICY = {
-  ontology_clusters: "ontology_clusters.ontology_clusters_member_select",
+  ontologies: "ontologies.ontologies_member_select",
   ontology_objects: "ontology_objects.ontology_objects_member_select",
   ontology_memberships: "ontology_memberships.ontology_memberships_member_select",
   ontology_relationships:
@@ -93,10 +93,10 @@ describe("REDTEAM ontology — the SHARE arm (Samuel 2026-09-09)", () => {
     // for a sharing feature those boards do not use; the narrowing Samuel's
     // matrix asks for is the SERVICE's (spec I6/§4).
     expect(liveFunction(READABLE)).toMatch(
-      /is_current_workspace_member\(\s*c\.workspace_id,\s*'viewer'/i
+      /is_current_workspace_member\(\s*o\.workspace_id,\s*'viewer'/i
     );
     expect(liveFunction(WRITABLE)).toMatch(
-      /is_current_workspace_member\(\s*c\.workspace_id,\s*'editor'/i
+      /is_current_workspace_member\(\s*o\.workspace_id,\s*'editor'/i
     );
     for (const table of CHILDREN) {
       expect(policy(SELECT_POLICY[table]), table).toMatch(
@@ -166,18 +166,18 @@ describe("REDTEAM ontology — the CHILD tables (R5)", () => {
     }
   });
 
-  it("🔒 an object reaches its cluster by the WALK, not by a column it has not got", () => {
-    // `ontology_memberships` names a PARENT OBJECT for a card and a CLUSTER only
+  it("🔒 an object reaches its ontology by the WALK, not by a column it has not got", () => {
+    // `ontology_memberships` names a PARENT OBJECT for a card and an ONTOLOGY only
     // for a column (spec R5), so a one-level join would leave every card
     // invisible to the reader the share is for.
     expect(policy(SELECT_POLICY.ontology_objects)).toMatch(
-      /dopl_ontology_object_clusters\(\s*ontology_objects\.id\s*\)/i
+      /dopl_ontology_object_ontologies\(\s*ontology_objects\.id\s*\)/i
     );
-    expect(liveFunction("dopl_ontology_object_clusters")).toMatch(
+    expect(liveFunction("dopl_ontology_object_ontologies")).toMatch(
       /WITH RECURSIVE/i
     );
     // `UNION`, not `UNION ALL`: the de-duplication is what terminates a cycle.
-    expect(liveFunction("dopl_ontology_object_clusters")).not.toMatch(
+    expect(liveFunction("dopl_ontology_object_ontologies")).not.toMatch(
       /UNION ALL/i
     );
   });
@@ -250,7 +250,7 @@ describe.skipIf(!liveRedteamEnabled)(
     let ownerContainerId = "";
     let linkContainerId = "";
     let channelId = "";
-    let clusterId = "";
+    let ontologyId = "";
     let objectId = "";
 
     /** A HOME channel — Q5 refuses a `standard` container AT REST, so the
@@ -269,7 +269,7 @@ describe.skipIf(!liveRedteamEnabled)(
       guests: string;
     }): Promise<void> {
       const { error } = await admin().from("ontology_channel_shares").upsert({
-        ontology_id: clusterId,
+        ontology_id: ontologyId,
         channel_id: channelId,
         workspace_id: ownerContainerId,
         members_level: levels.members,
@@ -284,7 +284,7 @@ describe.skipIf(!liveRedteamEnabled)(
       const { error } = await admin()
         .from("ontology_channel_shares")
         .delete()
-        .match({ ontology_id: clusterId, channel_id: channelId });
+        .match({ ontology_id: ontologyId, channel_id: channelId });
       if (error) throw error;
     }
 
@@ -335,7 +335,7 @@ describe.skipIf(!liveRedteamEnabled)(
         if (error) throw error;
       }
 
-      clusterId = await insertId("ontology_clusters", {
+      ontologyId = await insertId("ontologies", {
         workspace_id: ownerContainerId,
         slug: "redteam",
         name: "Redteam",
@@ -348,7 +348,7 @@ describe.skipIf(!liveRedteamEnabled)(
       });
       const membership = await admin().from("ontology_memberships").insert({
         workspace_id: ownerContainerId,
-        cluster_id: clusterId,
+        ontology_id: ontologyId,
         child_object_id: objectId,
       });
       if (membership.error) throw membership.error;
@@ -361,10 +361,10 @@ describe.skipIf(!liveRedteamEnabled)(
     }, 60_000);
 
     it("the OWNER sees their own ontology with no share at all (arm 1)", async () => {
-      expect(await rows(ownerId, "ontology_clusters")).toEqual([clusterId]);
+      expect(await rows(ownerId, "ontologies")).toEqual([ontologyId]);
     });
 
-    it.each(["ontology_clusters", "ontology_objects", "ontology_memberships"])(
+    it.each(["ontologies", "ontology_objects", "ontology_memberships"])(
       "%s: an OUTSIDER sees zero rows, shared or not",
       async (table) => {
         await setShare({ members: "edit", guests: "edit" });
@@ -376,14 +376,14 @@ describe.skipIf(!liveRedteamEnabled)(
       }
     );
 
-    it("🔒 a MEMBER at `none` sees nothing; at `view` sees the cluster AND its objects", async () => {
+    it("🔒 a MEMBER at `none` sees nothing; at `view` sees the ontology AND its objects", async () => {
       await setShare({ members: "none", guests: "none" });
-      expect(await rows(memberId, "ontology_clusters")).toHaveLength(0);
+      expect(await rows(memberId, "ontologies")).toHaveLength(0);
 
       await setShare({ members: "view", guests: "none" });
       try {
-        expect(await rows(memberId, "ontology_clusters")).toEqual([clusterId]);
-        // The children follow the parent: they ask about the cluster through
+        expect(await rows(memberId, "ontologies")).toEqual([ontologyId]);
+        // The children follow the parent: they ask about the ontology through
         // the membership walk, and never learn what a share is.
         expect(await rows(memberId, "ontology_objects")).toEqual([objectId]);
         expect(await rows(memberId, "ontology_memberships")).toHaveLength(1);
@@ -396,16 +396,16 @@ describe.skipIf(!liveRedteamEnabled)(
       // The sharpest row in the matrix: members at `edit`, guests at `none`.
       await setShare({ members: "edit", guests: "none" });
       try {
-        expect(await rows(memberId, "ontology_clusters")).toEqual([clusterId]);
-        expect(await rows(guestId, "ontology_clusters")).toHaveLength(0);
+        expect(await rows(memberId, "ontologies")).toEqual([ontologyId]);
+        expect(await rows(guestId, "ontologies")).toHaveLength(0);
         expect(await rows(guestId, "ontology_objects")).toHaveLength(0);
       } finally {
         await unshare();
       }
       await setShare({ members: "none", guests: "view" });
       try {
-        expect(await rows(guestId, "ontology_clusters")).toEqual([clusterId]);
-        expect(await rows(memberId, "ontology_clusters")).toHaveLength(0);
+        expect(await rows(guestId, "ontologies")).toEqual([ontologyId]);
+        expect(await rows(memberId, "ontologies")).toHaveLength(0);
       } finally {
         await unshare();
       }
@@ -415,17 +415,17 @@ describe.skipIf(!liveRedteamEnabled)(
       // The revoke half is where a `true` predicate would show: a policy that
       // admits a shared row proves nothing unless removing the row removes it.
       await setShare({ members: "view", guests: "view" });
-      expect(await rows(memberId, "ontology_clusters")).toEqual([clusterId]);
+      expect(await rows(memberId, "ontologies")).toEqual([ontologyId]);
       await unshare();
-      expect(await rows(memberId, "ontology_clusters")).toHaveLength(0);
+      expect(await rows(memberId, "ontologies")).toHaveLength(0);
       expect(await rows(memberId, "ontology_objects")).toHaveLength(0);
     });
 
     it("🔒 a SHARED CREDENTIAL is not widened by a share (M-10 / P25)", async () => {
       await setShare({ members: "edit", guests: "edit" });
       try {
-        expect(await rows(memberId, "ontology_clusters")).toEqual([clusterId]);
-        expect(await rows(memberId, "ontology_clusters", true)).toHaveLength(0);
+        expect(await rows(memberId, "ontologies")).toEqual([ontologyId]);
+        expect(await rows(memberId, "ontologies", true)).toHaveLength(0);
         expect(await rows(memberId, "ontology_objects", true)).toHaveLength(0);
       } finally {
         await unshare();
@@ -439,7 +439,7 @@ describe.skipIf(!liveRedteamEnabled)(
           readableIds(userId, "ontology_channel_shares", ownerContainerId, {
             idColumn: "ontology_id",
           });
-        expect(await shares(ownerId)).toEqual([clusterId]);
+        expect(await shares(ownerId)).toEqual([ontologyId]);
         expect(await shares(memberId)).toHaveLength(0);
         expect(await shares(guestId)).toHaveLength(0);
       } finally {
@@ -455,7 +455,7 @@ describe.skipIf(!liveRedteamEnabled)(
         name: "Not home",
       });
       const { error } = await admin().from("ontology_channel_shares").insert({
-        ontology_id: clusterId,
+        ontology_id: ontologyId,
         channel_id: standardChannel,
         workspace_id: ownerContainerId,
         created_by: ownerId,

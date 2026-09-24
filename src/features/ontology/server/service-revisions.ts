@@ -2,7 +2,7 @@ import "server-only";
 import { recordRevision } from "@/features/revisions/server/service";
 import type { RevisionAssociation, RevisionOp } from "@/features/revisions/types";
 import type { OntologyContext, OntologyObject, OntologyShare } from "../types";
-import type { OntologyClusterRow, OntologyObjectRow } from "./dto";
+import type { OntologyRow, OntologyObjectRow } from "./dto";
 
 /**
  * ONTOLOGY → REVISIONS: the CAPTURE half (2026-09-09, the CHANGELOG lane part 2,
@@ -65,15 +65,15 @@ export function objectFields(
 }
 
 /**
- * The CLUSTER's tracked fields.
+ * The ONTOLOGY's tracked fields.
  *
  * `layout` is not one — one `{x,y}` per node, written on every drag-drop;
  * recording it makes the changelog a mouse log (Samuel: it doesn't make sense
  * to track every tiny letter change). Nor `slug`: DERIVED from the name at
  * create and never changed, so a row about it would restate the rename.
  */
-export function clusterFields(
-  row: Pick<OntologyClusterRow, "name" | "purpose" | "agents_may_edit">
+export function ontologyFields(
+  row: Pick<OntologyRow, "name" | "purpose" | "agents_may_edit">
 ): Record<string, unknown> {
   return {
     name: row.name,
@@ -136,7 +136,7 @@ export interface RecordFieldOpts {
  *  were recorded, which is what the capture tests count. */
 async function recordFieldChanges(
   ctx: OntologyContext,
-  resource: { resourceType: "ontology_object" | "ontology_cluster"; id: string; workspaceId: string },
+  resource: { resourceType: "ontology_object" | "ontology"; id: string; workspaceId: string },
   changes: readonly OntologyFieldChange[],
   opts: RecordFieldOpts = {}
 ): Promise<number> {
@@ -146,7 +146,7 @@ async function recordFieldChanges(
       resourceId: resource.id,
       // The RESOURCE'S OWN container, never `ctx.workspaceId`: a LENT ontology
       // lives in the lender's, and a row filed under the writer's is invisible
-      // from the cluster it is the history of (INVARIANTS §T35).
+      // from the ontology it is the history of (INVARIANTS §T35).
       workspaceId: resource.workspaceId,
       op: opts.op ?? opForField(change.field),
       summary: opts.summary ?? null,
@@ -161,7 +161,7 @@ async function recordFieldChanges(
  *  rows would read as N edits of a thing that did not exist a moment earlier. */
 async function recordBundle(
   ctx: OntologyContext,
-  resourceType: "ontology_object" | "ontology_cluster",
+  resourceType: "ontology_object" | "ontology",
   row: { id: string; workspace_id: string },
   op: "create" | "delete",
   fields: Record<string, unknown>
@@ -235,7 +235,7 @@ export async function recordAnchorRevision(
 }
 
 /**
- * AN ASSOCIATION — a relationship or a cluster/column membership — filed on the
+ * AN ASSOCIATION — a relationship or an ontology/column membership — filed on the
  * OBJECT it attaches to.
  *
  * `op` is `edit`, not a new word: `link`/`unlink` would grow the migration's
@@ -268,7 +268,7 @@ export async function recordAssociationRevision(
 export async function recordMembershipCreate(
   ctx: OntologyContext,
   row: OntologyObjectRow,
-  placement: { clusterId: string | null; parentObjectId: string | null }
+  placement: { ontologyId: string | null; parentObjectId: string | null }
 ): Promise<void> {
   await recordAssociationRevision(
     ctx,
@@ -286,61 +286,61 @@ export function edgeSnapshot(
   return edges.map((edge) => ({ label: edge.label, targetIds: [...edge.targetIds] }));
 }
 
-// ─── Clusters ───────────────────────────────────────────────────────
+// ─── Ontologies ───────────────────────────────────────────────────────
 
-export async function recordClusterCreate(
+export async function recordOntologyCreate(
   ctx: OntologyContext,
-  row: OntologyClusterRow
+  row: OntologyRow
 ): Promise<void> {
-  await recordBundle(ctx, "ontology_cluster", row, "create", clusterFields(row));
+  await recordBundle(ctx, "ontology", row, "create", ontologyFields(row));
 }
 
-export async function recordClusterFieldChanges(
+export async function recordOntologyFieldChanges(
   ctx: OntologyContext,
-  before: OntologyClusterRow,
-  after: OntologyClusterRow
+  before: OntologyRow,
+  after: OntologyRow
 ): Promise<number> {
   return recordFieldChanges(
     ctx,
-    { resourceType: "ontology_cluster", id: after.id, workspaceId: after.workspace_id },
-    changedFields(clusterFields(before), clusterFields(after))
+    { resourceType: "ontology", id: after.id, workspaceId: after.workspace_id },
+    changedFields(ontologyFields(before), ontologyFields(after))
   );
 }
 
-/** The cascade delete — ONE row on the CLUSTER carrying its last state.
+/** The cascade delete — ONE row on the ONTOLOGY carrying its last state.
  *  The objects it took with it record NOTHING: the RPC is one statement and
  *  the rows are gone, so a per-object row would be a claim this path cannot
- *  make honestly. The cluster's `delete` row is what the roll-up shows. */
-export async function recordClusterDelete(
+ *  make honestly. The ontology's `delete` row is what the roll-up shows. */
+export async function recordOntologyDelete(
   ctx: OntologyContext,
-  row: OntologyClusterRow,
+  row: OntologyRow,
   cascadedObjects: number
 ): Promise<void> {
-  await recordBundle(ctx, "ontology_cluster", row, "delete", {
-    ...clusterFields(row),
+  await recordBundle(ctx, "ontology", row, "delete", {
+    ...ontologyFields(row),
     cascadedObjects,
   });
 }
 
 /**
- * A SHARE change — who else reaches this ontology, filed on the CLUSTER.
+ * A SHARE change — who else reaches this ontology, filed on the ONTOLOGY.
  *
  * Levels and the channel id, never a channel NAME: this row is read by whoever
- * can read the cluster's history, and a name belongs to somebody else's
+ * can read the ontology's history, and a name belongs to somebody else's
  * container.
  */
 export async function recordShareRevision(
   ctx: OntologyContext,
-  cluster: { id: string; workspaceId: string },
+  ontology: { id: string; workspaceId: string },
   channelId: string,
   before: OntologyShare | null,
   after: OntologyShare | null
 ): Promise<number> {
   if (stable(before) === stable(after)) return 0;
   await recordRevision(ctx, {
-    resourceType: "ontology_cluster",
-    resourceId: cluster.id,
-    workspaceId: cluster.workspaceId,
+    resourceType: "ontology",
+    resourceId: ontology.id,
+    workspaceId: ontology.workspaceId,
     op: "edit",
     payload: { association: "share", field: `share:${channelId}`, before, after },
   });

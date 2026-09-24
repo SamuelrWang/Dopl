@@ -1,6 +1,6 @@
 /**
  * Rollback for `useOntology()`'s optimistic deletes (sibling of
- * `create-cluster-rollback.ts`). The dispatch that removes the row also sets the
+ * `create-ontology-rollback.ts`). The dispatch that removes the row also sets the
  * store's `dirty` flag, which permanently disables the seed effect — so a refused
  * delete leaves the row live server-side, gone locally, and unreachable by any
  * refetch until the next mount.
@@ -11,8 +11,8 @@
  * PATCH hasn't fired, which would then persist the reverted value.
  */
 
-import { clusterObjectIds, type GraphAction, type GraphState } from "./graph-state";
-import type { OntologyCluster, OntologyObject, OntologySnapshot } from "./types";
+import { ontologyObjectIds, type GraphAction, type GraphState } from "./graph-state";
+import type { Ontology, OntologyObject, OntologySnapshot } from "./types";
 
 /**
  * The state to restore after a failed delete, or `null` when `action` is not
@@ -27,22 +27,22 @@ export function planDeleteRollback(
   current: GraphState,
   action: GraphAction
 ): OntologySnapshot | null {
-  if (action.type !== "OBJECT_DELETE" && action.type !== "CLUSTER_DELETE") return null;
+  if (action.type !== "OBJECT_DELETE" && action.type !== "ONTOLOGY_DELETE") return null;
 
-  const removedCluster: OntologyCluster | null =
-    action.type === "CLUSTER_DELETE"
-      ? (before.clusters.find((c) => c.id === action.id) ?? null)
+  const removedOntology: Ontology | null =
+    action.type === "ONTOLOGY_DELETE"
+      ? (before.ontologies.find((c) => c.id === action.id) ?? null)
       : null;
-  if (action.type === "CLUSTER_DELETE" && !removedCluster) return null;
+  if (action.type === "ONTOLOGY_DELETE" && !removedOntology) return null;
   if (action.type === "OBJECT_DELETE" && !before.objects[action.id]) return null;
 
   const removed = new Set(
-    action.type === "OBJECT_DELETE" ? [action.id] : clusterObjectIds(before, action.id)
+    action.type === "OBJECT_DELETE" ? [action.id] : ontologyObjectIds(before, action.id)
   );
 
   return {
     objects: restoreObjects(before, current, removed),
-    clusters: restoreClusters(before, current, removed, removedCluster),
+    ontologies: restoreOntologies(before, current, removed, removedOntology),
   };
 }
 
@@ -74,23 +74,23 @@ function restoreObjects(
 }
 
 /**
- * Restores `columnIds` on clusters an object delete pruned, and re-inserts a
- * deleted cluster at its original index — a failed delete must not reorder the
+ * Restores `columnIds` on ontologies an object delete pruned, and re-inserts a
+ * deleted ontology at its original index — a failed delete must not reorder the
  * tab strip.
  */
-function restoreClusters(
+function restoreOntologies(
   before: GraphState,
   current: GraphState,
   removed: ReadonlySet<string>,
-  removedCluster: OntologyCluster | null
-): OntologyCluster[] {
-  const clusters = current.clusters.map((c) => {
-    const was = before.clusters.find((b) => b.id === c.id);
+  removedOntology: Ontology | null
+): Ontology[] {
+  const ontologies = current.ontologies.map((c) => {
+    const was = before.ontologies.find((b) => b.id === c.id);
     if (!was || !was.columnIds.some((id) => removed.has(id))) return c;
     return { ...c, columnIds: was.columnIds };
   });
-  if (!removedCluster || clusters.some((c) => c.id === removedCluster.id)) return clusters;
-  const at = before.clusters.findIndex((c) => c.id === removedCluster.id);
-  const index = at === -1 ? clusters.length : Math.min(at, clusters.length);
-  return [...clusters.slice(0, index), removedCluster, ...clusters.slice(index)];
+  if (!removedOntology || ontologies.some((c) => c.id === removedOntology.id)) return ontologies;
+  const at = before.ontologies.findIndex((c) => c.id === removedOntology.id);
+  const index = at === -1 ? ontologies.length : Math.min(at, ontologies.length);
+  return [...ontologies.slice(0, index), removedOntology, ...ontologies.slice(index)];
 }

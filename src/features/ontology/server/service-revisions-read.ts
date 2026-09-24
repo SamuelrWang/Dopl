@@ -16,14 +16,14 @@ import type { OntologyContext } from "../types";
 import { OntologyObjectUpdateSchema, type OntologyObjectUpdateInput } from "../schema";
 import type { OntologyObjectRow } from "./dto";
 import * as repo from "./repository";
-import { requireCluster, requireObject } from "./service-gates";
+import { requireOntology, requireObject } from "./service-gates";
 import { resolveOntologyAudience } from "./service-audience";
-import { walkAdmittedClusters } from "./service-reads";
+import { walkAdmittedOntologies } from "./service-reads";
 import { ATTRIBUTE_FIELD_PREFIX } from "./service-revisions";
 import { updateObject } from "./service";
 
 /**
- * ONTOLOGY → REVISIONS: the READ half — one object's history, the CLUSTER
+ * ONTOLOGY → REVISIONS: the READ half — one object's history, the ONTOLOGY
  * ROLL-UP, and the PER-FIELD restore.
  *
  * Split from `./service-revisions.ts` by a cycle, not by size: the capture
@@ -32,7 +32,7 @@ import { updateObject } from "./service";
  * Every read passes the ontology's own gates first, and the proof is passed
  * on as a reach set. `revisions` states no visibility rule of its own
  * and its query runs as service role, so a read that skipped `requireObject` /
- * `requireCluster` would be an unfenced read of every container's writes. A
+ * `requireOntology` would be an unfenced read of every container's writes. A
  * refusal is that gate's 404 (`./service-gates.ts`'s rule).
  */
 
@@ -49,43 +49,43 @@ export async function listObjectRevisions(
 }
 
 /**
- * The cluster roll-up — every revision of the ontology and of every object in
+ * The ontology roll-up — every revision of the ontology and of every object in
  * it, newest first. What the /home card's Changelog renders.
  *
- * Gated on `requireCluster(ctx, id, "view")`, then narrowed to the ids the
- * cluster's OWN membership walk produces. The id set is the fence, the
+ * Gated on `requireOntology(ctx, id, "view")`, then narrowed to the ids the
+ * ontology's OWN membership walk produces. The id set is the fence, the
  * reach set the belt: the walk is the SAME one `./service-reads.ts ›
- * walkAdmittedClusters` gives `getSnapshot` (Q8), so an object reachable only
- * from another cluster is absent even though the query ran as service role.
+ * walkAdmittedOntologies` gives `getSnapshot` (Q8), so an object reachable only
+ * from another ontology is absent even though the query ran as service role.
  *
  * A deleted object's rows are filed and not shown — a `delete` revision
  * names an id no walk can still produce, which is the fail-closed direction and
- * the RLS policy's own answer (`20261002120000_revisions.sql`). The CLUSTER's
- * rows are unaffected, so a cascade delete still shows on the cluster.
+ * the RLS policy's own answer (`20261002120000_revisions.sql`). The ONTOLOGY's
+ * rows are unaffected, so a cascade delete still shows on the ontology.
  */
-export async function listClusterRevisions(
+export async function listOntologyRevisions(
   ctx: OntologyContext,
-  clusterId: string,
+  ontologyId: string,
   opts: ListRevisionsOpts = {}
 ): Promise<RevisionPage> {
-  const cluster = await requireCluster(ctx, clusterId, "view");
+  const ontology = await requireOntology(ctx, ontologyId, "view");
   const audience = await resolveOntologyAudience(ctx);
   const memberships = await repo.listMemberships(audience.workspaceIds);
-  const walk = walkAdmittedClusters(new Set([cluster.id]), memberships);
+  const walk = walkAdmittedOntologies(new Set([ontology.id]), memberships);
   const refs = [
-    { resourceType: "ontology_cluster" as const, resourceId: cluster.id },
+    { resourceType: "ontology" as const, resourceId: ontology.id },
     ...walk.objectIds.map((id) => ({
       resourceType: "ontology_object" as const,
       resourceId: id,
     })),
   ];
-  return listRevisionsAcross(cluster.workspace_id, refs, revisionReach(refs), opts);
+  return listRevisionsAcross(ontology.workspace_id, refs, revisionReach(refs), opts);
 }
 
 /**
  * Per-field restore — a NEW revision, never a rewrite. Samuel's design:
  * restore is per FIELD. ONE revision's `before` goes back through
- * {@link updateObject}, which re-runs Q9's every-cluster `edit` gate, the
+ * {@link updateObject}, which re-runs Q9's every-ontology `edit` gate, the
  * attribution stamp and the CAS path, and records the resulting revision with
  * `op: "restore"`. Nothing here touches the source row or any row since.
  *

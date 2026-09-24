@@ -6,8 +6,8 @@ import type { OntologySnapshot } from "@/features/ontology/types";
 import { cn } from "@/shared/lib/utils";
 import { usePlaygroundPoll, usePlaygroundSession } from "../../session";
 import {
-  DEMO_CLUSTERS,
-  snapshotToClusters,
+  DEMO_ONTOLOGIES,
+  snapshotToOntologies,
   type PaneCard,
   type PaneLane,
 } from "./ontology-pane-data";
@@ -16,21 +16,21 @@ import {
  * Playground ONTOLOGY page — a visual clone of
  * `apps/desktop-ui/src/pages/ontology` (which renders
  * `features/ontology/components/ontology-view` + `kanban-board`). Same
- * page-float frame, same header row (cluster pills, name + purpose, column
+ * page-float frame, same header row (ontology pills, name + purpose, column
  * controls), same `.graph-substrate kanban-substrate` dotted board with
  * `.kanban-card` column headers and object cards on the 12px grid (p-6 = 2
  * tiles, w-72 lanes = 24, gap-3 gutter = 1, lane p-3 = 1, card h-[216px] = 18).
  *
  * TWO content sources, one JSX (shapes in `./ontology-pane-data`):
  * - No session (or first poll unanswered): the static marketing demo,
- *   `DEMO_CLUSTERS`. Pills are cosmetic — no cluster switching.
+ *   `DEMO_ONTOLOGIES`. Pills are cosmetic — no ontology switching.
  * - Live session: `usePlaygroundPoll` GETs `/api/ontology` (the full
  *   `OntologySnapshot` the real board reads) with the guest bearer +
- *   `X-Workspace-Id`; clusters become pills/lanes, objects become cards, and
- *   the pills actually switch clusters. Reads only — the writer is the
+ *   `X-Workspace-Id`; ontologies become pills/lanes, objects become cards, and
+ *   the pills actually switch ontologies. Reads only — the writer is the
  *   visitor's agent over MCP.
  *
- * Local state is the active cluster (live only) plus cosmetic card selection
+ * Local state is the active ontology (live only) plus cosmetic card selection
  * (the `.kanban-card` `data-selected` ring) and the column-header disclosure.
  */
 export function OntologyPane() {
@@ -38,28 +38,28 @@ export function OntologyPane() {
   const { data } = usePlaygroundPoll<OntologySnapshot>(
     session ? "/api/ontology" : null
   );
-  const live = useMemo(() => (data ? snapshotToClusters(data) : null), [data]);
-  const clusters = live ?? DEMO_CLUSTERS;
+  const live = useMemo(() => (data ? snapshotToOntologies(data) : null), [data]);
+  const ontologies = live ?? DEMO_ONTOLOGIES;
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [activeClusterId, setActiveClusterId] = useState<string | null>(null);
-  // Demo mode pins the first (populated) cluster, matching the old static
+  const [activeOntologyId, setActiveOntologyId] = useState<string | null>(null);
+  // Demo mode pins the first (populated) ontology, matching the old static
   // render; live mode follows the picked pill, falling back to the first
-  // cluster when the picked one vanished mid-poll (agent deleted it).
+  // ontology when the picked one vanished mid-poll (agent deleted it).
   const active =
-    (live ? clusters.find((c) => c.id === activeClusterId) : undefined) ??
-    clusters[0] ??
+    (live ? ontologies.find((c) => c.id === activeOntologyId) : undefined) ??
+    ontologies[0] ??
     null;
 
-  const selectCluster = live
+  const selectOntology = live
     ? (id: string) => {
-        setActiveClusterId(id);
+        setActiveOntologyId(id);
         setSelectedId(null);
       }
     : undefined;
 
   if (!active) {
-    // Live workspace with zero clusters (agent deleted them all).
+    // Live workspace with zero ontologies (agent deleted them all).
     return (
       <div className="page-float flex flex-col antialiased">
         <p className="m-auto text-lead text-text-secondary">
@@ -71,14 +71,14 @@ export function OntologyPane() {
 
   return (
     <div className="page-float flex flex-col antialiased">
-      {/* Header row — cluster pills, cluster name + purpose, column controls. */}
+      {/* Header row — ontology pills, ontology name + purpose, column controls. */}
       <div className="flex shrink-0 items-center gap-3 border-b border-border-subtle px-3 py-2">
         <div className="flex items-center gap-1.5">
-          {clusters.map((c) => (
+          {ontologies.map((c) => (
             <button
               key={c.id}
               type="button"
-              onClick={selectCluster ? () => selectCluster(c.id) : undefined}
+              onClick={selectOntology ? () => selectOntology(c.id) : undefined}
               className={cn(
                 "flex h-[27px] items-center gap-1.5 rounded-full px-3 text-caption font-medium transition-colors",
                 c.id === active.id

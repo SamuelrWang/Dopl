@@ -194,7 +194,7 @@ const GUEST_ALLOWED: ReadonlyArray<readonly [string, string]> = [
   // `guest` (`home/server/service-claim-bound.ts`), so at the `viewer` default
   // the entire `guests_level` column was a word no request could exercise. The
   // gate is `ontology/server/service-audience.ts › resolveOntologyAudience` +
-  // `› levelForCluster`, resolved from DB facts on EVERY read and EVERY write: a
+  // `› levelForOntology`, resolved from DB facts on EVERY read and EVERY write: a
   // guest with no share row reads an empty snapshot and 404s on everything else,
   // exactly as they did before these floors existed. Behaviourally pinned in
   // `ontology/server/guest-lane.test.ts`.
@@ -202,14 +202,14 @@ const GUEST_ALLOWED: ReadonlyArray<readonly [string, string]> = [
   // ⚠ **THE WRITES MOVED WITH THE READS, AND THAT IS THE RULING** — "are guests
   // access/view or edit" — which is answered here by a LADDER rather than by a
   // per-grant boolean: `guests_level='edit'` is what admits them, and
-  // `service-gates.ts › requireObject` demands `edit` on EVERY cluster the
+  // `service-gates.ts › requireObject` demands `edit` on EVERY ontology the
   // object belongs to (Q9).
   //
   // ⚠ **WHAT DELIBERATELY DID NOT MOVE**, and each absence is a decision:
-  // `clusters/route.ts` POST + `clusters/[clusterId]/route.ts` PATCH/DELETE (a
+  // `ontologies/route.ts` POST + `ontologies/[ontologyId]/route.ts` PATCH/DELETE (a
   // guest creates, renames and deletes no ontology, and the PATCH carries the
   // `agentsMayEdit` toggle — a containment control), the whole
-  // `clusters/[clusterId]/shares/**` lane (a guest lends nothing), and
+  // `ontologies/[ontologyId]/shares/**` lane (a guest lends nothing), and
   // `objects/[objectId]/anchor/route.ts` POST (the anchor is workspace-scoped
   // identity, R9). A `grep -rn 'minRole' src/app/api/ontology` is the re-derive.
   ["ontology/route.ts", "GET"], // the snapshot / `?view=summary`
@@ -227,12 +227,12 @@ const GUEST_ALLOWED: ReadonlyArray<readonly [string, string]> = [
   // the floor its sibling already carries: a lent guest who can OPEN a board can
   // read its history, and one who can PATCH an object can restore one of its
   // fields. ⚠ **THE FLOOR IS THE WEAKEST FENCE ON ALL THREE, NOT THE GATE** —
-  // `service-revisions-read.ts` re-asks `requireObject`/`requireCluster` at
+  // `service-revisions-read.ts` re-asks `requireObject`/`requireOntology` at
   // `view` for the reads and at `edit` for the restore, so a guest whose share
   // says `view` reads history and is refused the restore with the same 404 every
   // other ontology write gives them.
   ["ontology/objects/[objectId]/revisions/route.ts", "GET"],
-  ["ontology/clusters/[clusterId]/revisions/route.ts", "GET"],
+  ["ontology/ontologies/[ontologyId]/revisions/route.ts", "GET"],
   // ⚠ NOT `sessionOnly`, unlike the object DELETE above: that gate is for acts
   // that DESTROY, and a restore appends a revision whose value already happened.
   ["ontology/objects/[objectId]/revisions/[revisionId]/restore/route.ts", "POST"],

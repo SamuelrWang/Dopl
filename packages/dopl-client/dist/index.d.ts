@@ -15,7 +15,7 @@ export type { AwaitMessagesOptions, AwaitResult, Channel, ChannelArtifact, Chann
 export type { ChannelSessionHealth } from "./session-health-types.js";
 export type { AccountChannelMessage, AccountChannelStatus, AccountMessagesOptions, AccountMessagesPage, AccountStatus, AccountStatusClips, AccountStatusOptions, AccountStatusView, AccountWaitingItem, } from "./account-types.js";
 export type { ChannelInfoCard, ChannelInfoCardBuiltInKey, ChannelInfoCardRow, ChannelUpdateInput, } from "./info-card-types.js";
-export type { OntologyAttribute, OntologyAttributeValue, OntologyCluster, OntologyClusterCreateInput, OntologyClusterPatch, OntologyClusterSummary, OntologyMethod, OntologyObject, OntologyObjectCreateInput, OntologyObjectPatch, OntologyObjectSummary, OntologyRelationship, OntologySnapshot, OntologySummary, OntologyTemplateField, } from "./ontology-types.js";
+export type { OntologyAttribute, OntologyAttributeValue, Ontology, OntologyCreateInput, OntologyPatch, OntologyListItem, OntologyMethod, OntologyObject, OntologyObjectCreateInput, OntologyObjectPatch, OntologyObjectSummary, OntologyRelationship, OntologySnapshot, OntologySummary, OntologyTemplateField, } from "./ontology-types.js";
 export type { AgentColorKey, AgentDirectiveCreateInput, AgentDirectiveCreated, LaunchDirective, LaunchDirectiveCreateInput, LaunchDirectiveCreated, LaunchDirectiveKind, LaunchDirectiveStatus, LaunchToolMode, LaunchMessageMode, LaunchRefusalReason, } from "./launch-types.js";
 export type { AgentDirection, AgentDirectionCreateInput, AgentDirectionCreated, DirectionRefusalReason, } from "./direction-types.js";
 export type { ChannelEscalationAnswerInput, ChannelEscalationFields, ChannelEscalationInput, ChannelEscalationOption, } from "./escalation-types.js";

@@ -54,14 +54,14 @@ async function main() {
 
     console.log("== 2. per-table seed counts ==");
     // Mirrors seed-workspace.ts: KB → skills → ontology → chat.
-    // Ontology: 1 cluster, 2 column objects + 7 card objects (= 9 objects,
+    // Ontology: 1 ontology, 2 column objects + 7 card objects (= 9 objects,
     // 9 memberships), 3 seed relationships that fan out to 4 rows (one row
     // per target — `ritual-upkeep` points at two).
     const expected: ReadonlyArray<readonly [string, number]> = [
       ["knowledge_bases", 1],
       ["knowledge_entries", 5],
       ["skills", 3],
-      ["ontology_clusters", 1],
+      ["ontologies", 1],
       ["ontology_objects", 9],
       ["ontology_memberships", 9],
       ["ontology_relationships", 4],

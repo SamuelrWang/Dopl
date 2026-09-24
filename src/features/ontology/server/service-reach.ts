@@ -1,6 +1,6 @@
 import "server-only";
 import * as narrow from "./repository-projections";
-import { levelForCluster, resolveOntologyAudience } from "./service-audience";
+import { levelForOntology, resolveOntologyAudience } from "./service-audience";
 import type { OntologyContext, OntologyLevel } from "../types";
 
 /**
@@ -12,7 +12,7 @@ import type { OntologyContext, OntologyLevel } from "../types";
  * `dopl-desktop-app/main/prompt-framing-ontology.js › ontologyReachLines`, which
  * INVARIANTS §4A calls a COMPENSATING CONTROL: it tells an agent what it may
  * open so it stops discovering its level by being refused. The fence is
- * `./service-audience.ts › resolveOntologyAudience` + `› levelForCluster`, which
+ * `./service-audience.ts › resolveOntologyAudience` + `› levelForOntology`, which
  * runs on every read and every write regardless of what any prompt says — and it
  * is the SAME function this read composes, which is the whole point: a second
  * statement of the level would be one that drifts.
@@ -30,12 +30,12 @@ import type { OntologyContext, OntologyLevel } from "../types";
  * any rung it does not recognise, and "an ontology exists that you may not
  * touch" is a fact about somebody else's shelf.
  *
- * One read. `listClusterSummaries` carries no `layout`, no objects and no
- * memberships — this answers a question about CLUSTERS, and pulling a graph to
+ * One read. `listOntologySummaries` carries no `layout`, no objects and no
+ * memberships — this answers a question about ONTOLOGIES, and pulling a graph to
  * write four prompt lines is what `getSummary` is for.
  */
 export interface OntologyReachEntry {
-  /** The CLUSTER id — the `dopl_ontology` op's handle, spliced verbatim into the
+  /** The ONTOLOGY id — the `dopl_ontology` op's handle, spliced verbatim into the
    *  call the framing tells the agent to make. */
   id: string;
   name: string;
@@ -50,10 +50,10 @@ export async function getReach(
   ctx: OntologyContext
 ): Promise<OntologyReachEntry[]> {
   const audience = await resolveOntologyAudience(ctx);
-  const rows = await narrow.listClusterSummaries(audience.workspaceIds);
+  const rows = await narrow.listOntologySummaries(audience.workspaceIds);
   const out: OntologyReachEntry[] = [];
   for (const row of rows) {
-    const level = levelForCluster(ctx, audience, row);
+    const level = levelForOntology(ctx, audience, row);
     if (level === "none") continue;
     out.push({
       id: row.id,

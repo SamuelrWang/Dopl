@@ -295,7 +295,7 @@ export async function softDeleteChannel(
  * `channels` are `ON DELETE CASCADE` (members, messages, consent requests,
  * tasks → participants, agents, sessions), so one DELETE is already atomic and
  * complete. Do not add an RPC to "follow the pattern" —
- * `cascade_hard_delete_cluster` needed PL/pgSQL for the OPPOSITE reason
+ * `cascade_hard_delete_ontology` needed PL/pgSQL for the OPPOSITE reason
  * (ontology's cascade is over MEMBERSHIP rows, so it had to be composed).
  * The slug comes back with the row (`channels_workspace_slug_key` is
  * non-partial, so only a survivor owns a name).

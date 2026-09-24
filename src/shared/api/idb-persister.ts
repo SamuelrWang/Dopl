@@ -26,7 +26,7 @@ const KEY = "client";
  * Bump when a change makes EXISTING persisted entries wrong in a way a deploy
  * id would not catch (e.g. reshaping the query-key contract itself).
  */
-const CACHE_SCHEMA_VERSION = "1";
+const CACHE_SCHEMA_VERSION = "2"; // 2 (2026-09-23): the ontology snapshot's list key was renamed.
 
 /**
  * Persistence BUSTER — TanStack discards the whole restored snapshot when this

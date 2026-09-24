@@ -14,8 +14,8 @@ import { useObjectDraft } from "../hooks/use-object-draft";
 import { OntologyResourcesProvider } from "../hooks/use-workspace-resources";
 import { BoardSettingsMenu, DescriptionField, NameField } from "./board-header-bits";
 import { CapNotice } from "./cap-notice";
-import { ClusterSwitcher, clusterSwitcherEntries } from "./cluster-switcher";
-import { DeleteClusterDialog } from "./delete-cluster-dialog";
+import { OntologySwitcher, ontologySwitcherEntries } from "./ontology-switcher";
+import { DeleteOntologyDialog } from "./delete-ontology-dialog";
 import { KanbanBoard } from "./kanban-board";
 import { NewObjectDialog } from "./new-object-dialog";
 import { ObjectPanel } from "./object-panel";
@@ -24,28 +24,28 @@ import { OntologyBoardSkeleton } from "./ontology-skeleton";
 interface Props {
   workspaceId: string;
   workspaceSegment: string;
-  /** Deep-linked cluster (`/[ws]/ontology/[clusterSlug]`); first cluster when omitted. */
-  initialClusterSlug?: string;
+  /** Deep-linked ontology (`/[ws]/ontology/[ontologySlug]`); first ontology when omitted. */
+  initialOntologySlug?: string;
   /**
-   * Single-ontology mode: pin the board to one cluster (2026-09-09, the /home
+   * Single-ontology mode: pin the board to one ontology (2026-09-09, the /home
    * Ontology face; `docs/specs/home-ontology.md` §5). A selection, never a
    * permission — the fence is the ontology service's (§4). Suppresses the gear's
    * Delete row and the URL write; the host owns both. A pin naming nothing
-   * resolves to nothing, never to `clusters[0]` — falling back would open a
+   * resolves to nothing, never to `ontologies[0]` — falling back would open a
    * different ontology under the name the operator clicked. Pair with
-   * `onSelectCluster` or a host picker moves nothing.
+   * `onSelectOntology` or a host picker moves nothing.
    */
-  pinnedClusterId?: string;
+  pinnedOntologyId?: string;
   /** Host-owned selection, fired beside the view's own state so a pinned host can
    *  move its pin. Omit and the view keeps selecting for itself. */
-  onSelectCluster?: (id: string) => void;
+  onSelectOntology?: (id: string) => void;
   /**
    * Overrides the "+ Ontology" row inside the name dropdown
-   * (`cluster-switcher.tsx`). Omitted ⇒ the view's own optimistic
-   * `createCluster`, which mints a provisional id a pin-holding host would be
+   * (`ontology-switcher.tsx`). Omitted ⇒ the view's own optimistic
+   * `createOntology`, which mints a provisional id a pin-holding host would be
    * left pointing at.
    */
-  onCreateCluster?: () => void;
+  onCreateOntology?: () => void;
   /**
    * Host rows inside the header's gear menu. Rows, not a trigger (2026-09-10):
    * two menus in one header is the drift a single trigger removes. Takes the
@@ -58,7 +58,7 @@ interface Props {
    *  (New ontology / + Object / Add new) are hidden. */
   canEdit?: boolean;
   /**
-   * How the address bar follows the active cluster's slug. Defaults to
+   * How the address bar follows the active ontology's slug. Defaults to
    * `history.replaceState`; RSC pages pass nothing (a server component can't hand
    * a function to a client component). Desktop SPA injects its hash-router
    * equivalent — replacing the path in a `file://` document is a Chromium
@@ -78,17 +78,17 @@ const replaceHistoryUrl = (path: string): void =>
   window.history.replaceState(null, "", path);
 
 /**
- * Ontology page root. One cluster per page; columns are container objects whose
- * children are cards. Edits persist through use-ontology. Active cluster is
+ * Ontology page root. One ontology per page; columns are container objects whose
+ * children are cards. Edits persist through use-ontology. Active ontology is
  * URL-addressed by slug via replaceState, so tab flips don't remount the page.
  */
 export function OntologyView({
   workspaceId,
   workspaceSegment,
-  initialClusterSlug,
-  pinnedClusterId,
-  onSelectCluster,
-  onCreateCluster,
+  initialOntologySlug,
+  pinnedOntologyId,
+  onSelectOntology,
+  onCreateOntology,
   settingsMenu,
   canManageBilling = false,
   canEdit = true,
@@ -104,20 +104,20 @@ export function OntologyView({
   const refreshCap = useCallback(() => {
     if (isCapped) void refresh();
   }, [isCapped, refresh]);
-  const [clusterId, setClusterId] = useState<string | null>(null);
+  const [ontologyId, setOntologyId] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   // Create renders rows under PROVISIONAL ids, swapped when the POST answers;
   // selection is local state and must move with them, else board + panel blank
   // out exactly when the create succeeds.
   const handleIdsResolved = useCallback((map: Readonly<Record<string, string>>) => {
-    setClusterId((id) => (id ? (map[id] ?? id) : id));
+    setOntologyId((id) => (id ? (map[id] ?? id) : id));
     setSelectedId((id) => (id ? (map[id] ?? id) : id));
   }, []);
   const {
     graph,
     status,
     dispatch,
-    createCluster,
+    createOntology,
     createObject,
     beginColumnDraft,
     discardColumnDraft,
@@ -138,67 +138,67 @@ export function OntologyView({
     discardColumnDraft,
     commitColumnDraft,
   });
-  const [confirmDeleteCluster, setConfirmDeleteCluster] = useState(false);
+  const [confirmDeleteOntology, setConfirmDeleteOntology] = useState(false);
   // Lives here, not in either child: the row that starts renaming is in the gear
   // and the field that ends it stands where the switcher does, so neither
   // component can own the flag without reaching across the header.
   const [renaming, setRenaming] = useState(false);
 
   // The pin outranks all three fallbacks and has none of its own.
-  const cluster = pinnedClusterId
-    ? (graph.clusters.find((c) => c.id === pinnedClusterId) ?? null)
-    : (graph.clusters.find((c) => c.id === clusterId) ??
-      graph.clusters.find((c) => c.slug === initialClusterSlug) ??
-      graph.clusters[0] ??
+  const ontology = pinnedOntologyId
+    ? (graph.ontologies.find((c) => c.id === pinnedOntologyId) ?? null)
+    : (graph.ontologies.find((c) => c.id === ontologyId) ??
+      graph.ontologies.find((c) => c.slug === initialOntologySlug) ??
+      graph.ontologies[0] ??
       null);
   const selected = selectedId ? (graph.objects[selectedId] ?? null) : null;
-  const clusterPending = cluster ? pendingIds.has(cluster.id) : false;
-  // One list for both picker faces, walked once per graph (`cluster-switcher.tsx`).
-  const entries = useMemo(() => clusterSwitcherEntries(graph), [graph]);
+  const ontologyPending = ontology ? pendingIds.has(ontology.id) : false;
+  // One list for both picker faces, walked once per graph (`ontology-switcher.tsx`).
+  const entries = useMemo(() => ontologySwitcherEntries(graph), [graph]);
 
-  const selectCluster = (id: string) => {
-    setClusterId(id);
+  const selectOntology = (id: string) => {
+    setOntologyId(id);
     setSelectedId(null);
-    setConfirmDeleteCluster(false);
+    setConfirmDeleteOntology(false);
     // A half-typed name belongs to the ontology that was open, not the next one.
     setRenaming(false);
     // Beside the local write, not instead of it: a pinned host resolves the
-    // cluster from its own state, an unpinned one from `clusterId`.
-    onSelectCluster?.(id);
+    // ontology from its own state, an unpinned one from `ontologyId`.
+    onSelectOntology?.(id);
   };
 
-  // Effect, not inline in `selectCluster`: an optimistic cluster is selected
+  // Effect, not inline in `selectOntology`: an optimistic ontology is selected
   // before it has a slug (server mints it, arrives via `CREATE_RESOLVE`). Keyed
   // on slug alone — stable across renames. Never in pinned mode: no URL there.
   const activeSlug =
-    !pinnedClusterId && cluster && cluster.id === clusterId ? cluster.slug : null;
+    !pinnedOntologyId && ontology && ontology.id === ontologyId ? ontology.slug : null;
   useEffect(() => {
     if (activeSlug) replaceUrl(`/${workspaceSegment}/ontology/${activeSlug}`);
   }, [activeSlug, workspaceSegment, replaceUrl]);
 
   // Permanent cascading delete. Selection moves to the adjacent tab (next, else
-  // previous), never index 0: the `?? clusters[0]` display fallback would land on
+  // previous), never index 0: the `?? ontologies[0]` display fallback would land on
   // an unrelated board.
-  const handleDeleteCluster = () => {
-    if (!cluster) return;
-    const at = graph.clusters.findIndex((c) => c.id === cluster.id);
-    const neighbour = graph.clusters[at + 1] ?? graph.clusters[at - 1] ?? null;
-    dispatch({ type: "CLUSTER_DELETE", id: cluster.id });
-    setConfirmDeleteCluster(false);
+  const handleDeleteOntology = () => {
+    if (!ontology) return;
+    const at = graph.ontologies.findIndex((c) => c.id === ontology.id);
+    const neighbour = graph.ontologies[at + 1] ?? graph.ontologies[at - 1] ?? null;
+    dispatch({ type: "ONTOLOGY_DELETE", id: ontology.id });
+    setConfirmDeleteOntology(false);
     if (neighbour) {
-      selectCluster(neighbour.id);
+      selectOntology(neighbour.id);
       return;
     }
-    // Last cluster: drop the dead slug so a reload doesn't deep-link at it.
-    setClusterId(null);
+    // Last ontology: drop the dead slug so a reload doesn't deep-link at it.
+    setOntologyId(null);
     setSelectedId(null);
     replaceUrl(`/${workspaceSegment}/ontology`);
   };
 
-  // New cluster creates TWO objects (column + first card) → needs headroom of 2,
+  // New ontology creates TWO objects (column + first card) → needs headroom of 2,
   // not just under-cap: a create at 999/1000 would trip the server cap
-  // mid-sequence and leave an orphaned partial cluster.
-  const handleCreateCluster = () => {
+  // mid-sequence and leave an orphaned partial ontology.
+  const handleCreateOntology = () => {
     if (
       ent.overCap ||
       (ent.isCapped &&
@@ -210,13 +210,13 @@ export function OntologyView({
     }
     // Synchronous: tab + column + first card land in the reducer before this
     // returns, so the board switches in the same frame as the click.
-    selectCluster(createCluster().id);
+    selectOntology(createOntology().id);
   };
 
   // Cards inherit column's template fields, relationships, actions —
   // server-side, mirrored locally for the pending row.
   const handleCreateObject = (
-    target: { clusterId: string } | { parentObjectId: string }
+    target: { ontologyId: string } | { parentObjectId: string }
   ) => {
     if (ent.overCap) {
       setUpgradeOpen(true);
@@ -232,12 +232,12 @@ export function OntologyView({
    * Create (`use-object-draft.ts`).
    */
   const handleNewObject = () => {
-    if (!cluster) return;
+    if (!ontology) return;
     if (ent.overCap) {
       setUpgradeOpen(true);
       return;
     }
-    draft.begin(cluster.id);
+    draft.begin(ontology.id);
   };
 
   if (status === "loading") {
@@ -256,7 +256,7 @@ export function OntologyView({
       </Frame>
     );
   }
-  if (pinnedClusterId && !cluster) {
+  if (pinnedOntologyId && !ontology) {
     // Not the empty state below: "there are none" and "the one you opened is
     // gone" are different answers, and the create button under the second would
     // make an unrelated ontology.
@@ -268,7 +268,7 @@ export function OntologyView({
       </Frame>
     );
   }
-  if (graph.clusters.length === 0) {
+  if (graph.ontologies.length === 0) {
     return (
       <Frame>
         <div className="m-auto flex flex-col items-center gap-3">
@@ -280,7 +280,7 @@ export function OntologyView({
           {canEdit && (
             <button
               type="button"
-              onClick={handleCreateCluster}
+              onClick={handleCreateOntology}
               className="auth-btn-3d rounded-lg px-4 py-2 text-lead font-semibold text-white"
             >
               New ontology
@@ -290,7 +290,7 @@ export function OntologyView({
       </Frame>
     );
   }
-  if (!cluster) return <Frame />;
+  if (!ontology) return <Frame />;
 
   return (
     <OntologyResourcesProvider workspaceId={workspaceId} graph={graph}>
@@ -304,31 +304,31 @@ export function OntologyView({
               decorated, so the chevron goes with the trigger. */}
           {renaming ? (
             <NameField
-              name={cluster.name}
+              name={ontology.name}
               onCommit={(name) => {
-                dispatch({ type: "CLUSTER_UPDATE", id: cluster.id, patch: { name } });
+                dispatch({ type: "ONTOLOGY_UPDATE", id: ontology.id, patch: { name } });
                 setRenaming(false);
               }}
               onCancel={() => setRenaming(false)}
             />
           ) : (
-            <ClusterSwitcher
+            <OntologySwitcher
               entries={entries}
-              activeId={cluster.id}
+              activeId={ontology.id}
               canEdit={canEdit}
-              onSelect={selectCluster}
-              onCreate={onCreateCluster ?? handleCreateCluster}
+              onSelect={selectOntology}
+              onCreate={onCreateOntology ?? handleCreateOntology}
             />
           )}
-          {/* Inert until cluster is real: an edit on a provisional row would
+          {/* Inert until ontology is real: an edit on a provisional row would
               debounce a PATCH at an id the server has never seen. */}
-          <div {...pendingRow(clusterPending, "flex min-w-0 flex-1 items-center")}>
+          <div {...pendingRow(ontologyPending, "flex min-w-0 flex-1 items-center")}>
             <DescriptionField
-              value={cluster.purpose}
+              value={ontology.purpose}
               onChange={(purpose) =>
                 dispatch({
-                  type: "CLUSTER_UPDATE",
-                  id: cluster.id,
+                  type: "ONTOLOGY_UPDATE",
+                  id: ontology.id,
                   patch: { purpose },
                 })
               }
@@ -336,18 +336,18 @@ export function OntologyView({
           </div>
           {(canEdit || settingsMenu) && (
             <BoardSettingsMenu
-              clusterName={cluster.name}
-              // Inert on a provisional cluster, like the Description field.
+              ontologyName={ontology.name}
+              // Inert on a provisional ontology, like the Description field.
               onRename={
-                canEdit && !clusterPending ? () => setRenaming(true) : undefined
+                canEdit && !ontologyPending ? () => setRenaming(true) : undefined
               }
               hostRows={settingsMenu}
               // One Delete slot, and the gear is it (2026-09-10). Pinned mode is
               // how a host declares it brings its own Delete, so exactly one of
               // the two is ever rendered.
               onDelete={
-                canEdit && !pinnedClusterId
-                  ? () => setConfirmDeleteCluster(true)
+                canEdit && !pinnedOntologyId
+                  ? () => setConfirmDeleteOntology(true)
                   : undefined
               }
             />
@@ -356,7 +356,7 @@ export function OntologyView({
             <button
               type="button"
               onClick={handleNewObject}
-              {...pendingRow(clusterPending, cn(TAB_ACTION, "gap-1.5"))}
+              {...pendingRow(ontologyPending, cn(TAB_ACTION, "gap-1.5"))}
             >
               <Plus size={13} aria-hidden="true" /> Object
             </button>
@@ -374,7 +374,7 @@ export function OntologyView({
 
         <div className="flex min-h-0 flex-1 overflow-hidden">
           <KanbanBoard
-            cluster={cluster}
+            ontology={ontology}
             graph={graph}
             dispatch={dispatch}
             selectedId={selectedId}
@@ -419,12 +419,12 @@ export function OntologyView({
         onCreate={draft.create}
       />
 
-      <DeleteClusterDialog
-        open={confirmDeleteCluster}
-        onOpenChange={setConfirmDeleteCluster}
+      <DeleteOntologyDialog
+        open={confirmDeleteOntology}
+        onOpenChange={setConfirmDeleteOntology}
         graph={graph}
-        cluster={cluster}
-        onConfirm={handleDeleteCluster}
+        ontology={ontology}
+        onConfirm={handleDeleteOntology}
       />
     </OntologyResourcesProvider>
   );

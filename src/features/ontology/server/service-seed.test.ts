@@ -20,7 +20,7 @@ import type { OntologySeedRefs } from "./service-seed";
 
 const WS = "ws-1";
 const USER = "user-1";
-const CLUSTER = "cluster-1";
+const ONTOLOGY = "ontology-1";
 
 const SEED = buildOntologySeed();
 
@@ -55,18 +55,18 @@ function insertedEdges() {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  vi.mocked(repo.listClusters).mockResolvedValue([]);
-  vi.mocked(repo.insertCluster).mockResolvedValue({ id: CLUSTER } as never);
+  vi.mocked(repo.listOntologies).mockResolvedValue([]);
+  vi.mocked(repo.insertOntology).mockResolvedValue({ id: ONTOLOGY } as never);
   vi.mocked(seedRepo.insertObjects).mockResolvedValue([]);
   vi.mocked(seedRepo.insertMemberships).mockResolvedValue(undefined);
   vi.mocked(seedRepo.insertRelationships).mockResolvedValue(undefined);
 });
 
 describe("ontology seed — write shape", () => {
-  it("writes the whole cluster in four statements", async () => {
+  it("writes the whole ontology in four statements", async () => {
     await seedWorkspace({ workspaceId: WS, userId: USER }, REFS);
 
-    expect(repo.insertCluster).toHaveBeenCalledTimes(1);
+    expect(repo.insertOntology).toHaveBeenCalledTimes(1);
     expect(seedRepo.insertObjects).toHaveBeenCalledTimes(1);
     expect(seedRepo.insertMemberships).toHaveBeenCalledTimes(1);
     expect(seedRepo.insertRelationships).toHaveBeenCalledTimes(1);
@@ -89,7 +89,7 @@ describe("ontology seed — write shape", () => {
       SEED.columns.length +
       SEED.columns.reduce((n, c) => n + c.children.length, 0);
     expect(result).toEqual({
-      clusterId: CLUSTER,
+      ontologyId: ONTOLOGY,
       objectsCreated: expectedObjects,
       relationshipsCreated: SEED.relationships.length,
     });
@@ -150,7 +150,7 @@ describe("ontology seed — the graph the batch produces", () => {
     }
   });
 
-  it("files each card under its own column, and each column under the cluster", async () => {
+  it("files each card under its own column, and each column under the ontology", async () => {
     await seedWorkspace({ workspaceId: WS, userId: USER }, REFS);
     const idByName = new Map(insertedObjects().map((o) => [o.name, o.id]));
     const memberships = insertedMemberships();
@@ -159,7 +159,7 @@ describe("ontology seed — the graph the batch produces", () => {
       const columnId = idByName.get(column.name);
       expect(memberships).toContainEqual({
         workspaceId: WS,
-        clusterId: CLUSTER,
+        ontologyId: ONTOLOGY,
         parentObjectId: null,
         childObjectId: columnId,
         position: colIndex,
@@ -167,7 +167,7 @@ describe("ontology seed — the graph the batch produces", () => {
       for (const [childIndex, child] of column.children.entries()) {
         expect(memberships).toContainEqual({
           workspaceId: WS,
-          clusterId: null,
+          ontologyId: null,
           parentObjectId: columnId,
           childObjectId: idByName.get(child.name),
           position: childIndex,

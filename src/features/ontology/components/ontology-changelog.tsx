@@ -8,26 +8,26 @@ import {
 import type { Revision } from "@/features/revisions/types";
 
 /**
- * The ontology's Changelog — the day-grouped roll-up of every change to the cluster
+ * The ontology's Changelog — the day-grouped roll-up of every change to the ontology
  * and to every object in it (Samuel, 2026-09-09). The same list the object panel
  * mounts, with different rows.
  *
- * Restore is addressed to the row's own object (`revision.resourceId`): a cluster
+ * Restore is addressed to the row's own object (`revision.resourceId`): an ontology
  * has no per-field restore door, and rows that cannot be written back render no
  * Restore. `revisions/lib/restorable.ts` states that rule once, for the button and
  * for the server's refusal.
  */
-export function ClusterChangelog({
-  clusterId,
+export function OntologyChangelog({
+  ontologyId,
   workspaceId,
   canEdit,
 }: {
-  clusterId: string;
+  ontologyId: string;
   workspaceId: string;
   canEdit: boolean;
 }) {
   const history = useRevisionHistory(
-    { kind: "ontology_cluster", id: clusterId },
+    { kind: "ontology", id: ontologyId },
     workspaceId
   );
   const restore = useRestoreOntologyRevision(workspaceId);

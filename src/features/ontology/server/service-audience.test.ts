@@ -30,9 +30,9 @@ vi.mock("@/shared/tenancy/personal-reach", () => ({
 import * as shares from "./repository-shares";
 import { personalShelfContainerIds } from "@/shared/tenancy/personal-reach";
 import {
-  levelForCluster,
+  levelForOntology,
   resolveOntologyAudience,
-  type AudienceClusterFacts,
+  type AudienceOntologyFacts,
 } from "./service-audience";
 
 const mockShares = vi.mocked(shares);
@@ -43,12 +43,12 @@ const OWNER_CONTAINER = "ws-personal";
 const CHANNEL = "ch-1";
 const OWNER = "user-owner";
 const PEER = "user-peer";
-const OWN_CLUSTER = "c-own";
-const PEER_CLUSTER = "c-peer";
+const OWN_ONTOLOGY = "c-own";
+const PEER_ONTOLOGY = "c-peer";
 
-function cluster(over: Partial<AudienceClusterFacts> = {}): AudienceClusterFacts {
+function ontology(over: Partial<AudienceOntologyFacts> = {}): AudienceOntologyFacts {
   return {
-    id: OWN_CLUSTER,
+    id: OWN_ONTOLOGY,
     // The ONTOLOGY's container, and NOT the calling one: every case below is
     // the cross-container shape the lend actually has.
     workspace_id: OWNER_CONTAINER,
@@ -66,7 +66,7 @@ function shareRow(over: {
   container?: string;
 }) {
   return {
-    ontology_id: over.ontology ?? OWN_CLUSTER,
+    ontology_id: over.ontology ?? OWN_ONTOLOGY,
     channel_id: CHANNEL,
     workspace_id: over.container ?? OWNER_CONTAINER,
     members_level: over.members ?? "none",
@@ -98,9 +98,9 @@ function prime(opts: {
 
 async function levelOf(
   c: OntologyContext,
-  facts: AudienceClusterFacts
+  facts: AudienceOntologyFacts
 ): Promise<OntologyLevel> {
-  return levelForCluster(c, await resolveOntologyAudience(c), facts);
+  return levelForOntology(c, await resolveOntologyAudience(c), facts);
 }
 
 beforeEach(() => {
@@ -110,67 +110,67 @@ beforeEach(() => {
 
 describe("matrix — the OWNER, in person", () => {
   it("solo and unshared: edit", async () => {
-    expect(await levelOf(ctx(), cluster())).toBe("edit");
+    expect(await levelOf(ctx(), ontology())).toBe("edit");
   });
 
   it("shared into a channel at members none: STILL edit — a share never narrows the owner", async () => {
     prime({ members: 4, shares: [shareRow({ members: "none", ownerAgents: "none" })] });
-    expect(await levelOf(ctx(), cluster())).toBe("edit");
+    expect(await levelOf(ctx(), ontology())).toBe("edit");
   });
 });
 
 describe("matrix — a MEMBER of the channel, and their agent", () => {
-  const peerCluster = cluster({ id: PEER_CLUSTER, created_by: PEER });
+  const peerOntology = ontology({ id: PEER_ONTOLOGY, created_by: PEER });
 
   for (const level of ["view", "edit", "none"] as const) {
     it(`reads members_level="${level}" verbatim`, async () => {
       prime({
         members: 2,
-        shares: [shareRow({ ontology: PEER_CLUSTER, members: level, guests: "edit" })],
+        shares: [shareRow({ ontology: PEER_ONTOLOGY, members: level, guests: "edit" })],
       });
-      expect(await levelOf(ctx({ userId: "user-me" }), peerCluster)).toBe(level);
+      expect(await levelOf(ctx({ userId: "user-me" }), peerOntology)).toBe(level);
     });
 
     it(`a member's AGENT inherits EXACTLY that: "${level}" (Q1, no second control)`, async () => {
       prime({
         members: 2,
-        shares: [shareRow({ ontology: PEER_CLUSTER, members: level, guests: "edit" })],
+        shares: [shareRow({ ontology: PEER_ONTOLOGY, members: level, guests: "edit" })],
       });
       expect(
-        await levelOf(ctx({ userId: "user-me", source: "agent" }), peerCluster)
+        await levelOf(ctx({ userId: "user-me", source: "agent" }), peerOntology)
       ).toBe(level);
     });
   }
 
   it("no share row at all: none — I3, unshared means owner only", async () => {
     prime({ members: 2, shares: [] });
-    expect(await levelOf(ctx({ userId: "user-me" }), peerCluster)).toBe("none");
+    expect(await levelOf(ctx({ userId: "user-me" }), peerOntology)).toBe("none");
   });
 });
 
 describe("matrix — a GUEST of the channel, and their agent", () => {
-  const peerCluster = cluster({ id: PEER_CLUSTER, created_by: PEER });
+  const peerOntology = ontology({ id: PEER_ONTOLOGY, created_by: PEER });
 
   for (const level of ["view", "edit", "none"] as const) {
     it(`reads guests_level="${level}", never members_level`, async () => {
       prime({
         members: 2,
-        shares: [shareRow({ ontology: PEER_CLUSTER, members: "edit", guests: level })],
+        shares: [shareRow({ ontology: PEER_ONTOLOGY, members: "edit", guests: level })],
       });
       expect(
-        await levelOf(ctx({ userId: "user-me", role: "guest" }), peerCluster)
+        await levelOf(ctx({ userId: "user-me", role: "guest" }), peerOntology)
       ).toBe(level);
     });
 
     it(`a guest's AGENT inherits EXACTLY that: "${level}"`, async () => {
       prime({
         members: 2,
-        shares: [shareRow({ ontology: PEER_CLUSTER, members: "edit", guests: level })],
+        shares: [shareRow({ ontology: PEER_ONTOLOGY, members: "edit", guests: level })],
       });
       expect(
         await levelOf(
           ctx({ userId: "user-me", role: "guest", source: "agent" }),
-          peerCluster
+          peerOntology
         )
       ).toBe(level);
     });
@@ -182,32 +182,32 @@ describe("matrix — the OWNER'S OWN AGENT (Samuel's solo toggle, Q2)", () => {
 
   it("solo room, toggle ON: edit", async () => {
     prime({ members: 1 });
-    expect(await levelOf(agent(), cluster({ agents_may_edit: true }))).toBe("edit");
+    expect(await levelOf(agent(), ontology({ agents_may_edit: true }))).toBe("edit");
   });
 
   it("solo room, toggle OFF: view — 'they can toggle it so their agents can only view'", async () => {
     prime({ members: 1 });
-    expect(await levelOf(agent(), cluster({ agents_may_edit: false }))).toBe("view");
+    expect(await levelOf(agent(), ontology({ agents_may_edit: false }))).toBe("view");
   });
 
   it("SHARED room, unshared ontology, toggle ON: drops to view until the owner sets it (Q2)", async () => {
     prime({ members: 2 });
-    expect(await levelOf(agent(), cluster({ agents_may_edit: true }))).toBe("view");
+    expect(await levelOf(agent(), ontology({ agents_may_edit: true }))).toBe("view");
   });
 
   it("a share row OVERRIDES the toggle with owner_agents_level", async () => {
     prime({ members: 2, shares: [shareRow({ ownerAgents: "edit" })] });
-    expect(await levelOf(agent(), cluster({ agents_may_edit: false }))).toBe("edit");
+    expect(await levelOf(agent(), ontology({ agents_may_edit: false }))).toBe("edit");
   });
 
   it("owner_agents_level='none' fences the owner's own agent out entirely", async () => {
     prime({ members: 2, shares: [shareRow({ ownerAgents: "none" })] });
-    expect(await levelOf(agent(), cluster())).toBe("none");
+    expect(await levelOf(agent(), ontology())).toBe("none");
   });
 
   it("🔒 AN UNREADABLE MEMBER COUNT FAILS CLOSED — null is 'not solo', so view not edit", async () => {
     prime({ members: null });
-    expect(await levelOf(agent(), cluster({ agents_may_edit: true }))).toBe("view");
+    expect(await levelOf(agent(), ontology({ agents_may_edit: true }))).toBe("view");
   });
 
   it("🔒 A COUNT OF ZERO IS NOT SOLO EITHER — F-718, the direction that leaked", async () => {
@@ -216,7 +216,7 @@ describe("matrix — the OWNER'S OWN AGENT (Samuel's solo toggle, Q2)", () => {
     // toggle back. `shared-room.ts › isSharedRoom` treats only an exact `1` as
     // solo, so the drop to `view` holds.
     prime({ members: 0 });
-    expect(await levelOf(agent(), cluster({ agents_may_edit: true }))).toBe("view");
+    expect(await levelOf(agent(), ontology({ agents_may_edit: true }))).toBe("view");
   });
 });
 
@@ -226,7 +226,7 @@ describe("the arms that are not matrix rows", () => {
     const audience = await resolveOntologyAudience(ctx({ userId: "user-me" }));
     expect(audience.kind).toBe("unrestricted");
     expect(
-      levelForCluster(ctx({ userId: "user-me" }), audience, cluster({ created_by: PEER }))
+      levelForOntology(ctx({ userId: "user-me" }), audience, ontology({ created_by: PEER }))
     ).toBe("edit");
     // And it costs ONE probe: no channels, no members, no shares.
     expect(mockShares.listChannelIdsForWorkspace).not.toHaveBeenCalled();
@@ -252,8 +252,8 @@ describe("the arms that are not matrix rows", () => {
       expect(audience.workspaceIds).toEqual([]);
       // …and the level answers `none` even for the caller's OWN container, which
       // `inOwnContainer` would otherwise admit at `view`/`edit`.
-      expect(levelForCluster(me, audience, cluster({ workspace_id: LINK }))).toBe("none");
-      expect(levelForCluster(me, audience, cluster())).toBe("none");
+      expect(levelForOntology(me, audience, ontology({ workspace_id: LINK }))).toBe("none");
+      expect(levelForOntology(me, audience, ontology())).toBe("none");
       // And it costs ONE probe: an unreadable kind must not buy a share fan.
       expect(mockShares.listSharesForChannels).not.toHaveBeenCalled();
     });
@@ -265,11 +265,11 @@ describe("the arms that are not matrix rows", () => {
     expect(audience.workspaceIds).toEqual([LINK]);
   });
 
-  it("🔒 a SHARED CREDENTIAL reaches nothing — not even its holder's own cluster (M-10)", async () => {
+  it("🔒 a SHARED CREDENTIAL reaches nothing — not even its holder's own ontology (M-10)", async () => {
     prime({ members: 1 });
     const shared = ctx({ credentialSubjectUserId: null, source: "agent" });
     const audience = await resolveOntologyAudience(shared);
-    expect(levelForCluster(shared, audience, cluster())).toBe("none");
+    expect(levelForOntology(shared, audience, ontology())).toBe("none");
     expect(audience.workspaceIds).toEqual([LINK]);
   });
 
@@ -355,11 +355,11 @@ describe("the arms that are not matrix rows", () => {
     prime({ members: 2, personal: [OWNER_CONTAINER] });
     const me = ctx({ userId: OWNER });
     // Row 2: the shelf is not the calling container, and there is no share row.
-    expect(await levelOf(me, cluster({ workspace_id: OWNER_CONTAINER }))).toBe("edit");
+    expect(await levelOf(me, ontology({ workspace_id: OWNER_CONTAINER }))).toBe("edit");
     // …and it is the CREATOR, never "somebody in that container": a peer's
-    // cluster sitting in the same container is still refused.
+    // ontology sitting in the same container is still refused.
     expect(
-      await levelOf(ctx({ userId: PEER }), cluster({ workspace_id: OWNER_CONTAINER }))
+      await levelOf(ctx({ userId: PEER }), ontology({ workspace_id: OWNER_CONTAINER }))
     ).toBe("none");
   });
 
@@ -367,9 +367,9 @@ describe("the arms that are not matrix rows", () => {
     prime({ members: 2, personal: [OWNER_CONTAINER] });
     const me = ctx({ userId: OWNER });
     const audience = await resolveOntologyAudience(me);
-    const left = cluster({ id: "c-left", workspace_id: "ws-i-was-removed-from" });
+    const left = ontology({ id: "c-left", workspace_id: "ws-i-was-removed-from" });
     // A row from a container this request never reached would answer `edit`…
-    expect(levelForCluster(me, audience, left)).toBe("edit");
+    expect(levelForOntology(me, audience, left)).toBe("edit");
     // …which is safe ONLY because no query can return it: that container is not
     // in the scope, and `service-gates.ts` reads every row through the scope.
     expect(audience.workspaceIds).not.toContain(left.workspace_id);

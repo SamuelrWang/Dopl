@@ -29,9 +29,9 @@ import {
  *
  * | SQL (`dopl_ontology_readable`)                                    | here                                    |
  * |-------------------------------------------------------------------|-----------------------------------------|
- * | `is_current_workspace_member(c.workspace_id,'viewer')`            | `cluster.workspaceId === ctx.workspaceId` |
+ * | `is_current_workspace_member(c.workspace_id,'viewer')`            | `ontology.workspaceId === ctx.workspaceId` |
  * | `NOT dopl_credential_is_shared()`                                 | `!isSharedCredential(ctx)`              |
- * | `dopl_ontology_level_rank(dopl_ontology_share_level(c.id)) >= 1`  | `reach.get(cluster.id) >= 'view'`       |
+ * | `dopl_ontology_level_rank(dopl_ontology_share_level(c.id)) >= 1`  | `reach.get(ontology.id) >= 'view'`       |
  *
  * The first row is NOT an equality, and this is the one place that says so.
  * `withWorkspaceAuth` resolves ONE container and proves membership OF IT, so a
@@ -40,7 +40,7 @@ import {
  * OntologyAudience.workspaceIds` reads WIDER (the caller's personal shelf, and
  * the LENDER's container behind a share). A DIVERGENCE, not a mirror:
  *
- * | the cluster's container `W`                        | SQL arm 1 | `inOwnContainer` |
+ * | the ontology's container `W`                        | SQL arm 1 | `inOwnContainer` |
  * |----------------------------------------------------|-----------|------------------|
  * | `W === ctx.workspaceId`                             | true      | **true**         |
  * | `W` = the caller's own personal shelf, standing in a room | true | **false**   |
@@ -49,8 +49,8 @@ import {
  *
  * So this module is strictly NARROWER than its SQL twin — the safe direction,
  * and still a divergence. Row 2 is restored, and only row 2, by
- * `./service-audience.ts › levelForCluster`'s `created_by === userId` arm.
- * Row 3 stays refused on purpose: a cluster in somebody else's link container
+ * `./service-audience.ts › levelForOntology`'s `created_by === userId` arm.
+ * Row 3 stays refused on purpose: an ontology in somebody else's link container
  * reaches this caller through a SHARE or not at all. A future edit that widens
  * arm 1 to a membership READ must delete that owner arm in the same
  * change, or one rule is stated twice. Pinned in `./service-shared.test.ts ›
@@ -58,22 +58,22 @@ import {
  *
  * The agent ceiling is not here and must not be added here. Samuel's matrix
  * caps an agent at its operator's level (I1, Q1) and gives the OWNER two extra
- * controls (`ontology_clusters.agents_may_edit`,
+ * controls (`ontologies.agents_may_edit`,
  * `ontology_channel_shares.owner_agents_level`) — a question about the CREDENTIAL
  * and the CHANNEL, not about the row, resolved once per request in
  * `./service-audience.ts › resolveOntologyAudience`. No policy can ask it: a
  * policy reads no `source` axis. Two layers, two questions.
  */
 
-/** The row shape the predicate needs — never the whole cluster. */
-export interface OntologyClusterScope {
+/** The row shape the predicate needs — never the whole ontology. */
+export interface OntologyScope {
   id: string;
   /** The ONTOLOGY's container: a `kind='personal'` one for a home ontology. */
   workspaceId: string;
 }
 
 /**
- * Cluster id → the caller's own HUMAN level: the maximum rung across every home
+ * Ontology id → the caller's own HUMAN level: the maximum rung across every home
  * channel they are in that the ontology is lent to (spec I5).
  *
  * Precomputed, one read for a row set — the
@@ -99,11 +99,11 @@ export const NO_ONTOLOGY_SHARES: OntologyShareReach = new Map();
  */
 export function sharedOntologyLevel(
   ctx: OntologyContext,
-  cluster: OntologyClusterScope,
+  ontology: OntologyScope,
   reach: OntologyShareReach
 ): OntologyLevel {
   if (isSharedCredential(ctx)) return "none";
-  return reach.get(cluster.id) ?? "none";
+  return reach.get(ontology.id) ?? "none";
 }
 
 /** Arm 1 — the container, i.e. `is_current_workspace_member(workspace_id,
@@ -112,9 +112,9 @@ export function sharedOntologyLevel(
  *  the owner"* needs no arm of its own. */
 function inOwnContainer(
   ctx: OntologyContext,
-  cluster: OntologyClusterScope
+  ontology: OntologyScope
 ): boolean {
-  return cluster.workspaceId === ctx.workspaceId;
+  return ontology.workspaceId === ctx.workspaceId;
 }
 
 /**
@@ -126,18 +126,18 @@ function inOwnContainer(
  * row nothing reads. The defect `20260923140000_grant_read_arm.sql` §3b records
  * for the knowledge children; pinned here in both directions.
  *
- * Q8 — the cluster is the boundary. A shared-in reader sees this cluster's
- * membership walk and nothing else; an object reachable only from another cluster
+ * Q8 — the ontology is the boundary. A shared-in reader sees this ontology's
+ * membership walk and nothing else; an object reachable only from another ontology
  * is not in this one.
  */
 export function canSeeOntology(
   ctx: OntologyContext,
-  cluster: OntologyClusterScope,
+  ontology: OntologyScope,
   reach: OntologyShareReach
 ): boolean {
   return (
-    inOwnContainer(ctx, cluster) ||
-    meetsLevel(sharedOntologyLevel(ctx, cluster, reach), "view")
+    inOwnContainer(ctx, ontology) ||
+    meetsLevel(sharedOntologyLevel(ctx, ontology, reach), "view")
   );
 }
 
@@ -150,28 +150,28 @@ export function canSeeOntology(
  * vocabulary this tree actually uses.
  *
  * Q9 is not answered here, on purpose. Samuel's ruling — a WRITE needs
- * `edit` on ALL of an object's clusters (spec R5), a READ on ANY — belongs to the
+ * `edit` on ALL of an object's ontologies (spec R5), a READ on ANY — belongs to the
  * caller that sees all of them at once (`./service-gates.ts › requireObject`).
- * An `every` here would make a single-cluster question lie.
+ * An `every` here would make a single-ontology question lie.
  */
 export function canEditOntology(
   ctx: OntologyContext,
-  cluster: OntologyClusterScope,
+  ontology: OntologyScope,
   reach: OntologyShareReach
 ): boolean {
   return (
-    (inOwnContainer(ctx, cluster) && meetsMinRole(ctx.role, "member")) ||
-    meetsLevel(sharedOntologyLevel(ctx, cluster, reach), "edit")
+    (inOwnContainer(ctx, ontology) && meetsMinRole(ctx.role, "member")) ||
+    meetsLevel(sharedOntologyLevel(ctx, ontology, reach), "edit")
   );
 }
 
-/** Clusters whose answer a SHARE could still change — the negation of arm 1 and
+/** Ontologies whose answer a SHARE could still change — the negation of arm 1 and
  *  of the shared-credential refusal. A deliberate mirror of the arms above
  *  (`knowledge/server/service-shared.ts › needsGrantArm`'s shape): a caller
  *  reading their OWN container's board asks the share table nothing. */
 export function needsShareArm(
   ctx: OntologyContext,
-  cluster: OntologyClusterScope
+  ontology: OntologyScope
 ): boolean {
-  return !inOwnContainer(ctx, cluster) && !isSharedCredential(ctx);
+  return !inOwnContainer(ctx, ontology) && !isSharedCredential(ctx);
 }

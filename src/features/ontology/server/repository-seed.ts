@@ -67,7 +67,7 @@ export async function insertObjects(
 export async function insertMemberships(
   inputs: Array<{
     workspaceId: string;
-    clusterId: string | null;
+    ontologyId: string | null;
     parentObjectId: string | null;
     childObjectId: string;
     position: number;
@@ -78,7 +78,7 @@ export async function insertMemberships(
   const { error } = await db.from("ontology_memberships").insert(
     inputs.map((input) => ({
       workspace_id: input.workspaceId,
-      cluster_id: input.clusterId,
+      ontology_id: input.ontologyId,
       parent_object_id: input.parentObjectId,
       child_object_id: input.childObjectId,
       position: input.position,

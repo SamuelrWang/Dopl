@@ -58,7 +58,7 @@ function primeHappyPath() {
       "file-knowledge-well": { id: "s2", name: "File" },
     },
   });
-  mOntology.mockResolvedValue({ clusterId: "c1", objectsCreated: 11, relationshipsCreated: 3 });
+  mOntology.mockResolvedValue({ ontologyId: "c1", objectsCreated: 11, relationshipsCreated: 3 });
   mChat.mockResolvedValue({ chatId: "ch1" });
 }
 

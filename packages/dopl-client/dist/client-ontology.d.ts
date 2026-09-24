@@ -3,7 +3,7 @@
  * delegation to `ontology.ts`; no HTTP here.
  */
 import { KnowledgeMethods } from "./client-knowledge.js";
-import type { OntologyCluster, OntologyClusterCreateInput, OntologyClusterPatch, OntologyObject, OntologyObjectCreateInput, OntologyObjectPatch, OntologySnapshot, OntologySummary } from "./ontology-types.js";
+import type { Ontology, OntologyCreateInput, OntologyPatch, OntologyObject, OntologyObjectCreateInput, OntologyObjectPatch, OntologySnapshot, OntologySummary } from "./ontology-types.js";
 export declare class OntologyMethods extends KnowledgeMethods {
     /**
      * The workspace ontology. `{ view: "summary" }` = cheap projection (names and
@@ -23,9 +23,9 @@ export declare class OntologyMethods extends KnowledgeMethods {
         view: "summary";
     }): Promise<OntologySummary>;
     getOntologyAnchor(): Promise<OntologyObject | null>;
-    createOntologyCluster(input: OntologyClusterCreateInput): Promise<OntologyCluster>;
-    updateOntologyCluster(clusterId: string, patch: OntologyClusterPatch): Promise<OntologyCluster>;
-    deleteOntologyCluster(clusterId: string): Promise<void>;
+    createOntology(input: OntologyCreateInput): Promise<Ontology>;
+    updateOntology(ontologyId: string, patch: OntologyPatch): Promise<Ontology>;
+    deleteOntology(ontologyId: string): Promise<void>;
     createOntologyObject(input: OntologyObjectCreateInput): Promise<OntologyObject>;
     updateOntologyObject(objectId: string, patch: OntologyObjectPatch, expectedVersion?: string): Promise<OntologyObject>;
     deleteOntologyObject(objectId: string): Promise<void>;

@@ -14,7 +14,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
 import type { GraphState } from "../graph-state";
 import { NEW_COLUMN_NAME } from "../optimistic-create";
-import type { OntologyCluster, OntologyObject } from "../types";
+import type { Ontology, OntologyObject } from "../types";
 import { KanbanBoard } from "./kanban-board";
 
 afterEach(cleanup);
@@ -33,7 +33,7 @@ function object(id: string, name: string, childIds: string[] = []): OntologyObje
 }
 
 /** One named lane and one still unnamed — the fallback only shows on the second. */
-const CLUSTER: OntologyCluster = {
+const ONTOLOGY: Ontology = {
   id: "c1",
   slug: "pipeline",
   name: "Pipeline",
@@ -43,7 +43,7 @@ const CLUSTER: OntologyCluster = {
 };
 
 const GRAPH: GraphState = {
-  clusters: [CLUSTER],
+  ontologies: [ONTOLOGY],
   objects: {
     "col-named": object("col-named", "Lead"),
     "col-unnamed": object("col-unnamed", ""),
@@ -53,7 +53,7 @@ const GRAPH: GraphState = {
 function renderBoard(canEdit = true) {
   return render(
     <KanbanBoard
-      cluster={CLUSTER}
+      ontology={ONTOLOGY}
       graph={GRAPH}
       dispatch={vi.fn()}
       selectedId={null}

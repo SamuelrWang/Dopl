@@ -4,7 +4,7 @@ import { GUIDE_ENTRY_KEYS } from "@/features/knowledge/server/seed";
 import { SEED_SKILL_SLUGS } from "@/features/skills/server/seed";
 
 /**
- * Seed ontology for a new workspace: the "Dopl Playbook" cluster. Two columns
+ * Seed ontology for a new workspace: the "Dopl Playbook" ontology. Two columns
  * (Surfaces, Rituals) whose attributes point at the seeded Skills and Knowledge
  * entries — the cross-references are the point, a fresh workspace shows a
  * connected graph.
@@ -45,8 +45,8 @@ export interface SeedRelationship {
 }
 
 export interface OntologySeed {
-  clusterName: string;
-  clusterSlug: string;
+  ontologyName: string;
+  ontologySlug: string;
   purpose: string;
   columns: SeedColumn[];
   relationships: SeedRelationship[];
@@ -66,8 +66,8 @@ const RITUAL_TEMPLATE: TemplateField[] = [
 
 export function buildOntologySeed(): OntologySeed {
   return {
-    clusterName: "Dopl Playbook",
-    clusterSlug: DOPL_PLAYBOOK_SLUG,
+    ontologyName: "Dopl Playbook",
+    ontologySlug: DOPL_PLAYBOOK_SLUG,
     purpose:
       "How this workspace is meant to be used — its surfaces and the rituals that keep them current.",
     columns: [

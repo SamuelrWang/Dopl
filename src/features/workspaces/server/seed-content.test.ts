@@ -155,9 +155,9 @@ describe("seed corpus — what a new workspace gets", () => {
     ]);
   });
 
-  it("one ontology cluster: two columns, seven objects", () => {
+  it("one ontology: two columns, seven objects", () => {
     const seed = buildOntologySeed();
-    expect(seed.clusterSlug).toBe("dopl-playbook");
+    expect(seed.ontologySlug).toBe("dopl-playbook");
     expect(seed.columns.map((c) => c.key)).toEqual(["surfaces", "rituals"]);
     expect(seed.columns.flatMap((c) => c.children.map((o) => o.key))).toEqual([
       "surface-knowledge",

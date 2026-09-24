@@ -15,7 +15,7 @@ import {
 } from "@/features/ontology/server/service-shares";
 
 /**
- * `GET|PUT|DELETE /api/ontology/clusters/{clusterId}/shares` — WHICH HOME
+ * `GET|PUT|DELETE /api/ontology/ontologies/{ontologyId}/shares` — WHICH HOME
  * CHANNELS THIS ONTOLOGY IS LENT INTO, and the writes that change one.
  *
  * ── The contract ────────────────────────────────────────────────────────────
@@ -51,17 +51,17 @@ import {
  *  4. its container is a HOME container (400, Q5).
  */
 
-function clusterIdOf(auth: WorkspaceAuthContext): string {
-  const clusterId = auth.params?.clusterId;
-  if (!clusterId) throw HttpError.badRequest("Missing clusterId");
-  return clusterId;
+function ontologyIdOf(auth: WorkspaceAuthContext): string {
+  const ontologyId = auth.params?.ontologyId;
+  if (!ontologyId) throw HttpError.badRequest("Missing ontologyId");
+  return ontologyId;
 }
 
 async function handleGet(_request: NextRequest, auth: WorkspaceAuthContext) {
   try {
     const body = await listOntologyShares(
       buildOntologyContext(auth),
-      clusterIdOf(auth)
+      ontologyIdOf(auth)
     );
     return NextResponse.json(body);
   } catch (err) {
@@ -74,7 +74,7 @@ async function handlePut(request: NextRequest, auth: WorkspaceAuthContext) {
     const input = await parseJson(request, OntologyShareWriteSchema);
     const share = await setOntologyShare(
       buildOntologyContext(auth),
-      clusterIdOf(auth),
+      ontologyIdOf(auth),
       input
     );
     return NextResponse.json({ share });
@@ -89,7 +89,7 @@ async function handleDelete(request: NextRequest, auth: WorkspaceAuthContext) {
     // from half the clients that would call it, and the pair is the address.
     const channelId = request.nextUrl.searchParams.get("channelId");
     if (!channelId) throw HttpError.badRequest("channelId is required");
-    await unshareOntology(buildOntologyContext(auth), clusterIdOf(auth), channelId);
+    await unshareOntology(buildOntologyContext(auth), ontologyIdOf(auth), channelId);
     return new NextResponse(null, { status: 204 });
   } catch (err) {
     return toHttpErrorResponse("ontology", err);

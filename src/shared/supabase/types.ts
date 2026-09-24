@@ -1327,7 +1327,7 @@ export type Database = {
         }
         Relationships: []
       }
-      ontology_clusters: {
+      ontologies: {
         Row: {
           created_at: string
           created_by: string | null
@@ -1369,7 +1369,7 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "ontology_clusters_workspace_id_fkey"
+            foreignKeyName: "ontologies_workspace_id_fkey"
             columns: ["workspace_id"]
             isOneToOne: false
             referencedRelation: "workspaces"
@@ -1380,7 +1380,7 @@ export type Database = {
       ontology_memberships: {
         Row: {
           child_object_id: string
-          cluster_id: string | null
+          ontology_id: string | null
           created_at: string
           id: string
           parent_object_id: string | null
@@ -1389,7 +1389,7 @@ export type Database = {
         }
         Insert: {
           child_object_id: string
-          cluster_id?: string | null
+          ontology_id?: string | null
           created_at?: string
           id?: string
           parent_object_id?: string | null
@@ -1398,7 +1398,7 @@ export type Database = {
         }
         Update: {
           child_object_id?: string
-          cluster_id?: string | null
+          ontology_id?: string | null
           created_at?: string
           id?: string
           parent_object_id?: string | null
@@ -1414,10 +1414,10 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "ontology_memberships_cluster_id_fkey"
-            columns: ["cluster_id"]
+            foreignKeyName: "ontology_memberships_ontology_id_fkey"
+            columns: ["ontology_id"]
             isOneToOne: false
-            referencedRelation: "ontology_clusters"
+            referencedRelation: "ontologies"
             referencedColumns: ["id"]
           },
           {
@@ -2341,8 +2341,8 @@ export type Database = {
       }
     }
     Functions: {
-      cascade_hard_delete_cluster: {
-        Args: { p_cluster_id: string; p_workspace_id: string }
+      cascade_hard_delete_ontology: {
+        Args: { p_ontology_id: string; p_workspace_id: string }
         Returns: number
       }
       cascade_hard_delete_folder: {
@@ -2353,33 +2353,7 @@ export type Database = {
         Args: { p_object_id: string; p_workspace_id: string }
         Returns: number
       }
-      cascade_purge_cluster: {
-        Args: { p_cluster_ref: string; p_workspace_id: string }
-        Returns: number
-      }
       cascade_restore_base: { Args: { p_base_id: string }; Returns: undefined }
-      cascade_restore_cluster: {
-        Args: { p_cluster_ref: string; p_workspace_id: string }
-        Returns: {
-          created_at: string
-          created_by: string | null
-          deleted_at: string | null
-          id: string
-          layout: Json
-          name: string
-          position: number
-          purpose: string
-          slug: string
-          updated_at: string
-          workspace_id: string
-        }[]
-        SetofOptions: {
-          from: "*"
-          to: "ontology_clusters"
-          isOneToOne: false
-          isSetofReturn: true
-        }
-      }
       cascade_restore_folder: {
         Args: { p_folder_id: string }
         Returns: undefined
@@ -2387,10 +2361,6 @@ export type Database = {
       cascade_soft_delete_base: {
         Args: { p_base_id: string; p_deleted_at: string }
         Returns: undefined
-      }
-      cascade_soft_delete_cluster: {
-        Args: { p_cluster_id: string; p_workspace_id: string }
-        Returns: number
       }
       cascade_soft_delete_folder: {
         Args: { p_deleted_at: string; p_folder_id: string }
@@ -2518,7 +2488,6 @@ export type Database = {
           updated_at: string
         }[]
       }
-      increment_fork_count: { Args: { pc_id: string }; Returns: undefined }
       increment_ingestion_count: {
         Args: { user_id_input: string }
         Returns: undefined

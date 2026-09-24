@@ -1,5 +1,5 @@
 /**
- * ONTOLOGY → REVISIONS, THE READ HALF — one object's history, the CLUSTER
+ * ONTOLOGY → REVISIONS, THE READ HALF — one object's history, the ONTOLOGY
  * ROLL-UP and the PER-FIELD RESTORE (2026-09-09, the CHANGELOG lane part 2).
  *
  * Split from `./service-revisions.test.ts` on the same seam the source is
@@ -12,11 +12,11 @@
  *
  * Mutation-verified — two reverts, two failures: `restoreObjectRevision`
  * writing without the `restore` op override (no new row is filed as a restore);
- * and `listClusterRevisions` losing its gate (the `none` reader gains history).
+ * and `listOntologyRevisions` losing its gate (the `none` reader gains history).
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import type { OntologyClusterRow, OntologyObjectRow } from "./dto";
+import type { OntologyRow, OntologyObjectRow } from "./dto";
 import { ontologyContextFactory } from "./test-fixtures";
 import type { Revision } from "@/features/revisions/types";
 
@@ -44,19 +44,19 @@ vi.mock("./repository-shares", () => ({
   countActiveWorkspaceMembers: vi.fn(async () => 1),
   listChannelIdsForWorkspace: vi.fn(async () => ["ch-1"]),
   listSharesForChannels: vi.fn(async () => []),
-  listSharesForCluster: vi.fn(async () => []),
+  listSharesForOntology: vi.fn(async () => []),
   upsertShare: vi.fn(),
   deleteShare: vi.fn(async () => {}),
   findChannelContainer: vi.fn(),
   findActiveMemberRole: vi.fn(),
-  countSharesForClusters: vi.fn(async () => new Map()),
+  countSharesForOntologies: vi.fn(async () => new Map()),
 }));
 
 vi.mock("./repository-projections", () => ({
-  listClusterSlugs: vi.fn(async () => []),
+  listOntologySlugs: vi.fn(async () => []),
   listMembershipParents: vi.fn(async () => []),
   listRelationshipsForSource: vi.fn(async () => []),
-  listClusterSummaries: vi.fn(async () => []),
+  listOntologySummaries: vi.fn(async () => []),
   listObjectSummariesByIds: vi.fn(async () => []),
 }));
 
@@ -65,20 +65,20 @@ vi.mock("@/shared/tenancy/personal-reach", () => ({
 }));
 
 vi.mock("./repository", () => ({
-  listClusters: vi.fn(async () => []),
+  listOntologies: vi.fn(async () => []),
   listMemberships: vi.fn(async () => []),
   listObjectsByIds: vi.fn(async () => []),
   listRelationshipsForSources: vi.fn(async () => []),
   filterObjectIds: vi.fn(async () => new Set<string>()),
   replaceRelationshipsForSource: vi.fn(async () => {}),
-  insertCluster: vi.fn(),
+  insertOntology: vi.fn(),
   updateObject: vi.fn(),
-  findClusterById: vi.fn(),
+  findOntologyById: vi.fn(),
   insertObject: vi.fn(),
   countMembershipSiblings: vi.fn(async () => 0),
   insertMembership: vi.fn(async () => ({})),
-  updateCluster: vi.fn(),
-  cascadeHardDeleteCluster: vi.fn(async () => 3),
+  updateOntology: vi.fn(),
+  cascadeHardDeleteOntology: vi.fn(async () => 3),
   findObjectById: vi.fn(),
   hardDeleteObject: vi.fn(async () => {}),
 }));
@@ -87,7 +87,7 @@ import * as revisionRepo from "@/features/revisions/server/repository";
 import * as shareRepo from "./repository-shares";
 import * as repo from "./repository";
 import {
-  listClusterRevisions,
+  listOntologyRevisions,
   listObjectRevisions,
   restoreObjectRevision,
 } from "./service-revisions-read";
@@ -98,14 +98,14 @@ const mockShares = vi.mocked(shareRepo);
 
 const WS = "ws-1";
 const OWNER_WS = "ws-owner";
-const CLUSTER_ID = "11111111-1111-4111-8111-111111111111";
+const ONTOLOGY_ID = "11111111-1111-4111-8111-111111111111";
 const OBJECT_ID = "22222222-2222-4222-8222-222222222222";
 
 const ctxOf = ontologyContextFactory({ workspaceId: WS });
 
-function clusterRow(over: Partial<OntologyClusterRow> = {}): OntologyClusterRow {
+function ontologyRow(over: Partial<OntologyRow> = {}): OntologyRow {
   return {
-    id: CLUSTER_ID,
+    id: ONTOLOGY_ID,
     workspace_id: WS,
     slug: "sales",
     name: "Sales",
@@ -152,17 +152,17 @@ beforeEach(() => {
   vi.clearAllMocks();
   mockShares.findWorkspaceKind.mockResolvedValue("standard");
   mockShares.listSharesForChannels.mockResolvedValue([]);
-  mockRepo.findClusterById.mockResolvedValue(clusterRow());
+  mockRepo.findOntologyById.mockResolvedValue(ontologyRow());
   mockRepo.findObjectById.mockResolvedValue(objectRow());
 });
 
-describe("the cluster roll-up", () => {
+describe("the ontology roll-up", () => {
   beforeEach(() => {
     mockRepo.listMemberships.mockResolvedValue([
       {
         id: "m-1",
         workspace_id: WS,
-        cluster_id: CLUSTER_ID,
+        ontology_id: ONTOLOGY_ID,
         parent_object_id: null,
         child_object_id: OBJECT_ID,
         position: 0,
@@ -170,7 +170,7 @@ describe("the cluster roll-up", () => {
       {
         id: "m-2",
         workspace_id: WS,
-        cluster_id: "other-cluster",
+        ontology_id: "other-ontology",
         parent_object_id: null,
         child_object_id: "44444444-4444-4444-8444-444444444444",
         position: 0,
@@ -178,24 +178,24 @@ describe("the cluster roll-up", () => {
     ]);
   });
 
-  it("asks for the cluster's OWN rows and its objects', and nothing else's", async () => {
-    await listClusterRevisions(ctxOf(), CLUSTER_ID);
+  it("asks for the ontology's OWN rows and its objects', and nothing else's", async () => {
+    await listOntologyRevisions(ctxOf(), ONTOLOGY_ID);
     const [workspaceId, ids] = vi.mocked(
       revisionRepo.listRevisionsForResources
     ).mock.calls[0];
     expect(workspaceId).toBe(WS);
-    // The id set is the fence — the object of ANOTHER cluster is not on it,
+    // The id set is the fence — the object of ANOTHER ontology is not on it,
     // because the walk is the same boundary `getSnapshot` uses (Q8).
-    expect(new Set(ids)).toEqual(new Set([CLUSTER_ID, OBJECT_ID]));
+    expect(new Set(ids)).toEqual(new Set([ONTOLOGY_ID, OBJECT_ID]));
   });
 
   it("🔒 a lent reader at `view` sees the history; one with no share gets 404", async () => {
     mockShares.findWorkspaceKind.mockResolvedValue("link");
-    mockRepo.findClusterById.mockResolvedValue(
-      clusterRow({ workspace_id: OWNER_WS, created_by: "owner-1" })
+    mockRepo.findOntologyById.mockResolvedValue(
+      ontologyRow({ workspace_id: OWNER_WS, created_by: "owner-1" })
     );
     const share = {
-      ontology_id: CLUSTER_ID,
+      ontology_id: ONTOLOGY_ID,
       channel_id: "ch-1",
       workspace_id: OWNER_WS,
       members_level: "view" as const,
@@ -203,7 +203,7 @@ describe("the cluster roll-up", () => {
       owner_agents_level: "view" as const,
     };
     mockShares.listSharesForChannels.mockResolvedValue([share]);
-    await expect(listClusterRevisions(ctxOf(), CLUSTER_ID)).resolves.toMatchObject({
+    await expect(listOntologyRevisions(ctxOf(), ONTOLOGY_ID)).resolves.toMatchObject({
       revisions: [],
     });
 
@@ -212,7 +212,7 @@ describe("the cluster roll-up", () => {
     ]);
     // A 404, never a 403 — "not shared with you" and "does not exist" are one
     // answer (`service-gates.ts`).
-    await expect(listClusterRevisions(ctxOf(), CLUSTER_ID)).rejects.toMatchObject({
+    await expect(listOntologyRevisions(ctxOf(), ONTOLOGY_ID)).rejects.toMatchObject({
       status: 404,
     });
   });
@@ -279,20 +279,20 @@ describe("per-field restore", () => {
     mockRepo.findObjectById.mockResolvedValue(
       objectRow({ workspace_id: OWNER_WS })
     );
-    mockRepo.findClusterById.mockResolvedValue(
-      clusterRow({ workspace_id: OWNER_WS, created_by: "owner-1" })
+    mockRepo.findOntologyById.mockResolvedValue(
+      ontologyRow({ workspace_id: OWNER_WS, created_by: "owner-1" })
     );
-    mockRepo.listClusters.mockResolvedValue([
-      clusterRow({ workspace_id: OWNER_WS, created_by: "owner-1" }),
+    mockRepo.listOntologies.mockResolvedValue([
+      ontologyRow({ workspace_id: OWNER_WS, created_by: "owner-1" }),
     ]);
     vi.mocked(
       (await import("./repository-projections")).listMembershipParents
     ).mockResolvedValue([
-      { cluster_id: CLUSTER_ID, parent_object_id: null, child_object_id: OBJECT_ID },
+      { ontology_id: ONTOLOGY_ID, parent_object_id: null, child_object_id: OBJECT_ID },
     ]);
     mockShares.listSharesForChannels.mockResolvedValue([
       {
-        ontology_id: CLUSTER_ID,
+        ontology_id: ONTOLOGY_ID,
         channel_id: "ch-1",
         workspace_id: OWNER_WS,
         members_level: "view",

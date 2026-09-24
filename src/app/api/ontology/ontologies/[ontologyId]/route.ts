@@ -3,24 +3,24 @@ import { withWorkspaceAuth, type WorkspaceAuthContext } from "@/shared/auth/with
 import { parseJson } from "@/shared/api/parse-json";
 import { toHttpErrorResponse } from "@/shared/api/http-error-response";
 import { HttpError } from "@/shared/lib/http-error";
-import { OntologyClusterUpdateSchema } from "@/features/ontology/schema";
+import { OntologyUpdateSchema } from "@/features/ontology/schema";
 import {
   buildOntologyContext,
-  deleteCluster,
-  updateCluster,
+  deleteOntology,
+  updateOntology,
 } from "@/features/ontology/server/service";
 
-function clusterIdOf(auth: WorkspaceAuthContext): string {
-  const clusterId = auth.params?.clusterId;
-  if (!clusterId) throw HttpError.badRequest("Missing clusterId");
-  return clusterId;
+function ontologyIdOf(auth: WorkspaceAuthContext): string {
+  const ontologyId = auth.params?.ontologyId;
+  if (!ontologyId) throw HttpError.badRequest("Missing ontologyId");
+  return ontologyId;
 }
 
 async function handlePatch(request: NextRequest, auth: WorkspaceAuthContext) {
   try {
-    const input = await parseJson(request, OntologyClusterUpdateSchema);
-    const cluster = await updateCluster(buildOntologyContext(auth), clusterIdOf(auth), input);
-    return NextResponse.json({ cluster });
+    const input = await parseJson(request, OntologyUpdateSchema);
+    const ontology = await updateOntology(buildOntologyContext(auth), ontologyIdOf(auth), input);
+    return NextResponse.json({ ontology });
   } catch (err) {
     return toHttpErrorResponse("ontology", err);
   }
@@ -28,7 +28,7 @@ async function handlePatch(request: NextRequest, auth: WorkspaceAuthContext) {
 
 async function handleDelete(_request: NextRequest, auth: WorkspaceAuthContext) {
   try {
-    await deleteCluster(buildOntologyContext(auth), clusterIdOf(auth));
+    await deleteOntology(buildOntologyContext(auth), ontologyIdOf(auth));
     return new NextResponse(null, { status: 204 });
   } catch (err) {
     return toHttpErrorResponse("ontology", err);

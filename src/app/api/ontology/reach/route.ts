@@ -11,7 +11,7 @@ import { buildOntologyContext, getReach } from "@/features/ontology/server/servi
  * (`dopl-desktop-app/main/ontology-reach.js` → `main/prompt-framing-ontology.js
  * › ontologyReachLines`), which is a COMPENSATING CONTROL and never a gate
  * (INVARIANTS §4A). Nothing here decides anything: the answer is
- * `service-audience.ts › levelForCluster` per cluster, the same function every
+ * `service-audience.ts › levelForOntology` per ontology, the same function every
  * ontology read and write already asks.
  *
  * ⚠ **THE ANSWER IS THE CALLER'S, WHICH IS WHY THE DESKTOP PRESENTS THE SESSION'S

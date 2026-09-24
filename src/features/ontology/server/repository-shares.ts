@@ -124,24 +124,24 @@ export async function listSharesForChannels(
  * How many channels each of these ontologies is lent into — the card's
  * "shared into N channels" line, for a WHOLE list.
  *
- * One query for the row set, never one per row — a `count` per cluster would
+ * One query for the row set, never one per row — a `count` per ontology would
  * be an N+1 on the hottest read this feature has.
  *
  * Every requested id gets an entry, including `0`: `0` is a MEASUREMENT
  * ("lent into no channel") while an absent key upstream means "nobody looked"
- * (`../types.ts › OntologyCluster.sharedChannelCount` keeps them apart).
+ * (`../types.ts › Ontology.sharedChannelCount` keeps them apart).
  *
  * Two ids only, no `ONTOLOGY_SHARE_COLS`: nothing here reads a level.
  */
-export async function countSharesForClusters(
-  clusterIds: readonly string[]
+export async function countSharesForOntologies(
+  ontologyIds: readonly string[]
 ): Promise<Map<string, number>> {
-  const counts = new Map<string, number>(clusterIds.map((id) => [id, 0]));
-  if (clusterIds.length === 0) return counts;
+  const counts = new Map<string, number>(ontologyIds.map((id) => [id, 0]));
+  if (ontologyIds.length === 0) return counts;
   const { data, error } = await supabaseAdmin()
     .from("ontology_channel_shares")
     .select("ontology_id, channel_id")
-    .in("ontology_id", clusterIds)
+    .in("ontology_id", ontologyIds)
     .limit(ONTOLOGY_SHARE_LIMIT);
   if (error) throw error;
   for (const row of (data ?? []) as { ontology_id: string }[]) {
@@ -152,13 +152,13 @@ export async function countSharesForClusters(
 
 /** Every channel one ontology is shared into — the inverse read, behind the
  *  share dialog's GET and the delete-confirm's channel COUNT (Q4). */
-export async function listSharesForCluster(
-  clusterId: string
+export async function listSharesForOntology(
+  ontologyId: string
 ): Promise<OntologyShareRow[]> {
   const { data, error } = await supabaseAdmin()
     .from("ontology_channel_shares")
     .select(ONTOLOGY_SHARE_COLS)
-    .eq("ontology_id", clusterId)
+    .eq("ontology_id", ontologyId)
     .limit(ONTOLOGY_SHARE_LIMIT);
   if (error) throw error;
   return (data ?? []) as OntologyShareRow[];
@@ -167,7 +167,7 @@ export async function listSharesForCluster(
 export interface OntologyShareWrite {
   ontologyId: string;
   channelId: string;
-  /** The ONTOLOGY's container. The service reads it off the cluster row it
+  /** The ONTOLOGY's container. The service reads it off the ontology row it
    *  has already fenced; taking it from the request would let a caller file a
    *  lend under somebody else's tenancy. */
   workspaceId: string;
@@ -206,13 +206,13 @@ export async function upsertShare(
 
 /** UNSHARE — a row DELETE, never a stored triple of `none` (I4). */
 export async function deleteShare(
-  clusterId: string,
+  ontologyId: string,
   channelId: string
 ): Promise<void> {
   const { error } = await supabaseAdmin()
     .from("ontology_channel_shares")
     .delete()
-    .eq("ontology_id", clusterId)
+    .eq("ontology_id", ontologyId)
     .eq("channel_id", channelId);
   if (error) throw error;
 }

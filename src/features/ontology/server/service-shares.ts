@@ -2,20 +2,20 @@ import "server-only";
 import { HttpError } from "@/shared/lib/http-error";
 import type { OntologyContext, OntologyShare } from "../types";
 import type { OntologyShareWriteInput } from "../schema";
-import type { OntologyClusterRow } from "./dto";
+import type { OntologyRow } from "./dto";
 import * as repo from "./repository";
 import {
   deleteShare,
   findActiveMemberRole,
   findChannelContainer,
   findWorkspaceKind,
-  listSharesForCluster,
+  listSharesForOntology,
   upsertShare,
   type OntologyShareRow,
 } from "./repository-shares";
 import { resolveOntologyAudience } from "./service-audience";
 // Awaited, after the write, inside the request (`./service-revisions.ts`). A
-// share is who ELSE reaches the ontology, so its row is filed on the CLUSTER.
+// share is who ELSE reaches the ontology, so its row is filed on the ONTOLOGY.
 import { recordShareRevision } from "./service-revisions";
 
 /**
@@ -43,12 +43,12 @@ import { recordShareRevision } from "./service-revisions";
 /** The ontology must be the caller's OWN — a `members_level='edit'` grant is a
  *  pen on the content, never on the lending. Reached through the audience's
  *  scope, then re-checked by `created_by`. */
-async function requireOwnCluster(
+async function requireOwnOntology(
   ctx: OntologyContext,
-  clusterId: string
-): Promise<OntologyClusterRow> {
+  ontologyId: string
+): Promise<OntologyRow> {
   const audience = await resolveOntologyAudience(ctx);
-  const row = await repo.findClusterById(audience.workspaceIds, clusterId);
+  const row = await repo.findOntologyById(audience.workspaceIds, ontologyId);
   if (!row || row.created_by !== ctx.userId) {
     throw HttpError.notFound("Ontology not found");
   }
@@ -96,16 +96,16 @@ async function assertHomeChannelReachable(
  */
 async function openShareWrite(
   ctx: OntologyContext,
-  clusterId: string,
+  ontologyId: string,
   channelId: string
-): Promise<{ cluster: OntologyClusterRow; existing: OntologyShareRow | undefined }> {
+): Promise<{ ontology: OntologyRow; existing: OntologyShareRow | undefined }> {
   assertHumanShareWrite(ctx);
-  const cluster = await requireOwnCluster(ctx, clusterId);
+  const ontology = await requireOwnOntology(ctx, ontologyId);
   await assertHomeChannelReachable(ctx, channelId);
-  const existing = (await listSharesForCluster(clusterId)).find(
+  const existing = (await listSharesForOntology(ontologyId)).find(
     (row) => row.channel_id === channelId
   );
-  return { cluster, existing };
+  return { ontology, existing };
 }
 
 function toShare(row: OntologyShareRow): OntologyShare {
@@ -123,10 +123,10 @@ function toShare(row: OntologyShareRow): OntologyShare {
  *  (`knowledge › listSharedIntoChannelBaseIds` makes the same call). */
 export async function listOntologyShares(
   ctx: OntologyContext,
-  clusterId: string
+  ontologyId: string
 ): Promise<{ canManage: boolean; shares: OntologyShare[] }> {
-  await requireOwnCluster(ctx, clusterId);
-  const rows = await listSharesForCluster(clusterId);
+  await requireOwnOntology(ctx, ontologyId);
+  const rows = await listSharesForOntology(ontologyId);
   // `canManage` comes off the SERVER — the write's own predicate, so the
   // dialog cannot render an editor for somebody the write will refuse.
   return { canManage: ctx.source === "user", shares: rows.map(toShare) };
@@ -143,21 +143,21 @@ export async function listOntologyShares(
  */
 export async function setOntologyShare(
   ctx: OntologyContext,
-  clusterId: string,
+  ontologyId: string,
   input: OntologyShareWriteInput
 ): Promise<OntologyShare> {
-  const { cluster, existing } = await openShareWrite(ctx, clusterId, input.channelId);
+  const { ontology, existing } = await openShareWrite(ctx, ontologyId, input.channelId);
   const ownerAgentsLevel =
     input.ownerAgentsLevel ??
     existing?.owner_agents_level ??
-    (cluster.agents_may_edit ? "edit" : "view");
+    (ontology.agents_may_edit ? "edit" : "view");
 
   const row = await upsertShare({
-    ontologyId: clusterId,
+    ontologyId: ontologyId,
     channelId: input.channelId,
     // The ONTOLOGY's container, off the row this lane already fenced — never
     // the channel's, and never anything off the request (spec §3.1).
-    workspaceId: cluster.workspace_id,
+    workspaceId: ontology.workspace_id,
     membersLevel: input.membersLevel,
     guestsLevel: input.guestsLevel,
     ownerAgentsLevel,
@@ -165,7 +165,7 @@ export async function setOntologyShare(
   });
   await recordShareRevision(
     ctx,
-    { id: clusterId, workspaceId: cluster.workspace_id },
+    { id: ontologyId, workspaceId: ontology.workspace_id },
     input.channelId,
     existing ? toShare(existing) : null,
     toShare(row)
@@ -183,17 +183,17 @@ export async function setOntologyShare(
  */
 export async function unshareOntology(
   ctx: OntologyContext,
-  clusterId: string,
+  ontologyId: string,
   channelId: string
 ): Promise<void> {
-  const { cluster, existing } = await openShareWrite(ctx, clusterId, channelId);
-  await deleteShare(clusterId, channelId);
+  const { ontology, existing } = await openShareWrite(ctx, ontologyId, channelId);
+  await deleteShare(ontologyId, channelId);
   // Nothing is recorded when nothing was shared — a revision for an unshare
   // that removed no row would put an access change in the history of an ontology
   // whose access did not change.
   await recordShareRevision(
     ctx,
-    { id: clusterId, workspaceId: cluster.workspace_id },
+    { id: ontologyId, workspaceId: ontology.workspace_id },
     channelId,
     existing ? toShare(existing) : null,
     null

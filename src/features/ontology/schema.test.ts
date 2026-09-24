@@ -8,7 +8,7 @@
 import { describe, it, expect } from "vitest";
 import {
   OntologyObjectUpdateSchema,
-  OntologyClusterCreateSchema,
+  OntologyCreateSchema,
   OntologyObjectCreateSchema,
 } from "./schema";
 
@@ -46,19 +46,19 @@ describe("attribute value shapes", () => {
   });
 });
 
-describe("object/cluster caps", () => {
-  it("cluster name is 1..200 and purpose ≤ 1000", () => {
-    expect(OntologyClusterCreateSchema.safeParse({ name: "AI Ops" }).success).toBe(true);
-    expect(OntologyClusterCreateSchema.safeParse({ name: "" }).success).toBe(false);
-    expect(OntologyClusterCreateSchema.safeParse({ name: "x", purpose: "a".repeat(1001) }).success).toBe(false);
+describe("object/ontology caps", () => {
+  it("ontology name is 1..200 and purpose ≤ 1000", () => {
+    expect(OntologyCreateSchema.safeParse({ name: "AI Ops" }).success).toBe(true);
+    expect(OntologyCreateSchema.safeParse({ name: "" }).success).toBe(false);
+    expect(OntologyCreateSchema.safeParse({ name: "x", purpose: "a".repeat(1001) }).success).toBe(false);
   });
 
-  it("object create requires exactly one of clusterId / parentObjectId", () => {
-    expect(OntologyObjectCreateSchema.safeParse({ name: "Col", clusterId: UUID }).success).toBe(true);
+  it("object create requires exactly one of ontologyId / parentObjectId", () => {
+    expect(OntologyObjectCreateSchema.safeParse({ name: "Col", ontologyId: UUID }).success).toBe(true);
     expect(OntologyObjectCreateSchema.safeParse({ name: "Card", parentObjectId: UUID }).success).toBe(true);
     expect(OntologyObjectCreateSchema.safeParse({ name: "X" }).success).toBe(false);
     expect(
-      OntologyObjectCreateSchema.safeParse({ name: "X", clusterId: UUID, parentObjectId: UUID }).success,
+      OntologyObjectCreateSchema.safeParse({ name: "X", ontologyId: UUID, parentObjectId: UUID }).success,
     ).toBe(false);
   });
 

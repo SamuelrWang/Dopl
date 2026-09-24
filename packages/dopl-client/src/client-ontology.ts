@@ -6,9 +6,9 @@
 import { KnowledgeMethods } from "./client-knowledge.js";
 import * as ontology from "./ontology.js";
 import type {
-  OntologyCluster,
-  OntologyClusterCreateInput,
-  OntologyClusterPatch,
+  Ontology,
+  OntologyCreateInput,
+  OntologyPatch,
   OntologyObject,
   OntologyObjectCreateInput,
   OntologyObjectPatch,
@@ -42,16 +42,16 @@ export class OntologyMethods extends KnowledgeMethods {
     return ontology.getOntologyAnchor(this.transport);
   }
 
-  createOntologyCluster(input: OntologyClusterCreateInput): Promise<OntologyCluster> {
-    return ontology.createOntologyCluster(this.transport, input);
+  createOntology(input: OntologyCreateInput): Promise<Ontology> {
+    return ontology.createOntology(this.transport, input);
   }
 
-  updateOntologyCluster(clusterId: string, patch: OntologyClusterPatch): Promise<OntologyCluster> {
-    return ontology.updateOntologyCluster(this.transport, clusterId, patch);
+  updateOntology(ontologyId: string, patch: OntologyPatch): Promise<Ontology> {
+    return ontology.updateOntology(this.transport, ontologyId, patch);
   }
 
-  deleteOntologyCluster(clusterId: string): Promise<void> {
-    return ontology.deleteOntologyCluster(this.transport, clusterId);
+  deleteOntology(ontologyId: string): Promise<void> {
+    return ontology.deleteOntology(this.transport, ontologyId);
   }
 
   createOntologyObject(input: OntologyObjectCreateInput): Promise<OntologyObject> {

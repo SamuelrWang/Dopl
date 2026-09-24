@@ -9,7 +9,7 @@
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { ontologyContextFactory } from "./test-fixtures";
-import type { OntologyClusterRow } from "./dto";
+import type { OntologyRow } from "./dto";
 
 // The changelog capture is a real awaited write (`./service-revisions.ts`), so
 // an unstubbed service test reaches `supabaseAdmin()` and fails on a missing
@@ -23,14 +23,14 @@ vi.mock("@/features/revisions/server/repository", () => ({
   listRevisionsForResources: vi.fn(async () => []),
 }));
 
-vi.mock("./repository", () => ({ findClusterById: vi.fn() }));
+vi.mock("./repository", () => ({ findOntologyById: vi.fn() }));
 
 vi.mock("./repository-shares", () => ({
   findWorkspaceKind: vi.fn(),
   countActiveWorkspaceMembers: vi.fn(async () => 1),
   listChannelIdsForWorkspace: vi.fn(async () => []),
   listSharesForChannels: vi.fn(async () => []),
-  listSharesForCluster: vi.fn(),
+  listSharesForOntology: vi.fn(),
   upsertShare: vi.fn(),
   deleteShare: vi.fn(),
   findChannelContainer: vi.fn(),
@@ -55,11 +55,11 @@ const mockShares = vi.mocked(shares);
 const OWNER = "user-owner";
 const PERSONAL = "ws-personal";
 const LINK = "ws-link";
-const CLUSTER_ID = "11111111-1111-4111-8111-111111111111";
+const ONTOLOGY_ID = "11111111-1111-4111-8111-111111111111";
 const CHANNEL_ID = "22222222-2222-4222-8222-222222222222";
 
-const CLUSTER: OntologyClusterRow = {
-  id: CLUSTER_ID,
+const ONTOLOGY: OntologyRow = {
+  id: ONTOLOGY_ID,
   workspace_id: PERSONAL,
   slug: "sales",
   name: "Sales",
@@ -89,8 +89,8 @@ function primeOpen() {
   mockShares.findWorkspaceKind.mockImplementation(async (id: string) =>
     id === LINK ? "link" : "personal"
   );
-  mockRepo.findClusterById.mockResolvedValue(CLUSTER);
-  mockShares.listSharesForCluster.mockResolvedValue([]);
+  mockRepo.findOntologyById.mockResolvedValue(ONTOLOGY);
+  mockShares.listSharesForOntology.mockResolvedValue([]);
   mockShares.findChannelContainer.mockResolvedValue({
     channelId: CHANNEL_ID,
     workspaceId: LINK,
@@ -113,19 +113,19 @@ beforeEach(() => {
 
 describe("fence order — the resource, then the room, both 404", () => {
   it("an ontology that is not the caller's OWN is 404 and never touches the channel", async () => {
-    mockRepo.findClusterById.mockResolvedValue({ ...CLUSTER, created_by: "someone-else" });
-    await expect(setOntologyShare(ctx(), CLUSTER_ID, WRITE)).rejects.toMatchObject({
+    mockRepo.findOntologyById.mockResolvedValue({ ...ONTOLOGY, created_by: "someone-else" });
+    await expect(setOntologyShare(ctx(), ONTOLOGY_ID, WRITE)).rejects.toMatchObject({
       status: 404,
     });
     // The order is the point: probing the channel first would make this a
-    // room oracle for anybody holding a cluster id.
+    // room oracle for anybody holding an ontology id.
     expect(mockShares.findChannelContainer).not.toHaveBeenCalled();
     expect(mockShares.upsertShare).not.toHaveBeenCalled();
   });
 
   it("an unknown ontology is the same 404, with the same silence", async () => {
-    mockRepo.findClusterById.mockResolvedValue(null);
-    await expect(setOntologyShare(ctx(), CLUSTER_ID, WRITE)).rejects.toMatchObject({
+    mockRepo.findOntologyById.mockResolvedValue(null);
+    await expect(setOntologyShare(ctx(), ONTOLOGY_ID, WRITE)).rejects.toMatchObject({
       status: 404,
     });
     expect(mockShares.findChannelContainer).not.toHaveBeenCalled();
@@ -133,10 +133,10 @@ describe("fence order — the resource, then the room, both 404", () => {
 
   it("an unknown channel and a channel the caller cannot reach are the SAME 404", async () => {
     mockShares.findChannelContainer.mockResolvedValue(null);
-    const unknown = await setOntologyShare(ctx(), CLUSTER_ID, WRITE).catch((e) => e);
+    const unknown = await setOntologyShare(ctx(), ONTOLOGY_ID, WRITE).catch((e) => e);
     primeOpen();
     mockShares.findActiveMemberRole.mockResolvedValue(null);
-    const unreachable = await setOntologyShare(ctx(), CLUSTER_ID, WRITE).catch((e) => e);
+    const unreachable = await setOntologyShare(ctx(), ONTOLOGY_ID, WRITE).catch((e) => e);
     expect(unknown.status).toBe(404);
     expect(unreachable.status).toBe(404);
     expect(unknown.message).toBe(unreachable.message);
@@ -145,45 +145,45 @@ describe("fence order — the resource, then the room, both 404", () => {
 
   it("Q5 — a reachable channel in a STANDARD workspace is a 400 naming home channels", async () => {
     mockShares.findWorkspaceKind.mockResolvedValue("standard");
-    const err = await setOntologyShare(ctx(), CLUSTER_ID, WRITE).catch((e) => e);
+    const err = await setOntologyShare(ctx(), ONTOLOGY_ID, WRITE).catch((e) => e);
     expect(err.status).toBe(400);
     expect(err.message).toMatch(/home channel/i);
     expect(mockShares.upsertShare).not.toHaveBeenCalled();
   });
 
   it("🔒 an AGENT source is refused outright — it may not widen its operator's audience", async () => {
-    const err = await setOntologyShare(ctx({ source: "agent" }), CLUSTER_ID, WRITE).catch(
+    const err = await setOntologyShare(ctx({ source: "agent" }), ONTOLOGY_ID, WRITE).catch(
       (e) => e
     );
     expect(err.status).toBe(403);
-    expect(mockRepo.findClusterById).not.toHaveBeenCalled();
+    expect(mockRepo.findOntologyById).not.toHaveBeenCalled();
     expect(mockShares.upsertShare).not.toHaveBeenCalled();
   });
 });
 
 describe("the write itself", () => {
   it("files the row under the ONTOLOGY's container, never the channel's", async () => {
-    await setOntologyShare(ctx(), CLUSTER_ID, WRITE);
+    await setOntologyShare(ctx(), ONTOLOGY_ID, WRITE);
     expect(mockShares.upsertShare).toHaveBeenCalledWith(
       expect.objectContaining({ workspaceId: PERSONAL, channelId: CHANNEL_ID })
     );
   });
 
   it("Q2 — the FIRST share seeds ownerAgentsLevel from agents_may_edit=true → edit", async () => {
-    const share = await setOntologyShare(ctx(), CLUSTER_ID, WRITE);
+    const share = await setOntologyShare(ctx(), ONTOLOGY_ID, WRITE);
     expect(share.ownerAgentsLevel).toBe("edit");
   });
 
   it("Q2 — the toggle OFF seeds view, not edit", async () => {
-    mockRepo.findClusterById.mockResolvedValue({ ...CLUSTER, agents_may_edit: false });
-    const share = await setOntologyShare(ctx(), CLUSTER_ID, WRITE);
+    mockRepo.findOntologyById.mockResolvedValue({ ...ONTOLOGY, agents_may_edit: false });
+    const share = await setOntologyShare(ctx(), ONTOLOGY_ID, WRITE);
     expect(share.ownerAgentsLevel).toBe("view");
   });
 
   it("Q2 — an EXISTING row keeps its stored ownerAgentsLevel when the write omits it", async () => {
-    mockShares.listSharesForCluster.mockResolvedValue([
+    mockShares.listSharesForOntology.mockResolvedValue([
       {
-        ontology_id: CLUSTER_ID,
+        ontology_id: ONTOLOGY_ID,
         channel_id: CHANNEL_ID,
         workspace_id: PERSONAL,
         members_level: "view",
@@ -191,14 +191,14 @@ describe("the write itself", () => {
         owner_agents_level: "none",
       },
     ]);
-    const share = await setOntologyShare(ctx(), CLUSTER_ID, WRITE);
+    const share = await setOntologyShare(ctx(), ONTOLOGY_ID, WRITE);
     // NOT re-seeded from the toggle: a share edit must never silently
     // re-decide what the owner already said about their own agents.
     expect(share.ownerAgentsLevel).toBe("none");
   });
 
   it("an explicit ownerAgentsLevel always wins", async () => {
-    const share = await setOntologyShare(ctx(), CLUSTER_ID, {
+    const share = await setOntologyShare(ctx(), ONTOLOGY_ID, {
       ...WRITE,
       ownerAgentsLevel: "none",
     });
@@ -208,22 +208,22 @@ describe("the write itself", () => {
 
 describe("unshare", () => {
   it("deletes the row after the same two fences", async () => {
-    await unshareOntology(ctx(), CLUSTER_ID, CHANNEL_ID);
-    expect(mockShares.deleteShare).toHaveBeenCalledWith(CLUSTER_ID, CHANNEL_ID);
+    await unshareOntology(ctx(), ONTOLOGY_ID, CHANNEL_ID);
+    expect(mockShares.deleteShare).toHaveBeenCalledWith(ONTOLOGY_ID, CHANNEL_ID);
   });
 
   it("is idempotent — a pair with no row is a success, not a 404", async () => {
     mockShares.deleteShare.mockResolvedValue(undefined);
-    await expect(unshareOntology(ctx(), CLUSTER_ID, CHANNEL_ID)).resolves.toBeUndefined();
+    await expect(unshareOntology(ctx(), ONTOLOGY_ID, CHANNEL_ID)).resolves.toBeUndefined();
   });
 
   it("refuses an agent, and a foreign ontology, before deleting anything", async () => {
     await expect(
-      unshareOntology(ctx({ source: "agent" }), CLUSTER_ID, CHANNEL_ID)
+      unshareOntology(ctx({ source: "agent" }), ONTOLOGY_ID, CHANNEL_ID)
     ).rejects.toMatchObject({ status: 403 });
-    mockRepo.findClusterById.mockResolvedValue({ ...CLUSTER, created_by: "nope" });
+    mockRepo.findOntologyById.mockResolvedValue({ ...ONTOLOGY, created_by: "nope" });
     await expect(
-      unshareOntology(ctx(), CLUSTER_ID, CHANNEL_ID)
+      unshareOntology(ctx(), ONTOLOGY_ID, CHANNEL_ID)
     ).rejects.toMatchObject({ status: 404 });
     expect(mockShares.deleteShare).not.toHaveBeenCalled();
   });
@@ -231,9 +231,9 @@ describe("unshare", () => {
 
 describe("the read", () => {
   it("lists the rows and says canManage off the SERVER, not off the client", async () => {
-    mockShares.listSharesForCluster.mockResolvedValue([
+    mockShares.listSharesForOntology.mockResolvedValue([
       {
-        ontology_id: CLUSTER_ID,
+        ontology_id: ONTOLOGY_ID,
         channel_id: CHANNEL_ID,
         workspace_id: PERSONAL,
         members_level: "edit",
@@ -241,7 +241,7 @@ describe("the read", () => {
         owner_agents_level: "view",
       },
     ]);
-    const view = await listOntologyShares(ctx(), CLUSTER_ID);
+    const view = await listOntologyShares(ctx(), ONTOLOGY_ID);
     expect(view.canManage).toBe(true);
     expect(view.shares).toEqual([
       {
@@ -254,13 +254,13 @@ describe("the read", () => {
   });
 
   it("an agent reads the list but canManage is false — the dialog cannot offer an editor the write refuses", async () => {
-    const view = await listOntologyShares(ctx({ source: "agent" }), CLUSTER_ID);
+    const view = await listOntologyShares(ctx({ source: "agent" }), ONTOLOGY_ID);
     expect(view.canManage).toBe(false);
   });
 
-  it("404s a cluster that is not the caller's own", async () => {
-    mockRepo.findClusterById.mockResolvedValue({ ...CLUSTER, created_by: "nope" });
-    await expect(listOntologyShares(ctx(), CLUSTER_ID)).rejects.toMatchObject({
+  it("404s an ontology that is not the caller's own", async () => {
+    mockRepo.findOntologyById.mockResolvedValue({ ...ONTOLOGY, created_by: "nope" });
+    await expect(listOntologyShares(ctx(), ONTOLOGY_ID)).rejects.toMatchObject({
       status: 404,
     });
   });

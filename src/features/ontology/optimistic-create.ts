@@ -1,11 +1,11 @@
 "use client";
 
-import { planClusterCreateRollback } from "./create-cluster-rollback";
+import { planOntologyCreateRollback } from "./create-ontology-rollback";
 import type { GraphAction } from "./graph-state";
 import type { OntologyObjectUpdateInput } from "./schema";
 import type {
   AttributeValue,
-  OntologyCluster,
+  Ontology,
   OntologyObject,
   TemplateField,
 } from "./types";
@@ -43,7 +43,7 @@ function newPendingId(): string {
 }
 
 /** Shared by the optimistic row and the POST body so they cannot drift. */
-export const NEW_CLUSTER_NAME = "New ontology";
+export const NEW_ONTOLOGY_NAME = "New ontology";
 /** The lane's born name: "object", not "column", since 2026-09-11. The
  *  identifier keeps the code's word; only what a person reads changed. */
 export const NEW_COLUMN_NAME = "Untitled object";
@@ -80,12 +80,12 @@ function pendingObject(name: string, parent?: OntologyObject): OntologyObject {
 }
 
 /** Slug is server-minted (uniqueness is a table-wide question), so the
- *  optimistic cluster has none until `CREATE_RESOLVE` folds it in. */
-function pendingCluster(): OntologyCluster {
+ *  optimistic ontology has none until `CREATE_RESOLVE` folds it in. */
+function pendingOntology(): Ontology {
   return {
     id: newPendingId(),
     slug: "",
-    name: NEW_CLUSTER_NAME,
+    name: NEW_ONTOLOGY_NAME,
     purpose: "",
     columnIds: [],
     layout: {},
@@ -94,9 +94,9 @@ function pendingCluster(): OntologyCluster {
 
 /** The writes a create can make, with the workspace already bound. */
 export interface OntologyCreateApi {
-  createCluster(input: { name: string }): Promise<OntologyCluster>;
+  createOntology(input: { name: string }): Promise<Ontology>;
   createObject(input: {
-    clusterId?: string;
+    ontologyId?: string;
     parentObjectId?: string;
     name: string;
   }): Promise<OntologyObject>;
@@ -110,7 +110,7 @@ export interface OntologyCreateApi {
     objectId: string,
     input: OntologyObjectUpdateInput
   ): Promise<OntologyObject>;
-  deleteCluster(clusterId: string): Promise<void>;
+  deleteOntology(ontologyId: string): Promise<void>;
 }
 
 /** Everything a create does to the outside world. Injected so a hand-settled
@@ -121,7 +121,7 @@ export interface OntologyCreateSink {
   /** On screen, not yet acknowledged: these rows render inert. */
   markPending(ids: readonly string[]): void;
   clearPending(ids: readonly string[]): void;
-  /** Provisional ids → the ids the server minted, plus new cluster slugs. */
+  /** Provisional ids → the ids the server minted, plus new ontology slugs. */
   resolve(
     map: Readonly<Record<string, string>>,
     slugs?: Readonly<Record<string, string>>
@@ -143,33 +143,33 @@ export interface OptimisticCreate<T> {
   done: Promise<T | null>;
 }
 
-/** "New cluster": tab, seed column, seed card on screen in the click's frame,
+/** "New ontology": tab, seed column, seed card on screen in the click's frame,
  *  then three serial POSTs behind them. */
-export function createClusterOptimistic(
+export function createOntologyOptimistic(
   api: OntologyCreateApi,
   sink: OntologyCreateSink
-): OptimisticCreate<OntologyCluster> {
-  const cluster = pendingCluster();
+): OptimisticCreate<Ontology> {
+  const ontology = pendingOntology();
   const column = pendingObject(NEW_COLUMN_NAME);
   const card = pendingObject(NEW_CARD_NAME, column);
-  const ids = [cluster.id, column.id, card.id];
+  const ids = [ontology.id, column.id, card.id];
 
   // Pixels first: nothing below this line is awaited before the board changes.
   sink.markPending(ids);
-  sink.dispatch({ type: "CLUSTER_ADD", cluster });
-  sink.dispatch({ type: "OBJECT_ADD", object: column, clusterId: cluster.id });
+  sink.dispatch({ type: "ONTOLOGY_ADD", ontology });
+  sink.dispatch({ type: "OBJECT_ADD", object: column, ontologyId: ontology.id });
   sink.dispatch({ type: "OBJECT_ADD", object: card, parentObjectId: column.id });
   sink.beginWrite();
 
-  const done = (async (): Promise<OntologyCluster | null> => {
+  const done = (async (): Promise<Ontology | null> => {
     // Guard for the SERVER half of the rollback: a later POST failing leaves an
-    // orphan cluster row (F-031).
-    let createdClusterId: string | null = null;
+    // orphan ontology row (F-031).
+    let createdOntologyId: string | null = null;
     try {
-      const savedCluster = await api.createCluster({ name: cluster.name });
-      createdClusterId = savedCluster.id;
+      const savedOntology = await api.createOntology({ name: ontology.name });
+      createdOntologyId = savedOntology.id;
       const savedColumn = await api.createObject({
-        clusterId: savedCluster.id,
+        ontologyId: savedOntology.id,
         name: column.name,
       });
       const savedCard = await api.createObject({
@@ -178,21 +178,21 @@ export function createClusterOptimistic(
       });
       sink.resolve(
         {
-          [cluster.id]: savedCluster.id,
+          [ontology.id]: savedOntology.id,
           [column.id]: savedColumn.id,
           [card.id]: savedCard.id,
         },
-        { [savedCluster.id]: savedCluster.slug }
+        { [savedOntology.id]: savedOntology.slug }
       );
       sink.created();
-      return savedCluster;
+      return savedOntology;
     } catch (err) {
-      // Local half first, whole: CLUSTER_DELETE cascades to the owned column +
+      // Local half first, whole: ONTOLOGY_DELETE cascades to the owned column +
       // card, so no ghost tab survives. Server half after, best-effort.
-      sink.dispatch({ type: "CLUSTER_DELETE", id: cluster.id });
-      const plan = planClusterCreateRollback(createdClusterId);
+      sink.dispatch({ type: "ONTOLOGY_DELETE", id: ontology.id });
+      const plan = planOntologyCreateRollback(createdOntologyId);
       if (plan.rollback) {
-        void api.deleteCluster(plan.clusterId).catch(() => undefined);
+        void api.deleteOntology(plan.ontologyId).catch(() => undefined);
       }
       sink.failed("create ontology", err);
       return null;
@@ -203,7 +203,7 @@ export function createClusterOptimistic(
     }
   })();
 
-  return { row: cluster, done };
+  return { row: ontology, done };
 }
 
 /** What the "New object" popup collects, applied to the draft lane on Create. */
@@ -226,11 +226,11 @@ export interface ColumnDraftPatch {
  */
 export function beginColumnDraft(
   sink: OntologyCreateSink,
-  clusterId: string
+  ontologyId: string
 ): OntologyObject {
   const object = pendingObject(NEW_COLUMN_NAME);
   sink.markPending([object.id]);
-  sink.dispatch({ type: "OBJECT_ADD", object, clusterId });
+  sink.dispatch({ type: "OBJECT_ADD", object, ontologyId });
   return object;
 }
 
@@ -258,7 +258,7 @@ export function discardColumnDraft(
 export function commitColumnDraftOptimistic(
   api: OntologyCreateApi,
   sink: OntologyCreateSink,
-  clusterId: string,
+  ontologyId: string,
   draft: OntologyObject,
   patch: ColumnDraftPatch
 ): OptimisticCreate<OntologyObject> {
@@ -268,7 +268,7 @@ export function commitColumnDraftOptimistic(
   const done = (async (): Promise<OntologyObject | null> => {
     let saved: OntologyObject | null = null;
     try {
-      saved = await api.createObject({ clusterId, name: patch.name });
+      saved = await api.createObject({ ontologyId, name: patch.name });
       sink.resolve({ [draft.id]: saved.id });
       sink.created();
       // Only when there is something the POST could not carry.
@@ -301,10 +301,10 @@ export function commitColumnDraftOptimistic(
 export function createObjectOptimistic(
   api: OntologyCreateApi,
   sink: OntologyCreateSink,
-  target: { clusterId: string } | { parentObjectId: string },
+  target: { ontologyId: string } | { parentObjectId: string },
   parent?: OntologyObject
 ): OptimisticCreate<OntologyObject> {
-  const isColumn = "clusterId" in target;
+  const isColumn = "ontologyId" in target;
   const object = pendingObject(
     isColumn ? NEW_COLUMN_NAME : NEW_CARD_NAME,
     isColumn ? undefined : parent

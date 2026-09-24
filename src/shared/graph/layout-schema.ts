@@ -2,7 +2,7 @@ import { z } from "zod";
 
 /**
  * Zod validation for a persisted graph `layout` (draggable-node positions on
- * the ontology cluster PATCH). Shape `{ [nodeId]: { x, y } }`, finite +
+ * the ontology PATCH). Shape `{ [nodeId]: { x, y } }`, finite +
  * bounded. ⚠ Security gate: bounds + node cap keep a malformed or oversized
  * blob (NaN, Infinity, strings, runaway id set) out of the JSONB column —
  * layout is display state, not a payload channel.

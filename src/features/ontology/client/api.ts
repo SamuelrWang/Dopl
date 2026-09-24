@@ -3,7 +3,7 @@
 import { ApiError, apiRequest } from "@/shared/api/api-client";
 import type { GraphLayout } from "@/shared/graph";
 import type {
-  OntologyCluster,
+  Ontology,
   OntologyObject,
   OntologyShare,
   OntologySnapshot,
@@ -58,39 +58,39 @@ export function fetchSnapshot(workspaceId: string): Promise<OntologySnapshot> {
   return request(workspaceId, "/api/ontology");
 }
 
-export async function createCluster(
+export async function createOntology(
   workspaceId: string,
   input: { name: string; purpose?: string }
-): Promise<OntologyCluster> {
-  const { cluster } = await request<{ cluster: OntologyCluster }>(
+): Promise<Ontology> {
+  const { ontology } = await request<{ ontology: Ontology }>(
     workspaceId,
-    "/api/ontology/clusters",
+    "/api/ontology/ontologies",
     { method: "POST", body: input }
   );
-  return cluster;
+  return ontology;
 }
 
-export async function updateCluster(
+export async function updateOntology(
   workspaceId: string,
-  clusterId: string,
+  ontologyId: string,
   input: { name?: string; purpose?: string; layout?: GraphLayout }
-): Promise<OntologyCluster> {
-  const { cluster } = await request<{ cluster: OntologyCluster }>(
+): Promise<Ontology> {
+  const { ontology } = await request<{ ontology: Ontology }>(
     workspaceId,
-    `/api/ontology/clusters/${clusterId}`,
+    `/api/ontology/ontologies/${ontologyId}`,
     { method: "PATCH", body: input }
   );
-  return cluster;
+  return ontology;
 }
 
-export function deleteCluster(workspaceId: string, clusterId: string): Promise<void> {
-  return request(workspaceId, `/api/ontology/clusters/${clusterId}`, { method: "DELETE" });
+export function deleteOntology(workspaceId: string, ontologyId: string): Promise<void> {
+  return request(workspaceId, `/api/ontology/ontologies/${ontologyId}`, { method: "DELETE" });
 }
 
 export async function createObject(
   workspaceId: string,
   input: {
-    clusterId?: string;
+    ontologyId?: string;
     parentObjectId?: string;
     name: string;
   }
@@ -125,8 +125,8 @@ export function deleteObject(workspaceId: string, objectId: string): Promise<voi
  * ────────────────────────────────────────────────────────────────────────── */
 
 /**
- * The two sharing fields a cluster carries once it is a home ontology, kept as a
- * partial over `OntologyCluster` because a cached snapshot predates them
+ * The two sharing fields an ontology carries once it is a home ontology, kept as a
+ * partial over `Ontology` because a cached snapshot predates them
  * (INVARIANTS §8): `GET /api/ontology` is served from IndexedDB on the first paint
  * after an upgrade, so every consumer goes through
  * `hooks/use-ontologies.ts › ontologyListRows` and never the raw field.
@@ -135,20 +135,20 @@ export function deleteObject(workspaceId: string, objectId: string): Promise<voi
  * default (`true`), a fact; `sharedChannelCount` falls back to `null` and renders
  * nothing, because unknown is not empty (INVARIANTS §5A).
  */
-export interface OntologyClusterSharing {
+export interface OntologySharing {
   /** The solo toggle (spec §5): may the owner's own agents write, or only read. */
   agentsMayEdit: boolean;
   /** How many channels this ontology is lent into. */
   sharedChannelCount: number;
 }
 
-/** One row of the /home Ontology face — a cluster, its size, and its sharing. */
+/** One row of the /home Ontology face — an ontology, its size, and its sharing. */
 export interface OntologyListRow {
   id: string;
   slug: string;
   name: string;
   purpose: string;
-  /** Objects reachable from this cluster — a graph walk, not a column (R5). */
+  /** Objects reachable from this ontology — a graph walk, not a column (R5). */
   objectCount: number;
   agentsMayEdit: boolean;
   /** `null` when the payload did not carry it — render nothing, never "0". */
@@ -169,13 +169,13 @@ export interface OntologySharesPayload {
   canManage: boolean;
 }
 
-/** `GET` one ontology's share rows. Cluster-scoped, so the dialog costs one read
+/** `GET` one ontology's share rows. Ontology-scoped, so the dialog costs one read
  *  whatever the container's channel fan is. */
 export function fetchOntologyShares(
   workspaceId: string,
-  clusterId: string
+  ontologyId: string
 ): Promise<OntologySharesPayload> {
-  return request(workspaceId, sharesPath(clusterId));
+  return request(workspaceId, sharesPath(ontologyId));
 }
 
 /**
@@ -184,10 +184,10 @@ export function fetchOntologyShares(
  */
 export function putOntologyShare(
   workspaceId: string,
-  clusterId: string,
+  ontologyId: string,
   share: OntologyShare
 ): Promise<void> {
-  return request(workspaceId, sharesPath(clusterId), {
+  return request(workspaceId, sharesPath(ontologyId), {
     method: "PUT",
     body: share,
   });
@@ -200,31 +200,31 @@ export function putOntologyShare(
  */
 export function deleteOntologyShare(
   workspaceId: string,
-  clusterId: string,
+  ontologyId: string,
   channelId: string
 ): Promise<void> {
   return request(
     workspaceId,
-    `${sharesPath(clusterId)}?channelId=${encodeURIComponent(channelId)}`,
+    `${sharesPath(ontologyId)}?channelId=${encodeURIComponent(channelId)}`,
     { method: "DELETE" }
   );
 }
 
 /**
- * The solo toggle's write — `agents_may_edit` on the cluster. It rides the existing
- * cluster PATCH (already the cluster write gate, spec §4.4) rather than growing a
+ * The solo toggle's write — `agents_may_edit` on the ontology. It rides the existing
+ * ontology PATCH (already the ontology write gate, spec §4.4) rather than growing a
  * route of its own: a second endpoint would be a second floor to keep in step.
  */
 export function setAgentsMayEdit(
   workspaceId: string,
-  clusterId: string,
+  ontologyId: string,
   agentsMayEdit: boolean
 ): Promise<unknown> {
-  return request(workspaceId, `/api/ontology/clusters/${clusterId}`, {
+  return request(workspaceId, `/api/ontology/ontologies/${ontologyId}`, {
     method: "PATCH",
     body: { agentsMayEdit },
   });
 }
 
-const sharesPath = (clusterId: string) =>
-  `/api/ontology/clusters/${clusterId}/shares`;
+const sharesPath = (ontologyId: string) =>
+  `/api/ontology/ontologies/${ontologyId}/shares`;

@@ -75,13 +75,13 @@ const COVERED: Record<string, Covered> = {
         "can_current_user_read_agent_identity",
     },
   },
-  // ── ontology: only the parent has a predicate; the child tables reach the cluster through
+  // ── ontology: only the parent has a predicate; the child tables reach the ontology through
   // `ontology_memberships` and end at the parent's function. Each policy keeps its workspace
   // `viewer` arm (this only ever widens). The `*_editor_*` write policies are not declared: check 3
   // counts `FOR SELECT` only, and their `editor` SELECT arm is subsumed by `viewer`.
-  ontology_clusters: {
+  ontologies: {
     predicates: ["canSeeOntology"],
-    select: { ontology_clusters_member_select: "dopl_ontology_readable" },
+    select: { ontologies_member_select: "dopl_ontology_readable" },
   },
   ontology_objects: {
     predicates: [],

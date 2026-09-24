@@ -9,7 +9,7 @@
  *
  * ⚠ MUTATION-VERIFIED — three reverts, three failures: admitting an ontology
  * ASSOCIATION row; admitting a `create`/`delete` BUNDLE (which has no `before`);
- * and admitting an `ontology_cluster` field row, for which no restore route
+ * and admitting an `ontology` field row, for which no restore route
  * exists.
  */
 
@@ -71,10 +71,10 @@ describe("ontology", () => {
     ).toBe(false);
   });
 
-  it("🔒 a CLUSTER row is not — the only restore door addresses an OBJECT", () => {
+  it("🔒 an ONTOLOGY row is not — the only restore door addresses an OBJECT", () => {
     expect(
       isRestorable(
-        rev("ontology_cluster", { field: "name", before: "Sales", after: "Pipeline" })
+        rev("ontology", { field: "name", before: "Sales", after: "Pipeline" })
       )
     ).toBe(false);
   });

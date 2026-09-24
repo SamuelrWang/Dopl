@@ -17,7 +17,7 @@ export const REVISION_RESOURCE_TYPES = [
   "knowledge_base",
   "knowledge_folder",
   "knowledge_entry",
-  "ontology_cluster",
+  "ontology",
   "ontology_object",
 ] as const;
 

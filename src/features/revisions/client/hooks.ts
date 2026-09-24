@@ -7,7 +7,7 @@ import { groupByDay } from "../lib/group";
 import {
   fetchBaseRevisions,
   fetchEntryRevisions,
-  fetchOntologyClusterRevisions,
+  fetchOntologyRevisions,
   fetchOntologyObjectRevisions,
   restoreEntryRevision,
   restoreOntologyObjectRevision,
@@ -35,7 +35,7 @@ export type RevisionScope =
   | { kind: "entry"; id: string }
   | { kind: "base"; id: string }
   | { kind: "ontology_object"; id: string }
-  | { kind: "ontology_cluster"; id: string };
+  | { kind: "ontology"; id: string };
 
 /** ⚠ ONE MAP, so adding a family is one line rather than a branch in each of the
  *  two places a page is fetched (the first query and `loadMore`). */
@@ -46,7 +46,7 @@ const FETCHERS: Record<
   entry: fetchEntryRevisions,
   base: fetchBaseRevisions,
   ontology_object: fetchOntologyObjectRevisions,
-  ontology_cluster: fetchOntologyClusterRevisions,
+  ontology: fetchOntologyRevisions,
 };
 
 export interface RevisionHistory {
