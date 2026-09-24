@@ -1,8 +1,9 @@
 /**
  * THE GRANULAR TOOL SURFACE (DMP-013), one verb_noun tool per job, and the legacy call each one
  * runs. `registrar.ts › registerGranular` serves it from this table; the connection's tool set picks
- * which set is listed, and the other stays callable. Read/write class, annotations and the `container` arg are DERIVED from
- * `gating.ts › isWriteOp`, `delete-policy.ts` and `workspace-arg.ts` — never restated here.
+ * which set is listed, and the other stays callable; `granular-text.ts` holds what each tool says. Read/write
+ * class, annotations and the `container` arg are DERIVED from `gating.ts › isWriteOp`, `delete-policy.ts`
+ * and `workspace-arg.ts` — never restated here.
  *
  * A binding key is `Gates.requestedOp`'s grain: `<legacy tool>:<op>` or `<legacy tool>:<op>.<action>`,
  * bare `<legacy tool>` for the three that take no op. `tool-manifest.test.ts` pins coverage (every
@@ -13,7 +14,6 @@ import type { ToolAnnotations } from "@modelcontextprotocol/sdk/types.js";
 
 import { isWriteOp } from "./gating.js";
 import { isBlockedDeleteOp } from "./delete-policy.js";
-import { acceptsWorkspaceArg } from "./workspace-arg.js";
 
 /** The tool sets a connection may ask for (`X-Dopl-Tool-Set`, else `?tools=`); the first is the default. */
 export const TOOL_SETS = ["legacy", "granular"] as const;
@@ -38,6 +38,11 @@ export interface GranularTool {
   preset?: Readonly<Record<string, string>>;
   /** Legacy arg names this tool publishes; `container` is derived, never listed. */
   params: readonly string[];
+  /**
+   * Args the bound legacy schema does not take, typed by the tool's text and handed to the legacy
+   * handler past that schema. Each must be read by the handler it reaches (`granular.test.ts`).
+   */
+  carry?: readonly string[];
   /** Overwrites existing content. Never a delete: deletion is app-only. */
   destructive?: true;
   /** A repeat with the same args leaves the same state. */
@@ -64,7 +69,7 @@ export const GRANULAR_TOOLS: readonly GranularTool[] = [
     params: ["query", "limit", "scope", "base", "response_format"],
     alwaysLoad: true,
   },
-  { name: "dopl_get_status", bind: "dopl_status", params: ["since", "response_format"], alwaysLoad: true },
+  { name: "dopl_get_status", bind: "dopl_status", params: ["since"], alwaysLoad: true },
   { name: "dopl_list_workspaces", bind: "dopl_workspaces:list", params: [] },
   { name: "dopl_create_workspace", bind: "dopl_workspaces:create_home_channel", params: ["name"] },
   {
@@ -86,7 +91,7 @@ export const GRANULAR_TOOLS: readonly GranularTool[] = [
       members: "dopl_channel:rooms.members",
       threads: "dopl_channel:rooms.threads",
     },
-    params: ["channel", "response_format"],
+    params: ["channel"],
   },
   {
     name: "dopl_read_channel",
@@ -104,18 +109,20 @@ export const GRANULAR_TOOLS: readonly GranularTool[] = [
     name: "dopl_request_decision",
     bind: "dopl_channel:send",
     preset: { kind: "decision" },
-    params: ["channel", "to", "body", "thread", "summary", "options", "recommendation", "client_msg_id"],
+    params: ["channel", "body", "thread", "summary", "options", "recommendation", "client_msg_id"],
     alwaysLoad: true,
   },
   {
     name: "dopl_create_channel",
     bind: "dopl_channel:rooms.open",
-    params: ["name", "summary", "visibility", "to"],
+    params: ["name", "visibility", "to"],
+    carry: ["description"],
   },
   {
     name: "dopl_update_channel",
     bind: { update: "dopl_channel:rooms.update", thread_mode: "dopl_channel:rooms.thread_mode" },
-    params: ["channel", "name", "summary", "info_card", "thread", "mode"],
+    params: ["channel", "name", "info_card", "thread", "mode"],
+    carry: ["description"],
     destructive: true,
     idempotent: true,
   },
@@ -128,7 +135,7 @@ export const GRANULAR_TOOLS: readonly GranularTool[] = [
   {
     name: "dopl_launch_agent",
     bind: "dopl_channel:manage.launch",
-    params: ["channel", "name", "body", "model", "runtime", "identity", "color", "posture", "client_msg_id", "wait_ms"],
+    params: ["channel", "name", "thread", "body", "model", "runtime", "identity", "color", "posture", "client_msg_id", "wait_ms"],
   },
   {
     name: "dopl_manage_session",
@@ -233,12 +240,12 @@ export const GRANULAR_TOOLS: readonly GranularTool[] = [
   {
     name: "dopl_browse_ontology",
     bind: { map: "dopl_ontology:map", anchor: "dopl_ontology:anchor", resolve: "dopl_ontology:resolve" },
-    params: ["ontology", "object", "query", "response_format"],
+    params: ["query"],
   },
   {
     name: "dopl_get_object",
     bind: "dopl_ontology:get",
-    params: ["object", "ontology", "response_format"],
+    params: ["object", "response_format"],
   },
   {
     name: "dopl_edit_object",
@@ -256,7 +263,7 @@ export const GRANULAR_TOOLS: readonly GranularTool[] = [
       claim_anchor: "dopl_ontology:claim_anchor",
     },
     params: [
-      "object", "ontology", "parent", "name", "subtitle", "label", "kind", "value", "values",
+      "object", "parent", "name", "subtitle", "label", "kind", "value", "values",
       "targets", "description", "outcome", "tools", "expected_version",
     ],
     destructive: true,
@@ -268,7 +275,7 @@ export const GRANULAR_TOOLS: readonly GranularTool[] = [
       update: "dopl_ontology:update_ontology",
       create_column: "dopl_ontology:create_column",
     },
-    params: ["ontology", "name", "purpose", "expected_version"],
+    params: ["ontology", "name", "purpose"],
     destructive: true,
   },
   // ── Members ─────────────────────────────────────────────────────────────
@@ -327,7 +334,7 @@ export const GRANULAR_TOOLS: readonly GranularTool[] = [
     name: "dopl_restore_version",
     bind: { entry: "dopl_kb:restore", skill: "dopl_skill:restore", object: "dopl_ontology:restore" },
     select: "resource",
-    params: ["base", "path", "slug", "object", "ontology", "revision", "expected_version"],
+    params: ["base", "path", "slug", "object", "revision", "expected_version"],
     destructive: true,
   },
 ];
@@ -366,10 +373,13 @@ export function unlistedFor(set: ToolSet): ReadonlySet<string> {
   return new Set([...inactive].filter((name) => !namesOf(set).has(name)));
 }
 
-/** A profile's legacy offer widened to the granular tools whose every bound legacy tool it offers. */
+/**
+ * A profile's legacy offer widened to the granular tools with a bound legacy tool it offers; such a
+ * tool serves only those jobs (`granular.ts › granularShape`).
+ */
 export function withGranularTools(offer: ReadonlySet<string> | null): ReadonlySet<string> | null {
   if (offer === null) return null;
-  const covered = GRANULAR_TOOLS.filter((t) => bindingsOf(t).every((key) => offer.has(parseBinding(key).tool)));
+  const covered = GRANULAR_TOOLS.filter((t) => bindingsOf(t).some((key) => offer.has(parseBinding(key).tool)));
   return new Set([...offer, ...covered.map((t) => t.name)]);
 }
 
@@ -388,11 +398,6 @@ export function isReadOnlyTool(t: GranularTool): boolean {
 /** A binding the delete policy refuses — must be false for every tool. */
 export function bindsDeleteOp(t: GranularTool): boolean {
   return someBinding(t, (tool, op) => op !== undefined && isBlockedDeleteOp(tool, op.split(".")[0]));
-}
-
-/** `container` is published iff some bound op still honours it (`workspace-arg.ts`). */
-export function takesContainer(t: GranularTool): boolean {
-  return someBinding(t, acceptsWorkspaceArg);
 }
 
 /** Every hint explicit: the MCP defaults (destructive, open-world) are wrong for a write here. */

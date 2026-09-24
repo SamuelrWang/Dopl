@@ -1,5 +1,5 @@
 /**
- * Serving a granular tool (DMP-013) from its manifest row: its input schema, its placeholder
+ * Serving a granular tool (DMP-013) from its manifest row and its text: the input schema, the
  * description, and the rewrite of a call into the bound legacy call. The registrar validates that
  * call against the legacy tool's own schema and runs the legacy pipeline, so every gate, charge and
  * tally sees legacy keys.
@@ -8,7 +8,9 @@
 import type { ZodRawShape, ZodType } from "zod";
 import { z } from "zod";
 
-import { bindingsOf, parseBinding, selectorOf, takesContainer, type GranularTool } from "./tool-manifest.js";
+import { parseBinding, selectorOf, type BindingKey, type GranularTool } from "./tool-manifest.js";
+import { FENCE_POINTER, GRANULAR_TEXT, SHARED_PARAMS } from "./granular-text.js";
+import { acceptsWorkspaceArg } from "./workspace-arg.js";
 import type { ToolResponse } from "./tools/respond.js";
 
 /** A registered legacy tool: its published shape, its strict input schema, its whole call pipeline. */
@@ -18,42 +20,75 @@ export interface LegacyTool {
   run: (args: Record<string, unknown>) => Promise<ToolResponse>;
 }
 
+/** The jobs this connection serves, as [selector value, binding]; null value for a one-job tool. */
+function servedJobs(t: GranularTool, legacy: ReadonlyMap<string, LegacyTool>): Array<[string | null, BindingKey]> {
+  const jobs: Array<[string | null, BindingKey]> = typeof t.bind === "string" ? [[null, t.bind]] : Object.entries(t.bind);
+  // A job whose legacy tool the profile did not offer is not served (dopl_only keeps two of three guides).
+  return jobs.filter(([, key]) => legacy.has(parseBinding(key).tool));
+}
+
+/** The param as published: this tool's type or its legacy owner's, re-described, required or optional. */
+function publish(schema: ZodType, description: string, required: boolean): ZodType {
+  const inner = schema instanceof z.ZodOptional ? (schema.unwrap() as ZodType) : schema;
+  const described = inner.describe(description);
+  return required ? described : described.optional();
+}
+
 /**
- * The row's params, each typed by the first bound legacy tool that publishes it, plus the selector.
- * Null when a bound legacy tool is not served on this connection (outside the profile offer).
+ * The row's params, typed by the tool's text or the first served legacy tool that publishes them,
+ * plus the selector over the served jobs. Null when no job is served on this connection.
  */
 export function granularShape(t: GranularTool, legacy: ReadonlyMap<string, LegacyTool>): ZodRawShape | null {
-  const found = bindingsOf(t).map((key) => legacy.get(parseBinding(key).tool)?.shape);
-  if (found.includes(undefined)) return null;
-  const shapes = found as ZodRawShape[];
+  const jobs = servedJobs(t, legacy);
+  if (jobs.length === 0) return null;
+  const text = GRANULAR_TEXT[t.name];
+  const shapes = jobs.map(([, key]) => legacy.get(parseBinding(key).tool)!.shape);
   const shape: Record<string, ZodType> = {};
   const selector = selectorOf(t);
   if (selector) {
-    const jobs = z.enum(Object.keys(t.bind) as [string, ...string[]]);
-    shape[selector] = t.selectDefault ? jobs.default(t.selectDefault) : jobs;
+    const names = jobs.map(([job]) => job!) as [string, ...string[]];
+    const line = text.params?.[selector];
+    const select = line ? z.enum(names).describe(line) : z.enum(names);
+    shape[selector] = t.selectDefault && names.includes(t.selectDefault) ? select.default(t.selectDefault) : select;
   }
-  for (const param of takesContainer(t) ? [...t.params, "container"] : t.params) {
-    const owner = shapes.find((s) => param in s);
-    if (!owner) throw new Error(`${t.name}: no bound legacy tool publishes "${param}"`);
-    shape[param] = owner[param] as ZodType;
+  const container = jobs.some(([, key]) => {
+    const { tool, op } = parseBinding(key);
+    return acceptsWorkspaceArg(tool, op);
+  });
+  for (const param of [...t.params, ...(t.carry ?? []), ...(container ? ["container"] : [])]) {
+    const type = text.types?.[param] ?? shapes.find((s) => param in s)?.[param];
+    // A param only an unserved job takes goes with that job.
+    if (!type) continue;
+    shape[param] = publish(type as ZodType, text.params?.[param] ?? SHARED_PARAMS[param], text.required?.includes(param) === true);
   }
   return shape;
 }
 
-/** Placeholder until B3 writes the prose: the name as a sentence ("dopl_get_map" → "Get map."). */
 export function granularDescription(t: GranularTool): string {
-  const words = t.name.replace(/^dopl_/, "").replace(/_/g, " ");
-  return `${words[0].toUpperCase()}${words.slice(1)}.`;
+  const text = GRANULAR_TEXT[t.name];
+  return text.fenced ? `${text.description} ${FENCE_POINTER}` : text.description;
 }
 
-/** The legacy tool and args a granular call stands for: selector consumed, preset and op/action written. */
-export function legacyCall(t: GranularTool, args: Record<string, unknown>): { tool: string; args: Record<string, unknown> } {
+/**
+ * The legacy tool and args a granular call stands for: selector consumed, preset and op/action
+ * written. `carried` are the params the legacy schema does not take, handed to its handler as-is.
+ */
+export function legacyCall(
+  t: GranularTool,
+  args: Record<string, unknown>,
+): { tool: string; args: Record<string, unknown>; carried: Record<string, unknown> } {
   const selector = selectorOf(t);
-  const { [selector ?? ""]: job, ...rest } = args;
-  const { tool, op } = parseBinding(typeof t.bind === "string" ? t.bind : t.bind[job as string]);
+  const rest: Record<string, unknown> = {};
+  const carried: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(args)) {
+    if (key === selector) continue;
+    (t.carry?.includes(key) ? carried : rest)[key] = value;
+  }
+  const { tool, op } = parseBinding(typeof t.bind === "string" ? t.bind : t.bind[args[selector!] as string]);
   const [base, action] = op === undefined ? [] : op.split(".");
   return {
     tool,
     args: { ...rest, ...t.preset, ...(base !== undefined && { op: base }), ...(action !== undefined && { action }) },
+    carried,
   };
 }

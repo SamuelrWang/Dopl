@@ -357,7 +357,8 @@ export function createToolRegistrars(deps: RegistrarDeps): ToolRegistrars {
             `Input validation error: Invalid arguments for tool ${t.name}: ${parsed.error.message}`,
           );
         }
-        return target.run(parsed.data as Record<string, unknown>);
+        // Carried args were validated by this tool's own schema; the legacy one does not know them.
+        return target.run({ ...(parsed.data as Record<string, unknown>), ...call.carried });
       }) as never,
     );
   }

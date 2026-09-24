@@ -31,8 +31,12 @@ import { opUpdate } from "./channel-ops-update";
 import type { z } from "zod";
 import type { ZodObject } from "zod";
 
-/** The validated argument bag, exactly as `channel.ts`'s handler receives it. */
-type ChannelArgs = z.infer<ZodObject<typeof CHANNEL_INPUT_SHAPE>>;
+/**
+ * The validated argument bag, exactly as `channel.ts`'s handler receives it. `description` is the
+ * room description only the granular tools carry (`tool-manifest.ts › GranularTool.carry`): the
+ * legacy schema refuses it, and its `summary` caps at 200 where the route takes 2,000.
+ */
+type ChannelArgs = z.infer<ZodObject<typeof CHANNEL_INPUT_SHAPE>> & { description?: string };
 
 /**
  * True for an action this module answers. ⚠ **THE ONE PLACE THE PAIRING IS
@@ -92,7 +96,7 @@ export async function dispatchRoomsAction(
         // intent" everywhere on this surface — a thread's title, a send's
         // notification line, a decision's question — and a room's topic is the
         // same sentence about a room. A second name for it was a param.
-        topic: args.summary,
+        topic: args.description ?? args.summary,
         visibility: args.visibility,
       });
     }
@@ -138,12 +142,12 @@ export async function dispatchRoomsAction(
     // stays app-only and is REFUSED here, not dropped. ⚠ All three OMITTED is the
     // READ — the card is replaced whole, so a blind write clobbers.
     case "update": {
-      const bad = strictParams('rooms action="update"', args, ["channel"], ["name", "summary", "info_card"]);
+      const bad = strictParams('rooms action="update"', args, ["channel"], ["name", "summary", "description", "info_card"]);
       if (bad) return bad;
       return opUpdate(client, args.channel as string, {
         card: args.info_card,
         name: args.name,
-        description: args.summary,
+        description: args.description ?? args.summary,
       });
     }
   }

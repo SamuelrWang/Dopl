@@ -37,6 +37,7 @@ import {
   opEnum,
   servesKey,
 } from "./parity-harness.js";
+import { GRANULAR_TOOLS, bindingsOf, parseBinding } from "../tool-manifest.js";
 
 // ── Sanity: capture worked ───────────────────────────────────────────
 
@@ -412,11 +413,14 @@ describe("schema / description parity", () => {
     // ⚠ No handler may read an arg the schema does not publish. `keysByFile` is
     // keyed by the REGISTRAR file; the union of its tools' schema keys is the
     // allowed set for the whole group, including split-out modules scanned via
-    // `toolGroupSource`.
+    // `toolGroupSource`. A granular tool's carried arg reaches its bound legacy handler too.
     const keysByFile = new Map<string, Set<string>>();
     for (const tool of TOOLS) {
       const set = keysByFile.get(tool.sourceFile) ?? new Set<string>();
       for (const key of Object.keys(tool.schema)) set.add(key);
+      for (const g of GRANULAR_TOOLS) {
+        if (bindingsOf(g).some((k) => parseBinding(k).tool === tool.name)) for (const key of g.carry ?? []) set.add(key);
+      }
       set.add("op");
       keysByFile.set(tool.sourceFile, set);
     }

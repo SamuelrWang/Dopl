@@ -1,16 +1,20 @@
 /**
- * The granular set as SERVED (DMP-013 B1): which set a connection lists, that the other stays
- * callable, the published annotations and titles, the per-tool param fence, and that every granular
- * call is its legacy twin — same result, same backend calls, same charge. Real `createServer`, real
- * transport; the backend is a recording double, so both sides meet identical data.
+ * The granular set as SERVED (DMP-013 B1/B2): which set a connection lists, that the other stays
+ * callable, the published annotations and titles, the per-tool param fence, the jobs a profile
+ * serves, the decision and room-description seams, and that every granular call is its legacy twin
+ * — same result, same backend calls, same charge. Real `createServer`, real transport; the backend
+ * is a recording double, so both sides meet identical data.
  */
 
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import { describe, it, expect } from "vitest";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import type { DoplClient, WorkspaceListItem } from "@dopl/client";
 
 import { createServer } from "./server.js";
+import { CHANNEL_DESCRIPTION_MAX_CHARS } from "./granular-text-channels.js";
 import { isWriteOp } from "./gating.js";
 import {
   ALWAYS_LOAD_META,
@@ -38,8 +42,8 @@ const WS: WorkspaceListItem = {
   role: "owner",
 };
 
-/** Every client method answers `{}` and is logged, so a handler's backend traffic is comparable. */
-function recordingClient(log: string[]): DoplClient {
+/** Every client method answers `{}` (or its `answers` entry) and is logged, so backend traffic is comparable. */
+function recordingClient(log: string[], answers: Record<string, unknown> = {}): DoplClient {
   const fixed: Record<string, unknown> = {
     getWorkspaceId: () => null,
     setWorkspaceId: () => {},
@@ -51,7 +55,7 @@ function recordingClient(log: string[]): DoplClient {
       if (prop in fixed) return fixed[prop];
       return async (...args: unknown[]) => {
         log.push(`${prop} ${JSON.stringify(args)}`);
-        return {};
+        return answers[prop] ?? {};
       };
     },
   });
@@ -64,10 +68,10 @@ interface Booted {
 
 async function boot(
   toolSet: ToolSet,
-  opts: { scopes?: string[]; toolProfile?: string } = {},
+  opts: { scopes?: string[]; toolProfile?: string; answers?: Record<string, unknown> } = {},
 ): Promise<Booted> {
   const log: string[] = [];
-  const server = createServer(recordingClient(log), {
+  const server = createServer(recordingClient(log, opts.answers), {
     toolSet,
     directory: [WS],
     workspace: WS,
@@ -126,11 +130,17 @@ describe("tool-set selection", () => {
     expect(granular.log).toEqual(legacy.log);
   });
 
-  it("a profile offers the granular tools whose every bound legacy tool it offers", async () => {
-    const offChannel = GRANULAR_TOOLS.filter((t) => bindingsOf(t).every((k) => parseBinding(k).tool !== "dopl_channel"));
-    expect(await listedNames(await boot("granular", { toolProfile: "dopl_only" }))).toEqual(
-      offChannel.map((t) => t.name).sort(),
-    );
+  it("a profile offers a granular tool with only the jobs whose legacy tool it offers", async () => {
+    const b = await boot("granular", { toolProfile: "dopl_only" });
+    const offered = GRANULAR_TOOLS.filter((t) => bindingsOf(t).some((k) => parseBinding(k).tool !== "dopl_channel"));
+    expect(await listedNames(b)).toEqual(offered.map((t) => t.name).sort());
+    const guide = (await b.client.listTools()).tools.find((t) => t.name === "dopl_get_guide")!;
+    const props = (guide.inputSchema as JsonSchema).properties!;
+    expect(props.topic.enum).toEqual(["skill_authoring", "chats"]);
+    // The channel guide's own param goes with it.
+    expect(Object.keys(props)).toEqual(["topic"]);
+    expect(await call(b, "dopl_get_guide", { topic: "channels" })).toMatchObject({ isError: true });
+    expect((await call(b, "dopl_get_guide", { topic: "chats" })).isError).toBe(false);
   });
 });
 
@@ -199,6 +209,60 @@ it("a row param the chosen job's legacy tool does not take is refused by name", 
   expect(res).toMatchObject({ isError: true });
   expect(res.text).toMatch(/Invalid arguments for tool dopl_search: .*"base"/s);
   expect(b.log).toEqual([]);
+});
+
+describe("a decision is its own tool", () => {
+  it('dopl_send_message refuses kind="decision" by name, before any backend call', async () => {
+    const b = await boot("granular");
+    const res = await call(b, "dopl_send_message", { channel: "eng", body: "x", kind: "decision" });
+    expect(res.isError).toBe(true);
+    expect(res.text).toMatch(/kind=\\"decision\\" is dopl_request_decision/);
+    expect(b.log).toEqual([]);
+  });
+
+  it("dopl_request_decision fixes the kind: a caller cannot send one", async () => {
+    const b = await boot("granular");
+    const options = [{ label: "a", consequence: "b" }, { label: "c", consequence: "d" }];
+    const res = await call(b, "dopl_request_decision", { channel: "eng", body: "x", summary: "q", options, kind: "message" });
+    expect(res.text).toMatch(/Unrecognized key: \\"kind\\"/);
+    expect(b.log).toEqual([]);
+  });
+});
+
+describe("a room description reaches the route whole, past the legacy 200-char summary", () => {
+  const eng = { id: "c-1", slug: "eng", name: "Eng", topic: null, updatedAt: "t" };
+  const long = "d".repeat(CHANNEL_DESCRIPTION_MAX_CHARS);
+
+  it("dopl_update_channel writes `description` as the topic", async () => {
+    const b = await boot("granular", { answers: { listChannels: [eng], updateChannel: { ...eng, topic: long } } });
+    const res = await call(b, "dopl_update_channel", { action: "update", channel: "eng", description: long });
+    expect(res.isError).toBe(false);
+    expect(b.log).toContain(`updateChannel ${JSON.stringify(["c-1", { topic: long }])}`);
+  });
+
+  it("dopl_create_channel opens the room with it", async () => {
+    const b = await boot("granular");
+    await call(b, "dopl_create_channel", { name: "Eng", description: long });
+    expect(b.log.some((l) => l.startsWith("createChannel") && l.includes(long))).toBe(true);
+  });
+
+  it("past the route's cap it is refused before any backend call", async () => {
+    const b = await boot("granular");
+    const res = await call(b, "dopl_update_channel", { action: "update", channel: "eng", description: `${long}d` });
+    expect(res.isError).toBe(true);
+    expect(b.log).toEqual([]);
+  });
+
+  it("the legacy tool still takes no `description`", async () => {
+    const b = await boot("legacy");
+    const res = await call(b, "dopl_channel", { op: "rooms", action: "update", channel: "eng", description: "x" });
+    expect(res.text).toMatch(/Unrecognized key: \\"description\\"/);
+  });
+
+  it("mirrors the route's cap", () => {
+    const route = readFileSync(path.resolve(process.cwd(), "../../src/features/channels/schema.ts"), "utf8");
+    expect(route).toContain(`safeOptionalLabel("Channel topic", ${CHANNEL_DESCRIPTION_MAX_CHARS})`);
+  });
 });
 
 type JsonSchema = {
