@@ -14,7 +14,7 @@
 // `remote ⊆ SPA`. That worked because both shells served one web tree, so the retired shell
 // doubled as a reference implementation. **The remote shell is deleted and its preload was
 // orphaned** (no window loaded it: spa-window takes app-preload, update-required-window
-// takes its own, claude-auth takes code-prompt-preload),
+// takes its own; claude-auth opens no window since 1.37.1),
 // so the reference is gone and comparing two preloads is no longer a thing that can be done.
 //
 // WHAT REPLACES IT IS A PINNED INVENTORY, and the choice is deliberate. The obvious
@@ -140,7 +140,6 @@ test("Stage D: the remote shell's preload is gone and nothing loads it", () => {
   assert.ok(
     !existsSync(join(HERE, "..", "renderer", "preload.js")),
     "renderer/preload.js is back. It was the REMOTE wrapper's bridge; every window now takes " +
-      "its own (spa-window -> app-preload, update-required-window -> update-required-preload, " +
-      "claude-auth -> code-prompt-preload)."
+      "its own (spa-window -> app-preload, update-required-window -> update-required-preload)."
   );
 });

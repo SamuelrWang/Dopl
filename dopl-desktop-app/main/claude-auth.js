@@ -1,12 +1,12 @@
-// THE IN-APP CLAUDE CODE SIGN-IN. `claude setup-token` runs under a pseudo-TTY with no window
-// (`script -q /dev/null`); its OAuth URL opens in the system browser, the code the page shows is pasted into
-// a local window, and the long-lived token the CLI then prints is stored as Dopl's own (`claude-token.js`).
-// setup-token only prints its token, so the operator's own Claude Code login is never written. The token is
-// never logged.
+// THE IN-APP CLAUDE CODE SIGN-IN. `claude setup-token` runs as a plain child with no window and no TTY: it
+// opens the OAuth page in the system browser itself and takes the redirect on its own localhost listener, so
+// nothing is pasted. The long-lived token it prints is stored as Dopl's own (`claude-token.js`); setup-token
+// only prints it, so the operator's own Claude Code login is never written. The token is never logged.
+//
+// No pty: macOS `script(1)` needs a terminal on stdin/stdout and refuses the pipes Electron hands a child
+// (`tcgetattr/ioctl: Operation not supported on socket`, EOPNOTSUPP, exit 1 in ms).
 
-const path = require('path');
 const { spawn } = require('child_process');
-const { shell, BrowserWindow, ipcMain } = require('electron');
 
 const spawner = require('./session-spawner');
 const { setStoredOAuthToken } = require('./claude-token');
@@ -17,22 +17,8 @@ const SETUP_TIMEOUT_MS = 5 * 60 * 1000;
 const TOKEN_OPEN = 'Your OAuth token';
 const TOKEN_CLOSE = 'Store this token securely';
 
-// ── Output parsing ───────────────────────────────────────────────────────────
-function extractOAuthUrl(s) {
-  // The OSC-8 hyperlink target (ESC ] 8 ; params ; URI BEL) is clean; the spinner mangles only the visible text.
-  const osc = s.match(/\x1b\]8;[^;]*;(https?:\/\/[^\x07\x1b]+)/);
-  if (osc && /oauth|authorize/i.test(osc[1])) return osc[1];
-  // Fallback: the first authorize-looking URL, cut at a second "https" (the spinner can duplicate it).
-  const gen = s.match(/https?:\/\/[^\s\x00-\x1f"']*(?:oauth|authorize)[^\s\x00-\x1f"']*/i);
-  if (gen) {
-    const u = gen[0];
-    const dup = u.indexOf('https', 5);
-    return dup > 0 ? u.slice(0, dup) : u;
-  }
-  return null;
-}
-
 const ANSI_RE = /\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)|\x1b\[[0-?]*[ -/]*[@-~]|\x1b[@-Z\\-_]/g;
+const LONE_TOKEN_RE = /^sk-ant-oat01-[A-Za-z0-9._-]{20,}$/;
 
 // The token between its two markers, with the terminal's escapes and line wrapping removed.
 function extractToken(s) {
@@ -44,50 +30,14 @@ function extractToken(s) {
   return m ? m[0] : null;
 }
 
-// ── Paste-back code window (local file page, single narrow IPC) ──────────────
-function openCodePrompt(onSubmit, onCancel) {
-  const win = new BrowserWindow({
-    width: 460,
-    height: 340,
-    resizable: false,
-    minimizable: false,
-    maximizable: false,
-    fullscreenable: false,
-    title: 'Sign in to Claude',
-    backgroundColor: '#0b0b0f',
-    show: false,
-    webPreferences: {
-      preload: path.join(__dirname, '..', 'renderer', 'code-prompt-preload.js'),
-      contextIsolation: true,
-      nodeIntegration: false,
-      sandbox: true,
-    },
-  });
-  win.setMenuBarVisibility(false);
-  win.loadFile(path.join(__dirname, '..', 'renderer', 'code-prompt.html'));
-  win.once('ready-to-show', () => win.show());
-
-  let submitted = false;
-  const handler = (event, code) => {
-    // Only from this window's own webContents.
-    if (win.isDestroyed() || event.sender !== win.webContents || submitted) return;
-    submitted = true;
-    try { onSubmit(code); } catch (_) { /* forwarded to child */ }
-    try { if (!win.isDestroyed()) win.close(); } catch (_) {}
-  };
-  ipcMain.on('code-prompt:submit', handler);
-  win.on('closed', () => {
-    ipcMain.removeListener('code-prompt:submit', handler);
-    if (!submitted) onCancel();
-  });
-  return win;
+// Without a TTY the CLI may print the token bare. Only trusted once it exited 0, and only if exactly one
+// line is a whole token, so a partial or echoed string is never taken.
+function extractLoneToken(s) {
+  const lines = String(s).replace(ANSI_RE, '').split(/\r?\n/).map((l) => l.trim()).filter((l) => LONE_TOKEN_RE.test(l));
+  return lines.length === 1 ? lines[0] : null;
 }
 
-// ── setup-token → true once Dopl holds the token ─────────────────────────────
-// No pty: macOS `script` refuses a pipe for stdin/stdout (`tcgetattr/ioctl: Operation not supported on
-// socket`, exit 1 in ms), which is what Electron hands a child. Without a TTY setup-token opens the system
-// browser itself and takes the redirect on its own localhost listener, so nothing is pasted; the token is read
-// from what it prints once it exits.
+// setup-token → true once Dopl holds the token.
 function runSetupTokenFlow(bin) {
   return new Promise((resolve) => {
     let child;
@@ -127,9 +77,12 @@ function runSetupTokenFlow(bin) {
       diag('claude signin: child error', err && err.message);
       finish(false);
     });
-    // An exit before a token was captured is a failure, whatever the code. The shape (never the text) is logged.
+    // The shape of a failed exit (never the text) is logged.
     child.on('close', (code) => {
-      if (!settled) diag('claude signin: exited', code, 'before a token; printed', out.length, 'chars');
+      if (settled) return;
+      const token = code === 0 ? extractLoneToken(out) : null;
+      if (token) return finish(setStoredOAuthToken(token));
+      diag('claude signin: exited', code, 'before a token; printed', out.length, 'chars');
       finish(false);
     });
   });
@@ -166,4 +119,4 @@ function signIn() {
   return current;
 }
 
-module.exports = { signIn, extractOAuthUrl, extractToken };
+module.exports = { signIn, extractToken, extractLoneToken };

@@ -225,7 +225,7 @@ test("NOTHING renderer-reachable can register a window", () => {
     .map(String)
     .filter((p) => /(^|[\\/])[^\\/]*preload[^\\/]*\.js$/.test(p))
     .sort();
-  assert.ok(preloads.length >= 3, `the preload sweep found ${preloads.length} files: ${preloads.join(", ")}`);
+  assert.ok(preloads.length >= 2, `the preload sweep found ${preloads.length} files: ${preloads.join(", ")}`);
   assert.ok(preloads.includes("app-preload.js"), "the shell's preload is the one that MUST be covered");
   for (const p of preloads) {
     const code = stripComments(readFileSync(join(RENDERER, p), "utf8"));
