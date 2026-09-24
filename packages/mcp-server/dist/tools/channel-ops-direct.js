@@ -32,6 +32,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.opDirectAgent = opDirectAgent;
 exports.opReadDirections = opReadDirections;
+const call_ref_js_1 = require("../call-ref.js");
 const respond_1 = require("./respond");
 const channel_shared_1 = require("./channel-shared");
 // ⚠ ONE write-result renderer, shared with `post` / `create_thread` / launch.
@@ -281,6 +282,6 @@ async function opReadDirections(client, opts = {}) {
         ...directions.map(renderDirection),
         "",
         `⚠ A row still reading **pending** or **claimed** has not been answered YET. Do not re-send it — a second direction says the same thing to a live agent twice.`,
-        `⚠ AN ANSWER HERE IS THE FINAL TEXT OF ONE TURN, not the agent's narration and not its current state. For what an agent is DOING, dopl_channel(op="status").`,
+        `⚠ AN ANSWER HERE IS THE FINAL TEXT OF ONE TURN, not the agent's narration and not its current state. For what an agent is DOING, ${(0, call_ref_js_1.callRef)("channel.status")}.`,
     ].join("\n"));
 }

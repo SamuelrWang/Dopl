@@ -30,9 +30,12 @@ export declare function notOwnedRefusal(createdBy: string | null | undefined, se
  * calling workspace. Not-found stays one uniform answer (no existence oracle).
  */
 export declare function resolveGrantScopeId(directory: WorkspaceDirectory, scope: GrantScopeArg, to: string): Promise<string | ToolResponse>;
-/** The three argument descriptions, shared by both tools (the enums are published as keywords). */
-export declare const GRANT_SCOPE_ARG_DESCRIPTION = "op=grant (required): WHERE to lend it \u2014 \"channel\" (a home channel's room) or \"container\" (a home channel or workspace, by ref). The scope decides the audience; the row itself never moves.";
-export declare const GRANT_TO_ARG_DESCRIPTION = "op=grant (required): the scope's handle \u2014 a channel UUID, or for scope=\"container\" a workspace slug/UUID or a home-channel CONTAINER id from dopl_workspaces(op=\"list\"). It must be one you are a member of; an id that does not resolve for you refuses and shares nothing, and there is no fallback to the workspace you are calling from.";
-export declare const GRANT_LEVEL_ARG_DESCRIPTION = "op=grant: \"visible\" or \"agent_only\" on a CHANNEL scope \u2014 two AUDIENCES in the room, not a high/low pair, and both READ-ONLY; \"read\" or \"edit\" on a container. Omitted, the narrower one. Mixing the vocabularies is refused.";
+/**
+ * The three argument descriptions, shared by both legacy tools (the enums are published as
+ * keywords); a granular tool describes its own (`granular-text.ts › SHARED_PARAMS`).
+ */
+export declare const GRANT_SCOPE_ARG_DESCRIPTION: string;
+export declare const GRANT_TO_ARG_DESCRIPTION: string;
+export declare const GRANT_LEVEL_ARG_DESCRIPTION: string;
 /** The `granted` line both tools answer with. */
 export declare function grantedLine(noun: string, name: string, scope: GrantScopeArg, scopeId: string, level: GrantLevelArg): ToolResponse;

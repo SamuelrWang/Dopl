@@ -3,13 +3,17 @@
  * Named error → named remedy: the `reason=` codes an agent matches on, declared once. Every
  * advertised `reason=` must be one a refusal actually renders (string equality with the
  * description's Errors line, `tool-style.test.ts`); a code taught but never emitted is the defect
- * these tables prevent.
+ * these tables prevent. A `retry` that names a call is a getter over `callRef`, so it reads in the
+ * set of whichever connection prints it (a legacy description prints the legacy spelling).
  */
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.STATUS_ERRORS = exports.SEARCH_ERRORS = exports.CHANNEL_ERRORS = exports.AGENT_ERRORS = exports.ONTOLOGY_ERRORS = exports.MEMBERS_ERRORS = exports.CHATS_ERRORS = exports.BAD_SESSION_DATE = exports.SKILL_ERRORS = exports.KB_ERRORS = exports.SESSION_REQUIRED = exports.KB_TARGET_VANISHED = exports.KB_ENTRY_NOT_FOUND = exports.KB_INVALID_FIELD = exports.CREDITS_EXHAUSTED = exports.AMBIGUOUS_CONTAINER = exports.DELETE_IS_APP_ONLY = exports.READ_ONLY_SESSION = exports.CHANNEL_MANAGE_REQUIRED = exports.UNUSED_PARAM = exports.MISSING_PARAMS = void 0;
 exports.refusal = refusal;
 exports.versionConflict = versionConflict;
 exports.fieldTooLong = fieldTooLong;
+const call_ref_js_1 = require("../call-ref.js");
+/** The op-relative spelling of `key` (`op="list_bases"`), whole on a granular connection. */
+const opRef = (key) => (0, call_ref_js_1.callRef)(key, {}, { form: "op" });
 /** The one refusal renderer, so the wire and the description that predicts it cannot drift. */
 function refusal(error, detail = "") {
     const tail = detail ? `. ${detail.trim()}` : "";
@@ -55,20 +59,24 @@ exports.CREDITS_EXHAUSTED = {
     meaning: "you are out of credits for this billing period",
     retry: "no",
 };
-/** HTTP 412; `retry` is the op that yields a fresh `expected_version`, which differs per tool. */
-function versionConflict(readOp) {
+/** HTTP 412; `retry` is the read (a manifest key) that yields a fresh `expected_version`. */
+function versionConflict(readKey) {
     return {
         reason: "version_conflict",
         meaning: "somebody wrote after your read; `expected_version` is stale",
-        retry: readOp,
+        get retry() {
+            return opRef(readKey);
+        },
     };
 }
-/** A "we looked and it is not here" refusal, pointed at the op that lists. */
-function notFound(reason, noun, listOp) {
+/** A "we looked and it is not here" refusal, pointed at the call (a manifest key) that lists. */
+function notFound(reason, noun, listKey) {
     return {
         reason,
         meaning: `no ${noun} by that ref, or none you can read`,
-        retry: listOp,
+        get retry() {
+            return opRef(listKey);
+        },
     };
 }
 /**
@@ -95,13 +103,17 @@ exports.KB_INVALID_FIELD = {
 exports.KB_ENTRY_NOT_FOUND = {
     reason: "entry_not_found",
     meaning: "no entry at that path in that base; it may have moved or been renamed",
-    retry: 'op="list_dir"',
+    get retry() {
+        return opRef("kb.list_dir");
+    },
 };
 /** Emit-only. `write_file` upserts, so `force=true` here would write a duplicate at that path. */
 exports.KB_TARGET_VANISHED = {
     reason: "target_vanished",
     meaning: "the entry you meant to overwrite is not at that path any more",
-    retry: 'op="list_dir" — NOT force=true, which would create a duplicate',
+    get retry() {
+        return `${opRef("kb.list_dir")} — NOT force=true, which would create a duplicate`;
+    },
 };
 /** Emit-only. 403 `SESSION_REQUIRED` = an app-only route, not a grantable permission. */
 exports.SESSION_REQUIRED = {
@@ -112,8 +124,8 @@ exports.SESSION_REQUIRED = {
 // Per-tool tables, ordered by frequency: `renderErrors` teaches only the first three.
 // `ambiguous_slug` must stay in `KB_ERRORS`' top three — a new row ahead of it silently drops it.
 exports.KB_ERRORS = [
-    notFound("base_not_found", "knowledge base", 'op="list_bases"'),
-    versionConflict('op="read_file"'),
+    notFound("base_not_found", "knowledge base", "kb.list_bases"),
+    versionConflict("kb.read_file"),
     {
         reason: "ambiguous_slug",
         // `dopl_kb` sits just under `HARD_DESCRIPTION_CEILING`, which throws at import; measure first.
@@ -122,8 +134,8 @@ exports.KB_ERRORS = [
     },
 ];
 exports.SKILL_ERRORS = [
-    notFound("skill_not_found", "active skill", 'op="list"'),
-    versionConflict('op="read"'),
+    notFound("skill_not_found", "active skill", "skill.list"),
+    versionConflict("skill.read"),
     {
         reason: "human_only_field",
         meaning: "`agent_write_enabled` is human-only, set in the app",
@@ -138,7 +150,7 @@ exports.BAD_SESSION_DATE = {
 };
 exports.CHATS_ERRORS = [
     exports.BAD_SESSION_DATE,
-    notFound("chat_not_found", "chat", 'op="list"'),
+    notFound("chat_not_found", "chat", "chats.list"),
     {
         reason: "chat_outside_retention",
         meaning: "past the free plan's 90-day window; nothing was deleted",
@@ -147,25 +159,27 @@ exports.CHATS_ERRORS = [
     {
         reason: "filed_chat_visibility",
         meaning: "a filed chat inherits its folder's sharing; set it there",
-        retry: 'op="update_folder"',
+        get retry() {
+            return opRef("chats.update_folder");
+        },
     },
 ];
 exports.MEMBERS_ERRORS = [
-    notFound("member_not_found", "member", 'op="list"'),
+    notFound("member_not_found", "member", "members.list"),
     {
         reason: "admin_only",
         meaning: "another member's effective access is admin/owner-only",
         retry: "no",
     },
-    notFound("team_not_found", "team", 'op="teams"'),
+    notFound("team_not_found", "team", "members.teams"),
 ];
 exports.ONTOLOGY_ERRORS = [
-    notFound("object_not_found", "object", 'op="resolve"'),
-    versionConflict('op="get"'),
-    notFound("ontology_not_found", "ontology", 'op="map"'),
+    notFound("object_not_found", "object", "ontology.resolve"),
+    versionConflict("ontology.get"),
+    notFound("ontology_not_found", "ontology", "ontology.map"),
 ];
 exports.AGENT_ERRORS = [
-    notFound("identity_not_found", "identity", 'op="list"'),
+    notFound("identity_not_found", "identity", "agent.list"),
     {
         reason: "ambiguous_name",
         meaning: "two identities share that name; both ids are in the message",

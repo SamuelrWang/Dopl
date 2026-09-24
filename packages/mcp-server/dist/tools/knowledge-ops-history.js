@@ -11,6 +11,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.opHistory = opHistory;
 exports.opRestore = opRestore;
+const call_ref_js_1 = require("../call-ref.js");
 const narration_1 = require("./narration");
 const respond_1 = require("./respond");
 const knowledge_shared_1 = require("./knowledge-shared");
@@ -59,7 +60,7 @@ async function opHistory(client, baseRef, path, callerUserId, opts) {
     if (opts.revision !== undefined) {
         const rev = await findRevision(client, entry.id, opts.revision);
         if (!rev) {
-            return (0, respond_1.err)((0, tool_errors_1.refusal)((0, revision_render_1.revisionNotFound)(revision_render_1.HISTORY_OP), `${(0, narration_1.inlineOr)(opts.revision, "`(empty)`")} is not in this entry's last ${FIND_PAGES_MAX * FIND_PAGE_SIZE} revisions.`));
+            return (0, respond_1.err)((0, tool_errors_1.refusal)((0, revision_render_1.revisionNotFound)("kb.history"), `${(0, narration_1.inlineOr)(opts.revision, "`(empty)`")} is not in this entry's last ${FIND_PAGES_MAX * FIND_PAGE_SIZE} revisions.`));
         }
         const body = rev.payload.body ?? "";
         const title = rev.payload.title ? (0, narration_1.inlineOr)(rev.payload.title, narration_1.NO_NAME) : "`(title unchanged)`";
@@ -67,7 +68,7 @@ async function opHistory(client, baseRef, path, callerUserId, opts) {
             `# Revision \`${rev.id}\` of ${(0, narration_1.inlineOr)(entry.title, narration_1.NO_NAME)}`,
             (0, revision_render_1.revisionRow)(rev, callerUserId),
             current,
-            `Restoring writes THIS snapshot (title ${title}, ${body.length} chars) over the current entry (${chars} chars) as a NEW revision; nothing is deleted. To do it: op="restore" revision="${rev.id}" expected_version="${entry.updatedAt}".`,
+            `Restoring writes THIS snapshot (title ${title}, ${body.length} chars) over the current entry (${chars} chars) as a NEW revision; nothing is deleted. To do it: ${(0, call_ref_js_1.callRef)("kb.restore", { revision: `"${rev.id}"`, expected_version: `"${entry.updatedAt}"` }, { form: "op" })}.`,
             "",
             "---",
             "",
@@ -91,7 +92,7 @@ async function opHistory(client, baseRef, path, callerUserId, opts) {
         const size = typeof rev.payload.body === "string" ? ` · ${rev.payload.body.length} chars` : "";
         lines.push((0, revision_render_1.revisionRow)(rev, callerUserId, size));
     }
-    lines.push("", (0, revision_render_1.pageTail)(page.nextCursor, "entry_cursor"), `Preview one with op="history" revision="<id>"; restore with op="restore" revision="<id>" expected_version="${entry.updatedAt}".`);
+    lines.push("", (0, revision_render_1.pageTail)(page.nextCursor, "entry_cursor"), `Preview one with ${(0, call_ref_js_1.callRef)("kb.history", { revision: '"<id>"' }, { form: "op" })}; restore with ${(0, call_ref_js_1.callRef)("kb.restore", { revision: '"<id>"', expected_version: `"${entry.updatedAt}"` }, { form: "op" })}.`);
     return (0, respond_1.ok)(lines.join("\n"));
 }
 async function opRestore(client, baseRef, path, revisionId, expectedVersion) {
@@ -100,20 +101,20 @@ async function opRestore(client, baseRef, path, revisionId, expectedVersion) {
         return found;
     const { entry, chars } = found;
     if (entry.updatedAt !== expectedVersion) {
-        return (0, revision_render_1.staleBeforeRestore)(revision_render_1.HISTORY_OP, entry.updatedAt, expectedVersion);
+        return (0, revision_render_1.staleBeforeRestore)("kb.history", entry.updatedAt, expectedVersion);
     }
     let restored;
     try {
         restored = await client.restoreKbEntryRevision(entry.id, revisionId, expectedVersion);
     }
     catch (e) {
-        const mapped = (0, revision_render_1.restoreRefusal)(e, revision_render_1.HISTORY_OP, revision_render_1.HISTORY_OP) ?? (0, knowledge_shared_1.agentWriteDenied)(e);
+        const mapped = (0, revision_render_1.restoreRefusal)(e, "kb.history", "kb.history") ?? (0, knowledge_shared_1.agentWriteDenied)(e);
         if (mapped)
             return mapped;
         throw e;
     }
     return (0, respond_1.ok)([
-        `Restored ${(0, narration_1.inlineOr)(restored.title, narration_1.NO_NAME)} to revision \`${revisionId}\` — written as a NEW revision; the one you restored from, and the state you replaced, are both still in op="history".`,
+        `Restored ${(0, narration_1.inlineOr)(restored.title, narration_1.NO_NAME)} to revision \`${revisionId}\` — written as a NEW revision; the one you restored from, and the state you replaced, are both still in ${(0, call_ref_js_1.callRef)("kb.history", {}, { form: "op" })}.`,
         `Version \`${expectedVersion}\` → \`${restored.updatedAt}\` · ${chars} → ${restored.body.length} chars · entry id \`${restored.id}\`.`,
     ].join("\n"));
 }

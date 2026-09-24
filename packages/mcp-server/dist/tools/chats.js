@@ -10,12 +10,13 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.registerChatTools = registerChatTools;
 const zod_1 = require("zod");
+const call_ref_js_1 = require("../call-ref.js");
 const narration_1 = require("./narration");
 const respond_1 = require("./respond");
 const tool_errors_1 = require("./tool-errors");
 const tool_style_1 = require("./tool-style");
 const chats_render_1 = require("./chats-render");
-const EXPORT_GUIDE = `## Exporting conversations into Dopl — the rules
+const exportGuide = () => `## Exporting conversations into Dopl — the rules
 
 **What the archive is for.** The user stores finished (or ongoing) agent
 sessions in Dopl so future sessions can recall them. Write every export
@@ -46,7 +47,7 @@ header and know whether the transcript is worth loading.
 **Idempotency.** Always pass a stable \`clientSessionId\` (your session
 id). Re-exporting the same session then updates the existing chat
 instead of duplicating it. Mid-session you may export early and use
-op="append" to extend the transcript.
+${(0, call_ref_js_1.callRef)("chats.append", {}, { form: "op" })} to extend the transcript.
 
 **Folders.** Pass \`folder\` with a short name ("Dopl", "Consulting") to
 file the chat; the folder is created if missing. Ask the user before
@@ -55,7 +56,7 @@ inventing a new taxonomy.
 **Folder sharing is authoritative.** A folder has its own sharing scope
 (private by default). Filing a chat into a folder makes the chat inherit
 the folder's scope — any \`visibility\` you pass alongside \`folder\` is
-superseded. Changing a folder's scope (op="update_folder") re-scopes
+superseded. Changing a folder's scope (${(0, call_ref_js_1.callRef)("chats.update_folder", {}, { form: "op" })}) re-scopes
 every chat inside it. Sharing a FILED chat directly is rejected: unfile
 it first, or change the folder's scope.
 
@@ -156,19 +157,19 @@ function registerChatTools(register, client) {
     register("dopl_chats", CHATS_DESCRIPTION, CHATS_SHAPE, async (args) => {
         switch (args.op) {
             case "guide":
-                return (0, respond_1.ok)(EXPORT_GUIDE);
+                return (0, respond_1.ok)(exportGuide());
             case "export": {
                 const miss = (0, respond_1.missingParams)("export", args, ["title", "messages"]);
                 if (miss)
                     return miss;
                 if (typeof args.title === "string" && args.title.trim().length === 0) {
-                    return (0, respond_1.err)(`op="export" got a blank title — pass a specific, non-empty title (whitespace-only is rejected).`);
+                    return (0, respond_1.err)(`${(0, call_ref_js_1.calledAs)("export")} got a blank title — pass a specific, non-empty title (whitespace-only is rejected).`);
                 }
                 const badDate = badSessionDate(args.session_date);
                 if (badDate)
                     return badDate;
                 if ((args.messages ?? []).length === 0) {
-                    return (0, respond_1.err)(`op="export" got an empty messages array — summarize the conversation's messages and pass at least one entry.`);
+                    return (0, respond_1.err)(`${(0, call_ref_js_1.calledAs)("export")} got an empty messages array — summarize the conversation's messages and pass at least one entry.`);
                 }
                 return opExport(client, args);
             }
@@ -177,7 +178,7 @@ function registerChatTools(register, client) {
                 if (miss)
                     return miss;
                 if ((args.messages ?? []).length === 0) {
-                    return (0, respond_1.err)(`op="append" got an empty messages array — pass at least one entry.`);
+                    return (0, respond_1.err)(`${(0, call_ref_js_1.calledAs)("append")} got an empty messages array — pass at least one entry.`);
                 }
                 return opAppend(client, args.chat_id, args.messages ?? []);
             }
@@ -211,7 +212,7 @@ function registerChatTools(register, client) {
                 if (miss)
                     return miss;
                 if (args.name === undefined && args.visibility === undefined) {
-                    return (0, respond_1.err)(`op="update_folder" needs name and/or visibility to change.`);
+                    return (0, respond_1.err)(`${(0, call_ref_js_1.calledAs)("update_folder")} needs name and/or visibility to change.`);
                 }
                 return opUpdateFolder(client, args.folder_id, {
                     name: args.name,
@@ -296,7 +297,7 @@ async function opUpdate(client, chatId, args) {
             : {}),
     };
     if (Object.values(patch).every((v) => v === undefined)) {
-        return (0, respond_1.err)(`op="update" needs at least one field to change: title, overview, project, session_date, deliverables, learnings, folder, visibility, pinned.`);
+        return (0, respond_1.err)(`${(0, call_ref_js_1.calledAs)("update")} needs at least one field to change: title, overview, project, session_date, deliverables, learnings, folder, visibility, pinned.`);
     }
     try {
         const chat = await client.updateChat(chatId, patch);
@@ -322,7 +323,7 @@ async function opList(client, scope, query) {
     if (chats.length === 0) {
         const empty = query || scope !== "all"
             ? `No chats match that filter. The filter runs over TITLE and OVERVIEW only — transcripts are not searched.`
-            : "No chats visible to you. The archive holds your own chats plus ones shared with you, so this is not proof the workspace has none. Use op=\"export\" to save this session.";
+            : `No chats visible to you. The archive holds your own chats plus ones shared with you, so this is not proof the workspace has none. Use ${(0, call_ref_js_1.callRef)("chats.export", {}, { form: "op" })} to save this session.`;
         return (0, respond_1.ok)(hiddenCount > 0 ? `${empty}\n\n${(0, chats_render_1.hiddenNote)(hiddenCount)}` : empty);
     }
     const lines = [];
@@ -344,7 +345,7 @@ async function opList(client, scope, query) {
     if (q) {
         lines.push(`\n_Filtered on TITLE and OVERVIEW only — transcripts are not searched, so a term that appears only inside one will not match here._`);
     }
-    lines.push(`\nUse dopl_chats(op="get", chat_id=...) to read a transcript.`);
+    lines.push(`\nUse ${(0, call_ref_js_1.callRef)("chats.get", { chat_id: "..." })} to read a transcript.`);
     return (0, respond_1.ok)(lines.join("\n"));
 }
 async function opGet(client, chatId) {
@@ -360,7 +361,7 @@ async function opGet(client, chatId) {
 async function opFolders(client) {
     const folders = await client.listChatFolders();
     if (folders.length === 0) {
-        return (0, respond_1.ok)(`No chat folders yet. Pass folder="<name>" on export (or op="create_folder") to create one.`);
+        return (0, respond_1.ok)(`No chat folders yet. Pass folder="<name>" on export (or ${(0, call_ref_js_1.callRef)("chats.create_folder", {}, { form: "op" })}) to create one.`);
     }
     const lines = folders.map((f) => `- ${(0, narration_1.inlineOr)(f.name, "`(unnamed folder)`")} \`${f.id}\` — ${(0, chats_render_1.folderScopeLabel)(f)}`);
     return (0, respond_1.ok)(`## Chat folders — ${folders.length}\n\n${lines.join("\n")}\n\nA folder's scope is authoritative: chats filed in it inherit its sharing.`);

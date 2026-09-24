@@ -5,6 +5,7 @@
  * op\'s container without being told?* — is settled in one place and pinned by
  * one suite (`workspace-arg.test.ts`).
  */
+import { type BindingKey } from "./tool-manifest.js";
 /**
  * 🔒 **THE `container=` ARGUMENT'S DESCRIPTION — R-32's ADDRESS GRAMMAR IN ONE
  * LINE** (Samuel, 2026-09-17).
@@ -87,9 +88,12 @@ export declare const WORKSPACE_ARG_OPS: Record<string, ReadonlySet<string> | nul
  * any other tool"* until 2026-09-02: false on the day B13 shipped, because the
  * arg is IGNORED everywhere outside this table. A hand-written list would be the
  * same claim one release later, so it is derived — a row added above changes
- * this sentence with it.
+ * this sentence with it. A granular connection gets the granular tools that
+ * publish `container` (a bound job honours it), named whole.
  */
 export declare function workspaceArgTargets(): string;
+/** Does the legacy job a granular binding runs take `container`? */
+export declare function bindingTakesContainer(key: BindingKey): boolean;
 /**
  * Does this op still take `workspace=`? ⚠ A tool with NO row takes it nowhere —
  * fail closed, so a tool added without a row cannot silently inherit routing.

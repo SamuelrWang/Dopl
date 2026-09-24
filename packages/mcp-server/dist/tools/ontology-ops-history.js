@@ -13,6 +13,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.opHistory = opHistory;
 exports.opRestore = opRestore;
+const call_ref_js_1 = require("../call-ref.js");
 const narration_1 = require("./narration");
 const respond_1 = require("./respond");
 const ontology_render_1 = require("./ontology-render");
@@ -63,7 +64,7 @@ function render(title, object, page, callerUserId, onObject) {
         lines.push("_No revisions recorded._");
     for (const rev of page.revisions)
         lines.push((0, revision_render_1.revisionRow)(rev, callerUserId, changeOf(rev, onObject)));
-    lines.push("", page.nextCursor ? `Newest ${page.revisions.length} shown; narrow with object= for one item's full trail.` : (0, revision_render_1.pageTail)(null, ""), `Restore writes a row's BEFORE value back, one field: op="restore" object="<id>" revision="<id>" expected_version="<Version from op=get>".`);
+    lines.push("", page.nextCursor ? `Newest ${page.revisions.length} shown; narrow with object= for one item's full trail.` : (0, revision_render_1.pageTail)(null, ""), `Restore writes a row's BEFORE value back, one field: ${(0, call_ref_js_1.callRef)("ontology.restore", { object: '"<id>"', revision: '"<id>"', expected_version: `"<Version from ${(0, call_ref_js_1.bySet)({ legacy: (0, call_ref_js_1.legacyOnly)("op=get"), granular: (0, call_ref_js_1.callRef)("ontology.get") })}>"` }, { form: "op" })}.`);
     return lines.join("\n");
 }
 async function opRestore(client, args) {
@@ -73,20 +74,20 @@ async function opRestore(client, args) {
         return resolved.fail;
     const object = resolved.hit;
     if (object.updatedAt && object.updatedAt !== args.expected_version) {
-        return (0, revision_render_1.staleBeforeRestore)('op="get"', object.updatedAt, args.expected_version);
+        return (0, revision_render_1.staleBeforeRestore)("ontology.get", object.updatedAt, args.expected_version);
     }
     let restored;
     try {
         restored = await client.restoreOntologyObjectRevision(object.id, args.revision, args.expected_version);
     }
     catch (e) {
-        const mapped = (0, revision_render_1.restoreRefusal)(e, 'op="get"', revision_render_1.HISTORY_OP);
+        const mapped = (0, revision_render_1.restoreRefusal)(e, "ontology.get", "ontology.history");
         if (mapped)
             return mapped;
         throw e;
     }
     return (0, respond_1.ok)([
         `Restored one field of ${(0, narration_1.inlineOr)(restored.name, narration_1.NO_NAME)} (id \`${restored.id}\`) from revision \`${args.revision}\` — written as a NEW revision; every other field kept its current value.`,
-        `Version \`${args.expected_version}\` → \`${restored.updatedAt ?? "(not reported)"}\`. Read the result with op="get".`,
+        `Version \`${args.expected_version}\` → \`${restored.updatedAt ?? "(not reported)"}\`. Read the result with ${(0, call_ref_js_1.callRef)("ontology.get", {}, { form: "op" })}.`,
     ].join("\n"));
 }

@@ -30,6 +30,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.resolveCallAddress = resolveCallAddress;
 exports.ambiguousContainer = ambiguousContainer;
+const call_ref_js_1 = require("./call-ref.js");
 const narration_js_1 = require("./tools/narration.js");
 const workspace_arg_js_1 = require("./workspace-arg.js");
 const tool_errors_js_1 = require("./tools/tool-errors.js");
@@ -77,7 +78,7 @@ async function resolveCallAddress(tool, op, args, { directory, activeWorkspace }
     if (!supplied) {
         return {
             kind: "refusal",
-            response: err(`The \`${argName}\` argument was blank. Pass a container slug or id from \`dopl_workspaces\`, or \`home\` for your home space — or omit it entirely to use this connection's container.`),
+            response: err(`The \`${argName}\` argument was blank. Pass a container slug or id from \`${(0, call_ref_js_1.toolName)("workspaces.list")}\`, or \`home\` for your home space — or omit it entirely to use this connection's container.`),
         };
     }
     let resolved;
@@ -97,7 +98,7 @@ async function resolveCallAddress(tool, op, args, { directory, activeWorkspace }
             kind: "refusal",
             // ⚠ Caller's own arg, but a raw backtick still escapes this span and puts
             // the tail into narration.
-            response: err(`Container not found: ${(0, narration_js_1.inlineOr)(supplied, "`(unreadable ref)`")}. Call \`dopl_workspaces\` for every container you can reach — workspaces, home channels and your home space alike; \`home\` names the last of those.`),
+            response: err(`Container not found: ${(0, narration_js_1.inlineOr)(supplied, "`(unreadable ref)`")}. Call \`${(0, call_ref_js_1.toolName)("workspaces.list")}\` for every container you can reach — workspaces, home channels and your home space alike; \`home\` names the last of those.`),
         };
     }
     if ((0, workspace_directory_js_1.isAmbiguousContainer)(resolved)) {
@@ -145,6 +146,6 @@ function ambiguousContainer(argName, ref, matches) {
         // ⚠ The id IS the `container=` handle, so the line an agent reads is also
         // the line it can act on.
         ...shown.map((w) => `- \`${w.id}\` — ${(0, narration_js_1.inlineOr)(w.name, narration_js_1.NO_NAME)} · kind=\`${(0, workspace_directory_js_1.containerKind)(w)}\``),
-        ...(rest > 0 ? [`- …and ${rest} more; \`dopl_workspaces\` has them all.`] : []),
+        ...(rest > 0 ? [`- …and ${rest} more; \`${(0, call_ref_js_1.toolName)("workspaces.list")}\` has them all.`] : []),
     ].join("\n");
 }

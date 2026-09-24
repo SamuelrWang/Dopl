@@ -11,9 +11,10 @@
  * be a summary.
  *
  * ⚠ IT IS NOT THE ONLY DOOR, DELIBERATELY. Not every MCP client reads resources
- * — several list tools and nothing else — so `dopl_channel(op="help")` returns
- * the SAME constant. Two doors, one text, no drift: `channel-doctrine.ts` is the
- * single definition and both surfaces import it.
+ * — several list tools and nothing else — so the guide topics (`dopl_get_guide`,
+ * legacy `rooms action="help"`) return the SAME text. Two doors, one text, no
+ * drift: the doctrine modules are the single definition, rendered in the
+ * connection's tool set (`call-ref.ts`) through either door.
  *
  * ⚠ REGISTRATION IS UNGATED AND UNCHARGED, and both are decisions. Ungated: a
  * read-only session needs the rules exactly as much as a write-capable one, and
@@ -23,9 +24,12 @@
  * agent how to stop wasting calls would be self-defeating.
  */
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { ToolSet } from "./tool-manifest.js";
+/** A published resource's text in the active set — also what a pulled guide topic serves. */
+export declare function resourceText(uri: string): string;
 /**
- * Publish every resource onto a session's server. ⚠ Called from
+ * Publish every resource onto a session's server, in its tool set. ⚠ Called from
  * `server.ts › createServer` beside the tool registrars, so "what this server
  * publishes" is answerable from one file.
  */
-export declare function registerResources(server: McpServer): void;
+export declare function registerResources(server: McpServer, toolSet: ToolSet): void;

@@ -129,7 +129,7 @@ function createServer(client, options = {}) {
     // ⚠ PULLED, NOT PUSHED. The channels doctrine is a resource (and
     // `dopl_channel(op="help")`) rather than description prose, so an agent pays
     // for it when it asks and never on connection. See `resources.ts`.
-    (0, resources_js_1.registerResources)(server);
+    (0, resources_js_1.registerResources)(server, toolSet);
     // ⚠ Four gates shared by BOTH registration paths, built here and passed in
     // rather than defined inside a wrapper: `registerMetaTool` registers straight
     // onto the SDK server and would otherwise pass through none of them.

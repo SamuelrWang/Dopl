@@ -22,6 +22,7 @@ exports.grantDetail = grantDetail;
 exports.matchMember = matchMember;
 exports.formatTeam = formatTeam;
 exports.formatEffectiveAccess = formatEffectiveAccess;
+const call_ref_js_1 = require("../call-ref.js");
 const identity_1 = require("./identity");
 const narration_1 = require("./narration");
 /**
@@ -45,7 +46,10 @@ exports.UNNAMED_MEMBER = "`(unnamed member)`";
  * reads the same route. ROUTING pointer only: cost, permissions and addressing
  * are `dopl_channel`'s to state.
  */
-const contactPointer = (vendor) => `To contact a member or their agent: dopl_channel (op="rooms" for your channels and for opening a DM, op="send" to say something). It is deferred in some clients, so load it with ${(0, identity_1.toolLoaderFor)(vendor)} if it is not in your tool list.`;
+const contactPointer = (vendor) => `To contact a member or their agent: ${(0, call_ref_js_1.bySet)({
+    legacy: `dopl_channel (${(0, call_ref_js_1.callRef)("channel.rooms", {}, { form: "op" })} for your channels and for opening a DM, ${(0, call_ref_js_1.callRef)("channel.send", {}, { form: "op" })} to say something). It is deferred in some clients, so load it`,
+    granular: `${(0, call_ref_js_1.toolName)("channel.rooms.list")} and ${(0, call_ref_js_1.toolName)("channel.rooms.open")} for your channels and for opening a DM, ${(0, call_ref_js_1.toolName)("channel.send")} to say something. They are deferred in some clients, so load them`,
+})} with ${(0, identity_1.toolLoaderFor)(vendor)} if it is not in your tool list.`;
 exports.contactPointer = contactPointer;
 // ─── Formatting helpers ─────────────────────────────────────────────
 // ⚠ REVERSED ranking (lower number = higher privilege) — this drives roster SORT
@@ -200,7 +204,7 @@ function matchMember(members, ref) {
         };
     }
     return {
-        error: `No member matching ${(0, narration_1.inlineOr)(ref, "`(unreadable ref)`")}. Use dopl_members(op="list") to see the roster.`,
+        error: `No member matching ${(0, narration_1.inlineOr)(ref, "`(unreadable ref)`")}. Use ${(0, call_ref_js_1.callRef)("members.list")} to see the roster.`,
     };
 }
 function formatTeam(team, members, matrix, opts = {}) {

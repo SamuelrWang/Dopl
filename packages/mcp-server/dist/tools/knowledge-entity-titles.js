@@ -31,6 +31,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.looksEntityEscaped = looksEntityEscaped;
 exports.titleDecodedNote = titleDecodedNote;
 exports.escapedTitleLine = escapedTitleLine;
+const call_ref_js_1 = require("../call-ref.js");
 const narration_1 = require("./narration");
 /**
  * ⚠ **HAND-COPIED CLASS, DETECTION ONLY** — the five named forms plus both
@@ -71,5 +72,5 @@ function escapedTitleLine(sample, count = 1) {
     const where = count === 1
         ? `${(0, narration_1.inlineOr)(sample, narration_1.NO_NAME)} is`
         : `${(0, narration_1.inlineOr)(sample, narration_1.NO_NAME)} and ${count - 1} other${count === 2 ? "" : "s"} here are`;
-    return `reason=TITLE_ENTITY_ESCAPED · ${where} stored with HTML entities in the title · fix=op="write_file" with the decoded title`;
+    return `reason=TITLE_ENTITY_ESCAPED · ${where} stored with HTML entities in the title · fix=${(0, call_ref_js_1.callRef)("kb.write_file", {}, { form: "op" })} with the decoded title`;
 }

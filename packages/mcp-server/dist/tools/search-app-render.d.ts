@@ -17,4 +17,4 @@ export declare function appGroupLines(groups: AppSearchGroup[], heading: "##" | 
     standard: boolean;
 }): string[];
 /** How to read a hit, once per result rather than per row. */
-export declare const APP_FOLLOW_UP = "_Read a message with dopl_channel(op=\"read\", channel=\u2026, since=<seq \u2212 1>), a thread with thread=\u2026, a member with dopl_members(op=\"get\", member=<id>), a chat with dopl_chats(op=\"get\", chat_id=<id>). A home channel also needs container=._";
+export declare const appFollowUp: () => string;

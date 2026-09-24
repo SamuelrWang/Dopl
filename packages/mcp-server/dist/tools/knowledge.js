@@ -5,6 +5,7 @@
  */
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.registerKnowledgeTools = registerKnowledgeTools;
+const call_ref_js_1 = require("../call-ref.js");
 const zod_1 = require("zod");
 const untrusted_fence_1 = require("./untrusted-fence");
 const response_size_1 = require("./response-size");
@@ -189,11 +190,11 @@ directory) {
                     ? args.path
                     : args.title;
                 if (path === undefined || path === "") {
-                    return (0, respond_1.err)(`op="write_file" is missing required param: path (pass path, or a title to derive it).`);
+                    return (0, respond_1.err)(`${(0, call_ref_js_1.calledAs)("write_file")} is missing required param: path (pass path, or a title to derive it).`);
                 }
                 // An empty body is a fixable value, not a missing param: keep the two messages distinct.
                 if (args.body === undefined) {
-                    return (0, respond_1.err)(`op="write_file" is missing required param: body.`);
+                    return (0, respond_1.err)(`${(0, call_ref_js_1.calledAs)("write_file")} is missing required param: body.`);
                 }
                 if (args.body === "") {
                     return (0, respond_1.err)(`write_file: body cannot be empty — pass content (or a single space for a stub).`);

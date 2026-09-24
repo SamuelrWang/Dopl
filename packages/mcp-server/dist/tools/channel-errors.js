@@ -14,12 +14,13 @@
  * ⚠ `channel-` filename prefix required by the parity split-scan (parity.test.ts).
  */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.FIELD_CAPS_NOTE = void 0;
+exports.fieldCapsNote = void 0;
 exports.isBadRequest = isBadRequest;
 exports.isForbidden = isForbidden;
 exports.classifyBadRequest = classifyBadRequest;
 exports.classifyForbidden = classifyForbidden;
 exports.serverDetail = serverDetail;
+const call_ref_js_1 = require("../call-ref.js");
 const channel_shared_1 = require("./channel-shared");
 const respond_1 = require("./respond");
 /** Duck-typed HTTP 400 from the Dopl API (across the @dopl/client boundary). */
@@ -118,4 +119,5 @@ function firstIssue(details) {
  * (`LaunchCreateSchema.agentName`, `AgentDirectiveCreateSchema`'s rename arm, and
  * `main/agent-names.js › MAX_NAME` at the far end).
  */
-exports.FIELD_CAPS_NOTE = "Field caps: summary <=200 characters, body <=16000 on op=\"send\" but <=4000 as a direction and <=2000 as a launch goal, name <=60, client_msg_id <=200.";
+const fieldCapsNote = () => `Field caps: summary <=200 characters, body <=16000 on ${(0, call_ref_js_1.callRef)("channel.send", {}, { form: "op" })} but <=4000 as a direction and <=2000 as a launch goal, name <=60, client_msg_id <=200.`;
+exports.fieldCapsNote = fieldCapsNote;

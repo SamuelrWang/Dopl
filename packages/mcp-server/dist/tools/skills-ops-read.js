@@ -8,6 +8,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.opList = opList;
 exports.opGet = opGet;
 exports.opRead = opRead;
+const call_ref_js_1 = require("../call-ref.js");
 const narration_1 = require("./narration");
 const respond_1 = require("./respond");
 const skills_shared_1 = require("./skills-shared");
@@ -23,8 +24,8 @@ async function opList(client, folder) {
         // private skills must not be told the workspace has none. Both branches say
         // whose view this is.
         return (0, respond_1.ok)(folder !== undefined
-            ? `No active skills visible to you in folder ${(0, narration_1.inlineOr)(folder, "`(unnamed folder)`")}. ${skills_shared_1.SCOPE_NOTE}`
-            : `No active skills visible to you in this workspace. Drafts and other members' private or team-scoped skills are not listed, so this is not proof the workspace has none — dopl_members(op="access_matrix") is the inventory. Create one with \`dopl_skill\` op="create" (requires the workspace to allow agent writes).`);
+            ? `No active skills visible to you in folder ${(0, narration_1.inlineOr)(folder, "`(unnamed folder)`")}. ${(0, skills_shared_1.skillsScopeNote)()}`
+            : `No active skills visible to you in this workspace. Drafts and other members' private or team-scoped skills are not listed, so this is not proof the workspace has none — ${(0, call_ref_js_1.callRef)("members.access_matrix")} is the inventory. Create one with ${(0, call_ref_js_1.bySet)({ legacy: `\`${(0, call_ref_js_1.toolName)("skill.create")}\` ${(0, call_ref_js_1.callRef)("skill.create", {}, { form: "op" })}`, granular: (0, call_ref_js_1.callRef)("skill.create") })} (requires the workspace to allow agent writes).`);
     }
     // Group by folder; unfiled last.
     const byFolder = new Map();
@@ -58,8 +59,8 @@ async function opList(client, folder) {
         }
         lines.push("");
     }
-    lines.push(`Showing ${active.length} skill${active.length === 1 ? "" : "s"}: active, and visible to you. ${skills_shared_1.SCOPE_NOTE}`);
-    lines.push("", "Call `dopl_skill` op=\"get\" (or op=\"read\") with a slug to load the SKILL.md procedure for the skill that fits the task.");
+    lines.push(`Showing ${active.length} skill${active.length === 1 ? "" : "s"}: active, and visible to you. ${(0, skills_shared_1.skillsScopeNote)()}`);
+    lines.push("", `Call ${(0, call_ref_js_1.bySet)({ legacy: `\`${(0, call_ref_js_1.toolName)("skill.get")}\` ${(0, call_ref_js_1.callRef)("skill.get", {}, { form: "op" })}`, granular: (0, call_ref_js_1.callRef)("skill.get") })} (or ${(0, call_ref_js_1.callRef)("skill.read", {}, { form: "op" })}) with a slug to load the SKILL.md procedure for the skill that fits the task.`);
     return (0, respond_1.ok)(lines.join("\n"));
 }
 async function opGet(client, slug, detail, 
@@ -112,11 +113,11 @@ callerUserId = null) {
             // NULL` and consults no visibility, so a ref to another member's PRIVATE
             // base is marked ✓ here and 404s on the read. Saying so is free; the
             // per-ref access check that would fix it is a query per reference.
-            lines.push(`_✓ means the reference EXISTS in this workspace, not that you can read it: a base private to another member still shows ✓ and then 404s on dopl_kb(op="read_file")._`);
+            lines.push(`_✓ means the reference EXISTS in this workspace, not that you can read it: a base private to another member still shows ✓ and then 404s on ${(0, call_ref_js_1.callRef)("kb.read_file")}._`);
         }
         if (detail === "summary") {
             lines.push("");
-            lines.push(`_Summary view — SKILL.md is ${body.length.toLocaleString()} chars. Pass detail="full" or use op="read" for the body._`);
+            lines.push(`_Summary view — SKILL.md is ${body.length.toLocaleString()} chars. Pass detail="full" or use ${(0, call_ref_js_1.callRef)("skill.read", {}, { form: "op" })} for the body._`);
         }
         else {
             lines.push("");
@@ -128,7 +129,7 @@ callerUserId = null) {
     }
     catch (e) {
         if ((0, respond_1.isNotFound)(e)) {
-            return (0, respond_1.err)(`No skill \`${slug}\`. List skills with dopl_skill(op="list").`);
+            return (0, respond_1.err)(`No skill \`${slug}\`. List skills with ${(0, call_ref_js_1.callRef)("skill.list")}.`);
         }
         return (0, respond_1.err)(`Couldn't load skill \`${slug}\`: ${(0, skills_shared_1.failureDetail)(e)}`);
     }

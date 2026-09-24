@@ -28,12 +28,12 @@ export declare const LAUNCH_INPUT_FIELDS: {
     }>>;
     posture: z.ZodOptional<z.ZodObject<{
         tools: z.ZodOptional<z.ZodEnum<{
+            granular: "granular";
             manual: "manual";
             accept_edits: "accept_edits";
             auto: "auto";
             bypass: "bypass";
             untrusted: "untrusted";
-            granular: "granular";
             "on-request": "on-request";
             never: "never";
             allowlist: "allowlist";

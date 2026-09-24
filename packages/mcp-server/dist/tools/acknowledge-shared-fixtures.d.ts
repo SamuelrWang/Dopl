@@ -24,7 +24,7 @@ export declare function workspaceStub(kind: "standard" | "link", memberCount: nu
             id: string;
             slug: string;
             name: string;
-            kind: "standard" | "link";
+            kind: "link" | "standard";
             role: string;
             memberCount: number | undefined;
         }[];
@@ -39,7 +39,7 @@ export declare const sharedContainer: () => {
             id: string;
             slug: string;
             name: string;
-            kind: "standard" | "link";
+            kind: "link" | "standard";
             role: string;
             memberCount: number | undefined;
         }[];
@@ -53,7 +53,7 @@ export declare const soloRoom: () => {
             id: string;
             slug: string;
             name: string;
-            kind: "standard" | "link";
+            kind: "link" | "standard";
             role: string;
             memberCount: number | undefined;
         }[];

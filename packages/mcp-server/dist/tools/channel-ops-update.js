@@ -30,6 +30,7 @@
  */
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.opUpdate = opUpdate;
+const call_ref_js_1 = require("../call-ref.js");
 const node_crypto_1 = require("node:crypto");
 const narration_1 = require("./narration");
 const respond_1 = require("./respond");
@@ -142,7 +143,7 @@ async function opUpdate(client, ref, arg) {
             ...descriptionLine(channel.topic),
             ...renderCard(channel.infoCard ?? EMPTY_CARD),
             "",
-            `⚠ The card is REPLACED WHOLE on a write. To add a row, re-issue op="rooms" action="update" with \`info_card\` carrying EVERY row above plus the new one — a write that omits a row deletes it. Send \`info_card={}\` to clear the card deliberately.`,
+            `⚠ The card is REPLACED WHOLE on a write. To add a row, re-issue ${(0, call_ref_js_1.callRef)("channel.rooms.update", {}, { form: "op" })} with \`info_card\` carrying EVERY row above plus the new one — a write that omits a row deletes it. Send \`info_card={}\` to clear the card deliberately.`,
         ].join("\n"));
     }
     const patch = {};
@@ -163,7 +164,7 @@ async function opUpdate(client, ref, arg) {
     catch (e) {
         // A header write is MANAGE-gated; a card write is membership-gated and keeps its own 403.
         if (header && (0, channel_errors_1.isForbidden)(e)) {
-            return (0, respond_1.err)((0, tool_errors_1.refusal)(tool_errors_1.CHANNEL_MANAGE_REQUIRED, `**${label}** was not changed (the info card included — one patch, one gate). Ask the channel's owner or a workspace admin, or drop \`name\`/\`summary\` to write the card alone.`));
+            return (0, respond_1.err)((0, tool_errors_1.refusal)(tool_errors_1.CHANNEL_MANAGE_REQUIRED, `**${label}** was not changed (the info card included — one patch, one gate). Ask the channel's owner or a workspace admin, or drop \`name\`/\`${(0, call_ref_js_1.bySet)({ legacy: "summary", granular: "description" })}\` to write the card alone.`));
         }
         throw e;
     }

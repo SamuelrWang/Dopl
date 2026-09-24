@@ -15,6 +15,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.opOpen = opOpen;
 exports.opInvite = opInvite;
+const call_ref_js_1 = require("../call-ref.js");
 const respond_1 = require("./respond");
 const channel_shared_1 = require("./channel-shared");
 const narration_1 = require("./narration");
@@ -31,7 +32,7 @@ async function opOpen(client, opts) {
         });
         return (0, respond_1.ok)([
             `Opened a direct message with ${member.label} (id: \`${channel.id}\` · slug: \`${channel.slug}\`).`,
-            `Post with dopl_channel(op="send", channel="${channel.id}", body="...").`,
+            `Post with ${(0, call_ref_js_1.callRef)("channel.send", { channel: `"${channel.id}"`, body: '"..."' })}.`,
         ].join("\n"));
     }
     const name = opts.name;
@@ -70,7 +71,7 @@ async function opOpen(client, opts) {
         // rule as everything else. Per-site judgement about who could have
         // authored a value is what leaves a peer-typed string raw.
         `Created channel **${(0, channel_shared_1.inlineOr)(channel.name, narration_1.NO_NAME)}** (slug: \`${channel.slug}\` · id: \`${channel.id}\`). ${visNote}${description}`,
-        `Post with dopl_channel(op="send", channel="${channel.slug}", body="..."); add members with op="rooms" action="invite".`,
+        `Post with ${(0, call_ref_js_1.callRef)("channel.send", { channel: `"${channel.slug}"`, body: '"..."' })}; add members with ${(0, call_ref_js_1.callRef)("channel.rooms.invite", {}, { form: "op" })}.`,
     ].join("\n"));
 }
 async function opInvite(client, channelRef, memberRef) {

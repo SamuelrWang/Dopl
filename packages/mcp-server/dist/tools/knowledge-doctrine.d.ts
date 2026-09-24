@@ -42,5 +42,7 @@ export declare const KNOWLEDGE_DOCTRINE_URI = "dopl://doctrine/knowledge";
  * excerpt that produced the trial's only reproducible wrong turn) belong in the
  * knowledge base that measured them, not in a document served to every agent.
  * A doctrine is the rules; the evidence for them is not agent-facing text.
+ *
+ * Rendered per call, in the connection's tool set; the legacy text is frozen.
  */
-export declare const KNOWLEDGE_DOCTRINE = "# Sections\n\nREAD: excerpt (get_tree) \u2192 section \u2192 body; stop at the first that answers.\nget_tree and read_file list an entry's headings; op=\"outline\" adds what each\nCOSTS. read_file(section=) returns one; an unknown heading answers with the\noutline.\n\nWRITE: the first two REFUSE an agent's save.\n- excerpt= required: what a reader FINDS here (a value, a decision, a heading\n  name). One word, or the title again, is refused.\n- entries past ~1.5k chars carry ## headings, one topic each; an unsectioned\n  one cannot be read in sections. write_file(section=) replaces one.\n- point at a target by base/path; \"see the approval ladder\" names nothing.\n- an entry that replaces another says so in its FIRST line, and in the\n  superseded one's excerpt.\n";
+export declare const knowledgeDoctrine: () => string;

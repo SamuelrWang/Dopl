@@ -31,6 +31,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.agentTarget = agentTarget;
 exports.isAgentTargetRefusal = isAgentTargetRefusal;
 exports.foreignAgent = foreignAgent;
+const call_ref_js_1 = require("../call-ref.js");
 const channel_agent_id_1 = require("./channel-agent-id");
 const respond_1 = require("./respond");
 /**
@@ -50,9 +51,9 @@ function agentTarget(raw) {
         // ⚠ THE TOKEN LINE NAMES THE FIELD, THE VERDICT AND WHERE THE ID COMES FROM — the same
         // grammar the launch caps use (`channel-ops-launch-goal.ts`). `retry=` is an OP rather
         // than `no`, because unlike a too-long field this one has a next call that fixes it.
-        `Nothing was filed — field=to reason=not_an_agent_id retry=dopl_channel(op="status")`,
-        `\`to\` must be an agent INSTANCE id on op="manage" — \`@agent-<id>\`, or the bare eight characters. A NAME handle (\`@my-agent\`) is a real address when you SEND, but never here: nothing on this lane resolves a name to an instance, so no request was made and nothing is pending.`,
-        `dopl_channel(op="status") lists your running agents with the id to pass.`,
+        `Nothing was filed — field=to reason=not_an_agent_id retry=${(0, call_ref_js_1.callRef)("channel.status")}`,
+        `\`to\` must be an agent INSTANCE id on ${(0, call_ref_js_1.bySet)({ legacy: (0, call_ref_js_1.callRef)("channel.manage", {}, { form: "op" }), granular: (0, call_ref_js_1.toolName)("channel.manage.end") })} — \`@agent-<id>\`, or the bare eight characters. A NAME handle (\`@my-agent\`) is a real address when you SEND, but never here: nothing on this lane resolves a name to an instance, so no request was made and nothing is pending.`,
+        `${(0, call_ref_js_1.callRef)("channel.status")} lists your running agents with the id to pass.`,
     ].join("\n"));
 }
 /** TRUE for {@link agentTarget}'s refusal arm. ⚠ A PREDICATE RATHER THAN A CAST, so the
@@ -85,6 +86,6 @@ function foreignAgent(agentId, verb) {
     return (0, respond_1.err)([
         `Nothing was ${verb} — agent \`${agentId}\` is ANOTHER MEMBER'S, and **no request was filed**.`,
         `You can only manage agents running on YOUR OWN operator's machine. A peer's agent appears in a channel as a handle and is not reachable from here at all — there is no permission that would change that, so do not look for another route and do not ask anyone to grant one.`,
-        `dopl_channel(op="status") lists exactly the agents you CAN manage. If you meant one of yours, take the id from there.`,
+        `${(0, call_ref_js_1.callRef)("channel.status")} lists exactly the agents you CAN manage. If you meant one of yours, take the id from there.`,
     ].join("\n"));
 }

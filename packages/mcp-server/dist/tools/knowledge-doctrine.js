@@ -23,7 +23,8 @@
  * documents. The description carries the one-line form, this carries the reason.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.KNOWLEDGE_DOCTRINE = exports.KNOWLEDGE_DOCTRINE_URI = void 0;
+exports.knowledgeDoctrine = exports.KNOWLEDGE_DOCTRINE_URI = void 0;
+const call_ref_js_1 = require("../call-ref.js");
 exports.KNOWLEDGE_DOCTRINE_URI = "dopl://doctrine/knowledge";
 /**
  * ⚠ ≤750 chars, asserted. Both halves: how to read, and what to write.
@@ -45,20 +46,29 @@ exports.KNOWLEDGE_DOCTRINE_URI = "dopl://doctrine/knowledge";
  * excerpt that produced the trial's only reproducible wrong turn) belong in the
  * knowledge base that measured them, not in a document served to every agent.
  * A doctrine is the rules; the evidence for them is not agent-facing text.
+ *
+ * Rendered per call, in the connection's tool set; the legacy text is frozen.
  */
-exports.KNOWLEDGE_DOCTRINE = `# Sections
+const knowledgeDoctrine = () => `# Sections
 
-READ: excerpt (get_tree) → section → body; stop at the first that answers.
-get_tree and read_file list an entry's headings; op="outline" adds what each
+${(0, call_ref_js_1.bySet)({
+    legacy: `READ: excerpt (get_tree) → section → body; stop at the first that answers.
+get_tree and read_file list an entry's headings; ${(0, call_ref_js_1.callRef)("kb.outline", {}, { form: "op" })} adds what each
 COSTS. read_file(section=) returns one; an unknown heading answers with the
-outline.
+outline.`,
+    granular: `READ: excerpt (${(0, call_ref_js_1.callRef)("kb.get_tree")}) → section → body; stop at the
+first that answers. The tree and ${(0, call_ref_js_1.toolName)("kb.read_file")} list an entry's headings;
+${(0, call_ref_js_1.callRef)("kb.outline")} adds what each COSTS. ${(0, call_ref_js_1.callRef)("kb.read_file", { section: "" })}
+returns one; an unknown heading answers with the outline.`,
+})}
 
 WRITE: the first two REFUSE an agent's save.
 - excerpt= required: what a reader FINDS here (a value, a decision, a heading
   name). One word, or the title again, is refused.
 - entries past ~1.5k chars carry ## headings, one topic each; an unsectioned
-  one cannot be read in sections. write_file(section=) replaces one.
+  one cannot be read in sections. ${(0, call_ref_js_1.bySet)({ legacy: "write_file(section=)", granular: (0, call_ref_js_1.callRef)("kb.write_file", { section: "" }) })} replaces one.
 - point at a target by base/path; "see the approval ladder" names nothing.
 - an entry that replaces another says so in its FIRST line, and in the
   superseded one's excerpt.
 `;
+exports.knowledgeDoctrine = knowledgeDoctrine;

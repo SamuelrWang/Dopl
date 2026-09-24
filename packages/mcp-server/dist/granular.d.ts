@@ -13,6 +13,8 @@ export interface LegacyTool {
     input: ZodType;
     run: (args: Record<string, unknown>) => Promise<ToolResponse>;
 }
+/** The resource a pulled job answers with, or undefined for a bound job. */
+export declare function pulledResource(t: GranularTool, args: Record<string, unknown>): string | undefined;
 /**
  * The row's params, typed by the tool's text or the first served legacy tool that publishes them,
  * plus the selector over the served jobs. Null when no job is served on this connection.

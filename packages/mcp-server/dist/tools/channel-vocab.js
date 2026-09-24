@@ -21,6 +21,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.CHANNEL_ACTION_NAMES = exports.CHANNEL_ACTIONS = exports.CHANNEL_OPS = void 0;
 exports.unknownOpRefusal = unknownOpRefusal;
 exports.unknownActionRefusal = unknownActionRefusal;
+const call_ref_js_1 = require("../call-ref.js");
 /**
  * THE SIX OPS AN AGENT SEES, and the only six it may pick from.
  *
@@ -63,7 +64,8 @@ function unknownOpRefusal(op) {
     // sixth op cannot arrive without appearing here.
     const quoted = exports.CHANNEL_OPS.map((o) => `"${o}"`);
     const offered = `${quoted.slice(0, -1).join(", ")} or ${quoted[quoted.length - 1]}`;
-    return `dopl_channel has no op "${shown}" — it takes ${offered}. Nothing was done.`;
+    // Legacy-only: a granular call names its tool, so it never sends an op.
+    return (0, call_ref_js_1.legacyOnly)(`dopl_channel has no op "${shown}" — it takes ${offered}. Nothing was done.`);
 }
 /**
  * THE SUB-VERBS, per dispatching op.
@@ -131,8 +133,8 @@ function unknownActionRefusal(op, action) {
     // over all three lists — and kept for the same reason `channel.ts` keeps its
     // exhaustive default: a build where that validation did not run must refuse,
     // and must not invent an op to send the caller to.
-    const belongs = owner ? ` — that word belongs to op="${owner}"` : "";
     const quoted = exports.CHANNEL_ACTIONS[op].map((a) => `"${a}"`);
     const offered = `${quoted.slice(0, -1).join(", ")} or ${quoted[quoted.length - 1]}`;
-    return `op="${op}" has no action "${shown}"${belongs}. Nothing was done. op="${op}" takes ${offered}.`;
+    // Legacy-only: a granular tool's selector is an enum of its own jobs, so this never reaches one.
+    return (0, call_ref_js_1.legacyOnly)(`op="${op}" has no action "${shown}"${owner ? ` — that word belongs to op="${owner}"` : ""}. Nothing was done. op="${op}" takes ${offered}.`);
 }

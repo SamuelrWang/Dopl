@@ -18,6 +18,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.LEGACY_ONTOLOGY_ARGS = void 0;
 exports.legacyOntologyOpMessage = legacyOntologyOpMessage;
+const call_ref_js_1 = require("./call-ref.js");
 /** Retired `dopl_ontology` args → the arg that replaced each. */
 exports.LEGACY_ONTOLOGY_ARGS = Object.freeze({
     cluster: "ontology",
@@ -35,5 +36,5 @@ function legacyOntologyOpMessage(issue) {
     const op = typeof issue.input === "string" ? issue.input : undefined;
     if (!op || !Object.prototype.hasOwnProperty.call(LEGACY_ONTOLOGY_OPS, op))
         return undefined;
-    return `Unknown op ${op} — renamed: send op=${LEGACY_ONTOLOGY_OPS[op]}`;
+    return (0, call_ref_js_1.legacyOnly)(`Unknown op ${op} — renamed: send op=${LEGACY_ONTOLOGY_OPS[op]}`);
 }

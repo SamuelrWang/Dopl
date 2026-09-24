@@ -11,6 +11,7 @@
  */
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.opSearch = opSearch;
+const call_ref_js_1 = require("../call-ref.js");
 const narration_1 = require("./narration");
 const respond_1 = require("./respond");
 const knowledge_shared_1 = require("./knowledge-shared");
@@ -49,7 +50,7 @@ async function opSearch(client, query, base, limit) {
     const hits = await client.searchKb(query, { baseSlug, limit });
     const shownQuery = (0, narration_1.inlineOr)(query, "`(unreadable query)`");
     if (hits.length === 0) {
-        return (0, respond_1.ok)(`No matches for ${shownQuery}. ${SEARCH_SCOPE_NOTE}`);
+        return (0, respond_1.ok)(`No matches for ${shownQuery}. ${searchScopeNote()}`);
     }
     const lines = [`## ${hits.length} match${hits.length === 1 ? "" : "es"} for ${shownQuery}\n`];
     for (const h of hits) {
@@ -58,7 +59,7 @@ async function opSearch(client, query, base, limit) {
         const cleanSnippet = (0, narration_1.inlineOr)(h.snippet.replace(/<\/?b>/g, ""), "`(no snippet)`");
         lines.push(`- ${(0, narration_1.inlineOr)(h.title, narration_1.NO_NAME)} _(rank ${h.rank.toFixed(2)})_ — ${hitAddress(h)}\n  ${cleanSnippet}`);
     }
-    lines.push("", SEARCH_SCOPE_NOTE);
+    lines.push("", searchScopeNote());
     return (0, respond_1.ok)(lines.join("\n"));
 }
 /**
@@ -71,4 +72,4 @@ async function opSearch(client, query, base, limit) {
  *
  * ⚠ States the SHAPE, not a number — the true count needs another query.
  */
-const SEARCH_SCOPE_NOTE = `_A ranked SAMPLE of the bases you can read, not an exhaustive scan: candidates are capped before ranking, distant matches are dropped, and hits in bases you cannot read are removed after ranking. Fewer hits than \`limit\` does not mean there are no others, and zero hits is not proof of absence — try op="get_tree" or different wording._`;
+const searchScopeNote = () => `_A ranked SAMPLE of the bases you can read, not an exhaustive scan: candidates are capped before ranking, distant matches are dropped, and hits in bases you cannot read are removed after ranking. Fewer hits than \`limit\` does not mean there are no others, and zero hits is not proof of absence — try ${(0, call_ref_js_1.callRef)("kb.get_tree", {}, { form: "op" })} or different wording._`;

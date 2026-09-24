@@ -23,7 +23,7 @@ import { type ToolResponse } from "./respond";
  * — it serves four actions and the other three have no such bound — so a 61-character name
  * reached the route and came back as a bare `VALIDATION_FAILED` naming no field. The number is
  * in `name`'s own `.describe()` ("1-60 visible characters") and in `channel-errors.ts ›
- * FIELD_CAPS_NOTE`; this is the third statement of it, and the only one that can refuse.
+ * fieldCapsNote()`; this is the third statement of it, and the only one that can refuse.
  */
 export declare const LAUNCH_NAME_MAX_CHARS = 60;
 /**

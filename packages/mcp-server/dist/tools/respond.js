@@ -19,6 +19,7 @@ exports.entitlementDenied = entitlementDenied;
 exports.missingParams = missingParams;
 exports.unusedParams = unusedParams;
 exports.strictParams = strictParams;
+const call_ref_js_1 = require("../call-ref.js");
 const tool_errors_1 = require("./tool-errors");
 function ok(text) {
     return { content: [{ type: "text", text }] };
@@ -66,7 +67,7 @@ function apiMessage(e) {
 function sessionRequired(e, op) {
     if (!isApiError(e, 403, "SESSION_REQUIRED"))
         return null;
-    return err((0, tool_errors_1.refusal)(tool_errors_1.SESSION_REQUIRED, `op="${op}" is app-only and NOTHING changed. Your token is an agent credential, which this route refuses whatever scopes it carries — there is no permission to request and no other route in. Ask your operator to do it in the Dopl app.`));
+    return err((0, tool_errors_1.refusal)(tool_errors_1.SESSION_REQUIRED, `${(0, call_ref_js_1.calledAs)(op)} is app-only and NOTHING changed. Your token is an agent credential, which this route refuses whatever scopes it carries — there is no permission to request and no other route in. Ask your operator to do it in the Dopl app.`));
 }
 /** True for a 409 (name/title/slug already-exists collision). */
 function isAlreadyExists(e) {
@@ -163,7 +164,7 @@ function missingParams(op, args, required) {
         return null;
     const plural = missing.length === 1 ? "param" : "params";
     // Through the declared code, so the wire matches the `reason=` every description teaches.
-    return err((0, tool_errors_1.refusal)(tool_errors_1.MISSING_PARAMS, `op="${op}" is missing required ${plural}: ${missing.join(", ")}.`));
+    return err((0, tool_errors_1.refusal)(tool_errors_1.MISSING_PARAMS, `${(0, call_ref_js_1.calledAs)(op)} is missing required ${plural}: ${missing.join(", ")}.`));
 }
 /**
  * Refusal when a param the op does NOT take was sent (a flat schema cannot say "this key belongs to
@@ -175,7 +176,7 @@ function unusedParams(op, args, allowed) {
     const stray = Object.keys(args).filter((k) => !own.has(k) && args[k] !== undefined);
     if (stray.length === 0)
         return null;
-    return err((0, tool_errors_1.refusal)(tool_errors_1.UNUSED_PARAM, `op="${op}" does not take: ${stray.join(", ")}. It takes: ${allowed.join(", ")}.`));
+    return err((0, tool_errors_1.refusal)(tool_errors_1.UNUSED_PARAM, `${(0, call_ref_js_1.calledAs)(op)} does not take: ${stray.join(", ")}. It takes: ${allowed.join(", ")}.`));
 }
 /** An op's whole param contract in one call: `missingParams` over `required`, then `unusedParams`
  *  over `required` + `optional`. */

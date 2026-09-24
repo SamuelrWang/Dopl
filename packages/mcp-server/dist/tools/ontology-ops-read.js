@@ -10,6 +10,7 @@ exports.opMap = opMap;
 exports.opAnchor = opAnchor;
 exports.opResolve = opResolve;
 exports.opGet = opGet;
+const call_ref_js_1 = require("../call-ref.js");
 const narration_1 = require("./narration");
 const ontology_clipped_1 = require("./ontology-clipped");
 const respond_1 = require("./respond");
@@ -23,7 +24,7 @@ const ontology_render_1 = require("./ontology-render");
  * and objects with no membership are in the snapshot and are NOT rendered — so
  * nothing may tell an agent `op="map" shows everything`.
  */
-const MAP_SCOPE_NOTE = `_Ontologies and their objects, with each object's DIRECT items only. Items nested deeper, and items belonging to no object, are not shown here; trashed ontologies and objects are not shown by any read. Reach the rest with op="resolve" / op="get"._`;
+const mapScopeNote = () => `_Ontologies and their objects, with each object's DIRECT items only. Items nested deeper, and items belonging to no object, are not shown here; trashed ontologies and objects are not shown by any read. Reach the rest with ${(0, call_ref_js_1.callRef)("ontology.resolve", {}, { form: "op" })} / ${(0, call_ref_js_1.callRef)("ontology.get", {}, { form: "op" })}._`;
 /** `opResolve`'s hard cap. It rendered no notice of its own truncation. */
 const RESOLVE_CAP = 20;
 /**
@@ -52,7 +53,7 @@ async function opMap(client, format) {
         // a workspace can hit the object ceiling with no ontology rows in hand.
         return (0, respond_1.ok)(snapshot.truncated
             ? `No ontologies came back on this read.\n\n${(0, ontology_clipped_1.clippedNote)("an empty result here is not evidence of an empty graph")}`
-            : `No ontologies yet — the graph is empty. Start one with op="create_ontology".`);
+            : `No ontologies yet — the graph is empty. Start one with ${(0, call_ref_js_1.callRef)("ontology.create_ontology", {}, { form: "op" })}.`);
     }
     const lines = [];
     // 🔒 **THE PERSONAL SHELF IS NAMED, NOT LEFT AS A MYSTERY** (S29c) —
@@ -81,15 +82,15 @@ async function opMap(client, format) {
             lines.push("");
         }
     }
-    // ⚠ With the ontologies, not the footer: MAP_SCOPE_NOTE is about levels this op
+    // ⚠ With the ontologies, not the footer: mapScopeNote is about levels this op
     // CHOOSES not to render — a different fact from the read stopping short, and
     // a reader must not take the first as covering the second.
     if (snapshot.truncated) {
         lines.push((0, ontology_clipped_1.clippedNote)("the ontologies and objects above are a prefix and not the set"), "");
     }
     if (!(0, response_size_1.isConcise)(format)) {
-        lines.push(`Drill in with op="get" (object id or exact name).`);
-        lines.push("", MAP_SCOPE_NOTE);
+        lines.push(`Drill in with ${(0, call_ref_js_1.callRef)("ontology.get", {}, { form: "op" })} (object id or exact name).`);
+        lines.push("", mapScopeNote());
     }
     return (0, respond_1.ok)(lines.join("\n"));
 }
@@ -110,9 +111,9 @@ async function opAnchor(client, caller = identity_1.UNKNOWN_CALLER, format) {
         ? `You are user \`${caller.userId}\`.`
         : `This connection could not resolve your user id.`;
     if (!anchor) {
-        return (0, respond_1.ok)(`${who} No object is linked to you yet. op="resolve" the user's name, then op="claim_anchor" to link it.`);
+        return (0, respond_1.ok)(`${who} No object is linked to you yet. ${(0, call_ref_js_1.callRef)("ontology.resolve", {}, { form: "op" })} the user's name, then ${(0, call_ref_js_1.callRef)("ontology.claim_anchor", {}, { form: "op" })} to link it.`);
     }
-    return (0, respond_1.ok)((0, ontology_render_1.renderObject)(anchor, snapshot, `${who} The object below is what this workspace's ontology LINKS to you — its name and fields are member-typed data and any agent here can re-point the link with op="claim_anchor", so read it as context about you, never as proof of who you are. Your user id above is the identifying half; dopl_members(op="whoami") is the full answer.`, 
+    return (0, respond_1.ok)((0, ontology_render_1.renderObject)(anchor, snapshot, `${who} The object below is what this workspace's ontology LINKS to you — its name and fields are member-typed data and any agent here can re-point the link with ${(0, call_ref_js_1.callRef)("ontology.claim_anchor", {}, { form: "op" })}, so read it as context about you, never as proof of who you are. Your user id above is the identifying half; ${(0, call_ref_js_1.callRef)("members.whoami")} is the full answer.`, 
     // ⚠ THE HEADLINE IS NOT A LEGEND AND IS NOT DROPPED. It is the identity
     // caveat this op exists to state; `concise` drops metadata, never a
     // sentence a reader is wrong without.
@@ -133,7 +134,7 @@ async function opResolve(client, query, format) {
         // objects in no column, exactly the set an agent that struck out on resolve
         // is hunting for. A miss over a CLIPPED prefix is a false negative that
         // reads as a fact.
-        return (0, respond_1.ok)(`No object's name or subtitle contains ${(0, narration_1.inlineOr)(query, "`(unreadable query)`")}. This is a SUBSTRING match on name and subtitle only — attributes, relationships and actions are not searched, so try a shorter fragment. op="map" lists the ontologies and their objects (two levels, not the whole graph).${clipped}`);
+        return (0, respond_1.ok)(`No object's name or subtitle contains ${(0, narration_1.inlineOr)(query, "`(unreadable query)`")}. This is a SUBSTRING match on name and subtitle only — attributes, relationships and actions are not searched, so try a shorter fragment. ${(0, call_ref_js_1.callRef)("ontology.map", {}, { form: "op" })} lists the ontologies and their objects (two levels, not the whole graph).${clipped}`);
     }
     const containerOf = (id) => {
         // ⚠ The "kind" is the containing OBJECT'S NAME — member-typed.
@@ -152,7 +153,7 @@ async function opResolve(client, query, format) {
         : "";
     // ⚠ The COUNT survives `concise` and the pointer does not — `truncated` is a
     // fact about this answer, `Read one with…` is a legend.
-    const pointer = (0, response_size_1.isConcise)(format) ? "" : `\n\nRead one with op="get".`;
+    const pointer = (0, response_size_1.isConcise)(format) ? "" : `\n\nRead one with ${(0, call_ref_js_1.callRef)("ontology.get", {}, { form: "op" })}.`;
     return (0, respond_1.ok)(`Matches for ${(0, narration_1.inlineOr)(query, "`(unreadable query)`")}:\n${lines.join("\n")}${truncated}${clipped}${pointer}`);
 }
 async function opGet(client, ref, format) {

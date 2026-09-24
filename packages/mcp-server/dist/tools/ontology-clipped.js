@@ -21,7 +21,8 @@
  */
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.clippedNote = clippedNote;
+const call_ref_js_1 = require("../call-ref.js");
 /** The clipped-read line for one surface. `subject` completes "…, so ${subject}." */
 function clippedNote(subject) {
-    return `_CLIPPED — this workspace holds more ontology than one read returns, so ${subject}. Every ontology read here shares that row ceiling (op="map", op="resolve" and op="get" alike), so no read on this connection fills the gap: report it rather than presenting this as the whole graph._`;
+    return `_CLIPPED — this workspace holds more ontology than one read returns, so ${subject}. Every ontology read here shares that row ceiling (${(0, call_ref_js_1.callRef)("ontology.map", {}, { form: "op" })}, ${(0, call_ref_js_1.callRef)("ontology.resolve", {}, { form: "op" })} and ${(0, call_ref_js_1.callRef)("ontology.get", {}, { form: "op" })} alike), so no read on this connection fills the gap: report it rather than presenting this as the whole graph._`;
 }

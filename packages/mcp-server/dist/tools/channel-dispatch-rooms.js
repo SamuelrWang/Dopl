@@ -22,6 +22,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.isRoomsAction = isRoomsAction;
 exports.dispatchRoomsAction = dispatchRoomsAction;
+const call_ref_js_1 = require("../call-ref.js");
 const respond_1 = require("./respond");
 const channel_doctrine_1 = require("./channel-doctrine");
 const channel_vocab_1 = require("./channel-vocab");
@@ -50,7 +51,7 @@ async function dispatchRoomsAction(action, args, client, selfUserId, isAdmin) {
         // the same table, so there is no not-found arm to write or to get wrong.
         case "help":
             return (0, respond_1.ok)(args.section === undefined
-                ? channel_doctrine_1.CHANNEL_DOCTRINE
+                ? (0, channel_doctrine_1.channelDoctrine)()
                 : (0, channel_doctrine_1.doctrineSection)(args.section));
         // ⚠ WHICH ROOM IS READ OFF THE SHAPE, NOT OFF A FLAG (C12, 2026-09-02).
         // `direct: true` was a third thing to get right beside the two arguments
@@ -61,7 +62,7 @@ async function dispatchRoomsAction(action, args, client, selfUserId, isAdmin) {
         // which it got.
         case "open": {
             if (args.to !== undefined && args.name !== undefined) {
-                return (0, respond_1.err)('op="rooms" action="open" takes `name` (a named channel) or `to` (a direct 1:1), never both — nothing was opened. Drop `to` to open a channel, or drop `name` to open the DM.');
+                return (0, respond_1.err)(`${(0, call_ref_js_1.callRef)("channel.rooms.open", {}, { form: "op" })} takes \`name\` (a named channel) or \`to\` (a direct 1:1), never both — nothing was opened. Drop \`to\` to open a channel, or drop \`name\` to open the DM.`);
             }
             if (args.to !== undefined) {
                 return (0, channel_ops_open_1.opOpen)(client, { direct: true, member: args.to });

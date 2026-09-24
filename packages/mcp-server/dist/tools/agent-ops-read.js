@@ -3,6 +3,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.opList = opList;
 exports.opGet = opGet;
+const call_ref_js_1 = require("../call-ref.js");
 const narration_js_1 = require("./narration.js");
 const untrusted_fence_1 = require("./untrusted-fence");
 const respond_js_1 = require("./respond.js");
@@ -27,7 +28,7 @@ directory) {
     const payload = await client.listAgentIdentitiesPayload();
     const identities = payload.identities;
     if (identities.length === 0) {
-        return (0, respond_js_1.ok)(`No agent identities visible to you here. ${agent_shared_js_1.IDENTITIES_SCOPE_NOTE}\n\nCreate one with \`dopl_agent(op='create')\`.`);
+        return (0, respond_js_1.ok)(`No agent identities visible to you here. ${agent_shared_js_1.IDENTITIES_SCOPE_NOTE}\n\nCreate one with \`${(0, call_ref_js_1.callRef)("agent.create", {}, { quote: "'" })}\`.`);
     }
     const personalIds = new Set(payload.homeScopedIdentityIds ?? EMPTY_IDENTITY_IDS);
     const personal = identities.filter((ident) => personalIds.has(ident.id));
@@ -80,7 +81,7 @@ maxChars) {
         `# ${(0, narration_js_1.inlineOr)(identity.name, narration_js_1.NO_NAME)}`,
         `id: \`${identity.id}\` · ${identity.visibility} · runtime ${identity.runtime ? (0, narration_js_1.inlineOr)(identity.runtime, narration_js_1.NO_NAME) : "(the channel's)"} · model ${identity.model ? (0, narration_js_1.inlineOr)(identity.model, narration_js_1.NO_NAME) : "(the runtime's default)"}`,
         // The version is printed on the header rows, so a clipped instructions body cannot hide it.
-        `Version: \`${identity.updatedAt}\` (pass as expected_version to op="update")`,
+        `Version: \`${identity.updatedAt}\` (pass as expected_version to ${(0, call_ref_js_1.callRef)("agent.update", {}, { form: "op" })})`,
         ...(identity.description ? [(0, narration_js_1.inlineOr)(identity.description, "")] : []),
     ];
     const scopes = (0, agent_shared_js_1.identityScopes)(identity);

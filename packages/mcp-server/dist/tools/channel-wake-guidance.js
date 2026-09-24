@@ -41,6 +41,7 @@ exports.holdFact = holdFact;
 exports.holdTimedOutLines = holdTimedOutLines;
 exports.workspaceHoldTimedOutLines = workspaceHoldTimedOutLines;
 exports.holdArrivedLines = holdArrivedLines;
+const call_ref_js_1 = require("../call-ref.js");
 const channel_doctrine_1 = require("./channel-doctrine");
 // ⚠ ONE statement of the runtime comparison, in `identity.ts` — the hold's
 // LENGTH branches on the same answer this file's CLAIMS do.
@@ -78,11 +79,11 @@ function waitingLine(call, cursor) {
 exports.WAITING_LINE_MAX_CHARS = 160;
 /** The re-arm call for ONE channel. ⚠ One spelling, shared by both results. */
 function channelHoldCall(ref, cursor) {
-    return `dopl_channel(op="read", channel="${ref}", since=${cursor}, wait_ms=<ms>)`;
+    return (0, call_ref_js_1.callRef)("channel.read", { channel: `"${ref}"`, since: `${cursor}`, wait_ms: "<ms>" });
 }
 /** The re-arm call for the WORKSPACE hold — no `channel`, and that is the op. */
 function workspaceHoldCall(cursor) {
-    return `dopl_channel(op="read", since=${cursor}, wait_ms=<ms>)`;
+    return (0, call_ref_js_1.callRef)("channel.read", { since: `${cursor}`, wait_ms: "<ms>" });
 }
 /**
  * WHAT A WRITE RESULT SAYS ABOUT WAITING — ⚠ ONE TOKEN, and it is the only thing

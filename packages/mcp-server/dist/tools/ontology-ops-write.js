@@ -10,6 +10,7 @@
  */
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.dispatch = dispatch;
+const call_ref_js_1 = require("../call-ref.js");
 const narration_1 = require("./narration");
 const respond_1 = require("./respond");
 const ontology_render_1 = require("./ontology-render");
@@ -61,7 +62,7 @@ caller = identity_1.UNKNOWN_CALLER) {
                 name: args.name,
                 purpose: args.purpose,
             });
-            return (0, respond_1.ok)(`Created ontology ${(0, narration_1.inlineOr)(ontology.name, narration_1.NO_NAME)} (slug: \`${ontology.slug}\`). Add objects with op="create_column".`);
+            return (0, respond_1.ok)(`Created ontology ${(0, narration_1.inlineOr)(ontology.name, narration_1.NO_NAME)} (slug: \`${ontology.slug}\`). Add objects with ${(0, call_ref_js_1.callRef)("ontology.create_column", {}, { form: "op" })}.`);
         }
         case "update_ontology": {
             const snapshot = await client.getOntology();
@@ -83,7 +84,7 @@ caller = identity_1.UNKNOWN_CALLER) {
                 ontologyId: resolved.hit.id,
                 name: args.name,
             });
-            return (0, respond_1.ok)(`Created object ${(0, narration_1.inlineOr)(column.name, narration_1.NO_NAME)} (id: \`${column.id}\`) in ${(0, narration_1.inlineOr)(resolved.hit.name, narration_1.NO_NAME)}. Add items with op="create_object" parent="${column.id}".`);
+            return (0, respond_1.ok)(`Created object ${(0, narration_1.inlineOr)(column.name, narration_1.NO_NAME)} (id: \`${column.id}\`) in ${(0, narration_1.inlineOr)(resolved.hit.name, narration_1.NO_NAME)}. Add items with ${(0, call_ref_js_1.callRef)("ontology.create_object", { parent: `"${column.id}"` }, { form: "op" })}.`);
         }
         case "create_object": {
             const snapshot = await client.getOntology();
@@ -187,7 +188,7 @@ caller = identity_1.UNKNOWN_CALLER) {
         case "claim_anchor":
             return withObject(client, args.object, async (object) => {
                 await client.claimOntologyAnchor(object.id);
-                return (0, respond_1.ok)(`Anchored the calling user to ${(0, narration_1.inlineOr)(object.name, narration_1.NO_NAME)} (\`${object.id}\`). op="anchor" now resolves to it.`);
+                return (0, respond_1.ok)(`Anchored the calling user to ${(0, narration_1.inlineOr)(object.name, narration_1.NO_NAME)} (\`${object.id}\`). ${(0, call_ref_js_1.callRef)("ontology.anchor", {}, { form: "op" })} now resolves to it.`);
             });
         default:
             return (0, respond_1.err)(`Unknown op ${(0, narration_1.inlineOr)(args.op, "`(unreadable)`")}.`);
@@ -206,7 +207,7 @@ async function withObject(client, ref, fn) {
         // caller's op="get" and this write. Re-get/reconcile/retry guidance, not an
         // opaque throw.
         if ((0, respond_1.isConflict)(e)) {
-            return (0, respond_1.err)(`${(0, narration_1.inlineOr)(resolved.hit.name, narration_1.NO_NAME)} (\`${resolved.hit.id}\`) changed since you last read it. Re-read it with op="get", reconcile your change, then retry with the fresh Version as \`expected_version\` (or omit expected_version to overwrite blindly).`);
+            return (0, respond_1.err)(`${(0, narration_1.inlineOr)(resolved.hit.name, narration_1.NO_NAME)} (\`${resolved.hit.id}\`) changed since you last read it. Re-read it with ${(0, call_ref_js_1.callRef)("ontology.get", {}, { form: "op" })}, reconcile your change, then retry with the fresh Version as \`expected_version\` (or omit expected_version to overwrite blindly).`);
         }
         throw e;
     }
@@ -267,7 +268,7 @@ async function opSetRelationship(client, args) {
         // rejects only undefined/null/empty-string) and persists NOTHING — the
         // server drops zero-target edges.
         if (!args.targets?.length) {
-            return (0, respond_1.err)(`set_relationship needs \`targets\` (at least one object). To clear ${(0, narration_1.inlineOr)(label, narration_1.NO_NAME)}, use op="remove_relationship".`);
+            return (0, respond_1.err)(`set_relationship needs \`targets\` (at least one object). To clear ${(0, narration_1.inlineOr)(label, narration_1.NO_NAME)}, use ${(0, call_ref_js_1.callRef)("ontology.remove_relationship", {}, { form: "op" })}.`);
         }
         const resolved = resolveObjectValues(snapshot, args.targets);
         if ("fail" in resolved)
@@ -355,7 +356,7 @@ async function resolveKbEntryRef(client, bases, ref) {
         }
         catch {
             return {
-                fail: (0, respond_1.err)(`No entry at ${(0, narration_1.inlineOr)(path, narration_1.NO_NAME)} in knowledge base \`${base.slug}\`. Check the path with dopl_kb op="get_tree" base="${base.slug}".`),
+                fail: (0, respond_1.err)(`No entry at ${(0, narration_1.inlineOr)(path, narration_1.NO_NAME)} in knowledge base \`${base.slug}\`. Check the path with ${(0, call_ref_js_1.callRef)("kb.get_tree", { base: `"${base.slug}"` }, { form: "named" })}.`),
             };
         }
     }

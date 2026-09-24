@@ -115,7 +115,7 @@ function registerSearchTool(register, client, directory, charge) {
                 `# Search: ${(0, narration_1.inlineOr)(args.query, "`(unreadable query)`")} — everywhere`,
                 "",
             ];
-            const foot = [search_app_render_1.APP_FOLLOW_UP, "", `_${fan.coverage} ${SCOPE_AXIS_NOTE}_`];
+            const foot = [(0, search_app_render_1.appFollowUp)(), "", `_${fan.coverage} ${SCOPE_AXIS_NOTE}_`];
             return (0, respond_1.ok)([...head, ...fan.lines, ...foot].join("\n"));
         }
         const terse = (0, response_size_1.isConcise)(args.response_format);
@@ -167,7 +167,7 @@ function registerSearchTool(register, client, directory, charge) {
             standard: where.standard,
         }));
         if (found.app.length > 0)
-            lines.push("", search_app_render_1.APP_FOLLOW_UP);
+            lines.push("", (0, search_app_render_1.appFollowUp)());
         lines.push("", scopeNote(limit, found.notice, terse));
         return (0, respond_1.ok)(lines.join("\n"));
     });

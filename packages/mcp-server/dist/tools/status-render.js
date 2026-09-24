@@ -26,6 +26,7 @@
  */
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.statusLines = statusLines;
+const call_ref_js_1 = require("../call-ref.js");
 const narration_js_1 = require("./narration.js");
 const channel_session_render_js_1 = require("./channel-session-render.js");
 const response_size_js_1 = require("./response-size.js");
@@ -39,9 +40,9 @@ const NO_TEXT = "(empty)";
  * about a session line is standing doctrine and is read once, on demand, at
  * `dopl_channel(op="help")` — see the T11 note on the header below.
  */
-const STATUS_LEGEND = [
-    "`container=` is the handle every other tool takes for that room — a workspace, a home channel, or `home` for your own home space; `kind=` says which. `channel=` is what dopl_channel takes.",
-    '"new" counts messages past the `since` you passed, EXCLUDING your own. Read them with dopl_channel(op="read", since=<your cursor>) — with no `channel`, that reads across every room below at once.',
+const statusLegend = () => [
+    `\`container=\` is the handle every other tool takes for that room — a workspace, a home channel, or \`home\` for your own home space; \`kind=\` says which. \`channel=\` is what ${(0, call_ref_js_1.bySet)({ legacy: "dopl_channel takes", granular: "the channel tools take" })}.`,
+    `"new" counts messages past the \`since\` you passed, EXCLUDING your own. Read them with ${(0, call_ref_js_1.callRef)("channel.read", { since: "<your cursor>" })} — with no \`channel\`, that reads across every room below at once.`,
 ];
 /**
  * One channel's own line: what it is, where it is, and whether it moved.
@@ -138,7 +139,7 @@ kinds = new Map()) {
     if (channels.length === 0) {
         return [
             "No channels. You are not a member of any channel in any workspace, and you have no home channels — so there is nothing to check in on and no cursor to advance.",
-            'Open a room with dopl_channel(op="rooms", action="open", name=…).',
+            `Open a room with ${(0, call_ref_js_1.callRef)("channel.rooms.open", { name: "…" })}.`,
         ];
     }
     const sessionCount = channels.reduce((n, c) => n + c.sessions.length, 0);
@@ -178,7 +179,7 @@ kinds = new Map()) {
         // the half that actually defangs a hostile string. The two `await` lanes
         // keep their banner for a POSITION argument that does not apply here
         // (F-407); this table is not a body render.
-        ...(terse ? [] : STATUS_LEGEND),
+        ...(terse ? [] : statusLegend()),
         ...(terse ? [] : [""]),
     ];
     for (const channel of channels) {

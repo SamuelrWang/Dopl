@@ -8,6 +8,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.isManageAction = isManageAction;
 exports.dispatchManageAction = dispatchManageAction;
+const call_ref_js_1 = require("../call-ref.js");
 const respond_1 = require("./respond");
 const channel_ops_direct_1 = require("./channel-ops-direct");
 const channel_ops_launch_1 = require("./channel-ops-launch");
@@ -77,7 +78,7 @@ async function dispatchManageAction(action, args, client) {
                 return miss;
             // Hand-written: `missingParams` counts "" as absent, but `name: ""` legally clears a display name.
             if (typeof args.name !== "string") {
-                return (0, respond_1.err)('op="manage" action="rename" is missing required param: name. Pass the display name you want (one line), or the EMPTY STRING to clear the name back to "Agent #<id>".');
+                return (0, respond_1.err)(`${(0, call_ref_js_1.callRef)("channel.manage.rename", {}, { form: "op" })} is missing required param: name. Pass the display name you want (one line), or the EMPTY STRING to clear the name back to "Agent #<id>".`);
             }
             return (0, channel_ops_agent_1.opRenameAgent)(client, args.channel, args.to, args.name, { waitMs: args.wait_ms });
         }
@@ -93,7 +94,7 @@ async function dispatchManageAction(action, args, client) {
             // Hand-written: `missingParams` cannot express "at least one of tools / messages".
             if (args.posture?.tools === undefined &&
                 args.posture?.messages === undefined) {
-                return (0, respond_1.err)('op="manage" action="posture" is missing required params: pass posture with at least one of tools (in the agent\'s runtime\'s own words — claude manual..bypass, codex untrusted..never, cursor allowlist..run-everything) or messages (ask | auto_inbound | auto_outbound | auto_both). Passing one and omitting the other is normal — the omitted axis is left alone. ⚠ Whatever you pass is a REQUEST: your operator\'s machine narrows it to the ceiling they set by hand and never widens past it.');
+                return (0, respond_1.err)(`${(0, call_ref_js_1.callRef)("channel.manage.posture", {}, { form: "op" })} is missing required params: pass posture with at least one of tools (in the agent's runtime's own words — claude manual..bypass, codex untrusted..never, cursor allowlist..run-everything) or messages (ask | auto_inbound | auto_outbound | auto_both). Passing one and omitting the other is normal — the omitted axis is left alone. ⚠ Whatever you pass is a REQUEST: your operator's machine narrows it to the ceiling they set by hand and never widens past it.`);
             }
             return (0, channel_ops_agent_mode_1.opSetAgentMode)(client, args.channel, args.to, { tools: args.posture.tools, messages: args.posture.messages }, { waitMs: args.wait_ms });
         }

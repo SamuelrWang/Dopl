@@ -36,6 +36,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.opReadAccount = opReadAccount;
 exports.opReadSessionsAccount = opReadSessionsAccount;
+const call_ref_js_1 = require("../call-ref.js");
 const respond_1 = require("./respond");
 const channel_shared_1 = require("./channel-shared");
 /**
@@ -76,7 +77,7 @@ const NO_NAME = "`(unnamed channel)`";
  */
 function accountScopeNote(channelCount) {
     if (channelCount === 0) {
-        return `⚠ THIS READ COVERED NOTHING: you are not a member of any channel in any workspace and you have no home channels, so no cursor can ever advance. Open a room with dopl_channel(op="rooms", action="open", …) first.`;
+        return `⚠ THIS READ COVERED NOTHING: you are not a member of any channel in any workspace and you have no home channels, so no cursor can ever advance. Open a room with ${(0, call_ref_js_1.callRef)("channel.rooms.open", { "…": true })} first.`;
     }
     return `Scope: every channel you are a MEMBER of, in every workspace AND every home channel (${channelCount}). ⚠ A PUBLIC channel you never joined is NOT included, so silence here is evidence YOUR rooms are quiet and not that the product is.`;
 }
@@ -147,7 +148,7 @@ outside = false) {
         // the cursor DID advance, so re-reading from it returns the next page.
         lines.push(`⚠ CLIPPED — this page hit its ceiling, so there is more past seq ${lastSeq}. Read again from it before you conclude you are caught up.`);
     }
-    lines.push(`Highest seq shown: ${lastSeq}. Continue with dopl_channel(op="read", since=${lastSeq}) — and read the "· to ..." and "· thread ..." tags first: an account-wide page is the least targeted read there is, so most of it is context rather than a request.`);
+    lines.push(`Highest seq shown: ${lastSeq}. Continue with ${(0, call_ref_js_1.callRef)("channel.read", { since: `${lastSeq}` })} — and read the "· to ..." and "· thread ..." tags first: an account-wide page is the least targeted read there is, so most of it is context rather than a request.`);
     return (0, respond_1.ok)(lines.join("\n"));
 }
 /**

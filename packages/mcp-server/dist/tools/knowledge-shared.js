@@ -6,6 +6,7 @@ exports.resolveBaseOr = resolveBaseOr;
 exports.entryNotFound = entryNotFound;
 exports.agentWriteDenied = agentWriteDenied;
 exports.writeOr = writeOr;
+const call_ref_js_1 = require("../call-ref.js");
 const narration_1 = require("./narration");
 const respond_1 = require("./respond");
 const tool_errors_1 = require("./tool-errors");
@@ -71,7 +72,7 @@ async function ambiguousBase(client, ref, matches) {
         (0, tool_errors_1.refusal)(AMBIGUOUS_SLUG, `Nothing was read or written — ${(0, narration_1.inlineOr)(ref, "`(unreadable ref)`")} names ${matches.length} knowledge bases you can see, in different containers, and this call refuses rather than picking one. A slug is unique only WITHIN a container, so this is a legitimate state. Re-issue with the ID of the one you meant — an id resolves its own container.`),
         "",
         ...shown.map((b, i) => matchLine(b, counts[i], personal.has(b.id))),
-        ...(rest > 0 ? [`- …and ${rest} more; op="list_bases" has them all.`] : []),
+        ...(rest > 0 ? [`- …and ${rest} more; ${(0, call_ref_js_1.callRef)("kb.list_bases", {}, { form: "op" })} has them all.`] : []),
     ].join("\n"));
 }
 function matchLine(base, count, isPersonal) {
@@ -115,7 +116,7 @@ function entryNotFound(e, path, baseRef) {
     const where = traversal
         ? `A FOLDER in that path does not exist${(0, respond_1.apiMessage)(e) ? ` — ${(0, narration_1.inlineOr)((0, respond_1.apiMessage)(e) ?? "", "")}` : ""}, so nothing below it can.`
         : `The path resolved to nothing, or to a folder rather than an entry.`;
-    return (0, respond_1.err)((0, tool_errors_1.refusal)(tool_errors_1.KB_ENTRY_NOT_FOUND, `${(0, narration_1.inlineOr)(path, narration_1.NO_PATH)} in ${(0, narration_1.inlineOr)(baseRef, "`(unreadable ref)`")}. ${where} List the folder it should be in with op="list_dir", or op="get_tree" for the whole base. An ENTRY ID survives a move and a rename; a path does not.`));
+    return (0, respond_1.err)((0, tool_errors_1.refusal)(tool_errors_1.KB_ENTRY_NOT_FOUND, `${(0, narration_1.inlineOr)(path, narration_1.NO_PATH)} in ${(0, narration_1.inlineOr)(baseRef, "`(unreadable ref)`")}. ${where} List the folder it should be in with ${(0, call_ref_js_1.callRef)("kb.list_dir", {}, { form: "op" })}, or ${(0, call_ref_js_1.callRef)("kb.get_tree", {}, { form: "op" })} for the whole base. An ENTRY ID survives a move and a rename; a path does not.`));
 }
 /** Maps 403 `AGENT_WRITE_DISABLED` to the server's message; null otherwise so the caller rethrows. */
 function agentWriteDenied(e) {

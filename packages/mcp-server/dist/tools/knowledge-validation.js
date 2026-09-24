@@ -19,6 +19,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.writeFileValidationError = writeFileValidationError;
 exports.createFolderValidationError = createFolderValidationError;
 exports.updateBaseValidationError = updateBaseValidationError;
+const call_ref_js_1 = require("../call-ref.js");
 const respond_1 = require("./respond");
 const tool_errors_1 = require("./tool-errors");
 /**
@@ -121,7 +122,7 @@ function writeFileValidationError(e, title) {
         return (0, respond_1.err)((0, tool_errors_1.refusal)((0, tool_errors_1.fieldTooLong)("excerpt", KB_TEXT_FIELD_MAX), `write_file: the excerpt is the row's one-line summary, not a preview of the body — keep it to one sentence. The BODY was not written either; re-issue the whole call.`));
     }
     if (fields.has("section")) {
-        return (0, respond_1.err)((0, tool_errors_1.refusal)((0, tool_errors_1.fieldTooLong)("section", KB_TEXT_FIELD_MAX), `write_file: \`section\` is ONE heading line, copied from op="outline" — not the text to write. Pass the heading in \`section\` and its new content in \`body\`.`));
+        return (0, respond_1.err)((0, tool_errors_1.refusal)((0, tool_errors_1.fieldTooLong)("section", KB_TEXT_FIELD_MAX), `write_file: \`section\` is ONE heading line, copied from ${(0, call_ref_js_1.callRef)("kb.outline", {}, { form: "op" })} — not the text to write. Pass the heading in \`section\` and its new content in \`body\`.`));
     }
     return (0, respond_1.err)(`write_file: request body failed validation${fields.size ? ` (field: ${[...fields].join(", ")})` : ""}. Titles can't contain '/', control, or zero-width characters.`);
 }

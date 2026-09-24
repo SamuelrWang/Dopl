@@ -16,6 +16,7 @@ exports.sharedCredentialPrivateDenied = sharedCredentialPrivateDenied;
 exports.identityScopes = identityScopes;
 exports.identityAudience = identityAudience;
 exports.identityRow = identityRow;
+const call_ref_js_1 = require("../call-ref.js");
 const audience_label_js_1 = require("./audience-label.js");
 const narration_js_1 = require("./narration.js");
 const respond_js_1 = require("./respond.js");
@@ -96,7 +97,7 @@ function identityChoiceLines(matches) {
     return matches.map((m) => `- \`${m.id}\` — ${(0, narration_js_1.inlineOr)(m.name, narration_js_1.NO_NAME)} (${m.visibility})`);
 }
 function identityNotFound(ref) {
-    return (0, respond_js_1.err)((0, tool_errors_js_1.refusal)(AGENT_ERRORS_BY_REASON.identity_not_found, `No agent identity ${(0, narration_js_1.inlineOr)(ref, narration_js_1.NO_NAME)} resolves for you, and nothing was read or written. Either there is no such identity or it is not shared with you — those are ONE answer here on purpose, so ids cannot be probed. Matching on a name is EXACT (case-insensitive), never fuzzy; list what you can see with dopl_agent(op="list").`));
+    return (0, respond_js_1.err)((0, tool_errors_js_1.refusal)(AGENT_ERRORS_BY_REASON.identity_not_found, `No agent identity ${(0, narration_js_1.inlineOr)(ref, narration_js_1.NO_NAME)} resolves for you, and nothing was read or written. Either there is no such identity or it is not shared with you — those are ONE answer here on purpose, so ids cannot be probed. Matching on a name is EXACT (case-insensitive), never fuzzy; list what you can see with ${(0, call_ref_js_1.callRef)("agent.list")}.`));
 }
 function identityWriteDenied(e) {
     if (!(0, respond_js_1.isApiError)(e, 403, "RESOURCE_ACCESS_DENIED"))
@@ -110,7 +111,7 @@ function identityWriteDenied(e) {
 function knowledgeBaseNotAttachable(e) {
     if (!(0, respond_js_1.isApiError)(e, 404, "KNOWLEDGE_BASE_NOT_FOUND"))
         return null;
-    return (0, respond_js_1.err)(`At least one knowledge id you passed does not resolve for you, so nothing was written. A base you cannot READ cannot be attached — that is what stops an identity laundering access to somebody else's private base — and "not yours" and "no such base" answer the same way here. The same answer covers a folder or an entry that is trashed, or that lives in a different base than the one you named. Check ids with dopl_kb(op="list_bases") and dopl_kb(op="get_tree").`);
+    return (0, respond_js_1.err)(`At least one knowledge id you passed does not resolve for you, so nothing was written. A base you cannot READ cannot be attached — that is what stops an identity laundering access to somebody else's private base — and "not yours" and "no such base" answer the same way here. The same answer covers a folder or an entry that is trashed, or that lives in a different base than the one you named. Check ids with ${(0, call_ref_js_1.callRef)("kb.list_bases")} and ${(0, call_ref_js_1.callRef)("kb.get_tree")}.`);
 }
 /** 403 `WORKSPACE_KEY_PRIVATE_VISIBILITY`, surfaced with the server's own sentence (this layer cannot tell which credential is in play). */
 function sharedCredentialPrivateDenied(e) {

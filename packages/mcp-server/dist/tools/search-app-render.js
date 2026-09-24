@@ -10,8 +10,9 @@
  * display name renders by id alone.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.APP_FOLLOW_UP = void 0;
+exports.appFollowUp = void 0;
 exports.appGroupLines = appGroupLines;
+const call_ref_js_1 = require("../call-ref.js");
 const narration_js_1 = require("./narration.js");
 const search_scope_js_1 = require("./search-scope.js");
 const HEADINGS = {
@@ -80,4 +81,5 @@ function appGroupLines(groups, heading, opts) {
     return lines;
 }
 /** How to read a hit, once per result rather than per row. */
-exports.APP_FOLLOW_UP = `_Read a message with dopl_channel(op="read", channel=…, since=<seq − 1>), a thread with thread=…, a member with dopl_members(op="get", member=<id>), a chat with dopl_chats(op="get", chat_id=<id>). A home channel also needs container=._`;
+const appFollowUp = () => `_Read a message with ${(0, call_ref_js_1.callRef)("channel.read", { channel: "…", since: "<seq − 1>" })}, a thread with thread=…, a member with ${(0, call_ref_js_1.callRef)("members.get", { member: "<id>" })}, a chat with ${(0, call_ref_js_1.callRef)("chats.get", { chat_id: "<id>" })}. A home channel also needs container=._`;
+exports.appFollowUp = appFollowUp;

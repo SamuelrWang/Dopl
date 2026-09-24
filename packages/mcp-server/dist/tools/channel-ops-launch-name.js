@@ -5,6 +5,7 @@ exports.launchName = launchName;
 exports.isNameRefusal = isNameRefusal;
 exports.launchedTag = launchedTag;
 exports.launchedName = launchedName;
+const call_ref_js_1 = require("../call-ref.js");
 const agent_display_name_1 = require("./agent-display-name");
 const channel_agent_id_1 = require("./channel-agent-id");
 const respond_1 = require("./respond");
@@ -32,7 +33,7 @@ const respond_1 = require("./respond");
  * — it serves four actions and the other three have no such bound — so a 61-character name
  * reached the route and came back as a bare `VALIDATION_FAILED` naming no field. The number is
  * in `name`'s own `.describe()` ("1-60 visible characters") and in `channel-errors.ts ›
- * FIELD_CAPS_NOTE`; this is the third statement of it, and the only one that can refuse.
+ * fieldCapsNote()`; this is the third statement of it, and the only one that can refuse.
  */
 exports.LAUNCH_NAME_MAX_CHARS = 60;
 /**
@@ -46,14 +47,14 @@ exports.LAUNCH_NAME_MAX_CHARS = 60;
 function launchName(raw) {
     const name = String(raw ?? "").trim();
     if (name.length === 0) {
-        return (0, respond_1.err)('op="manage" action="launch" is missing required param: name. Name the agent you are launching — a short role, 1-60 characters on one line ("Research", "Bug reviewer"). It is what every human surface shows and what other agents @-tag it by (`@bug-reviewer`).');
+        return (0, respond_1.err)(`${(0, call_ref_js_1.callRef)("channel.manage.launch", {}, { form: "op" })} is missing required param: name. Name the agent you are launching — a short role, 1-60 characters on one line ("Research", "Bug reviewer"). It is what every human surface shows and what other agents @-tag it by (\`@bug-reviewer\`).`);
     }
     // ⚠ **AN ID-SHAPED NAME IS REFUSED, AND THIS IS THE HALF SAMUEL SAID OUT LOUD.** It is
     // reachable by accident rather than by perversity: `read_sessions` prints `@agent-<id>`, so a
     // caller copying the neighbouring op's output into this field files an id as a name and undoes
     // the whole ruling one launch at a time.
     if (looksLikeAgentId(name)) {
-        return (0, respond_1.err)(`op="manage" action="launch": name="${name}" is an agent id, not a name. An id is internal plumbing and is never shown to a person; pass what the agent is FOR ("Research", "Bug reviewer").`);
+        return (0, respond_1.err)(`${(0, call_ref_js_1.callRef)("channel.manage.launch", {}, { form: "op" })}: name="${name}" is an agent id, not a name. An id is internal plumbing and is never shown to a person; pass what the agent is FOR ("Research", "Bug reviewer").`);
     }
     // ⚠ **A SLUG IS REPAIRED RATHER THAN REFUSED, AND ONLY AFTER THE TWO REFUSALS ABOVE**
     // (Samuel, 2026-09-17): `agent-display-name.ts` explains why this arm normalizes, and why

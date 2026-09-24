@@ -15,6 +15,7 @@ exports.confirmGate = confirmGate;
 exports.__resetConfirmTokensForTest = __resetConfirmTokensForTest;
 const node_crypto_1 = require("node:crypto");
 const client_1 = require("@dopl/client");
+const call_ref_js_1 = require("../call-ref.js");
 const shared_room_js_1 = require("../shared-room.js");
 const narration_js_1 = require("./narration.js");
 const respond_js_1 = require("./respond.js");
@@ -109,7 +110,7 @@ const PROCEED_ACKNOWLEDGED = {
 };
 /** A token on a call outside the confirm class is refused, not ignored (as `registrar.ts › strictInput` does). */
 function refuseStrayToken(tool, op) {
-    return (0, respond_js_1.err)(`\`confirm_token\` was passed to ${tool} op="${op}", but this call is not audience-changing — it creates something only you can see, so there is no preview to confirm and nothing was created. Re-issue WITHOUT \`confirm_token\`. Tokens are only ever minted for a write that publishes into a shared home channel.`);
+    return (0, respond_js_1.err)(`\`confirm_token\` was passed to ${(0, call_ref_js_1.calledAs)(op, { tool })}, but this call is not audience-changing — it creates something only you can see, so there is no preview to confirm and nothing was created. Re-issue WITHOUT \`confirm_token\`. Tokens are only ever minted for a write that publishes into a shared home channel.`);
 }
 /** Maps the server's 400 `CONTAINER_PUBLISH_UNACKNOWLEDGED`; the remedy is the caller's because it differs by op. */
 function containerPublishUnacknowledged(e, remedy) {
@@ -153,7 +154,7 @@ async function confirmGate(client, act, opts) {
 /** The dry run, returned as `isError` so nothing reads as a success. */
 function preview(act, target, token) {
     return (0, respond_js_1.err)([
-        `NOTHING WAS CREATED — this is a dry run. ${act.tool} op="${act.op}" would publish into a home channel somebody ELSE is in, so it previews first.`,
+        `NOTHING WAS CREATED — this is a dry run. ${(0, call_ref_js_1.calledAs)(act.op, { tool: act.tool })} would publish into a home channel somebody ELSE is in, so it previews first.`,
         "",
         `**What would be created:** ${act.what}`,
         `**Where:** ${target.label}${target.unknown ? " — ⚠ this home channel could not be read, so it is being treated as a shared room" : " (a home channel with at least one other person in it)"}`,
@@ -169,7 +170,7 @@ function tokenRefusal(act, verdict) {
         : verdict === "mismatch"
             ? `that \`confirm_token\` was minted for a DIFFERENT payload — at least one argument changed since the preview`
             : `that \`confirm_token\` is not recognised: it was already used, it was minted somewhere this request cannot see, or it was never issued`;
-    return (0, respond_js_1.err)(`Nothing was created — ${why}. Re-issue ${act.tool} op="${act.op}" WITHOUT \`confirm_token\` to get a fresh preview of exactly what would land and who would see it, then confirm that one. Do not guess a token: they are random and a wrong one can only ever refuse.`);
+    return (0, respond_js_1.err)(`Nothing was created — ${why}. Re-issue ${(0, call_ref_js_1.calledAs)(act.op, { tool: act.tool })} WITHOUT \`confirm_token\` to get a fresh preview of exactly what would land and who would see it, then confirm that one. Do not guess a token: they are random and a wrong one can only ever refuse.`);
 }
 /** Test-only: clears the process-lifetime store. */
 function __resetConfirmTokensForTest() {

@@ -14,7 +14,7 @@
  * ⚠ **THE FIX IS A PRE-FLIGHT, NOT A LOWERED SCHEMA.** Dropping `body` to 2000 would break
  * `op="send"`, which is the field's other and far commoner lane. What was wrong is that the
  * 2000 was UNPUBLISHED — so it is published now (`body`'s `.describe()` and
- * `channel-errors.ts › FIELD_CAPS_NOTE`) and refused here, before any request goes out.
+ * `channel-errors.ts › fieldCapsNote`) and refused here, before any request goes out.
  *
  * ⚠ **REFUSED HERE RATHER THAN AT THE ROUTE'S ZOD, BECAUSE ONLY THIS LAYER CAN SAY WHAT TO
  * DO INSTEAD** — the same argument `channel-ops-launch-name.ts` opens with. A goal that long
@@ -34,7 +34,7 @@ import { type ToolResponse } from "./respond";
 /**
  * **HAND-MIRRORED FROM `schema-launch.ts › LaunchCreateSchema.goal`'s `.max(2000)`**, the
  * bound that actually rejects the request — the same hand-mirror discipline
- * `channel-schema.ts`'s caps and `channel-errors.ts › FIELD_CAPS_NOTE` follow, and for the
+ * `channel-schema.ts`'s caps and `channel-errors.ts › fieldCapsNote` follow, and for the
  * same reason: this package cannot import from `src/`. ⚠ **IT IS NOT `body`'s 16000 AND MUST
  * NOT BE "CORRECTED" TO IT.** The two numbers are two different routes' and both are right.
  */

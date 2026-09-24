@@ -40,7 +40,7 @@ export declare const LIVE_AGENT_HANDLES = 5;
 export declare function buildInstructions(directory: WorkspaceListItem[], guidance?: {
     pin?: WorkspacePin | null;
     directoryLoadFailed?: boolean;
-    /** Absent ⇒ {@link IDENTITY_FALLBACK}. */
+    /** Absent ⇒ {@link identityFallback}. */
     identity?: ConnectionIdentity;
     /** `identity.ts › isDesktopRun`; false = not known to be desktop-run. Picks the WAIT sentence. */
     desktopRun?: boolean;

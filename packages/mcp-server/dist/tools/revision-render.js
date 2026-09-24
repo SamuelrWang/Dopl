@@ -9,7 +9,7 @@
  * gates still apply, and every restore here carries the caller's `expected_version`.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.HISTORY_OP = exports.HISTORY_PAGE_DEFAULT = void 0;
+exports.HISTORY_PAGE_DEFAULT = void 0;
 exports.revisionNotFound = revisionNotFound;
 exports.foreignRevision = foreignRevision;
 exports.revisionRow = revisionRow;
@@ -18,13 +18,16 @@ exports.restoreRefusal = restoreRefusal;
 exports.staleBeforeRestore = staleBeforeRestore;
 const narration_js_1 = require("./narration.js");
 const respond_js_1 = require("./respond.js");
+const call_ref_js_1 = require("../call-ref.js");
 const tool_errors_js_1 = require("./tool-errors.js");
 /** Emit-only: 404 `REVISION_NOT_FOUND` (unknown id, another item's revision, or unreadable). */
-function revisionNotFound(historyOp) {
+function revisionNotFound(historyKey) {
     return {
         reason: "revision_not_found",
         meaning: "no revision by that id on this item, or none you can read; nothing changed",
-        retry: historyOp,
+        get retry() {
+            return (0, call_ref_js_1.callRef)(historyKey, {}, { form: "op" });
+        },
     };
 }
 /** Emit-only: 409 `REVISION_NOT_RESTORABLE` — a move, a link, or a create/delete bundle. */
@@ -35,8 +38,6 @@ const REVISION_NOT_RESTORABLE = {
 };
 /** Default rows per history page; the server's own page cap bounds `limit`. */
 exports.HISTORY_PAGE_DEFAULT = 20;
-/** The op every history refusal points back to. */
-exports.HISTORY_OP = 'op="history"';
 /** Who wrote a row, relative to the caller. ⚠ Never a name: an id is the only unforgeable handle. */
 function actorLabel(rev, callerUserId) {
     if (rev.actor.userId && rev.actor.userId === callerUserId) {
@@ -58,21 +59,21 @@ function pageTail(nextCursor, cursorArg) {
     return nextCursor ? `More: ${cursorArg}="${nextCursor}"` : "End of history.";
 }
 /**
- * Map a restore failure to a named refusal, or null (rethrow). `readOp` is the call that yields
- * a fresh Version; `historyOp` the one that lists revisions.
+ * Map a restore failure to a named refusal, or null (rethrow). `readKey` is the call (a manifest
+ * key) that yields a fresh Version; `historyKey` the one that lists revisions.
  */
-function restoreRefusal(e, readOp, historyOp) {
+function restoreRefusal(e, readKey, historyKey) {
     if ((0, respond_js_1.isConflict)(e)) {
-        return (0, respond_js_1.err)((0, tool_errors_js_1.refusal)((0, tool_errors_js_1.versionConflict)(readOp), "NOTHING was restored. Somebody wrote after the Version you passed — read the current state, confirm the restore still makes sense, then re-issue with the new expected_version."));
+        return (0, respond_js_1.err)((0, tool_errors_js_1.refusal)((0, tool_errors_js_1.versionConflict)(readKey), "NOTHING was restored. Somebody wrote after the Version you passed — read the current state, confirm the restore still makes sense, then re-issue with the new expected_version."));
     }
     const code = (0, respond_js_1.apiErrorCode)(e);
     if (code === "REVISION_NOT_FOUND")
-        return (0, respond_js_1.err)((0, tool_errors_js_1.refusal)(revisionNotFound(historyOp)));
+        return (0, respond_js_1.err)((0, tool_errors_js_1.refusal)(revisionNotFound(historyKey)));
     if (code === "REVISION_NOT_RESTORABLE")
         return (0, respond_js_1.err)((0, tool_errors_js_1.refusal)(REVISION_NOT_RESTORABLE));
     return null;
 }
 /** Refused before any write: the Version the caller holds is not the current one. */
-function staleBeforeRestore(readOp, current, passed) {
-    return (0, respond_js_1.err)((0, tool_errors_js_1.refusal)((0, tool_errors_js_1.versionConflict)(readOp), `NOTHING was restored. You passed expected_version=${(0, narration_js_1.inlineOr)(passed, "`(empty)`")} but the current Version is \`${current}\` — something changed since your read. Re-read, confirm, then re-issue with the current Version.`));
+function staleBeforeRestore(readKey, current, passed) {
+    return (0, respond_js_1.err)((0, tool_errors_js_1.refusal)((0, tool_errors_js_1.versionConflict)(readKey), `NOTHING was restored. You passed expected_version=${(0, narration_js_1.inlineOr)(passed, "`(empty)`")} but the current Version is \`${current}\` — something changed since your read. Re-read, confirm, then re-issue with the current Version.`));
 }

@@ -11,6 +11,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.opHistory = opHistory;
 exports.opRestore = opRestore;
+const call_ref_js_1 = require("../call-ref.js");
 const narration_1 = require("./narration");
 const respond_1 = require("./respond");
 const skills_shared_1 = require("./skills-shared");
@@ -36,7 +37,7 @@ async function versionOf(client, file, versionId) {
         if (!(0, respond_1.isNotFound)(e))
             throw e;
     }
-    return (0, respond_1.err)((0, tool_errors_1.refusal)((0, revision_render_1.revisionNotFound)(revision_render_1.HISTORY_OP), `${(0, narration_1.inlineOr)(versionId, "`(empty)`")} is not a version of this skill.`));
+    return (0, respond_1.err)((0, tool_errors_1.refusal)((0, revision_render_1.revisionNotFound)("skill.history"), `${(0, narration_1.inlineOr)(versionId, "`(empty)`")} is not a version of this skill.`));
 }
 async function opHistory(client, slug, callerUserId, opts) {
     const file = await currentBody(client, slug);
@@ -54,7 +55,7 @@ async function opHistory(client, slug, callerUserId, opts) {
             `${header}# Version \`${version.id}\` of ${(0, narration_1.inlineOr)(slug, "`(empty)`")} / SKILL.md`,
             `Saved ${version.createdAt} via ${version.source} · ${version.body.length} chars.`,
             current,
-            `Restoring writes THIS body over the current one as a NEW save; nothing is deleted. To do it: op="restore" slug="${slug}" revision="${version.id}" expected_version="${file.updatedAt}".`,
+            `Restoring writes THIS body over the current one as a NEW save; nothing is deleted. To do it: ${(0, call_ref_js_1.callRef)("skill.restore", { slug: `"${slug}"`, revision: `"${version.id}"`, expected_version: `"${file.updatedAt}"` }, { form: "op" })}.`,
             "",
             "---",
             "",
@@ -71,7 +72,7 @@ async function opHistory(client, slug, callerUserId, opts) {
     }
     lines.push("", history.versions.length >= (opts.limit ?? revision_render_1.HISTORY_PAGE_DEFAULT)
         ? `Showing the newest ${history.versions.length}; raise \`limit\` for older ones.`
-        : "End of history.", `Preview one with op="history" revision="<id>"; restore with op="restore" revision="<id>" expected_version="${file.updatedAt}".`);
+        : "End of history.", `Preview one with ${(0, call_ref_js_1.callRef)("skill.history", { revision: '"<id>"' }, { form: "op" })}; restore with ${(0, call_ref_js_1.callRef)("skill.restore", { revision: '"<id>"', expected_version: `"${file.updatedAt}"` }, { form: "op" })}.`);
     return (0, respond_1.ok)(lines.join("\n"));
 }
 async function opRestore(client, slug, versionId, expectedVersion) {
@@ -79,7 +80,7 @@ async function opRestore(client, slug, versionId, expectedVersion) {
     if ((0, channel_shared_1.isErr)(file))
         return file;
     if (file.updatedAt !== expectedVersion) {
-        return (0, revision_render_1.staleBeforeRestore)('op="read"', file.updatedAt, expectedVersion);
+        return (0, revision_render_1.staleBeforeRestore)("skill.read", file.updatedAt, expectedVersion);
     }
     const version = await versionOf(client, file, versionId);
     if ((0, channel_shared_1.isErr)(version))
@@ -89,7 +90,7 @@ async function opRestore(client, slug, versionId, expectedVersion) {
         saved = await client.restoreSkillVersion(versionId, expectedVersion);
     }
     catch (e) {
-        const mapped = (0, revision_render_1.restoreRefusal)(e, 'op="read"', revision_render_1.HISTORY_OP) ?? (0, skills_shared_1.agentWriteDenied)(e);
+        const mapped = (0, revision_render_1.restoreRefusal)(e, "skill.read", "skill.history") ?? (0, skills_shared_1.agentWriteDenied)(e);
         if (mapped)
             return mapped;
         throw e;
@@ -98,7 +99,7 @@ async function opRestore(client, slug, versionId, expectedVersion) {
     return (0, respond_1.ok)([
         unchanged
             ? `Nothing to restore: SKILL.md of ${(0, narration_1.inlineOr)(slug, "`(empty)`")} already matches version \`${versionId}\`.`
-            : `Restored SKILL.md of ${(0, narration_1.inlineOr)(slug, "`(empty)`")} to version \`${versionId}\` — written as a NEW save; every earlier version is still in op="history".`,
+            : `Restored SKILL.md of ${(0, narration_1.inlineOr)(slug, "`(empty)`")} to version \`${versionId}\` — written as a NEW save; every earlier version is still in ${(0, call_ref_js_1.callRef)("skill.history", {}, { form: "op" })}.`,
         `Version \`${expectedVersion}\` → \`${saved.updatedAt}\` · ${file.body.length} → ${saved.body.length} chars.`,
     ].join("\n"));
 }

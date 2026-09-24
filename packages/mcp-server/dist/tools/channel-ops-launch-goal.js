@@ -15,7 +15,7 @@
  * ⚠ **THE FIX IS A PRE-FLIGHT, NOT A LOWERED SCHEMA.** Dropping `body` to 2000 would break
  * `op="send"`, which is the field's other and far commoner lane. What was wrong is that the
  * 2000 was UNPUBLISHED — so it is published now (`body`'s `.describe()` and
- * `channel-errors.ts › FIELD_CAPS_NOTE`) and refused here, before any request goes out.
+ * `channel-errors.ts › fieldCapsNote`) and refused here, before any request goes out.
  *
  * ⚠ **REFUSED HERE RATHER THAN AT THE ROUTE'S ZOD, BECAUSE ONLY THIS LAYER CAN SAY WHAT TO
  * DO INSTEAD** — the same argument `channel-ops-launch-name.ts` opens with. A goal that long
@@ -35,11 +35,12 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.LAUNCH_GOAL_MAX_CHARS = void 0;
 exports.launchGoal = launchGoal;
 exports.isGoalRefusal = isGoalRefusal;
+const call_ref_js_1 = require("../call-ref.js");
 const respond_1 = require("./respond");
 /**
  * **HAND-MIRRORED FROM `schema-launch.ts › LaunchCreateSchema.goal`'s `.max(2000)`**, the
  * bound that actually rejects the request — the same hand-mirror discipline
- * `channel-schema.ts`'s caps and `channel-errors.ts › FIELD_CAPS_NOTE` follow, and for the
+ * `channel-schema.ts`'s caps and `channel-errors.ts › fieldCapsNote` follow, and for the
  * same reason: this package cannot import from `src/`. ⚠ **IT IS NOT `body`'s 16000 AND MUST
  * NOT BE "CORRECTED" TO IT.** The two numbers are two different routes' and both are right.
  */
@@ -71,7 +72,7 @@ function launchGoal(raw) {
             // an agent to shorten an argument it never sent is the mis-narration this whole
             // module exists to end.
             `No agent was requested — field=body limit=${exports.LAUNCH_GOAL_MAX_CHARS} reason=goal_too_long retry=no`,
-            `**Nothing was filed**: your \`body\` is ${measured} characters and a launch goal caps at ${exports.LAUNCH_GOAL_MAX_CHARS}. The 16000 the schema publishes is op="send"'s; this lane is tighter.`,
+            `**Nothing was filed**: your \`body\` is ${measured} characters and a launch goal caps at ${exports.LAUNCH_GOAL_MAX_CHARS}. The 16000 the schema publishes is ${(0, call_ref_js_1.callRef)("channel.send", {}, { form: "op" })}'s; this lane is tighter.`,
             `The goal is the OPENING INSTRUCTION, not the brief. Put the long version where the agent can read it — a knowledge entry, or a post in the channel — and launch with a goal that names it.`,
         ].join("\n"));
     }

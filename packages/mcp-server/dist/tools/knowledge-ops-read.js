@@ -9,6 +9,7 @@ exports.opReadFile = exports.opOutline = void 0;
 exports.opListBases = opListBases;
 exports.opGetTree = opGetTree;
 exports.opListDir = opListDir;
+const call_ref_js_1 = require("../call-ref.js");
 const narration_1 = require("./narration");
 const respond_1 = require("./respond");
 const knowledge_shared_1 = require("./knowledge-shared");
@@ -22,7 +23,7 @@ const EMPTY_BASE_IDS = Object.freeze([]);
 /** Stale-cache fallback (INVARIANTS §8) for `entryHeadings`: absent renders rows without heading lists. */
 const EMPTY_HEADINGS = Object.freeze({});
 /** States on the result that the list is server-filtered; names the filters, never a hidden count. */
-const BASES_SCOPE_NOTE = `_Bases you can READ here. Another member's private bases, and any you have no grant on, are not listed, so this is not the workspace's base count. Full inventory across every visibility: dopl_members(op="access_matrix")._`;
+const basesScopeNote = () => `_Bases you can READ here. Another member's private bases, and any you have no grant on, are not listed, so this is not the workspace's base count. Full inventory across every visibility: ${(0, call_ref_js_1.callRef)("members.access_matrix")}._`;
 /** The server returns this container's bases plus the caller's personal ones; rows are grouped by container first
  *  (twin: `agent-ops-read.ts › opList`). */
 async function opListBases(client, 
@@ -36,7 +37,7 @@ directory) {
     const payload = await client.listKbBasesPayload({ channelId });
     const bases = payload.bases;
     if (bases.length === 0)
-        return (0, respond_1.ok)(`No knowledge bases visible to you here. ${BASES_SCOPE_NOTE}\n\nCreate one with \`dopl_kb(op='create_base')\`.`);
+        return (0, respond_1.ok)(`No knowledge bases visible to you here. ${basesScopeNote()}\n\nCreate one with \`${(0, call_ref_js_1.callRef)("kb.create_base", {}, { quote: "'" })}\`.`);
     const personalIds = new Set(payload.homeScopedBaseIds ?? EMPTY_BASE_IDS);
     // Split on the answer, not the question: `undefined` = not answered (skip the split); `{}` = answered, none granted.
     const grants = payload.channelGrants;
@@ -79,7 +80,7 @@ directory) {
         }
         lines.push("");
     }
-    lines.push(BASES_SCOPE_NOTE);
+    lines.push(basesScopeNote());
     return (0, respond_1.ok)(lines.join("\n"));
 }
 const TREE_ENTRY_CAP = 400;
@@ -143,7 +144,7 @@ async function opGetTree(client, ref, entryLimit, entryCursor) {
     if (escaped.length > 0)
         lines.push("", (0, knowledge_entity_titles_1.escapedTitleLine)(escaped[0], escaped.length));
     if (tree.nextEntryCursor) {
-        lines.push("", `_Showing ${tree.entries.length} of ${entryTotal} entries. Pass entry_cursor="${tree.nextEntryCursor}" for the next page, or narrow with op="list_dir" / op="search"._`);
+        lines.push("", `_Showing ${tree.entries.length} of ${entryTotal} entries. Pass entry_cursor="${tree.nextEntryCursor}" for the next page, or narrow with ${(0, call_ref_js_1.callRef)("kb.list_dir", {}, { form: "op" })} / ${(0, call_ref_js_1.callRef)("kb.search", {}, { form: "op" })}._`);
     }
     else {
         // The complete case states its own scope rather than leaving it implied.

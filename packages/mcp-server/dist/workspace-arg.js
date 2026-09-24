@@ -9,10 +9,13 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.UNADDRESSED_WRITE_REFUSALS = exports.WORKSPACE_ARG_OPS = exports.CONTAINER_ARG_DESCRIPTION = void 0;
 exports.workspaceArgTargets = workspaceArgTargets;
+exports.bindingTakesContainer = bindingTakesContainer;
 exports.acceptsWorkspaceArg = acceptsWorkspaceArg;
 exports.refusesUnaddressedWrite = refusesUnaddressedWrite;
 exports.unaddressedWriteRefusal = unaddressedWriteRefusal;
 exports.ignoredWorkspaceNote = ignoredWorkspaceNote;
+const call_ref_js_1 = require("./call-ref.js");
+const tool_manifest_js_1 = require("./tool-manifest.js");
 const narration_js_1 = require("./tools/narration.js");
 /**
  * 🔒 **THE `container=` ARGUMENT'S DESCRIPTION — R-32's ADDRESS GRAMMAR IN ONE
@@ -110,12 +113,23 @@ exports.WORKSPACE_ARG_OPS = {
  * any other tool"* until 2026-09-02: false on the day B13 shipped, because the
  * arg is IGNORED everywhere outside this table. A hand-written list would be the
  * same claim one release later, so it is derived — a row added above changes
- * this sentence with it.
+ * this sentence with it. A granular connection gets the granular tools that
+ * publish `container` (a bound job honours it), named whole.
  */
 function workspaceArgTargets() {
+    if ((0, call_ref_js_1.activeToolSet)() === "granular") {
+        return tool_manifest_js_1.GRANULAR_TOOLS.filter((t) => (0, tool_manifest_js_1.bindingsOf)(t).some(bindingTakesContainer))
+            .map((t) => t.name)
+            .join(", ");
+    }
     return Object.entries(exports.WORKSPACE_ARG_OPS)
         .map(([tool, ops]) => (ops === null ? tool : `${tool} (${[...ops].join(", ")})`))
         .join(", ");
+}
+/** Does the legacy job a granular binding runs take `container`? */
+function bindingTakesContainer(key) {
+    const { tool, op } = (0, tool_manifest_js_1.parseBinding)(key);
+    return acceptsWorkspaceArg(tool, op);
 }
 /**
  * Does this op still take `workspace=`? ⚠ A tool with NO row takes it nowhere —
@@ -182,10 +196,10 @@ function refusesUnaddressedWrite(tool, op) {
  * choice, and a refusal with no accepted value is a dead end an agent retries.
  */
 function unaddressedWriteRefusal(tool, op) {
-    return (`\`${tool}(op="${op}")\` needs an explicit \`container=\`. This connection names no ` +
+    return (`\`${(0, call_ref_js_1.calledAs)(op, { tool, form: "call" })}\` needs an explicit \`container=\`. This connection names no ` +
         `container, so the write would fall through to your home space — which lists no ` +
         `chats and no skills, and a row filed where nothing lists it is an orphan. Pass ` +
-        `\`container=<slug|id>\` (\`dopl_workspaces\` lists every one you can reach), or ` +
+        `\`container=<slug|id>\` (\`${(0, call_ref_js_1.toolName)("workspaces.list")}\` lists every one you can reach), or ` +
         `\`container="home"\` if the home space is genuinely where you mean it to go.`);
 }
 /**

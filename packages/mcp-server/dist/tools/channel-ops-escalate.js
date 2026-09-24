@@ -30,6 +30,7 @@
  */
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.opEscalate = opEscalate;
+const call_ref_js_1 = require("../call-ref.js");
 const respond_1 = require("./respond");
 const channel_escalate_render_1 = require("./channel-escalate-render");
 const channel_ops_write_1 = require("./channel-ops-write");
@@ -56,7 +57,7 @@ async function opEscalate(client, channelRef, escalation, opts = {}) {
     // wrong and nothing about which direction to move, and the two directions have
     // opposite remedies: one option means DO IT, seven means COLLAPSE THEM.
     if (escalation.options.length < MIN_OPTIONS) {
-        return (0, respond_1.err)(`Nothing was posted. An escalation offers ${MIN_OPTIONS}-${MAX_OPTIONS} options and you gave ${escalation.options.length} — **one option is not a question.** If there is only one way forward, that is a decision you already have: take it, and report it with dopl_channel(op="send", kind="milestone", thread="<id>", body="<one line>"). If you are asking permission for that one path, the second option is what happens if they say no — write it out.`);
+        return (0, respond_1.err)(`Nothing was posted. An escalation offers ${MIN_OPTIONS}-${MAX_OPTIONS} options and you gave ${escalation.options.length} — **one option is not a question.** If there is only one way forward, that is a decision you already have: take it, and report it with ${(0, call_ref_js_1.callRef)("channel.send", { kind: '"milestone"', thread: '"<id>"', body: '"<one line>"' })}. If you are asking permission for that one path, the second option is what happens if they say no — write it out.`);
     }
     if (escalation.options.length > MAX_OPTIONS) {
         return (0, respond_1.err)(`Nothing was posted. An escalation offers at most ${MAX_OPTIONS} options and you gave ${escalation.options.length} — past that it is the wall of prose this op exists to replace, with numbers on it. Collapse the near-duplicates into the decision they actually differ on, and put what you dropped into the \`body\` in one line if it matters.`);

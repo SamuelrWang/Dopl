@@ -153,7 +153,7 @@ caller = identity_1.UNKNOWN_CALLER) {
                 return (0, skills_ops_write_1.opSetVisibility)(client, caller.userId, args.slug, args.visibility, args.confirm_token);
             }
             case "authoring_guide":
-                return (0, respond_1.ok)(skill_authoring_guide_js_1.SKILL_AUTHORING_GUIDE);
+                return (0, respond_1.ok)((0, skill_authoring_guide_js_1.skillAuthoringGuide)());
             case "history": {
                 const bad = (0, respond_1.strictParams)("history", args, ["slug"], ["revision", "limit"]);
                 if (bad)

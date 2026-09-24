@@ -14,6 +14,7 @@
  */
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.registerOntologyTool = registerOntologyTool;
+const call_ref_js_1 = require("../call-ref.js");
 const zod_1 = require("zod");
 const response_size_1 = require("./response-size");
 const identity_1 = require("./identity");
@@ -169,10 +170,10 @@ caller = identity_1.UNKNOWN_CALLER) {
             if (stray)
                 return Promise.resolve(stray);
             if (args.object === undefined && args.ontology === undefined) {
-                return Promise.resolve((0, respond_1.err)('op="history" needs object= (one item) or ontology= (a roll-up).'));
+                return Promise.resolve((0, respond_1.err)(`${(0, call_ref_js_1.calledAs)("history")} needs object= (one item) or ontology= (a roll-up).`));
             }
             if (args.object !== undefined && args.ontology !== undefined) {
-                return Promise.resolve((0, respond_1.err)('op="history" takes object= OR ontology=, never both — nothing was read.'));
+                return Promise.resolve((0, respond_1.err)(`${(0, call_ref_js_1.calledAs)("history")} takes object= OR ontology=, never both — nothing was read.`));
             }
             return (0, ontology_ops_history_1.opHistory)(client, caller.userId, args);
         }

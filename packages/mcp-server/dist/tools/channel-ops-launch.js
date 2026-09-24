@@ -72,7 +72,7 @@ async function opLaunchAgent(client, ref, opts = {}) {
         }
         // Any other 400 is classified, and `serverDetail` names the refused field; nothing was filed.
         if ((0, channel_errors_1.isBadRequest)(e) && (0, channel_errors_1.classifyBadRequest)(e) === "invalid_request") {
-            return (0, respond_1.err)(`No agent was requested — that launch was rejected as INVALID before any directive was filed, and **nothing is pending**. This is NOT a membership, identity or colour problem, so do not invite anyone, re-pick an identity or change \`color\` over it.${(0, channel_errors_1.serverDetail)(e)} ${channel_errors_1.FIELD_CAPS_NOTE} Fix the field the server named and ask again.`);
+            return (0, respond_1.err)(`No agent was requested — that launch was rejected as INVALID before any directive was filed, and **nothing is pending**. This is NOT a membership, identity or colour problem, so do not invite anyone, re-pick an identity or change \`color\` over it.${(0, channel_errors_1.serverDetail)(e)} ${(0, channel_errors_1.fieldCapsNote)()} Fix the field the server named and ask again.`);
         }
         if ((0, respond_1.isNotFound)(e))
             return (0, channel_shared_1.channelNotFound)(ref);
@@ -184,12 +184,12 @@ function launchIdentityNotFound(ref, elsewhere) {
         return (0, respond_1.err)([
             // `inlineOr` already returns a code span, so no backticks of our own.
             `No agent was requested, and **nothing was filed** — identity ${(0, channel_shared_1.inlineOr)(elsewhere.name, narration_1.NO_NAME)} lives in ${(0, channel_shared_1.inlineOr)(elsewhere.label, "another tenancy of yours")}, not in this channel's own container.`,
-            `⚠ ${channel_doctrine_1.TENANCY_RULE} Owning it is not enough; it has to live here. ${channel_doctrine_1.TENANCY_FIX}`,
+            `⚠ ${channel_doctrine_1.TENANCY_RULE} Owning it is not enough; it has to live here. ${(0, channel_doctrine_1.tenancyFix)()}`,
         ].join("\n"));
     }
     return (0, respond_1.err)([
         // True of a name; the ID case is stated by `TENANCY_RULE`.
         `No agent was requested — no agent identity ${(0, channel_shared_1.inlineOr)(ref, narration_1.NO_NAME)} resolves in THIS CHANNEL'S container, and **nothing was filed**. Either there is no such identity, or it is not shared with you; those are ONE answer here on purpose, so ids cannot be probed.`,
-        `⚠ CHECK THE TENANCY BEFORE THE SPELLING. ${channel_doctrine_1.TENANCY_RULE} If it really should resolve here, the NAME is the other suspect — matching is exact, not fuzzy. ${channel_doctrine_1.TENANCY_FIX}`,
+        `⚠ CHECK THE TENANCY BEFORE THE SPELLING. ${channel_doctrine_1.TENANCY_RULE} If it really should resolve here, the NAME is the other suspect — matching is exact, not fuzzy. ${(0, channel_doctrine_1.tenancyFix)()}`,
     ].join("\n"));
 }

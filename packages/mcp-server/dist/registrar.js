@@ -14,7 +14,9 @@ const respond_js_1 = require("./tools/respond.js");
 const workspace_arg_js_1 = require("./workspace-arg.js");
 const container_resolve_js_1 = require("./container-resolve.js");
 const legacy_aliases_js_1 = require("./legacy-aliases.js");
+const call_ref_js_1 = require("./call-ref.js");
 const granular_js_1 = require("./granular.js");
+const resources_js_1 = require("./resources.js");
 const tool_manifest_js_1 = require("./tool-manifest.js");
 // Re-exported so tests read the injected arg's description through the registrar that injects it.
 var workspace_arg_js_2 = require("./workspace-arg.js");
@@ -55,10 +57,17 @@ const RENAMED_ARGS = {
     dopl_channel: { template: "identity" },
     dopl_ontology: legacy_aliases_js_1.LEGACY_ONTOLOGY_ARGS,
 };
+/** A granular tool inherits its bound legacy tools' renames, where it publishes the successor. */
+const GRANULAR_RENAMED_ARGS = Object.fromEntries(tool_manifest_js_1.GRANULAR_TOOLS.map((t) => [
+    t.name,
+    Object.fromEntries((0, tool_manifest_js_1.bindingsOf)(t)
+        .flatMap((key) => Object.entries(RENAMED_ARGS[(0, tool_manifest_js_1.parseBinding)(key).tool] ?? {}))
+        .filter(([, successor]) => t.params.includes(successor))),
+]));
 function renamedArgMessage(tool, issue) {
     if (issue.code !== "unrecognized_keys" || !issue.keys)
         return undefined;
-    const map = RENAMED_ARGS[tool];
+    const map = RENAMED_ARGS[tool] ?? GRANULAR_RENAMED_ARGS[tool];
     if (!map)
         return undefined;
     const renamed = issue.keys.filter((k) => Object.prototype.hasOwnProperty.call(map, k));
@@ -113,14 +122,15 @@ function createCreditedRunner(charge) {
 function createToolRegistrars(deps) {
     const { server, client, gates, directory, activeWorkspace, sessionEffective, caller, toolSet = "legacy", } = deps;
     const chargeCredit = createCharger(client);
-    // Every registered legacy tool, including one whose name the active granular set took.
+    // Every registered legacy tool, including one whose name the active granular set took. `run` is the
+    // bare pipeline: each registration opens its own tool-set scope (`call-ref.ts › withToolSet`).
     const legacy = new Map();
     function publishLegacy(name, description, shape, run) {
         const input = strictInput(shape, name);
         legacy.set(name, { shape, input, run });
         if (!(0, tool_manifest_js_1.servesName)(toolSet, "legacy", name))
             return;
-        server.registerTool(name, toolConfig(name, description, input), run);
+        server.registerTool(name, toolConfig(name, description, input), ((args) => (0, call_ref_js_1.withToolSet)(toolSet, () => run(args))));
     }
     const runWithCredits = createCreditedRunner(chargeCredit);
     /** Which workspace pays when no per-call container was honoured; none listable ⇒ no charge. */
@@ -207,16 +217,27 @@ function createToolRegistrars(deps) {
             annotations: (0, tool_manifest_js_1.annotationsFor)(t),
             ...(t.alwaysLoad && { _meta: tool_manifest_js_1.ALWAYS_LOAD_META }),
         }, (async (args) => {
+            const invalid = (message) => new types_js_1.McpError(types_js_1.ErrorCode.InvalidParams, `Input validation error: Invalid arguments for tool ${t.name}: ${message}`);
+            const selector = (0, tool_manifest_js_1.selectorOf)(t);
+            const pulled = (0, granular_js_1.pulledResource)(t, args);
+            if (pulled) {
+                const stray = Object.keys(args).filter((k) => k !== selector);
+                if (stray.length > 0)
+                    throw invalid(`${stray.map((k) => `"${k}"`).join(", ")} not taken by this topic`);
+                return (0, respond_js_1.ok)((0, call_ref_js_1.withToolSet)(toolSet, () => (0, resources_js_1.resourceText)(pulled)));
+            }
             const call = (0, granular_js_1.legacyCall)(t, args);
             const target = legacy.get(call.tool);
             // A multi-job row's schema is the union of its jobs; the chosen job's own schema has the last
             // word, so a param that job does not take is refused by name, never passed through.
             const parsed = target.input.safeParse(call.args);
-            if (!parsed.success) {
-                throw new types_js_1.McpError(types_js_1.ErrorCode.InvalidParams, `Input validation error: Invalid arguments for tool ${t.name}: ${parsed.error.message}`);
-            }
+            if (!parsed.success)
+                throw invalid(parsed.error.message);
             // Carried args were validated by this tool's own schema; the legacy one does not know them.
-            return target.run({ ...parsed.data, ...call.carried });
+            // The call is named back with its job, so a refusal says which of the tool's jobs it was.
+            const calledAs = selector ? `${t.name}(${selector}="${String(args[selector])}")` : t.name;
+            const run = () => target.run({ ...parsed.data, ...call.carried });
+            return (0, call_ref_js_1.withToolSet)(toolSet, run, calledAs);
         }));
     }
     return { registerTool, registerMetaTool, chargeCredit, registerGranular };

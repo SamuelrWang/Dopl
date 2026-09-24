@@ -20,6 +20,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.opCreateThread = opCreateThread;
 exports.opSetThreadMode = opSetThreadMode;
+const call_ref_js_1 = require("../call-ref.js");
 const respond_1 = require("./respond");
 const channel_shared_1 = require("./channel-shared");
 const narration_1 = require("./narration");
@@ -67,15 +68,15 @@ handoff) {
         if ((0, channel_errors_1.isBadRequest)(e)) {
             switch ((0, channel_errors_1.classifyBadRequest)(e)) {
                 case "addressee_not_member":
-                    return (0, respond_1.err)(`Couldn't address the thread to ${member.label} — they aren't a member of **${chName}**. Invite them first (op="rooms" action="invite"), then open the thread.`);
+                    return (0, respond_1.err)(`Couldn't address the thread to ${member.label} — they aren't a member of **${chName}**. Invite them first (${(0, call_ref_js_1.callRef)("channel.rooms.invite", {}, { form: "op" })}), then open the thread.`);
                 // A thread is postable only by its creator and target, so a
                 // self-addressed thread has nobody who can answer it and sits live and
                 // unanswerable. ⚠ Name the roster op — the failure mode is not knowing
                 // who else is in the channel.
                 case "self_target":
-                    return (0, respond_1.err)(`A thread can't be addressed to yourself — you and the member you address it to are the only two who may post into it, so a self-addressed thread has nobody who can answer it. No thread was opened. List the channel's other members (op="rooms", action="members", channel="${ch.id}"), then open the thread addressed to one of them.`);
+                    return (0, respond_1.err)(`A thread can't be addressed to yourself — you and the member you address it to are the only two who may post into it, so a self-addressed thread has nobody who can answer it. No thread was opened. List the channel's other members (${(0, call_ref_js_1.callRef)("channel.rooms.members", { channel: `"${ch.id}"` }, { form: "args" })}), then open the thread addressed to one of them.`);
                 case "invalid_request":
-                    return (0, respond_1.err)(`That create_thread was rejected as INVALID before it reached **${chName}** — no thread was opened, and this is NOT a membership problem, so do NOT invite ${member.label}.${(0, channel_errors_1.serverDetail)(e)} ${channel_errors_1.FIELD_CAPS_NOTE} Shorten the field that is over and open the thread again.`);
+                    return (0, respond_1.err)(`That create_thread was rejected as INVALID before it reached **${chName}** — no thread was opened, and this is NOT a membership problem, so do NOT invite ${member.label}.${(0, channel_errors_1.serverDetail)(e)} ${(0, channel_errors_1.fieldCapsNote)()} Shorten the field that is over and open the thread again.`);
                 case "workspace":
                     return (0, respond_1.err)(`The thread was not opened because the call carried no usable workspace.${(0, channel_errors_1.serverDetail)(e)} This is a connection-level problem, not a channel one — report it to your operator.`);
                 case "thread_not_in_channel":

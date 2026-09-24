@@ -6,10 +6,11 @@
  * (`tool-group-files.ts`).
  */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.UNTRUSTED_SKILL_BODY_HEADER = exports.SCOPE_NOTE = exports.NO_NAME = void 0;
+exports.UNTRUSTED_SKILL_BODY_HEADER = exports.skillsScopeNote = exports.NO_NAME = void 0;
 exports.errorMessage = errorMessage;
 exports.failureDetail = failureDetail;
 exports.agentWriteDenied = agentWriteDenied;
+const call_ref_js_1 = require("../call-ref.js");
 const narration_1 = require("./narration");
 const respond_1 = require("./respond");
 /**
@@ -31,7 +32,8 @@ exports.NO_NAME = "`(unnamed skill)`";
  * ⚠ Names the FILTERS, never a hidden count — "how many were hidden from you"
  * is a second query on every list call.
  */
-exports.SCOPE_NOTE = `Drafts and other members' private or team-scoped skills are not listed, so a count here is not the workspace's total. For the full inventory across every status and visibility: dopl_members(op="access_matrix").`;
+const skillsScopeNote = () => `Drafts and other members' private or team-scoped skills are not listed, so a count here is not the workspace's total. For the full inventory across every status and visibility: ${(0, call_ref_js_1.callRef)("members.access_matrix")}.`;
+exports.skillsScopeNote = skillsScopeNote;
 /**
  * Untrusted-content framing for a SKILL.md written by somebody other than the
  * caller — emitted as a HEADER, before the body, never after. Same idiom as

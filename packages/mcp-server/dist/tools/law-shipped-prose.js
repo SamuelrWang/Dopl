@@ -62,7 +62,7 @@ exports.DESCRIPTION = registeredDescription();
  * opens it has asked for the rules — so scanning only the pointer would let
  * 22,000 characters say whatever they liked.
  */
-exports.SHIPPED_PROSE = `${exports.DESCRIPTION}\n${channel_doctrine_1.CHANNEL_DOCTRINE}`;
+exports.SHIPPED_PROSE = `${exports.DESCRIPTION}\n${(0, channel_doctrine_1.channelDoctrine)()}`;
 /** The argument `.describe()` text, which is prose a client reads too. */
 exports.ARG_PROSE = Object.values(channel_schema_1.CHANNEL_INPUT_SHAPE)
     .map((arg) => arg.description ?? "")

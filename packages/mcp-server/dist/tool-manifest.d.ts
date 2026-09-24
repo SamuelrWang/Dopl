@@ -24,6 +24,11 @@ export interface GranularTool {
     select?: string;
     /** The job an omitted selector runs; only where a legacy call of the same name must still work. */
     selectDefault?: string;
+    /**
+     * Jobs that answer with a published resource's text (job → resource URI) rather than a legacy call:
+     * ungated and uncharged, like the resource read itself. They take no param but the selector.
+     */
+    pulled?: Readonly<Record<string, string>>;
     /** Args fixed by this tool (a decision is a `send` with `kind="decision"`). */
     preset?: Readonly<Record<string, string>>;
     /** Legacy arg names this tool publishes; `container` is derived, never listed. */

@@ -7,6 +7,7 @@
  */
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.registerMapTool = registerMapTool;
+const call_ref_js_1 = require("../call-ref.js");
 const workspace_directory_js_1 = require("../workspace-directory.js");
 const identity_1 = require("./identity");
 const narration_1 = require("./narration");
@@ -67,7 +68,7 @@ const DOMAIN_COUNT = 3;
  * the absence of a PARTIAL READ prefix proves every section was read; do not
  * revert to "an unreadable domain renders as an empty section".
  */
-const SCOPE_NOTE = `Scope: ACTIVE items visible to you. Draft skills and team-scoped items you have no grant on are not listed, so these counts are not workspace totals; a domain that could not be read is named with reason=partial_read opening this line, so with no such notice every section above was read. Authoritative inventory across every status and visibility: dopl_members(op="access_matrix").`;
+const scopeNote = () => `Scope: ACTIVE items visible to you. Draft skills and team-scoped items you have no grant on are not listed, so these counts are not workspace totals; a domain that could not be read is named with reason=partial_read opening this line, so with no such notice every section above was read. Authoritative inventory across every status and visibility: ${(0, call_ref_js_1.callRef)("members.access_matrix")}.`;
 /**
  * The one destination this manifest cannot list, named anyway. `dopl_channel`
  * is DEFERRED in some clients, so its description is invisible until the
@@ -84,7 +85,7 @@ const SCOPE_NOTE = `Scope: ACTIVE items visible to you. Draft skills and team-sc
  * queries must not inherit it. Routes and nothing more; cost and permissions
  * are `dopl_channel`'s to state.
  */
-const channelsRouting = (vendor) => `**Reaching a member or their agent: dopl_channel.** Channels are this workspace's live member-to-member and agent-to-agent messaging, and this manifest does not query them, so nothing above is a count of them. If dopl_channel is not in your tool list, load it with ${(0, identity_1.toolLoaderFor)(vendor)}, then call dopl_channel(op="rooms", action="list") for the channels and DMs this account can post into.`;
+const channelsRouting = (vendor) => `**Reaching a member or their agent: ${(0, call_ref_js_1.bySet)({ legacy: "dopl_channel", granular: "the channel tools" })}.** Channels are this workspace's live member-to-member and agent-to-agent messaging, and this manifest does not query them, so nothing above is a count of them. ${(0, call_ref_js_1.bySet)({ legacy: "If dopl_channel is not in your tool list, load it", granular: `If ${(0, call_ref_js_1.toolName)("channel.send")} is not in your tool list, load them` })} with ${(0, identity_1.toolLoaderFor)(vendor)}, then call ${(0, call_ref_js_1.callRef)("channel.rooms.list")} for the channels and DMs this account can post into.`;
 /**
  * 🔒 **THE CONTAINER NODES — "Home space" IS ITS OWN TOP-LEVEL NODE** (R-32,
  * Samuel 2026-09-17: *home must be structurally distinct, never just a prompt
@@ -160,7 +161,7 @@ directory, caller = identity_1.UNKNOWN_CALLER) {
             reads.soft("Ontology", client.getOntology({ view: "summary" }), EMPTY_ONTOLOGY),
         ]);
         const lines = ["# Workspace map", ...containerNodes(containers)];
-        lines.push("", `## Knowledge bases (${bases.length}) — dopl_kb`);
+        lines.push("", `## Knowledge bases (${bases.length}) — ${(0, call_ref_js_1.toolName)("kb.list_bases")}`);
         for (const b of bases) {
             const desc = b.description ? ` — ${(0, narration_1.inlineOr)(b.description, "")}` : "";
             lines.push(`- ${(0, narration_1.inlineOr)(b.name, narration_1.NO_NAME)} \`${b.slug}\`${desc}`);
@@ -168,14 +169,14 @@ directory, caller = identity_1.UNKNOWN_CALLER) {
         if (bases.length === 0)
             lines.push("_None._");
         const activeSkills = skills.filter((s) => s.status === "active");
-        lines.push("", `## Skills (${activeSkills.length}) — dopl_skill`);
+        lines.push("", `## Skills (${activeSkills.length}) — ${(0, call_ref_js_1.toolName)("skill.list")}`);
         for (const s of activeSkills) {
             const trigger = (0, narration_1.inlineOr)(s.whenToUse || s.description, "`(no trigger described)`");
             lines.push(`- ${(0, narration_1.inlineOr)(s.name, narration_1.NO_NAME)} \`${s.slug}\` — ${trigger}`);
         }
         if (activeSkills.length === 0)
             lines.push("_None._");
-        lines.push("", `## Ontology (${ontology.ontologies.length}) — dopl_ontology`);
+        lines.push("", `## Ontology (${ontology.ontologies.length}) — ${(0, call_ref_js_1.toolName)("ontology.map")}`);
         // 🔒 **S29c — THE ROUTING SURFACE IS WHERE THE MYSTERY WAS REPORTED.** A
         // brand-new home channel listed ontologies nobody had put there; they are
         // the caller's own personal shelf, which `service-audience.ts` folds into
@@ -207,7 +208,7 @@ directory, caller = identity_1.UNKNOWN_CALLER) {
         }
         // One footer line, not two — the partial-read notice PREFIXES the scope
         // note. On the healthy path `notice()` is "" and this is the note alone.
-        lines.push("", `_${reads.notice(DOMAIN_COUNT, "domains")}${SCOPE_NOTE}_`);
+        lines.push("", `_${reads.notice(DOMAIN_COUNT, "domains")}${scopeNote()}_`);
         lines.push("", channelsRouting(caller.vendor));
         return (0, respond_1.ok)(lines.join("\n"));
     });

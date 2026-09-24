@@ -31,6 +31,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.isArtifactAction = isArtifactAction;
 exports.dispatchArtifactAction = dispatchArtifactAction;
+const call_ref_js_1 = require("../call-ref.js");
 const narration_1 = require("./narration");
 const respond_1 = require("./respond");
 const channel_shared_1 = require("./channel-shared");
@@ -57,7 +58,7 @@ function isArtifactAction(action) {
  */
 function oneMessage(action, messages) {
     if (messages.length !== 1) {
-        return (0, respond_1.err)(`op="artifact" action="${action}" takes exactly ONE seq in \`messages\`, and ${messages.length} were named — nothing was changed. It moves one message at a time by design; loop it, or name the whole set on action="create".`);
+        return (0, respond_1.err)(`${(0, call_ref_js_1.callRef)(`channel.artifact.${action}`, {}, { form: "op" })} takes exactly ONE seq in \`messages\`, and ${messages.length} were named — nothing was changed. It moves one message at a time by design; loop it, or name the whole set on action="create".`);
     }
     return messages[0];
 }

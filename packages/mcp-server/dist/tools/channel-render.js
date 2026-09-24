@@ -23,6 +23,7 @@ exports.formatThreadLine = formatThreadLine;
 exports.formatThreadDetail = formatThreadDetail;
 exports.formatMemberLine = formatMemberLine;
 exports.groupByChannel = groupByChannel;
+const call_ref_js_1 = require("../call-ref.js");
 const channel_facts_1 = require("./channel-facts");
 const channel_shared_1 = require("./channel-shared");
 const narration_1 = require("./narration");
@@ -102,7 +103,7 @@ function clipBody(m, ref, clip) {
     if (!m.body)
         return "";
     const body = clip && m.body.length > BODY_CLIP_CHARS
-        ? `${m.body.slice(0, BODY_CLIP_CHARS)}\n… [${m.body.length - BODY_CLIP_CHARS} chars clipped — read this one message in full with dopl_channel(op="read", channel="${ref}", since=${Math.max(0, m.seq - 1)}, limit=1)]`
+        ? `${m.body.slice(0, BODY_CLIP_CHARS)}\n… [${m.body.length - BODY_CLIP_CHARS} chars clipped — read this one message in full with ${(0, call_ref_js_1.callRef)("channel.read", { channel: `"${ref}"`, since: `${Math.max(0, m.seq - 1)}`, limit: "1" })}]`
         : m.body;
     return `\n  ${body.replace(/\n/g, "\n  ")}`;
 }

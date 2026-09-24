@@ -94,4 +94,4 @@ export declare function serverDetail(e: unknown): string;
  * (`LaunchCreateSchema.agentName`, `AgentDirectiveCreateSchema`'s rename arm, and
  * `main/agent-names.js › MAX_NAME` at the far end).
  */
-export declare const FIELD_CAPS_NOTE = "Field caps: summary <=200 characters, body <=16000 on op=\"send\" but <=4000 as a direction and <=2000 as a launch goal, name <=60, client_msg_id <=200.";
+export declare const fieldCapsNote: () => string;

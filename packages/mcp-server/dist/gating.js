@@ -9,6 +9,7 @@ exports.WRITE_OPS = exports.NARROWEST_TOOL_PROFILE = exports.TOOL_PROFILES = exp
 exports.offeredToolsFor = offeredToolsFor;
 exports.isWriteOp = isWriteOp;
 exports.createGates = createGates;
+const call_ref_js_1 = require("./call-ref.js");
 const delete_policy_js_1 = require("./delete-policy.js");
 const tool_errors_js_1 = require("./tools/tool-errors.js");
 // Hide-then-delete step one (empty is normal); every name must still be registered.
@@ -167,7 +168,7 @@ function createGates(canWrite, offeredTools = null) {
         if ((0, delete_policy_js_1.isBlockedDeleteOp)(name, op.split(".")[0])) {
             return {
                 isError: true,
-                content: [{ type: "text", text: delete_policy_js_1.DELETE_REFUSAL }],
+                content: [{ type: "text", text: (0, delete_policy_js_1.deleteRefusal)() }],
             };
         }
         if (!canWrite && isWriteOp(name, op)) {
@@ -176,7 +177,7 @@ function createGates(canWrite, offeredTools = null) {
                 content: [
                     {
                         type: "text",
-                        text: (0, tool_errors_js_1.refusal)(tool_errors_js_1.READ_ONLY_SESSION, `\`${name}\` op="${op}" is a write operation. Reconnect with write access to perform it.`),
+                        text: (0, tool_errors_js_1.refusal)(tool_errors_js_1.READ_ONLY_SESSION, `${(0, call_ref_js_1.calledAs)(op, { tool: `\`${name}\`` })} is a write operation. Reconnect with write access to perform it.`),
                     },
                 ],
             };

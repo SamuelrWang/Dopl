@@ -11,6 +11,7 @@ exports.isErr = isErr;
 exports.channelNotFound = channelNotFound;
 exports.resolveChannelOr = resolveChannelOr;
 exports.resolveMemberOr = resolveMemberOr;
+const call_ref_js_1 = require("../call-ref.js");
 const narration_1 = require("./narration");
 const respond_1 = require("./respond");
 /** A non-empty string metadata field; one definition, since both lanes key thread linkage off it. */
@@ -50,7 +51,7 @@ function isErr(x) {
 }
 /** Uniform channel not-found, also used by the hot read/hold paths that map a route 404. */
 function channelNotFound(ref) {
-    return (0, respond_1.err)(`Channel not found: "${ref}". Use dopl_channel(op="rooms", action="list") to see channels you can access (pass a slug or id from there).`);
+    return (0, respond_1.err)(`Channel not found: "${ref}". Use ${(0, call_ref_js_1.callRef)("channel.rooms.list")} to see channels you can access (pass a slug or id from there).`);
 }
 /** Channel by id or slug, or not-found. For write ops only: hot read/hold paths pass the ref to the
  *  route (which resolves and enforces visibility) to avoid a list per poll. */
@@ -81,7 +82,7 @@ async function resolveMemberOr(client, ref) {
     }
     const match = byId ?? (byEmail.length === 1 ? byEmail[0] : undefined);
     if (!match) {
-        return (0, respond_1.err)(`No workspace member matching "${ref}". Invites are in-workspace only — pass the email or user id of an ACTIVE member (dopl_members lists them).`);
+        return (0, respond_1.err)(`No workspace member matching "${ref}". Invites are in-workspace only — pass the email or user id of an ACTIVE member (${(0, call_ref_js_1.toolName)("members.list")} lists them).`);
     }
     if (match.status !== "active") {
         const state = match.status === "pending"

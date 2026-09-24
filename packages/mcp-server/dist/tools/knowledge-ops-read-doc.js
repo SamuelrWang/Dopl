@@ -18,6 +18,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.opOutline = opOutline;
 exports.opReadFile = opReadFile;
+const call_ref_js_1 = require("../call-ref.js");
 const narration_1 = require("./narration");
 const respond_1 = require("./respond");
 const knowledge_shared_1 = require("./knowledge-shared");
@@ -62,7 +63,7 @@ async function opOutline(client, ref, path) {
             `## ${(0, narration_1.inlineOr)(read.entry.title, narration_1.NO_NAME)} — no headings`,
             `Path: \`${path}\` · ${outline?.totalChars ?? 0} chars whole.`,
             "",
-            `Nothing to address by section — read it with op="read_file". Entries over ${knowledge_sections_1.KB_SECTION_NUDGE_CHARS} chars should carry \`##\` headings, one topic each.`,
+            `Nothing to address by section — read it with ${(0, call_ref_js_1.callRef)("kb.read_file", {}, { form: "op" })}. Entries over ${knowledge_sections_1.KB_SECTION_NUDGE_CHARS} chars should carry \`##\` headings, one topic each.`,
         ].join("\n"));
     }
     return (0, respond_1.ok)([

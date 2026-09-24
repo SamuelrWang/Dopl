@@ -31,6 +31,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.workspaceRearmStopRule = workspaceRearmStopRule;
 exports.opHoldWorkspace = opHoldWorkspace;
+const call_ref_js_1 = require("../call-ref.js");
 const respond_1 = require("./respond");
 // ⚠ `groupByChannel` MOVED to `channel-render.ts` on 2026-09-01, when the
 // ACCOUNT-wide read needed the same grouping. It was private here; a second copy
@@ -68,9 +69,9 @@ function workspaceRearmStopRule() {
  *  an agent that sees traffic will otherwise assume it is seeing ALL traffic. */
 function scopeNote(channelCount) {
     if (channelCount === 0) {
-        return `⚠ THIS HOLD WATCHED NOTHING: you are not a member of any channel in this workspace, so no message can ever end it. Do not re-arm — join or open a channel first (dopl_channel(op="rooms", action="list") to see what exists, op="rooms", action="open" to create one).`;
+        return `⚠ THIS HOLD WATCHED NOTHING: you are not a member of any channel in this workspace, so no message can ever end it. Do not re-arm — join or open a channel first (${(0, call_ref_js_1.callRef)("channel.rooms.list")} to see what exists, ${(0, call_ref_js_1.callRef)("channel.rooms.open", {}, { form: "args" })} to create one).`;
     }
-    return `Scope: every channel you are a MEMBER of (${channelCount}). ⚠ A PUBLIC channel you have not joined is NOT watched by this hold, so silence here is not evidence the workspace is quiet — it is evidence YOUR rooms are. Join a channel to watch it, or hold on it by name with dopl_channel(op="read", channel=<slug>, since=…, wait_ms=<ms>).`;
+    return `Scope: every channel you are a MEMBER of (${channelCount}). ⚠ A PUBLIC channel you have not joined is NOT watched by this hold, so silence here is not evidence the workspace is quiet — it is evidence YOUR rooms are. Join a channel to watch it, or hold on it by name with ${(0, call_ref_js_1.callRef)("channel.read", { channel: "<slug>", since: "…", wait_ms: "<ms>" })}.`;
 }
 /**
  * THE WORKSPACE-WIDE HOLD. One call holds for `holdMsFor(waitMs, runtime)` by
@@ -112,7 +113,7 @@ async function opHoldWorkspace(client, since, waitMs, selfUserId = null, runtime
             return (0, respond_1.ok)([
                 timedOut,
                 `That hold was CUT SHORT — it asked for about ${Math.round(budgetMs / 1000)}s and returned in ${seconds}s, which usually means the platform is clamping the call (or the server is erroring instantly). A hold this short can never stay pending long enough to wake you.`,
-                `Do NOT immediately re-arm — you would loop on short calls that never wake anything. Report this to your operator and check channels with dopl_channel(op="read") instead.`,
+                `Do NOT immediately re-arm — you would loop on short calls that never wake anything. Report this to your operator and check channels with ${(0, call_ref_js_1.callRef)("channel.read")} instead.`,
             ].join("\n"));
         }
         // ⚠ The TIMEOUT is the compressed result (T03) — see

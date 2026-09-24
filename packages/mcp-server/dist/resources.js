@@ -12,9 +12,10 @@
  * be a summary.
  *
  * ⚠ IT IS NOT THE ONLY DOOR, DELIBERATELY. Not every MCP client reads resources
- * — several list tools and nothing else — so `dopl_channel(op="help")` returns
- * the SAME constant. Two doors, one text, no drift: `channel-doctrine.ts` is the
- * single definition and both surfaces import it.
+ * — several list tools and nothing else — so the guide topics (`dopl_get_guide`,
+ * legacy `rooms action="help"`) return the SAME text. Two doors, one text, no
+ * drift: the doctrine modules are the single definition, rendered in the
+ * connection's tool set (`call-ref.ts`) through either door.
  *
  * ⚠ REGISTRATION IS UNGATED AND UNCHARGED, and both are decisions. Ungated: a
  * read-only session needs the rules exactly as much as a write-capable one, and
@@ -24,44 +25,43 @@
  * agent how to stop wasting calls would be self-defeating.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.resourceText = resourceText;
 exports.registerResources = registerResources;
+const call_ref_js_1 = require("./call-ref.js");
 const channel_doctrine_js_1 = require("./tools/channel-doctrine.js");
 const knowledge_doctrine_js_1 = require("./tools/knowledge-doctrine.js");
+const RESOURCES = {
+    [channel_doctrine_js_1.DOCTRINE_URI]: {
+        name: "channels-doctrine",
+        title: "Dopl channels — rules, protocol and etiquette",
+        description: () => `How ${(0, call_ref_js_1.bySet)({ legacy: "dopl_channel works", granular: "the channel tools work" })}: the law of a channel, the thread/session model, the await loop and its stop rule, @-tagging, main-room etiquette, and how to run your own agents. Read once; the tool's results report only what each call did.`,
+        text: channel_doctrine_js_1.channelDoctrine,
+    },
+    // ⚠ **500 CHARACTERS AGAINST ~9,000, AND THE ASYMMETRY IS THE ARGUMENT.** A
+    // channel has a protocol, a lifecycle and an etiquette; a knowledge base has
+    // a filesystem, and the knowledge tools' arguments already describe it. What
+    // no argument can carry is the ORDER to read in and the duty that makes the
+    // order possible — see `knowledge-doctrine.ts`.
+    [knowledge_doctrine_js_1.KNOWLEDGE_DOCTRINE_URI]: {
+        name: "knowledge-doctrine",
+        title: "Dopl knowledge — sections",
+        description: () => "How to spend fewer characters on a knowledge entry: the read order (excerpt → outline → section → body) and the write duty that makes it possible (## headings, one topic each).",
+        text: knowledge_doctrine_js_1.knowledgeDoctrine,
+    },
+};
+/** A published resource's text in the active set — also what a pulled guide topic serves. */
+function resourceText(uri) {
+    return RESOURCES[uri].text();
+}
 /**
- * Publish every resource onto a session's server. ⚠ Called from
+ * Publish every resource onto a session's server, in its tool set. ⚠ Called from
  * `server.ts › createServer` beside the tool registrars, so "what this server
  * publishes" is answerable from one file.
  */
-function registerResources(server) {
-    server.registerResource("channels-doctrine", channel_doctrine_js_1.DOCTRINE_URI, {
-        title: "Dopl channels — rules, protocol and etiquette",
-        description: "How dopl_channel works: the law of a channel, the thread/session model, the await loop and its stop rule, @-tagging, main-room etiquette, and how to run your own agents. Read once; the tool's results report only what each call did.",
-        mimeType: "text/markdown",
-    }, (uri) => ({
-        contents: [
-            {
-                uri: uri.href,
-                mimeType: "text/markdown",
-                text: channel_doctrine_js_1.CHANNEL_DOCTRINE,
-            },
-        ],
-    }));
-    // ⚠ **500 CHARACTERS AGAINST ~9,000, AND THE ASYMMETRY IS THE ARGUMENT.** A
-    // channel has a protocol, a lifecycle and an etiquette; a knowledge base has
-    // a filesystem, and `dopl_kb`'s arguments already describe it. What no
-    // argument can carry is the ORDER to read in and the duty that makes the
-    // order possible — see `knowledge-doctrine.ts`.
-    server.registerResource("knowledge-doctrine", knowledge_doctrine_js_1.KNOWLEDGE_DOCTRINE_URI, {
-        title: "Dopl knowledge — sections",
-        description: "How to spend fewer characters on a knowledge entry: the read order (excerpt → outline → section → body) and the write duty that makes it possible (## headings, one topic each).",
-        mimeType: "text/markdown",
-    }, (uri) => ({
-        contents: [
-            {
-                uri: uri.href,
-                mimeType: "text/markdown",
-                text: knowledge_doctrine_js_1.KNOWLEDGE_DOCTRINE,
-            },
-        ],
-    }));
+function registerResources(server, toolSet) {
+    for (const [uri, r] of Object.entries(RESOURCES)) {
+        server.registerResource(r.name, uri, { title: r.title, description: (0, call_ref_js_1.withToolSet)(toolSet, r.description), mimeType: "text/markdown" }, (href) => ({
+            contents: [{ uri: href.href, mimeType: "text/markdown", text: (0, call_ref_js_1.withToolSet)(toolSet, r.text) }],
+        }));
+    }
 }

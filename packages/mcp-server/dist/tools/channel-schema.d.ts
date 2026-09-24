@@ -33,12 +33,12 @@ export declare const CHANNEL_INPUT_SHAPE: {
     }>>;
     posture: z.ZodOptional<z.ZodObject<{
         tools: z.ZodOptional<z.ZodEnum<{
+            granular: "granular";
             manual: "manual";
             accept_edits: "accept_edits";
             auto: "auto";
             bypass: "bypass";
             untrusted: "untrusted";
-            granular: "granular";
             "on-request": "on-request";
             never: "never";
             allowlist: "allowlist";
@@ -75,11 +75,11 @@ export declare const CHANNEL_INPUT_SHAPE: {
         }, z.core.$strip>>>;
     }, z.core.$strip>>;
     section: z.ZodOptional<z.ZodEnum<{
-        read: "read";
-        fields: "fields";
         send: "send";
         manage: "manage";
         model: "model";
+        fields: "fields";
+        read: "read";
         law: "law";
         waiting: "waiting";
         rooms: "rooms";
@@ -102,11 +102,11 @@ export declare const CHANNEL_INPUT_SHAPE: {
         detailed: "detailed";
     }>>;
     op: z.ZodEnum<{
-        status: "status";
-        read: "read";
         send: "send";
         manage: "manage";
         artifact: "artifact";
+        status: "status";
+        read: "read";
         rooms: "rooms";
     }>;
     action: z.ZodOptional<z.ZodEnum<{
@@ -116,9 +116,9 @@ export declare const CHANNEL_INPUT_SHAPE: {
     to: z.ZodOptional<z.ZodString>;
     body: z.ZodOptional<z.ZodString>;
     kind: z.ZodOptional<z.ZodEnum<{
+        decision: "decision";
         message: "message";
         record: "record";
-        decision: "decision";
         milestone: "milestone";
     }>>;
     thread: z.ZodOptional<z.ZodString>;

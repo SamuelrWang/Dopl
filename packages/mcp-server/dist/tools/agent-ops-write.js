@@ -7,6 +7,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.opCreate = opCreate;
 exports.opUpdate = opUpdate;
 exports.opGrantIdentity = opGrantIdentity;
+const call_ref_js_1 = require("../call-ref.js");
 const narration_js_1 = require("./narration.js");
 const grant_js_1 = require("./grant.js");
 const respond_js_1 = require("./respond.js");
@@ -38,7 +39,7 @@ function knowledgeDigest(input) {
             : `base:${s.baseId}`)
         .sort();
 }
-const IDENTITY_VERSION_CONFLICT = (0, tool_errors_js_1.versionConflict)('op="get"');
+const IDENTITY_VERSION_CONFLICT = (0, tool_errors_js_1.versionConflict)("agent.get");
 function withStoredTypes(fields, stored) {
     const types = new Map(stored.map((f) => [f.key, f.type]));
     return fields.map((f) => {
@@ -131,7 +132,7 @@ directory) {
     const dup = await (0, duplicate_name_js_1.duplicateNameNoteFor)(identity, () => client.listAgentIdentities(), "agent identity", true, true);
     return (0, respond_js_1.ok)([
         `Created agent identity ${(0, narration_js_1.inlineOr)(identity.name, narration_js_1.NO_NAME)} (id: \`${identity.id}\`). ${audience}${dup}`,
-        `Launch it into a channel with dopl_channel(op="manage", action="launch", channel=…, identity="${identity.id}") — which ASKS the operator's machine and does not start anything by itself.`,
+        `Launch it into a channel with ${(0, call_ref_js_1.callRef)("channel.manage.launch", { channel: "…", identity: `"${identity.id}"` })} — which ASKS the operator's machine and does not start anything by itself.`,
     ].join("\n"));
 }
 async function opUpdate(client, callerUserId, ref, input) {
@@ -147,7 +148,7 @@ async function opUpdate(client, callerUserId, ref, input) {
         knowledge: toKnowledgeScopes(input.knowledge),
     };
     if (Object.values(patch).every((v) => v === undefined)) {
-        return (0, respond_js_1.err)(`op="update" changed nothing because no field was passed. Pass at least one of: name, description, instructions, model, runtime, fields, visibility, knowledge_bases, knowledge.`);
+        return (0, respond_js_1.err)(`${(0, call_ref_js_1.calledAs)("update")} changed nothing because no field was passed. Pass at least one of: name, description, instructions, model, runtime, fields, visibility, knowledge_bases, knowledge.`);
     }
     const identity = await (0, agent_shared_js_1.resolveIdentityOr)(client, ref);
     if ((0, channel_shared_js_1.isErr)(identity))
@@ -204,7 +205,7 @@ async function opUpdate(client, callerUserId, ref, input) {
         ? ` Sharing is now: ${updated.visibility}.`
         : "";
     // The new Version is part of the success, so consecutive edits need no re-read.
-    return (0, respond_js_1.ok)(`Updated agent identity ${(0, narration_js_1.inlineOr)(updated.name, narration_js_1.NO_NAME)} (id: \`${updated.id}\`).${note}\nVersion: \`${updated.updatedAt}\` (pass as expected_version to the next op="update")`);
+    return (0, respond_js_1.ok)(`Updated agent identity ${(0, narration_js_1.inlineOr)(updated.name, narration_js_1.NO_NAME)} (id: \`${updated.id}\`).${note}\nVersion: \`${updated.updatedAt}\` (pass as expected_version to the next ${(0, call_ref_js_1.callRef)("agent.update", {}, { form: "op" })})`);
 }
 /**
  * op="grant": lend one identity to a channel, container or team — one `resource_grants` row, so an edit reaches every grantee.

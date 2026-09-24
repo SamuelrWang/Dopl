@@ -6,6 +6,7 @@
  * tally sees legacy keys.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.pulledResource = pulledResource;
 exports.granularShape = granularShape;
 exports.granularDescription = granularDescription;
 exports.legacyCall = legacyCall;
@@ -13,11 +14,16 @@ const zod_1 = require("zod");
 const tool_manifest_js_1 = require("./tool-manifest.js");
 const granular_text_js_1 = require("./granular-text.js");
 const workspace_arg_js_1 = require("./workspace-arg.js");
-/** The jobs this connection serves, as [selector value, binding]; null value for a one-job tool. */
+/** The bound jobs this connection serves, as [selector value, binding]; null value for a one-job tool. */
 function servedJobs(t, legacy) {
     const jobs = typeof t.bind === "string" ? [[null, t.bind]] : Object.entries(t.bind);
-    // A job whose legacy tool the profile did not offer is not served (dopl_only keeps two of three guides).
+    // A job whose legacy tool the profile did not offer is not served (dopl_only drops the channel guide).
     return jobs.filter(([, key]) => legacy.has((0, tool_manifest_js_1.parseBinding)(key).tool));
+}
+/** The resource a pulled job answers with, or undefined for a bound job. */
+function pulledResource(t, args) {
+    const selector = (0, tool_manifest_js_1.selectorOf)(t);
+    return selector ? t.pulled?.[args[selector]] : undefined;
 }
 /** The param as published: this tool's type or its legacy owner's, re-described, required or optional. */
 function publish(schema, description, required) {
@@ -38,15 +44,13 @@ function granularShape(t, legacy) {
     const shape = {};
     const selector = (0, tool_manifest_js_1.selectorOf)(t);
     if (selector) {
-        const names = jobs.map(([job]) => job);
+        // A pulled job rides with the bound ones: the tool is offered only for a served binding.
+        const names = [...jobs.map(([job]) => job), ...Object.keys(t.pulled ?? {})];
         const line = text.params?.[selector];
         const select = line ? zod_1.z.enum(names).describe(line) : zod_1.z.enum(names);
         shape[selector] = t.selectDefault && names.includes(t.selectDefault) ? select.default(t.selectDefault) : select;
     }
-    const container = jobs.some(([, key]) => {
-        const { tool, op } = (0, tool_manifest_js_1.parseBinding)(key);
-        return (0, workspace_arg_js_1.acceptsWorkspaceArg)(tool, op);
-    });
+    const container = jobs.some(([, key]) => (0, workspace_arg_js_1.bindingTakesContainer)(key));
     for (const param of [...t.params, ...(t.carry ?? []), ...(container ? ["container"] : [])]) {
         const type = text.types?.[param] ?? shapes.find((s) => param in s)?.[param];
         // A param only an unserved job takes goes with that job.

@@ -58,6 +58,7 @@ exports.GRANULAR_TOOLS = [
             chats: "dopl_chats:guide",
         },
         select: "topic",
+        pulled: { knowledge: "dopl://doctrine/knowledge" },
         params: ["section"],
     },
     // ── Channels ────────────────────────────────────────────────────────────

@@ -33,6 +33,7 @@ exports.recordAddressedRefusal = recordAddressedRefusal;
 exports.tooManyRecipientsRefusal = tooManyRecipientsRefusal;
 exports.decisionRefusal = decisionRefusal;
 exports.opPost = opPost;
+const call_ref_js_1 = require("../call-ref.js");
 const respond_1 = require("./respond");
 // ⚠ THE RESULT IS ONE LINE OF FACTS (T10/T12). Each import below contributes
 // FIELDS, not prose; the standing rules they used to restate live once in
@@ -69,7 +70,7 @@ function milestoneRefusal(body) {
     const multiline = /[\r\n]/.test(body);
     if (!over && !multiline)
         return null;
-    return (0, respond_1.err)(`Nothing was posted: a milestone is ONE LINE marking a step that just landed, and yours ${over ? `is ${body.length} characters (the cap is ${exports.MILESTONE_MAX_CHARS})` : "spans more than one line"}. The bound is the point of the op — a milestone carries no content, so a requester watching several agents can read a page of them at a glance. Send the substance with dopl_channel(op="send", thread="<the same id>", body=…), then mark it with one short line here.`);
+    return (0, respond_1.err)(`Nothing was posted: a milestone is ONE LINE marking a step that just landed, and yours ${over ? `is ${body.length} characters (the cap is ${exports.MILESTONE_MAX_CHARS})` : "spans more than one line"}. The bound is the point of the op — a milestone carries no content, so a requester watching several agents can read a page of them at a glance. Send the substance with ${(0, call_ref_js_1.callRef)("channel.send", { thread: '"<the same id>"', body: "…" })}, then mark it with one short line here.`);
 }
 /**
  * **THE `kind="decision"` BODY CAP, AND IT IS THE ROUTE'S** (2026-09-02, B8).
@@ -210,7 +211,7 @@ async function opPost(client, channelRef, body, opts = {}) {
         if ((0, channel_errors_1.isBadRequest)(e)) {
             switch ((0, channel_errors_1.classifyBadRequest)(e)) {
                 case "addressee_not_member":
-                    return (0, respond_1.err)(`Couldn't address the message — that member isn't in **${chName}**. Add them with dopl_channel(op="rooms", action="invite"), or send without \`to\`.`);
+                    return (0, respond_1.err)(`Couldn't address the message — that member isn't in **${chName}**. Add them with ${(0, call_ref_js_1.callRef)("channel.rooms.invite")}, or send without \`to\`.`);
                 // ⚠ NOTHING WAS WRITTEN, and the server's own message lists the live
                 // handles and the roster — which is the whole remedy, so this arm adds
                 // the one fact that message cannot carry: no row exists to retract.
@@ -219,7 +220,7 @@ async function opPost(client, channelRef, body, opts = {}) {
                 case "thread_not_in_channel":
                     return (0, respond_1.err)(`That thread is not in this channel — check the thread id, or send without \`thread\`.`);
                 case "invalid_request":
-                    return (0, respond_1.err)(`That message was rejected as INVALID before it reached **${chName}** — nothing was sent, and this is NOT a membership or thread problem, so do not invite anyone or change \`thread\` over it.${(0, channel_errors_1.serverDetail)(e)} ${channel_errors_1.FIELD_CAPS_NOTE} Shorten the field that is over and post again.`);
+                    return (0, respond_1.err)(`That message was rejected as INVALID before it reached **${chName}** — nothing was sent, and this is NOT a membership or thread problem, so do not invite anyone or change \`thread\` over it.${(0, channel_errors_1.serverDetail)(e)} ${(0, channel_errors_1.fieldCapsNote)()} Shorten the field that is over and post again.`);
                 case "workspace":
                     return (0, respond_1.err)(`The post was rejected because the call carried no usable workspace.${(0, channel_errors_1.serverDetail)(e)} This is a connection-level problem, not a channel one — report it to your operator.`);
                 // `self_target` is create_thread-only (`post to=self` is deliberately
@@ -249,7 +250,7 @@ async function opPost(client, channelRef, body, opts = {}) {
                 // ⚠ The thread id is NOT echoed here. It round-trips (an agent copies
                 // it from a `read` legend = `metadata.taskId`, peer-set verbatim for
                 // non-UUID values), and "the id you just passed" needs no escaping.
-                return (0, respond_1.err)(`You can't post into that thread — nothing was posted. A thread is between the member who OPENED it and the member it is addressed TO, and you are neither: check it with dopl_channel(op="read", channel="${ch.id}", thread=<the id you just passed>). Send into the channel instead, or ask one of those two to open a thread with you. Do NOT open your own thread for the same work; that is a duplicate room, not a way in.`);
+                return (0, respond_1.err)(`You can't post into that thread — nothing was posted. A thread is between the member who OPENED it and the member it is addressed TO, and you are neither: check it with ${(0, call_ref_js_1.callRef)("channel.read", { channel: `"${ch.id}"`, thread: "<the id you just passed>" })}. Send into the channel instead, or ask one of those two to open a thread with you. Do NOT open your own thread for the same work; that is a duplicate room, not a way in.`);
             }
             if (kind === "not_a_member") {
                 return (0, respond_1.err)(`You can't post to **${chName}** — you are not a member of that channel. Nothing was posted.`);

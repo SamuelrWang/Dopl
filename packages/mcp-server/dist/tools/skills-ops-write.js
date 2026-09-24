@@ -9,6 +9,7 @@ exports.opWrite = opWrite;
 exports.opCreate = opCreate;
 exports.opUpdate = opUpdate;
 exports.opSetVisibility = opSetVisibility;
+const call_ref_js_1 = require("../call-ref.js");
 const narration_1 = require("./narration");
 const respond_1 = require("./respond");
 const skills_shared_1 = require("./skills-shared");
@@ -21,7 +22,7 @@ async function opWrite(client, slug, body, expected_version, force) {
     }
     catch (e) {
         if ((0, respond_1.isConflict)(e)) {
-            return (0, respond_1.err)(`SKILL.md in \`${slug}\` changed since you last read it. Call dopl_skill(op="read", slug) to get the current body + version, reconcile your changes, then retry write with that expected_version (or pass force=true to overwrite).`);
+            return (0, respond_1.err)(`SKILL.md in \`${slug}\` changed since you last read it. Call ${(0, call_ref_js_1.callRef)("skill.read", { slug: true })} to get the current body + version, reconcile your changes, then retry write with that expected_version (or pass force=true to overwrite).`);
         }
         // Skill flagged read-only to agents — clean message, not a raw code.
         const denied = (0, skills_shared_1.agentWriteDenied)(e);
@@ -49,16 +50,16 @@ async function opCreate(client, params) {
         // ⚠ A draft or private skill is invisible to op="list" — say why, or the
         // caller's next listing silently omits what it just made.
         const listNote = skill.status !== "active"
-            ? ` It is a ${skill.status}, so dopl_skill(op="list") will NOT show it until status="active".`
+            ? ` It is a ${skill.status}, so ${(0, call_ref_js_1.callRef)("skill.list")} will NOT show it until status="active".`
             : skill.visibility === "private"
-                ? ` Other members' op="list" will not show it while it is private.`
+                ? ` Other members' ${(0, call_ref_js_1.callRef)("skill.list", {}, { form: "op" })} will not show it while it is private.`
                 : "";
         // ⚠ Q3's warning — AFTER the create, so a list that throws costs the caller
         // nothing. See `duplicate-name.ts` for why it warns rather than refuses.
         const dup = await (0, duplicate_name_1.duplicateNameNoteFor)(skill, () => client.listSkills(), "skill", true);
         return (0, respond_1.ok)(`Created skill ${(0, narration_1.inlineOr)(skill.name, skills_shared_1.NO_NAME)} (slug: \`${skill.slug}\`). ` +
             `Status: ${skill.status}. ${visNote}${listNote} ` +
-            `SKILL.md (${primaryFile.body.length} chars) is ready to edit with \`dopl_skill\` op="write".${dup}`);
+            `SKILL.md (${primaryFile.body.length} chars) is ready to edit with ${(0, call_ref_js_1.bySet)({ legacy: `\`${(0, call_ref_js_1.toolName)("skill.write")}\` ${(0, call_ref_js_1.callRef)("skill.write", {}, { form: "op" })}`, granular: (0, call_ref_js_1.callRef)("skill.write") })}.${dup}`);
     }
     catch (e) {
         return (0, respond_1.err)(`Couldn't create skill: ${(0, skills_shared_1.failureDetail)(e)}`);
@@ -84,7 +85,7 @@ async function opUpdate(client, params) {
         });
         return (0, respond_1.ok)(`Updated skill ${(0, narration_1.inlineOr)(updated.name, skills_shared_1.NO_NAME)} (slug: \`${updated.slug}\`). Status: ${updated.status}.` +
             (updated.status !== "active"
-                ? ` A non-active skill is not listed by dopl_skill(op="list").`
+                ? ` A non-active skill is not listed by ${(0, call_ref_js_1.callRef)("skill.list")}.`
                 : "") +
             (updated.folder ? ` Folder: ${(0, narration_1.inlineOr)(updated.folder, "`(unnamed folder)`")}.` : ""));
     }
@@ -131,7 +132,7 @@ async function opSetVisibility(client, callerUserId, slug, visibility, confirmTo
         });
         return (0, respond_1.ok)(visibility === "public"
             ? `Published skill ${(0, narration_1.inlineOr)(skill.name, skills_shared_1.NO_NAME)} (slug: \`${skill.slug}\`) — now visible workspace-wide.`
-            : `Skill ${(0, narration_1.inlineOr)(skill.name, skills_shared_1.NO_NAME)} (slug: \`${skill.slug}\`) is now private — only its owner can see it, and it drops out of every other member's dopl_skill(op="list").`);
+            : `Skill ${(0, narration_1.inlineOr)(skill.name, skills_shared_1.NO_NAME)} (slug: \`${skill.slug}\`) is now private — only its owner can see it, and it drops out of every other member's ${(0, call_ref_js_1.callRef)("skill.list")}.`);
     }
     catch (e) {
         const denied = (0, skills_shared_1.agentWriteDenied)(e);

@@ -10,6 +10,7 @@ exports.resolveObjectRef = resolveObjectRef;
 exports.resolveOntologyRef = resolveOntologyRef;
 exports.resolveResourceHandles = resolveResourceHandles;
 exports.renderObject = renderObject;
+const call_ref_js_1 = require("../call-ref.js");
 const response_size_1 = require("./response-size");
 const narration_1 = require("./narration");
 const respond_1 = require("./respond");
@@ -110,7 +111,7 @@ function resolveObjectRef(snapshot, ref) {
         };
     }
     return {
-        fail: (0, respond_1.err)(`No object ${(0, narration_1.inlineOr)(ref, narration_1.NO_NAME)}. Find ids with op="resolve" or op="map".`),
+        fail: (0, respond_1.err)(`No object ${(0, narration_1.inlineOr)(ref, narration_1.NO_NAME)}. Find ids with ${(0, call_ref_js_1.callRef)("ontology.resolve", {}, { form: "op" })} or ${(0, call_ref_js_1.callRef)("ontology.map", {}, { form: "op" })}.`),
     };
 }
 function resolveOntologyRef(snapshot, ref) {
@@ -268,10 +269,10 @@ function renderValue(value, nameOf, handles) {
                 if (!h)
                     return id;
                 const opener = h.kind === "kb"
-                    ? `dopl_kb op="get_tree" base="${h.slug}"`
+                    ? (0, call_ref_js_1.callRef)("kb.get_tree", { base: `"${h.slug}"` }, { form: "named" })
                     : h.kind === "kb-entry"
-                        ? `dopl_kb op="read_file" base="${h.slug}" path="${h.path}"`
-                        : `dopl_skill op="get" slug="${h.slug}"`;
+                        ? (0, call_ref_js_1.callRef)("kb.read_file", { base: `"${h.slug}"`, path: `"${h.path}"` }, { form: "named" })
+                        : (0, call_ref_js_1.callRef)("skill.get", { slug: `"${h.slug}"` }, { form: "named" });
                 return `${(0, narration_1.inlineOr)(h.name, narration_1.NO_NAME)} (${opener})`;
             })
                 .join(", ") || "—");

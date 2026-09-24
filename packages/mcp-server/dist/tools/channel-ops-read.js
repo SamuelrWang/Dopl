@@ -24,6 +24,7 @@ exports.opRead = opRead;
 exports.opReadSessions = opReadSessions;
 exports.opListThreads = opListThreads;
 exports.opMembers = opMembers;
+const call_ref_js_1 = require("../call-ref.js");
 const respond_1 = require("./respond");
 const channel_shared_1 = require("./channel-shared");
 const narration_1 = require("./narration");
@@ -55,7 +56,7 @@ const NO_ID = "(unreadable id)";
 async function opList(client) {
     const channels = await client.listChannels();
     if (channels.length === 0) {
-        return (0, respond_1.ok)('No channels yet. Create one with dopl_channel(op="rooms", action="open", name="...").');
+        return (0, respond_1.ok)(`No channels yet. Create one with ${(0, call_ref_js_1.callRef)("channel.rooms.open", { name: '"..."' })}.`);
     }
     // ⚠ NO PER-RESULT SECURITY BANNER (T11, 2026-09-02). The framing did not go
     // away — it moved to CHANNEL_DESCRIPTION's own SECURITY paragraph, which is
@@ -65,7 +66,7 @@ async function opList(client) {
     const lines = [`## Channels — ${channels.length}\n`];
     for (const c of channels)
         lines.push((0, channel_render_1.formatChannelLine)(c));
-    lines.push('\nRead a channel with dopl_channel(op="read", channel=<slug|id>); post with op="send"; WAIT for new ones by HOLDING — op="read" with wait_ms, never a timed re-read.');
+    lines.push(`\nRead a channel with ${(0, call_ref_js_1.callRef)("channel.read", { channel: "<slug|id>" })}; post with ${(0, call_ref_js_1.callRef)("channel.send", {}, { form: "op" })}; WAIT for new ones by HOLDING — ${(0, call_ref_js_1.callRef)("channel.read", {}, { form: "op" })} with wait_ms, never a timed re-read.`);
     return (0, respond_1.ok)(lines.join("\n"));
 }
 /**
@@ -168,7 +169,7 @@ outside = false) {
         if (scope) {
             return (0, respond_1.ok)([
                 ...card,
-                `No messages tagged with thread ${safeScope} in **${ref}**${sinceNote}. \`thread\` FILTERS the transcript — an id no message carries comes back empty rather than as an error — so check the id with dopl_channel(op="rooms", action="threads", channel="${ref}") before you conclude the exchange is silent, or drop \`thread\` to read the whole channel. A HOLD is channel-wide and takes no thread.`,
+                `No messages tagged with thread ${safeScope} in **${ref}**${sinceNote}. \`thread\` FILTERS the transcript — an id no message carries comes back empty rather than as an error — so check the id with ${(0, call_ref_js_1.callRef)("channel.rooms.threads", { channel: `"${ref}"` })} before you conclude the exchange is silent, or drop \`thread\` to read the whole channel. A HOLD is channel-wide and takes no thread.`,
                 (0, channel_wake_guidance_1.waitingLine)((0, channel_wake_guidance_1.channelHoldCall)(ref, since ?? 0), since ?? 0),
             ].join("\n"));
         }
@@ -276,7 +277,7 @@ async function opReadSessions(client, ref, format) {
         // have none": an asleep, signed-out or older machine reports nothing, so
         // an empty page is not evidence a session is not running. The rest — that
         // this is your own side only — is in the doctrine.
-        `No live sessions of yours are being REPORTED${channelLabel} right now. That is not the same as having none: an asleep, signed-out or older machine reports nothing. ${channel_doctrine_1.DOCTRINE_POINTER}`);
+        `No live sessions of yours are being REPORTED${channelLabel} right now. That is not the same as having none: an asleep, signed-out or older machine reports nothing. ${(0, channel_doctrine_1.doctrinePointer)()}`);
     }
     // ⚠ ONE `now` FOR THE WHOLE PAGE. Calling `Date.now()` per line lets two
     // sessions pushed in the same instant land on either side of the window and
@@ -321,11 +322,11 @@ async function opReadSessions(client, ref, format) {
     // a `—` means, why a row is a REPORT and not an observation) is doctrine and
     // is read once, not on every call of an op an orchestrator polls in a loop.
     // ⚠ The legend decodes THIS page's own hedged cells, so it survives `concise`
-    // whenever the page actually has one; the DOCTRINE_POINTER is standing
+    // whenever the page actually has one; the doctrinePointer() is standing
     // teaching and does not.
     lines.push((0, response_size_1.isConcise)(format)
         ? `\n${(0, channel_session_render_1.sessionLegend)(anyStale, operatorOnline)}`
-        : `\n${(0, channel_session_render_1.sessionLegend)(anyStale, operatorOnline)} ${channel_doctrine_1.DOCTRINE_POINTER}`);
+        : `\n${(0, channel_session_render_1.sessionLegend)(anyStale, operatorOnline)} ${(0, channel_doctrine_1.doctrinePointer)()}`);
     return (0, respond_1.ok)(lines.join("\n"));
 }
 async function opListThreads(client, ref, selfUserId = null) {
@@ -348,7 +349,7 @@ async function opListThreads(client, ref, selfUserId = null) {
         throw e;
     }
     if (threads.length === 0) {
-        return (0, respond_1.ok)(`No threads in **${ref}**. Open one with dopl_channel(op="send", channel="${ref}", thread="new", summary="...", body="...", to="...").`);
+        return (0, respond_1.ok)(`No threads in **${ref}**. Open one with ${(0, call_ref_js_1.callRef)("channel.send", { channel: `"${ref}"`, thread: '"new"', summary: '"..."', body: '"..."', to: '"..."' })}.`);
     }
     const lines = [
         `## ${ref} — ${threads.length} thread${threads.length === 1 ? "" : "s"}, most recently active first\n`,
@@ -369,7 +370,7 @@ async function opListThreads(client, ref, selfUserId = null) {
     // to close this listing is standing doctrine — true of every thread in every
     // channel — and is stated in `channel-doctrine.ts` under THE MODEL. What stays
     // is the two calls a reader of THIS page needs next.
-    lines.push(`\nRead one with op="read" (thread=<id>) — that returns the thread's card and its messages. ${channel_doctrine_1.DOCTRINE_POINTER}`);
+    lines.push(`\nRead one with ${(0, call_ref_js_1.callRef)("channel.read", {}, { form: "op" })} (thread=<id>) — that returns the thread's card and its messages. ${(0, channel_doctrine_1.doctrinePointer)()}`);
     return (0, respond_1.ok)(lines.join("\n"));
 }
 /**

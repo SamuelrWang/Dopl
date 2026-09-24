@@ -10,6 +10,7 @@
  */
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.registerMembersTool = registerMembersTool;
+const call_ref_js_1 = require("../call-ref.js");
 const zod_1 = require("zod");
 const narration_1 = require("./narration");
 const identity_1 = require("./identity");
@@ -131,10 +132,10 @@ async function opWhoami(client, caller) {
         : `- Teams: (unknown — no roster row resolved for your user id)`);
     lines.push(...(0, identity_1.sessionLines)(caller));
     if (reachable.length > 0) {
-        lines.push(`- Team-scoped resources you can reach: ${reachable.length} (op="my_access" for the list)`);
+        lines.push(`- Team-scoped resources you can reach: ${reachable.length} (${(0, call_ref_js_1.callRef)("members.my_access", {}, { form: "op" })} for the list)`);
     }
     if (me.role === "owner" || me.role === "admin") {
-        lines.push(`- As ${me.role} you have edit access to everything, and can inspect any member's effective access (op="get").`);
+        lines.push(`- As ${me.role} you have edit access to everything, and can inspect any member's effective access (${(0, call_ref_js_1.callRef)("members.get", {}, { form: "op" })}).`);
     }
     lines.push(``, (0, members_render_1.contactPointer)(caller.vendor));
     lines.push(``, identity_1.LOCUS_NOTE);
@@ -165,7 +166,7 @@ async function opList(client, caller, fields) {
     // invitations and deactivated memberships — say so, or nobody reads the
     // per-row status.
     lines.push(`\n_Every membership row, INCLUDING invited-but-not-joined and deactivated ones — the count above is rows, not active people. Read the status on each._`);
-    lines.push(`\nUse dopl_members(op="get", member=...) for one member's teams + effective access.`);
+    lines.push(`\nUse ${(0, call_ref_js_1.callRef)("members.get", { member: "..." })} for one member's teams + effective access.`);
     lines.push(`\n${(0, members_render_1.contactPointer)(caller.vendor)}`);
     return (0, respond_1.ok)(lines.join("\n"));
 }
@@ -293,7 +294,7 @@ async function opMyAccess(client) {
         // ⚠ The endpoint returns an EMPTY override list for an admin BY DESIGN
         // (teams/server/access.ts) — absence of rows is the answer, not a failure
         // to enumerate, and reads as the smaller set otherwise.
-        lines.push(`\n_No per-resource rows are listed for an admin or owner: the empty list IS the answer, not a truncation. dopl_members(op="access_matrix") enumerates the resources themselves._`);
+        lines.push(`\n_No per-resource rows are listed for an admin or owner: the empty list IS the answer, not a truncation. ${(0, call_ref_js_1.callRef)("members.access_matrix")} enumerates the resources themselves._`);
         return (0, respond_1.ok)(lines.join("\n"));
     }
     const reachable = visibleOverrides(access, matrix);

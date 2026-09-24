@@ -37,11 +37,11 @@ export declare const ROOMS_INPUT_FIELDS: {
         }, z.core.$strip>>>;
     }, z.core.$strip>>;
     section: z.ZodOptional<z.ZodEnum<{
-        read: "read";
-        fields: "fields";
         send: "send";
         manage: "manage";
         model: "model";
+        fields: "fields";
+        read: "read";
         law: "law";
         waiting: "waiting";
         rooms: "rooms";

@@ -41,6 +41,7 @@
  */
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.registerWorkspaceMetaTools = registerWorkspaceMetaTools;
+const call_ref_js_1 = require("./call-ref.js");
 const zod_1 = require("zod");
 const tool_style_js_1 = require("./tools/tool-style.js");
 const identity_js_1 = require("./tools/identity.js");
@@ -105,7 +106,7 @@ async function opCreateHomeChannel(client, name) {
         // container on `workspaceId` and the channel on `channelId`; the one
         // projection carries the container on `workspaceId` still, and the channel
         // on its own `id`.
-        `Address it with container=\`${channel.workspaceId}\` on ${(0, workspace_arg_js_1.workspaceArgTargets)()}, and with channel=\`${channel.id}\` on dopl_channel.`,
+        `Address it with container=\`${channel.workspaceId}\` on ${(0, workspace_arg_js_1.workspaceArgTargets)()}, and with channel=\`${channel.id}\` on ${(0, call_ref_js_1.bySet)({ legacy: "dopl_channel", granular: "the channel tools" })}.`,
         `⚠ You cannot add a person to it. Minting the invitation is an interactive-session act, refused over MCP for every role and token — ask the user to add someone from the Dopl app.`,
     ].join("\n"));
 }
