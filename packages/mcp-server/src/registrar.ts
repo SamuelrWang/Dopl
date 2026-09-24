@@ -21,6 +21,7 @@ import {
 import { CONTAINER_ARG_DESCRIPTION } from "./workspace-arg.js";
 import { resolveCallAddress } from "./container-resolve.js";
 import { LEGACY_ONTOLOGY_ARGS } from "./legacy-aliases.js";
+import { withToolSet } from "./call-ref.js";
 import { granularDescription, granularShape, legacyCall, type LegacyTool } from "./granular.js";
 import {
   ALWAYS_LOAD_META,
@@ -209,13 +210,15 @@ export function createToolRegistrars(deps: RegistrarDeps): ToolRegistrars {
     toolSet = "legacy",
   } = deps;
   const chargeCredit = createCharger(client);
-  // Every registered legacy tool, including one whose name the active granular set took.
+  // Every registered legacy tool, including one whose name the active granular set took. `run` is the
+  // bare pipeline: each registration opens its own tool-set scope (`call-ref.ts › withToolSet`).
   const legacy = new Map<string, LegacyTool>();
   function publishLegacy(name: string, description: string, shape: ZodRawShape, run: LegacyTool["run"]): void {
     const input = strictInput(shape, name);
     legacy.set(name, { shape, input, run });
     if (!servesName(toolSet, "legacy", name)) return;
-    server.registerTool(name, toolConfig(name, description, input), run as never);
+    server.registerTool(name, toolConfig(name, description, input), ((args: Record<string, unknown>) =>
+      withToolSet(toolSet, () => run(args))) as never);
   }
   const runWithCredits = createCreditedRunner(chargeCredit);
 
@@ -358,7 +361,7 @@ export function createToolRegistrars(deps: RegistrarDeps): ToolRegistrars {
           );
         }
         // Carried args were validated by this tool's own schema; the legacy one does not know them.
-        return target.run({ ...(parsed.data as Record<string, unknown>), ...call.carried });
+        return withToolSet(toolSet, () => target.run({ ...(parsed.data as Record<string, unknown>), ...call.carried }), t.name);
       }) as never,
     );
   }

@@ -9,11 +9,8 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, it, expect } from "vitest";
-import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
-import type { DoplClient, WorkspaceListItem } from "@dopl/client";
 
-import { createServer } from "./server.js";
+import { boot, call, sweep, type Booted, type JsonSchema } from "./surface-sweep.js";
 import { CHANNEL_DESCRIPTION_MAX_CHARS } from "./granular-text-channels.js";
 import { isWriteOp } from "./gating.js";
 import {
@@ -25,87 +22,9 @@ import {
   bindingsOf,
   parseBinding,
   selectorOf,
-  type BindingKey,
-  type GranularTool,
-  type ToolSet,
 } from "./tool-manifest.js";
 
-const WS: WorkspaceListItem = {
-  id: "11111111-1111-1111-1111-111111111111",
-  ownerId: "owner",
-  name: "Alpha",
-  slug: "alpha",
-  publicId: "pub-1",
-  description: null,
-  createdAt: "2026-01-01T00:00:00Z",
-  updatedAt: "2026-01-01T00:00:00Z",
-  role: "owner",
-};
-
-/** Every client method answers `{}` (or its `answers` entry) and is logged, so backend traffic is comparable. */
-function recordingClient(log: string[], answers: Record<string, unknown> = {}): DoplClient {
-  const fixed: Record<string, unknown> = {
-    getWorkspaceId: () => null,
-    setWorkspaceId: () => {},
-    listWorkspaces: async () => ({ workspaces: [WS] }),
-  };
-  return new Proxy({} as DoplClient, {
-    get(_target, prop) {
-      if (typeof prop !== "string" || prop === "then") return undefined;
-      if (prop in fixed) return fixed[prop];
-      return async (...args: unknown[]) => {
-        log.push(`${prop} ${JSON.stringify(args)}`);
-        return answers[prop] ?? {};
-      };
-    },
-  });
-}
-
-interface Booted {
-  client: Client;
-  log: string[];
-}
-
-async function boot(
-  toolSet: ToolSet,
-  opts: { scopes?: string[]; toolProfile?: string; answers?: Record<string, unknown> } = {},
-): Promise<Booted> {
-  const log: string[] = [];
-  const server = createServer(recordingClient(log, opts.answers), {
-    toolSet,
-    directory: [WS],
-    workspace: WS,
-    role: "owner",
-    workspaceSource: "header pin",
-    scopes: opts.scopes ?? ["dopl.read", "dopl.write"],
-    toolProfile: opts.toolProfile,
-  });
-  const [clientSide, serverSide] = InMemoryTransport.createLinkedPair();
-  const client = new Client({ name: "granular-probe", version: "0.0.0" });
-  await Promise.all([server.connect(serverSide), client.connect(clientSide)]);
-  return { client, log };
-}
-
 const listedNames = async (b: Booted) => (await b.client.listTools()).tools.map((t) => t.name).sort();
-
-async function call(b: Booted, name: string, args: Record<string, unknown>) {
-  const res = (await b.client.callTool({ name, arguments: args })) as {
-    content: Array<{ text: string }>;
-    isError?: boolean;
-  };
-  return { text: res.content.map((c) => c.text).join("\n"), isError: res.isError === true };
-}
-
-/** The legacy call a binding stands for, as a caller of the legacy tool would spell it. */
-function legacySpelling(key: BindingKey, t: GranularTool): { tool: string; args: Record<string, unknown> } {
-  const { tool, op } = parseBinding(key);
-  const [base, action] = op?.split(".") ?? [];
-  return { tool, args: { ...t.preset, ...(base && { op: base }), ...(action && { action }) } };
-}
-
-function jobsOf(t: GranularTool): Array<[string | null, BindingKey]> {
-  return typeof t.bind === "string" ? [[null, t.bind]] : Object.entries(t.bind);
-}
 
 describe("tool-set selection", () => {
   it("legacy (the default) lists the 11, granular lists the 39", async () => {
@@ -265,84 +184,28 @@ describe("a room description reaches the route whole, past the legacy 200-char s
   });
 });
 
-type JsonSchema = {
-  type?: string;
-  enum?: unknown[];
-  format?: string;
-  minimum?: number;
-  minItems?: number;
-  items?: JsonSchema;
-  anyOf?: JsonSchema[];
-  properties?: Record<string, JsonSchema>;
-  required?: string[];
-};
-
-/** A value the published schema accepts, so the call reaches past validation. */
-function sample(s: JsonSchema): unknown {
-  if (s.enum) return s.enum[0];
-  if (s.anyOf) return sample(s.anyOf[0]);
-  switch (s.type) {
-    case "string":
-      return s.format === "uuid" ? "11111111-1111-4111-8111-111111111111" : "x";
-    case "number":
-    case "integer":
-      return Math.max(1, s.minimum ?? 1);
-    case "boolean":
-      return true;
-    case "array":
-      return Array.from({ length: Math.max(1, s.minItems ?? 1) }, () => sample(s.items ?? {}));
-    default:
-      return Object.fromEntries((s.required ?? []).map((k) => [k, sample(s.properties?.[k] ?? {})]));
-  }
-}
-
-/** Random per-response fence tokens aside, the two texts must match byte for byte. */
-const normalize = (s: string) => s.replace(/_[0-9a-f]{8,}/g, "_HEX");
 const INVALID = "MCP error -32602";
 
 describe("each granular call is its legacy twin", async () => {
-  const bySet = {
-    legacy: (await (await boot("legacy")).client.listTools()).tools,
-    granular: (await (await boot("granular")).client.listTools()).tools,
-  };
-  const propsOf = (set: ToolSet, name: string) =>
-    (bySet[set].find((s) => s.name === name)!.inputSchema as JsonSchema).properties ?? {};
-  const cases = GRANULAR_TOOLS.flatMap((t) =>
-    jobsOf(t).map(([job, key]) => [`${t.name}${job ? `(${job})` : ""} = ${key}`, t, job, key] as const),
-  );
+  const cases = await sweep();
 
-  it.each(cases)("%s", async (_label, t, job, key) => {
-    const { tool, args } = legacySpelling(key, t);
-    const legacyProps = propsOf("legacy", tool);
-    const props = propsOf("granular", t.name);
-    // Bare; the schema's required params; every row param this legacy tool also publishes (a hold's
-    // wait_ms aside).
-    const fill = (params: readonly string[]) =>
-      Object.fromEntries(
-        params
-          .filter((p) => p in legacyProps && p !== "wait_ms" && p !== selectorOf(t))
-          .map((p) => [p, sample(props[p])]),
-      );
-    const required = (bySet.granular.find((s) => s.name === t.name)!.inputSchema as JsonSchema).required ?? [];
-    const selected = job ? { [selectorOf(t)!]: job } : {};
-    let compared = 0;
-    for (const extra of [{}, fill(required), fill(t.params)]) {
-      const legacy = await boot("legacy");
-      const granular = await boot("granular");
-      const a = await call(legacy, tool, { ...args, ...extra });
-      const b = await call(granular, t.name, { ...selected, ...extra });
-      // A schema refusal names the tool called, and a row param takes its first legacy owner's type
-      // (dopl_search requires `query`; dopl_kb checks it after the charge): refused on both sides,
-      // the granular one before any backend call.
-      if (a.text.startsWith(INVALID) || b.text.startsWith(INVALID)) {
-        expect([a.isError, b.isError, granular.log]).toEqual([true, true, []]);
-        continue;
-      }
-      expect(granular.log.map(normalize)).toEqual(legacy.log.map(normalize));
-      expect(normalize(b.text)).toBe(normalize(a.text));
-      expect(b.isError).toBe(a.isError);
-      compared++;
+  it.each(cases.map((c) => [c.label, c] as const))("%s", (_label, { legacy, granular }) => {
+    // A schema refusal names the tool called, and a row param takes its first legacy owner's type
+    // (dopl_search requires `query`; dopl_kb checks it after the charge): refused on both sides,
+    // the granular one before any backend call.
+    if (legacy.text.startsWith(INVALID) || granular.text.startsWith(INVALID)) {
+      expect([legacy.isError, granular.isError, granular.log]).toEqual([true, true, []]);
+      return;
     }
-    expect(compared, "no variant got past the schema on both sides").toBeGreaterThan(0);
+    expect(granular.log).toEqual(legacy.log);
+    expect(granular.text).toBe(legacy.text);
+    expect(granular.isError).toBe(legacy.isError);
+  });
+
+  it("every binding gets past the schema on both sides at least once", () => {
+    const binding = (label: string) => label.replace(/ #\d+$/, "");
+    const passed = (c: (typeof cases)[number]) => !c.legacy.text.startsWith(INVALID) && !c.granular.text.startsWith(INVALID);
+    const reached = new Set(cases.filter(passed).map((c) => binding(c.label)));
+    expect([...new Set(cases.map((c) => binding(c.label)))].filter((l) => !reached.has(l))).toEqual([]);
   });
 });
