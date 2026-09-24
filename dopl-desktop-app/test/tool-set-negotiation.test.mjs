@@ -1,10 +1,10 @@
-// THE TOOL-SET NEGOTIATION (DMP-013 B4): a session asks for `granular` ONLY where the server said it
-// serves it, read off the launch pre-flight's own `initialize` answer; everything else stays on the
-// legacy default and sends no header at all.
+// THE TOOL-SET NEGOTIATION: a session asks for `granular` ONLY where the server said it serves it,
+// read off the launch pre-flight's own `initialize` answer; everything else stays legacy and sends no
+// header at all (the server gives an unclaimed desktop session legacy, keyed on its custody stamp).
 //
 //   new desktop × old server   → no advertisement → legacy, no header (today's bytes)
 //   new desktop × new server   → advertisement    → `X-Dopl-Tool-Set: granular` on all three runtimes
-//   old desktop × new server   → no header        → the server's legacy default
+//   old desktop × new server   → no header        → legacy (the server's default for a desktop session)
 //
 // Run: `node --test dopl-desktop-app/test/tool-set-negotiation.test.mjs`
 

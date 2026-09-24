@@ -160,14 +160,23 @@ describe("bootServer caller identity", () => {
 });
 
 describe("bootServer tool set", () => {
+  // A desktop spawn stamps `X-Dopl-Runtime: desktop-session` (every build since 1.7.14); a container
+  // session also rides a locked token. Either mark alone is a desktop-run caller.
+  const OLD_DESKTOP = { runtime: "desktop-session" };
+  const LOCKED_SESSION = { containerId: "ws-1" };
   it.each([
-    [undefined, "legacy"],
-    ["legacy", "legacy"],
-    ["granular", "granular"],
-    ["GRANULAR", "legacy"],
-    ["compact", "legacy"],
-  ])("claim %j resolves to %s", async (claim, expected) => {
-    const res = await bootServer(mockClient({ directory: [WS1] }), { toolSet: claim });
+    ["external client, no claim", undefined, undefined, "granular"],
+    ["external client, explicit legacy", "legacy", undefined, "legacy"],
+    ["external client, explicit granular", "granular", undefined, "granular"],
+    ["external client, unplaceable claim", "GRANULAR", undefined, "granular"],
+    ["external client, unknown set", "compact", undefined, "granular"],
+    ["old desktop, no claim", undefined, OLD_DESKTOP, "legacy"],
+    ["container-locked session, no claim", undefined, LOCKED_SESSION, "legacy"],
+    ["desktop, unknown set", "compact", OLD_DESKTOP, "legacy"],
+    ["negotiated desktop", "granular", OLD_DESKTOP, "granular"],
+    ["desktop, explicit legacy", "legacy", OLD_DESKTOP, "legacy"],
+  ])("%s → %s", async (_label, claim, caller, expected) => {
+    const res = await bootServer(mockClient({ directory: [WS1] }), { toolSet: claim, caller });
     expect(res.toolSet).toBe(expected);
   });
 });

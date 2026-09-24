@@ -8,7 +8,7 @@
 
 import type { DoplClient, WorkspaceListItem } from "@dopl/client";
 import { createServer } from "./server.js";
-import { UNKNOWN_CALLER, type CallerIdentity } from "./tools/identity.js";
+import { UNKNOWN_CALLER, isDesktopRun, type CallerIdentity } from "./tools/identity.js";
 import {
   containerKind,
   matchesContainerRef,
@@ -42,8 +42,8 @@ export interface BootOptions {
    */
   toolProfile?: string | null;
   /**
-   * The TOOL SET claimed by `X-Dopl-Tool-Set` or `?tools=`, verbatim; resolved once here
-   * (`tool-manifest.ts › resolveToolSet`) and handed to `createServer`, which lists that set.
+   * The TOOL SET claimed by `X-Dopl-Tool-Set` or `?tools=`, verbatim; resolved once here against
+   * the caller (`tool-manifest.ts › resolveToolSet`) and handed to `createServer`, which lists that set.
    */
   toolSet?: string | null;
   /**
@@ -226,7 +226,7 @@ export async function bootServer(
     userId: opts.caller?.userId ?? userId,
   };
 
-  const toolSet = resolveToolSet(opts.toolSet);
+  const toolSet = resolveToolSet(opts.toolSet, isDesktopRun(caller));
   const server = createServer(client, {
     toolSet,
     isAdmin,

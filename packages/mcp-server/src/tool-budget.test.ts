@@ -195,10 +195,10 @@ const SCHEMA_CEILINGS: Record<string, number> = {
  * true also forces the headline number to be re-measured on every slice that
  * claims a win.
  */
-// DMP-013 B2: granular text written, body fence once in its instructions; B3 +6: its own WHICH TOOL line
-// and the knowledge guide topic. Re-derive, never quote. The
-// ceiling may never pass the target, the legacy total when the split was planned.
-const GRANULAR_SERVED_CEILING = 44_104;
+// The granular set's own served total, its briefing included (which states the body fence once and
+// must leave room for directory rows). Re-derive, never quote. The ceiling may never pass the target,
+// the legacy total when the split was planned.
+const GRANULAR_SERVED_CEILING = 44_153;
 const GRANULAR_SERVED_TARGET = 49_205;
 const SERVED_TOTAL_CEILING = 50_275; // re-derive, never quote: −2 the 2026-09-23 vocabulary removal merged onto DMP-002 (dopl_ontology: −3 schema, +1 history gloss), −5 DMP-004 (dopl_search names ten domains in the same 450), +964 DMP-002 history+restore on three tools, +119 DMP-009 field type enum, −6 DMP-001 net, −229 home-channel addressing pulled (P8-23), +15 caller's own tool loader (X-09), +9 P8-15/P8-18.
 /**

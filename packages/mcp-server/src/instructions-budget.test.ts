@@ -45,19 +45,23 @@ function ws(n: number): WorkspaceListItem {
 
 const directoryOf = (n: number) => Array.from({ length: n }, (_, i) => ws(i + 1));
 
-/** Every membership shape `server.ts › createServer` can boot into. */
-const SHAPES: Array<[string, string]> = [
-  ["no memberships", buildInstructions([])],
-  ["directory load failed", buildInstructions([], { directoryLoadFailed: true })],
-  ["sole membership", buildInstructions(directoryOf(1))],
-  ["two, no pin", buildInstructions(directoryOf(2))],
-  [
-    "two, header pin",
-    buildInstructions(directoryOf(2), { pin: { name: "Product Engineering 2", slug: "product-engineering-2" } }),
-  ],
-  ["five", buildInstructions(directoryOf(5))],
-  ["forty", buildInstructions(directoryOf(40))],
-];
+/** Every membership shape `server.ts › createServer` can boot into, in both tool sets. */
+const SHAPES: Array<[string, string]> = (["legacy", "granular"] as const).flatMap((toolSet) =>
+  (
+    [
+      ["no memberships", [], {}],
+      ["directory load failed", [], { directoryLoadFailed: true }],
+      ["sole membership", directoryOf(1), {}],
+      ["two, no pin", directoryOf(2), {}],
+      ["two, header pin", directoryOf(2), { pin: { name: "Product Engineering 2", slug: "product-engineering-2" } }],
+      ["five", directoryOf(5), {}],
+      ["forty", directoryOf(40), {}],
+    ] as const
+  ).map(([shape, dir, guidance]): [string, string] => [
+    `${toolSet}, ${shape}`,
+    buildInstructions([...dir], { ...guidance, toolSet }),
+  ]),
+);
 
 describe("the briefing fits the prefix the model is handed", () => {
   // ⚠ WRITTEN IS DELIVERED, and the LENGTH is the whole of that claim: the CLI
@@ -94,6 +98,19 @@ describe("the briefing fits the prefix the model is handed", () => {
     // them — a silently short directory reads as a complete one.
     expect(out).toMatch(/…and \d+ more — `dopl_workspaces`/);
     expect(out).not.toContain("product-engineering-40");
+  });
+
+  it("the granular briefing keeps directory rows too, and announces the rest", () => {
+    // The granular contract is longer (it states the body fence once); it must not
+    // crowd the whole directory off the prefix, for a desktop-run caller either.
+    const out = buildInstructions(directoryOf(40), {
+      toolSet: "granular",
+      desktopRun: true,
+      vendor: "claude",
+      identity: { userId: "2dac1943-da3b-4fd9-aee6-1716ddfc25f9", boundChannelId: null },
+    });
+    expect(out).toContain("product-engineering-1`");
+    expect(out).toMatch(/…and \d+ more — `dopl_list_workspaces`/);
   });
 });
 

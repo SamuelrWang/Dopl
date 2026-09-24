@@ -15,7 +15,7 @@ import type { ToolAnnotations } from "@modelcontextprotocol/sdk/types.js";
 import { isWriteOp } from "./gating.js";
 import { isBlockedDeleteOp } from "./delete-policy.js";
 
-/** The tool sets a connection may ask for (`X-Dopl-Tool-Set`, else `?tools=`); the first is the default. */
+/** The tool sets a connection may ask for (`X-Dopl-Tool-Set`, else `?tools=`). */
 export const TOOL_SETS = ["legacy", "granular"] as const;
 export type ToolSet = (typeof TOOL_SETS)[number];
 
@@ -26,9 +26,13 @@ export type ToolSet = (typeof TOOL_SETS)[number];
  */
 export const TOOL_SETS_CAPABILITY = "dopl/toolSets";
 
-/** An absent or unplaceable claim gets the default: a set names tools, it grants nothing. */
-export function resolveToolSet(claimed: string | null | undefined): ToolSet {
-  return TOOL_SETS.find((set) => set === claimed) ?? TOOL_SETS[0];
+/**
+ * A named set wins. With none (or one this server cannot place), a desktop-run caller
+ * (`identity.ts › isDesktopRun`) gets `legacy` — a desktop that does not negotiate knows only those
+ * names and gates by them — and everyone else `granular`. A set names tools; it grants nothing.
+ */
+export function resolveToolSet(claimed: string | null | undefined, desktopRun: boolean): ToolSet {
+  return TOOL_SETS.find((set) => set === claimed) ?? (desktopRun ? "legacy" : "granular");
 }
 
 export type BindingKey = `dopl_${string}`;

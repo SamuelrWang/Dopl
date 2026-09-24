@@ -27,7 +27,7 @@ import {
 const listedNames = async (b: Booted) => (await b.client.listTools()).tools.map((t) => t.name).sort();
 
 describe("tool-set selection", () => {
-  it("legacy (the default) lists the 11, granular lists the 39", async () => {
+  it("legacy lists the 11, granular lists the 39", async () => {
     expect(await listedNames(await boot("legacy"))).toEqual([...LEGACY_TOOL_NAMES].sort());
     expect(await listedNames(await boot("granular"))).toEqual([...GRANULAR_TOOL_NAMES].sort());
     expect(LEGACY_TOOL_NAMES.size).toBe(11);
@@ -38,6 +38,20 @@ describe("tool-set selection", () => {
     expect((await call(legacy, "dopl_list_workspaces", {})).text).toContain("alpha");
     const granular = await boot("granular");
     expect((await call(granular, "dopl_workspaces", {})).text).toContain("alpha");
+  });
+
+  it("a stale legacy call on a granular connection runs and answers in granular names", async () => {
+    const granular = await boot("granular", { answers: { listKbBases: [] } });
+    const legacySpelling = /\bdopl_(channel|kb|skill|ontology|chats|agent|map|members|status|workspaces)\b|\bop=/;
+    // A pulled guide, and a refusal whose retry hint names the next call.
+    const guide = await call(granular, "dopl_channel", { op: "rooms", action: "help" });
+    expect(guide.isError).toBe(false);
+    expect(guide.text).toContain("dopl_read_channel(");
+    expect(guide.text).not.toMatch(legacySpelling);
+    const refusal = await call(granular, "dopl_kb", { op: "get_tree", base: "notes" });
+    expect(refusal).toMatchObject({ isError: true });
+    expect(refusal.text).toMatch(/reason=base_not_found.*retry=dopl_browse_knowledge\(/s);
+    expect(refusal.text).not.toMatch(legacySpelling);
   });
 
   it("a legacy dopl_search call still works where the granular tool took the name", async () => {

@@ -136,7 +136,8 @@ async function bootDirectory(
 }> {
   registeredInstructions.length = 0;
   registeredTools.clear();
-  await bootServer(mockClient(rows, pin));
+  // The lock is set-independent; legacy's shorter briefing leaves room for every row asserted on.
+  await bootServer(mockClient(rows, pin), { toolSet: "legacy" });
   const cb = registeredTools.get("dopl_workspaces");
   return {
     instructions: registeredInstructions[0] ?? "",

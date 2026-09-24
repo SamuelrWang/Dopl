@@ -90,10 +90,11 @@ const WARM_RPC = {
   },
 };
 
-// ── THE TOOL-SET NEGOTIATION (DMP-013 B4) ───────────────────────────────────────────────────
+// ── THE TOOL-SET NEGOTIATION ─────────────────────────────────────────────────────────────────
 //
 // The server serves two tool surfaces and lists the one a connection asks for (`X-Dopl-Tool-Set`);
-// absent is the legacy default. The desktop asks for `granular` ONLY where the server has said it
+// a desktop session that asks for none gets legacy (the server keys that on the `X-Dopl-Runtime`
+// custody stamp, `tool-manifest.ts › resolveToolSet`). The desktop asks for `granular` ONLY where the server has said it
 // serves it: `initialize` names both sets under this capability (`packages/mcp-server/src/
 // tool-manifest.ts › TOOL_SETS_CAPABILITY`), and the pre-flight above already sends that request,
 // so reading its answer costs no extra round trip. An older server says nothing and every session
@@ -111,7 +112,7 @@ function advertisedToolSet(frame) {
   return sets.indexOf(GRANULAR_TOOL_SET) !== -1 ? GRANULAR_TOOL_SET : LEGACY_TOOL_SET;
 }
 
-/** The header a session's MCP entry carries: none for the default, so legacy is byte-for-byte today. */
+/** The header a session's MCP entry carries: none for legacy, so a legacy entry is byte-for-byte what it was. */
 function toolSetHeaders(set) {
   return set === GRANULAR_TOOL_SET ? { [TOOL_SET_HEADER]: GRANULAR_TOOL_SET } : {};
 }

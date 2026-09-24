@@ -8,7 +8,7 @@
  * The active set rides an AsyncLocalStorage scope the registrar opens around every tool call and
  * resource read (`withToolSet`), so a handler, a refusal or a footer renders for ITS connection
  * without the set threaded through a signature. Outside any scope (an import-time constant, a
- * legacy description, a unit test) the set is `legacy`, the default.
+ * legacy description, a unit test) the set is `legacy`.
  */
 
 import { AsyncLocalStorage } from "node:async_hooks";
