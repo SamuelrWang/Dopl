@@ -29,6 +29,16 @@ export type {
 export type { SpaBridgeSessions } from "./spa-bridge-sessions";
 
 
+/** One runtime's Dopl sign-in as main reports it: a state and a flag, never a credential. */
+export interface RuntimeCredentialStatus {
+  runtimeId: string;
+  /** The runtime's own name for itself. */
+  label: string;
+  state: "connected" | "not-connected" | "expired" | "signing-in";
+  /** Main raised this runtime's sign-in prompt, and no sign-in or dismissal has closed it. */
+  prompt: boolean;
+}
+
 export interface SpaBridgeSurface {
   apiRequest(
     path: string,
@@ -100,18 +110,16 @@ export interface SpaBridgeSurface {
     set(enabled: boolean): Promise<{ ok: boolean; reason?: string; enabled?: boolean }>;
   };
   /**
-   * SIGN THIS MAC IN TO ONE RUNTIME (`runtime:signIn`; it was `claude.signIn` until 2026-09-23) — the
-   * entry into that runtime's auth recovery flow. `runtimeId` `''` = the default runtime.
-   *
-   * ⚠ A SESSION RIDES A THIRD CREDENTIAL: not the Dopl login and not the vendor's app login, but
-   * the runtime credential THIS Mac holds. When it is missing the engine HOLDS the session.
-   * ⚠ NO CREDENTIAL CROSSES THIS BRIDGE: main opens the OAuth page in the SYSTEM BROWSER.
-   * ⚠ `ok` REPORTS THE CREDENTIAL, NOT THE FLOW; a declined, failed or refused sign-in all answer
-   * `{ ok: false }`. On `ok` main has already released that runtime's held sessions.
-   * ⚠ FEATURE-DETECT IT at the call site — the button must be ABSENT, never inert.
+   * DOPL'S OWN RUNTIME CREDENTIALS (`main/runtime-credentials.js`). `signIn` runs one runtime's in-app
+   * sign-in (`''` = the default) and, on `ok`, main has already released that runtime's held agents;
+   * `status` / `onStatus` read and follow every in-app-sign-in runtime's row; `dismissPrompt` closes
+   * one runtime's sign-in prompt. No credential crosses in either direction. Feature-detect each member.
    */
   runtimeAuth?: {
     signIn(runtimeId?: string): Promise<{ ok: boolean; resumed?: number }>;
+    status(): Promise<{ runtimes: RuntimeCredentialStatus[] }>;
+    onStatus(callback: (payload: { runtimes: RuntimeCredentialStatus[] }) => void): () => void;
+    dismissPrompt(runtimeId: string): Promise<{ ok: boolean }>;
   };
   /** THE OPERATOR'S OWN AGENTS — the whole namespace, declared in `./spa-bridge-sessions`.
    *  ⚠ A §1 SPLIT (2026-09-17): this file stood at EXACTLY the 500-line cap, which is the

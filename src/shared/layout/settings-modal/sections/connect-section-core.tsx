@@ -4,6 +4,7 @@
 // components the desktop renderer doesn't need into its bundle.
 import { RemoteConnect } from "@/features/mcp-connect/components/remote-connect";
 import { ConnectedAppsSection } from "@/features/mcp-connect/components/connected-apps-section";
+import { RuntimeCredentialBars } from "@/features/channels/components/runtime-credential-bars";
 import { SectionShell } from "./section-shell";
 
 /**
@@ -25,6 +26,7 @@ import { SectionShell } from "./section-shell";
 export function ConnectSectionCore() {
   return (
     <SectionShell title="Connect" subtitle="Reach Dopl from your MCP client">
+      <RuntimeCredentialBars />
       <RemoteConnect />
       <ConnectedAppsSection />
     </SectionShell>

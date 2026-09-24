@@ -11,6 +11,7 @@ import { getBridge } from "#/lib/dopl-bridge";
 // Reused feature components (ChatsView, SkillsBrowser mutations) fire toast()
 // and need a mounted host.
 import { ToastHost } from "@/shared/ui/toast";
+import { RuntimeSignInPrompt } from "#/components/runtime-sign-in-prompt";
 
 /**
  * The provider stack, mounted once by `main.tsx`.
@@ -99,6 +100,7 @@ export function App() {
       persistOptions={createPersistOptions(persister)}
     >
       <RouterProvider router={router} />
+      <RuntimeSignInPrompt />
       <ToastHost />
     </PersistQueryClientProvider>
   );
