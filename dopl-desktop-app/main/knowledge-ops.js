@@ -7,7 +7,7 @@
 const KNOWLEDGE_TOOL = 'mcp__dopl__dopl_kb';
 
 // `search` is filtered server-side to bases the caller may already read, so it discloses nothing `list_bases` would not.
-const KNOWLEDGE_READ_OPS = ['list_bases', 'get_tree', 'list_dir', 'outline', 'read_file', 'search'];
+const KNOWLEDGE_READ_OPS = ['list_bases', 'get_tree', 'list_dir', 'outline', 'read_file', 'search', 'history'];
 
 /** Is THIS CALL a knowledge read? Fail-closed: another tool, a missing op or an unlisted op all answer false. */
 function isKnowledgeReadCall(canonicalName, input) {
