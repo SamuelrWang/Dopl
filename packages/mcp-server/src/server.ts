@@ -240,6 +240,7 @@ export function createServer(
         // this server refuses to that caller.
         desktopRun: isDesktopRun(caller),
         vendor: caller.vendor,
+        toolSet: options.toolSet,
       }),
     },
   );

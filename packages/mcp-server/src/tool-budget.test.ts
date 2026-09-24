@@ -261,9 +261,10 @@ const SCHEMA_CEILINGS: Record<string, number> = {
  * true also forces the headline number to be re-measured on every slice that
  * claims a win.
  */
-// DMP-013 B1: the granular set as served with placeholder one-line descriptions. B3 owns the prose;
-// its target is the legacy total when the split was planned (49,205). Re-derive, never quote.
-const GRANULAR_SERVED_CEILING = 59_620;
+// DMP-013 B2: granular text written, body fence once in its instructions. Re-derive, never quote. The
+// ceiling may never pass the target, the legacy total when the split was planned.
+const GRANULAR_SERVED_CEILING = 44_098;
+const GRANULAR_SERVED_TARGET = 49_205;
 const SERVED_TOTAL_CEILING = 50_275; // re-derive, never quote: −2 the 2026-09-23 vocabulary removal merged onto DMP-002 (dopl_ontology: −3 schema, +1 history gloss), −5 DMP-004 (dopl_search names ten domains in the same 450), +964 DMP-002 history+restore on three tools, +119 DMP-009 field type enum, −6 DMP-001 net, −229 home-channel addressing pulled (P8-23), +15 caller's own tool loader (X-09), +9 P8-15/P8-18.
 /**
  * ⚠ THE BRIEFING IS WRITTEN ONCE AND PUSHED ONCE. It was 17,067 chars — 18% of
@@ -432,8 +433,9 @@ describe("the pushed surface fits its budget, as served", () => {
     expectRatchet(
       "the granular served surface",
       ratchet(new Map([["granular per connection", total]]), { "granular per connection": GRANULAR_SERVED_CEILING }),
-      "B3 writes the prose against this number; its target is the legacy total",
+      "cut a param line or a description before raising it",
     );
+    expect(GRANULAR_SERVED_CEILING).toBeLessThanOrEqual(GRANULAR_SERVED_TARGET);
   });
 
   it("the `instructions` briefing is bounded, and is delivered exactly as written", () => {
