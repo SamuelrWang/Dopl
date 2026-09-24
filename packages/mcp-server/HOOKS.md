@@ -26,7 +26,7 @@ about the user's own saved material, reminds the agent to check Dopl first.
         "hooks": [
           {
             "type": "command",
-            "command": "echo '{\"additionalContext\": \"This looks like a question about the user'\\''s own Dopl workspace. Before answering from general knowledge, call dopl_kb(op=search) for their knowledge bases and/or dopl_search across the workspace. Ground the answer in what they actually have.\"}'"
+            "command": "echo '{\"additionalContext\": \"This looks like a question about the user'\\''s own Dopl workspace. Before answering from general knowledge, call dopl_search across their workspace (within=knowledge for knowledge bases only). Ground the answer in what they actually have.\"}'"
           }
         ]
       }
@@ -60,7 +60,7 @@ the model tends to skip it.)
         "hooks": [
           {
             "type": "command",
-            "command": "echo '{\"additionalContext\": \"If this is the first turn of the session, call dopl_map before your substantive reply so questions about the workspace are grounded in current state. Once per session is enough.\"}'"
+            "command": "echo '{\"additionalContext\": \"If this is the first turn of the session, call dopl_get_map before your substantive reply so questions about the workspace are grounded in current state. Once per session is enough.\"}'"
           }
         ]
       }
@@ -87,8 +87,8 @@ After adding any of these to your settings file:
 
 If a hook doesn't fire, the most common cause is a regex that doesn't match. For
 `PostToolUse` matchers, MCP tools are addressed as
-`mcp__{server_name}__{tool_name}` — e.g. `mcp__dopl__dopl_kb`,
-`mcp__dopl__dopl_map`.
+`mcp__{server_name}__{tool_name}` — e.g. `mcp__dopl__dopl_read_entry`,
+`mcp__dopl__dopl_get_map`.
 
 ---
 

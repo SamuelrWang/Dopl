@@ -4,6 +4,20 @@ All notable changes to `@dopl/mcp-server` are documented here. Format follows [K
 
 ## [Unreleased]
 
+### Changed — an unclaimed connection gets the granular set (DMP-013 B5, 2026-09-24; rollout R3)
+
+- `resolveToolSet(claim, desktopRun)`: a named set (`X-Dopl-Tool-Set` / `?tools=`) wins for anyone,
+  so `legacy` stays available by name. With no claim, or one this server cannot place, a desktop-run
+  caller (`identity.ts › isDesktopRun`: the `X-Dopl-Runtime: desktop-session` stamp, or a
+  container-locked token) gets `legacy` and every other client (Claude Code, Codex, …) `granular`.
+  Released desktops (≤1.36.0) never send a claim and gate only legacy names, so they are unaffected;
+  a negotiating desktop asks for `granular` itself.
+- The granular briefing's WHICH TOOL line is shorter, so directory rows still fit the 2,048-char
+  prefix; `instructions-budget.test.ts` measures both sets.
+- A legacy tool called on a granular connection still runs (unlisted, callable) and answers with
+  granular spellings.
+- `HOOKS.md` names granular tools.
+
 ### Added — the desktop can negotiate the granular set (DMP-013 B4, 2026-09-24; `legacy` unchanged)
 
 - `initialize` advertises `capabilities.experimental["dopl/toolSets"] = { sets: ["legacy", "granular"] }`

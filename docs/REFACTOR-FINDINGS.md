@@ -709,7 +709,7 @@ COMMIT;
 - Location: `packages/mcp-server/src/tools/channel-render.ts:192-198` (bare `return "you"` at `:193`)
 - Found during: live identity-confusion incidents (2026-07-31)
 - Severity: smell
-- **Rewritten down to the one surviving residual 2026-08-08.** The body — ONE `CallerIdentity` record resolved at boot from the credential that is authorizing the request, rendered by one set of functions — is done and is documented in ENGINEERING §8 "MCP IDENTITY + LOCUS". The second residual is RESOLVED: `src/features/mcp-connect/skill-template.ts` now lists `dopl_search` (`:65`), `dopl_members` (`:67`) and `dopl_channel` (`:70`).
+- **Rewritten down to the one surviving residual 2026-08-08.** The body — ONE `CallerIdentity` record resolved at boot from the credential that is authorizing the request, rendered by one set of functions — is done and is documented in ENGINEERING §8 "MCP IDENTITY + LOCUS". The second residual is RESOLVED: the copy-paste skill template (a module deleted 2026-09-24, F-726) listed `dopl_search`, `dopl_members` and `dopl_channel`.
 - Open: `memberRef` collapses the caller to the bare literal `"you"` on a message line, dropping the id in that slot. Deliberate there, and the roster prints it — but it is the one place the rule "a name never travels without an id" is relaxed.
 - **The load-bearing half of the resolution, restated because a future change could break it silently:** a credential label names where the credential was MINTED, never where the session RUNS; an absent runtime stamp renders `unstamped`, never `external`, because a desktop spawn on an older build is also unstamped; and a peer's MACHINE is stated as not knowable ("do not assert it either way") while a peer's ACCOUNT is decidable by user id.
 - Status: open (residual)
@@ -10185,14 +10185,15 @@ The claim had been restated in five places from one sentence, which is how it su
   `src/features/knowledge/components/knowledge-v2/detail/overview-contents.tsx` (398 lines) ·
   `src/features/knowledge/components/knowledge-v2/detail/use-content-descriptions.ts` (102) ·
   `src/features/channels/hooks/use-channel-auto-send.ts` (40) ·
-  `src/features/mcp-connect/skill-template.ts` (112) ·
+  the copy-paste skill template under `src/features/mcp-connect/` (112; deleted 2026-09-24) ·
   `src/shared/layout/page-top-bar.tsx` (40).
 - Found during: the final whole-set review of the nine parity waves.
 - ⚠ **THE FIRST TWO ARE THE SHARP ONES, BECAUSE THE CODE ADMITS IT.** `knowledge-v2/detail/base-overview.tsx` says they are *"deliberately left in the tree, unmounted"* — which is precisely the state INVARIANTS §15's **DEAD CODE IS DELETED (2026-09-17)** rules out: *"Not disarmed, not parked, not left behind a flag nobody passes."* A rule made the same day is being contradicted by a comment in the tree it governs.
-- ⚠ **NOT DELETED IN THIS REVIEW, AND THE REASON IS SCOPE.** None of the five is wave output — `git log origin/master..master` touches only the knowledge pair, and only through R-38's palette commit. The review's mandate was the stacked diff; deleting pre-existing modules is a separate change with its own doc-anchor and test blast radius (`skill-template.ts` is cited three times by `docs/RETIREMENT-UNWIRING-PLAN.md`, so its deletion moves that document too).
+- ⚠ **NOT DELETED IN THIS REVIEW, AND THE REASON IS SCOPE.** None of the five is wave output — `git log origin/master..master` touches only the knowledge pair, and only through R-38's palette commit. The review's mandate was the stacked diff; deleting pre-existing modules is a separate change with its own doc-anchor and test blast radius (the skill template was cited three times by `docs/RETIREMENT-UNWIRING-PLAN.md`, so its deletion moved that document too).
 - ⚠ **`AppPanel` WAS IN THIS CLASS AND WAS DELETED**, because it was different in one way that matters: 00-MASTER §5 Wave 0 carried it as scoped work (X9) and the row claimed it done. Its CSS rule `app-shell.module.css › .mainDetail` went with it — zero other users.
 - Proposed resolution: delete all five, each in its own commit, with the `RETIREMENT-UNWIRING-PLAN.md` rows repointed in the same change. **Re-derive the orphan set first** (`npx knip`) rather than trusting this list — §15's own warning is that "dead" is a MEASUREMENT, and `bits.tsx › agentAccent` was called an orphan while it still had a live call site.
-- Status: open.
+- 2026-09-24 (DMP-013 B5): the skill template is DELETED — still zero importers, and it taught tool names and args the server no longer serves (`*_admin`, `workspace=`, `op:'list'` on channels). The Connect page shows only the connection snippets (`src/features/mcp-connect/snippets.ts`). The other four remain.
+- Status: open (four of five).
 
 ### F-727 — the search `tsvector` rides every transcript read, and the reads are `select("*")` (2026-09-17)
 
