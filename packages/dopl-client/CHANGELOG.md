@@ -6,6 +6,23 @@ All notable changes to `@dopl/client` are documented here. Format follows [Keep 
 
 ## [0.14.0] — 2026-09-23
 
+### Added
+
+- History + restore (each restore takes `expectedVersion`, sent as
+  `X-Updated-At`; a stale one is a 412):
+  - Knowledge: `listKbEntryRevisions`, `restoreKbEntryRevision`.
+  - Skills: `getSkillHistory`, `getSkillVersion`, `restoreSkillVersion`.
+  - Ontology: `listOntologyObjectRevisions`, `listOntologyRevisions`,
+    `restoreOntologyObjectRevision`.
+  - Types: `ContentRevision`, `ContentRevisionPage`, `RevisionOp`,
+    `RevisionPageOpts`, `SkillHistory`, `SkillVersionMeta`; `SkillFile` is now
+    exported from the package root.
+- `searchContainer` — the app's own search (`GET /api/search`) over one
+  container. Types: `AppSearchResponse`, `AppSearchGroup`,
+  `AppSearchGroupKind`, `AppSearchItem`.
+- `ChannelUpdateInput` carries `name` and `topic` beside `infoCard` (both
+  MANAGE-gated server-side).
+
 ### Renamed — BREAKING: the ontology speaks one word
 
 The graph's top level is an **ontology** everywhere, so the ontology surface
