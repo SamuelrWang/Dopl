@@ -28,6 +28,9 @@ import { resourceText } from "./resources.js";
 import {
   ALWAYS_LOAD_META,
   annotationsFor,
+  bindingsOf,
+  GRANULAR_TOOLS,
+  parseBinding,
   selectorOf,
   servesName,
   type GranularTool,
@@ -93,12 +96,24 @@ const RENAMED_ARGS: Readonly<Record<string, Readonly<Record<string, string>>>> =
   dopl_ontology: LEGACY_ONTOLOGY_ARGS,
 };
 
+/** A granular tool inherits its bound legacy tools' renames, where it publishes the successor. */
+const GRANULAR_RENAMED_ARGS: Readonly<Record<string, Readonly<Record<string, string>>>> = Object.fromEntries(
+  GRANULAR_TOOLS.map((t) => [
+    t.name,
+    Object.fromEntries(
+      bindingsOf(t)
+        .flatMap((key) => Object.entries(RENAMED_ARGS[parseBinding(key).tool] ?? {}))
+        .filter(([, successor]) => t.params.includes(successor)),
+    ),
+  ]),
+);
+
 function renamedArgMessage(
   tool: string,
   issue: { code?: string; keys?: readonly string[] },
 ): string | undefined {
   if (issue.code !== "unrecognized_keys" || !issue.keys) return undefined;
-  const map = RENAMED_ARGS[tool];
+  const map = RENAMED_ARGS[tool] ?? GRANULAR_RENAMED_ARGS[tool];
   if (!map) return undefined;
   const renamed = issue.keys.filter((k) => Object.prototype.hasOwnProperty.call(map, k));
   if (renamed.length === 0) return undefined;
@@ -354,9 +369,10 @@ export function createToolRegistrars(deps: RegistrarDeps): ToolRegistrars {
       (async (args: Record<string, unknown>) => {
         const invalid = (message: string) =>
           new McpError(ErrorCode.InvalidParams, `Input validation error: Invalid arguments for tool ${t.name}: ${message}`);
+        const selector = selectorOf(t);
         const pulled = pulledResource(t, args);
         if (pulled) {
-          const stray = Object.keys(args).filter((k) => k !== selectorOf(t));
+          const stray = Object.keys(args).filter((k) => k !== selector);
           if (stray.length > 0) throw invalid(`${stray.map((k) => `"${k}"`).join(", ")} not taken by this topic`);
           return ok(withToolSet(toolSet, () => resourceText(pulled)));
         }
@@ -367,7 +383,10 @@ export function createToolRegistrars(deps: RegistrarDeps): ToolRegistrars {
         const parsed = target.input.safeParse(call.args);
         if (!parsed.success) throw invalid(parsed.error.message);
         // Carried args were validated by this tool's own schema; the legacy one does not know them.
-        return withToolSet(toolSet, () => target.run({ ...(parsed.data as Record<string, unknown>), ...call.carried }), t.name);
+        // The call is named back with its job, so a refusal says which of the tool's jobs it was.
+        const calledAs = selector ? `${t.name}(${selector}="${String(args[selector])}")` : t.name;
+        const run = () => target.run({ ...(parsed.data as Record<string, unknown>), ...call.carried });
+        return withToolSet(toolSet, run, calledAs);
       }) as never,
     );
   }

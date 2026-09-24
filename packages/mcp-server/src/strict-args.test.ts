@@ -157,6 +157,9 @@ describe("a removed param is REFUSED, and the refusal names the field", () => {
     for (const [name, args] of [
       ["dopl_agent", { op: "get", template: "Researcher" }],
       ["dopl_channel", { op: "manage", action: "launch", channel: "general", template: "Coder" }],
+      // A granular tool inherits the hint from the legacy tool it runs (DMP-013 B3).
+      ["dopl_get_agent", { identity: "Researcher", template: "Researcher" }],
+      ["dopl_launch_agent", { channel: "general", name: "Coder", template: "Coder" }],
     ] as const) {
       const res = await client.callTool({ name, arguments: args });
       expect(res.isError, name).toBe(true);

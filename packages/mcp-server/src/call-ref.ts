@@ -21,7 +21,7 @@ import {
   type ToolSet,
 } from "./tool-manifest.js";
 
-/** What a call runs under: its connection's set, and the granular tool it came through, if any. */
+/** What a call runs under: its connection's set, and the granular call it came through, if any. */
 interface CallScope {
   set: ToolSet;
   tool: string | null;
@@ -30,8 +30,9 @@ interface CallScope {
 const scope = new AsyncLocalStorage<CallScope>();
 
 /**
- * Run `fn` with `set` active for everything it renders, awaited continuations included. `tool` is
- * the granular tool the call came through; null for a legacy call or a resource read.
+ * Run `fn` with `set` active for everything it renders, awaited continuations included. `tool` names
+ * the granular call it came through (`dopl_browse_knowledge(action="tree")`); null for a legacy call
+ * or a resource read.
  */
 export function withToolSet<T>(set: ToolSet, fn: () => T, tool: string | null = null): T {
   return scope.run({ set, tool }, fn);
@@ -42,7 +43,7 @@ export function activeToolSet(): ToolSet {
 }
 
 /**
- * The call being answered, named back to its caller: the granular tool it came through, else the
+ * The call being answered, named back to its caller: the granular call it came through, else the
  * legacy op as the caller spelled it — `op="export"`, after `legacy.tool` (`dopl_kb op="grant"`), or
  * as a call (`dopl_kb(op="grant")`).
  */
@@ -72,10 +73,10 @@ export type CallArgs = Readonly<Record<string, string | true>>;
 
 export interface CallOptions {
   /**
-   * The legacy prose shorthands, relative to the legacy tool, for a hint inside that tool's own text:
-   * `"op"` space-separated (`op="list_dir"`, `op="restore" revision="<id>"`), `"args"` the call's args alone
-   * (`op="rooms", action="open"`), `"named"` after the tool's name (`dopl_kb op="write_file"`). A
-   * granular tool is its own job, so a granular spelling is always the whole call.
+   * The legacy prose shorthands: `"op"` space-separated, relative to the tool whose text it is in
+   * (`op="list_dir"`, `op="restore" revision="<id>"`); `"named"` the same after the tool's name
+   * (`dopl_kb op="get_tree" base="notes"`); `"args"` the call's args alone (`op="rooms", action="open"`).
+   * A granular tool is its own job, so a granular spelling is always the whole call.
    */
   form?: "call" | "op" | "args" | "named";
   /** The quote around op/action/selector values. Default `"`. */
@@ -156,7 +157,7 @@ export function callRef(key: string, args: CallArgs = {}, options: CallOptions =
       case "op":
         return [...opText, ...argText(args)].join(" ");
       case "named":
-        return [`dopl_${tool} ${opText.join(" ")}`, ...argText(args)].join(", ");
+        return [`dopl_${tool}`, ...opText, ...argText(args)].join(" ");
       case "args":
         return all;
       default:

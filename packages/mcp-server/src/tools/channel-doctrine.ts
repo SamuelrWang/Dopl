@@ -13,8 +13,15 @@ import { bySet, callRef, toolName } from "../call-ref.js";
 // `retired-vocabulary.test.ts` reads them.
 export const TENANCY_RULE =
   "A NAME resolves only in the container the channel lives in, and a home channel IS its own container — so an identity named by NAME from your home space or a workspace does not resolve here. Its ID does: an id resolves wherever the row lives.";
+const grantInto = () => {
+  const args = { scope: '"container"', to: "<that container>" } as const;
+  return bySet({
+    legacy: `${toolName("agent.grant")} ${callRef("agent.grant", args, { form: "args" })}`,
+    granular: callRef("agent.grant", args),
+  });
+};
 export const tenancyFix = () =>
-  `Re-issue with its ID, which resolves wherever the row lives (${toolName("agent.list")} lists them); lend it into this channel's container (${callRef("agent.grant", { scope: '"container"', to: "<that container>" }, { form: "named" })}) or create it there — or launch without an identity.`;
+  `Re-issue with its ID, which resolves wherever the row lives (${toolName("agent.list")} lists them); lend it into this channel's container (${grantInto()}) or create it there — or launch without an identity.`;
 
 /** The MCP resource URI this text is published at. */
 export const DOCTRINE_URI = "dopl://doctrine/channels";
