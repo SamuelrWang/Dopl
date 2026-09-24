@@ -2,7 +2,7 @@
 // and `runtime/codex/credential.js` over fakes. No real login, no OpenAI call:
 // the live tier is `codex-signin-live.test.mjs` (CODEX_APP_SERVER_LIVE=1, never completes a login).
 
-import { test } from "node:test";
+import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import {
   mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, lstatSync, existsSync, symlinkSync,
@@ -14,6 +14,12 @@ import { loadWithStubs } from "./helpers/module-sandbox.mjs";
 
 const require = createRequire(import.meta.url);
 const login = require("../main/runtime/codex/login.js");
+
+// login.js unrefs its own timers so a pending login never holds the app open; on Node 22 the runner
+// then sees an empty event loop mid-await and cancels the file. One referenced handle holds it.
+let hold;
+before(() => { hold = setInterval(() => {}, 1000); });
+after(() => clearInterval(hold));
 
 const AUTH_URL = "https://auth.openai.com/oauth/authorize?state=SECRETSTATE&code_challenge=PKCE";
 const DEVICE = { loginId: "D1", userCode: "ABCD-1234", verificationUrl: "https://auth.openai.com/codex/device" };
