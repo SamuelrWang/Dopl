@@ -222,6 +222,8 @@ async function startSession(spec, rt) {
   // New Agent answers auth-hold rather than an address.
   const credentialHeld = await sessionAuth.holdIfNoRuntimeCredential(s, rt);
   if (credentialHeld) { sessions.delete(s.key); sessionSummary.touch(); return { authHold: true }; }
+  // The tool set this session speaks (DMP-013), known before the first turn spells a call in it.
+  await sessionQuery.stampToolSet(s);
   nameAndFrame(s, spec, rt);
   // Spawn idle starts no child (a held query would hold channel access unwatched); the timer arms the
   // abandonment bound, since no reducer event has run yet.

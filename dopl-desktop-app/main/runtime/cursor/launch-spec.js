@@ -42,7 +42,7 @@ function buildLaunchSpec(request) {
   const s = req.session;
   const cfg = tools.buildSessionToolConfig(s.profile);
   const pair = nativePair(s, cfg);
-  const wiring = mcp.buildWiring(s.workspaceId, sessionCredential.sessionBearer(s), store.slotKey(s));
+  const wiring = mcp.buildWiring(s.workspaceId, sessionCredential.sessionBearer(s), store.slotKey(s), s.doplToolSet);
   // The credential-path rules join here, not in the table: they read userData, known only at launch.
   const deny = cfg.disallowedTools.concat(tools.buildSecretPathDenyRules(userDataDir()));
 

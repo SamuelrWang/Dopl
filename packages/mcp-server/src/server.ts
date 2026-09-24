@@ -46,7 +46,14 @@ import { createToolRegistrars } from "./registrar.js";
 import { registerWorkspaceMetaTools } from "./meta-tools.js";
 import { registerResources } from "./resources.js";
 import { unlistTools } from "./unlisted-tools.js";
-import { GRANULAR_TOOLS, unlistedFor, withGranularTools, type ToolSet } from "./tool-manifest.js";
+import {
+  GRANULAR_TOOLS,
+  TOOL_SETS,
+  TOOL_SETS_CAPABILITY,
+  unlistedFor,
+  withGranularTools,
+  type ToolSet,
+} from "./tool-manifest.js";
 import {
   createWorkspaceDirectory,
   containerKind,
@@ -242,6 +249,7 @@ export function createServer(
         vendor: caller.vendor,
         toolSet: options.toolSet,
       }),
+      capabilities: { experimental: { [TOOL_SETS_CAPABILITY]: { sets: [...TOOL_SETS] } } },
     },
   );
 

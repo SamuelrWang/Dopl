@@ -75,6 +75,7 @@ function assembled(s) {
       // ⚠ A3's `X-Dopl-Tool-Profile` stamp (2026-09-02), stubbed: this suite is
       // about the turn brake. `session-tool-profile.test.mjs` owns the header.
       withToolProfileStamp: () => {},
+      withToolSetStamp: () => {},
       resolveClaudeExecutable: () => null,
     },
     { withStoredCredential: (e) => e },

@@ -59,7 +59,7 @@ function buildLaunchSpec(request) {
   const s = req.session;
   const cfg = tools.buildSessionToolConfig(s.profile);
   const pair = nativePair(s, cfg);
-  const server = mcp.buildDoplServerEntry(cfg.doplToolsPolicy, s.profile);
+  const server = mcp.buildDoplServerEntry(cfg.doplToolsPolicy, s.profile, s.doplToolSet);
   const wired = mcp.buildMcpEnv(s.workspaceId, sessionCredential.sessionBearer(s), store.slotKey(s));
 
   const threadStart = { sandbox: pair.sandbox_mode };

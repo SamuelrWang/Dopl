@@ -23,6 +23,8 @@
 // are READ from there and never restated — the timeout drifted once already by being restated.
 
 const { MCP_URL } = require('../../config');
+// The two-shape body reader (JSON or SSE) and the tool-set header are core's (`mcp-connect.js`).
+const { parseSse, readBody, toolSetHeaders } = require('../../mcp-connect');
 
 // ⚠ CUSTODY, NOT VENDOR — two headers, two facts, and port step 1 exists because they were nearly
 // fused. `desktop-session` means "the desktop app spawned this" and stays TRUE for a Dopl-driven
@@ -76,7 +78,7 @@ function doplBearer() {
  * concurrent sessions of one agent handle are distinguishable on the wire, which nothing else
  * about them is.
  */
-function buildWiring(workspaceId, bearerOverride, slotKey) {
+function buildWiring(workspaceId, bearerOverride, slotKey, toolSet) {
   const override = typeof bearerOverride === 'string' ? bearerOverride.trim() : '';
   const token = override || doplBearer();
   if (!token) return { usable: false, headers: null };
@@ -87,7 +89,7 @@ function buildWiring(workspaceId, bearerOverride, slotKey) {
     // other. `readBody` below parses both.
     Accept: 'application/json, text/event-stream',
     Authorization: `Bearer ${token}`,
-  }, RUNTIME_HEADERS);
+  }, RUNTIME_HEADERS, toolSetHeaders(toolSet));
   const pin = typeof workspaceId === 'string' ? workspaceId.trim() : '';
   if (pin) headers['X-Workspace-Id'] = pin;
   const slot = typeof slotKey === 'string' ? slotKey.trim() : '';
@@ -101,24 +103,8 @@ function buildWiring(workspaceId, bearerOverride, slotKey) {
 // ⚠ ONE FRAME PER REQUEST, AND THE RESPONSE MAY BE EITHER SHAPE. Streamable HTTP lets a server
 // answer a POST with `application/json` or with an SSE stream carrying the same JSON-RPC response.
 // A reader that assumed one would work in development and fail in production, or the reverse, so
-// this reads both and treats an unparseable body as a failure rather than as an empty result.
-function parseSse(text) {
-  let last = null;
-  for (const line of String(text).split(/\r?\n/)) {
-    if (!line.startsWith('data:')) continue;
-    const payload = line.slice(5).trim();
-    if (!payload) continue;
-    try { last = JSON.parse(payload); } catch (_) { /* a keep-alive or a partial frame */ }
-  }
-  return last;
-}
-
-async function readBody(res) {
-  const text = await res.text();
-  const type = String(res.headers.get('content-type') || '');
-  if (type.indexOf('text/event-stream') !== -1) return parseSse(text);
-  try { return JSON.parse(text); } catch (_) { return null; }
-}
+// `readBody` (core's, shared with the launch pre-flight) reads both and treats an unparseable body
+// as a failure rather than as an empty result.
 
 /**
  * One JSON-RPC request against the Dopl endpoint.

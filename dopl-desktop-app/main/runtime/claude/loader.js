@@ -285,6 +285,15 @@ function withToolProfileStamp(servers, profile) {
   return servers;
 }
 
+// WHICH TOOL SET this session asked for (DMP-013 B4), stamped onto the same entry. Only `granular`
+// adds a header (`mcp-connect.js › toolSetHeaders`), and only once the server advertised it; the
+// default sends nothing, so a legacy entry is byte-for-byte what it was. MUTATES IN PLACE.
+function withToolSetStamp(servers, toolSet) {
+  const entry = servers && typeof servers === 'object' ? servers.dopl : null;
+  if (entry && typeof entry === 'object') entry.headers = Object.assign(entry.headers || {}, mcpConnect.toolSetHeaders(toolSet));
+  return servers;
+}
+
 // FIX M2 — a scrubbed copy of process.env for options.env.
 // ⚠ The SDK's options.env REPLACES the child env entirely, so every var is copied and only the
 // permission-affecting knobs that would short-circuit canUseTool are dropped — and only when
@@ -353,6 +362,7 @@ module.exports = {
   buildMcpServers,
   withSessionStamp, // F2: this run's slot key, onto the entry above
   withToolProfileStamp, // this run's containment profile, onto the same entry — narrowing-only
+  withToolSetStamp, // DMP-013: the negotiated tool set, onto the same entry — granular only
   TOOL_PROFILE_HEADER,
   buildSecretPathDenyRules, // credential-path deny every session runs with
   buildScrubbedEnv,

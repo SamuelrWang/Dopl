@@ -90,6 +90,52 @@ const WARM_RPC = {
   },
 };
 
+// ── THE TOOL-SET NEGOTIATION (DMP-013 B4) ───────────────────────────────────────────────────
+//
+// The server serves two tool surfaces and lists the one a connection asks for (`X-Dopl-Tool-Set`);
+// absent is the legacy default. The desktop asks for `granular` ONLY where the server has said it
+// serves it: `initialize` names both sets under this capability (`packages/mcp-server/src/
+// tool-manifest.ts › TOOL_SETS_CAPABILITY`), and the pre-flight above already sends that request,
+// so reading its answer costs no extra round trip. An older server says nothing and every session
+// stays legacy, exactly as today; an older desktop never sends the header.
+const TOOL_SET_HEADER = 'X-Dopl-Tool-Set';
+const TOOL_SETS_CAPABILITY = 'dopl/toolSets';
+const GRANULAR_TOOL_SET = 'granular';
+const LEGACY_TOOL_SET = 'legacy';
+
+/** The set an `initialize` answer lets a session ask for: granular only when the server names it. */
+function advertisedToolSet(frame) {
+  const experimental = frame && frame.result && frame.result.capabilities && frame.result.capabilities.experimental;
+  const cap = experimental && typeof experimental === 'object' ? experimental[TOOL_SETS_CAPABILITY] : null;
+  const sets = cap && Array.isArray(cap.sets) ? cap.sets : [];
+  return sets.indexOf(GRANULAR_TOOL_SET) !== -1 ? GRANULAR_TOOL_SET : LEGACY_TOOL_SET;
+}
+
+/** The header a session's MCP entry carries: none for the default, so legacy is byte-for-byte today. */
+function toolSetHeaders(set) {
+  return set === GRANULAR_TOOL_SET ? { [TOOL_SET_HEADER]: GRANULAR_TOOL_SET } : {};
+}
+
+// A Streamable HTTP server answers a POST with `application/json` OR an SSE stream carrying the same
+// JSON-RPC frame, so both are read; an unparseable body is null, never an empty result.
+function parseSse(text) {
+  let last = null;
+  for (const line of String(text).split(/\r?\n/)) {
+    if (!line.startsWith('data:')) continue;
+    const payload = line.slice(5).trim();
+    if (!payload) continue;
+    try { last = JSON.parse(payload); } catch (_) { /* a keep-alive or a partial frame */ }
+  }
+  return last;
+}
+
+async function readBody(res) {
+  const text = await res.text();
+  const type = String((res.headers && typeof res.headers.get === 'function' && res.headers.get('content-type')) || '');
+  if (type.indexOf('text/event-stream') !== -1) return parseSse(text);
+  try { return JSON.parse(text); } catch (_) { return null; }
+}
+
 /**
  * THE `dopl` SERVER'S STATUS, off the init message's own list.
  *
@@ -181,6 +227,10 @@ async function warmMcpRoute(a) {
   const call = (async () => {
     try {
       const res = await fetchImpl(url, { method: 'POST', headers, body: JSON.stringify(WARM_RPC) });
+      // The answer's tool-set advertisement, when there is an answer to read (never fails the warm).
+      if (typeof opts.onToolSet === 'function' && res && res.status === 200 && typeof res.text === 'function') {
+        try { opts.onToolSet(advertisedToolSet(await readBody(res))); } catch (_) { /* unread stays unknown */ }
+      }
       // ⚠ ANY STATUS IS A WARM ROUTE. A 401 compiled and ran the handler, which is the whole
       // point; asserting 200 here would make an expired device token look like an outage.
       return `http ${(res && res.status) || 0}`;
@@ -211,4 +261,12 @@ module.exports = {
   mcpConnectVerdict,
   mcpDownText,
   warmMcpRoute,
+  TOOL_SET_HEADER,
+  TOOL_SETS_CAPABILITY,
+  GRANULAR_TOOL_SET,
+  LEGACY_TOOL_SET,
+  advertisedToolSet,
+  toolSetHeaders,
+  parseSse,
+  readBody,
 };

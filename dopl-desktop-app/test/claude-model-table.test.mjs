@@ -142,6 +142,7 @@ function assembled(s) {
       // this file is about the MODEL — but the assembly calls it, and a fake missing a
       // function the one assembly point invokes fails every test in the file at once.
       withToolProfileStamp: () => {},
+      withToolSetStamp: () => {},
       resolveClaudeExecutable: () => null,
     },
     { withStoredCredential: (e) => e },

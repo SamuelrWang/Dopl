@@ -107,19 +107,45 @@ function mcpTokenFor(s) {
   try { return require('./mcp-config').deviceTokenForSpawn() || ''; } catch (_) { return ''; }
 }
 
-/**
- * Warm the Dopl MCP route (a cold route can outlast the CLI's connect budget), then answer TRUE when
- * the launch must be abandoned. It never fails a launch; it re-checks `settled` after its up-to-25s
- * wait because the old query is already torn down and `settle` would have nothing to abort (F-692).
- */
-async function preflightMcp(s) {
-  const warm = await mcpConnect.warmMcpRoute({
+// The tool set the server last advertised on a pre-flight (DMP-013 B4); null until one was read.
+let advertisedToolSet = null;
+
+/** One warm call; resolves the log word and the tool set its answer advertised (null when unread). */
+async function warm(s) {
+  let heard = null;
+  const word = await mcpConnect.warmMcpRoute({
     url: config.MCP_URL,
     token: mcpTokenFor(s),
     workspaceId: s.workspaceId,
     fetchImpl: typeof fetch === 'function' ? fetch : null,
+    onToolSet: (set) => { heard = set; },
   });
-  diag('session-query: mcp pre-flight', config.MCP_URL, '->', warm);
+  if (heard) advertisedToolSet = heard;
+  return { word, heard };
+}
+
+/**
+ * THE TOOL SET A NEW SESSION SPEAKS, stamped once, before its first turn is written: the turn spells
+ * every Dopl call in it and the adapter's MCP entry asks for it (`mcp-connect.js › toolSetHeaders`).
+ * The first launch of an app run pays one warm call to learn it (the route is warm for the pre-flight
+ * after it); unknown is the legacy default.
+ */
+async function stampToolSet(s) {
+  if (advertisedToolSet === null) await warm(s);
+  s.doplToolSet = advertisedToolSet || mcpConnect.LEGACY_TOOL_SET;
+}
+
+/**
+ * Warm the Dopl MCP route (a cold route can outlast the CLI's connect budget), then answer TRUE when
+ * the launch must be abandoned. It never fails a launch; it re-checks `settled` after its up-to-25s
+ * wait because the old query is already torn down and `settle` would have nothing to abort (F-692).
+ * A server that answers without advertising `granular` (a rollback) takes a granular session back to
+ * the default before its entry is built; a session never moves the other way mid-life.
+ */
+async function preflightMcp(s) {
+  const { word, heard } = await warm(s);
+  diag('session-query: mcp pre-flight', config.MCP_URL, '->', word, heard ? `tools=${heard}` : '');
+  if (heard === mcpConnect.LEGACY_TOOL_SET && s.doplToolSet === mcpConnect.GRANULAR_TOOL_SET) s.doplToolSet = heard;
   if (s.settled) {
     diag('session-query: launch abandoned — the session settled during the pre-flight');
     return true;
@@ -136,6 +162,7 @@ module.exports = {
   buildLaunchSpec,
   abortInFlight,
   preflightMcp,
+  stampToolSet,
   startQuery,
   consume,
   isAbortError,

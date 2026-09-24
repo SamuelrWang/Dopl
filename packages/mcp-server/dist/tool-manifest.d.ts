@@ -13,6 +13,12 @@ import type { ToolAnnotations } from "@modelcontextprotocol/sdk/types.js";
 /** The tool sets a connection may ask for (`X-Dopl-Tool-Set`, else `?tools=`); the first is the default. */
 export declare const TOOL_SETS: readonly ["legacy", "granular"];
 export type ToolSet = (typeof TOOL_SETS)[number];
+/**
+ * The `initialize` capability that says this server serves both sets, so a client asks for
+ * `granular` only where it will be honoured (the desktop reads it off its launch pre-flight). An
+ * older server omits it and every client stays on the default.
+ */
+export declare const TOOL_SETS_CAPABILITY = "dopl/toolSets";
 /** An absent or unplaceable claim gets the default: a set names tools, it grants nothing. */
 export declare function resolveToolSet(claimed: string | null | undefined): ToolSet;
 export type BindingKey = `dopl_${string}`;

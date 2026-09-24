@@ -158,6 +158,7 @@ const DEPS = {
     // `session-tool-profile.test.mjs` owns what the header carries, and this
     // harness is about the built-in BOUND. The stub exists so the assembly runs.
     withToolProfileStamp: () => {},
+    withToolSetStamp: () => {},
     resolveClaudeExecutable: () => "",
   },
   axisB: { makeCanUseTool: () => () => {}, makeAgentOpsServer: () => null },

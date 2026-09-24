@@ -158,7 +158,8 @@ test("the guard is BOUND by the engine and CONSULTED by the consume loop", () =>
   // ABOVE the warm call is a guard about a moment that has passed.
   const pre = query.indexOf("async function preflightMcp(s) {");
   assert.ok(pre > 0, "preflightMcp is gone — both launch lanes reach the pre-flight through it");
-  assert.ok(query.indexOf("warmMcpRoute({", pre) < query.indexOf("if (s.settled) {", pre),
+  const warmAt = query.indexOf("await warm(s);", pre);
+  assert.ok(warmAt > pre && warmAt < query.indexOf("if (s.settled) {", pre),
     "preflightMcp must re-check `s.settled` AFTER the warm call, not before it");
   assert.ok(query.indexOf("if (await preflightMcp(s)) return;") < query.indexOf("rt.start(buildLaunchSpec(s))"),
     "startQuery must abandon the launch when the pre-flight says the session is gone");

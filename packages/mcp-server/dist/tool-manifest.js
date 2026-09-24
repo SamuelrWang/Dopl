@@ -11,7 +11,7 @@
  * legacy key bound exactly once, no delete op), the annotation truth and the naming rules.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.LEGACY_TOOL_NAMES = exports.GRANULAR_TOOL_NAMES = exports.GRANULAR_TOOLS = exports.ALWAYS_LOAD_META = exports.TOOL_SETS = void 0;
+exports.LEGACY_TOOL_NAMES = exports.GRANULAR_TOOL_NAMES = exports.GRANULAR_TOOLS = exports.ALWAYS_LOAD_META = exports.TOOL_SETS_CAPABILITY = exports.TOOL_SETS = void 0;
 exports.resolveToolSet = resolveToolSet;
 exports.parseBinding = parseBinding;
 exports.bindingsOf = bindingsOf;
@@ -26,6 +26,12 @@ const gating_js_1 = require("./gating.js");
 const delete_policy_js_1 = require("./delete-policy.js");
 /** The tool sets a connection may ask for (`X-Dopl-Tool-Set`, else `?tools=`); the first is the default. */
 exports.TOOL_SETS = ["legacy", "granular"];
+/**
+ * The `initialize` capability that says this server serves both sets, so a client asks for
+ * `granular` only where it will be honoured (the desktop reads it off its launch pre-flight). An
+ * older server omits it and every client stays on the default.
+ */
+exports.TOOL_SETS_CAPABILITY = "dopl/toolSets";
 /** An absent or unplaceable claim gets the default: a set names tools, it grants nothing. */
 function resolveToolSet(claimed) {
     return exports.TOOL_SETS.find((set) => set === claimed) ?? exports.TOOL_SETS[0];

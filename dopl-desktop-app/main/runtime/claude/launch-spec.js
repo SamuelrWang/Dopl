@@ -54,6 +54,7 @@ function buildOptions(s, dispatch) {
   loader.withSessionStamp(options.mcpServers, store.slotKey(s));
   // This run's profile (X-Dopl-Tool-Profile): the server may only narrow the surface; it grants nothing.
   loader.withToolProfileStamp(options.mcpServers, s.profile);
+  loader.withToolSetStamp(options.mcpServers, s.doplToolSet);
   // The in-process rename/end server, beside the dopl entry; null mounts nothing (never breaks a spawn).
   const agentOpsServer = axisB.makeAgentOpsServer(s);
   if (agentOpsServer) options.mcpServers[agentOps.SERVER_KEY] = agentOpsServer;

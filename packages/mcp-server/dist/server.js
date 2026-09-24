@@ -122,6 +122,7 @@ function createServer(client, options = {}) {
             vendor: caller.vendor,
             toolSet: options.toolSet,
         }),
+        capabilities: { experimental: { [tool_manifest_js_1.TOOL_SETS_CAPABILITY]: { sets: [...tool_manifest_js_1.TOOL_SETS] } } },
     });
     // Before any registration: it filters the list handler the first registerTool installs.
     const toolSet = options.toolSet ?? "legacy";

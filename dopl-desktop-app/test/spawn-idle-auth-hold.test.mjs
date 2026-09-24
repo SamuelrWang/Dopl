@@ -45,7 +45,7 @@ const TAIL = between(
 ) + "await startQuery(s, rt);\n return s;";
 
 const runTail = new Function(
-  "spec", "s", "rt", "sessionAuth", "sessions", "sessionSummary", "scheduleIdle", "diag", "startQuery", "nameAndFrame",
+  "spec", "s", "rt", "sessionAuth", "sessions", "sessionSummary", "scheduleIdle", "diag", "startQuery", "nameAndFrame", "sessionQuery",
   `return (async () => {\n${TAIL}\n})();`
 );
 
@@ -70,7 +70,9 @@ function drive(spec, { credential }) {
     () => {},
     async () => { calls.queries += 1; },
     // The naming + first-turn step (DMP-005) sits between the hold and the spawn; it spawns nothing.
-    () => {}
+    () => {},
+    // The tool-set stamp (DMP-013) precedes it; it spawns nothing either.
+    { stampToolSet: async () => {} },
   ).then((out) => ({ out, s, sessions, calls }));
 }
 

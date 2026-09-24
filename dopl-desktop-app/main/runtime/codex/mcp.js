@@ -5,6 +5,7 @@ const { MCP_URL } = require('../../config');
 const { normalizeProfile, DOPL_CHANNEL_TOOL } = require('../../tool-profiles');
 const { DOPL_READ_TOOLS, GRANULAR_READ_TOOLS } = require('../../session-dopl-tools');
 const { shortDoplName } = require('./tools');
+const { toolSetHeaders } = require('../../mcp-connect');
 
 // Values ride the child's env; only these NAMES appear in the entry, never the bearer in argv.
 const BEARER_ENV = 'DOPL_MCP_TOKEN';
@@ -64,11 +65,12 @@ function doplBearer() {
 // URL is the compiled-in `MCP_URL`; bearer and pins ride env var NAMES (`bearer_token_env_var`,
 // `env_http_headers`), never argv. `prompt` asks on every Axis-A mode only because Dopl never sends native
 // `never`, under which it fails with no request (`policy.js › NEVER_NATIVE`).
-function buildDoplServerEntry(doplToolsPolicy, profile) {
+// `toolSet` adds `X-Dopl-Tool-Set` only for the negotiated `granular` (`mcp-connect.js › toolSetHeaders`).
+function buildDoplServerEntry(doplToolsPolicy, profile, toolSet) {
   const entry = {
     url: MCP_URL,
     bearer_token_env_var: BEARER_ENV,
-    http_headers: Object.assign({}, RUNTIME_HEADERS, { [TOOL_PROFILE_HEADER]: normalizeProfile(profile) }),
+    http_headers: Object.assign({}, RUNTIME_HEADERS, { [TOOL_PROFILE_HEADER]: normalizeProfile(profile) }, toolSetHeaders(toolSet)),
     env_http_headers: {
       'X-Workspace-Id': WORKSPACE_ENV,
       'X-Dopl-Session-Id': SESSION_ENV,
