@@ -253,7 +253,7 @@ export function LaunchAgentDialog({
               {newAgent.launchError}
             </p>
             {launchRuntime && newAgent.launchError === signedOutLaunchCopy(launchRuntime) && (
-              <RuntimeSignInButton runtime={launchRuntime} onSignedIn={runner.launch} />
+              <RuntimeSignInButton runtime={launchRuntime} onSignedIn={runner.relaunch} />
             )}
           </div>
         )}

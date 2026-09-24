@@ -126,3 +126,37 @@ it("a runtime with no in-app flow says the sentence and offers no button (Cursor
   expect((await screen.findByRole("alert")).textContent).toBe("Sign in to Cursor to start an agent");
   expect(screen.queryByRole("button", { name: /^Sign in/ })).toBeNull();
 });
+
+describe("the relaunch after a sign-in", () => {
+  it("is the IDENTICAL request the refusal answered, sent exactly once however often it is clicked", async () => {
+    posture.stored = "codex";
+    let answer: (v: { ok: boolean }) => void = () => {};
+    signIn.mockReturnValue(new Promise((r) => { answer = r; }));
+    const newAgent = controls(signedOutLaunchCopy(realDescriptor("codex")));
+    render(<Harness newAgent={newAgent} />);
+    fireEvent.change(await screen.findByLabelText("Agent name"), { target: { value: "Scout" } });
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Launch" }));
+    });
+    const button = screen.getByRole("button", { name: "Sign in to Codex" });
+    fireEvent.click(button);
+    fireEvent.click(screen.getByRole("button", { name: "Signing in…" }));
+    await act(async () => answer({ ok: true }));
+    expect(signIn).toHaveBeenCalledTimes(1);
+    const calls = vi.mocked(newAgent.launchAgent).mock.calls;
+    expect(calls).toHaveLength(2);
+    expect(calls[1]).toEqual(calls[0]);
+  });
+
+  it("does not fire once the dialog has closed", async () => {
+    posture.stored = "codex";
+    let answer: (v: { ok: boolean }) => void = () => {};
+    signIn.mockReturnValue(new Promise((r) => { answer = r; }));
+    const newAgent = controls(signedOutLaunchCopy(realDescriptor("codex")));
+    render(<Harness newAgent={newAgent} />);
+    fireEvent.click(await screen.findByRole("button", { name: "Sign in to Codex" }));
+    fireEvent.click(screen.getByRole("button", { name: "Close new agent" }));
+    await act(async () => answer({ ok: true }));
+    expect(newAgent.launchAgent).not.toHaveBeenCalled();
+  });
+});
