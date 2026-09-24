@@ -1,7 +1,8 @@
 /**
  * The granular tools' text (`granular-text.ts`): every tool and param said once and only for a param
  * the tool has, and the served strings in the house style — short, first sentence inside the headline
- * window, no legacy call spellings, no retired vocabulary, the fence stated once in the instructions.
+ * window, no legacy call spellings, the fence stated once in the instructions. The retired graph word is
+ * `src/features/ontology/vocabulary.test.ts`'s, repo-wide, these files included.
  */
 
 import { describe, expect, it } from "vitest";
@@ -11,7 +12,7 @@ import type { DoplClient, WorkspaceListItem } from "@dopl/client";
 
 import { createServer } from "./server.js";
 import { FENCE_POINTER, GRANULAR_TEXT, SHARED_PARAMS } from "./granular-text.js";
-import { GRANULAR_TOOLS, GRANULAR_TOOL_NAMES, LEGACY_TOOL_NAMES, selectorOf, type ToolSet } from "./tool-manifest.js";
+import { GRANULAR_TOOLS, GRANULAR_TOOL_NAMES, selectorOf, type ToolSet } from "./tool-manifest.js";
 import { FENCE_DESCRIPTION_NOTE } from "./tools/untrusted-fence.js";
 import { HEADLINE_MAX_CHARS, READ_DESCRIPTION_MAX_CHARS } from "./tools/tool-style.js";
 
@@ -58,9 +59,6 @@ describe("the text covers the manifest exactly", () => {
 
 describe("the served granular text", async () => {
   const { tools, instructions } = await served("granular");
-  // A legacy name the granular set does not reuse, in any served string.
-  const legacyOnly = [...LEGACY_TOOL_NAMES].filter((n) => !GRANULAR_TOOL_NAMES.has(n));
-  const legacyCall = new RegExp(`\\bop=|\\b(${legacyOnly.join("|")})\\b`);
 
   it.each(tools.map((t) => [t.name, t] as const))("%s", (name, tool) => {
     const description = tool.description ?? "";
@@ -68,8 +66,7 @@ describe("the served granular text", async () => {
     expect(description.split(/(?<=\.) /)[0].length).toBeLessThanOrEqual(HEADLINE_MAX_CHARS);
     expect(description.endsWith(FENCE_POINTER)).toBe(GRANULAR_TEXT[name].fenced === true);
     const whole = JSON.stringify(tool);
-    expect(whole).not.toMatch(legacyCall);
-    expect(whole).not.toMatch(/cluster/i);
+    expect(whole).not.toMatch(/\bop=/);
     const named = [...whole.matchAll(/\bdopl_[a-z_]+/g)].map((m) => m[0]);
     expect(named.filter((n) => !GRANULAR_TOOL_NAMES.has(n)), "names a tool the set does not have").toEqual([]);
   });
