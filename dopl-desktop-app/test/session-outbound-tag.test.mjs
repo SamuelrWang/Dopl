@@ -156,7 +156,9 @@ test("makeCanUseTool computes the tag from isOutboundPost + s.taskId, and only r
   // session's own words coming back off the wire. It rides the SAME seam as the thread tag, for
   // the same reason — a prompt is a request, an injected argument is an invariant — and under
   // the SAME rules: own-channel posts only, never an overwrite, never on a deny.
-  assert.match(fn, /const outbound = isOutboundPost\(name, input, s\.channelId\);/);
+  // A granular call classifies as its legacy call (DMP-013); the tag still rewrites what the agent sent.
+  assert.match(fn, /const call = canonicalDoplCall\(name, input\);/);
+  assert.match(fn, /const outbound = isOutboundPost\(call\.name, call\.input, s\.channelId\);/);
   assert.match(fn, /const tag = outbound \? outboundTag\.threadTagFor\(input, s\.taskId, outboundTag\.nextOwnPostId\(s\)\) : null;/);
   // ⚠ THE STAMP IS MINTED ONLY FOR A REAL OWN-CHANNEL POST. Minting on every tool call would
   // spend ids the session never posts under and blunt the bounded lookback.

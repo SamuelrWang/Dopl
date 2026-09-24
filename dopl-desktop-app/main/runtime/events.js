@@ -6,6 +6,9 @@
 // normalizer decides what the error text means rather than core.
 const ERROR_FRAME = 'error';
 
+// Pure (tool-profiles + the generated table): a granular call classifies as the legacy call it runs.
+const { canonicalDoplCall } = require('../mcp-tool-names');
+
 // ── RENDER EVENTS — dispatched straight through, shapes owned by the renderer ──
 const assistant = (text) => ({ type: 'assistant', payload: { type: 'turn', role: 'assistant', text } });
 const thinking = (text) => ({ type: 'thinking', payload: { type: 'thinking', text } });
@@ -20,12 +23,14 @@ function toolCallEvents(call, ctx) {
   const io = require('../session-io');
   const c = ctx || {};
   const { id, name, input } = call;
-  if (io.isOutboundPost(name, input, c.channelId)) {
+  // Classified as the legacy call a granular one runs (DMP-013), the same key the gate reads.
+  const legacy = canonicalDoplCall(name, input);
+  if (io.isOutboundPost(legacy.name, legacy.input, c.channelId)) {
     const payload = io.withPostSurface({
       type: 'outbound_post',
       toolUseId: id,
       text: input && input.body != null ? String(input.body) : '',
-    }, input, c.peerName, c.peerId);
+    }, legacy.input, c.peerName, c.peerId);
     // `ownChannel` is a boolean, never another channel's id (§H-9).
     if (typeof c.willGatePost === 'function' && c.willGatePost(input, name) === true) {
       payload.pending = true;

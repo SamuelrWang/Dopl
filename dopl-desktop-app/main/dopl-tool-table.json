@@ -1,0 +1,321 @@
+{
+  "_source": "GENERATED from packages/mcp-server/src/tool-manifest.ts by desktop-tool-table.test.ts; do not edit.",
+  "tools": [
+    {
+      "name": "dopl_get_map",
+      "bind": "dopl_map",
+      "read": true
+    },
+    {
+      "name": "dopl_search",
+      "bind": {
+        "everything": "dopl_search",
+        "knowledge": "dopl_kb:search"
+      },
+      "select": "within",
+      "default": "everything",
+      "read": true
+    },
+    {
+      "name": "dopl_get_status",
+      "bind": "dopl_status",
+      "read": true
+    },
+    {
+      "name": "dopl_list_workspaces",
+      "bind": "dopl_workspaces:list",
+      "read": true
+    },
+    {
+      "name": "dopl_create_workspace",
+      "bind": "dopl_workspaces:create_home_channel",
+      "read": false
+    },
+    {
+      "name": "dopl_get_guide",
+      "bind": {
+        "channels": "dopl_channel:rooms.help",
+        "skill_authoring": "dopl_skill:authoring_guide",
+        "chats": "dopl_chats:guide"
+      },
+      "select": "topic",
+      "pulled": [
+        "knowledge"
+      ],
+      "read": true
+    },
+    {
+      "name": "dopl_list_channels",
+      "bind": "dopl_channel:rooms.list",
+      "read": true
+    },
+    {
+      "name": "dopl_get_channel",
+      "bind": {
+        "status": "dopl_channel:status",
+        "members": "dopl_channel:rooms.members",
+        "threads": "dopl_channel:rooms.threads"
+      },
+      "select": "action",
+      "read": true
+    },
+    {
+      "name": "dopl_read_channel",
+      "bind": "dopl_channel:read",
+      "read": true
+    },
+    {
+      "name": "dopl_send_message",
+      "bind": "dopl_channel:send",
+      "read": false
+    },
+    {
+      "name": "dopl_request_decision",
+      "bind": "dopl_channel:send",
+      "preset": {
+        "kind": "decision"
+      },
+      "read": false
+    },
+    {
+      "name": "dopl_create_channel",
+      "bind": "dopl_channel:rooms.open",
+      "read": false
+    },
+    {
+      "name": "dopl_update_channel",
+      "bind": {
+        "update": "dopl_channel:rooms.update",
+        "thread_mode": "dopl_channel:rooms.thread_mode"
+      },
+      "select": "action",
+      "read": false
+    },
+    {
+      "name": "dopl_invite_to_channel",
+      "bind": "dopl_channel:rooms.invite",
+      "read": false
+    },
+    {
+      "name": "dopl_launch_agent",
+      "bind": "dopl_channel:manage.launch",
+      "read": false
+    },
+    {
+      "name": "dopl_manage_session",
+      "bind": {
+        "end": "dopl_channel:manage.end",
+        "rename": "dopl_channel:manage.rename",
+        "posture": "dopl_channel:manage.posture",
+        "direct": "dopl_channel:manage.direct"
+      },
+      "select": "action",
+      "read": false
+    },
+    {
+      "name": "dopl_manage_artifact",
+      "bind": {
+        "create": "dopl_channel:artifact.create",
+        "add": "dopl_channel:artifact.add",
+        "remove": "dopl_channel:artifact.remove",
+        "dissolve": "dopl_channel:artifact.dissolve"
+      },
+      "select": "action",
+      "read": false
+    },
+    {
+      "name": "dopl_browse_knowledge",
+      "bind": {
+        "list_bases": "dopl_kb:list_bases",
+        "tree": "dopl_kb:get_tree",
+        "list_dir": "dopl_kb:list_dir",
+        "outline": "dopl_kb:outline"
+      },
+      "select": "action",
+      "read": true
+    },
+    {
+      "name": "dopl_read_entry",
+      "bind": "dopl_kb:read_file",
+      "read": true
+    },
+    {
+      "name": "dopl_write_entry",
+      "bind": "dopl_kb:write_file",
+      "read": false
+    },
+    {
+      "name": "dopl_manage_knowledge",
+      "bind": {
+        "create_base": "dopl_kb:create_base",
+        "update_base": "dopl_kb:update_base",
+        "create_folder": "dopl_kb:create_folder",
+        "move_folder": "dopl_kb:move_folder",
+        "move_entry": "dopl_kb:move_file",
+        "publish": "dopl_kb:set_visibility",
+        "grant": "dopl_kb:grant"
+      },
+      "select": "action",
+      "read": false
+    },
+    {
+      "name": "dopl_list_skills",
+      "bind": "dopl_skill:list",
+      "read": true
+    },
+    {
+      "name": "dopl_get_skill",
+      "bind": {
+        "details": "dopl_skill:get",
+        "body": "dopl_skill:read"
+      },
+      "select": "view",
+      "read": true
+    },
+    {
+      "name": "dopl_create_skill",
+      "bind": "dopl_skill:create",
+      "read": false
+    },
+    {
+      "name": "dopl_update_skill",
+      "bind": {
+        "update": "dopl_skill:update",
+        "write": "dopl_skill:write",
+        "visibility": "dopl_skill:set_visibility"
+      },
+      "select": "action",
+      "read": false
+    },
+    {
+      "name": "dopl_list_agents",
+      "bind": "dopl_agent:list",
+      "read": true
+    },
+    {
+      "name": "dopl_get_agent",
+      "bind": "dopl_agent:get",
+      "read": true
+    },
+    {
+      "name": "dopl_manage_agent",
+      "bind": {
+        "create": "dopl_agent:create",
+        "update": "dopl_agent:update",
+        "grant": "dopl_agent:grant"
+      },
+      "select": "action",
+      "read": false
+    },
+    {
+      "name": "dopl_browse_ontology",
+      "bind": {
+        "map": "dopl_ontology:map",
+        "anchor": "dopl_ontology:anchor",
+        "resolve": "dopl_ontology:resolve"
+      },
+      "select": "action",
+      "read": true
+    },
+    {
+      "name": "dopl_get_object",
+      "bind": "dopl_ontology:get",
+      "read": true
+    },
+    {
+      "name": "dopl_edit_object",
+      "bind": {
+        "create": "dopl_ontology:create_object",
+        "update": "dopl_ontology:update_object",
+        "set_template_field": "dopl_ontology:set_template_field",
+        "remove_template_field": "dopl_ontology:remove_template_field",
+        "set_attribute": "dopl_ontology:set_attribute",
+        "remove_attribute": "dopl_ontology:remove_attribute",
+        "set_relationship": "dopl_ontology:set_relationship",
+        "remove_relationship": "dopl_ontology:remove_relationship",
+        "set_action": "dopl_ontology:set_action",
+        "remove_action": "dopl_ontology:remove_action",
+        "claim_anchor": "dopl_ontology:claim_anchor"
+      },
+      "select": "action",
+      "read": false
+    },
+    {
+      "name": "dopl_manage_ontology",
+      "bind": {
+        "create": "dopl_ontology:create_ontology",
+        "update": "dopl_ontology:update_ontology",
+        "create_column": "dopl_ontology:create_column"
+      },
+      "select": "action",
+      "read": false
+    },
+    {
+      "name": "dopl_get_member",
+      "bind": {
+        "me": "dopl_members:whoami",
+        "member": "dopl_members:get",
+        "team": "dopl_members:get_team",
+        "my_access": "dopl_members:my_access"
+      },
+      "select": "who",
+      "read": true
+    },
+    {
+      "name": "dopl_list_members",
+      "bind": {
+        "members": "dopl_members:list",
+        "teams": "dopl_members:teams",
+        "access_matrix": "dopl_members:access_matrix"
+      },
+      "select": "list",
+      "read": true
+    },
+    {
+      "name": "dopl_list_chats",
+      "bind": {
+        "chats": "dopl_chats:list",
+        "folders": "dopl_chats:folders"
+      },
+      "select": "list",
+      "read": true
+    },
+    {
+      "name": "dopl_get_chat",
+      "bind": "dopl_chats:get",
+      "read": true
+    },
+    {
+      "name": "dopl_save_chat",
+      "bind": {
+        "export": "dopl_chats:export",
+        "append": "dopl_chats:append",
+        "update": "dopl_chats:update",
+        "create_folder": "dopl_chats:create_folder",
+        "update_folder": "dopl_chats:update_folder"
+      },
+      "select": "action",
+      "read": false
+    },
+    {
+      "name": "dopl_list_versions",
+      "bind": {
+        "entry": "dopl_kb:history",
+        "skill": "dopl_skill:history",
+        "object": "dopl_ontology:history"
+      },
+      "select": "resource",
+      "read": true
+    },
+    {
+      "name": "dopl_restore_version",
+      "bind": {
+        "entry": "dopl_kb:restore",
+        "skill": "dopl_skill:restore",
+        "object": "dopl_ontology:restore"
+      },
+      "select": "resource",
+      "read": false
+    }
+  ]
+}

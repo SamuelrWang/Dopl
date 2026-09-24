@@ -48,6 +48,7 @@ const {
   DOPL_CHANNEL_TOOL, DOPL_SAFE_TOOLS, DOPL_ADMIN_TOOLS, RETIRED_DOPL_TOOLS,
   DOPL_SERVER_PREFIX,
 } = require('./tool-profiles');
+const { GRANULAR_NAMES, granularRow, parseBinding, jobOf } = require('./dopl-tool-table');
 
 function mcpShortName(full) {
   return String(full == null ? '' : full).replace(/^mcp__.*__/i, '');
@@ -77,10 +78,13 @@ function mcpShortName(full) {
 // arriving under a connector or UUID server segment stays unclassified, which resolves to
 // `gate`: a button for the exact tool the table says can never be opened. The name being
 // unregisterable does not make it unsendable — this list is derived, so it follows.
+// The GRANULAR names (DMP-013) join the vocabulary so they canonicalise under any server prefix too;
+// `dopl_search` is a name both sets use, listed once.
 const DOPL_TOOL_PREFIX = DOPL_SERVER_PREFIX + '__';
-const DOPL_SHORT_NAMES = [DOPL_CHANNEL_TOOL]
+const DOPL_SHORT_NAMES = Object.freeze([...new Set([DOPL_CHANNEL_TOOL]
   .concat(DOPL_SAFE_TOOLS, DOPL_ADMIN_TOOLS, RETIRED_DOPL_TOOLS)
-  .map(function (t) { return mcpShortName(t); });
+  .map(function (t) { return mcpShortName(t); })
+  .concat(GRANULAR_NAMES))]);
 
 function canonicalDoplName(toolName) {
   const n = typeof toolName === 'string' ? toolName : '';
@@ -99,4 +103,41 @@ function isDoplToolName(toolName) {
   return canonicalDoplName(toolName).indexOf(DOPL_TOOL_PREFIX) === 0;
 }
 
-module.exports = { mcpShortName, canonicalDoplName, isDoplToolName, DOPL_SHORT_NAMES, DOPL_TOOL_PREFIX };
+// A pulled job (`dopl_get_guide` topic "knowledge") answers with a published doctrine resource: it
+// discloses nothing `dopl_map` does not, so it resolves exactly where `dopl_map` does.
+const PULLED_AS = DOPL_TOOL_PREFIX + 'dopl_map';
+
+// Args only the binding writes. No granular tool publishes them (the server's strict schema refuses
+// them), so a caller's copy is dropped rather than allowed to re-point the call.
+const BOUND_ARGS = ['op', 'action'];
+
+/**
+ * A GRANULAR call as the LEGACY call it runs (DMP-013), `{ name, input }`, mirroring the server's
+ * `granular.ts › legacyCall`: the selector is consumed, `op`/`action` come from the binding alone and
+ * the preset is written last (a caller's `kind` cannot un-make a decision); every other arg passes
+ * through. The name comes back canonical (`mcp__dopl__dopl_channel`), so the gate, the grant key and
+ * every list read the legacy key they always have. Any other name is returned untouched.
+ * ⚠ FAIL CLOSED: a selector naming no job keeps the granular name, which no list classifies, so it
+ * gates (and `read_only`'s deny list denies it). `dopl_search` is the one name both sets use, so an
+ * unplaced one stays the legacy read it already was (the server refuses the value).
+ */
+function canonicalDoplCall(toolName, input) {
+  const short = mcpShortName(toolName);
+  const row = granularRow(short);
+  if (!row) return { name: toolName, input };
+  const args = input && typeof input === 'object' && !Array.isArray(input) ? input : {};
+  const job = jobOf(row, args);
+  if (!job) return { name: DOPL_TOOL_PREFIX + short, input: args };
+  if (job.pulled) return { name: PULLED_AS, input: {} };
+  const { tool, op, action } = parseBinding(job.key);
+  const rest = {};
+  for (const key of Object.keys(args)) if (key !== row.select && BOUND_ARGS.indexOf(key) === -1) rest[key] = args[key];
+  return {
+    name: DOPL_TOOL_PREFIX + tool,
+    input: Object.assign(rest, op === undefined ? {} : { op }, action === undefined ? {} : { action }, row.preset),
+  };
+}
+
+module.exports = {
+  mcpShortName, canonicalDoplName, canonicalDoplCall, isDoplToolName, DOPL_SHORT_NAMES, DOPL_TOOL_PREFIX,
+};

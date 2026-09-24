@@ -14,6 +14,7 @@
 const { channelOpKey } = require('./channel-op-key'); // <op>.<action> — the classifiers' own key (F-578)
 const crypto = require('crypto');
 const { grantDecisionDetail, grantKeyFor, isOwnChannelPost, isChannelTool, mcpShortName } = require('./session-profiles');
+const { canonicalDoplCall } = require('./mcp-tool-names');
 const outboundTag = require('./session-outbound-tag');
 const { isOutboundPost, outboundConsentShape } = outboundTag;
 const postSurface = require('./session-post-surface');
@@ -72,8 +73,10 @@ function logGateVerdict(log, s, toolName, verdict, op) {
 // stays free for the next non-post request; everything else takes the dock. The POLICY path is
 // identical either way — same reducer event, same tracking, same scoped grant name, same
 // fail-closed mapping.
-function gatePayload(s, name, input, opts, requestId, verdict) {
-  const payload = outboundConsentShape(name, input, s.channelId)
+// `call` is the legacy call a granular one runs (`mcp-tool-names.js › canonicalDoplCall`): it CLASSIFIES
+// the card, while the name, the body and the input the operator reads stay the ones the agent sent.
+function gatePayload(s, name, input, call, opts, requestId, verdict) {
+  const payload = outboundConsentShape(call.name, call.input, s.channelId)
     ? withPostSurface({
       type: 'outbound_gate',
       requestId,
@@ -84,7 +87,7 @@ function gatePayload(s, name, input, opts, requestId, verdict) {
       // so both are `isOutboundPost` now and take the ordinary `outbound_post` frame — F-321's card
       // is minted by the ordinary path and the flag had no reachable arm left.
       text: input && input.body != null ? String(input.body) : '',
-    }, input, s.counterpartyName, s.counterpartyId)
+    }, call.input, s.counterpartyName, s.counterpartyId)
     : {
       type: 'permission_request',
       requestId,
@@ -93,14 +96,14 @@ function gatePayload(s, name, input, opts, requestId, verdict) {
       // FIX #9: WHERE an op=post is headed. The dock rendered the body with no target, so a
       // cross-channel post (the exfil shape D2 exists to catch) looked exactly like a normal reply.
       // A boolean, never the other channel's id (§H-9).
-      ownChannel: isOwnChannelPost(input, s.channelId),
+      ownChannel: isOwnChannelPost(call.input, s.channelId),
       inputSummary: io().summarizeInput(input),
       inputFull: io().safeInput(input),
       title: opts && opts.title,
       // MEDIUM-2 belt for the DOCK path (a CROSS-channel post): name a forged lifecycle kind here
       // too. `to` is deliberately left off — this card's destination line already reads "another
       // channel", the louder warning.
-      postKind: postKindOf(input),
+      postKind: postKindOf(call.input),
     };
   if (payload.postKind == null) delete payload.postKind; // absent stays absent
   // 2026-08-02 — WHY this card is on screen, on BOTH gate surfaces: without it every uncovered
@@ -128,10 +131,15 @@ function gateCall(s, name, input, opts, dispatch, log) {
   // second decision point that knew nothing about which axis a call belonged to is how one switch
   // came to authorize both Bash and outbound messages. The verdict comes back WITH the reason code
   // that explains it (2026-08-02), for the card and for the diag line.
-  const verdict = grantDecisionDetail(io().grantArgs(s, name, input));
+  // A GRANULAR call is judged as the legacy call it runs (DMP-013), so every list, lane and grant key
+  // reads the key it always has. The tag rewrites the args the AGENT sent (the granular tool takes
+  // `thread` / `client_msg_id` by the same names), and the diag line keeps the name it called.
+  const call = canonicalDoplCall(name, input);
+  const verdict = grantDecisionDetail(io().grantArgs(s, call.name, call.input));
   const decision = verdict.decision;
-  logGateVerdict(log, s, name, verdict, channelOpLabel(name, input));
-  const outbound = isOutboundPost(name, input, s.channelId);
+  const op = channelOpLabel(call.name, call.input);
+  logGateVerdict(log, s, name, verdict, op);
+  const outbound = isOutboundPost(call.name, call.input, s.channelId);
   const tag = outbound ? outboundTag.threadTagFor(input, s.taskId, outboundTag.nextOwnPostId(s)) : null;
   if (tag && tag.action === 'conflict' && typeof log === 'function') {
     log('session: outbound post names thread', String(tag.supplied).slice(0, 24),
@@ -151,8 +159,8 @@ function gateCall(s, name, input, opts, dispatch, log) {
   // v2.5 D2: the GRANT KEY (not always the bare tool name) is what an "Allow for this task" click
   // records, so a post grant stays scoped to own-channel posts. The renderer still sees the real
   // tool name in the payload.
-  const grantName = grantKeyFor(name, input, s.channelId, s.runtimeId);
-  const payload = gatePayload(s, name, input, opts, requestId, verdict);
+  const grantName = grantKeyFor(call.name, call.input, s.channelId, s.runtimeId);
+  const payload = gatePayload(s, name, input, call, opts, requestId, verdict);
   return {
     settled: false,
     tag,
@@ -172,7 +180,7 @@ function gateCall(s, name, input, opts, dispatch, log) {
         heldGates.note(s, {
           requestId: requestId,
           tool: shortToolLabel(name),
-          op: channelOpLabel(name, input),
+          op,
           summary: payload.inputSummary,
           reason: verdict.reason,
         });

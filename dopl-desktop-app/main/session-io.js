@@ -4,6 +4,7 @@
 
 const { grantDecisionDetail, floorWindowlessTool } = require('./session-profiles');
 const { DOPL_CHANNEL_TOOL } = require('./tool-profiles');
+const { canonicalDoplCall } = require('./mcp-tool-names');
 const outboundTag = require('./session-outbound-tag');
 const { isOutboundPost } = outboundTag;
 const seed = require('./session-seed');
@@ -144,9 +145,10 @@ function grantArgs(s, toolName, input) {
   };
 }
 
-// Will this own-channel post stop on a decision? The same question the gate asks, with the real tool name.
+// Will this own-channel post stop on a decision? The same question the gate asks, of the same legacy call.
 function postWillGate(s, input, toolName) {
-  return grantDecisionDetail(grantArgs(s, toolName || DOPL_CHANNEL_TOOL, input)).decision === 'gate';
+  const call = canonicalDoplCall(toolName || DOPL_CHANNEL_TOOL, input);
+  return grantDecisionDetail(grantArgs(s, call.name, call.input)).decision === 'gate';
 }
 
 const sessionPrivate = require('./session-private'); const postSurface = require('./session-post-surface');
