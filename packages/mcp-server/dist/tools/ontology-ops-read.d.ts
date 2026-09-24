@@ -12,7 +12,7 @@ import { type CallerIdentity } from "./identity";
  * ⚠ SUMMARY PROJECTION, NOT THE GRAPH, for the two name-only ops. Between them
  * `opMap` and `opResolve` read five fields, all carried by `view: "summary"`; a
  * bare `getOntology()` fetches every `attributes`, `methods`, `template` and
- * cluster `layout` in the workspace to supply them — on `op="map"`, the ROUTING
+ * ontology `layout` in the workspace to supply them — on `op="map"`, the ROUTING
  * call agents make first and speculatively.
  *
  * ⚠ `opGet` and `opAnchor` stay on the FULL graph: both render through

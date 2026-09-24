@@ -17,7 +17,7 @@ const ontology_clipped_js_1 = require("./ontology-clipped.js");
 const partial_read_js_1 = require("./partial-read.js");
 /** The `partialRead` denominator; moves with the four reads below. */
 exports.SEARCH_GROUP_COUNT = 4;
-const EMPTY_ONTOLOGY = { clusters: [], objects: {} };
+const EMPTY_ONTOLOGY = { ontologies: [], objects: {} };
 const EMPTY_IDENTITIES = { identities: [] };
 const EMPTY_IDS = Object.freeze([]);
 /**

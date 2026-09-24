@@ -22,7 +22,7 @@ import { partialRead } from "./partial-read.js";
 /** The `partialRead` denominator; moves with the four reads below. */
 export const SEARCH_GROUP_COUNT = 4;
 
-const EMPTY_ONTOLOGY: OntologySummary = { clusters: [], objects: {} };
+const EMPTY_ONTOLOGY: OntologySummary = { ontologies: [], objects: {} };
 const EMPTY_IDENTITIES: AgentIdentityListPayload = { identities: [] };
 const EMPTY_IDS: readonly string[] = Object.freeze([]);
 

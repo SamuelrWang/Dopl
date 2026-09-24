@@ -43,7 +43,7 @@ const healthyMap = (over: Record<string, unknown> = {}) =>
   stub({
     listKbBases: vi.fn(async () => [BASE]),
     listSkills: vi.fn(async () => [SKILL]),
-    getOntology: vi.fn(async () => ({ clusters: [], objects: {} })),
+    getOntology: vi.fn(async () => ({ ontologies: [], objects: {} })),
     ...over,
   });
 
@@ -51,7 +51,7 @@ const healthySearch = (over: Record<string, unknown> = {}) =>
   stub({
     searchKb: vi.fn(async () => []),
     listSkills: vi.fn(async () => [SKILL]),
-    getOntology: vi.fn(async () => ({ clusters: [], objects: {} })),
+    getOntology: vi.fn(async () => ({ ontologies: [], objects: {} })),
     // FOURTH group since 2026-08-28 — a new domain is a new read the stub has
     // to model, or the group renders as a failure nobody meant to test.
     listAgentIdentitiesPayload: vi.fn(async () => ({ identities: [] })),

@@ -57,7 +57,7 @@ function stubClient(): DoplClient {
     listChannels: vi.fn().mockResolvedValue([]),
     listKbBases: vi.fn().mockResolvedValue([]),
     listSkills: vi.fn().mockResolvedValue([]),
-    getOntology: vi.fn().mockResolvedValue({ clusters: [], objects: {} }),
+    getOntology: vi.fn().mockResolvedValue({ ontologies: [], objects: {} }),
   } as unknown as DoplClient;
 }
 

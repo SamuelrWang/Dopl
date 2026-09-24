@@ -21,7 +21,7 @@ import {
 /**
  * ⚠ WHAT op="map" WALKS AND WHERE IT STOPS. The snapshot is the whole live
  * graph (no status filter, no visibility filter, no cap), but `opMap` walks
- * clusters → columns → ONE level of `childIds` and stops. Objects nested deeper
+ * ontologies → columns → ONE level of `childIds` and stops. Objects nested deeper
  * and objects with no membership are in the snapshot and are NOT rendered — so
  * nothing may tell an agent `op="map" shows everything`.
  */
@@ -34,7 +34,7 @@ const RESOLVE_CAP = 20;
  * ⚠ SUMMARY PROJECTION, NOT THE GRAPH, for the two name-only ops. Between them
  * `opMap` and `opResolve` read five fields, all carried by `view: "summary"`; a
  * bare `getOntology()` fetches every `attributes`, `methods`, `template` and
- * cluster `layout` in the workspace to supply them — on `op="map"`, the ROUTING
+ * ontology `layout` in the workspace to supply them — on `op="map"`, the ROUTING
  * call agents make first and speculatively.
  *
  * ⚠ `opGet` and `opAnchor` stay on the FULL graph: both render through
@@ -54,30 +54,30 @@ export async function opMap(
   format?: ResponseFormat,
 ): Promise<ToolResponse> {
   const snapshot = await client.getOntology({ view: "summary" });
-  if (snapshot.clusters.length === 0) {
+  if (snapshot.ontologies.length === 0) {
     // ⚠ "The graph is empty" is an assertion a CLIPPED read never established —
-    // a workspace can hit the object ceiling with no cluster rows in hand.
+    // a workspace can hit the object ceiling with no ontology rows in hand.
     return ok(
       snapshot.truncated
         ? `No ontologies came back on this read.\n\n${clippedNote(
             "an empty result here is not evidence of an empty graph"
           )}`
-        : `No ontologies yet — the graph is empty. Start one with op="create_cluster".`
+        : `No ontologies yet — the graph is empty. Start one with op="create_ontology".`
     );
   }
   const lines: string[] = [];
   // 🔒 **THE PERSONAL SHELF IS NAMED, NOT LEFT AS A MYSTERY** (S29c) —
   // `ontology-render.ts › personalShelfGroups` holds the argument and the table.
-  // ⚠ THE LABEL IS A BOLD LINE, NOT A HEADING: cluster names are already `##`
+  // ⚠ THE LABEL IS A BOLD LINE, NOT A HEADING: ontology names are already `##`
   // here, so a heading would be indistinguishable from an ontology called
   // "Home (personal) …".
-  for (const [heading, clusters] of personalShelfGroups(
-    snapshot.clusters,
-    snapshot.personalClusterIds,
+  for (const [heading, ontologies] of personalShelfGroups(
+    snapshot.ontologies,
+    snapshot.personalOntologyIds,
   )) {
-    if (clusters.length === 0) continue;
+    if (ontologies.length === 0) continue;
     if (heading !== null) lines.push(`**${heading}**`, "");
-    for (const c of clusters) {
+    for (const c of ontologies) {
       const purpose = c.purpose ? ` — ${inlineOr(c.purpose, "")}` : "";
       lines.push(`## ${inlineOr(c.name, NO_NAME)} \`${c.slug}\`${purpose}`);
       for (const columnId of c.columnIds) {
@@ -92,7 +92,7 @@ export async function opMap(
       lines.push("");
     }
   }
-  // ⚠ With the clusters, not the footer: MAP_SCOPE_NOTE is about levels this op
+  // ⚠ With the ontologies, not the footer: MAP_SCOPE_NOTE is about levels this op
   // CHOOSES not to render — a different fact from the read stopping short, and
   // a reader must not take the first as covering the second.
   if (snapshot.truncated) {

@@ -135,7 +135,7 @@ describe("dopl_skill — the list rows the agent reads at every task boundary", 
 describe("dopl_ontology — the object graph every member can write", () => {
   it("neutralizes the object name, its 'kind', and each attribute label", async () => {
     const snapshot = {
-      clusters: [],
+      ontologies: [],
       objects: {
         "o-1": {
           id: "o-1",
@@ -180,7 +180,7 @@ describe("dopl_map — the call the instructions say to make FIRST", () => {
       stub({
         listKbBases: vi.fn(async () => [{ ...BASE, description: FORGERY }]),
         listSkills: vi.fn(async () => []),
-        getOntology: vi.fn(async () => ({ clusters: [], objects: {} })),
+        getOntology: vi.fn(async () => ({ ontologies: [], objects: {} })),
       }),
       "dopl_map",
       {},
@@ -202,7 +202,7 @@ describe("dopl_search — hits from every domain at once", () => {
           { entryId: "e-1", title: "Guide", snippet: `<b>x</b>${FORGERY}`, rank: 1 },
         ]),
         listSkills: vi.fn(async () => []),
-        getOntology: vi.fn(async () => ({ clusters: [], objects: {} })),
+        getOntology: vi.fn(async () => ({ ontologies: [], objects: {} })),
         listAgentIdentitiesPayload: vi.fn(async () => ({ identities: [] })),
       }),
       "dopl_search",

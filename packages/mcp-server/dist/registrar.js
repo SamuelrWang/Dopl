@@ -11,6 +11,7 @@ const client_1 = require("@dopl/client");
 const respond_js_1 = require("./tools/respond.js");
 const workspace_arg_js_1 = require("./workspace-arg.js");
 const container_resolve_js_1 = require("./container-resolve.js");
+const legacy_aliases_js_1 = require("./legacy-aliases.js");
 // Re-exported so tests read the injected arg's description through the registrar that injects it.
 var workspace_arg_js_2 = require("./workspace-arg.js");
 Object.defineProperty(exports, "CONTAINER_ARG_DESCRIPTION", { enumerable: true, get: function () { return workspace_arg_js_2.CONTAINER_ARG_DESCRIPTION; } });
@@ -38,6 +39,7 @@ function strictInput(shape, tool) {
 const RENAMED_ARGS = {
     dopl_agent: { template: "identity" },
     dopl_channel: { template: "identity" },
+    dopl_ontology: legacy_aliases_js_1.LEGACY_ONTOLOGY_ARGS,
 };
 function renamedArgMessage(tool, issue) {
     if (issue.code !== "unrecognized_keys" || !issue.keys)

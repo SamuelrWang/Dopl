@@ -79,8 +79,8 @@ export function offeredToolsFor(
  */
 export const WRITE_OPS: Record<string, Set<string>> = {
   dopl_ontology: new Set([
-    "create_cluster",
-    "update_cluster",
+    "create_ontology",
+    "update_ontology",
     "create_column",
     "create_object",
     "update_object",

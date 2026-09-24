@@ -26,7 +26,7 @@ import { callTool, stub } from "./narration-fixtures";
 
 /** The graph as the cheap projection returns it: names and containment only. */
 const SUMMARY = {
-  clusters: [
+  ontologies: [
     {
       id: "c-1",
       slug: "pipeline",
@@ -47,7 +47,7 @@ const SUMMARY = {
  * to feed the summary.
  */
 const HEAVY = {
-  clusters: [{ ...SUMMARY.clusters[0], layout: { "col-1": { x: 10, y: 20 } } }],
+  ontologies: [{ ...SUMMARY.ontologies[0], layout: { "col-1": { x: 10, y: 20 } } }],
   objects: {
     "col-1": {
       ...SUMMARY.objects["col-1"],
@@ -210,7 +210,7 @@ describe("a clipped ontology read is reported, not absorbed", () => {
     for (const text of [map, resolve, miss, search]) expect(text).not.toContain("CLIPPED");
   });
 
-  it('op="map" names the clip beside the clusters it clipped', async () => {
+  it('op="map" names the clip beside the ontologies it clipped', async () => {
     const text = await callTool(
       registerOntologyTool,
       stub(clipped()),
@@ -225,7 +225,7 @@ describe("a clipped ontology read is reported, not absorbed", () => {
   it('op="map" does not call an unestablished empty graph empty', async () => {
     const text = await callTool(
       registerOntologyTool,
-      stub({ getOntology: vi.fn(async () => ({ clusters: [], objects: {}, truncated: true })) }),
+      stub({ getOntology: vi.fn(async () => ({ ontologies: [], objects: {}, truncated: true })) }),
       "dopl_ontology",
       { op: "map" },
     );

@@ -94,7 +94,7 @@ function build(opts: { sole: boolean } = { sole: true }) {
     consumeCredits: vi.fn().mockResolvedValue(CHARGED),
     listKbBases: vi.fn().mockResolvedValue([]),
     listSkills: vi.fn().mockResolvedValue([]),
-    getOntology: vi.fn().mockResolvedValue({ clusters: [], objects: {} }),
+    getOntology: vi.fn().mockResolvedValue({ ontologies: [], objects: {} }),
   } as unknown as DoplClient & { consumeCredits: ReturnType<typeof vi.fn> };
   createServer(client, {
     scopes: ["dopl.read", "dopl.write"],

@@ -102,7 +102,7 @@ function mockClient(directory: WorkspaceListItem[]) {
     consumeCredits: vi.fn().mockResolvedValue(allowed()),
     listKbBases: vi.fn().mockResolvedValue([]),
     listSkills: vi.fn().mockResolvedValue([]),
-    getOntology: vi.fn().mockResolvedValue({ clusters: [], objects: {} }),
+    getOntology: vi.fn().mockResolvedValue({ ontologies: [], objects: {} }),
   } as unknown as DoplClient & {
     consumeCredits: ReturnType<typeof vi.fn>;
     listKbBases: ReturnType<typeof vi.fn>;

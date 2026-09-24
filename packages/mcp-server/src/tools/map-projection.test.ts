@@ -2,7 +2,7 @@
  * INVARIANT SUITE — ⚠ `dopl_map` fetches the SUMMARY, never the graph. The
  * instructions send every agent here before its first substantive reply, so it
  * is the most-executed read in the product, and a bare `getOntology()` pulls
- * every JSONB column across the wire to render cluster and column names.
+ * every JSONB column across the wire to render ontology and column names.
  *
  * ⚠ The regression is invisible by every other means: swapping back renders a
  * BYTE-IDENTICAL result and passes every existing map test. So the assertion is
@@ -16,7 +16,7 @@ import { registerMapFixture } from "./narration-fixtures";
 import { callTool, stub } from "./narration-fixtures";
 
 const SUMMARY = {
-  clusters: [
+  ontologies: [
     {
       id: "c-1",
       slug: "playbook",
@@ -54,7 +54,7 @@ describe("dopl_map asks for the cheap projection", () => {
     // starts reading those fields the two results diverge and the tool stops
     // being safe to feed the summary.
     const heavy = {
-      clusters: [{ ...SUMMARY.clusters[0], layout: { "o-1": { x: 40, y: 80 } } }],
+      ontologies: [{ ...SUMMARY.ontologies[0], layout: { "o-1": { x: 40, y: 80 } } }],
       objects: {
         "o-1": {
           ...SUMMARY.objects["o-1"],
@@ -113,8 +113,8 @@ describe("dopl_map reports a clipped ontology read", () => {
 describe("dopl_map labels the personal shelf", () => {
   const SHELF = {
     ...SUMMARY,
-    clusters: [
-      SUMMARY.clusters[0],
+    ontologies: [
+      SUMMARY.ontologies[0],
       {
         id: "c-2",
         slug: "my-notes",
@@ -123,7 +123,7 @@ describe("dopl_map labels the personal shelf", () => {
         columnIds: [],
       },
     ],
-    personalClusterIds: ["c-2"],
+    personalOntologyIds: ["c-2"],
   };
 
   it("names the shelf and files only its rows under it", async () => {
@@ -140,7 +140,7 @@ describe("dopl_map labels the personal shelf", () => {
     expect(text.indexOf("Home (personal)")).toBeLessThan(text.indexOf("`my-notes`"));
   });
 
-  it("counts every cluster, shelf included — the label splits, it does not filter", async () => {
+  it("counts every ontology, shelf included — the label splits, it does not filter", async () => {
     const text = await callTool(
       registerMapFixture,
       client({ getOntology: vi.fn(async () => SHELF) }),
@@ -154,11 +154,11 @@ describe("dopl_map labels the personal shelf", () => {
   /**
    * ⚠ **§8 STALE-CACHE — ABSENT IS "NOT ANSWERED", NEVER "NONE".** A payload
    * cached against a server older than this wave carries no
-   * `personalClusterIds`, and the render must be byte-identical to what it was
+   * `personalOntologyIds`, and the render must be byte-identical to what it was
    * before the field existed rather than filing every row under one shelf or
    * the other.
    */
-  it("a payload with NO personalClusterIds renders exactly as before", async () => {
+  it("a payload with NO personalOntologyIds renders exactly as before", async () => {
     const before = await callTool(registerMapFixture, client(), "dopl_map", {});
     const stale = await callTool(
       registerMapFixture,
@@ -170,25 +170,25 @@ describe("dopl_map labels the personal shelf", () => {
     expect(stale).not.toContain("Home (personal)");
   });
 
-  it("an EMPTY personalClusterIds also renders exactly as before", async () => {
+  it("an EMPTY personalOntologyIds also renders exactly as before", async () => {
     const before = await callTool(registerMapFixture, client(), "dopl_map", {});
     const none = await callTool(
       registerMapFixture,
-      client({ getOntology: vi.fn(async () => ({ ...SUMMARY, personalClusterIds: [] })) }),
+      client({ getOntology: vi.fn(async () => ({ ...SUMMARY, personalOntologyIds: [] })) }),
       "dopl_map",
       {},
     );
     expect(none).toBe(before);
   });
 
-  // ⚠ An id naming no listed cluster files nothing — the label is computed from
+  // ⚠ An id naming no listed ontology files nothing — the label is computed from
   // the SAME admitted list the response carries, so a mismatch is a stale
   // payload, not a row to invent a heading for.
-  it("an id matching no listed cluster adds no heading", async () => {
+  it("an id matching no listed ontology adds no heading", async () => {
     const text = await callTool(
       registerMapFixture,
       client({
-        getOntology: vi.fn(async () => ({ ...SUMMARY, personalClusterIds: ["c-99"] })),
+        getOntology: vi.fn(async () => ({ ...SUMMARY, personalOntologyIds: ["c-99"] })),
       }),
       "dopl_map",
       {},

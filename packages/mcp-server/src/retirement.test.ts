@@ -83,7 +83,7 @@ function mockClient(): DoplClient {
     deleteChat: unexpected("deleteChat"),
     deleteChatFolder: unexpected("deleteChatFolder"),
     deleteOntologyObject: unexpected("deleteOntologyObject"),
-    deleteOntologyCluster: unexpected("deleteOntologyCluster"),
+    deleteOntology: unexpected("deleteOntology"),
   } as unknown as DoplClient;
 }
 
@@ -217,7 +217,7 @@ const DELETED_DELETE_CALLS: Array<[string, string]> = [
   ["dopl_chats_admin", "delete"],
   ["dopl_chats_admin", "delete_folder"],
   ["dopl_ontology_admin", "delete_object"],
-  ["dopl_ontology_admin", "delete_cluster"],
+  ["dopl_ontology_admin", "delete_ontology"],
   ["dopl_agent_admin", "delete"],
 ];
 
@@ -272,7 +272,7 @@ describe("isBlockedDeleteOp — the rule future tools inherit", () => {
     // `_admin` tools gone it names the tool a delete op could only arrive on.
     expect(isBlockedDeleteOp("dopl_kb", "delete_base")).toBe(true);
     expect(isBlockedDeleteOp("dopl_skill", "delete")).toBe(true);
-    expect(isBlockedDeleteOp("dopl_ontology", "delete_cluster")).toBe(true);
+    expect(isBlockedDeleteOp("dopl_ontology", "delete_ontology")).toBe(true);
   });
 
   it("FAILS CLOSED on an admin op nobody added to the table", () => {

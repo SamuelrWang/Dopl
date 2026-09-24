@@ -7,7 +7,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.personalShelfGroups = personalShelfGroups;
 exports.resolveObjectRef = resolveObjectRef;
-exports.resolveClusterRef = resolveClusterRef;
+exports.resolveOntologyRef = resolveOntologyRef;
 exports.resolveResourceHandles = resolveResourceHandles;
 exports.renderObject = renderObject;
 const response_size_1 = require("./response-size");
@@ -47,12 +47,12 @@ function indented(text) {
 /**
  * ⚠ §8 STALE-CACHE, SPELLED INLINE, AND **ONE FROZEN EMPTY RATHER THAN TWO**.
  * A payload cached against a server older than S29c carries no
- * `personalClusterIds`, and this is what the absent key falls back to: no row is
+ * `personalOntologyIds`, and this is what the absent key falls back to: no row is
  * filed under the personal label, which is the reading that states nothing the
  * response did not measure. The knowledge lane's twin is
  * `knowledge-ops-read.ts › EMPTY_BASE_IDS`.
  */
-const EMPTY_CLUSTER_IDS = Object.freeze([]);
+const EMPTY_ONTOLOGY_IDS = Object.freeze([]);
 /**
  * 🔒 **THE PERSONAL SHELF, LABELLED ON THE ONTOLOGY LANE** (S29c, 2026-09-18).
  *
@@ -67,7 +67,7 @@ const EMPTY_CLUSTER_IDS = Object.freeze([]);
  *
  * ⚠ **THE SPLIT KEYS ON THE ANSWER, NOT ON THE QUESTION**, the same rule
  * `opListBases` states: an ABSENT key means "not answered" and puts every
- * cluster in the unlabelled group, which is byte-identical to what this render
+ * ontology in the unlabelled group, which is byte-identical to what this render
  * did before the field existed. It never files a row under a shelf it did not
  * measure.
  *
@@ -78,12 +78,12 @@ const EMPTY_CLUSTER_IDS = Object.freeze([]);
  * @returns the two groups in render order; the personal one carries the shared
  *          heading text, the other carries `null` (no heading at all).
  */
-function personalShelfGroups(clusters, personalClusterIds) {
-    const shelf = new Set(personalClusterIds ?? EMPTY_CLUSTER_IDS);
+function personalShelfGroups(ontologies, personalOntologyIds) {
+    const shelf = new Set(personalOntologyIds ?? EMPTY_ONTOLOGY_IDS);
     if (shelf.size === 0)
-        return [[null, clusters]];
-    const personal = clusters.filter((c) => shelf.has(c.id));
-    const here = clusters.filter((c) => !shelf.has(c.id));
+        return [[null, ontologies]];
+    const personal = ontologies.filter((c) => shelf.has(c.id));
+    const here = ontologies.filter((c) => !shelf.has(c.id));
     if (personal.length === 0)
         return [[null, here]];
     return [
@@ -113,12 +113,12 @@ function resolveObjectRef(snapshot, ref) {
         fail: (0, respond_1.err)(`No object ${(0, narration_1.inlineOr)(ref, narration_1.NO_NAME)}. Find ids with op="resolve" or op="map".`),
     };
 }
-function resolveClusterRef(snapshot, ref) {
+function resolveOntologyRef(snapshot, ref) {
     const needle = ref.toLowerCase();
-    const hit = snapshot.clusters.find((c) => c.id === ref || c.slug === ref || c.name.toLowerCase() === needle);
+    const hit = snapshot.ontologies.find((c) => c.id === ref || c.slug === ref || c.name.toLowerCase() === needle);
     if (hit)
         return { hit };
-    const known = snapshot.clusters.map((c) => (0, narration_1.inlineOr)(c.slug, narration_1.NO_NAME)).join(", ") || "none";
+    const known = snapshot.ontologies.map((c) => (0, narration_1.inlineOr)(c.slug, narration_1.NO_NAME)).join(", ") || "none";
     return {
         fail: (0, respond_1.err)(`No ontology ${(0, narration_1.inlineOr)(ref, narration_1.NO_NAME)}. Known ontologies: ${known}.`),
     };

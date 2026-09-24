@@ -2,7 +2,7 @@
 /**
  * `dopl_map` — the compact workspace manifest. One call answers "what
  * exists here and where should I look": knowledge bases, skills and
- * ontology clusters, names + one-liners only. The routing entry point —
+ * ontologies, names + one-liners only. The routing entry point —
  * call before drilling into any domain tool.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
@@ -18,10 +18,10 @@ const tool_errors_1 = require("./tool-errors");
 const tool_style_1 = require("./tool-style");
 /** ⚠ The same row `dopl_search` teaches — one fan-out failure, one code. */
 const PARTIAL_READ_ERROR = tool_errors_1.SEARCH_ERRORS[0];
-const EMPTY_ONTOLOGY = { clusters: [], objects: {} };
+const EMPTY_ONTOLOGY = { ontologies: [], objects: {} };
 /*
  * ⚠ EVERY string this tool renders is a member-typed one-liner LABEL (KB name +
- * description, skill name + `when_to_use`, cluster name + purpose, column name)
+ * description, skill name + `when_to_use`, ontology name + purpose, column name)
  * and NONE carries a charset rule — only KB folder names and entry titles do,
  * via `NAME_RE`. Newlines, backticks and `##` are all legal.
  *
@@ -153,8 +153,8 @@ directory, caller = identity_1.UNKNOWN_CALLER) {
             reads.soft("Skills", client.listSkills(), []),
             // ⚠ SUMMARY PROJECTION, NOT THE GRAPH. A bare `getOntology()` ships every
             // JSONB column (`attributes` up to 100×4000 chars, `methods`, `template`,
-            // each cluster's `layout`) plus relationships, and the render uses exactly
-            // two things: cluster names and column names. Measured 634 KB vs 82 KB on
+            // each ontology's `layout`) plus relationships, and the render uses exactly
+            // two things: ontology names and column names. Measured 634 KB vs 82 KB on
             // a 366-object workspace — on the ONE call mandated before every agent's
             // first substantive reply.
             reads.soft("Ontology", client.getOntology({ view: "summary" }), EMPTY_ONTOLOGY),
@@ -175,18 +175,18 @@ directory, caller = identity_1.UNKNOWN_CALLER) {
         }
         if (activeSkills.length === 0)
             lines.push("_None._");
-        lines.push("", `## Ontology (${ontology.clusters.length}) — dopl_ontology`);
+        lines.push("", `## Ontology (${ontology.ontologies.length}) — dopl_ontology`);
         // 🔒 **S29c — THE ROUTING SURFACE IS WHERE THE MYSTERY WAS REPORTED.** A
         // brand-new home channel listed ontologies nobody had put there; they are
         // the caller's own personal shelf, which `service-audience.ts` folds into
         // the read scope. The heading is `ontology-render.ts › personalShelfGroups`,
         // reading the SAME table the `dopl_kb` list does.
-        for (const [heading, clusters] of (0, ontology_render_1.personalShelfGroups)(ontology.clusters, ontology.personalClusterIds)) {
-            if (clusters.length === 0)
+        for (const [heading, ontologies] of (0, ontology_render_1.personalShelfGroups)(ontology.ontologies, ontology.personalOntologyIds)) {
+            if (ontologies.length === 0)
                 continue;
             if (heading !== null)
                 lines.push(`### ${heading}`);
-            for (const c of clusters) {
+            for (const c of ontologies) {
                 const columns = c.columnIds
                     .map((id) => ontology.objects[id]?.name)
                     .filter((n) => Boolean(n))
@@ -196,7 +196,7 @@ directory, caller = identity_1.UNKNOWN_CALLER) {
                 lines.push(`- ${(0, narration_1.inlineOr)(c.name, narration_1.NO_NAME)} \`${c.slug}\`${purpose}${columns ? ` (objects: ${columns})` : ""}`);
             }
         }
-        if (ontology.clusters.length === 0)
+        if (ontology.ontologies.length === 0)
             lines.push("_None._");
         // ⚠ A ceiling that renders identically to an exhausted list is the bug, so
         // a clipped read says so BESIDE the section it clipped, not in a footer.

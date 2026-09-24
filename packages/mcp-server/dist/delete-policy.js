@@ -13,7 +13,7 @@ exports.DELETE_BLOCKED_OPS = {
     dopl_kb: new Set(["delete_base", "delete_folder", "delete_file"]),
     dopl_skill: new Set(["delete"]),
     dopl_chats: new Set(["delete", "delete_folder"]),
-    dopl_ontology: new Set(["delete_object", "delete_cluster"]),
+    dopl_ontology: new Set(["delete_object", "delete_ontology"]),
     dopl_agent: new Set(["delete"]),
 };
 exports.DELETE_OP_SHAPE = /^(delete|destroy|purge|trash|remove)(_|$)/;

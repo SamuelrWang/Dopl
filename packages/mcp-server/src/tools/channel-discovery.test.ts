@@ -108,7 +108,7 @@ const MAP_CLIENT = () =>
   stub({
     listKbBases: vi.fn(async () => []),
     listSkills: vi.fn(async () => []),
-    getOntology: vi.fn(async () => ({ clusters: [], objects: {} })),
+    getOntology: vi.fn(async () => ({ ontologies: [], objects: {} })),
   });
 
 describe("dopl_map names the destination it cannot list", () => {

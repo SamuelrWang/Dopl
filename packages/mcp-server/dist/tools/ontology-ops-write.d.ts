@@ -1,7 +1,7 @@
 /**
  * `dopl_ontology` op dispatch + mutating handlers. `dispatch` is the whole
  * tool's switch: it validates required params, routes the read ops to
- * ontology-ops-read.ts, and handles every write inline (cluster/column/
+ * ontology-ops-read.ts, and handles every write inline (ontology/column/
  * object creation, attribute/relationship/action/template upserts,
  * claim_anchor). The value resolvers (refs → ids, knowledge/skill refs →
  * ids, entry refs) and the optimistic-concurrency `withObject` wrapper live
@@ -14,7 +14,7 @@ export interface OntologyArgs {
     op: string;
     query?: string;
     object?: string;
-    cluster?: string;
+    ontology?: string;
     parent?: string;
     name?: string;
     purpose?: string;

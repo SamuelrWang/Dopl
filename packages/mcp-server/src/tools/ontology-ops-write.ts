@@ -1,7 +1,7 @@
 /**
  * `dopl_ontology` op dispatch + mutating handlers. `dispatch` is the whole
  * tool's switch: it validates required params, routes the read ops to
- * ontology-ops-read.ts, and handles every write inline (cluster/column/
+ * ontology-ops-read.ts, and handles every write inline (ontology/column/
  * object creation, attribute/relationship/action/template upserts,
  * claim_anchor). The value resolvers (refs → ids, knowledge/skill refs →
  * ids, entry refs) and the optimistic-concurrency `withObject` wrapper live
@@ -15,7 +15,7 @@ import type {
 } from "@dopl/client";
 import { inlineOr, NO_NAME, UUID_RE } from "./narration";
 import { err, isConflict, missingParams, ok, type ToolResponse } from "./respond";
-import { resolveClusterRef, resolveObjectRef } from "./ontology-render";
+import { resolveOntologyRef, resolveObjectRef } from "./ontology-render";
 import { opAnchor, opGet, opMap, opResolve } from "./ontology-ops-read";
 import { UNKNOWN_CALLER, type CallerIdentity } from "./identity";
 
@@ -31,7 +31,7 @@ export interface OntologyArgs {
   op: string;
   query?: string;
   object?: string;
-  cluster?: string;
+  ontology?: string;
   parent?: string;
   name?: string;
   purpose?: string;
@@ -58,9 +58,9 @@ const PILL_VALUE_MAX = 400;
 const REQUIRED: Record<string, string[]> = {
   resolve: ["query"],
   get: ["object"],
-  create_cluster: ["name"],
-  update_cluster: ["cluster"],
-  create_column: ["cluster", "name"],
+  create_ontology: ["name"],
+  update_ontology: ["ontology"],
+  create_column: ["ontology", "name"],
   create_object: ["parent", "name"],
   update_object: ["object"],
   set_template_field: ["object", "label"],
@@ -95,31 +95,31 @@ export async function dispatch(
       return opResolve(client, args.query as string, args.response_format);
     case "get":
       return opGet(client, args.object as string, args.response_format);
-    case "create_cluster": {
-      const cluster = await client.createOntologyCluster({
+    case "create_ontology": {
+      const ontology = await client.createOntology({
         name: args.name as string,
         purpose: args.purpose,
       });
       return ok(
-        `Created ontology ${inlineOr(cluster.name, NO_NAME)} (slug: \`${cluster.slug}\`). Add objects with op="create_column".`
+        `Created ontology ${inlineOr(ontology.name, NO_NAME)} (slug: \`${ontology.slug}\`). Add objects with op="create_column".`
       );
     }
-    case "update_cluster": {
+    case "update_ontology": {
       const snapshot = await client.getOntology();
-      const resolved = resolveClusterRef(snapshot, args.cluster as string);
+      const resolved = resolveOntologyRef(snapshot, args.ontology as string);
       if ("fail" in resolved) return resolved.fail;
-      const cluster = await client.updateOntologyCluster(resolved.hit.id, {
+      const ontology = await client.updateOntology(resolved.hit.id, {
         name: args.name,
         purpose: args.purpose,
       });
-      return ok(`Updated ontology ${inlineOr(cluster.name, NO_NAME)} (slug: \`${cluster.slug}\`).`);
+      return ok(`Updated ontology ${inlineOr(ontology.name, NO_NAME)} (slug: \`${ontology.slug}\`).`);
     }
     case "create_column": {
       const snapshot = await client.getOntology();
-      const resolved = resolveClusterRef(snapshot, args.cluster as string);
+      const resolved = resolveOntologyRef(snapshot, args.ontology as string);
       if ("fail" in resolved) return resolved.fail;
       const column = await client.createOntologyObject({
-        clusterId: resolved.hit.id,
+        ontologyId: resolved.hit.id,
         name: args.name as string,
       });
       return ok(

@@ -173,7 +173,7 @@ export const MEMBERS_ERRORS: readonly ToolError[] = [
 export const ONTOLOGY_ERRORS: readonly ToolError[] = [
   notFound("object_not_found", "object", 'op="resolve"'),
   versionConflict('op="get"'),
-  notFound("cluster_not_found", "ontology", 'op="map"'),
+  notFound("ontology_not_found", "ontology", 'op="map"'),
 ];
 
 export const AGENT_ERRORS: readonly ToolError[] = [
