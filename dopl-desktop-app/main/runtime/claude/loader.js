@@ -164,12 +164,19 @@ function buildMcpServers(doplToolsPolicy, workspaceId, bearerOverride) {
     // (`if (isMcp) return true`) unless server or tool carries `alwaysLoad`. The per-server
     // `tools` policy exempts nothing — it is a PERMISSION policy, not a load policy. Deferral
     // is skipped wholesale only when ToolSearch is absent from the offered set.
-    // Without this, `full` (which has ToolSearch) gets `dopl_channel` — the session's DELIVERY
+    // Without this, a profile offering ToolSearch would get `dopl_channel` — the session's DELIVERY
     // PATH — as a bare name needing a ToolSearch call the prompt forbids by name and that gates
     // in every Axis-A mode, `bypass` included: "I do not have the mcp__dopl__dopl_channel tool".
-    // Also blocks launch until the server connects (MCP startup is non-blocking by default, so
-    // the turn-1 prompt could be built before it did), capped by the CLI's 5s connect timeout.
-    // NO-OP for read_only / dopl_only, which still deny ToolSearch.
+    // ⚠ ITS LIVE JOB TODAY IS THE OTHER ONE: it BLOCKS LAUNCH UNTIL THE SERVER CONNECTS (MCP
+    // startup is non-blocking by default, so the turn-1 prompt could be built before it did —
+    // F-692), capped by the connect budget below. No profile offers ToolSearch any more
+    // (`read_only` / `dopl_only` deny it, `full` / `channel_agent` bound it out), and the CLI
+    // skips deferral wholesale without it ("ToolSearchTool is not available"), so every Dopl tool
+    // loads either way.
+    // ⚠ WHY NOT PER-TOOL `_meta["anthropic/alwaysLoad"]` ON THE GRANULAR CORE 8 (DMP-013 B4,
+    // measured in the bundled CLI 0.3.220): it would defer nothing here (no ToolSearch), and only
+    // THIS flag routes the server through the blocking connect. `MCP_CONNECTION_NONBLOCKING=0`
+    // would block too, but trading a pinned field for an env knob buys no context. Kept.
     alwaysLoad: true,
     headers: {
       Authorization: `Bearer ${token}`,

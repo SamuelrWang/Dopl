@@ -273,3 +273,38 @@ test("the call id is read tolerantly and is NULL rather than minted when absent"
   assert.equal(axisB.callIdOf(undefined), null);
   assert.equal(axisB.callIdOf({ call_id: 42 }), null, "a non-string id is not an id");
 });
+
+// ── THE GRANULAR SURFACE (DMP-013 B4) ────────────────────────────────────────────────────────
+// The same boundary, the granular names: the gate judges `dopl_send_message` as the legacy post it
+// runs, and the tag is applied to the arguments the AGENT sent, under the name it called.
+
+const GRANULAR_TOOLS = [
+  { name: "dopl_send_message", description: "Post a message.", inputSchema: { type: "object" } },
+  { name: "dopl_read_channel", description: "Read a channel.", inputSchema: { type: "object" } },
+  { name: "dopl_read_entry", description: "Read an entry.", inputSchema: { type: "object" } },
+  { name: "dopl_get_map", description: "The map.", inputSchema: { type: "object" } },
+];
+
+test("GRANULAR: a post through dopl_send_message holds for consent like the legacy post", async () => {
+  const { byName, sent, cards } = await surface({ answer: "never", list: GRANULAR_TOOLS });
+  let settled = false;
+  byName("dopl_send_message").execute({ body: "hi" }).then(() => { settled = true; });
+  await new Promise((r) => setTimeout(r, 30));
+  assert.equal(settled, false);
+  assert.deepEqual(sent, []);
+  assert.equal(cards.length, 1);
+  assert.equal(cards[0].payload.type, "outbound_gate", "an own-channel granular post takes the OUTBOUND surface");
+});
+
+test("GRANULAR: an allowed post leaves under its own name with its own args, tagged", async () => {
+  const { byName, sent } = await surface({ answer: "allow", list: GRANULAR_TOOLS });
+  await byName("dopl_send_message").execute({ body: "hi" });
+  assert.deepEqual(sent, [{ name: "dopl_send_message", args: { body: "hi", thread: "task-9", client_msg_id: "agent-abcd1234-1" } }],
+    "no op/action may leak into a granular call: the server's strict schema would refuse it");
+});
+
+test("GRANULAR: a restricted profile registers the server's offer, from the real containment table", async () => {
+  const tools = registry.runtimeFor("cursor").toolConfigFor("read_only");
+  const { tools: registered } = await surface({ list: GRANULAR_TOOLS, policy: tools.doplToolsPolicy, deny: tools.disallowedTools });
+  assert.deepEqual(registered.map((t) => t.name), ["dopl_send_message", "dopl_read_channel"], "read_only offers the channel tools only");
+});

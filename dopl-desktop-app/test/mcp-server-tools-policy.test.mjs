@@ -119,6 +119,16 @@ test("the installed SDK types per-server `tools` as a PERMISSION policy, not a n
   assert.match(http, /alwaysLoad\?: boolean;/, "F-177's alwaysLoad left the http config");
 });
 
+test("no profile offers ToolSearch, so nothing on the Dopl server defers (DMP-013 B4's alwaysLoad verdict)", () => {
+  // The CLI skips deferral wholesale when ToolSearch is not offered, so per-tool alwaysLoad on the
+  // granular core would save nothing here; the server-level flag stays for the blocking connect.
+  for (const profile of ["read_only", "dopl_only", "channel_agent", "full"]) {
+    const cfg = buildSessionToolConfig(profile);
+    const offered = cfg.builtinTools.length === 0 || cfg.builtinTools.includes("ToolSearch");
+    assert.ok(!offered || cfg.disallowedTools.includes("ToolSearch"), `${profile} offers ToolSearch — the granular core 8 would defer`);
+  }
+});
+
 // ── (3) the join that makes the removal safe ───────────────────────────────────
 
 test("the deny lists already carry the bound the removed allowlist claimed", () => {
