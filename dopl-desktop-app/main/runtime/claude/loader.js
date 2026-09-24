@@ -305,10 +305,9 @@ function withToolSetStamp(servers, toolSet) {
 // ⚠ The SDK's options.env REPLACES the child env entirely, so every var is copied and only the
 // permission-affecting knobs that would short-circuit canUseTool are dropped — and only when
 // the key is ALSO CLAUDE_CODE_* / ANTHROPIC_*, so unrelated app env is untouched.
-// ⚠ AUTH IS PRESERVED: the bundled binary authenticates from the macOS keychain even under a
-// fully-stripped env (apiKeySource=none), and CLAUDE_CODE_OAUTH_TOKEN / ANTHROPIC_API_KEY /
-// ANTHROPIC_AUTH_TOKEN / ANTHROPIC_BASE_URL do not match the permission pattern. PATH / HOME /
-// keychain access are never removed.
+// ⚠ Every inherited credential is dropped too (`cli-spawn.js › scrubbedEnv`); the session's one credential is
+// added by `credential.js › withCredential`. With none, the binary falls back to the operator's own keychain
+// login, which is why every spawn is preflighted (`session-auth.js › holdIfNoRuntimeCredential`).
 const PERMISSION_ENV_RE = /PERMISSION|BYPASS|ACCEPT_EDITS|DONT_ASK|SKIP_PERMISSIONS|AUTO_APPROVE|DANGEROUS/i;
 
 // ⚠ THE THIRD MCP LANE, AND THE ONLY LEVER WE HAVE LEFT ON IT (2026-08-22, F-268).
@@ -338,7 +337,7 @@ const PERMISSION_ENV_RE = /PERMISSION|BYPASS|ACCEPT_EDITS|DONT_ASK|SKIP_PERMISSI
 const CLAUDEAI_MCP_ENV = 'ENABLE_CLAUDEAI_MCP_SERVERS';
 const CLAUDEAI_MCP_OFF = '0';
 function buildScrubbedEnv() {
-  const out = cliSpawn.scrubPermissionEnv(process.env, /^(CLAUDE_CODE_|ANTHROPIC_)/, PERMISSION_ENV_RE);
+  const out = cliSpawn.scrubbedEnv(process.env, /^(CLAUDE_CODE_|ANTHROPIC_)/, PERMISSION_ENV_RE);
   out[CLAUDEAI_MCP_ENV] = CLAUDEAI_MCP_OFF; // last word, always — see the block above
   // ── ⚠ THE MCP CONNECT BUDGET (F-692, 2026-09-13) ─────────────────────────────────────────────
   //

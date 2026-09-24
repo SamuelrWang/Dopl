@@ -26,7 +26,7 @@ const { diag } = require('../../diag');
 const PERMISSION_ENV_RE = /PERMISSION|BYPASS|APPROVAL|DONT_ASK|SKIP|AUTO_APPROVE|DANGEROUS|YOLO/i;
 
 function buildScrubbedEnv(extra) {
-  return Object.assign(cliSpawn.scrubPermissionEnv(process.env, /^(CODEX_|OPENAI_)/, PERMISSION_ENV_RE), extra || {});
+  return Object.assign(cliSpawn.scrubbedEnv(process.env, /^(CODEX_|OPENAI_)/, PERMISSION_ENV_RE), extra || {});
 }
 
 // ── NATIVE PAIR ──────────────────────────────────────────────────────────────────────────────

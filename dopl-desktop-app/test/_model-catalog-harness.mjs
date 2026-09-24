@@ -40,6 +40,7 @@ export function loadCodexModels(client) {
   return evalFile(join(MAIN, "runtime", "codex", "models.js"), (id) => {
     if (id === "./client") return client;
     if (id === "./config-home") return { isolatedEnv: (env) => env };
+    if (id === "../cli-spawn") return requireMain(join(MAIN, "runtime", "cli-spawn.js"));
     if (id === "../../app-version") return { appVersion: () => "" };
     throw new Error(`unexpected require: ${id}`);
   });

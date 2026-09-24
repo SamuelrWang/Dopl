@@ -330,18 +330,19 @@ test("the removed `--ignore-user-config` flag is never sent; CODEX_HOME owns iso
   assert.equal(spec.threadStart.sandbox, "workspace-write");
 });
 
-test("the env scrub can only REMOVE, and it never takes PATH, HOME or a credential", () => {
-  const before = process.env.CODEX_BYPASS_APPROVALS;
-  process.env.CODEX_BYPASS_APPROVALS = "1";
+test("the env scrub drops permission knobs and every inherited credential; PATH, HOME and Dopl's own pass", () => {
+  const planted = { CODEX_BYPASS_APPROVALS: "1", OPENAI_API_KEY: "sk-inherited", CODEX_API_KEY: "k", ANTHROPIC_API_KEY: "a" };
+  const before = Object.fromEntries(Object.keys(planted).map((k) => [k, process.env[k]]));
+  Object.assign(process.env, planted);
   try {
     const env = launchSpec.buildScrubbedEnv({ EXTRA: "x" });
     assert.equal(env.CODEX_BYPASS_APPROVALS, undefined, "a permission-shaped knob is dropped");
+    for (const key of ["OPENAI_API_KEY", "CODEX_API_KEY", "ANTHROPIC_API_KEY"]) assert.equal(env[key], undefined, key);
     assert.equal(env.PATH, process.env.PATH);
     assert.equal(env.HOME, process.env.HOME);
-    assert.equal(env.EXTRA, "x");
+    assert.equal(env.EXTRA, "x", "what the adapter adds itself survives");
   } finally {
-    if (before === undefined) delete process.env.CODEX_BYPASS_APPROVALS;
-    else process.env.CODEX_BYPASS_APPROVALS = before;
+    for (const [k, v] of Object.entries(before)) { if (v === undefined) delete process.env[k]; else process.env[k] = v; }
   }
 });
 

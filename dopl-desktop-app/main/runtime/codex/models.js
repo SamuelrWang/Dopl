@@ -4,6 +4,7 @@
 
 const client = require('./client');
 const configHome = require('./config-home');
+const cliSpawn = require('../cli-spawn');
 
 const LIST_TIMEOUT_MS = 8000;
 
@@ -108,7 +109,7 @@ async function fetchRoster(gate) {
       `\`${str(gate.path) || 'codex'} app-server\` did not answer \`model/list\` within ${LIST_TIMEOUT_MS}ms.`)),
     LIST_TIMEOUT_MS);
     try {
-      conn = client.connect({ args: [], env: configHome.isolatedEnv(process.env) });
+      conn = client.connect({ args: [], env: configHome.isolatedEnv(cliSpawn.scrubbedEnv(process.env)) });
       conn.request('initialize', client.initializeParams(appVersion()))
         .then(() => { conn.notify('initialized'); return listPages(conn); })
         .then(({ rows, truncated }) => {

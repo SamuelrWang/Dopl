@@ -136,9 +136,8 @@ test("the exported constants are the ones the builder actually uses", () => {
     "both are exported");
 });
 
-test("the scrub's existing jobs are untouched", () => {
-  // A new assignment at the end of the builder must not have disturbed the two properties this
-  // function already had: permission knobs dropped, auth vars preserved.
+test("the scrub drops permission knobs AND every inherited credential; the base URL passes", () => {
+  // The child's one credential is Dopl's own (`credential.js › withCredential`), never the parent's.
   const out = scrubWith({
     CLAUDE_CODE_DANGEROUSLY_SKIP_PERMISSIONS: "1",
     ANTHROPIC_BYPASS_PERMISSIONS: "1",
@@ -150,9 +149,9 @@ test("the scrub's existing jobs are untouched", () => {
   });
   assert.equal(out.CLAUDE_CODE_DANGEROUSLY_SKIP_PERMISSIONS, undefined, "permission knob dropped");
   assert.equal(out.ANTHROPIC_BYPASS_PERMISSIONS, undefined, "permission knob dropped");
-  assert.equal(out.CLAUDE_CODE_OAUTH_TOKEN, "tok", "auth preserved");
-  assert.equal(out.ANTHROPIC_API_KEY, "key", "auth preserved");
-  assert.equal(out.ANTHROPIC_BASE_URL, "https://x", "auth preserved");
+  assert.equal(out.CLAUDE_CODE_OAUTH_TOKEN, undefined, "an inherited token never reaches the child");
+  assert.equal(out.ANTHROPIC_API_KEY, undefined, "an inherited key never reaches the child");
+  assert.equal(out.ANTHROPIC_BASE_URL, "https://x", "not a credential");
   assert.equal(out.PATH, "/usr/bin");
 });
 
