@@ -8,7 +8,7 @@
 import type { ZodRawShape, ZodType } from "zod";
 import { z } from "zod";
 
-import { parseBinding, selectorOf, type BindingKey, type GranularTool } from "./tool-manifest.js";
+import { jobsOf, parseBinding, selectorOf, type BindingKey, type GranularTool } from "./tool-manifest.js";
 import { FENCE_POINTER, GRANULAR_TEXT, SHARED_PARAMS } from "./granular-text.js";
 import { bindingTakesContainer } from "./workspace-arg.js";
 import type { ToolResponse } from "./tools/respond.js";
@@ -22,9 +22,8 @@ export interface LegacyTool {
 
 /** The bound jobs this connection serves, as [selector value, binding]; null value for a one-job tool. */
 function servedJobs(t: GranularTool, legacy: ReadonlyMap<string, LegacyTool>): Array<[string | null, BindingKey]> {
-  const jobs: Array<[string | null, BindingKey]> = typeof t.bind === "string" ? [[null, t.bind]] : Object.entries(t.bind);
   // A job whose legacy tool the profile did not offer is not served (dopl_only drops the channel guide).
-  return jobs.filter(([, key]) => legacy.has(parseBinding(key).tool));
+  return jobsOf(t).filter(([, key]) => legacy.has(parseBinding(key).tool));
 }
 
 /** The resource a pulled job answers with, or undefined for a bound job. */

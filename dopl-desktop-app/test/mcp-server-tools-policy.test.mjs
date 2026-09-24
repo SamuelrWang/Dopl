@@ -119,7 +119,7 @@ test("the installed SDK types per-server `tools` as a PERMISSION policy, not a n
   assert.match(http, /alwaysLoad\?: boolean;/, "F-177's alwaysLoad left the http config");
 });
 
-test("no profile offers ToolSearch, so nothing on the Dopl server defers (DMP-013 B4's alwaysLoad verdict)", () => {
+test("no profile offers ToolSearch, so nothing on the Dopl server defers (the alwaysLoad verdict)", () => {
   // The CLI skips deferral wholesale when ToolSearch is not offered, so per-tool alwaysLoad on the
   // granular core would save nothing here; the server-level flag stays for the blocking connect.
   for (const profile of ["read_only", "dopl_only", "channel_agent", "full"]) {

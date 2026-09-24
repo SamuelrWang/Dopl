@@ -1,5 +1,5 @@
 /**
- * EVERY CALL SPELLING AN AGENT READS, rendered for the connection's active tool set (DMP-013 B3).
+ * EVERY CALL SPELLING AN AGENT READS, rendered for the connection's active tool set (DMP-013).
  * A spelling is named by its manifest key (`channel.read`, `kb.write_file`, `channel.rooms.help`:
  * a binding key without the `dopl_` prefix, `:` as `.`) and rendered from `tool-manifest.ts`, so
  * `dopl_channel(op="read", …)` on a legacy connection is `dopl_read_channel(…)` on a granular one
@@ -15,6 +15,7 @@ import { AsyncLocalStorage } from "node:async_hooks";
 
 import {
   GRANULAR_TOOLS,
+  jobsOf,
   selectorOf,
   TOOL_SETS,
   type GranularTool,
@@ -99,9 +100,7 @@ function targetMap(): ReadonlyMap<string, readonly Target[]> {
   if (targets) return targets;
   const map = new Map<string, Target[]>();
   for (const tool of GRANULAR_TOOLS) {
-    const jobs: Array<[string | null, string]> =
-      typeof tool.bind === "string" ? [[null, tool.bind]] : Object.entries(tool.bind);
-    for (const [job, binding] of jobs) {
+    for (const [job, binding] of jobsOf(tool)) {
       const key = binding.slice("dopl_".length).replace(":", ".");
       map.set(key, [...(map.get(key) ?? []), { tool, job }]);
     }

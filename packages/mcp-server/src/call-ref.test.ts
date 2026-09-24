@@ -1,5 +1,5 @@
 /**
- * `callRef` (DMP-013 B3): the renderer against the manifest. The legacy surface it must not move is
+ * `callRef` (DMP-013): the renderer against the manifest. The legacy surface it must not move is
  * `legacy-surface.test.ts`.
  */
 

@@ -173,7 +173,7 @@ function buildMcpServers(doplToolsPolicy, workspaceId, bearerOverride) {
     // (`read_only` / `dopl_only` deny it, `full` / `channel_agent` bound it out), and the CLI
     // skips deferral wholesale without it ("ToolSearchTool is not available"), so every Dopl tool
     // loads either way.
-    // ⚠ WHY NOT PER-TOOL `_meta["anthropic/alwaysLoad"]` ON THE GRANULAR CORE 8 (DMP-013 B4,
+    // ⚠ WHY NOT PER-TOOL `_meta["anthropic/alwaysLoad"]` ON THE GRANULAR CORE 8 (DMP-013,
     // measured in the bundled CLI 0.3.220): it would defer nothing here (no ToolSearch), and only
     // THIS flag routes the server through the blocking connect. `MCP_CONNECTION_NONBLOCKING=0`
     // would block too, but trading a pinned field for an env knob buys no context. Kept.
@@ -292,7 +292,7 @@ function withToolProfileStamp(servers, profile) {
   return servers;
 }
 
-// WHICH TOOL SET this session asked for (DMP-013 B4), stamped onto the same entry. Only `granular`
+// WHICH TOOL SET this session asked for (DMP-013), stamped onto the same entry. Only `granular`
 // adds a header (`mcp-connect.js › toolSetHeaders`), and only once the server advertised it; the
 // default sends nothing, so a legacy entry is byte-for-byte what it was. MUTATES IN PLACE.
 function withToolSetStamp(servers, toolSet) {

@@ -38,7 +38,7 @@ export async function logMcpToolCall(input: McpToolCallInput): Promise<void> {
  * loopback request carry this prefix on `tool`; loopback rows cannot, their tool is split at "_".
  * Legacy-tool retirement reads `tool like 'mcp:%'`; loopback readers exclude {@link MCP_CALL_ROWS}.
  */
-export const MCP_CALL_TOOL_PREFIX = "mcp:";
+const MCP_CALL_TOOL_PREFIX = "mcp:";
 /** PostgREST `like` pattern for those rows. */
 export const MCP_CALL_ROWS = `${MCP_CALL_TOOL_PREFIX}*`;
 

@@ -1,4 +1,4 @@
-// A GRANULAR DOPL CALL IS JUDGED AS THE LEGACY CALL IT RUNS (DMP-013 B4).
+// A GRANULAR DOPL CALL IS JUDGED AS THE LEGACY CALL IT RUNS (DMP-013).
 //
 // `main/dopl-tool-table.json` is the server manifest's projection (pinned byte-for-byte by
 // `packages/mcp-server/src/desktop-tool-table.test.ts`); `main/mcp-tool-names.js › canonicalDoplCall`

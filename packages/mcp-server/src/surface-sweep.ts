@@ -13,6 +13,7 @@ import type { DoplClient, WorkspaceListItem } from "@dopl/client";
 import { createServer } from "./server.js";
 import {
   GRANULAR_TOOLS,
+  jobsOf,
   parseBinding,
   selectorOf,
   type BindingKey,
@@ -33,7 +34,7 @@ export const WS: WorkspaceListItem = {
 };
 
 /** Every client method answers `{}` (or its `answers` entry) and is logged, so backend traffic is comparable. */
-export function recordingClient(log: string[], answers: Record<string, unknown> = {}): DoplClient {
+function recordingClient(log: string[], answers: Record<string, unknown> = {}): DoplClient {
   const fixed: Record<string, unknown> = {
     getWorkspaceId: () => null,
     setWorkspaceId: () => {},
@@ -91,14 +92,10 @@ export async function call(b: Booted, name: string, args: Record<string, unknown
 }
 
 /** The legacy call a binding stands for, as a caller of the legacy tool would spell it. */
-export function legacySpelling(key: BindingKey, t: GranularTool): { tool: string; args: Record<string, unknown> } {
+function legacySpelling(key: BindingKey, t: GranularTool): { tool: string; args: Record<string, unknown> } {
   const { tool, op } = parseBinding(key);
   const [base, action] = op?.split(".") ?? [];
   return { tool, args: { ...t.preset, ...(base && { op: base }), ...(action && { action }) } };
-}
-
-export function jobsOf(t: GranularTool): Array<[string | null, BindingKey]> {
-  return typeof t.bind === "string" ? [[null, t.bind]] : Object.entries(t.bind);
 }
 
 export type JsonSchema = {
@@ -135,7 +132,7 @@ function sample(s: JsonSchema): unknown {
 /** Random per-response fence tokens aside, a text is deterministic. */
 export const normalize = (s: string) => s.replace(/_[0-9a-f]{8,}/g, "_HEX");
 
-export interface SweepSide extends CallResult {
+interface SweepSide extends CallResult {
   log: string[];
 }
 

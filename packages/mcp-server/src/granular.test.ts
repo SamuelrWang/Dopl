@@ -1,5 +1,5 @@
 /**
- * The granular set as SERVED (DMP-013 B1/B2): which set a connection lists, that the other stays
+ * The granular set as SERVED (DMP-013): which set a connection lists, that the other stays
  * callable, the published annotations and titles, the per-tool param fence, the jobs a profile
  * serves, the decision and room-description seams, and that every granular call is its legacy twin
  * — same outcome, same backend calls, same charge. Real `createServer`, real transport; the backend
@@ -42,16 +42,16 @@ describe("tool-set selection", () => {
 
   it("a stale legacy call on a granular connection runs and answers in granular names", async () => {
     const granular = await boot("granular", { answers: { listKbBases: [] } });
-    const legacySpelling = /\bdopl_(channel|kb|skill|ontology|chats|agent|map|members|status|workspaces)\b|\bop=/;
+    const legacyName = /\bdopl_(channel|kb|skill|ontology|chats|agent|map|members|status|workspaces)\b|\bop=/;
     // A pulled guide, and a refusal whose retry hint names the next call.
     const guide = await call(granular, "dopl_channel", { op: "rooms", action: "help" });
     expect(guide.isError).toBe(false);
     expect(guide.text).toContain("dopl_read_channel(");
-    expect(guide.text).not.toMatch(legacySpelling);
+    expect(guide.text).not.toMatch(legacyName);
     const refusal = await call(granular, "dopl_kb", { op: "get_tree", base: "notes" });
     expect(refusal).toMatchObject({ isError: true });
     expect(refusal.text).toMatch(/reason=base_not_found.*retry=dopl_browse_knowledge\(/s);
-    expect(refusal.text).not.toMatch(legacySpelling);
+    expect(refusal.text).not.toMatch(legacyName);
   });
 
   it("a legacy dopl_search call still works where the granular tool took the name", async () => {

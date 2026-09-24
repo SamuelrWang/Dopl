@@ -107,7 +107,7 @@ function mcpTokenFor(s) {
   try { return require('./mcp-config').deviceTokenForSpawn() || ''; } catch (_) { return ''; }
 }
 
-// The tool set the server last advertised on a pre-flight (DMP-013 B4); null until one was read.
+// The tool set the server last advertised on a pre-flight (DMP-013); null until one was read.
 let advertisedToolSet = null;
 
 /** One warm call; resolves the log word and the tool set its answer advertised (null when unread). */

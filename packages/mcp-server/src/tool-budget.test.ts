@@ -249,7 +249,7 @@ const INSTRUCTIONS_CEILING = 1_804; // +15: an unstamped caller reads "your clie
 // ⚠ **32,551 → 8,960 (B8), THE LARGEST SINGLE FALL HERE.** The doctrine was
 // where every evicted paragraph landed: 5,765 of refusals, 4,873 of own-agent
 // narrative, 3,914 on a hold that is now a knob on `read`.
-// DMP-013 B3: the same doctrine spelled for a granular connection (longer tool names). Re-derive, never quote.
+// DMP-013: the same doctrine spelled for a granular connection (longer tool names). Re-derive, never quote.
 const GRANULAR_DOCTRINE_CEILING = 14_504;
 const DOCTRINE_CEILING = 14_252; // +312 pulled against −229 pushed: home-channel addressing moved into `rooms` (P8-23); +16 P8-20. Re-derive, never quote.
 

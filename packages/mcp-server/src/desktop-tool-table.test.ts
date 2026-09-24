@@ -1,5 +1,5 @@
 /**
- * THE DESKTOP'S COPY OF THE GRANULAR MANIFEST (DMP-013 B4), pinned byte-for-byte. The desktop app
+ * THE DESKTOP'S COPY OF THE GRANULAR MANIFEST (DMP-013), pinned byte-for-byte. The desktop app
  * ships only `dopl-desktop-app/main/**`, so it cannot import this package at runtime; it reads
  * `main/dopl-tool-table.json`, which is this projection of `tool-manifest.ts` and nothing else.
  * `main/mcp-tool-names.js › canonicalDoplCall` turns a granular call back into its legacy key with

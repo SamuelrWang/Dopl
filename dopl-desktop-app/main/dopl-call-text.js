@@ -1,4 +1,4 @@
-// EVERY DOPL CALL A DESKTOP PROMPT SPELLS, rendered for the session's negotiated tool set (DMP-013 B4).
+// EVERY DOPL CALL A DESKTOP PROMPT SPELLS, rendered for the session's negotiated tool set (DMP-013).
 //
 // The desktop twin of `packages/mcp-server/src/call-ref.ts`: a call is named by its manifest key
 // (`channel.read`, `channel.rooms.threads`, `kb.read_file` — the binding key without `dopl_`, `:` as
@@ -7,7 +7,7 @@
 // `s.doplToolSet`; anything but `granular` renders the legacy spelling, byte-for-byte what the
 // prompts said before. Pure: the table only.
 
-const { GRANULAR_NAMES, granularRow } = require('./dopl-tool-table');
+const { GRANULAR_NAMES, granularRow, jobsOf } = require('./dopl-tool-table');
 
 const PREFIX = 'mcp__dopl__';
 const GRANULAR = 'granular';
@@ -18,8 +18,7 @@ const TARGETS = new Map();
 for (const name of GRANULAR_NAMES) {
   const row = granularRow(name);
   if (row.preset) continue;
-  const jobs = typeof row.bind === 'string' ? [[null, row.bind]] : Object.entries(row.bind);
-  for (const [job, key] of jobs) TARGETS.set(key.slice('dopl_'.length).replace(':', '.'), { name, select: row.select, job });
+  for (const [job, key] of jobsOf(row)) TARGETS.set(key.slice('dopl_'.length).replace(':', '.'), { name, select: row.select, job });
 }
 
 /** The tool name and the job words for `key` in `set`; throws on a key the manifest does not bind. */

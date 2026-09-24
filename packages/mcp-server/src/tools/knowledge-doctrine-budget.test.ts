@@ -36,7 +36,7 @@ import { withToolSet } from "../call-ref.js";
 const KNOWLEDGE_DOCTRINE_MAX = 750;
 
 /**
- * The granular text says the same rules in the granular tools' longer names (DMP-013 B3); its own
+ * The granular text says the same rules in the granular tools' longer names (DMP-013); its own
  * ceiling, never the legacy one raised. Re-derive, never quote.
  */
 const GRANULAR_KNOWLEDGE_DOCTRINE_MAX = 817;

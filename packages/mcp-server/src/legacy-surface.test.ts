@@ -1,5 +1,5 @@
 /**
- * THE LEGACY SET DOES NOT MOVE (DMP-013 B3). Every text a legacy connection serves — tools/list,
+ * THE LEGACY SET DOES NOT MOVE (DMP-013). Every text a legacy connection serves — tools/list,
  * the instructions, both doctrine resources, and every manifest binding's legacy call in three arg
  * variants (`surface-sweep.ts`) — hashed and pinned. `callRef` re-spells these for a granular
  * connection; on a legacy one they must stay byte for byte what they were.

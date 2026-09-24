@@ -248,7 +248,7 @@ test("CLASSIFIER: fail-closed; an absent op is a read ONLY where the server defa
   assert.match(shape, /Default: "list"/, "dopl_workspaces.op no longer defaults to list — drop DEFAULT_READ_OP");
 });
 
-// ── THE GRANULAR SURFACE (DMP-013 B4) ──────────────────────────────────────────────────────────
+// ── THE GRANULAR SURFACE (DMP-013) ──────────────────────────────────────────────────────────
 // A granular call reaches the gate as the legacy call it runs (`mcp-tool-names.js ›
 // canonicalDoplCall`, called by `session-gate-bridge.js › gateCall`); the pins below run the same
 // rewrite and then the REAL gate, so a granular write is held to every legacy row above. Write ops

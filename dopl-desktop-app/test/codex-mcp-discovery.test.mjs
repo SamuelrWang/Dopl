@@ -243,7 +243,7 @@ describe('TIER 1 — the real app-server defers Dopl, and `tool_search` is the w
     assert.deepEqual(read.calls.map((c) => c.name), ['dopl_search']);
   });
 
-  // 🔒 THE GRANULAR SET (DMP-013 B4): the negotiated header reaches the server, a granular write asks
+  // 🔒 THE GRANULAR SET (DMP-013): the negotiated header reaches the server, a granular write asks
   // under its own title, a granular whole-tool read never asks, and `read_only` offers the channel tools.
   const GRANULAR = [toolDef('dopl_send_message'), toolDef('dopl_list_channels'), toolDef('dopl_get_map'), toolDef('dopl_read_entry')];
   const granularTurn = (profile, verdict, call) => scriptedTurn(profile, verdict, { tools: GRANULAR, toolSet: 'granular', call });

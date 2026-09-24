@@ -1,4 +1,4 @@
-// EVERY DOPL CALL A DESKTOP PROMPT SPELLS FOLLOWS THE SESSION'S TOOL SET (DMP-013 B4).
+// EVERY DOPL CALL A DESKTOP PROMPT SPELLS FOLLOWS THE SESSION'S TOOL SET (DMP-013).
 //
 // `main/dopl-call-text.js` renders a manifest key for `s.doplToolSet`: legacy is byte-for-byte the
 // spelling the prompts carried before, granular names the granular tool. The sweep below builds

@@ -1,5 +1,5 @@
 /**
- * The tool-set advertisement (DMP-013 B4): `initialize` names both sets on EVERY connection, so a
+ * The tool-set advertisement (DMP-013): `initialize` names both sets on EVERY connection, so a
  * client can ask for `granular` knowing it will be honoured. The desktop reads it off its launch
  * pre-flight (`dopl-desktop-app/main/mcp-connect.js › advertisedToolSets`) and pins the wire shape
  * on its side. Measured as served: real `createServer`, real transport.

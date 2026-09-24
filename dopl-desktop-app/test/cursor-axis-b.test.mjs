@@ -274,7 +274,7 @@ test("the call id is read tolerantly and is NULL rather than minted when absent"
   assert.equal(axisB.callIdOf({ call_id: 42 }), null, "a non-string id is not an id");
 });
 
-// ── THE GRANULAR SURFACE (DMP-013 B4) ────────────────────────────────────────────────────────
+// ── THE GRANULAR SURFACE (DMP-013) ────────────────────────────────────────────────────────
 // The same boundary, the granular names: the gate judges `dopl_send_message` as the legacy post it
 // runs, and the tag is applied to the arguments the AGENT sent, under the name it called.
 

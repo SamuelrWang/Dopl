@@ -1,5 +1,5 @@
 /**
- * NO HAND-WRITTEN CALL SPELLING (DMP-013 B3). Every string literal in `src` is scanned: a legacy tool
+ * NO HAND-WRITTEN CALL SPELLING (DMP-013). Every string literal in `src` is scanned: a legacy tool
  * name (`dopl_kb`) or an `op=` arg is allowed only in legacy-only text — a legacy tool's description
  * (`composeDescription`), a legacy param's `.describe()`, the `legacy` branch of a `bySet`, or text a
  * file wraps in `legacyOnly` — and in the renderer, the manifest and test support. Everything else

@@ -362,8 +362,13 @@ export function parseBinding(key: BindingKey): { tool: string; op: string | unde
   return colon < 0 ? { tool: key, op: undefined } : { tool: key.slice(0, colon), op: key.slice(colon + 1) };
 }
 
+/** Each job as [selector value, binding]; the value is null for a one-job tool. */
+export function jobsOf(t: GranularTool): Array<[string | null, BindingKey]> {
+  return typeof t.bind === "string" ? [[null, t.bind]] : Object.entries(t.bind);
+}
+
 export function bindingsOf(t: GranularTool): BindingKey[] {
-  return typeof t.bind === "string" ? [t.bind] : Object.values(t.bind);
+  return jobsOf(t).map(([, key]) => key);
 }
 
 /** The arg that picks the job, or null for a one-job tool. */

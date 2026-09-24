@@ -27,9 +27,14 @@ function parseBinding(key) {
   return { tool: key.slice(0, colon), op, action };
 }
 
+/** Each job as [selector value, binding key]; the value is null for a one-job row. */
+function jobsOf(row) {
+  return typeof row.bind === 'string' ? [[null, row.bind]] : Object.entries(row.bind);
+}
+
 /** Every binding key a row can run. */
 function bindingsOf(row) {
-  return typeof row.bind === 'string' ? [row.bind] : Object.values(row.bind);
+  return jobsOf(row).map(([, key]) => key);
 }
 
 /**
@@ -57,5 +62,5 @@ function namesTouching(shorts) {
 }
 
 module.exports = {
-  GRANULAR_NAMES, granularRow, parseBinding, bindingsOf, jobOf, namesBoundWithin, namesTouching,
+  GRANULAR_NAMES, granularRow, parseBinding, jobsOf, bindingsOf, jobOf, namesBoundWithin, namesTouching,
 };

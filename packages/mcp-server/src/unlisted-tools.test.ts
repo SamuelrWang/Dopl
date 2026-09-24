@@ -1,7 +1,7 @@
 /**
- * Spike A (DMP-013): a tool can be callable yet absent from `tools/list` on the SDK in use — and the
+ * DMP-013: a tool can be callable yet absent from `tools/list` on the SDK in use — and the
  * per-tool `_meta` Claude reads to keep a tool out of ToolSearch deferral reaches the listing
- * (spike B's server half). Measured through a real client over a real transport. The tool-set
+ * (the server half of per-tool alwaysLoad). Measured through a real client over a real transport. The tool-set
  * wiring into `createServer` is `granular.test.ts`'s.
  */
 
