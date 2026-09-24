@@ -62,7 +62,7 @@ const SESSION_MAX_TURNS = shipped(SPEC, "SESSION_MAX_TURNS");
 function assembled(s) {
   const src = `${fnOf(SPEC, "buildOptions")}\n return buildOptions;`;
   return new Function(
-    "tools", "channelDirs", "loader", "sessionAuth", "axisB", "diag",
+    "tools", "channelDirs", "loader", "credential", "axisB", "diag",
     "store", "models", "sessionCredential", "agentOps", "SESSION_MAX_TURNS", src
   )(
     { buildSessionToolConfig: () => ({ preApproved: [], disallowedTools: [], doplToolsPolicy: "full", builtinTools: [] }) },
@@ -78,7 +78,7 @@ function assembled(s) {
       withToolSetStamp: () => {},
       resolveClaudeExecutable: () => null,
     },
-    { withStoredCredential: (e) => e },
+    { withCredential: (e) => e },
     { makeCanUseTool: () => () => {}, makeAgentOpsServer: () => null },
     () => {},
     { slotKey: () => "c1:t1" },

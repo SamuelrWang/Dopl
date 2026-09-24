@@ -42,7 +42,7 @@ function setSelfIdentity(id) { selfUserId = id || null; }
 // Helpers take the engine's handles by injection (none requires back); read at call time, so order is free.
 sessionPark.bind({
   sessions, acquireRuntime, buildLaunchSpec, consume, dispatch, startSession, hasLiveSession,
-  preflightMcp: sessionQuery.preflightMcp,
+  preflightMcp: sessionQuery.preflightMcp, holdIfNoCredential: sessionAuth.holdIfNoRuntimeCredential,
 }); sessionBoot.bind({ sessions, runLifecycle, scheduleIdle });
 sessionQuery.bind({ dispatch, scheduleIdle });
 sessionAuth.bind({ sessions, dispatch, denyPending: denyPendingPermissions, teardown: teardownHandles });

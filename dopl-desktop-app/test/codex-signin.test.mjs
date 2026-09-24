@@ -1,16 +1,16 @@
 // THE IN-APP CODEX SIGN-IN (2026-09-23) — `runtime/codex/login.js` over a FAKE app-server connection,
-// and `runtime/codex/credential.js › signIn` / `probeStatus` over fakes. No real login, no OpenAI call:
+// and `runtime/codex/credential.js` over fakes. No real login, no OpenAI call:
 // the live tier is `codex-signin-live.test.mjs` (CODEX_APP_SERVER_LIVE=1, never completes a login).
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-  mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, lstatSync, existsSync, symlinkSync, chmodSync,
+  mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, lstatSync, existsSync, symlinkSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createRequire } from "node:module";
-import { loadWithStubs, real } from "./helpers/module-sandbox.mjs";
+import { loadWithStubs } from "./helpers/module-sandbox.mjs";
 
 const require = createRequire(import.meta.url);
 const login = require("../main/runtime/codex/login.js");
@@ -336,78 +336,34 @@ test("isOpenAiUrl: https on an OpenAI/ChatGPT host only", () => {
   assert.equal(login.redactUrl(AUTH_URL), "https://auth.openai.com/oauth/authorize");
 });
 
-// ── credential.signIn: login → forget → re-probe → release Codex's held sessions ─────────────
+// ── credential.js: Dopl's own auth.json is the whole answer ─────────────────────────────────
 
-function credentialWith({ outcome, exitCode }) {
+function credentialWith({ outcome, hasAuth = false, removeThrows = false }) {
   const calls = [];
   const cred = loadWithStubs("runtime/codex/credential.js", {
-    "./config-home": { isolatedEnv: (env) => ({ ...env, CODEX_HOME: "/private-home" }), AUTH_STORE_ARGS: ["-c", "x"] },
-    "./login": { signIn: async () => { calls.push("login"); return outcome; } },
-    "./resolve-bin": { resolveCodexBin: () => ({ ok: true, path: "/fake/codex" }) },
-    child_process: {
-      execFile: (_bin, args, opts, cb) => {
-        calls.push(`probe ${opts.env.CODEX_HOME} ${args.join(" ")}`);
-        setImmediate(() => cb(exitCode ? Object.assign(new Error("exit"), { code: exitCode }) : null));
-      },
+    "./config-home": {
+      hasAuth: () => hasAuth,
+      removeAuth: () => { calls.push("remove"); if (removeThrows) throw new Error("EACCES"); },
     },
-    "../../session-auth": { resumeHeldSessions: async (id) => { calls.push(`resume ${id}`); return 2; } },
+    "./login": { signIn: async () => { calls.push("login"); if (outcome instanceof Error) throw outcome; return outcome; } },
   });
   return { cred, calls };
 }
 
-test("a completed login re-probes the SESSION home and releases only Codex's held sessions", async () => {
-  const { cred, calls } = credentialWith({ outcome: { ok: true }, exitCode: 0 });
-  assert.deepEqual(await cred.signIn(), { ok: true, resumed: 2 });
-  assert.deepEqual(calls, ["login", "probe /private-home -c x login status", "resume codex"]);
+test("signed in = Dopl's own auth.json in the session home; nothing is spawned to ask", () => {
+  assert.deepEqual(credentialWith({ hasAuth: true }).cred.credentialState(), { usable: true, source: "dopl-auth-file" });
+  assert.deepEqual(credentialWith({ hasAuth: false }).cred.credentialState(), { usable: false, source: null });
 });
 
-test("the probe cache is dropped by a sign-in, and a failed login or a signed-out probe releases nothing", async () => {
-  const a = credentialWith({ outcome: { ok: true }, exitCode: 1 });
-  await a.cred.credentialState(); // cached "signed out"
-  assert.deepEqual(await a.cred.signIn(), { ok: false });
-  assert.equal(a.calls.filter((c) => c.startsWith("probe")).length, 2, "re-probed after the login");
-  assert.ok(!a.calls.some((c) => c.startsWith("resume")));
-
-  const b = credentialWith({ outcome: { ok: false, reason: "cancelled" }, exitCode: 0 });
-  assert.deepEqual(await b.cred.signIn(), { ok: false });
-  assert.ok(!b.calls.some((c) => c.startsWith("resume")));
+test("signIn answers the login's own outcome, and a throwing login is a failed one", async () => {
+  assert.deepEqual(await credentialWith({ outcome: { ok: true } }).cred.signIn(), { ok: true });
+  assert.deepEqual(await credentialWith({ outcome: { ok: false, reason: "cancelled" } }).cred.signIn(), { ok: false });
+  assert.deepEqual(await credentialWith({ outcome: new Error("boom") }).cred.signIn(), { ok: false });
 });
 
-// ── CX-11: the probe answers for the home the sessions use ───────────────────────────────────
-
-test("probeStatus asks the SESSION's private home, with the file store pinned", async (t) => {
-  const root = mkdtempSync(join(tmpdir(), "dopl-codex-probe-"));
-  const resolveBin = real("./runtime/codex/resolve-bin");
-  const credential = real("./runtime/codex/credential");
-  const prior = process.env.DOPL_CODEX_BIN;
-  t.after(() => {
-    if (prior === undefined) delete process.env.DOPL_CODEX_BIN; else process.env.DOPL_CODEX_BIN = prior;
-    resolveBin.forget();
-    rmSync(root, { recursive: true, force: true });
-  });
-  const bin = join(root, "bin");
-  mkdirSync(bin, { mode: 0o700 });
-  const log = join(root, "probe.log");
-  writeFileSync(join(bin, "codex"),
-    `#!/bin/sh\nprintf '%s|%s\\n' "$CODEX_HOME" "$*" >> '${log}'\n[ -f "$CODEX_HOME/auth.json" ]\n`, { mode: 0o700 });
-  chmodSync(join(bin, "codex"), 0o700);
-  process.env.DOPL_CODEX_BIN = join(bin, "codex");
-  resolveBin.forget();
-  const operator = join(root, "operator");
-  mkdirSync(operator);
-  const userData = join(root, "user-data");
-  const probe = () => credential.probeStatus({ env: { CODEX_HOME: operator, PATH: "/usr/bin:/bin" }, userDataRoot: userData });
-
-  assert.deepEqual(await probe(), { usable: false, source: "login-status-nonzero" }, "nothing anywhere");
-  writeFileSync(join(operator, "auth.json"), "{}", { mode: 0o600 });
-  assert.deepEqual(await probe(), { usable: true, source: "login-status" }, "the operator's file, through the link");
-  rmSync(join(operator, "auth.json"));
-  assert.deepEqual(await probe(), { usable: false, source: "login-status-nonzero" }, "a stale link is not a credential");
-  writeFileSync(join(userData, "codex-runtime-home-v1", "auth.json"), "{}", { mode: 0o600 });
-  assert.deepEqual(await probe(), { usable: true, source: "login-status" }, "the Dopl-owned file");
-
-  const lines = readFileSync(log, "utf8").trim().split("\n");
-  for (const line of lines) {
-    assert.equal(line, `${join(userData, "codex-runtime-home-v1")}|-c cli_auth_credentials_store="file" login status`);
-  }
+test("signOut removes Dopl's auth.json and says whether it could", () => {
+  const ok = credentialWith({});
+  assert.equal(ok.cred.signOut(), true);
+  assert.deepEqual(ok.calls, ["remove"]);
+  assert.equal(credentialWith({ removeThrows: true }).cred.signOut(), false);
 });

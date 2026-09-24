@@ -14,6 +14,7 @@ const AUTH_STATE_EVENT = 'dopl:auth-state-changed';
 // Channel names are constants: test/preload-parity pins that none is computed.
 const SESSIONS_EVENT = 'dopl:sessions';
 const NARRATION_EVENT = 'dopl:session-narration';
+const RUNTIME_CREDENTIALS_EVENT = 'dopl:runtime-credentials';
 
 const METHODS = { GET: 1, POST: 1, PATCH: 1, PUT: 1, DELETE: 1 };
 
@@ -190,11 +191,22 @@ contextBridge.exposeInMainWorld('dopl', {
     set: (e) => ipcRenderer.invoke('orchestrator:setDirectEnabled', { enabled: e === true }),
   },
 
-  // Sign this Mac in to one runtime (`''` = the default): the one entry into the auth-hold recovery flow
-  // (`main/session-auth.js`). No credential crosses in either direction — main runs the OAuth in the
-  // system browser. Feature-probed: absent, not inert.
+  // Dopl's own runtime credentials (`main/runtime-credentials.js`): sign one runtime in (`''` = the default),
+  // read or follow every runtime's status, close one runtime's sign-in prompt. No credential crosses in either
+  // direction — main runs the OAuth in the system browser. Feature-probed: absent, not inert.
   runtimeAuth: {
     signIn: (runtimeId) => ipcRenderer.invoke('runtime:signIn', { runtimeId: asId(runtimeId) }),
+    status: () => ipcRenderer.invoke('runtime:credentialStatus'),
+    onStatus: (callback) => {
+      if (typeof callback !== 'function') return () => {};
+      const listener = (_event, payload) => {
+        const p = payload && typeof payload === 'object' ? payload : {};
+        callback({ runtimes: Array.isArray(p.runtimes) ? p.runtimes : [] });
+      };
+      ipcRenderer.on(RUNTIME_CREDENTIALS_EVENT, listener);
+      return () => ipcRenderer.removeListener(RUNTIME_CREDENTIALS_EVENT, listener);
+    },
+    dismissPrompt: (runtimeId) => ipcRenderer.invoke('runtime:dismissSignInPrompt', { runtimeId: asId(runtimeId) }),
   },
 
   // The operator's OWN agents on this machine. Main resolves (channelId, taskId[, agentId]) against

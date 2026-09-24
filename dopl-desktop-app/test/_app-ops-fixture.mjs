@@ -79,13 +79,15 @@ export const APP_OPS = [
   "orchestratorLaunch.get",
   "orchestratorLaunch.set",
   "passwordSignIn",
-  // 2026-09-23: `runtimeAuth.signIn(runtimeId)` REPLACES `claude.signIn` (2026-08-25) — the ONE entry into
-  // a runtime's auth recovery flow, routed through the registry's `credential.signIn`. Its only input
-  // is a runtime id (`''` = the default, shape-checked at the boundary, registration checked inside),
-  // so the sender binding is still the real guard. NO CREDENTIAL CROSSES IT: main opens the OAuth page
-  // in the SYSTEM BROWSER and answers a bare `{ ok }`; on success it RELEASES that runtime's held
-  // sessions only.
+  // `runtimeAuth.*` (`main/runtime-credentials.js`): `signIn(runtimeId)` is the ONE entry into a runtime's
+  // in-app sign-in (`''` = the default, shape-checked at the boundary, registration checked inside) and on
+  // success RELEASES that runtime's held sessions only; `status` / `onStatus` read and follow each runtime's
+  // `{ runtimeId, label, state, prompt }`; `dismissPrompt(runtimeId)` closes one runtime's sign-in prompt.
+  // NO CREDENTIAL CROSSES ANY OF THEM: main opens the OAuth page in the SYSTEM BROWSER.
+  "runtimeAuth.dismissPrompt",
+  "runtimeAuth.onStatus",
   "runtimeAuth.signIn",
+  "runtimeAuth.status",
   // 2026-08-22 (OQ-3): `sessions.approveIdentity` records THIS MACHINE's first-use approval of
   // ANOTHER member's identity. It starts nothing and grants nothing — it decides only whether a
   // foreign identity's TEXT may become an agent's role here, and a launch from an approved identity

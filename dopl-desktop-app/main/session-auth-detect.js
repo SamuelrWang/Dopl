@@ -3,10 +3,7 @@
 
 // ─── BEGIN SESSION-AUTH-DETECT (pure; unit-tested via source extraction) ─────
 
-// The same shape claude-auth.isAuthShapedError matches on the headless path (trigger.js:341).
-// DUPLICATED ON PURPOSE: claude-auth.js is window/dialog-bound at its top, and this block must
-// stay evaluable standalone. test/session-auth-recovery.test.mjs pins the two regexes against
-// each other so they cannot drift.
+// A transport-sourced rejection that means the credential was refused.
 const AUTH_ERROR_RE = /401|OAuth.*expired|Re-authenticate/i;
 
 // The CLI's OWN login-required one-liner, as it reaches a session: the SDK relays it as an

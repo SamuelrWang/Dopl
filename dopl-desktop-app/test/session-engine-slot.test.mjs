@@ -83,7 +83,7 @@ const AGENT = "a1b2c3d4";
 const TASK = "11111111-2222-3333-4444-555555555555";
 
 function harness(cfg = {}) {
-  const calls = { started: [], diag: [], acquired: [] };
+  const calls = { started: [], diag: [], acquired: [], signIn: [] };
   const sessions = new Map();
   // `newAgentId` is injected deterministic (the real one is a CSPRNG); the cases are about launch
   // minting one and threading it through the key, the spec and the answer.
@@ -102,7 +102,8 @@ function harness(cfg = {}) {
       calls.acquired.push(runtimeId);
       if (cfg.sdkThrows) throw new Error("no agent runtime on this machine");
       if (cfg.duringSdk) cfg.duringSdk(sessions);
-      return cfg.rtId ? { id: cfg.rtId } : {};
+      const rt = cfg.rtId ? { id: cfg.rtId } : {};
+      return cfg.signedOut ? { ...rt, credentialState: async () => ({ usable: false, source: null }) } : rt;
     },
     startSession: async (spec) => {
       calls.started.push(spec);
@@ -116,7 +117,7 @@ function harness(cfg = {}) {
   };
   const api = new Function(
     "deps", "store", "sessionWindowless", "diag", "newAgentId", "isAgentId", "profiles",
-    "ontologyReach", "roomRoster", "refuseUnknownModel", "launchDefault", // both faked; own suites drive the real ones
+    "ontologyReach", "roomRoster", "refuseUnknownModel", "launchDefault", "credentials", // faked; own suites drive the real ones
     `${LAUNCH_SRC}\n${asyncFnOf(ENGINE, "credentialMissing")}\n${fnOf(ENGINE, "hasLiveSession")}\n${fnOf(ENGINE, "isAuthHeldSession")}\n` +
       ` return { launch, hasLiveSession, isAuthHeldSession };`
   )(
@@ -151,7 +152,8 @@ function harness(cfg = {}) {
     // HTTP routes, and `room-roster.test.mjs` pins its own promises (no call in a solo room, one
     // bounded read otherwise, fail-open). Here the funnel only has to AWAIT it and survive a throw.
     { fetchRoomRoster: async () => { if (cfg.rosterThrows) throw new Error("roster exploded"); return cfg.roster || { agents: [], agentsMore: 0, people: [], peopleMore: 0, read: 'skipped' };
-    } }, async () => cfg.modelRefusal || null, { withRuntimeDefault: async (_rt, model) => model }
+    } }, async () => cfg.modelRefusal || null, { withRuntimeDefault: async (_rt, model) => model },
+    { needSignIn: (id) => calls.signIn.push(id) }
   );
   return { ...api, sessions, calls };
 }
@@ -209,6 +211,17 @@ test("AUTH-HOLD is scoped to the launch runtime, and any held agent on the threa
   second.sessions.set(...live(slotKey({ channelId: CH, taskId: TASK, agentId: AGENT }), { agentId: AGENT, runtimeId: "claude", state: { authHeld: true } }));
   assert.deepEqual(await second.launch(call({ channelId: CH, taskId: TASK })), { skipped: "auth-hold" },
     "a held SECOND agent on the thread is not missed");
+  assert.deepEqual(second.calls.signIn, ["claude"], "the refusal raises the launch runtime's sign-in prompt");
+});
+
+test("SIGNED OUT: refused before anything registers, and the prompt is raised unless the caller shows a sign-in", async () => {
+  const h = harness({ rtId: "codex", signedOut: true });
+  const refused = { skipped: "auth-hold" };
+  assert.deepEqual(await h.launch(call({ channelId: CH, taskId: TASK, showsSignIn: true })), refused);
+  assert.deepEqual(h.calls.signIn, [], "the New Agent dialog offers its own sign-in beside the refusal");
+  assert.deepEqual(await h.launch(call({ channelId: CH, taskId: TASK, side: "responder" })), refused);
+  assert.deepEqual(h.calls.started, [], "nothing registered");
+  assert.deepEqual(h.calls.signIn, ["codex"]);
 });
 
 test("CHANNEL-LEVEL: a launch with no thread keys on an EMPTY middle segment", async () => {

@@ -300,17 +300,9 @@ function invalidateCookieIdentity() {
 // because a sign-out that a bad network can block is worse than a residual token. When
 // the revoke does not land, the diag line says so in words the operator can act on.
 //
-// THE THIRD CREDENTIAL (2026-07-31) — THE OPERATOR'S CLAUDE INFERENCE TOKEN. The
-// enumeration above used to stop at the Dopl credentials and omit this one entirely:
-// claude-token.js holds an `sk-ant-*` OAuth token, and BOTH spawn paths inject it as
-// CLAUDE_CODE_OAUTH_TOKEN (claude-resolve.spawnEnv for headless, session-auth's
-// withStoredCredential for the session window). So: sign out, hand the Mac to someone
-// else, they sign in — and every agent session they run bills the FIRST operator's
-// Anthropic account, against their rate limits. clearStoredOAuthToken() had ZERO
-// callers; it does now. The decision is safe because that store has exactly one
-// writer — Dopl's own `claude setup-token` flow (claude-auth.js) — so it can never
-// hold a credential the operator made outside Dopl. What it CANNOT do is revoke the
-// token at Anthropic, and the log line says that rather than implying otherwise.
+// THE THIRD CREDENTIAL: every runtime's Dopl-owned sign-in (`runtime-credentials.js › signOutAll`). Left
+// behind, the NEXT operator on this Mac would run agents on this one's account. Each has one writer, Dopl's
+// own sign-in, so no login made outside Dopl is touched; nothing is revoked at the vendor, and the log says so.
 //
 // STILL NOT COVERED: the user-scope `dopl` entry in the CLI's own config. See
 // mcp-config.clearDeviceToken's note — we cannot tell our entry from a hand-made one,
@@ -350,14 +342,13 @@ async function signOut() {
   } catch (err) {
     diag('auth: device-token teardown failed —', (err && err.message) || String(err));
   }
-  // The Claude inference credential. Lazy-required like the others (claude-token pulls
-  // in electron's safeStorage) and unconditional: a failure here is the one residual
-  // that would let the NEXT operator spend the previous one's Anthropic quota.
-  let claudeCred = false;
+  // Lazy-required like the others, and unconditional: a failure here is the one residual that would let
+  // the NEXT operator spend the previous one's agent quota.
+  let runtimeCreds = false;
   try {
-    claudeCred = require('./claude-token').clearStoredOAuthToken();
+    runtimeCreds = await require('./runtime-credentials').signOutAll();
   } catch (err) {
-    diag('auth: claude-token teardown failed —', (err && err.message) || String(err));
+    diag('auth: runtime sign-in teardown failed —', (err && err.message) || String(err));
   }
   const revokeNote =
     revoked === 'revoked'
@@ -369,9 +360,9 @@ async function signOut() {
           : '+ NOT revoked server-side (still valid until it expires — revoke it in web Settings > Connected apps)';
   diag('auth: signed out — blob cleared, cookies', cleared ? 'cleared' : 'CLEAR FAILED',
     '— MCP device token', device ? 'cleared' : 'CLEAR FAILED', revokeNote,
-    '— Claude sign-in token', claudeCred
-      ? "cleared from this Mac (the token itself stays valid at Anthropic; revoke it there if you want it dead)"
-      : 'CLEAR FAILED — the next person to sign in on this Mac would run agents on YOUR Anthropic account');
+    '— agent-runtime sign-ins', runtimeCreds
+      ? "cleared from this Mac (each token stays valid at its vendor; revoke it there if you want it dead)"
+      : 'CLEAR FAILED — the next person to sign in on this Mac would run agents on YOUR account');
   return cleared;
 }
 

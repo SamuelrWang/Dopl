@@ -13,8 +13,8 @@ const axisB = require('./axis-b');
 const agentOps = require('../../agent-self-ops');
 const channelDirs = require('../../channel-dirs');
 const store = require('../../session-store');
-const sessionAuth = require('../../session-auth');
 const models = require('./models');
+const credential = require('./credential');
 const sessionCredential = require('../../session-credential');
 const sessionDirected = require('../../session-directed');
 const fold = require('./fold');
@@ -42,8 +42,8 @@ function buildOptions(s, dispatch) {
     mcpServers: loader.buildMcpServers(cfg.doplToolsPolicy, s.workspaceId, sessionCredential.sessionBearer(s)),
     settingSources: [],
     permissionMode: 'default',
-    // Permission knobs scrubbed; the stored OAuth token added only when it is this Mac's only credential.
-    env: sessionAuth.withStoredCredential(loader.buildScrubbedEnv()),
+    // Permission knobs and inherited credentials scrubbed; Dopl's own token is the one credential.
+    env: credential.withCredential(loader.buildScrubbedEnv()),
     // `diag` is injected so the gate bridge stays electron-free.
     canUseTool: axisB.makeCanUseTool(s, dispatch, diag),
     abortController: s.abortController,

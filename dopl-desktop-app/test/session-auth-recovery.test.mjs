@@ -1,4 +1,4 @@
-// Q6 — the Claude Code credential preflight and the auth HOLD it raises (main side).
+// Q6 — the runtime credential preflight and the auth HOLD it raises (main side).
 //
 // THE BUG: a session on a Mac with no Claude Code sign-in rendered "Not logged in · Please run
 // /login" as an agent bubble and then died. Three layers are pinned here:
@@ -35,7 +35,6 @@ import { sentinelBlock, fnOf } from "./helpers/source-probe.mjs";
 const requireMain = (p) => createRequire(import.meta.url)(M(p));
 
 const DETECT_SRC = readFileSync(M("session-auth-detect.js"), "utf8");
-const CLAUDE_AUTH = readFileSync(M("claude-auth.js"), "utf8");
 const QUERY = readFileSync(M("session-query.js"), "utf8"); // §3 SPLIT: startQuery / consume / buildSdkOptions
 
 // ── 1. PURE: the detector + the copy ─────────────────────────────────────────
@@ -51,12 +50,7 @@ test("the detect block is standalone-evaluable (no electron / fs / require)", ()
   assert.equal(typeof api.authFailureText, "function");
 });
 
-test("isAuthShapedError matches the SAME shape the headless path already acts on", () => {
-  // claude-auth.js owns the headless copy (trigger.js:341). The two regexes are duplicated on
-  // purpose (claude-auth requires electron), so pin them against each other.
-  const headless = CLAUDE_AUTH.match(/const AUTH_ERROR_RE = (\/.*\/i);/);
-  assert.ok(headless, "claude-auth still declares AUTH_ERROR_RE");
-  assert.equal(String(detect.AUTH_ERROR_RE), headless[1], "the session copy has not drifted");
+test("isAuthShapedError matches a transport rejection of the credential, and nothing else", () => {
   for (const text of ["401 Unauthorized", "OAuth token has expired", "Please Re-authenticate"]) {
     assert.equal(detect.isAuthShapedError(text), true, text);
   }
@@ -137,15 +131,26 @@ test("PREFLIGHT: the selected runtime owns the credential verdict", async () => 
   const h = harness({ usable: false }); // Claude's local markers say signed out.
   const healthy = session({ runtimeId: "codex" });
   assert.equal(await h.holdIfNoRuntimeCredential(healthy, {
-    credentialState: async () => ({ usable: true, source: "login-status" }),
+    credentialState: async () => ({ usable: true, source: "dopl-auth-file" }),
   }), false, "a valid Codex login is not blocked by Claude's credential state");
   assert.deepEqual(h.calls.dispatch, []);
 
   const missing = session({ runtimeId: "codex" });
   assert.equal(await h.holdIfNoRuntimeCredential(missing, {
-    credentialState: async () => ({ usable: false, source: "login-status-nonzero" }),
+    credentialState: async () => ({ usable: false, source: null }),
   }), true);
   assert.equal(missing.state.authHeld, true);
+});
+
+test("every hold asks for its OWN runtime's sign-in: missing on a preflight, rejected mid-run", () => {
+  const h = harness({ usable: false });
+  h.holdIfNoCredential(session({ runtimeId: "codex" }));
+  const running = session({ key: "c1:t2", state: { phase: "running", parked: false, activity: "working" } });
+  running.abortController = { abort() {} };
+  running.pushIterator = { close() {} };
+  h.holdIfAuthFailure(running, "API Error: 401 unauthorized");
+  assert.deepEqual(h.calls.signIn, [{ id: "codex", kind: "missing" }, { id: "claude", kind: "rejected" }],
+    "an un-stamped session is the default runtime's");
 });
 
 // ⚠ "PREFLIGHT: a sign-in that does NOT finish leaves the hold answerable" STOOD HERE AND IS DELETED
@@ -275,6 +280,17 @@ test("the engine preflights AFTER the parked-shell branch and BEFORE startQuery"
     "a held launch un-registers itself and reports the hold");
 });
 
+test("every query START is preflighted too: no Dopl credential holds it before any child exists", () => {
+  // A parked agent woken after a sign-out (or on the first run after an update) must be HELD, not
+  // spawned on whatever login the CLI finds for itself. The resume site is driven in session-park.test.
+  const hold = QUERY.indexOf("if (await sessionAuth.holdIfNoRuntimeCredential(s, rt)) return;");
+  const lock = QUERY.indexOf("await sessionCredential.ensureContainerCredential(s, diag);");
+  const spawn = QUERY.indexOf("const q = rt.start(buildLaunchSpec(s));");
+  assert.ok(Math.min(hold, lock, spawn) !== -1, "an anchor is gone — reslice rather than pass on -1");
+  assert.ok(hold < lock && lock < spawn, "held before the container lock is minted and before the spawn");
+  assert.match(ENGINE, /holdIfNoCredential: sessionAuth\.holdIfNoRuntimeCredential/, "the resume site is bound to the same hold");
+});
+
 test("the consume loop routes an auth failure to the hold before it can dispatch `crash`", () => {
   // ⚠ 2026-08-31 (runtime-adapter port, step 4): the loop calls ONE thing per message where it
   // called three. The auth sentinel is now recognised by the ADAPTER's `normalize` — the shape a
@@ -310,25 +326,6 @@ test("the consume loop routes an auth failure to the hold before it can dispatch
   assert.match(QUERY, /if \(!isAbortError\(err\)\) \{/, "and an abort is still not an error at all");
 });
 
-test("what counts as a usable credential — and what the SPAWN env does about it", () => {
-  const probe = fnOf(AUTH_SRC, "credentialState");
-  // Three sources, most-explicit first. `stored-token` is LAST so it is chosen only when it is the
-  // only credential we hold, which is exactly when withStoredCredential injects it.
-  assert.match(probe, /if \(envKey\) state = \{ usable: true, source: 'env' \};/);
-  assert.match(probe, /else if \(cliStoreSignedIn\(\)\) state = \{ usable: true, source: 'cli-store' \};/);
-  assert.match(probe, /else if \(getStoredOAuthToken\(\)\) state = \{ usable: true, source: 'stored-token' \};/);
-  // The keychain item is NEVER read: a cross-app read pops an OS prompt, a worse interruption than
-  // the bug. Only markers.
-  assert.ok(!/security find-generic-password|execFile|spawn\(/.test(AUTH_SRC), "no keychain shell-out");
-  const marker = fnOf(AUTH_SRC, "cliStoreSignedIn");
-  assert.match(marker, /\.credentials\.json/, "the file-backed store, when there is one");
-  assert.match(marker, /account\.accountUuid/, "else the CLI's own signed-in marker (one bit, no field copied)");
-  assert.match(marker, /err\.code !== 'ENOENT'/, "an unreadable file FAILS OPEN; only a MISSING one blocks");
-  // The healthy path stays byte-identical: no stored-token source -> the same env object back.
-  const envFn = fnOf(AUTH_SRC, "withStoredCredential");
-  assert.match(envFn, /if \(state\.source !== 'stored-token'\) return env;/, "untouched on every other machine");
-});
-
 test("the engine injects its OWN denyPending + teardown (the hold assembles no query)", () => {
   // ⚠ THE BIND OBJECT LOST ITS LAST MEMBER (F-228): `getSessionBySender` resolved a session from an
   // IPC `event.sender` (a window's webContents) for the two deleted auth handlers. The rest is the
@@ -341,11 +338,11 @@ test("the engine injects its OWN denyPending + teardown (the hold assembles no q
   assert.match(ENGINE, /const \{ denyPendingPermissions, resolvePerm \} = sessionPermissions;/,
     "…and it is the shared one, not a local re-declaration");
   assert.ok(!/getSessionBySender/.test(ENGINE), "no sender-keyed session lookup survives anywhere in the engine");
-  // ⚠ 2026-08-31: the assembly is the runtime adapter's (`runtime/claude/launch-spec.js`). The
-  // property is unchanged — the stored token rides the SAME scrubbed base every spawn uses.
+  // The assembly is the runtime adapter's (`runtime/claude/launch-spec.js`): Dopl's token rides the
+  // SAME scrubbed base every spawn uses.
   assert.match(readFileSync(M("runtime/claude/launch-spec.js"), "utf8"),
-    /env: sessionAuth\.withStoredCredential\(loader\.buildScrubbedEnv\(\)\)/,
-    "and the stored setup-token reaches the spawn env through the SAME scrubbed base");
+    /env: credential\.withCredential\(loader\.buildScrubbedEnv\(\)\)/,
+    "and Dopl's token reaches the spawn env through the SAME scrubbed base");
 });
 
 // ── 4. U10 (2026-09-21): THE SENTENCES ON THIS SHARED PATH NAME THE SESSION'S OWN RUNTIME ────

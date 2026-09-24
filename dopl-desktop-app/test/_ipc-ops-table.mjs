@@ -69,6 +69,10 @@ export const OPS = [
   // malformed id, refused at the boundary before any flow module loads. It starts no turn: the OAuth
   // flow is completed in the operator's own browser, and success RELEASES that runtime's held sessions.
   ["runtime:signIn", { runtimeId: "codex" }, { ok: false }, { runtimeId: "../codex" }],
+  // Every in-app-sign-in runtime's status (no payload) and one runtime's prompt dismissal: states and
+  // a flag, never a credential. A refused read is the empty list.
+  ["runtime:credentialStatus", undefined, { runtimes: [] }],
+  ["runtime:dismissSignInPrompt", { runtimeId: "codex" }, { ok: false }, { runtimeId: "../codex" }],
   ["sessions:reopen", { channelId: CH, taskId: "t1" }, { ok: false }],
   // 2026-08-18 (wiring plan Phase 5): the Agents tab's controls on the operator's OWN agent. STOP
   // verbs — `interrupt` and `end` — dispatched through main's own reducer, under the same sender
@@ -143,6 +147,8 @@ export const NO_BAD_PAYLOAD = new Set([
   "orchestrator:getDirectEnabled",
   "orchestrator:setDirectEnabled",
   // `claude:signIn` left 2026-09-23: `runtime:signIn` carries a runtime id and has a real bad payload.
+  // `runtime:credentialStatus` reads no payload, so a "corrupted" call to it SUCCEEDS.
+  "runtime:credentialStatus",
   // 2026-09-18: `channels:getAgentDefaults` reads NO payload at all — its subject is the
   // machine-user — so there is no bad one to build, and a "corrupted" call to it SUCCEEDS.
   // ⚠ `channels:setAgentDefaults` is NOT exempt and must not become so: it reads `defaults`, and a

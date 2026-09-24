@@ -101,6 +101,11 @@ function signIn() {
   return null;
 }
 
+/** `null`: Dopl holds no Cursor credential of its own. */
+function signOut() {
+  return null;
+}
+
 // Descriptor half.
 const descriptor = {
   // ⚠ null => no sign-in button; the UI shows a settings pointer instead (hide-on-absent).
@@ -108,4 +113,4 @@ const descriptor = {
   probe: 'env-or-cli-status',
 };
 
-module.exports = { credentialState, signIn, descriptor, STATUS_TIMEOUT_MS };
+module.exports = { credentialState, signIn, signOut, descriptor, STATUS_TIMEOUT_MS };

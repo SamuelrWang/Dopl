@@ -19,9 +19,8 @@
 //
 // 🔒 ⚠ **THE HOSTILE CONFIG IS WRITTEN INTO A TEMPORARY HOME THIS FILE CREATES AND DELETES.**
 // NOTHING here writes to, or reads from, the operator's `~/.codex/`. `isolatedEnv` is handed a
-// `CODEX_HOME` pointing at the temp hostile home, so even the auth symlink it makes points at a
-// fixture `auth.json` in that temp tree. If this file ever grows a path under `os.homedir()`,
-// that is the bug.
+// `CODEX_HOME` pointing at the temp hostile home, whose fixture `auth.json` must not reach the
+// private home either. If this file ever grows a path under `os.homedir()`, that is the bug.
 //
 // ⚠ **NO TURN IS EVER STARTED HERE.** The control leg deliberately runs a session configured with
 // `never` approvals and `danger-full-access`; it starts a thread and reads policy back, and the
@@ -32,9 +31,9 @@
 
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync, lstatSync, realpathSync, existsSync } from 'node:fs';
-import { tmpdir, homedir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, realpathSync, existsSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import { dirname } from 'node:path';
@@ -88,8 +87,7 @@ function hostileTree() {
   const home = join(root, 'hostile-codex-home');
   mkdirSync(home, { recursive: true });
   writeFileSync(join(home, 'config.toml'), HOSTILE_TOML);
-  // A FIXTURE credential, so the isolation's auth symlink has a temp-tree target and never needs
-  // to look at the operator's own `~/.codex/auth.json`.
+  // A FIXTURE credential in the source home: the isolation must not expose it.
   writeFileSync(join(home, 'auth.json'), '{"fixture":"not-a-credential"}', { mode: 0o600 });
   // ⚠ `realpathSync`, because macOS reports `/private/var/...` for a `/var/...` temp path and the
   // server echoes the RESOLVED file in `origins`/`layers`. Comparing the unresolved spelling made
@@ -156,7 +154,7 @@ describe('the private Codex home refuses to launch unisolated', () => {
     }
   });
 
-  test('the isolated env exposes auth by symlink and NOTHING from the source home', () => {
+  test('the isolated env exposes NOTHING from the source home, its login included', () => {
     const t = hostileTree();
     try {
       const env = configHome.isolatedEnv({ CODEX_HOME: t.home, PATH: '/bin' }, t.userData);
@@ -164,14 +162,7 @@ describe('the private Codex home refuses to launch unisolated', () => {
       assert.equal(priv, join(t.userData, configHome.PRIVATE_HOME));
       assert.equal(env.CODEX_SQLITE_HOME, priv, 'state must not fall back to the ambient home');
       assert.equal(existsSync(join(priv, 'config.toml')), false, 'the hostile config was not copied');
-      assert.equal(lstatSync(join(priv, 'auth.json')).isSymbolicLink(), true);
-      assert.equal(realpathSync(join(priv, 'auth.json')), realpathSync(join(t.home, 'auth.json')));
-      // 🔒 AND IT POINTS INTO THE TEMP TREE, NOT AT THE OPERATOR. The only credential path this
-      // whole file may touch is one it created.
-      assert.equal(
-        realpathSync(join(priv, 'auth.json')).startsWith(resolve(homedir(), '.codex')), false,
-        "the test's auth link must not resolve into the operator's own Codex home",
-      );
+      assert.equal(existsSync(join(priv, 'auth.json')), false, "the source home's login is never linked");
     } finally {
       rmSync(t.root, { recursive: true, force: true });
     }
@@ -249,9 +240,9 @@ describe('a hostile ambient config cannot widen a Dopl Codex session', () => {
           'the hostile file must not appear as a config LAYER either',
         );
       }
-      // The isolation is still intact after the run: auth by link, no config written.
+      // The isolation is still intact after the run: no config written, no login linked.
       assert.equal(existsSync(join(env.CODEX_HOME, 'config.toml')), false);
-      assert.equal(lstatSync(join(env.CODEX_HOME, 'auth.json')).isSymbolicLink(), true);
+      assert.equal(existsSync(join(env.CODEX_HOME, 'auth.json')), false);
     } finally {
       rmSync(h.root, { recursive: true, force: true });
     }

@@ -123,16 +123,16 @@ test("a THROWING probe answers false (the trigger defers), never a crash", async
 
 test("SMOKE: every module the spawn and sign-in paths require really exists", () => {
   // The dead `./sdk-loader` name survived because every suite injected `require`. This one does
-  // not: each lazy `require('./…')` in the two files is resolved from `main/` for real.
+  // not: each lazy `require('./…')` in these files is resolved from `main/` for real.
   const req = createRequire(join(HERE, "..", "main", "index.js"));
-  for (const file of ["claude-runtime.js", "claude-signin-op.js"]) {
+  for (const file of ["claude-runtime.js", "claude-auth.js", "runtime-credentials.js"]) {
     const src = read(file);
     const names = [...src.matchAll(/require\('(\.\/[^']+)'\)/g)].map((m) => m[1]);
     assert.ok(names.length > 0, file);
     for (const name of names) assert.doesNotThrow(() => req.resolve(name), `${file} requires ${name}`);
   }
   assert.equal(typeof req("./claude-runtime.js").sessionSpawnAvailable, "function");
-  assert.equal(typeof req("./claude-signin-op.js").signIn, "function");
+  assert.equal(typeof req("./runtime-credentials.js").signIn, "function");
 });
 
 // ── 2. the call sites, so the right question stays asked ───────────────────────

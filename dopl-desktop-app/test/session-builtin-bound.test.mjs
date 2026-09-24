@@ -165,7 +165,7 @@ const DEPS = {
   agentOps: { SERVER_KEY: "dopl_agents" },
   channelDirs: { sessionSpawnDir: () => "/tmp/ch" },
   store: { slotKey: () => "slot" },
-  sessionAuth: { withStoredCredential: (env) => env },
+  credential: { withCredential: (env) => env },
   // 2026-09-22: the launch spec resolves the model on the adapter's live roster (`models.js`).
   models: { launchArg: () => "" },
   sessionCredential: { sessionBearer: () => "" },

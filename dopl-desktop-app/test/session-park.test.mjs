@@ -43,6 +43,19 @@ test("resumeParked (async) starts the query THROUGH buildLaunchSpec (v1.9 securi
   assert.ok(s.query && s.query.__query);
 });
 
+test("a resume without the runtime's Dopl credential is HELD, never spawned (the second query-start site)", async () => {
+  const h = harness();
+  const asked = [];
+  h.deps.holdIfNoCredential = async (s, rt) => { asked.push(rt); return true; };
+  const s = { settled: false, sdkSessionId: "sdk-xyz", resumeSdkId: null };
+  h.resumeParked(s);
+  await flush();
+  assert.equal(asked.length, 1, "the session's own runtime was asked");
+  assert.equal(h.calls.buildLaunchSpec.length, 0, "no spec is assembled, so no child can fall back to the operator's login");
+  assert.equal(h.calls.query.length, 0);
+  assert.equal(s.resuming, false, "the next wake after a sign-in can resume it");
+});
+
 test("resumeParked is a no-op for a settled session or a resume already in flight", () => {
   const h = harness();
   const settled = { settled: true };

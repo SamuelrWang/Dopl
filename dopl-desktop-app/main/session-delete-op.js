@@ -1,7 +1,7 @@
 // DELETE ONE AGENT — the body of `sessions:delete` (2026-08-25, Samuel's ruling).
 //
 // ⚠ SPLIT OUT OF `main/session-ipc-ops.js` UNDER THE HARD 500-LINE §1 CAP, on the
-// `session-launch-op.js` / `claude-signin-op.js` precedent. That file owns the IPC SURFACE —
+// `session-launch-op.js` precedent. That file owns the IPC SURFACE —
 // which verbs exist, who may call them, how a bad payload is refused — and this owns WHAT ONE
 // DELETION IS. The wrapper stays written LITERALLY at the `ipcMain.handle` site, because
 // `test/channel-ipc-sender.test.mjs`'s structural belt reads exactly that shape; this module is

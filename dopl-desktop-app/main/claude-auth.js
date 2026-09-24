@@ -1,61 +1,46 @@
-// Feature D — "Sign in to Claude" (no-terminal CLI auth).
-//
-// When a spawn fails with an auth-shaped error, we offer an in-app sign-in
-// instead of the generic failure notice:
-//   Tier 2 (primary): drive `claude setup-token` under a pseudo-TTY
-//     (`script -q /dev/null claude setup-token`), parse the OAuth URL from its
-//     output, open it in the system browser, collect the pasted authorization
-//     code in a minimal LOCAL BrowserWindow, and write it to the child's stdin.
-//   Tier 1 (fallback): open Terminal and run `claude /login` for the user.
-//
-// EMPIRICAL (claude 2.1.220, macOS, verified 2026-07-25): under a pty,
-// setup-token prints "Opening browser to sign in…", emits the OAuth authorize
-// URL as an OSC-8 hyperlink whose host is claude.com (NOT anthropic), and then
-// prompts "Paste code here if prompted >" on stdin. On completion it either
-// stores the credential in claude's own store (spawns then work with no env) or
-// prints a long-lived token — BOTH handled: a printed sk-ant-* token is captured
-// and stored (claude-token) for CLAUDE_CODE_OAUTH_TOKEN injection; otherwise a
-// clean exit is treated as success and spawns rely on claude's own store.
-//
-// Every flow state is diag()-logged. The token value is NEVER logged.
+// THE IN-APP CLAUDE CODE SIGN-IN. `claude setup-token` runs under a pseudo-TTY with no window
+// (`script -q /dev/null`); its OAuth URL opens in the system browser, the code the page shows is pasted into
+// a local window, and the long-lived token the CLI then prints is stored as Dopl's own (`claude-token.js`).
+// setup-token only prints its token, so the operator's own Claude Code login is never written. The token is
+// never logged.
 
 const path = require('path');
-const { spawn, execFile } = require('child_process');
-const { dialog, shell, Notification, BrowserWindow, ipcMain } = require('electron');
+const { spawn } = require('child_process');
+const { shell, BrowserWindow, ipcMain } = require('electron');
 
 const spawner = require('./session-spawner');
 const { setStoredOAuthToken } = require('./claude-token');
 const { diag } = require('./diag');
 
 const SETUP_TIMEOUT_MS = 5 * 60 * 1000;
-const AUTH_ERROR_RE = /401|OAuth.*expired|Re-authenticate/i;
+// What setup-token prints around its token (claude 2.1.220). Both are required, so a token still arriving is never taken.
+const TOKEN_OPEN = 'Your OAuth token';
+const TOKEN_CLOSE = 'Store this token securely';
 
-let inProgress = false; // single-flight: never stack two sign-in flows
-
-function isAuthShapedError(text) {
-  return AUTH_ERROR_RE.test(String(text == null ? '' : text));
-}
-
-// ── OAuth URL / token parsing ────────────────────────────────────────────────
+// ── Output parsing ───────────────────────────────────────────────────────────
 function extractOAuthUrl(s) {
-  // Primary: the OSC-8 hyperlink target — ESC ] 8 ; params ; URI BEL. The URI is
-  // clean (the animated redraw only mangles the VISIBLE text, not the target).
+  // The OSC-8 hyperlink target (ESC ] 8 ; params ; URI BEL) is clean; the spinner mangles only the visible text.
   const osc = s.match(/\x1b\]8;[^;]*;(https?:\/\/[^\x07\x1b]+)/);
   if (osc && /oauth|authorize/i.test(osc[1])) return osc[1];
-  // Fallback: first authorize-looking https URL; the spinner can duplicate it,
-  // so cut at a second "https" occurrence.
+  // Fallback: the first authorize-looking URL, cut at a second "https" (the spinner can duplicate it).
   const gen = s.match(/https?:\/\/[^\s\x00-\x1f"']*(?:oauth|authorize)[^\s\x00-\x1f"']*/i);
   if (gen) {
-    let u = gen[0];
+    const u = gen[0];
     const dup = u.indexOf('https', 5);
     return dup > 0 ? u.slice(0, dup) : u;
   }
   return null;
 }
 
+const ANSI_RE = /\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)|\x1b\[[0-?]*[ -/]*[@-~]|\x1b[@-Z\\-_]/g;
+
+// The token between its two markers, with the terminal's escapes and line wrapping removed.
 function extractToken(s) {
-  // setup-token prints a long-lived OAuth token when it doesn't store it itself.
-  const m = s.match(/sk-ant-[a-zA-Z0-9._-]{20,}/);
+  const plain = String(s).replace(ANSI_RE, '');
+  const open = plain.indexOf(TOKEN_OPEN);
+  const close = open === -1 ? -1 : plain.indexOf(TOKEN_CLOSE, open);
+  if (close === -1) return null;
+  const m = plain.slice(open + TOKEN_OPEN.length, close).replace(/\s+/g, '').match(/sk-ant-[A-Za-z0-9._-]{20,}/);
   return m ? m[0] : null;
 }
 
@@ -84,9 +69,8 @@ function openCodePrompt(onSubmit, onCancel) {
 
   let submitted = false;
   const handler = (event, code) => {
-    // Only accept from this window's own webContents.
-    if (win.isDestroyed() || event.sender !== win.webContents) return;
-    if (submitted) return;
+    // Only from this window's own webContents.
+    if (win.isDestroyed() || event.sender !== win.webContents || submitted) return;
     submitted = true;
     try { onSubmit(code); } catch (_) { /* forwarded to child */ }
     try { if (!win.isDestroyed()) win.close(); } catch (_) {}
@@ -99,18 +83,17 @@ function openCodePrompt(onSubmit, onCancel) {
   return win;
 }
 
-// ── Tier 2: setup-token under a pty ──────────────────────────────────────────
+// ── setup-token under a pty → true once Dopl holds the token ─────────────────
 function runSetupTokenFlow(bin) {
   return new Promise((resolve) => {
     let child;
     try {
-      // macOS `script -q /dev/null <cmd>` gives the child a TTY with no window.
       child = spawn('script', ['-q', '/dev/null', bin, 'setup-token'], {
         env: spawner.cliEnv(bin),
         stdio: ['pipe', 'pipe', 'pipe'],
       });
     } catch (err) {
-      diag('signin tier2: spawn failed', err && err.message);
+      diag('claude signin: spawn failed', err && err.message);
       resolve(false);
       return;
     }
@@ -119,10 +102,9 @@ function runSetupTokenFlow(bin) {
     let settled = false;
     let urlOpened = false;
     let promptWin = null;
-    let capturedToken = null;
 
     const timer = setTimeout(() => {
-      diag('signin tier2: timeout (5m)');
+      diag('claude signin: timeout (5m)');
       finish(false);
     }, SETUP_TIMEOUT_MS);
 
@@ -134,162 +116,78 @@ function runSetupTokenFlow(bin) {
       try { child.stdin.end(); } catch (_) {}
       try { child.kill('SIGINT'); } catch (_) {}
       setTimeout(() => { try { child.kill('SIGKILL'); } catch (_) {} }, 1500);
-      if (ok && capturedToken) {
-        const stored = setStoredOAuthToken(capturedToken);
-        diag('signin tier2: printed token', stored ? 'stored (safeStorage)' : 'store FAILED');
-      }
-      diag('signin tier2:', ok ? 'success' : 'failed');
+      diag('claude signin:', ok ? 'token stored' : 'failed');
       resolve(ok);
     }
 
     const onData = (buf) => {
-      const s = buf.toString('latin1');
-      out += s;
+      if (settled) return;
+      out += buf.toString('latin1');
       if (!urlOpened) {
         const url = extractOAuthUrl(out);
         if (url) {
           urlOpened = true;
-          diag('signin tier2: oauth url parsed, opening browser + paste window');
-          shell.openExternal(url).catch((e) => diag('signin tier2: openExternal failed', e && e.message));
+          diag('claude signin: oauth url parsed, opening browser + paste window');
+          shell.openExternal(url).catch((e) => diag('claude signin: openExternal failed', e && e.message));
           promptWin = openCodePrompt(
             (code) => {
               try {
                 child.stdin.write(String(code) + '\n');
-                diag('signin tier2: code submitted to child stdin');
               } catch (e) {
-                diag('signin tier2: stdin write failed', e && e.message);
+                diag('claude signin: stdin write failed', e && e.message);
               }
             },
             () => {
-              diag('signin tier2: code prompt cancelled');
+              diag('claude signin: code prompt cancelled');
               finish(false);
             }
           );
         }
       }
-      if (!capturedToken) {
-        const t = extractToken(out);
-        if (t) {
-          capturedToken = t;
-          diag('signin tier2: printed token detected in output');
-        }
-      }
+      const token = extractToken(out);
+      if (token) finish(setStoredOAuthToken(token));
     };
 
     child.stdout.on('data', onData);
     child.stderr.on('data', onData);
     child.on('error', (err) => {
-      diag('signin tier2: child error', err && err.message);
+      diag('claude signin: child error', err && err.message);
       finish(false);
     });
-    child.on('close', (code) => {
-      // A clean exit after the URL was opened = success (token captured, or
-      // stored by claude itself). A non-zero exit, or exit before we ever
-      // parsed a URL, is a failure → Tier 1.
-      finish(code === 0 && urlOpened);
-    });
+    // An exit before a token was captured is a failure, whatever the code.
+    child.on('close', () => finish(false));
   });
 }
 
-// ── Tier 1: open Terminal and run `claude /login` ────────────────────────────
-function appleQuote(s) {
-  return '"' + String(s).replace(/\\/g, '\\\\').replace(/"/g, '\\"') + '"';
-}
-function shellQuote(s) {
-  return "'" + String(s).replace(/'/g, `'\\''`) + "'";
-}
-
-async function terminalFallback(bin) {
-  const { response } = await dialog.showMessageBox({
-    type: 'info',
-    buttons: ['Cancel', 'Open Terminal to sign in'],
-    defaultId: 1,
-    cancelId: 0,
-    noLink: true,
-    title: 'Dopl',
-    message: 'Open Terminal to sign in',
-    detail:
-      'Dopl will open Terminal and start the Claude sign-in. Follow the prompts there, then return to Dopl.',
-  });
-  if (response !== 1) {
-    diag('signin tier1: user declined');
-    return;
-  }
-  const cmd = (bin ? shellQuote(bin) : 'claude') + ' /login';
-  const script = `tell application "Terminal"\nactivate\ndo script ${appleQuote(cmd)}\nend tell`;
-  execFile('osascript', ['-e', script], (err) => {
-    diag('signin tier1: terminal launch', err ? 'FAILED ' + (err.message || '') : 'ok');
-  });
-}
-
-function notifySuccess() {
+// The BUNDLED binary first (asar-unpacked and signed; most machines never installed a `claude`), then the
+// external CLI. The loader pulls `electron.app`, so a throw means "no bundled binary".
+async function resolveClaudeBin() {
   try {
-    if (Notification.isSupported()) {
-      new Notification({
-        title: 'Dopl',
-        body: "You're signed in to Claude. Channel auto-responses are back on.",
-      }).show();
-    }
-  } catch (_) { /* best-effort */ }
-}
-
-// ── Orchestrator ─────────────────────────────────────────────────────────────
-// Shows an alert notification + a dialog with a "Sign in to Claude" button, then
-// runs Tier 2, falling back to Tier 1 on any failure. Single-flight: a second
-// auth-shaped error while a flow is open is ignored.
-async function startSignInFlow({ getClaudeBin, channelName } = {}) {
-  if (inProgress) {
-    diag('signin: flow already in progress — ignoring duplicate trigger');
-    return;
-  }
-  inProgress = true;
-  try {
-    diag('signin: prompt shown (channel', (channelName || '?') + ')');
-    try {
-      if (Notification.isSupported()) {
-        new Notification({
-          title: 'Dopl: sign in to Claude',
-          body: 'Your Claude sign-in expired. Sign in again to keep answering channel requests.',
-        }).show();
-      }
-    } catch (_) { /* best-effort */ }
-
-    const { response } = await dialog.showMessageBox({
-      type: 'warning',
-      buttons: ['Later', 'Sign in to Claude'],
-      defaultId: 1,
-      cancelId: 0,
-      noLink: true,
-      title: 'Dopl',
-      message: 'Sign in to Claude',
-      detail:
-        'The Claude CLI needs you to sign in again before Dopl can answer requests in your channels.',
-    });
-    if (response !== 1) {
-      diag('signin: user chose Later');
-      return;
-    }
-
-    const bin = getClaudeBin ? await getClaudeBin() : null;
-    if (!bin) {
-      diag('signin: claude cli unresolved — going straight to tier1');
-      await terminalFallback(bin);
-      return;
-    }
-
-    diag('signin: starting tier2 (setup-token pty)');
-    const ok = await runSetupTokenFlow(bin);
-    if (ok) {
-      notifySuccess();
-      return;
-    }
-    diag('signin: tier2 failed — offering tier1');
-    await terminalFallback(bin);
+    const bundled = require('./runtime/claude/loader').resolveClaudeExecutable();
+    if (bundled) return bundled;
   } catch (err) {
-    diag('signin: flow error', err && err.message);
-  } finally {
-    inProgress = false;
+    diag('claude signin: bundled binary unresolved', err && err.message);
+  }
+  try {
+    return await spawner.getClaudeBinPath();
+  } catch (err) {
+    diag('claude signin: external cli unresolved', err && err.message);
+    return null;
   }
 }
 
-module.exports = { isAuthShapedError, startSignInFlow };
+let current = null;
+
+/** One sign-in → `{ ok }`; a click while one runs joins it rather than starting a second. */
+function signIn() {
+  if (!current) {
+    current = (async () => {
+      const bin = await resolveClaudeBin();
+      if (!bin) return { ok: false };
+      return { ok: await runSetupTokenFlow(bin) };
+    })().finally(() => { current = null; });
+  }
+  return current;
+}
+
+module.exports = { signIn, extractOAuthUrl, extractToken };

@@ -102,11 +102,8 @@ const DEFERRED = {
   "claude-auth.js": "step 6: the interactive sign-in flow -> the adapter's credential.js",
   "claude-resolve.js": "step 6: the external-binary probe -> the adapter's credential.js",
   "claude-runtime.js": "step 6: sessionSpawnAvailable -> the adapter's available()/packaging",
-  "claude-signin-op.js": "step 6: Claude's sign-in body -> the adapter (the IPC op is runtime:signIn since 2026-09-23)",
   "claude-token.js": "step 6: the stored-token keys -> the adapter's credential.js",
-  "session-auth.js": "step 6: the credential probe + env keys (the HOLD bookkeeping stays core)",
   "session-spawner.js": "step 6: the external-CLI facade -> the adapter's credential.js",
-  "auth-state.js": "step 6: the stored-credential shape for this runtime",
   // ⚠ CORRECTED 2026-08-31 (wave D) — it was filed under step 9 as "operator-facing copy naming
   // the runtime", and it is not copy: `require('./claude-runtime')` plus `checkRuntimeAtStart`
   // and `spawner.claudeAvailable()`, the STARTUP probe. It closes when `claude-runtime.js` does,

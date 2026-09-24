@@ -39,6 +39,8 @@ function abortInFlight(s) {
 async function startQuery(s, rt) {
   // Supersede first, so a relaunch can never leave a second child holding this session's channel access.
   abortInFlight(s);
+  // Held, never spawned, without the runtime's Dopl credential (a child would fall back to the operator's own).
+  if (await sessionAuth.holdIfNoRuntimeCredential(s, rt)) return;
   // The container lock, minted before the (synchronous) spec is built. One of exactly two query-start
   // sites with `session-park.js › startResumedConsumer` (a woken spawn-idle shell never comes here).
   await sessionCredential.ensureContainerCredential(s, diag);

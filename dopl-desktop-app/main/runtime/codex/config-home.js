@@ -1,5 +1,6 @@
 // Ambient-config isolation: `CODEX_HOME` and `CODEX_SQLITE_HOME` both point at an app-owned home with no
-// config; only a credential enters it, so `~/.codex/config.toml` never reaches the child.
+// config, so nothing of `~/.codex` reaches the child. Its only credential is the `auth.json` Dopl's own
+// sign-in installed (`login.js`); the operator's own login is never read.
 
 const fs = require('fs');
 const os = require('os');
@@ -18,13 +19,6 @@ function appUserData() {
     if (value) return value;
   } catch (_) { /* plain-Node tests use the bounded temp fallback */ }
   return path.join(os.tmpdir(), `dopl-user-data-${typeof process.getuid === 'function' ? process.getuid() : 'local'}`);
-}
-
-function sourceHome(env, target) {
-  const asked = env && typeof env.CODEX_HOME === 'string' ? env.CODEX_HOME.trim() : '';
-  const fallback = path.join(os.homedir(), '.codex');
-  const chosen = asked || fallback;
-  return path.resolve(chosen) === path.resolve(target) ? fallback : chosen;
 }
 
 function hasAmbientConfig(home) {
@@ -76,28 +70,6 @@ const lstatOrNull = (file) => {
     throw err;
   }
 };
-const realOrNull = (file) => {
-  try { return path.resolve(fs.realpathSync(file)); } catch (_) { return null; }
-};
-
-// Precedence: Dopl-owned auth.json (in-app sign-in) > link to the operator's auth.json > none.
-function linkAuth(source, target) {
-  const current = lstatOrNull(target);
-  if (current && current.isFile()) {
-    try { fs.chmodSync(target, 0o600); } catch (_) { /* best effort */ }
-    return;
-  }
-  if (current && !current.isSymbolicLink()) {
-    throw new Error(`Dopl private Codex home contains an unexpected auth.json (${target})`);
-  }
-  const wanted = fs.existsSync(source) ? realOrNull(source) : null;
-  if (current) {
-    if (wanted && realOrNull(target) === wanted) return;
-    // A stale or repointed link goes; the file it pointed at is never touched.
-    fs.unlinkSync(target);
-  }
-  if (wanted) fs.symlinkSync(source, target, 'file');
-}
 
 /** The app-owned CODEX_HOME a launch runs against (created by `isolatedEnv`). */
 function privateHome(userDataRoot) {
@@ -117,19 +89,36 @@ function loginEnv(env, userDataRoot) {
   return { home, env: Object.assign({}, env || {}, { CODEX_HOME: home, CODEX_SQLITE_HOME: home }) };
 }
 
+const authFile = (userDataRoot) => path.join(privateHome(userDataRoot), 'auth.json');
+
+/** Is the Dopl-owned `auth.json` present? A link an older build made to the operator's own is removed. */
+function hasAuth(userDataRoot) {
+  const file = authFile(userDataRoot);
+  const st = lstatOrNull(file);
+  if (st && st.isSymbolicLink()) {
+    fs.unlinkSync(file);
+    return false;
+  }
+  return !!st && st.isFile();
+}
+
+/** Remove the Dopl-owned `auth.json` (a Dopl sign-out). */
+function removeAuth(userDataRoot) {
+  fs.rmSync(authFile(userDataRoot), { force: true });
+}
+
 /** Remove the login home (idempotent). */
 function clearLoginHome(userDataRoot) {
   fs.rmSync(path.join(userDataRoot || appUserData(), LOGIN_HOME), { recursive: true, force: true, maxRetries: 3 });
 }
 
-/** Move a login's `auth.json` into the private home as the Dopl-owned credential (replacing any link). */
+/** Move a login's `auth.json` into the private home as the Dopl-owned credential. */
 function installAuth(file, userDataRoot) {
   const st = lstatOrNull(file);
   if (!st || !st.isFile()) throw new Error('the Codex sign-in left no credential file');
-  const target = privateHome(userDataRoot);
-  ownerOnlyDir(target);
+  ownerOnlyDir(privateHome(userDataRoot));
   fs.chmodSync(file, 0o600);
-  fs.renameSync(file, path.join(target, 'auth.json'));
+  fs.renameSync(file, authFile(userDataRoot));
 }
 
 function isolatedEnv(env, userDataRoot) {
@@ -140,8 +129,7 @@ function isolatedEnv(env, userDataRoot) {
   if (hasAmbientConfig(target)) {
     throw new Error(`Dopl private Codex home contains config.toml; refusing an unisolated launch (${target})`);
   }
-  const auth = path.join(sourceHome(input, target), 'auth.json');
-  linkAuth(auth, path.join(target, 'auth.json'));
+  hasAuth(userDataRoot); // drops an older build's link before any child can follow it
   input.CODEX_HOME = target;
   input.CODEX_SQLITE_HOME = target;
   return input;
@@ -149,6 +137,6 @@ function isolatedEnv(env, userDataRoot) {
 
 module.exports = {
   isolatedEnv, privateHome, hasAmbientConfig, onlyTrustEntries, projectTrustFence,
-  loginEnv, clearLoginHome, installAuth,
+  hasAuth, removeAuth, loginEnv, clearLoginHome, installAuth,
   PRIVATE_HOME, LOGIN_HOME, AUTH_STORE_ARGS,
 };
