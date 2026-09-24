@@ -1,9 +1,11 @@
 /**
- * The two registration helpers every tool goes through. Gates (`gating.ts`) are called
- * explicitly on both paths, because `registerMetaTool` bypasses `registerTool`'s wrapper.
+ * The two registration helpers every legacy tool goes through, and `registerGranular`, which serves
+ * a granular tool by running its bound legacy tool's pipeline. Gates (`gating.ts`) are called
+ * explicitly on both legacy paths, because `registerMetaTool` bypasses `registerTool`'s wrapper.
  */
 
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { ErrorCode, McpError } from "@modelcontextprotocol/sdk/types.js";
 import { z, type ZodRawShape } from "zod";
 import { workspaceContext } from "@dopl/client";
 import type { DoplClient, McpCallTally } from "@dopl/client";
@@ -19,6 +21,14 @@ import {
 import { CONTAINER_ARG_DESCRIPTION } from "./workspace-arg.js";
 import { resolveCallAddress } from "./container-resolve.js";
 import { LEGACY_ONTOLOGY_ARGS } from "./legacy-aliases.js";
+import { granularDescription, granularShape, legacyCall, type LegacyTool } from "./granular.js";
+import {
+  ALWAYS_LOAD_META,
+  annotationsFor,
+  servesName,
+  type GranularTool,
+  type ToolSet,
+} from "./tool-manifest.js";
 
 // Re-exported so tests read the injected arg's description through the registrar that injects it.
 export { CONTAINER_ARG_DESCRIPTION } from "./workspace-arg.js";
@@ -60,13 +70,13 @@ function strictInput<S extends ZodRawShape>(shape: S, tool: string): z.ZodObject
 }
 
 /**
- * The registration config both paths publish. `title` is the tool's own name because Codex copies a
+ * The registration config every path publishes. `title` is the tool's own name because Codex copies a
  * tool's `title` into its approval request as `_meta.tool_title`, the only per-tool identity that
  * request carries — the desktop names the call by it (`dopl-desktop-app/main/runtime/codex/
- * server-requests.js › doplElicitation`). Pinned in `tool-title.test.ts`.
+ * server-requests.js › doplElicitation`). Pinned in `tool-title.test.ts` and `granular.test.ts`.
  */
-function toolConfig<S extends ZodRawShape>(name: string, description: string, schema: S) {
-  return { title: name, description, inputSchema: strictInput(schema, name) };
+function toolConfig(name: string, description: string, inputSchema: z.ZodObject) {
+  return { title: name, description, inputSchema };
 }
 
 /**
@@ -173,6 +183,8 @@ export interface RegistrarDeps {
   /** That binding rendered footer-ready, or null when there is none. */
   sessionEffective: () => EffectiveWorkspace | null;
   caller: CallerIdentity;
+  /** Which set owns a name both sets use. Default `legacy`. */
+  toolSet?: ToolSet;
 }
 
 export interface ToolRegistrars {
@@ -181,6 +193,8 @@ export interface ToolRegistrars {
   registerMetaTool: RegisterMetaTool;
   /** A fan-out's additional legs only: the wrapper already charged the resolved workspace. */
   chargeCredit: ChargeCredit;
+  /** After every legacy registration: a granular tool runs a registered legacy tool. */
+  registerGranular: (tool: GranularTool) => void;
 }
 
 export function createToolRegistrars(deps: RegistrarDeps): ToolRegistrars {
@@ -192,8 +206,17 @@ export function createToolRegistrars(deps: RegistrarDeps): ToolRegistrars {
     activeWorkspace,
     sessionEffective,
     caller,
+    toolSet = "legacy",
   } = deps;
   const chargeCredit = createCharger(client);
+  // Every registered legacy tool, including one whose name the active granular set took.
+  const legacy = new Map<string, LegacyTool>();
+  function publishLegacy(name: string, description: string, shape: ZodRawShape, run: LegacyTool["run"]): void {
+    const input = strictInput(shape, name);
+    legacy.set(name, { shape, input, run });
+    if (!servesName(toolSet, "legacy", name)) return;
+    server.registerTool(name, toolConfig(name, description, input), run as never);
+  }
   const runWithCredits = createCreditedRunner(chargeCredit);
 
   /** Which workspace pays when no per-call container was honoured; none listable ⇒ no charge. */
@@ -273,12 +296,9 @@ export function createToolRegistrars(deps: RegistrarDeps): ToolRegistrars {
       );
     };
 
-    server.registerTool(
-      name,
-      toolConfig(name, description, enhancedSchema),
-      // The scope encloses handler and footer, so `dopl_search`'s per-leg charges are reported.
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      ((args: EnhancedArgs) => withUnmeteredScope(() => wrapped(args))) as any,
+    // The scope encloses handler and footer, so `dopl_search`'s per-leg charges are reported.
+    publishLegacy(name, description, enhancedSchema, (args) =>
+      withUnmeteredScope(() => wrapped(args as EnhancedArgs)),
     );
   }
 
@@ -309,13 +329,38 @@ export function createToolRegistrars(deps: RegistrarDeps): ToolRegistrars {
     };
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const framed = withDoplStatus(gated as any, sessionEffective, caller, unmeteredNote);
+    publishLegacy(name, description, schema, (args) => withUnmeteredScope(() => framed(args)));
+  }
+
+  // No gate of its own: the bound legacy pipeline runs every gate, charge and tally on legacy keys,
+  // and `Gates.requestedOp` reads the op/action the binding wrote into the call.
+  function registerGranular(t: GranularTool): void {
+    if (gates.isSuppressedTool(t.name) || !servesName(toolSet, "granular", t.name)) return;
+    const shape = granularShape(t, legacy);
+    if (!shape) return;
     server.registerTool(
-      name,
-      toolConfig(name, description, schema),
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      ((args: any) => withUnmeteredScope(() => framed(args))) as any,
+      t.name,
+      {
+        ...toolConfig(t.name, granularDescription(t), strictInput(shape, t.name)),
+        annotations: annotationsFor(t),
+        ...(t.alwaysLoad && { _meta: ALWAYS_LOAD_META }),
+      },
+      (async (args: Record<string, unknown>) => {
+        const call = legacyCall(t, args);
+        const target = legacy.get(call.tool)!;
+        // A multi-job row's schema is the union of its jobs; the chosen job's own schema has the last
+        // word, so a param that job does not take is refused by name, never passed through.
+        const parsed = target.input.safeParse(call.args);
+        if (!parsed.success) {
+          throw new McpError(
+            ErrorCode.InvalidParams,
+            `Input validation error: Invalid arguments for tool ${t.name}: ${parsed.error.message}`,
+          );
+        }
+        return target.run(parsed.data as Record<string, unknown>);
+      }) as never,
     );
   }
 
-  return { registerTool, registerMetaTool, chargeCredit };
+  return { registerTool, registerMetaTool, chargeCredit, registerGranular };
 }

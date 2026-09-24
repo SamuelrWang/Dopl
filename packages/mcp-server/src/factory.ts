@@ -43,7 +43,7 @@ export interface BootOptions {
   toolProfile?: string | null;
   /**
    * The TOOL SET claimed by `X-Dopl-Tool-Set` or `?tools=`, verbatim; resolved once here
-   * (`tool-manifest.ts › resolveToolSet`). Only `legacy` is served until B1 of the tool split.
+   * (`tool-manifest.ts › resolveToolSet`) and handed to `createServer`, which lists that set.
    */
   toolSet?: string | null;
   /**
@@ -226,7 +226,9 @@ export async function bootServer(
     userId: opts.caller?.userId ?? userId,
   };
 
+  const toolSet = resolveToolSet(opts.toolSet);
   const server = createServer(client, {
+    toolSet,
     isAdmin,
     caller,
     // ⚠ Not just diagnostic — `dopl_channel` needs this id to tell a reader a
@@ -260,7 +262,7 @@ export async function bootServer(
     isAdmin,
     activeWorkspace,
     directoryLoadFailed,
-    toolSet: resolveToolSet(opts.toolSet),
+    toolSet,
   };
 }
 

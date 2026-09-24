@@ -48,6 +48,8 @@ const registeredTools = new Map<
 
 vi.mock("@modelcontextprotocol/sdk/server/mcp.js", () => ({
   McpServer: class {
+    // `unlistTools` wraps the protocol handler install; a double installs nothing.
+    server = { setRequestHandler() {} };
     // ⚠ THE MCP RESOURCE SEAM (2026-09-02). `createServer` publishes
     // `dopl://doctrine/channels` through `registerResource` (`resources.ts`), so
     // a double without this method throws before a single tool is registered.

@@ -27,6 +27,8 @@ const registry = vi.hoisted(() => ({
 
 vi.mock("@modelcontextprotocol/sdk/server/mcp.js", () => ({
   McpServer: class {
+    // `unlistTools` wraps the protocol handler install; a double installs nothing.
+    server = { setRequestHandler() {} };
     registerResource() {}
     registerTool(
       name: string,
@@ -41,6 +43,7 @@ vi.mock("@modelcontextprotocol/sdk/server/mcp.js", () => ({
 
 import { createServer } from "./server.js";
 import { acceptsWorkspaceArg, WORKSPACE_ARG_OPS } from "./workspace-arg.js";
+import { unlistedFor } from "./tool-manifest.js";
 
 function wsItem(id: string, slug: string, name: string): WorkspaceListItem {
   return {
@@ -122,7 +125,8 @@ describe("`WORKSPACE_ARG_OPS` — the list/create set (B2/B13)", () => {
   });
 
   it("covers EVERY domain tool — a tool with no row honours the arg nowhere", () => {
-    const domain = [...registry.schemas.keys()].filter((n) => !META_TOOLS.includes(n));
+    const unlisted = unlistedFor("legacy");
+    const domain = [...registry.schemas.keys()].filter((n) => !unlisted.has(n) && !META_TOOLS.includes(n));
     expect(Object.keys(WORKSPACE_ARG_OPS).sort()).toEqual(domain.sort());
   });
 

@@ -31,6 +31,8 @@ const registry = vi.hoisted(() => ({
 
 vi.mock("@modelcontextprotocol/sdk/server/mcp.js", () => ({
   McpServer: class {
+    // `unlistTools` wraps the protocol handler install; a double installs nothing.
+    server = { setRequestHandler() {} };
     registerResource() {}
     registerTool(name: string, config: { inputSchema?: unknown }, handler: Handler) {
       registry.tools.set(name, handler);
@@ -46,6 +48,7 @@ import {
 import { createWorkspaceDirectory, HOME_ADDRESS } from "./workspace-directory.js";
 import { UNADDRESSED_WRITE_REFUSALS, WORKSPACE_ARG_OPS } from "./workspace-arg.js";
 import { WRITE_OPS } from "./gating.js";
+import { unlistedFor } from "./tool-manifest.js";
 
 function wsItem(
   id: string,
@@ -379,8 +382,10 @@ function argOf(schema: unknown, arg: "workspace" | "container"): string | undefi
   return shape?.[arg]?.description;
 }
 
+// What the default set lists: the unlisted granular set borrows these schemas (`granular.test.ts`).
+const listed = (n: string) => !unlistedFor("legacy").has(n);
 const domainTools = () =>
-  [...registry.schemas.keys()].filter((n) => !META_TOOLS.includes(n)).sort();
+  [...registry.schemas.keys()].filter((n) => listed(n) && !META_TOOLS.includes(n)).sort();
 
 describe("the injected addressing pair (C9 + R-32)", () => {
   beforeEach(() => {
@@ -407,7 +412,7 @@ describe("the injected addressing pair (C9 + R-32)", () => {
 
   it("is the byte-identical string on every domain tool — 9 of them today", () => {
     const carrying = [...registry.schemas]
-      .filter(([, schema]) => argOf(schema, "container") === CONTAINER_ARG_DESCRIPTION)
+      .filter(([name, schema]) => listed(name) && argOf(schema, "container") === CONTAINER_ARG_DESCRIPTION)
       .map(([name]) => name);
     // A scan over nothing is not a guard.
     expect(carrying.length).toBeGreaterThan(5);

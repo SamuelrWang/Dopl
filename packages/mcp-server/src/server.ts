@@ -46,6 +46,7 @@ import { createToolRegistrars } from "./registrar.js";
 import { registerWorkspaceMetaTools } from "./meta-tools.js";
 import { registerResources } from "./resources.js";
 import { unlistTools } from "./unlisted-tools.js";
+import { GRANULAR_TOOLS, unlistedFor, withGranularTools, type ToolSet } from "./tool-manifest.js";
 import {
   createWorkspaceDirectory,
   containerKind,
@@ -155,10 +156,10 @@ export function createServer(
      */
     operatorHandle?: string | null;
     /**
-     * Tools registered and callable but absent from `tools/list` (`unlisted-tools.ts`). Empty by
-     * default; B1 of the tool split puts the inactive tool set here.
+     * Which tool set `tools/list` shows (`tool-manifest.ts › TOOL_SETS`, resolved by `bootServer`).
+     * The other set stays registered and callable, unlisted, so a stale prompt still works.
      */
-    unlistedTools?: ReadonlySet<string>;
+    toolSet?: ToolSet;
   } = {},
 ): McpServer {
   // ⚠ FAIL CLOSED: write/admin capability ONLY on an explicit `dopl.write`
@@ -244,7 +245,8 @@ export function createServer(
   );
 
   // Before any registration: it filters the list handler the first registerTool installs.
-  if (options.unlistedTools) unlistTools(server, options.unlistedTools);
+  const toolSet = options.toolSet ?? "legacy";
+  unlistTools(server, unlistedFor(toolSet));
 
   // ⚠ PULLED, NOT PUSHED. The channels doctrine is a resource (and
   // `dopl_channel(op="help")`) rather than description prose, so an agent pays
@@ -256,9 +258,9 @@ export function createServer(
   // onto the SDK server and would otherwise pass through none of them.
   // ⚠ The profile narrowing is resolved HERE, to a set, so `gating.ts` owns the
   // table and `createGates` owns no vocabulary. `null` ⇒ no narrowing.
-  const gates = createGates(canWrite, offeredToolsFor(options.toolProfile));
+  const gates = createGates(canWrite, withGranularTools(offeredToolsFor(options.toolProfile)));
 
-  const { registerTool, registerMetaTool, chargeCredit } = createToolRegistrars({
+  const { registerTool, registerMetaTool, chargeCredit, registerGranular } = createToolRegistrars({
     server,
     // One MCP credit per domain-tool call through this client
     // (`registrar.ts › createCreditedRunner`); meta-tools are exempt.
@@ -268,6 +270,7 @@ export function createServer(
     activeWorkspace,
     sessionEffective,
     caller,
+    toolSet,
   });
 
   registerWorkspaceMetaTools(registerMetaTool, {
@@ -326,6 +329,9 @@ export function createServer(
   // 🔒 `directory` resolves `to` on op="grant", the same way it does for
   // `dopl_kb(op="grant")` above.
   registerAgentTools(registerTool, client, caller, directory); // dopl_agent — persistent agent identities
+
+  // Last: each granular tool runs a legacy tool registered above.
+  for (const tool of GRANULAR_TOOLS) registerGranular(tool);
 
   return server;
 }

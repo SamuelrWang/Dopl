@@ -37,6 +37,8 @@ const registry = vi.hoisted(() => ({ tools: new Map<string, Handler>() }));
 
 vi.mock("@modelcontextprotocol/sdk/server/mcp.js", () => ({
   McpServer: class {
+    // `unlistTools` wraps the protocol handler install; a double installs nothing.
+    server = { setRequestHandler() {} };
     registerResource() {}
     registerTool(name: string, _config: unknown, handler: Handler) {
       registry.tools.set(name, handler);

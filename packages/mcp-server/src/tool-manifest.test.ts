@@ -28,8 +28,9 @@ import {
   annotationsFor,
   bindingsOf,
   bindsDeleteOp,
+  LEGACY_TOOL_NAMES,
   parseBinding,
-  type GranularTool,
+  selectorOf,
 } from "./tool-manifest.js";
 import { UNCOVERED_ACTIONS } from "./tool-manifest-parity.js";
 
@@ -51,8 +52,6 @@ const VERBS = new Set([
   "get", "list", "read", "search", "browse", "create", "update", "write", "edit", "send",
   "request", "invite", "launch", "manage", "save", "restore",
 ]);
-
-const selectorOf = (t: GranularTool) => (typeof t.bind === "string" ? null : (t.select ?? "action"));
 
 describe("tool manifest", () => {
   it("is 39 uniquely named verb_noun tools", () => {
@@ -117,6 +116,13 @@ describe("tool manifest", () => {
       const selector = selectorOf(t);
       if (selector) expect(t.params, t.name).not.toContain(selector);
       else expect(t.select, t.name).toBeUndefined();
+    }
+  });
+
+  it("a selector default names one of its jobs, and only on a name the legacy set also uses", () => {
+    for (const t of GRANULAR_TOOLS.filter((g) => g.selectDefault !== undefined)) {
+      expect(Object.keys(t.bind), t.name).toContain(t.selectDefault);
+      expect(LEGACY_TOOL_NAMES.has(t.name), t.name).toBe(true);
     }
   });
 
