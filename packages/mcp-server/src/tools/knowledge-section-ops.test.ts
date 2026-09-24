@@ -145,17 +145,20 @@ describe('read_file(section=…)', () => {
     expect(out).toContain("## `Errors` · 640");
   });
 
-  it("an ambiguous heading names both lines and refuses to guess", async () => {
+  // 1.37.1: the server serves every match of a loose heading; the line says which.
+  it("names every section served, and how the heading matched", async () => {
     const readKbFilePart = vi.fn().mockResolvedValue({
-      entry: entry({ body: "" }),
+      entry: entry({ body: "## Notes\na\n## Notes\nb" }),
       outline: OUTLINE,
       section: {
-        ok: false,
-        reason: "SECTION_AMBIGUOUS",
-        matches: [
-          { heading: "Notes", level: 2, chars: 10, start: 0, line: 1 },
-          { heading: "Notes", level: 2, chars: 10, start: 90, line: 12 },
-        ],
+        ok: true,
+        heading: "Notes",
+        level: 2,
+        start: 0,
+        end: 20,
+        chars: 20,
+        served: ["Notes", "Notes"],
+        match: "contains",
       },
     });
     const out = text(
@@ -169,9 +172,8 @@ describe('read_file(section=…)', () => {
         "Notes",
       )) as never,
     );
-    expect(out).toContain("reason=SECTION_AMBIGUOUS");
-    expect(out).toContain("line 1");
-    expect(out).toContain("line 12");
+    expect(out).toContain("Sections: ## `Notes` + `Notes` (contains match for `Notes`)");
+    expect(out).toContain("## Notes\nb");
   });
 
   // 🔒 **WAVE 4 a1 — THE WHOLE BODY, PLUS THE ADDRESSES FOR NEXT TIME.** A

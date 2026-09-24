@@ -64,7 +64,7 @@ const KB_INPUT_SHAPE = {
   offset: OFFSET_FIELD,
   op: z.enum(KB_OPS).describe("Operation to perform."),
   base: z.string().optional().describe("Base slug or id. Required for every op but list_bases/create_base/search (optional scope there)."),
-  section: z.string().max(300).optional().describe('read_file: only this HEADING\'s section, down to the next heading of the same or higher level — case-insensitive; an unknown one answers with the outline. write_file: replace that section (`body` is its new content), appended at "##" if absent.'),
+  section: z.string().max(300).optional().describe('read_file: only this HEADING\'s section, down to the next heading of the same or higher level — loose match, all served; an unknown one answers with the outline. write_file: replace that section (`body` is its new content), appended at "##" if absent.'),
   path: z.string().optional().describe("Path within the base. list_dir: '/' or '' for root. create_folder: required, e.g. 'projects/foo'. outline/read_file/history/restore: required entry path. write_file: entry path — required unless you pass `title` (then the title becomes the path). There is no delete op — deletion is app-only."),
   from_path: z.string().optional().describe("move_folder/move_file: source path."),
   to_path: z.string().optional().describe("move_folder/move_file: destination path (leaf becomes the new name/title)."),

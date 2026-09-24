@@ -330,10 +330,7 @@ function mergeSection(
   const spliced = replaceSection(current, input.section, input.body);
   if (spliced.ok) return { body: spliced.body, created: false };
   if (spliced.reason === "SECTION_AMBIGUOUS") {
-    throw new KnowledgeSectionAmbiguousError(
-      input.section,
-      spliced.matches.map((m) => m.line)
-    );
+    throw new KnowledgeSectionAmbiguousError(input.section, spliced.matches);
   }
   return { body: appendSection(current, input.section, input.body), created: true };
 }

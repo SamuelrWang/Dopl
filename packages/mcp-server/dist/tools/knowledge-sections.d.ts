@@ -79,8 +79,6 @@ export declare function unsectionedNudge(): string;
  * has spent more than the read it refused.
  */
 export declare function sectionMiss(heading: string, outline: Outline | undefined, title: string): string[];
-/** `reason=SECTION_AMBIGUOUS` — two headings with one name, both named. */
-export declare function sectionAmbiguous(heading: string, matches: OutlineRow[]): string[];
 /**
  * ⚠ **HAND-COPIED FROM `src/shared/knowledge/caps.ts` — `packages/mcp-server`
  * cannot import the app's `src/`** (tsconfig `rootDir`). Drift is caught by

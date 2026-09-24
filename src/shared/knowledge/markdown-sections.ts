@@ -68,7 +68,17 @@ export type SectionFailure =
   | { ok: false; reason: "SECTION_NOT_FOUND" }
   | { ok: false; reason: "SECTION_AMBIGUOUS"; matches: MarkdownSection[] };
 
-export type SectionLookup = { ok: true; section: MarkdownSection } | SectionFailure;
+/** How a heading matched: as written (case aside), or only once formatting was dropped. */
+export type SectionMatch = "exact" | "normalized" | "contains";
+
+export type SectionLookup =
+  | { ok: true; section: MarkdownSection; match: SectionMatch }
+  | SectionFailure;
+
+/** A read's answer: every section it serves, in document order. Never ambiguous. */
+export type SectionsLookup =
+  | { ok: true; sections: MarkdownSection[]; match: SectionMatch }
+  | { ok: false; reason: "SECTION_NOT_FOUND" };
 
 // ── the scan ────────────────────────────────────────────────────────
 
@@ -237,27 +247,82 @@ function normalizeQuery(heading: string): string {
 }
 
 /**
- * Resolve a heading to ONE section.
+ * The words of a heading with markdown dropped: escapes (`2\.` → `2.`), link
+ * targets, emphasis and code marks, runs of whitespace, case. The outline shows
+ * headings as stored, so a caller typing the rendered words used to miss.
+ */
+function canonical(text: string): string {
+  return text
+    .replace(/\\([!-/:-@[-`{-~])/g, "$1")
+    .replace(/\[([^\]]*)\]\([^)]*\)/g, "$1")
+    .replace(/[*_`~]+/g, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase();
+}
+
+/** Drop a leading enumerator (`2.`, `2.1`, `3)`, `a.`), so "The rules" finds "2. The rules". */
+function unnumbered(text: string): string {
+  return text.replace(/^(?:\d+(?:\.\d+)*[.):]?|[a-z][.)])\s+/, "");
+}
+
+/**
+ * Stricter to looser; the first pass with any match wins, so a document holding
+ * both `Setup` and `setup` still addresses each precisely.
+ */
+const MATCH_PASSES: ReadonlyArray<[Exclude<SectionMatch, "contains">, (s: string) => string]> = [
+  ["exact", (s) => s],
+  ["exact", (s) => s.toLowerCase()],
+  ["normalized", canonical],
+  ["normalized", (s) => unnumbered(canonical(s))],
+];
+
+function matchSections(
+  sections: MarkdownSection[],
+  heading: string,
+): { matches: MarkdownSection[]; match: SectionMatch } {
+  const query = normalizeQuery(heading);
+  for (const [match, key] of MATCH_PASSES) {
+    const want = key(query);
+    const matches = sections.filter((s) => key(s.heading) === want);
+    if (matches.length > 0) return { matches, match };
+  }
+  return { matches: [], match: "exact" };
+}
+
+/**
+ * Resolve a heading to ONE section — the WRITE lookup.
  *
- * ⚠ **EXACT FIRST, THEN CASE-INSENSITIVE**, and the fallback runs only when the
- * exact pass found nothing — so a document holding both `Setup` and `setup`
- * still addresses each of them precisely.
- *
- * ⚠ **TWO IDENTICAL HEADINGS REFUSE, NAMING BOTH.** Picking the first would
+ * ⚠ **TWO MATCHING HEADINGS REFUSE, NAMING BOTH.** Picking the first would
  * make `write_file(section=…)` overwrite a section the caller did not mean, and
  * that write is unrecoverable.
  */
 export function findSection(body: string, heading: string): SectionLookup {
-  const query = normalizeQuery(heading);
-  const { sections } = outlineOf(body);
-  let matches = sections.filter((s) => s.heading === query);
-  if (matches.length === 0) {
-    const lower = query.toLowerCase();
-    matches = sections.filter((s) => s.heading.toLowerCase() === lower);
-  }
+  const { matches, match } = matchSections(outlineOf(body).sections, heading);
   if (matches.length === 0) return { ok: false, reason: "SECTION_NOT_FOUND" };
   if (matches.length > 1) return { ok: false, reason: "SECTION_AMBIGUOUS", matches };
-  return { ok: true, section: matches[0] };
+  return { ok: true, section: matches[0], match };
+}
+
+/**
+ * Resolve a heading for a READ, where serving too much beats missing (Samuel,
+ * 2026-09-24): every equal match is served, and with none, every heading whose
+ * words CONTAIN the query's. A section nested in another served one is dropped,
+ * since its parent already carries it.
+ */
+export function findSectionsForRead(body: string, heading: string): SectionsLookup {
+  const { sections } = outlineOf(body);
+  let { matches, match } = matchSections(sections, heading);
+  if (matches.length === 0) {
+    const want = unnumbered(canonical(normalizeQuery(heading)));
+    if (want.length >= 3) matches = sections.filter((s) => canonical(s.heading).includes(want));
+    match = "contains";
+  }
+  if (matches.length === 0) return { ok: false, reason: "SECTION_NOT_FOUND" };
+  const outermost = matches.filter(
+    (s) => !matches.some((p) => p !== s && p.start <= s.start && s.end <= p.end),
+  );
+  return { ok: true, sections: outermost, match };
 }
 
 /** The heading and everything under it, up to the next heading of the same or

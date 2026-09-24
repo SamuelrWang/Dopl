@@ -128,19 +128,18 @@ callerUserId = null, format, maxChars, section, offset) {
         outline = read.outline;
         const found = read.section;
         if (found && found.ok === false) {
-            const lines = found.reason === "SECTION_AMBIGUOUS"
-                ? (0, knowledge_sections_1.sectionAmbiguous)(section, found.matches)
-                : (0, knowledge_sections_1.sectionMiss)(section, outline, entry.title);
             // ⚠ `ok`, NOT `err`: the READ succeeded and the heading did not resolve.
             // An `isError` here would make a client that retries on error retry a
             // call that can only answer the same way.
-            return (0, respond_1.ok)(lines.join("\n"));
+            return (0, respond_1.ok)((0, knowledge_sections_1.sectionMiss)(section, outline, entry.title).join("\n"));
         }
         if (found && found.ok) {
             // ⚠ NO OUTER BACKTICKS: `inlineOr` already renders a VALUE as code, and
             // wrapping its output again produced ``` ``Errors`` ``` — a heading an
             // agent cannot copy back into `section=`.
-            sectionLine = `Section: ${"#".repeat(Math.min(3, found.level))} ${(0, narration_1.inlineOr)(found.heading, narration_1.NO_NAME)} · ${found.chars} of ${outline?.totalChars ?? found.chars} chars (starts at offset ${found.start}).`;
+            const names = (found.served ?? [found.heading]).map((h) => (0, narration_1.inlineOr)(h, narration_1.NO_NAME)).join(" + ");
+            const how = found.match ? ` (${found.match} match for ${(0, narration_1.inlineOr)(section, "`(unreadable)`")})` : "";
+            sectionLine = `${found.served ? "Sections" : "Section"}: ${"#".repeat(Math.min(3, found.level))} ${names}${how} · ${found.chars} of ${outline?.totalChars ?? found.chars} chars (starts at offset ${found.start}).`;
         }
     }
     const { body, notice } = (0, response_size_1.windowBody)(entry.body, offset, maxChars);

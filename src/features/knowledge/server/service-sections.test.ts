@@ -50,14 +50,18 @@ describe("projectFile", () => {
     ]);
   });
 
-  it("an ambiguous section names both lines and sends no body", () => {
+  // 1.37.1: a read serves every match rather than refusing (better read more than miss).
+  it("two matching sections are BOTH served, and named", () => {
     const out = projectFile(entry("## N\na\n## N\nb\n"), { section: "N" });
-    expect(out.entry.body).toBe("");
-    expect(out.section).toMatchObject({ ok: false, reason: "SECTION_AMBIGUOUS" });
-    if (out.section?.ok !== false || out.section.reason !== "SECTION_AMBIGUOUS") {
-      throw new Error("unreachable");
-    }
-    expect(out.section.matches.map((m) => m.line)).toEqual([1, 3]);
+    expect(out.entry.body).toBe("## N\na\n\n## N\nb\n");
+    expect(out.section).toMatchObject({ ok: true, served: ["N", "N"], start: 0 });
+    expect(out.section).not.toHaveProperty("match");
+  });
+
+  it("the natural heading reads the escaped one, and says it matched loosely", () => {
+    const out = projectFile(entry("## 2\\. The **rules**\nx\n"), { section: "2. The rules" });
+    expect(out.entry.body).toBe("## 2\\. The **rules**\nx\n");
+    expect(out.section).toMatchObject({ ok: true, match: "normalized" });
   });
 
   it("a body with no headings outlines as empty rather than as one section", () => {

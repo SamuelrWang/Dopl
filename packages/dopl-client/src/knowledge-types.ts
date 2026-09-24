@@ -276,9 +276,19 @@ export interface KnowledgeOutline {
  * not, so the answer carries the outline and the retry needs no second call.
  */
 export type KnowledgeSectionOutcome =
-  | { ok: true; heading: string; level: number; start: number; end: number; chars: number }
-  | { ok: false; reason: "SECTION_NOT_FOUND" }
-  | { ok: false; reason: "SECTION_AMBIGUOUS"; matches: KnowledgeOutlineRow[] };
+  | {
+      ok: true;
+      heading: string;
+      level: number;
+      start: number;
+      end: number;
+      chars: number;
+      /** Every heading served, when more than one matched (a read never refuses as ambiguous). */
+      served?: string[];
+      /** How the heading matched, when not as written. */
+      match?: "normalized" | "contains";
+    }
+  | { ok: false; reason: "SECTION_NOT_FOUND" };
 
 /**
  * A PART read: the entry with `body` narrowed to the section asked for (empty

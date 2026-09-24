@@ -8,6 +8,7 @@ import { describe, it, expect } from "vitest";
 import {
   appendSection,
   findSection,
+  findSectionsForRead,
   outlineOf,
   replaceSection,
   sectionCount,
@@ -247,6 +248,40 @@ describe("findSection", () => {
   it("headings that differ only by level are two different sections, not a collision", () => {
     const found = findSection("## A\nx\n### A\ny\n", "A");
     expect(found).toMatchObject({ ok: false, reason: "SECTION_AMBIGUOUS" });
+  });
+
+  // 1.37.1 live test #6: the natural heading missed the escaped one the outline showed.
+  it("matches the natural heading: escapes, emphasis, code, whitespace, numbering", () => {
+    const body = "## 2\\. The **rules**\na\n## `run`   it\nb\n";
+    expect(findSection(body, "2. The rules")).toMatchObject({ ok: true, match: "normalized" });
+    expect(findSection(body, "the rules")).toMatchObject({ ok: true, match: "normalized" });
+    expect(findSection(body, "run it")).toMatchObject({ ok: true, match: "normalized" });
+    expect(findSection(body, "2\\. The **rules**")).toMatchObject({ ok: true, match: "exact" });
+  });
+
+  it("a WRITE lookup still refuses two loose matches rather than pick one", () => {
+    const found = findSection("## 1. Setup\na\n## 2. Setup\nb\n", "Setup");
+    expect(found).toMatchObject({ ok: false, reason: "SECTION_AMBIGUOUS" });
+  });
+});
+
+describe("findSectionsForRead", () => {
+  it("serves every loose match, outermost only", () => {
+    const found = findSectionsForRead("## 1. Setup\na\n### Setup\nx\n## 2. Setup\nb\n", "Setup");
+    expect(found).toMatchObject({ ok: true, match: "exact" });
+    if (!found.ok) throw new Error("unreachable");
+    expect(found.sections.map((s) => s.heading)).toEqual(["Setup"]);
+  });
+
+  it("falls back to headings that CONTAIN the query, dropping nested ones", () => {
+    const found = findSectionsForRead("## Deploy rules\na\n### Rollback rules\nx\n## Style\nb\n", "rules");
+    expect(found).toMatchObject({ ok: true, match: "contains" });
+    if (!found.ok) throw new Error("unreachable");
+    expect(found.sections.map((s) => s.heading)).toEqual(["Deploy rules"]);
+  });
+
+  it("an unknown heading is still SECTION_NOT_FOUND", () => {
+    expect(findSectionsForRead(DOC, "Nope")).toEqual({ ok: false, reason: "SECTION_NOT_FOUND" });
   });
 });
 

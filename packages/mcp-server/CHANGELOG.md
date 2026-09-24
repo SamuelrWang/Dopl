@@ -4,6 +4,14 @@ All notable changes to `@dopl/mcp-server` are documented here. Format follows [K
 
 ## [Unreleased]
 
+### Fixed — `section=` accepts the natural heading (1.37.1, live test #6)
+
+- A heading matches loosely: exact, case-insensitive, then with markdown escapes/emphasis/code marks
+  and whitespace dropped, then without a leading enumerator. So `2. The rules` reads `2\. The rules`.
+- A read serves every match (and, with none, every heading containing the words) instead of refusing
+  as ambiguous; the result line names each section served and how it matched. A section write still
+  refuses a multi-match, naming each.
+
 ### Fixed — `dopl_search` scopes are defined, and "everywhere" no longer misses silently (1.37.1, live test #5)
 
 - `scope` now says what each value covers. "here" = the resolved container (`container=`, else the

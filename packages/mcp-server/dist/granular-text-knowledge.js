@@ -15,7 +15,7 @@ exports.KNOWLEDGE_TEXT = {
     dopl_read_entry: {
         description: 'One knowledge entry\'s body, whole or one heading\'s `section`, optionally clipped. Prefer a section: action="outline" on dopl_browse_knowledge lists them. Prints the Version a write needs.',
         params: {
-            section: "Only this heading's section (case-insensitive); an unknown one answers with the outline.",
+            section: "Only this heading's section, loose match, all served; an unknown one answers with the outline.",
             max_chars: "Stop after this many body characters; a clip says so.",
             offset: "Start the body at this character; pairs with max_chars.",
         },

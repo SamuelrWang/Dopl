@@ -35,7 +35,6 @@ import {
   outlineHeading,
   readHeadingsLine,
   renderOutline,
-  sectionAmbiguous,
   sectionMiss,
   KB_SECTION_NUDGE_CHARS,
   type Outline,
@@ -153,20 +152,18 @@ export async function opReadFile(
     outline = read.outline;
     const found = read.section;
     if (found && found.ok === false) {
-      const lines =
-        found.reason === "SECTION_AMBIGUOUS"
-          ? sectionAmbiguous(section, found.matches)
-          : sectionMiss(section, outline, entry.title);
       // ⚠ `ok`, NOT `err`: the READ succeeded and the heading did not resolve.
       // An `isError` here would make a client that retries on error retry a
       // call that can only answer the same way.
-      return ok(lines.join("\n"));
+      return ok(sectionMiss(section, outline, entry.title).join("\n"));
     }
     if (found && found.ok) {
       // ⚠ NO OUTER BACKTICKS: `inlineOr` already renders a VALUE as code, and
       // wrapping its output again produced ``` ``Errors`` ``` — a heading an
       // agent cannot copy back into `section=`.
-      sectionLine = `Section: ${"#".repeat(Math.min(3, found.level))} ${inlineOr(found.heading, NO_NAME)} · ${found.chars} of ${outline?.totalChars ?? found.chars} chars (starts at offset ${found.start}).`;
+      const names = (found.served ?? [found.heading]).map((h) => inlineOr(h, NO_NAME)).join(" + ");
+      const how = found.match ? ` (${found.match} match for ${inlineOr(section, "`(unreadable)`")})` : "";
+      sectionLine = `${found.served ? "Sections" : "Section"}: ${"#".repeat(Math.min(3, found.level))} ${names}${how} · ${found.chars} of ${outline?.totalChars ?? found.chars} chars (starts at offset ${found.start}).`;
     }
   }
   const { body, notice } = windowBody(entry.body, offset, maxChars);

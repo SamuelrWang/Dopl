@@ -1,9 +1,10 @@
 import "server-only";
 import type { KnowledgeEntry } from "../types";
 import {
-  findSection,
+  findSectionsForRead,
   outlineOf,
   type MarkdownSection,
+  type SectionMatch,
 } from "@/shared/knowledge/markdown-sections";
 
 /**
@@ -37,10 +38,24 @@ export interface KnowledgeOutlinePayload {
   totalChars: number;
 }
 
+/**
+ * A read never refuses as ambiguous (1.37.1): it serves every match. `served`
+ * lists the headings when more than one was served; `match` says how the
+ * heading matched when not as written. Both are additive (absent = the old answer).
+ * `heading`/`level`/`start` are the first served section's; `chars` is what was served.
+ */
 export type KnowledgeSectionOutcome =
-  | { ok: true; heading: string; level: number; start: number; end: number; chars: number }
-  | { ok: false; reason: "SECTION_NOT_FOUND" }
-  | { ok: false; reason: "SECTION_AMBIGUOUS"; matches: KnowledgeOutlineRow[] };
+  | {
+      ok: true;
+      heading: string;
+      level: number;
+      start: number;
+      end: number;
+      chars: number;
+      served?: string[];
+      match?: Exclude<SectionMatch, "exact">;
+    }
+  | { ok: false; reason: "SECTION_NOT_FOUND" };
 
 export interface KnowledgeFileProjection {
   entry: KnowledgeEntry;
@@ -106,25 +121,25 @@ export function projectFile(
     return { entry };
   }
   const outline = outlinePayload(body);
-  const found = findSection(body, opts.section);
+  const found = findSectionsForRead(body, opts.section);
   if (!found.ok) {
-    const section: KnowledgeSectionOutcome =
-      found.reason === "SECTION_AMBIGUOUS"
-        ? { ok: false, reason: "SECTION_AMBIGUOUS", matches: found.matches.map(row) }
-        : { ok: false, reason: "SECTION_NOT_FOUND" };
-    return { entry: { ...entry, body: "" }, outline, section };
+    return { entry: { ...entry, body: "" }, outline, section: found };
   }
-  const s = found.section;
+  const [s] = found.sections;
+  const last = found.sections[found.sections.length - 1];
+  const served = found.sections.map((x) => body.slice(x.start, x.end)).join("\n");
   return {
-    entry: { ...entry, body: body.slice(s.start, s.end) },
+    entry: { ...entry, body: served },
     outline,
     section: {
       ok: true,
       heading: s.heading,
       level: s.level,
       start: s.start,
-      end: s.end,
-      chars: s.chars,
+      end: last.end,
+      chars: served.length,
+      ...(found.sections.length > 1 ? { served: found.sections.map((x) => x.heading) } : {}),
+      ...(found.match !== "exact" ? { match: found.match } : {}),
     },
   };
 }

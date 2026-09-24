@@ -270,12 +270,12 @@ export class KnowledgeSectionAmbiguousError extends Error {
   readonly code = "KNOWLEDGE_SECTION_AMBIGUOUS";
   readonly heading: string;
   readonly lines: number[];
-  constructor(heading: string, lines: number[]) {
+  constructor(heading: string, matches: { heading: string; line: number }[]) {
     super(
-      `"${heading}" names ${lines.length} headings in this entry (lines ${lines.join(", ")}) — rename one, or write the whole body.`
+      `"${heading}" names ${matches.length} headings in this entry (${matches.map((m) => `line ${m.line} "${m.heading}"`).join(", ")}) — pass one exactly as written, rename one, or write the whole body.`
     );
     this.name = "KnowledgeSectionAmbiguousError";
     this.heading = heading;
-    this.lines = lines;
+    this.lines = matches.map((m) => m.line);
   }
 }

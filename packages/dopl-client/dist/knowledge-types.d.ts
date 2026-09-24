@@ -270,13 +270,13 @@ export type KnowledgeSectionOutcome = {
     start: number;
     end: number;
     chars: number;
+    /** Every heading served, when more than one matched (a read never refuses as ambiguous). */
+    served?: string[];
+    /** How the heading matched, when not as written. */
+    match?: "normalized" | "contains";
 } | {
     ok: false;
     reason: "SECTION_NOT_FOUND";
-} | {
-    ok: false;
-    reason: "SECTION_AMBIGUOUS";
-    matches: KnowledgeOutlineRow[];
 };
 /**
  * A PART read: the entry with `body` narrowed to the section asked for (empty

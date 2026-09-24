@@ -24,7 +24,6 @@ exports.outlineFooter = outlineFooter;
 exports.readHeadingsLine = readHeadingsLine;
 exports.unsectionedNudge = unsectionedNudge;
 exports.sectionMiss = sectionMiss;
-exports.sectionAmbiguous = sectionAmbiguous;
 const narration_1 = require("./narration");
 /**
  * ⚠ **THE HEADING ELISION, AND IT IS THE POINT OF THE WHOLE RENDER.** A row is
@@ -148,16 +147,6 @@ function sectionMiss(heading, outline, title) {
     }
     lines.push("", outlineHeading(title, outline), ...renderOutline(outline));
     return lines;
-}
-/** `reason=SECTION_AMBIGUOUS` — two headings with one name, both named. */
-function sectionAmbiguous(heading, matches) {
-    return [
-        `reason=SECTION_AMBIGUOUS · ${(0, narration_1.inlineOr)(heading, "`(unreadable)`")} names ${matches.length} headings in this entry · retry=none, they have the same name`,
-        "",
-        ...matches.map((m) => `- line ${m.line} (offset ${m.start}) · ${marks(m.level)} ${name(m)} · ${n(m.chars)} chars`),
-        "",
-        `Read the whole entry, or read from a position with offset=. Renaming one of them is the durable fix.`,
-    ];
 }
 /**
  * ⚠ **HAND-COPIED FROM `src/shared/knowledge/caps.ts` — `packages/mcp-server`
