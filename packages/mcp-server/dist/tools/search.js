@@ -7,7 +7,6 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.registerSearchTool = registerSearchTool;
 const zod_1 = require("zod");
 const client_1 = require("@dopl/client");
-const container_destination_1 = require("./container-destination");
 const narration_1 = require("./narration");
 const response_size_1 = require("./response-size");
 const search_scope_1 = require("./search-scope");
@@ -67,7 +66,8 @@ const SCOPE_AXIS_NOTE = `Each scope was searched the same way a single-scope cal
  * The container a single-scope call searched, for the app search (which names its container
  * explicitly, unlike the four MCP-native reads): the per-call override, else the connection's
  * binding, else the home space. `standard` is false for a home space or home channel, where the app
- * searches no members and no chats; an unknown kind reads as standard.
+ * searches no members and no chats; an unknown kind reads as standard. `inHomeChannel` is the same
+ * answer `container-destination.ts › resolveHomeChannelContainer` gives, off the one kind lookup.
  */
 async function searchedContainer(client, directory) {
     let id = null;
@@ -80,12 +80,16 @@ async function searchedContainer(client, directory) {
     if (!id && directory)
         id = (await directory.homeContainer().catch(() => null))?.id ?? null;
     if (!id || !directory)
-        return { id, standard: true };
+        return { id, standard: true, inHomeChannel: false };
     const kind = await directory
         .containerKindIndex()
         .then((k) => k.get(id))
         .catch(() => undefined);
-    return { id, standard: kind === undefined || kind === "workspace" };
+    return {
+        id,
+        standard: kind === undefined || kind === "workspace",
+        inHomeChannel: kind === "home_channel",
+    };
 }
 /** Without `directory` and `charge` there is no fan-out: `scope="everywhere"` answers (and says it
  *  answered) the single-scope search. */
@@ -120,7 +124,7 @@ function registerSearchTool(register, client, directory, charge) {
             query: args.query,
             limit,
             matches,
-            inHomeChannel: (await (0, container_destination_1.resolveHomeChannelContainer)(client, directory)) !== null,
+            inHomeChannel: where.inHomeChannel,
             containerId: where.id,
         });
         // The caller's own query is still neutralized: a backtick would escape the heading.

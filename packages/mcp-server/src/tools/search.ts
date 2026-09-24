@@ -8,7 +8,6 @@ import { workspaceContext } from "@dopl/client";
 import type { DoplClient } from "@dopl/client";
 import type { ChargeCredit } from "../registrar.js";
 import type { WorkspaceDirectory } from "../workspace-directory.js";
-import { resolveHomeChannelContainer } from "./container-destination";
 import { inlineOr, NO_NAME } from "./narration";
 import { isConcise, RESPONSE_FORMAT_FIELD } from "./response-size";
 import {
@@ -83,12 +82,13 @@ const SCOPE_AXIS_NOTE = `Each scope was searched the same way a single-scope cal
  * The container a single-scope call searched, for the app search (which names its container
  * explicitly, unlike the four MCP-native reads): the per-call override, else the connection's
  * binding, else the home space. `standard` is false for a home space or home channel, where the app
- * searches no members and no chats; an unknown kind reads as standard.
+ * searches no members and no chats; an unknown kind reads as standard. `inHomeChannel` is the same
+ * answer `container-destination.ts › resolveHomeChannelContainer` gives, off the one kind lookup.
  */
 async function searchedContainer(
   client: DoplClient,
   directory?: WorkspaceDirectory,
-): Promise<{ id: string | null; standard: boolean }> {
+): Promise<{ id: string | null; standard: boolean; inHomeChannel: boolean }> {
   let id: string | null = null;
   try {
     id = workspaceContext.getStore() ?? client.getWorkspaceId();
@@ -96,12 +96,16 @@ async function searchedContainer(
     id = null; // an unreadable binding is "not known", never a throw on the search path
   }
   if (!id && directory) id = (await directory.homeContainer().catch(() => null))?.id ?? null;
-  if (!id || !directory) return { id, standard: true };
+  if (!id || !directory) return { id, standard: true, inHomeChannel: false };
   const kind = await directory
     .containerKindIndex()
     .then((k) => k.get(id as string))
     .catch(() => undefined);
-  return { id, standard: kind === undefined || kind === "workspace" };
+  return {
+    id,
+    standard: kind === undefined || kind === "workspace",
+    inHomeChannel: kind === "home_channel",
+  };
 }
 
 /** Without `directory` and `charge` there is no fan-out: `scope="everywhere"` answers (and says it
@@ -148,7 +152,7 @@ export function registerSearchTool(
         query: args.query,
         limit,
         matches,
-        inHomeChannel: (await resolveHomeChannelContainer(client, directory)) !== null,
+        inHomeChannel: where.inHomeChannel,
         containerId: where.id,
       });
 
