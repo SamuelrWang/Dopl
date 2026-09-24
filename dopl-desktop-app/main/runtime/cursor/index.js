@@ -130,6 +130,7 @@ const runtime = {
   probeMcp() { return mcp.probeMcp(); },
   credentialState() { return credential.credentialState(); },
   signIn() { return credential.signIn(); },
+  signOut() { return credential.signOut(); },
 };
 
 module.exports = { descriptor, runtime };

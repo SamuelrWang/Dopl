@@ -1,27 +1,13 @@
-// THE IN-APP CLAUDE CODE SIGN-IN — the RECOVERY half of Q6, wired 2026-08-25.
+// THE IN-APP SIGN-IN'S RECOVERY HALF — a completed sign-in releases the sessions this Mac holds.
 //
-// THE BUG THIS SUITE EXISTS FOR IS AN ABSENCE, which is why it is a suite rather than a case.
-// Every DETECTING part of Q6 shipped and worked: `session-auth.js › holdIfNoCredential` preflights
-// a windowless launch and HOLDS it, `session-query.js` turns an auth-shaped mid-session failure
-// into the same hold, and the channels composer says so in as many words. Every REMEDYING part
-// shipped too — `claude-auth.js › startSignInFlow` and `session-auth.js › resumeAfterSignIn`, both
-// complete, both test-covered. **Neither had a single production caller.** So a held agent could
-// never be un-held: re-posting was refused with `auth-hold` forever and no dialog could ever
-// appear, on a machine whose own UI was telling the operator to sign in.
-//
-// A test suite over either half would have stayed green through all of it. What is pinned here is
-// therefore the WIRE — that the op exists, that it is bound, that it drives the flow exactly once,
-// that success is measured from the CREDENTIAL rather than reported by the flow, and that the
-// sessions this Mac is holding are the ones released.
-//
-// ⚠ THREE LAYERS, THE SAME WAY THE REST OF Q6 IS DRIVEN:
-//   1. FAN-OUT — the AUTH-RESUME-FAN-OUT block of `session-auth.js`, sliced and driven with fakes
-//      (it reads the engine's registry, which is why it sits outside the hold block's sentinels).
-//   2. OP — `main/claude-signin-op.js`, evaluated against a stub `require` so the real ordering
-//      (flow -> forget -> re-probe -> fan-out) is the thing under test.
-//   3. BOUNDARY — structural reads of `session-ipc-ops.js`, plus a driven refusal proving an
-//      unbound sender reaches no flow at all. The full sender-binding census is
-//      `channel-ipc-sender.test.mjs`, which carries this op's row.
+// The bug this suite was written for is an ABSENCE: every DETECTING part of Q6 shipped (the preflight
+// hold, the mid-session hold), and so did the remedy, and the remedy had no caller — so a held agent
+// could never be un-held. What is pinned here is therefore the WIRE:
+//   1. FAN-OUT — the AUTH-RESUME-FAN-OUT block of `session-auth.js`, sliced and driven with fakes.
+//   3. BOUNDARY — structural reads of `session-ipc-ops.js`, plus a driven refusal proving an unbound
+//      sender reaches no flow at all. The full sender-binding census is `channel-ipc-sender.test.mjs`.
+//   4. END TO END — held, signed in, running again.
+// The sign-in op itself (status, prompt, which runtime is released) is `runtime-credentials.test.mjs`.
 //
 // Run: `node --test dopl-desktop-app/test/claude-signin-recovery.test.mjs`
 
@@ -31,13 +17,12 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { createRequire } from "node:module";
-import { evalModule, bootIpc } from "./_ipc-harness.mjs";
+import { bootIpc } from "./_ipc-harness.mjs";
 import { harness, session } from "./_auth-hold-harness.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const M = (p) => join(HERE, "..", "main", p);
 const AUTH_SRC = readFileSync(M("session-auth.js"), "utf8");
-const OP_SRC = readFileSync(M("claude-signin-op.js"), "utf8");
 const OPS_SRC = readFileSync(M("session-ipc-ops.js"), "utf8");
 
 // ── 1. THE FAN-OUT: which sessions a completed sign-in releases ──────────────
@@ -146,144 +131,28 @@ test("an UNBOUND registry answers 0 rather than throwing into the sign-in", asyn
   assert.deepEqual(f.resumed, []);
 });
 
-// ── 2. THE OP: flow -> forget -> RE-PROBE -> fan-out ─────────────────────────
-
-/** `claude-signin-op.js` against fakes, recording every call it makes. */
-function bootOp({ usable = true, bundled = "/bundle/claude", external = "/usr/local/bin/claude",
-  bundledThrows = false, resumed = 3 } = {}) {
-  const calls = { flow: [], forget: 0, probe: 0, resume: 0, order: [] };
-  const stub = (id) => {
-    if (id === "./claude-auth") {
-      return {
-        startSignInFlow: async (opts) => {
-          calls.order.push("flow");
-          // The bin is resolved by the FLOW, through the accessor we hand it — exactly as
-          // `claude-auth.js` really does it, so the resolution order is driven rather than read.
-          calls.flow.push({ bin: await opts.getClaudeBin() });
-        },
-      };
-    }
-    if (id === "./session-auth") {
-      return {
-        forget: () => { calls.forget += 1; calls.order.push("forget"); },
-        credentialState: () => {
-          calls.probe += 1;
-          calls.order.push("probe");
-          return { usable, source: usable ? "cli-store" : null };
-        },
-        resumeHeldSessions: async (runtimeId) => {
-          calls.resume += 1; calls.order.push("resume"); calls.resumedRuntime = runtimeId; return resumed;
-        },
-      };
-    }
-    if (id === "./diag") return { diag: () => {} };
-    if (id === "./runtime/claude") return { descriptor: { id: "claude" } };
-    if (id === "./runtime/claude/loader") {
-      if (bundledThrows) throw new Error("electron.app unavailable");
-      return { resolveClaudeExecutable: () => bundled };
-    }
-    if (id === "./session-spawner") return { getClaudeBinPath: async () => external };
-    throw new Error("unexpected require: " + id);
-  };
-  return { op: evalModule(OP_SRC, stub), calls };
-}
-
-test("a completed sign-in re-probes the CREDENTIAL and releases every held session", async () => {
-  const { op, calls } = bootOp({ usable: true, resumed: 2 });
-  assert.deepEqual(await op.signIn(), { ok: true, resumed: 2 });
-  assert.equal(calls.flow.length, 1, "the flow ran");
-  assert.equal(calls.resume, 1, "and the fan-out ran once, not once per session");
-  // ⚠ THE ORDER IS THE CONTRACT. `forget` MUST precede the probe: `credentialState` is a 5s
-  // click-rate cache, and the moment a sign-in returns is precisely the moment it is wrong — a
-  // probe taken before it would answer with the state this flow just changed, and report failure
-  // over a credential that is now present.
-  assert.deepEqual(calls.order, ["flow", "forget", "probe", "resume"]);
-  assert.equal(calls.resumedRuntime, "claude", "only Claude's held sessions (P4-06)");
-});
-
-test("SUCCESS IS THE CREDENTIAL, NOT THE FLOW — a sign-in that did not take resumes nothing", async () => {
-  // `startSignInFlow` resolves `undefined` on every path: a completed sign-in, a declined dialog,
-  // a failed pty and the single-flight no-op are indistinguishable from the caller. So the answer
-  // is re-probed, and a machine still without a credential must NOT release its held sessions —
-  // resuming them would spawn queries that fail auth and re-hold, one round per click.
-  const { op, calls } = bootOp({ usable: false });
-  assert.deepEqual(await op.signIn(), { ok: false }, "the bare refusal shape, no reason to probe");
-  assert.equal(calls.resume, 0, "nothing was released");
-  assert.deepEqual(calls.order, ["flow", "forget", "probe"]);
-});
-
-test("ONE FLOW PER CALL — the single-flight stays in claude-auth.js, unduplicated", async () => {
-  // N held sessions produce exactly ONE dialog because the flow is driven once and the RESUME is
-  // the fan-out. And there is no second latch here: `claude-auth.js › startSignInFlow` already
-  // refuses to stack two sign-ins, and a local one would be a second answer to that question,
-  // able to drift out of step with it.
-  const { op, calls } = bootOp({ resumed: 5 });
-  await op.signIn();
-  assert.equal(calls.flow.length, 1, "one call, whatever the fan-out then releases");
-  assert.equal(calls.resume, 1);
-  assert.ok(!/inProgress|signingIn|inFlight/.test(OP_SRC), "no second single-flight latch here");
-  assert.match(OP_SRC, /require\('\.\/claude-auth'\)|claudeAuth\.startSignInFlow/,
-    "it CALLS the existing flow rather than re-implementing one");
-});
-
-test("the flow is pointed at the BUNDLED binary first, the external CLI second", async () => {
-  // The executable a session really runs ships inside the app bundle
-  // (`runtime/claude/loader.js › resolveClaudeExecutable`), and most machines we distribute to
-  // never installed a `claude` on PATH — a sign-in that needs one is the silent-drop defect.
-  const bundledFirst = bootOp({ bundled: "/bundle/claude", external: "/usr/local/bin/claude" });
-  await bundledFirst.op.signIn();
-  assert.equal(bundledFirst.calls.flow[0].bin, "/bundle/claude");
-  // No bundled binary -> the external CLI, so a developer machine behaves exactly as it did.
-  const fallback = bootOp({ bundled: null });
-  await fallback.op.signIn();
-  assert.equal(fallback.calls.flow[0].bin, "/usr/local/bin/claude");
-  // And a THROWING loader (it pulls `electron.app` at module scope) degrades to the same
-  // fallback rather than taking the sign-in down.
-  const thrown = bootOp({ bundledThrows: true });
-  await thrown.op.signIn();
-  assert.equal(thrown.calls.flow[0].bin, "/usr/local/bin/claude");
-});
-
-test("a flow that THROWS still re-probes — the credential may have landed anyway", async () => {
-  const calls = [];
-  const stub = (id) => {
-    if (id === "./claude-auth") return { startSignInFlow: async () => { throw new Error("boom"); } };
-    if (id === "./session-auth") {
-      return {
-        forget: () => calls.push("forget"),
-        credentialState: () => { calls.push("probe"); return { usable: true }; },
-        resumeHeldSessions: async () => { calls.push("resume"); return 1; },
-      };
-    }
-    if (id === "./diag") return { diag: () => {} };
-    if (id === "./runtime/claude") return { descriptor: { id: "claude" } };
-    throw new Error("unexpected require: " + id);
-  };
-  const op = evalModule(OP_SRC, stub);
-  assert.deepEqual(await op.signIn(), { ok: true, resumed: 1 });
-  assert.deepEqual(calls, ["forget", "probe", "resume"]);
-});
-
 // ── 3. THE BOUNDARY: bound, delegated, and inert when refused ────────────────
 
 test("the op is registered, sender-bound, and delegates rather than inlining the body", () => {
-  assert.match(OPS_SRC, /ipcMain\.handle\('claude:signIn', appWindowOnly\('claude:signIn', \{ ok: false \}/,
+  assert.match(OPS_SRC, /ipcMain\.handle\('runtime:signIn', appWindowOnly\('runtime:signIn', \{ ok: false \}/,
     "the wrapper is written LITERALLY at the site — the structural belt in " +
       "channel-ipc-sender.test.mjs reads exactly that shape");
-  assert.match(OPS_SRC, /require\('\.\/claude-signin-op'\)\.signIn\(\)/,
+  assert.match(OPS_SRC, /require\('\.\/runtime-credentials'\)\.signIn\(runtimeId\)/,
     "the body lives in its own module (§1's cap, the session-launch-op.js precedent)");
-  assert.ok(!/startSignInFlow/.test(OPS_SRC), "the IPC layer never drives the flow itself");
+  assert.ok(!/claude:signIn/.test(OPS_SRC), "the Claude-only channel is gone");
+  assert.match(readFileSync(M("runtime/claude/credential.js"), "utf8"), /require\('\.\.\/\.\.\/claude-auth'\)\.signIn\(\)/,
+    "Claude's registry entry drives its own flow");
 });
 
 test("A REFUSED SENDER REACHES NO FLOW AT ALL — not even the require", async () => {
   // The sharpest assertion available on this op: `_ipc-harness.mjs`'s stub `require` THROWS on
-  // any id it does not know, and it does not know `./claude-signin-op`. So a refusal that
+  // any id it does not know, and it does not know `./runtime-signin-op`. So a refusal that
   // returned the right shape while still having loaded (or run) the sign-in would blow up here
   // instead of passing quietly. The op pops a NATIVE DIALOG once it starts, which is the one
   // side effect a forged call must never be able to buy.
   for (const which of ["foreign", "iframe"]) {
     const ipc = bootIpc();
-    assert.deepEqual(await ipc.handlers["claude:signIn"](ipc[which]), { ok: false }, which);
+    assert.deepEqual(await ipc.handlers["runtime:signIn"](ipc[which], { runtimeId: "claude" }), { ok: false }, which);
     assert.deepEqual(ipc.dialogs, [], `${which}: no native dialog was opened`);
   }
 });
@@ -313,8 +182,7 @@ test("a WINDOWLESS PREFLIGHT hold, then a sign-in, and the RE-POST launches", as
   // invisible from the composer. A windowless launch that holds is UN-REGISTERED by the engine
   // (`session-engine.js`: `sessions.delete(s.key); return { authHold: true }`), so there is no
   // session left for the fan-out to release — the operator's next post makes a NEW one, and what
-  // has to be true is that the preflight now lets it through. That is why the op re-probes and
-  // calls `forget()` first: the 5s probe cache is the only thing that could still refuse here.
+  // has to be true is that the preflight now lets it through (the probe caches nothing).
   const h = harness({ usable: false });
   const first = session({ windowless: true });
   assert.equal(h.holdIfNoCredential(first), true, "the launch is held, and the engine drops it");

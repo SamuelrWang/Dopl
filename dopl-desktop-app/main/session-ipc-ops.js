@@ -1,4 +1,4 @@
-// The session + window IPC ops (`sessions:*`, `threads:*`, `agents:forgetThread`, `claude:signIn`), registered
+// The session + window IPC ops (`sessions:*`, `threads:*`, `agents:forgetThread`, `runtime:*`), registered
 // through `channel-dir-ipc.js › register`. Every handler is sender-bound: an app-owned window's TOP frame
 // (`ipc-guards.js › isAppWindowSender`), and `appWindowOnly(...)` is written literally at each `ipcMain.handle`
 // because test/channel-ipc-sender.test.mjs reads that shape. Every refusal matches the op's bad-payload shape.
@@ -16,6 +16,16 @@ function asAgentId(value) {
 
 // The 1:1 body bound, enforced at the boundary; pinned against the preload's own cap (preload-parity.test).
 const MESSAGE_CAP = 4000;
+
+// A runtime id's shape (`''` = the default); registration is checked inside the op.
+const RUNTIME_ID_RE = /^(?:[a-z][a-z0-9-]{0,31})?$/;
+
+/** `payload.runtimeId` when it is shaped like one (absent = `''`), else null. */
+function runtimeIdOf(payload) {
+  const raw = payload && payload.runtimeId;
+  const id = raw == null ? '' : raw;
+  return typeof id === 'string' && RUNTIME_ID_RE.test(id) ? id : null;
+}
 
 /** Register the ops. With no `getSenderIds` (a harness), every handler fails CLOSED. */
 function register(opts = {}) {
@@ -195,11 +205,23 @@ function register(opts = {}) {
     { ok: true, agentId: newAgentId() }
   )));
 
-  // Sign this Mac in to Claude Code, then release held sessions (body: `claude-signin-op.js`). No payload, so the
-  // sender binding is the only guard.
-  ipcMain.handle('claude:signIn', appWindowOnly('claude:signIn', { ok: false }, () => (
-    require('./claude-signin-op').signIn()
+  // Sign this Mac in to one runtime, then release that runtime's held sessions (body: `runtime-credentials.js`).
+  // `runtimeId` is `''` (the default runtime) or a registry-shaped id; anything else refuses before any work.
+  ipcMain.handle('runtime:signIn', appWindowOnly('runtime:signIn', { ok: false }, (_event, payload) => {
+    const runtimeId = runtimeIdOf(payload);
+    return runtimeId === null ? { ok: false } : require('./runtime-credentials').signIn(runtimeId);
+  }));
+
+  // Every in-app-sign-in runtime's credential status; the same rows `dopl:runtime-credentials` pushes.
+  ipcMain.handle('runtime:credentialStatus', appWindowOnly('runtime:credentialStatus', { runtimes: [] }, async () => (
+    { runtimes: await require('./runtime-credentials').list() }
   )));
+
+  // The operator closed one runtime's sign-in prompt.
+  ipcMain.handle('runtime:dismissSignInPrompt', appWindowOnly('runtime:dismissSignInPrompt', { ok: false }, (_event, payload) => {
+    const runtimeId = runtimeIdOf(payload);
+    return { ok: !!runtimeId && require('./runtime-credentials').dismissPrompt(runtimeId) };
+  }));
 
   // The pop-out thread window: three router-path strings, none trusted; the version floor applies.
   ipcMain.handle('threads:openWindow', appWindowOnly('threads:openWindow', { ok: false }, (_event, payload) => {

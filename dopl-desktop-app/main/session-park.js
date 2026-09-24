@@ -107,6 +107,8 @@ async function startResumedConsumer(s) {
     return;
   }
   try {
+    // The runtime's Dopl credential, as at the first query-start site (`session-query.js › startQuery`).
+    if (deps.holdIfNoCredential && (await deps.holdIfNoCredential(s, rt))) { s.resuming = false; return; }
     // The container lock (plan §4.4 B1): the second query-start site; a woken spawn-idle shell has no stamp yet.
     await sessionCredential.ensureContainerCredential(s, diag);
     // The MCP pre-flight runs here too (a boot re-park resumes against a cold route), with its settled re-check (F-696).

@@ -35,6 +35,8 @@ const RUNTIME_METHODS = {
   probeMcp: 0,
   credentialState: 0,
   signIn: 0,
+  // Drop Dopl's own credential for this runtime (a Dopl sign-out); `null` where it holds none.
+  signOut: 0,
 };
 
 // ── THE FOUR THAT REFUSE ─────────────────────────────────────────────────────────────────────

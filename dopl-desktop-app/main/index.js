@@ -40,6 +40,7 @@ const triggerOutcomes = require('./trigger-outcomes'); // the engine's lifecycle
 const agentRetention = require('./agent-retention'); // 2026-08-22: the ended-agent 7-day sweep
 const launchDirectives = require('./launch-directives'); // 2026-08-22: the orchestrator launch lane
 const agentDirections = require('./agent-directions');
+const runtimeCredentials = require('./runtime-credentials');
 // Phase-4 prerequisite: the server-authoritative minimum-version gate. Policy in
 // min-version.js, shell in version-gate.js, screen in update-required-window.js.
 const versionGate = require('./version-gate');
@@ -308,6 +309,8 @@ if (!gotLock) {
       });
       createShellWindow({ show: false });
     }
+    // Each runtime's Dopl sign-in status, pushed to every app window; a clicked sign-in notification reveals the app.
+    runtimeCredentials.start({ getWindows: () => appWindows.liveWindows(), showWindow: () => showMainWindow() });
     deepLink.flushPending();
 
     // Session seam: lifecycle handlers, then init() (registers session IPC + reloads records) BEFORE listener.start.

@@ -383,8 +383,7 @@ function checkNow() {
 // notification body and its action button all lead here.
 //
 // Windowless on purpose: the app is usually a hidden background listener, and a
-// modal parented to a hidden window would be invisible. claude-auth.js already
-// shows a windowless message box on the same reasoning.
+// modal parented to a hidden window would be invisible.
 function promptRestart() {
   if (!readyVersion || promptOpen) return Promise.resolve(false);
   promptOpen = true;

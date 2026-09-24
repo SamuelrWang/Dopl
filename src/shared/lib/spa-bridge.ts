@@ -29,6 +29,16 @@ export type {
 export type { SpaBridgeSessions } from "./spa-bridge-sessions";
 
 
+/** One runtime's Dopl sign-in as main reports it: a state and a flag, never a credential. */
+export interface RuntimeCredentialStatus {
+  runtimeId: string;
+  /** The runtime's own name for itself. */
+  label: string;
+  state: "connected" | "not-connected" | "expired" | "signing-in";
+  /** Main raised this runtime's sign-in prompt, and no sign-in or dismissal has closed it. */
+  prompt: boolean;
+}
+
 export interface SpaBridgeSurface {
   apiRequest(
     path: string,
@@ -100,32 +110,16 @@ export interface SpaBridgeSurface {
     set(enabled: boolean): Promise<{ ok: boolean; reason?: string; enabled?: boolean }>;
   };
   /**
-   * SIGN THIS MAC IN TO CLAUDE CODE (2026-08-25) — the ONE entry into the auth
-   * recovery flow, and the reason the "waiting for you to sign in" banner is now
-   * answerable rather than merely true.
-   *
-   * ⚠ A SESSION RIDES A THIRD CREDENTIAL. Not the Dopl login and not the Claude
-   * app login: the Claude Code credential held by THIS Mac. When it is missing or
-   * expired the engine HOLDS the session instead of burning it
-   * (`main/session-auth.js`), and until this op existed nothing could ever enter
-   * the remedy — re-posting was refused with `auth-hold` forever.
-   *
-   * ⚠ ITS OWN NAMESPACE, because it takes no session and no channel: one
-   * operator, one Mac, one credential.
-   * ⚠ NO CREDENTIAL CROSSES THIS BRIDGE, and none is typed into a Dopl surface —
-   * main opens the OAuth page in the SYSTEM BROWSER and collects the pasted code
-   * in its own local window.
-   * ⚠ `ok` REPORTS THE CREDENTIAL, NOT THE FLOW: it is true when this Mac can run
-   * a session afterwards, whichever tier finished. A declined dialog, a failed
-   * sign-in and a call from an unbound sender all answer `{ ok: false }` alike.
-   * ⚠ ON SUCCESS MAIN HAS ALREADY RELEASED every session it was holding
-   * (`session-auth.js › resumeHeldSessions`), so the next post reaches a live
-   * agent with no second call from here.
-   * ⚠ FEATURE-DETECT IT at the call site — an older main has no handler and a
-   * plain browser has no bridge; the button must be ABSENT, never inert.
+   * DOPL'S OWN RUNTIME CREDENTIALS (`main/runtime-credentials.js`). `signIn` runs one runtime's in-app
+   * sign-in (`''` = the default) and, on `ok`, main has already released that runtime's held agents;
+   * `status` / `onStatus` read and follow every in-app-sign-in runtime's row; `dismissPrompt` closes
+   * one runtime's sign-in prompt. No credential crosses in either direction. Feature-detect each member.
    */
-  claude?: {
-    signIn(): Promise<{ ok: boolean; resumed?: number }>;
+  runtimeAuth?: {
+    signIn(runtimeId?: string): Promise<{ ok: boolean; resumed?: number }>;
+    status(): Promise<{ runtimes: RuntimeCredentialStatus[] }>;
+    onStatus(callback: (payload: { runtimes: RuntimeCredentialStatus[] }) => void): () => void;
+    dismissPrompt(runtimeId: string): Promise<{ ok: boolean }>;
   };
   /** THE OPERATOR'S OWN AGENTS — the whole namespace, declared in `./spa-bridge-sessions`.
    *  ⚠ A §1 SPLIT (2026-09-17): this file stood at EXACTLY the 500-line cap, which is the

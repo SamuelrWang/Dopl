@@ -49,7 +49,7 @@ export const HOLD_BLOCK = sentinelBlock(AUTH_SRC, "SESSION-AUTH-HOLD");
 // await left in the resume, so that is where a re-entrancy race is made now.
 export function harness(over = {}) {
   const cfg = { usable: false, gate: null, ...over };
-  const calls = { dispatch: [], effects: [], startQuery: [], denyPending: [], phase: [], sdk: 0, acquired: [] };
+  const calls = { dispatch: [], effects: [], startQuery: [], denyPending: [], phase: [], sdk: 0, acquired: [], signIn: [] };
   const state = { usable: cfg.usable };
   const deps = {
     acquireRuntime: async (id) => { calls.sdk += 1; calls.acquired.push(id); if (cfg.gate) await cfg.gate; return { __runtime: true }; },
@@ -78,16 +78,19 @@ export function harness(over = {}) {
   const runtimeRegistry = require(M("runtime/index.js"));
   const runtimeCopy = runtimeRegistry.copy;
   const copyFor = (s) => runtimeRegistry.descriptorFor(s && s.runtimeId);
+  // `runtime-credentials.js`, recorded: which sign-in each hold asked for.
+  const credentials = {
+    needSignIn: (id) => calls.signIn.push({ id, kind: "missing" }),
+    noteRejected: (id) => calls.signIn.push({ id, kind: "rejected" }),
+  };
   const api = new Function(
-    "deps", "detect", "store", "diag", "credentialState", "floorWindowlessMessage",
-    "runtimeCopy", "copyFor",
+    "deps", "store", "diag", "credentials", "floorWindowlessMessage", "runtimeCopy", "copyFor",
     `${HOLD_BLOCK}\n return { holdMissingCredential, holdIfNoRuntimeCredential, holdIfAuthFailure, resumeAfterSignIn };`
-  )(deps, detect, { setRecordPhase: (key, phase) => calls.phase.push({ key, phase }) }, () => {},
-    () => ({ usable: state.usable, source: state.usable ? "cli-store" : null }),
+  )(deps, { setRecordPhase: (key, phase) => calls.phase.push({ key, phase }) }, () => {}, credentials,
     require(M("session-profiles.js")).floorWindowlessMessage,
     runtimeCopy, copyFor);
   // The preflight over this harness's fake credential verdict.
-  const holdIfNoCredential = (s) => api.holdMissingCredential(s, { usable: state.usable, source: state.usable ? "cli-store" : null });
+  const holdIfNoCredential = (s) => api.holdMissingCredential(s, { usable: state.usable, source: state.usable ? "dopl-token" : null });
   return { ...api, holdIfNoCredential, calls, state };
 }
 

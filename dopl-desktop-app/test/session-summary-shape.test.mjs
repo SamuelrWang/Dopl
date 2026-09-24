@@ -193,16 +193,17 @@ test("SHAPE: an end code this build does not know renders the GENERIC arm, not a
 });
 
 test("SHAPE: only the signed-out code offers a sign-in, and only where one exists", () => {
-  // ⚠ HIDE, NEVER GRAY, APPLIED TO A REMEDY. Codex declares `credential.interactiveSignIn: null`
-  // (`codex login` drives a browser flow Dopl cannot complete in its own window), so the sentence
-  // is still said and the BUTTON is absent — a button that opens nothing is the control that lies.
+  // ⚠ HIDE, NEVER GRAY, APPLIED TO A REMEDY. Cursor declares `credential.interactiveSignIn: null`,
+  // so the sentence is still said and the BUTTON is absent — a button that opens nothing is the
+  // control that lies. Codex has had an in-app flow since 2026-09-23.
   const m = load();
   const actionFor = (runtimeId, endCode) => {
     m.bind({ sessions: new Map(), endedRecords: () => [endedRecord({ runtimeId, endCode })] });
     return m.list()[0].endReason.action;
   };
   assert.equal(actionFor("claude", "runtime-signed-out"), "Sign in to Claude Code");
-  assert.equal(actionFor("codex", "runtime-signed-out"), null, "no in-app flow => no button");
+  assert.equal(actionFor("codex", "runtime-signed-out"), "Sign in to Codex");
+  assert.equal(actionFor("cursor", "runtime-signed-out"), null, "no in-app flow => no button");
   assert.equal(actionFor("claude", "runtime-crashed"), null, "a crash is not fixed by signing in");
 });
 

@@ -1,9 +1,8 @@
 // P4-06 — an auth-held session is released by ITS OWN runtime's credential, never another's.
 //
-// A runtime with no in-app sign-in (Codex: the operator runs `codex login` in a terminal) had no
-// release at all: its held agent stayed held forever. Now the next message to it re-probes that
-// runtime's credential and resumes it when the probe no longer says signed out. A runtime WITH an
-// in-app sign-in (Claude) is released only by that sign-in (`claude-signin-recovery.test.mjs`).
+// A runtime with no in-app sign-in (Cursor) re-probes on the next message and resumes when the probe
+// no longer says signed out. A runtime Dopl signs in (Claude, Codex) holds only Dopl's own credential, so
+// only that sign-in releases it (`runtime-credentials.js › signIn`); a message never re-probes it.
 //
 // Drives the REAL `session-auth.js` and the REAL `session-reopen.js › messageByTask`, with the
 // REAL reducer behind a fake dispatch; only the credential probe is stubbed.
@@ -16,7 +15,8 @@ import { loadReducer } from "./_reducer-block.mjs";
 const require = createRequire(import.meta.url);
 const sessionAuth = require("../main/session-auth.js");
 const sessionReopen = require("../main/session-reopen.js");
-const codexCredential = require("../main/runtime/codex/credential.js");
+const cursorCredential = require("../main/runtime/cursor/credential.js");
+const runtimeRegistry = require("../main/runtime/index.js");
 const { initialSessionState, sessionReducer } = loadReducer();
 
 const AGENT = "a1b2c3d4";
@@ -47,26 +47,33 @@ function world(runtimeId) {
   return { s, dispatched };
 }
 
+// Every runtime's probe, counted: a message must re-ask only the one that has no in-app sign-in.
 function withProbe(answer, fn) {
-  const real = codexCredential.credentialState;
-  let probes = 0;
-  codexCredential.credentialState = async () => { probes += 1; return answer(); };
-  return Promise.resolve().then(() => fn(() => probes)).finally(() => { codexCredential.credentialState = real; });
+  const probed = [];
+  const reals = new Map();
+  for (const id of runtimeRegistry.ids()) {
+    const rt = id === "cursor" ? cursorCredential : runtimeRegistry.resolve(id).runtime;
+    reals.set(rt, rt.credentialState);
+    rt.credentialState = async () => { probed.push(id); return answer(); };
+  }
+  // The hold's own status push (`runtime-credentials.js`) settles first; only the message's probes count.
+  return new Promise((r) => setImmediate(r)).then(() => { probed.length = 0; return fn(() => probed); })
+    .finally(() => { for (const [rt, real] of reals) rt.credentialState = real; });
 }
 
-test("Codex: still signed out → the message is refused and the agent stays held", async () => {
-  const { s } = world("codex");
-  await withProbe(() => ({ usable: false, source: "login-status-nonzero" }), async (probes) => {
+test("Cursor: still signed out → the message is refused and the agent stays held", async () => {
+  const { s } = world("cursor");
+  await withProbe(() => ({ usable: false, source: "status-nonzero" }), async (probed) => {
     const res = await sessionReopen.messageByTask({ ...task, text: "are you there?" });
     assert.deepEqual(res, { ok: false, reason: "auth-hold" });
-    assert.equal(probes(), 1, "the credential WAS re-asked");
+    assert.deepEqual(probed(), ["cursor"], "its own credential WAS re-asked");
     assert.equal(s.state.authHeld, true);
   });
 });
 
-test("Codex: signed back in → the next message releases the hold and is delivered", async () => {
-  const { s, dispatched } = world("codex");
-  await withProbe(() => ({ usable: true, source: "login-status" }), async () => {
+test("Cursor: signed back in → the next message releases the hold and is delivered", async () => {
+  const { s, dispatched } = world("cursor");
+  await withProbe(() => ({ usable: true, source: "cli-status" }), async () => {
     const res = await sessionReopen.messageByTask({ ...task, text: "carry on" });
     assert.deepEqual(res, { ok: true });
     assert.equal(s.state.authHeld, false, "released");
@@ -78,14 +85,16 @@ test("Codex: signed back in → the next message releases the hold and is delive
   });
 });
 
-test("Claude: a held session is NOT re-probed by a message — its in-app sign-in releases it", async () => {
-  const { s } = world("claude");
-  await withProbe(() => ({ usable: true }), async (probes) => {
-    assert.equal(sessionAuth.reprobesOnWake(s), false);
-    const res = sessionReopen.messageByTask({ ...task, text: "hello" });
-    assert.deepEqual(res, { ok: false, reason: "auth-hold" }, "synchronous, as before");
-    assert.equal(probes(), 0);
-    assert.equal(await sessionAuth.reprobeHeld(s), false);
-    assert.equal(s.state.authHeld, true);
+for (const runtimeId of ["claude", "codex"]) {
+  test(`${runtimeId}: a held session is NOT re-probed by a message — only Dopl's own sign-in releases it`, async () => {
+    const { s } = world(runtimeId);
+    await withProbe(() => ({ usable: true }), async (probed) => {
+      assert.equal(sessionAuth.reprobesOnWake(s), false);
+      const res = sessionReopen.messageByTask({ ...task, text: "hello" });
+      assert.deepEqual(res, { ok: false, reason: "auth-hold" }, "synchronous, as before");
+      assert.equal(await sessionAuth.reprobeHeld(s), false);
+      assert.deepEqual(probed(), []);
+      assert.equal(s.state.authHeld, true);
+    });
   });
-});
+}

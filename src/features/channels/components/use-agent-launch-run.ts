@@ -5,7 +5,7 @@
  * approval relaunch. The act itself is `use-launch-controls.ts › useLaunchControls`.
  */
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { IdentityApprovalRequest } from "@/features/agent-identities/components/identity-approval";
 import { NEW_AGENT_NAME } from "@/shared/lib/agent-name";
 import {
@@ -108,6 +108,11 @@ export function useLaunchRunner({
 }) {
   const [approval, setApproval] = useState<IdentityApprovalRequest | null>(null);
   const [approvalError, setApprovalError] = useState<string | null>(null);
+  // Read when a sign-in lands, which can be long after the click that started it.
+  const open = useRef(panel.open);
+  useEffect(() => {
+    open.current = panel.open;
+  }, [panel.open]);
 
   const run = async () => {
     if (!newAgent) return;
@@ -135,6 +140,10 @@ export function useLaunchRunner({
     /** Why storing the approval failed; the modal stays open holding it. */
     approvalError,
     launch: () => void run(),
+    /** After a sign-in that took: the request it interrupted, again, only while the dialog is open. */
+    relaunch: () => {
+      if (open.current) void run();
+    },
     cancelApproval: () => {
       setApproval(null);
       setApprovalError(null);

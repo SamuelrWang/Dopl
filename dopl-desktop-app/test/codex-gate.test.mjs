@@ -330,18 +330,19 @@ test("the removed `--ignore-user-config` flag is never sent; CODEX_HOME owns iso
   assert.equal(spec.threadStart.sandbox, "workspace-write");
 });
 
-test("the env scrub can only REMOVE, and it never takes PATH, HOME or a credential", () => {
-  const before = process.env.CODEX_BYPASS_APPROVALS;
-  process.env.CODEX_BYPASS_APPROVALS = "1";
+test("the env scrub drops permission knobs and every inherited credential; PATH, HOME and Dopl's own pass", () => {
+  const planted = { CODEX_BYPASS_APPROVALS: "1", OPENAI_API_KEY: "sk-inherited", CODEX_API_KEY: "k", ANTHROPIC_API_KEY: "a" };
+  const before = Object.fromEntries(Object.keys(planted).map((k) => [k, process.env[k]]));
+  Object.assign(process.env, planted);
   try {
     const env = launchSpec.buildScrubbedEnv({ EXTRA: "x" });
     assert.equal(env.CODEX_BYPASS_APPROVALS, undefined, "a permission-shaped knob is dropped");
+    for (const key of ["OPENAI_API_KEY", "CODEX_API_KEY", "ANTHROPIC_API_KEY"]) assert.equal(env[key], undefined, key);
     assert.equal(env.PATH, process.env.PATH);
     assert.equal(env.HOME, process.env.HOME);
-    assert.equal(env.EXTRA, "x");
+    assert.equal(env.EXTRA, "x", "what the adapter adds itself survives");
   } finally {
-    if (before === undefined) delete process.env.CODEX_BYPASS_APPROVALS;
-    else process.env.CODEX_BYPASS_APPROVALS = before;
+    for (const [k, v] of Object.entries(before)) { if (v === undefined) delete process.env[k]; else process.env[k] = v; }
   }
 });
 
@@ -405,9 +406,11 @@ test("resume is ALLOWED on the measured baseline, and the adapter's own door ope
   assert.equal(typeof launchSpec.resume, "function");
 });
 
-test("the sign-in button is HIDDEN, never grayed; the tool-search verb is MEASURED", () => {
-  assert.equal(D.credential.interactiveSignIn, null);
-  assert.equal(RT.signIn(), null, "a method whose capability is absent still EXISTS and answers null");
+test("the in-app sign-in is DECLARED (2026-09-23); the tool-search verb is MEASURED", () => {
+  // The bundled app-server's own login (`login.js`); called here it would spawn one, so only its shape.
+  assert.equal(D.credential.interactiveSignIn, true);
+  assert.equal("reprobeOnWake" in D.credential, false, "only Dopl's own sign-in releases a held agent");
+  assert.equal(typeof RT.signIn, "function");
   // 🔒 CXP-3A (2026-09-22, 0.155.1): MEASURED, no longer null — Codex defers every MCP tool.
   assert.equal(D.prose.toolSearchVerb, "tool_search", "the measured verb, never Claude's");
   // …and code-mode models reach the same tool through `exec`'s `ALL_TOOLS` (measured, same day).

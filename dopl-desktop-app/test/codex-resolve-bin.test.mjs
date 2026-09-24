@@ -255,14 +255,11 @@ test("CX-08: a HIT is cached for the process; a MISS is re-walked, so a Codex in
 test("no caller spawns the bare name any more", () => {
   const read = (rel) => require("node:fs").readFileSync(join(HERE, "..", "main", "runtime", "codex", rel), "utf8");
   // ⚠ BIDIRECTIONAL-ISH: the point is not that the string is absent (it is the module's own name)
-  // but that no `spawn`/`execFile` CALL takes it. These three were the call sites.
+  // but that no `spawn`/`execFile` CALL takes it. These were the call sites.
   const client = read("client.js");
   assert.ok(!/spawn\(BIN\b/.test(client), "client.js must spawn the resolved path");
   assert.ok(!/execFile\(BIN\b/.test(client), "client.js must probe the resolved path");
-  assert.ok(!/execFile\('codex'/.test(read("credential.js")), "credential.js must exec the resolved path");
-  for (const file of ["client.js", "credential.js"]) {
-    assert.match(read(file), /resolve-bin/, `${file} must ask the resolver`);
-  }
+  assert.match(client, /resolve-bin/, "client.js must ask the resolver");
 });
 
 // ─── THE TWO REAL INSTALLS THAT WERE REFUSED (measured 2026-09-22) ────────────────────────────

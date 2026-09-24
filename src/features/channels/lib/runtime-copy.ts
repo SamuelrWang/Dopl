@@ -15,12 +15,23 @@ function named(d: RuntimeDescriptor | null | undefined): string {
 export const canSignIn = (d: RuntimeDescriptor | null | undefined): boolean =>
   !!d?.credential?.interactiveSignIn;
 
-/** The sign-in button label, or `null` where Dopl cannot drive the flow in its own window (Codex). */
+/** The sign-in button label, or `null` where Dopl cannot drive the flow in its own window (Cursor). */
 export function signInAction(
   d: RuntimeDescriptor | null | undefined
 ): string | null {
   return canSignIn(d) ? `Sign in to ${named(d) || "the agent runtime"}` : null;
 }
+
+/** The sign-in button while its flow runs. */
+export const SIGN_IN_BUSY = "Signing in…";
+
+/** A sign-in that did not leave a credential behind. */
+export const signInFailedCopy = (
+  d: RuntimeDescriptor | null | undefined
+): string => {
+  const name = named(d);
+  return name ? `Couldn't sign in to ${name}` : "Couldn't sign in";
+};
 
 /** "This machine cannot run an agent", one short line (INVARIANTS §5). */
 export const noRuntimeCopy = (

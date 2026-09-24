@@ -119,6 +119,8 @@ async function launchFromButton(payload) {
     launchDepth: 0,
     // Lets the durable posture reach an idle spawn: the click is that human.
     operatorArmed: true,
+    // The dialog offers the sign-in beside a signed-out refusal, so no app-level prompt is raised for it.
+    showsSignIn: true,
   });
   if (res && res.agentId) return { ok: true, agentId: res.agentId, sessionId: res.sessionId || null };
   // `detail` is the refusal's sentence when there is one (e.g. `no-model`: what this machine offers).

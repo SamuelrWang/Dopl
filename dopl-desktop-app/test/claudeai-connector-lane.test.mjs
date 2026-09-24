@@ -54,7 +54,8 @@ import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { codeOf, fnOf } from "./helpers/source-probe.mjs";
+import { codeOf } from "./helpers/source-probe.mjs";
+import { loadWithStubs } from "./helpers/module-sandbox.mjs";
 
 const require = createRequire(import.meta.url);
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -65,7 +66,6 @@ const LOADER = read("runtime/claude/loader.js");
 // ⚠ 2026-08-31 (runtime-adapter port): the OPTION ASSEMBLY is the runtime adapter's — one
 // platform's option vocabulary is that platform's to own. What this pins is unchanged.
 const QUERY = read("runtime/claude/launch-spec.js");
-const AUTH = read("session-auth.js");
 const FRAMING_TEXT = read("prompt-framing-text.js");
 
 // The measured falsy set the bundled binary's `su()` accepts. Anything outside it is a NO-OP.
@@ -136,9 +136,8 @@ test("the exported constants are the ones the builder actually uses", () => {
     "both are exported");
 });
 
-test("the scrub's existing jobs are untouched", () => {
-  // A new assignment at the end of the builder must not have disturbed the two properties this
-  // function already had: permission knobs dropped, auth vars preserved.
+test("the scrub drops permission knobs AND every inherited credential; the base URL passes", () => {
+  // The child's one credential is Dopl's own (`credential.js › withCredential`), never the parent's.
   const out = scrubWith({
     CLAUDE_CODE_DANGEROUSLY_SKIP_PERMISSIONS: "1",
     ANTHROPIC_BYPASS_PERMISSIONS: "1",
@@ -150,9 +149,9 @@ test("the scrub's existing jobs are untouched", () => {
   });
   assert.equal(out.CLAUDE_CODE_DANGEROUSLY_SKIP_PERMISSIONS, undefined, "permission knob dropped");
   assert.equal(out.ANTHROPIC_BYPASS_PERMISSIONS, undefined, "permission knob dropped");
-  assert.equal(out.CLAUDE_CODE_OAUTH_TOKEN, "tok", "auth preserved");
-  assert.equal(out.ANTHROPIC_API_KEY, "key", "auth preserved");
-  assert.equal(out.ANTHROPIC_BASE_URL, "https://x", "auth preserved");
+  assert.equal(out.CLAUDE_CODE_OAUTH_TOKEN, undefined, "an inherited token never reaches the child");
+  assert.equal(out.ANTHROPIC_API_KEY, undefined, "an inherited key never reaches the child");
+  assert.equal(out.ANTHROPIC_BASE_URL, "https://x", "not a credential");
   assert.equal(out.PATH, "/usr/bin");
 });
 
@@ -162,7 +161,7 @@ test("the scrub's existing jobs are untouched", () => {
 // else in the option set re-opens the lane. These are the joins.
 
 test("the env that reaches query() is the SCRUBBED one, through the one assembly point", () => {
-  assert.match(QUERY, /env: sessionAuth\.withStoredCredential\(loader\.buildScrubbedEnv\(\)\)/,
+  assert.match(QUERY, /env: credential\.withCredential\(loader\.buildScrubbedEnv\(\)\)/,
     "the launch spec must build options.env from buildScrubbedEnv — nothing else");
   const opts = QUERY.slice(QUERY.indexOf("function buildOptions("));
   const body = opts.slice(0, opts.indexOf("\nfunction ", 1));
@@ -170,24 +169,18 @@ test("the env that reaches query() is the SCRUBBED one, through the one assembly
   assert.equal(/options\.env\s*=/.test(body), false, "and nothing rewrites it afterwards");
 });
 
-test("withStoredCredential ADDS a key and never replaces the env object", () => {
-  // If it ever returned a fresh object built from `process.env`, the suppression would be
-  // dropped on the one machine (stored-token) that takes its non-identity branch.
-  const fn = fnOf(AUTH, "withStoredCredential");
-  const make = (state, token) =>
-    new Function("credentialState", "getStoredOAuthToken", `${fn}\n return withStoredCredential;`)(
-      () => state, () => token
-    );
+test("withCredential ADDS Dopl's token to the same env object, and adds nothing without one", () => {
+  // A fresh object built from `process.env` would drop the suppression and re-admit inherited keys.
+  const make = (token) => loadWithStubs("runtime/claude/credential.js", {
+    "../../claude-token": { getStoredOAuthToken: () => token },
+  }).withCredential;
   const base = { ENABLE_CLAUDEAI_MCP_SERVERS: "0", PATH: "/usr/bin" };
-  // The pass-through machines: the SAME object back, byte for byte.
-  for (const source of ["env", "cli-store", null]) {
-    const out = make({ usable: true, source }, "tok")({ ...base });
-    assert.equal(out.ENABLE_CLAUDEAI_MCP_SERVERS, "0", `source=${source}`);
-  }
-  // The injecting machine: one key added, the suppression intact.
-  const injected = make({ usable: true, source: "stored-token" }, "tok")({ ...base });
-  assert.equal(injected.CLAUDE_CODE_OAUTH_TOKEN, "tok", "the setup-token still lands");
-  assert.equal(injected.ENABLE_CLAUDEAI_MCP_SERVERS, "0", "…and does not cost the suppression");
+  const env = { ...base };
+  const injected = make("tok")(env);
+  assert.equal(injected, env, "the scrubbed object itself");
+  assert.equal(injected.CLAUDE_CODE_OAUTH_TOKEN, "tok");
+  assert.equal(injected.ENABLE_CLAUDEAI_MCP_SERVERS, "0", "…and it does not cost the suppression");
+  assert.deepEqual(make(null)({ ...base }), base, "signed out: no credential at all");
 });
 
 test("the option set names exactly one MCP server, and no connector lane among them", () => {

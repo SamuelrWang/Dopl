@@ -44,7 +44,7 @@ const DESCRIPTOR = { id: "claude", label: "Claude Code", models: { source: "live
 /** Point the adapter at a fake CLI. `rows` may be a function (called per probe). */
 function fakeCli(rows, over = {}) {
   const calls = { probes: 0 };
-  let credential = over.credential || "cli-store";
+  let credential = over.credential || "dopl-token";
   models.inject({
     loadSdk: async () => ({}), bin: () => "/fake/claude", env: () => ({}),
     credentialSource: () => credential, sdkVersion: () => "0.3.220",
@@ -100,15 +100,32 @@ test("a FAILED read answers the build's table, marked `stale` with the reason �
 
 // ── 4. THE CACHE KEY ─────────────────────────────────────────────────────────────────────────
 
-test("cached per binary@version#credential: a sign-in is a new key and re-reads on the next LOOK", async () => {
+test("signed out, nothing is probed (the operator's own login would answer); a sign-in reads it once", async () => {
   const cli = fakeCli(MEASURED.slice(3), { credential: "none" });
   try {
-    await models.models(); await models.models();
-    assert.equal(cli.calls.probes, 1, "same key, one probe");
+    const out = await models.models();
+    assert.equal(cli.calls.probes, 0, "no probe without Dopl's token");
+    assert.equal(out.stale, true, "the build's table answers");
+    cli.signIn("dopl-token");
+    assert.equal((await models.models()).models.length, 2);
+    await models.models();
+    assert.equal(cli.calls.probes, 1, "one probe per key");
+  } finally { models.inject(); }
+});
+
+test("a READY catalog re-reads on the next LOOK when the key moves (an upgrade), without a timer", async () => {
+  const cli = fakeCli(MEASURED.slice(3));
+  let version = "0.3.220";
+  models.inject({
+    loadSdk: async () => ({}), bin: () => "/fake/claude", env: () => ({}),
+    credentialSource: () => "dopl-token", sdkVersion: () => version,
+    probe: async () => { cli.calls.probes += 1; return MEASURED.slice(3); },
+  });
+  try {
     const catalog = loadCatalog();
     catalog.snapshot(adapter()); await settle(); await settle();
-    assert.equal(catalog.snapshot(adapter()).models.length, 2);
-    cli.signIn("cli-store"); // the roster is per ACCOUNT (measured: signed out, no Fable)
+    assert.equal(cli.calls.probes, 1);
+    version = "0.3.221";
     catalog.snapshot(adapter()); await settle(); await settle();
     assert.equal(cli.calls.probes, 2, "the moved key re-read without a timer or an invalidation hook");
   } finally { models.inject(); }

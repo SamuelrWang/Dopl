@@ -1,9 +1,10 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { RouterProvider, createMemoryRouter } from "react-router";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createQueryClient } from "#/lib/query-client";
 import type { BridgeResponse } from "#/lib/dopl-bridge";
+import type { RuntimeCredentialStatus } from "@/shared/lib/spa-bridge";
 import { SEGMENT, installBridge } from "#/test-utils/bridge";
 import OnboardingPage from "./index";
 
@@ -115,6 +116,37 @@ describe("onboarding page", () => {
       await screen.findByText("https://www.usedopl.com/api/mcp")
     ).toBeInTheDocument();
     expect(await screen.findByText("Connected")).toBeInTheDocument();
+  });
+
+  it("the connect step shows a bar per runtime ABOVE the MCP connect, live, and never gates Continue", async () => {
+    type Row = RuntimeCredentialStatus;
+    const row = (runtimeId: string, label: string, state: Row["state"]): Row => ({ runtimeId, label, state, prompt: false });
+    let push: (p: { runtimes: Row[] }) => void = () => {};
+    const signIn = vi.fn().mockResolvedValue({ ok: true });
+    installBridge({
+      apiRequest,
+      appOrigin: "https://www.usedopl.com",
+      runtimeAuth: {
+        signIn,
+        status: () => Promise.resolve({ runtimes: [row("claude", "Claude Code", "not-connected"), row("codex", "Codex", "expired")] }),
+        onStatus: (cb: typeof push) => { push = cb; return () => {}; },
+        dismissPrompt: vi.fn(),
+      },
+    });
+    renderPage();
+    fireEvent.click(await screen.findByRole("button", { name: "Engineering" }));
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+
+    const heading = await screen.findByText("Connect Your Agent");
+    const bars = await screen.findByText("Claude Code");
+    expect(bars.compareDocumentPosition(heading) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.getByText("Sign-in expired")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Sign in to Claude Code" }));
+    expect(signIn).toHaveBeenCalledWith("claude");
+    act(() => push({ runtimes: [row("claude", "Claude Code", "signing-in"), row("codex", "Codex", "expired")] }));
+    expect(screen.getByRole("button", { name: "Signing in…" })).toBeDisabled();
+    // Continue waits on the MCP connect alone: nobody is signed in to a runtime here.
+    await waitFor(() => expect(screen.getByRole("button", { name: "Continue" })).toBeEnabled());
   });
 
   it("names the workspace, completes, and lands on the returned path", async () => {

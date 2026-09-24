@@ -6,6 +6,7 @@ import { useCopyToClipboard } from "@/shared/hooks/use-copy-to-clipboard";
 import { DEFAULT_MCP_URL } from "../constants";
 import { buildConnectPrompt } from "../bootstrap-prompt";
 import { getAppOrigin } from "@/shared/lib/app-origin";
+import { RuntimeCredentialBars } from "@/features/channels/components/runtime-credential-bars";
 
 interface McpConnectStepProps {
   connected: boolean;
@@ -37,6 +38,8 @@ export function McpConnectStep({ connected, finishing, onContinue, onSkip, showS
 
   return (
     <div>
+      {/* Dopl's own runtime sign-ins, above the MCP connect; never required to continue. */}
+      <RuntimeCredentialBars className="mb-8" />
       <h2 className="text-[26px] font-bold leading-tight tracking-[-0.5px] text-[#181818]">
         Connect Your Agent
       </h2>

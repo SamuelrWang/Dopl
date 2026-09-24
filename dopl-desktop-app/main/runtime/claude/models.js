@@ -62,9 +62,9 @@ function defaultDeps() {
   return {
     loadSdk: () => require('./loader').getSdk(),
     bin: () => require('./loader').resolveClaudeExecutable(),
-    env: () => require('../../session-auth').withStoredCredential(require('./loader').buildScrubbedEnv()),
+    env: () => require('./credential').withCredential(require('./loader').buildScrubbedEnv()),
     credentialSource: () => {
-      try { return String(require('../../session-auth').credentialState().source || 'none'); } catch (_) { return 'none'; }
+      try { return String(require('./credential').credentialState().source || 'none'); } catch (_) { return 'none'; }
     },
     // The platform binary's package: the SDK's `exports` map does not export its `package.json`.
     sdkVersion: () => {
@@ -105,6 +105,8 @@ async function readLive(key) {
 /** The offerable roster. Never throws: a failed read answers the fallback table (`stale`, with the
  *  reason), never an empty list or another runtime's. */
 async function models() {
+  // Without Dopl's token the probe would run on the operator's own login, so the table answers.
+  if (deps.credentialSource() === 'none') return frozenRoster();
   const key = rosterKey();
   if (held && held.key === key) return held.roster;
   if (inflight && inflight.key === key) return inflight.promise;

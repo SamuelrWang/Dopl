@@ -103,6 +103,7 @@ function noRuntimeCopy(descriptor) {
 module.exports = {
   runtimeLabel,
   canSignIn,
+  signInAction,
   RUNTIME_ERROR_CODES,
   errorCopy,
   heldToolDenial,

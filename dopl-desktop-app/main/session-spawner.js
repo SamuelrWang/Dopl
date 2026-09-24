@@ -9,12 +9,12 @@
 // front of a human. It was the fallback for when the SDK engine skipped, and there is no second
 // executor any more: `trigger.js`'s terminals answer the peer and settle instead.
 //
-// ⚠ WHAT SURVIVES IS A FACADE, AND IT IS LOAD-BEARING FOR SIX CALLERS. `claudeAvailable`,
+// ⚠ WHAT SURVIVES IS A FACADE, AND IT IS LOAD-BEARING FOR FIVE CALLERS. `claudeAvailable`,
 // `getClaudeBinPath` and `cliEnv` come from `claude-resolve.js`; `sessionSpawnAvailable` from
 // `claude-runtime.js`. Nothing here computes
 // them — this module is the NAME those callers already import (`mcp-config.js`,
-// `mcp-cli-add.js`, `claude-auth.js`, `session-auth.js`, `channel-listener.js`, `trigger.js`),
-// and collapsing it into six direct imports is a rename with no other effect. If that is worth
+// `mcp-cli-add.js`, `claude-auth.js`, `channel-listener.js`, `trigger.js`),
+// and collapsing it into five direct imports is a rename with no other effect. If that is worth
 // doing, do it as its own change.
 //
 // ⚠ `claudeAvailable()` AND `sessionSpawnAvailable()` ARE STILL DIFFERENT QUESTIONS (§11). The

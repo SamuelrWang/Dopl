@@ -13,6 +13,7 @@ const ontologyReach = require('./ontology-reach');
 const { diag } = require('./diag');
 const roomRoster = require('./room-roster');
 const launchDefault = require('./runtime/launch-default');
+const credentials = require('./runtime-credentials');
 
 let deps = {
   sessions: null, acquireRuntime: null, startSession: null, liveOnThread: null, sessionOn: null, selfUserId: null,
@@ -55,9 +56,12 @@ async function launch(a) {
   }
   // FIX #7: re-check after the await (slot-scoped, so only an id collision trips it).
   if (hasLiveSession(slot)) return { skipped: 'busy' };
-  if (isAuthHeldSession(slot, rt && rt.id)) return { skipped: 'auth-hold' };
-  // Asked before anything registers, so a signed-out launch leaves no record behind (P4-07).
-  if (await credentialMissing(rt)) return { skipped: 'auth-hold' };
+  // Asked before anything registers, so a signed-out launch leaves no record behind (P4-07). The refusal raises
+  // the runtime's sign-in prompt, unless the caller shows its own sign-in beside it (the New Agent dialog).
+  if (isAuthHeldSession(slot, rt && rt.id) || await credentialMissing(rt)) {
+    if (a.showsSignIn !== true) credentials.needSignIn(rt && rt.id);
+    return { skipped: 'auth-hold' };
+  }
   // A model the runtime does not offer is REFUSED with a sentence, never swapped; before `startSession`, so
   // there is nothing to roll back.
   const modelRefusal = await refuseUnknownModel(a.runtime, a.model);

@@ -134,10 +134,8 @@ function augmentedEnv(binPath) {
 //                operator's chosen folder, else ~/Downloads — which is a different answer to
 //                a different question and has been the live one since Round C.
 //
-// ⚠ THE OAUTH-TOKEN INJECTION IS NOT LOST, and that is worth stating because deleting an env
-// builder looks like deleting a credential path. `session-auth.js` injects the same token on
-// the SDK lane (its own comment names this function as the precedent), and `signOut()` still
-// clears it. What went is the builder for a spawn that no longer happens.
+// ⚠ THE OAUTH-TOKEN INJECTION IS NOT LOST: `runtime/claude/credential.js › withCredential` sets the
+// same token on the SDK lane, and a Dopl sign-out still clears it.
 
 // Best-effort probe so the listener can warn if the CLI is missing AND gate
 // spawning. Resolves true only when an absolute claude binary was found.
