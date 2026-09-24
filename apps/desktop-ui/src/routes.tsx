@@ -57,7 +57,7 @@ export const WORKSPACE_PAGES: PageRoute[] = [
   { path: "skills", label: "Skills", element: <SkillsPage /> },
   { path: "skills/:skillSlug", label: "Skill", element: <SkillDetailRedirect /> },
   { path: "ontology", label: "Ontology", element: <OntologyPage /> },
-  { path: "ontology/:clusterSlug", label: "Cluster", element: <OntologyDetailPage /> },
+  { path: "ontology/:ontologySlug", label: "Ontology", element: <OntologyDetailPage /> },
   { path: "chats", label: "Chats", element: <ChatsPage /> },
   { path: "members", label: "Members", element: <MembersPage /> },
   { path: "settings", label: "Settings", element: <SettingsPage /> },

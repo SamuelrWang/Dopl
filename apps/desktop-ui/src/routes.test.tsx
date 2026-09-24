@@ -182,7 +182,7 @@ describe("app routes", () => {
       "skills",
       "skills/:skillSlug",
       "ontology",
-      "ontology/:clusterSlug",
+      "ontology/:ontologySlug",
       "chats",
       "members",
       "settings",

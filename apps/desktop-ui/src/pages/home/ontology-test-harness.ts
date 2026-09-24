@@ -16,8 +16,8 @@ import { CHANNEL_ID } from "./home-test-ids";
  * pass a test that proves the opposite.
  */
 
-export const PIPELINE_ID = "cluster-pipeline";
-export const ROSTER_ID = "cluster-roster";
+export const PIPELINE_ID = "ontology-pipeline";
+export const ROSTER_ID = "ontology-roster";
 
 /**
  * 🔒 **`Roster` DELIBERATELY CARRIES NEITHER SHARING FIELD** — it is the
@@ -28,11 +28,11 @@ export const ROSTER_ID = "cluster-roster";
  * SAYS NOTHING about sharing rather than claiming zero.
  *
  * ⚠ THE CAST IS THE POINT AND IS NOT LAZINESS: the two fields are not on
- * `OntologyCluster` at all (they are a `Partial` in `client/api.ts`), so the
+ * `Ontology` at all (they are a `Partial` in `client/api.ts`), so the
  * fixture states the WIRE body, which is what the fallback exists for.
  */
 export const SNAPSHOT = {
-  clusters: [
+  ontologies: [
     {
       id: PIPELINE_ID,
       slug: "pipeline",
@@ -72,10 +72,10 @@ export const SHARES = {
   canManage: true,
 };
 
-export const SHARES_PATH = `/api/ontology/clusters/${PIPELINE_ID}/shares`;
+export const SHARES_PATH = `/api/ontology/ontologies/${PIPELINE_ID}/shares`;
 
 /**
- * THE CLUSTER ROLL-UP (2026-09-09, the CHANGELOG lane part 2) — one FIELD row on
+ * THE ONTOLOGY ROLL-UP (2026-09-09, the CHANGELOG lane part 2) — one FIELD row on
  * an object of `Pipeline` and one rename on the ontology itself, which is the
  * pair the roll-up exists to show together.
  *
@@ -83,7 +83,7 @@ export const SHARES_PATH = `/api/ontology/clusters/${PIPELINE_ID}/shares`;
  * ontology revision is one PROPERTY of one object, and a fixture carrying a body
  * would pass a renderer that only knows how to draw a document.
  */
-export const CLUSTER_REVISIONS = {
+export const ONTOLOGY_REVISIONS = {
   revisions: [
     {
       id: "rev-stage",
@@ -104,7 +104,7 @@ export const CLUSTER_REVISIONS = {
     },
     {
       id: "rev-name",
-      resourceType: "ontology_cluster",
+      resourceType: "ontology",
       resourceId: PIPELINE_ID,
       workspaceId: WORKSPACE_ID,
       actor: { userId: "user-1", kind: "agent", agentSessionId: "chan-1:abc" },
@@ -138,7 +138,7 @@ export function ontologyRoutes(
       ok(
         created.length === 0
           ? SNAPSHOT
-          : { ...SNAPSHOT, clusters: [...SNAPSHOT.clusters, ...created] }
+          : { ...SNAPSHOT, ontologies: [...SNAPSHOT.ontologies, ...created] }
       )
     );
   }
@@ -147,10 +147,10 @@ export function ontologyRoutes(
       ok({ plan: "pro", objectCap: null, objectsUsed: 3, isCapped: false })
     );
   }
-  // ⚠ BEFORE the `/clusters/` arms below — a GET on `/clusters/{id}/revisions`
+  // ⚠ BEFORE the `/ontologies/` arms below — a GET on `/ontologies/{id}/revisions`
   // would otherwise fall through to `null` and read as an unexpected path.
-  if (bare.endsWith("/revisions")) return Promise.resolve(ok(CLUSTER_REVISIONS));
-  if (bare.startsWith("/api/ontology/clusters/") && bare.endsWith("/shares")) {
+  if (bare.endsWith("/revisions")) return Promise.resolve(ok(ONTOLOGY_REVISIONS));
+  if (bare.startsWith("/api/ontology/ontologies/") && bare.endsWith("/shares")) {
     if (opts.method === "PUT") return Promise.resolve(noContent());
     if (opts.method === "DELETE") return Promise.resolve(noContent());
     return Promise.resolve(ok(shares));
@@ -175,15 +175,15 @@ export function ontologyRoutes(
       })
     );
   }
-  if (bare === "/api/ontology/clusters" && opts.method === "POST") {
+  if (bare === "/api/ontology/ontologies" && opts.method === "POST") {
     // ⚠ THE ROW JOINS THE SNAPSHOT, because that is what the server does: a
     // create is followed by an invalidate, and a table that answered with the
     // OLD list would pass a face that never showed what it just made.
-    created = [...created, NEW_CLUSTER];
-    return Promise.resolve(ok({ cluster: NEW_CLUSTER }));
+    created = [...created, NEW_ONTOLOGY];
+    return Promise.resolve(ok({ ontology: NEW_ONTOLOGY }));
   }
-  if (bare.startsWith("/api/ontology/clusters/")) {
-    if (opts.method === "PATCH") return Promise.resolve(ok({ cluster: {} }));
+  if (bare.startsWith("/api/ontology/ontologies/")) {
+    if (opts.method === "PATCH") return Promise.resolve(ok({ ontology: {} }));
     if (opts.method === "DELETE") return Promise.resolve(noContent());
   }
   return null;
@@ -192,13 +192,13 @@ export function ontologyRoutes(
 /** The personal container these rows live in — the boot payload's `workspace`. */
 export const PERSONAL_WORKSPACE_ID = WORKSPACE_ID;
 
-export const NEW_CLUSTER_ID = "cluster-new";
+export const NEW_ONTOLOGY_ID = "ontology-new";
 
-/** What `POST /api/ontology/clusters` mints — the row the create flow selects. */
-const NEW_CLUSTER = {
-  id: NEW_CLUSTER_ID,
-  slug: "new-cluster",
-  name: "New cluster",
+/** What `POST /api/ontology/ontologies` mints — the row the create flow selects. */
+const NEW_ONTOLOGY = {
+  id: NEW_ONTOLOGY_ID,
+  slug: "new-ontology",
+  name: "New ontology",
   purpose: "",
   columnIds: [],
   layout: {},
@@ -206,7 +206,7 @@ const NEW_CLUSTER = {
 
 /** ⚠ MODULE STATE, so `resetOntologyRoutes()` in `beforeEach` is not optional:
  *  a create in one test would otherwise leave a third ontology in the next. */
-let created: (typeof NEW_CLUSTER)[] = [];
+let created: (typeof NEW_ONTOLOGY)[] = [];
 /** Ids the object POST hands back — distinct per call, like the server's. */
 let objectsMinted = 0;
 
@@ -217,10 +217,10 @@ export function resetOntologyRoutes(): void {
 
 /**
  * Raise the /home Ontology face and wait for the BOARD — the face IS the board
- * since 2026-09-10, so "it rendered" means the cluster header is on screen.
+ * since 2026-09-10, so "it rendered" means the ontology header is on screen.
  *
  * ⚠ THE HEADER'S ANCHOR IS THE PICKER, not a name input: the ontology's name
- * became the dropdown's trigger the same day (`cluster-switcher.tsx`).
+ * became the dropdown's trigger the same day (`ontology-switcher.tsx`).
  */
 export async function openOntologyFace(): Promise<void> {
   await screen.findByRole("tab", { name: "Overview" });

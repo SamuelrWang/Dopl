@@ -6,13 +6,13 @@ import { PageError, PageLoading } from "#/components/page-states";
 import { useWorkspaceAccess } from "#/hooks/use-workspace-access";
 
 /**
- * `/:workspaceSegment/ontology` AND `/:workspaceSegment/ontology/:clusterSlug`.
+ * `/:workspaceSegment/ontology` AND `/:workspaceSegment/ontology/:ontologySlug`.
  *
  * ⚠ ONE component serves both routes; `detail.tsx` re-exports rather than
  * cloning. Same component type on both rows = react-router reconciles instead
  * of remounting, and the ontology store + optimistic reducer + debounced
  * per-object writes all live in `useOntology` inside this tree, so a remount on
- * the first cluster click drops pending edits.
+ * the first ontology click drops pending edits.
  *
  * The whole kanban view is REUSED BY IMPORT, sharing the
  * `["ontology-snapshot", workspaceId]` cache entry.
@@ -20,14 +20,14 @@ import { useWorkspaceAccess } from "#/hooks/use-workspace-access";
  * ⚠ URL is the one seam: `history.replaceState` with a path URL is a Chromium
  * security error on the packaged `file://` document, so `OntologyView` takes
  * the write as an injectable `replaceUrl` and gets the hash router's
- * `navigate(..., { replace: true })`. URL still follows the cluster with no
- * history entry, and a reload deep-links back to the open cluster.
+ * `navigate(..., { replace: true })`. URL still follows the ontology with no
+ * history entry, and a reload deep-links back to the open ontology.
  *
- * Deliberately NOT added: back-button restore of the cluster (no `popstate`,
+ * Deliberately NOT added: back-button restore of the ontology (no `popstate`,
  * no `pushState` here).
  */
 export default function OntologyPage() {
-  const { clusterSlug } = useParams();
+  const { ontologySlug } = useParams();
   const navigate = useNavigate();
   const { access, isPending, error, refetch } = useWorkspaceAccess();
 
@@ -45,7 +45,7 @@ export default function OntologyPage() {
     <OntologyView
       workspaceId={access.workspaceId}
       workspaceSegment={access.workspaceSlug}
-      initialClusterSlug={clusterSlug}
+      initialOntologySlug={ontologySlug}
       canManageBilling={access.isAdmin}
       canEdit={meetsMinRole(access.role, "member")}
       replaceUrl={replaceUrl}

@@ -207,7 +207,7 @@ describe("deleting", () => {
     ).toBeInTheDocument();
   });
 
-  it("DELETEs the cluster once confirmed", async () => {
+  it("DELETEs the ontology once confirmed", async () => {
     await openDelete();
     await screen.findByText(/unshares it from Priya Shah/);
 
@@ -219,7 +219,7 @@ describe("deleting", () => {
       expect(
         bridgeCalls(apiRequest).some(
           (c) =>
-            c.path === `/api/ontology/clusters/${PIPELINE_ID}` &&
+            c.path === `/api/ontology/ontologies/${PIPELINE_ID}` &&
             c.opts.method === "DELETE"
         )
       ).toBe(true);

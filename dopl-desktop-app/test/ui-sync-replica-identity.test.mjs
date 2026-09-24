@@ -18,10 +18,11 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync, readdirSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { between } from "./helpers/source-probe.mjs";
+import { readForwardRenamedMigrations } from "./helpers/migration-sql.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 // ⚠ THE PURE CORE MOVED to main/ui-sync-core.js on 2026-08-18 (wiring plan Phase 10):
@@ -35,11 +36,10 @@ const { SYNC_TABLES } = new Function(`${PURE}\n return { SYNC_TABLES };`)();
 
 // Every migration, in filename order, concatenated — the same replay the sibling file's
 // `publicationState()` does, reduced to the one thing the scans below need.
+// FORWARD-RENAMED (helpers/migration-sql.mjs), so a table renamed after its REPLICA IDENTITY
+// was set — `ontologies`, 2026-09-23 — is read under its final name.
 const PUB = {
-  sql: readdirSync(join(HERE, "..", "..", "supabase", "migrations"))
-    .filter((f) => f.endsWith(".sql")).sort()
-    .map((f) => readFileSync(join(HERE, "..", "..", "supabase", "migrations", f), "utf8"))
-    .join("\n"),
+  sql: readForwardRenamedMigrations(join(HERE, "..", "..", "supabase", "migrations")),
 };
 
 // ── THE DELETE DOORBELL: REPLICA IDENTITY vs THE SUBSCRIPTION FILTER ────────
@@ -103,7 +103,7 @@ function deleteCarriesWorkspaceId(table) {
 const DELETE_DOORBELL_TABLES = Object.freeze([
   "knowledge_bases", "knowledge_folders", "knowledge_entries",
   "skills",
-  "ontology_clusters", "ontology_objects", "ontology_memberships",
+  "ontologies", "ontology_objects", "ontology_memberships",
   "ontology_relationships",
   "chats", "chat_folders",
   "channel_members",

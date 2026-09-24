@@ -32,6 +32,7 @@ import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { between, fnOf } from "./helpers/source-probe.mjs";
+import { readForwardRenamedMigrations } from "./helpers/migration-sql.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 // ⚠ THE PURE CORE MOVED to main/ui-sync-core.js on 2026-08-18 (wiring plan Phase 10):
@@ -52,8 +53,9 @@ const { SYNC_TABLES, LISTENER_OWNED_TABLES } = new Function(
 
 function publicationState() {
   const dir = join(HERE, "..", "..", "supabase", "migrations");
-  const sql = readdirSync(dir).filter((f) => f.endsWith(".sql")).sort()
-    .map((f) => readFileSync(join(dir, f), "utf8")).join("\n");
+  // FORWARD-RENAMED (helpers/migration-sql.mjs): a publication ADD written before a table
+  // rename reads under the final name (`ontologies`, 2026-09-23).
+  const sql = readForwardRenamedMigrations(dir);
   const added = new Set();
   const dropped = new Set();
   for (const m of sql.matchAll(
@@ -156,7 +158,7 @@ test("the watched set is exactly the 17 tables, in a pinned order", () => {
   assert.deepEqual(SYNC_TABLES, [
     "knowledge_bases", "knowledge_folders", "knowledge_entries",
     "skills", "skill_versions",
-    "ontology_clusters", "ontology_objects", "ontology_memberships",
+    "ontologies", "ontology_objects", "ontology_memberships",
     "ontology_relationships",
     "chats", "chat_messages", "chat_folders",
     "channel_consent_requests", "channels", "channel_members",
@@ -291,7 +293,7 @@ test("nothing is published that no consumer binds", () => {
 // is a refactor, a read LEAVING the feature (or vanishing) is the change worth failing
 // on.
 //
-// ONE ENTRY LEFT. `clusters` and the five `workflow_*` names sat here from 2026-08-07,
+// ONE ENTRY LEFT. The legacy graph table and the five `workflow_*` names sat here from 2026-08-07,
 // un-published but still read. On 2026-08-11 the answer this pin demands came back
 // "nothing reads them" for real, and the map's own instruction was followed rather than
 // weakened: the tables were DROPPED (20260811120000) and the features deleted in the
@@ -336,21 +338,22 @@ test("every deliberately un-published table stays un-published, and its TABLE st
 
 // ── THE TABLES THAT WERE ACTUALLY DROPPED ──────────────────────────────────
 
-// The six names 20260811120000 dropped: the five `workflow_*` tables that
-// 20260807100000 un-published, plus `clusters`, the container that only ever held
-// workflows. Un-publishing was step one and this is step two, so the pairing rule the
+// The names 20260811120000 dropped: the five `workflow_*` tables that 20260807100000
+// un-published. (It also dropped the legacy graph container that only ever held workflows;
+// that name left this pin on 2026-09-23 with the rest of the retired vocabulary — the live
+// ontology table is `ontologies`, which is watched above.) Un-publishing was step one and this is step two, so the pairing rule the
 // retirement test used to enforce ("neither half can come back alone") is now a stronger
 // one — there is no half left to come back to.
 const DROPPED_TABLES = Object.freeze([
   "workflows", "workflow_steps", "workflow_step_edges",
-  "workflow_knowledge_bases", "workflow_skills", "clusters",
+  "workflow_knowledge_bases", "workflow_skills",
 ]);
 
 /**
  * Tables a BARE `DROP TABLE` really removed — NOT `PUB.dropped`, which is an ever-set
  * whose bare-DROP pass also swallows the tail of every `ALTER PUBLICATION … DROP TABLE
  * public.x` and so says "dropped" about a table that was merely un-published. Every name
- * below was un-published on 2026-08-07, so `PUB.dropped` has said `true` about all six
+ * below was un-published on 2026-08-07, so `PUB.dropped` has said `true` about all of them
  * since then: asserting on it here would have been a vacuous pass measuring nothing,
  * which is the exact failure this file's header warns about twice. The alternation is
  * the same discriminator `currentPublication` uses — it consumes the ALTER PUBLICATION
@@ -391,7 +394,7 @@ test("the dropped tables are gone from the schema, the feed, and the tree", () =
   }
   // NO TREE LEFT TO REGROW FROM. The features were deleted in the same commit as the
   // migration; a directory reappearing is the signal that someone reverted one half.
-  for (const feat of ["workflows", "clusters"]) {
+  for (const feat of ["workflows"]) {
     assert.ok(!existsSync(join(HERE, "..", "..", "src", "features", feat)),
       `src/features/${feat} is back but its tables are dropped — restore the migration `
       + "in the SAME change or the feature 500s on its first query");

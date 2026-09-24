@@ -96,7 +96,7 @@ test("M2: an abandoned session ENDS rather than being silently downgraded", () =
 // ── F2: `auto` must not silently write to the SHARED workspace ────────────────────
 // EXPLOIT: `auto` says "auto approving commands, asking for shell and web". It also
 // auto-approved dopl_kb / dopl_skill / dopl_ontology / dopl_chats (and, before the
-// 2026-08-07 retirement, dopl_workflow / dopl_cluster), every one of which registers
+// 2026-08-07 retirement, dopl_workflow and the retired graph tool), every one of which registers
 // write ops (dopl_kb alone has write_file /
 // create_base / create_folder / move_file). That is an off-machine write into rows every
 // workspace member can read — the same class of move as an outbound post, with no card and no

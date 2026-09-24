@@ -47,7 +47,7 @@ const AGENT = "11111111-2222-3333-4444-555555555555";
 
 // A `dopl_*` tool named WITHOUT the `mcp__dopl__` prefix the agent's list actually carries.
 // Lookbehind, so it catches the bare name in prose as well as in a call example.
-const BARE = /(?<!mcp__dopl__)\bdopl_(channel|map|members|kb|skill|search|ontology|workflow|cluster|chats)\b/;
+const BARE = /(?<!mcp__dopl__)\bdopl_(channel|map|members|kb|skill|search|ontology|workflow|chats)\b/;
 
 const ctx = (over = {}) => ({
   channelName: "Ops",

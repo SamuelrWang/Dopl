@@ -19,14 +19,14 @@ function reachable(ontologies) {
     .filter((o) => o.id && o.name && o.level);
 }
 
-// One line with the EXACT call. `cluster` is the tool's argument name (not respelled), and there is
-// no `workspace` argument: `dopl_ontology` refuses it; the cluster id resolves its own container.
+// One line with the EXACT call. `ontology` is the tool's argument name (not respelled), and there is
+// no `workspace` argument: `dopl_ontology` refuses it; the ontology id resolves its own container.
 function ontologyLine(o) {
   const verb =
     o.level === 'EDIT'
       ? 'you may also write to it with the write ops.'
       : 'READ ONLY: a write to it is refused, and that refusal is the fence working.';
-  return `- "${o.name}" (${o.level}): read it with mcp__dopl__dopl_ontology op "map", cluster "${o.id}"; ${verb}`;
+  return `- "${o.name}" (${o.level}): read it with mcp__dopl__dopl_ontology op "map", ontology "${o.id}"; ${verb}`;
 }
 
 /**

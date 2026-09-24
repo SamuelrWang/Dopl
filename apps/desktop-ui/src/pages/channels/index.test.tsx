@@ -313,7 +313,7 @@ describe("channels page", () => {
     // in the tree, which `npx knip` would not even flag.
     //
     // ⚠ THEY MOVED AGAIN ON 2026-08-19, WHICH IS WHY THIS TEST OPENS A TAB. The
-    // pane header now carries the info toggle and nothing else; the cluster is
+    // pane header now carries the info toggle and nothing else; the ontology is
     // the right panel's SETTINGS tab, where the Links empty state used to be.
     // The sidebar's two `+` entries did NOT move.
     renderPage();

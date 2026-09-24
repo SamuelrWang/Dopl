@@ -4,7 +4,7 @@ import type { BridgeRequestOpts } from "#/lib/dopl-bridge";
 import { bridgeCalls, installBridge, ok } from "#/test-utils/bridge";
 import { renderHome, routes } from "./home-test-harness";
 import {
-  NEW_CLUSTER_ID,
+  NEW_ONTOLOGY_ID,
   PERSONAL_WORKSPACE_ID,
   PIPELINE_ID,
   createOntologyFromSwitcher,
@@ -176,7 +176,7 @@ describe("the face", () => {
     expect(await screen.findByTestId("channel-surface")).toBeInTheDocument();
   });
 
-  it("keeps the board's OWN chrome — the black + Object, and no cluster delete", async () => {
+  it("keeps the board's OWN chrome — the black + Object, and no ontology delete", async () => {
     renderHome();
     await openOntologyFace();
 
@@ -281,7 +281,7 @@ describe("the face", () => {
       expect(
         bridgeCalls(apiRequest).some(
           (c) =>
-            c.path === `/api/ontology/clusters/${PIPELINE_ID}` &&
+            c.path === `/api/ontology/ontologies/${PIPELINE_ID}` &&
             c.opts.method === "PATCH"
         )
       ).toBe(true)
@@ -322,7 +322,7 @@ describe("the face", () => {
   it("offers ONE line and the page button when there are none", async () => {
     apiRequest.mockImplementation((path: string, opts: BridgeRequestOpts = {}) =>
       path.split("?")[0] === "/api/ontology"
-        ? Promise.resolve(ok({ clusters: [], objects: {} }))
+        ? Promise.resolve(ok({ ontologies: [], objects: {} }))
         : (ontologyRoutes(path, opts) ??
           routes(path, opts) ??
           Promise.reject(new Error(`unexpected: ${path}`)))
@@ -341,7 +341,7 @@ describe("the face", () => {
  * different tabs, have it be a dropdown"*).
  *
  * ⚠ MUTATION-VERIFIED — one revert, one failure: rendering only the ACTIVE entry
- * in `cluster-switcher.tsx › ClusterDropdown` (the menu lists the ontology you
+ * in `ontology-switcher.tsx › OntologyDropdown` (the menu lists the ontology you
  * are already on and no way to any other, which is the whole control missing
  * while the trigger still looks right).
  */
@@ -380,7 +380,7 @@ describe("the switcher", () => {
 });
 
 /**
- * ⚠ MUTATION-VERIFIED — one revert, one failure: dropping `setSelectedId(cluster.id)`
+ * ⚠ MUTATION-VERIFIED — one revert, one failure: dropping `setSelectedId(ontology.id)`
  * from `ontology-panels.tsx › create` (the POST still lands and the ontology
  * still exists, so every other assertion here passes while the operator is left
  * looking at the ontology they were already on).
@@ -398,19 +398,19 @@ describe("creating", () => {
 
     await waitFor(() => {
       const post = bridgeCalls(apiRequest).find(
-        (c) => c.path === "/api/ontology/clusters" && c.opts.method === "POST"
+        (c) => c.path === "/api/ontology/ontologies" && c.opts.method === "POST"
       );
       expect(post?.opts.workspaceId).toBe(PERSONAL_WORKSPACE_ID);
     });
-    await waitFor(() => expect(ontologyName()).toBe("New cluster"));
-    expect(NEW_CLUSTER_ID).toBe("cluster-new");
+    await waitFor(() => expect(ontologyName()).toBe("New ontology"));
+    expect(NEW_ONTOLOGY_ID).toBe("ontology-new");
   });
 
   /**
    * 🔒 **AND IT LANDS THERE AFTER THE BOARD HAS BEEN EDITED, WHICH IS THE CASE
    * THAT BROKE.** One keystroke sets `use-ontology.ts › dirtyRef`, after which the
    * reducer ignores every later snapshot — so the pin /home moves to the minted id
-   * named a cluster the board had never heard of, and the pane read "This ontology
+   * named an ontology the board had never heard of, and the pane read "This ontology
    * is no longer here.", its sentence for a DELETED one. The host's `boardEpoch`
    * `key` is the fix and its docblock carries why a remount is safe.
    * ⚠ MUTATION-VERIFIED — one revert (drop that `key`), one failure.
@@ -425,7 +425,7 @@ describe("creating", () => {
     });
     await createOntologyFromSwitcher();
 
-    await waitFor(() => expect(ontologyName()).toBe("New cluster"));
+    await waitFor(() => expect(ontologyName()).toBe("New ontology"));
     expect(screen.queryByText("This ontology is no longer here.")).toBeNull();
   });
 });
@@ -434,7 +434,7 @@ describe("creating", () => {
  * THE **Changelog** ENTRY POINT (2026-09-09, the CHANGELOG lane part 2).
  *
  * ⚠ MUTATION-VERIFIED — two reverts, two failures: pointing it at the OBJECT
- * route instead of the cluster ROLL-UP (the ontology's own rename disappears),
+ * route instead of the ontology ROLL-UP (the ontology's own rename disappears),
  * and rendering the roll-up with the knowledge row shape (the field row reads as
  * an op label with no values in it).
  */
@@ -446,7 +446,7 @@ describe("the changelog", () => {
     fireEvent.click(screen.getByRole("menuitem", { name: "Changelog" }));
   }
 
-  it("reads the CLUSTER roll-up and renders `field: before → after`", async () => {
+  it("reads the ONTOLOGY roll-up and renders `field: before → after`", async () => {
     await openChangelog();
     const row = await screen.findByText("Stage");
     expect(row.parentElement?.textContent).toContain("New");
@@ -454,7 +454,7 @@ describe("the changelog", () => {
     await waitFor(() =>
       expect(
         bridgeCalls(apiRequest).some(
-          (c) => c.path.split("?")[0] === `/api/ontology/clusters/${PIPELINE_ID}/revisions`
+          (c) => c.path.split("?")[0] === `/api/ontology/ontologies/${PIPELINE_ID}/revisions`
         )
       ).toBe(true)
     );
@@ -463,7 +463,7 @@ describe("the changelog", () => {
   it("shows the ontology's OWN rows beside its objects', day-grouped", async () => {
     await openChangelog();
     await screen.findByText("Stage");
-    // The cluster's own rename, by an AGENT — the roll-up is both, in one list.
+    // The ontology's own rename, by an AGENT — the roll-up is both, in one list.
     expect(screen.getByText("Name")).toBeInTheDocument();
     expect(screen.getByLabelText("agent")).toBeInTheDocument();
     expect(screen.getAllByRole("heading", { level: 4 })).toHaveLength(2);

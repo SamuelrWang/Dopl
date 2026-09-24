@@ -71,7 +71,7 @@ function mcpShortName(full) {
 // segment to look Dopl-ish re-breaks the UUID form already observed in the field.
 //
 // RETIRED NAMES BELONG IN THIS VOCABULARY TOO (2026-08-07). `dopl_workflow` /
-// `dopl_cluster` and their admins were DELETED from the server on 2026-08-11, but they are
+// the retired pre-ontology graph tool and their admins were DELETED from the server on 2026-08-11, but they are
 // still on the deny lists (RETIRED_DOPL_TOOLS), and a deny list is only reached through
 // this normalizer — that is the entire F-139 finding. Leave them out and a retired admin
 // arriving under a connector or UUID server segment stays unclassified, which resolves to

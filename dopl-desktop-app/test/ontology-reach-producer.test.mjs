@@ -156,12 +156,12 @@ test("the ONE spawn funnel awaits it — all three launch lanes, not one of them
 
 test("the producer's field names are the RENDERER's — the two halves actually meet", () => {
   // 🔒 THIS IS F-681 ITSELF. Both halves were individually correct and nothing
-  // connected them, so a mismatch (`clusterId` vs `id`) would have been invisible
+  // connected them, so a mismatch (`ontologyId` vs `id`) would have been invisible
   // to every other case in this file and in `ontology-reach-framing.test.mjs`.
   const lines = ontologyReachLines({ ontologies: boot().narrow([ONE]) });
   assert.ok(lines.length > 0, "the block must render from the producer's shape");
   assert.match(lines.join("\n"), /"Sales" \(EDIT\)/);
-  assert.match(lines.join("\n"), new RegExp(`cluster "${ONE.id}";`));
+  assert.match(lines.join("\n"), new RegExp(`ontology "${ONE.id}";`));
   // …and the empty answer stays byte-identical to the pre-module turn.
   assert.deepEqual(ontologyReachLines({ ontologies: [] }), []);
 });
