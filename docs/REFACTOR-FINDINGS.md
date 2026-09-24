@@ -3057,7 +3057,8 @@ constraint moves, and nothing connects the two.
 
 ## F-309 — Q6's auth recovery was DETECTED, SURFACED and NEVER CALLABLE: two complete functions with zero production callers (2026-08-25) — ✅ RESOLVED 2026-08-25
 
-- Location: `dopl-desktop-app/main/claude-auth.js › startSignInFlow` and
+- Location: the Claude sign-in flow (`startSignInFlow`; replaced 2026-09-24 by
+  `dopl-desktop-app/main/claude-auth.js › signIn`) and
   `dopl-desktop-app/main/session-auth.js › resumeAfterSignIn`, against the surface that told the
   operator to use them (`src/features/channels/components/agent-composer.tsx ›
   MESSAGE_AUTH_HELD`).
@@ -3087,12 +3088,13 @@ constraint moves, and nothing connects the two.
   the flow exactly once, that success is measured from the CREDENTIAL rather than reported by the
   flow, and that the sessions this Mac holds are the ones released.
 - **Resolved by WIRING ONLY — neither function was rewritten**, which was the standing constraint:
-  `main/claude-signin-op.js` (new, the body), the `claude:signIn` handler in `session-ipc-ops.js` (the
+  a new op module (the body), the `claude:signIn` handler in `session-ipc-ops.js` (the
   `appWindowOnly` surface), the preload's `claude.signIn` member, `SpaBridgeSurface.claude` in
   `spa-bridge.ts`, a web detector + wrapper module, and the button on the waiting banner in
   `channels/components/agent-composer.tsx`. (2026-09-23: the wire went runtime-generic — `runtime:signIn`,
   the preload's `runtimeAuth.signIn`, `channels/components/runtime-signin.ts` and
-  `runtime-signin-button.tsx`; `claude-signin-op.js` is unchanged. INVARIANTS §11.) The fan-out
+  `runtime-signin-button.tsx`. 2026-09-24: both op modules folded into `main/runtime-credentials.js ›
+  signIn`, INVARIANTS §11.0h.) The fan-out
   (`session-auth.js › resumeHeldSessions`) is the one new behaviour and it only chooses WHICH
   sessions get the existing per-session resume. INVARIANTS §11's preload-inventory bullet carries
   the contract.
@@ -3106,7 +3108,8 @@ constraint moves, and nothing connects the two.
   a refused send, so the button is reachable only after the operator has tried to post. A held agent
   that the operator has not yet messaged shows nothing to act on — the Agents-tab card has no
   auth-hold affordance. Not in this wave's scope; the transport now exists for whichever surface
-  wants it.
+  wants it. ⚠ **CLOSED 2026-09-24:** every hold now raises the app-level sign-in prompt
+  (`main/runtime-credentials.js › needSignIn`, INVARIANTS §11.0h), with or without a refused post.
 - Proposed resolution: **done** — Status: **resolved 2026-08-25** (residual above is a separate,
   surface-side question)
 
@@ -10503,6 +10506,7 @@ already wrong — `channel-dispatch-agents.ts` does pass `waitMs` — so do not 
 - Found during: the 2026-09-23 review's c-codex fix for P4-06 (auth holds are runtime-scoped; a runtime with no in-app sign-in re-probes its credential on the next wake).
 - **The gap.** After `codex login`, a held Codex agent resumes on the operator's next message, but a PEER's message into its thread still meets the hold: the inbound wake path does not ask `reprobeHeld`, so a multiplayer room can sit on a held agent until the operator happens to address it.
 - Proposed resolution: ask `reprobeHeld` on the inbound wake path too, once per wake, with the same fail-closed probe semantics.
+- 2026-09-24: Codex no longer re-probes at all (it holds only Dopl's own credential, which only the in-app sign-in restores), so the gap now applies to Cursor alone.
 - Status: OPEN.
 
 ### F-759 — `mcp_events` has had NO WRITER since `withMcpAccess` stopped wrapping any route; two surfaces still read it (2026-09-23)
@@ -10535,3 +10539,13 @@ already wrong — `channel-dispatch-agents.ts` does pass `waitMs` — so do not 
 - Why it matters: CLAUDE.md's glossary has to carry an exception list for the word; each remaining name is a place a reader confuses "the caller" or "the role block" with the durable agent identity.
 - Proposed resolution: rename both in one change that also moves every doc anchor.
 - Status: OPEN (low, naming).
+
+### F-764 — Dopl's Claude token is out of an agent's subprocess env but still in the CLI process's launch env (2026-09-24)
+
+- Location: `dopl-desktop-app/main/runtime/claude/credential.js › withCredential` (the token rides the bundled CLI's env as `CLAUDE_CODE_OAUTH_TOKEN`); evidence `dopl-desktop-app/test/claude-token-subprocess-env.test.mjs` (`CLAUDE_SDK_LIVE=1`).
+- Found during: the Dopl-owned-credentials build (checklist item 3: can an agent's shell read the token?).
+- **Measured, claude 2.1.220, no model turn.** The CLI builds every subprocess env (the Bash tool, hooks, stdio MCP servers, LSP) through one function that deletes `CLAUDE_CODE_OAUTH_TOKEN` whenever it is set, so a subprocess's `env` carries none (count 0). But a same-user process can read another process's LAUNCH environment on macOS (`ps -E -ww -p <pid>`, KERN_PROCARGS2), and the hook's `ps -E -ww -p $PPID` found the token in the CLI process's (count 1). An agent's shell can therefore still recover it.
+- **What the CLI offers, and why it was not taken here.** It reads `CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR` (a pipe fd, read once) in place of the env var, which keeps the token out of the launch env; using it means replacing the SDK's own process spawn with `spawnClaudeCodeProcess` (a custom spawner that opens the extra fd and must re-create the SDK's stderr, exit and abort handling). The internal `CLAUDE_BG_AUTH_SNAPSHOT_PATH` hand-off (a file the CLI reads and unlinks) is undocumented. Neither is a small change to the Claude lane.
+- Same class elsewhere: the Codex `auth.json` is a `0600` file in the private CODEX_HOME that a same-user Codex shell can read, and the Dopl MCP bearer rides both CLIs' launch envs.
+- Proposed resolution: Samuel rules whether to take the custom-spawn + fd route for Claude (and an equivalent for the Codex file), or to accept same-user process introspection as outside the agent fence.
+- Status: OPEN.
