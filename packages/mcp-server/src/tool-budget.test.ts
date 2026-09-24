@@ -41,6 +41,7 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import type { DoplClient, WorkspaceListItem } from "@dopl/client";
 import { createServer, buildInstructions } from "./server.js";
+import type { ToolSet } from "./tool-manifest.js";
 import { DESCRIPTION_MAX_CHARS } from "./tools/channel-description.js";
 
 /**
@@ -260,6 +261,9 @@ const SCHEMA_CEILINGS: Record<string, number> = {
  * true also forces the headline number to be re-measured on every slice that
  * claims a win.
  */
+// DMP-013 B1: the granular set as served with placeholder one-line descriptions. B3 owns the prose;
+// its target is the legacy total when the split was planned (49,205). Re-derive, never quote.
+const GRANULAR_SERVED_CEILING = 59_620;
 const SERVED_TOTAL_CEILING = 50_275; // re-derive, never quote: −2 the 2026-09-23 vocabulary removal merged onto DMP-002 (dopl_ontology: −3 schema, +1 history gloss), −5 DMP-004 (dopl_search names ten domains in the same 450), +964 DMP-002 history+restore on three tools, +119 DMP-009 field type enum, −6 DMP-001 net, −229 home-channel addressing pulled (P8-23), +15 caller's own tool loader (X-09), +9 P8-15/P8-18.
 /**
  * ⚠ THE BRIEFING IS WRITTEN ONCE AND PUSHED ONCE. It was 17,067 chars — 18% of
@@ -312,15 +316,9 @@ const INSTRUCTIONS_CEILING = 1_804; // +15: an unstamped caller reads "your clie
 const DOCTRINE_CEILING = 14_252; // +312 pulled against −229 pushed: home-channel addressing moved into `rooms` (P8-23); +16 P8-20. Re-derive, never quote.
 
 const WS: WorkspaceListItem = {
-  id: "11111111-1111-1111-1111-111111111111",
-  ownerId: "owner",
-  name: "Alpha",
-  slug: "alpha",
-  publicId: "pub-1",
-  description: null,
-  createdAt: "2026-01-01T00:00:00Z",
-  updatedAt: "2026-01-01T00:00:00Z",
-  role: "owner",
+  id: "11111111-1111-1111-1111-111111111111", ownerId: "owner", name: "Alpha", slug: "alpha",
+  publicId: "pub-1", description: null, role: "owner",
+  createdAt: "2026-01-01T00:00:00Z", updatedAt: "2026-01-01T00:00:00Z",
 };
 
 /** Enough of the client for registration. ⚠ No handler runs on this path. */
@@ -344,8 +342,9 @@ let instructions: string;
 /** Every published resource's body, by URI. Doctrine is the only one today. */
 let doctrine: Map<string, number>;
 
-beforeAll(async () => {
+async function connect(toolSet: ToolSet): Promise<Client> {
   const server = createServer(stubClient(), {
+    toolSet,
     directory: [WS],
     workspace: WS,
     role: "owner",
@@ -353,11 +352,13 @@ beforeAll(async () => {
     scopes: ["dopl.read", "dopl.write"],
   });
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
-  client = new Client({ name: "budget-probe", version: "0.0.0" });
-  await Promise.all([
-    server.connect(serverTransport),
-    client.connect(clientTransport),
-  ]);
+  const probe = new Client({ name: "budget-probe", version: "0.0.0" });
+  await Promise.all([server.connect(serverTransport), probe.connect(clientTransport)]);
+  return probe;
+}
+
+beforeAll(async () => {
+  client = await connect("legacy");
   listed = await client.listTools();
   descriptions = new Map(listed.tools.map((t) => [t.name, (t.description ?? "").length]));
   schemas = new Map(listed.tools.map((t) => [t.name, JSON.stringify(t.inputSchema).length]));
@@ -384,9 +385,8 @@ afterAll(async () => {
 });
 
 /** Every measured char an external client is pushed on connection. */
-function servedTotal(): number {
-  const sum = (m: Map<string, number>) => [...m.values()].reduce((a, b) => a + b, 0);
-  return sum(descriptions) + sum(schemas) + instructions.length;
+function servedTotal(tools = listed.tools, briefing = instructions): number {
+  return tools.reduce((n, t) => n + (t.description ?? "").length + JSON.stringify(t.inputSchema).length, briefing.length);
 }
 
 describe("the pushed surface fits its budget, as served", () => {
@@ -425,6 +425,17 @@ describe("the pushed surface fits its budget, as served", () => {
     );
   });
 
+  it("the granular set is bounded on its own, the same way", async () => {
+    const probe = await connect("granular");
+    const total = servedTotal((await probe.listTools()).tools, probe.getInstructions() ?? "");
+    await probe.close();
+    expectRatchet(
+      "the granular served surface",
+      ratchet(new Map([["granular per connection", total]]), { "granular per connection": GRANULAR_SERVED_CEILING }),
+      "B3 writes the prose against this number; its target is the legacy total",
+    );
+  });
+
   it("the `instructions` briefing is bounded, and is delivered exactly as written", () => {
     expectRatchet(
       "the instructions briefing",
@@ -448,13 +459,7 @@ describe("the pushed surface fits its budget, as served", () => {
       buildInstructions([WS], {
         pin: null,
         directoryLoadFailed: false,
-        identity: {
-          userId: null,
-          homeChannels: 0,
-          boundChannelId: null,
-          liveAgents: undefined,
-          posture: null,
-        },
+        identity: { userId: null, homeChannels: 0, boundChannelId: null, liveAgents: undefined, posture: null },
       }),
     );
   });
