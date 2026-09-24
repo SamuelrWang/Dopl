@@ -17,6 +17,7 @@
  *     source (`memberLabel` in channel-shared.ts). Do not re-wrap.
  */
 
+import { callRef } from "../call-ref.js";
 import type { DoplClient, ThreadMode } from "@dopl/client";
 import { ok, err, isNotFound, type ToolResponse } from "./respond";
 import { inlineOr, isErr, resolveChannelOr, resolveMemberOr } from "./channel-shared";
@@ -27,7 +28,7 @@ import { holdFact } from "./channel-wake-guidance";
 // ⚠ ONE write-result renderer, shared with `post`/`launch_agent`/`direct_agent`.
 import { factsLine } from "./channel-facts";
 import {
-  FIELD_CAPS_NOTE,
+  fieldCapsNote,
   classifyBadRequest,
   isBadRequest,
   isForbidden,
@@ -80,7 +81,7 @@ export async function opCreateThread(
       switch (classifyBadRequest(e)) {
         case "addressee_not_member":
           return err(
-            `Couldn't address the thread to ${member.label} — they aren't a member of **${chName}**. Invite them first (op="rooms" action="invite"), then open the thread.`,
+            `Couldn't address the thread to ${member.label} — they aren't a member of **${chName}**. Invite them first (${callRef("channel.rooms.invite", {}, { form: "op" })}), then open the thread.`,
           );
         // A thread is postable only by its creator and target, so a
         // self-addressed thread has nobody who can answer it and sits live and
@@ -88,11 +89,11 @@ export async function opCreateThread(
         // who else is in the channel.
         case "self_target":
           return err(
-            `A thread can't be addressed to yourself — you and the member you address it to are the only two who may post into it, so a self-addressed thread has nobody who can answer it. No thread was opened. List the channel's other members (op="rooms", action="members", channel="${ch.id}"), then open the thread addressed to one of them.`,
+            `A thread can't be addressed to yourself — you and the member you address it to are the only two who may post into it, so a self-addressed thread has nobody who can answer it. No thread was opened. List the channel's other members (${callRef("channel.rooms.members", { channel: `"${ch.id}"` }, { form: "args" })}), then open the thread addressed to one of them.`,
           );
         case "invalid_request":
           return err(
-            `That create_thread was rejected as INVALID before it reached **${chName}** — no thread was opened, and this is NOT a membership problem, so do NOT invite ${member.label}.${serverDetail(e)} ${FIELD_CAPS_NOTE} Shorten the field that is over and open the thread again.`,
+            `That create_thread was rejected as INVALID before it reached **${chName}** — no thread was opened, and this is NOT a membership problem, so do NOT invite ${member.label}.${serverDetail(e)} ${fieldCapsNote()} Shorten the field that is over and open the thread again.`,
           );
         case "workspace":
           return err(

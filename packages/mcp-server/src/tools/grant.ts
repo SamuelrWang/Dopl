@@ -5,6 +5,7 @@
  * so the refusal can name what the server's uniform 404 cannot.
  */
 
+import { calledAs, callRef, legacyOnly } from "../call-ref.js";
 import {
   isAmbiguousContainer,
   type WorkspaceDirectory,
@@ -74,7 +75,7 @@ export function notOwnedRefusal(
 ): ToolResponse | null {
   if (selfUserId && createdBy && createdBy === selfUserId) return null;
   return err(
-    `Refused: op="grant" lends ${noun}s YOU created, and ${inlineOr(ref, NO_NAME)} is not one of them. NOTHING was shared. Being able to read it is not the same as being able to lend it — a grant puts it in front of everyone in the scope you named. ${
+    `Refused: ${calledAs("grant")} lends ${noun}s YOU created, and ${inlineOr(ref, NO_NAME)} is not one of them. NOTHING was shared. Being able to read it is not the same as being able to lend it — a grant puts it in front of everyone in the scope you named. ${
       selfUserId
         ? `Ask its owner to share it.`
         : `(This session could not resolve who you are, so ownership cannot be proved at all — reconnect with a credential that carries your user id.)`
@@ -104,25 +105,30 @@ export async function resolveGrantScopeId(
   return target.id;
 }
 
-/** Where a container id comes from, worded once for the refusal and the `to` describe. */
-const CONTAINER_ID_SOURCE =
-  'Container ids come from dopl_workspaces(op="list");';
+/** Where a container id comes from, worded for the refusal. */
+const containerIdSource = () => `Container ids come from ${callRef("workspaces.list")};`;
 
 function unresolvableScope(scope: GrantScopeArg, to: string): ToolResponse {
   return err(
-    `\`to\` ${inlineOr(to, "`(unreadable ref)`")} does not resolve as a ${scope} you can act in, so NOTHING was shared — this op never falls back to the workspace you are calling from. Either there is no such ${scope} or it is not one you can act in; those are one answer here on purpose. ${CONTAINER_ID_SOURCE} a channel id is a uuid from dopl_channel(op="rooms", action="list").`,
+    `\`to\` ${inlineOr(to, "`(unreadable ref)`")} does not resolve as a ${scope} you can act in, so NOTHING was shared — this op never falls back to the workspace you are calling from. Either there is no such ${scope} or it is not one you can act in; those are one answer here on purpose. ${containerIdSource()} a channel id is a uuid from ${callRef("channel.rooms.list")}.`,
   );
 }
 
-/** The three argument descriptions, shared by both tools (the enums are published as keywords). */
-export const GRANT_SCOPE_ARG_DESCRIPTION =
-  `op=grant (required): WHERE to lend it — "channel" (a home channel's room) or "container" (a home channel or workspace, by ref). The scope decides the audience; the row itself never moves.`;
+/**
+ * The three argument descriptions, shared by both legacy tools (the enums are published as
+ * keywords); a granular tool describes its own (`granular-text.ts › SHARED_PARAMS`).
+ */
+export const GRANT_SCOPE_ARG_DESCRIPTION = legacyOnly(
+  `op=grant (required): WHERE to lend it — "channel" (a home channel's room) or "container" (a home channel or workspace, by ref). The scope decides the audience; the row itself never moves.`,
+);
 
-export const GRANT_TO_ARG_DESCRIPTION =
-  `op=grant (required): the scope's handle — a channel UUID, or for scope="container" a workspace slug/UUID or a home-channel CONTAINER id from dopl_workspaces(op="list"). It must be one you are a member of; an id that does not resolve for you refuses and shares nothing, and there is no fallback to the workspace you are calling from.`;
+export const GRANT_TO_ARG_DESCRIPTION = legacyOnly(
+  `op=grant (required): the scope's handle — a channel UUID, or for scope="container" a workspace slug/UUID or a home-channel CONTAINER id from dopl_workspaces(op="list"). It must be one you are a member of; an id that does not resolve for you refuses and shares nothing, and there is no fallback to the workspace you are calling from.`,
+);
 
-export const GRANT_LEVEL_ARG_DESCRIPTION =
-  `op=grant: "visible" or "agent_only" on a CHANNEL scope — two AUDIENCES in the room, not a high/low pair, and both READ-ONLY; "read" or "edit" on a container. Omitted, the narrower one. Mixing the vocabularies is refused.`;
+export const GRANT_LEVEL_ARG_DESCRIPTION = legacyOnly(
+  `op=grant: "visible" or "agent_only" on a CHANNEL scope — two AUDIENCES in the room, not a high/low pair, and both READ-ONLY; "read" or "edit" on a container. Omitted, the narrower one. Mixing the vocabularies is refused.`,
+);
 
 /**
  * What a channel level permits, said on the result (not the pushed describe): an audience, read-only

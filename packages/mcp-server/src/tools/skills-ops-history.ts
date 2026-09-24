@@ -8,13 +8,13 @@
  * alone, and an id copied from the wrong list must not roll back the wrong procedure.
  */
 
+import { callRef } from "../call-ref.js";
 import type { DoplClient, SkillFile } from "@dopl/client";
 import { inlineOr, isForeignAuthored } from "./narration";
 import { ok, err, isNotFound, type ToolResponse } from "./respond";
 import { agentWriteDenied, failureDetail, UNTRUSTED_SKILL_BODY_HEADER } from "./skills-shared";
 import { isErr } from "./channel-shared";
 import {
-  HISTORY_OP,
   HISTORY_PAGE_DEFAULT,
   restoreRefusal,
   revisionNotFound,
@@ -40,7 +40,7 @@ async function versionOf(client: DoplClient, file: SkillFile, versionId: string)
   }
   return err(
     refusal(
-      revisionNotFound(HISTORY_OP),
+      revisionNotFound("skill.history"),
       `${inlineOr(versionId, "`(empty)`")} is not a version of this skill.`,
     ),
   );
@@ -67,7 +67,7 @@ export async function opHistory(
         `${header}# Version \`${version.id}\` of ${inlineOr(slug, "`(empty)`")} / SKILL.md`,
         `Saved ${version.createdAt} via ${version.source} · ${version.body.length} chars.`,
         current,
-        `Restoring writes THIS body over the current one as a NEW save; nothing is deleted. To do it: op="restore" slug="${slug}" revision="${version.id}" expected_version="${file.updatedAt}".`,
+        `Restoring writes THIS body over the current one as a NEW save; nothing is deleted. To do it: ${callRef("skill.restore", { slug: `"${slug}"`, revision: `"${version.id}"`, expected_version: `"${file.updatedAt}"` }, { form: "op" })}.`,
         "",
         "---",
         "",
@@ -88,7 +88,7 @@ export async function opHistory(
     history.versions.length >= (opts.limit ?? HISTORY_PAGE_DEFAULT)
       ? `Showing the newest ${history.versions.length}; raise \`limit\` for older ones.`
       : "End of history.",
-    `Preview one with op="history" revision="<id>"; restore with op="restore" revision="<id>" expected_version="${file.updatedAt}".`,
+    `Preview one with ${callRef("skill.history", { revision: '"<id>"' }, { form: "op" })}; restore with ${callRef("skill.restore", { revision: '"<id>"', expected_version: `"${file.updatedAt}"` }, { form: "op" })}.`,
   );
   return ok(lines.join("\n"));
 }
@@ -102,7 +102,7 @@ export async function opRestore(
   const file = await currentBody(client, slug);
   if (isErr(file)) return file;
   if (file.updatedAt !== expectedVersion) {
-    return staleBeforeRestore('op="read"', file.updatedAt, expectedVersion);
+    return staleBeforeRestore("skill.read", file.updatedAt, expectedVersion);
   }
   const version = await versionOf(client, file, versionId);
   if (isErr(version)) return version;
@@ -110,7 +110,7 @@ export async function opRestore(
   try {
     saved = await client.restoreSkillVersion(versionId, expectedVersion);
   } catch (e) {
-    const mapped = restoreRefusal(e, 'op="read"', HISTORY_OP) ?? agentWriteDenied(e);
+    const mapped = restoreRefusal(e, "skill.read", "skill.history") ?? agentWriteDenied(e);
     if (mapped) return mapped;
     throw e;
   }
@@ -119,7 +119,7 @@ export async function opRestore(
     [
       unchanged
         ? `Nothing to restore: SKILL.md of ${inlineOr(slug, "`(empty)`")} already matches version \`${versionId}\`.`
-        : `Restored SKILL.md of ${inlineOr(slug, "`(empty)`")} to version \`${versionId}\` — written as a NEW save; every earlier version is still in op="history".`,
+        : `Restored SKILL.md of ${inlineOr(slug, "`(empty)`")} to version \`${versionId}\` — written as a NEW save; every earlier version is still in ${callRef("skill.history", {}, { form: "op" })}.`,
       `Version \`${expectedVersion}\` → \`${saved.updatedAt}\` · ${file.body.length} → ${saved.body.length} chars.`,
     ].join("\n"),
   );

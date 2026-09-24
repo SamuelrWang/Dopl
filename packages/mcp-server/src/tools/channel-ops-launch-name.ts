@@ -1,3 +1,4 @@
+import { callRef } from "../call-ref.js";
 import { agentDisplayName } from "./agent-display-name";
 import { bareAgentId, isAgentId } from "./channel-agent-id";
 import { err, type ToolResponse } from "./respond";
@@ -27,7 +28,7 @@ import { err, type ToolResponse } from "./respond";
  * — it serves four actions and the other three have no such bound — so a 61-character name
  * reached the route and came back as a bare `VALIDATION_FAILED` naming no field. The number is
  * in `name`'s own `.describe()` ("1-60 visible characters") and in `channel-errors.ts ›
- * FIELD_CAPS_NOTE`; this is the third statement of it, and the only one that can refuse.
+ * fieldCapsNote()`; this is the third statement of it, and the only one that can refuse.
  */
 export const LAUNCH_NAME_MAX_CHARS = 60;
 
@@ -43,7 +44,7 @@ export function launchName(raw: string | undefined): { name: string } | ToolResp
   const name = String(raw ?? "").trim();
   if (name.length === 0) {
     return err(
-      'op="manage" action="launch" is missing required param: name. Name the agent you are launching — a short role, 1-60 characters on one line ("Research", "Bug reviewer"). It is what every human surface shows and what other agents @-tag it by (`@bug-reviewer`).',
+      `${callRef("channel.manage.launch", {}, { form: "op" })} is missing required param: name. Name the agent you are launching — a short role, 1-60 characters on one line ("Research", "Bug reviewer"). It is what every human surface shows and what other agents @-tag it by (\`@bug-reviewer\`).`,
     );
   }
   // ⚠ **AN ID-SHAPED NAME IS REFUSED, AND THIS IS THE HALF SAMUEL SAID OUT LOUD.** It is
@@ -52,7 +53,7 @@ export function launchName(raw: string | undefined): { name: string } | ToolResp
   // the whole ruling one launch at a time.
   if (looksLikeAgentId(name)) {
     return err(
-      `op="manage" action="launch": name="${name}" is an agent id, not a name. An id is internal plumbing and is never shown to a person; pass what the agent is FOR ("Research", "Bug reviewer").`,
+      `${callRef("channel.manage.launch", {}, { form: "op" })}: name="${name}" is an agent id, not a name. An id is internal plumbing and is never shown to a person; pass what the agent is FOR ("Research", "Bug reviewer").`,
     );
   }
   // ⚠ **A SLUG IS REPAIRED RATHER THAN REFUSED, AND ONLY AFTER THE TWO REFUSALS ABOVE**

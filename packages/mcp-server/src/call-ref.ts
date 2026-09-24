@@ -3,7 +3,7 @@
  * A spelling is named by its manifest key (`channel.read`, `kb.write_file`, `channel.rooms.help`:
  * a binding key without the `dopl_` prefix, `:` as `.`) and rendered from `tool-manifest.ts`, so
  * `dopl_channel(op="read", …)` on a legacy connection is `dopl_read_channel(…)` on a granular one
- * with no second table. `call-ref.test.ts` bans a hand-written spelling anywhere else in `src`.
+ * with no second table. `call-spelling.test.ts` bans a hand-written spelling anywhere else in `src`.
  *
  * The active set rides an AsyncLocalStorage scope the registrar opens around every tool call and
  * resource read (`withToolSet`), so a handler, a refusal or a footer renders for ITS connection
@@ -43,10 +43,15 @@ export function activeToolSet(): ToolSet {
 
 /**
  * The call being answered, named back to its caller: the granular tool it came through, else the
- * legacy op label as the caller spelled it (`op="export"`, after `legacyPrefix` when given).
+ * legacy op as the caller spelled it — `op="export"`, after `legacy.tool` (`dopl_kb op="grant"`), or
+ * as a call (`dopl_kb(op="grant")`).
  */
-export function calledAs(opLabel: string, legacyPrefix = ""): string {
-  return scope.getStore()?.tool ?? `${legacyPrefix}op="${opLabel}"`;
+export function calledAs(op: string, legacy: { tool?: string; form?: "named" | "call" } = {}): string {
+  const granular = scope.getStore()?.tool;
+  if (granular) return granular;
+  const opText = `op="${op}"`;
+  if (!legacy.tool) return opText;
+  return legacy.form === "call" ? `${legacy.tool}(${opText})` : `${legacy.tool} ${opText}`;
 }
 
 /**
@@ -67,12 +72,12 @@ export type CallArgs = Readonly<Record<string, string | true>>;
 
 export interface CallOptions {
   /**
-   * The legacy prose shorthands: `"op"` relative to its own tool, for a hint inside that tool's own
-   * text (`op="list_dir"`, `op="rooms" action="list"`); `"named"` the same after the tool's name
-   * (`dopl_kb op="write_file"`). A granular tool is its own job, so a granular spelling is always the
-   * whole call.
+   * The legacy prose shorthands, relative to the legacy tool, for a hint inside that tool's own text:
+   * `"op"` space-separated (`op="list_dir"`, `op="restore" revision="<id>"`), `"args"` the call's args alone
+   * (`op="rooms", action="open"`), `"named"` after the tool's name (`dopl_kb op="write_file"`). A
+   * granular tool is its own job, so a granular spelling is always the whole call.
    */
-  form?: "call" | "op" | "named";
+  form?: "call" | "op" | "args" | "named";
   /** The quote around op/action/selector values. Default `"`. */
   quote?: '"' | "'";
 }
@@ -146,9 +151,17 @@ export function callRef(key: string, args: CallArgs = {}, options: CallOptions =
   if (activeToolSet() === "legacy") {
     const [tool, op, action] = key.split(".");
     const opText = [`op=${q}${op}${q}`, ...(action === undefined ? [] : [`action=${q}${action}${q}`])];
-    if (options.form === "op") return [opText.join(" "), ...argText(args)].join(", ");
-    if (options.form === "named") return [`dopl_${tool} ${opText.join(" ")}`, ...argText(args)].join(", ");
-    return `dopl_${tool}(${[...(op === undefined ? [] : opText), ...argText(args)].join(", ")})`;
+    const all = [...(op === undefined ? [] : opText), ...argText(args)].join(", ");
+    switch (options.form) {
+      case "op":
+        return [...opText, ...argText(args)].join(" ");
+      case "named":
+        return [`dopl_${tool} ${opText.join(" ")}`, ...argText(args)].join(", ");
+      case "args":
+        return all;
+      default:
+        return `dopl_${tool}(${all})`;
+    }
   }
   if (!targetMap().has(key)) return [...new Set(found.map((t) => t.tool.name))].join(" / ");
   const { tool, job } = pick(found, args);
@@ -156,25 +169,3 @@ export function callRef(key: string, args: CallArgs = {}, options: CallOptions =
   const parts = [...(selector && job ? [`${selector}=${q}${job}${q}`] : []), ...argText(args, tool.preset)];
   return `${tool.name}(${parts.join(", ")})`;
 }
-
-/**
- * A spelling rendered when it is PRINTED, not when it is built: for a module constant (an error
- * table's `retry`) that must read in the set of whichever connection prints it.
- */
-export class CallRef {
-  constructor(
-    readonly key: string,
-    readonly args: CallArgs = {},
-    readonly options: CallOptions = {},
-  ) {}
-
-  toString(): string {
-    return callRef(this.key, this.args, this.options);
-  }
-}
-
-/** Shorthand for a lazy {@link CallRef}. */
-export function ref(key: string, args?: CallArgs, options?: CallOptions): CallRef {
-  return new CallRef(key, args, options);
-}
-

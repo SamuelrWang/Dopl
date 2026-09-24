@@ -10,7 +10,7 @@ import { z } from "zod";
 
 import { parseBinding, selectorOf, type BindingKey, type GranularTool } from "./tool-manifest.js";
 import { FENCE_POINTER, GRANULAR_TEXT, SHARED_PARAMS } from "./granular-text.js";
-import { acceptsWorkspaceArg } from "./workspace-arg.js";
+import { bindingTakesContainer } from "./workspace-arg.js";
 import type { ToolResponse } from "./tools/respond.js";
 
 /** A registered legacy tool: its published shape, its strict input schema, its whole call pipeline. */
@@ -58,10 +58,7 @@ export function granularShape(t: GranularTool, legacy: ReadonlyMap<string, Legac
     const select = line ? z.enum(names).describe(line) : z.enum(names);
     shape[selector] = t.selectDefault && names.includes(t.selectDefault) ? select.default(t.selectDefault) : select;
   }
-  const container = jobs.some(([, key]) => {
-    const { tool, op } = parseBinding(key);
-    return acceptsWorkspaceArg(tool, op);
-  });
+  const container = jobs.some(([, key]) => bindingTakesContainer(key));
   for (const param of [...t.params, ...(t.carry ?? []), ...(container ? ["container"] : [])]) {
     const type = text.types?.[param] ?? shapes.find((s) => param in s)?.[param];
     // A param only an unserved job takes goes with that job.

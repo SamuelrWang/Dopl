@@ -4,6 +4,7 @@
  */
 
 import { z, type ZodRawShape } from "zod";
+import { calledAs } from "../call-ref.js";
 import {
   CREDITS_EXHAUSTED,
   MISSING_PARAMS,
@@ -98,7 +99,7 @@ export function sessionRequired(e: unknown, op: string): ToolResponse | null {
   return err(
     refusal(
       SESSION_REQUIRED,
-      `op="${op}" is app-only and NOTHING changed. Your token is an agent credential, which this route refuses whatever scopes it carries — there is no permission to request and no other route in. Ask your operator to do it in the Dopl app.`,
+      `${calledAs(op)} is app-only and NOTHING changed. Your token is an agent credential, which this route refuses whatever scopes it carries — there is no permission to request and no other route in. Ask your operator to do it in the Dopl app.`,
     ),
   );
 }
@@ -226,7 +227,7 @@ export function missingParams(
   const plural = missing.length === 1 ? "param" : "params";
   // Through the declared code, so the wire matches the `reason=` every description teaches.
   return err(
-    refusal(MISSING_PARAMS, `op="${op}" is missing required ${plural}: ${missing.join(", ")}.`),
+    refusal(MISSING_PARAMS, `${calledAs(op)} is missing required ${plural}: ${missing.join(", ")}.`),
   );
 }
 
@@ -244,7 +245,7 @@ export function unusedParams(
   const stray = Object.keys(args).filter((k) => !own.has(k) && args[k] !== undefined);
   if (stray.length === 0) return null;
   return err(
-    refusal(UNUSED_PARAM, `op="${op}" does not take: ${stray.join(", ")}. It takes: ${allowed.join(", ")}.`),
+    refusal(UNUSED_PARAM, `${calledAs(op)} does not take: ${stray.join(", ")}. It takes: ${allowed.join(", ")}.`),
   );
 }
 

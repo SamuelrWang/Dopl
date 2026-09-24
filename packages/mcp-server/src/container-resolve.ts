@@ -27,6 +27,7 @@
  * UNADDRESSED_WRITE_REFUSALS`.
  */
 
+import { toolName } from "./call-ref.js";
 import type { ToolResponse } from "./tools/respond.js";
 import { inlineOr, NO_NAME } from "./tools/narration.js";
 import {
@@ -120,7 +121,7 @@ export async function resolveCallAddress(
     return {
       kind: "refusal",
       response: err(
-        `The \`${argName}\` argument was blank. Pass a container slug or id from \`dopl_workspaces\`, or \`home\` for your home space — or omit it entirely to use this connection's container.`,
+        `The \`${argName}\` argument was blank. Pass a container slug or id from \`${toolName("workspaces.list")}\`, or \`home\` for your home space — or omit it entirely to use this connection's container.`,
       ),
     };
   }
@@ -147,7 +148,7 @@ export async function resolveCallAddress(
       // ⚠ Caller's own arg, but a raw backtick still escapes this span and puts
       // the tail into narration.
       response: err(
-        `Container not found: ${inlineOr(supplied, "`(unreadable ref)`")}. Call \`dopl_workspaces\` for every container you can reach — workspaces, home channels and your home space alike; \`home\` names the last of those.`,
+        `Container not found: ${inlineOr(supplied, "`(unreadable ref)`")}. Call \`${toolName("workspaces.list")}\` for every container you can reach — workspaces, home channels and your home space alike; \`home\` names the last of those.`,
       ),
     };
   }
@@ -207,6 +208,6 @@ export function ambiguousContainer(
       (w) =>
         `- \`${w.id}\` — ${inlineOr(w.name, NO_NAME)} · kind=\`${containerKind(w)}\``,
     ),
-    ...(rest > 0 ? [`- …and ${rest} more; \`dopl_workspaces\` has them all.`] : []),
+    ...(rest > 0 ? [`- …and ${rest} more; \`${toolName("workspaces.list")}\` has them all.`] : []),
   ].join("\n");
 }

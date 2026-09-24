@@ -27,6 +27,7 @@
  * removed-vocabulary source scan (`channel-law.test.ts`, `law-scan.test.ts`).
  */
 
+import { bySet, callRef, toolName } from "../call-ref.js";
 import { bareAgentId, isAgentId } from "./channel-agent-id";
 import { err, type ToolResponse } from "./respond";
 
@@ -47,9 +48,9 @@ export function agentTarget(raw: string): { agent: string } | ToolResponse {
       // ⚠ THE TOKEN LINE NAMES THE FIELD, THE VERDICT AND WHERE THE ID COMES FROM — the same
       // grammar the launch caps use (`channel-ops-launch-goal.ts`). `retry=` is an OP rather
       // than `no`, because unlike a too-long field this one has a next call that fixes it.
-      `Nothing was filed — field=to reason=not_an_agent_id retry=dopl_channel(op="status")`,
-      `\`to\` must be an agent INSTANCE id on op="manage" — \`@agent-<id>\`, or the bare eight characters. A NAME handle (\`@my-agent\`) is a real address when you SEND, but never here: nothing on this lane resolves a name to an instance, so no request was made and nothing is pending.`,
-      `dopl_channel(op="status") lists your running agents with the id to pass.`,
+      `Nothing was filed — field=to reason=not_an_agent_id retry=${callRef("channel.status")}`,
+      `\`to\` must be an agent INSTANCE id on ${bySet({ legacy: callRef("channel.manage", {}, { form: "op" }), granular: toolName("channel.manage.end") })} — \`@agent-<id>\`, or the bare eight characters. A NAME handle (\`@my-agent\`) is a real address when you SEND, but never here: nothing on this lane resolves a name to an instance, so no request was made and nothing is pending.`,
+      `${callRef("channel.status")} lists your running agents with the id to pass.`,
     ].join("\n"),
   );
 }
@@ -88,7 +89,7 @@ export function foreignAgent(agentId: string, verb: string): ToolResponse {
     [
       `Nothing was ${verb} — agent \`${agentId}\` is ANOTHER MEMBER'S, and **no request was filed**.`,
       `You can only manage agents running on YOUR OWN operator's machine. A peer's agent appears in a channel as a handle and is not reachable from here at all — there is no permission that would change that, so do not look for another route and do not ask anyone to grant one.`,
-      `dopl_channel(op="status") lists exactly the agents you CAN manage. If you meant one of yours, take the id from there.`,
+      `${callRef("channel.status")} lists exactly the agents you CAN manage. If you meant one of yours, take the id from there.`,
     ].join("\n"),
   );
 }

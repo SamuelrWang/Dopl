@@ -28,7 +28,7 @@ import { NO_NAME } from "./narration";
 import { isNameRefusal, launchName, launchedName } from "./channel-ops-launch-name";
 import { isGoalRefusal, launchGoal } from "./channel-ops-launch-goal";
 import {
-  FIELD_CAPS_NOTE,
+  fieldCapsNote,
   classifyBadRequest,
   isBadRequest,
   serverDetail,
@@ -106,7 +106,7 @@ export async function opLaunchAgent(
     // Any other 400 is classified, and `serverDetail` names the refused field; nothing was filed.
     if (isBadRequest(e) && classifyBadRequest(e) === "invalid_request") {
       return err(
-        `No agent was requested — that launch was rejected as INVALID before any directive was filed, and **nothing is pending**. This is NOT a membership, identity or colour problem, so do not invite anyone, re-pick an identity or change \`color\` over it.${serverDetail(e)} ${FIELD_CAPS_NOTE} Fix the field the server named and ask again.`,
+        `No agent was requested — that launch was rejected as INVALID before any directive was filed, and **nothing is pending**. This is NOT a membership, identity or colour problem, so do not invite anyone, re-pick an identity or change \`color\` over it.${serverDetail(e)} ${fieldCapsNote()} Fix the field the server named and ask again.`,
       );
     }
     if (isNotFound(e)) return channelNotFound(ref);

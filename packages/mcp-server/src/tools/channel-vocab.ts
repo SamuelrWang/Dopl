@@ -17,6 +17,8 @@
  * from them. The published shape that spends them lives in `channel-schema.ts`.
  */
 
+import { legacyOnly } from "../call-ref.js";
+
 /**
  * THE SIX OPS AN AGENT SEES, and the only six it may pick from.
  *
@@ -61,7 +63,8 @@ export function unknownOpRefusal(op: unknown): string {
   // sixth op cannot arrive without appearing here.
   const quoted = CHANNEL_OPS.map((o) => `"${o}"`);
   const offered = `${quoted.slice(0, -1).join(", ")} or ${quoted[quoted.length - 1]}`;
-  return `dopl_channel has no op "${shown}" — it takes ${offered}. Nothing was done.`;
+  // Legacy-only: a granular call names its tool, so it never sends an op.
+  return legacyOnly(`dopl_channel has no op "${shown}" — it takes ${offered}. Nothing was done.`);
 }
 
 /**
@@ -142,8 +145,8 @@ export function unknownActionRefusal(op: DispatchOp, action: string): string {
   // over all three lists — and kept for the same reason `channel.ts` keeps its
   // exhaustive default: a build where that validation did not run must refuse,
   // and must not invent an op to send the caller to.
-  const belongs = owner ? ` — that word belongs to op="${owner}"` : "";
   const quoted = CHANNEL_ACTIONS[op].map((a) => `"${a}"`);
   const offered = `${quoted.slice(0, -1).join(", ")} or ${quoted[quoted.length - 1]}`;
-  return `op="${op}" has no action "${shown}"${belongs}. Nothing was done. op="${op}" takes ${offered}.`;
+  // Legacy-only: a granular tool's selector is an enum of its own jobs, so this never reaches one.
+  return legacyOnly(`op="${op}" has no action "${shown}"${owner ? ` — that word belongs to op="${owner}"` : ""}. Nothing was done. op="${op}" takes ${offered}.`);
 }

@@ -9,6 +9,7 @@
 import { randomBytes, createHash } from "node:crypto";
 import { workspaceContext } from "@dopl/client";
 import type { DoplClient } from "@dopl/client";
+import { calledAs } from "../call-ref.js";
 import { isSharedRoom } from "../shared-room.js";
 import { inlineOr } from "./narration.js";
 import { err, isApiError, type ToolResponse } from "./respond.js";
@@ -143,7 +144,7 @@ const PROCEED_ACKNOWLEDGED: ConfirmVerdict = {
 /** A token on a call outside the confirm class is refused, not ignored (as `registrar.ts › strictInput` does). */
 export function refuseStrayToken(tool: string, op: string): ToolResponse {
   return err(
-    `\`confirm_token\` was passed to ${tool} op="${op}", but this call is not audience-changing — it creates something only you can see, so there is no preview to confirm and nothing was created. Re-issue WITHOUT \`confirm_token\`. Tokens are only ever minted for a write that publishes into a shared home channel.`,
+    `\`confirm_token\` was passed to ${calledAs(op, { tool })}, but this call is not audience-changing — it creates something only you can see, so there is no preview to confirm and nothing was created. Re-issue WITHOUT \`confirm_token\`. Tokens are only ever minted for a write that publishes into a shared home channel.`,
   );
 }
 
@@ -212,7 +213,7 @@ function preview(
 ): ToolResponse {
   return err(
     [
-      `NOTHING WAS CREATED — this is a dry run. ${act.tool} op="${act.op}" would publish into a home channel somebody ELSE is in, so it previews first.`,
+      `NOTHING WAS CREATED — this is a dry run. ${calledAs(act.op, { tool: act.tool })} would publish into a home channel somebody ELSE is in, so it previews first.`,
       "",
       `**What would be created:** ${act.what}`,
       `**Where:** ${target.label}${target.unknown ? " — ⚠ this home channel could not be read, so it is being treated as a shared room" : " (a home channel with at least one other person in it)"}`,
@@ -232,7 +233,7 @@ function tokenRefusal(act: ConfirmAct, verdict: ConsumeResult): ToolResponse {
         ? `that \`confirm_token\` was minted for a DIFFERENT payload — at least one argument changed since the preview`
         : `that \`confirm_token\` is not recognised: it was already used, it was minted somewhere this request cannot see, or it was never issued`;
   return err(
-    `Nothing was created — ${why}. Re-issue ${act.tool} op="${act.op}" WITHOUT \`confirm_token\` to get a fresh preview of exactly what would land and who would see it, then confirm that one. Do not guess a token: they are random and a wrong one can only ever refuse.`,
+    `Nothing was created — ${why}. Re-issue ${calledAs(act.op, { tool: act.tool })} WITHOUT \`confirm_token\` to get a fresh preview of exactly what would land and who would see it, then confirm that one. Do not guess a token: they are random and a wrong one can only ever refuse.`,
   );
 }
 

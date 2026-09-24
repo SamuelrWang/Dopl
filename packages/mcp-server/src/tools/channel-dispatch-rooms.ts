@@ -19,6 +19,7 @@
  * (`law-scan.test.ts`) read every non-test `channel-*.ts` in this directory.
  */
 
+import { callRef } from "../call-ref.js";
 import type { DoplClient } from "@dopl/client";
 import { err, missingParams, ok, strictParams, type ToolResponse } from "./respond";
 import { channelDoctrine, doctrineSection } from "./channel-doctrine";
@@ -82,7 +83,7 @@ export async function dispatchRoomsAction(
     case "open": {
       if (args.to !== undefined && args.name !== undefined) {
         return err(
-          'op="rooms" action="open" takes `name` (a named channel) or `to` (a direct 1:1), never both — nothing was opened. Drop `to` to open a channel, or drop `name` to open the DM.',
+          `${callRef("channel.rooms.open", {}, { form: "op" })} takes \`name\` (a named channel) or \`to\` (a direct 1:1), never both — nothing was opened. Drop \`to\` to open a channel, or drop \`name\` to open the DM.`,
         );
       }
       if (args.to !== undefined) {

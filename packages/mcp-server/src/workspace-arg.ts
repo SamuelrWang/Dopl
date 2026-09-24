@@ -6,6 +6,8 @@
  * one suite (`workspace-arg.test.ts`).
  */
 
+import { activeToolSet, calledAs, toolName } from "./call-ref.js";
+import { bindingsOf, GRANULAR_TOOLS, parseBinding, type BindingKey } from "./tool-manifest.js";
 import { inlineOr } from "./tools/narration.js";
 
 /**
@@ -108,12 +110,24 @@ export const WORKSPACE_ARG_OPS: Record<string, ReadonlySet<string> | null> = {
  * any other tool"* until 2026-09-02: false on the day B13 shipped, because the
  * arg is IGNORED everywhere outside this table. A hand-written list would be the
  * same claim one release later, so it is derived — a row added above changes
- * this sentence with it.
+ * this sentence with it. A granular connection gets the granular tools that
+ * publish `container` (a bound job honours it), named whole.
  */
 export function workspaceArgTargets(): string {
+  if (activeToolSet() === "granular") {
+    return GRANULAR_TOOLS.filter((t) => bindingsOf(t).some(bindingTakesContainer))
+      .map((t) => t.name)
+      .join(", ");
+  }
   return Object.entries(WORKSPACE_ARG_OPS)
     .map(([tool, ops]) => (ops === null ? tool : `${tool} (${[...ops].join(", ")})`))
     .join(", ");
+}
+
+/** Does the legacy job a granular binding runs take `container`? */
+export function bindingTakesContainer(key: BindingKey): boolean {
+  const { tool, op } = parseBinding(key);
+  return acceptsWorkspaceArg(tool, op);
 }
 
 /**
@@ -190,10 +204,10 @@ export function refusesUnaddressedWrite(
  */
 export function unaddressedWriteRefusal(tool: string, op: string): string {
   return (
-    `\`${tool}(op="${op}")\` needs an explicit \`container=\`. This connection names no ` +
+    `\`${calledAs(op, { tool, form: "call" })}\` needs an explicit \`container=\`. This connection names no ` +
     `container, so the write would fall through to your home space — which lists no ` +
     `chats and no skills, and a row filed where nothing lists it is an orphan. Pass ` +
-    `\`container=<slug|id>\` (\`dopl_workspaces\` lists every one you can reach), or ` +
+    `\`container=<slug|id>\` (\`${toolName("workspaces.list")}\` lists every one you can reach), or ` +
     `\`container="home"\` if the home space is genuinely where you mean it to go.`
   );
 }

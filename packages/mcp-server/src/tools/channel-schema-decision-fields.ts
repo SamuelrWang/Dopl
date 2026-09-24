@@ -31,7 +31,7 @@ export const DECISION_INPUT_FIELDS = {
   // one key with a paragraph and satisfy the schema. The other two fields it used to need are
   // gone because the surface already had them: the ISSUE is `summary`, the CONTEXT is `body`.
   // Caps mirror `src/features/channels/escalation.ts` — sync all three (that file, this one,
-  // `channel-errors.ts › FIELD_CAPS_NOTE`).
+  // `channel-errors.ts › fieldCapsNote`).
   options: z
     .array(
       z.object({

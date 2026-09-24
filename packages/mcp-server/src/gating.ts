@@ -195,7 +195,7 @@ export function createGates(
             type: "text" as const,
             text: refusal(
               READ_ONLY_SESSION,
-              `${calledAs(op, `\`${name}\` `)} is a write operation. Reconnect with write access to perform it.`,
+              `${calledAs(op, { tool: `\`${name}\`` })} is a write operation. Reconnect with write access to perform it.`,
             ),
           },
         ],

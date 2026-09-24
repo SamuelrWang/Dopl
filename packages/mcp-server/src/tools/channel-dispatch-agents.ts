@@ -5,6 +5,7 @@
  * The `channel-` filename prefix is load-bearing for the parity and removed-vocabulary scans.
  */
 
+import { callRef } from "../call-ref.js";
 import type { DoplClient } from "@dopl/client";
 import { err, missingParams, type ToolResponse } from "./respond";
 import { opDirectAgent } from "./channel-ops-direct";
@@ -86,7 +87,7 @@ export async function dispatchManageAction(
       // Hand-written: `missingParams` counts "" as absent, but `name: ""` legally clears a display name.
       if (typeof args.name !== "string") {
         return err(
-          'op="manage" action="rename" is missing required param: name. Pass the display name you want (one line), or the EMPTY STRING to clear the name back to "Agent #<id>".',
+          `${callRef("channel.manage.rename", {}, { form: "op" })} is missing required param: name. Pass the display name you want (one line), or the EMPTY STRING to clear the name back to "Agent #<id>".`,
         );
       }
       return opRenameAgent(
@@ -111,7 +112,7 @@ export async function dispatchManageAction(
         args.posture?.messages === undefined
       ) {
         return err(
-          'op="manage" action="posture" is missing required params: pass posture with at least one of tools (in the agent\'s runtime\'s own words — claude manual..bypass, codex untrusted..never, cursor allowlist..run-everything) or messages (ask | auto_inbound | auto_outbound | auto_both). Passing one and omitting the other is normal — the omitted axis is left alone. ⚠ Whatever you pass is a REQUEST: your operator\'s machine narrows it to the ceiling they set by hand and never widens past it.',
+          `${callRef("channel.manage.posture", {}, { form: "op" })} is missing required params: pass posture with at least one of tools (in the agent's runtime's own words — claude manual..bypass, codex untrusted..never, cursor allowlist..run-everything) or messages (ask | auto_inbound | auto_outbound | auto_both). Passing one and omitting the other is normal — the omitted axis is left alone. ⚠ Whatever you pass is a REQUEST: your operator's machine narrows it to the ceiling they set by hand and never widens past it.`,
         );
       }
       return opSetAgentMode(

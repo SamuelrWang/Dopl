@@ -8,6 +8,7 @@
  * the route (`X-Updated-At`, atomic) — so a restore over a newer edit is refused, never a clobber.
  */
 
+import { callRef } from "../call-ref.js";
 import type { ContentRevision, DoplClient, KnowledgeEntry } from "@dopl/client";
 import { inlineOr, NO_NAME, NO_PATH } from "./narration";
 import { ok, err, type ToolResponse } from "./respond";
@@ -16,7 +17,6 @@ import { isErr } from "./channel-shared";
 import { fenceBody } from "./untrusted-fence";
 import {
   foreignRevision,
-  HISTORY_OP,
   HISTORY_PAGE_DEFAULT,
   pageTail,
   restoreRefusal,
@@ -86,7 +86,7 @@ export async function opHistory(
     if (!rev) {
       return err(
         refusal(
-          revisionNotFound(HISTORY_OP),
+          revisionNotFound("kb.history"),
           `${inlineOr(opts.revision, "`(empty)`")} is not in this entry's last ${FIND_PAGES_MAX * FIND_PAGE_SIZE} revisions.`,
         ),
       );
@@ -98,7 +98,7 @@ export async function opHistory(
         `# Revision \`${rev.id}\` of ${inlineOr(entry.title, NO_NAME)}`,
         revisionRow(rev, callerUserId),
         current,
-        `Restoring writes THIS snapshot (title ${title}, ${body.length} chars) over the current entry (${chars} chars) as a NEW revision; nothing is deleted. To do it: op="restore" revision="${rev.id}" expected_version="${entry.updatedAt}".`,
+        `Restoring writes THIS snapshot (title ${title}, ${body.length} chars) over the current entry (${chars} chars) as a NEW revision; nothing is deleted. To do it: ${callRef("kb.restore", { revision: `"${rev.id}"`, expected_version: `"${entry.updatedAt}"` }, { form: "op" })}.`,
         "",
         "---",
         "",
@@ -126,7 +126,7 @@ export async function opHistory(
   lines.push(
     "",
     pageTail(page.nextCursor, "entry_cursor"),
-    `Preview one with op="history" revision="<id>"; restore with op="restore" revision="<id>" expected_version="${entry.updatedAt}".`,
+    `Preview one with ${callRef("kb.history", { revision: '"<id>"' }, { form: "op" })}; restore with ${callRef("kb.restore", { revision: '"<id>"', expected_version: `"${entry.updatedAt}"` }, { form: "op" })}.`,
   );
   return ok(lines.join("\n"));
 }
@@ -142,19 +142,19 @@ export async function opRestore(
   if (isErr(found)) return found;
   const { entry, chars } = found;
   if (entry.updatedAt !== expectedVersion) {
-    return staleBeforeRestore(HISTORY_OP, entry.updatedAt, expectedVersion);
+    return staleBeforeRestore("kb.history", entry.updatedAt, expectedVersion);
   }
   let restored: KnowledgeEntry;
   try {
     restored = await client.restoreKbEntryRevision(entry.id, revisionId, expectedVersion);
   } catch (e) {
-    const mapped = restoreRefusal(e, HISTORY_OP, HISTORY_OP) ?? agentWriteDenied(e);
+    const mapped = restoreRefusal(e, "kb.history", "kb.history") ?? agentWriteDenied(e);
     if (mapped) return mapped;
     throw e;
   }
   return ok(
     [
-      `Restored ${inlineOr(restored.title, NO_NAME)} to revision \`${revisionId}\` — written as a NEW revision; the one you restored from, and the state you replaced, are both still in op="history".`,
+      `Restored ${inlineOr(restored.title, NO_NAME)} to revision \`${revisionId}\` — written as a NEW revision; the one you restored from, and the state you replaced, are both still in ${callRef("kb.history", {}, { form: "op" })}.`,
       `Version \`${expectedVersion}\` → \`${restored.updatedAt}\` · ${chars} → ${restored.body.length} chars · entry id \`${restored.id}\`.`,
     ].join("\n"),
   );

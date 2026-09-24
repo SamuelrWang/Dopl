@@ -10,12 +10,12 @@
  * ⚠ `restore` REQUIRES `expected_version` and checks it here and atomically in the route.
  */
 
+import { bySet, callRef, legacyOnly } from "../call-ref.js";
 import type { ContentRevision, DoplClient, OntologyObject } from "@dopl/client";
 import { inlineOr, NO_NAME } from "./narration";
 import { ok, type ToolResponse } from "./respond";
 import { resolveOntologyRef, resolveObjectRef } from "./ontology-render";
 import {
-  HISTORY_OP,
   pageTail,
   restoreRefusal,
   revisionRow,
@@ -77,7 +77,7 @@ function render(
   lines.push(
     "",
     page.nextCursor ? `Newest ${page.revisions.length} shown; narrow with object= for one item's full trail.` : pageTail(null, ""),
-    `Restore writes a row's BEFORE value back, one field: op="restore" object="<id>" revision="<id>" expected_version="<Version from op=get>".`,
+    `Restore writes a row's BEFORE value back, one field: ${callRef("ontology.restore", { object: '"<id>"', revision: '"<id>"', expected_version: `"<Version from ${bySet({ legacy: legacyOnly("op=get"), granular: callRef("ontology.get") })}>"` }, { form: "op" })}.`,
   );
   return lines.join("\n");
 }
@@ -91,20 +91,20 @@ export async function opRestore(
   if ("fail" in resolved) return resolved.fail;
   const object = resolved.hit;
   if (object.updatedAt && object.updatedAt !== args.expected_version) {
-    return staleBeforeRestore('op="get"', object.updatedAt, args.expected_version);
+    return staleBeforeRestore("ontology.get", object.updatedAt, args.expected_version);
   }
   let restored: OntologyObject;
   try {
     restored = await client.restoreOntologyObjectRevision(object.id, args.revision, args.expected_version);
   } catch (e) {
-    const mapped = restoreRefusal(e, 'op="get"', HISTORY_OP);
+    const mapped = restoreRefusal(e, "ontology.get", "ontology.history");
     if (mapped) return mapped;
     throw e;
   }
   return ok(
     [
       `Restored one field of ${inlineOr(restored.name, NO_NAME)} (id \`${restored.id}\`) from revision \`${args.revision}\` — written as a NEW revision; every other field kept its current value.`,
-      `Version \`${args.expected_version}\` → \`${restored.updatedAt ?? "(not reported)"}\`. Read the result with op="get".`,
+      `Version \`${args.expected_version}\` → \`${restored.updatedAt ?? "(not reported)"}\`. Read the result with ${callRef("ontology.get", {}, { form: "op" })}.`,
     ].join("\n"),
   );
 }

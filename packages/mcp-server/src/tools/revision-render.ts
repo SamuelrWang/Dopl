@@ -11,14 +11,17 @@
 import type { ContentRevision } from "@dopl/client";
 import { inlineOr } from "./narration.js";
 import { apiErrorCode, err, isConflict, type ToolResponse } from "./respond.js";
+import { callRef } from "../call-ref.js";
 import { refusal, versionConflict, type ToolError } from "./tool-errors.js";
 
 /** Emit-only: 404 `REVISION_NOT_FOUND` (unknown id, another item's revision, or unreadable). */
-export function revisionNotFound(historyOp: string): ToolError {
+export function revisionNotFound(historyKey: string): ToolError {
   return {
     reason: "revision_not_found",
     meaning: "no revision by that id on this item, or none you can read; nothing changed",
-    retry: historyOp,
+    get retry() {
+      return callRef(historyKey, {}, { form: "op" });
+    },
   };
 }
 
@@ -31,9 +34,6 @@ const REVISION_NOT_RESTORABLE: ToolError = {
 
 /** Default rows per history page; the server's own page cap bounds `limit`. */
 export const HISTORY_PAGE_DEFAULT = 20;
-
-/** The op every history refusal points back to. */
-export const HISTORY_OP = 'op="history"';
 
 /** Who wrote a row, relative to the caller. ⚠ Never a name: an id is the only unforgeable handle. */
 function actorLabel(rev: ContentRevision, callerUserId: string | null): string {
@@ -60,29 +60,29 @@ export function pageTail(nextCursor: string | null, cursorArg: string): string {
 }
 
 /**
- * Map a restore failure to a named refusal, or null (rethrow). `readOp` is the call that yields
- * a fresh Version; `historyOp` the one that lists revisions.
+ * Map a restore failure to a named refusal, or null (rethrow). `readKey` is the call (a manifest
+ * key) that yields a fresh Version; `historyKey` the one that lists revisions.
  */
-export function restoreRefusal(e: unknown, readOp: string, historyOp: string): ToolResponse | null {
+export function restoreRefusal(e: unknown, readKey: string, historyKey: string): ToolResponse | null {
   if (isConflict(e)) {
     return err(
       refusal(
-        versionConflict(readOp),
+        versionConflict(readKey),
         "NOTHING was restored. Somebody wrote after the Version you passed — read the current state, confirm the restore still makes sense, then re-issue with the new expected_version.",
       ),
     );
   }
   const code = apiErrorCode(e);
-  if (code === "REVISION_NOT_FOUND") return err(refusal(revisionNotFound(historyOp)));
+  if (code === "REVISION_NOT_FOUND") return err(refusal(revisionNotFound(historyKey)));
   if (code === "REVISION_NOT_RESTORABLE") return err(refusal(REVISION_NOT_RESTORABLE));
   return null;
 }
 
 /** Refused before any write: the Version the caller holds is not the current one. */
-export function staleBeforeRestore(readOp: string, current: string, passed: string): ToolResponse {
+export function staleBeforeRestore(readKey: string, current: string, passed: string): ToolResponse {
   return err(
     refusal(
-      versionConflict(readOp),
+      versionConflict(readKey),
       `NOTHING was restored. You passed expected_version=${inlineOr(passed, "`(empty)`")} but the current Version is \`${current}\` — something changed since your read. Re-read, confirm, then re-issue with the current Version.`,
     ),
   );
