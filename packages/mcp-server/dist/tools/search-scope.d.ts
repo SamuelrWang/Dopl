@@ -49,6 +49,8 @@ export declare function searchScope(client: DoplClient, opts: {
     inHomeChannel: boolean;
     /** The container searched; null = unknown, and the app search is skipped (and says so). */
     containerId: string | null;
+    /** From the Home space: the app groups also cover these containers (the home channels). */
+    appAcross?: ReadonlySet<string>;
 }): Promise<ScopeHits>;
 /** Beside the ontology group when its read was clipped; a capped group is `more()`'s, not this. */
 export declare const ONTOLOGY_CLIPPED_NOTE: string;

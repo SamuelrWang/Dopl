@@ -60,8 +60,16 @@ export async function searchContainer(
   query: string,
   containerId: string
 ): Promise<AppSearchResponse> {
-  const params = new URLSearchParams({ q: query, scope: "container", container: containerId });
-  return t.request<AppSearchResponse>(`/api/search?${params.toString()}`, {
+  return appSearch(t, { q: query, scope: "container", container: containerId });
+}
+
+/** Every container the caller is in (a locked credential: its lock), ranked in one answer. */
+export async function searchAccount(t: DoplTransport, query: string): Promise<AppSearchResponse> {
+  return appSearch(t, { q: query, scope: "account" });
+}
+
+function appSearch(t: DoplTransport, params: Record<string, string>): Promise<AppSearchResponse> {
+  return t.request<AppSearchResponse>(`/api/search?${new URLSearchParams(params).toString()}`, {
     toolName: "search",
   });
 }

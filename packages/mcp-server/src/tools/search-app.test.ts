@@ -60,14 +60,47 @@ describe("the app-search groups", () => {
 
   it("falls back to the home space, and never guesses a container when none is known", async () => {
     const home = { homeContainer: async () => ({ id: "home-1" }), containerKindIndex: async () => new Map([["home-1", "personal"]]) } as unknown as WorkspaceDirectory;
-    const client = base({ getWorkspaceId: () => null });
+    const client = base({ getWorkspaceId: () => null, searchAccount: vi.fn(async () => RESPONSE) });
     await run(client, home);
-    expect(client.searchContainer).toHaveBeenCalledWith("launch", "home-1");
+    // From Home, "here" is Home plus its home channels: one account search, narrowed.
+    expect(client.searchAccount).toHaveBeenCalledWith("launch");
+    expect(client.searchContainer).not.toHaveBeenCalled();
 
     const blind = base({ getWorkspaceId: () => null });
     const text = await run(blind);
     expect(blind.searchContainer).not.toHaveBeenCalled();
     expect(text).toContain("Not searched — no container was resolved");
+  });
+
+  // 1.37.1 live test #5: an outside agent (unlocked, so "here" = Home) missed its
+  // own message just posted in a home channel.
+  it('"here" from Home finds a home-channel message and drops a workspace one', async () => {
+    const index = new Map([
+      ["home-1", "personal"],
+      ["hc-1", "home_channel"],
+      ["ws-9", "workspace"],
+    ]);
+    const home = { homeContainer: async () => ({ id: "home-1" }), containerKindIndex: async () => index } as unknown as WorkspaceDirectory;
+    const account: AppSearchResponse = {
+      q: "launch",
+      scope: "account",
+      tookMs: 1,
+      groups: [
+        {
+          kind: "messages",
+          total: 2,
+          items: [
+            { id: "m-1", kind: "messages", title: "Notes", snippet: "launch posted", containerId: "hc-1", channelId: "ch-h", seq: 7 },
+            { id: "m-2", kind: "messages", title: "Work", snippet: "launch elsewhere", containerId: "ws-9", channelId: "ch-w", seq: 8 },
+          ],
+        },
+      ],
+    };
+    const client = base({ getWorkspaceId: () => null, searchAccount: vi.fn(async () => account) });
+    const text = await run(client, home);
+    expect(text).toContain("(channel `ch-h` · seq 7)");
+    expect(text).not.toContain("ch-w");
+    expect(text).not.toContain("Showing");
   });
 
   it("every row ends on its follow-up address", async () => {

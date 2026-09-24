@@ -41,3 +41,5 @@ export interface AppSearchResponse {
 }
 /** One container's search. A query under 2 characters answers with no groups, never a 400. */
 export declare function searchContainer(t: DoplTransport, query: string, containerId: string): Promise<AppSearchResponse>;
+/** Every container the caller is in (a locked credential: its lock), ranked in one answer. */
+export declare function searchAccount(t: DoplTransport, query: string): Promise<AppSearchResponse>;

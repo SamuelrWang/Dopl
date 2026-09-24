@@ -35,7 +35,7 @@ const SEARCH_SHAPE = {
     .enum(["here", "everywhere"])
     .optional()
     .describe(
-      `Which scopes to search: "here" (DEFAULT) = the one workspace this call resolved to; "everywhere" = every workspace AND home channel you can reach, one fenced search each under per-scope headings, capped at ${MAX_SCOPES} scopes at ONE CREDIT PER SCOPE, with the truncation named in the result.`,
+      `"here" (DEFAULT): the resolved container, plus the Home bases, objects and identities a home channel sees, or from Home its home channels' rooms. "everywhere": all containers' rooms ranked, then ${MAX_SCOPES} containers in full (ranked hits first), ONE CREDIT EACH; the rest named.`,
     ),
 };
 
@@ -72,7 +72,7 @@ function scopeNote(limit: number, notice: string, terse: boolean): string {
       ? `_${notice}Scope: max ${limit} per group — a recall-capped sample, not a census. See this tool's description._`
       : `_Scope: max ${limit} per group — a recall-capped sample, not a census. See this tool's description._`;
   }
-  return `_${notice}Scope: max ${limit} per group, in ONE workspace — this one, with no cross-workspace fan-out. Only knowledge entries and channel messages are matched on their BODIES; skills, ontology objects, agent identities, channels, threads, artifacts, members (by name, never shown by email) and the chat archive on names, titles and short metadata only, so a term living inside a SKILL.md or inside an identity's instructions is not findable here. Channel groups cover only channels you are a member of. Drafts are excluded from Skills. Agent identities are the ones you can SEE, across both shelves. Teams are not searched. Knowledge entries are a ranked SAMPLE: candidates are capped before ranking, distant matches are dropped, and hits in bases you cannot read are removed after ranking — so fewer hits than \`limit\` does not mean there are no others. A group whose read failed still shows "No matches" and is named with reason=partial_read opening this line; no group here is proof of absence._`;
+  return `_${notice}Scope: max ${limit} per group, in the scope this call resolved to (see \`scope\`). Only knowledge entries and channel messages are matched on their BODIES; skills, ontology objects, agent identities, channels, threads, artifacts, members (by name, never shown by email) and the chat archive on names, titles and short metadata only, so a term living inside a SKILL.md or inside an identity's instructions is not findable here. Channel groups cover only channels you are a member of. Drafts are excluded from Skills. Agent identities are the ones you can SEE, across both shelves. Teams are not searched. Knowledge entries are a ranked SAMPLE: candidates are capped before ranking, distant matches are dropped, and hits in bases you cannot read are removed after ranking — so fewer hits than \`limit\` does not mean there are no others. A group whose read failed still shows "No matches" and is named with reason=partial_read opening this line; no group here is proof of absence._`;
 }
 
 /** The fan-out footer: a wider scope is not a wider domain. */
@@ -88,7 +88,12 @@ const SCOPE_AXIS_NOTE = `Each scope was searched the same way a single-scope cal
 async function searchedContainer(
   client: DoplClient,
   directory?: WorkspaceDirectory,
-): Promise<{ id: string | null; standard: boolean; inHomeChannel: boolean }> {
+): Promise<{
+  id: string | null;
+  standard: boolean;
+  inHomeChannel: boolean;
+  appAcross?: ReadonlySet<string>;
+}> {
   let id: string | null = null;
   try {
     id = workspaceContext.getStore() ?? client.getWorkspaceId();
@@ -97,14 +102,19 @@ async function searchedContainer(
   }
   if (!id && directory) id = (await directory.homeContainer().catch(() => null))?.id ?? null;
   if (!id || !directory) return { id, standard: true, inHomeChannel: false };
-  const kind = await directory
-    .containerKindIndex()
-    .then((k) => k.get(id as string))
-    .catch(() => undefined);
+  const index = await directory.containerKindIndex().catch(() => null);
+  const kind = index?.get(id);
+  // "here" from the Home space covers its home channels' rooms too. A locked
+  // connection never stands in the Home space, so this reaches nothing new.
+  const appAcross =
+    kind === "personal" && index
+      ? new Set([...index].filter(([, k]) => k !== "workspace").map(([cid]) => cid))
+      : undefined;
   return {
     id,
     standard: kind === undefined || kind === "workspace",
     inHomeChannel: kind === "home_channel",
+    ...(appAcross ? { appAcross } : {}),
   };
 }
 
@@ -154,6 +164,7 @@ export function registerSearchTool(
         matches,
         inHomeChannel: where.inHomeChannel,
         containerId: where.id,
+        appAcross: where.appAcross,
       });
 
       // The caller's own query is still neutralized: a backtick would escape the heading.

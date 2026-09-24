@@ -15,6 +15,8 @@ export declare class WorkspaceMethods extends DoplClientBase {
     grantResource(input: ResourceGrantInput): Promise<ResourceGrantResult>;
     /** The app's global search over ONE container (`GET /api/search`), cross-domain like a grant. */
     searchContainer(query: string, containerId: string): Promise<AppSearchResponse>;
+    /** The same search over every container the caller is in, ranked by the server. */
+    searchAccount(query: string): Promise<AppSearchResponse>;
     pingMcpStatus(): Promise<{
         is_admin: boolean;
         user_id: string | null;

@@ -4,6 +4,16 @@ All notable changes to `@dopl/mcp-server` are documented here. Format follows [K
 
 ## [Unreleased]
 
+### Fixed — `dopl_search` scopes are defined, and "everywhere" no longer misses silently (1.37.1, live test #5)
+
+- `scope` now says what each value covers. "here" = the resolved container (`container=`, else the
+  connection's, else Home); from a home channel knowledge now includes the Home-space bases visible
+  there (server: one RPC per readable base's container), and from Home the rooms groups also cover
+  the home channels (one `scope=account` app read, narrowed). Skills stay the container's own.
+- "everywhere" opens with one ranked account-wide app search, deep-searches the scopes with ranked
+  hits first (still max 6, one credit each — no cost change), and names every scope not searched.
+- `@dopl/client`: `searchAccount(query)`.
+
 ### Fixed — `excerpt` is described as required when creating (1.37.1, live test #4)
 
 - `dopl_kb` and `dopl_write_entry` published `excerpt` as a plain optional summary while a create

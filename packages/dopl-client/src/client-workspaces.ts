@@ -36,6 +36,11 @@ export class WorkspaceMethods extends DoplClientBase {
     return search.searchContainer(this.transport, query, containerId);
   }
 
+  /** The same search over every container the caller is in, ranked by the server. */
+  searchAccount(query: string): Promise<AppSearchResponse> {
+    return search.searchAccount(this.transport, query);
+  }
+
   async pingMcpStatus(): Promise<{
     is_admin: boolean;
     user_id: string | null;

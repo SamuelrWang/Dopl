@@ -6,6 +6,9 @@
  * scopes), a failed leg is named, and the leg list IS the locked list (`searchLegs`), so a locked
  * session searches its container alone. The registrar charged one scope; the rest are charged here,
  * sequentially, before each leg runs, and running out stops the fan-out and is named.
+ * Before the legs, ONE `scope=account` app search (the server's own membership + lock fence) ranks
+ * channel hits across every scope and orders the legs, so the cap drops scopes with no ranked hit
+ * first; every scope not searched in full is named.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.MAX_SCOPES = void 0;
@@ -88,8 +91,20 @@ async function searchOneLeg(client, leg, query, limit, matches) {
 /** The fan-out: body lines plus the coverage sentence. `alreadyCharged` is matched by id, so the
  *  registrar's leg is never charged twice. */
 async function fanOut(client, charge, opts) {
-    const total = opts.legs.length;
-    const planned = opts.legs.slice(0, exports.MAX_SCOPES);
+    // One ranked app search over EVERY reachable scope first (uncharged: the call
+    // already paid once), so the cap can never silently drop the scope holding a
+    // hit — scopes with ranked hits are deep-searched first.
+    const account = await Promise.resolve()
+        .then(() => client.searchAccount(opts.query))
+        .catch(() => null);
+    const hitsIn = new Map();
+    for (const g of account?.groups ?? []) {
+        for (const i of g.items)
+            hitsIn.set(i.containerId, (hitsIn.get(i.containerId) ?? 0) + 1);
+    }
+    const legs = [...opts.legs].sort((a, b) => (hitsIn.get(b.id) ?? 0) - (hitsIn.get(a.id) ?? 0));
+    const total = legs.length;
+    const planned = legs.slice(0, exports.MAX_SCOPES);
     let truncation = planned.length < total
         ? { kind: "cap", searched: planned.length, total }
         : { kind: "none" };
@@ -110,18 +125,28 @@ async function fanOut(client, charge, opts) {
         }
         results.push(await searchOneLeg(client, leg, opts.query, opts.limit, opts.matches));
     }
-    const lines = [];
+    const lines = [
+        "## Every scope, ranked (channels, messages, threads, artifacts)",
+        ...(account
+            ? (0, search_app_render_js_1.appGroupLines)(account.groups, "###", { searched: true, skipEmpty: true, standard: false })
+            : ["", "_The ranked search could not be read; scopes below are in directory order._"]),
+        "",
+    ];
     for (const r of results)
         lines.push(...r.lines, "");
     // The count is what was actually searched, never the leg list's length.
     const searched = results.length;
     const scopeWord = searched === 1 ? "scope" : "scopes";
     let coverage = `Searched ${searched} ${scopeWord} of ${total} you can reach, each one an ordinary search of that scope alone.`;
+    const unsearched = legs
+        .slice(searched)
+        .map((l) => `${(0, narration_js_1.inlineOr)(l.label, narration_js_1.NO_NAME)} (\`${l.id}\`)`)
+        .join(", ");
     if (truncation.kind === "cap") {
-        coverage += ` ⚠ TRUNCATED at the ${exports.MAX_SCOPES}-scope cap: ${total - searched} scope(s) were NOT searched and nothing here says anything about them. Narrow with \`container=\` and scope="here" to reach one directly.`;
+        coverage += ` ⚠ TRUNCATED at the ${exports.MAX_SCOPES}-scope cap: ${total - searched} scope(s) were NOT searched in full (their ranked hits, if any, are in the first section): ${unsearched}. Reach one with \`container=\` and scope="here".`;
     }
     else if (truncation.kind === "credits") {
-        coverage += ` ⚠ TRUNCATED — the fan-out stopped when you ran out of credits, so ${total - searched} scope(s) were NOT searched. What is above was searched and paid for; the rest is unknown, not empty.`;
+        coverage += ` ⚠ TRUNCATED — the fan-out stopped when you ran out of credits, so ${total - searched} scope(s) were NOT searched in full: ${unsearched}. What is above was searched and paid for; the rest is unknown, not empty.`;
     }
     if (searched === 0) {
         coverage = `NOTHING was searched — no scope was reached, so this result says nothing about what exists. ${coverage}`;

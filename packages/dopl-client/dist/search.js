@@ -10,10 +10,17 @@
  */
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.searchContainer = searchContainer;
+exports.searchAccount = searchAccount;
 /** One container's search. A query under 2 characters answers with no groups, never a 400. */
 async function searchContainer(t, query, containerId) {
-    const params = new URLSearchParams({ q: query, scope: "container", container: containerId });
-    return t.request(`/api/search?${params.toString()}`, {
+    return appSearch(t, { q: query, scope: "container", container: containerId });
+}
+/** Every container the caller is in (a locked credential: its lock), ranked in one answer. */
+async function searchAccount(t, query) {
+    return appSearch(t, { q: query, scope: "account" });
+}
+function appSearch(t, params) {
+    return t.request(`/api/search?${new URLSearchParams(params).toString()}`, {
         toolName: "search",
     });
 }

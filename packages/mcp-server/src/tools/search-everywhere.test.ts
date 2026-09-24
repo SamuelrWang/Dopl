@@ -447,3 +447,26 @@ describe("an everywhere leg reads and reports exactly like a single-scope search
     expect(ws).toContain("seen by every member of this workspace");
   });
 });
+
+// 1.37.1 live test #5: 17 scopes, the first 6 in directory order searched, a real hit missed.
+describe("the cap never silently drops a ranked hit", () => {
+  it("deep-searches scopes with ranked hits first, and names every scope it did not", async () => {
+    const many = Array.from({ length: MAX_SCOPES + 2 }, (_, i) => wsItem(`ws-${i}`, `w${i}`));
+    const last = `ws-${MAX_SCOPES + 1}`;
+    const searchAccount = vi.fn(async () => ({
+      q: "ship",
+      scope: "account",
+      tookMs: 1,
+      groups: [{ kind: "messages", total: 1, items: [{ id: "m-1", kind: "messages", title: "Room", snippet: "ship it", containerId: last, channelId: "ch-9", seq: 3 }] }],
+    }));
+    const text = await search(
+      clientStub({ getWorkspaceId: () => "ws-0", searchAccount }),
+      directoryStub(many),
+      noopCharge,
+      { query: "ship", scope: "everywhere" },
+    );
+    expect(text).toContain("(channel `ch-9` · seq 3)");
+    expect(text).toContain(`## \`w${MAX_SCOPES + 1} workspace\``);
+    expect(text).toContain(`w${MAX_SCOPES - 1} workspace\` (\`ws-${MAX_SCOPES - 1}\`)`);
+  });
+});

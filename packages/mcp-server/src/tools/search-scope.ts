@@ -77,6 +77,15 @@ export function termMatcher(query: string): Matcher {
   };
 }
 
+/** An account-wide answer narrowed to `ids`; a group's total becomes what survived when any row fell. */
+function withinContainers(groups: AppSearchGroup[], ids: ReadonlySet<string>): AppSearchGroup[] {
+  return groups.flatMap((g) => {
+    const items = g.items.filter((i) => ids.has(i.containerId));
+    if (items.length === 0) return [];
+    return [{ ...g, items, total: items.length === g.items.length ? g.total : items.length }];
+  });
+}
+
 const cap = <T>(all: T[], limit: number): Group<T> => ({
   hits: all.slice(0, limit),
   matched: all.length,
@@ -95,6 +104,8 @@ export async function searchScope(
     inHomeChannel: boolean;
     /** The container searched; null = unknown, and the app search is skipped (and says so). */
     containerId: string | null;
+    /** From the Home space: the app groups also cover these containers (the home channels). */
+    appAcross?: ReadonlySet<string>;
   },
 ): Promise<ScopeHits> {
   const { query, limit, matches } = opts;
@@ -111,12 +122,20 @@ export async function searchScope(
       ? reads.soft(
           APP_READ_LABEL,
           // Deferred, so even a synchronous throw is a named partial read, not a failed search.
-          Promise.resolve().then(() => client.searchContainer(query, opts.containerId as string)),
+          Promise.resolve().then(() =>
+            opts.appAcross
+              ? client.searchAccount(query)
+              : client.searchContainer(query, opts.containerId as string),
+          ),
           EMPTY_APP,
         )
       : Promise.resolve(EMPTY_APP),
   ]);
-  const byKind = new Map((appSearch.groups ?? []).map((g) => [g.kind, g]));
+  const byKind = new Map(
+    (opts.appAcross ? withinContainers(appSearch.groups ?? [], opts.appAcross) : appSearch.groups ?? []).map(
+      (g) => [g.kind, g],
+    ),
+  );
 
   const objects = Object.values(ontology.objects);
   // Absent key (older server) groups nothing as personal.

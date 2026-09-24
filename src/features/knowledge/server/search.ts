@@ -63,6 +63,33 @@ interface RpcRow {
   updated_at: string;
 }
 
+interface RpcArgs {
+  p_workspace_id: string;
+  p_query: string;
+  p_base_id: string | null;
+  p_limit: number;
+}
+
+/** One container's ranked rows: hybrid when there is an embedding, else (or on
+ *  a failing hybrid RPC) pure FTS. Search never breaks, only gets less semantic. */
+async function rankedRows(
+  args: RpcArgs,
+  embedding: string | null
+): Promise<RpcRow[]> {
+  const db = supabaseAdmin();
+  if (embedding) {
+    const hybrid = await db.rpc("search_knowledge_hybrid", { ...args, p_embedding: embedding });
+    if (!hybrid.error) return (hybrid.data ?? []) as RpcRow[];
+    console.error(
+      "[knowledge-search] hybrid RPC failed, falling back to FTS:",
+      hybrid.error.message
+    );
+  }
+  const { data, error } = await db.rpc("search_knowledge_entries", args);
+  if (error) throw error;
+  return (data ?? []) as RpcRow[];
+}
+
 export async function searchKnowledgeEntries(
   ctx: KnowledgeContext,
   query: string,
@@ -77,48 +104,44 @@ export async function searchKnowledgeEntries(
   const readableIds = new Set(readable.map((b) => b.id));
   if (readableIds.size === 0) return [];
 
-  let baseId: string | null = null;
+  // One RPC per CONTAINER the readable bases live in: in a home channel that
+  // is the channel plus the caller's Home space, whose bases `listBases`
+  // already admits there (both shelves). The RPC is keyed to one workspace, so
+  // searching `ctx.workspaceId` alone missed every Home base. Ids come from
+  // server-read rows, never client input (the RPC trusts what it is given).
+  let scopes: { workspaceId: string; baseId: string | null }[];
   if (opts.baseSlug) {
-    const base = await repo.findBaseBySlug(ctx.workspaceId, opts.baseSlug, false);
-    if (!base || !readableIds.has(base.id)) {
-      throw new KnowledgeBaseNotFoundError(opts.baseSlug);
-    }
-    baseId = base.id;
+    const named = readable.filter((b) => b.slug === opts.baseSlug);
+    // A slug can repeat across the two shelves: the calling container wins.
+    const base = named.find((b) => b.workspaceId === ctx.workspaceId) ?? named[0];
+    if (!base) throw new KnowledgeBaseNotFoundError(opts.baseSlug);
+    scopes = [{ workspaceId: base.workspaceId, baseId: base.id }];
+  } else {
+    scopes = [...new Set(readable.map((b) => b.workspaceId))].map((workspaceId) => ({
+      workspaceId,
+      baseId: null,
+    }));
   }
 
-  const db = supabaseAdmin();
-  // `p_workspace_id` must come from `ctx.workspaceId`, never client input: RPCs
-  // are SECURITY INVOKER but the admin client bypasses RLS, so they trust
-  // whatever workspace_id we pass.
-  const ftsArgs = {
-    p_workspace_id: ctx.workspaceId,
-    p_query: trimmed,
-    p_base_id: baseId,
-    p_limit: opts.limit ?? 20,
-  };
-  let result: { data: unknown; error: { message?: string } | null } | null = null;
+  const limit = opts.limit ?? 20;
   const queryEmbedding = await embedQuery(trimmed);
-  if (queryEmbedding) {
-    result = await db.rpc("search_knowledge_hybrid", {
-      ...ftsArgs,
-      p_embedding: queryEmbedding,
-    });
-    if (result.error) {
-      // Hybrid RPC missing/unhealthy — degrade to pure FTS.
-      console.error(
-        "[knowledge-search] hybrid RPC failed, falling back to FTS:",
-        result.error.message
-      );
-      result = null;
-    }
-  }
-  if (!result) result = await db.rpc("search_knowledge_entries", ftsArgs);
-  const { data, error } = result;
-  if (error) throw error;
-
-  const rows = ((data ?? []) as RpcRow[]).filter((row) =>
-    readableIds.has(row.knowledge_base_id)
+  const perScope = await Promise.all(
+    scopes.map((scope) =>
+      rankedRows({
+        p_workspace_id: scope.workspaceId,
+        p_query: trimmed,
+        p_base_id: scope.baseId,
+        p_limit: limit,
+      }, queryEmbedding)
+    )
   );
+  // Each scope ranks on the same scale (RRF, else ts_rank), so a merge by rank
+  // keeps the best `limit` across containers.
+  const rows = perScope
+    .flat()
+    .filter((row) => readableIds.has(row.knowledge_base_id))
+    .sort((a, b) => b.rank - a.rank)
+    .slice(0, limit);
 
   // 🔒 **THE ADDRESS, BUILT ONCE PER BASE THAT HAS A HIT** — never per hit. The
   // folder list is one query for a whole base and the result set is capped at

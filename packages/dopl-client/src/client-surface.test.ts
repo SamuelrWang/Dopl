@@ -241,6 +241,7 @@ const PUBLIC_SURFACE = [
   "restoreSkillVersion",
   // THE APP'S GLOBAL SEARCH (2026-09-23, DMP-004) — one container, the popup's own route.
   "searchContainer",
+  "searchAccount",
 ] as const;
 
 /** Every method reachable on an instance, across the whole chain. */

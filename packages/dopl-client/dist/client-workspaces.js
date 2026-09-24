@@ -59,6 +59,10 @@ class WorkspaceMethods extends client_base_js_1.DoplClientBase {
     searchContainer(query, containerId) {
         return search.searchContainer(this.transport, query, containerId);
     }
+    /** The same search over every container the caller is in, ranked by the server. */
+    searchAccount(query) {
+        return search.searchAccount(this.transport, query);
+    }
     async pingMcpStatus() {
         return workspaces.pingMcpStatus(this.transport);
     }

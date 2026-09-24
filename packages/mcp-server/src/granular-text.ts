@@ -61,7 +61,7 @@ const ORIENTATION_TEXT: Readonly<Record<string, ToolText>> = {
       within: '"knowledge" searches entry bodies only (20 hits by default).',
       query: "What to find.",
       limit: "Max hits per group (default 8).",
-      scope: '"everywhere": every container you reach, one credit each, max 6. Default "here".',
+      scope: '"here" (default): this container (+Home bases/identities in a home channel; +home-channel rooms from Home). "everywhere": all rooms ranked, then max 6 in full, 1 credit each.',
       base: 'within="knowledge": only this base.',
     },
     required: ["query"],

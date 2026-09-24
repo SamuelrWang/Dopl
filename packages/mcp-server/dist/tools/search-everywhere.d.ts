@@ -5,6 +5,9 @@
  * scopes), a failed leg is named, and the leg list IS the locked list (`searchLegs`), so a locked
  * session searches its container alone. The registrar charged one scope; the rest are charged here,
  * sequentially, before each leg runs, and running out stops the fan-out and is named.
+ * Before the legs, ONE `scope=account` app search (the server's own membership + lock fence) ranks
+ * channel hits across every scope and orders the legs, so the cap drops scopes with no ranked hit
+ * first; every scope not searched in full is named.
  */
 import type { DoplClient } from "@dopl/client";
 import type { ChargeCredit } from "../registrar.js";

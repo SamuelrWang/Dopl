@@ -40,6 +40,15 @@ function termMatcher(query) {
         return terms.every((t) => hay.includes(t));
     };
 }
+/** An account-wide answer narrowed to `ids`; a group's total becomes what survived when any row fell. */
+function withinContainers(groups, ids) {
+    return groups.flatMap((g) => {
+        const items = g.items.filter((i) => ids.has(i.containerId));
+        if (items.length === 0)
+            return [];
+        return [{ ...g, items, total: items.length === g.items.length ? g.total : items.length }];
+    });
+}
 const cap = (all, limit) => ({
     hits: all.slice(0, limit),
     matched: all.length,
@@ -62,10 +71,12 @@ async function searchScope(client, opts) {
         opts.containerId
             ? reads.soft(APP_READ_LABEL, 
             // Deferred, so even a synchronous throw is a named partial read, not a failed search.
-            Promise.resolve().then(() => client.searchContainer(query, opts.containerId)), EMPTY_APP)
+            Promise.resolve().then(() => opts.appAcross
+                ? client.searchAccount(query)
+                : client.searchContainer(query, opts.containerId)), EMPTY_APP)
             : Promise.resolve(EMPTY_APP),
     ]);
-    const byKind = new Map((appSearch.groups ?? []).map((g) => [g.kind, g]));
+    const byKind = new Map((opts.appAcross ? withinContainers(appSearch.groups ?? [], opts.appAcross) : appSearch.groups ?? []).map((g) => [g.kind, g]));
     const objects = Object.values(ontology.objects);
     // Absent key (older server) groups nothing as personal.
     const personalIds = new Set(identityPayload.homeScopedIdentityIds ?? EMPTY_IDS);
