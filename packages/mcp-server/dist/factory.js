@@ -129,7 +129,7 @@ async function bootServer(client, opts = {}) {
         ...opts.caller,
         userId: opts.caller?.userId ?? userId,
     };
-    const toolSet = (0, tool_manifest_js_1.resolveToolSet)(opts.toolSet);
+    const toolSet = (0, tool_manifest_js_1.resolveToolSet)(opts.toolSet, (0, identity_js_1.isDesktopRun)(caller));
     const server = (0, server_js_1.createServer)(client, {
         toolSet,
         isAdmin,

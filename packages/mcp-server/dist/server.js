@@ -148,6 +148,7 @@ function createServer(client, options = {}) {
         sessionEffective,
         caller,
         toolSet,
+        deprecateLegacy: options.deprecateLegacy,
     });
     (0, meta_tools_js_1.registerWorkspaceMetaTools)(registerMetaTool, {
         directory,

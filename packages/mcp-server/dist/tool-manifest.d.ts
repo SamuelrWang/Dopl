@@ -10,7 +10,7 @@
  * legacy key bound exactly once, no delete op), the annotation truth and the naming rules.
  */
 import type { ToolAnnotations } from "@modelcontextprotocol/sdk/types.js";
-/** The tool sets a connection may ask for (`X-Dopl-Tool-Set`, else `?tools=`); the first is the default. */
+/** The tool sets a connection may ask for (`X-Dopl-Tool-Set`, else `?tools=`). */
 export declare const TOOL_SETS: readonly ["legacy", "granular"];
 export type ToolSet = (typeof TOOL_SETS)[number];
 /**
@@ -19,8 +19,12 @@ export type ToolSet = (typeof TOOL_SETS)[number];
  * older server omits it and every client stays on the default.
  */
 export declare const TOOL_SETS_CAPABILITY = "dopl/toolSets";
-/** An absent or unplaceable claim gets the default: a set names tools, it grants nothing. */
-export declare function resolveToolSet(claimed: string | null | undefined): ToolSet;
+/**
+ * A named set wins. With none (or one this server cannot place), a desktop-run caller
+ * (`identity.ts › isDesktopRun`) gets `legacy` — a desktop that does not negotiate knows only those
+ * names and gates by them — and everyone else `granular`. A set names tools; it grants nothing.
+ */
+export declare function resolveToolSet(claimed: string | null | undefined, desktopRun: boolean): ToolSet;
 export type BindingKey = `dopl_${string}`;
 export interface GranularTool {
     name: string;
@@ -64,6 +68,8 @@ export declare function parseBinding(key: BindingKey): {
     tool: string;
     op: string | undefined;
 };
+/** Each job as [selector value, binding]; the value is null for a one-job tool. */
+export declare function jobsOf(t: GranularTool): Array<[string | null, BindingKey]>;
 export declare function bindingsOf(t: GranularTool): BindingKey[];
 /** The arg that picks the job, or null for a one-job tool. */
 export declare function selectorOf(t: GranularTool): string | null;

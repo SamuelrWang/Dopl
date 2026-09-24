@@ -120,7 +120,7 @@ function createCreditedRunner(charge) {
     };
 }
 function createToolRegistrars(deps) {
-    const { server, client, gates, directory, activeWorkspace, sessionEffective, caller, toolSet = "legacy", } = deps;
+    const { server, client, gates, directory, activeWorkspace, sessionEffective, caller, toolSet = "legacy", deprecateLegacy = false, } = deps;
     const chargeCredit = createCharger(client);
     // Every registered legacy tool, including one whose name the active granular set took. `run` is the
     // bare pipeline: each registration opens its own tool-set scope (`call-ref.ts › withToolSet`).
@@ -130,7 +130,15 @@ function createToolRegistrars(deps) {
         legacy.set(name, { shape, input, run });
         if (!(0, tool_manifest_js_1.servesName)(toolSet, "legacy", name))
             return;
-        server.registerTool(name, toolConfig(name, description, input), ((args) => (0, call_ref_js_1.withToolSet)(toolSet, () => run(args))));
+        const reply = deprecateLegacy ? (args) => withSuccessorNotice(name, args, run(args)) : run;
+        server.registerTool(name, toolConfig(name, description, input), ((args) => (0, call_ref_js_1.withToolSet)(toolSet, () => reply(args))));
+    }
+    async function withSuccessorNotice(name, args, pending) {
+        const res = await pending;
+        const successor = (0, call_ref_js_1.successorOf)(name, gates.requestedOp(args));
+        if (!successor)
+            return res;
+        return { ...res, content: [...res.content, { type: "text", text: `⚠ ${name} is deprecated: call ${successor} instead.` }] };
     }
     const runWithCredits = createCreditedRunner(chargeCredit);
     /** Which workspace pays when no per-call container was honoured; none listable ⇒ no charge. */

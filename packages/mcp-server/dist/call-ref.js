@@ -1,6 +1,6 @@
 "use strict";
 /**
- * EVERY CALL SPELLING AN AGENT READS, rendered for the connection's active tool set (DMP-013 B3).
+ * EVERY CALL SPELLING AN AGENT READS, rendered for the connection's active tool set (DMP-013).
  * A spelling is named by its manifest key (`channel.read`, `kb.write_file`, `channel.rooms.help`:
  * a binding key without the `dopl_` prefix, `:` as `.`) and rendered from `tool-manifest.ts`, so
  * `dopl_channel(op="read", …)` on a legacy connection is `dopl_read_channel(…)` on a granular one
@@ -9,7 +9,7 @@
  * The active set rides an AsyncLocalStorage scope the registrar opens around every tool call and
  * resource read (`withToolSet`), so a handler, a refusal or a footer renders for ITS connection
  * without the set threaded through a signature. Outside any scope (an import-time constant, a
- * legacy description, a unit test) the set is `legacy`, the default.
+ * legacy description, a unit test) the set is `legacy`.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.withToolSet = withToolSet;
@@ -19,6 +19,7 @@ exports.legacyOnly = legacyOnly;
 exports.bySet = bySet;
 exports.callKeys = callKeys;
 exports.toolName = toolName;
+exports.successorOf = successorOf;
 exports.callRef = callRef;
 const node_async_hooks_1 = require("node:async_hooks");
 const tool_manifest_js_1 = require("./tool-manifest.js");
@@ -69,8 +70,7 @@ function targetMap() {
         return targets;
     const map = new Map();
     for (const tool of tool_manifest_js_1.GRANULAR_TOOLS) {
-        const jobs = typeof tool.bind === "string" ? [[null, tool.bind]] : Object.entries(tool.bind);
-        for (const [job, binding] of jobs) {
+        for (const [job, binding] of (0, tool_manifest_js_1.jobsOf)(tool)) {
             const key = binding.slice("dopl_".length).replace(":", ".");
             map.set(key, [...(map.get(key) ?? []), { tool, job }]);
         }
@@ -104,6 +104,18 @@ function toolName(key, args = {}) {
     if (activeToolSet() === "legacy")
         return `dopl_${key.split(".")[0]}`;
     return pick(targetsOf(key), args).tool.name;
+}
+/**
+ * The granular call that replaces legacy `tool` called with `op` (`Gates.requestedOp`'s key), or null
+ * when the call names no manifest job or keeps its name (`dopl_search`). The whole op wins over its
+ * base op, so `op="rooms", action="list"` names its own job.
+ */
+function successorOf(tool, op) {
+    const base = tool.slice("dopl_".length);
+    const key = [op && `${base}.${op}`, op && `${base}.${op.split(".")[0]}`, !op && base].find((k) => typeof k === "string" && targetMap().has(k));
+    if (!key)
+        return null;
+    return withToolSet("granular", () => (toolName(key) === tool ? null : callRef(key)));
 }
 /**
  * `key` called with `args`, spelled for the active set. An op without its action spells, on a

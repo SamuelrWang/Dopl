@@ -31,8 +31,8 @@ export interface BootOptions {
      */
     toolProfile?: string | null;
     /**
-     * The TOOL SET claimed by `X-Dopl-Tool-Set` or `?tools=`, verbatim; resolved once here
-     * (`tool-manifest.ts › resolveToolSet`) and handed to `createServer`, which lists that set.
+     * The TOOL SET claimed by `X-Dopl-Tool-Set` or `?tools=`, verbatim; resolved once here against
+     * the caller (`tool-manifest.ts › resolveToolSet`) and handed to `createServer`, which lists that set.
      */
     toolSet?: string | null;
     /**

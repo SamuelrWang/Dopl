@@ -16,9 +16,8 @@ const granular_text_js_1 = require("./granular-text.js");
 const workspace_arg_js_1 = require("./workspace-arg.js");
 /** The bound jobs this connection serves, as [selector value, binding]; null value for a one-job tool. */
 function servedJobs(t, legacy) {
-    const jobs = typeof t.bind === "string" ? [[null, t.bind]] : Object.entries(t.bind);
     // A job whose legacy tool the profile did not offer is not served (dopl_only drops the channel guide).
-    return jobs.filter(([, key]) => legacy.has((0, tool_manifest_js_1.parseBinding)(key).tool));
+    return (0, tool_manifest_js_1.jobsOf)(t).filter(([, key]) => legacy.has((0, tool_manifest_js_1.parseBinding)(key).tool));
 }
 /** The resource a pulled job answers with, or undefined for a bound job. */
 function pulledResource(t, args) {

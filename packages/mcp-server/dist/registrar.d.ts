@@ -34,6 +34,8 @@ export interface RegistrarDeps {
     caller: CallerIdentity;
     /** Which set owns a name both sets use. Default `legacy`. */
     toolSet?: ToolSet;
+    /** Rollout R4, off until enabled: a direct legacy call's reply ends naming its granular successor. */
+    deprecateLegacy?: boolean;
 }
 export interface ToolRegistrars {
     registerTool: RegisterTool;

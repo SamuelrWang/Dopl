@@ -1,5 +1,5 @@
 /**
- * EVERY CALL SPELLING AN AGENT READS, rendered for the connection's active tool set (DMP-013 B3).
+ * EVERY CALL SPELLING AN AGENT READS, rendered for the connection's active tool set (DMP-013).
  * A spelling is named by its manifest key (`channel.read`, `kb.write_file`, `channel.rooms.help`:
  * a binding key without the `dopl_` prefix, `:` as `.`) and rendered from `tool-manifest.ts`, so
  * `dopl_channel(op="read", …)` on a legacy connection is `dopl_read_channel(…)` on a granular one
@@ -8,7 +8,7 @@
  * The active set rides an AsyncLocalStorage scope the registrar opens around every tool call and
  * resource read (`withToolSet`), so a handler, a refusal or a footer renders for ITS connection
  * without the set threaded through a signature. Outside any scope (an import-time constant, a
- * legacy description, a unit test) the set is `legacy`, the default.
+ * legacy description, a unit test) the set is `legacy`.
  */
 import { type ToolSet } from "./tool-manifest.js";
 /**
@@ -51,6 +51,12 @@ export interface CallOptions {
 export declare function callKeys(): ReadonlySet<string>;
 /** The tool `key` names, bare: `dopl_read_channel` (legacy `dopl_channel`); `args` pick a preset tool. */
 export declare function toolName(key: string, args?: CallArgs): string;
+/**
+ * The granular call that replaces legacy `tool` called with `op` (`Gates.requestedOp`'s key), or null
+ * when the call names no manifest job or keeps its name (`dopl_search`). The whole op wins over its
+ * base op, so `op="rooms", action="list"` names its own job.
+ */
+export declare function successorOf(tool: string, op: string | undefined): string | null;
 /**
  * `key` called with `args`, spelled for the active set. An op without its action spells, on a
  * granular connection, every tool under it (`dopl_launch_agent / dopl_manage_session`).

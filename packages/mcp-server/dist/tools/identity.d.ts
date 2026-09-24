@@ -104,7 +104,8 @@ export declare function isDesktopRuntime(runtime: string | null | undefined): bo
 /**
  * 🔒 **IS THIS CALL RUNNING ON THE OPERATOR'S OWN MACHINE?** — the ONE question
  * the `wait_ms` fence asks (T85, Desktop Agent default 2026-09-02; Samuel may
- * reverse, and reversing is this predicate).
+ * reverse, and reversing is this predicate), and the one an unclaimed tool set
+ * is defaulted by (`tool-manifest.ts › resolveToolSet`: true ⇒ `legacy`).
  *
  * ⚠ **TWO MARKS, AND THE SECOND IS WHY THIS IS ALLOWED TO GATE.**
  * {@link isDesktopRuntime} reads a HEADER, which a `full`-profile agent with
