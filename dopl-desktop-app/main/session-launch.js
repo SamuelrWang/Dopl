@@ -80,8 +80,8 @@ async function launch(a) {
   // One funnel, three lanes, so the producers sit here (F-510). Neither can refuse a launch, and a key is added
   // only when there is something to say, so an unreached context stays byte-identical.
   const ontologies = await ontologyReach.fetchOntologyReach(a.workspaceId);
-  // The signed-in operator, resolved HERE for every lane (New Agent, responder, directive) so none can forget it
-  // (DMP-005); null while unresolved, and the roster then fails open exactly as it did before.
+  // The signed-in operator, resolved HERE for every lane (New Agent, responder, directive) so none can forget it;
+  // null while unresolved, and the roster then fails open.
   let selfUserId = null;
   try { selfUserId = (deps.selfUserId && deps.selfUserId()) || null; } catch (_) { selfUserId = null; }
   const roster = await roomRoster.fetchRoomRoster({

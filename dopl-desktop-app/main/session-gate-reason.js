@@ -212,7 +212,7 @@ function makeGateReason(deps) {
         const name = d.canonicalDoplName(a.toolName);
         if (d.toolModeAllows(a.toolMode, name, a.runtime)) return 'tool-mode';
         if (d.isKnowledgeReadCall(name, a.input)) return 'knowledge-read-op';
-        return d.isDoplReadOpCall && d.isDoplReadOpCall(name, a.input) ? 'dopl-read-op' : 'tool-mode';
+        return d.isDoplReadOpCall(name, a.input) ? 'dopl-read-op' : 'tool-mode';
       }
       // The LAUNCH lane is asked first of the channel allows (2026-08-25, F-320): it is the only one
       // that is not a message, and an audit line claiming otherwise would file a launch under "what

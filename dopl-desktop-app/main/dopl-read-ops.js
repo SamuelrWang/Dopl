@@ -1,8 +1,7 @@
 // Which ops of a MIXED Dopl tool only READ — the per-call half of "which dopl tool writes". A tool with ANY
 // write op sits whole in `session-dopl-tools.js › DOPL_WRITE_TOOLS` (so Axis A below the widest mode, and every
 // `preApproved`, stop at it) and its read ops are scoped back in here, resolving exactly where a Dopl read tool
-// resolves (`session-profiles.js › grantDecision` step 5). Generalises OQ-1's `dopl_kb` branch (2026-08-22) to
-// `dopl_agent` and `dopl_workspaces` (2026-09-23), whose writes had ridden `DOPL_READ_TOOLS` ungated.
+// resolves (`session-profiles.js › grantDecision` step 5).
 // ⚠ POSITIVE allow-lists, so a write op the server adds later is UNKNOWN here and gates.
 // ⚠ Each row is pinned to the server's published `op` enum MINUS `packages/mcp-server/src/gating.ts › WRITE_OPS`
 // by `test/dopl-write-op-gating.test.mjs` (and `dopl_kb`'s by `knowledge-read-ops.test.mjs`).
@@ -32,4 +31,4 @@ function isDoplReadOpCall(canonicalName, input) {
   return reads.indexOf(op) !== -1;
 }
 
-module.exports = { DOPL_READ_OPS, DEFAULT_READ_OP, isDoplReadOpCall };
+module.exports = { DOPL_READ_OPS, isDoplReadOpCall };

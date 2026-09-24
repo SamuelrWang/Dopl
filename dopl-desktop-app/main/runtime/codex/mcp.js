@@ -39,10 +39,7 @@ const SERVER_KEY = 'dopl';
 // measured): the gate allows them in every mode, and they keep working against a server whose tools carry no
 // `title` (`server-requests.js › doplElicitation` refuses an ask it cannot name).
 const DEFAULT_TOOL_APPROVAL_MODE = 'prompt';
-const TOOL_APPROVAL_MODES = Object.freeze(DOPL_READ_TOOLS.reduce((acc, tool) => {
-  acc[shortDoplName(tool)] = 'approve';
-  return acc;
-}, {}));
+const TOOL_APPROVAL_MODES = Object.freeze(Object.fromEntries(DOPL_READ_TOOLS.map((t) => [shortDoplName(t), 'approve'])));
 
 function clientTimeoutSec() {
   // Lazy: `mcp-config` pulls auth, and an unwired harness must read "no token", never throw.

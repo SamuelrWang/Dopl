@@ -173,7 +173,7 @@ async function spawn(d, deps) {
     launchChain: plan.chain, idle: !d.goal,
     operatorArmed: true, // FIX-4: the operator armed this lane, so a handed-in posture is honoured
     // The funnel commits it through `commitRename` (unique per channel, refreshes the summary peers read)
-    // after registration and BEFORE the first turn, so a goal launch's first turn states it (DMP-005).
+    // after registration and BEFORE the first turn, so a goal launch's first turn states it.
     agentName: asked || NEW_AGENT_NAME,
   });
   if (res && res.agentId) {

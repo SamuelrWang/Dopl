@@ -51,9 +51,9 @@ sessionGate.bind({ sessions, dispatch });
 sessionReopen.bind({ sessions, refreshTray, dispatch, openAgentWindow: (t) => require('./agent-window').openAgentWindow(t) });
 sessionAnswerPermission.bind({ resolveSession: sessionReopen.resolveSession, dispatch });
 sessionSummary.bind({ sessions, endedRecords: agentHistory.listEnded }); sessionNarration.bind({ sessions });
-// `nameOf` is the rename store's read (electron-backed, so lazy): the framing's `ctx.agentName` (DMP-005).
+// `nameOf` is the rename store's read (electron-backed, so lazy): the framing's `ctx.agentName`.
 sessionRegistry.bind({ sessions, nameOf: (id) => require('./agent-names').displayNameFor(id) });
-// `selfUserId` is the operator identity the listener resolved (H2): every launch lane's roster reads it here (DMP-005).
+// `selfUserId` is the operator identity the listener resolved (H2): every launch lane's roster reads it here.
 sessionLaunch.bind({ sessions, acquireRuntime, startSession, liveOnThread, sessionOn, selfUserId: () => selfUserId });
 sessionTeardown.bind({ sessions, baseRecord: (s) => io.baseRecord(s), denyPendingPermissions, refreshTray, sessionOn });
 
@@ -236,7 +236,7 @@ async function startSession(spec, rt) {
 
 /** After registration, before any turn: commit the launch's name — registered, so the uniqueness rule sees this
  *  channel's live siblings and excludes this agent — stamp the context's id + name, then build the first turn
- *  off that context, so it states the FINAL name on every runtime (DMP-005). */
+ *  off that context, so it states the FINAL name on every runtime. */
 function nameAndFrame(s, spec, rt) {
   if (typeof spec.agentName === 'string') commitLaunchName(s, spec.agentName);
   noteSiblings(s);

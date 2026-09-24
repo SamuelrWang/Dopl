@@ -125,7 +125,7 @@ function sessionOn(a) {
  * assembles the turn and holds no registry handle (it is required BY the engine, never back into
  * it).
  * ⚠ THE NAME IS RE-READ FROM THE RENAME STORE ON EVERY STAMP, never carried on the record: a
- * rename, a park and a resume all land on the name the store holds now (DMP-005). A read that
+ * rename, a park and a resume all land on the name the store holds now. A read that
  * throws costs the name line, never the stamp; no name clears a stale one.
  * The function's name predates the sibling roster's removal.
  */

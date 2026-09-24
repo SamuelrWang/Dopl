@@ -241,8 +241,8 @@ async function reconcileInner() {
 }
 
 // Drop the operator identity in BOTH places it is held: this cache AND the engine's copy, which every launch lane
-// reads for the roster's self-exclusion and the session's operator stamp (DMP-005). Clearing only ours left the
-// engine on the PREVIOUS account until the next resolve, so a launch in that gap ran under the old account's id.
+// reads for the roster's self-exclusion and the session's operator stamp — else a launch before the next resolve
+// runs under the previous account's id.
 function forgetOperator() {
   myUserId = null;
   sessionEngine.setSelfIdentity(null);

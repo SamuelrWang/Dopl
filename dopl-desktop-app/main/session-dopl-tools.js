@@ -25,11 +25,9 @@ const { DOPL_SAFE_TOOLS } = require('./tool-profiles');
 // post, so never silent. Split out so `auto` GATES them (only `bypass` covers them) and
 // `dopl_only` stops SHADOWING them via allowedTools. Read half derived by subtraction; this list
 // must stay a SUBSET of DOPL_SAFE_TOOLS — session-permission-hardening.test.mjs partition test.
-// ⚠ A TOOL WITH ONE WRITE OP IS A WRITE TOOL. `dopl_agent` (create/update/grant) and
-// `dopl_workspaces` (create_home_channel) were missing until 2026-09-23 and rode DOPL_READ_TOOLS
-// into `dopl_only.preApproved`, Claude's `auto` (the windowless floor) and every Cursor mode.
-// Their READ ops are scoped back in per call by `dopl-read-ops.js`; `test/dopl-write-op-gating.test.mjs`
-// derives the membership from the server's WRITE_OPS, so the next tool that gains a write fails there.
+// ⚠ A TOOL WITH ONE WRITE OP IS A WRITE TOOL (a read-list member rides `dopl_only.preApproved`, Claude's
+// `auto` floor and every Cursor mode ungated). Read ops come back per call via `dopl-read-ops.js`;
+// `test/dopl-write-op-gating.test.mjs` derives this membership from the server's WRITE_OPS.
 const DOPL_WRITE_TOOLS = ['mcp__dopl__dopl_kb', 'mcp__dopl__dopl_skill',
   'mcp__dopl__dopl_ontology', 'mcp__dopl__dopl_chats',
   'mcp__dopl__dopl_agent', 'mcp__dopl__dopl_workspaces'];
