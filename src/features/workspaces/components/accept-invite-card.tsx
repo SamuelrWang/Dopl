@@ -1,5 +1,7 @@
 "use client";
 
+import { apiErrorFrom } from "@/shared/api/api-envelope";
+import { userFacingMessage } from "@/shared/api/user-facing-message";
 import { useState } from "react";
 import Link from "next/link";
 import type { InvitationStatus } from "../types";
@@ -61,8 +63,7 @@ export function AcceptInviteCard({ status, token, needsAuth }: Props) {
         { method: "POST" }
       );
       if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(body?.error?.message || body?.error || "Failed to accept");
+        throw apiErrorFrom(res.status, await res.json().catch(() => ({})));
       }
       const { workspaceSlug, workspacePublicId } = (await res.json()) as {
         workspaceSlug: string;
@@ -70,7 +71,7 @@ export function AcceptInviteCard({ status, token, needsAuth }: Props) {
       };
       setJoined({ slug: workspaceSlug, publicId: workspacePublicId });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong");
+      setError(userFacingMessage(err));
       setAccepting(false);
     }
   }

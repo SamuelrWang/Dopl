@@ -1,8 +1,8 @@
+import { userFacingMessage } from "@/shared/api/user-facing-message";
 import { cn } from "@/shared/lib/utils";
 import { CopyButton } from "@/shared/ui/copy-button";
 import { RAISED_WELL } from "@/shared/ui/wells";
 import { formatChannelTimestamp, formatDate } from "@/shared/lib/format-time";
-import { errorMessage } from "#/components/page-states";
 import type { ChannelPendingLink } from "@/features/channels/types";
 import { displayUrl, linkGrantLabel, linkUsesLabel } from "./home-rows";
 import { useRevokeHomeLink } from "./home-writes";
@@ -42,7 +42,7 @@ export function LinkOutPanel({ link }: { link: ChannelPendingLink }) {
       </div>
       {revoke.error ? (
         <p className="mt-2.5 text-caption text-danger" role="alert">
-          {errorMessage(revoke.error)}
+          {userFacingMessage(revoke.error)}
         </p>
       ) : null}
       <button

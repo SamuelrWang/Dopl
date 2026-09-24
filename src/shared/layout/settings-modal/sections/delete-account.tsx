@@ -1,5 +1,7 @@
 "use client";
 
+import { apiErrorFrom } from "@/shared/api/api-envelope";
+import { userFacingMessage } from "@/shared/api/user-facing-message";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { getSupabaseBrowser } from "@/shared/supabase/browser";
@@ -25,16 +27,10 @@ export function DeleteAccount() {
         // ⚠ Predates §9's `{ error: { code, message } }` envelope — answers a
         // flat `{ error: string }` on every failure branch
         // (src/app/api/user/delete/route.ts).
-        const data = (await res
-          .json()
-          .catch(() => null)) as { error?: string } | null;
-        throw new Error(data?.error || "Failed to delete account");
+        throw apiErrorFrom(res.status, await res.json().catch(() => null));
       }
     } catch (err) {
-      const message =
-        err instanceof Error && err.message
-          ? err.message
-          : "Something went wrong. Please try again.";
+      const message = userFacingMessage(err);
       setError(message);
       toast({ title: "Couldn't delete account", description: message });
       throw err;

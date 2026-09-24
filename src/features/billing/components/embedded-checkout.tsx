@@ -1,5 +1,7 @@
 "use client";
 
+import { apiErrorFrom } from "@/shared/api/api-envelope";
+import { userFacingMessage } from "@/shared/api/user-facing-message";
 import { useCallback, useEffect, useState } from "react";
 import { loadStripe } from "@stripe/stripe-js";
 import {
@@ -73,9 +75,7 @@ export function EmbeddedCheckoutForm({
         // Live-sub 409 ships a portal link; "Try again" would just 409 again.
         const portal = extractPortalUrl(errBody);
         if (portal) setPortalUrl(portal);
-        setError(
-          extractErrorMessage(errBody) || `Checkout failed (HTTP ${res.status})`
-        );
+        setError(userFacingMessage(apiErrorFrom(res.status, errBody)));
         return;
       }
       const data = await res.json();
@@ -85,7 +85,7 @@ export function EmbeddedCheckoutForm({
       }
       setClientSecret(data.clientSecret);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Checkout failed");
+      setError(userFacingMessage(err));
     } finally {
       setLoading(false);
     }
@@ -134,7 +134,7 @@ function CheckoutPaymentForm({ plan }: { plan: CheckoutPlan }) {
     return <CheckoutSkeleton />;
   }
   if (result.type === "error") {
-    return <CheckoutErrorCard message={result.error.message} />;
+    return <CheckoutErrorCard message={userFacingMessage(result.error)} />;
   }
 
   const checkout = result.checkout;
@@ -149,6 +149,7 @@ function CheckoutPaymentForm({ plan }: { plan: CheckoutPlan }) {
     // navigates away, so the button deliberately stays "Processing…".
     const confirmResult = await checkout.confirm();
     if (confirmResult.type === "error") {
+      // Stripe's buyer errors are written for the payer ("Your card was declined.").
       setConfirmError(confirmResult.error.message);
       setConfirming(false);
     }
@@ -289,29 +290,6 @@ function CheckoutErrorCard({
   );
 }
 
-/**
- * Handles BOTH billing error envelopes: flat `{ error: "CODE"|text, message? }`
- * (checkout 409s) and nested `{ error: { code, message } }`
- * (HttpError.toResponseBody).
- */
-function extractErrorMessage(body: unknown): string | null {
-  if (typeof body !== "object" || body === null) return null;
-  const env = body as {
-    error?: { message?: unknown } | string;
-    message?: unknown;
-  };
-  if (typeof env.message === "string" && env.message) return env.message;
-  if (typeof env.error === "string" && env.error) return env.error;
-  if (
-    typeof env.error === "object" &&
-    env.error !== null &&
-    typeof env.error.message === "string" &&
-    env.error.message
-  ) {
-    return env.error.message;
-  }
-  return null;
-}
 
 /** Live-sub 409 carries `portalUrl` (flat envelope) — manage-instead-of-recheckout. */
 function extractPortalUrl(body: unknown): string | null {

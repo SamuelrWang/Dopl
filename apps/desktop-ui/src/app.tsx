@@ -8,6 +8,7 @@ import {
 } from "#/lib/query-client";
 import { routes } from "#/routes";
 import { getBridge } from "#/lib/dopl-bridge";
+import { armErrorRecovery } from "#/lib/error-recovery";
 // Reused feature components (ChatsView, SkillsBrowser mutations) fire toast()
 // and need a mounted host.
 import { ToastHost } from "@/shared/ui/toast";
@@ -81,6 +82,10 @@ export function App() {
     }
     return off;
   }, [queryClient, persister, router]);
+
+  // A query left in `error` by a sleep or a network drop refetches on wake,
+  // on reconnect and on focus, instead of waiting for a reload.
+  useEffect(() => armErrorRecovery(queryClient), [queryClient]);
 
   // Main-initiated navigation (channel notification, tray "Pending"). Main
   // sends a router PATH; there is no URL to load in the SPA, so this is the

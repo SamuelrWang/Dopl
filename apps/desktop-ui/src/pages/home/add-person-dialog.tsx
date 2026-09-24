@@ -1,3 +1,4 @@
+import { userFacingMessage } from "@/shared/api/user-facing-message";
 import { useState } from "react";
 import { cn } from "@/shared/lib/utils";
 import { CopyButton } from "@/shared/ui/copy-button";
@@ -10,7 +11,6 @@ import {
   StandardDialog,
 } from "@/shared/ui/standard-dialog";
 import { RAISED_WELL } from "@/shared/ui/wells";
-import { errorMessage } from "#/components/page-states";
 import { PAGE_ACTION_BTN } from "./panel-buttons";
 import { displayUrl } from "./home-rows";
 import {
@@ -141,7 +141,7 @@ export function AddPersonDialog({ workspaceId }: { workspaceId: string }) {
             `unknown && <jsx/>` is `unknown` — not a ReactNode. */}
         {mint.error ? (
           <p className="text-caption text-danger" role="alert">
-            {errorMessage(mint.error)}
+            {userFacingMessage(mint.error)}
           </p>
         ) : null}
 

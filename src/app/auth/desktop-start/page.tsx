@@ -1,5 +1,6 @@
 "use client";
 
+import { userFacingMessage } from "@/shared/api/user-facing-message";
 import { useEffect, useState } from "react";
 import { getSupabaseBrowser } from "@/shared/supabase/browser";
 
@@ -32,7 +33,7 @@ export default function DesktopStartPage() {
           redirectTo: `${window.location.origin}/auth/callback?desktop=1${stateQs}`,
         },
       });
-      if (error) setError(error.message);
+      if (error) setError(userFacingMessage(error));
     })();
   }, []);
 

@@ -1,5 +1,6 @@
 "use client";
 
+import { userFacingMessage } from "@/shared/api/user-facing-message";
 import { useApiQuery } from "@/shared/hooks/use-api-query";
 import { membersPath } from "../client/query-keys";
 import type { MembersCache } from "../lib/optimistic-cache";
@@ -15,7 +16,7 @@ export function useMembers(workspaceSlug: string) {
   return {
     members: query.data ?? null,
     loading: query.isPending,
-    error: query.error ? query.error.message : null,
+    error: query.error ? userFacingMessage(query.error) : null,
     refresh: query.refetch,
   };
 }

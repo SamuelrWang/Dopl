@@ -1,5 +1,6 @@
 "use client";
 
+import { userFacingMessage } from "@/shared/api/user-facing-message";
 import { useState } from "react";
 // Deep import, not the `settings-modal` barrel: the barrel also re-exports
 // SettingsModal, whose section tree reaches `next/navigation`. This dialog is
@@ -11,7 +12,7 @@ import { Avatar } from "@/shared/ui/avatar";
 import { useApiQuery } from "@/shared/hooks/use-api-query";
 import type { WorkspaceMemberView } from "@/features/members/types";
 import type { Channel } from "../types";
-import { ChannelApiError, createChannel } from "../client/api";
+import { createChannel } from "../client/api";
 import { seedAgentDefaults } from "../lib/agent-defaults-seed";
 
 interface Props {
@@ -83,11 +84,7 @@ export function DirectMessageDialog({
       onCreated(channel);
       close();
     } catch (err) {
-      setError(
-        err instanceof ChannelApiError
-          ? err.message
-          : "Couldn't open the direct message"
-      );
+      setError(userFacingMessage(err, "Couldn't open the direct message"));
       setBusyId(null);
     }
   }

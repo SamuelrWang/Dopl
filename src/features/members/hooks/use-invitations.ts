@@ -1,5 +1,6 @@
 "use client";
 
+import { userFacingMessage } from "@/shared/api/user-facing-message";
 import { useApiQuery } from "@/shared/hooks/use-api-query";
 import { invitationsPath } from "../client/query-keys";
 import type { InvitationsCache } from "../lib/optimistic-cache";
@@ -21,7 +22,7 @@ export function useInvitations(workspaceSlug: string, enabled: boolean) {
     invitations: query.data ?? null,
     // Disabled (non-admin) callers are "not loading", not pending forever.
     loading: enabled && query.isPending,
-    error: query.error ? query.error.message : null,
+    error: query.error ? userFacingMessage(query.error) : null,
     refresh: query.refetch,
   };
 }

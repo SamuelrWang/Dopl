@@ -1,5 +1,6 @@
 "use client";
 
+import { userFacingMessage } from "@/shared/api/user-facing-message";
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { KB_BASE_DESCRIPTION_MAX } from "@/config";
@@ -16,7 +17,7 @@ import { meetsMinRole, type Role } from "@/features/workspaces/types";
 import { useTeams } from "@/features/members/hooks/use-teams";
 import type { KbScope } from "../scope";
 import type { KbShelf } from "../types";
-import { KnowledgeApiError, createBase } from "../client/api";
+import { createBase } from "../client/api";
 import { seedKnowledgeBase } from "../client/hooks";
 import type { KnowledgeRouting } from "./knowledge-v2/routing";
 import {
@@ -156,13 +157,7 @@ export function CreateBaseDialog({
       routing.goToBase(base, "push");
       routing.refreshServerData();
     } catch (err) {
-      const msg =
-        err instanceof KnowledgeApiError
-          ? err.message
-          : err instanceof Error
-            ? err.message
-            : "Something went wrong";
-      setError(msg);
+      setError(userFacingMessage(err));
       setSubmitting(false);
     }
   }

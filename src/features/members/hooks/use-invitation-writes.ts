@@ -1,5 +1,6 @@
 "use client";
 
+import { userFacingMessage } from "@/shared/api/user-facing-message";
 import {
   patchCache,
   useApiMutation,
@@ -49,8 +50,7 @@ export function revokeInvitationConfig(
     // The row reappearing IS the failure state; the toast only says why.
     onError: (err) =>
       toast({
-        title:
-          err instanceof Error ? err.message : "Couldn't revoke invitation",
+        title: userFacingMessage(err, "Couldn't revoke invitation"),
       }),
   };
 }
@@ -66,7 +66,7 @@ export function resetJoinLinkConfig(
     // not leave the admin believing the old URL is dead.
     onError: (err) =>
       toast({
-        title: err instanceof Error ? err.message : "Couldn't reset the link",
+        title: userFacingMessage(err, "Couldn't reset the link"),
       }),
   };
 }

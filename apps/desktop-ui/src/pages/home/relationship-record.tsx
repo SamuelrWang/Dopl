@@ -68,7 +68,7 @@ export function RelationshipRecord({
   // box, class expression for class expression (INVARIANTS §1A).
   if (loading) return <ChannelRecordSkeleton />;
   if (error) {
-    return <PageError error={new Error(error)} onRetry={() => refetch()} />;
+    return <PageError error={error} onRetry={() => refetch()} />;
   }
 
   const channel = channels.find((row) => row.id === homeChannel.id);

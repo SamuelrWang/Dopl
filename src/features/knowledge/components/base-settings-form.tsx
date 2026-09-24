@@ -1,10 +1,10 @@
 "use client";
 
+import { userFacingMessage } from "@/shared/api/user-facing-message";
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "@/shared/ui/toast";
 import {
-  KnowledgeApiError,
   deleteBase,
   updateBase,
   updateFolder,
@@ -101,12 +101,7 @@ export function BaseSettingsForm({
         routing.refreshServerData();
       }
     } catch (err) {
-      const msg =
-        err instanceof KnowledgeApiError
-          ? err.message
-          : err instanceof Error
-            ? err.message
-            : "Save failed";
+      const msg = userFacingMessage(err);
       toast({ title: "Couldn't save", description: msg });
     } finally {
       setSaving(false);
@@ -122,12 +117,7 @@ export function BaseSettingsForm({
       routing.goToBase(null, "replace");
       routing.refreshServerData();
     } catch (err) {
-      const msg =
-        err instanceof KnowledgeApiError
-          ? err.message
-          : err instanceof Error
-            ? err.message
-            : "Couldn't delete";
+      const msg = userFacingMessage(err);
       toast({ title: "Couldn't delete", description: msg });
     } finally {
       setDeleting(false);
@@ -344,12 +334,7 @@ function FolderDescriptionRow({
       setSavedValue(next);
       onSaved?.();
     } catch (err) {
-      const msg =
-        err instanceof KnowledgeApiError
-          ? err.message
-          : err instanceof Error
-            ? err.message
-            : "Save failed";
+      const msg = userFacingMessage(err);
       toast({ title: "Couldn't save folder description", description: msg });
     }
   }

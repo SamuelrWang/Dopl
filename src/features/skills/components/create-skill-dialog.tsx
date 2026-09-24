@@ -1,5 +1,6 @@
 "use client";
 
+import { userFacingMessage } from "@/shared/api/user-facing-message";
 import { useState } from "react";
 import { X } from "lucide-react";
 // ⚠ Shared 2000-char budget `SkillCreateSchema` bounds `description` and
@@ -11,7 +12,7 @@ import { KB_BASE_DESCRIPTION_MAX } from "@/config";
 import { ModalShell } from "@/shared/layout/settings-modal/modal-shell";
 import modalStyles from "@/shared/layout/settings-modal/settings-modal.module.css";
 import type { Skill } from "@/features/skills/types";
-import { SkillApiError, createSkill } from "@/features/skills/client/api";
+import { createSkill } from "@/features/skills/client/api";
 
 const FIELD =
   "px-3 py-2 rounded-md bg-surface-raised-3 border border-border-strong text-body text-text-primary placeholder:text-text-muted outline-none focus:border-border-highlight transition-colors";
@@ -75,11 +76,7 @@ export function CreateSkillDialog({
       close();
       onCreated(skill);
     } catch (err) {
-      setError(
-        err instanceof SkillApiError || err instanceof Error
-          ? err.message
-          : "Something went wrong"
-      );
+      setError(userFacingMessage(err));
       setSubmitting(false);
     }
   }

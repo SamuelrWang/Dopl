@@ -4,6 +4,7 @@ import { getSpaBridge } from "@/shared/lib/spa-bridge";
 import {
   ApiError,
   decodeResponse,
+  transportFailure,
   withQuery,
   type ApiRequestOpts,
   type RawApiResponse,
@@ -16,7 +17,9 @@ import {
  *   - optional `x-updated-at` concurrency precondition (412 on mismatch);
  *   - `undefined`-stripping query-param builder;
  *   - 204 → `undefined`; non-JSON error bodies degrade gracefully;
- *   - `!res.ok` → `ApiError` with the ENGINEERING §9 envelope.
+ *   - `!res.ok` → `ApiError` with the ENGINEERING §9 envelope;
+ *   - a request that never completed → `NetworkError` / generic `ApiError(0)`
+ *     (`transportFailure`), never the transport's raw text.
  *
  * ⚠ Everything but the TRANSPORT lives in `./api-envelope.ts`, shared verbatim
  * with `apps/desktop-ui/src/lib/api.ts`. This file owns only which wire the
@@ -52,12 +55,16 @@ export async function apiRequest<T>(
     // ⚠ The IPC call cannot be cancelled; racing it against the abort signal
     // preserves TanStack's unmount/supersede semantics (promise settles,
     // response discarded).
-    const call = bridge.apiRequest(url, {
-      method: opts.method ?? "GET",
-      body: opts.body,
-      workspaceId: opts.workspaceId,
-      expectedUpdatedAt: opts.expectedUpdatedAt,
-    });
+    const call = bridge
+      .apiRequest(url, {
+        method: opts.method ?? "GET",
+        body: opts.body,
+        workspaceId: opts.workspaceId,
+        expectedUpdatedAt: opts.expectedUpdatedAt,
+      })
+      .catch((err: unknown) => {
+        throw transportFailure(err, opts.signal);
+      });
     const out = await (opts.signal
       ? Promise.race([
           call,
@@ -81,13 +88,18 @@ export async function apiRequest<T>(
     if (opts.body !== undefined) headers["content-type"] = "application/json";
     if (opts.expectedUpdatedAt) headers["x-updated-at"] = opts.expectedUpdatedAt;
 
-    const res = await fetch(url, {
-      method: opts.method ?? "GET",
-      headers,
-      body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
-      credentials: "same-origin",
-      signal: opts.signal,
-    });
+    let res: Response;
+    try {
+      res = await fetch(url, {
+        method: opts.method ?? "GET",
+        headers,
+        body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
+        credentials: "same-origin",
+        signal: opts.signal,
+      });
+    } catch (err) {
+      throw transportFailure(err, opts.signal);
+    }
     raw =
       res.status === 204
         ? { status: res.status, statusText: res.statusText, hasBody: false }

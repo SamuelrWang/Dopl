@@ -10550,3 +10550,11 @@ already wrong — `channel-dispatch-agents.ts` does pass `waitMs` — so do not 
 - Same class elsewhere: the Codex `auth.json` is a `0600` file in the private CODEX_HOME that a same-user Codex shell can read, and the Dopl MCP bearer rides both CLIs' launch envs.
 - Proposed resolution: Samuel rules whether to take the custom-spawn + fd route for Claude (and an equivalent for the Codex file), or to accept same-user process introspection as outside the agent fence.
 - Status: OPEN.
+
+### F-763 — the browser `fetch` transports read a body cut off mid-stream as "no body" (2026-09-23)
+
+- Location: `src/shared/api/api-client.ts › readJsonBody` and `apps/desktop-ui/src/lib/api-transport.ts › fetchTransport` (the web client and the SPA's dev-in-browser transport).
+- Found during: the fetch-failed recovery (`fix/fetch-failed-recovery`), which made the desktop bridge answer a mid-body socket failure as `NETWORK_UNAVAILABLE` (`dopl-desktop-app/main/ui-bridge.js › performApiRequest`).
+- **The effect.** Both catch every `res.json()` throw as a non-JSON body, so a 2xx whose stream dies resolves as `undefined` data instead of a `NetworkError`. The packaged app no longer takes this path; the web app still does.
+- Proposed resolution: rethrow through `api-envelope.ts › transportFailure` when the read throws a network-class error (not a `SyntaxError`), in both readers.
+- Status: OPEN (low).

@@ -1,5 +1,6 @@
 "use client";
 
+import { userFacingMessage } from "@/shared/api/user-facing-message";
 import { useState } from "react";
 import { Hash, MessageSquare } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
@@ -65,8 +66,7 @@ export function KbChannelGrantsSection({
     try {
       await setGrant.mutateAsync({ channelId, level, guestWrite });
     } catch (err) {
-      const msg = err instanceof Error ? err.message : "Couldn't update sharing";
-      toast({ title: "Couldn't update sharing", description: msg });
+      toast({ title: "Couldn't update sharing", description: userFacingMessage(err) });
     } finally {
       setPendingChannelId(null);
     }

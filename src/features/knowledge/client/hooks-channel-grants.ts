@@ -13,6 +13,7 @@
  * inverse write — an inverse is wrong if a refetch landed in between.
  */
 
+import { userFacingMessage } from "@/shared/api/user-facing-message";
 import {
   useMutation,
   useQuery,
@@ -57,7 +58,7 @@ export function useChannelGrantSettings(
   return {
     data: query.data ?? null,
     loading: query.isPending,
-    error: query.error ? (query.error as Error).message : null,
+    error: query.error ? userFacingMessage(query.error) : null,
   };
 }
 

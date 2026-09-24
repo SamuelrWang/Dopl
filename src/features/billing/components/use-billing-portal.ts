@@ -1,5 +1,7 @@
 "use client";
 
+import { apiErrorFrom } from "@/shared/api/api-envelope";
+import { userFacingMessage } from "@/shared/api/user-facing-message";
 import { useState } from "react";
 
 /**
@@ -30,20 +32,11 @@ export function useBillingPortal(workspaceId?: string): BillingPortal {
         headers: workspaceId ? { "x-workspace-id": workspaceId } : undefined,
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok || !data.url) {
-        const message =
-          typeof data.error === "string"
-            ? data.error
-            : typeof data.error?.message === "string"
-              ? data.error.message
-              : "Couldn't open billing portal";
-        throw new Error(message);
-      }
+      if (!res.ok) throw apiErrorFrom(res.status, data);
+      if (!data.url) throw new Error("no portal url");
       window.location.href = data.url;
     } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "Couldn't open billing portal"
-      );
+      setError(userFacingMessage(err, "Couldn't open billing portal"));
     } finally {
       setLoading(false);
     }

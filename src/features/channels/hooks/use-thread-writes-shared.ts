@@ -1,9 +1,9 @@
 "use client";
 
+import { userFacingMessage } from "@/shared/api/user-facing-message";
 import type { QueryClient } from "@tanstack/react-query";
 import type { MutationGate } from "@/shared/hooks/use-api-mutation";
 import { toast } from "@/shared/ui/toast";
-import { ChannelApiError } from "../client/api";
 import { channelKeys } from "../client/query-keys";
 
 /**
@@ -34,7 +34,7 @@ export interface ThreadWriteDeps extends ThreadWritesParams {
 }
 
 export function failed(err: unknown, fallback: string) {
-  toast({ title: err instanceof ChannelApiError ? err.message : fallback });
+  toast({ title: userFacingMessage(err, fallback) });
 }
 
 export const messagesKey = (channelId: string) =>

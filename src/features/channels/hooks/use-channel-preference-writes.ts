@@ -1,12 +1,13 @@
 "use client";
 
+import { userFacingMessage } from "@/shared/api/user-facing-message";
 import {
   patchCache,
   useApiMutationWith,
   type MutationGate,
 } from "@/shared/hooks/use-api-mutation";
 import { toast } from "@/shared/ui/toast";
-import { ChannelApiError, channelRequest } from "../client/api";
+import { channelRequest } from "../client/api";
 import {
   CHANNEL_CONSENT_PATH,
   channelKeys,
@@ -74,7 +75,7 @@ export interface PreferenceWritesParams {
 }
 
 function failed(err: unknown, fallback: string) {
-  toast({ title: err instanceof ChannelApiError ? err.message : fallback });
+  toast({ title: userFacingMessage(err, fallback) });
 }
 
 export interface ToolProfileDraft {

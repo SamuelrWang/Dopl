@@ -1,5 +1,6 @@
 "use client";
 
+import { userFacingMessage } from "@/shared/api/user-facing-message";
 import { useState } from "react";
 import { Check, ChevronDown, Link2, RotateCcw } from "lucide-react";
 import { getAppOrigin } from "@/shared/lib/app-origin";
@@ -233,7 +234,7 @@ export function InviteDialog({
       }
       setSentCount(emails.length);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong");
+      setError(userFacingMessage(err));
     } finally {
       setSubmitting(false);
     }

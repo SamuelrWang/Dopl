@@ -1,5 +1,6 @@
 "use client";
 
+import { userFacingMessage } from "@/shared/api/user-facing-message";
 import { useEffect, useState } from "react";
 import { Check, Folder, FolderOpen } from "lucide-react";
 // Deep import, not the `settings-modal` barrel: the barrel also re-exports
@@ -22,7 +23,7 @@ import {
 } from "@/shared/lib/desktop";
 import type { WorkspaceMemberView } from "@/features/members/types";
 import type { Channel, ChannelVisibility } from "../types";
-import { addChannelMember, ChannelApiError, createChannel } from "../client/api";
+import { addChannelMember, createChannel } from "../client/api";
 import { seedAgentDefaults } from "../lib/agent-defaults-seed";
 
 interface Props {
@@ -194,9 +195,7 @@ export function CreateChannelDialog({
         close();
       }
     } catch (err) {
-      setError(
-        err instanceof ChannelApiError ? err.message : "Couldn't create the channel"
-      );
+      setError(userFacingMessage(err, "Couldn't create the channel"));
     } finally {
       setSubmitting(false);
     }

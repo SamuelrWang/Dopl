@@ -1,5 +1,6 @@
 "use client";
 
+import { userFacingMessage } from "@/shared/api/user-facing-message";
 import { useApiQuery } from "@/shared/hooks/use-api-query";
 import { teamsPath } from "../client/query-keys";
 import type { TeamsCache } from "../lib/optimistic-cache";
@@ -12,7 +13,7 @@ export function useTeams(workspaceSlug: string) {
   return {
     teams: query.data ?? null,
     loading: query.isPending,
-    error: query.error ? query.error.message : null,
+    error: query.error ? userFacingMessage(query.error) : null,
     refresh: query.refetch,
   };
 }

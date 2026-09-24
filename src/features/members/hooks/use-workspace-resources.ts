@@ -1,5 +1,6 @@
 "use client";
 
+import { userFacingMessage } from "@/shared/api/user-facing-message";
 import { useApiQuery } from "@/shared/hooks/use-api-query";
 import { accessMatrixPath } from "../client/query-keys";
 import type { ResourcesCache } from "../lib/optimistic-cache";
@@ -26,7 +27,7 @@ export function useWorkspaceResources(workspaceSlug: string) {
   return {
     resources: query.data ?? null,
     loading: query.isPending,
-    error: query.error ? query.error.message : null,
+    error: query.error ? userFacingMessage(query.error) : null,
     refresh: query.refetch,
   };
 }

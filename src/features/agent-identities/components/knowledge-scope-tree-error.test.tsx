@@ -9,7 +9,7 @@ const refetch = vi.hoisted(() => vi.fn());
 vi.mock("@/features/knowledge/client/hooks", () => ({
   useKnowledgeTree: (baseId: string | null) =>
     baseId
-      ? { data: null, status: "error", error: { message: "Forbidden" }, refetch }
+      ? { data: null, status: "error", error: { status: 403, message: "Forbidden" }, refetch }
       : { data: null, status: "idle", error: null, refetch },
 }));
 

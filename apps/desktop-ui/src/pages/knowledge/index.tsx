@@ -1,3 +1,4 @@
+import { ApiError } from "#/lib/api";
 import { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate, useParams, useSearchParams } from "react-router";
 import { useQueryClient } from "@tanstack/react-query";
@@ -191,7 +192,7 @@ function KnowledgeView({ access }: { access: WorkspaceAccess }) {
     // base that resolved once and is now gone falls THROUGH instead: a deleted
     // deep-link target is no deep link, not an error — render the knowledge
     // root the delete already navigated to.
-    return <PageError error={new Error("Knowledge base not found")} />;
+    return <PageError error={new ApiError(404, "NOT_FOUND", "Knowledge base not found")} />;
   }
 
   // ⚠ Deep link must resolve fully BEFORE the controller mounts: it reads

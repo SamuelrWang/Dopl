@@ -1,3 +1,4 @@
+import { ApiError } from "#/lib/api";
 import { useNavigate } from "react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { workspaceSegment } from "@/features/workspaces/url";
@@ -40,7 +41,7 @@ export default function SettingsPage() {
   if (route.error || query.error || !query.data) {
     return (
       <PageError
-        error={route.error ?? query.error ?? new Error("Workspace not found")}
+        error={route.error ?? query.error ?? new ApiError(404, "NOT_FOUND", "Workspace not found")}
         onRetry={() => {
           route.refetch();
           void query.refetch();

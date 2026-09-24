@@ -1,10 +1,11 @@
 "use client";
 
+import { userFacingMessage } from "@/shared/api/user-facing-message";
 import { useState } from "react";
 import { AlertTriangle } from "lucide-react";
 import { Switch } from "@/shared/ui/switch";
 import { toast } from "@/shared/ui/toast";
-import { KnowledgeApiError, updateBase } from "../client/api";
+import { updateBase } from "../client/api";
 
 interface Props {
   baseId: string;
@@ -45,13 +46,7 @@ export function AgentWriteToggle({
           : "Your agent can read but not modify this knowledge base.",
       });
     } catch (err) {
-      const msg =
-        err instanceof KnowledgeApiError
-          ? err.message
-          : err instanceof Error
-            ? err.message
-            : "Something went wrong";
-      toast({ title: "Couldn't toggle", description: msg });
+      toast({ title: "Couldn't toggle", description: userFacingMessage(err) });
     } finally {
       setSubmitting(false);
     }

@@ -25,7 +25,8 @@ import { sendRequest } from "./api-transport";
  * Failure vocabulary, matching the web client so the shared TanStack retry
  * predicate behaves identically:
  *   - server answered non-2xx → `ApiError` with `status` (4xx: no retry)
- *   - request never completed → plain `Error`, no `status` (retried once)
+ *   - request never completed → `NetworkError` (`status: 0`, retried with
+ *     backoff) or a generic `ApiError(0)` (retried once)
  */
 
 export { ApiError, decodeResponse, withQuery };

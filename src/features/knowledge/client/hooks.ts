@@ -7,6 +7,11 @@
  * `{ data, status, error, refetch }`; keep stable. `data` is held during a
  * same-key refetch (no flicker), cleared on key change (no cross-workspace leak).
  */
+import {
+  GENERIC_ERROR_MESSAGE,
+  NETWORK_ERROR_MESSAGE,
+  isNetworkError,
+} from "@/shared/api/api-envelope";
 import { useCallback } from "react";
 import {
   useMutation,
@@ -47,11 +52,10 @@ interface UseFetchOptions<T> {
 
 function toApiError(err: unknown): KnowledgeApiError {
   if (err instanceof KnowledgeApiError) return err;
-  return new KnowledgeApiError(
-    500,
-    "INTERNAL_ERROR",
-    err instanceof Error ? err.message : "Unknown error"
-  );
+  if (isNetworkError(err)) {
+    return new KnowledgeApiError(0, "NETWORK_UNAVAILABLE", NETWORK_ERROR_MESSAGE);
+  }
+  return new KnowledgeApiError(500, "INTERNAL_ERROR", GENERIC_ERROR_MESSAGE);
 }
 
 function useKnowledgeQuery<T>(

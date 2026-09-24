@@ -47,9 +47,10 @@ const avatarPolicy = require('./avatar-policy');
 // source. It is re-exported below because callers already import it through this module.
 const { isAppWindowSender } = require('./ipc-guards');
 const { diag } = require('./diag');
+const api = require('./api');
+const bridgeNet = require('./ui-bridge-net');
 
 const AUTH_STATE_EVENT = 'dopl:auth-state-changed';
-const REQUEST_TIMEOUT_MS = 30_000;
 
 // THE APP'S OWN UI, STAMPED. Without it a request the operator TYPES is indistinguishable
 // server-side from an external agent's post, and the listener can only open something inert on
@@ -180,20 +181,14 @@ async function sendApiRequest(href, opts, token) {
   if (opts.expectedUpdatedAt) headers['x-updated-at'] = opts.expectedUpdatedAt;
   if (opts.body !== undefined) headers['Content-Type'] = 'application/json';
 
-  const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), REQUEST_TIMEOUT_MS);
-  try {
-    // ⚠ Node's global fetch — the same undici pool main/api.js documents (and resets after a
-    // network transition), NOT Chromium's stack.
-    return await fetch(href, {
-      method,
-      headers,
-      body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
-      signal: ctrl.signal,
-    });
-  } finally {
-    clearTimeout(timer);
-  }
+  const init = { method, headers, body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined };
+  // ⚠ Node's global fetch — the same undici pool main/api.js documents (and resets after a
+  // network transition), NOT Chromium's stack. A dead pooled socket is recovered here.
+  return bridgeNet.sendWithRecovery(() => bridgeNet.fetchWithDeadline(href, init), {
+    method, href, diag,
+    currentPool: api.currentPool,
+    resetPool: (pool) => api.resetPool({ graceful: true, ifCurrent: pool }),
+  });
 }
 
 // ⚠ COPIED FROM THE SERVER, NOT INVENTED: byte-for-byte the body
@@ -258,7 +253,9 @@ async function performApiRequest(href, opts) {
   try {
     out.body = await res.json();
     out.hasBody = true;
-  } catch (_err) {
+  } catch (err) {
+    // A socket that died mid-body is a network failure, not an empty answer.
+    if (bridgeNet.classifyFailure(err).network) throw err;
     // Non-JSON (HTML error page, empty 500) — the renderer's decoder turns a bodiless failure
     // into ApiError(status, INTERNAL_ERROR).
   }
@@ -332,7 +329,9 @@ function register(opts = {}) {
           },
         };
       }
-      return performApiRequest(href, o);
+      // A failure is an envelope the renderer decodes, never an Electron-wrapped rejection.
+      return performApiRequest(href, o).catch((err) =>
+        bridgeNet.failureEnvelope(err, { method: o.method || 'GET', href, diag }));
     })
   );
 

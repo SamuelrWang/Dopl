@@ -45,7 +45,8 @@ export function useChannels(
   return {
     channels: query.data ?? EMPTY_CHANNELS,
     loading: query.isPending,
-    error: query.error ? query.error.message : null,
+    // The error itself: a surface renders it through `userFacingMessage` (PageError does).
+    error: query.error ?? null,
     refetch: query.refetch,
   };
 }

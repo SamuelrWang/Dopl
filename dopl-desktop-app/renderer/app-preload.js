@@ -15,6 +15,7 @@ const AUTH_STATE_EVENT = 'dopl:auth-state-changed';
 const SESSIONS_EVENT = 'dopl:sessions';
 const NARRATION_EVENT = 'dopl:session-narration';
 const RUNTIME_CREDENTIALS_EVENT = 'dopl:runtime-credentials';
+const WAKE_EVENT = 'dopl:wake'; // main/wake.js › WAKE_EVENT
 
 const METHODS = { GET: 1, POST: 1, PATCH: 1, PUT: 1, DELETE: 1 };
 
@@ -83,8 +84,8 @@ contextBridge.exposeInMainWorld('dopl', {
   // Public https origin for user-facing URLs (the document's own origin is file://).
   appOrigin: APP_ORIGIN,
 
-  // -> { status, statusText, hasBody, body? }. Never throws for an HTTP status (the renderer
-  //    decodes the envelope); rejects only when the request never completed or was malformed.
+  // -> { status, statusText, hasBody, body? }. Never throws for an HTTP status or a network failure
+  //    (`status: 0` + a code; the renderer decodes both); rejects only a refused sender or bad path.
   apiRequest: (path, opts) => ipcRenderer.invoke('dopl:api-request', asStr(path), asRequestOpts(opts)),
 
   // Main-initiated navigation (notification click). Path-only payload.
@@ -351,6 +352,14 @@ contextBridge.exposeInMainWorld('dopl', {
       ipcRenderer.on('agent-window:tabs', listener);
       return () => ipcRenderer.removeListener('agent-window:tabs', listener);
     },
+  },
+
+  // The machine woke or unlocked (main/wake.js); the SPA refetches whatever errored meanwhile.
+  onWake: (callback) => {
+    if (typeof callback !== 'function') return () => {};
+    const listener = () => callback();
+    ipcRenderer.on(WAKE_EVENT, listener);
+    return () => ipcRenderer.removeListener(WAKE_EVENT, listener);
   },
 
   openExternal: (url) => ipcRenderer.invoke('dopl:open-external', asStr(url)),

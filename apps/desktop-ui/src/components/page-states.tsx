@@ -1,5 +1,6 @@
 import { useRouteError } from "react-router";
 import { PageShellSkeleton, TwoPaneListSkeleton } from "@/shared/ui/skeleton";
+import { userFacingMessage } from "@/shared/api/user-facing-message";
 import { ApiError } from "#/lib/api";
 
 /**
@@ -9,6 +10,9 @@ import { ApiError } from "#/lib/api";
  *
  *   isPending → <PageLoading />
  *   error     → <PageError error={error} onRetry={refetch} />
+ *
+ * The error copy is `userFacingMessage` (never raw error text), and every
+ * error state offers Reload, which reloads the whole app.
  *
  * ⚠ `PageLoading` must render a SHAPE, never a line of text. A cold Channels
  * launch crosses FIVE of these back to back (boot ×3, shell, page access gate);
@@ -49,11 +53,8 @@ export function isUnauthorized(error: unknown): boolean {
   return error instanceof ApiError && error.status === 401;
 }
 
-/** Human copy for anything thrown by `apiRequest` (ApiError) or the transport. */
-export function errorMessage(error: unknown): string {
-  if (error instanceof ApiError) return error.message;
-  if (error instanceof Error) return error.message;
-  return "Something went wrong.";
+export function reloadApp(): void {
+  window.location.reload();
 }
 
 export function PageError({
@@ -65,12 +66,17 @@ export function PageError({
 }) {
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-3" role="alert">
-      <p className="text-body text-text-primary">{errorMessage(error)}</p>
-      {onRetry ? (
-        <button type="button" className="btn-light text-small px-3 py-1" onClick={onRetry}>
-          Try again
+      <p className="text-body text-text-primary">{userFacingMessage(error)}</p>
+      <div className="flex items-center gap-2">
+        {onRetry ? (
+          <button type="button" className="btn-light text-small px-3 py-1" onClick={onRetry}>
+            Try again
+          </button>
+        ) : null}
+        <button type="button" className="btn-light text-small px-3 py-1" onClick={reloadApp}>
+          Reload
         </button>
-      ) : null}
+      </div>
     </div>
   );
 }
@@ -80,7 +86,7 @@ export function RouteErrorBoundary() {
   const error = useRouteError();
   return (
     <div className="page-float flex flex-1 flex-col">
-      <PageError error={error} onRetry={() => window.location.reload()} />
+      <PageError error={error} />
     </div>
   );
 }

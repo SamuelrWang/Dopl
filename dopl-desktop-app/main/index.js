@@ -421,6 +421,7 @@ if (!gotLock) {
     // joined it; resume + unlock-screen fire together and are coalesced there.
     wake.arm({
       listener, api, authTokens, uiSync, versionGate,
+      getAppWindows: () => appWindows.liveWindows(),
     });
 
     app.on('activate', () => {

@@ -1,3 +1,4 @@
+import { ApiError } from "#/lib/api";
 import { useEffect, useState } from "react";
 import { Outlet, useLocation, useNavigate } from "react-router";
 import {
@@ -213,7 +214,10 @@ export function AppShellLayout() {
   if (error || !workspace) {
     return (
       <div className="flex h-screen w-screen flex-col">
-        <PageError error={error ?? new Error("Workspace not found")} onRetry={refetch} />
+        <PageError
+          error={error ?? new ApiError(404, "NOT_FOUND", "Workspace not found")}
+          onRetry={refetch}
+        />
       </div>
     );
   }

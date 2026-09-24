@@ -1,5 +1,6 @@
 "use client";
 
+import { userFacingMessage } from "@/shared/api/user-facing-message";
 import { useSearchParams } from "next/navigation";
 import { getSupabaseBrowser } from "@/shared/supabase/browser";
 import {
@@ -46,7 +47,7 @@ export function useLoginActions(): LoginActions {
   return {
     async signInWithPassword(email, password) {
       const { error } = await supabase.auth.signInWithPassword({ email, password });
-      if (error) return { error: error.message };
+      if (error) return { error: userFacingMessage(error) };
       window.location.assign(redirectTo);
       return {};
     },
@@ -57,7 +58,7 @@ export function useLoginActions(): LoginActions {
         password,
         options: { emailRedirectTo: buildCallbackUrl() },
       });
-      return error ? { error: error.message } : {};
+      return error ? { error: userFacingMessage(error) } : {};
     },
 
     async resetPassword(email) {
@@ -67,7 +68,7 @@ export function useLoginActions(): LoginActions {
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
         redirectTo: `${authOrigin()}/auth/callback?${params.toString()}`,
       });
-      return error ? { error: error.message } : {};
+      return error ? { error: userFacingMessage(error) } : {};
     },
 
     async oauth(provider) {
@@ -85,7 +86,7 @@ export function useLoginActions(): LoginActions {
         provider,
         options: { redirectTo: buildCallbackUrl() },
       });
-      return error ? { error: error.message } : {};
+      return error ? { error: userFacingMessage(error) } : {};
     },
   };
 }
