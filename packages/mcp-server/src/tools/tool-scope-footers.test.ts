@@ -260,7 +260,7 @@ describe("dopl_search carries its own scope", () => {
 
   // 🔒 **S15 / S49 — THE RECALL CAP, DISCLOSED ON THIS SURFACE TOO**
   // (2026-09-18). `dopl_kb`'s own search has said this for months
-  // (`knowledge-ops-read.ts › SEARCH_SCOPE_NOTE`) and this one never did, so
+  // (`knowledge-ops-search.ts › searchScopeNote`) and this one never did, so
   // "2 matches" here read as a census when it is a recall-capped,
   // visibility-filtered sample. ⚠ It rides the FOOTER, not the description:
   // `dopl_search` is held to `READ_DESCRIPTION_MAX_CHARS` (450), the tightest

@@ -93,7 +93,7 @@ export async function opMap(
       lines.push("");
     }
   }
-  // ⚠ With the ontologies, not the footer: MAP_SCOPE_NOTE is about levels this op
+  // ⚠ With the ontologies, not the footer: mapScopeNote is about levels this op
   // CHOOSES not to render — a different fact from the read stopping short, and
   // a reader must not take the first as covering the second.
   if (snapshot.truncated) {

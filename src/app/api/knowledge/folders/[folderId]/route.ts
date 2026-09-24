@@ -52,7 +52,7 @@ export const PATCH = withWorkspaceAuth(handlePatch, { minRole: "member" });
 // THE WHOLE FENCE: the `_admin` tool that carried the refusal was deleted once
 // this landed, so removing `sessionOnly` here removes the RULE, not a second
 // copy of it. ⚠ Per-METHOD — the reads and the PATCH stay ungated, because
-// editing and rewriting are exactly what `delete-policy.ts › DELETE_REFUSAL`
+// editing and rewriting are exactly what `delete-policy.ts › deleteRefusal`
 // redirects an agent to instead.
 // Full reasoning: `src/shared/auth/write-gate-coverage.test.ts`.
 export const DELETE = withWorkspaceAuth(handleDelete, {

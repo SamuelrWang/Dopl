@@ -4,6 +4,19 @@ All notable changes to `@dopl/mcp-server` are documented here. Format follows [K
 
 ## [Unreleased]
 
+### Changed — every call spelling reads in the connection's tool set (DMP-013 B3, 2026-09-24; `legacy` byte-identical)
+
+- `call-ref.ts › callRef(key, args)` renders a manifest key (`channel.read`) as
+  `dopl_channel(op="read", …)` on a legacy connection and `dopl_read_channel(…)` on a granular one,
+  from the manifest. The set rides a per-call AsyncLocalStorage scope the registrar opens.
+- Results, refusals, `retry=` hints, footers, the instructions (a granular WHICH TOOL line), both
+  doctrines, the skill-authoring and chat-export guides and the delete refusal render through it.
+  A granular call is named back with its job (`dopl_browse_knowledge(action="tree")`).
+- `dopl_get_guide` gains `topic="knowledge"`: the `dopl://doctrine/knowledge` text, uncharged like
+  the resource read; offered under `dopl_only`.
+- Granular tools inherit the renamed-arg hints (`template` → `identity`).
+- Granular served 44,104 chars; granular doctrine 14,504 (legacy 14,252 unchanged).
+
 ### Changed — granular tools speak for themselves (DMP-013 B2, 2026-09-24; `legacy` unchanged)
 
 - Each of the 39 has its own description and param lines (`granular-text*.ts`), required params

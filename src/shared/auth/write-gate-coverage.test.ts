@@ -159,7 +159,7 @@ describe("H-3 write-gate coverage", () => {
         // have a fence in the code, not only in the prompt.
         // ⚠ Per-METHOD throughout — the GETs and PATCHes stay ungated on
         // purpose, because editing and rewriting are exactly what
-        // `DELETE_REFUSAL` redirects an agent to instead. Gating them would
+        // `deleteRefusal` redirects an agent to instead. Gating them would
         // gate the capability the refusal advertises as the alternative.
         // ⚠ `minRole` is UNCHANGED: this adds a caller-type gate, it does not
         // raise the role floor. A member still deletes — in the app.

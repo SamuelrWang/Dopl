@@ -84,7 +84,7 @@ removed by this wave and the file pins the new rule in both directions.
 | # | Site | Text | Verdict |
 |---|---|---|---|
 | 1 | `dopl-desktop-app/main/prompt-framing.js › agentIdentityFraming` | `YOUR AGENT ID IS <id>.` — the only identity line a session gets. It says nothing about the NAME and nothing about not posting the id | REWRITE: name + id + "the id is internal" |
-| 2 | `packages/mcp-server/src/tools/channel-doctrine.ts › CHANNEL_LAW` | *"to=\"@agent-\<id\>\" or `@agent-<id>` in a body wakes THAT agent"* — teaches the id form as THE way to reach an agent | REWRITE: name tag first, id only for a duplicate name |
+| 2 | `packages/mcp-server/src/tools/channel-doctrine.ts › channelLaw` | *"to=\"@agent-\<id\>\" or `@agent-<id>` in a body wakes THAT agent"* — teaches the id form as THE way to reach an agent | REWRITE: name tag first, id only for a duplicate name |
 | 3 | `packages/mcp-server/src/tools/channel-addressing.ts › rosterAddressingRule` | *"`@agent-<id>` in the BODY … wakes one of YOUR OWN operator's agents by name"* | REWRITE to the name tag |
 | 4 | `packages/mcp-server/src/tools/channel-schema.ts` (the `name` param's describe) | *"`@agent-<id>` stays the only address, nothing resolves an agent by its name"* — **factually false since 2026-08-28**; the name door is live in all three trees | CORRECT |
 | 5 | `packages/mcp-server/src/tools/channel-session-handle.ts › addressableHandle` | *"A CUSTOM NAME IS NEVER A HANDLE HERE … No server holds it and this projection never carries it"* — **also stale**: `channel_sessions.display_name` exists (migration `20260905120000`) and `mapPeerSessionStateRow` projects it | CORRECT |

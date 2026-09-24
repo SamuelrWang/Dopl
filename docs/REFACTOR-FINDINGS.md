@@ -2752,7 +2752,7 @@ an agent reads at decision time steers the next call.
 
 ## F-302 — the zero-tag diagnostic proposed the WRONG REPAIR for the one cause both agents hit (2026-08-24, RESOLVED)
 
-- Location: `packages/mcp-server/src/tools/channel-doctrine.ts › CHANNEL_DOCTRINE`, the "WHY A TAG RESOLVES TO NOBODY" causes. ⚠ This was `channel-post-guidance.ts`'s `tagOutcomeNote` (the count-0 branch) until 2026-09-02, when T12 moved the five causes out of the per-post result and left the verdict behind as `tags=<resolved>/<attempted>`.
+- Location: `packages/mcp-server/src/tools/channel-doctrine.ts › channelDoctrine`, the "WHY A TAG RESOLVES TO NOBODY" causes. ⚠ This was `channel-post-guidance.ts`'s `tagOutcomeNote` (the count-0 branch) until 2026-09-02, when T12 moved the five causes out of the per-post result and left the verdict behind as `tags=<resolved>/<attempted>`.
 - Found during: the same run. **Both agents hit it independently**, which is what makes it a defect in the
   copy rather than a mistake by one model.
 - Severity: **major as a teaching defect** (the F-274 / F-291 class).
@@ -7170,7 +7170,7 @@ one; a widening that turns out to be wrong produces nothing anybody sees.
 
 ### F-437 — the scope footers now promise "any you have no grant on", and the only grant mechanism behind that phrase is a table with 5 inert rows (2026-09-02)
 
-- Location: `packages/mcp-server/src/tools/agent-shared.ts › IDENTITIES_SCOPE_NOTE`, `› knowledge-ops-read.ts › BASES_SCOPE_NOTE`, and the `"list_bases"` bullet in `› knowledge.ts`. The ledger row that REQUIRES the phrase is `› tool-scope-claims.test.ts › LEDGER` (`dopl_kb` / `list_bases`, `discloses: [… "no grant on"]`).
+- Location: `packages/mcp-server/src/tools/agent-shared.ts › IDENTITIES_SCOPE_NOTE`, `› knowledge-ops-read.ts › basesScopeNote`, and the `"list_bases"` bullet in `› knowledge.ts`. The ledger row that REQUIRES the phrase is `› tool-scope-claims.test.ts › LEDGER` (`dopl_kb` / `list_bases`, `discloses: [… "no grant on"]`).
 - Found during: A8. The clause used to name the team axis (*"bases scoped to a team you have no grant on"*); A8 removed the axis and kept the disclosure, because the server-side filters (`filterTeamVisibleBases`, `canSeeIdentity`) still run and a footer that claimed a full census would be the exact lie that ledger exists to catch.
 - Severity: latent staleness, correct today. Grants exist only through `team_resource_access` — 5 rows, all inert, measured in production 2026-09-02.
 - **The shape.** When the axis is retired in the database, the phrase stops describing anything: nothing will be able to drop a row for want of a grant, and the footer will be spending characters on every read to disclose a filter that no longer exists. It will NOT fail any test — the ledger only checks the phrase is PRESENT, never that the filter still bites — so nothing catches it.
@@ -7347,7 +7347,7 @@ one; a widening that turns out to be wrong produces nothing anybody sees.
 
 ### F-447 — the doctrine document GREW while every pushed surface shrank, and only a per-section budget makes that legible (2026-09-02)
 
-- Location: `packages/mcp-server/src/tools/channel-doctrine.ts › CHANNEL_DOCTRINE` and the new `channel-doctrine-budget.test.ts`.
+- Location: `packages/mcp-server/src/tools/channel-doctrine.ts › channelDoctrine` and the new `channel-doctrine-budget.test.ts`.
 - Found during: A6b, adding `op="help", section=`.
 - Severity: measurement hazard, not a defect — filed because the NUMBER moved the wrong way and a future reader comparing waves will otherwise read it as a regression.
 - **The measurement.** Across A6 + A6b the two PUSHED surfaces fell — served input schema 21,778 → 11,103 (−49%), description 1,775 → 1,703 — while the PULLED doctrine rose 28,870 → 32,085 → **32,728**. The last +643 is `section=` itself: an index line naming the sections, and the SECURITY sentence repeated at the head of each one, because a caller that pulls a single section skipped the header that rule used to live in.
@@ -7891,7 +7891,7 @@ one; a widening that turns out to be wrong produces nothing anybody sees.
 
 - **MEASURED**, as served, injected `workspace` excluded: 11,609 → 8,372 (`npx vitest run src/tools/channel-schema-budget.test.ts` prints it). The wave target in `docs/specs/mcp-v2-wave-b.md` §6 is **3,000**.
 - **WHERE THE 3,038 CAME FROM.** Params, not prose: thirteen fields left because the concept each named already had one (`to`, `summary`, `body`, `wait_ms`), and the op enum went 23 → 5. ⚠ **THAT IS A NET OF EIGHTEEN AND NOT A COUNT OF RETIREMENTS** (corrected 2026-09-02): TWENTY-TWO names retired and four arrived — `read` is the one old name that survived. `law-removed-vocabulary.ts › RETIRED_CHANNEL_OPS` is the list — it moved there when slice B16 deleted the redirect module that used to hold it.
-- **WHY THE GAP IS NOT CLOSED BY TRIMMING.** 3,000 over 23 fields is ~130 characters each INCLUDING the JSON Schema structure around them, which buys the number by deleting the answer to *"does this op want this argument"* — the floor `channel-schema-budget.test.ts › "every declared field still names at least one op that takes it"` exists to hold. The remaining prose is one sentence of contract per field, with every BOUND already moved out into the rendered `Limits:` block and every RULE already moved into `channel-doctrine.ts › FIELDS`.
+- **WHY THE GAP IS NOT CLOSED BY TRIMMING.** 3,000 over 23 fields is ~130 characters each INCLUDING the JSON Schema structure around them, which buys the number by deleting the answer to *"does this op want this argument"* — the floor `channel-schema-budget.test.ts › "every declared field still names at least one op that takes it"` exists to hold. The remaining prose is one sentence of contract per field, with every BOUND already moved out into the rendered `Limits:` block and every RULE already moved into `channel-doctrine.ts › fields`.
 - **SO THE NEXT REAL CUT IS FEWER FIELDS.** B13 takes the next one (`workspace=` off; `section`, `visibility` and `mode` are the three that are each the sole argument of one action). Param count is 23 against a target of ≤20 for the same reason.
 - Status: **OPEN, measured, and ratcheted** — `SCHEMA_CEILINGS.dopl_channel` only moves down.
 
