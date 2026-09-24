@@ -10,6 +10,7 @@
 import { describe, it, expect, vi } from "vitest";
 import type { DoplClient, KnowledgeBase, KnowledgeEntry } from "@dopl/client";
 import { opWriteFile } from "./knowledge-ops-write.js";
+import { boot } from "../surface-sweep.js";
 
 const BASE: KnowledgeBase = {
   id: "base-1",
@@ -323,5 +324,20 @@ describe("write_file NUDGES pointers and supersession", () => {
     );
     expect(out).toContain("reason=SUPERSESSION_BURIED");
     expect(out).toContain("superseded entry's excerpt");
+  });
+});
+
+// 1.37.1 live test #4: the schema called `excerpt` optional while a create was
+// refused EXCERPT_REQUIRED. One tool creates and updates, so the schema cannot
+// require it; the description must.
+describe("the published `excerpt` says it is required when creating", () => {
+  it.each([
+    ["legacy", "dopl_kb"],
+    ["granular", "dopl_write_entry"],
+  ] as const)("%s %s", async (set, tool) => {
+    const { client } = await boot(set);
+    const listed = (await client.listTools()).tools.find((t) => t.name === tool);
+    const excerpt = (listed?.inputSchema.properties as Record<string, { description?: string }>).excerpt;
+    expect(excerpt.description).toContain("required when creating an entry");
   });
 });

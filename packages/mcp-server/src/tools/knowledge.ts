@@ -73,7 +73,7 @@ const KB_INPUT_SHAPE = {
   slug: z.string().optional().describe("update_base: optional new slug (1-80 chars)."),
   body: z.string().max(1_048_576).optional().describe("write_file: required markdown body. Can't be empty — pass a single space for a deliberate stub."),
   title: z.string().optional().describe("write_file: the entry's title, which can't contain '/'. It RENAMES the path's last segment, and becomes the path itself when `path` is omitted."),
-  excerpt: z.string().optional().describe("write_file: the entry's agent-facing summary (max 300), shown in get_tree/list_dir; on an update it changes only when provided."),
+  excerpt: z.string().optional().describe("write_file: the entry's summary (max 300); required when creating an entry, on an update it changes only when provided."),
   expected_version: z.string().optional().describe("write_file: the entry's Version from a prior read_file — required when overwriting (412 without it, and only force=true skips the check); creates need none. restore: required, the Version op=\"history\" printed."),
   revision: z.string().optional().describe("history: preview this revision's snapshot. restore (required): the revision id to write back, as a NEW revision."),
   force: z.boolean().optional().describe("write_file: overwrite even if the entry changed since you read it. Discards the other edit. REFUSED if the entry moved — a forced write at a vacated path would duplicate it."),

@@ -29,7 +29,7 @@ exports.KNOWLEDGE_TEXT = {
             section: "Replace only this heading's section; appended as ## if absent.",
             body: "Markdown body; a single space for a deliberate stub.",
             title: "Title (no '/'); renames the path's last segment.",
-            excerpt: "Agent-facing summary (max 300) shown when browsing.",
+            excerpt: "Summary, max 300; required when creating an entry.",
             expected_version: "Version from your last read; required to overwrite.",
         },
         required: ["base", "body"],

@@ -4,6 +4,12 @@ All notable changes to `@dopl/mcp-server` are documented here. Format follows [K
 
 ## [Unreleased]
 
+### Fixed — `excerpt` is described as required when creating (1.37.1, live test #4)
+
+- `dopl_kb` and `dopl_write_entry` published `excerpt` as a plain optional summary while a create
+  without one was refused `EXCERPT_REQUIRED`. Both now say "required when creating an entry"
+  (one tool creates and updates, so the schema itself cannot require it).
+
 ### Fixed — a thread can be opened without `to` (1.37.1, live test #3)
 
 - `send thread="new"` no longer demands `to` for `kind="record"`: it opens a thread for nobody
