@@ -4,6 +4,17 @@ All notable changes to `@dopl/mcp-server` are documented here. Format follows [K
 
 ## [Unreleased]
 
+### Added — the granular tool set is servable (DMP-013 B1, 2026-09-24; `legacy` stays the default)
+
+- `createServer({ toolSet })` (from `bootServer`'s resolved claim): `legacy` lists the 11,
+  `granular` the 39; the other set is registered and callable but unlisted. Replaces the B0
+  `unlistedTools` option.
+- Each granular tool publishes its manifest annotations, `title` = name, `_meta`
+  `anthropic/alwaysLoad` on the core eight, and only its row's params. A call runs as its bound
+  legacy call (validated by that tool's own schema), so gates, credits and the call tally see
+  legacy keys. `dopl_search` belongs to the active set; `within` defaults to `everything`.
+- Descriptions are placeholders and results still spell legacy calls (B3).
+
 ### Added — tool split groundwork (DMP-013 B0, 2026-09-23; nothing new served)
 
 - `tool-manifest.ts`: the 39 granular tools, their legacy bindings and derived
