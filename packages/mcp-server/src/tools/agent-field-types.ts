@@ -1,5 +1,5 @@
 /**
- * `dopl_agent` custom-field TYPES (DMP-009, 2026-09-23): the product's five-word vocabulary and the
+ * `dopl_agent` custom-field TYPES: the product's five-word vocabulary and the
  * value check the editor's controls imply.
  *
  * ⚠ THE VALUE IS ALWAYS A STRING. `type` is the editor's input affordance (`identity-editor-rows.tsx ›

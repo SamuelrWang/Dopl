@@ -76,7 +76,7 @@ export class OntologyMethods extends KnowledgeMethods {
     return ontology.claimOntologyAnchor(this.transport, objectId);
   }
 
-  /** One object's per-FIELD history, newest first (DMP-002). */
+  /** One object's per-FIELD history, newest first. */
   listOntologyObjectRevisions(objectId: string, opts: RevisionPageOpts = {}): Promise<ContentRevisionPage> {
     return revisions.listOntologyObjectRevisions(this.transport, objectId, opts);
   }

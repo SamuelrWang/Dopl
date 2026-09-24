@@ -247,3 +247,14 @@ export function unusedParams(
     refusal(UNUSED_PARAM, `op="${op}" does not take: ${stray.join(", ")}. It takes: ${allowed.join(", ")}.`),
   );
 }
+
+/** An op's whole param contract in one call: `missingParams` over `required`, then `unusedParams`
+ *  over `required` + `optional`. */
+export function strictParams(
+  op: string,
+  args: Record<string, unknown>,
+  required: string[],
+  optional: readonly string[] = [],
+): ToolResponse | null {
+  return missingParams(op, args, required) ?? unusedParams(op, args, [...required, ...optional]);
+}

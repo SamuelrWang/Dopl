@@ -1,5 +1,5 @@
 /**
- * `dopl_search`'s six APP-SEARCH groups, rendered (DMP-004, 2026-09-23): channels, messages, threads,
+ * `dopl_search`'s six APP-SEARCH groups, rendered: channels, messages, threads,
  * artifacts, members, chats — the popup's own server search (`GET /api/search`), one container.
  *
  * ⚠ EVERY ROW ENDS ON ITS FOLLOW-UP ADDRESS — channel id, `seq`, thread id, artifact id, member id,
@@ -11,8 +11,9 @@
 
 import type { AppSearchGroup, AppSearchItem } from "@dopl/client";
 import { inlineOr, NO_NAME } from "./narration.js";
+import { APP_GROUP_ORDER } from "./search-scope.js";
 
-const HEADINGS: Record<string, string> = {
+const HEADINGS: Record<(typeof APP_GROUP_ORDER)[number], string> = {
   channels: "Channels",
   messages: "Messages",
   threads: "Threads",
@@ -63,8 +64,8 @@ export function appGroupLines(
 ): string[] {
   const lines: string[] = [];
   const byKind = new Map(groups.map((g) => [g.kind, g]));
-  for (const kind of Object.keys(HEADINGS)) {
-    const group = byKind.get(kind as AppSearchGroup["kind"]);
+  for (const kind of APP_GROUP_ORDER) {
+    const group = byKind.get(kind);
     if (!group && opts.skipEmpty) continue;
     lines.push("", `${heading} ${HEADINGS[kind]}`);
     if (!opts.searched) {

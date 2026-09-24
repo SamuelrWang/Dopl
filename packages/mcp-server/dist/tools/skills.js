@@ -155,24 +155,18 @@ caller = identity_1.UNKNOWN_CALLER) {
             case "authoring_guide":
                 return (0, respond_1.ok)(skill_authoring_guide_js_1.SKILL_AUTHORING_GUIDE);
             case "history": {
-                const miss = (0, respond_1.missingParams)("history", args, ["slug"]);
-                if (miss)
-                    return miss;
-                const stray = (0, respond_1.unusedParams)("history", args, ["slug", "revision", "limit"]);
-                if (stray)
-                    return stray;
+                const bad = (0, respond_1.strictParams)("history", args, ["slug"], ["revision", "limit"]);
+                if (bad)
+                    return bad;
                 return (0, skills_ops_history_1.opHistory)(client, args.slug, caller.userId, {
                     revision: args.revision,
                     limit: args.limit,
                 });
             }
             case "restore": {
-                const miss = (0, respond_1.missingParams)("restore", args, ["slug", "revision", "expected_version"]);
-                if (miss)
-                    return miss;
-                const stray = (0, respond_1.unusedParams)("restore", args, ["slug", "revision", "expected_version"]);
-                if (stray)
-                    return stray;
+                const bad = (0, respond_1.strictParams)("restore", args, ["slug", "revision", "expected_version"]);
+                if (bad)
+                    return bad;
                 return (0, skills_ops_history_1.opRestore)(client, args.slug, args.revision, args.expected_version);
             }
         }

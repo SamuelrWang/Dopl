@@ -1,7 +1,7 @@
 "use strict";
 /**
  * `dopl_kb` op="history" and op="restore" — one ENTRY's changelog, one revision read, and the
- * write-back (DMP-002, 2026-09-23). The app's Changelog panel reads the same route.
+ * write-back. The app's Changelog panel reads the same route.
  *
  * ⚠ `history` WITH `revision` IS THE PREVIEW: it prints the snapshot a restore would write and
  * the current Version to pass, so the old/new summary is in hand BEFORE the write.
@@ -50,7 +50,6 @@ async function findRevision(client, entryId, revisionId) {
     }
     return null;
 }
-const HISTORY_OP = 'op="history"';
 async function opHistory(client, baseRef, path, callerUserId, opts) {
     const found = await locate(client, baseRef, path);
     if ((0, channel_shared_1.isErr)(found))
@@ -60,7 +59,7 @@ async function opHistory(client, baseRef, path, callerUserId, opts) {
     if (opts.revision !== undefined) {
         const rev = await findRevision(client, entry.id, opts.revision);
         if (!rev) {
-            return (0, respond_1.err)((0, tool_errors_1.refusal)((0, revision_render_1.revisionNotFound)(HISTORY_OP), `${(0, narration_1.inlineOr)(opts.revision, "`(empty)`")} is not in this entry's last ${FIND_PAGES_MAX * FIND_PAGE_SIZE} revisions.`));
+            return (0, respond_1.err)((0, tool_errors_1.refusal)((0, revision_render_1.revisionNotFound)(revision_render_1.HISTORY_OP), `${(0, narration_1.inlineOr)(opts.revision, "`(empty)`")} is not in this entry's last ${FIND_PAGES_MAX * FIND_PAGE_SIZE} revisions.`));
         }
         const body = rev.payload.body ?? "";
         const title = rev.payload.title ? (0, narration_1.inlineOr)(rev.payload.title, narration_1.NO_NAME) : "`(title unchanged)`";
@@ -101,14 +100,14 @@ async function opRestore(client, baseRef, path, revisionId, expectedVersion) {
         return found;
     const { entry, chars } = found;
     if (entry.updatedAt !== expectedVersion) {
-        return (0, revision_render_1.staleBeforeRestore)('op="history"', entry.updatedAt, expectedVersion);
+        return (0, revision_render_1.staleBeforeRestore)(revision_render_1.HISTORY_OP, entry.updatedAt, expectedVersion);
     }
     let restored;
     try {
         restored = await client.restoreKbEntryRevision(entry.id, revisionId, expectedVersion);
     }
     catch (e) {
-        const mapped = (0, revision_render_1.restoreRefusal)(e, 'op="history"', HISTORY_OP) ?? (0, knowledge_shared_1.agentWriteDenied)(e);
+        const mapped = (0, revision_render_1.restoreRefusal)(e, revision_render_1.HISTORY_OP, revision_render_1.HISTORY_OP) ?? (0, knowledge_shared_1.agentWriteDenied)(e);
         if (mapped)
             return mapped;
         throw e;

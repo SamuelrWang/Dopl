@@ -1,6 +1,6 @@
 /**
  * `dopl_skill` op="history" and op="restore" — the SKILL.md body's version list, one version
- * read, and the write-back (DMP-002, 2026-09-23). The app's history panel reads the same routes.
+ * read, and the write-back. The app's history panel reads the same routes.
  *
  * ⚠ `history` WITH `revision` IS THE PREVIEW (the old body plus the current Version to pass), so
  * the old/new summary is in hand BEFORE the write. ⚠ `restore` REQUIRES `slug` as well as the

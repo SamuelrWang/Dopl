@@ -1,6 +1,6 @@
 /**
  * `dopl_skill` op="history" and op="restore" — the SKILL.md body's version list, one version
- * read, and the write-back (DMP-002, 2026-09-23). The app's history panel reads the same routes.
+ * read, and the write-back. The app's history panel reads the same routes.
  *
  * ⚠ `history` WITH `revision` IS THE PREVIEW (the old body plus the current Version to pass), so
  * the old/new summary is in hand BEFORE the write. ⚠ `restore` REQUIRES `slug` as well as the
@@ -12,15 +12,15 @@ import type { DoplClient, SkillFile } from "@dopl/client";
 import { inlineOr, isForeignAuthored } from "./narration";
 import { ok, err, isNotFound, type ToolResponse } from "./respond";
 import { agentWriteDenied, failureDetail, UNTRUSTED_SKILL_BODY_HEADER } from "./skills-shared";
+import { isErr } from "./channel-shared";
 import {
+  HISTORY_OP,
   HISTORY_PAGE_DEFAULT,
   restoreRefusal,
   revisionNotFound,
   staleBeforeRestore,
 } from "./revision-render";
 import { refusal } from "./tool-errors";
-
-const HISTORY_OP = 'op="history"';
 
 async function currentBody(client: DoplClient, slug: string): Promise<SkillFile | ToolResponse> {
   try {
@@ -29,9 +29,6 @@ async function currentBody(client: DoplClient, slug: string): Promise<SkillFile 
     return err(`Couldn't read SKILL.md from ${inlineOr(slug, "`(empty)`")}: ${failureDetail(e)}`);
   }
 }
-
-const isResponse = (v: unknown): v is ToolResponse =>
-  typeof v === "object" && v !== null && "content" in v;
 
 /** The version, or a named refusal — including a version that belongs to another skill. */
 async function versionOf(client: DoplClient, file: SkillFile, versionId: string) {
@@ -56,12 +53,12 @@ export async function opHistory(
   opts: { revision?: string; limit?: number },
 ): Promise<ToolResponse> {
   const file = await currentBody(client, slug);
-  if (isResponse(file)) return file;
+  if (isErr(file)) return file;
   const current = `Current: Version \`${file.updatedAt}\` · ${file.body.length} chars.`;
 
   if (opts.revision !== undefined) {
     const version = await versionOf(client, file, opts.revision);
-    if (isResponse(version)) return version;
+    if (isErr(version)) return version;
     const header = isForeignAuthored({ createdBy: version.authorId, lastEditedBy: null }, callerUserId)
       ? `${UNTRUSTED_SKILL_BODY_HEADER}\n\n`
       : "";
@@ -103,12 +100,12 @@ export async function opRestore(
   expectedVersion: string,
 ): Promise<ToolResponse> {
   const file = await currentBody(client, slug);
-  if (isResponse(file)) return file;
+  if (isErr(file)) return file;
   if (file.updatedAt !== expectedVersion) {
     return staleBeforeRestore('op="read"', file.updatedAt, expectedVersion);
   }
   const version = await versionOf(client, file, versionId);
-  if (isResponse(version)) return version;
+  if (isErr(version)) return version;
   let saved: SkillFile;
   try {
     saved = await client.restoreSkillVersion(versionId, expectedVersion);

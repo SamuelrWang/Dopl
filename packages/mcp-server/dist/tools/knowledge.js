@@ -213,12 +213,9 @@ directory) {
                 return (0, knowledge_ops_search_1.opSearch)(client, args.query, args.base, args.limit);
             }
             case "history": {
-                const miss = (0, respond_1.missingParams)("history", args, ["base", "path"]);
-                if (miss)
-                    return miss;
-                const stray = (0, respond_1.unusedParams)("history", args, ["base", "path", "revision", "limit", "entry_cursor"]);
-                if (stray)
-                    return stray;
+                const bad = (0, respond_1.strictParams)("history", args, ["base", "path"], ["revision", "limit", "entry_cursor"]);
+                if (bad)
+                    return bad;
                 return (0, knowledge_ops_history_1.opHistory)(client, args.base, args.path, caller.userId, {
                     revision: args.revision,
                     limit: args.limit,
@@ -226,12 +223,9 @@ directory) {
                 });
             }
             case "restore": {
-                const miss = (0, respond_1.missingParams)("restore", args, ["base", "path", "revision", "expected_version"]);
-                if (miss)
-                    return miss;
-                const stray = (0, respond_1.unusedParams)("restore", args, ["base", "path", "revision", "expected_version"]);
-                if (stray)
-                    return stray;
+                const bad = (0, respond_1.strictParams)("restore", args, ["base", "path", "revision", "expected_version"]);
+                if (bad)
+                    return bad;
                 return (0, knowledge_ops_history_1.opRestore)(client, args.base, args.path, args.revision, args.expected_version);
             }
             case "set_visibility": {

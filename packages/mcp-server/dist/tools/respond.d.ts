@@ -64,3 +64,6 @@ export declare function missingParams(op: string, args: Record<string, unknown>,
  * would narrate success over an argument that did nothing.
  */
 export declare function unusedParams(op: string, args: Record<string, unknown>, allowed: readonly string[]): ToolResponse | null;
+/** An op's whole param contract in one call: `missingParams` over `required`, then `unusedParams`
+ *  over `required` + `optional`. */
+export declare function strictParams(op: string, args: Record<string, unknown>, required: string[], optional?: readonly string[]): ToolResponse | null;

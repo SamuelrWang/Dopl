@@ -17,7 +17,7 @@
 import { z } from "zod";
 import type { DoplClient } from "@dopl/client";
 import { UNKNOWN_CALLER, type CallerIdentity } from "./identity";
-import { ok, missingParams, unusedParams, type RegisterTool, type ToolResponse } from "./respond";
+import { ok, missingParams, strictParams, type RegisterTool, type ToolResponse } from "./respond";
 import { opHistory, opRestore } from "./skills-ops-history";
 import { SKILL_ERRORS } from "./tool-errors";
 import { composeDescription, DESCRIPTION_MAX_CHARS } from "./tool-style";
@@ -180,20 +180,16 @@ export function registerSkillTools(
         case "authoring_guide":
           return ok(SKILL_AUTHORING_GUIDE);
         case "history": {
-          const miss = missingParams("history", args, ["slug"]);
-          if (miss) return miss;
-          const stray = unusedParams("history", args, ["slug", "revision", "limit"]);
-          if (stray) return stray;
+          const bad = strictParams("history", args, ["slug"], ["revision", "limit"]);
+          if (bad) return bad;
           return opHistory(client, args.slug as string, caller.userId, {
             revision: args.revision,
             limit: args.limit,
           });
         }
         case "restore": {
-          const miss = missingParams("restore", args, ["slug", "revision", "expected_version"]);
-          if (miss) return miss;
-          const stray = unusedParams("restore", args, ["slug", "revision", "expected_version"]);
-          if (stray) return stray;
+          const bad = strictParams("restore", args, ["slug", "revision", "expected_version"]);
+          if (bad) return bad;
           return opRestore(client, args.slug as string, args.revision as string, args.expected_version as string);
         }
       }

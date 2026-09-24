@@ -1,6 +1,6 @@
 /**
- * One scope's search — four MCP-native reads plus the app's own search (DMP-004) — shared by `dopl_search`'s single-scope path and every
- * `scope="everywhere"` leg (P8-10). Only the renderers differ; what is read, matched, capped and
+ * One scope's search — four MCP-native reads plus the app's own search — shared by `dopl_search`'s
+ * single-scope path and every `scope="everywhere"` leg (P8-10). Only the renderers differ; what is read, matched, capped and
  * reported as partial is decided here once.
  */
 
@@ -22,12 +22,12 @@ import { clippedNote } from "./ontology-clipped.js";
 import { partialRead } from "./partial-read.js";
 
 /** The `partialRead` denominator — READS, not groups: the fifth read (the app's search) answers six. */
-export const SEARCH_READ_COUNT = 5;
+const SEARCH_READ_COUNT = 5;
 
 /** The app-search groups this tool renders, in the popup's order. Knowledge, skills and identities
  *  come from the four MCP-native reads (entries match on BODIES there, titles only in the app). */
 export const APP_GROUP_ORDER = ["channels", "messages", "threads", "artifacts", "members", "chats"] as const;
-export const APP_READ_LABEL = "Channels, messages, threads, artifacts, members and chats";
+const APP_READ_LABEL = "Channels, messages, threads, artifacts, members and chats";
 
 const EMPTY_APP: AppSearchResponse = { q: "", scope: "container", tookMs: 0, groups: [] };
 

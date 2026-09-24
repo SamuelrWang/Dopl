@@ -39,7 +39,7 @@ const legacy_aliases_1 = require("../legacy-aliases");
  * the write-op glosses into an MCP resource, so they stop being pushed to every
  * client that only reads the graph.
  */
-const ONTOLOGY_PROSE_BUDGET = 1_572; // ⚠ **1,503 → 1,572 (2026-09-23, +69, DMP-002): TWO NEW OPS, "history" and "restore"**, which `parity.test.ts` requires quoted; the served string stays under `HARD_DESCRIPTION_CEILING`. // ⚠ **UNMOVED THROUGH THE 2026-09-23 VOCABULARY REMOVAL**: the rename put the prose one char over, and `name and \`purpose\`` → `name, \`purpose\`` (−3) paid for it; measured 1,501 that day, so re-derive before spending the two. // ⚠ **UNMOVED AT 1,503 THROUGH THE 2026-09-11 VOCABULARY RULING, AND THAT IS THE POINT**: the graph's top level reads as an *ontology* and a column as an *object*, so four strings were respelled to net ZERO — the headline became the containment ladder `items in objects in ontologies` (±0), `op="map"`'s bullet lost `members`/`objects` for `items` (−4), and that −4 paid for `create_column`'s gloss naming an *object type* (+3) and `ONTOLOGY_ERRORS`' `ontology_not_found` noun (+1). Op names and arg names did not move then; they moved on 2026-09-23. // ⚠ **1,506 → 1,503 (2026-09-09): BANKED, NOT RAISED.** The CHANGELOG lane part 2 added one clause to `policy` — every ontology write is filed per field in the changelog, which is a fact an agent cannot derive from any op — and paid for it out of this same description: five glosses trimmed to what only they say (the headline's routing tail, `op="get"`'s "Version token", `op="anchor"`'s phrasing, `create_column`'s, and "an agent gets its operator's" losing a word the ladder already carries). The three chars left over are banked here rather than left as headroom, which is the discipline `knowledge.ts › KB_PROSE_BUDGET` states: a ratchet that fails on a SHRINK is how a win gets kept.
+const ONTOLOGY_PROSE_BUDGET = 1_572; // ⚠ **1,503 → 1,572 (2026-09-23): TWO NEW OPS, "history" and "restore"**, which `parity.test.ts` requires quoted; the served string stays under `HARD_DESCRIPTION_CEILING`. // ⚠ **UNMOVED AT 1,503 THROUGH THE 2026-09-11 VOCABULARY RULING, AND THAT IS THE POINT**: the graph's top level reads as an *ontology* and a column as an *object*, so four strings were respelled to net ZERO — the headline became the containment ladder `items in objects in ontologies` (±0), `op="map"`'s bullet lost `members`/`objects` for `items` (−4), and that −4 paid for `create_column`'s gloss naming an *object type* (+3) and `ONTOLOGY_ERRORS`' `ontology_not_found` noun (+1). Op names and arg names did not move then; they moved on 2026-09-23. // ⚠ **1,506 → 1,503 (2026-09-09): BANKED, NOT RAISED.** The CHANGELOG lane part 2 added one clause to `policy` — every ontology write is filed per field in the changelog, which is a fact an agent cannot derive from any op — and paid for it out of this same description: five glosses trimmed to what only they say (the headline's routing tail, `op="get"`'s "Version token", `op="anchor"`'s phrasing, `create_column`'s, and "an agent gets its operator's" losing a word the ladder already carries). The three chars left over are banked here rather than left as headroom, which is the discipline `knowledge.ts › KB_PROSE_BUDGET` states: a ratchet that fails on a SHRINK is how a win gets kept.
 /**
  * ⚠ RENDERED, NOT WRITTEN — `tool-style.ts › composeDescription` holds the
  * order for every tool on this surface.
@@ -177,12 +177,9 @@ caller = identity_1.UNKNOWN_CALLER) {
             return (0, ontology_ops_history_1.opHistory)(client, caller.userId, args);
         }
         if (args.op === "restore") {
-            const miss = (0, respond_1.missingParams)("restore", args, ["object", "revision", "expected_version"]);
-            if (miss)
-                return Promise.resolve(miss);
-            const stray = (0, respond_1.unusedParams)("restore", args, ["object", "revision", "expected_version"]);
-            if (stray)
-                return Promise.resolve(stray);
+            const bad = (0, respond_1.strictParams)("restore", args, ["object", "revision", "expected_version"]);
+            if (bad)
+                return Promise.resolve(bad);
             return (0, ontology_ops_history_1.opRestore)(client, args);
         }
         return (0, ontology_ops_write_1.dispatch)(client, args, caller);

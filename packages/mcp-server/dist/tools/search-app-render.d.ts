@@ -1,5 +1,5 @@
 /**
- * `dopl_search`'s six APP-SEARCH groups, rendered (DMP-004, 2026-09-23): channels, messages, threads,
+ * `dopl_search`'s six APP-SEARCH groups, rendered: channels, messages, threads,
  * artifacts, members, chats — the popup's own server search (`GET /api/search`), one container.
  *
  * ⚠ EVERY ROW ENDS ON ITS FOLLOW-UP ADDRESS — channel id, `seq`, thread id, artifact id, member id,

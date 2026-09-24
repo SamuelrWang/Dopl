@@ -1,5 +1,5 @@
 /**
- * `dopl_ontology` op="history" and op="restore" (DMP-002, 2026-09-23). History is PER FIELD — one
+ * `dopl_ontology` op="history" and op="restore". History is PER FIELD — one
  * row per changed field, the app Changelog's granularity — for one object (`object=`) or an
  * ontology's roll-up (`ontology=`). Restore targets one OBJECT.
  *
@@ -15,6 +15,7 @@ import { inlineOr, NO_NAME } from "./narration";
 import { ok, type ToolResponse } from "./respond";
 import { resolveOntologyRef, resolveObjectRef } from "./ontology-render";
 import {
+  HISTORY_OP,
   pageTail,
   restoreRefusal,
   revisionRow,
@@ -96,7 +97,7 @@ export async function opRestore(
   try {
     restored = await client.restoreOntologyObjectRevision(object.id, args.revision, args.expected_version);
   } catch (e) {
-    const mapped = restoreRefusal(e, 'op="get"', 'op="history"');
+    const mapped = restoreRefusal(e, 'op="get"', HISTORY_OP);
     if (mapped) return mapped;
     throw e;
   }

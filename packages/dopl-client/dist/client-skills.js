@@ -67,7 +67,7 @@ class SkillMethods extends client_channels_js_1.ChannelMethods {
     writeSkillBody(slug, body, expectedVersion) {
         return skills.writeSkillBody(this.transport, slug, body, expectedVersion);
     }
-    /** Body snapshots + structural events, newest first (DMP-002). */
+    /** Body snapshots + structural events, newest first. */
     getSkillHistory(slug, opts = {}) {
         return revisions.getSkillHistory(this.transport, slug, opts);
     }

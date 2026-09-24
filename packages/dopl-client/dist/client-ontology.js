@@ -71,7 +71,7 @@ class OntologyMethods extends client_knowledge_js_1.KnowledgeMethods {
     claimOntologyAnchor(objectId) {
         return ontology.claimOntologyAnchor(this.transport, objectId);
     }
-    /** One object's per-FIELD history, newest first (DMP-002). */
+    /** One object's per-FIELD history, newest first. */
     listOntologyObjectRevisions(objectId, opts = {}) {
         return revisions.listOntologyObjectRevisions(this.transport, objectId, opts);
     }

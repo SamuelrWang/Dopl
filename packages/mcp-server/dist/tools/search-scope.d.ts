@@ -1,16 +1,13 @@
 /**
- * One scope's search — four MCP-native reads plus the app's own search (DMP-004) — shared by `dopl_search`'s single-scope path and every
- * `scope="everywhere"` leg (P8-10). Only the renderers differ; what is read, matched, capped and
+ * One scope's search — four MCP-native reads plus the app's own search — shared by `dopl_search`'s
+ * single-scope path and every `scope="everywhere"` leg (P8-10). Only the renderers differ; what is read, matched, capped and
  * reported as partial is decided here once.
  */
 import type { AgentIdentity, AppSearchGroup, DoplClient, KnowledgeSearchHit, OntologyObjectSummary, Skill } from "@dopl/client";
 import type { AudienceLabel } from "./audience-label.js";
-/** The `partialRead` denominator — READS, not groups: the fifth read (the app's search) answers six. */
-export declare const SEARCH_READ_COUNT = 5;
 /** The app-search groups this tool renders, in the popup's order. Knowledge, skills and identities
  *  come from the four MCP-native reads (entries match on BODIES there, titles only in the app). */
 export declare const APP_GROUP_ORDER: readonly ["channels", "messages", "threads", "artifacts", "members", "chats"];
-export declare const APP_READ_LABEL = "Channels, messages, threads, artifacts, members and chats";
 export type Matcher = (...fields: Array<string | null | undefined>) => boolean;
 /** A capped group: the hits shown and how many matched before the cap. */
 export interface Group<T> {

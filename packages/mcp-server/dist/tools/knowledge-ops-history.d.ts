@@ -1,6 +1,6 @@
 /**
  * `dopl_kb` op="history" and op="restore" — one ENTRY's changelog, one revision read, and the
- * write-back (DMP-002, 2026-09-23). The app's Changelog panel reads the same route.
+ * write-back. The app's Changelog panel reads the same route.
  *
  * ⚠ `history` WITH `revision` IS THE PREVIEW: it prints the snapshot a restore would write and
  * the current Version to pass, so the old/new summary is in hand BEFORE the write.

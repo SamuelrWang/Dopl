@@ -1,5 +1,5 @@
 /**
- * THE APP'S GLOBAL SEARCH — `GET /api/search` (DMP-004, 2026-09-23). The same server implementation
+ * THE APP'S GLOBAL SEARCH — `GET /api/search`. The same server implementation
  * the search popup calls, so an agent and a person searching one container get one answer.
  *
  * ⚠ THE FENCE IS THE SERVER'S: every read behind the route enters through the caller's own

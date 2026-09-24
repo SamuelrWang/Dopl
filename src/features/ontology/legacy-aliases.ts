@@ -24,7 +24,7 @@ import { z } from "zod";
 import { OntologyObjectCreateSchema } from "./schema";
 
 /** The last desktop build that speaks the retired names. */
-export const LEGACY_LAST_VERSION = "1.36.0";
+const LEGACY_LAST_VERSION = "1.36.0";
 
 /** The retired names, each beside its successor. */
 const OLD_ID_PARAM = "clusterId";
@@ -37,6 +37,8 @@ function triple(v: string): [number, number, number] | null {
   return m ? [Number(m[1]), Number(m[2]), Number(m[3])] : null;
 }
 
+const LEGACY_LAST = triple(LEGACY_LAST_VERSION) as [number, number, number];
+
 /**
  * Does this request come from a desktop that reads the old response keys? Only a desktop sends
  * `X-Dopl-App-Version`, and it is a diagnostic claim, never authz — the worst a forged value buys
@@ -45,10 +47,9 @@ function triple(v: string): [number, number, number] | null {
 export function isLegacyOntologyClient(appVersion: string | undefined): boolean {
   if (!appVersion) return false;
   const have = triple(appVersion);
-  const last = triple(LEGACY_LAST_VERSION);
-  if (!have || !last) return false;
+  if (!have) return false;
   for (let i = 0; i < 3; i++) {
-    if (have[i] !== last[i]) return have[i] < last[i];
+    if (have[i] !== LEGACY_LAST[i]) return have[i] < LEGACY_LAST[i];
   }
   return true;
 }

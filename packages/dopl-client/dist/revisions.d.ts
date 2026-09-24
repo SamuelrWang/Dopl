@@ -1,5 +1,5 @@
 /**
- * HISTORY + RESTORE for durable content (DMP-002, 2026-09-23): knowledge entries, skills and
+ * HISTORY + RESTORE for durable content: knowledge entries, skills and
  * ontology objects. Every route here already existed for the app's Changelog panels and is
  * agent-reachable by design (a restore APPENDS a revision and destroys nothing, so none is
  * `sessionOnly`); the server's write gates — `assertBaseWritable` / `agent_write_enabled`, the

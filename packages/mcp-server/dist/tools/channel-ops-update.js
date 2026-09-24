@@ -4,16 +4,14 @@
  *
  * ⚠ `channel-` filename prefix required by the parity split-scan.
  *
- * ── THREE FIELDS, TWO GATES (DMP-001, 2026-09-23) ──────────────────────────
+ * ── THREE FIELDS, TWO GATES ────────────────────────────────────────────────
  *
  * `PATCH /api/channels/{id}` accepts four things and they do not share a gate:
  *   - `visibility` is field-level `sessionOnly` — an agent token is refused it
  *     outright, in the route, and nothing here goes near it.
  *   - `name` / `topic` ("description") are MANAGE writes (`canManageChannel`:
- *     the room's owner or a workspace admin). ⚠ They were withheld until
- *     2026-09-23 because no UI could make them (F-346, ruling Q12 (b)); the
- *     channel Info tab now saves both (`use-channel-header-writes.ts`), so the
- *     operator's undo is a click, and the agent reaches the same outcome here.
+ *     the room's owner or a workspace admin). The channel Info tab saves both
+ *     too (`use-channel-header-writes.ts`), so the operator's undo is a click.
  *     A non-manager is refused by NAME (`CHANNEL_MANAGE_REQUIRED`), not a 403.
  *   - `infoCard` is documented as *deliberately* agent-writable and gated on
  *     MEMBERSHIP rather than session (Samuel, 2026-08-25): it is the channel's

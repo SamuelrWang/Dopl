@@ -1,6 +1,6 @@
 /**
  * `dopl_kb` op="history" and op="restore" — one ENTRY's changelog, one revision read, and the
- * write-back (DMP-002, 2026-09-23). The app's Changelog panel reads the same route.
+ * write-back. The app's Changelog panel reads the same route.
  *
  * ⚠ `history` WITH `revision` IS THE PREVIEW: it prints the snapshot a restore would write and
  * the current Version to pass, so the old/new summary is in hand BEFORE the write.
@@ -16,6 +16,7 @@ import { isErr } from "./channel-shared";
 import { fenceBody } from "./untrusted-fence";
 import {
   foreignRevision,
+  HISTORY_OP,
   HISTORY_PAGE_DEFAULT,
   pageTail,
   restoreRefusal,
@@ -67,8 +68,6 @@ async function findRevision(
   }
   return null;
 }
-
-const HISTORY_OP = 'op="history"';
 
 export async function opHistory(
   client: DoplClient,
@@ -143,13 +142,13 @@ export async function opRestore(
   if (isErr(found)) return found;
   const { entry, chars } = found;
   if (entry.updatedAt !== expectedVersion) {
-    return staleBeforeRestore('op="history"', entry.updatedAt, expectedVersion);
+    return staleBeforeRestore(HISTORY_OP, entry.updatedAt, expectedVersion);
   }
   let restored: KnowledgeEntry;
   try {
     restored = await client.restoreKbEntryRevision(entry.id, revisionId, expectedVersion);
   } catch (e) {
-    const mapped = restoreRefusal(e, 'op="history"', HISTORY_OP) ?? agentWriteDenied(e);
+    const mapped = restoreRefusal(e, HISTORY_OP, HISTORY_OP) ?? agentWriteDenied(e);
     if (mapped) return mapped;
     throw e;
   }

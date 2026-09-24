@@ -1,7 +1,7 @@
 /**
- * HISTORY + RESTORE, the parts `dopl_kb`, `dopl_skill` and `dopl_ontology` share (DMP-002,
- * 2026-09-23): one row renderer, one restore-error mapper, and the two codes a restore refusal
- * leads with — so the three tools cannot describe one failure three ways.
+ * HISTORY + RESTORE, the parts `dopl_kb`, `dopl_skill` and `dopl_ontology` share: one row
+ * renderer, one restore-error mapper, and the two codes a restore refusal leads with — so the
+ * three tools cannot describe one failure three ways.
  *
  * ⚠ A RESTORE DESTROYS NOTHING: it writes an old snapshot back as a NEW revision, and the source
  * row stays. That is why the routes are agent-reachable (not `sessionOnly`); the server's write
@@ -23,7 +23,7 @@ export function revisionNotFound(historyOp: string): ToolError {
 }
 
 /** Emit-only: 409 `REVISION_NOT_RESTORABLE` — a move, a link, or a create/delete bundle. */
-export const REVISION_NOT_RESTORABLE: ToolError = {
+const REVISION_NOT_RESTORABLE: ToolError = {
   reason: "revision_not_restorable",
   meaning: "that revision holds nothing to write back (a move, a link, or a create/delete bundle); nothing changed",
   retry: "pick another revision",
@@ -32,8 +32,11 @@ export const REVISION_NOT_RESTORABLE: ToolError = {
 /** Default rows per history page; the server's own page cap bounds `limit`. */
 export const HISTORY_PAGE_DEFAULT = 20;
 
+/** The op every history refusal points back to. */
+export const HISTORY_OP = 'op="history"';
+
 /** Who wrote a row, relative to the caller. ⚠ Never a name: an id is the only unforgeable handle. */
-export function actorLabel(rev: ContentRevision, callerUserId: string | null): string {
+function actorLabel(rev: ContentRevision, callerUserId: string | null): string {
   if (rev.actor.userId && rev.actor.userId === callerUserId) {
     return rev.actor.kind === "agent" ? "your agent" : "you";
   }

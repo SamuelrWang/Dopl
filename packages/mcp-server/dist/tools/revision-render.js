@@ -1,17 +1,16 @@
 "use strict";
 /**
- * HISTORY + RESTORE, the parts `dopl_kb`, `dopl_skill` and `dopl_ontology` share (DMP-002,
- * 2026-09-23): one row renderer, one restore-error mapper, and the two codes a restore refusal
- * leads with — so the three tools cannot describe one failure three ways.
+ * HISTORY + RESTORE, the parts `dopl_kb`, `dopl_skill` and `dopl_ontology` share: one row
+ * renderer, one restore-error mapper, and the two codes a restore refusal leads with — so the
+ * three tools cannot describe one failure three ways.
  *
  * ⚠ A RESTORE DESTROYS NOTHING: it writes an old snapshot back as a NEW revision, and the source
  * row stays. That is why the routes are agent-reachable (not `sessionOnly`); the server's write
  * gates still apply, and every restore here carries the caller's `expected_version`.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.HISTORY_PAGE_DEFAULT = exports.REVISION_NOT_RESTORABLE = void 0;
+exports.HISTORY_OP = exports.HISTORY_PAGE_DEFAULT = void 0;
 exports.revisionNotFound = revisionNotFound;
-exports.actorLabel = actorLabel;
 exports.foreignRevision = foreignRevision;
 exports.revisionRow = revisionRow;
 exports.pageTail = pageTail;
@@ -29,13 +28,15 @@ function revisionNotFound(historyOp) {
     };
 }
 /** Emit-only: 409 `REVISION_NOT_RESTORABLE` — a move, a link, or a create/delete bundle. */
-exports.REVISION_NOT_RESTORABLE = {
+const REVISION_NOT_RESTORABLE = {
     reason: "revision_not_restorable",
     meaning: "that revision holds nothing to write back (a move, a link, or a create/delete bundle); nothing changed",
     retry: "pick another revision",
 };
 /** Default rows per history page; the server's own page cap bounds `limit`. */
 exports.HISTORY_PAGE_DEFAULT = 20;
+/** The op every history refusal points back to. */
+exports.HISTORY_OP = 'op="history"';
 /** Who wrote a row, relative to the caller. ⚠ Never a name: an id is the only unforgeable handle. */
 function actorLabel(rev, callerUserId) {
     if (rev.actor.userId && rev.actor.userId === callerUserId) {
@@ -68,7 +69,7 @@ function restoreRefusal(e, readOp, historyOp) {
     if (code === "REVISION_NOT_FOUND")
         return (0, respond_js_1.err)((0, tool_errors_js_1.refusal)(revisionNotFound(historyOp)));
     if (code === "REVISION_NOT_RESTORABLE")
-        return (0, respond_js_1.err)((0, tool_errors_js_1.refusal)(exports.REVISION_NOT_RESTORABLE));
+        return (0, respond_js_1.err)((0, tool_errors_js_1.refusal)(REVISION_NOT_RESTORABLE));
     return null;
 }
 /** Refused before any write: the Version the caller holds is not the current one. */

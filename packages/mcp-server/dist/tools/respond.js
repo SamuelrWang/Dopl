@@ -18,6 +18,7 @@ exports.creditsExhausted = creditsExhausted;
 exports.entitlementDenied = entitlementDenied;
 exports.missingParams = missingParams;
 exports.unusedParams = unusedParams;
+exports.strictParams = strictParams;
 const tool_errors_1 = require("./tool-errors");
 function ok(text) {
     return { content: [{ type: "text", text }] };
@@ -175,4 +176,9 @@ function unusedParams(op, args, allowed) {
     if (stray.length === 0)
         return null;
     return err((0, tool_errors_1.refusal)(tool_errors_1.UNUSED_PARAM, `op="${op}" does not take: ${stray.join(", ")}. It takes: ${allowed.join(", ")}.`));
+}
+/** An op's whole param contract in one call: `missingParams` over `required`, then `unusedParams`
+ *  over `required` + `optional`. */
+function strictParams(op, args, required, optional = []) {
+    return missingParams(op, args, required) ?? unusedParams(op, args, [...required, ...optional]);
 }

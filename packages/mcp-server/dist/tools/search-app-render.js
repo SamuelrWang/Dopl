@@ -1,6 +1,6 @@
 "use strict";
 /**
- * `dopl_search`'s six APP-SEARCH groups, rendered (DMP-004, 2026-09-23): channels, messages, threads,
+ * `dopl_search`'s six APP-SEARCH groups, rendered: channels, messages, threads,
  * artifacts, members, chats — the popup's own server search (`GET /api/search`), one container.
  *
  * ⚠ EVERY ROW ENDS ON ITS FOLLOW-UP ADDRESS — channel id, `seq`, thread id, artifact id, member id,
@@ -13,6 +13,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.APP_FOLLOW_UP = void 0;
 exports.appGroupLines = appGroupLines;
 const narration_js_1 = require("./narration.js");
+const search_scope_js_1 = require("./search-scope.js");
 const HEADINGS = {
     channels: "Channels",
     messages: "Messages",
@@ -52,7 +53,7 @@ function row(item) {
 function appGroupLines(groups, heading, opts) {
     const lines = [];
     const byKind = new Map(groups.map((g) => [g.kind, g]));
-    for (const kind of Object.keys(HEADINGS)) {
+    for (const kind of search_scope_js_1.APP_GROUP_ORDER) {
         const group = byKind.get(kind);
         if (!group && opts.skipEmpty)
             continue;

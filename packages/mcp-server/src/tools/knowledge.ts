@@ -10,7 +10,7 @@ import { OFFSET_FIELD, RESPONSE_FORMAT_FIELD } from "./response-size";
 import { composeDescription } from "./tool-style";
 import { KB_ERRORS } from "./tool-errors";
 import { UNKNOWN_CALLER, type CallerIdentity } from "./identity";
-import { err, missingParams, unusedParams, type RegisterTool, type ToolResponse } from "./respond";
+import { err, missingParams, strictParams, type RegisterTool, type ToolResponse } from "./respond";
 import { opHistory, opRestore } from "./knowledge-ops-history";
 import {
   opGetTree,
@@ -264,10 +264,8 @@ export function registerKnowledgeTools(
           return opSearch(client, args.query as string, args.base, args.limit);
         }
         case "history": {
-          const miss = missingParams("history", args, ["base", "path"]);
-          if (miss) return miss;
-          const stray = unusedParams("history", args, ["base", "path", "revision", "limit", "entry_cursor"]);
-          if (stray) return stray;
+          const bad = strictParams("history", args, ["base", "path"], ["revision", "limit", "entry_cursor"]);
+          if (bad) return bad;
           return opHistory(client, args.base as string, args.path as string, caller.userId, {
             revision: args.revision,
             limit: args.limit,
@@ -275,10 +273,8 @@ export function registerKnowledgeTools(
           });
         }
         case "restore": {
-          const miss = missingParams("restore", args, ["base", "path", "revision", "expected_version"]);
-          if (miss) return miss;
-          const stray = unusedParams("restore", args, ["base", "path", "revision", "expected_version"]);
-          if (stray) return stray;
+          const bad = strictParams("restore", args, ["base", "path", "revision", "expected_version"]);
+          if (bad) return bad;
           return opRestore(
             client,
             args.base as string,

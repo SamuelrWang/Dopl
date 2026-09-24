@@ -1,5 +1,5 @@
 /**
- * `dopl_ontology` op="history" and op="restore" (DMP-002, 2026-09-23). History is PER FIELD — one
+ * `dopl_ontology` op="history" and op="restore". History is PER FIELD — one
  * row per changed field, the app Changelog's granularity — for one object (`object=`) or an
  * ontology's roll-up (`ontology=`). Restore targets one OBJECT.
  *

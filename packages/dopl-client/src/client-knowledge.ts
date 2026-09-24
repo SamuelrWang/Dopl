@@ -138,7 +138,7 @@ export class KnowledgeMethods extends WorkspaceMethods {
     return kb.searchKb(this.transport, query, opts);
   }
 
-  /** One entry's changelog, newest first (DMP-002). Rows carry the post-write snapshot. */
+  /** One entry's changelog, newest first. Rows carry the post-write snapshot. */
   listKbEntryRevisions(entryId: string, opts: RevisionPageOpts = {}): Promise<ContentRevisionPage> {
     return revisions.listKbEntryRevisions(this.transport, entryId, opts);
   }

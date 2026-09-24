@@ -32,7 +32,7 @@ export class WorkspaceMethods extends DoplClientBase {
   }
 
   /** The app's global search over ONE container (`GET /api/search`), cross-domain like a grant. */
-  async searchContainer(query: string, containerId: string): Promise<AppSearchResponse> {
+  searchContainer(query: string, containerId: string): Promise<AppSearchResponse> {
     return search.searchContainer(this.transport, query, containerId);
   }
 

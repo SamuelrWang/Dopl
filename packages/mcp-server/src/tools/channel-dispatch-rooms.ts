@@ -20,7 +20,7 @@
  */
 
 import type { DoplClient } from "@dopl/client";
-import { err, missingParams, ok, unusedParams, type ToolResponse } from "./respond";
+import { err, missingParams, ok, strictParams, type ToolResponse } from "./respond";
 import { CHANNEL_DOCTRINE, doctrineSection } from "./channel-doctrine";
 import { CHANNEL_INPUT_SHAPE } from "./channel-schema";
 import { CHANNEL_ACTIONS, type RoomsAction } from "./channel-vocab";
@@ -134,21 +134,12 @@ export async function dispatchRoomsAction(
       );
     }
 
-    // ⚠ NAME, DESCRIPTION (`summary` → `topic`) AND THE INFO CARD (DMP-001,
-    // 2026-09-23 — F-346's "no UI can ask for it" stopped being true when the
-    // Info tab began saving both). `visibility` stays app-only and is REFUSED
-    // here by `unusedParams`, not dropped. ⚠ All three OMITTED is the READ — the
-    // card is replaced whole, so a blind write clobbers.
+    // ⚠ NAME, DESCRIPTION (`summary` → `topic`) AND THE INFO CARD. `visibility`
+    // stays app-only and is REFUSED here, not dropped. ⚠ All three OMITTED is the
+    // READ — the card is replaced whole, so a blind write clobbers.
     case "update": {
-      const miss = missingParams('rooms action="update"', args, ["channel"]);
-      if (miss) return miss;
-      const stray = unusedParams('rooms action="update"', args, [
-        "channel",
-        "name",
-        "summary",
-        "info_card",
-      ]);
-      if (stray) return stray;
+      const bad = strictParams('rooms action="update"', args, ["channel"], ["name", "summary", "info_card"]);
+      if (bad) return bad;
       return opUpdate(client, args.channel as string, {
         card: args.info_card,
         name: args.name,

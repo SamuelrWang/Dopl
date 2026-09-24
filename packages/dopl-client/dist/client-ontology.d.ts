@@ -31,7 +31,7 @@ export declare class OntologyMethods extends KnowledgeMethods {
     updateOntologyObject(objectId: string, patch: OntologyObjectPatch, expectedVersion?: string): Promise<OntologyObject>;
     deleteOntologyObject(objectId: string): Promise<void>;
     claimOntologyAnchor(objectId: string): Promise<OntologyObject>;
-    /** One object's per-FIELD history, newest first (DMP-002). */
+    /** One object's per-FIELD history, newest first. */
     listOntologyObjectRevisions(objectId: string, opts?: RevisionPageOpts): Promise<ContentRevisionPage>;
     /** The ontology roll-up: its own revisions and every object's in it. */
     listOntologyRevisions(ontologyId: string, opts?: RevisionPageOpts): Promise<ContentRevisionPage>;

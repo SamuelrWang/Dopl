@@ -21,7 +21,7 @@ export declare class SkillMethods extends ChannelMethods {
     deleteSkill(slug: string): Promise<void>;
     readSkillBody(slug: string): Promise<SkillFile>;
     writeSkillBody(slug: string, body: string, expectedVersion?: string | null): Promise<SkillWriteFileResult>;
-    /** Body snapshots + structural events, newest first (DMP-002). */
+    /** Body snapshots + structural events, newest first. */
     getSkillHistory(slug: string, opts?: {
         limit?: number;
     }): Promise<SkillHistory>;

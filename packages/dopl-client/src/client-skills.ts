@@ -57,7 +57,7 @@ export class SkillMethods extends ChannelMethods {
     return skills.writeSkillBody(this.transport, slug, body, expectedVersion);
   }
 
-  /** Body snapshots + structural events, newest first (DMP-002). */
+  /** Body snapshots + structural events, newest first. */
   getSkillHistory(slug: string, opts: { limit?: number } = {}): Promise<SkillHistory> {
     return revisions.getSkillHistory(this.transport, slug, opts);
   }

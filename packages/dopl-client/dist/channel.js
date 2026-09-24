@@ -181,8 +181,7 @@ async function createChannel(t, input) {
  * `PATCH /api/channels/{id}` also accepts `visibility`, which is field-level
  * `sessionOnly` — an agent token is refused it outright, so
  * {@link ChannelUpdateInput} does not carry it. `name` / `topic` are MANAGE
- * writes (owner or workspace admin); they were withheld under F-346 until the
- * channel Info tab could edit both (2026-09-23, DMP-001).
+ * writes (owner or workspace admin).
  *
  * `infoCard` is intentionally AGENT-WRITABLE and gated on MEMBERSHIP rather than
  * session: the card is the channel's shared scratch surface and changes no
