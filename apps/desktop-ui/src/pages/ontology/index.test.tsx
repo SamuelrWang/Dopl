@@ -9,7 +9,7 @@ import {
 } from "#/test-utils/bridge";
 import OntologyPage from "./index";
 import OntologyDetailPage from "./detail";
-import { CLUSTER_ID, SEGMENT, WORKSPACE_ID, ontologyBridge } from "./test-fixtures";
+import { ONTOLOGY_ID, SEGMENT, WORKSPACE_ID, ontologyBridge } from "./test-fixtures";
 
 /**
  * Ontology smoke test: REAL `OntologyView` (name dropdown → kanban lanes → object
@@ -19,7 +19,7 @@ import { CLUSTER_ID, SEGMENT, WORKSPACE_ID, ontologyBridge } from "./test-fixtur
  *
  * ⚠ **THE HEADER IS THE BOARD'S, AND IT WAS RESTYLED ON 2026-09-10** — the ruling
  * landed on /home's face and this page mounts the same component, so the tab
- * strip is gone here too: the cluster's NAME is the dropdown trigger (with
+ * strip is gone here too: the ontology's NAME is the dropdown trigger (with
  * "+ Ontology" in it), the gear menu holds Rename and the header button
  * is the black "+ Object". This suite is the proof that the second surface moved
  * with the first.
@@ -38,9 +38,9 @@ const apiRequest = vi.hoisted(() => vi.fn());
 
 const calls = () => bridgeCalls(apiRequest);
 
-/** The board's open cluster — the dropdown trigger's own words (it was an input
+/** The board's open ontology — the dropdown trigger's own words (it was an input
  *  with a display value until 2026-09-10). */
-function openClusterName(): string {
+function openOntologyName(): string {
   return screen.getByTitle("Switch ontology").textContent ?? "";
 }
 
@@ -60,7 +60,7 @@ function renderOntology(entry = `/${SEGMENT}/ontology`) {
   const { router } = renderWithProviders(
     [
       { path: "/:workspaceSegment/ontology", element: <OntologyPage /> },
-      { path: "/:workspaceSegment/ontology/:clusterSlug", element: <OntologyDetailPage /> },
+      { path: "/:workspaceSegment/ontology/:ontologySlug", element: <OntologyDetailPage /> },
     ],
     [entry]
   );
@@ -78,11 +78,11 @@ describe("ontology page", () => {
     installBridge({ apiRequest });
   });
 
-  it("resolves the workspace, then renders the first cluster's board", async () => {
+  it("resolves the workspace, then renders the first ontology's board", async () => {
     renderOntology();
 
     await screen.findByTitle("Switch ontology");
-    expect(openClusterName()).toBe("Revenue");
+    expect(openOntologyName()).toBe("Revenue");
     expect(screen.getByDisplayValue("Accounts")).toBeInTheDocument();
     expect(screen.getByText("Acme Corp")).toBeInTheDocument();
 
@@ -96,16 +96,16 @@ describe("ontology page", () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 
-  it("honours the deep-linked cluster slug as the fallback selector", async () => {
+  it("honours the deep-linked ontology slug as the fallback selector", async () => {
     renderOntology(`/${SEGMENT}/ontology/delivery`);
 
     await screen.findByTitle("Switch ontology");
-    expect(openClusterName()).toBe("Delivery");
-    // `Accounts` is `Revenue`'s COLUMN — a lane header input, not the cluster.
+    expect(openOntologyName()).toBe("Delivery");
+    // `Accounts` is `Revenue`'s COLUMN — a lane header input, not the ontology.
     expect(screen.queryByDisplayValue("Accounts")).not.toBeInTheDocument();
   });
 
-  it("replaces the URL with the selected cluster's slug, with no history entry", async () => {
+  it("replaces the URL with the selected ontology's slug, with no history entry", async () => {
     const router = renderOntology();
     await screen.findByTitle("Switch ontology");
 
@@ -143,7 +143,7 @@ describe("ontology page", () => {
     );
   });
 
-  it("deletes the open cluster, naming its cascade", async () => {
+  it("deletes the open ontology, naming its cascade", async () => {
     const router = renderOntology();
     await screen.findByTitle("Switch ontology");
 
@@ -153,7 +153,7 @@ describe("ontology page", () => {
       within(openGear()).getByRole("menuitem", { name: "Delete" })
     );
 
-    // Count is the point of the copy: "cluster" undersells what a permanent
+    // Count is the point of the copy: "ontology" undersells what a permanent
     // cascade delete takes (the column + its card).
     expect(
       await screen.findByText(
@@ -167,12 +167,12 @@ describe("ontology page", () => {
       expect(
         calls().some(
           (c) =>
-            c.path === `/api/ontology/clusters/${CLUSTER_ID}` && c.opts.method === "DELETE"
+            c.path === `/api/ontology/ontologies/${ONTOLOGY_ID}` && c.opts.method === "DELETE"
         )
       ).toBe(true)
     );
-    // Selection lands on the ADJACENT cluster, address bar included.
-    await waitFor(() => expect(openClusterName()).toBe("Delivery"));
+    // Selection lands on the ADJACENT ontology, address bar included.
+    await waitFor(() => expect(openOntologyName()).toBe("Delivery"));
     await waitFor(() =>
       expect(router.state.location.pathname).toBe(`/${SEGMENT}/ontology/delivery`)
     );
@@ -193,7 +193,7 @@ describe("ontology page", () => {
     renderOntology();
 
     await screen.findByTitle("Switch ontology");
-    expect(openClusterName()).toBe("Revenue");
+    expect(openOntologyName()).toBe("Revenue");
     // The create row inside the name dropdown and the header's "+ Object" are
     // both member+ affordances.
     fireEvent.click(screen.getByTitle("Switch ontology"));
@@ -204,7 +204,7 @@ describe("ontology page", () => {
 
   /**
    * 🔒 BOTH SURFACES WEAR ONE HEADER (2026-09-10). The strip is DELETED, not
-   * hidden: `cluster-switcher.tsx` has a single face now.
+   * hidden: `ontology-switcher.tsx` has a single face now.
    */
   it("wears /home's header — name dropdown, gear, black + Object, no pills", async () => {
     renderOntology();
@@ -213,7 +213,7 @@ describe("ontology page", () => {
     const object = screen.getByRole("button", { name: "Object" });
     expect(object.className).toMatch(/auth-btn-3d/);
     expect(screen.getByRole("button", { name: /^Settings for Revenue/ })).toBeInTheDocument();
-    // The other clusters are BEHIND the trigger, never beside it as pills.
+    // The other ontologies are BEHIND the trigger, never beside it as pills.
     expect(screen.queryByRole("button", { name: /^Delivery/ })).not.toBeInTheDocument();
     // 🔒 THE DOTTED GRID IS BACK ON THIS SURFACE TOO (Samuel, 2026-09-11) — one
     // board component, so the workspace page moved with /home.
@@ -241,7 +241,7 @@ describe("ontology page", () => {
     await screen.findByTitle("Switch ontology");
 
     expect(screen.queryByRole("button", { name: /^Delete Revenue/ })).toBeNull();
-    expect(screen.queryByTitle("Delete cluster")).toBeNull();
+    expect(screen.queryByTitle("Delete ontology")).toBeNull();
 
     const menu = within(openGear());
     expect(menu.getAllByRole("menuitem", { name: "Delete" })).toHaveLength(1);
@@ -252,7 +252,7 @@ describe("ontology page", () => {
    * 🔒 **RENAME MOVED WITH THE HEADER** — the name is a dropdown trigger here too,
    * so the gear's row is this page's only rename as well.
    */
-  it("renames from the gear row, PATCHing the cluster", async () => {
+  it("renames from the gear row, PATCHing the ontology", async () => {
     renderOntology();
     await screen.findByTitle("Switch ontology");
 
@@ -265,12 +265,12 @@ describe("ontology page", () => {
     fireEvent.change(field, { target: { value: "Bookings" } });
     fireEvent.keyDown(field, { key: "Enter" });
 
-    await waitFor(() => expect(openClusterName()).toBe("Bookings"));
+    await waitFor(() => expect(openOntologyName()).toBe("Bookings"));
     await waitFor(
       () => {
         const patch = calls().find(
           (c) =>
-            c.path === `/api/ontology/clusters/${CLUSTER_ID}` &&
+            c.path === `/api/ontology/ontologies/${ONTOLOGY_ID}` &&
             c.opts.method === "PATCH"
         );
         expect(patch?.opts.body).toMatchObject({ name: "Bookings" });
@@ -289,11 +289,11 @@ describe("ontology page", () => {
     fireEvent.keyDown(field, { key: "Escape" });
 
     await screen.findByTitle("Switch ontology");
-    expect(openClusterName()).toBe("Revenue");
+    expect(openOntologyName()).toBe("Revenue");
     expect(
       calls().some(
         (c) =>
-          c.path === `/api/ontology/clusters/${CLUSTER_ID}` &&
+          c.path === `/api/ontology/ontologies/${ONTOLOGY_ID}` &&
           c.opts.method === "PATCH"
       )
     ).toBe(false);

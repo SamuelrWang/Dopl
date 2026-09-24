@@ -80,7 +80,7 @@ describe("the controls", () => {
     expect(within(menu).getByRole("menuitem", { name: "Rename" })).toBeInTheDocument();
   });
 
-  it("writes the agents rung to the CLUSTER's own PATCH", async () => {
+  it("writes the agents rung to the ONTOLOGY's own PATCH", async () => {
     renderHome();
     await openOntologyFace();
     await openOntologySwitcher();
@@ -93,7 +93,7 @@ describe("the controls", () => {
     await waitFor(() => {
       const patch = bridgeCalls(apiRequest).find(
         (c) =>
-          c.path === `/api/ontology/clusters/${ROSTER_ID}` &&
+          c.path === `/api/ontology/ontologies/${ROSTER_ID}` &&
           c.opts.method === "PATCH"
       );
       expect(patch?.opts.body).toEqual({ agentsMayEdit: false });
@@ -132,9 +132,9 @@ describe("what this face deliberately does not do", () => {
       c.path.includes("/shares")
     );
     // ⚠ NO SHARE READ ON FIRST PAINT. The board's own header says nothing about
-    // sharing; the per-cluster read is the DIALOG's.
+    // sharing; the per-ontology read is the DIALOG's.
     expect(shares).toHaveLength(0);
-    expect(PIPELINE_ID).toBe("cluster-pipeline");
+    expect(PIPELINE_ID).toBe("ontology-pipeline");
   });
 });
 
@@ -172,7 +172,7 @@ describe("renaming", () => {
     expect(screen.queryByTitle("Switch ontology")).toBeNull();
   });
 
-  it("PATCHes the cluster's name on Enter", async () => {
+  it("PATCHes the ontology's name on Enter", async () => {
     const field = await startRename();
 
     fireEvent.change(field, { target: { value: "Deal flow" } });
@@ -183,7 +183,7 @@ describe("renaming", () => {
       () => {
         const patch = bridgeCalls(apiRequest).find(
           (c) =>
-            c.path === `/api/ontology/clusters/${PIPELINE_ID}` &&
+            c.path === `/api/ontology/ontologies/${PIPELINE_ID}` &&
             c.opts.method === "PATCH"
         );
         expect(patch?.opts.body).toMatchObject({ name: "Deal flow" });
@@ -203,7 +203,7 @@ describe("renaming", () => {
     expect(
       bridgeCalls(apiRequest).some(
         (c) =>
-          c.path === `/api/ontology/clusters/${PIPELINE_ID}` &&
+          c.path === `/api/ontology/ontologies/${PIPELINE_ID}` &&
           c.opts.method === "PATCH"
       )
     ).toBe(false);

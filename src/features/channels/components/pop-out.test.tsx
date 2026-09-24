@@ -17,7 +17,7 @@
  *
  * ⚠ THE PLACEMENT IS NOW AN ORDER, NOT ONLY A PRESENCE (Samuel, 2026-08-19). It sat beside
  * the breadcrumb until then, on the left of a header whose right side held the whole
- * channel-management cluster. The cluster moved to the Settings tab, and this button moved
+ * channel-management group. The group moved to the Settings tab, and this button moved
  * to where it acts: immediately LEFT of the info toggle, wearing the same `IconButton`
  * face. A test that only asked "is it in the header" would stay green through the move.
  */
@@ -179,7 +179,7 @@ describe("the header slot", () => {
   });
 
   it("leaves NOTHING else on the right of the header", () => {
-    // The action cluster (settings / folder / invite / kebab) moved to the
+    // The action group (settings / folder / invite / kebab) moved to the
     // Settings tab and the inert sparkle was deleted outright — a decorative
     // button with no handler is not a feature to rehome (Samuel, 2026-08-19).
     withBridge(vi.fn(async () => ({ ok: true })));

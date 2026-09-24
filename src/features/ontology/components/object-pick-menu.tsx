@@ -37,8 +37,8 @@ export function ObjectPickMenu({
 
 function buildItems(graph: GraphState): PickMenuItem[] {
   const items: PickMenuItem[] = [];
-  for (const cluster of graph.clusters) {
-    for (const colId of cluster.columnIds) {
+  for (const ontology of graph.ontologies) {
+    for (const colId of ontology.columnIds) {
       const col = graph.objects[colId];
       if (!col) continue;
       const colName = col.name || "Untitled object";

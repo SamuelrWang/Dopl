@@ -193,7 +193,7 @@ const DEMO_SKILLS: DemoSkill[] = [
         <H2>Step 2 — Create in an object</H2>
         <P>
           Items live in objects inside an ontology (<Code>dopl_ontology</Code>{" "}
-          op=<Code>create_cluster</Code> / <Code>create_column</Code> /{" "}
+          op=<Code>create_ontology</Code> / <Code>create_column</Code> /{" "}
           <Code>create_object</Code>). Set the object&apos;s{" "}
           <Code>template</Code> fields so every new item inherits sensible
           empty attributes.

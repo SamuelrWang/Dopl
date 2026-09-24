@@ -3,7 +3,7 @@
 /**
  * Channels — the right panel's SETTINGS tab (Samuel, 2026-08-19).
  *
- * ⚠ THIS TAB IS WHERE THE PANE HEADER'S ACTION CLUSTER WENT. `message-pane.tsx`
+ * ⚠ THIS TAB IS WHERE THE PANE HEADER'S ACTION GROUP WENT. `message-pane.tsx`
  * used to carry six controls on the right of the breadcrumb — channel settings,
  * the working folder, invite, the kebab, an inert sparkle and the info toggle.
  * The ruling is that the CHANNEL header keeps only the info toggle, so the four

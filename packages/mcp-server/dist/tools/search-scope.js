@@ -22,7 +22,7 @@ exports.SEARCH_READ_COUNT = 5;
 exports.APP_GROUP_ORDER = ["channels", "messages", "threads", "artifacts", "members", "chats"];
 exports.APP_READ_LABEL = "Channels, messages, threads, artifacts, members and chats";
 const EMPTY_APP = { q: "", scope: "container", tookMs: 0, groups: [] };
-const EMPTY_ONTOLOGY = { clusters: [], objects: {} };
+const EMPTY_ONTOLOGY = { ontologies: [], objects: {} };
 const EMPTY_IDENTITIES = { identities: [] };
 const EMPTY_IDS = Object.freeze([]);
 /**

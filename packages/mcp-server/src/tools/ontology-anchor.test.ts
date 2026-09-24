@@ -32,7 +32,7 @@ const OBJECT = {
   updatedAt: "2026-07-31T00:00:00Z",
 };
 
-const SNAPSHOT = { clusters: [], objects: { "obj-1": OBJECT } };
+const SNAPSHOT = { ontologies: [], objects: { "obj-1": OBJECT } };
 
 function client(anchor: unknown): DoplClient {
   return stub({

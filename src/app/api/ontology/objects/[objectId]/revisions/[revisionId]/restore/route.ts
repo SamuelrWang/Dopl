@@ -11,7 +11,7 @@ import { restoreObjectRevision } from "@/features/ontology/server/service-revisi
  * ONE FIELD's prior value back.
  *
  * 🔒 **REFUSED AT `view`.** The service gate is `requireObject(…, "edit")` —
- * Q9's every-cluster write gate — so a lent reader granted `view` gets the same
+ * Q9's every-ontology write gate — so a lent reader granted `view` gets the same
  * 404 every other ontology write gives them. `minRole: "guest"` matches the
  * sibling `PATCH /api/ontology/objects/{objectId}`; the LEVEL is the fence.
  *

@@ -20,7 +20,7 @@ import { type ToolResponse } from "./respond";
  *
  * ⚠ **THE SPLIT KEYS ON THE ANSWER, NOT ON THE QUESTION**, the same rule
  * `opListBases` states: an ABSENT key means "not answered" and puts every
- * cluster in the unlabelled group, which is byte-identical to what this render
+ * ontology in the unlabelled group, which is byte-identical to what this render
  * did before the field existed. It never files a row under a shelf it did not
  * measure.
  *
@@ -33,7 +33,7 @@ import { type ToolResponse } from "./respond";
  */
 export declare function personalShelfGroups<T extends {
     id: string;
-}>(clusters: readonly T[], personalClusterIds: readonly string[] | undefined): Array<readonly [string | null, readonly T[]]>;
+}>(ontologies: readonly T[], personalOntologyIds: readonly string[] | undefined): Array<readonly [string | null, readonly T[]]>;
 export type Resolved<T> = {
     hit: T;
 } | {
@@ -57,7 +57,7 @@ export interface ObjectRefFields {
     name: string;
     childIds: string[];
 }
-export interface ClusterRefFields {
+export interface OntologyRefFields {
     id: string;
     slug: string;
     name: string;
@@ -65,8 +65,8 @@ export interface ClusterRefFields {
 export declare function resolveObjectRef<T extends ObjectRefFields>(snapshot: {
     objects: Record<string, T>;
 }, ref: string): Resolved<T>;
-export declare function resolveClusterRef<T extends ClusterRefFields>(snapshot: {
-    clusters: T[];
+export declare function resolveOntologyRef<T extends OntologyRefFields>(snapshot: {
+    ontologies: T[];
 }, ref: string): Resolved<T>;
 export type ResourceHandles = Map<string, {
     name: string;

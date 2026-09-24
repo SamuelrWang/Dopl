@@ -1,27 +1,27 @@
 "use client";
 
 import { ConfirmDialog } from "@/shared/ui/confirm-dialog";
-import { clusterObjectIds, type GraphState } from "../graph-state";
-import type { OntologyCluster } from "../types";
+import { ontologyObjectIds, type GraphState } from "../graph-state";
+import type { Ontology } from "../types";
 
 interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   graph: GraphState;
-  cluster: OntologyCluster;
+  ontology: Ontology;
   onConfirm: () => void;
 }
 
 /**
- * Confirm gate for a cascade cluster delete. Must name the cluster and the exact
- * object count — the count is the only thing telling the user a "cluster" delete
+ * Confirm gate for a cascade ontology delete. Must name the ontology and the exact
+ * object count — the count is the only thing telling the user a "ontology" delete
  * is really a board delete.
  */
-export function DeleteClusterDialog({
+export function DeleteOntologyDialog({
   open,
   onOpenChange,
   graph,
-  cluster,
+  ontology,
   onConfirm,
 }: Props) {
   return (
@@ -29,9 +29,9 @@ export function DeleteClusterDialog({
       open={open}
       onOpenChange={onOpenChange}
       title="Delete ontology?"
-      description={deleteClusterMessage(
-        cluster.name,
-        clusterObjectIds(graph, cluster.id).length
+      description={deleteOntologyMessage(
+        ontology.name,
+        ontologyObjectIds(graph, ontology.id).length
       )}
       confirmLabel="Delete permanently"
       destructive
@@ -40,9 +40,9 @@ export function DeleteClusterDialog({
   );
 }
 
-/** Confirm copy: names the cluster + how many objects go with it (columns +
+/** Confirm copy: names the ontology + how many objects go with it (columns +
  *  nested cards). `count` = the same cascade set the server deletes. */
-function deleteClusterMessage(name: string, count: number): string {
+function deleteOntologyMessage(name: string, count: number): string {
   const label = name || "this ontology";
   if (count === 0) {
     return `This permanently deletes "${label}". This can't be undone.`;

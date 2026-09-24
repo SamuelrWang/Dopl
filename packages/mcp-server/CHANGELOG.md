@@ -4,6 +4,14 @@ All notable changes to `@dopl/mcp-server` are documented here. Format follows [K
 
 ## [Unreleased]
 
+### Changed — BREAKING: `dopl_ontology` speaks one word (2026-09-23)
+
+- Ops `create_ontology` / `update_ontology`, arg `ontology=`, error code
+  `ontology_not_found`. The retired arg and op names are never accepted; the
+  refusal names the successor (`src/legacy-aliases.ts`, removed once the
+  desktop floor reaches 1.37.0).
+- Depends on `@dopl/client` ^0.14.0.
+
 ### Changed — waiting on a channel is a HOLD, never a poll (2026-09-03)
 
 - **One canonical statement.** `dopl://doctrine/channels` gains a `waiting`

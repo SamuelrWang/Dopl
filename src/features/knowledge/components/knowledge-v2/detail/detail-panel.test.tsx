@@ -29,7 +29,7 @@ vi.mock("@/features/revisions/client/api", () => ({
   fetchEntryRevisions: vi.fn(async () => ({ revisions: [], nextCursor: null })),
   fetchBaseRevisions: vi.fn(async () => ({ revisions: [], nextCursor: null })),
   fetchOntologyObjectRevisions: vi.fn(async () => ({ revisions: [], nextCursor: null })),
-  fetchOntologyClusterRevisions: vi.fn(async () => ({ revisions: [], nextCursor: null })),
+  fetchOntologyRevisions: vi.fn(async () => ({ revisions: [], nextCursor: null })),
   restoreEntryRevision: vi.fn(),
   restoreOntologyObjectRevision: vi.fn(),
 }));

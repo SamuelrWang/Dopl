@@ -96,7 +96,7 @@ export function InlineUnderlineField({
 }
 
 /**
- * The ontology's description, hinted "Description". Saves through `CLUSTER_UPDATE`
+ * The ontology's description, hinted "Description". Saves through `ONTOLOGY_UPDATE`
  * at `purpose`, debounced by the store — "purpose" is still what agents read.
  */
 export function DescriptionField({
@@ -135,7 +135,7 @@ export function NameField({
   onCancel,
 }: {
   name: string;
-  /** The existing `CLUSTER_UPDATE.name` path — never called with "". */
+  /** The existing `ONTOLOGY_UPDATE.name` path — never called with "". */
   onCommit: (next: string) => void;
   /** Leave the rename face untouched (Escape, empty, or no change). */
   onCancel: () => void;
@@ -188,12 +188,12 @@ export function NameField({
  * `.page-float`, where a trigger-anchored panel renders as a clipped sliver.
  */
 export function BoardSettingsMenu({
-  clusterName,
+  ontologyName,
   onRename,
   hostRows,
   onDelete,
 }: {
-  clusterName: string;
+  ontologyName: string;
   /** Member+ only — a viewer gets the host's rows and no edits. */
   onRename?: () => void;
   hostRows?: (close: () => void) => ReactNode;
@@ -211,7 +211,7 @@ export function BoardSettingsMenu({
         ref={triggerRef}
         type="button"
         title="Ontology settings"
-        aria-label={`Settings for ${clusterName || "ontology"}`}
+        aria-label={`Settings for ${ontologyName || "ontology"}`}
         aria-haspopup="menu"
         aria-expanded={anchor !== null}
         onClick={() => {

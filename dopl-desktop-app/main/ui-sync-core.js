@@ -37,11 +37,11 @@
 // refuse the whole channel, i.e. no live updates at all.
 // THE 5 `workflow_*` TABLES LEFT 2026-08-07 (Phase 5 / D8), PAIRED with migration
 // 20260807100000 — dropping the publication alone leaves a binding that joins, says SUBSCRIBED
-// and delivers nothing. They and `clusters` were DROPPED by 20260811120000, with the feature.
+// and delivers nothing. They and the legacy graph table were DROPPED by 20260811120000, with the feature.
 const SYNC_TABLES = Object.freeze([
   'knowledge_bases', 'knowledge_folders', 'knowledge_entries',
   'skills', 'skill_versions',
-  'ontology_clusters', 'ontology_objects', 'ontology_memberships',
+  'ontologies', 'ontology_objects', 'ontology_memberships',
   'ontology_relationships',
   'chats', 'chat_messages', 'chat_folders',
   'channel_consent_requests', 'channels', 'channel_members',

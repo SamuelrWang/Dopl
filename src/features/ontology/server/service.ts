@@ -4,13 +4,13 @@ import { HttpError } from "@/shared/lib/http-error";
 import { slugify } from "@/shared/lib/slug/slugify";
 import type { Role } from "@/features/workspaces/types";
 import type {
-  OntologyCluster,
+  Ontology,
   OntologyContext,
   OntologyObject,
 } from "../types";
 import type {
-  OntologyClusterCreateInput,
-  OntologyClusterUpdateInput,
+  OntologyCreateInput,
+  OntologyUpdateInput,
   OntologyObjectCreateInput,
   OntologyObjectUpdateInput,
 } from "../schema";
@@ -21,20 +21,20 @@ import * as narrow from "./repository-projections";
 import { resolveOntologyAudience } from "./service-audience";
 import {
   admittedObjectIds,
-  assertCanCreateCluster,
-  requireCluster,
+  assertCanCreateOntology,
+  requireOntology,
   requireObject,
 } from "./service-gates";
-import { mapClusterRow, getSnapshot, getSummary } from "./service-reads";
+import { mapOntologyRow, getSnapshot, getSummary } from "./service-reads";
 import { getReach } from "./service-reach";
 // Awaited, after the write, inside the request (`./service-revisions.ts`).
 import {
   edgeSnapshot,
   recordAnchorRevision,
   recordAssociationRevision,
-  recordClusterCreate,
-  recordClusterDelete,
-  recordClusterFieldChanges,
+  recordOntologyCreate,
+  recordOntologyDelete,
+  recordOntologyFieldChanges,
   recordMembershipCreate,
   recordObjectCreate,
   recordObjectDelete,
@@ -90,14 +90,14 @@ export function buildOntologyContext(auth: AuthLike): OntologyContext {
   };
 }
 
-export async function createCluster(
+export async function createOntology(
   ctx: OntologyContext,
-  input: OntologyClusterCreateInput
-): Promise<OntologyCluster> {
-  await assertCanCreateCluster(ctx);
-  const slugs = await narrow.listClusterSlugs(ctx.workspaceId);
-  const slug = slugify(input.name, "cluster", slugs);
-  const row = await repo.insertCluster({
+  input: OntologyCreateInput
+): Promise<Ontology> {
+  await assertCanCreateOntology(ctx);
+  const slugs = await narrow.listOntologySlugs(ctx.workspaceId);
+  const slug = slugify(input.name, "ontology", slugs);
+  const row = await repo.insertOntology({
     workspaceId: ctx.workspaceId,
     slug,
     name: input.name,
@@ -106,16 +106,16 @@ export async function createCluster(
     createdBy: ctx.userId,
     source: ctx.source,
   });
-  await recordClusterCreate(ctx, row);
-  return mapClusterRow(row);
+  await recordOntologyCreate(ctx, row);
+  return mapOntologyRow(row);
 }
 
-export async function updateCluster(
+export async function updateOntology(
   ctx: OntologyContext,
-  clusterId: string,
-  input: OntologyClusterUpdateInput
-): Promise<OntologyCluster> {
-  const gated = await requireCluster(ctx, clusterId, "edit");
+  ontologyId: string,
+  input: OntologyUpdateInput
+): Promise<Ontology> {
+  const gated = await requireOntology(ctx, ontologyId, "edit");
   // Containment: the solo toggle decides what THIS SESSION's class may do, so
   // a session that could write it would be one call from re-widening itself
   // (`channels/[channelId]/members`' `agentToolProfile` argument, one layer lower
@@ -127,36 +127,36 @@ export async function updateCluster(
       "Whether your agents may edit this ontology is a human-only setting."
     );
   }
-  const row = await repo.updateCluster(gated.workspace_id, clusterId, input, {
+  const row = await repo.updateOntology(gated.workspace_id, ontologyId, input, {
     userId: ctx.userId,
     source: ctx.source,
   });
   if (!row) throw HttpError.notFound("Ontology not found");
   // `gated` is the BEFORE state, so the diff costs no second read. A
   // layout-only drag changes no TRACKED field and records nothing
-  // (`./service-revisions.ts › clusterFields`).
-  await recordClusterFieldChanges(ctx, gated, row);
-  return mapClusterRow(row);
+  // (`./service-revisions.ts › ontologyFields`).
+  await recordOntologyFieldChanges(ctx, gated, row);
+  return mapOntologyRow(row);
 }
 
 /**
- * Cascade HARD-delete cluster + every object it owns, one atomic RPC.
+ * Cascade HARD-delete ontology + every object it owns, one atomic RPC.
  * Permanent: no trash/restore/purge. Must stay one transaction — two writes
- * can delete the objects and leave the cluster behind. Returns objects
- * cascaded; RPC null = no live cluster → 404 (≠ a cluster that owned 0).
+ * can delete the objects and leave the ontology behind. Returns objects
+ * cascaded; RPC null = no live ontology → 404 (≠ an ontology that owned 0).
  *
  * Q4 — the share rows cascade by FK (`ontology_channel_shares.ontology_id
  * ON DELETE CASCADE`, spec §3.1). Nothing here deletes them by hand: a
  * hand-written cascade beside a declared one is the copy that stops matching.
  */
-export async function deleteCluster(
+export async function deleteOntology(
   ctx: OntologyContext,
-  clusterId: string
+  ontologyId: string
 ): Promise<number> {
-  const gated = await requireCluster(ctx, clusterId, "edit");
-  const count = await repo.cascadeHardDeleteCluster(gated.workspace_id, clusterId);
+  const gated = await requireOntology(ctx, ontologyId, "edit");
+  const count = await repo.cascadeHardDeleteOntology(gated.workspace_id, ontologyId);
   if (count === null) throw HttpError.notFound("Ontology not found");
-  await recordClusterDelete(ctx, gated, count);
+  await recordOntologyDelete(ctx, gated, count);
   return count;
 }
 
@@ -165,15 +165,15 @@ export async function createObject(
   input: OntologyObjectCreateInput
 ): Promise<OntologyObject> {
   // The write gate comes FIRST and decides the container: a column lands in
-  // its cluster's, a card in its parent's. Q9 applies through `requireObject`
-  // for the parent case — a card inherits the parent's cluster set, so the
-  // parent's ALL-clusters `edit` is the same question asked one row up.
+  // its ontology's, a card in its parent's. Q9 applies through `requireObject`
+  // for the parent case — a card inherits the parent's ontology set, so the
+  // parent's ALL-ontologies `edit` is the same question asked one row up.
   let workspaceId: string;
   let attributes: OntologyObject["attributes"] | undefined;
   let methods: OntologyObject["methods"] | undefined;
   let inheritedEdges: OntologyObject["relationships"] | undefined;
-  if (input.clusterId) {
-    workspaceId = (await requireCluster(ctx, input.clusterId, "edit")).workspace_id;
+  if (input.ontologyId) {
+    workspaceId = (await requireOntology(ctx, input.ontologyId, "edit")).workspace_id;
   } else {
     const parent = await requireObject(ctx, input.parentObjectId as string, "edit");
     workspaceId = parent.workspace_id;
@@ -192,7 +192,7 @@ export async function createObject(
   }
 
   // Sole create-time choke point for free-plan object cap. Columns + nested
-  // cards land here; createCluster inserts no object row so it isn't gated.
+  // cards land here; createOntology inserts no object row so it isn't gated.
   // Freeze-don't-delete: only creation blocked, never updates/deletes/reads.
   // Billed to the ROW's container, which is the OWNER's when a peer creates
   // inside a lent ontology (R11, and `credits-service.ts › resolveBillingTarget`
@@ -209,13 +209,13 @@ export async function createObject(
   });
   const position = await repo.countMembershipSiblings(
     workspaceId,
-    input.clusterId
-      ? { clusterId: input.clusterId }
+    input.ontologyId
+      ? { ontologyId: input.ontologyId }
       : { parentObjectId: input.parentObjectId as string }
   );
   await repo.insertMembership({
     workspaceId,
-    clusterId: input.clusterId ?? null,
+    ontologyId: input.ontologyId ?? null,
     parentObjectId: input.parentObjectId ?? null,
     childObjectId: row.id,
     position,
@@ -225,7 +225,7 @@ export async function createObject(
   }
   await recordObjectCreate(ctx, row);
   await recordMembershipCreate(ctx, row, {
-    clusterId: input.clusterId ?? null,
+    ontologyId: input.ontologyId ?? null,
     parentObjectId: input.parentObjectId ?? null,
   });
   if (inheritedEdges?.length) {
@@ -266,7 +266,7 @@ export async function updateObject(
   expectedUpdatedAt?: string,
   revision: RecordFieldOpts = {}
 ): Promise<OntologyObject> {
-  // Q9 — `edit` on EVERY cluster this object belongs to, before any write.
+  // Q9 — `edit` on EVERY ontology this object belongs to, before any write.
   const gated = await requireObject(ctx, objectId, "edit");
   const workspaceId = gated.workspace_id;
   const scope = [workspaceId];
@@ -340,7 +340,7 @@ export async function updateObject(
  * `./repository.ts › filterObjectIds` alone would let somebody lent ONE ontology
  * point an edge at any row in that container — the "widens the scope and forgets
  * the filter" failure, arriving on a WRITE. `./service-gates.ts ›
- * admittedObjectIds` applies the cluster walk on top.
+ * admittedObjectIds` applies the ontology walk on top.
  *
  * It is still a `filter`, never a refusal: clients hold stale ids after a
  * delete, and a 400 on one dropped target would fail a whole legitimate save.
@@ -382,7 +382,7 @@ async function sanitizeEdges(
  *
  * The far end is filtered by the audience, as `getSnapshot` drops an
  * edge whose target it did not walk to: a row written before this fence existed,
- * or by the OWNER into a private cluster, must not hand a lent reader the raw id
+ * or by the OWNER into a private ontology, must not hand a lent reader the raw id
  * of an object they cannot open (spec R12). One batched walk, never one per
  * edge.
  */
@@ -437,7 +437,7 @@ export async function claimAnchor(
 }
 
 /** Caller's identity anchor — object linked via `ontology_objects.user_id`,
- *  or null. Re-gated as a READ (`view` on ANY cluster, Q9): an anchor whose
+ *  or null. Re-gated as a READ (`view` on ANY ontology, Q9): an anchor whose
  *  object left this caller's audience answers `null`, the same as no anchor. */
 export async function getAnchor(
   ctx: OntologyContext

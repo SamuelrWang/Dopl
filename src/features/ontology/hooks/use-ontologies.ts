@@ -2,10 +2,10 @@
 
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { clusterObjectIds, type GraphState } from "../graph-state";
+import { ontologiesOf, ontologyObjectIds, type GraphState } from "../graph-state";
 import {
   fetchSnapshot,
-  type OntologyClusterSharing,
+  type OntologySharing,
   type OntologyListRow,
 } from "../client/api";
 import { ontologySnapshotKey } from "./use-ontology";
@@ -16,7 +16,7 @@ import type { OntologySnapshot } from "../types";
 export type { OntologyListRow } from "../client/api";
 
 /**
- * The ontology list — one container's clusters as rows, for a surface that lists
+ * The ontology list — one container's ontologies as rows, for a surface that lists
  * them rather than editing one (`/home` → Ontology, spec §5).
  *
  * It shares `ontologySnapshotKey`'s cache entry with the board on purpose, so
@@ -58,7 +58,7 @@ export function useOntologies(workspaceId: string | null): {
  * One snapshot → the rows a list renders.
  *
  * The object count is a graph walk, not a column (R5 — an object can sit in several
- * clusters): `graph-state.ts › clusterObjectIds` is that walk. A `columnIds.length`
+ * ontologies): `graph-state.ts › ontologyObjectIds` is that walk. A `columnIds.length`
  * here would count columns and call them objects.
  *
  * Both sharing fields take a stale-cache fallback (INVARIANTS §8), and the two
@@ -68,17 +68,17 @@ export function useOntologies(workspaceId: string | null): {
  */
 export function ontologyListRows(snapshot: OntologySnapshot): OntologyListRow[] {
   const state: GraphState = {
-    clusters: snapshot.clusters,
+    ontologies: ontologiesOf(snapshot),
     objects: snapshot.objects,
   };
-  return snapshot.clusters.map((cluster) => {
-    const sharing = cluster as typeof cluster & Partial<OntologyClusterSharing>;
+  return state.ontologies.map((ontology) => {
+    const sharing = ontology as typeof ontology & Partial<OntologySharing>;
     return {
-      id: cluster.id,
-      slug: cluster.slug,
-      name: cluster.name,
-      purpose: cluster.purpose,
-      objectCount: clusterObjectIds(state, cluster.id).length,
+      id: ontology.id,
+      slug: ontology.slug,
+      name: ontology.name,
+      purpose: ontology.purpose,
+      objectCount: ontologyObjectIds(state, ontology.id).length,
       agentsMayEdit: sharing.agentsMayEdit ?? true,
       sharedChannelCount: sharing.sharedChannelCount ?? null,
     };

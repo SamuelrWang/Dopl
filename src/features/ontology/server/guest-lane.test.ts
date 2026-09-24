@@ -21,7 +21,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import type { OntologyClusterRow, OntologyObjectRow } from "./dto";
+import type { OntologyRow, OntologyObjectRow } from "./dto";
 import type { OntologyLevel } from "../types";
 import { ontologyContextFactory } from "./test-fixtures";
 
@@ -42,12 +42,12 @@ vi.mock("./repository-shares", () => ({
   countActiveWorkspaceMembers: vi.fn(),
   listChannelIdsForWorkspace: vi.fn(),
   listSharesForChannels: vi.fn(),
-  countSharesForClusters: vi.fn(async () => new Map<string, number>()),
+  countSharesForOntologies: vi.fn(async () => new Map<string, number>()),
 }));
 
 vi.mock("./repository-projections", () => ({
-  listClusterSlugs: vi.fn(async () => []),
-  listClusterSummaries: vi.fn(async () => []),
+  listOntologySlugs: vi.fn(async () => []),
+  listOntologySummaries: vi.fn(async () => []),
   listMembershipParents: vi.fn(async () => []),
   listRelationshipsForSource: vi.fn(async () => []),
 }));
@@ -61,11 +61,11 @@ vi.mock("@/features/billing/server/entitlements", () => ({
 }));
 
 vi.mock("./repository", () => ({
-  listClusters: vi.fn(async () => []),
+  listOntologies: vi.fn(async () => []),
   listMemberships: vi.fn(async () => []),
   listObjectsByIds: vi.fn(async () => []),
   listRelationshipsForSources: vi.fn(async () => []),
-  findClusterById: vi.fn(),
+  findOntologyById: vi.fn(),
   findObjectById: vi.fn(),
   insertObject: vi.fn(),
   updateObject: vi.fn(),
@@ -91,13 +91,13 @@ const mockShareRepo = vi.mocked(shareRepo);
 const LINK = "ws-link";
 /** The OWNER's personal shelf, where the lent ontology actually lives. */
 const OWNER_WS = "ws-owner";
-const CLUSTER_ID = "11111111-1111-4111-8111-111111111111";
+const ONTOLOGY_ID = "11111111-1111-4111-8111-111111111111";
 const OBJECT_ID = "44444444-4444-4444-8444-444444444444";
 const OWNER = "user-owner";
 const GUEST = "user-guest";
 
-const CLUSTER_ROW: OntologyClusterRow = {
-  id: CLUSTER_ID,
+const ONTOLOGY_ROW: OntologyRow = {
+  id: ONTOLOGY_ID,
   workspace_id: OWNER_WS,
   slug: "sales",
   name: "Sales",
@@ -130,7 +130,7 @@ const OBJECT_ROW: OntologyObjectRow = {
 const MEMBERSHIP = {
   id: "m-1",
   workspace_id: OWNER_WS,
-  cluster_id: CLUSTER_ID,
+  ontology_id: ONTOLOGY_ID,
   parent_object_id: null,
   child_object_id: OBJECT_ID,
   position: 0,
@@ -158,7 +158,7 @@ function primeShare(guests: OntologyLevel | null) {
       ? []
       : [
           {
-            ontology_id: CLUSTER_ID,
+            ontology_id: ONTOLOGY_ID,
             channel_id: "ch-1",
             workspace_id: OWNER_WS,
             members_level: "edit",
@@ -167,7 +167,7 @@ function primeShare(guests: OntologyLevel | null) {
           },
         ]
   );
-  mockRepo.listClusters.mockResolvedValue([CLUSTER_ROW]);
+  mockRepo.listOntologies.mockResolvedValue([ONTOLOGY_ROW]);
   mockRepo.listMemberships.mockResolvedValue([MEMBERSHIP]);
   // Honours the ids it is given: a mock that answers the same row whatever it
   // is asked cannot tell "the walk found nothing" from "the walk found it and
@@ -176,14 +176,14 @@ function primeShare(guests: OntologyLevel | null) {
     ids.includes(OBJECT_ID) ? [OBJECT_ROW] : []
   );
   mockRepo.listRelationshipsForSources.mockResolvedValue([]);
-  mockRepo.findClusterById.mockResolvedValue(CLUSTER_ROW);
+  mockRepo.findOntologyById.mockResolvedValue(ONTOLOGY_ROW);
   mockRepo.findObjectById.mockResolvedValue(OBJECT_ROW);
   mockNarrow.listMembershipParents.mockResolvedValue([
-    { cluster_id: CLUSTER_ID, parent_object_id: null, child_object_id: OBJECT_ID },
+    { ontology_id: ONTOLOGY_ID, parent_object_id: null, child_object_id: OBJECT_ID },
   ] as never);
-  mockNarrow.listClusterSummaries.mockResolvedValue([
+  mockNarrow.listOntologySummaries.mockResolvedValue([
     {
-      id: CLUSTER_ID,
+      id: ONTOLOGY_ID,
       workspace_id: OWNER_WS,
       slug: "sales",
       name: "Sales",
@@ -204,7 +204,7 @@ describe("a guest at `view` — reads the lent ontology, writes NOTHING", () => 
   it("reads the snapshot", async () => {
     primeShare("view");
     const snap = await getSnapshot(guest());
-    expect(snap.clusters.map((c) => c.id)).toEqual([CLUSTER_ID]);
+    expect(snap.ontologies.map((c) => c.id)).toEqual([ONTOLOGY_ID]);
     expect(Object.keys(snap.objects)).toEqual([OBJECT_ID]);
   });
 
@@ -216,10 +216,10 @@ describe("a guest at `view` — reads the lent ontology, writes NOTHING", () => 
     expect(mockRepo.updateObject).not.toHaveBeenCalled();
   });
 
-  it("🔒 …and a CREATE inside that cluster is refused the same way", async () => {
+  it("🔒 …and a CREATE inside that ontology is refused the same way", async () => {
     primeShare("view");
     await expect(
-      createObject(guest(), { clusterId: CLUSTER_ID, name: "New column" })
+      createObject(guest(), { ontologyId: ONTOLOGY_ID, name: "New column" })
     ).rejects.toMatchObject({ status: 404 });
     expect(mockRepo.insertObject).not.toHaveBeenCalled();
   });
@@ -227,7 +227,7 @@ describe("a guest at `view` — reads the lent ontology, writes NOTHING", () => 
   it("the reach read names it at VIEW (what the desktop framing is told)", async () => {
     primeShare("view");
     expect(await getReach(guest())).toEqual([
-      { id: CLUSTER_ID, name: "Sales", workspaceId: OWNER_WS, level: "view" },
+      { id: ONTOLOGY_ID, name: "Sales", workspaceId: OWNER_WS, level: "view" },
     ]);
   });
 });
@@ -243,12 +243,12 @@ describe("a guest at `edit` — the half of the ruling that was a stored word", 
 
   it("creates one (a MEMBERSHIP write, into the LENDER's container)", async () => {
     primeShare("edit");
-    await createObject(guest(), { clusterId: CLUSTER_ID, name: "New column" });
+    await createObject(guest(), { ontologyId: ONTOLOGY_ID, name: "New column" });
     expect(mockRepo.insertObject).toHaveBeenCalledWith(
       expect.objectContaining({ workspaceId: OWNER_WS, createdBy: GUEST })
     );
     expect(mockRepo.insertMembership).toHaveBeenCalledWith(
-      expect.objectContaining({ clusterId: CLUSTER_ID, workspaceId: OWNER_WS })
+      expect.objectContaining({ ontologyId: ONTOLOGY_ID, workspaceId: OWNER_WS })
     );
   });
 
@@ -275,7 +275,7 @@ describe("a guest at `none`, and a guest with NO share row — the same nothing 
     it(`${label}: the snapshot is EMPTY and no object is even asked for`, async () => {
       primeShare(level);
       const snap = await getSnapshot(guest());
-      expect(snap.clusters).toEqual([]);
+      expect(snap.ontologies).toEqual([]);
       expect(snap.objects).toEqual({});
       expect(mockRepo.listObjectsByIds).toHaveBeenCalledWith(expect.anything(), []);
     });
@@ -307,18 +307,18 @@ describe("the two lanes a guest may never reach", () => {
     workspaceFloor(readFileSync(join(API, rel), "utf8"), method);
 
   it("THE SHARE LANE — a guest lends no ontology and re-levels nobody's share", () => {
-    const rel = "ontology/clusters/[clusterId]/shares/route.ts";
+    const rel = "ontology/ontologies/[ontologyId]/shares/route.ts";
     expect(floorOf(rel, "GET")).toBe("member");
     expect(floorOf(rel, "PUT")).toBe("member");
     expect(floorOf(rel, "DELETE")).toBe("member");
   });
 
-  it("THE AGENTS TOGGLE — `agentsMayEdit` rides the cluster PATCH, which stays `member`", () => {
+  it("THE AGENTS TOGGLE — `agentsMayEdit` rides the ontology PATCH, which stays `member`", () => {
     // The toggle is a CONTAINMENT control on the OWNER's own agents
-    // (`schema.ts › OntologyClusterUpdateSchema.agentsMayEdit`). A guest cannot
+    // (`schema.ts › OntologyUpdateSchema.agentsMayEdit`). A guest cannot
     // rename an ontology either; both facts are this one floor.
-    expect(floorOf("ontology/clusters/[clusterId]/route.ts", "PATCH")).toBe("member");
-    expect(floorOf("ontology/clusters/[clusterId]/route.ts", "DELETE")).toBe("member");
-    expect(floorOf("ontology/clusters/route.ts", "POST")).toBe("member");
+    expect(floorOf("ontology/ontologies/[ontologyId]/route.ts", "PATCH")).toBe("member");
+    expect(floorOf("ontology/ontologies/[ontologyId]/route.ts", "DELETE")).toBe("member");
+    expect(floorOf("ontology/ontologies/route.ts", "POST")).toBe("member");
   });
 });

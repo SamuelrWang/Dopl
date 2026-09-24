@@ -83,7 +83,7 @@ function mockClient(directory: WorkspaceListItem[]): DoplClient {
     listKbBasesPayload: vi.fn().mockResolvedValue({ bases: [] }),
     listSkills: vi.fn().mockResolvedValue([]),
     listAgentIdentitiesPayload: vi.fn().mockResolvedValue({ identities: [] }),
-    getOntology: vi.fn().mockResolvedValue({ clusters: [], objects: {} }),
+    getOntology: vi.fn().mockResolvedValue({ ontologies: [], objects: {} }),
     getAccountStatus: vi.fn().mockResolvedValue({
       since: null,
       operatorOnline: false,

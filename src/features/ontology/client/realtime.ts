@@ -3,7 +3,7 @@
 import { useWorkspaceTablesRealtime } from "@/shared/realtime/use-workspace-tables-realtime";
 
 const ONTOLOGY_TABLES = [
-  "ontology_clusters",
+  "ontologies",
   "ontology_objects",
   "ontology_memberships",
   "ontology_relationships",

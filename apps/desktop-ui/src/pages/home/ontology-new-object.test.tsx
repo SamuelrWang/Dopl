@@ -131,7 +131,7 @@ describe("+ Object", () => {
       const post = bridgeCalls(apiRequest).find(
         (c) => c.path === "/api/ontology/objects" && c.opts.method === "POST"
       );
-      expect(post?.opts.body).toMatchObject({ clusterId: PIPELINE_ID, name: "Deal" });
+      expect(post?.opts.body).toMatchObject({ ontologyId: PIPELINE_ID, name: "Deal" });
     });
     await waitFor(() => {
       const patch = bridgeCalls(apiRequest).find(

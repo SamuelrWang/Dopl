@@ -22,7 +22,7 @@ export interface OntologySeedContext {
 }
 
 export interface SeedOntologyResult {
-  clusterId: string | null;
+  ontologyId: string | null;
   objectsCreated: number;
   relationshipsCreated: number;
 }
@@ -50,11 +50,11 @@ function resolveAttributes(
 }
 
 /**
- * Seeds the "Dopl Playbook" cluster. Inserts via the repository directly —
+ * Seeds the "Dopl Playbook" ontology. Inserts via the repository directly —
  * system content, so `service.createObject`'s free-plan object cap gate is
  * deliberately bypassed (a fresh solo workspace is uncapped anyway).
  *
- * FOUR writes, whatever the corpus size: cluster, objects, memberships,
+ * FOUR writes, whatever the corpus size: ontology, objects, memberships,
  * relationships — this runs before the post-signup redirect. Object uuids are
  * minted here so memberships/relationships are built up front rather than
  * discovered one insert at a time.
@@ -64,8 +64,8 @@ export async function seedWorkspace(
   refs: OntologySeedRefs
 ): Promise<SeedOntologyResult> {
   const seed = buildOntologySeed();
-  const existing = await repo.listClusters([ctx.workspaceId]);
-  const slug = slugify(seed.clusterSlug, "cluster", existing.map((c) => c.slug));
+  const existing = await repo.listOntologies([ctx.workspaceId]);
+  const slug = slugify(seed.ontologySlug, "ontology", existing.map((c) => c.slug));
 
   const idByKey: Record<string, string> = {};
   const objects: Parameters<typeof seedRepo.insertObjects>[0] = [];
@@ -96,7 +96,7 @@ export async function seedWorkspace(
       });
       memberships.push({
         workspaceId: ctx.workspaceId,
-        clusterId: null,
+        ontologyId: null,
         parentObjectId: columnId,
         childObjectId: childId,
         position: childIndex,
@@ -127,14 +127,14 @@ export async function seedWorkspace(
     relationshipsCreated += 1;
   }
 
-  // Ordering: cluster and objects are independent; memberships need both
-  // (`cluster_id` on columns, `parent_object_id` on cards) and relationships
+  // Ordering: ontology and objects are independent; memberships need both
+  // (`ontology_id` on columns, `parent_object_id` on cards) and relationships
   // need the objects. Two waves, four statements.
-  const [cluster] = await Promise.all([
-    repo.insertCluster({
+  const [ontology] = await Promise.all([
+    repo.insertOntology({
       workspaceId: ctx.workspaceId,
       slug,
-      name: seed.clusterName,
+      name: seed.ontologyName,
       purpose: seed.purpose,
       position: existing.length,
       createdBy: ctx.userId,
@@ -149,7 +149,7 @@ export async function seedWorkspace(
     seedRepo.insertMemberships([
       ...seed.columns.map((column, colIndex) => ({
         workspaceId: ctx.workspaceId,
-        clusterId: cluster.id,
+        ontologyId: ontology.id,
         parentObjectId: null,
         childObjectId: idByKey[column.key],
         position: colIndex,
@@ -159,5 +159,5 @@ export async function seedWorkspace(
     seedRepo.insertRelationships(ctx.workspaceId, edges),
   ]);
 
-  return { clusterId: cluster.id, objectsCreated: objects.length, relationshipsCreated };
+  return { ontologyId: ontology.id, objectsCreated: objects.length, relationshipsCreated };
 }

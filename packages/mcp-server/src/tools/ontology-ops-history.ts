@@ -1,7 +1,7 @@
 /**
  * `dopl_ontology` op="history" and op="restore" (DMP-002, 2026-09-23). History is PER FIELD — one
  * row per changed field, the app Changelog's granularity — for one object (`object=`) or an
- * ontology's roll-up (`cluster=`). Restore targets one OBJECT.
+ * ontology's roll-up (`ontology=`). Restore targets one OBJECT.
  *
  * ⚠ RESTORING A REVISION WRITES ITS `before` BACK — it undoes that change for that one field, and
  * the other fields keep their current values. Every row prints `before → after`, so the preview
@@ -13,7 +13,7 @@
 import type { ContentRevision, DoplClient, OntologyObject } from "@dopl/client";
 import { inlineOr, NO_NAME } from "./narration";
 import { ok, type ToolResponse } from "./respond";
-import { resolveClusterRef, resolveObjectRef } from "./ontology-render";
+import { resolveOntologyRef, resolveObjectRef } from "./ontology-render";
 import {
   pageTail,
   restoreRefusal,
@@ -45,7 +45,7 @@ function changeOf(rev: ContentRevision, onObject: boolean): string {
 export async function opHistory(
   client: DoplClient,
   callerUserId: string | null,
-  args: { object?: string; cluster?: string },
+  args: { object?: string; ontology?: string },
 ): Promise<ToolResponse> {
   const snapshot = await client.getOntology();
   if (args.object !== undefined) {
@@ -55,9 +55,9 @@ export async function opHistory(
     const page = await client.listOntologyObjectRevisions(object.id, { limit: ONTOLOGY_HISTORY_PAGE });
     return ok(render(`${inlineOr(object.name, NO_NAME)} (id \`${object.id}\`)`, object, page, callerUserId, true));
   }
-  const resolved = resolveClusterRef(snapshot, args.cluster as string);
+  const resolved = resolveOntologyRef(snapshot, args.ontology as string);
   if ("fail" in resolved) return resolved.fail;
-  const page = await client.listOntologyClusterRevisions(resolved.hit.id, { limit: ONTOLOGY_HISTORY_PAGE });
+  const page = await client.listOntologyRevisions(resolved.hit.id, { limit: ONTOLOGY_HISTORY_PAGE });
   return ok(render(`ontology ${inlineOr(resolved.hit.name, NO_NAME)}`, null, page, callerUserId, false));
 }
 

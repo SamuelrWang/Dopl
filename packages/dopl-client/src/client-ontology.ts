@@ -8,9 +8,9 @@ import * as ontology from "./ontology.js";
 import * as revisions from "./revisions.js";
 import type { ContentRevisionPage, RevisionPageOpts } from "./revisions.js";
 import type {
-  OntologyCluster,
-  OntologyClusterCreateInput,
-  OntologyClusterPatch,
+  Ontology,
+  OntologyCreateInput,
+  OntologyPatch,
   OntologyObject,
   OntologyObjectCreateInput,
   OntologyObjectPatch,
@@ -44,16 +44,16 @@ export class OntologyMethods extends KnowledgeMethods {
     return ontology.getOntologyAnchor(this.transport);
   }
 
-  createOntologyCluster(input: OntologyClusterCreateInput): Promise<OntologyCluster> {
-    return ontology.createOntologyCluster(this.transport, input);
+  createOntology(input: OntologyCreateInput): Promise<Ontology> {
+    return ontology.createOntology(this.transport, input);
   }
 
-  updateOntologyCluster(clusterId: string, patch: OntologyClusterPatch): Promise<OntologyCluster> {
-    return ontology.updateOntologyCluster(this.transport, clusterId, patch);
+  updateOntology(ontologyId: string, patch: OntologyPatch): Promise<Ontology> {
+    return ontology.updateOntology(this.transport, ontologyId, patch);
   }
 
-  deleteOntologyCluster(clusterId: string): Promise<void> {
-    return ontology.deleteOntologyCluster(this.transport, clusterId);
+  deleteOntology(ontologyId: string): Promise<void> {
+    return ontology.deleteOntology(this.transport, ontologyId);
   }
 
   createOntologyObject(input: OntologyObjectCreateInput): Promise<OntologyObject> {
@@ -81,9 +81,9 @@ export class OntologyMethods extends KnowledgeMethods {
     return revisions.listOntologyObjectRevisions(this.transport, objectId, opts);
   }
 
-  /** The ontology (cluster) roll-up: its own revisions and every object's in it. */
-  listOntologyClusterRevisions(clusterId: string, opts: RevisionPageOpts = {}): Promise<ContentRevisionPage> {
-    return revisions.listOntologyClusterRevisions(this.transport, clusterId, opts);
+  /** The ontology roll-up: its own revisions and every object's in it. */
+  listOntologyRevisions(ontologyId: string, opts: RevisionPageOpts = {}): Promise<ContentRevisionPage> {
+    return revisions.listOntologyRevisions(this.transport, ontologyId, opts);
   }
 
   /** Write ONE field's prior value back, under the object's Version (412 if stale). */

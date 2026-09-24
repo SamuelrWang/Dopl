@@ -59,7 +59,7 @@ const OBJECT = (i: number) => ({
 function ontologyWith(n: number) {
   const objects: Record<string, ReturnType<typeof OBJECT>> = {};
   for (let i = 1; i <= n; i++) objects[`o-${i}`] = OBJECT(i);
-  return { clusters: [], objects };
+  return { ontologies: [], objects };
 }
 
 // ─── dopl_skill(op="list") — the op at the centre of the incident ─────
@@ -118,7 +118,7 @@ describe("dopl_map carries its own scope", () => {
       stub({
         listKbBases: vi.fn(async () => [BASE]),
         listSkills: vi.fn(async () => [SKILL]),
-        getOntology: vi.fn(async () => ({ clusters: [], objects: {} })),
+        getOntology: vi.fn(async () => ({ ontologies: [], objects: {} })),
       }),
       "dopl_map",
       {},
@@ -239,7 +239,7 @@ describe("dopl_search carries its own scope", () => {
           name: `ship ${i}`,
         })),
       ),
-      getOntology: vi.fn(async () => ({ clusters: [], objects: {} })),
+      getOntology: vi.fn(async () => ({ ontologies: [], objects: {} })),
       listAgentIdentitiesPayload: vi.fn(async () => ({ identities: [] })),
     });
 

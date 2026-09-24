@@ -25,9 +25,9 @@ import type { Revision } from "../types";
  *   - an ASSOCIATION row is refused: restoring an edge means re-pointing at a
  *     target that may since have been deleted or left the caller's audience, and
  *     Samuel's design says restore is per FIELD.
- *   - a CLUSTER row is refused: the only restore door that exists is
+ *   - an ONTOLOGY row is refused: the only restore door that exists is
  *     `POST /api/ontology/objects/{objectId}/revisions/{revisionId}/restore`,
- *     and a predicate that admitted a cluster row would put a button on the
+ *     and a predicate that admitted an ontology row would put a button on the
  *     roll-up whose only outcome is a 404.
  */
 export function isRestorable(revision: Revision): boolean {

@@ -112,7 +112,7 @@ const OBJECT = {
 };
 
 const SNAPSHOT = {
-  clusters: [{ id: "c-1", slug: "crm", name: "CRM", purpose: "", columnIds: ["obj-1"] }],
+  ontologies: [{ id: "c-1", slug: "crm", name: "CRM", purpose: "", columnIds: ["obj-1"] }],
   objects: { "obj-1": { ...OBJECT, childIds: [] } },
 };
 

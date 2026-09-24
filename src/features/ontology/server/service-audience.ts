@@ -27,7 +27,7 @@ import {
  * resolveAgentAudience`, and the only fence behind the home ontology's sharing
  * model (spec §2 I6, §4 site 1).
  *
- * Every input is a DB fact (`./repository-shares.ts`, plus the cluster row's
+ * Every input is a DB fact (`./repository-shares.ts`, plus the ontology row's
  * own `created_by` / `agents_may_edit`) — never a header, a prompt or a tool
  * description. An agent holds its operator's credential and has Bash, so the
  * desktop's prompt framing (§4 site 9) is a COMPENSATING CONTROL, never this.
@@ -38,12 +38,12 @@ import {
  * Two answers share the word "scope" and confusing them is the one way to
  * LEAK: {@link OntologyAudience.workspaceIds} is a READ SCOPE, deliberately
  * WIDER than the caller's container (a lent ontology lives in the LENDER's);
- * {@link levelForCluster} is the AUTHORIZATION every returned row must pass.
+ * {@link levelForOntology} is the AUTHORIZATION every returned row must pass.
  */
 
-/** The cluster facts the ceiling reads. Structural, so `OntologyClusterRow` and
- *  `OntologyClusterSummaryRow` both satisfy it without either importing this. */
-export interface AudienceClusterFacts {
+/** The ontology facts the ceiling reads. Structural, so `OntologyRow` and
+ *  `OntologyListItemRow` both satisfy it without either importing this. */
+export interface AudienceOntologyFacts {
   id: string;
   /** The ONTOLOGY's container — `service-shared.ts › canSeeOntology`'s arm 1. */
   workspace_id: string;
@@ -68,13 +68,13 @@ export type OntologyAudience =
       readonly kind: "resolved";
       readonly workspaceIds: readonly string[];
       /**
-       * The caller's own human level per cluster — `service-shared.ts ›
+       * The caller's own human level per ontology — `service-shared.ts ›
        * OntologyShareReach`, and the map its predicates take. The MEMBER-vs-GUEST
        * column choice happens ONCE here, at resolve time, because the caller's
        * class is a fact about the request rather than about a row.
        */
       readonly reach: OntologyShareReach;
-      /** `owner_agents_level` per cluster — the OWNER's own agent column, which
+      /** `owner_agents_level` per ontology — the OWNER's own agent column, which
        *  is the only cell of the matrix an agent does not simply inherit. */
       readonly ownerAgents: ReadonlyMap<string, OntologyLevel>;
       readonly source: "user" | "agent";
@@ -92,7 +92,7 @@ export type OntologyAudience =
        * ontology lane's half of that pair.
        *
        * ⚠ **IT IS A LABEL, NEVER A FENCE.** Every row still has to clear
-       * {@link levelForCluster}; nothing here widens or narrows what is
+       * {@link levelForOntology}; nothing here widens or narrows what is
        * returned. Empty on every arm that resolves no shelf.
        */
       readonly personalWorkspaceIds: readonly string[];
@@ -141,7 +141,7 @@ export function resolveOntologyAudience(
  * RATHER THAN IN THE DEFAULT (F-683, fixed 2026-09-09).** It read
  * `if (kind !== "link" && kind !== "personal") return unrestricted`, so an
  * unknown kind — or a `null` from a workspace row that vanished mid-request —
- * answered `edit` on every cluster in scope. Same choice as the member count
+ * answered `edit` on every ontology in scope. Same choice as the member count
  * below and as `dopl_ontology_level_rank`'s `ELSE -1`.
  */
 async function computeAudience(ctx: OntologyContext): Promise<OntologyAudience> {
@@ -152,8 +152,8 @@ async function computeAudience(ctx: OntologyContext): Promise<OntologyAudience> 
   if (kind !== "link" && kind !== "personal") {
     // F-683's fail-closed arm. The READ SCOPE is EMPTY, not
     // `[ctx.workspaceId]`: every repository read short-circuits on an empty set,
-    // and {@link levelForCluster} answers `none` for one — which is what closes
-    // `./service-gates.ts › assertCanCreateCluster`, whose question is about a
+    // and {@link levelForOntology} answers `none` for one — which is what closes
+    // `./service-gates.ts › assertCanCreateOntology`, whose question is about a
     // row that does not exist yet and never came through a read.
     return {
       kind: "resolved",
@@ -198,7 +198,7 @@ async function computeAudience(ctx: OntologyContext): Promise<OntologyAudience> 
       credentialSubjectUserId: ctx.credentialSubjectUserId,
       source: ctx.source,
     }),
-    // Only the AGENT arms read this, and only on an UNSHARED own cluster; it
+    // Only the AGENT arms read this, and only on an UNSHARED own ontology; it
     // rides the same fan rather than adding a round trip for one caller.
     ctx.source === "agent"
       ? countActiveWorkspaceMembers(ctx.workspaceId)
@@ -224,7 +224,7 @@ async function computeAudience(ctx: OntologyContext): Promise<OntologyAudience> 
   return {
     kind: "resolved",
     // The lend widens the read scope and nothing else — every row it returns
-    // still has to clear `levelForCluster`, which admits only the cluster the
+    // still has to clear `levelForOntology`, which admits only the ontology the
     // share row actually names.
     workspaceIds: [
       ...new Set([
@@ -242,7 +242,7 @@ async function computeAudience(ctx: OntologyContext): Promise<OntologyAudience> 
     userId: ctx.userId,
     // Fail closed, through the ONE predicate (F-718, 2026-09-18): `0`, `null`
     // and `undefined` are all "not one", so a roster race cannot widen an
-    // agent's own-cluster arm from `view` to `edit`. The hand-spelled
+    // agent's own-ontology arm from `view` to `edit`. The hand-spelled
     // `memberCount !== null && memberCount <= 1` it replaces answered SOLO to a
     // real `0`.
     solo: !isSharedRoom(memberCount),
@@ -258,9 +258,9 @@ async function computeAudience(ctx: OntologyContext): Promise<OntologyAudience> 
  * unrestricted                         → edit  (standard workspaces, unchanged)
  * the human answer                     → edit / view / none  ← service-shared.ts
  * then, for an AGENT only, NARROW it:
- *   owner's own cluster, shared here   → owner_agents_level
- *   owner's own cluster, solo room     → agents_may_edit ? edit : view
- *   owner's own cluster, shared room   → view       (Q2's solo→shared drop)
+ *   owner's own ontology, shared here   → owner_agents_level
+ *   owner's own ontology, solo room     → agents_may_edit ? edit : view
+ *   owner's own ontology, shared room   → view       (Q2's solo→shared drop)
  *   anyone else's                      → unchanged  (Q1: EXACTLY its human)
  * ```
  *
@@ -274,16 +274,16 @@ async function computeAudience(ctx: OntologyContext): Promise<OntologyAudience> 
  * container (its only member IS its owner) and strictly narrower everywhere else.
  *
  * Sound only because the read scope contains the row: this arm asks
- * nothing about membership, so a caller that hands `levelForCluster` a row it did
+ * nothing about membership, so a caller that hands `levelForOntology` a row it did
  * NOT read through {@link OntologyAudience.workspaceIds} has broken it, and no arm
  * here can tell. Pinned in `./service-audience.test.ts › the owner arm`.
  *
  * Other people's agents need no `min` (Q1): the human answer already IS it.
  */
-export function levelForCluster(
+export function levelForOntology(
   ctx: OntologyContext,
   audience: OntologyAudience,
-  cluster: AudienceClusterFacts
+  ontology: AudienceOntologyFacts
 ): OntologyLevel {
   if (audience.kind === "unrestricted") return "edit";
   // AN EMPTY READ SCOPE REACHES NOTHING, SAID ONCE HERE (F-683) — including
@@ -292,9 +292,9 @@ export function levelForCluster(
   // be trusted.
   if (audience.workspaceIds.length === 0) return "none";
 
-  const scope = { id: cluster.id, workspaceId: cluster.workspace_id };
+  const scope = { id: ontology.id, workspaceId: ontology.workspace_id };
   const owns =
-    audience.userId !== null && cluster.created_by === audience.userId;
+    audience.userId !== null && ontology.created_by === audience.userId;
   // "A share never narrows the owner" (§2) — and see the docblock for why this
   // arm is not simply `inOwnContainer`.
   const human = owns
@@ -307,24 +307,24 @@ export function levelForCluster(
 
   if (audience.source !== "agent" || !owns) return human;
 
-  const shared = audience.ownerAgents.get(cluster.id);
+  const shared = audience.ownerAgents.get(ontology.id);
   if (shared !== undefined) return narrowerLevel(human, shared);
   // UNSHARED (I3): the solo toggle, capped to `view` once the room has a peer
   // (Q2) — until the owner states an `ownerAgentsLevel` on a share row.
   if (!audience.solo) return narrowerLevel(human, "view");
-  return narrowerLevel(human, cluster.agents_may_edit ? "edit" : "view");
+  return narrowerLevel(human, ontology.agents_may_edit ? "edit" : "view");
 }
 
-/** Does this audience clear `min` on this cluster? `min` defaults to `view`;
+/** Does this audience clear `min` on this ontology? `min` defaults to `view`;
  *  a WRITE must pass `"edit"` explicitly, so no caller gets a write gate by
  *  forgetting an argument. */
 export function audienceAdmits(
   ctx: OntologyContext,
   audience: OntologyAudience,
-  cluster: AudienceClusterFacts,
+  ontology: AudienceOntologyFacts,
   min: OntologyLevel = "view"
 ): boolean {
-  return meetsLevel(levelForCluster(ctx, audience, cluster), min);
+  return meetsLevel(levelForOntology(ctx, audience, ontology), min);
 }
 
 /** The wider of two rungs, `undefined` = nothing seen yet. I5, never the

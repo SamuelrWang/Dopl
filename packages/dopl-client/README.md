@@ -6,7 +6,7 @@ Most users want one of those packages, not this one directly.
 
 ## What's inside
 
-- **`DoplClient`** — typed HTTP client with progressive-disclosure methods across packs, clusters, canvas, ingest, and entries.
+- **`DoplClient`** — typed HTTP client with methods across workspaces, knowledge bases, skills, the ontology, channels and agent identities.
 - **`DoplTransport`** — internal transport with retries (jittered exponential backoff for idempotent methods, `Retry-After` honored on 429), structured error parsing, and a `debug` namespace.
 - **Typed errors** — `DoplApiError` (with parsed `code` / `apiMessage` / `details` from the canonical `{ error: { code, message, details } }` body shape), `DoplAuthError`, `DoplNetworkError`, `DoplTimeoutError`.
 

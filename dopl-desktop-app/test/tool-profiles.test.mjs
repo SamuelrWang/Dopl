@@ -216,7 +216,7 @@ test("the desktop's Dopl tool lists match the MCP server's live surface", () => 
 // RETIRED_DOPL_TOOLS is a SUPERSET of HIDDEN_TOOLS, never an equality.
 //
 // It was an equality until 2026-08-11, when the four names it held
-// (`dopl_workflow`/`_admin`, `dopl_cluster`/`_admin`) stopped being HIDDEN and
+// (`dopl_workflow`/`_admin` and the retired graph tool/`_admin`) stopped being HIDDEN and
 // started being DELETED — server-side there is no registrar, no route and no
 // table left, so HIDDEN_TOOLS is now empty while these four stay denied. That
 // asymmetry is the containment rule, not drift: a deny may outlive its tool,

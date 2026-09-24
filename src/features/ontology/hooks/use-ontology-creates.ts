@@ -6,14 +6,14 @@ import type { GraphAction } from "../graph-state";
 import {
   beginColumnDraft,
   commitColumnDraftOptimistic,
-  createClusterOptimistic,
+  createOntologyOptimistic,
   createObjectOptimistic,
   discardColumnDraft,
   type ColumnDraftPatch,
   type OntologyCreateApi,
   type OntologyCreateSink,
 } from "../optimistic-create";
-import type { OntologyCluster, OntologyObject } from "../types";
+import type { Ontology, OntologyObject } from "../types";
 
 /**
  * Create half of the ontology store: owns the pending-id set and the sink
@@ -31,7 +31,7 @@ export interface OntologyCreateCallbacks {
   onCreated?: () => void;
   /**
    * Provisional ids swapped for real ones. Anything holding an ontology id in its
-   * own state (the views' selected cluster/object) must map through this, else a
+   * own state (the views' selected ontology/object) must map through this, else a
    * selection on an optimistic row dangles when the server answers.
    */
   onIdsResolved?: (map: Readonly<Record<string, string>>) => void;
@@ -56,20 +56,20 @@ export interface OntologyCreatesParams {
 
 export interface OntologyCreates {
   /** Returns the row already on screen; the POSTs settle behind it. */
-  createCluster: () => OntologyCluster;
+  createOntology: () => Ontology;
   createObject: (
-    target: { clusterId: string } | { parentObjectId: string }
+    target: { ontologyId: string } | { parentObjectId: string }
   ) => OntologyObject;
   /**
    * "+ Object" — the lane on the board, POSTed by nothing until the popup's
    * Create (2026-09-11). Returns the row that is already on screen.
    */
-  beginColumnDraft: (clusterId: string) => OntologyObject;
+  beginColumnDraft: (ontologyId: string) => OntologyObject;
   /** Discard / Escape / backdrop — the lane leaves, no request either way. */
   discardColumnDraft: (draftId: string) => void;
   /** Create — POST the lane, then PATCH what the POST could not carry. */
   commitColumnDraft: (
-    clusterId: string,
+    ontologyId: string,
     draft: OntologyObject,
     patch: ColumnDraftPatch
   ) => void;
@@ -110,11 +110,11 @@ export function useOntologyCreates({
 
   const boundApi = useMemo<OntologyCreateApi>(
     () => ({
-      createCluster: (input) => api.createCluster(workspaceId, input),
+      createOntology: (input) => api.createOntology(workspaceId, input),
       createObject: (input) => api.createObject(workspaceId, input),
       updateObject: (objectId, input) =>
         api.updateObject(workspaceId, objectId, input),
-      deleteCluster: (clusterId) => api.deleteCluster(workspaceId, clusterId),
+      deleteOntology: (ontologyId) => api.deleteOntology(workspaceId, ontologyId),
     }),
     [workspaceId]
   );
@@ -141,17 +141,17 @@ export function useOntologyCreates({
     [dispatch, markPending, clearPending, beginWrite, endWrite, callbacks, reportError]
   );
 
-  const createCluster = useCallback((): OntologyCluster => {
+  const createOntology = useCallback((): Ontology => {
     markDirty();
     // Fire-and-forget: every outcome is handled through the sink. The store's
     // write gate — not this promise — holds the realtime re-seed off until the
     // POSTs settle.
-    const { row } = createClusterOptimistic(boundApi, sink);
+    const { row } = createOntologyOptimistic(boundApi, sink);
     return row;
   }, [boundApi, sink, markDirty]);
 
   const createObject = useCallback(
-    (target: { clusterId: string } | { parentObjectId: string }): OntologyObject => {
+    (target: { ontologyId: string } | { parentObjectId: string }): OntologyObject => {
       markDirty();
       const parent =
         "parentObjectId" in target ? getObject(target.parentObjectId) : undefined;
@@ -167,9 +167,9 @@ export function useOntologyCreates({
    * one thing. Sequences are in `optimistic-create.ts`.
    */
   const begin = useCallback(
-    (clusterId: string): OntologyObject => {
+    (ontologyId: string): OntologyObject => {
       markDirty();
-      return beginColumnDraft(sink, clusterId);
+      return beginColumnDraft(sink, ontologyId);
     },
     [sink, markDirty]
   );
@@ -180,16 +180,16 @@ export function useOntologyCreates({
   );
 
   const commit = useCallback(
-    (clusterId: string, draft: OntologyObject, patch: ColumnDraftPatch): void => {
+    (ontologyId: string, draft: OntologyObject, patch: ColumnDraftPatch): void => {
       markDirty();
       // Fire-and-forget: the sink handles every outcome.
-      commitColumnDraftOptimistic(boundApi, sink, clusterId, draft, patch);
+      commitColumnDraftOptimistic(boundApi, sink, ontologyId, draft, patch);
     },
     [boundApi, sink, markDirty]
   );
 
   return {
-    createCluster,
+    createOntology,
     createObject,
     beginColumnDraft: begin,
     discardColumnDraft: discard,

@@ -1,11 +1,11 @@
 import "server-only";
 import { supabaseAdmin } from "@/shared/supabase/admin";
 import {
-  ONTOLOGY_CLUSTER_SUMMARY_COLS,
+  ONTOLOGY_SUMMARY_COLS,
   ONTOLOGY_OBJECT_SUMMARY_COLS,
   ONTOLOGY_READ_LIMITS,
   ONTOLOGY_RELATIONSHIP_COLS,
-  type OntologyClusterSummaryRow,
+  type OntologyListItemRow,
   type OntologyMembershipRow,
   type OntologyObjectSummaryRow,
   type OntologyRelationshipRow,
@@ -19,28 +19,28 @@ import {
  * logic, every query filtered by `workspace_id` (service-role bypasses RLS).
  *
  * And the same workspace SET — `repository.ts`'s header carries the
- * argument in full: the set is a READ SCOPE, `levelForCluster` is the
+ * argument in full: the set is a READ SCOPE, `levelForOntology` is the
  * authorization, and the object read below takes the ids the membership walk
  * produced rather than a container.
  */
 
-/** Clusters for a map-shaped read: no `layout`. `layout` is one `{x,y}` per
+/** Ontologies for a map-shaped read: no `layout`. `layout` is one `{x,y}` per
  *  node — the largest field on a busy row, and useless off the canvas. */
-export async function listClusterSummaries(
+export async function listOntologySummaries(
   workspaceIds: readonly string[]
-): Promise<OntologyClusterSummaryRow[]> {
+): Promise<OntologyListItemRow[]> {
   if (workspaceIds.length === 0) return [];
   const db = supabaseAdmin();
   const { data, error } = await db
-    .from("ontology_clusters")
-    .select(ONTOLOGY_CLUSTER_SUMMARY_COLS)
+    .from("ontologies")
+    .select(ONTOLOGY_SUMMARY_COLS)
     .in("workspace_id", workspaceIds)
     .is("deleted_at", null)
     .order("position")
     .order("created_at")
-    .limit(ONTOLOGY_READ_LIMITS.clusters);
+    .limit(ONTOLOGY_READ_LIMITS.ontologies);
   if (error) throw error;
-  return (data ?? []) as OntologyClusterSummaryRow[];
+  return (data ?? []) as OntologyListItemRow[];
 }
 
 /** Objects for a map-shaped read: id, name, subtitle. No `attributes`/
@@ -62,18 +62,18 @@ export async function listObjectSummariesByIds(
   return (data ?? []) as OntologyObjectSummaryRow[];
 }
 
-/** Just the slugs, for `createCluster`'s uniqueness check. ONE container,
+/** Just the slugs, for `createOntology`'s uniqueness check. ONE container,
  *  never the audience set: a create lands in the container it names, and the
- *  slug it must not collide with is that container's. Not `listClusters`
- *  — that drags every cluster's `layout` over the wire to compare strings. */
-export async function listClusterSlugs(workspaceId: string): Promise<string[]> {
+ *  slug it must not collide with is that container's. Not `listOntologies`
+ *  — that drags every ontology's `layout` over the wire to compare strings. */
+export async function listOntologySlugs(workspaceId: string): Promise<string[]> {
   const db = supabaseAdmin();
   const { data, error } = await db
-    .from("ontology_clusters")
+    .from("ontologies")
     .select("slug")
     .eq("workspace_id", workspaceId)
     .is("deleted_at", null)
-    .limit(ONTOLOGY_READ_LIMITS.clusters);
+    .limit(ONTOLOGY_READ_LIMITS.ontologies);
   if (error) throw error;
   return (data ?? []).map((row) => row.slug as string);
 }
@@ -100,8 +100,8 @@ export async function listRelationshipsForSource(
 
 /**
  * The membership rows POINTING AT `childObjectIds` — one level UP the graph.
- * The step `service-gates.ts › clustersOfObject` iterates to answer Q9's "every
- * cluster this object belongs to".
+ * The step `service-gates.ts › ontologiesOfObject` iterates to answer Q9's "every
+ * ontology this object belongs to".
  *
  * Narrow on purpose: three columns, no `position`, no `id`. The walk reads
  * the edge, never the row.
@@ -110,19 +110,19 @@ export async function listMembershipParents(
   workspaceIds: readonly string[],
   childObjectIds: readonly string[]
 ): Promise<
-  Pick<OntologyMembershipRow, "cluster_id" | "parent_object_id" | "child_object_id">[]
+  Pick<OntologyMembershipRow, "ontology_id" | "parent_object_id" | "child_object_id">[]
 > {
   if (workspaceIds.length === 0 || childObjectIds.length === 0) return [];
   const db = supabaseAdmin();
   const { data, error } = await db
     .from("ontology_memberships")
-    .select("cluster_id, parent_object_id, child_object_id")
+    .select("ontology_id, parent_object_id, child_object_id")
     .in("workspace_id", workspaceIds)
     .in("child_object_id", childObjectIds)
     .limit(ONTOLOGY_READ_LIMITS.memberships);
   if (error) throw error;
   return (data ?? []) as Pick<
     OntologyMembershipRow,
-    "cluster_id" | "parent_object_id" | "child_object_id"
+    "ontology_id" | "parent_object_id" | "child_object_id"
   >[];
 }

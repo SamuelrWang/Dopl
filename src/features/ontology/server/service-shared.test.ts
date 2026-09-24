@@ -29,7 +29,7 @@ import {
 } from "./service-shared";
 
 describe("canSeeOntology / canEditOntology — Samuel's matrix, in TypeScript", () => {
-  const CLUSTER = { id: "cluster-1", workspaceId: "owner-container" };
+  const ONTOLOGY = { id: "ontology-1", workspaceId: "owner-container" };
   const ctx = ontologyContextFactory({
     workspaceId: "owner-container",
     userId: "owner",
@@ -40,23 +40,23 @@ describe("canSeeOntology / canEditOntology — Samuel's matrix, in TypeScript", 
   const peer = (over: Partial<OntologyContext> = {}) =>
     ctx({ workspaceId: "someone-elses-container", userId: "peer", role: "member", ...over });
   const reach = (level: OntologyLevel): OntologyShareReach =>
-    new Map([[CLUSTER.id, level]]);
+    new Map([[ONTOLOGY.id, level]]);
 
   it("the OWNER sees and edits, with no share and none needed (arm 1)", () => {
-    expect(canSeeOntology(ctx(), CLUSTER, NO_ONTOLOGY_SHARES)).toBe(true);
-    expect(canEditOntology(ctx(), CLUSTER, NO_ONTOLOGY_SHARES)).toBe(true);
+    expect(canSeeOntology(ctx(), ONTOLOGY, NO_ONTOLOGY_SHARES)).toBe(true);
+    expect(canEditOntology(ctx(), ONTOLOGY, NO_ONTOLOGY_SHARES)).toBe(true);
     // …and the share table is never asked.
-    expect(needsShareArm(ctx(), CLUSTER)).toBe(false);
+    expect(needsShareArm(ctx(), ONTOLOGY)).toBe(false);
   });
 
   it("🔒 a share NEVER NARROWS the owner — even at `none`", () => {
-    expect(canEditOntology(ctx(), CLUSTER, reach("none"))).toBe(true);
+    expect(canEditOntology(ctx(), ONTOLOGY, reach("none"))).toBe(true);
   });
 
   it("a VIEWER of the container sees but cannot edit — the `editor` rung", () => {
     const viewer = ctx({ role: "viewer", userId: "viewer" });
-    expect(canSeeOntology(viewer, CLUSTER, NO_ONTOLOGY_SHARES)).toBe(true);
-    expect(canEditOntology(viewer, CLUSTER, NO_ONTOLOGY_SHARES)).toBe(false);
+    expect(canSeeOntology(viewer, ONTOLOGY, NO_ONTOLOGY_SHARES)).toBe(true);
+    expect(canEditOntology(viewer, ONTOLOGY, NO_ONTOLOGY_SHARES)).toBe(false);
   });
 
   it.each([
@@ -66,29 +66,29 @@ describe("canSeeOntology / canEditOntology — Samuel's matrix, in TypeScript", 
   ] as const)(
     "a PEER at `%s` → see:%s edit:%s",
     (level, see, edit) => {
-      expect(canSeeOntology(peer(), CLUSTER, reach(level))).toBe(see);
-      expect(canEditOntology(peer(), CLUSTER, reach(level))).toBe(edit);
+      expect(canSeeOntology(peer(), ONTOLOGY, reach(level))).toBe(see);
+      expect(canEditOntology(peer(), ONTOLOGY, reach(level))).toBe(edit);
     }
   );
 
   it("a peer with NO share row reads nothing — absence is `none` (I4)", () => {
-    expect(canSeeOntology(peer(), CLUSTER, NO_ONTOLOGY_SHARES)).toBe(false);
-    expect(needsShareArm(peer(), CLUSTER)).toBe(true);
+    expect(canSeeOntology(peer(), ONTOLOGY, NO_ONTOLOGY_SHARES)).toBe(false);
+    expect(needsShareArm(peer(), ONTOLOGY)).toBe(true);
   });
 
   it("🔒 a SHARED CREDENTIAL is refused the SHARE ARM and keeps arm 1 (M-10)", () => {
     const shared = { credentialSubjectUserId: null };
-    expect(canSeeOntology(peer(shared), CLUSTER, reach("edit"))).toBe(false);
-    expect(canEditOntology(peer(shared), CLUSTER, reach("edit"))).toBe(false);
-    expect(needsShareArm(peer(shared), CLUSTER)).toBe(false);
+    expect(canSeeOntology(peer(shared), ONTOLOGY, reach("edit"))).toBe(false);
+    expect(canEditOntology(peer(shared), ONTOLOGY, reach("edit"))).toBe(false);
+    expect(needsShareArm(peer(shared), ONTOLOGY)).toBe(false);
     // …and it still reaches its OWN container's board. Narrowing that would be
     // a change to M-10 this feature has no business making.
-    expect(canSeeOntology(ctx(shared), CLUSTER, NO_ONTOLOGY_SHARES)).toBe(true);
+    expect(canSeeOntology(ctx(shared), ONTOLOGY, NO_ONTOLOGY_SHARES)).toBe(true);
   });
 
-  it("🔒 the level is read for THIS cluster only — I5's key is the pair", () => {
-    const otherCluster = new Map<string, OntologyLevel>([["cluster-2", "edit"]]);
-    expect(canSeeOntology(peer(), CLUSTER, otherCluster)).toBe(false);
+  it("🔒 the level is read for THIS ontology only — I5's key is the pair", () => {
+    const otherOntology = new Map<string, OntologyLevel>([["ontology-2", "edit"]]);
+    expect(canSeeOntology(peer(), ONTOLOGY, otherOntology)).toBe(false);
   });
 
   /**
@@ -100,21 +100,21 @@ describe("canSeeOntology / canEditOntology — Samuel's matrix, in TypeScript", 
    * The narrow direction is the SAFE one and it is still a divergence: the
    * service-role client bypasses RLS, so what runs is this. Row 2 (the caller's
    * own personal shelf, reached from a room) is restored — and only row 2 — by
-   * `./service-audience.ts › levelForCluster`'s `created_by` arm, which its own
+   * `./service-audience.ts › levelForOntology`'s `created_by` arm, which its own
    * suite pins.
    */
   it("the SQL twin's arm 1 — narrower here, and DELIBERATELY (the header's table)", () => {
     // Row 2: the caller's OWN personal container, reached while standing in a
     // room. SQL says true; this says false, and no share row changes that.
-    const ownShelf = { id: "cluster-9", workspaceId: "my-personal-container" };
+    const ownShelf = { id: "ontology-9", workspaceId: "my-personal-container" };
     const inARoom = ctx({ workspaceId: "ws-link", userId: "owner" });
     expect(canSeeOntology(inARoom, ownShelf, NO_ONTOLOGY_SHARES)).toBe(false);
     expect(needsShareArm(inARoom, ownShelf)).toBe(true);
 
     // Row 3: another container the caller is a member of. SQL says true; this
-    // says false, and that one is NOT restored anywhere — a cluster in somebody
+    // says false, and that one is NOT restored anywhere — an ontology in somebody
     // else's link container reaches this caller through a SHARE or not at all.
-    const otherRoom = { id: "cluster-8", workspaceId: "ws-link-2" };
+    const otherRoom = { id: "ontology-8", workspaceId: "ws-link-2" };
     expect(canSeeOntology(inARoom, otherRoom, NO_ONTOLOGY_SHARES)).toBe(false);
     expect(canSeeOntology(inARoom, otherRoom, new Map([[otherRoom.id, "view"]]))).toBe(
       true

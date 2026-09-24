@@ -52,7 +52,7 @@ export interface OntologyObject {
      */
     updatedAt?: string;
 }
-export interface OntologyCluster {
+export interface Ontology {
     id: string;
     slug: string;
     name: string;
@@ -60,10 +60,10 @@ export interface OntologyCluster {
     columnIds: string[];
 }
 export interface OntologySnapshot {
-    clusters: OntologyCluster[];
+    ontologies: Ontology[];
     objects: Record<string, OntologyObject>;
     /**
-     * 🔒 **WHICH CLUSTERS CAME OFF THE CALLER'S OWN PERSONAL SHELF** (S29c,
+     * 🔒 **WHICH ONTOLOGIES CAME OFF THE CALLER'S OWN PERSONAL SHELF** (S29c,
      * 2026-09-18) — the ontology twin of `KbBasesPayload.homeScopedBaseIds`.
      *
      * ⚠ **ABSENT IS "NOT ANSWERED", NEVER "NONE".** A payload cached against an
@@ -72,17 +72,17 @@ export interface OntologySnapshot {
      * this field exists to stop being made by accident. Every render falls back to
      * a FROZEN EMPTY and files no row under the personal label.
      *
-     * ⚠ **A LABEL, NOT A FENCE.** Nothing filters on it: every cluster listed
-     * already cleared `levelForCluster`.
+     * ⚠ **A LABEL, NOT A FENCE.** Nothing filters on it: every ontology listed
+     * already cleared `levelForOntology`.
      */
-    personalClusterIds?: string[];
+    personalOntologyIds?: string[];
 }
 /**
  * `GET /api/ontology?view=summary` — same graph SHAPE, every JSONB column left
- * in the database: no `attributes`, `methods`, `template`, cluster `layout`,
+ * in the database: no `attributes`, `methods`, `template`, ontology `layout`,
  * and no relationships read at all. For map-shaped renders that print names and
  * containment only (`dopl_map` runs before every agent's first substantive
- * reply and was pulling the whole graph to render cluster and column names).
+ * reply and was pulling the whole graph to render ontology and column names).
  *
  * ⚠ A DISTINCT TYPE, not a snapshot with empty arrays: `attributes: []` asserts
  * an object HAS none; omitting says this view did not ask. Anything needing a
@@ -96,7 +96,7 @@ export interface OntologyObjectSummary {
     subtitle: string;
     childIds: string[];
 }
-export interface OntologyClusterSummary {
+export interface OntologyListItem {
     id: string;
     slug: string;
     name: string;
@@ -104,10 +104,10 @@ export interface OntologyClusterSummary {
     columnIds: string[];
 }
 export interface OntologySummary {
-    clusters: OntologyClusterSummary[];
+    ontologies: OntologyListItem[];
     objects: Record<string, OntologyObjectSummary>;
     /**
-     * 🔒 **WHICH CLUSTERS CAME OFF THE CALLER'S OWN PERSONAL SHELF** (S29c,
+     * 🔒 **WHICH ONTOLOGIES CAME OFF THE CALLER'S OWN PERSONAL SHELF** (S29c,
      * 2026-09-18) — the ontology twin of `KbBasesPayload.homeScopedBaseIds`.
      *
      * ⚠ **ABSENT IS "NOT ANSWERED", NEVER "NONE".** A payload cached against an
@@ -116,27 +116,27 @@ export interface OntologySummary {
      * this field exists to stop being made by accident. Every render falls back to
      * a FROZEN EMPTY and files no row under the personal label.
      *
-     * ⚠ **A LABEL, NOT A FENCE.** Nothing filters on it: every cluster listed
-     * already cleared `levelForCluster`.
+     * ⚠ **A LABEL, NOT A FENCE.** Nothing filters on it: every ontology listed
+     * already cleared `levelForOntology`.
      */
-    personalClusterIds?: string[];
+    personalOntologyIds?: string[];
     /**
      * True when a server row ceiling clipped this view. Absent on older servers
      * — treat `undefined` as "not clipped", never "unknown".
      */
     truncated?: boolean;
 }
-export interface OntologyClusterCreateInput {
+export interface OntologyCreateInput {
     name: string;
     purpose?: string;
 }
-export interface OntologyClusterPatch {
+export interface OntologyPatch {
     name?: string;
     purpose?: string;
 }
 export interface OntologyObjectCreateInput {
-    /** Exactly one of clusterId (new column) or parentObjectId (new card). */
-    clusterId?: string;
+    /** Exactly one of ontologyId (new column) or parentObjectId (new card). */
+    ontologyId?: string;
     parentObjectId?: string;
     name: string;
 }

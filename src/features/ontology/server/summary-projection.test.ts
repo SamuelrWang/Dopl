@@ -16,7 +16,7 @@
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type {
-  OntologyClusterSummaryRow,
+  OntologyListItemRow,
   OntologyMembershipRow,
   OntologyObjectSummaryRow,
 } from "./dto";
@@ -29,7 +29,7 @@ vi.mock("./repository", () => ({
 }));
 
 vi.mock("./repository-projections", () => ({
-  listClusterSummaries: vi.fn(),
+  listOntologySummaries: vi.fn(),
   listObjectSummariesByIds: vi.fn(),
 }));
 
@@ -51,12 +51,12 @@ const mockRepo = vi.mocked(repo);
 const mockNarrow = vi.mocked(narrow);
 
 const CTX = ontologyContextFactory()();
-const CLUSTER = "c-1";
+const ONTOLOGY = "c-1";
 const COLUMN = "o-col";
 const CARD = "o-card";
 
-const CLUSTER_ROW: OntologyClusterSummaryRow = {
-  id: CLUSTER,
+const ONTOLOGY_ROW: OntologyListItemRow = {
+  id: ONTOLOGY,
   workspace_id: "ws-1",
   slug: "playbook",
   name: "Dopl Playbook",
@@ -74,7 +74,7 @@ const MEMBERSHIPS: OntologyMembershipRow[] = [
   {
     id: "m-1",
     workspace_id: "ws-1",
-    cluster_id: CLUSTER,
+    ontology_id: ONTOLOGY,
     parent_object_id: null,
     child_object_id: COLUMN,
     position: 0,
@@ -82,7 +82,7 @@ const MEMBERSHIPS: OntologyMembershipRow[] = [
   {
     id: "m-2",
     workspace_id: "ws-1",
-    cluster_id: null,
+    ontology_id: null,
     parent_object_id: COLUMN,
     child_object_id: CARD,
     position: 0,
@@ -90,11 +90,11 @@ const MEMBERSHIPS: OntologyMembershipRow[] = [
 ];
 
 function prime(over: {
-  clusters?: OntologyClusterSummaryRow[];
+  ontologies?: OntologyListItemRow[];
   objects?: OntologyObjectSummaryRow[];
   memberships?: OntologyMembershipRow[];
 } = {}) {
-  mockNarrow.listClusterSummaries.mockResolvedValue(over.clusters ?? [CLUSTER_ROW]);
+  mockNarrow.listOntologySummaries.mockResolvedValue(over.ontologies ?? [ONTOLOGY_ROW]);
   mockNarrow.listObjectSummariesByIds.mockResolvedValue(over.objects ?? OBJECT_ROWS);
   mockRepo.listMemberships.mockResolvedValue(over.memberships ?? MEMBERSHIPS);
 }
@@ -118,11 +118,11 @@ describe("getSummary — what does NOT cross the wire", () => {
     }
   });
 
-  it("ships no cluster layout", async () => {
+  it("ships no ontology layout", async () => {
     const summary = await getSummary(CTX);
-    for (const cluster of summary.clusters) {
-      expect(cluster).not.toHaveProperty("layout");
-      expect(Object.keys(cluster).sort()).toEqual([
+    for (const ontology of summary.ontologies) {
+      expect(ontology).not.toHaveProperty("layout");
+      expect(Object.keys(ontology).sort()).toEqual([
         "columnIds",
         "id",
         "name",
@@ -135,7 +135,7 @@ describe("getSummary — what does NOT cross the wire", () => {
   it("never reads the relationships table — three round trips, not four", async () => {
     await getSummary(CTX);
     expect(mockRepo.listRelationshipsForSources).not.toHaveBeenCalled();
-    expect(mockNarrow.listClusterSummaries).toHaveBeenCalledTimes(1);
+    expect(mockNarrow.listOntologySummaries).toHaveBeenCalledTimes(1);
     expect(mockNarrow.listObjectSummariesByIds).toHaveBeenCalledTimes(1);
     expect(mockRepo.listMemberships).toHaveBeenCalledTimes(1);
   });
@@ -144,7 +144,7 @@ describe("getSummary — what does NOT cross the wire", () => {
 describe("getSummary — the structure a map-shaped render walks", () => {
   it("assembles columnIds and childIds exactly as getSnapshot does", async () => {
     const summary = await getSummary(CTX);
-    expect(summary.clusters[0].columnIds).toEqual([COLUMN]);
+    expect(summary.ontologies[0].columnIds).toEqual([COLUMN]);
     expect(summary.objects[COLUMN].childIds).toEqual([CARD]);
     expect(summary.objects[CARD].childIds).toEqual([]);
   });
@@ -156,7 +156,7 @@ describe("getSummary — the structure a map-shaped render walks", () => {
         {
           id: "m-3",
           workspace_id: "ws-1",
-          cluster_id: CLUSTER,
+          ontology_id: ONTOLOGY,
           parent_object_id: null,
           child_object_id: "gone",
           position: 1,
@@ -164,7 +164,7 @@ describe("getSummary — the structure a map-shaped render walks", () => {
       ],
     });
     const summary = await getSummary(CTX);
-    expect(summary.clusters[0].columnIds).toEqual([COLUMN]);
+    expect(summary.ontologies[0].columnIds).toEqual([COLUMN]);
   });
 });
 
@@ -188,13 +188,13 @@ describe("getSummary — the row ceilings are reported, not silent", () => {
     expect(summary.truncated).toBe(true);
   });
 
-  it("reports truncated:true when the cluster read hits its ceiling", async () => {
+  it("reports truncated:true when the ontology read hits its ceiling", async () => {
     prime({
-      clusters: Array.from({ length: ONTOLOGY_READ_LIMITS.clusters }, (_, i) => ({
+      ontologies: Array.from({ length: ONTOLOGY_READ_LIMITS.ontologies }, (_, i) => ({
         id: `c-${i}`,
         workspace_id: "ws-1",
-        slug: `cluster-${i}`,
-        name: `Cluster ${i}`,
+        slug: `ontology-${i}`,
+        name: `Ontology ${i}`,
         purpose: "",
         created_by: "user-1",
         agents_may_edit: true,

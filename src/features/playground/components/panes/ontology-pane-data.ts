@@ -6,8 +6,8 @@ import type {
 
 /**
  * Data layer for the playground ONTOLOGY pane: one render-ready shape
- * (`PaneCluster` → `PaneLane` → `PaneCard`) that both sources feed —
- * the static marketing demo below, and `snapshotToClusters` mapping the real
+ * (`PaneOntology` → `PaneLane` → `PaneCard`) that both sources feed —
+ * the static marketing demo below, and `snapshotToOntologies` mapping the real
  * `GET /api/ontology` response (`features/ontology/types › OntologySnapshot`)
  * once a playground session exists.
  */
@@ -31,7 +31,7 @@ export interface PaneLane {
   cards: PaneCard[];
 }
 
-export interface PaneCluster {
+export interface PaneOntology {
   id: string;
   name: string;
   purpose: string;
@@ -51,21 +51,21 @@ const KIND_LABELS: Record<TemplateField["kind"], string> = {
 };
 
 /**
- * Real snapshot → pane shape. Columns are the cluster's `columnIds` resolved
+ * Real snapshot → pane shape. Columns are the ontology's `columnIds` resolved
  * through `objects`; cards are each column's `childIds`. Dangling ids (mid-poll
  * deletes) are dropped, so an empty or half-edited workspace renders as empty
  * lanes rather than crashing.
  */
-export function snapshotToClusters(snapshot: OntologySnapshot): PaneCluster[] {
+export function snapshotToOntologies(snapshot: OntologySnapshot): PaneOntology[] {
   const objects = snapshot.objects ?? {};
-  return (snapshot.clusters ?? []).map((cluster) => {
-    const columns = (cluster.columnIds ?? [])
+  return (snapshot.ontologies ?? []).map((ontology) => {
+    const columns = (ontology.columnIds ?? [])
       .map((id) => objects[id])
       .filter((col): col is OntologyObject => Boolean(col));
     return {
-      id: cluster.id,
-      name: cluster.name,
-      purpose: cluster.purpose,
+      id: ontology.id,
+      name: ontology.name,
+      purpose: ontology.purpose,
       count: columns.length,
       lanes: columns.map((col) => ({
         id: col.id,
@@ -105,10 +105,10 @@ function toCard(obj: OntologyObject): PaneCard {
  * Static demo content — the marketing preview shown before a session starts,
  * themed on the "how to use Dopl" starter corpus
  * (`features/workspaces/server/seed-workspace.ts` → ontology seed's
- * "Dopl Playbook" cluster). Only the first cluster carries lanes; the others
+ * "Dopl Playbook" ontology). Only the first ontology carries lanes; the others
  * are cosmetic pills, exactly as the pane rendered before live wiring.
  */
-export const DEMO_CLUSTERS: PaneCluster[] = [
+export const DEMO_ONTOLOGIES: PaneOntology[] = [
   {
     id: "demo-playbook",
     name: "Dopl Playbook",

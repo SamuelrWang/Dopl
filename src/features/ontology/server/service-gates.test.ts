@@ -3,12 +3,12 @@
  * container (`service-gates.ts`, spec §4 sites 2-6). `service.test.ts` runs
  * the same service in a standard workspace; this file moves it into a `link`
  * container and pins: reads are filtered, a `view` level refuses a write, Q9's
- * all-clusters rule holds on an object in two clusters, and every write is
+ * all-ontologies rule holds on an object in two ontologies, and every write is
  * attributed.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import type { OntologyClusterRow, OntologyObjectRow } from "./dto";
+import type { OntologyRow, OntologyObjectRow } from "./dto";
 import { ontologyContextFactory } from "./test-fixtures";
 
 // The changelog capture is a real awaited write (`./service-revisions.ts`), so
@@ -29,14 +29,14 @@ vi.mock("./repository-shares", () => ({
   listChannelIdsForWorkspace: vi.fn(),
   listSharesForChannels: vi.fn(),
   // The card's "shared into N channels" read (`service-reads.ts ›
-  // mapClusterRow`). It rides `getSnapshot`'s second fan, so a mock that omits
+  // mapOntologyRow`). It rides `getSnapshot`'s second fan, so a mock that omits
   // it fails every snapshot case here with a missing-export error rather than a
   // wrong answer.
-  countSharesForClusters: vi.fn(async () => new Map<string, number>()),
+  countSharesForOntologies: vi.fn(async () => new Map<string, number>()),
 }));
 
 vi.mock("./repository-projections", () => ({
-  listClusterSlugs: vi.fn(async () => []),
+  listOntologySlugs: vi.fn(async () => []),
   listMembershipParents: vi.fn(async () => []),
   listRelationshipsForSource: vi.fn(async () => []),
 }));
@@ -55,14 +55,14 @@ vi.mock("@/features/billing/server/entitlements", () => ({
 }));
 
 vi.mock("./repository", () => ({
-  listClusters: vi.fn(),
+  listOntologies: vi.fn(),
   listMemberships: vi.fn(),
   listObjectsByIds: vi.fn(),
   listRelationshipsForSources: vi.fn(),
-  findClusterById: vi.fn(),
-  insertCluster: vi.fn(),
-  updateCluster: vi.fn(),
-  cascadeHardDeleteCluster: vi.fn(),
+  findOntologyById: vi.fn(),
+  insertOntology: vi.fn(),
+  updateOntology: vi.fn(),
+  cascadeHardDeleteOntology: vi.fn(),
   findObjectById: vi.fn(),
   insertObject: vi.fn(),
   updateObject: vi.fn(),
@@ -78,13 +78,13 @@ import * as anchorRepo from "./repository-anchor";
 import * as narrowRepo from "./repository-projections";
 import * as shareRepo from "./repository-shares";
 import {
-  createCluster,
+  createOntology,
   createObject,
-  deleteCluster,
+  deleteOntology,
   deleteObject,
   getAnchor,
   getSnapshot,
-  updateCluster,
+  updateOntology,
   updateObject,
 } from "./service";
 
@@ -94,13 +94,13 @@ const mockNarrow = vi.mocked(narrowRepo);
 const mockShareRepo = vi.mocked(shareRepo);
 
 const WS = "ws-1";
-const CLUSTER_ID = "11111111-1111-4111-8111-111111111111";
+const ONTOLOGY_ID = "11111111-1111-4111-8111-111111111111";
 const LINK = "ws-link";
-const PEER_CLUSTER = "33333333-3333-4333-8333-333333333333";
+const PEER_ONTOLOGY = "33333333-3333-4333-8333-333333333333";
 const OBJECT_ID = "44444444-4444-4444-8444-444444444444";
 
-const CLUSTER_ROW: OntologyClusterRow = {
-  id: CLUSTER_ID,
+const ONTOLOGY_ROW: OntologyRow = {
+  id: ONTOLOGY_ID,
   workspace_id: WS,
   slug: "sales",
   name: "Sales",
@@ -156,18 +156,18 @@ function primeHome(shares: ReturnType<typeof share>[]) {
   mockShareRepo.listSharesForChannels.mockResolvedValue([...shares]);
 }
 
-describe("home container — reads are FILTERED to the admitted clusters", () => {
-  it("drops a cluster with no share row, and never reads its objects", async () => {
-    primeHome([share({ ontology: CLUSTER_ID, members: "view" })]);
-    mockRepo.listClusters.mockResolvedValue([
-      CLUSTER_ROW,
-      { ...CLUSTER_ROW, id: PEER_CLUSTER, created_by: "somebody-else" },
+describe("home container — reads are FILTERED to the admitted ontologies", () => {
+  it("drops an ontology with no share row, and never reads its objects", async () => {
+    primeHome([share({ ontology: ONTOLOGY_ID, members: "view" })]);
+    mockRepo.listOntologies.mockResolvedValue([
+      ONTOLOGY_ROW,
+      { ...ONTOLOGY_ROW, id: PEER_ONTOLOGY, created_by: "somebody-else" },
     ]);
     mockRepo.listMemberships.mockResolvedValue([
       {
         id: "m-1",
         workspace_id: WS,
-        cluster_id: CLUSTER_ID,
+        ontology_id: ONTOLOGY_ID,
         parent_object_id: null,
         child_object_id: "obj-1",
         position: 0,
@@ -175,7 +175,7 @@ describe("home container — reads are FILTERED to the admitted clusters", () =>
       {
         id: "m-2",
         workspace_id: WS,
-        cluster_id: PEER_CLUSTER,
+        ontology_id: PEER_ONTOLOGY,
         parent_object_id: null,
         child_object_id: "obj-secret",
         position: 0,
@@ -186,8 +186,8 @@ describe("home container — reads are FILTERED to the admitted clusters", () =>
 
     const snapshot = await getSnapshot(homeCtx({ userId: "user-1" }));
 
-    expect(snapshot.clusters.map((c) => c.id)).toEqual([CLUSTER_ID]);
-    // The unadmitted cluster's object is never ASKED FOR: a filter applied
+    expect(snapshot.ontologies.map((c) => c.id)).toEqual([ONTOLOGY_ID]);
+    // The unadmitted ontology's object is never ASKED FOR: a filter applied
     // after the read is one a second consumer of the rows walks straight past.
     expect(mockRepo.listObjectsByIds).toHaveBeenCalledWith(expect.anything(), ["obj-1"]);
   });
@@ -195,68 +195,68 @@ describe("home container — reads are FILTERED to the admitted clusters", () =>
 
 describe("home container — a `view` level REFUSES every write", () => {
   beforeEach(() => {
-    primeHome([share({ ontology: CLUSTER_ID, members: "view" })]);
-    mockRepo.findClusterById.mockResolvedValue({
-      ...CLUSTER_ROW,
+    primeHome([share({ ontology: ONTOLOGY_ID, members: "view" })]);
+    mockRepo.findOntologyById.mockResolvedValue({
+      ...ONTOLOGY_ROW,
       created_by: "somebody-else",
     });
   });
 
-  it("updateCluster 404s rather than 403s — refusal is never an oracle", async () => {
+  it("updateOntology 404s rather than 403s — refusal is never an oracle", async () => {
     await expect(
-      updateCluster(homeCtx(), CLUSTER_ID, { name: "Renamed" })
+      updateOntology(homeCtx(), ONTOLOGY_ID, { name: "Renamed" })
     ).rejects.toMatchObject({ status: 404 });
-    expect(mockRepo.updateCluster).not.toHaveBeenCalled();
+    expect(mockRepo.updateOntology).not.toHaveBeenCalled();
   });
 
-  it("deleteCluster refuses before the cascade RPC", async () => {
-    await expect(deleteCluster(homeCtx(), CLUSTER_ID)).rejects.toMatchObject({
+  it("deleteOntology refuses before the cascade RPC", async () => {
+    await expect(deleteOntology(homeCtx(), ONTOLOGY_ID)).rejects.toMatchObject({
       status: 404,
     });
-    expect(mockRepo.cascadeHardDeleteCluster).not.toHaveBeenCalled();
+    expect(mockRepo.cascadeHardDeleteOntology).not.toHaveBeenCalled();
   });
 
   it("createObject refuses before the entitlement check and the insert", async () => {
     await expect(
-      createObject(homeCtx(), { clusterId: CLUSTER_ID, name: "Card" })
+      createObject(homeCtx(), { ontologyId: ONTOLOGY_ID, name: "Card" })
     ).rejects.toMatchObject({ status: 404 });
     expect(mockRepo.insertObject).not.toHaveBeenCalled();
   });
 
-  it("createCluster refuses an AGENT whose owner lane is capped at view", async () => {
+  it("createOntology refuses an AGENT whose owner lane is capped at view", async () => {
     // Solo toggle OFF is the same answer as a shared room: not `edit`.
     mockShareRepo.countActiveWorkspaceMembers.mockResolvedValue(4);
     await expect(
-      createCluster(homeCtx({ source: "agent" }), { name: "New" })
+      createOntology(homeCtx({ source: "agent" }), { name: "New" })
     ).rejects.toMatchObject({ status: 403 });
-    expect(mockRepo.insertCluster).not.toHaveBeenCalled();
+    expect(mockRepo.insertOntology).not.toHaveBeenCalled();
   });
 });
 
-describe("home container — Q9, an object in TWO clusters", () => {
-  const bothClusters = [
-    { ...CLUSTER_ROW, created_by: "somebody-else" },
-    { ...CLUSTER_ROW, id: PEER_CLUSTER, created_by: "somebody-else" },
+describe("home container — Q9, an object in TWO ontologies", () => {
+  const bothOntologies = [
+    { ...ONTOLOGY_ROW, created_by: "somebody-else" },
+    { ...ONTOLOGY_ROW, id: PEER_ONTOLOGY, created_by: "somebody-else" },
   ];
 
   function primeObjectInBoth(secondLevel: "none" | "view" | "edit") {
     primeHome([
-      share({ ontology: CLUSTER_ID, members: "edit" }),
-      share({ ontology: PEER_CLUSTER, members: secondLevel }),
+      share({ ontology: ONTOLOGY_ID, members: "edit" }),
+      share({ ontology: PEER_ONTOLOGY, members: secondLevel }),
     ]);
     mockRepo.findObjectById.mockResolvedValue({
       ...OBJECT_ROW,
       id: OBJECT_ID,
     });
-    mockRepo.listClusters.mockResolvedValue(bothClusters);
+    mockRepo.listOntologies.mockResolvedValue(bothOntologies);
     mockNarrow.listMembershipParents.mockResolvedValue([
-      { cluster_id: CLUSTER_ID, parent_object_id: null, child_object_id: OBJECT_ID },
-      { cluster_id: PEER_CLUSTER, parent_object_id: null, child_object_id: OBJECT_ID },
+      { ontology_id: ONTOLOGY_ID, parent_object_id: null, child_object_id: OBJECT_ID },
+      { ontology_id: PEER_ONTOLOGY, parent_object_id: null, child_object_id: OBJECT_ID },
     ]);
     mockRepo.updateObject.mockResolvedValue({ ...OBJECT_ROW, id: OBJECT_ID });
   }
 
-  it("a WRITE needs `edit` on EVERY cluster — `edit` + `view` is a refusal", async () => {
+  it("a WRITE needs `edit` on EVERY ontology — `edit` + `view` is a refusal", async () => {
     primeObjectInBoth("view");
     await expect(
       updateObject(homeCtx(), OBJECT_ID, { name: "Renamed" })
@@ -264,7 +264,7 @@ describe("home container — Q9, an object in TWO clusters", () => {
     expect(mockRepo.updateObject).not.toHaveBeenCalled();
   });
 
-  it("`edit` + `none` is a refusal too — an invisible cluster still COUNTS", async () => {
+  it("`edit` + `none` is a refusal too — an invisible ontology still COUNTS", async () => {
     primeObjectInBoth("none");
     await expect(
       updateObject(homeCtx(), OBJECT_ID, { name: "Renamed" })
@@ -287,18 +287,18 @@ describe("home container — Q9, an object in TWO clusters", () => {
     expect(mockRepo.hardDeleteObject).not.toHaveBeenCalled();
   });
 
-  it("a cluster the walk NAMES but this caller cannot even SEE still refuses the write", async () => {
-    // The sharpest form of Q9: the object also hangs under a cluster in a
-    // container this request never reached, so `listClusters` never returns it —
+  it("an ontology the walk NAMES but this caller cannot even SEE still refuses the write", async () => {
+    // The sharpest form of Q9: the object also hangs under an ontology in a
+    // container this request never reached, so `listOntologies` never returns it —
     // an `every` over the visible ones alone would admit the write.
-    primeHome([share({ ontology: CLUSTER_ID, members: "edit" })]);
+    primeHome([share({ ontology: ONTOLOGY_ID, members: "edit" })]);
     mockRepo.findObjectById.mockResolvedValue({ ...OBJECT_ROW, id: OBJECT_ID });
-    mockRepo.listClusters.mockResolvedValue([
-      { ...CLUSTER_ROW, created_by: "somebody-else" },
+    mockRepo.listOntologies.mockResolvedValue([
+      { ...ONTOLOGY_ROW, created_by: "somebody-else" },
     ]);
     mockNarrow.listMembershipParents.mockResolvedValue([
-      { cluster_id: CLUSTER_ID, parent_object_id: null, child_object_id: OBJECT_ID },
-      { cluster_id: "c-invisible", parent_object_id: null, child_object_id: OBJECT_ID },
+      { ontology_id: ONTOLOGY_ID, parent_object_id: null, child_object_id: OBJECT_ID },
+      { ontology_id: "c-invisible", parent_object_id: null, child_object_id: OBJECT_ID },
     ]);
 
     await expect(
@@ -307,24 +307,24 @@ describe("home container — Q9, an object in TWO clusters", () => {
     expect(mockRepo.updateObject).not.toHaveBeenCalled();
   });
 
-  it("🔒 a READ needs `view` on ANY — one visible cluster is enough, even beside an invisible one", async () => {
-    primeHome([share({ ontology: CLUSTER_ID, members: "view" })]);
+  it("🔒 a READ needs `view` on ANY — one visible ontology is enough, even beside an invisible one", async () => {
+    primeHome([share({ ontology: ONTOLOGY_ID, members: "view" })]);
     mockAnchor.findAnchorObject.mockResolvedValue({ ...OBJECT_ROW, id: OBJECT_ID });
     mockRepo.findObjectById.mockResolvedValue({ ...OBJECT_ROW, id: OBJECT_ID });
-    mockRepo.listClusters.mockResolvedValue([
-      { ...CLUSTER_ROW, created_by: "somebody-else" },
+    mockRepo.listOntologies.mockResolvedValue([
+      { ...ONTOLOGY_ROW, created_by: "somebody-else" },
     ]);
     mockNarrow.listMembershipParents.mockResolvedValue([
-      { cluster_id: CLUSTER_ID, parent_object_id: null, child_object_id: OBJECT_ID },
-      { cluster_id: "c-invisible", parent_object_id: null, child_object_id: OBJECT_ID },
+      { ontology_id: ONTOLOGY_ID, parent_object_id: null, child_object_id: OBJECT_ID },
+      { ontology_id: "c-invisible", parent_object_id: null, child_object_id: OBJECT_ID },
     ]);
 
-    // The asymmetry is the ruling: the same pair of clusters that refuses the
+    // The asymmetry is the ruling: the same pair of ontologies that refuses the
     // write two cases up admits the read.
     await expect(getAnchor(homeCtx())).resolves.toMatchObject({ id: OBJECT_ID });
   });
 
-  it("an object reachable from NO cluster is refused — `every` over nothing must not admit", async () => {
+  it("an object reachable from NO ontology is refused — `every` over nothing must not admit", async () => {
     primeObjectInBoth("edit");
     mockNarrow.listMembershipParents.mockResolvedValue([]);
     await expect(
@@ -334,7 +334,7 @@ describe("home container — Q9, an object in TWO clusters", () => {
 });
 
 /**
- * Q8 on a WRITE — an edge may not reach out of the shared cluster.
+ * Q8 on a WRITE — an edge may not reach out of the shared ontology.
  *
  * The scope holds the LENDER's whole container by construction, so
  * `repository.ts › filterObjectIds` (which asks only "is this a live row in the
@@ -342,16 +342,16 @@ describe("home container — Q9, an object in TWO clusters", () => {
  * admittedObjectIds` is the second half, and this is the case that would pass
  * without it.
  */
-describe("Q8 on a WRITE — an edge target outside the shared cluster is dropped", () => {
+describe("Q8 on a WRITE — an edge target outside the shared ontology is dropped", () => {
   const FOREIGN = "55555555-5555-4555-8555-555555555555";
 
   beforeEach(() => {
-    primeHome([share({ ontology: CLUSTER_ID, members: "edit" })]);
+    primeHome([share({ ontology: ONTOLOGY_ID, members: "edit" })]);
     mockRepo.findObjectById.mockResolvedValue({ ...OBJECT_ROW, id: OBJECT_ID });
-    mockRepo.listClusters.mockResolvedValue([
-      { ...CLUSTER_ROW, created_by: "somebody-else" },
+    mockRepo.listOntologies.mockResolvedValue([
+      { ...ONTOLOGY_ROW, created_by: "somebody-else" },
       // The LENDER's other, unshared ontology — in the scope, not in the answer.
-      { ...CLUSTER_ROW, id: PEER_CLUSTER, created_by: "somebody-else" },
+      { ...ONTOLOGY_ROW, id: PEER_ONTOLOGY, created_by: "somebody-else" },
     ]);
     // Both rows are LIVE and in the read scope: the old filter admitted both.
     mockRepo.filterObjectIds.mockResolvedValue(new Set([OBJECT_ID, FOREIGN]));
@@ -359,20 +359,20 @@ describe("Q8 on a WRITE — an edge target outside the shared cluster is dropped
     mockNarrow.listMembershipParents.mockImplementation(async (_ws, ids) => {
       const asked = new Set(ids);
       const rows: {
-        cluster_id: string | null;
+        ontology_id: string | null;
         parent_object_id: string | null;
         child_object_id: string;
       }[] = [];
       if (asked.has(OBJECT_ID)) {
         rows.push({
-          cluster_id: CLUSTER_ID,
+          ontology_id: ONTOLOGY_ID,
           parent_object_id: null,
           child_object_id: OBJECT_ID,
         });
       }
       if (asked.has(FOREIGN)) {
         rows.push({
-          cluster_id: PEER_CLUSTER,
+          ontology_id: PEER_ONTOLOGY,
           parent_object_id: null,
           child_object_id: FOREIGN,
         });
@@ -381,7 +381,7 @@ describe("Q8 on a WRITE — an edge target outside the shared cluster is dropped
     });
   });
 
-  it("keeps a target inside an admitted cluster and drops one outside it", async () => {
+  it("keeps a target inside an admitted ontology and drops one outside it", async () => {
     await updateObject(homeCtx(), OBJECT_ID, {
       relationships: [{ label: "reports to", targetIds: [OBJECT_ID, FOREIGN] }],
     });
@@ -412,13 +412,13 @@ describe("Q8 on a WRITE — an edge target outside the shared cluster is dropped
 
 describe("attribution — Q3/Q6, an edit survives the unshare", () => {
   it("stamps last_edited_by and last_edited_source on an object update", async () => {
-    primeHome([share({ ontology: CLUSTER_ID, members: "edit" })]);
+    primeHome([share({ ontology: ONTOLOGY_ID, members: "edit" })]);
     mockRepo.findObjectById.mockResolvedValue({ ...OBJECT_ROW, id: OBJECT_ID });
-    mockRepo.listClusters.mockResolvedValue([
-      { ...CLUSTER_ROW, created_by: "somebody-else" },
+    mockRepo.listOntologies.mockResolvedValue([
+      { ...ONTOLOGY_ROW, created_by: "somebody-else" },
     ]);
     mockNarrow.listMembershipParents.mockResolvedValue([
-      { cluster_id: CLUSTER_ID, parent_object_id: null, child_object_id: OBJECT_ID },
+      { ontology_id: ONTOLOGY_ID, parent_object_id: null, child_object_id: OBJECT_ID },
     ]);
     mockRepo.updateObject.mockResolvedValue({ ...OBJECT_ROW, id: OBJECT_ID });
 
@@ -434,23 +434,23 @@ describe("attribution — Q3/Q6, an edit survives the unshare", () => {
   });
 
   it("stamps the AUTHOR and the SOURCE on a create too", async () => {
-    primeHome([share({ ontology: CLUSTER_ID, members: "edit" })]);
-    mockRepo.findClusterById.mockResolvedValue({
-      ...CLUSTER_ROW,
+    primeHome([share({ ontology: ONTOLOGY_ID, members: "edit" })]);
+    mockRepo.findOntologyById.mockResolvedValue({
+      ...ONTOLOGY_ROW,
       created_by: "somebody-else",
     });
     mockRepo.insertObject.mockResolvedValue(OBJECT_ROW);
     mockRepo.insertMembership.mockResolvedValue({
       id: "m-1",
       workspace_id: WS,
-      cluster_id: CLUSTER_ID,
+      ontology_id: ONTOLOGY_ID,
       parent_object_id: null,
       child_object_id: OBJECT_ROW.id,
       position: 0,
     });
 
     await createObject(homeCtx({ source: "agent" }), {
-      clusterId: CLUSTER_ID,
+      ontologyId: ONTOLOGY_ID,
       name: "Sales Rep",
     });
 

@@ -46,7 +46,7 @@ describe("HIDDEN_TOOLS — the retired surface", () => {
     }
   });
 
-  it("is EMPTY — nothing is mid-retirement (workflows/clusters were deleted)", () => {
+  it("is EMPTY — nothing is mid-retirement (workflows and the legacy graph tools were deleted)", () => {
     // ⚠ Pinned as a VALUE, not skipped — this is what makes a re-hide
     // deliberate. The mechanism is not dead: the next retirement adds names
     // here, ships dark, and deletes later. ⚠ Hide BOTH halves of a domain (the

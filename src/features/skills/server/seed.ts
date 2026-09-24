@@ -107,7 +107,7 @@ If you're about to write prose, stop — it belongs in a KB entry, and the objec
 
 ## Step 2 — Create in an object
 
-Items live in objects inside an ontology (\`dopl_ontology\` op=\`create_cluster\` / \`create_column\` / \`create_object\` — the op NAMES are the code's, the words are yours). Set the object's \`template\` fields with \`op=set_template_field\` so every new item inherits sensible empty attributes.
+Items live in objects inside an ontology (\`dopl_ontology\` op=\`create_ontology\` / \`create_column\` / \`create_object\` — the op NAMES are the code's, the words are yours). Set the object's \`template\` fields with \`op=set_template_field\` so every new item inherits sensible empty attributes.
 
 ## Step 3 — Attributes short, refs explicit
 

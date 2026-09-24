@@ -164,7 +164,7 @@ vi.mock("./message-pane", () => ({
 }));
 vi.mock("./info-panel", () => ({ ChannelsInfoPanel: () => null }));
 vi.mock("./agent-panel", () => ({ ChannelsAgentPanel: () => null }));
-// The channel-management cluster arrived at the cutover (wiring plan Phase 12)
+// The channel-management group arrived at the cutover (wiring plan Phase 12)
 // and drags three write hooks, two dialogs and a Supabase-backed auth read in
 // with it. It has nothing to say about which channel is open, which is the only
 // question this file asks.

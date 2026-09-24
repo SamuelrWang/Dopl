@@ -42,7 +42,7 @@ const searchStub = (identities: unknown[], over: Record<string, unknown> = {}) =
   stub({
     searchKb: vi.fn(async () => []),
     listSkills: vi.fn(async () => []),
-    getOntology: vi.fn(async () => ({ clusters: [], objects: {} })),
+    getOntology: vi.fn(async () => ({ ontologies: [], objects: {} })),
     listAgentIdentitiesPayload: vi.fn(async () => ({ identities })),
     ...over,
   });

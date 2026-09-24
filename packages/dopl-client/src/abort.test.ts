@@ -189,7 +189,7 @@ describe("DoplTransport — caller cancellation", () => {
     const external = new AbortController();
     external.abort();
     const client = new DoplClient(BASE, "k", { signal: external.signal });
-    await expect(client.createOntologyCluster({ name: "x" })).rejects.toBeInstanceOf(DoplAbortError);
+    await expect(client.createOntology({ name: "x" })).rejects.toBeInstanceOf(DoplAbortError);
     expect(stub.calls).toBe(0);
   });
 
@@ -200,10 +200,10 @@ describe("DoplTransport — caller cancellation", () => {
       signalSeenByFetch = signal;
       external.abort();
       await new Promise((r) => setTimeout(r, 5));
-      return new Response(JSON.stringify({ cluster: { id: "c1" } }), { status: 200 });
+      return new Response(JSON.stringify({ ontology: { id: "c1" } }), { status: 200 });
     });
     const client = new DoplClient(BASE, "k", { signal: external.signal });
-    await expect(client.createOntologyCluster({ name: "x" })).resolves.toEqual({ id: "c1" });
+    await expect(client.createOntology({ name: "x" })).resolves.toEqual({ id: "c1" });
     expect(signalSeenByFetch?.aborted).toBe(false);
   });
 
@@ -212,7 +212,7 @@ describe("DoplTransport — caller cancellation", () => {
       throw new DOMException("aborted", "AbortError");
     });
     const client = new DoplClient(BASE, "k");
-    const err = await client.createOntologyCluster({ name: "x" }).catch((e: unknown) => e);
+    const err = await client.createOntology({ name: "x" }).catch((e: unknown) => e);
     expect(err).toBeInstanceOf(DoplTimeoutError);
     expect(err).not.toBeInstanceOf(DoplAbortError);
   });

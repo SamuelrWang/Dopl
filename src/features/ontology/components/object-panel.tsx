@@ -71,7 +71,7 @@ export function ObjectPanel({
   const [confirmDelete, setConfirmDelete] = useState(false);
   if (!object) return null;
 
-  const isColumn = graph.clusters.some((c) => c.columnIds.includes(objectId));
+  const isColumn = graph.ontologies.some((c) => c.columnIds.includes(objectId));
   const containerName = containerNameOf(graph, objectId);
 
   return (

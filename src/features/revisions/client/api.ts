@@ -71,14 +71,14 @@ export async function fetchOntologyObjectRevisions(
   );
 }
 
-/** THE CLUSTER ROLL-UP — the ontology and everything in it. */
-export async function fetchOntologyClusterRevisions(
-  clusterId: string,
+/** THE ONTOLOGY ROLL-UP — the ontology and everything in it. */
+export async function fetchOntologyRevisions(
+  ontologyId: string,
   args: RevisionPageArgs = {}
 ): Promise<RevisionPage> {
   return toPage(
     await apiRequest<Partial<RevisionPage>>(
-      `/api/ontology/clusters/${clusterId}/revisions`,
+      `/api/ontology/ontologies/${ontologyId}/revisions`,
       { workspaceId: args.workspaceId, query: pageQuery(args) }
     )
   );

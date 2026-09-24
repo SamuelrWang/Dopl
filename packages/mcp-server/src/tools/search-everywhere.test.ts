@@ -85,7 +85,7 @@ function clientStub(over: Record<string, unknown> = {}) {
     getWorkspaceId: () => "ws-a",
     searchKb: vi.fn(async () => []),
     listSkills: vi.fn(async () => [SKILL]),
-    getOntology: vi.fn(async () => ({ clusters: [], objects: {} })),
+    getOntology: vi.fn(async () => ({ ontologies: [], objects: {} })),
     listAgentIdentitiesPayload: vi.fn(async () => ({ identities: [] })),
     getHomeChannels: vi.fn(async () => ({ channels: [], pendingLinks: [] })),
     // The fifth read per leg since 2026-09-23 (DMP-004): the app's search, for THAT leg's container.
@@ -411,7 +411,7 @@ describe("an everywhere leg reads and reports exactly like a single-scope search
   it("a clipped ontology read is named on the leg even when nothing matched", async () => {
     const text = await search(
       clientStub({
-        getOntology: vi.fn(async () => ({ clusters: [], objects: {}, truncated: true })),
+        getOntology: vi.fn(async () => ({ ontologies: [], objects: {}, truncated: true })),
       }),
       directoryStub([wsItem("ws-a", "acme")]),
       noopCharge,

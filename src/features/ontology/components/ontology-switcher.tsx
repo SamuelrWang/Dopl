@@ -3,10 +3,10 @@
 import { useRef, useState } from "react";
 import { ChevronDown, Plus } from "lucide-react";
 import { MenuDivider, MenuItem, Popover } from "@/shared/ui/popover-menu";
-import { clusterObjectIds, type GraphState } from "../graph-state";
+import { ontologyObjectIds, type GraphState } from "../graph-state";
 
 /**
- * The cluster picker: the ontology's name is the trigger (2026-09-10). One face
+ * The ontology picker: the ontology's name is the trigger (2026-09-10). One face
  * for both boards — /home's pane and `/[ws]/ontology` — so there is no second
  * picker vocabulary in the same header.
  *
@@ -16,7 +16,7 @@ import { clusterObjectIds, type GraphState } from "../graph-state";
  * rather than at a caller.
  *
  * The object count is in the menu rows, not the trigger, and it is the graph walk
- * (R5 — an object can sit in several clusters), never `columnIds.length`. That is
+ * (R5 — an object can sit in several ontologies), never `columnIds.length`. That is
  * the mistake `use-ontologies.ts › ontologyListRows` carries its own warning about.
  *
  * "+ Ontology" is the last row and a `MenuItem`, so the kit's hover face lands on
@@ -27,7 +27,7 @@ import { clusterObjectIds, type GraphState } from "../graph-state";
  * panel renders as a clipped sliver.
  */
 
-export interface ClusterSwitcherEntry {
+export interface OntologySwitcherEntry {
   id: string;
   name: string;
   /** The graph walk (R5) — what the menu rows say out loud. */
@@ -35,22 +35,22 @@ export interface ClusterSwitcherEntry {
 }
 
 /** One graph → the rows the menu renders. */
-export function clusterSwitcherEntries(graph: GraphState): ClusterSwitcherEntry[] {
-  return graph.clusters.map((cluster) => ({
-    id: cluster.id,
-    name: cluster.name,
-    objectCount: clusterObjectIds(graph, cluster.id).length,
+export function ontologySwitcherEntries(graph: GraphState): OntologySwitcherEntry[] {
+  return graph.ontologies.map((ontology) => ({
+    id: ontology.id,
+    name: ontology.name,
+    objectCount: ontologyObjectIds(graph, ontology.id).length,
   }));
 }
 
-export function ClusterSwitcher({
+export function OntologySwitcher({
   entries,
   activeId,
   canEdit,
   onSelect,
   onCreate,
 }: {
-  entries: readonly ClusterSwitcherEntry[];
+  entries: readonly OntologySwitcherEntry[];
   activeId: string;
   /** Member+ — a viewer gets the list and no create row. */
   canEdit?: boolean;

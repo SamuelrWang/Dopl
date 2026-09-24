@@ -13,10 +13,10 @@ import {
   type OntologyShare,
 } from "../types";
 
-/** TanStack key for one ontology's share rows. Cluster-scoped, because the route
+/** TanStack key for one ontology's share rows. Ontology-scoped, because the route
  *  is: one dialog, one read, whatever the container's channel fan is. */
-export const ontologySharesKey = (workspaceId: string, clusterId: string) =>
-  ["ontology-shares", workspaceId, clusterId] as const;
+export const ontologySharesKey = (workspaceId: string, ontologyId: string) =>
+  ["ontology-shares", workspaceId, ontologyId] as const;
 
 /** A share row is unshared, not stored, when all three audiences are `none` (I4).
  *  One place decides it, so the dialog and the write cannot disagree. */
@@ -41,7 +41,7 @@ export function isUnshared(share: OntologyShare): boolean {
  */
 export function useOntologyShares(
   workspaceId: string | null,
-  clusterId: string | null
+  ontologyId: string | null
 ): {
   shares: readonly OntologyShare[];
   canManage: boolean;
@@ -51,10 +51,10 @@ export function useOntologyShares(
   saving: boolean;
 } {
   const queryClient = useQueryClient();
-  const enabled = workspaceId !== null && clusterId !== null;
+  const enabled = workspaceId !== null && ontologyId !== null;
   const query = useQuery({
-    queryKey: ontologySharesKey(workspaceId ?? "", clusterId ?? ""),
-    queryFn: () => fetchOntologyShares(workspaceId as string, clusterId as string),
+    queryKey: ontologySharesKey(workspaceId ?? "", ontologyId ?? ""),
+    queryFn: () => fetchOntologyShares(workspaceId as string, ontologyId as string),
     enabled,
     refetchOnWindowFocus: false,
   });
@@ -67,13 +67,13 @@ export function useOntologyShares(
       isUnshared(share)
         ? deleteOntologyShare(
             workspaceId as string,
-            clusterId as string,
+            ontologyId as string,
             share.channelId
           )
-        : putOntologyShare(workspaceId as string, clusterId as string, share),
+        : putOntologyShare(workspaceId as string, ontologyId as string, share),
     onSuccess: () => {
       void queryClient.invalidateQueries({
-        queryKey: ontologySharesKey(workspaceId ?? "", clusterId ?? ""),
+        queryKey: ontologySharesKey(workspaceId ?? "", ontologyId ?? ""),
       });
       // The second entry — the card's share count rides the snapshot.
       void queryClient.invalidateQueries({

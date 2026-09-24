@@ -16,7 +16,7 @@ exports.getSkillHistory = getSkillHistory;
 exports.getSkillVersion = getSkillVersion;
 exports.restoreSkillVersion = restoreSkillVersion;
 exports.listOntologyObjectRevisions = listOntologyObjectRevisions;
-exports.listOntologyClusterRevisions = listOntologyClusterRevisions;
+exports.listOntologyRevisions = listOntologyRevisions;
 exports.restoreOntologyObjectRevision = restoreOntologyObjectRevision;
 const enc = encodeURIComponent;
 function pageQuery(opts) {
@@ -58,8 +58,8 @@ async function restoreSkillVersion(t, versionId, expectedVersion) {
 async function listOntologyObjectRevisions(t, objectId, opts = {}) {
     return t.request(`/api/ontology/objects/${enc(objectId)}/revisions${pageQuery(opts)}`, { toolName: "ontology_history" });
 }
-async function listOntologyClusterRevisions(t, clusterId, opts = {}) {
-    return t.request(`/api/ontology/clusters/${enc(clusterId)}/revisions${pageQuery(opts)}`, { toolName: "ontology_history" });
+async function listOntologyRevisions(t, ontologyId, opts = {}) {
+    return t.request(`/api/ontology/ontologies/${enc(ontologyId)}/revisions${pageQuery(opts)}`, { toolName: "ontology_history" });
 }
 async function restoreOntologyObjectRevision(t, objectId, revisionId, expectedVersion) {
     const data = await t.request(`/api/ontology/objects/${enc(objectId)}/revisions/${enc(revisionId)}/restore`, { method: "POST", toolName: "ontology_restore", customHeaders: precondition(expectedVersion) });

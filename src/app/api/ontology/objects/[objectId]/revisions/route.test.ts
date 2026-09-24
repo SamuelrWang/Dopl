@@ -42,7 +42,7 @@ vi.mock("@/shared/auth/with-workspace-auth", () => ({
       wrapperOptions.push(options);
       return handler(req, {
         ...AUTH,
-        params: { objectId: "obj-1", clusterId: "cl-1", revisionId: "rev-1" },
+        params: { objectId: "obj-1", ontologyId: "cl-1", revisionId: "rev-1" },
       });
     },
 }));
@@ -53,22 +53,22 @@ vi.mock("@/features/ontology/server/service", () => ({
     userId: auth.userId,
   }),
   getSnapshot: vi.fn(async () => ({
-    clusters: [],
+    ontologies: [],
     objects: { "obj-1": { id: "obj-1", name: "Acme" } },
   })),
 }));
 
 vi.mock("@/features/ontology/server/service-revisions-read", () => ({
   listObjectRevisions: vi.fn(async () => ({ revisions: [], nextCursor: null })),
-  listClusterRevisions: vi.fn(async () => ({ revisions: [], nextCursor: null })),
+  listOntologyRevisions: vi.fn(async () => ({ revisions: [], nextCursor: null })),
   restoreObjectRevision: vi.fn(async () => {}),
 }));
 
 import { GET as GET_OBJECT } from "./route";
-import { GET as GET_CLUSTER } from "../../../clusters/[clusterId]/revisions/route";
+import { GET as GET_ONTOLOGY } from "../../../ontologies/[ontologyId]/revisions/route";
 import { POST as POST_RESTORE } from "./[revisionId]/restore/route";
 import {
-  listClusterRevisions,
+  listOntologyRevisions,
   listObjectRevisions,
   restoreObjectRevision,
 } from "@/features/ontology/server/service-revisions-read";
@@ -120,11 +120,11 @@ describe("GET /api/ontology/objects/{objectId}/revisions", () => {
   });
 });
 
-describe("GET /api/ontology/clusters/{clusterId}/revisions", () => {
-  it("answers the cluster ROLL-UP at the guest floor", async () => {
-    const res = await GET_CLUSTER(req("/api/ontology/clusters/cl-1/revisions"), CTX_ARG);
+describe("GET /api/ontology/ontologies/{ontologyId}/revisions", () => {
+  it("answers the ontology ROLL-UP at the guest floor", async () => {
+    const res = await GET_ONTOLOGY(req("/api/ontology/ontologies/cl-1/revisions"), CTX_ARG);
     expect(res.status).toBe(200);
-    expect(vi.mocked(listClusterRevisions).mock.calls[0][1]).toBe("cl-1");
+    expect(vi.mocked(listOntologyRevisions).mock.calls[0][1]).toBe("cl-1");
     expect(wrapperOptions[0]).toMatchObject({ minRole: "guest" });
   });
 });

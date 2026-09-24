@@ -140,7 +140,7 @@ export const DELETE = withUserAuth(async (_request, { userId }) => {
       await admin.storage.from("community-thumbnails").remove(thumbPaths);
     }
 
-    // Cascades profiles / user-scoped clusters / user_preferences.
+    // Cascades profiles / user_preferences.
     // mcp_events.user_id + system_events.user_id are SET NULL (analytics retained).
     const { error } = await admin.auth.admin.deleteUser(user.id);
 

@@ -3,7 +3,7 @@
 import type {
   ObjectAttribute,
   ObjectMethod,
-  OntologyCluster,
+  Ontology,
   OntologyObject,
   OntologySnapshot,
 } from "./types";
@@ -11,23 +11,33 @@ import type {
 /**
  * Client-side graph store. Actions mutate local state optimistically;
  * `use-ontology.ts` mirrors them to the API. Columns are container objects:
- * cluster holds columnIds, a column's childIds are its cards.
+ * ontology holds columnIds, a column's childIds are its cards.
  */
 
 export interface GraphState {
-  clusters: OntologyCluster[];
+  ontologies: Ontology[];
   objects: Record<string, OntologyObject>;
 }
 
-export const EMPTY_GRAPH: GraphState = { clusters: [], objects: {} };
+/**
+ * ⚠ CACHE-SHAPE FALLBACK (INVARIANTS §8). A snapshot persisted before 2026-09-23 carries its
+ * list under the retired key and no `ontologies`, and the persisted query cache restores it
+ * before the first refetch. It reads as EMPTY until that refetch lands — never a crash. Every
+ * snapshot-to-state entry point reads the list through here.
+ */
+export function ontologiesOf(snapshot: OntologySnapshot): Ontology[] {
+  return (snapshot as Partial<OntologySnapshot>).ontologies ?? [];
+}
+
+export const EMPTY_GRAPH: GraphState = { ontologies: [], objects: {} };
 
 export type GraphAction =
   | { type: "SNAPSHOT_SET"; snapshot: OntologySnapshot }
-  | { type: "CLUSTER_ADD"; cluster: OntologyCluster }
+  | { type: "ONTOLOGY_ADD"; ontology: Ontology }
   /**
    * Optimistic-create reconcile: provisional ids from `optimistic-create.ts`
    * swapped for the server's wherever referenced, plus server-minted slugs.
-   * `map` = provisional → real; `slugs` keyed by the real cluster id.
+   * `map` = provisional → real; `slugs` keyed by the real ontology id.
    * A swap, not a re-seed — rows stay as they are on screen.
    */
   | {
@@ -35,12 +45,12 @@ export type GraphAction =
       map: Readonly<Record<string, string>>;
       slugs?: Readonly<Record<string, string>>;
     }
-  | { type: "CLUSTER_UPDATE"; id: string; patch: { name?: string; purpose?: string } }
-  | { type: "CLUSTER_DELETE"; id: string }
+  | { type: "ONTOLOGY_UPDATE"; id: string; patch: { name?: string; purpose?: string } }
+  | { type: "ONTOLOGY_DELETE"; id: string }
   | {
       type: "OBJECT_ADD";
       object: OntologyObject;
-      clusterId?: string;
+      ontologyId?: string;
       parentObjectId?: string;
     }
   | { type: "OBJECT_UPDATE"; id: string; patch: Partial<OntologyObject> }
@@ -92,7 +102,7 @@ function patchObject(
 /**
  * Rewrite provisional ids everywhere the graph names one: the object map's keys,
  * `id`, `columnIds`, `childIds`, relationship targets, `ref` attribute values and
- * each cluster's `layout` keys. Total on purpose — any on-screen id can be picked
+ * each ontology's `layout` keys. Total on purpose — any on-screen id can be picked
  * as a relationship/`ref` target mid-round-trip, and a missed rewrite dangles.
  * `layout`'s KEYS are ids though it has no id-shaped field, so a row-shape-driven
  * enumeration skips it and the stale key rides `pending:<uuid>` into the next write.
@@ -123,9 +133,9 @@ function resolveIds(
   }
   return {
     objects,
-    clusters: state.clusters.map((c) => {
+    ontologies: state.ontologies.map((c) => {
       const id = to(c.id);
-      const layout: OntologyCluster["layout"] = {};
+      const layout: Ontology["layout"] = {};
       for (const [nodeId, point] of Object.entries(c.layout ?? {})) layout[to(nodeId)] = point;
       return {
         ...c,
@@ -138,11 +148,11 @@ function resolveIds(
   };
 }
 
-/** Every object a cluster owns: columns + all childIds descendants.
+/** Every object an ontology owns: columns + all childIds descendants.
  *  Visited-set guards cycles from objects shared across parents. */
-function collectClusterObjectIds(state: GraphState, cluster: OntologyCluster): Set<string> {
+function collectOntologyObjectIds(state: GraphState, ontology: Ontology): Set<string> {
   const removed = new Set<string>();
-  const stack = [...cluster.columnIds];
+  const stack = [...ontology.columnIds];
   while (stack.length > 0) {
     const id = stack.pop();
     if (id === undefined || removed.has(id)) continue;
@@ -168,7 +178,7 @@ export function orphanedByObjectDelete(state: GraphState, objectId: string): str
       for (const childId of state.objects[id]?.childIds ?? []) {
         if (removed.has(childId)) continue;
         const hasSurvivingParent =
-          state.clusters.some((c) => c.columnIds.includes(childId)) ||
+          state.ontologies.some((c) => c.columnIds.includes(childId)) ||
           Object.values(state.objects).some(
             (o) => !removed.has(o.id) && o.childIds.includes(childId)
           );
@@ -183,32 +193,32 @@ export function orphanedByObjectDelete(state: GraphState, objectId: string): str
   return [...removed];
 }
 
-/** Ids of every object a `CLUSTER_DELETE` removes — columns and all descendants. */
-export function clusterObjectIds(state: GraphState, clusterId: string): string[] {
-  const cluster = state.clusters.find((c) => c.id === clusterId);
-  if (!cluster) return [];
-  return [...collectClusterObjectIds(state, cluster)];
+/** Ids of every object a `ONTOLOGY_DELETE` removes — columns and all descendants. */
+export function ontologyObjectIds(state: GraphState, ontologyId: string): string[] {
+  const ontology = state.ontologies.find((c) => c.id === ontologyId);
+  if (!ontology) return [];
+  return [...collectOntologyObjectIds(state, ontology)];
 }
 
 export function graphReducer(state: GraphState, action: GraphAction): GraphState {
   switch (action.type) {
     case "SNAPSHOT_SET":
-      return { clusters: action.snapshot.clusters, objects: action.snapshot.objects };
-    case "CLUSTER_ADD":
-      return { ...state, clusters: [...state.clusters, action.cluster] };
+      return { ontologies: ontologiesOf(action.snapshot), objects: action.snapshot.objects };
+    case "ONTOLOGY_ADD":
+      return { ...state, ontologies: [...state.ontologies, action.ontology] };
     case "CREATE_RESOLVE":
       return resolveIds(state, action.map, action.slugs);
-    case "CLUSTER_UPDATE":
+    case "ONTOLOGY_UPDATE":
       return {
         ...state,
-        clusters: state.clusters.map((c) =>
+        ontologies: state.ontologies.map((c) =>
           c.id === action.id ? { ...c, ...action.patch } : c
         ),
       };
-    case "CLUSTER_DELETE": {
-      const cluster = state.clusters.find((c) => c.id === action.id);
-      if (!cluster) return state;
-      const removed = collectClusterObjectIds(state, cluster);
+    case "ONTOLOGY_DELETE": {
+      const ontology = state.ontologies.find((c) => c.id === action.id);
+      if (!ontology) return state;
+      const removed = collectOntologyObjectIds(state, ontology);
       const objects = { ...state.objects };
       for (const id of removed) delete objects[id];
       for (const [oid, obj] of Object.entries(objects)) {
@@ -225,7 +235,7 @@ export function graphReducer(state: GraphState, action: GraphAction): GraphState
       }
       return {
         objects,
-        clusters: state.clusters.filter((c) => c.id !== action.id),
+        ontologies: state.ontologies.filter((c) => c.id !== action.id),
       };
     }
     case "OBJECT_ADD": {
@@ -242,8 +252,8 @@ export function graphReducer(state: GraphState, action: GraphAction): GraphState
       }
       return {
         objects,
-        clusters: state.clusters.map((c) =>
-          c.id === action.clusterId
+        ontologies: state.ontologies.map((c) =>
+          c.id === action.ontologyId
             ? { ...c, columnIds: [...c.columnIds, action.object.id] }
             : c
         ),
@@ -268,7 +278,7 @@ export function graphReducer(state: GraphState, action: GraphAction): GraphState
       }
       return {
         objects,
-        clusters: state.clusters.map((c) => ({
+        ontologies: state.ontologies.map((c) => ({
           ...c,
           columnIds: c.columnIds.filter((id) => id !== action.id),
         })),

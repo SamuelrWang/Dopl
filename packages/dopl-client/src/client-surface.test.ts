@@ -32,11 +32,11 @@ const BASE = "https://api.example.test";
  *   92 — HEAD's `client.d.ts` at the split (93 members, less constructor)
  *   85 — less the SEVEN the trash teardown removed in the same working tree
  *        (`listChatsTrash`, `listKbTrash`, `restoreChat`, `restoreKbBase`,
- *        `restoreKbEntry`, `restoreKbFolder`, `restoreOntologyCluster`). The
+ *        `restoreKbEntry`, `restoreKbFolder`, `restoreOntology`). The
  *        split itself moved declarations between files and dropped none.
- *   67 — less the EIGHTEEN that went with the workflows + clusters deletion
- *        (five `*Cluster` + thirteen `*Workflow*`), along with `clusters.ts`,
- *        `workflows.ts` and both of their chain links.
+ *   67 — less the EIGHTEEN that went with the workflows + legacy-graph deletion
+ *        (five legacy-graph methods + thirteen `*Workflow*`), along with the
+ *        legacy-graph module, `workflows.ts` and both of their chain links.
  *   68 — PLUS ONE: `consumeCredits`, added with the `BillingMethods` link
  *        (`client-billing.ts`). First ADDITION this list has recorded — every
  *        prior delta was a removal — so stated as one, not folded in.
@@ -120,7 +120,7 @@ const PUBLIC_SURFACE = [
   "createAgentIdentity",
   "createKbBase",
   "createKbFolderByPath",
-  "createOntologyCluster",
+  "createOntology",
   "createOntologyObject",
   "createSkill",
   "deleteChat",
@@ -133,7 +133,7 @@ const PUBLIC_SURFACE = [
   "dryRunKbBase",
   "deleteKbBase",
   "deleteKbByPath",
-  "deleteOntologyCluster",
+  "deleteOntology",
   "deleteOntologyObject",
   "deleteSkill",
   "exportChat",
@@ -223,7 +223,7 @@ const PUBLIC_SURFACE = [
   "updateChat",
   "updateChatFolder",
   "updateKbBase",
-  "updateOntologyCluster",
+  "updateOntology",
   "updateOntologyObject",
   "updateSkill",
   "writeChannelArtifact",
@@ -234,7 +234,7 @@ const PUBLIC_SURFACE = [
   "getSkillHistory",
   "getSkillVersion",
   "listKbEntryRevisions",
-  "listOntologyClusterRevisions",
+  "listOntologyRevisions",
   "listOntologyObjectRevisions",
   "restoreKbEntryRevision",
   "restoreOntologyObjectRevision",

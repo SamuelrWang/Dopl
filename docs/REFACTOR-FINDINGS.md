@@ -8341,7 +8341,7 @@ one; a widening that turns out to be wrong produces nothing anybody sees.
   pinning, 2026-09-18),
   and the reach is a third question on a third axis. It is
   `src/app/api/ontology/reach/route.ts` → `src/features/ontology/server/service-reach.ts › getReach`,
-  which composes `› service-audience.ts › levelForCluster` per cluster and drops `none`.
+  which composes `› service-audience.ts › levelForOntology` per cluster and drops `none`.
   ⚠ **NO `?channelId=`, and that is not an omission**: the ceiling resolves per CONTAINER
   (`repository-shares.ts › listChannelIdsForWorkspace` folds every channel in and takes the wider
   rung, I5), and a home channel IS the one channel in its `kind='link'` container — a channel filter
@@ -8408,7 +8408,7 @@ one; a widening that turns out to be wrong produces nothing anybody sees.
   `if (audience.workspaceIds.length === 0) return "none"` — because `service-shared.ts ›
   inOwnContainer` asks about `ctx.workspaceId` and would otherwise have admitted the calling
   container to an audience resolved BECAUSE that container's kind could not be trusted. That line is
-  also what closes `service-gates.ts › assertCanCreateCluster`, whose question is about a row that
+  also what closes `service-gates.ts › assertCanCreateOntology`, whose question is about a row that
   does not exist yet and therefore never came through a read.
   *Tests:* `service-audience.test.ts` (an unknown kind, and a missing row — both directions, with the
   `standard` arm still pinned to `unrestricted`) and `service-reach.test.ts`. MUTATION-VERIFIED:
@@ -8542,8 +8542,8 @@ one; a widening that turns out to be wrong produces nothing anybody sees.
      (`revisions/server/service.ts › COALESCING_RESOURCE_TYPES`). Keying the window on
      `(resource, field)` was refused: a field change is already atomic, so the window would buy
      nothing and cost a rule with two arms.
-  4. **THE CLUSTER ROLL-UP** is `service-revisions-read.ts › listClusterRevisions`, narrowed by the
-     cluster's own membership walk (`service-reads.ts › walkAdmittedClusters`, exported for it) —
+  4. **THE CLUSTER ROLL-UP** is `service-revisions-read.ts › listOntologyRevisions`, narrowed by the
+     cluster's own membership walk (`service-reads.ts › walkAdmittedOntologies`, exported for it) —
      the same "the id set is the fence" the base roll-up uses.
 - **NO MIGRATION.** The `revisions` table, its two ontology `resource_type` arms and
   `dopl_revision_readable`'s `CASE` were already right; the two arms now answer about real rows,
@@ -10237,6 +10237,7 @@ The claim had been restated in five places from one sentence, which is how it su
 - ⚠ **ZERO TOMBSTONES, AND THAT IS A MEASUREMENT.** All eight `deleted_at`-bearing tables read `count(*) FILTER (WHERE deleted_at IS NOT NULL) = 0` on 2026-09-18 (`knowledge_bases` 0/36, `knowledge_entries` 0/260, `knowledge_folders` 0/36, `skills` 0/23, `channels` 0/18, `chats` 0/5, `ontology_clusters` 0/8, `ontology_objects` 0/40). Re-derive before acting; `20260807110000_purge_soft_deleted_rows.sql` is what made it true.
 - 🔒 **WHY THE DROP IS NOT MECHANICAL, WHICH IS THE ONLY REASON IT WAS NOT DONE.** Three of the indexes are PARTIAL UNIQUE constraints whose predicate IS `deleted_at IS NULL` — `knowledge_bases_workspace_slug_active_unique`, `knowledge_entries_unique_active` (`NULLS NOT DISTINCT`), `knowledge_folders_unique_active`, plus `skills_workspace_slug_active_idx`. Dropping the column means REBUILDING each as a total unique index on live tables: a real constraint change, and `20260501070000_knowledge_bases_slug_partial_unique.sql`'s header records that the JS dedupe was written to match the partial form. `knowledge_entries_search_tsv_idx` is a partial GIN over a GENERATED STORED `tsvector`. And the TS side cannot move alone: `scripts/check-knowledge-type-drift.ts` pins `KnowledgeBase` field-for-field against the published `@dopl/client` mirror, so the column leaving the database is a PUBLISHED-SDK change in the same commit.
 - ⚠ **THE ONTOLOGY HALF IS THE SAME SHAPE AND IS DELIBERATELY NOT IN THAT MIGRATION.** `cascade_soft_delete_cluster(uuid, uuid)`, `cascade_restore_cluster(uuid, text)` and `cascade_purge_cluster(uuid, text)` (`20260718000040`, `20260718000060`) are live in prod, are trash/restore machinery for `ontology_clusters.deleted_at` / `ontology_objects.deleted_at`, and have NO caller — their single tree reference each is `src/shared/supabase/types.ts`, the file generated FROM the deployed database. They were left standing because a migration whose header says "knowledge" must not quietly change another feature; a follow-up naming ontology should take them.
+- **UPDATE 2026-09-23 — THE ONTOLOGY TRASH/RESTORE/PURGE RPCs ARE DROPPED IN `20261022120000_ontology_vocabulary_rename.sql`** (written, not applied at time of writing; measure with `select proname from pg_proc where proname like 'cascade_%'`). The ontology table's `deleted_at` column is NOT dropped there; it stays in this entry's scope.
 - ⚠ **`channels.deleted_at` AND `chats.deleted_at` ARE NOT IN SCOPE AND ARE NOT INERT.** Five live RLS policies filter on `channels.deleted_at IS NULL` (`channels_member_select` and the four child-table SELECT policies that `EXISTS`-join it), and `channels/server/repository-{account,await-workspace}.ts` call the filter *"not optional"*. Whatever the channel lifecycle means by it, it is a different question from this one.
 - Proposed resolution: ONE migration per feature, each `DROP COLUMN ... CASCADE`-free and paired with the explicit index rebuilds, ordered rebuild-then-drop; the knowledge/skills one lands WITH the `@dopl/client` field removal, a `dist/` rebuild and a `check-knowledge-type-drift.ts` run in the same commit, or the gate goes red on a published package.
 - Status: **OPEN.** The inert state is pinned by `src/features/knowledge/soft-delete-retired.test.ts`, which replays the migration directory and asserts the six functions and two triggers are gone, that `cascade_hard_delete_folder` survives, and that every FK to `knowledge_bases` is `ON DELETE CASCADE`. MUTATION-VERIFY: 1 revert (remove `20261013120000` from the directory), 9 failures, 0 vacuous (2026-09-18).

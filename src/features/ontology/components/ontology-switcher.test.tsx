@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 /**
- * The cluster picker — the ontology's name as the trigger, every ontology and the
+ * The ontology picker — the ontology's name as the trigger, every ontology and the
  * create behind it (Samuel, 2026-09-10). Pins source and shape: one control on two
  * boards, against a board showing a different set, the trigger returning as a pill,
  * or the create row going missing.
@@ -9,7 +9,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import type { GraphState } from "../graph-state";
-import { ClusterSwitcher, clusterSwitcherEntries } from "./cluster-switcher";
+import { OntologySwitcher, ontologySwitcherEntries } from "./ontology-switcher";
 
 afterEach(cleanup);
 
@@ -26,10 +26,10 @@ function object(id: string, name: string, childIds: string[] = []) {
   };
 }
 
-/** One cluster of a column and two cards (three objects, one column) plus one empty
- *  cluster — the pair that keeps the count honest (R5, a graph walk). */
+/** One ontology of a column and two cards (three objects, one column) plus one empty
+ *  ontology — the pair that keeps the count honest (R5, a graph walk). */
 const GRAPH = {
-  clusters: [
+  ontologies: [
     {
       id: "c1",
       slug: "pipeline",
@@ -48,10 +48,10 @@ const GRAPH = {
 } as unknown as GraphState;
 
 describe("the list source", () => {
-  it("carries the graph WALK, one entry per cluster", () => {
-    // R5: an object can sit in several clusters, so the count is a walk — one
+  it("carries the graph WALK, one entry per ontology", () => {
+    // R5: an object can sit in several ontologies, so the count is a walk — one
     // column plus its two cards is three, never `columnIds.length`.
-    expect(clusterSwitcherEntries(GRAPH)).toEqual([
+    expect(ontologySwitcherEntries(GRAPH)).toEqual([
       { id: "c1", name: "Pipeline", objectCount: 3 },
       { id: "c2", name: "Roster", objectCount: 0 },
     ]);
@@ -68,8 +68,8 @@ function renderSwitcher(
   const onSelect = props.onSelect ?? vi.fn();
   const onCreate = props.onCreate ?? vi.fn();
   render(
-    <ClusterSwitcher
-      entries={clusterSwitcherEntries(GRAPH)}
+    <OntologySwitcher
+      entries={ontologySwitcherEntries(GRAPH)}
       activeId="c1"
       canEdit={props.canEdit}
       onSelect={onSelect}
@@ -99,7 +99,7 @@ describe("the trigger", () => {
 });
 
 describe("the menu", () => {
-  it("lists EVERY cluster, marks the current one, and selects", () => {
+  it("lists EVERY ontology, marks the current one, and selects", () => {
     const { onSelect } = renderSwitcher({ canEdit: true });
     fireEvent.click(screen.getByTitle("Switch ontology"));
 

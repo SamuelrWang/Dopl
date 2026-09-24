@@ -22,7 +22,7 @@ import {
   ChatFolderCreateSchema,
 } from "@/features/chats/schema";
 import {
-  OntologyClusterCreateSchema,
+  OntologyCreateSchema,
   OntologyObjectCreateSchema,
 } from "@/features/ontology/schema";
 import { ChannelCreateSchema } from "@/features/channels/schema";
@@ -133,13 +133,13 @@ const BOUNDED_FIELDS: BoundedField[] = [
     accepts: (v) => ChatFolderCreateSchema.safeParse({ name: v }).success,
   },
   {
-    column: "ontology_clusters.name",
-    accepts: (v) => OntologyClusterCreateSchema.safeParse({ name: v }).success,
+    column: "ontologies.name",
+    accepts: (v) => OntologyCreateSchema.safeParse({ name: v }).success,
   },
   {
     column: "ontology_objects.name",
     accepts: (v) =>
-      OntologyObjectCreateSchema.safeParse({ clusterId: UUID, name: v }).success,
+      OntologyObjectCreateSchema.safeParse({ ontologyId: UUID, name: v }).success,
   },
   // Regression guard: both resolve through the shared helper now.
   {

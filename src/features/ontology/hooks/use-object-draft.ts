@@ -17,7 +17,7 @@ import type { OntologyObject } from "../types";
 export interface ObjectDraft {
   /** True while a draft lane is on the board waiting for the popup's answer. */
   open: boolean;
-  begin: (clusterId: string) => void;
+  begin: (ontologyId: string) => void;
   /** Discard / Escape / backdrop — the lane leaves, nothing was ever sent. */
   discard: () => void;
   create: (patch: ColumnDraftPatch) => void;
@@ -28,10 +28,10 @@ export function useObjectDraft({
   discardColumnDraft,
   commitColumnDraft,
 }: {
-  beginColumnDraft: (clusterId: string) => OntologyObject;
+  beginColumnDraft: (ontologyId: string) => OntologyObject;
   discardColumnDraft: (draftId: string) => void;
   commitColumnDraft: (
-    clusterId: string,
+    ontologyId: string,
     draft: OntologyObject,
     patch: ColumnDraftPatch
   ) => void;
@@ -40,15 +40,15 @@ export function useObjectDraft({
   // inside a `setState` updater runs during render — twice under StrictMode, which
   // is two lanes for one click. The ref holds the row; the render reads only the
   // boolean.
-  const draftRef = useRef<{ clusterId: string; row: OntologyObject } | null>(null);
+  const draftRef = useRef<{ ontologyId: string; row: OntologyObject } | null>(null);
   const [open, setOpen] = useState(false);
 
   const begin = useCallback(
-    (clusterId: string) => {
+    (ontologyId: string) => {
       // One draft at a time: a second click would strand the first lane on the
       // board with nothing holding its row.
       if (draftRef.current) return;
-      draftRef.current = { clusterId, row: beginColumnDraft(clusterId) };
+      draftRef.current = { ontologyId, row: beginColumnDraft(ontologyId) };
       setOpen(true);
     },
     [beginColumnDraft]
@@ -69,7 +69,7 @@ export function useObjectDraft({
   const create = useCallback(
     (patch: ColumnDraftPatch) => {
       const current = take();
-      if (current) commitColumnDraft(current.clusterId, current.row, patch);
+      if (current) commitColumnDraft(current.ontologyId, current.row, patch);
     },
     [take, commitColumnDraft]
   );

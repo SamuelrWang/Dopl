@@ -37,6 +37,18 @@ const NON_GET_EXPORT =
 const USES_WRAPPER = /\b(withUserAuth|withWorkspaceAuth|withMcpAccess)\b/;
 
 /**
+ * A route file that takes its handlers from ANOTHER route file (a retired path kept as an alias)
+ * inherits that file's verdict — resolved and read, never assumed from the import alone.
+ */
+const ROUTE_IMPORT = /from\s+"(\.{1,2}\/[^"]*\/route)"/;
+function delegatesToWrapped(full: string, src: string): boolean {
+  const m = ROUTE_IMPORT.exec(src);
+  if (!m) return false;
+  const target = path.join(path.dirname(full), `${m[1]}.ts`);
+  return USES_WRAPPER.test(readFileSync(target, "utf8"));
+}
+
+/**
  * Source with comments removed.
  *
  * ⚠ THE SET PINS BELOW ARE REGEXES OVER TEXT: a route whose DOCBLOCK quotes
@@ -85,6 +97,7 @@ describe("H-3 write-gate coverage", () => {
       if (!NON_GET_EXPORT.test(src)) continue; // read-only route file
       if (EXEMPT[rel]) continue; // conscious exemption
       if (USES_WRAPPER.test(src)) continue; // auto-gated
+      if (delegatesToWrapped(full, src)) continue; // an alias of a gated route
       escaped.push(rel);
     }
     expect(
@@ -162,7 +175,7 @@ describe("H-3 write-gate coverage", () => {
         "knowledge/bases/[baseId]/route.ts",
         "knowledge/entries/[entryId]/route.ts",
         "knowledge/folders/[folderId]/route.ts",
-        "ontology/clusters/[clusterId]/route.ts",
+        "ontology/ontologies/[ontologyId]/route.ts",
         // PUT lends an ontology into a home channel and DELETE takes it back
         // (2026-09-09, home ontology S3). Taken straight off the
         // `knowledge/.../channel-grants` row above, which is the same line
@@ -177,7 +190,7 @@ describe("H-3 write-gate coverage", () => {
         // COPY: `ontology/server/service-shares.ts › assertHumanShareWrite`
         // refuses an agent source inside the service too, so this row is the
         // door and that one is the room.
-        "ontology/clusters/[clusterId]/shares/route.ts",
+        "ontology/ontologies/[ontologyId]/shares/route.ts",
         "ontology/objects/[objectId]/route.ts",
         "skills/[skillSlug]/route.ts",
         // POST mints a CONTAINER-LOCKED child credential, DELETE revokes one

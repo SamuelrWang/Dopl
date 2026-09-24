@@ -7,7 +7,7 @@
 // §2 SPLITS: the pure EFFECT BUILDERS live in main/session-effects.js (H1) and the STATE
 // SHAPE — the defaults, initialSessionState, the cap readers and the mode tables — in
 // main/session-state.js (2026-07-31, the self-authored inbound conjunct). Both are needed
-// because session-reducer.js sits in the ENGINEERING.md §2 zero-headroom cluster.
+// because session-reducer.js sits in the ENGINEERING.md §2 zero-headroom group.
 // session-reducer.js requires them at module scope, ABOVE its own sentinel, so inside its
 // block they are free vars — which means the three blocks CONCATENATE back into exactly the
 // standalone program the tests always evaluated. `require` is still undefined in that

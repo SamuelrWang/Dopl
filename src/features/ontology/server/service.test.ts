@@ -7,7 +7,7 @@
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { WorkspaceBillingRow } from "@/features/billing/server/workspace-billing";
-import type { OntologyClusterRow, OntologyObjectRow } from "./dto";
+import type { OntologyRow, OntologyObjectRow } from "./dto";
 import { ontologyContextFactory } from "./test-fixtures";
 
 // The changelog capture is a real awaited write (`./service-revisions.ts`), so
@@ -39,7 +39,7 @@ vi.mock("./repository-shares", () => ({
 }));
 
 vi.mock("./repository-projections", () => ({
-  listClusterSlugs: vi.fn(async () => []),
+  listOntologySlugs: vi.fn(async () => []),
   listMembershipParents: vi.fn(async () => []),
   listRelationshipsForSource: vi.fn(async () => []),
 }));
@@ -49,18 +49,18 @@ vi.mock("@/shared/tenancy/personal-reach", () => ({
 }));
 
 vi.mock("./repository", () => ({
-  listClusters: vi.fn(),
+  listOntologies: vi.fn(),
   listMemberships: vi.fn(),
   listObjectsByIds: vi.fn(),
   listRelationshipsForSources: vi.fn(),
-  insertCluster: vi.fn(),
+  insertOntology: vi.fn(),
   updateObject: vi.fn(),
-  findClusterById: vi.fn(),
+  findOntologyById: vi.fn(),
   insertObject: vi.fn(),
   countMembershipSiblings: vi.fn(),
   insertMembership: vi.fn(),
-  updateCluster: vi.fn(),
-  cascadeHardDeleteCluster: vi.fn(),
+  updateOntology: vi.fn(),
+  cascadeHardDeleteOntology: vi.fn(),
   findObjectById: vi.fn(),
   hardDeleteObject: vi.fn(),
 }));
@@ -69,9 +69,9 @@ import * as billingRepo from "@/features/billing/server/workspace-billing";
 import * as repo from "./repository";
 import {
   createObject,
-  deleteCluster,
+  deleteOntology,
   deleteObject,
-  updateCluster,
+  updateOntology,
 } from "./service";
 import { EntitlementError } from "@/features/billing/server/entitlements";
 
@@ -80,10 +80,10 @@ const mockRepo = vi.mocked(repo);
 
 const WS = "ws-1";
 const CTX = ontologyContextFactory({ workspaceId: WS })();
-const CLUSTER_ID = "11111111-1111-4111-8111-111111111111";
+const ONTOLOGY_ID = "11111111-1111-4111-8111-111111111111";
 
-const CLUSTER_ROW: OntologyClusterRow = {
-  id: CLUSTER_ID,
+const ONTOLOGY_ROW: OntologyRow = {
+  id: ONTOLOGY_ID,
   workspace_id: WS,
   slug: "sales",
   name: "Sales",
@@ -141,13 +141,13 @@ function setEntitlements(opts: {
 }
 
 function primeRepoForCreate() {
-  mockRepo.findClusterById.mockResolvedValue(CLUSTER_ROW);
+  mockRepo.findOntologyById.mockResolvedValue(ONTOLOGY_ROW);
   mockRepo.insertObject.mockResolvedValue(OBJECT_ROW);
   mockRepo.countMembershipSiblings.mockResolvedValue(0);
   mockRepo.insertMembership.mockResolvedValue({
     id: "mem-1",
     workspace_id: WS,
-    cluster_id: CLUSTER_ID,
+    ontology_id: ONTOLOGY_ID,
     parent_object_id: null,
     child_object_id: OBJECT_ROW.id,
     position: 0,
@@ -162,7 +162,7 @@ beforeEach(() => {
 describe("createObject — free-plan object cap", () => {
   it("free 2-member workspace at 50 objects allows the create", async () => {
     setEntitlements({ billing: null, members: 2, objects: 50 });
-    const object = await createObject(CTX, { clusterId: CLUSTER_ID, name: "Sales Rep" });
+    const object = await createObject(CTX, { ontologyId: ONTOLOGY_ID, name: "Sales Rep" });
     expect(object.id).toBe("obj-1");
     expect(mockRepo.insertObject).toHaveBeenCalledTimes(1);
   });
@@ -170,14 +170,14 @@ describe("createObject — free-plan object cap", () => {
   it("free 2-member workspace AT the cap (100) throws EntitlementError and never writes", async () => {
     setEntitlements({ billing: null, members: 2, objects: 100 });
     await expect(
-      createObject(CTX, { clusterId: CLUSTER_ID, name: "Sales Rep" })
+      createObject(CTX, { ontologyId: ONTOLOGY_ID, name: "Sales Rep" })
     ).rejects.toBeInstanceOf(EntitlementError);
     expect(mockRepo.insertObject).not.toHaveBeenCalled();
   });
 
   it("carries over_free_cap + workspaceId on the thrown error", async () => {
     setEntitlements({ billing: null, members: 2, objects: 100 });
-    await createObject(CTX, { clusterId: CLUSTER_ID, name: "Sales Rep" }).catch(
+    await createObject(CTX, { ontologyId: ONTOLOGY_ID, name: "Sales Rep" }).catch(
       (err) => {
         expect((err as EntitlementError).code).toBe("over_free_cap");
         expect((err as EntitlementError).workspaceId).toBe(WS);
@@ -187,7 +187,7 @@ describe("createObject — free-plan object cap", () => {
 
   it("solo free workspace at 5000 objects is uncapped — create OK", async () => {
     setEntitlements({ billing: null, members: 1, objects: 5000 });
-    const object = await createObject(CTX, { clusterId: CLUSTER_ID, name: "Sales Rep" });
+    const object = await createObject(CTX, { ontologyId: ONTOLOGY_ID, name: "Sales Rep" });
     expect(object.id).toBe("obj-1");
     expect(mockRepo.insertObject).toHaveBeenCalledTimes(1);
   });
@@ -198,73 +198,73 @@ describe("createObject — free-plan object cap", () => {
       members: 8,
       objects: 5000,
     });
-    const object = await createObject(CTX, { clusterId: CLUSTER_ID, name: "Sales Rep" });
+    const object = await createObject(CTX, { ontologyId: ONTOLOGY_ID, name: "Sales Rep" });
     expect(object.id).toBe("obj-1");
     expect(mockRepo.insertObject).toHaveBeenCalledTimes(1);
   });
 });
 
-describe("updateCluster — layout round-trip", () => {
-  it("forwards a layout patch to the repository and maps it back onto the domain cluster", async () => {
+describe("updateOntology — layout round-trip", () => {
+  it("forwards a layout patch to the repository and maps it back onto the domain ontology", async () => {
     const layout = { "obj-1": { x: 40, y: 80 }, "obj-2": { x: 320, y: 0 } };
-    mockRepo.updateCluster.mockResolvedValue({ ...CLUSTER_ROW, layout });
+    mockRepo.updateOntology.mockResolvedValue({ ...ONTOLOGY_ROW, layout });
 
-    const cluster = await updateCluster(CTX, CLUSTER_ID, { layout });
+    const ontology = await updateOntology(CTX, ONTOLOGY_ID, { layout });
 
-    expect(mockRepo.updateCluster).toHaveBeenCalledWith(WS, CLUSTER_ID, { layout }, {
+    expect(mockRepo.updateOntology).toHaveBeenCalledWith(WS, ONTOLOGY_ID, { layout }, {
       userId: "user-1",
       source: "user",
     });
-    expect(cluster.layout).toEqual(layout);
+    expect(ontology.layout).toEqual(layout);
   });
 
   it("defaults a null stored layout to an empty map", async () => {
-    mockRepo.updateCluster.mockResolvedValue({ ...CLUSTER_ROW, layout: null });
-    const cluster = await updateCluster(CTX, CLUSTER_ID, { name: "Renamed" });
-    expect(cluster.layout).toEqual({});
+    mockRepo.updateOntology.mockResolvedValue({ ...ONTOLOGY_ROW, layout: null });
+    const ontology = await updateOntology(CTX, ONTOLOGY_ID, { name: "Renamed" });
+    expect(ontology.layout).toEqual({});
   });
 
-  it("throws NotFound when the cluster is missing", async () => {
-    mockRepo.updateCluster.mockResolvedValue(null);
-    await expect(updateCluster(CTX, CLUSTER_ID, { name: "X" })).rejects.toThrow();
+  it("throws NotFound when the ontology is missing", async () => {
+    mockRepo.updateOntology.mockResolvedValue(null);
+    await expect(updateOntology(CTX, ONTOLOGY_ID, { name: "X" })).rejects.toThrow();
   });
 });
 
 // ── Cascade HARD delete ─────────────────────────────────────────────
 // Deleting is PERMANENT and IMMEDIATE — no trash, restore or purge.
-// `deleteCluster` must stay ONE atomic RPC (`cascadeHardDeleteCluster`,
+// `deleteOntology` must stay ONE atomic RPC (`cascadeHardDeleteOntology`,
 // migration 20260807120000); composing two writes re-opens a desync that
 // leaves objects hard-gone under a surviving tombstone. Pins the RPC call, the
 // object count, and the null→404 mapping.
 
-describe("deleteCluster — atomic cascade HARD delete", () => {
+describe("deleteOntology — atomic cascade HARD delete", () => {
   it("delegates to the single cascade RPC and returns its object count", async () => {
-    mockRepo.cascadeHardDeleteCluster.mockResolvedValue(3);
+    mockRepo.cascadeHardDeleteOntology.mockResolvedValue(3);
 
-    const count = await deleteCluster(CTX, CLUSTER_ID);
+    const count = await deleteOntology(CTX, ONTOLOGY_ID);
 
     expect(count).toBe(3);
-    expect(mockRepo.cascadeHardDeleteCluster).toHaveBeenCalledTimes(1);
-    expect(mockRepo.cascadeHardDeleteCluster).toHaveBeenCalledWith(WS, CLUSTER_ID);
+    expect(mockRepo.cascadeHardDeleteOntology).toHaveBeenCalledTimes(1);
+    expect(mockRepo.cascadeHardDeleteOntology).toHaveBeenCalledWith(WS, ONTOLOGY_ID);
   });
 
-  it("deletes a cluster that owns zero objects (count 0 is not 'not found')", async () => {
-    mockRepo.cascadeHardDeleteCluster.mockResolvedValue(0);
-    await expect(deleteCluster(CTX, CLUSTER_ID)).resolves.toBe(0);
+  it("deletes an ontology that owns zero objects (count 0 is not 'not found')", async () => {
+    mockRepo.cascadeHardDeleteOntology.mockResolvedValue(0);
+    await expect(deleteOntology(CTX, ONTOLOGY_ID)).resolves.toBe(0);
   });
 
-  it("throws NotFound when the RPC matched no live cluster", async () => {
+  it("throws NotFound when the RPC matched no live ontology", async () => {
     // null (not 0) = RPC's "nothing matched"; distinguishes missing from
     // empty.
-    mockRepo.cascadeHardDeleteCluster.mockResolvedValue(null);
-    await expect(deleteCluster(CTX, CLUSTER_ID)).rejects.toThrow();
+    mockRepo.cascadeHardDeleteOntology.mockResolvedValue(null);
+    await expect(deleteOntology(CTX, ONTOLOGY_ID)).rejects.toThrow();
   });
 
   it("surfaces an RPC failure with no half-write (atomic)", async () => {
-    mockRepo.cascadeHardDeleteCluster.mockRejectedValue(new Error("db down"));
+    mockRepo.cascadeHardDeleteOntology.mockRejectedValue(new Error("db down"));
 
-    await expect(deleteCluster(CTX, CLUSTER_ID)).rejects.toThrow("db down");
-    expect(mockRepo.cascadeHardDeleteCluster).toHaveBeenCalledTimes(1);
+    await expect(deleteOntology(CTX, ONTOLOGY_ID)).rejects.toThrow("db down");
+    expect(mockRepo.cascadeHardDeleteOntology).toHaveBeenCalledTimes(1);
   });
 });
 

@@ -27,6 +27,7 @@ import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import {
+  FILES,
   livePolicies,
   liveFunctionBody,
   liveFunctionHeader,
@@ -102,7 +103,7 @@ describe("dopl_revision_readable — the CASE that defers", () => {
   it("🔒 defers to BOTH resource families' own predicates", () => {
     expect(BODY).toContain("dopl_knowledge_base_readable");
     expect(BODY).toContain("dopl_ontology_readable");
-    expect(BODY).toContain("dopl_ontology_object_clusters");
+    expect(BODY).toContain("dopl_ontology_object_ontologies");
   });
 
   it("🔒 has an arm for EVERY resource type the CHECK admits", () => {
@@ -117,7 +118,23 @@ describe("dopl_revision_readable — the CASE that defers", () => {
 });
 
 describe("the closed sets, pinned against the CHECKs", () => {
+  /**
+   * A later migration that restated a CHECK (`ADD CONSTRAINT revisions_<col>_check`) wins over
+   * the CREATE TABLE's inline one — the 2026-09-23 vocabulary rename re-worded `resource_type`.
+   */
+  function restatedCheck(column: string): string[] | null {
+    const re = new RegExp(
+      String.raw`ADD\s+CONSTRAINT\s+revisions_${column}_check\s+CHECK\s*\(\s*${column}\s+IN\s*\(([^)]*)\)`,
+      "gi"
+    );
+    let last: string | null = null;
+    for (const { sql } of FILES) for (const m of sql.matchAll(re)) last = m[1];
+    return last === null ? null : [...last.matchAll(/'([a-z_]+)'/g)].map((x) => x[1]);
+  }
+
   function checkValues(column: string): string[] {
+    const restated = restatedCheck(column);
+    if (restated) return restated;
     const m = new RegExp(
       `${column}\\s+TEXT\\s+NOT\\s+NULL\\s+CHECK\\s*\\(\\s*${column}\\s+IN([\\s\\S]*?)\\)\\s*,`,
       "i"

@@ -57,18 +57,18 @@ export interface OntologyObject {
   updatedAt?: string;
 }
 
-export interface OntologyCluster {
+export interface Ontology {
   id: string;
   /** URL handle (`/[workspace]/ontology/[slug]`). Stable across renames. */
   slug: string;
   name: string;
   purpose: string;
-  /** The cluster's columns — each a container object whose children are the cards. */
+  /** The ontology's columns — each a container object whose children are the cards. */
   columnIds: string[];
   /** Persisted dragged node positions (id → {x,y}); `{}` = pure auto-layout. */
   layout: GraphLayout;
   /**
-   * The solo toggle (`ontology_clusters.agents_may_edit`, spec §3.1). Optional
+   * The solo toggle (`ontologies.agents_may_edit`, spec §3.1). Optional
    * because a cached snapshot predates it (INVARIANTS §8); every consumer goes
    * through `hooks/use-ontologies.ts › ontologyListRows`, which falls back to the
    * column default `true`.
@@ -77,7 +77,7 @@ export interface OntologyCluster {
   /**
    * How many home channels this ontology is lent into (spec Q4). Absent is
    * unknown, never zero: a stale payload carried no share rows, and "shared into 0
-   * channels" would be a claim nobody read. Emitted only for clusters the caller
+   * channels" would be a claim nobody read. Emitted only for ontologies the caller
    * owns.
    */
   sharedChannelCount?: number;
@@ -85,10 +85,10 @@ export interface OntologyCluster {
 
 /** Full workspace ontology as the API serves it — the UI store's shape. */
 export interface OntologySnapshot {
-  clusters: OntologyCluster[];
+  ontologies: Ontology[];
   objects: Record<string, OntologyObject>;
   /**
-   * 🔒 **WHICH CLUSTERS CAME OFF THE CALLER'S OWN PERSONAL SHELF** (S29c,
+   * 🔒 **WHICH ONTOLOGIES CAME OFF THE CALLER'S OWN PERSONAL SHELF** (S29c,
    * 2026-09-18) — the ontology twin of `KbBasesPayload.homeScopedBaseIds`.
    *
    * ⚠ **ABSENT IS "NOT ANSWERED", NEVER "NONE".** A payload cached against an
@@ -97,10 +97,10 @@ export interface OntologySnapshot {
    * this field exists to stop being made by accident. Every render falls back to
    * a FROZEN EMPTY and files no row under the personal label.
    *
-   * ⚠ **A LABEL, NOT A FENCE.** Nothing filters on it: every cluster listed
-   * already cleared `levelForCluster`.
+   * ⚠ **A LABEL, NOT A FENCE.** Nothing filters on it: every ontology listed
+   * already cleared `levelForOntology`.
    */
-  personalClusterIds?: string[];
+  personalOntologyIds?: string[];
 }
 
 /** A workspace knowledge base or skill, with the caller's access resolved. */

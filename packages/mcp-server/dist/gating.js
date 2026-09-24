@@ -72,8 +72,8 @@ function offeredToolsFor(claimed) {
  */
 exports.WRITE_OPS = {
     dopl_ontology: new Set([
-        "create_cluster",
-        "update_cluster",
+        "create_ontology",
+        "update_ontology",
         "create_column",
         "create_object",
         "update_object",

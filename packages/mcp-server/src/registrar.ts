@@ -18,6 +18,7 @@ import {
 } from "./tools/respond.js";
 import { CONTAINER_ARG_DESCRIPTION } from "./workspace-arg.js";
 import { resolveCallAddress } from "./container-resolve.js";
+import { LEGACY_ONTOLOGY_ARGS } from "./legacy-aliases.js";
 
 // Re-exported so tests read the injected arg's description through the registrar that injects it.
 export { CONTAINER_ARG_DESCRIPTION } from "./workspace-arg.js";
@@ -75,6 +76,7 @@ function toolConfig<S extends ZodRawShape>(name: string, description: string, sc
 const RENAMED_ARGS: Readonly<Record<string, Readonly<Record<string, string>>>> = {
   dopl_agent: { template: "identity" },
   dopl_channel: { template: "identity" },
+  dopl_ontology: LEGACY_ONTOLOGY_ARGS,
 };
 
 function renamedArgMessage(

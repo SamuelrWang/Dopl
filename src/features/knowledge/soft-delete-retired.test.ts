@@ -13,7 +13,7 @@
  *      `20261013120000_drop_knowledge_soft_delete.sql`. Two of the six functions
  *      (`cascade_*_soft_delete_to_attachments`) were LIVE DEFECTS, not merely
  *      dead: their bodies `DELETE FROM workflow_knowledge_bases` /
- *      `workflow_skills`, tables `20260811120000_drop_workflows_and_clusters.sql`
+ *      `workflow_skills`, tables migration `20260811120000`
  *      dropped. That file's own header explains the miss — *"DROP TABLE removes
  *      the tables' own triggers"* — and these two triggers sit on
  *      `knowledge_bases` and `skills`, which survived.

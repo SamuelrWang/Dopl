@@ -31,7 +31,7 @@ export const APP_READ_LABEL = "Channels, messages, threads, artifacts, members a
 
 const EMPTY_APP: AppSearchResponse = { q: "", scope: "container", tookMs: 0, groups: [] };
 
-const EMPTY_ONTOLOGY: OntologySummary = { clusters: [], objects: {} };
+const EMPTY_ONTOLOGY: OntologySummary = { ontologies: [], objects: {} };
 const EMPTY_IDENTITIES: AgentIdentityListPayload = { identities: [] };
 const EMPTY_IDS: readonly string[] = Object.freeze([]);
 

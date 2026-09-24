@@ -5,9 +5,9 @@
 
 import type { DoplTransport } from "./transport.js";
 import type {
-  OntologyCluster,
-  OntologyClusterCreateInput,
-  OntologyClusterPatch,
+  Ontology,
+  OntologyCreateInput,
+  OntologyPatch,
   OntologyObject,
   OntologyObjectCreateInput,
   OntologyObjectPatch,
@@ -46,39 +46,39 @@ export async function getOntologyAnchor(
   return data.object;
 }
 
-export async function createOntologyCluster(
+export async function createOntology(
   t: DoplTransport,
-  input: OntologyClusterCreateInput
-): Promise<OntologyCluster> {
-  const data = await t.request<{ cluster: OntologyCluster }>(
-    "/api/ontology/clusters",
-    { toolName: "ontology_create_cluster", method: "POST", body: input }
+  input: OntologyCreateInput
+): Promise<Ontology> {
+  const data = await t.request<{ ontology: Ontology }>(
+    "/api/ontology/ontologies",
+    { toolName: "ontology_create_ontology", method: "POST", body: input }
   );
-  return data.cluster;
+  return data.ontology;
 }
 
-export async function updateOntologyCluster(
+export async function updateOntology(
   t: DoplTransport,
-  clusterId: string,
-  patch: OntologyClusterPatch
-): Promise<OntologyCluster> {
-  const data = await t.request<{ cluster: OntologyCluster }>(
-    `/api/ontology/clusters/${enc(clusterId)}`,
-    { toolName: "ontology_update_cluster", method: "PATCH", body: patch }
+  ontologyId: string,
+  patch: OntologyPatch
+): Promise<Ontology> {
+  const data = await t.request<{ ontology: Ontology }>(
+    `/api/ontology/ontologies/${enc(ontologyId)}`,
+    { toolName: "ontology_update_ontology", method: "PATCH", body: patch }
   );
-  return data.cluster;
+  return data.ontology;
 }
 
-export async function deleteOntologyCluster(
+export async function deleteOntology(
   t: DoplTransport,
-  clusterId: string
+  ontologyId: string
 ): Promise<void> {
   // ⚠ Route replies 204 — request<T>() chokes on the empty body ("Unexpected
   // end of JSON input") AFTER the delete applied.
   await t.requestNoContent(
-    `/api/ontology/clusters/${enc(clusterId)}`,
+    `/api/ontology/ontologies/${enc(ontologyId)}`,
     "DELETE",
-    "ontology_delete_cluster"
+    "ontology_delete_ontology"
   );
 }
 
@@ -119,7 +119,7 @@ export async function deleteOntologyObject(
   t: DoplTransport,
   objectId: string
 ): Promise<void> {
-  // 204 route — see deleteOntologyCluster.
+  // 204 route — see deleteOntology.
   await t.requestNoContent(
     `/api/ontology/objects/${enc(objectId)}`,
     "DELETE",

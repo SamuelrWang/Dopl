@@ -162,7 +162,7 @@ exports.MEMBERS_ERRORS = [
 exports.ONTOLOGY_ERRORS = [
     notFound("object_not_found", "object", 'op="resolve"'),
     versionConflict('op="get"'),
-    notFound("cluster_not_found", "ontology", 'op="map"'),
+    notFound("ontology_not_found", "ontology", 'op="map"'),
 ];
 exports.AGENT_ERRORS = [
     notFound("identity_not_found", "identity", 'op="list"'),

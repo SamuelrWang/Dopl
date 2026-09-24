@@ -454,14 +454,14 @@ Membership and invitations move to \`workspace_members\` and \`workspace_invitat
         id: "ps-2",
         title: "ADR-014: workspace_id over user_id scoping",
         excerpt:
-          "Decision record for moving cluster scoping from per-user to per-workspace.",
+          "Decision record for moving ontology scoping from per-user to per-workspace.",
         body: `## Context
 
-Pre-overhaul, every cluster row was scoped to \`user_id\`. With workspaces, multiple users can collaborate on the same set of clusters.
+Pre-overhaul, every ontology row was scoped to \`user_id\`. With workspaces, multiple users can collaborate on the same set of ontologies.
 
 ## Decision
 
-Move all cluster-related tables to scope by \`workspace_id\` instead of \`user_id\`. Keep \`user_id\` on rows as the **creator** for audit, not for access control.
+Move all ontology-related tables to scope by \`workspace_id\` instead of \`user_id\`. Keep \`user_id\` on rows as the **creator** for audit, not for access control.
 
 ## Consequences
 
@@ -471,12 +471,12 @@ Move all cluster-related tables to scope by \`workspace_id\` instead of \`user_i
 
 ## Alternatives considered
 
-- **Per-user with sharing**: would require a separate \`shared_with\` table per cluster. Rejected — too many small tables.
-- **Per-board (the visual one)**: would tie cluster lifecycle to board lifecycle. Rejected — clusters often outlive a specific board.
+- **Per-user with sharing**: would require a separate \`shared_with\` table per ontology. Rejected — too many small tables.
+- **Per-board (the visual one)**: would tie ontology lifecycle to board lifecycle. Rejected — ontologies often outlive a specific board.
 
 ## Open questions
 
-- How do we handle published clusters (community gallery)? They're cross-workspace by nature. **Resolution**: keep \`published_clusters\` user-scoped; clone semantics on fork.`,
+- How do we handle published ontologies (community gallery)? They're cross-workspace by nature. **Resolution**: keep them user-scoped; clone semantics on fork.`,
         type: "doc",
         updatedAt: "1w ago",
       },
@@ -586,7 +586,7 @@ This is exactly the positioning we've been pushing for two quarters. **The custo
       },
       {
         id: "cf-3",
-        title: "Support ticket cluster — onboarding confusion",
+        title: "Support ticket pattern — onboarding confusion",
         excerpt:
           "12 tickets in two weeks all asking the same first-board question. UI fix needed.",
         body: `12 tickets in two weeks. **All variations of the same question**: "I just signed up, where do I start?"

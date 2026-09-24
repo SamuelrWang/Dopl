@@ -11,7 +11,7 @@ import * as api from "../client/api";
 import { planDeleteRollback } from "../delete-rollback";
 import { useOntologyRealtime } from "../client/realtime";
 import {
-  clusterObjectIds,
+  ontologyObjectIds,
   EMPTY_GRAPH,
   graphReducer,
   objectIdToSync,
@@ -23,7 +23,7 @@ import {
   type OntologyCreateCallbacks,
 } from "./use-ontology-creates";
 import type { ColumnDraftPatch } from "../optimistic-create";
-import type { OntologyCluster, OntologyObject } from "../types";
+import type { Ontology, OntologyObject } from "../types";
 
 const OBJECT_SYNC_DELAY_MS = 800;
 
@@ -34,7 +34,7 @@ export const ontologySnapshotKey = (workspaceId: string) =>
 export type OntologyStatus = "loading" | "ready" | "error";
 
 export interface UseOntologyOptions extends OntologyCreateCallbacks {
-  /** An object or cluster was permanently deleted on the server. The cap is a
+  /** An object or ontology was permanently deleted on the server. The cap is a
    *  server-side count, so the caller must refresh entitlements here or the meter
    *  (and the `overCap` short-circuit) stays stuck until a reload. */
   onDeleted?: () => void;
@@ -54,15 +54,15 @@ export function useOntology(
   status: OntologyStatus;
   dispatch: (action: GraphAction) => void;
   /** Both return the row that is already on screen — no await to a pixel. */
-  createCluster: () => OntologyCluster;
+  createOntology: () => Ontology;
   createObject: (
-    target: { clusterId: string } | { parentObjectId: string }
+    target: { ontologyId: string } | { parentObjectId: string }
   ) => OntologyObject;
   /** The header's "+ Object": the lane on screen, POSTed only by `commit`. */
-  beginColumnDraft: (clusterId: string) => OntologyObject;
+  beginColumnDraft: (ontologyId: string) => OntologyObject;
   discardColumnDraft: (draftId: string) => void;
   commitColumnDraft: (
-    clusterId: string,
+    ontologyId: string,
     draft: OntologyObject,
     patch: ColumnDraftPatch
   ) => void;
@@ -103,7 +103,7 @@ export function useOntology(
   const seededRef = useRef(false);
   // `seeded` mirrors seededRef as state: status must track when the reducer has
   // the snapshot, not the query cache — else the empty-graph frame flashes the
-  // "create your first cluster" CTA on a cached revisit.
+  // "create your first ontology" CTA on a cached revisit.
   const [seeded, setSeeded] = useState(false);
   const snapshot = snapshotQuery.data;
   useEffect(() => {
@@ -169,15 +169,15 @@ export function useOntology(
       // navigating away.
       for (const [key, timer] of timers) {
         clearTimeout(timer);
-        if (key.startsWith("cluster:")) {
-          const cluster = graphRef.current.clusters.find(
-            (c) => c.id === key.slice("cluster:".length)
+        if (key.startsWith("ontology:")) {
+          const ontology = graphRef.current.ontologies.find(
+            (c) => c.id === key.slice("ontology:".length)
           );
-          if (cluster) {
+          if (ontology) {
             void api
-              .updateCluster(workspaceId, cluster.id, {
-                name: cluster.name || "Untitled",
-                purpose: cluster.purpose,
+              .updateOntology(workspaceId, ontology.id, {
+                name: ontology.name || "Untitled",
+                purpose: ontology.purpose,
               })
               .catch(() => undefined);
           }
@@ -248,23 +248,23 @@ export function useOntology(
     [syncObject]
   );
 
-  const scheduleClusterSync = useCallback(
-    (clusterId: string) => {
+  const scheduleOntologySync = useCallback(
+    (ontologyId: string) => {
       const timers = timersRef.current;
-      const key = `cluster:${clusterId}`;
+      const key = `ontology:${ontologyId}`;
       const existing = timers.get(key);
       if (existing) clearTimeout(existing);
       timers.set(
         key,
         setTimeout(() => {
           timers.delete(key);
-          const cluster = graphRef.current.clusters.find((c) => c.id === clusterId);
-          if (!cluster) return;
+          const ontology = graphRef.current.ontologies.find((c) => c.id === ontologyId);
+          if (!ontology) return;
           beginWrite();
           api
-            .updateCluster(workspaceId, clusterId, {
-              name: cluster.name || "Untitled",
-              purpose: cluster.purpose,
+            .updateOntology(workspaceId, ontologyId, {
+              name: ontology.name || "Untitled",
+              purpose: ontology.purpose,
             })
             .catch((err) => reportSaveError("ontology", err))
             .finally(endWrite);
@@ -285,15 +285,15 @@ export function useOntology(
   const dispatch = useCallback(
     (action: GraphAction) => {
       // Captured before the reducer runs: rollback source, and the state the
-      // cluster cascade's pending-timer keys are read from.
+      // ontology cascade's pending-timer keys are read from.
       const before = graphRef.current;
-      const removedClusterObjectIds =
-        action.type === "CLUSTER_DELETE" ? clusterObjectIds(before, action.id) : [];
+      const removedOntologyObjectIds =
+        action.type === "ONTOLOGY_DELETE" ? ontologyObjectIds(before, action.id) : [];
       dirtyRef.current = true;
       rawDispatch(action);
       const objectId = objectIdToSync(action);
       if (objectId) scheduleObjectSync(objectId);
-      if (action.type === "CLUSTER_UPDATE") scheduleClusterSync(action.id);
+      if (action.type === "ONTOLOGY_UPDATE") scheduleOntologySync(action.id);
       if (action.type === "OBJECT_DELETE") {
         const timer = timersRef.current.get(action.id);
         if (timer) clearTimeout(timer);
@@ -309,14 +309,14 @@ export function useOntology(
           }
         );
       }
-      if (action.type === "CLUSTER_DELETE") {
+      if (action.type === "ONTOLOGY_DELETE") {
         const timers = timersRef.current;
-        for (const key of [`cluster:${action.id}`, ...removedClusterObjectIds]) {
+        for (const key of [`ontology:${action.id}`, ...removedOntologyObjectIds]) {
           const timer = timers.get(key);
           if (timer) clearTimeout(timer);
           timers.delete(key);
         }
-        void api.deleteCluster(workspaceId, action.id).then(
+        void api.deleteOntology(workspaceId, action.id).then(
           () => optionsRef.current.onDeleted?.(),
           (err: unknown) => {
             rollbackDelete(before, action);
@@ -325,7 +325,7 @@ export function useOntology(
         );
       }
     },
-    [workspaceId, scheduleObjectSync, scheduleClusterSync, rollbackDelete]
+    [workspaceId, scheduleObjectSync, scheduleOntologySync, rollbackDelete]
   );
 
   const markDirty = useCallback(() => {
@@ -336,7 +336,7 @@ export function useOntology(
     []
   );
   const {
-    createCluster,
+    createOntology,
     createObject,
     beginColumnDraft,
     discardColumnDraft,
@@ -357,7 +357,7 @@ export function useOntology(
     graph,
     status,
     dispatch,
-    createCluster,
+    createOntology,
     createObject,
     beginColumnDraft,
     discardColumnDraft,

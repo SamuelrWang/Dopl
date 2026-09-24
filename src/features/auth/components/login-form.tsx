@@ -25,8 +25,8 @@ export function LoginForm({ defaultMode }: { defaultMode: LoginMode }) {
   const actions = useLoginActions();
   const searchParams = useSearchParams();
 
-  // ⚠ Switch must carry the query. `useLoginActions` reads `?redirectTo=` (and
-  // `installCluster`) off the URL; moving to a BARE URL silently drops the deep
+  // ⚠ Switch must carry the query. `useLoginActions` reads `?redirectTo=` off the
+  // URL; moving to a BARE URL silently drops the deep
   // link for visitors who arrived from one. One slug now — the modes differ
   // only in `?mode=` (absent = sign-in, matching /authenticate's default).
   const href = (mode: LoginMode) => {

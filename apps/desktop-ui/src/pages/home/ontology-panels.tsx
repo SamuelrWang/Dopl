@@ -5,9 +5,9 @@ import { OpenScaleButton } from "@/shared/ui/open-scale-button";
 import { MenuDivider, MenuItem } from "@/shared/ui/popover-menu";
 import { SectionPanel } from "@/shared/ui/section-panel";
 import { OntologyView } from "@/features/ontology/components/ontology-view";
-import { ClusterChangelog } from "@/features/ontology/components/cluster-changelog";
-import { createCluster, setAgentsMayEdit } from "@/features/ontology/client/api";
-import { NEW_CLUSTER_NAME } from "@/features/ontology/optimistic-create";
+import { OntologyChangelog } from "@/features/ontology/components/ontology-changelog";
+import { createOntology, setAgentsMayEdit } from "@/features/ontology/client/api";
+import { NEW_ONTOLOGY_NAME } from "@/features/ontology/optimistic-create";
 import { ontologySnapshotKey } from "@/features/ontology/hooks/use-ontology";
 import {
   useOntologies,
@@ -36,16 +36,16 @@ import {
  * of different tabs, have it be a dropdown"* — so an ontology is opened by
  * naming it, not by finding its card and pressing Open.
  *
- * ⚠ **ITS ROWS ARE STILL PERSONAL** — an ontology is an `ontology_clusters` row
+ * ⚠ **ITS ROWS ARE STILL PERSONAL** — an ontology is an `ontologies` row
  * in the caller's `kind='personal'` container (INVARIANTS §4A), never the
  * selected channel's. Knowledge and Agents list what is IN the room; this is
  * what the operator OWNS and lends INTO rooms, which is why the face takes no
  * channel at all (`home-tabs.ts › ONTOLOGY_PANE`) and the share popup asks the
  * SERVER for the operator's home channels rather than taking the selected one.
  *
- * ⚠ **SELECTION IS THIS COMPONENT'S, AND IT REACHES THE BOARD AS `pinnedClusterId`.**
+ * ⚠ **SELECTION IS THIS COMPONENT'S, AND IT REACHES THE BOARD AS `pinnedOntologyId`.**
  * The board is pinned exactly as it was before the restyle; what changed is that
- * the host now offers a picker for the pin (`onSelectCluster`). ⚠ It must stay
+ * the host now offers a picker for the pin (`onSelectOntology`). ⚠ It must stay
  * that way round: the board's OWN create mints PROVISIONAL ids that its reducer
  * swaps when the POST answers, so a host holding one would be left pointing at
  * an id the graph no longer has. /home therefore creates through the API and
@@ -87,7 +87,7 @@ export function HomeOntologyPanels({
    * background refetch from clobbering a half-typed field: after ANY local
    * dispatch the reducer ignores every later `SNAPSHOT_SET` for the life of the
    * mount. /home writes through the API and moves its PIN to the id the server
-   * minted — so on an edited board the pin named a cluster the reducer had never
+   * minted — so on an edited board the pin named an ontology the reducer had never
    * heard of, and `ontology-view.tsx` answered with **"This ontology is no
    * longer here."**, its sentence for a DELETED ontology, over one created a
    * moment earlier. A delete was the milder half of the same drift: the removed
@@ -103,7 +103,7 @@ export function HomeOntologyPanels({
   const { rows, resolved, error, refetch } = useOntologies(homeWorkspaceId);
 
   // ⚠ SELECTION PERSISTS, BUT NEVER DANGLES: a deleted or not-yet-chosen id
-  // falls to the first row, so the pin always names a cluster the graph has —
+  // falls to the first row, so the pin always names an ontology the graph has —
   // the board's own rule is that a pin naming nothing renders "no longer here".
   const active =
     rows.find((row) => row.id === selectedId) ?? rows[0] ?? null;
@@ -115,14 +115,14 @@ export function HomeOntologyPanels({
       // ⚠ NOT THE BOARD'S OPTIMISTIC CREATE, and deliberately (see the header):
       // that path mints a provisional id this component would then hold. The
       // POST answers with the real one, which is what the pin takes.
-      const cluster = await createCluster(homeWorkspaceId, {
-        name: NEW_CLUSTER_NAME,
+      const ontology = await createOntology(homeWorkspaceId, {
+        name: NEW_ONTOLOGY_NAME,
       });
       await queryClient.invalidateQueries({
         queryKey: ontologySnapshotKey(homeWorkspaceId),
       });
       setChangelogOpen(false);
-      setSelectedId(cluster.id);
+      setSelectedId(ontology.id);
       // ⚠ AFTER the invalidate, so the fresh mount seeds from a snapshot that
       // already holds the new row. See `boardEpoch`.
       setBoardEpoch((n) => n + 1);
@@ -178,8 +178,8 @@ export function HomeOntologyPanels({
             the ontology's whole history, and the board pane is already a
             full-height canvas with a 420px panel beside it. */}
         <SectionPanel id="home-ontology-changelog" label={`${active.name} · Changelog`}>
-          <ClusterChangelog
-            clusterId={active.id}
+          <OntologyChangelog
+            ontologyId={active.id}
             workspaceId={homeWorkspaceId}
             // ⚠ /home lists only what the caller OWNS, so a restore is theirs to
             // make. A peer's reach into a LENT ontology is the service's answer
@@ -200,13 +200,13 @@ export function HomeOntologyPanels({
         frameless
         workspaceId={homeWorkspaceId}
         workspaceSegment={homeWorkspaceSegment ?? ""}
-        pinnedClusterId={active.id}
-        onSelectCluster={setSelectedId}
+        pinnedOntologyId={active.id}
+        onSelectOntology={setSelectedId}
         // ⚠ THE CREATE IS A ROW IN THE NAME DROPDOWN NOW, not a black button in
         // the header (Samuel, 2026-09-10) — so /home passes the ACT and the
         // switcher owns the face. Still /home's own POST-then-select, for the
         // provisional-id reason in this file's header.
-        onCreateCluster={() => {
+        onCreateOntology={() => {
           if (!creating) void create();
         }}
         settingsMenu={(close) => (
@@ -362,5 +362,5 @@ function OntologyMenuRows({
 
 const PANE = "flex min-w-0 flex-1 flex-col gap-3 overflow-y-auto p-3";
 
-/** /home has no address bar for a cluster slug to follow. */
+/** /home has no address bar for an ontology slug to follow. */
 const NO_URL = () => {};

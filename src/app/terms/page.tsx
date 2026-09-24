@@ -77,7 +77,7 @@ export default function TermsPage() {
             </h2>
             <p>
               You retain ownership of any content you submit to the Service, including workspace
-              configurations, clusters, and custom setups. By using the Service, you grant us a
+              configurations, ontologies, and custom setups. By using the Service, you grant us a
               limited license to store, process, and display your content solely to provide and
               improve the Service.
             </p>

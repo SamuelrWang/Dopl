@@ -140,8 +140,8 @@ vi.mock("@/features/ontology/server/service", () => ({
   }),
   updateObject: vi.fn(),
   deleteObject: vi.fn(),
-  updateCluster: vi.fn(),
-  deleteCluster: vi.fn(),
+  updateOntology: vi.fn(),
+  deleteOntology: vi.fn(),
 }));
 
 import { DELETE as deleteKbBase } from "@/app/api/knowledge/bases/[baseId]/route";
@@ -152,7 +152,7 @@ import { DELETE as deleteSkillRoute } from "@/app/api/skills/[skillSlug]/route";
 import { DELETE as deleteChatRoute } from "@/app/api/chats/[chatId]/route";
 import { DELETE as deleteChatFolder } from "@/app/api/chats/folders/[folderId]/route";
 import { DELETE as deleteOntologyObject } from "@/app/api/ontology/objects/[objectId]/route";
-import { DELETE as deleteOntologyCluster } from "@/app/api/ontology/clusters/[clusterId]/route";
+import { DELETE as deleteOntology } from "@/app/api/ontology/ontologies/[ontologyId]/route";
 
 import * as knowledgeService from "@/features/knowledge/server/service";
 import * as skillService from "@/features/skills/server/service";
@@ -249,12 +249,12 @@ const GATED: Array<{
     service: () => vi.mocked(ontologyService.deleteObject),
   },
   {
-    refusedOps: ["dopl_ontology.delete_cluster"],
-    file: "ontology/clusters/[clusterId]/route.ts",
-    url: "http://localhost/api/ontology/clusters/cl-1",
-    params: { clusterId: "cl-1" },
-    handler: deleteOntologyCluster as unknown as Handler,
-    service: () => vi.mocked(ontologyService.deleteCluster),
+    refusedOps: ["dopl_ontology.delete_ontology"],
+    file: "ontology/ontologies/[ontologyId]/route.ts",
+    url: "http://localhost/api/ontology/ontologies/cl-1",
+    params: { ontologyId: "cl-1" },
+    handler: deleteOntology as unknown as Handler,
+    service: () => vi.mocked(ontologyService.deleteOntology),
   },
 ];
 

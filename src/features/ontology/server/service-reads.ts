@@ -1,6 +1,6 @@
 import "server-only";
 import type {
-  OntologyCluster,
+  Ontology,
   OntologyContext,
   OntologyObject,
   OntologySnapshot,
@@ -9,19 +9,19 @@ import {
   mapObjectRow,
   ONTOLOGY_READ_LIMITS,
   pushEdge,
-  type OntologyClusterRow,
-  type OntologyClusterSummary,
+  type OntologyRow,
+  type OntologyListItem,
   type OntologyMembershipRow,
   type OntologyObjectSummary,
   type OntologySummary,
 } from "./dto";
 import * as repo from "./repository";
 import * as narrow from "./repository-projections";
-import { countSharesForClusters } from "./repository-shares";
+import { countSharesForOntologies } from "./repository-shares";
 import {
   audienceAdmits,
   resolveOntologyAudience,
-  type AudienceClusterFacts,
+  type AudienceOntologyFacts,
   type OntologyAudience,
 } from "./service-audience";
 
@@ -31,11 +31,11 @@ import {
  * ── The order, and why it is not negotiable ─────────────────────────────────
  * ```
  * 1. resolve the audience          — one ceiling for the request
- * 2. read clusters in its SCOPE    — wider than the caller's container (the lend)
+ * 2. read ontologies in its SCOPE    — wider than the caller's container (the lend)
  * 3. FILTER them by level          — the authorization; step 2 is not one
- * 4. WALK memberships from those   — Q8: the cluster's membership walk IS the
+ * 4. WALK memberships from those   — Q8: the ontology's membership walk IS the
  *                                    boundary, so an object reachable only from
- *                                    another cluster is not in this answer
+ *                                    another ontology is not in this answer
  * 5. read objects and edges BY ID  — never by container
  * ```
  * Steps 2 and 3 are a pair: widening the scope and keeping the filter is safe;
@@ -44,33 +44,33 @@ import {
  *
  * One deliberate consequence for the unrestricted arm too: the walk replaces
  * a whole-container object read, so an ORPHAN — an object no membership chain
- * reaches a cluster from — stops appearing even in a standard workspace. That
+ * reaches an ontology from — stops appearing even in a standard workspace. That
  * is a bug STATE, not a product one (every create writes a membership in the
  * same call, and nothing renders an orphan). A `kind:"ref"` attribute into
- * ANOTHER cluster still resolves under `unrestricted` — every cluster is a root
+ * ANOTHER ontology still resolves under `unrestricted` — every ontology is a root
  * there — and does not under a `resolved` audience, which is Q8.
  */
 
-/** The membership rows reachable from an ADMITTED cluster, and the objects they
+/** The membership rows reachable from an ADMITTED ontology, and the objects they
  *  reach. Rows outside the walk are DROPPED, never merely unrendered — they
  *  are what would otherwise attach a foreign column to a visible board. */
-interface ClusterWalk {
+interface OntologyWalk {
   objectIds: string[];
   rows: OntologyMembershipRow[];
 }
 
-/** EXPORTED FOR THE CLUSTER ROLL-UP (`./service-revisions-read.ts ›
- *  listClusterRevisions`), which needs the SAME boundary — a second downward
+/** EXPORTED FOR THE ONTOLOGY ROLL-UP (`./service-revisions-read.ts ›
+ *  listOntologyRevisions`), which needs the SAME boundary — a second downward
  *  walk is how a history comes to name an object the board does not show. */
-export function walkAdmittedClusters(
-  admittedClusterIds: Set<string>,
+export function walkAdmittedOntologies(
+  admittedOntologyIds: Set<string>,
   memberships: OntologyMembershipRow[]
-): ClusterWalk {
+): OntologyWalk {
   const byParent = new Map<string, OntologyMembershipRow[]>();
   const roots: OntologyMembershipRow[] = [];
   for (const m of memberships) {
-    if (m.cluster_id) {
-      if (admittedClusterIds.has(m.cluster_id)) roots.push(m);
+    if (m.ontology_id) {
+      if (admittedOntologyIds.has(m.ontology_id)) roots.push(m);
     } else if (m.parent_object_id) {
       const bucket = byParent.get(m.parent_object_id);
       if (bucket) bucket.push(m);
@@ -97,44 +97,44 @@ export function walkAdmittedClusters(
   return { objectIds: [...seen], rows };
 }
 
-/** Steps 1-4 of the order above, for either cluster projection — the two reads
+/** Steps 1-4 of the order above, for either ontology projection — the two reads
  *  differ only in WHICH columns they pull, never in the fence. */
-async function admittedWalk<T extends AudienceClusterFacts>(
+async function admittedWalk<T extends AudienceOntologyFacts>(
   ctx: OntologyContext,
-  readClusters: (workspaceIds: readonly string[]) => Promise<T[]>
+  readOntologies: (workspaceIds: readonly string[]) => Promise<T[]>
 ): Promise<{
   audience: OntologyAudience;
-  clusterCount: number;
+  ontologyCount: number;
   membershipCount: number;
   admitted: T[];
-  walk: ClusterWalk;
+  walk: OntologyWalk;
 }> {
   const audience = await resolveOntologyAudience(ctx);
-  const [clusterRows, membershipRows] = await Promise.all([
-    readClusters(audience.workspaceIds),
+  const [ontologyRows, membershipRows] = await Promise.all([
+    readOntologies(audience.workspaceIds),
     repo.listMemberships(audience.workspaceIds),
   ]);
-  const admitted = clusterRows.filter((row) => audienceAdmits(ctx, audience, row));
+  const admitted = ontologyRows.filter((row) => audienceAdmits(ctx, audience, row));
   return {
     audience,
-    clusterCount: clusterRows.length,
+    ontologyCount: ontologyRows.length,
     membershipCount: membershipRows.length,
     admitted,
-    walk: walkAdmittedClusters(new Set(admitted.map((c) => c.id)), membershipRows),
+    walk: walkAdmittedOntologies(new Set(admitted.map((c) => c.id)), membershipRows),
   };
 }
 
 /** Hang the walk's rows on their parents. A row whose child did not survive
  *  the object read is skipped, never rendered as an empty node. */
 function attachWalkRows(
-  walk: ClusterWalk,
-  clustersById: ReadonlyMap<string, { columnIds: string[] }>,
+  walk: OntologyWalk,
+  ontologiesById: ReadonlyMap<string, { columnIds: string[] }>,
   objects: Record<string, { childIds: string[] } | undefined>
 ): void {
   for (const m of walk.rows) {
     if (!objects[m.child_object_id]) continue;
-    if (m.cluster_id) {
-      clustersById.get(m.cluster_id)?.columnIds.push(m.child_object_id);
+    if (m.ontology_id) {
+      ontologiesById.get(m.ontology_id)?.columnIds.push(m.child_object_id);
     } else if (m.parent_object_id) {
       objects[m.parent_object_id]?.childIds.push(m.child_object_id);
     }
@@ -146,7 +146,7 @@ function attachWalkRows(
  *  are dropped here, as they always were. */
 export async function getSnapshot(ctx: OntologyContext): Promise<OntologySnapshot> {
   const { audience, admitted, walk } = await admittedWalk(ctx, (ids) =>
-    repo.listClusters(ids)
+    repo.listOntologies(ids)
   );
 
   const [objectRows, relationshipRows, shareCounts] = await Promise.all([
@@ -154,16 +154,16 @@ export async function getSnapshot(ctx: OntologyContext): Promise<OntologySnapsho
     repo.listRelationshipsForSources(audience.workspaceIds, walk.objectIds),
     // One read for the whole list, and it rides THIS fan rather than adding a
     // round trip — the `grantedResourceIds` shape (spec §3 reason 4).
-    countSharesForClusters(ownedClusterIds(audience, admitted)),
+    countSharesForOntologies(ownedOntologyIds(audience, admitted)),
   ]);
 
   const objects: Record<string, OntologyObject> = {};
   for (const row of objectRows) objects[row.id] = mapObjectRow(row);
 
-  const clusters = admitted.map((row) =>
-    mapClusterRow(row, shareCounts.get(row.id))
+  const ontologies = admitted.map((row) =>
+    mapOntologyRow(row, shareCounts.get(row.id))
   );
-  attachWalkRows(walk, new Map(clusters.map((c) => [c.id, c])), objects);
+  attachWalkRows(walk, new Map(ontologies.map((c) => [c.id, c])), objects);
 
   for (const r of relationshipRows) {
     const source = objects[r.source_object_id];
@@ -171,11 +171,11 @@ export async function getSnapshot(ctx: OntologyContext): Promise<OntologySnapsho
     pushEdge(source.relationships, r.label, r.target_object_id);
   }
 
-  return { clusters, objects, personalClusterIds: personalClusterIds(audience, admitted) };
+  return { ontologies, objects, personalOntologyIds: personalOntologyIds(audience, admitted) };
 }
 
 /**
- * 🔒 **WHICH ADMITTED CLUSTERS CAME OFF THE CALLER'S OWN PERSONAL SHELF**
+ * 🔒 **WHICH ADMITTED ONTOLOGIES CAME OFF THE CALLER'S OWN PERSONAL SHELF**
  * (S29c, 2026-09-18) — the ontology twin of the knowledge lane's
  * `homeScopedBaseIds`, and the only thing a reader needs to stop calling them
  * mystery rows.
@@ -190,7 +190,7 @@ export async function getSnapshot(ctx: OntologyContext): Promise<OntologySnapsho
  * `personalShelfContainerIds` is ever called), so nothing there is personal and
  * saying so costs one empty array.
  */
-function personalClusterIds(
+function personalOntologyIds(
   audience: OntologyAudience,
   admitted: readonly { id: string; workspace_id: string }[]
 ): string[] {
@@ -201,7 +201,7 @@ function personalClusterIds(
 }
 
 /**
- * One cluster row → the wire shape.
+ * One ontology row → the wire shape.
  *
  * It carries `agentsMayEdit` and `sharedChannelCount`, both read by the
  * /home card (`pages/home/ontology-panels.tsx › OntologyCard` through
@@ -213,10 +213,10 @@ function personalClusterIds(
  * the row: how widely somebody else's ontology is lent is their business, and
  * `undefined` is the "nobody looked" the card renders as nothing.
  */
-export function mapClusterRow(
-  row: OntologyClusterRow,
+export function mapOntologyRow(
+  row: OntologyRow,
   sharedChannelCount?: number
-): OntologyCluster {
+): Ontology {
   return {
     id: row.id,
     slug: row.slug,
@@ -229,10 +229,10 @@ export function mapClusterRow(
   };
 }
 
-/** The admitted clusters the caller OWNS — the only ones a share count is
+/** The admitted ontologies the caller OWNS — the only ones a share count is
  *  emitted for. `unrestricted` answers NOTHING: a standard-workspace board
  *  never lends into a home channel, so the hot path pays no share read. */
-function ownedClusterIds(
+function ownedOntologyIds(
   audience: OntologyAudience,
   admitted: readonly { id: string; created_by: string | null }[]
 ): string[] {
@@ -254,8 +254,8 @@ function ownedClusterIds(
  * `op="get"`.
  */
 export async function getSummary(ctx: OntologyContext): Promise<OntologySummary> {
-  const { audience, clusterCount, membershipCount, admitted, walk } =
-    await admittedWalk(ctx, (ids) => narrow.listClusterSummaries(ids));
+  const { audience, ontologyCount, membershipCount, admitted, walk } =
+    await admittedWalk(ctx, (ids) => narrow.listOntologySummaries(ids));
   const objectRows = await narrow.listObjectSummariesByIds(
     audience.workspaceIds,
     walk.objectIds
@@ -271,25 +271,25 @@ export async function getSummary(ctx: OntologyContext): Promise<OntologySummary>
     };
   }
 
-  const clusters: OntologyClusterSummary[] = admitted.map((row) => ({
+  const ontologies: OntologyListItem[] = admitted.map((row) => ({
     id: row.id,
     slug: row.slug,
     name: row.name,
     purpose: row.purpose,
     columnIds: [],
   }));
-  attachWalkRows(walk, new Map(clusters.map((c) => [c.id, c])), objects);
+  attachWalkRows(walk, new Map(ontologies.map((c) => [c.id, c])), objects);
 
   // At-ceiling is indistinguishable from exhausted → counts as clipped.
   const truncated =
-    clusterCount >= ONTOLOGY_READ_LIMITS.clusters ||
+    ontologyCount >= ONTOLOGY_READ_LIMITS.ontologies ||
     objectRows.length >= ONTOLOGY_READ_LIMITS.objects ||
     membershipCount >= ONTOLOGY_READ_LIMITS.memberships;
 
   return {
-    clusters,
+    ontologies,
     objects,
     truncated,
-    personalClusterIds: personalClusterIds(audience, admitted),
+    personalOntologyIds: personalOntologyIds(audience, admitted),
   };
 }

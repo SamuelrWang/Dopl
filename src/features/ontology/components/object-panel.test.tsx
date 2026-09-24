@@ -22,7 +22,7 @@ import {
   SECTION_PANEL_SHELL,
 } from "@/shared/ui/section-panel";
 import type { GraphState } from "../graph-state";
-import type { OntologyCluster, OntologyObject } from "../types";
+import type { Ontology, OntologyObject } from "../types";
 import { ObjectPanel } from "./object-panel";
 import { PANEL_WELL } from "./panel-section";
 
@@ -45,7 +45,7 @@ function object(id: string, name: string, childIds: string[] = []): OntologyObje
   };
 }
 
-const CLUSTER: OntologyCluster = {
+const ONTOLOGY: Ontology = {
   id: "c1",
   slug: "pipeline",
   name: "Pipeline",
@@ -63,7 +63,7 @@ const CARD: OntologyObject = {
 };
 
 const GRAPH: GraphState = {
-  clusters: [CLUSTER],
+  ontologies: [ONTOLOGY],
   objects: { [LANE_ID]: object(LANE_ID, "Lead", [CARD_ID]), [CARD_ID]: CARD },
 };
 
@@ -385,7 +385,7 @@ describe("the 2026-09-14 field ruling", () => {
     render(
       <ObjectPanel
         objectId={CARD_ID}
-        graph={{ clusters: [CLUSTER], objects: { [LANE_ID]: object(LANE_ID, "Lead"), [CARD_ID]: REF_CARD } }}
+        graph={{ ontologies: [ONTOLOGY], objects: { [LANE_ID]: object(LANE_ID, "Lead"), [CARD_ID]: REF_CARD } }}
         dispatch={vi.fn()}
         canEdit={false}
         onSelectObject={vi.fn()}

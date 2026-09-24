@@ -50,14 +50,14 @@ class OntologyMethods extends client_knowledge_js_1.KnowledgeMethods {
     getOntologyAnchor() {
         return ontology.getOntologyAnchor(this.transport);
     }
-    createOntologyCluster(input) {
-        return ontology.createOntologyCluster(this.transport, input);
+    createOntology(input) {
+        return ontology.createOntology(this.transport, input);
     }
-    updateOntologyCluster(clusterId, patch) {
-        return ontology.updateOntologyCluster(this.transport, clusterId, patch);
+    updateOntology(ontologyId, patch) {
+        return ontology.updateOntology(this.transport, ontologyId, patch);
     }
-    deleteOntologyCluster(clusterId) {
-        return ontology.deleteOntologyCluster(this.transport, clusterId);
+    deleteOntology(ontologyId) {
+        return ontology.deleteOntology(this.transport, ontologyId);
     }
     createOntologyObject(input) {
         return ontology.createOntologyObject(this.transport, input);
@@ -75,9 +75,9 @@ class OntologyMethods extends client_knowledge_js_1.KnowledgeMethods {
     listOntologyObjectRevisions(objectId, opts = {}) {
         return revisions.listOntologyObjectRevisions(this.transport, objectId, opts);
     }
-    /** The ontology (cluster) roll-up: its own revisions and every object's in it. */
-    listOntologyClusterRevisions(clusterId, opts = {}) {
-        return revisions.listOntologyClusterRevisions(this.transport, clusterId, opts);
+    /** The ontology roll-up: its own revisions and every object's in it. */
+    listOntologyRevisions(ontologyId, opts = {}) {
+        return revisions.listOntologyRevisions(this.transport, ontologyId, opts);
     }
     /** Write ONE field's prior value back, under the object's Version (412 if stale). */
     restoreOntologyObjectRevision(objectId, revisionId, expectedVersion) {

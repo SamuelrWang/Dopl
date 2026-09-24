@@ -220,14 +220,14 @@ const OBJECT = {
 function ontologyClient(over: Record<string, unknown> = {}) {
   return stub({
     getOntology: vi.fn(async () => ({
-      clusters: [{ id: "cl-1", slug: "crm", name: "CRM", purpose: "", columnIds: [] }],
+      ontologies: [{ id: "cl-1", slug: "crm", name: "CRM", purpose: "", columnIds: [] }],
       objects: { "obj-1": OBJECT },
     })),
     listOntologyObjectRevisions: vi.fn(async () => ({
       revisions: [rev({ resourceType: "ontology_object", resourceId: "obj-1", payload: { field: "name", before: "Acme Inc", after: "Acme" } })],
       nextCursor: null,
     })),
-    listOntologyClusterRevisions: vi.fn(async () => ({ revisions: [], nextCursor: null })),
+    listOntologyRevisions: vi.fn(async () => ({ revisions: [], nextCursor: null })),
     restoreOntologyObjectRevision: vi.fn(async () => ({ ...OBJECT, name: "Acme Inc", updatedAt: "2026-09-23T03:00:00.000Z" })),
     ...over,
   });
@@ -244,8 +244,8 @@ describe("dopl_ontology history + restore", () => {
     expect(text).toContain(`Version \`${V2}\``);
   });
 
-  it("history refuses object= and cluster= together", async () => {
-    const { text, isError } = await ontology(ontologyClient())({ op: "history", object: "obj-1", cluster: "crm" });
+  it("history refuses object= and ontology= together", async () => {
+    const { text, isError } = await ontology(ontologyClient())({ op: "history", object: "obj-1", ontology: "crm" });
     expect(isError).toBe(true);
     expect(text).toContain("never both");
   });

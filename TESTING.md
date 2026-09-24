@@ -245,4 +245,4 @@ This is per the approved design, not a bug. Mentioning it so nobody files it as 
 
 ## Other sections
 
-(Add more testing groups here as features ship — e.g. `Canvas sync`, `Cluster brain editing`, `Billing / access gate`.)
+(Add more testing groups here as features ship — e.g. `Ontology sharing`, `Billing / access gate`.)

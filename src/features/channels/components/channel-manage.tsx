@@ -7,7 +7,7 @@
  * port's intent doc, deleted with the mock folder at that cutover).
  *
  * ⚠ IT NO LONGER HANGS OFF THE PANE HEADER (Samuel, 2026-08-19). The header's
- * right side is the info toggle and nothing else; this cluster is the RIGHT
+ * right side is the info toggle and nothing else; this group is the RIGHT
  * PANEL'S SETTINGS TAB now, where the LINKS empty state used to be. What moved
  * is the HOST, not the controls: this file still owns every dialog, every write
  * hook and the one `gate`, and `settings-tab.tsx` is the rows it renders into.
@@ -100,7 +100,7 @@ export interface ChannelsManageProps {
 /**
  * The right panel's SETTINGS tab, whole: per-channel settings, the desktop-only
  * working folder, invite, and the lifecycle rows (visibility / delete
- * / leave) with their confirm dialogs. It rendered as a header icon cluster
+ * / leave) with their confirm dialogs. It rendered as a header icon group
  * until 2026-08-19 — see the file docblock.
  *
  * ⚠ ALL THREE WRITE HOOKS TAKE THE PAGE'S `gate`, not a second coordinator.
@@ -296,7 +296,7 @@ export function ChannelsManageActions({
 
 /**
  * The two CREATE dialogs, behind the sidebar's `+` buttons. Split from the
- * header cluster because they are workspace-scoped, not channel-scoped: they
+ * header group because they are workspace-scoped, not channel-scoped: they
  * must mount when the workspace has NO channel at all, which is exactly when
  * the header does not exist.
  */

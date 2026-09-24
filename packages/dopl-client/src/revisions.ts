@@ -163,13 +163,13 @@ export async function listOntologyObjectRevisions(
   );
 }
 
-export async function listOntologyClusterRevisions(
+export async function listOntologyRevisions(
   t: DoplTransport,
-  clusterId: string,
+  ontologyId: string,
   opts: RevisionPageOpts = {}
 ): Promise<ContentRevisionPage> {
   return t.request<ContentRevisionPage>(
-    `/api/ontology/clusters/${enc(clusterId)}/revisions${pageQuery(opts)}`,
+    `/api/ontology/ontologies/${enc(ontologyId)}/revisions${pageQuery(opts)}`,
     { toolName: "ontology_history" }
   );
 }

@@ -13,7 +13,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { NextRequest } from "next/server";
 import type { WorkspaceAuthContext } from "@/shared/auth/with-workspace-auth";
 
-const CLUSTER_ID = "11111111-1111-4111-8111-111111111111";
+const ONTOLOGY_ID = "11111111-1111-4111-8111-111111111111";
 const CHANNEL_ID = "22222222-2222-4222-8222-222222222222";
 
 const AUTH: WorkspaceAuthContext = {
@@ -24,7 +24,7 @@ const AUTH: WorkspaceAuthContext = {
   workspacePublicId: "pub-1",
   role: "member",
   apiKeyWorkspaceId: null,
-  params: { clusterId: CLUSTER_ID },
+  params: { ontologyId: ONTOLOGY_ID },
 };
 
 vi.mock("@/shared/auth/with-workspace-auth", () => ({
@@ -78,7 +78,7 @@ function request(url: string, init?: RequestInit): NextRequest {
  *  `auth.params` is what the handlers read — but the EXPORTS keep the real
  *  wrapper's signature, and a test that could not type-check against it would
  *  not be testing the route Next.js calls. */
-const SEGMENT = { params: Promise.resolve({ clusterId: CLUSTER_ID }) };
+const SEGMENT = { params: Promise.resolve({ ontologyId: ONTOLOGY_ID }) };
 
 const SHARE = {
   channelId: CHANNEL_ID,
@@ -110,7 +110,7 @@ describe("the wire contract", () => {
   it("GET returns canManage plus the share rows", async () => {
     mockList.mockResolvedValue({ canManage: true, shares: [SHARE] });
     const res = await GET(
-      request(`http://localhost/api/ontology/clusters/${CLUSTER_ID}/shares`),
+      request(`http://localhost/api/ontology/ontologies/${ONTOLOGY_ID}/shares`),
       SEGMENT
     );
     expect(res.status).toBe(200);
@@ -120,7 +120,7 @@ describe("the wire contract", () => {
   it("PUT upserts one channel's row and answers with it", async () => {
     mockSet.mockResolvedValue(SHARE);
     const res = await PUT(
-      request(`http://localhost/api/ontology/clusters/${CLUSTER_ID}/shares`, {
+      request(`http://localhost/api/ontology/ontologies/${ONTOLOGY_ID}/shares`, {
         method: "PUT",
         headers: { "content-type": "application/json" },
         body: JSON.stringify(SHARE),
@@ -131,14 +131,14 @@ describe("the wire contract", () => {
     await expect(res.json()).resolves.toEqual({ share: SHARE });
     expect(mockSet).toHaveBeenCalledWith(
       expect.objectContaining({ userId: "user-1" }),
-      CLUSTER_ID,
+      ONTOLOGY_ID,
       SHARE
     );
   });
 
   it("PUT rejects a level outside the ladder with a 400, before the service", async () => {
     const res = await PUT(
-      request(`http://localhost/api/ontology/clusters/${CLUSTER_ID}/shares`, {
+      request(`http://localhost/api/ontology/ontologies/${ONTOLOGY_ID}/shares`, {
         method: "PUT",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ ...SHARE, membersLevel: "admin" }),
@@ -153,18 +153,18 @@ describe("the wire contract", () => {
     mockUnshare.mockResolvedValue(undefined);
     const res = await DELETE(
       request(
-        `http://localhost/api/ontology/clusters/${CLUSTER_ID}/shares?channelId=${CHANNEL_ID}`,
+        `http://localhost/api/ontology/ontologies/${ONTOLOGY_ID}/shares?channelId=${CHANNEL_ID}`,
         { method: "DELETE" }
       ),
       SEGMENT
     );
     expect(res.status).toBe(204);
-    expect(mockUnshare).toHaveBeenCalledWith(expect.anything(), CLUSTER_ID, CHANNEL_ID);
+    expect(mockUnshare).toHaveBeenCalledWith(expect.anything(), ONTOLOGY_ID, CHANNEL_ID);
   });
 
   it("DELETE without a channelId is a 400, never a blanket unshare", async () => {
     const res = await DELETE(
-      request(`http://localhost/api/ontology/clusters/${CLUSTER_ID}/shares`, {
+      request(`http://localhost/api/ontology/ontologies/${ONTOLOGY_ID}/shares`, {
         method: "DELETE",
       }),
       SEGMENT

@@ -79,7 +79,7 @@
   --color-link: var(--link);
   --color-accent-on: var(--accent-on);
 
-  /* Cluster/agent "active" green (Agent: on pills, attachment banner) */
+  /* Ontology/agent "active" green (Agent: on pills, attachment banner) */
   --color-agent-on: var(--agent-on);
 
   /* Inverted affordance (menu rows flipping solid on hover/active) +
@@ -220,8 +220,8 @@
   --card-surface-elevated: #ffffff;
   --card-surface-subtle: #f4f6f9;
   --navbar-surface: oklch(0.145 0 0);
-  --cluster-tab-surface: oklch(0.08 0 0);
-  --cluster-menu-surface: oklch(0.06 0 0);
+  --panel-group-tab-surface: oklch(0.08 0 0);
+  --panel-group-menu-surface: oklch(0.06 0 0);
   --tabs-surface: oklch(0.135 0 0);
 
   --border-subtle: oklch(0 0 0 / 6%);
@@ -286,7 +286,7 @@
   --agent-color-16: oklch(0.44 0.11 358);
 
   /* These back the --color-* tokens above. The effect tokens further down
-     (glows, gradients, cluster-outline, panel shadow/shine, navbar/cluster
+     (glows, gradients, ontology-outline, panel shadow/shine, navbar/ontology
      surfaces) still hold legacy dark/cyan values consumed only by canvas
      effects + marketing. */
 
@@ -425,11 +425,11 @@
   --orange: #d8bca6;
   --black: var(--surface-cta);
 
-  /* Cluster outline (dashed region behind grouped panels) — drawn in SVG. */
-  --cluster-outline-stroke: oklch(0.78 0.16 240 / 60%);
-  --cluster-outline-stroke-strong: oklch(0.78 0.16 240 / 80%);
-  --cluster-outline-fill: oklch(0.78 0.16 240 / 5%);
-  --cluster-outline-fill-strong: oklch(0.78 0.16 240 / 8%);
+  /* Panel-group outline (dashed region behind grouped panels) — drawn in SVG. */
+  --panel-group-outline-stroke: oklch(0.78 0.16 240 / 60%);
+  --panel-group-outline-stroke-strong: oklch(0.78 0.16 240 / 80%);
+  --panel-group-outline-fill: oklch(0.78 0.16 240 / 5%);
+  --panel-group-outline-fill-strong: oklch(0.78 0.16 240 / 8%);
 
   /* Panel shine + selection — consumed by canvas-panel INLINE styles. */
   --shine-top-gradient: linear-gradient(

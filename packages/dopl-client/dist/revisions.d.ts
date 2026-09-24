@@ -78,5 +78,5 @@ export declare function getSkillVersion(t: DoplTransport, versionId: string): Pr
 }>;
 export declare function restoreSkillVersion(t: DoplTransport, versionId: string, expectedVersion: string): Promise<SkillFile>;
 export declare function listOntologyObjectRevisions(t: DoplTransport, objectId: string, opts?: RevisionPageOpts): Promise<ContentRevisionPage>;
-export declare function listOntologyClusterRevisions(t: DoplTransport, clusterId: string, opts?: RevisionPageOpts): Promise<ContentRevisionPage>;
+export declare function listOntologyRevisions(t: DoplTransport, ontologyId: string, opts?: RevisionPageOpts): Promise<ContentRevisionPage>;
 export declare function restoreOntologyObjectRevision(t: DoplTransport, objectId: string, revisionId: string, expectedVersion: string): Promise<OntologyObject>;

@@ -12,38 +12,38 @@
 import { describe, expect, it } from "vitest";
 import { EMPTY_GRAPH, type GraphState } from "./graph-state";
 import {
-  createClusterOptimistic,
+  createOntologyOptimistic,
   createObjectOptimistic,
   isPendingOntologyId,
   NEW_CARD_NAME,
-  NEW_CLUSTER_NAME,
+  NEW_ONTOLOGY_NAME,
   NEW_COLUMN_NAME,
 } from "./optimistic-create";
 import {
   flush,
   harness,
-  savedCluster,
+  savedOntology,
   savedObject,
   seededOf,
 } from "./optimistic-create-harness";
 
-describe("createClusterOptimistic — ordering", () => {
+describe("createOntologyOptimistic — ordering", () => {
   it("has the tab, its column and its first card on the board before the first POST leaves", () => {
     const h = harness();
-    const { row } = createClusterOptimistic(h.api, h.sink);
+    const { row } = createOntologyOptimistic(h.api, h.sink);
 
     expect(h.sent).toHaveLength(1);
     const atSubmit = h.sent[0]!.board;
-    expect(atSubmit.clusters.map((c) => c.id)).toEqual([row.id]);
+    expect(atSubmit.ontologies.map((c) => c.id)).toEqual([row.id]);
     const { column, card } = seededOf(atSubmit, row);
     expect(column.name).toBe(NEW_COLUMN_NAME);
     expect(card.name).toBe(NEW_CARD_NAME);
-    expect(row.name).toBe(NEW_CLUSTER_NAME);
+    expect(row.name).toBe(NEW_ONTOLOGY_NAME);
   });
 
   it("marks all three rows pending, and holds the write gate open, from the click", () => {
     const h = harness();
-    const { row } = createClusterOptimistic(h.api, h.sink);
+    const { row } = createOntologyOptimistic(h.api, h.sink);
     const { column, card } = seededOf(h.board, row);
 
     expect([...h.pending].sort()).toEqual([row.id, column.id, card.id].sort());
@@ -53,7 +53,7 @@ describe("createClusterOptimistic — ordering", () => {
     // same tick could re-seed the reducer over rows that have no server row yet.
     expect(h.order).toEqual([
       "markPending",
-      "CLUSTER_ADD",
+      "ONTOLOGY_ADD",
       "OBJECT_ADD",
       "OBJECT_ADD",
       "beginWrite",
@@ -62,13 +62,13 @@ describe("createClusterOptimistic — ordering", () => {
 
   it("runs the seed POSTs against the ids the server minted, in order", async () => {
     const h = harness();
-    createClusterOptimistic(h.api, h.sink);
+    createOntologyOptimistic(h.api, h.sink);
 
-    h.clusterCalls[0]!.settle(savedCluster());
+    h.ontologyCalls[0]!.settle(savedOntology());
     await flush();
     expect(h.sent[1]).toMatchObject({
       op: "createObject",
-      input: { clusterId: "cluster-real", name: NEW_COLUMN_NAME },
+      input: { ontologyId: "ontology-real", name: NEW_COLUMN_NAME },
     });
 
     h.objectCalls[0]!.settle(savedObject("column-real"));
@@ -80,24 +80,24 @@ describe("createClusterOptimistic — ordering", () => {
   });
 });
 
-describe("createClusterOptimistic — resolve", () => {
+describe("createOntologyOptimistic — resolve", () => {
   it("swaps every provisional id for the real one and folds in the server slug", async () => {
     const h = harness();
-    const { row, done } = createClusterOptimistic(h.api, h.sink);
+    const { row, done } = createOntologyOptimistic(h.api, h.sink);
     const { column, card } = seededOf(h.board, row);
 
-    h.clusterCalls[0]!.settle(savedCluster());
+    h.ontologyCalls[0]!.settle(savedOntology());
     await flush();
     h.objectCalls[0]!.settle(savedObject("column-real"));
     await flush();
     h.objectCalls[1]!.settle(savedObject("card-real"));
     await done;
 
-    const cluster = h.board.clusters[0]!;
-    expect(cluster.id).toBe("cluster-real");
-    // Slug is server-minted; optimistic cluster has none.
-    expect(cluster.slug).toBe("new-cluster");
-    expect(cluster.columnIds).toEqual(["column-real"]);
+    const ontology = h.board.ontologies[0]!;
+    expect(ontology.id).toBe("ontology-real");
+    // Slug is server-minted; optimistic ontology has none.
+    expect(ontology.slug).toBe("new-ontology");
+    expect(ontology.columnIds).toEqual(["column-real"]);
     expect(h.board.objects["column-real"]!.childIds).toEqual(["card-real"]);
     for (const gone of [row.id, column.id, card.id]) {
       expect(h.board.objects[gone]).toBeUndefined();
@@ -107,9 +107,9 @@ describe("createClusterOptimistic — resolve", () => {
 
   it("clears pending only AFTER the swap, and releases the gate once", async () => {
     const h = harness();
-    const { done } = createClusterOptimistic(h.api, h.sink);
+    const { done } = createOntologyOptimistic(h.api, h.sink);
 
-    h.clusterCalls[0]!.settle(savedCluster());
+    h.ontologyCalls[0]!.settle(savedOntology());
     await flush();
     h.objectCalls[0]!.settle(savedObject("column-real"));
     await flush();
@@ -126,20 +126,20 @@ describe("createClusterOptimistic — resolve", () => {
   });
 });
 
-describe("createClusterOptimistic — rollback", () => {
-  it("takes the whole optimistic cluster back off the board when a seed POST fails", async () => {
+describe("createOntologyOptimistic — rollback", () => {
+  it("takes the whole optimistic ontology back off the board when a seed POST fails", async () => {
     const h = harness();
-    const { done } = createClusterOptimistic(h.api, h.sink);
+    const { done } = createOntologyOptimistic(h.api, h.sink);
 
-    h.clusterCalls[0]!.settle(savedCluster());
+    h.ontologyCalls[0]!.settle(savedOntology());
     await flush();
     const boom = new Error("seed column refused");
     h.objectCalls[0]!.fail(boom);
     expect(await done).toBeNull();
 
-    // Column + card go with the cluster, else a ghost tab survives (F-031).
+    // Column + card go with the ontology, else a ghost tab survives (F-031).
     expect(h.board).toEqual(EMPTY_GRAPH);
-    expect(h.deletedClusters).toEqual(["cluster-real"]);
+    expect(h.deletedOntologies).toEqual(["ontology-real"]);
     expect(h.failures).toEqual([{ what: "create ontology", err: boom }]);
     expect(h.pending.size).toBe(0);
     expect(h.writesInFlight).toBe(0);
@@ -147,28 +147,28 @@ describe("createClusterOptimistic — rollback", () => {
     expect(h.createdCount).toBe(0);
   });
 
-  it("deletes nothing server-side when the cluster POST itself fails", async () => {
+  it("deletes nothing server-side when the ontology POST itself fails", async () => {
     const h = harness();
-    const { done } = createClusterOptimistic(h.api, h.sink);
+    const { done } = createOntologyOptimistic(h.api, h.sink);
 
-    h.clusterCalls[0]!.fail(new Error("nope"));
+    h.ontologyCalls[0]!.fail(new Error("nope"));
     expect(await done).toBeNull();
 
     expect(h.board).toEqual(EMPTY_GRAPH);
-    expect(h.deletedClusters).toEqual([]);
+    expect(h.deletedOntologies).toEqual([]);
     expect(h.sent).toHaveLength(1);
   });
 
-  it("leaves a board that already had clusters exactly as it found it", async () => {
+  it("leaves a board that already had ontologies exactly as it found it", async () => {
     const h = harness();
     const existing: GraphState = {
-      clusters: [savedCluster({ id: "c1", slug: "c1", columnIds: ["col1"] })],
+      ontologies: [savedOntology({ id: "c1", slug: "c1", columnIds: ["col1"] })],
       objects: { col1: savedObject("col1", { name: "Accounts" }) },
     };
     h.seed(existing);
-    const { done } = createClusterOptimistic(h.api, h.sink);
+    const { done } = createOntologyOptimistic(h.api, h.sink);
 
-    h.clusterCalls[0]!.fail(new Error("nope"));
+    h.ontologyCalls[0]!.fail(new Error("nope"));
     await done;
 
     expect(h.board).toEqual(existing);
@@ -186,7 +186,7 @@ describe("createObjectOptimistic", () => {
     relationships: [{ label: "member of", targetIds: ["col1"] }],
   });
   const board: GraphState = {
-    clusters: [savedCluster({ id: "c1", slug: "c1", columnIds: ["col1"] })],
+    ontologies: [savedOntology({ id: "c1", slug: "c1", columnIds: ["col1"] })],
     objects: { col1: column },
   };
 
@@ -213,12 +213,12 @@ describe("createObjectOptimistic", () => {
     expect(h.pending.has(row.id)).toBe(true);
   });
 
-  it("adds a column straight to the cluster, with no inherited template", () => {
+  it("adds a column straight to the ontology, with no inherited template", () => {
     const h = harness();
     h.seed(board);
-    const { row } = createObjectOptimistic(h.api, h.sink, { clusterId: "c1" });
+    const { row } = createObjectOptimistic(h.api, h.sink, { ontologyId: "c1" });
 
-    expect(h.sent[0]!.board.clusters[0]!.columnIds).toEqual(["col1", row.id]);
+    expect(h.sent[0]!.board.ontologies[0]!.columnIds).toEqual(["col1", row.id]);
     expect(row.name).toBe(NEW_COLUMN_NAME);
     expect(row.attributes).toEqual([]);
   });

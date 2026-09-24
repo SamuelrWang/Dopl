@@ -42,7 +42,7 @@ const base = (over: Record<string, unknown> = {}) =>
     getWorkspaceId: () => "ws-1",
     searchKb: vi.fn(async () => []),
     listSkills: vi.fn(async () => []),
-    getOntology: vi.fn(async () => ({ clusters: [], objects: {} })),
+    getOntology: vi.fn(async () => ({ ontologies: [], objects: {} })),
     listAgentIdentitiesPayload: vi.fn(async () => ({ identities: [] })),
     searchContainer: vi.fn(async () => RESPONSE),
     ...over,

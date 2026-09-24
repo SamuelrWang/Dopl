@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { ConfirmDialog } from "@/shared/ui/confirm-dialog";
 import { FormDialog, FormSection, PillChoice } from "@/shared/ui/form-dialog";
-import { deleteCluster } from "@/features/ontology/client/api";
+import { deleteOntology } from "@/features/ontology/client/api";
 import {
   LEVEL_OPTIONS,
   useOntologyShares,
@@ -149,7 +149,7 @@ export function OntologyShareDialog({
  * DELETING A SHARED ONTOLOGY — the confirm NAMES the channels it is lent into
  * (Q4), because the cascade is what the operator cannot see.
  *
- * ⚠ APP-ONLY, DELIBERATELY. `DELETE /api/ontology/clusters/[clusterId]` is
+ * ⚠ APP-ONLY, DELIBERATELY. `DELETE /api/ontology/ontologies/[ontologyId]` is
  * `sessionOnly` and `dopl_ontology` has no delete op and must not gain one.
  *
  * ⚠ IT WAITS FOR THE SHARE READ. A confirm that offered to delete before it
@@ -190,7 +190,7 @@ export function DeleteOntologyConfirm({
       description={describeDelete(names, resolved)}
       confirmLabel="Delete"
       onConfirm={async () => {
-        await deleteCluster(workspaceId, ontology.id);
+        await deleteOntology(workspaceId, ontology.id);
         onDeleted();
       }}
     />

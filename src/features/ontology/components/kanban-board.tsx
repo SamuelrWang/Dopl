@@ -5,12 +5,12 @@ import type { Dispatch } from "react";
 import { pendingRow } from "@/shared/ui/pending";
 import type { GraphAction, GraphState } from "../graph-state";
 import { NEW_COLUMN_NAME } from "../optimistic-create";
-import type { OntologyCluster, OntologyObject } from "../types";
+import type { Ontology, OntologyObject } from "../types";
 import { KanbanCard } from "./kanban-card";
 import { KanbanColumnHeader } from "./kanban-column-header";
 
 interface Props {
-  cluster: OntologyCluster;
+  ontology: Ontology;
   graph: GraphState;
   dispatch: Dispatch<GraphAction>;
   selectedId: string | null;
@@ -31,7 +31,7 @@ interface Props {
  * board behind it is the page surface.
  */
 export function KanbanBoard({
-  cluster,
+  ontology,
   graph,
   dispatch,
   selectedId,
@@ -40,7 +40,7 @@ export function KanbanBoard({
   onSelect,
   onCreateObject,
 }: Props) {
-  const columns = cluster.columnIds
+  const columns = ontology.columnIds
     .map((id) => graph.objects[id])
     .filter((col): col is OntologyObject => Boolean(col));
 

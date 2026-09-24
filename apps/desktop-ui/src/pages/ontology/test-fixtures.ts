@@ -12,7 +12,7 @@ export { SEGMENT, WORKSPACE_ID } from "#/test-utils/bridge";
  * import it without one test file importing another.
  */
 
-export const CLUSTER_ID = "cluster-1";
+export const ONTOLOGY_ID = "ontology-1";
 export const COLUMN_ID = "obj-column-1";
 export const CARD_ID = "obj-card-1";
 
@@ -28,18 +28,18 @@ const object = (over: Partial<OntologyObject> & { id: string }): OntologyObject 
 });
 
 export const SNAPSHOT: OntologySnapshot = {
-  clusters: [
+  ontologies: [
     {
-      id: CLUSTER_ID,
+      id: ONTOLOGY_ID,
       slug: "revenue",
       name: "Revenue",
       purpose: "How money reaches the business.",
       columnIds: [COLUMN_ID],
-      // `{}` = pure auto-layout, the state every cluster starts in.
+      // `{}` = pure auto-layout, the state every ontology starts in.
       layout: {},
     },
     {
-      id: "cluster-2",
+      id: "ontology-2",
       slug: "delivery",
       name: "Delivery",
       purpose: "",
@@ -69,13 +69,13 @@ export function ontologyBridge(
   const shared = workspaceRoutes(path);
   if (shared) return shared;
   if (path === "/api/ontology") return Promise.resolve(ok(SNAPSHOT));
-  if (path === "/api/ontology/clusters" && opts.method === "POST") {
+  if (path === "/api/ontology/ontologies" && opts.method === "POST") {
     return Promise.resolve(
       ok({
-        cluster: {
-          id: "cluster-new",
-          slug: "new-cluster",
-          name: "New cluster",
+        ontology: {
+          id: "ontology-new",
+          slug: "new-ontology",
+          name: "New ontology",
           purpose: "",
           columnIds: [],
           layout: {},
@@ -86,7 +86,7 @@ export function ontologyBridge(
   if (path === "/api/ontology/objects" && opts.method === "POST") {
     return Promise.resolve(ok({ object: object({ id: "obj-new", name: "Untitled object" }) }));
   }
-  if (path.startsWith("/api/ontology/clusters/") || path.startsWith("/api/ontology/objects/")) {
+  if (path.startsWith("/api/ontology/ontologies/") || path.startsWith("/api/ontology/objects/")) {
     return Promise.resolve(noContent());
   }
   if (path === "/api/knowledge/bases") return Promise.resolve(ok({ bases: [] }));
