@@ -4,6 +4,18 @@ All notable changes to `@dopl/mcp-server` are documented here. Format follows [K
 
 ## [Unreleased]
 
+### Changed — granular tools speak for themselves (DMP-013 B2, 2026-09-24; `legacy` unchanged)
+
+- Each of the 39 has its own description and param lines (`granular-text*.ts`), required params
+  that every job needs, and no `op=` wording. Served total 44,098 chars (target 49,205).
+- The body-fence rule moves into the granular set's instructions, once; body-returning reads end
+  with a one-line pointer. `response_format` stays only on body-returning reads.
+- `dopl_send_message` refuses `kind="decision"` by name; `dopl_request_decision` fixes it.
+- `dopl_create_channel` / `dopl_update_channel` take `description` up to the route's 2,000 chars.
+- A contained profile serves a granular tool's offered jobs only: `dopl_only` keeps
+  `dopl_get_guide` (skill authoring, chats) without the channel guide.
+- Dropped row params no handler read; `dopl_launch_agent` gains `thread`.
+
 ### Added — the granular tool set is servable (DMP-013 B1, 2026-09-24; `legacy` stays the default)
 
 - `createServer({ toolSet })` (from `bootServer`'s resolved claim): `legacy` lists the 11,
