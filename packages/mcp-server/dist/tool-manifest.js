@@ -1,8 +1,8 @@
 "use strict";
 /**
  * THE GRANULAR TOOL SURFACE (DMP-013), one verb_noun tool per job, and the legacy call each one
- * runs. Nothing serves it yet: B1 registers from this table, and until then the legacy surface is
- * the only one on the wire. Read/write class, annotations and the `container` arg are DERIVED from
+ * runs. `registrar.ts › registerGranular` serves it from this table; the connection's tool set picks
+ * which set is listed, and the other stays callable. Read/write class, annotations and the `container` arg are DERIVED from
  * `gating.ts › isWriteOp`, `delete-policy.ts` and `workspace-arg.ts` — never restated here.
  *
  * A binding key is `Gates.requestedOp`'s grain: `<legacy tool>:<op>` or `<legacy tool>:<op>.<action>`,
@@ -10,10 +10,14 @@
  * legacy key bound exactly once, no delete op), the annotation truth and the naming rules.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.GRANULAR_TOOLS = exports.ALWAYS_LOAD_META = exports.TOOL_SETS = void 0;
+exports.LEGACY_TOOL_NAMES = exports.GRANULAR_TOOL_NAMES = exports.GRANULAR_TOOLS = exports.ALWAYS_LOAD_META = exports.TOOL_SETS = void 0;
 exports.resolveToolSet = resolveToolSet;
 exports.parseBinding = parseBinding;
 exports.bindingsOf = bindingsOf;
+exports.selectorOf = selectorOf;
+exports.servesName = servesName;
+exports.unlistedFor = unlistedFor;
+exports.withGranularTools = withGranularTools;
 exports.isReadOnlyTool = isReadOnlyTool;
 exports.bindsDeleteOp = bindsDeleteOp;
 exports.takesContainer = takesContainer;
@@ -39,6 +43,8 @@ exports.GRANULAR_TOOLS = [
         name: "dopl_search",
         bind: { everything: "dopl_search", knowledge: "dopl_kb:search" },
         select: "within",
+        // Shares the legacy tool's name, so a legacy `dopl_search` call lands here in the granular set.
+        selectDefault: "everything",
         params: ["query", "limit", "scope", "base", "response_format"],
         alwaysLoad: true,
     },
@@ -316,6 +322,30 @@ function parseBinding(key) {
 }
 function bindingsOf(t) {
     return typeof t.bind === "string" ? [t.bind] : Object.values(t.bind);
+}
+/** The arg that picks the job, or null for a one-job tool. */
+function selectorOf(t) {
+    return typeof t.bind === "string" ? null : (t.select ?? "action");
+}
+exports.GRANULAR_TOOL_NAMES = new Set(exports.GRANULAR_TOOLS.map((t) => t.name));
+/** The legacy surface, as the manifest binds it (the test pins that it binds every legacy key). */
+exports.LEGACY_TOOL_NAMES = new Set(exports.GRANULAR_TOOLS.flatMap(bindingsOf).map((key) => parseBinding(key).tool));
+const namesOf = (set) => (set === "granular" ? exports.GRANULAR_TOOL_NAMES : exports.LEGACY_TOOL_NAMES);
+/** Is `family`'s tool `name` registered while `set` is active? A name both sets use goes to the active one. */
+function servesName(set, family, name) {
+    return family === set || !namesOf(set).has(name);
+}
+/** The inactive set: registered and callable, absent from `tools/list`, so stale prompts still work. */
+function unlistedFor(set) {
+    const inactive = namesOf(set === "granular" ? "legacy" : "granular");
+    return new Set([...inactive].filter((name) => !namesOf(set).has(name)));
+}
+/** A profile's legacy offer widened to the granular tools whose every bound legacy tool it offers. */
+function withGranularTools(offer) {
+    if (offer === null)
+        return null;
+    const covered = exports.GRANULAR_TOOLS.filter((t) => bindingsOf(t).every((key) => offer.has(parseBinding(key).tool)));
+    return new Set([...offer, ...covered.map((t) => t.name)]);
 }
 function someBinding(t, test) {
     return bindingsOf(t).some((key) => {

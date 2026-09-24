@@ -1,7 +1,7 @@
 /**
  * THE GRANULAR TOOL SURFACE (DMP-013), one verb_noun tool per job, and the legacy call each one
- * runs. Nothing serves it yet: B1 registers from this table, and until then the legacy surface is
- * the only one on the wire. Read/write class, annotations and the `container` arg are DERIVED from
+ * runs. `registrar.ts › registerGranular` serves it from this table; the connection's tool set picks
+ * which set is listed, and the other stays callable. Read/write class, annotations and the `container` arg are DERIVED from
  * `gating.ts › isWriteOp`, `delete-policy.ts` and `workspace-arg.ts` — never restated here.
  *
  * A binding key is `Gates.requestedOp`'s grain: `<legacy tool>:<op>` or `<legacy tool>:<op>.<action>`,
@@ -21,6 +21,8 @@ export interface GranularTool {
     bind: BindingKey | Readonly<Record<string, BindingKey>>;
     /** The selector arg's name when `bind` is a record. Default `action`. */
     select?: string;
+    /** The job an omitted selector runs; only where a legacy call of the same name must still work. */
+    selectDefault?: string;
     /** Args fixed by this tool (a decision is a `send` with `kind="decision"`). */
     preset?: Readonly<Record<string, string>>;
     /** Legacy arg names this tool publishes; `container` is derived, never listed. */
@@ -46,6 +48,17 @@ export declare function parseBinding(key: BindingKey): {
     op: string | undefined;
 };
 export declare function bindingsOf(t: GranularTool): BindingKey[];
+/** The arg that picks the job, or null for a one-job tool. */
+export declare function selectorOf(t: GranularTool): string | null;
+export declare const GRANULAR_TOOL_NAMES: ReadonlySet<string>;
+/** The legacy surface, as the manifest binds it (the test pins that it binds every legacy key). */
+export declare const LEGACY_TOOL_NAMES: ReadonlySet<string>;
+/** Is `family`'s tool `name` registered while `set` is active? A name both sets use goes to the active one. */
+export declare function servesName(set: ToolSet, family: ToolSet, name: string): boolean;
+/** The inactive set: registered and callable, absent from `tools/list`, so stale prompts still work. */
+export declare function unlistedFor(set: ToolSet): ReadonlySet<string>;
+/** A profile's legacy offer widened to the granular tools whose every bound legacy tool it offers. */
+export declare function withGranularTools(offer: ReadonlySet<string> | null): ReadonlySet<string> | null;
 /** Read-only iff no bound key is a gated write. */
 export declare function isReadOnlyTool(t: GranularTool): boolean;
 /** A binding the delete policy refuses — must be false for every tool. */

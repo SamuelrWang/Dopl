@@ -1,10 +1,12 @@
 /**
- * The two registration helpers every tool goes through. Gates (`gating.ts`) are called
- * explicitly on both paths, because `registerMetaTool` bypasses `registerTool`'s wrapper.
+ * The two registration helpers every legacy tool goes through, and `registerGranular`, which serves
+ * a granular tool by running its bound legacy tool's pipeline. Gates (`gating.ts`) are called
+ * explicitly on both legacy paths, because `registerMetaTool` bypasses `registerTool`'s wrapper.
  */
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { DoplClient, McpCallTally } from "@dopl/client";
 import { type RegisterMetaTool, type RegisterTool, type ToolResponse } from "./tools/respond.js";
+import { type GranularTool, type ToolSet } from "./tool-manifest.js";
 export { CONTAINER_ARG_DESCRIPTION } from "./workspace-arg.js";
 import type { CallerIdentity } from "./tools/identity.js";
 import { type Gates } from "./gating.js";
@@ -30,6 +32,8 @@ export interface RegistrarDeps {
     /** That binding rendered footer-ready, or null when there is none. */
     sessionEffective: () => EffectiveWorkspace | null;
     caller: CallerIdentity;
+    /** Which set owns a name both sets use. Default `legacy`. */
+    toolSet?: ToolSet;
 }
 export interface ToolRegistrars {
     registerTool: RegisterTool;
@@ -37,5 +41,7 @@ export interface ToolRegistrars {
     registerMetaTool: RegisterMetaTool;
     /** A fan-out's additional legs only: the wrapper already charged the resolved workspace. */
     chargeCredit: ChargeCredit;
+    /** After every legacy registration: a granular tool runs a registered legacy tool. */
+    registerGranular: (tool: GranularTool) => void;
 }
 export declare function createToolRegistrars(deps: RegistrarDeps): ToolRegistrars;

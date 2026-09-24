@@ -1,17 +1,21 @@
 "use strict";
 /**
- * The two registration helpers every tool goes through. Gates (`gating.ts`) are called
- * explicitly on both paths, because `registerMetaTool` bypasses `registerTool`'s wrapper.
+ * The two registration helpers every legacy tool goes through, and `registerGranular`, which serves
+ * a granular tool by running its bound legacy tool's pipeline. Gates (`gating.ts`) are called
+ * explicitly on both legacy paths, because `registerMetaTool` bypasses `registerTool`'s wrapper.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.CONTAINER_ARG_DESCRIPTION = void 0;
 exports.createToolRegistrars = createToolRegistrars;
+const types_js_1 = require("@modelcontextprotocol/sdk/types.js");
 const zod_1 = require("zod");
 const client_1 = require("@dopl/client");
 const respond_js_1 = require("./tools/respond.js");
 const workspace_arg_js_1 = require("./workspace-arg.js");
 const container_resolve_js_1 = require("./container-resolve.js");
 const legacy_aliases_js_1 = require("./legacy-aliases.js");
+const granular_js_1 = require("./granular.js");
+const tool_manifest_js_1 = require("./tool-manifest.js");
 // Re-exported so tests read the injected arg's description through the registrar that injects it.
 var workspace_arg_js_2 = require("./workspace-arg.js");
 Object.defineProperty(exports, "CONTAINER_ARG_DESCRIPTION", { enumerable: true, get: function () { return workspace_arg_js_2.CONTAINER_ARG_DESCRIPTION; } });
@@ -34,13 +38,13 @@ function strictInput(shape, tool) {
     });
 }
 /**
- * The registration config both paths publish. `title` is the tool's own name because Codex copies a
+ * The registration config every path publishes. `title` is the tool's own name because Codex copies a
  * tool's `title` into its approval request as `_meta.tool_title`, the only per-tool identity that
  * request carries — the desktop names the call by it (`dopl-desktop-app/main/runtime/codex/
- * server-requests.js › doplElicitation`). Pinned in `tool-title.test.ts`.
+ * server-requests.js › doplElicitation`). Pinned in `tool-title.test.ts` and `granular.test.ts`.
  */
-function toolConfig(name, description, schema) {
-    return { title: name, description, inputSchema: strictInput(schema, name) };
+function toolConfig(name, description, inputSchema) {
+    return { title: name, description, inputSchema };
 }
 /**
  * Renamed args (no alias): the refusal names the successor. Keyed by tool: only a tool that
@@ -107,8 +111,17 @@ function createCreditedRunner(charge) {
     };
 }
 function createToolRegistrars(deps) {
-    const { server, client, gates, directory, activeWorkspace, sessionEffective, caller, } = deps;
+    const { server, client, gates, directory, activeWorkspace, sessionEffective, caller, toolSet = "legacy", } = deps;
     const chargeCredit = createCharger(client);
+    // Every registered legacy tool, including one whose name the active granular set took.
+    const legacy = new Map();
+    function publishLegacy(name, description, shape, run) {
+        const input = strictInput(shape, name);
+        legacy.set(name, { shape, input, run });
+        if (!(0, tool_manifest_js_1.servesName)(toolSet, "legacy", name))
+            return;
+        server.registerTool(name, toolConfig(name, description, input), run);
+    }
     const runWithCredits = createCreditedRunner(chargeCredit);
     /** Which workspace pays when no per-call container was honoured; none listable ⇒ no charge. */
     async function billingTarget() {
@@ -153,10 +166,8 @@ function createToolRegistrars(deps) {
             const result = await runWithCredits(await billingTarget(), tally(name, op), () => handler(innerArgs));
             return (0, status_footer_js_1.appendDoplStatus)(result, sessionEffective(), caller, (0, credits_unmetered_js_1.joinNotes)(address.note, (0, credits_unmetered_js_1.unmeteredNote)()), format);
         };
-        server.registerTool(name, toolConfig(name, description, enhancedSchema), 
         // The scope encloses handler and footer, so `dopl_search`'s per-leg charges are reported.
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        ((args) => (0, credits_unmetered_js_1.withUnmeteredScope)(() => wrapped(args))));
+        publishLegacy(name, description, enhancedSchema, (args) => (0, credits_unmetered_js_1.withUnmeteredScope)(() => wrapped(args)));
     }
     // Meta path: no container arg (account-wide lookups). It bypasses `registerTool`'s wrapper, so its
     // gates are explicit — never add a gate only one path performs. Uncharged by default:
@@ -181,9 +192,31 @@ function createToolRegistrars(deps) {
         };
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const framed = (0, status_footer_js_1.withDoplStatus)(gated, sessionEffective, caller, credits_unmetered_js_1.unmeteredNote);
-        server.registerTool(name, toolConfig(name, description, schema), 
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        ((args) => (0, credits_unmetered_js_1.withUnmeteredScope)(() => framed(args))));
+        publishLegacy(name, description, schema, (args) => (0, credits_unmetered_js_1.withUnmeteredScope)(() => framed(args)));
     }
-    return { registerTool, registerMetaTool, chargeCredit };
+    // No gate of its own: the bound legacy pipeline runs every gate, charge and tally on legacy keys,
+    // and `Gates.requestedOp` reads the op/action the binding wrote into the call.
+    function registerGranular(t) {
+        if (gates.isSuppressedTool(t.name) || !(0, tool_manifest_js_1.servesName)(toolSet, "granular", t.name))
+            return;
+        const shape = (0, granular_js_1.granularShape)(t, legacy);
+        if (!shape)
+            return;
+        server.registerTool(t.name, {
+            ...toolConfig(t.name, (0, granular_js_1.granularDescription)(t), strictInput(shape, t.name)),
+            annotations: (0, tool_manifest_js_1.annotationsFor)(t),
+            ...(t.alwaysLoad && { _meta: tool_manifest_js_1.ALWAYS_LOAD_META }),
+        }, (async (args) => {
+            const call = (0, granular_js_1.legacyCall)(t, args);
+            const target = legacy.get(call.tool);
+            // A multi-job row's schema is the union of its jobs; the chosen job's own schema has the last
+            // word, so a param that job does not take is refused by name, never passed through.
+            const parsed = target.input.safeParse(call.args);
+            if (!parsed.success) {
+                throw new types_js_1.McpError(types_js_1.ErrorCode.InvalidParams, `Input validation error: Invalid arguments for tool ${t.name}: ${parsed.error.message}`);
+            }
+            return target.run(parsed.data);
+        }));
+    }
+    return { registerTool, registerMetaTool, chargeCredit, registerGranular };
 }

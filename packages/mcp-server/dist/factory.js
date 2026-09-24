@@ -129,7 +129,9 @@ async function bootServer(client, opts = {}) {
         ...opts.caller,
         userId: opts.caller?.userId ?? userId,
     };
+    const toolSet = (0, tool_manifest_js_1.resolveToolSet)(opts.toolSet);
     const server = (0, server_js_1.createServer)(client, {
+        toolSet,
         isAdmin,
         caller,
         // ⚠ Not just diagnostic — `dopl_channel` needs this id to tell a reader a
@@ -161,7 +163,7 @@ async function bootServer(client, opts = {}) {
         isAdmin,
         activeWorkspace,
         directoryLoadFailed,
-        toolSet: (0, tool_manifest_js_1.resolveToolSet)(opts.toolSet),
+        toolSet,
     };
 }
 async function pingWithRetry(client, retries) {

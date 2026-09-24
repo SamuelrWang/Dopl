@@ -42,6 +42,7 @@ const registrar_js_1 = require("./registrar.js");
 const meta_tools_js_1 = require("./meta-tools.js");
 const resources_js_1 = require("./resources.js");
 const unlisted_tools_js_1 = require("./unlisted-tools.js");
+const tool_manifest_js_1 = require("./tool-manifest.js");
 const workspace_directory_js_1 = require("./workspace-directory.js");
 const version_js_1 = require("./version.js");
 // ⚠ Keep: `factory.ts` and four suites import `buildInstructions` from HERE.
@@ -122,8 +123,8 @@ function createServer(client, options = {}) {
         }),
     });
     // Before any registration: it filters the list handler the first registerTool installs.
-    if (options.unlistedTools)
-        (0, unlisted_tools_js_1.unlistTools)(server, options.unlistedTools);
+    const toolSet = options.toolSet ?? "legacy";
+    (0, unlisted_tools_js_1.unlistTools)(server, (0, tool_manifest_js_1.unlistedFor)(toolSet));
     // ⚠ PULLED, NOT PUSHED. The channels doctrine is a resource (and
     // `dopl_channel(op="help")`) rather than description prose, so an agent pays
     // for it when it asks and never on connection. See `resources.ts`.
@@ -133,8 +134,8 @@ function createServer(client, options = {}) {
     // onto the SDK server and would otherwise pass through none of them.
     // ⚠ The profile narrowing is resolved HERE, to a set, so `gating.ts` owns the
     // table and `createGates` owns no vocabulary. `null` ⇒ no narrowing.
-    const gates = (0, gating_js_1.createGates)(canWrite, (0, gating_js_1.offeredToolsFor)(options.toolProfile));
-    const { registerTool, registerMetaTool, chargeCredit } = (0, registrar_js_1.createToolRegistrars)({
+    const gates = (0, gating_js_1.createGates)(canWrite, (0, tool_manifest_js_1.withGranularTools)((0, gating_js_1.offeredToolsFor)(options.toolProfile)));
+    const { registerTool, registerMetaTool, chargeCredit, registerGranular } = (0, registrar_js_1.createToolRegistrars)({
         server,
         // One MCP credit per domain-tool call through this client
         // (`registrar.ts › createCreditedRunner`); meta-tools are exempt.
@@ -144,6 +145,7 @@ function createServer(client, options = {}) {
         activeWorkspace,
         sessionEffective,
         caller,
+        toolSet,
     });
     (0, meta_tools_js_1.registerWorkspaceMetaTools)(registerMetaTool, {
         directory,
@@ -194,5 +196,8 @@ function createServer(client, options = {}) {
     // 🔒 `directory` resolves `to` on op="grant", the same way it does for
     // `dopl_kb(op="grant")` above.
     (0, agent_js_1.registerAgentTools)(registerTool, client, caller, directory); // dopl_agent — persistent agent identities
+    // Last: each granular tool runs a legacy tool registered above.
+    for (const tool of tool_manifest_js_1.GRANULAR_TOOLS)
+        registerGranular(tool);
     return server;
 }

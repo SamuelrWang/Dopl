@@ -24,6 +24,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { DoplClient } from "@dopl/client";
 import type { WorkspaceListItem, WorkspaceRole, WorkspaceSummary } from "@dopl/client";
 import { type CallerIdentity } from "./tools/identity.js";
+import { type ToolSet } from "./tool-manifest.js";
 import { type WorkspaceSource } from "./workspace-directory.js";
 export { buildInstructions } from "./instructions.js";
 export declare function createServer(client: DoplClient, options?: {
@@ -121,8 +122,8 @@ export declare function createServer(client: DoplClient, options?: {
      */
     operatorHandle?: string | null;
     /**
-     * Tools registered and callable but absent from `tools/list` (`unlisted-tools.ts`). Empty by
-     * default; B1 of the tool split puts the inactive tool set here.
+     * Which tool set `tools/list` shows (`tool-manifest.ts › TOOL_SETS`, resolved by `bootServer`).
+     * The other set stays registered and callable, unlisted, so a stale prompt still works.
      */
-    unlistedTools?: ReadonlySet<string>;
+    toolSet?: ToolSet;
 }): McpServer;

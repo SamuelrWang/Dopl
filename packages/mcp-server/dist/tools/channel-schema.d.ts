@@ -118,8 +118,8 @@ export declare const CHANNEL_INPUT_SHAPE: {
     kind: z.ZodOptional<z.ZodEnum<{
         message: "message";
         record: "record";
-        milestone: "milestone";
         decision: "decision";
+        milestone: "milestone";
     }>>;
     thread: z.ZodOptional<z.ZodString>;
     summary: z.ZodOptional<z.ZodString>;
