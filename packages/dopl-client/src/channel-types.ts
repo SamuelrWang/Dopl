@@ -305,10 +305,8 @@ export interface ChannelThreadCreateInput {
   title: string;
   mode?: ThreadMode;
   body: string;
-  /** The other party. Omitted, the thread is the opener's alone and its opener wakes nobody. */
-  toUserId?: string;
-  /** `"chat"` opens it as a record; refused with `toUserId`. */
-  intent?: MessageIntent;
+  toUserId?: string; // omitted: the opener's thread alone, and its opener wakes nobody
+  intent?: MessageIntent; // "chat" opens it as a record; refused with toUserId
   /**
    * Idempotency key — re-sent create_thread with same id returns the existing
    * thread instead of double-creating it (and double-spawning the responder's

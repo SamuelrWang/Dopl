@@ -6004,8 +6004,8 @@ capability that genuinely needs its own namespace has no move left.
 ⚠ **THE THREE OPTIONS, NONE OF THEM FREE, AND THIS IS SAMUEL'S TO RULE:**
 1. **Relax the pin to an ALLOW-LIST** of preload-local modules the harness loads too. Keeps the
    execute-don't-grep property; costs a reviewed list, and the list is a thing that can be added to.
-2. **A SECOND preload for a second window class.** The tree already has three (`app-preload.js`,
-   `code-prompt-preload.js`, `update-required-preload.js`) — but a pop-out is an APP window and
+2. **A SECOND preload for a second window class.** The tree already has two (`app-preload.js`,
+   `update-required-preload.js`; the sign-in paste window's left in 1.37.1) — but a pop-out is an APP window and
    deliberately gets this one, so splitting by window class would split the wrong axis.
 3. **Reclaim by re-wrapping.** Eight empty `//` lines exist. This is what
    `main/session-profiles.js`'s header calls a ONE-TIME RECLAIM, NOT A BUDGET, and it buys one wave.
