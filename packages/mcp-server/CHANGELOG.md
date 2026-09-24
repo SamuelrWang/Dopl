@@ -4,6 +4,14 @@ All notable changes to `@dopl/mcp-server` are documented here. Format follows [K
 
 ## [Unreleased]
 
+### Fixed — a thread can be opened without `to` (1.37.1, live test #3)
+
+- `send thread="new"` no longer demands `to` for `kind="record"`: it opens a thread for nobody
+  (`intent:"chat"`, no target), which is the only way a one-member home channel can open one. A
+  record thread that names `to` is refused; a plain `thread="new"` with no `to` gets the
+  address-or-record refusal. Same fix on `dopl_send_message`. Needs the web route's optional
+  `toUserId` (`TaskCreateSchema`), shipped with it.
+
 ### Changed — an unclaimed connection gets the granular set (DMP-013 B5, 2026-09-24; rollout R3)
 
 - `resolveToolSet(claim, desktopRun)`: a named set (`X-Dopl-Tool-Set` / `?tools=`) wins for anyone,

@@ -170,21 +170,28 @@ export function registerChannelTool(
           // it decides which ROUTE the send goes to. `summary` is the title —
           // one field, one meaning, and the create route's own `.min(1)` is what
           // refuses a whitespace-only one after trimming.
+          // ⚠ `to` names the other party; kind="record" takes none and opens a
+          // thread for nobody (the only way to open one in a one-member room).
+          // Any other kind without `to` is the address-or-record refusal.
           if (args.thread === "new") {
-            const missNew = missingParams('send thread="new"', args, [
-              "to",
-              "summary",
-            ]);
+            const missNew = missingParams('send thread="new"', args, ["summary"]);
             if (missNew) return missNew;
+            const record = args.kind === "record";
+            const refused = record
+              ? recordAddressedRefusal(Boolean(args.to))
+              : unaddressedRefusal(Boolean(args.to), false);
+            if (refused) return refused;
             return opCreateThread(
               client,
               channel,
               args.summary as string,
               body,
-              args.to as string,
+              args.to,
               undefined,
               args.client_msg_id,
               runtime,
+              undefined,
+              record,
             );
           }
 

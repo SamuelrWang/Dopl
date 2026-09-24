@@ -144,14 +144,20 @@ directory) {
                 // it decides which ROUTE the send goes to. `summary` is the title —
                 // one field, one meaning, and the create route's own `.min(1)` is what
                 // refuses a whitespace-only one after trimming.
+                // ⚠ `to` names the other party; kind="record" takes none and opens a
+                // thread for nobody (the only way to open one in a one-member room).
+                // Any other kind without `to` is the address-or-record refusal.
                 if (args.thread === "new") {
-                    const missNew = (0, respond_1.missingParams)('send thread="new"', args, [
-                        "to",
-                        "summary",
-                    ]);
+                    const missNew = (0, respond_1.missingParams)('send thread="new"', args, ["summary"]);
                     if (missNew)
                         return missNew;
-                    return (0, channel_ops_threads_1.opCreateThread)(client, channel, args.summary, body, args.to, undefined, args.client_msg_id, runtime);
+                    const record = args.kind === "record";
+                    const refused = record
+                        ? (0, channel_ops_write_1.recordAddressedRefusal)(Boolean(args.to))
+                        : (0, channel_ops_write_1.unaddressedRefusal)(Boolean(args.to), false);
+                    if (refused)
+                        return refused;
+                    return (0, channel_ops_threads_1.opCreateThread)(client, channel, args.summary, body, args.to, undefined, args.client_msg_id, runtime, undefined, record);
                 }
                 // ⚠ `thread` is REQUIRED here where a plain send leaves it optional —
                 // an untagged milestone groups into nothing, the one shape of this

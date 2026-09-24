@@ -26,6 +26,7 @@ import * as list from "./service-list";
 import { createTask, setTaskMode } from "./service-tasks";
 import {
   ChannelAddresseeNotMemberError,
+  ChannelChatAddressedError,
   ChannelForbiddenError,
   TaskForbiddenError,
   TaskSelfTargetError,
@@ -309,6 +310,47 @@ describe("createTask — self-target guard", () => {
   });
 });
 
+
+// 1.37.1: a thread needs no target. A one-member home channel could not open one
+// at all, because the only addressable member was the caller.
+describe("createTask — targetless thread", () => {
+  beforeEach(() => {
+    vi.mocked(repoTasks.insertTask).mockImplementation(async (row) =>
+      taskRow({ created_by: row.created_by, target_user_id: row.target_user_id })
+    );
+  });
+
+  it("opens with no target in a one-member channel, addressed to nobody", async () => {
+    const { thread, openingSeq } = await createTask(ctx, "general", {
+      title: "Log",
+      body: "note",
+    });
+    expect(thread.targetUserId).toBeNull();
+    expect(openingSeq).toBe(1);
+    expect(vi.mocked(repoTasks.insertTask).mock.calls[0][0].target_user_id).toBeNull();
+    // There is no addressee to check.
+    expect(repo.isActiveWorkspaceMember).not.toHaveBeenCalled();
+    const opener = vi.mocked(repoMessages.insertMessage).mock.calls[0][0];
+    expect(opener.metadata.taskId).toBe(TASK_ID);
+    expect(opener.metadata.to_user_id).toBeUndefined();
+  });
+
+  it('stamps intent "chat" on the opener of a record thread', async () => {
+    await createTask(ctx, "general", { title: "Log", body: "note", intent: "chat" });
+    const opener = vi.mocked(repoMessages.insertMessage).mock.calls[0][0];
+    expect(opener.metadata.intent).toBe("chat");
+  });
+
+  it("refuses a record thread that names a target, before writing anything", async () => {
+    vi.mocked(repo.findMembership).mockImplementation(async (_c, uid) =>
+      uid === USER ? memberRow(USER, "owner") : memberRow(uid)
+    );
+    await expect(
+      createTask(ctx, "general", { title: "T", body: "b", toUserId: PEER, intent: "chat" })
+    ).rejects.toBeInstanceOf(ChannelChatAddressedError);
+    expect(repoTasks.insertTask).not.toHaveBeenCalled();
+  });
+});
 
 describe("setTaskMode — authorization", () => {
   it("allows the creator and posts NO message", async () => {

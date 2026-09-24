@@ -248,12 +248,21 @@ const TaskModeSchema = closedEnum<ThreadMode>()(["interactive", "autonomous"]);
  * interactive. `toUserId` must be an active member (service validates).
  * `clientMsgId` idempotency key: a re-send returns the existing task rather than
  * double-creating it AND double-spawning the responder's window.
+ *
+ * ⚠ `toUserId` is OPTIONAL since 1.37.1: a thread with no target has its opener
+ * as its only party and its opening post wakes nobody (address-only wake). The
+ * column was always nullable (`ON DELETE SET NULL`), so every reader already
+ * handles it. `intent:"chat"` opens it as a RECORD, the MCP `kind="record"`.
  */
 export const TaskCreateSchema = z.object({
   title: z.string().trim().min(1).max(200),
   mode: TaskModeSchema.optional(),
   body: z.string().min(1).max(16000),
-  toUserId: z.string().uuid(),
+  toUserId: z.string().uuid().optional(),
+  intent: MessageIntentSchema.optional(),
+  // Zod strips unknown keys, so without this a malformed FAN-OUT (`toUserIds: []`)
+  // would fall through the union and open a targetless thread instead of a 400.
+  toUserIds: removedParam("toUserIds is the fan-out shape; it needs at least one addressee"),
   clientMsgId: z.string().min(1).max(200).optional(),
   /**
    * SPAWN-WITH-HANDOFF: an external agent (the operator's own Claude Desktop / Code
@@ -311,8 +320,8 @@ export type TaskFanOutInput = z.infer<typeof TaskFanOutSchema>;
  * single-target one. ⚠ Plain union, FAN-OUT FIRST, and the order is load-bearing —
  * there is no discriminator to add without breaking every installed caller, and zod
  * STRIPS unknown keys, so a `{toUserIds}` body checked against
- * {@link TaskCreateSchema} first would fail only on the missing `toUserId`. The two
- * arms are mutually exclusive by their REQUIRED fields, so first-match is exact.
+ * {@link TaskCreateSchema} first would parse as a targetless thread. The single arm
+ * refuses a `toUserIds` key outright, so first-match is exact.
  */
 export const TaskCreatePayloadSchema = z.union([
   TaskFanOutSchema,

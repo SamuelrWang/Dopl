@@ -198,7 +198,7 @@ const SCHEMA_CEILINGS: Record<string, number> = {
 // The granular set's own served total, its briefing included (which states the body fence once and
 // must leave room for directory rows). Re-derive, never quote. The ceiling may never pass the target,
 // the legacy total when the split was planned.
-const GRANULAR_SERVED_CEILING = 44_153;
+const GRANULAR_SERVED_CEILING = 44_148;
 const GRANULAR_SERVED_TARGET = 49_205;
 const SERVED_TOTAL_CEILING = 50_275; // re-derive, never quote: −2 the 2026-09-23 vocabulary removal merged onto DMP-002 (dopl_ontology: −3 schema, +1 history gloss), −5 DMP-004 (dopl_search names ten domains in the same 450), +964 DMP-002 history+restore on three tools, +119 DMP-009 field type enum, −6 DMP-001 net, −229 home-channel addressing pulled (P8-23), +15 caller's own tool loader (X-09), +9 P8-15/P8-18.
 /**
@@ -250,8 +250,8 @@ const INSTRUCTIONS_CEILING = 1_804; // +15: an unstamped caller reads "your clie
 // where every evicted paragraph landed: 5,765 of refusals, 4,873 of own-agent
 // narrative, 3,914 on a hold that is now a knob on `read`.
 // DMP-013: the same doctrine spelled for a granular connection (longer tool names). Re-derive, never quote.
-const GRANULAR_DOCTRINE_CEILING = 14_504;
-const DOCTRINE_CEILING = 14_252; // +312 pulled against −229 pushed: home-channel addressing moved into `rooms` (P8-23); +16 P8-20. Re-derive, never quote.
+const GRANULAR_DOCTRINE_CEILING = 14_500;
+const DOCTRINE_CEILING = 14_248; // +312 pulled against −229 pushed: home-channel addressing moved into `rooms` (P8-23); +16 P8-20. Re-derive, never quote.
 
 const WS: WorkspaceListItem = {
   id: "11111111-1111-1111-1111-111111111111", ownerId: "owner", name: "Alpha", slug: "alpha",

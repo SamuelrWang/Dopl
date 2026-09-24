@@ -44,7 +44,8 @@ export async function opCreateThread(
   channelRef: string,
   title: string,
   body: string,
-  to: string,
+  // Omitted: a thread for nobody — its opener is its only party and nothing wakes.
+  to: string | undefined,
   mode?: ThreadMode,
   clientMsgId?: string,
   // Caller's OBSERVED runtime stamp. Changes nothing this op does — only what
@@ -55,12 +56,15 @@ export async function opCreateThread(
   // the opening message's reserved `metadata.handoff` stamp; ⚠ the desktop
   // honors it only for a thread the operator created as themselves.
   handoff?: boolean,
+  // `kind="record"`: the opener is stored `intent:"chat"`, the post for nobody.
+  record = false,
 ): Promise<ToolResponse> {
   const ch = await resolveChannelOr(client, channelRef);
   if (isErr(ch)) return ch;
   const chName = inlineOr(ch.name, NO_NAME);
-  const member = await resolveMemberOr(client, to);
-  if (isErr(member)) return member;
+  const member = to === undefined ? undefined : await resolveMemberOr(client, to);
+  if (member && isErr(member)) return member;
+  const label = member?.label ?? "nobody";
 
   // Idempotency key goes out AS GIVEN — it carries no meaning beyond dedupe.
   let created;
@@ -68,20 +72,21 @@ export async function opCreateThread(
     created = await client.createChannelThread(ch.id, {
       title,
       body,
-      toUserId: member.userId,
+      toUserId: member?.userId,
+      intent: record ? "chat" : undefined,
       mode,
       clientMsgId,
       handoff,
     });
   } catch (e) {
-    // ⚠ Read the CODE. `to` is required here, so a bare `isBadRequest` branch
+    // ⚠ Read the CODE. `to` is usually given here, so a bare `isBadRequest` branch
     // answers every 400 with the addressee message — an over-length title then
     // reads as "invite them first" and op="rooms" action="invite" answers "already a member".
     if (isBadRequest(e)) {
       switch (classifyBadRequest(e)) {
         case "addressee_not_member":
           return err(
-            `Couldn't address the thread to ${member.label} — they aren't a member of **${chName}**. Invite them first (${callRef("channel.rooms.invite", {}, { form: "op" })}), then open the thread.`,
+            `Couldn't address the thread to ${label} — they aren't a member of **${chName}**. Invite them first (${callRef("channel.rooms.invite", {}, { form: "op" })}), then open the thread.`,
           );
         // A thread is postable only by its creator and target, so a
         // self-addressed thread has nobody who can answer it and sits live and
@@ -93,7 +98,7 @@ export async function opCreateThread(
           );
         case "invalid_request":
           return err(
-            `That create_thread was rejected as INVALID before it reached **${chName}** — no thread was opened, and this is NOT a membership problem, so do NOT invite ${member.label}.${serverDetail(e)} ${fieldCapsNote()} Shorten the field that is over and open the thread again.`,
+            `That create_thread was rejected as INVALID before it reached **${chName}** — no thread was opened, and this is NOT a membership problem, so do NOT invite ${label}.${serverDetail(e)} ${fieldCapsNote()} Shorten the field that is over and open the thread again.`,
           );
         case "workspace":
           return err(
@@ -153,7 +158,7 @@ export async function opCreateThread(
       // caller reads it, and a fabricated cursor would silently skip messages.
       seq: created.openingSeq ?? undefined,
       mode: thread.mode,
-      addressed: true,
+      addressed: member !== undefined,
       handoff: handoff ? "ignored" : undefined,
       hold: holdFact(runtime, created.openingSeq),
     }),

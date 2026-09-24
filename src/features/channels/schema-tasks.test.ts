@@ -135,9 +135,22 @@ describe("TaskCreatePayloadSchema — one POST, two shapes", () => {
     expect(parsed.data && isTaskFanOutInput(parsed.data)).toBe(false);
   });
 
-  it("refuses a body that names neither", () => {
+  it("accepts a body that names neither as a TARGETLESS single create", () => {
+    const parsed = TaskCreatePayloadSchema.safeParse({ title: "x", body: "y" });
+    expect(parsed.success).toBe(true);
+    expect(parsed.data && isTaskFanOutInput(parsed.data)).toBe(false);
+  });
+
+  // Without the single arm's refusal, zod would strip the key and open a
+  // targetless thread for what was a broken fan-out.
+  it("still refuses a fan-out with no addressees", () => {
     expect(
-      TaskCreatePayloadSchema.safeParse({ title: "x", body: "y" }).success
+      TaskCreatePayloadSchema.safeParse({
+        title: "x",
+        body: "y",
+        toUserIds: [],
+        clientMsgId: "base-1",
+      }).success
     ).toBe(false);
   });
 });

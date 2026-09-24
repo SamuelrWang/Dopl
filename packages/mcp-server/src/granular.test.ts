@@ -166,6 +166,15 @@ describe("a decision is its own tool", () => {
     expect(b.log).toEqual([]);
   });
 
+  it('dopl_send_message opens a record thread with no `to` (thread="new")', async () => {
+    const eng = { id: "c-1", slug: "eng", name: "Eng" };
+    const opened = { thread: { id: "t-1", mode: "interactive" }, openingSeq: 3 };
+    const b = await boot("granular", { answers: { listChannels: [eng], createChannelThread: opened } });
+    const res = await call(b, "dopl_send_message", { channel: "eng", body: "x", kind: "record", thread: "new", summary: "Log" });
+    expect(res.isError).toBe(false);
+    expect(b.log).toContain(`createChannelThread ["c-1",{"title":"Log","body":"x","intent":"chat"}]`);
+  });
+
   it("dopl_request_decision fixes the kind: a caller cannot send one", async () => {
     const b = await boot("granular");
     const options = [{ label: "a", consequence: "b" }, { label: "c", consequence: "d" }];

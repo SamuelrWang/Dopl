@@ -33,7 +33,9 @@ const channel_errors_1 = require("./channel-errors");
 /** Fallbacks for peer text that neutralized to nothing — never an empty span. */
 const NO_TITLE = "(untitled)";
 const NO_ID = "(unreadable id)";
-async function opCreateThread(client, channelRef, title, body, to, mode, clientMsgId, 
+async function opCreateThread(client, channelRef, title, body, 
+// Omitted: a thread for nobody — its opener is its only party and nothing wakes.
+to, mode, clientMsgId, 
 // Caller's OBSERVED runtime stamp. Changes nothing this op does — only what
 // the result claims about waiting.
 runtime = null, 
@@ -41,34 +43,38 @@ runtime = null,
 // OPERATOR'S machine rather than being kept by this external session. Rides
 // the opening message's reserved `metadata.handoff` stamp; ⚠ the desktop
 // honors it only for a thread the operator created as themselves.
-handoff) {
+handoff, 
+// `kind="record"`: the opener is stored `intent:"chat"`, the post for nobody.
+record = false) {
     const ch = await (0, channel_shared_1.resolveChannelOr)(client, channelRef);
     if ((0, channel_shared_1.isErr)(ch))
         return ch;
     const chName = (0, channel_shared_1.inlineOr)(ch.name, narration_1.NO_NAME);
-    const member = await (0, channel_shared_1.resolveMemberOr)(client, to);
-    if ((0, channel_shared_1.isErr)(member))
+    const member = to === undefined ? undefined : await (0, channel_shared_1.resolveMemberOr)(client, to);
+    if (member && (0, channel_shared_1.isErr)(member))
         return member;
+    const label = member?.label ?? "nobody";
     // Idempotency key goes out AS GIVEN — it carries no meaning beyond dedupe.
     let created;
     try {
         created = await client.createChannelThread(ch.id, {
             title,
             body,
-            toUserId: member.userId,
+            toUserId: member?.userId,
+            intent: record ? "chat" : undefined,
             mode,
             clientMsgId,
             handoff,
         });
     }
     catch (e) {
-        // ⚠ Read the CODE. `to` is required here, so a bare `isBadRequest` branch
+        // ⚠ Read the CODE. `to` is usually given here, so a bare `isBadRequest` branch
         // answers every 400 with the addressee message — an over-length title then
         // reads as "invite them first" and op="rooms" action="invite" answers "already a member".
         if ((0, channel_errors_1.isBadRequest)(e)) {
             switch ((0, channel_errors_1.classifyBadRequest)(e)) {
                 case "addressee_not_member":
-                    return (0, respond_1.err)(`Couldn't address the thread to ${member.label} — they aren't a member of **${chName}**. Invite them first (${(0, call_ref_js_1.callRef)("channel.rooms.invite", {}, { form: "op" })}), then open the thread.`);
+                    return (0, respond_1.err)(`Couldn't address the thread to ${label} — they aren't a member of **${chName}**. Invite them first (${(0, call_ref_js_1.callRef)("channel.rooms.invite", {}, { form: "op" })}), then open the thread.`);
                 // A thread is postable only by its creator and target, so a
                 // self-addressed thread has nobody who can answer it and sits live and
                 // unanswerable. ⚠ Name the roster op — the failure mode is not knowing
@@ -76,7 +82,7 @@ handoff) {
                 case "self_target":
                     return (0, respond_1.err)(`A thread can't be addressed to yourself — you and the member you address it to are the only two who may post into it, so a self-addressed thread has nobody who can answer it. No thread was opened. List the channel's other members (${(0, call_ref_js_1.callRef)("channel.rooms.members", { channel: `"${ch.id}"` }, { form: "args" })}), then open the thread addressed to one of them.`);
                 case "invalid_request":
-                    return (0, respond_1.err)(`That create_thread was rejected as INVALID before it reached **${chName}** — no thread was opened, and this is NOT a membership problem, so do NOT invite ${member.label}.${(0, channel_errors_1.serverDetail)(e)} ${(0, channel_errors_1.fieldCapsNote)()} Shorten the field that is over and open the thread again.`);
+                    return (0, respond_1.err)(`That create_thread was rejected as INVALID before it reached **${chName}** — no thread was opened, and this is NOT a membership problem, so do NOT invite ${label}.${(0, channel_errors_1.serverDetail)(e)} ${(0, channel_errors_1.fieldCapsNote)()} Shorten the field that is over and open the thread again.`);
                 case "workspace":
                     return (0, respond_1.err)(`The thread was not opened because the call carried no usable workspace.${(0, channel_errors_1.serverDetail)(e)} This is a connection-level problem, not a channel one — report it to your operator.`);
                 case "thread_not_in_channel":
@@ -130,7 +136,7 @@ handoff) {
         // caller reads it, and a fabricated cursor would silently skip messages.
         seq: created.openingSeq ?? undefined,
         mode: thread.mode,
-        addressed: true,
+        addressed: member !== undefined,
         handoff: handoff ? "ignored" : undefined,
         hold: (0, channel_wake_guidance_1.holdFact)(runtime, created.openingSeq),
     }));

@@ -18,7 +18,7 @@
  */
 import type { DoplClient, ThreadMode } from "@dopl/client";
 import { type ToolResponse } from "./respond";
-export declare function opCreateThread(client: DoplClient, channelRef: string, title: string, body: string, to: string, mode?: ThreadMode, clientMsgId?: string, runtime?: string | null, handoff?: boolean): Promise<ToolResponse>;
+export declare function opCreateThread(client: DoplClient, channelRef: string, title: string, body: string, to: string | undefined, mode?: ThreadMode, clientMsgId?: string, runtime?: string | null, handoff?: boolean, record?: boolean): Promise<ToolResponse>;
 /**
  * ⚠ TWO OPS ENDED HERE with thread closing (wiring plan Phase 4, 2026-08-18):
  *

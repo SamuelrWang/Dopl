@@ -169,3 +169,55 @@ describe("`to` takes several recipients, and the result says so", () => {
     expect(out).toContain(`at most ${SEND_MAX_RECIPIENTS}`);
   });
 });
+
+// 1.37.1 live test #3: thread="new" demanded `to` even for a record, so a
+// one-member home channel (where `to=self` is refused) could never open a thread.
+describe('thread="new" — `to` only when there is somebody to address', () => {
+  const opened = { thread: { id: "t9", mode: "interactive" }, openingSeq: 7 };
+
+  function threadStub(create: unknown): DoplClient {
+    return stub({
+      listChannels: vi.fn(async () => [CHANNEL]),
+      getChannel: vi.fn(async () => CHANNEL),
+      createChannelThread: create,
+    });
+  }
+
+  it("opens a RECORD thread with no `to`, addressed to nobody", async () => {
+    const create = vi.fn(async () => opened);
+    const out = await send(threadStub(create), { thread: "new", kind: "record", summary: "Log" });
+    expect(create).toHaveBeenCalledTimes(1);
+    const input = create.mock.calls[0][1];
+    expect(input.toUserId).toBeUndefined();
+    expect(input.intent).toBe("chat");
+    expect(input.title).toBe("Log");
+    expect(out).toContain("thread=t9");
+    expect(out).toContain("addressed=no");
+  });
+
+  it("refuses a PLAIN new thread with no `to`: address it or file a record", async () => {
+    const create = vi.fn(async () => opened);
+    const out = await send(threadStub(create), { thread: "new", summary: "Log" });
+    expect(create).not.toHaveBeenCalled();
+    expect(out).toContain('kind="record"');
+  });
+
+  it("refuses a record thread that names somebody", async () => {
+    const create = vi.fn(async () => opened);
+    const out = await send(threadStub(create), {
+      thread: "new",
+      kind: "record",
+      summary: "Log",
+      to: "ada@example.com",
+    });
+    expect(create).not.toHaveBeenCalled();
+    expect(out).toContain("cannot carry `to`");
+  });
+
+  it("still needs a title", async () => {
+    const create = vi.fn(async () => opened);
+    const out = await send(threadStub(create), { thread: "new", kind: "record" });
+    expect(create).not.toHaveBeenCalled();
+    expect(out).toContain("summary");
+  });
+});

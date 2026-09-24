@@ -3,6 +3,7 @@ import type { ChannelThread, ThreadMode } from "../types";
 import type { TaskCreateInput } from "../schema";
 import {
   ChannelAddresseeNotMemberError,
+  ChannelChatAddressedError,
   TaskForbiddenError,
   TaskNotFoundError,
   TaskSelfTargetError,
@@ -71,11 +72,10 @@ async function postOpeningMessage(
   ctx: ChannelContext,
   channelId: string,
   task: { id: string; title: string; target_user_id: string | null },
-  body: string,
-  // Spawn-with-handoff: the opener carries the reserved `metadata.handoff` stamp
-  // so the OPERATOR'S desktop opens the requester session instead of the
-  // external session that posted the create. ⚠ Server-internal only.
-  handoff?: boolean,
+  // `handoff`: the opener carries the reserved `metadata.handoff` stamp so the
+  // OPERATOR'S desktop opens the requester session. `intent:"chat"` makes it a
+  // record. ⚠ Neither is stored on the task row, so a retry re-sends them.
+  { body, handoff, intent }: Pick<TaskCreateInput, "body" | "handoff" | "intent">,
   // Request fan-out: the opener carries the reserved `metadata.fanoutGroup`
   // stamp so the N threads of ONE request render as ONE card. ⚠ Server-internal
   // only — {@link TaskCreateOptions}.
@@ -87,6 +87,7 @@ async function postOpeningMessage(
     {
       body,
       kind: "message",
+      intent,
       toUserId: task.target_user_id ?? undefined,
       summary: task.title,
       metadata: { taskId: task.id },
@@ -145,8 +146,7 @@ async function convergeOnThread(
     ctx,
     channelId,
     task,
-    input.body,
-    input.handoff,
+    input,
     opts.fanoutGroupId
   );
   return { thread: mapTaskRow(task), openingSeq };
@@ -190,18 +190,27 @@ export async function createTask(
     ref,
     "create a task in this channel"
   );
+  const target = input.toUserId;
+  // ⚠ Refused BEFORE the insert: `postMessage` refuses the same contradiction,
+  // but only after the row exists, which would leave a thread with no opener.
+  if (target && input.intent === "chat") {
+    throw new ChannelChatAddressedError("toUserId");
+  }
+  // ⚠ A TARGETLESS thread (no `toUserId`) skips both checks below: its opener is
+  // its only party, and its opening post wakes nobody.
   // ⚠ Target must be a channel member AND an ACTIVE workspace member.
   // `channel_members` is never swept on workspace-leave, so a departed teammate
   // stays addressable: create succeeds, the opener posts, `openingSeq` returns,
   // the requester arms `await`, and nothing ever answers. Channel check first,
   // so the workspace round-trip is only paid for an actual channel member.
   if (
+    target &&
     !(
-      (await repo.findMembership(channel.id, input.toUserId)) &&
-      (await repo.isActiveWorkspaceMember(ctx.workspaceId, input.toUserId))
+      (await repo.findMembership(channel.id, target)) &&
+      (await repo.isActiveWorkspaceMember(ctx.workspaceId, target))
     )
   ) {
-    throw new ChannelAddresseeNotMemberError(input.toUserId);
+    throw new ChannelAddresseeNotMemberError(target);
   }
   // ⚠ A thread addressed to its own creator is DEAD ON ARRIVAL — only creator
   // and target may post, and here they are one person. Closes the AGENT path
@@ -212,7 +221,7 @@ export async function createTask(
   // ⚠ SITS BEFORE THE IDEMPOTENCY SHORT-CIRCUIT ON PURPOSE. Behind it, a retry
   // with the same `client_msg_id` finds the stored dead thread and returns it as
   // a success — the caller is told it is fine exactly once it is unfixable.
-  if (input.toUserId === ctx.userId) {
+  if (target === ctx.userId) {
     throw new TaskSelfTargetError();
   }
 
@@ -238,7 +247,7 @@ export async function createTask(
       title: input.title,
       mode: input.mode ?? "interactive",
       created_by: ctx.userId,
-      target_user_id: input.toUserId,
+      target_user_id: target ?? null,
       client_msg_id: input.clientMsgId ?? null,
     });
   } catch (err) {
@@ -260,8 +269,7 @@ export async function createTask(
     ctx,
     channel.id,
     task,
-    input.body,
-    input.handoff,
+    input,
     opts.fanoutGroupId
   );
 
