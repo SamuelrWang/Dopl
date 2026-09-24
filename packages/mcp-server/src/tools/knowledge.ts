@@ -3,6 +3,7 @@
  * `knowledge-ops-*` modules. There is no delete op — deletion is app-only (`delete-policy.ts`).
  */
 
+import { calledAs } from "../call-ref.js";
 import { z } from "zod";
 import type { DoplClient } from "@dopl/client";
 import { FENCE_DESCRIPTION_NOTE } from "./untrusted-fence";
@@ -239,12 +240,12 @@ export function registerKnowledgeTools(
               : args.title;
           if (path === undefined || path === "") {
             return err(
-              `op="write_file" is missing required param: path (pass path, or a title to derive it).`
+              `${calledAs("write_file")} is missing required param: path (pass path, or a title to derive it).`
             );
           }
           // An empty body is a fixable value, not a missing param: keep the two messages distinct.
           if (args.body === undefined) {
-            return err(`op="write_file" is missing required param: body.`);
+            return err(`${calledAs("write_file")} is missing required param: body.`);
           }
           if (args.body === "") {
             return err(

@@ -22,7 +22,7 @@ import { SEARCH_ERRORS } from "./tool-errors";
 import { composeDescription, READ_DESCRIPTION_MAX_CHARS } from "./tool-style";
 import { searchLegs } from "../workspace-directory";
 import { fanOut, MAX_SCOPES } from "./search-everywhere";
-import { APP_FOLLOW_UP, appGroupLines } from "./search-app-render";
+import { appFollowUp, appGroupLines } from "./search-app-render";
 import { ok, type RegisterTool, type ToolResponse } from "./respond";
 
 /** One shape: published by the registrar and read by `composeDescription` for its bounds. */
@@ -142,7 +142,7 @@ export function registerSearchTool(
           `# Search: ${inlineOr(args.query, "`(unreadable query)`")} — everywhere`,
           "",
         ];
-        const foot = [APP_FOLLOW_UP, "", `_${fan.coverage} ${SCOPE_AXIS_NOTE}_`];
+        const foot = [appFollowUp(), "", `_${fan.coverage} ${SCOPE_AXIS_NOTE}_`];
         return ok([...head, ...fan.lines, ...foot].join("\n"));
       }
 
@@ -201,7 +201,7 @@ export function registerSearchTool(
           standard: where.standard,
         }),
       );
-      if (found.app.length > 0) lines.push("", APP_FOLLOW_UP);
+      if (found.app.length > 0) lines.push("", appFollowUp());
 
       lines.push("", scopeNote(limit, found.notice, terse));
       return ok(lines.join("\n"));

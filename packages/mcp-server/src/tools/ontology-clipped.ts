@@ -19,7 +19,9 @@
  * Framing and remedy are shared, so a reader who met one has met all.
  */
 
+import { callRef } from "../call-ref.js";
+
 /** The clipped-read line for one surface. `subject` completes "…, so ${subject}." */
 export function clippedNote(subject: string): string {
-  return `_CLIPPED — this workspace holds more ontology than one read returns, so ${subject}. Every ontology read here shares that row ceiling (op="map", op="resolve" and op="get" alike), so no read on this connection fills the gap: report it rather than presenting this as the whole graph._`;
+  return `_CLIPPED — this workspace holds more ontology than one read returns, so ${subject}. Every ontology read here shares that row ceiling (${callRef("ontology.map", {}, { form: "op" })}, ${callRef("ontology.resolve", {}, { form: "op" })} and ${callRef("ontology.get", {}, { form: "op" })} alike), so no read on this connection fills the gap: report it rather than presenting this as the whole graph._`;
 }

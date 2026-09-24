@@ -15,6 +15,7 @@
  * or it does not get a number.
  */
 
+import { callRef } from "../call-ref.js";
 import { err, type ToolResponse } from "./respond";
 import { fieldTooLong, KB_INVALID_FIELD, refusal } from "./tool-errors";
 
@@ -157,7 +158,7 @@ export function writeFileValidationError(e: unknown, title?: string): ToolRespon
     return err(
       refusal(
         fieldTooLong("section", KB_TEXT_FIELD_MAX),
-        `write_file: \`section\` is ONE heading line, copied from op="outline" — not the text to write. Pass the heading in \`section\` and its new content in \`body\`.`,
+        `write_file: \`section\` is ONE heading line, copied from ${callRef("kb.outline", {}, { form: "op" })} — not the text to write. Pass the heading in \`section\` and its new content in \`body\`.`,
       ),
     );
   }

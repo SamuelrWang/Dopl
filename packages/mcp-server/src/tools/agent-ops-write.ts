@@ -3,6 +3,7 @@
  * The confirm gate is a tripwire (`confirm-token.ts`); the fence is the server's shared-publish check, fed by `acknowledgeShared`.
  */
 
+import { calledAs, callRef } from "../call-ref.js";
 import type {
   AgentIdentityCreateInput,
   AgentIdentityUpdateInput,
@@ -89,7 +90,7 @@ function knowledgeDigest(input: IdentityWriteInput): string[] {
     .sort();
 }
 
-const IDENTITY_VERSION_CONFLICT = versionConflict('op="get"');
+const IDENTITY_VERSION_CONFLICT = versionConflict("agent.get");
 
 function withStoredTypes(fields: IdentityField[], stored: IdentityField[]): IdentityField[] {
   const types = new Map(stored.map((f) => [f.key, f.type]));
@@ -204,7 +205,7 @@ export async function opCreate(
   return ok(
     [
       `Created agent identity ${inlineOr(identity.name, NO_NAME)} (id: \`${identity.id}\`). ${audience}${dup}`,
-      `Launch it into a channel with dopl_channel(op="manage", action="launch", channel=…, identity="${identity.id}") — which ASKS the operator's machine and does not start anything by itself.`,
+      `Launch it into a channel with ${callRef("channel.manage.launch", { channel: "…", identity: `"${identity.id}"` })} — which ASKS the operator's machine and does not start anything by itself.`,
     ].join("\n"),
   );
 }
@@ -228,7 +229,7 @@ export async function opUpdate(
   };
   if (Object.values(patch).every((v) => v === undefined)) {
     return err(
-      `op="update" changed nothing because no field was passed. Pass at least one of: name, description, instructions, model, runtime, fields, visibility, knowledge_bases, knowledge.`,
+      `${calledAs("update")} changed nothing because no field was passed. Pass at least one of: name, description, instructions, model, runtime, fields, visibility, knowledge_bases, knowledge.`,
     );
   }
 
@@ -298,7 +299,7 @@ export async function opUpdate(
       : "";
   // The new Version is part of the success, so consecutive edits need no re-read.
   return ok(
-    `Updated agent identity ${inlineOr(updated.name, NO_NAME)} (id: \`${updated.id}\`).${note}\nVersion: \`${updated.updatedAt}\` (pass as expected_version to the next op="update")`,
+    `Updated agent identity ${inlineOr(updated.name, NO_NAME)} (id: \`${updated.id}\`).${note}\nVersion: \`${updated.updatedAt}\` (pass as expected_version to the next ${callRef("agent.update", {}, { form: "op" })})`,
   );
 }
 

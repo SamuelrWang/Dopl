@@ -12,6 +12,7 @@
  *     `resolveMemberOr`. ⚠ Do NOT neutralize twice.
  */
 
+import { callRef } from "../call-ref.js";
 import type { ChannelVisibility, DoplClient } from "@dopl/client";
 import { ok, err, isAlreadyExists, type ToolResponse } from "./respond";
 import {
@@ -49,7 +50,7 @@ export async function opOpen(
     return ok(
       [
         `Opened a direct message with ${member.label} (id: \`${channel.id}\` · slug: \`${channel.slug}\`).`,
-        `Post with dopl_channel(op="send", channel="${channel.id}", body="...").`,
+        `Post with ${callRef("channel.send", { channel: `"${channel.id}"`, body: '"..."' })}.`,
       ].join("\n"),
     );
   }
@@ -93,7 +94,7 @@ export async function opOpen(
       // rule as everything else. Per-site judgement about who could have
       // authored a value is what leaves a peer-typed string raw.
       `Created channel **${inlineOr(channel.name, NO_NAME)}** (slug: \`${channel.slug}\` · id: \`${channel.id}\`). ${visNote}${description}`,
-      `Post with dopl_channel(op="send", channel="${channel.slug}", body="..."); add members with op="rooms" action="invite".`,
+      `Post with ${callRef("channel.send", { channel: `"${channel.slug}"`, body: '"..."' })}; add members with ${callRef("channel.rooms.invite", {}, { form: "op" })}.`,
     ].join("\n"),
   );
 }

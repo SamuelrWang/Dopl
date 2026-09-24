@@ -39,6 +39,7 @@
  * its bearings calls with `{}`.
  */
 
+import { bySet } from "./call-ref.js";
 import { z } from "zod";
 import { composeDescription, READ_DESCRIPTION_MAX_CHARS } from "./tools/tool-style.js";
 import { sessionLines, type CallerIdentity } from "./tools/identity.js";
@@ -135,7 +136,7 @@ async function opCreateHomeChannel(
       // container on `workspaceId` and the channel on `channelId`; the one
       // projection carries the container on `workspaceId` still, and the channel
       // on its own `id`.
-      `Address it with container=\`${channel.workspaceId}\` on ${workspaceArgTargets()}, and with channel=\`${channel.id}\` on dopl_channel.`,
+      `Address it with container=\`${channel.workspaceId}\` on ${workspaceArgTargets()}, and with channel=\`${channel.id}\` on ${bySet({ legacy: "dopl_channel", granular: "the channel tools" })}.`,
       `⚠ You cannot add a person to it. Minting the invitation is an interactive-session act, refused over MCP for every role and token — ask the user to add someone from the Dopl app.`,
     ].join("\n"),
   );

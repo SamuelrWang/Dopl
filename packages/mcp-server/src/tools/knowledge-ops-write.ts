@@ -19,6 +19,7 @@
  * agent-write-denied (403), validation (400) — and anything unmapped rethrows.
  */
 
+import { bySet, callRef, legacyOnly } from "../call-ref.js";
 import type { DoplClient } from "@dopl/client";
 import { inlineOr, NO_NAME, NO_PATH } from "./narration";
 import { ok, err, isConflict, isAlreadyExists, isApiError, apiMessage, type ToolResponse } from "./respond";
@@ -164,7 +165,7 @@ export async function opWriteFile(client: DoplClient, ref: string, path: string,
         return err(
           refusal(
             KB_TARGET_VANISHED,
-            `NOTHING was written at ${inlineOr(path, NO_PATH)}. A path is a POSITION, not an identity: op="move_file" and a retitle both vacate one. ⚠ Do NOT re-issue this call with force=true — write_file is an UPSERT, so a forced write at a vacated path CREATES A SECOND ENTRY that nothing afterwards can tell from the first. Find where it went with op="list_dir" (or op="get_tree"), then write at the path it is at now. An ENTRY ID survives a move; a path does not.`,
+            `NOTHING was written at ${inlineOr(path, NO_PATH)}. A path is a POSITION, not an identity: ${callRef("kb.move_file", {}, { form: "op" })} and a retitle both vacate one. ⚠ Do NOT re-issue this call with force=true — write_file is an UPSERT, so a forced write at a vacated path CREATES A SECOND ENTRY that nothing afterwards can tell from the first. Find where it went with ${callRef("kb.list_dir", {}, { form: "op" })} (or ${callRef("kb.get_tree", {}, { form: "op" })}), then write at the path it is at now. An ENTRY ID survives a move; a path does not.`,
           ),
         );
       }
@@ -177,14 +178,14 @@ export async function opWriteFile(client: DoplClient, ref: string, path: string,
       if (isConflict(e)) {
         return err(
           refusal(
-            versionConflict('op="read_file"'),
-            `NOTHING was written at ${inlineOr(path, NO_PATH)}. Read it again for the current body and Version, reconcile, then re-issue with that expected_version. ⚠ The other write may have MOVED or RENAMED this entry rather than edited it — check op="list_dir" before you retry, because write_file is an UPSERT and a forced write at a vacated path creates a DUPLICATE rather than overwriting anything.`,
+            versionConflict("kb.read_file"),
+            `NOTHING was written at ${inlineOr(path, NO_PATH)}. Read it again for the current body and Version, reconcile, then re-issue with that expected_version. ⚠ The other write may have MOVED or RENAMED this entry rather than edited it — check ${callRef("kb.list_dir", {}, { form: "op" })} before you retry, because write_file is an UPSERT and a forced write at a vacated path creates a DUPLICATE rather than overwriting anything.`,
           ),
         );
       }
       if (isAlreadyExists(e)) {
         return err(
-          `An entry titled ${inlineOr(title ?? path.split("/").filter(Boolean).pop(), NO_NAME)} already exists in that folder. Pick a different title/path, or read+overwrite the existing entry with dopl_kb(op="read_file" → "write_file").`
+          `An entry titled ${inlineOr(title ?? path.split("/").filter(Boolean).pop(), NO_NAME)} already exists in that folder. Pick a different title/path, or read+overwrite the existing entry with ${bySet({ legacy: legacyOnly('dopl_kb(op="read_file" → "write_file")'), granular: `${callRef("kb.read_file")} → ${callRef("kb.write_file")}` })}.`
         );
       }
       // ⚠ Name the failing field + rule, never a raw "VALIDATION_FAILED".

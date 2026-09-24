@@ -28,6 +28,7 @@
  * (`law-scan.test.ts`) read every non-test `channel-*.ts` in this directory.
  */
 
+import { callRef } from "../call-ref.js";
 import type {
   ChannelArtifactAction,
   ChannelArtifactResult,
@@ -71,7 +72,7 @@ function oneMessage(
 ): number | ToolResponse {
   if (messages.length !== 1) {
     return err(
-      `op="artifact" action="${action}" takes exactly ONE seq in \`messages\`, and ${messages.length} were named — nothing was changed. It moves one message at a time by design; loop it, or name the whole set on action="create".`,
+      `${callRef(`channel.artifact.${action}`, {}, { form: "op" })} takes exactly ONE seq in \`messages\`, and ${messages.length} were named — nothing was changed. It moves one message at a time by design; loop it, or name the whole set on action="create".`,
     );
   }
   return messages[0]!;

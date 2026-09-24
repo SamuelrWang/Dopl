@@ -15,6 +15,7 @@
  * ⚠ Both ops are re-exported from `knowledge-ops-read.ts`, so no importer moved.
  */
 
+import { callRef } from "../call-ref.js";
 import type { DoplClient } from "@dopl/client";
 import {
   inlineOr,
@@ -79,7 +80,7 @@ export async function opOutline(
         `## ${inlineOr(read.entry.title, NO_NAME)} — no headings`,
         `Path: \`${path}\` · ${outline?.totalChars ?? 0} chars whole.`,
         "",
-        `Nothing to address by section — read it with op="read_file". Entries over ${KB_SECTION_NUDGE_CHARS} chars should carry \`##\` headings, one topic each.`,
+        `Nothing to address by section — read it with ${callRef("kb.read_file", {}, { form: "op" })}. Entries over ${KB_SECTION_NUDGE_CHARS} chars should carry \`##\` headings, one topic each.`,
       ].join("\n"),
     );
   }

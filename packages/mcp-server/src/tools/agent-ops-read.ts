@@ -1,5 +1,6 @@
 /** `dopl_agent` read ops: list, get. Non-mutating — they resolve an identity ref and render it. */
 
+import { callRef } from "../call-ref.js";
 import type { AgentIdentity, DoplClient } from "@dopl/client";
 import { inlineOr, isForeignAuthored, NO_NAME } from "./narration.js";
 import { fenceBody } from "./untrusted-fence";
@@ -45,7 +46,7 @@ export async function opList(
   const identities = payload.identities;
   if (identities.length === 0) {
     return ok(
-      `No agent identities visible to you here. ${IDENTITIES_SCOPE_NOTE}\n\nCreate one with \`dopl_agent(op='create')\`.`,
+      `No agent identities visible to you here. ${IDENTITIES_SCOPE_NOTE}\n\nCreate one with \`${callRef("agent.create", {}, { quote: "'" })}\`.`,
     );
   }
   const personalIds = new Set(payload.homeScopedIdentityIds ?? EMPTY_IDENTITY_IDS);
@@ -106,7 +107,7 @@ export async function opGet(
     `# ${inlineOr(identity.name, NO_NAME)}`,
     `id: \`${identity.id}\` · ${identity.visibility} · runtime ${identity.runtime ? inlineOr(identity.runtime, NO_NAME) : "(the channel's)"} · model ${identity.model ? inlineOr(identity.model, NO_NAME) : "(the runtime's default)"}`,
     // The version is printed on the header rows, so a clipped instructions body cannot hide it.
-    `Version: \`${identity.updatedAt}\` (pass as expected_version to op="update")`,
+    `Version: \`${identity.updatedAt}\` (pass as expected_version to ${callRef("agent.update", {}, { form: "op" })})`,
     ...(identity.description ? [inlineOr(identity.description, "")] : []),
   ];
   const scopes = identityScopes(identity);

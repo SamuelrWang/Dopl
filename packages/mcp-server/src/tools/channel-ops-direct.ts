@@ -29,6 +29,7 @@
  * an `await`. That is why this op holds on the ROW, exactly as `launch_agent` does.
  */
 
+import { callRef } from "../call-ref.js";
 import type { AgentDirection, DirectionRefusalReason, DoplClient } from "@dopl/client";
 import { ok, isNotFound, type ToolResponse } from "./respond";
 import { channelNotFound, inlineOr, isErr, resolveChannelOr } from "./channel-shared";
@@ -324,7 +325,7 @@ export async function opReadDirections(
       ...directions.map(renderDirection),
       "",
       `⚠ A row still reading **pending** or **claimed** has not been answered YET. Do not re-send it — a second direction says the same thing to a live agent twice.`,
-      `⚠ AN ANSWER HERE IS THE FINAL TEXT OF ONE TURN, not the agent's narration and not its current state. For what an agent is DOING, dopl_channel(op="status").`,
+      `⚠ AN ANSWER HERE IS THE FINAL TEXT OF ONE TURN, not the agent's narration and not its current state. For what an agent is DOING, ${callRef("channel.status")}.`,
     ].join("\n"),
   );
 }

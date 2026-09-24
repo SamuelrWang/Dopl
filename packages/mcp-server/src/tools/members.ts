@@ -8,6 +8,7 @@
  * and access changes are human decisions made in the Dopl web UI.
  */
 
+import { callRef } from "../call-ref.js";
 import { z } from "zod";
 import type { AccessMatrix, DoplClient, MyAccess } from "@dopl/client";
 import { inlineOr } from "./narration";
@@ -170,10 +171,10 @@ async function opWhoami(
   );
   lines.push(...sessionLines(caller));
   if (reachable.length > 0) {
-    lines.push(`- Team-scoped resources you can reach: ${reachable.length} (op="my_access" for the list)`);
+    lines.push(`- Team-scoped resources you can reach: ${reachable.length} (${callRef("members.my_access", {}, { form: "op" })} for the list)`);
   }
   if (me.role === "owner" || me.role === "admin") {
-    lines.push(`- As ${me.role} you have edit access to everything, and can inspect any member's effective access (op="get").`);
+    lines.push(`- As ${me.role} you have edit access to everything, and can inspect any member's effective access (${callRef("members.get", {}, { form: "op" })}).`);
   }
   lines.push(``, contactPointer(caller.vendor));
   lines.push(``, LOCUS_NOTE);
@@ -211,7 +212,7 @@ async function opList(
   lines.push(
     `\n_Every membership row, INCLUDING invited-but-not-joined and deactivated ones — the count above is rows, not active people. Read the status on each._`,
   );
-  lines.push(`\nUse dopl_members(op="get", member=...) for one member's teams + effective access.`);
+  lines.push(`\nUse ${callRef("members.get", { member: "..." })} for one member's teams + effective access.`);
   lines.push(`\n${contactPointer(caller.vendor)}`);
   return ok(lines.join("\n"));
 }
@@ -358,7 +359,7 @@ async function opMyAccess(client: DoplClient): Promise<ToolResponse> {
     // (teams/server/access.ts) — absence of rows is the answer, not a failure
     // to enumerate, and reads as the smaller set otherwise.
     lines.push(
-      `\n_No per-resource rows are listed for an admin or owner: the empty list IS the answer, not a truncation. dopl_members(op="access_matrix") enumerates the resources themselves._`,
+      `\n_No per-resource rows are listed for an admin or owner: the empty list IS the answer, not a truncation. ${callRef("members.access_matrix")} enumerates the resources themselves._`,
     );
     return ok(lines.join("\n"));
   }

@@ -4,13 +4,14 @@
  * its Version token). Non-mutating. Routed from the registrar in `skills.ts`.
  */
 
+import { bySet, callRef, toolName } from "../call-ref.js";
 import type { DoplClient } from "@dopl/client";
 import { inlineOr, isForeignAuthored } from "./narration";
 import { ok, err, isNotFound, type ToolResponse } from "./respond";
 import {
   failureDetail,
   NO_NAME,
-  SCOPE_NOTE,
+  skillsScopeNote,
   UNTRUSTED_SKILL_BODY_HEADER,
 } from "./skills-shared";
 
@@ -30,8 +31,8 @@ export async function opList(
     // whose view this is.
     return ok(
       folder !== undefined
-        ? `No active skills visible to you in folder ${inlineOr(folder, "`(unnamed folder)`")}. ${SCOPE_NOTE}`
-        : `No active skills visible to you in this workspace. Drafts and other members' private or team-scoped skills are not listed, so this is not proof the workspace has none — dopl_members(op="access_matrix") is the inventory. Create one with \`dopl_skill\` op="create" (requires the workspace to allow agent writes).`
+        ? `No active skills visible to you in folder ${inlineOr(folder, "`(unnamed folder)`")}. ${skillsScopeNote()}`
+        : `No active skills visible to you in this workspace. Drafts and other members' private or team-scoped skills are not listed, so this is not proof the workspace has none — ${callRef("members.access_matrix")} is the inventory. Create one with ${bySet({ legacy: `\`${toolName("skill.create")}\` ${callRef("skill.create", {}, { form: "op" })}`, granular: callRef("skill.create") })} (requires the workspace to allow agent writes).`
     );
   }
   // Group by folder; unfiled last.
@@ -66,11 +67,11 @@ export async function opList(
     lines.push("");
   }
   lines.push(
-    `Showing ${active.length} skill${active.length === 1 ? "" : "s"}: active, and visible to you. ${SCOPE_NOTE}`
+    `Showing ${active.length} skill${active.length === 1 ? "" : "s"}: active, and visible to you. ${skillsScopeNote()}`
   );
   lines.push(
     "",
-    "Call `dopl_skill` op=\"get\" (or op=\"read\") with a slug to load the SKILL.md procedure for the skill that fits the task."
+    `Call ${bySet({ legacy: `\`${toolName("skill.get")}\` ${callRef("skill.get", {}, { form: "op" })}`, granular: callRef("skill.get") })} (or ${callRef("skill.read", {}, { form: "op" })}) with a slug to load the SKILL.md procedure for the skill that fits the task.`
   );
   return ok(lines.join("\n"));
 }
@@ -139,14 +140,14 @@ export async function opGet(
       // base is marked ✓ here and 404s on the read. Saying so is free; the
       // per-ref access check that would fix it is a query per reference.
       lines.push(
-        `_✓ means the reference EXISTS in this workspace, not that you can read it: a base private to another member still shows ✓ and then 404s on dopl_kb(op="read_file")._`
+        `_✓ means the reference EXISTS in this workspace, not that you can read it: a base private to another member still shows ✓ and then 404s on ${callRef("kb.read_file")}._`
       );
     }
 
     if (detail === "summary") {
       lines.push("");
       lines.push(
-        `_Summary view — SKILL.md is ${body.length.toLocaleString()} chars. Pass detail="full" or use op="read" for the body._`
+        `_Summary view — SKILL.md is ${body.length.toLocaleString()} chars. Pass detail="full" or use ${callRef("skill.read", {}, { form: "op" })} for the body._`
       );
     } else {
       lines.push("");
@@ -157,7 +158,7 @@ export async function opGet(
     return ok(lines.join("\n"));
   } catch (e) {
     if (isNotFound(e)) {
-      return err(`No skill \`${slug}\`. List skills with dopl_skill(op="list").`);
+      return err(`No skill \`${slug}\`. List skills with ${callRef("skill.list")}.`);
     }
     return err(`Couldn't load skill \`${slug}\`: ${failureDetail(e)}`);
   }

@@ -4,6 +4,7 @@
  * Member-written names are values (`inlineOr`); summaries and headings render verbatim only inside a fence.
  */
 
+import { callRef } from "../call-ref.js";
 import type { DoplClient } from "@dopl/client";
 import {
   flattenFenced,
@@ -30,7 +31,8 @@ const EMPTY_BASE_IDS: readonly string[] = Object.freeze([]);
 const EMPTY_HEADINGS: Readonly<Record<string, string[]>> = Object.freeze({});
 
 /** States on the result that the list is server-filtered; names the filters, never a hidden count. */
-const BASES_SCOPE_NOTE = `_Bases you can READ here. Another member's private bases, and any you have no grant on, are not listed, so this is not the workspace's base count. Full inventory across every visibility: dopl_members(op="access_matrix")._`;
+const basesScopeNote = () =>
+  `_Bases you can READ here. Another member's private bases, and any you have no grant on, are not listed, so this is not the workspace's base count. Full inventory across every visibility: ${callRef("members.access_matrix")}._`;
 
 /** The server returns this container's bases plus the caller's personal ones; rows are grouped by container first
  *  (twin: `agent-ops-read.ts › opList`). */
@@ -48,7 +50,7 @@ export async function opListBases(
   const bases = payload.bases;
   if (bases.length === 0)
     return ok(
-      `No knowledge bases visible to you here. ${BASES_SCOPE_NOTE}\n\nCreate one with \`dopl_kb(op='create_base')\`.`,
+      `No knowledge bases visible to you here. ${basesScopeNote()}\n\nCreate one with \`${callRef("kb.create_base", {}, { quote: "'" })}\`.`,
     );
   const personalIds = new Set(payload.homeScopedBaseIds ?? EMPTY_BASE_IDS);
   // Split on the answer, not the question: `undefined` = not answered (skip the split); `{}` = answered, none granted.
@@ -95,7 +97,7 @@ export async function opListBases(
     }
     lines.push("");
   }
-  lines.push(BASES_SCOPE_NOTE);
+  lines.push(basesScopeNote());
   return ok(lines.join("\n"));
 }
 
@@ -166,7 +168,7 @@ export async function opGetTree(
   if (tree.nextEntryCursor) {
     lines.push(
       "",
-      `_Showing ${tree.entries.length} of ${entryTotal} entries. Pass entry_cursor="${tree.nextEntryCursor}" for the next page, or narrow with op="list_dir" / op="search"._`
+      `_Showing ${tree.entries.length} of ${entryTotal} entries. Pass entry_cursor="${tree.nextEntryCursor}" for the next page, or narrow with ${callRef("kb.list_dir", {}, { form: "op" })} / ${callRef("kb.search", {}, { form: "op" })}._`
     );
   } else {
     // The complete case states its own scope rather than leaving it implied.

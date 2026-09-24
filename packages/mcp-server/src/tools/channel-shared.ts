@@ -3,6 +3,7 @@
  * filename prefix is required by the parity split-scan.
  */
 
+import { callRef, toolName } from "../call-ref.js";
 import type {
   Channel,
   ChannelMessage,
@@ -54,7 +55,7 @@ export function isErr<T>(x: T | ToolResponse): x is ToolResponse {
 /** Uniform channel not-found, also used by the hot read/hold paths that map a route 404. */
 export function channelNotFound(ref: string): ToolResponse {
   return err(
-    `Channel not found: "${ref}". Use dopl_channel(op="rooms", action="list") to see channels you can access (pass a slug or id from there).`,
+    `Channel not found: "${ref}". Use ${callRef("channel.rooms.list")} to see channels you can access (pass a slug or id from there).`,
   );
 }
 
@@ -106,7 +107,7 @@ export async function resolveMemberOr(
   const match = byId ?? (byEmail.length === 1 ? byEmail[0] : undefined);
   if (!match) {
     return err(
-      `No workspace member matching "${ref}". Invites are in-workspace only — pass the email or user id of an ACTIVE member (dopl_members lists them).`,
+      `No workspace member matching "${ref}". Invites are in-workspace only — pass the email or user id of an ACTIVE member (${toolName("members.list")} lists them).`,
     );
   }
   if (match.status !== "active") {

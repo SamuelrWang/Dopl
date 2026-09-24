@@ -5,6 +5,7 @@
  * (`tool-group-files.ts`).
  */
 
+import { callRef } from "../call-ref.js";
 import { inlineOr } from "./narration";
 import { apiMessage, err, isApiError, type ToolResponse } from "./respond";
 
@@ -28,7 +29,8 @@ export const NO_NAME = "`(unnamed skill)`";
  * ⚠ Names the FILTERS, never a hidden count — "how many were hidden from you"
  * is a second query on every list call.
  */
-export const SCOPE_NOTE = `Drafts and other members' private or team-scoped skills are not listed, so a count here is not the workspace's total. For the full inventory across every status and visibility: dopl_members(op="access_matrix").`;
+export const skillsScopeNote = () =>
+  `Drafts and other members' private or team-scoped skills are not listed, so a count here is not the workspace's total. For the full inventory across every status and visibility: ${callRef("members.access_matrix")}.`;
 
 /**
  * Untrusted-content framing for a SKILL.md written by somebody other than the

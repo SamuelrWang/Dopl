@@ -8,6 +8,7 @@
  * here too. The registrar (ontology.ts) wires this to the tool.
  */
 
+import { callRef } from "../call-ref.js";
 import type {
   DoplClient,
   OntologyObject,
@@ -101,7 +102,7 @@ export async function dispatch(
         purpose: args.purpose,
       });
       return ok(
-        `Created ontology ${inlineOr(ontology.name, NO_NAME)} (slug: \`${ontology.slug}\`). Add objects with op="create_column".`
+        `Created ontology ${inlineOr(ontology.name, NO_NAME)} (slug: \`${ontology.slug}\`). Add objects with ${callRef("ontology.create_column", {}, { form: "op" })}.`
       );
     }
     case "update_ontology": {
@@ -123,7 +124,7 @@ export async function dispatch(
         name: args.name as string,
       });
       return ok(
-        `Created object ${inlineOr(column.name, NO_NAME)} (id: \`${column.id}\`) in ${inlineOr(resolved.hit.name, NO_NAME)}. Add items with op="create_object" parent="${column.id}".`
+        `Created object ${inlineOr(column.name, NO_NAME)} (id: \`${column.id}\`) in ${inlineOr(resolved.hit.name, NO_NAME)}. Add items with ${callRef("ontology.create_object", { parent: `"${column.id}"` }, { form: "op" })}.`
       );
     }
     case "create_object": {
@@ -249,7 +250,7 @@ export async function dispatch(
       return withObject(client, args.object as string, async (object) => {
         await client.claimOntologyAnchor(object.id);
         return ok(
-          `Anchored the calling user to ${inlineOr(object.name, NO_NAME)} (\`${object.id}\`). op="anchor" now resolves to it.`
+          `Anchored the calling user to ${inlineOr(object.name, NO_NAME)} (\`${object.id}\`). ${callRef("ontology.anchor", {}, { form: "op" })} now resolves to it.`
         );
       });
     default:
@@ -273,7 +274,7 @@ async function withObject(
     // opaque throw.
     if (isConflict(e)) {
       return err(
-        `${inlineOr(resolved.hit.name, NO_NAME)} (\`${resolved.hit.id}\`) changed since you last read it. Re-read it with op="get", reconcile your change, then retry with the fresh Version as \`expected_version\` (or omit expected_version to overwrite blindly).`
+        `${inlineOr(resolved.hit.name, NO_NAME)} (\`${resolved.hit.id}\`) changed since you last read it. Re-read it with ${callRef("ontology.get", {}, { form: "op" })}, reconcile your change, then retry with the fresh Version as \`expected_version\` (or omit expected_version to overwrite blindly).`
       );
     }
     throw e;
@@ -354,7 +355,7 @@ async function opSetRelationship(client: DoplClient, args: OntologyArgs): Promis
     // server drops zero-target edges.
     if (!args.targets?.length) {
       return err(
-        `set_relationship needs \`targets\` (at least one object). To clear ${inlineOr(label, NO_NAME)}, use op="remove_relationship".`
+        `set_relationship needs \`targets\` (at least one object). To clear ${inlineOr(label, NO_NAME)}, use ${callRef("ontology.remove_relationship", {}, { form: "op" })}.`
       );
     }
 
@@ -463,7 +464,7 @@ async function resolveKbEntryRef(
     } catch {
       return {
         fail: err(
-          `No entry at ${inlineOr(path, NO_NAME)} in knowledge base \`${base.slug}\`. Check the path with dopl_kb op="get_tree" base="${base.slug}".`
+          `No entry at ${inlineOr(path, NO_NAME)} in knowledge base \`${base.slug}\`. Check the path with ${callRef("kb.get_tree", { base: `"${base.slug}"` }, { form: "named" })}.`
         ),
       };
     }

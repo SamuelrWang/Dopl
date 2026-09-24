@@ -5,6 +5,7 @@
  * call before drilling into any domain tool.
  */
 
+import { bySet, callRef, toolName } from "../call-ref.js";
 import type { DoplClient, OntologySummary, WorkspaceListItem } from "@dopl/client";
 import {
   containerKind,
@@ -78,7 +79,7 @@ const DOMAIN_COUNT = 3;
  * the absence of a PARTIAL READ prefix proves every section was read; do not
  * revert to "an unreadable domain renders as an empty section".
  */
-const SCOPE_NOTE = `Scope: ACTIVE items visible to you. Draft skills and team-scoped items you have no grant on are not listed, so these counts are not workspace totals; a domain that could not be read is named with reason=partial_read opening this line, so with no such notice every section above was read. Authoritative inventory across every status and visibility: dopl_members(op="access_matrix").`;
+const scopeNote = () => `Scope: ACTIVE items visible to you. Draft skills and team-scoped items you have no grant on are not listed, so these counts are not workspace totals; a domain that could not be read is named with reason=partial_read opening this line, so with no such notice every section above was read. Authoritative inventory across every status and visibility: ${callRef("members.access_matrix")}.`;
 
 /**
  * The one destination this manifest cannot list, named anyway. `dopl_channel`
@@ -97,7 +98,7 @@ const SCOPE_NOTE = `Scope: ACTIVE items visible to you. Draft skills and team-sc
  * are `dopl_channel`'s to state.
  */
 const channelsRouting = (vendor: string | null) =>
-  `**Reaching a member or their agent: dopl_channel.** Channels are this workspace's live member-to-member and agent-to-agent messaging, and this manifest does not query them, so nothing above is a count of them. If dopl_channel is not in your tool list, load it with ${toolLoaderFor(vendor)}, then call dopl_channel(op="rooms", action="list") for the channels and DMs this account can post into.`;
+  `**Reaching a member or their agent: ${bySet({ legacy: "dopl_channel", granular: "the channel tools" })}.** Channels are this workspace's live member-to-member and agent-to-agent messaging, and this manifest does not query them, so nothing above is a count of them. ${bySet({ legacy: "If dopl_channel is not in your tool list, load it", granular: `If ${toolName("channel.send")} is not in your tool list, load them` })} with ${toolLoaderFor(vendor)}, then call ${callRef("channel.rooms.list")} for the channels and DMs this account can post into.`;
 
 /**
  * 🔒 **THE CONTAINER NODES — "Home space" IS ITS OWN TOP-LEVEL NODE** (R-32,
@@ -183,7 +184,7 @@ export function registerMapTool(
 
     const lines: string[] = ["# Workspace map", ...containerNodes(containers)];
 
-    lines.push("", `## Knowledge bases (${bases.length}) — dopl_kb`);
+    lines.push("", `## Knowledge bases (${bases.length}) — ${toolName("kb.list_bases")}`);
     for (const b of bases) {
       const desc = b.description ? ` — ${inlineOr(b.description, "")}` : "";
       lines.push(`- ${inlineOr(b.name, NO_NAME)} \`${b.slug}\`${desc}`);
@@ -191,14 +192,14 @@ export function registerMapTool(
     if (bases.length === 0) lines.push("_None._");
 
     const activeSkills = skills.filter((s) => s.status === "active");
-    lines.push("", `## Skills (${activeSkills.length}) — dopl_skill`);
+    lines.push("", `## Skills (${activeSkills.length}) — ${toolName("skill.list")}`);
     for (const s of activeSkills) {
       const trigger = inlineOr(s.whenToUse || s.description, "`(no trigger described)`");
       lines.push(`- ${inlineOr(s.name, NO_NAME)} \`${s.slug}\` — ${trigger}`);
     }
     if (activeSkills.length === 0) lines.push("_None._");
 
-    lines.push("", `## Ontology (${ontology.ontologies.length}) — dopl_ontology`);
+    lines.push("", `## Ontology (${ontology.ontologies.length}) — ${toolName("ontology.map")}`);
     // 🔒 **S29c — THE ROUTING SURFACE IS WHERE THE MYSTERY WAS REPORTED.** A
     // brand-new home channel listed ontologies nobody had put there; they are
     // the caller's own personal shelf, which `service-audience.ts` folds into
@@ -233,7 +234,7 @@ export function registerMapTool(
 
     // One footer line, not two — the partial-read notice PREFIXES the scope
     // note. On the healthy path `notice()` is "" and this is the note alone.
-    lines.push("", `_${reads.notice(DOMAIN_COUNT, "domains")}${SCOPE_NOTE}_`);
+    lines.push("", `_${reads.notice(DOMAIN_COUNT, "domains")}${scopeNote()}_`);
     lines.push("", channelsRouting(caller.vendor));
     return ok(lines.join("\n"));
   });

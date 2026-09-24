@@ -28,6 +28,7 @@
  *      collapse it.
  */
 
+import { callRef } from "../call-ref.js";
 import type { ChannelEscalationInput, DoplClient } from "@dopl/client";
 import { err, type ToolResponse } from "./respond";
 import { escalationBody } from "./channel-escalate-render";
@@ -67,7 +68,7 @@ export async function opEscalate(
   // opposite remedies: one option means DO IT, seven means COLLAPSE THEM.
   if (escalation.options.length < MIN_OPTIONS) {
     return err(
-      `Nothing was posted. An escalation offers ${MIN_OPTIONS}-${MAX_OPTIONS} options and you gave ${escalation.options.length} — **one option is not a question.** If there is only one way forward, that is a decision you already have: take it, and report it with dopl_channel(op="send", kind="milestone", thread="<id>", body="<one line>"). If you are asking permission for that one path, the second option is what happens if they say no — write it out.`,
+      `Nothing was posted. An escalation offers ${MIN_OPTIONS}-${MAX_OPTIONS} options and you gave ${escalation.options.length} — **one option is not a question.** If there is only one way forward, that is a decision you already have: take it, and report it with ${callRef("channel.send", { kind: '"milestone"', thread: '"<id>"', body: '"<one line>"' })}. If you are asking permission for that one path, the second option is what happens if they say no — write it out.`,
     );
   }
   if (escalation.options.length > MAX_OPTIONS) {

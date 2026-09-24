@@ -9,6 +9,7 @@
  * display name renders by id alone.
  */
 
+import { callRef } from "../call-ref.js";
 import type { AppSearchGroup, AppSearchItem } from "@dopl/client";
 import { inlineOr, NO_NAME } from "./narration.js";
 import { APP_GROUP_ORDER } from "./search-scope.js";
@@ -90,4 +91,5 @@ export function appGroupLines(
 }
 
 /** How to read a hit, once per result rather than per row. */
-export const APP_FOLLOW_UP = `_Read a message with dopl_channel(op="read", channel=…, since=<seq − 1>), a thread with thread=…, a member with dopl_members(op="get", member=<id>), a chat with dopl_chats(op="get", chat_id=<id>). A home channel also needs container=._`;
+export const appFollowUp = () =>
+  `_Read a message with ${callRef("channel.read", { channel: "…", since: "<seq − 1>" })}, a thread with thread=…, a member with ${callRef("members.get", { member: "<id>" })}, a chat with ${callRef("chats.get", { chat_id: "<id>" })}. A home channel also needs container=._`;

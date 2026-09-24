@@ -1,5 +1,6 @@
 /** Shared base resolution and error mappers for the `dopl_kb` op modules. */
 
+import { callRef } from "../call-ref.js";
 import type { DoplClient, KnowledgeBase } from "@dopl/client";
 import { inlineOr, NO_NAME, NO_PATH, UUID_RE } from "./narration";
 import { apiMessage, err, isApiError, type ToolResponse } from "./respond";
@@ -88,7 +89,7 @@ async function ambiguousBase(
       ),
       "",
       ...shown.map((b, i) => matchLine(b, counts[i], personal.has(b.id))),
-      ...(rest > 0 ? [`- …and ${rest} more; op="list_bases" has them all.`] : []),
+      ...(rest > 0 ? [`- …and ${rest} more; ${callRef("kb.list_bases", {}, { form: "op" })} has them all.`] : []),
     ].join("\n"),
   );
 }
@@ -147,7 +148,7 @@ export function entryNotFound(
   return err(
     refusal(
       KB_ENTRY_NOT_FOUND,
-      `${inlineOr(path, NO_PATH)} in ${inlineOr(baseRef, "`(unreadable ref)`")}. ${where} List the folder it should be in with op="list_dir", or op="get_tree" for the whole base. An ENTRY ID survives a move and a rename; a path does not.`,
+      `${inlineOr(path, NO_PATH)} in ${inlineOr(baseRef, "`(unreadable ref)`")}. ${where} List the folder it should be in with ${callRef("kb.list_dir", {}, { form: "op" })}, or ${callRef("kb.get_tree", {}, { form: "op" })} for the whole base. An ENTRY ID survives a move and a rename; a path does not.`,
     ),
   );
 }

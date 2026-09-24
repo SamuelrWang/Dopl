@@ -27,6 +27,7 @@
  * fix and the server performs it.
  */
 
+import { callRef } from "../call-ref.js";
 import { inlineOr, NO_NAME } from "./narration";
 
 /**
@@ -73,5 +74,5 @@ export function escapedTitleLine(sample: string, count = 1): string {
     count === 1
       ? `${inlineOr(sample, NO_NAME)} is`
       : `${inlineOr(sample, NO_NAME)} and ${count - 1} other${count === 2 ? "" : "s"} here are`;
-  return `reason=TITLE_ENTITY_ESCAPED · ${where} stored with HTML entities in the title · fix=op="write_file" with the decoded title`;
+  return `reason=TITLE_ENTITY_ESCAPED · ${where} stored with HTML entities in the title · fix=${callRef("kb.write_file", {}, { form: "op" })} with the decoded title`;
 }

@@ -18,6 +18,7 @@
  * control flow.
  */
 
+import { callRef } from "../call-ref.js";
 import type {
   ChannelMember,
   ChannelMessage,
@@ -72,7 +73,7 @@ export async function opList(client: DoplClient): Promise<ToolResponse> {
   const channels = await client.listChannels();
   if (channels.length === 0) {
     return ok(
-      'No channels yet. Create one with dopl_channel(op="rooms", action="open", name="...").',
+      `No channels yet. Create one with ${callRef("channel.rooms.open", { name: '"..."' })}.`,
     );
   }
   // ⚠ NO PER-RESULT SECURITY BANNER (T11, 2026-09-02). The framing did not go
@@ -83,7 +84,7 @@ export async function opList(client: DoplClient): Promise<ToolResponse> {
   const lines = [`## Channels — ${channels.length}\n`];
   for (const c of channels) lines.push(formatChannelLine(c));
   lines.push(
-    '\nRead a channel with dopl_channel(op="read", channel=<slug|id>); post with op="send"; WAIT for new ones by HOLDING — op="read" with wait_ms, never a timed re-read.',
+    `\nRead a channel with ${callRef("channel.read", { channel: "<slug|id>" })}; post with ${callRef("channel.send", {}, { form: "op" })}; WAIT for new ones by HOLDING — ${callRef("channel.read", {}, { form: "op" })} with wait_ms, never a timed re-read.`,
   );
   return ok(lines.join("\n"));
 }
@@ -200,7 +201,7 @@ export async function opRead(
       return ok(
         [
           ...card,
-          `No messages tagged with thread ${safeScope} in **${ref}**${sinceNote}. \`thread\` FILTERS the transcript — an id no message carries comes back empty rather than as an error — so check the id with dopl_channel(op="rooms", action="threads", channel="${ref}") before you conclude the exchange is silent, or drop \`thread\` to read the whole channel. A HOLD is channel-wide and takes no thread.`,
+          `No messages tagged with thread ${safeScope} in **${ref}**${sinceNote}. \`thread\` FILTERS the transcript — an id no message carries comes back empty rather than as an error — so check the id with ${callRef("channel.rooms.threads", { channel: `"${ref}"` })} before you conclude the exchange is silent, or drop \`thread\` to read the whole channel. A HOLD is channel-wide and takes no thread.`,
           waitingLine(channelHoldCall(ref, since ?? 0), since ?? 0),
         ].join("\n"),
       );
@@ -405,7 +406,7 @@ export async function opListThreads(
   }
   if (threads.length === 0) {
     return ok(
-      `No threads in **${ref}**. Open one with dopl_channel(op="send", channel="${ref}", thread="new", summary="...", body="...", to="...").`,
+      `No threads in **${ref}**. Open one with ${callRef("channel.send", { channel: `"${ref}"`, thread: '"new"', summary: '"..."', body: '"..."', to: '"..."' })}.`,
     );
   }
   const lines = [
@@ -426,7 +427,7 @@ export async function opListThreads(
   // channel — and is stated in `channel-doctrine.ts` under THE MODEL. What stays
   // is the two calls a reader of THIS page needs next.
   lines.push(
-    `\nRead one with op="read" (thread=<id>) — that returns the thread's card and its messages. ${doctrinePointer()}`,
+    `\nRead one with ${callRef("channel.read", {}, { form: "op" })} (thread=<id>) — that returns the thread's card and its messages. ${doctrinePointer()}`,
   );
   return ok(lines.join("\n"));
 }

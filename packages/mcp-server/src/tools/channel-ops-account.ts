@@ -33,6 +33,7 @@
  * would hand a locked session its operator's other rooms.
  */
 
+import { callRef } from "../call-ref.js";
 import type { AccountStatus, DoplClient } from "@dopl/client";
 import { ok, type ToolResponse } from "./respond";
 import { inlineOr } from "./channel-shared";
@@ -89,7 +90,7 @@ const NO_NAME = "`(unnamed channel)`";
  */
 function accountScopeNote(channelCount: number): string {
   if (channelCount === 0) {
-    return `⚠ THIS READ COVERED NOTHING: you are not a member of any channel in any workspace and you have no home channels, so no cursor can ever advance. Open a room with dopl_channel(op="rooms", action="open", …) first.`;
+    return `⚠ THIS READ COVERED NOTHING: you are not a member of any channel in any workspace and you have no home channels, so no cursor can ever advance. Open a room with ${callRef("channel.rooms.open", { "…": true })} first.`;
   }
   return `Scope: every channel you are a MEMBER of, in every workspace AND every home channel (${channelCount}). ⚠ A PUBLIC channel you never joined is NOT included, so silence here is evidence YOUR rooms are quiet and not that the product is.`;
 }
@@ -179,7 +180,7 @@ export async function opReadAccount(
     );
   }
   lines.push(
-    `Highest seq shown: ${lastSeq}. Continue with dopl_channel(op="read", since=${lastSeq}) — and read the "· to ..." and "· thread ..." tags first: an account-wide page is the least targeted read there is, so most of it is context rather than a request.`,
+    `Highest seq shown: ${lastSeq}. Continue with ${callRef("channel.read", { since: `${lastSeq}` })} — and read the "· to ..." and "· thread ..." tags first: an account-wide page is the least targeted read there is, so most of it is context rather than a request.`,
   );
   return ok(lines.join("\n"));
 }

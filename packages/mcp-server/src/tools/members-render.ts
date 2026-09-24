@@ -7,6 +7,7 @@
  * can share a display name; only one can hold the id.
  */
 
+import { bySet, callRef, toolName } from "../call-ref.js";
 import type {
   AccessMatrix,
   EffectiveAccessRow,
@@ -41,7 +42,10 @@ export const UNNAMED_MEMBER = "`(unnamed member)`";
  * are `dopl_channel`'s to state.
  */
 export const contactPointer = (vendor: string | null) =>
-  `To contact a member or their agent: dopl_channel (op="rooms" for your channels and for opening a DM, op="send" to say something). It is deferred in some clients, so load it with ${toolLoaderFor(vendor)} if it is not in your tool list.`;
+  `To contact a member or their agent: ${bySet({
+    legacy: `dopl_channel (${callRef("channel.rooms", {}, { form: "op" })} for your channels and for opening a DM, ${callRef("channel.send", {}, { form: "op" })} to say something). It is deferred in some clients, so load it`,
+    granular: `${toolName("channel.rooms.list")} and ${toolName("channel.rooms.open")} for your channels and for opening a DM, ${toolName("channel.send")} to say something. They are deferred in some clients, so load them`,
+  })} with ${toolLoaderFor(vendor)} if it is not in your tool list.`;
 
 // ─── Formatting helpers ─────────────────────────────────────────────
 
@@ -228,7 +232,7 @@ export function matchMember(
     };
   }
   return {
-    error: `No member matching ${inlineOr(ref, "`(unreadable ref)`")}. Use dopl_members(op="list") to see the roster.`,
+    error: `No member matching ${inlineOr(ref, "`(unreadable ref)`")}. Use ${callRef("members.list")} to see the roster.`,
   };
 }
 

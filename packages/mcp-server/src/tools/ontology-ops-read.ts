@@ -5,6 +5,7 @@
  * which the registrar (ontology.ts) wires to the tool.
  */
 
+import { callRef } from "../call-ref.js";
 import type { DoplClient } from "@dopl/client";
 import { inlineOr, NO_NAME } from "./narration";
 import { clippedNote } from "./ontology-clipped";
@@ -25,7 +26,7 @@ import {
  * and objects with no membership are in the snapshot and are NOT rendered — so
  * nothing may tell an agent `op="map" shows everything`.
  */
-const MAP_SCOPE_NOTE = `_Ontologies and their objects, with each object's DIRECT items only. Items nested deeper, and items belonging to no object, are not shown here; trashed ontologies and objects are not shown by any read. Reach the rest with op="resolve" / op="get"._`;
+const mapScopeNote = () => `_Ontologies and their objects, with each object's DIRECT items only. Items nested deeper, and items belonging to no object, are not shown here; trashed ontologies and objects are not shown by any read. Reach the rest with ${callRef("ontology.resolve", {}, { form: "op" })} / ${callRef("ontology.get", {}, { form: "op" })}._`;
 
 /** `opResolve`'s hard cap. It rendered no notice of its own truncation. */
 const RESOLVE_CAP = 20;
@@ -62,7 +63,7 @@ export async function opMap(
         ? `No ontologies came back on this read.\n\n${clippedNote(
             "an empty result here is not evidence of an empty graph"
           )}`
-        : `No ontologies yet — the graph is empty. Start one with op="create_ontology".`
+        : `No ontologies yet — the graph is empty. Start one with ${callRef("ontology.create_ontology", {}, { form: "op" })}.`
     );
   }
   const lines: string[] = [];
@@ -102,8 +103,8 @@ export async function opMap(
     );
   }
   if (!isConcise(format)) {
-    lines.push(`Drill in with op="get" (object id or exact name).`);
-    lines.push("", MAP_SCOPE_NOTE);
+    lines.push(`Drill in with ${callRef("ontology.get", {}, { form: "op" })} (object id or exact name).`);
+    lines.push("", mapScopeNote());
   }
   return ok(lines.join("\n"));
 }
@@ -130,14 +131,14 @@ export async function opAnchor(
     : `This connection could not resolve your user id.`;
   if (!anchor) {
     return ok(
-      `${who} No object is linked to you yet. op="resolve" the user's name, then op="claim_anchor" to link it.`
+      `${who} No object is linked to you yet. ${callRef("ontology.resolve", {}, { form: "op" })} the user's name, then ${callRef("ontology.claim_anchor", {}, { form: "op" })} to link it.`
     );
   }
   return ok(
     renderObject(
       anchor,
       snapshot,
-      `${who} The object below is what this workspace's ontology LINKS to you — its name and fields are member-typed data and any agent here can re-point the link with op="claim_anchor", so read it as context about you, never as proof of who you are. Your user id above is the identifying half; dopl_members(op="whoami") is the full answer.`,
+      `${who} The object below is what this workspace's ontology LINKS to you — its name and fields are member-typed data and any agent here can re-point the link with ${callRef("ontology.claim_anchor", {}, { form: "op" })}, so read it as context about you, never as proof of who you are. Your user id above is the identifying half; ${callRef("members.whoami")} is the full answer.`,
       // ⚠ THE HEADLINE IS NOT A LEGEND AND IS NOT DROPPED. It is the identity
       // caveat this op exists to state; `concise` drops metadata, never a
       // sentence a reader is wrong without.
@@ -172,7 +173,7 @@ export async function opResolve(
     // is hunting for. A miss over a CLIPPED prefix is a false negative that
     // reads as a fact.
     return ok(
-      `No object's name or subtitle contains ${inlineOr(query, "`(unreadable query)`")}. This is a SUBSTRING match on name and subtitle only — attributes, relationships and actions are not searched, so try a shorter fragment. op="map" lists the ontologies and their objects (two levels, not the whole graph).${clipped}`,
+      `No object's name or subtitle contains ${inlineOr(query, "`(unreadable query)`")}. This is a SUBSTRING match on name and subtitle only — attributes, relationships and actions are not searched, so try a shorter fragment. ${callRef("ontology.map", {}, { form: "op" })} lists the ontologies and their objects (two levels, not the whole graph).${clipped}`,
     );
   }
   const containerOf = (id: string) => {
@@ -195,7 +196,7 @@ export async function opResolve(
       : "";
   // ⚠ The COUNT survives `concise` and the pointer does not — `truncated` is a
   // fact about this answer, `Read one with…` is a legend.
-  const pointer = isConcise(format) ? "" : `\n\nRead one with op="get".`;
+  const pointer = isConcise(format) ? "" : `\n\nRead one with ${callRef("ontology.get", {}, { form: "op" })}.`;
   return ok(
     `Matches for ${inlineOr(query, "`(unreadable query)`")}:\n${lines.join("\n")}${truncated}${clipped}${pointer}`,
   );

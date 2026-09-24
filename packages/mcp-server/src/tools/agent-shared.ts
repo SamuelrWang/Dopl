@@ -3,6 +3,7 @@
  * The `agent-` filename prefix is load-bearing: `tool-group-files.ts` groups a tool's files on it for the parity scans.
  */
 
+import { callRef } from "../call-ref.js";
 import type { AgentIdentity, DoplClient, IdentityKnowledgeRef } from "@dopl/client";
 import { AUDIENCE_LABELS, type AudienceLabel } from "./audience-label.js";
 import { inlineOr, NO_NAME, UUID_RE } from "./narration.js";
@@ -119,7 +120,7 @@ export function identityNotFound(ref: string): ToolResponse {
   return err(
     refusal(
       AGENT_ERRORS_BY_REASON.identity_not_found,
-      `No agent identity ${inlineOr(ref, NO_NAME)} resolves for you, and nothing was read or written. Either there is no such identity or it is not shared with you — those are ONE answer here on purpose, so ids cannot be probed. Matching on a name is EXACT (case-insensitive), never fuzzy; list what you can see with dopl_agent(op="list").`,
+      `No agent identity ${inlineOr(ref, NO_NAME)} resolves for you, and nothing was read or written. Either there is no such identity or it is not shared with you — those are ONE answer here on purpose, so ids cannot be probed. Matching on a name is EXACT (case-insensitive), never fuzzy; list what you can see with ${callRef("agent.list")}.`,
     ),
   );
 }
@@ -138,7 +139,7 @@ export function identityWriteDenied(e: unknown): ToolResponse | null {
 export function knowledgeBaseNotAttachable(e: unknown): ToolResponse | null {
   if (!isApiError(e, 404, "KNOWLEDGE_BASE_NOT_FOUND")) return null;
   return err(
-    `At least one knowledge id you passed does not resolve for you, so nothing was written. A base you cannot READ cannot be attached — that is what stops an identity laundering access to somebody else's private base — and "not yours" and "no such base" answer the same way here. The same answer covers a folder or an entry that is trashed, or that lives in a different base than the one you named. Check ids with dopl_kb(op="list_bases") and dopl_kb(op="get_tree").`,
+    `At least one knowledge id you passed does not resolve for you, so nothing was written. A base you cannot READ cannot be attached — that is what stops an identity laundering access to somebody else's private base — and "not yours" and "no such base" answer the same way here. The same answer covers a folder or an entry that is trashed, or that lives in a different base than the one you named. Check ids with ${callRef("kb.list_bases")} and ${callRef("kb.get_tree")}.`,
   );
 }
 

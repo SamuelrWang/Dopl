@@ -28,6 +28,7 @@
  * second op to gate, classify and describe.
  */
 
+import { bySet, callRef } from "../call-ref.js";
 import type {
   ChannelInfoCard,
   ChannelInfoCardBuiltInKey,
@@ -195,7 +196,7 @@ export async function opUpdate(
         ...descriptionLine(channel.topic),
         ...renderCard(channel.infoCard ?? EMPTY_CARD),
         "",
-        `⚠ The card is REPLACED WHOLE on a write. To add a row, re-issue op="rooms" action="update" with \`info_card\` carrying EVERY row above plus the new one — a write that omits a row deletes it. Send \`info_card={}\` to clear the card deliberately.`,
+        `⚠ The card is REPLACED WHOLE on a write. To add a row, re-issue ${callRef("channel.rooms.update", {}, { form: "op" })} with \`info_card\` carrying EVERY row above plus the new one — a write that omits a row deletes it. Send \`info_card={}\` to clear the card deliberately.`,
       ].join("\n"),
     );
   }
@@ -218,7 +219,7 @@ export async function opUpdate(
       return err(
         refusal(
           CHANNEL_MANAGE_REQUIRED,
-          `**${label}** was not changed (the info card included — one patch, one gate). Ask the channel's owner or a workspace admin, or drop \`name\`/\`summary\` to write the card alone.`,
+          `**${label}** was not changed (the info card included — one patch, one gate). Ask the channel's owner or a workspace admin, or drop \`name\`/\`${bySet({ legacy: "summary", granular: "description" })}\` to write the card alone.`,
         ),
       );
     }

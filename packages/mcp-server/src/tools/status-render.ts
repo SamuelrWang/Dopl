@@ -24,6 +24,7 @@
  * The asymmetry with the wake surfaces that DO carry one is F-407.
  */
 
+import { bySet, callRef } from "../call-ref.js";
 import type { ContainerKind } from "@dopl/contracts";
 import type { AccountChannelStatus, AccountStatus } from "@dopl/client";
 import { inlineOr, NO_NAME } from "./narration.js";
@@ -41,9 +42,9 @@ const NO_TEXT = "(empty)";
  * about a session line is standing doctrine and is read once, on demand, at
  * `dopl_channel(op="help")` — see the T11 note on the header below.
  */
-const STATUS_LEGEND = [
-  "`container=` is the handle every other tool takes for that room — a workspace, a home channel, or `home` for your own home space; `kind=` says which. `channel=` is what dopl_channel takes.",
-  '"new" counts messages past the `since` you passed, EXCLUDING your own. Read them with dopl_channel(op="read", since=<your cursor>) — with no `channel`, that reads across every room below at once.',
+const statusLegend = () => [
+  `\`container=\` is the handle every other tool takes for that room — a workspace, a home channel, or \`home\` for your own home space; \`kind=\` says which. \`channel=\` is what ${bySet({ legacy: "dopl_channel takes", granular: "the channel tools take" })}.`,
+  `"new" counts messages past the \`since\` you passed, EXCLUDING your own. Read them with ${callRef("channel.read", { since: "<your cursor>" })} — with no \`channel\`, that reads across every room below at once.`,
 ];
 
 /**
@@ -147,7 +148,7 @@ export function statusLines(
   if (channels.length === 0) {
     return [
       "No channels. You are not a member of any channel in any workspace, and you have no home channels — so there is nothing to check in on and no cursor to advance.",
-      'Open a room with dopl_channel(op="rooms", action="open", name=…).',
+      `Open a room with ${callRef("channel.rooms.open", { name: "…" })}.`,
     ];
   }
   const sessionCount = channels.reduce((n, c) => n + c.sessions.length, 0);
@@ -190,7 +191,7 @@ export function statusLines(
     // the half that actually defangs a hostile string. The two `await` lanes
     // keep their banner for a POSITION argument that does not apply here
     // (F-407); this table is not a body render.
-    ...(terse ? [] : STATUS_LEGEND),
+    ...(terse ? [] : statusLegend()),
     ...(terse ? [] : [""]),
   ];
   for (const channel of channels) {

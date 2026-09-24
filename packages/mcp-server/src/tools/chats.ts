@@ -9,7 +9,7 @@
 
 import { z } from "zod";
 import type { ChatDetail, DoplClient } from "@dopl/client";
-import { callRef } from "../call-ref.js";
+import { calledAs, callRef } from "../call-ref.js";
 import { inlineOr } from "./narration";
 import { err, ok, missingParams, type RegisterTool, type ToolResponse } from "./respond";
 import { BAD_SESSION_DATE, CHATS_ERRORS, refusal } from "./tool-errors";
@@ -188,12 +188,12 @@ export function registerChatTools(
           const miss = missingParams("export", args, ["title", "messages"]);
           if (miss) return miss;
           if (typeof args.title === "string" && args.title.trim().length === 0) {
-            return err(`op="export" got a blank title — pass a specific, non-empty title (whitespace-only is rejected).`);
+            return err(`${calledAs("export")} got a blank title — pass a specific, non-empty title (whitespace-only is rejected).`);
           }
           const badDate = badSessionDate(args.session_date);
           if (badDate) return badDate;
           if ((args.messages ?? []).length === 0) {
-            return err(`op="export" got an empty messages array — summarize the conversation's messages and pass at least one entry.`);
+            return err(`${calledAs("export")} got an empty messages array — summarize the conversation's messages and pass at least one entry.`);
           }
           return opExport(client, args);
         }
@@ -201,7 +201,7 @@ export function registerChatTools(
           const miss = missingParams("append", args, ["chat_id", "messages"]);
           if (miss) return miss;
           if ((args.messages ?? []).length === 0) {
-            return err(`op="append" got an empty messages array — pass at least one entry.`);
+            return err(`${calledAs("append")} got an empty messages array — pass at least one entry.`);
           }
           return opAppend(client, args.chat_id as string, args.messages ?? []);
         }
@@ -230,7 +230,7 @@ export function registerChatTools(
           const miss = missingParams("update_folder", args, ["folder_id"]);
           if (miss) return miss;
           if (args.name === undefined && args.visibility === undefined) {
-            return err(`op="update_folder" needs name and/or visibility to change.`);
+            return err(`${calledAs("update_folder")} needs name and/or visibility to change.`);
           }
           return opUpdateFolder(client, args.folder_id as string, {
             name: args.name,
@@ -345,7 +345,7 @@ async function opUpdate(
   };
   if (Object.values(patch).every((v) => v === undefined)) {
     return err(
-      `op="update" needs at least one field to change: title, overview, project, session_date, deliverables, learnings, folder, visibility, pinned.`,
+      `${calledAs("update")} needs at least one field to change: title, overview, project, session_date, deliverables, learnings, folder, visibility, pinned.`,
     );
   }
   try {
@@ -376,7 +376,7 @@ async function opList(
     const empty =
       query || scope !== "all"
         ? `No chats match that filter. The filter runs over TITLE and OVERVIEW only — transcripts are not searched.`
-        : "No chats visible to you. The archive holds your own chats plus ones shared with you, so this is not proof the workspace has none. Use op=\"export\" to save this session.";
+        : `No chats visible to you. The archive holds your own chats plus ones shared with you, so this is not proof the workspace has none. Use ${callRef("chats.export", {}, { form: "op" })} to save this session.`;
     return ok(hiddenCount > 0 ? `${empty}\n\n${hiddenNote(hiddenCount)}` : empty);
   }
 
@@ -400,7 +400,7 @@ async function opList(
       `\n_Filtered on TITLE and OVERVIEW only — transcripts are not searched, so a term that appears only inside one will not match here._`,
     );
   }
-  lines.push(`\nUse dopl_chats(op="get", chat_id=...) to read a transcript.`);
+  lines.push(`\nUse ${callRef("chats.get", { chat_id: "..." })} to read a transcript.`);
   return ok(lines.join("\n"));
 }
 
@@ -419,7 +419,7 @@ async function opGet(client: DoplClient, chatId: string): Promise<ToolResponse> 
 async function opFolders(client: DoplClient): Promise<ToolResponse> {
   const folders = await client.listChatFolders();
   if (folders.length === 0) {
-    return ok(`No chat folders yet. Pass folder="<name>" on export (or op="create_folder") to create one.`);
+    return ok(`No chat folders yet. Pass folder="<name>" on export (or ${callRef("chats.create_folder", {}, { form: "op" })}) to create one.`);
   }
   const lines = folders.map(
     (f) => `- ${inlineOr(f.name, "`(unnamed folder)`")} \`${f.id}\` — ${folderScopeLabel(f)}`,

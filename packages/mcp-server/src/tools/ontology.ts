@@ -12,6 +12,7 @@
  *   - `ontology-ops-write.ts` — op dispatch + every mutating handler
  */
 
+import { calledAs } from "../call-ref.js";
 import { z } from "zod";
 import { RESPONSE_FORMAT_FIELD } from "./response-size";
 import { UNKNOWN_CALLER, type CallerIdentity } from "./identity";
@@ -182,10 +183,10 @@ export function registerOntologyTool(
         const stray = unusedParams("history", args, ["object", "ontology"]);
         if (stray) return Promise.resolve(stray);
         if (args.object === undefined && args.ontology === undefined) {
-          return Promise.resolve(err('op="history" needs object= (one item) or ontology= (a roll-up).'));
+          return Promise.resolve(err(`${calledAs("history")} needs object= (one item) or ontology= (a roll-up).`));
         }
         if (args.object !== undefined && args.ontology !== undefined) {
-          return Promise.resolve(err('op="history" takes object= OR ontology=, never both — nothing was read.'));
+          return Promise.resolve(err(`${calledAs("history")} takes object= OR ontology=, never both — nothing was read.`));
         }
         return opHistory(client, caller.userId, args);
       }

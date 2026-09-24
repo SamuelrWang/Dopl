@@ -4,6 +4,7 @@
  * error listing candidates, never a guess).
  */
 
+import { callRef } from "../call-ref.js";
 import type { DoplClient, OntologyObject, OntologySnapshot } from "@dopl/client";
 import { isConcise, type ResponseFormat } from "./response-size";
 import { inlineOr, NO_NAME } from "./narration";
@@ -146,7 +147,7 @@ export function resolveObjectRef<T extends ObjectRefFields>(
   }
   return {
     fail: err(
-      `No object ${inlineOr(ref, NO_NAME)}. Find ids with op="resolve" or op="map".`,
+      `No object ${inlineOr(ref, NO_NAME)}. Find ids with ${callRef("ontology.resolve", {}, { form: "op" })} or ${callRef("ontology.map", {}, { form: "op" })}.`,
     ),
   };
 }
@@ -349,10 +350,10 @@ function renderValue(
             if (!h) return id;
             const opener =
               h.kind === "kb"
-                ? `dopl_kb op="get_tree" base="${h.slug}"`
+                ? callRef("kb.get_tree", { base: `"${h.slug}"` }, { form: "named" })
                 : h.kind === "kb-entry"
-                  ? `dopl_kb op="read_file" base="${h.slug}" path="${h.path}"`
-                  : `dopl_skill op="get" slug="${h.slug}"`;
+                  ? callRef("kb.read_file", { base: `"${h.slug}"`, path: `"${h.path}"` }, { form: "named" })
+                  : callRef("skill.get", { slug: `"${h.slug}"` }, { form: "named" });
             return `${inlineOr(h.name, NO_NAME)} (${opener})`;
           })
           .join(", ") || "—"

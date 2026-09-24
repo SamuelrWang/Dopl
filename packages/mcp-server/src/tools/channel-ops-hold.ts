@@ -21,6 +21,7 @@
  * declared-param drift guards.
  */
 
+import { callRef } from "../call-ref.js";
 import type { ChannelMessage, DoplClient } from "@dopl/client";
 import { ok, isNotFound, type ToolResponse } from "./respond";
 import { channelNotFound } from "./channel-shared";
@@ -111,7 +112,7 @@ export async function opHold(
           // fact this branch has that the doctrine cannot: a SECOND failure of
           // the same shape is not a hold to re-arm, it is an outage to report.
           `Nothing was missed, so re-arm before you end your turn. ${waitingLine(channelHoldCall(ref, cursor), cursor)}`,
-          `If the very next hold fails the same way, stop re-arming and report it to your operator; read the channel with dopl_channel(op="read", channel="${ref}", since=${cursor}) instead.`,
+          `If the very next hold fails the same way, stop re-arming and report it to your operator; read the channel with ${callRef("channel.read", { channel: `"${ref}"`, since: `${cursor}` })} instead.`,
         ].join("\n"),
       );
     }
@@ -120,7 +121,7 @@ export async function opHold(
         [
           timedOut,
           `That hold was CUT SHORT — it asked for about ${Math.round(budgetMs / 1000)}s and returned in ${seconds}s, which usually means the platform is clamping the call (or the server is erroring instantly). A hold this short can never stay pending long enough to wake you.`,
-          `Do NOT immediately re-arm — you would loop on short calls that never wake anything. Report this to your operator: the wait is not holding, so replies on this channel have to be checked with dopl_channel(op="read") instead.`,
+          `Do NOT immediately re-arm — you would loop on short calls that never wake anything. Report this to your operator: the wait is not holding, so replies on this channel have to be checked with ${callRef("channel.read")} instead.`,
         ].join("\n"),
       );
     }

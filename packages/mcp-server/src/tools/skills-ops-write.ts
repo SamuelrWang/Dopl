@@ -4,6 +4,7 @@
  * `failureDetail` in `skills-shared.ts`.
  */
 
+import { bySet, callRef, toolName } from "../call-ref.js";
 import type { DoplClient } from "@dopl/client";
 import { inlineOr } from "./narration";
 import { ok, err, isConflict, type ToolResponse } from "./respond";
@@ -30,7 +31,7 @@ export async function opWrite(
   } catch (e) {
     if (isConflict(e)) {
       return err(
-        `SKILL.md in \`${slug}\` changed since you last read it. Call dopl_skill(op="read", slug) to get the current body + version, reconcile your changes, then retry write with that expected_version (or pass force=true to overwrite).`
+        `SKILL.md in \`${slug}\` changed since you last read it. Call ${callRef("skill.read", { slug: true })} to get the current body + version, reconcile your changes, then retry write with that expected_version (or pass force=true to overwrite).`
       );
     }
     // Skill flagged read-only to agents — clean message, not a raw code.
@@ -74,9 +75,9 @@ export async function opCreate(
     // caller's next listing silently omits what it just made.
     const listNote =
       skill.status !== "active"
-        ? ` It is a ${skill.status}, so dopl_skill(op="list") will NOT show it until status="active".`
+        ? ` It is a ${skill.status}, so ${callRef("skill.list")} will NOT show it until status="active".`
         : skill.visibility === "private"
-          ? ` Other members' op="list" will not show it while it is private.`
+          ? ` Other members' ${callRef("skill.list", {}, { form: "op" })} will not show it while it is private.`
           : "";
     // ⚠ Q3's warning — AFTER the create, so a list that throws costs the caller
     // nothing. See `duplicate-name.ts` for why it warns rather than refuses.
@@ -89,7 +90,7 @@ export async function opCreate(
     return ok(
       `Created skill ${inlineOr(skill.name, NO_NAME)} (slug: \`${skill.slug}\`). ` +
         `Status: ${skill.status}. ${visNote}${listNote} ` +
-        `SKILL.md (${primaryFile.body.length} chars) is ready to edit with \`dopl_skill\` op="write".${dup}`
+        `SKILL.md (${primaryFile.body.length} chars) is ready to edit with ${bySet({ legacy: `\`${toolName("skill.write")}\` ${callRef("skill.write", {}, { form: "op" })}`, granular: callRef("skill.write") })}.${dup}`
     );
   } catch (e) {
     return err(`Couldn't create skill: ${failureDetail(e)}`);
@@ -132,7 +133,7 @@ export async function opUpdate(
     return ok(
       `Updated skill ${inlineOr(updated.name, NO_NAME)} (slug: \`${updated.slug}\`). Status: ${updated.status}.` +
         (updated.status !== "active"
-          ? ` A non-active skill is not listed by dopl_skill(op="list").`
+          ? ` A non-active skill is not listed by ${callRef("skill.list")}.`
           : "") +
         (updated.folder ? ` Folder: ${inlineOr(updated.folder, "`(unnamed folder)`")}.` : "")
     );
@@ -190,7 +191,7 @@ export async function opSetVisibility(
     return ok(
       visibility === "public"
         ? `Published skill ${inlineOr(skill.name, NO_NAME)} (slug: \`${skill.slug}\`) — now visible workspace-wide.`
-        : `Skill ${inlineOr(skill.name, NO_NAME)} (slug: \`${skill.slug}\`) is now private — only its owner can see it, and it drops out of every other member's dopl_skill(op="list").`,
+        : `Skill ${inlineOr(skill.name, NO_NAME)} (slug: \`${skill.slug}\`) is now private — only its owner can see it, and it drops out of every other member's ${callRef("skill.list")}.`,
     );
   } catch (e) {
     const denied = agentWriteDenied(e);

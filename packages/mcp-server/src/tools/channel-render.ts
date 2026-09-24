@@ -15,6 +15,7 @@
  * immutable `authorUserId` — the one half the author does not control.
  */
 
+import { callRef } from "../call-ref.js";
 import type {
   Channel,
   ChannelMember,
@@ -125,7 +126,7 @@ function clipBody(m: ChannelMessage, ref: string, clip: boolean): string {
   if (!m.body) return "";
   const body =
     clip && m.body.length > BODY_CLIP_CHARS
-      ? `${m.body.slice(0, BODY_CLIP_CHARS)}\n… [${m.body.length - BODY_CLIP_CHARS} chars clipped — read this one message in full with dopl_channel(op="read", channel="${ref}", since=${Math.max(0, m.seq - 1)}, limit=1)]`
+      ? `${m.body.slice(0, BODY_CLIP_CHARS)}\n… [${m.body.length - BODY_CLIP_CHARS} chars clipped — read this one message in full with ${callRef("channel.read", { channel: `"${ref}"`, since: `${Math.max(0, m.seq - 1)}`, limit: "1" })}]`
       : m.body;
   return `\n  ${body.replace(/\n/g, "\n  ")}`;
 }

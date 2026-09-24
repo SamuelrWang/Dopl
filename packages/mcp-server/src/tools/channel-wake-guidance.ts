@@ -32,6 +32,7 @@
  *   - unstamped → nothing promised: the cursor, the call, and the pointer.
  */
 
+import { callRef } from "../call-ref.js";
 import { DOCTRINE_URI } from "./channel-doctrine";
 // ⚠ ONE statement of the runtime comparison, in `identity.ts` — the hold's
 // LENGTH branches on the same answer this file's CLAIMS do.
@@ -73,12 +74,12 @@ export const WAITING_LINE_MAX_CHARS = 160;
 
 /** The re-arm call for ONE channel. ⚠ One spelling, shared by both results. */
 export function channelHoldCall(ref: string, cursor: number): string {
-  return `dopl_channel(op="read", channel="${ref}", since=${cursor}, wait_ms=<ms>)`;
+  return callRef("channel.read", { channel: `"${ref}"`, since: `${cursor}`, wait_ms: "<ms>" });
 }
 
 /** The re-arm call for the WORKSPACE hold — no `channel`, and that is the op. */
 export function workspaceHoldCall(cursor: number): string {
-  return `dopl_channel(op="read", since=${cursor}, wait_ms=<ms>)`;
+  return callRef("channel.read", { since: `${cursor}`, wait_ms: "<ms>" });
 }
 
 /**
