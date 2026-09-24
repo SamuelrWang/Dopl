@@ -13,6 +13,7 @@ const server_js_1 = require("./server.js");
 const identity_js_1 = require("./tools/identity.js");
 const workspace_directory_js_1 = require("./workspace-directory.js");
 const shared_room_js_1 = require("./shared-room.js");
+const tool_manifest_js_1 = require("./tool-manifest.js");
 var server_js_2 = require("./server.js");
 Object.defineProperty(exports, "createServer", { enumerable: true, get: function () { return server_js_2.createServer; } });
 Object.defineProperty(exports, "buildInstructions", { enumerable: true, get: function () { return server_js_2.buildInstructions; } });
@@ -160,6 +161,7 @@ async function bootServer(client, opts = {}) {
         isAdmin,
         activeWorkspace,
         directoryLoadFailed,
+        toolSet: (0, tool_manifest_js_1.resolveToolSet)(opts.toolSet),
     };
 }
 async function pingWithRetry(client, retries) {

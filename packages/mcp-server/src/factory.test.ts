@@ -156,3 +156,16 @@ describe("bootServer caller identity", () => {
     expect(res.userId).toBeNull();
   });
 });
+
+describe("bootServer tool set", () => {
+  it.each([
+    [undefined, "legacy"],
+    ["legacy", "legacy"],
+    ["granular", "granular"],
+    ["GRANULAR", "legacy"],
+    ["compact", "legacy"],
+  ])("claim %j resolves to %s", async (claim, expected) => {
+    const res = await bootServer(mockClient({ directory: [WS1] }), { toolSet: claim });
+    expect(res.toolSet).toBe(expected);
+  });
+});

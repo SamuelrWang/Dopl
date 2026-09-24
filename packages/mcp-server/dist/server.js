@@ -41,6 +41,7 @@ const gating_js_1 = require("./gating.js");
 const registrar_js_1 = require("./registrar.js");
 const meta_tools_js_1 = require("./meta-tools.js");
 const resources_js_1 = require("./resources.js");
+const unlisted_tools_js_1 = require("./unlisted-tools.js");
 const workspace_directory_js_1 = require("./workspace-directory.js");
 const version_js_1 = require("./version.js");
 // ⚠ Keep: `factory.ts` and four suites import `buildInstructions` from HERE.
@@ -120,6 +121,9 @@ function createServer(client, options = {}) {
             vendor: caller.vendor,
         }),
     });
+    // Before any registration: it filters the list handler the first registerTool installs.
+    if (options.unlistedTools)
+        (0, unlisted_tools_js_1.unlistTools)(server, options.unlistedTools);
     // ⚠ PULLED, NOT PUSHED. The channels doctrine is a resource (and
     // `dopl_channel(op="help")`) rather than description prose, so an agent pays
     // for it when it asks and never on connection. See `resources.ts`.

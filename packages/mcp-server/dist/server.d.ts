@@ -120,4 +120,9 @@ export declare function createServer(client: DoplClient, options?: {
      * ping already ran. See `instructions.ts › ConnectionIdentity.operatorHandle`.
      */
     operatorHandle?: string | null;
+    /**
+     * Tools registered and callable but absent from `tools/list` (`unlisted-tools.ts`). Empty by
+     * default; B1 of the tool split puts the inactive tool set here.
+     */
+    unlistedTools?: ReadonlySet<string>;
 }): McpServer;

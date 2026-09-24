@@ -9,6 +9,7 @@ import {
 } from "@/shared/auth/runtime-header";
 import { readSessionIdHeader } from "@/shared/auth/session-header";
 import { readToolProfileHeader } from "@/shared/auth/tool-profile-header";
+import { readToolSetClaim } from "@/shared/auth/tool-set-header";
 import { resolveTransportWorkspaceId } from "@/shared/auth/mcp-transport-pin";
 import { withSseKeepAlive } from "@/shared/api/sse-keep-alive";
 
@@ -122,6 +123,7 @@ async function handle(request: Request): Promise<Response> {
     // while a header this server cannot read narrows to the floor rather than
     // widening on a value nobody could parse.
     toolProfile: callerToolProfile,
+    toolSet: readToolSetClaim(request),
     onDiag: (message) => console.error(message),
   });
 

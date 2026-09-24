@@ -45,6 +45,7 @@ import { createGates, offeredToolsFor } from "./gating.js";
 import { createToolRegistrars } from "./registrar.js";
 import { registerWorkspaceMetaTools } from "./meta-tools.js";
 import { registerResources } from "./resources.js";
+import { unlistTools } from "./unlisted-tools.js";
 import {
   createWorkspaceDirectory,
   containerKind,
@@ -153,6 +154,11 @@ export function createServer(
      * ping already ran. See `instructions.ts › ConnectionIdentity.operatorHandle`.
      */
     operatorHandle?: string | null;
+    /**
+     * Tools registered and callable but absent from `tools/list` (`unlisted-tools.ts`). Empty by
+     * default; B1 of the tool split puts the inactive tool set here.
+     */
+    unlistedTools?: ReadonlySet<string>;
   } = {},
 ): McpServer {
   // ⚠ FAIL CLOSED: write/admin capability ONLY on an explicit `dopl.write`
@@ -236,6 +242,9 @@ export function createServer(
       }),
     },
   );
+
+  // Before any registration: it filters the list handler the first registerTool installs.
+  if (options.unlistedTools) unlistTools(server, options.unlistedTools);
 
   // ⚠ PULLED, NOT PUSHED. The channels doctrine is a resource (and
   // `dopl_channel(op="help")`) rather than description prose, so an agent pays

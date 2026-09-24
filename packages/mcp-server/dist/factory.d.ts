@@ -8,6 +8,7 @@
 import type { DoplClient } from "@dopl/client";
 import { createServer } from "./server.js";
 import { type CallerIdentity } from "./tools/identity.js";
+import { type ToolSet } from "./tool-manifest.js";
 export type { CallerIdentity } from "./tools/identity.js";
 export { createServer, buildInstructions } from "./server.js";
 export { clientIdentifier, packageVersion } from "./version.js";
@@ -29,6 +30,11 @@ export interface BootOptions {
      * cannot place ⇒ the narrowest profile, never the widest.
      */
     toolProfile?: string | null;
+    /**
+     * The TOOL SET claimed by `X-Dopl-Tool-Set` or `?tools=`, verbatim; resolved once here
+     * (`tool-manifest.ts › resolveToolSet`). Only `legacy` is served until B1 of the tool split.
+     */
+    toolSet?: string | null;
     /**
      * Retry attempts for the initial status ping. Default 0 — fast for per-request
      * HTTP; the stdio binary passes retries because it boots once.
@@ -81,6 +87,7 @@ export interface BootResult {
      * not "you have no workspaces".
      */
     directoryLoadFailed: boolean;
+    toolSet: ToolSet;
 }
 /**
  * Build a fully-registered MCP server for `client`: status-ping handshake
