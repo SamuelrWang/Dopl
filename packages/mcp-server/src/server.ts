@@ -167,6 +167,8 @@ export function createServer(
      * The other set stays registered and callable, unlisted, so a stale prompt still works.
      */
     toolSet?: ToolSet;
+    /** `registrar.ts › RegistrarDeps.deprecateLegacy`; no caller sets it yet (rollout R4). */
+    deprecateLegacy?: boolean;
   } = {},
 ): McpServer {
   // ⚠ FAIL CLOSED: write/admin capability ONLY on an explicit `dopl.write`
@@ -280,6 +282,7 @@ export function createServer(
     sessionEffective,
     caller,
     toolSet,
+    deprecateLegacy: options.deprecateLegacy,
   });
 
   registerWorkspaceMetaTools(registerMetaTool, {

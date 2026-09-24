@@ -143,6 +143,20 @@ export function toolName(key: string, args: CallArgs = {}): string {
 }
 
 /**
+ * The granular call that replaces legacy `tool` called with `op` (`Gates.requestedOp`'s key), or null
+ * when the call names no manifest job or keeps its name (`dopl_search`). The whole op wins over its
+ * base op, so `op="rooms", action="list"` names its own job.
+ */
+export function successorOf(tool: string, op: string | undefined): string | null {
+  const base = tool.slice("dopl_".length);
+  const key = [op && `${base}.${op}`, op && `${base}.${op.split(".")[0]}`, !op && base].find(
+    (k): k is string => typeof k === "string" && targetMap().has(k),
+  );
+  if (!key) return null;
+  return withToolSet("granular", () => (toolName(key) === tool ? null : callRef(key)));
+}
+
+/**
  * `key` called with `args`, spelled for the active set. An op without its action spells, on a
  * granular connection, every tool under it (`dopl_launch_agent / dopl_manage_session`).
  */

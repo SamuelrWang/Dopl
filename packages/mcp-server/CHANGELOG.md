@@ -18,6 +18,13 @@ All notable changes to `@dopl/mcp-server` are documented here. Format follows [K
   granular spellings.
 - `HOOKS.md` names granular tools.
 
+### Added — the R4 deprecation notice, built and off
+
+- `createServer({ deprecateLegacy: true })` ends a direct legacy call's reply with
+  `⚠ <legacy tool> is deprecated: call <granular call> instead.`, the successor derived from the
+  manifest (`call-ref.ts › successorOf`). Nothing sets it; enable at R4 (legacy unlisted everywhere,
+  after ≥2 negotiating desktop releases and a min-version bump).
+
 ### Added — the desktop can negotiate the granular set (DMP-013 B4, 2026-09-24; `legacy` unchanged)
 
 - `initialize` advertises `capabilities.experimental["dopl/toolSets"] = { sets: ["legacy", "granular"] }`

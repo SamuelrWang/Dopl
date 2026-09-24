@@ -58,7 +58,7 @@ export interface Booted {
 
 export async function boot(
   toolSet: ToolSet,
-  opts: { scopes?: string[]; toolProfile?: string; answers?: Record<string, unknown> } = {},
+  opts: { scopes?: string[]; toolProfile?: string; answers?: Record<string, unknown>; deprecateLegacy?: boolean } = {},
 ): Promise<Booted> {
   const log: string[] = [];
   const server = createServer(recordingClient(log, opts.answers), {
@@ -69,6 +69,7 @@ export async function boot(
     workspaceSource: "header pin",
     scopes: opts.scopes ?? ["dopl.read", "dopl.write"],
     toolProfile: opts.toolProfile,
+    deprecateLegacy: opts.deprecateLegacy,
   });
   const [clientSide, serverSide] = InMemoryTransport.createLinkedPair();
   const client = new Client({ name: "surface-probe", version: "0.0.0" });

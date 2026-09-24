@@ -22,7 +22,7 @@ import {
 import { CONTAINER_ARG_DESCRIPTION } from "./workspace-arg.js";
 import { resolveCallAddress } from "./container-resolve.js";
 import { LEGACY_ONTOLOGY_ARGS } from "./legacy-aliases.js";
-import { withToolSet } from "./call-ref.js";
+import { successorOf, withToolSet } from "./call-ref.js";
 import { granularDescription, granularShape, legacyCall, pulledResource, type LegacyTool } from "./granular.js";
 import { resourceText } from "./resources.js";
 import {
@@ -204,6 +204,8 @@ export interface RegistrarDeps {
   caller: CallerIdentity;
   /** Which set owns a name both sets use. Default `legacy`. */
   toolSet?: ToolSet;
+  /** Rollout R4, off until enabled: a direct legacy call's reply ends naming its granular successor. */
+  deprecateLegacy?: boolean;
 }
 
 export interface ToolRegistrars {
@@ -226,6 +228,7 @@ export function createToolRegistrars(deps: RegistrarDeps): ToolRegistrars {
     sessionEffective,
     caller,
     toolSet = "legacy",
+    deprecateLegacy = false,
   } = deps;
   const chargeCredit = createCharger(client);
   // Every registered legacy tool, including one whose name the active granular set took. `run` is the
@@ -235,8 +238,19 @@ export function createToolRegistrars(deps: RegistrarDeps): ToolRegistrars {
     const input = strictInput(shape, name);
     legacy.set(name, { shape, input, run });
     if (!servesName(toolSet, "legacy", name)) return;
+    const reply = deprecateLegacy ? (args: Record<string, unknown>) => withSuccessorNotice(name, args, run(args)) : run;
     server.registerTool(name, toolConfig(name, description, input), ((args: Record<string, unknown>) =>
-      withToolSet(toolSet, () => run(args))) as never);
+      withToolSet(toolSet, () => reply(args))) as never);
+  }
+  async function withSuccessorNotice(
+    name: string,
+    args: Record<string, unknown>,
+    pending: Promise<ToolResponse>,
+  ): Promise<ToolResponse> {
+    const res = await pending;
+    const successor = successorOf(name, gates.requestedOp(args));
+    if (!successor) return res;
+    return { ...res, content: [...res.content, { type: "text", text: `⚠ ${name} is deprecated: call ${successor} instead.` }] };
   }
   const runWithCredits = createCreditedRunner(chargeCredit);
 
