@@ -4,12 +4,12 @@
   "statusNote": "Captured from a real Codex CLI by scripts/codex-app-server-schema.js. Shapes are key names and value types; no prompt, token or transcript content is stored.",
   "regenerate": "cd dopl-desktop-app && npm run codex:schema",
   "generatedBy": "dopl-desktop-app/scripts/codex-app-server-schema.js",
-  "capturedAt": "2026-09-22T18:00:09.237Z",
+  "capturedAt": "2026-09-23T18:20:02.106Z",
   "cli": {
     "version": "codex-cli 0.155.1",
-    "versionCommand": "/opt/homebrew/Cellar/node/24.7.0/lib/node_modules/@openai/codex/bin/codex.js --version",
-    "path": "/opt/homebrew/Cellar/node/24.7.0/lib/node_modules/@openai/codex/bin/codex.js",
-    "source": "path"
+    "versionCommand": "/Users/samuelwang/Downloads/sie-codex-mcp-ready/dopl-desktop-app/node_modules/@openai/codex-darwin-arm64/vendor/aarch64-apple-darwin/bin/codex --version",
+    "path": "/Users/samuelwang/Downloads/sie-codex-mcp-ready/dopl-desktop-app/node_modules/@openai/codex-darwin-arm64/vendor/aarch64-apple-darwin/bin/codex",
+    "source": "bundled"
   },
   "handshake": {
     "initialize": {
@@ -138,6 +138,7 @@
       "turn/steer",
       "turn/interrupt",
       "model/list",
+      "mcpServerStatus/list",
       "account/login/start",
       "account/login/cancel"
     ]

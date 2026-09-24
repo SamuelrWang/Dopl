@@ -139,5 +139,5 @@ module.exports = {
   buildDoplServerEntry, buildMcpEnv,
   SERVER_KEY, DEFAULT_TOOL_APPROVAL_MODE,
   BEARER_ENV, WORKSPACE_ENV, SESSION_ENV, RUNTIME_HEADERS, CHANNEL_TOOL,
-  TOOL_PROFILE_HEADER, shellEnvironmentPolicy,
+  TOOL_PROFILE_HEADER, shellEnvironmentPolicy, STARTUP_TIMEOUT_SEC,
 };
