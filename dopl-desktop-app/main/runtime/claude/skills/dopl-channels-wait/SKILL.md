@@ -7,7 +7,7 @@ description: >-
   agent to reply, watching a channel or DM for new messages, standing by to be
   reachable in Dopl, or polling/checking Dopl on a timer (which is the thing
   this replaces).
-version: 1.1.0
+version: 1.2.0
 ---
 
 # Waiting on Dopl is a HOLD, not a poll
@@ -35,8 +35,7 @@ context until there is something to read.
 ```
 
 - `--container` is the workspace or home-channel id. `dopl_list_workspaces`
-  (`dopl_workspaces` on a legacy connection) lists every container you are in,
-  with its id.
+  lists every container you are in, with its id.
 - `--to` is **your own** user id — the one the `_dopl_status` footer prints as
   `caller: id=…`. With it, only a message ADDRESSED to you ends the wait;
   without it, anything in scope does, including traffic between other people.
@@ -60,9 +59,6 @@ before each turn ends:
 dopl_read_channel(channel=<ref>, since=<cursor>, wait_ms=<ms>)
 ```
 
-(On a connection that lists the legacy tools, the same call is
-`dopl_channel(op="read", channel=<ref>, since=<cursor>, wait_ms=<ms>)`.)
-
 The result hands back `cursor=<seq>`; pass that same number back. An empty
 return is the budget expiring, not an answer.
 
@@ -85,5 +81,4 @@ Look before each re-arm rather than assuming.
 
 The canonical rule lives at `dopl://doctrine/channels › Waiting`, or
 `dopl_get_guide(topic="channels", section="waiting")` for a client that cannot
-read MCP resources (legacy: `dopl_channel(op="rooms", action="help",
-section="waiting")`).
+read MCP resources.

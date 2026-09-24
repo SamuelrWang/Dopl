@@ -5,9 +5,8 @@
 # WHY IT EXISTS. Waiting on Dopl is a HOLD, never a poll: every wake of an LLM
 # session re-sends its whole context, so a timer pays that per tick while a hold
 # pays it once, when a message actually lands. `dopl_read_channel(wait_ms=…)`
-# (legacy `dopl_channel(op="read", wait_ms=…)`) holds inside the MCP call, which
-# means it returns inside the TURN
-# that armed it — a pending call keeps a turn alive, it cannot end one.
+# holds inside the MCP call, which means it returns inside the TURN that armed
+# it — a pending call keeps a turn alive, it cannot end one.
 #
 # A harness that can run BACKGROUND TASKS already has the missing half. Run this
 # as such a task and END your turn: the task's own completion is a wake the
@@ -77,7 +76,7 @@ die() {
 }
 
 usage() {
-  sed -n '3,58p' "$0" | sed 's/^#\{0,1\} \{0,1\}//' >&2
+  sed -n '3,/^$/p' "$0" | sed 's/^#\{0,1\} \{0,1\}//' >&2
   exit 2
 }
 
