@@ -22,6 +22,7 @@ export type {
   BuildResult,
   ChannelContainer,
   CreditConsumeResponse,
+  McpCallTally,
   CreditWalletKind,
   WorkspaceKind,
   WorkspaceRole,

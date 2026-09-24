@@ -267,6 +267,17 @@ export interface PendingStatus {
 export type CreditWalletKind = "personal" | "seat";
 
 /**
+ * The MCP call a credit spend pays for, tallied by the consume route (`mcp_tool_calls`, tool
+ * prefixed `mcp:`) so legacy-tool retirement is a query. `op` is the gate key, `""` for a tool
+ * that takes none.
+ */
+export interface McpCallTally {
+  tool: string;
+  op: string;
+  write: boolean;
+}
+
+/**
  * One MCP credit spend (`POST /api/mcp/credits/consume`).
  *
  * `allowed` is the only field the registrar acts on; counters are for refusal

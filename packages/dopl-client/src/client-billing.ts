@@ -5,7 +5,7 @@
 
 import { HomeMethods } from "./client-home.js";
 import * as billing from "./billing.js";
-import type { CreditConsumeResponse } from "./types.js";
+import type { CreditConsumeResponse, McpCallTally } from "./types.js";
 
 export class BillingMethods extends HomeMethods {
   /**
@@ -15,7 +15,10 @@ export class BillingMethods extends HomeMethods {
    * workspace), nothing is pooled across a workspace. The caller renders the
    * refusal, this does NOT throw.
    */
-  async consumeCredits(workspaceId: string): Promise<CreditConsumeResponse> {
-    return billing.consumeCredits(this.transport, workspaceId);
+  async consumeCredits(
+    workspaceId: string,
+    call?: McpCallTally
+  ): Promise<CreditConsumeResponse> {
+    return billing.consumeCredits(this.transport, workspaceId, call);
   }
 }

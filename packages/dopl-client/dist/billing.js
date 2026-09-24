@@ -19,13 +19,14 @@ exports.consumeCredits = consumeCredits;
  * method must not have.
  *
  * POST is outside `IDEMPOTENT_METHODS`, so the transport never retries it — a
- * retried spend is a double charge.
+ * retried spend is a double charge. `call` rides the body for the route's tally; a fan-out's
+ * extra legs omit it, being charges for a call already tallied.
  */
-async function consumeCredits(t, workspaceId) {
+async function consumeCredits(t, workspaceId, call) {
     return t.request("/api/mcp/credits/consume", {
         method: "POST",
         toolName: "_mcp_credits_consume",
-        body: {},
+        body: call ? { call } : {},
         workspaceIdOverride: workspaceId,
     });
 }

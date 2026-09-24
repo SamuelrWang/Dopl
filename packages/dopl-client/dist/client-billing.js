@@ -48,8 +48,8 @@ class BillingMethods extends client_home_js_1.HomeMethods {
      * workspace), nothing is pooled across a workspace. The caller renders the
      * refusal, this does NOT throw.
      */
-    async consumeCredits(workspaceId) {
-        return billing.consumeCredits(this.transport, workspaceId);
+    async consumeCredits(workspaceId, call) {
+        return billing.consumeCredits(this.transport, workspaceId, call);
     }
 }
 exports.BillingMethods = BillingMethods;

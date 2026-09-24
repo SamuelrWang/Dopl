@@ -4,6 +4,12 @@ All notable changes to `@dopl/client` are documented here. Format follows [Keep 
 
 ## [Unreleased]
 
+### Added
+
+- `consumeCredits(workspaceId, call?)` — an optional `McpCallTally` (`tool`,
+  `op`, `write`) riding the consume body, so the route can count the MCP call
+  it charges. Omitted, the request is byte-identical to before.
+
 ## [0.14.0] — 2026-09-23
 
 ### Added

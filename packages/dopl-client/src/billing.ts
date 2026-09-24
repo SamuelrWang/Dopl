@@ -5,7 +5,7 @@
  */
 
 import type { DoplTransport } from "./transport.js";
-import type { CreditConsumeResponse } from "./types.js";
+import type { CreditConsumeResponse, McpCallTally } from "./types.js";
 
 /**
  * Charge ONE MCP tool call to a workspace (`POST /api/mcp/credits/consume`).
@@ -20,16 +20,18 @@ import type { CreditConsumeResponse } from "./types.js";
  * method must not have.
  *
  * POST is outside `IDEMPOTENT_METHODS`, so the transport never retries it — a
- * retried spend is a double charge.
+ * retried spend is a double charge. `call` rides the body for the route's tally; a fan-out's
+ * extra legs omit it, being charges for a call already tallied.
  */
 export async function consumeCredits(
   t: DoplTransport,
-  workspaceId: string
+  workspaceId: string,
+  call?: McpCallTally
 ): Promise<CreditConsumeResponse> {
   return t.request<CreditConsumeResponse>("/api/mcp/credits/consume", {
     method: "POST",
     toolName: "_mcp_credits_consume",
-    body: {},
+    body: call ? { call } : {},
     workspaceIdOverride: workspaceId,
   });
 }

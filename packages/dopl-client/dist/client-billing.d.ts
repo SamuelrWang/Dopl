@@ -3,7 +3,7 @@
  * `DoplClient` extends this one. Pure delegation to `billing.ts`; no HTTP here.
  */
 import { HomeMethods } from "./client-home.js";
-import type { CreditConsumeResponse } from "./types.js";
+import type { CreditConsumeResponse, McpCallTally } from "./types.js";
 export declare class BillingMethods extends HomeMethods {
     /**
      * Spend one MCP credit for `workspaceId`. `allowed: false` = the PAYER's own
@@ -12,5 +12,5 @@ export declare class BillingMethods extends HomeMethods {
      * workspace), nothing is pooled across a workspace. The caller renders the
      * refusal, this does NOT throw.
      */
-    consumeCredits(workspaceId: string): Promise<CreditConsumeResponse>;
+    consumeCredits(workspaceId: string, call?: McpCallTally): Promise<CreditConsumeResponse>;
 }
