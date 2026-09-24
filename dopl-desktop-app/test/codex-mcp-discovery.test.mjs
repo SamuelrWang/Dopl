@@ -106,7 +106,7 @@ async function scriptedTurn(profile, verdict, opts) {
   const serverReqs = [];
   try {
     const cfg = tools.buildSessionToolConfig(profile);
-    const entry = mcp.buildDoplServerEntry(cfg.doplToolsPolicy);
+    const entry = mcp.buildDoplServerEntry(cfg.doplToolsPolicy, profile, o.toolSet);
     entry.url = dopl.url;
     let finish = null;
     const finished = new Promise((r) => { finish = r; });
@@ -135,7 +135,7 @@ async function scriptedTurn(profile, verdict, opts) {
       await conn.request('turn/start', { threadId: th.thread.id, input: [{ type: 'text', text: 'hello' }] });
       await finished;
     });
-    return { requests: model.requests, calls: dopl.calls, items, asked, serverReqs };
+    return { requests: model.requests, calls: dopl.calls, seen: dopl.seen, items, asked, serverReqs };
   } finally {
     await model.close();
     await dopl.close();
@@ -241,6 +241,37 @@ describe('TIER 1 — the real app-server defers Dopl, and `tool_search` is the w
     assert.equal(write.calls.length, 0);
     const read = await scriptedTurn('dopl_only', 'deny', { tools: UNTITLED_TOOLS, call: { fn: 'dopl_search', args: { query: 'q' } } });
     assert.deepEqual(read.calls.map((c) => c.name), ['dopl_search']);
+  });
+
+  // 🔒 THE GRANULAR SET (DMP-013 B4): the negotiated header reaches the server, a granular write asks
+  // under its own title, a granular whole-tool read never asks, and `read_only` offers the channel tools.
+  const GRANULAR = [toolDef('dopl_send_message'), toolDef('dopl_list_channels'), toolDef('dopl_get_map'), toolDef('dopl_read_entry')];
+  const granularTurn = (profile, verdict, call) => scriptedTurn(profile, verdict, { tools: GRANULAR, toolSet: 'granular', call });
+
+  test('GRANULAR: a write asks by its own title, and the entry asked the server for the granular set', async (t) => {
+    if (skipLive(t, GATE)) return;
+    const args = { body: 'CXP3A-GRANULAR', channel: 'chan-1' };
+    const run = await granularTurn('dopl_only', 'deny', { fn: 'dopl_send_message', args });
+    assert.ok(run.seen.some((r) => r.headers['x-dopl-tool-set'] === 'granular'), 'the header rode every request');
+    assert.deepEqual(run.serverReqs, ['mcpServer/elicitation/request']);
+    assert.deepEqual(run.asked, [{ name: 'dopl_send_message', input: args }]);
+    assert.equal(run.calls.length, 0, 'declined at the gate, never reached the server');
+  });
+
+  test('GRANULAR: a whole-tool read never asks, and runs once', async (t) => {
+    if (skipLive(t, GATE)) return;
+    const run = await granularTurn('dopl_only', 'deny', { fn: 'dopl_get_map', args: {} });
+    assert.deepEqual(run.serverReqs, []);
+    assert.deepEqual(run.calls.map((c) => c.name), ['dopl_get_map']);
+  });
+
+  test('GRANULAR: read_only discovers only the channel tools its offer names', async (t) => {
+    if (skipLive(t, GATE)) return;
+    const run = await granularTurn('read_only', 'deny', { fn: 'dopl_send_message', args: { body: 'x' } });
+    const out = run.requests[1].input.find((i) => i.type === 'tool_search_output');
+    const found = out.tools.filter((x) => x.type === 'namespace').flatMap((n) => n.tools.map((x) => x.name)).sort();
+    assert.deepEqual(found, ['dopl_list_channels', 'dopl_send_message']);
+    assert.deepEqual(run.asked.map((a) => a.name), ['dopl_send_message']);
   });
 
   test('C1b: a channel POST hands the gate its FULL arguments — op-scoped, not whole-tool', async (t) => {
