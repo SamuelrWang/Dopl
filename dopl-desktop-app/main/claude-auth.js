@@ -83,15 +83,16 @@ function openCodePrompt(onSubmit, onCancel) {
   return win;
 }
 
-// ── setup-token under a pty → true once Dopl holds the token ─────────────────
+// ── setup-token → true once Dopl holds the token ─────────────────────────────
+// No pty: macOS `script` refuses a pipe for stdin/stdout (`tcgetattr/ioctl: Operation not supported on
+// socket`, exit 1 in ms), which is what Electron hands a child. Without a TTY setup-token opens the system
+// browser itself and takes the redirect on its own localhost listener, so nothing is pasted; the token is read
+// from what it prints once it exits.
 function runSetupTokenFlow(bin) {
   return new Promise((resolve) => {
     let child;
     try {
-      child = spawn('script', ['-q', '/dev/null', bin, 'setup-token'], {
-        env: spawner.cliEnv(bin),
-        stdio: ['pipe', 'pipe', 'pipe'],
-      });
+      child = spawn(bin, ['setup-token'], { env: spawner.cliEnv(bin), stdio: ['ignore', 'pipe', 'pipe'] });
     } catch (err) {
       diag('claude signin: spawn failed', err && err.message);
       resolve(false);
@@ -100,9 +101,6 @@ function runSetupTokenFlow(bin) {
 
     let out = '';
     let settled = false;
-    let urlOpened = false;
-    let promptWin = null;
-
     const timer = setTimeout(() => {
       diag('claude signin: timeout (5m)');
       finish(false);
@@ -112,50 +110,28 @@ function runSetupTokenFlow(bin) {
       if (settled) return;
       settled = true;
       clearTimeout(timer);
-      try { if (promptWin && !promptWin.isDestroyed()) promptWin.close(); } catch (_) {}
-      try { child.stdin.end(); } catch (_) {}
-      try { child.kill('SIGINT'); } catch (_) {}
-      setTimeout(() => { try { child.kill('SIGKILL'); } catch (_) {} }, 1500);
+      try { child.kill('SIGTERM'); } catch (_) {}
       diag('claude signin:', ok ? 'token stored' : 'failed');
       resolve(ok);
     }
 
     const onData = (buf) => {
       if (settled) return;
-      out += buf.toString('latin1');
-      if (!urlOpened) {
-        const url = extractOAuthUrl(out);
-        if (url) {
-          urlOpened = true;
-          diag('claude signin: oauth url parsed, opening browser + paste window');
-          shell.openExternal(url).catch((e) => diag('claude signin: openExternal failed', e && e.message));
-          promptWin = openCodePrompt(
-            (code) => {
-              try {
-                child.stdin.write(String(code) + '\n');
-              } catch (e) {
-                diag('claude signin: stdin write failed', e && e.message);
-              }
-            },
-            () => {
-              diag('claude signin: code prompt cancelled');
-              finish(false);
-            }
-          );
-        }
-      }
+      out += buf.toString('utf8');
       const token = extractToken(out);
       if (token) finish(setStoredOAuthToken(token));
     };
-
     child.stdout.on('data', onData);
     child.stderr.on('data', onData);
     child.on('error', (err) => {
       diag('claude signin: child error', err && err.message);
       finish(false);
     });
-    // An exit before a token was captured is a failure, whatever the code.
-    child.on('close', () => finish(false));
+    // An exit before a token was captured is a failure, whatever the code. The shape (never the text) is logged.
+    child.on('close', (code) => {
+      if (!settled) diag('claude signin: exited', code, 'before a token; printed', out.length, 'chars');
+      finish(false);
+    });
   });
 }
 
