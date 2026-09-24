@@ -6,7 +6,7 @@
  * set of whichever connection prints it (a legacy description prints the legacy spelling).
  */
 
-import { callRef } from "../call-ref.js";
+import { bySet, callRef } from "../call-ref.js";
 
 /** The op-relative spelling of `key` (`op="list_bases"`), whole on a granular connection. */
 const opRef = (key: string) => callRef(key, {}, { form: "op" });
@@ -28,16 +28,23 @@ export function refusal(error: ToolError, detail = ""): string {
 }
 
 // Cross-cutting (gates, registrar): a tool's table names one only when it is in its own top three.
+// The noun follows the set: a granular tool is one job, so it has no "op" to speak of.
+const job = () => bySet({ legacy: "op", granular: "call" });
+
 export const MISSING_PARAMS: ToolError = {
   reason: "missing_params",
-  meaning: "a param this op needs is absent; the message names it",
+  get meaning() {
+    return `a param this ${job()} needs is absent; the message names it`;
+  },
   retry: "no",
 };
 
 /** Emit-only: `respond.ts › unusedParams`. A param the op ignores is refused, never dropped. */
 export const UNUSED_PARAM: ToolError = {
   reason: "unused_param",
-  meaning: "a param this op does not take was sent; nothing was done",
+  get meaning() {
+    return `a param this ${job()} does not take was sent; nothing was done`;
+  },
   retry: "drop it and re-issue",
 };
 
@@ -134,13 +141,6 @@ export const KB_TARGET_VANISHED: ToolError = {
   get retry() {
     return `${opRef("kb.list_dir")} — NOT force=true, which would create a duplicate`;
   },
-};
-
-/** Emit-only. 403 `SESSION_REQUIRED` = an app-only route, not a grantable permission. */
-export const SESSION_REQUIRED: ToolError = {
-  reason: "session_required",
-  meaning: "this op needs an interactive app session; MCP callers are refused",
-  retry: "no",
 };
 
 // Per-tool tables, ordered by frequency: `renderErrors` teaches only the first three.

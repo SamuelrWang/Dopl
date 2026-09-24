@@ -7,7 +7,7 @@
  * set of whichever connection prints it (a legacy description prints the legacy spelling).
  */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.STATUS_ERRORS = exports.SEARCH_ERRORS = exports.CHANNEL_ERRORS = exports.AGENT_ERRORS = exports.ONTOLOGY_ERRORS = exports.MEMBERS_ERRORS = exports.CHATS_ERRORS = exports.BAD_SESSION_DATE = exports.SKILL_ERRORS = exports.KB_ERRORS = exports.SESSION_REQUIRED = exports.KB_TARGET_VANISHED = exports.KB_ENTRY_NOT_FOUND = exports.KB_INVALID_FIELD = exports.CREDITS_EXHAUSTED = exports.AMBIGUOUS_CONTAINER = exports.DELETE_IS_APP_ONLY = exports.READ_ONLY_SESSION = exports.CHANNEL_MANAGE_REQUIRED = exports.UNUSED_PARAM = exports.MISSING_PARAMS = void 0;
+exports.STATUS_ERRORS = exports.SEARCH_ERRORS = exports.CHANNEL_ERRORS = exports.AGENT_ERRORS = exports.ONTOLOGY_ERRORS = exports.MEMBERS_ERRORS = exports.CHATS_ERRORS = exports.BAD_SESSION_DATE = exports.SKILL_ERRORS = exports.KB_ERRORS = exports.KB_TARGET_VANISHED = exports.KB_ENTRY_NOT_FOUND = exports.KB_INVALID_FIELD = exports.CREDITS_EXHAUSTED = exports.AMBIGUOUS_CONTAINER = exports.DELETE_IS_APP_ONLY = exports.READ_ONLY_SESSION = exports.CHANNEL_MANAGE_REQUIRED = exports.UNUSED_PARAM = exports.MISSING_PARAMS = void 0;
 exports.refusal = refusal;
 exports.versionConflict = versionConflict;
 exports.fieldTooLong = fieldTooLong;
@@ -20,15 +20,21 @@ function refusal(error, detail = "") {
     return `reason=${error.reason} · ${error.meaning}${tail} · retry=${error.retry}`;
 }
 // Cross-cutting (gates, registrar): a tool's table names one only when it is in its own top three.
+// The noun follows the set: a granular tool is one job, so it has no "op" to speak of.
+const job = () => (0, call_ref_js_1.bySet)({ legacy: "op", granular: "call" });
 exports.MISSING_PARAMS = {
     reason: "missing_params",
-    meaning: "a param this op needs is absent; the message names it",
+    get meaning() {
+        return `a param this ${job()} needs is absent; the message names it`;
+    },
     retry: "no",
 };
 /** Emit-only: `respond.ts › unusedParams`. A param the op ignores is refused, never dropped. */
 exports.UNUSED_PARAM = {
     reason: "unused_param",
-    meaning: "a param this op does not take was sent; nothing was done",
+    get meaning() {
+        return `a param this ${job()} does not take was sent; nothing was done`;
+    },
     retry: "drop it and re-issue",
 };
 /** Emit-only: a channel rename/description write by a caller who cannot manage the room. */
@@ -114,12 +120,6 @@ exports.KB_TARGET_VANISHED = {
     get retry() {
         return `${opRef("kb.list_dir")} — NOT force=true, which would create a duplicate`;
     },
-};
-/** Emit-only. 403 `SESSION_REQUIRED` = an app-only route, not a grantable permission. */
-exports.SESSION_REQUIRED = {
-    reason: "session_required",
-    meaning: "this op needs an interactive app session; MCP callers are refused",
-    retry: "no",
 };
 // Per-tool tables, ordered by frequency: `renderErrors` teaches only the first three.
 // `ambiguous_slug` must stay in `KB_ERRORS`' top three — a new row ahead of it silently drops it.

@@ -10483,7 +10483,8 @@ already wrong — `channel-dispatch-agents.ts` does pass `waitMs` — so do not 
 - **The two probes are dead guards.** `modelArg` (and `rosterKey`) are contract methods since 2026-09-23 (`main/runtime/contract.js › RUNTIME_METHODS`), and `sealAdapter` refuses an adapter that lacks one, so the `typeof` branch can never be false for a registered runtime — it only hides a contract violation behind a silent pass-through.
 - **`sessionRequired` has no production caller** since knowledge pinning left, and is kept deliberately by its own test. Deleting it needs a ruling, not a sweep.
 - Proposed resolution: call `rt.modelArg` directly in both places; rule on `sessionRequired`.
-- Status: OPEN (low).
+- **`sessionRequired` RESOLVED 2026-09-24 (DMP-013 B4, Samuel's batch instruction):** deleted with its `SESSION_REQUIRED` row and its direct test. The two `modelArg` probes remain.
+- Status: OPEN (low) — the probes only.
 
 ### F-757 — knowledge SEARCH still admits `access_mode='teams'` bases to non-members: the base read never selects `access_mode` (2026-09-23)
 

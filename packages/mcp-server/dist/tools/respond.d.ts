@@ -30,11 +30,6 @@ export declare function isApiError(e: unknown, status: number, code: string): bo
 export declare function apiErrorCode(e: unknown): string | null;
 /** The server's own sentence, or null. Prefer it: the server knows which gate refused. */
 export declare function apiMessage(e: unknown): string | null;
-/**
- * 403 `SESSION_REQUIRED` = an app-only (`sessionOnly`) route, not a grantable permission; any other
- * error → null. No production caller yet; tested in `knowledge-refusals.test.ts`.
- */
-export declare function sessionRequired(e: unknown, op: string): ToolResponse | null;
 /** True for a 409 (name/title/slug already-exists collision). */
 export declare function isAlreadyExists(e: unknown): boolean;
 /** Credit allowance spent for the billing period. */

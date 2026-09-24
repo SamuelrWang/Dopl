@@ -34,6 +34,8 @@ const knowledge_shared_1 = require("./knowledge-shared");
 const knowledge_validation_1 = require("./knowledge-validation");
 const channel_shared_1 = require("./channel-shared");
 const knowledge_sections_1 = require("./knowledge-sections");
+/** The write's upsert rule, named by the tool the caller is using (`write_file` on a legacy connection). */
+const UPSERT = () => `${(0, call_ref_js_1.bySet)({ legacy: "write_file", granular: (0, call_ref_js_1.toolName)("kb.write_file") })} is an UPSERT`;
 // ⚠ RE-EXPORTED, NOT RE-IMPLEMENTED — `knowledge.ts` and four suites address
 // the base ops through this module's name, and a split is not a reason to move
 // every call site.
@@ -130,7 +132,7 @@ async function opWriteFile(client, ref, path, body, title, expected_version, for
         // status-only arms below, which would otherwise read this 409 as
         // "an entry with that title already exists" — the opposite fact.
         if ((0, respond_1.isApiError)(e, 409, "KNOWLEDGE_TARGET_VANISHED")) {
-            return (0, respond_1.err)((0, tool_errors_1.refusal)(tool_errors_1.KB_TARGET_VANISHED, `NOTHING was written at ${(0, narration_1.inlineOr)(path, narration_1.NO_PATH)}. A path is a POSITION, not an identity: ${(0, call_ref_js_1.callRef)("kb.move_file", {}, { form: "op" })} and a retitle both vacate one. ⚠ Do NOT re-issue this call with force=true — write_file is an UPSERT, so a forced write at a vacated path CREATES A SECOND ENTRY that nothing afterwards can tell from the first. Find where it went with ${(0, call_ref_js_1.callRef)("kb.list_dir", {}, { form: "op" })} (or ${(0, call_ref_js_1.callRef)("kb.get_tree", {}, { form: "op" })}), then write at the path it is at now. An ENTRY ID survives a move; a path does not.`));
+            return (0, respond_1.err)((0, tool_errors_1.refusal)(tool_errors_1.KB_TARGET_VANISHED, `NOTHING was written at ${(0, narration_1.inlineOr)(path, narration_1.NO_PATH)}. A path is a POSITION, not an identity: ${(0, call_ref_js_1.callRef)("kb.move_file", {}, { form: "op" })} and a retitle both vacate one. ⚠ Do NOT re-issue this call with force=true — ${UPSERT()}, so a forced write at a vacated path CREATES A SECOND ENTRY that nothing afterwards can tell from the first. Find where it went with ${(0, call_ref_js_1.callRef)("kb.list_dir", {}, { form: "op" })} (or ${(0, call_ref_js_1.callRef)("kb.get_tree", {}, { form: "op" })}), then write at the path it is at now. An ENTRY ID survives a move; a path does not.`));
         }
         // ⚠ **THE MOVE AND THE DUPLICATE RISK ARE NAMED HERE TOO (S40).** A
         // conflict says somebody wrote after your read — and the write that
@@ -139,7 +141,7 @@ async function opWriteFile(client, ref, path, body, title, expected_version, for
         // retry" reaches for `force`, which is the one input that used to walk
         // past the server's own anti-duplicate guard.
         if ((0, respond_1.isConflict)(e)) {
-            return (0, respond_1.err)((0, tool_errors_1.refusal)((0, tool_errors_1.versionConflict)("kb.read_file"), `NOTHING was written at ${(0, narration_1.inlineOr)(path, narration_1.NO_PATH)}. Read it again for the current body and Version, reconcile, then re-issue with that expected_version. ⚠ The other write may have MOVED or RENAMED this entry rather than edited it — check ${(0, call_ref_js_1.callRef)("kb.list_dir", {}, { form: "op" })} before you retry, because write_file is an UPSERT and a forced write at a vacated path creates a DUPLICATE rather than overwriting anything.`));
+            return (0, respond_1.err)((0, tool_errors_1.refusal)((0, tool_errors_1.versionConflict)("kb.read_file"), `NOTHING was written at ${(0, narration_1.inlineOr)(path, narration_1.NO_PATH)}. Read it again for the current body and Version, reconcile, then re-issue with that expected_version. ⚠ The other write may have MOVED or RENAMED this entry rather than edited it — check ${(0, call_ref_js_1.callRef)("kb.list_dir", {}, { form: "op" })} before you retry, because ${UPSERT()} and a forced write at a vacated path creates a DUPLICATE rather than overwriting anything.`));
         }
         if ((0, respond_1.isAlreadyExists)(e)) {
             return (0, respond_1.err)(`An entry titled ${(0, narration_1.inlineOr)(title ?? path.split("/").filter(Boolean).pop(), narration_1.NO_NAME)} already exists in that folder. Pick a different title/path, or read+overwrite the existing entry with ${(0, call_ref_js_1.bySet)({ legacy: (0, call_ref_js_1.legacyOnly)('dopl_kb(op="read_file" → "write_file")'), granular: `${(0, call_ref_js_1.callRef)("kb.read_file")} → ${(0, call_ref_js_1.callRef)("kb.write_file")}` })}.`);

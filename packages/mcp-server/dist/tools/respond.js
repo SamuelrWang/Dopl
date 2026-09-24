@@ -12,7 +12,6 @@ exports.isNotFound = isNotFound;
 exports.isApiError = isApiError;
 exports.apiErrorCode = apiErrorCode;
 exports.apiMessage = apiMessage;
-exports.sessionRequired = sessionRequired;
 exports.isAlreadyExists = isAlreadyExists;
 exports.creditsExhausted = creditsExhausted;
 exports.entitlementDenied = entitlementDenied;
@@ -59,15 +58,6 @@ function apiMessage(e) {
         return null;
     const msg = e.apiMessage;
     return typeof msg === "string" && msg ? msg : null;
-}
-/**
- * 403 `SESSION_REQUIRED` = an app-only (`sessionOnly`) route, not a grantable permission; any other
- * error → null. No production caller yet; tested in `knowledge-refusals.test.ts`.
- */
-function sessionRequired(e, op) {
-    if (!isApiError(e, 403, "SESSION_REQUIRED"))
-        return null;
-    return err((0, tool_errors_1.refusal)(tool_errors_1.SESSION_REQUIRED, `${(0, call_ref_js_1.calledAs)(op)} is app-only and NOTHING changed. Your token is an agent credential, which this route refuses whatever scopes it carries — there is no permission to request and no other route in. Ask your operator to do it in the Dopl app.`));
 }
 /** True for a 409 (name/title/slug already-exists collision). */
 function isAlreadyExists(e) {

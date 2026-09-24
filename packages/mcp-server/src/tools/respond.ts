@@ -9,7 +9,6 @@ import {
   CREDITS_EXHAUSTED,
   MISSING_PARAMS,
   refusal,
-  SESSION_REQUIRED,
   UNUSED_PARAM,
 } from "./tool-errors";
 
@@ -88,20 +87,6 @@ export function apiMessage(e: unknown): string | null {
   if (typeof e !== "object" || e === null) return null;
   const msg = (e as { apiMessage?: unknown }).apiMessage;
   return typeof msg === "string" && msg ? msg : null;
-}
-
-/**
- * 403 `SESSION_REQUIRED` = an app-only (`sessionOnly`) route, not a grantable permission; any other
- * error → null. No production caller yet; tested in `knowledge-refusals.test.ts`.
- */
-export function sessionRequired(e: unknown, op: string): ToolResponse | null {
-  if (!isApiError(e, 403, "SESSION_REQUIRED")) return null;
-  return err(
-    refusal(
-      SESSION_REQUIRED,
-      `${calledAs(op)} is app-only and NOTHING changed. Your token is an agent credential, which this route refuses whatever scopes it carries — there is no permission to request and no other route in. Ask your operator to do it in the Dopl app.`,
-    ),
-  );
 }
 
 /** True for a 409 (name/title/slug already-exists collision). */

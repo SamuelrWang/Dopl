@@ -41,8 +41,6 @@ export declare const KB_INVALID_FIELD: ToolError;
 export declare const KB_ENTRY_NOT_FOUND: ToolError;
 /** Emit-only. `write_file` upserts, so `force=true` here would write a duplicate at that path. */
 export declare const KB_TARGET_VANISHED: ToolError;
-/** Emit-only. 403 `SESSION_REQUIRED` = an app-only route, not a grantable permission. */
-export declare const SESSION_REQUIRED: ToolError;
 export declare const KB_ERRORS: readonly ToolError[];
 export declare const SKILL_ERRORS: readonly ToolError[];
 export declare const BAD_SESSION_DATE: ToolError;

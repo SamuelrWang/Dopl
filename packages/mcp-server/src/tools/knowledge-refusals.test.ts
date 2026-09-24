@@ -19,7 +19,6 @@ import { describe, it, expect, vi } from "vitest";
 import type { DoplClient, KnowledgeBase, KnowledgeEntry } from "@dopl/client";
 import { opOutline, opReadFile } from "./knowledge-ops-read.js";
 import { opCreateFolder, opWriteFile } from "./knowledge-ops-write.js";
-import { sessionRequired } from "./respond.js";
 
 const BASE: KnowledgeBase = {
   id: "base-1",
@@ -260,33 +259,6 @@ describe("S40: a conflict warns that force=true at a vacated path DUPLICATES", (
     expect(out).toContain("Do NOT re-issue this call with force=true");
     // 🔒 It must NOT be read as the title collision the other 409 means.
     expect(out).not.toContain("already exists in that folder");
-  });
-});
-
-// ── S43 — an app-only route, answered as a refusal ─────────────────────────
-// ⚠ **THE PIN VERBS WERE THIS HELPER'S ONLY CALLER, AND THEY ARE GONE**
-// (integration, 2026-09-19 — Samuel's ruling deleted knowledge pinning). The
-// helper is kept deliberately: `sessionOnly` is a cross-cutting wrapper option
-// that the delete routes, `channel-grants` and the identity delete all carry,
-// so the next op to grow an arm gets this sentence rather than a second
-// wording of it. It is therefore tested DIRECTLY, against the error shape the
-// wrapper actually answers — a test that went through a removed op would have
-// gone with it, leaving the sentence unasserted.
-describe("S43: an app-only route refuses with reason=session_required retry=no", () => {
-  it("names the op, says nothing changed, and closes the door", () => {
-    const res = sessionRequired(apiError(403, "SESSION_REQUIRED"), "delete_base");
-    expect(res).not.toBeNull();
-    const out = textOf(res!);
-    expect(res!.isError).toBe(true);
-    expect(out).toContain("reason=session_required");
-    expect(out).toContain("retry=no");
-    expect(out).toContain('op="delete_base"');
-    expect(out).toContain("NOTHING changed");
-  });
-
-  it("is null for any other error, so the caller rethrows", () => {
-    expect(sessionRequired(apiError(403, "AGENT_WRITE_DISABLED"), "x")).toBeNull();
-    expect(sessionRequired(apiError(409, "SESSION_REQUIRED"), "x")).toBeNull();
   });
 });
 
