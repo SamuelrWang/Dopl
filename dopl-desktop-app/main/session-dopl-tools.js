@@ -19,20 +19,25 @@
 
 const { DOPL_SAFE_TOOLS } = require('./tool-profiles');
 
-// ⚠ DOPL_SAFE_TOOLS is "non-admin", NOT "read-only". These four WRITE to the shared workspace
-// (dopl_kb registers write_file / create_base / create_folder / move_file — packages/mcp-server
-// knowledge.ts; dopl_skill / dopl_ontology / dopl_chats carry the same create+update shape). A
+// ⚠ DOPL_SAFE_TOOLS is "non-admin", NOT "read-only". These six WRITE to the shared workspace — every
+// tool `packages/mcp-server/src/gating.ts › WRITE_OPS` names bar `dopl_channel` (Axis B's). A
 // write lands OFF this machine in rows every member reads — exfil, same class as an outbound
 // post, so never silent. Split out so `auto` GATES them (only `bypass` covers them) and
 // `dopl_only` stops SHADOWING them via allowedTools. Read half derived by subtraction; this list
 // must stay a SUBSET of DOPL_SAFE_TOOLS — session-permission-hardening.test.mjs partition test.
+// ⚠ A TOOL WITH ONE WRITE OP IS A WRITE TOOL. `dopl_agent` (create/update/grant) and
+// `dopl_workspaces` (create_home_channel) were missing until 2026-09-23 and rode DOPL_READ_TOOLS
+// into `dopl_only.preApproved`, Claude's `auto` (the windowless floor) and every Cursor mode.
+// Their READ ops are scoped back in per call by `dopl-read-ops.js`; `test/dopl-write-op-gating.test.mjs`
+// derives the membership from the server's WRITE_OPS, so the next tool that gains a write fails there.
 const DOPL_WRITE_TOOLS = ['mcp__dopl__dopl_kb', 'mcp__dopl__dopl_skill',
-  'mcp__dopl__dopl_ontology', 'mcp__dopl__dopl_chats'];
+  'mcp__dopl__dopl_ontology', 'mcp__dopl__dopl_chats',
+  'mcp__dopl__dopl_agent', 'mcp__dopl__dopl_workspaces'];
 const DOPL_READ_TOOLS = DOPL_SAFE_TOOLS
   .filter(function (t) { return DOPL_WRITE_TOOLS.indexOf(t) === -1; });
 
 // ⚠ "WHERE DOES A DOPL READ RESOLVE?", ASKED OF THE TABLE RATHER THAN ANSWERED TWICE. The
-// op-scoped knowledge branch in `session-profiles.js › grantDecision` grants a `dopl_kb` READ
+// op-scoped read branch in `session-profiles.js › grantDecision` grants a mixed tool's READ op
 // exactly where a `DOPL_READ_TOOL` is already granted. Naming those modes there would be a SECOND
 // statement of AUTO_TOOLS' membership, which stops being true the day the floor or the lists
 // move; asking the adapter's `axisAAllows` about a real member cannot drift.

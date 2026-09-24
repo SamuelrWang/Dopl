@@ -102,6 +102,8 @@ const GATE_REASONS = [
   'knowledge-read-op', //        2026-08-22 (OQ-1): an OP-SCOPED `dopl_kb` READ. Axis A does NOT
   //                             cover the tool (it is a write tool) and the CALL is a read;
   //                             `tool-mode` here would claim the operator granted the whole tool.
+  'dopl-read-op', //             2026-09-23: the same, for the other op-scoped write tools
+  //                             (`dopl-read-ops.js` — `dopl_agent` list/get, `dopl_workspaces` list).
 ];
 
 // Build the explainer. `deps` are the session-profile table's own predicates — passed in rather
@@ -209,7 +211,8 @@ function makeGateReason(deps) {
       if (!channel) {
         const name = d.canonicalDoplName(a.toolName);
         if (d.toolModeAllows(a.toolMode, name, a.runtime)) return 'tool-mode';
-        return d.isKnowledgeReadCall(name, a.input) ? 'knowledge-read-op' : 'tool-mode';
+        if (d.isKnowledgeReadCall(name, a.input)) return 'knowledge-read-op';
+        return d.isDoplReadOpCall && d.isDoplReadOpCall(name, a.input) ? 'dopl-read-op' : 'tool-mode';
       }
       // The LAUNCH lane is asked first of the channel allows (2026-08-25, F-320): it is the only one
       // that is not a message, and an audit line claiming otherwise would file a launch under "what

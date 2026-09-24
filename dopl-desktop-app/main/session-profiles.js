@@ -9,8 +9,9 @@ const { makeGrantDetail, GATE_REASONS } = require('./session-gate-reason');
 const { containerOnlyDenies } = require('./session-audience');
 const { makeGrantKeyFor, POST_GRANT, postFieldsOk } = require('./session-grant-keys');
 const { mcpShortName, canonicalDoplName, isDoplToolName } = require('./mcp-tool-names');
-// The op-scoped knowledge read (OQ-1).
+// The op-scoped reads of the mixed write tools (OQ-1's `dopl_kb`, then `dopl_agent` / `dopl_workspaces`).
 const { isKnowledgeReadCall } = require('./knowledge-ops');
+const { isDoplReadOpCall } = require('./dopl-read-ops');
 const {
   OWN_CHANNEL_MARKER_KIND, OWN_CHANNEL_THREAD_NEW, OWN_CHANNEL_ESCALATE_KIND, OWN_CHANNEL_OUTBOUND_OPS,
   OWN_CHANNEL_SEND_OPS, OWN_CHANNEL_ARTIFACT_OPS,
@@ -153,9 +154,9 @@ function grantDecision(args) {
   if (allowForTask.indexOf(grantKeyFor(a.toolName, a.input, a.channelId, a.runtime)) !== -1) return 'allow';
   // 4. Axis A in this runtime's own words; an unknown mode allows nothing.
   if (rt.axisAAllows(a.toolMode, name)) return 'allow';
-  // 5. An op-scoped `dopl_kb` READ, after Axis A so it narrows nothing: a whole-tool verdict would pick the write
-  // surface, and a windowless miss is a deny (OQ-1).
-  if (isKnowledgeReadCall(name, a.input) && rt.axisAAllows(a.toolMode, DOPL_READ_REFERENCE)) return 'allow';
+  // 5. An op-scoped READ of a mixed write tool (`dopl-read-ops.js`), after Axis A so it narrows nothing: a
+  // whole-tool verdict would pick the write surface, and a windowless miss is a deny (OQ-1).
+  if (isDoplReadOpCall(name, a.input) && rt.axisAAllows(a.toolMode, DOPL_READ_REFERENCE)) return 'allow';
   return 'gate';
 }
 
@@ -170,7 +171,7 @@ const grantDecisionDetail = makeGrantDetail(grantDecision, {
   isOwnChannelArtifact, isOwnChannelOutboundCall,
   OWN_CHANNEL_OUTBOUND_OPS, isOwnMachineLaunch, isOwnMachineDirect,
   isOwnMachineManage, manageAllowReason,
-  toolModeAllows, isKnowledgeReadCall,
+  toolModeAllows, isKnowledgeReadCall, isDoplReadOpCall,
   isClassifiedTool,
   containerOnlyDenies, isDoplTool: isDoplToolName, buildSessionToolConfig,
 });
@@ -187,7 +188,7 @@ module.exports = {
   isOwnChannelOutboundCall,
   isOwnChannelOutbound, OWN_CHANNEL_OUTBOUND_OPS,
   isOwnMachineManage, OWN_MACHINE_MANAGE_OPS, manageAllowReason,
-  isKnowledgeReadCall,
+  isKnowledgeReadCall, isDoplReadOpCall,
   DOPL_READ_REFERENCE,
   mcpShortName, canonicalDoplName,
   grantDecisionDetail, GATE_REASONS,

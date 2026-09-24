@@ -63,6 +63,9 @@ const KEYS = require(join(HERE, "..", "main", "session-grant-keys.js"));
 const NAMES = require(join(HERE, "..", "main", "mcp-tool-names.js"));
 // 2026-08-22 (OQ-1): the block op-scopes `dopl_kb` the way it has always op-scoped `dopl_channel`.
 const KB_OPS = require(join(HERE, "..", "main", "knowledge-ops.js"));
+// 2026-09-23: the same op-scoping for `dopl_agent` / `dopl_workspaces` (dopl-write-op-gating.test).
+const READ_OPS = require(join(HERE, "..", "main", "dopl-read-ops.js"));
+const DOPL_TOOLS = require(join(HERE, "..", "main", "session-dopl-tools.js"));
 // 2026-08-24 (Samuel's create_thread ruling): the own-channel outbound ops beside the post were
 // §2-split into main/session-own-outbound.js and are injected REAL. `isOwnChannelMarker` /
 // `OWN_CHANNEL_MARKER_KIND` are re-exported from that module rather than returned out of the
@@ -94,7 +97,7 @@ const { grantDecision, grantKeyFor, POST_GRANT, isOwnChannelPost,
   isChannelTool } = new Function(
   "READ_BUILTINS", "WEB_TOOLS", "DOPL_SAFE_TOOLS", "DENIED_BUILTINS",
   "DOPL_ADMIN_TOOLS", "RETIRED_DOPL_TOOLS", "UNIVERSAL_HARD_DENY", "DOPL_CHANNEL_TOOL", "DOPL_SERVER_PREFIX", "normalizeProfile", "shaKey",
-  "makeGrantKeyFor", "POST_GRANT", "postFieldsOk", "mcpShortName", "canonicalDoplName", "isKnowledgeReadCall",
+  "makeGrantKeyFor", "POST_GRANT", "postFieldsOk", "mcpShortName", "canonicalDoplName", "isKnowledgeReadCall", "isDoplReadOpCall", "DOPL_READ_REFERENCE",
   "OWN_CHANNEL_MARKER_KIND", "OWN_CHANNEL_THREAD_NEW", "OWN_CHANNEL_OUTBOUND_OPS",
   "isOwnChannelMarker", "isOwnChannelThreadOpen", "isOwnChannelOutbound",
   "isOwnMachineLaunch", "launchLaneVerdict",
@@ -112,7 +115,7 @@ const { grantDecision, grantKeyFor, POST_GRANT, isOwnChannelPost,
             isChannelTool };`
 )(READ_BUILTINS, WEB_TOOLS, DOPL_SAFE_TOOLS, DENIED_BUILTINS, DOPL_ADMIN_TOOLS, RETIRED_DOPL_TOOLS, UNIVERSAL_HARD_DENY, DOPL_CHANNEL_TOOL, DOPL_SERVER_PREFIX, normalizeProfile, shaKey,
   KEYS.makeGrantKeyFor, KEYS.POST_GRANT, KEYS.postFieldsOk, NAMES.mcpShortName, NAMES.canonicalDoplName,
-  KB_OPS.isKnowledgeReadCall,
+  KB_OPS.isKnowledgeReadCall, READ_OPS.isDoplReadOpCall, DOPL_TOOLS.DOPL_READ_REFERENCE,
   OUT.OWN_CHANNEL_MARKER_KIND, OUT.OWN_CHANNEL_THREAD_NEW, OUT.OWN_CHANNEL_OUTBOUND_OPS,
   OUT.isOwnChannelMarker, OUT.isOwnChannelThreadOpen, OUT.isOwnChannelOutbound,
   LAUNCH.isOwnMachineLaunch, LAUNCH.launchLaneVerdict,
@@ -179,9 +182,10 @@ test("read_only: local reads pre-approved (NOT the channel); web + dopl reads/ad
 
 // FIX F2 (v2.9 review): the WORKSPACE-WRITE dopl tools. "Non-admin" is not "read-only" — a write
 // lands OFF this machine in rows every workspace member can read, which is the same class of move
-// as an outbound post. Four since the 2026-08-07 retirement.
+// as an outbound post. Four since the 2026-08-07 retirement; six since 2026-09-23, when `dopl_agent`
+// and `dopl_workspaces` (each with write ops in the server's WRITE_OPS) left the pre-approved read half.
 const DOPL_WRITE = ["mcp__dopl__dopl_kb", "mcp__dopl__dopl_skill", "mcp__dopl__dopl_ontology",
-  "mcp__dopl__dopl_chats"];
+  "mcp__dopl__dopl_chats", "mcp__dopl__dopl_agent", "mcp__dopl__dopl_workspaces"];
 const DOPL_READ = DOPL_SAFE_TOOLS.filter((t) => !DOPL_WRITE.includes(t));
 
 test("dopl_only: reads + web + READ-ONLY dopl pre-approved; writes GATE; admins denied", () => {

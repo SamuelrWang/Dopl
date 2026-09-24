@@ -42,6 +42,9 @@ const NAMES = require(join(HERE, "..", "main", "mcp-tool-names.js"));
 // 2026-08-22 (OQ-1): the block op-scopes `dopl_kb` the way it has always op-scoped `dopl_channel`.
 // Injected REAL.
 const KB_OPS = require(join(HERE, "..", "main", "knowledge-ops.js"));
+// 2026-09-23: the same op-scoping for `dopl_agent` / `dopl_workspaces` (dopl-write-op-gating.test).
+const READ_OPS = require(join(HERE, "..", "main", "dopl-read-ops.js"));
+const DOPL_TOOLS = require(join(HERE, "..", "main", "session-dopl-tools.js"));
 // 2026-08-24 (create_thread ruling): the own-channel outbound ops beside the post, a §2 split into
 // main/session-own-outbound.js. Injected REAL.
 const OUT = require(join(HERE, "..", "main", "session-own-outbound.js"));
@@ -72,7 +75,7 @@ const shortDoplName = CLAUDE_TOOLS.shortDoplName;
 const { grantDecision, grantKeyFor } = new Function(
   "READ_BUILTINS", "WEB_TOOLS", "DOPL_SAFE_TOOLS", "DENIED_BUILTINS",
   "DOPL_ADMIN_TOOLS", "RETIRED_DOPL_TOOLS", "UNIVERSAL_HARD_DENY", "DOPL_CHANNEL_TOOL", "DOPL_SERVER_PREFIX", "normalizeProfile", "shaKey",
-  "makeGrantKeyFor", "POST_GRANT", "postFieldsOk", "mcpShortName", "canonicalDoplName", "isKnowledgeReadCall",
+  "makeGrantKeyFor", "POST_GRANT", "postFieldsOk", "mcpShortName", "canonicalDoplName", "isKnowledgeReadCall", "isDoplReadOpCall", "DOPL_READ_REFERENCE",
   // 2026-09-06: two of these names had not existed since F-578 — `OWN_CHANNEL_MARKER_OPS` /
   // `OWN_CHANNEL_THREAD_OPS` became `..._KIND` / `..._NEW`, so `OUT.<old name>` was injecting
   // `undefined` under a name the block does not reference. Corrected to the REAL exports, and
@@ -91,7 +94,7 @@ const { grantDecision, grantKeyFor } = new Function(
    return { grantDecision, grantKeyFor };`
 )(READ_BUILTINS, WEB_TOOLS, DOPL_SAFE_TOOLS, DENIED_BUILTINS, DOPL_ADMIN_TOOLS, RETIRED_DOPL_TOOLS, UNIVERSAL_HARD_DENY, DOPL_CHANNEL_TOOL, DOPL_SERVER_PREFIX, normalizeProfile, shaKey,
   KEYS.makeGrantKeyFor, KEYS.POST_GRANT, KEYS.postFieldsOk, NAMES.mcpShortName, NAMES.canonicalDoplName,
-  KB_OPS.isKnowledgeReadCall,
+  KB_OPS.isKnowledgeReadCall, READ_OPS.isDoplReadOpCall, DOPL_TOOLS.DOPL_READ_REFERENCE,
   OUT.OWN_CHANNEL_MARKER_KIND, OUT.OWN_CHANNEL_THREAD_NEW, OUT.OWN_CHANNEL_OUTBOUND_OPS,
   OUT.isOwnChannelMarker, OUT.isOwnChannelThreadOpen, OUT.isOwnChannelOutbound,
   LAUNCH.isOwnMachineLaunch, LAUNCH.launchLaneVerdict,
