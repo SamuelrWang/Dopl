@@ -74,7 +74,7 @@ describe("Tool access — every profile says what it means, in a few words", () 
     expect(CLAUDE_TOOLS).toContain("const SESSION_HARD_DENY = UNIVERSAL_HARD_DENY.slice();");
     expect(CLAUDE_TOOLS).toContain("disallowedTools: SESSION_HARD_DENY.slice(),");
     expect(CLAUDE_TOOLS).toContain("builtinTools: READ_BUILTINS.concat(WEB_TOOLS),");
-    expect(CLAUDE_TOOLS).toContain("doplToolsPolicy: DOPL_SAFE_TOOLS.map(shortDoplName).concat([channelShort]),");
+    expect(CLAUDE_TOOLS).toContain("doplToolsPolicy: withGranularOffer(DOPL_SAFE_TOOLS.map(shortDoplName).concat([channelShort])),");
     expect(CLAUDE_TOOLS).toContain("builtinTools: READ_BUILTINS.slice(),");
   });
 
