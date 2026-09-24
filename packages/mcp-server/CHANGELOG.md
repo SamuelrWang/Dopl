@@ -4,6 +4,14 @@ All notable changes to `@dopl/mcp-server` are documented here. Format follows [K
 
 ## [Unreleased]
 
+### Added — tool split groundwork (DMP-013 B0, 2026-09-23; nothing new served)
+
+- `tool-manifest.ts`: the 39 granular tools, their legacy bindings and derived
+  annotations; `tool-manifest-parity.ts`: the product actions no tool runs.
+- `BootOptions.toolSet` / `BootResult.toolSet` (`X-Dopl-Tool-Set` or `?tools=`,
+  default `legacy`); `createServer({ unlistedTools })`, callable-but-unlisted.
+- Every credit charge carries the call it pays for (`McpCallTally`).
+
 ### Changed — BREAKING: `dopl_ontology` speaks one word (2026-09-23)
 
 - Ops `create_ontology` / `update_ontology`, arg `ontology=`, error code
