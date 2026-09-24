@@ -6,7 +6,7 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z, type ZodRawShape } from "zod";
 import { workspaceContext } from "@dopl/client";
-import type { DoplClient } from "@dopl/client";
+import type { DoplClient, McpCallTally } from "@dopl/client";
 
 import {
   creditsExhausted,
@@ -23,7 +23,7 @@ import { LEGACY_ONTOLOGY_ARGS } from "./legacy-aliases.js";
 // Re-exported so tests read the injected arg's description through the registrar that injects it.
 export { CONTAINER_ARG_DESCRIPTION } from "./workspace-arg.js";
 import type { CallerIdentity } from "./tools/identity.js";
-import type { Gates } from "./gating.js";
+import { isWriteOp, type Gates } from "./gating.js";
 import {
   appendDoplStatus,
   requestedFormat,
@@ -99,15 +99,24 @@ function renamedArgMessage(
  * container resolution (the addressed container's wallet pays), BEFORE the handler, exactly once per
  * call. Fail open except on `allowed === false`: a transient blip must not read as an empty wallet.
  * Called by name from the domain wrapper, `registerMetaTool`'s opt-in and `dopl_search`'s fan-out.
+ * `call` is tallied with the charge (legacy retirement counts it); fan-out legs pass none.
  */
-export type ChargeCredit = (workspaceId: string) => Promise<ToolResponse | null>;
+export type ChargeCredit = (
+  workspaceId: string,
+  call?: McpCallTally,
+) => Promise<ToolResponse | null>;
+
+function tally(tool: string, op: string | undefined): McpCallTally {
+  return { tool, op: op ?? "", write: op !== undefined && isWriteOp(tool, op) };
+}
 
 function createCharger(client: DoplClient): ChargeCredit {
   return async function charge(
     workspaceId: string,
+    call?: McpCallTally,
   ): Promise<ToolResponse | null> {
     try {
-      const outcome = await client.consumeCredits(workspaceId);
+      const outcome = await client.consumeCredits(workspaceId, call);
       if (outcome?.allowed === false) return creditsExhausted(outcome);
       // The consume route failed open (`consume/route.ts › failOpen`): run free, but say so.
       if (outcome?.degraded === true) {
@@ -136,9 +145,10 @@ function createCreditedRunner(charge: ChargeCredit) {
   // Charge, then run. A `null` workspace is nothing to charge — only `billingTarget` produces it.
   return async function runWithCredits(
     workspaceId: string | null,
+    call: McpCallTally,
     run: () => Promise<ToolResponse>,
   ): Promise<ToolResponse> {
-    const refusal = workspaceId === null ? null : await charge(workspaceId);
+    const refusal = workspaceId === null ? null : await charge(workspaceId, call);
     if (refusal) return refusal;
     try {
       return await run();
@@ -237,7 +247,7 @@ export function createToolRegistrars(deps: RegistrarDeps): ToolRegistrars {
       if (address.kind === "addressed") {
         // Inside the ALS scope, client.* calls carry the override in `X-Workspace-Id`.
         const { effective } = address;
-        const result = await runWithCredits(effective.id, () =>
+        const result = await runWithCredits(effective.id, tally(name, op), () =>
           workspaceContext.run(effective.id, () => handler(innerArgs)),
         );
         return appendDoplStatus(
@@ -251,7 +261,7 @@ export function createToolRegistrars(deps: RegistrarDeps): ToolRegistrars {
         );
       }
 
-      const result = await runWithCredits(await billingTarget(), () =>
+      const result = await runWithCredits(await billingTarget(), tally(name, op), () =>
         handler(innerArgs),
       );
       return appendDoplStatus(
@@ -286,12 +296,13 @@ export function createToolRegistrars(deps: RegistrarDeps): ToolRegistrars {
     const gated = async (
       args: z.infer<z.ZodObject<S>>,
     ): Promise<ToolResponse> => {
-      const refusal = gates.opRefusal(name, gates.requestedOp(args));
+      const op = gates.requestedOp(args);
+      const refusal = gates.opRefusal(name, op);
       if (refusal) return refusal;
       if (!opts.charged) return handler(args);
       const billTo = await billingTarget();
       if (billTo) {
-        const denied = await chargeCredit(billTo);
+        const denied = await chargeCredit(billTo, tally(name, op));
         if (denied) return denied;
       }
       return handler(args);

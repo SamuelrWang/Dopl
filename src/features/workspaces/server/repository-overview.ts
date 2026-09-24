@@ -1,5 +1,6 @@
 import "server-only";
 import { supabaseAdmin } from "@/shared/supabase/admin";
+import { MCP_CALL_ROWS } from "@/features/analytics/server/mcp-tool-calls";
 import { visibleChannelsOr } from "@/features/channels/server/repository-visibility";
 
 /**
@@ -309,7 +310,8 @@ export async function countMcpCallsInWindow(
     .eq("workspace_id", workspaceId)
     .gte("created_at", win.startIso)
     .lt("created_at", win.endIso)
-    .or("tool.neq.channel,op.not.like.await*");
+    .or("tool.neq.channel,op.not.like.await*")
+    .not("tool", "like", MCP_CALL_ROWS);
   if (error) throw error;
   return count ?? 0;
 }

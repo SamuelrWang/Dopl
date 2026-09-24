@@ -145,14 +145,14 @@ describe("exactly once, on both terminal paths", () => {
     const { map, client } = build({ sole: true });
     await map({});
     expect(client.consumeCredits).toHaveBeenCalledTimes(1);
-    expect(client.consumeCredits).toHaveBeenCalledWith("id-1");
+    expect(client.consumeCredits).toHaveBeenCalledWith("id-1", expect.anything());
   });
 
   it("charges the RESOLVED workspace on the `workspace=` branch, once", async () => {
     const { map, client } = build({ sole: false });
     await map({ container: "beta" });
     expect(client.consumeCredits).toHaveBeenCalledTimes(1);
-    expect(client.consumeCredits).toHaveBeenCalledWith("id-2");
+    expect(client.consumeCredits).toHaveBeenCalledWith("id-2", expect.anything());
   });
 
   it("charges once PER CALL — three calls, three credits", async () => {
@@ -337,7 +337,7 @@ describe("what is NOT charged", () => {
     const res = await map({});
     expect(res.isError).toBeFalsy();
     expect(client.consumeCredits).toHaveBeenCalledTimes(1);
-    expect(client.consumeCredits).toHaveBeenCalledWith("id-1");
+    expect(client.consumeCredits).toHaveBeenCalledWith("id-1", expect.anything());
   });
 
   it("a blank `workspace=` is refused before any charge", async () => {

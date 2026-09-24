@@ -1,5 +1,6 @@
 import "server-only";
 import { supabaseAdmin } from "@/shared/supabase/admin";
+import { MCP_CALL_ROWS } from "@/features/analytics/server/mcp-tool-calls";
 import type { Role } from "@/features/workspaces/types";
 
 /**
@@ -122,7 +123,8 @@ export async function countMetricInWindow(
     .in("workspace_id", workspaceIds)
     .gte("created_at", win.startIso)
     .lt("created_at", win.endIso)
-    .or(EXCLUDE_AWAIT_POLLING);
+    .or(EXCLUDE_AWAIT_POLLING)
+    .not("tool", "like", MCP_CALL_ROWS);
   if (error) throw error;
   return count ?? 0;
 }
@@ -159,6 +161,7 @@ export async function scanMcpCalls(
     .in("workspace_id", workspaceIds)
     .gte("created_at", sinceIso)
     .or(EXCLUDE_AWAIT_POLLING)
+    .not("tool", "like", MCP_CALL_ROWS)
     .order("created_at", { ascending: false })
     .limit(limit);
   if (error) throw error;

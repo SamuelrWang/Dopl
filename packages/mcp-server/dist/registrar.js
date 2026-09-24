@@ -15,6 +15,7 @@ const legacy_aliases_js_1 = require("./legacy-aliases.js");
 // Re-exported so tests read the injected arg's description through the registrar that injects it.
 var workspace_arg_js_2 = require("./workspace-arg.js");
 Object.defineProperty(exports, "CONTAINER_ARG_DESCRIPTION", { enumerable: true, get: function () { return workspace_arg_js_2.CONTAINER_ARG_DESCRIPTION; } });
+const gating_js_1 = require("./gating.js");
 const status_footer_js_1 = require("./status-footer.js");
 const credits_unmetered_js_1 = require("./credits-unmetered.js");
 // The one addressing arg injected into every domain tool: `container` (slug, id or `home`), routed
@@ -64,10 +65,13 @@ function renamedArgMessage(tool, issue) {
     const hints = renamed.map((k) => `renamed: send ${map[k]}, not ${k}`).join("; ");
     return `Unrecognized key${issue.keys.length === 1 ? "" : "s"}: ${keys} — ${hints}`;
 }
+function tally(tool, op) {
+    return { tool, op: op ?? "", write: op !== undefined && (0, gating_js_1.isWriteOp)(tool, op) };
+}
 function createCharger(client) {
-    return async function charge(workspaceId) {
+    return async function charge(workspaceId, call) {
         try {
-            const outcome = await client.consumeCredits(workspaceId);
+            const outcome = await client.consumeCredits(workspaceId, call);
             if (outcome?.allowed === false)
                 return (0, respond_js_1.creditsExhausted)(outcome);
             // The consume route failed open (`consume/route.ts › failOpen`): run free, but say so.
@@ -87,8 +91,8 @@ function createCharger(client) {
 }
 function createCreditedRunner(charge) {
     // Charge, then run. A `null` workspace is nothing to charge — only `billingTarget` produces it.
-    return async function runWithCredits(workspaceId, run) {
-        const refusal = workspaceId === null ? null : await charge(workspaceId);
+    return async function runWithCredits(workspaceId, call, run) {
+        const refusal = workspaceId === null ? null : await charge(workspaceId, call);
         if (refusal)
             return refusal;
         try {
@@ -141,12 +145,12 @@ function createToolRegistrars(deps) {
             if (address.kind === "addressed") {
                 // Inside the ALS scope, client.* calls carry the override in `X-Workspace-Id`.
                 const { effective } = address;
-                const result = await runWithCredits(effective.id, () => client_1.workspaceContext.run(effective.id, () => handler(innerArgs)));
+                const result = await runWithCredits(effective.id, tally(name, op), () => client_1.workspaceContext.run(effective.id, () => handler(innerArgs)));
                 return (0, status_footer_js_1.appendDoplStatus)(result, effective, caller, (0, credits_unmetered_js_1.joinNotes)(address.note, (0, credits_unmetered_js_1.unmeteredNote)()), format, 
                 // The connection's own binding, which the per-call override did not touch.
                 sessionEffective());
             }
-            const result = await runWithCredits(await billingTarget(), () => handler(innerArgs));
+            const result = await runWithCredits(await billingTarget(), tally(name, op), () => handler(innerArgs));
             return (0, status_footer_js_1.appendDoplStatus)(result, sessionEffective(), caller, (0, credits_unmetered_js_1.joinNotes)(address.note, (0, credits_unmetered_js_1.unmeteredNote)()), format);
         };
         server.registerTool(name, toolConfig(name, description, enhancedSchema), 
@@ -161,14 +165,15 @@ function createToolRegistrars(deps) {
         if (gates.isSuppressedTool(name))
             return;
         const gated = async (args) => {
-            const refusal = gates.opRefusal(name, gates.requestedOp(args));
+            const op = gates.requestedOp(args);
+            const refusal = gates.opRefusal(name, op);
             if (refusal)
                 return refusal;
             if (!opts.charged)
                 return handler(args);
             const billTo = await billingTarget();
             if (billTo) {
-                const denied = await chargeCredit(billTo);
+                const denied = await chargeCredit(billTo, tally(name, op));
                 if (denied)
                     return denied;
             }

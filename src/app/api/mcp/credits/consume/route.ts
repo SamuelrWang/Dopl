@@ -10,6 +10,10 @@ import {
   clearUnmetered,
   recordUnmetered,
 } from "@/features/billing/server/credits-unmetered";
+import {
+  logMcpCall,
+  readMcpCallTally,
+} from "@/features/analytics/server/mcp-tool-calls";
 
 /**
  * POST /api/mcp/credits/consume — charge ONE MCP tool call to a workspace. The ONLY caller is
@@ -37,7 +41,11 @@ import {
  * a tool result, and it already has to read `allowed`.
  */
 export const POST = withWorkspaceAuth(
-  async (_request, { workspaceId, workspaceKind, userId, sessionId }) => {
+  async (request, { workspaceId, workspaceKind, userId, sessionId }) => {
+    // The MCP call this charge pays for, tallied beside it — never awaited, never thrown.
+    void readMcpCallTally(request).then(
+      (call) => call && logMcpCall(workspaceId, userId, call)
+    );
     try {
       // ⚠ THE KIND PICKS THE WALLET. A standard workspace charges the CALLER'S
       // OWN SEAT; a `kind='link'` or `kind='personal'` container has no plan and

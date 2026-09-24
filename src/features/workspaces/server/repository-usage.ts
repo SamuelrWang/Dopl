@@ -1,5 +1,6 @@
 import "server-only";
 import { supabaseAdmin } from "@/shared/supabase/admin";
+import { MCP_CALL_ROWS } from "@/features/analytics/server/mcp-tool-calls";
 import type { Role } from "../types";
 
 /**
@@ -157,6 +158,7 @@ export async function scanWorkspaceMcpCalls(
     .eq("workspace_id", workspaceId)
     .gte("created_at", sinceIso)
     .or(EXCLUDE_AWAIT_POLLING)
+    .not("tool", "like", MCP_CALL_ROWS)
     .order("created_at", { ascending: false })
     .limit(limit);
   if (error) throw error;

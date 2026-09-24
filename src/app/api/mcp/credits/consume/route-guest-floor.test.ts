@@ -70,6 +70,8 @@ vi.mock("@/features/workspaces/server/seed-workspace", () => ({
 }));
 vi.mock("@/features/analytics/server/mcp-tool-calls", () => ({
   logMcpToolCall: vi.fn(),
+  logMcpCall: vi.fn(),
+  readMcpCallTally: vi.fn().mockResolvedValue(null),
 }));
 vi.mock("@/features/billing/server/workspace-billing", () => ({
   getWorkspaceBilling: vi.fn(),
