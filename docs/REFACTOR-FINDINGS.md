@@ -10478,7 +10478,7 @@ already wrong — `channel-dispatch-agents.ts` does pass `waitMs` — so do not 
 
 ### F-756 — runtime-seam leftovers the cleanup did not reach (2026-09-23)
 
-- Location: `dopl-desktop-app/main/session-reopen.js › setModelByTask` and `dopl-desktop-app/main/launch-directive-spawn.js › appliedModelId` (both still probe `typeof rt.modelArg === 'function'`); `packages/mcp-server/src/tools/respond.ts › sessionRequired`.
+- Location: `dopl-desktop-app/main/session-reopen.js › setModelByTask` and `dopl-desktop-app/main/launch-directive-spawn.js › appliedModelId` (both still probe `typeof rt.modelArg === 'function'`); the `sessionRequired` helper in `packages/mcp-server/src/tools/respond.ts` (deleted 2026-09-24).
 - Found during: the 2026-09-23 review's Wave 2 (w2-runtime, w2-pkgs), deferred because the files belonged to other partitions or needed a ruling.
 - **The two probes are dead guards.** `modelArg` (and `rosterKey`) are contract methods since 2026-09-23 (`main/runtime/contract.js › RUNTIME_METHODS`), and `sealAdapter` refuses an adapter that lacks one, so the `typeof` branch can never be false for a registered runtime — it only hides a contract violation behind a silent pass-through.
 - **`sessionRequired` has no production caller** since knowledge pinning left, and is kept deliberately by its own test. Deleting it needs a ruling, not a sweep.

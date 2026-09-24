@@ -4,6 +4,23 @@ All notable changes to `@dopl/mcp-server` are documented here. Format follows [K
 
 ## [Unreleased]
 
+### Added — the desktop can negotiate the granular set (DMP-013 B4, 2026-09-24; `legacy` unchanged)
+
+- `initialize` advertises `capabilities.experimental["dopl/toolSets"] = { sets: ["legacy", "granular"] }`
+  (`tool-manifest.ts › TOOL_SETS_CAPABILITY`) on every connection, so a client asks for `granular`
+  only where it is served. The default stays `legacy`.
+- `desktop-tool-table.test.ts` pins `dopl-desktop-app/main/dopl-tool-table.json` to the manifest.
+
+### Removed
+
+- `respond.ts › sessionRequired` and the `SESSION_REQUIRED` error row: no op has reached an app-only
+  route since knowledge pinning left (F-756).
+
+### Changed
+
+- On a granular connection `missing_params` / `unused_param` say "call" rather than "op", and the
+  write-conflict refusals name `dopl_write_entry` as the upsert. Legacy bytes unchanged.
+
 ### Changed — every call spelling reads in the connection's tool set (DMP-013 B3, 2026-09-24; `legacy` byte-identical)
 
 - `call-ref.ts › callRef(key, args)` renders a manifest key (`channel.read`) as
