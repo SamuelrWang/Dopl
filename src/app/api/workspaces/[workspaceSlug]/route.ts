@@ -63,7 +63,7 @@ export const PATCH = withUserAuth(async (request: NextRequest, { userId, apiKeyW
   }
 });
 
-/** DELETE — owner-only. Cascades clusters / panels / memberships / invitations via FK. */
+/** DELETE — owner-only. Cascades the container's rows (ontologies, knowledge, skills, channels, members, invitations) via FK. */
 export const DELETE = withUserAuth(async (_request: NextRequest, { userId, apiKeyWorkspaceId, params }: Ctx) => {
   try {
     const workspaceSlug = params?.workspaceSlug;
@@ -79,5 +79,5 @@ export const DELETE = withUserAuth(async (_request: NextRequest, { userId, apiKe
   } catch (err) {
     return toHttpErrorResponse("api/workspaces/[workspaceSlug]", err);
   }
-// sessionOnly: destroying a workspace cascades KBs/skills/clusters/members — never an agent.
+// sessionOnly: destroying a workspace cascades KBs/skills/ontologies/members — never an agent.
 }, { sessionOnly: true });

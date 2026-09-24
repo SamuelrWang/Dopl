@@ -63,7 +63,7 @@ function mount(over: {
 }
 
 describe("the Settings tab's host", () => {
-  it("is the CHANNEL cluster in channel view", () => {
+  it("is the CHANNEL group in channel view", () => {
     mount({ thread: null });
     expect(screen.getByTestId("channel-manage")).toBeTruthy();
     expect(screen.queryByTestId("thread-manage")).toBeNull();
@@ -71,7 +71,7 @@ describe("the Settings tab's host", () => {
 
   /** ⚠ The channel host must not merely be hidden — it must not MOUNT, or its
    *  trust read fires every time a reader opens Settings on a thread. */
-  it("is the THREAD cluster in thread view, and the channel one does not mount", () => {
+  it("is the THREAD group in thread view, and the channel one does not mount", () => {
     mount({ thread: makeThread() });
     expect(screen.getByTestId("thread-manage")).toBeTruthy();
     expect(screen.queryByTestId("channel-manage")).toBeNull();

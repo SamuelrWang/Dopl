@@ -59,7 +59,7 @@ export function WorkspaceDangerZoneCore({
       </div>
       <div className={cn(SECTION_BOX_INSET, "space-y-3 p-4")}>
         <p className="text-caption text-text-secondary">
-          Deletes this workspace and everything inside it — clusters,
+          Deletes this workspace and everything inside it — ontologies,
           knowledge bases, skills, and chat history. This can&rsquo;t be
           undone.
         </p>

@@ -312,7 +312,7 @@ beside `ChannelsCreateDialogs`, and **the two mount positions stay** — WS must
 omit `onDelete` when they pass `hostRows`. Make the type say it:
 
 ```ts
-type BoardSettingsMenuProps = { clusterName: string; onRename?: () => void } & (
+type BoardSettingsMenuProps = { ontologyName: string; onRename?: () => void } & (
   | { hostRows: (close: () => void) => ReactNode; onDelete?: never }
   | { hostRows?: never; onDelete?: () => void }
 );

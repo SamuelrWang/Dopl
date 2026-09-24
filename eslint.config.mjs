@@ -95,10 +95,11 @@ const eslintConfig = defineConfig([
       // `ChannelAgentsClient` link was deleted: `DoplClient` is still ONE flat
       // class, but its methods are declared across a chain of
       // `client-<domain>.ts` links (see `client-base.ts` for the order), and
-      // the cluster/workflow/workspace HTTP that was still inline moved into
-      // `clusters.ts` / `workflows.ts` / `workspaces.ts` beside the domain
-      // modules that already existed. (Two of those three, and their chain
-      // links, were deleted with workflows + clusters on 2026-08-11.)
+      // the legacy-graph/workflow/workspace HTTP that was still inline moved
+      // into three modules (legacy graph, `workflows.ts`, `workspaces.ts`)
+      // beside the domain modules that already existed. (Two of those three,
+      // and their chain links, were deleted with workflows and the legacy graph
+      // feature on 2026-08-11.)
       //
       // WHAT THE SPLIT DID AND DID NOT CHANGE, corrected (2026-08-08). This
       // used to claim "Public API byte-frozen — `index.d.ts` is unchanged",
@@ -113,7 +114,7 @@ const eslintConfig = defineConfig([
       // the pre-split one — HEAD declared 92, and the seven trash-teardown
       // methods (`listChatsTrash`, `listKbTrash`, `restoreChat`,
       // `restoreKbBase`, `restoreKbEntry`, `restoreKbFolder`,
-      // `restoreOntologyCluster`) left the class in a SEPARATE change that
+      // `restoreOntology`) left the class in a SEPARATE change that
       // happened to land in the same working tree. Two edits, one diff; the
       // split moved methods between files and removed none.
       "src/features/knowledge/server/seed-fixtures-data.ts",

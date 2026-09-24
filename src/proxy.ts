@@ -131,7 +131,7 @@ export async function proxy(request: NextRequest) {
   }
 
   // Audit fix S-8: redirect mixed-case URLs to lowercase. Slugs in this
-  // app (workspaces, canvases, knowledge bases, entries, clusters) are
+  // app (workspaces, knowledge bases, entries, ontologies) are
   // generated lowercase, but Next's router is case-sensitive — so a
   // pasted `/Default/knowledge` 404s instead of resolving to the same
   // workspace as `/default/knowledge`. 308 redirects so the canonical

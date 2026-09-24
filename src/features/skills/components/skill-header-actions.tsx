@@ -8,7 +8,7 @@ import type { Skill } from "@/features/skills/types";
 import { duplicateSkill } from "@/features/skills/client/api";
 import { errMessage } from "./skill-view-utils";
 
-/** Export / duplicate / delete cluster, with the permanent-delete confirm. */
+/** Export / duplicate / delete skill, with the permanent-delete confirm. */
 export function SkillHeaderActions({
   slug,
   workspaceId,

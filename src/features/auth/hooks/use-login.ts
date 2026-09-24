@@ -29,9 +29,6 @@ export function useLoginActions(): LoginActions {
   // guard). See `shared/lib/url/post-auth-landing.ts`.
   const explicitTarget = explicitPostAuthTarget(searchParams.get("redirectTo"));
   const redirectTo = explicitTarget ?? WEB_POST_AUTH_LANDING;
-  // "install this cluster after sign-in" intent, threaded to /auth/callback so
-  // OAuth + email flows fork server-side.
-  const installCluster = searchParams.get("installCluster");
 
   function buildCallbackUrl(): string {
     const params = new URLSearchParams();
@@ -40,7 +37,6 @@ export function useLoginActions(): LoginActions {
     // download-page landing — threading the default here makes every plain
     // signup look like a deep link.
     if (explicitTarget) params.set("redirectTo", explicitTarget);
-    if (installCluster) params.set("installCluster", installCluster);
     const qs = params.toString();
     return `${authOrigin()}/auth/callback${qs ? `?${qs}` : ""}`;
   }

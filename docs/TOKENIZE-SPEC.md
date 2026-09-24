@@ -40,7 +40,7 @@ Keep the side/width part; swap only the color:
 | `bg-white/[0.01..0.03]`, `bg-white/[0.02]`, `/[0.03]` | `bg-surface-raised-1` |
 | `bg-white/[0.04]`, `/[0.05]` | `bg-surface-raised-2` |
 | `bg-white/[0.06]`, `/[0.07]` | `bg-surface-raised-3` |
-| `bg-white/[0.08]`, `/[0.09]`, `/[0.1]`, `/[0.12]`, `/[0.14]` | `bg-surface-raised-4` **UNLESS** it's the fill of a SELECTED/ACTIVE item (selected row, active tab, current cluster) → then `bg-surface-selected` |
+| `bg-white/[0.08]`, `/[0.09]`, `/[0.1]`, `/[0.12]`, `/[0.14]` | `bg-surface-raised-4` **UNLESS** it's the fill of a SELECTED/ACTIVE item (selected row, active tab, current ontology) → then `bg-surface-selected` |
 | `bg-white/30`, `bg-white/40`, `bg-white/90` and other high-alpha decorative FILL marks (dots, indicators) | `bg-text-muted` (treat as a muted foreground mark) — FLAG if it's actually a solid surface |
 | `bg-[#0a0a0a]` | `bg-modal-surface` |
 | `bg-[#1a1a1a]`, `bg-[#1c1c1e]`, `bg-[#1c1c1f]`, `bg-[#252528]`, `bg-[#141414]`, `bg-[#181818]` | nearest existing surface: use `bg-bg-inset` for the darkest menu/popover surfaces, `bg-bg-elevated` for panel-like. FLAG if unsure. |
@@ -91,7 +91,7 @@ Rule of thumb: if it's a `<button>`/clickable that is the page's primary action 
 | `border-white/60` (and other high-alpha active-tab underlines), keep side/width prefix | `border-border-active` (e.g. `border-b-2 border-border-active`) |
 
 ### Canvas-native SVG / inline-`style` raw `rgba()` — OUT OF SCOPE this pass
-Raw `rgba(...)` inside SVG attributes (`stroke`, `fill`) or computed inline `style` that is NOT one of the mapped shadow/gradient/hairline cases (e.g. minimap, marquee, grid lines, cluster outline). LEAVE these and FLAG — they're handled in a separate canvas-chrome pass.
+Raw `rgba(...)` inside SVG attributes (`stroke`, `fill`) or computed inline `style` that is NOT one of the mapped shadow/gradient/hairline cases (e.g. minimap, marquee, grid lines, ontology outline). LEAVE these and FLAG — they're handled in a separate canvas-chrome pass.
 
 ## Hard rules
 1. **Never invent a utility.** Only the names above. If nothing fits, LEAVE the literal and add it to your FLAG list.

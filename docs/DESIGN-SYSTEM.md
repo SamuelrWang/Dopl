@@ -458,7 +458,7 @@ Re-derive rather than trusting the rows: `grep -rln 'FormDialog' src apps`.
 | `members/components/members-v2/member-facts.tsx` | MENU | Done (out of scope) |
 | `members/components/members-v2/tab-settings.tsx` | CONFIRMATION | Done |
 | `members/components/members-v2/team-detail-pane.tsx` | CONFIRMATION ‡ | Done |
-| `ontology/components/delete-cluster-dialog.tsx` | CONFIRMATION | Done |
+| `ontology/components/delete-ontology-dialog.tsx` | CONFIRMATION | Done |
 | `ontology/components/object-panel.tsx` | CONFIRMATION ‡ | Done |
 | `skills/components/create-skill-dialog.tsx` | INPUT FORM | Todo |
 | `apps/desktop-ui/src/pages/home/add-person-dialog.tsx` | CONFIRMATION § | Done |
@@ -679,7 +679,7 @@ message-box-agent component is deleted: an agent's post is a person's post plus 
     all** rather than a disabled one — a control that can only fail is worse than no control. What
     counts as "nothing" is `revisions/lib/restorable.ts › isRestorable`, THE SAME PREDICATE the
     server refuses on, so the button and the refusal cannot disagree: a knowledge row with no
-    body, an ontology association, a create/delete bundle, and every cluster row.
+    body, an ontology association, a create/delete bundle, and every ontology row.
   - **MINIMAL COPY.** Label and control; no explainer paragraph about what a revision is. Empty,
     loading and error states are one `text-caption text-text-muted` line each.
 - **Search popup** (2026-09-17, Samuel: *"it should be a pop up like this"*, over a
