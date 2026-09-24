@@ -32,6 +32,15 @@ function strictInput(shape, tool) {
     });
 }
 /**
+ * The registration config both paths publish. `title` is the tool's own name because Codex copies a
+ * tool's `title` into its approval request as `_meta.tool_title`, the only per-tool identity that
+ * request carries — the desktop names the call by it (`dopl-desktop-app/main/runtime/codex/
+ * server-requests.js › doplElicitation`). Pinned in `tool-title.test.ts`.
+ */
+function toolConfig(name, description, schema) {
+    return { title: name, description, inputSchema: strictInput(schema, name) };
+}
+/**
  * Renamed args (no alias): the refusal names the successor. Keyed by tool: only a tool that
  * accepts the successor may name it.
  */
@@ -138,7 +147,7 @@ function createToolRegistrars(deps) {
             const result = await runWithCredits(await billingTarget(), () => handler(innerArgs));
             return (0, status_footer_js_1.appendDoplStatus)(result, sessionEffective(), caller, (0, credits_unmetered_js_1.joinNotes)(address.note, (0, credits_unmetered_js_1.unmeteredNote)()), format);
         };
-        server.registerTool(name, { description, inputSchema: strictInput(enhancedSchema, name) }, 
+        server.registerTool(name, toolConfig(name, description, enhancedSchema), 
         // The scope encloses handler and footer, so `dopl_search`'s per-leg charges are reported.
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         ((args) => (0, credits_unmetered_js_1.withUnmeteredScope)(() => wrapped(args))));
@@ -165,7 +174,7 @@ function createToolRegistrars(deps) {
         };
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const framed = (0, status_footer_js_1.withDoplStatus)(gated, sessionEffective, caller, credits_unmetered_js_1.unmeteredNote);
-        server.registerTool(name, { description, inputSchema: strictInput(schema, name) }, 
+        server.registerTool(name, toolConfig(name, description, schema), 
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         ((args) => (0, credits_unmetered_js_1.withUnmeteredScope)(() => framed(args))));
     }

@@ -9,14 +9,13 @@ const require = createRequire(import.meta.url);
 const CODEX = join(HERE, "..", "main", "runtime", "codex");
 const requests = require(join(CODEX, "server-requests.js"));
 const mcp = require(join(CODEX, "mcp.js"));
-const codexTools = require(join(CODEX, "tools.js"));
 const profiles = require(join(HERE, "..", "main", "session-profiles.js"));
 
 const ELICITATION = "mcpServer/elicitation/request";
 
 /**
- * One tool-call elicitation as codex-cli 0.155.1 really sends it (the transcript lives in
- * `test/codex-mcp-surface.test.mjs`), with `over` replacing params.
+ * One tool-call elicitation as codex-cli 0.155.1 really sends it for a TITLED tool (the transcript
+ * lives in `test/codex-mcp-surface.test.mjs`), with `over` replacing params.
  *
  * ⚠ THE `message` DELIBERATELY NAMES A TOOL. Nothing in the adapter may read it, and the case
  * `the prose is never read` below proves it by naming the WRONG tool there.
@@ -31,6 +30,7 @@ const elicitation = (over) => ({
     message: 'Allow the dopl MCP server to run tool "dopl_channel"?',
     _meta: {
       codex_approval_kind: "mcp_tool_call",
+      tool_title: "dopl_channel",
       tool_description: "Read or post in a Dopl channel.",
       tool_params: { op: "send", body: "hello" },
       tool_params_display: [{ name: "op", value: "send", display_name: "op" }],
@@ -117,27 +117,23 @@ test("a failed Dopl gate denies with the request method's valid shape", async ()
   );
 });
 
-// ══ THE MCP ELICITATION — DOPL'S OWN SERVER, AND NOBODY ELSE'S ══════════════════════════════
+// ══ THE MCP ELICITATION — NAMED BY `_meta.tool_title`, DOPL'S OWN SERVER ONLY ═══════════════
 //
-// 🔒 ⚠ **THE RELEASE BLOCKER THESE CASES CLOSE**: `mcpServer/elicitation/request` carries NO tool
-// name and no `itemId` to join to the item that has one, so it used to be answered with an
-// unconditional `{ action: 'decline' }` and a Dopl-launched Codex agent could not post, read or
-// reach its own channel at all. Samuel's ruling (2026-09-22) was to *resolve it by server*: the
-// request names the SERVER, Dopl mounts that server itself, and Dopl's own entry puts exactly one
-// tool on it in a mode that can ask. Nothing is parsed out of the operator-facing sentence.
+// 🔒 The request carries no tool-name field and no `itemId`. The one per-tool identity in it is
+// `_meta.tool_title`, which Codex copies from the called tool's `title` (and Dopl's server titles
+// every tool with its own name). An ask with no title, or a title that is not a Dopl tool, is
+// declined WITHOUT asking — never guessed, never read out of the operator-facing sentence.
 
-test("a Dopl-server tool-call elicitation reaches the REAL gate, under the one tool that server asks for", async () => {
-  const gate = recorder("allow");
-  const answer = await requests.answer(elicitation(), gate.decide);
+/** `_meta` for a tool-call approval of `tool_title` with `tool_params`. */
+const meta = (tool_title, tool_params) => ({ codex_approval_kind: "mcp_tool_call", tool_title, tool_params });
 
-  assert.deepEqual(answer, { action: "accept" });
-  assert.equal(gate.seen.length, 1, "the gate is consulted exactly once");
-  // ⚠ THE NAME IS THE ENTRY'S, NOT A LITERAL: `mcp.js` pins one asking tool and this is it.
-  assert.equal(gate.seen[0].name, mcp.soleAskingTool());
-  assert.equal(gate.seen[0].name, mcp.CHANNEL_TOOL);
-  // …and the call's OWN ARGUMENTS ride along (§5 item C1), so Axis B's op-scoped lanes are
-  // reachable rather than being handed an empty input that would classify as malformed.
-  assert.deepEqual(gate.seen[0].input, { op: "send", body: "hello" });
+test("a titled Dopl elicitation reaches the REAL gate under ITS OWN tool's name, with its arguments", async () => {
+  for (const [title, args] of [["dopl_channel", { op: "send", body: "hello" }], ["dopl_kb", { op: "write", base: "b" }]]) {
+    const gate = recorder("allow");
+    const answer = await requests.answer(elicitation({ _meta: meta(title, args) }), gate.decide);
+    assert.deepEqual(answer, { action: "accept" }, title);
+    assert.deepEqual(gate.seen, [{ name: title, input: args }], "consulted once, with the call's own op");
+  }
 });
 
 test("the gate's DENY is a decline, and a gate that THROWS is a decline too", async () => {
@@ -150,8 +146,7 @@ test("the gate's DENY is a decline, and a gate that THROWS is a decline too", as
 });
 
 test("an elicitation from ANY OTHER server declines and never reaches the gate", async () => {
-  // ⚠ INCLUDING NEAR-MISSES. Allowing a third party's tool on the strength of Dopl's posture is
-  // not a question this gate was ever asked, so the comparison is exact identity.
+  // ⚠ INCLUDING NEAR-MISSES, and even when it carries a Dopl tool's title: the comparison is exact.
   const foreign = ["evil", "Dopl", "DOPL", "dopl ", " dopl", "dopl2", "xdopl", "", null, undefined, 7, {}, ["dopl"]];
   for (const serverName of foreign) {
     const gate = recorder("allow");
@@ -167,12 +162,12 @@ test("every malformed or unknown elicitation shape declines WITHOUT asking anyon
     { why: "_meta is null", over: { _meta: null } },
     { why: "_meta is a string", over: { _meta: "mcp_tool_call" } },
     { why: "_meta is an array", over: { _meta: ["mcp_tool_call"] } },
-    { why: "no approval kind", over: { _meta: { tool_params: { op: "send" } } } },
-    { why: "a DIFFERENT approval kind", over: { _meta: { codex_approval_kind: "mcp_elicitation" } } },
-    { why: "an empty approval kind", over: { _meta: { codex_approval_kind: "" } } },
+    { why: "no approval kind", over: { _meta: { tool_title: "dopl_channel", tool_params: { op: "send" } } } },
+    { why: "a DIFFERENT approval kind", over: { _meta: { codex_approval_kind: "mcp_elicitation", tool_title: "dopl_channel" } } },
+    { why: "an empty approval kind", over: { _meta: { codex_approval_kind: "", tool_title: "dopl_channel" } } },
     // ⚠ A SERVER'S OWN FORM IS NOT A TOOL-CALL APPROVAL and must not borrow one's allow path,
     // even when it really is Dopl's server raising it.
-    { why: "Dopl raising its own form", over: { _meta: { codex_approval_kind: "form", tool_params: {} } } },
+    { why: "Dopl raising its own form", over: { _meta: { codex_approval_kind: "form", tool_title: "dopl_channel" } } },
   ];
   for (const { why, over } of bad) {
     const gate = recorder("allow");
@@ -185,14 +180,49 @@ test("every malformed or unknown elicitation shape declines WITHOUT asking anyon
   assert.deepEqual(gate.seen, []);
 });
 
+test("an UNNAMED Dopl ask (an older server publishes no titles) declines unasked, and says why", async () => {
+  for (const tool_title of [undefined, null, "", 7, ["dopl_channel"], { name: "dopl_channel" }]) {
+    const gate = recorder("allow");
+    const logged = [];
+    const answer = await requests.answer(
+      elicitation({ _meta: meta(tool_title, { op: "read" }) }), gate.decide, (line) => logged.push(line));
+    assert.deepEqual(answer, { action: "decline" }, JSON.stringify(tool_title));
+    assert.deepEqual(gate.seen, [], "never guessed: not the channel, not a surface name");
+    assert.equal(logged.length, 1);
+    assert.match(logged[0], /_meta\.tool_title/, "the reason names the missing field");
+  }
+});
+
+test("a title that is not a Dopl tool declines unasked — no near-miss, no prefixed form", async () => {
+  for (const tool_title of ["evil_tool", "Dopl_KB", "dopl_kb ", "mcp__dopl__dopl_kb", "dopl_kb_v2"]) {
+    const gate = recorder("allow");
+    const logged = [];
+    const answer = await requests.answer(
+      elicitation({ _meta: meta(tool_title, { op: "list" }) }), gate.decide, (line) => logged.push(line));
+    assert.deepEqual(answer, { action: "decline" }, tool_title);
+    assert.deepEqual(gate.seen, [], tool_title);
+    assert.match(logged[0], /is not a Dopl tool/, tool_title);
+  }
+  // No logger is optional, not a crash.
+  assert.deepEqual(await requests.answer(elicitation({ _meta: meta("evil_tool", {}) }), recorder("allow").decide),
+    { action: "decline" });
+});
+
+test("a RETIRED Dopl name is named, and the real gate hard-denies it", async () => {
+  const decide = async (name, input) => profiles.grantDecision({
+    runtime: "codex", profile: "full", toolMode: "never", toolName: name, input,
+  }) === "allow" ? "allow" : "deny";
+  const answer = await requests.answer(elicitation({ _meta: meta("dopl_kb_admin", { op: "delete" }) }), decide);
+  assert.deepEqual(answer, { action: "decline" });
+});
+
 test("a Dopl elicitation with NO arguments still reaches the gate, with an empty input", async () => {
   // ⚠ ABSENT ARGUMENTS ARE NOT A REASON TO SKIP THE GATE — they are a reason for the gate to have
-  // nothing to classify, which its own Axis-B branch answers with `gate` (`postFieldsOk` /
-  // `channelOpKey`). Deciding that here would be a second gate.
+  // nothing to classify, which its own branches answer with `gate`. Deciding that here would be a
+  // second gate.
   for (const tool_params of [undefined, null, "op=send", 42, ["op"]]) {
     const gate = recorder("deny");
-    const answer = await requests.answer(
-      elicitation({ _meta: { codex_approval_kind: "mcp_tool_call", tool_params } }), gate.decide);
+    const answer = await requests.answer(elicitation({ _meta: meta("dopl_channel", tool_params) }), gate.decide);
     assert.deepEqual(answer, { action: "decline" }, String(tool_params));
     assert.equal(gate.seen.length, 1, "the gate is still the one that decides");
     assert.deepEqual(gate.seen[0].input, {}, "a non-object argument bag reaches the gate as EMPTY");
@@ -207,8 +237,7 @@ test("the reply vocabulary is `{action}` — never `{decision}`, and never `canc
     const answer = await requests.answer(elicitation(), async () => verdict);
     assert.deepEqual(Object.keys(answer), ["action"], String(verdict));
     assert.equal(answer.decision, undefined, String(verdict));
-    // ⚠ `cancel` MEANS "THE ASK WAS ABANDONED", NOT "NO". Dopl's gate always produces a verdict,
-    // so Dopl has no state in which it has no answer to give.
+    // ⚠ `cancel` MEANS "THE ASK WAS ABANDONED", NOT "NO". Dopl's gate always produces a verdict.
     assert.notEqual(answer.action, "cancel", String(verdict));
     assert.equal(answer.action, verdict === "allow" ? "accept" : "decline", String(verdict));
   }
@@ -218,65 +247,21 @@ test("the prose is never read: the message may name ANOTHER tool and the name do
   const gate = recorder("allow");
   await requests.answer(elicitation({
     message: 'Allow the dopl MCP server to run tool "dopl_kb"?',
-    _meta: { codex_approval_kind: "mcp_tool_call", tool_params: { op: "read" } },
+    _meta: meta("dopl_channel", { op: "read" }),
   }), gate.decide);
-  assert.equal(gate.seen[0].name, mcp.soleAskingTool(),
-    "the name comes from Dopl's own entry, not from the sentence the operator would have read");
+  assert.equal(gate.seen[0].name, "dopl_channel", "named by the title, not by the sentence");
+  // …and a sentence naming a tool does not rescue an ask with no title.
+  const unnamed = recorder("allow");
+  const answer = await requests.answer(elicitation({
+    message: 'Allow the dopl MCP server to run tool "dopl_kb"?',
+    _meta: meta(undefined, { op: "list" }),
+  }), unnamed.decide);
+  assert.deepEqual(answer, { action: "decline" });
+  assert.deepEqual(unnamed.seen, []);
 });
 
-// ── THE CONSTANT-SHARING PINS ────────────────────────────────────────────────────────────────
-
-test("the server key is ONE constant, and the asking table is read off the ENTRY", () => {
-  // ⚠ NO SECOND LITERAL. The comparison that opens the allow path and the key the entry is
-  // mounted under are the same value; `test/codex-gate.test.mjs` pins the launch spec's own mount
-  // against it, which is the other half of this join.
-  const entry = mcp.buildDoplServerEntry(["dopl_channel", "dopl_kb"]);
-  assert.deepEqual(mcp.askingToolsIn(entry), [mcp.CHANNEL_TOOL],
-    "exactly one tool on Dopl's entry may raise an ask — that singleton IS the name derivation");
-  assert.equal(mcp.soleAskingTool(entry), mcp.CHANNEL_TOOL);
-  assert.equal(entry.tools[mcp.CHANNEL_TOOL].approval_mode, "prompt");
-  assert.equal(entry.default_tools_approval_mode, "approve",
-    "a default that can ask puts every tool in the asking set and makes every ask un-nameable");
-  assert.equal(requests.doplElicitation(elicitation().params).name, mcp.soleAskingTool());
-});
-
-test("a SECOND asking tool degrades to the un-named Dopl surface instead of guessing", () => {
-  // ⚠ THE SET, NOT THE FIRST MEMBER. A future entry that lets two tools ask must stop deriving a
-  // name, not pick one — so the derivation is pinned on a synthetic entry rather than trusted.
-  const two = mcp.buildDoplServerEntry(null);
-  two.tools = { dopl_channel: { approval_mode: "prompt" }, dopl_kb: { approval_mode: "prompt" } };
-  assert.deepEqual(mcp.askingToolsIn(two), ["dopl_channel", "dopl_kb"]);
-  assert.equal(mcp.soleAskingTool(two), null);
-  // …and a default that asks means EVERY tool can, which is not a set Dopl enumerated at all.
-  for (const mode of mcp.ASKING_MODES) {
-    const wide = mcp.buildDoplServerEntry(null);
-    wide.default_tools_approval_mode = mode;
-    assert.equal(mcp.askingToolsIn(wide), null, mode);
-    assert.equal(mcp.soleAskingTool(wide), null, mode);
-  }
-});
-
-test("the un-named Dopl surface is NOT the channel tool, and is allowed by no mode", async () => {
-  const surface = requests.DOPL_TOOL_SURFACE;
-  // ⚠ IT MUST NOT INHERIT AXIS B's CHANNEL LANES. A call Dopl cannot name must not be judged by
-  // the classifier for the one tool it happens to be unable to name.
-  assert.equal(profiles.isChannelTool(surface), false);
-  // …and it is in no Axis-A positive allow-list, so `grantDecision` reaches `gate` in every mode,
-  // `never` included — an operator is ASKED rather than a name being invented.
-  for (const mode of codexTools.TOOL_MODES) {
-    assert.equal(codexTools.axisAAllows(mode, surface), false, mode);
-  }
-
-  // END TO END through the real wire path, with the derivation forced to fail.
-  const real = mcp.soleAskingTool;
-  mcp.soleAskingTool = () => null;
-  try {
-    const gate = recorder("allow");
-    const answer = await requests.answer(elicitation(), gate.decide);
-    assert.deepEqual(gate.seen, [{ name: surface, input: { op: "send", body: "hello" } }],
-      "the gate is still asked — under the surface name, which gates");
-    assert.deepEqual(answer, { action: "accept" }, "and the gate's answer is still what is sent");
-  } finally {
-    mcp.soleAskingTool = real;
-  }
+test("the server key is ONE constant: the entry's mount and the comparison agree", () => {
+  // `test/codex-gate.test.mjs` pins the launch spec's own mount against it, the other half of this join.
+  assert.equal(requests.doplElicitation(elicitation().params).name, "dopl_channel");
+  assert.ok(requests.doplElicitation(elicitation({ serverName: mcp.SERVER_KEY + "x" }).params).refused);
 });

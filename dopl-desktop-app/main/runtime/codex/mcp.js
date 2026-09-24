@@ -3,6 +3,7 @@
 
 const { MCP_URL } = require('../../config');
 const { normalizeProfile, DOPL_CHANNEL_TOOL } = require('../../tool-profiles');
+const { DOPL_READ_TOOLS } = require('../../session-dopl-tools');
 const { shortDoplName } = require('./tools');
 
 // Values ride the child's env; only these NAMES appear in the entry, never the bearer in argv.
@@ -33,33 +34,15 @@ const CHANNEL_TOOL = shortDoplName(DOPL_CHANNEL_TOOL);
 // The one definition: `launch-spec.js` mounts under it and `server-requests.js` matches `serverName` to it.
 const SERVER_KEY = 'dopl';
 
-// An elicitation names no tool, so this config names it: `'approve'` is the only never-ask mode (`auto`
-// asks, measured), leaving `dopl_channel` (`prompt`) the sole asker. Deliberate; a second asker makes every
-// ask un-nameable (declined).
-const DEFAULT_TOOL_APPROVAL_MODE = 'approve';
-const TOOL_APPROVAL_MODES = Object.freeze({ [CHANNEL_TOOL]: 'prompt' });
-
-// Modes that can ask (`writes`/`auto` only sometimes — counted anyway, the fail-closed direction).
-const ASKING_MODES = Object.freeze(['prompt', 'auto', 'writes']);
-
-// Read off the entry the launch sends, so it cannot drift; `null` = the default asks (not nameable).
-function askingToolsIn(entry) {
-  const e = entry && typeof entry === 'object' ? entry : {};
-  if (ASKING_MODES.indexOf(e.default_tools_approval_mode) !== -1) return null;
-  const table = (e.tools && typeof e.tools === 'object') ? e.tools : {};
-  return Object.keys(table)
-    .filter((tool) => {
-      const cfg = table[tool];
-      return !!cfg && ASKING_MODES.indexOf(cfg.approval_mode) !== -1;
-    })
-    .sort();
-}
-
-// Not intersected with `enabled_tools`: this knows no profile, and every profile offers `dopl_channel`.
-function soleAskingTool(entry) {
-  const asking = askingToolsIn(entry || buildDoplServerEntry(null));
-  return asking && asking.length === 1 ? asking[0] : null;
-}
+// Every Dopl call asks (`prompt`) so Dopl's gate judges it per op, as on every runtime; a tool Dopl does not
+// know yet asks too. Only the whole-tool reads never ask (`approve`, the one never-ask mode — `auto` asks,
+// measured): the gate allows them in every mode, and they keep working against a server whose tools carry no
+// `title` (`server-requests.js › doplElicitation` refuses an ask it cannot name).
+const DEFAULT_TOOL_APPROVAL_MODE = 'prompt';
+const TOOL_APPROVAL_MODES = Object.freeze(DOPL_READ_TOOLS.reduce((acc, tool) => {
+  acc[shortDoplName(tool)] = 'approve';
+  return acc;
+}, {}));
 
 function clientTimeoutSec() {
   // Lazy: `mcp-config` pulls auth, and an unwired harness must read "no token", never throw.
@@ -79,8 +62,8 @@ function doplBearer() {
 }
 
 // URL is the compiled-in `MCP_URL`; bearer and pins ride env var NAMES (`bearer_token_env_var`,
-// `env_http_headers`), never argv. The `prompt` pin asks on every Axis-A mode only because Dopl never
-// sends native `never`, under which it fails with no request (`policy.js › NEVER_NATIVE`).
+// `env_http_headers`), never argv. `prompt` asks on every Axis-A mode only because Dopl never sends native
+// `never`, under which it fails with no request (`policy.js › NEVER_NATIVE`).
 function buildDoplServerEntry(doplToolsPolicy, profile) {
   const entry = {
     url: MCP_URL,
@@ -99,8 +82,7 @@ function buildDoplServerEntry(doplToolsPolicy, profile) {
       return acc;
     }, {}),
   };
-  // The offer bound for non-channel tools (they raise no request under `approve`). Absent on `full` /
-  // `channel_agent`: the whole Dopl surface is offered (CX-23).
+  // The offer bound. Absent on `full` / `channel_agent`: the whole Dopl surface is offered, each call gated.
   if (Array.isArray(doplToolsPolicy) && doplToolsPolicy.length) entry.enabled_tools = doplToolsPolicy.slice();
   return entry;
 }
@@ -143,7 +125,7 @@ const descriptor = {
   probe: false,
   // `mcpToolCall` carries `{ server, tool }` with the tool name bare — no `mcp__` prefix (measured).
   toolNamePrefix: '<tool>',
-  // Axis B's pin; the key survives `config/read` under `--strict-config` (measured).
+  // The per-tool approval table; the key survives `config/read` under `--strict-config` (measured).
   perToolApproval: 'tools.<tool>.approval_mode',
   // None: Codex defers every MCP tool behind `tool_search`; `capability.mcpDiscovery` orders the search.
   eagerLoadFlag: null,
@@ -153,8 +135,7 @@ const descriptor = {
 module.exports = {
   registerMcp, probeMcp, descriptor,
   buildDoplServerEntry, buildMcpEnv,
-  SERVER_KEY, askingToolsIn, soleAskingTool,
-  DEFAULT_TOOL_APPROVAL_MODE, ASKING_MODES,
+  SERVER_KEY, DEFAULT_TOOL_APPROVAL_MODE,
   BEARER_ENV, WORKSPACE_ENV, SESSION_ENV, RUNTIME_HEADERS, CHANNEL_TOOL,
   TOOL_PROFILE_HEADER, shellEnvironmentPolicy,
 };

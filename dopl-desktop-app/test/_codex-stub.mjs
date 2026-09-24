@@ -18,8 +18,10 @@ const launchSpec = require(join(CODEX, 'launch-spec.js'));
 export const STUB_MODEL = Object.freeze({ searchPath: 'gpt-5.5', codeMode: 'gpt-6-astra' });
 export const CH = '11111111-1111-4111-8111-111111111111';
 
+// Titled like the real server's tools (`registrar.ts › toolConfig`): Codex names an approval by the title.
 export const CHANNEL_TOOL_DEF = Object.freeze({
   name: mcp.CHANNEL_TOOL,
+  title: mcp.CHANNEL_TOOL,
   description: 'Read or post in a Dopl channel.',
   inputSchema: { type: 'object', properties: { op: { type: 'string' } }, required: ['op'] },
 });

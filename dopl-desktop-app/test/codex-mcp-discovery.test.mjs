@@ -58,8 +58,11 @@ const DISCOVERY = runtime.capability.mcpDiscovery(runtime.descriptorFor('codex')
 
 const skipLiveTurn = (t) => skipLive(t, GATE) || skipTurn(t);
 
-// Two tools, so a restricted profile's `enabled_tools` has something to hide.
-const DOPL_TOOLS = [CHANNEL_TOOL_DEF, { name: 'dopl_kb', description: 'Dopl knowledge bases.', inputSchema: { type: 'object', properties: {} } }];
+// A write tool and a whole-tool read, so a restricted profile's `enabled_tools` has something to hide.
+const toolDef = (name) => ({ name, title: name, description: `Dopl ${name}.`, inputSchema: { type: 'object', properties: {} } });
+const DOPL_TOOLS = [CHANNEL_TOOL_DEF, toolDef('dopl_kb'), toolDef('dopl_search')];
+// What an older Dopl server serves: the same tools with no `title`.
+const UNTITLED_TOOLS = DOPL_TOOLS.map(({ title: _t, ...rest }) => rest);
 
 // The scripted model: search, call whatever the search returned, stop. Code mode: one `exec` that
 // finds the tool in `ALL_TOOLS` and calls it, then stop.
@@ -94,7 +97,7 @@ const OPERATOR_AUTH = join(process.env.CODEX_HOME || join(homedir(), '.codex'), 
 async function scriptedTurn(profile, verdict, opts) {
   const o = opts || {};
   const model = await scriptedModel(discoveryScript(o.call));
-  const dopl = await standInDopl(DOPL_TOOLS);
+  const dopl = await standInDopl(o.tools || DOPL_TOOLS);
   const home = stubHome({ port: model.port, model: o.call && o.call.codeMode ? STUB_MODEL.codeMode : STUB_MODEL.searchPath });
   if (o.linkAuth) symlinkSync(OPERATOR_AUTH, join(home, 'auth.json'));
   const env = { ...process.env, CODEX_HOME: home, [mcp.BEARER_ENV]: 'cxp3a-bearer', [mcp.WORKSPACE_ENV]: 'ws', [mcp.SESSION_ENV]: 'slot' };
@@ -105,7 +108,6 @@ async function scriptedTurn(profile, verdict, opts) {
     const cfg = tools.buildSessionToolConfig(profile);
     const entry = mcp.buildDoplServerEntry(cfg.doplToolsPolicy);
     entry.url = dopl.url;
-    if (o.defaultMode) entry.default_tools_approval_mode = o.defaultMode;
     let finish = null;
     const finished = new Promise((r) => { finish = r; });
     await withAppServer({
@@ -211,21 +213,34 @@ describe('TIER 1 — the real app-server defers Dopl, and `tool_search` is the w
     });
   }
 
-  // 🔒 §5 C1b — THE PREMISE `approval.js › doplElicitation` NAMES ASKS BY. Every ask from Dopl's
-  // server is named `dopl_channel`, so NO other Dopl tool may ask. Measured 2026-09-22: under
-  // `'auto'` a `dopl_kb` call DID ask (and would have been gated as a channel call with a KB
-  // call's arguments); under `'approve'` it runs with no request at all.
-  test('C1b: a NON-channel Dopl tool raises no request under the shipped default, and did under `auto`', async (t) => {
+  // 🔒 A DOPL WRITE TOOL ASKS, NAMED BY ITS TITLE (2026-09-23). Until then only `dopl_channel` could
+  // ask (an ask was named by being the only one), so every other Dopl write ran unasked on Codex.
+  test('a Dopl WRITE tool asks under the shipped default, and the gate sees ITS name and op', async (t) => {
     if (skipLive(t, GATE)) return;
-    const call = { fn: 'dopl_kb', args: { op: 'list' } };
-    const control = await scriptedTurn('dopl_only', 'deny', { call, defaultMode: 'auto' });
-    assert.ok(control.serverReqs.includes('mcpServer/elicitation/request'), 'control: `auto` asks');
-    assert.equal(control.calls.length, 0);
-    assert.equal(mcp.DEFAULT_TOOL_APPROVAL_MODE, 'approve');
-    const run = await scriptedTurn('dopl_only', 'deny', { call });
-    assert.deepEqual(run.serverReqs, [], 'the shipped default raised a request for a non-channel tool');
-    assert.deepEqual(run.asked, []);
-    assert.deepEqual(run.calls.map((c) => c.name), ['dopl_kb'], 'it ran, once, with no card');
+    const args = { op: 'write', base: 'b', path: 'p', content: 'x' };
+    const run = await scriptedTurn('dopl_only', 'deny', { call: { fn: 'dopl_kb', args } });
+    assert.deepEqual(run.serverReqs, ['mcpServer/elicitation/request']);
+    assert.deepEqual(run.asked, [{ name: 'dopl_kb', input: args }]);
+    assert.equal(run.calls.length, 0, 'declined at the gate, never reached the server');
+  });
+
+  test('a whole-tool Dopl READ never asks, and runs once', async (t) => {
+    if (skipLive(t, GATE)) return;
+    const run = await scriptedTurn('dopl_only', 'deny', { call: { fn: 'dopl_search', args: { query: 'q' } } });
+    assert.deepEqual(run.serverReqs, []);
+    assert.deepEqual(run.calls.map((c) => c.name), ['dopl_search']);
+  });
+
+  // 🔒 COMPATIBILITY: a new desktop against a server that predates titles. Its asks cannot be named,
+  // so they are declined unasked (fail closed); its whole-tool reads never ask and keep working.
+  test('an OLDER server (no titles): asks decline unasked, whole-tool reads still run', async (t) => {
+    if (skipLive(t, GATE)) return;
+    const write = await scriptedTurn('dopl_only', 'allow', { tools: UNTITLED_TOOLS, call: { fn: 'dopl_kb', args: { op: 'write' } } });
+    assert.deepEqual(write.serverReqs, ['mcpServer/elicitation/request']);
+    assert.deepEqual(write.asked, [], 'an unnamed ask is never put to the gate, even one that allows');
+    assert.equal(write.calls.length, 0);
+    const read = await scriptedTurn('dopl_only', 'deny', { tools: UNTITLED_TOOLS, call: { fn: 'dopl_search', args: { query: 'q' } } });
+    assert.deepEqual(read.calls.map((c) => c.name), ['dopl_search']);
   });
 
   test('C1b: a channel POST hands the gate its FULL arguments — op-scoped, not whole-tool', async (t) => {

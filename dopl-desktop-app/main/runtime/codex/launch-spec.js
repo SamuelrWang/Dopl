@@ -148,7 +148,7 @@ function makeApprovalHandler(s, dispatch) {
         toolUseID: params.itemId || null,
       });
       return verdict && verdict.behavior === 'allow' ? 'allow' : 'deny';
-    });
+    }, diag);
   };
 }
 

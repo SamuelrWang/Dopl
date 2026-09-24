@@ -55,7 +55,8 @@ function axisAAllows(mode, toolName) {
   return NEVER_TOOLS.indexOf(name) !== -1; // never
 }
 
-// `preApproved` is empty: Codex raises no request for a read, so a pre-approval would only be a shadow.
+// `preApproved` is empty: a whole-tool Dopl read never asks (`mcp.js › TOOL_APPROVAL_MODES`), and every
+// other Dopl call must reach the gate.
 // `dopl_only` has no web here (network is a sandbox property, `sandbox_approval` denied) — deliberate.
 // Thread `features` fence, every profile: `apps`/`plugins` off — `codex_apps` mounts from the operator's
 // ChatGPT auth; `multi_agent` off (delegation fence; code-mode models are fenced by `catalog.js`).
@@ -93,7 +94,7 @@ function buildSessionToolConfig(profile) {
     return {
       builtinTools: [],
       preApproved: [],
-      // Non-admin Dopl surface offered; under mcp `approve` only `dopl_channel` raises a request (CX-23).
+      // Non-admin Dopl surface offered; each write reaches the gate per op (`mcp.js`).
       disallowedTools: RESTRICTED_DENY.concat(doplSurfaceDeny),
       doplToolsPolicy: DOPL_SAFE_TOOLS.map(shortDoplName).concat([channelShort]),
       native: { sandbox_mode: 'read-only', approval_policy: 'untrusted' },

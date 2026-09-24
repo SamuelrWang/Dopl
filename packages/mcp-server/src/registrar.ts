@@ -59,6 +59,16 @@ function strictInput<S extends ZodRawShape>(shape: S, tool: string): z.ZodObject
 }
 
 /**
+ * The registration config both paths publish. `title` is the tool's own name because Codex copies a
+ * tool's `title` into its approval request as `_meta.tool_title`, the only per-tool identity that
+ * request carries — the desktop names the call by it (`dopl-desktop-app/main/runtime/codex/
+ * server-requests.js › doplElicitation`). Pinned in `tool-title.test.ts`.
+ */
+function toolConfig<S extends ZodRawShape>(name: string, description: string, schema: S) {
+  return { title: name, description, inputSchema: strictInput(schema, name) };
+}
+
+/**
  * Renamed args (no alias): the refusal names the successor. Keyed by tool: only a tool that
  * accepts the successor may name it.
  */
@@ -253,7 +263,7 @@ export function createToolRegistrars(deps: RegistrarDeps): ToolRegistrars {
 
     server.registerTool(
       name,
-      { description, inputSchema: strictInput(enhancedSchema, name) },
+      toolConfig(name, description, enhancedSchema),
       // The scope encloses handler and footer, so `dopl_search`'s per-leg charges are reported.
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       ((args: EnhancedArgs) => withUnmeteredScope(() => wrapped(args))) as any,
@@ -288,7 +298,7 @@ export function createToolRegistrars(deps: RegistrarDeps): ToolRegistrars {
     const framed = withDoplStatus(gated as any, sessionEffective, caller, unmeteredNote);
     server.registerTool(
       name,
-      { description, inputSchema: strictInput(schema, name) },
+      toolConfig(name, description, schema),
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       ((args: any) => withUnmeteredScope(() => framed(args))) as any,
     );

@@ -15,6 +15,11 @@
 //      (a pre-approval is a SHADOW: the call never reaches `canUseTool` at all).
 //   3. THE OP-SCOPED READS. `dopl-read-ops.js › DOPL_READ_OPS` holds no write op, and for each tool
 //      it scopes it is exactly the server's published op enum MINUS its WRITE_OPS.
+//   4. CODEX REACHES THE GATE AT ALL. Claude and Cursor hand every call to `grantDecision`; Codex only
+//      asks when Dopl's MCP entry makes the tool ask, and names the ask by `_meta.tool_title`. So every
+//      write tool must ask there, and its ask — in Codex's wire shape — must come back with the same
+//      verdict the gate gives. (Until 2026-09-23 only `dopl_channel` could ask on Codex, so every row of
+//      pin 1 was true there and unreachable: each Dopl write ran unasked.)
 //
 // Run: `node --test dopl-desktop-app/test/dopl-write-op-gating.test.mjs`
 
@@ -35,6 +40,8 @@ const { grantDecision, grantDecisionDetail } = require(M("session-profiles.js"))
 const { DOPL_READ_TOOLS, DOPL_WRITE_TOOLS } = require(M("session-dopl-tools.js"));
 const { DOPL_SAFE_TOOLS } = require(M("tool-profiles.js"));
 const { DOPL_READ_OPS, isDoplReadOpCall } = require(M("dopl-read-ops.js"));
+const codexMcp = require(M("runtime", "codex", "mcp.js"));
+const codexRequests = require(M("runtime", "codex", "server-requests.js"));
 
 const SERVER = join(HERE, "..", "..", "packages", "mcp-server", "src");
 // ⚠ A MISSING SERVER TREE IS A FAILURE, NOT A SKIP — a guard that quietly stops guarding is the bug.
@@ -116,6 +123,38 @@ test("GATE: no write op is allowed or pre-approved below the widest Axis-A mode,
     }
   }
   assert.deepEqual(leaks, [], `writes auto-approved:\n${leaks.join("\n")}`);
+});
+
+test("CODEX: every write tool ASKS, and its ask reaches the gate under its own name — same verdicts", async () => {
+  const entry = codexMcp.buildDoplServerEntry(null);
+  const asks = (short) => ((entry.tools[short] || {}).approval_mode || entry.default_tools_approval_mode) !== "approve";
+  for (const tool of AXIS_A_WRITE_TOOLS) assert.ok(asks(tool), `${tool} writes and never asks on Codex`);
+  for (const short of Object.keys(entry.tools)) {
+    if (!asks(short)) assert.equal(WRITE_OPS[short], undefined, `${short} never asks on Codex and has write ops`);
+  }
+  // Codex's wire shape (`mcpServer/elicitation/request`), answered through the REAL translator and gate.
+  const viaCodex = (c, tool, input) => codexRequests.answer({
+    method: "mcpServer/elicitation/request",
+    params: { serverName: codexMcp.SERVER_KEY, _meta: { codex_approval_kind: "mcp_tool_call", tool_title: tool, tool_params: input } },
+  }, async (name, args) => (grantDecision({
+    runtime: "codex", profile: c.profile, toolMode: c.mode, toolName: name, input: args,
+  }) === "allow" ? "allow" : "deny"));
+  const leaks = [];
+  for (const c of cells().filter((x) => x.runtime === "codex")) {
+    for (const tool of AXIS_A_WRITE_TOOLS) {
+      for (const op of WRITE_OPS[tool]) {
+        const input = { op, name: "x" };
+        const want = grantDecision({ runtime: "codex", profile: c.profile, toolMode: c.mode, toolName: full(tool), input }) === "allow";
+        const { action } = await viaCodex(c, tool, input);
+        if (action !== (want ? "accept" : "decline")) leaks.push(`${c.profile}/${c.mode} ${tool}.${op} -> ${action}`);
+        if (!c.widest && action === "accept") leaks.push(`${c.profile}/${c.mode} ${tool}.${op} accepted below the widest mode`);
+      }
+    }
+  }
+  assert.deepEqual(leaks, [], `Codex answered a write differently from the gate:\n${leaks.join("\n")}`);
+  // Not a blanket decline: the widest mode on `full` really accepts, as on every runtime.
+  const widest = { profile: "full", mode: SPR.widestToolModeFor("codex") };
+  assert.deepEqual(await viaCodex(widest, "dopl_agent", { op: "create", name: "x" }), { action: "accept" });
 });
 
 test("GATE: the windowless floor does not open a write (the common case, not an odd one)", () => {

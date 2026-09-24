@@ -225,22 +225,21 @@ test("THE MOUNT KEY AND THE ELICITATION'S SERVER COMPARISON ARE ONE CONSTANT", (
   assert.deepEqual(mounted, [mcp.SERVER_KEY],
     "the launch mounts Dopl's server under a key the elicitation comparison does not know");
   // …and the comparison really is identity against THAT key, not a near-match.
-  const meta = { codex_approval_kind: "mcp_tool_call", tool_params: { op: "read" } };
-  assert.ok(serverRequests.doplElicitation({ serverName: mounted[0], _meta: meta }));
-  assert.equal(serverRequests.doplElicitation({ serverName: mounted[0] + "x", _meta: meta }), null);
+  const meta = { codex_approval_kind: "mcp_tool_call", tool_title: "dopl_channel", tool_params: { op: "read" } };
+  assert.equal(serverRequests.doplElicitation({ serverName: mounted[0], _meta: meta }).name, "dopl_channel");
+  assert.ok(serverRequests.doplElicitation({ serverName: mounted[0] + "x", _meta: meta }).refused);
 });
 
 test("a Dopl elicitation reaches AXIS B with the call's own op — the blocker, end to end", () => {
-  // 🔒 ⚠ **THE CASE THAT SAYS A DOPL-LAUNCHED CODEX AGENT CAN POST.** The approval carries no tool
-  // name; the name is derived from Dopl's own entry, the arguments ride `_meta.tool_params`, and
-  // both are handed to the SAME `grantDecision` every other runtime asks.
+  // 🔒 ⚠ **THE CASE THAT SAYS A DOPL-LAUNCHED CODEX AGENT CAN POST.** The tool is named by
+  // `_meta.tool_title`, the arguments ride `_meta.tool_params`, and both are handed to the SAME
+  // `grantDecision` every other runtime asks.
   const target = serverRequests.doplElicitation({
     serverName: mcp.SERVER_KEY,
     message: 'Allow the dopl MCP server to run tool "dopl_channel"?',
-    _meta: { codex_approval_kind: "mcp_tool_call", tool_params: { op: "send", body: "hi" } },
+    _meta: { codex_approval_kind: "mcp_tool_call", tool_title: "dopl_channel", tool_params: { op: "send", body: "hi" } },
   });
   assert.equal(target.name, mcp.CHANNEL_TOOL);
-  assert.equal(target.derived, true, "the name came from the entry, not from the sentence");
   // Axis B's lanes, reached through the elicitation's own name and input.
   assert.equal(decide({ toolName: target.name, input: target.input, messageMode: "auto_outbound" }), "allow");
   assert.equal(decide({ toolName: target.name, input: target.input, messageMode: "ask" }), "gate");
@@ -346,20 +345,16 @@ test("the env scrub can only REMOVE, and it never takes PATH, HOME or a credenti
   }
 });
 
-test("the Dopl MCP entry pins the channel tool and keeps the bearer OFF ARGV", () => {
+test("the Dopl MCP entry makes every Dopl call but a whole-tool read ask, and keeps the bearer OFF ARGV", () => {
   const entry = mcp.buildDoplServerEntry(["dopl_channel"]);
-  // ⚠ AXIS B'S PIN, INDEPENDENT OF AXIS A. The operator's policy may be as wide as `never`; the
-  // channel tool must still reach the gate, because no tool posture can send a message.
-  assert.equal(entry.tools.dopl_channel.approval_mode, "prompt");
-  // 🔒 ⚠ `auto` SINCE 2026-09-22, AND IT IS LOAD-BEARING RATHER THAN A RELAXATION. The elicitation
-  // that carries a Dopl tool call's approval names NO tool, so the name is recovered from this
-  // entry: exactly one tool on it may raise an ask. A default that can ask puts every tool in that
-  // set, the derivation stops, and every Dopl call declines — which was the release blocker. The
-  // cost is written out at `mcp.js › TOOL_APPROVAL_MODES`.
-  // 🔒 `approve`, not `auto`: `auto` was MEASURED to ask (CXP-3A, 2026-09-22) — `approve` never does.
-  assert.equal(entry.default_tools_approval_mode, "approve");
-  assert.deepEqual(mcp.askingToolsIn(entry), [mcp.CHANNEL_TOOL], "exactly ONE tool may ask");
-  assert.equal(mcp.soleAskingTool(entry), mcp.CHANNEL_TOOL);
+  // ⚠ EVERY CALL REACHES THE GATE, INDEPENDENT OF AXIS A — the channel tool because no tool posture
+  // can send a message, the write tools because the gate judges them per op. A tool Dopl does not
+  // know yet asks too (the default).
+  assert.equal(entry.default_tools_approval_mode, "prompt");
+  assert.equal(entry.tools.dopl_channel, undefined, "the channel inherits the asking default");
+  // Only the whole-tool reads never ask (`approve`; `auto` was MEASURED to ask, CXP-3A).
+  const neverAsk = Object.keys(entry.tools).filter((t) => entry.tools[t].approval_mode === "approve");
+  assert.deepEqual(neverAsk.map((t) => `mcp__dopl__${t}`).sort(), profiles.DOPL_READ_TOOLS.slice().sort());
   assert.deepEqual(entry.enabled_tools, ["dopl_channel"]);
   // ⚠ A VARIABLE NAME, NEVER A TOKEN. An override carrying the bearer would put the device token
   // on a command line every `ps` on the machine can read.
