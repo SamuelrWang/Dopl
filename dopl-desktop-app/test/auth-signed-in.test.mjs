@@ -383,7 +383,9 @@ test("the listener drops its cached identity while the machine is conflicted", (
   // channel-listener resolves myUserId once and caches it for the life of the process
   // (`if (!myUserId)`), so without this the first-resolved identity would keep classifying.
   const fn = fnOf(LISTENER, "reconcileInner");
-  assert.match(fn, /if \(auth\.identityMismatch\(\)\) myUserId = null;/);
+  assert.match(fn, /if \(auth\.identityMismatch\(\)\) forgetOperator\(\);/);
+  // …and the drop reaches the ENGINE's copy too (the launch lanes' operator id; stale-account-id test).
+  assert.match(fnOf(LISTENER, "forgetOperator"), /myUserId = null;[\s\S]*sessionEngine\.setSelfIdentity\(null\)/);
   assert.match(AUTH, /identityMismatch: state\.identityMismatch/, "auth.js re-exports the accessor");
   assert.match(LISTENER, /if \(!myUserId\)/, "…which is only useful because the id IS cached");
 });

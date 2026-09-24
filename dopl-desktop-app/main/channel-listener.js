@@ -137,7 +137,7 @@ async function reconcileInner() {
   if (!running) return;
   // Cookie-aware: `ensureSignedIn` repairs a dead session blob from the jar before answering.
   if (!(await auth.ensureSignedIn())) {
-    myUserId = null; // force re-resolve on next sign-in
+    forgetOperator(); // force re-resolve on next sign-in
     stopLoops();
     presence.setWorkspaces([]); // stop heartbeating when signed out
     if (REALTIME.ENABLED) realtime.setWorkspaces([]); // drop the WS subscriptions
@@ -147,7 +147,7 @@ async function reconcileInner() {
     return;
   }
   // FIX S4: jar and blob name different users — drop the cached identity while that lasts.
-  if (auth.identityMismatch()) myUserId = null;
+  if (auth.identityMismatch()) forgetOperator();
   // Push wedged at want=0 with a live credential: re-apply the last good set first.
   if (REALTIME.ENABLED &&
       heal.shouldReapplyWorkspaces(true, realtime.desiredCount(), lastGoodWorkspaceIds.length)) {
@@ -238,6 +238,14 @@ async function reconcileInner() {
   // Last, and guarded (P3-36): seeds agent-created channels from the defaults (`channel-seed-watch.js`).
   try { seedWatch.observeChannels(desired, failedWorkspaces.size === 0, myUserId); }
   catch (err) { diag('seed-watch: pass failed —', err && err.message); }
+}
+
+// Drop the operator identity in BOTH places it is held: this cache AND the engine's copy, which every launch lane
+// reads for the roster's self-exclusion and the session's operator stamp (DMP-005). Clearing only ours left the
+// engine on the PREVIOUS account until the next resolve, so a launch in that gap ran under the old account's id.
+function forgetOperator() {
+  myUserId = null;
+  sessionEngine.setSelfIdentity(null);
 }
 
 function stopLoops() {
