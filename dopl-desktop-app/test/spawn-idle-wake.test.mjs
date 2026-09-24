@@ -265,6 +265,6 @@ test("GOAL: the engine stamps it only where it can be read", () => {
   // too would put the same text in the prompt twice.
   assert.match(ENGINE,
     /launchGoal: spec\.parkedShell === true \? String\(spec\.firstMessage == null \? '' : spec\.firstMessage\) : '',/);
-  assert.match(ENGINE, /const firstTurn = spec\.parkedShell \? ''/,
+  assert.match(ENGINE, /if \(spec\.parkedShell\) return '';/,
     "`firstTurn` stays empty for a parked shell — `startQuery` is its only pusher and it never runs");
 });

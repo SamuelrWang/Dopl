@@ -18,18 +18,21 @@
 // ⚠ EVERY FUNCTION HERE IS A PURE READ. If one ever needs to mutate a session, it belongs in the
 // engine: the value of this seam is that a caller can reason about it without knowing what a
 // dispatch does. `noteSiblings` is the single exception and it writes only DISPLAY CONTEXT (the
-// framing's agent id) onto `s.context`, never reducer state.
+// framing's agent id and name) onto `s.context`, never reducer state.
 
 const store = require('./session-store');
 
 // ─── BEGIN SESSION-REGISTRY-PURE (injectable; unit-tested via source extraction) ───
 
-let deps = { sessions: null };
+let deps = { sessions: null, nameOf: null };
 
-/** The engine binds its in-memory `sessions` Map here at load. Read at CALL time, so bind
- *  order at module load does not matter. */
+/** The engine binds its in-memory `sessions` Map (and the rename store's read, `nameOf`) here at
+ *  load. Read at CALL time, so bind order at module load does not matter. */
 function bind(d) {
-  deps = { sessions: (d && d.sessions) || null };
+  deps = {
+    sessions: (d && d.sessions) || null,
+    nameOf: (d && typeof d.nameOf === 'function') ? d.nameOf : null,
+  };
 }
 
 /**
@@ -115,16 +118,24 @@ function sessionOn(a) {
 }
 
 /**
- * Stamp this session's context with its own agent id, for the framing.
+ * Stamp this session's context with its own agent id AND display name, for the framing
+ * (`prompt-framing-self.js › agentSelfFraming` reads `ctx.agentId` / `ctx.agentName`).
  *
  * ⚠ IT WRITES ONTO `s.context` rather than being read at framing time because `session-seed.js`
  * assembles the turn and holds no registry handle (it is required BY the engine, never back into
  * it).
- * The name predates the sibling roster's removal; only the session's own id is stamped now.
+ * ⚠ THE NAME IS RE-READ FROM THE RENAME STORE ON EVERY STAMP, never carried on the record: a
+ * rename, a park and a resume all land on the name the store holds now (DMP-005). A read that
+ * throws costs the name line, never the stamp; no name clears a stale one.
+ * The function's name predates the sibling roster's removal.
  */
 function noteSiblings(s) {
   if (!s || !s.context) return;
   s.context.agentId = String(s.agentId || '');
+  let name = '';
+  try { name = deps.nameOf && s.agentId ? String(deps.nameOf(s.agentId) || '').trim() : ''; } catch (_) { name = ''; }
+  if (name) s.context.agentName = name;
+  else delete s.context.agentName;
 }
 
 // ─── END SESSION-REGISTRY-PURE ────────────────────────────────────────────────────

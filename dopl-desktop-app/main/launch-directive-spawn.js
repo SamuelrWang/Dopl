@@ -135,6 +135,12 @@ async function spawn(d, deps) {
   }
   const plan = planPosture(d, runtime.id, chainAllowed);
   const modelArg = await resolveModel(runtime.id, d, identity);
+  const asked = d.agentName || '';
+  if (!asked) {
+    diag('launch-directive: directive carried NO agent name — falling back to',
+      NEW_AGENT_NAME, '(an older client sends none; a NEWER one that asked for a name and'
+      + ' landed here has lost it upstream of this machine)');
+  }
   const res = await deps.launch({
     channelId: d.channelId,
     taskId: d.taskId,
@@ -166,29 +172,15 @@ async function spawn(d, deps) {
     // directive's author is an agent, whose unaddressed posts could never wake an idle shell.
     launchChain: plan.chain, idle: !d.goal,
     operatorArmed: true, // FIX-4: the operator armed this lane, so a handed-in posture is honoured
+    // The funnel commits it through `commitRename` (unique per channel, refreshes the summary peers read)
+    // after registration and BEFORE the first turn, so a goal launch's first turn states it (DMP-005).
+    agentName: asked || NEW_AGENT_NAME,
   });
-  // The name is committed AFTER the launch (it is keyed on the agent id) through `commitRename`,
-  // which also refreshes the summary peers read. The `try` wraps only the commit (F-736): a logging
-  // throw must not lose the stored name, which is the address an orchestrator uses.
   if (res && res.agentId) {
-    let stored = null;
-    try {
-      const asked = d.agentName || '';
-      if (!asked) {
-        diag('launch-directive: directive carried NO agent name — falling back to',
-          NEW_AGENT_NAME, '(an older client sends none; a NEWER one that asked for a name and'
-          + ' landed here has lost it upstream of this machine)');
-      }
-      stored = require('./agent-identity-commit')
-        .commitRename(res.agentId, asked || NEW_AGENT_NAME);
-    } catch (err) {
-      diag('launch-directive: could not store the agent name —', err && err.message);
-    }
-    const applied = stored && stored.ok ? stored.name : null;
+    // The STORED name (the uniqueness suffix included), never the ask; null = refused or not stored.
+    const applied = typeof res.agentName === 'string' && res.agentName ? res.agentName : null;
     if (!applied) {
-      diag('launch-directive: the agent name was REFUSED by the store —',
-        (stored && stored.reason) || 'no reason given',
-        '— agent', res.agentId, 'is running UNNAMED');
+      diag('launch-directive: the agent name was not stored — agent', res.agentId, 'is running UNNAMED');
     }
     return {
       agentId: res.agentId,

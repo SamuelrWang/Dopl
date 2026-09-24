@@ -363,5 +363,6 @@ test("ORDER: an identity runtime this Mac cannot run is REFUSED, never swapped",
 // must answer it — a foreign one-field hunk on `session-launch.js › launch`'s success return.
 test("FUNNEL: a successful launch answers the model it launched with", () => {
   const src = readFileSync(join(HERE, "..", "main", "session-launch.js"), "utf8");
-  assert.match(src, /return \{ sessionId: s\.sessionId, agentId: agentId, model \};/);
+  // ⚠ `agentName` joined it (DMP-005): the STORED name, which the directive echo reports.
+  assert.match(src, /return \{ sessionId: s\.sessionId, agentId: agentId, model, agentName \};/);
 });

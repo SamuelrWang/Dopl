@@ -126,10 +126,12 @@ test("DELIVERY (running): the goal is built into `firstTurn`, fenced, with the p
   // ⚠ SOURCE-PINNED for the same reason as above; `startSession` needs Electron. What is pinned
   // is the two facts a running directive spawn depends on: `firstTurn` is BUILT for a non-parked
   // spawn, and its framing context carries `spec.profile`.
-  assert.match(ENGINE, /const firstTurn = spec\.parkedShell \? ''/);
+  // Built AFTER registration and naming (DMP-005), off the stamped `s.context`.
+  assert.match(ENGINE, /if \(spec\.parkedShell\) return '';/);
+  assert.match(ENGINE, /s\.firstTurn = firstTurnFor\(s, spec, rt\);/);
   assert.match(
     ENGINE,
-    /buildFencedTurn\(\{ side: spec\.side, message: spec\.firstMessage, context: \{ \.\.\.context, profile: spec\.profile, mcpDiscovery: io\.discoveryFor\(rt && rt\.id\) \}, nonce \}\)/,
+    /buildFencedTurn\(\{ side: spec\.side, message: spec\.firstMessage, context: \{ \.\.\.s\.context, profile: spec\.profile, mcpDiscovery: io\.discoveryFor\(rt && rt\.id\) \}, nonce: s\.nonce \}\)/,
     "⚠ the profile rides in: without it `knowledgeLines` orders a `read_only`-denied tool",
   );
   assert.match(ENGINE, /launchGoal: spec\.parkedShell === true \?/, "…and the parked shape still holds its goal");

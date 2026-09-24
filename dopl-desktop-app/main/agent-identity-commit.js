@@ -39,8 +39,8 @@
  *
  * ⚠ **HERE, BECAUSE THIS IS ALREADY THE ONE DOOR EVERY RENAME AND EVERY LAUNCH LANE GOES
  * THROUGH** — the IPC op, the in-process tool, the external directive, and both launch lanes
- * (`launch-directive-spawn.js` commits the directive's name; the SPA renames straight after its
- * launch). One place rather than five.
+ * (`session-engine.js › commitLaunchName` commits the directive's name after registration and
+ * before the first turn; the SPA renames straight after its idle launch). One place rather than five.
  *
  * ⚠ **THE SUFFIX IS APPLIED TO WHAT IS STORED, AND THE ANSWER CARRIES IT BACK.** `res.name` is
  * main's OWN value (the never-echo-the-ask rule), so a caller that renders it already shows
