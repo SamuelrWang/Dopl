@@ -68,6 +68,7 @@ const { canonicalDoplName } = require('../../mcp-tool-names');
 
 const DOPL_WRITE_TOOLS = doplTools.DOPL_WRITE_TOOLS;
 const DOPL_READ_TOOLS = doplTools.DOPL_READ_TOOLS;
+const { GRANULAR_SAFE_TOOLS, withGranularOffer } = doplTools;
 
 /** The bare, server-local name. Our server registers tools bare; only a host adds a prefix. */
 function shortDoplName(full) {
@@ -208,8 +209,8 @@ function buildSessionToolConfig(profile) {
       // Local execution + writes + the web + third-party MCP, plus the whole Dopl surface except
       // the channel tool. The twin of Claude's read_only, in Cursor's vocabulary.
       disallowedTools: [SHELL_ANY, WRITE_ANY, WEB_ANY, MCP_ANY]
-        .concat(doplSurfaceDeny, DOPL_SAFE_TOOLS),
-      doplToolsPolicy: [channelShort],
+        .concat(doplSurfaceDeny, DOPL_SAFE_TOOLS, GRANULAR_SAFE_TOOLS),
+      doplToolsPolicy: withGranularOffer([channelShort]),
       native: { runMode: 'allowlist', sandbox: true },
     };
   }
@@ -221,7 +222,7 @@ function buildSessionToolConfig(profile) {
       // Same floor minus the web: this profile's whole point is looking things up with no shell.
       disallowedTools: [SHELL_ANY, WRITE_ANY, MCP_ANY]
         .concat(doplSurfaceDeny),
-      doplToolsPolicy: DOPL_SAFE_TOOLS.map(shortDoplName).concat([channelShort]),
+      doplToolsPolicy: withGranularOffer(DOPL_SAFE_TOOLS.map(shortDoplName).concat([channelShort])),
       native: { runMode: 'allowlist', sandbox: true },
     };
   }

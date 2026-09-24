@@ -49,6 +49,7 @@ const { buildSessionToolConfig, shortDoplName } = require(join(HERE, "..", "main
 const {
   DOPL_SAFE_TOOLS, DOPL_ADMIN_TOOLS, RETIRED_DOPL_TOOLS, DOPL_CHANNEL_TOOL,
 } = require(join(HERE, "..", "main", "tool-profiles.js"));
+const { GRANULAR_NAMES } = require(join(HERE, "..", "main", "dopl-tool-table.js"));
 
 // The real builder, run for real.
 const MCP_URL = "https://dopl.test/api/mcp";
@@ -125,8 +126,10 @@ test("the deny lists already carry the bound the removed allowlist claimed", () 
   // dopl tools NOT hard-denied are exactly the tools the old `doplToolsPolicy` named. If a
   // later edit adds a dopl tool to the surface, or drops one from a deny list, this fails —
   // which is the day the missing second bound would have mattered.
+  // The granular tools (DMP-013) are surface too: whichever set the connection lists.
   const surface = [
     ...DOPL_SAFE_TOOLS, ...DOPL_ADMIN_TOOLS, ...RETIRED_DOPL_TOOLS, DOPL_CHANNEL_TOOL,
+    ...GRANULAR_NAMES.map((n) => `mcp__dopl__${n}`),
   ];
   const sorted = (names) => [...new Set(names)].sort();
   for (const profile of ["read_only", "dopl_only"]) {

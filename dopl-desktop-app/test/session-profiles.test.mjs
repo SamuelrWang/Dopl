@@ -40,6 +40,8 @@ const {
   UNIVERSAL_HARD_DENY,
   normalizeProfile,
 } = require(join(HERE, "..", "main", "tool-profiles.js"));
+// The granular half (DMP-013), derived from the server's table by read class.
+const { GRANULAR_READ_TOOLS, GRANULAR_SAFE_TOOLS, withGranularOffer } = require(join(HERE, "..", "main", "session-dopl-tools.js"));
 
 const BEGIN = "// ─── BEGIN SESSION-PROFILE TABLE";
 const END = "// ─── END SESSION-PROFILE TABLE";
@@ -172,10 +174,10 @@ test("read_only: local reads pre-approved (NOT the channel); web + dopl reads/ad
   const cfg = buildSessionToolConfig("read_only");
   assert.deepEqual(cfg.builtinTools, READ_BUILTINS);
   assert.deepEqual(cfg.preApproved, READ_BUILTINS.concat(AGENT_OPS)); // FIX H1: no dopl_channel here. D7.2: + the two self-ops verbs, DECLARED
-  for (const t of DENIED_BUILTINS.concat(WEB_TOOLS, DOPL_ADMIN_TOOLS, RETIRED_DOPL_TOOLS, DOPL_SAFE_TOOLS)) {
+  for (const t of DENIED_BUILTINS.concat(WEB_TOOLS, DOPL_ADMIN_TOOLS, RETIRED_DOPL_TOOLS, DOPL_SAFE_TOOLS, GRANULAR_SAFE_TOOLS)) {
     assert.ok(cfg.disallowedTools.includes(t), `read_only must deny ${t}`);
   }
-  assert.deepEqual(cfg.doplToolsPolicy, [CHANNEL_SHORT]);
+  assert.deepEqual(cfg.doplToolsPolicy, withGranularOffer([CHANNEL_SHORT]));
 });
 
 // ── dopl_only ────────────────────────────────────────────────────────────────
@@ -193,7 +195,7 @@ test("dopl_only: reads + web + READ-ONLY dopl pre-approved; writes GATE; admins 
   assert.deepEqual(cfg.builtinTools, READ_BUILTINS.concat(WEB_TOOLS));
   // FIX H1: no dopl_channel. FIX F2: no dopl WRITE tool either — a shadowed write tool never
   // reaches canUseTool at all, which is the v1.9 half of the `auto` auto-approval hole.
-  assert.deepEqual(cfg.preApproved, READ_BUILTINS.concat(WEB_TOOLS, DOPL_READ, AGENT_OPS)); // D7.2: + the two self-ops verbs, DECLARED
+  assert.deepEqual(cfg.preApproved, READ_BUILTINS.concat(WEB_TOOLS, DOPL_READ, GRANULAR_READ_TOOLS, AGENT_OPS)); // D7.2: + the two self-ops verbs, DECLARED
   for (const t of DOPL_WRITE) {
     assert.ok(!cfg.preApproved.includes(t), `dopl_only must NOT shadow ${t}`);
     assert.ok(!cfg.disallowedTools.includes(t), `${t} must REACH the gate, not be denied`);
@@ -202,7 +204,7 @@ test("dopl_only: reads + web + READ-ONLY dopl pre-approved; writes GATE; admins 
     assert.ok(cfg.disallowedTools.includes(t), `dopl_only must deny ${t}`);
   }
   for (const t of WEB_TOOLS) assert.ok(!cfg.disallowedTools.includes(t), `dopl_only must not deny ${t}`);
-  assert.deepEqual(cfg.doplToolsPolicy, DOPL_SAFE_TOOLS.map(shortDoplName).concat([CHANNEL_SHORT]));
+  assert.deepEqual(cfg.doplToolsPolicy, withGranularOffer(DOPL_SAFE_TOOLS.map(shortDoplName).concat([CHANNEL_SHORT])));
   // ...and under dopl_only they really do stop on a button now.
   for (const t of DOPL_WRITE) {
     assert.equal(grantDecision({ profile: "dopl_only", toolName: t, input: { op: "write_file" } }), "gate", t);

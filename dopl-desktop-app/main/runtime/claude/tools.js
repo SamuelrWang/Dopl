@@ -58,6 +58,7 @@ const SESSION_HARD_DENY = UNIVERSAL_HARD_DENY.slice();
 
 const DOPL_WRITE_TOOLS = doplTools.DOPL_WRITE_TOOLS;
 const DOPL_READ_TOOLS = doplTools.DOPL_READ_TOOLS;
+const { GRANULAR_READ_TOOLS, GRANULAR_SAFE_TOOLS, withGranularOffer } = doplTools;
 
 // SESSION grant config for a profile. `preApproved` -> SDK allowedTools (shadowed, no button).
 // `builtinTools` -> SDK tools (POSITIVE bound; [] = no bound). `disallowedTools` -> SDK
@@ -116,8 +117,8 @@ function buildSessionToolConfig(profile) {
     return {
       builtinTools: READ_BUILTINS.slice(),
       preApproved: READ_BUILTINS.concat(AGENT_OPS_TOOL_NAMES), // + AGENT-OPS, declared above
-      disallowedTools: DENIED_BUILTINS.concat(WEB_TOOLS, DOPL_ADMIN_TOOLS, RETIRED_DOPL_TOOLS, DOPL_SAFE_TOOLS),
-      doplToolsPolicy: [channelShort],
+      disallowedTools: DENIED_BUILTINS.concat(WEB_TOOLS, DOPL_ADMIN_TOOLS, RETIRED_DOPL_TOOLS, DOPL_SAFE_TOOLS, GRANULAR_SAFE_TOOLS),
+      doplToolsPolicy: withGranularOffer([channelShort]),
     };
   }
 
@@ -128,9 +129,9 @@ function buildSessionToolConfig(profile) {
     // reach the gate like dopl_channel, and stay in doplToolsPolicy.
     return {
       builtinTools: READ_BUILTINS.concat(WEB_TOOLS),
-      preApproved: READ_BUILTINS.concat(WEB_TOOLS, DOPL_READ_TOOLS, AGENT_OPS_TOOL_NAMES), // + AGENT-OPS
+      preApproved: READ_BUILTINS.concat(WEB_TOOLS, DOPL_READ_TOOLS, GRANULAR_READ_TOOLS, AGENT_OPS_TOOL_NAMES), // + AGENT-OPS
       disallowedTools: DENIED_BUILTINS.concat(DOPL_ADMIN_TOOLS, RETIRED_DOPL_TOOLS),
-      doplToolsPolicy: DOPL_SAFE_TOOLS.map(shortDoplName).concat([channelShort]),
+      doplToolsPolicy: withGranularOffer(DOPL_SAFE_TOOLS.map(shortDoplName).concat([channelShort])),
     };
   }
 

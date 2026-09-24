@@ -354,7 +354,8 @@ test("the Dopl MCP entry makes every Dopl call but a whole-tool read ask, and ke
   assert.equal(entry.tools.dopl_channel, undefined, "the channel inherits the asking default");
   // Only the whole-tool reads never ask (`approve`; `auto` was MEASURED to ask, CXP-3A).
   const neverAsk = Object.keys(entry.tools).filter((t) => entry.tools[t].approval_mode === "approve");
-  assert.deepEqual(neverAsk.map((t) => `mcp__dopl__${t}`).sort(), profiles.DOPL_READ_TOOLS.slice().sort());
+  const granularReads = require(join(MAIN, "session-dopl-tools.js")).GRANULAR_READ_TOOLS;
+  assert.deepEqual(neverAsk.map((t) => `mcp__dopl__${t}`).sort(), profiles.DOPL_READ_TOOLS.concat(granularReads).sort());
   assert.deepEqual(entry.enabled_tools, ["dopl_channel"]);
   // ⚠ A VARIABLE NAME, NEVER A TOKEN. An override carrying the bearer would put the device token
   // on a command line every `ps` on the machine can read.

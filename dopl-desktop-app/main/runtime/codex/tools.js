@@ -10,6 +10,7 @@ const { canonicalDoplName } = require('../../mcp-tool-names');
 
 const DOPL_WRITE_TOOLS = doplTools.DOPL_WRITE_TOOLS;
 const DOPL_READ_TOOLS = doplTools.DOPL_READ_TOOLS;
+const { GRANULAR_SAFE_TOOLS, withGranularOffer } = doplTools;
 
 // Per-server `enabled_tools` lists use the bare server-local name.
 function shortDoplName(full) {
@@ -83,8 +84,8 @@ function buildSessionToolConfig(profile) {
     return {
       builtinTools: [],
       preApproved: [],
-      disallowedTools: RESTRICTED_DENY.concat(doplSurfaceDeny, DOPL_SAFE_TOOLS),
-      doplToolsPolicy: [channelShort],
+      disallowedTools: RESTRICTED_DENY.concat(doplSurfaceDeny, DOPL_SAFE_TOOLS, GRANULAR_SAFE_TOOLS),
+      doplToolsPolicy: withGranularOffer([channelShort]),
       native: { sandbox_mode: 'read-only', approval_policy: 'untrusted' },
       features: { ...FEATURE_FENCE },
     };
@@ -96,7 +97,7 @@ function buildSessionToolConfig(profile) {
       preApproved: [],
       // Non-admin Dopl surface offered; each write reaches the gate per op (`mcp.js`).
       disallowedTools: RESTRICTED_DENY.concat(doplSurfaceDeny),
-      doplToolsPolicy: DOPL_SAFE_TOOLS.map(shortDoplName).concat([channelShort]),
+      doplToolsPolicy: withGranularOffer(DOPL_SAFE_TOOLS.map(shortDoplName).concat([channelShort])),
       native: { sandbox_mode: 'read-only', approval_policy: 'untrusted' },
       features: { ...FEATURE_FENCE },
     };

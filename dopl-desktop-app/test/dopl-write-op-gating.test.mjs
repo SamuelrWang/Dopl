@@ -247,3 +247,113 @@ test("CLASSIFIER: fail-closed; an absent op is a read ONLY where the server defa
   assert.match(shape, /\.optional\(\)/, "dopl_workspaces.op is no longer optional — drop DEFAULT_READ_OP");
   assert.match(shape, /Default: "list"/, "dopl_workspaces.op no longer defaults to list — drop DEFAULT_READ_OP");
 });
+
+// ── THE GRANULAR SURFACE (DMP-013 B4) ──────────────────────────────────────────────────────────
+// A granular call reaches the gate as the legacy call it runs (`mcp-tool-names.js ›
+// canonicalDoplCall`, called by `session-gate-bridge.js › gateCall`); the pins below run the same
+// rewrite and then the REAL gate, so a granular write is held to every legacy row above. Write ops
+// still come from the server's `WRITE_OPS` source text, never from the generated table.
+
+const TABLE = require(M("dopl-tool-table.json")).tools;
+const { parseBinding } = require(M("dopl-tool-table.js"));
+const { canonicalDoplCall } = require(M("mcp-tool-names.js"));
+const { GRANULAR_READ_TOOLS, GRANULAR_SAFE_TOOLS } = require(M("session-dopl-tools.js"));
+
+// `gating.ts › isWriteOp`'s grain: an entry names the op whole (`manage`) or one action (`rooms.open`).
+const isWrite = (key) => {
+  const { tool, op, action } = parseBinding(key);
+  const writes = WRITE_OPS[tool] || [];
+  return op !== undefined && (writes.includes(op) || (action !== undefined && writes.includes(`${op}.${action}`)));
+};
+/** Every (tool, job, binding) with the input a granular call for that job carries. */
+const JOBS = TABLE.flatMap((row) => (typeof row.bind === "string" ? [[null, row.bind]] : Object.entries(row.bind))
+  .map(([job, key]) => ({ row, key, input: { name: "x", body: "b", ...(job === null ? {} : { [row.select]: job }) } })));
+/** What the production gate does (`gateCall`): canonicalise, then the REAL `grantDecision`. */
+const viaGate = (c, name, input) => {
+  const call = canonicalDoplCall(name, input);
+  return grantDecision({ runtime: c.runtime, profile: c.profile, toolMode: c.mode, toolName: call.name, input: call.input });
+};
+
+test("GRANULAR: the generated read class agrees with the server's WRITE_OPS, job by job", () => {
+  for (const row of TABLE) {
+    const writes = JOBS.filter((j) => j.row === row && isWrite(j.key));
+    assert.equal(row.read, writes.length === 0, `${row.name}: read=${row.read} but writes ${writes.map((j) => j.key)}`);
+  }
+  assert.ok(JOBS.filter((j) => isWrite(j.key)).length >= 40, "the parse found too few granular write jobs");
+});
+
+test("GRANULAR GATE: no granular write job is allowed or pre-approved below the widest mode, anywhere", () => {
+  const leaks = [];
+  for (const c of cells()) {
+    if (c.widest) continue;
+    for (const j of JOBS.filter((x) => isWrite(x.key))) {
+      const v = viaGate(c, full(j.row.name), j.input);
+      if (v !== "gate" && v !== "deny") leaks.push(`${c.runtime}/${c.profile}/${c.mode} ${j.row.name}(${j.key}) -> ${v}`);
+    }
+  }
+  assert.deepEqual(leaks, [], `granular writes auto-approved:\n${leaks.join("\n")}`);
+});
+
+test("GRANULAR LISTS: only whole-tool reads are pre-approved or never-ask, and each job resolves as its legacy read", () => {
+  assert.deepEqual(GRANULAR_READ_TOOLS.slice().sort(), ["dopl_get_map", "dopl_get_member", "dopl_get_status", "dopl_list_members"].map(full),
+    "the granular whole-tool reads moved — a new one must be argued, not inherited");
+  const granular = new Set(TABLE.map((r) => full(r.name)));
+  const readNames = new Set(TABLE.filter((r) => r.read).map((r) => full(r.name)));
+  for (const id of RUNTIMES.ids()) {
+    for (const profile of Object.keys(RUNTIMES.descriptorFor(id).containment.profiles)) {
+      const cfg = SPR.buildSessionToolConfig(profile, id);
+      for (const name of cfg.preApproved.filter((t) => granular.has(t) && !DOPL_READ_TOOLS.includes(t))) {
+        assert.ok(readNames.has(name), `${id}/${profile} pre-approves the granular write ${name}`);
+        for (const j of JOBS.filter((x) => full(x.row.name) === name)) {
+          const v = viaGate({ runtime: id, profile, mode: SPR.toolModesFor(id)[0] }, name, j.input);
+          assert.equal(v, "preapproved", `${id}/${profile} shadows ${name} but its legacy call resolves ${v}`);
+        }
+      }
+    }
+  }
+  const entry = codexMcp.buildDoplServerEntry(null);
+  for (const row of TABLE) {
+    const approve = (entry.tools[row.name] || {}).approval_mode === "approve";
+    if (approve) assert.ok(row.read, `${row.name} writes and never asks on Codex`);
+  }
+});
+
+test("GRANULAR OFFER: a restricted profile offers the server's set and denies what binds only the surface it denies", () => {
+  for (const id of RUNTIMES.ids()) {
+    for (const profile of ["read_only", "dopl_only"]) {
+      if (!RUNTIMES.descriptorFor(id).containment.profiles[profile]) continue;
+      const cfg = SPR.buildSessionToolConfig(profile, id);
+      for (const row of TABLE) {
+        const offered = cfg.doplToolsPolicy.includes(row.name);
+        const bound = JOBS.filter((j) => j.row === row).map((j) => parseBinding(j.key).tool);
+        assert.equal(offered, bound.some((t) => cfg.doplToolsPolicy.includes(t)), `${id}/${profile} ${row.name}: offer does not follow its bound tools`);
+        if (profile !== "read_only") continue;
+        assert.equal(cfg.disallowedTools.includes(full(row.name)), !offered, `${id}/read_only ${row.name}: deny is not the offer's complement`);
+        // A job outside the offer is denied at the gate as its legacy tool, even on an offered tool.
+        for (const j of JOBS.filter((x) => x.row === row && !cfg.doplToolsPolicy.includes(parseBinding(x.key).tool))) {
+          assert.equal(viaGate({ runtime: id, profile, mode: SPR.widestToolModeFor(id) }, full(row.name), j.input), "deny", `${id}/read_only ${row.name}(${j.key})`);
+        }
+      }
+    }
+  }
+  assert.equal(GRANULAR_SAFE_TOOLS.length, 26, "the granular tools binding only the non-channel surface moved");
+});
+
+test("CODEX: a granular ask is named by its title and answered exactly as its legacy call", async () => {
+  const leaks = [];
+  for (const c of cells().filter((x) => x.runtime === "codex")) {
+    for (const j of JOBS) {
+      const want = viaGate(c, full(j.row.name), j.input) === "allow";
+      const { action } = await codexRequests.answer({
+        method: "mcpServer/elicitation/request",
+        params: { serverName: codexMcp.SERVER_KEY, _meta: { codex_approval_kind: "mcp_tool_call", tool_title: j.row.name, tool_params: j.input } },
+      }, async (name, args) => (viaGate(c, name, args) === "allow" ? "allow" : "deny"));
+      if (action !== (want ? "accept" : "decline")) leaks.push(`${c.profile}/${c.mode} ${j.row.name}(${j.key}) -> ${action}`);
+      if (!c.widest && isWrite(j.key) && action === "accept") leaks.push(`${c.profile}/${c.mode} ${j.row.name}(${j.key}) accepted below the widest mode`);
+    }
+  }
+  assert.deepEqual(leaks, [], `Codex answered a granular call differently from the gate:\n${leaks.join("\n")}`);
+  // Not a blanket decline: the widest mode on `full` accepts a granular write, as on every runtime.
+  const widest = { runtime: "codex", profile: "full", mode: SPR.widestToolModeFor("codex") };
+  assert.equal(viaGate(widest, "dopl_manage_agent", { action: "create", name: "x" }), "allow");
+});

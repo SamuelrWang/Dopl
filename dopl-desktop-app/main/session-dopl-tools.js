@@ -18,6 +18,7 @@
 // partial exports are TOOL LISTS resolves to `undefined` at exactly the moment a gate asks.
 
 const { DOPL_SAFE_TOOLS } = require('./tool-profiles');
+const { namesBoundWithin, namesTouching } = require('./dopl-tool-table');
 
 // ⚠ DOPL_SAFE_TOOLS is "non-admin", NOT "read-only". These six WRITE to the shared workspace — every
 // tool `packages/mcp-server/src/gating.ts › WRITE_OPS` names bar `dopl_channel` (Axis B's). A
@@ -41,4 +42,30 @@ const DOPL_READ_TOOLS = DOPL_SAFE_TOOLS
 // move; asking the adapter's `axisAAllows` about a real member cannot drift.
 const DOPL_READ_REFERENCE = DOPL_READ_TOOLS[0] || 'mcp__dopl__dopl_search';
 
-module.exports = { DOPL_WRITE_TOOLS, DOPL_READ_TOOLS, DOPL_READ_REFERENCE };
+// ── THE GRANULAR SURFACE (DMP-013), DERIVED FROM THE SERVER'S TABLE, NEVER LISTED ──────────────
+// The gate judges a granular call as its legacy call (`mcp-tool-names.js › canonicalDoplCall`), so
+// these exist only where a runtime names tools BEFORE the gate: a pre-approval, a launch deny list,
+// an offer (`enabled_tools`, Cursor's `customTools`) and Codex's per-tool approval table. Names a
+// legacy list already carries (`dopl_search`, shared by both sets) are not repeated.
+const PREFIX = 'mcp__dopl__';
+const shortSet = (list) => new Set(list.map((t) => t.slice(PREFIX.length)));
+const granular = (names, legacy) => names.map((n) => PREFIX + n).filter((t) => legacy.indexOf(t) === -1);
+// Read-class tools binding ONLY whole-tool reads: they resolve wherever DOPL_READ_TOOLS do, so they
+// ride the same pre-approvals. A tool with any write job, or a job on a mixed tool, is never here.
+const GRANULAR_READ_TOOLS = granular(namesBoundWithin(shortSet(DOPL_READ_TOOLS), true), DOPL_READ_TOOLS);
+// Tools binding ONLY the non-channel surface: a profile that denies DOPL_SAFE_TOOLS denies these too.
+const GRANULAR_SAFE_TOOLS = granular(namesBoundWithin(shortSet(DOPL_SAFE_TOOLS), false), DOPL_SAFE_TOOLS);
+
+/**
+ * A restricted profile's Dopl offer (bare names) widened to the granular tools the server offers with
+ * it (`tool-manifest.ts › withGranularTools`: a tool with SOME bound legacy tool offered). Each job
+ * outside the offer still resolves at the gate as its legacy tool, where the profile refuses it.
+ */
+function withGranularOffer(shorts) {
+  return shorts.concat(namesTouching(new Set(shorts)).filter((n) => shorts.indexOf(n) === -1));
+}
+
+module.exports = {
+  DOPL_WRITE_TOOLS, DOPL_READ_TOOLS, DOPL_READ_REFERENCE,
+  GRANULAR_READ_TOOLS, GRANULAR_SAFE_TOOLS, withGranularOffer,
+};

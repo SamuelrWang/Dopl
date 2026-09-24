@@ -3,7 +3,7 @@
 
 const { MCP_URL } = require('../../config');
 const { normalizeProfile, DOPL_CHANNEL_TOOL } = require('../../tool-profiles');
-const { DOPL_READ_TOOLS } = require('../../session-dopl-tools');
+const { DOPL_READ_TOOLS, GRANULAR_READ_TOOLS } = require('../../session-dopl-tools');
 const { shortDoplName } = require('./tools');
 
 // Values ride the child's env; only these NAMES appear in the entry, never the bearer in argv.
@@ -37,9 +37,12 @@ const SERVER_KEY = 'dopl';
 // Every Dopl call asks (`prompt`) so Dopl's gate judges it per op, as on every runtime; a tool Dopl does not
 // know yet asks too. Only the whole-tool reads never ask (`approve`, the one never-ask mode — `auto` asks,
 // measured): the gate allows them in every mode, and they keep working against a server whose tools carry no
-// `title` (`server-requests.js › doplElicitation` refuses an ask it cannot name).
+// `title` (`server-requests.js › doplElicitation` refuses an ask it cannot name). The granular whole-tool reads
+// (DMP-013) are derived from the server's table by read class, never listed.
 const DEFAULT_TOOL_APPROVAL_MODE = 'prompt';
-const TOOL_APPROVAL_MODES = Object.freeze(Object.fromEntries(DOPL_READ_TOOLS.map((t) => [shortDoplName(t), 'approve'])));
+const TOOL_APPROVAL_MODES = Object.freeze(Object.fromEntries(
+  DOPL_READ_TOOLS.concat(GRANULAR_READ_TOOLS).map((t) => [shortDoplName(t), 'approve']),
+));
 
 function clientTimeoutSec() {
   // Lazy: `mcp-config` pulls auth, and an unwired harness must read "no token", never throw.
