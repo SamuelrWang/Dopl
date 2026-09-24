@@ -4,9 +4,9 @@ import { describe, it, expect, vi } from "vitest";
 import type { ChannelSessionState, DoplClient } from "@dopl/client";
 import { opReadSessions } from "./channel-ops-read";
 import { SESSION_TABLE_HEAD } from "./channel-session-table";
-import { CHANNEL_DOCTRINE, DOCTRINE_URI } from "./channel-doctrine";
+import { channelDoctrine, DOCTRINE_URI } from "./channel-doctrine";
 
-// Sentences the deleted standing notes carried, now in `CHANNEL_DOCTRINE`: required there and
+// Sentences the deleted standing notes carried, now in `channelDoctrine()`: required there and
 // forbidden in the result, since either half alone cannot tell a move from a delete.
 const NOTE_PHRASES = [
   // …the handle, and the limits on spending it.
@@ -132,7 +132,7 @@ describe('op="status" — the summary shape', () => {
     const text = (await opReadSessions(stubClient({ listChannelSessions })))
       .content[0].text;
     for (const phrase of NOTE_PHRASES) {
-      expect(CHANNEL_DOCTRINE, `${phrase} left the doctrine`).toContain(phrase);
+      expect(channelDoctrine(), `${phrase} left the doctrine`).toContain(phrase);
       expect(text, `${phrase} is back in the status result`).not.toContain(
         phrase,
       );
@@ -162,7 +162,7 @@ describe('op="status" — the summary shape', () => {
     // The peer rule is doctrine now; the result carries only a pointer to it.
     expect(text).toContain(DOCTRINE_URI);
     expect(text).toContain('op="rooms", action="help"');
-    expect(CHANNEL_DOCTRINE).toContain("never their session");
+    expect(channelDoctrine()).toContain("never their session");
   });
 
   it("a channel arg resolves the ref and filters the read to that channel id", async () => {

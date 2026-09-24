@@ -3,7 +3,7 @@
 
 import { describe, it, expect } from "vitest";
 import { opRenameAgent } from "./channel-ops-agent";
-import { CHANNEL_DOCTRINE } from "./channel-doctrine";
+import { channelDoctrine } from "./channel-doctrine";
 import { AGENT, endText, settledMode as settled } from "./launch-fixtures";
 import { sourceOf } from "./tool-group-files";
 
@@ -17,15 +17,15 @@ describe("the sibling verbs keep their own answers (the two maps stay two)", () 
     expect(text).toContain("retry=no");
     expect(text).not.toMatch(/turn(ed)? (it )?on/i);
     // Both claims must stay findable in the shared text, or they have collapsed into one answer.
-    expect(CHANNEL_DOCTRINE).toContain("`no-bridge` the operator's LAUNCH toggle is off");
-    expect(CHANNEL_DOCTRINE).toContain('it gates "launch" and "posture", never "end" or "rename"');
+    expect(channelDoctrine()).toContain("`no-bridge` the operator's LAUNCH toggle is off");
+    expect(channelDoctrine()).toContain('it gates "launch" and "posture", never "end" or "rename"');
   });
 
   it("an END's pending line still points at the disappearance, not at a posture", async () => {
     const text = await endText(settled({ kind: "end", status: "pending" }));
     // The one kind with a real confirmation surface: the agent disappearing from `op="status"`.
     expect(text).toContain("confirm=status");
-    expect(CHANNEL_DOCTRINE).toContain(
+    expect(channelDoctrine()).toContain(
       'op="status" reads your own machine\'s live sessions and the directions waiting for them',
     );
   });
@@ -45,7 +45,7 @@ describe("the sibling verbs keep their own answers (the two maps stay two)", () 
     expect(text).not.toContain("confirm=status");
     // No `asked=`: that is what tells a rename's line from a re-posture's, since both answer `confirm=none`.
     expect(text).not.toContain("asked=");
-    expect(CHANNEL_DOCTRINE).toContain("what people see and what agents tag it by");
+    expect(channelDoctrine()).toContain("what people see and what agents tag it by");
   });
 });
 
@@ -54,7 +54,7 @@ describe("the ungated verbs' copy never sends a caller to the launch toggle", ()
   const src = sourceOf("channel-ops-agent.ts");
 
   it("states the DENIAL, and states it positively", () => {
-    expect(CHANNEL_DOCTRINE).toContain('never "end" or "rename"');
+    expect(channelDoctrine()).toContain('never "end" or "rename"');
   });
 
   it("never tells that caller to have the toggle turned on", () => {
@@ -65,7 +65,7 @@ describe("the ungated verbs' copy never sends a caller to the launch toggle", ()
 
   it("and the GATED verb is the only one whose copy says the toggle applies", () => {
     // The doctrine grants the gate to `launch` and `posture` by name; the ungated module never claims it.
-    expect(CHANNEL_DOCTRINE).toContain('it gates "launch" and "posture"');
+    expect(channelDoctrine()).toContain('it gates "launch" and "posture"');
     expect(src).not.toContain("IS gated by it");
   });
 });

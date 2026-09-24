@@ -23,7 +23,7 @@
 
 import { describe, it, expect } from "vitest";
 import { z } from "zod";
-import { CHANNEL_DOCTRINE } from "./channel-doctrine";
+import { channelDoctrine } from "./channel-doctrine";
 import { CHANNEL_INPUT_SHAPE } from "./channel-schema";
 
 const shape = z.object(CHANNEL_INPUT_SHAPE);
@@ -134,9 +134,9 @@ describe("the describes that make claims this schema cannot enforce", () => {
     // field — so the CLAIM moved with it, into the doctrine's `manage` section
     // where the whole lane is described. That is a relocation, and this pin is
     // what proves the fact was not dropped on the way.
-    expect(CHANNEL_DOCTRINE).toContain("another member's id reaches nothing");
-    expect(CHANNEL_DOCTRINE).toContain("`no-session`");
-    expect(CHANNEL_DOCTRINE).not.toContain("no request is filed");
+    expect(channelDoctrine()).toContain("another member's id reaches nothing");
+    expect(channelDoctrine()).toContain("`no-session`");
+    expect(channelDoctrine()).not.toContain("no request is filed");
   });
 
   it("thread: one op answers the noun, so the param has no split to explain", () => {

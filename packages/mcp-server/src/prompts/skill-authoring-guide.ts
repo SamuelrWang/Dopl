@@ -7,16 +7,22 @@
  * description that SUMMARIZES the workflow makes the agent skip the body. So: lead
  * with concrete *what*, then heavy *when*-triggers, and NEVER summarize the
  * workflow/steps in the description.
+ *
+ * Rendered per call, in the connection's tool set (`call-ref.ts`).
  */
 
-export const SKILL_AUTHORING_GUIDE = `# Skill authoring framework
+import { callRef } from "../call-ref.js";
+
+const q = { quote: "'" } as const;
+
+export const skillAuthoringGuide = () => `# Skill authoring framework
 
 A skill is a SINGLE-FILE procedural prompt: one tight SKILL.md the agent discovers by description alone, then loads on-demand to perform a task. Author for *progressive disclosure*: cheap to discover, useful to load, deep when drilled into. Optimize for triggering accuracy and instruction-following under pressure — not literary completeness.
 
 ## Single-file doctrine (read this first)
 
 - **A skill is ONE file.** There are no supplementary files. Everything the agent needs to *act* lives in SKILL.md.
-- **Reference material goes in knowledge bases, not the skill.** Long specs, lookup tables, schemas, transcripts, big examples — put them in a KB and link from the body as \`[label](dopl://kb/<slug>)\`. The agent loads the KB with \`dopl_kb(op='read_file')\` only when it needs it. The skill stays short and procedural.
+- **Reference material goes in knowledge bases, not the skill.** Long specs, lookup tables, schemas, transcripts, big examples — put them in a KB and link from the body as \`[label](dopl://kb/<slug>)\`. The agent loads the KB with \`${callRef("kb.read_file", {}, q)}\` only when it needs it. The skill stays short and procedural.
 - **Prefer MANY SMALL skills over monoliths.** One skill = one action (draft the email, triage the ticket, write the ADR). Small skills attach cleanly to ontology objects and trigger more reliably. If a skill is trying to do three things, split it into three.
 - **Organize with folders.** Set \`folder\` on create/update (a plain-text label) to group related small skills, e.g. "Outreach", "Research".
 
@@ -82,7 +88,7 @@ These fields are appended to the description for triggering and count toward the
 
 A skill has no supplementary files — it is one SKILL.md. When you have material that doesn't fit that, do NOT bloat the body:
 
-- **Long reference docs** (API specs, schemas, lookup tables, big example sets, transcripts) → put them in a **knowledge base** and link from the body: \`For the full field list, see [Product specs](dopl://kb/product-specs).\` The agent loads it with \`dopl_kb(op='read_file')\` only when needed.
+- **Long reference docs** (API specs, schemas, lookup tables, big example sets, transcripts) → put them in a **knowledge base** and link from the body: \`For the full field list, see [Product specs](dopl://kb/product-specs).\` The agent loads it with \`${callRef("kb.read_file", {}, q)}\` only when needed.
 - **A second distinct procedure** → make it a **second skill** and cross-reference by name. Many small skills beat one big one.
 - **Copy-paste templates** short enough to inline → keep them in an Output-format code block. Large ones → a KB entry.
 
@@ -122,8 +128,8 @@ When the user says "build me a skill for X":
 1. **Clarify intent first.** Ask the user what trigger phrases they'd use, what success looks like, and what the skill should NOT do. The first 30 seconds of clarification saves 10x debugging.
 2. **Scope to ONE action.** If the request spans several actions, plan several small skills (and a shared \`folder\`), not one big one.
 3. **Draft the description and when_to_use FIRST**, before any body. These are 80% of the discoverability win — get them right.
-4. **Call \`dopl_skill(op='create')\`** with the metadata (and optional \`folder\`) + an optional initial body. The skill is now real and addressable.
-5. **Write SKILL.md procedurally** via \`dopl_skill(op='write')\`. Follow the canonical section order. Keep it short — push reference material into a KB and link it.
+4. **Call \`${callRef("skill.create", {}, q)}\`** with the metadata (and optional \`folder\`) + an optional initial body. The skill is now real and addressable.
+5. **Write SKILL.md procedurally** via \`${callRef("skill.write", {}, q)}\`. Follow the canonical section order. Keep it short — push reference material into a KB and link it.
 6. **Self-grade against the quality checklist above.** If anything is missing, fix it before declaring done.
 7. **Verify.** Read the description aloud — would *you* trigger this skill from that description? If not, rewrite.
 

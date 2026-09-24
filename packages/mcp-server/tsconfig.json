@@ -16,6 +16,7 @@
     "src/tools/narration-fixtures.ts",
     "src/tools/parity-harness.ts",
     "src/tools/tool-group-files.ts",
-    "src/surface-sweep.ts"
+    "src/surface-sweep.ts",
+    "src/budget-ratchet.ts"
   ]
 }

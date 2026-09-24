@@ -20,7 +20,7 @@
 
 import { describe, it, expect, vi } from "vitest";
 import type { DoplClient } from "@dopl/client";
-import { CHANNEL_DOCTRINE } from "./channel-doctrine";
+import { channelDoctrine } from "./channel-doctrine";
 import { CHANNEL_INPUT_SHAPE } from "./channel-schema";
 import { opPost } from "./channel-ops-write";
 import { registerChannelTool } from "./channel";
@@ -237,12 +237,12 @@ describe("the published surface says whose each kind is", () => {
     // property it guards is unchanged and both directions are still pinned: the
     // fence names the CREDENTIAL, and the wrong version (keyed on the caller)
     // may not come back.
-    expect(CHANNEL_DOCTRINE).toContain(
+    expect(channelDoctrine()).toContain(
       "are the runtime's and are REFUSED FROM AN AGENT CREDENTIAL",
     );
-    expect(CHANNEL_DOCTRINE).not.toContain("they are REFUSED from you");
-    expect(CHANNEL_DOCTRINE).not.toMatch(/REFUSED FROM YOU|this tool REFUSES them/i);
+    expect(channelDoctrine()).not.toContain("they are REFUSED from you");
+    expect(channelDoctrine()).not.toMatch(/REFUSED FROM YOU|this tool REFUSES them/i);
     // ⚠ RE-POINTED: `op="post"` is `op="send"`, so the doctrine's noun moved with it.
-    expect(CHANNEL_DOCTRINE).toContain("EVERY SUBSTANTIVE THING YOU SAY IS AN ORDINARY SEND");
+    expect(channelDoctrine()).toContain("EVERY SUBSTANTIVE THING YOU SAY IS AN ORDINARY SEND");
   });
 });

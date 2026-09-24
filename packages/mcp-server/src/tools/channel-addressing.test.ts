@@ -18,8 +18,8 @@ import type { DoplClient } from "@dopl/client";
 // ⚠ T12 — every "NOT ADDRESSED" pin below is now a pair: the paragraph is out
 // of the result, and the rule it stated is still shipped, from one place.
 import {
-  CHANNEL_DOCTRINE,
-  DOCTRINE_POINTER,
+  channelDoctrine,
+  doctrinePointer,
   DOCTRINE_URI,
 } from "./channel-doctrine";
 import { opHold } from "./channel-ops-hold";
@@ -227,8 +227,8 @@ describe("await — a wake that is not for you", () => {
     const text = (await opHold(client, "general", 6, 1, ME)).content[0].text;
 
     expect(text).toContain(`${DOCTRINE_URI} › Waiting`);
-    expect(CHANNEL_DOCTRINE).toContain("the MEMBER YOU ADDRESSED — not the room");
-    expect(CHANNEL_DOCTRINE).not.toContain("the peer has shown nothing");
+    expect(channelDoctrine()).toContain("the MEMBER YOU ADDRESSED — not the room");
+    expect(channelDoctrine()).not.toContain("the peer has shown nothing");
   });
 });
 
@@ -262,7 +262,7 @@ describe("post — an unaddressed post outside a DM triggers nobody", () => {
     // ⚠ What makes THIS post safe to call unheard is its AUTHOR KIND, not the
     // channel's size — and that claim may not generalize, so it is pinned where
     // it is now stated rather than allowed to vanish with the paragraph.
-    expect(CHANNEL_DOCTRINE).toContain(
+    expect(channelDoctrine()).toContain(
       "an AGENT-authored UNADDRESSED message starts nobody",
     );
     expect(text).not.toContain("nobody was woken by it");
@@ -279,7 +279,7 @@ describe("post — an unaddressed post outside a DM triggers nobody", () => {
       .content[0].text;
 
     expect(text).toContain("addressed=no");
-    expect(CHANNEL_DOCTRINE).toContain("in a room of two or of ten");
+    expect(channelDoctrine()).toContain("in a room of two or of ten");
   });
 
   it("reports `addressed=yes` when the post named an addressee", async () => {
@@ -357,8 +357,8 @@ describe("thread reads — both parties (N-party)", () => {
     // listing — so it is stated once under THE MODEL and the listing spends one
     // pointer line instead of restating it per page.
     expect(text).not.toContain("ONLY from the member who opened it");
-    expect(text).toContain(DOCTRINE_POINTER);
-    expect(CHANNEL_DOCTRINE).toContain(
+    expect(text).toContain(doctrinePointer());
+    expect(channelDoctrine()).toContain(
       // ⚠ PUNCTUATION DRIFT FROM THE DOCTRINE REWRITE, not a moved rule —
       // same claim, same section, re-pointed at the shipped wording.
       "Only those two can post into it; a third member's post is refused",

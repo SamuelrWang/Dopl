@@ -7,7 +7,7 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import type { DoplClient, WorkspaceListItem } from "@dopl/client";
 import { createServer } from "../server.js";
-import { CHANNEL_DOCTRINE } from "./channel-doctrine.js";
+import { channelDoctrine } from "./channel-doctrine.js";
 import {
   CHANNEL_INPUT_SHAPE,
   PARAM_DESCRIPTION_MAX_CHARS,
@@ -131,7 +131,7 @@ describe("the served input schema fits its budget", () => {
 describe("what the schema stopped carrying, the doctrine carries", () => {
   it("the FIELDS section exists and states each moved rule once", () => {
     // A move, not a delete: each line was once a paragraph inside a `.describe()`.
-    expect(CHANNEL_DOCTRINE).toContain("THE ARGUMENTS THAT CARRY A RULE:");
+    expect(channelDoctrine()).toContain("THE ARGUMENTS THAT CARRY A RULE:");
     // Only rules with nowhere else to live belong here; one that fits its own `.describe()` stays there.
     for (const rule of [
       "OMITTING `channel` IS A WIDER READ",
@@ -141,7 +141,7 @@ describe("what the schema stopped carrying, the doctrine carries", () => {
       "`client_msg_id` IS WHAT MAKES A RETRY SAFE",
       "`posture.chain` NAMES ITS THREE STATES",
     ])
-      expect(CHANNEL_DOCTRINE, rule).toContain(rule);
+      expect(channelDoctrine(), rule).toContain(rule);
     // And the other direction: neither may come back onto the pushed schema.
     const prose = Object.values(served)
       .map((schema) => (schema as { description?: string }).description ?? "")

@@ -19,7 +19,7 @@
 import { describe, it, expect, vi } from "vitest";
 import type { DoplClient } from "@dopl/client";
 import { opCreateThread } from "./channel-ops-threads";
-import { CHANNEL_DOCTRINE } from "./channel-doctrine";
+import { channelDoctrine } from "./channel-doctrine";
 
 const CHANNEL = {
   id: "chan-1",
@@ -159,7 +159,7 @@ describe('send thread="new" handoff (rollback §3.5)', () => {
     // ⚠ …AND IT IS NAMED IN THE DOCTRINE, not on every create. Stating it per
     // call charged every caller for a pointer; dropping it entirely would close
     // a door and open none, which is how an agent invents a workaround.
-    expect(CHANNEL_DOCTRINE).toContain('op="manage" action="launch"');
+    expect(channelDoctrine()).toContain('op="manage" action="launch"');
   });
 
   it("a handoff create with NO opening seq asks for the cursor instead of inventing one", async () => {
@@ -190,7 +190,7 @@ describe('send thread="new" handoff (rollback §3.5)', () => {
     // ⚠ "Go and read the cursor yourself" left the result with every other
     // standing sentence; the dash is this call's statement that there is nothing
     // to take, and the doctrine still names the op that takes it.
-    expect(CHANNEL_DOCTRINE).toContain('"read"');
+    expect(channelDoctrine()).toContain('"read"');
   });
 
   it("WITHOUT handoff, behaviour is unchanged: the create keeps the reply and arms await", async () => {

@@ -1,10 +1,10 @@
 // `manage action="end"` / `"rename"`: what each terminal result teaches. Each case pins the field on
-// this call's line and the rule in `CHANNEL_DOCTRINE`; the doctrine-only half is
+// this call's line and the rule in `channelDoctrine()`; the doctrine-only half is
 // `channel-ops-agent-doctrine.test.ts`.
 
 import { describe, it, expect, vi } from "vitest";
 import { opEndAgent, opRenameAgent } from "./channel-ops-agent";
-import { CHANNEL_DOCTRINE } from "./channel-doctrine";
+import { channelDoctrine } from "./channel-doctrine";
 import { CHANNEL_INPUT_SHAPE } from "./channel-schema";
 import {
   AGENT,
@@ -35,12 +35,12 @@ describe('manage action="end" — the success line', () => {
   it("says the handle is SPENT — the one paragraph that had to survive as a FACT", async () => {
     const out = await endText(done);
     expect(out).toContain("handle=spent");
-    expect(CHANNEL_DOCTRINE).toContain('op="manage" action="launch"');
+    expect(channelDoctrine()).toContain('op="manage" action="launch"');
   });
 
   it("does not claim more than a machine can prove", async () => {
     // The result reports what came back and never an outcome it did not observe.
-    expect(CHANNEL_DOCTRINE).toContain(
+    expect(channelDoctrine()).toContain(
       "Every action files a request on your own operator's machine and holds for its answer",
     );
     expect(await endText(done)).toContain("filed=yes");
@@ -57,13 +57,13 @@ describe('manage action="end" — no-session is NOT a fault', () => {
     // The wire word stays on the result: the doctrine is keyed on it.
     expect(out).toContain("reason=no-session");
     // The "usually good news" gloss is pinned absent in `channel-ops-agent-doctrine.test.ts › RETIRED_BY_RULING`.
-    expect(CHANNEL_DOCTRINE).toContain("`no-session` no such agent");
+    expect(channelDoctrine()).toContain("`no-session` no such agent");
   });
 
   it('sends the caller to op="status" rather than to a retry', async () => {
     // `retry=no` is the whole of "do not ask again"; the surface that answers instead is in the doctrine.
     expect(await endText(gone)).toContain("retry=no");
-    expect(CHANNEL_DOCTRINE).toContain(
+    expect(channelDoctrine()).toContain(
       'op="status" reads your own machine\'s live sessions and the directions waiting for them',
     );
   });
@@ -84,8 +84,8 @@ describe("the refusal advice must NOT be the launch op's", () => {
     expect(out).not.toContain("TURNED OFF on that machine");
     expect(out).not.toMatch(/turn(ed)? (it )?on/i);
     // One clause carries both halves, so a reword of either side cannot delete the asymmetry.
-    expect(CHANNEL_DOCTRINE).toContain("`no-bridge` the operator's LAUNCH toggle is off");
-    expect(CHANNEL_DOCTRINE).toContain('it gates "launch" and "posture", never "end" or "rename"');
+    expect(channelDoctrine()).toContain("`no-bridge` the operator's LAUNCH toggle is off");
+    expect(channelDoctrine()).toContain('it gates "launch" and "posture", never "end" or "rename"');
   });
 
   // `cap` on a launch means "wait for a slot"; on an end that contradicts the request, and `retry=no`
@@ -103,7 +103,7 @@ describe("the refusal advice must NOT be the launch op's", () => {
     const busy = await endText(settled({ status: "refused", refusalReason: "busy" }));
     expect(busy).toContain("reason=busy");
     expect(busy).toContain("retry=once");
-    expect(CHANNEL_DOCTRINE).toContain("`busy` mid-turn");
+    expect(channelDoctrine()).toContain("`busy` mid-turn");
     for (const reason of ["cap", "no-sdk", "auth-hold", "no-identity"] as const) {
       const out = await endText(settled({ status: "refused", refusalReason: reason }));
       expect(out, `${reason} earned a retry it should not have`).toContain("retry=no");
@@ -127,14 +127,14 @@ describe('manage action="rename" — display only, on one machine', () => {
     expect(out).toContain(`renamed agent=@agent-${AGENT}`);
     expect(out).toContain("handle=unchanged");
     expect(out).toContain("name=Research");
-    expect(CHANNEL_DOCTRINE).toContain("what people see and what agents tag it by");
+    expect(channelDoctrine()).toContain("what people see and what agents tag it by");
   });
 
   it('warns that op="status" will NOT show the name, and that this is correct', async () => {
     // Nothing here can confirm a rename landed, so the caller is not sent to poll a listing.
     const out = await renameText(done);
     expect(out).toContain("confirm=none");
-    expect(CHANNEL_DOCTRINE).toContain("what people see and what agents tag it by");
+    expect(channelDoctrine()).toContain("what people see and what agents tag it by");
   });
 
   it("a name with a SPACE is quoted, so it cannot invent a field", async () => {
@@ -164,7 +164,7 @@ describe('manage action="rename" — display only, on one machine', () => {
     // A refused rename is cosmetic: the agent still runs, so a caller must not end and re-launch it.
     expect(out).toContain("agentChanged=no");
     // The doctrine explains the word; `name`'s own `.describe()` states the bound where a client decides.
-    expect(CHANNEL_DOCTRINE).toContain(
+    expect(channelDoctrine()).toContain(
       "`bad-name` the label was not one line of 1-60 visible characters",
     );
     expect(ARG_PROSE).toContain("1-60 visible characters on ONE line");

@@ -28,8 +28,8 @@ import { CHANNEL_INPUT_SHAPE } from "./channel-schema";
 // ⚠ WHERE THE FIVE SENTENCES WENT (T10, 2026-09-02). A `manage action="direct"`
 // result is ONE line of `key=value` facts now; the paragraph per refusal word,
 // the privacy framing and the "final text of one turn" bound are standing
-// doctrine and are re-pinned on CHANNEL_DOCTRINE below — moved, never dropped.
-import { CHANNEL_DOCTRINE } from "./channel-doctrine";
+// doctrine and are re-pinned on channelDoctrine() below — moved, never dropped.
+import { channelDoctrine } from "./channel-doctrine";
 import { WRITE_RESULT_MAX_CHARS } from "./channel-facts";
 
 const CHANNEL = {
@@ -220,10 +220,10 @@ describe("the terminal shapes", () => {
     // ⚠ RE-POINTED BY THE FIVE-OP COLLAPSE. The doctrine states the same bound in
     // the `manage` section's one line for this action, and the surface an
     // orchestrator goes to for what an agent is DOING is `op="status"` now.
-    expect(CHANNEL_DOCTRINE).toContain(
+    expect(channelDoctrine()).toContain(
       '"direct" sends it a private message and reads that turn\'s final text back',
     );
-    expect(CHANNEL_DOCTRINE).toContain('op="status"');
+    expect(channelDoctrine()).toContain('op="status"');
   });
 
   it("DELIVERED with no reply says NOT REPORTED, never 'it said nothing'", async () => {
@@ -262,8 +262,8 @@ describe("the terminal shapes", () => {
     // ⚠ RE-POINTED: the paragraph per word became one entry per word in the
     // `manage` section's refusal table, and the "a refusal is normal" headline
     // became that table's opening sentence.
-    expect(CHANNEL_DOCTRINE).toContain("`no-session` no such agent");
-    expect(CHANNEL_DOCTRINE).toContain("A REFUSAL IS A NORMAL ANSWER");
+    expect(channelDoctrine()).toContain("`no-session` no such agent");
+    expect(channelDoctrine()).toContain("A REFUSAL IS A NORMAL ANSWER");
   });
 
   it("PENDING forbids re-issuing, and names the one place the answer lands", async () => {
@@ -295,10 +295,10 @@ describe("the terminal shapes", () => {
     // sentence became ONE timeout rule covering all five `manage` actions, which
     // is the collapse's own design — one text, five mailboxes. It still forbids
     // the bare re-issue and still names the cost.
-    expect(CHANNEL_DOCTRINE).toContain(
+    expect(channelDoctrine()).toContain(
       "A TIMEOUT IS NOT A FAILURE: the request stays PENDING",
     );
-    expect(CHANNEL_DOCTRINE).toContain(
+    expect(channelDoctrine()).toContain(
       "re-issuing without the SAME `client_msg_id` starts a SECOND agent",
     );
   });
@@ -346,7 +346,7 @@ describe("every refusal word renders its verdict, and the doctrine explains it",
     // 2026-09-02; the list is all five now and a new word must arrive with its
     // paragraph rather than after it.
     const expanded = (Object.keys(RETRY_BY_REASON) as DirectionRefusalReason[]).filter(
-      (word) => CHANNEL_DOCTRINE.includes(`\`${word}\``),
+      (word) => channelDoctrine().includes(`\`${word}\``),
     );
     // ⚠ **AND THE FIVE-OP COLLAPSE RE-OPENED IT FOR A DAY**, which is the second
     // time this list caught the same thing: the refusal table went to nine words
@@ -364,10 +364,10 @@ describe("every refusal word renders its verdict, and the doctrine explains it",
 
   it("...and each expanded word still ends in a next action", () => {
     // ⚠ RE-POINTED WORD BY WORD onto the refusal table the paragraphs became.
-    expect(CHANNEL_DOCTRINE).toContain("`no-session` no such agent");
-    expect(CHANNEL_DOCTRINE).toContain("`auth-hold` the operator must sign in");
-    expect(CHANNEL_DOCTRINE).toContain("`busy` mid-turn");
-    expect(CHANNEL_DOCTRINE).toContain("`no-bridge` the operator's LAUNCH toggle is off");
+    expect(channelDoctrine()).toContain("`no-session` no such agent");
+    expect(channelDoctrine()).toContain("`auth-hold` the operator must sign in");
+    expect(channelDoctrine()).toContain("`busy` mid-turn");
+    expect(channelDoctrine()).toContain("`no-bridge` the operator's LAUNCH toggle is off");
   });
 
   it("the CONSENT refusal never reads as a fault or suggests a workaround", async () => {
@@ -383,7 +383,7 @@ describe("every refusal word renders its verdict, and the doctrine explains it",
     // route" was RETIRED BY RULING (contracts only, wave B spec §4) — `retry=no`
     // already says asking again changes nothing — and is pinned ABSENT once, in
     // `channel-ops-agent-doctrine.test.ts › RETIRED_BY_RULING`.
-    expect(CHANNEL_DOCTRINE).toContain("`no-bridge` the operator's LAUNCH toggle is off");
+    expect(channelDoctrine()).toContain("`no-bridge` the operator's LAUNCH toggle is off");
   });
 });
 

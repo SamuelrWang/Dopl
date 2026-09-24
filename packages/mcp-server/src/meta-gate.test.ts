@@ -41,7 +41,7 @@ import { z } from "zod";
 import { createToolRegistrars } from "./registrar.js";
 import { createGates } from "./gating.js";
 import { HIDDEN_TOOLS } from "./gating.js";
-import { DELETE_REFUSAL } from "./delete-policy.js";
+import { deleteRefusal } from "./delete-policy.js";
 import { UNKNOWN_CALLER } from "./tools/identity.js";
 import type { WorkspaceDirectory } from "./workspace-directory.js";
 
@@ -195,7 +195,7 @@ describe("registerMetaTool runs opRefusal (registrar.ts:303)", () => {
     });
     expect(res.isError).toBe(true);
     const text = (res.content as Array<{ text: string }>).map((c) => c.text).join("");
-    expect(text).toContain(DELETE_REFUSAL);
+    expect(text).toContain(deleteRefusal());
     // ⚠ Fires BEFORE the handler, so a refused delete cannot half-happen.
     expect(handlers.admin).not.toHaveBeenCalled();
   });

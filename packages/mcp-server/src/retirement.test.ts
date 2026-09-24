@@ -47,11 +47,12 @@ vi.mock("@modelcontextprotocol/sdk/server/mcp.js", () => ({
 }));
 
 import { createServer, buildInstructions } from "./server.js";
+import { withToolSet } from "./call-ref.js";
 // The policy from the module that owns it: the refusal, and the table of delete
 // ops no tool may publish.
 import {
   DELETE_BLOCKED_OPS,
-  DELETE_REFUSAL,
+  deleteRefusal,
   isBlockedDeleteOp,
 } from "./delete-policy.js";
 
@@ -251,11 +252,13 @@ describe("no delete op is reachable over MCP", () => {
     // ⚠ Pinned so a reword cannot turn "ask the user" into an unactionable
     // "denied". It is the answer the gate returns the moment a delete-shaped op
     // lands on a tool, and the wording the `sessionOnly` 403 backs up.
-    expect(DELETE_REFUSAL).toContain(
-      "Deletion is app-only. Ask the user to delete this in the Dopl app.",
-    );
-    // ⚠ Must close the retry loop, or the agent walks the op enum.
-    expect(DELETE_REFUSAL).toContain("do not retry");
+    // ⚠ In BOTH tool sets: only the rewrite tools it names are spelled per set.
+    for (const text of [deleteRefusal(), withToolSet("granular", deleteRefusal)]) {
+      expect(text.startsWith("reason=delete_is_app_only · agents never delete over MCP. Deletion is app-only. Ask the user to delete this in the Dopl app.")).toBe(true);
+      // ⚠ Must close the retry loop, or the agent walks the op enum.
+      expect(text).toContain("do not retry");
+    }
+    expect(withToolSet("granular", deleteRefusal)).toContain("(dopl_write_entry(), dopl_update_skill(action=\"write\"), dopl_edit_object(action=\"update\"))");
   });
 
   it("does not touch the non-destructive ops on the surviving tools", async () => {

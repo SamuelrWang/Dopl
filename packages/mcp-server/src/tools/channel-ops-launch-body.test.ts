@@ -2,7 +2,7 @@
 
 import { describe, it, expect, vi } from "vitest";
 import { opLaunchAgent } from "./channel-ops-launch";
-import { CHANNEL_DOCTRINE, TENANCY_RULE } from "./channel-doctrine";
+import { channelDoctrine, TENANCY_RULE } from "./channel-doctrine";
 import { CHANNEL_INPUT_SHAPE } from "./channel-schema";
 import {
   created,
@@ -69,7 +69,7 @@ describe("the call itself", () => {
     expect(out).toContain("filed=yes");
     expect(out).not.toContain("nothing was filed");
     // Names whose fence failed, never which of deleted / invisible (the resolve is 404-never-403).
-    expect(CHANNEL_DOCTRINE).toContain(
+    expect(channelDoctrine()).toContain(
       "`no-identity` THAT machine could not resolve it under the operator's visibility",
     );
     // The tenancy rule is standing and reveals no row, so it may be stated here.

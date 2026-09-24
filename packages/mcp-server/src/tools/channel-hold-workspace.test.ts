@@ -5,7 +5,7 @@ import { describe, it, expect, vi } from "vitest";
 import type { DoplClient } from "@dopl/client";
 import { opHoldWorkspace } from "./channel-ops-hold-workspace";
 import { opHold } from "./channel-ops-hold";
-import { CHANNEL_DOCTRINE, DOCTRINE_URI } from "./channel-doctrine";
+import { channelDoctrine, DOCTRINE_URI } from "./channel-doctrine";
 
 const ME = "11111111-1111-1111-1111-111111111111";
 
@@ -140,8 +140,8 @@ describe("the workspace stop rule is its own, not the per-channel one", () => {
     expect(await text(wsClient({}), 5, HOLD_MS)).toContain(
       `${DOCTRINE_URI} › Waiting`,
     );
-    expect(CHANNEL_DOCTRINE).toContain("No thread ever closes");
-    expect(CHANNEL_DOCTRINE).toContain(
+    expect(channelDoctrine()).toContain("No thread ever closes");
+    expect(channelDoctrine()).toContain(
       "STOP when nothing has come from the MEMBER YOU ADDRESSED",
     );
   });

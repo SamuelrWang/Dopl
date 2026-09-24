@@ -43,10 +43,18 @@ export function activeToolSet(): ToolSet {
 
 /**
  * The call being answered, named back to its caller: the granular tool it came through, else the
- * legacy op label as the caller spelled it (`op="export"`).
+ * legacy op label as the caller spelled it (`op="export"`, after `legacyPrefix` when given).
  */
-export function calledAs(opLabel: string): string {
-  return scope.getStore()?.tool ?? `op="${opLabel}"`;
+export function calledAs(opLabel: string, legacyPrefix = ""): string {
+  return scope.getStore()?.tool ?? `${legacyPrefix}op="${opLabel}"`;
+}
+
+/**
+ * Marks text only a LEGACY call can reach (an answer to a legacy-only arg or op), which keeps its
+ * legacy spelling; `call-spelling.test.ts` skips what it wraps. Never for text a granular call reaches.
+ */
+export function legacyOnly(text: string): string {
+  return text;
 }
 
 /** Prose that differs by set beyond a call spelling (a renamed param, a sentence about ops). */
@@ -59,11 +67,12 @@ export type CallArgs = Readonly<Record<string, string | true>>;
 
 export interface CallOptions {
   /**
-   * `"op"`: the legacy spelling relative to its own tool, for a hint inside that tool's own text —
-   * `op="list_dir"`, or `op="rooms" action="list"` where there is an action. A granular tool is its own
-   * job, so a granular spelling is always the whole call.
+   * The legacy prose shorthands: `"op"` relative to its own tool, for a hint inside that tool's own
+   * text (`op="list_dir"`, `op="rooms" action="list"`); `"named"` the same after the tool's name
+   * (`dopl_kb op="write_file"`). A granular tool is its own job, so a granular spelling is always the
+   * whole call.
    */
-  form?: "call" | "op";
+  form?: "call" | "op" | "named";
   /** The quote around op/action/selector values. Default `"`. */
   quote?: '"' | "'";
 }
@@ -99,9 +108,11 @@ export function callKeys(): ReadonlySet<string> {
   return new Set(targetMap().keys());
 }
 
+/** A key's targets; an op without its action (`channel.manage`) names every job under it. */
 function targetsOf(key: string): readonly Target[] {
-  const found = targetMap().get(key);
-  if (!found) throw new Error(`callRef: "${key}" is not a manifest key`);
+  const found =
+    targetMap().get(key) ?? [...targetMap()].flatMap(([k, t]) => (k.startsWith(`${key}.`) ? t : []));
+  if (found.length === 0) throw new Error(`callRef: "${key}" is not a manifest key`);
   return found;
 }
 
@@ -119,23 +130,27 @@ function argText(args: CallArgs, skip: Readonly<Record<string, string>> = {}): s
     .map(([name, value]) => (value === true ? name : `${name}=${value}`));
 }
 
-/** The granular tool `key` names, bare: `dopl_read_channel`. Legacy: `dopl_channel`. */
-export function toolName(key: string): string {
+/** The tool `key` names, bare: `dopl_read_channel` (legacy `dopl_channel`); `args` pick a preset tool. */
+export function toolName(key: string, args: CallArgs = {}): string {
   if (activeToolSet() === "legacy") return `dopl_${key.split(".")[0]}`;
-  return pick(targetsOf(key), {}).tool.name;
+  return pick(targetsOf(key), args).tool.name;
 }
 
-/** `key` called with `args`, spelled for the active set. */
+/**
+ * `key` called with `args`, spelled for the active set. An op without its action spells, on a
+ * granular connection, every tool under it (`dopl_launch_agent / dopl_manage_session`).
+ */
 export function callRef(key: string, args: CallArgs = {}, options: CallOptions = {}): string {
   const found = targetsOf(key);
   const q = options.quote ?? '"';
   if (activeToolSet() === "legacy") {
     const [tool, op, action] = key.split(".");
-    const act = action === undefined ? "" : `action=${q}${action}${q}`;
-    if (options.form === "op") return [[`op=${q}${op}${q}`, ...(act ? [act] : [])].join(" "), ...argText(args)].join(", ");
-    const parts = [...(op === undefined ? [] : [`op=${q}${op}${q}`]), ...(act ? [act] : []), ...argText(args)];
-    return `dopl_${tool}(${parts.join(", ")})`;
+    const opText = [`op=${q}${op}${q}`, ...(action === undefined ? [] : [`action=${q}${action}${q}`])];
+    if (options.form === "op") return [opText.join(" "), ...argText(args)].join(", ");
+    if (options.form === "named") return [`dopl_${tool} ${opText.join(" ")}`, ...argText(args)].join(", ");
+    return `dopl_${tool}(${[...(op === undefined ? [] : opText), ...argText(args)].join(", ")})`;
   }
+  if (!targetMap().has(key)) return [...new Set(found.map((t) => t.tool.name))].join(" / ");
   const { tool, job } = pick(found, args);
   const selector = selectorOf(tool);
   const parts = [...(selector && job ? [`${selector}=${q}${job}${q}`] : []), ...argText(args, tool.preset)];

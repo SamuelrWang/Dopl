@@ -21,7 +21,7 @@ import { ok, missingParams, strictParams, type RegisterTool, type ToolResponse }
 import { opHistory, opRestore } from "./skills-ops-history";
 import { SKILL_ERRORS } from "./tool-errors";
 import { composeDescription, DESCRIPTION_MAX_CHARS } from "./tool-style";
-import { SKILL_AUTHORING_GUIDE } from "../prompts/skill-authoring-guide.js";
+import { skillAuthoringGuide } from "../prompts/skill-authoring-guide.js";
 import { opGet, opList, opRead } from "./skills-ops-read";
 import {
   opCreate,
@@ -178,7 +178,7 @@ export function registerSkillTools(
           );
         }
         case "authoring_guide":
-          return ok(SKILL_AUTHORING_GUIDE);
+          return ok(skillAuthoringGuide());
         case "history": {
           const bad = strictParams("history", args, ["slug"], ["revision", "limit"]);
           if (bad) return bad;

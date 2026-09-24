@@ -1,11 +1,11 @@
-// The addressable handle `op="status"` publishes, and the handle rule in `CHANNEL_DOCTRINE` that must
+// The addressable handle `op="status"` publishes, and the handle rule in `channelDoctrine()` that must
 // travel with it: a tool result is read at the moment a model picks its next action (INVARIANTS §10).
 
 import { describe, expect, it } from "vitest";
 import { addressableHandle } from "./channel-session-handle";
 import { formatSessionLine } from "./channel-session-render";
 import { sessionBlockLines } from "./channel-session-table";
-import { CHANNEL_DOCTRINE, DOCTRINE_SECTIONS } from "./channel-doctrine";
+import { channelDoctrine, DOCTRINE_SECTIONS } from "./channel-doctrine";
 import type { ChannelSessionStateOwn } from "@dopl/client";
 
 const NOW = Date.parse("2026-08-31T05:00:00.000Z");
@@ -89,42 +89,42 @@ describe("the handle rule survived the move to the doctrine, clause for clause",
   it("names the form, and says a CUSTOM NAME **is** the address", () => {
     // The name is the address (`channel_sessions.display_name` is peer-visible), and its exclusivity
     // clause travels with it.
-    expect(CHANNEL_DOCTRINE).toContain("that tag, in `to`, wakes THAT agent");
-    expect(CHANNEL_DOCTRINE).toContain("AND ONLY IN `to`, BY NAME");
-    expect(CHANNEL_DOCTRINE).toContain("never without naming one");
-    expect(CHANNEL_DOCTRINE).toContain("what people see and what agents tag it by");
+    expect(channelDoctrine()).toContain("that tag, in `to`, wakes THAT agent");
+    expect(channelDoctrine()).toContain("AND ONLY IN `to`, BY NAME");
+    expect(channelDoctrine()).toContain("never without naming one");
+    expect(channelDoctrine()).toContain("what people see and what agents tag it by");
     // The id still exists and must not be written into a message.
-    expect(CHANNEL_DOCTRINE).toContain("NEVER WRITE AN AGENT ID IN A MESSAGE");
+    expect(channelDoctrine()).toContain("NEVER WRITE AN AGENT ID IN A MESSAGE");
   });
 
   it("SAYS THE HANDLE WAKES, AND NAMES IT AS A WAKE RATHER THAN A TAG", () => {
     // The MCP caller posts under its operator's account, which is what licenses the wake.
-    expect(CHANNEL_DOCTRINE).toContain("wakes THAT agent");
-    expect(CHANNEL_DOCTRINE).toContain(
+    expect(channelDoctrine()).toContain("wakes THAT agent");
+    expect(channelDoctrine()).toContain(
       "Tagging is not addressing and starts no agent",
     );
   });
 
   it("puts the GOAL first — waking is for redirecting, not for starting", () => {
     // Goal first, wake thereafter: the launch takes the body as its first instruction.
-    expect(CHANNEL_DOCTRINE).toContain("its `body` is its FIRST INSTRUCTION");
-    expect(CHANNEL_DOCTRINE).toContain(
+    expect(channelDoctrine()).toContain("its `body` is its FIRST INSTRUCTION");
+    expect(channelDoctrine()).toContain(
       'op="manage" action="launch" starts one and answers the name it got; that tag, in `to`, wakes THAT agent',
     );
   });
 
   it("CARRIES ALL THREE LIMITS — an exception without its boundary is a hole", () => {
     // (1) Addressed only: an unaddressed agent post is exactly what the loop brake refuses.
-    expect(CHANNEL_DOCTRINE).toContain(
+    expect(channelDoctrine()).toContain(
       "an AGENT-authored UNADDRESSED message starts nobody",
     );
-    expect(CHANNEL_DOCTRINE).toContain(
+    expect(channelDoctrine()).toContain(
       "YOUR OWN OPERATOR'S AGENTS, AND ONLY THEIR MACHINE",
     );
-    expect(CHANNEL_DOCTRINE).toContain("Never another member's agent");
+    expect(channelDoctrine()).toContain("Never another member's agent");
     // (3) The receipt (`delivery=`) is the only ack; the wake itself is decided on a desktop.
-    expect(CHANNEL_DOCTRINE).toContain("`delivery=` IS THE ACK AND THE ONLY ONE");
-    expect(CHANNEL_DOCTRINE).toContain(
+    expect(channelDoctrine()).toContain("`delivery=` IS THE ACK AND THE ONLY ONE");
+    expect(channelDoctrine()).toContain(
       "`idle` resolved but nothing running, filed until that machine reconciles",
     );
     // The capability and its boundary in one breath, so a reader cannot take the first alone.

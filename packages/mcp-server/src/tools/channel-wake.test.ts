@@ -26,7 +26,7 @@ import { CHANNEL_DESCRIPTION } from "./channel-description";
 import { UNTRUSTED_BODY_HEADER } from "./channel-framing";
 // ⚠ WHERE THE HOLD PROTOCOL LIVES SINCE T10/T12 (2026-09-02) and, since
 // 2026-09-03, the WAITING rule with it — moved, never dropped, re-pinned here.
-import { CHANNEL_DOCTRINE, DOCTRINE_URI } from "./channel-doctrine";
+import { channelDoctrine, DOCTRINE_URI } from "./channel-doctrine";
 import { opHold } from "./channel-ops-hold";
 
 const CHANNEL = {
@@ -349,13 +349,13 @@ describe("opHold — long hold (WAKE-V1)", () => {
       expect(text).not.toContain("closed or failed");
       expect(text).not.toContain('op="get_thread"');
     }
-    expect(CHANNEL_DOCTRINE).toContain(
+    expect(channelDoctrine()).toContain(
       "STOP when nothing has come from the MEMBER YOU ADDRESSED",
     );
-    expect(CHANNEL_DOCTRINE).toContain("No thread ever closes");
+    expect(channelDoctrine()).toContain("No thread ever closes");
     // ⚠ A flat "stop after N timeouts" abandons a peer heads-down on a long
     // job — the exact case this feature exists for.
-    expect(CHANNEL_DOCTRINE).not.toMatch(
+    expect(channelDoctrine()).not.toMatch(
       /stop\D{0,40}3 (consecutive )?(empty )?(holds|timeouts)/i,
     );
   });
@@ -373,8 +373,8 @@ describe("opHold — long hold (WAKE-V1)", () => {
     // — a heuristic for what the 30-minute rule already requires, since you
     // cannot know nothing came from the member you addressed without looking.
     expect(text).toContain("hold, never poll");
-    expect(CHANNEL_DOCTRINE).toContain("LOOK before each re-arm");
-    expect(CHANNEL_DOCTRINE).toMatch(/STOP when nothing has come[\s\S]{0,80}30 min/);
+    expect(channelDoctrine()).toContain("LOOK before each re-arm");
+    expect(channelDoctrine()).toMatch(/STOP when nothing has come[\s\S]{0,80}30 min/);
   });
 
   // ── FIX M1: the untrusted-content caveat is a HEADER, not a footnote ──
@@ -459,10 +459,10 @@ describe("opCreateThread — the hold cursor rides back (WAKE-V1)", () => {
     // which is the load-bearing half this pair was ever about, and it is what
     // the doctrine end of the pair now holds.
     // ⚠ RE-POINTED (2026-09-03): the stop rule is `waiting`'s, once, both lanes.
-    expect(CHANNEL_DOCTRINE).toContain(
+    expect(channelDoctrine()).toContain(
       "STOP when nothing has come from the MEMBER YOU ADDRESSED",
     );
-    expect(CHANNEL_DOCTRINE).toContain(
+    expect(channelDoctrine()).toContain(
       "An empty return is the budget expiring, not an answer",
     );
   });
@@ -493,7 +493,7 @@ describe("opCreateThread — the hold cursor rides back (WAKE-V1)", () => {
     // ⚠ RE-POINTED (B8), because the lookup no longer needs two ops named. A
     // read with NO cursor IS the latest-seq lookup, and that is now stated on
     // the read itself rather than as a pair of op names.
-    expect(CHANNEL_DOCTRINE).toContain(
+    expect(channelDoctrine()).toContain(
       "with none you get the newest page",
     );
   });

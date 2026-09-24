@@ -52,7 +52,7 @@ import { rosterAddressingRule } from "./channel-addressing";
 // ⚠ THE ONE LINE A READ RESULT SPENDS ON THE RULES. Every standing paragraph
 // these ops used to close with is in `channel-doctrine.ts`, behind `op="rooms" action="help"`
 // and the `dopl://doctrine/channels` resource.
-import { DOCTRINE_POINTER } from "./channel-doctrine";
+import { doctrinePointer } from "./channel-doctrine";
 // ⚠ THE ONE LINE A READ SPENDS ON WAITING — cursor, the exact hold call, and a
 // pointer at the rule. Shared with both hold lanes so the three cannot drift.
 import { channelHoldCall, waitingLine } from "./channel-wake-guidance";
@@ -322,7 +322,7 @@ export async function opReadSessions(
       // have none": an asleep, signed-out or older machine reports nothing, so
       // an empty page is not evidence a session is not running. The rest — that
       // this is your own side only — is in the doctrine.
-      `No live sessions of yours are being REPORTED${channelLabel} right now. That is not the same as having none: an asleep, signed-out or older machine reports nothing. ${DOCTRINE_POINTER}`,
+      `No live sessions of yours are being REPORTED${channelLabel} right now. That is not the same as having none: an asleep, signed-out or older machine reports nothing. ${doctrinePointer()}`,
     );
   }
 
@@ -372,12 +372,12 @@ export async function opReadSessions(
   // a `—` means, why a row is a REPORT and not an observation) is doctrine and
   // is read once, not on every call of an op an orchestrator polls in a loop.
   // ⚠ The legend decodes THIS page's own hedged cells, so it survives `concise`
-  // whenever the page actually has one; the DOCTRINE_POINTER is standing
+  // whenever the page actually has one; the doctrinePointer() is standing
   // teaching and does not.
   lines.push(
     isConcise(format)
       ? `\n${sessionLegend(anyStale, operatorOnline)}`
-      : `\n${sessionLegend(anyStale, operatorOnline)} ${DOCTRINE_POINTER}`,
+      : `\n${sessionLegend(anyStale, operatorOnline)} ${doctrinePointer()}`,
   );
   return ok(lines.join("\n"));
 }
@@ -426,7 +426,7 @@ export async function opListThreads(
   // channel — and is stated in `channel-doctrine.ts` under THE MODEL. What stays
   // is the two calls a reader of THIS page needs next.
   lines.push(
-    `\nRead one with op="read" (thread=<id>) — that returns the thread's card and its messages. ${DOCTRINE_POINTER}`,
+    `\nRead one with op="read" (thread=<id>) — that returns the thread's card and its messages. ${doctrinePointer()}`,
   );
   return ok(lines.join("\n"));
 }

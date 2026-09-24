@@ -43,73 +43,7 @@ import type { DoplClient, WorkspaceListItem } from "@dopl/client";
 import { createServer, buildInstructions } from "./server.js";
 import type { ToolSet } from "./tool-manifest.js";
 import { DESCRIPTION_MAX_CHARS } from "./tools/channel-description.js";
-
-/**
- * ⚠ A CEILING THAT ONLY EVER MOVES DOWN — AND ALL FOUR OF ITS HALVES. Only the
- * first is a budget; the other three are what keep it one.
- *
- *   • OVER    — it grew past its ceiling. The regression this file is for.
- *   • STALE   — it shrank below its ceiling, so the ceiling can be lowered.
- *     ⚠ The description half of this **asserted nothing until 2026-09-02**: it
- *     read `len <= Math.min(ceiling, DESCRIPTION_MAX_CHARS)`, and since every
- *     ceiling here is ABOVE the cap the `Math.min` collapsed to the cap, which
- *     re-asks the OVER question. Every shrink in between — the whole range the
- *     half exists to police — passed silently. It caught two real shrinks the
- *     hour it was repaired.
- *   • DEAD    — a ceiling for a name nothing serves any more. Wave A deletes
- *     five tools; without this their entries outlive them and become headroom
- *     for whatever is added next.
- *   • MISSING — a name served with no ceiling declared. Without it a NEW tool
- *     joins the surface unbudgeted, which is how a per-item gate stops bounding
- *     the total. `cap` opts a family out of this half: descriptions have a
- *     shared cap, so only the over-cap ones declare a ceiling of their own.
- */
-interface RatchetReport {
-  over: string[];
-  stale: string[];
-  dead: string[];
-  missing: string[];
-}
-
-function ratchet(
-  measured: ReadonlyMap<string, number>,
-  ceilings: Readonly<Record<string, number | undefined>>,
-  cap?: number,
-): RatchetReport {
-  const report: RatchetReport = { over: [], stale: [], dead: [], missing: [] };
-  for (const [name, size] of measured) {
-    const ceiling = ceilings[name] ?? cap;
-    if (ceiling === undefined) {
-      report.missing.push(`${name}: ${size} chars, no ceiling declared`);
-    } else if (size > ceiling) {
-      report.over.push(`${name}: ${size} chars (ceiling ${ceiling})`);
-    }
-  }
-  for (const [name, ceiling] of Object.entries(ceilings)) {
-    if (ceiling === undefined) continue;
-    const size = measured.get(name);
-    if (size === undefined) {
-      report.dead.push(`${name}: ceiling ${ceiling}, nothing serves it`);
-    } else if (size < ceiling) {
-      report.stale.push(`${name}: ${size} chars, ceiling ${ceiling}`);
-    }
-  }
-  return report;
-}
-
-/** Asserts all four halves, so no ratchet in this file can ship with three. */
-function expectRatchet(
-  what: string,
-  report: RatchetReport,
-  grew: string,
-  shrank = "lower the ceiling to the measured size in the same commit — that is how the win gets banked",
-): void {
-  const list = (rows: string[]) => `\n- ${rows.join("\n- ")}`;
-  expect(report.over, `${what} grew past its ceiling. ${grew}:${list(report.over)}`).toEqual([]);
-  expect(report.stale, `${what} shrank below its ceiling — ${shrank}:${list(report.stale)}`).toEqual([]);
-  expect(report.dead, `${what}: a ceiling holding up nothing — delete the entry:${list(report.dead)}`).toEqual([]);
-  expect(report.missing, `${what}: served with no ceiling — measure it and declare one, never leave it unbudgeted:${list(report.missing)}`).toEqual([]);
-}
+import { expectRatchet, ratchet } from "./budget-ratchet.js";
 
 /**
  * ⚠ THE DESCRIPTION RATCHET, AND IT IS NOT AN EXEMPTION LIST. Seven
@@ -261,9 +195,10 @@ const SCHEMA_CEILINGS: Record<string, number> = {
  * true also forces the headline number to be re-measured on every slice that
  * claims a win.
  */
-// DMP-013 B2: granular text written, body fence once in its instructions. Re-derive, never quote. The
+// DMP-013 B2: granular text written, body fence once in its instructions; B3 +6: its own WHICH TOOL line
+// and the knowledge guide topic. Re-derive, never quote. The
 // ceiling may never pass the target, the legacy total when the split was planned.
-const GRANULAR_SERVED_CEILING = 44_098;
+const GRANULAR_SERVED_CEILING = 44_104;
 const GRANULAR_SERVED_TARGET = 49_205;
 const SERVED_TOTAL_CEILING = 50_275; // re-derive, never quote: −2 the 2026-09-23 vocabulary removal merged onto DMP-002 (dopl_ontology: −3 schema, +1 history gloss), −5 DMP-004 (dopl_search names ten domains in the same 450), +964 DMP-002 history+restore on three tools, +119 DMP-009 field type enum, −6 DMP-001 net, −229 home-channel addressing pulled (P8-23), +15 caller's own tool loader (X-09), +9 P8-15/P8-18.
 /**
@@ -314,6 +249,8 @@ const INSTRUCTIONS_CEILING = 1_804; // +15: an unstamped caller reads "your clie
 // ⚠ **32,551 → 8,960 (B8), THE LARGEST SINGLE FALL HERE.** The doctrine was
 // where every evicted paragraph landed: 5,765 of refusals, 4,873 of own-agent
 // narrative, 3,914 on a hold that is now a knob on `read`.
+// DMP-013 B3: the same doctrine spelled for a granular connection (longer tool names). Re-derive, never quote.
+const GRANULAR_DOCTRINE_CEILING = 14_504;
 const DOCTRINE_CEILING = 14_252; // +312 pulled against −229 pushed: home-channel addressing moved into `rooms` (P8-23); +16 P8-20. Re-derive, never quote.
 
 const WS: WorkspaceListItem = {
@@ -364,22 +301,21 @@ beforeAll(async () => {
   descriptions = new Map(listed.tools.map((t) => [t.name, (t.description ?? "").length]));
   schemas = new Map(listed.tools.map((t) => [t.name, JSON.stringify(t.inputSchema).length]));
   instructions = client.getInstructions() ?? "";
-  const published = await client.listResources();
-  doctrine = new Map(
-    await Promise.all(
-      published.resources.map(async ({ uri }): Promise<[string, number]> => {
-        const read = await client.readResource({ uri });
-        // ⚠ A resource may answer text OR a blob; only text costs an agent
-        // tokens, and a blob must not be silently counted as zero either — the
-        // doctrine is markdown and a blob here would be a different bug.
-        const body = read.contents
-          .map((c) => ("text" in c ? c.text : ""))
-          .join("");
-        return [uri, body.length];
-      }),
-    ),
-  );
+  doctrine = await resourceSizes(client);
 });
+
+/**
+ * Every published resource's body length, by URI. ⚠ A resource may answer text OR a blob; only text
+ * costs an agent tokens, and the doctrine is markdown, so a blob here would be a different bug.
+ */
+async function resourceSizes(probe: Client): Promise<Map<string, number>> {
+  const { resources } = await probe.listResources();
+  const size = async (uri: string) =>
+    (await probe.readResource({ uri })).contents.map((c) => ("text" in c ? c.text : "")).join("").length;
+  return new Map(await Promise.all(resources.map(async ({ uri }) => [uri, await size(uri)] as const)));
+}
+
+const sum = (sizes: Map<string, number>) => [...sizes.values()].reduce((a, b) => a + b, 0);
 
 afterAll(async () => {
   await client?.close();
@@ -489,11 +425,22 @@ describe("the pulled doctrine fits its own, separate budget", () => {
   });
 
   it("is ratcheted per resource and in total", () => {
-    const total = [...doctrine.values()].reduce((a, b) => a + b, 0);
+    const total = sum(doctrine);
     expectRatchet(
       "the pulled doctrine",
       ratchet(new Map([["all resources", total]]), { "all resources": DOCTRINE_CEILING }),
       "a rise is only legitimate against a LARGER fall in the pushed surface — record the trade here or it is prose laundering",
+    );
+  });
+
+  it("is ratcheted on a granular connection against its own ceiling", async () => {
+    const probe = await connect("granular");
+    const total = sum(await resourceSizes(probe));
+    await probe.close();
+    expectRatchet(
+      "the granular pulled doctrine",
+      ratchet(new Map([["all resources", total]]), { "all resources": GRANULAR_DOCTRINE_CEILING }),
+      "the same rules in granular names; a rise is a legacy rise first",
     );
   });
 });

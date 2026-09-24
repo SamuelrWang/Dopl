@@ -1,12 +1,12 @@
 // `manage action="posture"`: the ask is never a grant, a `null` echo is "not reported", and each
-// terminal shape pins its field on the line and its rule in `CHANNEL_DOCTRINE`. The cross-verb
+// terminal shape pins its field on the line and its rule in `channelDoctrine()`. The cross-verb
 // `no-bridge` asymmetry lives in `channel-ops-agent-gate.test.ts`.
 
 import { describe, it, expect, vi } from "vitest";
 import type { DoplClient, LaunchDirective } from "@dopl/client";
 import { opSetAgentMode } from "./channel-ops-agent-mode";
 import { factsLine, postureFacts } from "./channel-facts";
-import { CHANNEL_DOCTRINE } from "./channel-doctrine";
+import { channelDoctrine } from "./channel-doctrine";
 import { CHANNEL_INPUT_SHAPE } from "./channel-schema";
 import {
   AGENT,
@@ -55,7 +55,7 @@ describe('manage action="posture" — the ASK, never the SET', () => {
     expect(text.startsWith("taken ")).toBe(true);
     expect(text).not.toContain("handle=spent");
     expect(text).not.toContain("ended");
-    expect(CHANNEL_DOCTRINE).toContain('"posture" re-permissions a running one');
+    expect(channelDoctrine()).toContain('"posture" re-permissions a running one');
   });
 
   it("renders `-` for an axis deliberately left alone", async () => {
@@ -99,7 +99,7 @@ describe("the posture ECHO — a NULL is 'not reported', never agreement", () =>
       'taken posture="not reported" chain="not reported"',
     );
     expect(ARG_PROSE).toContain("how much freedom to ASK FOR");
-    expect(CHANNEL_DOCTRINE).toContain("A `—` cell was NOT REPORTED");
+    expect(channelDoctrine()).toContain("A `—` cell was NOT REPORTED");
   });
 
   it("NEVER echoes the REQUEST back when the echo is null", () => {
@@ -169,8 +169,8 @@ describe('manage action="posture" — the terminal shapes', () => {
     expect(text).toContain("filed=yes");
     // The "agent already finished" gloss is pinned absent in
     // `channel-ops-agent-doctrine.test.ts › RETIRED_BY_RULING`.
-    expect(CHANNEL_DOCTRINE).toContain("A REFUSAL IS A NORMAL ANSWER");
-    expect(CHANNEL_DOCTRINE).toContain("`no-session` no such agent");
+    expect(channelDoctrine()).toContain("A REFUSAL IS A NORMAL ANSWER");
+    expect(channelDoctrine()).toContain("`no-session` no such agent");
   });
 
   it("`no-bridge` HERE MAY BE THE LAUNCH TOGGLE — and the doctrine names it", async () => {
@@ -182,8 +182,8 @@ describe('manage action="posture" — the terminal shapes', () => {
     expect(text).toContain("retry=no");
     // The one asymmetry on this lane: the shared text names `posture` as gated, and
     // `channel-ops-agent-gate.test.ts` pins the other end.
-    expect(CHANNEL_DOCTRINE).toContain("`no-bridge` the operator's LAUNCH toggle is off");
-    expect(CHANNEL_DOCTRINE).toContain('it gates "launch" and "posture"');
+    expect(channelDoctrine()).toContain("`no-bridge` the operator's LAUNCH toggle is off");
+    expect(channelDoctrine()).toContain('it gates "launch" and "posture"');
   });
 
   it("`cap` does NOT borrow the launch advice to wait for a free slot", async () => {
@@ -202,7 +202,7 @@ describe('manage action="posture" — the terminal shapes', () => {
     expect(text).toContain("reason=bad-name");
     expect(text).toContain("retry=no");
     // The doctrine says the word is about a label, and this verb sends none.
-    expect(CHANNEL_DOCTRINE).toContain(
+    expect(channelDoctrine()).toContain(
       "`bad-name` the label was not one line of 1-60 visible characters",
     );
   });
@@ -214,10 +214,10 @@ describe('manage action="posture" — the terminal shapes', () => {
     expect(text).toContain(`directive=${DIRECTIVE_ID}`);
     expect(text).toContain("retry=no");
     // A second directive is a second request for the same change, with nothing to say which acted.
-    expect(CHANNEL_DOCTRINE).toContain(
+    expect(channelDoctrine()).toContain(
       "A TIMEOUT IS NOT A FAILURE: the request stays PENDING",
     );
-    expect(CHANNEL_DOCTRINE).toContain(
+    expect(channelDoctrine()).toContain(
       "re-issuing without the SAME `client_msg_id` starts a SECOND agent",
     );
   });

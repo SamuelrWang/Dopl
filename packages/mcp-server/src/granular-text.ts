@@ -84,7 +84,7 @@ const ORIENTATION_TEXT: Readonly<Record<string, ToolText>> = {
   },
   dopl_get_guide: {
     description:
-      'Long-form guides, pulled on demand: topic="channels" (the channel rules), "skill_authoring" (before dopl_create_skill), "chats" (before dopl_save_chat).',
+      'Long-form guides, pulled on demand: topic="channels" (the channel rules), "knowledge" (how to read and write entries), "skill_authoring" (before dopl_create_skill), "chats" (before dopl_save_chat).',
     params: { section: 'topic="channels": one section instead of the whole guide.' },
   },
 };

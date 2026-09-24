@@ -23,7 +23,7 @@ import {
   identityChoiceLines,
 } from "./agent-shared";
 // One wording of the tenancy rule, shared with the doctrine.
-import { TENANCY_FIX, TENANCY_RULE } from "./channel-doctrine";
+import { tenancyFix, TENANCY_RULE } from "./channel-doctrine";
 import { NO_NAME } from "./narration";
 import { isNameRefusal, launchName, launchedName } from "./channel-ops-launch-name";
 import { isGoalRefusal, launchGoal } from "./channel-ops-launch-goal";
@@ -248,7 +248,7 @@ export function launchIdentityNotFound(
       [
         // `inlineOr` already returns a code span, so no backticks of our own.
         `No agent was requested, and **nothing was filed** — identity ${inlineOr(elsewhere.name, NO_NAME)} lives in ${inlineOr(elsewhere.label, "another tenancy of yours")}, not in this channel's own container.`,
-        `⚠ ${TENANCY_RULE} Owning it is not enough; it has to live here. ${TENANCY_FIX}`,
+        `⚠ ${TENANCY_RULE} Owning it is not enough; it has to live here. ${tenancyFix()}`,
       ].join("\n"),
     );
   }
@@ -256,7 +256,7 @@ export function launchIdentityNotFound(
     [
       // True of a name; the ID case is stated by `TENANCY_RULE`.
       `No agent was requested — no agent identity ${inlineOr(ref, NO_NAME)} resolves in THIS CHANNEL'S container, and **nothing was filed**. Either there is no such identity, or it is not shared with you; those are ONE answer here on purpose, so ids cannot be probed.`,
-      `⚠ CHECK THE TENANCY BEFORE THE SPELLING. ${TENANCY_RULE} If it really should resolve here, the NAME is the other suspect — matching is exact, not fuzzy. ${TENANCY_FIX}`,
+      `⚠ CHECK THE TENANCY BEFORE THE SPELLING. ${TENANCY_RULE} If it really should resolve here, the NAME is the other suspect — matching is exact, not fuzzy. ${tenancyFix()}`,
     ].join("\n"),
   );
 }

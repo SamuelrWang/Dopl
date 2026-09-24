@@ -1,9 +1,9 @@
 // What each terminal shape of `manage action="launch"` teaches: every case pins the fact on the terse
-// result line AND the sentence that moved to `CHANNEL_DOCTRINE`, so prose can neither vanish nor grow back.
+// result line AND the sentence that moved to `channelDoctrine()`, so prose can neither vanish nor grow back.
 
 import { describe, it, expect, vi } from "vitest";
 import type { LaunchDirective, LaunchRefusalReason } from "@dopl/client";
-import { CHANNEL_DOCTRINE } from "./channel-doctrine";
+import { channelDoctrine } from "./channel-doctrine";
 import { WRITE_RESULT_MAX_CHARS } from "./channel-facts";
 import {
   created,
@@ -34,7 +34,7 @@ describe("OFFLINE — nothing is filed, and the caveat is honest about presence"
 
   it("keeps the fallback that needs nobody's machine reachable in the doctrine", async () => {
     expect(await text(offline)).not.toContain('op="send"');
-    expect(CHANNEL_DOCTRINE).toContain('op="send"');
+    expect(channelDoctrine()).toContain('op="send"');
   });
 
   it("never polls — there is no directive to poll", async () => {
@@ -54,9 +54,9 @@ describe("LAUNCHED — the id, and how to direct it", () => {
     expect(out).toContain("agent=@agent-abcd1234");
     expect(out).not.toContain("ITS HANDLE IS");
     // The id stays the agent's permanent handle; the NAME is what a caller addresses.
-    expect(CHANNEL_DOCTRINE).toContain("NEVER WRITE AN AGENT ID IN A MESSAGE");
-    expect(CHANNEL_DOCTRINE).toContain("NAMES ARE UNIQUE among addressable agents");
-    expect(CHANNEL_DOCTRINE).not.toContain("is then the address");
+    expect(channelDoctrine()).toContain("NEVER WRITE AN AGENT ID IN A MESSAGE");
+    expect(channelDoctrine()).toContain("NAMES ARE UNIQUE among addressable agents");
+    expect(channelDoctrine()).not.toContain("is then the address");
   });
 
   // The machine may store `Coder` as `Coder-1`; echoing the request would address the wrong agent.
@@ -92,25 +92,25 @@ describe("LAUNCHED — the id, and how to direct it", () => {
     // `channel_sessions.display_name` is peer-visible, so "reaches no server" must stay out.
     const out = await text(launched);
     expect(out).not.toContain("lives on their machine alone");
-    expect(CHANNEL_DOCTRINE).toContain("what people see and what agents tag it by");
-    expect(CHANNEL_DOCTRINE).not.toContain("it reaches no server");
+    expect(channelDoctrine()).toContain("what people see and what agents tag it by");
+    expect(channelDoctrine()).not.toContain("it reaches no server");
   });
 
   it("KEEPS THE WAKE **WITH ITS THREE LIMITS** — the sentence the repro bought", async () => {
     expect(await text(launched)).not.toContain("THREE LIMITS");
-    expect(CHANNEL_DOCTRINE).toContain("THE LOOP BRAKE, AND IT IS ABSOLUTE");
-    expect(CHANNEL_DOCTRINE).toContain("that tag, in `to`, wakes THAT agent");
+    expect(channelDoctrine()).toContain("THE LOOP BRAKE, AND IT IS ABSOLUTE");
+    expect(channelDoctrine()).toContain("that tag, in `to`, wakes THAT agent");
     // (1) addressed only
-    expect(CHANNEL_DOCTRINE).toContain(
+    expect(channelDoctrine()).toContain(
       "an AGENT-authored UNADDRESSED message starts nobody",
     );
     // (2) own operator only
-    expect(CHANNEL_DOCTRINE).toContain("YOUR OWN AGENTS ARE THE ONE EXCEPTION, AND ONLY IN `to`, BY NAME");
-    expect(CHANNEL_DOCTRINE).toContain(
+    expect(channelDoctrine()).toContain("YOUR OWN AGENTS ARE THE ONE EXCEPTION, AND ONLY IN `to`, BY NAME");
+    expect(channelDoctrine()).toContain(
       "Never another member's agent, and never without naming one",
     );
     // (3) the send lane's `delivery=` reports the wake
-    expect(CHANNEL_DOCTRINE).toContain("`woken` a dormant one was started");
+    expect(channelDoctrine()).toContain("`woken` a dormant one was started");
   });
 
   it("says a BODY-LESS launch runs nothing, and a body RUNS", async () => {
@@ -119,7 +119,7 @@ describe("LAUNCHED — the id, and how to direct it", () => {
       "idle=yes",
     );
     expect(await text(launched, { goal: "Draft the notes" })).toContain("idle=no");
-    expect(CHANNEL_DOCTRINE).toContain(
+    expect(channelDoctrine()).toContain(
       '`name` it (never an id; nameless is refused) and its `body` is its FIRST INSTRUCTION',
     );
   });
@@ -157,8 +157,8 @@ describe("LAUNCHED — the id, and how to direct it", () => {
 
   it('points at the hold (channel AND workspace form) and op="status", in the doctrine', async () => {
     expect(await text(launched)).not.toContain('op="await"');
-    expect(CHANNEL_DOCTRINE).toContain('op="status"');
-    expect(CHANNEL_DOCTRINE).toContain("OMITTING `channel` IS A WIDER READ");
+    expect(channelDoctrine()).toContain('op="status"');
+    expect(channelDoctrine()).toContain("OMITTING `channel` IS A WIDER READ");
   });
 
   it("does NOT claim to have verified the launch", async () => {
@@ -166,7 +166,7 @@ describe("LAUNCHED — the id, and how to direct it", () => {
     const out = await text(launched);
     expect(out.startsWith("launched ")).toBe(true);
     expect(out).not.toMatch(/confirm|verified|running now/i);
-    expect(CHANNEL_DOCTRINE).toContain(
+    expect(channelDoctrine()).toContain(
       "Every action files a request on your own operator's machine and holds for its answer",
     );
   });
@@ -212,7 +212,7 @@ describe("REFUSED — nine words, nine next actions", () => {
       // The row exists and was answered: nothing to chase, nothing to cancel.
       expect(out, reason).toContain("filed=yes");
       expect(out.split("\n"), reason).toHaveLength(1);
-      for (const phrase of says) expect(CHANNEL_DOCTRINE, `${reason}: ${phrase}`).toContain(phrase);
+      for (const phrase of says) expect(channelDoctrine(), `${reason}: ${phrase}`).toContain(phrase);
     },
   );
 
@@ -248,14 +248,14 @@ describe("TIMEOUT — pending, and the strongest possible do-not-re-issue", () =
     expect(out.startsWith("pending ")).toBe(true);
     expect(out).not.toContain("refused");
     expect(out).not.toContain("DO NOT ISSUE THIS CALL AGAIN");
-    expect(CHANNEL_DOCTRINE).toContain(
+    expect(channelDoctrine()).toContain(
       "re-issuing without the SAME `client_msg_id` starts a SECOND agent",
     );
   });
 
   it("says where the answer will show up instead", async () => {
     expect(await text(pending, { waitMs: 0 })).not.toContain('op="status"');
-    expect(CHANNEL_DOCTRINE).toContain(
+    expect(channelDoctrine()).toContain(
       'op="status" reads your own machine\'s live sessions and the directions waiting for them',
     );
   });

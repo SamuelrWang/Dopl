@@ -20,11 +20,17 @@ export interface LegacyTool {
   run: (args: Record<string, unknown>) => Promise<ToolResponse>;
 }
 
-/** The jobs this connection serves, as [selector value, binding]; null value for a one-job tool. */
+/** The bound jobs this connection serves, as [selector value, binding]; null value for a one-job tool. */
 function servedJobs(t: GranularTool, legacy: ReadonlyMap<string, LegacyTool>): Array<[string | null, BindingKey]> {
   const jobs: Array<[string | null, BindingKey]> = typeof t.bind === "string" ? [[null, t.bind]] : Object.entries(t.bind);
-  // A job whose legacy tool the profile did not offer is not served (dopl_only keeps two of three guides).
+  // A job whose legacy tool the profile did not offer is not served (dopl_only drops the channel guide).
   return jobs.filter(([, key]) => legacy.has(parseBinding(key).tool));
+}
+
+/** The resource a pulled job answers with, or undefined for a bound job. */
+export function pulledResource(t: GranularTool, args: Record<string, unknown>): string | undefined {
+  const selector = selectorOf(t);
+  return selector ? t.pulled?.[args[selector] as string] : undefined;
 }
 
 /** The param as published: this tool's type or its legacy owner's, re-described, required or optional. */
@@ -46,7 +52,8 @@ export function granularShape(t: GranularTool, legacy: ReadonlyMap<string, Legac
   const shape: Record<string, ZodType> = {};
   const selector = selectorOf(t);
   if (selector) {
-    const names = jobs.map(([job]) => job!) as [string, ...string[]];
+    // A pulled job rides with the bound ones: the tool is offered only for a served binding.
+    const names = [...jobs.map(([job]) => job!), ...Object.keys(t.pulled ?? {})] as [string, ...string[]];
     const line = text.params?.[selector];
     const select = line ? z.enum(names).describe(line) : z.enum(names);
     shape[selector] = t.selectDefault && names.includes(t.selectDefault) ? select.default(t.selectDefault) : select;

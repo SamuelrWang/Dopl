@@ -25,8 +25,8 @@ import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import type { DoplClient, WorkspaceListItem } from "@dopl/client";
 import { createServer } from "./server.js";
 import {
-  CHANNEL_DOCTRINE,
-  DOCTRINE_POINTER,
+  channelDoctrine,
+  doctrinePointer,
   DOCTRINE_URI,
 } from "./tools/channel-doctrine.js";
 
@@ -93,7 +93,7 @@ describe("the channels doctrine is published as an MCP resource", () => {
     // ⚠ IDENTITY, NOT A SUBSTRING MATCH. A resource serving a summary of the
     // doctrine would pass a `toContain` and still be the drift this file exists
     // to prevent — the point of the tier is that there is ONE text.
-    expect(contents[0].text).toBe(CHANNEL_DOCTRINE);
+    expect(contents[0].text).toBe(channelDoctrine());
   });
 
   it("carries what left the descriptions and the results, so nothing was merely deleted", () => {
@@ -122,7 +122,7 @@ describe("the channels doctrine is published as an MCP resource", () => {
       ["the home-channel rule", "across every workspace and home container"],
     ];
     const missing = probes
-      .filter(([, phrase]) => !CHANNEL_DOCTRINE.includes(phrase))
+      .filter(([, phrase]) => !channelDoctrine().includes(phrase))
       .map(([what, phrase]) => `${what} (looked for: ${phrase})`);
     expect(
       missing,
@@ -134,8 +134,8 @@ describe("the channels doctrine is published as an MCP resource", () => {
     // ⚠ THE REASON `rooms(action="help")` EXISTS. Several MCP clients list tools
     // and never read resources; without the action, the rules would be
     // unreachable for them.
-    expect(DOCTRINE_POINTER).toContain(DOCTRINE_URI);
-    expect(DOCTRINE_POINTER).toContain('op="rooms", action="help"');
+    expect(doctrinePointer()).toContain(DOCTRINE_URI);
+    expect(doctrinePointer()).toContain('op="rooms", action="help"');
   });
 
   it('`rooms(action="help")` returns the SAME text, byte for byte', async () => {
@@ -149,7 +149,7 @@ describe("the channels doctrine is published as an MCP resource", () => {
     // `_dopl_status` footer to every tool result (INVARIANTS §10), so the op's
     // payload is a prefix of what a client receives. The DOCTRINE half must be
     // identical — two doors, one text.
-    expect(text).toContain(CHANNEL_DOCTRINE);
+    expect(text).toContain(channelDoctrine());
   });
 
   it('`rooms(action="help")` reads nothing — it makes no request at all', async () => {

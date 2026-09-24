@@ -7,9 +7,10 @@
 
 import { describe, it, expect } from "vitest";
 import {
-  KNOWLEDGE_DOCTRINE,
+  knowledgeDoctrine,
   KNOWLEDGE_DOCTRINE_URI,
 } from "./knowledge-doctrine";
+import { withToolSet } from "../call-ref.js";
 
 /**
  * ⚠ Samuel's ruling 2026-09-03: a ≤500-char block, both halves.
@@ -34,20 +35,33 @@ import {
  */
 const KNOWLEDGE_DOCTRINE_MAX = 750;
 
+/**
+ * The granular text says the same rules in the granular tools' longer names (DMP-013 B3); its own
+ * ceiling, never the legacy one raised. Re-derive, never quote.
+ */
+const GRANULAR_KNOWLEDGE_DOCTRINE_MAX = 817;
+
 describe("dopl://doctrine/knowledge", () => {
   it(`fits its ${KNOWLEDGE_DOCTRINE_MAX}-character budget`, () => {
-    expect(KNOWLEDGE_DOCTRINE.length).toBeLessThanOrEqual(KNOWLEDGE_DOCTRINE_MAX);
+    expect(knowledgeDoctrine().length).toBeLessThanOrEqual(KNOWLEDGE_DOCTRINE_MAX);
+  });
+
+  it(`fits ${GRANULAR_KNOWLEDGE_DOCTRINE_MAX} on a granular connection, naming its tools`, () => {
+    const granular = withToolSet("granular", knowledgeDoctrine);
+    expect(granular.length).toBeLessThanOrEqual(GRANULAR_KNOWLEDGE_DOCTRINE_MAX);
+    expect(granular).toContain("dopl_write_entry(section=)");
+    expect(granular).not.toMatch(/\bop=|dopl_kb/);
   });
 
   it("carries BOTH halves — the read order and the write duty", () => {
     // ⚠ A doctrine that teaches only the read half asks agents to section
     // documents nobody writes headings into, which is the failure this whole
     // wave is about.
-    expect(KNOWLEDGE_DOCTRINE).toContain("outline");
-    expect(KNOWLEDGE_DOCTRINE).toContain("section");
-    expect(KNOWLEDGE_DOCTRINE).toContain("## headings");
-    expect(KNOWLEDGE_DOCTRINE).toMatch(/READ:/);
-    expect(KNOWLEDGE_DOCTRINE).toMatch(/WRITE:/);
+    expect(knowledgeDoctrine()).toContain("outline");
+    expect(knowledgeDoctrine()).toContain("section");
+    expect(knowledgeDoctrine()).toContain("## headings");
+    expect(knowledgeDoctrine()).toMatch(/READ:/);
+    expect(knowledgeDoctrine()).toMatch(/WRITE:/);
   });
 
   // 🔒 **A RULE THAT REFUSES MUST BE READABLE BEFORE IT FIRES** (Samuel's
@@ -56,10 +70,10 @@ describe("dopl://doctrine/knowledge", () => {
   // ahead of time — `knowledge.ts`'s description has ~112 characters of room
   // before `HARD_DESCRIPTION_CEILING` throws at import.
   it("states BOTH refusals, and says they are refusals", () => {
-    expect(KNOWLEDGE_DOCTRINE).toContain("REFUSE");
-    expect(KNOWLEDGE_DOCTRINE).toContain("excerpt=");
-    expect(KNOWLEDGE_DOCTRINE).toMatch(/one word|One word/i);
-    expect(KNOWLEDGE_DOCTRINE).toContain("~1.5k");
+    expect(knowledgeDoctrine()).toContain("REFUSE");
+    expect(knowledgeDoctrine()).toContain("excerpt=");
+    expect(knowledgeDoctrine()).toMatch(/one word|One word/i);
+    expect(knowledgeDoctrine()).toContain("~1.5k");
   });
 
   // ⚠ The two NUDGED rules, which a refusal never teaches because it never
@@ -67,8 +81,8 @@ describe("dopl://doctrine/knowledge", () => {
   // names no destination hit all four runs, and the supersession marker was the
   // one piece of signposting that worked with no metadata help at all.
   it("carries the two nudged authoring rules as well", () => {
-    expect(KNOWLEDGE_DOCTRINE).toMatch(/base\/path/);
-    expect(KNOWLEDGE_DOCTRINE).toMatch(/FIRST line/);
+    expect(knowledgeDoctrine()).toMatch(/base\/path/);
+    expect(knowledgeDoctrine()).toMatch(/FIRST line/);
   });
 
   it("is addressed under the doctrine scheme the channels one uses", () => {

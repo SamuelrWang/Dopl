@@ -12,7 +12,7 @@ import {
   shortModelLabel,
 } from "./channel-session-render";
 import { SESSION_TABLE_HEAD, sessionBlockLines } from "./channel-session-table";
-import { CHANNEL_DOCTRINE } from "./channel-doctrine";
+import { channelDoctrine } from "./channel-doctrine";
 
 /** From `from` up to the next `to`; throws when either marker is missing or they are out of order. */
 function between(src: string, from: string, to: string): string {
@@ -178,7 +178,7 @@ describe("F-293 — a model id can never split into two bare names", () => {
     const clauses = line.split(" · ");
     const bareNames = clauses.filter((c) => /^`[^`]+`$/.test(c));
     expect(bareNames).toEqual(["`claude-opus-5-1m`"]);
-    expect(CHANNEL_DOCTRINE).toContain(
+    expect(channelDoctrine()).toContain(
       "The MODEL is always ONE unbroken token, so a name with a space in it is an identity.",
     );
   });

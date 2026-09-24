@@ -252,7 +252,7 @@ export function createServer(
   // ⚠ PULLED, NOT PUSHED. The channels doctrine is a resource (and
   // `dopl_channel(op="help")`) rather than description prose, so an agent pays
   // for it when it asks and never on connection. See `resources.ts`.
-  registerResources(server);
+  registerResources(server, toolSet);
 
   // ⚠ Four gates shared by BOTH registration paths, built here and passed in
   // rather than defined inside a wrapper: `registerMetaTool` registers straight

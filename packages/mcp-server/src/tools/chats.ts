@@ -9,6 +9,7 @@
 
 import { z } from "zod";
 import type { ChatDetail, DoplClient } from "@dopl/client";
+import { callRef } from "../call-ref.js";
 import { inlineOr } from "./narration";
 import { err, ok, missingParams, type RegisterTool, type ToolResponse } from "./respond";
 import { BAD_SESSION_DATE, CHATS_ERRORS, refusal } from "./tool-errors";
@@ -24,7 +25,7 @@ import {
   UNTRUSTED_ARCHIVE_HEADER,
 } from "./chats-render";
 
-const EXPORT_GUIDE = `## Exporting conversations into Dopl — the rules
+const exportGuide = () => `## Exporting conversations into Dopl — the rules
 
 **What the archive is for.** The user stores finished (or ongoing) agent
 sessions in Dopl so future sessions can recall them. Write every export
@@ -55,7 +56,7 @@ header and know whether the transcript is worth loading.
 **Idempotency.** Always pass a stable \`clientSessionId\` (your session
 id). Re-exporting the same session then updates the existing chat
 instead of duplicating it. Mid-session you may export early and use
-op="append" to extend the transcript.
+${callRef("chats.append", {}, { form: "op" })} to extend the transcript.
 
 **Folders.** Pass \`folder\` with a short name ("Dopl", "Consulting") to
 file the chat; the folder is created if missing. Ask the user before
@@ -64,7 +65,7 @@ inventing a new taxonomy.
 **Folder sharing is authoritative.** A folder has its own sharing scope
 (private by default). Filing a chat into a folder makes the chat inherit
 the folder's scope — any \`visibility\` you pass alongside \`folder\` is
-superseded. Changing a folder's scope (op="update_folder") re-scopes
+superseded. Changing a folder's scope (${callRef("chats.update_folder", {}, { form: "op" })}) re-scopes
 every chat inside it. Sharing a FILED chat directly is rejected: unfile
 it first, or change the folder's scope.
 
@@ -182,7 +183,7 @@ export function registerChatTools(
     async (args): Promise<ToolResponse> => {
       switch (args.op) {
         case "guide":
-          return ok(EXPORT_GUIDE);
+          return ok(exportGuide());
         case "export": {
           const miss = missingParams("export", args, ["title", "messages"]);
           if (miss) return miss;

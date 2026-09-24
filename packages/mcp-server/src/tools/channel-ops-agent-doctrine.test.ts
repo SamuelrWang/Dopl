@@ -2,7 +2,7 @@
 // reworded, where `channel-ops-agent.test.ts` fails when `channel-facts.ts`'s fields move.
 
 import { describe, it, expect } from "vitest";
-import { CHANNEL_DOCTRINE } from "./channel-doctrine";
+import { channelDoctrine } from "./channel-doctrine";
 import { endText, renameText, settled } from "./launch-fixtures";
 
 // Sentences these results stopped carrying: absent from every result AND present in the doctrine,
@@ -40,14 +40,14 @@ const RETIRED_BY_RULING = [
 describe("the doctrine still carries every paragraph these results dropped", () => {
   it('each moved sentence is one rooms(action="help") away', () => {
     for (const phrase of MOVED_DOCTRINE) {
-      expect(CHANNEL_DOCTRINE, `${phrase} left the doctrine`).toContain(phrase);
+      expect(channelDoctrine(), `${phrase} left the doctrine`).toContain(phrase);
     }
   });
 
   it("…and the ones retired by ruling stay OUT of it", () => {
     // One assertion over the whole list, so a failure reports every phrase, not the first.
     const grownBack = RETIRED_BY_RULING.filter((phrase) =>
-      CHANNEL_DOCTRINE.includes(phrase),
+      channelDoctrine().includes(phrase),
     );
     expect(
       grownBack,

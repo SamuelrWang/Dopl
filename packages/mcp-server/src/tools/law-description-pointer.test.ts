@@ -24,8 +24,8 @@ import {
   HOME_CHANNEL_POINTER,
 } from "./channel-description";
 import {
-  CHANNEL_DOCTRINE,
-  CHANNEL_LAW,
+  channelDoctrine,
+  channelLaw,
   DOCTRINE_SECTIONS,
   DOCTRINE_URI,
 } from "./channel-doctrine";
@@ -82,7 +82,7 @@ describe("the DESCRIPTION is a pointer, and has to stay one", () => {
     expect(DESCRIPTION).not.toContain("THE LAW OF THIS ROOM");
     expect(DESCRIPTION).not.toContain("THE LOOP BRAKE");
     expect(DESCRIPTION).not.toContain("A CHANNEL IS A ROOM OF PEOPLE");
-    expect(DESCRIPTION).not.toContain(CHANNEL_LAW);
+    expect(DESCRIPTION).not.toContain(channelLaw());
   });
 
   it("keeps the SECURITY rule, which is the one thing no result may have to repeat", () => {
@@ -143,7 +143,7 @@ describe("the removed ops are absent from the published op set", () => {
       "what people see and what agents tag it by",
       "NEVER WRITE AN AGENT ID IN A MESSAGE",
     ])
-      expect(CHANNEL_DOCTRINE).toContain(fact);
+      expect(channelDoctrine()).toContain(fact);
   });
 
   it("still documents the ops that SURVIVED, so the rollback took nothing extra", () => {

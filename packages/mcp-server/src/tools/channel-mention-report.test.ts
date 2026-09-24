@@ -35,7 +35,7 @@
 
 import { describe, expect, it, vi } from "vitest";
 import type { ChannelMessage, DoplClient } from "@dopl/client";
-import { CHANNEL_DOCTRINE } from "./channel-doctrine";
+import { channelDoctrine } from "./channel-doctrine";
 import { opPost } from "./channel-ops-write";
 import {
   classifyMentions,
@@ -127,30 +127,30 @@ describe("postMentionFacts — says what it knows and nothing past it", () => {
     // The two limits the prose carried are standing doctrine and are pinned
     // there, because a token cannot state them and they may not simply vanish.
     // (1) OWN OPERATOR ONLY — the 2026-08-28 fence, which the carve did not move.
-    expect(CHANNEL_DOCTRINE).toContain("Never another member's agent");
+    expect(channelDoctrine()).toContain("Never another member's agent");
     // ⚠ RE-POINTED AT THE LAW BULLET THAT CARRIES IT (B8): the own-operator
     // fence is stated as the ONE EXCEPTION to the loop brake rather than as a
     // sentence about the wake token. Same fence, and stated where the reader
     // meets it first.
-    expect(CHANNEL_DOCTRINE).toContain("YOUR OWN AGENTS ARE THE ONE EXCEPTION");
+    expect(channelDoctrine()).toContain("YOUR OWN AGENTS ARE THE ONE EXCEPTION");
     // (2) NOT OBSERVABLE — the wake is decided on a desktop no server can see.
     // ⚠ RE-POINTED, AND THE CLAIM IS STRONGER FOR IT: the doctrine stopped
     // hedging ("not observable", "rather than assuming") and now NAMES the one
     // field that answers the question, with the vocabulary it answers in. An
     // agent told to read `delivery=` cannot assume a wake it was not handed.
-    expect(CHANNEL_DOCTRINE).toContain("`delivery=` IS THE ACK AND THE ONLY ONE");
-    expect(CHANNEL_DOCTRINE).toContain("`woken` a dormant one was started");
+    expect(channelDoctrine()).toContain("`delivery=` IS THE ACK AND THE ONLY ONE");
+    expect(channelDoctrine()).toContain("`woken` a dormant one was started");
   });
 
   it("says an agent handle stamps nobody, so no inbox is involved", () => {
     expect(facts("@k3v7d2mq", []).tags).toBeUndefined();
     expect(facts("@k3v7d2mq", []).wake).toBe("@agent-k3v7d2mq");
     // ⚠ RE-POINTED 2026-09-15 — the cause names the rule that DOES reach an agent.
-    expect(CHANNEL_DOCTRINE).toContain("an agent is reached by `to` alone");
+    expect(channelDoctrine()).toContain("an agent is reached by `to` alone");
     // ⚠ RE-POINTED: "starts no inbox entry" and "lands in no Tags inbox" were
     // two spellings of one claim in the old text; the compressed list keeps the
     // one that names WHICH inbox, which is the half a reader can act on.
-    expect(CHANNEL_DOCTRINE).toContain("Tagging is not addressing and starts no agent");
+    expect(channelDoctrine()).toContain("Tagging is not addressing and starts no agent");
   });
 
   it("reports member handles against the server's own COUNT — all landed", () => {
@@ -241,7 +241,7 @@ describe("what a post result actually carries about its `@` tokens", () => {
     const out = await resultOf("@dia can you look", []);
     expect(out).toContain("tags=0/1");
     expect(out).not.toContain("wake=@");
-    expect(CHANNEL_DOCTRINE).toContain("WHY A TAG RESOLVES TO NOBODY — FIVE CAUSES");
+    expect(channelDoctrine()).toContain("WHY A TAG RESOLVES TO NOBODY — FIVE CAUSES");
   });
 
   it("a MIXED body reports the MEMBER verdict, and no wake it cannot prove", async () => {
@@ -273,11 +273,11 @@ describe("what a post result actually carries about its `@` tokens", () => {
     // in the LAW and are what this half of the pair now holds: the rule did not
     // vanish from the product, it stopped being spelled as a per-run test the
     // server cannot check.
-    expect(CHANNEL_DOCTRINE).toContain(
+    expect(channelDoctrine()).toContain(
       "You MAY also post to the main room unprompted, SPARSELY",
     );
-    expect(CHANNEL_DOCTRINE).toContain("that is a capability, not a habit");
-    expect(CHANNEL_DOCTRINE).not.toContain("WHEN IT IS WORTH IT");
+    expect(channelDoctrine()).toContain("that is a capability, not a habit");
+    expect(channelDoctrine()).not.toContain("WHEN IT IS WORTH IT");
   });
 
   it("a body with no `@` at all reports both fields as absent", async () => {

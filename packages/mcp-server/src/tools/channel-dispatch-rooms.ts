@@ -21,7 +21,7 @@
 
 import type { DoplClient } from "@dopl/client";
 import { err, missingParams, ok, strictParams, type ToolResponse } from "./respond";
-import { CHANNEL_DOCTRINE, doctrineSection } from "./channel-doctrine";
+import { channelDoctrine, doctrineSection } from "./channel-doctrine";
 import { CHANNEL_INPUT_SHAPE } from "./channel-schema";
 import { CHANNEL_ACTIONS, type RoomsAction } from "./channel-vocab";
 import { opList, opListThreads, opMembers } from "./channel-ops-read";
@@ -68,7 +68,7 @@ export async function dispatchRoomsAction(
     case "help":
       return ok(
         args.section === undefined
-          ? CHANNEL_DOCTRINE
+          ? channelDoctrine()
           : doctrineSection(args.section),
       );
 

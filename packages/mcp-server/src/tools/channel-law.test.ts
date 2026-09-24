@@ -1,30 +1,30 @@
-// THE LAW's wording in `CHANNEL_DOCTRINE`. A prose pin only: whether it is TRUE is
+// THE LAW's wording in `channelDoctrine()`. A prose pin only: whether it is TRUE is
 // `main/targeting.js › classify` and `service-writes-metadata-thread.ts › isThreadParticipant`.
 // The description-as-pointer half is `law-description-pointer.test.ts`.
 
 import { describe, it, expect } from "vitest";
-// `CHANNEL_LAW` is its own export so the caps below measure the law, not a slice between headings.
-import { CHANNEL_DOCTRINE, CHANNEL_LAW } from "./channel-doctrine";
+// `channelLaw()` is its own export so the caps below measure the law, not a slice between headings.
+import { channelDoctrine, channelLaw } from "./channel-doctrine";
 import { REMOVED_VOCABULARY } from "./law-removed-vocabulary";
 import { ARG_PROSE, SHIPPED_PROSE } from "./law-shipped-prose";
 
 describe("THE LAW is stated, in full, in the doctrine", () => {
   it("is the FIRST thing after the opening line — an agent must not have to find it", () => {
     // First in the doctrine, behind only the title and SECURITY.
-    const law = CHANNEL_DOCTRINE.indexOf(CHANNEL_LAW);
+    const law = channelDoctrine().indexOf(channelLaw());
     expect(law).toBeGreaterThan(-1);
-    expect(law).toBeLessThan(CHANNEL_DOCTRINE.indexOf("THE MODEL"));
+    expect(law).toBeLessThan(channelDoctrine().indexOf("THE MODEL"));
     expect(law).toBeLessThan(800);
   });
 
   it("says a channel is a room of PEOPLE", () => {
-    expect(CHANNEL_LAW).toContain("A CHANNEL IS A ROOM OF PEOPLE");
+    expect(channelLaw()).toContain("A CHANNEL IS A ROOM OF PEOPLE");
   });
 
   it("says addressing a PERSON is what asks for their machine", () => {
-    expect(CHANNEL_LAW).toContain("ADDRESSING A PERSON");
+    expect(channelLaw()).toContain("ADDRESSING A PERSON");
     // What is absolute is WHOSE agent: `to` may name one of your own, never another member's.
-    expect(CHANNEL_LAW).toContain(
+    expect(channelLaw()).toContain(
       "`to` never names another member's agent, and one of your own only by the next bullet",
     );
     // Across every shipped word: the retired sentence anywhere teaches the retired rule.
@@ -35,98 +35,98 @@ describe("THE LAW is stated, in full, in the doctrine", () => {
 
   it("says every message is ADDRESSED or a RECORD, and that a bare send is refused", () => {
     // Every message is addressed or a record; a send that is neither is refused, not interpreted.
-    expect(CHANNEL_LAW).toContain(
+    expect(channelLaw()).toContain(
       "EVERY MESSAGE YOU SEND IS ADDRESSED OR IT IS A RECORD, AND THERE IS NO THIRD WAY",
     );
-    expect(CHANNEL_LAW).toContain(
+    expect(channelLaw()).toContain(
       "`to` addresses — ONE name or SEVERAL, comma-separated, agents and people mixed",
     );
-    expect(CHANNEL_LAW).toContain(
+    expect(channelLaw()).toContain(
       'kind="record" files a post for NOBODY: visible in the room, reaching no agent and no inbox',
     );
-    expect(CHANNEL_LAW).toContain("A send with neither is REFUSED");
+    expect(channelLaw()).toContain("A send with neither is REFUSED");
   });
 
   it("keeps THE LOOP BRAKE absolute — agents do not wake each other by talking", () => {
     // Absolute: an unaddressed agent post starts nobody and is shown to nobody.
-    expect(CHANNEL_LAW).toContain("THE LOOP BRAKE, AND IT IS ABSOLUTE");
-    expect(CHANNEL_LAW).toContain(
+    expect(channelLaw()).toContain("THE LOOP BRAKE, AND IT IS ABSOLUTE");
+    expect(channelLaw()).toContain(
       "an AGENT-authored UNADDRESSED message starts nobody AND IS SHOWN TO NOBODY, in a room of two or of ten",
     );
-    expect(CHANNEL_LAW).toContain(
+    expect(channelLaw()).toContain(
       "Agents do not wake each other by talking, and every post you make is agent-authored",
     );
   });
 
   it("STATES THE ONE EXCEPTION, AND STATES ITS TWO LIMITS WITH IT", () => {
     // The exception is stated with its two limits, or the brake reads as negotiable.
-    expect(CHANNEL_LAW).toContain(
+    expect(channelLaw()).toContain(
       "YOUR OWN AGENTS ARE THE ONE EXCEPTION, AND ONLY IN `to`, BY NAME",
     );
     // An agent handle in a body is prose; `to` is the agent address, and it takes a list.
-    expect(CHANNEL_LAW).toContain("that tag, in `to`, wakes THAT agent");
-    expect(CHANNEL_LAW).toContain("`to` takes as many of them as the work needs");
-    expect(CHANNEL_LAW).toContain(
+    expect(channelLaw()).toContain("that tag, in `to`, wakes THAT agent");
+    expect(channelLaw()).toContain("`to` takes as many of them as the work needs");
+    expect(channelLaw()).toContain(
       "AN AGENT HANDLE IN YOUR BODY IS PROSE AND REACHES NOBODY",
     );
-    expect(CHANNEL_LAW).toContain("NEVER WRITE AN AGENT ID IN A MESSAGE");
-    expect(CHANNEL_LAW).toContain(
+    expect(channelLaw()).toContain("NEVER WRITE AN AGENT ID IN A MESSAGE");
+    expect(channelLaw()).toContain(
       "Never another member's agent, and never without naming one",
     );
   });
 
   it("names the two things to act on, and calls everything else ambient context", () => {
     // Two, not three: a third trigger beside a law with no engagement contradicts it.
-    expect(CHANNEL_LAW).toContain("messages in a THREAD you are a party to");
-    expect(CHANNEL_LAW).toContain("main-room messages addressed to YOU");
-    expect(CHANNEL_LAW).toContain(
+    expect(channelLaw()).toContain("messages in a THREAD you are a party to");
+    expect(channelLaw()).toContain("main-room messages addressed to YOU");
+    expect(channelLaw()).toContain(
       "EVERYTHING ELSE IS AMBIENT CONTEXT — read it, do not answer it",
     );
   });
 
   it("says to reply where you were asked", () => {
-    expect(CHANNEL_LAW).toContain("REPLY WHERE YOU WERE ASKED");
-    expect(CHANNEL_LAW).toContain("Asked in the main room, answer in the main room");
-    expect(CHANNEL_LAW).toContain("Work traffic stays in its thread");
+    expect(channelLaw()).toContain("REPLY WHERE YOU WERE ASKED");
+    expect(channelLaw()).toContain("Asked in the main room, answer in the main room");
+    expect(channelLaw()).toContain("Work traffic stays in its thread");
   });
 
   it("grants the main-room post as a SPARSE capability, in the same bullet", () => {
     // Capability first, then the limit: "work traffic stays in its thread" alone reads as a ban.
-    expect(CHANNEL_LAW).toContain(
+    expect(channelLaw()).toContain(
       "You MAY also post to the main room unprompted, SPARSELY",
     );
-    expect(CHANNEL_LAW).toContain("that is a capability, not a habit");
+    expect(channelLaw()).toContain("that is a capability, not a habit");
   });
 
   it("names the @-tag as how a HUMAN is reached, and denies that it addresses", () => {
     // Both halves: a tag reaches a human, and it never addresses (`mentionedUserIds` is not
     // `to_user_id`, INVARIANTS §5).
-    expect(CHANNEL_LAW).toContain("@-TAG A HUMAN YOU DID NOT ADDRESS");
-    expect(CHANNEL_LAW).toContain("Tags inbox");
-    expect(CHANNEL_LAW).toContain("Tagging is not addressing and starts no agent");
+    expect(channelLaw()).toContain("@-TAG A HUMAN YOU DID NOT ADDRESS");
+    expect(channelLaw()).toContain("Tags inbox");
+    expect(channelLaw()).toContain("Tagging is not addressing and starts no agent");
   });
 
   it("puts the recipient in `to=` and keeps the envelope OUT of the body", () => {
     // The recipient lives only in `to=` and the room renders it; nothing validates a body's first line,
     // so prose is the only fence against a typed header.
-    expect(CHANNEL_LAW).toContain("that IS the address and the room RENDERS it");
-    expect(CHANNEL_DOCTRINE).toContain(
+    expect(channelLaw()).toContain("that IS the address and the room RENDERS it");
+    expect(channelDoctrine()).toContain(
       "WHERE THE RECIPIENT IS WRITTEN: in `to=`, never in the body",
     );
-    expect(CHANNEL_DOCTRINE).toContain("FROM→TO | KIND |");
+    expect(channelDoctrine()).toContain("FROM→TO | KIND |");
   });
 
   it("keeps the law to at most 8 BULLETS — one rule per line, no line per rule", () => {
     // A ceiling, not a target: a ninth line means one of the eight stopped being a rule. Counts lines
     // that open a bullet.
-    const bullets = CHANNEL_LAW.split("\n").filter((l) => l.trim().startsWith("- "));
+    const bullets = channelLaw().split("\n").filter((l) => l.trim().startsWith("- "));
     expect(bullets.length).toBeLessThanOrEqual(8);
   });
 
   it("keeps the law SHORT — the budget the bullet count could not enforce", () => {
     // ~20% headroom; the per-bullet cap stops one bullet swallowing another's budget.
-    expect(CHANNEL_LAW.length).toBeLessThanOrEqual(2200);
-    const bullets = CHANNEL_LAW.split("\n").filter((l) => l.trim().startsWith("- "));
+    expect(channelLaw().length).toBeLessThanOrEqual(2200);
+    const bullets = channelLaw().split("\n").filter((l) => l.trim().startsWith("- "));
     const overlong = bullets.filter((b) => b.length > 900);
     expect(
       overlong.map((b) => `${b.length} chars: ${b.slice(0, 80)}…`),
@@ -186,21 +186,21 @@ describe("what the law and the ops around it may NOT say", () => {
   // A prose pin, not a vocabulary entry: "inbound" is ordinary English elsewhere in the doctrine,
   // and the retired claim is about approval, not the word.
   it("says a message NOTIFIES the receiving side rather than being held there", () => {
-    expect(CHANNEL_DOCTRINE).toContain(
+    expect(channelDoctrine()).toContain(
       "WHAT HAPPENS ON THE RECEIVING SIDE IS NOT THAT",
     );
-    expect(CHANNEL_DOCTRINE).toContain("simply NOTIFIES them");
-    expect(CHANNEL_DOCTRINE).toContain(
+    expect(channelDoctrine()).toContain("simply NOTIFIES them");
+    expect(channelDoctrine()).toContain(
       "Nothing you send sits in a queue over there waiting to be approved",
     );
     // An agent that reads silence as "pending review" waits on a decision that never comes.
-    expect(CHANNEL_DOCTRINE).toContain("means nobody has picked it up YET");
+    expect(channelDoctrine()).toContain("means nobody has picked it up YET");
   });
 
   it("keeps the OUTBOUND review, and keeps it scoped to the caller's own machine", () => {
     // Untouched by the retirement: "consent was removed" is the over-read that would delete it too.
-    expect(CHANNEL_DOCTRINE).toContain("wait for YOUR OWN operator to approve it");
-    expect(CHANNEL_DOCTRINE).toContain(
+    expect(channelDoctrine()).toContain("wait for YOUR OWN operator to approve it");
+    expect(channelDoctrine()).toContain(
       "Your outgoing call is reviewed on YOUR machine",
     );
   });
@@ -214,8 +214,8 @@ describe("what the law and the ops around it may NOT say", () => {
   it("teaches that a handle inside CODE tags nobody", () => {
     // The server skips backticked handles (`lib/mentions.ts`), and the surface must say so or a
     // zero-tag report reads as a typo.
-    expect(CHANNEL_DOCTRINE).toContain("THE HANDLE WAS IN CODE");
-    expect(CHANNEL_DOCTRINE).toContain(
+    expect(channelDoctrine()).toContain("THE HANDLE WAS IN CODE");
+    expect(channelDoctrine()).toContain(
       "a handle inside backticks or a fenced block is quoted text and tags nobody",
     );
   });
@@ -226,14 +226,14 @@ describe("what the law and the ops around it may NOT say", () => {
     expect(ARG_PROSE).not.toContain("METADATA ONLY");
     expect(ARG_PROSE).not.toContain("get_thread");
     // A thread has no lifecycle state, so this is not a way to learn whether an exchange is over.
-    expect(CHANNEL_DOCTRINE).toContain("A THREAD HAS NO FINISHED STATE");
-    expect(CHANNEL_DOCTRINE).toContain(
+    expect(channelDoctrine()).toContain("A THREAD HAS NO FINISHED STATE");
+    expect(channelDoctrine()).toContain(
       "nothing settles one, no op ends one",
     );
   });
 
   it("describes a thread as writable by exactly its two parties, with no exception", () => {
-    expect(CHANNEL_DOCTRINE).toContain("between exactly TWO parties");
-    expect(CHANNEL_DOCTRINE).toContain("Only those two can post into it");
+    expect(channelDoctrine()).toContain("between exactly TWO parties");
+    expect(channelDoctrine()).toContain("Only those two can post into it");
   });
 });

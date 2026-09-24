@@ -25,7 +25,7 @@ import type { DoplClient } from "@dopl/client";
 import type { RegisterTool } from "./respond";
 import { registerChannelTool } from "./channel";
 import type { WorkspaceDirectory } from "../workspace-directory";
-import { CHANNEL_DOCTRINE } from "./channel-doctrine";
+import { channelDoctrine } from "./channel-doctrine";
 import { CHANNEL_INPUT_SHAPE } from "./channel-schema";
 
 /**
@@ -64,7 +64,7 @@ export const DESCRIPTION = registeredDescription();
  * opens it has asked for the rules — so scanning only the pointer would let
  * 22,000 characters say whatever they liked.
  */
-export const SHIPPED_PROSE = `${DESCRIPTION}\n${CHANNEL_DOCTRINE}`;
+export const SHIPPED_PROSE = `${DESCRIPTION}\n${channelDoctrine()}`;
 
 /** The argument `.describe()` text, which is prose a client reads too. */
 export const ARG_PROSE = Object.values(CHANNEL_INPUT_SHAPE)

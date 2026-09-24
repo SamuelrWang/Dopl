@@ -24,7 +24,7 @@ import { describe, it, expect } from "vitest";
 import type { WorkspaceListItem } from "@dopl/client";
 
 import { buildInstructions, INSTRUCTIONS_MAX_CHARS } from "./instructions.js";
-import { SKILL_AUTHORING_GUIDE } from "./prompts/skill-authoring-guide.js";
+import { skillAuthoringGuide } from "./prompts/skill-authoring-guide.js";
 import { registerSkillTools } from "./tools/skills.js";
 import { callTool, stub } from "./tools/narration-fixtures.js";
 
@@ -141,9 +141,9 @@ describe("what the budget buys back is still stated", () => {
 describe("the skill-authoring guide is PULLED, not pushed", () => {
   /** Three samples: the head, an interior heading, and the tail. */
   const SAMPLES = [
-    SKILL_AUTHORING_GUIDE.slice(0, 120),
-    SKILL_AUTHORING_GUIDE.slice(Math.floor(SKILL_AUTHORING_GUIDE.length / 2), Math.floor(SKILL_AUTHORING_GUIDE.length / 2) + 120),
-    SKILL_AUTHORING_GUIDE.slice(-120),
+    skillAuthoringGuide().slice(0, 120),
+    skillAuthoringGuide().slice(Math.floor(skillAuthoringGuide().length / 2), Math.floor(skillAuthoringGuide().length / 2) + 120),
+    skillAuthoringGuide().slice(-120),
   ];
 
   it("is not interpolated into the briefing (9,653 chars of it, 57% of the old block)", () => {
@@ -162,7 +162,7 @@ describe("the skill-authoring guide is PULLED, not pushed", () => {
       "dopl_skill",
       { op: "authoring_guide" },
     );
-    expect(out).toContain(SKILL_AUTHORING_GUIDE);
+    expect(out).toContain(skillAuthoringGuide());
   });
 });
 

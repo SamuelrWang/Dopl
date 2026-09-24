@@ -4,7 +4,8 @@
  * this source text; `tool-profile.test.ts` bans its PERSONA_WORDS here, comments included.
  */
 
-import { DELETE_REFUSAL, isBlockedDeleteOp } from "./delete-policy.js";
+import { calledAs } from "./call-ref.js";
+import { deleteRefusal, isBlockedDeleteOp } from "./delete-policy.js";
 import type { ToolResponse } from "./tools/respond.js";
 import { READ_ONLY_SESSION, refusal } from "./tools/tool-errors.js";
 
@@ -183,7 +184,7 @@ export function createGates(
     if (isBlockedDeleteOp(name, op.split(".")[0])) {
       return {
         isError: true,
-        content: [{ type: "text" as const, text: DELETE_REFUSAL }],
+        content: [{ type: "text" as const, text: deleteRefusal() }],
       };
     }
     if (!canWrite && isWriteOp(name, op)) {
@@ -194,7 +195,7 @@ export function createGates(
             type: "text" as const,
             text: refusal(
               READ_ONLY_SESSION,
-              `\`${name}\` op="${op}" is a write operation. Reconnect with write access to perform it.`,
+              `${calledAs(op, `\`${name}\` `)} is a write operation. Reconnect with write access to perform it.`,
             ),
           },
         ],

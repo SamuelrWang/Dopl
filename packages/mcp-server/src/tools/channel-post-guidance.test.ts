@@ -23,7 +23,7 @@
 import { describe, it, expect, vi } from "vitest";
 import type { DoplClient } from "@dopl/client";
 import { opPost } from "./channel-ops-write";
-import { CHANNEL_DOCTRINE } from "./channel-doctrine";
+import { channelDoctrine } from "./channel-doctrine";
 import { registerChannelTool } from "./channel";
 import { CHANNEL_INPUT_SHAPE } from "./channel-schema";
 import type { RegisterTool } from "./respond";
@@ -110,7 +110,7 @@ describe("Q13 · the not-threaded note, and the round-trip it cost", () => {
     expect(text).not.toContain("t-cd");
     expect(text).not.toContain("t-ce");
     expect(text).not.toContain("they belong to other members");
-    expect(CHANNEL_DOCTRINE).toContain(
+    expect(channelDoctrine()).toContain(
       // ⚠ PUNCTUATION DRIFT FROM THE DOCTRINE REWRITE, not a moved rule: the
       // sentence reads "…post into it; a third member's post is refused" now.
       // Same claim, same section, re-pointed at the shipped wording.
@@ -150,7 +150,7 @@ describe("Q13 · the not-threaded note, and the round-trip it cost", () => {
     // shape the agent is filling in. The join is unbroken: delete the action and
     // there is no way to find an id; delete the rooms section and nothing says
     // where to look.
-    expect(CHANNEL_DOCTRINE).toContain('op="rooms" — WHAT THIS PLACE IS');
+    expect(channelDoctrine()).toContain('op="rooms" — WHAT THIS PLACE IS');
     expect(CHANNEL_INPUT_SHAPE.action.description).toContain('"threads"');
     expect(CHANNEL_INPUT_SHAPE.action.safeParse("threads").success).toBe(true);
   });
@@ -208,10 +208,10 @@ describe("P11 · what a post's result teaches about what to do NEXT", () => {
     // CAPABILITY and its LIMIT survive in the LAW, which is the half that was
     // ever checkable: the bar asked the agent to audit its own run, and what
     // ships now states the permission and bounds it in one clause.
-    expect(CHANNEL_DOCTRINE).toContain(
+    expect(channelDoctrine()).toContain(
       "You MAY also post to the main room unprompted, SPARSELY",
     );
-    expect(CHANNEL_DOCTRINE).toContain("that is a capability, not a habit");
+    expect(channelDoctrine()).toContain("that is a capability, not a habit");
   });
 
   it("…and NOT the tagging line — the result carries facts, not advice", async () => {
@@ -230,15 +230,15 @@ describe("P11 · what a post's result teaches about what to do NEXT", () => {
     expect(text).toContain("landed=thread");
     expect(text).toContain("tags=-");
     expect(text).not.toContain("NOBODY IS TAGGED IN THIS POST");
-    expect(CHANNEL_DOCTRINE).toContain("Tags inbox");
+    expect(channelDoctrine()).toContain("Tags inbox");
     // ⚠ **PIN RETIRED: the notification-roadmap hedge is deleted BY RULING**
     // (wave B §4) — "the product's direction is" was a promise about a build
     // that had not shipped, and the doctrine carries contracts only. Its
     // load-bearing half is the one below, and it is unchanged: a tag may not
     // read as a second way to ask for a machine.
-    expect(CHANNEL_DOCTRINE).not.toContain("the product's direction is");
+    expect(channelDoctrine()).not.toContain("the product's direction is");
     // ⚠ RE-POINTED: same claim, the LAW's wording.
-    expect(CHANNEL_DOCTRINE).toContain("Tagging is not addressing and starts no agent");
+    expect(channelDoctrine()).toContain("Tagging is not addressing and starts no agent");
   });
 
   it("drops the when-to-tag advice once the body carries a tag, and REPORTS instead", async () => {
@@ -271,12 +271,12 @@ describe("P11 · what a post's result teaches about what to do NEXT", () => {
     // it (`op="members"` is `op="rooms" action="members"`), and it still
     // enumerates (2), (3) and (4) BY NUMBER so cause (5) cannot be swept into a
     // repair that would waste the turn.
-    expect(CHANNEL_DOCTRINE).toContain("For (2), (3) and (4), check the roster");
+    expect(channelDoctrine()).toContain("For (2), (3) and (4), check the roster");
     // ⚠ **PIN RETIRED: the old-server hedge is deleted BY RULING** (wave B §4).
     // What INVARIANTS §13 forbids is asserted in its load-bearing direction —
     // nothing in the list claims a delivery failure it cannot prove — in
     // `channel-zero-tag.test.ts`, which owns the copy of this text.
-    expect(CHANNEL_DOCTRINE).not.toContain("looks identical from here");
+    expect(channelDoctrine()).not.toContain("looks identical from here");
   });
 
   it("counts the SERVER's set, and a junk value counts as none rather than as trust", async () => {
@@ -345,7 +345,7 @@ describe("chat + a thread tag — the branch that never read landedThread", () =
     // "addressing nobody and starting nobody" — which read the ABSENCE of an address as a
     // statement. Samuel's structural ruling names the state instead: a post for nobody is a
     // RECORD, and the law says what one reaches.
-    expect(CHANNEL_DOCTRINE).toContain(
+    expect(channelDoctrine()).toContain(
       'kind="record" files a post for NOBODY: visible in the room, reaching no agent and no inbox',
     );
   });
@@ -375,7 +375,7 @@ describe("chat + a thread tag — the branch that never read landedThread", () =
     // is exactly what this case pairs it with.
     // ⚠ RE-POINTED (2026-09-03): the stop rule is the `waiting` section's now,
     // stated once for both hold lanes and pointed at by every result.
-    expect(CHANNEL_DOCTRINE).toContain(
+    expect(channelDoctrine()).toContain(
       "STOP when nothing has come from the MEMBER YOU ADDRESSED",
     );
   });

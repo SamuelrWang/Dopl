@@ -34,7 +34,7 @@
 
 import { describe, it, expect } from "vitest";
 import type { ChannelMessage } from "@dopl/client";
-import { CHANNEL_DOCTRINE } from "./channel-doctrine";
+import { channelDoctrine } from "./channel-doctrine";
 import { postMentionFacts } from "./channel-post-guidance";
 
 /**
@@ -47,18 +47,18 @@ import { postMentionFacts } from "./channel-post-guidance";
  * would either pass vacuously or fail on the sentence they exist to protect.
  */
 function causes(): string {
-  const start = CHANNEL_DOCTRINE.indexOf("WHY A TAG RESOLVES TO NOBODY");
+  const start = channelDoctrine().indexOf("WHY A TAG RESOLVES TO NOBODY");
   // ⚠ THE CLOSING HEADING MOVED (B8). The list used to be followed by a
   // `WHEN IT IS WORTH IT` section, which the collapse deleted as encouragement
   // — the doctrine carries contracts now. The receiving-side paragraph is what
   // follows the list, so it is the new fence, and the scope this function exists
   // to give is unchanged: the cause list and nothing either side of it.
-  const end = CHANNEL_DOCTRINE.indexOf("WHAT HAPPENS ON THE RECEIVING SIDE");
+  const end = channelDoctrine().indexOf("WHAT HAPPENS ON THE RECEIVING SIDE");
   // ⚠ Guarded rather than assumed: a slice off two `indexOf(-1)` is the empty
   // string, and every `not.toContain` below would then pass over nothing.
   expect(start, "the cause list's heading moved or was renamed").toBeGreaterThan(-1);
   expect(end, "the receiving-side paragraph moved or was renamed").toBeGreaterThan(start);
-  return CHANNEL_DOCTRINE.slice(start, end);
+  return channelDoctrine().slice(start, end);
 }
 
 /** A stored message carrying the server's own stamped resolution. */
@@ -179,12 +179,12 @@ describe("cause (5): an agent id is a WAKE, and can never be a tag", () => {
     // "corrected" back.
     // ⚠ RE-SPELLED 2026-09-15 — the LAW teaches the NAME tag now, and keeps the id form for
     // the one case Samuel carved out (two ACTIVE agents wearing one name).
-    expect(CHANNEL_DOCTRINE).toContain("that tag, in `to`, wakes THAT agent");
-    expect(CHANNEL_DOCTRINE).toContain("YOUR OWN AGENTS ARE THE ONE EXCEPTION");
+    expect(channelDoctrine()).toContain("that tag, in `to`, wakes THAT agent");
+    expect(channelDoctrine()).toContain("YOUR OWN AGENTS ARE THE ONE EXCEPTION");
     // ⚠ WHICH agent it wakes is stated in the doctrine's OWN AGENTS section
     // rather than inside the cause list — the half that used to ride here as
     // "a WAKE for that agent". Pinned so the claim cannot vanish from BOTH.
-    expect(CHANNEL_DOCTRINE).toContain("wakes THAT agent");
+    expect(channelDoctrine()).toContain("wakes THAT agent");
   });
 
   it("sends this cause to NO roster remedy — that is the wrong turn it fixes", () => {

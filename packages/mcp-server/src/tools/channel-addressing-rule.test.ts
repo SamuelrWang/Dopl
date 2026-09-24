@@ -31,7 +31,7 @@ import {
 // distinction matters — the write and read lanes now share one definition.
 import { isFirstClassThreadId } from "./channel-render-threads";
 import { threadFacts } from "./channel-post-linkage";
-import { CHANNEL_DOCTRINE } from "./channel-doctrine";
+import { channelDoctrine } from "./channel-doctrine";
 import { CHANNEL_INPUT_SHAPE } from "./channel-schema";
 import { opMembers } from "./channel-ops-read";
 import { opPost } from "./channel-ops-write";
@@ -275,7 +275,7 @@ describe("addressed= / landed= — what the note became", () => {
     // ⚠ The DM clause is what a caller told otherwise acts on, by leaving `to`
     // off and reaching nobody. It survives in the roster line and the doctrine.
     expect(rosterAddressingRule("general", 2)).toContain("a DIRECT (1:1) message channel included");
-    expect(CHANNEL_DOCTRINE).toContain("in a room of two or of ten");
+    expect(channelDoctrine()).toContain("in a room of two or of ten");
   });
 
   it("names the AUTHOR KIND as the reason, never the member count", async () => {
@@ -287,7 +287,7 @@ describe("addressed= / landed= — what the note became", () => {
     expect(text).toContain("addressed=no");
     expect(text).not.toContain("NOT ADDRESSED");
     expect(text).not.toContain("nobody was woken");
-    expect(CHANNEL_DOCTRINE).toContain(
+    expect(channelDoctrine()).toContain(
       "an AGENT-authored UNADDRESSED message starts nobody AND IS SHOWN TO NOBODY, in a room of two or of ten",
     );
   });
@@ -308,7 +308,7 @@ describe("addressed= / landed= — what the note became", () => {
     // was rewritten to carry the new arrow vocabulary and the responder rule.
     // The claim lives in the LAW, which is where it always belonged — MODEL was
     // saying it a second time.
-    expect(CHANNEL_DOCTRINE).toContain(
+    expect(channelDoctrine()).toContain(
       "messages in a THREAD you are a party to",
     );
   });

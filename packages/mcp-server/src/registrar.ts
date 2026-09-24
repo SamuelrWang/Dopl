@@ -12,6 +12,7 @@ import type { DoplClient, McpCallTally } from "@dopl/client";
 
 import {
   creditsExhausted,
+  ok,
   entitlementDenied,
   type MetaToolOptions,
   type RegisterMetaTool,
@@ -22,10 +23,12 @@ import { CONTAINER_ARG_DESCRIPTION } from "./workspace-arg.js";
 import { resolveCallAddress } from "./container-resolve.js";
 import { LEGACY_ONTOLOGY_ARGS } from "./legacy-aliases.js";
 import { withToolSet } from "./call-ref.js";
-import { granularDescription, granularShape, legacyCall, type LegacyTool } from "./granular.js";
+import { granularDescription, granularShape, legacyCall, pulledResource, type LegacyTool } from "./granular.js";
+import { resourceText } from "./resources.js";
 import {
   ALWAYS_LOAD_META,
   annotationsFor,
+  selectorOf,
   servesName,
   type GranularTool,
   type ToolSet,
@@ -349,17 +352,20 @@ export function createToolRegistrars(deps: RegistrarDeps): ToolRegistrars {
         ...(t.alwaysLoad && { _meta: ALWAYS_LOAD_META }),
       },
       (async (args: Record<string, unknown>) => {
+        const invalid = (message: string) =>
+          new McpError(ErrorCode.InvalidParams, `Input validation error: Invalid arguments for tool ${t.name}: ${message}`);
+        const pulled = pulledResource(t, args);
+        if (pulled) {
+          const stray = Object.keys(args).filter((k) => k !== selectorOf(t));
+          if (stray.length > 0) throw invalid(`${stray.map((k) => `"${k}"`).join(", ")} not taken by this topic`);
+          return ok(withToolSet(toolSet, () => resourceText(pulled)));
+        }
         const call = legacyCall(t, args);
         const target = legacy.get(call.tool)!;
         // A multi-job row's schema is the union of its jobs; the chosen job's own schema has the last
         // word, so a param that job does not take is refused by name, never passed through.
         const parsed = target.input.safeParse(call.args);
-        if (!parsed.success) {
-          throw new McpError(
-            ErrorCode.InvalidParams,
-            `Input validation error: Invalid arguments for tool ${t.name}: ${parsed.error.message}`,
-          );
-        }
+        if (!parsed.success) throw invalid(parsed.error.message);
         // Carried args were validated by this tool's own schema; the legacy one does not know them.
         return withToolSet(toolSet, () => target.run({ ...(parsed.data as Record<string, unknown>), ...call.carried }), t.name);
       }) as never,

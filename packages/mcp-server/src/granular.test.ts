@@ -2,7 +2,7 @@
  * The granular set as SERVED (DMP-013 B1/B2): which set a connection lists, that the other stays
  * callable, the published annotations and titles, the per-tool param fence, the jobs a profile
  * serves, the decision and room-description seams, and that every granular call is its legacy twin
- * — same result, same backend calls, same charge. Real `createServer`, real transport; the backend
+ * — same outcome, same backend calls, same charge. Real `createServer`, real transport; the backend
  * is a recording double, so both sides meet identical data.
  */
 
@@ -55,11 +55,24 @@ describe("tool-set selection", () => {
     expect(await listedNames(b)).toEqual(offered.map((t) => t.name).sort());
     const guide = (await b.client.listTools()).tools.find((t) => t.name === "dopl_get_guide")!;
     const props = (guide.inputSchema as JsonSchema).properties!;
-    expect(props.topic.enum).toEqual(["skill_authoring", "chats"]);
+    expect(props.topic.enum).toEqual(["skill_authoring", "chats", "knowledge"]);
     // The channel guide's own param goes with it.
     expect(Object.keys(props)).toEqual(["topic"]);
     expect(await call(b, "dopl_get_guide", { topic: "channels" })).toMatchObject({ isError: true });
     expect((await call(b, "dopl_get_guide", { topic: "chats" })).isError).toBe(false);
+  });
+
+  it('topic="knowledge" serves the knowledge doctrine as the resource does: no backend call, no other param', async () => {
+    const b = await boot("granular", { toolProfile: "dopl_only" });
+    const res = await call(b, "dopl_get_guide", { topic: "knowledge" });
+    const { contents } = await b.client.readResource({ uri: "dopl://doctrine/knowledge" });
+    expect(res).toEqual({ text: (contents[0] as { text: string }).text, isError: false });
+    expect(res.text).toContain("dopl_write_entry(section=)");
+    expect(b.log).toEqual([]);
+    // Where `section` is published (the channel guide takes it), this topic still refuses it.
+    const refused = await call(await boot("granular"), "dopl_get_guide", { topic: "knowledge", section: "law" });
+    expect(refused.isError).toBe(true);
+    expect(refused.text).toMatch(/"section" not taken/);
   });
 });
 
@@ -197,8 +210,9 @@ describe("each granular call is its legacy twin", async () => {
       expect([legacy.isError, granular.isError, granular.log]).toEqual([true, true, []]);
       return;
     }
+    // Same backend traffic, same outcome. The texts differ only in call spelling, which each set
+    // renders for itself: `legacy-surface.test.ts` pins one side, `call-ref.test.ts` scans the other.
     expect(granular.log).toEqual(legacy.log);
-    expect(granular.text).toBe(legacy.text);
     expect(granular.isError).toBe(legacy.isError);
   });
 

@@ -25,7 +25,7 @@ import type { DoplClient } from "@dopl/client";
 import { registerChannelTool } from "./channel";
 import { MILESTONE_MAX_CHARS } from "./channel-ops-write";
 import {
-  CHANNEL_DOCTRINE,
+  channelDoctrine,
   DOCTRINE_SECTIONS,
   DOCTRINE_SECTION_NAMES,
 } from "./channel-doctrine";
@@ -176,7 +176,7 @@ describe('C12 — rooms action="open" reads the room off the shape, not a flag',
 describe('rooms action="help" — the doctrine, pullable in pieces', () => {
   it("with no section it is the whole document, and it indexes the sections", async () => {
     const out = await run(seamStub(), { op: "rooms", action: "help" });
-    expect(out).toContain(CHANNEL_DOCTRINE);
+    expect(out).toContain(channelDoctrine());
     for (const name of DOCTRINE_SECTION_NAMES) expect(out, name).toContain(name);
   });
 
@@ -192,7 +192,7 @@ describe('rooms action="help" — the doctrine, pullable in pieces', () => {
     });
     expect(out).toContain(DOCTRINE_SECTIONS.read);
     expect(out).not.toContain(DOCTRINE_SECTIONS.rooms);
-    expect(out.length).toBeLessThan(CHANNEL_DOCTRINE.length / 2);
+    expect(out.length).toBeLessThan(channelDoctrine().length / 2);
   });
 
   /**
@@ -216,7 +216,7 @@ describe('rooms action="help" — the doctrine, pullable in pieces', () => {
       section: "nonesuch",
     });
     expect(out).toMatch(/section/i);
-    expect(out).not.toContain(CHANNEL_DOCTRINE);
+    expect(out).not.toContain(channelDoctrine());
   });
 
   it("reads nothing — it is a constant, not a request", async () => {

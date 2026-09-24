@@ -15,6 +15,8 @@
  * file and its two call sites (`registrar.ts › RENAMED_ARGS`, `tools/ontology.ts`'s op enum).
  */
 
+import { legacyOnly } from "./call-ref.js";
+
 /** Retired `dopl_ontology` args → the arg that replaced each. */
 export const LEGACY_ONTOLOGY_ARGS: Readonly<Record<string, string>> = Object.freeze({
   cluster: "ontology",
@@ -33,5 +35,5 @@ const LEGACY_ONTOLOGY_OPS: Readonly<Record<string, string>> = Object.freeze({
 export function legacyOntologyOpMessage(issue: { input?: unknown }): string | undefined {
   const op = typeof issue.input === "string" ? issue.input : undefined;
   if (!op || !Object.prototype.hasOwnProperty.call(LEGACY_ONTOLOGY_OPS, op)) return undefined;
-  return `Unknown op ${op} — renamed: send op=${LEGACY_ONTOLOGY_OPS[op]}`;
+  return legacyOnly(`Unknown op ${op} — renamed: send op=${LEGACY_ONTOLOGY_OPS[op]}`);
 }

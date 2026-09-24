@@ -1,3 +1,4 @@
+import { bySet, callRef } from "./call-ref.js";
 import { DELETE_IS_APP_ONLY, refusal } from "./tools/tool-errors.js";
 
 /**
@@ -23,9 +24,13 @@ export function isBlockedDeleteOp(tool: string, op: string): boolean {
   return tool.endsWith("_admin") && DELETE_OP_SHAPE.test(op);
 }
 
-/** The one refusal: states the rule, names where the user can act, and closes the retry loop. */
-export const DELETE_REFUSAL = refusal(
-  DELETE_IS_APP_ONLY,
-  // First sentence pinned verbatim by `retirement.test.ts`.
-  `Deletion is app-only. Ask the user to delete this in the Dopl app. No role, scope or argument changes that, so do not retry with different parameters. Editing and rewriting are still available to you (dopl_kb op="write_file", dopl_skill op="write", dopl_ontology's update ops).`,
-);
+/**
+ * The one refusal: states the rule, names where the user can act, and closes the retry loop. The
+ * rewrite tools it names are the connection's set's.
+ */
+export const deleteRefusal = () =>
+  refusal(
+    DELETE_IS_APP_ONLY,
+    // First sentence pinned verbatim by `retirement.test.ts`, in both sets.
+    `Deletion is app-only. Ask the user to delete this in the Dopl app. No role, scope or argument changes that, so do not retry with different parameters. Editing and rewriting are still available to you (${callRef("kb.write_file", {}, { form: "named" })}, ${callRef("skill.write", {}, { form: "named" })}, ${bySet({ legacy: "dopl_ontology's update ops", granular: callRef("ontology.update_object") })}).`,
+  );

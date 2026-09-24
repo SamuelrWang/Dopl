@@ -6,30 +6,16 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
-import type { DoplClient, WorkspaceListItem } from "@dopl/client";
 
-import { createServer } from "./server.js";
 import { FENCE_POINTER, GRANULAR_TEXT, SHARED_PARAMS } from "./granular-text.js";
+import { INSTRUCTIONS_MAX_CHARS } from "./instructions.js";
+import { boot } from "./surface-sweep.js";
 import { GRANULAR_TOOLS, GRANULAR_TOOL_NAMES, selectorOf, type ToolSet } from "./tool-manifest.js";
 import { FENCE_DESCRIPTION_NOTE } from "./tools/untrusted-fence.js";
 import { HEADLINE_MAX_CHARS, READ_DESCRIPTION_MAX_CHARS } from "./tools/tool-style.js";
 
-const WS = {
-  id: "11111111-1111-1111-1111-111111111111", ownerId: "owner", name: "Alpha", slug: "alpha",
-  publicId: "pub-1", description: null, role: "owner",
-  createdAt: "2026-01-01T00:00:00Z", updatedAt: "2026-01-01T00:00:00Z",
-} satisfies WorkspaceListItem;
-
 async function served(toolSet: ToolSet) {
-  const server = createServer({ getWorkspaceId: () => null, setWorkspaceId: () => {} } as unknown as DoplClient, {
-    toolSet, directory: [WS], workspace: WS, role: "owner", workspaceSource: "header pin",
-    scopes: ["dopl.read", "dopl.write"],
-  });
-  const [a, b] = InMemoryTransport.createLinkedPair();
-  const client = new Client({ name: "text-probe", version: "0.0.0" });
-  await Promise.all([server.connect(b), client.connect(a)]);
+  const { client } = await boot(toolSet);
   return { tools: (await client.listTools()).tools, instructions: client.getInstructions() ?? "" };
 }
 
@@ -69,6 +55,14 @@ describe("the served granular text", async () => {
     expect(whole).not.toMatch(/\bop=/);
     const named = [...whole.matchAll(/\bdopl_[a-z_]+/g)].map((m) => m[0]);
     expect(named.filter((n) => !GRANULAR_TOOL_NAMES.has(n)), "names a tool the set does not have").toEqual([]);
+  });
+
+  it("the instructions name granular tools only, and leave the directory room inside the prefix", () => {
+    expect(instructions).not.toMatch(/\bop=/);
+    const named = [...instructions.matchAll(/\bdopl_[a-z_]+/g)].map((m) => m[0]);
+    expect(named.filter((n) => !GRANULAR_TOOL_NAMES.has(n))).toEqual([]);
+    expect(instructions).toContain("alpha");
+    expect(instructions.length).toBeLessThanOrEqual(INSTRUCTIONS_MAX_CHARS);
   });
 
   it("states the body fence once, in the instructions; the legacy briefing does not change", async () => {

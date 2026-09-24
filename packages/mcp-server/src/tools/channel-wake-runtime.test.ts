@@ -23,9 +23,9 @@ import { registerChannelTool } from "./channel";
 // ⚠ WHERE THE HOLD MECHANICS LIVE SINCE T10/T12 (2026-09-02). `post` and
 // `create_thread` used to close with three paragraphs each — the hold, the stop
 // rule, the skip clause. All three are standing doctrine and are re-pinned on
-// CHANNEL_DOCTRINE below; what SURVIVES in a write result is the one thing that
+// channelDoctrine() below; what SURVIVES in a write result is the one thing that
 // is a fact about the call, the `hold=` branch off the observed runtime.
-import { CHANNEL_DOCTRINE, DOCTRINE_URI } from "./channel-doctrine";
+import { channelDoctrine, DOCTRINE_URI } from "./channel-doctrine";
 import { UNTRUSTED_BODY_HEADER } from "./channel-framing";
 
 const CHANNEL = { id: "chan-1", slug: "general", name: "General", visibility: "private" };
@@ -148,10 +148,10 @@ describe("desktop-session runtime — no wake promise, and do NOT await", () => 
     // REFUSES the hold outright rather than being asked to skip it. Same rule,
     // now unskippable.
     // ⚠ RE-POINTED (2026-09-03): the desktop clause left READ for `waiting`.
-    expect(CHANNEL_DOCTRINE).toContain(
+    expect(channelDoctrine()).toContain(
       "A DESKTOP-RUN SESSION MAY NOT HOLD: the message wakes it.",
     );
-    expect(CHANNEL_DOCTRINE).toContain("A DESKTOP-RUN SESSION MAY NOT HOLD");
+    expect(channelDoctrine()).toContain("A DESKTOP-RUN SESSION MAY NOT HOLD");
   });
 
   it('send thread="new" tells it not to arm, and says the thread was addressed', async () => {
@@ -244,13 +244,13 @@ describe("unstamped runtime — the wake is the CLIENT's, and is stated as one",
     // which is the load-bearing half this pair was ever about, and it is what
     // the doctrine end of the pair now holds.
     // ⚠ RE-POINTED (2026-09-03): the stop rule is `waiting`'s, once, both lanes.
-    expect(CHANNEL_DOCTRINE).toContain(
+    expect(channelDoctrine()).toContain(
       "STOP when nothing has come from the MEMBER YOU ADDRESSED",
     );
-    expect(CHANNEL_DOCTRINE).toContain(
+    expect(channelDoctrine()).toContain(
       "An empty return is the budget expiring, not an answer",
     );
-    expect(CHANNEL_DOCTRINE).toContain("A DESKTOP-RUN SESSION MAY NOT HOLD");
+    expect(channelDoctrine()).toContain("A DESKTOP-RUN SESSION MAY NOT HOLD");
   });
 
   it('send thread="new" does the same, keeping the opening-seq cursor', async () => {
@@ -277,7 +277,7 @@ describe("unstamped runtime — the wake is the CLIENT's, and is stated as one",
     // which is the load-bearing half this pair was ever about, and it is what
     // the doctrine end of the pair now holds.
     // ⚠ RE-POINTED (2026-09-03): the stop rule is `waiting`'s, once, both lanes.
-    expect(CHANNEL_DOCTRINE).toContain(
+    expect(channelDoctrine()).toContain(
       "STOP when nothing has come from the MEMBER YOU ADDRESSED",
     );
   });
@@ -304,10 +304,10 @@ describe("unstamped runtime — the wake is the CLIENT's, and is stated as one",
     // ⚠ STILL REQUIRED OF EVERY RE-ARM INSTRUCTION (INVARIANTS §10), NOW BY A
     // POINTER RATHER THAN A COPY — the ~700 chars are not paid per empty hold.
     expect(text).toContain(`${DOCTRINE_URI} › Waiting`);
-    expect(CHANNEL_DOCTRINE).toContain(
+    expect(channelDoctrine()).toContain(
       "STOP when nothing has come from the MEMBER YOU ADDRESSED",
     );
-    expect(CHANNEL_DOCTRINE).toContain("No thread ever closes");
+    expect(channelDoctrine()).toContain("No thread ever closes");
     // ⚠ Pinned as ABSENCES: the mechanism lecture is taught where it is NEW
     // (post, create_thread, and the hold that returned), not re-read on every
     // empty hold of a poll loop.
@@ -351,8 +351,8 @@ describe("unstamped runtime — the wake is the CLIENT's, and is stated as one",
       expect(text).not.toContain("background shell tasks");
     }
     // ⚠ CONDITIONAL on a capability the server cannot observe, never a promise.
-    expect(CHANNEL_DOCTRINE).toContain("WITH BACKGROUND TASKS: run the hold in one");
-    expect(CHANNEL_DOCTRINE).toContain("END your turn");
+    expect(channelDoctrine()).toContain("WITH BACKGROUND TASKS: run the hold in one");
+    expect(channelDoctrine()).toContain("END your turn");
 
     // ⚠ AND THE TIMED-OUT HOLD IS ON THE SILENT SIDE, WITH THE TWO WRITES. It is
     // the ONE result an orchestrator reads over and over — every ~45s on a quiet
@@ -383,10 +383,10 @@ describe("unstamped runtime — the wake is the CLIENT's, and is stated as one",
     // CURSOR that makes any poll possible, and none of them promises a wake.
     // The one rule that outlived the offer is the stop rule.
     // ⚠ RE-POINTED (2026-09-03): the stop rule is `waiting`'s, once, both lanes.
-    expect(CHANNEL_DOCTRINE).toContain(
+    expect(channelDoctrine()).toContain(
       "STOP when nothing has come from the MEMBER YOU ADDRESSED",
     );
-    expect(CHANNEL_DOCTRINE).not.toContain("background shell tasks");
+    expect(channelDoctrine()).not.toContain("background shell tasks");
   });
 
   it("does NOT offer it to a desktop session, which is already fed replies", async () => {
@@ -478,13 +478,13 @@ describe("CHANNEL_DESCRIPTION — runtime-neutral and honest", () => {
     // `docs/specs/mcp-v2-wave-b.md:280`). The doctrine still says what the hold
     // IS, what it needs, and when to stop; it no longer speculates about the
     // caller's harness.
-    expect(CHANNEL_DOCTRINE).toContain("`wait_ms` turns the page into a HOLD and needs `since`");
+    expect(channelDoctrine()).toContain("`wait_ms` turns the page into a HOLD and needs `since`");
     // ⚠ RE-POINTED (2026-09-03): the stop rule is `waiting`'s, once, both lanes.
-    expect(CHANNEL_DOCTRINE).toContain(
+    expect(channelDoctrine()).toContain(
       "STOP when nothing has come from the MEMBER YOU ADDRESSED",
     );
     // ...and the desktop-session escape hatch, which the static text CAN state
     // conditionally because it addresses every caller at once.
-    expect(CHANNEL_DOCTRINE).toContain("A DESKTOP-RUN SESSION MAY NOT HOLD");
+    expect(channelDoctrine()).toContain("A DESKTOP-RUN SESSION MAY NOT HOLD");
   });
 });

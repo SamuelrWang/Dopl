@@ -202,8 +202,8 @@ describe('opRead — thread= scopes the transcript to one exchange', () => {
     // budget and is stated once in the PULLED doctrine, which is the only other
     // place it exists. The join is unbroken — delete either end and the other is
     // still a lonely claim — but it is now param-to-doctrine, not param-only.
-    const { CHANNEL_DOCTRINE } = await import("./channel-doctrine");
-    expect(CHANNEL_DOCTRINE).toContain("take yours from an unscoped read");
+    const { channelDoctrine } = await import("./channel-doctrine");
+    expect(channelDoctrine()).toContain("take yours from an unscoped read");
   });
 
   it("never re-reads the CHANNEL HEAD — there is still no number to offer", async () => {
