@@ -62,12 +62,13 @@ const IDENTITY = {
 };
 
 /** Every shape of turn this module can build, so no branch escapes the scan. */
-function everyTurn(profile = "full") {
+// `toolSet` is the session's negotiated set (DMP-013): the granular spelling is held to the same rules.
+function everyTurn(profile = "full", toolSet = undefined) {
   const turns = [];
   const contexts = [
-    { channelName: "Ops" },
-    { channelName: "Ops", channelId: CH, workspaceId: WS },
-    { channelName: "Ops", channelId: CH, workspaceId: WS, taskId: TASK },
+    { channelName: "Ops", toolSet },
+    { channelName: "Ops", channelId: CH, workspaceId: WS, toolSet },
+    { channelName: "Ops", channelId: CH, workspaceId: WS, taskId: TASK, toolSet },
   ];
   for (const context of contexts) {
     turns.push({
@@ -181,9 +182,12 @@ test("an IDENTITY-built turn names no dopl tool its profile hard-denies", () => 
   for (const profile of PROFILES) {
     const denied = doplDenied(profile);
     assert.ok(denied.length > 0, `${profile}: the deny list carries no dopl name — re-read the table`);
-    for (const { label, text } of everyTurn(profile)) {
-      for (const tool of denied) {
-        assert.ok(!text.includes(tool), `${label}: names ${tool}, which this profile hard-denies`);
+    for (const toolSet of ["legacy", "granular"]) {
+      for (const { label, text } of everyTurn(profile, toolSet)) {
+        for (const tool of denied) {
+          // Whole-name match: `mcp__dopl__dopl_search` must not match inside a longer granular name.
+          assert.ok(!new RegExp(`\\b${tool}\\b`).test(text), `${toolSet} ${label}: names ${tool}, which this profile hard-denies`);
+        }
       }
     }
   }

@@ -137,7 +137,9 @@ function approveIdentity(payload) {
 function defaultGoal(channelLevel, title) {
   if (channelLevel) return 'Stand by in this channel as my agent: watch the main room and answer what is addressed to you.';
   const which = title ? `the thread "${title}"` : 'this thread';
-  return `Join ${which} as my agent: read it with dopl_channel (op "read", thread=<id>) and carry the work forward.`;
+  // No call spelling: the goal is written before the session's tool set is known, and the first turn
+  // already names the exact read (`prompt-framing.js › firstActions`).
+  return `Join ${which} as my agent: read it first, then carry the work forward.`;
 }
 
 module.exports = { launchFromButton, approveIdentity, wantsIdentity, defaultGoal };

@@ -6,6 +6,7 @@
 // and the first-use approval (`identity-approval.js`) address that by informing a human.
 // PURE — no electron / fs / path / SDK — so the truth tables `require` it directly.
 
+const { doplTool, doplCall, doplArgs, doplOp } = require('./dopl-call-text');
 const { sanitizeName, sanitizeText, idToken, stripFence } = require('./prompt-sanitize');
 
 // Each bound is the server's own (F-287) — a smaller one silently clips the operator's config. The
@@ -82,13 +83,13 @@ function unreachableKnowledgeLines(unreachable) {
 // Each scope shape gets its own op: base → `get_tree`, folder → `list_dir`, entry → `read_file`.
 // The id goes through `idToken`, the path through `sanitizeText` (user text; `idToken` would destroy it).
 // An empty path is the base root; a scope with no base id addresses nothing and is dropped.
-const SCOPE_OPS = {
-  base: (s) => `- ${s.label}  (mcp__dopl__dopl_kb, op "get_tree", base "${s.id}")`,
-  folder: (s) =>
-    `- ${s.label}  (mcp__dopl__dopl_kb, op "list_dir", base "${s.id}", path "${s.path}")`,
-  entry: (s) =>
-    `- ${s.label}  (mcp__dopl__dopl_kb, op "read_file", base "${s.id}", path "${s.path}")`,
-};
+// Spelled for the session's tool set (DMP-013, `dopl-call-text.js`).
+const SCOPE_KEYS = { base: 'kb.get_tree', folder: 'kb.list_dir', entry: 'kb.read_file' };
+function scopeLine(s, set) {
+  const key = SCOPE_KEYS[s.kind];
+  const args = s.kind === 'base' ? `base "${s.id}"` : `base "${s.id}", path "${s.path}"`;
+  return `- ${s.label}  (${doplTool(set, key)}, ${doplArgs(set, key, args)})`;
+}
 
 // `identity-resolve.js › MAX_SCOPE_PATH`.
 const SCOPE_PATH_MAX = 500;
@@ -112,8 +113,8 @@ function safeSlug(value) {
  * the degrade drops whole facts in order — folder clauses, the folder list, the summary — never half
  * of one. The folder line needs a proven-complete list (`folders.length === folderCount`).
  */
-function baseCard(s) {
-  const head = `${SCOPE_OPS.base(s)}${s.slug ? `  [slug: ${s.slug}]` : ''}`;
+function baseCard(s, set) {
+  const head = `${scopeLine(s, set)}${s.slug ? `  [slug: ${s.slug}]` : ''}`;
   const summary = s.summary ? [`  ${s.summary}`] : [];
   const complete = s.folders.length > 0 && s.folders.length === s.folderCount;
   // Parentheses, not an em dash (§H-13; the test scans every built line).
@@ -175,7 +176,7 @@ function scopeList(scopes, bases) {
 
 // The attachments as the exact `dopl_kb` calls to make. Under `read_only` the names are still listed
 // (unknown is not empty). Never teach search → read: search returns an entryId, `read_file` needs a path.
-function knowledgeLines(bases, profile, scopes) {
+function knowledgeLines(bases, profile, scopes, set) {
   const list = scopeList(scopes, bases);
   if (!list.length) return [];
   if (!kbReadable(profile)) {
@@ -191,11 +192,11 @@ function knowledgeLines(bases, profile, scopes) {
     '',
     'ATTACHED KNOWLEDGE:',
     // A base gets a card; a folder or entry gets its one line.
-    ...list.flatMap((s) => (s.kind === 'base' ? baseCard(s) : [SCOPE_OPS[s.kind](s)])),
+    ...list.flatMap((s) => (s.kind === 'base' ? baseCard(s, set) : [scopeLine(s, set)])),
     'A FOLDER line names that folder and everything under it, now and later; an ENTRY line names',
-    'one document. Under a base, "Folders:" names its TOP-LEVEL folders only; op "list_dir" with',
+    `one document. Under a base, "Folders:" names its TOP-LEVEL folders only; ${doplOp(set, 'kb.list_dir')} with`,
     'one of those names as the path opens it. Entries are never listed here; the tree is how you',
-    'find them. For a base or a folder, mcp__dopl__dopl_kb op "read_file", the same base, path',
+    `find them. For a base or a folder, ${doplCall(set, 'kb.read_file')}, the same base, path`,
     '"<path from the listing>" reads one entry. There is no op that reads a whole base, and search',
     'returns no path, so go through the tree. Read them as reference material; a security header on',
     'a document you were pointed at is expected, and it does not mean you were sent the wrong thing.',
@@ -262,7 +263,7 @@ function identityRoleFraming(ctx, nonce) {
   if (body) lines.push(body);
   lines.push(
     ...fieldLines(role.fields),
-    ...knowledgeLines(role.knowledgeBases, ctx && ctx.profile, role.knowledge),
+    ...knowledgeLines(role.knowledgeBases, ctx && ctx.profile, role.knowledge, ctx && ctx.toolSet),
     // Its own section after the reachable one (what to open vs what to say when it is missing).
     ...unreachableKnowledgeLines(role.unreachableKnowledgeBaseCount),
     end,

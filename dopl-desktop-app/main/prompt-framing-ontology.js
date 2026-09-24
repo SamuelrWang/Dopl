@@ -3,6 +3,7 @@
 // own module because these lines carry caller data (the text module is fixed text only).
 
 const { idToken, sanitizeName } = require('./prompt-sanitize');
+const { doplCall, GRANULAR } = require('./dopl-call-text');
 
 // Fails closed: `none` or an unknown level names no ontology at all.
 const LEVELS = { view: 'VIEW', edit: 'EDIT' };
@@ -21,12 +22,17 @@ function reachable(ontologies) {
 
 // One line with the EXACT call. `ontology` is the tool's argument name (not respelled), and there is
 // no `workspace` argument: `dopl_ontology` refuses it; the ontology id resolves its own container.
-function ontologyLine(o) {
+// The granular tool publishes no `ontology` (the map op never read it) and its strict schema refuses
+// one, so that spelling names the id beside the call instead.
+function ontologyLine(o, set) {
+  const call = set === GRANULAR
+    ? `${doplCall(set, 'ontology.map')} (id "${o.id}")`
+    : doplCall(set, 'ontology.map', `ontology "${o.id}"`);
   const verb =
     o.level === 'EDIT'
       ? 'you may also write to it with the write ops.'
       : 'READ ONLY: a write to it is refused, and that refusal is the fence working.';
-  return `- "${o.name}" (${o.level}): read it with mcp__dopl__dopl_ontology op "map", ontology "${o.id}"; ${verb}`;
+  return `- "${o.name}" (${o.level}): read it with ${call}; ${verb}`;
 }
 
 /**
@@ -40,7 +46,7 @@ function ontologyReachLines(ctx) {
   return [
     '',
     'ONTOLOGIES YOU CAN REACH IN THIS CHANNEL:',
-    ...list.map(ontologyLine),
+    ...list.map((o) => ontologyLine(o, ctx.toolSet)),
     'These are your operator\'s ontologies, LENT into this channel as one row, not a copy, so an',
     'edit you make is seen by everyone it is lent to. The level above is enforced on the server and',
     'bounds what you may do NEXT; it does not retract anything already in this window. An ontology',

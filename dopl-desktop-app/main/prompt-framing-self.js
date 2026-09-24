@@ -8,6 +8,7 @@
 // Keep it to a few short lines: a fact and a prohibition is the shape an agent follows.
 
 const { AGENT_ID_RE } = require('./agent-id');
+const { doplCall } = require('./dopl-call-text');
 
 // The roster block's budget. Fixed size; its degrade order is roles, then the people line, never the
 // same-operator flag (the one fact a handle cannot carry). It says "as of launch": a snapshot.
@@ -18,32 +19,33 @@ function agentRow(a) {
   return `- @${a.handle} · ${whose}`;
 }
 
-function rosterLines(roster, withRoles) {
+function rosterLines(roster, withRoles, set) {
+  const status = doplCall(set, 'channel.status', '', true);
   const r = roster || {};
   const agents = Array.isArray(r.agents) ? r.agents : [];
   const people = Array.isArray(r.people) ? r.people : [];
   if (!agents.length && !people.length && r.read !== 'failed') return [];
-  const lines = [`IN THIS ROOM as of launch (live: dopl_channel op "status"):`];
+  const lines = [`IN THIS ROOM as of launch (live: ${status}):`];
   for (const a of agents) {
     const role = withRoles && a.role ? ` · ${a.role}` : '';
     lines.push(`${agentRow(a)}${role}`);
   }
-  if (r.agentsMore > 0) lines.push(`- and ${r.agentsMore} more agents: dopl_channel op "status"`);
+  if (r.agentsMore > 0) lines.push(`- and ${r.agentsMore} more agents: ${status}`);
   if (people.length) {
     const tags = people.map((p) => `@${p.handle}`).join(', ');
     const more = r.peopleMore > 0 ? `, and ${r.peopleMore} more` : '';
     lines.push(`- people: ${tags}${more}`);
   }
   // An unread half is said out loud, never shown as an empty room.
-  if (r.read === 'failed') lines.push(`- others: not read; ask dopl_channel op "status"`);
+  if (r.read === 'failed') lines.push(`- others: not read; ask ${status}`);
   return lines;
 }
 
 /** The roster within its budget; each fallback drops a WHOLE fact, never half of one. */
-function roomRosterLines(roster) {
-  const withRoles = rosterLines(roster, true);
+function roomRosterLines(roster, set) {
+  const withRoles = rosterLines(roster, true, set);
   if (!withRoles.length) return [];
-  const withoutRoles = rosterLines(roster, false);
+  const withoutRoles = rosterLines(roster, false, set);
   const withoutPeople = withoutRoles.filter((l) => l.indexOf('- people: ') !== 0);
   for (const block of [withRoles, withoutRoles, withoutPeople]) {
     if (block.join('\n').length <= ROSTER_MAX_CHARS) return block;
@@ -67,7 +69,7 @@ function agentSelfFraming(ctx) {
     `Names are unique among live agents, so a tag reaches exactly one.`,
     `"for you" on an agent line means YOUR operator's agent; another name means another member's.`,
     `"outside session" is your operator's own coding session: address it @desktop, in full detail.`,
-    ...roomRosterLines(c.roster),
+    ...roomRosterLines(c.roster, c.toolSet),
   ];
 }
 

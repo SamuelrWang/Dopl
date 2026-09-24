@@ -143,7 +143,7 @@ test("T85: the framing does not teach a call the gate refuses", () => {
   // the copy names the SHAPE. Teaching `op "await"` would now be a doubly-wrong call — refused
   // by this gate AND rejected by the tool's own enum.
   assert.ok(!/op "await"/.test(code), "the retired op name is not in the prompt at all");
-  assert.ok(/a HELD read \(op "read" with/.test(code) && /wait_ms\) is refused/.test(code),
+  assert.ok(/a HELD read \(\$\{doplOp\(set, 'channel\.read'\)\} with/.test(code) && /wait_ms\) is refused/.test(code),
     "and the replacement says so plainly");
   assert.ok(/delivered to you as a new TURN/.test(code),
     "…and names what happens instead, or the agent invents a poll loop");

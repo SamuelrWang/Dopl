@@ -93,7 +93,7 @@ function runEffect(s, eff) {
       break;
     case 'pushInbound':
       noteSiblings(s);
-      if (s.pushIterator) s.pushIterator.push(io.userMessage(io.withSeed(s, io.frameContinuation(s.nonce, eff.message, eff.authorName, eff.addressing, eff.authorNote))));
+      if (s.pushIterator) s.pushIterator.push(io.userMessage(io.withSeed(s, io.frameContinuation(s.nonce, eff.message, eff.authorName, eff.addressing, eff.authorNote, s.doplToolSet))));
       break;
     case 'interruptQuery':
       // The interrupted turn still ends with a `result`; the direction it was answering lapses (P4-08).
@@ -250,7 +250,7 @@ function nameAndFrame(s, spec, rt) {
 function firstTurnFor(s, spec, rt) {
   if (spec.parkedShell) return '';
   if (spec.rawFirstTurn) return spec.rawFirstTurn;
-  return framing.buildFencedTurn({ side: spec.side, message: spec.firstMessage, context: { ...s.context, profile: spec.profile, mcpDiscovery: io.discoveryFor(rt && rt.id) }, nonce: s.nonce });
+  return framing.buildFencedTurn({ side: spec.side, message: spec.firstMessage, context: { ...s.context, profile: spec.profile, toolSet: s.doplToolSet, mcpDiscovery: io.discoveryFor(rt && rt.id) }, nonce: s.nonce });
 }
 
 /** Store the name a launch asked for through the one rename door (uniqueness + sanitizer + summary flush).

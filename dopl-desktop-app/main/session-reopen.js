@@ -194,7 +194,7 @@ function messageByTask(a) {
     // Read BEFORE the dispatch (it moves activity to working). `priority: 'next'` queues or joins the running
     // turn rather than interrupting it.
     const inFlight = privateTurn.turnInFlight(s.state);
-    const framed = (directed ? framing.frameDirectedTurn : framing.frameOperatorTurn)(s.nonce, text);
+    const framed = (directed ? framing.frameDirectedTurn : framing.frameOperatorTurn)(s.nonce, text, s.doplToolSet);
     deps.dispatch(s, {
       type: 'steer',
       text: framed,
