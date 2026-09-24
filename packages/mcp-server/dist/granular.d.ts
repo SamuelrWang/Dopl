@@ -1,5 +1,5 @@
 /**
- * Serving a granular tool (DMP-013) from its manifest row: its input schema, its placeholder
+ * Serving a granular tool (DMP-013) from its manifest row and its text: the input schema, the
  * description, and the rewrite of a call into the bound legacy call. The registrar validates that
  * call against the legacy tool's own schema and runs the legacy pipeline, so every gate, charge and
  * tally sees legacy keys.
@@ -14,14 +14,17 @@ export interface LegacyTool {
     run: (args: Record<string, unknown>) => Promise<ToolResponse>;
 }
 /**
- * The row's params, each typed by the first bound legacy tool that publishes it, plus the selector.
- * Null when a bound legacy tool is not served on this connection (outside the profile offer).
+ * The row's params, typed by the tool's text or the first served legacy tool that publishes them,
+ * plus the selector over the served jobs. Null when no job is served on this connection.
  */
 export declare function granularShape(t: GranularTool, legacy: ReadonlyMap<string, LegacyTool>): ZodRawShape | null;
-/** Placeholder until B3 writes the prose: the name as a sentence ("dopl_get_map" → "Get map."). */
 export declare function granularDescription(t: GranularTool): string;
-/** The legacy tool and args a granular call stands for: selector consumed, preset and op/action written. */
+/**
+ * The legacy tool and args a granular call stands for: selector consumed, preset and op/action
+ * written. `carried` are the params the legacy schema does not take, handed to its handler as-is.
+ */
 export declare function legacyCall(t: GranularTool, args: Record<string, unknown>): {
     tool: string;
     args: Record<string, unknown>;
+    carried: Record<string, unknown>;
 };

@@ -5,6 +5,7 @@
  * loses directory rows, never the contract. Gate: `instructions-budget.test.ts`.
  */
 import type { WorkspaceListItem } from "@dopl/client";
+import type { ToolSet } from "./tool-manifest.js";
 /** The container this connection is bound to (`X-Workspace-Id`). */
 export interface WorkspacePin {
     name: string;
@@ -45,4 +46,9 @@ export declare function buildInstructions(directory: WorkspaceListItem[], guidan
     desktopRun?: boolean;
     /** `X-Dopl-Vendor`: picks the caller's own tool-loader wording (`identity.ts › toolLoaderFor`). */
     vendor?: string | null;
+    /**
+     * The listed set. The granular one states the body fence here, once, where the legacy tools
+     * each carry it; its body-returning reads point back (`granular-text.ts › FENCE_POINTER`).
+     */
+    toolSet?: ToolSet;
 }): string;

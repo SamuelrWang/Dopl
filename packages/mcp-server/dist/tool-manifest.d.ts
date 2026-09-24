@@ -1,8 +1,9 @@
 /**
  * THE GRANULAR TOOL SURFACE (DMP-013), one verb_noun tool per job, and the legacy call each one
  * runs. `registrar.ts › registerGranular` serves it from this table; the connection's tool set picks
- * which set is listed, and the other stays callable. Read/write class, annotations and the `container` arg are DERIVED from
- * `gating.ts › isWriteOp`, `delete-policy.ts` and `workspace-arg.ts` — never restated here.
+ * which set is listed, and the other stays callable; `granular-text.ts` holds what each tool says. Read/write
+ * class, annotations and the `container` arg are DERIVED from `gating.ts › isWriteOp`, `delete-policy.ts`
+ * and `workspace-arg.ts` — never restated here.
  *
  * A binding key is `Gates.requestedOp`'s grain: `<legacy tool>:<op>` or `<legacy tool>:<op>.<action>`,
  * bare `<legacy tool>` for the three that take no op. `tool-manifest.test.ts` pins coverage (every
@@ -27,6 +28,11 @@ export interface GranularTool {
     preset?: Readonly<Record<string, string>>;
     /** Legacy arg names this tool publishes; `container` is derived, never listed. */
     params: readonly string[];
+    /**
+     * Args the bound legacy schema does not take, typed by the tool's text and handed to the legacy
+     * handler past that schema. Each must be read by the handler it reaches (`granular.test.ts`).
+     */
+    carry?: readonly string[];
     /** Overwrites existing content. Never a delete: deletion is app-only. */
     destructive?: true;
     /** A repeat with the same args leaves the same state. */
@@ -57,13 +63,14 @@ export declare const LEGACY_TOOL_NAMES: ReadonlySet<string>;
 export declare function servesName(set: ToolSet, family: ToolSet, name: string): boolean;
 /** The inactive set: registered and callable, absent from `tools/list`, so stale prompts still work. */
 export declare function unlistedFor(set: ToolSet): ReadonlySet<string>;
-/** A profile's legacy offer widened to the granular tools whose every bound legacy tool it offers. */
+/**
+ * A profile's legacy offer widened to the granular tools with a bound legacy tool it offers; such a
+ * tool serves only those jobs (`granular.ts › granularShape`).
+ */
 export declare function withGranularTools(offer: ReadonlySet<string> | null): ReadonlySet<string> | null;
 /** Read-only iff no bound key is a gated write. */
 export declare function isReadOnlyTool(t: GranularTool): boolean;
 /** A binding the delete policy refuses — must be false for every tool. */
 export declare function bindsDeleteOp(t: GranularTool): boolean;
-/** `container` is published iff some bound op still honours it (`workspace-arg.ts`). */
-export declare function takesContainer(t: GranularTool): boolean;
 /** Every hint explicit: the MCP defaults (destructive, open-world) are wrong for a write here. */
 export declare function annotationsFor(t: GranularTool): ToolAnnotations;

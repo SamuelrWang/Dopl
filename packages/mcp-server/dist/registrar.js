@@ -215,7 +215,8 @@ function createToolRegistrars(deps) {
             if (!parsed.success) {
                 throw new types_js_1.McpError(types_js_1.ErrorCode.InvalidParams, `Input validation error: Invalid arguments for tool ${t.name}: ${parsed.error.message}`);
             }
-            return target.run(parsed.data);
+            // Carried args were validated by this tool's own schema; the legacy one does not know them.
+            return target.run({ ...parsed.data, ...call.carried });
         }));
     }
     return { registerTool, registerMetaTool, chargeCredit, registerGranular };

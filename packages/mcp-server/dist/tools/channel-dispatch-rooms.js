@@ -75,7 +75,7 @@ async function dispatchRoomsAction(action, args, client, selfUserId, isAdmin) {
                 // intent" everywhere on this surface — a thread's title, a send's
                 // notification line, a decision's question — and a room's topic is the
                 // same sentence about a room. A second name for it was a param.
-                topic: args.summary,
+                topic: args.description ?? args.summary,
                 visibility: args.visibility,
             });
         }
@@ -115,13 +115,13 @@ async function dispatchRoomsAction(action, args, client, selfUserId, isAdmin) {
         // stays app-only and is REFUSED here, not dropped. ⚠ All three OMITTED is the
         // READ — the card is replaced whole, so a blind write clobbers.
         case "update": {
-            const bad = (0, respond_1.strictParams)('rooms action="update"', args, ["channel"], ["name", "summary", "info_card"]);
+            const bad = (0, respond_1.strictParams)('rooms action="update"', args, ["channel"], ["name", "summary", "description", "info_card"]);
             if (bad)
                 return bad;
             return (0, channel_ops_update_1.opUpdate)(client, args.channel, {
                 card: args.info_card,
                 name: args.name,
-                description: args.summary,
+                description: args.description ?? args.summary,
             });
         }
     }

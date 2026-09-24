@@ -24,8 +24,14 @@ import { CHANNEL_INPUT_SHAPE } from "./channel-schema";
 import { type RoomsAction } from "./channel-vocab";
 import type { z } from "zod";
 import type { ZodObject } from "zod";
-/** The validated argument bag, exactly as `channel.ts`'s handler receives it. */
-type ChannelArgs = z.infer<ZodObject<typeof CHANNEL_INPUT_SHAPE>>;
+/**
+ * The validated argument bag, exactly as `channel.ts`'s handler receives it. `description` is the
+ * room description only the granular tools carry (`tool-manifest.ts › GranularTool.carry`): the
+ * legacy schema refuses it, and its `summary` caps at 200 where the route takes 2,000.
+ */
+type ChannelArgs = z.infer<ZodObject<typeof CHANNEL_INPUT_SHAPE>> & {
+    description?: string;
+};
 /**
  * True for an action this module answers. ⚠ **THE ONE PLACE THE PAIRING IS
  * CHECKED**, and it exists because `action` is ONE flat enum over two

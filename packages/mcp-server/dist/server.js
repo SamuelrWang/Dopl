@@ -120,6 +120,7 @@ function createServer(client, options = {}) {
             // this server refuses to that caller.
             desktopRun: (0, identity_js_1.isDesktopRun)(caller),
             vendor: caller.vendor,
+            toolSet: options.toolSet,
         }),
     });
     // Before any registration: it filters the list handler the first registerTool installs.
