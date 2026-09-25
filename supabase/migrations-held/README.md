@@ -67,12 +67,12 @@ row to its whole workspace** — and a `RAISE` inside `db push` aborts the batch
 part-way. Only the query in step 3 can say whether such rows exist.
 
 ⚠ **WHAT THIS PARAGRAPH USED TO SAY, AND WHY IT MUST NOT BE RESTORED.** It read
-*"Precondition P2, unmet: `TENANCY_PERSONAL_CONTAINER` has never been on … no
+*"Precondition P2, unmet: `TENANCY_HOME_SPACE` has never been on … no
 personal container exists"*. Both halves are now false. `20260920120000_workspace_kind_personal.sql`
 is in `supabase/migrations/` (match by NAME, §12) and the personal container is
-live and **UNFLAGGED**: `TENANCY_PERSONAL_CONTAINER` is read by no code at all —
+live and **UNFLAGGED**: `TENANCY_HOME_SPACE` is read by no code at all —
 slice B15 deleted the flag, the dual write and the union read with it, and
-`src/shared/tenancy/personal-container.ts` now REFUSES a personal write with no
+`src/shared/tenancy/home-space.ts` now REFUSES a personal write with no
 container rather than falling back to a shared workspace. So P2's code half is
 satisfied, steps 1 and 2 below describe a flag that does not exist, and the hold
 rests entirely on step 3's count. **Deploy state is a measurement, not a claim**
@@ -80,7 +80,7 @@ rests entirely on step 3's count. **Deploy state is a measurement, not a claim**
 
 **To release it, in order:**
 
-1. ~~Ship a release with `TENANCY_PERSONAL_CONTAINER=1`~~ — **DONE AND GONE.**
+1. ~~Ship a release with `TENANCY_HOME_SPACE=1`~~ — **DONE AND GONE.**
    There is no flag; personal writes land in a container or refuse.
 2. ~~Leave it on for a full release cycle~~ — **moot for the same reason.** What
    step 3 measures is whether any row PREDATING that state is still stranded.

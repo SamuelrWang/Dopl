@@ -111,7 +111,7 @@ hold two drops nine versions apart) and the duplicate-version ratchet are both g
    in no slice's `Owns` column. The gate's `OPEN_SITES` map is **deleted**, which is the sign-off;
    the header records that a precondition existed and was met.
 3. 🔒 **`20260923120000` (drop `home_scoped`) HAS TWO PRECONDITIONS OF ITS OWN.** P1: `…0920` is
-   applied. **P2: the personal-container flag has been default-ON for a release.** P2 is a DEPLOY
+   applied. **P2: the home-space flag has been default-ON for a release.** P2 is a DEPLOY
    fact, not a repo fact — this batch cannot satisfy it and does not claim to.
 4. **F-583's six probes (P15–P20) and F-461's grant probes are still owed**, and this batch adds
    **five more (P21–P25)** on the grant read arm: container grant with/without membership, channel
@@ -119,7 +119,7 @@ hold two drops nine versions apart) and the duplicate-version ratchet are both g
    credential.
 5. 🔒 **`20260922120000` NEEDS `src/shared/supabase/types.ts` REGENERATED IN THE SAME APPLY.** It is
    the only pending migration that changes the FUNCTION surface the generated types describe —
-   `default_workspace_of` and `ensure_default_workspace` out, `personal_container_origin_of` in —
+   `default_workspace_of` and `ensure_default_workspace` out, `home_space_origin_of` in —
    and that file is a §1 carve-out nothing typechecks against the database, so a stale copy declares
    two RPCs that answer `42883` and omits the one that works. Command, not the answer:
    `npx supabase gen types typescript --linked > src/shared/supabase/types.ts`.
@@ -258,7 +258,7 @@ say "the hold", or ratify the quote.**
 5. **G20 / F-450** — land the eighth session-health field or retire the guardrail. It is the last
    prose guardrail that is prose by default rather than by ruling.
 6. **Two flag flips, both default-OFF and neither exercised**: `RLS_CALLER_SCOPED_READS` and
-   `TENANCY_PERSONAL_CONTAINER`. `20260923120000` cannot be applied until the second has been ON
+   `TENANCY_HOME_SPACE`. `20260923120000` cannot be applied until the second has been ON
    for a release.
 7. **The parameter diet** — the served target needs ~16,857 more and it is FIELDS. Samuel's
    standing answer is a separate slice with usage evidence per param.

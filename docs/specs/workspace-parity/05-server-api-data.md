@@ -27,8 +27,8 @@ in the tree today and three of them appear in the same files.
 |---|---|---|
 | **home space / `/home`** | The desktop's ACCOUNT surface: a five-tab face that spans every container the user is in. Not a workspace at all. | `apps/desktop-ui/src/components/app-shell/account-rail.tsx › HOME_PATH` (L12), `src/features/home/tabs.ts › HOME_TABS` (L51) |
 | **home channel** | A `workspaces.kind='link'` container holding exactly ONE channel and 1..N members. A real workspace row with a real membership. | `docs/INVARIANTS.md` §4A; `src/features/home/types.ts › HomeChannel` (L43) |
-| **home workspace** | ⚠ **A DEAD WORD — THIS ROW WAS WRONG WHEN IT WAS MEASURED AND R-35 RETIRES THE CONCEPT** (corrected 2026-09-17). It said *"the caller's DEFAULT STANDARD workspace, answered by `POST /api/boot › workspace`"*. `getBootState`'s no-segment branch calls `ensurePersonalContainer` and has since wave B B14, so what boot answers is the **home shelf** row below — a `kind='personal'` container, never a `kind='standard'` row. Samuel's ruling R-35 (2026-09-17) makes that the rule rather than a leftover: a new account gets a home space and no standard workspace. **Do not reintroduce this sense of "home".** | `src/features/workspaces/server/segment.ts › getBootState`, `› ensurePersonalContainer`; `docs/INVARIANTS.md` §4A |
-| **home shelf (`?shelf=home`)** | The caller's `kind='personal'` container — one per user. | `src/shared/tenancy/personal-container.ts › resolveShelfScope` (L227) |
+| **home workspace** | ⚠ **A DEAD WORD — THIS ROW WAS WRONG WHEN IT WAS MEASURED AND R-35 RETIRES THE CONCEPT** (corrected 2026-09-17). It said *"the caller's DEFAULT STANDARD workspace, answered by `POST /api/boot › workspace`"*. `getBootState`'s no-segment branch calls `ensureHomeSpace` and has since wave B B14, so what boot answers is the **home shelf** row below — a `kind='personal'` container, never a `kind='standard'` row. Samuel's ruling R-35 (2026-09-17) makes that the rule rather than a leftover: a new account gets a home space and no standard workspace. **Do not reintroduce this sense of "home".** | `src/features/workspaces/server/segment.ts › getBootState`, `› ensureHomeSpace`; `docs/INVARIANTS.md` §4A |
+| **home shelf (`?shelf=home`)** | The caller's `kind='personal'` container — one per user. | `src/shared/tenancy/home-space.ts › resolveShelfScope` (L227) |
 
 ⚠ **THREE ARE LIVE, NOT FOUR (2026-09-17, R-35).** The "home workspace" sense named a row
 `POST /api/boot` stopped answering at wave B B14, and R-35 retires the concept outright — a new
@@ -113,8 +113,8 @@ into three different client caches.
 
 | # | Concern | Home path | Workspace path | Same code? | Class | Action | Risk |
 |---|---|---|---|---|---|---|---|
-| A26 | Shelf resolution | `shared/tenancy/personal-container.ts › resolveShelfScope` (L227) | same function | ✅ **yes** | **shared-already** | 🏆 **THIS IS THE TARGET SHAPE.** One function, one fence, `shelf` as a parameter, an EMPTY list as the fail-safe. §G builds on it | low |
-| A27 | Shelf-bound INSERT | `personal-container.ts › personalWriteWorkspaceId` (L281) | same | ✅ yes | shared-already | refuses (`PersonalContainerMissingError`) rather than falling back | low |
+| A26 | Shelf resolution | `shared/tenancy/home-space.ts › resolveShelfScope` (L227) | same function | ✅ **yes** | **shared-already** | 🏆 **THIS IS THE TARGET SHAPE.** One function, one fence, `shelf` as a parameter, an EMPTY list as the fail-safe. §G builds on it | low |
+| A27 | Shelf-bound INSERT | `home-space.ts › homeSpaceWriteWorkspaceId` (L281) | same | ✅ yes | shared-already | refuses (`HomeSpaceMissingError`) rather than falling back | low |
 | A28 | KB list | `GET /api/knowledge/bases?shelf=home` | `?shelf=workspace` (or absent) | ✅ ONE route | **shared-already** | 🏆 the endpoint collapse §B asks for, already done once | low |
 | A29 | Template list | `GET /api/agent-templates?shelf=home` | `?shelf=workspace` | ✅ ONE route | shared-already | 🏆 same pattern | low |
 | A30 | Template visibility scopes | `agent-templates/lib/visibility.ts › SECTIONS_CONTAINER` (2 options) | `› SECTIONS` (3 options incl. `team`) | ❌ two arrays, ONE module | **host-adapter** | already parameterised: `components/template-editor.tsx › TemplateEditorProps.containerKind` (L111) + `› sections` (L227). 🏆 the in-kind difference expressed as a PROP | low |
@@ -260,7 +260,7 @@ second pattern for channels and overview — extend this one.**
 | `channel_links.workspace_id` | `20260824120000_home_channel_containers.sql` L104-106 | **link** (binds a token to an existing container) | — | no. ⚠ **NULLABLE by design** (legacy unbound link) |
 | `channel_link_claims` | `20260823150000` L150-161 | **link** | — | no |
 | `consume_channel_link(uuid)` RPC | `20260823150000` L200 | **link** | — | no |
-| `channel_personal_arming` | `20260925120000_channel_personal_arming.sql` L38-48 | **personal** | — | 🔴 **DEAD.** Samuel reversed task 11 on 2026-09-06; `src/shared/tenancy/personal-reach.ts` (L14-18) records that nothing writes it. Three live policies (L66, L75, L93) still count against the RLS surface. **Drop candidate, not a parity item** |
+| `channel_personal_arming` | `20260925120000_channel_personal_arming.sql` L38-48 | **personal** | — | 🔴 **DEAD.** Samuel reversed task 11 on 2026-09-06; `src/shared/tenancy/home-space-reach.ts` (L14-18) records that nothing writes it. Three live policies (L66, L75, L93) still count against the RLS surface. **Drop candidate, not a parity item** |
 | `workspace_token_spend` | `20260927120000_workspace_token_spend.sql` L75-127 | **schema kind-agnostic, reader home-only** — fenced per OPERATOR (`user_id`) | none | ✅ **yes, if Overview ships for workspaces** — the table already works; what is missing is a workspace-side read surface **and a ruling** (L149-153 says it is *"DELIBERATELY NARROWER"* because a member-scoped read leaks a colleague's spend) |
 | `credit_usage_events.origin_workspace_id` | `20260901130000_credit_usage_events.sql` L73 | the /home read's dimension | `workspace_id` arm is the standard path | already parity |
 | `credit_usage_events.wallet` / `.payer_user_id` | `20260930120000_credit_wallets.sql` L335, L354; CHECK `('workspace','personal','seat')` L346 | splits home vs seat | `seat` | already parity |
@@ -274,8 +274,8 @@ second pattern for channels and overview — extend this one.**
 | `channel_members.favorited_at` | `20260819120000_channel_members_favorited_at.sql` L106 | **kind-agnostic** | identical | **no DB gap — the fork is two wire names, §A10** |
 | `channel_mention_reads` | `20260818140000` (workspace guard L91) | kind-agnostic | same | no DB gap — **the fork is that only /home computes a badge from it (§A12)** |
 | `resource_grants` | `20260914120000_resource_grants.sql` L168-192 | **kind-agnostic by design** | — | ✅ see C.4 |
-| `workspaces_personal_owner_uidx` | `20260920120000_workspace_kind_personal.sql` L186-187 | **personal** (partial unique on `owner_id WHERE kind='personal'`) | none needed | correct |
-| `ensure_personal_container(uuid,text)` | `20260920120000` L232-311 (re-declared `20260922120000` L109) | **personal** | `ensure_default_workspace` was the standard twin — **DROPPED** (`20260922120000` L183) | asymmetric on purpose |
+| `workspaces_home_owner_uidx` | `20260920120000_workspace_kind_personal.sql` L186-187 | **personal** (partial unique on `owner_id WHERE kind='personal'`) | none needed | correct |
+| `ensure_home_space(uuid,text)` | `20260920120000` L232-311 (re-declared `20260922120000` L109) | **personal** | `ensure_default_workspace` was the standard twin — **DROPPED** (`20260922120000` L183) | asymmetric on purpose |
 | `default_workspace_of(uuid)` | `20260920120000` L198-207 (`kind='standard'` L204) | **standard** | — | *"born deprecated"* (L209-210); **DROPPED** `20260922120000` L179 |
 
 **Deleted one-kind objects (for completeness):** `channel_resource_grants` (created `20260827120000` L111, dropped `20260923130000` L126) and its trigger/function/policy stack; `agent_template_teams` (`20260915120000`); `team_resource_access` (`20260916120000`); `enforce_link_container_member_cap` (see C.5).
@@ -337,7 +337,7 @@ re-opening a finding that has already been closed twice (F-333 / F-336 class).
 | `enforce_link_container_member_cap()` | created `20260824120000` L129-182 (kind read L148-155) | link | 🔴 **DROPPED** by `20260830120000_link_container_multi_member.sql` L89-90. ⚠ **`src/features/workspaces/server/authz.ts` (L52-53) still says *"The hard fence under both is the database — `enforce_link_container_member_cap`"* and still describes a TWO-MEMBER CAP (L35-38). That comment has been false since 2026-08-30** — see §F F-note |
 | `enforce_resource_grant()` | `20260914120000` L237-294, redefined `20260921140000` L245-326 | **none** | kind-agnostic |
 | `ensure_default_workspace` | `20260823160000` L73-84 (`kind='standard'` L76, L81) | standard | **DROPPED** `20260922120000` L183 |
-| `ensure_personal_container(uuid,text)` | `20260920120000` L232-311 | personal | live. ⚠ **owner membership insert L305-306 is not optional** — every read fence asks about MEMBERSHIP, not ownership |
+| `ensure_home_space(uuid,text)` | `20260920120000` L232-311 | personal | live. ⚠ **owner membership insert L305-306 is not optional** — every read fence asks about MEMBERSHIP, not ownership |
 | ~10 `*_workspace_guard` triggers on channel children | e.g. `20260725130000` L100/L105; `20260822160000` L222; `20260903120000` L224 | **none** — child's `workspace_id` must match its channel's | kind-agnostic, applies identically to all three kinds |
 
 ### C.6 RLS — the pair gate
@@ -353,7 +353,7 @@ re-opening a finding that has already been closed twice (F-333 / F-336 class).
   (`src/features/ontology/server/service-shared.ts` L134) *narrates* `personal` in its
   docblock but the branch lives in `service-audience.ts › computeAudience` (L129).
 - **Two redteam suites touch kind at all:**
-  `src/features/knowledge/server/rls-redteam-personal-container.test.ts` (L31-57, mints
+  `src/features/knowledge/server/rls-redteam-home-space.test.ts` (L31-57, mints
   via the RPC — *"never a hand-built row"*) and
   `src/features/ontology/server/rls-redteam.test.ts` (L272, the one `kind:"link"` fixture).
   **There is no standard-container counterpart because the standard case IS the baseline.**
@@ -392,7 +392,7 @@ overview must not be the thing that discovers this.**
 
 | Question | `kind='link'` | `kind='personal'` |
 |---|---|---|
-| Membership | **the same rows, the same gate.** A link container is a real `workspaces` + `workspace_members` pair (INVARIANTS §4A) | same — and `ensure_personal_container` (`20260920120000` L305-306) **inserts the owner membership** precisely so every existing fence keeps working |
+| Membership | **the same rows, the same gate.** A link container is a real `workspaces` + `workspace_members` pair (INVARIANTS §4A) | same — and `ensure_home_space` (`20260920120000` L305-306) **inserts the owner membership** precisely so every existing fence keeps working |
 | Role floor | the same `meetsMinRole`. A claimer lands at the link's `granted_role` (default `guest`) | exactly one member, who is the owner |
 | Add a member | **only** `home/server/service-claim-bound.ts › claimBoundLink` — a single-use token bound to that container. Every workspace-level path refuses (`authz.ts › assertMemberAddable`, L73) | **nobody, ever.** Same refusal, different sentence (L80) |
 | Mint that token | `home/server/service-writes.ts › mintContainerLink` — `member`+ floor (`LINK_MINT_FORBIDDEN`) **plus** grant-above-self (`GRANT_ABOVE_SELF`) | n/a |
@@ -587,7 +587,7 @@ a container.** `packages/mcp-server/src/workspace-arg.ts` (L53-56) says so; cont
   caller-relativity that an account-wide payload will *stop* being able to assume.
 
 **R8 — `channel_personal_arming` is dead. Drop it?** Nothing writes it
-(`src/shared/tenancy/personal-reach.ts` L14-18); three live policies still count against
+(`src/shared/tenancy/home-space-reach.ts` L14-18); three live policies still count against
 the RLS surface; it is still a CASCADE child of `channels` and so still in
 `channels/schema-sql.test.ts`'s count.
 - ✅ **Recommendation: drop it in the parity wave**, per the standing "delete, don't disarm" ruling.
@@ -603,8 +603,8 @@ the RLS surface; it is still a CASCADE child of `channels` and so still in
 2. 🔴 **`packages/contracts/src/workspaces.ts` (L47-64) carries two stale claims**:
    `"link"` is described as *"holding ONE or TWO members"* (cap retired 2026-08-26), and
    `personal` as *"NO ROW HAS THIS KIND YET — the migration is unapplied and the dual-write
-   sits behind `TENANCY_PERSONAL_CONTAINER` (default off)"*. INVARIANTS §4A says that is not
-   a claim a repo can make, and `grep -rn TENANCY_PERSONAL_CONTAINER src packages apps`
+   sits behind `TENANCY_HOME_SPACE` (default off)"*. INVARIANTS §4A says that is not
+   a claim a repo can make, and `grep -rn TENANCY_HOME_SPACE src packages apps`
    answers **comments and test prose only — no code reads it**
    (`supabase/migrations-held/README.md` L68 says the same). File as a finding.
 3. ⚠ **A THIRD overview-series cache entry is live on /home — DELIBERATELY, and that is
@@ -626,9 +626,9 @@ the RLS surface; it is still a CASCADE child of `channels` and so still in
 > **One implementation per concern, parameterised by a `ContainerScope` the host
 > supplies; the kind is data, never a branch in the feature.**
 
-`src/shared/tenancy/personal-container.ts › resolveShelfScope` is the worked example
+`src/shared/tenancy/home-space.ts › resolveShelfScope` is the worked example
 already in the tree: one function, one fence, `shelf` as a parameter, an EMPTY list as the
-fail-safe, and a REFUSAL (`PersonalContainerMissingError`) instead of a fallback. Its own
+fail-safe, and a REFUSAL (`HomeSpaceMissingError`) instead of a fallback. Its own
 header records that it **replaced two hand-mirrored copies** (`resolveHomeScope` and
 `resolveTemplateHomeScope`) and collapsed two error classes into one. **That is the
 template.**
@@ -687,7 +687,7 @@ template.**
 3. 🔒 **One wire name per fact.** `favorited_at` has two (§A10) and it cost a bug.
    Before any field is added to a merged projection, it gets ONE name.
 4. 🔒 **A scope resolver REFUSES rather than falling back.** `resolveShelfScope` returns an
-   EMPTY list for an unreachable shelf and `personalWriteWorkspaceId` throws — because the
+   EMPTY list for an unreachable shelf and `homeSpaceWriteWorkspaceId` throws — because the
    fallback writes a row nothing can find. A `scope=account` read that cannot resolve the
    caller's containers must answer empty, never "the workspace you happen to be in".
 5. 🔒 **Fan, never per-row.** `home/server/service-reads.ts › hydrateChannels` is the
@@ -711,7 +711,7 @@ template.**
 
 | Already right | Why it is the model |
 |---|---|
-| `src/shared/tenancy/personal-container.ts › resolveShelfScope` | one function, `shelf` as a parameter, empty-as-fail-safe, refusal-not-fallback |
+| `src/shared/tenancy/home-space.ts › resolveShelfScope` | one function, `shelf` as a parameter, empty-as-fail-safe, refusal-not-fallback |
 | `supabase/migrations/20260914120000_resource_grants.sql` | one polymorphic grant table, **zero** `kind` clauses, cross-container reach bought with an author |
 | `GET /api/knowledge/bases?shelf=` and `GET /api/agent-templates?shelf=` | one route, one auth wrapper, the shelf as a `WHERE` |
 | `billing/server/credits-service.ts › containerTarget` | the whole kind→wallet table in one function, reached from both arms so neither can drift |

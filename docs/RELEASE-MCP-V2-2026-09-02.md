@@ -77,7 +77,7 @@ prod as `20260901202204`. Do not re-apply it.
 | `20260917120000_mcp_token_credential_axes` | no | **YES** | cols drop clean | 2 UPDATEs backfilling `container_id` / `subject_user_id` |
 | `20260918120000_channel_default_responder` | no | no | yes | CHECK widen |
 | `20260919120000_rls_helpers_and_caller_scope` | no | no | yes | functions only; **inert while `RLS_CALLER_SCOPED_READS` is off** |
-| `20260920120000_workspace_kind_personal` | no | no | yes | **inert while `TENANCY_PERSONAL_CONTAINER` is off** |
+| `20260920120000_workspace_kind_personal` | no | no | yes | **inert while `TENANCY_HOME_SPACE` is off** |
 | `20260921120000_rls_phase2_policies` | no | no | yes | policies bite only caller-scoped reads; service_role bypasses RLS |
 | `20260921130000_channel_resource_grants_read_only` | policy | no | yes | drops a WRITE policy; old writes go through service_role, which bypasses it |
 | `20260921140000_resource_grant_trigger_arms` | no | no | yes | function replacements |
@@ -104,7 +104,7 @@ have been applied and the trigger armed, or this raises.**
 
 | File | Why |
 |---|---|
-| `20260923120000_drop_home_scoped` | **Precondition P2 unmet.** It drops `home_scoped`, and refuses while any `home_scoped = true` row sits outside a `kind='personal'` container. `TENANCY_PERSONAL_CONTAINER` has never been on ⇒ no personal container exists ⇒ every such row is stranded ⇒ the guard raises **mid-push**, leaving the batch half-applied. It is also the rollback path: while the column exists, reverting to pre-Wave-B code finds its data. |
+| `20260923120000_drop_home_scoped` | **Precondition P2 unmet.** It drops `home_scoped`, and refuses while any `home_scoped = true` row sits outside a `kind='personal'` container. `TENANCY_HOME_SPACE` has never been on ⇒ no personal container exists ⇒ every such row is stranded ⇒ the guard raises **mid-push**, leaving the batch half-applied. It is also the rollback path: while the column exists, reverting to pre-Wave-B code finds its data. |
 
 Enforced by moving it to `supabase/migrations-held/` — `db push` and `db reset`
 read `supabase/migrations/` and nothing else. `src/shared/supabase/migrations-held.test.ts`
@@ -171,7 +171,7 @@ contract phase raises and the release stops half-applied.
 
 | Var | This release | Why |
 |---|---|---|
-| `TENANCY_PERSONAL_CONTAINER` | **leave OFF / unset** | No applied migration needs it. Turning it on is what starts P2's clock for a *later* release that can then drop `home_scoped`. |
+| `TENANCY_HOME_SPACE` | **leave OFF / unset** | No applied migration needs it. Turning it on is what starts P2's clock for a *later* release that can then drop `home_scoped`. |
 | `RLS_CALLER_SCOPED_READS` | **leave OFF / unset** | Phase-2 RLS policies land inert; reads stay on service_role, which bypasses RLS. Flipping it and the migrations in one release changes the schema and the client identity at once, with no replay evidence behind either. |
 | `SUPABASE_JWT_SECRET` | **do not set** | Required *only* when caller-scoped reads flip. `shared/supabase/caller-jwt.ts` refuses the half-configured state explicitly: *"Unset it and `RLS_CALLER_SCOPED_READS` together, or set both."* |
 
@@ -324,7 +324,7 @@ channel_default_responder …0336 · rls_helpers_and_caller_scope …0337 ·
 workspace_kind_personal …0340 · channel_resource_grants_read_only …0343 ·
 resource_grant_trigger_arms …0344. Snapshot 58/172/73/571 → 59/184/74/618.
 
-**Found in the 1.26.0 smoke (2026-09-03), fixed on `fix/personal-container-through-lock`:** a
+**Found in the 1.26.0 smoke (2026-09-03), fixed on `fix/home-space-through-lock`:** a
 personal-shelf base was unreachable from a home channel — `base_not_found`, then
 `KNOWLEDGE_BASE_MISMATCH` — through four independently-correct fences composing
 to a refusal (F-470 the id doors and the MCP ref resolver, F-662 the grant lanes
@@ -349,7 +349,7 @@ applied to production from that branch.
 2. **`20260920120000_workspace_kind_personal` is NOT inert.** It minted 15
    personal containers and moved the 3 `home_scoped` rows (Orchestration
    Guidelines KB + 2 templates) into the owner's container. There is no runtime
-   flag left in the code — `src/shared/tenancy/personal-container.ts` resolves
+   flag left in the code — `src/shared/tenancy/home-space.ts` resolves
    the container by owner — so the rows are invisible to the OLD code until the
    deploy lands and visible immediately after. That also satisfies the P1 half of
    the held file's precondition; P2 ("a release with the container live") begins

@@ -177,7 +177,7 @@ is a TYPECHECK and not one of the twelve:
     `RLS_REDTEAM_LIVE=1 npx vitest run rls-redteam` — a vitest PATH FILTER since 2026-09-23, so a new
     `*rls-redteam*.test.ts` joins the live run without a CI edit (re-derive the set with
     `find src -name '*rls-redteam*.test.ts'`). It was a list of named files until then, and
-    `src/features/knowledge/server/rls-redteam-personal-container.test.ts` sat on disk and off that list
+    `src/features/knowledge/server/rls-redteam-home-space.test.ts` sat on disk and off that list
     (its live half never ran) until 2026-09-14 — the failure the filter removes. Before the job, every behavioural RLS
     case in two waves was green having never executed a statement, because the flag was set
     nowhere. `db reset` makes it the migration REPLAY gate too. ⚠ It cannot run on a machine

@@ -106,7 +106,7 @@ The ledger narrowing is the §3 table read backwards, and it is the same mapping
 backfill applies (`scripts/sql/backfill-credit-wallets-v2.sql`): rows where
 `payer_user_id = reader AND wallet = 'personal'`, **plus** legacy `wallet = 'workspace'` rows whose
 `origin_workspace_id` is a `personal`/`link` container the reader OWNS (ownership, not membership —
-`src/features/home/server/repository-overview.ts › listOwnedPersonalContainerIds`). The plot
+`src/features/home/server/repository-overview.ts › listOwnedHomeSpaceIds`). The plot
 therefore totals the bar again, but by a SECOND derivation of one quantity rather than by sharing an
 array: a wrong sum now shows up as a plot that disagrees with its own bar. ⚠ The bar is a counter and
 the plot is a CAPPED ledger haul (the writer is transactional with the counter since 2026-09-13, F-693), so the plot may read LOW only when the cap clips it;
@@ -349,7 +349,7 @@ Every slice: mutation-verify and state the count. Pins that MUST move: `credits.
 `credits-service.test.ts` (call-count budget: 3 seat / 2 link / 1 personal), `credits-link-reroute.test.ts`
 (rewrite: link → owner's PERSONAL wallet, no ambiguity branch), `status/route.test.ts`,
 `consume/route.test.ts`, `route-guest-floor.test.ts`, `schema-sql.test.ts`,
-`shared/tenancy/personal-container-schema.test.ts` (the "lands on the owner's standard workspace"
+`shared/tenancy/home-space-schema.test.ts` (the "lands on the owner's standard workspace"
 pin inverts), `use-workspace-entitlements` stale-cache test, `packages/mcp-server/src/credits.test.ts`,
 `container-lock.test.ts`, `url.test.ts`, checkout/webhook/stripe tests, `plans-billing.test.tsx`,
 `billing-page-screen.test.tsx`, desktop `overview-credit-bar.test.tsx` / `home-test-harness`.
@@ -365,7 +365,7 @@ it cannot run on the authoring machine; INVARIANTS §14 is the authority, this l
 
 | Agent | Owns |
 |---|---|
-| A core | migration; `billing/credits.ts` (+test); `billing/plans.ts`; `billing/server/{credit-wallets.ts (new), workspace-billing.ts, credit-ledger.ts, credits-service.ts, status-service.ts, entitlements.ts}` (+tests); `app/api/mcp/credits/consume/*`; `app/api/billing/status/*`; `billing/components/use-workspace-entitlements.ts` (+stale-cache test); `features/knowledge/schema-sql.test.ts`; `shared/tenancy/personal-container-schema.test.ts`; `features/home/**` compile fixes only |
+| A core | migration; `billing/credits.ts` (+test); `billing/plans.ts`; `billing/server/{credit-wallets.ts (new), workspace-billing.ts, credit-ledger.ts, credits-service.ts, status-service.ts, entitlements.ts}` (+tests); `app/api/mcp/credits/consume/*`; `app/api/billing/status/*`; `billing/components/use-workspace-entitlements.ts` (+stale-cache test); `features/knowledge/schema-sql.test.ts`; `shared/tenancy/home-space-schema.test.ts`; `features/home/**` compile fixes only |
 | B mcp | `packages/dopl-client/src/**` (consumeCredits type); `packages/mcp-server/src/**` (registrar, respond, credits.test, container-lock.test); rebuild + commit both `dist/` |
 | C ui | `shared/layout/settings-modal/sections/{plan-cards,plans-billing-core,plans-billing}.tsx` (+tests); `billing/components/{upgrade-modal,embedded-checkout,billing-usage-pane,billing-plans-pane,billing-page-screen}.tsx` (+tests); `marketing/components/pricing-content.tsx`; `members/components/{invite-dialog,members-v2/members-v2-view}.tsx`; `members/hooks/use-join-requests.ts`; `apps/desktop-ui/src/**` |
 | D stripe/routes | `billing/url.ts` (+test); `app/api/billing/{checkout,upgrade-to-team,cancel,portal,webhook}/**`; `app/billing/**`; `billing/server/{stripe,seats,webhook-handler,subscriptions,billing-account-service}.ts` (+tests); `onboarding/{constants,schema}.ts`; `analytics/server/launch-metrics.ts`; `features/workspaces/server/workspace-kind.test.ts`, `knowledge/server/service-storage.test.ts`, `billing/kb-storage.test.ts` solo mentions |
@@ -475,7 +475,7 @@ method and cancel/resume all work UNCHANGED. The only new SQL is widening the pl
   `minRole: "admin"` + `sessionOnly` unchanged (the personal owner is `owner`).
 - `url.ts`: `parseCheckoutPlan` accepts `team` | `pro`. `entitlements.ts › upgradeUrl(plan?)`:
   `plan: "pro"` appends `plan=pro`. Segment-less `/billing` page: with `?plan=pro`, forward to the
-  caller's PERSONAL container segment (resolve via the existing personal-container read in
+  caller's PERSONAL container segment (resolve via the existing home-space read in
   `workspaces/server/repository.ts`; it exists for every user since `20260920120000`); otherwise
   the standard-workspace forward/picker as today, plus a "Personal" row at the top of the picker
   linking to that segment.
@@ -564,6 +564,6 @@ code.
    carries `min-width: 560px` inside its own `overflow-x: auto` scroller, so a 3-cell row scrolls
    inside the card and the PAGE never scrolls sideways; a 5-cell row needs roughly 900px and would
    put the reader on a horizontal drag to reach the last price, on a page whose whole job is
-   comparing prices. `PERSONAL_ROWS` / `WORKSPACE_ROWS` replace the single `COMPARE_ROWS`.
+   comparing prices. `HOME_SPACE_ROWS` / `WORKSPACE_ROWS` replace the single `COMPARE_ROWS`.
    ⚠ The live-subscription badge is the WORKSPACES group's only: reflecting a current plan on the
-   Personal group would need the caller's personal-container id, which this public page never holds.
+   Personal group would need the caller's home-space id, which this public page never holds.
