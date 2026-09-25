@@ -24,9 +24,9 @@ describe('each runtime maps the three levels onto its own settings', () => {
     assert.equal(pair('codex', 'full'), 'never/danger-full-access');
     assert.equal(pl.levelSettings(d('codex'), 'full').label, 'Full access');
   });
-  test('codex Auto runs Ask\'s pair (auto_review is withheld: it bypasses Dopl\'s gate)', () => {
-    assert.equal(pair('codex', 'auto'), pair('codex', 'ask'));
-    assert.equal(JSON.stringify(pl.levelSettings(d('codex'), 'auto').native).includes('review'), false);
+  test('codex Auto is the app\'s "Approve for me": Ask\'s pair plus Codex\'s reviewer (F-765 accepted 2026-09-25)', () => {
+    assert.equal(pair('codex', 'auto'), 'on-request/workspace-write/guardian_subagent');
+    assert.equal(pl.levelSettings(d('codex'), 'auto').label, 'Approve for me');
   });
   test('cursor: allowlist / auto-review / run-everything', () => {
     assert.deepEqual(pl.LEVELS.map((l) => pair('cursor', l)), ['allowlist', 'auto-review', 'run-everything']);
@@ -47,7 +47,9 @@ describe('levelOf — the widest level a native pair meets on every axis', () =>
     assert.equal(pl.levelOf(d('codex'), 'untrusted'), 'ask');
     assert.equal(pl.levelOf(d('codex'), 'never', { sandbox_mode: 'workspace-write' }), 'auto');
     assert.equal(pl.levelOf(d('codex'), 'never'), 'auto'); // absent sandbox = workspace-write
-    assert.equal(pl.levelOf(d('codex'), 'on-request', { sandbox_mode: 'danger-full-access' }), 'auto');
+    assert.equal(pl.levelOf(d('codex'), 'on-request', { sandbox_mode: 'danger-full-access' }), 'ask'); // no reviewer
+    assert.equal(pl.levelOf(d('codex'), 'on-request', { sandbox_mode: 'workspace-write', approvals_reviewer: 'guardian_subagent' }), 'auto');
+    assert.equal(pl.levelOf(d('codex'), 'granular', { approvals_reviewer: 'guardian_subagent' }), 'ask'); // the reviewer serves on-request only
     assert.equal(pl.levelOf(d('codex'), 'never', { sandbox_mode: 'danger-full-access' }), 'full');
   });
   test('an unrecognised word fails closed to Ask', () => {

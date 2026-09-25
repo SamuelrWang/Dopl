@@ -1,10 +1,10 @@
-// WHY CODEX "AUTO" IS NOT THE CODEX APP'S "APPROVE FOR ME" — measured on a real `codex app-server`
-// (2026-09-25, codex-cli 0.155.1, scripted model; the `codex-parity-fences-live.test.mjs` technique).
+// WHAT CODEX "AUTO" (THE CODEX APP'S "APPROVE FOR ME") DOES TO A DOPL POST — measured on a real
+// `codex app-server` (2026-09-25, codex-cli 0.155.1, scripted model; the `codex-parity-fences-live.test.mjs` technique).
 //
-// "Approve for me" is Ask's pair plus `approvalsReviewer: 'auto_review'`. Under it a Dopl channel
-// post is reviewed by Codex's own reviewer model and RUNS without Dopl's gate ever being asked, so
-// the level table (`runtime/codex/index.js › levels.auto`) withholds it. If this test starts
-// failing, the reviewer stopped swallowing MCP approvals and the withholding can be revisited.
+// Auto sends Ask's pair plus `approvalsReviewer: 'guardian_subagent'` (`policy.js › APPROVALS_REVIEWER`;
+// 0.155.1 answers it as `auto_review`). Under it a Dopl channel post is reviewed by Codex's own reviewer
+// model and RUNS without Dopl's gate ever being asked. Accepted by Samuel 2026-09-25 (F-765); this test
+// keeps the behaviour measured, so a change in either direction is seen.
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -20,6 +20,7 @@ const require = createRequire(import.meta.url);
 const CODEX = join(HERE, '..', 'main', 'runtime', 'codex');
 const mcp = require(join(CODEX, 'mcp.js'));
 const serverRequests = require(join(CODEX, 'server-requests.js'));
+const policy = require(join(CODEX, 'policy.js'));
 const GATE = announceGate(liveGate());
 
 const REVIEWER = 'codex-auto-review'; // the model id the reviewer asks the provider for
@@ -61,7 +62,7 @@ async function postUnder(reviewer) {
     }, async (conn) => {
       await conn.request('initialize', client.initializeParams('0.0.0-auto-review'));
       const started = await conn.request('thread/start', Object.assign({}, ts, { cwd }));
-      assert.equal(started.approvalsReviewer, reviewer);
+      assert.equal(started.approvalsReviewer, reviewer === policy.APPROVALS_REVIEWER.value ? 'auto_review' : reviewer);
       await conn.request('turn/start', { threadId: started.thread.id, input: [{ type: 'text', text: 'hello' }] });
       await finished;
     });
@@ -72,9 +73,9 @@ async function postUnder(reviewer) {
   }
 }
 
-test('auto_review: a Dopl channel post goes to Codex\'s reviewer and runs; Dopl\'s gate is never asked', async (t) => {
+test('Auto\'s reviewer: a Dopl channel post goes to Codex\'s reviewer and runs; Dopl\'s gate is never asked', async (t) => {
   if (skipLive(t, GATE)) return;
-  const run = await postUnder('auto_review');
+  const run = await postUnder(policy.APPROVALS_REVIEWER.value);
   assert.equal(run.reviewed, true);
   assert.deepEqual(run.asked, []);
   assert.equal(run.ran, true);

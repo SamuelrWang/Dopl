@@ -307,6 +307,19 @@ test("a RESTRICTED profile pins the native pair; `full` rides the operator's own
   );
 });
 
+test("Auto's reviewer (the app's \"Approve for me\") rides on-request only, and never a restricted profile", () => {
+  const auto = { sandbox_mode: "workspace-write", approvals_reviewer: "guardian_subagent" };
+  assert.deepEqual(launchSpec.nativePair(codexState({ tools: "on-request", native: auto }), RT.toolConfigFor("full")),
+    { approval_policy: "on-request", sandbox_mode: "workspace-write", approvals_reviewer: "guardian_subagent" });
+  // A narrower live pick asks a person again; `never` raises nothing to review.
+  for (const tools of ["untrusted", "granular", "never"]) {
+    assert.equal(launchSpec.nativePair(codexState({ tools, native: auto }), RT.toolConfigFor("full")).approvals_reviewer, undefined, tools);
+  }
+  assert.equal(launchSpec.nativePair({ state: { toolMode: "on-request", native: auto } }, RT.toolConfigFor("read_only")).approvals_reviewer, undefined);
+  assert.match(readFileSync(new URL("../main/runtime/codex/launch-spec.js", import.meta.url), "utf8"),
+    /if \(pair\.approvals_reviewer\) threadStart\.approvalsReviewer = pair\.approvals_reviewer;/);
+});
+
 test("`granular` uses the measured structured app-server shape and asks every shown category", () => {
   assert.deepEqual(launchSpec.approvalPolicy("granular"), {
     granular: {

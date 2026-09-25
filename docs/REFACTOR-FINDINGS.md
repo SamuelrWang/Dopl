@@ -10569,10 +10569,10 @@ already wrong — `channel-dispatch-agents.ts` does pass `waitMs` — so do not 
   2026-09-24 "Dopl-owned credentials only" ruling excludes today — Samuel rules.
 - Status: OPEN (rulings).
 
-### F-765 — Codex "Auto" withholds the Codex app's "Approve for me" reviewer, because it bypasses Dopl's gate (2026-09-25)
+### F-765 — Codex "Auto" (the Codex app's "Approve for me") lets Codex's reviewer approve a Dopl post past Dopl's gate (2026-09-25, accepted)
 
-- Location: `dopl-desktop-app/main/runtime/codex/index.js › descriptor.toolMode.levels.auto` (runs Ask's
-  `on-request` + `workspace-write`); evidence `dopl-desktop-app/test/codex-auto-review-live.test.mjs`.
+- Location: `dopl-desktop-app/main/runtime/codex/index.js › descriptor.toolMode.levels.auto` (Ask's
+  `on-request` + `workspace-write` plus the reviewer); evidence `dopl-desktop-app/test/codex-auto-review-live.test.mjs`.
 - Found during: the unified permission levels build (Samuel's option B: Codex Auto = the pair behind
   the Codex app's "Approve for me").
 - **Measured, codex-cli 0.155.1, scripted model.** "Approve for me" is `on-request` + `workspace-write`
@@ -10585,7 +10585,8 @@ already wrong — `channel-dispatch-agents.ts` does pass `waitMs` — so do not 
   operator's messaging setting. Withholding it makes Codex Auto identical to Codex Ask.
 - Proposed resolution (Samuel rules): keep Codex Auto = Ask (current), or take `auto_review` only if
   Dopl's own MCP calls can be kept out of the reviewer (no such knob measured on 0.155.1).
-- Status: OPEN (ruling).
+- Status: ACCEPTED by Samuel 2026-09-25 (Codex Auto may self-approve posts via its reviewer). Codex Auto now
+  sends `approvalsReviewer: 'guardian_subagent'` beside `on-request` (`runtime/codex/policy.js › APPROVALS_REVIEWER`).
 
 ### F-764 — Dopl's Claude token is out of an agent's subprocess env but still in the CLI process's launch env (2026-09-24)
 

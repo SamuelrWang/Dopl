@@ -20,6 +20,14 @@ function containmentAxis(d) {
   return { key: sec.key, options: sec.options.map((o) => o && o.value), default: sec.default };
 }
 
+/** The approval reviewer a level may add (`toolMode.reviewer`: `{ key, value, mode }`), or null. */
+function reviewerAxis(d) {
+  const r = (d && d.toolMode && d.toolMode.reviewer) || null;
+  return r && typeof r.key === 'string' && typeof r.value === 'string' && typeof r.mode === 'string' ? r : null;
+}
+// The reviewer runs only beside the tool mode it serves (`runtime/codex/launch-spec.js › nativePair`).
+const hasReviewer = (r, tools, native) => !!r && tools === r.mode && !!native && typeof native === 'object' && native[r.key] === r.value;
+
 /**
  * `{ tools, native, label }` for a level on this runtime. An unknown level reads as the narrowest.
  * The label is the entry's own, else the tool option's (the runtime's name for that setting).
@@ -34,15 +42,19 @@ function levelSettings(d, level) {
   };
 }
 
-// Per-axis index, narrowest = 0; an absent containment value is the platform default.
+// Per-axis index, narrowest = 0; an absent containment value is the platform default. The reviewer
+// axis is met by carrying it or by a tool mode wider than the one it serves (`never` asks nobody).
 function rank(d, tools, native) {
-  const out = [capability.toolModes(d).indexOf(capability.normalizeToolMode(d, tools))];
+  const modes = capability.toolModes(d);
+  const out = [modes.indexOf(capability.normalizeToolMode(d, tools))];
   const axis = containmentAxis(d);
   if (axis) {
     const v = native && typeof native === 'object' ? native[axis.key] : undefined;
     const at = axis.options.indexOf(v == null || v === '' ? axis.default : v);
     out.push(at === -1 ? 0 : at);
   }
+  const rev = reviewerAxis(d);
+  if (rev) out.push(hasReviewer(rev, modes[out[0]], native) || out[0] > modes.indexOf(rev.mode) ? 1 : 0);
   return out;
 }
 
@@ -58,11 +70,12 @@ function levelOf(d, tools, native) {
   return LEVELS[0];
 }
 
-/** The native words of a pair, tool mode first: `never/danger-full-access`, `bypass`. */
+/** The native words of a pair, tool mode first: `never/danger-full-access`, `bypass`, `on-request/workspace-write/guardian_subagent`. */
 function settingText(d, tools, native) {
   const axis = containmentAxis(d);
+  const rev = reviewerAxis(d);
   const v = axis && native && typeof native === 'object' ? native[axis.key] : '';
-  return v ? `${tools}/${v}` : String(tools || '');
+  return [tools || '', v, hasReviewer(rev, tools, native) ? rev.value : ''].filter(Boolean).join('/');
 }
 
 /** `{ level, label, setting }` for a native pair: the level it meets, that level's name, its own words. */
@@ -102,7 +115,9 @@ function levelProblems(d) {
     const e = table[level];
     if (!e || typeof e !== 'object') { problems.push(`${id}: toolMode.levels.${level} is missing`); continue; }
     if (modes.indexOf(e.tools) === -1) problems.push(`${id}: toolMode.levels.${level}.tools "${e.tools}" is not a declared tool mode`);
+    const rev = reviewerAxis(d);
     for (const key of Object.keys(e.native || {})) {
+      if (rev && key === rev.key && e.native[key] === rev.value) continue;
       if (!axis || key !== axis.key || axis.options.indexOf(e.native[key]) === -1) {
         problems.push(`${id}: toolMode.levels.${level}.native.${key} is not a declared containment value`);
       }

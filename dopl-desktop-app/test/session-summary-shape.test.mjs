@@ -246,5 +246,10 @@ test("PERMISSION: the badge is the session's REAL state — runtime, level name 
   assert.deepEqual(m.list()[0].permission, { runtime: "Codex", level: "full", label: "Full access", setting: "never/danger-full-access" });
   // A live narrowing moves the tool mode; the spawn-time sandbox stays, and the badge says so.
   s.state = { ...s.state, toolMode: "on-request" };
-  assert.deepEqual(m.list()[0].permission, { runtime: "Codex", level: "auto", label: "Ask for approval", setting: "on-request/danger-full-access" });
+  assert.deepEqual(m.list()[0].permission, { runtime: "Codex", level: "ask", label: "Ask for approval", setting: "on-request/danger-full-access" });
+  // Auto's reviewer shows beside the mode it serves, and drops with a narrower live pick.
+  s.state = { ...s.state, native: { sandbox_mode: "workspace-write", approvals_reviewer: "guardian_subagent" } };
+  assert.deepEqual(m.list()[0].permission, { runtime: "Codex", level: "auto", label: "Approve for me", setting: "on-request/workspace-write/guardian_subagent" });
+  s.state = { ...s.state, toolMode: "untrusted" };
+  assert.equal(m.list()[0].permission.setting, "untrusted/workspace-write");
 });

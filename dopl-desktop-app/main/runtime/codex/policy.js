@@ -28,6 +28,12 @@ const GRANULAR_NATIVE = Object.freeze({
 
 const GRANULAR_KEYS = Object.keys(GRANULAR_NATIVE.granular);
 
+// The Codex app's "Approve for me": `on-request` prompts go to Codex's own reviewer instead of a person
+// (0.155.1 echoes `guardian_subagent` as `auto_review`). Sent only with `mode`: a narrower pick asks
+// someone, and `never` raises nothing to review. It approves a Dopl channel post past Dopl's outbound
+// gate, accepted by Samuel 2026-09-25 (F-765, `test/codex-auto-review-live.test.mjs`).
+const APPROVALS_REVIEWER = Object.freeze({ key: 'approvals_reviewer', value: 'guardian_subagent', mode: 'on-request' });
+
 /** The native `approval_policy` for an ALREADY-NORMALISED Dopl mode (`tools.normalizeToolMode`). */
 function nativeApprovalPolicy(normalized) {
   if (normalized === 'never') return clone(NEVER_NATIVE);
@@ -85,5 +91,5 @@ function assertPolicyTook(sent, response) {
 
 module.exports = {
   nativeApprovalPolicy, placePolicy, assertPolicyTook,
-  NEVER_NATIVE, GRANULAR_KEYS,
+  NEVER_NATIVE, GRANULAR_KEYS, APPROVALS_REVIEWER,
 };

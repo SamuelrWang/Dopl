@@ -301,7 +301,7 @@ test("LEVEL: `full` asked on an Auto channel CLAMPS to Auto, in each runtime's w
   assert.equal(decided(claude)[0].appliedSetting, "auto");
   const codex = boot({ channelRuntime: "codex", ceilings: { codex: { level: "auto", messages: "auto_both" } } });
   await codex.api.handle(launchRow({ start_tool_mode: "full" }), WS);
-  assert.equal(decided(codex)[0].appliedSetting, "on-request/workspace-write", "never Full access past an Auto channel");
+  assert.equal(decided(codex)[0].appliedSetting, "on-request/workspace-write/guardian_subagent", "never Full access past an Auto channel");
 });
 
 test("LEVEL: a NARROWER level ask on a Full channel keeps the narrower sandbox too", async () => {

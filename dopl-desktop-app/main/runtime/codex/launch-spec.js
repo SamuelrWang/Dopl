@@ -50,7 +50,11 @@ function nativePair(s, cfg) {
   // Absent is the platform default; an unrecognised value fail-closes to the narrowest (X-05).
   const sandbox = asked == null || asked === '' ? DEFAULT_SANDBOX
     : (SANDBOX_MODES.indexOf(asked) === -1 ? SANDBOX_MODES[0] : asked);
-  return { approval_policy: approvalPolicy(st.toolMode), sandbox_mode: sandbox };
+  const pair = { approval_policy: approvalPolicy(st.toolMode), sandbox_mode: sandbox };
+  // Auto's reviewer rides only the mode it serves: a narrower live pick asks a person again.
+  const rev = policy.APPROVALS_REVIEWER;
+  if (native[rev.key] === rev.value && pair.approval_policy === rev.mode) pair.approvals_reviewer = rev.value;
+  return pair;
 }
 
 // ── SPEC ─────────────────────────────────────────────────────────────────────────────────────
@@ -65,6 +69,7 @@ function buildLaunchSpec(request) {
   const wired = mcp.buildMcpEnv(s.workspaceId, sessionCredential.sessionBearer(s), store.slotKey(s));
 
   const threadStart = { sandbox: pair.sandbox_mode };
+  if (pair.approvals_reviewer) threadStart.approvalsReviewer = pair.approvals_reviewer;
   const cwd = channelDirs.sessionSpawnDir(s.channelId);
   // "Use my tools" in a private channel lifts the native fences (`operator-tools.js`).
   const natives = operatorTools.nativesOn(s);

@@ -79,7 +79,9 @@ function planPosture(d, runtimeId, chainAllowed) {
       'applied', plan.modes.tools + '/' + plan.modes.messages);
   }
   const L = permissionLevel.LEVELS;
-  const appliedLevel = L[Math.min(L.indexOf(permissionLevel.levelOf(desc, plan.modes.tools, ceiling.native)), L.indexOf(ceiling.level))];
+  // An asked LEVEL is its own answer: its tool word alone drops a level-only axis (Codex Auto's reviewer).
+  const toolLevel = L.indexOf(d.startToolMode) !== -1 ? d.startToolMode : permissionLevel.levelOf(desc, plan.modes.tools, ceiling.native);
+  const appliedLevel = L[Math.min(L.indexOf(toolLevel), L.indexOf(ceiling.level))];
   const native = permissionLevel.levelSettings(desc, appliedLevel).native;
   const hand = { tools: plan.modes.tools, messages: plan.modes.messages, native };
   if (askedTools || d.startMessageMode) hand.pinned = { tools: !!askedTools, messages: !!d.startMessageMode };
