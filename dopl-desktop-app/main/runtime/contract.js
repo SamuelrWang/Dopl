@@ -128,6 +128,8 @@ function descriptorProblems(descriptor) {
     }
   }
   problems.push(...selectionProblems(d));
+  // Lazy: the level module reads the capability layer, which a sealed descriptor must not wait on.
+  problems.push(...require('./permission-level').levelProblems(d));
   return problems;
 }
 

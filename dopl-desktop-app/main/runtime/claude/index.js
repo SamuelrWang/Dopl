@@ -49,6 +49,8 @@ const descriptor = {
       { value: 'bypass', label: 'Bypass', description: 'Every classified work tool runs. Hard-denied tools never do.', native: true },
     ],
     default: 'manual',
+    // The operator's Ask / Auto / Full in this runtime's words (`permission-level.js`).
+    levels: { ask: { tools: 'manual' }, auto: { tools: 'auto' }, full: { tools: 'bypass' } },
     // The mode an unattended session floors to (a windowless session has no gate surface).
     windowlessFloor: 'auto',
     // null, not {}: no second containment axis, so the UI renders nothing there.

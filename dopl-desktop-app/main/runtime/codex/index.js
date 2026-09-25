@@ -51,6 +51,16 @@ const descriptor = {
       { value: 'never', label: 'never', description: 'No approval prompts from Codex. Dopl\'s own hard-deny and outbound gate still hold.', native: true },
     ],
     default: 'untrusted',
+    // The operator's Ask / Auto / Full as the Codex app's own presets (ChatGPT.app 0.155 agent-mode
+    // table: "Ask for approval" = on-request + workspace-write; "Full access" = never +
+    // danger-full-access). "Approve for me" adds approvals_reviewer=auto_review, which hands Dopl's
+    // own channel calls to Codex's reviewer instead of Dopl's gate (`test/codex-auto-review-live.test.mjs`),
+    // so Auto runs Ask's pair until that is ruled on.
+    levels: {
+      ask: { tools: 'on-request', native: { sandbox_mode: 'workspace-write' }, label: 'Ask for approval' },
+      auto: { tools: 'on-request', native: { sandbox_mode: 'workspace-write' }, label: 'Ask for approval' },
+      full: { tools: 'never', native: { sandbox_mode: 'danger-full-access' }, label: 'Full access' },
+    },
     windowlessFloor: tools.WINDOWLESS_FLOOR,
     // A second containment axis the other runtimes lack; enforcement is OS-native.
     secondaryAxis: {

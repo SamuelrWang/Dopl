@@ -48,6 +48,8 @@ const descriptor = {
       { value: 'run-everything', label: 'Run Everything', description: 'Every tool call runs automatically — no sandbox, no classifier. Dopl\'s own hard-deny and outbound gate still hold.', native: true },
     ],
     default: 'allowlist',
+    // The operator's Ask / Auto / Full in this runtime's words (`permission-level.js`).
+    levels: { ask: { tools: 'allowlist' }, auto: { tools: 'auto-review' }, full: { tools: 'run-everything' } },
     windowlessFloor: tools.WINDOWLESS_FLOOR,
     secondaryAxis: {
       key: 'sandbox',
