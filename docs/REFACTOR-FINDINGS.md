@@ -10545,6 +10545,30 @@ already wrong — `channel-dispatch-agents.ts` does pass `waitMs` — so do not 
 - Proposed resolution: rename both in one change that also moves every doc anchor.
 - Status: OPEN (low, naming).
 
+### F-766 — "Use my tools" residuals: Codex natives outlive a peer joining, operator skills' files stay behind the secret-path rules, Chrome/connectors are inert on Dopl's token (2026-09-25)
+
+- Location: `dopl-desktop-app/main/runtime/codex/operator-tools.js › nativesOn`,
+  `dopl-desktop-app/main/runtime/claude/operator-tools.js › withOperatorTools`,
+  `dopl-desktop-app/main/runtime/claude/loader.js › buildSecretPathDenyRules`.
+- Found during: the "Use my tools" build (INVARIANTS §11 "USE MY TOOLS").
+- (a) A Codex session launched into a PRIVATE channel lifts the native fences (sub-agents, goals,
+  sleep, memories, apps, plugins, skills). A peer joining mid-session drops every operator MCP call at
+  the gate, but the natives raise no per-call request, so they keep running until the session
+  relaunches (which is fenced, `› nativesOn` re-checks). Nothing ends or parks a session on a CHANNEL
+  roster change (`session-park-on-claim.js` watches CONTAINERS only).
+- (b) The operator's skills load through a Dopl-owned plugin in userData that links to
+  `~/.claude/skills`; both paths are behind the `Read` deny rules, so a skill that tells the agent to
+  read one of its own supporting files is refused (the SKILL.md body itself arrives).
+- (c) Claude in Chrome and the claude.ai connectors are wired (`--chrome`, the connector env lever
+  lifted) but stay off on Dopl's `claude setup-token` credential: measured in the bundled CLI 2.1.220,
+  Chrome needs `user:profile` / `user:office` / `user:ccr_inference` and connectors `user:mcp_servers`;
+  a setup-token carries `user:inference` only.
+- Proposed resolution: (a) end or park a natives-lifted Codex session when its channel gains a member
+  (Samuel rules: end, park, or accept); (b) carve the plugin path out of the deny, or ship skills by
+  copy; (c) needs a credential with those scopes (the operator's own claude.ai login), which the
+  2026-09-24 "Dopl-owned credentials only" ruling excludes today — Samuel rules.
+- Status: OPEN (rulings).
+
 ### F-765 — Codex "Auto" withholds the Codex app's "Approve for me" reviewer, because it bypasses Dopl's gate (2026-09-25)
 
 - Location: `dopl-desktop-app/main/runtime/codex/index.js › descriptor.toolMode.levels.auto` (runs Ask's

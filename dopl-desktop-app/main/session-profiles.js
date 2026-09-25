@@ -117,7 +117,8 @@ function privateTurnMessageMode(mode) {
 /**
  * The per-call verdict: 'deny' (hard-denied, unopenable), 'preapproved' (shadowed past the callback, never the
  * channel tool), 'allow' (a task grant or a posture), 'gate' (ask). ORDER IS THE CONTRACT: hard-deny ->
- * audience belt -> Axis-B channel branch -> preapproved -> scoped grant -> Axis A -> knowledge read -> gate.
+ * audience belt -> operator-tool turn -> Axis-B channel branch -> preapproved -> scoped grant -> Axis A
+ * (+ an operator tool at Full) -> knowledge read -> gate.
  * `a.runtime` names which vocabulary steps 1 and 4 are asked in; absent is the default runtime.
  */
 function grantDecision(args) {
