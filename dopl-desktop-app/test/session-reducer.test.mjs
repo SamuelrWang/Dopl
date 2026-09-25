@@ -272,7 +272,7 @@ test("inbound_arrived with AXIS B auto-accepting: feeds the reply (pushInbound)"
   assert.equal(r.state.activity, "working");
   // FIX 3: ...plus the idle re-arm, because a turn was just pushed.
   assert.deepEqual(effTypes(r.effects), ["pushInbound", "scheduleIdle"]);
-  assert.deepEqual(findEff(r.effects, "pushInbound"), { type: "pushInbound", message: "hi", authorName: "Bob", authorNote: null, addressing: null });
+  assert.deepEqual(findEff(r.effects, "pushInbound"), { type: "pushInbound", message: "hi", authorName: "Bob", authorNote: null, addressing: null, replyTo: "" });
 });
 
 test("inbound_arrived under the STANDING task grant from awaiting_peer clears back to working", () => {

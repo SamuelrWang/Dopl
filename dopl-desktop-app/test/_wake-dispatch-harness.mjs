@@ -117,14 +117,14 @@ export function harness(over = {}) {
     verdictFor: realDeliveryAck.verdictFor,
     note: (...a) => { calls.acks.push(a); return true; },
   };
-  // ⚠ `agentAuthorNote` JOINED 2026-09-18 — the room roster's one reader inside this block. The
+  // ⚠ `agentAuthorNote` JOINED 2026-09-18 (and `authorAddress`, the reply's `to=`, 2026-09-25). The
   // REAL one: it is a pure function of (session, message, userId, names) and faking it would let
   // these tables assert a sentence the app does not produce, which is the rule `deliveryAck.
   // verdictFor` beside it already follows.
   const api = new Function(
-    "targeting", "sessionEngine", "io", "agentHandles", "deliveryAck", "diag", "agentAuthorNote",
+    "targeting", "sessionEngine", "io", "agentHandles", "deliveryAck", "diag", "agentAuthorNote", "authorAddress",
     `${BLOCK}\n return { feedLiveSession, authorLabel, mentionedAgentIds, serverAddressed, serverNamesMember, storedVerdict, planFor, escalationAnswerAgentIds, addressingFor, mayFeed, mayWake, unwoken, dormant };`
-  )(targeting, sessionEngine, io, agentHandles, deliveryAck, () => {}, realRoomRoster.agentAuthorNote);
+  )(targeting, sessionEngine, io, agentHandles, deliveryAck, () => {}, realRoomRoster.agentAuthorNote, realRoomRoster.authorAddress);
   return { ...api, calls, cfg };
 }
 

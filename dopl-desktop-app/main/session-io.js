@@ -232,6 +232,7 @@ module.exports = {
   queueInbound,
   shiftInbound,
   frameContinuation: seed.frameContinuation,
+  replyFor: seed.replyFor,
   frameHistorySeed: seed.frameHistorySeed,
   historyTranscript: seed.historyTranscript,
   noteGatedBody: seed.noteGatedBody,

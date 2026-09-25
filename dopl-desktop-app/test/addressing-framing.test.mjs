@@ -291,18 +291,18 @@ test("frameContinuation puts EVERY branch above the fence, and none of it inside
     const tail = sliceFrom(out, `BEGIN-REQUEST-${NONCE}`);
     assert.match(head, phrase, `${label}: the verdict is missing from the trusted preamble`);
     assert.ok(!phrase.test(tail), `${label}: the verdict leaked inside the fence`);
-    // Its POSITION is fixed: after our two authored lines, before the opening fence.
-    assert.match(head, /^Dave replied in the channel\./, label);
+    // Its POSITION is fixed: after our two authored lines, before the answer line and the fence.
+    assert.match(head, /^Dave posted in the channel\./, label);
     assert.ok(out.includes("the peer's words"), `${label}: the body still rides`);
   }
 });
 
 test("frameContinuation with NO addressee is byte-identical to the pre-ruling turn", () => {
   // The 3-arg callers are untouched, which is what keeps `session-seed-name.test.mjs`'s two-line
-  // preamble true. ⚠ SINCE 2026-09-02 a COMPUTED "nobody" (`null`) reaches the same two lines —
+  // preamble true. ⚠ SINCE 2026-09-02 a COMPUTED "nobody" (`null`) reaches the same lines —
   // the unaddressed paragraph is deleted — so the three spellings are asserted together.
   const out = seed.frameContinuation(NONCE, "hi", "Dave");
-  assert.equal(preambleOf(out).length, 2, "exactly the two authored lines");
+  assert.equal(preambleOf(out).length, 3, "exactly the three authored lines");
   assert.equal(out, seed.frameContinuation(NONCE, "hi", "Dave", undefined));
   assert.equal(out, seed.frameContinuation(NONCE, "hi", "Dave", null));
 });

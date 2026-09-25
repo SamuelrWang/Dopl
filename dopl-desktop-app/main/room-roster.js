@@ -158,6 +158,24 @@ async function fetchRoomRoster(a = {}) {
   });
 }
 
+const authorHandle = (m) => agentSlug(String((m && m.authorAgentName) || '').replace(/[\r\n]+/g, ' ').trim().slice(0, 80));
+const ownAuthor = (m, myUserId) => !!myUserId && String((m && m.authorUserId) || '') === String(myUserId);
+
+/**
+ * WHO A REPLY TO `m` IS ADDRESSED TO — the `to=` the reply call carries (`prompt-framing.js ›
+ * replyCall`): one of MY agents by its @handle (the only agent `to=` reaches), anyone else by the
+ * posting account's user id — a peer's agent included, since no handle reaches another member's
+ * agent. Never an email. '' when my agent's name is unknown, so no wrong address is handed over.
+ */
+function authorAddress(m, myUserId) {
+  if (!m || !m.authorUserId) return '';
+  if (m.authorKind === 'agent' && ownAuthor(m, myUserId)) {
+    const handle = authorHandle(m);
+    return handle ? `@${handle}` : '';
+  }
+  return String(m.authorUserId);
+}
+
 /**
  * An agent the launch snapshot never named introduces itself on the turn it writes to this session
  * — per session, costing no read. The author's display name is slugged, capped and stripped of line
@@ -165,13 +183,13 @@ async function fetchRoomRoster(a = {}) {
  */
 function agentAuthorNote(s, m, myUserId, io) {
   if (!m || m.authorKind !== 'agent') return null;
-  const handle = agentSlug(String((m && m.authorAgentName) || '').replace(/[\r\n]+/g, ' ').trim().slice(0, 80));
+  const handle = authorHandle(m);
   if (!handle) return null;
   const roster = (s && s.context && s.context.roster) || null;
   const known = roster && Array.isArray(roster.agents)
     && roster.agents.some((a) => a && String(a.handle || '') === handle);
   if (known) return null;
-  const mine = !!myUserId && String(m.authorUserId || '') === String(myUserId);
+  const mine = ownAuthor(m, myUserId);
   const names = io || require('./listener-io');
   const person = String((names.displayNameFor(m && m.authorUserId)) || '').trim();
   const whose = mine ? 'one of YOUR operator\'s agents' : `${person || 'another member'}'s agent`;
@@ -181,6 +199,7 @@ function agentAuthorNote(s, m, myUserId, io) {
 module.exports = {
   fetchRoomRoster,
   agentAuthorNote,
+  authorAddress,
   ownAgents,
   peerAgents,
   people,

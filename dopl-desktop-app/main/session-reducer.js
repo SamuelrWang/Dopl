@@ -36,9 +36,9 @@ function inboundAutoAccepted(state) {
   return m === 'auto_inbound' || m === 'auto_both' || state.inboundForTask === true;
 }
 
-// FEED one counterparty turn. `addressing` is framing-only: the reducer carries it and reads nothing from it.
+// FEED one counterparty turn. `addressing` and `replyTo` are framing-only: the reducer carries them and reads nothing.
 function pushInboundEffect(event) {
-  return { type: 'pushInbound', message: event.message, authorName: event.authorName, authorNote: event.authorNote || null, addressing: event.addressing || null };
+  return { type: 'pushInbound', message: event.message, authorName: event.authorName, authorNote: event.authorNote || null, addressing: event.addressing || null, replyTo: event.replyTo || '' };
 }
 
 function feedInboundEffects(state, event) {

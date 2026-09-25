@@ -58,14 +58,14 @@ test("ACCEPT: feeds the held reply as the next turn and returns to working", () 
   assert.equal(r.state.activity, "working");
   assert.equal(r.state.hasPendingInbound, false);
   assert.equal(r.state.inboundForTask, false, "a one-off accept grants nothing standing");
-  assert.deepEqual(findEff(r.effects, "pushInbound"), { type: "pushInbound", message: "can you ship it?", authorName: "David", authorNote: null, addressing: null });
+  assert.deepEqual(findEff(r.effects, "pushInbound"), { type: "pushInbound", message: "can you ship it?", authorName: "David", authorNote: null, addressing: null, replyTo: "" });
 });
 
 test("ACCEPT FOR THIS TASK: feeds it AND arms the standing grant", () => {
   const held = sessionReducer(running(), arrive).state;
   const r = sessionReducer(held, { type: "inbound_accept_for_task", pendingId: "p1", message: "go", authorName: "David" });
   assert.equal(r.state.inboundForTask, true);
-  assert.deepEqual(findEff(r.effects, "pushInbound"), { type: "pushInbound", message: "go", authorName: "David", authorNote: null, addressing: null });
+  assert.deepEqual(findEff(r.effects, "pushInbound"), { type: "pushInbound", message: "go", authorName: "David", authorNote: null, addressing: null, replyTo: "" });
   // The grant makes every LATER reply flow straight through (no second card).
   const next = sessionReducer(r.state, { type: "inbound_arrived", pendingId: "p2", message: "and this", authorName: "David" });
   assert.equal(next.state.phase, "running");
@@ -78,7 +78,7 @@ test("ACCEPT: `inbound_released` is kept as the accept-once alias (v2.3 callers)
   const r = sessionReducer(held, { type: "inbound_released", message: "go", authorName: "David" });
   assert.equal(r.state.phase, "running");
   assert.equal(r.state.inboundForTask, false, "the alias never grants anything standing");
-  assert.deepEqual(findEff(r.effects, "pushInbound"), { type: "pushInbound", message: "go", authorName: "David", authorNote: null, addressing: null });
+  assert.deepEqual(findEff(r.effects, "pushInbound"), { type: "pushInbound", message: "go", authorName: "David", authorNote: null, addressing: null, replyTo: "" });
 });
 
 // ── decline ──────────────────────────────────────────────────────────────────────

@@ -107,10 +107,10 @@ function harness(over = {}) {
     // ⚠ `deliveryAck` joined the block's free vars with the wake ack (2026-09-02, A9). A no-op
     // recorder is enough here: this suite asserts routing, and `delivery-ack.test.mjs` owns
     // the buffer.
-    "targeting", "sessionEngine", "io", "agentHandles", "deliveryAck", "diag", "agentAuthorNote",
+    "targeting", "sessionEngine", "io", "agentHandles", "deliveryAck", "diag", "agentAuthorNote", "authorAddress",
     `${DISPATCH_BLOCK}\n return { feedLiveSession };`
   )(targeting, sessionEngine, { displayNameFor: (id) => `name:${id}` },
-    agentHandles, { note: () => true, verdictFor: () => '' }, () => {}, realRoomRoster.agentAuthorNote);
+    agentHandles, { note: () => true, verdictFor: () => '' }, () => {}, realRoomRoster.agentAuthorNote, realRoomRoster.authorAddress);
 
   const api = new Function(
     "versionSkew", "sessionDispatch", "targeting", "trigger", "taskNotify", "diag",

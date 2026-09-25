@@ -90,17 +90,38 @@ function channelScopeFraming(ctx) {
 }
 
 /**
- * The exact delivery call's args, or '' when either id is missing. `container=` (not the
- * deprecated `workspace=`) with the workspace UUID, never a slug; `thread` is the agent-facing
- * argument (never `task`). Tag EVERY reply: an untagged agent reply reads as a fresh request.
+ * The send's address args, or '' when either id is missing. `container=` (not the deprecated
+ * `workspace=`) with the workspace UUID, never a slug; `thread` is the agent-facing argument (never
+ * `task`). Tag EVERY reply: an untagged agent reply reads as a fresh request. A thread is its own
+ * address, so `to` rides only a main-room send.
  */
-function deliveryCall(ctx) {
+function sendArgs(ctx, to) {
   const channelId = idToken(ctx && ctx.channelId);
   const workspaceId = idToken(ctx && ctx.workspaceId);
   if (!channelId || !workspaceId) return '';
   const taskId = idToken(ctx && ctx.taskId);
-  const thread = taskId ? `, thread "${taskId}"` : '';
-  return doplArgs(ctx.toolSet, 'channel.send', `channel "${channelId}", container "${workspaceId}"${thread}`);
+  const tail = taskId ? `, thread "${taskId}"` : to ? `, to "${to}"` : '';
+  return `channel "${channelId}", container "${workspaceId}"${tail}`;
+}
+
+/** The exact delivery call's args (after the tool name), or ''. */
+function deliveryCall(ctx) {
+  const args = sendArgs(ctx);
+  return args && doplArgs(ctx.toolSet, 'channel.send', args);
+}
+
+/**
+ * The whole reply call to one inbound message (hand, don't hunt): `to` is the author's canonical
+ * address (`room-roster.js › authorAddress`), a closed charset here since it lands in the trusted
+ * preamble. '' when a main-room reply has no address to carry: a send that is neither addressed
+ * nor a record is refused.
+ */
+const ADDRESS_RE = /^@?[A-Za-z0-9_-]{1,64}$/;
+function replyCall(ctx, to) {
+  const addr = ADDRESS_RE.test(String(to || '')) ? to : '';
+  const args = sendArgs(ctx, addr);
+  if (!args || (!idToken(ctx.taskId) && !addr)) return '';
+  return doplCall(ctx.toolSet, 'channel.send', args);
 }
 
 /**
@@ -302,6 +323,7 @@ module.exports = {
   milestoneGuidance,
   sanitizeName,
   buildFencedTurn,
+  replyCall,
   PROSE_RULE, // prose is a message, final answer included — asserted on every branch
   VOCABULARY, // the kinds are not an interchangeable list (prompt-framing-text.js)
   CONCISION,

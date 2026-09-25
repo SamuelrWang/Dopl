@@ -95,7 +95,7 @@ const agentHandles = require('./agent-handles');
 // THE RECEIPT BUFFER (2026-09-02, A9) and the ROOM-ROSTER note (2026-09-18). Above the sentinel like every other dep, so the extracted block reaches each as a free var and the truth tables can inject a fake.
 const deliveryAck = require('./delivery-ack');
 const { diag } = require('./diag');
-const { agentAuthorNote } = require('./room-roster');
+const { agentAuthorNote, authorAddress } = require('./room-roster');
 // ─── BEGIN SESSION-DISPATCH-PURE (routing; unit-tested via source extraction) ──
 
 // ⚠ THE SERVER'S OWN VOCABULARY, RESTATED — `src/features/channels/types-delivery.ts ›
@@ -127,7 +127,7 @@ const VERDICTS = ['none', 'member', 'agent', 'thread', 'thread_peer', 'reciproca
 
 // WHO WROTE THIS MESSAGE, for the wrapper a session is fed it inside.
 // ⚠ `io.displayNameFor` names the ACCOUNT a post came from, and a peer's AGENT posts from the
-// peer's account — so "<name> replied in the channel…" credits a person for a machine's words.
+// peer's account — so "<name> posted in the channel…" credits a person for a machine's words.
 // `author_kind` tells the two apart and is derived server-side from the caller's credential,
 // never claimed on the wire.
 // ⚠ Inside the PURE block on purpose: the truth tables slice this block whole and drive the
@@ -453,7 +453,7 @@ function feedLiveSession(entry, m, myUserId) {
       agentId: s.agentId,
       message: m.body,
       seq: m.seq, // the turn's seq — the windowless outbound bridge's thread join
-      authorName: authorName, authorNote: agentAuthorNote(s, m, myUserId), // ⚠ ONLY when THIS session's launch snapshot missed the author
+      authorName: authorName, authorNote: agentAuthorNote(s, m, myUserId), replyTo: authorAddress(m, myUserId), // ⚠ the note: ONLY when THIS session's launch snapshot missed the author
       addressing: addressing,
       // ⚠ THE VERDICT, NOT THE INPUTS. `session-gate.js › feedInbound` is the entry point the
       // engine exports and is the BELT on this rule; handing it the answer is what stops it

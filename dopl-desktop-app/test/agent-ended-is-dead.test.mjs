@@ -103,7 +103,7 @@ function dispatch(agents) {
     // ⚠ `deliveryAck` joined the block's free vars with the wake ack (2026-09-02, A9). A no-op
     // recorder is enough here: this suite asserts routing, and `delivery-ack.test.mjs` owns
     // the buffer.
-    "targeting", "sessionEngine", "io", "agentHandles", "deliveryAck", "diag", "agentAuthorNote",
+    "targeting", "sessionEngine", "io", "agentHandles", "deliveryAck", "diag", "agentAuthorNote", "authorAddress",
     `${BLOCK}\n return { feedLiveSession, mentionedAgentIds };`
   )(
     { firstClassTaskId: (m) => m.taskId || "" },
@@ -114,7 +114,8 @@ function dispatch(agents) {
     () => {},
     // ⚠ THE REAL ONE (2026-09-18): a pure function of (session, message, userId, names), so a
     // fake would let this table assert a sentence the app does not produce.
-    realRoomRoster.agentAuthorNote
+    realRoomRoster.agentAuthorNote,
+    realRoomRoster.authorAddress
   );
   return { ...api, fed };
 }

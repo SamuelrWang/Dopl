@@ -93,7 +93,7 @@ function runEffect(s, eff) {
       break;
     case 'pushInbound':
       noteSiblings(s);
-      if (s.pushIterator) s.pushIterator.push(io.userMessage(io.withSeed(s, io.frameContinuation(s.nonce, eff.message, eff.authorName, eff.addressing, eff.authorNote, s.doplToolSet))));
+      if (s.pushIterator) s.pushIterator.push(io.userMessage(io.withSeed(s, io.frameContinuation(s.nonce, eff.message, eff.authorName, eff.addressing, eff.authorNote, s.doplToolSet, io.replyFor(s, eff.replyTo)))));
       break;
     case 'interruptQuery':
       // The interrupted turn still ends with a `result`; the direction it was answering lapses (P4-08).
