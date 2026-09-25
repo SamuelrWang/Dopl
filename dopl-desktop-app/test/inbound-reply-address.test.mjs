@@ -91,6 +91,18 @@ test("a PERSON's main-room ask carries their user id and the ready call, above t
   assert.ok(!/replied in the channel|Continue the thread/.test(turn), "the thread-only wording is gone");
 });
 
+test("the 2026-09-25 evidence, replayed: the standby's woken first turn carries all three fixes", () => {
+  for (const toolSet of [undefined, "granular"]) {
+    const turn = deliver(mainMsg({ authorUserId: SAM }), { toolSet });
+    assert.match(turn, /^You are a Dopl agent STANDING BY in the main room/, "standby opening, not the requester's");
+    assert.ok(!/DRIVING a thread/.test(turn));
+    assert.match(turn.replace(/\s+/g, " "), /A message that arrived IN THE CHANNEL is answered IN THE CHANNEL, by posting, including when it is from your operator\./);
+    const tool = toolSet ? "mcp__dopl__dopl_send_message" : 'mcp__dopl__dopl_channel op "send",';
+    assert.ok(turn.includes(`never in your final text: ${tool} channel "${CH}", container "${WS}", to "${SAM}".`));
+    assert.ok(turn.endsWith(`BEGIN-REQUEST-n1\n${ASK}\nEND-REQUEST-n1`), "the ask rides its own fence, last");
+  }
+});
+
 test("the same call in the LEGACY spelling", () => {
   const turn = deliver(mainMsg({ authorUserId: SAM }));
   assert.ok(turn.includes(`mcp__dopl__dopl_channel op "send", channel "${CH}", container "${WS}", to "${SAM}".`));
