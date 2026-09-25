@@ -71,6 +71,8 @@ import { dirname, join } from "node:path";
 import { legacyPreset, mapPrefs, RESTRICTIVE, CH_A, CH_B } from "./_channel-prefs-block.mjs";
 import { evalModule } from "./helpers/module-sandbox.mjs";
 import { sentinelBlock } from "./helpers/source-probe.mjs";
+import { createRequire as createRequirePL } from "node:module";
+const PERMISSION_LEVEL = createRequirePL(import.meta.url)("../main/runtime/permission-level.js");
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const M = (p) => readFileSync(join(HERE, "..", "main", p), "utf8");
@@ -124,6 +126,8 @@ const onWire = (pair) => ({
   // version. `{}` is the stubbed catalog layer — `test/runtime-model-catalog.test.mjs` owns it.
   catalogVersion: 1,
   catalogs: {},
+  // 2026-09-25, ADDITIVE: each runtime's reading of Ask / Auto / Full, computed by the real module.
+  permissionLevels: Object.fromEntries(FAKE_RUNTIMES.map((d) => [d.id, PERMISSION_LEVEL.levelTableFor(d)])),
 });
 
 // ── normalizePreset: unknown values are REJECTED, never coerced ──────────────
@@ -341,6 +345,7 @@ function bootIpc() {
     // `./runtime` stub two arms up: a fake would make every `onWire` comparison pin the fake.
     if (id === "./channel-runtime-reply") return runtimeReply;
     if (id === "./runtime/model-catalog") return { CATALOG_VERSION: 1, catalogs: () => ({}) };
+    if (id === "./runtime/permission-level") return PERMISSION_LEVEL; // pure; the real reading
     // 🔒 THE `./settings` AND `./session-state` STUBS STOOD HERE AND ARE DELETED (2026-09-07,
     // Samuel's ruling). They backed `settings:getTurnCap` / `settings:setTurnCap` — the cap and
     // the two issuer-keyed defaults the pair shipped over the wire. Both ops are unregistered,

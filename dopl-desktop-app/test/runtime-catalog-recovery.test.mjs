@@ -23,6 +23,8 @@ import {
   fakeClient, row, adapter, CODEX_DESCRIPTOR, settle,
 } from "./_model-catalog-harness.mjs";
 import { evalModule } from "./helpers/module-sandbox.mjs";
+import { createRequire as createRequirePL } from "node:module";
+const PERMISSION_LEVEL = createRequirePL(import.meta.url)("../main/runtime/permission-level.js");
 
 const MAIN = join(dirname(fileURLToPath(import.meta.url)), "..", "main");
 
@@ -157,6 +159,7 @@ function loadReply({ catalog, adapters, connected }) {
   const stub = (id) => {
     if (id === "./runtime") return registry;
     if (id === "./runtime/model-catalog") return catalog;
+    if (id === "./runtime/permission-level") return PERMISSION_LEVEL; // pure; the real reading
     if (id === "./diag") return { diag: () => {} };
     throw new Error(`unexpected require: ${id}`);
   };

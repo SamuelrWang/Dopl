@@ -467,7 +467,6 @@ export type {
   // ⚠ THE TWO POSTURE AXES (2026-09-01, T24) — ORDERED unions whose order the desktop's
   // clamp depends on; read their docblock in `types-launch.ts` before touching either.
   LaunchToolMode,
-  LaunchAppliedToolMode,
   LaunchMessageMode,
 } from "./types-launch";
 

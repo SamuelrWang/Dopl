@@ -2,7 +2,7 @@
 
 /**
  * What the selected runtime implies for the New Agent dialog: the Runtime row (options, preselect),
- * the Model row (shown, offered, submitted), the native summary, sign-in and stop notes. The
+ * the Model row (shown, offered, submitted), the permission line, sign-in and stop notes. The
  * dialog's only desktop read — a second reader would drift. Row rules are pure functions below.
  */
 
@@ -29,8 +29,8 @@ import {
   type RuntimeDescriptor,
 } from "../lib/runtime-capability";
 import { signedOutLaunchCopy } from "../lib/runtime-copy";
-import { nativeDimensions, nativeSummary } from "../lib/runtime-native";
 import type { AgentLaunchPanel } from "./use-agent-launch";
+import type { LevelSetting } from "../lib/launch-selection";
 
 /** Two words, not a sentence (INVARIANTS §5). */
 const NOT_CONNECTED = "not connected";
@@ -73,6 +73,12 @@ function pickRuntime(
   const live = runtimes.find((d) => connected.includes(d.id));
   if (live) return live;
   return runtimes[0] ?? null;
+}
+
+/** The level this runtime will launch at, in its own name (`Full access · never/danger-full-access`). */
+function permissionLineFor(s: LevelSetting | null): string {
+  if (!s) return "";
+  return s.label.toLowerCase() === s.setting.toLowerCase() ? s.label : `${s.label} · ${s.setting}`;
 }
 
 /** Shown when a launch names no model and the catalog has no default: the platform picks. */
@@ -174,8 +180,8 @@ export interface LaunchDialogRuntime {
   launchRuntime: RuntimeDescriptor | null;
   runtimeOptions: Array<{ key: string; label: string; hint?: string }>;
   modelRow: ModelRow;
-  /** A report, never a control: native values ride the channel's record, not the launch. */
-  nativeLine: string;
+  /** The level this runtime will launch at, in its own name; a report, never a control. */
+  permissionLine: string;
   /** The selected runtime's own sign-in sentence (never Claude's), or `null`. */
   connectionNote: string | null;
   /** Why this runtime cannot stop a running turn, or `null`. */
@@ -191,7 +197,7 @@ export function useLaunchDialogRuntime(
   // The runtime-keyed record: the legacy reply describes only the channel's runtime.
   const selection = useLaunchSelection({ kind: "channel", channelId });
   const { setRuntime, setModel } = panel;
-  const { runtimes, connected, connectedKnown, recordFor, catalogFor } = selection;
+  const { runtimes, connected, connectedKnown, settingFor, catalogFor } = selection;
 
   const runtimeOptions = useMemo(
     () => runtimeRowOptions(runtimes, connected, connectedKnown),
@@ -212,7 +218,6 @@ export function useLaunchDialogRuntime(
 
   // A roster is never borrowed from another runtime: no catalog ⇒ platform default.
   const catalog = useMemo(() => catalogFor(scopeId), [catalogFor, scopeId]);
-  const record = useMemo(() => recordFor(scopeId), [recordFor, scopeId]);
 
   // Display ≠ submission: `panel.model` stays `''` until the operator touches the row, so main's
   // order launcher > identity > runtime default stays the one authority (as `panel.color`:
@@ -238,16 +243,7 @@ export function useLaunchDialogRuntime(
     ]
   );
 
-  const nativeLine = useMemo(
-    () =>
-      nativeSummary(
-        effectiveRuntime,
-        nativeDimensions(effectiveRuntime, catalog, modelRow.shown),
-        record.tools,
-        record.native
-      ),
-    [effectiveRuntime, catalog, modelRow.shown, record]
-  );
+  const permissionLine = useMemo(() => permissionLineFor(settingFor(scopeId)), [settingFor, scopeId]);
 
   const connectionNote =
     effectiveRuntime && connectedKnown && !connected.includes(effectiveRuntime.id)
@@ -286,7 +282,7 @@ export function useLaunchDialogRuntime(
     launchRuntime: effectiveRuntime ?? null,
     runtimeOptions,
     modelRow,
-    nativeLine,
+    permissionLine,
     connectionNote,
     // The one exception to minimal copy (INVARIANTS §5): the descriptor's own sentence, pre-launch.
     stopWarning: runtimes.length ? interruptRefusal(effectiveRuntime) : null,

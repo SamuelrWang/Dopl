@@ -84,14 +84,19 @@ export const SETTINGS_HELP: Readonly<Record<string, SettingHelpCopy>> = {
   Runtime: {
     body: "Which agent platform a launch in this channel runs on. Applies to agents you launch here.",
   },
-  // No option list: the options are the selected runtime's, and its dropdown describes them.
-  "Tool use": {
+  // One control for every runtime; Details under it shows each runtime's own reading.
+  Permissions: {
     body:
-      "How much freedom an agent you launch here starts with over its tools. Set when the agent launches; changing it does not move a running agent.",
+      "How much freedom an agent you launch here gets over its tools, applied in each runtime's own settings. Running agents take the new tool setting; a sandbox change waits for the next launch.",
+    options: [
+      { label: "Ask", text: "the agent asks before edits and commands" },
+      { label: "Auto", text: "routine work runs, riskier actions ask" },
+      { label: "Full", text: "everything the tool profile allows runs" },
+    ],
   },
   "Tool access": {
     body:
-      "Which tools exist for agents on this channel at all. It applies on top of Tool use, so it bounds every session here — yours and any you launch.",
+      "Which tools exist for agents on this channel at all. It applies on top of Permissions, so it bounds every session here — yours and any you launch.",
     options: [
       { label: "Full access", text: "everything, including your connected apps" },
       { label: "Dopl only", text: "files, web, and Dopl" },

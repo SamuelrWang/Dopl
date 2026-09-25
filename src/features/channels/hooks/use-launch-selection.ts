@@ -9,10 +9,12 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
+  levelFor,
   readLaunchSelection,
-  recordFor,
+  readPermissionLevels,
   type LaunchSelection,
-  type RuntimeRecord,
+  type LevelSetting,
+  type PermissionLevel,
 } from "../lib/launch-selection";
 import type { ModelCatalog, ModelCatalogs } from "../lib/model-catalog";
 import { useRuntimeCatalogs } from "./use-runtime-catalogs";
@@ -36,10 +38,9 @@ export type LaunchSelectionScope =
 /** Own-key at channel scope; every key is meaningful at defaults scope. */
 export interface LaunchSelectionPatch {
   runtime?: string;
-  tools?: string;
+  /** The one permission control; main clears any per-runtime override with it. */
+  level?: PermissionLevel;
   messages?: string;
-  /** The whole bag for the target runtime: main replaces `native` wholesale. */
-  native?: Record<string, string>;
   /** Defaults scope only; a channel's chaining flag has its own op. */
   agentChain?: boolean;
 }
@@ -62,9 +63,12 @@ export interface LaunchSelectionState {
   runtime: string;
   descriptor: RuntimeDescriptor | null;
   messages: string;
-  /** The selected runtime's record; never null. */
-  record: RuntimeRecord;
-  recordFor: (runtimeId: string) => RuntimeRecord;
+  /** The channel's permission level. */
+  level: PermissionLevel;
+  /** The level a runtime launches at (`''` = the default adapter). */
+  levelFor: (runtimeId: string) => PermissionLevel;
+  /** That runtime's own reading of its level, or `null` from an older desktop. */
+  settingFor: (runtimeId: string) => LevelSetting | null;
   /** `null` is a real answer, never another runtime's list. */
   catalogFor: (runtimeId: string) => ModelCatalog | null;
   catalogs: ModelCatalogs;
@@ -207,9 +211,15 @@ export function useLaunchSelection(scope: LaunchSelectionScope): LaunchSelection
   );
 
   const selection: LaunchSelection = read.selection;
-  const recordAt = useCallback(
-    (runtimeId: string): RuntimeRecord => recordFor(selection, runtimeId, defaultRuntime),
+  const levels = useMemo(() => readPermissionLevels(reply), [reply]);
+  const levelAt = useCallback(
+    (runtimeId: string): PermissionLevel => levelFor(selection, runtimeId, defaultRuntime),
     [defaultRuntime, selection]
+  );
+  const settingAt = useCallback(
+    (runtimeId: string): LevelSetting | null =>
+      levels[runtimeId || defaultRuntime]?.[levelAt(runtimeId)] ?? null,
+    [defaultRuntime, levelAt, levels]
   );
 
   const update = useCallback(
@@ -223,9 +233,7 @@ export function useLaunchSelection(scope: LaunchSelectionScope): LaunchSelection
             // drops every other runtime's record (`agent-defaults.js › normalizeDefaults`).
             wholeDefaultsRecord(selection, patch, {
               runtime,
-              defaultRuntime,
               agentChain: (reply as { agentChain?: unknown } | null)?.agentChain === true,
-              record: recordAt(patch.runtime ?? runtime),
             });
       setBusy(true);
       try {
@@ -251,7 +259,7 @@ export function useLaunchSelection(scope: LaunchSelectionScope): LaunchSelection
         setBusy(false);
       }
     },
-    [adopt, bridge, busy, defaultRuntime, key, kind, recordAt, reply, runtime, selection]
+    [adopt, bridge, busy, key, kind, reply, runtime, selection]
   );
 
   return {
@@ -264,8 +272,9 @@ export function useLaunchSelection(scope: LaunchSelectionScope): LaunchSelection
     runtime,
     descriptor,
     messages: selection.messages,
-    record: recordAt(runtime),
-    recordFor: recordAt,
+    level: selection.level,
+    levelFor: levelAt,
+    settingFor: settingAt,
     catalogs: runtimeCatalogs.catalogs,
     catalogFor: (id: string) => runtimeCatalogs.catalogFor(id, defaultRuntime),
     review: read.review,
@@ -277,34 +286,21 @@ export function useLaunchSelection(scope: LaunchSelectionScope): LaunchSelection
 }
 
 /**
- * The defaults record, whole: the patch merged onto what is stored. The patch's fields land on the
- * runtime the patch selects (`launch-selection.js › patchSelection`'s rule); every other runtime's
- * record is carried through untouched; no pick (`''`) files the edit under the default runtime's
- * key, the one main's `activeRecord` reads (F1).
+ * The defaults record, whole: the patch merged onto what is stored. A level in the patch clears the
+ * per-runtime overrides (the one control governs every runtime), as main's own `patchSelection` does.
  */
 function wholeDefaultsRecord(
   selection: LaunchSelection,
   patch: LaunchSelectionPatch,
-  current: {
-    runtime: string;
-    defaultRuntime: string;
-    agentChain: boolean;
-    record: RuntimeRecord;
-  }
+  current: { runtime: string; agentChain: boolean }
 ): Record<string, unknown> {
-  const pick = patch.runtime !== undefined ? patch.runtime : current.runtime;
-  const target = pick || current.defaultRuntime;
-  const byRuntime: Record<string, RuntimeRecord> = { ...selection.byRuntime };
-  const next: RuntimeRecord = { ...current.record };
-  if (patch.tools !== undefined) next.tools = patch.tools;
-  if (patch.native !== undefined) next.native = patch.native;
-  byRuntime[target] = next;
   return {
     // The version main sent back, never a literal typed here.
     ...(selection.v ? { v: selection.v } : {}),
-    runtime: pick,
+    runtime: patch.runtime !== undefined ? patch.runtime : current.runtime,
     messages: patch.messages !== undefined ? patch.messages : selection.messages,
+    level: patch.level !== undefined ? patch.level : selection.level,
     agentChain: patch.agentChain !== undefined ? patch.agentChain : current.agentChain,
-    byRuntime,
+    byRuntime: patch.level !== undefined ? {} : selection.byRuntime,
   };
 }

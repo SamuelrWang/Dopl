@@ -26,6 +26,7 @@
 import { createRequire } from "node:module";
 import { resolve } from "node:path";
 import type { RuntimeDescriptor } from "./runtime-capability";
+import type { PermissionLevels } from "./launch-selection";
 
 const requireFromRoot = createRequire(resolve(process.cwd(), "package.json"));
 
@@ -46,6 +47,16 @@ export const REAL_DESCRIPTORS: ReadonlyArray<RuntimeDescriptor> = registry
 
 /** The adapter a channel with no pick launches on. */
 export const REAL_DEFAULT_RUNTIME = registry.DEFAULT_ID;
+
+/** Main's own reading of each level per runtime (`channel-runtime-reply.js › permissionLevels`). */
+export const REAL_PERMISSION_LEVELS: PermissionLevels = Object.fromEntries(
+  REAL_DESCRIPTORS.map((d) => [
+    d.id,
+    (requireFromRoot(resolve(process.cwd(), "dopl-desktop-app/main/runtime/permission-level")) as {
+      levelTableFor: (d: RuntimeDescriptor) => PermissionLevels[string];
+    }).levelTableFor(d),
+  ])
+);
 
 /**
  * One descriptor by id. ⚠ IT THROWS RATHER THAN ANSWERING `undefined`: a suite that

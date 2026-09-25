@@ -7,15 +7,13 @@ import {
   catalogReady,
   catalogReason,
   catalogSelection,
-  dimensionDefaultFor,
-  dimensionOptionsFor,
   modelLabel,
   modelOptionsFor,
   normalizeCatalogs,
   selectableModels,
 } from "./model-catalog";
 import { AGENT_MODELS } from "./agent-models";
-import { catalog, wireCatalog } from "../hooks/launch-selection-harness";
+import { wireCatalog } from "../hooks/launch-selection-harness";
 
 const CLAUDE_IDS = AGENT_MODELS.map((m) => m.id);
 
@@ -166,53 +164,3 @@ describe("omission is the platform default — displayed, never persisted", () =
   });
 });
 
-describe("reasoning effort follows the MODEL, not the runtime", () => {
-  it("the options change when the selected model changes", () => {
-    const c = codex();
-    expect(dimensionOptionsFor(c, "gpt-a").map((o) => o.value)).toEqual(["low", "medium", "high"]);
-    expect(dimensionOptionsFor(c, "gpt-b").map((o) => o.value)).toEqual(["high"]);
-    expect(dimensionDefaultFor(c, "gpt-a")).toBe("medium");
-    expect(dimensionDefaultFor(c, "gpt-b")).toBe("high");
-  });
-
-  it("a model with no efforts gets NO CONTROL — absent, not an empty dropdown", () => {
-    expect(dimensionOptionsFor(codex(), "gpt-hidden")).toEqual([]);
-    expect(dimensionDefaultFor(codex(), "gpt-hidden")).toBeNull();
-  });
-
-  it("with no model named, it answers for the catalog's DEFAULT model", () => {
-    expect(dimensionOptionsFor(codex(), "").map((o) => o.value)).toEqual(["low", "medium", "high"]);
-  });
-
-  it("an ALIAS of a model gets that model's efforts", () => {
-    const c = codex({
-      models: catalog("codex", [
-        {
-          id: "gpt-a",
-          label: "A",
-          isDefault: true,
-          aliases: ["gpt-a-legacy"],
-          efforts: ["low", "high"],
-          effortDefault: "high",
-        },
-      ]).models,
-    });
-    expect(dimensionOptionsFor(c, "gpt-a-legacy").map((o) => o.value)).toEqual(["low", "high"]);
-    expect(dimensionDefaultFor(c, "gpt-a-legacy")).toBe("high");
-  });
-
-  it("a dimension whose options are empty on the wire is DROPPED, not rendered blank", () => {
-    const c = codex({
-      models: [
-        {
-          id: "gpt-a",
-          label: "A",
-          isDefault: true,
-          hidden: false,
-          dimensions: { reasoningEffort: { options: [], default: "medium" } },
-        },
-      ],
-    });
-    expect(dimensionOptionsFor(c, "gpt-a")).toEqual([]);
-  });
-});

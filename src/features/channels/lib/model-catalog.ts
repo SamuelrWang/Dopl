@@ -63,12 +63,8 @@ export type ModelCatalogs = Readonly<Record<string, ModelCatalog>>;
 /** ⚠ Module-level so an absent map is the SAME identity every render. */
 export const NO_CATALOGS: ModelCatalogs = Object.freeze({});
 const NO_MODELS: ReadonlyArray<CatalogModel> = Object.freeze([]);
-const NO_OPTIONS: ReadonlyArray<ModelDimensionOption> = Object.freeze([]);
 const NO_DIMENSIONS: Readonly<Record<string, ModelDimension>> = Object.freeze({});
 const NO_ALIASES: ReadonlyArray<string> = Object.freeze([]);
-
-/** The model-scoped dimension every runtime that has one spells the same way. */
-export const REASONING_EFFORT = "reasoningEffort";
 
 const str = (v: unknown): string => (typeof v === "string" ? v.trim() : "");
 
@@ -251,29 +247,4 @@ export function modelOptionsFor(
   const trimmed = findModel(c, effective)?.id ?? str(effective);
   if (!trimmed || options.some((o) => o.value === trimmed)) return options;
   return [...options, { value: trimmed, label: modelLabel(c, trimmed) }];
-}
-
-/**
- * One model's options for a dimension. Per model, since Codex's efforts differ between models;
- * empty means render no control.
- */
-export function dimensionOptionsFor(
-  c: ModelCatalog | null | undefined,
-  modelId: string | null | undefined,
-  dimension: string = REASONING_EFFORT
-): ReadonlyArray<ModelDimensionOption> {
-  const wanted = str(modelId) || c?.defaultId || "";
-  if (!wanted) return NO_OPTIONS;
-  return findModel(c, wanted)?.dimensions[dimension]?.options ?? NO_OPTIONS;
-}
-
-/** This model's own declared default for a dimension, or `null`. */
-export function dimensionDefaultFor(
-  c: ModelCatalog | null | undefined,
-  modelId: string | null | undefined,
-  dimension: string = REASONING_EFFORT
-): string | null {
-  const wanted = str(modelId) || c?.defaultId || "";
-  if (!wanted) return null;
-  return findModel(c, wanted)?.dimensions[dimension]?.default ?? null;
 }

@@ -6,8 +6,8 @@
 
 import { vi } from "vitest";
 import { CATALOG_VERSION, type ModelCatalog, type ModelCatalogs } from "../lib/model-catalog";
-import { REAL_DEFAULT_RUNTIME, REAL_DESCRIPTORS } from "../lib/runtime-descriptors-harness";
-import type { RuntimeRecord } from "../lib/launch-selection";
+import { REAL_DEFAULT_RUNTIME, REAL_DESCRIPTORS, REAL_PERMISSION_LEVELS } from "../lib/runtime-descriptors-harness";
+import type { PermissionLevel, PermissionLevels } from "../lib/launch-selection";
 import type { LaunchSelectionState } from "./use-launch-selection";
 
 export interface CatalogModelInput {
@@ -71,15 +71,18 @@ export function wireCatalog(
   return { version: CATALOG_VERSION, key: null, ...catalog(runtime, models, over) };
 }
 
-export interface SelectionStubInput extends Partial<Omit<LaunchSelectionState, "recordFor" | "catalogFor">> {
-  /** `{ <runtimeId>: { tools?, native? } }` — what each runtime remembers. */
-  byRuntime?: Record<string, RuntimeRecord>;
+export interface SelectionStubInput extends Partial<Omit<LaunchSelectionState, "levelFor" | "settingFor" | "catalogFor">> {
+  /** A runtime's own level where it differs from `level` (a migrated override). */
+  byRuntime?: Record<string, PermissionLevel>;
+  /** Omitted = main's real reading of each level. */
+  permissionLevels?: PermissionLevels;
   catalogs?: ModelCatalogs;
 }
 
 /** `update` is a `vi.fn()` so suites can assert the payload a control writes. */
 export function launchSelectionStub(over: SelectionStubInput = {}): LaunchSelectionState {
-  const byRuntime = over.byRuntime ?? {};
+  const { byRuntime = {}, permissionLevels = REAL_PERMISSION_LEVELS, ...rest } = over;
+  const level = over.level ?? "ask";
   const catalogs = over.catalogs ?? ({} as ModelCatalogs);
   const defaultRuntime = over.defaultRuntime ?? "";
   return {
@@ -92,16 +95,17 @@ export function launchSelectionStub(over: SelectionStubInput = {}): LaunchSelect
     runtime: "",
     descriptor: null,
     messages: "ask",
+    level,
     review: [],
     rejected: [],
     agentChain: false,
     busy: false,
     update: vi.fn().mockResolvedValue(undefined),
-    ...over,
+    ...rest,
     catalogs,
-    // Both derive from `byRuntime` so they cannot disagree; no suite overrides `record`.
-    record: over.record ?? byRuntime[over.runtime ?? ""] ?? {},
-    recordFor: (id: string) => byRuntime[id || defaultRuntime] ?? {},
+    // Both derive from `byRuntime` so they cannot disagree.
+    levelFor: (id: string) => byRuntime[id || defaultRuntime] ?? level,
+    settingFor: (id: string) => permissionLevels[id || defaultRuntime]?.[byRuntime[id || defaultRuntime] ?? level] ?? null,
     catalogFor: (id: string) => catalogs[id || defaultRuntime] ?? null,
   };
 }
@@ -115,7 +119,8 @@ export function channelRecordBridge(over: { runtime?: string; catalogs?: ModelCa
       connected: REAL_DESCRIPTORS.map((d) => d.id),
       catalogVersion: 1,
       catalogs: over.catalogs ?? {},
-      selection: { v: 2, runtime: over.runtime ?? "", messages: "ask", byRuntime: {} },
+      permissionLevels: REAL_PERMISSION_LEVELS,
+      selection: { v: 3, runtime: over.runtime ?? "", messages: "ask", level: "ask", byRuntime: {} },
     }),
     setLaunchPosture: vi.fn().mockResolvedValue({ ok: true }),
   };

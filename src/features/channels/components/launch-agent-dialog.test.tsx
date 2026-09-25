@@ -61,7 +61,7 @@ const posture = vi.hoisted(() => ({
   connected: [] as string[],
   connectedKnown: false,
   /** ⚠ U7: what each runtime REMEMBERS, and which models each one offers. */
-  byRuntime: {} as Record<string, { tools?: string; native?: Record<string, string> }>,
+  byRuntime: {} as Record<string, "ask" | "auto" | "full">,
   catalogs: {} as Record<string, unknown>,
 }));
 // ⚠ **THE DIALOG READS THE VERSIONED, RUNTIME-KEYED RECORD SINCE 2026-09-21 (U7)** — one hook,

@@ -83,20 +83,21 @@ function bridge(opts: { present?: boolean; ok?: boolean; folder?: boolean } = {}
   // regression; it can only assert about a world that no longer exists.
   // ⚠ THE STORE ANSWERS AS A CURRENT MAIN DOES — the versioned record with its roster — and
   // merges each own-key patch onto what it holds (`main/launch-selection.js › patchSelection`).
-  const posture: { value: { tools?: string; messages?: string } } = { value: {} };
+  const posture: { value: { level?: string; messages?: string } } = { value: {} };
   const reply = () => ({
     runtimes: [{ id: "claude", label: "Claude Code" }],
     defaultRuntime: "claude",
     connected: ["claude"],
     selection: {
-      v: 2,
+      v: 3,
       runtime: "",
       messages: posture.value.messages ?? "ask",
-      byRuntime: posture.value.tools ? { claude: { tools: posture.value.tools } } : {},
+      level: posture.value.level ?? "ask",
+      byRuntime: {},
     },
   });
   const getLaunchPosture = vi.fn(() => Promise.resolve(reply()));
-  const setLaunchPosture = vi.fn((_id: string, next: { tools?: string; messages?: string }) => {
+  const setLaunchPosture = vi.fn((_id: string, next: { level?: string; messages?: string }) => {
     if (opts.ok === false) return Promise.resolve({ ok: false });
     posture.value = { ...posture.value, ...next };
     return Promise.resolve({ ok: true });
@@ -152,21 +153,19 @@ function mountAgent(over: Partial<Parameters<typeof ChannelAgentSettings>[0]> = 
 
 // The SETTINGS TAB's two selects. ⚠ They read the DURABLE posture since
 // 2026-08-20; the arm's labels below belong to the REQUEST CARD alone.
-// ⚠ THE ACCESSIBLE NAMES MOVED 2026-09-06 (settings overhaul): "Permissions" →
-// "Tool use" (item 5), "Sends" → "Messaging" (item 7). Renames only — same axes,
-// same options, same writes. The LOCAL helper names are kept: they are named for
-// the records they read, which did not move.
-const permissions = () => screen.getByLabelText("Tool use for agents you launch");
+// ⚠ THE TOOL AXIS IS "Permissions" AGAIN (2026-09-25): one Ask / Auto / Full control that each
+// runtime applies in its own settings; "Sends" → "Messaging" (2026-09-06).
+const permissions = () => screen.getByLabelText("Permissions for agents you launch");
 const sends = () => screen.getByLabelText("Messaging for agents you launch");
 const queryPermissions = () =>
-  screen.queryByLabelText("Tool use for agents you launch");
+  screen.queryByLabelText("Permissions for agents you launch");
 // ⚠ `armTools()` STOOD HERE — the request card's ARM select, reached by the label
 // "What this thread's agent may do". The arm is deleted (2026-08-20, F-233) and the
 // label belongs to nothing; the two selects this file drives are both above.
 const item = (name: RegExp | string) => screen.getByRole("menuitem", { name });
 
 describe("the posture section exists only where the bridge does", () => {
-  it("shows Tool use and Messaging inside the desktop shell", async () => {
+  it("shows Permissions and Messaging inside the desktop shell", async () => {
     bridge();
     mountAgent();
     await waitFor(() => expect(queryPermissions()).not.toBeNull());
@@ -209,7 +208,7 @@ describe("choosing, inline", () => {
     mountAgent();
     await waitFor(() => expect(queryPermissions()).not.toBeNull());
     fireEvent.click(permissions());
-    fireEvent.click(item(/^Bypass/));
+    fireEvent.click(item(/^Full/));
     // 🔒 ⚠ **OWN-KEYS ONLY — the patch carries the axis that MOVED and nothing else**
     // (F-754, 2026-09-22). This asserted `{tools, messages}`, i.e. the write restating an
     // axis the operator did not touch. That is the exact shape that erased stored records:
@@ -217,13 +216,13 @@ describe("choosing, inline", () => {
     // "set this to what I last read", and a runtime-only patch was refused whole because
     // of it. The untouched axis is not in the call at all.
     await waitFor(() =>
-      expect(b.setLaunchPosture).toHaveBeenCalledWith(CHANNEL, { tools: "bypass" })
+      expect(b.setLaunchPosture).toHaveBeenCalledWith(CHANNEL, { level: "full" })
     );
     // ⚠ The "does not touch the ARM" pair that stood here is gone with the arm's
     // bridge ops (2026-08-20). There is no second permission record left to
     // overwrite, so the property is structural rather than asserted.
     // ⚠ No drill-back: the value is on the row the whole time.
-    await waitFor(() => expect(permissions().textContent).toContain("Bypass"));
+    await waitFor(() => expect(permissions().textContent).toContain("Full"));
   });
 
   it("writes the tool PROFILE through the caller's cloud mutation, not the bridge", async () => {
@@ -350,11 +349,11 @@ describe("ONE record, two readers — the merge rule, end to end", () => {
       </>
     );
     await waitFor(() =>
-      expect(screen.getAllByLabelText("Tool use for agents you launch")).toHaveLength(2)
+      expect(screen.getAllByLabelText("Permissions for agents you launch")).toHaveLength(2)
     );
-    const [firstTools] = screen.getAllByLabelText("Tool use for agents you launch");
+    const [firstTools] = screen.getAllByLabelText("Permissions for agents you launch");
     fireEvent.click(firstTools);
-    fireEvent.click(item(/^Bypass/));
+    fireEvent.click(item(/^Full/));
     await waitFor(() => expect(b.setLaunchPosture).toHaveBeenCalledTimes(1));
 
     const [, secondSends] = screen.getAllByLabelText("Messaging for agents you launch");
@@ -391,14 +390,14 @@ describe("ONE record, two readers — the merge rule, end to end", () => {
       </>
     );
     await waitFor(() =>
-      expect(screen.getAllByLabelText("Tool use for agents you launch")).toHaveLength(2)
+      expect(screen.getAllByLabelText("Permissions for agents you launch")).toHaveLength(2)
     );
-    const [firstTools] = screen.getAllByLabelText("Tool use for agents you launch");
+    const [firstTools] = screen.getAllByLabelText("Permissions for agents you launch");
     fireEvent.click(firstTools);
-    fireEvent.click(item(/^Bypass/));
+    fireEvent.click(item(/^Full/));
     await waitFor(() => {
-      const [, second] = screen.getAllByLabelText("Tool use for agents you launch");
-      expect(second.textContent).toContain("Bypass");
+      const [, second] = screen.getAllByLabelText("Permissions for agents you launch");
+      expect(second.textContent).toContain("Full");
     });
   });
 });

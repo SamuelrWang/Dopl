@@ -1,14 +1,22 @@
 /**
- * The durable launch selection as the renderer reads it: main's versioned, runtime-keyed record
- * (`main/launch-selection.js`). Each runtime's settings sit side by side, never translated. This
- * narrows a value that crossed a process boundary; it validates no vocabulary (main does).
+ * The durable launch selection as the renderer reads it: main's versioned record
+ * (`main/launch-selection.js`) — ONE permission level that each runtime applies in its own settings,
+ * plus the runtime pick and the message axis. This narrows a value that crossed a process boundary;
+ * it derives no runtime's settings (main sends each runtime's reading, `permissionLevels`).
  */
 
-/** One runtime's half. Absent fields are omitted, never `""`/`null` (main's rule). */
-export interface RuntimeRecord {
-  tools?: string;
-  native?: Readonly<Record<string, string>>;
+import { LAUNCH_PERMISSION_LEVELS } from "../schema-launch-modes";
+
+export type PermissionLevel = (typeof LAUNCH_PERMISSION_LEVELS)[number];
+
+/** One runtime's reading of one level: its own name for it and its own words (`never/danger-full-access`). */
+export interface LevelSetting {
+  label: string;
+  setting: string;
 }
+
+/** `{ [runtimeId]: { [level]: LevelSetting } }`, off main's reply. */
+export type PermissionLevels = Readonly<Record<string, Readonly<Partial<Record<PermissionLevel, LevelSetting>>>>>;
 
 export interface LaunchSelection {
   /** The record version main wrote; echoed back on a defaults write, never invented. */
@@ -17,7 +25,10 @@ export interface LaunchSelection {
   runtime: string;
   /** Dopl's own axis; the one vocabulary that does not move with the runtime. */
   messages: string;
-  byRuntime: Readonly<Record<string, RuntimeRecord>>;
+  /** The one permission control. */
+  level: PermissionLevel;
+  /** A migrated runtime's own level where it differs from `level`; a level write clears it. */
+  byRuntime: Readonly<Record<string, PermissionLevel>>;
 }
 
 export interface LaunchSelectionRead {
@@ -26,61 +37,38 @@ export interface LaunchSelectionRead {
   review: ReadonlyArray<string>;
 }
 
-const EMPTY_RECORDS: Readonly<Record<string, RuntimeRecord>> = Object.freeze({});
+const NO_OVERRIDES: Readonly<Record<string, PermissionLevel>> = Object.freeze({});
 const NO_REVIEW: ReadonlyArray<string> = [];
+const NO_LEVELS: PermissionLevels = Object.freeze({});
+
+const str = (v: unknown): string => (typeof v === "string" ? v.trim() : "");
+const asLevel = (v: unknown): PermissionLevel | null =>
+  (LAUNCH_PERMISSION_LEVELS as ReadonlyArray<string>).includes(str(v)) ? (str(v) as PermissionLevel) : null;
 
 /** The selection an unconfigured channel resolves to: the restrictive one. */
 export function emptySelection(): LaunchSelection {
-  return { v: 0, runtime: "", messages: "ask", byRuntime: EMPTY_RECORDS };
-}
-
-const str = (v: unknown): string => (typeof v === "string" ? v.trim() : "");
-
-function normalizeRecord(raw: unknown): RuntimeRecord | null {
-  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
-  const row = raw as Record<string, unknown>;
-  const out: RuntimeRecord = {};
-  const tools = str(row.tools);
-  if (tools) out.tools = tools;
-  // No `model`: channels store none.
-  if (row.native && typeof row.native === "object" && !Array.isArray(row.native)) {
-    const native: Record<string, string> = {};
-    for (const [key, value] of Object.entries(row.native as Record<string, unknown>)) {
-      const v = str(value);
-      if (v) native[str(key)] = v;
-    }
-    if (Object.keys(native).length) out.native = native;
-  }
-  return out;
+  return { v: 0, runtime: "", messages: "ask", level: LAUNCH_PERMISSION_LEVELS[0], byRuntime: NO_OVERRIDES };
 }
 
 /**
  * The versioned record off a launch-posture or agent-defaults reply. The per-channel reply nests it
  * under `selection`; the defaults reply IS the record (`agent-defaults.js › effectiveDefaults`).
+ * An unreadable level is Ask — the narrowest, never a wider one than main holds.
  */
 export function readLaunchSelection(raw: unknown): LaunchSelectionRead {
-  if (!raw || typeof raw !== "object") {
-    return { selection: emptySelection(), review: NO_REVIEW };
-  }
+  if (!raw || typeof raw !== "object") return { selection: emptySelection(), review: NO_REVIEW };
   const reply = raw as Record<string, unknown>;
-  const nested = Object.prototype.hasOwnProperty.call(reply, "selection")
-    ? (reply.selection as Record<string, unknown> | null)
-    : null;
-  const record = nested && typeof nested === "object" && !Array.isArray(nested)
+  const nested = reply.selection;
+  const record = (nested && typeof nested === "object" && !Array.isArray(nested)
     ? nested
-    : Object.prototype.hasOwnProperty.call(reply, "byRuntime")
-      ? reply
-      : null;
-  if (!record) {
-    return { selection: emptySelection(), review: NO_REVIEW };
-  }
-  const byRuntime: Record<string, RuntimeRecord> = {};
+    : Object.prototype.hasOwnProperty.call(reply, "level") ? reply : null) as Record<string, unknown> | null;
+  if (!record) return { selection: emptySelection(), review: NO_REVIEW };
+  const byRuntime: Record<string, PermissionLevel> = {};
   const source = record.byRuntime;
   if (source && typeof source === "object" && !Array.isArray(source)) {
     for (const [id, value] of Object.entries(source as Record<string, unknown>)) {
-      const normalized = normalizeRecord(value);
-      // A record for an unregistered runtime is kept (main's rule) and simply never renders.
-      if (normalized) byRuntime[str(id)] = normalized;
+      const level = asLevel(value);
+      if (level) byRuntime[str(id)] = level;
     }
   }
   const version = Number(record.v);
@@ -92,23 +80,21 @@ export function readLaunchSelection(raw: unknown): LaunchSelectionRead {
       v: Number.isFinite(version) ? version : 0,
       runtime: str(record.runtime),
       messages: str(record.messages) || "ask",
-      byRuntime,
+      level: asLevel(record.level) ?? LAUNCH_PERMISSION_LEVELS[0],
+      byRuntime: Object.keys(byRuntime).length ? byRuntime : NO_OVERRIDES,
     },
     review: review.length ? review : NO_REVIEW,
   };
 }
 
-const EMPTY_RECORD: RuntimeRecord = Object.freeze({});
+/** Main's per-runtime reading of each level, or `{}` from an older desktop. */
+export function readPermissionLevels(raw: unknown): PermissionLevels {
+  const table = raw && typeof raw === "object" ? (raw as { permissionLevels?: unknown }).permissionLevels : null;
+  return table && typeof table === "object" && !Array.isArray(table) ? (table as PermissionLevels) : NO_LEVELS;
+}
 
-/**
- * One runtime's record, never null. ⚠ `''` resolves to the default adapter's record — the key main's
- * `activeRecord` reads, where a migrated legacy `{tools}` lives (`launch-selection.js › fromLegacy`).
- */
-export function recordFor(
-  selection: LaunchSelection,
-  runtimeId: string,
-  defaultRuntime: string
-): RuntimeRecord {
+/** The level `runtimeId` launches at (`''` = the default adapter): its override, else the channel's. */
+export function levelFor(selection: LaunchSelection, runtimeId: string, defaultRuntime: string): PermissionLevel {
   const id = str(runtimeId) || str(defaultRuntime);
-  return (id && selection.byRuntime[id]) || EMPTY_RECORD;
+  return (id && selection.byRuntime[id]) || selection.level;
 }

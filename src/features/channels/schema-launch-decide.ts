@@ -13,7 +13,7 @@ import type {
   LaunchAppliedToolMode,
   LaunchMessageMode,
   LaunchRefusalReason,
-} from "./types";
+} from "./types-launch";
 
 // What the operator's machine reports back about one directive; the request side is
 // `schema-launch.ts`. The enums come from the `schema-launch-modes.ts` leaf.

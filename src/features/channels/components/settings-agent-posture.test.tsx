@@ -11,8 +11,8 @@ import {
   desktopMainFilesContaining,
   desktopSource,
   disabled,
+  postureLevel,
   postureSends,
-  postureTools,
 } from "./settings-agent-harness";
 import { launchSelectionStub } from "../hooks/launch-selection-harness";
 import { SETTINGS_HELP } from "./settings-help";
@@ -24,29 +24,23 @@ const CHANNEL_PREFS = desktopSource("channel-prefs.js");
 
 describe("the LAUNCH POSTURE renders with its current values, and changes on selection", () => {
   it("shows both axes' current values without opening anything", () => {
-    agentView({
-      selection: launchSelectionStub({
-        runtime: "",
-        byRuntime: { "": { tools: "bypass" } },
-        messages: "auto_both",
-      }),
-    });
-    expect(postureTools().textContent).toContain("Bypass");
+    agentView({ selection: launchSelectionStub({ runtime: "", level: "full", messages: "auto_both" }) });
+    expect(postureLevel().textContent).toContain("Full");
     expect(postureSends().textContent).toContain("Automatic");
   });
 
   it("writes the picked mode back on the axis it belongs to", () => {
     const selection = launchSelectionStub();
     agentView({ selection });
-    fireEvent.click(postureTools());
-    fireEvent.click(screen.getByRole("menuitem", { name: /^Bypass/ }));
-    // The `tools` key alone: main's write is own-key, and restating a field would re-stamp one nobody moved.
-    expect(selection.update).toHaveBeenCalledWith({ tools: "bypass" });
+    fireEvent.click(postureLevel());
+    fireEvent.click(screen.getByRole("menuitem", { name: /^Full/ }));
+    // The `level` key alone: main's write is own-key, and restating a field would re-stamp one nobody moved.
+    expect(selection.update).toHaveBeenCalledWith({ level: "full" });
   });
 
   it("goes inert while a posture write is in flight", () => {
     agentView({ selection: launchSelectionStub({ busy: true }) });
-    expect(disabled(postureTools())).toBe(true);
+    expect(disabled(postureLevel())).toBe(true);
     expect(disabled(postureSends())).toBe(true);
   });
 
@@ -55,9 +49,10 @@ describe("the LAUNCH POSTURE renders with its current values, and changes on sel
     const text = copy();
     expect(text).not.toContain("When you launch an agent");
     expect(text).not.toContain("For every session on this channel");
-    expect(SETTINGS_HELP["Tool use"].body).toContain("an agent you launch here");
-    // No Claude-only option list under a row whose words are the runtime's; no help for a Model row.
-    expect(SETTINGS_HELP["Tool use"].options).toBeUndefined();
+    expect(SETTINGS_HELP.Permissions.body).toContain("an agent you launch here");
+    // The three levels are Dopl's own, so their list is the same on every runtime; no Model row help.
+    expect(SETTINGS_HELP.Permissions.options?.map((o) => o.label)).toEqual(["Ask", "Auto", "Full"]);
+    expect("Tool use" in SETTINGS_HELP).toBe(false);
     expect("Model" in SETTINGS_HELP).toBe(false);
     // The deleted single-use arm's heading is what a reader would reach for to re-add a fuse (F-233).
     expect(text).not.toContain("For the next request you allow");
@@ -115,7 +110,7 @@ describe("the two permission axes agree across both trees", () => {
   const WEB_MODULE = "src/features/channels/components/permission-preset-row.tsx";
   const web = readSource(resolve(process.cwd(), WEB_MODULE));
   const offered = (name: string): string[] => {
-    const list = name === "TOOL_MODES" ? "TOOL_OPTIONS" : "MESSAGE_OPTIONS";
+    const list = name === "LEVELS" ? "LEVEL_OPTIONS" : "MESSAGE_OPTIONS";
     const m = new RegExp(`export const ${list}[^=]*=\\s*\\[([\\s\\S]*?)\\n\\];`).exec(web);
     if (!m) throw new Error(`no \`${list}\` in ${WEB_MODULE}`);
     return [...m[1].matchAll(/value: "([^"]+)"/g)].map((x) => x[1]);
@@ -180,9 +175,16 @@ describe("the two permission axes agree across both trees", () => {
         if (name === "TOOL_MODES" && file === DIRECTIVE_VOCAB) continue;
         expect(modes(desktopSource(file), name), file).toEqual(winner);
       }
-      expect(offered(name), WEB_MODULE).toEqual(winner);
+      if (name === "MESSAGE_MODES") expect(offered(name), WEB_MODULE).toEqual(winner);
     }
   );
+
+  it("the web's one tool control offers main's permission LEVELS, in main's order", () => {
+    const m = /const LEVELS = Object\.freeze\(\[([^\]]*)\]\)/.exec(desktopSource("runtime/permission-level.js"));
+    if (!m) throw new Error("no `const LEVELS = Object.freeze([ … ])` in runtime/permission-level.js");
+    const levels = [...m[1].matchAll(/'([^']+)'/g)].map((x) => x[1]);
+    expect(offered("LEVELS")).toEqual(levels);
+  });
 
   const DIRECTIVE_VOCAB = "launch-directive-vocab.js";
   it("the directive wire's applied Axis A is the union of every adapter's own list", () => {
@@ -197,7 +199,9 @@ describe("the two permission axes agree across both trees", () => {
     const profiles = desktopSource("session-profiles.js");
     const adapterDefault = /default: '([^']+)',/.exec(desktopSource(ADAPTER))?.[1];
     expect(adapterDefault).toBe(declaredToolModes()[0]);
-    expect(offered("TOOL_MODES")[0]).toBe(adapterDefault);
+    // The level that fail-closes is Ask, and on the default adapter Ask is its fail-closed mode.
+    expect(offered("LEVELS")[0]).toBe("ask");
+    expect(desktopSource(ADAPTER)).toContain(`ask: { tools: '${adapterDefault}' }`);
     const messageFallback =
       /MESSAGE_MODES\.indexOf\(mode\) === -1 \? '([^']+)'/.exec(profiles)?.[1];
     expect(offered("MESSAGE_MODES")[0]).toBe(messageFallback);

@@ -2,13 +2,10 @@
 
 import { describe, expect, it } from "vitest";
 import {
-  approvalCategories,
-  approvalCategoryMode,
   descriptorFor,
   interruptRefusal,
   normalizeRuntimeId,
   normalizeToolMode,
-  secondaryAxis,
   toolModeOptions,
   type RuntimeDescriptor,
 } from "./runtime-capability";
@@ -66,43 +63,6 @@ describe("toolMode.options is an ORDERING — narrowest first, widest last", () 
   it("answers null with no descriptor — the caller falls back to Dopl's own four", () => {
     expect(normalizeToolMode(null, "manual")).toBeNull();
     expect(toolModes(null)).toEqual([]);
-  });
-});
-
-describe("secondaryAxis — a row Claude does not have", () => {
-  it("is null on Claude and declared on the other two, in their own words", () => {
-    expect(secondaryAxis(CLAUDE)).toBeNull();
-    expect(secondaryAxis(CODEX)?.key).toBe("sandbox_mode");
-    expect(secondaryAxis(CODEX)?.options.map((o) => o.value)).toEqual([
-      "read-only",
-      "workspace-write",
-      "danger-full-access",
-    ]);
-    expect(secondaryAxis(CURSOR)?.key).toBe("sandbox");
-    expect(secondaryAxis(CURSOR)?.options.map((o) => o.value)).toEqual([
-      "enabled",
-      "disabled",
-    ]);
-  });
-});
-
-describe("approval.categories — Codex's own five, under Codex's own mode", () => {
-  it("names the five verbatim and invents none", () => {
-    expect(approvalCategories(CODEX)).toEqual([
-      "sandbox_approval",
-      "rules",
-      "mcp_elicitations",
-      "request_permissions",
-      "skill_approval",
-    ]);
-  });
-
-  it("hangs them under `granular` and gives the other two no sub-control at all", () => {
-    expect(approvalCategoryMode(CODEX)).toBe("granular");
-    expect(approvalCategoryMode(CLAUDE)).toBeNull();
-    expect(approvalCategoryMode(CURSOR)).toBeNull();
-    expect(approvalCategories(CLAUDE)).toEqual([]);
-    expect(approvalCategories(CURSOR)).toEqual([]);
   });
 });
 

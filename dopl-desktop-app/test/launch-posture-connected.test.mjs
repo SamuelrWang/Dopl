@@ -32,6 +32,8 @@ import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { evalModule, loadWithStubs } from "./helpers/module-sandbox.mjs";
 import { sentinelBlock } from "./helpers/source-probe.mjs";
+import { createRequire as createRequirePL } from "node:module";
+const PERMISSION_LEVEL = createRequirePL(import.meta.url)("../main/runtime/permission-level.js");
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const MAIN = join(HERE, "..", "main");
@@ -274,6 +276,7 @@ function bootIpc(opts = {}) {
     if (id === "./channel-runtime-reply") return runtimeReply;
     // The catalog layer, stubbed: these cases drive `connected`, not the model roster.
     if (id === "./runtime/model-catalog") return { CATALOG_VERSION: 1, catalogs: () => ({}) };
+    if (id === "./runtime/permission-level") return PERMISSION_LEVEL; // pure; the real reading
     throw new Error(`unexpected require: ${id}`);
   };
   const evalMain = (file) => evalModule(readFileSync(join(MAIN, file), "utf8"), stub);

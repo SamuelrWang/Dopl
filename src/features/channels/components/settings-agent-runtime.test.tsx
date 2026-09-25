@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 /**
- * The Settings tab's runtime row and Axis A in each runtime's own words, over the real adapters'
- * descriptors so a descriptor change fails here.
+ * The Settings tab's runtime row and the ONE permission control (Ask / Auto / Full), over the real
+ * adapters' descriptors and main's real reading of each level, so a descriptor change fails here.
  */
 
 import { afterEach, describe, expect, it } from "vitest";
@@ -11,7 +11,7 @@ import {
   REAL_DESCRIPTORS,
   realDescriptor,
 } from "../lib/runtime-descriptors-harness";
-import { agentView, disabled, postureTools } from "./settings-agent-harness";
+import { agentView, disabled, postureLevel } from "./settings-agent-harness";
 import {
   catalog,
   launchSelectionStub,
@@ -20,14 +20,8 @@ import {
 
 afterEach(cleanup);
 
-const CLAUDE = realDescriptor("claude");
-const CODEX = realDescriptor("codex");
-const CURSOR = realDescriptor("cursor");
-
 const RUNTIME_ROW = "Runtime for agents you launch";
 
-/** The Settings tab on a desktop with the runtime concept. The stub derives `record` from `byRuntime`,
- *  so "what is selected" and "what that runtime remembers" cannot disagree. */
 function withRuntime(runtime: string, over: SelectionStubInput = {}) {
   const selection = launchSelectionStub({
     runtimeSupported: true,
@@ -43,264 +37,113 @@ function withRuntime(runtime: string, over: SelectionStubInput = {}) {
 /** The option labels behind a `SelectMenu`, as an operator would read them. */
 function openMenu(trigger: HTMLElement): string[] {
   fireEvent.click(trigger);
-  return screen
-    .getAllByRole("menuitem")
-    .map((el) => el.textContent ?? "");
+  return screen.getAllByRole("menuitem").map((el) => el.textContent ?? "");
+}
+
+/** The Details rows, opened. */
+function details(): string[] {
+  fireEvent.click(screen.getByRole("button", { name: "Details" }));
+  return Array.from(screen.getByLabelText("Permissions by runtime").querySelectorAll("li")).map((li) => li.textContent ?? "");
 }
 
 describe("a desktop with NO runtime key renders no runtime row at all", () => {
-  it("omits the row rather than greying it — the older-desktop lane", () => {
-    // Such a build drops `runtime` on write: a live row would silently launch every agent on Claude.
+  it("omits the runtime row and Details rather than greying them — the older-desktop lane", () => {
     agentView();
     expect(screen.queryByLabelText(RUNTIME_ROW)).toBeNull();
+    expect(screen.queryByRole("button", { name: "Details" })).toBeNull();
   });
 
-  it("still renders Dopl's own four on the Tool use row", () => {
-    // `permission-preset-row.tsx › TOOL_OPTIONS`, whose per-option copy a security review bought.
-    agentView({ selection: launchSelectionStub({ byRuntime: { "": { tools: "auto" } } }) });
-    expect(openMenu(postureTools()).map((t) => t.split(/(?=[A-Z])/)[0])).toHaveLength(4);
-    expect(screen.getByRole("menuitem", { name: /^Accept edits/ })).toBeTruthy();
-    expect(screen.queryByRole("menuitem", { name: /granular/ })).toBeNull();
-  });
-
-  it("renders no runtime row even when the descriptor list arrives", () => {
-    // The view gates on `runtimeSupported`, never on the list alone.
-    agentView({
-      selection: launchSelectionStub({ runtimes: REAL_DESCRIPTORS, descriptor: CLAUDE }),
-    });
-    expect(screen.queryByLabelText(RUNTIME_ROW)).toBeNull();
+  it("still renders the permission control", () => {
+    agentView({ selection: launchSelectionStub({ level: "auto" }) });
+    expect(postureLevel().textContent).toContain("Auto");
   });
 });
 
 describe("the runtime picker", () => {
   it("offers Default plus every registered adapter, by the PLATFORM's own label", () => {
     withRuntime("");
-    expect(openMenu(screen.getByLabelText(RUNTIME_ROW))).toEqual([
-      "Default",
-      "Claude Code",
-      "Codex",
-      "Cursor",
-    ]);
-  });
-
-  it("shows the channel's pick without opening anything", () => {
-    withRuntime("cursor");
-    expect(screen.getByLabelText(RUNTIME_ROW).textContent).toContain("Cursor");
+    expect(openMenu(screen.getByLabelText(RUNTIME_ROW))).toEqual(["Default", "Claude Code", "Codex", "Cursor"]);
   });
 
   it("writes the pick on the `runtime` key alone", () => {
     const { selection } = withRuntime("");
     fireEvent.click(screen.getByLabelText(RUNTIME_ROW));
     fireEvent.click(screen.getByRole("menuitem", { name: "Codex" }));
-    // No other key: `patchRejections` checks a patch's `tools` against the runtime the patch selects,
-    // so restating the old runtime's `accept_edits` would refuse the whole write.
     expect(selection.update).toHaveBeenCalledWith({ runtime: "codex" });
   });
 
   it("goes inert while a posture write is in flight", () => {
     withRuntime("codex", { busy: true });
     expect(disabled(screen.getByLabelText(RUNTIME_ROW))).toBe(true);
+    expect(disabled(postureLevel())).toBe(true);
   });
 });
 
-describe("Axis A renders each runtime's OWN vocabulary and nothing else's", () => {
-  it("Claude: its own four, in its own order", () => {
-    withRuntime("claude");
-    expect(openMenu(postureTools())).toEqual([
-      "Ask each timeEvery tool call waits for you.",
-      "Accept editsFile writes run; everything else asks.",
-      "AutoReads and edits run; shell and network ask.",
-      "BypassEvery classified work tool runs. Hard-denied tools never do.",
-    ]);
-  });
-
-  it("Codex: untrusted / granular / on-request / never — and no Claude word", () => {
-    withRuntime("codex");
-    const labels = openMenu(postureTools());
-    expect(labels.map((t) => t.split(/(?=[A-Z])/)[0].trim())).toEqual([
-      "untrusted",
-      "granular",
-      "on-request",
-      "never",
-    ]);
-    expect(labels.join(" ")).not.toMatch(/Accept edits|Bypass|Ask each time/);
-  });
-
-  it("Cursor: Allowlist / Auto-review / Run Everything — and no Codex word", () => {
-    withRuntime("cursor");
-    const labels = openMenu(postureTools());
-    expect(labels[0]).toMatch(/^Allowlist/);
-    expect(labels[1]).toMatch(/^Auto-review/);
-    expect(labels[2]).toMatch(/^Run Everything/);
-    expect(labels).toHaveLength(3);
-    expect(labels.join(" ")).not.toMatch(/untrusted|granular|on-request/);
-  });
-
-  it("coerces a Claude-shaped stored value onto the runtime's NARROWEST mode", () => {
-    // Pre-runtime channels store `manual`, which Codex does not speak; index 0 is main's own coercion.
-    withRuntime("codex", { byRuntime: { codex: { tools: "manual" } } });
-    expect(postureTools().textContent).toContain("untrusted");
-    expect(postureTools().textContent).not.toContain("Ask each time");
-  });
-
-  it("treats the mode already shown as NO CHANGE, not as a write", () => {
-    // `SelectMenu` displays `options[0]` whatever the value, so an uncoerced `manual` would read
-    // "untrusted" and clicking it would write a posture nobody picked.
-    const { selection } = withRuntime("codex", { byRuntime: { codex: { tools: "manual" } } });
-    fireEvent.click(postureTools());
-    fireEvent.click(screen.getByRole("menuitem", { name: /^untrusted/ }));
-    expect(selection.update).not.toHaveBeenCalled();
-  });
-
-  it("writes the runtime's own word back on the tools axis", () => {
-    const { selection } = withRuntime("cursor");
-    fireEvent.click(postureTools());
-    fireEvent.click(screen.getByRole("menuitem", { name: /^Run Everything/ }));
-    expect(selection.update).toHaveBeenCalledWith({ tools: "run-everything" });
-  });
-});
-
-describe("the SECOND axis exists only where the platform declares one", () => {
-  it("Claude renders NO sandbox row — no placeholder, no disabled control", () => {
-    withRuntime("claude");
-    // The Tool use row is present, so the absence is Claude declaring no secondary axis.
-    expect(postureTools()).toBeTruthy();
-    expect(screen.queryByText("Sandbox")).toBeNull();
-  });
-
-  it("Codex renders its own row, at its own declared default", () => {
-    const { container } = withRuntime("codex");
-    expect(screen.getByText("Sandbox")).toBeTruthy();
-    expect(container.textContent).toContain("workspace-write");
-    // Not Cursor's vocabulary, on the row Cursor also calls "Sandbox".
-    expect(container.textContent).not.toContain("Enabled");
-  });
-
-  it("IS A CONTROL NOW, AND IT WRITES", () => {
-    // `session-engine.js` stamps the native bag at spawn, so the pick reaches the launch (F-390).
-    const { selection } = withRuntime("codex");
-    fireEvent.click(screen.getByLabelText("Sandbox for agents you launch"));
-    fireEvent.click(screen.getByRole("menuitem", { name: /^danger-full-access/ }));
-    // The whole bag: main replaces `native` wholesale.
-    expect(selection.update).toHaveBeenCalledWith({
-      native: { sandbox_mode: "danger-full-access" },
-    });
-  });
-
-  it("keeps each runtime's native settings apart — no translation, either way", () => {
-    const byRuntime = {
-      claude: { tools: "accept_edits" },
-      codex: { tools: "on-request", native: { sandbox_mode: "read-only" } },
-    };
-    const onCodex = withRuntime("codex", { byRuntime });
-    expect(onCodex.container.textContent).toContain("read-only");
-    expect(onCodex.container.textContent).not.toContain("Accept edits");
-    onCodex.unmount();
-    const onClaude = withRuntime("claude", { byRuntime });
-    expect(onClaude.container.textContent).toContain("Accept edits");
-    expect(onClaude.container.textContent).not.toContain("read-only");
-    expect(screen.queryByText("Sandbox")).toBeNull();
-  });
-
-  it("Cursor renders its own row, at its own declared default", () => {
-    const { container } = withRuntime("cursor");
-    expect(screen.getByText("Sandbox")).toBeTruthy();
-    expect(container.textContent).toContain("Enabled");
-    expect(container.textContent).not.toContain("workspace-write");
-  });
-});
-
-describe("the five approval categories, under `granular` and nowhere else", () => {
-  const FIVE = CODEX.approval?.categories ?? [];
-
-  it("appear when Codex is at `granular`, in Codex's own words", () => {
-    const { container } = withRuntime("codex", {
-      byRuntime: { codex: { tools: "granular" } },
-    });
-    expect(FIVE).toHaveLength(5);
-    for (const c of FIVE) expect(container.textContent).toContain(c);
-  });
-
-  it("are absent at every OTHER Codex mode", () => {
-    for (const mode of ["untrusted", "on-request", "never"]) {
-      const { container, unmount } = withRuntime("codex", {
-        byRuntime: { codex: { tools: mode } },
-      });
-      expect(container.textContent).not.toContain("mcp_elicitations");
-      unmount();
-    }
-  });
-
-  it("are absent on Claude and on Cursor at every mode they offer", () => {
-    for (const d of [CLAUDE, CURSOR]) {
-      for (const opt of d.toolMode?.options ?? []) {
-        const { container, unmount } = withRuntime(d.id, {
-          byRuntime: { [d.id]: { tools: opt.value } },
-        });
-        expect(container.textContent).not.toContain("sandbox_approval");
-        expect(container.textContent).not.toContain("skill_approval");
-        unmount();
-      }
-    }
-  });
-});
-
-// A launch's model is the launcher's pick, the identity's or the runtime default: neither row renders on
-// any runtime, even with a live catalog that could fill them.
-describe("NO model row and NO reasoning-effort row, on any runtime", () => {
-  const CLAUDE_MODELS = catalog("claude", [
-    { id: "claude-fable-5", label: "Fable 5" },
-    { id: "claude-sonnet-5", label: "Sonnet 5", isDefault: true },
-  ]);
-  const CODEX_MODELS = catalog("codex", [
-    { id: "gpt-6-astra", label: "GPT-6 Astra", isDefault: true, efforts: ["low", "high"] },
-    { id: "gpt-6-mini", label: "GPT-6 Mini", efforts: ["minimal", "low"] },
-  ]);
-  const both = { claude: CLAUDE_MODELS, codex: CODEX_MODELS };
-
+describe("ONE permission control, the same three levels on every runtime", () => {
   for (const runtime of ["claude", "codex", "cursor"]) {
-    it(`${runtime}: neither row renders, and the runtime/tool/messaging rows still do`, () => {
-      const { container } = withRuntime(runtime, {
-        catalogs: both,
-        // An older desktop's record still carrying an effort must not bring either row back.
-        byRuntime: { [runtime]: { native: { reasoningEffort: "high" } } },
-      });
-      expect(screen.queryByLabelText("Model for agents you launch")).toBeNull();
-      expect(screen.queryByLabelText("Reasoning effort for agents you launch")).toBeNull();
-      expect(container.textContent).not.toMatch(/GPT-6 Astra|Fable 5/);
-      expect(screen.getByLabelText("Runtime for agents you launch")).toBeTruthy();
-      expect(screen.getByLabelText("Messaging for agents you launch")).toBeTruthy();
+    it(`${runtime}: Ask / Auto / Full — no runtime word, no sandbox row, no approval categories`, () => {
+      const { container } = withRuntime(runtime, { level: "full" });
+      expect(postureLevel().textContent).toContain("Full");
+      expect(openMenu(postureLevel())).toEqual([expect.stringMatching(/^Ask/), expect.stringMatching(/^Auto/), expect.stringMatching(/^Full/)]);
+      expect(screen.queryByLabelText("Tool use for agents you launch")).toBeNull();
+      expect(screen.queryByText("Sandbox")).toBeNull();
+      expect(container.textContent).not.toMatch(/sandbox_approval|mcp_elicitations/);
     });
   }
 
-  it("Codex's CONTAINMENT row (the sandbox) survives the cut", () => {
-    withRuntime("codex", { catalogs: both });
-    expect(screen.getByText("Sandbox")).toBeTruthy();
+  it("writes the level alone", () => {
+    const { selection } = withRuntime("codex", { level: "ask" });
+    fireEvent.click(postureLevel());
+    fireEvent.click(screen.getByRole("menuitem", { name: /^Full/ }));
+    expect(selection.update).toHaveBeenCalledWith({ level: "full" });
   });
 });
 
-describe("what main refused, and what it could not fully honour", () => {
-  it("says a REFUSED write out loud, in main's own words", () => {
-    // Main fails closed before the store, so the rows alone look like a control that did nothing.
-    const { container } = withRuntime("codex", {
-      byRuntime: { codex: { tools: "on-request" } },
-      rejected: ['"accept_edits" is not a tool setting Codex offers'],
-    });
-    expect(container.textContent).toContain("is not a tool setting Codex offers");
+describe("Details: each runtime's own reading of its level, from main", () => {
+  it("is collapsed until asked", () => {
+    withRuntime("", { level: "full" });
+    expect(screen.queryByLabelText("Permissions by runtime")).toBeNull();
   });
 
-  it("does NOT echo the rejected request back into the row", () => {
-    withRuntime("codex", {
-      byRuntime: { codex: { tools: "on-request" } },
-      rejected: ['"accept_edits" is not a tool setting Codex offers'],
+  it("Full names bypass, never/danger-full-access and run-everything, each in its own words", () => {
+    withRuntime("", { level: "full" });
+    expect(details()).toEqual([
+      "Claude Code · Bypassbypass",
+      "Codex · Full accessnever/danger-full-access",
+      "Cursor · Run Everythingrun-everything",
+    ]);
+  });
+
+  it("shows a migrated runtime's own, narrower level where it has one", () => {
+    withRuntime("", { level: "full", byRuntime: { codex: "ask" } });
+    expect(details()[1]).toBe("Codex · Ask for approvalon-request/workspace-write");
+  });
+});
+
+describe("NO model row and NO reasoning-effort row, on any runtime", () => {
+  const both = {
+    claude: catalog("claude", [{ id: "claude-sonnet-5", label: "Sonnet 5", isDefault: true }]),
+    codex: catalog("codex", [{ id: "gpt-6-astra", label: "GPT-6 Astra", isDefault: true, efforts: ["low", "high"] }]),
+  };
+  for (const runtime of ["claude", "codex", "cursor"]) {
+    it(`${runtime}: neither row renders`, () => {
+      const { container } = withRuntime(runtime, { catalogs: both });
+      expect(screen.queryByLabelText("Model for agents you launch")).toBeNull();
+      expect(screen.queryByLabelText("Reasoning effort for agents you launch")).toBeNull();
+      expect(container.textContent).not.toMatch(/GPT-6 Astra|Sonnet 5/);
     });
-    expect(postureTools().textContent).toContain("on-request");
+  }
+});
+
+describe("what main refused, and what it could not fully honour", () => {
+  it("says a REFUSED write out loud, in main's own words, and does not echo it into the row", () => {
+    const { container } = withRuntime("codex", { level: "auto", rejected: ['"max" is not a permission level (ask, auto, full)'] });
+    expect(container.textContent).toContain("is not a permission level");
+    expect(postureLevel().textContent).toContain("Auto");
   });
 
   it("surfaces `needsReview` as a NOTE, never as a failure", () => {
-    const { container } = withRuntime("codex", {
-      review: ["Codex does not offer \"wide-open\" for sandbox_mode; it fell back to the narrowest"],
-    });
-    expect(container.textContent).toContain("fell back to the narrowest");
+    const { container } = withRuntime("codex", { review: ['Codex\'s stored setting "never/workspace-write" is now auto (on-request/workspace-write)'] });
+    expect(container.textContent).toContain("is now auto");
   });
 });

@@ -65,6 +65,22 @@ function settingText(d, tools, native) {
   return v ? `${tools}/${v}` : String(tools || '');
 }
 
+/** `{ level, label, setting }` for a native pair: the level it meets, that level's name, its own words. */
+function describe(d, tools, native) {
+  const level = levelOf(d, tools, native);
+  return { level, label: levelSettings(d, level).label, setting: settingText(d, tools, native) };
+}
+
+/** Every level as this runtime applies it, `{ [level]: { label, setting } }` — what the UI renders. */
+function levelTableFor(d) {
+  const out = {};
+  for (const level of LEVELS) {
+    const s = levelSettings(d, level);
+    out[level] = { label: s.label, setting: settingText(d, s.tools, s.native) };
+  }
+  return out;
+}
+
 /**
  * An asked Axis-A word in this runtime's terms: a level becomes that level's tool mode; a native
  * word this runtime offers stays itself; anything else is `''` (not applied).
@@ -101,5 +117,5 @@ function levelProblems(d) {
 }
 
 module.exports = {
-  LEVELS, normalizeLevel, levelSettings, levelOf, settingText, toolWordFor, levelProblems,
+  LEVELS, normalizeLevel, levelSettings, levelOf, settingText, describe, levelTableFor, toolWordFor, levelProblems,
 };

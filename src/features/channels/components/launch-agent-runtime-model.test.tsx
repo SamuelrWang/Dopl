@@ -35,7 +35,8 @@ vi.mock("@/features/agent-identities/hooks/use-agent-identities", () => ({
 const posture = vi.hoisted(() => ({
   stored: "",
   connected: [] as string[],
-  byRuntime: {} as Record<string, { tools?: string; native?: Record<string, string> }>,
+  level: "ask" as "ask" | "auto" | "full",
+  byRuntime: {} as Record<string, "ask" | "auto" | "full">,
   catalogs: {} as Record<string, unknown>,
 }));
 
@@ -53,6 +54,7 @@ vi.mock("../hooks/use-launch-selection", async () => {
         connected: posture.connected,
         connectedKnown: true,
         defaultRuntime: REAL_DEFAULT_RUNTIME,
+        level: posture.level,
         byRuntime: posture.byRuntime,
         catalogs: posture.catalogs as never,
       }),
@@ -92,6 +94,7 @@ beforeEach(() => {
   mintAgentId.mockReset().mockResolvedValue({ ok: true, agentId: MINTED });
   posture.stored = "";
   posture.connected = [];
+  posture.level = "ask";
   posture.byRuntime = {};
   posture.catalogs = {};
   identityList.identities = [];
@@ -197,10 +200,6 @@ describe("the MODEL row follows the RUNTIME row", () => {
     // Samuel: "We don't need a pin model in the settings." A record an OLDER desktop wrote may
     // still carry a per-runtime model; the row must not read it, on either runtime.
     bothRuntimes();
-    posture.byRuntime = {
-      claude: { model: "claude-opus-5" },
-      codex: { model: "gpt-6-mini" },
-    } as never;
     const controls = await open();
     expect(modelSelected()).toContain("Fable 5");
     fireEvent.click(pillFor(CODEX.label));
@@ -373,20 +372,29 @@ describe("an IDENTITY with a runtime (rulings 4, 5)", () => {
     await waitFor(() => expect(selectedRuntime()).toContain(CLAUDE.label));
   });
 
-  it("summarises the LAUNCH runtime's stored record, not the channel's selected one (X-02)", async () => {
+  it("shows the level the LAUNCH runtime will get, in its own words, not the selected one's (X-02)", async () => {
     bothRuntimes();
     posture.stored = "claude";
-    posture.byRuntime = {
-      claude: { tools: "bypass" },
-      codex: { tools: "on-request", native: { sandbox_mode: "read-only" } },
-    };
+    posture.level = "full";
+    posture.byRuntime = { codex: "ask" };
     identityList.identities = [codexCoder];
     await open();
     pickIdentity("Coder");
     await waitFor(() => expect(selectedRuntime()).toContain(CODEX.label));
     const notes = screen.getAllByRole("note").map((n) => n.textContent ?? "").join(" ");
-    expect(notes).toContain("on-request");
+    expect(notes).toContain("Ask for approval · on-request/workspace-write");
     expect(notes).not.toContain("Bypass");
+  });
+
+  it("REGRESSION 2026-09-25: a Full channel picking Codex shows Codex's Full access, not the Claude-era word", async () => {
+    bothRuntimes();
+    posture.stored = "claude";
+    posture.level = "full";
+    await open();
+    fireEvent.click(pillFor(CODEX.label));
+    await waitFor(() => expect(selectedRuntime()).toContain(CODEX.label));
+    const notes = screen.getAllByRole("note").map((n) => n.textContent ?? "").join(" ");
+    expect(notes).toContain("Full access · never/danger-full-access");
   });
 });
 

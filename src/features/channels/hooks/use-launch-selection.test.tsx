@@ -4,7 +4,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
 import { installSpaBridge } from "@/shared/testing/spa-bridge";
-import { REAL_DEFAULT_RUNTIME, REAL_DESCRIPTORS } from "../lib/runtime-descriptors-harness";
+import {
+  REAL_DEFAULT_RUNTIME,
+  REAL_DESCRIPTORS,
+  REAL_PERMISSION_LEVELS,
+} from "../lib/runtime-descriptors-harness";
 import { useLaunchSelection } from "./use-launch-selection";
 
 const CHANNEL = "11111111-2222-3333-4444-555555555555";
@@ -14,43 +18,33 @@ const setLaunchPosture = vi.fn();
 const getAgentDefaults = vi.fn();
 const setAgentDefaults = vi.fn();
 
-/** What a current main answers: the legacy keys and the versioned record, additively
- *  (`channel-dir-ipc.js › channels:getLaunchPosture`). */
+/** What a current main answers (`channel-dir-ipc.js › channels:getLaunchPosture`): a Full channel
+ *  whose Codex record migrated with its own, narrower level. */
 const postureReply = (over: Record<string, unknown> = {}) => ({
-  tools: "accept_edits",
+  tools: "bypass",
   messages: "ask",
   runtime: "",
   runtimes: REAL_DESCRIPTORS,
   defaultRuntime: REAL_DEFAULT_RUNTIME,
   connected: ["claude"],
-  selectionVersion: 2,
+  permissionLevels: REAL_PERMISSION_LEVELS,
   needsReview: [],
-  selection: {
-    v: 2,
-    runtime: "",
-    messages: "ask",
-    byRuntime: {
-      claude: { tools: "accept_edits" },
-      codex: { tools: "on-request", native: { sandbox_mode: "read-only" } },
-    },
-  },
+  selection: { v: 3, runtime: "", messages: "ask", level: "full", byRuntime: { codex: "ask" } },
   ...over,
 });
 
 /** What `channels:getAgentDefaults` answers — the record ITSELF, plus the roster. */
 const defaultsReply = (over: Record<string, unknown> = {}) => ({
-  tools: "accept_edits",
-  messages: "ask",
-  agentChain: false,
+  v: 3,
   runtime: "",
-  v: 2,
-  byRuntime: {
-    claude: { tools: "accept_edits" },
-    codex: { native: { sandbox_mode: "read-only" } },
-  },
+  messages: "ask",
+  level: "auto",
+  byRuntime: { codex: "ask" },
+  agentChain: false,
   runtimes: REAL_DESCRIPTORS,
   defaultRuntime: REAL_DEFAULT_RUNTIME,
   connected: ["claude"],
+  permissionLevels: REAL_PERMISSION_LEVELS,
   ...over,
 });
 
@@ -79,11 +73,25 @@ async function defaultsHook() {
 
 // A channel write is an own-key patch: main leaves every key the caller did not send alone.
 describe("the CHANNEL scope", () => {
-  it("reads every runtime's record, not just the selected one", async () => {
+  it("reads the level, each runtime's own level, and main's reading of it", async () => {
     const { result } = await channelHook();
-    expect(result.current.recordFor("claude").tools).toBe("accept_edits");
-    expect(result.current.recordFor("codex").tools).toBe("on-request");
-    expect(result.current.recordFor("codex").native).toEqual({ sandbox_mode: "read-only" });
+    expect(result.current.level).toBe("full");
+    expect(result.current.levelFor("")).toBe("full");
+    expect(result.current.levelFor("codex")).toBe("ask");
+    expect(result.current.settingFor("claude")).toEqual({ label: "Bypass", setting: "bypass" });
+    expect(result.current.settingFor("codex")).toEqual({ label: "Ask for approval", setting: "on-request/workspace-write" });
+  });
+
+  it("an older desktop's reply (no permissionLevels) reads no setting rather than guessing one", async () => {
+    getLaunchPosture.mockResolvedValue(postureReply({ permissionLevels: undefined }));
+    const { result } = await channelHook();
+    expect(result.current.settingFor("codex")).toBeNull();
+  });
+
+  it("an unreadable level is Ask — never wider than main holds", async () => {
+    getLaunchPosture.mockResolvedValue(postureReply({ selection: { v: 3, runtime: "", messages: "ask", level: "max" } }));
+    const { result } = await channelHook();
+    expect(result.current.level).toBe("ask");
   });
 
   it("sends EXACTLY the keys the caller patched — a runtime switch restates nothing", async () => {
@@ -94,49 +102,36 @@ describe("the CHANNEL scope", () => {
     expect(setLaunchPosture).toHaveBeenCalledWith(CHANNEL, { runtime: "codex" });
   });
 
-  it("carries a native bag as its own key", async () => {
-    const { result } = await channelHook();
-    await act(async () => {
-      await result.current.update({ native: { sandbox_mode: "workspace-write" } });
-    });
-    expect(setLaunchPosture).toHaveBeenCalledWith(CHANNEL, {
-      native: { sandbox_mode: "workspace-write" },
-    });
-  });
-
-  it("RE-READS after a write rather than echoing the request", async () => {
+  it("a level write sends the level alone, then RE-READS rather than echoing", async () => {
     const { result } = await channelHook();
     getLaunchPosture.mockClear();
     await act(async () => {
-      await result.current.update({ tools: "auto" });
+      await result.current.update({ level: "auto" });
     });
+    expect(setLaunchPosture).toHaveBeenCalledWith(CHANNEL, { level: "auto" });
     expect(getLaunchPosture).toHaveBeenCalled();
   });
 
   it("on a refusal changes nothing and surfaces main's own sentence", async () => {
-    setLaunchPosture.mockResolvedValue({
-      ok: false,
-      rejected: ['"accept_edits" is not a tool setting Codex offers'],
-    });
+    setLaunchPosture.mockResolvedValue({ ok: false, rejected: ['"max" is not a permission level (ask, auto, full)'] });
     const { result } = await channelHook();
     getLaunchPosture.mockClear();
     await act(async () => {
-      await result.current.update({ tools: "accept_edits" });
+      await result.current.update({ level: "auto" });
     });
-    // Main fails closed before the store: nothing to re-read, nothing to revert.
     expect(getLaunchPosture).not.toHaveBeenCalled();
-    expect(result.current.rejected).toEqual(['"accept_edits" is not a tool setting Codex offers']);
-    expect(result.current.recordFor("claude").tools).toBe("accept_edits");
+    expect(result.current.rejected).toEqual(['"max" is not a permission level (ask, auto, full)']);
+    expect(result.current.level).toBe("full");
   });
 
   it("keeps the last good reply when the re-read after a write fails", async () => {
     const { result } = await channelHook();
     getLaunchPosture.mockRejectedValueOnce(new Error("ipc down"));
     await act(async () => {
-      await result.current.update({ tools: "auto" });
+      await result.current.update({ level: "auto" });
     });
     expect(result.current.runtimeSupported).toBe(true);
-    expect(result.current.recordFor("claude").tools).toBe("accept_edits");
+    expect(result.current.level).toBe("full");
     expect(result.current.busy).toBe(false);
   });
 
@@ -144,41 +139,34 @@ describe("the CHANNEL scope", () => {
     setLaunchPosture.mockRejectedValueOnce(new Error("ipc down"));
     const { result } = await channelHook();
     await act(async () => {
-      await expect(result.current.update({ tools: "auto" })).resolves.toBeUndefined();
+      await expect(result.current.update({ level: "auto" })).resolves.toBeUndefined();
     });
     expect(result.current.busy).toBe(false);
-    expect(result.current.recordFor("claude").tools).toBe("accept_edits");
   });
 });
 
 // A defaults write is the whole record and carries `v`: without it `agent-defaults.js › normalizeDefaults`
-// reads it as legacy and drops every other runtime's record.
+// reads it as legacy.
 describe("the DEFAULTS scope", () => {
   it("writes the WHOLE record, carrying `v` so main does not read it as legacy", async () => {
     const { result } = await defaultsHook();
     await act(async () => {
       await result.current.update({ runtime: "codex" });
     });
-    const sent = setAgentDefaults.mock.calls[0][0];
-    expect(sent.v).toBe(2);
-    expect(sent.runtime).toBe("codex");
-    expect(sent.messages).toBe("ask");
-    expect(sent.agentChain).toBe(false);
+    expect(setAgentDefaults.mock.calls[0][0]).toEqual({
+      v: 3, runtime: "codex", messages: "ask", level: "auto", agentChain: false, byRuntime: { codex: "ask" },
+    });
   });
 
-  it("carries EVERY runtime's record through a write that names one", async () => {
+  it("a level write clears the per-runtime overrides, as main's own patch does", async () => {
     const { result } = await defaultsHook();
     await act(async () => {
-      await result.current.update({ runtime: "codex", tools: "never" });
+      await result.current.update({ level: "full" });
     });
     const sent = setAgentDefaults.mock.calls[0][0];
-    expect(sent.byRuntime.claude).toEqual({ tools: "accept_edits" });
-    expect(sent.byRuntime.codex.tools).toBe("never");
-    // The native bag survives a tools-only write…
-    expect(sent.byRuntime.codex.native).toEqual({ sandbox_mode: "read-only" });
-    // …and no model is written at either level.
-    expect("model" in sent).toBe(false);
-    expect(JSON.stringify(sent.byRuntime)).not.toContain("model");
+    expect(sent.level).toBe("full");
+    expect(sent.byRuntime).toEqual({});
+    expect("tools" in sent || "model" in sent).toBe(false);
   });
 
   it("NEVER writes a channel's record — the write-once seed is the only inheritance point", async () => {
@@ -188,20 +176,6 @@ describe("the DEFAULTS scope", () => {
       await result.current.update({ agentChain: true });
     });
     expect(setLaunchPosture).not.toHaveBeenCalled();
-  });
-
-  it("with NO runtime picked, files the edit under the DEFAULT runtime's key main reads", async () => {
-    // Main's `activeRecord` reads `byRuntime[runtime || defaultId]`; a `byRuntime[""]` key is never read.
-    const { result } = await defaultsHook();
-    expect(result.current.runtime).toBe("");
-    await act(async () => {
-      await result.current.update({ tools: "auto" });
-    });
-    const sent = setAgentDefaults.mock.calls[0][0];
-    expect(sent.runtime).toBe("");
-    expect(sent.byRuntime[REAL_DEFAULT_RUNTIME].tools).toBe("auto");
-    expect(Object.keys(sent.byRuntime)).not.toContain("");
-    expect(sent.byRuntime.codex).toEqual({ native: { sandbox_mode: "read-only" } });
   });
 
   it("carries the chaining flag, which is this record's and not a channel's", async () => {

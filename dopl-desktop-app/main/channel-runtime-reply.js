@@ -8,6 +8,7 @@
 
 const runtimeRegistry = require('./runtime');
 const modelCatalog = require('./runtime/model-catalog');
+const permissionLevel = require('./runtime/permission-level');
 const { diag } = require('./diag');
 
 /** Every registered adapter, or `[]` when the registry has no such accessor (a mid-wave harness). */
@@ -66,6 +67,8 @@ async function runtimeReply() {
     // The SPA checks this before trusting the catalog shape.
     catalogVersion: modelCatalog.CATALOG_VERSION,
     catalogs,
+    // Each runtime's reading of Ask / Auto / Full, so the SPA renders it and never derives it.
+    permissionLevels: Object.fromEntries(adapters().map((a) => [a.descriptor.id, permissionLevel.levelTableFor(a.descriptor)])),
   };
 }
 

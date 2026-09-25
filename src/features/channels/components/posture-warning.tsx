@@ -47,7 +47,7 @@
 
 import { useState, type ReactNode } from "react";
 import { ConfirmDialog } from "@/shared/ui/confirm-dialog";
-import type { MessageMode, PermissionPreset } from "../lib/permission-modes";
+import type { MessageMode } from "../lib/permission-modes";
 import type { AgentToolProfile } from "../types";
 
 /**
@@ -187,7 +187,7 @@ type PendingPostureChange =
  * ⚠ ABSENT ≠ `''`: an omitted key leaves the channel's pick untouched, `''` sets
  * it back to the default adapter (`use-channel-launch-posture.ts › update`).
  */
-export type PosturePatch = Partial<PermissionPreset> & { runtime?: string };
+export type PosturePatch = { messages?: MessageMode; runtime?: string };
 
 export interface PostureWarningGate {
   /** Call INSTEAD OF the posture write; commits, or opens the dialog first. */

@@ -2,7 +2,8 @@
 // `RequestPermissionRowView` that made it a component was deleted below). It is
 // imported by client components and renders nothing itself.
 import type { SelectMenuOption } from "@/shared/ui/select-menu";
-import type { MessageMode, ToolMode } from "../lib/permission-modes";
+import type { MessageMode } from "../lib/permission-modes";
+import type { PermissionLevel } from "../lib/launch-selection";
 
 /**
  * THE TWO PERMISSION AXES, as an operator reads them: what an agent may DO, and
@@ -26,29 +27,11 @@ import type { MessageMode, ToolMode } from "../lib/permission-modes";
  * hydration-safe.
  */
 
-/** AXIS A. Titles are short; the description is the desktop's exact posture line. */
-export const TOOL_OPTIONS: ReadonlyArray<SelectMenuOption<ToolMode>> = [
-  {
-    value: "manual",
-    label: "Ask each time",
-    description: "Asking before each command",
-  },
-  {
-    value: "accept_edits",
-    label: "Accept edits",
-    description: "Auto approving file edits",
-  },
-  {
-    value: "auto",
-    label: "Auto",
-    description:
-      "Auto approving local edits and lookups, asking for shell, web and workspace writes",
-  },
-  {
-    value: "bypass",
-    label: "Bypass",
-    description: "Auto approving every command the tool profile allows",
-  },
+/** AXIS A — the one permission control; each runtime applies the level in its own settings. */
+export const LEVEL_OPTIONS: ReadonlyArray<SelectMenuOption<PermissionLevel>> = [
+  { value: "ask", label: "Ask", description: "Asking before edits and commands" },
+  { value: "auto", label: "Auto", description: "Routine work runs, riskier actions ask" },
+  { value: "full", label: "Full", description: "Everything the tool profile allows runs" },
 ];
 
 /** AXIS B — what crosses between the two machines. */
@@ -94,7 +77,7 @@ export const MESSAGE_OPTIONS: ReadonlyArray<SelectMenuOption<MessageMode>> = [
  * reuse.
  *
  * ⚠ THE FILE STAYS BECAUSE THE OPTION TABLES ABOVE ARE LIVE, and they are the
- * reason it exists at all: `TOOL_OPTIONS` and `MESSAGE_OPTIONS` carry the per-mode
+ * reason it exists at all: `LEVEL_OPTIONS` and `MESSAGE_OPTIONS` carry the per-mode
  * copy a security review bought (see the header), and BOTH surfaces import them.
  * That is the sharing that survived — the vocabulary, not the markup.
  */

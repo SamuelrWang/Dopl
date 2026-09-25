@@ -34,7 +34,8 @@ import {
   warrantsPostureWarning,
   type PostureWarningInputs,
 } from "./posture-warning";
-import { agentView, postureSends, postureTools } from "./settings-agent-harness";
+import { agentView, postureLevel, postureSends } from "./settings-agent-harness";
+import type { PermissionLevel } from "../lib/launch-selection";
 import { launchSelectionStub } from "../hooks/launch-selection-harness";
 import type { MessageMode } from "../lib/permission-modes";
 import type { AgentToolProfile, ChannelMember } from "../types";
@@ -212,14 +213,14 @@ describe("the one production mount actually hands the roster over", () => {
  */
 function mount(
   over: Parameters<typeof agentView>[0] & {
-    posture?: { tools: string; messages: MessageMode } | null;
+    posture?: { level: PermissionLevel; messages: MessageMode } | null;
   } = {}
 ) {
   const onSetToolProfile = vi.fn();
   const { posture, ...rest } = over;
   const selection = launchSelectionStub({
     messages: posture?.messages ?? "ask",
-    byRuntime: posture ? { "": { tools: posture.tools } } : {},
+    level: posture?.level ?? "ask",
     ...(posture === null ? { bridge: null } : {}),
   });
   agentView({
@@ -242,7 +243,7 @@ describe("the DIALOG fires on the transition, from EITHER axis", () => {
   it("asks before the SENDS axis completes the combination", async () => {
     const { onChangePosture } = mount({
       profile: "full",
-      posture: { tools: "manual", messages: "ask" },
+      posture: { level: "ask", messages: "ask" },
     });
     pickSends(/^Automatic/);
     expect(await screen.findByText(POSTURE_WARNING_TITLE)).toBeTruthy();
@@ -254,7 +255,7 @@ describe("the DIALOG fires on the transition, from EITHER axis", () => {
   it("asks before the TOOLS axis completes the combination", async () => {
     const { onSetToolProfile } = mount({
       profile: "dopl_only",
-      posture: { tools: "manual", messages: "auto_both" },
+      posture: { level: "ask", messages: "auto_both" },
     });
     pickToolAccess(/Full access/);
     expect(await screen.findByText(POSTURE_WARNING_TITLE)).toBeTruthy();
@@ -262,7 +263,7 @@ describe("the DIALOG fires on the transition, from EITHER axis", () => {
   });
 
   it("names the peer who would receive", async () => {
-    mount({ profile: "full", posture: { tools: "manual", messages: "ask" } });
+    mount({ profile: "full", posture: { level: "ask", messages: "ask" } });
     pickSends(/^Automatic/);
     await screen.findByText(POSTURE_WARNING_TITLE);
     expect(document.body.textContent).toContain("Dana Reyes");
@@ -273,18 +274,18 @@ describe("the DIALOG does NOT fire on anything else", () => {
   it("stays silent on a channel ALREADY in the combination", async () => {
     const { selection } = mount({
       profile: "full",
-      posture: { tools: "manual", messages: "auto_both" },
+      posture: { level: "ask", messages: "auto_both" },
     });
-    // The OTHER axis — Tool use — on a channel that already sends automatically with full tools.
+    // The OTHER axis — Permissions — on a channel that already sends automatically with full tools.
     // Re-asking here is how a confirmation becomes a thing people click through.
     // ⚠ **THE TOOL AXIS REACHES THE RECORD DIRECTLY SINCE 2026-09-21 (U8), NOT THE GATE.**
     // `usePostureWarning › changePosture` reads ONLY `patch.messages`, so routing this axis
     // through it never could open (or suppress) the dialog — the narrowing is a statement of
     // what was already true, and the claim this case makes is unchanged.
-    fireEvent.click(postureTools());
-    fireEvent.click(screen.getByRole("menuitem", { name: /^Bypass/ }));
+    fireEvent.click(postureLevel());
+    fireEvent.click(screen.getByRole("menuitem", { name: /^Full/ }));
     await waitFor(() =>
-      expect(selection.update).toHaveBeenCalledWith({ tools: "bypass" })
+      expect(selection.update).toHaveBeenCalledWith({ level: "full" })
     );
     expect(screen.queryByText(POSTURE_WARNING_TITLE)).toBeNull();
   });
@@ -293,7 +294,7 @@ describe("the DIALOG does NOT fire on anything else", () => {
     const { onChangePosture } = mount({
       roster: SOLO,
       profile: "full",
-      posture: { tools: "manual", messages: "ask" },
+      posture: { level: "ask", messages: "ask" },
     });
     pickSends(/^Automatic/);
     await waitFor(() =>
@@ -305,7 +306,7 @@ describe("the DIALOG does NOT fire on anything else", () => {
   it("stays silent on an unrelated change (a narrower profile)", async () => {
     const { onSetToolProfile } = mount({
       profile: "full",
-      posture: { tools: "manual", messages: "auto_both" },
+      posture: { level: "ask", messages: "auto_both" },
     });
     pickToolAccess(/Read only/);
     await waitFor(() => expect(onSetToolProfile).toHaveBeenCalledWith("read_only"));
@@ -315,7 +316,7 @@ describe("the DIALOG does NOT fire on anything else", () => {
   it("stays silent on a change that LEAVES the combination", async () => {
     const { onChangePosture } = mount({
       profile: "full",
-      posture: { tools: "manual", messages: "auto_both" },
+      posture: { level: "ask", messages: "auto_both" },
     });
     pickSends(/^Ask each time/);
     await waitFor(() =>
@@ -336,7 +337,7 @@ describe("what the two answers do", () => {
   it("CANCEL leaves the setting exactly as it was", async () => {
     const { onChangePosture } = mount({
       profile: "full",
-      posture: { tools: "manual", messages: "ask" },
+      posture: { level: "ask", messages: "ask" },
     });
     pickSends(/^Automatic/);
     fireEvent.click(await screen.findByText("Cancel"));
@@ -355,7 +356,7 @@ describe("what the two answers do", () => {
   it("CONFIRM writes exactly the change that was clicked", async () => {
     const { onChangePosture } = mount({
       profile: "full",
-      posture: { tools: "manual", messages: "ask" },
+      posture: { level: "ask", messages: "ask" },
     });
     pickSends(/^Automatic/);
     fireEvent.click(await screen.findByText(POSTURE_WARNING_CONFIRM));
@@ -371,7 +372,7 @@ describe("what the two answers do", () => {
   it("CONFIRM on the tools axis writes the profile, not a posture patch", async () => {
     const { onSetToolProfile, onChangePosture } = mount({
       profile: "dopl_only",
-      posture: { tools: "manual", messages: "auto_both" },
+      posture: { level: "ask", messages: "auto_both" },
     });
     pickToolAccess(/Full access/);
     fireEvent.click(await screen.findByText(POSTURE_WARNING_CONFIRM));

@@ -87,7 +87,7 @@ export function LaunchAgentDialog({
     launchRuntime,
     runtimeOptions,
     modelRow,
-    nativeLine,
+    permissionLine,
     connectionNote,
     stopWarning,
     chooseRuntime,
@@ -229,9 +229,9 @@ export function LaunchAgentDialog({
           takenBy={takenBy}
         />
 
-        {nativeLine && (
+        {permissionLine && (
           <p role="note" className="text-caption text-text-secondary">
-            {nativeLine}
+            {permissionLine}
           </p>
         )}
         {connectionNote && (

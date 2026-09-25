@@ -59,9 +59,9 @@ export const copy = (over: Partial<ChannelAgentSettingsViewProps> = {}) =>
 /** The root suite has no jest-dom — `toBeDisabled` does not exist here. */
 export const disabled = (el: HTMLElement) => (el as HTMLButtonElement).disabled;
 
-// Named for the record fields they read (`tools` / `messages`), not the row labels; Messaging
+// Named for the record fields they read (`level` / `messages`), not the row labels; Messaging
 // covers both directions.
-export const postureTools = () =>
-  screen.getByLabelText("Tool use for agents you launch");
+export const postureLevel = () =>
+  screen.getByLabelText("Permissions for agents you launch");
 export const postureSends = () =>
   screen.getByLabelText("Messaging for agents you launch");
