@@ -36,18 +36,19 @@ exports.LAUNCH_INPUT_FIELDS = {
     // The ID/NAME split mirrors `service-resolve-ref.ts › resolveIdentityRef`; pinned by `channel-ops-launch-body.test.ts`.
     'op="manage" action="launch" (optional): the AGENT IDENTITY the new agent runs as, under THE OPERATOR\'S visibility. An ID resolves wherever it lives; a NAME, in THIS CHANNEL\'S container. Omit for a blank agent.'),
     color: channel_ops_launch_color_1.AGENT_COLOR_FIELD,
-    // `tools`: hand mirror of `src/features/channels/schema-launch-modes.ts › LAUNCH_TOOL_MODES`, each runtime's
-    // own words, narrowest first. `chain` has three values because absent is not `off`.
+    // `tools`: hand mirror of `src/features/channels/schema-launch-modes.ts › LAUNCH_TOOL_MODES` — the
+    // levels first, then each runtime's own words. `chain` has three values because absent is not `off`.
     posture: zod_1.z
         .object({
         tools: zod_1.z
             .enum([
-            "manual", "accept_edits", "auto", "bypass",
+            "ask", "auto", "full",
+            "manual", "accept_edits", "bypass",
             "untrusted", "granular", "on-request", "never",
             "allowlist", "auto-review", "run-everything",
         ])
             .optional()
-            .describe("TOOL freedom in the agent's runtime's words, narrowest first: claude manual..bypass, codex untrusted..never, cursor allowlist..run-everything."),
+            .describe("TOOL freedom: ask | auto | full (a runtime's own word also works)."),
         messages: zod_1.z
             .enum(["ask", "auto_inbound", "auto_outbound", "auto_both"])
             .optional()

@@ -217,6 +217,7 @@ export type DecideLaunchInput =
       appliedAgentName?: string;
       appliedRuntime?: string;
       appliedModel?: string;
+      appliedSetting?: string;
     }
   /** Non-launch kinds' success. No agent id: the row already names its target. The optional pair
    *  is `set_agent_mode`'s echo. */
@@ -256,6 +257,8 @@ export async function decideLaunchDirective(
         input.status === "launched" ? input.appliedRuntime ?? null : null,
       applied_model:
         input.status === "launched" ? input.appliedModel ?? null : null,
+      applied_setting:
+        input.status === "launched" ? input.appliedSetting ?? null : null,
       decided_at: new Date(now).toISOString(),
     }
   );

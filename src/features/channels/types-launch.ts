@@ -6,6 +6,7 @@ import type {
   LaunchDirectiveKind,
   LaunchDirectiveStatus,
   LaunchToolMode,
+  LaunchAppliedToolMode,
   LaunchMessageMode,
 } from "@dopl/contracts";
 
@@ -13,6 +14,7 @@ export type {
   LaunchRefusalReason,
   LaunchDirectiveKind,
   LaunchToolMode,
+  LaunchAppliedToolMode,
   LaunchMessageMode,
 };
 
@@ -62,6 +64,8 @@ export type LaunchDirective = {
   /** What the machine actually started on; `null` = not reported, never "claude". */
   appliedRuntime: string | null;
   appliedModel: string | null;
+  /** The runtime's own effective setting on a launch (`never/danger-full-access`); `null` = not reported. */
+  appliedSetting: string | null;
   /** Retired: `null` on new rows (no server clamp); the desktop falls back to `start*`. */
   resolvedToolMode: LaunchToolMode | null;
   resolvedMessageMode: LaunchMessageMode | null;

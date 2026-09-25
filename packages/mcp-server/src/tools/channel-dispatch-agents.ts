@@ -112,7 +112,7 @@ export async function dispatchManageAction(
         args.posture?.messages === undefined
       ) {
         return err(
-          `${callRef("channel.manage.posture", {}, { form: "op" })} is missing required params: pass posture with at least one of tools (in the agent's runtime's own words — claude manual..bypass, codex untrusted..never, cursor allowlist..run-everything) or messages (ask | auto_inbound | auto_outbound | auto_both). Passing one and omitting the other is normal — the omitted axis is left alone. ⚠ Whatever you pass is a REQUEST: your operator's machine narrows it to the ceiling they set by hand and never widens past it.`,
+          `${callRef("channel.manage.posture", {}, { form: "op" })} is missing required params: pass posture with at least one of tools (ask | auto | full, or the agent's runtime's own word) or messages (ask | auto_inbound | auto_outbound | auto_both). Passing one and omitting the other is normal — the omitted axis is left alone. ⚠ Whatever you pass is a REQUEST: your operator's machine narrows it to the ceiling they set by hand and never widens past it.`,
         );
       }
       return opSetAgentMode(

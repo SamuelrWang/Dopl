@@ -11,7 +11,7 @@ const {
   STATUS_PENDING, STATUS_CLAIMED, STATUS_LAUNCHED, STATUS_DONE, STATUS_REFUSED, STATUS_EXPIRED,
   STATUSES,
   KIND_LAUNCH, KIND_END, KIND_RENAME, KIND_SET_MODE, KINDS, KINDS_NEEDING_LAUNCH_CONSENT,
-  TOOL_MODES, MESSAGE_MODES, REFUSAL_REASONS,
+  TOOL_MODES, APPLIED_TOOL_MODES, SETTING_RE, MESSAGE_MODES, REFUSAL_REASONS,
   TARGET_NAME_MAX, AGENT_ID_RE, RUNTIME_ID_RE, GOAL_MAX, IDENTITY_NAME_MAX, MODEL_MAX, text,
 } = vocab;
 
@@ -127,7 +127,7 @@ function decideBody(directiveId, outcome) {
   const agentId = String(o.agentId || '');
   if (agentId) {
     const body = { directiveId: String(directiveId || ''), status: STATUS_LAUNCHED, agentId: agentId };
-    if (TOOL_MODES.indexOf(o.appliedTools) !== -1) body.appliedTools = o.appliedTools;
+    if (APPLIED_TOOL_MODES.indexOf(o.appliedTools) !== -1) body.appliedTools = o.appliedTools;
     if (MESSAGE_MODES.indexOf(o.appliedMessages) !== -1) body.appliedMessages = o.appliedMessages;
     // `false` is a report ("may NOT launch workers"), hence `typeof`, not truthiness.
     if (typeof o.appliedChain === 'boolean') body.appliedChain = o.appliedChain;
@@ -140,12 +140,13 @@ function decideBody(directiveId, outcome) {
     if (typeof o.appliedModel === 'string' && o.appliedModel.trim() !== '') {
       body.appliedModel = o.appliedModel.trim().slice(0, MODEL_MAX);
     }
+    if (SETTING_RE.test(String(o.appliedSetting || ''))) body.appliedSetting = String(o.appliedSetting);
     return body;
   }
   // No id on `done`: the row already names its target. No `appliedChain`: a re-posture decides none.
   if (o.done === true) {
     const body = { directiveId: String(directiveId || ''), status: STATUS_DONE };
-    if (TOOL_MODES.indexOf(o.appliedTools) !== -1) body.appliedTools = o.appliedTools;
+    if (APPLIED_TOOL_MODES.indexOf(o.appliedTools) !== -1) body.appliedTools = o.appliedTools;
     if (MESSAGE_MODES.indexOf(o.appliedMessages) !== -1) body.appliedMessages = o.appliedMessages;
     return body;
   }
@@ -175,6 +176,7 @@ module.exports = {
   KIND_SET_MODE,
   KINDS_NEEDING_LAUNCH_CONSENT,
   TOOL_MODES,
+  APPLIED_TOOL_MODES,
   MESSAGE_MODES,
   AGENT_ID_RE,
   RUNTIME_ID_RE,

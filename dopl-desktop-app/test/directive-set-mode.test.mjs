@@ -66,14 +66,16 @@ test("WIRE: a mode this build does not recognise collapses to `''`, not to a coe
   }
 });
 
-test("WIRE: Axis A is the UNION of every runtime's own words; Axis B is `session-profiles.js`'s", async () => {
+test("WIRE: Axis A is the levels plus the UNION of every runtime's own words; Axis B is `session-profiles.js`'s", async () => {
   // ⚠ The wire block is pure (no require), so both lists are DRIVEN against their authorities:
   // each runtime's `tools.js › TOOL_MODES` (ruling R3), and the runtime-neutral message axis.
   const req = await import("node:module").then((m) => m.createRequire(import.meta.url));
   const profiles = req(new URL("../main/session-profiles.js", import.meta.url).pathname);
   assert.deepEqual(wire.MESSAGE_MODES, profiles.MESSAGE_MODES);
   const union = ["claude", "codex", "cursor"].flatMap((r) => runtimeToolModes(r));
-  assert.deepEqual([...wire.TOOL_MODES].sort(), [...union].sort());
+  const levels = req(new URL("../main/runtime/permission-level.js", import.meta.url).pathname).LEVELS;
+  assert.deepEqual([...wire.TOOL_MODES].sort(), [...new Set([...levels, ...union])].sort());
+  assert.deepEqual([...wire.APPLIED_TOOL_MODES].sort(), [...union].sort(), "applied is always a runtime's own word");
   assert.equal(new Set(wire.TOOL_MODES).size, wire.TOOL_MODES.length, "no word is shared by two runtimes");
 });
 
@@ -239,6 +241,15 @@ test("RUNTIME: asking Codex's narrowest against a `never` ceiling gets the narro
   const h = boot({ live: codexLive(), ceilings: { codex: { tools: "never", messages: "auto_both" } } });
   await h.api.handle(modeRow({ target_tool_mode: "untrusted" }), WS);
   assert.deepEqual(decided(h), [{ directiveId: DID, status: "done", appliedTools: "untrusted" }]);
+});
+
+test("LEVEL: a level re-ask reaches the engine as the agent's OWN runtime's word", async () => {
+  const h = boot({ live: codexLive(), ceilings: { codex: { tools: "never", messages: "auto_both" } } });
+  await h.api.handle(modeRow({ target_tool_mode: "full" }), WS);
+  assert.deepEqual(h.modes.map((m) => [m.axis, m.mode]), [["tools", "never"]]);
+  const claude = boot({ live: live() });
+  await claude.api.handle(modeRow({ target_tool_mode: "ask" }), WS);
+  assert.deepEqual(claude.modes.map((m) => [m.axis, m.mode]), [["tools", "manual"]]);
 });
 
 test("RUNTIME: a word the agent's runtime does not offer is NOT applied — never coerced", async () => {

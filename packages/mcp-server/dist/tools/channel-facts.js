@@ -86,6 +86,9 @@ function runtimeFacts(d) {
     const facts = {
         runtime: applied ?? "not reported",
     };
+    // The level as that runtime applies it, in its own words (`never/danger-full-access`).
+    if (d.appliedSetting)
+        facts.setting = d.appliedSetting;
     if (asked !== null && asked !== applied)
         facts.runtimeAsked = asked;
     const model = d.appliedModel ?? null;

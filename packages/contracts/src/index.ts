@@ -32,6 +32,7 @@ export type {
   LaunchDirectiveKind,
   LaunchDirectiveStatus,
   LaunchToolMode,
+  LaunchAppliedToolMode,
   LaunchMessageMode,
 } from "./directives.js";
 

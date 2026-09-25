@@ -15,7 +15,8 @@ import {
 
 // Whole document, a ratchet both ways: a rise must be paid for by a fall on a pushed surface, or
 // it is prose laundering. Re-derive, never quote.
-const DOCTRINE_MAX_CHARS: Record<ToolSet, number> = { legacy: 13_508, granular: 13_687 };
+// +54 (2026-09-25): `posture.tools` names the permission levels and the runtime words behind them.
+const DOCTRINE_MAX_CHARS: Record<ToolSet, number> = { legacy: 13_562, granular: 13_741 };
 // Per section as served (a typical pull is one section); a ceiling only. `send` is the largest, so
 // its next rule should split the section rather than raise this. Re-derive, never quote.
 const DOCTRINE_SECTION_MAX_CHARS: Record<ToolSet, number> = { legacy: 3_600, granular: 3_650 };

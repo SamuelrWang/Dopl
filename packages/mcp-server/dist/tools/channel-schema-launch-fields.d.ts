@@ -29,6 +29,8 @@ export declare const LAUNCH_INPUT_FIELDS: {
     posture: z.ZodOptional<z.ZodObject<{
         tools: z.ZodOptional<z.ZodEnum<{
             granular: "granular";
+            full: "full";
+            ask: "ask";
             manual: "manual";
             accept_edits: "accept_edits";
             auto: "auto";

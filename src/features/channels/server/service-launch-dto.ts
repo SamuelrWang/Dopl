@@ -65,6 +65,7 @@ export function toDirective(
     appliedAgentName: row.applied_agent_name ?? null,
     appliedRuntime: row.applied_runtime ?? null,
     appliedModel: row.applied_model ?? null,
+    appliedSetting: row.applied_setting ?? null,
     // Retired: `null` on every new row; the desktop's `directiveFrom` falls back to `start*`.
     resolvedToolMode: (row.resolved_tool_mode ??
       null) as LaunchDirective["resolvedToolMode"],

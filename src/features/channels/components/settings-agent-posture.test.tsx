@@ -77,6 +77,7 @@ describe("the LAUNCH POSTURE renders with its current values, and changes on sel
     const readers = [
       ...desktopMainFilesContaining("channelPrefs.launchStartModes("),
       ...desktopMainFilesContaining("channelPrefs.getLaunchPosture("),
+      ...desktopMainFilesContaining("channelPrefs.launchPostureFor("),
     ].filter((f) => f !== DISCLOSURE_ONLY);
     expect([...new Set(readers)].sort()).toEqual([
       "launch-directive-spawn.js",
@@ -184,11 +185,11 @@ describe("the two permission axes agree across both trees", () => {
   );
 
   const DIRECTIVE_VOCAB = "launch-directive-vocab.js";
-  it("the directive wire's Axis A is the union of every adapter's own list", () => {
+  it("the directive wire's applied Axis A is the union of every adapter's own list", () => {
     const adapters = declaringFiles("TOOL_MODES").filter((f) => f.startsWith("runtime/"));
     const union = adapters.flatMap((f) => modes(desktopSource(f), "TOOL_MODES"));
     expect(adapters.length).toBeGreaterThanOrEqual(3);
-    expect([...modes(desktopSource(DIRECTIVE_VOCAB), "TOOL_MODES")].sort()).toEqual([...union].sort());
+    expect([...modes(desktopSource(DIRECTIVE_VOCAB), "APPLIED_TOOL_MODES")].sort()).toEqual([...union].sort());
   });
 
   it("the web offering's FIRST option is the desktop's fail-closed answer", () => {

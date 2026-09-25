@@ -60,13 +60,19 @@ export type LaunchDirectiveStatus =
 
 /**
  * The two posture axes a directive ASKS for; it never widens. The operator's machine clamps each to
- * its stored channel ceiling (`main/launch-posture.js`): tools are each runtime's own words, clamped
- * in the launch runtime's descriptor order; messages clamp as an inbound/outbound intersection.
+ * its stored channel ceiling (`main/launch-posture.js`). Tools: a permission LEVEL (`ask`/`auto`/
+ * `full`, applied in the launch runtime's own settings) or, for compatibility, one runtime's own
+ * word, clamped in that runtime's descriptor order. Messages clamp as an inbound/outbound
+ * intersection. `applied_tool_mode` is always the runtime's own word, never a level.
  */
 export type LaunchToolMode =
+  | "ask" | "full" // levels; `auto` is also a level (Claude's word, same meaning)
   | "manual" | "accept_edits" | "auto" | "bypass" // claude
   | "untrusted" | "granular" | "on-request" | "never" // codex
   | "allowlist" | "auto-review" | "run-everything"; // cursor
+
+/** What the machine echoes as applied: always a runtime's own word, never a level. */
+export type LaunchAppliedToolMode = Exclude<LaunchToolMode, "ask" | "full">;
 
 export type LaunchMessageMode =
   | "ask"

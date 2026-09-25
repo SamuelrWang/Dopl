@@ -33,14 +33,19 @@ const KINDS = [KIND_LAUNCH, KIND_END, KIND_RENAME, KIND_SET_MODE];
 // work tools). `end` (a stop) and `rename` (display only) widen nothing and stay outside it.
 const KINDS_NEEDING_LAUNCH_CONSENT = [KIND_LAUNCH, KIND_SET_MODE];
 
-// Axis A on the wire: every registered runtime's OWN words, as a SET (ruling R3). A word is
-// validated and clamped against the launch runtime's descriptor order, never this list's order.
-// Mirrors `schema-launch-modes.ts › LAUNCH_TOOL_MODES` and the column CHECKs (suite-pinned).
-const TOOL_MODES = [
+// Axis A as APPLIED: every registered runtime's OWN words, as a SET (ruling R3), validated and
+// clamped against the launch runtime's descriptor order, never this list's order.
+const APPLIED_TOOL_MODES = [
   'manual', 'accept_edits', 'auto', 'bypass', // claude
   'untrusted', 'granular', 'on-request', 'never', // codex
   'allowlist', 'auto-review', 'run-everything', // cursor
 ];
+// Axis A as ASKED: a permission level (`runtime/permission-level.js › LEVELS`; `auto` is also a
+// Claude word) or a runtime's own word. Mirrors `schema-launch-modes.ts › LAUNCH_TOOL_MODES` and
+// the column CHECKs (suite-pinned).
+const TOOL_MODES = ['ask', 'full', ...APPLIED_TOOL_MODES];
+// A reported effective setting's shape (`never/danger-full-access`); mirrors `› LAUNCH_SETTING_RE`.
+const SETTING_RE = /^[a-z0-9_/-]{1,80}$/;
 // Axis B is runtime-neutral, narrowest first.
 const MESSAGE_MODES = ['ask', 'auto_inbound', 'auto_outbound', 'auto_both'];
 
@@ -95,6 +100,8 @@ module.exports = {
   KINDS,
   KINDS_NEEDING_LAUNCH_CONSENT,
   TOOL_MODES,
+  APPLIED_TOOL_MODES,
+  SETTING_RE,
   MESSAGE_MODES,
   REFUSAL_REASONS,
   TARGET_NAME_MAX,

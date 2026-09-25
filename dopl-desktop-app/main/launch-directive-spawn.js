@@ -6,6 +6,7 @@ const channelPrefs = require('./channel-prefs');
 const wire = require('./launch-directive-wire');
 const { pickOf } = require('./runtime/selection-vocabulary');
 const launchPosture = require('./launch-posture');
+const permissionLevel = require('./runtime/permission-level');
 const { diag } = require('./diag');
 
 /**
@@ -49,37 +50,40 @@ async function resolveModel(runtimeId, d, identity) {
 }
 
 /**
- * The start posture in the LAUNCH runtime's words (R3/R4): the ceiling is that runtime's record
- * (`launchPostureFor`), the native bag `launchStartModes`'. A tool word the runtime does not offer
- * is not applied (that axis runs at the channel posture); clamp in the runtime's order, then floor.
- * Only the axes the directive ASKED are pinned as the session's own pick (C2); the rest follow the
- * channel live.
+ * The start posture in the LAUNCH runtime's words (R3/R4). An asked level becomes that runtime's tool
+ * mode; a word it does not offer is not applied (that axis runs at the channel level). The tool mode
+ * clamps to the channel level's (`launchPostureFor`) in the runtime's order, and the containment
+ * value follows the NARROWER of the applied mode's level and the channel's, so a narrower ask never
+ * keeps a wider sandbox. Only the axes the directive ASKED are pinned as the session's own pick (C2).
  */
 function planPosture(d, runtimeId, chainAllowed) {
   const profiles = require('./session-profiles');
-  const order = profiles.toolModesFor(runtimeId); // that runtime's words, narrowest first
-  const askedTools = d.startToolMode && order.indexOf(d.startToolMode) !== -1 ? d.startToolMode : '';
+  const desc = require('./runtime').descriptorFor(runtimeId);
+  const askedTools = d.startToolMode ? permissionLevel.toolWordFor(desc, d.startToolMode) : '';
   if (d.startToolMode && !askedTools) {
-    diag('launch-directive: tool mode', d.startToolMode, 'is not a', runtimeId || 'default-runtime',
-      'word — that axis launches at the channel posture');
+    diag('launch-directive: tool mode', d.startToolMode, 'is not a level or a', runtimeId || 'default-runtime',
+      'word — that axis launches at the channel level');
   }
+  const ceiling = channelPrefs.launchPostureFor(d.channelId, runtimeId);
   const plan = launchPosture.resolveLaunch({
     requested: { tools: askedTools, messages: d.startMessageMode },
-    ceiling: channelPrefs.launchPostureFor(d.channelId, runtimeId),
+    ceiling,
     chainRequested: d.chain,
     chainAllowed,
     floorMessages: profiles.floorWindowlessMessage,
-    toolOrder: order,
+    toolOrder: profiles.toolModesFor(runtimeId),
   });
   if (plan.clamped) {
     diag('launch-directive: posture CLAMPED to this channel\'s stored pair — asked',
       String(d.startToolMode || '-') + '/' + String(d.startMessageMode || '-'),
       'applied', plan.modes.tools + '/' + plan.modes.messages);
   }
-  const start = channelPrefs.launchStartModes(d.channelId, runtimeId) || {};
-  const hand = { tools: plan.modes.tools, messages: plan.modes.messages, native: { ...(start.native || {}) } };
+  const L = permissionLevel.LEVELS;
+  const appliedLevel = L[Math.min(L.indexOf(permissionLevel.levelOf(desc, plan.modes.tools, ceiling.native)), L.indexOf(ceiling.level))];
+  const native = permissionLevel.levelSettings(desc, appliedLevel).native;
+  const hand = { tools: plan.modes.tools, messages: plan.modes.messages, native };
   if (askedTools || d.startMessageMode) hand.pinned = { tools: !!askedTools, messages: !!d.startMessageMode };
-  return { hand, chain: plan.chain };
+  return { hand, chain: plan.chain, setting: permissionLevel.settingText(desc, hand.tools, native) };
 }
 
 /**
@@ -190,6 +194,7 @@ async function spawn(d, deps) {
       appliedAgentName: applied,
       appliedRuntime: appliedRuntimeId(runtime.id),
       appliedModel: appliedModelId(runtime.id, typeof res.model === 'string' ? res.model : modelArg),
+      appliedSetting: plan.setting,
     };
   }
   return { refused: wire.refusalFor(res && res.skipped) };

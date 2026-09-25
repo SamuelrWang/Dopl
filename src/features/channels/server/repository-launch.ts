@@ -39,6 +39,7 @@ export type LaunchDirectiveRow = {
   applied_agent_name?: string | null;
   applied_runtime?: string | null;
   applied_model?: string | null;
+  applied_setting?: string | null;
   /** Retired: every create writes null (the server clamps nothing, resolves no model). */
   resolved_tool_mode?: string | null;
   resolved_message_mode?: string | null;
@@ -107,6 +108,8 @@ export type LaunchDecision = {
    *  default model. */
   applied_runtime: string | null;
   applied_model: string | null;
+  /** The runtime's own effective setting on a launch; `null` elsewhere or when not reported. */
+  applied_setting: string | null;
   decided_at: string;
 };
 

@@ -274,20 +274,41 @@ test("COMPAT: a row written before the column existed launches on the default pa
 
 // ── 7. THE LAUNCH RUNTIME'S OWN RECORD AND WORDS (rulings R3/R5; P3-03, P3-04, P3-07) ─────
 
-// 🔒 P3-04 + P3-03: the ceiling AND the native bag are read for the LAUNCH runtime, not the
-// channel's selected one — a Codex pick on a Claude channel used to get Claude's posture and no
-// sandbox, i.e. Codex's `workspace-write` default: WIDER than the button lane's `read-only`.
-test("RECORD: a Codex launch reads the CODEX record — its sandbox reaches the spawn", async () => {
-  const h = boot({ ceilings: {
-    claude: { tools: "bypass", messages: "auto_both" },
-    codex: { tools: "on-request", messages: "auto_both", native: { sandbox_mode: "read-only" } },
-  } });
+// 🔒 P3-04 + P3-03: the ceiling AND the native bag are the LAUNCH runtime's reading of the level,
+// not the channel's selected runtime's.
+test("LEVEL: a Codex launch reads the level in CODEX words — its sandbox reaches the spawn", async () => {
+  const h = boot({ ceilings: { claude: { level: "full", messages: "auto_both" }, codex: { level: "full", messages: "auto_both" } } });
   await h.api.handle(launchRow({ runtime: "codex" }), WS);
-  assert.deepEqual(h.ceilingAsks, ["codex"], "C1: the ceiling is the LAUNCH runtime's record");
-  assert.deepEqual(h.startAsks, ["codex"], "…and so is the native bag");
-  assert.deepEqual(handedModes(h),
-    { tools: "on-request", messages: "auto_both", native: { sandbox_mode: "read-only" } });
-  assert.equal(decided(h)[0].appliedTools, "on-request", "the echo is a CODEX word (C5)");
+  assert.deepEqual(h.ceilingAsks, ["codex"], "C1: the ceiling is the LAUNCH runtime's reading");
+  assert.deepEqual(handedModes(h), { tools: "never", messages: "auto_both", native: { sandbox_mode: "danger-full-access" } });
+  assert.equal(decided(h)[0].appliedTools, "never", "the echo is a CODEX word (C5)");
+  assert.equal(decided(h)[0].appliedSetting, "never/danger-full-access", "…and the reply names the whole setting");
+});
+
+// 🔒 THE 2026-09-25 REGRESSION: "asked never/auto_both applied untrusted/auto_both" on a bypass channel.
+test("LEVEL: an MCP launch asking `never` on a Full channel runs Codex at never/danger-full-access", async () => {
+  const h = boot({ channelRuntime: "codex", ceilings: { codex: { level: "full", messages: "auto_both" } } });
+  await h.api.handle(launchRow({ start_tool_mode: "never", start_message_mode: "auto_both" }), WS);
+  assert.equal(handedModes(h).tools, "never");
+  assert.deepEqual(handedModes(h).native, { sandbox_mode: "danger-full-access" });
+  assert.equal(h.logged.some((l) => l.includes("CLAMPED")), false);
+});
+
+test("LEVEL: `full` asked on an Auto channel CLAMPS to Auto, in each runtime's words", async () => {
+  const claude = boot({ ceilings: { claude: { level: "auto", messages: "auto_both" } } });
+  await claude.api.handle(launchRow({ start_tool_mode: "full" }), WS);
+  assert.equal(handedModes(claude).tools, "auto");
+  assert.equal(decided(claude)[0].appliedSetting, "auto");
+  const codex = boot({ channelRuntime: "codex", ceilings: { codex: { level: "auto", messages: "auto_both" } } });
+  await codex.api.handle(launchRow({ start_tool_mode: "full" }), WS);
+  assert.equal(decided(codex)[0].appliedSetting, "on-request/workspace-write", "never Full access past an Auto channel");
+});
+
+test("LEVEL: a NARROWER level ask on a Full channel keeps the narrower sandbox too", async () => {
+  const h = boot({ channelRuntime: "codex", ceilings: { codex: { level: "full", messages: "auto_both" } } });
+  await h.api.handle(launchRow({ start_tool_mode: "ask" }), WS);
+  assert.deepEqual(handedModes(h).native, { sandbox_mode: "workspace-write" });
+  assert.equal(decided(h)[0].appliedSetting, "on-request/workspace-write");
 });
 
 // 🔒 P3-07: Claude's clamp order on a Codex launch turned an ask for the NARROWEST into the WIDEST.
@@ -324,7 +345,7 @@ test("WORDS: a wider Codex ask clamps in CODEX order to the Codex ceiling", asyn
 test("WORDS: a Claude word on a Codex launch is not applied — the channel posture runs", async () => {
   const h = boot({ channelRuntime: "codex", ceilings: { codex: { tools: "on-request", messages: "auto_both" } } });
   await h.api.handle(launchRow({ start_tool_mode: "bypass" }), WS);
-  assert.deepEqual(handedModes(h), { tools: "on-request", messages: "auto_both", native: {} },
+  assert.deepEqual(handedModes(h), { tools: "on-request", messages: "auto_both", native: { sandbox_mode: "workspace-write" } },
     "nothing asked that this runtime speaks → nothing pinned");
   assert.equal(decided(h)[0].appliedTools, "on-request");
   assert.ok(h.logged.some((l) => l.includes("bypass") && l.includes("codex")));

@@ -94,7 +94,7 @@ async function dispatchManageAction(action, args, client) {
             // Hand-written: `missingParams` cannot express "at least one of tools / messages".
             if (args.posture?.tools === undefined &&
                 args.posture?.messages === undefined) {
-                return (0, respond_1.err)(`${(0, call_ref_js_1.callRef)("channel.manage.posture", {}, { form: "op" })} is missing required params: pass posture with at least one of tools (in the agent's runtime's own words — claude manual..bypass, codex untrusted..never, cursor allowlist..run-everything) or messages (ask | auto_inbound | auto_outbound | auto_both). Passing one and omitting the other is normal — the omitted axis is left alone. ⚠ Whatever you pass is a REQUEST: your operator's machine narrows it to the ceiling they set by hand and never widens past it.`);
+                return (0, respond_1.err)(`${(0, call_ref_js_1.callRef)("channel.manage.posture", {}, { form: "op" })} is missing required params: pass posture with at least one of tools (ask | auto | full, or the agent's runtime's own word) or messages (ask | auto_inbound | auto_outbound | auto_both). Passing one and omitting the other is normal — the omitted axis is left alone. ⚠ Whatever you pass is a REQUEST: your operator's machine narrows it to the ceiling they set by hand and never widens past it.`);
             }
             return (0, channel_ops_agent_mode_1.opSetAgentMode)(client, args.channel, args.to, { tools: args.posture.tools, messages: args.posture.messages }, { waitMs: args.wait_ms });
         }

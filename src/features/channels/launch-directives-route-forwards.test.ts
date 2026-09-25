@@ -33,6 +33,7 @@ import {
   LaunchCreateSchema,
   LaunchDecideSchema,
 } from "./schema-launch";
+import { LAUNCH_APPLIED_TOOL_MODES } from "./schema-launch-modes";
 
 const post = (handler: typeof createPost, body: unknown) =>
   handler(
@@ -67,14 +68,15 @@ const FULL_DECISIONS: Record<string, Record<string, unknown>> = {
   launched: {
     status: "launched",
     agentId: "a1b2c3d4",
-    appliedTools: LAUNCH_TOOL_MODES[0],
+    appliedTools: LAUNCH_APPLIED_TOOL_MODES[0],
     appliedMessages: LAUNCH_MESSAGE_MODES[0],
     appliedChain: false,
     appliedAgentName: "Scout",
     appliedRuntime: "codex",
     appliedModel: "gpt-6-astra",
+    appliedSetting: "never/danger-full-access",
   },
-  done: { status: "done", appliedTools: LAUNCH_TOOL_MODES[0], appliedMessages: LAUNCH_MESSAGE_MODES[0] },
+  done: { status: "done", appliedTools: LAUNCH_APPLIED_TOOL_MODES[0], appliedMessages: LAUNCH_MESSAGE_MODES[0] },
   refused: { status: "refused", refusalReason: "cap" },
 };
 

@@ -141,7 +141,7 @@ test("LANE: a directive naming NO posture launches exactly as it did before T24"
       directiveId: DID, status: "launched", agentId: "a1b2c3d4",
       appliedTools: "bypass", appliedMessages: "auto_both", appliedChain: false,
       appliedAgentName: "New Agent",
-      appliedRuntime: "claude", appliedModel: "claude-opus-5",
+      appliedRuntime: "claude", appliedModel: "claude-opus-5", appliedSetting: "bypass",
     }]);
   });
 });
@@ -168,7 +168,7 @@ test("LANE: a WIDER request is CLAMPED to the operator's stored pair, and still 
     appliedAgentName: "New Agent",
     // ⚠ U9's pair, unaffected by a posture clamp: a runtime is not narrowed, it is honoured or
     // refused, and nothing on this path may change which vendor runs.
-    appliedRuntime: "claude", appliedModel: "claude-opus-5",
+    appliedRuntime: "claude", appliedModel: "claude-opus-5", appliedSetting: "accept_edits",
   }]);
   assert.ok(h.logged.some((l) => l.includes("CLAMPED")), "and the clamp is recorded, not hidden");
 });

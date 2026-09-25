@@ -2,21 +2,23 @@ import { z } from "zod";
 import { closedEnum } from "@/shared/lib/closed-enum";
 import { safeLabel } from "@/shared/lib/safe-label";
 import {
+  LAUNCH_APPLIED_TOOL_MODES,
   LAUNCH_MESSAGE_MODES,
-  LAUNCH_TOOL_MODES,
   LAUNCH_REFUSAL_REASONS,
   LAUNCH_RUNTIME_ID_MESSAGE,
   LAUNCH_RUNTIME_ID_RE,
+  LAUNCH_SETTING_RE,
 } from "./schema-launch-modes";
 import type {
+  LaunchAppliedToolMode,
   LaunchMessageMode,
   LaunchRefusalReason,
-  LaunchToolMode,
 } from "./types";
 
 // What the operator's machine reports back about one directive; the request side is
 // `schema-launch.ts`. The enums come from the `schema-launch-modes.ts` leaf.
-const ToolModeSchema = closedEnum<LaunchToolMode>()(LAUNCH_TOOL_MODES);
+// A machine never echoes a level (the `applied_tool_mode` CHECK holds only runtime words).
+const ToolModeSchema = closedEnum<LaunchAppliedToolMode>()(LAUNCH_APPLIED_TOOL_MODES);
 const MessageModeSchema = closedEnum<LaunchMessageMode>()(LAUNCH_MESSAGE_MODES);
 const LaunchRefusalReasonSchema =
   closedEnum<LaunchRefusalReason>()(LAUNCH_REFUSAL_REASONS);
@@ -43,6 +45,8 @@ export const LaunchDecideSchema = z.discriminatedUnion("status", [
       .regex(LAUNCH_RUNTIME_ID_RE, LAUNCH_RUNTIME_ID_MESSAGE)
       .optional(),
     appliedModel: safeLabel("Model", 120).optional(),
+    /** The runtime's own effective setting, e.g. `never/danger-full-access`; the column CHECK's shape. */
+    appliedSetting: z.string().regex(LAUNCH_SETTING_RE, "Invalid setting").optional(),
   }),
   // The non-launch kinds' success: no agent id (the row already names its target). It carries
   // `set_agent_mode`'s appliedTools/appliedMessages; only `launched` carries

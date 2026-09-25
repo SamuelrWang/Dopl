@@ -160,13 +160,23 @@ describe("a refused FIELD is named", () => {
 
 // Codex tool words are published, carried to the create untouched, and echoed.
 describe("each runtime's own tool words", () => {
-  it("publishes every runtime's Axis-A words and says which are whose", () => {
+  it("publishes the permission levels first, still accepts every runtime's words, and the doctrine explains them", () => {
     const posture = (CHANNEL_INPUT_SHAPE as Record<string, unknown>).posture as {
       unwrap: () => { shape: { tools: { unwrap: () => { options: string[] }; description?: string } } };
     };
     const tools = posture.unwrap().shape.tools;
+    expect(tools.unwrap().options.slice(0, 3)).toEqual(["ask", "auto", "full"]);
     expect(tools.unwrap().options).toEqual(expect.arrayContaining(["on-request", "never", "run-everything"]));
-    expect(tools.description).toContain("codex untrusted..never");
+    expect(tools.description).toContain("ask | auto | full");
+    expect(DOCTRINE_SECTIONS.manage).toContain("ask | auto | full, RUN IN THE AGENT'S RUNTIME'S OWN SETTINGS");
+  });
+
+  it("files a level as asked and renders the machine's effective native setting", async () => {
+    const c = created(launched({ runtime: "codex", appliedRuntime: "codex", appliedToolMode: "never", appliedSetting: "never/danger-full-access" }));
+    const out = await text(c, { runtime: "codex", tools: "full" });
+    expect((c.createLaunchDirective as ReturnType<typeof vi.fn>).mock.calls[0][0]).toMatchObject({ tools: "full" });
+    expect(out).toContain("runtime=codex");
+    expect(out).toContain("setting=never/danger-full-access");
   });
 
   it("files a Codex word as asked and renders the machine's Codex echo", async () => {

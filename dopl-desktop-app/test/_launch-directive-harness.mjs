@@ -57,6 +57,8 @@ export const IDENTITY_COMMIT_SRC = readFileSync(join(MAIN, "agent-identity-commi
 export const SPAWN_SRC = readFileSync(join(MAIN, "launch-directive-spawn.js"), "utf8");
 export const wire = require_(join(MAIN, "launch-directive-wire.js"));
 const LAUNCH_DEFAULT = require_(join(MAIN, "runtime", "launch-default.js"));
+const REAL_REGISTRY = require_(join(MAIN, "runtime", "index.js"));
+const LEVEL = require_(join(MAIN, "runtime", "permission-level.js"));
 const POSTURE = require_(join(MAIN, "launch-posture.js"));
 const PROFILES = require_(join(MAIN, "session-profiles.js"));
 const floorMessages = (m) => (m === "auto_outbound" || m === "auto_both" ? "auto_both" : "auto_inbound");
@@ -127,7 +129,6 @@ export function boot(over = {}) {
   const rosters = [];  // every `runtime.models()` read this lane made (2026-09-21, U9)
   const identityAsks = []; // every runtime the identity link was asked of (2026-09-23)
   const runtimeAsks = []; // every C3 `resolveLaunchRuntime` call ({ pick, identity, channelId })
-  const startAsks = []; // every C1 `launchStartModes(channelId, runtimeId)` read — the runtime asked
   const ceilingAsks = []; // every C1 `launchPostureFor(channelId, runtimeId)` read — the ceiling's runtime
   // The registry stub, shared by `./runtime` and the REAL C3 resolver's `deps.registry`.
   const rids = cfg.runtimeIds || ["claude", "codex", "cursor"];
@@ -142,6 +143,8 @@ export function boot(over = {}) {
       return {};
     },
     resolve: (rid) => ({ descriptor: { id: rid, models: {} } }),
+    // The REAL descriptors (electron-free at load): the level table is read off them.
+    descriptorFor: (rid) => REAL_REGISTRY.descriptorFor(rid),
     runtimeFor: (rid) => ({
       models: async () => {
         rosters.push(rid);
@@ -191,21 +194,19 @@ export function boot(over = {}) {
     if (id === "./channel-prefs") {
       return {
         getOrchestratorLaunch: () => cfg.enabled === true,
-        // C1 (a1's contract), stubbed at its seam: THAT runtime's record, messages windowless-
-        // floored, native bag verbatim. `cfg.ceilings[rid]` beats `cfg.ceiling` for one runtime.
-        // C1's ceiling helper: the same record, messages NOT floored.
+        // C1's ceiling, stubbed at its seam: the level in THAT runtime's words, messages NOT floored.
+        // `cfg.ceilings[rid]` beats `cfg.ceiling` for one runtime.
         launchPostureFor: (channelId, rid) => {
           ceilingAsks.push(rid);
           const c = (cfg.ceilings && cfg.ceilings[rid]) || cfg.ceiling
             || { tools: "bypass", messages: "auto_both" };
-          return { tools: c.tools, messages: c.messages };
-        },
-        launchStartModes: (channelId, rid) => {
-          startAsks.push(rid);
-          const c = (cfg.ceilings && cfg.ceilings[rid]) || cfg.ceiling
-            || { tools: "bypass", messages: "auto_both" };
-          const out = c.messages === "auto_outbound" || c.messages === "auto_both" ? "auto_both" : "auto_inbound";
-          return { tools: c.tools, messages: out, native: { ...(c.native || {}) } };
+          const d = REAL_REGISTRY.descriptorFor(rid);
+          const level = c.level || LEVEL.levelOf(d, c.tools, c.native);
+          const s = LEVEL.levelSettings(d, level);
+          // A ceiling given as a level is that level's words; one given as words keeps them.
+          return c.level
+            ? { tools: s.tools, messages: c.messages, level, native: s.native }
+            : { tools: c.tools, messages: c.messages, level, native: { ...(c.native || {}) } };
         },
         // ⚠ `getLaunchModel` / `getLaunchModelLink` LEFT WITH THE REAL FUNCTIONS (2026-09-23): the
         // channel no longer stores a model, and a fake offering one would let a lane that still
@@ -291,6 +292,7 @@ export function boot(over = {}) {
       };
     }
     if (id === "./runtime/selection-vocabulary") return require_(join(MAIN, "runtime/selection-vocabulary.js"));
+    if (id === "./runtime/permission-level") return LEVEL;
     if (id === "./session-launch-op") return require_(join(MAIN, "session-launch-op.js")); // `defaultGoal`, the button lane's sentence
     // ⚠ THE IDENTITY RESOLVE IS STUBBED AT ITS SEAM, not faked at the transport. The real module
     // is `main/identity-resolve.js` and it rides `api.js`, which reaches Electron — so what is
@@ -377,7 +379,7 @@ export function boot(over = {}) {
   // was actually asked about. Nothing about the module is wrapped — `handle` is the real one.
   const handle = (frame, ws) => { cfg.lastFrame = frame; return api.handle(frame, ws); };
   return { api: { ...api, handle }, cfg, posts, gets, arms, logged, resolves, controls, names,
-    flushes, modes, acquires, rosters, identityAsks, runtimeAsks, startAsks, ceilingAsks };
+    flushes, modes, acquires, rosters, identityAsks, runtimeAsks, ceilingAsks };
 }
 
 export const claimPosts = (h) => h.posts.filter((p) => p.path === wire.ROUTES.claim);

@@ -369,7 +369,7 @@ test("DECIDE: a successful launch writes `launched` and the AGENT ID", async () 
     directiveId: DID, status: "launched", agentId: "a1b2c3d4",
     appliedTools: "bypass", appliedMessages: "auto_both", appliedChain: false,
     appliedAgentName: "New Agent",
-    appliedRuntime: "claude", appliedModel: "claude-opus-5",
+    appliedRuntime: "claude", appliedModel: "claude-opus-5", appliedSetting: "bypass",
   });
   assert.equal(decidePosts(h)[0].workspaceId, WS, "fenced on the workspace, like every write here");
 });

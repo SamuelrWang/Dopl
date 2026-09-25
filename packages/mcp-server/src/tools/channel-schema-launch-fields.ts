@@ -43,19 +43,20 @@ export const LAUNCH_INPUT_FIELDS = {
 
   color: AGENT_COLOR_FIELD,
 
-  // `tools`: hand mirror of `src/features/channels/schema-launch-modes.ts › LAUNCH_TOOL_MODES`, each runtime's
-  // own words, narrowest first. `chain` has three values because absent is not `off`.
+  // `tools`: hand mirror of `src/features/channels/schema-launch-modes.ts › LAUNCH_TOOL_MODES` — the
+  // levels first, then each runtime's own words. `chain` has three values because absent is not `off`.
   posture: z
     .object({
       tools: z
         .enum([
-          "manual", "accept_edits", "auto", "bypass",
+          "ask", "auto", "full",
+          "manual", "accept_edits", "bypass",
           "untrusted", "granular", "on-request", "never",
           "allowlist", "auto-review", "run-everything",
         ])
         .optional()
         .describe(
-          "TOOL freedom in the agent's runtime's words, narrowest first: claude manual..bypass, codex untrusted..never, cursor allowlist..run-everything.",
+          "TOOL freedom: ask | auto | full (a runtime's own word also works).",
         ),
       messages: z
         .enum(["ask", "auto_inbound", "auto_outbound", "auto_both"])

@@ -280,6 +280,7 @@ test("CONTRACT: a directive in the DTO's spelling survives `handle`'s owner chec
     // older desktop that reported nothing, which is a different statement from a vendor.
     appliedRuntime: null,
     appliedModel: null,
+    appliedSetting: null,
     status: "pending",
     refusalReason: null,
     agentId: null,

@@ -40,6 +40,8 @@ export interface LaunchDirective {
      *  mean the runtime's own default. */
     appliedRuntime?: string | null;
     appliedModel?: string | null;
+    /** The runtime's own effective setting on a launch (`never/danger-full-access`). `null` = not reported. */
+    appliedSetting?: string | null;
     status: LaunchDirectiveStatus;
     /** Set iff `status` is `refused`. */
     refusalReason: LaunchRefusalReason | null;

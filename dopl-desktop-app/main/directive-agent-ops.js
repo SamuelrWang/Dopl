@@ -117,13 +117,15 @@ function setAgentMode(d) {
     agentId: String(row.agentId || ''),
   };
 
-  // A tool word the session's runtime does not offer is not applied (R3).
+  // A level becomes the session runtime's tool mode (a containment value is spawn-time and does not
+  // move live); a word that runtime does not offer is not applied (R3).
   const runtimeId = row.runtimeId || null;
-  const words = require('./session-profiles').toolModesFor(runtimeId);
-  const tools = d.targetToolMode && words.indexOf(d.targetToolMode) !== -1 ? d.targetToolMode : '';
+  const tools = d.targetToolMode
+    ? require('./runtime/permission-level').toolWordFor(require('./runtime').descriptorFor(runtimeId), d.targetToolMode)
+    : '';
   if (d.targetToolMode && !tools) {
     diag('directive-agent-ops: set_agent_mode', d.targetAgentId, '— tool mode', d.targetToolMode,
-      'is not a', runtimeId || 'default-runtime', 'word; the tool axis is left alone');
+      'is not a level or a', runtimeId || 'default-runtime', 'word; the tool axis is left alone');
   }
   const messages = d.targetMessageMode;
   if (!tools && !messages) return { refused: 'no-bridge' };

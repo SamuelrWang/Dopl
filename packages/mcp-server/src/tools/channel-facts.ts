@@ -97,6 +97,8 @@ export function runtimeFacts(d: LaunchDirective): Record<string, FactValue> {
   const facts: Record<string, FactValue> = {
     runtime: applied ?? "not reported",
   };
+  // The level as that runtime applies it, in its own words (`never/danger-full-access`).
+  if (d.appliedSetting) facts.setting = d.appliedSetting;
   if (asked !== null && asked !== applied) facts.runtimeAsked = asked;
   const model = d.appliedModel ?? null;
   if (model !== null && model !== d.model) facts.appliedModel = model;

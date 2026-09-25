@@ -13,7 +13,7 @@ import {
   LAUNCH_TOOL_MODES,
   LaunchCreateSchema,
 } from "./schema-launch";
-import { LAUNCH_TOOL_MODES_BY_RUNTIME } from "./schema-launch-modes";
+import { LAUNCH_PERMISSION_LEVELS, LAUNCH_SETTING_RE, LAUNCH_TOOL_MODES_BY_RUNTIME } from "./schema-launch-modes";
 
 const AGENT = "a1b2c3d4";
 const BASE = { channel: "general", agentId: AGENT } as const;
@@ -38,10 +38,11 @@ describe("the mode vocabularies", () => {
     },
   );
 
-  it("the wire accepts the UNION of every runtime's words, and no word is shared", () => {
+  it("the wire accepts the permission levels plus the UNION of every runtime's words, each once", () => {
     const union = Object.values(LAUNCH_TOOL_MODES_BY_RUNTIME).flat();
-    expect([...LAUNCH_TOOL_MODES].sort()).toEqual([...union].sort());
+    expect([...LAUNCH_TOOL_MODES].sort()).toEqual([...new Set([...LAUNCH_PERMISSION_LEVELS, ...union])].sort());
     expect(new Set(LAUNCH_TOOL_MODES).size).toBe(LAUNCH_TOOL_MODES.length);
+    expect(new Set(union).size).toBe(union.length);
   });
 
   it("messages: ask -> auto_inbound -> auto_outbound -> auto_both, in that order", () => {
@@ -53,17 +54,20 @@ describe("the mode vocabularies", () => {
     ]);
   });
 
-  // A CHECK narrower than the wire would refuse a legal decide at rest.
-  it("the latest tool-mode CHECKs admit exactly the wire union", () => {
+  // A CHECK narrower than the wire would refuse a legal request at rest; `applied` is a runtime's
+  // own word only (the machine never echoes a level).
+  it("the latest tool-mode CHECKs admit exactly the wire union (applied: the runtime words)", () => {
     const sql = readSource(
-      repoFile("supabase/migrations/20261020120000_channel_launch_directives_runtime_tool_words.sql"),
+      repoFile("supabase/migrations/20261024120000_channel_launch_directives_permission_levels.sql"),
     );
+    const union = Object.values(LAUNCH_TOOL_MODES_BY_RUNTIME).flat();
     for (const col of ["start_tool_mode", "target_tool_mode", "applied_tool_mode", "resolved_tool_mode"]) {
       const m = new RegExp(`${col} IN \\(([^)]*)\\)`).exec(sql);
       expect(m, col).not.toBeNull();
       const words = [...m![1].matchAll(/'([^']+)'/g)].map((x) => x[1]);
-      expect(words.sort(), col).toEqual([...LAUNCH_TOOL_MODES].sort());
+      expect(words.sort(), col).toEqual(col === "applied_tool_mode" ? [...union].sort() : [...LAUNCH_TOOL_MODES].sort());
     }
+    expect(sql).toContain(`applied_setting ~ '${LAUNCH_SETTING_RE.source}'`);
   });
 
   it("a launch and a re-posture accept a Codex word, and refuse a word no runtime has", () => {
