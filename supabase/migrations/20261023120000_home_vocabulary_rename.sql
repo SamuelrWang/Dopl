@@ -18,9 +18,9 @@
 --   workspaces.slug 'personal' on those rows    → 'home'   (MCP keeps a one-release alias)
 --   workspaces_personal_owner_uidx              → workspaces_home_owner_uidx (re-created: a
 --                                                  partial index predicate cannot be altered)
---   ensure_personal_container(uuid, text)       → ensure_home_container(uuid, text)
---   personal_container_origin_of(uuid)          → home_container_origin_of(uuid)
---   enforce_personal_container_permanent()      → enforce_home_container_permanent()
+--   ensure_personal_container(uuid, text)       → ensure_home_space(uuid, text)
+--   personal_container_origin_of(uuid)          → home_space_origin_of(uuid)
+--   enforce_personal_container_permanent()      → enforce_home_space_permanent()
 --   trigger workspaces_enforce_personal_permanent → workspaces_enforce_home_permanent
 --   the four column/table comments that spell the old kind
 --
@@ -72,7 +72,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS workspaces_home_owner_uidx
 -- 3. The mint and its origin lookup (same logic, same ACLs, new names)
 -- ===========================================================================
 
-CREATE OR REPLACE FUNCTION public.home_container_origin_of(p_owner_id uuid)
+CREATE OR REPLACE FUNCTION public.home_space_origin_of(p_owner_id uuid)
  RETURNS uuid
  LANGUAGE sql
  STABLE
@@ -83,15 +83,15 @@ AS $function$
    LIMIT 1;
 $function$;
 
-CREATE OR REPLACE FUNCTION public.ensure_home_container(p_owner_id uuid, p_public_id text)
- RETURNS TABLE(id uuid, owner_id uuid, name text, slug text, public_id text, description text, icon_url text, kind text, created_at timestamp with time zone, updated_at timestamp with time zone, created boolean)
+CREATE OR REPLACE FUNCTION public.ensure_home_space(p_owner_id uuid, p_public_id text)
+ RETURNS TABLE (id uuid, owner_id uuid, name text, slug text, public_id text, description text, icon_url text, kind text, created_at timestamp with time zone, updated_at timestamp with time zone, created boolean)
  LANGUAGE plpgsql
 AS $function$
 DECLARE
   w public.workspaces%rowtype;
   origin public.workspaces%rowtype;
 BEGIN
-  PERFORM pg_advisory_xact_lock(hashtextextended('ensure_home_container:' || p_owner_id::text, 0));
+  PERFORM pg_advisory_xact_lock(hashtextextended('ensure_home_space:' || p_owner_id::text, 0));
 
   SELECT * INTO w FROM public.workspaces
    WHERE workspaces.owner_id = p_owner_id AND workspaces.kind = 'home'
@@ -103,9 +103,9 @@ BEGIN
     RETURN;
   END IF;
 
-  SELECT * INTO origin FROM public.workspaces WHERE workspaces.id = public.home_container_origin_of(p_owner_id);
+  SELECT * INTO origin FROM public.workspaces WHERE workspaces.id = public.home_space_origin_of(p_owner_id);
 
-  -- 'Personal' is the onboarding PLACEHOLDER display name (service.ts › HOME_CONTAINER_PLACEHOLDER_NAME),
+  -- 'Personal' is the onboarding PLACEHOLDER display name (service.ts › HOME_SPACE_PLACEHOLDER_NAME),
   -- a stored English label, not the kind.
   INSERT INTO public.workspaces (owner_id, name, slug, public_id, description, kind, created_at)
     VALUES (
@@ -127,8 +127,10 @@ BEGIN
 END;
 $function$;
 
-REVOKE ALL ON FUNCTION public.ensure_home_container(uuid, text) FROM PUBLIC, anon, authenticated;
-GRANT EXECUTE ON FUNCTION public.ensure_home_container(uuid, text) TO service_role;
+REVOKE ALL ON FUNCTION public.ensure_home_space(uuid, text) FROM public;
+REVOKE ALL ON FUNCTION public.ensure_home_space(uuid, text) FROM anon;
+REVOKE ALL ON FUNCTION public.ensure_home_space(uuid, text) FROM authenticated;
+GRANT EXECUTE ON FUNCTION public.ensure_home_space(uuid, text) TO service_role;
 
 DROP FUNCTION IF EXISTS public.ensure_personal_container(uuid, text);
 DROP FUNCTION IF EXISTS public.personal_container_origin_of(uuid);
@@ -137,7 +139,7 @@ DROP FUNCTION IF EXISTS public.personal_container_origin_of(uuid);
 -- 4. Permanence: the Home space cannot be deleted
 -- ===========================================================================
 
-CREATE OR REPLACE FUNCTION public.enforce_home_container_permanent()
+CREATE OR REPLACE FUNCTION public.enforce_home_space_permanent()
  RETURNS trigger
  LANGUAGE plpgsql
  SECURITY DEFINER
@@ -161,14 +163,14 @@ BEGIN
 END;
 $function$;
 
-REVOKE ALL ON FUNCTION public.enforce_home_container_permanent() FROM PUBLIC, anon, authenticated;
-GRANT EXECUTE ON FUNCTION public.enforce_home_container_permanent() TO service_role;
+REVOKE ALL ON FUNCTION public.enforce_home_space_permanent() FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.enforce_home_space_permanent() TO service_role;
 
 DROP TRIGGER IF EXISTS workspaces_enforce_personal_permanent ON public.workspaces;
 DROP TRIGGER IF EXISTS workspaces_enforce_home_permanent ON public.workspaces;
 CREATE TRIGGER workspaces_enforce_home_permanent
   BEFORE DELETE ON public.workspaces
-  FOR EACH ROW EXECUTE FUNCTION public.enforce_home_container_permanent();
+  FOR EACH ROW EXECUTE FUNCTION public.enforce_home_space_permanent();
 
 DROP FUNCTION IF EXISTS public.enforce_personal_container_permanent();
 
@@ -268,8 +270,8 @@ BEGIN
     RAISE EXCEPTION 'ABORT: the one-Home-per-user index is missing';
   END IF;
 
-  IF has_function_privilege('authenticated', 'public.ensure_home_container(uuid, text)', 'EXECUTE')
-     OR has_function_privilege('anon', 'public.ensure_home_container(uuid, text)', 'EXECUTE') THEN
+  IF has_function_privilege('authenticated', 'public.ensure_home_space(uuid, text)', 'EXECUTE')
+     OR has_function_privilege('anon', 'public.ensure_home_space(uuid, text)', 'EXECUTE') THEN
     RAISE EXCEPTION 'ABORT: the Home mint is callable by a role that must not call it';
   END IF;
 
