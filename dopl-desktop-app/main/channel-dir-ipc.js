@@ -21,7 +21,8 @@ const { diag } = require('./diag');
 
 // A posture write applies to the agents already running in the room (Samuel, 2026-08-25), through
 // the existing live op (`setModeByTask`, where coercion and the windowless floor live). Axis A goes
-// only to sessions whose OWN runtime's record moved, in that runtime's words; Axis B to every
+// only to sessions whose OWN runtime's tool mode moved, in that runtime's words (a containment value
+// such as a sandbox is spawn-time and waits for the next launch); Axis B to every
 // session when it moved (P3-02). Unpinned, so a per-agent pick keeps narrowing (C2). Addressed per
 // agent, never per thread. Best-effort: the durable write has already landed. Returns the count.
 function applyPostureToLive(channelId, before, after) {
@@ -31,7 +32,7 @@ function applyPostureToLive(channelId, before, after) {
     const engine = require('./session-engine');
     if (typeof engine.listLiveSessions !== 'function' || typeof engine.setModeByTask !== 'function') return 0;
     const c = require('./runtime').selectionContext();
-    const toolsOf = (sel, rt) => selectionShape.activeRecord(c, { ...sel, runtime: rt }).tools || c.narrowestToolFor(rt);
+    const toolsOf = (sel, rt) => selectionShape.settingsFor(c, sel, rt).tools;
     for (const row of engine.listLiveSessions()) {
       if (!row || row.channelId !== channelId) continue;
       const target = { channelId: channelId, taskId: row.taskId || '', agentId: row.agentId || '' };

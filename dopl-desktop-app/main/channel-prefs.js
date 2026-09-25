@@ -14,8 +14,9 @@ const agentChain = require('./channel-agent-chain');
 const orchestratorConsent = require('./orchestrator-consent');
 const identityApproval = require('./identity-approval');
 
-// `channelLaunchSelection` is the only record a read trusts. The two pre-U5 keys are a read-only
-// migration source (`launch-selection.js › fromLegacy`); nothing writes them.
+// `channelLaunchSelection` is the only record a read trusts (a v2 record in it migrates on read,
+// `launch-selection.js › fromV2`). The two pre-U5 keys are a read-only migration source
+// (`› fromLegacy`); nothing writes them.
 const POSTURE_KEY = 'channelLaunchPosture'; // legacy: { [channelId]: { tools, messages } }
 const SELECTION_KEY = 'channelLaunchSelection'; // { [channelId]: { v, runtime, messages, byRuntime } }
 const RUNTIME_KEY = 'channelRuntime'; // legacy: { [channelId]: '<runtime id>' }
@@ -31,8 +32,8 @@ function readMap(key) {
 
 /** `{ selection, review, stored }`, never null. A legacy record migrates on the read; the read never persists it. */
 function getLaunchSelectionDetail(channelId) {
-  if (!channelId) return { selection: selection.emptySelection(), review: [], stored: false };
   const c = ctx();
+  if (!channelId) return { selection: selection.emptySelection(c), review: [], stored: false };
   const raw = readMap(SELECTION_KEY)[channelId];
   if (raw != null) return selection.normalizeSelection(c, raw);
   return selection.fromLegacy(c, readMap(POSTURE_KEY)[channelId], readMap(RUNTIME_KEY)[channelId]);
@@ -81,25 +82,20 @@ function setLaunchSelection(channelId, patch) {
     return { ok: false };
   }
   diag('channel-prefs selection', String(channelId).slice(0, 8),
-    res.selection.runtime || '(default)', preset.tools, preset.messages);
+    res.selection.runtime || '(default)', res.selection.level, preset.tools, preset.messages);
   return { ok: true, preset: preset, selection: res.selection, review: res.review };
 }
 
 /**
- * `{ tools, messages }` for ONE runtime (`''`/unregistered = the selected one), messages unfloored:
- * the ceiling a directive or per-agent pick is clamped to, and the live Axis-A value it gates on.
+ * `{ tools, messages, level, native }` for ONE runtime (`''`/unregistered = the selected one),
+ * messages unfloored: the ceiling a directive or per-agent pick is clamped to, and the live Axis-A
+ * value it gates on. `tools`/`native` are the channel level in that runtime's own words.
  */
 function launchPostureFor(channelId, runtimeId) {
-  const r = runtimeRecord(channelId, runtimeId);
-  return { tools: r.tools, messages: r.sel.messages };
-}
-
-function runtimeRecord(channelId, runtimeId) {
   const c = ctx();
   const sel = getLaunchSelection(channelId);
-  const rt = c.known(runtimeId) ? runtimeId : (sel.runtime || c.defaultId);
-  const rec = selection.activeRecord(c, { ...sel, runtime: rt });
-  return { sel: sel, rec: rec, tools: rec.tools || c.narrowestToolFor(rt) };
+  const s = selection.settingsFor(c, sel, runtimeId);
+  return { tools: s.tools, messages: sel.messages, level: selection.levelFor(c, sel, runtimeId), native: s.native };
 }
 
 /**
@@ -108,11 +104,11 @@ function runtimeRecord(channelId, runtimeId) {
  * `session-private.js`. The native bag is opaque to core: only the adapter's launch spec reads it.
  */
 function launchStartModes(channelId, runtimeId) {
-  const r = runtimeRecord(channelId, runtimeId);
+  const p = launchPostureFor(channelId, runtimeId);
   return {
-    tools: r.tools,
-    messages: require('./session-profiles').floorWindowlessMessage(r.sel.messages),
-    native: r.rec.native ? { ...r.rec.native } : {},
+    tools: p.tools,
+    messages: require('./session-profiles').floorWindowlessMessage(p.messages),
+    native: p.native,
   };
 }
 

@@ -94,20 +94,18 @@ test("P4-02: the summary's default is the session runtime's narrowest word, neve
 
 const session = (runtimeId, state) => ({ channelId: CH, runtimeId, windowless: true, state });
 
-test("X-01: a Codex session in a CLAUDE-selected room reads the CODEX record, not Claude's", () => {
-  room({ runtime: "claude", tools: "bypass", messages: "ask" });
-  prefs.setLaunchSelection(CH, { runtime: "codex", tools: "never" });
-  prefs.setLaunchSelection(CH, { runtime: "claude" });
+test("X-01: a Codex session in a CLAUDE-selected room reads the level in CODEX words, not Claude's", () => {
+  room({ runtime: "claude", level: "full", messages: "ask" });
   const codex = session("codex", startedStateFor({ windowless: true }, { id: "codex" }));
   assert.equal(priv.effectiveToolMode(codex), "never");
   const claude = session("claude", startedStateFor({ windowless: true }, { id: "claude" }));
   assert.equal(priv.effectiveToolMode(claude), "bypass");
   const legacy = session(null, startedStateFor({ windowless: true }, { id: "claude" }));
-  assert.equal(priv.effectiveToolMode(legacy), "bypass", "no stamped runtime = the DEFAULT runtime's record");
+  assert.equal(priv.effectiveToolMode(legacy), "bypass", "no stamped runtime = the DEFAULT runtime's words");
 });
 
 test("C2: a pinned pick is clamped to the channel for the session's runtime, then held under it", () => {
-  room({ runtime: "codex", tools: "on-request", messages: "auto_inbound" });
+  room({ runtime: "codex", level: "ask", messages: "auto_inbound" });
   const s = session("codex", startedStateFor({ windowless: true }, { id: "codex" }));
   const wide = priv.pickForSession(s, "tools", "never", true);
   assert.deepEqual(wide, { mode: "on-request", clamped: true }, "never wider than the channel");
@@ -117,14 +115,19 @@ test("C2: a pinned pick is clamped to the channel for the session's runtime, the
   assert.deepEqual(msgs, { mode: "auto_inbound", clamped: true }, "capability bits: no out half");
   s.state = sessionReducer(s.state, { type: "set_tool_mode", mode: narrow.mode, pinned: true }).state;
   assert.equal(priv.effectiveToolMode(s), "granular");
-  prefs.setLaunchSelection(CH, { tools: "untrusted" });
-  assert.equal(priv.effectiveToolMode(s), "untrusted", "the room narrowing below the pick wins at once");
-  prefs.setLaunchSelection(CH, { tools: "never" });
-  assert.equal(priv.effectiveToolMode(s), "granular", "…and the pick comes back, never past itself");
+  prefs.setLaunchSelection(CH, { level: "full" });
+  assert.equal(priv.effectiveToolMode(s), "granular", "a wider room never widens the pick");
+  const p = session("codex", startedStateFor({ windowless: true }, { id: "codex" }));
+  p.state = sessionReducer(p.state, { type: "set_tool_mode", mode: "never", pinned: true }).state;
+  assert.equal(priv.effectiveToolMode(p), "never");
+  prefs.setLaunchSelection(CH, { level: "ask" });
+  assert.equal(priv.effectiveToolMode(p), "on-request", "the room narrowing below the pick wins at once");
+  prefs.setLaunchSelection(CH, { level: "full" });
+  assert.equal(priv.effectiveToolMode(p), "never", "…and the pick comes back, never past itself");
 });
 
 test("C2: an unpinned set (the Settings fan-out) is validated but never clamped or stamped", () => {
-  room({ runtime: "codex", tools: "untrusted", messages: "ask" });
+  room({ runtime: "codex", level: "ask", messages: "ask" });
   const s = session("codex", startedStateFor({ windowless: true }, { id: "codex" }));
   assert.deepEqual(priv.pickForSession(s, "tools", "never", false), { mode: "never", clamped: false });
   assert.deepEqual(priv.pickForSession(s, "tools", "bypass", false), { mode: "untrusted", clamped: false });
@@ -148,22 +151,22 @@ test("C2: a START posture pinned on ONE axis pins only that axis; the other foll
 
 // ── 3. THE LAUNCH READS THE LAUNCH RUNTIME'S RECORD (C1 / X-02 / P3-04) ───────────────────────
 
-test("C1: launchStartModes reads byRuntime[launch runtime], in that runtime's words, with its native bag", () => {
-  room({ runtime: "codex", tools: "never", native: { sandbox_mode: "read-only" }, messages: "auto_outbound" });
-  prefs.setLaunchSelection(CH, { runtime: "claude", tools: "bypass" });
+test("C1: launchStartModes reads the level in the LAUNCH runtime's words, with its native bag", () => {
+  room({ runtime: "codex", level: "full", messages: "auto_outbound" });
+  prefs.setLaunchSelection(CH, { runtime: "claude" });
   assert.deepEqual(prefs.launchStartModes(CH, "codex"),
-    { tools: "never", messages: "auto_both", native: { sandbox_mode: "read-only" } });
+    { tools: "never", messages: "auto_both", native: { sandbox_mode: "danger-full-access" } });
   assert.deepEqual(prefs.launchStartModes(CH, "claude"), { tools: "bypass", messages: "auto_both", native: {} });
   assert.deepEqual(prefs.launchStartModes(CH, ""), prefs.launchStartModes(CH, "claude"), "'' = the SELECTED runtime");
   assert.deepEqual(prefs.launchStartModes(CH, "borg"), prefs.launchStartModes(CH, "claude"), "unregistered = selected");
-  assert.deepEqual(prefs.launchStartModes(CH, "cursor").tools, registry.capability.narrowestToolMode(registry.descriptorFor("cursor")),
-    "a runtime with no record starts at ITS narrowest");
-  assert.deepEqual(prefs.launchPostureFor(CH, "codex"), { tools: "never", messages: "auto_outbound" }, "the ceiling is unfloored");
+  assert.equal(prefs.launchStartModes(CH, "cursor").tools, "run-everything", "every runtime reads the ONE level");
+  assert.deepEqual(prefs.launchPostureFor(CH, "codex"),
+    { tools: "never", messages: "auto_outbound", level: "full", native: { sandbox_mode: "danger-full-access" } }, "the ceiling is unfloored");
 });
 
-test("X-02: the button lane starts a dialog-picked Codex agent on the CODEX record in a Claude room", async () => {
-  room({ runtime: "codex", tools: "never", native: { sandbox_mode: "read-only" }, messages: "ask" });
-  prefs.setLaunchSelection(CH, { runtime: "claude", tools: "bypass" });
+test("X-02: the button lane starts a dialog-picked Codex agent on the level in CODEX words in a Claude room", async () => {
+  room({ runtime: "codex", level: "full", messages: "ask" });
+  prefs.setLaunchSelection(CH, { runtime: "claude" });
   const launches = [];
   const stub = (id) => {
     if (id === "./channel-prefs") return prefs;
@@ -179,7 +182,7 @@ test("X-02: the button lane starts a dialog-picked Codex agent on the CODEX reco
   const res = await op.launchFromButton({ channelId: CH, taskId: "", runtime: "codex" });
   assert.equal(res.ok, true, JSON.stringify(res));
   assert.equal(launches[0].runtime, "codex");
-  assert.deepEqual(launches[0].startModes, { tools: "never", messages: "auto_inbound", native: { sandbox_mode: "read-only" } });
+  assert.deepEqual(launches[0].startModes, { tools: "never", messages: "auto_inbound", native: { sandbox_mode: "danger-full-access" } });
   await op.launchFromButton({ channelId: CH, taskId: "" });
   assert.equal(launches[1].runtime, "claude", "no pick: the channel's runtime");
   assert.equal(launches[1].startModes.tools, "bypass");

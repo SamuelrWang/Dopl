@@ -43,7 +43,7 @@ function nativePair(s, cfg) {
   // A restricted profile pins both values: containment is not the operator's to widen.
   if (cfg.native) return { approval_policy: cfg.native.approval_policy, sandbox_mode: cfg.native.sandbox_mode };
   const st = (s && s.state) || {};
-  // Validated by `selection-vocabulary.js › normalizeNative`; re-checked as the last step before argv.
+  // Derived from the level table (`permission-level.js`); re-checked as the last step before argv.
   const native = (st.native && typeof st.native === 'object') ? st.native : {};
   const asked = native.sandbox_mode;
   // Absent is the platform default; an unrecognised value fail-closes to the narrowest (X-05).

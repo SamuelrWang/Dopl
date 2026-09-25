@@ -16,8 +16,8 @@ const ctx = () => runtimeRegistry.selectionContext();
 
 /**
  * A defaults record — a launch selection plus `agentChain` — or null. Messaging is HARD (unknown =
- * null); the per-runtime half floors to that runtime's narrowest; `agentChain` is `=== true` only.
- * A record with no `v` is pre-U5 and migrates through `sel.fromLegacy`.
+ * null); the level floors to Ask; `agentChain` is `=== true` only. A record with no `v` is pre-U5
+ * and migrates through `sel.fromLegacy`; a v2 record through `sel.normalizeSelection`.
  */
 function normalizeDefaults(sel, ctx, raw) {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
@@ -29,45 +29,36 @@ function normalizeDefaults(sel, ctx, raw) {
   const asked = typeof raw.messages === 'string' ? raw.messages : '';
   if (sel.SELECTION_MESSAGE_MODES.indexOf(asked) === -1) return null;
   return {
-    v: res.selection.v,
-    runtime: res.selection.runtime,
+    ...res.selection,
     messages: legacy ? asked : res.selection.messages, // a legacy record migrates its messages even when its tools do not
-    byRuntime: res.selection.byRuntime,
     agentChain: raw.agentChain === true,
   };
 }
 
-/** The renderer's view (stored, or the restrictive factory answer); `tools`/`runtime` are always own keys. */
+/** The renderer's view (stored, or the restrictive factory answer); `runtime` is always an own key. */
 function effectiveDefaults(sel, ctx, stored) {
-  const base = stored || { ...sel.emptySelection(), agentChain: false };
-  const rec = sel.activeRecord(ctx, base);
+  const base = stored || { ...sel.emptySelection(ctx), agentChain: false };
   return {
-    tools: rec.tools || ctx.narrowestToolFor(base.runtime),
-    messages: base.messages,
-    agentChain: base.agentChain === true,
-    runtime: base.runtime || '',
     v: base.v,
+    runtime: base.runtime || '',
+    messages: base.messages,
+    level: base.level,
     byRuntime: base.byRuntime,
-    native: rec.native ? { ...rec.native } : {},
+    agentChain: base.agentChain === true,
   };
 }
 
-/** A write's hard failures: a registered runtime's `tools` it does not offer (reads floor it; P3-29). */
+/** A write's hard failures (reads floor them): an unknown level, or a per-runtime word. */
 function defaultsRejections(sel, ctx, raw) {
-  const by = raw && raw.byRuntime && typeof raw.byRuntime === 'object' && !Array.isArray(raw.byRuntime)
-    ? raw.byRuntime : {};
-  const out = [];
-  for (const id of Object.keys(by)) {
-    const tools = by[id] && typeof by[id].tools === 'string' ? by[id].tools.trim() : '';
-    if (!tools || !ctx.known(id)) continue;
-    for (const line of sel.patchRejections(ctx, { runtime: id }, { tools: tools })) out.push(line);
-  }
-  return out;
+  const p = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
+  const patch = {};
+  for (const key of ['level', 'tools', 'native']) if (p[key] !== undefined) patch[key] = p[key];
+  return sel.patchRejections(ctx, null, patch);
 }
 
 // ─── END AGENT-DEFAULTS-VALIDATE ─────
 
-const DEFAULTS_KEY = 'agentDefaults'; // { v, runtime, messages, byRuntime, agentChain }
+const DEFAULTS_KEY = 'agentDefaults'; // { v, runtime, messages, level, byRuntime, agentChain }
 
 function normalizeStored(raw) {
   return normalizeDefaults(selection, ctx(), raw);
@@ -121,10 +112,11 @@ function seedChannel(channelId) {
   const stored = readStored();
   // No defaults record seeds nothing: stamping the factory answer would be a posture nobody chose.
   if (!stored) return { ok: true, seeded: false };
-  // Every runtime's record is copied, through the one validating writer (it re-validates them all).
+  // The level and any per-runtime override, through the one validating writer.
   const res = channelPrefs.setLaunchSelection(channelId, {
     runtime: stored.runtime,
     messages: stored.messages,
+    level: stored.level,
     byRuntime: stored.byRuntime,
   });
   if (!res || res.ok !== true) return { ok: false, seeded: false };

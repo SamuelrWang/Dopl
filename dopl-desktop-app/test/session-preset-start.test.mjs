@@ -306,7 +306,7 @@ test("H2/split: the RESPONDER lane reads NO stored record, and its tool axis flo
 
 test("H2/split: ONE windowless message floor — the launch read defers to session-profiles", () => {
   assert.match(PREFS, /function launchStartModes\(channelId, runtimeId\)/);
-  assert.match(PREFS, /require\('\.\/session-profiles'\)\.floorWindowlessMessage\(r\.sel\.messages\)/);
+  assert.match(PREFS, /require\('\.\/session-profiles'\)\.floorWindowlessMessage\(p\.messages\)/);
   assert.ok(!/function windowlessMessageMode/.test(PREFS), "no second spelling of the floor");
 });
 

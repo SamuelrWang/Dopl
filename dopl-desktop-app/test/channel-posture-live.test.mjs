@@ -49,9 +49,9 @@ const REGISTRY = require(join(HERE, "..", "main", "runtime", "index.js"));
 const SELECTION = require(join(HERE, "..", "main", "launch-selection.js"));
 
 // Two stored selections: what the record was, and what the write made it.
-const SEL = (over = {}) => ({ v: 2, runtime: "", messages: "ask", byRuntime: {}, ...over });
+const SEL = (over = {}) => ({ v: 3, runtime: "", messages: "ask", level: "ask", byRuntime: {}, ...over });
 const BEFORE = SEL();
-const WIDE = SEL({ messages: "auto_both", byRuntime: { claude: { tools: "bypass" } } });
+const WIDE = SEL({ messages: "auto_both", level: "full" });
 
 // ── the driver ───────────────────────────────────────────────────────────────
 // The REAL `applyPostureToLive`, with the engine faked at the `require` seam it uses; the
@@ -127,16 +127,15 @@ test("no live sessions is a clean zero, not a failure", () => {
 
 // ── 1b. ONLY WHAT CHANGED, ONLY WHERE IT APPLIES (P3-02) ─────────────────────
 
-test("P3-02: Axis A reaches only sessions whose OWN runtime's record moved — Axis B reaches all", () => {
-  // The Claude record moved to bypass. A Codex agent in the same room must not be handed a Claude
-  // word (it used to be, coerced to `untrusted` and pinned there); it takes the messaging change.
+test("a LEVEL write reaches every session in its OWN runtime's words — Axis B reaches all", () => {
+  // Ask -> Full: a Claude agent takes `bypass`, a Codex agent `never` (never another runtime's word).
   const r = runApply({ rows: [row("claude1"), row("codex1", CH, "", "codex")] });
-  assert.deepEqual(r.calls.filter((c) => c.axis === "tools").map((c) => [c.agentId, c.mode]), [["claude1", "bypass"]]);
+  assert.deepEqual(r.calls.filter((c) => c.axis === "tools").map((c) => [c.agentId, c.mode]), [["claude1", "bypass"], ["codex1", "never"]]);
   assert.deepEqual(r.calls.filter((c) => c.axis === "messages").map((c) => c.agentId), ["claude1", "codex1"]);
 });
 
-test("P3-02: a Codex record write reaches Codex sessions in CODEX words", () => {
-  const after = SEL({ runtime: "codex", byRuntime: { codex: { tools: "never" } } });
+test("P3-02: a Codex-only override moves only Codex sessions, in CODEX words", () => {
+  const after = SEL({ runtime: "codex", byRuntime: { codex: "full" } });
   const r = runApply({ rows: [row("claude1"), row("codex1", CH, "", "codex")], after });
   assert.deepEqual(r.calls.map((c) => [c.agentId, c.axis, c.mode]), [["codex1", "tools", "never"]]);
 });
@@ -144,8 +143,8 @@ test("P3-02: a Codex record write reaches Codex sessions in CODEX words", () => 
 test("P3-02: a runtime SWITCH moves no running session at all", () => {
   // Claude -> Codex with neither record touched: no session's own-runtime record moved, and the
   // messaging axis did not either. It used to stamp every Claude agent `manual` + pinned.
-  const before = SEL({ byRuntime: { claude: { tools: "bypass" } } });
-  const after = SEL({ runtime: "codex", byRuntime: { claude: { tools: "bypass" } } });
+  const before = SEL({ level: "full" });
+  const after = SEL({ runtime: "codex", level: "full" });
   const r = runApply({ rows: [row("claude1"), row("codex1", CH, "", "codex")], before, after });
   assert.equal(r.calls.length, 0);
   assert.equal(r.applied, 0);

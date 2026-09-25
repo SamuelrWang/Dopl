@@ -23,8 +23,8 @@ const ctx = req(join(HERE, "..", "main", "runtime", "index.js")).selectionContex
 /** A whole valid legacy `{tools, messages}` pair, or null — the migration read's own rule. */
 export const legacyPreset = (raw) => sel.legacyPreset(ctx, raw);
 
-/** The restrictive pair an unset channel reads as on the default runtime. */
-export const RESTRICTIVE = Object.freeze({ tools: ctx.narrowestToolFor(""), messages: "ask" });
+/** The restrictive pair an unset channel reads as: Ask, on the default runtime. */
+export const RESTRICTIVE = Object.freeze({ tools: ctx.levelSettings(ctx.defaultId, "ask").tools, messages: "ask" });
 
 /** A map-backed stand-in for the store: validated writes, restrictive reads. */
 export const mapPrefs = {

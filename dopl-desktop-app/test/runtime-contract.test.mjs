@@ -409,59 +409,6 @@ test("a DECLARED model dimension with no options REFUSES registration — F-390'
   }
 });
 
-test("a declared NATIVE dimension is really writable, and UNKNOWN is not EMPTY", () => {
-  for (const { descriptor } of ADAPTERS) {
-    const dims = capability.nativeDimensions(descriptor);
-    if (dims === null) {
-      // ⚠ `null`, NEVER `{}`. "This runtime has no native launch setting" and "it has none right
-      // now" are different facts, and the UI hides on the first.
-      assert.deepEqual(capability.normalizeNative(descriptor, { anything: "x" }).value, {},
-        `${descriptor.id}: a runtime with no dimensions stores none`);
-      continue;
-    }
-    for (const [key, dim] of Object.entries(dims)) {
-      assert.ok(dim.options.length, `${descriptor.id}.${key}: a dimension with no options is a control that writes nowhere`);
-      // Every declared option round-trips — a declaration the adapter cannot accept is a claim
-      // it cannot back.
-      for (const option of dim.options) {
-        assert.equal(capability.normalizeNative(descriptor, { [key]: option }).value[key], option,
-          `${descriptor.id}.${key}=${option}`);
-      }
-      // ⚠ NARROWEST-FIRST IS LOAD-BEARING on a CONTAINMENT dimension: `[0]` is where an
-      // unreadable value fail-closes, and it must never be the widest.
-      const fell = capability.normalizeNative(descriptor, { [key]: "not-a-real-value" });
-      if (dim.fallback === "narrowest") {
-        assert.equal(fell.value[key], dim.options[0], `${descriptor.id}.${key} floors to its narrowest`);
-        assert.notEqual(fell.value[key], dim.options[dim.options.length - 1],
-          `${descriptor.id}.${key} must never fall to its WIDEST`);
-      } else {
-        assert.equal(fell.value[key], undefined, `${descriptor.id}.${key} drops rather than guessing`);
-      }
-      assert.ok(fell.review.length, `${descriptor.id}.${key}: a fallback must be reviewable, not silent`);
-      // ⚠ AN ABSENT KEY IS NOT AN UNKNOWN ONE. Absent means "no pick, the platform's own default"
-      // and says nothing; present-and-unreadable falls closed and says so.
-      assert.deepEqual(capability.normalizeNative(descriptor, {}), { value: {}, review: [] }, descriptor.id);
-    }
-  }
-});
-
-test("no adapter claims a native dimension it cannot spend", () => {
-  // ⚠ CODEX'S GRANULAR APPROVAL CATEGORIES ARE THE LIVE CASE AND THEY ARE DELIBERATELY ABSENT.
-  // `approval.categories` names them and `approval.js › toolNameFor` classifies a request that
-  // arrives under one, but the structured `approval_policy = { granular = { … } }` WRITE shape is
-  // unmeasured. A dimension declared becomes a storable, spendable setting; declaring that one
-  // would be claiming a capability the adapter cannot back.
-  for (const { descriptor } of ADAPTERS) {
-    const dims = capability.nativeDimensions(descriptor) || {};
-    const categories = (descriptor.approval && descriptor.approval.categories) || null;
-    if (!categories) continue;
-    for (const category of categories) {
-      assert.equal(dims[category], undefined,
-        `${descriptor.id}: ${category} is classified, not configured — do not declare it writable until it is`);
-    }
-  }
-});
-
 // ── helpers ───────────────────────────────────────────────────────────────────
 
 // A MUTABLE deep copy of a sealed adapter, so a case can build the failing descriptor the

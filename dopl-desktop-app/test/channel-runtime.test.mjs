@@ -208,74 +208,60 @@ test("every id this record can hold belongs to an adapter that PASSED the contra
   }
 });
 
-// ── 4. U5: A RUNTIME SWITCH REMEMBERS, IT NO LONGER CLEARS ───────────────────────────────────
+// ── 4. THE LEVEL MODEL (2026-09-25): ONE CONTROL, EACH RUNTIME IN ITS OWN WORDS ──────────────
 //
-// ⚠ **THIS SECTION REVERSES A RULE THIS FILE'S MODULE USED TO ENFORCE, AND THE REVERSAL IS A
-// SAMUEL RULING** (Decisions #1 and #2 of the 2026-09-21 runtime-parity plan: Claude and Codex
-// native settings and model choices are stored SEPARATELY and never translated, so Claude → Codex
-// → Claude restores BOTH sets). From 2026-09-06 `setChannelRuntime` DELETED the channel's stored
-// model on every switch. That was correct for the record it had: ONE global model field held a
-// model for whatever runtime happened to be selected, so a Claude id left on a Codex channel sat
-// ABOVE the platform default in the launch precedence chain — the stale id WON, and Codex was
-// asked for a model it has never heard of. The record is runtime-keyed now, so the stale id is
-// unreachable from the wrong adapter by construction and clearing it would be nothing but the
-// operator losing a pick every time they look at another runtime.
-// ⚠ 2026-09-23: the stored MODEL is gone entirely (Samuel: "We don't need a pin model in the
-// settings"); what is remembered per runtime is its tool setting and its CONTAINMENT native axis.
+// The channel stores ONE permission level; a runtime switch changes which runtime launches, never
+// the level. Each runtime applies the level in its own native settings, so Claude → Codex → Claude
+// needs nothing remembered per runtime. Driven against the REAL channel-prefs over a fake store.
 
-test("switching runtime and back RESTORES both remembered tool settings — it clears neither", () => {
+test("a runtime switch keeps the level; each runtime reads it in its own words", () => {
   const m = load();
-  m.setChannelRuntime(CH_A, "claude");
-  m.prefs.setLaunchSelection(CH_A, { tools: "bypass", messages: "auto_both" });
-  m.setChannelRuntime(CH_A, "codex");
-  // The Claude record is untouched, and the Codex side starts at Codex's own narrowest mode rather
-  // than inheriting a word Codex does not speak.
-  assert.equal(m.prefs.getLaunchPosture(CH_A).tools, "untrusted", "…its own narrowest mode");
-  m.prefs.setLaunchSelection(CH_A, { tools: "on-request", messages: "auto_both" });
-  m.setChannelRuntime(CH_A, "claude");
+  m.prefs.setLaunchSelection(CH_A, { level: "full", messages: "auto_both" });
   assert.deepEqual(m.prefs.getLaunchPosture(CH_A), { tools: "bypass", messages: "auto_both" });
   m.setChannelRuntime(CH_A, "codex");
-  assert.deepEqual(m.prefs.getLaunchPosture(CH_A), { tools: "on-request", messages: "auto_both" });
-});
-
-test("NO PIN (2026-09-23): a `model` in a write is ignored — never stored, never refusing the rest", () => {
-  // Samuel: "We don't need a pin model in the settings." A renderer one version behind may still
-  // send the key; the write lands without it and no model reaches the wire.
-  const m = load();
-  const res = m.prefs.setLaunchSelection(CH_A, { tools: "bypass", messages: "auto_both", model: "claude-opus-5" });
-  assert.equal(res.ok, true);
-  assert.deepEqual(m.prefs.getLaunchSelection(CH_A).byRuntime.claude, { tools: "bypass" });
-  assert.equal("model" in m.prefs.getLaunchPosture(CH_A), false);
-  // A record an older build wrote WITH a model reads harmlessly, and the next write strips it.
-  const old = load({ disk: { channelLaunchSelection: { [CH_A]: {
-    v: 2, runtime: "codex", messages: "ask",
-    byRuntime: { codex: { tools: "never", model: "gpt-5-codex", native: { reasoningEffort: "high" } } },
-  } } } });
-  assert.deepEqual(old.prefs.getLaunchSelection(CH_A).byRuntime.codex, { tools: "never" });
-  assert.deepEqual(old.prefs.getLaunchSelectionDetail(CH_A).review, [], "dropping it is silent");
-  old.prefs.setLaunchSelection(CH_A, { messages: "auto_both" });
-  assert.deepEqual(old.disk.channelLaunchSelection[CH_A].byRuntime.codex, { tools: "never" });
-});
-
-test("the two runtimes' NATIVE settings are remembered side by side, never translated", () => {
-  // ⚠ Codex declares a `sandbox_mode` axis; the default adapter declares none. A switch must not
-  // carry one into the other, invent a synonym, or drop it. ⚠ The model-scoped reasoning effort is
-  // NOT stored since 2026-09-23 and is dropped silently.
-  const m = load();
-  m.setChannelRuntime(CH_A, "codex");
-  m.prefs.setLaunchSelection(CH_A, { native: { sandbox_mode: "read-only", reasoningEffort: "high" } });
+  assert.deepEqual(m.prefs.getLaunchPosture(CH_A), { tools: "never", messages: "auto_both" });
+  assert.deepEqual(m.prefs.launchStartModes(CH_A).native, { sandbox_mode: "danger-full-access" });
   m.setChannelRuntime(CH_A, "claude");
-  assert.deepEqual(m.prefs.launchStartModes(CH_A).native, {}, "the runtime with no such axis gets no bag");
-  m.setChannelRuntime(CH_A, "codex");
-  assert.deepEqual(m.prefs.launchStartModes(CH_A).native,
-    { sandbox_mode: "read-only" }, "…and the runtime that owns it gets its own back, minus the effort");
+  assert.deepEqual(m.prefs.launchStartModes(CH_A).native, {}, "the runtime with no containment axis gets no bag");
 });
 
-test("a pre-U5 record migrates into the DEFAULT runtime's half, untranslated, on first read", () => {
-  // ⚠ THE LEGACY PAIR IS THE DEFAULT RUNTIME'S VOCABULARY BY CONSTRUCTION — it is the only thing
-  // the pre-U5 validators could store — so it lands in that runtime's record whatever runtime the
-  // channel had selected. Putting it under the SELECTED runtime would be the migration asserting
-  // that `bypass` "is" some Codex approval mode, which is the one-to-one mapping the plan refuses.
+test("REGRESSION 2026-09-25: a stored bypass/auto_both channel with NO Codex record launches Codex at Full access", () => {
+  // The live bug: the channel held the Claude-era `bypass`, an absent Codex record read as
+  // `untrusted`, and a Codex launch ran untrusted/workspace-write while the UI showed bypass.
+  const m = load({ disk: { channelLaunchSelection: { [CH_A]: {
+    v: 2, runtime: "", messages: "auto_both", byRuntime: { claude: { tools: "bypass" } },
+  } } } });
+  assert.deepEqual(m.prefs.launchStartModes(CH_A, "codex"), {
+    tools: "never", messages: "auto_both", native: { sandbox_mode: "danger-full-access" },
+  });
+  assert.equal(m.prefs.launchPostureFor(CH_A, "codex").level, "full");
+  assert.deepEqual(m.prefs.getLaunchSelectionDetail(CH_A).review, []);
+  // Reading never wrote; the next write persists the migrated v3 record, and it is idempotent.
+  assert.equal(m.disk.channelLaunchSelection[CH_A].v, 2);
+  m.prefs.setLaunchSelection(CH_A, { messages: "auto_both" });
+  assert.deepEqual(m.disk.channelLaunchSelection[CH_A], { v: 3, runtime: "", messages: "auto_both", level: "full", byRuntime: {} });
+});
+
+test("an explicit Codex record survives migration for Codex; a level write replaces it", () => {
+  const m = load({ disk: { channelLaunchSelection: { [CH_A]: {
+    v: 2, runtime: "", messages: "ask",
+    byRuntime: { claude: { tools: "bypass" }, codex: { tools: "untrusted", model: "gpt-5-codex", native: { reasoningEffort: "high" } } },
+  } } } });
+  assert.equal(m.prefs.launchStartModes(CH_A, "codex").tools, "on-request", "Codex stays at Ask (its own explicit choice)");
+  assert.equal(m.prefs.launchStartModes(CH_A, "claude").tools, "bypass");
+  m.prefs.setLaunchSelection(CH_A, { level: "auto" });
+  assert.deepEqual(m.prefs.getLaunchSelection(CH_A).byRuntime, {}, "the one control governs every runtime");
+});
+
+test("a per-runtime word in a write is REFUSED whole (an older renderer), and nothing is stored", () => {
+  const m = load();
+  const res = m.prefs.setLaunchSelection(CH_A, { tools: "bypass", messages: "auto_both" });
+  assert.equal(res.ok, false);
+  assert.match(res.rejected.join(), /no longer stored/);
+  assert.equal(m.disk.channelLaunchSelection, undefined);
+});
+
+test("a pre-U5 record migrates its default-runtime tools into the level, on first read", () => {
   const m = load({
     disk: {
       channelLaunchPosture: { [CH_A]: { tools: "bypass", messages: "auto_both", model: "claude-opus-5" } },
@@ -283,15 +269,9 @@ test("a pre-U5 record migrates into the DEFAULT runtime's half, untranslated, on
     },
   });
   assert.equal(m.getChannelRuntime(CH_A), "codex", "the separately stored pick is carried over");
-  const sel = m.prefs.getLaunchSelection(CH_A);
-  assert.deepEqual(sel.byRuntime.claude, { tools: "bypass" }, "the legacy model is dropped (2026-09-23)");
-  assert.equal(sel.byRuntime.codex, undefined, "nothing is invented for the selected runtime");
-  // ⚠ AND THE EFFECTIVE BEHAVIOUR IS UNCHANGED BY THE MIGRATION. `bypass` is not a Codex mode, so
-  // before U5 it was coerced to Codex's narrowest at every gate decision anyway; the migration
-  // stores what was already in force rather than changing it.
-  assert.equal(m.prefs.launchStartModes(CH_A).tools, "untrusted");
-  // ⚠ READING NEVER WROTE. A machine that only launches keeps both legacy records untouched and
-  // can be downgraded with nothing lost.
+  assert.equal(m.prefs.getLaunchSelection(CH_A).level, "full");
+  assert.equal(m.prefs.launchStartModes(CH_A).tools, "never");
+  // Reading never wrote: a machine that only launches keeps both legacy records untouched.
   assert.equal(m.disk.channelLaunchSelection, undefined);
   assert.deepEqual(m.disk.channelRuntime, { [CH_A]: "codex" });
 });
@@ -299,7 +279,7 @@ test("a pre-U5 record migrates into the DEFAULT runtime's half, untranslated, on
 test("a WRITE leaves both legacy records untouched — they are a migration source only (P3-13)", () => {
   const legacy = { [CH_A]: { tools: "manual", messages: "ask" } };
   const m = load({ disk: { channelLaunchPosture: legacy, channelRuntime: { [CH_A]: "claude", [CH_B]: "cursor" } } });
-  m.prefs.setLaunchSelection(CH_A, { runtime: "codex", tools: "never", messages: "auto_both" });
+  m.prefs.setLaunchSelection(CH_A, { runtime: "codex", level: "full", messages: "auto_both" });
   assert.deepEqual(m.disk.channelLaunchPosture, legacy);
   assert.deepEqual(m.disk.channelRuntime, { [CH_A]: "claude", [CH_B]: "cursor" });
   assert.equal(m.getChannelRuntime(CH_A), "codex", "the selection record is the authority once written");

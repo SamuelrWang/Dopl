@@ -1,30 +1,17 @@
-// THE VERSIONED, RUNTIME-KEYED LAUNCH SELECTION — `main/launch-selection.js`, the record that
-// replaced one global tool mode plus one global model plus a separately stored runtime pick.
+// THE LAUNCH SELECTION — `main/launch-selection.js`, v3: one permission LEVEL (Ask / Auto / Full)
+// that each runtime applies in its own native settings, plus the runtime pick and the message axis.
 //
-// ⚠ **THE PROPERTY THIS FILE EXISTS FOR IS THAT ONE RUNTIME'S CHOICES ARE NEVER READ, WRITTEN OR
-// COERCED THROUGH ANOTHER RUNTIME'S VOCABULARY.** That is Samuel's Decisions #1 and #2 of the
-// 2026-09-21 runtime-parity plan, and it is not a preference: `Accept edits` is not a Codex
-// approval mode (Codex separates approval policy from sandbox containment, and `granular` has no
-// Claude analogue), and a Claude model id is not a member of any Codex roster. Before this record
-// existed, `main/channel-prefs.js` and `main/agent-defaults.js` each imported
-// `main/session-model.js` — the DEFAULT runtime's frozen id table — and validated every runtime's
-// model through it, so a Codex pick could not be stored at all and `session-engine.js` coerced any
-// Codex id to the literal string `default` on its way to the Codex launch spec.
+// ⚠ TWO PROPERTIES. (1) Every unreadable state resolves NARROWER, never wider: Ask is the fail-closed
+// level, and unrestricted is never a migration fallback. (2) A migrated record keeps what the operator
+// explicitly chose — the channel level is the selected runtime's explicit choice, a runtime with no
+// record inherits it, and a runtime with its own explicit, different record keeps its own level.
 //
-// ⚠ **AND THE SECOND PROPERTY IS THAT EVERY UNREADABLE STATE RESOLVES NARROWER, NEVER WIDER.** The
-// plan's scope boundary is explicit: unknown, stale or partially migrated values resolve to the
-// narrowest supported behaviour and surface a recoverable `needs review` state. **Unrestricted is
-// never a migration fallback.** Each case below that has a fallback asserts the DIRECTION, not
-// just that something was chosen.
-//
-// ⚠ DRIVEN AGAINST THE REAL ADAPTERS, NOT A FIXTURE. `ctx` is `main/runtime/index.js ›
-// selectionContext()`, so "Codex accepts a Codex value" is a statement about the shipped Codex
-// descriptor. A fixture that mirrors an adapter is a copy that drifts with it
-// (`runtime-capability.test.ts`'s rule, applied on this side of the bridge).
+// ⚠ DRIVEN AGAINST THE REAL ADAPTERS: `ctx` is `main/runtime/index.js › selectionContext()`. The v2
+// fixtures are the shapes production stores wrote (`electron-store` › `channelLaunchSelection`).
 //
 // Run: `node --test dopl-desktop-app/test/launch-selection.test.mjs`
 
-import { test } from "node:test";
+import { test, describe } from "node:test";
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
@@ -36,291 +23,154 @@ const MAIN = join(HERE, "..", "main");
 const req = createRequire(import.meta.url);
 
 const sel = req(join(MAIN, "launch-selection.js"));
-const RUNTIME = req(join(MAIN, "runtime", "index.js"));
-const ctx = RUNTIME.selectionContext();
+const ctx = req(join(MAIN, "runtime", "index.js")).selectionContext();
+const norm = (raw) => sel.normalizeSelection(ctx, raw);
+const text = (s, id) => {
+  const x = sel.settingsFor(ctx, s, id);
+  return ctx.settingText(id || s.runtime || ctx.defaultId, x.tools, x.native);
+};
 
-const DEFAULT_ID = ctx.defaultId;
-const NARROW = (id) => ctx.narrowestToolFor(id);
-
-// ── 1. THE VERSION IS READ BEFORE ANYTHING ELSE ──────────────────────────────────────────────
-
-test("an ABSENT record is the restrictive selection and says NOTHING", () => {
-  // ⚠ ABSENT IS NOT CORRUPT. A channel nobody has configured really does start at the narrowest
-  // settings, and saying so is the truth rather than a fault an operator has to act on. A review
-  // sentence here would fire for every channel on the machine.
-  const res = sel.normalizeSelection(ctx, null);
-  assert.deepEqual(res.selection, { v: sel.SELECTION_VERSION, runtime: "", messages: "ask", byRuntime: {} });
-  assert.deepEqual(res.review, []);
-  assert.equal(res.stored, false, "…and the caller can still tell 'never configured' from 'read back'");
-});
-
-test("a FUTURE version resolves restrictive, keeps only the PICK, and surfaces `needs review`", () => {
-  // ⚠ `v: 3` could mean `messages` gained a fifth member or that `byRuntime`'s values changed
-  // shape. Reading the fields this build happens to recognise is how a widened setting arrives
-  // silently, so everything a future version might have re-meant is dropped.
-  const res = sel.normalizeSelection(ctx, {
-    v: 99,
-    runtime: "codex",
-    messages: "auto_both",
-    byRuntime: { codex: { tools: "never", model: "gpt-5-codex", native: { sandbox_mode: "danger-full-access" } } },
+describe("1. the version is read before anything else", () => {
+  test("ABSENT is the restrictive selection and says nothing", () => {
+    const res = norm(null);
+    assert.deepEqual(res.selection, { v: 3, runtime: "", messages: "ask", level: "ask", byRuntime: {} });
+    assert.deepEqual(res.review, []);
+    assert.equal(res.stored, false);
   });
-  assert.equal(res.selection.messages, "ask");
-  assert.deepEqual(res.selection.byRuntime, {});
-  // ⚠ THE PICK SURVIVES BECAUSE CHOOSING A RUNTIME WIDENS NOTHING — every adapter re-derives its
-  // own deny lists and Axis-A vocabulary, and the four gate steps ahead of Axis A are core's on
-  // all of them (`channel-runtime.js`'s header is the one spelling of that argument). Keeping it
-  // strands nobody and moves no operator to another vendor.
-  assert.equal(res.selection.runtime, "codex");
-  assert.equal(res.review.length, 1);
-  assert.match(res.review[0], /newer version of Dopl/);
-  assert.equal(sel.toLegacyPosture(ctx, res.selection).tools, NARROW("codex"),
-    "and the effective tool setting is that runtime's NARROWEST, never its widest");
-});
-
-test("a MALFORMED record resolves restrictive too, and keeps no pick", () => {
-  for (const bad of ["x", 7, [], true]) {
-    const res = sel.normalizeSelection(ctx, bad);
-    assert.deepEqual(res.selection, sel.emptySelection(), JSON.stringify(bad));
-    assert.equal(res.review.length, 1, "…and it is reviewable rather than silent");
-  }
-});
-
-test("an UNREADABLE stored tool mode FLOORS to the narrowest and is reviewed", () => {
-  // ⚠ A READ FLOORS WHERE A WRITE REJECTS. A record already on disk cannot be "rejected" —
-  // refusing to read it would strand the channel — so it resolves narrower and says so.
-  const res = sel.normalizeSelection(ctx, {
-    v: 2, runtime: "codex", messages: "ask", byRuntime: { codex: { tools: "bypass" } },
+  test("a FUTURE version resolves restrictive, keeps only the pick, and is reviewed", () => {
+    const res = norm({ v: 9, runtime: "codex", messages: "auto_both", level: "full" });
+    assert.equal(res.selection.level, "ask");
+    assert.equal(res.selection.messages, "ask");
+    assert.equal(res.selection.runtime, "codex");
+    assert.match(res.review.join(), /newer version of Dopl/);
   });
-  assert.equal(res.selection.byRuntime.codex.tools, NARROW("codex"));
-  assert.notEqual(res.selection.byRuntime.codex.tools, "bypass");
-  assert.match(res.review.join(" "), /narrowest/);
-});
-
-test("an UNREGISTERED runtime reads as the default and is NOT repaired in place", () => {
-  const res = sel.normalizeSelection(ctx, {
-    v: 2, runtime: "some-future-runtime", messages: "ask", byRuntime: {},
+  test("a MALFORMED record resolves restrictive and keeps no pick", () => {
+    for (const raw of ["x", [], { v: 1, runtime: "codex" }]) {
+      const res = norm(raw);
+      assert.equal(res.selection.level, "ask");
+      assert.equal(res.selection.runtime, "");
+      assert.equal(res.review.length, 1);
+    }
   });
-  assert.equal(res.selection.runtime, "", "the launch lands on the default adapter");
-});
-
-test("a record for an UNREGISTERED runtime is KEPT verbatim and never read", () => {
-  // ⚠ A DOWNGRADE MUST NOT DESTROY WHAT AN UPGRADE STORED. It cannot be validated (no descriptor)
-  // and cannot be launched (nothing resolves the id), so it is carried and ignored — strictly
-  // narrower than dropping it, because dropping it makes re-upgrading a silent reset.
-  const res = sel.normalizeSelection(ctx, {
-    v: 2, runtime: "", messages: "ask", byRuntime: { "some-future-runtime": { tools: "wide-open" } },
+  test("an unknown level floors to Ask and is reviewed; an unregistered runtime's entry is kept, never read", () => {
+    const res = norm({ v: 3, runtime: "", messages: "ask", level: "yolo", byRuntime: { codex: "max", future: "full" } });
+    assert.equal(res.selection.level, "ask");
+    assert.deepEqual(res.selection.byRuntime, { future: "full" }, "codex's bad entry equals the floored channel level, so no override");
+    assert.equal(res.review.length, 2);
   });
-  assert.deepEqual(res.selection.byRuntime["some-future-runtime"], { tools: "wide-open" });
-  assert.equal(sel.toLegacyPosture(ctx, res.selection).tools, NARROW(""),
-    "and it reaches no launch: the wire answers the DEFAULT adapter's narrowest");
-});
-
-// ── 2. MIGRATION EQUIVALENCE ─────────────────────────────────────────────────────────────────
-
-test("a legacy record migrates into the DEFAULT runtime's half, UNTRANSLATED", () => {
-  const res = sel.fromLegacy(ctx, { tools: "bypass", messages: "auto_both", model: "claude-opus-5" }, "codex");
-  assert.equal(res.selection.runtime, "codex");
-  assert.equal(res.selection.messages, "auto_both");
-  // ⚠ THE LEGACY `model` IS DROPPED (2026-09-23): no launch record stores one any more.
-  assert.deepEqual(res.selection.byRuntime[DEFAULT_ID], { tools: "bypass" });
-  assert.equal(res.selection.byRuntime.codex, undefined,
-    "nothing is invented for the selected runtime — there is no Codex synonym for `bypass`");
-  assert.deepEqual(res.review, [], "a clean migration is SILENT; thousands take this path once");
-});
-
-test("migration EQUIVALENCE: the legacy wire answers exactly what it answered before", () => {
-  // ⚠ THE TABLE IS THE CASE. Every one of these is a record that exists on disk today, and the
-  // third column is what `channel-prefs.js › getLaunchPosture` answered for it before U5 — minus
-  // `model`, which left the wire on 2026-09-23 (Samuel: "We don't need a pin model in the settings").
-  const cases = [
-    [null, "", { tools: NARROW(""), messages: "ask" }],
-    [{ tools: "manual", messages: "ask" }, "", { tools: "manual", messages: "ask" }],
-    [{ tools: "bypass", messages: "auto_both" }, "", { tools: "bypass", messages: "auto_both" }],
-    [{ tools: "auto", messages: "auto_inbound", model: "claude-opus-5" }, "",
-      { tools: "auto", messages: "auto_inbound" }],
-    // ⚠ A CODEX-SELECTED CHANNEL IS THE ONE ROW WHOSE WIRE VALUE MOVES, AND IT IS NOT A BEHAVIOUR
-    // CHANGE. `manual` is not a Codex mode, so the gate already coerced it to Codex's narrowest at
-    // every decision (`capability.js › normalizeToolMode`); what changes is that the wire now says
-    // so instead of saying `manual` and being coerced on the other side of the bridge.
-    [{ tools: "manual", messages: "ask" }, "codex", { tools: NARROW("codex"), messages: "ask" }],
-  ];
-  for (const [legacy, runtime, expected] of cases) {
-    const res = sel.fromLegacy(ctx, legacy, runtime);
-    assert.deepEqual(sel.toLegacyPosture(ctx, res.selection), expected,
-      `${JSON.stringify(legacy)} on ${runtime || "(default)"}`);
-  }
-});
-
-test("a HALF-VALID legacy pair is no pair: nothing migrates and the channel reads unconfigured (P3-34)", () => {
-  for (const legacy of [
-    { tools: "garbage", messages: "auto_both" },
-    { tools: "bypass", messages: "garbage" },
-    { tools: "on-request", messages: "ask" }, // never a pre-U5 word
-    { messages: "auto_both" },
-  ]) {
-    const res = sel.fromLegacy(ctx, legacy, "");
-    assert.equal(res.stored, false, JSON.stringify(legacy));
-    assert.deepEqual(res.selection, sel.emptySelection());
-    assert.equal(sel.legacyPreset(ctx, legacy), null, "…and presence agrees (`hasLaunchPosture`)");
-  }
-});
-
-// ── 3. A CODEX RECORD, WITHOUT PASSING THROUGH ANOTHER RUNTIME'S ENUMS ───────────────────────
-
-test("a Codex record accepts Codex values — its mode and its CONTAINMENT native axis", () => {
-  const res = sel.patchSelection(ctx, sel.emptySelection(), {
-    runtime: "codex",
-    tools: "on-request",
-    native: { sandbox_mode: "read-only" },
+  test("an unregistered pick reads as the default and is not repaired", () => {
+    assert.equal(norm({ v: 3, runtime: "nope", messages: "ask", level: "auto" }).selection.runtime, "");
   });
-  assert.deepEqual(res.review, []);
-  assert.deepEqual(res.selection.byRuntime.codex, {
-    tools: "on-request",
-    native: { sandbox_mode: "read-only" },
+});
+
+describe("2. one level, each runtime in its own words", () => {
+  const full = norm({ v: 3, runtime: "", messages: "auto_both", level: "full", byRuntime: {} }).selection;
+  test("Full is bypass on Claude, never/danger-full-access on Codex, run-everything on Cursor", () => {
+    assert.equal(text(full, "claude"), "bypass");
+    assert.equal(text(full, "codex"), "never/danger-full-access");
+    assert.equal(text(full, "cursor"), "run-everything");
   });
-  // ⚠ NEITHER VALUE IS A MEMBER OF THE DEFAULT RUNTIME'S VOCABULARY, which is the point: before U5
-  // the mode rejected the whole write and the sandbox had nowhere to be stored at all.
-  assert.equal(ctx.toolModeFor(DEFAULT_ID, "on-request"), NARROW(DEFAULT_ID));
-});
-
-test("NO PIN (2026-09-23): a model and a MODEL-scoped native key are DROPPED, silently", () => {
-  // Samuel: "We don't need a pin model in the settings." A launch's model is the launcher's pick,
-  // the identity's, or the runtime's default — never a stored one — and the reasoning effort is a
-  // property OF a model, so it goes with it. The CONTAINMENT axis beside it stays.
-  const res = sel.patchSelection(ctx, sel.emptySelection(), {
-    runtime: "codex",
-    tools: "on-request",
-    model: "gpt-5-codex",
-    native: { sandbox_mode: "read-only", reasoningEffort: "high" },
+  test("the wire's legacy pair is the SELECTED runtime's word", () => {
+    assert.deepEqual(sel.toLegacyPosture(ctx, full), { tools: "bypass", messages: "auto_both" });
+    assert.deepEqual(sel.toLegacyPosture(ctx, { ...full, runtime: "codex" }), { tools: "never", messages: "auto_both" });
   });
-  assert.deepEqual(res.review, [], "nothing narrowed, so nothing is reviewed");
-  assert.deepEqual(res.selection.byRuntime.codex, { tools: "on-request", native: { sandbox_mode: "read-only" } });
-  // A record an older build wrote WITH both reads harmlessly, with no review either.
-  const old = sel.normalizeSelection(ctx, {
-    v: 2, runtime: "codex", messages: "ask",
-    byRuntime: {
-      codex: { model: "gpt-5-codex", native: { reasoningEffort: "high" } },
-      [DEFAULT_ID]: { tools: "bypass", model: "claude-opus-5" },
-    },
+  test("an override wins for its runtime only", () => {
+    const s = norm({ v: 3, runtime: "", messages: "ask", level: "full", byRuntime: { codex: "ask" } }).selection;
+    assert.equal(sel.levelFor(ctx, s, "codex"), "ask");
+    assert.equal(sel.levelFor(ctx, s, "claude"), "full");
+    assert.equal(sel.levelFor(ctx, s, "cursor"), "full");
   });
-  assert.deepEqual(old.review, []);
-  assert.equal(old.selection.byRuntime.codex, undefined, "a record that held only a model and an effort is no record");
-  assert.deepEqual(old.selection.byRuntime[DEFAULT_ID], { tools: "bypass" });
-  assert.equal("model" in sel.toLegacyPosture(ctx, old.selection), false, "and no model reaches the wire");
-  // A patch carrying ONLY a model is a no-op, not a clear of anything else.
-  const s = sel.patchSelection(ctx, old.selection, { model: "claude-fable-5" }).selection;
-  assert.deepEqual(s.byRuntime, old.selection.byRuntime);
 });
 
-test("Claude → Codex → Claude restores BOTH remembered tool settings and native sets", () => {
-  let s = sel.emptySelection();
-  s = sel.patchSelection(ctx, s, { runtime: DEFAULT_ID, tools: "bypass" }).selection;
-  s = sel.patchSelection(ctx, s, { runtime: "codex" }).selection;
-  // The switch alone changes nothing but the pick: the new runtime starts at ITS OWN defaults.
-  assert.deepEqual(sel.toLegacyPosture(ctx, s), { tools: NARROW("codex"), messages: "ask" });
-  s = sel.patchSelection(ctx, s, {
-    tools: "never", native: { sandbox_mode: "danger-full-access" },
-  }).selection;
-  s = sel.patchSelection(ctx, s, { runtime: DEFAULT_ID }).selection;
-  assert.deepEqual(sel.toLegacyPosture(ctx, s), { tools: "bypass", messages: "ask" });
-  assert.deepEqual(sel.activeRecord(ctx, s).native, undefined, "the runtime with no such axis gets no bag");
-  s = sel.patchSelection(ctx, s, { runtime: "codex" }).selection;
-  assert.deepEqual(sel.toLegacyPosture(ctx, s), { tools: "never", messages: "ask" });
-  assert.deepEqual(sel.activeRecord(ctx, s).native, { sandbox_mode: "danger-full-access" });
-});
-
-// ── 4. THE WRITE PATH: WHAT A VERSION-SKEWED RENDERER CANNOT SMUGGLE ─────────────────────────
-
-test("a renderer cannot smuggle an unregistered RUNTIME past main", () => {
-  const res = sel.patchSelection(ctx, sel.emptySelection(), { runtime: "some-future-runtime" });
-  assert.equal(res.selection.runtime, "", "an id this build cannot resolve is not parked in the store");
-  assert.match(res.review.join(" "), /not a runtime this version of Dopl can start/);
-});
-
-test("a renderer cannot smuggle an unknown TOOL word — the write is REJECTED WHOLE", () => {
-  // ⚠ REJECTED, NOT FLOORED. A write is a claim about what the operator just chose; if this build
-  // cannot honour it, storing something narrower would leave the control showing one thing and the
-  // record holding another. The SPA reverts its optimistic pick on the refusal.
-  const codex = sel.patchSelection(ctx, sel.emptySelection(), { runtime: "codex" }).selection;
-  assert.deepEqual(sel.patchRejections(ctx, codex, { tools: "bypass" }).length, 1,
-    "a DEFAULT-runtime word on a Codex channel is refused…");
-  assert.deepEqual(sel.patchRejections(ctx, codex, { tools: "never" }), [],
-    "…and that runtime's own word is accepted, which is F-390's actual fix");
-  assert.deepEqual(sel.patchRejections(ctx, sel.emptySelection(), { tools: "never" }).length, 1,
-    "…in both directions");
-});
-
-test("a renderer cannot smuggle an unknown MESSAGING value", () => {
-  assert.equal(sel.patchRejections(ctx, sel.emptySelection(), { messages: "whenever" }).length, 1);
-  assert.deepEqual(sel.patchRejections(ctx, sel.emptySelection(), { messages: "auto_both" }), []);
-});
-
-test("a renderer cannot smuggle a NATIVE key the adapter cannot spend", () => {
-  // ⚠ DROPPED AND REVIEWED, not stored-and-ignored. A key main keeps but never spends is a control
-  // that appears to work; INVARIANTS §11's rule is that such a control must be ABSENT.
-  const res = sel.patchSelection(ctx, sel.emptySelection(), {
-    runtime: "codex", native: { sandbox_mode: "read-only", bogus: "x", granular: "{}" },
+describe("3. migration from v2 (production-shaped records)", () => {
+  test("REGRESSION 2026-09-25: a bypass/auto_both channel with no Codex record → Full, and Codex launches at never/danger-full-access", () => {
+    const stored = { v: 2, runtime: "", messages: "auto_both", byRuntime: { claude: { tools: "bypass" } } };
+    const res = norm(stored);
+    assert.equal(res.stored, true);
+    assert.equal(res.selection.level, "full");
+    assert.deepEqual(res.selection.byRuntime, {});
+    assert.equal(text(res.selection, "codex"), "never/danger-full-access");
+    assert.deepEqual(res.review, []);
   });
-  assert.deepEqual(res.selection.byRuntime.codex.native, { sandbox_mode: "read-only" });
-  assert.match(res.review.join(" "), /no native setting called "bogus"/);
-  assert.match(res.review.join(" "), /no native setting called "granular"/);
-});
-
-test("an unreadable CONTAINMENT value floors to the NARROWEST, and says so", () => {
-  // ⚠ The sandbox is CONTAINMENT, so an unreadable value resolves to the narrowest declared option.
-  const res = sel.patchSelection(ctx, sel.emptySelection(), {
-    runtime: "codex", native: { sandbox_mode: "danger-please" },
+  test("Claude manual → Ask, accept_edits → Ask (reviewed: it meant more), auto → Auto", () => {
+    const at = (tools) => norm({ v: 2, runtime: "", messages: "ask", byRuntime: { claude: { tools } } });
+    assert.equal(at("manual").selection.level, "ask");
+    assert.equal(at("accept_edits").selection.level, "ask");
+    assert.match(at("accept_edits").review.join(), /"accept_edits" is now ask \(manual\)/);
+    assert.equal(at("auto").selection.level, "auto");
   });
-  assert.deepEqual(res.selection.byRuntime.codex.native, { sandbox_mode: "read-only" });
-  assert.match(res.review.join(" "), /narrowest/);
+  test("an explicit Codex record wins for Codex (never widened to the Claude-derived level)", () => {
+    const res = norm({ v: 2, runtime: "", messages: "auto_both", byRuntime: { claude: { tools: "bypass" }, codex: { tools: "untrusted" } } });
+    assert.equal(res.selection.level, "full");
+    assert.deepEqual(res.selection.byRuntime, { codex: "ask" });
+    assert.equal(text(res.selection, "codex"), "on-request/workspace-write");
+    assert.equal(text(res.selection, "claude"), "bypass");
+  });
+  test("the SELECTED runtime's explicit choice is the channel level; the default runtime's record keeps its own", () => {
+    const res = norm({ v: 2, runtime: "codex", messages: "ask", byRuntime: { codex: { tools: "never", native: { sandbox_mode: "danger-full-access" } }, claude: { tools: "manual" } } });
+    assert.equal(res.selection.level, "full");
+    assert.deepEqual(res.selection.byRuntime, { claude: "ask" });
+  });
+  test("a Codex never on workspace-write is NOT Full (Full needs danger-full-access too) and is reviewed", () => {
+    const res = norm({ v: 2, runtime: "codex", messages: "ask", byRuntime: { codex: { tools: "never", native: { sandbox_mode: "workspace-write" } } } });
+    assert.equal(res.selection.level, "auto");
+    assert.match(res.review.join(), /never\/workspace-write/);
+  });
+  test("no explicit tools anywhere → Ask; a v2 '' key folds into the default runtime (P3-05)", () => {
+    assert.equal(norm({ v: 2, runtime: "", messages: "ask", byRuntime: {} }).selection.level, "ask");
+    assert.equal(norm({ v: 2, runtime: "", messages: "ask", byRuntime: { "": { tools: "bypass" } } }).selection.level, "full");
+  });
+  test("IDEMPOTENT: re-reading the migrated record (as the next write stores it) changes nothing", () => {
+    const fixtures = [
+      { v: 2, runtime: "", messages: "auto_both", byRuntime: { claude: { tools: "bypass" } } },
+      { v: 2, runtime: "codex", messages: "ask", byRuntime: { claude: { tools: "bypass" }, codex: { tools: "granular" } } },
+      { v: 2, runtime: "cursor", messages: "auto_inbound", byRuntime: { cursor: { tools: "auto-review", native: { sandbox: "disabled" } } } },
+    ];
+    for (const f of fixtures) {
+      const once = norm(f).selection;
+      const twice = norm(JSON.parse(JSON.stringify(once))).selection;
+      assert.deepEqual(twice, once);
+      assert.deepEqual(sel.patchSelection(ctx, once, {}).selection, once);
+    }
+  });
+  test("a pre-U5 pair migrates in the default runtime's words", () => {
+    const res = sel.fromLegacy(ctx, { tools: "bypass", messages: "auto_both" }, "codex");
+    assert.equal(res.selection.level, "full");
+    assert.equal(res.selection.runtime, "codex");
+    assert.equal(sel.fromLegacy(ctx, { tools: "bypass", messages: "nope" }, "").stored, false, "a half-valid pair is no pair (P3-34)");
+  });
 });
 
-test("a patch is OWN-KEY throughout — a write that omits a field leaves it alone", () => {
-  // ⚠ THE 2026-09-05 FAILURE, GENERALISED. A pick from a surface that knows nothing about native
-  // settings must not rewrite the record whole and drop them on the floor.
-  let s = sel.patchSelection(ctx, sel.emptySelection(), {
-    runtime: "codex", tools: "never", native: { sandbox_mode: "read-only" },
-  }).selection;
-  s = sel.patchSelection(ctx, s, { messages: "auto_both" }).selection;
-  assert.deepEqual(s.byRuntime.codex, { tools: "never", native: { sandbox_mode: "read-only" } });
-  // ⚠ `{}` IS A REAL "CLEAR THEM", which is the other half of the same rule.
-  s = sel.patchSelection(ctx, s, { native: {} }).selection;
-  assert.equal(s.byRuntime.codex.native, undefined);
-  assert.equal(s.byRuntime.codex.tools, "never", "…and clearing one field touches no other");
+describe("4. the write path", () => {
+  const base = norm({ v: 3, runtime: "", messages: "ask", level: "auto", byRuntime: { codex: "ask" } }).selection;
+  test("a level write sets the one control for every runtime and clears the overrides", () => {
+    const s = sel.patchSelection(ctx, base, { level: "full" }).selection;
+    assert.equal(s.level, "full");
+    assert.deepEqual(s.byRuntime, {});
+  });
+  test("an unknown level, messaging value, or a per-runtime word is REJECTED whole", () => {
+    assert.match(sel.patchRejections(ctx, base, { level: "max" }).join(), /not a permission level/);
+    assert.match(sel.patchRejections(ctx, base, { messages: "all" }).join(), /messaging/);
+    assert.match(sel.patchRejections(ctx, base, { tools: "bypass" }).join(), /no longer stored/);
+    assert.match(sel.patchRejections(ctx, base, { native: { sandbox_mode: "danger-full-access" } }).join(), /no longer stored/);
+    assert.deepEqual(sel.patchRejections(ctx, base, { level: "ask", messages: "auto_both", runtime: "codex" }), []);
+  });
+  test("own-key: a runtime switch moves no level and no override", () => {
+    const s = sel.patchSelection(ctx, base, { runtime: "codex" }).selection;
+    assert.equal(s.level, "auto");
+    assert.deepEqual(s.byRuntime, { codex: "ask" });
+    assert.equal(sel.patchSelection(ctx, base, { runtime: "nope" }).selection.runtime, "");
+  });
+  test("byRuntime (the seed's whole-map replace) is re-validated", () => {
+    const s = sel.patchSelection(ctx, base, { byRuntime: { codex: "full", claude: "bogus" } });
+    assert.deepEqual(s.selection.byRuntime, { codex: "full", claude: "ask" });
+    assert.equal(s.review.length, 1);
+  });
 });
 
-test("a patch's fields land on the runtime the PATCH selects, not the one selected before it", () => {
-  // A single write that switches runtime AND sets that runtime's sandbox is one operation;
-  // splitting it would write the new setting into the old runtime's record.
-  const s = sel.patchSelection(ctx, sel.emptySelection(), {
-    runtime: "codex", native: { sandbox_mode: "read-only" },
-  }).selection;
-  assert.deepEqual(s.byRuntime.codex.native, { sandbox_mode: "read-only" });
-  assert.equal(s.byRuntime[DEFAULT_ID], undefined);
-});
-
-test("an unchanged field is RE-VALIDATED on every write, not carried untouched", () => {
-  // ⚠ A value stored by a build that offered it and has since withdrawn it must not survive just
-  // because nobody mentioned it. The merge happens BEFORE validation for exactly this reason.
-  const smuggled = {
-    v: 2, runtime: "codex", messages: "ask", byRuntime: { codex: { tools: "never", native: { bogus: "x" } } },
-  };
-  const s = sel.patchSelection(ctx, sel.normalizeSelection(ctx, smuggled).selection, { tools: "never" });
-  assert.deepEqual(s.selection.byRuntime.codex, { tools: "never" });
-});
-
-// ── 5. THE MODULE MAY NOT KNOW A VENDOR ──────────────────────────────────────────────────────
-
-test("the shape module holds NO runtime's vocabulary — the whole bar of the unit", () => {
-  // ⚠ **THE VERIFICATION BAR U5 SETS, ASSERTED MECHANICALLY**: no shared storage or session-core
-  // path imports one runtime's model/tool enums to validate another runtime's launch. The pure
-  // block takes every vocabulary through the injected `ctx`, so a literal inside it would be this
-  // record deciding what a vendor id means — which is the entire class of bug U5 removed.
-  // ⚠ CODE LINES ONLY: the header explains the rule in the words the code may not use.
+test("5. the shape module holds NO runtime's vocabulary", () => {
   const src = req("node:fs").readFileSync(join(MAIN, "launch-selection.js"), "utf8");
-  const block = sentinelBlock(src, "LAUNCH-SELECTION");
-  const code = codeOf(block);
+  const code = codeOf(sentinelBlock(src, "LAUNCH-SELECTION"));
   assert.ok(!/\brequire\s*\(|\bstore\./.test(code), "no store or require inside the fence");
-  assert.ok(!/manual|accept_edits|bypass|untrusted|on-request|claude|codex|cursor|gpt-|sandbox_mode|reasoningEffort/i
-    .test(code), "no runtime's vocabulary inside the fence");
+  assert.ok(!/manual|accept_edits|bypass|untrusted|on-request|claude|codex|cursor|gpt-|sandbox_mode|reasoningEffort/i.test(code));
 });

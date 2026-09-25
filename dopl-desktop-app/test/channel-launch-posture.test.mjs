@@ -82,7 +82,9 @@ test("getLaunchPosture falls back to the restrictive default, never to null", ()
   // the restrictive one by construction. Pinned as the SPELLING, because the store-backed reader
   // is the half source extraction cannot reach.
   assert.match(fnOf(SRC, "getLaunchPosture"), /toLegacyPosture\(ctx\(\), getLaunchSelection\(channelId\)\)/);
-  assert.match(fnOf(SELECTION_SRC, "toLegacyPosture"), /rec\.tools \|\| ctx\.narrowestToolFor\(selection\.runtime\)/,
+  // ⚠ 2026-09-25 (the level model): the tool word is the level's, and an unset level is `levels[0]` (Ask).
+  assert.match(fnOf(SELECTION_SRC, "toLegacyPosture"), /settingsFor\(ctx, sel, ''\)\.tools/);
+  assert.match(fnOf(SELECTION_SRC, "emptySelection"), /level: ctx\.levels\[0\]/,
     "the restrictive fallback must survive the move, or an unset channel reads as no constraint");
   // …and the thing it falls back to really is the narrowest, not "whatever parsed".
   assert.match(fnOf(SELECTION_SRC, "emptySelection"), /messages: SELECTION_MESSAGE_MODES\[0\]/,

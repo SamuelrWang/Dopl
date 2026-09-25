@@ -130,9 +130,7 @@ module.exports = {
   resumeZeroesBaseline, USAGE_BASELINE_RESETS, USAGE_BASELINE_CONTINUES,
   toolModes, narrowestToolMode, widestToolMode, normalizeToolMode, floorWindowlessTool,
   windowlessFloorRefusal, editScopedTools, toolTaxonomy, axisBOpScopedWarning, mcpDiscovery,
-  // The launch-selection vocabulary (`selection-vocabulary.js`), re-exported for one require.
+  // The model-pick vocabulary (`selection-vocabulary.js`), re-exported for one require.
   pickRule: selection.pickRule,
   launchModelPick: selection.launchModelPick,
-  nativeDimensions: selection.nativeDimensions,
-  normalizeNative: selection.normalizeNative,
 };

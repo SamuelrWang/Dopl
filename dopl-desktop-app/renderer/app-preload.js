@@ -56,26 +56,12 @@ const APP_ORIGIN = APP_ORIGIN_ARG ? APP_ORIGIN_ARG.split('=')[1] : '';
 // Channel-scoped input coercion: the bridge never forwards raw renderer values.
 const asId = (channelId) => String(channelId == null ? '' : channelId);
 const asMode = (mode) => String(mode == null ? '' : mode);
-// The runtime-native settings bag as a flat string map (no nesting, arrays or numbers); main
-// re-validates every key against the selected adapter's declared dimensions.
-const asNative = (native) => {
+// A launch selection's per-runtime levels, `{ <runtimeId>: <level> }`, as a flat string map (no
+// nesting, arrays or numbers); main re-validates every value.
+const asLevels = (byRuntime) => {
   const out = {};
-  if (native && typeof native === 'object' && !Array.isArray(native)) {
-    for (const key of Object.keys(native)) out[String(key)] = asMode(native[key]);
-  }
-  return out;
-};
-// The runtime-keyed half of a launch selection, `{ <runtimeId>: { tools?, native? } }`. Each field
-// is forwarded only on an OWN KEY: absence and `''` are different facts in that record.
-const asRuntimeRecords = (byRuntime) => {
-  const out = {};
-  if (!byRuntime || typeof byRuntime !== 'object' || Array.isArray(byRuntime)) return out;
-  for (const id of Object.keys(byRuntime)) {
-    const record = byRuntime[id] || {};
-    out[String(id)] = {
-      ...(record.tools !== undefined ? { tools: asMode(record.tools) } : {}),
-      ...(record.native !== undefined ? { native: asNative(record.native) } : {}),
-    };
+  if (byRuntime && typeof byRuntime === 'object' && !Array.isArray(byRuntime)) {
+    for (const id of Object.keys(byRuntime)) out[String(id)] = asMode(byRuntime[id]);
   }
   return out;
 };
@@ -143,10 +129,9 @@ contextBridge.exposeInMainWorld('dopl', {
         preset: {
           // Own-key on every field: `setLaunchSelection` rejects the WHOLE write on an unoffered
           // value, and `''` is a real value (`runtime: ''` resets to the default runtime), so an
-          // absent field must stay absent. No `model`: the channel stores none.
-          ...(preset && preset.tools !== undefined ? { tools: asMode(preset.tools) } : {}),
+          // absent field must stay absent. The level is the one permission control.
+          ...(preset && preset.level !== undefined ? { level: asMode(preset.level) } : {}),
           ...(preset && preset.messages !== undefined ? { messages: asMode(preset.messages) } : {}),
-          ...(preset && preset.native !== undefined ? { native: asNative(preset.native) } : {}),
           ...(preset && preset.runtime !== undefined ? { runtime: asMode(preset.runtime) } : {}),
         },
       }),
@@ -163,16 +148,15 @@ contextBridge.exposeInMainWorld('dopl', {
     setAgentDefaults: (defaults) =>
       ipcRenderer.invoke('channels:setAgentDefaults', {
         defaults: {
-          tools: asMode(defaults && defaults.tools),
+          level: asMode(defaults && defaults.level),
           messages: asMode(defaults && defaults.messages),
           agentChain: !!(defaults && defaults.agentChain),
           // Coerced unconditionally, unlike `setLaunchPosture`: this record has ONE writer (the
           // profile popup's Agents tab), which always sends the whole record.
           runtime: asMode(defaults && defaults.runtime),
-          // `v` must ride along: `normalizeDefaults` reads a record without it as the legacy shape
-          // and overwrites the other runtimes' settings. Own-key.
+          // `v` must ride along: `normalizeDefaults` reads a record without it as the legacy shape.
           ...(defaults && defaults.v !== undefined ? { v: Number(defaults.v) } : {}),
-          ...(defaults && defaults.byRuntime !== undefined ? { byRuntime: asRuntimeRecords(defaults.byRuntime) } : {}),
+          ...(defaults && defaults.byRuntime !== undefined ? { byRuntime: asLevels(defaults.byRuntime) } : {}),
         },
       }),
     applyAgentDefaults: (channelId) => ipcRenderer.invoke('channels:applyAgentDefaults', { channelId: asId(channelId) }),

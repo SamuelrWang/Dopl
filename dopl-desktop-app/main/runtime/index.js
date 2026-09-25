@@ -7,6 +7,7 @@ const { sealAdapter } = require('./contract');
 const capability = require('./capability');
 const connectivity = require('./connectivity');
 const runtimeCopy = require('./runtime-copy');
+const permissionLevel = require('./permission-level');
 
 const REGISTRY = new Map();
 
@@ -64,24 +65,22 @@ const connectedIds = () => connectivity.connectedIds(all());
 const expireConnectivity = () => connectivity.expire();
 
 /**
- * The adapter vocabulary a durable launch selection is validated against, handed IN so
+ * The adapter vocabulary a durable launch selection is read through, handed IN so
  * `main/launch-selection.js` stays pure. Resolved per call. The caller must ask `known()` before
  * trusting an id: `descriptorFor` answers the default adapter for an unknown one by design.
  */
 function selectionContext() {
+  const d = descriptorFor;
   return {
     ids: ids(),
     defaultId: DEFAULT_ID,
+    levels: permissionLevel.LEVELS,
     known: (id) => typeof id === 'string' && REGISTRY.has(id),
-    toolModeFor: (id, mode) => capability.normalizeToolMode(descriptorFor(id), mode),
-    narrowestToolFor: (id) => capability.narrowestToolMode(descriptorFor(id)),
-    // The model-scoped native keys, which a stored selection drops (no model is stored).
-    modelDimensionsFor: (id) => {
-      const dims = (descriptorFor(id).models || {}).dimensions;
-      return Array.isArray(dims) ? dims.slice() : [];
-    },
-    nativeFor: (id, raw) => capability.normalizeNative(descriptorFor(id), raw),
-    labelFor: (id) => descriptorFor(id).label,
+    toolModeFor: (id, mode) => capability.normalizeToolMode(d(id), mode),
+    levelOf: (id, tools, native) => permissionLevel.levelOf(d(id), tools, native),
+    levelSettings: (id, level) => permissionLevel.levelSettings(d(id), level),
+    settingText: (id, tools, native) => permissionLevel.settingText(d(id), tools, native),
+    labelFor: (id) => d(id).label,
   };
 }
 
