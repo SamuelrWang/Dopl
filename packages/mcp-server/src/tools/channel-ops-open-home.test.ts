@@ -27,7 +27,7 @@ function directory(locked: string | null = null): WorkspaceDirectory {
     lockedWorkspaceId: () => locked,
     containerKindIndex: async () =>
       new Map([
-        [HOME, "personal"],
+        [HOME, "home"],
         [TEAM, "workspace"],
       ]),
   } as unknown as WorkspaceDirectory;

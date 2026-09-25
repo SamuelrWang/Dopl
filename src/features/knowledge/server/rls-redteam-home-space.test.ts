@@ -10,7 +10,7 @@ import {
 } from "@/shared/supabase/rls-redteam-fixture";
 
 /**
- * The personal container, read through a container LOCK — the SQL half of the
+ * The home space, read through a container LOCK — the SQL half of the
  * 1.26.0 smoke fix, and why that fix ships no policy change.
  *
  * The lock is not a policy input and must not become one:
@@ -25,21 +25,21 @@ import {
  * LOCKED credential reading outside its lock.
  */
 describe.skipIf(!liveRedteamEnabled)(
-  "REDTEAM (live) — a locked credential and its operator's PERSONAL container",
+  "REDTEAM (live) — a locked credential and its operator's HOME space",
   () => {
     let ownerId = "";
     let strangerId = "";
-    let personalId = "";
-    let strangerPersonalId = "";
+    let homeSpaceId = "";
+    let strangerHomeSpaceId = "";
     let myBaseId = "";
     let strangerBaseId = "";
 
-    /** The container through `ensure_personal_container`, never a hand-built
+    /** The container through `ensure_home_space`, never a hand-built
      *  row: the owner membership and the partial unique index are the mint's,
      *  and a fixture that invented them would prove something else. */
-    async function mintPersonal(userId: string): Promise<string> {
+    async function mintHomeSpace(userId: string): Promise<string> {
       const { data, error } = await supabaseAdmin().rpc(
-        "ensure_personal_container",
+        "ensure_home_space",
         { p_owner_id: userId, p_public_id: generatePublicId() }
       );
       if (error) throw error;
@@ -49,12 +49,12 @@ describe.skipIf(!liveRedteamEnabled)(
     beforeAll(async () => {
       ownerId = await makeUser("shelf-owner");
       strangerId = await makeUser("shelf-stranger");
-      personalId = await mintPersonal(ownerId);
-      strangerPersonalId = await mintPersonal(strangerId);
+      homeSpaceId = await mintHomeSpace(ownerId);
+      strangerHomeSpaceId = await mintHomeSpace(strangerId);
       const repo = await import("./repository");
       myBaseId = (
         await repo.insertBase({
-          workspaceId: personalId,
+          workspaceId: homeSpaceId,
           name: "Orchestration Guidelines",
           slug: "orchestration-guidelines",
           visibility: "private",
@@ -63,7 +63,7 @@ describe.skipIf(!liveRedteamEnabled)(
       ).id;
       strangerBaseId = (
         await repo.insertBase({
-          workspaceId: strangerPersonalId,
+          workspaceId: strangerHomeSpaceId,
           name: "Their Notes",
           slug: "their-notes",
           visibility: "private",
@@ -73,14 +73,14 @@ describe.skipIf(!liveRedteamEnabled)(
     }, 60_000);
 
     afterAll(async () => {
-      await deleteWorkspace(personalId);
-      await deleteWorkspace(strangerPersonalId);
+      await deleteWorkspace(homeSpaceId);
+      await deleteWorkspace(strangerHomeSpaceId);
       await deleteUsers([ownerId, strangerId]);
     }, 60_000);
 
     it("locked WITH A SUBJECT reads its own personal base — 1 row", async () => {
       expect(
-        await readableIds(ownerId, "knowledge_bases", personalId)
+        await readableIds(ownerId, "knowledge_bases", homeSpaceId)
       ).toEqual([myBaseId]);
     });
 
@@ -88,7 +88,7 @@ describe.skipIf(!liveRedteamEnabled)(
       // M-10: a credential that may be passed between humans stands for nobody,
       // so `created_by = auth.uid()` is not enough on a private row.
       expect(
-        await readableIds(ownerId, "knowledge_bases", personalId, {
+        await readableIds(ownerId, "knowledge_bases", homeSpaceId, {
           shared: true,
         })
       ).toHaveLength(0);
@@ -99,10 +99,10 @@ describe.skipIf(!liveRedteamEnabled)(
       // non-member refusal: admitting the caller's OWN container to the id lane
       // borrows no reach into anyone else's — the lookup is keyed on the owner.
       expect(
-        await readableIds(ownerId, "knowledge_bases", strangerPersonalId)
+        await readableIds(ownerId, "knowledge_bases", strangerHomeSpaceId)
       ).toHaveLength(0);
       expect(
-        await readableIds(strangerId, "knowledge_bases", strangerPersonalId)
+        await readableIds(strangerId, "knowledge_bases", strangerHomeSpaceId)
       ).toEqual([strangerBaseId]);
     });
   }

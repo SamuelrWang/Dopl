@@ -38,7 +38,7 @@ export type CheckoutPlan = PlanIdSubset<"team" | "pro">;
 export type BillingIntent = "upgrade" | "success" | "return";
 
 /** Segment-less `/billing` is legal — with `?plan=pro` it forwards to the
- *  caller's personal container, otherwise it forwards when they own exactly one
+ *  caller's home space, otherwise it forwards when they own exactly one
  *  standard workspace and asks them to pick when they do not
  *  (`src/app/billing/page.tsx`). */
 export const BILLING_SURFACE_ROOT = "/billing";
@@ -62,7 +62,7 @@ export interface BillingPathOptions {
 }
 
 /** `/billing/acme-ab12cd34ef56?billing=upgrade&plan=team` — path only.
- *  `plan=pro` with no segment is the personal-container forward: the seller
+ *  `plan=pro` with no segment is the home-space forward: the seller
  *  rarely holds that segment, and `/billing` resolves it (`page.tsx`). */
 export function billingPath({
   segment,

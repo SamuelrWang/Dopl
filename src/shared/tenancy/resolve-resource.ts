@@ -5,7 +5,7 @@ import {
   type CredentialAxes,
 } from "@/shared/auth/credential-audience";
 import { supabaseAdmin } from "@/shared/supabase/admin";
-import { resolvePersonalReach } from "./personal-reach";
+import { resolveHomeSpaceReach } from "./home-space-reach";
 import { grantedResourceIds } from "./resource-grant-reach";
 
 /**
@@ -13,7 +13,7 @@ import { grantedResourceIds } from "./resource-grant-reach";
  * `supabaseAdmin()` bypasses RLS, so these clauses ARE the fence; a row is nameable only when all hold:
  *   1. the caller is a person: a shared credential resolves nothing (arm 2 of every `canSee*`).
  *   2. the container is one the caller actively belongs to, at or above {@link CONTAINER_READ_FLOOR}.
- *   3. a locked credential resolves inside its lock plus its operator's personal container, never
+ *   3. a locked credential resolves inside its lock plus its operator's home space, never
  *      wider ({@link lockedCandidates}).
  *   4. the caller could already list the row: they created it, or it is shared with the whole
  *      container — or, by id only, it is lent to a scope they are in ({@link findGrantedResource}).
@@ -38,7 +38,7 @@ export interface ResourceCaller extends CredentialAxes {
   /** The container the credential is locked to (`mcp_tokens.container_id`); `null`/absent =
    *  unlocked. Clause 3 narrows on it and never widens. */
   apiKeyWorkspaceId?: string | null;
-  /** Forwarded to {@link resolvePersonalReach}, which does not branch on them; optional because
+  /** Forwarded to {@link resolveHomeSpaceReach}, which does not branch on them; optional because
    *  feature contexts already carry them under these names. */
   source?: string | null;
   sessionId?: string | null;
@@ -124,7 +124,7 @@ async function listContainersForCaller(
 
 /**
  * Containers a locked credential may still name rows in: its lock, plus the operator's personal
- * container when `personal-reach.ts` answers open. Widens by exactly one container, inside the same
+ * container when `home-space-reach.ts` answers open. Widens by exactly one container, inside the same
  * `workspace_members` read, so clauses 2 and 4 still apply and every other container stays fenced.
  * A closed answer stays `[lock]`, never a refusal, so the id takes the ordinary 404 path.
  */
@@ -132,7 +132,7 @@ async function lockedCandidates(
   caller: ResourceCaller,
   lockedWorkspaceId: string
 ): Promise<string[]> {
-  const reach = await resolvePersonalReach({
+  const reach = await resolveHomeSpaceReach({
     userId: caller.userId,
     credentialSubjectUserId: caller.credentialSubjectUserId,
     // The room is the lock: a DB fact off the token row, never a header or the container asked about.

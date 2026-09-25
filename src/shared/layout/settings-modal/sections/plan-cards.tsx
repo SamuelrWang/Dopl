@@ -48,7 +48,7 @@ export function isLegacySolo(ent: WorkspaceEntitlements): boolean {
  *
  * ⚠ **KIND-AWARE SINCE 2026-09-08, AND THE THREE ARMS ARE DISJOINT BY LIST, NOT
  * BY BRANCH ORDER.** `plansForKind` never mixes the groups (`plans.ts`), so the
- * `pro` arm is only ever asked about a personal container and the `team` arm
+ * `pro` arm is only ever asked about a home space and the `team` arm
  * only about a standard one — this function does not need the kind, only the
  * card in front of it. Both lists carry an `id: "free"` card, which is why the
  * free arm is the FALL-THROUGH rather than a third `plan.id ===` test.
@@ -86,7 +86,7 @@ export function PlanColumn({
 }: PlanActions & { plan: PlanDef }) {
   const isCurrent = isCurrentPlan(plan, ent);
   // The card being SOLD, whichever group this is — `team` on a standard
-  // workspace, `pro` on a personal container. Never both in one list.
+  // workspace, `pro` on a home space. Never both in one list.
   const highlight = plan.id === "team" || plan.id === "pro";
 
   return (
@@ -187,9 +187,9 @@ function PlanCta({
   /**
    * ⚠ PRO HAS NO SWITCH-IN-PLACE ARM AND NEEDS NONE. `upgrade-to-team` exists
    * to move a live legacy `solo` subscription without a second checkout; a
-   * personal container has never held one (`solo` was only ever sold on a
+   * home space has never held one (`solo` was only ever sold on a
    * standard workspace), so Pro is always a fresh checkout.
-   * ⚠ The `!canManage` note is UNREACHABLE here — a personal container's only
+   * ⚠ The `!canManage` note is UNREACHABLE here — a home space's only
    * member is its owner — and is kept so the arm cannot render an empty slot if
    * that ever stops being true.
    */

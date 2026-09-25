@@ -79,7 +79,7 @@ type WalletCredits = Omit<StatusCredits, "unmeteredSince">;
 
 export interface WorkspaceBillingStatusPayload {
   /**
-   * The ENTITLED plan of the addressed container. On a `kind='personal'` one it
+   * The ENTITLED plan of the addressed container. On a `kind='home'` one it
    * is `pro` or `free` and never `team` (2026-09-08): a surface rendering plan
    * cards must pick the list by `containerKind`, not guess from this value.
    */
@@ -186,15 +186,15 @@ async function callerCredits(
   }
   if (resolved.wallet === "personal") {
     // The meter must read the row enforcement charges against: for a personal
-    // wallet that is the PAYER'S personal container, which is the addressed one
+    // wallet that is the PAYER'S home space, which is the addressed one
     // only when the caller addressed their own shelf. In a link container the row
     // above is `null`, so metering with it would show a Pro operator 500 while
     // the consume path charged against 5,000.
     const personal =
-      caller.workspaceKind === "personal"
+      caller.workspaceKind === "home"
         ? billing
         : await readPersonalBilling(resolved.payerUserId, null);
-    // Member count 1: a personal container holds its owner and nobody else, so
+    // Member count 1: a home space holds its owner and nobody else, so
     // the addressed container's roster is not this wallet's business.
     return reconciled(await summarizeCredits(resolved, personal, 1), resolved);
   }

@@ -251,7 +251,7 @@ describe("🔒 channelScopeRefusal — the server's SCOPE_NOT_ALLOWED_IN_WORKSPA
  * FIRST-WINS — until this date, which meant a slug naming two containers the
  * caller is in silently LENT INTO THE FIRST (F-719's case, and a grant is a
  * widen-the-audience write), and `to="home"` resolved to nothing at all though
- * R-32 made the personal shelf a first-class address.
+ * R-32 made the home shelf a first-class address.
  *
  * ⚠ A REAL directory, not a stub: what is pinned is that the grant reaches the
  * SAME resolver `container=` reaches, so a stub of its shape proves nothing.
@@ -260,7 +260,7 @@ describe('🔒 op="grant" addresses a container the way every other call does', 
   const ws = (
     id: string,
     slug: string,
-    kind: "standard" | "link" | "personal",
+    kind: "standard" | "link" | "home",
   ): WorkspaceListItem => ({
     id,
     ownerId: "owner",
@@ -278,7 +278,7 @@ describe('🔒 op="grant" addresses a container the way every other call does', 
   // peer who minted it, so a caller seeing two `ops` is the documented case.
   const MINE = ws("id-ws-ops", "ops", "standard");
   const THEIRS = ws("id-room-ops", "ops", "link");
-  const HOME = ws("id-home", "sam", "personal");
+  const HOME = ws("id-home", "sam", "home");
 
   const directoryOf = (rows: WorkspaceListItem[]) =>
     createWorkspaceDirectory(
@@ -300,7 +300,7 @@ describe('🔒 op="grant" addresses a container the way every other call does', 
     return { res, grant };
   };
 
-  it('to="home" resolves the caller\'s PERSONAL container (R-32)', async () => {
+  it('to="home" resolves the caller\'s HOME space (R-32)', async () => {
     const { res, grant } = await grantTo([MINE, HOME], "home");
     expect(res.isError).toBeFalsy();
     expect(grant).toHaveBeenCalledWith(

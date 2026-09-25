@@ -3,7 +3,7 @@ import {
   ACCESS_PREFIX,
   MCP_SCOPES,
   insertTokenRow,
-  personalUnfencedAxes,
+  homeSpaceUnfencedAxes,
   randToken,
   sha256,
 } from "@/shared/auth/mcp-oauth";
@@ -54,7 +54,7 @@ export async function issuePlaygroundToken(input: {
     // 🔒 A person, unfenced — the guest is a real (ephemeral) user and the
     // token acts as them. A guest row left with a NULL subject would read as a
     // SHARED credential the day B13 drops the legacy pair (F-587).
-    ...personalUnfencedAxes(input.userId),
+    ...homeSpaceUnfencedAxes(input.userId),
   });
   return { token: accessToken, expiresAt };
 }

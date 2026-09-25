@@ -3,7 +3,7 @@
  * Account → Subscription. Drives the real hooks + transport against a fake,
  * STATEFUL wire (`fetch` stub): the status read answers from `rows`, and the
  * cancel POST flips `cancelAtPeriodEnd` on the row its `x-workspace-id` names
- * (none = the personal container), exactly as the route does.
+ * (none = the home space), exactly as the route does.
  *
  * Pins: hidden for free users; personal Pro shown with no workspace header;
  * Team shown only to admins of a STANDARD workspace; confirm before POST;
@@ -65,7 +65,7 @@ const PERSONAL = "__personal__";
 interface Row {
   plan: "free" | "pro" | "team" | "solo";
   status: "free" | "active" | "past_due" | "canceled";
-  containerKind: "personal" | "standard";
+  containerKind: "home" | "standard";
   cancelAtPeriodEnd: boolean;
 }
 
@@ -105,7 +105,7 @@ beforeEach(() => {
     [PERSONAL]: {
       plan: "free",
       status: "free",
-      containerKind: "personal",
+      containerKind: "home",
       cancelAtPeriodEnd: false,
     },
   };
@@ -231,7 +231,7 @@ describe("visibility", () => {
     expect(view.queryByRole("button", { name: "Cancel subscription" })).toBeNull();
   });
 
-  it("draws the personal subscription ONCE when the open workspace IS the personal container", async () => {
+  it("draws the personal subscription ONCE when the open workspace IS the home space", async () => {
     rows[PERSONAL] = { ...rows[PERSONAL], plan: "pro", status: "active" };
     rows["personal-id"] = rows[PERSONAL];
     const view = mount({ workspaceId: "personal-id", role: "owner" });
@@ -261,7 +261,7 @@ describe("the cancel flow", () => {
     expect(posts).toHaveLength(0);
   });
 
-  it("confirming POSTs ONE cancel to the personal container, then shows 'Cancels <date>' + Resume without a reload", async () => {
+  it("confirming POSTs ONE cancel to the home space, then shows 'Cancels <date>' + Resume without a reload", async () => {
     const view = mount({});
     fireEvent.click(await view.findByRole("button", { name: "Cancel subscription" }));
     await act(async () => {

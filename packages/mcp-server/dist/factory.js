@@ -97,8 +97,8 @@ async function bootServer(client, opts = {}) {
     //
     // ⚠ F-564's WARNING IS HONOURED, NOT DROPPED. It was against
     // `!isStandardWorkspace(…)`, whose NEGATIVE spelling armed a peer-shaped lock
-    // on every operator's own `personal` container. The member count excludes the
-    // personal shelf POSITIVELY — it has exactly one member — so nothing arms on
+    // on every operator's own `home` container. The member count excludes the
+    // home shelf POSITIVELY — it has exactly one member — so nothing arms on
     // a room with nobody else in it.
     //
     // ⚠ SHARED, NOT SOLO. A one-member container is the operator's own primary

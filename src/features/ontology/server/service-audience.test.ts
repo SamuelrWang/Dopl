@@ -23,12 +23,12 @@ vi.mock("./repository-shares", () => ({
   listSharesForChannels: vi.fn(),
 }));
 
-vi.mock("@/shared/tenancy/personal-reach", () => ({
-  personalShelfContainerIds: vi.fn(),
+vi.mock("@/shared/tenancy/home-space-reach", () => ({
+  homeSpaceShelfContainerIds: vi.fn(),
 }));
 
 import * as shares from "./repository-shares";
-import { personalShelfContainerIds } from "@/shared/tenancy/personal-reach";
+import { homeSpaceShelfContainerIds } from "@/shared/tenancy/home-space-reach";
 import {
   levelForOntology,
   resolveOntologyAudience,
@@ -36,7 +36,7 @@ import {
 } from "./service-audience";
 
 const mockShares = vi.mocked(shares);
-const mockPersonal = vi.mocked(personalShelfContainerIds);
+const mockHomeSpace = vi.mocked(homeSpaceShelfContainerIds);
 
 const LINK = "ws-link";
 const OWNER_CONTAINER = "ws-personal";
@@ -93,7 +93,7 @@ function prime(opts: {
   );
   mockShares.listChannelIdsForWorkspace.mockResolvedValue([CHANNEL]);
   mockShares.listSharesForChannels.mockResolvedValue([...(opts.shares ?? [])]);
-  mockPersonal.mockResolvedValue(opts.personal ?? [OWNER_CONTAINER]);
+  mockHomeSpace.mockResolvedValue(opts.personal ?? [OWNER_CONTAINER]);
 }
 
 async function levelOf(
@@ -259,7 +259,7 @@ describe("the arms that are not matrix rows", () => {
     });
   }
 
-  it("a standard workspace's scope stays its own container — the personal shelf is NOT folded in", async () => {
+  it("a standard workspace's scope stays its own container — the home shelf is NOT folded in", async () => {
     prime({ kind: "standard" });
     const audience = await resolveOntologyAudience(ctx());
     expect(audience.workspaceIds).toEqual([LINK]);
@@ -273,7 +273,7 @@ describe("the arms that are not matrix rows", () => {
     expect(audience.workspaceIds).toEqual([LINK]);
   });
 
-  it("the read SCOPE folds in the personal shelf and every LENDER's container", async () => {
+  it("the read SCOPE folds in the home shelf and every LENDER's container", async () => {
     prime({
       members: 2,
       personal: [OWNER_CONTAINER],
@@ -300,20 +300,20 @@ describe("the arms that are not matrix rows", () => {
     });
     const audience = await resolveOntologyAudience(ctx({ userId: "user-me" }));
     if (audience.kind !== "resolved") throw new Error("unreachable");
-    expect([...audience.personalWorkspaceIds]).toEqual([OWNER_CONTAINER]);
+    expect([...audience.homeSpaceWorkspaceIds]).toEqual([OWNER_CONTAINER]);
     // ⚠ A LENDER'S CONTAINER IS IN THE SCOPE AND IS NOT THE SHELF — somebody
     // else's ontology lent into this room is not the caller's own.
-    expect(audience.personalWorkspaceIds).not.toContain("ws-lender");
+    expect(audience.homeSpaceWorkspaceIds).not.toContain("ws-lender");
     // ⚠ …and it is not the CALLING container either, which is what the label
     // distinguishes rows FROM.
-    expect(audience.personalWorkspaceIds).not.toContain(LINK);
+    expect(audience.homeSpaceWorkspaceIds).not.toContain(LINK);
   });
 
   it("no shelf resolved ⇒ an empty label, never a guessed one", async () => {
     prime({ members: 2, personal: [] });
     const audience = await resolveOntologyAudience(ctx({ userId: "user-me" }));
     if (audience.kind !== "resolved") throw new Error("unreachable");
-    expect([...audience.personalWorkspaceIds]).toEqual([]);
+    expect([...audience.homeSpaceWorkspaceIds]).toEqual([]);
   });
 
   it("🔒 a SHARED CREDENTIAL has no shelf to label (M-10)", async () => {
@@ -322,7 +322,7 @@ describe("the arms that are not matrix rows", () => {
       ctx({ credentialSubjectUserId: null, source: "agent" })
     );
     if (audience.kind !== "resolved") throw new Error("unreachable");
-    expect([...audience.personalWorkspaceIds]).toEqual([]);
+    expect([...audience.homeSpaceWorkspaceIds]).toEqual([]);
   });
 
   it("⚠ ONE RESOLUTION PER REQUEST — two calls on one context probe the DB once", async () => {
@@ -344,14 +344,14 @@ describe("the arms that are not matrix rows", () => {
 
   /**
    * The OWNER arm — `created_by === userId`, which restores ROW 2 of
-   * `./service-shared.ts`'s truth table (the caller's own personal shelf,
+   * `./service-shared.ts`'s truth table (the caller's own home shelf,
    * reached from a room) and nothing else.
    *
    * It asks NOTHING about membership, so its soundness is the READ SCOPE's:
    * a row from a container the caller was removed from would answer `edit` and
    * simply never arrives. The second case states that in as many words.
    */
-  it("the owner arm — `created_by`, restoring the personal shelf and nothing more", async () => {
+  it("the owner arm — `created_by`, restoring the home shelf and nothing more", async () => {
     prime({ members: 2, personal: [OWNER_CONTAINER] });
     const me = ctx({ userId: OWNER });
     // Row 2: the shelf is not the calling container, and there is no share row.

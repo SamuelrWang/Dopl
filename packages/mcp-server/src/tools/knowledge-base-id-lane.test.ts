@@ -4,7 +4,7 @@
  * ⚠ **THE DEFECT THIS PINS.** `knowledge-shared.ts › resolveBase` matched a ref
  * against `listKbBases()`, which answers for the ONE container the connection is
  * bound to. So every op whose whole argument is an ID was container-keyed: a
- * base on the caller's own personal shelf — or in any other container they
+ * base on the caller's own home shelf — or in any other container they
  * belong to — answered `base_not_found` for an id the server's own id door
  * (`GET /api/knowledge/bases/<id>`) resolves. Reproduced in the 1.26.0 smoke on
  * a home channel's `container_session` credential.
@@ -19,7 +19,7 @@ import { describe, it, expect, vi } from "vitest";
 import type { DoplClient, KnowledgeBase, KnowledgeEntry } from "@dopl/client";
 import { opReadFile, opGetTree } from "./knowledge-ops-read.js";
 
-/** The base lives in the caller's PERSONAL container; the connection is bound
+/** The base lives in the caller's HOME space; the connection is bound
  *  to a home channel's container, so `list_bases` never names it. */
 const ELSEWHERE: KnowledgeBase = {
   id: "a5b5a013-d2dc-4387-a41b-e08b47d68e79",

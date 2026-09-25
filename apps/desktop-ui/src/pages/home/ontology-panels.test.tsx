@@ -5,7 +5,7 @@ import { bridgeCalls, installBridge, ok } from "#/test-utils/bridge";
 import { renderHome, routes } from "./home-test-harness";
 import {
   NEW_ONTOLOGY_ID,
-  PERSONAL_WORKSPACE_ID,
+  HOME_SPACE_WORKSPACE_ID,
   PIPELINE_ID,
   createOntologyFromSwitcher,
   ontologyName,
@@ -53,7 +53,7 @@ import {
  * ⚠ MOUNTED THROUGH `HomePage`, NEVER THE PANEL, for the reason
  * `knowledge-panels.test.tsx` gives: three of the things this file proves are
  * properties of the PAGE — that the fifth tab exists and is reachable, that the
- * face reads the PERSONAL container off the boot query the page already mounts,
+ * face reads the HOME space off the boot query the page already mounts,
  * and that the pane token resolves to this face at all. A direct mount would
  * hand the panel static props and pass with every one of those broken.
  *
@@ -124,7 +124,7 @@ describe("the pane token", () => {
 });
 
 describe("the face", () => {
-  it("IS the board, addressed at the PERSONAL container — not a list of cards", async () => {
+  it("IS the board, addressed at the HOME space — not a list of cards", async () => {
     renderHome();
     await openOntologyFace();
 
@@ -136,7 +136,7 @@ describe("the face", () => {
     expect(screen.queryByRole("button", { name: "Share" })).toBeNull();
   });
 
-  it("reads `/api/ontology` addressed to the PERSONAL container, once", async () => {
+  it("reads `/api/ontology` addressed to the HOME space, once", async () => {
     renderHome();
     await openOntologyFace();
 
@@ -145,7 +145,7 @@ describe("the face", () => {
     );
     expect(reads).not.toHaveLength(0);
     for (const read of reads) {
-      expect(read.opts.workspaceId).toBe(PERSONAL_WORKSPACE_ID);
+      expect(read.opts.workspaceId).toBe(HOME_SPACE_WORKSPACE_ID);
     }
   });
 
@@ -386,7 +386,7 @@ describe("the switcher", () => {
  * looking at the ontology they were already on).
  */
 describe("creating", () => {
-  it("POSTs into the personal container and LANDS on the new ontology", async () => {
+  it("POSTs into the home space and LANDS on the new ontology", async () => {
     renderHome();
     await openOntologyFace();
 
@@ -400,7 +400,7 @@ describe("creating", () => {
       const post = bridgeCalls(apiRequest).find(
         (c) => c.path === "/api/ontology/ontologies" && c.opts.method === "POST"
       );
-      expect(post?.opts.workspaceId).toBe(PERSONAL_WORKSPACE_ID);
+      expect(post?.opts.workspaceId).toBe(HOME_SPACE_WORKSPACE_ID);
     });
     await waitFor(() => expect(ontologyName()).toBe("New ontology"));
     expect(NEW_ONTOLOGY_ID).toBe("ontology-new");

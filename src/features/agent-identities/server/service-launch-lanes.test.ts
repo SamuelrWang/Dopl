@@ -30,7 +30,7 @@ import {
 
 /** Where the caller was authorised — a channel's container, say. */
 const HERE = "11111111-1111-1111-1111-111111111111";
-/** Where the identity actually lives — the caller's personal shelf. */
+/** Where the identity actually lives — the caller's home shelf. */
 const SHELF = "22222222-2222-2222-2222-222222222222";
 const ID = "44444444-4444-4444-4444-444444444444";
 
@@ -121,14 +121,14 @@ describe("a NAME does not follow, on either lane, and that is deliberate", () =>
         name: "Code Auditor",
         containerId: SHELF,
         containerName: "",
-        containerKind: "personal",
+        containerKind: "home",
         ownedByCaller: true,
         containerRole: "admin",
       },
     ]);
     await expect(resolveIdentityRef(ctx(), "Code Auditor")).resolves.toEqual({
       kind: "elsewhere",
-      identity: { name: "Code Auditor", label: "your personal container" },
+      identity: { name: "Code Auditor", label: "your home space" },
     });
   });
 });

@@ -11,22 +11,22 @@ vi.mock("@/shared/supabase/admin", () => ({
   supabaseAdmin: () => ({ __marker: "admin-client" }),
 }));
 
-vi.mock("@/shared/tenancy/personal-reach", () => ({
-  resolvePersonalReach: vi.fn(),
-  personalShelfContainerIds: vi.fn(),
+vi.mock("@/shared/tenancy/home-space-reach", () => ({
+  resolveHomeSpaceReach: vi.fn(),
+  homeSpaceShelfContainerIds: vi.fn(),
 }));
 
-import { resolvePersonalReach } from "@/shared/tenancy/personal-reach";
-import { PersonalContainerMissingError } from "@/shared/tenancy/personal-container";
+import { resolveHomeSpaceReach } from "@/shared/tenancy/home-space-reach";
+import { HomeSpaceMissingError } from "@/shared/tenancy/home-space";
 import { resolveIdentityCreateDestination } from "./service-write-gates";
 import { IdentityTeamNotGrantableError } from "./errors";
 
-const mockReach = vi.mocked(resolvePersonalReach);
+const mockReach = vi.mocked(resolveHomeSpaceReach);
 
 const ME = "u-operator";
 /** A shared room — a container with a peer in it. */
 const ROOM = "e7998a94-d3ab-42cc-8c76-99585bcb920c";
-/** The caller's own personal container; never equal to the room. */
+/** The caller's own home space; never equal to the room. */
 const CONTAINER = "33333333-3333-4333-8333-333333333333";
 
 function ctx(over: Partial<AgentIdentityContext> = {}): AgentIdentityContext {
@@ -84,7 +84,7 @@ describe("homeScoped — the fence decides, and it is finally asked", () => {
   });
 
   it("REFUSES an agent in an UNARMED shared room — the hole this gate closes", async () => {
-    // `personalWriteWorkspaceId` routes by author and asks nobody, so the gate must refuse first.
+    // `homeSpaceWriteWorkspaceId` routes by author and asks nobody, so the gate must refuse first.
     mockReach.mockResolvedValue({ kind: "closed", refusal: "unarmed_room" });
 
     const err = await resolveIdentityCreateDestination(ctx(), {
@@ -95,16 +95,16 @@ describe("homeScoped — the fence decides, and it is finally asked", () => {
       (e: Error) => e
     );
 
-    expect(err).toBeInstanceOf(PersonalContainerMissingError);
-    expect(err!.message).toContain("not armed for your personal shelf");
+    expect(err).toBeInstanceOf(HomeSpaceMissingError);
+    expect(err!.message).toContain("not armed for your home shelf");
     expect(err!.message).toContain("human-only");
   });
 
   it.each([
-    ["shared_credential" as const, "a shared credential has no personal shelf"],
-    ["no_container" as const, "your personal container has not been created yet"],
+    ["shared_credential" as const, "a shared credential has no home shelf"],
+    ["no_container" as const, "your home space has not been created yet"],
   ])("refuses %s with the shared sentence, verbatim", async (refusal, sentence) => {
-    // One sentence per reason, from `personal-container.ts › personalShelfRefusal`, shared by three doors.
+    // One sentence per reason, from `home-space.ts › homeSpaceShelfRefusal`, shared by three doors.
     mockReach.mockResolvedValue({ kind: "closed", refusal });
 
     const err = await resolveIdentityCreateDestination(ctx(), {
@@ -115,7 +115,7 @@ describe("homeScoped — the fence decides, and it is finally asked", () => {
       (e: Error) => e
     );
 
-    expect(err).toBeInstanceOf(PersonalContainerMissingError);
+    expect(err).toBeInstanceOf(HomeSpaceMissingError);
     expect(err!.message).toContain(sentence);
   });
 
@@ -128,11 +128,11 @@ describe("homeScoped — the fence decides, and it is finally asked", () => {
         homeScoped: true,
         visibility: "private",
       })
-    ).rejects.toBeInstanceOf(PersonalContainerMissingError);
+    ).rejects.toBeInstanceOf(HomeSpaceMissingError);
   });
 
   it("asks the fence about THE CALLER, exactly once", async () => {
-    // Passed whole (it satisfies `PersonalReachCaller`), never a container the input named.
+    // Passed whole (it satisfies `HomeSpaceReachCaller`), never a container the input named.
     mockReach.mockResolvedValue({ kind: "open", containerId: CONTAINER });
     const caller = ctx();
 

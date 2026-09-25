@@ -19,7 +19,7 @@ import { useWorkspaceEntitlements } from "./use-workspace-entitlements";
  * `credits.wallet` says which, so the label names the payer instead of implying
  * a pool that does not exist.
  * Minimal copy (INVARIANTS §5): label + control, no explainer paragraph.
- * 2026-09-08: a personal container has no roster and no seats, so the Members
+ * 2026-09-08: a home space has no roster and no seats, so the Members
  * line and every "billable seat" phrase are dropped there rather than printed
  * as a `1` that can only ever be 1.
  */
@@ -28,7 +28,7 @@ export function BillingUsagePane({ workspaceId }: { workspaceId: string }) {
 
   if (ent.loading) return <UsageSkeleton />;
 
-  const isPersonal = ent.containerKind === "personal";
+  const isHomeSpace = ent.containerKind === "home";
   const creditsExhausted = ent.credits.remaining === 0 && ent.credits.limit > 0;
 
   return (
@@ -75,10 +75,10 @@ export function BillingUsagePane({ workspaceId }: { workspaceId: string }) {
 
       <section className="bento px-6 py-5">
         <h2 className="text-title font-semibold tracking-tight text-text-primary">
-          {isPersonal ? "Limits" : "Workspace limits"}
+          {isHomeSpace ? "Limits" : "Workspace limits"}
         </h2>
         <div className="mt-3 divide-y divide-border-subtle">
-          {!isPersonal && (
+          {!isHomeSpace && (
             <UsageLine
               className="py-2 first:pt-0"
               label="Members"

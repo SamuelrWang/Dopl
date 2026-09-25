@@ -86,7 +86,7 @@ let axisColumnsPresent = true;
  * equality the DB's own `mcp_tokens_subject_is_owner_check` enforces cannot be
  * spelled three different ways at three call sites.
  */
-export function personalUnfencedAxes(userId: string): {
+export function homeSpaceUnfencedAxes(userId: string): {
   container_id: null;
   subject_user_id: string;
 } {

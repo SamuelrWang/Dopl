@@ -38,7 +38,7 @@ describe("allowances", () => {
   });
 
   it("🔒 carries a `pro` key that NO seat ever reads — it is there for the Record type", () => {
-    // `pro` is sold only on a `kind='personal'` container, which has no seats.
+    // `pro` is sold only on a `kind='home'` container, which has no seats.
     // The key exists so `Record<PlanId, number>` stays exhaustive and the next
     // plan id is a compile error rather than a silent `undefined`; the credits
     // service never routes a seat burn through it
@@ -109,7 +109,7 @@ describe("personalCreditsForPlan", () => {
     expect(personalCreditsForPlan("free")).toBe(500);
   });
 
-  it("🔒 answers FREE for a workspace plan that cannot be on a personal container", () => {
+  it("🔒 answers FREE for a workspace plan that cannot be on a home space", () => {
     // The safe direction: `team` and `solo` cannot be the verdict here, and if a
     // bad row produced one, reading it as paid would hand a free home space
     // credits nobody bought — which a taxonomy-wide lookup would do.

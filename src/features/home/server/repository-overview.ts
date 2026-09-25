@@ -20,7 +20,7 @@ import type { Role } from "@/features/workspaces/types";
  * should not cost a round trip.
  *
  * ⚠ **TWO FUNCTIONS TAKE A PERSON INSTEAD, AND THAT IS A SECOND FENCE RATHER
- * THAN AN EXCEPTION TO THE FIRST (2026-09-12).** `listOwnedPersonalContainerIds`
+ * THAN AN EXCEPTION TO THE FIRST (2026-09-12).** `listOwnedHomeSpaceIds`
  * and `scanCreditEvents` are fenced on the reader's OWN USER ID, because the
  * thing they answer for is a WALLET and a wallet belongs to a person, not to a
  * container set. Membership and ownership are different lists (see that
@@ -226,11 +226,11 @@ export interface CreditEventScanRow {
  * (`scripts/sql/backfill-credit-wallets-v2.sql`). ⚠ It fences the LEGACY arm of
  * the wallet predicate only; a `standard` workspace's burn is a SEAT wallet's.
  */
-const PERSONAL_WALLET_KINDS = ["personal", "link"];
+const PERSONAL_WALLET_KINDS = ["home", "link"];
 
 /**
  * Every container whose burns are charged to `userId`'s PERSONAL wallet — their
- * own `kind='personal'` container and every `kind='link'` container they OWN.
+ * own `kind='home'` container and every `kind='link'` container they OWN.
  *
  * 🔒 **OWNERSHIP, NOT MEMBERSHIP, AND THE TWO ARE DIFFERENT FENCES ON THIS
  * PAGE.** `repository-containers.ts › listLinkContainers` (the fence every other
@@ -241,7 +241,7 @@ const PERSONAL_WALLET_KINDS = ["personal", "link"];
  * ⚠ It is derived from the SESSION user id and nothing a caller sent, which is
  * what lets it be handed to the RLS-bypassing admin client (INVARIANTS §2).
  */
-export async function listOwnedPersonalContainerIds(
+export async function listOwnedHomeSpaceIds(
   userId: string
 ): Promise<string[]> {
   const { data, error } = await supabaseAdmin()

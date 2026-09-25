@@ -6,7 +6,7 @@
  * row belong in the rail". Its NEGATION is not "therefore a home channel", and
  * a growing number of sites read it that way. That is correct BY ACCIDENT while
  * `standard` and `link` are the only two kinds. **`20260920120000` adds a third
- * (`personal`) for every user at once**, and each of these sites then advertises
+ * (`home`) for every user at once**, and each of these sites then advertises
  * a person's own container as a home channel — a MISLABEL, not a leak, which is
  * why it does not block the code landing and does block the migration RUNNING.
  *
@@ -77,7 +77,7 @@ const SHAPES: ReadonlyArray<[string, RegExp]> = [
  *   • **the integration** closed `packages/mcp-server/src/tools/confirm-token.ts`,
  *     which was in no slice's `Owns` column: `resolveConfirmTarget` asked
  *     `!isStandardWorkspace(…)` and was saved only by its member-count term,
- *     which a one-member personal container happens to fail. Correct by
+ *     which a one-member home space happens to fail. Correct by
  *     accident is not correct.
  */
 
@@ -89,7 +89,7 @@ const SHAPES: ReadonlyArray<[string, RegExp]> = [
  * of the eight sites is a FENCE rather than a label: `assertMemberAddable`
  * refuses to add a member to a container of ANY kind, and it must go on reading
  * the negation so a fourth kind inherits the refusal instead of opting into it.
- * Repointing it to `kind === "link"` would have OPENED personal containers to
+ * Repointing it to `kind === "link"` would have OPENED home spaces to
  * member-add — the gate would have gone green by introducing the bug F-295
  * exists to prevent.
  *
@@ -104,7 +104,7 @@ const FENCE_SITES: Record<string, string> = {
   "src/app/api/billing/upgrade-to-team/route.ts":
     "credit-model-v2.1 (2026-09-08) — CLOSED: Team belongs on a standard workspace only, " +
     "so the 409 must be inherited by every future kind rather than opted into; the MESSAGE " +
-    "branches on `kind` (a home channel carries no plan, a personal container has Pro)",
+    "branches on `kind` (a home channel carries no plan, a home space has Pro)",
 };
 
 /**
@@ -118,7 +118,7 @@ const FENCE_SITES: Record<string, string> = {
  * parked here to dodge the message assertion.
  *
  * ⚠ **EMPTY SINCE 2026-09-17, AND THE EMPTYING IS THE RECORD.** Its one entry was
- * `app-shell.tsx`, whose `leavesShell` read `kind !== "personal" && !isStandardWorkspace(...)`
+ * `app-shell.tsx`, whose `leavesShell` read `kind !== "home" && !isStandardWorkspace(...)`
  * — "not personal AND not standard", which ADMITS every kind added to `WorkspaceKind`
  * later and bounces those members out of the shell. Final review replaced it with
  * the positive `kind === "link"`, so the file is no longer a negation site at all

@@ -3,7 +3,7 @@
  *
  * The property with teeth (2026-09-08, spec §11): **a container is refused
  * before the plan is read, with its own code.** Team is a standard workspace's
- * plan; a `kind='personal'` container's paid plan is `pro`. Falling through
+ * plan; a `kind='home'` container's paid plan is `pro`. Falling through
  * would have answered 409 `NOT_ON_SOLO` — a sentence about a plan the caller
  * never had — and, on a row that DID satisfy the solo check, would have swapped
  * a personal subscription onto the per-seat price.
@@ -137,9 +137,9 @@ describe("the legacy switch", () => {
 });
 
 describe("🔒 a CONTAINER is refused, and not as NOT_ON_SOLO", () => {
-  it("409s NOT_A_WORKSPACE on a personal container, before the billing row is even read", async () => {
+  it("409s NOT_A_WORKSPACE on a home space, before the billing row is even read", async () => {
     AUTH.workspaceId = "personal-1";
-    AUTH.workspaceKind = "personal";
+    AUTH.workspaceKind = "home";
     const res = await call();
     expect(res.status).toBe(409);
     const body = await res.json();
@@ -149,11 +149,11 @@ describe("🔒 a CONTAINER is refused, and not as NOT_ON_SOLO", () => {
     expect(stripeCalls.updated).toBeNull();
   });
 
-  it("refuses a personal container even when its row WOULD satisfy the Solo check", async () => {
+  it("refuses a home space even when its row WOULD satisfy the Solo check", async () => {
     // ⚠ The dangerous case: without the kind arm this row swaps a personal
     // subscription onto the per-seat price and grows a seat count.
     AUTH.workspaceId = "personal-1";
-    AUTH.workspaceKind = "personal";
+    AUTH.workspaceKind = "home";
     mockRepo.getWorkspaceBilling.mockResolvedValue(
       billing({ workspaceId: "personal-1" })
     );
@@ -182,7 +182,7 @@ describe("🔒 a CONTAINER is refused, and not as NOT_ON_SOLO", () => {
     expect(linkMessage).toContain("home channel");
     expect(linkMessage).not.toContain("personal space");
 
-    AUTH.workspaceKind = "personal";
+    AUTH.workspaceKind = "home";
     const personalMessage = (await (await call()).json()).message;
     expect(personalMessage).toContain("personal space");
     expect(personalMessage).not.toContain("home channel");

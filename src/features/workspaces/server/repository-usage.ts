@@ -56,7 +56,7 @@ const EXCLUDE_AWAIT_POLLING = "tool.neq.channel,op.not.like.await*";
 
 /** The wallets a STANDARD workspace's own spend can sit on: the v2.1 per-member
  *  `seat`, and the LEGACY pooled `workspace` (the column's `DEFAULT`, every row
- *  written before 2026-09-07). ⚠ `personal` is neither, and its absence is the
+ *  written before 2026-09-07). ⚠ `home` is neither, and its absence is the
  *  whole fence — see {@link scanWorkspaceCreditEvents}. */
 const WORKSPACE_WALLETS = ["seat", "workspace"];
 

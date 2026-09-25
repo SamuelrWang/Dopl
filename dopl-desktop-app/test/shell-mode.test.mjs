@@ -160,7 +160,7 @@ test("registration is optional at the WIRING level and fatal at neither end", ()
 // original workspace. The user should be auto at the Home space. (This is for
 // new opens)."* A COLD launch already did: the SPA loads its index with no hash,
 // the hash router resolves `/` to the boot page, and boot navigates to `/home`
-// for a `kind='personal'` boot answer (`c37e4942`). What did not was every OTHER
+// for a `kind='home'` boot answer (`c37e4942`). What did not was every OTHER
 // "open": Dopl lives in the tray, so the dock icon, "Open Dopl" and a second
 // launch all revealed the SAME window, still on the workspace route it was left
 // on. `openMainWindow` is that gap, and nothing else.

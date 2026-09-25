@@ -125,7 +125,7 @@ describe("what the page reads back off the URL", () => {
 
   it("accepts Team and Pro — the two plans on sale — and nothing else", () => {
     expect(parseCheckoutPlan("team")).toBe("team");
-    // Personal Pro on a `kind='personal'` container (2026-09-08). Which
+    // Personal Pro on a `kind='home'` container (2026-09-08). Which
     // container may buy it is the checkout route's fence, not this parser's — a
     // URL is read before any workspace is resolved.
     expect(parseCheckoutPlan("pro")).toBe("pro");
@@ -137,7 +137,7 @@ describe("what the page reads back off the URL", () => {
   });
 
   it("carries `plan=pro` through the builder with no segment — the personal forward", () => {
-    // The seller (a 402 envelope, /pricing) holds no personal-container segment;
+    // The seller (a 402 envelope, /pricing) holds no home-space segment;
     // `/billing` resolves it and must still see the plan.
     expect(billingPath({ intent: "upgrade", plan: "pro" })).toBe(
       "/billing?billing=upgrade&plan=pro"

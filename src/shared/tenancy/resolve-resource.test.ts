@@ -31,7 +31,7 @@ import {
   makeAdmin,
   member,
   ME,
-  personalContainer,
+  homeSpace,
   identityRow,
   T1,
   WS_A,
@@ -142,7 +142,7 @@ describe("🔒 the container lock is honoured, and narrows", () => {
     // ⚠ MUTATION CHECK. Without this the membership set is the caller's WHOLE
     // reach and a locked credential resolves ids outside its own lock — a
     // workspace fence (§4 layer B1) quietly stepped over by a read.
-    // ⚠ A caller with NO personal container gets the lock and nothing else, so
+    // ⚠ A caller with NO home space gets the lock and nothing else, so
     // the admission below cannot be a blanket widening in disguise.
     expect(filters(calls, "workspace_members")).toEqual([
       `eq("user_id"=${JSON.stringify(ME)})`,
@@ -151,12 +151,12 @@ describe("🔒 the container lock is honoured, and narrows", () => {
     ]);
   });
 
-  it("🔒 ALSO admits the caller's OWN PERSONAL container", async () => {
-    // 🔒 Rulings B10 / #18: the personal shelf is reachable from every
+  it("🔒 ALSO admits the caller's OWN HOME space", async () => {
+    // 🔒 Rulings B10 / #18: the home shelf is reachable from every
     // container the user is in. It stopped being reachable the moment it became
     // a container of its own — the 1.26.0 smoke's `base_not_found`.
     const calls = makeAdmin({
-      workspaces: [personalContainer()],
+      workspaces: [homeSpace()],
       workspace_members: [member(WS_P, "owner")],
       knowledge_bases: [
         {
@@ -164,14 +164,14 @@ describe("🔒 the container lock is honoured, and narrows", () => {
           name: "Orchestration Guidelines",
           workspace_id: WS_P,
           created_by: ME,
-          workspace: { name: "Personal", kind: "personal" },
+          workspace: { name: "Personal", kind: "home" },
         },
       ],
     });
     const resolved = await resolveResource(locked, "knowledge_base", T1);
     expect(resolved).toMatchObject({
       containerId: WS_P,
-      containerKind: "personal",
+      containerKind: "home",
       ownedByCaller: true,
     });
     expect(filters(calls, "workspace_members")).toContain(
@@ -181,23 +181,23 @@ describe("🔒 the container lock is honoured, and narrows", () => {
 
   it("🔒 looks that container up BY OWNER, so it is never somebody else's", async () => {
     // ⚠ MUTATION CHECK, and it is the whole reason the admission is safe: the
-    // probe is keyed on the CALLER's id and on `kind='personal'`. Key it on
+    // probe is keyed on the CALLER's id and on `kind='home'`. Key it on
     // anything a caller supplies and the lock becomes a door into any shelf.
     const calls = makeAdmin({
-      workspaces: [personalContainer()],
+      workspaces: [homeSpace()],
       workspace_members: [member(WS_A)],
       agent_identities: [],
     });
     await resolveResource(locked, "agent_identity", T1);
     expect(filters(calls, "workspaces")).toEqual([
       `eq("owner_id"=${JSON.stringify(ME)})`,
-      `eq("kind"="personal")`,
+      `eq("kind"="home")`,
     ]);
   });
 
-  it("names the lock ONCE when the lock IS the personal container", async () => {
+  it("names the lock ONCE when the lock IS the home space", async () => {
     const calls = makeAdmin({
-      workspaces: [personalContainer(WS_A)],
+      workspaces: [homeSpace(WS_A)],
       workspace_members: [member(WS_A, "owner")],
       agent_identities: [],
     });
@@ -211,7 +211,7 @@ describe("🔒 the container lock is honoured, and narrows", () => {
     // Clause 1 refuses before a query is built, so the personal probe is not
     // issued either: a credential that may be passed between humans points at
     // nobody's shelf. ⚠ MUTATION CHECK for moving the admission ABOVE clause 1.
-    const calls = makeAdmin({ workspaces: [personalContainer()] });
+    const calls = makeAdmin({ workspaces: [homeSpace()] });
     expect(
       await resolveResource(
         { ...locked, credentialSubjectUserId: null },

@@ -239,7 +239,7 @@ const LEDGER: FilteredOp[] = [
     // ⚠ **"NO shelf label" LEFT THIS ROW ON 2026-09-02 (slice B15).** It was a
     // disclosure about an axis this surface no longer has: the `home_scoped`
     // column is dropped and a personal identity is an ordinary row in the
-    // caller's own `kind='personal'` container, so there is no unlabelled state
+    // caller's own `kind='home'` container, so there is no unlabelled state
     // to warn about. The VISIBILITY disclosures are untouched.
     discloses: ["you can SEE", "not the workspace's roster"],
   },

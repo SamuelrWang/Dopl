@@ -127,8 +127,8 @@ describe("resolveAgentAudience — the three unrestricted branches", () => {
     expect(mockGrants).not.toHaveBeenCalled();
   });
 
-  it("a PERSONAL container — one member — is unrestricted", async () => {
-    mockKind.mockResolvedValue("personal");
+  it("a HOME space — one member — is unrestricted", async () => {
+    mockKind.mockResolvedValue("home");
     mockCount.mockResolvedValue(1);
 
     expect(await resolveAgentAudience(ctx())).toEqual({ kind: "unrestricted" });

@@ -37,7 +37,7 @@ import { KnowledgeBaseCreateSchema } from "@/features/knowledge/schema";
  *     card, never a missing one.
  *   - `homeScopedBaseIds` (2026-08-28): which of the listed bases sit on the caller's PERSONAL
  *     (/home) shelf. 🔒 A SIBLING KEY, AND IT SURVIVED THE COLUMN IT WAS NAMED FOR: since
- *     2026-09-02 (slice B15) the shelf is a TENANCY — the caller's own `kind='personal'` container —
+ *     2026-09-02 (slice B15) the shelf is a TENANCY — the caller's own `kind='home'` container —
  *     so the question is "is this row in my container" and there is no flag to project. The key
  *     shape and the `?? []` rule are unchanged. `[]` for both "none on the personal
  *     shelf" and a degraded read: an unreadable flag means an UNLABELLED card, never a mislabelled

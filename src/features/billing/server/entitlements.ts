@@ -18,11 +18,11 @@ import {
  * The entitlements contract every gate (enforcement, chats window, UI) builds
  * against. A plan belongs to a CONTAINER, and which plans a container may be
  * sold depends on its kind — Starter/Team on a standard workspace, Free/Pro on
- * a `kind='personal'` one (`../plans.ts › plansForKind`). `solo` is legacy:
+ * a `kind='home'` one (`../plans.ts › plansForKind`). `solo` is legacy:
  * retired from sale, and every rule below still applies to rows on it.
  *   - team: entitled while active/past_due; seats sync to active members.
  *   - pro: entitled while active/past_due, with NO member condition (F-673).
- *     Personal containers only.
+ *     Home spaces only.
  *   - solo: entitled only while active/past_due AND memberCount === 1; a second
  *     member degrades it to free multi-member rules, which is the backstop that
  *     keeps the object cap unbypassable.
@@ -45,7 +45,7 @@ export type WorkspacePlan = PlanId;
  *  Legacy rows only — nothing sells solo since 2026-09-07. */
 const SOLO_MAX_MEMBERS = 1;
 
-/** A `kind='personal'` container holds its owner and nobody else
+/** A `kind='home'` container holds its owner and nobody else
  *  (`20260920120000_workspace_kind_personal.sql`). Not a plan limit you can buy
  *  past, unlike `SOLO_MAX_MEMBERS`: it is what the container is. */
 const PERSONAL_MAX_MEMBERS = 1;
@@ -84,7 +84,7 @@ export {
  *
  * `pro` carries no member condition, and that is a decision (2026-09-08,
  * F-673). Solo's `memberCount <= 1` is a backstop against a second member the
- * schema permits; a `kind='personal'` container has exactly one member by
+ * schema permits; a `kind='home'` container has exactly one member by
  * construction (`20260920120000_workspace_kind_personal.sql`), so the same
  * clause would guard nothing and would silently drop a paying customer to the
  * free allowance on one stale membership row.
@@ -126,10 +126,10 @@ export function entitledPlanFor(
 /**
  * The whole contract for one container, read fresh (three round trips).
  *
- * A `kind='personal'` container needs no branch here (spec §11.1): it has one
+ * A `kind='home'` container needs no branch here (spec §11.1): it has one
  * member, so `objectCap` falls out `null` on the 1-member-free rule, `seatCount`
  * is `null` because that key is Team-only, and `chatsWindowDays` follows the
- * `pro` verdict. A `kind === "personal"` branch would be a second copy of those
+ * `pro` verdict. A `kind === "home"` branch would be a second copy of those
  * rules that agrees today and drifts on the next edit — which is why this
  * function takes an id and not a kind.
  */
@@ -193,7 +193,7 @@ export class EntitlementError extends Error {
  *
  * `plan` names what the caller is being sold and only `"pro"` is sayable
  * (2026-09-08): with it the segment-less `/billing` forwards to the caller's
- * personal container, the only place a home-space upsell can land. Typed as the
+ * home space, the only place a home-space upsell can land. Typed as the
  * literal rather than `url.ts`'s `CheckoutPlan`, so this file's correctness is
  * not a question about merge order.
  */
@@ -219,7 +219,7 @@ export async function assertCanCreateObject(
  *
  * The code is a parameter (2026-09-08) because the two refusals differ:
  * `SOLO_MEMBER_LIMIT` means "buy Team" and the invite/join surfaces key on that
- * string to offer the in-place upgrade; a personal container's refusal has no
+ * string to offer the in-place upgrade; a home space's refusal has no
  * upgrade that fixes it. Same status and shape, different code and sentence.
  */
 class MemberLimitError extends HttpError {
@@ -249,7 +249,7 @@ class MemberLimitError extends HttpError {
  *
  *   * a live legacy SOLO workspace → `SOLO_MEMBER_LIMIT`, with the Team
  *     checkout attached: buying Team is the fix.
- *   * a live PRO personal container → `PERSONAL_SINGLE_MEMBER`, with NO
+ *   * a live PRO home space → `PERSONAL_SINGLE_MEMBER`, with NO
  *     upgrade url: there is nothing to buy and the empty string says so, the
  *     same posture `credits-service.ts › upgradeUrlFor` takes.
  *

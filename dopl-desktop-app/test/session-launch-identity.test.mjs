@@ -95,7 +95,7 @@ test("F-1 / F-2: a 404 REFUSES with `no-identity` — deleted and invisible are 
 // ⚠ EVERY 404 IS ONE ANSWER (P7-13): the server stopped sending a tenancy hint, and a body that
 // still carries one is not read — nothing here may reconstruct the 404-never-403 oracle.
 test("every 404 is `no-identity`, whatever its body says", async () => {
-  const shelf = { name: "Code Auditor", label: "your personal shelf" }, at = (el) => boot({ status: 404, body: el === undefined ? undefined : { error: { details: { elsewhere: el } } } });
+  const shelf = { name: "Code Auditor", label: "your home shelf" }, at = (el) => boot({ status: 404, body: el === undefined ? undefined : { error: { details: { elsewhere: el } } } });
   for (const el of [shelf, undefined, {}, { name: "x" }, "shelf", 7, null])
     assert.deepEqual(await at(el).resolve.resolveAgentIdentity(IDENTITY_ID, WS), { ok: false, reason: "no-identity" }, JSON.stringify(el ?? null));
 });

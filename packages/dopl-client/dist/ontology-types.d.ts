@@ -63,7 +63,7 @@ export interface OntologySnapshot {
     ontologies: Ontology[];
     objects: Record<string, OntologyObject>;
     /**
-     * 🔒 **WHICH ONTOLOGIES CAME OFF THE CALLER'S OWN PERSONAL SHELF** (S29c,
+     * 🔒 **WHICH ONTOLOGIES CAME OFF THE CALLER'S OWN HOME SHELF** (S29c,
      * 2026-09-18) — the ontology twin of `KbBasesPayload.homeScopedBaseIds`.
      *
      * ⚠ **ABSENT IS "NOT ANSWERED", NEVER "NONE".** A payload cached against an
@@ -75,7 +75,7 @@ export interface OntologySnapshot {
      * ⚠ **A LABEL, NOT A FENCE.** Nothing filters on it: every ontology listed
      * already cleared `levelForOntology`.
      */
-    personalOntologyIds?: string[];
+    homeSpaceOntologyIds?: string[];
 }
 /**
  * `GET /api/ontology?view=summary` — same graph SHAPE, every JSONB column left
@@ -107,7 +107,7 @@ export interface OntologySummary {
     ontologies: OntologyListItem[];
     objects: Record<string, OntologyObjectSummary>;
     /**
-     * 🔒 **WHICH ONTOLOGIES CAME OFF THE CALLER'S OWN PERSONAL SHELF** (S29c,
+     * 🔒 **WHICH ONTOLOGIES CAME OFF THE CALLER'S OWN HOME SHELF** (S29c,
      * 2026-09-18) — the ontology twin of `KbBasesPayload.homeScopedBaseIds`.
      *
      * ⚠ **ABSENT IS "NOT ANSWERED", NEVER "NONE".** A payload cached against an
@@ -119,7 +119,7 @@ export interface OntologySummary {
      * ⚠ **A LABEL, NOT A FENCE.** Nothing filters on it: every ontology listed
      * already cleared `levelForOntology`.
      */
-    personalOntologyIds?: string[];
+    homeSpaceOntologyIds?: string[];
     /**
      * True when a server row ceiling clipped this view. Absent on older servers
      * — treat `undefined` as "not clipped", never "unknown".

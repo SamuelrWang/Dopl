@@ -166,7 +166,7 @@ describe("the scope trigger — both arms refusable AT REST", () => {
 
   it("🔒 arm 1 — `workspace_id` is the ONTOLOGY's container, not the channel's", () => {
     // `20260914120000` rule 3. A wrong container files the share where the
-    // owner's personal-container cascade cannot reach it.
+    // owner's home-space cascade cannot reach it.
     expect(REPLAYED).toMatch(
       /NEW\.workspace_id <> v_owner_workspace[\s\S]{0,200}RAISE EXCEPTION/i
     );
@@ -174,7 +174,7 @@ describe("the scope trigger — both arms refusable AT REST", () => {
 
   it("🔒 arm 2 — Q5, home channels only, in the POSITIVE form", () => {
     // `<> 'link'`, never `= 'standard'`: asking the negative would silently admit
-    // every kind added to the union later, `personal` included (INVARIANTS §4A,
+    // every kind added to the union later, `home` included (INVARIANTS §4A,
     // F-295).
     expect(REPLAYED).toMatch(/v_channel_kind <> 'link'/i);
     expect(REPLAYED).toMatch(/home channels only/i);

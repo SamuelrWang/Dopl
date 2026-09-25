@@ -105,7 +105,7 @@ export const HOME_BASES: KnowledgeBaseList = {
   baseStats: {},
   kbStorageLimit: null,
   starredBaseIds: [],
-  // The personal shelf's base is shared nowhere — the card keeps "Private".
+  // The home shelf's base is shared nowhere — the card keeps "Private".
   sharedBaseIds: [],
   channelGrants: {},
 };

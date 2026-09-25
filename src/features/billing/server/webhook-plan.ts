@@ -55,12 +55,12 @@ export function derivePlan(subscription: Stripe.Subscription): PlanId {
 
 /**
  * Does this plan belong on this container's KIND? `pro` is sold only on a
- * `kind='personal'` container and `team` only on a standard workspace
+ * `kind='home'` container and `team` only on a standard workspace
  * (spec §11.1); `solo` and `free` are legacy/absent and constrain nothing.
  */
 function planFitsKind(plan: PlanId, kind: WorkspaceKind | undefined): boolean {
-  if (plan === "pro") return kind === "personal";
-  // The positive predicate (§4A, F-295), never `kind !== "personal"` — a
+  if (plan === "pro") return kind === "home";
+  // The positive predicate (§4A, F-295), never `kind !== "home"` — a
   // fourth kind must not become sellable by the act of being named.
   if (plan === "team") return isStandardWorkspace({ kind });
   return true;
@@ -68,7 +68,7 @@ function planFitsKind(plan: PlanId, kind: WorkspaceKind | undefined): boolean {
 
 /**
  * Report, never refuse. `checkout/route.ts` is the fence that keeps `pro` on a
- * personal container and `team` on a standard workspace, refused before Stripe
+ * home space and `team` on a standard workspace, refused before Stripe
  * is called. By the time an event reaches the webhook the money has moved, so a
  * contradiction is an operator problem: dropping the write would leave a paying
  * customer with no plan. Logged at ERROR, plan written as derived.

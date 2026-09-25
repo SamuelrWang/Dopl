@@ -3,18 +3,18 @@
  *
  * ⚠ **THE DEFECT THIS PINS, AND IT COST TEN DAYS OF WRITES.**
  * `knowledge-shared.ts › resolveBase` took `Array.find` over `listKbBases()`,
- * which answers for the bound container PLUS the caller's own personal shelf.
+ * which answers for the bound container PLUS the caller's own home shelf.
  * `knowledge_bases` is unique on `(workspace_id, slug)` — PER CONTAINER — so one
  * slug legitimately names several rows, and FIRST WON, silently. On 2026-09-05
  * three live bases shared `dopl-development`; the row `.find` reached was an
- * empty shell in the personal container, and `get_tree` answered "0 folders, 0
+ * empty shell in the home space, and `get_tree` answered "0 folders, 0
  * entries" for ten days while the real base filled up elsewhere
  * (`KB-LOSS-TRACE.md`). Nothing was ever deleted.
  *
  * ⚠ **WHY A SILENT PICK IS THE WORST OF THE OPTIONS.** It cannot be diagnosed
  * from its own answer: an empty tree is exactly what an empty base looks like.
  * Every tie-break is wrong in the same way — "newest wins" picks the same empty
- * shell, "bound container wins" is the rule a caller holding a personal-shelf
+ * shell, "bound container wins" is the rule a caller holding a home-shelf
  * slug is already violating — so the resolver lists and refuses, the shape
  * `agent-shared.ts › ambiguousIdentity` already uses for identity names.
  *
@@ -49,7 +49,7 @@ function base(over: Partial<KnowledgeBase> = {}): KnowledgeBase {
   } as KnowledgeBase;
 }
 
-/** The empty shell in the caller's PERSONAL container — the row that won. */
+/** The empty shell in the caller's HOME space — the row that won. */
 const SHELL = base({
   id: "7f943a28-ecc3-4e66-bc15-1e4d55d453b6",
   workspaceId: "ws-personal",
@@ -133,10 +133,10 @@ describe("🔒 an ambiguous slug is refused rather than resolved", () => {
     expect(text).toContain("4 entries");
   });
 
-  it("labels the caller's own personal container", async () => {
+  it("labels the caller's own home space", async () => {
     const client = clientFor();
     expect(textOf(await opGetTree(client, SLUG))).toContain(
-      "your personal container"
+      "your home space"
     );
   });
 
@@ -209,13 +209,13 @@ describe("the refusal degrades rather than failing", () => {
 
   it("refuses without the shelf label when the sibling key is absent", async () => {
     // ⚠ INVARIANTS §8: an older server sends no `homeScopedBaseIds`, and absent
-    // is NO LABEL — never "not personal", never "personal".
+    // is NO LABEL — never "not personal", never "home".
     const client = clientFor({
       listKbBasesPayload: vi.fn(async () => ({ bases: [SHELL, REAL] })),
     });
     const text = textOf(await opGetTree(client, SLUG));
     expect(text).toContain("reason=ambiguous_slug");
-    expect(text).not.toContain("your personal container");
+    expect(text).not.toContain("your home space");
     expect(text).toContain("container `ws-personal`");
   });
 

@@ -67,7 +67,7 @@ export async function findWorkspaceByPublicId(
  * post-publicId, so an ambiguous legacy URL must 404 rather than route to the
  * wrong workspace. Canonical `{slug}-{publicId}` URLs bypass this entirely.
  *
- * ⚠ **STANDARD KINDS ONLY (2026-09-02, F-561).** `link` and `personal`
+ * ⚠ **STANDARD KINDS ONLY (2026-09-02, F-561).** `link` and `home`
  * containers are memberships with slugs too, and neither has ever had a URL of
  * this shape — counting them makes a real workspace's own legacy URL ambiguous
  * (2 matches → `null` → 404) whenever a hidden container beside it shares the
@@ -402,25 +402,25 @@ export async function insertWorkspaceWithOwnerMembership(
 }
 
 /**
- * Race-proof SELECT-or-INSERT of the caller's PERSONAL CONTAINER via the
- * `ensure_personal_container` RPC (migration 20260920120000): a per-owner
+ * Race-proof SELECT-or-INSERT of the caller's HOME SPACE via the
+ * `ensure_home_space` RPC (migration 20260920120000): a per-owner
  * advisory lock serializes concurrent callers so two cold boots cannot mint two
  * containers. `created` = THIS call made it.
  *
  * ⚠ TAKES ONLY AN OWNER, so it takes no `CreateWorkspaceArgs`: the name and
  * `created_at` are the DATABASE's, minted from the row this container replaces
- * (`personal_container_origin_of`, migration 20260922120000) so nothing is
- * invented, and the slug is the constant `personal`.
+ * (`home_space_origin_of`, migration 20260922120000) so nothing is
+ * invented, and the slug is the constant `home`.
  *
  * ⚠ `kind` COMES BACK AND MUST. `mapWorkspaceRow` reads an ABSENT kind as
- * `standard` (§4A), which would put a personal container in the rail; the RPC
+ * `standard` (§4A), which would put a home space in the rail; the RPC
  * returns the column for exactly this reason.
  */
-export async function ensurePersonalContainerRow(
+export async function ensureHomeSpaceRow(
   ownerId: string
 ): Promise<{ workspace: Workspace; created: boolean }> {
   const db = supabaseAdmin();
-  const { data, error } = await db.rpc("ensure_personal_container", {
+  const { data, error } = await db.rpc("ensure_home_space", {
     p_owner_id: ownerId,
     p_public_id: generatePublicId(),
   });
@@ -428,7 +428,7 @@ export async function ensurePersonalContainerRow(
   const row = (Array.isArray(data) ? data[0] : data) as
     | (WorkspaceRow & { created: boolean })
     | undefined;
-  if (!row) throw new Error("ensure_personal_container returned no row");
+  if (!row) throw new Error("ensure_home_space returned no row");
   return { workspace: mapWorkspaceRow(row), created: row.created };
 }
 

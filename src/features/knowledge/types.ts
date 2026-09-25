@@ -40,8 +40,8 @@ export type Visibility = "public" | "private";
 /**
  * Which shelf a base lives on: the /home Knowledge pane's "across all channels"
  * scope, or the workspace Knowledge page (ruling 2026-08-26). Since 2026-09-02
- * these are two containers — the personal shelf is the caller's own
- * `kind='personal'` workspace — so the shelf resolves to a `workspace_id`, not
+ * these are two containers — the home shelf is the caller's own
+ * `kind='home'` workspace — so the shelf resolves to a `workspace_id`, not
  * to a `WHERE`.
  *
  * Not a field on `KnowledgeBase` and never make it one: it is a write input

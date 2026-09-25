@@ -25,7 +25,7 @@ import type { CallerScope } from "@/shared/supabase/caller-scope";
  */
 export function sessionCallerScope(userId: string): CallerScope {
   // ⚠ `source: null` IS THE PERSON ANSWER AND IT IS STATED, not defaulted — a
-  // session is a human at a screen, which is what lets `personal-reach.ts` open
+  // session is a human at a screen, which is what lets `home-space-reach.ts` open
   // their own shelf from any container ungated.
   return {
     userId,

@@ -59,7 +59,7 @@ beforeEach(() => {
 describe("update and delete name the id's own container", () => {
   const SHELF = "ws-personal";
 
-  /** A row on the caller's personal shelf, read from a channel they are standing in. */
+  /** A row on the caller's home shelf, read from a channel they are standing in. */
   function livesOnTheShelf(over: Partial<ReturnType<typeof identity>> = {}) {
     mockRepo.findIdentityById.mockImplementation(
       (async (workspaceId: string) =>
@@ -73,7 +73,7 @@ describe("update and delete name the id's own container", () => {
       name: "Researcher",
       containerId: SHELF,
       containerName: "Samuel's Workspace",
-      containerKind: "personal",
+      containerKind: "home",
       ownedByCaller: true,
       containerRole: "owner",
     } as never);
@@ -144,7 +144,7 @@ describe("update and delete name the id's own container", () => {
  * client's `visibilityOptions` pill is a courtesy; an agent credential reaches the REST route directly.
  */
 describe("team visibility outside a standard workspace", () => {
-  it.each(["personal", "link"] as const)(
+  it.each(["home", "link"] as const)(
     "REFUSES a create landing at `team` in a %s container",
     async (kind) => {
       containerKind(kind);
@@ -164,7 +164,7 @@ describe("team visibility outside a standard workspace", () => {
   });
 
   it("REFUSES the PATCH too — a create fence with no update twin is defeated in two calls", async () => {
-    containerKind("personal");
+    containerKind("home");
     mockRepo.findIdentityById.mockResolvedValue(identity({ visibility: "private" }));
     await expect(
       updateIdentity(ctx(), "id-1", { visibility: "team" })

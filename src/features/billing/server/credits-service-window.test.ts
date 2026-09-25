@@ -42,7 +42,7 @@ import { consumeMcpCredits } from "./credits-service";
 import { creditPeriodFor, summarizeCredits, unmetered } from "./credits-meter";
 import {
   ledgerAttribution,
-  personalTarget,
+  homeSpaceTarget,
   seatTarget,
   teamBillingRow,
   unmeteredTarget,
@@ -65,7 +65,7 @@ const CALENDAR_END = "2026-09-01T00:00:00.000Z";
 
 const seatCaller = { userId: CALLER, workspaceKind: "standard" as const };
 const linkCaller = { userId: CALLER, workspaceKind: "link" as const };
-const personalCaller = { userId: CALLER, workspaceKind: "personal" as const };
+const homeSpaceCaller = { userId: CALLER, workspaceKind: "home" as const };
 
 /** `credits-target-fixtures.ts › teamBillingRow` + this suite's MID-MONTH anchor. */
 function billing(overrides: Partial<WorkspaceBillingRow> = {}): WorkspaceBillingRow {
@@ -81,12 +81,12 @@ function setup(opts: {
   members: number;
   allowed?: boolean;
   used?: number;
-  /** The OWNER's personal container row — separate from `billing` on purpose. */
+  /** The OWNER's home space row — separate from `billing` on purpose. */
   personalBilling?: WorkspaceBillingRow | null;
 }) {
   mockRepo.getWorkspaceBilling.mockResolvedValue(opts.billing);
   mockRepo.countActiveMembers.mockResolvedValue(opts.members);
-  // The owner's personal container, free by default — the arm a link burn takes.
+  // The owner's home space, free by default — the arm a link burn takes.
   mockRepo.getPersonalBilling.mockResolvedValue({
     containerId: PERSONAL,
     billing: opts.personalBilling ?? null,
@@ -207,7 +207,7 @@ describe("the settings meter resolves the SAME window and wallet as enforcement"
 
     const charged = await consumeMcpCredits(CONTAINER, linkCaller);
     const metered = await summarizeCredits(
-      personalTarget({ workspaceId: CONTAINER, payerUserId: OWNER }),
+      homeSpaceTarget({ workspaceId: CONTAINER, payerUserId: OWNER }),
       null,
       1
     );
@@ -243,7 +243,7 @@ describe("the settings meter resolves the SAME window and wallet as enforcement"
 
     const charged = await consumeMcpCredits(CONTAINER, linkCaller);
     const metered = await summarizeCredits(
-      personalTarget({ workspaceId: CONTAINER, payerUserId: OWNER }),
+      homeSpaceTarget({ workspaceId: CONTAINER, payerUserId: OWNER }),
       pro,
       1
     );
@@ -265,7 +265,7 @@ describe("the settings meter resolves the SAME window and wallet as enforcement"
   it("never reports negative remaining, even if usage overshot the limit", async () => {
     mockWallets.getUserCreditsUsed.mockResolvedValue(600);
     const metered = await summarizeCredits(
-      personalTarget({
+      homeSpaceTarget({
         workspaceId: PERSONAL,
         payerUserId: CALLER,
         personalBillingContainerId: PERSONAL,
@@ -332,7 +332,7 @@ describe("consumeMcpCredits — refusal and the upgrade url", () => {
     // workspace by default, so a bare upgrade link would land a home-space
     // upsell on a workspace the caller may not even have.
     setup({ billing: null, members: 1, allowed: false, used: 500 });
-    const res = await consumeMcpCredits(PERSONAL, personalCaller);
+    const res = await consumeMcpCredits(PERSONAL, homeSpaceCaller);
     expect(res.allowed).toBe(false);
     expect(res.upgradeUrl).toMatch(/\/billing\?billing=upgrade&plan=pro$/);
   });
@@ -344,7 +344,7 @@ describe("consumeMcpCredits — refusal and the upgrade url", () => {
       allowed: false,
       used: 5_000,
     });
-    expect((await consumeMcpCredits(PERSONAL, personalCaller)).upgradeUrl).toBe("");
+    expect((await consumeMcpCredits(PERSONAL, homeSpaceCaller)).upgradeUrl).toBe("");
   });
 
   it("🔒 the two free offers are DIFFERENT urls — a seat is never sold Pro", async () => {
@@ -353,7 +353,7 @@ describe("consumeMcpCredits — refusal and the upgrade url", () => {
     setup({ billing: null, members: 1, allowed: false, used: 100 });
     const seat = await consumeMcpCredits(WS, seatCaller);
     setup({ billing: null, members: 1, allowed: false, used: 500 });
-    const personal = await consumeMcpCredits(PERSONAL, personalCaller);
+    const personal = await consumeMcpCredits(PERSONAL, homeSpaceCaller);
     expect(seat.upgradeUrl).not.toBe(personal.upgradeUrl);
     expect(seat.upgradeUrl).not.toContain("plan=");
   });

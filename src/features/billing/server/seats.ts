@@ -43,7 +43,7 @@ export async function syncSeatQuantity(workspaceId: string): Promise<void> {
         `[seats] ${label} ${workspaceId} has ${members} active members; ` +
           `this plan is single-member and flat. Not resizing Stripe quantity ` +
           `(entitlements backstop degrades solo to free multi-member rules; a ` +
-          `personal container cannot hold a second member by construction).`
+          `home space cannot hold a second member by construction).`
       );
     }
     return;

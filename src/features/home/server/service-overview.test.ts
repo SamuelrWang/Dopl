@@ -57,8 +57,8 @@ const STANDARD_WS = "ws-standard";
 const CHAN_A = "chan-a";
 const CHAN_B = "chan-b";
 /** The containers the reader OWNS of kind personal/link — what
- *  `repository-overview.ts › listOwnedPersonalContainerIds` answers. */
-const OWNED = new Set([WS_A, "personal-container"]);
+ *  `repository-overview.ts › listOwnedHomeSpaceIds` answers. */
+const OWNED = new Set([WS_A, "home-space"]);
 
 function call(over: Partial<McpCallScanRow> = {}): McpCallScanRow {
   return { workspace_id: WS_A, user_id: "u1", tool: "kb", op: "read_file", ...over };
@@ -246,11 +246,11 @@ describe("isPersonalWalletBurn", () => {
   it("keeps a v2.1 personal row the reader paid for, wherever it was burned", () => {
     expect(isPersonalWalletBurn(burn(), VIEWER, OWNED)).toBe(true);
     // ⚠ A container the reader does NOT own is still theirs to pay for when the
-    // ledger says so — the reader's own `kind='personal'` container is not in any
+    // ledger says so — the reader's own `kind='home'` container is not in any
     // link-container list, and that spend is the most personal of all.
     expect(
       isPersonalWalletBurn(
-        burn({ origin_workspace_id: "personal-container" }),
+        burn({ origin_workspace_id: "home-space" }),
         VIEWER,
         OWNED
       )

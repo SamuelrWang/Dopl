@@ -77,7 +77,7 @@ async function ambiguousBase(
 ): Promise<ToolResponse> {
   const shown = matches.slice(0, MAX_LISTED_MATCHES);
   const [personal, counts] = await Promise.all([
-    personalBaseIds(client),
+    homeSpaceBaseIds(client),
     Promise.all(shown.map((b) => entryCount(client, b.id))),
   ]);
   const rest = matches.length - shown.length;
@@ -97,10 +97,10 @@ async function ambiguousBase(
 function matchLine(
   base: KnowledgeBase,
   count: number | null,
-  isPersonal: boolean,
+  isHomeSpace: boolean,
 ): string {
-  const where = isPersonal
-    ? `your personal container \`${base.workspaceId}\``
+  const where = isHomeSpace
+    ? `your home space \`${base.workspaceId}\``
     : `container \`${base.workspaceId}\``;
   const entries =
     count === null
@@ -109,8 +109,8 @@ function matchLine(
   return `- \`${base.id}\` — ${inlineOr(base.name, NO_NAME)} · ${where} · ${entries}`;
 }
 
-/** Ids of the caller's personal-container bases; empty when absent or unreadable = no label (INVARIANTS §8). */
-async function personalBaseIds(client: DoplClient): Promise<Set<string>> {
+/** Ids of the caller's home-space bases; empty when absent or unreadable = no label (INVARIANTS §8). */
+async function homeSpaceBaseIds(client: DoplClient): Promise<Set<string>> {
   try {
     const payload = await client.listKbBasesPayload();
     return new Set(payload.homeScopedBaseIds ?? []);

@@ -75,8 +75,8 @@ vi.mock("@/features/analytics/server/mcp-tool-calls", () => ({
 }));
 vi.mock("@/features/billing/server/workspace-billing", () => ({
   getWorkspaceBilling: vi.fn(),
-  // ⚠ THE PAYER'S OWN PERSONAL CONTAINER (2026-09-08). A home burn's LIMIT now
-  // comes off the owner's `kind='personal'` row, so this read is on the guest
+  // ⚠ THE PAYER'S OWN HOME SPACE (2026-09-08). A home burn's LIMIT now
+  // comes off the owner's `kind='home'` row, so this read is on the guest
   // path too — and leaving it unmocked makes the route FAIL OPEN, which looks
   // like a 200 with `allowed: true` and charges nobody.
   getPersonalBilling: vi.fn(),
@@ -103,8 +103,8 @@ const CONTAINER = "cccccccc-cccc-cccc-cccc-cccccccccccc";
 const OWNER_WS = "0000ffff-0000-ffff-0000-ffffffffffff";
 const OWNER = "operator-user";
 const GUEST = "guest-user";
-/** The OWNER's own `kind='personal'` container — where their home plan lives. */
-const OWNER_PERSONAL = "0000aaaa-0000-aaaa-0000-aaaaaaaaaaaa";
+/** The OWNER's own `kind='home'` container — where their home plan lives. */
+const OWNER_HOME_SPACE = "0000aaaa-0000-aaaa-0000-aaaaaaaaaaaa";
 
 function workspace(id: string, kind: "standard" | "link"): Workspace {
   return {
@@ -162,7 +162,7 @@ beforeEach(() => {
   mockBilling.getWorkspaceBilling.mockResolvedValue(null);
   // The OWNER's home space, free — a container that exists and has no sub.
   mockBilling.getPersonalBilling.mockResolvedValue({
-    containerId: OWNER_PERSONAL,
+    containerId: OWNER_HOME_SPACE,
     billing: null,
   });
   mockBilling.countActiveMembers.mockResolvedValue(1);
@@ -221,9 +221,9 @@ describe("POST /api/mcp/credits/consume — a guest is metered, not refused", ()
     // guest's plan — the owner's Pro allowance silently capped at the guest's
     // free 500.
     mockBilling.getPersonalBilling.mockResolvedValue({
-      containerId: OWNER_PERSONAL,
+      containerId: OWNER_HOME_SPACE,
       billing: {
-        workspaceId: OWNER_PERSONAL,
+        workspaceId: OWNER_HOME_SPACE,
         plan: "pro",
         status: "active",
         stripeCustomerId: "cus_1",

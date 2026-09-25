@@ -48,7 +48,7 @@ export interface CallerScope {
    * `X-Dopl-Runtime`.
    *
    * ⚠ **IT REPLACES A PROXY, AND THAT IS THE WHOLE REASON IT EXISTS.**
-   * `tenancy/personal-container.ts` had to infer "agent" from the credential
+   * `tenancy/home-space.ts` had to infer "agent" from the credential
    * being CONTAINER-LOCKED, because the repositories take no context argument and
    * this store was all they could read. The inference was true only while
    * `issueContainerToken` was the sole minter of a lock; the field states the
@@ -57,7 +57,7 @@ export interface CallerScope {
    *
    * ⚠ **REQUIRED, AND `null` IS THE UNGATED ANSWER** — the one field here that
    * does NOT fail closed, by ruling (#1077 clause (a), approved #1080): a person
-   * crosses into their own personal container from anywhere, and a lane that
+   * crosses into their own home space from anywhere, and a lane that
    * forgot to say `source` would be a web route. It is required so the
    * typechecker collects every construction site rather than letting a new AGENT
    * lane default itself into the human answer.

@@ -1,6 +1,6 @@
 {
   "name": "@dopl/client",
-  "version": "0.14.0",
+  "version": "0.15.0",
   "description": "Shared HTTP client for the Dopl API — consumed by @dopl/mcp-server. Internal workspace lib (not published to npm).",
   "private": true,
   "main": "dist/index.js",

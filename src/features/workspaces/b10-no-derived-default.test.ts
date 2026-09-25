@@ -29,7 +29,7 @@ import { describe, it, expect } from "vitest";
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { dirname, join, relative, sep } from "node:path";
 import { fileURLToPath } from "node:url";
-import { PERSONAL_CONTAINER_PLACEHOLDER_NAME } from "./server/service";
+import { HOME_SPACE_PLACEHOLDER_NAME } from "./server/service";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
 
@@ -154,7 +154,7 @@ describe("🔒 20260922120000 — the concept's SQL objects", () => {
   });
 
   it("🔒 the live dependency is REPOINTED before it is dropped, not after", () => {
-    // `default_workspace_of` is what `ensure_personal_container` reads for the
+    // `default_workspace_of` is what `ensure_home_space` reads for the
     // name and created_at a container inherits. Dropping it first is a runtime
     // failure on the next mint — plpgsql resolves the call when it runs.
     const repoint = sql.indexOf("public.personal_container_origin_of(p_owner_id)");
@@ -177,7 +177,7 @@ describe("🔒 20260922120000 — the concept's SQL objects", () => {
     for (const create of sql.match(/CREATE (?:OR REPLACE )?FUNCTION/g) ?? []) {
       expect(create).toBe("CREATE OR REPLACE FUNCTION");
     }
-    // ⚠ FUNCTION BODIES STRIPPED FIRST. `ensure_personal_container` INSERTs —
+    // ⚠ FUNCTION BODIES STRIPPED FIRST. `ensure_home_space` INSERTs —
     // that is what it is for — and a scan that read its restated body would
     // report this file as destructive. What must hold is that no statement
     // THIS FILE executes touches a row: a revert loses no data, which is why
@@ -198,10 +198,10 @@ describe("🔒 20260922120000 — the concept's SQL objects", () => {
   });
 
   it("🔒 the placeholder name the app checks IS the one the SQL mints", () => {
-    // `renamePersonalContainerIfPlaceholder` only renames a container still
+    // `renameHomeSpaceIfPlaceholder` only renames a container still
     // wearing this name. A drift here is silent in both directions: onboarding
     // would either refuse to name a fresh container or overwrite one a user
     // already named.
-    expect(sql).toContain(`COALESCE(origin.name, '${PERSONAL_CONTAINER_PLACEHOLDER_NAME}')`);
+    expect(sql).toContain(`COALESCE(origin.name, '${HOME_SPACE_PLACEHOLDER_NAME}')`);
   });
 });

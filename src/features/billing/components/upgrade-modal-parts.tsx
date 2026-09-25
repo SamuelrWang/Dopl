@@ -13,7 +13,7 @@ import { useWorkspaceEntitlements } from "./use-workspace-entitlements";
  * `prices.ts › TEAM_SEAT_PRICE` is the one source.
  * `AddMemberBlocked` is standard-workspace-only (2026-09-08), enforced by the
  * caller (`./upgrade-modal.tsx › showAddMember`) — everything it says is about
- * a roster, and a personal container has none.
+ * a roster, and a home space has none.
  */
 
 export type Ent = ReturnType<typeof useWorkspaceEntitlements>;
@@ -195,7 +195,7 @@ export function AlreadyPaidNote({
   return (
     <div className="mt-5">
       <p className="rounded-lg border border-border-default bg-card-surface-subtle px-3 py-2 text-caption text-text-secondary">
-        {ent.containerKind === "personal"
+        {ent.containerKind === "home"
           ? "You're already on Pro."
           : `This workspace is already on ${
               ent.isSolo ? "the legacy Pro plan" : "Team"

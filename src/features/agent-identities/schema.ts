@@ -159,7 +159,7 @@ export const AgentIdentityCreateSchema = z
     teamIds: TeamIdsSchema.optional(),
     knowledgeBaseIds: KnowledgeBaseIdsSchema.optional(),
     knowledge: KnowledgeScopesSchema.optional(),
-    /** A request to file the row in the caller's personal container; routes, never stored. */
+    /** A request to file the row in the caller's home space; routes, never stored. */
     homeScoped: z.boolean().optional(),
     /** G16's precondition (`workspaces/server/shared-publish.ts`); ignored where it does not apply. */
     acknowledgeShared: z.boolean().optional(),

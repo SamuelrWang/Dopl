@@ -5,7 +5,7 @@ import { DEVICE_CLIENT_ID, DEVICE_CLIENT_NAME } from "./mcp-credential";
 import {
   ACCESS_PREFIX,
   insertTokenRow,
-  personalUnfencedAxes,
+  homeSpaceUnfencedAxes,
   randToken,
   sha256,
 } from "./mcp-access-token";
@@ -35,7 +35,7 @@ export {
   ACCESS_PREFIX,
   insertTokenRow,
   isOAuthAccessToken,
-  personalUnfencedAxes,
+  homeSpaceUnfencedAxes,
   randToken,
   sha256,
   validateAccessToken,
@@ -203,7 +203,7 @@ export async function issueTokens(input: {
     refresh_expires_at: new Date(now + REFRESH_TTL_S * 1000).toISOString(),
     client_name: input.clientName ?? null,
     family_id: input.familyId ?? randomUUID(),
-    ...personalUnfencedAxes(input.userId),
+    ...homeSpaceUnfencedAxes(input.userId),
   });
   return {
     access_token: accessToken,
@@ -269,7 +269,7 @@ export async function issueDeviceToken(input: {
     refresh_expires_at: null,
     client_name: input.deviceLabel,
     // 🔒 A person, unfenced — a device token is one operator's machine.
-    ...personalUnfencedAxes(input.userId),
+    ...homeSpaceUnfencedAxes(input.userId),
   });
   return { token: accessToken, expiresAt };
 }

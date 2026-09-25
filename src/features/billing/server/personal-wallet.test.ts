@@ -1,7 +1,7 @@
 /**
  * The PERSONAL wallet's tier: which row decides it, what it allows, and when it
  * rolls. The wallet gained a plan on 2026-09-08, billed on the owner's own
- * `kind='personal'` container (spec §11.1).
+ * `kind='home'` container (spec §11.1).
  *
  * Repository mocked; `entitlements.ts` and `credits.ts` are real, so the verdict
  * is the same `paidEntitlement` the seat wallet uses and the window the same
@@ -60,7 +60,7 @@ afterEach(() => {
 
 /**
  * Why there are two reads: the addressed container IS the billing row when the
- * caller addressed their own personal shelf; inside a link container the payer's
+ * caller addressed their own home shelf; inside a link container the payer's
  * row is somewhere else entirely.
  */
 describe("readPersonalBilling", () => {
@@ -75,7 +75,7 @@ describe("readPersonalBilling", () => {
     expect(mockRepo.getPersonalBilling).not.toHaveBeenCalled();
   });
 
-  it("makes the owner → container hop when no personal container was addressed", async () => {
+  it("makes the owner → container hop when no home space was addressed", async () => {
     mockRepo.getPersonalBilling.mockResolvedValue({
       containerId: PERSONAL,
       billing: billing(),
@@ -90,7 +90,7 @@ describe("readPersonalBilling", () => {
     expect(mockRepo.getWorkspaceBilling).not.toHaveBeenCalled();
   });
 
-  it("answers null for a personal container that has never been billed", async () => {
+  it("answers null for a home space that has never been billed", async () => {
     mockRepo.getPersonalBilling.mockResolvedValue({
       containerId: PERSONAL,
       billing: null,
@@ -98,7 +98,7 @@ describe("readPersonalBilling", () => {
     expect(await readPersonalBilling(OWNER, null)).toBeNull();
   });
 
-  it("🔒 falls back to null AND WARNS when the user has no personal container", async () => {
+  it("🔒 falls back to null AND WARNS when the user has no home space", async () => {
     // Cannot happen after `20260920120000_workspace_kind_personal.sql`, and the
     // burn still has to be charged to something. Free is the safe direction; the
     // warning stops a paying customer being quietly metered at 500.
@@ -109,7 +109,7 @@ describe("readPersonalBilling", () => {
 
     const line = warn.mock.calls.map((c: unknown[]) => String(c[0])).join("\n");
     expect(line).toContain(OWNER);
-    expect(line).toContain("no kind='personal' container");
+    expect(line).toContain("no kind='home' container");
     warn.mockRestore();
   });
 
@@ -167,7 +167,7 @@ describe("personalWalletTier", () => {
   });
 
   it("🔒 counts ONE member, so `solo`'s degrade rule can never fire here", () => {
-    // A personal container holds its owner and nobody else, so the member count
+    // A home space holds its owner and nobody else, so the member count
     // is a constant: a real count would be a round trip to learn 1.
     expect(personalWalletTier(billing({ plan: "solo" }))).toMatchObject({
       verdict: "solo",
@@ -175,7 +175,7 @@ describe("personalWalletTier", () => {
   });
 
   it("🔒 a stray `team` row still yields the FREE personal allowance", () => {
-    // `team` cannot be the plan on a personal container. On a bad row the verdict
+    // `team` cannot be the plan on a home space. On a bad row the verdict
     // is `team` but the allowance is the free personal figure:
     // `personalCreditsForPlan` answers 5,000 only for `pro`.
     expect(personalWalletTier(billing({ plan: "team" }))).toMatchObject({

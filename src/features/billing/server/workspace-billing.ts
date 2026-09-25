@@ -7,7 +7,7 @@ import { supabaseAdmin } from "@/shared/supabase/admin";
  * `entitlements.ts` unit-testable by mocking this module.
  *
  * A `workspace_billing` row is not always a workspace's (2026-09-08): the
- * personal Pro tier is billed on the `kind='personal'` container's own row
+ * personal Pro tier is billed on the `kind='home'` container's own row
  * (spec §11.1), so every function here answers for containers too and
  * `getPersonalBilling` is the one lookup that goes owner → container → row.
  */
@@ -105,7 +105,7 @@ export async function getWorkspaceBilling(
 }
 
 /**
- * The caller's PERSONAL container and its billing row, in ONE round trip.
+ * The caller's HOME space and its billing row, in ONE round trip.
  *
  * The embed is why this function exists: it is on the MCP credit path (once per
  * tool call), and "find the container, then read its row" is two sequential
@@ -114,8 +114,8 @@ export async function getWorkspaceBilling(
  * back into two reads fails `credits-service.test.ts`'s mock call counts, which
  * is the intended alarm.
  *
- * `null` = the user has no personal container, a state the database says is
- * impossible (backfill + `ensure_personal_container`); the branch stays because
+ * `null` = the user has no home space, a state the database says is
+ * impossible (backfill + `ensure_home_space`); the branch stays because
  * this read must return rather than throw on the hottest path.
  * `{ containerId, billing: null }` is the different answer: the container exists
  * and has never been billed, i.e. a free home space.
@@ -127,7 +127,7 @@ export async function getPersonalBilling(
     .from("workspaces")
     .select(`id, workspace_billing(${BILLING_COLS})`)
     .eq("owner_id", ownerUserId)
-    .eq("kind", "personal")
+    .eq("kind", "home")
     .maybeSingle();
   if (error) throw error;
   if (!data) return null;

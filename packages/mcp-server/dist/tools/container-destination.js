@@ -56,7 +56,7 @@ async function landsInHomeSpace(client, directory) {
         const workspaceId = client_1.workspaceContext.getStore() ?? client.getWorkspaceId();
         if (!workspaceId)
             return true;
-        return (await directory.containerKindIndex()).get(workspaceId) === "personal";
+        return (await directory.containerKindIndex()).get(workspaceId) === "home";
     }
     catch {
         return false;

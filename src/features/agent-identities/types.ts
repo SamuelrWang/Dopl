@@ -79,7 +79,7 @@ export interface IdentityKnowledgeRef {
 }
 
 /**
- * Which surface lists an identity — /home's Personal section (the caller's personal container) or
+ * Which surface lists an identity — /home's Personal section (the caller's home space) or
  * the workspace Identities page. Mirrors `knowledge/types.ts › KbShelf` (§1). A write input and a read
  * filter, never a field on the row; not the visibility axis. Absent = no filter.
  */

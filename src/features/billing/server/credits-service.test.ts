@@ -48,7 +48,7 @@ import { findActiveOwnerUserId } from "@/features/workspaces/server/repository";
 import { consumeMcpCredits, resolveBillingTarget } from "./credits-service";
 import {
   ledgerAttribution,
-  personalTarget,
+  homeSpaceTarget,
   seatTarget,
   teamBillingRow,
   unmeteredTarget,
@@ -71,7 +71,7 @@ const CALENDAR_END = "2026-09-01T00:00:00.000Z";
 
 const seatCaller = { userId: CALLER, workspaceKind: "standard" as const };
 const linkCaller = { userId: CALLER, workspaceKind: "link" as const };
-const personalCaller = { userId: CALLER, workspaceKind: "personal" as const };
+const homeSpaceCaller = { userId: CALLER, workspaceKind: "home" as const };
 
 /** `credits-target-fixtures.ts › teamBillingRow` + this suite's MID-MONTH anchor. */
 function billing(overrides: Partial<WorkspaceBillingRow> = {}): WorkspaceBillingRow {
@@ -87,7 +87,7 @@ function setup(opts: {
   members: number;
   allowed?: boolean;
   used?: number;
-  /** The OWNER's personal container row, reached only from a link container.
+  /** The OWNER's home space row, reached only from a link container.
    *  Deliberately separate from `billing`: one fixture for both would pass
    *  against a version that meters a home burn off the addressed container. */
   personalBilling?: WorkspaceBillingRow | null;
@@ -132,14 +132,14 @@ describe("resolveBillingTarget — with NO calling channel, the addressed kind p
 
   it("personal → the caller's PERSONAL wallet, WITHOUT an owner lookup", async () => {
     // The container is the billing row on this arm and on no other.
-    expect(await resolveBillingTarget(PERSONAL, personalCaller)).toEqual(
-      personalTarget({
+    expect(await resolveBillingTarget(PERSONAL, homeSpaceCaller)).toEqual(
+      homeSpaceTarget({
         workspaceId: PERSONAL,
         payerUserId: CALLER,
         personalBillingContainerId: PERSONAL,
       })
     );
-    // A personal container has exactly one member, so the caller is provably the
+    // A home space has exactly one member, so the caller is provably the
     // payer and the owner lookup buys an answer we already hold.
     expect(mockOwner).not.toHaveBeenCalled();
   });
@@ -149,7 +149,7 @@ describe("resolveBillingTarget — with NO calling channel, the addressed kind p
     // against a version that bills the caller. `personalBillingContainerId`
     // stays null — a link container carries no billing row.
     expect(await resolveBillingTarget(CONTAINER, linkCaller)).toEqual(
-      personalTarget({ workspaceId: CONTAINER, payerUserId: OWNER })
+      homeSpaceTarget({ workspaceId: CONTAINER, payerUserId: OWNER })
     );
     expect(mockOwner).toHaveBeenCalledWith(CONTAINER);
   });
@@ -168,7 +168,7 @@ describe("resolveBillingTarget — with NO calling channel, the addressed kind p
     // would be green under the very reroute it claims to detect.
     for (const [addressed, caller] of [
       [CONTAINER, linkCaller],
-      [PERSONAL, personalCaller],
+      [PERSONAL, homeSpaceCaller],
       [WS, seatCaller],
     ] as const) {
       expect((await resolveBillingTarget(addressed, caller)).workspaceId).toBe(
@@ -206,7 +206,7 @@ describe("consumeMcpCredits — the query budget, per wallet", () => {
 
   it("PERSONAL is two: the container's own billing row, then the RPC", async () => {
     setup({ billing: null, members: 1 });
-    await consumeMcpCredits(PERSONAL, personalCaller);
+    await consumeMcpCredits(PERSONAL, homeSpaceCaller);
     // The container is the billing row (spec §11.1), so the owner → container
     // hop never happens.
     expect(mockRepo.getWorkspaceBilling).toHaveBeenCalledTimes(1);
@@ -230,7 +230,7 @@ describe("consumeMcpCredits — the query budget, per wallet", () => {
     setup({ billing: billing(), members: 3 });
     await consumeMcpCredits(WS, seatCaller);
     await consumeMcpCredits(CONTAINER, linkCaller);
-    await consumeMcpCredits(PERSONAL, personalCaller);
+    await consumeMcpCredits(PERSONAL, homeSpaceCaller);
     expect(mockRepo.countOntologyObjects).not.toHaveBeenCalled();
   });
 
@@ -321,9 +321,9 @@ describe("consumeMcpCredits — the PERSONAL wallet", () => {
     });
   });
 
-  it("spends the CALLER's own wallet in their personal container", async () => {
+  it("spends the CALLER's own wallet in their home space", async () => {
     setup({ billing: null, members: 1 });
-    await consumeMcpCredits(PERSONAL, personalCaller);
+    await consumeMcpCredits(PERSONAL, homeSpaceCaller);
     expect(mockWallets.consumeUserCredits).toHaveBeenCalledWith(
       CALLER,
       CALENDAR_START,
@@ -346,7 +346,7 @@ describe("consumeMcpCredits — the PERSONAL wallet", () => {
 
 /**
  * Personal Pro tier (Samuel, 2026-09-08): limit and window both come off the
- * payer's own `kind='personal'` container's billing row.
+ * payer's own `kind='home'` container's billing row.
  */
 describe("consumeMcpCredits — a PRO personal wallet", () => {
   const PRO = (overrides: Partial<WorkspaceBillingRow> = {}) =>
@@ -376,9 +376,9 @@ describe("consumeMcpCredits — a PRO personal wallet", () => {
     });
   });
 
-  it("charges the CALLER against 5,000 in their own personal container", async () => {
+  it("charges the CALLER against 5,000 in their own home space", async () => {
     setup({ billing: PRO(), members: 1 });
-    const res = await consumeMcpCredits(PERSONAL, personalCaller);
+    const res = await consumeMcpCredits(PERSONAL, homeSpaceCaller);
     expect(mockWallets.consumeUserCredits).toHaveBeenCalledWith(
       CALLER,
       "2026-07-21T09:30:00.000Z",
@@ -391,7 +391,7 @@ describe("consumeMcpCredits — a PRO personal wallet", () => {
 
   it("past_due keeps the Pro allowance (grace), like every other entitlement", async () => {
     setup({ billing: PRO({ status: "past_due" }), members: 1 });
-    expect((await consumeMcpCredits(PERSONAL, personalCaller)).limit).toBe(5_000);
+    expect((await consumeMcpCredits(PERSONAL, homeSpaceCaller)).limit).toBe(5_000);
   });
 
   it("🔒 a CANCELED Pro row drops to 500 AND to the calendar month — no lockout", async () => {
@@ -399,34 +399,34 @@ describe("consumeMcpCredits — a PRO personal wallet", () => {
     // anchor, so honouring it would lock a key already spent to 5,000 out of a
     // fresh 500 limit. The free verdict ignores the anchor.
     setup({ billing: PRO({ status: "canceled" }), members: 1 });
-    const res = await consumeMcpCredits(PERSONAL, personalCaller);
+    const res = await consumeMcpCredits(PERSONAL, homeSpaceCaller);
     expect(res.limit).toBe(500);
     expect(res.periodStart).toBe(CALENDAR_START);
     expect(res.periodEnd).toBe(CALENDAR_END);
   });
 
-  it("🔒 a stray `team` row on a personal container gets the FREE personal figure", async () => {
+  it("🔒 a stray `team` row on a home space gets the FREE personal figure", async () => {
     // Cannot happen, and the answer must be the small one anyway: reading it as
     // paid would hand a free home space 5,000 credits nobody bought.
     setup({ billing: PRO({ plan: "team" }), members: 1 });
-    expect((await consumeMcpCredits(PERSONAL, personalCaller)).limit).toBe(500);
+    expect((await consumeMcpCredits(PERSONAL, homeSpaceCaller)).limit).toBe(500);
   });
 
   it("🔒 a `pro` row NEVER routes through the SEAT map", async () => {
     // `SEAT_MONTHLY_CREDITS.pro` is 5,000 too, so a wrong route agrees on the
     // number — the counter is what separates them.
     setup({ billing: PRO(), members: 1 });
-    await consumeMcpCredits(PERSONAL, personalCaller);
+    await consumeMcpCredits(PERSONAL, homeSpaceCaller);
     expect(mockWallets.consumeMemberCredits).not.toHaveBeenCalled();
   });
 });
 
 /**
- * A payer with no personal container cannot exist after
+ * A payer with no home space cannot exist after
  * `20260920120000_workspace_kind_personal.sql`, but the read can still answer
  * null and a burn has to be charged to something.
  */
-describe("consumeMcpCredits — the owner has no personal container", () => {
+describe("consumeMcpCredits — the owner has no home space", () => {
   it("falls to the FREE tier on the calendar month, and SAYS SO", async () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     setup({ billing: null, members: 1 });
@@ -454,7 +454,7 @@ describe("consumeMcpCredits — the owner has no personal container", () => {
     // until the refusal lands.
     const line = warn.mock.calls.map((c: unknown[]) => String(c[0])).join("\n");
     expect(line).toContain(OWNER);
-    expect(line).toContain("no kind='personal' container");
+    expect(line).toContain("no kind='home' container");
     warn.mockRestore();
   });
 });

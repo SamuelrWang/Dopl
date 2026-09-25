@@ -85,7 +85,7 @@ describe("isWorkspaceSeatBurn — the meters must not mix", () => {
 
   it("takes a seat burn whose CHANNEL is here but whose origin is not (rule B)", () => {
     // A workspace-channel agent reading somebody's personal KB charges the
-    // caller's seat HERE; `origin_workspace_id` is the personal container.
+    // caller's seat HERE; `origin_workspace_id` is the home space.
     const row = burn({ origin_workspace_id: OTHER, channel_id: CHAN });
     expect(isWorkspaceSeatBurn(row, WS, new Set([CHAN]))).toBe(true);
   });

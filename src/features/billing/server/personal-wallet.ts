@@ -18,7 +18,7 @@ import {
  * answers what that wallet is entitled to — which before the Pro tier was one
  * constant with no row behind it (`credits.ts › PERSONAL_MONTHLY_CREDITS`).
  *
- * 2026-09-08: the personal container IS the billing row. A `kind='personal'`
+ * 2026-09-08: the home space IS the billing row. A `kind='home'`
  * container is a real `workspaces` row, so its Pro subscription lives in
  * `workspace_billing` keyed by that container id — same table, webhook, watermark
  * and portal. There is no second Stripe pipeline and no `user_billing` table.
@@ -29,31 +29,31 @@ import {
  * either path.
  *
  * Which read depends on what was addressed. A caller who addressed their own
- * personal container IS the row we want, so `getWorkspaceBilling(containerId)`
+ * home space IS the row we want, so `getWorkspaceBilling(containerId)`
  * answers directly and the owner → container hop never happens; from a
  * `kind='link'` container the payer is its owner, so
  * `workspace-billing.ts › getPersonalBilling` makes the hop as one embedded query.
  *
- * Pass `addressedPersonalContainerId` only for `kind='personal'`: a link
+ * Pass `addressedHomeSpaceId` only for `kind='home'`: a link
  * container's id reads a row that does not exist and reports every Pro operator as
  * free, silently, because a missing row is a legitimate answer here.
  *
- * A payer with no personal container falls to the free tier and warns. That is the
+ * A payer with no home space falls to the free tier and warns. That is the
  * safe direction (a wrong `pro` hands out 5,000 credits nobody paid for), and the
  * warn is there because a silent free-tier fallback for a paying customer has no
  * visible symptom until the refusal lands.
  */
 export async function readPersonalBilling(
   payerUserId: string,
-  addressedPersonalContainerId: string | null
+  addressedHomeSpaceId: string | null
 ): Promise<WorkspaceBillingRow | null> {
-  if (addressedPersonalContainerId) {
-    return getWorkspaceBilling(addressedPersonalContainerId);
+  if (addressedHomeSpaceId) {
+    return getWorkspaceBilling(addressedHomeSpaceId);
   }
   const personal = await getPersonalBilling(payerUserId);
   if (!personal) {
     console.warn(
-      `[credits] user ${payerUserId} has no kind='personal' container; ` +
+      `[credits] user ${payerUserId} has no kind='home' container; ` +
         `charging their personal wallet at the FREE tier on the calendar month. ` +
         `Every user should have one since 20260920120000_workspace_kind_personal.sql.`
     );
@@ -64,7 +64,7 @@ export async function readPersonalBilling(
 
 /** A personal wallet's tier: the verdict, what it allows, and when it rolls. */
 export interface PersonalWalletTier extends CreditPeriod {
-  /** The entitlement verdict — `pro` or `free` on a personal container. */
+  /** The entitlement verdict — `pro` or `free` on a home space. */
   verdict: PlanId;
   limit: number;
 }
@@ -72,7 +72,7 @@ export interface PersonalWalletTier extends CreditPeriod {
 /**
  * Verdict → allowance → window, from a row the caller already read.
  *
- * `memberCount` is hardcoded 1 as a fact, not an assumption: a `kind='personal'`
+ * `memberCount` is hardcoded 1 as a fact, not an assumption: a `kind='home'`
  * container holds its owner and nobody else (`entitlements.ts › assertCanAddMember`
  * refuses the second), so counting would buy a round trip to learn a constant.
  *

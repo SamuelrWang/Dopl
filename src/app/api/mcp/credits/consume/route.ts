@@ -48,7 +48,7 @@ export const POST = withWorkspaceAuth(
     );
     try {
       // ⚠ THE KIND PICKS THE WALLET. A standard workspace charges the CALLER'S
-      // OWN SEAT; a `kind='link'` or `kind='personal'` container has no plan and
+      // OWN SEAT; a `kind='link'` or `kind='home'` container has no plan and
       // charges the container OWNER's PERSONAL wallet, whoever made the call
       // (`credits-service.ts › resolveBillingTarget`, INVARIANTS §4A).
       // ⚠ `userId` is REQUIRED by that call since 2026-09-07 — both wallets are

@@ -1,5 +1,8 @@
--- DROP `home_scoped` — THE PERSONAL SHELF IS A TENANCY, NOT A COLUMN
+-- DROP `home_scoped` — THE HOME SHELF IS A TENANCY, NOT A COLUMN
 -- (2026-09-02, wave B slice B15, Samuel's rulings B10 + B11).
+--
+-- ⚠ Since 2026-09-24 this file says kind 'home': promote it with a timestamp AFTER
+-- 20261023120000_home_vocabulary_rename.sql, or its assertion reads a kind that does not exist yet.
 --
 -- ⚠ **WRITTEN, NOT APPLIED. REPLAY HAS NEVER RUN** (Docker was down for all of
 -- wave A and all of wave B). Deploy state is a MEASUREMENT: re-derive with
@@ -11,14 +14,14 @@
 -- ═══ 🔒 TWO PRECONDITIONS, AND NEITHER IS OPTIONAL ══════════════════════════
 --
 -- **P1 — `20260920120000_workspace_kind_personal.sql` HAS RUN.** Its §5 is a
--- ONE-TIME move of every `home_scoped` row into its author's `kind='personal'`
+-- ONE-TIME move of every `home_scoped` row into its author's `kind='home'`
 -- container. This file's §1 RAISEs rather than trusting that, and the assertion
 -- is the whole reason the drop is safe: after the column goes there is no marker
 -- left, so a row still sitting on a shared workspace's shelf would become an
 -- ordinary workspace row — visible to every member of a workspace its author
 -- filed as private, with nothing anywhere that could notice.
 --
--- **P2 — `TENANCY_PERSONAL_CONTAINER` HAS BEEN DEFAULT-ON FOR A FULL RELEASE,
+-- **P2 — `TENANCY_HOME_SPACE` HAS BEEN DEFAULT-ON FOR A FULL RELEASE,
 -- AND THE CODE OF THIS SLICE IS DEPLOYED.** ⚠ **THIS IS THE ORDERING TRAP AND IT
 -- IS NOT THE SAME AS P1.** §5's move ran ONCE; the flag is what decided where
 -- personal writes LAND afterwards. There is therefore a window — containers
@@ -26,8 +29,8 @@
 -- workspace with `home_scoped = true`, and §1 below is exactly what refuses to
 -- drop the column while any of those exist. **Turn the flag on, let it run one
 -- release, then apply this file.** Once it is applied the flag has nothing left
--- to decide: `shared/tenancy/personal-container.ts` no longer reads it, a
--- personal write lands in the container or REFUSES, and `personalWriteWorkspaceId`
+-- to decide: `shared/tenancy/home-space.ts` no longer reads it, a
+-- personal write lands in the container or REFUSES, and `homeSpaceWriteWorkspaceId`
 -- has no fallback to strand a row in.
 --
 -- ⚠ **P1's OWN PRECONDITION (F-564) IS SEPARATE AND STILL APPLIES.** The gate is
@@ -41,12 +44,12 @@
 --   ALTER TABLE public.knowledge_bases ADD COLUMN IF NOT EXISTS home_scoped BOOLEAN NOT NULL DEFAULT false;
 --   ALTER TABLE public.agent_identities ADD COLUMN IF NOT EXISTS home_scoped BOOLEAN NOT NULL DEFAULT false;
 --   UPDATE public.knowledge_bases k SET home_scoped = true
---     FROM public.workspaces p WHERE p.id = k.workspace_id AND p.kind = 'personal';
+--     FROM public.workspaces p WHERE p.id = k.workspace_id AND p.kind = 'home';
 --   UPDATE public.agent_identities t SET home_scoped = true
---     FROM public.workspaces p WHERE p.id = t.workspace_id AND p.kind = 'personal';
+--     FROM public.workspaces p WHERE p.id = t.workspace_id AND p.kind = 'home';
 --
 -- ⚠ **THE ROLLBACK IS LOSSLESS ONLY BECAUSE THE CONTAINER CARRIES THE FACT.**
--- After P1 and P2 "personal" IS "lives in a `kind='personal'` container", so the
+-- After P1 and P2 "home" IS "lives in a `kind='home'` container", so the
 -- boolean can be recomputed exactly. That equivalence is what this file is
 -- deleting a redundant copy of — and it is why §1 must hold before the drop,
 -- not after.
@@ -73,12 +76,12 @@ BEGIN
        WHERE k.home_scoped IS TRUE
          AND NOT EXISTS (
            SELECT 1 FROM public.workspaces p
-            WHERE p.id = k.workspace_id AND p.kind = 'personal'
+            WHERE p.id = k.workspace_id AND p.kind = 'home'
          )
     $q$ INTO stranded;
     IF stranded > 0 THEN
       RAISE EXCEPTION
-        'drop_home_scoped: % knowledge_bases still carry home_scoped=true outside a personal container. Dropping the column would publish them to their workspace. Run 20260920120000 section 5 again, and check TENANCY_PERSONAL_CONTAINER has been on long enough that no newer personal write landed in a shared workspace.',
+        'drop_home_scoped: % knowledge_bases still carry home_scoped=true outside a home space. Dropping the column would publish them to their workspace. Run 20260920120000 section 5 again, and check TENANCY_HOME_SPACE has been on long enough that no newer personal write landed in a shared workspace.',
         stranded;
     END IF;
   END IF;
@@ -95,12 +98,12 @@ BEGIN
          WHERE t.home_scoped IS TRUE
            AND NOT EXISTS (
              SELECT 1 FROM public.workspaces p
-              WHERE p.id = t.workspace_id AND p.kind = 'personal'
+              WHERE p.id = t.workspace_id AND p.kind = 'home'
            )
       $q$, tbl) INTO stranded;
       IF stranded > 0 THEN
         RAISE EXCEPTION
-          'drop_home_scoped: % % rows still carry home_scoped=true outside a personal container. See the knowledge_bases branch above for the remedy.',
+          'drop_home_scoped: % % rows still carry home_scoped=true outside a home space. See the knowledge_bases branch above for the remedy.',
           stranded, tbl;
       END IF;
     END IF;

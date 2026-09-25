@@ -12,10 +12,10 @@ interface WorkspaceNameStepProps {
  * Onboarding step 3 — name the caller's HOME SPACE (+ optional description).
  * Auth-3D kit, not the token surface, matching steps 1-2. Blank name keeps the
  * server's "Home" fallback (`onboarding/server/service.ts ›
- * PERSONAL_CONTAINER_DEFAULT_NAME`).
+ * HOME_SPACE_DEFAULT_NAME`).
  *
  * ⚠ **IT SAID "WORKSPACE" EVERYWHERE UNTIL 2026-09-10 AND NAMED NO WORKSPACE.**
- * What this step renames is the caller's `kind='personal'` container — a SHELF,
+ * What this step renames is the caller's `kind='home'` container — a SHELF,
  * not a workspace (`20260920120000`'s header) — and the word set the new user's
  * expectation wrong on the first screen they ever see: they finish, land on
  * /home, and the thing they named is not called what they were told.

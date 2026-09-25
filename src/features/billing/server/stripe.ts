@@ -56,7 +56,7 @@ export function getSoloPriceId(): string | null {
 }
 
 /**
- * Flat personal Pro price — $8.99/month on a `kind='personal'` container
+ * Flat personal Pro price — $8.99/month on a `kind='home'` container
  * (2026-09-08). Not the retired Solo plan even though Stripe hangs it off the same
  * product: separate prices, `PlanId`s and container kinds. Null when unset so
  * callers degrade like `getSeatPriceId`.
@@ -105,7 +105,7 @@ export function selectSeatItem(
 
 export interface WorkspaceCheckoutArgs {
   /** The container being bought for — a standard workspace for `team`, the
-   *  caller's `kind='personal'` container for `pro`. Same column either way, which
+   *  caller's `kind='home'` container for `pro`. Same column either way, which
    *  is why personal Pro needs no second Stripe pipeline. */
   workspaceId: string;
   /** `"team"` or `"pro"` (2026-09-08). The retired Solo plan cannot be minted:

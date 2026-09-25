@@ -62,7 +62,7 @@ function apiError(status: number, code: string, apiMessage?: string): Error {
 //
 // ⚠ **THE FOUR HOME-SHELF CASES THAT STOOD HERE ARE DELETED (2026-09-02, slice
 // B15).** They pinned `resolveIdentityHomeScope`'s 403 surfacing as an
-// actionable sentence, the `home shelf` → `personal shelf` re-spelling, and the
+// actionable sentence, the `home shelf` → `home shelf` re-spelling, and the
 // local shelf/visibility contradiction. The column, the fence, the mapper and
 // the argument are all gone (ruling B10), so those were assertions about a
 // surface that no longer exists — deleted rather than adapted, because there is

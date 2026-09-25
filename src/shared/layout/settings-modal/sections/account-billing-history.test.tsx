@@ -2,7 +2,7 @@
 /**
  * Account → Billing history. Real hooks + transport over a fake wire: the
  * status read answers from `rows`, the invoices read from `invoices`, both keyed
- * by `x-workspace-id` (none = the personal container).
+ * by `x-workspace-id` (none = the home space).
  *
  * Pins: no block and NO invoices request for a never-paid user; hidden when the
  * history holds no paid charge; paid non-zero charges only, newest first, with
@@ -29,7 +29,7 @@ const PERSONAL = "__personal__";
 interface Row {
   plan: "free" | "pro" | "team";
   status: "free" | "active" | "canceled";
-  containerKind: "personal" | "standard";
+  containerKind: "home" | "standard";
   hasCustomer: boolean;
 }
 
@@ -85,7 +85,7 @@ beforeEach(() => {
     [PERSONAL]: {
       plan: "free",
       status: "free",
-      containerKind: "personal",
+      containerKind: "home",
       hasCustomer: false,
     },
   };
@@ -140,7 +140,7 @@ function personalCustomer(list: InvoiceDto[] | "error", status: Row["status"] = 
   rows[PERSONAL] = {
     plan: status === "canceled" ? "free" : "pro",
     status,
-    containerKind: "personal",
+    containerKind: "home",
     hasCustomer: true,
   };
   invoices[PERSONAL] = list;

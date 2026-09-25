@@ -30,7 +30,7 @@
  * costs the most. Nothing here saw them, because they are neither served at
  * connect time nor published as a resource: `channel-doctrine.ts › tenancyFix`
  * still routed a refused launch at `dopl_agent op="copy", to_workspace` (B15
- * deleted both), `TENANCY_RULE` still said "personal shelf", and the grant
+ * deleted both), `TENANCY_RULE` still said "home shelf", and the grant
  * scope refusal sent a caller to `dopl_home(op="list_channels")` and
  * `list_workspaces` (B13 deleted both TOOLS). So the scan takes three sources
  * now, not one:

@@ -14,6 +14,13 @@
  * DEFAULT_MIN_VERSION` reaches 1.37.0 (the first desktop that frames `ontology`). Delete this
  * file and its two call sites (`registrar.ts › RENAMED_ARGS`, `tools/ontology.ts`'s op enum).
  */
+/**
+ * `container=personal` — the Home space's slug until `20261023120000_home_vocabulary_rename.sql`
+ * re-slugged it `home` (Samuel, 2026-09-24: the `personal` layer is cut). An agent holding the old
+ * spelling still lands in its Home space for ONE release. REMOVAL TRIGGER: the release after
+ * 1.37.1; delete this function and its one call site (`workspace-directory.ts › resolveContainerRef`).
+ */
+export declare function isLegacyHomeAddress(foldedRef: string): boolean;
 /** Retired `dopl_ontology` args → the arg that replaced each. */
 export declare const LEGACY_ONTOLOGY_ARGS: Readonly<Record<string, string>>;
 /**

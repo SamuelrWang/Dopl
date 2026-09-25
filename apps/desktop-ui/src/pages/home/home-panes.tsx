@@ -61,14 +61,14 @@ export function HomePane({
     rows.find((candidate) => candidate.id === id) ?? null;
 
   if (shown === OVERVIEW_PANE) {
-    // The caller's `kind='personal'` container, so the credit bar reads their PERSONAL wallet
+    // The caller's `kind='home'` container, so the credit bar reads their PERSONAL wallet
     // (`credits-service.ts › resolveBillingTarget`). Null until onboarded.
     return (
       <HomeOverviewPanels homeWorkspaceId={identity.workspace?.id ?? null} />
     );
   }
   if (shown === ONTOLOGY_PANE) {
-    // An ontology is a personal item lent into channels, so this face takes the personal container.
+    // An ontology is a personal item lent into channels, so this face takes the home space.
     return (
       <HomeOntologyPanels
         homeWorkspaceId={identity.workspace?.id ?? null}

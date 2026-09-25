@@ -62,7 +62,7 @@ export function BillingPageScreen({
   // the cached billing-status read they already share — the shell needs it only
   // to name what `[segment]` resolved to.
   const ent = useWorkspaceEntitlements(workspaceId);
-  const isPersonal = ent.containerKind === "personal";
+  const isHomeSpace = ent.containerKind === "home";
   // Reported up by `PlansBilling` while Stripe's card form is mounted;
   // switcher inert while true.
   const [checkoutOpen, setCheckoutOpen] = useState(false);
@@ -99,11 +99,11 @@ export function BillingPageScreen({
           {workspaceName}
         </h1>
         {/* The sub-label names what `[segment]` resolved to (2026-09-08): this
-            route serves a `kind='personal'` container as well as a standard
+            route serves a `kind='home'` container as well as a standard
             workspace since Pro went on sale. A personal space gets a plain
             label rather than the browser-payment explainer. */}
         <p className="mt-1.5 text-caption text-text-secondary">
-          {isPersonal
+          {isHomeSpace
             ? "Personal space"
             : "Payment lives in your browser — the desktop app never handles card details. Everything else about Dopl is in the app."}
         </p>

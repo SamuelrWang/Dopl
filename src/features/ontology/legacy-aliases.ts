@@ -54,13 +54,13 @@ export function isLegacyOntologyClient(appVersion: string | undefined): boolean 
   return true;
 }
 
-/** `GET /api/ontology` (both views): the list and the personal-shelf ids under their old keys too. */
+/** `GET /api/ontology` (both views): the list and the home-shelf ids under their old keys too. */
 export function withLegacySnapshotKeys<
-  T extends { ontologies: readonly unknown[]; personalOntologyIds?: readonly string[] },
+  T extends { ontologies: readonly unknown[]; homeSpaceOntologyIds?: readonly string[] },
 >(body: T, appVersion: string | undefined): T {
   if (!isLegacyOntologyClient(appVersion)) return body;
   const legacy: Record<string, unknown> = { ...body, [OLD_LIST_KEY]: body.ontologies };
-  if (body.personalOntologyIds !== undefined) legacy[OLD_PERSONAL_KEY] = body.personalOntologyIds;
+  if (body.homeSpaceOntologyIds !== undefined) legacy[OLD_PERSONAL_KEY] = body.homeSpaceOntologyIds;
   return legacy as T;
 }
 

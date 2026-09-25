@@ -215,7 +215,7 @@ describe("channelPeople — the ONE read of `peers`", () => {
  * kind; the column can only address `kind='link'` containers, which have no
  * route of their own.
  *
- * ⚠ **THE `personal` CASE IS THE SHARP ONE.** It is not a standard workspace
+ * ⚠ **THE `home` CASE IS THE SHARP ONE.** It is not a standard workspace
  * either, so a `!isStandardWorkspace(…)` test would ADMIT it — the operator's own
  * shelf would appear as a channel row beside their relationships.
  */
@@ -229,12 +229,12 @@ describe("🔒 homeRows keeps ONLY `container.kind === \"link\"` (G3)", () => {
       }),
       channel({
         workspaceId: "ws-me",
-        container: { id: "ws-me", kind: "personal", segment: "sam-cc33" },
+        container: { id: "ws-me", kind: "home", segment: "sam-cc33" },
       }),
     ],
   };
 
-  it("drops standard AND personal containers", () => {
+  it("drops standard AND home spaces", () => {
     expect(homeRows(payload).map((row) => row.id)).toEqual(["rel:ws-1"]);
     expect(homeChannels(payload).map((c) => c.workspaceId)).toEqual(["ws-1"]);
   });

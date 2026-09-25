@@ -37,13 +37,13 @@ import {
  * point below funnels through `loadVisibleChannel`, the same gate the transcript
  * uses, and there is no artifact-specific visibility rule to drift from it.
  *
- * ⚠ **NOTHING HERE TOUCHES THE PERSONAL-SHELF FENCE** (`shared/tenancy/
- * personal-reach.ts`), and that is correct rather than an omission: that fence
- * answers "may this caller reach their own personal CONTAINER", and an artifact
+ * ⚠ **NOTHING HERE TOUCHES THE HOME-SHELF FENCE** (`shared/tenancy/
+ * home-space-reach.ts`), and that is correct rather than an omission: that fence
+ * answers "may this caller reach their own home SPACE", and an artifact
  * is channel-scoped — it folds rows in `channel_messages`, which the room's own
  * membership already governs. Adding a container question to a channel read
  * would be the second authority §8 warns about. Nothing in this file weakens a
- * pin in `personal-reach.test.ts` or the resolve-resource tests; none of those
+ * pin in `home-space-reach.test.ts` or the resolve-resource tests; none of those
  * paths is reached.
  */
 

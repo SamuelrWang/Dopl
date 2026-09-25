@@ -18,7 +18,7 @@
 
 /**
  * Pro — the personal paid tier, flat per month (2026-09-08). Sold on a
- * `kind='personal'` container only; buys the personal wallet's paid allowance
+ * `kind='home'` container only; buys the personal wallet's paid allowance
  * (`credits.ts › PERSONAL_MONTHLY_CREDITS`).
  */
 export const PRO_PRICE = 8.99;

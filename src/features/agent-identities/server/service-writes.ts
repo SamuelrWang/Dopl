@@ -97,7 +97,7 @@ export async function createIdentity(
   });
 
   const identity = await repo.insertIdentity({
-    // The router resolves the same personal container by owner that the gate did.
+    // The router resolves the same home space by owner that the gate did.
     workspaceId: destination.workspaceId,
     name: stripNullBytes(input.name),
     description: normalizeProse(input.description),

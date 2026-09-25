@@ -139,7 +139,7 @@ export async function searchScope(
 
   const objects = Object.values(ontology.objects);
   // Absent key (older server) groups nothing as personal.
-  const personalIds = new Set(identityPayload.homeScopedIdentityIds ?? EMPTY_IDS);
+  const homeSpaceIds = new Set(identityPayload.homeScopedIdentityIds ?? EMPTY_IDS);
   return {
     entries: entryHits.slice(0, limit),
     skills: cap(
@@ -165,7 +165,7 @@ export async function searchScope(
     },
     audienceOf: (ident) =>
       identityAudience(ident, {
-        personal: personalIds.has(ident.id),
+        personal: homeSpaceIds.has(ident.id),
         inHomeChannel: opts.inHomeChannel,
       }),
     notice: reads.notice(opts.containerId ? SEARCH_READ_COUNT : SEARCH_READ_COUNT - 1, "reads"),

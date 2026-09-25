@@ -15,7 +15,7 @@ interface Props {
  * full — the same two cards the core picks for the container it was handed
  * (`plans.ts › plansForKind`, 2026-09-08): a STANDARD workspace gets Starter
  * (free, 100 credits per member per month) and Team ($8.99 per seat, 5,000 per
- * member) plus the legacy-Pro note; a `kind='personal'` container gets Free
+ * member) plus the legacy-Pro note; a `kind='home'` container gets Free
  * (500 credits a month) and **Pro** ($8.99 a month, 5,000). The copy lives in
  * the shared core and this file adds no words of its own about plans. Only the
  * two Stripe-shaped actions differ, because the packaged CSP

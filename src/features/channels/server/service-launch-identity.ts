@@ -54,6 +54,6 @@ export async function resolveIdentityForDirective(
     throw new LaunchIdentityNotFoundError(ref, resolution.identity);
   }
   // An id resolves the same way here and at spawn (`service-reads.ts › resolveIdentityForLaunch`):
-  // both compose `readResourceById`, so an identity on its owner's personal shelf launches anywhere.
+  // both compose `readResourceById`, so an identity on its owner's home shelf launches anywhere.
   return { id: resolution.id, name: resolution.name };
 }

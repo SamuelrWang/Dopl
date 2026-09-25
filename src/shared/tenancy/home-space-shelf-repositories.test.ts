@@ -1,7 +1,7 @@
 /**
  * BOTH SHELF-BEARING TABLES, DRIVEN THROUGH THE REAL REPOSITORY FUNCTIONS, so
  * what is pinned is the SQL each one emits rather than the resolver's return
- * value (which `personal-container.test.ts` already holds).
+ * value (which `home-space.test.ts` already holds).
  *
  * ⚠ ONE FILE FOR TWO FEATURES ON PURPOSE. `knowledge_bases` and
  * `agent_identities` are hand mirrors of each other on the shelf axis — same
@@ -12,9 +12,9 @@
  * is what makes a one-sided edit fail.
  *
  * ⚠ **THE SHELF AXIS IS A TENANCY SINCE 2026-09-02 (slice B15)**, so every case
- * that drove `TENANCY_PERSONAL_CONTAINER` or asserted a `home_scoped` filter is
+ * that drove `TENANCY_HOME_SPACE` or asserted a `home_scoped` filter is
  * gone with the flag and the column. What is left is the same pair, asked the
- * new way: the personal shelf is ONE container, the workspace shelf is the
+ * new way: the home shelf is ONE container, the workspace shelf is the
  * calling workspace, and the write REFUSES rather than falling back.
  */
 
@@ -108,13 +108,13 @@ beforeEach(() => {
     userId: USER,
     sharedCredential: false,
     credentialWorkspaceId: null,
-    // ⚠ A PERSON, stated. `personal-reach.ts` gates only the literal `"agent"`,
+    // ⚠ A PERSON, stated. `home-space-reach.ts` gates only the literal `"agent"`,
     // and every case in this file is a human surface listing its own shelves.
     source: null,
   });
 });
 
-describe("the personal shelf is ONE container, on both tables", () => {
+describe("the home shelf is ONE container, on both tables", () => {
   it("reads the caller's container and nothing else, on both tables", async () => {
     await listBasesForWorkspace(WORKSPACE, false, "home");
     await listIdentitiesForWorkspace(WORKSPACE, "home");
@@ -240,11 +240,11 @@ describe("the personal WRITE", () => {
     // this file exists to catch, and it is invisible from either feature alone.
     containerId = null;
     await expect(insertBase({ ...baseArgs, homeScoped: true })).rejects.toMatchObject(
-      { code: "PERSONAL_CONTAINER_MISSING" }
+      { code: "HOME_SPACE_MISSING" }
     );
     await expect(
       insertIdentity({ ...identityArgs, homeScoped: true })
-    ).rejects.toMatchObject({ code: "PERSONAL_CONTAINER_MISSING" });
+    ).rejects.toMatchObject({ code: "HOME_SPACE_MISSING" });
     expect(
       rowQueries(),
       "nothing may be inserted before the refusal"

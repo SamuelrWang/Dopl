@@ -5,8 +5,8 @@ import { meetsMinRole } from "@/features/workspaces/types";
 import { assertSharedPublishAcknowledged } from "@/features/workspaces/server/shared-publish";
 import { assertHomeChannelRowIsShared } from "@/features/workspaces/server/home-channel-destination";
 import { listTeamIdsForUser } from "@/features/teams/server/repository";
-import { personalShelfRefusal } from "@/shared/tenancy/personal-container";
-import { resolvePersonalReach } from "@/shared/tenancy/personal-reach";
+import { homeSpaceShelfRefusal } from "@/shared/tenancy/home-space";
+import { resolveHomeSpaceReach } from "@/shared/tenancy/home-space-reach";
 import type { KnowledgeContext } from "../types";
 import type { KnowledgeBaseCreateInput } from "../schema";
 import {
@@ -25,7 +25,7 @@ import { resolveAgentAudience } from "./service-audience";
  * A create must not produce a row its creator cannot read back (F-323): an agent in a shared room
  * reads only channel-granted bases, and granting is human-only. One message for both refusing arms.
  */
-function personalShelfUnreachableInRoom(): AgentWriteDisabledError {
+function homeSpaceShelfUnreachableInRoom(): AgentWriteDisabledError {
   return new AgentWriteDisabledError(
     "(new)",
     "An agent cannot create a knowledge base inside a shared home channel. " +
@@ -34,18 +34,18 @@ function personalShelfUnreachableInRoom(): AgentWriteDisabledError {
       "base you just created carries no grant, so it would be invisible to you from " +
       "your very next call. Sharing one into a channel is a human-only setting. " +
       "Ask your operator to create the base here and share it into the channel, to " +
-      "arm this channel for their personal shelf so your creates land there, or " +
+      "arm this channel for their home shelf so your creates land there, or " +
       "create it in a workspace of your own instead.",
   );
 }
 
 /**
- * Where a create lands. A create the shared room would refuse goes to the caller's personal container
- * instead, by owner and only when `personal-reach.ts` answers open; nothing guesses a container.
+ * Where a create lands. A create the shared room would refuse goes to the caller's home space
+ * instead, by owner and only when `home-space-reach.ts` answers open; nothing guesses a container.
  * `shareToChannelId` and team grants name the calling container, so they keep the refusal.
  */
 export interface CreateDestination {
-  /** Routing flag; resolves the same owner container `personalWriteWorkspaceId` does. */
+  /** Routing flag; resolves the same owner container `homeSpaceWriteWorkspaceId` does. */
   homeScoped: boolean;
   /** Where the row lands (for the slug read and the rollback); `ctx.workspaceId` unless personal. */
   workspaceId: string;
@@ -64,22 +64,22 @@ export async function resolveCreateDestination(
     workspaceId: ctx.workspaceId,
   };
   if (input.homeScoped === true) {
-    const reach = await resolvePersonalReach(ctx);
+    const reach = await resolveHomeSpaceReach(ctx);
     if (reach.kind === "open") {
       return { homeScoped: true, workspaceId: reach.containerId };
     }
     // Refuse, never downgrade: the workspace shelf is a different audience, not a lesser one.
-    throw personalShelfRefusal(reach.refusal);
+    throw homeSpaceShelfRefusal(reach.refusal);
   }
 
   const audience = await resolveAgentAudience(ctx);
   if (audience.kind === "unrestricted") return room;
   // A create that names the room keeps the read-back refusal; anything else may follow its owner.
   if (input.shareToChannelId !== undefined || input.wantsTeams === true) {
-    throw personalShelfUnreachableInRoom();
+    throw homeSpaceShelfUnreachableInRoom();
   }
-  const reach = await resolvePersonalReach(ctx);
-  if (reach.kind === "closed") throw personalShelfUnreachableInRoom();
+  const reach = await resolveHomeSpaceReach(ctx);
+  if (reach.kind === "closed") throw homeSpaceShelfUnreachableInRoom();
   return { homeScoped: true, workspaceId: reach.containerId };
 }
 
@@ -141,7 +141,7 @@ export async function assertCreateBaseAllowed(
 
   // On the RESOLVED visibility (teams rewrites it to public); before the slug loop, so no slug is spent.
   await assertSharedPublishAcknowledged({
-    // The container the row lands in: a personal shelf has one member, so nothing is owed.
+    // The container the row lands in: a home shelf has one member, so nothing is owed.
     workspaceId: destination.workspaceId,
     publishes: resolvedVisibility === "public",
     acknowledged: input.acknowledgeShared,

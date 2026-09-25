@@ -1,6 +1,6 @@
 import "server-only";
 import { isSharedCredential } from "@/shared/auth/credential-audience";
-import { personalShelfContainerIds } from "@/shared/tenancy/personal-reach";
+import { homeSpaceShelfContainerIds } from "@/shared/tenancy/home-space-reach";
 import { isSharedRoom } from "@/shared/tenancy/shared-room";
 import {
   meetsLevel,
@@ -80,7 +80,7 @@ export type OntologyAudience =
       readonly source: "user" | "agent";
       /**
        * 🔒 **WHICH OF {@link OntologyAudience.workspaceIds} ARE THE CALLER'S OWN
-       * PERSONAL SHELF** — the subset `personalShelfContainerIds` contributed,
+       * HOME SHELF** — the subset `homeSpaceShelfContainerIds` contributed,
        * kept rather than merged away (S29c, 2026-09-18).
        *
        * ⚠ **THE WIDENING WAS INVISIBLE AND THAT IS THE BUG.** The shelf reaches
@@ -95,7 +95,7 @@ export type OntologyAudience =
        * {@link levelForOntology}; nothing here widens or narrows what is
        * returned. Empty on every arm that resolves no shelf.
        */
-      readonly personalWorkspaceIds: readonly string[];
+      readonly homeSpaceWorkspaceIds: readonly string[];
       /** The person this request acts as, or `null` for a credential standing
        *  for nobody in particular — which owns nothing and inherits nobody. */
       readonly userId: string | null;
@@ -139,7 +139,7 @@ export function resolveOntologyAudience(
  *
  * **THE FALLBACK REACHES NOTHING, AND THE SAFE READING BELONGS IN THE ARM
  * RATHER THAN IN THE DEFAULT (F-683, fixed 2026-09-09).** It read
- * `if (kind !== "link" && kind !== "personal") return unrestricted`, so an
+ * `if (kind !== "link" && kind !== "home") return unrestricted`, so an
  * unknown kind — or a `null` from a workspace row that vanished mid-request —
  * answered `edit` on every ontology in scope. Same choice as the member count
  * below and as `dopl_ontology_level_rank`'s `ELSE -1`.
@@ -149,7 +149,7 @@ async function computeAudience(ctx: OntologyContext): Promise<OntologyAudience> 
   if (kind === "standard") {
     return { kind: "unrestricted", workspaceIds: [ctx.workspaceId] };
   }
-  if (kind !== "link" && kind !== "personal") {
+  if (kind !== "link" && kind !== "home") {
     // F-683's fail-closed arm. The READ SCOPE is EMPTY, not
     // `[ctx.workspaceId]`: every repository read short-circuits on an empty set,
     // and {@link levelForOntology} answers `none` for one — which is what closes
@@ -164,7 +164,7 @@ async function computeAudience(ctx: OntologyContext): Promise<OntologyAudience> 
       // ⚠ NO SHELF WAS RESOLVED ON THIS ARM, so there is nothing to label —
       // which is a different statement from "the shelf is empty" only in a
       // world where this arm returned rows, and it returns none.
-      personalWorkspaceIds: [],
+      homeSpaceWorkspaceIds: [],
       userId: null,
       solo: false,
     };
@@ -184,15 +184,15 @@ async function computeAudience(ctx: OntologyContext): Promise<OntologyAudience> 
       source: ctx.source,
       // ⚠ A SHARED CREDENTIAL STANDS FOR NOBODY, so it has no shelf to reach
       // into and none to label (M-10, unchanged).
-      personalWorkspaceIds: [],
+      homeSpaceWorkspaceIds: [],
       userId: null,
       solo: false,
     };
   }
 
-  const [channelIds, personalIds, memberCount] = await Promise.all([
+  const [channelIds, homeSpaceIds, memberCount] = await Promise.all([
     listChannelIdsForWorkspace(ctx.workspaceId),
-    personalShelfContainerIds({
+    homeSpaceShelfContainerIds({
       userId: ctx.userId,
       workspaceId: ctx.workspaceId,
       credentialSubjectUserId: ctx.credentialSubjectUserId,
@@ -229,7 +229,7 @@ async function computeAudience(ctx: OntologyContext): Promise<OntologyAudience> 
     workspaceIds: [
       ...new Set([
         ctx.workspaceId,
-        ...personalIds,
+        ...homeSpaceIds,
         ...shareRows.map((r) => r.workspace_id),
       ]),
     ],
@@ -238,7 +238,7 @@ async function computeAudience(ctx: OntologyContext): Promise<OntologyAudience> 
     source: ctx.source,
     // ⚠ THE SHELF'S OWN IDS, KEPT SEPARATE FROM THE SCOPE ABOVE — see the field.
     // The scope is a UNION and cannot be un-mixed by a later reader.
-    personalWorkspaceIds: personalIds,
+    homeSpaceWorkspaceIds: homeSpaceIds,
     userId: ctx.userId,
     // Fail closed, through the ONE predicate (F-718, 2026-09-18): `0`, `null`
     // and `undefined` are all "not one", so a roster race cannot widen an

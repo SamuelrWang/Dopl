@@ -8,7 +8,7 @@
  * (recorded 2026-09-02, in the wave-B batch-2 review, which flagged the file as
  * out of date). This file describes what PRODUCTION HOLDS. Wave B's eleven
  * migrations are UNAPPLIED, so the absence of `resource_grants` and
- * `ensure_personal_container`, and the presence of `team_resource_access`, are
+ * `ensure_home_space`, and the presence of `team_resource_access`, are
  * this file being CORRECT about a database that has not moved yet.
  * Re-generating it now would rewrite it to the same thing.
  * ⚠ **IT BECOMES A REAL DEFECT THE MOMENT THOSE MIGRATIONS APPLY**, and it will

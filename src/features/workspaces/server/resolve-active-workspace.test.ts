@@ -4,7 +4,7 @@
  *   - header UUID → membership check (404 for non-member / nonexistent);
  *   - blank / non-UUID header → 400 WORKSPACE_INVALID (never a 500, never a
  *     silent fall-through);
- *   - **no header → the caller's own personal container, minted on first ask**
+ *   - **no header → the caller's own home space, minted on first ask**
  *     (ruling B10). No membership count, no auto-target, no refusal.
  */
 
@@ -15,12 +15,12 @@ vi.mock("./repository", () => ({
   listWorkspacesWithRoleForUser: vi.fn(),
   findWorkspaceById: vi.fn(),
   findMembership: vi.fn(),
-  ensurePersonalContainerRow: vi.fn(),
+  ensureHomeSpaceRow: vi.fn(),
 }));
 vi.mock("./last-seen", () => ({ touchLastSeen: vi.fn() }));
 vi.mock("./seed-workspace", () => ({ seedNewWorkspace: vi.fn() }));
-vi.mock("@/shared/tenancy/personal-container", () => ({
-  findPersonalContainerId: vi.fn(),
+vi.mock("@/shared/tenancy/home-space", () => ({
+  findHomeSpaceId: vi.fn(),
 }));
 
 import * as repo from "./repository";
@@ -131,15 +131,15 @@ describe("resolveActiveWorkspace — header path", () => {
   });
 });
 
-describe("resolveActiveWorkspace — no-header path is the PERSONAL CONTAINER", () => {
+describe("resolveActiveWorkspace — no-header path is the HOME SPACE", () => {
   function primeContainer(role: Role = "owner") {
-    mockRepo.ensurePersonalContainerRow.mockResolvedValue({
-      workspace: { ...workspace("ws-home", "personal"), kind: "personal" },
+    mockRepo.ensureHomeSpaceRow.mockResolvedValue({
+      workspace: { ...workspace("ws-home", "home"), kind: "home" },
       created: false,
     });
     mockRepo.findWorkspaceById.mockResolvedValue({
-      ...workspace("ws-home", "personal"),
-      kind: "personal",
+      ...workspace("ws-home", "home"),
+      kind: "home",
     });
     mockRepo.findMembership.mockResolvedValue(membership("ws-home", role));
   }
@@ -167,8 +167,8 @@ describe("resolveActiveWorkspace — no-header path is the PERSONAL CONTAINER", 
   it("🔒 a caller with ZERO workspaces resolves — sign-in cannot dead-end", async () => {
     primeContainer();
     const res = await resolveActiveWorkspace(USER, null);
-    expect(res.workspace.kind).toBe("personal");
-    expect(mockRepo.ensurePersonalContainerRow).toHaveBeenCalledWith(USER);
+    expect(res.workspace.kind).toBe("home");
+    expect(mockRepo.ensureHomeSpaceRow).toHaveBeenCalledWith(USER);
   });
 
   it("still fails closed on the container it just ensured (revoked membership → 404)", async () => {
@@ -189,9 +189,9 @@ describe("resolveActiveWorkspace — no-header path is the PERSONAL CONTAINER", 
  * ⚠ **THE MIGRATION HEADER HAD SAID SO SINCE 2026-09-02 AND THE CODE DID IT
  * ANYWAY** — `20260920120000_workspace_kind_personal.sql`'s `WHAT IS
  * DELIBERATELY *NOT* SEEDED` paragraph names `seedNewWorkspace` by symbol and
- * gives the reason (*"a personal container is a SHELF, not a workspace … the one
+ * gives the reason (*"a home space is a SHELF, not a workspace … the one
  * surface that must show only what its owner put there"*), while
- * `service.ts › ensurePersonalContainer` called it on `created`. The header was
+ * `service.ts › ensureHomeSpace` called it on `created`. The header was
  * right; this is the pin that stops it being right alone.
  *
  * ⚠ **IT MUST BE ASSERTED ON A FIRST MINT, NOT ON A RE-ASK.** Every other case
@@ -199,24 +199,24 @@ describe("resolveActiveWorkspace — no-header path is the PERSONAL CONTAINER", 
  * either — so all of them passed before the fix and none of them is this claim.
  * `created: true` is the only state that ever reached the seeder.
  */
-describe("🔒 a first-mint personal container is seeded with NOTHING", () => {
+describe("🔒 a first-mint home space is seeded with NOTHING", () => {
   beforeEach(() => {
-    mockRepo.ensurePersonalContainerRow.mockResolvedValue({
-      workspace: { ...workspace("ws-home", "personal"), kind: "personal" },
+    mockRepo.ensureHomeSpaceRow.mockResolvedValue({
+      workspace: { ...workspace("ws-home", "home"), kind: "home" },
       created: true,
     });
     mockRepo.findWorkspaceById.mockResolvedValue({
-      ...workspace("ws-home", "personal"),
-      kind: "personal",
+      ...workspace("ws-home", "home"),
+      kind: "home",
     });
     mockRepo.findMembership.mockResolvedValue(membership("ws-home", "owner"));
   });
 
   it("the starter corpus is never orchestrated — zero bases, skills, ontology objects, chats", async () => {
-    const { ensurePersonalContainer } = await import("./service");
-    const container = await ensurePersonalContainer(USER);
+    const { ensureHomeSpace } = await import("./service");
+    const container = await ensureHomeSpace(USER);
 
-    expect(container.kind).toBe("personal");
+    expect(container.kind).toBe("home");
     // ⚠ ONE ASSERTION, FOUR SURFACES. `seedNewWorkspace` is the single entry
     // point to all of them (`seed-workspace.ts`'s own contract), so not calling
     // it IS "no bases, no skills, no ontology, no chats" — stating the four
@@ -233,8 +233,8 @@ describe("🔒 a first-mint personal container is seeded with NOTHING", () => {
 
   it("⚠ and the RPC is still asked exactly once — dropping the seed did not drop the mint", async () => {
     await resolveActiveWorkspace(USER, null);
-    expect(mockRepo.ensurePersonalContainerRow).toHaveBeenCalledTimes(1);
-    expect(mockRepo.ensurePersonalContainerRow).toHaveBeenCalledWith(USER);
+    expect(mockRepo.ensureHomeSpaceRow).toHaveBeenCalledTimes(1);
+    expect(mockRepo.ensureHomeSpaceRow).toHaveBeenCalledWith(USER);
   });
 });
 

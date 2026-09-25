@@ -117,9 +117,9 @@ export function tallyTools(rows: McpCallScanRow[]): HomeToolUsage[] {
  *      READER's wallet, and that row is theirs even though `user_id` is not.
  *   2. a LEGACY row — `wallet = 'workspace'`, the column's `DEFAULT`, written
  *      before 2026-09-07 with no payer at all — is the reader's iff its ORIGIN
- *      CONTAINER is one they OWN of kind `personal`/`link`, which is how the
+ *      CONTAINER is one they OWN of kind `home`/`link`, which is how the
  *      backfill derives a payer for exactly those rows.
- * A `seat` row is neither, and a `personal` row somebody ELSE paid for is
+ * A `seat` row is neither, and a personal-wallet row somebody ELSE paid for is
  * neither. ⚠ **`wallet` IS NOT NARROWED TO A UNION HERE** — the column has no
  * `CHECK`-closed future and the closed-value test belongs on the read side, the
  * same argument `narrowSessionDetail` makes: an unknown wallet is not the

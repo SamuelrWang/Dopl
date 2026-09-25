@@ -47,7 +47,7 @@ export const ONTOLOGY_SHARE_LIMIT = 500;
 
 /** `workspaces.kind` for one workspace, or `null` when the row is gone.
  *  Raw COLUMN, not a predicate — the ceiling asks "is this specifically a
- *  link/personal container", which must answer NO for a kind nobody has
+ *  link/home space", which must answer NO for a kind nobody has
  *  designed yet. */
 export async function findWorkspaceKind(workspaceId: string): Promise<string | null> {
   const { data, error } = await supabaseAdmin()

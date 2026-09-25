@@ -11,7 +11,7 @@
  *     keyed on a caller-supplied container it becomes a door into any shelf.
  *
  * The two refusals are deliberately different errors: a caller that asked for
- * the shelf gets `PersonalContainerMissingError`, one that asked for nothing
+ * the shelf gets `HomeSpaceMissingError`, one that asked for nothing
  * gets `AgentWriteDisabledError`. Collapsing them would tell an agent that never
  * mentioned a shelf that its operator has one.
  */
@@ -23,28 +23,28 @@ vi.mock("@/shared/supabase/admin", () => ({
   supabaseAdmin: () => ({ __marker: "admin-client" }),
 }));
 
-vi.mock("@/shared/tenancy/personal-reach", () => ({
-  resolvePersonalReach: vi.fn(),
-  personalShelfContainerIds: vi.fn(),
+vi.mock("@/shared/tenancy/home-space-reach", () => ({
+  resolveHomeSpaceReach: vi.fn(),
+  homeSpaceShelfContainerIds: vi.fn(),
 }));
 
 vi.mock("./service-audience", () => ({
   resolveAgentAudience: vi.fn(),
 }));
 
-import { resolvePersonalReach } from "@/shared/tenancy/personal-reach";
-import { PersonalContainerMissingError } from "@/shared/tenancy/personal-container";
+import { resolveHomeSpaceReach } from "@/shared/tenancy/home-space-reach";
+import { HomeSpaceMissingError } from "@/shared/tenancy/home-space";
 import { resolveAgentAudience } from "./service-audience";
 import { resolveCreateDestination } from "./service-base-gates";
 import { AgentWriteDisabledError } from "./errors";
 
-const mockReach = vi.mocked(resolvePersonalReach);
+const mockReach = vi.mocked(resolveHomeSpaceReach);
 const mockAudience = vi.mocked(resolveAgentAudience);
 
 const ME = "u-operator";
 /** The room — a link container with a peer in it. */
 const ROOM = "e7998a94-d3ab-42cc-8c76-99585bcb920c";
-/** The caller's own personal container. Never equal to the room. */
+/** The caller's own home space. Never equal to the room. */
 const CONTAINER = "33333333-3333-4333-8333-333333333333";
 const CHANNEL = "aaaaaaaa-0000-4000-8000-000000000001";
 
@@ -98,7 +98,7 @@ describe("🔒 homeScoped — asked for by name, so the fence alone decides", ()
       workspaceId: CONTAINER,
     });
     // The flag and the id together: `insertBase` routes on the flag through
-    // `personalWriteWorkspaceId` while the slug read and the rollback use the
+    // `homeSpaceWriteWorkspaceId` while the slug read and the rollback use the
     // id.
   });
 
@@ -121,7 +121,7 @@ describe("🔒 homeScoped — asked for by name, so the fence alone decides", ()
 
     await expect(
       resolveCreateDestination(ctx(), { homeScoped: true })
-    ).rejects.toBeInstanceOf(PersonalContainerMissingError);
+    ).rejects.toBeInstanceOf(HomeSpaceMissingError);
   });
 
   it("names the REMEDY on an unarmed room, and arming is human-only", async () => {
@@ -136,16 +136,16 @@ describe("🔒 homeScoped — asked for by name, so the fence alone decides", ()
       (e: Error) => e
     );
 
-    expect(err!.message).toContain("not armed for your personal shelf");
+    expect(err!.message).toContain("not armed for your home shelf");
     expect(err!.message).toContain("human-only");
   });
 
   it.each([
-    ["shared_credential" as const, "a shared credential has no personal shelf"],
-    ["no_container" as const, "your personal container has not been created yet"],
+    ["shared_credential" as const, "a shared credential has no home shelf"],
+    ["no_container" as const, "your home space has not been created yet"],
   ])("carries the %s reason through verbatim", async (refusal, sentence) => {
-    // One sentence per reason, written once (`personal-container.ts ›
-    // personalShelfRefusal`) and shared with the router and the agent-identities
+    // One sentence per reason, written once (`home-space.ts ›
+    // homeSpaceShelfRefusal`) and shared with the router and the agent-identities
     // twin.
     closed(refusal);
 
@@ -211,7 +211,7 @@ describe("⚠ an UNRESTRICTED audience lands in the calling container, as it alw
 // ── Arm 3: restricted, but the shelf is reachable ─────────────────────────
 
 describe("🔒 a RESTRICTED audience follows its OWNER when the room is armed", () => {
-  it("re-routes to the personal container instead of refusing", async () => {
+  it("re-routes to the home space instead of refusing", async () => {
     // Personal-visibility creates resolve their container by owner, never by
     // call site. The only creates this moves are ones the read-back gate was
     // already refusing outright.
@@ -242,8 +242,8 @@ describe("🔒 a RESTRICTED audience follows its OWNER when the room is armed", 
 describe("🔒 RESTRICTED and out of reach keeps F-323's refusal", () => {
   it("refuses an unarmed shared room with the ROOM error, not the shelf one", async () => {
     // This caller never mentioned a shelf. Answering
-    // `PERSONAL_CONTAINER_MISSING` would disclose that its operator has a
-    // personal container and that this room is not armed for it.
+    // `HOME_SPACE_MISSING` would disclose that its operator has a
+    // home space and that this room is not armed for it.
     restricted();
     closed("unarmed_room");
 
@@ -253,7 +253,7 @@ describe("🔒 RESTRICTED and out of reach keeps F-323's refusal", () => {
     );
 
     expect(err).toBeInstanceOf(AgentWriteDisabledError);
-    expect(err).not.toBeInstanceOf(PersonalContainerMissingError);
+    expect(err).not.toBeInstanceOf(HomeSpaceMissingError);
     // The sentence carries why, who can fix it, and what else to do.
     expect(err!.message).toContain("shared home channel");
     expect(err!.message).toContain("Ask your operator");
@@ -261,7 +261,7 @@ describe("🔒 RESTRICTED and out of reach keeps F-323's refusal", () => {
 
   it("🔒 a create naming a CHANNEL is refused WITHOUT asking the fence", async () => {
     // `shareToChannelId` names the room and a grant cannot follow a row out of
-    // it: re-routing would land the base on the personal shelf and then grant it
+    // it: re-routing would land the base on the home shelf and then grant it
     // into a channel of a container it no longer lives in.
     restricted();
 
@@ -292,7 +292,7 @@ describe("🔒 RESTRICTED and out of reach keeps F-323's refusal", () => {
         homeScoped: true,
         shareToChannelId: CHANNEL,
       })
-    ).rejects.toBeInstanceOf(PersonalContainerMissingError);
+    ).rejects.toBeInstanceOf(HomeSpaceMissingError);
     expect(mockAudience).not.toHaveBeenCalled();
   });
 });

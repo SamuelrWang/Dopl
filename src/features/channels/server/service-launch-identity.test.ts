@@ -125,7 +125,7 @@ describe("the identity ref — resolved under the CALLER's visibility, before an
     // The classification is the identity feature's; the outcome is unchanged (404, nothing filed).
     vi.mocked(resolveIdentityRef).mockResolvedValue({
       kind: "elsewhere",
-      identity: { name: "Code Auditor", label: "your personal shelf" },
+      identity: { name: "Code Auditor", label: "your home shelf" },
     });
     const err = await createLaunchDirective(ctx, {
       channel: "general",
@@ -134,7 +134,7 @@ describe("the identity ref — resolved under the CALLER's visibility, before an
     expect(err).toBeInstanceOf(LaunchIdentityNotFoundError);
     expect((err as LaunchIdentityNotFoundError).elsewhere).toEqual({
       name: "Code Auditor",
-      label: "your personal shelf",
+      label: "your home shelf",
     });
     expect(launchRepo.insertLaunchDirective).not.toHaveBeenCalled();
   });
@@ -216,7 +216,7 @@ describe("the 404 body", () => {
     const res = toChannelErrorResponse(
       new LaunchIdentityNotFoundError("Code Auditor", {
         name: "Code Auditor",
-        label: "your personal shelf",
+        label: "your home shelf",
       })
     );
     expect(res.status).toBe(404);
@@ -224,7 +224,7 @@ describe("the 404 body", () => {
       error: {
         code: "AGENT_IDENTITY_NOT_FOUND",
         message: "Agent identity not found: Code Auditor",
-        details: { elsewhere: { name: "Code Auditor", label: "your personal shelf" } },
+        details: { elsewhere: { name: "Code Auditor", label: "your home shelf" } },
       },
     });
   });

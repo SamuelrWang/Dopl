@@ -14,7 +14,7 @@ import { ConfirmDialog } from "@/shared/ui/confirm-dialog";
 /**
  * Account → Subscription: cancel or resume the caller's live subscriptions; renders nothing when
  * none is live. Next-free, so web and desktop mount the same block. Two rows are possible: Pro on
- * the caller's personal container (no `workspaceId`; the server resolves it), and Team / legacy
+ * the caller's home space (no `workspaceId`; the server resolves it), and Team / legacy
  * Pro on the open standard workspace for admin/owner only (the route's own floor). The second row
  * is `containerKind === "standard"` only, so one subscription never draws twice.
  * `useCancelPlan` sets Stripe's `cancel_at_period_end` and awaits the status refresh, so the row
@@ -29,12 +29,12 @@ export function AccountSubscription({
   /** Caller's role in `workspaceId`. Absent = no workspace row. */
   role?: Role;
 }) {
-  // No id → the caller's own personal container (`with-workspace-auth.ts`).
+  // No id → the caller's own home space (`with-workspace-auth.ts`).
   const personal = useWorkspaceEntitlements(undefined);
   const workspace = useWorkspaceEntitlements(workspaceId);
 
   const showPersonal =
-    personal.containerKind === "personal" && personal.isPaid;
+    personal.containerKind === "home" && personal.isPaid;
   const showWorkspace =
     Boolean(workspaceId) &&
     role !== undefined &&

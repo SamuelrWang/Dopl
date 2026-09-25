@@ -5,7 +5,7 @@
 // (`prompt-profile-drift.test.mjs`), and tools are named fully qualified (`mcp__dopl__dopl_channel`)
 // because a bare name sends an agent searching.
 
-const { THREAD_TAG, VOCABULARY, PROSE_RULE, CONCISION, LANE_EXCLUSIVITY, REPLY_ROUTING, PERSONAL_KNOWLEDGE_CONFIDENTIALITY, ADDRESSING } = require('./prompt-framing-text');
+const { THREAD_TAG, VOCABULARY, PROSE_RULE, CONCISION, LANE_EXCLUSIVITY, REPLY_ROUTING, HOME_SPACE_KNOWLEDGE_CONFIDENTIALITY, ADDRESSING } = require('./prompt-framing-text');
 
 // `sanitizeName` is re-exported below: `session-seed.js` reaches it as `framing.sanitizeName`.
 const { sanitizeName, idToken, stripFence } = require('./prompt-sanitize');
@@ -241,7 +241,7 @@ function buildFencedTurn({ side, message, context, nonce } = {}) {
       ``,
       ...CONCISION,
       ``,
-      ...PERSONAL_KNOWLEDGE_CONFIDENTIALITY,
+      ...HOME_SPACE_KNOWLEDGE_CONFIDENTIALITY,
       ...ontologyReachLines(ctx),
       ``,
       ...deliverySection('requester', ctx),
@@ -274,7 +274,7 @@ function buildFencedTurn({ side, message, context, nonce } = {}) {
     ``,
     ...CONCISION,
     ``,
-    ...PERSONAL_KNOWLEDGE_CONFIDENTIALITY,
+    ...HOME_SPACE_KNOWLEDGE_CONFIDENTIALITY,
     ...ontologyReachLines(ctx),
     ``,
     ...counterpartyFraming(ctx),
@@ -305,6 +305,6 @@ module.exports = {
   PROSE_RULE, // prose is a message, final answer included — asserted on every branch
   VOCABULARY, // the kinds are not an interchangeable list (prompt-framing-text.js)
   CONCISION,
-  PERSONAL_KNOWLEDGE_CONFIDENTIALITY,
+  HOME_SPACE_KNOWLEDGE_CONFIDENTIALITY,
   ontologyReachLines,
 };

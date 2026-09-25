@@ -59,7 +59,7 @@ describe("the app-search groups", () => {
   });
 
   it("falls back to the home space, and never guesses a container when none is known", async () => {
-    const home = { homeContainer: async () => ({ id: "home-1" }), containerKindIndex: async () => new Map([["home-1", "personal"]]) } as unknown as WorkspaceDirectory;
+    const home = { homeContainer: async () => ({ id: "home-1" }), containerKindIndex: async () => new Map([["home-1", "home"]]) } as unknown as WorkspaceDirectory;
     const client = base({ getWorkspaceId: () => null, searchAccount: vi.fn(async () => RESPONSE) });
     await run(client, home);
     // From Home, "here" is Home plus its home channels: one account search, narrowed.
@@ -76,7 +76,7 @@ describe("the app-search groups", () => {
   // own message just posted in a home channel.
   it('"here" from Home finds a home-channel message and drops a workspace one', async () => {
     const index = new Map([
-      ["home-1", "personal"],
+      ["home-1", "home"],
       ["hc-1", "home_channel"],
       ["ws-9", "workspace"],
     ]);
@@ -134,7 +134,7 @@ describe("the app-search groups", () => {
   });
 
   it("a home space says members and chats were NOT searched, not that nothing matched", async () => {
-    const home = { homeContainer: async () => null, containerKindIndex: async () => new Map([["ws-1", "personal"]]) } as unknown as WorkspaceDirectory;
+    const home = { homeContainer: async () => null, containerKindIndex: async () => new Map([["ws-1", "home"]]) } as unknown as WorkspaceDirectory;
     const text = await run(base({ searchContainer: vi.fn(async () => ({ ...RESPONSE, groups: [] })) }), home);
     expect(text).toContain("home space or home channel has no member list or chat archive");
   });

@@ -3,9 +3,9 @@ import { generatePublicId } from "@/shared/lib/id/public-id";
 import { supabaseAdmin } from "@/shared/supabase/admin";
 import { readClient } from "@/shared/supabase/caller-client";
 import {
-  personalWriteWorkspaceId,
+  homeSpaceWriteWorkspaceId,
   resolveShelfScope,
-} from "@/shared/tenancy/personal-container";
+} from "@/shared/tenancy/home-space";
 import type { KbShelf, KnowledgeBase } from "../types";
 import {
   KNOWLEDGE_BASE_COLS,
@@ -99,7 +99,7 @@ export async function findBaseByPublicId(
  * re-seeds on every list call.
  *
  * The shelf is a TENANCY, not a `WHERE`: `shelf="home"` is the caller's personal
- * container, and `shared/tenancy/personal-container.ts` decides the scope.
+ * container, and `shared/tenancy/home-space.ts` decides the scope.
  */
 export async function listBasesForWorkspace(
   workspaceId: string,
@@ -120,7 +120,7 @@ export async function listBasesForWorkspace(
 }
 
 /**
- * WHICH of `baseIds` are in the caller's PERSONAL container — the fold behind
+ * WHICH of `baseIds` are in the caller's HOME space — the fold behind
  * `GET /api/knowledge/bases › homeScopedBaseIds`. One query for N bases.
  *
  * Callers MUST pass the post-visibility list: the id set IS the fence (same
@@ -241,14 +241,14 @@ function baseInsertRow(args: InsertBaseArgs) {
 }
 
 /**
- * A personal write lands in the container or refuses: `personalWriteWorkspaceId`
+ * A personal write lands in the container or refuses: `homeSpaceWriteWorkspaceId`
  * throws rather than guessing, because a fallback would write a row no surface
  * can find. Only `insertBase` can be personal, which is why {@link insertBases}
  * (the new-workspace seed) is not on this path.
  */
 export async function insertBase(args: InsertBaseArgs): Promise<KnowledgeBase> {
   const db = supabaseAdmin();
-  const workspaceId = await personalWriteWorkspaceId(args);
+  const workspaceId = await homeSpaceWriteWorkspaceId(args);
   const { data, error } = await db
     .from("knowledge_bases")
     .insert(baseInsertRow({ ...args, workspaceId }))

@@ -25,7 +25,7 @@ import {
  * SCOPE — never an authorization; ontologies stay filtered by `levelForOntology`,
  * and object reads take ids from the membership walk over ALREADY-ADMITTED
  * ontologies (Q8). Same shape, same reason, as
- * `shared/tenancy/personal-container.ts › resolveShelfScope`.
+ * `shared/tenancy/home-space.ts › resolveShelfScope`.
  */
 
 /**

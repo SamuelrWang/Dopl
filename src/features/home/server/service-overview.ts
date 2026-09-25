@@ -16,7 +16,7 @@ import {
 import {
   countMetricInWindow,
   listContainerRoles,
-  listOwnedPersonalContainerIds,
+  listOwnedHomeSpaceIds,
   scanCreditEvents,
   scanMcpCalls,
   scanMessageChannels,
@@ -193,9 +193,9 @@ async function resolveScope(userId: string): Promise<{
  * bar again.
  *
  * ⚠ **THE FENCE IS OWNERSHIP, WHICH IS A SECOND ROUND TRIP AND WORTH IT.**
- * `listOwnedPersonalContainerIds` is `workspaces.owner_id = reader`, NOT the
+ * `listOwnedHomeSpaceIds` is `workspaces.owner_id = reader`, NOT the
  * membership list `resolveScope` builds: a burn in somebody else's channel
- * spends THEIR wallet, and a burn in the reader's own `kind='personal'`
+ * spends THEIR wallet, and a burn in the reader's own `kind='home'`
  * container spends the reader's without ever appearing in a link-container list.
  * Neither list is a subset of the other, so neither can be derived from the
  * other.
@@ -211,7 +211,7 @@ async function scanPersonalWalletBurns(
   userId: string,
   sinceIso: string
 ): Promise<Scan<CreditEventScanRow>> {
-  const ownedIds = await listOwnedPersonalContainerIds(userId);
+  const ownedIds = await listOwnedHomeSpaceIds(userId);
   return filterWalletBurns(
     userId,
     ownedIds,
@@ -244,7 +244,7 @@ function filterWalletBurns(
  * ⚠ **ONE ROUND TRIP MORE THAN THE SCAN ITSELF — the owned-container list, which
  * only the LEGACY arm of the wallet predicate needs.** The superseded version read
  * each container's `kind` as well, because the old scope vocabulary resolved
- * "Desktop agent" to the reader's `kind='personal'` shelves; rule B's
+ * "Desktop agent" to the reader's `kind='home'` shelves; rule B's
  * `channel_id IS NULL` answers that with no column and no guess.
  * ⚠ **THE HAUL IS BOUNDED AT BOTH ENDS** — see `scanCreditEvents`' `untilIso`:
  * the scan is newest-first and capped, so an unbounded haul anchored in a PAST
@@ -256,7 +256,7 @@ async function scanUsageHistogramBurns(
   scope: string | null,
   windows: HomeWindow[]
 ): Promise<Scan<CreditEventScanRow>> {
-  const ownedIds = await listOwnedPersonalContainerIds(userId);
+  const ownedIds = await listOwnedHomeSpaceIds(userId);
   const channel = resolveUsageChannel(scope);
   const scan = await scanCreditEvents(
     userId,

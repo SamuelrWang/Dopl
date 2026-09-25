@@ -41,7 +41,7 @@ function atRole(role: Role): Channel[] {
   return [{ ...HOME.channels[0], myWorkspaceRole: role, linkOut: null }];
 }
 
-/** ⚠ THE PERSONAL CONTAINER IS A ROSTER OF ONE, AND THAT IS ALL IT TAKES: the
+/** ⚠ THE HOME SPACE IS A ROSTER OF ONE, AND THAT IS ALL IT TAKES: the
  *  single row is the viewer's (no Remove — never self) and the viewer is its
  *  owner (no Leave — the last owner cannot go). No third rule, and the server
  *  refuses it besides (`leaveWorkspace › assertWorkspacePermanentById`, R-35). */
@@ -137,7 +137,7 @@ describe("who gets which control", () => {
     expect(screen.getByTestId("channel-members")).toBeTruthy();
   });
 
-  it("shows NEITHER in a personal container", async () => {
+  it("shows NEITHER in a home space", async () => {
     serve(atRole("owner"), SOLO_ROSTER);
     renderHome();
     await openRoster();

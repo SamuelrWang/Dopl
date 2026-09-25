@@ -39,7 +39,7 @@ type WorkspaceWireRow = { id: string; kind?: WorkspaceKind };
  * Personal (Free / Pro — one person's home space, flat) and Workspaces
  * (Starter / Team — seats). They are separate sections with separate compare
  * tables and they are NEVER concatenated: `pro` is refused checkout on a
- * standard workspace and `team` on a personal container (400
+ * standard workspace and `team` on a home space (400
  * `PLAN_NOT_FOR_CONTAINER`), so one four-column list would offer two purchases
  * that answer 400.
  *
@@ -64,11 +64,11 @@ type CompareRow = { label: string; left: CompareCell; right: CompareCell };
  * PRICING MISREPRESENTATION that no test could see — a string is a string.
  * Interpolating deletes the duplicate rather than gating it.
  */
-const PERSONAL_ROWS: CompareRow[] = [
+const HOME_SPACE_ROWS: CompareRow[] = [
   {
     label: "Ontology objects",
     // ⚠ Uncapped on BOTH: the object cap is a MULTI-member free rule
-    // (`plans.ts › FREE_MULTI_MEMBER_OBJECT_CAP`) and a personal container has
+    // (`plans.ts › FREE_MULTI_MEMBER_OBJECT_CAP`) and a home space has
     // one member by construction, so Pro sells no uncapping here.
     left: { main: "Unlimited" },
     right: { main: "Unlimited" },
@@ -79,7 +79,7 @@ const PERSONAL_ROWS: CompareRow[] = [
     right: { main: "Full" },
   },
   {
-    // ⚠ SUB-LINE IS "per month", NOT "per member / month". A personal container
+    // ⚠ SUB-LINE IS "per month", NOT "per member / month". A home space
     // has exactly one member, so "per member" would invite the reader to
     // multiply by a roster that cannot exist.
     label: "Credits",
@@ -178,7 +178,7 @@ export function PricingContent() {
 
   // ⚠ **THE STATUS READ IS THE WORKSPACES GROUP'S, AND ONLY ITS** (2026-09-08).
   // It is scoped to a STANDARD workspace the visitor solely owns, so it can say
-  // whether Team is live; it says nothing about their PERSONAL container, whose
+  // whether Team is live; it says nothing about their HOME space, whose
   // id this public page never holds. So the Personal group never badges a
   // current plan — `/billing?plan=pro` resolves that container and shows the
   // payer their real state, which is where a purchase happens anyway.
@@ -217,7 +217,7 @@ export function PricingContent() {
   /**
    * ⚠ **SEGMENT-LESS, WITH `plan=pro` — THAT PAIR IS THE PERSONAL FORWARD.**
    * `/billing?billing=upgrade&plan=pro` is the one link that resolves the
-   * caller's own `kind='personal'` container (`src/app/billing/page.tsx`); a
+   * caller's own `kind='home'` container (`src/app/billing/page.tsx`); a
    * public page holds no segment for it, and every user has exactly one, so
    * there is nothing to disambiguate.
    */
@@ -263,7 +263,7 @@ export function PricingContent() {
         title="Personal"
         plans={PERSONAL_PLANS}
         summary={PERSONAL_SUMMARY}
-        rows={PERSONAL_ROWS}
+        rows={HOME_SPACE_ROWS}
         subscribeLabel="Go Pro"
         onSubscribe={handleGoPro}
         authChecked={authChecked}

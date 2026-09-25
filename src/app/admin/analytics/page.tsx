@@ -54,7 +54,7 @@ export default async function AdminAnalyticsPage() {
             `pro_workspaces` is `rows.length` over every LIVE paid row — solo,
             team AND the new personal `pro` — so the old label now names one of
             the three plans it counts, and the count is of CONTAINERS (a
-            personal container is not a workspace). The WIRE FIELD keeps its
+            home space is not a workspace). The WIRE FIELD keeps its
             name: it is on the shipped payload, and renaming it here would be a
             second thing to get wrong. */}
         <Kpi label="Paying containers" value={m.pro_workspaces} accent="emerald" />

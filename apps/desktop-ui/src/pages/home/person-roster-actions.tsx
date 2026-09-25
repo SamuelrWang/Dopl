@@ -99,7 +99,7 @@ export function PersonRosterActions({
  *    `admin` and a bound link may grant `viewer` (`home/schema.ts`), and the
  *    server lets both walk out.
  *
- * ⚠ **A PERSONAL CONTAINER FALLS OUT OF THOSE TWO AND NEEDS NO THIRD RULE**: its
+ * ⚠ **A HOME SPACE FALLS OUT OF THOSE TWO AND NEEDS NO THIRD RULE**: its
  * one member is its owner, so the row is self (no Remove) and the owner (no
  * Leave). The server refuses it besides — `leaveWorkspace` runs
  * `assertWorkspacePermanentById` (R-35).

@@ -43,18 +43,21 @@ describe("the kind set gains exactly one value", () => {
 });
 
 describe("🔒 exactly one container per user", () => {
+  // The live mint and index are the 2026-09-24 rename's restatement, not the original file's.
+  const sql = read("20261023120000_home_vocabulary_rename.sql");
+
   it("is enforced by a PARTIAL UNIQUE INDEX, not only by the function", () => {
     // ⚠ THE INDEX IS THE FENCE AND THE ADVISORY LOCK IS THE ERGONOMICS. A code
-    // path that forgets `ensure_personal_container` must be UNABLE to mint a
+    // path that forgets `ensure_home_space` must be UNABLE to mint a
     // second container, not merely unlikely to.
     expect(sql).toMatch(
-      /CREATE UNIQUE INDEX IF NOT EXISTS workspaces_personal_owner_uidx\s+ON public\.workspaces \(owner_id\) WHERE kind = 'personal';/
+      /CREATE UNIQUE INDEX IF NOT EXISTS workspaces_home_owner_uidx\s+ON public\.workspaces \(owner_id\) WHERE kind = 'home';/
     );
   });
 
   it("serializes the mint on its OWN advisory-lock namespace", () => {
     expect(sql).toContain(
-      "pg_advisory_xact_lock(hashtextextended('ensure_personal_container:' || p_owner_id::text, 0))"
+      "pg_advisory_xact_lock(hashtextextended('ensure_home_space:' || p_owner_id::text, 0))"
     );
     // ⚠ Sharing `ensure_default_workspace`'s key would make signup and the
     // personal mint block each other for no reason.
@@ -77,7 +80,7 @@ describe("🔒 exactly one container per user", () => {
   it("is service-role only, restated in the file", () => {
     for (const grantee of ["public", "anon", "authenticated"]) {
       expect(sql).toContain(
-        `REVOKE ALL ON FUNCTION public.ensure_personal_container(uuid, text) FROM ${grantee};`
+        `REVOKE ALL ON FUNCTION public.ensure_home_space(uuid, text) FROM ${grantee};`
       );
     }
   });
@@ -100,14 +103,14 @@ describe("🔒 the shelf moves by AUTHOR", () => {
 
   it("contains no destructive statement at all", () => {
     // 🔒 `knowledge_bases.workspace_id` is ON DELETE CASCADE, so a `DELETE FROM
-    // workspaces` in a personal-container migration destroys personal rows. The
+    // workspaces` in a home-space migration destroys personal rows. The
     // revert is prose in the header, in the only safe order, and it is prose
     // precisely so nobody runs it by applying this file.
     expect(sql).not.toMatch(/^\s*(DELETE|DROP TABLE|TRUNCATE|ALTER TABLE .*DROP COLUMN)/im);
   });
 });
 
-describe("nothing else has to change for a personal container to work", () => {
+describe("nothing else has to change for a home space to work", () => {
   it("`ensure_default_workspace`'s guard already excludes it, POSITIVELY", () => {
     // ⚠ This is why the kind guard is RETIRED in batch 3 rather than repointed
     // now: both of its branches select `kind = 'standard'`, so a third kind is
@@ -122,7 +125,7 @@ describe("nothing else has to change for a personal container to work", () => {
   it("`enforce_resource_grant` lets an ATTRIBUTED grant cross containers", () => {
     // The container is only useful if a personal KB can be lent into a
     // workspace. The trigger fences that on the GRANTOR being a member of both
-    // sides — which the owner of a personal container is — and never on the two
+    // sides — which the owner of a home space is — and never on the two
     // containers being equal.
     const grants = read("20260914120000_resource_grants.sql");
     expect(grants).toContain(
@@ -151,7 +154,7 @@ describe("nothing else has to change for a personal container to work", () => {
  *
  * ⚠ **THIS PIN IS INVERTED, NOT DELETED.** A header that still promised the
  * standard-workspace reroute would send the next reader to a code path that no
- * longer exists, on the one file whose whole job is to say what a `personal`
+ * longer exists, on the one file whose whole job is to say what a `home`
  * container does NOT break.
  */
 describe("the billing bullet describes the WALLET, not a workspace reroute", () => {
@@ -178,7 +181,7 @@ describe("the billing bullet describes the WALLET, not a workspace reroute", () 
   it("🔒 the wallet migration exists, sorts AFTER this one, and is written not applied", () => {
     const wallets = read("20260930120000_credit_wallets.sql");
     expect("20260930120000" > NAME.slice(0, 14)).toBe(true);
-    // ⚠ It DEPENDS on this file: the personal container is what the personal
+    // ⚠ It DEPENDS on this file: the home space is what the personal
     // wallet is spent from. Apply order is filename order, and the header says
     // so rather than leaving an operator to infer it.
     expect(wallets).toContain("WRITTEN, NOT APPLIED");

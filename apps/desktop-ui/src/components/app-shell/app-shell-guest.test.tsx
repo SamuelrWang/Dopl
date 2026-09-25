@@ -48,7 +48,7 @@ import { AppShellLayout } from "./index";
  *   the gate narrowed back to `role === "guest"` ................. 3 red
  *   the ghost dropped over the redirect window .................... 1 red
  *   ⚠ **THAT ROW IS NOW THE OTHER WAY UP AGAIN (2026-09-17).** The gate WAS
- *   `kind !== "personal" && !isStandardWorkspace(…)` and is now
+ *   `kind !== "home" && !isStandardWorkspace(…)` and is now
  *   `kind === "link"`; the negative spelling admitted every future kind, and
  *   "a FOURTH container kind" below is the fixture that catches it — 1 red.
  *   - `?? []` dropped from the `select` .......................... **0 red**,
@@ -361,7 +361,7 @@ describe("the shell sends a container member to their channel", () => {
   });
 
   /** 🔒 THE POSITIVE FORM, AND THE CASE NO EXISTING KIND COULD MAKE (2026-09-17).
-   *  The gate was `kind !== "personal" && !isStandardWorkspace(…)` — "not
+   *  The gate was `kind !== "home" && !isStandardWorkspace(…)` — "not
    *  personal and not standard" — so every kind added to `WorkspaceKind` later
    *  would be ADMITTED and its members bounced out of the shell into a
    *  single-channel redirect. `kind === "link"` excludes an unknown kind by

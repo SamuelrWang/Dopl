@@ -42,12 +42,12 @@ afterEach(() => {
 // ── A. The shelf axis — 🔒 DELETED 2026-09-02 (slice B15, ruling B10) ─────
 //
 // ⚠ **NINE CASES STOOD HERE AND ALL NINE ARE GONE, NOT ADAPTED.** They pinned
-// the `personal` → `home` wire mapping, the asymmetric absent-argument rule, the
+// the `home` → `home` wire mapping, the asymmetric absent-argument rule, the
 // `homeScopedBaseIds` sibling label (present, absent and fail-safe), the
 // local personal+public contradiction, the fence's 403 and the no-shelf-move
 // refusal on `update_base`. Every one of them was an assertion about the
 // `home_scoped` BOOLEAN, which the migration drops: a personal base is now an
-// ordinary row in the caller's own `kind='personal'` container, so there is no
+// ordinary row in the caller's own `kind='home'` container, so there is no
 // axis left to map, label, contradict or refuse a move along.
 //
 // ⚠ **WHAT SURVIVES IS ONE LINE OF THE OLD SECTION, MOVED INTO THE CREATE

@@ -8,7 +8,7 @@ import type { ResourceCaller } from "./resolve-resource";
 export const ME = "22222222-3333-4444-5555-666666666666";
 export const WS_A = "11111111-2222-3333-4444-555555555555";
 export const WS_B = "99999999-8888-7777-6666-555555555555";
-/** The caller's own `kind='personal'` container. */
+/** The caller's own `kind='home'` container. */
 export const WS_P = "77777777-7777-7777-7777-777777777777";
 export const T1 = "44444444-4444-4444-4444-444444444444";
 
@@ -44,7 +44,7 @@ export function makeAdmin(
       ilike: (c: string, v: unknown) => rec("ilike", [c, v]),
       // The grant lane bounds its fan-out (`GRANT_REACH_LIMIT`).
       limit: (n: number) => rec("limit", [n]),
-      // `findPersonalContainerId` ends its chain here — at most one row.
+      // `findHomeSpaceId` ends its chain here — at most one row.
       maybeSingle: () =>
         Promise.resolve({ data: rows()[0] ?? null, error: null }),
       then: (
@@ -66,8 +66,8 @@ export function makeAdmin(
   return calls;
 }
 
-/** The row `findPersonalContainerId` reads, when the caller has a container. */
-export function personalContainer(id = WS_P) {
+/** The row `findHomeSpaceId` reads, when the caller has a container. */
+export function homeSpace(id = WS_P) {
   return { id };
 }
 

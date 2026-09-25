@@ -189,8 +189,8 @@ export function ontologyRoutes(
   return null;
 }
 
-/** The personal container these rows live in — the boot payload's `workspace`. */
-export const PERSONAL_WORKSPACE_ID = WORKSPACE_ID;
+/** The home space these rows live in — the boot payload's `workspace`. */
+export const HOME_SPACE_WORKSPACE_ID = WORKSPACE_ID;
 
 export const NEW_ONTOLOGY_ID = "ontology-new";
 

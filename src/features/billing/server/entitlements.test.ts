@@ -185,12 +185,12 @@ describe("getWorkspaceEntitlements — team", () => {
 });
 
 /**
- * The personal Pro tier (2026-09-08). A `kind='personal'` container is a real
+ * The personal Pro tier (2026-09-08). A `kind='home'` container is a real
  * `workspaces` row with a real `workspace_billing` row, so it reaches this function
  * through the same arithmetic — these cases prove the three claims fall out of the
  * existing rules rather than a personal branch.
  */
-describe("getWorkspaceEntitlements — pro (the personal container)", () => {
+describe("getWorkspaceEntitlements — pro (the home space)", () => {
   it("pro active is uncapped, full history, and surfaces NO seatCount", async () => {
     setup({ billing: billing({ plan: "pro", seatCount: null }), members: 1, objects: 5_000 });
     const ent = await getWorkspaceEntitlements(WS);
@@ -228,7 +228,7 @@ describe("getWorkspaceEntitlements — pro (the personal container)", () => {
 
   it("🔒 pro does NOT degrade at 2 members — unlike solo (F-673)", async () => {
     // Revert detector for "copy the solo arm": solo's `memberCount <= 1` backstops
-    // a state the schema permits, but a personal container cannot hold a second
+    // a state the schema permits, but a home space cannot hold a second
     // member at all — so the same clause would guard nothing while letting one
     // stale membership row silently drop a paying customer to free.
     setup({ billing: billing({ plan: "pro", seatCount: null }), members: 2, objects: 5_000 });

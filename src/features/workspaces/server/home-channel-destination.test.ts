@@ -4,7 +4,7 @@
  *
  * ⚠ **THE POINT OF THE SUITE IS THE KIND AXIS.** The rule is a property of ONE
  * container kind, so the cases that matter most are the ones it must NOT fire
- * for: a `kind='personal'` container is destination 1 and is made of private
+ * for: a `kind='home'` container is destination 1 and is made of private
  * rows, and a `kind='standard'` workspace lists its own private rows on its own
  * pages. A negative spelling (`!isStandardWorkspace`) would have refused the
  * first of those — that is F-564's shape, and it is why this asks
@@ -79,11 +79,11 @@ describe("assertHomeChannelRowIsShared", () => {
     expect(found).not.toHaveBeenCalled();
   });
 
-  it("✅ ALLOWS a private row in the caller's PERSONAL container — that IS destination 1", async () => {
+  it("✅ ALLOWS a private row in the caller's HOME space — that IS destination 1", async () => {
     // 🔒 **THE CASE A NEGATIVE PREDICATE WOULD HAVE BROKEN.** `!isStandardWorkspace`
-    // is true of `personal`, so spelling the fence that way would refuse every
+    // is true of `home`, so spelling the fence that way would refuse every
     // Home create — the entire first destination.
-    found.mockResolvedValue(asWorkspace("personal"));
+    found.mockResolvedValue(asWorkspace("home"));
     await expect(assertHomeChannelRowIsShared(ROW)).resolves.toBeUndefined();
   });
 

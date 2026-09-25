@@ -106,11 +106,11 @@ describe("dopl_map reports a clipped ontology read", () => {
  * 🔒 **S29c — THE TWO MYSTERY ONTOLOGIES IN A BRAND-NEW CHANNEL.**
  *
  * `createHomeChannel` seeds nothing: what a fresh channel lists is the CALLER'S
- * OWN personal shelf, which `service-audience.ts › computeAudience` folds into
+ * OWN home shelf, which `service-audience.ts › computeAudience` folds into
  * the read scope exactly as the knowledge lane does. The knowledge lane labels
  * its half; this one rendered the widening and never named it.
  */
-describe("dopl_map labels the personal shelf", () => {
+describe("dopl_map labels the home shelf", () => {
   const SHELF = {
     ...SUMMARY,
     ontologies: [
@@ -123,7 +123,7 @@ describe("dopl_map labels the personal shelf", () => {
         columnIds: [],
       },
     ],
-    personalOntologyIds: ["c-2"],
+    homeSpaceOntologyIds: ["c-2"],
   };
 
   it("names the shelf and files only its rows under it", async () => {
@@ -154,11 +154,11 @@ describe("dopl_map labels the personal shelf", () => {
   /**
    * ⚠ **§8 STALE-CACHE — ABSENT IS "NOT ANSWERED", NEVER "NONE".** A payload
    * cached against a server older than this wave carries no
-   * `personalOntologyIds`, and the render must be byte-identical to what it was
+   * `homeSpaceOntologyIds`, and the render must be byte-identical to what it was
    * before the field existed rather than filing every row under one shelf or
    * the other.
    */
-  it("a payload with NO personalOntologyIds renders exactly as before", async () => {
+  it("a payload with NO homeSpaceOntologyIds renders exactly as before", async () => {
     const before = await callTool(registerMapFixture, client(), "dopl_map", {});
     const stale = await callTool(
       registerMapFixture,
@@ -170,11 +170,11 @@ describe("dopl_map labels the personal shelf", () => {
     expect(stale).not.toContain("Home (personal)");
   });
 
-  it("an EMPTY personalOntologyIds also renders exactly as before", async () => {
+  it("an EMPTY homeSpaceOntologyIds also renders exactly as before", async () => {
     const before = await callTool(registerMapFixture, client(), "dopl_map", {});
     const none = await callTool(
       registerMapFixture,
-      client({ getOntology: vi.fn(async () => ({ ...SUMMARY, personalOntologyIds: [] })) }),
+      client({ getOntology: vi.fn(async () => ({ ...SUMMARY, homeSpaceOntologyIds: [] })) }),
       "dopl_map",
       {},
     );
@@ -188,7 +188,7 @@ describe("dopl_map labels the personal shelf", () => {
     const text = await callTool(
       registerMapFixture,
       client({
-        getOntology: vi.fn(async () => ({ ...SUMMARY, personalOntologyIds: ["c-99"] })),
+        getOntology: vi.fn(async () => ({ ...SUMMARY, homeSpaceOntologyIds: ["c-99"] })),
       }),
       "dopl_map",
       {},

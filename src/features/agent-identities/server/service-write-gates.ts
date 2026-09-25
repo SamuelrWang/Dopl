@@ -1,6 +1,6 @@
 import "server-only";
-import { personalShelfRefusal } from "@/shared/tenancy/personal-container";
-import { resolvePersonalReach } from "@/shared/tenancy/personal-reach";
+import { homeSpaceShelfRefusal } from "@/shared/tenancy/home-space";
+import { resolveHomeSpaceReach } from "@/shared/tenancy/home-space-reach";
 // Imported, never mirrored: `scripts/check-role-drift.ts › checkWorkspaceKind` counts the copies.
 import { findWorkspaceById } from "@/features/workspaces/server/repository";
 import { isStandardWorkspace } from "@/features/workspaces/types";
@@ -11,11 +11,11 @@ import { IdentityTeamNotGrantableError } from "./errors";
  * Where an identity create lands — the twin of `knowledge/server/service-base-gates.ts ›
  * resolveCreateDestination`, not a call into it: that one decides from the KNOWLEDGE audience, and
  * an identity has no read ceiling to re-route around (its creator can always read it back).
- * A `homeScoped` request asks the personal-reach fence and refuses rather than downgrades, with the
- * shared {@link personalShelfRefusal} sentences.
+ * A `homeScoped` request asks the home-space-reach fence and refuses rather than downgrades, with the
+ * shared {@link homeSpaceShelfRefusal} sentences.
  */
 interface IdentityCreateDestination {
-  /** Passed to `insertIdentity`, whose router resolves the same personal container by owner. */
+  /** Passed to `insertIdentity`, whose router resolves the same home space by owner. */
   homeScoped: boolean;
   /** Where the row, its junctions and the response re-read land; `ctx.workspaceId` unless personal. */
   workspaceId: string;
@@ -33,14 +33,14 @@ export async function resolveIdentityCreateDestination(
   if (input.visibility === "team") {
     throw new IdentityTeamNotGrantableError(
       "A personal identity cannot be shared with a team. It lives in your own " +
-        "personal container and a team grant belongs to the workspace the team " +
+        "home space and a team grant belongs to the workspace the team " +
         "is in. Create it in the workspace and share it there, or keep it " +
         "personal and lend it with a grant."
     );
   }
 
-  const reach = await resolvePersonalReach(ctx);
-  if (reach.kind === "closed") throw personalShelfRefusal(reach.refusal);
+  const reach = await resolveHomeSpaceReach(ctx);
+  if (reach.kind === "closed") throw homeSpaceShelfRefusal(reach.refusal);
   return { homeScoped: true, workspaceId: reach.containerId };
 }
 

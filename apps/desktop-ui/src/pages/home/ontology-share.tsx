@@ -18,7 +18,7 @@ import { useHomeChannels } from "./use-home-channels";
  * 🔒 **A SHARE IS A REFERENCE, NEVER A COPY** (ruling B11, INVARIANTS §5A): one
  * ontology, lent into N channels, and an edit reaches everyone it is lent to.
  * That is why unsharing is a row DELETE and why the ontology keeps living in the
- * operator's own personal container.
+ * operator's own home space.
  *
  * ⚠ **THREE AUDIENCES PER CHANNEL, NOT ONE**: members, guests, and the OWNER's
  * own agents in that room. Samuel's ruling is that the same ontology in two

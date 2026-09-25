@@ -49,9 +49,9 @@ export async function opList(
       `No agent identities visible to you here. ${IDENTITIES_SCOPE_NOTE}\n\nCreate one with \`${callRef("agent.create", {}, { quote: "'" })}\`.`,
     );
   }
-  const personalIds = new Set(payload.homeScopedIdentityIds ?? EMPTY_IDENTITY_IDS);
-  const personal = identities.filter((ident) => personalIds.has(ident.id));
-  const here = identities.filter((ident) => !personalIds.has(ident.id));
+  const homeSpaceIds = new Set(payload.homeScopedIdentityIds ?? EMPTY_IDENTITY_IDS);
+  const personal = identities.filter((ident) => homeSpaceIds.has(ident.id));
+  const here = identities.filter((ident) => !homeSpaceIds.has(ident.id));
   const inHomeChannel = await resolveHomeChannelContainer(client, directory);
 
   // Rows with an unoffered visibility (`team`) fall into a trailing bucket — never silently dropped.
@@ -77,7 +77,7 @@ export async function opList(
     lines.push(`### ${heading}`);
     for (const ident of rows) {
       const audience = identityAudience(ident, {
-        personal: personalIds.has(ident.id),
+        personal: homeSpaceIds.has(ident.id),
         inHomeChannel: inHomeChannel !== null,
       });
       lines.push(identityRow(ident, audience));

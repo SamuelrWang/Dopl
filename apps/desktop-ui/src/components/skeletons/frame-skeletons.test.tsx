@@ -215,7 +215,7 @@ describe("the shell's own loading state mirrors the shell", () => {
 
   /**
    * ⚠ THE COLD OPEN IS /home's FRAME, because that is where a cold launch lands:
-   * `/api/boot` with no segment answers the caller's personal container and boot
+   * `/api/boot` with no segment answers the caller's home space and boot
    * routes it to `HOME_PATH`. So the cover and /home's own pending gate paint the
    * SAME shape and the hand-off between them is invisible — where the white
    * `fixed inset-0` cover it replaced shared nothing with either.

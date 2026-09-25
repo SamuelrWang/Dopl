@@ -81,15 +81,15 @@ export default function BootPage() {
   if (!boot.data.isOnboarded) return <Navigate to="/onboarding" replace />;
   if (!boot.data.segment) return <BootCover label="Opening workspace" />;
 
-  // ⚠ A COLD LAUNCH ANSWERS THE PERSONAL CONTAINER, AND THAT IS NOT A WORKSPACE
+  // ⚠ A COLD LAUNCH ANSWERS THE HOME SPACE, AND THAT IS NOT A WORKSPACE
   // ROUTE (2026-09-08, Samuel: "a ghost overview page … the workspace is called
   // Home … none of the icons on the left are selected"). Since the personal-
   // container wave (`20260920120000`) `/api/boot` with no segment provisions and
-  // returns the caller's `kind='personal'` container; routing to `/{segment}`
-  // rendered the WORKSPACE overview for it. The personal container's surface is
+  // returns the caller's `kind='home'` container; routing to `/{segment}`
+  // rendered the WORKSPACE overview for it. The home space's surface is
   // /home. A standard workspace (a routed segment, or an older server that sends
   // no kind) still lands on its own route.
-  if (boot.data.workspace?.kind === "personal") {
+  if (boot.data.workspace?.kind === "home") {
     return <Navigate to={HOME_PATH} replace />;
   }
 
@@ -108,7 +108,7 @@ export default function BootPage() {
  * the swap, so the first paint of the app was a surface the app does not have.
  *
  * ⚠ /home's FRAME AND NOT THE WORKSPACE SHELL'S, because that is where a cold
- * launch lands: `/api/boot` with no segment answers the caller's `kind='personal'`
+ * launch lands: `/api/boot` with no segment answers the caller's `kind='home'`
  * container and this page routes it to `HOME_PATH` (the 2026-09-08 ruling above).
  * `HomePageSkeleton` is that page's own shape, so the boot cover and /home's own
  * pending gate paint the SAME thing and the hand-off between them is invisible.

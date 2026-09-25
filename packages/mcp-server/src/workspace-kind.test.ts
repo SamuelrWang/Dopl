@@ -129,23 +129,23 @@ describe("WorkspaceDirectory — listing vs resolution", () => {
 
   it("containerKind labels each row POSITIVELY, from its own kind (F-564)", () => {
     // ⚠ THE F-564 SHAPE, ASSERTED. `!isStandardWorkspace(…)` answered "home
-    // channel" for anything not standard, which `20260920120000`'s `personal`
+    // channel" for anything not standard, which `20260920120000`'s `home`
     // kind makes false for every user at once. The `default` arm is the safe
     // one: an unknown kind is a workspace, never somebody's room.
     expect(containerKind(STANDARD)).toBe("workspace");
     expect(containerKind(KINDLESS)).toBe("workspace");
     expect(containerKind(LINK_A)).toBe("home_channel");
-    expect(containerKind({ kind: "personal" })).toBe("personal");
+    expect(containerKind({ kind: "home" })).toBe("home");
     expect(containerKind({ kind: "vault" as never })).toBe("workspace");
   });
 
-  it("renders the personal container as the caller's home space, never as a workspace (Samuel, 2026-09-06)", () => {
-    // The row is what an agent reads to pick a container. "personal" alone was
+  it("renders the Home space as the caller's home space, never as a workspace (Samuel, 2026-09-06)", () => {
+    // The row is what an agent reads to pick a container. "home" alone was
     // skipped over, and a workspace-shaped NAME beside it was read as a second
     // workspace — so the label says what the container serves as, and says
     // what it is not.
-    const label = containerKindLabel("personal");
-    expect(label).toBe("home space (your default; a personal container, not a workspace)");
+    const label = containerKindLabel("home");
+    expect(label).toBe("home space (your default; not a workspace, and it holds no channels)");
     expect(label).toMatch(/not a workspace/);
     expect(containerKindLabel("workspace")).toBe("workspace");
     expect(containerKindLabel("home_channel")).toBe("home channel");

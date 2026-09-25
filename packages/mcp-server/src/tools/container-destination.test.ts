@@ -4,7 +4,7 @@
  * per tool is how the two surfaces started describing one model differently.
  *
  *   1. **HOME** — `container="home"`, or a connection bound to nothing. The
- *      caller's own personal container; `private` is the right value there.
+ *      caller's own home space; `private` is the right value there.
  *   2. **A HOME CHANNEL** — created in that channel's container AND shared into
  *      the channel: `visibility: "workspace"` for an identity, `shareToChannelId`
  *      for a knowledge base.
@@ -57,7 +57,7 @@ function directory(kinds: Record<string, string>): WorkspaceDirectory {
 }
 
 const ROOM_IS_CHANNEL = directory({ [ROOM]: "home_channel" });
-const HOME_IS_PERSONAL = directory({ [HOME]: "personal" });
+const HOME_IS_PERSONAL = directory({ [HOME]: "home" });
 
 /** The one channel inside `ROOM` — `getHomeChannels` is `scope=account`, so the
  *  row carries its container and the filter is the POSITIVE `kind === "link"`. */

@@ -78,8 +78,8 @@ describe("channelScopeAllowedInContainer", () => {
     expect(await channelScopeAllowedInContainer("ws-1")).toBe(true);
   });
 
-  it("ALLOWS a `personal` container — one member, untouched", async () => {
-    rows = { workspaces: [{ kind: "personal" }] };
+  it("ALLOWS a `home` container — one member, untouched", async () => {
+    rows = { workspaces: [{ kind: "home" }] };
     expect(await channelScopeAllowedInContainer("ws-1")).toBe(true);
   });
 
@@ -190,7 +190,7 @@ describe("channelScopeAllowedForKind — the one spelling of the rule", () => {
   it("answers for every kind, and an absent one reads as STANDARD", () => {
     expect(channelScopeAllowedForKind("standard")).toBe(false);
     expect(channelScopeAllowedForKind("link")).toBe(true);
-    expect(channelScopeAllowedForKind("personal")).toBe(true);
+    expect(channelScopeAllowedForKind("home")).toBe(true);
     expect(channelScopeAllowedForKind(null)).toBe(false);
     expect(channelScopeAllowedForKind(undefined)).toBe(false);
   });

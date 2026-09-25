@@ -17,7 +17,7 @@
  * convergent create that re-runs the fold statement is the "half the run is in
  * each" bug the idempotency key exists to prevent. Neither is visible in a
  * return value, so the authority and idempotency blocks assert that the write
- * functions were NOT CALLED — same discipline as `personal-reach.test.ts`,
+ * functions were NOT CALLED — same discipline as `home-space-reach.test.ts`,
  * which pins its query shapes for the same reason.
  *
  * ⚠ **BOTH DOUBLES COME FROM `service-shared.ts`, WHICH IS THE ARROW BEING

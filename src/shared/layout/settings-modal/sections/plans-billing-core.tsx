@@ -48,7 +48,7 @@ export interface PlansBillingCoreProps {
  *
  *   - a STANDARD workspace sells seats — Starter (free, 100 credits per member
  *     per month) and Team ($8.99 per seat per month, 5,000 per member);
- *   - a `kind='personal'` container sells one person their own home space —
+ *   - a `kind='home'` container sells one person their own home space —
  *     Free (500 credits a month) and Pro ($8.99 a month, 5,000).
  *
  * Every figure is interpolated from `billing/credits.ts` / `billing/prices.ts`
@@ -63,7 +63,7 @@ export interface PlansBillingCoreProps {
  * personal `pro` above — IS RETIRED FROM SALE (2026-09-07) AND HAS NO CARD. A
  * workspace still holding a live legacy row gets a one-line note plus the
  * in-place `/api/billing/upgrade-to-team` switch (no second checkout); nothing
- * sells it. That note is STANDARD-ONLY: a personal container cannot hold one.
+ * sells it. That note is STANDARD-ONLY: a home space cannot hold one.
  * Admins/owners upgrade, switch, or open the portal.
  * ⚠ `workspaceId` scopes every read/checkout/portal call to the workspace whose
  * settings are open — without it the DEFAULT workspace leaks in.
@@ -155,9 +155,9 @@ export function PlansBillingCore({
 
       {isSuccessReturn && ent.isPaid && (
         <div className="mb-4 rounded-lg border border-success/25 bg-success/10 px-3 py-2 text-caption text-success">
-          {/* ⚠ A personal container has no seats to count — naming them here
+          {/* ⚠ A home space has no seats to count — naming them here
               would report a roster the container cannot have. */}
-          {ent.containerKind === "personal"
+          {ent.containerKind === "home"
             ? "Welcome to Pro."
             : `Welcome to Team — ${ent.billableSeats} ${
                 ent.billableSeats === 1 ? "seat" : "seats"
@@ -241,7 +241,7 @@ function creditsLabel(wallet: WalletKind | null): string {
 /** ⚠ Named off the CARD LIST this container is shown, so the badge and the
  *  cards under it cannot disagree about which product the reader is on. */
 function planLabel(ent: WorkspaceEntitlements): string {
-  if (ent.containerKind === "personal") {
+  if (ent.containerKind === "home") {
     return ent.isPro ? "Pro plan" : "Free plan";
   }
   if (ent.isSolo) return "Legacy Pro plan";
@@ -258,9 +258,9 @@ function BillingSummary({
   onManage,
   onSwitchToTeam,
 }: PlanActions) {
-  // The one branch that decides every line below: a personal container is one
+  // The one branch that decides every line below: a home space is one
   // person's home space, so it has no seats, no roster and no legacy row.
-  const isPersonal = ent.containerKind === "personal";
+  const isHomeSpace = ent.containerKind === "home";
 
   if (ent.loading) {
     return <div className="bento mb-5 h-24 animate-pulse opacity-50" />;
@@ -279,17 +279,17 @@ function BillingSummary({
         >
           {planLabel(ent)}
         </span>
-        {/* ⚠ NO MEMBER COUNT ON A PERSONAL CONTAINER. It has exactly one member
+        {/* ⚠ NO MEMBER COUNT ON A HOME SPACE. It has exactly one member
             by construction and cannot gain another, so "1 member" is a fact
             about the schema rather than about this reader's plan. */}
-        {!isPersonal && (
+        {!isHomeSpace && (
           <span className="text-caption text-text-secondary">
             {ent.memberCount} {ent.memberCount === 1 ? "member" : "members"}
           </span>
         )}
       </div>
 
-      {isPersonal ? (
+      {isHomeSpace ? (
         ent.isPro && (
           <div className="mt-3 text-body text-text-primary">
             <span className="font-semibold">{formatMoney(PRO_PRICE)}</span>{" "}
@@ -386,7 +386,7 @@ function BillingSummary({
             </p>
           )
         ) : canManage ? (
-          isPersonal ? (
+          isHomeSpace ? (
             <button
               type="button"
               onClick={() => onUpgrade("pro")}

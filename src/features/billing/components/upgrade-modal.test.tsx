@@ -1,9 +1,9 @@
 // @vitest-environment jsdom
 /**
  * The paywall, and which plan it sells. `UpgradeModal` is mounted from four
- * places and since 2026-09-08 it can be shown a `kind='personal'` container as
+ * places and since 2026-09-08 it can be shown a `kind='home'` container as
  * well as a standard workspace, so what it offers follows the container, not the
- * call site — selling Team on a personal container opens a checkout that answers
+ * call site — selling Team on a home space opens a checkout that answers
  * 400 `PLAN_NOT_FOR_CONTAINER`.
  *
  * jsdom and a real render: `ModalShell` is a portal that mounts on a
@@ -57,7 +57,7 @@ const STANDARD_FREE: Status = {
 
 const PERSONAL_FREE: Status = {
   ...STANDARD_FREE,
-  containerKind: "personal",
+  containerKind: "home",
   memberCount: 1,
   objectCap: null,
   credits: {
@@ -91,7 +91,7 @@ async function open(
   return dialog.innerHTML;
 }
 
-describe("on a personal container", () => {
+describe("on a home space", () => {
   it("sells Pro, flat, and never Team", async () => {
     const html = await open(PERSONAL_FREE);
     expect(html).toContain("Upgrade to Pro");
@@ -114,7 +114,7 @@ describe("on a personal container", () => {
   });
 
   it("promises no unlock the container already has", async () => {
-    // The ontology cap is a multi-member free rule and a personal container has
+    // The ontology cap is a multi-member free rule and a home space has
     // one member, so "uncapped objects" would be selling nothing.
     const html = await open(PERSONAL_FREE);
     expect(html).not.toContain("Uncapped ontology objects");
@@ -124,7 +124,7 @@ describe("on a personal container", () => {
 
   /**
    * The add-member variant is standard-only: its pitch is seats, "invite your
-   * team" and the legacy single-member limit, and a personal container has no
+   * team" and the legacy single-member limit, and a home space has no
    * roster, so the caller falls back to the generic upsell.
    */
   it("falls back to the generic upsell when asked for the add-member variant", async () => {

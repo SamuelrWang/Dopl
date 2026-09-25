@@ -127,7 +127,7 @@ describe("the footer says whether the connection binding moved", () => {
     name: "Home",
     role: "owner",
     source: "header pin",
-    kind: "personal",
+    kind: "home",
   };
 
   it("a per-call override is marked THIS CALL ONLY and names the connection", async () => {

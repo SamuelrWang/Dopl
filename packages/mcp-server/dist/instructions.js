@@ -40,7 +40,7 @@ function directoryRow(w, withDescription) {
     const desc = withDescription && w.description ? ` — ${(0, narration_js_1.inlineOr)(w.description, "")}` : "";
     // Kind is the typed wire value, rendered not inferred (F-564); the id stays off to save budget.
     const kind = (0, workspace_directory_js_1.containerKind)(w);
-    const address = kind === "personal" ? `address: \`${workspace_directory_js_1.HOME_ADDRESS}\`` : `slug: \`${w.slug}\``;
+    const address = kind === "home" ? `address: \`${workspace_directory_js_1.HOME_ADDRESS}\`` : `slug: \`${w.slug}\``;
     return `- ${(0, narration_js_1.inlineOr)(w.name, exports.UNNAMED_WORKSPACE)} — kind=\`${kind}\` (${address}, role: ${w.role})${desc}`;
 }
 /** The directory within `budget` chars: descriptions go first, then rows (each drop announced). */

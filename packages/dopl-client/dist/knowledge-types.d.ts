@@ -85,16 +85,16 @@ export interface KnowledgeDirListing {
  * ⚠ THIS IS THE WIRE VOCABULARY (`home` | `workspace`), which is what
  * `GET /api/knowledge/bases?shelf=` accepts. ⚠ **THE MCP SURFACE NO LONGER
  * SPEAKS IT (2026-09-02, slice B15).** `tools/shelf.ts › toWireShelf` mapped an
- * operator-facing `personal` onto this (Samuel's ruling Q1, 2026-08-28); the
+ * operator-facing `home` onto this (Samuel's ruling Q1, 2026-08-28); the
  * tool argument, the mapper and the file are deleted, because on that surface
- * the personal container is simply the tenancy the call is in.
+ * the home space is simply the tenancy the call is in.
  *
  * ⚠ ABSENT IS NOT A THIRD VALUE — it means NO FILTER, i.e. BOTH shelves, which
  * is what every pre-existing caller (MCP `list_bases` included) rides.
  *
  * ⚠ MIRRORS `src/features/knowledge/types.ts › KbShelf`. ⚠ **THE SHELF IS A
  * TENANCY SINCE 2026-09-02 (wave B slice B15)** — the personal one is the
- * caller's own `kind='personal'` container, not a boolean beside a workspace —
+ * caller's own `kind='home'` container, not a boolean beside a workspace —
  * so there is nothing shelf-shaped to project onto {@link KnowledgeBase}, and
  * this stays a write input and a read FILTER, never a field on the row.
  */
@@ -107,14 +107,14 @@ export type KbShelf = "home" | "workspace";
  * THE DIFFERENCE IS THE WHOLE DESIGN.** Adding it to {@link KnowledgeBase} would
  * widen the SDK-mirrored row type and trip
  * `scripts/check-knowledge-type-drift.ts` — and since 2026-09-02 there is no
- * column to add: the key answers "is this row in my personal container". A sibling key is the shipped answer
+ * column to add: the key answers "is this row in my home space". A sibling key is the shipped answer
  * for exactly this shape (`channelGrants` and `starredBaseIds` on this same
  * response).
  *
  * ⚠ **ABSENT IS A REAL STATE — READ IT AS `?? []` AT EVERY SITE (INVARIANTS
  * §8).** An older server sends no such key, and this response is cached. The
  * fail-safe reading of "I do not know which shelf this base is on" is NOT
- * "personal": an unknown id simply carries no label, which is the same answer
+ * "home": an unknown id simply carries no label, which is the same answer
  * the surface gave before the key existed.
  */
 export interface KnowledgeBaseListPayload {
@@ -164,10 +164,10 @@ export interface KnowledgeBaseCreateInput {
      */
     visibility?: KnowledgeVisibility;
     /**
-     * Put the new base on the PERSONAL SHELF instead of the workspace Knowledge
+     * Put the new base on the HOME SHELF instead of the workspace Knowledge
      * page. ⚠ A REQUEST, NOT A DECISION, and since 2026-09-02 it ROUTES the row's
      * container rather than being stored on it: `src/shared/tenancy/
-     * personal-container.ts › personalWriteWorkspaceId` is the fence and it 403s
+     * home-space.ts › homeSpaceWriteWorkspaceId` is the fence and it 403s
      * rather than downgrading. Omitted/false = the container the call is in.
      */
     homeScoped?: boolean;

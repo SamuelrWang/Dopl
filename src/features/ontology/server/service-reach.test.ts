@@ -27,8 +27,8 @@ vi.mock("./repository-projections", () => ({
   listOntologySummaries: vi.fn(async () => []),
 }));
 
-vi.mock("@/shared/tenancy/personal-reach", () => ({
-  personalShelfContainerIds: vi.fn(async () => []),
+vi.mock("@/shared/tenancy/home-space-reach", () => ({
+  homeSpaceShelfContainerIds: vi.fn(async () => []),
 }));
 
 import * as narrowRepo from "./repository-projections";

@@ -91,7 +91,7 @@ const channelsRouting = (vendor) => `**Reaching a member or their agent: ${(0, c
  * Samuel 2026-09-17: *home must be structurally distinct, never just a prompt
  * line*).
  *
- * ⚠ **THREE HEADINGS, NOT ONE LIST WITH A KIND COLUMN.** The personal container
+ * ⚠ **THREE HEADINGS, NOT ONE LIST WITH A KIND COLUMN.** The home space
  * is the DEFAULT — it is where an unaddressed read lands — and a default that
  * renders as one row among N is a default an agent has to be told about in
  * prose. Its own node is the structure that replaces the sentence.
@@ -109,12 +109,12 @@ function containerNodes(list) {
     const by = (kind) => list.filter((w) => (0, workspace_directory_js_1.containerKind)(w) === kind);
     const row = (w, address) => `- ${(0, narration_1.inlineOr)(w.name, narration_1.NO_NAME)} — kind=\`${(0, workspace_directory_js_1.containerKind)(w)}\` (${address}, id: \`${w.id}\`)`;
     const lines = ["", "## Home space — your default container"];
-    const home = by("personal");
+    const home = by("home");
     for (const w of home) {
         lines.push(row(w, `container=\`${workspace_directory_js_1.HOME_ADDRESS}\``));
     }
     if (home.length === 0) {
-        // ⚠ ABSENT IS NOT EMPTY. A caller whose account has no personal container
+        // ⚠ ABSENT IS NOT EMPTY. A caller whose account has no home space
         // (the mint has not replayed for them) must not read a blank node as "your
         // home space has nothing in it" — the node says the container is missing.
         lines.push("_None — you have no home space, so an unaddressed call has no default to land in._");
@@ -179,10 +179,10 @@ directory, caller = identity_1.UNKNOWN_CALLER) {
         lines.push("", `## Ontology (${ontology.ontologies.length}) — ${(0, call_ref_js_1.toolName)("ontology.map")}`);
         // 🔒 **S29c — THE ROUTING SURFACE IS WHERE THE MYSTERY WAS REPORTED.** A
         // brand-new home channel listed ontologies nobody had put there; they are
-        // the caller's own personal shelf, which `service-audience.ts` folds into
-        // the read scope. The heading is `ontology-render.ts › personalShelfGroups`,
+        // the caller's own home shelf, which `service-audience.ts` folds into
+        // the read scope. The heading is `ontology-render.ts › homeSpaceShelfGroups`,
         // reading the SAME table the `dopl_kb` list does.
-        for (const [heading, ontologies] of (0, ontology_render_1.personalShelfGroups)(ontology.ontologies, ontology.personalOntologyIds)) {
+        for (const [heading, ontologies] of (0, ontology_render_1.homeSpaceShelfGroups)(ontology.ontologies, ontology.homeSpaceOntologyIds)) {
             if (ontologies.length === 0)
                 continue;
             if (heading !== null)

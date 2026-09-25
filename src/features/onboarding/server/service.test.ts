@@ -1,10 +1,10 @@
 /**
  * ⚠ **DRIFT ALARM, AND THE CONSTANT IT WATCHES CHANGED ON 2026-09-10.**
  * `completeOnboarding` lands a new user on `/home` now, not on
- * `/{segment}/overview`: what onboarding names is a `kind='personal'` container,
+ * `/{segment}/overview`: what onboarding names is a `kind='home'` container,
  * and a container has no workspace shell to open. So the path this file must keep
  * honest is the SPA's ROOT `HOME_PATH`, and `WORKSPACE_HOME_PATH` is pinned here
- * only as the fallback for the branch a non-personal container would take.
+ * only as the fallback for the branch a non-home space would take.
  *
  * Source of truth for each:
  * `HOME_PATH` — `apps/desktop-ui/src/components/app-shell/account-rail.tsx`,
@@ -32,8 +32,8 @@ vi.mock("@/features/analytics/server/conversion-events", () => ({
   hasFiredEvent: vi.fn(),
 }));
 vi.mock("@/features/workspaces/server/service", () => ({
-  PERSONAL_CONTAINER_DEFAULT_NAME: "Home",
-  renamePersonalContainerIfPlaceholder: vi.fn(),
+  HOME_SPACE_DEFAULT_NAME: "Home",
+  renameHomeSpaceIfPlaceholder: vi.fn(),
 }));
 vi.mock("./repository", () => ({
   findDisplayName: vi.fn(),
@@ -42,7 +42,7 @@ vi.mock("./repository", () => ({
   markOnboarded: vi.fn(),
 }));
 
-import { renamePersonalContainerIfPlaceholder } from "@/features/workspaces/server/service";
+import { renameHomeSpaceIfPlaceholder } from "@/features/workspaces/server/service";
 import { markOnboarded } from "./repository";
 import { completeOnboarding } from "./service";
 
@@ -100,14 +100,14 @@ function spaWorkspaceHomePath(): string {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  vi.mocked(renamePersonalContainerIfPlaceholder).mockResolvedValue({
+  vi.mocked(renameHomeSpaceIfPlaceholder).mockResolvedValue({
     id: "ws-1",
     slug: "acme",
     publicId: "a1b2c3d4e5f6",
     name: "Acme",
     // ⚠ THE FIXTURE CARRIES `kind` NOW — it is what the landing branches on, and
-    // the real function only ever answers a personal container.
-    kind: "personal",
+    // the real function only ever answers a home space.
+    kind: "home",
   } as never);
   vi.mocked(markOnboarded).mockResolvedValue(false);
 });
@@ -117,11 +117,11 @@ describe("completeOnboarding redirect target", () => {
    * 🔒 **THE NEW USER LANDS ON `/home`, NOT INSIDE THE WORKSPACE SHELL
    * (2026-09-10).** This case asserted `/{segment}/overview` and was RIGHT about
    * the thing it was watching — the path existed and rendered — which is why the
-   * wrong room was never caught here. Onboarding names a `kind='personal'`
+   * wrong room was never caught here. Onboarding names a `kind='home'`
    * container; that row is a SHELF (`20260920120000`'s header) and its surface is
    * /home. The segment is deliberately absent from the expectation.
    */
-  it("lands the new user on /home — a personal container has no workspace shell", async () => {
+  it("lands the new user on /home — a home space has no workspace shell", async () => {
     // ⚠ Not a literal path — that would be a FOURTH copy, passing after a repoint.
     const { redirectPath } = await completeOnboarding("user-1", {
       mcpConnected: true,
@@ -133,12 +133,12 @@ describe("completeOnboarding redirect target", () => {
     expect(redirectPath).not.toContain("a1b2c3d4e5f6");
   });
 
-  it("⚠ a non-personal container would still land on the workspace home page", async () => {
-    // The `kind` check is what makes the rule readable as "a personal container
-    // lands on /home". Unreachable today — `renamePersonalContainerIfPlaceholder`
-    // goes through `ensurePersonalContainer` — and pinned so that the day
+  it("⚠ a non-home space would still land on the workspace home page", async () => {
+    // The `kind` check is what makes the rule readable as "a home space
+    // lands on /home". Unreachable today — `renameHomeSpaceIfPlaceholder`
+    // goes through `ensureHomeSpace` — and pinned so that the day
     // onboarding names a real workspace, the shell landing is already correct.
-    vi.mocked(renamePersonalContainerIfPlaceholder).mockResolvedValue({
+    vi.mocked(renameHomeSpaceIfPlaceholder).mockResolvedValue({
       id: "ws-1",
       slug: "acme",
       publicId: "a1b2c3d4e5f6",
@@ -153,9 +153,9 @@ describe("completeOnboarding redirect target", () => {
 
   it("names an unnamed home space \"Home\", never after the user (Samuel, 2026-09-06)", async () => {
     // "<First>'s Workspace" was read by agents as a second workspace. The
-    // personal container is the default space, and its default name says so.
+    // home space is the default space, and its default name says so.
     await completeOnboarding("user-1", { mcpConnected: false });
-    expect(renamePersonalContainerIfPlaceholder).toHaveBeenCalledWith(
+    expect(renameHomeSpaceIfPlaceholder).toHaveBeenCalledWith(
       "user-1",
       "Home",
       undefined

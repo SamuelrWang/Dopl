@@ -83,7 +83,7 @@ function containerSession(over: Partial<KnowledgeContext> = {}): KnowledgeContex
 }
 
 /** The credential M-10 was written for: fenced to the same container, but with
- *  NO subject — it inherits nobody's personal reach. Identical to
+ *  NO subject — it inherits nobody's home reach. Identical to
  *  `containerSession` on the container axis; they differ on the subject axis
  *  and nowhere else. */
 function sharedKey(over: Partial<KnowledgeContext> = {}): KnowledgeContext {

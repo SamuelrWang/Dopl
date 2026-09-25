@@ -65,7 +65,7 @@ async function decorateByContainer(
 }
 
 /**
- * Which of `identities` (already through `canSeeIdentity`) sit in the caller's personal container —
+ * Which of `identities` (already through `canSeeIdentity`) sit in the caller's home space —
  * the route's `homeScopedIdentityIds` label. Twin of `knowledge/server/service-bases.ts ›
  * listHomeScopedBaseIds`; the pair must move together.
  */

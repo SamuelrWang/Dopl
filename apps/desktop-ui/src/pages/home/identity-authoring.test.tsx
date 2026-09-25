@@ -177,7 +177,7 @@ describe("each section's create writes where its section reads", () => {
   });
 
   it("🔒 the SHARED create sends NO homeScoped — a container has no shelf", async () => {
-    // `personalWriteWorkspaceId` routes on it and this create is not personal;
+    // `homeSpaceWriteWorkspaceId` routes on it and this create is not personal;
     // an explicit `false` would widen the contract for no reason.
     renderHome();
     await openIdentities();
@@ -243,13 +243,13 @@ describe("what the editor is allowed to ask for", () => {
     ).toHaveLength(0);
   });
 
-  it("🔒 offers NO Team scope on the PERSONAL shelf, and asks for no teams either", async () => {
+  it("🔒 offers NO Team scope on the HOME shelf, and asks for no teams either", async () => {
     // 🔒 SAMUEL'S RULING, 2026-09-08: *"we should remove the team option, if
     // it's in the home space, because the team thing is for workspaces."*
     // ⚠ **THIS CASE ASSERTED THE OPPOSITE ("offers all THREE in the caller's own
     // workspace, where a team can exist") AND IT WAS WRONG ON THE WIRE THE WHOLE
     // TIME.** This button writes with `shelf: "home"` ⇒ `homeScoped: true`,
-    // which routes the row into the caller's `kind='personal'` container — and
+    // which routes the row into the caller's `kind='home'` container — and
     // `agent-identities/server/service-write-gates.ts › resolveIdentityCreateDestination`
     // refuses `team` there. The third pill could only ever produce a 403.
     renderHome();

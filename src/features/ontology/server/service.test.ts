@@ -44,8 +44,8 @@ vi.mock("./repository-projections", () => ({
   listRelationshipsForSource: vi.fn(async () => []),
 }));
 
-vi.mock("@/shared/tenancy/personal-reach", () => ({
-  personalShelfContainerIds: vi.fn(async () => []),
+vi.mock("@/shared/tenancy/home-space-reach", () => ({
+  homeSpaceShelfContainerIds: vi.fn(async () => []),
 }));
 
 vi.mock("./repository", () => ({

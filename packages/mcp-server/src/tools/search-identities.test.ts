@@ -178,7 +178,7 @@ describe("an identity hit says WHO can see it, from its container (P8-16)", () =
     expect(text).not.toContain("every member of this workspace");
   });
 
-  it("a row off the caller's personal shelf is theirs alone", async () => {
+  it("a row off the caller's home shelf is theirs alone", async () => {
     const text = await run(
       { identities: [IDENTITY], homeScopedIdentityIds: [IDENTITY.id] },
       homeDirectory,

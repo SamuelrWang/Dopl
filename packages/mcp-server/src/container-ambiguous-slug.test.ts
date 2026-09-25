@@ -28,7 +28,7 @@ function wsItem(
   id: string,
   slug: string,
   name: string,
-  kind: "standard" | "link" | "personal",
+  kind: "standard" | "link" | "home",
 ): WorkspaceListItem {
   return {
     id,
@@ -48,7 +48,7 @@ function wsItem(
  *  workspace, and `ops` is also the room a peer minted and named. */
 const MINE = wsItem("id-ws-ops", "ops", "Ops", "standard");
 const THEIRS = wsItem("id-room-ops", "ops", "Ops", "link");
-const HOME = wsItem("id-home", "sam", "Sam", "personal");
+const HOME = wsItem("id-home", "sam", "Sam", "home");
 
 function client(directory: WorkspaceListItem[]): DoplClient {
   return {

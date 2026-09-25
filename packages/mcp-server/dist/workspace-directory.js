@@ -23,9 +23,10 @@ exports.containerKindLabel = containerKindLabel;
 exports.containerKind = containerKind;
 exports.narrowToLock = narrowToLock;
 exports.searchLegs = searchLegs;
+const legacy_aliases_js_1 = require("./legacy-aliases.js");
 /**
  * 🔒 **THE RESERVED CONTAINER ADDRESS** (R-32, Samuel 2026-09-17). `home` is the
- * CALLER'S own `kind='personal'` container, resolved per caller — so the same
+ * CALLER'S own `kind='home'` container, resolved per caller — so the same
  * six characters name a different row for every agent that types them, and no
  * agent ever has to be handed an id to reach its own shelf.
  *
@@ -33,7 +34,7 @@ exports.searchLegs = searchLegs;
  * whose slug is literally `home` is reachable by its id, which is the tradeoff
  * a reserved word always makes; the reverse — a caller's own shelf being
  * shadowed by somebody's workspace name — is the one that cannot be worked
- * around, because the personal container's slug is not published anywhere.
+ * around, because the home space's slug is not published anywhere.
  */
 exports.HOME_ADDRESS = "home";
 /**
@@ -116,19 +117,20 @@ function createWorkspaceDirectory(client, options = {}) {
         return (await matchContainerRefs(ref))[0] ?? null;
     }
     /**
-     * ⚠ **THE PERSONAL CONTAINER IS SELECTED OFF THE LISTABLE SET, so the lock
+     * ⚠ **THE HOME SPACE IS SELECTED OFF THE LISTABLE SET, so the lock
      * narrows it for free**: a locked session sees `[lockedTo]` and finds a
-     * personal container there only if that is what it is locked to.
+     * home space there only if that is what it is locked to.
      */
     async function homeContainer() {
         const list = await getWorkspaceList();
-        return list.find((w) => containerKind(w) === "personal") ?? null;
+        return list.find((w) => containerKind(w) === "home") ?? null;
     }
     async function resolveContainerRef(ref) {
         // ⚠ THE RESERVED WORD IS TESTED FIRST AND CASE-INSENSITIVELY. An agent that
         // types `Home` means its home space; a slug is lower-case by construction
         // (`slugifyWorkspaceName`), so nothing legitimate is shadowed by the fold.
-        if (ref.trim().toLowerCase() === exports.HOME_ADDRESS)
+        const folded = ref.trim().toLowerCase();
+        if (folded === exports.HOME_ADDRESS || (0, legacy_aliases_js_1.isLegacyHomeAddress)(folded))
             return homeContainer();
         const matches = await matchContainerRefs(ref);
         // ⚠ **AN ID ANSWERS BEFORE ANY SLUG QUESTION** — it is unique account-wide,
@@ -164,7 +166,7 @@ function createWorkspaceDirectory(client, options = {}) {
  * predicate answers "does this belong in the rail"; its NEGATION was read as
  * "therefore a home channel" at four sites in this package, which was correct
  * by accident while `standard` and `link` were the only kinds and stops being
- * correct the moment `20260920120000` mints a `personal` container for every
+ * correct the moment `20260920120000` mints a `home` container for every
  * user at once. A `default` arm that says "workspace" also fails safe for a
  * kind added later: an unknown container is not silently advertised as somebody
  * else's room.
@@ -175,7 +177,7 @@ function createWorkspaceDirectory(client, options = {}) {
  * containers (B10) without ever calling one a workspace.
  */
 /**
- * How a kind is RENDERED in a directory row. The personal container is the one
+ * How a kind is RENDERED in a directory row. The Home space is the one
  * an agent keeps mistaking for a workspace (Samuel, 2026-09-06: "Samuel's
  * Workspace" read as the home space, and the home space read as a workspace),
  * so its label says what it serves as, in words that cannot be read as a
@@ -190,7 +192,7 @@ function createWorkspaceDirectory(client, options = {}) {
  * reader.
  */
 const CONTAINER_KIND_LABELS = {
-    personal: "home space (your default; a personal container, not a workspace)",
+    home: "home space (your default; not a workspace, and it holds no channels)",
     home_channel: "home channel",
     workspace: "workspace",
 };
@@ -206,8 +208,8 @@ function containerKind(row) {
     switch (row.kind ?? "standard") {
         case "link":
             return "home_channel";
-        case "personal":
-            return "personal";
+        case "home":
+            return "home";
         default:
             return "workspace";
     }

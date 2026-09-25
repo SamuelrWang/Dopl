@@ -18,7 +18,7 @@ import type { DoplClient, WorkspaceKind, WorkspaceListItem, WorkspaceRole } from
 export type { ContainerKind };
 /**
  * 🔒 **THE RESERVED CONTAINER ADDRESS** (R-32, Samuel 2026-09-17). `home` is the
- * CALLER'S own `kind='personal'` container, resolved per caller — so the same
+ * CALLER'S own `kind='home'` container, resolved per caller — so the same
  * six characters name a different row for every agent that types them, and no
  * agent ever has to be handed an id to reach its own shelf.
  *
@@ -26,7 +26,7 @@ export type { ContainerKind };
  * whose slug is literally `home` is reachable by its id, which is the tradeoff
  * a reserved word always makes; the reverse — a caller's own shelf being
  * shadowed by somebody's workspace name — is the one that cannot be worked
- * around, because the personal container's slug is not published anywhere.
+ * around, because the home space's slug is not published anywhere.
  */
 export declare const HOME_ADDRESS = "home";
 /**
@@ -160,13 +160,13 @@ export interface WorkspaceDirectory {
      * {@link HOME_ADDRESS}, else a slug, else an id, against every membership.
      *
      * ⚠ **`home` IS ANSWERED FROM THE DIRECTORY, NOT FROM A SECOND CONCEPT.** The
-     * caller's personal container is one of the rows `getWorkspaceList()` already
+     * caller's home space is one of the rows `getWorkspaceList()` already
      * returns (B10 stopped filtering them), so the reserved word is a SELECT over
      * the list this object already holds — no loopback, no default-workspace
      * notion coming back, and a locked session resolves it only if the row it is
      * locked to IS that container.
      *
-     * ⚠ **NULL FOR A CALLER WITH NO PERSONAL CONTAINER, AND THAT IS A REFUSAL AND
+     * ⚠ **NULL FOR A CALLER WITH NO HOME SPACE, AND THAT IS A REFUSAL AND
      * NOT A FALLBACK** (§G.3 rule 4). `20260920120000` mints one per account, but
      * an estate where it has not replayed has callers without one, and answering
      * `home` with "the first workspace you happen to be in" would file a write
@@ -181,9 +181,9 @@ export interface WorkspaceDirectory {
      */
     resolveContainerRef(ref: string): Promise<ContainerRefResolution | null>;
     /**
-     * The caller's own personal container, or null. ⚠ The one reader of what
+     * The caller's own home space, or null. ⚠ The one reader of what
      * `home` MEANS — used by the unaddressed-read default and by `dopl_map`'s
-     * Home-space node, so neither restates the `kind === "personal"` test.
+     * Home-space node, so neither restates the `kind === "home"` test.
      */
     homeContainer(): Promise<WorkspaceListItem | null>;
     /**

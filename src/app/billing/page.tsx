@@ -9,7 +9,7 @@
  * is shown their own list and picks.
  *
  * ⚠ **`?plan=pro` IS A NAMED DESTINATION, NOT A GUESS (2026-09-08, spec §11).** Pro is sold on the
- * caller's `kind='personal'` container and on nothing else, so a request that names it has already
+ * caller's `kind='home'` container and on nothing else, so a request that names it has already
  * named its container — there is exactly one per user. The forward is therefore as determined as a
  * segment in the URL would be, and it exists because no SELLER holds that segment: a 402 envelope,
  * the desktop and `/pricing` all know the plan and not the container. ⚠ It runs BEFORE the
@@ -23,7 +23,7 @@
  * This is not the guess ruling B10 deleted: that one chose among SEVERAL candidates by age, this one
  * is the only candidate there is.
  *
- * ⚠ **THE PERSONAL CONTAINER IS STILL A PICKER ROW FOR EVERYONE ELSE, AND STILL NOT A `choices`
+ * ⚠ **THE HOME SPACE IS STILL A PICKER ROW FOR EVERYONE ELSE, AND STILL NOT A `choices`
  * CANDIDATE.** It carries a plan of its own since §11 (`free` / `pro`), so hiding it hid a page the
  * caller may pay on; it is rendered as its own row, above the workspaces, rather than being folded
  * into a list whose every other entry is a standard workspace with a seat count. Link containers
@@ -72,13 +72,13 @@ export default async function BillingWorkspacePickerPage({
   }
 
   // ⚠ ONE membership read serves both the Pro forward and the picker's Personal
-  // row. The personal container is a membership like any other (its owner is its
+  // row. The home space is a membership like any other (its owner is its
   // only member), so no second lookup is needed to find it.
   const memberships = await listMyWorkspacesWithRole(user.id);
-  const personal = memberships.find((w) => w.kind === "personal") ?? null;
+  const personal = memberships.find((w) => w.kind === "home") ?? null;
 
   // ⚠ Pro names its container, so this forward is a resolution, not a guess.
-  // A caller with no personal container yet (nothing has minted one) falls
+  // A caller with no home space yet (nothing has minted one) falls
   // through to the picker rather than 404ing on a segment that does not exist.
   if (
     parseCheckoutPlan(typeof query.plan === "string" ? query.plan : null) ===

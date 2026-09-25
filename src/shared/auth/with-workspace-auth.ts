@@ -110,7 +110,7 @@ interface Options {
  *   2. Else `X-Workspace-Id` header (UUID only; blank/non-UUID → 400
  *      WORKSPACE_INVALID). With `workspaceIdFromQuery`, `?workspaceId=` slots in
  *      at the same priority (header wins).
- *   3. Else **the caller's own personal container** (`resolveActiveWorkspace`),
+ *   3. Else **the caller's own home space** (`resolveActiveWorkspace`),
  *      minted on first ask. ⚠ Ruling B10: there is no derivation left here, so
  *      there is no membership count, no auto-target and no refusal to render —
  *      an unnamed request lands on a container the caller is the only member of,

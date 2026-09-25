@@ -7,12 +7,12 @@ import type { DoplClient, OntologyObject, OntologySnapshot } from "@dopl/client"
 import { type ResponseFormat } from "./response-size";
 import { type ToolResponse } from "./respond";
 /**
- * 🔒 **THE PERSONAL SHELF, LABELLED ON THE ONTOLOGY LANE** (S29c, 2026-09-18).
+ * 🔒 **THE HOME SHELF, LABELLED ON THE ONTOLOGY LANE** (S29c, 2026-09-18).
  *
  * ⚠ **THE COMPLAINT THIS ANSWERS.** A BRAND-NEW home channel listed two
  * ontologies nobody had put there, with nothing saying where they came from —
  * `createHomeChannel` seeds none, and what is actually happening is that
- * `service-audience.ts › computeAudience` folds the caller's own personal shelf
+ * `service-audience.ts › computeAudience` folds the caller's own home shelf
  * into the read scope, exactly as the knowledge lane does. The KB lane labels
  * its half `container-destination.ts › DESTINATION_HEADINGS.personal`; the
  * ontology lane rendered the widening and never named it, which is how two rows
@@ -31,9 +31,9 @@ import { type ToolResponse } from "./respond";
  * @returns the two groups in render order; the personal one carries the shared
  *          heading text, the other carries `null` (no heading at all).
  */
-export declare function personalShelfGroups<T extends {
+export declare function homeSpaceShelfGroups<T extends {
     id: string;
-}>(ontologies: readonly T[], personalOntologyIds: readonly string[] | undefined): Array<readonly [string | null, readonly T[]]>;
+}>(ontologies: readonly T[], homeSpaceOntologyIds: readonly string[] | undefined): Array<readonly [string | null, readonly T[]]>;
 export type Resolved<T> = {
     hit: T;
 } | {

@@ -64,7 +64,7 @@ async function resolveBaseOr(client, ref) {
 async function ambiguousBase(client, ref, matches) {
     const shown = matches.slice(0, MAX_LISTED_MATCHES);
     const [personal, counts] = await Promise.all([
-        personalBaseIds(client),
+        homeSpaceBaseIds(client),
         Promise.all(shown.map((b) => entryCount(client, b.id))),
     ]);
     const rest = matches.length - shown.length;
@@ -75,17 +75,17 @@ async function ambiguousBase(client, ref, matches) {
         ...(rest > 0 ? [`- …and ${rest} more; ${(0, call_ref_js_1.callRef)("kb.list_bases", {}, { form: "op" })} has them all.`] : []),
     ].join("\n"));
 }
-function matchLine(base, count, isPersonal) {
-    const where = isPersonal
-        ? `your personal container \`${base.workspaceId}\``
+function matchLine(base, count, isHomeSpace) {
+    const where = isHomeSpace
+        ? `your home space \`${base.workspaceId}\``
         : `container \`${base.workspaceId}\``;
     const entries = count === null
         ? "entry count unavailable"
         : `${count} ${count === 1 ? "entry" : "entries"}`;
     return `- \`${base.id}\` — ${(0, narration_1.inlineOr)(base.name, narration_1.NO_NAME)} · ${where} · ${entries}`;
 }
-/** Ids of the caller's personal-container bases; empty when absent or unreadable = no label (INVARIANTS §8). */
-async function personalBaseIds(client) {
+/** Ids of the caller's home-space bases; empty when absent or unreadable = no label (INVARIANTS §8). */
+async function homeSpaceBaseIds(client) {
     try {
         const payload = await client.listKbBasesPayload();
         return new Set(payload.homeScopedBaseIds ?? []);

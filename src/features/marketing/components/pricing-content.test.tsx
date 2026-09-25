@@ -9,7 +9,7 @@
  * which plans they name.
  *
  * 🔒 **TWO GROUPS SINCE 2026-09-08 (spec §11): Personal and Workspaces.** They
- * are different products — a personal container is billed flat and a standard
+ * are different products — a home space is billed flat and a standard
  * workspace by the seat — and a checkout for one on the other answers 400
  * `PLAN_NOT_FOR_CONTAINER`. Every assertion below is scoped to ONE group's
  * markup for that reason: a whole-page `toContain` passes while the two groups
@@ -212,7 +212,7 @@ describe("the workspace numbers, all of them interpolated", () => {
 /**
  * WHERE EACH PAID CTA SENDS A SIGNED-IN VISITOR. ⚠ The Pro link is
  * SEGMENT-LESS on purpose: `/billing?billing=upgrade&plan=pro` is the one URL
- * that resolves the caller's own `kind='personal'` container
+ * that resolves the caller's own `kind='home'` container
  * (`src/app/billing/page.tsx`), and a public page holds no segment for it.
  */
 describe("the paid CTAs", () => {

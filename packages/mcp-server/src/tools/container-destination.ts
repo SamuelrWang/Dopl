@@ -57,7 +57,7 @@ export async function landsInHomeSpace(
     if (directory.lockedWorkspaceId() !== null) return false;
     const workspaceId = workspaceContext.getStore() ?? client.getWorkspaceId();
     if (!workspaceId) return true;
-    return (await directory.containerKindIndex()).get(workspaceId) === "personal";
+    return (await directory.containerKindIndex()).get(workspaceId) === "home";
   } catch {
     return false;
   }

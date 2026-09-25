@@ -81,13 +81,13 @@ const LEGACY_SOLO: WorkspaceEntitlementsStatus = {
 };
 
 /**
- * The same page addressed at a `kind='personal'` container (spec §11.1). Every
+ * The same page addressed at a `kind='home'` container (spec §11.1). Every
  * "workspace" fact is dropped rather than set to a small number: one member is a
  * fact about the schema, and the object cap is a multi-member rule.
  */
 const PERSONAL_FREE: WorkspaceEntitlementsStatus = {
   ...FREE,
-  containerKind: "personal",
+  containerKind: "home",
   memberCount: 1,
   objectCap: null,
   credits: {
@@ -340,12 +340,12 @@ describe("the Billing tab", () => {
 });
 
 /**
- * The same route serves a personal container since Pro went on sale
+ * The same route serves a home space since Pro went on sale
  * (2026-09-08, spec §11.1): its subscription lives in `workspace_billing` keyed
  * by that container, so checkout, portal, invoices and cancel are unchanged and
  * only the wording that assumed a roster differs.
  */
-describe("addressed at a personal container", () => {
+describe("addressed at a home space", () => {
   const usage = (status: WorkspaceEntitlementsStatus) =>
     screen({ initialTab: "usage" }, status);
 
@@ -367,7 +367,7 @@ describe("addressed at a personal container", () => {
     expect(markup).not.toContain("Members");
     expect(markup).not.toContain("Workspace limits");
     expect(markup).toContain("Limits");
-    // Chat history survives — a real limit on a personal container.
+    // Chat history survives — a real limit on a home space.
     expect(markup).toContain("Last 90 days");
   });
 
@@ -381,7 +381,7 @@ describe("addressed at a personal container", () => {
     const markup = screen({}, PERSONAL_FREE);
     expect(markup).toContain("Upgrade to Pro");
     expect(markup).toContain(`$${PRO_PRICE.toFixed(2)}`);
-    // The two groups are never concatenated: `team` on a personal container
+    // The two groups are never concatenated: `team` on a home space
     // answers 400 `PLAN_NOT_FOR_CONTAINER`, so offering it would sell a checkout
     // that refuses.
     expect(markup).not.toContain("Starter");
@@ -412,7 +412,7 @@ describe("addressed at a personal container", () => {
     expect(markup).toContain("Payment method");
     expect(markup).toContain("Invoices");
     expect(markup).toContain("Cancel plan");
-    // And a free personal container gets none of them — no customer exists.
+    // And a free home space gets none of them — no customer exists.
     const free = screen({}, PERSONAL_FREE);
     expect(free).not.toContain("Payment method");
     expect(free).not.toContain("Invoices");

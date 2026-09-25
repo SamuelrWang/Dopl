@@ -261,10 +261,10 @@ describe("🔒 the REVOKE twin of the home-channel destination fence (2026-09-18
     expect(mockDelete).toHaveBeenCalledTimes(1);
   });
 
-  it("✅ ALLOWS it in the caller's PERSONAL container — that IS destination 1", async () => {
+  it("✅ ALLOWS it in the caller's HOME space — that IS destination 1", async () => {
     // 🔒 The case a negative predicate (`!isStandardWorkspace`) would have
     // broken; the kind axis itself is `home-channel-destination.test.ts`'s.
-    mockWorkspace.mockResolvedValue(asWorkspace("personal"));
+    mockWorkspace.mockResolvedValue(asWorkspace("home"));
     await expect(revoke(SHARED_BASE)).resolves.toBeNull();
     expect(mockDelete).toHaveBeenCalledTimes(1);
     // ⚠ And it stops at the kind: a container the rule does not cover never

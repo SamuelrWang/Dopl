@@ -65,7 +65,7 @@ vi.mock("@/features/analytics/server/conversion-events", () => ({
   hasFiredEvent: vi.fn(async () => false),
 }));
 vi.mock("@/features/workspaces/server/service", () => ({
-  ensurePersonalContainer: vi.fn(async () => ({ id: "ws-1", slug: "personal" })),
+  ensureHomeSpace: vi.fn(async () => ({ id: "ws-1", slug: "home" })),
 }));
 vi.mock("@/features/onboarding/server/service", () => ({
   isOnboarded: vi.fn(async () => state.onboarded),
@@ -257,7 +257,7 @@ describe("the retirement carries a validated redirectTo off /onboarding", () => 
  * NOT MERELY UNCHOSEN.** It would make a web-only account arrive in the desktop
  * app already "onboarded": `getBootState`'s provisioning branch would hand the SPA
  * a container, the first-run survey would never run, and the home space would keep
- * the `Personal` placeholder name that `renamePersonalContainerIfPlaceholder`
+ * the `Personal` placeholder name that `renameHomeSpaceIfPlaceholder`
  * exists to replace. The flag would then mean two different things depending on
  * which surface set it, and the desktop reads it as one.
  *

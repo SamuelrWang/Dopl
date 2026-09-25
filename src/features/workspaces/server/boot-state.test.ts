@@ -22,7 +22,7 @@ vi.mock("./repository", () => ({
   findMemberWorkspaceBySlug: vi.fn(),
   findMembership: vi.fn(),
   listWorkspacesWithRoleForUser: vi.fn(),
-  ensurePersonalContainerRow: vi.fn(),
+  ensureHomeSpaceRow: vi.fn(),
   deleteWorkspace: vi.fn(),
   insertWorkspaceWithOwnerMembership: vi.fn(),
   listMembers: vi.fn(),
@@ -138,7 +138,7 @@ describe("getBootState — segment mode", () => {
       overrides: [{ resourceType: "knowledge_base", resourceId: "kb-1", level: "read" }],
     });
     // FAIL-CLOSED: nothing in the segment mode may provision.
-    expect(mockRepo.ensurePersonalContainerRow).not.toHaveBeenCalled();
+    expect(mockRepo.ensureHomeSpaceRow).not.toHaveBeenCalled();
   });
 
   it("returns null — and provisions NOTHING — for a segment that misses", async () => {
@@ -146,7 +146,7 @@ describe("getBootState — segment mode", () => {
     mockRepo.findMemberWorkspaceBySlug.mockResolvedValue(null);
 
     expect(await getBootState(USER, "someone-elses-workspace")).toBeNull();
-    expect(mockRepo.ensurePersonalContainerRow).not.toHaveBeenCalled();
+    expect(mockRepo.ensureHomeSpaceRow).not.toHaveBeenCalled();
     expect(mockAccess).not.toHaveBeenCalled();
   });
 
@@ -165,8 +165,8 @@ describe("getBootState — segment mode", () => {
 });
 
 describe("getBootState — launch mode", () => {
-  it("provisions the caller's personal container and answers its membership", async () => {
-    mockRepo.ensurePersonalContainerRow.mockResolvedValue({
+  it("provisions the caller's home space and answers its membership", async () => {
+    mockRepo.ensureHomeSpaceRow.mockResolvedValue({
       workspace: WORKSPACE,
       created: false,
     });
@@ -184,24 +184,24 @@ describe("getBootState — launch mode", () => {
     });
   });
 
-  it("🔒 mints the PERSONAL container and NOTHING ELSE — a new account gets no standard workspace (R-35)", async () => {
+  it("🔒 mints the HOME space and NOTHING ELSE — a new account gets no standard workspace (R-35)", async () => {
     // Samuel, 2026-09-17: "New users should not be getting a workspace. It
     // should be the home space. Home spaces are the only thing new users get."
     // The claim is an ABSENCE, so it is asserted as one: boot's provisioning
     // branch is the last surviving provisioning path (the auth callback is the
     // other, and it calls the same function), and neither the workspace INSERT
     // nor the starter-corpus seed may run from it.
-    mockRepo.ensurePersonalContainerRow.mockResolvedValue({
-      workspace: { ...WORKSPACE, kind: "personal" },
+    mockRepo.ensureHomeSpaceRow.mockResolvedValue({
+      workspace: { ...WORKSPACE, kind: "home" },
       created: true,
     });
-    mockRepo.findWorkspaceById.mockResolvedValue({ ...WORKSPACE, kind: "personal" });
+    mockRepo.findWorkspaceById.mockResolvedValue({ ...WORKSPACE, kind: "home" });
     mockRepo.findMembership.mockResolvedValue(membership("owner"));
 
     const state = await getBootState(USER, null);
 
-    expect(state?.workspace?.kind).toBe("personal");
-    expect(mockRepo.ensurePersonalContainerRow).toHaveBeenCalledTimes(1);
+    expect(state?.workspace?.kind).toBe("home");
+    expect(mockRepo.ensureHomeSpaceRow).toHaveBeenCalledTimes(1);
     expect(mockRepo.insertWorkspaceWithOwnerMembership).not.toHaveBeenCalled();
     expect(seedNewWorkspace).not.toHaveBeenCalled();
   });
@@ -217,11 +217,11 @@ describe("getBootState — launch mode", () => {
       role: null,
       myAccess: null,
     });
-    expect(mockRepo.ensurePersonalContainerRow).not.toHaveBeenCalled();
+    expect(mockRepo.ensureHomeSpaceRow).not.toHaveBeenCalled();
   });
 
   it("404s a container the caller owns but is no longer an active member of", async () => {
-    mockRepo.ensurePersonalContainerRow.mockResolvedValue({
+    mockRepo.ensureHomeSpaceRow.mockResolvedValue({
       workspace: WORKSPACE,
       created: false,
     });

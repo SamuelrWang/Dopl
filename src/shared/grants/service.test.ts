@@ -238,8 +238,8 @@ describe("🔒 the CONTAINER-KIND fence on a channel scope", () => {
     expect(upsert).toHaveBeenCalledTimes(1);
   });
 
-  it("ALLOWS a channel in a `personal` container — one member, untouched", async () => {
-    const upsert = makeAdmin({ workspace_id: SCOPE_WS }, null, "personal");
+  it("ALLOWS a channel in a `home` container — one member, untouched", async () => {
+    const upsert = makeAdmin({ workspace_id: SCOPE_WS }, null, "home");
     await grantResource(caller, { ...INPUT });
     expect(upsert).toHaveBeenCalledTimes(1);
   });

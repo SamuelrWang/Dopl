@@ -271,7 +271,7 @@ describe("§8 stale cache", () => {
     expect(screen.queryByText("Call notes")).not.toBeInTheDocument();
   });
 
-  it("offers no Personal shelf, and asks for no home bases, when boot has no workspace", async () => {
+  it("offers no Home shelf, and asks for no home bases, when boot has no workspace", async () => {
     apiRequest.mockImplementation(
       (path: string, opts: BridgeRequestOpts = {}) =>
         path === "/api/boot"

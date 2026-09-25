@@ -37,13 +37,13 @@ import {
  * `withWorkspaceAuth` resolves ONE container and proves membership OF IT, so a
  * `true` here is always a `true` in
  * SQL; the converse is FALSE, because `./service-audience.ts ›
- * OntologyAudience.workspaceIds` reads WIDER (the caller's personal shelf, and
+ * OntologyAudience.workspaceIds` reads WIDER (the caller's home shelf, and
  * the LENDER's container behind a share). A DIVERGENCE, not a mirror:
  *
  * | the ontology's container `W`                        | SQL arm 1 | `inOwnContainer` |
  * |----------------------------------------------------|-----------|------------------|
  * | `W === ctx.workspaceId`                             | true      | **true**         |
- * | `W` = the caller's own personal shelf, standing in a room | true | **false**   |
+ * | `W` = the caller's own home shelf, standing in a room | true | **false**   |
  * | `W` = another container the caller is a member of    | true      | **false**        |
  * | `W` = a container the caller is not in               | false     | **false**        |
  *
@@ -68,7 +68,7 @@ import {
 /** The row shape the predicate needs — never the whole ontology. */
 export interface OntologyScope {
   id: string;
-  /** The ONTOLOGY's container: a `kind='personal'` one for a home ontology. */
+  /** The ONTOLOGY's container: a `kind='home'` one for a home ontology. */
   workspaceId: string;
 }
 
@@ -107,7 +107,7 @@ export function sharedOntologyLevel(
 }
 
 /** Arm 1 — the container, i.e. `is_current_workspace_member(workspace_id,
- *  'viewer')` asked from the other side. In a `kind='personal'` container the
+ *  'viewer')` asked from the other side. In a `kind='home'` container the
  *  only member is the OWNER, which is why the matrix's *"a share never narrows
  *  the owner"* needs no arm of its own. */
 function inOwnContainer(

@@ -125,7 +125,7 @@ describe("what a checkout may be minted for", () => {
   });
 
   it("bills the flat PERSONAL PRO price at quantity 1, whatever seat count it is handed", async () => {
-    // 2026-09-08, spec §11. A `kind='personal'` container has exactly one
+    // 2026-09-08, spec §11. A `kind='home'` container has exactly one
     // member, so a seat count reaching here is noise — and billing it would
     // charge one person N times for their own home space.
     await createWorkspaceCheckoutSession({
@@ -167,7 +167,7 @@ describe("what a checkout may be minted for", () => {
   it("refuses a Pro checkout with its OWN env var named when that price is unset", async () => {
     // Not the seat price: the two are the same $8.99 on different container
     // kinds, so a fallback would put a per-seat subscription on somebody's
-    // personal container and only the webhook would notice.
+    // home space and only the webhook would notice.
     vi.stubEnv("STRIPE_PERSONAL_PRO_PRICE_ID", "");
     await expect(
       createWorkspaceCheckoutSession({

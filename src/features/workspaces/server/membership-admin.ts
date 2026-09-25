@@ -23,7 +23,7 @@ import { findMembership } from "./repository";
  *
  * ⚠ **`assertWorkspacePermanentById` IS HERE, THOUGH, AND IT IS A DIFFERENT
  * QUESTION** (R-35, 2026-09-17): not "may this container gain a member" but
- * "may this container lose its only one". A `kind='personal'` home space is
+ * "may this container lose its only one". A `kind='home'` home space is
  * permanent, so `removeMember` AND `leaveWorkspace` refuse it outright; `link`
  * and `standard` are untouched.
  *
@@ -130,7 +130,7 @@ export async function removeMember(
   }
 
   // 🔒 ⚠ NOBODY LEAVES A HOME SPACE (Samuel's ruling R-35, 2026-09-17). The
-  // last-owner protection below ALREADY refuses this — a personal container has
+  // last-owner protection below ALREADY refuses this — a home space has
   // exactly one member and that member is its owner — but it refuses for an
   // accident of the roster, and the rule is about the KIND. Stated here so the
   // refusal survives a roster that ever changes shape, and so the message says
@@ -171,7 +171,7 @@ export async function removeMember(
  * of `removeMember`: that write is `admin`+ and then denies `isSelf` below
  * owner, so before this function no role a container holds could leave one
  * (F-725).
- * ⚠ SAME THREE REFUSALS removal has, for the same reasons: a `kind='personal'`
+ * ⚠ SAME THREE REFUSALS removal has, for the same reasons: a `kind='home'`
  * home space is permanent (R-35), the last owner may not go, and a caller with
  * no active row is an idempotent no-op.
  * ⚠ NO ROLE FLOOR OF ITS OWN, and the DELETE route's resolver still carries

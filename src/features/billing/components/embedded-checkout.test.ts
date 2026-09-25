@@ -29,7 +29,7 @@ describe("the order line above the card form", () => {
 
   it("names Pro and does NOT invent a seat", () => {
     // `pro` is a flat quantity-1 subscription (`server/stripe.ts`), so
-    // "1 seat × $8.99" would name a unit the personal container does not have.
+    // "1 seat × $8.99" would name a unit the home space does not have.
     const order = describeOrder(session("$8.99", 1, "$8.99"), "pro");
     expect(order.planName).toBe("Pro");
     expect(order.summaryDetail).toBe("Billed monthly");

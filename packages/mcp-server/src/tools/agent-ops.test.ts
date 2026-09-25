@@ -99,7 +99,7 @@ describe("op=list", () => {
   });
 
   // ⚠ **THE TWO SHELF CASES HERE ARE DELETED (2026-09-02, slice B15).** One
-  // pinned the `personal` → `home` wire mapping and one the shelf-scoped empty
+  // pinned the `home` → `home` wire mapping and one the shelf-scoped empty
   // sentence; both described an argument this op no longer takes.
 
   it("an empty list does not claim the workspace has no identities", async () => {

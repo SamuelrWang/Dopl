@@ -43,7 +43,7 @@ export const SECTIONS_CONTAINER: ReadonlyArray<IdentitySectionDef> = [
   },
 ];
 
-/** The /home Personal section — the caller's personal container. "Personal" is copy; the value is `private`. */
+/** The /home Personal section — the caller's home space. "Personal" is copy; the value is `private`. */
 export const SECTION_PRIVATE_EVERYWHERE: IdentitySectionDef = {
   visibility: "private",
   label: "Personal",

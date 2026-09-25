@@ -109,9 +109,9 @@ beforeEach(() => {
   findWorkspace.mockResolvedValue({
     id: PERSONAL,
     name: "Home",
-    slug: "personal",
+    slug: "home",
     publicId: "ff00ff00ff00",
-    kind: "personal",
+    kind: "home",
   } as never);
 });
 
@@ -129,7 +129,7 @@ describe("a personal Pro subscription", () => {
   });
 
   it("pins seatCount to 1 even when Stripe reports a larger quantity", async () => {
-    // A hand-edited dashboard quantity must not make a personal container look
+    // A hand-edited dashboard quantity must not make a home space look
     // like a multi-seat workspace to `entitlements.ts`.
     await processStripeEvent(event("customer.subscription.updated", proSub(4)));
     expect(mockRepo.upsertWorkspaceBilling).toHaveBeenCalledWith(

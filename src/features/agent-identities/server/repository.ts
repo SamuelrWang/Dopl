@@ -1,7 +1,7 @@
 import "server-only";
 import { supabaseAdmin } from "@/shared/supabase/admin";
 import { readClient } from "@/shared/supabase/caller-client";
-import { personalWriteWorkspaceId, resolveShelfScope } from "@/shared/tenancy/personal-container";
+import { homeSpaceWriteWorkspaceId, resolveShelfScope } from "@/shared/tenancy/home-space";
 import type {
   AgentIdentity,
   IdentityField,
@@ -42,8 +42,8 @@ export async function listIdentitiesForWorkspace(
 }
 
 /**
- * Which of `identityIds` live in the caller's personal container. Callers pass the post-visibility
- * list — the id set is the fence — and the same resolver the list uses answers "personal".
+ * Which of `identityIds` live in the caller's home space. Callers pass the post-visibility
+ * list — the id set is the fence — and the same resolver the list uses answers "home".
  */
 export async function listHomeScopedIdentityIds(
   workspaceId: string,
@@ -87,7 +87,7 @@ export interface InsertIdentityArgs {
   runtime?: string | null;
   fields: IdentityField[];
   visibility: IdentityVisibility;
-  /** A routing flag, not a column: `true` files the row in the author's personal container. */
+  /** A routing flag, not a column: `true` files the row in the author's home space. */
   homeScoped?: boolean;
   createdBy: string | null;
 }
@@ -101,7 +101,7 @@ export async function insertIdentity(
   args: InsertIdentityArgs
 ): Promise<AgentIdentity> {
   const db = supabaseAdmin();
-  const workspaceId = await personalWriteWorkspaceId(args);
+  const workspaceId = await homeSpaceWriteWorkspaceId(args);
   const { data, error } = await db
     .from("agent_identities")
     .insert({

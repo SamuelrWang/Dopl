@@ -184,7 +184,7 @@ describe("onboarding page", () => {
   it("🔒 renders and completes with NO workspace in existence — it reads none", async () => {
     apiRequest.mockImplementation((path: string) => {
       if (path === "/api/onboarding/complete") {
-        // What the server actually answers for a personal container.
+        // What the server actually answers for a home space.
         return Promise.resolve(ok({ redirectTo: "/home" }));
       }
       return bridge(false)(path);

@@ -1,8 +1,8 @@
 /**
- * THE PERSONAL CONTAINER'S FENCE AND ITS ONE READ, pinned in both directions.
+ * THE HOME SPACE'S FENCE AND ITS ONE READ, pinned in both directions.
  *
  * ⚠ **THIS FILE WAS THE 2x2 UNTIL 2026-09-02 (slice B15).** It drove all four
- * combinations of (containers minted?) x (`TENANCY_PERSONAL_CONTAINER` on?) and
+ * combinations of (containers minted?) x (`TENANCY_HOME_SPACE` on?) and
  * the union read that made every one of them safe. **`home_scoped` was what made
  * the union possible AND what made it necessary** — every personal row carried
  * the boolean wherever it lived — and `20260923120000_drop_home_scoped.sql`
@@ -24,11 +24,11 @@ vi.mock("@/shared/supabase/caller-scope", () => ({ getCallerScope: vi.fn() }));
 import { supabaseAdmin } from "@/shared/supabase/admin";
 import { getCallerScope } from "@/shared/supabase/caller-scope";
 import {
-  PersonalContainerMissingError,
-  findPersonalContainerId,
-  personalWriteWorkspaceId,
+  HomeSpaceMissingError,
+  findHomeSpaceId,
+  homeSpaceWriteWorkspaceId,
   resolveShelfScope,
-} from "./personal-container";
+} from "./home-space";
 
 const USER = "11111111-1111-4111-8111-111111111111";
 const WORKSPACE = "22222222-2222-4222-8222-222222222222";
@@ -39,7 +39,7 @@ const CONTAINER = "33333333-3333-4333-8333-333333333333";
 let filters: Array<[string, unknown]>;
 let tables: string[];
 
-/** ⚠ A RETIRED READ, KEPT TOLERATED (2026-09-06 reversal). `personal-reach.ts`
+/** ⚠ A RETIRED READ, KEPT TOLERATED (2026-09-06 reversal). `home-space-reach.ts`
  *  no longer counts the room's members — reach is default-on — so no test
  *  drives this now. The builder still answers it harmlessly, so a regression
  *  that re-issues the read shows up as a table in `tables` rather than as a
@@ -93,22 +93,22 @@ beforeEach(() => {
   callerIs(USER);
 });
 
-describe("findPersonalContainerId", () => {
+describe("findHomeSpaceId", () => {
   it("asks `workspaces` for ONE row, keyed on owner AND kind", async () => {
-    expect(await findPersonalContainerId(USER)).toBe(CONTAINER);
+    expect(await findHomeSpaceId(USER)).toBe(CONTAINER);
     expect(tables).toEqual(["workspaces"]);
     // ⚠ BOTH filters, and the kind one is what stops a standard workspace
     // answering. `maybeSingle` is legitimate only because
-    // `workspaces_personal_owner_uidx` is unique on this pair.
+    // `workspaces_home_owner_uidx` is unique on this pair.
     expect(filters).toEqual([
       ["owner_id", USER],
-      ["kind", "personal"],
+      ["kind", "home"],
     ]);
   });
 
   it("answers null before the migration has run", async () => {
     primeContainer(null);
-    expect(await findPersonalContainerId(USER)).toBeNull();
+    expect(await findHomeSpaceId(USER)).toBeNull();
   });
 });
 
@@ -140,7 +140,7 @@ describe("resolveShelfScope — one container, or none", () => {
     // OWN container is read IN ADDITION, by owner. Nothing is guessed.
     expect(filters).toEqual([
       ["owner_id", USER],
-      ["kind", "personal"],
+      ["kind", "home"],
     ]);
   });
 
@@ -157,13 +157,13 @@ describe("resolveShelfScope — one container, or none", () => {
     });
   });
 
-  it("the PERSONAL shelf is the caller's container and nothing else", async () => {
+  it("the HOME shelf is the caller's container and nothing else", async () => {
     expect(await resolveShelfScope(WORKSPACE, "home")).toEqual({
       workspaceIds: [CONTAINER],
     });
     expect(filters).toEqual([
       ["owner_id", USER],
-      ["kind", "personal"],
+      ["kind", "home"],
     ]);
   });
 
@@ -171,7 +171,7 @@ describe("resolveShelfScope — one container, or none", () => {
     // ⚠ THE DIRECTION THAT CHANGED (B15). Every arm of the old 2x2 fell back to
     // `[workspaceId]`, which was safe only because `home_scoped` was still there
     // to narrow it. Without the column that fallback answers a request for the
-    // PERSONAL shelf with the SHARED workspace's rows — the widening direction,
+    // HOME shelf with the SHARED workspace's rows — the widening direction,
     // and silent.
     primeContainer(null);
     expect(await resolveShelfScope(WORKSPACE, "home")).toEqual({
@@ -179,13 +179,13 @@ describe("resolveShelfScope — one container, or none", () => {
     });
   });
 
-  it("🔒 a SHARED credential has no personal shelf, and does not even ask", async () => {
+  it("🔒 a SHARED credential has no home shelf, and does not even ask", async () => {
     callerIs(USER, true);
     expect(await resolveShelfScope(WORKSPACE, "home")).toEqual({ workspaceIds: [] });
     expect(tables).toEqual([]);
   });
 
-  it("outside a request there is no caller, and no personal shelf either", async () => {
+  it("outside a request there is no caller, and no home shelf either", async () => {
     callerIs(null);
     expect(await resolveShelfScope(WORKSPACE, "home")).toEqual({ workspaceIds: [] });
     expect(tables).toEqual([]);
@@ -193,8 +193,8 @@ describe("resolveShelfScope — one container, or none", () => {
 });
 
 /**
- * 🔓 **BOTH SHELF READS ASK `personal-reach.ts`, AND THIS IS WHERE THAT SHOWS.**
- * The fence's own directions are driven in `personal-reach.test.ts`; what is
+ * 🔓 **BOTH SHELF READS ASK `home-space-reach.ts`, AND THIS IS WHERE THAT SHOWS.**
+ * The fence's own directions are driven in `home-space-reach.test.ts`; what is
  * pinned here is that the shelf reads GO THROUGH IT. Since the 2026-09-06
  * reversal the fence is DEFAULT-ON: an agent reaches its operator's shelf from
  * any room, and the confidentiality of that shelf's contents is a prompt rule,
@@ -203,7 +203,7 @@ describe("resolveShelfScope — one container, or none", () => {
 describe("🔓 an AGENT's shelf reads are open from any room (default-on)", () => {
   const inRoom = { source: "agent" as const, credentialWorkspaceId: WORKSPACE };
 
-  it("opens the personal shelf in a shared room — no member count", async () => {
+  it("opens the home shelf in a shared room — no member count", async () => {
     callerIs(USER, false, inRoom);
     expect(await resolveShelfScope(WORKSPACE, "home")).toEqual({
       workspaceIds: [CONTAINER],
@@ -233,26 +233,26 @@ describe("🔓 an AGENT's shelf reads are open from any room (default-on)", () =
   });
 });
 
-describe("personalWriteWorkspaceId — refuse, never downgrade", () => {
+describe("homeSpaceWriteWorkspaceId — refuse, never downgrade", () => {
   const base = { workspaceId: WORKSPACE, createdBy: USER };
 
   it("leaves a WORKSPACE-shelf insert alone, and does not ask", async () => {
-    expect(await personalWriteWorkspaceId(base)).toBe(WORKSPACE);
-    expect(await personalWriteWorkspaceId({ ...base, homeScoped: false })).toBe(
+    expect(await homeSpaceWriteWorkspaceId(base)).toBe(WORKSPACE);
+    expect(await homeSpaceWriteWorkspaceId({ ...base, homeScoped: false })).toBe(
       WORKSPACE
     );
     expect(tables).toEqual([]);
   });
 
   it("files a personal row in the AUTHOR's container", async () => {
-    expect(await personalWriteWorkspaceId({ ...base, homeScoped: true })).toBe(
+    expect(await homeSpaceWriteWorkspaceId({ ...base, homeScoped: true })).toBe(
       CONTAINER
     );
     // ⚠ THE AUTHOR, NOT THE AMBIENT CALLER — the write path must produce the
     // same row from a script as from a request.
     expect(filters).toEqual([
       ["owner_id", USER],
-      ["kind", "personal"],
+      ["kind", "home"],
     ]);
   });
 
@@ -264,18 +264,18 @@ describe("personalWriteWorkspaceId — refuse, never downgrade", () => {
     // refusal, and it is the only condition of the two deleted `resolveHomeScope`
     // copies that survives.
     await expect(
-      personalWriteWorkspaceId({ ...base, homeScoped: true, createdBy: null })
-    ).rejects.toBeInstanceOf(PersonalContainerMissingError);
+      homeSpaceWriteWorkspaceId({ ...base, homeScoped: true, createdBy: null })
+    ).rejects.toBeInstanceOf(HomeSpaceMissingError);
     primeContainer(null);
     await expect(
-      personalWriteWorkspaceId({ ...base, homeScoped: true })
-    ).rejects.toMatchObject({ status: 403, code: "PERSONAL_CONTAINER_MISSING" });
+      homeSpaceWriteWorkspaceId({ ...base, homeScoped: true })
+    ).rejects.toMatchObject({ status: 403, code: "HOME_SPACE_MISSING" });
   });
 
   it("🔒 what the write lands in, the read looks in", async () => {
     // The round trip, driven rather than argued — the surviving half of the
     // rollback property the 2x2 existed to hold.
-    const wrote = await personalWriteWorkspaceId({ ...base, homeScoped: true });
+    const wrote = await homeSpaceWriteWorkspaceId({ ...base, homeScoped: true });
     expect((await resolveShelfScope(WORKSPACE, "home")).workspaceIds).toEqual([
       wrote,
     ]);
@@ -286,7 +286,7 @@ describe("🔒 no path here prefers a workspace by 'default'", () => {
   it("the module names no default-workspace lookup at all", async () => {
     const { readFileSync } = await import("node:fs");
     const src = readFileSync(
-      new URL("./personal-container.ts", import.meta.url),
+      new URL("./home-space.ts", import.meta.url),
       "utf8"
     );
     // ⚠ B10 removes the CONCEPT, not just a call: a resolver that reached for

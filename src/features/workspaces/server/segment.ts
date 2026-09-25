@@ -11,7 +11,7 @@ import { parseSegment } from "@/shared/lib/url/parse-segment";
 import { meetsMinRole, type Role, type Workspace } from "../types";
 import { workspaceSegment } from "../url";
 import {
-  ensurePersonalContainer,
+  ensureHomeSpace,
   findWorkspaceForMember,
   findWorkspaceForMemberByPublicId,
   resolveMembershipOrThrow,
@@ -256,7 +256,7 @@ export async function resolveApiWorkspaceAccess(
  *     `null` → plain 404. ⚠ NEVER falls back to the caller's own home; a boot
  *     endpoint that answers a segment it was not given is a cross-tenant bug.
  *   - `segment` ABSENT (cold launch at `/`) — the PROVISIONING path:
- *     `ensurePersonalContainer`, idempotent, always 200. ⚠ Gated on onboarding —
+ *     `ensureHomeSpace`, idempotent, always 200. ⚠ Gated on onboarding —
  *     an un-onboarded caller must not have a workspace provisioned underneath
  *     them, so that branch returns a null workspace and the SPA routes to
  *     `/onboarding`.
@@ -310,7 +310,7 @@ const BOOT_MIN_ROLE: Role = "guest";
  *
  * 🔒 ⚠ `apiKeyWorkspaceId` IS THE CONTAINER LOCK, AND THE NO-SEGMENT MODE IS THE
  * REASON IT HAD TO REACH THIS FUNCTION (2026-08-26). The provisioning branch
- * answers `ensurePersonalContainer` — the OPERATOR's own home — to anything
+ * answers `ensureHomeSpace` — the OPERATOR's own home — to anything
  * holding a valid credential. For a container-locked child token that is the
  * FIRST MOVE out of the container: it learns the operator's own container id AND
  * its canonical `{slug}-{publicId}` segment, which is exactly the argument the
@@ -371,7 +371,7 @@ export async function getBootState(
     };
   }
 
-  const workspace = await ensurePersonalContainer(userId);
+  const workspace = await ensureHomeSpace(userId);
   // ⚠ Fail-closed even on the workspace just ensured: a revoked owner has no
   // active membership and must get the same 404.
   const { membership } = await resolveMembershipOrThrow(workspace.id, userId);

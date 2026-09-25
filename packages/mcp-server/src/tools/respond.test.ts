@@ -43,7 +43,7 @@ describe("entitlementDenied", () => {
    * the retired single-member WORKSPACE one (`src/features/billing/plans.ts`;
    * checkout still answers 400 `PLAN_RETIRED` for `solo`). ⚠ **THE 2026-09-08
    * PERSONAL PRO TIER DOES NOT REVIVE IT HERE** — this code is a chat-history
-   * gate on a workspace and `pro` is sold ONLY on a personal container, so
+   * gate on a workspace and `pro` is sold ONLY on a home space, so
    * "Team" is still the honest remedy. An agent reads this literally.
    */
   it("its chat_outside_retention fallback offers TEAM, never the retired Pro", () => {
@@ -106,7 +106,7 @@ describe("entitlementDenied", () => {
 
 /**
  * ⚠ **`creditsExhausted` DECIDES THE UPGRADE LINE FROM `upgradeUrl` ALONE.**
- * The `personal` arm dropped the link unconditionally for one wave, when the
+ * The personal-wallet arm dropped the link unconditionally for one wave, when the
  * home space genuinely had nothing to sell; a personal PRO tier exists since
  * 2026-09-08 (Samuel), and a wallet-keyed rule would now swallow the link the
  * server is handing this function on the surface most agents run on.

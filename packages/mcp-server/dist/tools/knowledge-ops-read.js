@@ -38,11 +38,11 @@ directory) {
     const bases = payload.bases;
     if (bases.length === 0)
         return (0, respond_1.ok)(`No knowledge bases visible to you here. ${basesScopeNote()}\n\nCreate one with \`${(0, call_ref_js_1.callRef)("kb.create_base", {}, { quote: "'" })}\`.`);
-    const personalIds = new Set(payload.homeScopedBaseIds ?? EMPTY_BASE_IDS);
+    const homeSpaceIds = new Set(payload.homeScopedBaseIds ?? EMPTY_BASE_IDS);
     // Split on the answer, not the question: `undefined` = not answered (skip the split); `{}` = answered, none granted.
     const grants = payload.channelGrants;
-    const personal = bases.filter((b) => personalIds.has(b.id));
-    const here = bases.filter((b) => !personalIds.has(b.id));
+    const personal = bases.filter((b) => homeSpaceIds.has(b.id));
+    const here = bases.filter((b) => !homeSpaceIds.has(b.id));
     // Container first, then the grant. Headings are shared with the identity lane (`DESTINATION_HEADINGS`). The audience
     // label comes from the group (`audience-label.ts`), never the visibility column — a shared base is stored `private`;
     // a `null` label (standard workspace only) falls back to the column.

@@ -31,7 +31,7 @@ export interface HomeChannelDestination {
 
 /**
  * The one kind probe behind the create and revoke arms. Tests `kind === "link"` positively, never
- * `!isStandardWorkspace` (F-564), so a personal container's private rows pass. A missing row answers
+ * `!isStandardWorkspace` (F-564), so a home space's private rows pass. A missing row answers
  * `false` — the only fail-open direction, since `withWorkspaceAuth` already proved membership.
  */
 export async function isHomeChannelContainer(

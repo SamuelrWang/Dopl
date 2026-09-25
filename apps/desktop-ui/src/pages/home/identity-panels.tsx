@@ -117,7 +117,7 @@ export function HomeIdentityPanels({
     homeWorkspaceId !== null && !homeList.resolved && !scopeFailed;
 
   // `null` = not onboarded: the button disables rather than writing into the container.
-  const personalCreateTarget: EditorTarget | null =
+  const homeSpaceCreateTarget: EditorTarget | null =
     homeWorkspaceId !== null ? { where: "home", identity: null } : null;
 
   return (
@@ -197,8 +197,8 @@ export function HomeIdentityPanels({
         }
         action={
           <CreateButton
-            disabled={personalCreateTarget === null}
-            onClick={() => setEditing(personalCreateTarget)}
+            disabled={homeSpaceCreateTarget === null}
+            onClick={() => setEditing(homeSpaceCreateTarget)}
           >
             Agent Identity
           </CreateButton>

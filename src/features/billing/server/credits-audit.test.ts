@@ -22,7 +22,7 @@ vi.mock("./credit-wallets", () => ({
 import * as wallets from "./credit-wallets";
 import { ledgerDriftFor, walletMatchesLedger } from "./credits-audit";
 import {
-  personalTarget,
+  homeSpaceTarget,
   seatTarget,
   unmeteredTarget,
 } from "./credits-target-fixtures";
@@ -129,7 +129,7 @@ describe("ledgerDriftFor — what the status payload publishes", () => {
     mockWallets.getUserCreditsUsed.mockResolvedValue(9);
     mockWallets.sumCreditLedger.mockResolvedValue(7);
     const drift = await ledgerDriftFor(
-      personalTarget({ workspaceId: "ws-link-1", payerUserId: PAYER }),
+      homeSpaceTarget({ workspaceId: "ws-link-1", payerUserId: PAYER }),
       PERIOD
     );
     expect(drift).toBe(2);
@@ -168,7 +168,7 @@ describe("ledgerDriftFor — what the status payload publishes", () => {
       new Error("Could not find the function public.credit_ledger_sum")
     );
     const drift = await ledgerDriftFor(
-      personalTarget({ workspaceId: "ws-link-1", payerUserId: PAYER }),
+      homeSpaceTarget({ workspaceId: "ws-link-1", payerUserId: PAYER }),
       PERIOD
     );
     expect(drift).toBe(0);

@@ -32,7 +32,7 @@ import { SectionShell } from "./section-shell";
  * ⚠ **THE HOME ROW IS NOT READ FROM THAT LIST.** Home is the account surface
  * every account has, pinned above the rule in the rail
  * (`app-shell/account-rail.tsx`) for the same reason it is pinned here; its
- * `kind='personal'` container is never rendered as a workspace (the shell
+ * `kind='home'` container is never rendered as a workspace (the shell
  * bounces `/{personal-segment}` to /home on sight).
  */
 export function WorkspacesSectionCore({

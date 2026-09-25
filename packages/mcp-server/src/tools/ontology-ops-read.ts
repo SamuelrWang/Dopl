@@ -13,7 +13,7 @@ import { ok, type ToolResponse } from "./respond";
 import { isConcise, type ResponseFormat } from "./response-size";
 import { UNKNOWN_CALLER, type CallerIdentity } from "./identity";
 import {
-  personalShelfGroups,
+  homeSpaceShelfGroups,
   renderObject,
   resolveObjectRef,
   resolveResourceHandles,
@@ -67,14 +67,14 @@ export async function opMap(
     );
   }
   const lines: string[] = [];
-  // 🔒 **THE PERSONAL SHELF IS NAMED, NOT LEFT AS A MYSTERY** (S29c) —
-  // `ontology-render.ts › personalShelfGroups` holds the argument and the table.
+  // 🔒 **THE HOME SHELF IS NAMED, NOT LEFT AS A MYSTERY** (S29c) —
+  // `ontology-render.ts › homeSpaceShelfGroups` holds the argument and the table.
   // ⚠ THE LABEL IS A BOLD LINE, NOT A HEADING: ontology names are already `##`
   // here, so a heading would be indistinguishable from an ontology called
   // "Home (personal) …".
-  for (const [heading, ontologies] of personalShelfGroups(
+  for (const [heading, ontologies] of homeSpaceShelfGroups(
     snapshot.ontologies,
-    snapshot.personalOntologyIds,
+    snapshot.homeSpaceOntologyIds,
   )) {
     if (ontologies.length === 0) continue;
     if (heading !== null) lines.push(`**${heading}**`, "");

@@ -94,8 +94,8 @@ export interface AgentIdentityCreateInput {
   knowledgeBaseIds?: string[];
   /** Scoped attachments, REPLACE-SET; mutually exclusive with `knowledgeBaseIds`. */
   knowledge?: IdentityKnowledgeScope[];
-  /** Route the new row to the caller's personal container (`personal-container.ts ›
-   *  personalWriteWorkspaceId` 403s rather than downgrading). Omitted = the container of the call. */
+  /** Route the new row to the caller's home space (`home-space.ts ›
+   *  homeSpaceWriteWorkspaceId` 403s rather than downgrading). Omitted = the container of the call. */
   homeScoped?: boolean;
   /** Required only when publishing at shared visibility into a home-channel container with 2+
    *  active members (400 `CONTAINER_PUBLISH_UNACKNOWLEDGED`); MCP sets it only from a spent token. */

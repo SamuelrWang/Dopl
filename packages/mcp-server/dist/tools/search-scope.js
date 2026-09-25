@@ -79,7 +79,7 @@ async function searchScope(client, opts) {
     const byKind = new Map((opts.appAcross ? withinContainers(appSearch.groups ?? [], opts.appAcross) : appSearch.groups ?? []).map((g) => [g.kind, g]));
     const objects = Object.values(ontology.objects);
     // Absent key (older server) groups nothing as personal.
-    const personalIds = new Set(identityPayload.homeScopedIdentityIds ?? EMPTY_IDS);
+    const homeSpaceIds = new Set(identityPayload.homeScopedIdentityIds ?? EMPTY_IDS);
     return {
         entries: entryHits.slice(0, limit),
         skills: cap(skills.filter((s) => s.status === "active" && matches(s.name, s.description, s.whenToUse)), limit),
@@ -98,7 +98,7 @@ async function searchScope(client, opts) {
             return name ? (0, narration_js_1.inlineOr)(name, narration_js_1.NO_NAME) : "object";
         },
         audienceOf: (ident) => (0, agent_shared_js_1.identityAudience)(ident, {
-            personal: personalIds.has(ident.id),
+            personal: homeSpaceIds.has(ident.id),
             inHomeChannel: opts.inHomeChannel,
         }),
         notice: reads.notice(opts.containerId ? SEARCH_READ_COUNT : SEARCH_READ_COUNT - 1, "reads"),

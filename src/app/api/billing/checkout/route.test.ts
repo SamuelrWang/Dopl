@@ -10,7 +10,7 @@
  *
  * 🔒 And the one with teeth since 2026-09-08 (spec §11): **a plan and a
  * container KIND must agree.** Team ($8.99/seat) is a standard workspace's,
- * Pro ($8.99 flat) is a personal container's, and this route is the only place
+ * Pro ($8.99 flat) is a home space's, and this route is the only place
  * the two can be told apart before the money moves — downstream they are one
  * `workspace_billing` row keyed by container id.
  *
@@ -44,10 +44,10 @@ const AUTH: WorkspaceAuthContext = {
 };
 
 /** Stand the route in a container of another kind for one case. */
-function asContainer(kind: "personal" | "link", id = "personal-1") {
+function asContainer(kind: "home" | "link", id = "personal-1") {
   AUTH.workspaceKind = kind;
   AUTH.workspaceId = id;
-  AUTH.workspaceSlug = kind === "personal" ? "personal" : "link";
+  AUTH.workspaceSlug = kind === "home" ? "home" : "link";
   AUTH.workspacePublicId = "ff00ff00ff00";
 }
 
@@ -232,8 +232,8 @@ describe("which plan may be bought", () => {
 });
 
 describe("🔒 which CONTAINER may buy which plan", () => {
-  it("sells Pro on a personal container, flat at quantity 1", async () => {
-    asContainer("personal");
+  it("sells Pro on a home space, flat at quantity 1", async () => {
+    asContainer("home");
     const res = await call({ plan: "pro" });
     expect(res.status).toBe(200);
     expect(mockStripe.createWorkspaceCheckoutSession).toHaveBeenCalledWith(
@@ -243,7 +243,7 @@ describe("🔒 which CONTAINER may buy which plan", () => {
         quantity: 1,
       })
     );
-    // ⚠ A personal container has one member by construction; asking Postgres
+    // ⚠ A home space has one member by construction; asking Postgres
     // how many is a read that can only produce a wrong seat count.
     expect(mockRepo.countActiveMembers).not.toHaveBeenCalled();
   });
@@ -257,11 +257,11 @@ describe("🔒 which CONTAINER may buy which plan", () => {
     expect(mockStripe.createWorkspaceCheckoutSession).not.toHaveBeenCalled();
   });
 
-  it("400s PLAN_NOT_FOR_CONTAINER for Team on a personal container, and mints nothing", async () => {
+  it("400s PLAN_NOT_FOR_CONTAINER for Team on a home space, and mints nothing", async () => {
     // ⚠ The other direction matters just as much: both plans are $8.99, and a
     // per-seat subscription on a one-member container bills correctly TODAY
     // and grows a seat count nobody can change.
-    asContainer("personal");
+    asContainer("home");
     const res = await call({ plan: "team" });
     expect(res.status).toBe(400);
     expect((await res.json()).error).toBe("PLAN_NOT_FOR_CONTAINER");
@@ -277,7 +277,7 @@ describe("🔒 which CONTAINER may buy which plan", () => {
 
   it("answers an ABSENT plan from the container: Pro on personal", async () => {
     // The desktop Upgrade button POSTs no body, and it is right in both places.
-    asContainer("personal");
+    asContainer("home");
     expect((await call()).status).toBe(200);
     expect(mockStripe.createWorkspaceCheckoutSession).toHaveBeenCalledWith(
       expect.objectContaining({ plan: "pro" })
@@ -285,7 +285,7 @@ describe("🔒 which CONTAINER may buy which plan", () => {
   });
 
   it("releases the claim after a container refusal", async () => {
-    asContainer("personal");
+    asContainer("home");
     await call({ plan: "team" });
     expect(mockRepo.releaseWorkspaceCheckout).toHaveBeenCalledWith("personal-1");
   });

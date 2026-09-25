@@ -25,10 +25,10 @@ const AUTH: WorkspaceAuthContext = {
   workspaceKind: "standard",
 };
 
-/** The caller's `kind='personal'` container. ⚠ AUTH is mutated in place by the
- *  personal-container case and restored in `beforeEach` — the gate mock closes
+/** The caller's `kind='home'` container. ⚠ AUTH is mutated in place by the
+ *  home-space case and restored in `beforeEach` — the gate mock closes
  *  over the object. */
-const PERSONAL_ID = "personal-1";
+const HOME_SPACE_ID = "personal-1";
 
 interface GateOptions {
   minRole?: string;
@@ -236,23 +236,23 @@ describe("the body", () => {
   });
 });
 
-describe("a PERSONAL container passes through unchanged", () => {
+describe("a HOME space passes through unchanged", () => {
   it("cancels a Pro subscription on the container id, with no kind arm", async () => {
-    // 2026-09-08, spec §11.1: a personal container's Pro subscription lives in
+    // 2026-09-08, spec §11.1: a home space's Pro subscription lives in
     // `workspace_billing` keyed by that container's id, so cancel/resume needed
     // no arm for it — the pin is that nobody ADDS a kind filter later.
-    AUTH.workspaceId = PERSONAL_ID;
-    AUTH.workspaceKind = "personal";
+    AUTH.workspaceId = HOME_SPACE_ID;
+    AUTH.workspaceKind = "home";
     mockRepo.getWorkspaceBilling.mockResolvedValue(
-      billing({ workspaceId: PERSONAL_ID, plan: "pro", seatCount: 1 })
+      billing({ workspaceId: HOME_SPACE_ID, plan: "pro", seatCount: 1 })
     );
     const res = await POST(request({}), { params: Promise.resolve({}) });
     expect(res.status).toBe(200);
-    expect(mockRepo.getWorkspaceBilling).toHaveBeenCalledWith(PERSONAL_ID);
+    expect(mockRepo.getWorkspaceBilling).toHaveBeenCalledWith(HOME_SPACE_ID);
     expect(stripeCalls.updated).toMatchObject({
       params: { cancel_at_period_end: true },
     });
-    expect(mockRepo.upsertWorkspaceBilling).toHaveBeenCalledWith(PERSONAL_ID, {
+    expect(mockRepo.upsertWorkspaceBilling).toHaveBeenCalledWith(HOME_SPACE_ID, {
       cancelAtPeriodEnd: true,
     });
   });

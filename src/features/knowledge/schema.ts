@@ -231,9 +231,9 @@ export const KnowledgeBaseCreateSchema = z
     /** Initial team grants — only valid with `accessMode: 'teams'`. */
     teamGrants: z.array(KbTeamGrantSchema).max(50).optional(),
     /**
-     * Put the new base on the PERSONAL SHELF (`types.ts › KbShelf`) instead of
+     * Put the new base on the HOME SHELF (`types.ts › KbShelf`) instead of
      * the workspace Knowledge page. A request, not a decision:
-     * `shared/tenancy/personal-container.ts › personalWriteWorkspaceId` is the
+     * `shared/tenancy/home-space.ts › homeSpaceWriteWorkspaceId` is the
      * fence and it 403s rather than downgrading. It routes the row and nothing
      * stores it — it decides the `workspace_id`. Omitted/false = the container
      * the call is in.

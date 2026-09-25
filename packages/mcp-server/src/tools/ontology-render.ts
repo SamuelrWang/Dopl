@@ -46,7 +46,7 @@ function indented(text: string): string {
 /**
  * ⚠ §8 STALE-CACHE, SPELLED INLINE, AND **ONE FROZEN EMPTY RATHER THAN TWO**.
  * A payload cached against a server older than S29c carries no
- * `personalOntologyIds`, and this is what the absent key falls back to: no row is
+ * `homeSpaceOntologyIds`, and this is what the absent key falls back to: no row is
  * filed under the personal label, which is the reading that states nothing the
  * response did not measure. The knowledge lane's twin is
  * `knowledge-ops-read.ts › EMPTY_BASE_IDS`.
@@ -54,12 +54,12 @@ function indented(text: string): string {
 const EMPTY_ONTOLOGY_IDS: readonly string[] = Object.freeze([]);
 
 /**
- * 🔒 **THE PERSONAL SHELF, LABELLED ON THE ONTOLOGY LANE** (S29c, 2026-09-18).
+ * 🔒 **THE HOME SHELF, LABELLED ON THE ONTOLOGY LANE** (S29c, 2026-09-18).
  *
  * ⚠ **THE COMPLAINT THIS ANSWERS.** A BRAND-NEW home channel listed two
  * ontologies nobody had put there, with nothing saying where they came from —
  * `createHomeChannel` seeds none, and what is actually happening is that
- * `service-audience.ts › computeAudience` folds the caller's own personal shelf
+ * `service-audience.ts › computeAudience` folds the caller's own home shelf
  * into the read scope, exactly as the knowledge lane does. The KB lane labels
  * its half `container-destination.ts › DESTINATION_HEADINGS.personal`; the
  * ontology lane rendered the widening and never named it, which is how two rows
@@ -78,11 +78,11 @@ const EMPTY_ONTOLOGY_IDS: readonly string[] = Object.freeze([]);
  * @returns the two groups in render order; the personal one carries the shared
  *          heading text, the other carries `null` (no heading at all).
  */
-export function personalShelfGroups<T extends { id: string }>(
+export function homeSpaceShelfGroups<T extends { id: string }>(
   ontologies: readonly T[],
-  personalOntologyIds: readonly string[] | undefined,
+  homeSpaceOntologyIds: readonly string[] | undefined,
 ): Array<readonly [string | null, readonly T[]]> {
-  const shelf = new Set(personalOntologyIds ?? EMPTY_ONTOLOGY_IDS);
+  const shelf = new Set(homeSpaceOntologyIds ?? EMPTY_ONTOLOGY_IDS);
   if (shelf.size === 0) return [[null, ontologies]];
   const personal = ontologies.filter((c) => shelf.has(c.id));
   const here = ontologies.filter((c) => !shelf.has(c.id));

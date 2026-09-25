@@ -4,8 +4,8 @@ import {
   hasFiredEvent,
 } from "@/features/analytics/server/conversion-events";
 import {
-  PERSONAL_CONTAINER_DEFAULT_NAME,
-  renamePersonalContainerIfPlaceholder,
+  HOME_SPACE_DEFAULT_NAME,
+  renameHomeSpaceIfPlaceholder,
 } from "@/features/workspaces/server/service";
 import { workspaceSegment } from "@/features/workspaces/url";
 /**
@@ -53,16 +53,16 @@ export async function isMcpConnected(userId: string): Promise<boolean> {
 }
 
 /**
- * Finish onboarding: name the caller's HOME — their personal container, which
+ * Finish onboarding: name the caller's HOME — their home space, which
  * is what ruling B10 leaves for a first-run survey to name — stamp
  * onboarded_at, return the URL to land on. Blank name → "Home" (Samuel,
- * 2026-09-06: the personal container is every user's default space and must
+ * 2026-09-06: the home space is every user's default space and must
  * never carry a name that reads as a workspace — "{FirstName}'s Workspace"
  * was mistaken for one). ⚠ Every step idempotent so a retry after partial
  * failure converges.
  *
  * 🔒 **THE LANDING IS `/home` (2026-09-10, the new-user flow), NOT
- * `/{segment}/overview`.** What onboarding names is a `kind='personal'`
+ * `/{segment}/overview`.** What onboarding names is a `kind='home'`
  * container, and that container has no workspace shell: `/home` is its surface
  * and the account rail's pinned tile is how it is reached. The old path took a
  * brand-new user THROUGH the workspace shell — sidebar, channels tree, the
@@ -71,9 +71,9 @@ export async function isMcpConnected(userId: string): Promise<boolean> {
  * is why nothing caught it; it was simply the wrong room.
  *
  * ⚠ **THE `kind` CHECK IS NOT DEFENSIVE PROSE, IT IS THE STATEMENT OF WHY.** The
- * container is personal by construction here (`renamePersonalContainerIfPlaceholder`
- * goes through `ensurePersonalContainer`), so the else branch is unreachable
- * today — and keeping it is what makes the rule READ as "a personal container
+ * container is personal by construction here (`renameHomeSpaceIfPlaceholder`
+ * goes through `ensureHomeSpace`), so the else branch is unreachable
+ * today — and keeping it is what makes the rule READ as "a home space
  * lands on /home" rather than "onboarding hardcodes /home". A workspace
  * onboarding ever names keeps the workspace landing, for free.
  *
@@ -88,9 +88,9 @@ export async function completeOnboarding(
   const typedName = opts.name?.trim();
   const description = opts.description?.trim() || undefined;
 
-  const workspaceName = typedName || PERSONAL_CONTAINER_DEFAULT_NAME;
+  const workspaceName = typedName || HOME_SPACE_DEFAULT_NAME;
 
-  const workspace = await renamePersonalContainerIfPlaceholder(
+  const workspace = await renameHomeSpaceIfPlaceholder(
     userId,
     workspaceName,
     description
@@ -105,7 +105,7 @@ export async function completeOnboarding(
     });
   }
 
-  if (workspace.kind === "personal") return { redirectPath: HOME_PATH };
+  if (workspace.kind === "home") return { redirectPath: HOME_PATH };
   return { redirectPath: `/${workspaceSegment(workspace)}/overview` };
 }
 

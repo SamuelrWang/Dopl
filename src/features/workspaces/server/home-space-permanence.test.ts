@@ -6,7 +6,7 @@
  * Four claims, and they are deliberately at four different layers, because the
  * ruling is only true if every one of them holds:
  *   1. **DELETE is refused by the SERVICE** — `deleteWorkspaceForUser` 403s a
- *      `kind='personal'` container for its OWNER, which is the only role that
+ *      `kind='home'` container for its OWNER, which is the only role that
  *      could have deleted it, and lets `standard` / `link` through unchanged.
  *   2. **LEAVING is refused by the SERVICE** — `removeMember` refuses on the
  *      KIND, ahead of the last-owner protection that would otherwise refuse for
@@ -35,7 +35,7 @@ vi.mock("./repository", () => ({
   findWorkspaceByPublicId: vi.fn(),
   findMemberWorkspaceBySlug: vi.fn(),
   findMembership: vi.fn(),
-  ensurePersonalContainerRow: vi.fn(),
+  ensureHomeSpaceRow: vi.fn(),
   insertWorkspaceWithOwnerMembership: vi.fn(),
   listMembers: vi.fn(),
   updateWorkspace: vi.fn(),
@@ -43,8 +43,8 @@ vi.mock("./repository", () => ({
 }));
 vi.mock("./last-seen", () => ({ touchLastSeen: vi.fn() }));
 vi.mock("./seed-workspace", () => ({ seedNewWorkspace: vi.fn() }));
-vi.mock("@/shared/tenancy/personal-container", () => ({
-  findPersonalContainerId: vi.fn(),
+vi.mock("@/shared/tenancy/home-space", () => ({
+  findHomeSpaceId: vi.fn(),
 }));
 vi.mock("@/features/billing/server/seats", () => ({ syncSeatQuantity: vi.fn() }));
 vi.mock("@/features/channels/server/service", () => ({
@@ -66,7 +66,7 @@ function workspace(kind?: WorkspaceKind): Workspace {
     id: WS,
     ownerId: USER,
     name: "Home",
-    slug: kind === "personal" ? "personal" : "acme",
+    slug: kind === "home" ? "home" : "acme",
     publicId: "pub-abc123456789",
     description: null,
     iconUrl: null,
@@ -95,13 +95,13 @@ beforeEach(() => {
 });
 
 describe("deleteWorkspaceForUser — a home space cannot be deleted", () => {
-  it("403 PERSONAL_CONTAINER_PERMANENT for the OWNER of a personal container", async () => {
-    mockRepo.findWorkspaceById.mockResolvedValue(workspace("personal"));
+  it("403 HOME_SPACE_PERMANENT for the OWNER of a home space", async () => {
+    mockRepo.findWorkspaceById.mockResolvedValue(workspace("home"));
     const err = (await deleteWorkspaceForUser(WS, USER).catch(
       (e) => e
     )) as HttpError;
     expect(err.status).toBe(403);
-    expect(err.code).toBe("PERSONAL_CONTAINER_PERMANENT");
+    expect(err.code).toBe("HOME_SPACE_PERMANENT");
     // ⚠ THE POINT OF THE TEST: no row left, not merely a message.
     expect(mockRepo.deleteWorkspace).not.toHaveBeenCalled();
   });
@@ -125,7 +125,7 @@ describe("deleteWorkspaceForUser — a home space cannot be deleted", () => {
   });
 
   it("a NON-owner still gets the role refusal, not the kind refusal", async () => {
-    mockRepo.findWorkspaceById.mockResolvedValue(workspace("personal"));
+    mockRepo.findWorkspaceById.mockResolvedValue(workspace("home"));
     mockRepo.findMembership.mockResolvedValue(membership("admin"));
     const err = (await deleteWorkspaceForUser(WS, USER).catch(
       (e) => e
@@ -137,17 +137,17 @@ describe("deleteWorkspaceForUser — a home space cannot be deleted", () => {
 
 describe("removeMember — nobody leaves a home space", () => {
   it("refuses on the KIND, ahead of the last-owner protection", async () => {
-    mockRepo.findWorkspaceById.mockResolvedValue(workspace("personal"));
+    mockRepo.findWorkspaceById.mockResolvedValue(workspace("home"));
     const err = (await removeMember(WS, USER, USER).catch((e) => e)) as HttpError;
     expect(err.status).toBe(403);
-    expect(err.code).toBe("PERSONAL_CONTAINER_PERMANENT");
+    expect(err.code).toBe("HOME_SPACE_PERMANENT");
     // NOT `WORKSPACE_LAST_OWNER`: that answer offers "transfer ownership first",
     // which is advice nobody can take on a container that admits no 2nd member.
     expect(err.code).not.toBe("WORKSPACE_LAST_OWNER");
   });
 
   it("is a no-op for a member who is not there — on every kind", async () => {
-    mockRepo.findWorkspaceById.mockResolvedValue(workspace("personal"));
+    mockRepo.findWorkspaceById.mockResolvedValue(workspace("home"));
     mockRepo.findMembership.mockImplementation(async (_ws, user) =>
       user === USER ? membership() : null
     );
@@ -156,22 +156,22 @@ describe("removeMember — nobody leaves a home space", () => {
   });
 });
 
-describe("the DATABASE half — 20261009120000_personal_container_permanent.sql", () => {
+describe("the DATABASE half — the live trigger, restated by 20261023120000_home_vocabulary_rename.sql", () => {
   const sql = readFileSync(
     join(
       process.cwd(),
-      "supabase/migrations/20261009120000_personal_container_permanent.sql"
+      "supabase/migrations/20261023120000_home_vocabulary_rename.sql"
     ),
     "utf8"
   );
 
   it("installs a BEFORE DELETE trigger on public.workspaces", () => {
     expect(sql).toContain("BEFORE DELETE ON public.workspaces");
-    expect(sql).toContain("public.enforce_personal_container_permanent()");
+    expect(sql).toContain("public.enforce_home_space_permanent()");
   });
 
-  it("raises only for kind = 'personal'", () => {
-    expect(sql).toContain("IF OLD.kind = 'personal' THEN");
+  it("raises only for kind = 'home'", () => {
+    expect(sql).toContain("IF OLD.kind = 'home' THEN");
     expect(sql).toContain("RAISE EXCEPTION");
     expect(sql).toContain("ERRCODE = 'check_violation'");
   });

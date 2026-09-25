@@ -55,7 +55,7 @@ function directoryRow(w: WorkspaceListItem, withDescription: boolean): string {
   // Kind is the typed wire value, rendered not inferred (F-564); the id stays off to save budget.
   const kind = containerKind(w);
   const address =
-    kind === "personal" ? `address: \`${HOME_ADDRESS}\`` : `slug: \`${w.slug}\``;
+    kind === "home" ? `address: \`${HOME_ADDRESS}\`` : `slug: \`${w.slug}\``;
   return `- ${inlineOr(w.name, UNNAMED_WORKSPACE)} — kind=\`${kind}\` (${address}, role: ${w.role})${desc}`;
 }
 

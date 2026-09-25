@@ -21,7 +21,7 @@ import {
   listWorkspacesWithRoleForUser,
   listMembers,
   updateWorkspace,
-  ensurePersonalContainerRow,
+  ensureHomeSpaceRow,
 } from "./repository";
 import { assertWorkspacePermanent } from "./authz";
 import { scrubHiddenPresence } from "./dto";
@@ -82,7 +82,7 @@ export async function resolveMembershipOrThrow(
 
 /**
  * The request's workspace: the `X-Workspace-Id` header (UUID only; blank or non-UUID is 400, never
- * coerced to "no header"), else the caller's personal container. Fail-closed: an unnamed request lands
+ * coerced to "no header"), else the caller's home space. Fail-closed: an unnamed request lands
  * only on a container the caller owns alone. `withWorkspaceAuth` applies the API-key lock before this.
  */
 export async function resolveActiveWorkspace(
@@ -99,40 +99,40 @@ export async function resolveActiveWorkspace(
     return resolveMembershipOrThrow(trimmed, userId);
   }
 
-  const container = await ensurePersonalContainer(userId);
+  const container = await ensureHomeSpace(userId);
   // Membership is re-read even here: a revoked row must 404 as it does on a named workspace.
   return resolveMembershipOrThrow(container.id, userId);
 }
 
 /**
- * The caller's one `kind='personal'` home, minted if absent: the answer when nothing is named. One RPC;
- * `workspaces_personal_owner_uidx` makes a second container unrepresentable. Never seeded: a home space
+ * The caller's one `kind='home'` home, minted if absent: the answer when nothing is named. One RPC;
+ * `workspaces_home_owner_uidx` makes a second container unrepresentable. Never seeded: a home space
  * starts empty (only `createWorkspaceForUser` seeds).
  */
-export async function ensurePersonalContainer(userId: string): Promise<Workspace> {
-  const { workspace } = await ensurePersonalContainerRow(userId);
+export async function ensureHomeSpace(userId: string): Promise<Workspace> {
+  const { workspace } = await ensureHomeSpaceRow(userId);
   return workspace;
 }
 
 /**
- * The name `ensure_personal_container` mints for a brand-new account. The literal is the migration's
+ * The name `ensure_home_space` mints for a brand-new account. The literal is the migration's
  * `COALESCE(origin.name, 'Personal')`, pinned by `b10-no-derived-default.test.ts`.
  */
-export const PERSONAL_CONTAINER_PLACEHOLDER_NAME = "Personal";
+export const HOME_SPACE_PLACEHOLDER_NAME = "Personal";
 /** The home's name after onboarding if the user typed none; agents read a workspace-shaped name as one. */
-export const PERSONAL_CONTAINER_DEFAULT_NAME = "Home";
+export const HOME_SPACE_DEFAULT_NAME = "Home";
 
 /**
  * Onboarding: name the caller's home while it still has the placeholder name (any rename wins). The slug
- * stays `personal`: `findMemberWorkspaceBySlug` answers `null` on 2+ matches, so re-slugging collides (F-561).
+ * stays `home`: `findMemberWorkspaceBySlug` answers `null` on 2+ matches, so re-slugging collides (F-561).
  */
-export async function renamePersonalContainerIfPlaceholder(
+export async function renameHomeSpaceIfPlaceholder(
   userId: string,
   name: string,
   description?: string | null
 ): Promise<Workspace> {
-  const workspace = await ensurePersonalContainer(userId);
-  if (workspace.name !== PERSONAL_CONTAINER_PLACEHOLDER_NAME) return workspace;
+  const workspace = await ensureHomeSpace(userId);
+  if (workspace.name !== HOME_SPACE_PLACEHOLDER_NAME) return workspace;
   const patch: { name: string; description?: string | null } = { name };
   if (description !== undefined) patch.description = description;
   return updateWorkspace(workspace.id, patch);
@@ -205,7 +205,7 @@ export async function updateWorkspaceIcon(
 }
 
 /**
- * Destroy a workspace (owner-only). A `kind='personal'` home is permanent, and its owner is exactly who
+ * Destroy a workspace (owner-only). A `kind='home'` home is permanent, and its owner is exactly who
  * this refuses. The guard runs after the role gate so a non-owner learns nothing about the row's kind.
  */
 export async function deleteWorkspaceForUser(

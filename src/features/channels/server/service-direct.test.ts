@@ -128,7 +128,7 @@ describe("createChannel — slug allocation vs. soft-deleted channels", () => {
 });
 
 describe("createChannel — the Home space holds no channels", () => {
-  const home: ChannelContext = { ...ctx, workspaceKind: "personal" };
+  const home: ChannelContext = { ...ctx, workspaceKind: "home" };
 
   it.each([
     ["a plain channel", { name: "Design" }],

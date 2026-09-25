@@ -51,7 +51,7 @@ const mockFindOwner = vi.mocked(findActiveOwnerUserId);
 
 const USER = "user-1";
 const STANDARD_WS = "ws-standard";
-const PERSONAL_WS = "ws-personal";
+const HOME_SPACE_WS = "ws-personal";
 
 /** Out of credits — the only state that renders a refusal at all. */
 const EXHAUSTED = { allowed: false, used: 999_999 };
@@ -104,9 +104,9 @@ describe("the SEAT offer", () => {
 
 describe("the PERSONAL offer", () => {
   it("🔒 a FREE home space is offered the PRO allowance, off the constant", async () => {
-    const res = await consumeMcpCredits(PERSONAL_WS, {
+    const res = await consumeMcpCredits(HOME_SPACE_WS, {
       userId: USER,
-      workspaceKind: "personal",
+      workspaceKind: "home",
     });
 
     expect(res.wallet).toBe("personal");
@@ -122,9 +122,9 @@ describe("the PERSONAL offer", () => {
    * the wrong wallet's allowance.
    */
   it("🔒 reads the PERSONAL constant on the personal arm, never the seat one", async () => {
-    const res = await consumeMcpCredits(PERSONAL_WS, {
+    const res = await consumeMcpCredits(HOME_SPACE_WS, {
       userId: USER,
-      workspaceKind: "personal",
+      workspaceKind: "home",
     });
     expect(res.upgradeCredits).toBe(PERSONAL_MONTHLY_CREDITS.pro);
     expect(res.upgradeCredits).not.toBe(SEAT_MONTHLY_CREDITS.free);
@@ -135,13 +135,13 @@ describe("the PERSONAL offer", () => {
     // readPersonalBilling`), so the Pro row comes back off `getWorkspaceBilling`
     // and never through the owner → container hop.
     mockRepo.getWorkspaceBilling.mockResolvedValue({
-      ...teamBillingRow({ workspaceId: PERSONAL_WS }),
+      ...teamBillingRow({ workspaceId: HOME_SPACE_WS }),
       plan: "pro",
     } as WorkspaceBillingRow);
 
-    const res = await consumeMcpCredits(PERSONAL_WS, {
+    const res = await consumeMcpCredits(HOME_SPACE_WS, {
       userId: USER,
-      workspaceKind: "personal",
+      workspaceKind: "home",
     });
 
     expect(res.upgradeUrl).toBe("");

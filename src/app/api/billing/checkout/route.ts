@@ -59,7 +59,7 @@ type PlanRequest = "team" | "pro" | "retired" | "unknown";
  *
  * ⚠ IT DOES NOT DEFAULT TO `team` ANY MORE, and that is the whole edit: a
  * default chosen here is a default chosen before the container kind is known,
- * which is exactly how a personal container would end up buying seats.
+ * which is exactly how a home space would end up buying seats.
  */
 async function readPlan(request: NextRequest): Promise<PlanRequest> {
   try {
@@ -82,7 +82,7 @@ function checkoutConflict(portalUrl: string | null) {
  * Subscription checkout for the active CONTAINER. Admin/owner only. Two plans, and the container's
  * KIND decides which one it may buy (2026-09-08, spec §11):
  *   • a STANDARD workspace buys `team`, per-seat, quantity = active member count;
- *   • a `kind='personal'` container buys `pro`, flat, quantity 1.
+ *   • a `kind='home'` container buys `pro`, flat, quantity 1.
  *
  * 🔒 **THE KIND FENCE IS HERE, AND HERE IS THE ONLY PLACE IT IS FREE.** Both plans are $8.99, both
  * live on `workspace_billing` keyed by container id, and nothing downstream can tell them apart
@@ -137,11 +137,11 @@ export const POST = withWorkspaceAuth(
       if (requested === "retired") return planRetired();
       const isStandard = isStandardWorkspace({ kind: workspaceKind });
       // ⚠ The POSITIVE predicate for `team` (§4A, F-295) and an explicit
-      // `personal` for `pro`: a link container is neither, and a fourth kind
+      // `home` for `pro`: a link container is neither, and a fourth kind
       // must not become sellable by the act of being named.
       const plan =
         requested === "unknown" ? (isStandard ? "team" : "pro") : requested;
-      if (plan === "pro" && workspaceKind !== "personal") {
+      if (plan === "pro" && workspaceKind !== "home") {
         return planNotForContainer("pro");
       }
       if (plan === "team" && !isStandard) return planNotForContainer("team");
@@ -158,7 +158,7 @@ export const POST = withWorkspaceAuth(
         );
       }
 
-      // ⚠ Pro is flat — a personal container has exactly one member, so the
+      // ⚠ Pro is flat — a home space has exactly one member, so the
       // count is both known and unbillable. Skipping it also skips a read.
       const quantity = plan === "pro" ? 1 : await countActiveMembers(workspaceId);
 

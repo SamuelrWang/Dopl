@@ -73,14 +73,14 @@ export function AppShellLayout() {
     navigate(canonicalPath(location.pathname, segment), { replace: true });
   }, [needsRedirect, segment, location.pathname, navigate]);
 
-  // 🔒 THE SHELL NEVER RENDERS A PERSONAL CONTAINER (2026-09-08). Its surface is
+  // 🔒 THE SHELL NEVER RENDERS A HOME SPACE (2026-09-08). Its surface is
   // /home; a typed or stale `/{personal-segment}` URL — or a cold launch that
   // slipped past `pages/boot` — otherwise paints a workspace overview titled
   // "Home" with no rail icon lit (Samuel's "ghost overview page"). ⚠ `link`
   // containers are fenced by the redirect BELOW, not here: they land on the
   // container's own channel record rather than on /home (R-01(a)).
   useEffect(() => {
-    if (workspace?.kind !== "personal") return;
+    if (workspace?.kind !== "home") return;
     navigate(HOME_PATH, { replace: true });
   }, [workspace?.kind, navigate]);
 
@@ -114,7 +114,7 @@ export function AppShellLayout() {
    * ⚠ NO CHANNEL ⇒ `/home`, and a FAILED read lands there too. Not
    * UNKNOWN-rendered-as-EMPTY (INVARIANTS §11): `/home` asserts nothing, and
    * claiming "you have no channel" ON a workspace URL is what would be a lie.
-   * ⚠ ORDERED BEHIND THE CANONICAL REDIRECT above, and `personal` is excluded
+   * ⚠ ORDERED BEHIND THE CANONICAL REDIRECT above, and `home` is excluded
    * because the effect above already owns it: any two of these firing in one
    * tick would race two `replace`s over one history entry.
    *

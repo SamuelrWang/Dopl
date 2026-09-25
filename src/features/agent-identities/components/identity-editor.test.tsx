@@ -191,7 +191,7 @@ describe("no Team scope outside a standard workspace", () => {
     expect(tabLabels("Visibility")).toEqual(["Private", "Team", "Public"]);
   });
 
-  it.each(["personal", "link"] as const)(
+  it.each(["home", "link"] as const)(
     "drops Team in a %s container, and keeps the rest in order",
     async (kind) => {
       await open({ containerKind: kind });
@@ -204,7 +204,7 @@ describe("no Team scope outside a standard workspace", () => {
     // Not rewritten on open: silently moving a stored audience would decide a sharing fact on a
     // form the operator may close without saving.
     await open({
-      containerKind: "personal",
+      containerKind: "home",
       identity: filledIdentity({ visibility: "team", teamIds: ["team-1"] }),
     });
     const pill = row("Visibility").getByRole("tab", { name: /^Team/ });
@@ -219,7 +219,7 @@ describe("no Team scope outside a standard workspace", () => {
 
   it("lets Save through the moment the operator picks a value the container holds", async () => {
     const { draft } = await open({
-      containerKind: "personal",
+      containerKind: "home",
       identity: filledIdentity({ visibility: "team", teamIds: ["team-1"] }),
     });
     pick("Visibility", "Private");
@@ -232,7 +232,7 @@ describe("no Team scope outside a standard workspace", () => {
 
   it("no longer offers the pill it just dropped, once the row is off Team", async () => {
     await open({
-      containerKind: "personal",
+      containerKind: "home",
       identity: filledIdentity({ visibility: "team", teamIds: ["team-1"] }),
     });
     pick("Visibility", "Private");

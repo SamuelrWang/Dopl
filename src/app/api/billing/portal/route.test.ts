@@ -2,7 +2,7 @@
  * POST /api/billing/portal — the Stripe-hosted handoff. Two properties:
  *   - gates: admin AND `sessionOnly` (INVARIANTS §3, all billing writes);
  *   - it keys on the CONTAINER id and returns to THAT container's billing page,
- *     personal containers included (2026-09-08, spec §11.1 — a Pro subscription
+ *     home spaces included (2026-09-08, spec §11.1 — a Pro subscription
  *     is an ordinary `workspace_billing` row keyed by the container id, so this
  *     route needed no arm for it and must never grow a kind filter).
  * The Stripe SDK is faked at the module boundary; nothing touches the network.
@@ -26,7 +26,7 @@ const AUTH: WorkspaceAuthContext = {
   workspaceKind: "standard",
 };
 
-const PERSONAL_ID = "personal-1";
+const HOME_SPACE_ID = "personal-1";
 
 interface GateOptions {
   minRole?: string;
@@ -129,21 +129,21 @@ describe("the handoff", () => {
   });
 });
 
-describe("a PERSONAL container passes through unchanged", () => {
+describe("a HOME space passes through unchanged", () => {
   it("opens the portal on the container id and returns to its own billing page", async () => {
-    AUTH.workspaceId = PERSONAL_ID;
-    AUTH.workspaceKind = "personal";
-    AUTH.workspaceSlug = "personal";
+    AUTH.workspaceId = HOME_SPACE_ID;
+    AUTH.workspaceKind = "home";
+    AUTH.workspaceSlug = "home";
     AUTH.workspacePublicId = "ff00ff00ff00";
     mockRepo.getWorkspaceBilling.mockResolvedValue(
-      billing({ workspaceId: PERSONAL_ID, plan: "pro", seatCount: 1 })
+      billing({ workspaceId: HOME_SPACE_ID, plan: "pro", seatCount: 1 })
     );
     const res = await call();
     expect(res.status).toBe(200);
-    expect(mockRepo.getWorkspaceBilling).toHaveBeenCalledWith(PERSONAL_ID);
+    expect(mockRepo.getWorkspaceBilling).toHaveBeenCalledWith(HOME_SPACE_ID);
     expect(stripeCalls.portal).toMatchObject({
       return_url:
-        "https://www.usedopl.com/billing/personal-ff00ff00ff00?billing=return",
+        "https://www.usedopl.com/billing/home-ff00ff00ff00?billing=return",
     });
   });
 });

@@ -37,7 +37,7 @@ import {
  * naming it, not by finding its card and pressing Open.
  *
  * ⚠ **ITS ROWS ARE STILL PERSONAL** — an ontology is an `ontologies` row
- * in the caller's `kind='personal'` container (INVARIANTS §4A), never the
+ * in the caller's `kind='home'` container (INVARIANTS §4A), never the
  * selected channel's. Knowledge and Agents list what is IN the room; this is
  * what the operator OWNS and lends INTO rooms, which is why the face takes no
  * channel at all (`home-tabs.ts › ONTOLOGY_PANE`) and the share popup asks the
@@ -65,7 +65,7 @@ export function HomeOntologyPanels({
   homeWorkspaceId,
   homeWorkspaceSegment,
 }: {
-  /** ⚠ `POST /api/boot`'s `workspace` — the PERSONAL container these rows live
+  /** ⚠ `POST /api/boot`'s `workspace` — the HOME space these rows live
    *  in, NULL until the caller is onboarded. Unavailable, not empty. */
   homeWorkspaceId: string | null;
   /** Same payload's `segment`; the board takes it for its own URL writes, which

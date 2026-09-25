@@ -27,18 +27,18 @@ import {
  *
  * 🔒 **A CONTAINER IS REFUSED BEFORE THE PLAN IS EVEN READ (2026-09-08, spec
  * §11), AND WITH ITS OWN CODE.** Team is a standard workspace's plan; a
- * `kind='personal'` container's paid plan is `pro` and it is bought, not
+ * `kind='home'` container's paid plan is `pro` and it is bought, not
  * upgraded into. Falling through would have answered 409 `NOT_ON_SOLO` — a
  * sentence about a plan the caller never had, on a container that could not
  * hold Team even if they did — and, on the one row that WOULD satisfy the solo
- * check, would have swapped a personal container's subscription to the per-seat
+ * check, would have swapped a home space's subscription to the per-seat
  * price. `NOT_A_WORKSPACE` says the true thing instead.
  *
  * 🔒 **A FENCE, SO THE PREDICATE STAYS NEGATIVE AND THE MESSAGE BRANCHES ON THE
  * KIND (F-564, declared in `features/workspaces/home-channel-derivation.test.ts
  * › FENCE_SITES`).** Team belongs on a standard workspace and on nothing else,
  * so a fourth kind must INHERIT this refusal rather than opt into it —
- * repointing at the positive link test would make `personal` upgradable to
+ * repointing at the positive link test would make `home` upgradable to
  * Team. ⚠ **AND THAT SENTENCE DELIBERATELY DOES NOT SPELL THE TEST OUT**: the
  * gate's third case greps this file's RAW TEXT (comments included) for it, so a
  * docblock quoting the expression would satisfy the gate on behalf of code that
@@ -49,7 +49,7 @@ import {
  */
 export const POST = withWorkspaceAuth(
   async (_request, { workspaceId, workspaceKind: kind }) => {
-    // ⚠ The POSITIVE predicate (§4A, F-295): `link` and `personal` are both
+    // ⚠ The POSITIVE predicate (§4A, F-295): `link` and `home` are both
     // refused, and so is any kind added later.
     if (!isStandardWorkspace({ kind })) {
       return NextResponse.json(

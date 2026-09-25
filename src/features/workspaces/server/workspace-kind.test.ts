@@ -10,11 +10,11 @@
  *      is what a narrowed projection or a fixture omits, and that must not
  *      change behaviour.
  *   2. `resolveActiveWorkspace` no-header path — it answers the caller's own
- *      PERSONAL CONTAINER (ruling B10), so no membership of any kind is an
+ *      HOME SPACE (ruling B10), so no membership of any kind is an
  *      implicit candidate any more and an EXPLICIT header still reaches a link
  *      container.
  *   3. `findSoleOwnedStandardWorkspace` — billing's question, and `link` /
- *      `personal` containers are excluded from it: neither carries a plan, and
+ *      `home` containers are excluded from it: neither carries a plan, and
  *      neither may make an unambiguous owner look ambiguous.
  */
 
@@ -90,11 +90,11 @@ async function withMemberships(memberships: WorkspaceWithRole[]) {
     id: "ws-home",
     ownerId: USER,
     name: "Personal",
-    slug: "personal",
+    slug: "home",
     publicId: "pub-ws-home",
     description: null,
     iconUrl: null,
-    kind: "personal",
+    kind: "home",
     createdAt: "2026-01-01T00:00:00Z",
     updatedAt: "2026-01-01T00:00:00Z",
   };
@@ -104,7 +104,7 @@ async function withMemberships(memberships: WorkspaceWithRole[]) {
       id === container.id ? container : findWorkspaceById(id)
     ),
     findMembership,
-    ensurePersonalContainerRow: vi.fn(async () => ({
+    ensureHomeSpaceRow: vi.fn(async () => ({
       workspace: container,
       created: false,
     })),
@@ -190,7 +190,7 @@ describe("a SOLO (one-member) link container is a link container", () => {
 
     const res = await service.resolveActiveWorkspace(USER, null);
     expect(res.workspace.id).toBe("ws-home");
-    expect(res.workspace.kind).toBe("personal");
+    expect(res.workspace.kind).toBe("home");
   });
 
   it("never becomes anyone's billing target, even as the only owned row", async () => {
@@ -222,7 +222,7 @@ describe("resolveActiveWorkspace — no membership is an IMPLICIT candidate", ()
 
     const res = await service.resolveActiveWorkspace(USER, null);
     expect(res.workspace.id).toBe("ws-home");
-    expect(res.workspace.kind).toBe("personal");
+    expect(res.workspace.kind).toBe("home");
   });
 
   it("an EXPLICIT header targeting a link container still resolves", async () => {
@@ -244,7 +244,7 @@ describe("findSoleOwnedStandardWorkspace — standard only, and it REFUSES", () 
     primeSupabase([
       { id: "ws-link", kind: "link" },
       { id: "ws-real", kind: "standard" },
-      { id: "ws-home", kind: "personal" },
+      { id: "ws-home", kind: "home" },
     ]);
     const { workspace, count } = await findSoleOwnedStandardWorkspace(USER);
     expect(workspace?.id).toBe("ws-real");
@@ -252,7 +252,7 @@ describe("findSoleOwnedStandardWorkspace — standard only, and it REFUSES", () 
   });
 
   it("owning only containers answers NOTHING, with the count that says why", async () => {
-    primeSupabase([{ id: "ws-link", kind: "link" }, { id: "ws-home", kind: "personal" }]);
+    primeSupabase([{ id: "ws-link", kind: "link" }, { id: "ws-home", kind: "home" }]);
     expect(await findSoleOwnedStandardWorkspace(USER)).toEqual({
       workspace: null,
       count: 0,

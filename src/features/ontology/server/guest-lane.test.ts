@@ -52,8 +52,8 @@ vi.mock("./repository-projections", () => ({
   listRelationshipsForSource: vi.fn(async () => []),
 }));
 
-vi.mock("@/shared/tenancy/personal-reach", () => ({
-  personalShelfContainerIds: vi.fn(async () => []),
+vi.mock("@/shared/tenancy/home-space-reach", () => ({
+  homeSpaceShelfContainerIds: vi.fn(async () => []),
 }));
 
 vi.mock("@/features/billing/server/entitlements", () => ({
@@ -89,7 +89,7 @@ const mockShareRepo = vi.mocked(shareRepo);
 
 /** The LINK container the guest stands in — never the ontology's. */
 const LINK = "ws-link";
-/** The OWNER's personal shelf, where the lent ontology actually lives. */
+/** The OWNER's home shelf, where the lent ontology actually lives. */
 const OWNER_WS = "ws-owner";
 const ONTOLOGY_ID = "11111111-1111-4111-8111-111111111111";
 const OBJECT_ID = "44444444-4444-4444-8444-444444444444";

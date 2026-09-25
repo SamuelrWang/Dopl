@@ -8,7 +8,7 @@
  *
  * ── THE ADDRESS GRAMMAR ────────────────────────────────────────────────────
  *
- *   container=home        → the CALLER's own personal container, per caller
+ *   container=home        → the CALLER's own home space, per caller
  *   container=<slug>      → a workspace, or a home channel (its channel's slug;
  *                           one channel per link container, minted from the
  *                           same name — `home/server/service-writes.ts ›

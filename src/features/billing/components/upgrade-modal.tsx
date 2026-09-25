@@ -37,7 +37,7 @@ const TEAM_UNLOCKS = [
 ] as const;
 
 /**
- * What Pro buys on a personal container (2026-09-08). No "per member" (one
+ * What Pro buys on a home space (2026-09-08). No "per member" (one
  * member by construction) and no object-cap line — the cap is a multi-member
  * free rule (`plans.ts › FREE_MULTI_MEMBER_OBJECT_CAP`), so listing it would
  * sell an unlock the buyer already has.
@@ -65,7 +65,7 @@ interface Props {
    *
    * The variants differ only in why the modal opened, not in what they sell
    * within a kind. "add-member" is standard-only (2026-09-08) and falls back to
-   * the generic upsell on a personal container, which has no roster to add to
+   * the generic upsell on a home space, which has no roster to add to
    * (`server/entitlements.ts › assertCanAddMember`).
    */
   variant?: "generic" | "add-member";
@@ -121,12 +121,12 @@ export function UpgradeModal({
     }
   }
 
-  const isPersonal = ent.containerKind === "personal";
-  const showAddMember = variant === "add-member" && !isPersonal;
+  const isHomeSpace = ent.containerKind === "home";
+  const showAddMember = variant === "add-member" && !isHomeSpace;
 
   const label = showAddMember
     ? "Upgrade to add members"
-    : isPersonal
+    : isHomeSpace
       ? "Upgrade to Pro"
       : "Upgrade your workspace";
 
@@ -253,7 +253,7 @@ function browserBillingUrl(plan: CheckoutPlan): string {
   // `pro` goes segment-less deliberately (2026-09-08): the hash segment names
   // the standard workspace this window is showing, where `pro` is refused (400
   // `PLAN_NOT_FOR_CONTAINER`). Bare `/billing?plan=pro` is the one link that
-  // resolves the caller's personal container (`app/billing/page.tsx`).
+  // resolves the caller's home space (`app/billing/page.tsx`).
   if (plan === "pro") {
     return billingUrl(getAppOrigin(), { intent: "upgrade", plan });
   }
@@ -286,19 +286,19 @@ function GenericUpsell({
   onChoose: (plan: CheckoutPlan) => void;
   onClose: () => void;
 }) {
-  const isPersonal = ent.containerKind === "personal";
+  const isHomeSpace = ent.containerKind === "home";
   // A live (or grace-period) sub behind a free-reporting plan is a degraded
   // legacy Solo sub; checkout would 409, so Team swaps in place via
   // /api/billing/upgrade-to-team. Entitled paid containers show AlreadyPaidNote
-  // instead. Standard-only: `solo` was never sold on a personal container.
+  // instead. Standard-only: `solo` was never sold on a home space.
   const hasLiveSub =
-    !isPersonal && (ent.status === "active" || ent.status === "past_due");
-  const unlocks = isPersonal ? PRO_UNLOCKS : TEAM_UNLOCKS;
+    !isHomeSpace && (ent.status === "active" || ent.status === "past_due");
+  const unlocks = isHomeSpace ? PRO_UNLOCKS : TEAM_UNLOCKS;
 
   return (
     <div>
       <h2 className="text-display font-semibold tracking-tight text-text-primary">
-        {isPersonal ? "Upgrade to Pro" : "Upgrade your workspace"}
+        {isHomeSpace ? "Upgrade to Pro" : "Upgrade your workspace"}
       </h2>
       {reason && (
         <p className="mt-1 text-caption text-text-secondary">{reason}</p>
@@ -330,7 +330,7 @@ function GenericUpsell({
             <p className="mt-4 text-caption text-danger">{switchError}</p>
           )}
           <div className="mt-5 flex flex-col gap-2.5">
-            {isPersonal ? (
+            {isHomeSpace ? (
               <PlanOption
                 title="Pro"
                 priceLine={
@@ -391,7 +391,7 @@ function GenericUpsell({
           ) : (
             <AskAdminNote
               onClose={onClose}
-              action={isPersonal ? "upgrade your plan" : "upgrade this workspace"}
+              action={isHomeSpace ? "upgrade your plan" : "upgrade this workspace"}
             />
           )}
         </>

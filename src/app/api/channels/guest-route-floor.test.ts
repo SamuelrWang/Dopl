@@ -84,7 +84,7 @@
  *
  * ⚠ THREE `personal-arming` VERBS STOOD HERE AND ARE DELETED (2026-09-07) with
  * the route itself: Samuel reversed task 11 and personal knowledge reaches a
- * shared channel BY DEFAULT (`shared/tenancy/personal-reach.ts`), so the switch
+ * shared channel BY DEFAULT (`shared/tenancy/home-space-reach.ts`), so the switch
  * had nothing left to switch — it wrote rows no fence read.
  */
 

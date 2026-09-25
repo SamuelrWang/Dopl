@@ -1,5 +1,5 @@
 /**
- * 🔓 **CLAUSE 3 — A LOCKED CREDENTIAL AND ITS OPERATOR'S PERSONAL SHELF**, driven
+ * 🔓 **CLAUSE 3 — A LOCKED CREDENTIAL AND ITS OPERATOR'S HOME SHELF**, driven
  * against the real query builder.
  *
  * ⚠ **A THIRD SUITE OVER ONE MODULE, AND ONLY BECAUSE OF THE §1 LINE CAP** — the
@@ -24,7 +24,7 @@ import {
   makeAdmin,
   member,
   ME,
-  personalContainer,
+  homeSpace,
   T1,
   WS_A,
   WS_P,
@@ -40,7 +40,7 @@ beforeEach(() => {
  * lock widens onto the shelf only from a room that is armed").
  *
  * ⚠ **THE TESTS BELOW ARE THE REVERSAL'S OWED HALF, AND THEY WERE OWED FOR A
- * REASON WORTH KEEPING.** `personal-reach.ts` stopped reading the arming
+ * REASON WORTH KEEPING.** `home-space-reach.ts` stopped reading the arming
  * switch, stopped counting the room's members and stopped
  * consulting the session header; two cases here went on asserting the probe and
  * the `[lock]`-alone candidate list, so the suite failed RED against shipped,
@@ -52,7 +52,7 @@ beforeEach(() => {
  * container, from any room, exactly as a person does. The confidentiality of
  * that shelf's contents is held by the session's prompt framing
  * (`dopl-desktop-app/main/prompt-framing-text.js ›
- * PERSONAL_KNOWLEDGE_CONFIDENTIALITY`), not by a refusal here — so a test that
+ * HOME_SPACE_KNOWLEDGE_CONFIDENTIALITY`), not by a refusal here — so a test that
  * expected a narrower candidate list would now be pinning a fence that is
  * deliberately gone.
  *
@@ -78,7 +78,7 @@ describe("🔓 an AGENT's lock widens onto its operator's shelf, from any room",
 
   it("admits the shelf from a SHARED room, with nothing armed", async () => {
     const calls = makeAdmin({
-      workspaces: [personalContainer()],
+      workspaces: [homeSpace()],
       workspace_members: [member(WS_P, "owner")],
       knowledge_bases: [
         {
@@ -86,7 +86,7 @@ describe("🔓 an AGENT's lock widens onto its operator's shelf, from any room",
           name: "Orchestration Guidelines",
           workspace_id: WS_P,
           created_by: ME,
-          workspace: { name: "Personal", kind: "personal" },
+          workspace: { name: "Personal", kind: "home" },
         },
       ],
     });
@@ -94,7 +94,7 @@ describe("🔓 an AGENT's lock widens onto its operator's shelf, from any room",
     // base on its operator's own shelf, and nobody had to arm anything.
     expect(await resolveResource(agent, "knowledge_base", T1)).toMatchObject({
       containerId: WS_P,
-      containerKind: "personal",
+      containerKind: "home",
     });
     expect(filters(calls, "workspace_members")).toContain(
       `in("workspace_id"=${JSON.stringify([WS_A, WS_P])})`
@@ -108,7 +108,7 @@ describe("🔓 an AGENT's lock widens onto its operator's shelf, from any room",
     // fence has grown a second decision.
     const calls = makeAdmin(
       {
-        workspaces: [personalContainer()],
+        workspaces: [homeSpace()],
         workspace_members: [member(WS_A)],
         agent_identities: [],
       },
@@ -123,22 +123,22 @@ describe("🔓 an AGENT's lock widens onto its operator's shelf, from any room",
 
   it("🔒 THE SHELF IS THE OPERATOR'S OWN, resolved by owner and by kind", async () => {
     // ⚠ MUTATION CHECK, and the one clause 3 still owns. The widening probe is
-    // keyed to the CALLER — a proven user id — and to `kind='personal'`; read it
+    // keyed to the CALLER — a proven user id — and to `kind='home'`; read it
     // off anything caller-supplied and "my shelf" becomes "a shelf I named".
     const calls = makeAdmin({
-      workspaces: [personalContainer()],
+      workspaces: [homeSpace()],
       workspace_members: [member(WS_A)],
       agent_identities: [],
     });
     await resolveResource(agent, "agent_identity", T1);
     expect(filters(calls, "workspaces")).toEqual([
       `eq("owner_id"=${JSON.stringify(ME)})`,
-      `eq("kind"="personal")`,
+      `eq("kind"="home")`,
     ]);
   });
 
-  it("🔒 a lock with NO personal container stays the lock alone", async () => {
-    // ⚠ The fail-safe half: `findPersonalContainerId` answers `null` (the
+  it("🔒 a lock with NO home space stays the lock alone", async () => {
+    // ⚠ The fail-safe half: `findHomeSpaceId` answers `null` (the
     // migration has not run for this owner), and the candidate list must narrow
     // to the lock rather than widen to `undefined` or to every membership.
     const calls = makeAdmin({

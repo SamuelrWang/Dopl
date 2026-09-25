@@ -2,9 +2,19 @@
 
 All notable changes to `@dopl/client` are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.15.0] — 2026-09-24
+
+### Changed (BREAKING)
+
+- The Home space's container kind is `home`, not `personal` (Samuel, 2026-09-24: the layer is cut).
+  `WorkspaceKind` = `standard | link | home`; `ContainerKind` = `home | home_channel | workspace`.
+- `OntologySnapshot.personalOntologyIds` → `homeSpaceOntologyIds` (both views).
+- The personal WALLET keeps its name: `CreditWalletKind` is still `personal | seat`.
 
 ### Added
+
+- `createHomeChannel(input)` takes `HomeChannelCreateInput` — `{ name, topic? }`; `topic` is the
+  room's description.
 
 - `consumeCredits(workspaceId, call?)` — an optional `McpCallTally` (`tool`,
   `op`, `write`) riding the consume body, so the route can count the MCP call

@@ -14,7 +14,7 @@ import { SkeletonLine } from "@/shared/ui/skeleton";
  * billing? Basically the price and date"). Next-free; web and desktop Account
  * panes mount it under `./account-subscription`.
  *
- * SAME SCOPING AS CANCEL: the personal container (no `workspaceId` → the
+ * SAME SCOPING AS CANCEL: the home space (no `workspaceId` → the
  * server resolves the caller's own), plus the open STANDARD workspace for an
  * admin/owner. Source is `GET /api/billing/invoices` (Stripe invoices, one page
  * of `INVOICE_PAGE_SIZE`, admin floor server-side) via `useWorkspaceInvoices`.
@@ -39,7 +39,7 @@ export function AccountBillingHistory({
   const workspace = useWorkspaceEntitlements(workspaceId);
 
   const personalOn =
-    personal.containerKind === "personal" && personal.has_stripe_customer;
+    personal.containerKind === "home" && personal.has_stripe_customer;
   const workspaceOn =
     Boolean(workspaceId) &&
     role !== undefined &&

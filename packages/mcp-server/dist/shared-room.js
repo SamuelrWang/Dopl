@@ -12,10 +12,10 @@
  * whatever kind of container the room sits in**, and R-15 arms the container
  * lock on exactly that.
  *
- * ⚠ **THE PERSONAL SHELF IS STILL EXCLUDED, AND NOW IT IS EXCLUDED ON PURPOSE.**
+ * ⚠ **THE HOME SHELF IS STILL EXCLUDED, AND NOW IT IS EXCLUDED ON PURPOSE.**
  * F-564's warning was against `!isStandardWorkspace(…)`, whose NEGATIVE spelling
- * armed a peer-shaped lock on every operator's own `personal` container. The
- * member count excludes it positively: a personal shelf has exactly one member,
+ * armed a peer-shaped lock on every operator's own `home` container. The
+ * member count excludes it positively: a home shelf has exactly one member,
  * so it answers solo for the reason it IS solo. `confirm-token.ts` used to call
  * that exclusion "correct by accident"; it is the rule now.
  *

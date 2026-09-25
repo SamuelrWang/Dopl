@@ -54,7 +54,7 @@ function wsItem(
   id: string,
   slug: string,
   name: string,
-  kind?: "standard" | "link" | "personal",
+  kind?: "standard" | "link" | "home",
 ): WorkspaceListItem {
   return {
     id,
@@ -75,7 +75,7 @@ const WS = wsItem("id-ws", "acme", "Acme", "standard");
  *  `home/server/service-writes.ts › createHomeChannel`, and a link container
  *  holds exactly ONE channel. */
 const ROOM = wsItem("id-room", "with-dana", "With Dana", "link");
-const HOME = wsItem("id-home", "sam", "Sam", "personal");
+const HOME = wsItem("id-home", "sam", "Sam", "home");
 
 function mockClient(directory: WorkspaceListItem[]): DoplClient {
   return {
@@ -153,12 +153,16 @@ describe("the container address grammar", () => {
       directory: [WS, ROOM, HOME],
     });
 
-  it("`home` is the CALLER's personal container, and nothing else is", async () => {
+  it("`home` is the CALLER's home space, and nothing else is", async () => {
     expect(await directory().resolveContainerRef(HOME_ADDRESS)).toEqual(HOME);
     // ⚠ Case-folded: an agent that types `Home` means its home space, and a
     // slug is lower-case by construction so nothing legitimate is shadowed.
     expect(await directory().resolveContainerRef("Home")).toEqual(HOME);
     expect(await directory().resolveContainerRef(" home ")).toEqual(HOME);
+  });
+
+  it("the retired slug still reaches the caller's Home space for one release (legacy-aliases.ts)", async () => {
+    expect(await directory().resolveContainerRef("Personal")).toEqual(HOME);
   });
 
   it("`home` REFUSES rather than falling back when the caller has none", async () => {
@@ -226,7 +230,7 @@ describe("the container address grammar", () => {
 
 // ── 2. THE KIND, AS A CENSUS OVER REAL OUTPUT ───────────────────────────────
 
-const KINDS: ContainerKind[] = ["personal", "home_channel", "workspace"];
+const KINDS: ContainerKind[] = ["home", "home_channel", "workspace"];
 
 describe("every list that NAMES a container renders its typed kind", () => {
   /**
@@ -235,8 +239,8 @@ describe("every list that NAMES a container renders its typed kind", () => {
    * an agent. Each row names the tool and what it must carry.
    */
   const CENSUS: Array<{ tool: string; args: Record<string, unknown>; expect: ContainerKind[] }> = [
-    { tool: "dopl_workspaces", args: {}, expect: ["workspace", "home_channel", "personal"] },
-    { tool: "dopl_map", args: {}, expect: ["workspace", "home_channel", "personal"] },
+    { tool: "dopl_workspaces", args: {}, expect: ["workspace", "home_channel", "home"] },
+    { tool: "dopl_map", args: {}, expect: ["workspace", "home_channel", "home"] },
     { tool: "dopl_status", args: {}, expect: ["workspace", "home_channel"] },
   ];
 
@@ -263,7 +267,7 @@ describe("every list that NAMES a container renders its typed kind", () => {
     // for once per response rather than once per row.
     build([WS, ROOM, HOME], HOME);
     const text = textOf(await tool("dopl_kb")({ op: "list_bases" }));
-    expect(text).toContain("kind=`personal`");
+    expect(text).toContain("kind=`home`");
   });
 
   // ⚠ THE REGISTRAR THREADS THE KNOB, and this is the end-to-end half of
@@ -296,7 +300,7 @@ describe("dopl_map draws Home space as its own top-level node", () => {
     expect(text).toContain("container=`acme`");
   });
 
-  it("a caller with no personal container gets ABSENT, never an empty node", async () => {
+  it("a caller with no home space gets ABSENT, never an empty node", async () => {
     build([WS]);
     const text = textOf(await tool("dopl_map")({}));
     expect(text).toContain("## Home space — your default container");

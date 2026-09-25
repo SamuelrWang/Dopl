@@ -258,14 +258,14 @@ describe("the miss that is not a mystery", () => {
     });
   });
 
-  it("calls the PERSONAL CONTAINER the personal container, never a home channel", async () => {
+  it("calls the HOME SPACE the home space, never a home channel", async () => {
     // The label keys on container kind; personal is not standard, so arm order matters (F-564).
     vi.mocked(tenancy.resolveResourcesByName).mockResolvedValue([
-      elsewhere({ containerKind: "personal" }),
+      elsewhere({ containerKind: "home" }),
     ]);
     expect(await resolveIdentityRef(ctx, "Code Auditor")).toEqual({
       kind: "elsewhere",
-      identity: { name: "Code Auditor", label: "your personal container" },
+      identity: { name: "Code Auditor", label: "your home space" },
     });
   });
 
@@ -293,7 +293,7 @@ describe("the miss that is not a mystery", () => {
     // Never a roster, and sorted so the same refusal reads the same on every call.
     vi.mocked(tenancy.resolveResourcesByName).mockResolvedValue([
       elsewhere({ containerName: "Zephyr" }),
-      elsewhere({ containerKind: "personal" }),
+      elsewhere({ containerKind: "home" }),
     ]);
     expect(await resolveIdentityRef(ctx, "Code Auditor")).toEqual({
       kind: "elsewhere",

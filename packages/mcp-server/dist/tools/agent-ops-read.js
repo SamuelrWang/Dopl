@@ -30,9 +30,9 @@ directory) {
     if (identities.length === 0) {
         return (0, respond_js_1.ok)(`No agent identities visible to you here. ${agent_shared_js_1.IDENTITIES_SCOPE_NOTE}\n\nCreate one with \`${(0, call_ref_js_1.callRef)("agent.create", {}, { quote: "'" })}\`.`);
     }
-    const personalIds = new Set(payload.homeScopedIdentityIds ?? EMPTY_IDENTITY_IDS);
-    const personal = identities.filter((ident) => personalIds.has(ident.id));
-    const here = identities.filter((ident) => !personalIds.has(ident.id));
+    const homeSpaceIds = new Set(payload.homeScopedIdentityIds ?? EMPTY_IDENTITY_IDS);
+    const personal = identities.filter((ident) => homeSpaceIds.has(ident.id));
+    const here = identities.filter((ident) => !homeSpaceIds.has(ident.id));
     const inHomeChannel = await (0, container_destination_js_1.resolveHomeChannelContainer)(client, directory);
     // Rows with an unoffered visibility (`team`) fall into a trailing bucket — never silently dropped.
     const hereGroups = inHomeChannel
@@ -56,7 +56,7 @@ directory) {
         lines.push(`### ${heading}`);
         for (const ident of rows) {
             const audience = (0, agent_shared_js_1.identityAudience)(ident, {
-                personal: personalIds.has(ident.id),
+                personal: homeSpaceIds.has(ident.id),
                 inHomeChannel: inHomeChannel !== null,
             });
             lines.push((0, agent_shared_js_1.identityRow)(ident, audience));

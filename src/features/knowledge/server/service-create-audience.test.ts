@@ -59,12 +59,12 @@ vi.mock("./repository", () => ({
 }));
 
 // A2: `createBase` no longer refuses a restricted audience outright — it asks
-// `personal-reach.ts` whether the caller's own shelf is reachable from this room
+// `home-space-reach.ts` whether the caller's own shelf is reachable from this room
 // and follows the owner when it is (gap 2 of #1077). Defaulted CLOSED here: an
 // unarmed room, the world every case below was written in.
-vi.mock("@/shared/tenancy/personal-reach", () => ({
-  resolvePersonalReach: vi.fn(),
-  personalShelfContainerIds: vi.fn(async () => []),
+vi.mock("@/shared/tenancy/home-space-reach", () => ({
+  resolveHomeSpaceReach: vi.fn(),
+  homeSpaceShelfContainerIds: vi.fn(async () => []),
 }));
 
 import {
@@ -74,7 +74,7 @@ import {
   listGrantedBaseIdsForChannels,
 } from "./repository-audience";
 import * as repo from "./repository";
-import { resolvePersonalReach } from "@/shared/tenancy/personal-reach";
+import { resolveHomeSpaceReach } from "@/shared/tenancy/home-space-reach";
 import { assertCreateBaseAllowed, createBase } from "./service-base-writes";
 import { getBaseBySlug, listBases } from "./service-bases";
 import { AgentWriteDisabledError } from "./errors";
@@ -130,8 +130,8 @@ function soloContainer() {
   mockCount.mockResolvedValue(1);
 }
 
-const mockReach = vi.mocked(resolvePersonalReach);
-/** The operator's OWN personal container. Never the room. */
+const mockReach = vi.mocked(resolveHomeSpaceReach);
+/** The operator's OWN home space. Never the room. */
 const PERSONAL = "33333333-3333-4333-8333-333333333333";
 
 beforeEach(() => {
@@ -232,7 +232,7 @@ describe("createBase refuses where the creator could not read it back", () => {
 // ── ARMED: the refusal becomes a RE-ROUTE, and only then ─────────────
 
 describe("🔒 an ARMED room sends the create to its OWNER instead of refusing", () => {
-  /** The owner has armed this room for their personal shelf (#1077 gap 2). */
+  /** The owner has armed this room for their home shelf (#1077 gap 2). */
   function armed() {
     mockReach.mockResolvedValue({ kind: "open", containerId: PERSONAL });
   }
@@ -288,7 +288,7 @@ describe("🔒 an ARMED room sends the create to its OWNER instead of refusing",
 // `assertCreateBaseAllowed` is tested for saying the same thing `createBase`
 // says, not against its own expectations.
 describe("🔒 the dry run runs the SAME gate, and writes nothing", () => {
-  /** The owner has armed this room for their personal shelf (#1077 gap 2). */
+  /** The owner has armed this room for their home shelf (#1077 gap 2). */
   function armed() {
     mockReach.mockResolvedValue({ kind: "open", containerId: PERSONAL });
   }

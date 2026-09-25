@@ -25,7 +25,7 @@ import {
  * Plan derivation and the plan/container-kind check both live in
  * `./webhook-plan.ts` — `derivePlan` (item price → plan, metadata fallback) and
  * `reportPlanContainerMismatch` (a `pro` sub on a standard workspace, or a
- * `team` sub on a personal container, is LOGGED and still written: by this
+ * `team` sub on a home space, is LOGGED and still written: by this
  * point the money has moved, and `checkout/route.ts` is the fence).
  *
  * ORDERING: Stripe delivers at-least-once, unordered. Every applied event
@@ -137,7 +137,7 @@ function subscriptionFields(subscription: Stripe.Subscription, plan: PlanId) {
   const periodEnd = subLevel.current_period_end ?? item?.current_period_end;
   return {
     // `pro` is flat — one container, one member, one price. Pinned so a
-    // hand-edited dashboard quantity cannot make a personal container look
+    // hand-edited dashboard quantity cannot make a home space look
     // multi-seat to `entitlements.ts`.
     seatCount: plan === "pro" ? 1 : (item?.quantity ?? 1),
     stripePriceId: item?.price?.id ?? null,

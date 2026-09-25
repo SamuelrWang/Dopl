@@ -31,13 +31,13 @@ describe("isLegacyOntologyClient", () => {
 });
 
 describe("withLegacySnapshotKeys", () => {
-  const body = { ontologies: [{ id: "o-1" }], objects: {}, personalOntologyIds: ["o-1"] };
+  const body = { ontologies: [{ id: "o-1" }], objects: {}, homeSpaceOntologyIds: ["o-1"] };
 
   it("adds the old keys beside the new for a legacy desktop", () => {
     const out = withLegacySnapshotKeys(body, "1.36.0") as Record<string, unknown>;
     expect(out.ontologies).toBe(body.ontologies);
     expect(out.clusters).toBe(body.ontologies);
-    expect(out.personalClusterIds).toBe(body.personalOntologyIds);
+    expect(out.personalClusterIds).toBe(body.homeSpaceOntologyIds);
   });
 
   it("is the identity for a current client or a browser", () => {
@@ -45,7 +45,7 @@ describe("withLegacySnapshotKeys", () => {
     expect(withLegacySnapshotKeys(body, undefined)).toBe(body);
   });
 
-  it("never invents a personal-shelf answer the payload did not carry", () => {
+  it("never invents a home-shelf answer the payload did not carry", () => {
     const out = withLegacySnapshotKeys({ ontologies: [], objects: {} }, "1.30.0");
     expect("personalClusterIds" in out).toBe(false);
   });

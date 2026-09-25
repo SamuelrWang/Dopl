@@ -268,7 +268,7 @@ export function HomeKnowledgePanels({
     return <HomeKnowledgePanelsSkeleton label="Loading knowledge" />;
   }
 
-  const personalPending =
+  const homeSpacePending =
     homeWorkspaceId !== null && homeList.data === undefined;
 
   return (
@@ -358,10 +358,10 @@ export function HomeKnowledgePanels({
       >
         {/* ⚠ THE FAIL-CLOSED BACKFILL NOTICE WAS REMOVED HERE (2026-09-06
             reversal of task 11): there is no arming regression to explain now
-            that personal reach is default-on. */}
+            that home reach is default-on. */}
         {homeWorkspaceId === null ? (
           <EmptyLine>Finish setting up your home space to keep bases here.</EmptyLine>
-        ) : personalPending ? (
+        ) : homeSpacePending ? (
           // Body stays bare while the home shelf is in flight — an empty
           // sentence here would be a claim about a list nobody has seen.
           <div className="h-10" />
@@ -459,7 +459,7 @@ export function HomeKnowledgePanels({
  */
 const HOME_SHELF = "home" as const;
 
-/** Personal is the caller's OWN private things — see the `personal` memo. */
+/** Personal is the caller's OWN private things — see the `home` memo. */
 function isOwnPrivate(base: KnowledgeBase, currentUserId: string): boolean {
   return base.visibility === "private" && base.createdBy === currentUserId;
 }

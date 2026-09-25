@@ -133,7 +133,7 @@ function makeShellHelpers(deps) {
   // MEASURED CAUSE, and it was NOT the renderer. A COLD process launch already
   // lands on /home: `spa-window.js` loads the index with no hash, the hash
   // router resolves `/` to `pages/boot`, and boot navigates to `/home` whenever
-  // `POST /api/boot`'s no-segment answer is the caller's `kind='personal'`
+  // `POST /api/boot`'s no-segment answer is the caller's `kind='home'`
   // container (`c37e4942`). Nothing persists a route on either side — main
   // stores none and the SPA's IndexedDB cache is queries only, which boot
   // refuses to navigate on (`refetchOnMount: "always"` + `isFetchedAfterMount`).

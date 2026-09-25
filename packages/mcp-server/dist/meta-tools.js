@@ -148,18 +148,18 @@ function registerWorkspaceMetaTools(registerMetaTool, { directory, activeWorkspa
             const kind = (0, workspace_directory_js_1.containerKind)(w);
             // ⚠ **KIND IS THE TYPED WIRE VALUE SINCE R-32** (`@dopl/contracts ›
             // ContainerKind`), rendered rather than inferred by the reader, and the
-            // personal container keeps its LABEL beside it because that is the one an
+            // home space keeps its LABEL beside it because that is the one an
             // agent has repeatedly read as a second workspace.
             // ⚠ **AND EVERY KIND HAS A SLUG NOW.** A container's slug used to be
             // withheld, on the argument that printing one beside a room would read as
             // a second, equivalent address — R-32 makes it THE address: a home
-            // channel is addressed by its channel's slug, and the personal container
+            // channel is addressed by its channel's slug, and the home space
             // by the reserved word `home`. The id stays on every row; it always worked
             // and still does.
-            const address = kind === "personal"
+            const address = kind === "home"
                 ? `address: \`${workspace_directory_js_1.HOME_ADDRESS}\` · id: \`${w.id}\``
                 : `slug: \`${w.slug}\` · id: \`${w.id}\``;
-            const gloss = kind === "personal" ? ` — ${(0, workspace_directory_js_1.containerKindLabel)(kind)}` : "";
+            const gloss = kind === "home" ? ` — ${(0, workspace_directory_js_1.containerKindLabel)(kind)}` : "";
             const here = w.id === activeWorkspace?.id ? " ←" : "";
             lines.push(`- ${(0, narration_js_1.inlineOr)(w.name, instructions_js_1.UNNAMED_WORKSPACE)} — kind=\`${kind}\`${gloss} (${address}, role: ${w.role})${here}`);
         }

@@ -17,7 +17,7 @@ import { useWorkspaceEntitlements } from "./use-workspace-entitlements";
  * keeps a member from firing routes that answer 403, `has_stripe_customer` keeps
  * a free container from rendering an empty card and invoice table.
  *
- * The gate covers `pro` with no plan test (2026-09-08): a personal container's
+ * The gate covers `pro` with no plan test (2026-09-08): a home space's
  * Pro subscription mints the same Stripe customer, invoices and portal session a
  * Team workspace does, so a `plan === "team"` test here would strand every Pro
  * payer with no way to change a card.

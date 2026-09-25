@@ -14,7 +14,7 @@ import { PRO_PRICE, SOLO_PRICE, TEAM_SEAT_PRICE, formatMoney } from "../prices";
  * endpoint resolve the caller's own container.
  *
  * 2026-09-08: two paid plans on two kinds of container — Team (per seat, on a
- * standard workspace) and Pro (flat, on the caller's `kind='personal'`
+ * standard workspace) and Pro (flat, on the caller's `kind='home'`
  * container). `containerKind` says which one a payload is about. Retired Solo
  * is not `pro`; `SOLO_PRICE` and `isSolo` survive only to label legacy rows.
  */
@@ -31,7 +31,7 @@ export type { BillingStatus };
  */
 export interface WorkspaceCreditsStatus {
   /** Which wallet these numbers came off: `seat` inside a standard workspace,
-   *  `personal` in the caller's home space. `null` on a degraded reading and on
+   *  `home` in the caller's home space. `null` on a degraded reading and on
    *  a cached row stored before the field shipped — the fallback below is not
    *  optional (INVARIANTS §8). */
   wallet: WalletKind | null;

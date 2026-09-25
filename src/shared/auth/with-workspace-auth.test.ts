@@ -81,7 +81,7 @@ vi.mock("@/features/workspaces/server/repository", () => ({
   listWorkspacesWithRoleForUser: vi.fn(),
   findWorkspaceById: vi.fn(),
   findMembership: vi.fn(),
-  ensurePersonalContainerRow: vi.fn(),
+  ensureHomeSpaceRow: vi.fn(),
 }));
 vi.mock("@/features/workspaces/server/last-seen", () => ({ touchLastSeen: vi.fn() }));
 vi.mock("@/features/workspaces/server/seed-workspace", () => ({
@@ -98,7 +98,7 @@ const mockRepo = vi.mocked(repo);
 
 const UUID_A = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
 const UUID_B = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb";
-/** The caller's personal container — never one of the granted memberships. */
+/** The caller's home space — never one of the granted memberships. */
 const UUID_HOME = "cccccccc-cccc-cccc-cccc-cccccccccccc";
 
 function workspace(id: string, slug: string): Workspace {
@@ -130,7 +130,7 @@ function membership(id: string, role: Role): WorkspaceMembership {
 
 /**
  * Wire the repo so the given workspace ids resolve as active memberships, and
- * `home` as the caller's PERSONAL CONTAINER — what a header-less request
+ * `home` as the caller's HOME SPACE — what a header-less request
  * resolves to (ruling B10). ⚠ The container is deliberately NOT one of
  * `entries`: a fixture where it is also a listed membership cannot tell
  * "answered the container" from "auto-targeted a workspace".
@@ -139,10 +139,10 @@ function grantMemberships(
   entries: Array<{ id: string; slug: string; role: Role }>,
   home?: Role
 ) {
-  const container = { ...workspace(UUID_HOME, "personal"), kind: "personal" as const };
+  const container = { ...workspace(UUID_HOME, "home"), kind: "home" as const };
   if (home) {
-    entries = [...entries, { id: UUID_HOME, slug: "personal", role: home }];
-    mockRepo.ensurePersonalContainerRow.mockResolvedValue({ workspace: container, created: false });
+    entries = [...entries, { id: UUID_HOME, slug: "home", role: home }];
+    mockRepo.ensureHomeSpaceRow.mockResolvedValue({ workspace: container, created: false });
   }
   const byId = new Map(entries.map((e) => [e.id, e]));
   mockRepo.findWorkspaceById.mockImplementation(async (id: string) =>

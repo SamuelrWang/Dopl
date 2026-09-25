@@ -9,7 +9,7 @@ import type { WorkspaceBillingRow } from "./workspace-billing";
  * Rule B added `channelId` (the calling channel whose container is charged,
  * `null` for a channel-less call) and, on the personal arm,
  * `personalBillingContainerId` — the container to read the billing row from,
- * which is the container itself only when it is `kind='personal'`. A link
+ * which is the container itself only when it is `kind='home'`. A link
  * container carries no row, so its wallet reaches the tier through the payer.
  *
  * Not a test file (no `describe`) — the `*-fixtures.ts` naming convention.
@@ -27,11 +27,11 @@ export function seatTarget(over: {
   };
 }
 
-export function personalTarget(over: {
+export function homeSpaceTarget(over: {
   workspaceId: string;
   payerUserId: string;
   channelId?: string | null;
-  /** Pass the container id ONLY for a `kind='personal'` container. */
+  /** Pass the container id ONLY for a `kind='home'` container. */
   personalBillingContainerId?: string | null;
 }): BillingTarget {
   return {

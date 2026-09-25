@@ -21,7 +21,7 @@ import {
  * Mounted only while open, so `session` is the constant `1` and the mount loads the draft.
  */
 
-/** The personal shelf. `?shelf=home` is a server WHERE: a forgotten argument widens silently, and
+/** The home shelf. `?shelf=home` is a server WHERE: a forgotten argument widens silently, and
  *  the write's shelf must equal the read's or the optimistic patch lands on an unread key (F-331). */
 export const HOME_SHELF: IdentityShelf = "home";
 
@@ -54,8 +54,8 @@ export function ContainerIdentityEditor({
   );
 }
 
-/** Writing onto the caller's personal shelf. `containerKind` is where the row LANDS: the home
- *  shelf routes it into the caller's `kind='personal'` container. */
+/** Writing onto the caller's home shelf. `containerKind` is where the row LANDS: the home
+ *  shelf routes it into the caller's `kind='home'` container. */
 export function HomeWorkspaceIdentityEditor({
   workspaceId,
   identity,
@@ -66,7 +66,7 @@ export function HomeWorkspaceIdentityEditor({
       workspaceId={workspaceId}
       identity={identity}
       sections={SECTIONS}
-      containerKind="personal"
+      containerKind="home"
       // Sends `homeScoped: true` (routes the row) and keys the patched cache entry (F-331).
       shelf={HOME_SHELF}
       onClose={onClose}

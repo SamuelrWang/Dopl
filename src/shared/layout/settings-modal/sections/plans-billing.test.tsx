@@ -58,7 +58,7 @@ const STANDARD_FREE: WorkspaceEntitlementsStatus = {
 
 const PERSONAL_FREE: WorkspaceEntitlementsStatus = {
   ...STANDARD_FREE,
-  containerKind: "personal",
+  containerKind: "home",
   memberCount: 1,
   credits: {
     ...STANDARD_FREE.credits,
@@ -184,12 +184,12 @@ describe("what the plan list sells", () => {
 /**
  * 🔒 **WHICH CARDS A CONTAINER IS SHOWN (2026-09-08, spec §11).** The pane
  * renders `plans.ts › plansForKind(ent.containerKind)`, so a standard workspace
- * sees seats and a personal container sees its own flat plan. The two groups are
+ * sees seats and a home space sees its own flat plan. The two groups are
  * NEVER concatenated: `pro` is refused on a standard workspace and `team` on a
  * personal one (400 `PLAN_NOT_FOR_CONTAINER`), so a pane showing all four would
  * be offering two purchases that answer 400.
  */
-describe("the plan list on a PERSONAL container", () => {
+describe("the plan list on a HOME space", () => {
   const markup = paint(
     <PlansBilling role="owner" workspaceId="ws-1" />,
     PERSONAL_FREE
@@ -238,7 +238,7 @@ describe("the plan list on a PERSONAL container", () => {
  * checkout.
  */
 describe("what the upgrade CTAs ask for", () => {
-  it("asks for `pro` on a personal container — every button that asks", () => {
+  it("asks for `pro` on a home space — every button that asks", () => {
     const onUpgrade = mountCore(PERSONAL_FREE);
     const buttons = screen.getAllByRole("button", { name: /Upgrade to Pro/ });
     // Two: the summary card's and the Pro column's. Both must name `pro`.
@@ -261,7 +261,7 @@ describe("what the upgrade CTAs ask for", () => {
 /** The other half of `plan-cards.tsx › isCurrentPlan`: it must be able to say
  *  YES as well as NO, on both kinds. */
 describe("which card is badged current", () => {
-  it("badges Free on a free personal container, and not Pro", () => {
+  it("badges Free on a free home space, and not Pro", () => {
     const markup = paint(
       <PlansBilling role="owner" workspaceId="ws-1" />,
       PERSONAL_FREE

@@ -170,15 +170,15 @@ describe("boot page", () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 
-  it("a cold launch that answers the PERSONAL container lands on /home, never the workspace route", async () => {
+  it("a cold launch that answers the HOME space lands on /home, never the workspace route", async () => {
     // ⚠ THE GHOST OVERVIEW (Samuel, 2026-09-08). `/api/boot` with no segment
-    // provisions and returns the caller's `kind='personal'` container since the
-    // personal-container wave; routing to `/{segment}` painted a workspace
+    // provisions and returns the caller's `kind='home'` container since the
+    // home-space wave; routing to `/{segment}` painted a workspace
     // overview titled "Home" with no rail icon lit. /home is that container's
     // surface. A standard workspace (or an older server sending no kind) still
     // takes the workspace route — the G2 case above.
     apiRequest.mockImplementation((path: string) =>
-      bridgeFor(true, { ...WORKSPACE, kind: "personal", name: "Home", slug: "personal" })(path)
+      bridgeFor(true, { ...WORKSPACE, kind: "home", name: "Home", slug: "home" })(path)
     );
     renderBoot();
     expect(await screen.findByText("HOME ROUTE")).toBeInTheDocument();

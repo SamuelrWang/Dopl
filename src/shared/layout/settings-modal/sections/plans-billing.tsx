@@ -16,7 +16,7 @@ import styles from "../settings-modal.module.css";
  * Stripe-hosted portal.
  *
  * ⚠ CHECKOUT SELLS TWO PLANS SINCE 2026-09-08 — `team` on a standard workspace,
- * `pro` on a personal container (`features/billing/url.ts › CheckoutPlan`) — so
+ * `pro` on a home space (`features/billing/url.ts › CheckoutPlan`) — so
  * the confirmation line above the card form branches on the PLAN IT WAS HANDED,
  * never on the container: the plan is what the session will be created for.
  * Prices and seat counts are interpolated, never restated.

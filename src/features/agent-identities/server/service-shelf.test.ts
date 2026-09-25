@@ -1,6 +1,6 @@
 /**
- * The identity shelves (twin of `knowledge/server/service-shelf.test.ts`): the personal shelf is the
- * caller's own `kind='personal'` container, the shelf reaches the query, absent means both, and the shelf
+ * The identity shelves (twin of `knowledge/server/service-shelf.test.ts`): the home shelf is the
+ * caller's own `kind='home'` container, the shelf reaches the query, absent means both, and the shelf
  * is never a second visibility gate.
  */
 
@@ -14,12 +14,12 @@ vi.mock("@/shared/supabase/admin", () => ({
 vi.mock("./repository", async () => (await import("./service-writes-fixtures")).repoMock());
 
 // The create's destination asks the personal fence; open here (its arms are `service-write-gates.test.ts`).
-vi.mock("@/shared/tenancy/personal-reach", () => ({
-  resolvePersonalReach: vi.fn(async () => ({
+vi.mock("@/shared/tenancy/home-space-reach", () => ({
+  resolveHomeSpaceReach: vi.fn(async () => ({
     kind: "open",
     containerId: "ws-personal",
   })),
-  personalShelfContainerIds: vi.fn(async () => []),
+  homeSpaceShelfContainerIds: vi.fn(async () => []),
 }));
 
 // A create that left the calling container is re-read through the resolving read.
@@ -27,9 +27,9 @@ vi.mock("@/shared/tenancy/read-resource", () => ({
   readResourceById: vi.fn(),
 }));
 
-// `assertHomeChannelRowIsShared` reads the landing workspace; `personal` is the one it never refuses.
+// `assertHomeChannelRowIsShared` reads the landing workspace; `home` is the one it never refuses.
 vi.mock("@/features/workspaces/server/repository", () => ({
-  findWorkspaceById: vi.fn(async () => ({ id: "ws-personal", kind: "personal" })),
+  findWorkspaceById: vi.fn(async () => ({ id: "ws-personal", kind: "home" })),
 }));
 
 import * as repo from "./repository";
@@ -42,7 +42,7 @@ const mockRepo = vi.mocked(repo);
 const mockFollow = vi.mocked(readResourceById);
 
 const HOME_WS = "ws-home";
-const PERSONAL_WS = "ws-personal";
+const HOME_SPACE_WS = "ws-personal";
 
 /** A signed-in person in their own default standard workspace. */
 const personCtx = (over: Partial<AgentIdentityContext> = {}) =>
@@ -62,7 +62,7 @@ beforeEach(() => {
     (args) => Promise.resolve(homeIdentity({ name: args.name, visibility: args.visibility })) as never
   );
   mockFollow.mockImplementation(
-    async () => ({ value: homeIdentity({ workspaceId: PERSONAL_WS }) }) as never
+    async () => ({ value: homeIdentity({ workspaceId: HOME_SPACE_WS }) }) as never
   );
 });
 
@@ -107,50 +107,50 @@ describe("listing one shelf", () => {
 });
 
 describe("decorating a list that spans containers", () => {
-  const KB_PERSONAL = "kb-personal";
+  const KB_HOME_SPACE = "kb-personal";
 
   it("reads each row's knowledge in ITS OWN container, so a personal row keeps its set", async () => {
     mockRepo.listIdentitiesForWorkspace.mockResolvedValue([
       homeIdentity({ id: "here", workspaceId: HOME_WS }),
-      homeIdentity({ id: "personal", workspaceId: PERSONAL_WS }),
+      homeIdentity({ id: "home", workspaceId: HOME_SPACE_WS }),
     ]);
     // Links are filed under the row's container; asked under the calling one they are not there.
     mockRepo.listKnowledgeLinksForIdentities.mockImplementation(async (ws) =>
-      ws === PERSONAL_WS
-        ? [{ identityId: "personal", knowledgeBaseId: KB_PERSONAL, scopeKind: "base", folderId: null, entryId: null }]
+      ws === HOME_SPACE_WS
+        ? [{ identityId: "home", knowledgeBaseId: KB_HOME_SPACE, scopeKind: "base", folderId: null, entryId: null }]
         : []
     );
     mockRepo.listKnowledgeBaseAccessRows.mockImplementation(async (ws) =>
-      ws === PERSONAL_WS
-        ? ([{ id: KB_PERSONAL, name: "Notes", visibility: "private", accessMode: "workspace", createdBy: USER }] as never)
+      ws === HOME_SPACE_WS
+        ? ([{ id: KB_HOME_SPACE, name: "Notes", visibility: "private", accessMode: "workspace", createdBy: USER }] as never)
         : []
     );
 
     const rows = await listIdentities(personCtx());
-    const personal = rows.find((t) => t.id === "personal");
+    const personal = rows.find((t) => t.id === "home");
 
-    expect(mockRepo.listKnowledgeLinksForIdentities).toHaveBeenCalledWith(PERSONAL_WS, ["personal"]);
-    expect(personal?.knowledgeBases).toEqual([{ id: KB_PERSONAL, name: "Notes" }]);
+    expect(mockRepo.listKnowledgeLinksForIdentities).toHaveBeenCalledWith(HOME_SPACE_WS, ["home"]);
+    expect(personal?.knowledgeBases).toEqual([{ id: KB_HOME_SPACE, name: "Notes" }]);
     expect(personal?.unreachableKnowledgeBaseCount).toBe(0);
-    expect(rows.map((t) => t.id)).toEqual(["here", "personal"]);
+    expect(rows.map((t) => t.id)).toEqual(["here", "home"]);
   });
 });
 
-describe("creating onto the personal shelf", () => {
+describe("creating onto the home shelf", () => {
   it("resolves the asked-for shelf to a container, and the two AGREE", async () => {
     // Flag and id together, so the insert lands where the junctions and the re-read look.
     await createIdentity(personCtx(), { name: "Shelf agent", homeScoped: true });
     expect(mockRepo.insertIdentity).toHaveBeenCalledWith(
       expect.objectContaining({
         homeScoped: true,
-        workspaceId: PERSONAL_WS,
+        workspaceId: HOME_SPACE_WS,
         visibility: "private",
       })
     );
   });
 
   it("re-reads a row that LEFT the room through the resolving read", async () => {
-    // A re-read keyed to `ctx.workspaceId` would 404 a create that landed in the personal container.
+    // A re-read keyed to `ctx.workspaceId` would 404 a create that landed in the home space.
     await createIdentity(personCtx(), { name: "Shelf agent", homeScoped: true });
 
     expect(mockFollow).toHaveBeenCalledTimes(1);

@@ -61,7 +61,7 @@ describe("derivePlan — the price is authoritative", () => {
 
   it("never calls a personal Pro subscription `team` — the $8.99 collision", () => {
     // Both prices are $8.99 and both are live. Reading Pro as Team would hand
-    // a personal container a per-seat plan and a workspace's entitlements.
+    // a home space a per-seat plan and a workspace's entitlements.
     expect(derivePlan(sub(["price_personal_pro"]))).toBe("pro");
   });
 
@@ -104,8 +104,8 @@ describe("🔒 reportPlanContainerMismatch — reports, never refuses", () => {
     err.mockRestore();
   });
 
-  it("says nothing when Pro lands on a personal container", async () => {
-    findWorkspace.mockResolvedValue(workspace("personal"));
+  it("says nothing when Pro lands on a home space", async () => {
+    findWorkspace.mockResolvedValue(workspace("home"));
     const err = vi.spyOn(console, "error").mockImplementation(() => {});
     await reportPlanContainerMismatch("ws-1", "pro");
     expect(err).not.toHaveBeenCalled();
@@ -121,16 +121,16 @@ describe("🔒 reportPlanContainerMismatch — reports, never refuses", () => {
     err.mockRestore();
   });
 
-  it("ERRORS when Team lands on a personal container", async () => {
-    findWorkspace.mockResolvedValue(workspace("personal"));
+  it("ERRORS when Team lands on a home space", async () => {
+    findWorkspace.mockResolvedValue(workspace("home"));
     const err = vi.spyOn(console, "error").mockImplementation(() => {});
     await reportPlanContainerMismatch("ws-1", "team");
-    expect(err).toHaveBeenCalledWith(expect.stringContaining("personal"));
+    expect(err).toHaveBeenCalledWith(expect.stringContaining("home"));
     err.mockRestore();
   });
 
   it("ERRORS when Team lands on a LINK container — the positive predicate", async () => {
-    // Not `kind !== "personal"`: a home-channel container carries no plan either,
+    // Not `kind !== "home"`: a home-channel container carries no plan either,
     // and a fourth kind must not become sellable by being named.
     findWorkspace.mockResolvedValue(workspace("link"));
     const err = vi.spyOn(console, "error").mockImplementation(() => {});

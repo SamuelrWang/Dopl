@@ -37,7 +37,7 @@ vi.mock("@/features/workspaces/server/repository", () => ({
   listWorkspacesWithRoleForUser: vi.fn(),
   findWorkspaceById: vi.fn(),
   findMembership: vi.fn(),
-  ensurePersonalContainerRow: vi.fn(),
+  ensureHomeSpaceRow: vi.fn(),
 }));
 vi.mock("@/features/workspaces/server/last-seen", () => ({ touchLastSeen: vi.fn() }));
 vi.mock("@/features/workspaces/server/seed-workspace", () => ({

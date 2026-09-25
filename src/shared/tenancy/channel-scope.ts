@@ -12,7 +12,7 @@ import { isStandardWorkspace, type WorkspaceKind } from "@/features/workspaces/t
  *
  * ⚠ **FENCED BY KIND, NOT DELETED.** A home channel is a `kind='link'` container
  * holding one channel (INVARIANTS §4A), so "share into this channel" there IS the
- * container grant; `kind='personal'` has one member. **Only `standard` refuses.**
+ * container grant; `kind='home'` has one member. **Only `standard` refuses.**
  *
  * Three doors, one rule:
  *   - WRITE — {@link assertChannelScopeAllowedInContainer}: `shared/grants/service.ts ›
@@ -50,7 +50,7 @@ export function channelScopeRefusal(): HttpError {
  *
  * ⚠ **A POSITIVE TEST OF THE KIND THE RULING NAMES** (`isStandardWorkspace`,
  * `(kind ?? "standard") === "standard"`, F-295). A `=== "link"` spelling would silently
- * refuse every kind added to the union later, `personal` included. ⚠ An ABSENT kind is
+ * refuse every kind added to the union later, `home` included. ⚠ An ABSENT kind is
  * `standard` and refuses; that is the same fail-closed reading the SQL twin's
  * `COALESCE(kind,'standard')` takes.
  *

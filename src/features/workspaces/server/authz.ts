@@ -65,7 +65,7 @@ export async function requireWorkspaceRole(
  * ONE (F-564, closed here 2026-09-02).** This reads the LISTING predicate's
  * negation, which is correct as a FENCE — nobody may be added to a container of
  * any kind, and a fourth kind must inherit that refusal rather than opt into it
- * — and was wrong as a DESCRIPTION the moment `personal` existed: a `personal`
+ * — and was wrong as a DESCRIPTION the moment `home` existed: a `home`
  * container is nobody's home channel and has no invite link to point at. So the
  * predicate stays negative on purpose and the MESSAGE branches on the kind,
  * which is the split the rule in `shared-publish.ts` is actually asking for.
@@ -96,7 +96,7 @@ export async function assertMemberAddableById(workspaceId: string): Promise<void
  * R-35/R-34, 2026-09-17: *"Each user has a home space, and that should be
  * permanent. Every user will always have a home space, no matter what."*).
  *
- * ⚠ **POSITIVE ON `personal`, NOT `!isStandardWorkspace`, AND THAT IS THE WHOLE
+ * ⚠ **POSITIVE ON `home`, NOT `!isStandardWorkspace`, AND THAT IS THE WHOLE
  * DIFFERENCE FROM `assertMemberAddable` ABOVE.** That guard is a FENCE over
  * every container kind, so a fourth kind inherits its refusal. This one states a
  * PROPERTY OF ONE KIND: a `kind='link'` home channel is deletable by its owner
@@ -105,7 +105,7 @@ export async function assertMemberAddableById(workspaceId: string): Promise<void
  * asks `=== "link"` positively for the mirror-image reason.
  *
  * ⚠ **THIS IS THE APP FENCE; THE HARD ONE IS THE DATABASE.**
- * `enforce_personal_container_permanent` (migration
+ * `enforce_home_space_permanent` (migration
  * `20261009120000_personal_container_permanent.sql`) refuses the row delete
  * itself, so a path that forgets this call cannot destroy a home space either.
  * The DB guard exempts `pg_trigger_depth() > 1`, so ACCOUNT deletion still tears
@@ -113,7 +113,7 @@ export async function assertMemberAddableById(workspaceId: string): Promise<void
  * CASCADE` — permanence is "for as long as the account exists", which is what
  * the ruling says.
  *
- * ⚠ **LEAVING IS ALREADY REFUSED AND NOT BY THIS GUARD.** A personal container
+ * ⚠ **LEAVING IS ALREADY REFUSED AND NOT BY THIS GUARD.** A home space
  * has exactly one member, its owner, so `membership-admin.ts › removeMember`
  * hits the last-owner protection (409 `WORKSPACE_LAST_OWNER`) and the
  * `enforce_last_active_owner` trigger (`20260720184806`) closes the race.
@@ -122,10 +122,10 @@ export async function assertMemberAddableById(workspaceId: string): Promise<void
  * "your home space is permanent" is the rule.
  */
 export function assertWorkspacePermanent(workspace: { kind?: WorkspaceKind }): void {
-  if (workspace.kind !== "personal") return;
+  if (workspace.kind !== "home") return;
   throw new HttpError(
     403,
-    "PERSONAL_CONTAINER_PERMANENT",
+    "HOME_SPACE_PERMANENT",
     "Your home space is permanent — it cannot be deleted or left."
   );
 }

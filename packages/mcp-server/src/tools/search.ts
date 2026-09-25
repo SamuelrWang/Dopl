@@ -107,7 +107,7 @@ async function searchedContainer(
   // "here" from the Home space covers its home channels' rooms too. A locked
   // connection never stands in the Home space, so this reaches nothing new.
   const appAcross =
-    kind === "personal" && index
+    kind === "home" && index
       ? new Set([...index].filter(([, k]) => k !== "workspace").map(([cid]) => cid))
       : undefined;
   return {

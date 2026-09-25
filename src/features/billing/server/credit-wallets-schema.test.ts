@@ -289,7 +289,7 @@ describe("ordering", () => {
     const files = readdirSync(MIGRATIONS).filter((f) => f.endsWith(".sql"));
     expect(files.filter((f) => f.startsWith("20260930120000"))).toEqual([NAME]);
     // Not a style rule: this file ALTERs `credit_usage_events` and reads the
-    // `personal` workspace kind, so its dependencies must sort before it or the
+    // `home` workspace kind, so its dependencies must sort before it or the
     // replay fails.
     for (const dependency of [
       "20260901130000_credit_usage_events.sql",

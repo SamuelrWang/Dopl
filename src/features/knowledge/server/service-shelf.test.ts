@@ -1,8 +1,8 @@
 /**
  * The two shelves — Samuel's ruling, 2026-08-26 ("home-only shelf"). The shelf
  * is a TENANCY since 2026-09-02 (slice B15, ruling B10): `home_scoped` is dropped
- * by `20260923120000_drop_home_scoped.sql` and the personal shelf is the caller's
- * own `kind='personal'` container.
+ * by `20260923120000_drop_home_scoped.sql` and the home shelf is the caller's
+ * own `kind='home'` container.
  *
  * THE READ HALF
  *   1. a shelf reaches the QUERY, not a post-filter — the rows must not arrive
@@ -14,7 +14,7 @@
  *
  * THE WRITE HALF — `resolveHomeScope`'s three conditions left this file on
  * 2026-09-02 with the fence and the column; the survivor is pinned against both
- * tables in `shared/tenancy/personal-shelf-repositories.test.ts`. What is left
+ * tables in `shared/tenancy/home-space-shelf-repositories.test.ts`. What is left
  * here is that the SERVICE does not re-decide the flag on its way down.
  *
  * NOT a cross-workspace leak suite — nothing leaked, the RANGE was wrong, so
@@ -73,12 +73,12 @@ vi.mock("./service-seed", () => ({ seedWorkspace: vi.fn() }));
 // (`service-base-gates.ts › resolveCreateDestination`), and that decision asks
 // the personal fence. Mocked OPEN so this file measures the SERVICE, not the
 // fence.
-vi.mock("@/shared/tenancy/personal-reach", () => ({
-  resolvePersonalReach: vi.fn(async () => ({
+vi.mock("@/shared/tenancy/home-space-reach", () => ({
+  resolveHomeSpaceReach: vi.fn(async () => ({
     kind: "open",
     containerId: "ws-personal",
   })),
-  personalShelfContainerIds: vi.fn(async () => []),
+  homeSpaceShelfContainerIds: vi.fn(async () => []),
 }));
 
 vi.mock("@/features/teams/server/repository", () => ({
@@ -196,11 +196,11 @@ describe("listing one shelf", () => {
   });
 });
 
-describe("creating onto the personal shelf", () => {
+describe("creating onto the home shelf", () => {
   // Six cases became two on 2026-09-02 (slice B15): four pinned
   // `resolveHomeScope`'s three conditions, deleted with the `home_scoped` column.
-  // The survivor is `shared/tenancy/personal-container.ts ›
-  // personalWriteWorkspaceId`, pinned in `personal-shelf-repositories.test.ts`.
+  // The survivor is `shared/tenancy/home-space.ts ›
+  // homeSpaceWriteWorkspaceId`, pinned in `home-space-shelf-repositories.test.ts`.
   //
   // The "does not re-decide" pin is retired on the A2 slice (gap 2 of #1077) and
   // its reversal is the feature: the service DOES resolve the flag now, via
@@ -211,7 +211,7 @@ describe("creating onto the personal shelf", () => {
 
   it("resolves the asked-for shelf to a container, and the two AGREE", async () => {
     // the flag and the id together, or the slug read, the insert and the rollback
-    // disagree about where the row went. Both resolve the personal container by
+    // disagree about where the row went. Both resolve the home space by
     // OWNER, so they cannot answer differently.
     await createBase(personCtx(), { name: "Shelf note", homeScoped: true });
     expect(mockRepo.insertBase).toHaveBeenCalledWith(

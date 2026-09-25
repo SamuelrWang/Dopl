@@ -6,7 +6,7 @@
  * Two single-member refusals, two codes, two offers: `SOLO_MEMBER_LIMIT` means the
  * workspace's plan is too small (invite/join surfaces key on that string to offer
  * the in-place upgrade), `PERSONAL_SINGLE_MEMBER` means it is a home space and has
- * nothing to sell. Collapsing them shows a Team checkout inside a personal container.
+ * nothing to sell. Collapsing them shows a Team checkout inside a home space.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";

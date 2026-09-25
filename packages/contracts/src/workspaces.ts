@@ -16,11 +16,11 @@ export type MembershipStatus = "pending" | "active" | "revoked";
 
 /**
  * The `workspaces.kind` column. `standard` = a user-facing workspace; `link` = a hidden home-channel
- * container (bills to the container owner's personal wallet); `personal` = the one container every
- * user has (`/home`). `!isStandardWorkspace(…)` does not mean home channel — ask `kind === "link"`
- * (F-564).
+ * container (bills to the container owner's personal wallet); `home` = the Home space, one per user
+ * (`/home`), holding no channels. `!isStandardWorkspace(…)` does not mean home channel — ask
+ * `kind === "link"` (F-564).
  */
-export type WorkspaceKind = "standard" | "link" | "personal";
+export type WorkspaceKind = "standard" | "link" | "home";
 
 /**
  * `private` = the creator (and admins); `team` = teams granted through `resource_grants`
@@ -31,7 +31,7 @@ export type IdentityVisibility = "private" | "team" | "workspace";
 /**
  * The container kind an AGENT is told, on every MCP row that names a container — not the column
  * ({@link WorkspaceKind}). Mapped in one place, `packages/mcp-server/src/workspace-directory.ts ›
- * containerKind`. `home_channel` is a wire value (no space). `personal` is where an unaddressed read
- * lands (the reserved address `home`).
+ * containerKind`. `home_channel` is a wire value (no space). `home` is the Home space, where an
+ * unaddressed read lands (the reserved address `home`).
  */
-export type ContainerKind = "personal" | "home_channel" | "workspace";
+export type ContainerKind = "home" | "home_channel" | "workspace";

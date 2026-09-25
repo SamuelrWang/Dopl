@@ -3,7 +3,7 @@
  *
  * 2026-09-08: two plan groups, because there are two kinds of thing to bill.
  * A standard workspace is sold by the seat (`WORKSPACE_PLANS`); a
- * `kind='personal'` container is sold flat (`PERSONAL_PLANS`). `plansForKind`
+ * `kind='home'` container is sold flat (`PERSONAL_PLANS`). `plansForKind`
  * picks; no surface may concatenate the two, since checkout answers 400
  * `PLAN_NOT_FOR_CONTAINER` for the wrong pairing.
  * 2026-09-07: the Solo card is retired from sale but the `solo` plan id is not
@@ -26,7 +26,7 @@ import type { WorkspaceKind } from "@/features/workspaces/types";
 
 /**
  * The billing taxonomy; each value is scoped to a container kind — `team` only
- * on a standard workspace, `pro` (2026-09-08) only on `kind='personal'`, `solo`
+ * on a standard workspace, `pro` (2026-09-08) only on `kind='home'`, `solo`
  * retired and sold nowhere, `free` = no live subscription on either.
  * Mirrored by `workspace_billing_plan_check`
  * (`20260930130000_workspace_billing_plan_pro.sql`): a value here the CHECK
@@ -83,7 +83,7 @@ const seatCreditsFeature = (plan: PlanId) =>
   `${planNumber(SEAT_MONTHLY_CREDITS[plan])} credits per member / month`;
 
 /**
- * The personal credits line. Deliberately not "per member": a personal container
+ * The personal credits line. Deliberately not "per member": a home space
  * has exactly one member, so the wording would imply a roster that cannot exist.
  */
 const personalCreditsFeature = (tier: "free" | "pro") =>
@@ -127,9 +127,9 @@ export const WORKSPACE_PLANS: ReadonlyArray<PlanDef> = [
 ];
 
 /**
- * Personal-container plans — Free and Pro (2026-09-08, spec §11.1).
+ * Home-space plans — Free and Pro (2026-09-08, spec §11.1).
  *
- * No member line and no seat wording on either card: a personal container has
+ * No member line and no seat wording on either card: a home space has
  * exactly one member (`20260920120000_workspace_kind_personal.sql`), so
  * "Unlimited members" would invite what the container refuses
  * (`server/entitlements.ts › assertCanAddMember`). The object cap is a
@@ -169,11 +169,11 @@ export const PERSONAL_PLANS: ReadonlyArray<PlanDef> = [
  *
  * `link` falling to the workspace group is deliberate: an unknown kind must not
  * be offered a checkout that 400s, and `pro` is refused for anything but
- * `personal`. An absent kind (a row read before `20260920120000` applied) is
+ * `home`. An absent kind (a row read before `20260920120000` applied) is
  * `standard`, the same default `workspaces/types.ts › isStandardWorkspace` takes.
  */
 export function plansForKind(
   kind: WorkspaceKind | undefined
 ): ReadonlyArray<PlanDef> {
-  return kind === "personal" ? PERSONAL_PLANS : WORKSPACE_PLANS;
+  return kind === "home" ? PERSONAL_PLANS : WORKSPACE_PLANS;
 }

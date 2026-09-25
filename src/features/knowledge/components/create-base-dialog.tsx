@@ -40,8 +40,8 @@ interface Props {
    * entry keyed by that same shelf. One without the other creates a base the
    * surface that created it cannot see (§8).
    *
-   * A request, not a guarantee — `shared/tenancy/personal-container.ts ›
-   * personalWriteWorkspaceId` 403s when the caller has no personal container,
+   * A request, not a guarantee — `shared/tenancy/home-space.ts ›
+   * homeSpaceWriteWorkspaceId` 403s when the caller has no home space,
    * and the dialog surfaces that message rather than retrying unmarked.
    */
   shelf?: KbShelf;

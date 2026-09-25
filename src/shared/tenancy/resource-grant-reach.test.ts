@@ -198,11 +198,11 @@ describe("grantedResourceIds", () => {
       );
     });
 
-    it("HONOURS it in a `personal` container too — one member, untouched", async () => {
+    it("HONOURS it in a `home` container too — one member, untouched", async () => {
       rows = {
         resource_grants: [visible],
         channel_members: [{ channel_id: "ch-1" }],
-        ...homeChannel("ch-1", "personal"),
+        ...homeChannel("ch-1", "home"),
       };
       expect([...(await grantedResourceIds("u-1", "knowledge_base", ["kb-1"]))]).toEqual(
         ["kb-1"]

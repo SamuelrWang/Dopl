@@ -59,7 +59,7 @@
  * `apiKeyWorkspaceId`, so the claim was true of one wrapper and false of the
  * other. The reachable walk was:
  *   1. `POST /api/boot` with NO segment — the provisioning branch answers
- *      `ensurePersonalContainer`, i.e. the operator's OWN container id AND its
+ *      `ensureHomeSpace`, i.e. the operator's OWN container id AND its
  *      canonical `{slug}-{publicId}` segment, to any valid credential;
  *   2. that segment into any of the 19 `resolveApiWorkspace` route files —
  *      access-matrix, members-with-emails, overview, overview-series, teams,
@@ -89,7 +89,7 @@ vi.mock("./service", () => ({
   findWorkspaceForMemberByPublicId: vi.fn(),
   findWorkspaceForMember: vi.fn(),
   resolveMembershipOrThrow: vi.fn(),
-  ensurePersonalContainer: vi.fn(),
+  ensureHomeSpace: vi.fn(),
 }));
 vi.mock("@/features/analytics/server/system-events", () => ({
   logSystemEvent: vi.fn(),
@@ -111,7 +111,7 @@ import {
 import {
   findWorkspaceForMemberByPublicId,
   findWorkspaceForMember,
-  ensurePersonalContainer,
+  ensureHomeSpace,
   resolveMembershipOrThrow,
 } from "./service";
 import { getOnboardingStatus } from "@/features/onboarding/server/service";
@@ -353,7 +353,7 @@ describe("🔒 getBootState — the no-segment PROVISIONING mode is closed to a 
       onboarded: true,
       surveyCompleted: true,
     } as never);
-    vi.mocked(ensurePersonalContainer).mockResolvedValue(WORKSPACE as never);
+    vi.mocked(ensureHomeSpace).mockResolvedValue(WORKSPACE as never);
     vi.mocked(resolveMembershipOrThrow).mockResolvedValue({
       membership: { role: "owner" },
     } as never);
@@ -365,13 +365,13 @@ describe("🔒 getBootState — the no-segment PROVISIONING mode is closed to a 
     expect(
       await getBootState(USER, null, "44444444-4444-4444-8444-444444444444")
     ).toBeNull();
-    expect(ensurePersonalContainer).not.toHaveBeenCalled();
+    expect(ensureHomeSpace).not.toHaveBeenCalled();
   });
 
   it("an UNLOCKED caller still provisions — the cold-launch path is untouched", async () => {
     const state = await getBootState(USER, null);
     expect(state?.workspace?.id).toBe(WORKSPACE.id);
-    expect(ensurePersonalContainer).toHaveBeenCalledTimes(1);
+    expect(ensureHomeSpace).toHaveBeenCalledTimes(1);
   });
 
   it("SEGMENT mode with a locked credential naming ANOTHER workspace is 404, not the record", async () => {

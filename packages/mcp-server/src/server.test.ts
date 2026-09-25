@@ -393,7 +393,7 @@ describe("dopl_workspaces — the tool an agent reaches for when it is lost", ()
     const container = wsItem("id-3", "room-seg", "With Dana", "owner");
     container.kind = "link";
     const home = wsItem("id-h", "sam", "Sam", "owner");
-    home.kind = "personal";
+    home.kind = "home";
     build({
       directory: [WS1, container, home],
       workspace: null,
@@ -403,9 +403,9 @@ describe("dopl_workspaces — the tool an agent reaches for when it is lost", ()
     const text = textOf(await tool("dopl_workspaces")({}));
     expect(text).toContain("`With Dana` — kind=`home_channel` (slug: `room-seg` · id: `id-3`");
     expect(text).toContain("`Alpha` — kind=`workspace` (slug: `alpha`");
-    // ⚠ THE PERSONAL CONTAINER IS ADDRESSED BY THE RESERVED WORD, and keeps its
+    // ⚠ THE HOME SPACE IS ADDRESSED BY THE RESERVED WORD, and keeps its
     // label — it is the row an agent has repeatedly read as a second workspace.
-    expect(text).toContain("`Sam` — kind=`personal` — home space");
+    expect(text).toContain("`Sam` — kind=`home` — home space");
     expect(text).toContain("address: `home` · id: `id-h`");
   });
 });

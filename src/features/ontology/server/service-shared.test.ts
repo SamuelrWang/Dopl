@@ -99,14 +99,14 @@ describe("canSeeOntology / canEditOntology — Samuel's matrix, in TypeScript", 
    *
    * The narrow direction is the SAFE one and it is still a divergence: the
    * service-role client bypasses RLS, so what runs is this. Row 2 (the caller's
-   * own personal shelf, reached from a room) is restored — and only row 2 — by
+   * own home shelf, reached from a room) is restored — and only row 2 — by
    * `./service-audience.ts › levelForOntology`'s `created_by` arm, which its own
    * suite pins.
    */
   it("the SQL twin's arm 1 — narrower here, and DELIBERATELY (the header's table)", () => {
-    // Row 2: the caller's OWN personal container, reached while standing in a
+    // Row 2: the caller's OWN home space, reached while standing in a
     // room. SQL says true; this says false, and no share row changes that.
-    const ownShelf = { id: "ontology-9", workspaceId: "my-personal-container" };
+    const ownShelf = { id: "ontology-9", workspaceId: "my-home-space" };
     const inARoom = ctx({ workspaceId: "ws-link", userId: "owner" });
     expect(canSeeOntology(inARoom, ownShelf, NO_ONTOLOGY_SHARES)).toBe(false);
     expect(needsShareArm(inARoom, ownShelf)).toBe(true);

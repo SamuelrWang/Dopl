@@ -157,7 +157,7 @@ describe("the two sections", () => {
 });
 
 describe("empty scopes", () => {
-  it("says nothing under an empty shared section, and states an empty Personal shelf", async () => {
+  it("says nothing under an empty shared section, and states an empty Home shelf", async () => {
     apiRequest.mockImplementation((path: string, opts: BridgeRequestOpts = {}) =>
       path.split("?")[0] === "/api/agent-identities"
         ? Promise.resolve(ok({ identities: [] }))
@@ -175,7 +175,7 @@ describe("empty scopes", () => {
     expect(screen.queryByText(/Yours alone/)).toBeNull();
   });
 
-  it("offers no Personal shelf, and asks for no home identities, when boot has no workspace", async () => {
+  it("offers no Home shelf, and asks for no home identities, when boot has no workspace", async () => {
     apiRequest.mockImplementation((path: string, opts: BridgeRequestOpts = {}) =>
       path === "/api/boot"
         ? Promise.resolve(

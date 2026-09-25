@@ -27,7 +27,7 @@ export async function createChannel(
   input: ChannelCreateInput
 ): Promise<Channel> {
   // DMs too: the Home space has exactly one member, so a DM there has no legitimate peer.
-  if (ctx.workspaceKind === "personal") throw new ChannelInHomeSpaceError();
+  if (ctx.workspaceKind === "home") throw new ChannelInHomeSpaceError();
   if (input.direct === true) {
     return createDirectChannel(ctx, input.memberUserId);
   }

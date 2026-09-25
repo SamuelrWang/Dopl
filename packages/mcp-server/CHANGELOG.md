@@ -4,6 +4,20 @@ All notable changes to `@dopl/mcp-server` are documented here. Format follows [K
 
 ## [Unreleased]
 
+### Fixed — a channel opened in the Home space is a home channel (1.37.1)
+
+- `rooms.open` / `dopl_create_channel` with no container, `container=home` or the Home id used to
+  file a plain channel inside the Home space, where nothing renders it. It now mints a home channel
+  (its own container) with the asked name and description and answers with the new container id and
+  channel slug. A `visibility="public"` ask is answered: a home channel starts private. DMs,
+  workspace-bound and container-locked calls keep their path.
+
+### Changed — the Home space's kind is `home` (1.37.1)
+
+- `ContainerKind` says `home`, never `personal`; the directory label is "home space (your default;
+  not a workspace, and it holds no channels)". `container=personal` (the Home row's old slug) still
+  resolves to the Home space for one release (`legacy-aliases.ts › isLegacyHomeAddress`).
+
 ### Fixed — `section=` accepts the natural heading (1.37.1, live test #6)
 
 - A heading matches loosely: exact, case-insensitive, then with markdown escapes/emphasis/code marks

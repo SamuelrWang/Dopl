@@ -156,15 +156,15 @@ export interface OntologySummary {
    *  must say "there is more", not present a partial graph as the whole. */
   truncated: boolean;
   /**
-   * 🔒 **WHICH ONTOLOGIES CAME OFF THE CALLER'S OWN PERSONAL SHELF** (S29c,
-   * 2026-09-18) — `service-reads.ts › personalOntologyIds`.
+   * 🔒 **WHICH ONTOLOGIES CAME OFF THE CALLER'S OWN HOME SHELF** (S29c,
+   * 2026-09-18) — `service-reads.ts › homeSpaceOntologyIds`.
    *
    * ⚠ **REQUIRED HERE, OPTIONAL ON THE WIRE.** This is the SERVER's own shape
    * and it always measures the answer; `@dopl/client › OntologySummary` marks it
    * optional because a payload cached against an older server carries no such
    * key, and absent must read as "not answered" rather than "none".
    */
-  personalOntologyIds: string[];
+  homeSpaceOntologyIds: string[];
 }
 
 /**

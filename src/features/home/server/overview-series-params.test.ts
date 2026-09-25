@@ -14,7 +14,7 @@
  *
  * ⚠ **THIS FILE ASSERTED THE OPPOSITE FOR ONE DAY.** Its superseded header said
  * `credit_usage_events` had no channel column, so a channel was its `kind='link'`
- * CONTAINER and Desktop agent was the reader's `kind='personal'` shelf — a
+ * CONTAINER and Desktop agent was the reader's `kind='home'` shelf — a
  * partition that dropped every burn a home channel's agent made against another
  * container, which is exactly the traffic rule B moved onto that channel's wallet.
  */
@@ -23,7 +23,7 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 import { HttpError } from "@/shared/lib/http-error";
 
 const repo = vi.hoisted(() => ({
-  listOwnedPersonalContainerIds: vi.fn(),
+  listOwnedHomeSpaceIds: vi.fn(),
   scanCreditEvents: vi.fn(),
 }));
 
@@ -177,7 +177,7 @@ describe("resolveUsageChannel", () => {
 describe("getHomeOverviewSeries — the narrowed credits arm", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    repo.listOwnedPersonalContainerIds.mockResolvedValue(OWNED_IDS);
+    repo.listOwnedHomeSpaceIds.mockResolvedValue(OWNED_IDS);
     repo.scanCreditEvents.mockResolvedValue({ rows: [], truncated: false });
   });
 

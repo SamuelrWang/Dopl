@@ -17,6 +17,16 @@
 
 import { legacyOnly } from "./call-ref.js";
 
+/**
+ * `container=personal` — the Home space's slug until `20261023120000_home_vocabulary_rename.sql`
+ * re-slugged it `home` (Samuel, 2026-09-24: the `personal` layer is cut). An agent holding the old
+ * spelling still lands in its Home space for ONE release. REMOVAL TRIGGER: the release after
+ * 1.37.1; delete this function and its one call site (`workspace-directory.ts › resolveContainerRef`).
+ */
+export function isLegacyHomeAddress(foldedRef: string): boolean {
+  return foldedRef === "personal";
+}
+
 /** Retired `dopl_ontology` args → the arg that replaced each. */
 export const LEGACY_ONTOLOGY_ARGS: Readonly<Record<string, string>> = Object.freeze({
   cluster: "ontology",

@@ -51,7 +51,7 @@ export default function OnboardingPage() {
     );
   }
   // Already onboarded — the boot route resolves the caller's HOME SPACE (their
-  // `kind='personal'` container) and lands on /home. ⚠ NOT "the default
+  // `kind='home'` container) and lands on /home. ⚠ NOT "the default
   // workspace": there is no derived default (INVARIANTS §4A, wave B B14).
   if (state.data?.isOnboarded) return <Navigate to="/" replace />;
 
@@ -59,7 +59,7 @@ export default function OnboardingPage() {
     <OnboardingFlowCore
       initialStep={state.data?.surveyCompleted ? "connect" : "survey"}
       bannerSrc={frameworkBanner}
-      // The server answers `/home` for a personal container — a ROOT SPA route,
+      // The server answers `/home` for a home space — a ROOT SPA route,
       // not `/{segment}/overview` (`onboarding/server/service.ts ›
       // completeOnboarding`). Either way it is a path the SPA already has.
       onDone={(to) => navigate(to, { replace: true })}

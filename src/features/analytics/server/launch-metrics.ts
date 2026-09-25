@@ -66,7 +66,7 @@ export async function getLaunchMetrics(): Promise<LaunchMetrics> {
 
   // Billing is CONTAINER-level: 'solo' ($5.99 flat, LEGACY — off sale since
   // 2026-09-07, live rows still bill), 'team' (per seat, price read per row),
-  // 'pro' ($8.99 flat, a personal container). Canceled reverts to plan='free'
+  // 'pro' ($8.99 flat, a home space). Canceled reverts to plan='free'
   // and past_due keeps entitlements, so active + past_due are the rows that
   // drive MRR.
   const [{ count: signupsTotal }, { data: paidRows }] = await Promise.all([

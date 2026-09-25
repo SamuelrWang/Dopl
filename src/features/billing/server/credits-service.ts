@@ -42,7 +42,7 @@ import { countActiveMembers, getWorkspaceBilling } from "./workspace-billing";
  *   wallet RPC in the counter's transaction — this file has no ledger write at
  *   all. Dimensions travel as `credit-ledger.ts › CreditLedgerAttribution`.
  * - 2026-09-08: the personal wallet has a plan (Pro), billed on the owner's own
- *   `kind='personal'` container, so both personal arms resolve a billing row via
+ *   `kind='home'` container, so both personal arms resolve a billing row via
  *   `./personal-wallet.ts` — one round trip more than before.
  *
  * The plan is always the entitlement verdict, never `workspace_billing.plan`: a
@@ -97,7 +97,7 @@ export type BillingTarget =
       channelId: string | null;
       /**
        * The container to read the personal billing row from, or `null` to reach it
-       * through the payer. Non-null only for a `kind='personal'` container, which
+       * through the payer. Non-null only for a `kind='home'` container, which
        * is its own billing row — `personal-wallet.ts › readPersonalBilling` refuses
        * any other id, since a link container has no row and passing its id would
        * report every Pro operator as free.
@@ -120,7 +120,7 @@ export type BillingTarget =
  * `./channel-attribution.ts`; the kind→wallet half is {@link containerTarget}.
  *
  * 2026-08-26: a home-space burn is charged to the container's owner whoever made
- * the call. A `link` container is a relationship and a `personal` container is a
+ * the call. A `link` container is a relationship and a `home` container is a
  * shelf; neither is a tenant and neither carries a plan.
  */
 export async function resolveBillingTarget(
@@ -142,7 +142,7 @@ export async function resolveBillingTarget(
  * The whole kind→wallet decision for one container, reached from both of rule B's
  * arms so neither can drift.
  *
- * `kind='personal'` skips the owner lookup — a round trip saved, not a check
+ * `kind='home'` skips the owner lookup — a round trip saved, not a check
  * skipped: such a container has exactly one member, its owner, so the caller is
  * provably the payer.
  *
@@ -160,7 +160,7 @@ async function containerTarget(
   if (isStandardWorkspace({ kind: kind as WorkspaceKind | undefined })) {
     return { wallet: "seat", workspaceId, payerUserId: userId, channelId };
   }
-  if (kind === "personal") {
+  if (kind === "home") {
     return {
       wallet: "personal",
       workspaceId,
@@ -267,7 +267,7 @@ function upgradeCreditsFor(
  * `credits-service.test.ts` (re-pinned 2026-09-08 when the personal arms each
  * gained a billing-row read):
  *   * seat — billing row + member count (concurrent), then the RPC: 3.
- *   * `personal` — the container's own billing row, then the RPC: 2.
+ *   * `home` — the container's own billing row, then the RPC: 2.
  *   * `link` — owner lookup, the owner's personal billing row (one embedded query,
  *     `workspace-billing.ts › getPersonalBilling`), then the RPC: 3.
  * Rule B's reads sit on `./channel-attribution.ts`'s budget, not this one.
@@ -307,7 +307,7 @@ export async function consumeMcpCredits(
       ? await spendPersonal(
           target.payerUserId,
           // The charged container is the billing row only when it is
-          // `kind='personal'`; a link container has none, so passing its id would
+          // `kind='home'`; a link container has none, so passing its id would
           // read nothing and bill a Pro operator at the free tier. Read off the
           // target, not `caller.workspaceKind`: under rule B the charged container
           // is the channel's, and the addressed container's kind says nothing.
@@ -348,7 +348,7 @@ interface WalletSpend {
  * both the window and the limit, then the RPC. Two round trips.
  *
  * `personalBillingContainerId` is the charged container's id when that container is
- * `kind='personal'` (it is the billing row, so the owner → container hop is
+ * `kind='home'` (it is the billing row, so the owner → container hop is
  * skipped) and `null` for a link container, which carries no billing row.
  */
 async function spendPersonal(

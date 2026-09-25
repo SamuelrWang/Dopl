@@ -70,8 +70,8 @@ const CONCISION = [
 ];
 
 // The compensating control for personal knowledge reachable from a shared channel: the reach is a
-// server fence (`shared/tenancy/personal-reach.ts`); this is the other half — read, never disclose.
-const PERSONAL_KNOWLEDGE_CONFIDENTIALITY = [
+// server fence (`shared/tenancy/home-space-reach.ts`); this is the other half — read, never disclose.
+const HOME_SPACE_KNOWLEDGE_CONFIDENTIALITY = [
   'PERSONAL KNOWLEDGE IS YOURS TO USE, NOT TO SHARE:',
   '- You may read your own operator\'s personal and private knowledge bases and use what you',
   '  find there to do this work on their behalf.',
@@ -132,4 +132,4 @@ const ADDRESSING = [
   `  but never the recipient you just named in to=, whom the app already renders.`,
 ];
 
-module.exports = { THREAD_TAG, VOCABULARY, PROSE_RULE, CONCISION, LANE_EXCLUSIVITY, REPLY_ROUTING, PERSONAL_KNOWLEDGE_CONFIDENTIALITY, ADDRESSING };
+module.exports = { THREAD_TAG, VOCABULARY, PROSE_RULE, CONCISION, LANE_EXCLUSIVITY, REPLY_ROUTING, HOME_SPACE_KNOWLEDGE_CONFIDENTIALITY, ADDRESSING };

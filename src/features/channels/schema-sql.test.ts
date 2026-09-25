@@ -272,7 +272,7 @@ describe("every FK into channels is ON DELETE CASCADE (what makes one DELETE com
   // one statement (INVARIANTS §5). A new child that does not cascade fails the
   // next case, not this one. ⚠ A grant is deliberately NOT kept when its channel
   // goes: it is a share INTO that channel, meaningless without it.
-  // ⚠ THIRTEEN SINCE 2026-09-06, all three from the artifacts/personal-reach
+  // ⚠ THIRTEEN SINCE 2026-09-06, all three from the artifacts/home-space-reach
   // wave and all three APPLIED TO PROD 2026-09-05 (the "UNAPPLIED" this comment
   // carried was true only while it was being written): `channel_personal_arming.channel_id`
   // (`20260925120000`) and `channel_artifacts.channel_id` (`20260926120000`),

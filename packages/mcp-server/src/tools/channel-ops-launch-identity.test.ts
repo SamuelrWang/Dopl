@@ -77,7 +77,7 @@ describe("the identity ref", () => {
       client({
         createLaunchDirective: vi.fn(async () => {
           throw apiError(404, "AGENT_IDENTITY_NOT_FOUND", {
-            elsewhere: { name: "Code Auditor", label: "your personal shelf" },
+            elsewhere: { name: "Code Auditor", label: "your home shelf" },
           });
         }),
       }),
@@ -85,7 +85,7 @@ describe("the identity ref", () => {
       { name: "Scout", identity: "Code Auditor" },
     )).content[0].text as string;
     expect(out).toContain("`Code Auditor`");
-    expect(out).toContain("lives in `your personal shelf`, not in this channel's own container");
+    expect(out).toContain("lives in `your home shelf`, not in this channel's own container");
     expect(out).toContain("nothing was filed");
     expect(out).toContain("Owning it is not enough");
     expect(out).toContain("create it there");

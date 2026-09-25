@@ -26,10 +26,10 @@
 -- atomically, and — this is the part that bites — the row records the ADDRESSED
 -- container while a SEAT burn's CHARGED workspace appears on it NOWHERE
 -- (`billing/server/credit-ledger.ts › CreditUsageEvent`; rule B arm 2 is a
--- workspace-channel agent reaching into a personal shelf). So re-deriving a seat
+-- workspace-channel agent reaching into a home shelf). So re-deriving a seat
 -- counter from `origin_workspace_id` dropped every cross-container burn from the
 -- total it then OVERWROTE, and wrote a `workspace_member_credit_usage` row keyed
--- on a `kind='personal'` container besides. **Legacy rows have no such problem:
+-- on a `kind='home'` container besides. **Legacy rows have no such problem:
 -- rule B did not exist when they were written, so the origin container IS the
 -- charged one for every one of them.**
 --
@@ -74,7 +74,7 @@
 -- `workspaces` row was deleted) are SKIPPED: there is nothing to charge, and they
 -- were unmetered under both models.
 -- ⚠ The personal payer is `workspaces.owner_id` — the same column
--- `home/server/repository-overview.ts › listOwnedPersonalContainerIds` follows —
+-- `home/server/repository-overview.ts › listOwnedHomeSpaceIds` follows —
 -- and NOT `findActiveOwnerUserId`'s `workspace_members` row, which is what the
 -- live credit path resolves. They agree on every container the product mints; a
 -- hand-edited one where they disagree is a person's problem, not this script's.

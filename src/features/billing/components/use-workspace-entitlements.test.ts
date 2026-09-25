@@ -108,7 +108,7 @@ describe("prices and the default meter", () => {
     state.data = {
       ...payload(),
       plan: "pro",
-      containerKind: "personal" as const,
+      containerKind: "home" as const,
       seatCount: null,
       memberCount: 1,
     };
@@ -130,7 +130,7 @@ describe("prices and the default meter", () => {
     state.data = {
       ...payload(),
       plan: "pro",
-      containerKind: "personal" as const,
+      containerKind: "home" as const,
       seatCount: null,
       memberCount: 4,
     };
@@ -266,8 +266,8 @@ describe("a cached row from before a field shipped still renders", () => {
   });
 
   it("a containerKind the CURRENT server sends is passed through untouched", () => {
-    state.data = { ...payload(), containerKind: "personal" as const };
-    expect(useWorkspaceEntitlements().containerKind).toBe("personal");
+    state.data = { ...payload(), containerKind: "home" as const };
+    expect(useWorkspaceEntitlements().containerKind).toBe("home");
   });
 
   it("a wallet the CURRENT server sends is passed through untouched", () => {

@@ -38,7 +38,7 @@ export type IdentityRefResolution =
 /** An identity the caller holds elsewhere; the label names a tenancy, never a roster. */
 export interface IdentityElsewhere {
   name: string;
-  /** "your personal container" / "the workspace \u201cAcme\u201d" / a home channel's container id. */
+  /** "your home space" / "the workspace \u201cAcme\u201d" / a home channel's container id. */
   label: string;
 }
 
@@ -125,7 +125,7 @@ export async function classifyMissingIdentityRef(
  * (the actionable `workspace=` value, §4A). No markdown: renderers neutralize punctuation in it.
  */
 function tenancyLabel(row: ResolvedResource): string {
-  if (row.containerKind === "personal") return "your personal container";
+  if (row.containerKind === "home") return "your home space";
   if (row.containerKind !== "standard") {
     return `a home channel of yours, container ${row.containerId}`;
   }

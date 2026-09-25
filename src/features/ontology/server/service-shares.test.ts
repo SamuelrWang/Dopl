@@ -37,8 +37,8 @@ vi.mock("./repository-shares", () => ({
   findActiveMemberRole: vi.fn(),
 }));
 
-vi.mock("@/shared/tenancy/personal-reach", () => ({
-  personalShelfContainerIds: vi.fn(async () => []),
+vi.mock("@/shared/tenancy/home-space-reach", () => ({
+  homeSpaceShelfContainerIds: vi.fn(async () => []),
 }));
 
 import * as repo from "./repository";
@@ -87,7 +87,7 @@ const WRITE = {
 
 function primeOpen() {
   mockShares.findWorkspaceKind.mockImplementation(async (id: string) =>
-    id === LINK ? "link" : "personal"
+    id === LINK ? "link" : "home"
   );
   mockRepo.findOntologyById.mockResolvedValue(ONTOLOGY);
   mockShares.listSharesForOntology.mockResolvedValue([]);

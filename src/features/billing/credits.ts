@@ -41,7 +41,7 @@ export const SEAT_MONTHLY_CREDITS: Record<PlanId, number> = {
   solo: 5_000,
   team: 5_000,
   // `pro` never applies to a seat; the key exists for the `Record` type alone
-  // (2026-09-08). `pro` is sold only on a `kind='personal'` container, whose
+  // (2026-09-08). `pro` is sold only on a `kind='home'` container, whose
   // burns go to the personal wallet via `PERSONAL_MONTHLY_CREDITS`. Widening to
   // `Partial<Record<…>>` would delete the compile error that forces the next
   // plan id to declare its seat allowance here.
@@ -50,10 +50,10 @@ export const SEAT_MONTHLY_CREDITS: Record<PlanId, number> = {
 
 /**
  * Monthly allowance on a user's personal wallet (their home space), by the
- * personal container's entitled plan. Two tiers since 2026-09-08, superseding
+ * home space's entitled plan. Two tiers since 2026-09-08, superseding
  * spec assumption A5's bare `500`.
  *
- * Keyed `"free" | "pro"` rather than `PlanId` on purpose: a personal container
+ * Keyed `"free" | "pro"` rather than `PlanId` on purpose: a home space
  * can only ever be entitled to those two, so the narrow map makes "what does a
  * `team` personal wallet get" unaskable. `personalCreditsForPlan` narrows a
  * verdict onto it.

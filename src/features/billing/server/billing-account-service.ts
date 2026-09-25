@@ -25,7 +25,7 @@ import {
  * cancel/resume. Logic between the three routes and the two data sources
  * (`./stripe.ts`, `./workspace-billing.ts`).
  *
- * Container, not "workspace" (2026-09-08): a personal container's Pro
+ * Container, not "workspace" (2026-09-08): a home space's Pro
  * subscription is a `workspace_billing` row keyed by that container's id, so every
  * function here already worked on one. Do not add a kind filter — it would strand
  * a personal subscriber with no way to stop paying.

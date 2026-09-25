@@ -191,7 +191,7 @@ describe("🔒 rule B, arm 2 — a WORKSPACE-CHANNEL agent pays the CALLER's SEA
     mockRepo.getWorkspaceBilling.mockResolvedValue(billing());
     const res = await consumeMcpCredits(PERSONAL, {
       userId: GUEST,
-      workspaceKind: "personal",
+      workspaceKind: "home",
       channelId: TEAM_CHANNEL,
     });
     expect(res).toMatchObject({ wallet: "seat", allowed: true, limit: 5_000 });

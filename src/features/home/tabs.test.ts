@@ -13,10 +13,10 @@
  * SET is the vocabulary (`tabs.ts`, read by the SPA page and by the landing
  * page's hero strip); the IMPORT SCAN is what catches a skills or chats surface
  * arriving inside an existing face, which is the shape the V1/V3 rows actually
- * described ("a personal shelf").
+ * described ("a home shelf").
  *
  * ⚠ **IT IS NOT A CLAIM ABOUT THE MCP SURFACE.** `dopl_skill` and `dopl_chats`
- * are `workspace_id`-scoped and already reach a personal container; R-33 is
+ * are `workspace_id`-scoped and already reach a home space; R-33 is
  * about /home having no FACE for either. ⚠ And V2 — `dopl_chats(op="export")`
  * with no container filing chats nothing lists — is still an OPEN orphan class
  * (00-MASTER §5 Wave 7), not something this file closes.
