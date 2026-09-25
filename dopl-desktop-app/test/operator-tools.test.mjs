@@ -120,6 +120,16 @@ function running() {
   return s;
 }
 
+test("fan-out → gate → reducer: the operator's own post keeps BOTH its reply address and its origin", async () => {
+  const h = harness({ agents: [agent(A1)] });
+  await h.feedLiveSession(entry, peerMsg({ authorUserId: ME, authorKind: "user" }), ME);
+  const fed = h.calls.feedInbound[0];
+  assert.deepEqual([fed.replyTo, fed.fromOperator], [ME, true]);
+  assert.match(readFileSync(M("session-gate.js"), "utf8"), /replyTo: item\.replyTo, fromOperator: a\.fromOperator === true/);
+  const push = RED.sessionReducer(running().state, { type: "inbound_arrived", ...fed }).effects.find((e) => e.type === "pushInbound");
+  assert.deepEqual([push.replyTo, push.fromOperator], [ME, true]);
+});
+
 test("engine: a peer's fed message opens the window for its turn; the operator's does not", () => {
   const s = running();
   funnel(s, { type: "inbound_arrived", message: "mine", authorName: "Me", fromOperator: true });

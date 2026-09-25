@@ -292,7 +292,7 @@ test("frameContinuation puts EVERY branch above the fence, and none of it inside
     assert.match(head, phrase, `${label}: the verdict is missing from the trusted preamble`);
     assert.ok(!phrase.test(tail), `${label}: the verdict leaked inside the fence`);
     // Its POSITION is fixed: after our two authored lines, before the opening fence.
-    assert.match(head, /^Dave replied in the channel\./, label);
+    assert.match(head, /^Dave posted in the channel\./, label);
     assert.ok(out.includes("the peer's words"), `${label}: the body still rides`);
   }
 });

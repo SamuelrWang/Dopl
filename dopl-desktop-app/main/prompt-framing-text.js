@@ -7,7 +7,7 @@
 // the runtime and the answer is a message (a `task_finished` body is not rendered — P0-1). The tag
 // rule is `lib/mentions.ts`' (exact match; ambiguity reaches nobody), and it promises the Tags inbox,
 // never a notification.
-const VOCABULARY = [
+const VOCAB_TERMS = [
   'VOCABULARY (use these words when you write):',
   '- A CHANNEL (or DM) holds many THREADS.',
   '- A THREAD is ONE exchange between two members about one thing. It may be a single',
@@ -22,11 +22,16 @@ const VOCABULARY = [
   '  They are not yours to post and the server refuses them from you. What is yours: an',
   '  ordinary MESSAGE for everything you say, and one optional MILESTONE marker per step',
   '  that lands.',
+];
+// A THREAD session's brake on the room; a main-room agent's room IS its lane, so it is left out there.
+const VOCAB_CHANNEL_POSTS = [
   '- You MAY post to the CHANNEL itself, not only into your thread, and you should do it',
   '  RARELY. The channel is for what the people in the room need to know: a milestone that',
   '  changes what somebody else is doing, or an answer to something asked in the room. If you',
   '  have already posted to the channel in this run, the next one needs a reason a human would',
   '  name out loud. Work traffic stays in the thread.',
+];
+const VOCAB_TAGS = [
   // The canonical handle is the display name slugged (`mentionSlug`, F-708); the older forms resolve
   // but are named as fallbacks. Tags are for someone NOT already addressed by `to=` (Samuel,
   // 2026-09-22) — same wording as `channel-doctrine.ts`, so both surfaces teach one rule.
@@ -45,6 +50,8 @@ const VOCABULARY = [
   '  message in that person\'s Tags inbox, which is what your operator watches instead of',
   '  reading every message. It is not an address and it starts no agent.',
 ];
+const VOCABULARY = [...VOCAB_TERMS, ...VOCAB_CHANNEL_POSTS, ...VOCAB_TAGS];
+const MAIN_ROOM_VOCABULARY = [...VOCAB_TERMS, ...VOCAB_TAGS];
 
 // The failure mode, not a style rule: `kind` defaults to message, and a lifecycle kind's body is not
 // rendered on the peer's card. Stated on every delivery branch (the section an agent re-reads).
@@ -108,19 +115,15 @@ const OPERATOR_TOOLS_LANE = [
   `  who asked here: post here.`,
 ];
 
-// Two inbound lanes, one visible to others: work goes to the CHANNEL, a question about the agent may
-// be answered in the private panel (Samuel, 2026-08-31). The discriminator is the audience.
+// Two inbound lanes, one visible to others (Samuel, 2026-08-31). The lane a message ARRIVED on decides
+// (2026-09-25): "the room does not need it" read as licence to answer the operator's channel ask in the panel.
 const REPLY_ROUTING = [
-  `WHERE YOUR ANSWER GOES IS DECIDED BY WHO IS WAITING FOR IT, not by where the question came in.`,
-  `- You have TWO inbound lanes. CHANNEL messages are posts everyone in the room can read. Your`,
-  `  operator can also talk to you PRIVATELY in the Dopl app's agent panel; those turns are on no`,
-  `  wire and NOBODY ELSE CAN SEE THEM, not the other members and not their agents.`,
-  `- CHANNEL WORK IS ANSWERED INTO THE CHANNEL, by posting, even when your operator asked for it`,
-  `  privately. A result, a status, a question for the room, anything somebody else is waiting on:`,
-  `  post it. An answer typed back into the panel reaches ONE person and looks, to everyone else,`,
-  `  exactly like an agent that did nothing.`,
-  `- THE PANEL IS FOR YOUR OPERATOR ALONE: what you are doing, what you need from them, anything`,
-  `  the room does not need. Answer those there and do not echo them into the channel.`,
+  `WHERE YOUR ANSWER GOES:`,
+  `- A message that arrived IN THE CHANNEL is answered IN THE CHANNEL, by posting, including when it`,
+  `  is from your operator. Your final text is not a post: nobody in the room sees it.`,
+  `- The panel is only for turns your operator sent you privately in the panel, and for status about`,
+  `  yourself they asked for there. NOBODY ELSE CAN SEE THOSE TURNS: do not echo them into the channel.`,
+  `  Channel work they ask for there is still posted.`,
 ];
 
 // Address it or mark it a record (Samuel, 2026-09-18): the refusal lives in the MCP tool; this saves
@@ -141,4 +144,4 @@ const ADDRESSING = [
   `  but never the recipient you just named in to=, whom the app already renders.`,
 ];
 
-module.exports = { THREAD_TAG, VOCABULARY, PROSE_RULE, CONCISION, LANE_EXCLUSIVITY, OPERATOR_TOOLS_LANE, REPLY_ROUTING, HOME_SPACE_KNOWLEDGE_CONFIDENTIALITY, ADDRESSING };
+module.exports = { THREAD_TAG, VOCABULARY, MAIN_ROOM_VOCABULARY, PROSE_RULE, CONCISION, LANE_EXCLUSIVITY, OPERATOR_TOOLS_LANE, REPLY_ROUTING, HOME_SPACE_KNOWLEDGE_CONFIDENTIALITY, ADDRESSING };

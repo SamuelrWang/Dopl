@@ -95,7 +95,7 @@ function enqueue(s, a) {
   // narration about the message, composed by `session-dispatch.js` (which holds both the author
   // and this session's launch snapshot) and rendered above the fence. Null on every turn whose
   // author the start card already named — which is almost all of them.
-  const item = { pendingId: crypto.randomUUID(), message: a.message, authorName: a.authorName, authorNote: a.authorNote || null, addressing: a.addressing || null };
+  const item = { pendingId: crypto.randomUUID(), message: a.message, authorName: a.authorName, authorNote: a.authorNote || null, addressing: a.addressing || null, replyTo: a.replyTo || '' };
   const disp = io.queueInbound(s, item, !auto);
   // AUDIT D2: a REJECTED message is not a gated one. noteGatedBody used to run BEFORE this
   // early return, so a reply that overflowed the queue (MAX_PENDING_INBOUND) fell through to
@@ -137,7 +137,7 @@ function enqueue(s, a) {
   if (disp === 'dispatch') {
     deps.dispatch(s, {
       type: 'inbound_arrived', pendingId: item.pendingId, message: a.message, authorName: a.authorName,
-      authorNote: item.authorNote, addressing: item.addressing, fromOperator: a.fromOperator === true,
+      authorNote: item.authorNote, addressing: item.addressing, replyTo: item.replyTo, fromOperator: a.fromOperator === true,
     });
   }
   return true;

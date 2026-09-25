@@ -17,8 +17,10 @@
 //  1. The block is BUILT INTO EVERY TURN — both sides, and both the id-present and the degraded
 //     branch. The lane an answer leaves by is not a property of the side or of what ids the
 //     launch knew, and the defect was FOUND on a responder.
-//  2. The rule is keyed on the AUDIENCE, not on the lane the question arrived on. "Reply where
-//     you were asked" is right for a question about the agent and wrong for the room's work.
+//  2. A message that ARRIVED in the channel is answered in the channel, the operator's own included
+//     (2026-09-25). The 08-31 wording keyed on the audience ("anything the room does not need"), and
+//     an agent filed its operator's channel ask as panel business: the reverse of the same defect.
+//     Channel work asked for privately is still posted.
 //  3. It does NOT tell the agent to echo private exchanges into the room — that would be the
 //     running commentary the sparseness rule forbids, bought by fixing the opposite problem.
 //
@@ -51,51 +53,33 @@ const ids = (over = {}) => ({
 const turn = (side, context) =>
   buildFencedTurn({ side, message: "do the thing", nonce: "n1", context });
 
-test("ROUTING: the block rides EVERY built turn — both sides, ids or no ids", () => {
-  // ⚠ ALL FOUR BRANCHES OF `deliverySection`. The defect is about the lane an answer LEAVES by,
-  // which every one of them shares; putting the block on the requester branch alone would leave
-  // a panel-woken responder answering into the invisible lane, which is where it was found.
+test("ROUTING: the block rides EVERY built turn, both sides, ids or no ids", () => {
+  // ALL FOUR BRANCHES OF `deliverySection`: the lane an answer LEAVES by is shared by every one.
   for (const side of ["requester", "responder"]) {
     for (const context of [ids(), ids({ channelId: null, workspaceId: null })]) {
       const out = turn(side, context);
-      assert.ok(
-        out.includes("WHERE YOUR ANSWER GOES IS DECIDED BY WHO IS WAITING FOR IT"),
-        `${side} / ids=${!!context.channelId}: no routing block`,
-      );
       for (const line of REPLY_ROUTING) {
-        assert.ok(out.includes(line), `${side}: missing routing line ${JSON.stringify(line)}`);
+        assert.ok(out.includes(line), `${side} / ids=${!!context.channelId}: missing ${JSON.stringify(line)}`);
       }
     }
   }
 });
 
-test("ROUTING: it names BOTH lanes and says the panel is invisible to everyone else", () => {
-  // ⚠ The invisibility is the load-bearing fact. Without it an agent has no reason to think the
-  // panel is a worse place for a result than the channel, and "reply where you were asked" —
-  // which the law block also teaches — points it at the wrong one.
-  const out = turn("requester", ids());
-  assert.match(out, /TWO inbound lanes/);
-  assert.match(out, /NOBODY ELSE CAN SEE THEM/);
+test("ROUTING: a CHANNEL message is answered in the CHANNEL, the operator's own included (2026-09-25)", () => {
+  // The defect: "anything the room does not need" let an agent file its OPERATOR's channel ask as
+  // panel business. The lane the message arrived on decides, whoever wrote it.
+  const out = turn("requester", ids()).replace(/\s+/g, " ");
+  assert.match(out, /A message that arrived IN THE CHANNEL is answered IN THE CHANNEL, by posting, including when it is from your operator\./);
+  assert.match(out, /Your final text is not a post: nobody in the room sees it\./);
+  assert.ok(!/anything the room does not need/.test(out), "the ambiguous clause is gone");
 });
 
-test("ROUTING: CHANNEL WORK is answered into the CHANNEL, even when asked privately", () => {
-  // The sentence the ruling is. The "even when your operator asked for it privately" clause is
-  // the whole correction: without it the rule reads as "reply on the lane you were asked on",
-  // which is the behaviour being fixed.
-  const out = turn("responder", ids());
-  assert.match(out, /CHANNEL WORK IS ANSWERED INTO THE CHANNEL/);
-  assert.match(out, /even when your operator asked for it\s+privately/);
-  // …and it says what the failure LOOKS like, because an agent cannot see the room it is not in.
-  assert.match(out, /looks, to everyone else,\s+exactly like an agent that did nothing/);
-});
-
-test("ROUTING: the PANEL keeps a purpose — this is not 'post everything'", () => {
-  // ⚠ THE OPPOSITE FAILURE, AND IT IS A REAL ONE. An agent that mirrored every private exchange
-  // into the room would be the running commentary the sparseness rule forbids. The block must
-  // leave the panel a job rather than deprecate it.
-  const out = turn("requester", ids());
-  assert.match(out, /THE PANEL IS FOR YOUR OPERATOR ALONE/);
-  assert.match(out, /do not echo them into the channel/);
+test("ROUTING: the PANEL keeps its job, private and never echoed", () => {
+  const out = turn("responder", ids()).replace(/\s+/g, " ");
+  assert.match(out, /The panel is only for turns your operator sent you privately in the panel, and for status about yourself they asked for there\./);
+  assert.match(out, /NOBODY ELSE CAN SEE THOSE TURNS: do not echo them into the channel\./);
+  // The 2026-08-31 correction survives: channel work asked for privately still lands in the room.
+  assert.match(out, /Channel work they ask for there is still posted\./);
 });
 
 test("ROUTING: no em dash, house voice §H-13", () => {
@@ -116,9 +100,7 @@ test("ROUTING: the block lives in the TEXT module, with the other fixed blocks",
   // "REPLY_ROUTING is the last name before the brace" fails on the next block that joins it —
   // reporting a missing import that is right there.
   assert.match(framing, /const \{[^}]*\bREPLY_ROUTING\b[^}]*\} = require\('\.\/prompt-framing-text'\)/);
-  assert.equal(
-    (framing.match(/\.\.\.REPLY_ROUTING,/g) || []).length,
-    4,
-    "spread on all FOUR delivery branches — a missing one is a lane that stays invisible",
-  );
+  // ⚠ ONE spread since 2026-09-25: `deliverySection` has a single return every side shares, so no
+  // branch can drop the block (the first test drives all of them).
+  assert.equal((framing.match(/\.\.\.REPLY_ROUTING\]/g) || []).length, 1, "spread once, on the shared return");
 });
