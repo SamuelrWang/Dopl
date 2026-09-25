@@ -388,10 +388,10 @@ function mayFeed(s, wake) {
  * that is already RUNNING — that is how two of my agents coordinate.
  */
 function mayWake(m, myUserId) {
-  if (!m || m.authorKind !== 'agent') return true;
-  const me = String(myUserId || '');
-  return !!me && String(m.authorUserId) === me;
+  return !m || m.authorKind !== 'agent' || fromMe(m, myUserId);
 }
+
+const fromMe = (m, myUserId) => !!myUserId && String(m.authorUserId) === String(myUserId); // my account; blank matches nothing
 
 function feedLiveSession(entry, m, myUserId) {
   // ⚠ THE kind FILTER IS THE LAST WORD ON THIS MACHINE — a non-'message' post reaches no
@@ -458,7 +458,7 @@ function feedLiveSession(entry, m, myUserId) {
       // engine exports and is the BELT on this rule; handing it the answer is what stops it
       // becoming a second spelling of the wake rule.
       wake: wake === true,
-      fromOperator: m.authorKind === 'user' && String(m.authorUserId) === String(myUserId), // not their agents' posts
+      fromOperator: m.authorKind === 'user' && fromMe(m, myUserId), // not their agents' posts
     });
     if (!ok) { ack(s, { refused: 1 }); continue; }
     fed += 1;
