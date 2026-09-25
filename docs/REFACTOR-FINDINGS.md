@@ -6176,8 +6176,9 @@ and `codex/launch-spec.js` reads `state.native`, so a sandbox pick reaches the l
   launching on the default"* — is exactly what U6's four catalog states and `selectableModels` now
   prevent for models, and what the `native` stamp prevents for the sandbox.
 
-Status: **RESOLVED for the tool axis, the secondary axis and the model dimensions; OPEN, scoped to
-the granular approval categories only.**
+Status: **RESOLVED (2026-09-25).** The per-runtime Axis-A value and sandbox are no longer stored at
+all: the channel stores one permission level, derived per runtime at launch (INVARIANTS §11); the
+granular approval categories' report row left with the per-runtime tool row.
 
 ### F-391 — the descriptor does not say WHICH Axis-A option its approval categories belong to (2026-08-31, port wave D, the SPA half)
 
@@ -6185,7 +6186,7 @@ Design §3.1: the five categories render *"under Codex's `granular` option only"
 carries `approval.granularity: 'category'` and `approval.categories: [...]`, and **nothing joins either
 to a member of `toolMode.options`.** The prose names the option; the data does not.
 
-So `src/features/channels/lib/runtime-capability.ts › approvalCategoryMode` makes the join, once,
+So `approvalCategoryMode` (in `src/features/channels/lib/runtime-capability.ts`, deleted 2026-09-25) made the join, once,
 gated on BOTH declarations and fail-closed: a runtime that does not claim category granularity, or
 that declares no option by that name, gets **no sub-control** rather than a guess. The vendor word is
 a LOOKUP against the runtime's own option values and never a label — the matched option's own `label`
@@ -6198,6 +6199,9 @@ whose purpose is to enforce native vocabulary"* is the failure decision (1) exis
 name hardcoded on the READING side is the same defect one module further out. **The fix is a
 descriptor field — `approval.categoryMode` — and it belongs to main**, alongside `granularity` and
 `categories`, where `contract.js › sealAdapter` can require the three to agree.
+
+Status: **RESOLVED BY DELETION (2026-09-25).** The category report rows and the join left with the
+per-runtime tool row when the Settings axis became one permission level.
 
 ### F-392 — `src/shared/lib/spa-bridge.ts` is now AT the 500-line cap (2026-08-31, port wave D, the SPA half)
 
@@ -10540,6 +10544,24 @@ already wrong — `channel-dispatch-agents.ts` does pass `waitMs` — so do not 
 - Why it matters: CLAUDE.md's glossary has to carry an exception list for the word; each remaining name is a place a reader confuses "the caller" or "the role block" with the durable agent identity.
 - Proposed resolution: rename both in one change that also moves every doc anchor.
 - Status: OPEN (low, naming).
+
+### F-765 — Codex "Auto" withholds the Codex app's "Approve for me" reviewer, because it bypasses Dopl's gate (2026-09-25)
+
+- Location: `dopl-desktop-app/main/runtime/codex/index.js › descriptor.toolMode.levels.auto` (runs Ask's
+  `on-request` + `workspace-write`); evidence `dopl-desktop-app/test/codex-auto-review-live.test.mjs`.
+- Found during: the unified permission levels build (Samuel's option B: Codex Auto = the pair behind
+  the Codex app's "Approve for me").
+- **Measured, codex-cli 0.155.1, scripted model.** "Approve for me" is `on-request` + `workspace-write`
+  + `approvalsReviewer: 'auto_review'` (the app sends `guardian_subagent`; the server echoes it as
+  `auto_review`). Under it, a `dopl_channel` send is reviewed by Codex's `codex-auto-review` model and,
+  when that allows it, RUNS — no server request ever reaches the client, so Dopl's Axis-B gate (the
+  outbound consent) is never asked. With reviewer `user` the same post reaches Dopl's gate and a deny
+  stops it.
+- Why it matters: taking the preset verbatim would let a Codex agent post to a channel past the
+  operator's messaging setting. Withholding it makes Codex Auto identical to Codex Ask.
+- Proposed resolution (Samuel rules): keep Codex Auto = Ask (current), or take `auto_review` only if
+  Dopl's own MCP calls can be kept out of the reviewer (no such knob measured on 0.155.1).
+- Status: OPEN (ruling).
 
 ### F-764 — Dopl's Claude token is out of an agent's subprocess env but still in the CLI process's launch env (2026-09-24)
 

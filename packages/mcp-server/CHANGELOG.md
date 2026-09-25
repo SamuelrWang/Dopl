@@ -4,6 +4,16 @@ All notable changes to `@dopl/mcp-server` are documented here. Format follows [K
 
 ## [Unreleased]
 
+### Changed — `posture.tools` asks a permission level (desktop 1.37.2)
+
+- `dopl_launch_agent` / `dopl_manage_session` and legacy `dopl_channel` `manage.launch` / `manage.posture`
+  take `posture.tools: ask | auto | full`, applied in the agent's runtime's own settings and never
+  wider than the channel's level. Each runtime's own words (claude manual..bypass, codex
+  untrusted..never, cursor allowlist..run-everything) are still accepted.
+- A launch reply prints `setting=` — the runtime's own effective setting, e.g.
+  `setting=never/danger-full-access` beside `runtime=codex`.
+- Served surface re-measured: `dopl_channel` schema −63, granular −126; pulled doctrine +58.
+
 ### Fixed — a channel opened in the Home space is a home channel (1.37.1)
 
 - `rooms.open` / `dopl_create_channel` with no container, `container=home` or the Home id used to

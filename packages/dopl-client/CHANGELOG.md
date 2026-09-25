@@ -2,6 +2,15 @@
 
 All notable changes to `@dopl/client` are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- `LaunchToolMode` gains the permission levels `ask` and `full` (`auto` was already a member); a
+  new `LaunchAppliedToolMode` (from `@dopl/contracts`) is what a machine echoes — never a level.
+- `LaunchDirective.appliedSetting` — the runtime's own effective setting on a launch
+  (`never/danger-full-access`); `null` = not reported.
+
 ## [0.15.0] — 2026-09-24
 
 ### Changed (BREAKING)
