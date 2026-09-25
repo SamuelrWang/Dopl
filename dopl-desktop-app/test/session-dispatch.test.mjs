@@ -71,15 +71,13 @@ test("feed: EVERY live agent on the thread is fed, and each is told which it is"
     // naming an agent this session's LAUNCH SNAPSHOT never saw. NULL here and on almost every
     // turn — a PERSON wrote this one — which is what keeps the fed turn byte-identical.
     authorNote: null,
-    // The reply's `to=` (2026-09-25, `room-roster.js › authorAddress`): a PERSON wrote it, so their user id.
-    replyTo: PEER,
+    replyTo: PEER, // the reply's `to=` (2026-09-25, `room-roster.js › authorAddress`): a PERSON's user id
     addressing: null, // nobody was @-mentioned
     // ⚠ THE WAKE VERDICT RIDES WITH EVERY FEED SINCE 2026-08-28, and `false` is the ordinary
     // answer: these two agents are RUNNING, so the fan-out delivered the message without any
     // wake being involved. `session-gate.js › feedInbound` reads this rather than re-deriving it.
     wake: false,
-    // 2026-09-25: a PEER wrote it, so the turn it starts may not use the operator's own tools.
-    fromOperator: false,
+    fromOperator: false, // 2026-09-25: a PEER wrote it, so its turn may not use the operator's own tools
   });
 });
 
