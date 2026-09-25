@@ -59,6 +59,7 @@ test("DIRECTIVE + goal: the spawn is NOT idle, and the goal is the launch goal",
   // ruling moved WHEN the goal runs, not what the session may do.
   assert.equal(spec.windowless, true);
   assert.equal(spec.operatorArmed, true);
+  assert.equal(spec.firstTurnFromOperator, true, "ruling 3 (2026-09-25): the goal is an operator turn for Use my tools");
   assert.equal(spec.toolProfile, "full", "still main's own watched-channel DTO");
   assert.equal(spec.launchDepth, undefined, "still absent, so `MAX_LAUNCH_DEPTH` fails closed");
 });

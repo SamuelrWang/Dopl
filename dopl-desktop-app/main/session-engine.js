@@ -198,6 +198,7 @@ async function startSession(spec, rt) {
     nonce,
     // Built below, once the session is registered and named (`firstTurnFor`).
     firstTurn: '',
+    firstTurnFromOperator: spec.firstTurnFromOperator === true,
     resumeSdkId: spec.resumeSdkId || null,
     startedAt: Date.now(),
     // Token delta baseline: `tokensSpent` is not in the record, so both start at 0.

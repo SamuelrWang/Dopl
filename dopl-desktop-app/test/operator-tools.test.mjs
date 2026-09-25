@@ -162,9 +162,17 @@ test("engine: a direction from another session is not the operator; a panel mess
   assert.equal(priv.isPeerTurn(s), false);
 });
 
+test("ruling 3: a directive's goal reaches the session as an operator turn; no other lane stamps it", () => {
+  assert.match(readFileSync(M("session-launch.js"), "utf8"), /firstTurnFromOperator: a\.firstTurnFromOperator === true,/);
+  assert.match(ENGINE, /firstTurnFromOperator: spec\.firstTurnFromOperator === true,/);
+  const stampers = ["launch-directive-spawn.js", "session-launch-op.js", "trigger.js", "session-park.js"]
+    .filter((f) => /firstTurnFromOperator: true/.test(readFileSync(M(f), "utf8")));
+  assert.deepEqual(stampers, ["launch-directive-spawn.js"]);
+});
+
 test("the first pushed turn and every teardown are wired to the window", () => {
   const query = readFileSync(M("session-query.js"), "utf8");
-  assert.match(query, /s\.pushIterator\.push\(io\.userMessage\(s\.firstTurn\)\);[\s\S]*peerTurn\.resetPeerTurn\(s\);\s*peerTurn\.openPeerTurn\(s, false\);/);
+  assert.match(query, /s\.pushIterator\.push\(io\.userMessage\(s\.firstTurn\)\);[\s\S]*peerTurn\.resetPeerTurn\(s\);\s*if \(!s\.firstTurnFromOperator\) peerTurn\.openPeerTurn\(s, false\);/);
   assert.equal((ENGINE.match(/sessionPrivate\.resetPeerTurn\(s\);/g) || []).length, 2, "abortQuery + denyPending");
   assert.match(readFileSync(M("session-park.js"), "utf8"), /privateTurn\.resetPeerTurn\(s\);/);
   assert.match(readFileSync(M("session-directed.js"), "utf8"), /windows\.peerPushJoined\(s, pushedText\);/);

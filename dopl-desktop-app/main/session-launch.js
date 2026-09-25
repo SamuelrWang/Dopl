@@ -131,6 +131,8 @@ async function launch(a) {
     // Spawn idle: registered with prepared context, no query until the first message.
     parkedShell: a.idle === true,
     operatorArmed: a.operatorArmed === true,
+    // The pushed first turn is the operator's (the directive lane alone): it opens no peer window.
+    firstTurnFromOperator: a.firstTurnFromOperator === true,
     triggerSeq: a.triggerSeq,
     // The name the launcher asked for; `startSession` commits it (unique per channel) before the first turn.
     // Absent = no commit here (the New Agent button renames after its idle launch, before any turn).

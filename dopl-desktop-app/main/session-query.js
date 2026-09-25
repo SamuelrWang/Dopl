@@ -54,10 +54,10 @@ async function startQuery(s, rt) {
   const q = rt.start(buildLaunchSpec(s));
   s.query = q;
   s.pushIterator.push(io.userMessage(s.firstTurn));
-  // No human typed a pushed first turn (a responder's ask, a directive's goal, a resume nudge), and a
-  // fresh query owes exactly this one `result`, so the peer window is exactly one unit.
+  // A pushed first turn is a peer's (a responder's ask, a resume nudge) unless the operator's own agent
+  // launched it (a directive's goal, ruling 3); a fresh query owes exactly this one `result`, so one unit.
   peerTurn.resetPeerTurn(s);
-  peerTurn.openPeerTurn(s, false);
+  if (!s.firstTurnFromOperator) peerTurn.openPeerTurn(s, false);
   // Arm the launch watchdog here, the one deferred launch: a child that never emits init must still end.
   if (deps && deps.scheduleIdle) deps.scheduleIdle(s);
   consume(s, q, rt);

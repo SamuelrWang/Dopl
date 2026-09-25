@@ -178,6 +178,9 @@ async function spawn(d, deps) {
     // directive's author is an agent, whose unaddressed posts could never wake an idle shell.
     launchChain: plan.chain, idle: !d.goal,
     operatorArmed: true, // FIX-4: the operator armed this lane, so a handed-in posture is honoured
+    // Ruling 3 (2026-09-25): the goal is an operator turn for "Use my tools". Only the operator's own account
+    // files a directive this machine acts on (the watcher's owner check), so its launcher is always theirs.
+    firstTurnFromOperator: true,
     // The funnel commits it through `commitRename` (unique per channel, refreshes the summary peers read)
     // after registration and BEFORE the first turn, so a goal launch's first turn states it.
     agentName: asked || NEW_AGENT_NAME,
