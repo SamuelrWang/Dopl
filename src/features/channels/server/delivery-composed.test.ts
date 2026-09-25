@@ -88,7 +88,7 @@ function machine(live: Session[]) {
   const fed: Array<{ agentId: string; wake: boolean }> = [];
   const acked: Array<[string, string, number, string, string, string]> = [];
   const api = new Function(
-    "targeting", "sessionEngine", "io", "agentHandles", "deliveryAck", "diag", "agentAuthorNote",
+    "targeting", "sessionEngine", "io", "agentHandles", "deliveryAck", "diag", "agentAuthorNote", "authorAddress",
     `${dispatchBlock()}\n return { feedLiveSession };`
   )(
     { firstClassTaskId: (m: { taskId?: string }) => m.taskId || "" },
@@ -111,7 +111,9 @@ function machine(live: Session[]) {
     // ⚠ `agentAuthorNote` JOINED THE BLOCK'S FREE VARS 2026-09-18 (`main/room-roster.js`): one
     // line naming an agent a session's launch snapshot never saw. This suite is about WHO IS
     // FED, so a no-op is enough — `dopl-desktop-app/test/room-roster.test.mjs` owns the sentence.
-    () => null
+    () => null,
+    // `authorAddress` (2026-09-25): the reply's to=, framing only; `inbound-reply-address.test.mjs` owns it.
+    () => ""
   ) as Machine;
   return { ...api, fed, acked };
 }
