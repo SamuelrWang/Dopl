@@ -211,7 +211,7 @@ const ids = (over = {}) => ({ channelName: "Ops", authorName: "Alice", channelId
 test("buildFencedTurn responder: the delivery section states the EXACT dopl_channel call", () => {
   const out = buildFencedTurn({ side: "responder", message: "summarize it", nonce: "n1", context: ids() });
   assert.ok(out.includes(`op "send", channel "${CH}", container "${WS}"`), "the concrete call, ids and all");
-  assert.match(out, /Make the call exactly like this/, "stated as the call to make, not as trivia");
+  assert.match(out, /Make the call like this, adding the to= each message you are sent names/, "no thread: the call plus its to=");
   assert.match(out, /post your reply into this channel with the mcp__dopl__dopl_channel MCP tool/, "the v1.9 line survives");
   assert.match(out, /there is no other capture/);
 });

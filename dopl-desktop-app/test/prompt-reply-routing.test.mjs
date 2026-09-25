@@ -100,9 +100,7 @@ test("ROUTING: the block lives in the TEXT module, with the other fixed blocks",
   // "REPLY_ROUTING is the last name before the brace" fails on the next block that joins it —
   // reporting a missing import that is right there.
   assert.match(framing, /const \{[^}]*\bREPLY_ROUTING\b[^}]*\} = require\('\.\/prompt-framing-text'\)/);
-  assert.equal(
-    (framing.match(/\.\.\.REPLY_ROUTING,/g) || []).length,
-    4,
-    "spread on all FOUR delivery branches — a missing one is a lane that stays invisible",
-  );
+  // ⚠ ONE spread since 2026-09-25: `deliverySection` has a single return every side shares, so no
+  // branch can drop the block (the first test drives all of them).
+  assert.equal((framing.match(/\.\.\.REPLY_ROUTING\]/g) || []).length, 1, "spread once, on the shared return");
 });
