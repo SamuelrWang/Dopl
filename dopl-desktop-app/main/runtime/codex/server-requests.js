@@ -64,19 +64,35 @@ function approvalInput(method, params) {
  * declined unasked. Named only by `_meta.tool_title` — never the operator-facing `message`.
  */
 function doplElicitation(params) {
+  const call = toolCall(params);
+  // A server's own form or credential prompt is not a tool-call approval.
+  if (!call) return { refused: 'not a tool-call approval' };
+  if (call.server !== mcp.SERVER_KEY) return { refused: 'not from Dopl\'s MCP server' };
+  // An older Dopl server publishes no titles: its asks cannot be named, so none of them runs.
+  if (!call.title) return { refused: `no _meta.${TOOL_TITLE_META} names the tool` };
+  if (DOPL_SHORT_NAMES.indexOf(call.title) === -1) return { refused: `${JSON.stringify(call.title)} is not a Dopl tool` };
+  return { name: call.title, input: call.input };
+}
+
+// `{ server, title, input }` for a tool-call approval, else null. Arrays are rejected: classifiers read `input.op`.
+function toolCall(params) {
   const p = (params && typeof params === 'object') ? params : {};
   const meta = (p._meta && typeof p._meta === 'object') ? p._meta : null;
-  // A server's own form or credential prompt is not a tool-call approval.
-  if (!meta || meta.codex_approval_kind !== MCP_TOOL_CALL_KIND) return { refused: 'not a tool-call approval' };
-  if (p.serverName !== mcp.SERVER_KEY) return { refused: 'not from Dopl\'s MCP server' };
-  const name = meta[TOOL_TITLE_META];
-  // An older Dopl server publishes no titles: its asks cannot be named, so none of them runs.
-  if (typeof name !== 'string' || !name) return { refused: `no _meta.${TOOL_TITLE_META} names the tool` };
-  if (DOPL_SHORT_NAMES.indexOf(name) === -1) return { refused: `${JSON.stringify(name)} is not a Dopl tool` };
+  if (!meta || meta.codex_approval_kind !== MCP_TOOL_CALL_KIND) return null;
   const args = meta.tool_params;
-  // Arrays are rejected: the classifiers read `input.op`.
-  const input = (args && typeof args === 'object' && !Array.isArray(args)) ? args : {};
-  return { name, input };
+  return {
+    server: p.serverName,
+    title: typeof meta[TOOL_TITLE_META] === 'string' ? meta[TOOL_TITLE_META] : '',
+    input: (args && typeof args === 'object' && !Array.isArray(args)) ? args : {},
+  };
+}
+
+/** A tool-call approval from one of the operator's own servers ("Use my tools"), named the way the gate
+ *  classifies an operator tool (`mcp__<server>__<tool>`), or null. */
+function operatorElicitation(params, servers) {
+  const call = toolCall(params);
+  if (!call || call.server === mcp.SERVER_KEY || !servers || !servers.has(call.server)) return null;
+  return { name: `mcp__${call.server}__${call.title || 'tool'}`, input: call.input };
 }
 
 // A gate that throws is not an operator who said yes.
@@ -98,8 +114,8 @@ function decisionReply(verdict) {
 
 // `{ action }`, not `{ decision }`. A named Dopl tool reaches the gate; anything else declines unasked.
 // `cancel` is never sent: it means nobody answered, and the gate always answers.
-async function elicitationAnswer(params, decide, log) {
-  const target = doplElicitation(params);
+async function elicitationAnswer(params, decide, log, operatorServers) {
+  const target = operatorElicitation(params, operatorServers) || doplElicitation(params);
   if (target.refused) {
     log(`codex: MCP approval declined unasked — ${target.refused}`);
     return { action: 'decline' };
@@ -108,7 +124,8 @@ async function elicitationAnswer(params, decide, log) {
   return { action: verdict === 'allow' ? 'accept' : 'decline' };
 }
 
-async function answer(message, decide, log) {
+/** `operatorServers`: the Set of the operator's own mounted server names ("Use my tools"), or absent. */
+async function answer(message, decide, log, operatorServers) {
   const msg = message && typeof message === 'object' ? message : {};
   const method = String(msg.method || '');
   const params = msg.params && typeof msg.params === 'object' ? msg.params : {};
@@ -122,7 +139,9 @@ async function answer(message, decide, log) {
     const requested = params.permissions && typeof params.permissions === 'object' ? params.permissions : {};
     return { permissions: verdict === 'allow' ? requested : EMPTY_PERMISSIONS, scope: 'turn' };
   }
-  if (method === MCP_ELICITATION) return elicitationAnswer(params, gate, typeof log === 'function' ? log : () => {});
+  if (method === MCP_ELICITATION) {
+    return elicitationAnswer(params, gate, typeof log === 'function' ? log : () => {}, operatorServers);
+  }
   // Dopl has no surface for a free-form question; this is the protocol-valid empty answer.
   if (method === USER_INPUT) return { answers: {} };
 
@@ -139,6 +158,6 @@ const descriptor = {
 };
 
 module.exports = {
-  answer, decisionReply, doplElicitation, descriptor,
+  answer, decisionReply, doplElicitation, operatorElicitation, descriptor,
   approvalInput, rpcError,
 };

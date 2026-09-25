@@ -8,17 +8,10 @@
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const { MCP_URL } = require('../../config');
 const { NATIVE_BUILTINS } = require('../../tool-profiles');
+const { isDoplServer } = require('../../operator-tools');
 const { CLAUDEAI_MCP_ENV } = require('./loader');
 const { diag } = require('../../diag');
-
-const MCP_HOST = new URL(MCP_URL).host;
-// Dopl's own entry is the session's container-locked one; a second route to Dopl would bypass the lock.
-const isDoplEntry = (name, entry) => {
-  if (name === 'dopl') return true;
-  try { return typeof entry.url === 'string' && new URL(entry.url).host === MCP_HOST; } catch (_) { return false; }
-};
 
 /** The CLI's USER scope (`~/.claude.json › mcpServers`): a project entry is not the operator's everywhere. */
 function userMcpServers(home) {
@@ -27,7 +20,7 @@ function userMcpServers(home) {
   const servers = cfg && cfg.mcpServers && typeof cfg.mcpServers === 'object' ? cfg.mcpServers : {};
   const out = {};
   for (const [name, entry] of Object.entries(servers)) {
-    if (entry && typeof entry === 'object' && !Array.isArray(entry) && !isDoplEntry(name, entry)) out[name] = entry;
+    if (entry && typeof entry === 'object' && !Array.isArray(entry) && !isDoplServer(name, entry.url)) out[name] = entry;
   }
   return out;
 }

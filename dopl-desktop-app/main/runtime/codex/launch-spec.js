@@ -9,6 +9,7 @@ const configHome = require('./config-home');
 const policy = require('./policy');
 const catalog = require('./catalog');
 const skillsFence = require('./skills-fence');
+const operatorTools = require('./operator-tools');
 const resolveBin = require('./resolve-bin');
 const mcp = require('./mcp');
 const mcpReady = require('./mcp-ready');
@@ -65,17 +66,20 @@ function buildLaunchSpec(request) {
 
   const threadStart = { sandbox: pair.sandbox_mode };
   const cwd = channelDirs.sessionSpawnDir(s.channelId);
+  // "Use my tools" in a private channel lifts the native fences (`operator-tools.js`).
+  const natives = operatorTools.nativesOn(s);
   threadStart.config = {
     // Every launch, token or not: `codex_apps` mounts from operator auth (`tools.js › ACCOUNT_FENCE`).
-    features: Object.assign({}, cfg.features),
+    features: Object.assign({}, cfg.features, natives ? operatorTools.NATIVE_FEATURES : null),
     // Without it a workspace-write thread auto-trusts its cwd (`config-home.js › projectTrustFence`).
     projects: configHome.projectTrustFence(cwd),
-    skills: skillsFence.skillsFence({ cwd, codexHome: configHome.privateHome(), log: diag }),
     // A thread-level `[]` silences a home-layer `notify` (`tools.js › NOTIFY_FENCE`).
     notify: tools.NOTIFY_FENCE.slice(),
     // No Dopl bearer in any shell command's env (`mcp.js › shellEnvironmentPolicy`, CX-03).
     shell_environment_policy: mcp.shellEnvironmentPolicy(),
   };
+  // Absent is Codex's own skill discovery; fenced otherwise.
+  if (!natives) threadStart.config.skills = skillsFence.skillsFence({ cwd, codexHome: configHome.privateHome(), log: diag });
   // No token, no Dopl server (the session still launches): an entry that 401s looks like a live path.
   if (wired.usable) threadStart.config.mcp_servers = { [mcp.SERVER_KEY]: server };
   // An OBJECT policy rides `config.approval_policy` (the typed field needs the experimental API).
@@ -99,6 +103,8 @@ function buildLaunchSpec(request) {
     // The per-channel folder: context, not a fence (the sandbox is). Set on the child and on `thread/start`.
     cwd,
     resumeThreadId: s.resumeSdkId || null,
+    // Decided once per spawn and read again at `start` (the catalog's delegation fence).
+    natives,
   };
 }
 
@@ -139,7 +145,7 @@ function makeFrameQueue() {
 
 // Server requests → the held gate (core `{ behavior }` verdicts, F-382); `server-requests.js › answer`
 // translates to Codex's wire words. `updatedInput` is dropped: Codex's reply has no slot for it.
-function makeApprovalHandler(s, dispatch) {
+function makeApprovalHandler(s, dispatch, operatorServers) {
   const gate = axisB.makeCanUseTool(s, dispatch, diag);
   return async function onServerRequest(msg) {
     const params = msg && msg.params ? msg.params : {};
@@ -149,7 +155,7 @@ function makeApprovalHandler(s, dispatch) {
         toolUseID: params.itemId || null,
       });
       return verdict && verdict.behavior === 'allow' ? 'allow' : 'deny';
-    }, diag);
+    }, diag, operatorServers);
   };
 }
 
@@ -247,19 +253,25 @@ function start(spec) {
   }
 
   (async () => {
+    // "Use my tools": the operator's servers, read against THEIR config home (the scrubbed env without
+    // Dopl's private CODEX_HOME). Dopl's own entry wins a name clash.
+    const mine = s.operatorTools ? await operatorTools.operatorServers(codexBin(), buildScrubbedEnv(), log) : {};
+    const config = (spec.threadStart && spec.threadStart.config) || {};
+    if (Object.keys(mine).length) config.mcp_servers = Object.assign(mine, config.mcp_servers);
     // Delegation fence (`catalog.js`): `model_catalog_json` works only as process config (`-c` argv);
-    // the same key in `thread/start.config` is ignored. No catalog fails the launch.
-    const fenced = await catalog.writeDelegationFreeCatalog(env.CODEX_HOME, {
+    // the same key in `thread/start.config` is ignored. No catalog fails the launch. Lifted with the
+    // other native fences in a private channel.
+    const fenced = spec.natives ? null : await catalog.writeDelegationFreeCatalog(env.CODEX_HOME, {
       bin: codexBin(), env, model: (spec.threadStart && spec.threadStart.model) || '',
     });
     if (link.closed) return;
     const conn = client.connect({
-      args: (spec.args || []).concat(catalog.catalogArgs(fenced)),
+      args: (spec.args || []).concat(fenced ? catalog.catalogArgs(fenced) : []),
       env,
       cwd: spec.cwd,
       log,
       onNotification,
-      onServerRequest: makeApprovalHandler(s, spec.dispatch),
+      onServerRequest: makeApprovalHandler(s, spec.dispatch, operatorTools.approvalServers(mine, spec.natives)),
       // An exit is never a clean end-of-stream for a live session; the spawn error is the cause.
       onExit: (code, signal, spawnError) => frames.fail(
         spawnError || new Error(`Codex app-server exited (code ${code}, signal ${signal})`)

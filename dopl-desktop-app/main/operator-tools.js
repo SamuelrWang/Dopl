@@ -9,6 +9,15 @@ const { AGENT_OPS_TOOL_NAMES } = require('./agent-self-ops');
 const { isSharedChannel } = require('./targeting-window');
 const { normalizeToolMode, widestToolModeFor } = require('./session-profiles-runtime');
 const { NATIVE_BUILTINS } = require('./tool-profiles');
+const { MCP_URL } = require('./config');
+
+const MCP_HOST = new URL(MCP_URL).host;
+/** One of the operator's own entries for Dopl: never loaded, since the session's own entry carries the
+ *  container-locked credential and a second route to Dopl would bypass it. */
+function isDoplServer(name, url) {
+  if (name === 'dopl') return true;
+  try { return typeof url === 'string' && new URL(url).host === MCP_HOST; } catch (_) { return false; }
+}
 
 /** An operator tool: a native built-in above, or any MCP tool that is neither Dopl's nor agent-ops'. */
 function isOperatorTool(name) {
@@ -60,4 +69,4 @@ function turnState(s) {
   return toggleOn(s.channelId) && !require('./session-private').isPeerTurn(s) ? 'on' : 'off';
 }
 
-module.exports = { isOperatorTool, operatorToolVerdict, isPrivateChannel, launchScope, turnState };
+module.exports = { isDoplServer, isOperatorTool, operatorToolVerdict, isPrivateChannel, launchScope, turnState };
