@@ -141,7 +141,8 @@ describe("ordering", () => {
     // the branch is alone).
     const later = files.filter((f) => f.slice(0, 14) > "20260930130000");
     for (const name of later) {
-      const laterSql = strip(read(name));
+      // A COMMENT ON the column documents it and re-states no CHECK.
+      const laterSql = strip(read(name)).replace(/COMMENT ON[\s\S]*?';/g, "");
       expect(laterSql, `${name} re-states the plan CHECK`).not.toMatch(
         /workspace_billing[\s\S]{0,200}?plan/
       );
