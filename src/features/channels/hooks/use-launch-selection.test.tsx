@@ -21,8 +21,6 @@ const setAgentDefaults = vi.fn();
 /** What a current main answers (`channel-dir-ipc.js › channels:getLaunchPosture`): a Full channel
  *  whose Codex record migrated with its own, narrower level. */
 const postureReply = (over: Record<string, unknown> = {}) => ({
-  tools: "bypass",
-  messages: "ask",
   runtime: "",
   runtimes: REAL_DESCRIPTORS,
   defaultRuntime: REAL_DEFAULT_RUNTIME,

@@ -117,5 +117,5 @@ function levelProblems(d) {
 }
 
 module.exports = {
-  LEVELS, normalizeLevel, levelSettings, levelOf, settingText, describe, levelTableFor, toolWordFor, levelProblems,
+  LEVELS, levelSettings, levelOf, settingText, describe, levelTableFor, toolWordFor, levelProblems,
 };

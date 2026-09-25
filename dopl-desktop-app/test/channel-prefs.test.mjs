@@ -115,7 +115,6 @@ const FAKE_RUNTIMES = Object.freeze([
 // ⚠ `model` LEFT THE WIRE ON 2026-09-23 (Samuel: "We don't need a pin model in the settings"):
 // its ABSENCE is what makes the SPA's own-key probe draw no Model row.
 const onWire = (pair) => ({
-  ...pair,
   selection: { v: 2, runtime: "", messages: pair.messages, byRuntime: {} },
   needsReview: [],
   runtime: "",

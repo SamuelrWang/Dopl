@@ -96,14 +96,13 @@ function register(opts = {}) {
     return folderAnswer(channelId);
   }));
 
-  // The launch posture read: the selected runtime's `{ tools, messages }` own keys (older SPA rows
-  // feature-probe them), the whole `selection` + its `needsReview` sentences (never a read failure),
-  // `runtime` (always present; `''` = default) and the runtime roster/catalogs. Disclosure only:
-  // spawning from it is `launchStartModes`'s alone (H2).
+  // The launch posture read: the whole `selection` + its `needsReview` sentences (never a read
+  // failure), `runtime` (always present; `''` = default) and the runtime roster, catalogs and each
+  // runtime's reading of the levels. Disclosure only: spawning from it is `launchStartModes`'s (H2).
   ipcMain.handle('channels:getLaunchPosture', appWindowOnly('getLaunchPosture', null, async (_event, channelId) => {
     if (!isUuid(channelId)) return null;
     const detail = channelPrefs.getLaunchSelectionDetail(channelId);
-    return Object.assign({}, channelPrefs.getLaunchPosture(channelId), {
+    return Object.assign({
       selection: detail.selection,
       needsReview: detail.review,
       runtime: channelRuntime.getChannelRuntime(channelId),

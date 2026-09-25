@@ -283,8 +283,9 @@ test("EVERY BOUND SENDER gets the real behaviour — the shell and the pop-out a
     // `runtimes` roster it does not shorten. This harness registers no adapters, so it is empty.
     // ⚠ AND THREE MORE SINCE 2026-09-21 (U5), ADDITIVE AGAIN: the record VERSION main writes,
     // the whole VERSIONED, RUNTIME-KEYED selection, and the `needs review` sentences for a record
-    // this build could not fully honour (empty here — the fake record is clean). The legacy three
-    // keys are unchanged and must stay, because every renderer older than U5 feature-probes them.
+    // this build could not fully honour (empty here — the fake record is clean). ⚠ The legacy
+    // `{tools, messages}` pair LEFT the reply 2026-09-25 (the level model): the bundled SPA reads
+    // only `selection` (and `permissionLevels`, from the runtime half this harness stubs).
     // ⚠ AND TWO MORE SINCE 2026-09-21 (U6), ADDITIVE AGAIN: the per-runtime MODEL CATALOG map and
     // the version of its shape. `catalogs: {}` here is "this build registered no adapters", which
     // is a DIFFERENT state from the key being absent (an older desktop) — the harness registers
@@ -292,7 +293,6 @@ test("EVERY BOUND SENDER gets the real behaviour — the shell and the pop-out a
     // `main/channel-runtime-reply.js`; that it still arrives is what this case pins.
     assert.deepEqual(await ipc.handlers["channels:getLaunchPosture"](sender, CH),
       {
-        ...PRESET,
         selection: SELECTION,
         needsReview: [],
         runtime: "",

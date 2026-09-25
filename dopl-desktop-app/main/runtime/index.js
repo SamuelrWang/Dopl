@@ -72,7 +72,6 @@ const expireConnectivity = () => connectivity.expire();
 function selectionContext() {
   const d = descriptorFor;
   return {
-    ids: ids(),
     defaultId: DEFAULT_ID,
     levels: permissionLevel.LEVELS,
     known: (id) => typeof id === 'string' && REGISTRY.has(id),
