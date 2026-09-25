@@ -45,6 +45,8 @@ const { displayText, IDENTITY_NAME_MAX } = summaryText;
 const { heldGatesFor } = req(join(MAIN, "session-held-gates.js"));
 // RC-15's one spelling of "no model pick". Injected REAL; the module requires nothing.
 const { pickOf } = req(join(MAIN, "runtime", "selection-vocabulary.js"));
+// The effective-permission reading (2026-09-25). Injected REAL: the registry is electron-free at load.
+const { describePermission } = req(join(MAIN, "runtime", "index.js"));
 
 // Through `module.exports`, not END: the push wiring after the pure block is evaluated too.
 const BLOCK = between(SRC, "// ─── BEGIN SESSION-SUMMARY-PURE", "module.exports = {");
@@ -94,13 +96,15 @@ export function load() {
     "listeningState",
     "diag",
     "pickOf",
+    "describePermission",
     `${BLOCK}\n return { ${EXPORTED.join(", ")} };`
   )(
     metricOrNull, metrics, noteEvent, detailFor, endReasonFor, displayNameFor, descriptionForAgent,
     displayText, IDENTITY_NAME_MAX, heldGatesFor,
     PILL_STATES, ACTIVITY_PILL, PILL_ENDED, pillState, queryTornDown, listeningState,
     (...parts) => logged.push(parts.join(" ")),
-    pickOf
+    pickOf,
+    describePermission
   );
   const spaWindow = {
     destroyed: false,

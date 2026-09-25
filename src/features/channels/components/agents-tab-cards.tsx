@@ -23,6 +23,7 @@ import { AgentEndedPill, AgentLiveness } from "./agent-bits";
 import {
   agentDisplayName,
   agentLiveness,
+  agentPermissionLabel,
   agentRunningModel,
   NO_THREAD_LABEL,
   peerRowStale,
@@ -120,6 +121,7 @@ export function AgentCard({
   const description = agentDescription(agent);
   // The session's running model, never the channel's stored pick; labelled from the runtime's catalog.
   const modelLabel = agentModelShortLabel(agentRunningModel(agent), catalogs);
+  const permissionLabel = agentPermissionLabel(agent);
   // Spawn-time snapshot; own cards only — on a peer card a private identity's name is an existence oracle.
   const identityName = agent.identityName?.trim() || null;
 
@@ -164,6 +166,11 @@ export function AgentCard({
         )}
         {modelLabel && (
           <span className="shrink-0 text-text-muted">· {modelLabel}</span>
+        )}
+        {permissionLabel && (
+          <span className="shrink-0 text-text-muted" title={agent.permission?.setting}>
+            · {permissionLabel}
+          </span>
         )}
       </div>
 

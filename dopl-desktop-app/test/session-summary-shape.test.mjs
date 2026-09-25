@@ -55,6 +55,9 @@ test("SHAPE: a live summary carries exactly what the Agents tab and the agent vi
       // launched on. An absent Axis A reads null (the fixture's state carries no runtime word
       // list), never one runtime's word; an absent Axis B reads `ask`.
       toolMode: null,
+      // The EFFECTIVE permission (2026-09-25), read off the same state: no tool word fails closed to
+      // the default runtime's Ask, stated in its own words.
+      permission: { runtime: "Claude Code", level: "ask", label: "Ask each time", setting: "" },
       messageMode: "ask",
       // `model` (2026-08-22, Samuel's model-selection ruling), and the fixture shows the
       // PRECEDENCE: the SDK's own reported id (`s.liveModel`) beats the operator's pick, because
@@ -234,4 +237,14 @@ test("SHAPE: a settled registry entry is never listed", () => {
   const m = load();
   m.bind({ sessions: new Map([["chan-1:task-1", session({ settled: true })]]) });
   assert.deepEqual(m.list(), []);
+});
+
+test("PERMISSION: the badge is the session's REAL state — runtime, level name and native words", () => {
+  const m = load();
+  const s = { ...session(), runtimeId: "codex", state: { phase: "running", activity: "working", parked: false, toolMode: "never", native: { sandbox_mode: "danger-full-access" } } };
+  m.bind({ sessions: new Map([[s.key, s]]) });
+  assert.deepEqual(m.list()[0].permission, { runtime: "Codex", level: "full", label: "Full access", setting: "never/danger-full-access" });
+  // A live narrowing moves the tool mode; the spawn-time sandbox stays, and the badge says so.
+  s.state = { ...s.state, toolMode: "on-request" };
+  assert.deepEqual(m.list()[0].permission, { runtime: "Codex", level: "auto", label: "Ask for approval", setting: "on-request/danger-full-access" });
 });

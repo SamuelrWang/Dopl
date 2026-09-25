@@ -350,6 +350,12 @@ export function agentRunningModel(
   return normalizeAgentModel(session.model);
 }
 
+/** The effective-permission badge (`Codex · Full access`), or `null` when this desktop reported none. */
+export function agentPermissionLabel(session: DesktopSessionSummary): string | null {
+  const p = session.permission;
+  return p && p.runtime && p.label ? `${p.runtime} · ${p.label}` : null;
+}
+
 /** WHERE AN AGENT IS ON NO THREAD (Samuel, 2026-08-27). ⚠ It read "no thread title" — a MISSING
  *  FIELD, where the truth is a PLACE: a channel-level agent is on the ROOM on purpose
  *  (`agents-controls.ts`: `taskId: null`). ⚠ ONE STATEMENT; THREE callers each spelled it out — the third (`agents-tab-cards.tsx › AgentCard`) was missed by the 2026-08-27 wave and converted 2026-08-28, so the card and the panel it opens no longer disagree. */

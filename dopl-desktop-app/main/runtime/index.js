@@ -84,8 +84,14 @@ function selectionContext() {
   };
 }
 
+/** A running session's effective permission: `{ runtime, level, label, setting }` in its runtime's words. */
+function describePermission(runtimeId, tools, native) {
+  const d = descriptorFor(runtimeId);
+  return { runtime: d.label, ...permissionLevel.describe(d, tools, native) };
+}
+
 module.exports = {
-  resolve, descriptorFor, runtimeFor, acquire, ids, all, connectedIds, expireConnectivity,
+  resolve, descriptorFor, runtimeFor, acquire, ids, all, connectedIds, expireConnectivity, describePermission,
   DEFAULT_ID,
   capability, // one require answers a capability question
   selectionContext,

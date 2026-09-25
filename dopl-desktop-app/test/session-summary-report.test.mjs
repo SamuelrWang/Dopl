@@ -83,7 +83,7 @@ test("REPORT: `list()` narrows the report-only `key` back off — `workspaceId` 
     "identityName",
     "lastActivityAt", "lastDeniedTool", "lastWakeAt", "lastWakeSeq", "listening", "messageMode",
     "model",
-    "name", "runtimeId", "sessionId", "stale", "startedAt", "state", "taskId",
+    "name", "permission", "runtimeId", "sessionId", "stale", "startedAt", "state", "taskId",
     "threadTitle", "tokensDelta", "tokensSpent", "toolLabel", "toolMode",
     "turns",
     // `workspaceId` joined the WIRE on 2026-09-14 (the pop-out rail routes by it).

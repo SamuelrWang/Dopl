@@ -9,6 +9,7 @@ const { noteEvent, detailFor, endReasonFor } = require('./session-detail');
 const { displayNameFor, descriptionForAgent } = require('./agent-names');
 const { diag } = require('./diag');
 const { pickOf } = require('./runtime/selection-vocabulary');
+const { describePermission } = require('./runtime');
 const { displayText, IDENTITY_NAME_MAX } = require('./session-summary-text'); const { heldGatesFor } = require('./session-held-gates');
 
 // ─── BEGIN SESSION-SUMMARY-PURE (injectable; unit-tested via source extraction) ──────
@@ -45,6 +46,8 @@ function liveSummary(s, name) {
     toolLabel: (s && s.lastToolLabel) || null,
     // The live posture (reducer state, not the stored launch posture); absent fails closed to the narrowest word.
     toolMode: (s && s.state && (s.state.toolMode || (s.state.toolModes && s.state.toolModes[0]))) || null,
+    // What really runs (live tool mode + spawn-time containment), never the channel's level; local only.
+    permission: describePermission(s && s.runtimeId, s && s.state && s.state.toolMode, s && s.state && s.state.native),
     messageMode: (s && s.state && s.state.messageMode) || 'ask',
     // The runtime's reported model first, then the pick; null is real (a spawn-idle agent started nothing).
     model: (s && s.liveModel) || modelPick(s),
@@ -86,6 +89,7 @@ function endedSummary(e, name) {
     endReason: endReasonFor(e),
     diag: (e && typeof e.diag === 'string' && e.diag) || null,
     toolMode: null,
+    permission: null,
     messageMode: null,
     // A model is a control's value; a control over an ended agent is a control over nothing.
     model: null,

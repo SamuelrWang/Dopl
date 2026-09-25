@@ -54,6 +54,12 @@ export interface DesktopSessionSummary {
    * posture); `null` when ended. Axis A is in the session runtime's words ({@link runtimeId}).
    */
   toolMode?: string | null;
+  /**
+   * What this session really runs at: its runtime's name, the permission level its live tool mode
+   * and spawn-time containment meet, that level's own name, and the native words
+   * (`never/danger-full-access`). Local only; `null` when ended, absent from an older desktop.
+   */
+  permission?: { runtime: string; level: string; label: string; setting: string } | null;
   messageMode?: "ask" | "auto_inbound" | "auto_outbound" | "auto_both" | null;
   /**
    * The runtime stamped at spawn, never re-chosen: running-agent surfaces read this runtime's

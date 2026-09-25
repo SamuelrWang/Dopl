@@ -70,6 +70,7 @@ import {
   agentDisplayName,
   agentKey,
   agentLiveness,
+  agentPermissionLabel,
   agentRunningModel,
   postDestination,
   parseAgentPostStamp,
@@ -410,6 +411,7 @@ export function AgentPanelHeader({
   // The desktop's model rosters, so the chip names a live model the way its runtime does (F15).
   const { catalogs } = useChannelLaunchPosture(agent.channelId);
   const modelLabel = agentModelShortLabel(agentRunningModel(agent), catalogs);
+  const permissionLabel = agentPermissionLabel(agent);
   return (
     <header className="flex h-[56px] shrink-0 items-center gap-2 border-b border-border-default px-3.5">
       <Bot size={15} aria-hidden className="shrink-0 text-text-secondary" />
@@ -431,6 +433,11 @@ export function AgentPanelHeader({
           {modelLabel && (
             <span className="shrink-0 text-text-muted">
               · {modelLabel}
+            </span>
+          )}
+          {permissionLabel && (
+            <span className="shrink-0 text-text-muted" title={agent.permission?.setting}>
+              · {permissionLabel}
             </span>
           )}
         </span>
