@@ -242,6 +242,14 @@ test("REGRESSION 2026-09-25: a stored bypass/auto_both channel with NO Codex rec
   assert.deepEqual(m.disk.channelLaunchSelection[CH_A], { v: 3, runtime: "", messages: "auto_both", level: "full", byRuntime: {} });
 });
 
+test("NOTHING ever chosen still fails closed to Ask — on Codex that is the app's own Ask pair, not a wider one", () => {
+  const m = load();
+  assert.equal(m.prefs.hasLaunchPosture(CH_A), false);
+  assert.equal(m.prefs.launchPostureFor(CH_A, "codex").level, "ask");
+  assert.deepEqual(m.prefs.launchStartModes(CH_A, "codex"), { tools: "on-request", messages: "auto_inbound", native: { sandbox_mode: "workspace-write" } });
+  assert.equal(m.prefs.launchStartModes(CH_A, "claude").tools, "manual");
+});
+
 test("an explicit Codex record survives migration for Codex; a level write replaces it", () => {
   const m = load({ disk: { channelLaunchSelection: { [CH_A]: {
     v: 2, runtime: "", messages: "ask",
