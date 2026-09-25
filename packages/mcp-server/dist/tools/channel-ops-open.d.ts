@@ -13,6 +13,7 @@
  */
 import type { ChannelVisibility, DoplClient } from "@dopl/client";
 import { type ToolResponse } from "./respond";
+import type { WorkspaceDirectory } from "../workspace-directory.js";
 /** Options for opOpen — a normal channel, or a `direct` message with `member`. */
 interface OpenOptions {
     direct?: boolean;
@@ -21,6 +22,6 @@ interface OpenOptions {
     topic?: string;
     visibility?: ChannelVisibility;
 }
-export declare function opOpen(client: DoplClient, opts: OpenOptions): Promise<ToolResponse>;
+export declare function opOpen(client: DoplClient, directory: WorkspaceDirectory, opts: OpenOptions): Promise<ToolResponse>;
 export declare function opInvite(client: DoplClient, channelRef: string, memberRef: string): Promise<ToolResponse>;
 export {};

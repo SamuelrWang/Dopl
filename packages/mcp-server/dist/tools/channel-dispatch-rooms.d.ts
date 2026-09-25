@@ -22,6 +22,7 @@ import type { DoplClient } from "@dopl/client";
 import { type ToolResponse } from "./respond";
 import { CHANNEL_INPUT_SHAPE } from "./channel-schema";
 import { type RoomsAction } from "./channel-vocab";
+import type { WorkspaceDirectory } from "../workspace-directory.js";
 import type { z } from "zod";
 import type { ZodObject } from "zod";
 /**
@@ -39,5 +40,5 @@ type ChannelArgs = z.infer<ZodObject<typeof CHANNEL_INPUT_SHAPE>> & {
  * `open`. The two lists are disjoint, so membership settles the pair.
  */
 export declare function isRoomsAction(action: string): action is RoomsAction;
-export declare function dispatchRoomsAction(action: RoomsAction, args: ChannelArgs, client: DoplClient, selfUserId: string | null, isAdmin: boolean): Promise<ToolResponse>;
+export declare function dispatchRoomsAction(action: RoomsAction, args: ChannelArgs, client: DoplClient, selfUserId: string | null, isAdmin: boolean, directory: WorkspaceDirectory): Promise<ToolResponse>;
 export {};

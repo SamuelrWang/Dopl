@@ -12,6 +12,7 @@
 
 import { describe, it, expect, vi } from "vitest";
 import type { DoplClient } from "@dopl/client";
+import type { WorkspaceDirectory } from "../workspace-directory";
 import { opInvite, opOpen } from "./channel-ops-open";
 import { opPost } from "./channel-ops-write";
 import {
@@ -89,9 +90,16 @@ function stubClient(overrides: Record<string, unknown> = {}): DoplClient {
   return {
     listChannels: vi.fn(async () => [HOSTILE_CHANNEL]),
     listWorkspaceMembers: vi.fn(async () => [HOSTILE_MEMBER]),
+    getWorkspaceId: () => "ws-1",
     ...overrides,
   } as unknown as DoplClient;
 }
+
+/** The call is bound to a standard workspace, so `opOpen` takes the plain-channel path. */
+const WORKSPACE_DIRECTORY = {
+  lockedWorkspaceId: () => null,
+  containerKindIndex: async () => new Map([["ws-1", "workspace"]]),
+} as unknown as WorkspaceDirectory;
 
 // ── The channel NAME, at every write op that names a channel ────────────
 
@@ -178,7 +186,7 @@ describe("Q1 write · a hostile channel NAME", () => {
       })),
     });
 
-    const text = (await opOpen(client, { name: FORGERY })).content[0].text;
+    const text = (await opOpen(client, WORKSPACE_DIRECTORY, { name: FORGERY })).content[0].text;
 
     expectContained(text);
     expectNoForgedStructure(text);
@@ -207,7 +215,7 @@ describe("Q1-D write · a hostile display_name", () => {
       createChannel: vi.fn(async () => ({ id: "dm-1", slug: "dm-a-b" })),
     });
 
-    const text = (await opOpen(client, { direct: true, member: "u-peer" }))
+    const text = (await opOpen(client, WORKSPACE_DIRECTORY, { direct: true, member: "u-peer" }))
       .content[0].text;
 
     expectContained(text);

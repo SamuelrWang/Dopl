@@ -6,6 +6,7 @@
 import { AgentIdentityMethods } from "./client-agent-identities.js";
 import * as home from "./home.js";
 import type {
+  HomeChannelCreateInput,
   HomeChannelCreateResult,
   HomeChannelsPayload,
 } from "./home-types.js";
@@ -15,7 +16,7 @@ export class HomeMethods extends AgentIdentityMethods {
     return home.getHomeChannels(this.transport);
   }
 
-  createHomeChannel(input: { name: string }): Promise<HomeChannelCreateResult> {
+  createHomeChannel(input: HomeChannelCreateInput): Promise<HomeChannelCreateResult> {
     return home.createHomeChannel(this.transport, input);
   }
 }

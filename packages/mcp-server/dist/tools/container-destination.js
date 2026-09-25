@@ -7,6 +7,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.DESTINATION_HEADINGS = exports.HOME_CHANNEL_ROW_NOT_SHARED_CODE = void 0;
 exports.homeChannelRowNotShared = homeChannelRowNotShared;
 exports.resolveHomeChannelContainer = resolveHomeChannelContainer;
+exports.landsInHomeSpace = landsInHomeSpace;
 exports.resolveHomeChannelId = resolveHomeChannelId;
 exports.resolveChannelShareTarget = resolveChannelShareTarget;
 const client_1 = require("@dopl/client");
@@ -42,6 +43,23 @@ directory) {
     }
     catch {
         return null;
+    }
+}
+/**
+ * Does this call land in the caller's Home space? Unbound and unlocked = yes: the server resolves
+ * the caller's Home. Any doubt answers false, and the server's fence then refuses by name.
+ */
+async function landsInHomeSpace(client, directory) {
+    try {
+        if (directory.lockedWorkspaceId() !== null)
+            return false;
+        const workspaceId = client_1.workspaceContext.getStore() ?? client.getWorkspaceId();
+        if (!workspaceId)
+            return true;
+        return (await directory.containerKindIndex()).get(workspaceId) === "personal";
+    }
+    catch {
+        return false;
     }
 }
 /**

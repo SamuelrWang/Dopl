@@ -53,6 +53,7 @@ export type {
 } from "./agent-identity-types.js";
 export type {
   ChannelPendingLink,
+  HomeChannelCreateInput,
   HomeChannelCreateResult,
   HomeChannelsPayload,
 } from "./home-types.js";

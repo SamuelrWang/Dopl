@@ -19,7 +19,8 @@ const call_ref_js_1 = require("../call-ref.js");
 const respond_1 = require("./respond");
 const channel_shared_1 = require("./channel-shared");
 const narration_1 = require("./narration");
-async function opOpen(client, opts) {
+const container_destination_1 = require("./container-destination");
+async function opOpen(client, directory, opts) {
     // Direct branch: open (or dedup-return) a 1:1 channel — the server dedups a
     // repeat DM to the same peer, so this is idempotent.
     if (opts.direct) {
@@ -36,6 +37,10 @@ async function opOpen(client, opts) {
         ].join("\n"));
     }
     const name = opts.name;
+    // The Home space holds no channels (the server refuses one); a room opened there is a home channel.
+    if (await (0, container_destination_1.landsInHomeSpace)(client, directory)) {
+        return openHomeChannel(client, name, opts);
+    }
     let channel;
     try {
         channel = await client.createChannel({
@@ -72,6 +77,19 @@ async function opOpen(client, opts) {
         // authored a value is what leaves a peer-typed string raw.
         `Created channel **${(0, channel_shared_1.inlineOr)(channel.name, narration_1.NO_NAME)}** (slug: \`${channel.slug}\` · id: \`${channel.id}\`). ${visNote}${description}`,
         `Post with ${(0, call_ref_js_1.callRef)("channel.send", { channel: `"${channel.slug}"`, body: '"..."' })}; add members with ${(0, call_ref_js_1.callRef)("channel.rooms.invite", {}, { form: "op" })}.`,
+    ].join("\n"));
+}
+/** A home channel is its own private container; `visibility` cannot widen it at mint (an agent may not
+ *  set visibility on PATCH either), so a public ask is answered, not dropped silently. */
+async function openHomeChannel(client, name, opts) {
+    const { channel } = await client.createHomeChannel({ name, topic: opts.topic });
+    const safeTopic = channel.topic ? (0, channel_shared_1.neutralizeInline)(channel.topic) : null;
+    return (0, respond_1.ok)([
+        `Created home channel **${(0, channel_shared_1.inlineOr)(channel.name, narration_1.NO_NAME)}** in its own container (container: \`${channel.workspaceId}\` · slug: \`${channel.slug}\` · id: \`${channel.id}\`). Your Home space holds no channels, so this is where the room lives. Private — you are in it alone.${safeTopic ? ` Description: ${safeTopic}` : ""}`,
+        ...(opts.visibility === "public"
+            ? ["A home channel starts private; the user can make it public from the Dopl app."]
+            : []),
+        `Post with ${(0, call_ref_js_1.callRef)("channel.send", { channel: `"${channel.id}"`, body: '"..."' })}. Adding a person is an interactive-session act — ask the user to do it from the Dopl app.`,
     ].join("\n"));
 }
 async function opInvite(client, channelRef, memberRef) {

@@ -6,6 +6,7 @@
 
 import type { DoplTransport } from "./transport.js";
 import type {
+  HomeChannelCreateInput,
   HomeChannelCreateResult,
   HomeChannelsPayload,
 } from "./home-types.js";
@@ -28,7 +29,7 @@ export async function getHomeChannels(
  *  a room you are alone in reaches no other person. */
 export async function createHomeChannel(
   t: DoplTransport,
-  input: { name: string }
+  input: HomeChannelCreateInput
 ): Promise<HomeChannelCreateResult> {
   return t.request<HomeChannelCreateResult>("/api/channels?scope=account", {
     method: "POST",

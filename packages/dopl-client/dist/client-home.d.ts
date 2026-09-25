@@ -3,10 +3,8 @@
  * delegation to `home.ts`; the method names are pinned by `client-surface.test.ts`.
  */
 import { AgentIdentityMethods } from "./client-agent-identities.js";
-import type { HomeChannelCreateResult, HomeChannelsPayload } from "./home-types.js";
+import type { HomeChannelCreateInput, HomeChannelCreateResult, HomeChannelsPayload } from "./home-types.js";
 export declare class HomeMethods extends AgentIdentityMethods {
     getHomeChannels(): Promise<HomeChannelsPayload>;
-    createHomeChannel(input: {
-        name: string;
-    }): Promise<HomeChannelCreateResult>;
+    createHomeChannel(input: HomeChannelCreateInput): Promise<HomeChannelCreateResult>;
 }

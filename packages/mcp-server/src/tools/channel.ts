@@ -422,7 +422,7 @@ export function registerChannelTool(
           if (!isRoomsAction(action)) {
             return err(unknownActionRefusal("rooms", action));
           }
-          return dispatchRoomsAction(action, args, client, selfUserId, isAdmin);
+          return dispatchRoomsAction(action, args, client, selfUserId, isAdmin, directory);
         }
 
         // ⚠ THE FOLD, AND IT WRITES NO MESSAGE. It re-files rows that already

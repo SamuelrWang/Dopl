@@ -46,6 +46,24 @@ export async function resolveHomeChannelContainer(
 }
 
 /**
+ * Does this call land in the caller's Home space? Unbound and unlocked = yes: the server resolves
+ * the caller's Home. Any doubt answers false, and the server's fence then refuses by name.
+ */
+export async function landsInHomeSpace(
+  client: DoplClient,
+  directory: WorkspaceDirectory,
+): Promise<boolean> {
+  try {
+    if (directory.lockedWorkspaceId() !== null) return false;
+    const workspaceId = workspaceContext.getStore() ?? client.getWorkspaceId();
+    if (!workspaceId) return true;
+    return (await directory.containerKindIndex()).get(workspaceId) === "personal";
+  } catch {
+    return false;
+  }
+}
+
+/**
  * The one channel in a home-channel container, or null: two would be unresolvable, never picked.
  * The filter is the positive `container.kind === "link"` plus an exact container id (F-564).
  */

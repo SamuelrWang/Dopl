@@ -21,6 +21,11 @@ export declare function resolveHomeChannelContainer(client: DoplClient,
 /** Optional: an absent directory means "not known" (null). */
 directory?: WorkspaceDirectory): Promise<string | null>;
 /**
+ * Does this call land in the caller's Home space? Unbound and unlocked = yes: the server resolves
+ * the caller's Home. Any doubt answers false, and the server's fence then refuses by name.
+ */
+export declare function landsInHomeSpace(client: DoplClient, directory: WorkspaceDirectory): Promise<boolean>;
+/**
  * The one channel in a home-channel container, or null: two would be unresolvable, never picked.
  * The filter is the positive `container.kind === "link"` plus an exact container id (F-564).
  */

@@ -349,7 +349,7 @@ directory) {
                 if (!(0, channel_dispatch_rooms_1.isRoomsAction)(action)) {
                     return (0, respond_1.err)((0, channel_vocab_1.unknownActionRefusal)("rooms", action));
                 }
-                return (0, channel_dispatch_rooms_1.dispatchRoomsAction)(action, args, client, selfUserId, isAdmin);
+                return (0, channel_dispatch_rooms_1.dispatchRoomsAction)(action, args, client, selfUserId, isAdmin, directory);
             }
             // ⚠ THE FOLD, AND IT WRITES NO MESSAGE. It re-files rows that already
             // exist under one card, so it is neither a send nor a read: `send`'s

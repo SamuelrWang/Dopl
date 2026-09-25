@@ -24,6 +24,8 @@ import {
 } from "./channel-shared";
 
 import { NO_NAME } from "./narration";
+import { landsInHomeSpace } from "./container-destination";
+import type { WorkspaceDirectory } from "../workspace-directory.js";
 
 /** Options for opOpen — a normal channel, or a `direct` message with `member`. */
 interface OpenOptions {
@@ -36,6 +38,7 @@ interface OpenOptions {
 
 export async function opOpen(
   client: DoplClient,
+  directory: WorkspaceDirectory,
   opts: OpenOptions,
 ): Promise<ToolResponse> {
   // Direct branch: open (or dedup-return) a 1:1 channel — the server dedups a
@@ -56,6 +59,10 @@ export async function opOpen(
   }
 
   const name = opts.name as string;
+  // The Home space holds no channels (the server refuses one); a room opened there is a home channel.
+  if (await landsInHomeSpace(client, directory)) {
+    return openHomeChannel(client, name, opts);
+  }
   let channel;
   try {
     channel = await client.createChannel({
@@ -95,6 +102,26 @@ export async function opOpen(
       // authored a value is what leaves a peer-typed string raw.
       `Created channel **${inlineOr(channel.name, NO_NAME)}** (slug: \`${channel.slug}\` · id: \`${channel.id}\`). ${visNote}${description}`,
       `Post with ${callRef("channel.send", { channel: `"${channel.slug}"`, body: '"..."' })}; add members with ${callRef("channel.rooms.invite", {}, { form: "op" })}.`,
+    ].join("\n"),
+  );
+}
+
+/** A home channel is its own private container; `visibility` cannot widen it at mint (an agent may not
+ *  set visibility on PATCH either), so a public ask is answered, not dropped silently. */
+async function openHomeChannel(
+  client: DoplClient,
+  name: string,
+  opts: OpenOptions,
+): Promise<ToolResponse> {
+  const { channel } = await client.createHomeChannel({ name, topic: opts.topic });
+  const safeTopic = channel.topic ? neutralizeInline(channel.topic) : null;
+  return ok(
+    [
+      `Created home channel **${inlineOr(channel.name, NO_NAME)}** in its own container (container: \`${channel.workspaceId}\` · slug: \`${channel.slug}\` · id: \`${channel.id}\`). Your Home space holds no channels, so this is where the room lives. Private — you are in it alone.${safeTopic ? ` Description: ${safeTopic}` : ""}`,
+      ...(opts.visibility === "public"
+        ? ["A home channel starts private; the user can make it public from the Dopl app."]
+        : []),
+      `Post with ${callRef("channel.send", { channel: `"${channel.id}"`, body: '"..."' })}. Adding a person is an interactive-session act — ask the user to do it from the Dopl app.`,
     ].join("\n"),
   );
 }

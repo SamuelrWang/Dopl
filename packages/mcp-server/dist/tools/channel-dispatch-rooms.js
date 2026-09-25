@@ -39,7 +39,7 @@ const channel_ops_update_1 = require("./channel-ops-update");
 function isRoomsAction(action) {
     return channel_vocab_1.CHANNEL_ACTIONS.rooms.includes(action);
 }
-async function dispatchRoomsAction(action, args, client, selfUserId, isAdmin) {
+async function dispatchRoomsAction(action, args, client, selfUserId, isAdmin, directory) {
     switch (action) {
         case "list":
             return (0, channel_ops_read_1.opList)(client);
@@ -65,12 +65,12 @@ async function dispatchRoomsAction(action, args, client, selfUserId, isAdmin) {
                 return (0, respond_1.err)(`${(0, call_ref_js_1.callRef)("channel.rooms.open", {}, { form: "op" })} takes \`name\` (a named channel) or \`to\` (a direct 1:1), never both — nothing was opened. Drop \`to\` to open a channel, or drop \`name\` to open the DM.`);
             }
             if (args.to !== undefined) {
-                return (0, channel_ops_open_1.opOpen)(client, { direct: true, member: args.to });
+                return (0, channel_ops_open_1.opOpen)(client, directory, { direct: true, member: args.to });
             }
             const miss = (0, respond_1.missingParams)('rooms action="open"', args, ["name"]);
             if (miss)
                 return miss;
-            return (0, channel_ops_open_1.opOpen)(client, {
+            return (0, channel_ops_open_1.opOpen)(client, directory, {
                 name: args.name,
                 // ⚠ **THE TOPIC IS `summary` (B8).** One field carries "the one-line
                 // intent" everywhere on this surface — a thread's title, a send's

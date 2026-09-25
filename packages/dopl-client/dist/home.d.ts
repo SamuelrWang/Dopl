@@ -4,7 +4,7 @@
  * means `container`. No link mint/revoke/claim is bound: those are `sessionOnly` (they reach a person).
  */
 import type { DoplTransport } from "./transport.js";
-import type { HomeChannelCreateResult, HomeChannelsPayload } from "./home-types.js";
+import type { HomeChannelCreateInput, HomeChannelCreateResult, HomeChannelsPayload } from "./home-types.js";
 /**
  * Every channel the caller is in, every container kind (tell them apart by `Channel.container`).
  * Not narrowed here: the container lock is per MCP connection
@@ -14,6 +14,4 @@ import type { HomeChannelCreateResult, HomeChannelsPayload } from "./home-types.
 export declare function getHomeChannels(t: DoplTransport): Promise<HomeChannelsPayload>;
 /** Create a home channel (a solo container plus one private channel). Reachable by an agent token:
  *  a room you are alone in reaches no other person. */
-export declare function createHomeChannel(t: DoplTransport, input: {
-    name: string;
-}): Promise<HomeChannelCreateResult>;
+export declare function createHomeChannel(t: DoplTransport, input: HomeChannelCreateInput): Promise<HomeChannelCreateResult>;

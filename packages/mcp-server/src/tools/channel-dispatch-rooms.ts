@@ -27,6 +27,7 @@ import { CHANNEL_INPUT_SHAPE } from "./channel-schema";
 import { CHANNEL_ACTIONS, type RoomsAction } from "./channel-vocab";
 import { opList, opListThreads, opMembers } from "./channel-ops-read";
 import { opInvite, opOpen } from "./channel-ops-open";
+import type { WorkspaceDirectory } from "../workspace-directory.js";
 import { opSetThreadMode } from "./channel-ops-threads";
 import { opUpdate } from "./channel-ops-update";
 import type { z } from "zod";
@@ -55,6 +56,7 @@ export async function dispatchRoomsAction(
   client: DoplClient,
   selfUserId: string | null,
   isAdmin: boolean,
+  directory: WorkspaceDirectory,
 ): Promise<ToolResponse> {
   switch (action) {
     case "list":
@@ -87,11 +89,11 @@ export async function dispatchRoomsAction(
         );
       }
       if (args.to !== undefined) {
-        return opOpen(client, { direct: true, member: args.to });
+        return opOpen(client, directory, { direct: true, member: args.to });
       }
       const miss = missingParams('rooms action="open"', args, ["name"]);
       if (miss) return miss;
-      return opOpen(client, {
+      return opOpen(client, directory, {
         name: args.name as string,
         // ⚠ **THE TOPIC IS `summary` (B8).** One field carries "the one-line
         // intent" everywhere on this surface — a thread's title, a send's

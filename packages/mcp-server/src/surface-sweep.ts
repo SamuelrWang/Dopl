@@ -36,7 +36,7 @@ export const WS: WorkspaceListItem = {
 /** Every client method answers `{}` (or its `answers` entry) and is logged, so backend traffic is comparable. */
 function recordingClient(log: string[], answers: Record<string, unknown> = {}): DoplClient {
   const fixed: Record<string, unknown> = {
-    getWorkspaceId: () => null,
+    getWorkspaceId: () => WS.id, // the header pin below
     setWorkspaceId: () => {},
     listWorkspaces: async () => ({ workspaces: [WS] }),
   };

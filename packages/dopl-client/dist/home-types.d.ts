@@ -6,6 +6,11 @@
  */
 import type { Channel } from "./channel-types.js";
 import type { WorkspaceRole } from "./types.js";
+/** `POST /api/channels?scope=account`'s body; `topic` is the product's "description". */
+export interface HomeChannelCreateInput {
+    name: string;
+    topic?: string;
+}
 /** A minted, unclaimed channel link (server: `src/shared/links/types.ts › ChannelPendingLink`).
  *  Read-only here: mint/revoke/claim are `sessionOnly` (they reach a person), so nothing binds them. */
 export interface ChannelPendingLink {
