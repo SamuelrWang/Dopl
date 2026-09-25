@@ -76,6 +76,8 @@ test("feed: EVERY live agent on the thread is fed, and each is told which it is"
     // answer: these two agents are RUNNING, so the fan-out delivered the message without any
     // wake being involved. `session-gate.js › feedInbound` reads this rather than re-deriving it.
     wake: false,
+    // 2026-09-25: a PEER wrote it, so the turn it starts may not use the operator's own tools.
+    fromOperator: false,
   });
 });
 

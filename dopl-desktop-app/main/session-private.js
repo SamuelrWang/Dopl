@@ -65,7 +65,14 @@ function turnInFlight(state) {
 // join can pay back the unit opened for the push's own turn. Bounded; stale entries go oldest-first.
 const PRIVATE_JOIN_MAX = 16;
 
-function openPrivateTurn(s, wasInFlight, prompt) {
+// Two windows share one arithmetic: PRIVATE (a 1:1 panel turn withdraws Axis B's out half) and PEER
+// (a turn the operator did not originate refuses their own tools, `operator-tools.js`).
+const PRIVATE_WINDOW = { depth: 'privateDepth', join: 'privateJoinable' };
+const PEER_WINDOW = { depth: 'peerDepth', join: 'peerJoinable' };
+
+const windowOpen = (s, w) => (Number(s && s[w.depth]) || 0) > 0;
+
+function openWindow(s, w, wasInFlight, prompt) {
   if (!s) return 0;
   // THE WINDOW IS OPENED AFTER THE DISPATCH SINCE 2026-08-31, AND `wasInFlight` IS WHAT MAKES THAT
   // POSSIBLE (F-372). A `steer` at a PARKED session makes the reducer emit `resumeQuery` BEFORE
@@ -78,15 +85,45 @@ function openPrivateTurn(s, wasInFlight, prompt) {
   // dispatch moves activity to `working` and the state can no longer answer the question. Absent
   // falls back to reading the state, so the pre-2026-08-31 one-argument call is unchanged.
   const inFlight = wasInFlight === undefined ? turnInFlight(s.state) : wasInFlight === true;
-  const add = (inFlight && !isPrivateTurn(s)) ? 2 : 1;
-  s.privateDepth = (Number(s.privateDepth) || 0) + add;
+  const add = (inFlight && !windowOpen(s, w)) ? 2 : 1;
+  s[w.depth] = (Number(s[w.depth]) || 0) + add;
   if (inFlight && typeof prompt === 'string' && prompt) {
-    const list = Array.isArray(s.privateJoinable) ? s.privateJoinable : [];
+    const list = Array.isArray(s[w.join]) ? s[w.join] : [];
     list.push(prompt);
     while (list.length > PRIVATE_JOIN_MAX) list.shift();
-    s.privateJoinable = list;
+    s[w.join] = list;
   }
-  return s.privateDepth;
+  return s[w.depth];
+}
+
+function joinWindow(s, w, pushedText) {
+  const list = s && Array.isArray(s[w.join]) ? s[w.join] : [];
+  const text = typeof pushedText === 'string' ? pushedText : '';
+  const i = text ? list.findIndex((p) => text.includes(p)) : -1;
+  if (i === -1) return Number((s && s[w.depth]) || 0);
+  list.splice(i, 1);
+  return closeWindow(s, w);
+}
+
+function resetWindow(s, w) {
+  if (!s) return 0;
+  s[w.depth] = 0;
+  s[w.join] = null;
+  return 0;
+}
+
+// Floored at zero: a stray `result` (a superseded query's drained tail) must never make the NEXT turn
+// read as already closed.
+function closeWindow(s, w) {
+  if (!s) return 0;
+  const next = (Number(s[w.depth]) || 0) - 1;
+  s[w.depth] = next > 0 ? next : 0;
+  if (!s[w.depth]) s[w.join] = null; // no turn left for a join to belong to
+  return s[w.depth];
+}
+
+function openPrivateTurn(s, wasInFlight, prompt) {
+  return openWindow(s, PRIVATE_WINDOW, wasInFlight, prompt);
 }
 
 /**
@@ -95,12 +132,7 @@ function openPrivateTurn(s, wasInFlight, prompt) {
  * channel turn runs with the out half withdrawn. Either order against that `result` pays back one.
  */
 function privatePushJoined(s, pushedText) {
-  const list = s && Array.isArray(s.privateJoinable) ? s.privateJoinable : [];
-  const text = typeof pushedText === 'string' ? pushedText : '';
-  const i = text ? list.findIndex((p) => text.includes(p)) : -1;
-  if (i === -1) return Number((s && s.privateDepth) || 0);
-  list.splice(i, 1);
-  return closePrivateTurn(s);
+  return joinWindow(s, PRIVATE_WINDOW, pushedText);
 }
 
 /**
@@ -110,29 +142,26 @@ function privatePushJoined(s, pushedText) {
  * a crash or an operator End left the surplus behind for the NEXT private turn to open on top of.
  */
 function resetPrivateTurn(s) {
-  if (!s) return 0;
-  s.privateDepth = 0;
-  s.privateJoinable = null;
-  return 0;
+  return resetWindow(s, PRIVATE_WINDOW);
 }
 
-/**
- * A turn ENDED: spend one of the window. ⚠ Floored at zero — a stray `result` (the drained tail
- * of a superseded query) must never push the depth negative and make the NEXT private turn read
- * as already closed.
- */
+/** A turn ENDED: spend one of the window. */
 function closePrivateTurn(s) {
-  if (!s) return 0;
-  const next = (Number(s.privateDepth) || 0) - 1;
-  s.privateDepth = next > 0 ? next : 0;
-  if (!s.privateDepth) s.privateJoinable = null; // no private turn left for a join to belong to
-  return s.privateDepth;
+  return closeWindow(s, PRIVATE_WINDOW);
 }
 
 /** Is the CURRENT turn private? The one question the gate and the narration tag both ask. */
 function isPrivateTurn(s) {
-  return (Number(s && s.privateDepth) || 0) > 0;
+  return windowOpen(s, PRIVATE_WINDOW);
 }
+
+// The PEER window: opened by every push the operator did not author, spent by the same `result` and
+// teardown clocks, so a turn it covers can never outlive its own answer.
+const openPeerTurn = (s, wasInFlight, prompt) => openWindow(s, PEER_WINDOW, wasInFlight, prompt);
+const peerPushJoined = (s, pushedText) => joinWindow(s, PEER_WINDOW, pushedText);
+const resetPeerTurn = (s) => resetWindow(s, PEER_WINDOW);
+const closePeerTurn = (s) => closeWindow(s, PEER_WINDOW);
+const isPeerTurn = (s) => windowOpen(s, PEER_WINDOW);
 
 // `autoSendMessageMode` stood here and is DELETED (2026-09-06, item 8). It forced Axis B's OUT half
 // on over whatever the stored posture said — the mechanism by which the auto-send toggle overrode
@@ -327,6 +356,7 @@ module.exports = {
   closePrivateTurn,
   resetPrivateTurn, // 2026-08-22: a torn-down query owes no results — the window closes with it
   isPrivateTurn,
+  openPeerTurn, peerPushJoined, resetPeerTurn, closePeerTurn, isPeerTurn,
   // ⚠ `autoSendMessageMode` REMOVED 2026-09-06 (item 8) — see the block above it.
   effectiveMessageMode,
   channelMessageMode, // 2026-09-06: the live read of the channel's Messaging value, for the suite

@@ -32,6 +32,9 @@ export const OPS = [
   // sender from a channel with chaining off.
   ["channels:getAgentChain", CH, false],
   ["channels:setAgentChain", { channelId: CH, on: true }, { ok: false }],
+  // 2026-09-25 ("Use my tools"): a shared channel's per-channel flag, the same shape and refusals.
+  ["channels:getUseMyTools", CH, false],
+  ["channels:setUseMyTools", { channelId: CH, on: true }, { ok: false }],
   // 2026-09-18 (default-agent-settings ruling): the machine-user's DEFAULTS record, plus the seed
   // that copies it into a channel at CREATION. `get` / `set` take NO channel id — their subject is
   // the machine-user, like the two orchestrator ops below — so the sender binding is the only

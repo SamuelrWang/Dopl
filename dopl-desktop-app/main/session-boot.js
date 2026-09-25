@@ -80,7 +80,7 @@ function parkedSessionFromRecord(key, rec, sdkId) {
     side: state.side,
     profile: profile,
     // The launch stamps are restored, never minted; absent reads as the cap at the gate.
-    launchDepth: rec.launchDepth, launchChain: rec.launchChain === true,
+    launchDepth: rec.launchDepth, launchChain: rec.launchChain === true, operatorTools: rec.operatorTools || '',
     mode: state.mode,
     counterpartyId: rec.counterpartyId || null,
     bind: rec.bind === 'room' ? 'room' : 'pair',

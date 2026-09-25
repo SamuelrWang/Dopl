@@ -144,7 +144,9 @@ function observe(s, event) {
 /** An adapter's hook: the runtime joined a push into the running turn, so the private window and the directed
  *  capture it opened each pay back the push's own turn. Lazy: `session-private` reaches the runtime registry. */
 function steerJoined(s, pushedText) {
-  require('./session-private').privatePushJoined(s, pushedText);
+  const windows = require('./session-private');
+  windows.privatePushJoined(s, pushedText);
+  windows.peerPushJoined(s, pushedText);
   report(noteSteerJoined(s, pushedText));
 }
 

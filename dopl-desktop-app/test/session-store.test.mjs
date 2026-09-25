@@ -172,7 +172,8 @@ test("durableSessionRecord whitelists exactly the durable fields", () => {
     // than carrying it forward — the same treatment `turnCap` got when the caps went.
     "agentId", "bind", "channelId", "channelName", "counterpartyId",
     "counterpartyName", "direct", "identityName", "key", "launchChain", "launchDepth", "mode", "model",
-    "ownPostSeq", "parkedAt", "phase", "profile", "runtimeId", "sessionId",
+    // "operatorTools" (2026-09-25): the "Use my tools" launch scope, a strict enum ('' otherwise).
+    "operatorTools", "ownPostSeq", "parkedAt", "phase", "profile", "runtimeId", "sessionId",
     "side", "startedAt", "taskId", "taskTitle", "turns", "workspaceId",
   ]);
   // ⚠ A PASSTHROUGH, AND **NULL IS OLD** — `durableSessionRecord` is in the PURE block and may not

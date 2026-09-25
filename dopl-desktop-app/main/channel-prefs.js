@@ -36,7 +36,15 @@ function getLaunchSelectionDetail(channelId) {
   if (!channelId) return { selection: selection.emptySelection(c), review: [], stored: false };
   const raw = readMap(SELECTION_KEY)[channelId];
   if (raw != null) return selection.normalizeSelection(c, raw);
-  return selection.fromLegacy(c, readMap(POSTURE_KEY)[channelId], readMap(RUNTIME_KEY)[channelId]);
+  const detail = selection.fromLegacy(c, readMap(POSTURE_KEY)[channelId], readMap(RUNTIME_KEY)[channelId]);
+  // An unconfigured PRIVATE channel defaults to Full (Samuel, 2026-09-25); anything unprovable stays Ask.
+  if (!detail.stored && isPrivateChannel(channelId)) detail.selection.level = c.levels[c.levels.length - 1];
+  return detail;
+}
+
+// Lazy and fail-closed: the listener pulls electron, and a harness that cannot load it reads "shared".
+function isPrivateChannel(channelId) {
+  try { return require('./operator-tools').isPrivateChannel(channelId); } catch (_err) { return false; }
 }
 
 const getLaunchSelection = (channelId) => getLaunchSelectionDetail(channelId).selection;
@@ -115,6 +123,8 @@ function launchStartModes(channelId, runtimeId) {
 module.exports = {
   getAgentChain: agentChain.getAgentChain,
   setAgentChain: agentChain.setAgentChain,
+  getUseMyTools: agentChain.getUseMyTools,
+  setUseMyTools: agentChain.setUseMyTools,
   getOrchestratorLaunch: orchestratorConsent.getOrchestratorLaunch,
   setOrchestratorLaunch: orchestratorConsent.setOrchestratorLaunch,
   getOrchestratorDirect: orchestratorConsent.getOrchestratorDirect,

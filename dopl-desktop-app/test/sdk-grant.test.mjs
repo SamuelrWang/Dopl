@@ -90,6 +90,7 @@ const { grantDecision, grantKeyFor } = new Function(
   // 2026-08-26 (plan §4.4 B2): the AUDIENCE BELT, injected REAL like every other predicate — a fake
   // would let the harness agree with itself while the shipped gate did something else.
   "containerOnlyDenies", "isDoplToolName", "runtimeFor", "editToolsFor",
+  "operatorToolVerdict", // 2026-09-25: gate step 1.6, injected REAL
   `${BLOCK}
    return { grantDecision, grantKeyFor };`
 )(READ_BUILTINS, WEB_TOOLS, DOPL_SAFE_TOOLS, DENIED_BUILTINS, DOPL_ADMIN_TOOLS, RETIRED_DOPL_TOOLS, UNIVERSAL_HARD_DENY, DOPL_CHANNEL_TOOL, DOPL_SERVER_PREFIX, normalizeProfile, shaKey,
@@ -102,7 +103,8 @@ const { grantDecision, grantKeyFor } = new Function(
   MANAGE.isOwnMachineManage, MANAGE.manageLaneVerdict,
   require(join(HERE, "..", "main", "channel-op-key.js")).channelOpKey,
   AUDIENCE.containerOnlyDenies, NAMES.isDoplToolName, RUNTIME.runtimeFor,
-  (id) => RUNTIME.capability.editScopedTools(RUNTIME.descriptorFor(id)));
+  (id) => RUNTIME.capability.editScopedTools(RUNTIME.descriptorFor(id)),
+  require(join(HERE, "..", "main", "operator-tools.js")).operatorToolVerdict);
 
 const PROFILES = ["read_only", "dopl_only", "full"];
 const ownPost = (channel) => ({ op: "send", channel });

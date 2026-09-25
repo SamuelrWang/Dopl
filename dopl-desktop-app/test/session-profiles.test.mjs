@@ -112,6 +112,8 @@ const { grantDecision, grantKeyFor, POST_GRANT, isOwnChannelPost,
   // 2026-08-26 (plan §4.4 B2): the AUDIENCE BELT, injected REAL — a fake would let the harness
   // agree with itself while the shipped gate did something else.
   "containerOnlyDenies", "isDoplToolName", "runtimeFor", "editToolsFor",
+  // 2026-09-25: the "Use my tools" step (gate 1.6), injected REAL.
+  "operatorToolVerdict",
   `${BLOCK}
    return { grantDecision, grantKeyFor, POST_GRANT, isOwnChannelPost,
             isChannelTool };`
@@ -125,7 +127,8 @@ const { grantDecision, grantKeyFor, POST_GRANT, isOwnChannelPost,
   MANAGE.isOwnMachineManage, MANAGE.manageLaneVerdict,
   require(join(HERE, "..", "main", "channel-op-key.js")).channelOpKey,
   AUDIENCE.containerOnlyDenies, NAMES.isDoplToolName, RUNTIME.runtimeFor,
-  (id) => RUNTIME.capability.editScopedTools(RUNTIME.descriptorFor(id)));
+  (id) => RUNTIME.capability.editScopedTools(RUNTIME.descriptorFor(id)),
+  require(join(HERE, "..", "main", "operator-tools.js")).operatorToolVerdict);
 const { isOwnChannelMarker, OWN_CHANNEL_MARKER_KIND } = OUT;
 
 const CHANNEL_SHORT = "dopl_channel";

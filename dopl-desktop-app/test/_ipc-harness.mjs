@@ -106,6 +106,8 @@ export function bootIpc({ blocked = false } = {}) {
         // worked or not.
         getAgentChain: () => true,
         setAgentChain: (channelId, on) => { writes.push({ channelId, agentChain: on }); return on === true; },
+        getUseMyTools: () => true, // TRUE for the reason above
+        setUseMyTools: (channelId, on) => { writes.push({ channelId, useMyTools: on }); return on === true; },
         // 2026-08-22, the ORCHESTRATOR LAUNCH TOGGLE. The getter answers TRUE for the reason above;
         // `set` records into the SAME `writes` ledger as every other writer here.
         getOrchestratorLaunch: () => true,

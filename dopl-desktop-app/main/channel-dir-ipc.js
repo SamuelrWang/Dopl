@@ -19,6 +19,13 @@ const selectionShape = require('./launch-selection');
 const sessionIpcOps = require('./session-ipc-ops');
 const { diag } = require('./diag');
 
+// A per-channel boolean's handler pair: a malformed id reads false and writes nothing.
+const getFlag = (get) => (_event, channelId) => (isUuid(channelId) ? get(channelId) : false);
+const setFlag = (set) => (_event, payload) => {
+  const p = payload || {};
+  return isUuid(p.channelId) ? { ok: true, on: set(p.channelId, p.on === true) } : { ok: false };
+};
+
 // A posture write applies to the agents already running in the room (Samuel, 2026-08-25), through
 // the existing live op (`setModeByTask`, where coercion and the windowless floor live). Axis A goes
 // only to sessions whose OWN runtime's tool mode moved, in that runtime's words (a containment value
@@ -125,17 +132,12 @@ function register(opts = {}) {
     });
   }));
 
-  // Agent chaining (`channel-agent-chain.js`). A containment bound, so it is stamped at spawn and
-  // NOT fanned out to running sessions.
-  ipcMain.handle('channels:getAgentChain', appWindowOnly('getAgentChain', false, (_event, channelId) => {
-    if (!isUuid(channelId)) return false;
-    return channelPrefs.getAgentChain(channelId);
-  }));
-  ipcMain.handle('channels:setAgentChain', appWindowOnly('setAgentChain', { ok: false }, (_event, payload) => {
-    const p = payload || {};
-    if (!isUuid(p.channelId)) return { ok: false };
-    return { ok: true, on: channelPrefs.setAgentChain(p.channelId, p.on === true) };
-  }));
+  // Per-channel local flags (`channel-agent-chain.js`). Agent chaining is a containment bound, so it is
+  // stamped at spawn and NOT fanned out; "Use my tools" is read live by the gate, so none is needed.
+  ipcMain.handle('channels:getAgentChain', appWindowOnly('getAgentChain', false, getFlag(channelPrefs.getAgentChain)));
+  ipcMain.handle('channels:setAgentChain', appWindowOnly('setAgentChain', { ok: false }, setFlag(channelPrefs.setAgentChain)));
+  ipcMain.handle('channels:getUseMyTools', appWindowOnly('getUseMyTools', false, getFlag(channelPrefs.getUseMyTools)));
+  ipcMain.handle('channels:setUseMyTools', appWindowOnly('setUseMyTools', { ok: false }, setFlag(channelPrefs.setUseMyTools)));
 
   // Agent defaults (`agent-defaults.js`): machine-user scoped, so no channel id; a forged `apply`
   // can only seed a channel with no posture yet. No live fan-out — they govern rooms not yet made.

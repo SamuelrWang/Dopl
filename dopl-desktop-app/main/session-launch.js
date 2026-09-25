@@ -8,6 +8,7 @@ const sessionWindowless = require('./session-windowless');
 const launchBudget = require('./launch-budget');
 // Pure: the windowless-floor refusal and the Axis-B warning, both asked of the runtime's own declaration.
 const profiles = require('./session-profiles');
+const operatorTools = require('./operator-tools');
 // Producers for `context.ontologies` / `context.roster`; each requires lazily and never throws (F-681).
 const ontologyReach = require('./ontology-reach');
 const { diag } = require('./diag');
@@ -109,6 +110,8 @@ async function launch(a) {
     workspaceId: a.workspaceId,
     side: a.side,
     profile: a.toolProfile,
+    // Read once here for all three lanes, from main's own roster and store, never the payload.
+    operatorTools: operatorTools.launchScope(a.channelId),
     mode: a.mode,
     context,
     counterpartyId: a.counterpartyId,

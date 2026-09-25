@@ -137,7 +137,7 @@ function enqueue(s, a) {
   if (disp === 'dispatch') {
     deps.dispatch(s, {
       type: 'inbound_arrived', pendingId: item.pendingId, message: a.message, authorName: a.authorName,
-      authorNote: item.authorNote, addressing: item.addressing,
+      authorNote: item.authorNote, addressing: item.addressing, fromOperator: a.fromOperator === true,
     });
   }
   return true;

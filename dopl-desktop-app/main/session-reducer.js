@@ -38,7 +38,7 @@ function inboundAutoAccepted(state) {
 
 // FEED one counterparty turn. `addressing` is framing-only: the reducer carries it and reads nothing from it.
 function pushInboundEffect(event) {
-  return { type: 'pushInbound', message: event.message, authorName: event.authorName, authorNote: event.authorNote || null, addressing: event.addressing || null };
+  return { type: 'pushInbound', message: event.message, authorName: event.authorName, authorNote: event.authorNote || null, addressing: event.addressing || null, ...(event.fromOperator === true ? { fromOperator: true } : {}) };
 }
 
 function feedInboundEffects(state, event) {

@@ -141,6 +141,9 @@ contextBridge.exposeInMainWorld('dopl', {
     // lifts a depth bound and grants nothing (`main/channel-prefs.js › getAgentChain`).
     getAgentChain: (channelId) => ipcRenderer.invoke('channels:getAgentChain', asId(channelId)),
     setAgentChain: (channelId, on) => ipcRenderer.invoke('channels:setAgentChain', { channelId: asId(channelId), on: on === true }),
+    // "Use my tools" in a SHARED channel (a private one always has them): `main/operator-tools.js`.
+    getUseMyTools: (channelId) => ipcRenderer.invoke('channels:getUseMyTools', asId(channelId)),
+    setUseMyTools: (channelId, on) => ipcRenderer.invoke('channels:setUseMyTools', { channelId: asId(channelId), on: on === true }),
     // Default agent settings: what a NEW channel starts on. No channel id (one operator, one Mac).
     // A seed, never a launch-time read (`main/agent-defaults.js`: that would re-open H2);
     // `applyAgentDefaults` refuses a channel that already has a posture.

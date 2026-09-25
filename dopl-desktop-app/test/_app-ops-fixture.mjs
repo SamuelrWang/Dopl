@@ -49,6 +49,10 @@ export const APP_OPS = [
   // It has exactly ONE consumer (`sessions:launch`); a second reader re-opens the failure H2 exists
   // to prevent, which is what the census in `test/session-preset-start.test.mjs` enforces.
   "channels.getLaunchPosture",
+  // 2026-09-25: `channels.get/setUseMyTools` — appWindowOnly, UUID-gated, per channel, default OFF,
+  // boolean-only. It gives a SHARED channel's sessions the operator's own tools; the gate reads it
+  // live, so turning it off narrows running sessions at once and turning it on loads at next launch.
+  "channels.getUseMyTools",
   // 2026-08-20: `channels.getPermissionPreset` / `.setPermissionPreset` were REMOVED, and a removal
   // is exactly what this file exists to catch — so it is stated rather than absorbed. The feature
   // was already missing: the arm's web controls lived in `launch-panel.tsx`'s INBOUND branch, which
@@ -57,6 +61,7 @@ export const APP_OPS = [
   "channels.setAgentDefaults", // 2026-09-18 — the review is on `channels.applyAgentDefaults` above
   // `channels.setAutoSend` left 2026-09-06 — the removal review is on `channels.getAutoSend` above.
   "channels.setLaunchPosture",
+  "channels.setUseMyTools", // 2026-09-25 — the review is on `channels.getUseMyTools` above
   "getAuthState",
   "onAuthState",
   "onNavigate",

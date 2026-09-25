@@ -68,6 +68,8 @@ function durableSessionRecord(rec) {
     launchDepth: typeof r.launchDepth === 'number' && Number.isFinite(r.launchDepth) && r.launchDepth >= 0
       ? Math.floor(r.launchDepth) : null,
     launchChain: r.launchChain === true,
+    // "Use my tools" scope at launch (`operator-tools.js › launchScope`); anything else loads none.
+    operatorTools: r.operatorTools === 'private' || r.operatorTools === 'shared' ? r.operatorTools : '',
     mode: r.mode,
     phase: r.phase,
     startedAt: r.startedAt,

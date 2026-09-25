@@ -75,7 +75,7 @@ function resumeParked(s) {
   reapPriorChild(s);
   // A rebuilt query owes no results: the private window and any directed capture reset with it.
   s.resuming = true;
-  privateTurn.resetPrivateTurn(s);
+  privateTurn.resetPrivateTurn(s); privateTurn.resetPeerTurn(s);
   directedTurn.resetDirected(s);
   s.abortController = new AbortController();
   s.pushIterator = io.makePushIterator();
@@ -180,7 +180,7 @@ async function startResume(rec, sdkSessionId, rawFirstTurn) {
     // Fail restrictive: a raw stored profile would fall through `normalizeProfile`'s fallback to FULL.
     side: rec.side, profile: knownProfile(rec.profile), mode: rec.mode,
     // The launch stamps are restored, never minted; absent reads as the cap at the gate.
-    launchDepth: rec.launchDepth, launchChain: rec.launchChain === true,
+    launchDepth: rec.launchDepth, launchChain: rec.launchChain === true, operatorTools: rec.operatorTools,
     // Load-bearing: it is what applies Axis B's windowless floor at the construction site (F-236). Not a posture:
     // H2 still forbids a resume handing in `startModes`.
     windowless: true,

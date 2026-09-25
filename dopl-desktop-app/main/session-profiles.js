@@ -32,6 +32,7 @@ const {
   TOOL_MODES, AUTO_TOOLS, BYPASS_TOOLS, BYPASS_READS, ESCALATION_TOOLS, EDIT_TOOLS,
 } = require('./session-profiles-runtime');
 const { DOPL_CHANNEL_TOOL } = require('./tool-profiles');
+const { operatorToolVerdict, isOperatorTool } = require('./operator-tools');
 
 // ─── BEGIN SESSION-PROFILE TABLE (extracted by session-profiles/sdk-grant tests) ───
 
@@ -130,6 +131,9 @@ function grantDecision(args) {
   if (cfg.disallowedTools.indexOf(name) !== -1) return 'deny';
   // 1.5 The audience belt, ahead of `preApproved` (which shadows past the bridge) (plan §4.4 B2).
   if (containerOnlyDenies(a, isDoplToolName)) return 'deny';
+  // 1.6 "Use my tools": an operator tool on a turn that may not use it, ahead of any grant (`operator-tools.js`).
+  const operator = operatorToolVerdict(a, name);
+  if (operator === 'deny') return 'deny';
   // 2. THE INVARIANT: a message op branches to Axis B here and never reaches Axis A.
   if (isChannelTool(a.toolName)) {
     // A post whose `to`/`kind` is not a string cannot be described honestly: fail closed.
@@ -153,7 +157,7 @@ function grantDecision(args) {
   // 3. A scoped standing grant, keyed on the shape the operator saw.
   if (allowForTask.indexOf(grantKeyFor(a.toolName, a.input, a.channelId, a.runtime)) !== -1) return 'allow';
   // 4. Axis A in this runtime's own words; an unknown mode allows nothing.
-  if (rt.axisAAllows(a.toolMode, name)) return 'allow';
+  if (operator === 'allow' || rt.axisAAllows(a.toolMode, name)) return 'allow';
   // 5. An op-scoped READ of a mixed write tool (`dopl-read-ops.js`), after Axis A so it narrows nothing: a
   // whole-tool verdict would pick the write surface, and a windowless miss is a deny (OQ-1).
   if (isDoplReadOpCall(name, a.input) && rt.axisAAllows(a.toolMode, DOPL_READ_REFERENCE)) return 'allow';
@@ -173,7 +177,7 @@ const grantDecisionDetail = makeGrantDetail(grantDecision, {
   isOwnMachineManage, manageAllowReason,
   toolModeAllows, isKnowledgeReadCall, isDoplReadOpCall,
   isClassifiedTool,
-  containerOnlyDenies, isDoplTool: isDoplToolName, buildSessionToolConfig,
+  containerOnlyDenies, isDoplTool: isDoplToolName, buildSessionToolConfig, isOperatorTool,
 });
 
 module.exports = {

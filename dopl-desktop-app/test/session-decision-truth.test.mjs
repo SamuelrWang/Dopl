@@ -103,6 +103,8 @@ function harness() {
     // cases are about the PERMISSION resolver, and the capture's own behaviour is pinned in
     // `agent-directions.test.mjs`. What matters here is that it cannot throw into the funnel.
     "sessionDirected",
+    // 2026-09-25: the funnel reads the turn windows on every event (the peer window). Injected REAL.
+    "sessionPrivate",
     `${cut("function dispatch(s, event) {", "function runEffect(s, eff) {")}
      ${PERMS.slice(PERMS.indexOf("function denialMessage(s, requestId) {"), PERMS.indexOf("module.exports = {"))}
      function runEffect(s, eff) {
@@ -124,7 +126,7 @@ function harness() {
     note: () => { touched.count += 1; },
   }, {
     observe: () => {},
-  });
+  }, require(M("session-private.js")));
   return { ...api, emitted, touched };
 }
 

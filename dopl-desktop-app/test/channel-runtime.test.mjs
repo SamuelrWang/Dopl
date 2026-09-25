@@ -84,6 +84,8 @@ function load(opts = {}) {
     // than evaluated because each opens its own store handle and none of them is under test here.
     if (id === "./channel-agent-chain") return { AGENT_CHAIN_KEY: "channelAgentChain", getAgentChain: () => false, setAgentChain: () => false };
     if (id === "./orchestrator-consent") return {};
+    // The roster read behind the private-channel default (2026-09-25); `opts.solo` names solo rooms.
+    if (id === "./operator-tools") return { isPrivateChannel: (c) => (opts.solo || []).includes(c) };
     if (id === "./identity-approval") return {};
     throw new Error(`unexpected require: ${id}`);
   };
@@ -119,6 +121,14 @@ test("only a REGISTERED id normalizes to itself; everything else is the default"
     assert.equal(m.normalizeRuntimeId(bad), "", `${JSON.stringify(bad)} must read as the default`);
   }
   assert.equal(m.normalizeRuntimeId("  codex  "), "codex", "surrounding space is trimmed, not rejected");
+});
+
+test("an UNCONFIGURED private channel defaults to Full; shared stays Ask; a stored level always wins", () => {
+  const m = load({ solo: [CH_A] });
+  assert.equal(m.prefs.getLaunchSelection(CH_A).level, "full");
+  assert.equal(m.prefs.getLaunchSelection(CH_B).level, "ask");
+  assert.equal(m.prefs.setLaunchSelection(CH_A, { level: "auto" }).ok, true);
+  assert.equal(m.prefs.getLaunchSelection(CH_A).level, "auto");
 });
 
 test("round trip: a pick is stored, read back, and is per channel", () => {

@@ -454,11 +454,11 @@ function feedLiveSession(entry, m, myUserId) {
       message: m.body,
       seq: m.seq, // the turn's seq — the windowless outbound bridge's thread join
       authorName: authorName, authorNote: agentAuthorNote(s, m, myUserId), // ⚠ ONLY when THIS session's launch snapshot missed the author
-      addressing: addressing,
-      // ⚠ THE VERDICT, NOT THE INPUTS. `session-gate.js › feedInbound` is the entry point the
+      addressing: addressing, // ⚠ THE VERDICT, NOT THE INPUTS, below: `session-gate.js › feedInbound` is the entry point the
       // engine exports and is the BELT on this rule; handing it the answer is what stops it
       // becoming a second spelling of the wake rule.
       wake: wake === true,
+      fromOperator: m.authorKind === 'user' && String(m.authorUserId) === String(myUserId), // not their agents' posts
     });
     if (!ok) { ack(s, { refused: 1 }); continue; }
     fed += 1;

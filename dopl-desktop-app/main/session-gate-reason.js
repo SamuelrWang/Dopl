@@ -51,6 +51,9 @@ const GATE_REASONS = [
   //                             `launch-depth-capped` has one, and because the fix is NOT a
   //                             setting — a wake already arrives as a TURN here
   //                             (`session-profiles.js › isAwaitOp`).
+  'operator-tools-off', //       2026-09-25: one of the operator's own tools ("Use my tools") on a turn
+  //                             that may not use it — a shared channel with the toggle off, or a
+  //                             turn another member (or an agent) started (`operator-tools.js`).
   'container-audience', //       2026-08-26 (plan §4.4 B2): this session runs in a SHARED link
   //                             container and the call named a DIFFERENT workspace. Its own code
   //                             for `launch-depth-capped`'s reason, and the only code that says
@@ -175,7 +178,8 @@ function makeGateReason(deps) {
     // the old `BYPASS_TOOLS` membership asked, and correct on a runtime that spells its widest mode
     // differently. Handed the SESSION's runtime, or a non-default session would be narrated against
     // another runtime's lists.
-    if (!d.isClassifiedTool(name, a.runtime)) return 'unclassified-tool';
+    // An operator tool is classified by the level itself (Full runs it), so below Full it is an ask.
+    if (!d.isClassifiedTool(name, a.runtime) && !(a.operatorTools && d.isOperatorTool && d.isOperatorTool(name))) return 'unclassified-tool';
     const m = d.normalizeToolMode(a.toolMode, a.runtime);
     return m === 'auto' || m === 'bypass' ? 'not-covered-by-bypass' : 'awaiting-approval';
   };
@@ -195,6 +199,10 @@ function makeGateReason(deps) {
       const hardDenied = !!cfg && cfg.disallowedTools.indexOf(d.canonicalDoplName(a.toolName)) !== -1;
       if (!hardDenied && d.containerOnlyDenies && d.containerOnlyDenies(a, d.isDoplTool)) {
         return 'container-audience';
+      }
+      // Gate step 1.6: an operator tool on a turn that may not use it (`operator-tools.js`).
+      if (!hardDenied && a.operatorTools === 'off' && d.isOperatorTool && d.isOperatorTool(a.toolName)) {
+        return 'operator-tools-off';
       }
       // 2026-09-01: `await` is refused inside the channel branch ahead of the launch lane, so it is
       // asked ahead of the depth cap here. The two are disjoint ops, so the order buys nothing today

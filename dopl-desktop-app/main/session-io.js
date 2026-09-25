@@ -11,6 +11,7 @@ const seed = require('./session-seed');
 const mcpConnect = require('./mcp-connect');
 const runtimeRegistry = require('./runtime');
 const runtimeTruth = require('./session-runtime-truth');
+const operatorTools = require('./operator-tools');
 
 // A bounded FIFO of held interactive inbound replies: only the head is surfaced, a second never overwrites it.
 const MAX_PENDING_INBOUND = 16;
@@ -141,7 +142,9 @@ function grantArgs(s, toolName, input) {
     // Which runtime's vocabulary gate steps 1 and 4 are asked in; it decides nothing else.
     runtime: (s && s.runtimeId) || null,
     // A private 1:1 turn withdraws Axis B's out half (session-private.js).
-    messageMode: sessionPrivate.effectiveMessageMode(s)
+    messageMode: sessionPrivate.effectiveMessageMode(s),
+    // May THIS turn use the operator's own tools? Membership, toggle and turn origin, read live.
+    operatorTools: operatorTools.turnState(s),
   };
 }
 
@@ -163,7 +166,7 @@ function baseRecord(s) {
     taskId: s.taskId,
     workspaceId: s.workspaceId,
     side: s.side,
-    profile: s.profile,
+    profile: s.profile, operatorTools: s.operatorTools || '',
     // The launch stamps persist so a record-driven rebuild keeps its depth; absent still reads as the cap.
     launchDepth: s.launchDepth, launchChain: s.launchChain === true,
     mode: s.mode,

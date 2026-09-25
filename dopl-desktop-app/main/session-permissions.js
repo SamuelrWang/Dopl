@@ -119,6 +119,11 @@ const AWAIT_DENY_MESSAGE =
 // answered a profile-level refusal with.
 const BLOCKED_MESSAGE = 'Blocked for this session';
 
+// Says why and what still works, so the agent neither retries the tool nor goes quiet.
+const OPERATOR_TOOLS_DENY_MESSAGE =
+  'Your operator\'s own tools are off for this turn: it was not started by your operator, or this shared '
+  + 'channel does not allow them. Use Dopl tools; ask your operator for anything else.';
+
 /**
  * WHICH SENTENCE DOES A `deny` VERDICT DESERVE? Keyed on the gate REASON CODE, which is the one
  * thing that already distinguishes them (`session-gate-reason.js`), so this cannot grow a second
@@ -137,6 +142,7 @@ const BLOCKED_MESSAGE = 'Blocked for this session';
 const DENY_MESSAGES = new Map([
   ['launch-depth-capped', LAUNCH_DEPTH_DENY_MESSAGE],
   ['await-desktop-session', AWAIT_DENY_MESSAGE],
+  ['operator-tools-off', OPERATOR_TOOLS_DENY_MESSAGE],
 ]);
 
 function denyMessageFor(reason) {

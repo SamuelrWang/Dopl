@@ -62,13 +62,23 @@ const baseRecord = io.baseRecord;
 /** The one dispatch funnel. Answers whether an effect resolved a LIVE held-tool promise (FIX F1). */
 function dispatch(s, event) {
   // A turn ended: spend one unit of the private window (a fact about the session object, not reducer state).
-  if (event && event.type === 'result') sessionPrivate.closePrivateTurn(s);
+  if (event && event.type === 'result') { sessionPrivate.closePrivateTurn(s); sessionPrivate.closePeerTurn(s); }
   if (event && (event.type === 'steer' || event.type === 'inbound_arrived')) s.awaitingDirective = false;
+  const wasInFlight = sessionPrivate.turnInFlight(s.state);
   const { state, effects } = sessionReducer(s.state, event);
   s.state = state; sessionSummary.noteActivity(s, event); sessionNarration.note(s, event); sessionDirected.observe(s, event);
   let resolvedLive = false;
   for (const eff of effects) resolvedLive = runEffect(s, eff) === true || resolvedLive;
+  notePeerPush(s, event, effects, wasInFlight);
   return resolvedLive;
+}
+
+// A push the operator did not author (anyone else's channel message, a direction) opens the peer window,
+// AFTER the effects: a wake resets the windows first (F-372). Its text lets a joined push pay its turn back.
+function notePeerPush(s, event, effects, wasInFlight) {
+  const inbound = effects.find((e) => e.type === 'pushInbound' && e.fromOperator !== true);
+  const directed = event && event.type === 'steer' && event.directed === true && effects.some((e) => e.type === 'pushTurn');
+  if (inbound || directed) sessionPrivate.openPeerTurn(s, wasInFlight, inbound ? inbound.message : event.text);
 }
 
 function runEffect(s, eff) {
@@ -106,13 +116,13 @@ function runEffect(s, eff) {
       break;
     case 'abortQuery':
       // A torn-down query owes no results: the private window and the directed capture reset with it.
-      sessionPrivate.resetPrivateTurn(s);
+      sessionPrivate.resetPrivateTurn(s); sessionPrivate.resetPeerTurn(s);
       sessionDirected.resetDirected(s);
       // The runtime's handle too: a Codex child ends only on `close()` (P4-14).
       teardownHandles(s);
       break;
     case 'denyPending':
-      sessionPrivate.resetPrivateTurn(s);
+      sessionPrivate.resetPrivateTurn(s); sessionPrivate.resetPeerTurn(s);
       sessionDirected.resetDirected(s);
       denyPendingPermissions(s, 'Session paused');
       break;
@@ -167,6 +177,8 @@ async function startSession(spec, rt) {
     side: state.side,
     // Containment stamps: absent `launchDepth` reads as the cap at the gate; `launchChain` only `=== true`.
     profile: spec.profile, launchDepth: spec.launchDepth, launchChain: spec.launchChain === true,
+    // "Use my tools" scope, stamped at launch: what the adapter loads. The gate still asks per turn.
+    operatorTools: spec.operatorTools || '',
     mode: state.mode,
     counterpartyId: spec.counterpartyId || null,
     bind: spec.bind === 'room' ? 'room' : 'pair',
