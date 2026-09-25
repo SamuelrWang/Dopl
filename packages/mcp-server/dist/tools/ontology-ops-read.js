@@ -60,7 +60,7 @@ async function opMap(client, format) {
     // `ontology-render.ts › homeSpaceShelfGroups` holds the argument and the table.
     // ⚠ THE LABEL IS A BOLD LINE, NOT A HEADING: ontology names are already `##`
     // here, so a heading would be indistinguishable from an ontology called
-    // "Home (personal) …".
+    // "Home shelf …".
     for (const [heading, ontologies] of (0, ontology_render_1.homeSpaceShelfGroups)(snapshot.ontologies, snapshot.homeSpaceOntologyIds)) {
         if (ontologies.length === 0)
             continue;

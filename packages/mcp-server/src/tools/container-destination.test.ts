@@ -301,7 +301,7 @@ describe("op=list / op=list_bases — container first, then the audience", () =>
     );
     expect(text).toContain("### Shared in this channel");
     expect(text).toContain("### Legacy — not visible anywhere in the app");
-    expect(text).toContain("### Home (personal)");
+    expect(text).toContain("### Home shelf");
     // ⚠ **NO UNDIFFERENTIATED "Private to you"** — that heading spanned both
     // destinations and is what made an agent treat an orphan as a live row.
     expect(text).not.toContain("Private to you");
@@ -347,7 +347,7 @@ describe("op=list / op=list_bases — container first, then the audience", () =>
     );
     expect(text).toContain("### Shared in this channel");
     expect(text).toContain("### Legacy — not visible anywhere in the app");
-    expect(text).toContain("### Home (personal)");
+    expect(text).toContain("### Home shelf");
   });
 });
 
@@ -366,7 +366,7 @@ describe("🔒 §8 — a cached payload missing the sibling keys", () => {
       ),
     );
     expect(text).toContain("### Shared in this channel");
-    expect(text).not.toContain("Home (personal)");
+    expect(text).not.toContain("Home shelf");
   });
 
   it("dopl_kb: no `channelGrants` and no `homeScopedBaseIds` ⇒ the flat list, no crash", async () => {

@@ -69,7 +69,7 @@ export async function opList(
   // The addressed container's rows first, so the heading order does not read as another container's roster.
   const groups: Array<readonly [string, AgentIdentity[]]> = [
     ...hereGroups,
-    [DESTINATION_HEADINGS.personal, personal],
+    [DESTINATION_HEADINGS.home, personal],
   ];
   const lines = ["## Agent identities\n"];
   for (const [heading, rows] of groups) {

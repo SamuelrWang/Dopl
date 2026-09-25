@@ -79,7 +79,7 @@ export async function opListBases(
   const lines = ["## Knowledge bases\n"];
   for (const [heading, rows, audience] of [
     ...groups,
-    [DESTINATION_HEADINGS.personal, personal, AUDIENCE_LABELS.you] as const,
+    [DESTINATION_HEADINGS.home, personal, AUDIENCE_LABELS.you] as const,
   ]) {
     if (rows.length === 0) continue;
     if (heading !== null) lines.push(`### ${heading}`);

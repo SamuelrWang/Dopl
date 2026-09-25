@@ -14,7 +14,7 @@ import { type ToolResponse } from "./respond";
  * `createHomeChannel` seeds none, and what is actually happening is that
  * `service-audience.ts › computeAudience` folds the caller's own home shelf
  * into the read scope, exactly as the knowledge lane does. The KB lane labels
- * its half `container-destination.ts › DESTINATION_HEADINGS.personal`; the
+ * its half `container-destination.ts › DESTINATION_HEADINGS.home`; the
  * ontology lane rendered the widening and never named it, which is how two rows
  * a caller owns read as two rows a caller must go and investigate.
  *

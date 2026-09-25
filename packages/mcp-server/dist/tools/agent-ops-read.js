@@ -47,7 +47,7 @@ directory) {
     // The addressed container's rows first, so the heading order does not read as another container's roster.
     const groups = [
         ...hereGroups,
-        [container_destination_js_1.DESTINATION_HEADINGS.personal, personal],
+        [container_destination_js_1.DESTINATION_HEADINGS.home, personal],
     ];
     const lines = ["## Agent identities\n"];
     for (const [heading, rows] of groups) {

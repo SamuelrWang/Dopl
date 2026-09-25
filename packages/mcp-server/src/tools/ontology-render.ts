@@ -61,7 +61,7 @@ const EMPTY_ONTOLOGY_IDS: readonly string[] = Object.freeze([]);
  * `createHomeChannel` seeds none, and what is actually happening is that
  * `service-audience.ts › computeAudience` folds the caller's own home shelf
  * into the read scope, exactly as the knowledge lane does. The KB lane labels
- * its half `container-destination.ts › DESTINATION_HEADINGS.personal`; the
+ * its half `container-destination.ts › DESTINATION_HEADINGS.home`; the
  * ontology lane rendered the widening and never named it, which is how two rows
  * a caller owns read as two rows a caller must go and investigate.
  *
@@ -89,7 +89,7 @@ export function homeSpaceShelfGroups<T extends { id: string }>(
   if (personal.length === 0) return [[null, here]];
   return [
     [null, here],
-    [DESTINATION_HEADINGS.personal, personal],
+    [DESTINATION_HEADINGS.home, personal],
   ];
 }
 

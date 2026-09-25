@@ -133,11 +133,11 @@ describe("dopl_map labels the home shelf", () => {
       "dopl_map",
       {},
     );
-    expect(text).toContain("Home (personal)");
+    expect(text).toContain("Home shelf");
     // ⚠ ORDER IS THE CLAIM: the container's own rows come first, the shelf after
     // its heading — otherwise the heading appears to cover both.
-    expect(text.indexOf("`playbook`")).toBeLessThan(text.indexOf("Home (personal)"));
-    expect(text.indexOf("Home (personal)")).toBeLessThan(text.indexOf("`my-notes`"));
+    expect(text.indexOf("`playbook`")).toBeLessThan(text.indexOf("Home shelf"));
+    expect(text.indexOf("Home shelf")).toBeLessThan(text.indexOf("`my-notes`"));
   });
 
   it("counts every ontology, shelf included — the label splits, it does not filter", async () => {
@@ -167,7 +167,7 @@ describe("dopl_map labels the home shelf", () => {
       {},
     );
     expect(stale).toBe(before);
-    expect(stale).not.toContain("Home (personal)");
+    expect(stale).not.toContain("Home shelf");
   });
 
   it("an EMPTY homeSpaceOntologyIds also renders exactly as before", async () => {
@@ -193,6 +193,6 @@ describe("dopl_map labels the home shelf", () => {
       "dopl_map",
       {},
     );
-    expect(text).not.toContain("Home (personal)");
+    expect(text).not.toContain("Home shelf");
   });
 });

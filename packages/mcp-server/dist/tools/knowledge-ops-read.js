@@ -63,7 +63,7 @@ directory) {
     const lines = ["## Knowledge bases\n"];
     for (const [heading, rows, audience] of [
         ...groups,
-        [container_destination_1.DESTINATION_HEADINGS.personal, personal, audience_label_1.AUDIENCE_LABELS.you],
+        [container_destination_1.DESTINATION_HEADINGS.home, personal, audience_label_1.AUDIENCE_LABELS.you],
     ]) {
         if (rows.length === 0)
             continue;

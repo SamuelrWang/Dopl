@@ -14,7 +14,7 @@ export const HOME_CHANNEL_ROW_NOT_SHARED_CODE = "HOME_CHANNEL_ROW_NOT_SHARED";
 /** The two destinations as list headings, one table for both surfaces; "Shared in this channel" (the app's wording), never "Public". */
 export const DESTINATION_HEADINGS = {
   shared: "Shared in this channel",
-  personal: "Home (personal) — yours, visible in every home channel",
+  home: "Home shelf — yours, visible in every home channel",
   /** F-735: rows in the retired destination — rendered (never dropped) and labelled so they are not treated as live. */
   legacy: "Legacy — not visible anywhere in the app",
 } as const;
