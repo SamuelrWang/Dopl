@@ -76,18 +76,13 @@ function deliver(msg, opts = {}) {
   return pushed[0];
 }
 
-const fenceOf = (turn) => {
-  const lines = turn.split("\n");
-  const begin = lines.lastIndexOf("BEGIN-REQUEST-n1");
-  return { above: lines.slice(0, begin), lines };
-};
 const mainMsg = (over) => verdictMsg("agent", { taskId: "", recipientAgentIds: [A1], body: ASK, ...over });
 
-test("a PERSON's main-room ask carries their user id and the ready call, above the fence (granular)", () => {
+test("a PERSON's main-room ask carries their user id and the ready call, as the turn's last line (granular)", () => {
   const turn = deliver(mainMsg({ authorUserId: SAM }), { toolSet: "granular" });
-  const { above } = fenceOf(turn);
   const line = `Answer IN THE CHANNEL, never in your final text: mcp__dopl__dopl_send_message channel "${CH}", container "${WS}", to "${SAM}".`;
-  assert.equal(above[above.length - 1], line, "the call is the last trusted line before the message");
+  // Below the fence, where an agent that reads tools first still finds it (measured 2026-09-25).
+  assert.ok(turn.endsWith(`END-REQUEST-n1\n${line}`), "the call closes the turn, right after the message");
   assert.ok(!/replied in the channel|Continue the thread/.test(turn), "the thread-only wording is gone");
 });
 
@@ -99,7 +94,7 @@ test("the 2026-09-25 evidence, replayed: the standby's woken first turn carries 
     assert.match(turn.replace(/\s+/g, " "), /A message that arrived IN THE CHANNEL is answered IN THE CHANNEL, by posting, including when it is from your operator\./);
     const tool = toolSet ? "mcp__dopl__dopl_send_message" : 'mcp__dopl__dopl_channel op "send",';
     assert.ok(turn.includes(`never in your final text: ${tool} channel "${CH}", container "${WS}", to "${SAM}".`));
-    assert.ok(turn.endsWith(`BEGIN-REQUEST-n1\n${ASK}\nEND-REQUEST-n1`), "the ask rides its own fence, last");
+    assert.ok(turn.includes(`BEGIN-REQUEST-n1\n${ASK}\nEND-REQUEST-n1\nAnswer IN THE CHANNEL`), "the ask rides its own fence, then the call");
   }
 });
 
