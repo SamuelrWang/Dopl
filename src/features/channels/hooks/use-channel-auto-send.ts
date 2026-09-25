@@ -30,7 +30,7 @@
  *
  * ⚠ ITS OPTIMISTIC-WITH-REVERT IDIOM IS STILL CITED by `use-orchestrator-launch.ts`, which names
  * this file. That reference is to the PATTERN, not to this code; the pattern is unchanged and
- * lives on in that hook and in `use-channel-agent-chain.ts`.
+ * lives on in that hook and in `use-channel-flag.ts`.
  *
  * The main-process half went in the same change: `channel-prefs.getAutoSend` / `setAutoSend`, the
  * `channels:getAutoSend` / `channels:setAutoSend` IPC handlers, their `app-preload.js` bridge

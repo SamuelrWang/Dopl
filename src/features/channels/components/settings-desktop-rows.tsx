@@ -20,6 +20,8 @@
  *   orchestrator launches `(this Mac)`. See {@link LaunchAgentsRow}.
  * - **Direct agents** — may the operator's other sessions direct agents running on
  *   this Mac. See {@link DirectAgentsRow}.
+ * - **Use my tools** — a shared channel's opt-in to the operator's own tools. See
+ *   {@link UseMyToolsRow}.
  */
 
 // ⚠ `Switch` LEFT WITH THE TWO LAUNCH TOGGLES AND THE REPLIES ROW (2026-09-06,
@@ -285,6 +287,39 @@ export function DirectAgentsRow({
         }}
         ariaLabel="Whether your other sessions may send private instructions to agents running on this Mac"
         disabled={orchestratorDirect.busy}
+      />
+    </SettingRow>
+  );
+}
+
+type OnOff = "off" | "on";
+const USE_MY_TOOLS_OPTIONS: ReadonlyArray<SelectMenuOption<OnOff>> = [
+  { value: "off", label: "Off" },
+  { value: "on", label: "On" },
+];
+
+/**
+ * USE MY TOOLS — a SHARED channel's opt-in to the operator's own tools (Samuel, 2026-09-25). The
+ * caller renders it only in a shared channel: a private one always has them, so a control there
+ * would set nothing. What it buys, and the operator-turn rule, live in the eye popover.
+ */
+export function UseMyToolsRow({
+  useMyTools,
+}: {
+  useMyTools: { on: boolean; busy: boolean; onToggle: (on: boolean) => void };
+}) {
+  const value: OnOff = useMyTools.on ? "on" : "off";
+  return (
+    <SettingRow name="Use my tools">
+      <SelectMenu<OnOff>
+        variant="text"
+        value={value}
+        options={USE_MY_TOOLS_OPTIONS}
+        onChange={(next) => {
+          if (next !== value) useMyTools.onToggle(next === "on");
+        }}
+        ariaLabel="Whether agents here may use your own tools on turns you start"
+        disabled={useMyTools.busy}
       />
     </SettingRow>
   );

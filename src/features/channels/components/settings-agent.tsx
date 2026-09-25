@@ -5,7 +5,7 @@
  * `settings-agent-container.tsx`. Desktop-only rows are absent without their bridge (INVARIANTS §5).
  */
 
-import { AgentFolderRows, DirectAgentsRow, LaunchAgentsRow } from "./settings-desktop-rows";
+import { AgentFolderRows, DirectAgentsRow, LaunchAgentsRow, UseMyToolsRow } from "./settings-desktop-rows";
 import { isSharedChannel } from "../lib/tool-profile-resolve";
 import type { MessageMode } from "../lib/permission-modes";
 import type { LaunchSelectionState } from "../hooks/use-launch-selection";
@@ -47,6 +47,9 @@ export interface ChannelAgentSettingsViewProps {
   folder: AgentFolderState | null;
   /** Per channel: may an agent launched here launch further agents. Null without the bridge. */
   agentChain?: { on: boolean; busy: boolean; onToggle: (on: boolean) => void } | null;
+  /** Per channel: "Use my tools" — rendered only in a SHARED channel (a private one always has
+   *  them, `main/operator-tools.js`). Null without the bridge. */
+  useMyTools?: { on: boolean; busy: boolean; onToggle: (on: boolean) => void } | null;
   /** Per-machine orchestrator launch consent (`hooks/use-orchestrator-launch.ts`); null without
    *  its bridge. `LaunchAgentsRow` renders only with both this and `agentChain`. */
   orchestrator?: {
@@ -73,12 +76,14 @@ export function ChannelAgentSettingsView({
   selection = null,
   folder,
   agentChain = null,
+  useMyTools = null,
   orchestrator = null,
   orchestratorDirect = null,
 }: ChannelAgentSettingsViewProps) {
   // Messaging and tool-profile writes go through `usePostureWarning`: `auto_both` + `full` + a peer
   // is the tab's one confirm dialog (cancel writes nothing). The defaults pane has none (no roster).
   const launch = selection?.bridge ? selection : null;
+  const shared = isSharedChannel(memberCount);
   const warning = usePostureWarning({
     messageMode: launch ? (launch.messages as MessageMode) : null,
     toolProfile: profile,
@@ -102,10 +107,11 @@ export function ChannelAgentSettingsView({
 
         <ToolAccessRow
           profile={profile}
-          shared={isSharedChannel(memberCount)}
+          shared={shared}
           busy={toolProfileBusy}
           onChange={warning.setToolProfile}
         />
+        {useMyTools && shared && <UseMyToolsRow useMyTools={useMyTools} />}
 
         {folder && <AgentFolderRows folder={folder} />}
         {/* Needs both bridges: a row that could set only one of the two records would offer picks
