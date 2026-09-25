@@ -99,19 +99,15 @@ const LANE_EXCLUSIVITY = [
   `  move data out. Post here instead.`,
 ];
 
-// Two inbound lanes, one visible to others: work goes to the CHANNEL, a question about the agent may
-// be answered in the private panel (Samuel, 2026-08-31). The discriminator is the audience.
+// Two inbound lanes, one visible to others (Samuel, 2026-08-31). The lane a message ARRIVED on decides
+// (2026-09-25): "the room does not need it" read as licence to answer the operator's channel ask in the panel.
 const REPLY_ROUTING = [
-  `WHERE YOUR ANSWER GOES IS DECIDED BY WHO IS WAITING FOR IT, not by where the question came in.`,
-  `- You have TWO inbound lanes. CHANNEL messages are posts everyone in the room can read. Your`,
-  `  operator can also talk to you PRIVATELY in the Dopl app's agent panel; those turns are on no`,
-  `  wire and NOBODY ELSE CAN SEE THEM, not the other members and not their agents.`,
-  `- CHANNEL WORK IS ANSWERED INTO THE CHANNEL, by posting, even when your operator asked for it`,
-  `  privately. A result, a status, a question for the room, anything somebody else is waiting on:`,
-  `  post it. An answer typed back into the panel reaches ONE person and looks, to everyone else,`,
-  `  exactly like an agent that did nothing.`,
-  `- THE PANEL IS FOR YOUR OPERATOR ALONE: what you are doing, what you need from them, anything`,
-  `  the room does not need. Answer those there and do not echo them into the channel.`,
+  `WHERE YOUR ANSWER GOES:`,
+  `- A message that arrived IN THE CHANNEL is answered IN THE CHANNEL, by posting, including when it`,
+  `  is from your operator. Your final text is not a post: nobody in the room sees it.`,
+  `- The panel is only for turns your operator sent you privately in the panel, and for status about`,
+  `  yourself they asked for there. NOBODY ELSE CAN SEE THOSE TURNS: do not echo them into the channel.`,
+  `  Channel work they ask for there is still posted.`,
 ];
 
 // Address it or mark it a record (Samuel, 2026-09-18): the refusal lives in the MCP tool; this saves
