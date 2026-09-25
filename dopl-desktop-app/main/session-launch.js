@@ -111,7 +111,7 @@ async function launch(a) {
     side: a.side,
     profile: a.toolProfile,
     // Read once here for all three lanes, from main's own roster and store, never the payload.
-    operatorTools: operatorTools.launchScope(a.channelId),
+    operatorTools: operatorTools.launchScope(a.channelId, a.toolProfile),
     mode: a.mode,
     context,
     counterpartyId: a.counterpartyId,

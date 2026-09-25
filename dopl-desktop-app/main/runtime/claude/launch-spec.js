@@ -18,6 +18,7 @@ const credential = require('./credential');
 const sessionCredential = require('../../session-credential');
 const sessionDirected = require('../../session-directed');
 const fold = require('./fold');
+const operatorTools = require('./operator-tools');
 const { diag } = require('../../diag');
 
 // The runaway backstop for a query that never reaches another `result` — NOT the operator turn cap
@@ -60,6 +61,8 @@ function buildOptions(s, dispatch) {
   if (agentOpsServer) options.mcpServers[agentOps.SERVER_KEY] = agentOpsServer;
   // Omitted when empty: what `[]` means to the SDK is disputed (F-427).
   if (cfg.builtinTools.length) options.tools = cfg.builtinTools;
+  // "Use my tools" (`main/operator-tools.js › launchScope`): loaded at spawn, judged per turn by the gate.
+  if (s.operatorTools) operatorTools.withOperatorTools(options);
   const bin = loader.resolveClaudeExecutable();
   if (bin) options.pathToClaudeCodeExecutable = bin;
   // The row's own launch value on the live roster; absent is the runtime default (`models.js › launchArg`).

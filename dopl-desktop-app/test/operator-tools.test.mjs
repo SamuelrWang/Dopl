@@ -42,14 +42,16 @@ test("an operator tool is any non-Dopl MCP tool or a native built-in; Dopl, agen
 
 test("launch scope: private always, shared only with the toggle, an unknown roster is shared", () => {
   set(1, false);
-  assert.equal(ops.launchScope("c1"), "private");
+  assert.equal(ops.launchScope("c1", "full"), "private");
+  assert.equal(ops.launchScope("c1", "read_only"), "", "a restricted Tool access stays whole");
+  assert.equal(ops.launchScope("c1", "dopl_only"), "");
   set(2, false);
-  assert.equal(ops.launchScope("c1"), "");
+  assert.equal(ops.launchScope("c1", "channel_agent"), "");
   set(2, true);
-  assert.equal(ops.launchScope("c1"), "shared");
+  assert.equal(ops.launchScope("c1", "channel_agent"), "shared");
   set(undefined, false);
-  assert.equal(ops.launchScope("c1"), "", "no memberCount is not solo");
-  assert.equal(ops.launchScope(""), "");
+  assert.equal(ops.launchScope("c1", "full"), "", "no memberCount is not solo");
+  assert.equal(ops.launchScope("", "full"), "");
 });
 
 test("turn state is read live: a peer joining drops the tools, the toggle and the turn's origin decide", () => {

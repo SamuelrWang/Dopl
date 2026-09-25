@@ -55,6 +55,10 @@ const WEB_TOOLS = ['WebFetch', 'WebSearch'];
 // The shell, spelled once (`BashOutput`/`KillShell` reach the same child); every reader derives from it.
 const SHELL_BUILTINS = ['Bash', 'BashOutput', 'KillShell'];
 
+// The runtime's own sub-agents and skills: off on every profile, re-offered only by "Use my tools"
+// (`operator-tools.js`), which the gate then judges per turn.
+const NATIVE_BUILTINS = ['Agent', 'Skill'];
+
 // Built-ins a restricted profile never reaches, by what they would buy an injected message body.
 const DENIED_BUILTINS = [
   ...SHELL_BUILTINS,
@@ -143,6 +147,7 @@ module.exports = {
   UNIVERSAL_HARD_DENY,
   CHANNEL_AGENT_HARD_DENY,
   SHELL_BUILTINS,
+  NATIVE_BUILTINS,
   onUnknownProfile,
   DOPL_SAFE_TOOLS,
   DOPL_ADMIN_TOOLS,

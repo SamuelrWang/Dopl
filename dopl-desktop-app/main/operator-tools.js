@@ -8,9 +8,7 @@ const { isDoplToolName } = require('./mcp-tool-names');
 const { AGENT_OPS_TOOL_NAMES } = require('./agent-self-ops');
 const { isSharedChannel } = require('./targeting-window');
 const { normalizeToolMode, widestToolModeFor } = require('./session-profiles-runtime');
-
-// The runtime's own sub-agents and skills (Claude's names; Codex's natives raise no named call).
-const NATIVE_BUILTINS = Object.freeze(['Agent', 'Skill']);
+const { NATIVE_BUILTINS } = require('./tool-profiles');
 
 /** An operator tool: a native built-in above, or any MCP tool that is neither Dopl's nor agent-ops'. */
 function isOperatorTool(name) {
@@ -42,8 +40,12 @@ function toggleOn(channelId) {
 /** The operator is the channel's only member, per the listener's live DTO (unknown = shared). */
 const isPrivateChannel = (channelId) => !!channelId && !isSharedChannel(watchedChannel(channelId));
 
+// A restricted Tool access (Read only / Dopl only) is the operator's own narrowing and stays whole.
+const WIDE_PROFILES = ['full', 'channel_agent'];
+
 /** At launch: `'private'`, `'shared'` (toggle on), or `''` — what the session loads. */
-function launchScope(channelId) {
+function launchScope(channelId, profile) {
+  if (WIDE_PROFILES.indexOf(profile) === -1) return '';
   if (isPrivateChannel(channelId)) return 'private';
   return toggleOn(channelId) ? 'shared' : '';
 }
@@ -58,4 +60,4 @@ function turnState(s) {
   return toggleOn(s.channelId) && !require('./session-private').isPeerTurn(s) ? 'on' : 'off';
 }
 
-module.exports = { NATIVE_BUILTINS, isOperatorTool, operatorToolVerdict, isPrivateChannel, launchScope, turnState };
+module.exports = { isOperatorTool, operatorToolVerdict, isPrivateChannel, launchScope, turnState };
