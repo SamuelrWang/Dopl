@@ -5,7 +5,7 @@
 // (`prompt-profile-drift.test.mjs`), and tools are named fully qualified (`mcp__dopl__dopl_channel`)
 // because a bare name sends an agent searching.
 
-const { THREAD_TAG, VOCABULARY, PROSE_RULE, CONCISION, LANE_EXCLUSIVITY, REPLY_ROUTING, HOME_SPACE_KNOWLEDGE_CONFIDENTIALITY, ADDRESSING } = require('./prompt-framing-text');
+const { THREAD_TAG, VOCABULARY, PROSE_RULE, CONCISION, LANE_EXCLUSIVITY, OPERATOR_TOOLS_LANE, REPLY_ROUTING, HOME_SPACE_KNOWLEDGE_CONFIDENTIALITY, ADDRESSING } = require('./prompt-framing-text');
 
 // `sanitizeName` is re-exported below: `session-seed.js` reaches it as `framing.sanitizeName`.
 const { sanitizeName, idToken, stripFence } = require('./prompt-sanitize');
@@ -119,7 +119,7 @@ function firstActions(side, ctx) {
     ...grantLines(disc, set),
     `  Just make the call in the delivery section below; if a call is genuinely refused, your`,
     `  operator sees the refusal on this window and it is theirs to fix, not the counterparty's.`,
-    ...LANE_EXCLUSIVITY,
+    ...(ctx && ctx.operatorTools ? OPERATOR_TOOLS_LANE : LANE_EXCLUSIVITY),
   ];
   // `channel_agent` has no shell (B7); told nothing, it plans with one.
   if ((ctx && ctx.profile) === 'channel_agent') {

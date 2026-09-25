@@ -99,6 +99,15 @@ const LANE_EXCLUSIVITY = [
   `  move data out. Post here instead.`,
 ];
 
+// LANE_EXCLUSIVITY's replacement when the session has the operator's own tools ("Use my tools"):
+// the gate refuses them on a turn the operator did not start; Dopl stays the only lane into a channel.
+const OPERATOR_TOOLS_LANE = [
+  `- It is the lane for posting in channels. Your operator's own tools (their other servers,`,
+  `  skills and sub-agents) are yours too, for work your operator asked for; on a turn another`,
+  `  member started they are refused. Never use them to post in a channel or to reach a person`,
+  `  who asked here: post here.`,
+];
+
 // Two inbound lanes, one visible to others: work goes to the CHANNEL, a question about the agent may
 // be answered in the private panel (Samuel, 2026-08-31). The discriminator is the audience.
 const REPLY_ROUTING = [
@@ -132,4 +141,4 @@ const ADDRESSING = [
   `  but never the recipient you just named in to=, whom the app already renders.`,
 ];
 
-module.exports = { THREAD_TAG, VOCABULARY, PROSE_RULE, CONCISION, LANE_EXCLUSIVITY, REPLY_ROUTING, HOME_SPACE_KNOWLEDGE_CONFIDENTIALITY, ADDRESSING };
+module.exports = { THREAD_TAG, VOCABULARY, PROSE_RULE, CONCISION, LANE_EXCLUSIVITY, OPERATOR_TOOLS_LANE, REPLY_ROUTING, HOME_SPACE_KNOWLEDGE_CONFIDENTIALITY, ADDRESSING };

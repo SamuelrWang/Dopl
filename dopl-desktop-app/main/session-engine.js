@@ -262,7 +262,7 @@ function nameAndFrame(s, spec, rt) {
 function firstTurnFor(s, spec, rt) {
   if (spec.parkedShell) return '';
   if (spec.rawFirstTurn) return spec.rawFirstTurn;
-  return framing.buildFencedTurn({ side: spec.side, message: spec.firstMessage, context: { ...s.context, profile: spec.profile, toolSet: s.doplToolSet, mcpDiscovery: io.discoveryFor(rt && rt.id) }, nonce: s.nonce });
+  return framing.buildFencedTurn({ side: spec.side, message: spec.firstMessage, context: { ...s.context, profile: spec.profile, operatorTools: s.operatorTools, toolSet: s.doplToolSet, mcpDiscovery: io.discoveryFor(rt && rt.id) }, nonce: s.nonce });
 }
 
 /** Store the name a launch asked for through the one rename door (uniqueness + sanitizer + summary flush).

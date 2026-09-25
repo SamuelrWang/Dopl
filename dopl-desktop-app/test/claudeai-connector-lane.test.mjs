@@ -239,5 +239,11 @@ test("the belt actually reaches a built turn, on BOTH sides", () => {
     const first = out.indexOf("FIRST ACTIONS THIS TURN");
     const belt = out.indexOf("ONLY path off this machine");
     assert.ok(first >= 0 && belt > first, `${side}: the belt sits inside FIRST ACTIONS`);
+    // 2026-09-25 ("Use my tools"): a session with the operator's own tools is told they are its to
+    // use for the operator's work, and that Dopl stays the only lane into a channel.
+    const mine = framing.buildFencedTurn({ side, message: "x", nonce: "f268", context: { ...context, operatorTools: "private" } });
+    assert.doesNotMatch(mine, /ONLY path off this machine/, `${side}: the exclusivity rule is replaced`);
+    assert.match(mine, /Your operator's own tools/, `${side}`);
+    assert.match(mine, /lane for posting in channels/, `${side}`);
   }
 });

@@ -413,7 +413,7 @@ test("`context.identity` rides the funnel's LITERAL WHITELIST and survives park/
   const resume = fnOf(park, "resumeParked");
   assert.equal(/s\.context/.test(resume), false, "a park/resume never rewrites the context");
   // …and the framing reads it from there, with the session's OWN profile spread on at wake.
-  assert.match(read("session-seed.js"), /context: \{ \.\.\.\(\(s && s\.context\) \|\| \{\}\), profile: s\.profile, toolSet: s\.doplToolSet, mcpDiscovery: discoveryFor\(s && s\.runtimeId\) \}/);
+  assert.match(read("session-seed.js"), /context: \{ \.\.\.\(\(s && s\.context\) \|\| \{\}\), profile: s\.profile, operatorTools: s\.operatorTools, toolSet: s\.doplToolSet, mcpDiscovery: discoveryFor\(s && s\.runtimeId\) \}/);
 });
 
 // ⚠ **AND A CRASH RESUME IS THE OTHER HALF, NOT FREE** (F-288, 2026-08-23). Above is `resumeParked`,

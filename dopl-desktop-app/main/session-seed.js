@@ -146,7 +146,7 @@ function takeFraming(s, transcript) {
   s.freshFraming = false;
   return framing.buildFencedTurn({
     side: s.side, bind: s.bind, message: transcript || s.launchGoal || '',
-    context: { ...((s && s.context) || {}), profile: s.profile, toolSet: s.doplToolSet, mcpDiscovery: discoveryFor(s && s.runtimeId) }, nonce: s.nonce,
+    context: { ...((s && s.context) || {}), profile: s.profile, operatorTools: s.operatorTools, toolSet: s.doplToolSet, mcpDiscovery: discoveryFor(s && s.runtimeId) }, nonce: s.nonce,
   });
 }
 
