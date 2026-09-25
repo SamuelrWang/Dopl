@@ -134,6 +134,15 @@ export class DirectSelfTargetError extends ChannelError {
   }
 }
 
+/** The Home space holds no channels: each home channel is its own `kind='link'` container. */
+export class ChannelInHomeSpaceError extends ChannelError {
+  constructor() {
+    super(
+      "Channels cannot live in your Home space. Create a home channel instead (POST /api/channels?scope=account; over MCP, create a channel with no container)."
+    );
+  }
+}
+
 /** A direct channel is immutable (two members, always private). Refused as 400 instead of the
  *  CHECK-constraint 500. `aspect` names what was attempted. */
 export class DirectChannelImmutableError extends ChannelError {

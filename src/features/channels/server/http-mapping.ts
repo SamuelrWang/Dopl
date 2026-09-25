@@ -8,6 +8,7 @@ import {
   ChannelRecipientUnresolvedError,
   ChannelForbiddenError,
   ChannelInfoCardTooLargeError,
+  ChannelInHomeSpaceError,
   ChannelInviteeNotMemberError,
   ChannelLastOwnerError,
   ChannelLifecycleKindForbiddenError,
@@ -152,6 +153,9 @@ function mapChannelError(err: unknown): HttpError | null {
   }
   if (err instanceof DirectSelfTargetError) {
     return new HttpError(400, "DIRECT_SELF_TARGET", err.message);
+  }
+  if (err instanceof ChannelInHomeSpaceError) {
+    return new HttpError(409, "CHANNEL_IN_HOME_SPACE", err.message);
   }
   if (err instanceof DirectChannelImmutableError) {
     return new HttpError(400, "DIRECT_CHANNEL_IMMUTABLE", err.message);

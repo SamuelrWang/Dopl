@@ -6,6 +6,7 @@ import type { ChannelCreateInput, ChannelUpdateInput } from "../schema";
 import {
   ChannelForbiddenError,
   ChannelInfoCardTooLargeError,
+  ChannelInHomeSpaceError,
   ChannelSlugConflictError,
   DirectChannelImmutableError,
 } from "./errors";
@@ -25,6 +26,8 @@ export async function createChannel(
   ctx: ChannelContext,
   input: ChannelCreateInput
 ): Promise<Channel> {
+  // DMs too: the Home space has exactly one member, so a DM there has no legitimate peer.
+  if (ctx.workspaceKind === "personal") throw new ChannelInHomeSpaceError();
   if (input.direct === true) {
     return createDirectChannel(ctx, input.memberUserId);
   }

@@ -31,6 +31,7 @@ import { createChannel, deleteChannel } from "./service-writes";
 import { addMember, removeMember } from "./service-writes-members";
 import {
   ChannelForbiddenError,
+  ChannelInHomeSpaceError,
   ChannelInviteeNotMemberError,
   ChannelNotFoundError,
   ChannelSlugConflictError,
@@ -123,6 +124,20 @@ describe("createChannel — slug allocation vs. soft-deleted channels", () => {
     await expect(createChannel(ctx, { name: "Design" })).rejects.toBeInstanceOf(
       ChannelSlugConflictError
     );
+  });
+});
+
+describe("createChannel — the Home space holds no channels", () => {
+  const home: ChannelContext = { ...ctx, workspaceKind: "personal" };
+
+  it.each([
+    ["a plain channel", { name: "Design" }],
+    ["a DM", { direct: true as const, memberUserId: PEER }],
+  ])("refuses %s before touching the database", async (_label, input) => {
+    await expect(createChannel(home, input)).rejects.toBeInstanceOf(ChannelInHomeSpaceError);
+    expect(repo.existingSlugs).not.toHaveBeenCalled();
+    expect(repo.insertChannel).not.toHaveBeenCalled();
+    expect(repo.isActiveWorkspaceMember).not.toHaveBeenCalled();
   });
 });
 

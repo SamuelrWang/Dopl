@@ -1,5 +1,5 @@
 import "server-only";
-import { meetsMinRole, type Role } from "@/features/workspaces/types";
+import { meetsMinRole, type Role, type WorkspaceKind } from "@/features/workspaces/types";
 import { narrowAppVersion } from "@/shared/auth/app-version-header";
 import { narrowRuntime, type DoplRuntime } from "@/shared/auth/runtime-header";
 import { narrowSessionId } from "@/shared/auth/session-header";
@@ -28,6 +28,8 @@ export interface ChannelContext {
   source: "user" | "agent";
   /** Caller's workspace role; null when the auth layer didn't resolve one. */
   role: Role | null;
+  /** The resolver's `workspaces.kind` read; absent = not the Home space (the DB trigger is the backstop). */
+  workspaceKind?: WorkspaceKind;
   /** Container a locked credential is fenced to (`mcp_tokens.container_id`), `null` when unfenced.
    *  A fence, never a request field (`service-account.ts` applies it as the B1 ceiling). */
   apiKeyWorkspaceId?: string | null;
@@ -46,6 +48,7 @@ export interface AuthLike {
   userId: string;
   workspaceId: string;
   role?: Role | null;
+  workspaceKind?: WorkspaceKind;
   agentTokenId?: string | null;
   /** The container fence — its absence widens rather than narrows. */
   apiKeyWorkspaceId?: string | null;
@@ -62,6 +65,7 @@ export function buildChannelContext(auth: AuthLike): ChannelContext {
     userId: auth.userId,
     source: auth.agentTokenId ? "agent" : "user",
     role: auth.role ?? null,
+    workspaceKind: auth.workspaceKind,
     // `null` means unfenced — the wider answer — so auth contexts must pass the lock when there is one.
     apiKeyWorkspaceId: auth.apiKeyWorkspaceId ?? null,
     // No default: the caller must say whose reach this credential carries.
