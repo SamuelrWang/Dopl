@@ -91,12 +91,13 @@ test("gate step 1.6: Full runs it, below Full asks, an off turn denies ahead of 
   assert.deepEqual(gate({ operatorTools: "" }), { decision: "gate", reason: "unclassified-tool" });
 });
 
-test("fan-out: only the operator's own HUMAN post is operator-originated", async () => {
+test("fan-out: the operator's account is operator-originated — their posts and their own agents' (ruling 2)", async () => {
   const cases = [
     [peerMsg(), false],
+    [peerMsg({ authorKind: "agent" }), false], // another member's agent
     [peerMsg({ authorUserId: ME, authorKind: "user" }), true],
-    [peerMsg({ authorUserId: ME, authorKind: "agent" }), false],
-    [peerMsg({ authorUserId: ME }), false], // a row with no author kind proves nothing
+    [peerMsg({ authorUserId: ME, authorKind: "agent" }), true],
+    [peerMsg({ authorUserId: ME }), true],
   ];
   for (const [m, want] of cases) {
     const h = harness({ agents: [agent(A1)] });

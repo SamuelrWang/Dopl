@@ -155,7 +155,7 @@ function isPrivateTurn(s) {
   return windowOpen(s, PRIVATE_WINDOW);
 }
 
-// The PEER window: opened by every push the operator did not author, spent by the same `result` and
+// The PEER window: opened by every push the operator's account did not author, spent by the same `result` and
 // teardown clocks, so a turn it covers can never outlive its own answer.
 const openPeerTurn = (s, wasInFlight, prompt) => openWindow(s, PEER_WINDOW, wasInFlight, prompt);
 const peerPushJoined = (s, pushedText) => joinWindow(s, PEER_WINDOW, pushedText);

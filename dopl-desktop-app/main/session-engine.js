@@ -73,7 +73,7 @@ function dispatch(s, event) {
   return resolvedLive;
 }
 
-// A push the operator did not author (anyone else's channel message, a direction) opens the peer window,
+// A push the operator's account did not author (another member's or their agent's message, a direction) opens the peer window,
 // AFTER the effects: a wake resets the windows first (F-372). Its text lets a joined push pay its turn back.
 function notePeerPush(s, event, effects, wasInFlight) {
   const inbound = effects.find((e) => e.type === 'pushInbound' && e.fromOperator !== true);
