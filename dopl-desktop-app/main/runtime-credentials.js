@@ -109,8 +109,8 @@ function dismissPrompt(runtimeId) {
   return true;
 }
 
-// One in-app flow on runtime `id`, its busy counter `busy` pushed around it → true when it took.
-async function runFlow(id, busy, method) {
+// One in-app flow on runtime `id`, its busy counter `busy` pushed around it → true when it took (`onOk` first).
+async function runFlow(id, busy, method, onOk) {
   const f = flagsFor(id);
   f[busy] += 1;
   void push();
@@ -122,7 +122,7 @@ async function runFlow(id, busy, method) {
     diag('runtime credentials:', method, 'threw —', (err && err.message) || err);
   }
   f[busy] -= 1;
-  if (ok && method === 'signIn') Object.assign(f, { rejected: false, prompt: false, dismissed: false });
+  if (ok && onOk) onOk(f);
   void push();
   return ok;
 }
@@ -130,7 +130,8 @@ async function runFlow(id, busy, method) {
 /** One runtime's in-app sign-in (`''` = the default runtime), then its held sessions are released. */
 async function signIn(runtimeId) {
   const id = runtimeId || runtimeRegistry.DEFAULT_ID;
-  if (signInIds().indexOf(id) === -1 || !(await runFlow(id, 'inFlight', 'signIn'))) return { ok: false };
+  const clearPrompt = (f) => Object.assign(f, { rejected: false, prompt: false, dismissed: false });
+  if (signInIds().indexOf(id) === -1 || !(await runFlow(id, 'inFlight', 'signIn', clearPrompt))) return { ok: false };
   const resumed = await require('./session-auth').resumeHeldSessions(id);
   diag('runtime credentials: signed in to', id, '— held sessions resumed:', resumed);
   return { ok: true, resumed };
