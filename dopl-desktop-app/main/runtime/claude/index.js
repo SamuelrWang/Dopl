@@ -126,6 +126,9 @@ const runtime = {
   credentialState() { return credential.credentialState(); },
   signIn() { return credential.signIn(); },
   signOut() { return credential.signOut(); },
+  // Optional, declared by `descriptor.credential.fullSignIn` ("Enable Chrome & connectors").
+  signInFull() { return credential.signInFull(); },
+  hasFullLogin() { return credential.hasFullLogin(); },
 };
 
 module.exports = { descriptor, runtime };

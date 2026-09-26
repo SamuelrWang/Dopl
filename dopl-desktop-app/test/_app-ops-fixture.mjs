@@ -90,11 +90,13 @@ export const APP_OPS = [
   // `runtimeAuth.*` (`main/runtime-credentials.js`): `signIn(runtimeId)` is the ONE entry into a runtime's
   // in-app sign-in (`''` = the default, shape-checked at the boundary, registration checked inside) and on
   // success RELEASES that runtime's held sessions only; `status` / `onStatus` read and follow each runtime's
-  // `{ runtimeId, label, state, prompt }`; `dismissPrompt(runtimeId)` closes one runtime's sign-in prompt.
+  // `{ runtimeId, label, state, prompt, full? }`; `dismissPrompt(runtimeId)` closes one runtime's sign-in prompt;
+  // `signInFull(runtimeId)` is "Enable Chrome & connectors" (2026-09-25), the runtime's optional full login.
   // NO CREDENTIAL CROSSES ANY OF THEM: main opens the OAuth page in the SYSTEM BROWSER.
   "runtimeAuth.dismissPrompt",
   "runtimeAuth.onStatus",
   "runtimeAuth.signIn",
+  "runtimeAuth.signInFull",
   "runtimeAuth.status",
   // 2026-08-22 (OQ-3): `sessions.approveIdentity` records THIS MACHINE's first-use approval of
   // ANOTHER member's identity. It starts nothing and grants nothing — it decides only whether a

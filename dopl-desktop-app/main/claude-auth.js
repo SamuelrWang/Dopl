@@ -1,15 +1,25 @@
-// THE IN-APP CLAUDE CODE SIGN-IN. `claude setup-token` runs as a plain child with no window and no TTY: it
-// opens the OAuth page in the system browser itself and takes the redirect on its own localhost listener, so
-// nothing is pasted. The long-lived token it prints is stored as Dopl's own (`claude-token.js`); setup-token
-// only prints it, so the operator's own Claude Code login is never written. The token is never logged.
+// THE IN-APP CLAUDE CODE SIGN-INS. Both run the bundled CLI as a plain child with no window and no TTY: it opens
+// the OAuth page in the system browser itself and takes the redirect on its own localhost listener, so nothing
+// is pasted. Nothing a child prints is logged.
+//   `signIn`      `claude setup-token`. The long-lived inference token it prints is stored as Dopl's own
+//                 (`claude-token.js`); setup-token only prints it, so the operator's own login is never written.
+//   `signInFull`  "Enable Chrome & connectors" (Samuel, 2026-09-25, ruling 4): `claude auth login --claudeai`, a
+//                 FULL claude.ai login (user:profile, user:mcp_servers, …) that the CLI keeps in a Dopl-private
+//                 secure store — config dir AND secure-store dir both `claude-token.js › fullLoginDir`, so the
+//                 Keychain item is `Claude Code-credentials-<sha256(dir)[0:8]>` (or that dir's
+//                 `.credentials.json`) and the operator's `~/.claude.json` and Keychain item are never written
+//                 (measured, claude 2.1.220). The CLI refreshes it itself; Dopl stores only a marker.
 //
 // No pty: macOS `script(1)` needs a terminal on stdin/stdout and refuses the pipes Electron hands a child
 // (`tcgetattr/ioctl: Operation not supported on socket`, EOPNOTSUPP, exit 1 in ms).
 
+const fs = require('fs');
 const { spawn } = require('child_process');
 
 const spawner = require('./session-spawner');
-const { setStoredOAuthToken } = require('./claude-token');
+const cliSpawn = require('./runtime/cli-spawn');
+const { setStoredOAuthToken, fullLoginDir, setFullLogin } = require('./claude-token');
+const { SECURE_STORE_ENV } = require('./runtime/claude/credential');
 const { diag } = require('./diag');
 
 const SETUP_TIMEOUT_MS = 5 * 60 * 1000;
@@ -37,55 +47,91 @@ function extractLoneToken(s) {
   return lines.length === 1 ? lines[0] : null;
 }
 
-// setup-token → true once Dopl holds the token.
-function runSetupTokenFlow(bin) {
+/** `auth status --json` says a claude.ai login is in the store it was pointed at. */
+function isClaudeAiLogin(out) {
+  const plain = String(out).replace(ANSI_RE, '');
+  try {
+    const s = JSON.parse(plain.slice(plain.indexOf('{'), plain.lastIndexOf('}') + 1));
+    return s.loggedIn === true && s.authMethod === 'claude.ai';
+  } catch (_) {
+    return false;
+  }
+}
+
+// One CLI child → `{ code, out, picked }`: at its exit, at the timeout (`code: null`), or as soon as `pick(out)`
+// answers (the child is then stopped). A failed spawn is `code: null` too.
+function runChild(bin, args, env, pick) {
   return new Promise((resolve) => {
     let child;
     try {
-      child = spawn(bin, ['setup-token'], { env: spawner.cliEnv(bin), stdio: ['ignore', 'pipe', 'pipe'] });
+      child = spawn(bin, args, { env, stdio: ['ignore', 'pipe', 'pipe'] });
     } catch (err) {
       diag('claude signin: spawn failed', err && err.message);
-      resolve(false);
+      resolve({ code: null, out: '', picked: null });
       return;
     }
-
     let out = '';
     let settled = false;
     const timer = setTimeout(() => {
       diag('claude signin: timeout (5m)');
-      finish(false);
+      finish(null, null);
     }, SETUP_TIMEOUT_MS);
-
-    function finish(ok) {
+    function finish(code, picked) {
       if (settled) return;
       settled = true;
       clearTimeout(timer);
       try { child.kill('SIGTERM'); } catch (_) {}
-      diag('claude signin:', ok ? 'token stored' : 'failed');
-      resolve(ok);
+      resolve({ code, out, picked });
     }
-
     const onData = (buf) => {
       if (settled) return;
       out += buf.toString('utf8');
-      const token = extractToken(out);
-      if (token) finish(setStoredOAuthToken(token));
+      const picked = pick ? pick(out) : null;
+      if (picked) finish(null, picked);
     };
     child.stdout.on('data', onData);
     child.stderr.on('data', onData);
     child.on('error', (err) => {
       diag('claude signin: child error', err && err.message);
-      finish(false);
+      finish(null, null);
     });
-    // The shape of a failed exit (never the text) is logged.
-    child.on('close', (code) => {
-      if (settled) return;
-      const token = code === 0 ? extractLoneToken(out) : null;
-      if (token) return finish(setStoredOAuthToken(token));
-      diag('claude signin: exited', code, 'before a token; printed', out.length, 'chars');
-      finish(false);
-    });
+    child.on('close', (code) => finish(code, null));
   });
+}
+
+// setup-token → true once Dopl holds the token. The shape of a failed exit (never the text) is logged.
+async function runSetupTokenFlow(bin) {
+  const r = await runChild(bin, ['setup-token'], spawner.cliEnv(bin), extractToken);
+  const token = r.picked || (r.code === 0 ? extractLoneToken(r.out) : null);
+  if (!token) diag('claude signin: exited', r.code, 'before a token; printed', r.out.length, 'chars');
+  const ok = !!token && setStoredOAuthToken(token);
+  diag('claude signin:', ok ? 'token stored' : 'failed');
+  return ok;
+}
+
+// A full-login child's env: no inherited credential, and the CLI's config and secure store both in Dopl's dir.
+function fullLoginEnv(bin) {
+  const env = cliSpawn.scrubbedEnv(spawner.cliEnv(bin));
+  env.CLAUDE_CONFIG_DIR = fullLoginDir();
+  env[SECURE_STORE_ENV] = env.CLAUDE_CONFIG_DIR;
+  return env;
+}
+
+// auth login → true once `auth status` confirms a claude.ai login in Dopl's store and the marker is written.
+async function runFullLoginFlow(bin) {
+  let env;
+  try {
+    env = fullLoginEnv(bin);
+    fs.mkdirSync(env.CLAUDE_CONFIG_DIR, { recursive: true, mode: 0o700 });
+  } catch (err) {
+    diag('claude full login: no private directory', err && err.message);
+    return false;
+  }
+  const login = await runChild(bin, ['auth', 'login', '--claudeai'], env);
+  const ok = login.code === 0 && isClaudeAiLogin((await runChild(bin, ['auth', 'status', '--json'], env)).out)
+    && setFullLogin(true);
+  diag('claude full login:', ok ? 'stored' : `failed (login exit ${login.code})`);
+  return ok;
 }
 
 // The BUNDLED binary first (asar-unpacked and signed; most machines never installed a `claude`), then the
@@ -105,18 +151,30 @@ async function resolveClaudeBin() {
   }
 }
 
-let current = null;
-
-/** One sign-in → `{ ok }`; a click while one runs joins it rather than starting a second. */
-function signIn() {
-  if (!current) {
-    current = (async () => {
+// One flow per kind at a time: a click while one runs joins it rather than starting a second.
+const running = new Map();
+function joined(kind, flow) {
+  if (!running.has(kind)) {
+    running.set(kind, (async () => {
       const bin = await resolveClaudeBin();
-      if (!bin) return { ok: false };
-      return { ok: await runSetupTokenFlow(bin) };
-    })().finally(() => { current = null; });
+      return { ok: !!bin && await flow(bin) };
+    })().finally(() => { running.delete(kind); }));
   }
-  return current;
+  return running.get(kind);
 }
 
-module.exports = { signIn, extractToken, extractLoneToken };
+/** The setup-token sign-in → `{ ok }`. */
+const signIn = () => joined('token', runSetupTokenFlow);
+
+/** "Enable Chrome & connectors": the full claude.ai login → `{ ok }`. */
+const signInFull = () => joined('full', runFullLoginFlow);
+
+/** Drop the full login: the marker at once (no later spawn uses it), then the CLI's own logout empties the
+ *  private store. Fire-and-forget; a failed logout leaves a store nothing reads. */
+function signOutFull() {
+  setFullLogin(false);
+  void resolveClaudeBin().then((bin) => (bin ? runChild(bin, ['auth', 'logout'], fullLoginEnv(bin)) : null))
+    .catch((err) => diag('claude full login: logout failed', err && err.message));
+}
+
+module.exports = { signIn, signInFull, signOutFull, extractToken, extractLoneToken, isClaudeAiLogin };

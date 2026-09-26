@@ -37,6 +37,8 @@ export interface RuntimeCredentialStatus {
   state: "connected" | "not-connected" | "expired" | "signing-in";
   /** Main raised this runtime's sign-in prompt, and no sign-in or dismissal has closed it. */
   prompt: boolean;
+  /** "Enable Chrome & connectors": the optional full login; absent where the runtime offers none. */
+  full?: "on" | "off" | "signing-in";
 }
 
 export interface SpaBridgeSurface {
@@ -120,6 +122,7 @@ export interface SpaBridgeSurface {
    */
   runtimeAuth?: {
     signIn(runtimeId?: string): Promise<{ ok: boolean; resumed?: number }>;
+    signInFull(runtimeId?: string): Promise<{ ok: boolean }>;
     status(): Promise<{ runtimes: RuntimeCredentialStatus[] }>;
     onStatus(callback: (payload: { runtimes: RuntimeCredentialStatus[] }) => void): () => void;
     dismissPrompt(runtimeId: string): Promise<{ ok: boolean }>;

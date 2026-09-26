@@ -7,13 +7,16 @@ function rewriteAsarUnpacked(p) {
 }
 
 // Every model-vendor credential the bundled CLIs read from their environment (claude 2.1.220, codex-cli
-// 0.155.1). An inherited one never reaches a child: each adapter sets only Dopl's own.
+// 0.155.1), and the one var that moves Claude's credential STORE. An inherited one never reaches a child:
+// each adapter sets only Dopl's own.
 const INHERITED_CREDENTIAL_ENV = new Set([
   'ANTHROPIC_API_KEY',
   'ANTHROPIC_AUTH_TOKEN',
   'CLAUDE_CODE_OAUTH_TOKEN',
+  'CLAUDE_CODE_OAUTH_REFRESH_TOKEN',
   'CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR',
   'CLAUDE_CODE_API_KEY_FILE_DESCRIPTOR',
+  'CLAUDE_SECURESTORAGE_CONFIG_DIR',
   'OPENAI_API_KEY',
   'CODEX_API_KEY',
   'CODEX_ACCESS_TOKEN',

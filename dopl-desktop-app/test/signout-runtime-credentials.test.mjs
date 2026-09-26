@@ -51,9 +51,10 @@ test("each store's ONLY writer is Dopl's own sign-in, so the credential is ours 
   }
   assert.deepEqual(writers, ["claude-auth.js"], "exactly one module writes the Claude token");
   const flow = fnOf(AUTH, "runSetupTokenFlow");
-  assert.match(flow, /finish\(setStoredOAuthToken\(token\)\)/, "…only the token its own child printed");
-  assert.match(flow, /spawn\(bin, \['setup-token'\]/,
-    "the token is captured from a child THIS APP started");
+  assert.match(flow, /runChild\(bin, \['setup-token'\]/, "the token is captured from a child THIS APP started");
+  assert.match(flow, /const token = r\.picked \|\| \(r\.code === 0 \? extractLoneToken\(r\.out\) : null\);/,
+    "…only the token its own child printed");
+  assert.match(flow, /!!token && setStoredOAuthToken\(token\)/);
   assert.match(CODEX_LOGIN, /configHome\.installAuth\(/, "the Codex auth.json is installed only by Dopl's login");
 });
 

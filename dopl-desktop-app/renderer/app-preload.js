@@ -184,6 +184,7 @@ contextBridge.exposeInMainWorld('dopl', {
   // direction — main runs the OAuth in the system browser. Feature-probed: absent, not inert.
   runtimeAuth: {
     signIn: (runtimeId) => ipcRenderer.invoke('runtime:signIn', { runtimeId: asId(runtimeId) }),
+    signInFull: (runtimeId) => ipcRenderer.invoke('runtime:signInFull', { runtimeId: asId(runtimeId) }),
     status: () => ipcRenderer.invoke('runtime:credentialStatus'),
     onStatus: (callback) => {
       if (typeof callback !== 'function') return () => {};

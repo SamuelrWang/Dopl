@@ -10,7 +10,7 @@ import { bootIpc } from "./_ipc-harness.mjs";
 const registry = real("./runtime");
 const settle = () => new Promise((r) => setImmediate(r));
 
-function world({ signedIn = [], focused = false, signIns = {}, signOuts = {} } = {}) {
+function world({ signedIn = [], focused = false, signIns = {}, signOuts = {}, full = { on: false, answer: { ok: true } } } = {}) {
   const sent = [];
   const notes = [];
   const shown = [];
@@ -30,6 +30,13 @@ function world({ signedIn = [], focused = false, signIns = {}, signOuts = {} } =
       if (signOuts[id] instanceof Error) throw signOuts[id];
       cred.delete(id);
       return id in signOuts ? signOuts[id] : true;
+    },
+    hasFullLogin: () => full.on,
+    signInFull: async () => {
+      ran.push(`${id}:full`);
+      const answer = typeof full.answer === "function" ? await full.answer() : full.answer;
+      if (answer && answer.ok) full.on = true;
+      return answer;
     },
   });
   class Notification {
@@ -60,9 +67,9 @@ test("only the runtimes Dopl signs in from the app are listed, by their own labe
   assert.equal(w.sent[0].channel, w.mod.STATUS_EVENT);
   assert.equal(w.mod.STATUS_EVENT, "dopl:runtime-credentials");
   assert.deepEqual(w.rows(), [
-    { runtimeId: "claude", label: "Claude Code", state: "not-connected", prompt: false },
+    { runtimeId: "claude", label: "Claude Code", state: "not-connected", prompt: false, full: "off" },
     { runtimeId: "codex", label: "Codex", state: "connected", prompt: false },
-  ], "Cursor declares no in-app sign-in, so it has no row");
+  ], "Cursor declares no in-app sign-in, so it has no row; only Claude offers the full login");
   assert.deepEqual(await w.mod.list(), w.rows(), "the read and the push are one answer");
 });
 
@@ -169,10 +176,38 @@ test("a failed or throwing sign-in is the bare refusal and releases nothing", as
   assert.deepEqual([w.row("claude").state, w.row("codex").state], ["not-connected", "not-connected"]);
 });
 
+test("ENABLE CHROME & CONNECTORS: signing-in while the full login runs, on after it; no hold is released", async () => {
+  let finish = () => {};
+  const w = world({ signedIn: ["claude"], full: { on: false, answer: () => new Promise((r) => { finish = r; }) } });
+  await settle();
+  const pending = w.mod.signInFull("claude");
+  await settle();
+  assert.equal(w.row("claude").full, "signing-in");
+  assert.equal(w.row("claude").state, "connected", "the inference sign-in is untouched");
+  finish({ ok: true });
+  assert.deepEqual(await pending, { ok: true });
+  await settle();
+  assert.equal(w.row("claude").full, "on");
+  assert.deepEqual(w.resumed, [], "a full login releases nothing — held sessions wait on the inference token");
+  assert.deepEqual(await w.mod.signInFull("codex"), { ok: false }, "Codex offers no full login");
+  assert.deepEqual(w.ran, ["claude:full"]);
+});
+
+test("ENABLE CHROME & CONNECTORS: a failed or throwing full login is the bare { ok: false } and stays off", async () => {
+  for (const answer of [{ ok: false }, () => Promise.reject(new Error("boom")), null]) {
+    const w = world({ full: { on: false, answer } });
+    await settle();
+    assert.deepEqual(await w.mod.signInFull("claude"), { ok: false });
+    await settle();
+    assert.equal(w.row("claude").full, "off");
+  }
+});
+
 test("the boundary refuses a malformed id before any credential module loads", async () => {
   const ipc = bootIpc();
   for (const runtimeId of ["../codex", "Codex", 42, { id: "codex" }, "x".repeat(40)]) {
     assert.deepEqual(await ipc.handlers["runtime:signIn"](ipc.shell, { runtimeId }), { ok: false }, String(runtimeId));
+    assert.deepEqual(await ipc.handlers["runtime:signInFull"](ipc.shell, { runtimeId }), { ok: false }, String(runtimeId));
     assert.deepEqual(await ipc.handlers["runtime:dismissSignInPrompt"](ipc.shell, { runtimeId }), { ok: false }, String(runtimeId));
   }
   assert.deepEqual(ipc.dialogs, []);

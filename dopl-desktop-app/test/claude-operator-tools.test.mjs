@@ -13,6 +13,13 @@ import { dirname, join } from "node:path";
 const HERE = dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
 const MAIN = join(HERE, "..", "main");
+// Dopl's full-login marker (`claude-token.js`, electron-bound), faked through the module cache.
+const fullLogin = { on: false };
+const TOKEN_MODULE = join(MAIN, "claude-token.js");
+require.cache[TOKEN_MODULE] = {
+  id: TOKEN_MODULE, filename: TOKEN_MODULE, loaded: true, children: [], paths: [],
+  exports: { hasFullLogin: () => fullLogin.on, fullLoginDir: () => "/userData/claude-full-login" },
+};
 const { withOperatorTools, userMcpServers } = require(join(MAIN, "runtime", "claude", "operator-tools.js"));
 const { MCP_URL } = require(join(MAIN, "config.js"));
 
@@ -61,4 +68,28 @@ test("only a session stamped with a scope takes the widening", () => {
   const src = readFileSync(join(MAIN, "runtime", "claude", "launch-spec.js"), "utf8");
   assert.match(src, /if \(s\.operatorTools\) operatorTools\.withOperatorTools\(options\);/);
   assert.match(src, /settingSources: \[\],/);
+});
+
+test("ENABLE CHROME & CONNECTORS: with the full login the spawn reads Dopl's private store, never an env credential", () => {
+  const spawn = () => ({ mcpServers: {}, env: { CLAUDE_CODE_OAUTH_TOKEN: "sk-ant-oat01-dopl", ENABLE_CLAUDEAI_MCP_SERVERS: "0" } });
+  fullLogin.on = false;
+  const token = withOperatorTools(spawn(), home({})).env;
+  assert.equal(token.CLAUDE_CODE_OAUTH_TOKEN, "sk-ant-oat01-dopl", "no full login: Dopl's inference token, as before");
+  assert.equal("CLAUDE_SECURESTORAGE_CONFIG_DIR" in token, false);
+  fullLogin.on = true;
+  const full = withOperatorTools(spawn(), home({})).env;
+  assert.equal("CLAUDE_CODE_OAUTH_TOKEN" in full, false, "an env token would win over the store");
+  assert.equal(full.CLAUDE_SECURESTORAGE_CONFIG_DIR, "/userData/claude-full-login");
+  assert.equal("CLAUDE_CONFIG_DIR" in full, false, "transcripts stay where every other session keeps them");
+  fullLogin.on = false;
+});
+
+test("only a Use my tools spawn can take the full login", () => {
+  const spec = readFileSync(join(MAIN, "runtime", "claude", "launch-spec.js"), "utf8");
+  assert.equal(/withFullLogin/.test(spec), false, "the ordinary spawn path never asks for it");
+  const users = ["runtime/claude/operator-tools.js", "runtime/claude/credential.js"];
+  for (const f of ["runtime/claude/launch-spec.js", "runtime/claude/loader.js", "session-query.js", "session-park.js"]) {
+    assert.equal(/withFullLogin\(/.test(readFileSync(join(MAIN, f), "utf8")), false, f);
+  }
+  assert.match(readFileSync(join(MAIN, users[0]), "utf8"), /withFullLogin\(out\.env\);/);
 });

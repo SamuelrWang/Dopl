@@ -14,21 +14,28 @@ export function canSignInToRuntime(): boolean {
   return typeof getSpaBridge()?.runtimeAuth?.signIn === "function";
 }
 
-/**
- * Run the sign-in; `''`/absent = the default runtime. `ok` is the credential after the flow, and main
- * has already released that runtime's held sessions when it answers `ok`.
- */
-export async function signInToRuntime(
-  runtimeId?: string | null
-): Promise<{ ok: boolean }> {
+async function run(op: "signIn" | "signInFull", runtimeId?: string | null): Promise<{ ok: boolean }> {
   const bridge = getSpaBridge()?.runtimeAuth;
-  if (typeof bridge?.signIn !== "function") return { ok: false };
+  if (typeof bridge?.[op] !== "function") return { ok: false };
   try {
-    const res = await bridge.signIn(runtimeId ?? "");
+    const res = await bridge[op](runtimeId ?? "");
     return { ok: res?.ok === true };
   } catch {
     return { ok: false };
   }
+}
+
+/**
+ * Run the sign-in; `''`/absent = the default runtime. `ok` is the credential after the flow, and main
+ * has already released that runtime's held sessions when it answers `ok`.
+ */
+export function signInToRuntime(runtimeId?: string | null): Promise<{ ok: boolean }> {
+  return run("signIn", runtimeId);
+}
+
+/** "Enable Chrome & connectors": the runtime's optional full login, used by the next "Use my tools" agent. */
+export function signInFullToRuntime(runtimeId: string): Promise<{ ok: boolean }> {
+  return run("signInFull", runtimeId);
 }
 
 /** Close one runtime's sign-in prompt; main keeps it closed until that runtime's next sign-in. */

@@ -8,7 +8,7 @@ const { diag } = require('./diag');
 const STATUS_EVENT = 'dopl:runtime-credentials';
 
 let host = { getWindows: () => [], showWindow: () => {} };
-// runtimeId -> { inFlight, rejected, prompt, dismissed }
+// runtimeId -> { inFlight, fullInFlight, rejected, prompt, dismissed }
 const flags = new Map();
 let lastDigest = null;
 let pushing = Promise.resolve();
@@ -25,7 +25,7 @@ function signInIds() {
 }
 
 function flagsFor(id) {
-  if (!flags.has(id)) flags.set(id, { inFlight: 0, rejected: false, prompt: false, dismissed: false });
+  if (!flags.has(id)) flags.set(id, { inFlight: 0, fullInFlight: 0, rejected: false, prompt: false, dismissed: false });
   return flags.get(id);
 }
 
@@ -37,11 +37,20 @@ async function stateOf(id, f) {
   return f.rejected ? 'expired' : 'connected';
 }
 
-/** `[{ runtimeId, label, state, prompt }]` in registration order; `state` is what the next session would meet. */
+// The optional full login ("Enable Chrome & connectors"): `on` / `off` / `signing-in`, only where the runtime offers it.
+function fullOf(id, f) {
+  if (!runtimeRegistry.copy.canSignInFull(runtimeRegistry.descriptorFor(id))) return {};
+  if (f.fullInFlight > 0) return { full: 'signing-in' };
+  let on = false;
+  try { on = runtimeRegistry.runtimeFor(id).hasFullLogin() === true; } catch (_) { /* unreadable reads as off */ }
+  return { full: on ? 'on' : 'off' };
+}
+
+/** `[{ runtimeId, label, state, prompt, full? }]` in registration order; `state` is what the next session would meet. */
 function list() {
   return Promise.all(signInIds().map(async (id) => {
     const f = flagsFor(id);
-    return { runtimeId: id, label: runtimeRegistry.descriptorFor(id).label, state: await stateOf(id, f), prompt: f.prompt };
+    return { runtimeId: id, label: runtimeRegistry.descriptorFor(id).label, state: await stateOf(id, f), prompt: f.prompt, ...fullOf(id, f) };
   }));
 }
 
@@ -100,27 +109,41 @@ function dismissPrompt(runtimeId) {
   return true;
 }
 
-/** One runtime's in-app sign-in (`''` = the default runtime), then its held sessions are released. */
-async function signIn(runtimeId) {
-  const id = runtimeId || runtimeRegistry.DEFAULT_ID;
-  if (signInIds().indexOf(id) === -1) return { ok: false };
+// One in-app flow on runtime `id`, its busy counter `busy` pushed around it → true when it took.
+async function runFlow(id, busy, method) {
   const f = flagsFor(id);
-  f.inFlight += 1;
+  f[busy] += 1;
   void push();
   let ok = false;
   try {
-    const res = await runtimeRegistry.runtimeFor(id).signIn();
+    const res = await runtimeRegistry.runtimeFor(id)[method]();
     ok = !!res && res.ok === true;
   } catch (err) {
-    diag('runtime credentials: sign-in threw —', (err && err.message) || err);
+    diag('runtime credentials:', method, 'threw —', (err && err.message) || err);
   }
-  f.inFlight -= 1;
-  if (ok) Object.assign(f, { rejected: false, prompt: false, dismissed: false });
+  f[busy] -= 1;
+  if (ok && method === 'signIn') Object.assign(f, { rejected: false, prompt: false, dismissed: false });
   void push();
-  if (!ok) return { ok: false };
+  return ok;
+}
+
+/** One runtime's in-app sign-in (`''` = the default runtime), then its held sessions are released. */
+async function signIn(runtimeId) {
+  const id = runtimeId || runtimeRegistry.DEFAULT_ID;
+  if (signInIds().indexOf(id) === -1 || !(await runFlow(id, 'inFlight', 'signIn'))) return { ok: false };
   const resumed = await require('./session-auth').resumeHeldSessions(id);
   diag('runtime credentials: signed in to', id, '— held sessions resumed:', resumed);
   return { ok: true, resumed };
+}
+
+/**
+ * "Enable Chrome & connectors" for one runtime: its full login (`runtime.signInFull`). Used by the next "Use my
+ * tools" spawn; a running session keeps the credential it started with.
+ */
+async function signInFull(runtimeId) {
+  const id = runtimeId || runtimeRegistry.DEFAULT_ID;
+  if (!runtimeRegistry.copy.canSignInFull(runtimeRegistry.descriptorFor(id))) return { ok: false };
+  return { ok: await runFlow(id, 'fullInFlight', 'signInFull') };
 }
 
 /** A Dopl sign-out: every runtime drops Dopl's own credential. True when none is left behind. */
@@ -139,4 +162,4 @@ async function signOutAll() {
   return cleared;
 }
 
-module.exports = { start, list, needSignIn, noteRejected, dismissPrompt, signIn, signOutAll, STATUS_EVENT };
+module.exports = { start, list, needSignIn, noteRejected, dismissPrompt, signIn, signInFull, signOutAll, STATUS_EVENT };

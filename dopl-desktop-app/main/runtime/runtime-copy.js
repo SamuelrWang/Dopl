@@ -17,6 +17,9 @@ function runtimeLabel(descriptor) {
 /** Can Dopl drive this runtime's sign-in from inside the app? The one reader of `interactiveSignIn`. */
 const canSignIn = (d) => !!(d && d.credential && d.credential.interactiveSignIn);
 
+/** Does this runtime offer the optional full login ("Enable Chrome & connectors")? The one reader of `fullSignIn`. */
+const canSignInFull = (d) => canSignIn(d) && d.credential.fullSignIn === true;
+
 /** The sign-in action's label, or `null` when there is no in-app flow (hide, never gray). */
 function signInAction(descriptor) {
   return canSignIn(descriptor) ? `Sign in to ${runtimeLabel(descriptor)}` : null;
@@ -103,6 +106,7 @@ function noRuntimeCopy(descriptor) {
 module.exports = {
   runtimeLabel,
   canSignIn,
+  canSignInFull,
   signInAction,
   RUNTIME_ERROR_CODES,
   errorCopy,

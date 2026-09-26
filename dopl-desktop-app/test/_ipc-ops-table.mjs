@@ -72,6 +72,8 @@ export const OPS = [
   // malformed id, refused at the boundary before any flow module loads. It starts no turn: the OAuth
   // flow is completed in the operator's own browser, and success RELEASES that runtime's held sessions.
   ["runtime:signIn", { runtimeId: "codex" }, { ok: false }, { runtimeId: "../codex" }],
+  // 2026-09-25 (ruling 4): "Enable Chrome & connectors" — the same shape, one runtime's optional full login.
+  ["runtime:signInFull", { runtimeId: "claude" }, { ok: false }, { runtimeId: "../claude" }],
   // Every in-app-sign-in runtime's status (no payload) and one runtime's prompt dismissal: states and
   // a flag, never a credential. A refused read is the empty list.
   ["runtime:credentialStatus", undefined, { runtimes: [] }],

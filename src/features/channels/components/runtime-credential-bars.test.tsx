@@ -20,17 +20,19 @@ afterEach(() => {
 function bridge(first: Row[]) {
   let push: (p: { runtimes: Row[] }) => void = () => {};
   const signIn = vi.fn().mockResolvedValue({ ok: true });
+  const signInFull = vi.fn().mockResolvedValue({ ok: true });
   const off = vi.fn();
   (window as { dopl?: unknown }).dopl = {
     apiRequest: vi.fn(),
     runtimeAuth: {
       signIn,
+      signInFull,
       status: () => Promise.resolve({ runtimes: first }),
       onStatus: (cb: typeof push) => { push = cb; return off; },
       dismissPrompt: vi.fn(),
     },
   };
-  return { signIn, off, push: (runtimes: Row[]) => act(() => push({ runtimes })) };
+  return { signIn, signInFull, off, push: (runtimes: Row[]) => act(() => push({ runtimes })) };
 }
 
 const bar = (label: string) => screen.getByText(label).closest("li") as HTMLElement;
@@ -100,4 +102,34 @@ it("renders nothing without the bridge op — the web tree, an older desktop", (
   (window as { dopl?: unknown }).dopl = { apiRequest: vi.fn() };
   const { container } = render(<RuntimeCredentialBars />);
   expect(container.innerHTML).toBe("");
+});
+
+describe("Enable Chrome & connectors: the optional full login, on a connected runtime only", () => {
+  const full = (state: Row["state"], f: Row["full"]): Row => ({ ...row("claude", "Claude Code", state), full: f });
+
+  it("off: the control runs THAT runtime's full login", async () => {
+    const b = bridge([full("connected", "off")]);
+    render(<RuntimeCredentialBars />);
+    fireEvent.click(await screen.findByRole("button", { name: "Enable Chrome & connectors" }));
+    expect(b.signInFull).toHaveBeenCalledWith("claude");
+    expect(b.signIn).not.toHaveBeenCalled();
+  });
+
+  it("signing-in: busy and not pressable; on: a label, no control", async () => {
+    const b = bridge([full("connected", "signing-in")]);
+    render(<RuntimeCredentialBars />);
+    const busy = (await screen.findByRole("button", { name: "Signing in…" })) as HTMLButtonElement;
+    expect(busy.disabled).toBe(true);
+    b.push([full("connected", "on")]);
+    expect(bar("Claude Code").textContent).toBe("Claude CodeConnectedChrome & connectors on");
+    expect(screen.queryByRole("button")).toBeNull();
+  });
+
+  it("absent until the runtime itself is connected, and absent where the runtime offers none", async () => {
+    bridge([full("not-connected", "off"), row("codex", "Codex", "connected")]);
+    render(<RuntimeCredentialBars />);
+    await screen.findByText("Not connected");
+    expect(screen.queryByRole("button", { name: "Enable Chrome & connectors" })).toBeNull();
+    expect(bar("Codex").textContent).toBe("CodexConnected");
+  });
 });

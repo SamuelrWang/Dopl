@@ -2,7 +2,8 @@
 // (`claude-auth.js`), safeStorage-encrypted. Its one writer is that flow, so it never holds a login the operator
 // made outside Dopl. No UI deps, so the adapter can import it without cycles. The token never reaches a log.
 
-const { safeStorage } = require('electron');
+const path = require('path');
+const { app, safeStorage } = require('electron');
 const Store = require('electron-store');
 
 const store = new Store();
@@ -51,4 +52,31 @@ function clearStoredOAuthToken() {
   return !getStoredOAuthToken();
 }
 
-module.exports = { setStoredOAuthToken, getStoredOAuthToken, clearStoredOAuthToken };
+// "ENABLE CHROME & CONNECTORS" (Samuel, 2026-09-25, ruling 4): an optional FULL claude.ai login that the bundled
+// CLI itself keeps in a Dopl-private secure store (`claude-auth.js › signInFull`) — never the operator's own
+// `~/.claude` login. Dopl holds no copy of it: only this directory and a marker that the login completed.
+const FULL_LOGIN_DIR = 'claude-full-login';
+const FULL_LOGIN_KEY = 'claudeFullLogin';
+
+/** The private config + secure-store directory the full login lives in (userData, behind the Read deny rules). */
+function fullLoginDir() {
+  return path.join(app.getPath('userData'), FULL_LOGIN_DIR);
+}
+
+function hasFullLogin() {
+  try { return store.get(FULL_LOGIN_KEY) === true; } catch (_) { return false; }
+}
+
+function setFullLogin(on) {
+  try {
+    if (on) store.set(FULL_LOGIN_KEY, true);
+    else store.delete(FULL_LOGIN_KEY);
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
+
+module.exports = {
+  setStoredOAuthToken, getStoredOAuthToken, clearStoredOAuthToken, fullLoginDir, hasFullLogin, setFullLogin,
+};

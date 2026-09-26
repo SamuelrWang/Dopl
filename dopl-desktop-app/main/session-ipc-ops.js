@@ -212,6 +212,12 @@ function register(opts = {}) {
     return runtimeId === null ? { ok: false } : require('./runtime-credentials').signIn(runtimeId);
   }));
 
+  // "Enable Chrome & connectors": one runtime's optional full login (body: `runtime-credentials.js › signInFull`).
+  ipcMain.handle('runtime:signInFull', appWindowOnly('runtime:signInFull', { ok: false }, (_event, payload) => {
+    const runtimeId = runtimeIdOf(payload);
+    return runtimeId === null ? { ok: false } : require('./runtime-credentials').signInFull(runtimeId);
+  }));
+
   // Every in-app-sign-in runtime's credential status; the same rows `dopl:runtime-credentials` pushes.
   ipcMain.handle('runtime:credentialStatus', appWindowOnly('runtime:credentialStatus', { runtimes: [] }, async () => (
     { runtimes: await require('./runtime-credentials').list() }

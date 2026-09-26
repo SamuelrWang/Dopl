@@ -11,6 +11,7 @@ const path = require('path');
 const { NATIVE_BUILTINS } = require('../../tool-profiles');
 const { isDoplServer } = require('../../operator-tools');
 const { CLAUDEAI_MCP_ENV } = require('./loader');
+const { withFullLogin } = require('./credential');
 const { diag } = require('../../diag');
 
 /** The CLI's USER scope (`~/.claude.json › mcpServers`): a project entry is not the operator's everywhere. */
@@ -56,8 +57,10 @@ function withOperatorTools(options, home) {
   const out = options;
   out.mcpServers = Object.assign(userMcpServers(h), out.mcpServers);
   out.tools = (out.tools || []).concat(NATIVE_BUILTINS);
-  // Connectors and Chrome need a claude.ai login's scopes; on Dopl's setup-token they stay off by themselves.
+  // Connectors and Chrome need a claude.ai login's scopes: Dopl's full login when the operator enabled one;
+  // on Dopl's setup-token (user:inference only) they stay off by themselves.
   delete out.env[CLAUDEAI_MCP_ENV];
+  withFullLogin(out.env);
   out.extraArgs = Object.assign({}, out.extraArgs, { chrome: null });
   const plugin = operatorPlugin(h);
   if (plugin) out.plugins = [plugin];

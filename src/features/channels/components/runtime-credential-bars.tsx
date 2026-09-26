@@ -9,7 +9,9 @@ import { cn } from "@/shared/lib/utils";
 import { OpenScaleButton } from "@/shared/ui/open-scale-button";
 import type { RuntimeCredentialStatus } from "@/shared/lib/spa-bridge";
 import { SIGN_IN_BUSY } from "../lib/runtime-copy";
-import { signInToRuntime, useRuntimeCredentials } from "./runtime-signin";
+import { signInFullToRuntime, signInToRuntime, useRuntimeCredentials } from "./runtime-signin";
+
+const FULL_LABEL = "Enable Chrome & connectors";
 
 const STATUS: Record<RuntimeCredentialStatus["state"], { text: string; tone: string } | null> = {
   connected: { text: "Connected", tone: "text-success" },
@@ -43,6 +45,19 @@ export function RuntimeCredentialBars({ className }: { className?: string }) {
                   className="disabled:opacity-60"
                 >
                   {busy ? SIGN_IN_BUSY : "Sign in"}
+                </OpenScaleButton>
+              )}
+              {r.state === "connected" && r.full === "on" && (
+                <span className="text-caption text-success">Chrome & connectors on</span>
+              )}
+              {r.state === "connected" && (r.full === "off" || r.full === "signing-in") && (
+                <OpenScaleButton
+                  onClick={() => void signInFullToRuntime(r.runtimeId)}
+                  disabled={r.full === "signing-in"}
+                  aria-busy={r.full === "signing-in"}
+                  className="disabled:opacity-60"
+                >
+                  {r.full === "signing-in" ? SIGN_IN_BUSY : FULL_LABEL}
                 </OpenScaleButton>
               )}
             </span>
