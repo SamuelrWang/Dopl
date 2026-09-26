@@ -12,7 +12,7 @@ import type {
 } from "./types";
 
 /**
- * Service-role access to `glasses_messages` / `glasses_devices`
+ * Service-role access to `glasses_messages` / `glasses_templates`
  * (`20261025120000_glasses_messages.sql`). ⚠ Bypasses RLS, so EVERY query is
  * filtered on `user_id` here — the callers pass the authenticated user.
  *
@@ -182,23 +182,6 @@ export const glassesRepository: GlassesStore = {
     return count ?? 0;
   },
 
-  async touchDevice(userId: string, now: string) {
-    const { error } = await supabaseAdmin()
-      .from("glasses_devices")
-      .upsert({ user_id: userId, last_seen: now }, { onConflict: "user_id" });
-    if (error) fail("touchDevice", error);
-  },
-
-  async lastSeen(userId: string) {
-    const { data, error } = await supabaseAdmin()
-      .from("glasses_devices")
-      .select("last_seen")
-      .eq("user_id", userId)
-      .maybeSingle();
-    if (error) fail("lastSeen", error);
-    return (data as { last_seen: string } | null)?.last_seen ?? null;
-  },
-
   async getSpec(userId: string, id: string) {
     const { data, error } = await supabaseAdmin()
       .from(MESSAGES)
@@ -249,26 +232,5 @@ export const glassesRepository: GlassesStore = {
       if (err instanceof Error && err.message.includes("duplicate key")) return null;
       throw err;
     }
-  },
-
-  async getReplyCursor(userId: string) {
-    const { data, error } = await supabaseAdmin()
-      .from("glasses_devices")
-      .select("reply_channel_id, reply_cursor_seq")
-      .eq("user_id", userId)
-      .maybeSingle();
-    if (error) fail("getReplyCursor", error);
-    const row = data as { reply_channel_id: string | null; reply_cursor_seq: number | null } | null;
-    return { channelId: row?.reply_channel_id ?? null, seq: row?.reply_cursor_seq ?? null };
-  },
-
-  async setReplyCursor(userId: string, channelId: string, seq: number, now: string) {
-    const { error } = await supabaseAdmin()
-      .from("glasses_devices")
-      .upsert(
-        { user_id: userId, reply_channel_id: channelId, reply_cursor_seq: seq, last_seen: now },
-        { onConflict: "user_id" },
-      );
-    if (error) fail("setReplyCursor", error);
   },
 };

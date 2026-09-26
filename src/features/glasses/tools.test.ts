@@ -2,13 +2,14 @@ import { describe, expect, it } from "vitest";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { createFakeGlassesStore } from "./fake-store";
+import { createFakeDeviceStore } from "./fake-device-store";
 import { createGlassesMcpServer } from "./tools";
 
 const USER = "11111111-1111-4111-8111-111111111111";
 
-async function connect(canWrite = true) {
+async function connect(canWrite = true, charge?: () => Promise<string | null>) {
   const fake = createFakeGlassesStore();
-  const server = createGlassesMcpServer({ store: fake.store }, USER, { canWrite });
+  const server = createGlassesMcpServer({ store: fake.store, devices: createFakeDeviceStore().devices }, USER, { canWrite, charge });
   const client = new Client({ name: "test", version: "0" });
   const [a, b] = InMemoryTransport.createLinkedPair();
   await Promise.all([server.connect(a), client.connect(b)]);
@@ -85,5 +86,17 @@ describe("glasses MCP server", () => {
     expect(res.isError).toBe(true);
     const body = JSON.parse((res.content as { text: string }[])[0].text);
     expect(body.errors[0].code).toBe("multiple_selectable");
+  });
+
+  it("charges each call once and refuses with the meter's message when the wallet is empty", async () => {
+    let calls = 0;
+    const { client, rows } = await connect(true, async () => (++calls > 1 ? "Your Dopl credits are used up for this period." : null));
+    const ok = await client.callTool({ name: "glasses_notify", arguments: { title: "a", body: "b" } });
+    expect(ok.isError).toBeFalsy();
+    const refused = await client.callTool({ name: "glasses_notify", arguments: { title: "a", body: "b" } });
+    expect(refused.isError).toBe(true);
+    expect((refused.content as { text: string }[])[0].text).toContain("credits are used up");
+    expect(rows).toHaveLength(1);
+    expect(calls).toBe(2);
   });
 });

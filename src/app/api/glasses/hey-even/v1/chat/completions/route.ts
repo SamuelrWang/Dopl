@@ -1,14 +1,10 @@
-import "server-only";
-import { preflight } from "@/features/glasses/device";
-import { heyEvenPost } from "@/features/glasses/hey-even-route";
+import { preflight } from "@/features/glasses/cors";
+import { voiceHandlers } from "@/features/glasses/glasses-runtime";
 
-/** Hey Even (OpenAI chat-completions) → linked Dopl channel. docs/glasses-mcp.md. */
+/** Hey Even chat completions (OpenAI path) (docs/glasses-mcp.md). */
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 30;
 
-export function OPTIONS(request: Request): Response {
-  return preflight(request);
-}
-
-export const POST = heyEvenPost;
+export const OPTIONS = preflight;
+export const POST = voiceHandlers.heyEven;

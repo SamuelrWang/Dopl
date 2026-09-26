@@ -1,15 +1,10 @@
-import "server-only";
-import { authenticateDevice, json, preflight } from "@/features/glasses/device";
-import { modelList } from "@/features/glasses/voice";
+import { preflight } from "@/features/glasses/cors";
+import { voiceHandlers } from "@/features/glasses/glasses-runtime";
 
-/** Hey Even model discovery: one model, `dopl-glasses`. */
+/** Hey Even model list (docs/glasses-mcp.md). */
+export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+export const maxDuration = 30;
 
-export function OPTIONS(request: Request): Response {
-  return preflight(request);
-}
-
-export function GET(request: Request): Response {
-  if (!authenticateDevice(request)) return json(request, { error: { message: "Unauthorized" } }, 401);
-  return json(request, modelList(Math.floor(Date.now() / 1000)));
-}
+export const OPTIONS = preflight;
+export const GET = voiceHandlers.models;

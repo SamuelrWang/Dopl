@@ -303,13 +303,15 @@ describe("every FK into channels is ON DELETE CASCADE (what makes one DELETE com
   // ONTOLOGY's container and not the channel's, which is what makes the
   // cross-container lend work — and is exactly why this cascade has to be
   // declared rather than inherited from a tenancy column.
-  it("finds all fourteen child FKs", () => {
+  it("finds all sixteen child FKs", () => {
     // ⚠ FIFTEEN SINCE 2026-09-13: `credit_usage_events.channel_id`
     // (`20261003120000_credit_events_channel.sql`, F-691, an ALTER TABLE — the
     // first FK into channels added by ADD COLUMN), a RECORD of something that
     // happened, SET NULL, named below. F-690's "revisions" FK never existed:
     // `owningTable` did not read ALTER and pinned this one on the file before.
-    expect(refs.length).toBe(15);
+    // ⚠ SIXTEEN SINCE 2026-09-26: `glasses_device_links.linked_channel_id`
+    // (`20261028120000_glasses_device_links_pairings.sql`), SET NULL, named below.
+    expect(refs.length).toBe(16);
   });
 
   /**
@@ -338,6 +340,16 @@ describe("every FK into channels is ON DELETE CASCADE (what makes one DELETE com
       // agent" once the channel is gone). Same class as the one above.
       "ON DELETE SET NULL",
     ],
+    [
+      "glasses_device_links.linked_channel_id",
+      // Glasses production phase, 2026-09-26 — ⚠ AN AGENT'S CALL WHILE SAMUEL WAS
+      // AWAY, flagged for his ruling. A paired device is not a statement ABOUT
+      // the room: it is the user's hardware, merely POINTED at a channel for
+      // voice. Deleting the room must unlink it, not unpair the glasses (CASCADE
+      // would silently revoke a device the user still wears). SET NULL leaves no
+      // row referencing the deleted channel, so the purge stays complete.
+      "ON DELETE SET NULL",
+    ],
   ]);
 
   /**
@@ -358,12 +370,13 @@ describe("every FK into channels is ON DELETE CASCADE (what makes one DELETE com
 
   /**
    * The column an inline FK hangs off — the identifier just before `REFERENCES`.
-   * ⚠ FAIL-CLOSED on purpose: all thirteen are inline `<col> uuid [NOT NULL]`
-   * declarations, and anything this cannot read returns "", which matches no
-   * exemption and is therefore held to CASCADE.
+   * ⚠ FAIL-CLOSED on purpose: all are inline `<col> uuid [NOT NULL | NULL]`
+   * declarations (explicit `NULL` since `glasses_device_links`, 2026-09-26), and
+   * anything this cannot read returns "", which matches no exemption and is
+   * therefore held to CASCADE.
    */
   function owningColumn(index: number): string {
-    const m = /([a-z_]+)\s+uuid(?:\s+NOT\s+NULL)?\s*$/i.exec(
+    const m = /([a-z_]+)\s+uuid(?:\s+(?:NOT\s+)?NULL)?\s*$/i.exec(
       ALL_SQL.slice(Math.max(0, index - 80), index)
     );
     return m ? m[1] : "";

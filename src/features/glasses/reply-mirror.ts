@@ -1,12 +1,13 @@
 import { g2Measurer, type TextMeasurer } from "./measure";
 import { sanitizeGlassesText, utf8Bytes } from "./text";
+import type { DeviceStore, GlassesDevice } from "./devices-types";
 import type { GlassesStore, ShowPayload } from "./types";
 import type { ChannelGateway, ChannelReply } from "./voice-utterance";
 
 /**
- * Agent replies in the linked channel → glasses. Runs inside the device inbox
- * long-poll (no background worker): each tick reads agent `message` rows past
- * the device's cursor and queues one glasses message per row, card_id
+ * Agent replies in a device's linked channel → glasses. Runs inside the device
+ * inbox long-poll (no background worker): each tick reads agent `message` rows
+ * past the device's cursor (`glasses_device_links.reply_cursor_seq`) and queues one glasses message per row, card_id
  * `reply-<channel message id>`, ALWAYS as a `show` card (a `notify` is
  * auto-dismissed after a few seconds; a reply must stay until the wearer taps
  * it or it expires, Samuel 2026-09-26). Idempotent twice over: the cursor only moves
@@ -86,27 +87,38 @@ export function replyToGlasses(
 
 export interface MirrorDeps {
   store: GlassesStore;
+  devices: DeviceStore;
   gateway: ChannelGateway;
   now?: () => number;
   measurer?: TextMeasurer;
 }
 
-/** Queue every new agent reply in `channelId` for `userId`'s glasses. Returns how many were queued. */
-export async function mirrorReplies(deps: MirrorDeps, userId: string, channelId: string): Promise<number> {
+/**
+ * Queue every new agent reply in `device`'s linked channel for its owner's
+ * glasses (all of the owner's devices see it: the queue is per user). Returns
+ * how many were queued and the cursor now stored, which a caller polling in a
+ * loop feeds back in. An unlinked device mirrors nothing.
+ */
+export async function mirrorReplies(
+  deps: MirrorDeps,
+  device: Pick<GlassesDevice, "id" | "user_id" | "linked_channel_id" | "reply_cursor_seq">,
+): Promise<{ queued: number; cursor: number | null }> {
+  const channelId = device.linked_channel_id;
+  if (!channelId) return { queued: 0, cursor: device.reply_cursor_seq };
   const nowMs = (deps.now ?? Date.now)();
   const now = new Date(nowMs).toISOString();
-  const cursor = await deps.store.getReplyCursor(userId);
-  if (cursor.channelId !== channelId || cursor.seq === null) {
-    await deps.store.setReplyCursor(userId, channelId, await deps.gateway.headSeq(channelId), now);
-    return 0;
+  if (device.reply_cursor_seq === null) {
+    const head = await deps.gateway.headSeq(channelId);
+    await deps.devices.setReplyCursor(device.id, head);
+    return { queued: 0, cursor: head };
   }
-  const replies = await deps.gateway.agentMessagesAfter(channelId, cursor.seq, 20);
-  if (replies.length === 0) return 0;
+  const replies = await deps.gateway.agentMessagesAfter(channelId, device.reply_cursor_seq, 20);
+  if (replies.length === 0) return { queued: 0, cursor: device.reply_cursor_seq };
   let queued = 0;
   for (const reply of replies) {
     const msg = replyToGlasses(reply, deps.measurer);
     if (!msg) continue;
-    const row = await deps.store.insertIfAbsent(userId, {
+    const row = await deps.store.insertIfAbsent(device.user_id, {
       kind: msg.kind,
       card_id: `reply-${reply.id}`,
       payload: msg.payload,
@@ -115,6 +127,7 @@ export async function mirrorReplies(deps: MirrorDeps, userId: string, channelId:
     });
     if (row) queued += 1;
   }
-  await deps.store.setReplyCursor(userId, channelId, replies[replies.length - 1].seq, now);
-  return queued;
+  const cursor = replies[replies.length - 1].seq;
+  await deps.devices.setReplyCursor(device.id, cursor);
+  return { queued, cursor };
 }

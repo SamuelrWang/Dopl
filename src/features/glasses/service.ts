@@ -6,21 +6,24 @@ import {
   cleanSeconds,
   isUuid,
 } from "./text";
+import { isOnline } from "./devices-service";
+import type { DeviceStore } from "./devices-types";
 import type { GlassesAnswer, GlassesStatus, GlassesStore } from "./types";
 
 /**
- * The five agent-facing operations behind `/api/mcp/glasses`. Pure over a
+ * The message tools (`glasses_notify|show|ask|get_answer|status`). Pure over a
  * {@link GlassesStore} plus an injectable clock/sleep, so the hold loop is
- * testable without a database or real time.
+ * testable without a database or real time. Everything is per USER: every
+ * active device of the caller receives what is queued here.
  */
 
 /** Longest a single `glasses_ask` call holds. Under the route's maxDuration (300). */
 export const ASK_HOLD_CAP_SEC = 200;
 export const ASK_POLL_MS = 1000;
-export const ONLINE_WINDOW_MS = 60_000;
 
 export interface GlassesDeps {
   store: GlassesStore;
+  devices: DeviceStore;
   now?: () => number;
   sleep?: (ms: number) => Promise<void>;
 }
@@ -181,10 +184,19 @@ export async function glassesGetAnswer(
 
 export async function glassesStatus(deps: GlassesDeps, userId: string) {
   const now = clock(deps)();
-  const [lastSeen, activeCount] = await Promise.all([
-    deps.store.lastSeen(userId),
+  const [devices, activeCount] = await Promise.all([
+    deps.devices.listDevices(userId),
     deps.store.countActive(userId, iso(now)),
   ]);
-  const online = lastSeen !== null && now - Date.parse(lastSeen) <= ONLINE_WINDOW_MS;
-  return { online, last_seen: lastSeen, active_count: activeCount };
+  const lastSeen = devices
+    .map((d) => d.last_seen)
+    .filter((x): x is string => x !== null)
+    .sort()
+    .at(-1) ?? null;
+  return {
+    online: devices.some((d) => isOnline(d, now)),
+    last_seen: lastSeen,
+    active_count: activeCount,
+    devices: devices.map((d) => ({ id: d.id, name: d.name, online: isOnline(d, now), last_seen: d.last_seen })),
+  };
 }

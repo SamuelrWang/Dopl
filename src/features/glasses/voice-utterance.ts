@@ -1,6 +1,6 @@
 /**
- * Voice → channel: what the wearer said is posted into the LINKED Dopl channel
- * as the operator's own message, so the channel's normal wake rule wakes its
+ * Voice → channel: what the wearer said is posted into the device's LINKED Dopl
+ * channel as the device owner's own message, so the channel's normal wake rule wakes its
  * agent, then holds briefly for the agent's first reply. The hold is CAPPED
  * (`GLASSES_REPLY_HOLD_MS`, default 6000) and its clock starts BEFORE the post,
  * so post + hold stays under the ~10s an Even client waits. A reply slower than
@@ -38,7 +38,7 @@ export interface ChannelGateway {
 
 export interface VoiceConfig {
   channelId: string;
-  /** The account the utterance is posted as: a member of the linked channel. */
+  /** The account the utterance is posted as: the device owner, a member of the linked channel. */
   operatorUserId: string;
 }
 
@@ -52,8 +52,8 @@ export interface UtteranceDeps {
 }
 
 export const DEFAULT_REPLY_HOLD_MS = 6000;
-/** Never hold longer than this, whatever the env says: an Even client gives up at ~10s. */
-const MAX_REPLY_HOLD_MS = 8000;
+/** Never hold longer than this, whatever the env says: an Even client gives up at ~10s, and posting takes time too. */
+const MAX_REPLY_HOLD_MS = 6000;
 const POLL_MS = 500;
 export const UTTERANCE_MAX_BYTES = 4000;
 
@@ -85,10 +85,12 @@ export class UtteranceError extends Error {
   }
 }
 
-export function voiceConfigFromEnv(env: Record<string, string | undefined> = process.env): VoiceConfig | null {
-  const channelId = env.GLASSES_LINKED_CHANNEL_ID?.trim();
-  const operatorUserId = (env.GLASSES_LINKED_CHANNEL_USER_ID ?? env.GLASSES_DEVICE_USER_ID)?.trim();
-  return channelId && operatorUserId ? { channelId, operatorUserId } : null;
+/** Where a device's voice goes: its linked channel, posted as the device's owner. Null when unlinked. */
+export function voiceConfigForDevice(device: {
+  user_id: string;
+  linked_channel_id: string | null;
+}): VoiceConfig | null {
+  return device.linked_channel_id ? { channelId: device.linked_channel_id, operatorUserId: device.user_id } : null;
 }
 
 export async function handleGlassesUtterance(deps: UtteranceDeps, text: string): Promise<UtteranceResult> {

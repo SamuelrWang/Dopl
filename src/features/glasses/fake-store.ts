@@ -4,8 +4,6 @@ import type { GlassesMessage, GlassesStatus, GlassesStore, GlassesTemplate } fro
 export function createFakeGlassesStore() {
   const rows: (GlassesMessage & { user_id: string; spec?: unknown })[] = [];
   const templates = new Map<string, GlassesTemplate>();
-  const cursors = new Map<string, { channelId: string | null; seq: number | null }>();
-  const devices = new Map<string, string>();
   let seq = 0;
   const active = (r: GlassesMessage, now: string) =>
     (r.status === "pending" || r.status === "delivered") && r.expires_at > now;
@@ -64,13 +62,6 @@ export function createFakeGlassesStore() {
       if (rows.some((r) => r.user_id === userId && r.card_id !== null && r.card_id === row.card_id)) return null;
       return store.insert(userId, row);
     },
-    async getReplyCursor(userId) {
-      return cursors.get(userId) ?? { channelId: null, seq: null };
-    },
-    async setReplyCursor(userId, channelId, seq, now) {
-      cursors.set(userId, { channelId, seq });
-      devices.set(userId, now);
-    },
     async getSpec(userId, id) {
       return find(userId, id)?.spec ?? null;
     },
@@ -116,14 +107,8 @@ export function createFakeGlassesStore() {
     async countActive(userId, now) {
       return rows.filter((r) => r.user_id === userId && active(r, now)).length;
     },
-    async touchDevice(userId, now) {
-      devices.set(userId, now);
-    },
-    async lastSeen(userId) {
-      return devices.get(userId) ?? null;
-    },
   };
-  return { store, rows, devices, templates, cursors };
+  return { store, rows, templates };
 }
 
 /** A controllable clock whose `sleep` just advances time. */

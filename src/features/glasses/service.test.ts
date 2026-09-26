@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { createFakeGlassesStore, fakeClock } from "./fake-store";
+import { createFakeDeviceStore } from "./fake-device-store";
 import {
   ASK_HOLD_CAP_SEC,
   glassesAsk,
@@ -14,7 +15,8 @@ const USER = "11111111-1111-4111-8111-111111111111";
 function setup() {
   const fake = createFakeGlassesStore();
   const clock = fakeClock();
-  return { ...fake, clock, deps: { store: fake.store, now: clock.now, sleep: clock.sleep } };
+  const { devices, deviceRows } = createFakeDeviceStore();
+  return { ...fake, clock, devices, deviceRows, deps: { store: fake.store, devices, now: clock.now, sleep: clock.sleep } };
 }
 
 describe("glasses_notify", () => {
@@ -137,12 +139,20 @@ describe("glasses_get_answer / glasses_status", () => {
     await expect(glassesGetAnswer(deps, USER, { id: "bogus" })).rejects.toThrow("no glasses message");
   });
 
-  it("is online within 60s of the last poll", async () => {
-    const { deps, store, clock } = setup();
-    expect(await glassesStatus(deps, USER)).toEqual({ online: false, last_seen: null, active_count: 0 });
-    await store.touchDevice(USER, new Date(clock.now()).toISOString());
+  it("lists the caller's devices; online within 60s of a device's last request", async () => {
+    const { deps, devices, clock } = setup();
+    expect(await glassesStatus(deps, USER)).toEqual({ online: false, last_seen: null, active_count: 0, devices: [] });
+    const now = new Date(clock.now()).toISOString();
+    const d = await devices.insertDevice({ userId: USER, name: "Lens", platform: "even_g2", linkedChannelId: null, linkedContainerId: null, now });
+    await devices.insertDevice({ userId: "someone-else", name: "Other", platform: "even_g2", linkedChannelId: null, linkedContainerId: null, now });
+    await devices.touchDevice(d.id, now);
     await glassesNotify(deps, USER, { title: "t", body: "b" });
-    expect(await glassesStatus(deps, USER)).toMatchObject({ online: true, active_count: 1 });
+    expect(await glassesStatus(deps, USER)).toEqual({
+      online: true,
+      last_seen: now,
+      active_count: 1,
+      devices: [{ id: d.id, name: "Lens", online: true, last_seen: now }],
+    });
     clock.advance(61_000);
     expect(await glassesStatus(deps, USER)).toMatchObject({ online: false, active_count: 0 });
   });

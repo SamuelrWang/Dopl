@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { createFakeGlassesStore, fakeClock } from "./fake-store";
+import { createFakeDeviceStore } from "./fake-device-store";
 import { answerAsk, readInbox } from "./device";
 import {
   ScreenInvalidError,
@@ -22,7 +23,8 @@ const BLOCKS = [
 function setup() {
   const fake = createFakeGlassesStore();
   const clock = fakeClock();
-  return { ...fake, clock, deps: { store: fake.store, now: clock.now, sleep: clock.sleep } };
+  const { devices, deviceRows } = createFakeDeviceStore();
+  return { ...fake, clock, devices, deviceRows, deps: { store: fake.store, devices, now: clock.now, sleep: clock.sleep } };
 }
 
 describe("glasses_render", () => {

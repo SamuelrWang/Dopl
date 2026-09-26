@@ -12,7 +12,8 @@ import {
   redactedHeaders,
 } from "./voice";
 import { createFakeChannel } from "./voice-test-kit";
-import { handleGlassesUtterance, replyHoldMsFromEnv, voiceConfigFromEnv } from "./voice-utterance";
+import { handleGlassesUtterance, replyHoldMsFromEnv, voiceConfigForDevice } from "./voice-utterance";
+import { createFakeDeviceStore } from "./fake-device-store";
 import type { ShowPayload } from "./types";
 
 const USER = "11111111-1111-4111-8111-111111111111";
@@ -64,11 +65,11 @@ describe("handleGlassesUtterance", () => {
     expect(clock.now() - start).toBeGreaterThanOrEqual(5500);
   });
 
-  it("reads the hold from GLASSES_REPLY_HOLD_MS, capped at 8s", () => {
+  it("reads the hold from GLASSES_REPLY_HOLD_MS, capped at 6s", () => {
     expect(replyHoldMsFromEnv({})).toBe(6000);
     expect(replyHoldMsFromEnv({ GLASSES_REPLY_HOLD_MS: "3000" })).toBe(3000);
     expect(replyHoldMsFromEnv({ GLASSES_REPLY_HOLD_MS: "0" })).toBe(0);
-    expect(replyHoldMsFromEnv({ GLASSES_REPLY_HOLD_MS: "60000" })).toBe(8000);
+    expect(replyHoldMsFromEnv({ GLASSES_REPLY_HOLD_MS: "60000" })).toBe(6000);
     expect(replyHoldMsFromEnv({ GLASSES_REPLY_HOLD_MS: "abc" })).toBe(6000);
   });
 
@@ -80,46 +81,54 @@ describe("handleGlassesUtterance", () => {
     expect(sleep).not.toHaveBeenCalled();
   });
 
-  it("reads config from env, defaulting the poster to the device user", () => {
-    expect(voiceConfigFromEnv({ GLASSES_LINKED_CHANNEL_ID: "c", GLASSES_DEVICE_USER_ID: "u" })).toEqual({
-      channelId: "c",
-      operatorUserId: "u",
-    });
-    expect(voiceConfigFromEnv({ GLASSES_LINKED_CHANNEL_ID: "c", GLASSES_DEVICE_USER_ID: "u", GLASSES_LINKED_CHANNEL_USER_ID: "o" })?.operatorUserId).toBe("o");
-    expect(voiceConfigFromEnv({})).toBeNull();
+  it("routes a device's voice to its linked channel as its owner", () => {
+    expect(voiceConfigForDevice({ user_id: "u", linked_channel_id: "c" })).toEqual({ channelId: "c", operatorUserId: "u" });
+    expect(voiceConfigForDevice({ user_id: "u", linked_channel_id: null })).toBeNull();
   });
 });
 
 describe("reply mirror", () => {
+  async function linkedDevice(devices: ReturnType<typeof createFakeDeviceStore>["devices"], channel: string | null = "chan") {
+    return devices.insertDevice({ userId: USER, name: "Lens", platform: "even_g2", linkedChannelId: channel, linkedContainerId: null, now: "t" });
+  }
+
   it("starts at the channel head, then mirrors each agent reply exactly once", async () => {
     const { store, rows } = createFakeGlassesStore();
+    const { devices, deviceRows } = createFakeDeviceStore();
     const ch = createFakeChannel();
     ch.agentSays("old history, never replayed");
-    const deps = { store, gateway: ch.gateway };
-    expect(await mirrorReplies(deps, USER, "chan")).toBe(0);
+    const deps = { store, devices, gateway: ch.gateway };
+    const device = await linkedDevice(devices);
+    const first = await mirrorReplies(deps, device);
+    expect(first).toEqual({ queued: 0, cursor: 101 });
+    expect(deviceRows[0].reply_cursor_seq).toBe(101);
     const id = ch.agentSays("Build is **green**. Deploying now.");
-    expect(await mirrorReplies(deps, USER, "chan")).toBe(1);
-    expect(await mirrorReplies(deps, USER, "chan")).toBe(0);
+    const second = await mirrorReplies(deps, { ...device, reply_cursor_seq: first.cursor });
+    expect(second).toEqual({ queued: 1, cursor: 102 });
+    expect(await mirrorReplies(deps, { ...device, reply_cursor_seq: second.cursor })).toEqual({ queued: 0, cursor: 102 });
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({
       kind: "show",
       card_id: `reply-${id}`,
+      user_id: USER,
       payload: { title: "Coder", lines: ["Build is green. Deploying now."] },
     });
     expect(Date.parse(rows[0].expires_at) - Date.parse(rows[0].created_at)).toBe(600_000);
   });
 
-  it("is idempotent even if the cursor is rewound", async () => {
-    const { store, rows, cursors } = createFakeGlassesStore();
+  it("is idempotent even if the cursor is rewound, and ignores unlinked devices", async () => {
+    const { store, rows } = createFakeGlassesStore();
+    const { devices } = createFakeDeviceStore();
     const ch = createFakeChannel();
-    const deps = { store, gateway: ch.gateway };
-    await mirrorReplies(deps, USER, "chan");
-    const before = cursors.get(USER)!.seq!;
+    const deps = { store, devices, gateway: ch.gateway };
+    const device = await linkedDevice(devices);
+    const { cursor } = await mirrorReplies(deps, device);
     ch.agentSays("one");
-    await mirrorReplies(deps, USER, "chan");
-    cursors.set(USER, { channelId: "chan", seq: before });
-    await mirrorReplies(deps, USER, "chan");
+    await mirrorReplies(deps, { ...device, reply_cursor_seq: cursor });
+    await mirrorReplies(deps, { ...device, reply_cursor_seq: cursor });
     expect(rows).toHaveLength(1);
+    const unlinked = await linkedDevice(devices, null);
+    expect(await mirrorReplies(deps, unlinked)).toEqual({ queued: 0, cursor: null });
   });
 
   it("mirrors even a one-word reply as a show card (it must not auto-dismiss)", () => {

@@ -1,45 +1,19 @@
 import { describe, expect, it, vi } from "vitest";
 import { createFakeGlassesStore, fakeClock } from "./fake-store";
-import {
-  answerAsk,
-  authenticateDevice,
-  corsHeaders,
-  dismissMessage,
-  parseInboxQuery,
-  readInbox,
-} from "./device";
+import { createFakeDeviceStore } from "./fake-device-store";
+import { answerAsk, dismissMessage, parseInboxQuery, readInbox } from "./device";
 import { glassesNotify } from "./service";
 
 const USER = "11111111-1111-4111-8111-111111111111";
-const ENV = { token: "secret-token", userId: USER };
 
 function setup() {
   const fake = createFakeGlassesStore();
   const clock = fakeClock();
-  return { ...fake, clock, deps: { store: fake.store, now: clock.now, sleep: clock.sleep } };
+  const { devices, deviceRows } = createFakeDeviceStore();
+  return { ...fake, clock, devices, deviceRows, deps: { store: fake.store, devices, now: clock.now, sleep: clock.sleep } };
 }
 
-const req = (headers: Record<string, string> = {}) =>
-  new Request("http://localhost:3100/api/glasses/device/inbox", { headers });
-
-describe("device auth + CORS", () => {
-  it("maps the exact bearer to the configured user", () => {
-    expect(authenticateDevice(req({ authorization: "Bearer secret-token" }), ENV)).toBe(USER);
-    expect(authenticateDevice(req({ authorization: "Bearer wrong" }), ENV)).toBeNull();
-    expect(authenticateDevice(req(), ENV)).toBeNull();
-    expect(authenticateDevice(req({ authorization: "Bearer x" }), {})).toBeNull();
-  });
-
-  it("echoes only the simulator origins", () => {
-    expect(corsHeaders(req({ origin: "http://127.0.0.1:5180" }))["Access-Control-Allow-Origin"]).toBe(
-      "http://127.0.0.1:5180",
-    );
-    expect(corsHeaders(req({ origin: "http://localhost:5180" }))["Access-Control-Allow-Origin"]).toBe(
-      "http://localhost:5180",
-    );
-    expect(corsHeaders(req({ origin: "http://evil.test" }))["Access-Control-Allow-Origin"]).toBeUndefined();
-  });
-
+describe("inbox query", () => {
   it("parses inbox query", () => {
     const u = (q: string) => new URL(`http://x/api/glasses/device/inbox${q}`);
     expect(parseInboxQuery(u(""))).toEqual({ after: null, waitSec: 25 });
@@ -56,14 +30,13 @@ describe("device auth + CORS", () => {
 });
 
 describe("inbox long-poll", () => {
-  it("returns queued rows, marks them delivered, touches last_seen", async () => {
-    const { deps, rows, devices } = setup();
+  it("returns queued rows and marks them delivered", async () => {
+    const { deps, rows } = setup();
     await glassesNotify(deps, USER, { title: "t", body: "b" });
     const res = await readInbox(deps, USER, null, 25);
     expect(res.messages).toHaveLength(1);
     expect(res.messages[0]).toMatchObject({ kind: "notify", status: "delivered", payload: { title: "t", body: "b" } });
     expect(rows[0].status).toBe("delivered");
-    expect(devices.get(USER)).toBeDefined();
   });
 
   it("honours `after` so delivery does not re-surface a row", async () => {

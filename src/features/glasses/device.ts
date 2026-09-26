@@ -1,67 +1,15 @@
-import { timingSafeEqual } from "node:crypto";
 import { isUuid } from "./text";
 import type { GlassesMessage, GlassesStore, ScreenPayload } from "./types";
 
 /**
- * The G2 plugin's side of the queue: auth, CORS, long-poll inbox, answer,
- * dismiss. Route files in `src/app/api/glasses/device/*` are thin wrappers.
- *
- * PROTOTYPE AUTH: one device, one static bearer (`GLASSES_DEVICE_TOKEN`) mapped
- * to one user (`GLASSES_DEVICE_USER_ID`). No pairing.
+ * The glasses' side of the message queue: long-poll inbox, answer, dismiss.
+ * Auth (`devices-service.ts › deviceFromBearer`) and CORS (`cors.ts`) happen in
+ * the route files, which are thin wrappers; everything here is per USER, so
+ * every active device of the user sees the same queue.
  */
 
-export const DEVICE_ALLOWED_ORIGINS = [
-  "http://127.0.0.1:5180",
-  "http://localhost:5180",
-] as const;
 export const INBOX_MAX_WAIT_SEC = 25;
 export const INBOX_POLL_MS = 1000;
-
-export function corsHeaders(request: Request): Record<string, string> {
-  const origin = request.headers.get("origin");
-  const headers: Record<string, string> = {
-    "Access-Control-Allow-Headers": "Authorization, Content-Type",
-    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-    "Access-Control-Max-Age": "600",
-    Vary: "Origin",
-  };
-  if (origin && (DEVICE_ALLOWED_ORIGINS as readonly string[]).includes(origin)) {
-    headers["Access-Control-Allow-Origin"] = origin;
-  }
-  return headers;
-}
-
-export function preflight(request: Request): Response {
-  return new Response(null, { status: 204, headers: corsHeaders(request) });
-}
-
-export function json(request: Request, body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: {
-      ...corsHeaders(request),
-      "Content-Type": "application/json",
-      "Cache-Control": "no-store",
-    },
-  });
-}
-
-/** The device's user id, or null when the bearer is missing/wrong or env is unset. */
-export function authenticateDevice(
-  request: Request,
-  env: { token?: string; userId?: string } = {
-    token: process.env.GLASSES_DEVICE_TOKEN,
-    userId: process.env.GLASSES_DEVICE_USER_ID,
-  },
-): string | null {
-  if (!env.token || !env.userId) return null;
-  const presented = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "").trim();
-  if (!presented) return null;
-  const a = Buffer.from(presented);
-  const b = Buffer.from(env.token);
-  if (a.length !== b.length || !timingSafeEqual(a, b)) return null;
-  return env.userId;
-}
 
 export interface DeviceDeps {
   store: GlassesStore;
@@ -104,7 +52,6 @@ export async function readInbox(
   const now = deps.now ?? Date.now;
   const sleep = deps.sleep ?? defaultSleep;
   const start = now();
-  await deps.store.touchDevice(userId, new Date(start).toISOString());
   await deps.store.expireStale(userId, new Date(start).toISOString());
 
   for (;;) {

@@ -101,8 +101,6 @@ export interface GlassesStore {
   getSpec(userId: string, id: string): Promise<unknown>;
   /** Insert unless a row with the same (user, card_id) exists; null when it did. */
   insertIfAbsent(userId: string, row: NewGlassesMessage): Promise<GlassesMessage | null>;
-  getReplyCursor(userId: string): Promise<{ channelId: string | null; seq: number | null }>;
-  setReplyCursor(userId: string, channelId: string, seq: number, now: string): Promise<void>;
   saveTemplate(userId: string, name: string, spec: unknown, now: string): Promise<GlassesTemplate>;
   listTemplates(userId: string): Promise<GlassesTemplate[]>;
   getTemplate(userId: string, name: string): Promise<GlassesTemplate | null>;
@@ -122,6 +120,4 @@ export interface GlassesStore {
   /** pending -> delivered WITHOUT touching updated_at (the inbox cursor). */
   markDelivered(userId: string, ids: string[]): Promise<void>;
   countActive(userId: string, now: string): Promise<number>;
-  touchDevice(userId: string, now: string): Promise<void>;
-  lastSeen(userId: string): Promise<string | null>;
 }

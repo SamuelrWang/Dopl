@@ -12,9 +12,11 @@ import {
 import { registerScreenTools } from "./screen-tools";
 
 /**
- * The `/api/mcp/glasses` tool surface — deliberately a SEPARATE server from
- * `@dopl/mcp-server` so these tools never appear on the main `/api/mcp`
- * list. Every tool acts on the authenticated caller's own queue.
+ * The ONE glasses tool implementation, registered on two surfaces:
+ * `/api/mcp/glasses` (its own server, for external agents) and the main
+ * `/api/mcp` — there only for a caller with at least one paired device
+ * (`mcp-exposure.ts`), so users without glasses see no extra tools. Every tool
+ * acts on the authenticated caller's own queue, which all their devices share.
  */
 
 type ToolResult = {
@@ -22,7 +24,7 @@ type ToolResult = {
   isError?: boolean;
 };
 
-async function run(fn: () => Promise<unknown>): Promise<ToolResult> {
+async function runTool(fn: () => Promise<unknown>): Promise<ToolResult> {
   try {
     return { content: [{ type: "text", text: JSON.stringify(await fn()) }] };
   } catch (err) {
@@ -41,18 +43,31 @@ const NEEDS_WRITE: ToolResult = {
 
 const TEXT_RULE = "Plain text only: no emoji; curly quotes/long dashes are converted.";
 
-/**
- * `canWrite` mirrors `/api/mcp`'s fail-closed rule: only an explicit
- * `dopl.write` scope may queue anything. Reads (`get_answer`, `status`) stay open.
- */
-export function createGlassesMcpServer(
+export interface GlassesToolOptions {
+  /** `/api/mcp`'s fail-closed rule: only an explicit `dopl.write` scope may queue anything. */
+  canWrite: boolean;
+  signal?: AbortSignal;
+  /**
+   * Meter one call (`mcp-exposure.ts › glassesCreditCharger`): the refusal text
+   * when the wallet is empty, else null. Charged before the handler, once per
+   * call, like every Dopl MCP tool; absent = unmetered (tests).
+   */
+  charge?: () => Promise<string | null>;
+}
+
+/** Register every glasses tool on `server`. */
+export function registerGlassesTools(
+  server: McpServer,
   deps: GlassesDeps,
   userId: string,
-  opts: { canWrite: boolean; signal?: AbortSignal },
-): McpServer {
-  const { canWrite, signal } = opts;
+  opts: GlassesToolOptions,
+): void {
+  const { canWrite, signal, charge } = opts;
+  const run = async (fn: () => Promise<unknown>): Promise<ToolResult> => {
+    const refusal = charge ? await charge() : null;
+    return refusal ? { content: [{ type: "text", text: refusal }], isError: true } : runTool(fn);
+  };
   const write = (fn: () => Promise<unknown>) => (canWrite ? run(fn) : Promise.resolve(NEEDS_WRITE));
-  const server = new McpServer({ name: "dopl-glasses", version: "0.1.0" });
 
   server.registerTool(
     "glasses_notify",
@@ -118,6 +133,11 @@ export function createGlassesMcpServer(
   );
 
   registerScreenTools(server, { run, write }, deps, userId, signal);
+}
 
+/** The standalone `/api/mcp/glasses` server. */
+export function createGlassesMcpServer(deps: GlassesDeps, userId: string, opts: GlassesToolOptions): McpServer {
+  const server = new McpServer({ name: "dopl-glasses", version: "0.2.0" });
+  registerGlassesTools(server, deps, userId, opts);
   return server;
 }

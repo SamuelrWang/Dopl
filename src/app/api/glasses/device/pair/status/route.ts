@@ -1,10 +1,10 @@
 import { preflight } from "@/features/glasses/cors";
 import { deviceHandlers } from "@/features/glasses/glasses-runtime";
 
-/** Device: dismiss a message (docs/glasses-mcp.md). */
+/** Device pairing: poll; returns the device token once (docs/glasses-mcp.md). */
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 30;
 
 export const OPTIONS = preflight;
-export const POST = deviceHandlers.dismiss;
+export const GET = deviceHandlers.pairStatus;
