@@ -7,7 +7,7 @@ import {
 
 /**
  * `POST /api/glasses/device/voice` and the Hey-Even chat-completions shim (both
- * return right after posting; replies come via the inbox mirror), as
+ * post, then hold up to GLASSES_REPLY_HOLD_MS for a reply), as
  * pure functions over injected STT + channel deps. Routes are thin wrappers.
  */
 
