@@ -89,7 +89,6 @@ test("a spawn handed NO posture seeds nothing: it starts at manual/ask", () => {
   assert.equal(state.toolMode, "manual");
   assert.equal(state.messageMode, "ask");
   assert.equal(state.allowForTask.length, 0, "a posture is still not a grant");
-  assert.equal(state.inboundForTask, false);
 });
 
 // ── 2b. ⚠ FIX 1b ENDED HERE — 2026-08-20, F-228 ──────────────────────────────

@@ -163,7 +163,6 @@ test("H2: a corrupt or hostile handed-in posture still lands on the MOST RESTRIC
 
 test("H2: the preset is not, and cannot become, part of any GRANT", () => {
   const s = initialSessionState({ toolMode: "bypass", messageMode: "auto_both" });
-  assert.equal(s.inboundForTask, false, "the standing inbound grant is NOT part of the posture");
   assert.deepEqual(s.allowForTask, [], "nor is any tool grant");
   assert.equal(s.authHeld, false);
 });
@@ -359,6 +358,6 @@ test("M2: a park KEEPS the posture; only the AUTH HOLD resets it", () => {
   assert.doesNotMatch(idle, /toolMode: 'manual'/, "the idle park writes no posture at all");
   assert.match(idle, /parkEffects\(\{ armAbandon: true \}\)/);
   const hold = between(REDUCER, "if (type === 'auth_hold')", "if (type === 'auth_release')");
-  assert.match(hold, /toolMode: toolModesOf\(state\)\[0\], messageMode: MESSAGE_MODES\[0\], inboundForTask: false/,
+  assert.match(hold, /toolMode: toolModesOf\(state\)\[0\], messageMode: MESSAGE_MODES\[0\],/,
     "a session with no credential still hard-resets to the restrictive pair, in ITS runtime's words");
 });

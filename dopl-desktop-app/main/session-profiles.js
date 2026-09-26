@@ -81,8 +81,9 @@ function isOwnChannelRead(input, sessionChannelId) {
 
 const grantKeyFor = makeGrantKeyFor({ isChannelTool, isOwnChannelPost, editToolsFor });
 
-// AXIS B, Dopl's enum on every runtime. The INBOUND half is enforced at the inbound gate, the OUTBOUND half
-// here, only for the session's OWN channel; everything cross-channel gates (the exfil surface).
+// AXIS B, Dopl's enum on every runtime, enforced here for the session's OWN channel: the IN half admits its
+// reads, the OUT half its posts; everything cross-channel gates (the exfil surface). An inbound message is always
+// fed (inbound consent is retired).
 const MESSAGE_MODES = ['ask', 'auto_inbound', 'auto_outbound', 'auto_both'];
 
 function normalizeMessageMode(mode) {
@@ -97,8 +98,8 @@ function autoOutboundMode(mode) {
   return m === 'auto_outbound' || m === 'auto_both';
 }
 
-// The windowless floor, the ONE statement of it (F-236): a windowless session has no accept surface, so a held
-// reply would be held forever. It raises the IN half to auto and never touches the OUT half; the launch lane
+// The windowless floor, the ONE statement of it (F-236): a windowless session has no gate surface, so a gated
+// own-channel read would be denied. It raises the IN half to auto and never touches the OUT half; the launch lane
 // applies the same function (`channel-prefs.js`), pinned by session-mode-floor.test.
 function floorWindowlessMessage(mode) {
   const m = normalizeMessageMode(mode);

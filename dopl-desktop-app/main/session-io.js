@@ -13,19 +13,6 @@ const runtimeRegistry = require('./runtime');
 const runtimeTruth = require('./session-runtime-truth');
 const operatorTools = require('./operator-tools');
 
-// A bounded FIFO of held interactive inbound replies: only the head is surfaced, a second never overwrites it.
-const MAX_PENDING_INBOUND = 16;
-function queueInbound(s, item, interactive) {
-  if (!interactive) return 'dispatch';
-  if (s.pendingInbound.length >= MAX_PENDING_INBOUND) return 'full';
-  const wasEmpty = s.pendingInbound.length === 0;
-  s.pendingInbound.push(item);
-  return wasEmpty ? 'dispatch' : 'queued';
-}
-function shiftInbound(s) {
-  return s.pendingInbound.length ? s.pendingInbound.shift() : null;
-}
-
 // The push-based prompt the runtime consumes. It remembers what it handed out (bounded, not a transcript) so
 // a superseded launch can be replayed (F-696).
 const REPLAY_MAX = 8;
@@ -232,8 +219,6 @@ function applyCoreEvents(s, list, dispatch, store) {
 module.exports = {
   makePushIterator,
   userMessage,
-  queueInbound,
-  shiftInbound,
   frameContinuation: seed.frameContinuation,
   replyFor: seed.replyFor,
   frameHistorySeed: seed.frameHistorySeed,

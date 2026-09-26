@@ -16,10 +16,9 @@ const DETAIL_TOOL = 'tool';
 const DETAIL_POSTING = 'posting';
 const DETAIL_PERMISSION = 'permission';
 const DETAIL_AWAITING_PEER = 'awaiting_peer';
-const DETAIL_AWAITING_INBOUND = 'awaiting_inbound';
 const DETAIL_KINDS = [
   DETAIL_THINKING, DETAIL_TOOL, DETAIL_POSTING, DETAIL_PERMISSION,
-  DETAIL_AWAITING_PEER, DETAIL_AWAITING_INBOUND,
+  DETAIL_AWAITING_PEER,
 ];
 
 // A tool label is peer-adjacent display text: one line, collapsed, caption-bounded.
@@ -51,7 +50,6 @@ function detailFor(state, lastEventKind, pill) {
   const st = state || {};
   if (st.activity === 'awaiting_permission') return DETAIL_PERMISSION;
   if (st.activity === 'awaiting_peer') return DETAIL_AWAITING_PEER;
-  if (st.activity === 'awaiting_inbound') return DETAIL_AWAITING_INBOUND;
   if (lastEventKind === 'tool_use') return DETAIL_TOOL;
   if (lastEventKind === 'outbound_post') return DETAIL_POSTING;
   if (lastEventKind === 'assistant') return null;

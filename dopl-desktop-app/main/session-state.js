@@ -69,11 +69,7 @@ function initialSessionState(opts) {
     messagePick: pinMessages ? messageMode : '',
     // Stamped at spawn, never read live: a sandbox that could change under a running turn is not a fence.
     native: nativeBag(o.native),
-    // The standing inbound grant ("Accept for this session"); never persisted.
-    inboundForTask: false,
-    hasPendingInbound: false,
-    // P1: the query is torn down but the session object survives, so a turn can lazily resume it. Distinct from
-    // `phase` because a parked session holding a reply sits at `awaiting_inbound` (FIX #6).
+    // P1: the query is torn down but the session object survives, so a turn can lazily resume it.
     parked: false,
     // H1: held on a sign-in; parked but NOT woken by an inbound turn (no credential to spawn with).
     authHeld: false,

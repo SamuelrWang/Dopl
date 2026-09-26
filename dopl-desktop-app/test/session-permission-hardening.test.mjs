@@ -61,11 +61,11 @@ const post = (over) => ({ op: "send", body: "shipping tonight", ...over });
 // existed because a COMMENT saying "cleared on park" is what stopped anyone checking that nothing
 // cleared it. The requirement changed (Samuel: a posture and its grants hold for the session), so
 // the claim to keep honest changed with it — the same defect class, pointed the other way. The
-// idle park must now touch NONE of the four, and the AUTH HOLD must still reset all four, and
+// idle park must now touch NONE of the three, and the AUTH HOLD must still reset all three, and
 // each half has to be provable from source or the next edit silently merges them again.
 
 const branch = (from, to) => REDUCER_SRC.slice(REDUCER_SRC.indexOf(from), REDUCER_SRC.indexOf(to));
-const POSTURE_FIELDS = ["toolMode: toolModesOf(state)[0]", "messageMode: MESSAGE_MODES[0]", "inboundForTask: false", "allowForTask: []"]; // the SESSION's own narrowest word (X-01)
+const POSTURE_FIELDS = ["toolMode: toolModesOf(state)[0]", "messageMode: MESSAGE_MODES[0]", "allowForTask: []"]; // the SESSION's own narrowest word (X-01)
 
 test("M2: the idle_timeout patch resets NO posture and NO grant", () => {
   const patch = branch("if (type === 'idle_timeout')", "if (type === 'abandon_timeout')");
@@ -79,7 +79,7 @@ test("M2: the idle_timeout patch resets NO posture and NO grant", () => {
   assert.match(patch, /postedThisTurn: false, postedToolUseIds: \[\]/);
 });
 
-test("M2: the AUTH HOLD is the one park that still resets all four", () => {
+test("M2: the AUTH HOLD is the one park that still resets all three", () => {
   const patch = branch("if (type === 'auth_hold')", "if (type === 'auth_release')");
   for (const field of POSTURE_FIELDS) assert.ok(patch.includes(field), `the hold must still clear ${field}`);
 });

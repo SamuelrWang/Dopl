@@ -103,26 +103,15 @@ test("CLEAR: `steer` really is a wake trigger for a parked session (the 1:1 lane
 
 /** `feedInbound`, sliced from the shipped gate and driven against a fake registry. */
 function gate(session) {
-  // ⚠ `autoInbound` IS SLICED WITH IT. `enqueue` calls it to decide hold-vs-dispatch, so a slice
-  // that started at `enqueue` would evaluate to a ReferenceError — and stubbing it would test a
-  // hold rule this file does not ship.
-  const body = ["autoInbound", "enqueue", "feedInbound"].map((n) => fnOf(GATE, n)).join("\n");
-  const queued = [];
+  const body = ["enqueue", "feedInbound"].map((n) => fnOf(GATE, n)).join("\n");
   const dispatched = [];
   const sessions = new Map([["k", session]]);
-  const api = new Function(
-    "deps", "store", "io", "crypto",
-    `${body}\n return { feedInbound };`
-  )(
+  const api = new Function("deps", "store", "io", `${body}\n return { feedInbound };`)(
     { sessions, dispatch: (s, ev) => dispatched.push(ev) },
     { slotKey: () => "k" },
-    {
-      queueInbound: (s, item, held) => { queued.push(item); return held ? "queued" : "dispatch"; },
-      noteGatedBody: () => {},
-    },
-    { randomUUID: () => "pending-1" }
+    { noteGatedBody: () => {} }
   );
-  return { ...api, queued, dispatched };
+  return { ...api, dispatched };
 }
 
 const live = () => ({ settled: false, state: { messageMode: "auto_inbound" } });
@@ -141,7 +130,6 @@ test("BELT: the gate refuses an unwoken message for an undirected agent", () => 
   // ⚠ AND NOTHING WAS RECORDED EITHER. A refusal here must look like a full queue, not like a
   // GATED message: `io.noteGatedBody` would drop the body out of any later seed, which is the
   // AUDIT D2 failure (a message invisible to the agent forever) reached from a new direction.
-  assert.equal(g.queued.length, 0);
 });
 
 test("BELT: a message the routing WOKE passes the belt and is dispatched", () => {

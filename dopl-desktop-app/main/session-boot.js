@@ -101,7 +101,6 @@ function parkedSessionFromRecord(key, rec, sdkId) {
     lastTotalTokens: 0,
     pendingPermissions: new Map(),
     pendingNames: new Map(),
-    pendingInbound: [],
     // Not a fresh shell: the resume carries the ROLE block, so the first woken turn is not re-framed.
     freshRun: false,
     freshFraming: false,

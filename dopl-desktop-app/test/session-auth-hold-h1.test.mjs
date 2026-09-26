@@ -43,21 +43,14 @@ test("H1(a) A PEER WAKE CANNOT RESUME A HELD SESSION, even under an auto_both po
   assert.equal(h.holdIfNoCredential(s), true);
   assert.deepEqual([s.state.authHeld, s.state.messageMode, s.state.toolMode], [true, "ask", "manual"],
     "a hold disarms both axes on the way in, exactly as a park does");
-  // Now the peer's follow-up arrives. It must NOT be auto-accepted and must NOT wake anything.
-  const arrived = sessionReducer(s.state, {
-    type: "inbound_arrived", pendingId: "p1", message: "any update?", authorName: "David",
-  });
-  const effects = arrived.effects.map((e) => e.type);
-  assert.ok(!effects.includes("resumeQuery"), "NO SDK spawn on a credential-less machine");
-  assert.ok(!effects.includes("pushInbound"), "and the turn never reaches an agent that cannot run");
-  assert.equal(arrived.state.hasPendingInbound, true, "it is HELD for the operator instead");
-  assert.equal(arrived.state.authHeld, true, "and the session is still held");
-  // Even a forced auto-accept posture cannot re-open the wake path while held.
-  const forced = { ...arrived.state, messageMode: "auto_both", inboundForTask: true };
-  const again = sessionReducer(forced, {
-    type: "inbound_arrived", pendingId: "p2", message: "still there?", authorName: "David",
-  });
-  assert.ok(!again.effects.map((e) => e.type).includes("resumeQuery"), "belt: still no spawn");
+  // Now the peer's follow-up arrives. The gate refuses it (`session-gate.js › feedInbound`); if one
+  // reached the reducer anyway it must neither wake nor feed nor claim the session (the belt).
+  const arrived = sessionReducer(s.state, { type: "inbound_arrived", message: "any update?", authorName: "David" });
+  assert.deepEqual(arrived.effects, [], "NO SDK spawn and no turn for an agent that cannot run");
+  assert.equal(arrived.state, s.state, "and the session is untouched, still held");
+  // Even a forced wide posture cannot re-open the wake path while held.
+  const again = sessionReducer({ ...s.state, messageMode: "auto_both" }, { type: "inbound_arrived", message: "still there?", authorName: "David" });
+  assert.deepEqual(again.effects, [], "belt: still no spawn");
 });
 
 test("H1(a) TWO CONCURRENT RESUMES: the claim of `s.authHold` is the ticket", async () => {
@@ -116,14 +109,6 @@ test("H1 startQuery SUPERSEDES before it assembles — the real backstop for two
   assert.match(teardown, /teardownHandles\(s, \{ supersede: true \}\);/, "the previous child is torn down and superseded");
 });
 
-// ⚠ "H1 an auth-held session refuses an inbound ACCEPT at the gate, keeping the card live" STOOD HERE
-// AND IS DELETED (F-228). It sliced `session-gate.decideInbound` and pinned its hold guard's ORDER:
-// an ACCEPT on a held session was refused BEFORE `io.shiftInbound(s)`, so the message stayed on the
-// queue rather than being consumed into a session with no credential to answer it — while a DECLINE
-// still worked, because dropping needs no agent. ⚠ NOT A LOST GUARD: `decideInbound` answered a gate
-// CARD in the session window and is deleted with the hold it answered (a windowless session's
-// message axis is floored at `auto_inbound`, INVARIANTS §11, so nothing is ever held for a human).
-// What it protected — a held session must not have an inbound turn fed into it — did NOT move to the
-// gate's remaining code; it lives one layer down in the reducer, and "H1(a) A PEER WAKE CANNOT
-// RESUME A HELD SESSION" above drives it end to end against the REAL reducer rather than by reading
-// source order — so the property is better covered after this deletion than before it.
+// A held session must never have an inbound turn fed into it: the gate refuses it
+// (`session-gate.js › feedInbound`, pinned in session-gate.test.mjs) and the reducer is inert to
+// one that got past ("H1(a) A PEER WAKE CANNOT RESUME A HELD SESSION" above).

@@ -17,8 +17,8 @@
 // opened view SAFE — a surface that started a query would silently spend tokens and run gated
 // tools for a thread the operator only wanted to LOOK at, on a machine they may have walked away
 // from. That argument did not depend on the window; it depends on the REDUCER refusing to
-// produce `resumeQuery` for anything but a steer or an ACCEPTED inbound, and on `resumeQuery`
-// being the one effect that reaches `session-park.resumeParked`. Both are live, so all five
+// produce `resumeQuery` for anything but a steer or a fed inbound, and on `resumeQuery`
+// being the one effect that reaches `session-park.resumeParked`. Both are live, so the
 // rules below still run (INVARIANTS §14).
 //
 // Same source-extraction idiom as session-reducer's own suite: the three PURE blocks are sliced
@@ -75,7 +75,7 @@ const REDUCER = [
 // behaviourally against the shipping preamble in test/main-audit-resume-budget.test.mjs, which
 // is the stronger form of the same guard.
 
-// ── the wake triggers: ONLY a steer or an ACCEPTED inbound resumes ────────────────
+// ── the wake triggers: ONLY a steer or a fed inbound resumes ──────────────────────
 
 const { initialSessionState, sessionReducer } = new Function(
   `${REDUCER}\n return { initialSessionState, sessionReducer };`
@@ -93,28 +93,10 @@ test("A5: a STEER (the operator typed) is a wake trigger", () => {
   assert.deepEqual(effTypes(r).slice(0, 2), ["resumeQuery", "pushTurn"], "wake FIRST, then the turn");
 });
 
-test("A5: an ACCEPTED inbound is the other wake trigger (all three accept spellings)", () => {
-  for (const type of ["inbound_accept", "inbound_accept_for_task", "inbound_released"]) {
-    const r = sessionReducer(parked(), { type, pendingId: "p1", message: "hi", authorName: "David" });
-    assert.ok(effTypes(r).includes("resumeQuery"), `${type} wakes the shell`);
-    assert.equal(r.state.parked, false, type);
-  }
-});
-
-test("A5: an inbound that only ARRIVES is HELD — the shell stays parked, no query", () => {
-  const r = sessionReducer(parked(), { type: "inbound_arrived", pendingId: "p1", message: "hi", authorName: "David" });
-  assert.ok(!effTypes(r).includes("resumeQuery"), "a message waiting is not an operator decision");
-  assert.ok(!effTypes(r).includes("pushInbound"), "and it never reaches the agent");
-  assert.equal(r.state.parked, true, "still parked, now showing a card");
-  assert.equal(r.state.hasPendingInbound, true);
-});
-
-test("A5: a DECLINE is not a wake trigger either", () => {
-  const held = sessionReducer(parked(), { type: "inbound_arrived", pendingId: "p1", message: "hi" }).state;
-  const r = sessionReducer(held, { type: "inbound_decline", pendingId: "p1" });
-  assert.ok(!effTypes(r).includes("resumeQuery"));
-  assert.equal(r.state.parked, true);
-  assert.equal(r.state.phase, "parked");
+test("A5: a fed inbound is the other wake trigger (inbound consent is retired: nothing holds it)", () => {
+  const r = sessionReducer(parked(), { type: "inbound_arrived", message: "hi", authorName: "David" });
+  assert.deepEqual(effTypes(r).slice(0, 2), ["resumeQuery", "pushInbound"], "wake FIRST, then the turn");
+  assert.equal(r.state.parked, false);
 });
 
 test("A5: the SDK tail of the torn-down query cannot wake an opened shell", () => {

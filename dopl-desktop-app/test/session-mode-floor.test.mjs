@@ -1,7 +1,12 @@
-// AXIS B's WINDOWLESS FLOOR — one rule, two lanes, and the hold it prevents (F-236).
+// AXIS B's WINDOWLESS FLOOR — one rule, three lanes (F-236).
 //
-// ── THE BUG THIS FILE EXISTS FOR ─────────────────────────────────────────────────────
-// A WINDOWLESS session has NO ACCEPT SURFACE. `session-gate.js › enqueue` HOLDS an inbound
+// ⚠ THE HOLD BELOW IS DELETED (2026-09-25, Samuel's ruling 5): `session-gate.js` feeds every
+// message in every posture, so no reply can be stranded any more. The floor keeps its other job —
+// Axis B's IN half is what admits a session's OWN-CHANNEL READS (`grantDecision`), and a windowless
+// session has no gate surface, so a gated read is a DENIED read. The history is kept below.
+//
+// ── THE BUG THIS FILE WAS WRITTEN FOR ────────────────────────────────────────────────
+// A WINDOWLESS session has NO ACCEPT SURFACE. `session-gate.js › enqueue` HELD an inbound
 // reply whenever `autoInbound(s)` is false, and the entire family that used to release one —
 // `decideInbound`, `drainQueue`, `drainInbound` — was deleted with the session window (F-228),
 // on the stated grounds that "a windowless session's message axis is FLOORED at auto_inbound,
@@ -63,11 +68,10 @@ test("the floor raises the IN half and never touches the OUT half", () => {
   assert.equal(floorWindowlessMessage("auto_both"), "auto_both");
 });
 
-test("EVERY message mode floors to one that auto-accepts inbound — the property, not the table", () => {
-  // ⚠ THE ASSERTION THAT ACTUALLY MATTERS, stated over the axis rather than over four literals:
-  // whatever the operator picks, `session-gate.js › autoInbound` must answer TRUE afterwards,
-  // because that is the predicate deciding whether a reply is held. A fifth message mode added
-  // to the axis fails here rather than silently reintroducing the hold.
+test("EVERY message mode floors to one that admits own-channel reads — the property, not the table", () => {
+  // Stated over the axis rather than over four literals: whatever the operator picks,
+  // `autoInboundMode` must answer TRUE afterwards, because that is the predicate `grantDecision`
+  // admits an own-channel read on. A fifth message mode fails here rather than denying reads.
   for (const mode of MESSAGE_MODES) {
     assert.equal(autoInboundMode(floorWindowlessMessage(mode)), true, mode);
   }
@@ -235,18 +239,4 @@ test("the live lane takes the SHARED floor, not a local copy of it", () => {
   assert.match(src, /floorWindowlessMessage\(/, "and actually called");
   assert.equal(/function floorWindowlessMessage\s*\(/.test(src), false,
     "session-reopen.js must not re-declare the floor");
-});
-
-test("the hold this prevents is still UNRELEASABLE — the reason the floor is not optional", () => {
-  // ⚠ THE STANDING CONDITION. If an accept surface ever returns, this floor becomes a product
-  // choice rather than a correctness one; while it does not exist, a held inbound turn on a
-  // windowless session cannot be released by anything. Pinned as an absence so that whoever
-  // builds the surface reads this file first.
-  const gate = read("session-gate.js").replace(/\/\/[^\n]*/g, "");
-  for (const gone of ["decideInbound", "drainQueue", "drainInbound", "feedInboundForTask"]) {
-    assert.equal(gate.includes(gone), false, `${gone} is deleted — nothing can release a hold`);
-  }
-  const windowless = read("session-windowless.js").replace(/\/\/[^\n]*/g, "");
-  assert.equal(/inbound_pending/.test(windowless), false,
-    "claimGate handles outbound_gate and permission_request only — a held inbound reaches no surface");
 });

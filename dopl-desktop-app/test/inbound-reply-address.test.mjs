@@ -56,7 +56,7 @@ function gate(session, pushed) {
 // A main-room standby agent (the evidence shape) or a thread session, fresh and undirected.
 function session({ taskId = "", toolSet, agentId = A1, running = false } = {}) {
   return {
-    key: "k", settled: false, pendingInbound: [], agentId, nonce: "n1", side: "requester",
+    key: "k", settled: false, agentId, nonce: "n1", side: "requester",
     channelId: CH, workspaceId: WS, taskId, doplToolSet: toolSet,
     freshFraming: !running, launchGoal: "Stand by in this channel as my agent.", awaitingDirective: !running,
     context: { channelName: "AI Glasses MCP", channelId: CH, workspaceId: WS, taskId, scope: taskId ? "thread" : "channel" },

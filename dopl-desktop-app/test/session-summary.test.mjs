@@ -65,19 +65,14 @@ const MAPPING = [
     why: "the other machine has it; nothing runs here",
   },
   {
-    name: "a session holding an inbound reply for an Accept",
-    state: { phase: "awaiting_inbound", activity: "awaiting_inbound", hasPendingInbound: true },
-    pill: "idle",
-  },
-  {
     name: "a PARKED session (idle timeout)",
     state: { phase: "parked", activity: "parked", parked: true },
     pill: "idle",
     why: "the query is torn down but the session is resumable, not gone",
   },
   {
-    name: "a park that landed while a message was held (FIX #6: phase and activity disagree)",
-    state: { phase: "awaiting_inbound", activity: "parked", parked: true },
+    name: "a park whose phase and activity disagree (FIX #6)",
+    state: { phase: "running", activity: "parked", parked: true },
     pill: "idle",
     why: "`parked` is read off the flag, not off the phase, exactly because those two diverge",
   },

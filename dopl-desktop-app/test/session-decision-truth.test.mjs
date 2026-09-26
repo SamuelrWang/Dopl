@@ -249,13 +249,8 @@ test("F1: the shipped engine really propagates that verdict (and denyPending is 
 // axes" drives all of them against the REAL reducer: one axis moves, the other does not, a single
 // `modes` echo is the ONLY effect either event produces ("an axis change NEVER drains the pending
 // dock"), both coerce fail-closed, and a settled session ignores both. Re-stating them here would
-// be a second copy of that file's assertions, not a recovered guard.
-//
-// ⚠ ONE JOIN IS GENUINELY THIN NOW, and it is worth naming rather than quietly losing: that the
-// field the reducer writes (`state.messageMode`) is the field the gate READS
-// (`session-gate.autoInbound`). test/session-permission-axes.test.mjs owns that pairing — and at
-// the time of writing its slice of `autoInbound` still ends on the deleted `windowHasFocus`, so
-// that file needs the same treatment this one just had.
+// be a second copy of that file's assertions, not a recovered guard. (The inbound feed reads no
+// message mode since its hold was deleted, 2026-09-25, so there is no gate-side join left to pin.)
 
 // ── F4: what the gate actually hands the decision surface ────────────────────────────
 

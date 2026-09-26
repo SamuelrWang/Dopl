@@ -147,14 +147,12 @@ test("FIX F6: a woken session still counts a NEW post normally", () => {
 // is strictly stronger than the downgrade was (an ended session cannot be woken at all), and by
 // the PROFILE hard-deny, which no posture and no grant has ever been able to widen.
 
-test("M2: parking keeps BOTH axes, inboundForTask AND every standing grant", () => {
-  const s = { ...running(), toolMode: "bypass", messageMode: "auto_both", inboundForTask: true,
-    allowForTask: ["Bash#ls#abc"] };
+test("M2: parking keeps BOTH axes AND every standing grant", () => {
+  const s = { ...running(), toolMode: "bypass", messageMode: "auto_both", allowForTask: ["Bash#ls#abc"] };
   const r = sessionReducer(s, { type: "idle_timeout" });
   assert.equal(r.state.parked, true);
   assert.equal(r.state.toolMode, "bypass", "AXIS A is the operator's for the session");
   assert.equal(r.state.messageMode, "auto_both", "and so is AXIS B");
-  assert.equal(r.state.inboundForTask, true, "and the standing inbound grant");
   assert.deepEqual(r.state.allowForTask, ["Bash#ls#abc"], "and the scoped for-task grants");
 });
 
@@ -169,11 +167,9 @@ test("M2: a woken session behaves as the operator set it — the whole point of 
 test("M2: the AUTH HOLD still disarms — it is the one park that does", () => {
   // H1's reasoning is untouched: a hold is a session with no CREDENTIAL, which relaunches through
   // startQuery on sign-in rather than resuming in place, so its arm belongs to the run that ended.
-  const s = { ...running(), toolMode: "bypass", messageMode: "auto_both", inboundForTask: true,
-    allowForTask: ["Bash#ls#abc"] };
+  const s = { ...running(), toolMode: "bypass", messageMode: "auto_both", allowForTask: ["Bash#ls#abc"] };
   const r = sessionReducer(s, { type: "auth_hold" });
   assert.deepEqual({ t: r.state.toolMode, m: r.state.messageMode }, { t: "manual", m: "ask" });
-  assert.equal(r.state.inboundForTask, false);
   assert.deepEqual(r.state.allowForTask, []);
   // A held session arms NO abandonment bound: the window carries the Sign in button.
   assert.ok(r.effects.some((e) => e.type === "clearIdle"), "the hold CLEARS the timer, it does not re-arm");
@@ -245,18 +241,13 @@ test("a parked session ignores a stale idle_timeout (idempotent, no double-park)
 
 // ── the two lazy-resume triggers ──────────────────────────────────────────────────
 
-// v2.5 D1: an inbound turn only wakes a parked session when it is AUTO-ACCEPTED (AXIS B, or
-// the standing task grant). Without that opt-in the reply is held and the session stays
-// parked — the two cases below. M2 (2026-08-05): a park no longer disarms either, so an opt-in
-// set BEFORE the park survives it; this case starts from a session that never had one, and
-// grants it, so it still proves the wake rather than the survival (which M2's own tests cover).
-test("LAZY RESUME (a): an AUTO-ACCEPTED inbound turn wakes a parked session (resumeQuery FIRST)", () => {
+// Inbound consent is retired and its hold deleted (2026-09-25): an inbound turn wakes a parked
+// session in every posture, `ask` included.
+test("LAZY RESUME (a): an inbound turn wakes a parked session (resumeQuery FIRST), in every posture", () => {
   const parked = sessionReducer(running({ mode: "autonomous" }), { type: "idle_timeout" }).state;
   assert.equal(parked.parked, true);
-  assert.equal(parked.messageMode, "ask", "this session never opted in, so the gate holds");
-  assert.equal(parked.inboundForTask, false);
-  const granted = { ...parked, inboundForTask: true }; // the operator's standing grant
-  const r = sessionReducer(granted, { type: "inbound_arrived", message: "back", authorName: "Bob" });
+  assert.equal(parked.messageMode, "ask", "a posture that never opted in still feeds");
+  const r = sessionReducer(parked, { type: "inbound_arrived", message: "back", authorName: "Bob" });
   assert.equal(r.state.phase, "running");
   assert.equal(r.state.parked, false, "the wake clears the parked flag");
   // resumeQuery MUST precede pushInbound so the fresh push iterator exists first.
@@ -276,28 +267,9 @@ test("LAZY RESUME (b): operator steer wakes a parked session (resumeQuery, no in
   assert.equal(r.state.activity, "working");
 });
 
-test("interactive park holds an inbound reply (stays parked); the RELEASE wakes it", () => {
-  const parked = sessionReducer(running({ mode: "interactive" }), { type: "idle_timeout" }).state;
-  // A held reply does not wake a parked query — it stays parked, phase awaiting_inbound.
-  const held = sessionReducer(parked, { type: "inbound_arrived", pendingId: "p1", message: "hi", authorName: "Bob" });
-  assert.equal(held.state.phase, "awaiting_inbound");
-  assert.equal(held.state.parked, true, "still parked until the operator releases");
-  assert.ok(!held.effects.some((e) => e.type === "resumeQuery"), "holding a reply does not resume");
-  // Releasing it is the wake trigger.
-  const released = sessionReducer(held.state, { type: "inbound_released", message: "hi", authorName: "Bob" });
-  assert.equal(released.state.phase, "running");
-  assert.equal(released.state.parked, false);
-  assert.equal(effTypes(released.effects)[0], "resumeQuery");
-});
-
-test("a live (not parked) inbound / steer / release NEVER emits resumeQuery", () => {
+test("a live (not parked) inbound / steer NEVER emits resumeQuery", () => {
   const auto = sessionReducer(running({ mode: "autonomous" }), { type: "inbound_arrived", message: "x", authorName: "B" });
   assert.ok(!auto.effects.some((e) => e.type === "resumeQuery"));
   const steer = sessionReducer(running(), { type: "steer", text: "x" });
   assert.ok(!steer.effects.some((e) => e.type === "resumeQuery"));
-  const rel = sessionReducer(
-    { ...running({ mode: "interactive" }), phase: "awaiting_inbound", hasPendingInbound: true },
-    { type: "inbound_released", message: "go", authorName: "B" }
-  );
-  assert.ok(!rel.effects.some((e) => e.type === "resumeQuery"));
 });

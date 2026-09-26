@@ -3,13 +3,7 @@
 
 // ─── BEGIN SESSION-EFFECTS (pure; unit-tested via source extraction) ─────────
 
-// A pending inbound card wins the displayed PHASE ("Message waiting"); `activity` still tells the truth.
-function gatePhase(state, phase) {
-  return state && state.hasPendingInbound === true ? 'awaiting_inbound' : phase;
-}
-
-// The same rule for ACTIVITY: a held permission outranks "working", so a blocked agent never reads as busy.
-// A display truth rule, not a gate.
+// A held permission outranks "working", so a blocked agent never reads as busy. A display truth rule, not a gate.
 function gateActivity(state, activity) {
   const pending = state && state.pendingPermissions;
   return pending && pending.length > 0 ? 'awaiting_permission' : activity;
@@ -112,7 +106,6 @@ function parkEffects(opts) {
 // ─── END SESSION-EFFECTS ─────────────────────────────────────────────────────
 
 module.exports = {
-  gatePhase,
   gateActivity,
   terminalBody,
   TERMINAL_BODIES,

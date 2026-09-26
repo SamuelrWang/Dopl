@@ -15,9 +15,8 @@
 // ⚠ NO CHANNEL POST GOES WITH IT, by ruling. The acknowledgement is a FIELD an orchestrator
 // reads, not a row in a transcript both members pay for.
 //
-// SOURCE EXTRACTION with INJECTION — the `main-audit-gate-queue.test.mjs` idiom: slice
-// SESSION-GATE-PURE, inject the REAL `session-io` queue helpers, drive `enqueue` and
-// `feedInbound` directly.
+// SOURCE EXTRACTION with INJECTION — the `session-gate.test.mjs` idiom: slice SESSION-GATE-PURE,
+// inject the REAL `session-io` seed recorder, drive `enqueue` and `feedInbound` directly.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -39,28 +38,13 @@ assert.ok(from !== -1 && to > from, "SESSION-GATE-PURE sentinels missing or out 
 const BLOCK = SRC.slice(from, to);
 
 const realIo = require(join(MAIN, "session-io.js"));
-const MAX_PENDING_INBOUND = Number(
-  /const MAX_PENDING_INBOUND = (\d+);/.exec(readFileSync(join(MAIN, "session-io.js"), "utf8"))[1]
-);
 
 function harness() {
   const dispatched = [];
-  let n = 0;
-  const crypto = { randomUUID: () => `pid-${++n}` };
-  const io = {
-    queueInbound: realIo.queueInbound,
-    shiftInbound: realIo.shiftInbound,
-    noteGatedBody: realIo.noteGatedBody,
-  };
+  const io = { noteGatedBody: realIo.noteGatedBody };
   const sessions = new Map();
-  const store = {
-    sessionKey: (c, t) => `${c}:${t}`,
-    slotKey: (a) => `${(a && a.channelId) || ""}:${(a && (a.agentId || a.taskId)) || ""}`,
-  };
-  const api = new Function(
-    "crypto", "io", "store", "diag",
-    `${BLOCK}\n return { bind, enqueue, autoInbound, feedInbound };`
-  )(crypto, io, store, () => {});
+  const store = { slotKey: (a) => `${(a && a.channelId) || ""}:${(a && (a.agentId || a.taskId)) || ""}` };
+  const api = new Function("io", "store", `${BLOCK}\n return { bind, enqueue, feedInbound };`)(io, store);
   api.bind({ sessions, dispatch: (s, ev) => dispatched.push(ev) });
   return { ...api, sessions, dispatched };
 }
@@ -69,8 +53,7 @@ function harness() {
 const session = (over = {}) => ({
   key: "c1:t1",
   settled: false,
-  pendingInbound: [],
-  state: { messageMode: "auto_inbound", inboundForTask: false, mode: "interactive" },
+  state: { messageMode: "auto_inbound", mode: "interactive" },
   win: null,
   ...over,
 });
@@ -150,20 +133,17 @@ test("WAKE: the LATEST wake wins — the field answers 'woke on #<seq>', not 'wa
   assert.equal(s.lastWakeSeq, 902);
 });
 
-// ── 2. A WAKE THE QUEUE REJECTED IS NOT A WAKE ───────────────────────────────────────────
+// ── 2. A WAKE THE FEED REFUSED IS NOT A WAKE ─────────────────────────────────────────────
 
-test("WAKE: an OVERFLOWED message stamps nothing — it was never delivered", () => {
-  // ⚠ THE STAMP SITS PAST THE `full` EARLY RETURN ON PURPOSE. A wake recorded above that line
-  // claims a turn for a message the queue rejected, which is precisely the false confirmation
-  // this field exists to remove — and the caller falls through to a PASSIVE notice, so the agent
-  // really did not get it.
+test("WAKE: a session HELD on its sign-in is refused, and a refusal stamps nothing", () => {
+  // A wake recorded for a message that was never delivered is precisely the false confirmation
+  // this field exists to remove.
   const h = harness();
-  const s = session({ state: { messageMode: "ask", inboundForTask: false, mode: "interactive" } });
-  for (let i = 0; i < MAX_PENDING_INBOUND; i++) {
-    assert.equal(h.enqueue(s, inbound({ wake: false, seq: 100 + i, message: `held ${i}` })), true);
-  }
-  assert.equal(h.enqueue(s, inbound({ wake: true, seq: 999 })), false, "the queue is full");
-  assert.equal(s.lastWakeSeq, undefined, "a rejected message woke nothing");
+  const s = session({ state: { messageMode: "ask", mode: "interactive", authHeld: true, parked: true } });
+  h.sessions.set("c1:a1b2c3d4", s);
+  assert.equal(h.feedInbound({ channelId: "c1", taskId: "t1", agentId: "a1b2c3d4",
+    message: "go", authorName: "Samuel", seq: 999, wake: true }), false);
+  assert.equal(s.lastWakeSeq, undefined, "a refused message woke nothing");
 });
 
 // ── 3. THROUGH THE ENGINE'S OWN ENTRY POINT ──────────────────────────────────────────────

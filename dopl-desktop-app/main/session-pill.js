@@ -25,8 +25,8 @@
 
 // ── THE STATE MAPPING ────────────────────────────────────────────────────────────────
 // Engine vocabulary is two fields (session-state.js / session-reducer.js): PHASE (launching /
-// running / awaiting_permission / awaiting_inbound / interrupted / parked / ended) and ACTIVITY
-// (working / idle / awaiting_peer / awaiting_permission / awaiting_inbound / parked). A pill
+// running / awaiting_permission / interrupted / parked / ended) and ACTIVITY
+// (working / idle / awaiting_peer / awaiting_permission / parked). A pill
 // has THREE states:
 //
 //   ENGINE                                  PILL      WHY
@@ -38,14 +38,12 @@
 //                                                     continuing. "idle" would be a lie.
 //   activity 'idle'                         idle      between turns
 //   activity 'awaiting_peer'                idle      posted; the other machine has it
-//   activity 'awaiting_inbound'             idle      reply HELD for an Accept; running nothing
 //   activity 'parked'                       idle      (the parked branch above wins)
 //   anything else / absent                  idle      fallback
 //
 // ⚠ PRECEDENCE IS PHASE-FIRST for the two terminal-ish answers, ACTIVITY-SECOND for the rest:
 // `phase` and `activity` deliberately disagree in normal operation (a still-pending gate card
-// keeps its phase while activity moves; a park lands with phase 'awaiting_inbound' when a
-// message is held). Reading one field is how the predecessor got it wrong.
+// keeps its phase while activity moves). Reading one field is how the predecessor got it wrong.
 // ⚠ FALLBACK IS 'idle' BY CHOICE. "working" over a dead session makes the operator wait with no
 // natural end and no feedback; "idle" over a working one only makes them re-ask.
 //
@@ -67,7 +65,6 @@ const ACTIVITY_PILL = {
   awaiting_permission: PILL_WORKING,
   idle: PILL_IDLE,
   awaiting_peer: PILL_IDLE,
-  awaiting_inbound: PILL_IDLE,
   parked: PILL_IDLE,
 };
 

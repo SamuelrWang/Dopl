@@ -95,7 +95,7 @@ export function harness(over = {}) {
 }
 
 // A REAL initial state (not a three-field stub): the hold flows through the reducer, so the fields it
-// sets have to be the ones wakeEffects / inboundAutoAccepted actually read. ⚠ `win: null` and no
+// sets have to be the ones wakeEffects and the inbound belt actually read. ⚠ `win: null` and no
 // `windowHidden` — agents run WINDOWLESS (F-228). The fake carried a `show()` counter (the preflight
 // surfaced a hidden window); one that still answered it would hide a re-added paint.
 export const session = (over = {}) => ({

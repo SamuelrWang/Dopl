@@ -307,7 +307,7 @@ function toolModeAllows(mode, toolName) {
 //
 // A windowless session has NO GATE SURFACE: `session-windowless.js › claimGate` answers a
 // `permission_request` with `setImmediate(() => decide(rid, 'deny'))`. Axis B's floor exists
-// because a HELD INBOUND is held forever there; this one exists because a GATED TOOL is DENIED
+// because a gated own-channel READ is denied there; this one exists because a GATED TOOL is DENIED
 // there. Under `manual` — Axis A's start value AND its park reset, so the common case, not an odd
 // one — `toolModeAllows` returns false for every name, so EVERY work tool is silently denied,
 // including the read tools `prompt-framing.js` ORDERS the agent to use. Flooring at `auto` makes

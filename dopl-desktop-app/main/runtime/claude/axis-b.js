@@ -20,7 +20,7 @@
 // INPUT, so the gate can read `input.op` / `input.channel` / `to` / `kind` and scope a standing
 // grant to the exact shape the operator was shown. A runtime whose approval request carries no
 // arguments collapses Axis B from op-scoped to WHOLE-TOOL — every channel call gates, READS
-// INCLUDED — and a held inbound on a windowless session is then held forever, which is precisely
+// INCLUDED — and a gated own-channel read on a windowless session is then denied, which is precisely
 // what `session-profiles.js › floorWindowlessMessage` exists to prevent.
 //
 // ⚠ `axisBTools()` IS NULL HERE, AND THE AGENT-OPS SERVER BELOW IS NOT A COUNTEREXAMPLE. That

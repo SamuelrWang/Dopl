@@ -4,7 +4,7 @@
 
 // Required above the sentinel: inside the block these are free vars, and test/_reducer-block.mjs prepends
 // the effects and state blocks to evaluate the set standalone.
-const { gatePhase, gateActivity, endEffects, endReasonOf, parkEffects, terminalBody } = require('./session-effects');
+const { gateActivity, endEffects, endReasonOf, parkEffects, terminalBody } = require('./session-effects');
 const {
   DEFAULT_IDLE_MS, MESSAGE_MODES, coerceMode, toolModesOf, initialSessionState, nextIdleMs, idleTimeout,
 } = require('./session-state');
@@ -28,23 +28,11 @@ function wakeEffects(state) {
   return state.parked && state.authHeld !== true ? [{ type: 'resumeQuery' }] : [];
 }
 
-// May an inbound turn reach the agent without an Accept? Only via Axis B or the standing task grant;
-// `session-gate.autoInbound` answers the same question and must agree. A held session accepts nothing.
-function inboundAutoAccepted(state) {
-  if (state.authHeld === true) return false;
-  const m = state.messageMode;
-  return m === 'auto_inbound' || m === 'auto_both' || state.inboundForTask === true;
-}
-
-// FEED one counterparty turn. `addressing`, `replyTo` and `fromOperator` are carried, never read, here.
-function pushInboundEffect(event) {
-  return { type: 'pushInbound', message: event.message, authorName: event.authorName, authorNote: event.authorNote || null, addressing: event.addressing || null, replyTo: event.replyTo || '', ...(event.fromOperator === true ? { fromOperator: true } : {}) };
-}
-
+// FEED one counterparty turn, waking a parked session first; a pushed turn is not idle. `addressing`,
+// `replyTo` and `fromOperator` are carried, never read, here.
 function feedInboundEffects(state, event) {
   const effects = wakeEffects(state);
-  effects.push(pushInboundEffect(event));
-  // A pushed turn is not idle.
+  effects.push({ type: 'pushInbound', message: event.message, authorName: event.authorName, authorNote: event.authorNote || null, addressing: event.addressing || null, replyTo: event.replyTo || '', ...(event.fromOperator === true ? { fromOperator: true } : {}) });
   effects.push({ type: 'scheduleIdle' });
   return effects;
 }
@@ -61,12 +49,10 @@ function sessionReducer(state, event) {
   }
 
   if (type === 'launched') {
-    // AUDIT F8: through gatePhase, so a resume under a held inbound card keeps "Message waiting".
-    const phase = gatePhase(state, 'running');
     return {
-      state: clone(state, { phase: phase }),
+      state: clone(state, { phase: 'running' }),
       effects: [
-        { type: 'persist', phase: phase },
+        { type: 'persist', phase: 'running' },
         { type: 'lifecycle', kind: 'task_started', extra: {} },
         { type: 'scheduleIdle' },
       ],
@@ -99,7 +85,7 @@ function sessionReducer(state, event) {
     }
     return {
       state: clone(state, {
-        phase: gatePhase(state, 'awaiting_permission'),
+        phase: 'awaiting_permission',
         activity: 'awaiting_permission',
         pendingPermissions: addUnique(state.pendingPermissions, event.requestId),
       }),
@@ -114,7 +100,7 @@ function sessionReducer(state, event) {
     const nextAllow = event.decision === 'allow-task' ? addUnique(state.allowForTask, event.name) : state.allowForTask;
     const nextPending = without(state.pendingPermissions, event.requestId);
     // A stale click on a PARKED session must not flip it to running; only a steer or an inbound turn wakes it.
-    const phase = gatePhase(state, state.parked ? 'parked' : (nextPending.length ? 'awaiting_permission' : 'running'));
+    const phase = state.parked ? 'parked' : (nextPending.length ? 'awaiting_permission' : 'running');
     const activity = state.parked ? 'parked' : (nextPending.length ? 'awaiting_permission' : 'working');
     const effects = [{ type: 'resolvePermission', requestId: event.requestId, decision: sdkDecision }];
     // Answering a card is activity, except on a parked session, which has no live turn to keep alive.
@@ -149,35 +135,10 @@ function sessionReducer(state, event) {
   }
 
   if (type === 'inbound_arrived') {
-    // THE INBOUND GATE: a counterparty turn reaches the agent only on an explicit Axis B / task opt-in.
-    if (inboundAutoAccepted(state)) {
-      return { state: clone(state, { phase: 'running', activity: 'working', parked: false }), effects: feedInboundEffects(state, event) };
-    }
-    // Hold it for the operator; a parked session stays parked (the Accept wakes it).
-    return { state: clone(state, { phase: 'awaiting_inbound', activity: 'awaiting_inbound', hasPendingInbound: true }), effects: [] };
-  }
-
-  // ACCEPT (`inbound_released` is the legacy alias): feed the held reply; the accept wakes a parked session.
-  // `inbound_accept_for_task` also records the standing grant.
-  if (type === 'inbound_accept' || type === 'inbound_accept_for_task' || type === 'inbound_released') {
-    const effects = wakeEffects(state);
-    effects.push(pushInboundEffect(event));
-    if (state.authHeld !== true) effects.push({ type: 'scheduleIdle' });
-    // A held session never comes out of here claiming to run (H1 belt; the gate normally refuses first).
-    const patch = state.authHeld === true
-      ? { hasPendingInbound: false }
-      : { phase: 'running', activity: 'working', hasPendingInbound: false, parked: false };
-    if (type === 'inbound_accept_for_task') patch.inboundForTask = true;
-    return { state: clone(state, patch), effects: effects };
-  }
-
-  // DECLINE is local: dropped, never fed, nothing written to the server; a parked session stays parked.
-  if (type === 'inbound_decline') {
-    const parked = state.parked === true;
-    return {
-      state: clone(state, { phase: parked ? 'parked' : 'running', activity: parked ? 'parked' : 'idle', hasPendingInbound: false }),
-      effects: [],
-    };
+    // Inbound consent is retired (2026-08-22): a counterparty turn is always fed. A held session is never
+    // woken, so nothing could read it; `session-gate.js › feedInbound` refuses it first, and this is the belt.
+    if (state.authHeld === true) return { state: state, effects: [] };
+    return { state: clone(state, { phase: 'running', activity: 'working', parked: false }), effects: feedInboundEffects(state, event) };
   }
 
   if (type === 'steer') {
@@ -187,10 +148,8 @@ function sessionReducer(state, event) {
     const effects = waking ? [{ type: 'resumeQuery' }] : [];
     if (event.priority === 'now' && !waking) effects.push({ type: 'interruptQuery' });
     effects.push({ type: 'pushTurn', text: event.text, priority: event.priority || 'next' });
-    // Typing does not answer the gate, so a held card keeps the phase (FIX #6).
-    const nextPhase = gatePhase(state, waking ? 'running' : state.phase);
     effects.push({ type: 'scheduleIdle' });
-    return { state: clone(state, { phase: nextPhase, activity: 'working', parked: false }), effects: effects };
+    return { state: clone(state, { phase: waking ? 'running' : state.phase, activity: 'working', parked: false }), effects: effects };
   }
 
   if (type === 'interrupt') {
@@ -208,7 +167,7 @@ function sessionReducer(state, event) {
     // post counters still clear.
     if (state.parked === true) return { state: state, effects: [] };
     return {
-      state: clone(state, { phase: gatePhase(state, 'parked'), parked: true, activity: 'parked',
+      state: clone(state, { phase: 'parked', parked: true, activity: 'parked',
         pendingPermissions: [], postedThisTurn: false, postedToolUseIds: [] }),
       effects: parkEffects({ armAbandon: true }),
     };
@@ -226,8 +185,8 @@ function sessionReducer(state, event) {
     // belonged to the run whose credential failed. No abandonment timer; idempotent.
     if (state.authHeld === true) return { state: state, effects: [] };
     return {
-      state: clone(state, { phase: gatePhase(state, 'parked'), parked: true, activity: 'parked',
-        authHeld: true, toolMode: toolModesOf(state)[0], messageMode: MESSAGE_MODES[0], inboundForTask: false,
+      state: clone(state, { phase: 'parked', parked: true, activity: 'parked',
+        authHeld: true, toolMode: toolModesOf(state)[0], messageMode: MESSAGE_MODES[0],
         allowForTask: [], pendingPermissions: [], postedThisTurn: false, postedToolUseIds: [] }),
       effects: parkEffects({ lifecycle: true }),
     };

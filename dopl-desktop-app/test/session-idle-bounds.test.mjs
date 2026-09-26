@@ -103,13 +103,12 @@ test("FIX 3 / M2: NO card and genuinely quiet past the TTL still PARKS, and keep
   // BURNING. M2 (2026-08-05) inverts what it does to the posture — see the reducer's idle_timeout
   // branch. Stopping the query is about cost; revoking consent the operator gave is not, and
   // fifteen quiet minutes was never evidence they had gone.
-  const c = armedRunning({ toolMode: "bypass", messageMode: "auto_both", inboundForTask: true, allowForTask: ["Bash"] });
+  const c = armedRunning({ toolMode: "bypass", messageMode: "auto_both", allowForTask: ["Bash"] });
   c.dispatch({ type: "launched", payload: {} });
   c.advance(TTL);
   assert.equal(c.s.state.parked, true);
   assert.equal(c.s.state.toolMode, "bypass");
   assert.equal(c.s.state.messageMode, "auto_both");
-  assert.equal(c.s.state.inboundForTask, true, "the standing grants outlive the park too");
   assert.deepEqual(c.s.state.allowForTask, ["Bash"]);
 });
 

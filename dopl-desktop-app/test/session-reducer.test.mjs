@@ -40,7 +40,6 @@ test("initialSessionState defaults: interactive/responder, documented caps, empt
   // v2.9 THE TWO AXES both start at their MOST RESTRICTIVE value (fail-closed).
   assert.equal(s.toolMode, "manual");
   assert.equal(s.messageMode, "ask");
-  assert.equal(s.hasPendingInbound, false);
   // P1: a fresh launch is never parked.
   assert.equal(s.parked, false);
   // Item 3: a launching session starts `working`, nothing posted yet.
@@ -262,12 +261,11 @@ test("result never ends the session on turns (the caps are deleted)", () => {
   assert.ok(!many.effects.some((e) => e.type === "settle"), "no cap settle");
 });
 
-// ── inbound: the universal gate + its two auto-accept bypasses (v2.5 D1/D4) ──────
+// ── inbound: always fed (inbound consent retired; the hold deleted 2026-09-25) ──────
 
-test("inbound_arrived with AXIS B auto-accepting: feeds the reply (pushInbound)", () => {
-  // v2.5 D1: the opt-in decides, not `autonomous`; the fed effects stay byte-equivalent.
-  const s = { ...running({ mode: "autonomous" }), messageMode: "auto_inbound" };
-  const r = sessionReducer(s, { type: "inbound_arrived", pendingId: "p1", message: "hi", authorName: "Bob" });
+test("inbound_arrived feeds the reply (pushInbound), whatever the message axis says", () => {
+  const s = running({ mode: "interactive" });
+  const r = sessionReducer(s, { type: "inbound_arrived", message: "hi", authorName: "Bob" });
   assert.equal(r.state.phase, "running");
   assert.equal(r.state.activity, "working");
   // FIX 3: ...plus the idle re-arm, because a turn was just pushed.
@@ -275,28 +273,11 @@ test("inbound_arrived with AXIS B auto-accepting: feeds the reply (pushInbound)"
   assert.deepEqual(findEff(r.effects, "pushInbound"), { type: "pushInbound", message: "hi", authorName: "Bob", authorNote: null, addressing: null, replyTo: "" });
 });
 
-test("inbound_arrived under the STANDING task grant from awaiting_peer clears back to working", () => {
-  const s = { ...running({ mode: "autonomous" }), inboundForTask: true, activity: "awaiting_peer" };
+test("inbound_arrived from awaiting_peer clears back to working", () => {
+  const s = { ...running({ mode: "autonomous" }), activity: "awaiting_peer" };
   const r = sessionReducer(s, { type: "inbound_arrived", message: "reply", authorName: "Bob" });
   assert.equal(r.state.activity, "working");
   assert.deepEqual(effTypes(r.effects), ["pushInbound", "scheduleIdle"]);
-});
-
-test("inbound_arrived with no opt-in: HOLDS the reply at the gate (every mode)", () => {
-  const s = running({ mode: "interactive" });
-  const r = sessionReducer(s, { type: "inbound_arrived", pendingId: "p1", message: "hi", authorName: "Bob" });
-  assert.equal(r.state.phase, "awaiting_inbound");
-  assert.equal(r.state.activity, "awaiting_inbound"); // item 3: rides the phase
-  assert.equal(r.state.hasPendingInbound, true);
-  assert.deepEqual(r.effects, [], "the hold is state only");
-});
-
-test("inbound_released: -> running, pushes the framed reply, clears the pending flag", () => {
-  const s = { ...running({ mode: "interactive" }), phase: "awaiting_inbound", hasPendingInbound: true };
-  const r = sessionReducer(s, { type: "inbound_released", message: "go", authorName: "Bob" });
-  assert.equal(r.state.phase, "running");
-  assert.equal(r.state.hasPendingInbound, false);
-  assert.deepEqual(effTypes(r.effects), ["pushInbound", "scheduleIdle"]); // FIX 3
 });
 
 // ── steer / interrupt ───────────────────────────────────────────────────────────
@@ -312,17 +293,10 @@ test("steer priority 'now' interrupts first, then pushes; default just pushes ne
   assert.equal(findEff(next.effects, "pushTurn").priority, "next");
 });
 
-test("steer / inbound_released from a waiting activity clear back to working (item 3)", () => {
-  // Steering while awaiting a peer reply re-activates the turn.
+test("steer from a waiting activity clears back to working (item 3)", () => {
   const steered = sessionReducer({ ...running(), activity: "awaiting_peer" }, { type: "steer", text: "nudge" });
   assert.equal(steered.state.activity, "working");
   assert.deepEqual(effTypes(steered.effects), ["pushTurn", "scheduleIdle"]);
-  // inbound_released always returns to working.
-  const released = sessionReducer(
-    { ...running({ mode: "interactive" }), phase: "awaiting_inbound", activity: "awaiting_inbound", hasPendingInbound: true },
-    { type: "inbound_released", message: "go", authorName: "Bob" }
-  );
-  assert.equal(released.state.activity, "working");
 });
 
 test("interrupt (Stop): -> interrupted, interruptQuery", () => {

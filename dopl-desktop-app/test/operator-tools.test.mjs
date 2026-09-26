@@ -126,7 +126,7 @@ test("fan-out → gate → reducer: the operator's own post keeps BOTH its reply
   await h.feedLiveSession(entry, peerMsg({ authorUserId: ME, authorKind: "user" }), ME);
   const fed = h.calls.feedInbound[0];
   assert.deepEqual([fed.replyTo, fed.fromOperator], [ME, true]);
-  assert.match(readFileSync(M("session-gate.js"), "utf8"), /replyTo: item\.replyTo, fromOperator: a\.fromOperator === true/);
+  assert.match(readFileSync(M("session-gate.js"), "utf8"), /replyTo: a\.replyTo \|\| '', fromOperator: a\.fromOperator === true/);
   const push = RED.sessionReducer(running().state, { type: "inbound_arrived", ...fed }).effects.find((e) => e.type === "pushInbound");
   assert.deepEqual([push.replyTo, push.fromOperator], [ME, true]);
 });

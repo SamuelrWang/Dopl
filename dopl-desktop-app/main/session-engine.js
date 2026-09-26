@@ -89,7 +89,7 @@ function runEffect(s, eff) {
       emit(s, eff.payload);
       break;
     case 'persist':
-      // A park saves the full record; the effect's phase is authoritative (state may read awaiting_inbound).
+      // A park saves the full record.
       if (eff.phase === 'parked') store.saveRecord({ ...baseRecord(s), phase: eff.phase });
       else store.setRecordPhase(s.key, eff.phase);
       break;
@@ -205,7 +205,6 @@ async function startSession(spec, rt) {
     lastTotalTokens: 0,
     pendingPermissions: new Map(),
     pendingNames: new Map(),
-    pendingInbound: [],
     // A shell with nothing to resume starts a new conversation, so its first turn carries the full framing.
     freshRun: spec.parkedShell === true && !spec.resumeSdkId,
     freshFraming: spec.parkedShell === true && !spec.resumeSdkId,

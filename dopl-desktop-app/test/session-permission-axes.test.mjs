@@ -46,7 +46,6 @@ const io = require(M("session-io.js"));
 const axisB = require(M("runtime/claude/axis-b.js"));
 const { DOPL_CHANNEL_TOOL } = require(M("tool-profiles.js"));
 
-const GATE = readFileSync(M("session-gate.js"), "utf8");
 const REDUCER_SRC = readFileSync(M("session-reducer.js"), "utf8");
 // §2 SPLIT (2026-07-31): the reducer's STATE SHAPE — its defaults, initialSessionState and the
 // two mode tables it defends itself with — moved to session-state.js when session-reducer.js
@@ -313,7 +312,7 @@ test("B3: grants are in-memory only — nothing about a key is ever persisted", 
   assert.equal(rec.messageMode, undefined);
 });
 
-// ── D. M2 (2026-08-05): THE PARK PRESERVES BOTH AXES, inboundForTask AND THE GRANTS ──
+// ── D. M2 (2026-08-05): THE PARK PRESERVES BOTH AXES AND THE GRANTS ──
 //
 // THE REQUIREMENT CHANGE, and it inverts this test. It used to prove A4/A5 (both axes), C9
 // (inboundForTask) and FIX F1 (allowForTask) were all cleared on park. Samuel's contract is that
@@ -325,19 +324,18 @@ test("B3: grants are in-memory only — nothing about a key is ever persisted", 
 // session ENDS, which is terminal and therefore stronger than a downgrade that stayed wakeable)
 // and by the PROFILE hard-deny, which no posture and no grant has ever been able to widen — the
 // last assertion below is that half, unchanged.
-test("M2: a park preserves both axes, inboundForTask AND every standing grant", () => {
+test("M2: a park preserves both axes AND every standing grant", () => {
   const postGrant = keyOf(OWN_POST);
   const bashGrant = grantKeyFor("Bash", { command: "ls -la" });
   const armed = {
     ...reducer.initialSessionState(), phase: "running",
-    toolMode: "bypass", messageMode: "auto_both", inboundForTask: true,
+    toolMode: "bypass", messageMode: "auto_both",
     allowForTask: [postGrant, bashGrant],
   };
   const r = reducer.sessionReducer(armed, { type: "idle_timeout" });
   assert.equal(r.state.parked, true, "it still parks: the query is still torn down");
   assert.equal(r.state.toolMode, "bypass");
   assert.equal(r.state.messageMode, "auto_both");
-  assert.equal(r.state.inboundForTask, true);
   assert.deepEqual(r.state.allowForTask, [postGrant, bashGrant], "the grants outlive the park");
   // The WOKEN session behaves as the operator set it — asked with the woken state, as before.
   const s = { profile: "full", channelId: CH, state: r.state };
@@ -395,29 +393,6 @@ test("the web's launch vocabulary agrees with main's tables", () => {
   assert.deepEqual(list(/LAUNCH_MESSAGE_MODES = \[([^\]]*)\]/), MESSAGE_MODES);
 });
 
-test("the two inbound-auto predicates (gate + reducer) agree on all four message modes", () => {
-  // session-gate.autoInbound and the reducer's inboundAutoAccepted answer the same question
-  // on two paths; if they ever disagreed, a message would be held by one and fed by the other.
-  // ⚠ 2026-08-20 (F-228): both halves used to be `src.slice(indexOf(A), indexOf(B))`, and the
-  // gate's END MARKER was `function windowHasFocus` — which F-228 deleted along with the rest of
-  // the surfacing half. That slice would now throw (or, with a marker that merely MOVED, silently
-  // yield "" and pass vacuously — the audit R3(a) shape). fnOf() brace-matches each function's
-  // REAL body, so there is no neighbouring symbol left for this extraction to depend on at all.
-  const gateFn = new Function("s", fnOf(GATE, "autoInbound") + "\n return autoInbound(s);");
-  const redFn = new Function("state", fnOf(REDUCER_SRC, "inboundAutoAccepted") + "\n return inboundAutoAccepted(state);");
-  for (const messageMode of MESSAGE_MODES) {
-    for (const inboundForTask of [false, true]) {
-      const state = { messageMode, inboundForTask };
-      assert.equal(gateFn({ state }), redFn(state), `${messageMode}/${inboundForTask}`);
-    }
-  }
-  // And a TOOL posture opens neither of them.
-  for (const toolMode of TOOL_MODES) {
-    assert.equal(gateFn({ state: { toolMode } }), false, toolMode);
-    assert.equal(redFn({ toolMode }), false, toolMode);
-  }
-});
-
 // ── F. THE IPC SURFACE ────────────────────────────────────────────────────────────
 //
 // ⚠ DELETED 2026-08-20 (F-228) — "IPC: the fused channel is REPLACED by two, and the inbound
@@ -468,5 +443,4 @@ test("A: the SDK is still driven at permissionMode 'default' with settingSources
 // decision surfaces" was entirely a renderer/session/session-viewmodel.js property: a 400-char or
 // multi-line `from` on a `counterparty` / `inbound_pending` item was capped at 60 and one-lined,
 // so a hostile display name could not push the body and the buttons off screen. There is no
-// screen and no view-model. main/session-gate.js keeps its OWN `oneLine(value, cap)` for the
-// notice copy it still hands trigger.js, and that half is pinned in test/inbound-gate-notify.test.mjs.
+// screen and no view-model.

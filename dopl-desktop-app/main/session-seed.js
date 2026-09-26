@@ -97,8 +97,8 @@ function frameHistorySeed(nonce, transcript) {
   ].join('\n');
 }
 
-// FIX F1: the seed is assembled at first-turn time and drops every body the inbound gate handled, so a
-// declined message never rides it and an accepted one does not arrive twice.
+// FIX F1: the seed is assembled at first-turn time and drops every body the inbound feed delivered
+// (`session-gate.js`), so a fed message does not arrive twice.
 const SEED_SKIP_CAP = 32;
 const SEED_CAP = 4000;
 const SEED_NAME_CAP = 80;

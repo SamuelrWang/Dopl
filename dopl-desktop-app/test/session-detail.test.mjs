@@ -108,12 +108,6 @@ const TABLE = [
     last: "result",
     detail: "awaiting_peer",
   },
-  {
-    name: "a reply held for an Accept",
-    state: { phase: "awaiting_inbound", activity: "awaiting_inbound" },
-    last: "inbound_arrived",
-    detail: "awaiting_inbound",
-  },
 ];
 
 for (const row of TABLE) {

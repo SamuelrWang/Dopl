@@ -55,7 +55,7 @@ const store = {
 const sess = (over = {}) => ({
   key: KEY, agentId: AGENT, channelId: CH, taskId: TASK,
   settled: false, state: {}, context: {}, nonce: "n0nce",
-  ownPostIds: new Set(), pendingInbound: [],
+  ownPostIds: new Set(),
   ...over,
 });
 
@@ -214,30 +214,28 @@ test("OPS: a 1:1 send IN FLIGHT when the agent ends REFUSES rather than throwing
 
 // ── 5. the inbound gate, and the reducer belt behind everything ──────────────
 
-test("GATE: `feedInbound` refuses a settled session — nothing is enqueued for a resume", () => {
+test("GATE: `feedInbound` refuses a settled session — nothing is fed for a resume", () => {
   const SRC = read("session-gate.js");
   const BLOCK = SRC.slice(
     SRC.indexOf("// ─── BEGIN SESSION-GATE-PURE"),
     SRC.indexOf("// ─── END SESSION-GATE-PURE")
   );
-  const built = new Function(
-    "crypto", "io", "store", "diag",
-    `${BLOCK}\n return { bind, feedInbound };`
-  )(require("node:crypto"), require(join(MAIN, "session-io.js")), store, () => {});
+  const built = new Function("io", "store", `${BLOCK}\n return { bind, feedInbound };`)(
+    require(join(MAIN, "session-io.js")), store
+  );
   const ended = sess({ settled: true });
   built.bind({ sessions: new Map([[KEY, ended]]), dispatch: () => { throw new Error("dispatched into a dead session"); } });
   assert.equal(
     built.feedInbound({ channelId: CH, taskId: TASK, agentId: AGENT, message: "hi", seq: 8 }),
     false
   );
-  assert.deepEqual(ended.pendingInbound, [], "not queued either — a dead agent has no later");
 });
 
 test("REDUCER: a settled state refuses EVERY event, which is the belt behind all five", () => {
   const { sessionReducer } = require(join(MAIN, "session-reducer.js"));
   const ended = { phase: "ended", activity: "idle", parked: false, pendingPermissions: [] };
   for (const type of [
-    "inbound_arrived", "inbound_accept", "steer", "launched", "result",
+    "inbound_arrived", "steer", "launched", "result",
     "idle_timeout", "abandon_timeout", "interrupt", "end", "crash", "auth_release",
   ]) {
     const out = sessionReducer(ended, { type, message: "x", text: "x" });
