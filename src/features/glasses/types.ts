@@ -115,8 +115,9 @@ export interface GlassesStore {
   ): Promise<GlassesMessage | null>;
   /** Mark pending|delivered rows past expires_at as expired. */
   expireStale(userId: string, now: string): Promise<void>;
-  /** pending|delivered, unexpired, updated_at > after (if given), updated_at asc. */
-  listInbox(userId: string, now: string, after: string | null): Promise<GlassesMessage[]>;
+  /** With `since`: every row with updated_at > since, any status. Without: pending|delivered and
+   *  unexpired. Ordered by updated_at asc. */
+  listInbox(userId: string, now: string, since: string | null): Promise<GlassesMessage[]>;
   /** pending -> delivered WITHOUT touching updated_at (the inbox cursor). */
   markDelivered(userId: string, ids: string[]): Promise<void>;
   countActive(userId: string, now: string): Promise<number>;

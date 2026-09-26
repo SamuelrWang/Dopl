@@ -16,15 +16,18 @@ import type {
  * (`20261025120000_glasses_messages.sql`). ⚠ Bypasses RLS, so EVERY query is
  * filtered on `user_id` here — the callers pass the authenticated user.
  *
- * ⚠ ONE CLOCK: every timestamp is written from the app's clock (the `now`
- * argument), never the DB's `now()`, because the device inbox compares
- * `updated_at` against a cursor the app handed out.
+ * ⚠ ONE CLOCK FOR THE CURSOR: `created_at`/`updated_at` are never written
+ * here. The DB stamps them (`DEFAULT now()` and the
+ * `glasses_messages_touch_updated_at` trigger, `20261029120000`), so the device
+ * inbox compares `updated_at` with values from the same clock. `now` arguments
+ * are for EXPIRY comparisons only.
  */
 
 const COLS =
   "id, kind, card_id, payload, status, answer, created_at, updated_at, expires_at";
 const MESSAGES = "glasses_messages";
 const ACTIVE: GlassesStatus[] = ["pending", "delivered"];
+const UNIQUE_VIOLATION = "23505";
 const TEMPLATES = "glasses_templates";
 const TEMPLATE_COLS = "name, spec, created_at, updated_at";
 
@@ -44,8 +47,6 @@ export const glassesRepository: GlassesStore = {
         status: "pending",
         expires_at: row.expires_at,
         spec: row.spec ?? null,
-        created_at: row.now,
-        updated_at: row.now,
       })
       .select(COLS)
       .single();
@@ -99,7 +100,6 @@ export const glassesRepository: GlassesStore = {
       status: "pending",
       answer: null,
       expires_at: expiresAt,
-      updated_at: now,
     };
     if (spec !== undefined) patch.spec = spec;
     const { data, error } = await supabaseAdmin()
@@ -121,7 +121,7 @@ export const glassesRepository: GlassesStore = {
     now: string,
     answer?: GlassesAnswer,
   ) {
-    const patch: Record<string, unknown> = { status: to, updated_at: now };
+    const patch: Record<string, unknown> = { status: to };
     if (answer) patch.answer = answer;
     const { data, error } = await supabaseAdmin()
       .from(MESSAGES)
@@ -138,21 +138,18 @@ export const glassesRepository: GlassesStore = {
   async expireStale(userId: string, now: string) {
     const { error } = await supabaseAdmin()
       .from(MESSAGES)
-      .update({ status: "expired", updated_at: now })
+      .update({ status: "expired" })
       .eq("user_id", userId)
       .in("status", ACTIVE)
       .lte("expires_at", now);
     if (error) fail("expireStale", error);
   },
 
-  async listInbox(userId: string, now: string, after: string | null) {
-    let query = supabaseAdmin()
-      .from(MESSAGES)
-      .select(COLS)
-      .eq("user_id", userId)
-      .in("status", ACTIVE)
-      .gt("expires_at", now);
-    if (after) query = query.gt("updated_at", after);
+  async listInbox(userId: string, now: string, since: string | null) {
+    let query = supabaseAdmin().from(MESSAGES).select(COLS).eq("user_id", userId);
+    // With a cursor, every row touched since then — terminal ones included, so
+    // other devices can clear them. Without one, only the live queue.
+    query = since ? query.gt("updated_at", since) : query.in("status", ACTIVE).gt("expires_at", now);
     const { data, error } = await query
       .order("updated_at", { ascending: true })
       .limit(50);
@@ -225,12 +222,22 @@ export const glassesRepository: GlassesStore = {
   },
 
   async insertIfAbsent(userId: string, row: NewGlassesMessage) {
-    try {
-      return await glassesRepository.insert(userId, row);
-    } catch (err) {
-      // `glasses_messages_reply_card_uidx`: the reply was already mirrored.
-      if (err instanceof Error && err.message.includes("duplicate key")) return null;
-      throw err;
-    }
+    const { data, error } = await supabaseAdmin()
+      .from(MESSAGES)
+      .insert({
+        user_id: userId,
+        kind: row.kind,
+        card_id: row.card_id,
+        payload: row.payload,
+        status: "pending",
+        expires_at: row.expires_at,
+        spec: row.spec ?? null,
+      })
+      .select(COLS)
+      .single();
+    // `glasses_messages_reply_card_uidx`: this reply was already mirrored.
+    if (error?.code === UNIQUE_VIOLATION) return null;
+    if (error) fail("insertIfAbsent", error);
+    return data as GlassesMessage;
   },
 };

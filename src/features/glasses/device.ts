@@ -9,7 +9,10 @@ import type { GlassesMessage, GlassesStore, ScreenPayload } from "./types";
  */
 
 export const INBOX_MAX_WAIT_SEC = 25;
-export const INBOX_POLL_MS = 1000;
+/** DB poll cadence inside the hold (P1-9: 2s, was 1s). */
+export const INBOX_POLL_MS = 2000;
+/** How far before `after` the inbox looks again (clock skew / late-committed rows). */
+export const INBOX_OVERLAP_MS = 15_000;
 
 export interface DeviceDeps {
   store: GlassesStore;
@@ -42,6 +45,17 @@ export function parseInboxQuery(url: URL): { after: string | null; waitSec: numb
   return { after, waitSec };
 }
 
+/**
+ * Long-poll the user's queue.
+ *
+ * CURSOR CONTRACT: `after` is the `updated_at` of the newest message the device
+ * holds. The server answers with every row touched in the last
+ * {@link INBOX_OVERLAP_MS} before `after` too — terminal ones included, so a
+ * message answered or dismissed on another device clears here — and the device
+ * dedupes by `(id, updated_at)`. The overlap catches a row whose write committed
+ * after a later one's. The hold ends as soon as any row is strictly newer than
+ * `after` (or anything is queued, without a cursor).
+ */
 export async function readInbox(
   deps: DeviceDeps,
   userId: string,
@@ -53,6 +67,8 @@ export async function readInbox(
   const sleep = deps.sleep ?? defaultSleep;
   const start = now();
   await deps.store.expireStale(userId, new Date(start).toISOString());
+  const afterMs = after ? Date.parse(after) : null;
+  const since = afterMs === null ? null : new Date(afterMs - INBOX_OVERLAP_MS).toISOString();
 
   for (;;) {
     if (deps.beforeRead) {
@@ -63,17 +79,16 @@ export async function readInbox(
       }
     }
     const t = new Date(now()).toISOString();
-    const rows = await deps.store.listInbox(userId, t, after);
-    if (rows.length > 0) {
+    const rows = await deps.store.listInbox(userId, t, since);
+    const fresh = afterMs === null ? rows : rows.filter((r) => Date.parse(r.updated_at) > afterMs);
+    const done = signal?.aborted || now() - start + INBOX_POLL_MS > waitSec * 1000;
+    if (fresh.length > 0 || done) {
       const pendingIds = rows.filter((r) => r.status === "pending").map((r) => r.id);
       await deps.store.markDelivered(userId, pendingIds);
       return {
         messages: rows.map((r) => (r.status === "pending" ? { ...r, status: "delivered" } : r)),
         server_time: t,
       };
-    }
-    if (signal?.aborted || now() - start + INBOX_POLL_MS > waitSec * 1000) {
-      return { messages: [], server_time: t };
     }
     await sleep(INBOX_POLL_MS);
   }

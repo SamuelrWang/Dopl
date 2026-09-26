@@ -8,7 +8,7 @@ import {
   fillTemplate,
   templateVariables,
 } from "./screen-template";
-import { ASK_HOLD_CAP_SEC, ASK_POLL_MS, type GlassesDeps } from "./service";
+import { ASK_HOLD_CAP_SEC, ASK_POLL_MS, RESERVED_CARD_PREFIX, type GlassesDeps } from "./service";
 import { GlassesValidationError, cleanSeconds } from "./text";
 import type { GlassesAnswer, GlassesMessage, GlassesStatus, ScreenPayload } from "./types";
 
@@ -35,6 +35,9 @@ function cleanScreenId(v: unknown): string {
   if (v === undefined || v === null) return `s-${randomBytes(4).toString("hex")}`;
   if (typeof v !== "string" || !SCREEN_ID_RE.test(v)) {
     throw new GlassesValidationError("screen_id must be 1-64 chars of A-Z a-z 0-9 _ -");
+  }
+  if (v.startsWith(RESERVED_CARD_PREFIX)) {
+    throw new GlassesValidationError(`screen_id may not start with "${RESERVED_CARD_PREFIX}" (reserved for agent replies)`);
   }
   return v;
 }

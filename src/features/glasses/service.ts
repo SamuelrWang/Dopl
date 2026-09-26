@@ -19,7 +19,10 @@ import type { GlassesAnswer, GlassesStatus, GlassesStore } from "./types";
 
 /** Longest a single `glasses_ask` call holds. Under the route's maxDuration (300). */
 export const ASK_HOLD_CAP_SEC = 200;
-export const ASK_POLL_MS = 1000;
+export const ASK_POLL_MS = 1500;
+
+/** `reply-<channel message id>` cards belong to the reply mirror (`reply-mirror.ts`). */
+export const RESERVED_CARD_PREFIX = "reply-";
 
 export interface GlassesDeps {
   store: GlassesStore;
@@ -68,6 +71,9 @@ export async function glassesShow(
       throw new GlassesValidationError("card_id must be a non-empty string");
     }
     cardId = args.card_id.trim().slice(0, 64);
+    if (cardId.startsWith(RESERVED_CARD_PREFIX)) {
+      throw new GlassesValidationError(`card_id may not start with "${RESERVED_CARD_PREFIX}" (reserved for agent replies)`);
+    }
   }
   const now = clock(deps)();
   const payload = { title, lines };

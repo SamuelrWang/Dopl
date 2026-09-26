@@ -1,6 +1,10 @@
 import type { GlassesMessage, GlassesStatus, GlassesStore, GlassesTemplate } from "./types";
 
-/** In-memory {@link GlassesStore} for tests — mirrors `repository.ts` query semantics. */
+/**
+ * In-memory {@link GlassesStore} for tests — mirrors `repository.ts` query
+ * semantics. The `now` each write receives stands in for the DB clock that
+ * stamps `created_at`/`updated_at` in production.
+ */
 export function createFakeGlassesStore() {
   const rows: (GlassesMessage & { user_id: string; spec?: unknown })[] = [];
   const templates = new Map<string, GlassesTemplate>();
@@ -93,9 +97,9 @@ export function createFakeGlassesStore() {
         }
       }
     },
-    async listInbox(userId, now, after) {
+    async listInbox(userId, now, since) {
       return rows
-        .filter((r) => r.user_id === userId && active(r, now) && (!after || r.updated_at > after))
+        .filter((r) => r.user_id === userId && (since ? r.updated_at > since : active(r, now)))
         .sort((a, b) => a.updated_at.localeCompare(b.updated_at))
         .map(strip);
     },

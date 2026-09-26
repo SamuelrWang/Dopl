@@ -39,12 +39,35 @@ describe("inbox long-poll", () => {
     expect(rows[0].status).toBe("delivered");
   });
 
-  it("honours `after` so delivery does not re-surface a row", async () => {
-    const { deps } = setup();
+  it("re-sends the 15s overlap unchanged (the device dedupes by id + updated_at) and holds for newer", async () => {
+    const { deps, clock } = setup();
     await glassesNotify(deps, USER, { title: "t", body: "b" });
     const first = await readInbox(deps, USER, null, 0);
-    const again = await readInbox(deps, USER, first.messages[0].updated_at, 0);
-    expect(again.messages).toEqual([]);
+    const cursor = first.messages[0].updated_at;
+    const again = await readInbox(deps, USER, cursor, 0);
+    expect(again.messages.map((m) => [m.id, m.updated_at])).toEqual([[first.messages[0].id, cursor]]);
+    // Nothing newer than the cursor: the hold runs its full wait before answering.
+    const start = clock.now();
+    await readInbox(deps, USER, cursor, 6);
+    expect(clock.now() - start).toBeGreaterThanOrEqual(4000);
+  });
+
+  it("includes rows that turned terminal after the cursor, so other devices clear them", async () => {
+    const { deps, store, clock } = setup();
+    const n = await glassesNotify(deps, USER, { title: "t", body: "b" });
+    const first = await readInbox(deps, USER, null, 0);
+    clock.advance(1000);
+    await store.transition(USER, n.id, ["pending", "delivered"], "dismissed", new Date(clock.now()).toISOString());
+    const res = await readInbox(deps, USER, first.messages[0].updated_at, 25);
+    expect(res.messages).toEqual([expect.objectContaining({ id: n.id, status: "dismissed" })]);
+  });
+
+  it("drops rows touched more than 15s before the cursor", async () => {
+    const { deps, clock } = setup();
+    await glassesNotify(deps, USER, { title: "old", body: "b" });
+    clock.advance(20_000);
+    const res = await readInbox(deps, USER, new Date(clock.now()).toISOString(), 0);
+    expect(res.messages).toEqual([]);
   });
 
   it("waits up to `wait` seconds and wakes on a new row", async () => {
