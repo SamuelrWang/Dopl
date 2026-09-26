@@ -79,6 +79,10 @@ export const PUBLIC_ROUTES = [
   "/oauth/authorize",
   "/api/oauth",
   "/api/mcp",
+  // Glasses MCP prototype device API (docs/glasses-mcp.md): self-authenticates
+  // by a static device bearer, and a browser CORS preflight carries no
+  // credentials at all, so the session gate would 401 every OPTIONS.
+  "/api/glasses/device/",
   // The desktop minimum-version floor. It MUST answer a signed-out caller: a
   // build below the floor may be too old to complete a sign-in at all, and the
   // whole point is to tell it to upgrade before it tries. Left out of this list
@@ -101,6 +105,8 @@ export const PUBLIC_ROUTES = [
 // marketing pages are session-AWARE, so they still need the claims read.
 export const SELF_AUTH_ROUTES = [
   "/api/mcp",
+  // Glasses device API: static device bearer, checked by the route itself.
+  "/api/glasses/device/",
   // Playground machine surface: /session provisions anonymously (per-IP limited inside); /mcp/<token> self-authenticates by the guest bearer. The /playground PAGE is PUBLIC_ROUTES.
   "/api/playground",
   "/api/oauth",

@@ -80,6 +80,12 @@ const EXEMPT: Record<string, string> = {
     "Anonymous playground provisioning — the audience has no account by definition. Per-IP rate-limited in the service; creates only its own throwaway guest user/workspace/token.",
   "playground/mcp/[token]/route.ts":
     "The /api/mcp transport under a URL-embedded bearer (desktop MCP clients cannot send headers). Delegates to mcp/route.ts, which authenticates via authenticateMcpRequest — same exemption rationale as mcp/route.ts.",
+  "mcp/glasses/route.ts":
+    "Glasses MCP prototype transport (authenticateMcpRequest). JSON-RPC over POST like mcp/route.ts; its write tools are scope-gated per call on an explicit dopl.write (features/glasses/tools.ts › createGlassesMcpServer).",
+  "glasses/device/answer/route.ts":
+    "Glasses device API — authenticated by the static GLASSES_DEVICE_TOKEN bearer (features/glasses/device.ts › authenticateDevice), not a user OAuth token; no scope to gate.",
+  "glasses/device/dismiss/route.ts":
+    "Glasses device API — static GLASSES_DEVICE_TOKEN bearer, same as glasses/device/answer.",
 };
 
 const files = routeFiles(API_ROOT);
