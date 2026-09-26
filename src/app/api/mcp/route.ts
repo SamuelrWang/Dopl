@@ -12,6 +12,7 @@ import { readToolProfileHeader } from "@/shared/auth/tool-profile-header";
 import { readToolSetClaim } from "@/shared/auth/tool-set-header";
 import { resolveTransportWorkspaceId } from "@/shared/auth/mcp-transport-pin";
 import { withSseKeepAlive } from "@/shared/api/sse-keep-alive";
+import { maybeRegisterGlassesTools } from "@/features/glasses/mcp-exposure";
 
 // ⚠ Node runtime required (SDK uses node:crypto); never Edge. Per-request auth ⇒ no caching.
 //
@@ -136,6 +137,15 @@ async function handle(request: Request): Promise<Response> {
   //
   // The stream stays open and SILENT for an ~215s `op="await"` hold, which intermediaries reap,
   // hence `withSseKeepAlive` (SSE comments only; non-SSE responses pass through untouched).
+  // GLASSES TOOLS ride this surface only for a caller with paired glasses
+  // (`features/glasses/mcp-exposure.ts`): no device, no extra tools. Same
+  // fail-closed write rule as the server above, and metered per call.
+  await maybeRegisterGlassesTools(server, userId, {
+    canWrite: scopes?.includes("dopl.write") ?? false,
+    signal: request.signal,
+    sessionId: callerSessionId,
+  });
+
   const transport = new WebStandardStreamableHTTPServerTransport({
     sessionIdGenerator: undefined,
   });
