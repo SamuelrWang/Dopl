@@ -2,15 +2,24 @@ import "server-only";
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
 import { authenticateMcpRequest } from "@/shared/auth/with-mcp-transport-auth";
 import { withSseKeepAlive } from "@/shared/api/sse-keep-alive";
-import { createGlassesMcpServer } from "@/features/glasses/tools";
-import { glassesCreditCharger, glassesToolDeps } from "@/features/glasses/mcp-exposure";
+import { DoplClient } from "@dopl/client";
+import { clientIdentifier } from "@dopl/mcp-server/factory";
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { appBaseUrl } from "@/shared/api/loopback-base-url";
+import { readRuntimeHeader, readVendorHeader } from "@/shared/auth/runtime-header";
 import { readSessionIdHeader } from "@/shared/auth/session-header";
+import { readToolProfileHeader } from "@/shared/auth/tool-profile-header";
+import { resolveTransportWorkspaceId } from "@/shared/auth/mcp-transport-pin";
+import { registerGlassesTools } from "@/features/glasses/tools";
+import { glassesToolDeps, mcpToolCharger, profileOffersGlasses } from "@/features/glasses/mcp-exposure";
 
 /**
  * `/api/mcp/glasses` — the focused glasses MCP endpoint for external agents
  * (docs/glasses-mcp.md). Same OAuth bearer and transport shape as `/api/mcp`,
- * but only the glasses tools (`features/glasses/tools.ts`), always listed. `glasses_ask` holds up to 200s,
- * hence maxDuration 300 and the SSE keep-alive, exactly as `/api/mcp`.
+ * but only the glasses tools (`features/glasses/tools.ts`) — listed for any caller whose
+ * containment profile offers them (`mcp-exposure.ts › profileOffersGlasses`), metered through
+ * the caller's loopback client like `/api/mcp`. `glasses_ask` holds up to 200s, hence
+ * maxDuration 300 and the SSE keep-alive, exactly as `/api/mcp`.
  */
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -19,13 +28,24 @@ export const maxDuration = 300;
 async function handle(request: Request): Promise<Response> {
   const authed = await authenticateMcpRequest(request);
   if (!authed.ok) return authed.response;
-  const { userId, scopes } = authed.auth;
-  const server = createGlassesMcpServer(glassesToolDeps, userId, {
-    // Fail closed, same as `/api/mcp`: writes only on an explicit dopl.write.
-    canWrite: scopes?.includes("dopl.write") ?? false,
-    signal: request.signal,
-    charge: glassesCreditCharger(userId, readSessionIdHeader(request)),
-  });
+  const { userId, scopes, credential, apiKeyWorkspaceId } = authed.auth;
+  const server = new McpServer({ name: "dopl-glasses", version: "0.2.0" });
+  if (profileOffersGlasses(readToolProfileHeader(request))) {
+    const client = new DoplClient(appBaseUrl(request), credential, {
+      clientIdentifier,
+      workspaceId: resolveTransportWorkspaceId(apiKeyWorkspaceId, request.headers.get("x-workspace-id")),
+      runtime: readRuntimeHeader(request),
+      vendor: readVendorHeader(request),
+      sessionId: readSessionIdHeader(request),
+      signal: request.signal,
+    });
+    registerGlassesTools(server, glassesToolDeps, userId, {
+      // Fail closed, same as `/api/mcp`: writes only on an explicit dopl.write.
+      canWrite: scopes?.includes("dopl.write") ?? false,
+      signal: request.signal,
+      charge: mcpToolCharger(client, userId, apiKeyWorkspaceId),
+    });
+  }
   const transport = new WebStandardStreamableHTTPServerTransport({
     sessionIdGenerator: undefined,
   });

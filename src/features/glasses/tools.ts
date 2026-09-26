@@ -48,11 +48,11 @@ export interface GlassesToolOptions {
   canWrite: boolean;
   signal?: AbortSignal;
   /**
-   * Meter one call (`mcp-exposure.ts › glassesCreditCharger`): the refusal text
-   * when the wallet is empty, else null. Charged before the handler, once per
-   * call, like every Dopl MCP tool; absent = unmetered (tests).
+   * Meter one call (`mcp-exposure.ts › mcpToolCharger`): the refusal text when
+   * the wallet is empty, else null. Charged before the handler, once per call,
+   * like every Dopl MCP tool; absent = unmetered (tests). `write` feeds the tally.
    */
-  charge?: () => Promise<string | null>;
+  charge?: (write: boolean) => Promise<string | null>;
 }
 
 /** Register every glasses tool on `server`. */
@@ -63,11 +63,13 @@ export function registerGlassesTools(
   opts: GlassesToolOptions,
 ): void {
   const { canWrite, signal, charge } = opts;
-  const run = async (fn: () => Promise<unknown>): Promise<ToolResult> => {
-    const refusal = charge ? await charge() : null;
+  const metered = (isWrite: boolean) => async (fn: () => Promise<unknown>): Promise<ToolResult> => {
+    const refusal = charge ? await charge(isWrite) : null;
     return refusal ? { content: [{ type: "text", text: refusal }], isError: true } : runTool(fn);
   };
-  const write = (fn: () => Promise<unknown>) => (canWrite ? run(fn) : Promise.resolve(NEEDS_WRITE));
+  const run = metered(false);
+  const runWrite = metered(true);
+  const write = (fn: () => Promise<unknown>) => (canWrite ? runWrite(fn) : Promise.resolve(NEEDS_WRITE));
 
   server.registerTool(
     "glasses_notify",
@@ -126,7 +128,8 @@ export function registerGlassesTools(
     "glasses_status",
     {
       title: "glasses_status",
-      description: "Are the glasses online (polled in the last 60s)? Returns {online, last_seen, active_count}.",
+      description:
+        "Your paired glasses: {online (any device seen in the last 60s), last_seen, active_count (queued messages), devices:[{id, name, online, last_seen}]}.",
       inputSchema: z.object({}),
     },
     () => run(() => glassesStatus(deps, userId)),

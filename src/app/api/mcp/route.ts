@@ -12,6 +12,7 @@ import { readToolProfileHeader } from "@/shared/auth/tool-profile-header";
 import { readToolSetClaim } from "@/shared/auth/tool-set-header";
 import { resolveTransportWorkspaceId } from "@/shared/auth/mcp-transport-pin";
 import { withSseKeepAlive } from "@/shared/api/sse-keep-alive";
+import { appBaseUrl } from "@/shared/api/loopback-base-url";
 import { maybeRegisterGlassesTools } from "@/features/glasses/mcp-exposure";
 
 // ⚠ Node runtime required (SDK uses node:crypto); never Edge. Per-request auth ⇒ no caching.
@@ -25,26 +26,6 @@ import { maybeRegisterGlassesTools } from "@/features/glasses/mcp-exposure";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
-
-/**
- * Base URL for the in-app MCP server's `/api/*` loopback calls (carries caller's credential).
- *
- * ⚠ Use the EXACT arrival host, NOT NEXT_PUBLIC_APP_URL: that env points at the apex
- * (usedopl.com), which 307s to www, and `fetch` DROPS Authorization across a host change —
- * 401ing every loopback call.
- */
-function appBaseUrl(request: Request): string {
-  const host = request.headers.get("host");
-  if (host) {
-    const proto = request.headers.get("x-forwarded-proto") ?? "https";
-    return `${proto}://${host}`;
-  }
-  try {
-    return new URL(request.url).origin;
-  } catch {
-    return process.env.NEXT_PUBLIC_APP_URL || "https://www.usedopl.com";
-  }
-}
 
 async function handle(request: Request): Promise<Response> {
   // Auth at transport boundary: headers only — body stays intact for the transport.
@@ -128,6 +109,18 @@ async function handle(request: Request): Promise<Response> {
     onDiag: (message) => console.error(message),
   });
 
+  // GLASSES TOOLS ride this surface only for a caller with paired glasses, and only under a
+  // containment profile that offers them (`features/glasses/mcp-exposure.ts`): no device or a
+  // `read_only`/`dopl_only` session, no extra tools. Same fail-closed write rule as the server
+  // above; metered per call through this request's own loopback client, like every `dopl_*` tool.
+  await maybeRegisterGlassesTools(server, userId, {
+    canWrite: scopes?.includes("dopl.write") ?? false,
+    signal: request.signal,
+    toolProfile: callerToolProfile,
+    client,
+    lockedContainerId: apiKeyWorkspaceId,
+  });
+
   // ⚠ NEVER set `enableJsonResponse: true` here. That mode makes the SDK resolve only once every
   // JSON-RPC response is ready, so no headers reach the client until the tool handler returns —
   // and Claude Code's AbortController (max(server.timeout ?? 60_000, 60_000)) bounds
@@ -137,15 +130,6 @@ async function handle(request: Request): Promise<Response> {
   //
   // The stream stays open and SILENT for an ~215s `op="await"` hold, which intermediaries reap,
   // hence `withSseKeepAlive` (SSE comments only; non-SSE responses pass through untouched).
-  // GLASSES TOOLS ride this surface only for a caller with paired glasses
-  // (`features/glasses/mcp-exposure.ts`): no device, no extra tools. Same
-  // fail-closed write rule as the server above, and metered per call.
-  await maybeRegisterGlassesTools(server, userId, {
-    canWrite: scopes?.includes("dopl.write") ?? false,
-    signal: request.signal,
-    sessionId: callerSessionId,
-  });
-
   const transport = new WebStandardStreamableHTTPServerTransport({
     sessionIdGenerator: undefined,
   });
