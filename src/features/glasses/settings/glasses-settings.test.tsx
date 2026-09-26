@@ -163,6 +163,13 @@ describe("device list", () => {
     );
   });
 
+  it("keeps a linked channel the list does not carry on the menu", async () => {
+    devices = [device({ linked_channel: { id: "ch-9", name: "" } })];
+    renderPane();
+    const picker = await screen.findByRole("button", { name: "Channel for My G2" });
+    expect(picker.textContent).toContain("Unknown channel");
+  });
+
   it("renames inline", async () => {
     devices = [device()];
     renderPane();

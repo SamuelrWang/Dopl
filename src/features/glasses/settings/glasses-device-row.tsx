@@ -24,7 +24,7 @@ import {
 
 const PLATFORM_LABELS: Record<string, string> = { even_g2: "Even G2" };
 
-/** Mirrors the server's name ceiling. */
+/** Mirrors `glasses/devices-service.ts › DEVICE_NAME_MAX` (a server module the SPA cannot import). */
 const DEVICE_NAME_MAX = 64;
 
 /** `connected-apps-section.tsx`'s text action. */

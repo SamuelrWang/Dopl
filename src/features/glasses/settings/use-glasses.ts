@@ -50,7 +50,8 @@ export function useGlassesChannelOptions(
       if (c.isMember && !c.isDirect) options.push({ value: c.id, label: c.name });
     }
     if (current && !options.some((o) => o.value === current.id)) {
-      options.push({ value: current.id, label: current.name });
+      // The server sends "" for a channel it can no longer name.
+      options.push({ value: current.id, label: current.name || "Unknown channel" });
     }
     return options;
   }, [channels, current]);
