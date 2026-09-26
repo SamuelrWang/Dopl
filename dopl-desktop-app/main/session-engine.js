@@ -73,12 +73,12 @@ function dispatch(s, event) {
   return resolvedLive;
 }
 
-// A push the operator's account did not author (another member's or their agent's message, a direction) opens the peer window,
+// A push the operator's account did not author (another member's or their agent's message) opens the peer window,
 // AFTER the effects: a wake resets the windows first (F-372). Its text lets a joined push pay its turn back.
+// A direction is never one: only the operator's own account can file it (`agent-directions.js`; Samuel, 2026-09-25).
 function notePeerPush(s, event, effects, wasInFlight) {
   const inbound = effects.find((e) => e.type === 'pushInbound' && e.fromOperator !== true);
-  const directed = event && event.type === 'steer' && event.directed === true && effects.some((e) => e.type === 'pushTurn');
-  if (inbound || directed) sessionPrivate.openPeerTurn(s, wasInFlight, inbound ? inbound.message : event.text);
+  if (inbound) sessionPrivate.openPeerTurn(s, wasInFlight, inbound.message);
 }
 
 function runEffect(s, eff) {

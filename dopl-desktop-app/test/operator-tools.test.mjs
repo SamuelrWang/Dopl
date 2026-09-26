@@ -153,11 +153,10 @@ test("engine: a peer message joining an operator turn taints the rest of it, and
   assert.equal(priv.isPeerTurn(s), false, "one result answered both: nothing left over");
 });
 
-test("engine: a direction from another session is not the operator; a panel message is", () => {
+test("engine: a direction (only the operator's account can file one) and a panel message are both the operator's", () => {
   const s = running();
   funnel(s, { type: "steer", text: "framed", private: true, directed: true, priority: "next" });
-  assert.equal(priv.isPeerTurn(s), true);
-  priv.resetPeerTurn(s);
+  assert.equal(priv.isPeerTurn(s), false);
   funnel(s, { type: "steer", text: "framed", private: true, directed: false, priority: "next" });
   assert.equal(priv.isPeerTurn(s), false);
 });
