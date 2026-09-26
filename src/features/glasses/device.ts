@@ -1,6 +1,6 @@
 import { timingSafeEqual } from "node:crypto";
 import { isUuid } from "./text";
-import type { GlassesMessage, GlassesStore } from "./types";
+import type { GlassesMessage, GlassesStore, ScreenPayload } from "./types";
 
 /**
  * The G2 plugin's side of the queue: auth, CORS, long-poll inbox, answer,
@@ -132,9 +132,10 @@ export async function answerAsk(
   userId: string,
   body: unknown,
 ): Promise<AnswerOutcome> {
-  const b = (body ?? {}) as { id?: unknown; choice?: unknown; index?: unknown };
+  const b = (body ?? {}) as { id?: unknown; choice?: unknown; index?: unknown; block_id?: unknown };
   if (typeof b.id !== "string" || !b.id) return { ok: false, status: 400, error: "id required" };
   const row = isUuid(b.id) ? await deps.store.get(userId, b.id) : null;
+  if (row?.kind === "screen") return answerScreen(deps, userId, row, b);
   if (!row || row.kind !== "ask") return { ok: false, status: 404, error: "no such ask" };
   const options = (row.payload as { options: string[] }).options ?? [];
   let index = typeof b.index === "number" && Number.isInteger(b.index) ? b.index : -1;
@@ -159,6 +160,57 @@ export async function answerAsk(
     { choice: options[index], index, at },
   );
   if (!moved) return { ok: false, status: 409, error: `ask already ${row.status}` };
+  return { ok: true };
+}
+
+/**
+ * A tap on an agent-built screen. Unlike an ask, a screen may be tapped again
+ * (the latest input wins) until it expires, because it stays on the glasses.
+ * `index` resolves from `choice` against the list's items when missing — the
+ * G2 delivers index 0 as undefined.
+ */
+async function answerScreen(
+  deps: DeviceDeps,
+  userId: string,
+  row: GlassesMessage,
+  b: { choice?: unknown; index?: unknown; block_id?: unknown },
+): Promise<AnswerOutcome> {
+  const containers = (row.payload as ScreenPayload).containers ?? [];
+  let container = containers.find((c) => c.capture) ?? null;
+  if (b.block_id !== undefined && b.block_id !== null) {
+    container = containers.find((c) => c.block_id === b.block_id) ?? null;
+    if (!container) return { ok: false, status: 400, error: `no block '${String(b.block_id)}' on this screen` };
+  }
+  const choice = typeof b.choice === "string" && b.choice ? b.choice.slice(0, 200) : "click";
+  let index = typeof b.index === "number" && Number.isInteger(b.index) ? b.index : -1;
+  if (container?.kind === "list") {
+    const items = container.items ?? [];
+    if (index < 0 || index >= items.length) index = items.indexOf(choice);
+    if (index < 0) return { ok: false, status: 400, error: `index must be 0-${items.length - 1}` };
+  } else if (index < 0) {
+    index = 0;
+  }
+  const nowMs = (deps.now ?? Date.now)();
+  const at = new Date(nowMs).toISOString();
+  if (Date.parse(row.expires_at) <= nowMs) {
+    await deps.store.transition(userId, row.id, ["pending", "delivered", "answered"], "expired", at);
+    return { ok: false, status: 409, error: "screen expired" };
+  }
+  const answer = {
+    choice: container?.kind === "list" ? (container.items ?? [])[index] : choice,
+    index,
+    at,
+    block_id: container?.block_id ?? null,
+  };
+  const moved = await deps.store.transition(
+    userId,
+    row.id,
+    ["pending", "delivered", "answered"],
+    "answered",
+    at,
+    answer,
+  );
+  if (!moved) return { ok: false, status: 409, error: `screen already ${row.status}` };
   return { ok: true };
 }
 

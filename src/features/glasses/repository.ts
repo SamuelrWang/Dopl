@@ -2,10 +2,12 @@ import "server-only";
 import { supabaseAdmin } from "@/shared/supabase/admin";
 import type {
   GlassesAnswer,
+  GlassesKind,
   GlassesMessage,
   GlassesPayload,
   GlassesStatus,
   GlassesStore,
+  GlassesTemplate,
   NewGlassesMessage,
 } from "./types";
 
@@ -23,6 +25,8 @@ const COLS =
   "id, kind, card_id, payload, status, answer, created_at, updated_at, expires_at";
 const MESSAGES = "glasses_messages";
 const ACTIVE: GlassesStatus[] = ["pending", "delivered"];
+const TEMPLATES = "glasses_templates";
+const TEMPLATE_COLS = "name, spec, created_at, updated_at";
 
 function fail(op: string, error: { message: string }): never {
   throw new Error(`glasses ${op} failed: ${error.message}`);
@@ -39,6 +43,7 @@ export const glassesRepository: GlassesStore = {
         payload: row.payload,
         status: "pending",
         expires_at: row.expires_at,
+        spec: row.spec ?? null,
         created_at: row.now,
         updated_at: row.now,
       })
@@ -59,14 +64,20 @@ export const glassesRepository: GlassesStore = {
     return (data as GlassesMessage | null) ?? null;
   },
 
-  async findActiveCard(userId: string, cardId: string, now: string) {
+  async findActiveCard(
+    userId: string,
+    cardId: string,
+    now: string,
+    kind: GlassesKind = "show",
+    statuses: GlassesStatus[] = ACTIVE,
+  ) {
     const { data, error } = await supabaseAdmin()
       .from(MESSAGES)
       .select(COLS)
       .eq("user_id", userId)
-      .eq("kind", "show")
+      .eq("kind", kind)
       .eq("card_id", cardId)
-      .in("status", ACTIVE)
+      .in("status", statuses)
       .gt("expires_at", now)
       .order("updated_at", { ascending: false })
       .limit(1)
@@ -81,10 +92,19 @@ export const glassesRepository: GlassesStore = {
     payload: GlassesPayload,
     expiresAt: string,
     now: string,
+    spec?: unknown,
   ) {
+    const patch: Record<string, unknown> = {
+      payload,
+      status: "pending",
+      answer: null,
+      expires_at: expiresAt,
+      updated_at: now,
+    };
+    if (spec !== undefined) patch.spec = spec;
     const { data, error } = await supabaseAdmin()
       .from(MESSAGES)
-      .update({ payload, status: "pending", expires_at: expiresAt, updated_at: now })
+      .update(patch)
       .eq("user_id", userId)
       .eq("id", id)
       .select(COLS)
@@ -177,5 +197,47 @@ export const glassesRepository: GlassesStore = {
       .maybeSingle();
     if (error) fail("lastSeen", error);
     return (data as { last_seen: string } | null)?.last_seen ?? null;
+  },
+
+  async getSpec(userId: string, id: string) {
+    const { data, error } = await supabaseAdmin()
+      .from(MESSAGES)
+      .select("spec")
+      .eq("user_id", userId)
+      .eq("id", id)
+      .maybeSingle();
+    if (error) fail("getSpec", error);
+    return (data as { spec: unknown } | null)?.spec ?? null;
+  },
+
+  async saveTemplate(userId: string, name: string, spec: unknown, now: string) {
+    const { data, error } = await supabaseAdmin()
+      .from(TEMPLATES)
+      .upsert({ user_id: userId, name, spec, updated_at: now }, { onConflict: "user_id,name" })
+      .select(TEMPLATE_COLS)
+      .single();
+    if (error) fail("saveTemplate", error);
+    return data as GlassesTemplate;
+  },
+
+  async listTemplates(userId: string) {
+    const { data, error } = await supabaseAdmin()
+      .from(TEMPLATES)
+      .select(TEMPLATE_COLS)
+      .eq("user_id", userId)
+      .order("name", { ascending: true });
+    if (error) fail("listTemplates", error);
+    return (data as GlassesTemplate[] | null) ?? [];
+  },
+
+  async getTemplate(userId: string, name: string) {
+    const { data, error } = await supabaseAdmin()
+      .from(TEMPLATES)
+      .select(TEMPLATE_COLS)
+      .eq("user_id", userId)
+      .eq("name", name)
+      .maybeSingle();
+    if (error) fail("getTemplate", error);
+    return (data as GlassesTemplate | null) ?? null;
   },
 };

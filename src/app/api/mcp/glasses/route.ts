@@ -7,7 +7,7 @@ import { glassesRepository } from "@/features/glasses/repository";
 
 /**
  * `/api/mcp/glasses` — the Glasses MCP prototype (docs/glasses-mcp.md). Same
- * OAuth bearer and same transport shape as `/api/mcp`, but its OWN five-tool
+ * OAuth bearer and same transport shape as `/api/mcp`, but its OWN tool
  * server, so the main surface does not grow. `glasses_ask` holds up to 200s,
  * hence maxDuration 300 and the SSE keep-alive, exactly as `/api/mcp`.
  */

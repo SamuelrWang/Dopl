@@ -1,15 +1,17 @@
-import type { GlassesMessage, GlassesStatus, GlassesStore } from "./types";
+import type { GlassesMessage, GlassesStatus, GlassesStore, GlassesTemplate } from "./types";
 
 /** In-memory {@link GlassesStore} for tests — mirrors `repository.ts` query semantics. */
 export function createFakeGlassesStore() {
-  const rows: (GlassesMessage & { user_id: string })[] = [];
+  const rows: (GlassesMessage & { user_id: string; spec?: unknown })[] = [];
+  const templates = new Map<string, GlassesTemplate>();
   const devices = new Map<string, string>();
   let seq = 0;
   const active = (r: GlassesMessage, now: string) =>
     (r.status === "pending" || r.status === "delivered") && r.expires_at > now;
   const strip = (r: GlassesMessage & { user_id: string }): GlassesMessage => {
-    const m: Partial<typeof r> = { ...r };
+    const m: Partial<typeof r> & { spec?: unknown } = { ...r };
     delete m.user_id;
+    delete m.spec;
     return m as GlassesMessage;
   };
   const find = (userId: string, id: string) =>
@@ -29,6 +31,7 @@ export function createFakeGlassesStore() {
         created_at: row.now,
         updated_at: row.now,
         expires_at: row.expires_at,
+        spec: row.spec ?? null,
       };
       rows.push(r);
       return strip(r);
@@ -37,16 +40,42 @@ export function createFakeGlassesStore() {
       const r = find(userId, id);
       return r ? strip(r) : null;
     },
-    async findActiveCard(userId, cardId, now) {
+    async findActiveCard(userId, cardId, now, kind = "show", statuses = ["pending", "delivered"]) {
       const r = rows
-        .filter((x) => x.user_id === userId && x.kind === "show" && x.card_id === cardId && active(x, now))
+        .filter(
+          (x) =>
+            x.user_id === userId &&
+            x.kind === kind &&
+            x.card_id === cardId &&
+            statuses.includes(x.status) &&
+            x.expires_at > now,
+        )
         .at(-1);
       return r ? strip(r) : null;
     },
-    async refreshCard(userId, id, payload, expiresAt, now) {
+    async refreshCard(userId, id, payload, expiresAt, now, spec) {
       const r = find(userId, id)!;
-      Object.assign(r, { payload, status: "pending", expires_at: expiresAt, updated_at: now });
+      Object.assign(r, { payload, status: "pending", answer: null, expires_at: expiresAt, updated_at: now });
+      if (spec !== undefined) r.spec = spec;
       return strip(r);
+    },
+    async getSpec(userId, id) {
+      return find(userId, id)?.spec ?? null;
+    },
+    async saveTemplate(userId, name, spec, now) {
+      const key = `${userId}:${name}`;
+      const t = { name, spec, created_at: templates.get(key)?.created_at ?? now, updated_at: now };
+      templates.set(key, t);
+      return t;
+    },
+    async listTemplates(userId) {
+      return [...templates.entries()]
+        .filter(([k]) => k.startsWith(`${userId}:`))
+        .map(([, t]) => t)
+        .sort((a, b) => a.name.localeCompare(b.name));
+    },
+    async getTemplate(userId, name) {
+      return templates.get(`${userId}:${name}`) ?? null;
     },
     async transition(userId, id, from, to, now, answer) {
       const r = find(userId, id);
@@ -82,7 +111,7 @@ export function createFakeGlassesStore() {
       return devices.get(userId) ?? null;
     },
   };
-  return { store, rows, devices };
+  return { store, rows, devices, templates };
 }
 
 /** A controllable clock whose `sleep` just advances time. */

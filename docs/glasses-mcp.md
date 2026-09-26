@@ -20,9 +20,64 @@ OAuth login.
 | `glasses_get_answer` | `id` | `{id, status, answer}` |
 | `glasses_status` | none | `{online (polled in the last 60s), last_seen, active_count}` |
 
+The screen tools are described below. Each write tool needs the `dopl.write` scope. Read-only calls work without it: `get_answer`, `status`, `capabilities`, `list_templates`, and `render`/`use_template` with `validate_only`.
+
 All text is sanitized before the byte check: curly quotes become straight, en/em dashes become `-`,
 and emoji and non-BMP characters are stripped. The G2 fails silently on any of those. An over-limit
 field returns a tool error such as `question is 121 bytes; max 120. Shorten it.`
+
+### Agent-built screens (`glasses_capabilities`, `glasses_render`, `glasses_update`, templates)
+
+Code: `src/features/glasses/screen-*.ts`. Layout is measured server-side with
+`@evenrealities/pretext`, the G2 firmware's own glyph table, which runs in Node.
+
+- `glasses_capabilities()` returns the screen size, limits, block types, and the box model the
+  compiler assumes.
+- `glasses_render({screen_id?, blocks, layout?='stack'|'absolute', wait_for_input?, timeout_sec?=120, ttl_sec?=600, validate_only?})`.
+  - **Blocks:**
+    - `text{content, lines?, brightness? 0-4, border?}`
+    - `list{items[], selectable?=true}`, with at most one selectable list per screen
+    - `progress{value 0-1, label?}`, which becomes a text line such as `label ██████▒▒▒▒ 62%`
+    - `divider{}`, which becomes a line of `─`
+    - `spacer{lines?=1}`, which is empty space and creates no container
+    - In `absolute` layout, blocks also take `x`, `y` (required) and `w`, `h` (optional).
+  - **Invalid specs** get a tool error `{ok:false, errors:[{block, code, message}]}`. Codes are
+    `too_many_blocks`, `text_too_long`, `overflow`, `out_of_bounds`, `multiple_selectable`,
+    `list_too_long`, `item_too_long` and `bad_value`. Nothing is truncated silently.
+  - **Overflow:** a stack that is too tall is an error. The one exception is a list, which scrolls
+    on the glasses and so may shrink to 2 visible rows first.
+  - **`validate_only:true`** returns `{ok, screen_id, compiled, preview}` and sends nothing. The
+    preview is a 64x16 ASCII mock: `[id]` marks each block, `[id*]` marks the block that takes
+    input, and `#`/`.`/`-` stand in for the bar and divider glyphs.
+  - **Sending:** otherwise a `kind:'screen'` row is stored with `card_id = screen_id`. An id of
+    `s-xxxxxxxx` is generated if none is given. Rendering the same `screen_id` again replaces the
+    screen in place, clears any earlier tap and re-delivers it.
+  - **Waiting for input:** with `wait_for_input`, the call holds for up to 200s and returns
+    `{id, screen_id, status:'answered', input:{block_id, choice, index, at}}`.
+    - If the wearer doesn't tap in time, it returns `status:'timeout'`. The screen **stays up**;
+      its own ttl decides when it expires.
+    - If `timeout_sec` is over 200, it returns `status:'pending'`; read the tap later with
+      `glasses_get_answer`.
+- `glasses_update({screen_id, patches:[{id, content?|items?|value?|label?}]})` merges the patches
+  into the stored spec, re-compiles, and re-delivers the screen with status `pending`.
+- **Templates:** `glasses_save_template({name, blocks, layout?})`, `glasses_list_templates()`,
+  `glasses_use_template({name, data, screen_id?, wait_for_input?, timeout_sec?, ttl_sec?, validate_only?})`.
+  - Placeholders `{{var}}` are filled inside strings.
+  - A field that is exactly `"{{var}}"` takes the value's own type, so `value:"{{pct}}"` becomes a
+    number.
+  - A list item that is exactly `"{{var}}"` with an array value is spread into the list.
+  - Any missing variable is an error that names it.
+  - Names are lowercased, 1-64 characters of `a-z 0-9 _ -`.
+
+**Wire payload for `kind:'screen'`** (inbox):
+`{screen_id, spec_version:1, containers:[{block_id, kind:'text'|'list', x, y, w, h, content?, items?, brightness?, border?, capture}]}`.
+- Containers are already sanitized, byte-checked and positioned. There are at most 8.
+- Exactly one container has `capture:true`: the selectable list, otherwise the last text
+  container, otherwise the last container.
+- **Box model the compiler assumes (the plugin must render the same way):**
+  - `paddingLength: 4` on every container, plus `borderWidth: 2` when `border` is true.
+  - 27px per line; a list row is 27px.
+  - A text container's height is `lines*27 + 8`, plus `4` with a border.
 
 ### Device side: `/api/glasses/device/*` (the plugin contract)
 
@@ -39,10 +94,16 @@ field returns a tool error such as `question is 121 bytes; max 120. Shorten it.`
     unencoded `+00:00` is tolerated. Delivery does not change `updated_at`. A `glasses_show`
     update does change it, so an updated card comes back.
   - Omit `after` on open, or after `FOREGROUND_ENTER`, to get the whole active queue.
-- `Message = {id, kind:'notify'|'show'|'ask', card_id, payload, status, answer, created_at, updated_at, expires_at}`.
+- `Message = {id, kind:'notify'|'show'|'ask'|'screen', card_id, payload, status, answer, created_at, updated_at, expires_at}`.
   - The payload is `{title, body}` for notify, `{title, lines}` for show, or `{question, options}`
-    for ask.
-- `POST /answer {id, choice, index}` returns `{ok:true}`.
+    for ask. For screen it is the wire payload described above.
+- `POST /answer {id, choice, index, block_id?}` returns `{ok:true}`.
+  - **Screens:** a tap on a `kind:'screen'` row is stored as its answer
+    `{choice, index, at, block_id}` with status `answered`, whether or not the agent is waiting.
+    Later taps overwrite it until the screen expires.
+  - `block_id` defaults to the capture container.
+  - On a list, a missing or out-of-range `index` is found from `choice`. On text, `choice`
+    defaults to `'click'` and `index` to 0.
   - It returns 409 if the ask is already answered, dismissed or expired, and 404 if the id is not
     an ask belonging to this user.
   - The stored `choice` is `options[index]`. If `index` is missing or out of range, the server
@@ -59,7 +120,7 @@ GLASSES_DEVICE_USER_ID=<the Dopl auth.users id the device acts as>
 ```
 
 Everything else comes from the normal Dopl `.env.local`. It points at the project's Supabase, and
-migration `20261025120000_glasses_messages.sql` is applied there.
+migrations `20261025120000_glasses_messages.sql` and `20261026120000_glasses_screens_templates.sql` are applied there.
 
 ## Run
 

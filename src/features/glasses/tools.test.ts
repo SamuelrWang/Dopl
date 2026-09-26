@@ -16,15 +16,21 @@ async function connect(canWrite = true) {
 }
 
 describe("glasses MCP server", () => {
-  it("lists exactly the five glasses tools", async () => {
+  it("lists exactly the glasses tools", async () => {
     const { client } = await connect();
     const { tools } = await client.listTools();
     expect(tools.map((t) => t.name).sort()).toEqual([
       "glasses_ask",
+      "glasses_capabilities",
       "glasses_get_answer",
+      "glasses_list_templates",
       "glasses_notify",
+      "glasses_render",
+      "glasses_save_template",
       "glasses_show",
       "glasses_status",
+      "glasses_update",
+      "glasses_use_template",
     ]);
     for (const t of tools) expect(t.description!.length).toBeLessThan(300);
   });
@@ -55,5 +61,29 @@ describe("glasses MCP server", () => {
     expect(rows).toHaveLength(0);
     const status = await client.callTool({ name: "glasses_status", arguments: {} });
     expect(status.isError).toBeFalsy();
+  });
+
+  it("renders a validate_only preview over MCP without needing write", async () => {
+    const { client, rows } = await connect(false);
+    const res = await client.callTool({
+      name: "glasses_render",
+      arguments: { blocks: [{ type: "text", content: "Hi" }], validate_only: true },
+    });
+    expect(res.isError).toBeFalsy();
+    const body = JSON.parse((res.content as { text: string }[])[0].text);
+    expect(body.ok).toBe(true);
+    expect(body.preview).toContain("[b1*] Hi");
+    expect(rows).toHaveLength(0);
+  });
+
+  it("returns compile errors as JSON tool errors", async () => {
+    const { client } = await connect();
+    const res = await client.callTool({
+      name: "glasses_render",
+      arguments: { blocks: [{ type: "list", items: ["a"] }, { type: "list", items: ["b"] }] },
+    });
+    expect(res.isError).toBe(true);
+    const body = JSON.parse((res.content as { text: string }[])[0].text);
+    expect(body.errors[0].code).toBe("multiple_selectable");
   });
 });

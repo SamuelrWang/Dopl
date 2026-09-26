@@ -9,10 +9,11 @@ import {
   glassesStatus,
   type GlassesDeps,
 } from "./service";
+import { registerScreenTools } from "./screen-tools";
 
 /**
  * The `/api/mcp/glasses` tool surface — deliberately a SEPARATE server from
- * `@dopl/mcp-server` so these five tools never appear on the main `/api/mcp`
+ * `@dopl/mcp-server` so these tools never appear on the main `/api/mcp`
  * list. Every tool acts on the authenticated caller's own queue.
  */
 
@@ -115,6 +116,8 @@ export function createGlassesMcpServer(
     },
     () => run(() => glassesStatus(deps, userId)),
   );
+
+  registerScreenTools(server, { run, write }, deps, userId, signal);
 
   return server;
 }
