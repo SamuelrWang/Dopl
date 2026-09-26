@@ -137,9 +137,11 @@ What the wearer says is posted into one **linked channel** as the operator's own
   head.
 - Each reply becomes a glasses message with `card_id = reply-<channel message id>`. The partial
   unique index `glasses_messages_reply_card_uidx` stops duplicates.
-- A reply of 180 bytes or less, after markdown is flattened, becomes `notify {title: agent name, body}`.
-- A longer reply becomes `show {title, lines}`: up to 4 lines wrapped to the G2 width, each at
-  most 100 bytes, with the last line ending in `…` when cut.
+- Every reply becomes a `show {title: agent display name, lines}` card, never a `notify`. A notify
+  is auto-dismissed after a few seconds; a show card stays until the wearer taps it or it
+  expires.
+- The lines are wrapped to the G2 width: up to 4 lines, each at most 100 bytes, with the last
+  line ending in `…` when cut. Markdown is flattened first.
 - Replies expire after 600s.
 
 **Endpoints** (device bearer, CORS as above):

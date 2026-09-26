@@ -102,10 +102,11 @@ describe("reply mirror", () => {
     expect(await mirrorReplies(deps, USER, "chan")).toBe(0);
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({
-      kind: "notify",
+      kind: "show",
       card_id: `reply-${id}`,
-      payload: { title: "Coder", body: "Build is green. Deploying now." },
+      payload: { title: "Coder", lines: ["Build is green. Deploying now."] },
     });
+    expect(Date.parse(rows[0].expires_at) - Date.parse(rows[0].created_at)).toBe(600_000);
   });
 
   it("is idempotent even if the cursor is rewound", async () => {
@@ -119,6 +120,13 @@ describe("reply mirror", () => {
     cursors.set(USER, { channelId: "chan", seq: before });
     await mirrorReplies(deps, USER, "chan");
     expect(rows).toHaveLength(1);
+  });
+
+  it("mirrors even a one-word reply as a show card (it must not auto-dismiss)", () => {
+    expect(replyToGlasses({ agentName: "Orchestrator", body: "pong" })).toEqual({
+      kind: "show",
+      payload: { title: "Orchestrator", lines: ["pong"] },
+    });
   });
 
   it("turns a long reply into a clamped show card", () => {

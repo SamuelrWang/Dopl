@@ -1,18 +1,19 @@
 import { g2Measurer, type TextMeasurer } from "./measure";
 import { sanitizeGlassesText, utf8Bytes } from "./text";
-import type { GlassesStore, NotifyPayload, ShowPayload } from "./types";
+import type { GlassesStore, ShowPayload } from "./types";
 import type { ChannelGateway, ChannelReply } from "./voice-utterance";
 
 /**
  * Agent replies in the linked channel → glasses. Runs inside the device inbox
  * long-poll (no background worker): each tick reads agent `message` rows past
  * the device's cursor and queues one glasses message per row, card_id
- * `reply-<channel message id>`. Idempotent twice over: the cursor only moves
+ * `reply-<channel message id>`, ALWAYS as a `show` card (a `notify` is
+ * auto-dismissed after a few seconds; a reply must stay until the wearer taps
+ * it or it expires, Samuel 2026-09-26). Idempotent twice over: the cursor only moves
  * forward, and `glasses_messages_reply_card_uidx` refuses a second row for the
  * same reply. A fresh cursor starts at the channel's head, never replaying history.
  */
 
-export const REPLY_NOTIFY_MAX_BYTES = 180;
 export const REPLY_TTL_SEC = 600;
 const TITLE_MAX_BYTES = 64;
 const LINE_MAX_BYTES = 100;
@@ -76,11 +77,10 @@ export function wrapLines(text: string, m: TextMeasurer = g2Measurer): string[] 
 export function replyToGlasses(
   reply: Pick<ChannelReply, "agentName" | "body">,
   m: TextMeasurer = g2Measurer,
-): { kind: "notify"; payload: NotifyPayload } | { kind: "show"; payload: ShowPayload } | null {
+): { kind: "show"; payload: ShowPayload } | null {
   const title = clampBytes(sanitizeGlassesText(reply.agentName) || "Agent", TITLE_MAX_BYTES);
   const body = plainReply(reply.body);
   if (!body) return null;
-  if (utf8Bytes(body) <= REPLY_NOTIFY_MAX_BYTES) return { kind: "notify", payload: { title, body } };
   return { kind: "show", payload: { title, lines: wrapLines(body, m) } };
 }
 
