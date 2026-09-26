@@ -1,8 +1,10 @@
 /**
  * Voice → channel: what the wearer said is posted into the LINKED Dopl channel
  * as the operator's own message, so the channel's normal wake rule wakes its
- * agent. Then a short hold for the agent's first reply. Pure over a
- * {@link ChannelGateway}; the real one is `voice-channel.ts`.
+ * agent, and returns AT ONCE. There is no reply hold (Samuel, 2026-09-26: agent
+ * replies almost always take longer than the ~10s an Even client waits); the
+ * reply reaches the glasses through the inbox's reply mirror (`reply-mirror.ts`).
+ * Pure over a {@link ChannelGateway}; the real one is `voice-channel.ts`.
  */
 
 export interface ChannelReply {
@@ -21,6 +23,8 @@ export interface PostedUtterance {
   liveAgents: number;
   /** The one agent the post was @-addressed to, if exactly one was live. */
   addressedTo: string | null;
+  /** That agent's operator-given display name, when it has one. */
+  addressedName: string | null;
 }
 
 export interface ChannelGateway {
@@ -40,18 +44,22 @@ export interface VoiceConfig {
 export interface UtteranceDeps {
   gateway: ChannelGateway;
   config: VoiceConfig;
-  now?: () => number;
-  sleep?: (ms: number) => Promise<void>;
-  holdMs?: number;
 }
 
-export const UTTERANCE_HOLD_MS = 8000;
-const POLL_MS = 1000;
 export const UTTERANCE_MAX_BYTES = 4000;
 
-export type UtteranceResult =
-  | { status: "replied"; channel_message_id: string; reply: string; reply_message_id: string; agent: string }
-  | { status: "sent" | "offline"; channel_message_id: string; addressed_to: string | null };
+export interface UtteranceResult {
+  /** `replied` is no longer produced (no reply hold); kept in the union for older clients. */
+  status: "sent" | "offline" | "replied";
+  channel_message_id: string;
+  /** `@`-less handle of the one agent addressed, else null. */
+  addressed_to: string | null;
+  /** That agent's display name (e.g. "Orchestrator"), else null. */
+  addressed_name?: string | null;
+  /** Compat only: never set on the hot path. */
+  reply?: string;
+  reply_message_id?: string;
+}
 
 export class UtteranceError extends Error {
   constructor(message: string) {
@@ -73,27 +81,12 @@ export async function handleGlassesUtterance(deps: UtteranceDeps, text: string):
     throw new UtteranceError(`utterance is too long (max ${UTTERANCE_MAX_BYTES} bytes)`);
   }
   const { gateway, config } = deps;
-  const now = deps.now ?? Date.now;
-  const sleep = deps.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
   const posted = await gateway.postAsOperator(config.channelId, config.operatorUserId, clean);
-  const base = { channel_message_id: posted.id, addressed_to: posted.addressedTo };
-  if (posted.liveAgents === 0 && posted.recipientAgentIds.length === 0) {
-    return { status: "offline", ...base };
-  }
-  const start = now();
-  const holdMs = deps.holdMs ?? UTTERANCE_HOLD_MS;
-  while (now() - start < holdMs) {
-    await sleep(POLL_MS);
-    const [reply] = await gateway.agentMessagesAfter(config.channelId, posted.seq, 1);
-    if (reply) {
-      return {
-        status: "replied",
-        channel_message_id: posted.id,
-        reply: reply.body,
-        reply_message_id: reply.id,
-        agent: reply.agentName,
-      };
-    }
-  }
-  return { status: "sent", ...base };
+  const offline = posted.liveAgents === 0 && posted.recipientAgentIds.length === 0;
+  return {
+    status: offline ? "offline" : "sent",
+    channel_message_id: posted.id,
+    addressed_to: posted.addressedTo,
+    addressed_name: posted.addressedName,
+  };
 }

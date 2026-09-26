@@ -6,7 +6,8 @@ import {
 } from "./voice-utterance";
 
 /**
- * `POST /api/glasses/device/voice` and the Hey-Even chat-completions shim, as
+ * `POST /api/glasses/device/voice` and the Hey-Even chat-completions shim (both
+ * return right after posting; replies come via the inbox mirror), as
  * pure functions over injected STT + channel deps. Routes are thin wrappers.
  */
 
@@ -65,8 +66,8 @@ export function lastUserText(body: unknown): string | null {
 }
 
 export function assistantText(result: UtteranceResult): string {
-  if (result.status === "replied") return result.reply;
-  const who = result.addressed_to ? `@${result.addressed_to}` : "your Dopl channel";
+  if (result.status === "replied" && result.reply) return result.reply;
+  const who = result.addressed_name || (result.addressed_to ? `@${result.addressed_to}` : "your Dopl channel");
   if (result.status === "offline") return `Sent to ${who}, but no agent is running there right now.`;
   return `Sent to ${who}. Reply coming to your glasses.`;
 }

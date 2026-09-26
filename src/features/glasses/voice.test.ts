@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { createFakeGlassesStore, fakeClock } from "./fake-store";
+import { createFakeGlassesStore } from "./fake-store";
 import { mirrorReplies, plainReply, replyToGlasses, wrapLines } from "./reply-mirror";
 import { isNearSilent, pcmToWav, type SttProvider } from "./stt";
 import {
@@ -27,36 +27,22 @@ function tone(ms: number, amplitude: number): Uint8Array {
 }
 
 describe("handleGlassesUtterance", () => {
-  it("posts, then returns the agent's first reply", async () => {
+  it("posts and returns sent immediately, with no reply hold", async () => {
     const ch = createFakeChannel();
-    const clock = fakeClock();
-    let ticks = 0;
-    clock.onSleep(() => {
-      if (++ticks === 2) ch.agentSays("pong");
-    });
-    const res = await handleGlassesUtterance(
-      { gateway: ch.gateway, config: CONFIG, now: clock.now, sleep: clock.sleep },
-      "  reply with pong ",
-    );
+    const res = await handleGlassesUtterance({ gateway: ch.gateway, config: CONFIG }, "  reply with pong ");
     expect(ch.messages[0]).toMatchObject({ body: "reply with pong", author: "user" });
-    expect(res).toMatchObject({ status: "replied", reply: "pong", agent: "Coder" });
+    expect(res).toEqual({
+      status: "sent",
+      channel_message_id: ch.messages[0].id,
+      addressed_to: "agent-abcdefgh",
+      addressed_name: "Orchestrator",
+    });
   });
 
-  it("returns sent after the 8s hold with no reply", async () => {
-    const ch = createFakeChannel();
-    const clock = fakeClock();
-    const start = clock.now();
-    const res = await handleGlassesUtterance({ gateway: ch.gateway, config: CONFIG, now: clock.now, sleep: clock.sleep }, "hi");
-    expect(res).toMatchObject({ status: "sent", addressed_to: "agent-abcdefgh" });
-    expect(clock.now() - start).toBeGreaterThanOrEqual(8000);
-  });
-
-  it("returns offline at once when no agent is live", async () => {
+  it("returns offline when no agent is live", async () => {
     const ch = createFakeChannel({ liveAgents: 0 });
-    const sleep = vi.fn();
-    const res = await handleGlassesUtterance({ gateway: ch.gateway, config: CONFIG, sleep }, "hi");
-    expect(res.status).toBe("offline");
-    expect(sleep).not.toHaveBeenCalled();
+    const res = await handleGlassesUtterance({ gateway: ch.gateway, config: CONFIG }, "hi");
+    expect(res).toMatchObject({ status: "offline", addressed_to: null });
   });
 
   it("reads config from env, defaulting the poster to the device user", () => {
@@ -178,11 +164,13 @@ describe("hey-even shim", () => {
     expect(modelList(1).data[0].id).toBe("dopl-glasses");
   });
 
-  it("says where it went when nobody replied in time", () => {
-    expect(assistantText({ status: "sent", channel_message_id: "m", addressed_to: "agent-abcdefgh" })).toBe(
-      "Sent to @agent-abcdefgh. Reply coming to your glasses.",
+  it("says which agent it went to, by display name when there is one", () => {
+    const base = { status: "sent" as const, channel_message_id: "m", addressed_to: "agent-abcdefgh" };
+    expect(assistantText({ ...base, addressed_name: "Orchestrator" })).toBe("Sent to Orchestrator. Reply coming to your glasses.");
+    expect(assistantText({ ...base, addressed_name: null })).toBe("Sent to @agent-abcdefgh. Reply coming to your glasses.");
+    expect(assistantText({ status: "sent", channel_message_id: "m", addressed_to: null })).toBe(
+      "Sent to your Dopl channel. Reply coming to your glasses.",
     );
-    expect(assistantText({ status: "replied", channel_message_id: "m", reply: "pong", reply_message_id: "r", agent: "A" })).toBe("pong");
   });
 
   it("redacts credentials in the header log", () => {

@@ -16,6 +16,7 @@ export function createFakeChannel(opts: { liveAgents?: number } = {}) {
         recipientAgentIds: live > 0 ? ["abcdefgh"] : [],
         liveAgents: live,
         addressedTo: live === 1 ? "agent-abcdefgh" : null,
+        addressedName: live === 1 ? "Orchestrator" : null,
       };
     },
     async agentMessagesAfter(_channelId, after, limit) {

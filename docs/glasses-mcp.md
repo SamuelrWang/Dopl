@@ -120,10 +120,10 @@ What the wearer says is posted into one **linked channel** as the operator's own
   Otherwise it is unaddressed, and the server's rule for an unaddressed person-authored post
   (RR3) wakes the room's agent.
 - **Waking:** the operator's installed Dopl desktop wakes the agent off that stored row.
-- **Reply hold:** the handler then waits up to 8s for the first agent-authored reply:
-  - `replied` with `reply`, `reply_message_id` and `agent` if one arrives;
-  - `sent` if none arrives in time;
-  - `offline` if no agent session was live and the post woke nobody.
+- **No reply hold** (Samuel, 2026-09-26). The call returns as soon as the message is posted.
+  Agent replies usually take longer than the roughly 10s an Even client waits.
+  - The status is `sent`, or `offline` when no agent session was live and the post woke nobody.
+  - Replies reach the glasses only through the reply mirror below.
 
 **Reply mirror** (`reply-mirror.ts`):
 - Each device inbox long-poll also reads agent `message` rows in the linked channel past a
@@ -135,8 +135,6 @@ What the wearer says is posted into one **linked channel** as the operator's own
 - A longer reply becomes `show {title, lines}`: up to 4 lines wrapped to the G2 width, each at
   most 100 bytes, with the last line ending in `…` when cut.
 - Replies expire after 600s.
-- **Duplicates:** the plugin can use the voice response's `reply_message_id` to skip the
-  `reply-<id>` card for a reply it already showed.
 
 **Endpoints** (device bearer, CORS as above):
 - `POST /api/glasses/device/voice`
@@ -144,11 +142,14 @@ What the wearer says is posted into one **linked channel** as the operator's own
     `Content-Type: application/octet-stream`, up to about 60s. Larger bodies get a 413.
   - It is wrapped as a WAV and transcribed by the first STT key present: `OPENAI_API_KEY` (model
     `gpt-4o-mini-transcribe`), otherwise `GROQ_API_KEY` (`whisper-large-v3`).
-  - It returns `{transcript, status:'replied'|'sent'|'offline'|'empty', reply?, reply_message_id?, agent?, channel_message_id, addressed_to?}`.
+  - It returns `{transcript, status:'sent'|'offline'|'empty', channel_message_id, addressed_to, addressed_name}`
+    right after posting. `reply` and `reply_message_id` are optional in the types for
+    compatibility and are never set.
   - Audio shorter than 300ms or with RMS below 150 is `empty`, and STT is not called.
 - `POST /api/glasses/hey-even/v1/chat/completions` (also `POST /api/glasses/hey-even`)
   - OpenAI chat-completions shape. It takes the last `user` message.
-  - The answer is the agent's reply, or `Sent to @agent-…. Reply coming to your glasses.`
+  - It answers straight away with `Sent to <agent display name>. Reply coming to your glasses.`
+    It falls back to `@agent-<id>`, then to "your Dopl channel", when there is no display name.
   - `stream:true` returns one SSE chunk, a finish chunk, then `[DONE]`.
   - Every request's headers are logged with credentials redacted (`[glasses] hey-even request …`).
 - `GET /api/glasses/hey-even/v1/models` returns `dopl-glasses`.

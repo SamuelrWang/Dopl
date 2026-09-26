@@ -68,6 +68,7 @@ export const glassesChannelGateway: ChannelGateway = {
       recipientAgentIds: posted.recipientAgentIds ?? [],
       liveAgents: live.length,
       addressedTo,
+      addressedName: live.length === 1 ? live[0].display_name?.trim() || null : null,
     };
   },
 
