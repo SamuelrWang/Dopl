@@ -69,18 +69,34 @@ npm run dev -- -p 3100
 
 ## Connect Claude Code
 
-```sh
-claude mcp add --transport http dopl-glasses http://localhost:3100/api/mcp/glasses
-```
+### Local connect (header token) — use this
 
-Then run `/mcp` → `dopl-glasses` → Authenticate. A browser opens the local Dopl OAuth consent page,
-where you sign in at `localhost:3100` if asked. To skip OAuth with a Dopl access token you already
-have:
+Browser OAuth does not complete against a local server: `/oauth/authorize` sends a signed-out
+browser through `/login` → `/authenticate`, and the sign-in ends on the `/get-started` download page
+instead of returning to the consent screen (see "Why browser OAuth fails locally"). Connect with a
+pre-minted Dopl access token in a header instead:
 
 ```sh
 claude mcp add --transport http dopl-glasses http://localhost:3100/api/mcp/glasses \
-  --header "Authorization: Bearer dopl_at_..."
+  --header "Authorization: Bearer $(cat <path-to-token-file>)"
 ```
+
+The token is an ordinary `mcp_tokens` row (`dopl_at_…`, scopes `dopl.read dopl.write`, labelled
+`glasses-local-dev`), minted with the same row shape as `shared/auth/mcp-oauth.ts › issueDeviceToken`.
+Revoke it by setting `revoked_at` on that row. Writes (`notify`/`show`/`ask`) need `dopl.write`.
+
+### Why browser OAuth fails locally (not fixed)
+
+`src/app/oauth/authorize/page.tsx` redirects a signed-out visitor to
+`/login?redirectTo=/oauth/authorize?…` and `/login` 307s to `/authenticate`, which keeps the
+target. The OAuth sign-in's return URL comes from `src/features/auth/hooks/use-login.ts ›
+authOrigin`, which is `window.location.origin` (`http://localhost:3100`) in dev. Most likely the
+Supabase Auth redirect allow-list does not include `http://localhost:3100/auth/callback`, so Supabase
+falls back to the project Site URL (production). Production's callback then has no `redirectTo`, and
+`shared/lib/url/post-auth-landing.ts › webPostAuthDestination` sends it to
+`WEB_POST_AUTH_LANDING` (`/get-started`), the download page. Unverified: this needs a look at the
+Supabase dashboard's redirect URLs. Fix options: allow-list the localhost callback, or keep using
+header tokens.
 
 ## Smoke test
 
