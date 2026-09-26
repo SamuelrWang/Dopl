@@ -13,7 +13,7 @@ import {
 } from "./voice";
 import { createFakeChannel } from "./voice-test-kit";
 import { handleGlassesUtterance, replyHoldMsFromEnv, voiceConfigForDevice } from "./voice-utterance";
-import { createFakeDeviceStore } from "./fake-device-store";
+import { createFakeDeviceStore, fakeLinker } from "./fake-device-store";
 import type { ShowPayload } from "./types";
 
 const USER = "11111111-1111-4111-8111-111111111111";
@@ -97,7 +97,7 @@ describe("reply mirror", () => {
     const { devices, deviceRows } = createFakeDeviceStore();
     const ch = createFakeChannel();
     ch.agentSays("old history, never replayed");
-    const deps = { store, devices, gateway: ch.gateway };
+    const deps = { store, devices, gateway: ch.gateway, linker: fakeLinker({ chan: { name: "Room", members: [USER] } }) };
     const device = await linkedDevice(devices);
     const first = await mirrorReplies(deps, device);
     expect(first).toEqual({ queued: 0, cursor: 101 });
@@ -120,7 +120,7 @@ describe("reply mirror", () => {
     const { store, rows } = createFakeGlassesStore();
     const { devices } = createFakeDeviceStore();
     const ch = createFakeChannel();
-    const deps = { store, devices, gateway: ch.gateway };
+    const deps = { store, devices, gateway: ch.gateway, linker: fakeLinker({ chan: { name: "Room", members: [USER] } }) };
     const device = await linkedDevice(devices);
     const { cursor } = await mirrorReplies(deps, device);
     ch.agentSays("one");
@@ -129,6 +129,21 @@ describe("reply mirror", () => {
     expect(rows).toHaveLength(1);
     const unlinked = await linkedDevice(devices, null);
     expect(await mirrorReplies(deps, unlinked)).toEqual({ queued: 0, cursor: null });
+  });
+
+  it("unlinks the device and reads nothing once the owner can no longer see the channel", async () => {
+    const { store, rows } = createFakeGlassesStore();
+    const { devices, deviceRows } = createFakeDeviceStore();
+    const ch = createFakeChannel();
+    const room = { name: "Room", members: [USER] };
+    const deps = { store, devices, gateway: ch.gateway, linker: fakeLinker({ chan: room }) };
+    const device = await linkedDevice(devices);
+    const { cursor } = await mirrorReplies(deps, device);
+    room.members = [];
+    ch.agentSays("after departure");
+    expect(await mirrorReplies(deps, { ...device, reply_cursor_seq: cursor })).toEqual({ queued: 0, cursor: null, unlinked: true });
+    expect(rows).toHaveLength(0);
+    expect(deviceRows[0].linked_channel_id).toBeNull();
   });
 
   it("mirrors even a one-word reply as a show card (it must not auto-dismiss)", () => {

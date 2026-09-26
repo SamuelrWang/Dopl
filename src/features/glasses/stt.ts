@@ -1,9 +1,9 @@
 /**
  * Speech-to-text for the glasses push-to-talk. The device uploads raw PCM
  * (signed 16-bit little-endian, 16 kHz, mono); it is wrapped as a WAV here and
- * sent to the configured provider. Provider = the first key present, in the
- * order the prototype plan fixed: OpenAI, then Groq. Deepgram / ElevenLabs /
- * Soniox are named in that plan but not implemented (no key on this machine).
+ * sent to the configured provider: the first key present of `OPENAI_API_KEY`
+ * (`gpt-4o-mini-transcribe`) and `GROQ_API_KEY` (`whisper-large-v3`). No other
+ * provider is implemented.
  */
 
 export const PCM_SAMPLE_RATE = 16_000;

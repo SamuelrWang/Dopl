@@ -48,16 +48,21 @@ export interface DeviceStore {
   claimPairing(id: string, deviceId: string, now: string): Promise<boolean>;
   /** Stamp `token_issued_at` once; `true` only for the single caller that won. */
   markTokenIssued(id: string, now: string): Promise<boolean>;
-  expirePairings(now: string): Promise<void>;
+  /** Free a code held by an EXPIRED pending pairing (after an insert collided on it). */
+  expirePairingCode(code: string, now: string): Promise<void>;
+  /** Delete pairings that expired before `cutoff` (housekeeping; they are never read again). */
+  deleteStalePairings(cutoff: string): Promise<void>;
 
   insertDevice(d: NewDevice): Promise<GlassesDevice>;
-  getDevice(userId: string, id: string): Promise<GlassesDevice | null>;
+  /** Paired devices: unrevoked AND holding a device token (a claim whose token was never
+   *  collected is not a device yet). */
   listDevices(userId: string): Promise<GlassesDevice[]>;
   /** Active (unrevoked) device by credential hash. */
   findDeviceByTokenHash(hash: string): Promise<GlassesDevice | null>;
   findDeviceByHeyEvenKeyHash(hash: string): Promise<GlassesDevice | null>;
   setTokenHash(deviceId: string, hash: string): Promise<void>;
-  setHeyEvenKeyHash(userId: string, deviceId: string, hash: string): Promise<void>;
+  /** `false` when no active device matched. */
+  setHeyEvenKeyHash(userId: string, deviceId: string, hash: string): Promise<boolean>;
   updateDevice(
     userId: string,
     id: string,

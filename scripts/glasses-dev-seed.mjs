@@ -9,10 +9,12 @@
  *   # or pair a headless "device" end to end (start → claim → status) and save its token:
  *   node scripts/glasses-dev-seed.mjs --user-token-file <file> --out <device-token-file> [--channel <uuid>] [--hey-even <key-file>]
  *
- * <file> holds a Dopl user credential (a `dopl_at_…` MCP token or a Supabase
- * access JWT) for the account that will own the device; with --channel that
- * account must be a member of the channel. Secrets are only ever written to
- * files (mode 600), never printed.
+ * <file> holds a Dopl user credential for the account that will own the device:
+ * a Supabase access JWT, or — only on a dev server started with
+ * GLASSES_DEV_AGENT_TOKENS=1 (never production) — a `dopl_at_…` MCP token,
+ * since claiming is otherwise session-only. With --channel that account must be
+ * a member of the channel. Secrets are only ever written to files (mode 600),
+ * never printed.
  */
 import { readFileSync, writeFileSync } from "node:fs";
 import { parseArgs } from "node:util";
@@ -39,6 +41,7 @@ const userToken = readFileSync(a["user-token-file"], "utf8").trim();
 const base = a.base.replace(/\/+$/, "");
 
 async function call(method, path, { body, token } = {}) {
+  // `token` rides `Authorization: Bearer` — for the pairing status poll that is the poll secret.
   const res = await fetch(`${base}${path}`, {
     method,
     headers: {
@@ -71,8 +74,9 @@ if (a.code) {
   const start = await call("POST", "/api/glasses/device/pair/start");
   console.log(`pairing code ${start.code} (expires ${start.expires_at})`);
   const device = await claim(start.code);
-  const q = `pair_id=${encodeURIComponent(start.pair_id)}&poll_secret=${encodeURIComponent(start.poll_secret)}`;
-  const status = await call("GET", `/api/glasses/device/pair/status?${q}`);
+  const status = await call("GET", `/api/glasses/device/pair/status?pair_id=${encodeURIComponent(start.pair_id)}`, {
+    token: start.poll_secret,
+  });
   if (status.status !== "claimed" || !status.device_token) die(`unexpected status ${status.status}`);
   saveSecret(a.out, status.device_token);
   console.log(`device ${status.device_id} token saved to ${a.out}`);

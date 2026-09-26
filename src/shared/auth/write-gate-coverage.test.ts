@@ -88,6 +88,8 @@ const EXEMPT: Record<string, string> = {
     "Glasses device API — per-device token, same as glasses/device/answer.",
   "glasses/device/voice/route.ts":
     "Glasses push-to-talk — per-device token; posts only into that device's linked channel, as its owner.",
+  "glasses/device/unpair/route.ts":
+    "Glasses device sign-out — per-device token; revokes only the calling device (features/glasses/device-handlers.ts › createDeviceHandlers).",
   "glasses/device/pair/start/route.ts":
     "Glasses pairing start — unauthenticated by design (the glasses have no credential yet); per-IP rate-limited, writes only a 10-minute pairing row (features/glasses/pairing-service.ts › startPairing).",
   "glasses/hey-even/route.ts":

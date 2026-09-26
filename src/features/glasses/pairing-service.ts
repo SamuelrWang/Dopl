@@ -18,11 +18,13 @@ import { isUuid } from "./text";
  * 🔒 No plaintext token is ever stored. The claim creates the device row with
  * no credential; the first status poll after the claim wins an atomic
  * `token_issued_at` stamp, mints the token, stores only its hash and returns
- * it. Every later poll answers `claimed` without a token. A lost response
- * means re-pairing, never a second copy.
+ * it. Every later poll answers a bare `{status:'claimed'}` — the device's cue to
+ * pair again, since it evidently lost the token. Never a second copy.
  */
 
 export const PAIRING_TTL_MS = 10 * 60 * 1000;
+/** Pairings are deleted a day after they expire; nothing reads them past expiry. */
+export const PAIRING_RETENTION_MS = 24 * 60 * 60 * 1000;
 const CODE_ATTEMPTS = 5;
 export const DEFAULT_DEVICE_NAME = "Even G2";
 export const DEFAULT_PLATFORM = "even_g2";
@@ -38,7 +40,7 @@ const iso = (ms: number) => new Date(ms).toISOString();
 
 export async function startPairing(deps: PairingDeps) {
   const now = (deps.now ?? Date.now)();
-  await deps.devices.expirePairings(iso(now));
+  await deps.devices.deleteStalePairings(iso(now - PAIRING_RETENTION_MS));
   const pollSecret = mintPollSecret();
   const expiresAt = iso(now + PAIRING_TTL_MS);
   for (let i = 0; i < CODE_ATTEMPTS; i++) {
@@ -50,6 +52,8 @@ export async function startPairing(deps: PairingDeps) {
       now: iso(now),
     });
     if (row) return { pair_id: row.id, code: row.code, poll_secret: pollSecret, expires_at: row.expires_at };
+    // The code is held by a pending pairing; if that one has expired, free it for the next draw.
+    await deps.devices.expirePairingCode(code, iso(now));
   }
   throw new HttpError(503, "PAIRING_UNAVAILABLE", "Could not allocate a pairing code; try again.");
 }
@@ -63,7 +67,9 @@ function sameSecret(presented: string, storedHash: string): boolean {
 export type PairingStatusResult =
   | { status: "pending"; expires_at: string }
   | { status: "expired" }
-  | { status: "claimed"; device_id: string; device_token?: string };
+  | { status: "claimed"; device_id: string; device_token: string }
+  /** Already collected (or the device is gone): the caller should pair again. */
+  | { status: "claimed" };
 
 export async function pairingStatus(
   deps: PairingDeps,
@@ -79,13 +85,12 @@ export async function pairingStatus(
     return { status: "expired" };
   }
   if (p.status === "pending") return { status: "pending", expires_at: p.expires_at };
-  if (!p.device_id) return { status: "expired" };
-  if (!p.token_issued_at && (await deps.devices.markTokenIssued(p.id, iso(now)))) {
+  if (p.device_id && !p.token_issued_at && (await deps.devices.markTokenIssued(p.id, iso(now)))) {
     const token = mintDeviceToken();
     await deps.devices.setTokenHash(p.device_id, hashCredential(token));
     return { status: "claimed", device_id: p.device_id, device_token: token };
   }
-  return { status: "claimed", device_id: p.device_id };
+  return { status: "claimed" };
 }
 
 export interface ClaimInput {

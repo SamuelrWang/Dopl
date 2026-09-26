@@ -6,7 +6,8 @@ import { createFakeGlassesStore, fakeClock } from "./fake-store";
 import { startPairing } from "./pairing-service";
 import { glassesNotify } from "./service";
 import type { SttProvider } from "./stt";
-import { createUserHandlers } from "./user-handlers";
+import { createUserHandlers, heyEvenBaseUrl } from "./user-handlers";
+import { glassesSessionOnly } from "./session-policy";
 import { createVoiceHandlers } from "./voice-handlers";
 import { createFakeChannel } from "./voice-test-kit";
 
@@ -14,7 +15,7 @@ const OWNER = "22222222-2222-4222-8222-222222222222";
 const CHANNEL = "33333333-3333-4333-8333-333333333333";
 const BASE = "http://127.0.0.1:3100";
 
-function setup(opts: { allowPairStart?: boolean; allowClaim?: boolean } = {}) {
+function setup(opts: { allowPairStart?: boolean; allowClaim?: boolean; allowUtterance?: boolean; refuse?: string } = {}) {
   const msgs = createFakeGlassesStore();
   const dev = createFakeDeviceStore();
   const clock = fakeClock();
@@ -35,8 +36,15 @@ function setup(opts: { allowPairStart?: boolean; allowClaim?: boolean } = {}) {
     ...dev,
     ch,
     clock,
+    linker,
     device: createDeviceHandlers(deps),
-    voice: createVoiceHandlers({ ...deps, stt: () => stt, holdMs: 0 }),
+    voice: createVoiceHandlers({
+      ...deps,
+      stt: () => stt,
+      holdMs: 0,
+      allowUtterance: async () => opts.allowUtterance ?? true,
+      chargeUtterance: async () => opts.refuse ?? null,
+    }),
     user: createUserHandlers({ devices: dev.devices, linker, allowClaim: async () => opts.allowClaim ?? true, now: clock.now }),
   };
 }
@@ -55,7 +63,7 @@ async function pair(t: ReturnType<typeof setup>, channel: string | null = CHANNE
   const claim = await t.user.claim(post("/api/glasses/pair/claim", { code: start.code, channel_id: channel }), OWNER);
   expect(claim.status).toBe(201);
   const status = await (
-    await t.device.pairStatus(req(`/api/glasses/device/pair/status?pair_id=${start.pair_id}&poll_secret=${start.poll_secret}`))
+    await t.device.pairStatus(req(`/api/glasses/device/pair/status?pair_id=${start.pair_id}`, { token: start.poll_secret }))
   ).json();
   return { token: status.device_token as string, id: status.device_id as string };
 }
@@ -65,9 +73,9 @@ describe("device API", () => {
     const t = setup();
     const { token, id } = await pair(t);
     await glassesNotify({ store: t.store, devices: t.devices }, OWNER, { title: "Hi", body: "there" });
-    const res = await t.device.inbox(req("/api/glasses/device/inbox?wait=0", { token, headers: { origin: "http://127.0.0.1:5180" } }));
+    const res = await t.device.inbox(req("/api/glasses/device/inbox?wait=0", { token, headers: { origin: "https://even.example" } }));
     expect(res.status).toBe(200);
-    expect(res.headers.get("access-control-allow-origin")).toBe("http://127.0.0.1:5180");
+    expect(res.headers.get("access-control-allow-origin")).toBe("*");
     const body = await res.json();
     expect(body.messages).toHaveLength(1);
     expect(t.deviceRows.find((d) => d.id === id)?.last_seen).not.toBeNull();
@@ -83,6 +91,41 @@ describe("device API", () => {
     expect((await t.device.answer(post("/api/glasses/device/answer", { id: "x" }, token))).status).toBe(401);
   });
 
+  it("unpairs the calling device, which then 401s", async () => {
+    const t = setup();
+    const { token, id } = await pair(t);
+    const res = await t.device.unpair(req("/api/glasses/device/unpair", { method: "POST", token }));
+    expect(await res.json()).toEqual({ ok: true });
+    expect(t.deviceRows.find((d) => d.id === id)?.revoked_at).not.toBeNull();
+    expect((await t.device.inbox(req("/api/glasses/device/inbox?wait=0", { token }))).status).toBe(401);
+    expect((await t.device.unpair(req("/api/glasses/device/unpair", { method: "POST", token }))).status).toBe(401);
+  });
+
+  it("writes last_seen at most once per 30s per device", async () => {
+    const t = setup();
+    const { token } = await pair(t);
+    const touch = vi.spyOn(t.devices, "touchDevice");
+    for (let i = 0; i < 3; i++) await t.device.inbox(req("/api/glasses/device/inbox?wait=0", { token }));
+    expect(touch).toHaveBeenCalledTimes(1);
+    t.clock.advance(31_000);
+    await t.device.inbox(req("/api/glasses/device/inbox?wait=0", { token }));
+    expect(touch).toHaveBeenCalledTimes(2);
+  });
+
+  it("runs the reply mirror at most once per 5s per device, and mirrors agent replies", async () => {
+    const t = setup();
+    const { token } = await pair(t);
+    const isLinkable = vi.spyOn(t.linker, "isLinkable");
+    await t.device.inbox(req("/api/glasses/device/inbox?wait=0", { token }));
+    await t.device.inbox(req("/api/glasses/device/inbox?wait=0", { token }));
+    expect(isLinkable).toHaveBeenCalledTimes(1);
+    t.ch.agentSays("pong", "Orchestrator");
+    t.clock.advance(5_000);
+    const body = await (await t.device.inbox(req("/api/glasses/device/inbox?wait=0", { token }))).json();
+    expect(isLinkable).toHaveBeenCalledTimes(2);
+    expect(body.messages).toEqual([expect.objectContaining({ kind: "show", payload: { title: "Orchestrator", lines: ["pong"] } })]);
+  });
+
   it("rate-limits pairing starts with 429", async () => {
     const t = setup({ allowPairStart: false });
     const res = await t.device.pairStart(req("/api/glasses/device/pair/start", { method: "POST" }));
@@ -94,8 +137,10 @@ describe("device API", () => {
     const t = setup();
     expect((await t.device.pairStatus(req("/api/glasses/device/pair/status"))).status).toBe(400);
     const s = await startPairing({ devices: t.devices, linker: fakeLinker({}) });
-    expect((await t.device.pairStatus(req(`/api/glasses/device/pair/status?pair_id=${s.pair_id}&poll_secret=bad`))).status).toBe(404);
-    // The header form keeps the secret out of access logs.
+    expect((await t.device.pairStatus(req(`/api/glasses/device/pair/status?pair_id=${s.pair_id}`, { token: "bad" }))).status).toBe(404);
+    // The secret is read from the header only: the query form (logged by proxies) is refused.
+    const viaQuery = await t.device.pairStatus(req(`/api/glasses/device/pair/status?pair_id=${s.pair_id}&poll_secret=${s.poll_secret}`));
+    expect(viaQuery.status).toBe(400);
     const viaHeader = await t.device.pairStatus(req(`/api/glasses/device/pair/status?pair_id=${s.pair_id}`, { token: s.poll_secret }));
     expect(await viaHeader.json()).toMatchObject({ status: "pending" });
   });
@@ -125,6 +170,25 @@ describe("voice + Hey Even", () => {
     expect(res.status).toBe(200);
     expect(await res.json()).toMatchObject({ transcript: "what is the status", status: "sent" });
     expect(t.ch.messages[0].body).toBe("what is the status");
+  });
+
+  it("rate-limits and meters utterances", async () => {
+    const limited = setup({ allowUtterance: false });
+    const a = await pair(limited);
+    expect((await limited.voice.voice(req("/api/glasses/device/voice", { method: "POST", body: pcm(), token: a.token }))).status).toBe(429);
+
+    const broke = setup({ refuse: "Your Dopl credits are used up for this period." });
+    const b = await pair(broke);
+    const res = await broke.voice.voice(req("/api/glasses/device/voice", { method: "POST", body: pcm(), token: b.token }));
+    expect(res.status).toBe(402);
+    expect(broke.ch.messages).toHaveLength(0);
+  });
+
+  it("refuses oversize audio by Content-Length before reading it", async () => {
+    const t = setup();
+    const { token } = await pair(t);
+    const big = req("/api/glasses/device/voice", { method: "POST", body: "x", token, headers: { "content-length": String(5_000_000) } });
+    expect((await t.voice.voice(big)).status).toBe(413);
   });
 
   it("409s voice from an unlinked device", async () => {
@@ -185,6 +249,26 @@ describe("user API", () => {
     expect((await patch({ channel_id: "55555555-5555-4555-8555-555555555555" })).status).toBe(404);
     expect((await t.user.claim(post("/api/glasses/pair/claim", { name: "x" }), OWNER)).status).toBe(400);
     expect((await t.user.patch(req("/api/glasses/devices/zzz", { method: "PATCH", body: '{"name":"a"}' }), OWNER, "zzz")).status).toBe(404);
+  });
+
+  it("404s a Hey Even key rotation for an unknown or revoked device", async () => {
+    const t = setup();
+    const { id } = await pair(t);
+    await t.user.revoke(OWNER, id);
+    expect((await t.user.rotateHeyEvenKey(post(`/api/glasses/devices/${id}/hey-even-key`, {}), OWNER, id)).status).toBe(404);
+  });
+
+  it("builds the Hey Even URL from configuration, never from forwarded headers", () => {
+    const r = new Request("http://internal:3000/x", { headers: { "x-forwarded-host": "evil.test" } });
+    expect(heyEvenBaseUrl(r, { GLASSES_API_BASE_URL: "https://www.usedopl.com/" })).toBe("https://www.usedopl.com");
+    expect(heyEvenBaseUrl(r, { NODE_ENV: "production", NEXT_PUBLIC_APP_URL: "https://usedopl.com" })).toBe("https://usedopl.com");
+    expect(heyEvenBaseUrl(r, { NODE_ENV: "development", NEXT_PUBLIC_APP_URL: "https://usedopl.com" })).toBe("http://internal:3000");
+  });
+
+  it("is session-only unless a non-production dev server opts agent tokens in", () => {
+    expect(glassesSessionOnly({ NODE_ENV: "production", GLASSES_DEV_AGENT_TOKENS: "1" })).toBe(true);
+    expect(glassesSessionOnly({ NODE_ENV: "development" })).toBe(true);
+    expect(glassesSessionOnly({ NODE_ENV: "development", GLASSES_DEV_AGENT_TOKENS: "1" })).toBe(false);
   });
 
   it("rate-limits claims per user", async () => {

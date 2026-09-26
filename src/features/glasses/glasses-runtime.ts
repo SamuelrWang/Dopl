@@ -9,7 +9,8 @@ import { glassesRepository } from "./repository";
 import { sttProviderFromEnv } from "./stt";
 import { CLAIM_RPM, createUserHandlers } from "./user-handlers";
 import { glassesChannelGateway } from "./voice-channel";
-import { createVoiceHandlers } from "./voice-handlers";
+import { createVoiceHandlers, UTTERANCE_RPM } from "./voice-handlers";
+import { utteranceCharger } from "./mcp-exposure";
 
 /**
  * The production wiring: real stores, the channels-service gateway, the shared
@@ -32,7 +33,14 @@ const base = {
 
 export const deviceHandlers = createDeviceHandlers(base);
 
-export const voiceHandlers = createVoiceHandlers({ ...base, stt: () => sttProviderFromEnv() });
+export const voiceHandlers = createVoiceHandlers({
+  ...base,
+  stt: () => sttProviderFromEnv(),
+  allowUtterance: (deviceId) =>
+    checkAndRecordRateLimitSubject(`glasses-utterance:${deviceId}`, UTTERANCE_RPM, "POST /api/glasses/(voice|hey-even)"),
+  chargeUtterance: utteranceCharger,
+  debug: process.env.GLASSES_DEBUG === "1",
+});
 
 export const userHandlers = createUserHandlers({
   devices: deviceRepository,
@@ -40,3 +48,5 @@ export const userHandlers = createUserHandlers({
   allowClaim: (userId) =>
     checkAndRecordRateLimitSubject(`glasses-claim:${userId}`, CLAIM_RPM, "POST /api/glasses/pair/claim"),
 });
+
+export { glassesSessionOnly } from "./session-policy";

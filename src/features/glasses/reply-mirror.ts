@@ -1,5 +1,6 @@
 import { g2Measurer, type TextMeasurer } from "./measure";
 import { sanitizeGlassesText, utf8Bytes } from "./text";
+import type { ChannelLinker } from "./devices-service";
 import type { DeviceStore, GlassesDevice } from "./devices-types";
 import type { GlassesStore, ShowPayload } from "./types";
 import type { ChannelGateway, ChannelReply } from "./voice-utterance";
@@ -89,6 +90,7 @@ export interface MirrorDeps {
   store: GlassesStore;
   devices: DeviceStore;
   gateway: ChannelGateway;
+  linker: ChannelLinker;
   now?: () => number;
   measurer?: TextMeasurer;
 }
@@ -98,13 +100,22 @@ export interface MirrorDeps {
  * glasses (all of the owner's devices see it: the queue is per user). Returns
  * how many were queued and the cursor now stored, which a caller polling in a
  * loop feeds back in. An unlinked device mirrors nothing.
+ *
+ * 🔒 VISIBILITY IS RE-CHECKED EVERY PASS: replies are read with the service
+ * role, so this pass first asks whether the owner may still see the channel
+ * (member, not archived, not deleted). If not, the device is UNLINKED and
+ * nothing is read — departure is removal.
  */
 export async function mirrorReplies(
   deps: MirrorDeps,
   device: Pick<GlassesDevice, "id" | "user_id" | "linked_channel_id" | "reply_cursor_seq">,
-): Promise<{ queued: number; cursor: number | null }> {
+): Promise<{ queued: number; cursor: number | null; unlinked?: true }> {
   const channelId = device.linked_channel_id;
   if (!channelId) return { queued: 0, cursor: device.reply_cursor_seq };
+  if (!(await deps.linker.isLinkable(device.user_id, channelId))) {
+    await deps.devices.updateDevice(device.user_id, device.id, { linkedChannelId: null });
+    return { queued: 0, cursor: null, unlinked: true };
+  }
   const nowMs = (deps.now ?? Date.now)();
   const now = new Date(nowMs).toISOString();
   if (device.reply_cursor_seq === null) {

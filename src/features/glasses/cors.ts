@@ -1,17 +1,17 @@
 /**
  * CORS for the device-facing routes (`/api/glasses/device/*`, `/api/glasses/hey-even*`).
  *
- * ⚠ DEFENSE IN DEPTH, NOT THE GATE. Every device route authenticates by a
- * bearer credential (device token or Hey Even key) that a browser never sends
- * on its own, so a foreign origin gains nothing even if it is allowed. The
- * allowlist only keeps other pages from reading responses.
- *
- * The Even Hub WebView's production origin is not documented, so the list is
- * configuration: `GLASSES_PLUGIN_ORIGINS` (comma-separated exact origins; `*`
- * allows any). Unset → the local simulator origins below.
+ * DEFAULT `Access-Control-Allow-Origin: *`, and that is safe here: every device
+ * route authenticates ONLY by a bearer credential (device token, Hey Even key,
+ * pairing poll secret) that the page itself must hold and send. No cookie or
+ * ambient credential is ever read, and `*` forbids credentialed requests anyway,
+ * so a foreign origin gains nothing it did not already have. The Even Hub
+ * WebView's production origin is undocumented, so a narrower list would block
+ * the real plugin. `GLASSES_PLUGIN_ORIGINS` (comma-separated exact origins) is
+ * an optional override for defense in depth.
  */
 
-export const DEFAULT_PLUGIN_ORIGINS = ["http://127.0.0.1:5180", "http://localhost:5180"] as const;
+export const DEFAULT_PLUGIN_ORIGINS = ["*"] as const;
 
 export function pluginOrigins(env: Record<string, string | undefined> = process.env): string[] {
   const raw = env.GLASSES_PLUGIN_ORIGINS;
@@ -30,9 +30,8 @@ export function corsHeaders(request: Request, allowed: string[] = pluginOrigins(
     "Access-Control-Max-Age": "600",
     Vary: "Origin",
   };
-  if (origin && (allowed.includes("*") || allowed.includes(origin))) {
-    headers["Access-Control-Allow-Origin"] = origin;
-  }
+  if (allowed.includes("*")) headers["Access-Control-Allow-Origin"] = "*";
+  else if (origin && allowed.includes(origin)) headers["Access-Control-Allow-Origin"] = origin;
   return headers;
 }
 

@@ -88,13 +88,19 @@ export const deviceRepository: DeviceStore = {
     return (data ?? []).length === 1;
   },
 
-  async expirePairings(now) {
+  async expirePairingCode(code, now) {
     const { error } = await db()
       .from(PAIRINGS)
       .update({ status: "expired" })
+      .eq("code", code)
       .eq("status", "pending")
       .lte("expires_at", now);
-    if (error) fail("expirePairings", error);
+    if (error) fail("expirePairingCode", error);
+  },
+
+  async deleteStalePairings(cutoff) {
+    const { error } = await db().from(PAIRINGS).delete().lt("expires_at", cutoff);
+    if (error) fail("deleteStalePairings", error);
   },
 
   async insertDevice({ userId, name, platform, linkedChannelId, linkedContainerId, now }) {
@@ -114,24 +120,13 @@ export const deviceRepository: DeviceStore = {
     return toDevice(data as DeviceRow);
   },
 
-  async getDevice(userId, id) {
-    const { data, error } = await db()
-      .from(DEVICES)
-      .select(DEVICE_COLS)
-      .eq("user_id", userId)
-      .eq("id", id)
-      .is("revoked_at", null)
-      .maybeSingle();
-    if (error) fail("getDevice", error);
-    return data ? toDevice(data as DeviceRow) : null;
-  },
-
   async listDevices(userId) {
     const { data, error } = await db()
       .from(DEVICES)
       .select(DEVICE_COLS)
       .eq("user_id", userId)
       .is("revoked_at", null)
+      .not("token_hash", "is", null)
       .order("created_at", { ascending: true });
     if (error) fail("listDevices", error);
     return ((data ?? []) as DeviceRow[]).map(toDevice);
@@ -151,13 +146,15 @@ export const deviceRepository: DeviceStore = {
   },
 
   async setHeyEvenKeyHash(userId, deviceId, hash) {
-    const { error } = await db()
+    const { data, error } = await db()
       .from(DEVICES)
       .update({ hey_even_key_hash: hash })
       .eq("user_id", userId)
       .eq("id", deviceId)
-      .is("revoked_at", null);
+      .is("revoked_at", null)
+      .select("id");
     if (error) fail("setHeyEvenKeyHash", error);
+    return (data ?? []).length === 1;
   },
 
   async updateDevice(userId, id, patch) {

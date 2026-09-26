@@ -43,12 +43,13 @@ describe("credentials", () => {
 
 describe("cors", () => {
   const req = (origin: string) => new Request("http://x/api/glasses/device/inbox", { headers: { origin } });
-  it("defaults to the simulator origins and is configurable", () => {
-    expect(pluginOrigins({})).toEqual(["http://127.0.0.1:5180", "http://localhost:5180"]);
-    expect(pluginOrigins({ GLASSES_PLUGIN_ORIGINS: "https://a.test/, https://b.test" })).toEqual(["https://a.test", "https://b.test"]);
-    expect(corsHeaders(req("http://127.0.0.1:5180"))["Access-Control-Allow-Origin"]).toBe("http://127.0.0.1:5180");
-    expect(corsHeaders(req("http://evil.test"))["Access-Control-Allow-Origin"]).toBeUndefined();
-    expect(corsHeaders(req("https://any.test"), ["*"])["Access-Control-Allow-Origin"]).toBe("https://any.test");
+  it("defaults to * (bearer-only routes) and narrows when configured", () => {
+    expect(pluginOrigins({})).toEqual(["*"]);
+    expect(corsHeaders(req("https://any.test"), ["*"])["Access-Control-Allow-Origin"]).toBe("*");
+    const list = pluginOrigins({ GLASSES_PLUGIN_ORIGINS: "https://a.test/, http://127.0.0.1:5180" });
+    expect(list).toEqual(["https://a.test", "http://127.0.0.1:5180"]);
+    expect(corsHeaders(req("http://127.0.0.1:5180"), list)["Access-Control-Allow-Origin"]).toBe("http://127.0.0.1:5180");
+    expect(corsHeaders(req("http://evil.test"), list)["Access-Control-Allow-Origin"]).toBeUndefined();
   });
 });
 
@@ -71,7 +72,8 @@ describe("pairing", () => {
     expect(deviceRows[0].token_hash).toBe(hashCredential(token));
     expect(JSON.stringify(deviceRows)).not.toContain(token);
 
-    expect(await pairingStatus(deps, start.pair_id, start.poll_secret)).toEqual({ status: "claimed", device_id: device.id });
+    // A second poll never gets a second copy: bare `claimed` tells the device to pair again.
+    expect(await pairingStatus(deps, start.pair_id, start.poll_secret)).toEqual({ status: "claimed" });
   });
 
   it("refuses a wrong poll secret or unknown pair as 404", async () => {

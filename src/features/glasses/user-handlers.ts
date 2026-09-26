@@ -10,11 +10,10 @@ import { claimPairing } from "./pairing-service";
 
 /**
  * Handlers for the signed-in user's glasses API (`/api/glasses/pair/claim`,
- * `/api/glasses/devices*`). The routes wrap these in `withUserAuth`, so a
- * Supabase session and a `dopl_at_` agent token both work; non-GET methods
- * pass that wrapper's write-scope gate. A Hey Even key only lets its holder
- * post to one linked channel as the user, strictly less than `dopl.write`
- * already allows, so rotating it is not session-only.
+ * `/api/glasses/devices*`). The routes wrap these in `withUserAuth`; every
+ * credential-minting or -changing route is session-only
+ * (`glasses-runtime.ts › glassesSessionOnly`), so an agent token can list
+ * devices but not pair, relink, revoke or mint a Hey Even key.
  */
 
 export interface UserHandlerDeps {
@@ -37,11 +36,17 @@ const PatchSchema = z
   .object({ name: Name.optional(), channel_id: z.string().uuid().nullable().optional() })
   .refine((v) => v.name !== undefined || v.channel_id !== undefined, { message: "Send name and/or channel_id." });
 
-/** The origin the caller reached us on, so a Hey Even URL points where the key works. */
-export function arrivalOrigin(request: Request): string {
-  const host = request.headers.get("x-forwarded-host") ?? request.headers.get("host");
-  if (host) return `${request.headers.get("x-forwarded-proto") ?? "https"}://${host}`;
-  return new URL(request.url).origin;
+/**
+ * The public base a Hey Even URL is built on. `GLASSES_API_BASE_URL` first —
+ * set it to the canonical host (`https://www.usedopl.com`): `NEXT_PUBLIC_APP_URL`
+ * is the apex, which 307s to www, and clients drop `Authorization` across that
+ * redirect. Then `NEXT_PUBLIC_APP_URL` in production. Local dev (no config)
+ * answers the server's own origin. Never a request header: a spoofed
+ * `X-Forwarded-Host` must not steer where a user sends their key.
+ */
+export function heyEvenBaseUrl(request: Request, env: Record<string, string | undefined> = process.env): string {
+  const configured = env.GLASSES_API_BASE_URL || (env.NODE_ENV === "production" ? env.NEXT_PUBLIC_APP_URL : "");
+  return (configured || new URL(request.url).origin).replace(/\/+$/, "");
 }
 
 const fail = (err: unknown) => toHttpErrorResponse("glasses", err);
@@ -88,7 +93,7 @@ export function createUserHandlers(deps: UserHandlerDeps) {
 
     async rotateHeyEvenKey(request: Request, userId: string, id: string): Promise<Response> {
       try {
-        const out = await rotateHeyEvenKey(deps, userId, id, arrivalOrigin(request));
+        const out = await rotateHeyEvenKey(deps, userId, id, heyEvenBaseUrl(request));
         return NextResponse.json(out, { headers: { "Cache-Control": "no-store" } });
       } catch (err) {
         return fail(err);

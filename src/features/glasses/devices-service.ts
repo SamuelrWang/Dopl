@@ -20,9 +20,11 @@ export interface ChannelLink {
 
 /** Channel reads the device model needs; `channel-link.ts` is the real one. */
 export interface ChannelLinker {
-  /** The channel, if `userId` may link it (a member of a live channel); else throws 400/404. */
+  /** The channel, if `userId` may link it (a member of a live channel); else throws 404. */
   resolveLink(userId: string, channelId: string): Promise<ChannelLink>;
-  channelNames(ids: string[]): Promise<Map<string, string>>;
+  /** Names of the channels in `ids` that `userId` may still link; others are absent. */
+  visibleChannelNames(userId: string, ids: string[]): Promise<Map<string, string>>;
+  isLinkable(userId: string, channelId: string): Promise<boolean>;
 }
 
 export interface DeviceDto {
@@ -40,8 +42,9 @@ export function isOnline(device: Pick<GlassesDevice, "last_seen">, now: number):
   return device.last_seen !== null && now - Date.parse(device.last_seen) <= DEVICE_ONLINE_WINDOW_MS;
 }
 
+/** `names` holds only channels the owner may still see; any other link renders as none. */
 export function toDeviceDto(device: GlassesDevice, names: Map<string, string>, now: number): DeviceDto {
-  const channelId = device.linked_channel_id;
+  const channelId = device.linked_channel_id && names.has(device.linked_channel_id) ? device.linked_channel_id : null;
   return {
     id: device.id,
     name: device.name,
@@ -49,7 +52,7 @@ export function toDeviceDto(device: GlassesDevice, names: Map<string, string>, n
     created_at: device.created_at,
     last_seen: device.last_seen,
     online: isOnline(device, now),
-    linked_channel: channelId ? { id: channelId, name: names.get(channelId) ?? "" } : null,
+    linked_channel: channelId ? { id: channelId, name: names.get(channelId)! } : null,
     has_hey_even_key: device.has_hey_even_key,
   };
 }
@@ -65,7 +68,7 @@ const notFound = () => new HttpError(404, "DEVICE_NOT_FOUND", "No such device.")
 export async function listDevices(deps: DevicesDeps, userId: string) {
   const devices = await deps.devices.listDevices(userId);
   const ids = [...new Set(devices.map((d) => d.linked_channel_id).filter((x): x is string => !!x))];
-  const names = ids.length ? await deps.linker.channelNames(ids) : new Map<string, string>();
+  const names = ids.length ? await deps.linker.visibleChannelNames(userId, ids) : new Map<string, string>();
   const now = (deps.now ?? Date.now)();
   return { devices: devices.map((d) => toDeviceDto(d, names, now)) };
 }
@@ -91,7 +94,7 @@ export async function updateDevice(
   const device = await deps.devices.updateDevice(userId, id, update);
   if (!device) throw notFound();
   if (device.linked_channel_id && !names.has(device.linked_channel_id)) {
-    names = await deps.linker.channelNames([device.linked_channel_id]);
+    names = await deps.linker.visibleChannelNames(userId, [device.linked_channel_id]);
   }
   return toDeviceDto(device, names, (deps.now ?? Date.now)());
 }
@@ -106,10 +109,8 @@ export async function revokeDevice(deps: DevicesDeps, userId: string, id: string
 /** A fresh Hey Even key, returned once. Rotating replaces (and so revokes) the previous key. */
 export async function rotateHeyEvenKey(deps: DevicesDeps, userId: string, id: string, baseUrl: string) {
   if (!isUuid(id)) throw notFound();
-  const device = await deps.devices.getDevice(userId, id);
-  if (!device) throw notFound();
   const key = mintHeyEvenKey();
-  await deps.devices.setHeyEvenKeyHash(userId, id, hashCredential(key));
+  if (!(await deps.devices.setHeyEvenKeyHash(userId, id, hashCredential(key)))) throw notFound();
   return { key, url: `${baseUrl.replace(/\/+$/, "")}/api/glasses/hey-even/v1/chat/completions` };
 }
 

@@ -1,0 +1,28 @@
+/**
+ * A tiny in-memory stand-in for the supabase-js query builder, enough for the
+ * glasses modules that read other features' tables (`channel-link.ts`,
+ * `voice-channel.ts`) to be tested without a database. Supports select, eq, in,
+ * gt, order, limit, maybeSingle, and awaiting the builder for `{data, error}`.
+ */
+type Row = Record<string, unknown>;
+
+export function fakePostgrest(tables: Record<string, Row[]>) {
+  function from(table: string) {
+    let rows = [...(tables[table] ?? [])];
+    const builder = {
+      select: () => builder,
+      eq: (col: string, v: unknown) => ((rows = rows.filter((r) => r[col] === v)), builder),
+      in: (col: string, vs: unknown[]) => ((rows = rows.filter((r) => vs.includes(r[col]))), builder),
+      gt: (col: string, v: number) => ((rows = rows.filter((r) => (r[col] as number) > v)), builder),
+      order: (col: string, o: { ascending: boolean }) => {
+        rows.sort((a, b) => ((a[col] as number) - (b[col] as number)) * (o.ascending ? 1 : -1));
+        return builder;
+      },
+      limit: (n: number) => ((rows = rows.slice(0, n)), builder),
+      maybeSingle: async () => ({ data: rows[0] ?? null, error: null }),
+      then: (resolve: (v: { data: Row[]; error: null }) => unknown) => resolve({ data: rows, error: null }),
+    };
+    return builder;
+  }
+  return { from };
+}

@@ -1,9 +1,9 @@
 import { randomUUID } from "node:crypto";
 import { corsHeaders, json } from "./cors";
-import { authedDevice, type DeviceHandlerDeps } from "./device-handlers";
+import { authedDevice, resolveDeviceDeps, type DeviceHandlerDeps } from "./device-handlers";
 import { deviceFromHeyEvenKey } from "./devices-service";
 import type { GlassesDevice } from "./devices-types";
-import type { SttProvider } from "./stt";
+import { PCM_MAX_BYTES, type SttProvider } from "./stt";
 import {
   VoiceInputError,
   assistantText,
@@ -11,6 +11,7 @@ import {
   chatCompletionStream,
   handleVoiceUpload,
   lastUserText,
+  readCappedBody,
   modelList,
   redactedHeaders,
 } from "./voice";
@@ -26,19 +27,32 @@ import { UtteranceError, handleGlassesUtterance, voiceConfigForDevice, type Utte
 export interface VoiceHandlerDeps extends DeviceHandlerDeps {
   stt: () => SttProvider | null;
   holdMs?: number;
+  /** Per-device utterance limiter (voice + Hey Even share it); true = within the limit. */
+  allowUtterance: (deviceId: string) => Promise<boolean>;
+  /**
+   * Meter one utterance for the device owner: refusal text, or null to proceed.
+   * An utterance is charged like one glasses MCP tool call (one credit), because
+   * it does the same work — a post into a channel — plus STT for voice.
+   */
+  chargeUtterance: (userId: string) => Promise<string | null>;
+  /** Log Hey Even request headers (credentials redacted); off unless GLASSES_DEBUG=1. */
+  debug?: boolean;
 }
 
+export const UTTERANCE_RPM = 20;
 const NOT_LINKED = "This device is not linked to a channel. Link one in Dopl settings → Glasses.";
+const LIMITED = "Too many voice requests from this device; try again in a minute.";
 
 function utteranceDeps(deps: VoiceHandlerDeps, device: GlassesDevice): UtteranceDeps | null {
   const config = voiceConfigForDevice(device);
   return config ? { gateway: deps.gateway, config, now: deps.now, sleep: deps.sleep, holdMs: deps.holdMs } : null;
 }
 
-const oaiError = (request: Request, message: string, type: string, status: number) =>
-  json(request, { error: { message, type } }, status);
+const oaiError = (request: Request, message: string, type: string, status: number, extra: Record<string, string> = {}) =>
+  json(request, { error: { message, type } }, status, extra);
 
-export function createVoiceHandlers(deps: VoiceHandlerDeps) {
+export function createVoiceHandlers(input: VoiceHandlerDeps) {
+  const deps = resolveDeviceDeps(input);
   return {
     async voice(request: Request): Promise<Response> {
       const device = await authedDevice(deps, request);
@@ -48,8 +62,10 @@ export function createVoiceHandlers(deps: VoiceHandlerDeps) {
       const stt = deps.stt();
       if (!stt) return json(request, { error: "Speech-to-text is not configured on this server." }, 503);
       try {
-        const pcm = new Uint8Array(await request.arrayBuffer());
-        return json(request, await handleVoiceUpload({ stt, utterance }, pcm));
+        if (!(await deps.allowUtterance(device.id))) return json(request, { error: LIMITED }, 429, { "Retry-After": "60" });
+        const pcm = await readCappedBody(request, PCM_MAX_BYTES);
+        const charge = () => deps.chargeUtterance(device.user_id);
+        return json(request, await handleVoiceUpload({ stt, utterance, charge }, pcm));
       } catch (err) {
         if (err instanceof VoiceInputError) return json(request, { error: err.message }, err.httpStatus);
         if (err instanceof UtteranceError) return json(request, { error: err.message }, 400);
@@ -59,8 +75,9 @@ export function createVoiceHandlers(deps: VoiceHandlerDeps) {
     },
 
     async heyEven(request: Request): Promise<Response> {
-      // Header log for real-glasses verification; every credential-bearing header is redacted.
-      console.log("[glasses] hey-even request", new URL(request.url).pathname, JSON.stringify(redactedHeaders(request.headers)));
+      if (deps.debug) {
+        console.log("[glasses] hey-even request", new URL(request.url).pathname, JSON.stringify(redactedHeaders(request.headers)));
+      }
       const device = await deviceFromHeyEvenKey(deps.devices, request);
       if (!device) return oaiError(request, "Unauthorized", "invalid_request_error", 401);
       const utterance = utteranceDeps(deps, device);
@@ -73,6 +90,11 @@ export function createVoiceHandlers(deps: VoiceHandlerDeps) {
       }
       const text = lastUserText(body);
       if (!text) return oaiError(request, "no user message", "invalid_request_error", 400);
+      if (!(await deps.allowUtterance(device.id))) {
+        return oaiError(request, LIMITED, "rate_limit_error", 429, { "Retry-After": "60" });
+      }
+      const refusal = await deps.chargeUtterance(device.user_id);
+      if (refusal) return oaiError(request, refusal, "insufficient_quota", 402);
       try {
         const content = assistantText(await handleGlassesUtterance(utterance, text));
         const id = `chatcmpl-${randomUUID()}`;

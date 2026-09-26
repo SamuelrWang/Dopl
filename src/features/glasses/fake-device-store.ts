@@ -52,8 +52,11 @@ export function createFakeDeviceStore() {
       p.token_issued_at = now;
       return true;
     },
-    async expirePairings(now) {
-      for (const p of pairings) if (p.status === "pending" && p.expires_at <= now) p.status = "expired";
+    async expirePairingCode(code, now) {
+      for (const p of pairings) if (p.code === code && p.status === "pending" && p.expires_at <= now) p.status = "expired";
+    },
+    async deleteStalePairings(cutoff) {
+      for (let i = pairings.length - 1; i >= 0; i--) if (pairings[i].expires_at < cutoff) pairings.splice(i, 1);
     },
     async insertDevice(d) {
       const r: Row = {
@@ -74,12 +77,8 @@ export function createFakeDeviceStore() {
       devices.push(r);
       return out(r);
     },
-    async getDevice(userId, did) {
-      const r = devices.find((x) => x.user_id === userId && x.id === did && active(x));
-      return r ? out(r) : null;
-    },
     async listDevices(userId) {
-      return devices.filter((x) => x.user_id === userId && active(x)).map(out);
+      return devices.filter((x) => x.user_id === userId && active(x) && x.token_hash !== null).map(out);
     },
     async findDeviceByTokenHash(hash) {
       const r = devices.find((x) => x.token_hash === hash && active(x));
@@ -96,6 +95,7 @@ export function createFakeDeviceStore() {
     async setHeyEvenKeyHash(userId, did, hash) {
       const r = devices.find((x) => x.user_id === userId && x.id === did && active(x));
       if (r) r.hey_even_key_hash = hash;
+      return !!r;
     },
     async updateDevice(userId, did, patch) {
       const r = devices.find((x) => x.user_id === userId && x.id === did && active(x));
@@ -139,8 +139,11 @@ export function fakeLinker(channels: Record<string, { name: string; members: str
       }
       return { channelId, containerId: "11111111-0000-4000-8000-000000000000", name: c.name };
     },
-    async channelNames(ids) {
-      return new Map(ids.filter((i) => channels[i]).map((i) => [i, channels[i].name]));
+    async visibleChannelNames(userId, ids) {
+      return new Map(ids.filter((i) => channels[i]?.members.includes(userId)).map((i) => [i, channels[i].name]));
+    },
+    async isLinkable(userId, channelId) {
+      return !!channels[channelId]?.members.includes(userId);
     },
   };
 }

@@ -1,5 +1,6 @@
 import { HttpError } from "@/shared/lib/http-error";
 import { json } from "./cors";
+import { Throttle } from "./ttl-cache";
 import { bearerOf } from "./credentials";
 import { answerAsk, dismissMessage, parseInboxQuery, readInbox } from "./device";
 import { deviceFromBearer } from "./devices-service";
@@ -25,16 +26,36 @@ export interface DeviceHandlerDeps {
   allowPairStart: (request: Request) => Promise<boolean>;
   now?: () => number;
   sleep?: (ms: number) => Promise<void>;
+  /** `last_seen` writes, at most one per device per 30s (defaults per handler set). */
+  touchThrottle?: Throttle<string>;
+  /** Reply-mirror passes, at most one per device per 5s. */
+  mirrorThrottle?: Throttle<string>;
 }
 
 export const PAIR_START_RPM = 10;
+export const TOUCH_INTERVAL_MS = 30_000;
+export const MIRROR_INTERVAL_MS = 5_000;
+const MAX_TRACKED_DEVICES = 10_000;
 const UNAUTHORIZED = { error: "Unauthorized" };
 
-/** The calling device, stamped as seen; null → answer 401. */
-export async function authedDevice(deps: DeviceHandlerDeps, request: Request): Promise<GlassesDevice | null> {
+type ResolvedDeps = DeviceHandlerDeps & { touchThrottle: Throttle<string>; mirrorThrottle: Throttle<string> };
+
+/** The calling device, stamped as seen (throttled); null → answer 401. */
+export async function authedDevice(deps: ResolvedDeps, request: Request): Promise<GlassesDevice | null> {
   const device = await deviceFromBearer(deps.devices, request);
-  if (device) await deps.devices.touchDevice(device.id, new Date((deps.now ?? Date.now)()).toISOString());
+  const now = (deps.now ?? Date.now)();
+  if (device && deps.touchThrottle.tryAcquire(device.id, now)) {
+    await deps.devices.touchDevice(device.id, new Date(now).toISOString());
+  }
   return device;
+}
+
+export function resolveDeviceDeps<D extends DeviceHandlerDeps>(deps: D): D & ResolvedDeps {
+  return {
+    ...deps,
+    touchThrottle: deps.touchThrottle ?? new Throttle<string>(TOUCH_INTERVAL_MS, MAX_TRACKED_DEVICES),
+    mirrorThrottle: deps.mirrorThrottle ?? new Throttle<string>(MIRROR_INTERVAL_MS, MAX_TRACKED_DEVICES),
+  };
 }
 
 async function readJson(request: Request): Promise<unknown> {
@@ -51,7 +72,8 @@ function fromError(request: Request, err: unknown, label: string): Response {
   return json(request, { error: `${label} failed` }, 500);
 }
 
-export function createDeviceHandlers(deps: DeviceHandlerDeps) {
+export function createDeviceHandlers(input: DeviceHandlerDeps) {
+  const deps = resolveDeviceDeps(input);
   return {
     async inbox(request: Request): Promise<Response> {
       const device = await authedDevice(deps, request);
@@ -59,14 +81,16 @@ export function createDeviceHandlers(deps: DeviceHandlerDeps) {
       const parsed = parseInboxQuery(new URL(request.url));
       if ("error" in parsed) return json(request, { error: parsed.error }, 400);
       try {
-        // The linked channel's agent replies ride this same long-poll (reply-mirror.ts).
-        let cursor = device.reply_cursor_seq;
-        const beforeRead = device.linked_channel_id
-          ? async () => {
-              const r = await mirrorReplies(deps, { ...device, reply_cursor_seq: cursor });
-              cursor = r.cursor;
-            }
-          : undefined;
+        // The linked channel's agent replies ride this same long-poll (reply-mirror.ts),
+        // checked at most every MIRROR_INTERVAL_MS per device.
+        const current = { ...device };
+        const beforeRead = async () => {
+          if (!current.linked_channel_id) return;
+          if (!deps.mirrorThrottle.tryAcquire(device.id, (deps.now ?? Date.now)())) return;
+          const r = await mirrorReplies(deps, current);
+          current.reply_cursor_seq = r.cursor;
+          if (r.unlinked) current.linked_channel_id = null;
+        };
         const result = await readInbox(
           { store: deps.store, beforeRead, now: deps.now, sleep: deps.sleep },
           device.user_id,
@@ -102,6 +126,18 @@ export function createDeviceHandlers(deps: DeviceHandlerDeps) {
       }
     },
 
+    /** The device signs itself out: revoke the calling device (its token dies with it). */
+    async unpair(request: Request): Promise<Response> {
+      const device = await authedDevice(deps, request);
+      if (!device) return json(request, UNAUTHORIZED, 401);
+      try {
+        await deps.devices.revokeDevice(device.user_id, device.id, new Date((deps.now ?? Date.now)()).toISOString());
+        return json(request, { ok: true });
+      } catch (err) {
+        return fromError(request, err, "unpair");
+      }
+    },
+
     async pairStart(request: Request): Promise<Response> {
       try {
         if (!(await deps.allowPairStart(request))) {
@@ -116,12 +152,12 @@ export function createDeviceHandlers(deps: DeviceHandlerDeps) {
     },
 
     async pairStatus(request: Request): Promise<Response> {
-      const url = new URL(request.url);
-      const pairId = url.searchParams.get("pair_id") ?? "";
-      // Prefer `Authorization: Bearer <poll_secret>`: a query string lands in access
-      // logs. `?poll_secret=` stays accepted because the v1 contract names it.
-      const secret = bearerOf(request) ?? url.searchParams.get("poll_secret") ?? "";
-      if (!pairId || !secret) return json(request, { error: "pair_id and poll_secret are required" }, 400);
+      const pairId = new URL(request.url).searchParams.get("pair_id") ?? "";
+      // The poll secret rides `Authorization: Bearer`, never the query string (access logs).
+      const secret = bearerOf(request) ?? "";
+      if (!pairId || !secret) {
+        return json(request, { error: "pair_id and Authorization: Bearer <poll_secret> are required" }, 400);
+      }
       try {
         return json(request, await pairingStatus(deps, pairId, secret));
       } catch (err) {

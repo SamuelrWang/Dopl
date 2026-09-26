@@ -79,11 +79,11 @@ export const PUBLIC_ROUTES = [
   "/oauth/authorize",
   "/api/oauth",
   "/api/mcp",
-  // Glasses MCP prototype device API (docs/glasses-mcp.md): self-authenticates
-  // by a static device bearer, and a browser CORS preflight carries no
-  // credentials at all, so the session gate would 401 every OPTIONS.
+  // Glasses device API (docs/glasses-mcp.md): self-authenticates by a per-device
+  // bearer (or, for pairing, none / a poll secret), and a browser CORS preflight
+  // carries no credentials at all, so the session gate would 401 every OPTIONS.
   "/api/glasses/device/",
-  // Glasses Hey-Even shim: an OpenAI-style client authenticating with the same device bearer.
+  // Glasses Hey-Even shim: an OpenAI-style client authenticating with a per-device Hey Even key.
   "/api/glasses/hey-even",
   // The desktop minimum-version floor. It MUST answer a signed-out caller: a
   // build below the floor may be too old to complete a sign-in at all, and the
@@ -107,7 +107,7 @@ export const PUBLIC_ROUTES = [
 // marketing pages are session-AWARE, so they still need the claims read.
 export const SELF_AUTH_ROUTES = [
   "/api/mcp",
-  // Glasses device API + Hey-Even shim: static device bearer, checked by the route itself.
+  // Glasses device API + Hey-Even shim: per-device bearers, checked by the route itself.
   "/api/glasses/device/",
   "/api/glasses/hey-even",
   // Playground machine surface: /session provisions anonymously (per-IP limited inside); /mcp/<token> self-authenticates by the guest bearer. The /playground PAGE is PUBLIC_ROUTES.
