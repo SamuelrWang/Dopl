@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { createFakeGlassesStore, fakeClock } from "./fake-store";
 import {
   answerAsk,
@@ -91,6 +91,28 @@ describe("inbox long-poll", () => {
     const res = await readInbox(deps, USER, null, 3);
     expect(res.messages).toEqual([]);
     expect(clock.now() - start).toBeLessThanOrEqual(3000);
+  });
+
+  it("runs the pre-read hook each tick and survives its failure", async () => {
+    const { deps } = setup();
+    let calls = 0;
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const res = await readInbox(
+      {
+        ...deps,
+        beforeRead: async () => {
+          calls += 1;
+          if (calls === 1) throw new Error("channel read failed");
+          await glassesNotify(deps, USER, { title: "mirrored", body: "b" });
+        },
+      },
+      USER,
+      null,
+      5,
+    );
+    expect(calls).toBe(2);
+    expect(res.messages).toHaveLength(1);
+    spy.mockRestore();
   });
 
   it("lazily expires stale rows", async () => {

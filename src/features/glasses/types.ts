@@ -99,6 +99,10 @@ export interface GlassesStore {
   ): Promise<GlassesMessage>;
   /** The stored agent spec of a screen row. */
   getSpec(userId: string, id: string): Promise<unknown>;
+  /** Insert unless a row with the same (user, card_id) exists; null when it did. */
+  insertIfAbsent(userId: string, row: NewGlassesMessage): Promise<GlassesMessage | null>;
+  getReplyCursor(userId: string): Promise<{ channelId: string | null; seq: number | null }>;
+  setReplyCursor(userId: string, channelId: string, seq: number, now: string): Promise<void>;
   saveTemplate(userId: string, name: string, spec: unknown, now: string): Promise<GlassesTemplate>;
   listTemplates(userId: string): Promise<GlassesTemplate[]>;
   getTemplate(userId: string, name: string): Promise<GlassesTemplate | null>;

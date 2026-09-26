@@ -86,6 +86,12 @@ const EXEMPT: Record<string, string> = {
     "Glasses device API — authenticated by the static GLASSES_DEVICE_TOKEN bearer (features/glasses/device.ts › authenticateDevice), not a user OAuth token; no scope to gate.",
   "glasses/device/dismiss/route.ts":
     "Glasses device API — static GLASSES_DEVICE_TOKEN bearer, same as glasses/device/answer.",
+  "glasses/device/voice/route.ts":
+    "Glasses push-to-talk — static GLASSES_DEVICE_TOKEN bearer; posts to the ONE env-configured linked channel as its operator.",
+  "glasses/hey-even/route.ts":
+    "Glasses Hey-Even chat-completions shim — static GLASSES_DEVICE_TOKEN bearer (features/glasses/hey-even-route.ts › heyEvenPost).",
+  "glasses/hey-even/v1/chat/completions/route.ts":
+    "Glasses Hey-Even chat-completions shim, OpenAI path — same handler and bearer as glasses/hey-even/route.ts.",
 };
 
 const files = routeFiles(API_ROOT);

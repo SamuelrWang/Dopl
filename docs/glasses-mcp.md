@@ -110,6 +110,49 @@ Code: `src/features/glasses/screen-*.ts`. Layout is measured server-side with
     finds it by looking up `choice`.
 - `POST /dismiss {id}` returns `{ok:true}`. It returns 404 if the id is unknown.
 
+## Voice: glasses to Dopl channel to agent, replies back to the glasses
+
+What the wearer says is posted into one **linked channel** as the operator's own message.
+- **Handler:** `voice-utterance.ts › handleGlassesUtterance`, using the channels service's
+  `postMessage`. That is the same write the app and `dopl_send_message` use, so the server stores
+  the normal wake verdict.
+- **Addressing:** if exactly one agent session is live, the post is addressed `to: @agent-<id>`.
+  Otherwise it is unaddressed, and the server's rule for an unaddressed person-authored post
+  (RR3) wakes the room's agent.
+- **Waking:** the operator's installed Dopl desktop wakes the agent off that stored row.
+- **Reply hold:** the handler then waits up to 8s for the first agent-authored reply:
+  - `replied` with `reply`, `reply_message_id` and `agent` if one arrives;
+  - `sent` if none arrives in time;
+  - `offline` if no agent session was live and the post woke nobody.
+
+**Reply mirror** (`reply-mirror.ts`):
+- Each device inbox long-poll also reads agent `message` rows in the linked channel past a
+  per-device cursor (`glasses_devices.reply_cursor_seq`). A fresh cursor starts at the channel's
+  head.
+- Each reply becomes a glasses message with `card_id = reply-<channel message id>`. The partial
+  unique index `glasses_messages_reply_card_uidx` stops duplicates.
+- A reply of 180 bytes or less, after markdown is flattened, becomes `notify {title: agent name, body}`.
+- A longer reply becomes `show {title, lines}`: up to 4 lines wrapped to the G2 width, each at
+  most 100 bytes, with the last line ending in `…` when cut.
+- Replies expire after 600s.
+- **Duplicates:** the plugin can use the voice response's `reply_message_id` to skip the
+  `reply-<id>` card for a reply it already showed.
+
+**Endpoints** (device bearer, CORS as above):
+- `POST /api/glasses/device/voice`
+  - The body is raw PCM (signed 16-bit little-endian, 16 kHz, mono) with
+    `Content-Type: application/octet-stream`, up to about 60s. Larger bodies get a 413.
+  - It is wrapped as a WAV and transcribed by the first STT key present: `OPENAI_API_KEY` (model
+    `gpt-4o-mini-transcribe`), otherwise `GROQ_API_KEY` (`whisper-large-v3`).
+  - It returns `{transcript, status:'replied'|'sent'|'offline'|'empty', reply?, reply_message_id?, agent?, channel_message_id, addressed_to?}`.
+  - Audio shorter than 300ms or with RMS below 150 is `empty`, and STT is not called.
+- `POST /api/glasses/hey-even/v1/chat/completions` (also `POST /api/glasses/hey-even`)
+  - OpenAI chat-completions shape. It takes the last `user` message.
+  - The answer is the agent's reply, or `Sent to @agent-…. Reply coming to your glasses.`
+  - `stream:true` returns one SSE chunk, a finish chunk, then `[DONE]`.
+  - Every request's headers are logged with credentials redacted (`[glasses] hey-even request …`).
+- `GET /api/glasses/hey-even/v1/models` returns `dopl-glasses`.
+
 ## Env vars (`.env.local`)
 
 The repo's `.gitignore` ignores `.env*`, so no `.env.example` is committed. Set these by hand:
@@ -117,6 +160,9 @@ The repo's `.gitignore` ignores `.env*`, so no `.env.example` is committed. Set 
 ```
 GLASSES_DEVICE_TOKEN=<random hex, e.g. openssl rand -hex 32>
 GLASSES_DEVICE_USER_ID=<the Dopl auth.users id the device acts as>
+GLASSES_LINKED_CHANNEL_ID=<channel voice posts into and replies are mirrored from>
+GLASSES_LINKED_CHANNEL_USER_ID=<a MEMBER of that channel to post as; defaults to GLASSES_DEVICE_USER_ID>
+OPENAI_API_KEY=<STT; or GROQ_API_KEY>
 ```
 
 Everything else comes from the normal Dopl `.env.local`. It points at the project's Supabase, and

@@ -65,6 +65,8 @@ export function authenticateDevice(
 
 export interface DeviceDeps {
   store: GlassesStore;
+  /** Runs before each inbox read, e.g. the channel reply mirror. Its failure never fails the poll. */
+  beforeRead?: () => Promise<void>;
   now?: () => number;
   sleep?: (ms: number) => Promise<void>;
 }
@@ -106,6 +108,13 @@ export async function readInbox(
   await deps.store.expireStale(userId, new Date(start).toISOString());
 
   for (;;) {
+    if (deps.beforeRead) {
+      try {
+        await deps.beforeRead();
+      } catch (err) {
+        console.error("[glasses] inbox pre-read hook failed", err);
+      }
+    }
     const t = new Date(now()).toISOString();
     const rows = await deps.store.listInbox(userId, t, after);
     if (rows.length > 0) {
