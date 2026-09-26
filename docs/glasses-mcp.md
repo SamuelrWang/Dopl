@@ -1,8 +1,71 @@
-# Glasses MCP (prototype, local only)
+# Glasses MCP
 
-An agent calls glasses tools on a local Dopl MCP endpoint; the Even G2 plugin long-polls Dopl for
-messages, renders them, and posts answers back. Code: `src/features/glasses/`. Nothing here is
-deployed.
+Agents send messages, questions and custom screens to a user's Even G2 glasses through Dopl's MCP.
+The glasses plugin long-polls Dopl, renders what arrives and posts taps back. Voice from the
+glasses goes into a Dopl channel as the user, and the channel's agent replies come back to the
+lens. Code: `src/features/glasses/`.
+
+## Production model (2026-09-26)
+
+### Pairing and devices
+
+Each pair of glasses is a row in `glasses_device_links` (`20261028120000_glasses_device_links_pairings.sql`).
+- **Credentials are hashes only.** A device token (`glsdt_…`) and a Hey Even key (`glshe_…`) are
+  stored as SHA-256 hex and returned in plaintext exactly once.
+- **Pairing flow:**
+  1. The glasses call `POST /api/glasses/device/pair/start` (no auth, 10 per minute per IP).
+     They get `{pair_id, code, poll_secret, expires_at}`: a 6-character code from `A-Z2-9`
+     without `I`/`O`, valid for 10 minutes.
+  2. The user enters the code in Dopl, which calls `POST /api/glasses/pair/claim`.
+  3. The glasses poll `GET /api/glasses/device/pair/status?pair_id=…`.
+     - Send the poll secret as `Authorization: Bearer <poll_secret>`. `&poll_secret=` also works,
+       but a query string lands in access logs.
+     - The answer is `{status:'pending'}`, `{status:'expired'}`, or
+       `{status:'claimed', device_id, device_token}`.
+- **No token is stored at claim time.** The first poll after the claim mints the token, stores its
+  hash and returns it. Every later poll answers `{status:'claimed', device_id}` with no token. A
+  lost response means pairing again.
+- **Revoking** clears both credential hashes, so a revoked device returns 401 everywhere.
+- **Online** means the device made an authenticated request in the last 60s (`last_seen`).
+- **One queue per user.** Messages stay per user: every active device of the user receives
+  everything queued for them.
+
+### User API (Dopl session or `dopl_at_` token, via `withUserAuth`)
+
+| Route | Body | Returns |
+|---|---|---|
+| `POST /api/glasses/pair/claim` | `{code, name?, channel_id?}` | 201 `{device}`. Limited to 10 per minute per user. |
+| `GET /api/glasses/devices` | none | `{devices:[{id, name, platform, created_at, last_seen, online, linked_channel:{id,name}\|null, has_hey_even_key}]}` |
+| `PATCH /api/glasses/devices/:id` | `{name?, channel_id? (uuid or null)}` | `{device}`. Changing the channel restarts the reply mirror at that channel's head. |
+| `DELETE /api/glasses/devices/:id` | none | `{ok:true}` (revoke) |
+| `POST /api/glasses/devices/:id/hey-even-key` | none | `{key, url}`, returned once. Rotating replaces the old key. |
+
+- **Channel rule:** a device can be linked only to a live channel its owner is a member of. The
+  claim and PATCH both check this and return 404 `CHANNEL_NOT_FOUND` otherwise. Posting re-checks
+  membership.
+- **The Hey Even `url`** uses the origin the request arrived on, so it points where the key works.
+
+### MCP exposure and metering
+
+- **Where the tools appear:** the tools have one implementation (`tools.ts ›
+  registerGlassesTools`).
+  - `/api/mcp/glasses` always lists them.
+  - The main `/api/mcp` adds all 11 glasses tools **only when the caller has at least one paired
+    device** (`mcp-exposure.ts › maybeRegisterGlassesTools`). The check is cached per process for
+    30s.
+- **Metering:** each call costs one credit through `consumeMcpCredits`, charged to the caller's
+  home container, with rule B's channel hint taken from `X-Dopl-Session-Id`. It fails open on an
+  error, like the registrar.
+
+### Security
+
+- **Bearer-only device routes.** The device and Hey Even routes authenticate only by bearer
+  credentials looked up by hash. They are in `SELF_AUTH_ROUTES`, so a browser preflight is not
+  session-gated.
+- **CORS is defense in depth:** `GLASSES_PLUGIN_ORIGINS` is a comma-separated list of exact
+  origins, or `*`. When unset it allows `http://127.0.0.1:5180` and `http://localhost:5180`.
+- **No credential values in logs:** the Hey Even header log redacts `authorization`, `cookie` and
+  any `*token*`/`*api-key*` header.
 
 ## Endpoints
 
@@ -81,12 +144,12 @@ Code: `src/features/glasses/screen-*.ts`. Layout is measured server-side with
 
 ### Device side: `/api/glasses/device/*` (the plugin contract)
 
-- **Auth:** `Authorization: Bearer $GLASSES_DEVICE_TOKEN`. The token maps to `$GLASSES_DEVICE_USER_ID`.
-  Anything else gets a 401.
-- **CORS:** `OPTIONS` answers 204. `Access-Control-Allow-Origin` echoes `http://127.0.0.1:5180` or
-  `http://localhost:5180`.
+- **Auth:** `Authorization: Bearer <device token>` from pairing. A missing, unknown or revoked
+  token gets 401.
+- **CORS:** `OPTIONS` answers 204. `Access-Control-Allow-Origin` echoes an origin from
+  `GLASSES_PLUGIN_ORIGINS` (see Security).
 - `GET /inbox?after=<ISO>&wait=<0-25, default 25>` returns `{messages: Message[], server_time}`.
-  - Each call stamps `last_seen`.
+  - Every authenticated device call stamps that device's `last_seen`.
   - Returns rows that are pending or delivered and not expired, with `updated_at > after`, ordered
     by `updated_at` ascending. Returned rows are marked `delivered`.
   - When nothing matches, it polls once a second for up to `wait` seconds, then returns `[]`.
@@ -112,16 +175,17 @@ Code: `src/features/glasses/screen-*.ts`. Layout is measured server-side with
 
 ## Voice: glasses to Dopl channel to agent, replies back to the glasses
 
-What the wearer says is posted into one **linked channel** as the operator's own message.
+What the wearer says is posted into the **device's linked channel** as the device owner's own
+message. An unlinked device gets 409.
 - **Handler:** `voice-utterance.ts › handleGlassesUtterance`, using the channels service's
   `postMessage`. That is the same write the app and `dopl_send_message` use, so the server stores
   the normal wake verdict.
 - **Addressing:** if exactly one agent session is live, the post is addressed `to: @agent-<id>`.
   Otherwise it is unaddressed, and the server's rule for an unaddressed person-authored post
   (RR3) wakes the room's agent.
-- **Waking:** the operator's installed Dopl desktop wakes the agent off that stored row.
+- **Waking:** the owner's installed Dopl desktop wakes the agent off that stored row.
 - **Short reply hold, capped:** the handler waits for the agent's first reply for up to
-  `GLASSES_REPLY_HOLD_MS` (default 6000, capped at 8000).
+  `GLASSES_REPLY_HOLD_MS` (default 6000, capped at 6000).
   - The clock starts before the post, so posting plus waiting stays under the roughly 10s an
     Even client waits.
   - It returns `replied` with `reply`, `reply_message_id` and `agent` if a reply arrives in time.
@@ -133,8 +197,8 @@ What the wearer says is posted into one **linked channel** as the operator's own
 
 **Reply mirror** (`reply-mirror.ts`):
 - Each device inbox long-poll also reads agent `message` rows in the linked channel past a
-  per-device cursor (`glasses_devices.reply_cursor_seq`). A fresh cursor starts at the channel's
-  head.
+  per-device cursor (`glasses_device_links.reply_cursor_seq`). A fresh cursor starts at the
+  channel's head.
 - Each reply becomes a glasses message with `card_id = reply-<channel message id>`. The partial
   unique index `glasses_messages_reply_card_uidx` stops duplicates.
 - Every reply becomes a `show {title: agent display name, lines}` card, never a `notify`. A notify
@@ -144,8 +208,8 @@ What the wearer says is posted into one **linked channel** as the operator's own
   line ending in `…` when cut. Markdown is flattened first.
 - Replies expire after 600s.
 
-**Endpoints** (device bearer, CORS as above):
-- `POST /api/glasses/device/voice`
+**Endpoints** (CORS as above):
+- `POST /api/glasses/device/voice` (device token)
   - The body is raw PCM (signed 16-bit little-endian, 16 kHz, mono) with
     `Content-Type: application/octet-stream`, up to about 60s. Larger bodies get a 413.
   - It is wrapped as a WAV and transcribed by the first STT key present: `OPENAI_API_KEY` (model
@@ -154,29 +218,33 @@ What the wearer says is posted into one **linked channel** as the operator's own
     It uses the same capped hold; transcription time is counted separately.
   - Audio shorter than 300ms or with RMS below 150 is `empty`, and STT is not called.
 - `POST /api/glasses/hey-even/v1/chat/completions` (also `POST /api/glasses/hey-even`)
+  - Auth is `Authorization: Bearer <Hey Even key>`, the device's rotated key (the device token
+    does not work here).
   - OpenAI chat-completions shape. It takes the last `user` message.
   - The answer is the agent's reply if it lands inside the hold. Otherwise it is
     `Sent to <agent display name>. Reply coming to your glasses.`, falling back to `@agent-<id>`,
     then to "your Dopl channel", when there is no display name.
   - `stream:true` returns one SSE chunk, a finish chunk, then `[DONE]`.
   - Every request's headers are logged with credentials redacted (`[glasses] hey-even request …`).
-- `GET /api/glasses/hey-even/v1/models` returns `dopl-glasses`.
+- `GET /api/glasses/hey-even/v1/models` (Hey Even key) returns `dopl-glasses`.
 
-## Env vars (`.env.local`)
+## Env vars
 
-The repo's `.gitignore` ignores `.env*`, so no `.env.example` is committed. Set these by hand:
+No per-user data lives in env; devices, links and keys are rows. Server-wide settings:
 
 ```
-GLASSES_DEVICE_TOKEN=<random hex, e.g. openssl rand -hex 32>
-GLASSES_DEVICE_USER_ID=<the Dopl auth.users id the device acts as>
-GLASSES_LINKED_CHANNEL_ID=<channel voice posts into and replies are mirrored from>
-GLASSES_LINKED_CHANNEL_USER_ID=<a MEMBER of that channel to post as; defaults to GLASSES_DEVICE_USER_ID>
-OPENAI_API_KEY=<STT; or GROQ_API_KEY>
-GLASSES_REPLY_HOLD_MS=<optional; default 6000, max 8000>
+OPENAI_API_KEY=<speech-to-text; otherwise GROQ_API_KEY>
+GLASSES_PLUGIN_ORIGINS=<optional; comma-separated plugin WebView origins, or *>
+GLASSES_REPLY_HOLD_MS=<optional; default 6000, max 6000>
 ```
 
-Everything else comes from the normal Dopl `.env.local`. It points at the project's Supabase, and
-migrations `20261025120000_glasses_messages.sql` and `20261026120000_glasses_screens_templates.sql` are applied there.
+Migrations applied to the project (matched by NAME):
+- `20261025120000_glasses_messages`
+- `20261026120000_glasses_screens_templates`
+- `20261027120000_glasses_voice_reply_mirror`
+- `20261028120000_glasses_device_links_pairings`
+
+The prototype's `glasses_devices` table is no longer read.
 
 ## Run
 
@@ -215,10 +283,18 @@ falls back to the project Site URL (production). Production's callback then has 
 Supabase dashboard's redirect URLs. Fix options: allow-list the localhost callback, or keep using
 header tokens.
 
-## Smoke test
+## Local dev: pair through the real flow
+
+`scripts/glasses-dev-seed.mjs` takes a file holding a Dopl user credential (a `dopl_at_…` token or
+a Supabase access JWT) for the account that will own the device. Secrets go only to files (mode
+600).
 
 ```sh
-T=$GLASSES_DEVICE_TOKEN
-curl -s "http://localhost:3100/api/glasses/device/inbox?wait=0"                             # 401
-curl -s -H "Authorization: Bearer $T" "http://localhost:3100/api/glasses/device/inbox?wait=5"
+# Claim the code the plugin/simulator is showing:
+node scripts/glasses-dev-seed.mjs --user-token-file <file> --code ABC234 --channel <channel uuid>
+
+# Or pair a headless device end to end, saving its token (and optionally a Hey Even key):
+node scripts/glasses-dev-seed.mjs --user-token-file <file> --out <token file> --channel <uuid> --hey-even <key file>
 ```
+
+`--base` defaults to `http://127.0.0.1:3100`.
