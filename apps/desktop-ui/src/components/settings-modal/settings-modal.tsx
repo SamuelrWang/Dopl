@@ -9,6 +9,7 @@ import { AccountSectionCore } from "@/shared/layout/settings-modal/sections/acco
 import { WorkspacesSectionCore } from "@/shared/layout/settings-modal/sections/workspaces-section-core";
 import { ConnectSectionCore } from "@/shared/layout/settings-modal/sections/connect-section-core";
 import { AgentDefaultsSettings } from "@/features/channels/components/agent-defaults-settings";
+import { GlassesSettings } from "@/features/glasses/settings/glasses-settings";
 import { useApiQuery } from "#/hooks/use-api-query";
 // ⚠ Deep import, not the `#/components/app-shell` barrel: that barrel exports
 // the shell, which imports THIS file, and the cycle is what `account-rail.tsx`'s
@@ -115,6 +116,7 @@ export function SettingsModal({
       // ⚠ IT TAKES NO WORKSPACE AND NO CHANNEL. One operator, one Mac, one answer — which is why
       // it is the one pane here that needs nothing from the props above it.
       agentsPane={<AgentDefaultsSettings />}
+      glassesPane={<GlassesSettings />}
       billingPane={
         <BillingPane
           workspaceSegment={workspaceSegment}

@@ -143,7 +143,7 @@ const gear = () => screen.getByRole("button", { name: "Settings" });
 /**
  * The rail, in order, AS THE DESKTOP DRAWS IT.
  *
- * ⚠ **FIVE ROWS HERE AND FOUR ON THE WEB, and that split is the contract, not a
+ * ⚠ **SIX ROWS HERE AND FIVE ON THE WEB, and that split is the contract, not a
  * fixture detail.** "Agents" is default agent settings, held in this machine's
  * own store, so `SettingsModalCore` draws it only when a binding passes
  * `agentsPane` — the desktop does, the web passes nothing. Flattening this list
@@ -153,6 +153,7 @@ const NAV_LABELS = [
   "Workspaces",
   "Connect",
   "Agents",
+  "Glasses",
   "Account",
   "Plans & Billing",
 ];
@@ -273,6 +274,24 @@ describe("settings modal", () => {
         )
       ).toBe(true)
     );
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  /** The shared Glasses pane reaches the User API over the bridge, account-scoped (no workspace). */
+  it("opens the Glasses pane and reads devices over the bridge", async () => {
+    renderShell();
+    await screen.findByText("page body");
+    fireEvent.click(gear());
+    await screen.findByRole("dialog", { name: "Settings" });
+    fireEvent.click(screen.getByRole("button", { name: "Glasses" }));
+
+    expect(await screen.findByRole("heading", { name: "Glasses" })).toBeInTheDocument();
+    expect(screen.getByLabelText("Pairing code")).toBeInTheDocument();
+    await waitFor(() =>
+      expect(calls().some((c) => c.path === "/api/glasses/devices")).toBe(true)
+    );
+    const read = calls().find((c) => c.path === "/api/glasses/devices");
+    expect(read?.opts.workspaceId).toBeUndefined();
     expect(fetch).not.toHaveBeenCalled();
   });
 

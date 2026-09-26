@@ -1,6 +1,6 @@
 "use client";
 
-import { Bot, CreditCard, LayoutGrid, Plug, UserRound } from "lucide-react";
+import { Bot, CreditCard, Glasses, LayoutGrid, Plug, UserRound } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
 import { SMALL_TEXT_BUTTON } from "@/shared/ui/small-action-button";
@@ -33,6 +33,7 @@ export type SettingsSection =
   | "workspaces"
   | "connect"
   | "agents"
+  | "glasses"
   | "account"
   | "billing";
 
@@ -51,14 +52,15 @@ interface NavItem {
  * and a header over a single row was naming a group of one.
  *
  * ⚠ **"Agents" SITS BELOW Connect** (Samuel, same review) and is the one row
- * that may be ABSENT — `has` below is what drops it, so the WEB draws four rows
- * and the DESKTOP five. It is not reordered by that: the list is the order,
+ * that may be ABSENT — `has` below is what drops it, so the WEB draws five rows
+ * and the DESKTOP six. It is not reordered by that: the list is the order,
  * filtered, never two lists.
  */
 const NAV: ReadonlyArray<NavItem> = [
   { id: "workspaces", label: "Workspaces", icon: LayoutGrid },
   { id: "connect", label: "Connect", icon: Plug },
   { id: "agents", label: "Agents", icon: Bot },
+  { id: "glasses", label: "Glasses", icon: Glasses },
   { id: "account", label: "Account", icon: UserRound },
   { id: "billing", label: "Plans & Billing", icon: CreditCard },
 ];
@@ -78,6 +80,9 @@ export interface SettingsModalCoreProps {
   /** Stripe Elements on the web; read-only status + open-in-browser handoff on
    *  desktop, whose CSP refuses the Stripe script and every network origin. */
   billingPane: React.ReactNode;
+  /** Paired glasses. Account-scoped over `apiRequest`, so both bindings pass the same
+   *  `features/glasses/settings › GlassesSettings`. */
+  glassesPane: React.ReactNode;
   /**
    * DEFAULT AGENT SETTINGS (2026-09-18) — the one pane that is OPTIONAL, and the omission is the
    * contract rather than a convenience. The record it edits lives in the desktop's own local
@@ -107,6 +112,7 @@ export function SettingsModalCore({
   connectPane,
   accountPane,
   billingPane,
+  glassesPane,
   agentsPane,
 }: SettingsModalCoreProps) {
   // ⚠ ONE PREDICATE, READ BY BOTH THE RAIL AND THE PANE. A nav entry whose pane is absent is a
@@ -157,6 +163,7 @@ export function SettingsModalCore({
         {section === "account" && accountPane}
         {section === "billing" && billingPane}
         {section === "agents" && has("agents") && agentsPane}
+        {section === "glasses" && glassesPane}
       </div>
     </ModalShell>
   );
