@@ -217,18 +217,49 @@ const REFUSALS: Record<string, string> = {
   "bad-name": "That agent name was refused.",
 };
 
+export const LAUNCH_NAME_MAX = 40;
+
+/** A wearer-typed agent name: trimmed, sanitized for G2, ≤ 40 chars; empty → none. */
+export function launchName(raw: string | null | undefined): string | null {
+  const name = sanitizeGlassesText(raw ?? "").slice(0, LAUNCH_NAME_MAX).trim();
+  return name || null;
+}
+
+export const NEW_AGENT_NAME = "New agent";
+
+/** "New agent", then "New agent 1", "New agent 2"… — the first not already in `taken` (case-insensitive). */
+export function nextFreeName(taken: Iterable<string>): string {
+  const used = new Set([...taken].map((n) => n.trim().toLowerCase()));
+  if (!used.has(NEW_AGENT_NAME.toLowerCase())) return NEW_AGENT_NAME;
+  for (let i = 1; ; i++) {
+    const candidate = `${NEW_AGENT_NAME} ${i}`;
+    if (!used.has(candidate.toLowerCase())) return candidate;
+  }
+}
+
+/** Unique among the owner's agents the menu can see (live sessions) and their recent launches. */
+async function nextNewAgentName(deps: MenuDeps, device: Device): Promise<string> {
+  const channels = await deps.gateway.listChannels(device.user_id);
+  const [sessions, launched] = await Promise.all([
+    deps.gateway.listSessions(channels.map((c) => c.id), 200),
+    deps.gateway.recentLaunchNames(device.user_id),
+  ]);
+  return nextFreeName([...sessions.map((s) => s.displayName ?? ""), ...launched]);
+}
+
 export async function launchAgent(
   deps: MenuDeps,
   device: Device,
-  input: { channel_id: string; runtime: string; model?: string | null },
+  input: { channel_id: string; runtime: string; model?: string | null; name?: string | null },
 ) {
   const runtime = input.runtime.trim();
   if (!RUNTIME_RE.test(runtime)) throw new HttpError(400, "BAD_RUNTIME", "Unknown runtime.");
   const model = input.model?.trim() || null;
   if (model && (model.length > 100 || /\s/.test(model))) throw new HttpError(400, "BAD_MODEL", "Unknown model.");
   await assertReadable(deps, device, input.channel_id);
-  const shortModel = model ? (runtime === "claude" ? agentModelLabel(model).split(" ")[0] : model) : "";
-  const agentName = `${runtimeLabel(runtime)}${shortModel ? ` ${shortModel}` : ""}`.slice(0, 60);
+  // The name rides the launch's own `agentName` (the field `dopl_launch_agent` sends); the
+  // desktop applies it or refuses `bad-name`. Unnamed launches get the next free "New agent N".
+  const agentName = launchName(input.name) ?? (await nextNewAgentName(deps, device));
   const filed = await deps.gateway.createLaunch(device.user_id, input.channel_id, {
     runtime,
     model,

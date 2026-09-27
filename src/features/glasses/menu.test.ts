@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { createFakeDeviceStore, fakeLinker } from "./fake-device-store";
 import { createFakeGlassesStore, fakeClock } from "./fake-store";
 import { createMenuHandlers } from "./menu-handlers";
-import { agentStatus, launchOptions, readChannel, toG2Message } from "./menu-service";
+import { agentStatus, launchName, launchOptions, nextFreeName, readChannel, toG2Message } from "./menu-service";
 import type { LaunchState, MenuGateway, MenuMessage, MenuSession } from "./menu-types";
 import { hashCredential } from "./credentials";
 import { createVoiceHandlers } from "./voice-handlers";
@@ -52,6 +52,7 @@ function fakeGateway(over: Partial<MenuGateway> = {}) {
     },
     awaitMessages: async (_u, _c, after) => [msg(after + 1, { body: "new" })],
     launchHistory: async () => [{ runtime: "codex", model: "gpt-6" }],
+    recentLaunchNames: async () => ["New agent", "new agent 2"],
     createLaunch: async () => {
       const l: LaunchState = { directiveId: "55555555-5555-4555-8555-555555555555", status: "launching", agentId: null, agentName: "Claude Opus", refusalReason: null };
       launches.push(l);
@@ -186,6 +187,31 @@ describe("menu routes", () => {
     expect(await res.json()).toMatchObject({ status: "launched", session_id: "newagent", agent_name: "Claude Opus" });
     const row = t.deviceRows.find((r) => r.id === d.id)!;
     expect([row.current_target_channel_id, row.current_target_agent]).toEqual([OPS, "newagent"]);
+  });
+
+  it("names the launch: the wearer's name if given, else the next free New agent N", async () => {
+    const createLaunch = vi.fn<MenuGateway["createLaunch"]>(async () => ({
+      directiveId: "d",
+      status: "launched",
+      agentId: "newagent",
+      agentName: "Scout",
+      refusalReason: null,
+    }));
+    const t = setup({ gateway: { createLaunch } });
+    await device(t);
+    await t.menu.launch(send("POST", "/launch", { channel_id: OPS, runtime: "claude", name: "  Scout \u{1F50D} " }));
+    expect(createLaunch.mock.calls[0][2]).toMatchObject({ agentName: "Scout" });
+    await t.menu.launch(send("POST", "/launch", { channel_id: OPS, runtime: "claude", model: "claude-opus-5", name: "   " }));
+    // Unnamed: the next free "New agent N" (taken here: "New agent", "new agent 2").
+    expect(createLaunch.mock.calls[1][2]).toMatchObject({ agentName: "New agent 1" });
+    expect(launchName("x".repeat(60))).toHaveLength(40);
+    expect(launchName(null)).toBeNull();
+  });
+
+  it("numbers unnamed agents New agent, New agent 1, 2… skipping names in use", () => {
+    expect(nextFreeName([])).toBe("New agent");
+    expect(nextFreeName(["Orchestrator", "NEW AGENT"])).toBe("New agent 1");
+    expect(nextFreeName(["New agent", "New agent 1", "New agent 3"])).toBe("New agent 2");
   });
 
   it("surfaces launch refusals and an offline desktop as lens-ready errors", async () => {

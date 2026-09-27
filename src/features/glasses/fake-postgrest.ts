@@ -15,7 +15,8 @@ export function fakePostgrest(tables: Record<string, Row[]>) {
       in: (col: string, vs: unknown[]) => ((rows = rows.filter((r) => vs.includes(r[col]))), builder),
       gt: (col: string, v: number) => ((rows = rows.filter((r) => (r[col] as number) > v)), builder),
       order: (col: string, o: { ascending: boolean }) => {
-        rows.sort((a, b) => ((a[col] as number) - (b[col] as number)) * (o.ascending ? 1 : -1));
+        const cmp = (x: unknown, y: unknown) => (typeof x === "number" && typeof y === "number" ? x - y : String(x).localeCompare(String(y)));
+        rows.sort((a, b) => cmp(a[col], b[col]) * (o.ascending ? 1 : -1));
         return builder;
       },
       limit: (n: number) => ((rows = rows.slice(0, n)), builder),

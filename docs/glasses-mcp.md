@@ -259,7 +259,7 @@ access.
 | `GET /api/glasses/device/channels/:id/messages?before=&limit=(1-100, default 40)&agent=` | `{messages:[{seq, author:{kind:'member'\|'agent', name}, text, created_at, attachments_note?}], has_more, before, after}`, oldest first |
 | `GET /api/glasses/device/channels/:id/messages?after=<seq>&wait=(≤20)&agent=` | Long-poll, same shape. The DB is polled every 2s. The next `after` is returned even when the `agent` filter dropped every row. |
 | `GET /api/glasses/device/launch-options?channel_id=` | `{runtimes:[{id, label, models:[{id, label}]}]}` |
-| `POST /api/glasses/device/launch {channel_id, runtime, model?}` | `{status, session_id, agent_name, directive_id}` |
+| `POST /api/glasses/device/launch {channel_id, runtime, model?, name?}` | `{status, session_id, agent_name, directive_id}`. The agent's name rides the launch request's own `agentName` field (the one `dopl_launch_agent` sends), which the desktop applies. Without `name` it is the next free `New agent`, `New agent 1`, `New agent 2`…, unique case-insensitively among the owner's live agent sessions and their last 200 launches; the agent can rename itself later. The optional `name` is trimmed, sanitized and cut to 40 characters, and empty means none. |
 | `GET /api/glasses/device/launch/:directiveId?channel_id=` | The same shape, for a launch still `launching` after the POST |
 | `PUT /api/glasses/device/target {channel_id \| null, agent_session_id?}` | `{ok:true}` |
 

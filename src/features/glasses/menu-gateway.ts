@@ -147,6 +147,19 @@ export const menuGateway: MenuGateway = {
     return messages.map(toMenuMessage);
   },
 
+  async recentLaunchNames(userId) {
+    const { data, error } = await supabaseAdmin()
+      .from("channel_launch_directives")
+      .select("agent_name, applied_agent_name")
+      .eq("operator_user_id", userId)
+      .order("created_at", { ascending: false })
+      .limit(200);
+    if (error) throw new Error(`glasses launch names read failed: ${error.message}`);
+    return ((data ?? []) as { agent_name: string | null; applied_agent_name: string | null }[])
+      .flatMap((r) => [r.agent_name, r.applied_agent_name])
+      .filter((n): n is string => !!n);
+  },
+
   async launchHistory(userId) {
     const { data, error } = await supabaseAdmin()
       .from("channel_launch_directives")

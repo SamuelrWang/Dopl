@@ -57,6 +57,22 @@ export async function readCappedBody(request: Request, max: number): Promise<Uin
   return out;
 }
 
+/** Voice's first half: size + shape checks, the silence check (no STT, no charge), the meter, STT. */
+async function transcribePcm(
+  deps: { stt: SttProvider; charge?: () => Promise<string | null> },
+  pcm: Uint8Array,
+): Promise<{ status: "ok" | "empty"; transcript: string }> {
+  if (pcm.byteLength > PCM_MAX_BYTES) {
+    throw new VoiceInputError(`audio is ${pcm.byteLength} bytes; max ${PCM_MAX_BYTES} (~60s of 16 kHz s16le mono)`, 413);
+  }
+  if (pcm.byteLength % 2 !== 0) throw new VoiceInputError("PCM must be whole 16-bit samples", 400);
+  if (isNearSilent(pcm)) return { status: "empty", transcript: "" };
+  const refusal = deps.charge ? await deps.charge() : null;
+  if (refusal) throw new VoiceInputError(refusal, 402);
+  const transcript = (await deps.stt.transcribe(pcmToWav(pcm))).trim();
+  return transcript ? { status: "ok", transcript } : { status: "empty", transcript: "" };
+}
+
 export async function handleVoiceUpload(
   deps: {
     stt: SttProvider;
@@ -66,16 +82,9 @@ export async function handleVoiceUpload(
   },
   pcm: Uint8Array,
 ): Promise<VoiceResponse> {
-  if (pcm.byteLength > PCM_MAX_BYTES) {
-    throw new VoiceInputError(`audio is ${pcm.byteLength} bytes; max ${PCM_MAX_BYTES} (~60s of 16 kHz s16le mono)`, 413);
-  }
-  if (pcm.byteLength % 2 !== 0) throw new VoiceInputError("PCM must be whole 16-bit samples", 400);
-  if (isNearSilent(pcm)) return { status: "empty", transcript: "" };
-  const refusal = deps.charge ? await deps.charge() : null;
-  if (refusal) throw new VoiceInputError(refusal, 402);
-  const transcript = (await deps.stt.transcribe(pcmToWav(pcm))).trim();
-  if (!transcript) return { status: "empty", transcript: "" };
-  return { transcript, ...(await handleGlassesUtterance(deps.utterance, transcript)) };
+  const heard = await transcribePcm(deps, pcm);
+  if (heard.status === "empty") return { status: "empty", transcript: "" };
+  return { transcript: heard.transcript, ...(await handleGlassesUtterance(deps.utterance, heard.transcript)) };
 }
 
 // ─── Hey Even (OpenAI chat-completions shape) ──────────────────────────────

@@ -31,6 +31,11 @@ beforeEach(() => {
   db = fakePostgrest({
     channels: [{ id: CH, workspace_id: "ws-1" }],
     workspaces: [{ id: "ws-1", name: "Acme", kind: "standard" }, { id: "home-1", name: "x", kind: "home" }],
+    channel_launch_directives: [
+      { operator_user_id: USER, agent_name: "New agent", applied_agent_name: "New agent", created_at: "2" },
+      { operator_user_id: USER, agent_name: "Scout", applied_agent_name: null, created_at: "1" },
+      { operator_user_id: "someone-else", agent_name: "New agent 1", applied_agent_name: null, created_at: "3" },
+    ],
   });
   vi.clearAllMocks();
 });
@@ -62,6 +67,10 @@ describe("menu gateway (Dopl services)", () => {
     const { messages } = await menuGateway.readMessages(USER, CH, { before: 10, limit: 5 });
     expect(readTranscript).toHaveBeenCalledWith(expect.objectContaining({ userId: USER, workspaceId: "ws-1" }), CH, { before: 10, limit: 5 });
     expect(messages[0]).toMatchObject({ seq: 3, authorAgentId: "abcdefgh", authorAgentName: "Orch" });
+  });
+
+  it("lists only the caller's own recent launch names", async () => {
+    expect(await menuGateway.recentLaunchNames(USER)).toEqual(["New agent", "New agent", "Scout"]);
   });
 
   it("files launches through createLaunchDirective and maps directive status", async () => {

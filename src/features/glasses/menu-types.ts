@@ -67,6 +67,8 @@ export interface MenuGateway {
   ): Promise<{ messages: MenuMessage[]; hasMore: boolean }>;
   /** Hold until messages with seq > `after` exist or `deadline` (epoch ms) passes. */
   awaitMessages(userId: string, channelId: string, after: number, deadline: number, signal?: AbortSignal): Promise<MenuMessage[]>;
+  /** Agent names this user's recent launches asked for or were given (any channel). */
+  recentLaunchNames(userId: string): Promise<string[]>;
   /** Runtimes / models this user has launched before, most recent first. */
   launchHistory(userId: string): Promise<{ runtime: string; model: string | null }[]>;
   /** File a launch through Dopl's own launch path; `null` = the user's Dopl desktop is offline. */

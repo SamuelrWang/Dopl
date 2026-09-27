@@ -54,6 +54,7 @@ const LaunchSchema = z.object({
   channel_id: z.string().uuid(),
   runtime: z.string().min(1).max(32),
   model: z.string().max(100).nullable().optional(),
+  name: z.string().max(200).nullable().optional(),
 });
 const TargetSchema = z.object({
   channel_id: z.string().uuid().nullable(),
