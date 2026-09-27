@@ -263,6 +263,27 @@ access.
 | `GET /api/glasses/device/launch/:directiveId?channel_id=` | The same shape, for a launch still `launching` after the POST |
 | `PUT /api/glasses/device/target {channel_id \| null, agent_session_id?}` | `{ok:true}` |
 
+**Live agent activity** (the channel page's "working · thinking" bar, `channel-activity.ts`):
+- Every messages response, paged or long-polled, carries
+  `activity:[{session_id, name, state:'thinking'|'working'|'replying'|'waiting', detail?}]` and
+  `activity_version` (a 12-hex fingerprint).
+- It is built from the live `channel_sessions` rows each operator's desktop pushes, using the
+  `dopl_read_channel` vocabulary:
+
+  | Session detail | `state` | `detail` |
+  |---|---|---|
+  | `thinking` | `thinking` | |
+  | `tool` (or none, while working) | `working` | the tool name, only on the wearer's own sessions |
+  | `posting` | `replying` | |
+  | `permission` | `waiting` | "needs approval" |
+  | `awaiting_peer` | `waiting` | "waiting on an agent" |
+
+- **Omitted:** idle and ended sessions, a session only holding an inbound reply
+  (`awaiting_inbound`), and rows not refreshed in the last 120s.
+- **Long-poll wake-up:** pass `&activity=<activity_version>` and the long-poll also returns as soon
+  as the set or any state changes, with `messages: []` if nothing new was posted. It checks once
+  every 2s: one message check, then one activity read.
+
 **Message rendering:**
 - Only `kind:'message'` rows are shown.
 - Text is markdown-flattened and sanitized. Images become `[image]`; links to files become

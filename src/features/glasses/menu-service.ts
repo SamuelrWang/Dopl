@@ -3,6 +3,7 @@ import { HttpError } from "@/shared/lib/http-error";
 import { AGENT_MODELS, agentModelLabel } from "@/features/channels/lib/agent-models";
 import type { ChannelLinker } from "./devices-service";
 import type { DeviceStore, GlassesDevice } from "./devices-types";
+import { activityVersion, channelActivity } from "./channel-activity";
 import { flattenForG2 } from "./g2-text";
 import type { AgentStatus, LaunchState, MenuGateway, MenuMessage, MenuSession } from "./menu-types";
 import { sanitizeGlassesText } from "./text";
@@ -154,6 +155,7 @@ export async function readChannel(deps: MenuDeps, device: Device, channelId: str
     limit: agent ? Math.min(limit * 4, 200) : limit,
   });
   const messages = shape(raw.messages, device.user_id, agent).slice(-limit);
+  const live = await activityNow(deps, device, channelId);
   const oldest = raw.messages.reduce((min, m) => Math.min(min, m.seq), Number.POSITIVE_INFINITY);
   return {
     messages,
@@ -162,24 +164,51 @@ export async function readChannel(deps: MenuDeps, device: Device, channelId: str
     before: Number.isFinite(oldest) ? oldest : null,
     /** Pass as `after` to long-poll for newer messages. */
     after: raw.messages.reduce((max, m) => Math.max(max, m.seq), 0),
+    ...live,
   };
 }
 
+/** Live agent activity in the channel, with its version (see `channel-activity.ts`). */
+async function activityNow(deps: MenuDeps, device: Device, channelId: string) {
+  const sessions = await deps.gateway.listSessions([channelId], 50);
+  const activity = channelActivity(sessions, device.user_id, (deps.now ?? Date.now)());
+  return { activity, activity_version: activityVersion(activity) };
+}
+
+/** Each hold slice: one message wait, then one activity read. */
+export const POLL_SLICE_MS = 2000;
+
+/**
+ * Long-poll: returns as soon as a message newer than `after` lands, or — when the
+ * caller passes the `activity` version it holds — as soon as the channel's live
+ * activity differs from it; else at the deadline.
+ */
 export async function pollChannel(
   deps: MenuDeps,
   device: Device,
   channelId: string,
-  q: { after: number; waitSec: number; agent?: string | null },
+  q: { after: number; waitSec: number; agent?: string | null; activity?: string | null },
   signal?: AbortSignal,
 ) {
   await assertReadable(deps, device, channelId);
-  const now = (deps.now ?? Date.now)();
-  const deadline = now + Math.min(Math.max(q.waitSec, 0), POLL_MAX_SEC) * 1000;
-  const raw = await deps.gateway.awaitMessages(device.user_id, channelId, q.after, deadline, signal);
+  const now = deps.now ?? Date.now;
+  const deadline = now() + Math.min(Math.max(q.waitSec, 0), POLL_MAX_SEC) * 1000;
+  let raw: MenuMessage[] = [];
+  let live = await activityNow(deps, device, channelId);
+  const changed = () => !!q.activity && live.activity_version !== q.activity;
+  while (!changed() && !signal?.aborted) {
+    const slice = Math.min(now() + POLL_SLICE_MS, deadline);
+    raw = await deps.gateway.awaitMessages(device.user_id, channelId, q.after, slice, signal);
+    live = await activityNow(deps, device, channelId);
+    if (raw.length > 0 || now() >= deadline) break;
+    // A gateway that returned before its slice (tests, or an early wake) must not spin.
+    if (now() < slice && deps.sleep) await deps.sleep(slice - now());
+  }
   return {
     messages: shape(raw, device.user_id, q.agent ?? null),
     has_more: false,
     after: raw.reduce((max, m) => Math.max(max, m.seq), q.after),
+    ...live,
   };
 }
 

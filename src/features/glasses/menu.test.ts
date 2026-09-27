@@ -13,6 +13,8 @@ const OPS = "33333333-3333-4333-8333-333333333333";
 const SECRET = "44444444-4444-4444-8444-444444444444";
 const TOKEN = "glsdt_test";
 const BASE = "http://127.0.0.1:3100/api/glasses/device";
+/** Inside the 120s liveness window of `fakeClock()`'s start. */
+const FRESH = "2026-09-26T11:59:30.000Z";
 
 const msg = (seq: number, over: Partial<MenuMessage> = {}): MenuMessage => ({
   seq,
@@ -28,12 +30,19 @@ const msg = (seq: number, over: Partial<MenuMessage> = {}): MenuMessage => ({
   ...over,
 });
 
-function fakeGateway(over: Partial<MenuGateway> = {}) {
-  const sessions: MenuSession[] = [
-    { agentId: "abcdefgh", displayName: "Orchestrator", channelId: OPS, state: "working", detail: "tool", model: "claude-opus-5", lastActivity: "t2" },
-    { agentId: "zyxwvuts", displayName: null, channelId: OPS, state: "idle", detail: "awaiting_inbound", model: null, lastActivity: "t1" },
-  ];
+function fakeGateway(over: Partial<MenuGateway> = {}, sessions: MenuSession[] = defaultSessions()) {
   const launches: LaunchState[] = [];
+  return { sessions, gw: buildGateway(over, sessions, launches) };
+}
+
+function defaultSessions(): MenuSession[] {
+  return [
+    { agentId: "abcdefgh", displayName: "Orchestrator", channelId: OPS, state: "working", detail: "tool", model: "claude-opus-5", lastActivity: "t2", updatedAt: FRESH, userId: OWNER, toolLabel: "Bash" },
+    { agentId: "zyxwvuts", displayName: null, channelId: OPS, state: "idle", detail: "awaiting_inbound", model: null, lastActivity: "t1", updatedAt: FRESH, userId: OWNER, toolLabel: null },
+  ];
+}
+
+function buildGateway(over: Partial<MenuGateway>, sessions: MenuSession[], launches: LaunchState[]): MenuGateway {
   const gw: MenuGateway = {
     listChannels: async () => [
       { id: OPS, name: "Ops \u{1F680}", containerId: "c1", containerName: "Acme", lastActivity: "2026-09-27T01:00Z", unread: true },
@@ -69,7 +78,7 @@ function setup(opts: { gateway?: Partial<MenuGateway>; allowLaunch?: boolean } =
   const dev = createFakeDeviceStore();
   const clock = fakeClock();
   const linker = fakeLinker({ [OPS]: { name: "Ops", members: [OWNER] }, [SECRET]: { name: "Secret", members: [] } });
-  const gateway = fakeGateway(opts.gateway);
+  const { gw: gateway, sessions } = fakeGateway(opts.gateway);
   const ch = createFakeChannel();
   const base = {
     store: msgs.store,
@@ -88,7 +97,7 @@ function setup(opts: { gateway?: Partial<MenuGateway>; allowLaunch?: boolean } =
     allowUtterance: async () => true,
     chargeUtterance: async () => null,
   });
-  return { ...dev, clock, linker, gateway, menu, voice, ch };
+  return { ...dev, clock, linker, gateway, sessions, menu, voice, ch };
 }
 
 async function device(t: ReturnType<typeof setup>) {
@@ -166,6 +175,29 @@ describe("menu routes", () => {
     await device(t);
     const { agents } = await (await t.menu.agents(get(`/channels/${OPS}/agents`), OPS)).json();
     expect(agents[0]).toEqual({ session_id: "abcdefgh", name: "Orchestrator", runtime: "claude", model: "claude-opus-5", status: "working", last_activity: "t2" });
+  });
+
+  it("reports live agent activity with every read, and wakes a long-poll when it changes", async () => {
+    const t = setup({ gateway: { awaitMessages: async () => [] } });
+    await device(t);
+    const page = await (await t.menu.messages(get(`/channels/${OPS}/messages?limit=2`), OPS)).json();
+    expect(page.activity).toEqual([{ session_id: "abcdefgh", name: "Orchestrator", state: "working", detail: "Bash" }]);
+    expect(page.activity_version).toMatch(/^[0-9a-f]{12}$/);
+
+    // Same version held: the poll runs to its deadline with nothing new.
+    const start = t.clock.now();
+    const idle = await (await t.menu.messages(get(`/channels/${OPS}/messages?after=4&wait=6&activity=${page.activity_version}`), OPS)).json();
+    expect(idle.messages).toEqual([]);
+    expect(t.clock.now() - start).toBeGreaterThanOrEqual(6000);
+
+    // The agent starts replying mid-hold: the poll returns early with the new set.
+    t.clock.onSleep(() => {
+      t.sessions[0].detail = "posting";
+    });
+    const woke = await (await t.menu.messages(get(`/channels/${OPS}/messages?after=4&wait=20&activity=${page.activity_version}`), OPS)).json();
+    expect(woke.activity).toEqual([{ session_id: "abcdefgh", name: "Orchestrator", state: "replying" }]);
+    expect(woke.activity_version).not.toBe(page.activity_version);
+    expect((await t.menu.messages(get(`/channels/${OPS}/messages?after=4&activity=XYZ`), OPS)).status).toBe(400);
   });
 
   it("pages, long-polls and validates message queries", async () => {

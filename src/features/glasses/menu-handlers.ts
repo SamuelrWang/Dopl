@@ -120,7 +120,8 @@ export function createMenuHandlers(input: MenuHandlerDeps) {
       }
     },
 
-    /** `?before=&limit=` pages back; `?after=&wait=` long-polls; `&agent=` narrows to a conversation. */
+    /** `?before=&limit=` pages back; `?after=&wait=[&activity=]` long-polls (and wakes on an activity
+     *  change when `activity` is the version the caller holds); `&agent=` narrows to a conversation. */
     async messages(request: Request, channelId: string): Promise<Response> {
       const device = await gate(request, deps.allowRead);
       if (device instanceof Response) return device;
@@ -131,6 +132,7 @@ export function createMenuHandlers(input: MenuHandlerDeps) {
         const limit = intParam(url, "limit");
         const wait = intParam(url, "wait");
         const agent = url.searchParams.get("agent");
+        const activity = url.searchParams.get("activity");
         if ([before, after, limit, wait].some((v) => Number.isNaN(v))) {
           throw new HttpError(400, "BAD_QUERY", "before, after, limit and wait are whole numbers.");
         }
@@ -139,7 +141,10 @@ export function createMenuHandlers(input: MenuHandlerDeps) {
         const id = channelParam(channelId);
         if (after !== undefined) {
           const waitSec = Math.min(wait ?? POLL_MAX_SEC, POLL_MAX_SEC);
-          return json(request, await pollChannel(menuDeps, device, id, { after, waitSec, agent }, request.signal));
+          if (activity !== null && !/^[0-9a-f]{1,40}$/.test(activity)) {
+            throw new HttpError(400, "BAD_QUERY", "activity is the activity_version from a previous response.");
+          }
+          return json(request, await pollChannel(menuDeps, device, id, { after, waitSec, agent, activity }, request.signal));
         }
         return json(request, await readChannel(menuDeps, device, id, { before, limit, agent }));
       } catch (e) {

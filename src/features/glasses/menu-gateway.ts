@@ -101,7 +101,7 @@ export const menuGateway: MenuGateway = {
     // Peer projection only — the columns every member of these channels may see.
     const { data, error } = await supabaseAdmin()
       .from("channel_sessions")
-      .select("name, display_name, channel_id, state, detail, model, last_activity_at, updated_at")
+      .select("name, display_name, channel_id, state, detail, model, last_activity_at, updated_at, user_id, tool_label")
       .in("channel_id", channelIds)
       .neq("name", "")
       .order("updated_at", { ascending: false })
@@ -116,6 +116,9 @@ export const menuGateway: MenuGateway = {
         detail: r.detail,
         model: r.model,
         lastActivity: r.last_activity_at ?? r.updated_at,
+        updatedAt: r.updated_at,
+        userId: r.user_id,
+        toolLabel: r.tool_label,
       }),
     );
   },

@@ -24,6 +24,12 @@ export interface MenuSession {
   detail: string | null;
   model: string | null;
   lastActivity: string | null;
+  /** When the desktop last pushed this row (the liveness clock). */
+  updatedAt: string | null;
+  /** The operator running the session. */
+  userId: string | null;
+  /** Operator-only telemetry: the tool being run, when `detail` is `tool`. */
+  toolLabel: string | null;
 }
 
 /** One channel message as the menu needs it (already visibility-checked). */
