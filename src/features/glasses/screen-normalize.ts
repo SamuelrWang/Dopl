@@ -151,11 +151,14 @@ function normalizeList(b: Record<string, unknown>, n: NormBlock, errors: ScreenE
     n.items = [];
     return;
   }
-  if (b.items.length > LIM.list_items) {
+  const max = n.selectable ? LIM.selectable_list_items : LIM.list_items;
+  if (b.items.length > max) {
     errors.push({
       block: id,
       code: "list_too_long",
-      message: `${b.items.length} items; max ${LIM.list_items}`,
+      message: n.selectable
+        ? `${b.items.length} items; max ${max} in a selectable list (the 20th row is the back button)`
+        : `${b.items.length} items; max ${max}`,
     });
   }
   n.items = b.items.map((item, j) => {

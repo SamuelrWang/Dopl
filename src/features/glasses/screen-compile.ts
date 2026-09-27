@@ -9,6 +9,9 @@ import {
   PAD,
   PROGRESS_EMPTY,
   PROGRESS_FILLED,
+  CONTENT_H,
+  NAV_FOOTER,
+  NAV_FOOTER_H,
   SCREEN_H,
   SCREEN_LIMITS as LIM,
   SCREEN_W,
@@ -96,7 +99,7 @@ function toContainer(s: Sized, x: number, y: number, w: number, h: number): Scre
 function layoutStack(sized: Sized[], errors: ScreenError[]): ScreenContainer[] {
   const w = SCREEN_W - 2 * MARGIN;
   const heights = sized.map((s) => s.natural);
-  const available = SCREEN_H - 2 * MARGIN;
+  const available = CONTENT_H - 2 * MARGIN;
   let total = heights.reduce((a, h) => a + h, 0);
   // A list scrolls natively, so it may give up rows (down to 2) before we call it overflow.
   const li = sized.findIndex((s) => s.block.type === "list");
@@ -114,7 +117,7 @@ function layoutStack(sized: Sized[], errors: ScreenError[]): ScreenContainer[] {
     errors.push({
       block: tallest.block.id,
       code: "overflow",
-      message: `stack height ${total + 2 * MARGIN}px > ${SCREEN_H}px; remove ${Math.ceil(excess / LINE_H)} line(s) or shorten ${tallest.block.id}`,
+      message: `stack height ${total + 2 * MARGIN}px > ${CONTENT_H}px (the bottom ${NAV_FOOTER_H}px is the back button); remove ${Math.ceil(excess / LINE_H)} line(s) or shorten ${tallest.block.id}`,
     });
     return [];
   }
@@ -146,6 +149,14 @@ function layoutAbsolute(sized: Sized[], errors: ScreenError[]): ScreenContainer[
         block: b.id,
         code: "out_of_bounds",
         message: `${b.id} spans x ${b.x}-${b.x + w}, y ${b.y}-${b.y + h}; must fit inside ${SCREEN_W}x${SCREEN_H}`,
+      });
+      continue;
+    }
+    if (b.y + h > NAV_FOOTER.y) {
+      errors.push({
+        block: b.id,
+        code: "overlaps_nav_footer",
+        message: `${b.id} ends at y ${b.y + h}; y >= ${NAV_FOOTER.y} is reserved for the back button. Move it up or shrink h by ${b.y + h - NAV_FOOTER.y}px`,
       });
       continue;
     }
@@ -189,5 +200,5 @@ export function compileScreen(
     ? containers.find((c) => c.block_id === selectable.id)
     : ([...containers].reverse().find((c) => c.kind === "text") ?? containers.at(-1));
   if (capture) capture.capture = true;
-  return { ok: true, layout, payload: { screen_id: screenId, spec_version: 1, containers } };
+  return { ok: true, layout, payload: { screen_id: screenId, spec_version: 1, containers, nav_footer: { ...NAV_FOOTER } } };
 }

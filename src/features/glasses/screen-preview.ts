@@ -10,7 +10,10 @@ import type { ScreenContainer } from "./types";
 const PREVIEW_COLS = 64;
 const PREVIEW_ROWS = 16;
 
-export function renderPreview(containers: ScreenContainer[]): string {
+export function renderPreview(
+  containers: ScreenContainer[],
+  navFooter?: { y: number } | null,
+): string {
   const cw = SCREEN_W / PREVIEW_COLS;
   const ch = SCREEN_H / PREVIEW_ROWS;
   const grid = Array.from({ length: PREVIEW_ROWS }, () => Array<string>(PREVIEW_COLS).fill(" "));
@@ -31,6 +34,12 @@ export function renderPreview(containers: ScreenContainer[]): string {
       const text = rows[r - r0] ?? "";
       for (let k = 0; k < width; k++) grid[r][c0 + k] = text[k] ?? " ";
     }
+  }
+  if (navFooter) {
+    // The plugin's context back button lives here; show it so layouts are honest.
+    const r = Math.min(PREVIEW_ROWS - 1, Math.round(navFooter.y / ch));
+    const label = "< [back button]";
+    for (let k = 0; k < PREVIEW_COLS; k++) grid[r][k] = label[k] ?? " ";
   }
   const frame = "+" + "-".repeat(PREVIEW_COLS) + "+";
   return [frame, ...grid.map((row) => "|" + row.join("") + "|"), frame].join("\n");

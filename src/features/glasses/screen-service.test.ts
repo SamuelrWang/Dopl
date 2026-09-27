@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { createFakeGlassesStore, fakeClock } from "./fake-store";
 import { createFakeDeviceStore } from "./fake-device-store";
-import { answerAsk, readInbox } from "./device";
+import { answerAsk, dismissMessage, readInbox } from "./device";
 import {
   ScreenInvalidError,
   listTemplates,
@@ -77,6 +77,20 @@ describe("glasses_render", () => {
     });
     const res = await renderScreen(deps, USER, { screen_id: "q", blocks: BLOCKS, wait_for_input: true });
     expect(res).toMatchObject({ status: "answered", input: { block_id: "act", choice: "Hold", index: 1 } });
+  });
+
+  it("wait_for_input returns dismissed promptly when the wearer leaves via back", async () => {
+    const { deps, clock } = setup();
+    let ticks = 0;
+    clock.onSleep(async () => {
+      if (++ticks !== 1) return;
+      const inbox = await readInbox(deps, USER, null, 0);
+      expect((await dismissMessage(deps, USER, { id: inbox.messages[0].id })).ok).toBe(true);
+    });
+    const start = clock.now();
+    const res = await renderScreen(deps, USER, { screen_id: "q", blocks: BLOCKS, wait_for_input: true, timeout_sec: 120 });
+    expect(res).toMatchObject({ status: "dismissed", input: null });
+    expect(clock.now() - start).toBeLessThanOrEqual(3000);
   });
 
   it("wait_for_input times out without taking the screen down", async () => {

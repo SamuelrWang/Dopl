@@ -36,6 +36,8 @@ export interface ScreenPayload {
   screen_id: string;
   spec_version: 1;
   containers: ScreenContainer[];
+  /** The band the plugin fills with its context back button; blocks never enter it. */
+  nav_footer?: { x: number; y: number; w: number; h: number };
 }
 export type GlassesPayload = NotifyPayload | ShowPayload | AskPayload | ScreenPayload;
 

@@ -25,7 +25,7 @@ const block = z.looseObject({
 const blocks = z.array(block).describe(BLOCKS_DOC);
 const layout = z.enum(["stack", "absolute"]).optional().describe("Default 'stack'.");
 const waitArgs = {
-  wait_for_input: z.boolean().optional().describe("Hold (<=200s) until the wearer taps; returns input."),
+  wait_for_input: z.boolean().optional().describe("Hold (<=200s) until the wearer taps; returns input, or status 'dismissed' if they leave via back."),
   timeout_sec: z.number().optional().describe("Seconds to wait for input (default 120)."),
 };
 
@@ -51,7 +51,7 @@ export function registerScreenTools(
     {
       title: "glasses_render",
       description:
-        "Draw a custom screen on the glasses from blocks (576x288, max 8 text/list blocks). Same screen_id replaces it live. " +
+        "Draw a custom screen on the glasses from blocks (576x248 usable; the bottom 40px is the wearer's back button, max 8 text/list blocks). Same screen_id replaces it live. " +
         "validate_only:true returns the compiled layout + ASCII preview without sending. Errors are fixable JSON.",
       inputSchema: z.object({
         screen_id: z.string().optional(),

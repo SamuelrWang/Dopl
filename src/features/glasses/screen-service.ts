@@ -70,7 +70,7 @@ export async function renderScreen(
   const spec = { blocks: args.blocks, layout: args.layout ?? "stack" };
   const payload = compileOrThrow(spec, screenId);
   if (args.validate_only === true) {
-    return { ok: true, screen_id: screenId, compiled: payload, preview: renderPreview(payload.containers) };
+    return { ok: true, screen_id: screenId, compiled: payload, preview: renderPreview(payload.containers, payload.nav_footer) };
   }
   const ttl = cleanSeconds("ttl_sec", args.ttl_sec, 600, 5, 86_400);
   const timeout = cleanSeconds("timeout_sec", args.timeout_sec, 120, 5, 86_400);

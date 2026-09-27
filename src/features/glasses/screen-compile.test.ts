@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { compileScreen } from "./screen-compile";
 import { renderPreview } from "./screen-preview";
-import { LINE_H, MARGIN, PAD, SCREEN_H, SCREEN_W } from "./screen-spec";
+import { CONTENT_H, LINE_H, MARGIN, NAV_FOOTER, PAD, SCREEN_H, SCREEN_W, glassesCapabilities } from "./screen-spec";
 
 const ok = (spec: unknown) => {
   const r = compileScreen(spec, "s1");
@@ -45,19 +45,44 @@ describe("stack layout", () => {
   it("reports overflow with a fix, never truncates", () => {
     const e = errs({ blocks: Array.from({ length: 8 }, () => ({ type: "text", content: "long line ".repeat(20) })) });
     expect(e[0].code).toBe("overflow");
-    expect(e[0].message).toMatch(/^stack height \d+px > 288px; remove \d+ line\(s\) or shorten b\d$/);
+    expect(e[0].message).toMatch(/^stack height \d+px > 248px \(the bottom 40px is the back button\); remove \d+ line\(s\) or shorten b\d$/);
   });
 
   it("shrinks a long list (it scrolls) before calling overflow", () => {
     const p = ok({
       blocks: [
         { type: "text", content: "Pick one" },
-        { type: "list", items: Array.from({ length: 20 }, (_, i) => `Option ${i}`) },
+        { type: "list", items: Array.from({ length: 19 }, (_, i) => `Option ${i}`) },
       ],
     });
     const list = p.containers[1];
-    expect(list.items).toHaveLength(20);
-    expect(list.y + list.h).toBe(SCREEN_H - MARGIN);
+    expect(list.items).toHaveLength(19);
+    expect(list.y + list.h).toBe(CONTENT_H - MARGIN);
+  });
+
+  it("reserves the bottom band for the plugin's back button on every screen", () => {
+    const p = ok({ blocks: [{ type: "text", content: "hi" }] });
+    expect(p.nav_footer).toEqual({ x: 0, y: SCREEN_H - 40, w: SCREEN_W, h: 40 });
+    const tall = ok({ blocks: Array.from({ length: 6 }, () => ({ type: "text", content: "one line" })) });
+    for (const c of tall.containers) expect(c.y + c.h).toBeLessThanOrEqual(NAV_FOOTER.y);
+    const caps = glassesCapabilities();
+    expect(caps.content).toEqual({ width: SCREEN_W, height: CONTENT_H });
+    expect(caps.limits.selectable_list_items).toBe(19);
+  });
+
+  it("caps a selectable list at 19 (the 20th row is the back item); a plain list keeps 20", () => {
+    const items = Array.from({ length: 20 }, (_, i) => `o${i}`);
+    expect(errs({ blocks: [{ type: "list", items }] })[0]).toMatchObject({
+      code: "list_too_long",
+      message: "20 items; max 19 in a selectable list (the 20th row is the back button)",
+    });
+    expect(ok({ blocks: [{ type: "text", content: "a" }, { type: "list", items, selectable: false }] }).containers[1].items).toHaveLength(20);
+  });
+
+  it("rejects absolute blocks that reach into the back-button band", () => {
+    const e = errs({ layout: "absolute", blocks: [{ type: "text", content: "hi", x: 0, y: 230, w: 200, h: 40 }] });
+    expect(e[0]).toMatchObject({ block: "b1", code: "overlaps_nav_footer" });
+    expect(e[0].message).toContain("shrink h by 22px");
   });
 
   it("flags a text that wraps past its fixed lines", () => {
@@ -125,9 +150,11 @@ describe("absolute layout", () => {
 
 describe("preview", () => {
   it("draws an ASCII mock with block ids and the capture mark", () => {
-    const preview = renderPreview(ok(FOUR).containers);
+    const compiled = ok(FOUR);
+    const preview = renderPreview(compiled.containers, compiled.nav_footer);
     const rows = preview.split("\n");
     expect(rows).toHaveLength(18);
+    expect(preview).toContain("< [back button]");
     expect(rows[0]).toBe("+" + "-".repeat(64) + "+");
     expect(preview).toContain("[title] Deploy - prod");
     expect(preview).toContain("[bar] Build #");

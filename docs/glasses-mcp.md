@@ -190,8 +190,21 @@ Code: `src/features/glasses/screen-*.ts`. Layout is measured server-side with
   - Any missing variable is an error that names it.
   - Names are lowercased, 1-64 characters of `a-z 0-9 _ -`.
 
+**Back-button band (2026-09-27):**
+- Every compiled screen reserves its bottom 40px (`nav_footer: {x:0, y:248, w:576, h:40}` in the
+  payload; `spec_version` stays 1). The plugin draws its context back button there: Back to
+  Agent, Back to Channel or Back Home.
+- Stack layouts end above the band.
+- An absolute block reaching into it gets the fixable error `overlaps_nav_footer`.
+- A selectable list holds at most 19 items, because the plugin appends the back item as the 20th;
+  a plain list keeps 20.
+- `glasses_capabilities` reports `content` (576x248), `nav_footer` and `selectable_list_items: 19`.
+- The ASCII preview shows `< [back button]` in the band.
+- If the wearer leaves a screen via back, the plugin calls `/dismiss`. A `wait_for_input` hold
+  then returns `{status:'dismissed', input:null}` on its next poll (within 1.5s).
+
 **Wire payload for `kind:'screen'`** (inbox):
-`{screen_id, spec_version:1, containers:[{block_id, kind:'text'|'list', x, y, w, h, content?, items?, brightness?, border?, capture}]}`.
+`{screen_id, spec_version:1, containers:[{block_id, kind:'text'|'list', x, y, w, h, content?, items?, brightness?, border?, capture}], nav_footer:{x,y,w,h}}`.
 - Containers are already sanitized, byte-checked and positioned. There are at most 8.
 - Exactly one container has `capture:true`: the selectable list, otherwise the last text
   container, otherwise the last container.
