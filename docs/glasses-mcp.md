@@ -236,16 +236,85 @@ Code: `src/features/glasses/screen-*.ts`. Layout is measured server-side with
     finds it by looking up `choice`.
 - `POST /dismiss {id}` returns `{ok:true}`. It returns 404 if the id is unknown.
 
+## Menu and read mode (device API, 2026-09-27)
+
+The glasses plugin's menu is Home, then channel actions,
+agents, start agent, conversation and read. It is served by `menu-service.ts` over `menu-gateway.ts`,
+which calls Dopl's own services:
+- `listAccountChannels` for channels;
+- `readTranscript` and `awaitNewMessages` for messages;
+- `createLaunchDirective` and `getLaunchDirective` for launches.
+
+All routes take the device token and answer errors as `{error:{code, message}}`. Reads (polls
+included) are limited to 120 per minute per device, launches to 5 per minute.
+
+🔒 **Visibility:** every channel-scoped call first checks that the device owner is a member of a
+live channel (`channel-link.ts`), and the channels service checks again. Leaving a channel removes
+access.
+
+| Route | Returns |
+|---|---|
+| `GET /api/glasses/device/home` | `{recent_agents:[{session_id, agent_name, channel:{id,name}, status, last_activity}] (max 6), channels:[{id, name, container_name, last_activity, unread}]}`, channels newest activity first |
+| `GET /api/glasses/device/channels/:id/agents` | `{agents:[{session_id, name, runtime, model, status, last_activity}]}` |
+| `GET /api/glasses/device/channels/:id/messages?before=&limit=(1-100, default 40)&agent=` | `{messages:[{seq, author:{kind:'member'\|'agent', name}, text, created_at, attachments_note?}], has_more, before, after}`, oldest first |
+| `GET /api/glasses/device/channels/:id/messages?after=<seq>&wait=(≤20)&agent=` | Long-poll, same shape. The DB is polled every 2s. The next `after` is returned even when the `agent` filter dropped every row. |
+| `GET /api/glasses/device/launch-options?channel_id=` | `{runtimes:[{id, label, models:[{id, label}]}]}` |
+| `POST /api/glasses/device/launch {channel_id, runtime, model?}` | `{status, session_id, agent_name, directive_id}` |
+| `GET /api/glasses/device/launch/:directiveId?channel_id=` | The same shape, for a launch still `launching` after the POST |
+| `PUT /api/glasses/device/target {channel_id \| null, agent_session_id?}` | `{ok:true}` |
+
+**Message rendering:**
+- Only `kind:'message'` rows are shown.
+- Text is markdown-flattened and sanitized. Images become `[image]`; links to files become
+  `[file: name]`, and these are also listed in `attachments_note`.
+- Authors are named `You` for the device owner, then the member's name, then the agent's display
+  name, then `agent-<id>`.
+- **Conversation filter** (`agent=`): that agent's own posts, plus the owner's posts addressed to
+  it. It reads a raw page four times wider. Use `before` from the response to page further back,
+  because the filter drops rows.
+
+**Status mapping:** `channel_sessions.state`/`detail` map to `working`, `waiting`, `idle` or
+`ended`. `waiting` means detail is `permission` (a tool approval) or `awaiting_inbound`.
+
+**Launch semantics:**
+- Agents run on the owner's Dopl desktop, so the server files a launch directive through the same
+  `createLaunchDirective` path as `dopl_launch_agent`. The desktop claims it and enforces the agent
+  cap, launch posture, credits and runtime/model availability.
+- The POST waits up to 10s for the result:
+  - `launched`: `session_id` is the new agent id, and the device's current target is set to that
+    agent.
+  - Still `launching`: poll `GET /launch/:directiveId`.
+  - Refused: 409 `LAUNCH_<REASON>` with a short message, for example `LAUNCH_CAP` "Agent limit
+    reached on your computer.".
+  - Expired: 409 `LAUNCH_EXPIRED`.
+  - Desktop offline: 409 `DESKTOP_OFFLINE`.
+- The server has no model catalog (the desktop owns it), so launch options are the runtimes and
+  models this user has launched before, plus Claude and its known models. Each runtime starts with
+  `Default` (no model, so the desktop picks). The desktop refuses anything it can't run (`no-sdk`,
+  `no-model`).
+
+**Current target and voice routing:**
+- Voice and Hey Even go to the first usable target, in this order:
+  1. an explicit override: `?channel_id=&agent=` on the request, or the headers
+     `X-Glasses-Channel` / `X-Glasses-Agent`;
+  2. the stored current target;
+  3. the linked channel.
+- Each candidate is re-validated, and an invalid one falls through to the next.
+- An **agent** target is sent `to: @agent-<id>` and must be running; if it isn't, the answer is 400
+  "That agent is not running".
+- A **channel** target is unaddressed, so the channel's normal wake rule applies.
+- The Hey Even answer is `Sent to <agent display name | channel name>.`, or the agent's reply if it
+  arrives within the hold.
+
 ## Voice: glasses to Dopl channel to agent, replies back to the glasses
 
-What the wearer says is posted into the **device's linked channel** as the device owner's own
-message. An unlinked device gets 409.
+What the wearer says is posted as the device owner's own message into the **resolved target**
+(see "Current target and voice routing" above). With no usable target the answer is 409.
 - **Handler:** `voice-utterance.ts › handleGlassesUtterance`, using the channels service's
   `postMessage`. That is the same write the app and `dopl_send_message` use, so the server stores
   the normal wake verdict.
-- **Addressing:** if exactly one agent session is live, the post is addressed `to: @agent-<id>`.
-  Otherwise it is unaddressed, and the server's rule for an unaddressed person-authored post
-  (RR3) wakes the room's agent.
+- **Addressing:** an agent target is addressed `to: @agent-<id>`. A channel target is unaddressed,
+  and the server's rule for an unaddressed person-authored post (RR3) wakes the room's agent.
 - **Waking:** the owner's installed Dopl desktop wakes the agent off that stored row.
 - **Short reply hold, capped:** the handler waits for the agent's first reply for up to
   `GLASSES_REPLY_HOLD_MS` (default 6000, capped at 6000).
@@ -310,6 +379,7 @@ Migrations applied to the project (matched by NAME):
 - `20261027120000_glasses_voice_reply_mirror`
 - `20261028120000_glasses_device_links_pairings`
 - `20261029120000_glasses_review_hardening`
+- `20261030120000_glasses_device_current_target`
 
 The prototype's `glasses_devices` table is no longer read.
 
