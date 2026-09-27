@@ -8,6 +8,11 @@ export interface NotifyPayload {
 export interface ShowPayload {
   title: string;
   lines: string[];
+  /** Mirrored agent replies only (`reply-<id>` cards): the source channel, so the plugin can fold
+   *  the reply inline in Read / Conversation for that channel. */
+  channel_id?: string;
+  /** Mirrored replies only: the agent that wrote it, when known. */
+  agent_session_id?: string;
 }
 export interface AskPayload {
   question: string;

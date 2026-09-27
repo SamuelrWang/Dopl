@@ -32,7 +32,7 @@ export function createFakeChannel(opts: { liveAgents?: number } = {}) {
     messages,
     agentSays(body: string, agentName = "Coder") {
       seq += 1;
-      messages.push({ id: `msg-${seq}`, seq, body, agentName, author: "agent" });
+      messages.push({ id: `msg-${seq}`, seq, body, agentName, author: "agent", agentId: "abcdefgh" });
       return `msg-${seq}`;
     },
   };

@@ -70,7 +70,7 @@ describe("channel-link: what a device may link, see and keep", () => {
 describe("voice-channel gateway", () => {
   it("reads only agent-authored messages past the cursor, named by display name", async () => {
     expect(await glassesChannelGateway.agentMessagesAfter(LIVE, 10, 5)).toEqual([
-      { id: "m3", seq: 12, body: "pong", agentName: "Orchestrator" },
+      { id: "m3", seq: 12, body: "pong", agentName: "Orchestrator", agentId: "abcdefgh" },
     ]);
     expect(await glassesChannelGateway.headSeq(LIVE)).toBe(12);
   });

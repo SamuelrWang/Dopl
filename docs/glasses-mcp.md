@@ -333,7 +333,9 @@ What the wearer says is posted as the device owner's own message into the **reso
   channel's head.
 - Each reply becomes a glasses message with `card_id = reply-<channel message id>`. The partial
   unique index `glasses_messages_reply_card_uidx` stops duplicates.
-- Every reply becomes a `show {title: agent display name, lines}` card, never a `notify`. A notify
+- Every reply becomes a `show {title: agent display name, lines, channel_id, agent_session_id?}`
+  card, never a `notify`. `channel_id` is the source channel and `agent_session_id` the author
+  agent when known, so the plugin can fold the reply inline in Read/Conversation for that channel. A notify
   is auto-dismissed after a few seconds; a show card stays until the wearer taps it or it
   expires.
 - The lines are wrapped to the G2 width: up to 4 lines, each at most 100 bytes, with the last

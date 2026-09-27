@@ -118,7 +118,11 @@ export async function mirrorReplies(
     const row = await deps.store.insertIfAbsent(device.user_id, {
       kind: msg.kind,
       card_id: `reply-${reply.id}`,
-      payload: msg.payload,
+      payload: {
+        ...msg.payload,
+        channel_id: channelId,
+        ...(reply.agentId ? { agent_session_id: reply.agentId } : {}),
+      },
       expires_at: new Date(nowMs + REPLY_TTL_SEC * 1000).toISOString(),
       now,
     });

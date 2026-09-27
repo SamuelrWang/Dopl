@@ -13,6 +13,8 @@ export interface ChannelReply {
   seq: number;
   body: string;
   agentName: string;
+  /** The agent that wrote it (`channel_sessions.name`), when the row says. */
+  agentId?: string | null;
 }
 
 export interface PostedUtterance {

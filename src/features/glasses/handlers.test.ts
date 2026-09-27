@@ -123,7 +123,7 @@ describe("device API", () => {
     t.clock.advance(5_000);
     const body = await (await t.device.inbox(req("/api/glasses/device/inbox?wait=0", { token }))).json();
     expect(isLinkable).toHaveBeenCalledTimes(2);
-    expect(body.messages).toEqual([expect.objectContaining({ kind: "show", payload: { title: "Orchestrator", lines: ["pong"] } })]);
+    expect(body.messages).toEqual([expect.objectContaining({ kind: "show", payload: { title: "Orchestrator", lines: ["pong"], channel_id: CHANNEL, agent_session_id: "abcdefgh" } })]);
   });
 
   it("rate-limits pairing starts with 429", async () => {

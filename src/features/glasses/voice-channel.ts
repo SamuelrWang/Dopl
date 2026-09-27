@@ -100,6 +100,7 @@ export const glassesChannelGateway: ChannelGateway = {
         seq: Number(r.seq),
         body: r.body,
         agentName: (agentId && names.get(agentId)) || (agentId ? agentIdHandle(agentId) : "Agent"),
+        agentId,
       };
     });
   },

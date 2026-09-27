@@ -129,7 +129,7 @@ describe("reply mirror", () => {
       kind: "show",
       card_id: `reply-${id}`,
       user_id: USER,
-      payload: { title: "Coder", lines: ["Build is green. Deploying now."] },
+      payload: { title: "Coder", lines: ["Build is green. Deploying now."], channel_id: "chan", agent_session_id: "abcdefgh" },
     });
     expect(Date.parse(rows[0].expires_at) - Date.parse(rows[0].created_at)).toBe(600_000);
   });
