@@ -26,7 +26,7 @@ export function corsHeaders(request: Request, allowed: string[] = pluginOrigins(
   const origin = request.headers.get("origin");
   const headers: Record<string, string> = {
     "Access-Control-Allow-Headers": "Authorization, Content-Type",
-    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+    "Access-Control-Allow-Methods": "GET, POST, PUT, OPTIONS",
     "Access-Control-Max-Age": "600",
     Vary: "Origin",
   };

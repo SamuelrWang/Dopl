@@ -10,6 +10,8 @@ import { sttProviderFromEnv } from "./stt";
 import { CLAIM_RPM, createUserHandlers } from "./user-handlers";
 import { glassesChannelGateway } from "./voice-channel";
 import { createVoiceHandlers, UTTERANCE_RPM } from "./voice-handlers";
+import { createMenuHandlers, LAUNCH_RPM, MENU_READ_RPM } from "./menu-handlers";
+import { menuGateway } from "./menu-gateway";
 import { utteranceCharger } from "./mcp-exposure";
 
 /**
@@ -40,6 +42,15 @@ export const voiceHandlers = createVoiceHandlers({
     checkAndRecordRateLimitSubject(`glasses-utterance:${deviceId}`, UTTERANCE_RPM, "POST /api/glasses/(voice|hey-even)"),
   chargeUtterance: utteranceCharger,
   debug: process.env.GLASSES_DEBUG === "1",
+});
+
+export const menuHandlers = createMenuHandlers({
+  ...base,
+  menu: menuGateway,
+  allowRead: (deviceId) =>
+    checkAndRecordRateLimitSubject(`glasses-menu:${deviceId}`, MENU_READ_RPM, "GET /api/glasses/device/(menu)"),
+  allowLaunch: (deviceId) =>
+    checkAndRecordRateLimitSubject(`glasses-launch:${deviceId}`, LAUNCH_RPM, "POST /api/glasses/device/launch"),
 });
 
 export const userHandlers = createUserHandlers({
