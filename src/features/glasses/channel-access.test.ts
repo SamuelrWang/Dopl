@@ -78,23 +78,23 @@ describe("voice-channel gateway", () => {
   it("posts as the operator and @-addresses the one live agent", async () => {
     listChannelSessionStates.mockResolvedValue([{ name: "abcdefgh", display_name: "Orchestrator" }]);
     postMessage.mockResolvedValue({ id: "p1", seq: 13, recipientAgentIds: ["abcdefgh"] });
-    const posted = await glassesChannelGateway.postAsOperator(LIVE, USER, "status?");
+    const posted = await glassesChannelGateway.postAsOperator(LIVE, USER, "status?", "abcdefgh");
     expect(postMessage).toHaveBeenCalledWith(
       expect.objectContaining({ userId: USER, workspaceId: "ws-1" }),
       LIVE,
       expect.objectContaining({ body: "status?", to: "@agent-abcdefgh" }),
     );
-    expect(posted).toMatchObject({ id: "p1", seq: 13, liveAgents: 1, addressedTo: "agent-abcdefgh", addressedName: "Orchestrator" });
+    expect(posted).toMatchObject({ id: "p1", seq: 13, liveAgents: 1, addressedTo: "agent-abcdefgh", addressedName: "Orchestrator", channelName: "room-22" });
   });
 
-  it("retries unaddressed when the @-address is refused", async () => {
+  it("posts a channel target unaddressed, and refuses an agent target that is not running", async () => {
     listChannelSessionStates.mockResolvedValue([{ name: "abcdefgh", display_name: null }]);
-    postMessage.mockRejectedValueOnce(new Error("recipient unresolved")).mockResolvedValue({ id: "p2", seq: 14, recipientAgentIds: [] });
-    const err = vi.spyOn(console, "error").mockImplementation(() => {});
-    const posted = await glassesChannelGateway.postAsOperator(LIVE, USER, "hi");
-    err.mockRestore();
-    expect(postMessage).toHaveBeenCalledTimes(2);
-    expect(postMessage.mock.calls[1][2]).not.toHaveProperty("to");
-    expect(posted.id).toBe("p2");
+    postMessage.mockResolvedValue({ id: "p2", seq: 14, recipientAgentIds: [] });
+    const posted = await glassesChannelGateway.postAsOperator(LIVE, USER, "hi", null);
+    expect(postMessage.mock.calls[0][2]).not.toHaveProperty("to");
+    expect(posted).toMatchObject({ id: "p2", addressedTo: null, channelName: "room-22" });
+    await expect(glassesChannelGateway.postAsOperator(LIVE, USER, "hi", "zzzzzzzz")).rejects.toThrow("not running");
+    expect(postMessage).toHaveBeenCalledTimes(1);
   });
+;
 });

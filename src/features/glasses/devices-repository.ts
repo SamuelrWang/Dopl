@@ -13,7 +13,7 @@ import type { DeviceStore, GlassesDevice, GlassesPairing } from "./devices-types
 const DEVICES = "glasses_device_links";
 const PAIRINGS = "glasses_pairings";
 const DEVICE_COLS =
-  "id, user_id, name, platform, linked_channel_id, linked_container_id, reply_cursor_seq, created_at, last_seen, revoked_at, hey_even_key_hash";
+  "id, user_id, name, platform, linked_channel_id, linked_container_id, reply_cursor_seq, current_target_channel_id, current_target_agent, created_at, last_seen, revoked_at, hey_even_key_hash";
 const PAIRING_COLS = "id, code, poll_secret_hash, status, device_id, token_issued_at, expires_at";
 const UNIQUE_VIOLATION = "23505";
 
@@ -199,6 +199,15 @@ export const deviceRepository: DeviceStore = {
   async setReplyCursor(deviceId, seq) {
     const { error } = await db().from(DEVICES).update({ reply_cursor_seq: seq }).eq("id", deviceId);
     if (error) fail("setReplyCursor", error);
+  },
+
+  async setCurrentTarget(deviceId, channelId, agentId, now) {
+    const { error } = await db()
+      .from(DEVICES)
+      .update({ current_target_channel_id: channelId, current_target_agent: agentId, current_target_at: now })
+      .eq("id", deviceId)
+      .is("revoked_at", null);
+    if (error) fail("setCurrentTarget", error);
   },
 
   async countActiveDevices(userId) {

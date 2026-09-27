@@ -15,13 +15,15 @@ import {
   modelList,
   redactedHeaders,
 } from "./voice";
-import { UtteranceError, handleGlassesUtterance, voiceConfigForDevice, type UtteranceDeps } from "./voice-utterance";
+import { UtteranceError, handleGlassesUtterance, type UtteranceDeps } from "./voice-utterance";
+import { resolveVoiceTarget, targetOverrideFrom } from "./voice-target";
 
 /**
  * Voice-facing handlers: push-to-talk (`/api/glasses/device/voice`, device
  * token) and the Hey Even chat-completions shim (`/api/glasses/hey-even*`,
- * per-device Hey Even key). Both post into the DEVICE's linked channel as the
- * device OWNER; an unlinked device gets 409.
+ * per-device Hey Even key). Both post as the device OWNER to the resolved
+ * target (`voice-target.ts`: explicit override → current target → linked
+ * channel); with none of those usable the answer is 409.
  */
 
 export interface VoiceHandlerDeps extends DeviceHandlerDeps {
@@ -40,12 +42,14 @@ export interface VoiceHandlerDeps extends DeviceHandlerDeps {
 }
 
 export const UTTERANCE_RPM = 20;
-const NOT_LINKED = "This device is not linked to a channel. Link one in Dopl settings → Glasses.";
+const NO_TARGET = "No channel to talk to. Pick one in the glasses menu, or link one in Dopl settings → Glasses.";
 const LIMITED = "Too many voice requests from this device; try again in a minute.";
 
-function utteranceDeps(deps: VoiceHandlerDeps, device: GlassesDevice): UtteranceDeps | null {
-  const config = voiceConfigForDevice(device);
-  return config ? { gateway: deps.gateway, config, now: deps.now, sleep: deps.sleep, holdMs: deps.holdMs } : null;
+async function utteranceDeps(deps: VoiceHandlerDeps, device: GlassesDevice, request: Request): Promise<UtteranceDeps | null> {
+  const target = await resolveVoiceTarget(deps.linker, device, targetOverrideFrom(request));
+  if (!target) return null;
+  const config = { channelId: target.channelId, operatorUserId: device.user_id, agentId: target.agentId };
+  return { gateway: deps.gateway, config, now: deps.now, sleep: deps.sleep, holdMs: deps.holdMs };
 }
 
 const oaiError = (request: Request, message: string, type: string, status: number, extra: Record<string, string> = {}) =>
@@ -57,8 +61,8 @@ export function createVoiceHandlers(input: VoiceHandlerDeps) {
     async voice(request: Request): Promise<Response> {
       const device = await authedDevice(deps, request);
       if (!device) return json(request, { error: "Unauthorized" }, 401);
-      const utterance = utteranceDeps(deps, device);
-      if (!utterance) return json(request, { error: NOT_LINKED }, 409);
+      const utterance = await utteranceDeps(deps, device, request);
+      if (!utterance) return json(request, { error: NO_TARGET }, 409);
       const stt = deps.stt();
       if (!stt) return json(request, { error: "Speech-to-text is not configured on this server." }, 503);
       try {
@@ -80,8 +84,8 @@ export function createVoiceHandlers(input: VoiceHandlerDeps) {
       }
       const device = await deviceFromHeyEvenKey(deps.devices, request);
       if (!device) return oaiError(request, "Unauthorized", "invalid_request_error", 401);
-      const utterance = utteranceDeps(deps, device);
-      if (!utterance) return oaiError(request, NOT_LINKED, "invalid_request_error", 409);
+      const utterance = await utteranceDeps(deps, device, request);
+      if (!utterance) return oaiError(request, NO_TARGET, "invalid_request_error", 409);
       let body: unknown;
       try {
         body = await request.json();

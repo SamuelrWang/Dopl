@@ -7,7 +7,7 @@ import { agentNamesFor } from "@/features/channels/server/service-shared";
 import { listChannelSessionStates } from "@/features/channels/server/repository-sessions";
 import { agentIdHandle } from "@/features/channels/lib/agent-mentions";
 import { authorAgentIdOf } from "@/features/channels/lib/agent-post-stamp";
-import type { ChannelGateway, ChannelReply, PostedUtterance } from "./voice-utterance";
+import { UtteranceError, type ChannelGateway, type ChannelReply, type PostedUtterance } from "./voice-utterance";
 
 /**
  * The real {@link ChannelGateway}: posts through the channels service's own
@@ -17,14 +17,14 @@ import type { ChannelGateway, ChannelReply, PostedUtterance } from "./voice-utte
  * off that row. Reads go straight to `channel_messages` with the service role.
  */
 
-async function channelWorkspace(channelId: string): Promise<string> {
+async function channelRow(channelId: string): Promise<{ workspace_id: string; name: string }> {
   const { data, error } = await supabaseAdmin()
     .from("channels")
-    .select("workspace_id")
+    .select("workspace_id, name")
     .eq("id", channelId)
     .maybeSingle();
-  if (error || !data) throw new Error(`linked channel ${channelId} not found`);
-  return (data as { workspace_id: string }).workspace_id;
+  if (error || !data) throw new Error(`channel ${channelId} not found`);
+  return data as { workspace_id: string; name: string };
 }
 
 async function postOnce(
@@ -48,27 +48,26 @@ async function postOnce(
 }
 
 export const glassesChannelGateway: ChannelGateway = {
-  async postAsOperator(channelId, operatorUserId, text): Promise<PostedUtterance> {
-    const workspaceId = await channelWorkspace(channelId);
+  async postAsOperator(channelId, operatorUserId, text, agentId): Promise<PostedUtterance> {
+    const { workspace_id: workspaceId, name: channelName } = await channelRow(channelId);
     const live = (await listChannelSessionStates(workspaceId, channelId)).filter((s) => s.name.length > 0);
-    // Exactly one live agent: address it explicitly. Otherwise the server's RR3
-    // rule answers an unaddressed PERSON post with the room's nominee.
-    const addressedTo = live.length === 1 ? agentIdHandle(live[0].name) : null;
-    let posted;
-    try {
-      posted = await postOnce(operatorUserId, workspaceId, channelId, text, addressedTo ? `@${addressedTo}` : undefined);
-    } catch (err) {
-      if (!addressedTo) throw err;
-      console.error("[glasses] addressed post refused, retrying unaddressed", err);
-      posted = await postOnce(operatorUserId, workspaceId, channelId, text, undefined);
+    // An AGENT target is @-addressed and must be running; a CHANNEL target is
+    // unaddressed, so the server's normal rule (RR3: a person's unaddressed post
+    // is answered by the room's nominee) decides who wakes.
+    const session = agentId ? live.find((s) => s.name === agentId) : undefined;
+    if (agentId && !session) {
+      throw new UtteranceError("That agent is not running. Start it again from the glasses menu.");
     }
+    const addressedTo = agentId ? agentIdHandle(agentId) : null;
+    const posted = await postOnce(operatorUserId, workspaceId, channelId, text, addressedTo ? `@${addressedTo}` : undefined);
     return {
       id: posted.id,
       seq: posted.seq,
       recipientAgentIds: posted.recipientAgentIds ?? [],
       liveAgents: live.length,
       addressedTo,
-      addressedName: live.length === 1 ? live[0].display_name?.trim() || null : null,
+      addressedName: session?.display_name?.trim() || null,
+      channelName,
     };
   },
 

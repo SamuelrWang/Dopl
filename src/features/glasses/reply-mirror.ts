@@ -1,4 +1,5 @@
 import { g2Measurer, type TextMeasurer } from "./measure";
+import { plainReply } from "./g2-text";
 import { sanitizeGlassesText, utf8Bytes } from "./text";
 import type { ChannelLinker } from "./devices-service";
 import type { DeviceStore, GlassesDevice } from "./devices-types";
@@ -23,21 +24,6 @@ const MAX_LINES = 4;
 /** Text width inside a full-width show card (576 - 2*8 margin - 2*4 padding - slack). */
 const LINE_WIDTH_PX = 536;
 const ELLIPSIS = "…";
-
-/** Markdown an agent writes, flattened for a monochrome text display. */
-export function plainReply(body: string): string {
-  return sanitizeGlassesText(
-    body
-      .replace(/```[\s\S]*?```/g, " [code] ")
-      .replace(/`([^`]*)`/g, "$1")
-      .replace(/\*\*([^*]+)\*\*/g, "$1")
-      .replace(/(^|\s)[*_]([^*_]+)[*_](?=\s|$)/g, "$1$2")
-      .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
-      .replace(/^#{1,6}\s+/gm, "")
-      .replace(/^\s*[-*]\s+/gm, "- ")
-      .replace(/\s*\n\s*/g, " "),
-  );
-}
 
 function clampBytes(s: string, max: number): string {
   let out = s;

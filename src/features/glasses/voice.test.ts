@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { createFakeGlassesStore, fakeClock } from "./fake-store";
-import { mirrorReplies, plainReply, replyToGlasses, wrapLines } from "./reply-mirror";
+import { mirrorReplies, replyToGlasses, wrapLines } from "./reply-mirror";
+import { flattenForG2, plainReply } from "./g2-text";
 import { isNearSilent, pcmToWav, type SttProvider } from "./stt";
 import {
   assistantText,
@@ -12,12 +13,13 @@ import {
   redactedHeaders,
 } from "./voice";
 import { createFakeChannel } from "./voice-test-kit";
-import { handleGlassesUtterance, replyHoldMsFromEnv, voiceConfigForDevice } from "./voice-utterance";
+import { handleGlassesUtterance, replyHoldMsFromEnv } from "./voice-utterance";
+import { resolveVoiceTarget, targetOverrideFrom } from "./voice-target";
 import { createFakeDeviceStore, fakeLinker } from "./fake-device-store";
 import type { ShowPayload } from "./types";
 
 const USER = "11111111-1111-4111-8111-111111111111";
-const CONFIG = { channelId: "chan", operatorUserId: USER };
+const CONFIG = { channelId: "chan", operatorUserId: USER, agentId: "abcdefgh" };
 
 function tone(ms: number, amplitude: number): Uint8Array {
   const n = Math.round((16_000 * ms) / 1000);
@@ -46,6 +48,7 @@ describe("handleGlassesUtterance", () => {
       channel_message_id: ch.messages[0].id,
       addressed_to: "agent-abcdefgh",
       addressed_name: "Orchestrator",
+      channel_name: "AI Glasses",
       reply: "pong",
       reply_message_id: replyId,
       agent: "Orchestrator",
@@ -76,14 +79,29 @@ describe("handleGlassesUtterance", () => {
   it("returns offline when no agent is live", async () => {
     const ch = createFakeChannel({ liveAgents: 0 });
     const sleep = vi.fn();
-    const res = await handleGlassesUtterance({ gateway: ch.gateway, config: CONFIG, sleep }, "hi");
-    expect(res).toMatchObject({ status: "offline", addressed_to: null });
+    const res = await handleGlassesUtterance({ gateway: ch.gateway, config: { ...CONFIG, agentId: null }, sleep }, "hi");
+    expect(res).toMatchObject({ status: "offline", addressed_to: null, channel_name: "AI Glasses" });
     expect(sleep).not.toHaveBeenCalled();
   });
 
-  it("routes a device's voice to its linked channel as its owner", () => {
-    expect(voiceConfigForDevice({ user_id: "u", linked_channel_id: "c" })).toEqual({ channelId: "c", operatorUserId: "u" });
-    expect(voiceConfigForDevice({ user_id: "u", linked_channel_id: null })).toBeNull();
+  it("routes to the explicit override, then the current target, then the linked channel", async () => {
+    const A = "aaaaaaaa-0000-4000-8000-000000000000";
+    const B = "bbbbbbbb-0000-4000-8000-000000000000";
+    const C = "cccccccc-0000-4000-8000-000000000000";
+    const gone = "dddddddd-0000-4000-8000-000000000000";
+    const linker = fakeLinker({ [A]: { name: "a", members: [USER] }, [B]: { name: "b", members: [USER] }, [C]: { name: "c", members: [USER] } });
+    const device = { user_id: USER, linked_channel_id: C, current_target_channel_id: B, current_target_agent: "abcdefgh" };
+    expect(await resolveVoiceTarget(linker, device, { channelId: A, agentId: null })).toEqual({ channelId: A, agentId: null, source: "override" });
+    expect(await resolveVoiceTarget(linker, device, null)).toEqual({ channelId: B, agentId: "abcdefgh", source: "current" });
+    expect(await resolveVoiceTarget(linker, { ...device, current_target_channel_id: gone }, { channelId: gone })).toEqual({
+      channelId: C,
+      agentId: null,
+      source: "linked",
+    });
+    expect(await resolveVoiceTarget(linker, { ...device, current_target_channel_id: null, linked_channel_id: null }, null)).toBeNull();
+    const req = new Request(`http://x/api/glasses/device/voice?channel_id=${A}&agent=bad-id`);
+    expect(targetOverrideFrom(req)).toEqual({ channelId: A, agentId: "bad-id" });
+    expect(await resolveVoiceTarget(linker, device, targetOverrideFrom(req))).toMatchObject({ channelId: A, agentId: null });
   });
 });
 
@@ -165,6 +183,10 @@ describe("reply mirror", () => {
 
   it("flattens markdown and wraps without cutting short text", () => {
     expect(plainReply("# Title\n- one\n- `two`\n[link](http://x)")).toBe("Title - one - two link");
+    expect(flattenForG2("See ![chart](https://x/c.png) and [Q3 report](https://x/q3.pdf).")).toEqual({
+      text: "See [image] and [file: Q3 report] .",
+      notes: ["[image]", "[file: Q3 report]"],
+    });
     expect(wrapLines("short reply")).toEqual(["short reply"]);
     expect(replyToGlasses({ agentName: "A", body: "\u{1F600}" })).toBeNull();
   });
@@ -233,10 +255,11 @@ describe("hey-even shim", () => {
 
   it("says which agent it went to, by display name when there is one", () => {
     const base = { status: "sent" as const, channel_message_id: "m", addressed_to: "agent-abcdefgh" };
-    expect(assistantText({ ...base, addressed_name: "Orchestrator" })).toBe("Sent to Orchestrator. Reply coming to your glasses.");
-    expect(assistantText({ ...base, addressed_name: null })).toBe("Sent to @agent-abcdefgh. Reply coming to your glasses.");
+    expect(assistantText({ ...base, addressed_name: "Orchestrator" })).toBe("Sent to Orchestrator.");
+    expect(assistantText({ ...base, addressed_name: null })).toBe("Sent to @agent-abcdefgh.");
+    expect(assistantText({ status: "sent", channel_message_id: "m", addressed_to: null, channel_name: "Ops" })).toBe("Sent to Ops.");
     expect(assistantText({ status: "sent", channel_message_id: "m", addressed_to: null })).toBe(
-      "Sent to your Dopl channel. Reply coming to your glasses.",
+      "Sent to your Dopl channel.",
     );
     expect(assistantText({ ...base, status: "replied", reply: "pong", reply_message_id: "r" })).toBe("pong");
   });

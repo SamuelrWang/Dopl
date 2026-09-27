@@ -106,9 +106,11 @@ export function lastUserText(body: unknown): string | null {
 
 export function assistantText(result: UtteranceResult): string {
   if (result.status === "replied" && result.reply) return result.reply;
-  const who = result.addressed_name || (result.addressed_to ? `@${result.addressed_to}` : "your Dopl channel");
-  if (result.status === "offline") return `Sent to ${who}, but no agent is running there right now.`;
-  return `Sent to ${who}. Reply coming to your glasses.`;
+  const who =
+    result.addressed_name ||
+    (result.addressed_to ? `@${result.addressed_to}` : result.channel_name || "your Dopl channel");
+  if (result.status === "offline") return `Sent to ${who}. No agent is running there right now.`;
+  return `Sent to ${who}.`;
 }
 
 export function chatCompletion(content: string, id: string, created: number) {

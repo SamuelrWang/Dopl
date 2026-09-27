@@ -212,7 +212,7 @@ describe("voice + Hey Even", () => {
     expect(JSON.stringify(log.mock.calls)).not.toContain(rotated.key);
     log.mockRestore();
     expect(res.status).toBe(200);
-    expect((await res.json()).choices[0].message.content).toBe("Sent to Orchestrator. Reply coming to your glasses.");
+    expect((await res.json()).choices[0].message.content).toBe("Sent to AI Glasses.");
     expect(t.ch.messages.at(-1)?.body).toBe("reply with pong");
 
     const models = await t.voice.models(req("/api/glasses/hey-even/v1/models", { token: rotated.key }));

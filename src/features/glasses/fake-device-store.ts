@@ -67,6 +67,8 @@ export function createFakeDeviceStore() {
         linked_channel_id: d.linkedChannelId,
         linked_container_id: d.linkedContainerId,
         reply_cursor_seq: null,
+        current_target_channel_id: null,
+        current_target_agent: null,
         created_at: d.now,
         last_seen: null,
         revoked_at: null,
@@ -121,6 +123,10 @@ export function createFakeDeviceStore() {
     async setReplyCursor(did, seq) {
       const r = devices.find((x) => x.id === did);
       if (r) r.reply_cursor_seq = seq;
+    },
+    async setCurrentTarget(did, channelId, agentId) {
+      const r = devices.find((x) => x.id === did && active(x));
+      if (r) Object.assign(r, { current_target_channel_id: channelId, current_target_agent: agentId });
     },
     async countActiveDevices(userId) {
       return devices.filter((x) => x.user_id === userId && active(x) && x.token_hash !== null).length;

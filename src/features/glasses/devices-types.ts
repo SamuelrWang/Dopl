@@ -7,6 +7,9 @@ export interface GlassesDevice {
   linked_channel_id: string | null;
   linked_container_id: string | null;
   reply_cursor_seq: number | null;
+  /** Where voice / Hey Even go by default (menu pick); re-validated on every use. */
+  current_target_channel_id: string | null;
+  current_target_agent: string | null;
   created_at: string;
   last_seen: string | null;
   revoked_at: string | null;
@@ -71,5 +74,6 @@ export interface DeviceStore {
   revokeDevice(userId: string, id: string, now: string): Promise<boolean>;
   touchDevice(deviceId: string, now: string): Promise<void>;
   setReplyCursor(deviceId: string, seq: number | null): Promise<void>;
+  setCurrentTarget(deviceId: string, channelId: string | null, agentId: string | null, now: string): Promise<void>;
   countActiveDevices(userId: string): Promise<number>;
 }

@@ -22,14 +22,17 @@ export interface PostedUtterance {
   recipientAgentIds: string[];
   /** Live agent sessions in the channel at post time. */
   liveAgents: number;
-  /** The one agent the post was @-addressed to, if exactly one was live. */
+  /** The agent the post was @-addressed to (`agent-<id>`), or null for an unaddressed post. */
   addressedTo: string | null;
   /** That agent's operator-given display name, when it has one. */
   addressedName: string | null;
+  channelName: string;
 }
 
 export interface ChannelGateway {
-  postAsOperator(channelId: string, operatorUserId: string, text: string): Promise<PostedUtterance>;
+  /** Post as the operator; `agentId` @-addresses that live agent (else the post is unaddressed).
+   *  Throws {@link UtteranceError} when the addressed agent is not running. */
+  postAsOperator(channelId: string, operatorUserId: string, text: string, agentId: string | null): Promise<PostedUtterance>;
   /** Agent-authored `message` rows after `seq`, oldest first. */
   agentMessagesAfter(channelId: string, seq: number, limit: number): Promise<ChannelReply[]>;
   /** The channel's current highest seq (0 when empty). */
@@ -38,8 +41,10 @@ export interface ChannelGateway {
 
 export interface VoiceConfig {
   channelId: string;
-  /** The account the utterance is posted as: the device owner, a member of the linked channel. */
+  /** The account the utterance is posted as: the device owner, a member of the channel. */
   operatorUserId: string;
+  /** Agent to @-address, or null for an unaddressed channel post. */
+  agentId: string | null;
 }
 
 export interface UtteranceDeps {
@@ -70,6 +75,7 @@ export interface UtteranceResult {
   addressed_to: string | null;
   /** That agent's display name (e.g. "Orchestrator"), else null. */
   addressed_name?: string | null;
+  channel_name?: string;
   /** Set when `replied`: the agent's reply text, its channel message id (the
    *  mirrored card is `reply-<reply_message_id>`, so the plugin can skip it) and
    *  the agent's name. */
@@ -85,13 +91,6 @@ export class UtteranceError extends Error {
   }
 }
 
-/** Where a device's voice goes: its linked channel, posted as the device's owner. Null when unlinked. */
-export function voiceConfigForDevice(device: {
-  user_id: string;
-  linked_channel_id: string | null;
-}): VoiceConfig | null {
-  return device.linked_channel_id ? { channelId: device.linked_channel_id, operatorUserId: device.user_id } : null;
-}
 
 export async function handleGlassesUtterance(deps: UtteranceDeps, text: string): Promise<UtteranceResult> {
   const clean = text.trim();
@@ -104,11 +103,12 @@ export async function handleGlassesUtterance(deps: UtteranceDeps, text: string):
   const sleep = deps.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
   // The budget covers the post too, so a slow write eats the hold, not the client's timeout.
   const deadline = now() + (deps.holdMs ?? replyHoldMsFromEnv());
-  const posted = await gateway.postAsOperator(config.channelId, config.operatorUserId, clean);
+  const posted = await gateway.postAsOperator(config.channelId, config.operatorUserId, clean, config.agentId);
   const base = {
     channel_message_id: posted.id,
     addressed_to: posted.addressedTo,
     addressed_name: posted.addressedName,
+    channel_name: posted.channelName,
   };
   if (posted.liveAgents === 0 && posted.recipientAgentIds.length === 0) {
     return { status: "offline", ...base };

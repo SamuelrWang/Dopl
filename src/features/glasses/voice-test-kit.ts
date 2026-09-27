@@ -2,21 +2,22 @@ import type { ChannelGateway, ChannelReply, PostedUtterance } from "./voice-utte
 
 /** In-memory {@link ChannelGateway} for tests: a channel as a seq-ordered list. */
 export function createFakeChannel(opts: { liveAgents?: number } = {}) {
-  const messages: (ChannelReply & { author: "user" | "agent" })[] = [];
+  const messages: (ChannelReply & { author: "user" | "agent"; agentId?: string | null })[] = [];
   let seq = 100;
   const gateway: ChannelGateway = {
-    async postAsOperator(_channelId, _operatorUserId, text): Promise<PostedUtterance> {
+    async postAsOperator(_channelId, _operatorUserId, text, agentId): Promise<PostedUtterance> {
       seq += 1;
       const id = `msg-${seq}`;
-      messages.push({ id, seq, body: text, agentName: "", author: "user" });
+      messages.push({ id, seq, body: text, agentName: "", author: "user", agentId });
       const live = opts.liveAgents ?? 1;
       return {
         id,
         seq,
         recipientAgentIds: live > 0 ? ["abcdefgh"] : [],
         liveAgents: live,
-        addressedTo: live === 1 ? "agent-abcdefgh" : null,
-        addressedName: live === 1 ? "Orchestrator" : null,
+        addressedTo: agentId ? `agent-${agentId}` : null,
+        addressedName: agentId ? "Orchestrator" : null,
+        channelName: "AI Glasses",
       };
     },
     async agentMessagesAfter(_channelId, after, limit) {
