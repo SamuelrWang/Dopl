@@ -7,8 +7,8 @@ import { apiRequest } from "@/shared/api/api-client";
 import { useApiQuery } from "@/shared/hooks/use-api-query";
 import type { Role } from "@/features/workspaces/types";
 import { Avatar } from "@/shared/ui/avatar";
-import { PAGE_ACTION_BTN } from "@/shared/ui/page-action-button";
-import { RAISED_INPUT } from "@/shared/ui/wells";
+import { UnderlineField } from "@/shared/ui/form-dialog";
+import { SMALL_PRIMARY_BUTTON } from "@/shared/ui/small-action-button";
 import { cn } from "@/shared/lib/utils";
 import { SettingsCard, SettingsPane, SettingsPanel } from "./settings-panel";
 import { AccountSubscription } from "./account-subscription";
@@ -110,21 +110,24 @@ export function AccountSectionCore({
             </div>
           </div>
 
-          <div className="mt-4 flex max-w-md items-end gap-2">
-            <label className="flex min-w-0 flex-1 flex-col gap-1">
-              <span className="text-caption font-medium text-text-secondary">Display name</span>
-              <input
-                type="text"
+          <div className="mt-4 flex max-w-md items-end gap-3">
+            <div className="min-w-0 flex-1">
+              <UnderlineField
+                id="settings-display-name"
+                label="Display name"
+                ariaLabel="Display name"
                 value={displayName}
-                onChange={(e) => setDisplayName(e.target.value)}
-                className={cn(RAISED_INPUT, "px-2.5 py-1.5")}
+                onChange={setDisplayName}
+                onEnter={() => {
+                  if (dirty && !saving) void handleSave();
+                }}
               />
-            </label>
+            </div>
             <button
               type="button"
               disabled={!dirty || saving}
               onClick={handleSave}
-              className={cn(PAGE_ACTION_BTN, "disabled:cursor-not-allowed disabled:opacity-40")}
+              className={cn(SMALL_PRIMARY_BUTTON, "disabled:cursor-not-allowed disabled:opacity-40")}
             >
               {saving ? "Saving…" : "Save"}
             </button>

@@ -15,3 +15,15 @@
 export const SMALL_TEXT_BUTTON =
   "flex h-[var(--action-h-sm)] items-center rounded-[8px] px-2.5 text-caption font-medium " +
   "text-text-secondary transition-colors hover:bg-surface-raised-1 hover:text-text-primary";
+
+/**
+ * THE 30px BLACK VERB — `.auth-btn-3d` at `--action-h-sm`, the popup form's primary
+ * (`form-dialog.tsx › FormDialog`'s footer: New channel, Add person, New agent). It was that file's
+ * private `PRIMARY_BTN` and moved here verbatim (Samuel, 2026-09-28: the profile popup's black
+ * buttons were "too big … The other should be a smaller version"), so the popup panes wear the
+ * same string, not a copy. The 36px `PAGE_ACTION_BTN` stays with the page buttons ("New channel").
+ * Face and scale only; disabled states and width stay with the caller.
+ */
+export const SMALL_PRIMARY_BUTTON =
+  "auth-btn-3d flex h-[var(--action-h-sm)] items-center rounded-[8px] px-3.5 text-caption " +
+  "font-semibold text-text-on-cta";

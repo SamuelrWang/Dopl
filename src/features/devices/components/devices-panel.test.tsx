@@ -28,13 +28,6 @@ import { ApiError } from "@/shared/api/api-envelope";
 import { EVEN_G2_INFO } from "@/features/glasses/platforms/even-g2/info";
 import { DevicesPanel } from "./devices-panel";
 
-const CHANNELS = [
-  { id: "ch-1", name: "General", isMember: true, isDirect: false },
-  { id: "ch-2", name: "Ops", isMember: true, isDirect: false },
-  { id: "ch-3", name: "Lurked", isMember: false, isDirect: false },
-  { id: "ch-4", name: "Ada", isMember: true, isDirect: true },
-];
-
 function device(over: Partial<GlassesDevice> = {}): GlassesDevice {
   return {
     id: "dev-1",
@@ -79,7 +72,6 @@ function route(path: string, opts: Record<string, unknown> = {}): Promise<unknow
   if (path === "/api/glasses/devices" && method === "GET") return Promise.resolve({ devices });
   if (path === "/api/devices" && method === "GET") return Promise.resolve({ devices: computers });
   if (path.startsWith("/api/devices/") && method === "DELETE") return Promise.resolve({ ok: true });
-  if (path === "/api/channels") return Promise.resolve({ channels: CHANNELS });
   if (path === "/api/glasses/pair/claim") return Promise.resolve({ device: device() });
   if (path.endsWith("/hey-even-key")) return Promise.resolve(HEY_EVEN);
   if (path.startsWith("/api/glasses/devices/")) return Promise.resolve(undefined);
@@ -148,23 +140,15 @@ describe("pairing", () => {
     expect(toasts).toEqual(["Glasses paired"]);
   });
 
-  it("sends the picked channel, offering only the caller's non-direct channels", async () => {
+  it("pairs by code alone: no channel picker, no channel_id", async () => {
     renderPane();
     openPairing();
+    expect(screen.queryByRole("button", { name: "Channel for the new glasses" })).toBeNull();
     fireEvent.change(screen.getByLabelText("Pairing code"), { target: { value: "ABC23D" } });
-    fireEvent.click(await screen.findByRole("button", { name: "Channel for the new glasses" }));
-    const menu = await screen.findByRole("menu");
-    await within(menu).findByRole("menuitem", { name: "Ops" });
-    expect(within(menu).getAllByRole("menuitem").map((m) => m.textContent)).toEqual([
-      "No channel",
-      "General",
-      "Ops",
-    ]);
-    fireEvent.click(within(menu).getByRole("menuitem", { name: "Ops" }));
     fireEvent.click(screen.getByRole("button", { name: "Pair" }));
 
     await waitFor(() => expect(writes()).toHaveLength(1));
-    expect(writes()[0].body).toEqual({ code: "ABC23D", channel_id: "ch-2" });
+    expect(writes()[0].body).toEqual({ code: "ABC23D" });
   });
 
   it("shows the server's message when the code is refused", async () => {
@@ -182,26 +166,15 @@ describe("pairing", () => {
 });
 
 describe("glasses rows", () => {
-  it("renders name, platform, presence and the linked channel", async () => {
+  it("renders name, platform and presence, with no channel control", async () => {
     devices = [device(), device({ id: "dev-2", name: "Spare", online: false, linked_channel: null })];
     renderPane();
     const list = await screen.findByRole("list", { name: "Devices" });
     await within(list).findByText("My G2");
     expect(within(list).getByText("My G2")).toBeTruthy();
     expect(within(list).getByText("Even G2 · Online")).toBeTruthy();
-    expect(within(list).getByRole("button", { name: "Channel for My G2" }).textContent).toContain(
-      "General"
-    );
-    expect(within(list).getByRole("button", { name: "Channel for Spare" }).textContent).toContain(
-      "No channel"
-    );
-  });
-
-  it("keeps a linked channel the list does not carry on the menu", async () => {
-    devices = [device({ linked_channel: { id: "ch-9", name: "" } })];
-    renderPane();
-    const picker = await screen.findByRole("button", { name: "Channel for My G2" });
-    expect(picker.textContent).toContain("Unknown channel");
+    expect(within(list).queryByRole("button", { name: /^Channel for/ })).toBeNull();
+    expect(within(list).queryByText("General")).toBeNull();
   });
 
   it("renames inline", async () => {
@@ -214,18 +187,6 @@ describe("glasses rows", () => {
     await waitFor(() =>
       expect(writes()).toEqual([
         { path: "/api/glasses/devices/dev-1", method: "PATCH", body: { name: "Work G2" } },
-      ])
-    );
-  });
-
-  it("unlinks the channel with a null channel_id", async () => {
-    devices = [device()];
-    renderPane();
-    fireEvent.click(await screen.findByRole("button", { name: "Channel for My G2" }));
-    fireEvent.click(await screen.findByRole("menuitem", { name: "No channel" }));
-    await waitFor(() =>
-      expect(writes()).toEqual([
-        { path: "/api/glasses/devices/dev-1", method: "PATCH", body: { channel_id: null } },
       ])
     );
   });

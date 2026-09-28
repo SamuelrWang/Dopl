@@ -3,10 +3,11 @@
 import { useState } from "react";
 import { userFacingMessage } from "@/shared/api/user-facing-message";
 import { formatRelativeTime } from "@/shared/lib/format-time";
+import { cn } from "@/shared/lib/utils";
 import { ConfirmDialog } from "@/shared/ui/confirm-dialog";
 import { InlineEditableRow } from "@/shared/ui/inline-editable-row";
-import { SelectMenu } from "@/shared/ui/select-menu";
 import { toast } from "@/shared/ui/toast";
+import { UNDERLINE_FIELD } from "@/shared/ui/wells";
 import { RowAction, SettingsRow } from "@/shared/layout/settings-modal/sections/settings-panel";
 import { useConfirmedAction } from "@/shared/layout/settings-modal/sections/use-confirmed-action";
 import { DeviceGlyph } from "@/features/devices/components/device-glyph";
@@ -20,18 +21,13 @@ import {
 } from "./glasses-api";
 import { platformInfo } from "../platforms/info";
 import { AssistantKeyDialog } from "./assistant-key-dialog";
-import {
-  NO_CHANNEL,
-  useGlassesChannelOptions,
-  useInvalidateGlassesDevices,
-} from "./use-glasses";
+import { useInvalidateGlassesDevices } from "./use-glasses";
 
 /** Mirrors `core/devices/service.ts › DEVICE_NAME_MAX` (a server module the SPA cannot import). */
 const DEVICE_NAME_MAX = 64;
 
 export function GlassesDeviceRow({ device }: { device: GlassesDevice }) {
   const invalidate = useInvalidateGlassesDevices();
-  const channelOptions = useGlassesChannelOptions(device.linked_channel);
   const [renaming, setRenaming] = useState(false);
   const [busy, setBusy] = useState(false);
   const [secret, setSecret] = useState<AssistantKey | null>(null);
@@ -76,6 +72,11 @@ export function GlassesDeviceRow({ device }: { device: GlassesDevice }) {
               setRenaming(false);
             }}
             onExit={() => setRenaming(false)}
+            // The inline-rename underline (`wells.ts › UNDERLINE_FIELD`), over the row's box face.
+            inputClassName={cn(
+              UNDERLINE_FIELD,
+              "rounded-none font-medium focus:border-text-primary focus:bg-transparent"
+            )}
           />
         ) : (
           <button
@@ -90,20 +91,6 @@ export function GlassesDeviceRow({ device }: { device: GlassesDevice }) {
       }
       meta={deviceMeta(glassesToDevice(device), formatRelativeTime(device.last_seen))}
     >
-      <SelectMenu
-        variant="text"
-        value={device.linked_channel?.id ?? NO_CHANNEL}
-        options={channelOptions}
-        onChange={(next) =>
-          void patch(
-            { channel_id: next === NO_CHANNEL ? null : next },
-            "Couldn't change the channel"
-          ).catch(() => {})
-        }
-        ariaLabel={`Channel for ${device.name}`}
-        disabled={busy}
-        menuClassName="max-h-[320px] overflow-y-auto"
-      />
       {assistant && (
         <RowAction
           disabled={busy}

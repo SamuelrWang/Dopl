@@ -6,7 +6,7 @@ import { formatMoney, PRO_PRICE, TEAM_SEAT_PRICE } from "@/features/billing/pric
 import type { PlanDef } from "@/features/billing/plans";
 import type { CheckoutPlan } from "@/features/billing/url";
 import { cn } from "@/shared/lib/utils";
-import { PAGE_ACTION_BTN } from "@/shared/ui/page-action-button";
+import { SMALL_PRIMARY_BUTTON } from "@/shared/ui/small-action-button";
 
 /**
  * ⚠ THE PLAN UNION IS `features/billing/url.ts › CheckoutPlan`, RE-EXPORTED,
@@ -159,13 +159,13 @@ function PlanCta({
   onUpgrade,
   onSwitchToTeam,
 }: PlanActions & { plan: PlanDef; isCurrent: boolean }) {
-  // /home's page action button (`page-action-button.ts`), full width. The current paid plan's
-  // "Manage billing" is the summary card's, once.
-  const primary = cn(PAGE_ACTION_BTN, "w-full justify-center disabled:cursor-default disabled:opacity-60");
+  // The popup's small black verb (`small-action-button.ts › SMALL_PRIMARY_BUTTON`), full width.
+  // The current paid plan's "Manage billing" is the summary card's, once.
+  const primary = cn(SMALL_PRIMARY_BUTTON, "w-full justify-center disabled:cursor-default disabled:opacity-60");
   const current =
-    "flex h-9 w-full items-center justify-center text-small font-semibold text-text-secondary";
+    "flex h-[var(--action-h-sm)] w-full items-center justify-center text-small font-semibold text-text-secondary";
   const muted =
-    "flex h-9 w-full items-center justify-center text-small font-medium text-text-muted";
+    "flex h-[var(--action-h-sm)] w-full items-center justify-center text-small font-medium text-text-muted";
 
   // The card's "Current plan" badge already says it; a paid plan is managed from the summary card.
   if (isCurrent) return null;

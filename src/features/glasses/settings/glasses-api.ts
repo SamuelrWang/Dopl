@@ -21,7 +21,8 @@ export interface GlassesDevice {
   created_at: string;
   last_seen: string | null;
   online: boolean;
-  linked_channel: GlassesLinkedChannel | null;
+  /** Still sent by older servers; the pane no longer reads or sets it (no channel picker). */
+  linked_channel?: GlassesLinkedChannel | null;
   /** Wire name for "has an assistant key", kept for existing clients. */
   has_hey_even_key: boolean;
 }
@@ -39,13 +40,10 @@ export interface AssistantKey {
 export interface PairClaimInput {
   code: string;
   name?: string;
-  channel_id?: string;
 }
 
-/** `channel_id: null` unlinks. */
 export interface DevicePatch {
   name?: string;
-  channel_id?: string | null;
 }
 
 export const GLASSES_DEVICES = apiResource("/api/glasses/devices");

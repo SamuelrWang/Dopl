@@ -3,25 +3,24 @@
 /**
  * The popup form kit: every dialog that collects input is a `FormDialog` (a yes/no question stays
  * `confirm-dialog.tsx › ConfirmDialog`). Anatomy: `StandardDialog`, stacked {@link FormSection}s
- * (label above control), {@link UnderlineField} for text, {@link PillChoice} for a single choice,
- * and a footer of text Discard + `auth-btn-3d` verb.
+ * (label above control), {@link UnderlineField} for text ({@link InlineUnderlineField} when it has
+ * no label), {@link PillChoice} for a single choice, and a footer of text Discard + `auth-btn-3d` verb.
  * Everything inside a popup is the 30px `--action-h-sm` scale; 36px belongs to the page buttons
  * that open one (`channels/components/bits.tsx › TAB_ACTION`).
  * Escape, the backdrop and × are Discard, so {@link FormDialog} takes one exit, not two.
  * Conformance table: docs/DESIGN-SYSTEM.md, "Popup forms".
  */
 
-import { useState, type ReactNode } from "react";
+import { useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
 import { DialogActions, StandardDialog } from "./standard-dialog";
 import { SegmentedControl } from "./segmented-control";
 import { cn } from "@/shared/lib/utils";
-import { SMALL_TEXT_BUTTON } from "./small-action-button";
+import { SMALL_PRIMARY_BUTTON, SMALL_TEXT_BUTTON } from "./small-action-button";
 import styles from "./form-dialog.module.css";
 
-/** The verb — the composer's black CTA face, at `--action-h-sm`. */
-const PRIMARY_BTN =
-  "auth-btn-3d flex h-[var(--action-h-sm)] items-center rounded-[8px] px-3.5 text-caption " +
-  "font-semibold text-text-on-cta";
+/** The verb — the composer's black CTA face, at `--action-h-sm` (one declaration, shared with
+ *  the profile popup's panes). */
+const PRIMARY_BTN = SMALL_PRIMARY_BUTTON;
 
 /**
  * One section: the bold label, then the control under it. The weight lives in the module's
@@ -138,6 +137,83 @@ export function UnderlineField({
         )}
       </span>
     </FormSection>
+  );
+}
+
+/**
+ * The LABEL-LESS underline field: {@link UnderlineField}'s line and sweep with no label above it —
+ * the name is the hint inside the line. Born as the ontology board header's fields (Samuel,
+ * 2026-09-10: gray rule that turns black while editing) and moved into the kit on 2026-09-28 when
+ * the profile popup's inline fields (the pairing code) took the underline — one recipe, not two.
+ *
+ * The active class is React state, not `:focus-within`: jsdom loads no stylesheet,
+ * so a pure-CSS focus rule would be untestable.
+ */
+export function InlineUnderlineField({
+  label,
+  value,
+  onChange,
+  className,
+  inputClassName,
+  quiet,
+  autoFocus,
+  readOnly,
+  onKeyDown,
+  onBlur,
+}: {
+  /** The hint inside the line, and the accessible name. */
+  label: string;
+  /** Extra class on the input itself (the kit's `.inputAction` for a 36px row). */
+  inputClassName?: string;
+  /**
+   * No rule at rest, black line only while focused (Samuel, 2026-09-14, over the
+   * object panel's rows). The kit's `.inputQuiet` is a resting state of this same
+   * recipe, not a second field, so only the gray goes transparent. Panel row fields
+   * wear it; the two Description fields keep their gray→black line.
+   */
+  quiet?: boolean;
+  value: string;
+  onChange: (next: string) => void;
+  /** Width/flex only — the face is this component's. */
+  className?: string;
+  autoFocus?: boolean;
+  /**
+   * Viewer parity (2026-09-12): the line keeps its face and still takes focus —
+   * `disabled` would drop the row out of the tab order.
+   */
+  readOnly?: boolean;
+  onKeyDown?: (e: ReactKeyboardEvent<HTMLInputElement>) => void;
+  /** Fired AFTER the active class clears, so a commit may unmount the field. */
+  onBlur?: () => void;
+}) {
+  const [focused, setFocused] = useState(false);
+  return (
+    <span
+      className={cn(
+        styles.line,
+        focused && styles.lineActive,
+        "min-w-0",
+        className
+      )}
+    >
+      <input
+        type="text"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        onFocus={() => setFocused(true)}
+        onBlur={() => {
+          setFocused(false);
+          onBlur?.();
+        }}
+        onKeyDown={onKeyDown}
+        autoFocus={autoFocus}
+        readOnly={readOnly}
+        aria-label={label}
+        placeholder={label}
+        spellCheck={false}
+        className={cn(styles.input, quiet && styles.inputQuiet, inputClassName)}
+      />
+    </span>
   );
 }
 
