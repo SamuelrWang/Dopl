@@ -15,16 +15,15 @@ import {
   type GlassesDevice,
   type HeyEvenKey,
 } from "./glasses-api";
-import { HeyEvenKeyDialog } from "./hey-even-key-dialog";
+import { platformInfo } from "../platforms/info";
+import { AssistantKeyDialog } from "./assistant-key-dialog";
 import {
   NO_CHANNEL,
   useGlassesChannelOptions,
   useInvalidateGlassesDevices,
 } from "./use-glasses";
 
-const PLATFORM_LABELS: Record<string, string> = { even_g2: "Even G2" };
-
-/** Mirrors `glasses/devices-service.ts › DEVICE_NAME_MAX` (a server module the SPA cannot import). */
+/** Mirrors `core/devices/service.ts › DEVICE_NAME_MAX` (a server module the SPA cannot import). */
 const DEVICE_NAME_MAX = 64;
 
 /** `connected-apps-section.tsx`'s text action. */
@@ -74,7 +73,8 @@ export function GlassesDeviceRow({ device }: { device: GlassesDevice }) {
   }
 
   const lastSeen = device.online ? "Online" : formatRelativeTime(device.last_seen);
-  const platform = PLATFORM_LABELS[device.platform] ?? device.platform;
+  const info = platformInfo(device.platform);
+  const assistant = info?.assistant;
 
   return (
     <li className="flex flex-col gap-1 rounded-lg border border-border-default bg-bg-elevated px-3 py-2">
@@ -102,16 +102,18 @@ export function GlassesDeviceRow({ device }: { device: GlassesDevice }) {
             {device.name}
           </button>
         )}
-        <button
-          type="button"
-          disabled={busy}
-          onClick={() =>
-            device.has_hey_even_key ? setConfirm("rotate") : void rotate().catch(() => {})
-          }
-          className={`${ROW_ACTION} hover:text-text-primary`}
-        >
-          Hey Even
-        </button>
+        {assistant && (
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() =>
+              device.has_hey_even_key ? setConfirm("rotate") : void rotate().catch(() => {})
+            }
+            className={`${ROW_ACTION} hover:text-text-primary`}
+          >
+            {assistant.name}
+          </button>
+        )}
         <button
           type="button"
           disabled={busy}
@@ -123,7 +125,7 @@ export function GlassesDeviceRow({ device }: { device: GlassesDevice }) {
       </div>
       <div className="flex min-w-0 items-center gap-2">
         <p className="min-w-0 flex-1 truncate text-micro font-mono text-text-muted">
-          {platform} · {lastSeen}
+          {info?.label ?? device.platform} · {lastSeen}
         </p>
         <SelectMenu
           variant="text"
@@ -148,15 +150,19 @@ export function GlassesDeviceRow({ device }: { device: GlassesDevice }) {
         destructive
         onConfirm={revoke}
       />
-      <ConfirmDialog
-        open={confirm === "rotate"}
-        onOpenChange={(open) => !open && setConfirm(null)}
-        title="Replace the Hey Even key?"
-        confirmLabel="Replace"
-        destructive
-        onConfirm={rotate}
-      />
-      <HeyEvenKeyDialog secret={secret} onClose={() => setSecret(null)} />
+      {assistant && (
+        <>
+          <ConfirmDialog
+            open={confirm === "rotate"}
+            onOpenChange={(open) => !open && setConfirm(null)}
+            title={`Replace the ${assistant.name} key?`}
+            confirmLabel="Replace"
+            destructive
+            onConfirm={rotate}
+          />
+          <AssistantKeyDialog assistant={assistant} secret={secret} onClose={() => setSecret(null)} />
+        </>
+      )}
     </li>
   );
 }

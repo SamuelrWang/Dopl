@@ -24,7 +24,7 @@ vi.mock("@/shared/ui/toast", () => ({
 
 import { ApiError } from "@/shared/api/api-envelope";
 import { GlassesSettings } from "./glasses-settings";
-import { HEY_EVEN_WHERE } from "./hey-even-key-dialog";
+import { EVEN_G2_INFO } from "../platforms/even-g2/info";
 
 const CHANNELS = [
   { id: "ch-1", name: "General", isMember: true, isDirect: false },
@@ -223,7 +223,7 @@ describe("Hey Even", () => {
     expect(writes()).toEqual([
       { path: "/api/glasses/devices/dev-1/hey-even-key", method: "POST", body: undefined },
     ]);
-    expect(within(dialog).getByText(HEY_EVEN_WHERE)).toBeTruthy();
+    expect(within(dialog).getByText(EVEN_G2_INFO.assistant.setupPath)).toBeTruthy();
     expect(within(dialog).getByText(HEY_EVEN.url)).toBeTruthy();
     expect(within(dialog).getByText(HEY_EVEN.key)).toBeTruthy();
 

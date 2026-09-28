@@ -3,18 +3,19 @@
 import { CopyButton } from "@/shared/ui/copy-button";
 import { FormDialog, FormSection } from "@/shared/ui/form-dialog";
 import { useCopyToClipboard } from "@/shared/hooks/use-copy-to-clipboard";
+import type { PlatformInfo } from "../platforms/info";
 import type { HeyEvenKey } from "./glasses-api";
 
-export const HEY_EVEN_WHERE = "Even app → Settings → Even AI → Agent Configuration";
-
 /**
- * The one showing of a freshly rotated Hey Even key. The key lives only in the caller's state;
+ * The one showing of a freshly rotated assistant key. The key lives only in the caller's state;
  * closing drops it, and the server keeps a hash, so there is no second look.
  */
-export function HeyEvenKeyDialog({
+export function AssistantKeyDialog({
+  assistant,
   secret,
   onClose,
 }: {
+  assistant: NonNullable<PlatformInfo["assistant"]>;
   secret: HeyEvenKey | null;
   onClose: () => void;
 }) {
@@ -23,7 +24,7 @@ export function HeyEvenKeyDialog({
     <FormDialog
       open={secret !== null}
       onDiscard={onClose}
-      title="Hey Even"
+      title={assistant.name}
       discardLabel="Close"
       primary={{
         label: copied ? "Copied" : "Copy key",
@@ -32,7 +33,7 @@ export function HeyEvenKeyDialog({
         },
       }}
     >
-      <p className="text-caption text-text-secondary">{HEY_EVEN_WHERE}</p>
+      <p className="text-caption text-text-secondary">{assistant.setupPath}</p>
       {secret && (
         <>
           <SecretRow label="URL" text={secret.url} copyLabel="Copy URL" />
