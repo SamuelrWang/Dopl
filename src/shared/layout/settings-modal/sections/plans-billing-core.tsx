@@ -19,7 +19,12 @@ import { apiRequest, ApiError } from "@/shared/api/api-client";
 import { meetsMinRole, type Role } from "@/features/workspaces/types";
 import { cn } from "@/shared/lib/utils";
 import { UsageMeter } from "@/shared/ui/usage-meter";
+import { NAKED_ICON, NAKED_ICON_BUTTON } from "@/shared/ui/naked-icon-button";
+import { OpenScaleButton } from "@/shared/ui/open-scale-button";
+import { PAGE_ACTION_BTN } from "@/shared/ui/page-action-button";
+import { CHIP } from "@/shared/ui/wells";
 import { isLegacySolo, PlanColumn, type CheckoutPlan, type PlanActions } from "./plan-cards";
+import { SettingsPane, SettingsPanel } from "./settings-panel";
 
 export type { CheckoutPlan };
 
@@ -138,100 +143,95 @@ export function PlansBillingCore({
   }
 
   return (
-    <div>
-      <div className="mb-4 flex items-center justify-between">
-        <h2 className="text-title font-semibold tracking-tight text-text-primary">
-          Plans and Billing
-        </h2>
-        <button
-          type="button"
-          className="cursor-pointer p-1 text-text-muted transition-colors hover:text-text-secondary"
-          onClick={() => ent.refresh()}
-          aria-label="Refresh billing status"
-        >
-          <RefreshCw size={14} />
-        </button>
-      </div>
-
-      {isSuccessReturn && ent.isPaid && (
-        <div className="mb-4 rounded-lg border border-success/25 bg-success/10 px-3 py-2 text-caption text-success">
-          {/* ⚠ A home space has no seats to count — naming them here
-              would report a roster the container cannot have. */}
-          {ent.containerKind === "home"
-            ? "Welcome to Pro."
-            : `Welcome to Team — ${ent.billableSeats} ${
-                ent.billableSeats === 1 ? "seat" : "seats"
-              } active.`}
-        </div>
-      )}
-      {finalizing && !ent.isPaid && (
-        <div className="mb-4 rounded-lg border border-border-default bg-card-surface-subtle px-3 py-2 text-caption text-text-secondary">
-          Finalizing your subscription… this usually takes a few seconds.
-        </div>
-      )}
-
-      {ent.isPastDue && (
-        <div className="mb-4 rounded-lg border border-warning/30 bg-warning/10 px-3 py-2.5 text-caption text-warning">
-          <div className="font-semibold">Payment past due</div>
-          <div className="mt-0.5 text-text-secondary">
-            Your {ent.isPro ? "Pro" : ent.isSolo ? "legacy Pro" : "Team"} plan
-            stays active for now. Update your payment method to avoid losing
-            paid features.
-            {canManage && (
-              <>
-                {" "}
-                <button
-                  type="button"
-                  onClick={onManage}
-                  disabled={portalLoading}
-                  className="cursor-pointer font-semibold text-warning underline disabled:opacity-50"
-                >
-                  Update payment method
-                </button>
-              </>
-            )}
+    <SettingsPane>
+      <SettingsPanel
+        id="settings-billing-plan"
+        label="Plans and Billing"
+        action={
+          <button
+            type="button"
+            className={NAKED_ICON_BUTTON}
+            onClick={() => ent.refresh()}
+            aria-label="Refresh billing status"
+          >
+            <RefreshCw size={NAKED_ICON} />
+          </button>
+        }
+      >
+        {isSuccessReturn && ent.isPaid && (
+          <div className="rounded-lg border border-success/25 bg-success/10 px-3 py-2 text-caption text-success">
+            {/* ⚠ A home space has no seats to count — naming them here
+                would report a roster the container cannot have. */}
+            {ent.containerKind === "home"
+              ? "Welcome to Pro."
+              : `Welcome to Team — ${ent.billableSeats} ${
+                  ent.billableSeats === 1 ? "seat" : "seats"
+                } active.`}
           </div>
+        )}
+        {finalizing && !ent.isPaid && (
+          <p className="px-1 text-caption text-text-secondary">Finalizing your plan…</p>
+        )}
+
+        {ent.isPastDue && (
+          <div className="rounded-lg border border-warning/30 bg-warning/10 px-3 py-2.5 text-caption text-warning">
+            <div className="font-semibold">Payment past due</div>
+            <div className="mt-0.5 text-text-secondary">
+              Your {ent.isPro ? "Pro" : ent.isSolo ? "legacy Pro" : "Team"} plan
+              stays active for now. Update your payment method to avoid losing
+              paid features.
+              {canManage && (
+                <>
+                  {" "}
+                  <button
+                    type="button"
+                    onClick={onManage}
+                    disabled={portalLoading}
+                    className="cursor-pointer font-semibold text-warning underline disabled:opacity-50"
+                  >
+                    Update payment method
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+        )}
+
+        <BillingSummary
+          ent={ent}
+          canManage={canManage}
+          portalLoading={portalLoading}
+          switching={switching}
+          onUpgrade={onUpgrade}
+          onManage={onManage}
+          onSwitchToTeam={handleSwitchToTeam}
+        />
+
+        {portalError && <p className="px-1 text-caption text-danger">{portalError}</p>}
+        {switchError && <p className="px-1 text-caption text-danger">{switchError}</p>}
+      </SettingsPanel>
+
+      <SettingsPanel id="settings-billing-plans" label="Plans">
+        <div className="grid grid-cols-2 gap-3 max-[900px]:grid-cols-1">
+          {plansForKind(ent.containerKind).map((plan) => (
+            <PlanColumn
+              key={plan.id}
+              plan={plan}
+              ent={ent}
+              canManage={canManage}
+              portalLoading={portalLoading}
+              switching={switching}
+              onUpgrade={onUpgrade}
+              onManage={onManage}
+              onSwitchToTeam={handleSwitchToTeam}
+            />
+          ))}
         </div>
-      )}
-
-      <BillingSummary
-        ent={ent}
-        canManage={canManage}
-        portalLoading={portalLoading}
-        switching={switching}
-        onUpgrade={onUpgrade}
-        onManage={onManage}
-        onSwitchToTeam={handleSwitchToTeam}
-      />
-
-      {portalError && <p className="mb-3 text-caption text-danger">{portalError}</p>}
-      {switchError && <p className="mb-3 text-caption text-danger">{switchError}</p>}
-
-      <div className="grid grid-cols-2 gap-2 max-[900px]:grid-cols-1">
-        {plansForKind(ent.containerKind).map((plan) => (
-          <PlanColumn
-            key={plan.id}
-            plan={plan}
-            ent={ent}
-            canManage={canManage}
-            portalLoading={portalLoading}
-            switching={switching}
-            onUpgrade={onUpgrade}
-            onManage={onManage}
-            onSwitchToTeam={handleSwitchToTeam}
-          />
-        ))}
-      </div>
-    </div>
+      </SettingsPanel>
+    </SettingsPane>
   );
 }
 
-/**
- * Whose meter this is. `wallet` says which counter the status endpoint read —
- * the caller's SEAT in this workspace, or their PERSONAL home-space wallet
- * (`billing/credits.ts › WalletKind`). Null = an older cached payload; the
- * neutral label claims nothing about the payer.
- */
 function creditsLabel(wallet: WalletKind | null): string {
   if (wallet === "seat") return "Your credits";
   if (wallet === "personal") return "Personal credits";
@@ -263,18 +263,17 @@ function BillingSummary({
   const isHomeSpace = ent.containerKind === "home";
 
   if (ent.loading) {
-    return <div className="bento mb-5 h-24 animate-pulse opacity-50" />;
+    return <div className="bento h-24 animate-pulse opacity-50" />;
   }
 
   return (
-    <div className="bento mb-5 p-4">
+    <div className="bento p-3.5">
       <div className="flex items-center justify-between">
         <span
           className={cn(
-            "rounded-full border px-2.5 py-0.5 text-caption font-semibold",
             ent.isPaid
-              ? "border-border-strong bg-surface-cta text-text-on-cta"
-              : "border-border-strong bg-bg-inset text-text-secondary"
+              ? "rounded-full border border-border-strong bg-surface-cta px-2.5 py-0.5 text-small font-medium text-text-on-cta"
+              : CHIP
           )}
         >
           {planLabel(ent)}
@@ -359,20 +358,19 @@ function BillingSummary({
         {ent.isPaid ? (
           canManage ? (
             <div className="flex items-center gap-2">
-              <button
-                type="button"
+              <OpenScaleButton
                 disabled={portalLoading}
                 onClick={onManage}
-                className="btn-light flex h-8 cursor-pointer items-center justify-center rounded-lg px-4 text-small font-medium text-text-primary disabled:cursor-default disabled:opacity-50"
+                className="disabled:opacity-50"
               >
                 {portalLoading ? "Loading…" : "Manage billing"}
-              </button>
+              </OpenScaleButton>
               {isLegacySolo(ent) && (
                 <button
                   type="button"
                   disabled={switching}
                   onClick={onSwitchToTeam}
-                  className="auth-btn-3d flex h-8 cursor-pointer items-center justify-center rounded-lg px-4 text-small font-semibold text-white disabled:cursor-default disabled:opacity-60"
+                  className={cn(PAGE_ACTION_BTN, "disabled:cursor-default disabled:opacity-60")}
                 >
                   {switching
                     ? "Switching…"
@@ -390,7 +388,7 @@ function BillingSummary({
             <button
               type="button"
               onClick={() => onUpgrade("pro")}
-              className="auth-btn-3d flex h-8 cursor-pointer items-center justify-center rounded-lg px-4 text-small font-semibold text-white"
+              className={PAGE_ACTION_BTN}
             >
               Upgrade to Pro — {formatMoney(PRO_PRICE)}/month
             </button>
@@ -398,7 +396,7 @@ function BillingSummary({
             <button
               type="button"
               onClick={() => onUpgrade("team")}
-              className="auth-btn-3d flex h-8 cursor-pointer items-center justify-center rounded-lg px-4 text-small font-semibold text-white"
+              className={PAGE_ACTION_BTN}
             >
               Upgrade to Team — {formatMoney(TEAM_SEAT_PRICE)}/seat
             </button>

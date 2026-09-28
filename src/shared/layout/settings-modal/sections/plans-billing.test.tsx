@@ -100,7 +100,7 @@ describe("a plain visit", () => {
   it("opens on the plan list, with nothing claiming a purchase is in flight", () => {
     const markup = paint(<PlansBilling role="owner" workspaceId="ws-1" />);
     expect(markup).toContain("Plans and Billing");
-    expect(markup).not.toContain("Finalizing your subscription");
+    expect(markup).not.toContain("Finalizing your plan");
     expect(markup).not.toContain("Subscribe to");
   });
 });
@@ -112,14 +112,14 @@ describe("the checkout return (?billing=success)", () => {
     const markup = paint(
       <PlansBilling role="owner" workspaceId="ws-1" billingReturn="success" />
     );
-    expect(markup).toContain("Finalizing your subscription");
+    expect(markup).toContain("Finalizing your plan");
   });
 
   it("the portal return polls too, but quietly", () => {
     const markup = paint(
       <PlansBilling role="owner" workspaceId="ws-1" billingReturn="return" />
     );
-    expect(markup).not.toContain("Finalizing your subscription");
+    expect(markup).not.toContain("Finalizing your plan");
     expect(markup).not.toContain("Welcome to");
   });
 });
@@ -129,7 +129,7 @@ describe("an upgrade arrival that names a plan (?billing=upgrade&plan=…)", () 
     const markup = paint(
       <PlansBilling role="owner" workspaceId="ws-1" initialCheckoutPlan="team" />
     );
-    expect(markup).toContain("Subscribe to Team");
+    expect(markup).toContain("Upgrade to Team");
     expect(markup).toContain("Back to plans");
     expect(markup).not.toContain("Plans and Billing");
   });
@@ -277,7 +277,7 @@ describe("which card is badged current", () => {
       status: "active",
     });
     expect(markup).toContain("Current plan");
-    expect(markup).toContain("Manage subscription");
+    expect(markup).toContain("Manage billing");
     expect(markup).not.toContain("Upgrade to Pro");
   });
 
@@ -292,9 +292,9 @@ describe("which card is badged current", () => {
    * from being wrong.
    *
    * ⚠ **COUNTING, NOT `toContain`** — "contains Current plan" passes happily
-   * when BOTH cards carry it, which is the whole bug. The badged card prints
-   * the phrase TWICE (the pill and its own inert CTA) and a badged PAID card
-   * prints it once beside "Manage subscription", so 2 is one card and 3 is two.
+   * when BOTH cards carry it, which is the whole bug. Since 2026-09-28 a badged
+   * card prints the phrase ONCE (the pill; its CTA slot is empty), so 1 is one
+   * card and 2 is two.
    */
   for (const status of ["canceled", "free"] as const) {
     it(`badges only Free when a \`pro\` column is ${status}, never both cards`, () => {
@@ -303,11 +303,11 @@ describe("which card is badged current", () => {
         plan: "pro",
         status,
       });
-      expect(markup.split("Current plan").length - 1).toBe(2);
+      expect(markup.split("Current plan").length - 1).toBe(1);
       // …and the card still SELLING is the paid one: a Pro card that thought it
       // was current would offer the portal instead.
       expect(markup).toContain("Upgrade to Pro");
-      expect(markup).not.toContain("Manage subscription");
+      expect(markup).not.toContain("Manage billing");
     });
   }
 
@@ -317,9 +317,9 @@ describe("which card is badged current", () => {
       plan: "team",
       status: "canceled",
     });
-    expect(markup.split("Current plan").length - 1).toBe(2);
+    expect(markup.split("Current plan").length - 1).toBe(1);
     expect(markup).toContain(`Upgrade — ${formatMoney(TEAM_SEAT_PRICE)}/seat`);
-    expect(markup).not.toContain("Manage subscription");
+    expect(markup).not.toContain("Manage billing");
   });
 });
 
@@ -329,7 +329,7 @@ describe("a personal upgrade arrival (?billing=upgrade&plan=pro)", () => {
       <PlansBilling role="owner" workspaceId="ws-1" initialCheckoutPlan="pro" />,
       PERSONAL_FREE
     );
-    expect(markup).toContain("Subscribe to Pro");
+    expect(markup).toContain("Upgrade to Pro");
     expect(markup).toContain(`${formatMoney(PRO_PRICE)} / month`);
     expect(markup).not.toContain("seats ·");
   });

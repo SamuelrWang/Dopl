@@ -53,24 +53,18 @@ export function BillingPane({ workspaceSegment, workspaceId, role }: Props) {
   }
 
   return (
-    <div>
-      <PlansBillingCore
-        role={role}
-        workspaceId={workspaceId}
-        // The chosen plan rides to the browser, so the billing page opens on
-        // that checkout instead of re-asking (`features/billing/url.ts`). ⚠ The
-        // plan is `team` OR `pro` since 2026-09-08 and `billingPath` already
-        // takes the union — the segment is whichever container's settings are
-        // open, which is the container the core offered that plan for.
-        onUpgrade={(plan) => openInBrowser(billingPath(workspaceSegment, plan))}
-        onManage={handleManage}
-        portalLoading={portalLoading}
-        portalError={portalError}
-      />
-      <p className="mt-4 text-caption text-text-secondary">
-        Payment steps finish in your browser — the desktop app never handles
-        card details. Your plan updates here as soon as they do.
-      </p>
-    </div>
+    <PlansBillingCore
+      role={role}
+      workspaceId={workspaceId}
+      // The chosen plan rides to the browser, so the billing page opens on
+      // that checkout instead of re-asking (`features/billing/url.ts`). ⚠ The
+      // plan is `team` OR `pro` since 2026-09-08 and `billingPath` already
+      // takes the union — the segment is whichever container's settings are
+      // open, which is the container the core offered that plan for.
+      onUpgrade={(plan) => openInBrowser(billingPath(workspaceSegment, plan))}
+      onManage={handleManage}
+      portalLoading={portalLoading}
+      portalError={portalError}
+    />
   );
 }

@@ -6,9 +6,9 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { getSupabaseBrowser } from "@/shared/supabase/browser";
 import { ConfirmDialog } from "@/shared/ui/confirm-dialog";
-import { SECTION_BOX_INSET } from "@/shared/ui/section-box";
+import { OpenScaleButton } from "@/shared/ui/open-scale-button";
 import { toast } from "@/shared/ui/toast";
-import { cn } from "@/shared/lib/utils";
+import { SettingsPanel, SettingsRow, SettingsRows } from "./settings-panel";
 
 export function DeleteAccount() {
   const router = useRouter();
@@ -60,28 +60,17 @@ export function DeleteAccount() {
   }
 
   return (
-    <section className="w-full overflow-hidden rounded-[14px] border border-border-strong">
-      <div className="flex items-center bg-card-surface-subtle px-4 py-1.5">
-        <span className="text-label font-semibold uppercase tracking-wide text-danger">
-          Danger zone
-        </span>
-      </div>
-      <div className={cn(SECTION_BOX_INSET, "space-y-3 p-4")}>
-        <p className="text-caption text-text-secondary">
-          Permanently delete your account and all associated data. This action
-          cannot be undone.
-        </p>
-
-        {error && <p className="text-caption text-danger">{error}</p>}
-
-        <button
-          type="button"
-          onClick={() => setConfirmOpen(true)}
-          className="btn-light rounded-md px-2.5 py-1.5 text-small font-medium text-danger"
+    <SettingsPanel id="settings-account-danger" label="Danger zone">
+      <SettingsRows label="Danger zone">
+        <SettingsRow
+          title="Delete account"
+          meta={error ? <span className="text-danger">{error}</span> : undefined}
         >
-          Delete account
-        </button>
-      </div>
+          <OpenScaleButton onClick={() => setConfirmOpen(true)} className="text-danger">
+            Delete
+          </OpenScaleButton>
+        </SettingsRow>
+      </SettingsRows>
 
       <ConfirmDialog
         open={confirmOpen}
@@ -92,6 +81,6 @@ export function DeleteAccount() {
         destructive
         onConfirm={handleDelete}
       />
-    </section>
+    </SettingsPanel>
   );
 }

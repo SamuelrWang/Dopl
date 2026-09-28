@@ -5,9 +5,12 @@ import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/shared/api/api-client";
 import { useApiQuery } from "@/shared/hooks/use-api-query";
-import { useBridgedImageSrc } from "@/shared/hooks/use-bridged-image-src";
 import type { Role } from "@/features/workspaces/types";
-import { SectionShell } from "./section-shell";
+import { Avatar } from "@/shared/ui/avatar";
+import { PAGE_ACTION_BTN } from "@/shared/ui/page-action-button";
+import { RAISED_INPUT } from "@/shared/ui/wells";
+import { cn } from "@/shared/lib/utils";
+import { SettingsCard, SettingsPane, SettingsPanel } from "./settings-panel";
 import { AccountSubscription } from "./account-subscription";
 import { AccountBillingHistory } from "./account-billing-history";
 
@@ -54,9 +57,6 @@ export function AccountSectionCore({
   const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  // Raw OAuth-provider URL — proxied through main in the packaged SPA, verbatim
-  // on the web.
-  const avatarSrc = useBridgedImageSrc(profile?.avatar_url);
 
   // ⚠ Seed ONCE on first arrival; after that the field is user-owned and a
   // background refetch must not overwrite typing.
@@ -88,58 +88,57 @@ export function AccountSectionCore({
   }
 
   return (
-    <SectionShell title="Account" subtitle="Manage your personal account">
-      <div className="flex items-center gap-4">
-        {avatarSrc ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={avatarSrc}
-            alt=""
-            className="h-14 w-14 rounded-full border border-border-default object-cover"
-          />
-        ) : (
-          <div className="flex h-14 w-14 items-center justify-center rounded-full border border-border-default bg-bg-inset text-title text-text-secondary">
-            {(displayName[0] || profile?.email?.[0] || "?").toUpperCase()}
+    <SettingsPane>
+      <SettingsPanel id="settings-account-profile" label="Profile">
+        <SettingsCard label="Profile">
+          <div className="flex items-center gap-3">
+            {/* The app's own avatar (bridged image on desktop, initials fallback). */}
+            <Avatar
+              size="md"
+              person={{
+                userId: "",
+                email: profile?.email ?? null,
+                displayName: displayName || profile?.display_name || null,
+                avatarUrl: profile?.avatar_url ?? null,
+              }}
+            />
+            <div className="min-w-0">
+              <p className="truncate text-body font-medium text-text-primary">
+                {profile?.display_name || "User"}
+              </p>
+              <p className="truncate text-caption text-text-muted">{profile?.email}</p>
+            </div>
           </div>
-        )}
-        <div className="min-w-0">
-          <p className="truncate text-body font-medium text-text-primary">
-            {profile?.display_name || "User"}
-          </p>
-          <p className="truncate text-caption text-text-muted">{profile?.email}</p>
-        </div>
-      </div>
 
-      <label className="flex max-w-sm flex-col gap-1">
-        <span className="text-label font-semibold uppercase tracking-wide text-text-muted">
-          Display name
-        </span>
-        <input
-          type="text"
-          value={displayName}
-          onChange={(e) => setDisplayName(e.target.value)}
-          className="concave-field rounded-lg px-2.5 py-1.5 text-body text-text-primary outline-none"
-        />
-      </label>
+          <div className="mt-4 flex max-w-md items-end gap-2">
+            <label className="flex min-w-0 flex-1 flex-col gap-1">
+              <span className="text-caption font-medium text-text-secondary">Display name</span>
+              <input
+                type="text"
+                value={displayName}
+                onChange={(e) => setDisplayName(e.target.value)}
+                className={cn(RAISED_INPUT, "px-2.5 py-1.5")}
+              />
+            </label>
+            <button
+              type="button"
+              disabled={!dirty || saving}
+              onClick={handleSave}
+              className={cn(PAGE_ACTION_BTN, "disabled:cursor-not-allowed disabled:opacity-40")}
+            >
+              {saving ? "Saving…" : "Save"}
+            </button>
+          </div>
 
-      {error && <p className="text-caption text-danger">{error}</p>}
-      {status && <p className="text-caption text-success">{status}</p>}
-
-      <div className="flex max-w-sm justify-end">
-        <button
-          type="button"
-          disabled={!dirty || saving}
-          onClick={handleSave}
-          className="flex h-7 cursor-pointer items-center rounded-md bg-surface-cta px-2.5 text-small font-medium text-text-on-cta transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
-        >
-          {saving ? "Saving…" : "Save changes"}
-        </button>
-      </div>
+          {error && <p className="mt-2 text-caption text-danger">{error}</p>}
+          {status && <p className="mt-2 text-caption text-success">{status}</p>}
+        </SettingsCard>
+      </SettingsPanel>
 
       <AccountSubscription workspaceId={workspaceId} role={role} />
       <AccountBillingHistory workspaceId={workspaceId} role={role} />
       {machineSection}
       {dangerZone}
-    </SectionShell>
+    </SettingsPane>
   );
 }

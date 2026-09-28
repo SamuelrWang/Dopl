@@ -8,6 +8,7 @@ import { meetsMinRole, type Role } from "@/features/workspaces/types";
 import { formatDate } from "@/shared/lib/format-time";
 import { openExternalUrl } from "@/shared/lib/open-external";
 import { SkeletonLine } from "@/shared/ui/skeleton";
+import { SettingsPanel, SettingsRows } from "./settings-panel";
 
 /**
  * Account → Billing history (Samuel, 2026-09-19: "a place that shows past
@@ -74,18 +75,10 @@ export function AccountBillingHistory({
   if (!loading && !isError && rows.length === 0) return null;
 
   return (
-    <section
-      aria-label="Billing history"
-      className="w-full overflow-hidden rounded-[14px] border border-border-strong"
-    >
-      <div className="flex items-center bg-card-surface-subtle px-4 py-1.5">
-        <span className="text-label font-semibold uppercase tracking-wide text-text-muted">
-          Billing history
-        </span>
-      </div>
+    <SettingsPanel id="settings-account-billing-history" label="Billing history">
       {loading ? (
         <div
-          className="space-y-3 p-4"
+          className="bento space-y-3 p-3.5"
           role="status"
           aria-busy="true"
           aria-label="Loading billing history"
@@ -94,7 +87,7 @@ export function AccountBillingHistory({
           <SkeletonLine w="66%" />
         </div>
       ) : isError ? (
-        <p className="p-4 text-caption text-danger" role="alert">
+        <p className="bento p-3.5 text-caption text-danger" role="alert">
           Couldn&apos;t load billing history.{" "}
           <button
             type="button"
@@ -108,11 +101,11 @@ export function AccountBillingHistory({
           </button>
         </p>
       ) : (
-        <ul className="divide-y divide-border-default">
+        <SettingsRows label="Billing history">
           {rows.map(({ invoice, plan }, index) => (
             <li
               key={invoice.id || invoice.number || `charge-${index}`}
-              className="flex items-center gap-3 px-4 py-2.5"
+              className="flex items-center gap-3 py-2.5"
             >
               <span className="min-w-0 flex-1 truncate text-body text-text-primary">
                 {formatDate(invoice.created)}
@@ -140,9 +133,9 @@ export function AccountBillingHistory({
               )}
             </li>
           ))}
-        </ul>
+        </SettingsRows>
       )}
-    </section>
+    </SettingsPanel>
   );
 }
 
