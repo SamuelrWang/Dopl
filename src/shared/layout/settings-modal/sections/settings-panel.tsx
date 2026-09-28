@@ -2,13 +2,17 @@
 
 import type { ReactNode } from "react";
 import { cn } from "@/shared/lib/utils";
-import { SectionPanel } from "@/shared/ui/section-panel";
+import { SECTION_PANEL_GROUND, SECTION_PANEL_SHELL } from "@/shared/ui/section-panel";
+import { IDENTITY_NAME_TEXT } from "@/shared/ui/section-heading";
 import { SMALL_TEXT_BUTTON } from "@/shared/ui/small-action-button";
 
 /**
  * THE PROFILE POPUP'S PANEL LANGUAGE — /home Overview's, by reference (Samuel, 2026-09-28: the
- * popup pages "don't use our design system"). Every pane is a stack of `SectionPanel`s (the gray
- * well + 18px heading) holding white `.bento` cards, exactly `pages/home/overview-panels.tsx`.
+ * popup pages "don't use our design system"). Every pane is a stack of `SectionPanel`-shaped gray
+ * wells holding white `.bento` cards, exactly `pages/home/overview-panels.tsx`.
+ * ⚠ The well heading is Overview's "Credit spend" face (`IDENTITY_NAME_TEXT`, 14px medium), NOT
+ * `SectionPanel`'s 18px `SECTION_HEADING_TEXT` (Samuel, 2026-09-28: the headers were "too big").
+ * So the panel composes the well by its exported recipe instead of mounting `SectionPanel`.
  * ⚠ No header strips, no `SECTION_BOX_INSET` wells, no `bg-card-surface-subtle` / `bg-bg-inset`
  * fills: those were the popup's own and nothing on /home wears them.
  */
@@ -33,9 +37,20 @@ export function SettingsPanel({
   children: ReactNode;
 }) {
   return (
-    <SectionPanel id={id} label={label} action={action} caption={caption}>
+    <section
+      aria-labelledby={id}
+      data-section-panel
+      className={cn(SECTION_PANEL_SHELL, SECTION_PANEL_GROUND)}
+    >
+      <div className="flex min-h-[22px] items-center justify-between gap-2 px-1 pb-2">
+        <h2 id={id} className={cn("truncate", IDENTITY_NAME_TEXT)}>
+          {label}
+        </h2>
+        {action}
+      </div>
+      {caption && <p className="px-1 pb-2 text-caption text-text-muted">{caption}</p>}
       <div className="flex flex-col gap-3">{children}</div>
-    </SectionPanel>
+    </section>
   );
 }
 
