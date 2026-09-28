@@ -45,6 +45,10 @@ them through, so the model is built so that a new device kind is a new source, n
 - The client merges the sources into one `ConnectedDevice[]`
   (`src/features/devices/merge.ts › mergeDevices`): this computer first, then online devices, then the
   rest by last seen.
+- Every row's name renames in place (`components/device-name-title.tsx › DeviceNameTitle`): glasses
+  through `PATCH /api/glasses/devices/{id}`, computers through `PATCH /api/devices/{id}`, where
+  clearing the name restores the detected one (the placeholder while empty). A legacy computer has no
+  row to rename.
 - `DeviceKind` is open (`"computer" | "glasses" | (string & {})`). A kind with no row of its own
   renders `DevicesPanel`'s generic row: glyph, name and `platform · presence`. Nothing is dropped.
 - Glasses stay on their own endpoints on purpose. The glasses feature is segmented per vendor

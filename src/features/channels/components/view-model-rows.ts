@@ -11,6 +11,7 @@ import {
   lifecycleReceiptStatus,
   type ReceiptStatus,
 } from "../lib/message-receipt";
+import { messageDisplayOf, messageSourceOf, type MessageDisplay, type MessageSource } from "../lib/message-device";
 import { authorAgentIdOf } from "./agents-model";
 import {
   fanoutGroupOf,
@@ -61,6 +62,13 @@ export interface MessageRow {
   recipientAgentIds: string[];
   /** The people half of `recipientAgentIds` — same source and gate, never merged with it. */
   recipientUserIds: string[];
+  /** The message's channel — the display card's write address. Optional: hand-built rows omit it. */
+  channelId?: string;
+  /** Person rows only: the device it was posted from (`lib/message-device.ts`); absent draws no
+   *  pill. */
+  source?: MessageSource | null;
+  /** An agent-built display (`lib/message-device.ts`); the card replaces the markdown body. */
+  display?: MessageDisplay | null;
 }
 
 /** A `system` row (joins, topic changes) — no side, avatar or author. */
@@ -221,6 +229,10 @@ function toMessageRow(
       message.authorKind === "agent" ? [...(message.recipientAgentIds ?? [])] : [],
     recipientUserIds:
       message.authorKind === "agent" ? [...(message.recipientUserIds ?? [])] : [],
+    channelId: message.channelId,
+    // Server-written, reserved keys (stripped from caller input); a person's device, never an agent's.
+    source: message.authorKind === "agent" ? null : messageSourceOf(message.metadata),
+    display: messageDisplayOf(message.metadata),
   };
 }
 

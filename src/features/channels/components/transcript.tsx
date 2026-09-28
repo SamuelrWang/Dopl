@@ -10,6 +10,9 @@ import { cn } from "@/shared/lib/utils";
 import { ArtifactCard } from "./artifact-card";
 import { AuthoredRow } from "./authored-row";
 import { agentBoxOf, agentPostAccent } from "./agent-box-rule";
+import { DevicePill } from "./device-pill";
+import { DisplayCard } from "./display-card";
+import { decisionCardPaint } from "./escalation-card-face";
 import { ThreadCardMessage } from "./thread-card-row";
 import { EscalationCardMessage } from "./escalation-card-row";
 import { MessageMarkdown } from "./message-markdown";
@@ -205,7 +208,18 @@ function Message({
     index.agents,
     index.byId
   );
-  const body = (
+  // The same predicate `transcript-filter.tsx` uses for "People", so filter and paint agree.
+  const box = agentBoxOf(row, index);
+  // A display replaces the markdown body; the body is its plain-text fallback for other readers.
+  const body = row.display && row.channelId ? (
+    <DisplayCard
+      channelId={row.channelId}
+      messageId={row.id}
+      display={row.display}
+      paint={decisionCardPaint(box?.color)}
+      canAct={row.side === "me"}
+    />
+  ) : (
     <MessageMarkdown
       text={row.body}
       index={index}
@@ -217,8 +231,6 @@ function Message({
       onJumpToSeq={onJumpToSeq}
     />
   );
-  // The same predicate `transcript-filter.tsx` uses for "People", so filter and paint agree.
-  const box = agentBoxOf(row, index);
   return (
     <AuthoredRow
       id={row.id}
@@ -238,6 +250,7 @@ function Message({
     >
       {/* The whole body at once: markdown blocks (fences, lists) span lines. */}
       {body}
+      {row.source && <DevicePill source={row.source} />}
     </AuthoredRow>
   );
 }

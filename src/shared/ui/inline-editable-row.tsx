@@ -34,6 +34,9 @@ interface Props {
    *  files 120). Native hard-cap so a 5000-char paste can't blow up the row. */
   maxLength?: number;
   ariaLabel?: string;
+  /** An emptied field COMMITS `""` instead of exiting — for a name whose clearing means "back to
+   *  the default" (a computer's detected name). */
+  allowEmpty?: boolean;
 }
 
 export function InlineEditableRow({
@@ -49,6 +52,7 @@ export function InlineEditableRow({
   inputClassName,
   maxLength,
   ariaLabel,
+  allowEmpty = false,
 }: Props) {
   const [draft, setDraft] = useState(value);
   const [busy, setBusy] = useState(false);
@@ -93,7 +97,7 @@ export function InlineEditableRow({
       return;
     }
     const next = draft.trim();
-    if (!next || next === value.trim()) {
+    if ((!next && !allowEmpty) || next === value.trim()) {
       // Nothing changed — settle and exit. ⚠ NOT onCancel; that is Escape only.
       settledRef.current = true;
       onExit?.();

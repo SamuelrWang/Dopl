@@ -72,6 +72,7 @@ function route(path: string, opts: Record<string, unknown> = {}): Promise<unknow
   if (path === "/api/glasses/devices" && method === "GET") return Promise.resolve({ devices });
   if (path === "/api/devices" && method === "GET") return Promise.resolve({ devices: computers });
   if (path.startsWith("/api/devices/") && method === "DELETE") return Promise.resolve({ ok: true });
+  if (path.startsWith("/api/devices/") && method === "PATCH") return Promise.resolve({ device: computer() });
   if (path === "/api/glasses/pair/claim") return Promise.resolve({ device: device() });
   if (path.endsWith("/hey-even-key")) return Promise.resolve(HEY_EVEN);
   if (path.startsWith("/api/glasses/devices/")) return Promise.resolve(undefined);
@@ -273,5 +274,32 @@ describe("computers", () => {
       ])
     );
     expect(toasts).toContain("Computer removed");
+  });
+
+  it("renames a computer inline; clearing the name restores the detected one", async () => {
+    computers = [computer({ name: "Studio", detected_name: "Samuel's MacBook Pro", renamed: true })];
+    renderPane();
+    const path = "/api/devices/c0ffee00-0000-4000-8000-000000000001";
+    fireEvent.click(await screen.findByRole("button", { name: "Studio" }));
+    let input = screen.getByLabelText("Computer name") as HTMLInputElement;
+    expect(input.placeholder).toBe("Samuel's MacBook Pro");
+    fireEvent.change(input, { target: { value: " Desk Mac " } });
+    fireEvent.blur(input);
+    await waitFor(() =>
+      expect(writes()).toEqual([{ path, method: "PATCH", body: { name: "Desk Mac" } }])
+    );
+    fireEvent.click(await screen.findByRole("button", { name: "Studio" }));
+    input = screen.getByLabelText("Computer name") as HTMLInputElement;
+    fireEvent.change(input, { target: { value: "" } });
+    fireEvent.blur(input);
+    await waitFor(() => expect(writes()[1]).toEqual({ path, method: "PATCH", body: { name: null } }));
+  });
+
+  it("offers no rename on a legacy computer (a bare device token)", async () => {
+    computers = [computer({ legacy: true, current: false })];
+    renderPane();
+    const list = await screen.findByRole("list", { name: "Devices" });
+    await within(list).findByText("Samuel's MacBook Pro");
+    expect(within(list).queryByRole("button", { name: "Samuel's MacBook Pro" })).toBeNull();
   });
 });

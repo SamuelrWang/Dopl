@@ -42,6 +42,9 @@ export interface UsageMeterProps {
   /** Defaults to `toLocaleString()` — right for counts, wrong for bytes. Pass
    *  `shared/lib/format-bytes.ts › formatBytes` for a byte meter. */
   formatValue?: (value: number) => string;
+  /** Replaces the `used / limit` readout outright — a bar whose number is not a count (the
+   *  channel display card's `progress` block reads `62%`). */
+  readout?: string;
 }
 
 /**
@@ -66,6 +69,7 @@ export function UsageMeter({
   className = "mt-3",
   tone = "cta",
   formatValue,
+  readout,
 }: UsageMeterProps) {
   const fmt = formatValue ?? ((value: number) => value.toLocaleString());
   // Zero/negative limit: empty track rather than dividing by it.
@@ -105,7 +109,7 @@ export function UsageMeter({
             over ? "text-warning" : "text-text-primary"
           )}
         >
-          {hasLimit ? `${fmt(used)} / ${fmt(limit)}` : fmt(used)}
+          {readout ?? (hasLimit ? `${fmt(used)} / ${fmt(limit)}` : fmt(used))}
         </span>
       </div>
       <div className="concave-track">

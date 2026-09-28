@@ -92,3 +92,20 @@ export const DECISION_BTN_BASE =
   "inline-flex shrink-0 items-center justify-center rounded-full font-medium transition-colors";
 export const DECISION_BTN_BLACK = "auth-btn-3d text-white";
 export const DECISION_BTN_GREY = "bg-[var(--seg-fill)] text-text-secondary";
+
+/**
+ * **THE AGENT CARD'S SHELL — a painted bar over a white panel inset by `m-0.5 mt-0`, so the sliver
+ * around the panel IS the border and bar and border are one colour by construction.** Two cards wear
+ * it: the decision card (`escalation-card-row.tsx`) and the display card (`display-card.tsx`). The
+ * paint goes through `style` (`decisionCardPaint`), never a class the JIT cannot see.
+ */
+export const AGENT_CARD_SHELL = "mt-1 w-full max-w-[460px] overflow-hidden rounded-[14px] text-left";
+export const AGENT_CARD_BAR = "flex items-center gap-2 px-3 py-2";
+/** The bar's type is the attribution pill's name type, to the class (pinned in
+ *  `escalation-card.test.tsx`). */
+export const AGENT_CARD_BAR_TYPE = "text-body font-semibold leading-tight text-text-on-cta";
+export const AGENT_CARD_PANEL = "m-0.5 mt-0 flex flex-col gap-2 rounded-[12px] bg-white p-3";
+/** Black ink at MESSAGE size, for every body line. */
+export const AGENT_CARD_BODY_TYPE = "wrap-anywhere text-body text-text-primary";
+/** The button box: `text-caption`, the control strip under the prose. */
+export const AGENT_CARD_BTN_BOX = "h-[27px] px-3 text-caption";

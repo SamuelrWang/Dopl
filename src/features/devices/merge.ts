@@ -15,6 +15,8 @@ export function computerToDevice(row: ComputerDeviceDto): ConnectedDevice {
     current: row.current,
     appVersion: row.app_version,
     legacy: row.legacy,
+    // `?? null`: a persisted payload from before renames lacks the key (INVARIANTS §8).
+    detectedName: row.detected_name ?? null,
   };
 }
 

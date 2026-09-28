@@ -46,6 +46,21 @@ export function useConnectedDevices(): { devices: ConnectedDevice[] | null; fail
   return { devices, failed: computers.isError && !computers.data };
 }
 
+/**
+ * A device's CURRENT name, or `null` when no source knows it (removed, another person's, or the read
+ * has not landed) — the caller falls back to its own snapshot. Reads the Devices panel's cache
+ * entries and adds no poll. `enabled: false` (no id to resolve) reads nothing at all.
+ */
+export function useDeviceName(kind: string, id: string | null): string | null {
+  const enabled = id !== null;
+  const computers = useApiQuery(enabled && kind === "computer" ? COMPUTERS.path : null, {
+    select: selectComputers,
+  });
+  const glasses = useGlassesDevices({ enabled: enabled && kind === "glasses" });
+  const rows = kind === "computer" ? (computers.data ?? EMPTY_COMPUTERS) : glasses;
+  return (id && rows.find((row) => row.id === id)?.name) || null;
+}
+
 export function useInvalidateComputers() {
   const queryClient = useQueryClient();
   return () => queryClient.invalidateQueries({ queryKey: COMPUTERS.all });

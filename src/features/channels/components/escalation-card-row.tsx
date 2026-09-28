@@ -39,6 +39,12 @@ import { AgentPill } from "./agent-bits";
 import { agentBoxOf, agentPostAccent } from "./agent-box-rule";
 import { AuthoredRow } from "./authored-row";
 import {
+  AGENT_CARD_BAR,
+  AGENT_CARD_BAR_TYPE,
+  AGENT_CARD_BODY_TYPE,
+  AGENT_CARD_BTN_BOX,
+  AGENT_CARD_PANEL,
+  AGENT_CARD_SHELL,
   DECISION_BTN_BASE,
   DECISION_BTN_BLACK,
   DECISION_BTN_GREY,
@@ -48,26 +54,6 @@ import {
 } from "./escalation-card-face";
 import type { AuthorIndex } from "./view-model";
 import type { EscalationRow } from "./view-model-escalation";
-
-/**
- * **THE BAR'S TYPE IS THE PILL'S NAME TYPE, TO THE CLASS** (Samuel: *"make the
- * font styling of that header to be the same as that of the bolded text that's
- * in the badge for the name of the agent in the channel. And same size."*).
- *
- * ⚠ It is spelled out rather than imported because `attribution-pill.tsx` wears
- * it inline on a `<span>` with no constant to take; the pairing is asserted in
- * `escalation-card.test.tsx` so the two cannot drift silently.
- */
-const BAR_TYPE = "text-body font-semibold leading-tight text-text-on-cta";
-
-/** The card's one body face — black ink at MESSAGE size, for every line
- *  (Samuel: *"black text, in the same fontsize as the normal text"*). */
-const BODY_TYPE = "wrap-anywhere text-body text-text-primary";
-
-/** The button box. ⚠ `text-caption` and not `text-body`: the buttons are the
- *  control strip under the prose, and "Option A" at body size reads as another
- *  sentence in the paragraph it is meant to answer. */
-const BTN_BOX = "h-[27px] px-3 text-caption";
 
 /**
  * What an ANSWERED card says under its buttons.
@@ -184,20 +170,20 @@ export function EscalationCardMessage({
       <div
         data-escalation-id={row.id}
         data-decision-paint={row.agentId ?? undefined}
-        className="mt-1 w-full max-w-[460px] overflow-hidden rounded-[14px] text-left"
+        className={AGENT_CARD_SHELL}
         style={{ backgroundColor: paint }}
       >
-        <div className="flex items-center px-3 py-2">
-          <span className={BAR_TYPE}>{DECISION_CARD_LABEL}</span>
+        <div className={AGENT_CARD_BAR}>
+          <span className={AGENT_CARD_BAR_TYPE}>{DECISION_CARD_LABEL}</span>
         </div>
-        <div className="m-0.5 mt-0 flex flex-col gap-2 rounded-[12px] bg-white p-3">
+        <div className={AGENT_CARD_PANEL}>
           {/* ⚠ PLAIN LINES, IN READING ORDER: what is being decided, any
               context, then one line per option saying what it does. Nothing is
               behind a disclosure — a question you have to expand to answer is
               the prose wall this card replaced. */}
-          <p className={BODY_TYPE}>{escalation.issue}</p>
+          <p className={AGENT_CARD_BODY_TYPE}>{escalation.issue}</p>
           {escalation.context && (
-            <p className={cn(BODY_TYPE, "whitespace-pre-wrap")}>
+            <p className={cn(AGENT_CARD_BODY_TYPE, "whitespace-pre-wrap")}>
               {escalation.context}
             </p>
           )}
@@ -217,7 +203,7 @@ export function EscalationCardMessage({
                     one interpolated string: the same words are the BUTTON's
                     accessible name, and a test (or a reader) must be able to
                     find either one on its own. */}
-                <p className={BODY_TYPE}>
+                <p className={AGENT_CARD_BODY_TYPE}>
                   <span>{option.label}</span>
                   {option.consequence && (
                     <>
@@ -238,14 +224,14 @@ export function EscalationCardMessage({
                option, so spelling it any other way here would be the dash back
                in a second costume. */
             <div className="flex flex-col items-start gap-0.5">
-              <p className={cn(BODY_TYPE, "flex items-center gap-1.5")}>
+              <p className={cn(AGENT_CARD_BODY_TYPE, "flex items-center gap-1.5")}>
                 Recommended:
                 <AgentPill>
                   {decisionOptionName(escalation.recommendation.index)}
                 </AgentPill>
               </p>
               {escalation.recommendation.why && (
-                <p className={BODY_TYPE}>{escalation.recommendation.why}</p>
+                <p className={AGENT_CARD_BODY_TYPE}>{escalation.recommendation.why}</p>
               )}
             </div>
           )}
@@ -255,7 +241,7 @@ export function EscalationCardMessage({
               const chosen = answer?.optionIndex === i;
               const face = cn(
                 DECISION_BTN_BASE,
-                BTN_BOX,
+                AGENT_CARD_BTN_BOX,
                 // ⚠ BEFORE A PRESS EVERY OPTION IS BLACK — they are equals, and
                 // greying one early would read as an answer nobody gave. AFTER a
                 // press exactly the chosen one stays.
