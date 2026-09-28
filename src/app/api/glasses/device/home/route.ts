@@ -1,5 +1,4 @@
-import { preflight } from "@/features/glasses/cors";
-import { menuHandlers } from "@/features/glasses/glasses-runtime";
+import { menuHandlers, preflight } from "@/features/glasses/glasses-runtime";
 
 /** Glasses menu home: recent agents + channels (docs/glasses-mcp.md › Menu). */
 export const runtime = "nodejs";

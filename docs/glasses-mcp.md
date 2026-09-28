@@ -3,7 +3,28 @@
 Agents send messages, questions and custom screens to a user's Even G2 glasses through Dopl's MCP.
 The glasses plugin long-polls Dopl, renders what arrives and posts taps back. Voice from the
 glasses goes into a Dopl channel as the user, and the channel's agent replies come back to the
-lens. Code: `src/features/glasses/`.
+lens. Code: `src/features/glasses/` (layout below).
+
+## Code layout (2026-09-28)
+
+- `core/`: platform-neutral. `devices/` (pairing, credentials, linking, the User API), `messages/`
+  (the queue, inbox long-poll, answer/dismiss, reply mirror), `screens/` (the block vocabulary,
+  validation, templates, render/update), `mcp/` (the one tool registration and its two
+  exposures), `voice/` (push-to-talk, STT, target routing, the channel gateway), `menu/` (menu +
+  read mode, live activity). `glasses-runtime.ts` wires the real stores; route files import only it.
+- `platforms/`: one `GlassesPlatform` per device platform (`platforms/types.ts ›
+  GlassesPlatform`: capabilities, screen limits, `compileScreen`, `previewScreen`,
+  `sanitizeText`, `wrapCardLines`). Core reaches an implementation only through
+  `platforms/registry.ts › glassesPlatform`, keyed by `glasses_device_links.platform`; user-scoped
+  work (MCP cards and screens, queued for every device of the user) uses `DEFAULT_PLATFORM`.
+  `platforms/info.ts › platformInfo` holds the client-safe facts (label, assistant setup copy) the
+  settings UI reads.
+- `platforms/even-g2/`: everything G2-specific: the 576x288 display and container box model
+  (`display.ts`), the compiler and ASCII preview, `@evenrealities/pretext` metrics, the G2 glyph
+  sanitizer and card wrapping (`text.ts`), and the Hey Even OpenAI-compatible shim and key
+  rotation (`hey-even.ts`).
+- A new platform adds a folder under `platforms/`, one registry entry and one `info.ts` entry;
+  the device API paths and JSON shapes stay the same.
 
 ## Production model (2026-09-26)
 
@@ -40,7 +61,7 @@ Each pair of glasses is a row in `glasses_device_links` (`20261028120000_glasses
 ### User API (`withUserAuth`)
 
 - **Session only:** claim, PATCH, DELETE and the Hey Even key are **session-only**
-  (`session-policy.ts › glassesSessionOnly`). A `dopl_at_` agent token gets 403
+  (`core/devices/session-policy.ts › glassesSessionOnly`). A `dopl_at_` agent token gets 403
   `SESSION_REQUIRED`, so a prompt-injected agent cannot mint glasses credentials.
 - **List is open:** `GET /devices` accepts either.
 - **Dev-only escape:** `GLASSES_DEV_AGENT_TOKENS=1` on a non-production server lets the dev seed
@@ -68,11 +89,11 @@ Each pair of glasses is a row in `glasses_device_links` (`20261028120000_glasses
 
 ### MCP exposure and metering
 
-- **Where the tools appear:** the tools have one implementation (`tools.ts ›
+- **Where the tools appear:** the tools have one implementation (`core/mcp/tools.ts ›
   registerGlassesTools`).
   - `/api/mcp/glasses` lists them to any caller whose containment profile offers them.
   - The main `/api/mcp` adds all 11 **only when the caller has at least one paired device**
-    (`mcp-exposure.ts › maybeRegisterGlassesTools`). The check is cached per process for 30s and
+    (`core/mcp/exposure.ts › exposeGlassesTools`, `requireDevice: true`). The check is cached per process for 30s and
     bounded to 5k users.
 - **Containment profiles:** `@dopl/mcp-server › offeredToolsFor` decides.
   - An absent header, `channel_agent` or `full` gets the glasses tools.
@@ -117,6 +138,11 @@ Each pair of glasses is a row in `glasses_device_links` (`20261028120000_glasses
 - The reply mirror runs at most every 5s.
 - `last_seen` is written at most once per 30s.
 - `glasses_ask` and screen waits poll every 1.5s.
+- A menu request checks membership once and resolves the channels-service context once
+  (`core/menu/types.ts › MenuChannelHandle`); a read-mode long-poll or a launch hold reuses it
+  every slice.
+- Voice and Hey Even resolve every target candidate with one membership read, and the post reuses
+  that channel row.
 
 ### Deferred (needs Samuel)
 
@@ -149,7 +175,7 @@ field returns a tool error such as `question is 121 bytes; max 120. Shorten it.`
 
 ### Agent-built screens (`glasses_capabilities`, `glasses_render`, `glasses_update`, templates)
 
-Code: `src/features/glasses/screen-*.ts`. Layout is measured server-side with
+Code: `core/screens/` (vocabulary, validation, templates) and `platforms/even-g2/compile.ts`. Layout is measured server-side with
 `@evenrealities/pretext`, the G2 firmware's own glyph table, which runs in Node.
 
 - `glasses_capabilities()` returns the screen size, limits, block types, and the box model the
@@ -252,7 +278,7 @@ Code: `src/features/glasses/screen-*.ts`. Layout is measured server-side with
 ## Menu and read mode (device API, 2026-09-27)
 
 The glasses plugin's menu is Home, then channel actions,
-agents, start agent, conversation and read. It is served by `menu-service.ts` over `menu-gateway.ts`,
+agents, start agent, conversation and read. It is served by `core/menu/service.ts` over `core/menu/gateway.ts`,
 which calls Dopl's own services:
 - `listAccountChannels` for channels;
 - `readTranscript` and `awaitNewMessages` for messages;
@@ -262,7 +288,7 @@ All routes take the device token and answer errors as `{error:{code, message}}`.
 included) are limited to 120 per minute per device, launches to 5 per minute.
 
 🔒 **Visibility:** every channel-scoped call first checks that the device owner is a member of a
-live channel (`channel-link.ts`), and the channels service checks again. Leaving a channel removes
+live channel (`core/devices/channel-link.ts`), and the channels service checks again. Leaving a channel removes
 access.
 
 | Route | Returns |
@@ -276,7 +302,7 @@ access.
 | `GET /api/glasses/device/launch/:directiveId?channel_id=` | The same shape, for a launch still `launching` after the POST |
 | `PUT /api/glasses/device/target {channel_id \| null, agent_session_id?}` | `{ok:true}` |
 
-**Live agent activity** (the channel page's "working · thinking" bar, `channel-activity.ts`):
+**Live agent activity** (the channel page's "working · thinking" bar, `core/menu/activity.ts`):
 - Every messages response, paged or long-polled, carries
   `activity:[{session_id, name, state:'thinking'|'working'|'replying'|'waiting', detail?}]` and
   `activity_version` (a 12-hex fingerprint).
@@ -344,7 +370,7 @@ access.
 
 What the wearer says is posted as the device owner's own message into the **resolved target**
 (see "Current target and voice routing" above). With no usable target the answer is 409.
-- **Handler:** `voice-utterance.ts › handleGlassesUtterance`, using the channels service's
+- **Handler:** `core/voice/utterance.ts › handleGlassesUtterance`, using the channels service's
   `postMessage`. That is the same write the app and `dopl_send_message` use, so the server stores
   the normal wake verdict.
 - **Addressing:** an agent target is addressed `to: @agent-<id>`. A channel target is unaddressed,
@@ -361,7 +387,7 @@ What the wearer says is posted as the device owner's own message into the **reso
 - **Duplicates:** the mirror also queues a reply that was returned inline, as card
   `reply-<reply_message_id>`. The plugin should skip that card if it already showed the reply.
 
-**Reply mirror** (`reply-mirror.ts`):
+**Reply mirror** (`core/messages/reply-mirror.ts`):
 - Each device inbox long-poll also reads agent `message` rows in the linked channel past a
   per-device cursor (`glasses_device_links.reply_cursor_seq`). A fresh cursor starts at the
   channel's head.

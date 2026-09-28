@@ -1,5 +1,4 @@
-import { preflight } from "@/features/glasses/cors";
-import { deviceHandlers } from "@/features/glasses/glasses-runtime";
+import { deviceHandlers, preflight } from "@/features/glasses/glasses-runtime";
 
 /** Device: revoke itself before forgetting its token (docs/glasses-mcp.md). */
 export const runtime = "nodejs";
