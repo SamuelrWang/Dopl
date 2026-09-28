@@ -1,5 +1,6 @@
 "use client";
 
+import { cn } from "@/shared/lib/utils";
 import { userFacingMessage } from "@/shared/api/user-facing-message";
 import { useState } from "react";
 import { X } from "lucide-react";
@@ -155,12 +156,12 @@ export function CreateSkillDialog({
         </div>
 
         <div className={modalStyles.confirmActions}>
-          <button type="button" className={modalStyles.btnCancel} onClick={close}>
+          <button type="button" className={cn("btn-light", modalStyles.btn)} onClick={close}>
             Cancel
           </button>
           <button
             type="button"
-            className={modalStyles.btnConfirm}
+            className={cn("auth-btn-3d", modalStyles.btn, modalStyles.btnConfirm)}
             onClick={() => void handleCreate()}
             disabled={disabled}
           >

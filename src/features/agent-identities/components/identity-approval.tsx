@@ -75,7 +75,7 @@ export function IdentityApprovalDialog({
         <div className={styles.confirmActions}>
           <button
             type="button"
-            className={styles.btnCancel}
+            className={cn("btn-light", styles.btn)}
             disabled={busy}
             onClick={onCancel}
           >
@@ -83,7 +83,7 @@ export function IdentityApprovalDialog({
           </button>
           <button
             type="button"
-            className={styles.btnConfirm}
+            className={cn("auth-btn-3d", styles.btn, styles.btnConfirm)}
             disabled={busy}
             onClick={onConfirm}
           >
