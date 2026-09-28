@@ -21,9 +21,12 @@ them through, so the model is built so that a new device kind is a new source, n
 | Connect an agent | `src/features/mcp-connect/snippets.ts › connectRecipes`, rendered by `mcp-connect/components/remote-connect.tsx › RemoteConnect` |
 
 - **One row per app.** Clients such as Claude and Codex register a new OAuth client on every install,
-  and refresh rotation leaves rows behind. `mcp_tokens` rows are grouped by the app's name
-  (`appKey(appName(client_name))`). A group is listed while any of its rows is unrevoked and has a
-  live access or refresh token.
+  and refresh rotation leaves rows behind. `mcp_tokens` rows are grouped by the app's name AND its
+  redirect host (`appKey(name, redirectHost(oauth_clients.redirect_uris))`). A group is listed while
+  any of its rows is unrevoked and has a live access or refresh token.
+- **A look-alike cannot hide in a real app's row.** `client_name` is self-declared at registration, so a
+  client calling itself "Claude" with another callback host gets its own row. Every row shows its host
+  and, above one, its connection count.
 - **First-party credentials are never agent apps.** The desktop's device token and its per-session
   container tokens (`DEVICE_CLIENT_ID`), and the playground (`PLAYGROUND_CLIENT_ID`), are filtered out
   in `agent-apps-repository.ts`. Container sessions are listed nowhere and die with their computer.
@@ -71,31 +74,57 @@ them through, so the model is built so that a new device kind is a new source, n
   `(user_id, install_id)`.
   - It rides the existing presence loop: the optional `presence-core.js` hooks `onBeat` / `onAway`.
     There is no second timer.
-  - It is throttled to one write per 60s unless the status changes.
-  - A locked screen reports `away`. Suspend, shutdown and quit report `offline` at once.
+  - It is throttled to one write per ~50s (`device-registry-core.js › MIN_INTERVAL_MS`) unless the
+    status changes; a status asked for while a send is in flight is sent right after it.
+  - A locked screen reports `away`. Suspend and shutdown report `offline` at once; quit awaits the
+    `offline` post together with presence's `away` inside the same flush deadline.
+  - The name and OS version are read asynchronously at arm and refreshed in the background; a beat
+    never shells out.
+  - Server side it is ONE update in the common case; a row is inserted only for a new install.
+  - It stamps `desktop_devices.auth_session_id` from the `session_id` claim of the sign-in it arrives on
+    (`runtime.ts › requestSessionId`).
 - **Online.** A computer is online when its status is not `offline` and its last beat is within
   `devices-service.ts › COMPUTER_ONLINE_WINDOW_MS`.
 - **Token linking.** `POST /api/auth/mcp-device-token` and `POST /api/auth/mcp-container-token`
-  resolve the header to the caller's active `desktop_devices` row and stamp `mcp_tokens.device_id`
-  (`features/devices/server/runtime.ts › mintingDeviceId`). This never fails a mint.
-  - The heartbeat also carries `tokenLabel`, the label of the device token this machine already
-    holds. It links a token minted before the computer registered.
+  resolve the header to the caller's `desktop_devices` row (`features/devices/server/runtime.ts ›
+  mintingDevice`): an active computer's mint stamps `mcp_tokens.device_id`; a REMOVED computer's mint
+  answers 403 `DEVICE_REMOVED`; no header, or a lookup failure, mints unlinked as before.
+  - The device-token mint returns `tokenId`, which the desktop saves with its token. The first beat
+    after sign-in or a re-mint carries it, linking a token minted before the computer registered.
+    A record from an older build (no id) sends its `tokenLabel` once instead.
 - **Legacy computers.** An active device token with no `device_id` (minted by an older build) is
-  listed as a computer named from its label (`Dopl Desktop CLI (<host>)`). Remove revokes it by label.
-- **Remove** (`DELETE /api/devices/{id}`, session-only) does three things:
+  listed as a computer named from its label (`Dopl Desktop CLI (<host>)`). Remove revokes that token
+  by ID, never by label, so two Macs with the same hostname cannot revoke each other.
+- **Remove** (`DELETE /api/devices/{id}`, session-only):
   - Stamps the row `revoked_at`.
   - Revokes every unrevoked `mcp_tokens` row with that `device_id`, which covers the device token and
     every container session.
-  - Makes the heartbeat answer `{ device: { revoked: true } }`. The desktop then rotates its install
-    id and runs the normal sign-out sequence, so a later sign-in on that Mac is a new computer.
-    Nothing resurrects a removed row.
+  - Ends the computer's Supabase sign-in: `end_auth_session(user, auth_session_id)` deletes that
+    `auth.sessions` row (its refresh tokens cascade), so the machine can no longer refresh.
+  - Makes the heartbeat answer `{ device: { revoked: true } }` and every later mint answer 403. The
+    desktop then rotates its install id and runs the normal sign-out sequence, so a later sign-in on
+    that Mac is a new computer. Nothing resurrects a removed row.
+
+### What Remove does NOT reach (residual limits)
+
+- **An access token already issued** keeps working until it expires (Supabase's JWT lifetime, about
+  an hour). Only its refresh is ended; `withUserAuth` does not look up devices per request.
+- **A sign-in the heartbeat never saw.** `auth_session_id` is the session of the last beat that
+  carried a readable one. A computer that never beat on this build (off since before the upgrade)
+  has none, so its sign-in lives until it signs out or its refresh token expires.
+- **Container tokens minted before the computer registered** carry no `device_id`. They are listed
+  nowhere and survive Remove until their 24h TTL (`CONTAINER_TOKEN_TTL_S`); the desktop also revokes
+  each at session end.
+- **Legacy computers** (unlinked device tokens) have no session to end: Remove revokes the token only.
 
 ## Schema
 
-`supabase/migrations/20261105120000_desktop_devices.sql` (additive): the table `desktop_devices`
-(RLS on, owner-only SELECT, service role writes) and the column `mcp_tokens.device_id` (nullable FK,
-`ON DELETE SET NULL`).
-
-- It was applied by name as `desktop_devices`.
+- `supabase/migrations/20261105120000_desktop_devices.sql` (additive): the table `desktop_devices`
+  (RLS on, owner-only SELECT, service role writes) and the column `mcp_tokens.device_id` (nullable FK,
+  `ON DELETE SET NULL`). Applied by name as `desktop_devices`.
+- `supabase/migrations/20261106120000_desktop_devices_session.sql` (additive): the column
+  `desktop_devices.auth_session_id` and the function `end_auth_session(user, session)` (SECURITY
+  DEFINER, pinned search_path, EXECUTE for `service_role` only). Applied by name as
+  `desktop_devices_session`.
 - To verify it, run `list_migrations` and compare `md5(array_to_string(statements, ''))` in
   `supabase_migrations.schema_migrations` with `md5 -q` of the file.
