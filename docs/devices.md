@@ -44,9 +44,11 @@ them through, so the model is built so that a new device kind is a new source, n
   rest by last seen.
 - `DeviceKind` is open (`"computer" | "glasses" | (string & {})`). A kind with no row of its own
   renders `DevicesPanel`'s generic row: glyph, name and `platform · presence`. Nothing is dropped.
-- Glasses stay on their own endpoints on purpose. The glasses feature is being segmented per vendor,
-  so the devices feature reads it over HTTP only. Folding glasses into `GET /api/devices` server-side
-  is the follow-up once that segmentation lands.
+- Glasses stay on their own endpoints on purpose. The glasses feature is segmented per vendor
+  (`src/features/glasses/core`, `src/features/glasses/platforms/*`), so the devices feature reads it
+  over HTTP only. The glasses row itself (`glasses/settings/glasses-device-row.tsx`) takes its
+  platform label and assistant from the glasses platform registry. Folding glasses into
+  `GET /api/devices` server-side is the follow-up (F-770).
 
 ### Adding a kind (phone, robot, …)
 
