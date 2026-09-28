@@ -227,7 +227,7 @@ describe("a cancel the server refuses", () => {
             body: {
               error: {
                 code: "NO_ACTIVE_SUBSCRIPTION",
-                message: "This workspace has no active subscription to cancel.",
+                message: "This workspace has no active plan to cancel.",
               },
             },
           }
@@ -238,7 +238,7 @@ describe("a cancel the server refuses", () => {
 
     await waitFor(() =>
       expect(view.getByRole("alert").textContent).toContain(
-        "This workspace has no active subscription to cancel."
+        "This workspace has no active plan to cancel."
       )
     );
     expect(view.queryByTestId("confirm-dialog")).toBeNull();

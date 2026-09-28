@@ -320,7 +320,7 @@ describe("the cancel flow", () => {
             json: async () => ({
               error: {
                 code: "NO_ACTIVE_SUBSCRIPTION",
-                message: "This workspace has no active subscription to cancel.",
+                message: "This workspace has no active plan to cancel.",
               },
             }),
           } as unknown as Response)
@@ -335,7 +335,7 @@ describe("the cancel flow", () => {
     });
     await waitFor(() =>
       expect(view.getByRole("alert").textContent).toContain(
-        "no active subscription"
+        "no active plan"
       )
     );
     expect(view.queryByTestId("confirm-dialog")).toBeNull();
