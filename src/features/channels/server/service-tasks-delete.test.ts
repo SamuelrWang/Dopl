@@ -123,7 +123,6 @@ beforeEach(() => {
   vi.mocked(repoSessions.deleteSessionStatesForThread).mockResolvedValue(
     undefined
   );
-  vi.mocked(repoTasks.deleteTaskParticipants).mockResolvedValue(undefined);
   vi.mocked(repoTasks.deleteTask).mockResolvedValue(undefined);
 });
 
@@ -131,7 +130,6 @@ beforeEach(() => {
 function expectNothingDeleted() {
   expect(repoMessages.deleteMessagesByThread).not.toHaveBeenCalled();
   expect(repoSessions.deleteSessionStatesForThread).not.toHaveBeenCalled();
-  expect(repoTasks.deleteTaskParticipants).not.toHaveBeenCalled();
   expect(repoTasks.deleteTask).not.toHaveBeenCalled();
 }
 
@@ -224,16 +222,13 @@ describe("deleteTask — the cascade", () => {
         order.push("sessions");
       }
     );
-    vi.mocked(repoTasks.deleteTaskParticipants).mockImplementation(async () => {
-      order.push("participants");
-    });
     vi.mocked(repoTasks.deleteTask).mockImplementation(async () => {
       order.push("task");
     });
 
     await deleteTask(ctxWith(), "general", TASK_ID);
 
-    expect(order).toEqual(["messages", "sessions", "participants", "task"]);
+    expect(order).toEqual(["messages", "sessions", "task"]);
   });
 
   it("scopes every statement to the resolved channel / workspace", async () => {
@@ -247,7 +242,6 @@ describe("deleteTask — the cascade", () => {
       CHAN,
       TASK_ID
     );
-    expect(repoTasks.deleteTaskParticipants).toHaveBeenCalledWith(TASK_ID);
     expect(repoTasks.deleteTask).toHaveBeenCalledWith(CHAN, TASK_ID);
   });
 

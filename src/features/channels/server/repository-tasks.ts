@@ -209,32 +209,6 @@ export async function updateTask(
 }
 
 /**
- * DROP a thread's participant rows — the cascade's second child step.
- *
- * ⚠ THE FK ALREADY CASCADES (`channel_task_participants.task_id … ON DELETE
- * CASCADE`, `20260731130000`), so this statement is REDUNDANT with the task-row
- * delete below and is here anyway, deliberately: the cascade is ordered
- * children-first so that a failure part-way through can only ever leave a thread
- * with less hanging off it, never a task row whose children outlived it. Relying
- * on the FK for one child and an explicit statement for the others would make the
- * order a half-truth. It costs one indexed delete
- * (`channel_task_participants_identity_key` leads with `task_id`) on a table that
- * is usually empty.
- *
- * ⚠ THE TABLE ITSELF IS DEAD CODE — nothing has INSERTed into it since breakout
- * rooms were removed (channels rollback §1) — but rows written before that are
- * still there, so "nothing writes it" is not "nothing is in it".
- */
-export async function deleteTaskParticipants(taskId: string): Promise<void> {
-  const db = supabaseAdmin();
-  const { error } = await db
-    .from("channel_task_participants")
-    .delete()
-    .eq("task_id", taskId);
-  if (error) throw error;
-}
-
-/**
  * REMOVE the thread row itself — the LAST step of the cascade.
  *
  * ⚠ CHANNEL-SCOPED, like every other write here: the id alone would let a
