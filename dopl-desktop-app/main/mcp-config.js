@@ -166,6 +166,14 @@ function loadDeviceToken() {
   return null;
 }
 
+// The label the CURRENT device token was minted under, '' when none. The device heartbeat sends it
+// so the server can link a token minted before this computer registered (re-mints are ~90 days apart).
+function currentDeviceTokenLabel() {
+  const rec = loadDeviceToken();
+  if (!rec || !rec.token) return '';
+  return String(rec.label || deviceLabel());
+}
+
 // ⚠ THE SDK PATH'S BEARER, never a file read — AND THE ONLY PLACE THE BEARER IS SPELLED, now
 // that no file holds it. Landing a 90-day dopl.read+dopl.write credential in plaintext anywhere
 // under userData is what the removed spawn-config write did: every profile PRE-APPROVES `Read`
@@ -458,6 +466,7 @@ module.exports = {
   ensureMcpConfig,
   spawnConfigPath,
   deviceTokenForSpawn, // the SDK path's bearer, from safeStorage — never off disk
+  currentDeviceTokenLabel, // device-identity.js › descriptor
   clearDeviceToken, // S2: sign-out teardown, LOCAL (auth-state.signOut)
   revokeDeviceToken, // F-085: sign-out teardown, SERVER-side (auth-state.signOut)
   MCP_CLIENT_TIMEOUT_MS, // Q9: ONE definition — runtime/claude/loader.js reads it from here

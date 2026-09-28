@@ -66,6 +66,9 @@ const ONE_PATH = '/api/channels/presence';
  *  - setTimer/clearTimer   scheduling (injected so a test owns the clock)
  *  - diag(...)             logging
  *  - random()              [0,1) for the jitter
+ *  - onBeat(status)        optional: each signed-in beat's posture (the device heartbeat rides it)
+ *  - onAway(reason)        optional: sleep()/stop() while signed in
+ *  Both hooks are fire-and-forget: never awaited, errors swallowed, so presence timing is unchanged.
  */
 function createPresence(deps) {
   const {
@@ -73,7 +76,16 @@ function createPresence(deps) {
     now = () => Date.now(),
     setTimer = setTimeout, clearTimer = clearTimeout,
     diag = () => {}, random = Math.random,
+    onBeat = null, onAway = null,
   } = deps;
+
+  function hook(fn, arg) {
+    if (typeof fn !== 'function') return;
+    try {
+      const r = fn(arg);
+      if (r && typeof r.catch === 'function') r.catch(() => {});
+    } catch (_) { /* a hook never breaks presence */ }
+  }
 
   let timer = null;
   let started = false;
@@ -190,8 +202,10 @@ function createPresence(deps) {
     const ctrl = new AbortController();
     inFlight = ctrl;
     let outcome;
+    const status = posture();
+    hook(onBeat, status);
     try {
-      outcome = await beatOnce(posture(), ctrl.signal);
+      outcome = await beatOnce(status, ctrl.signal);
     } finally {
       if (inFlight === ctrl) inFlight = null;
     }
@@ -257,6 +271,7 @@ function createPresence(deps) {
     if (inFlight) { try { inFlight.abort(); } catch (_) { /* gone */ } inFlight = null; }
     diag('presence: away —', reason);
     if (!isSignedIn()) return Promise.resolve('signed-out');
+    hook(onAway, reason);
     return postAway();
   }
 
@@ -286,6 +301,7 @@ function createPresence(deps) {
     if (inFlight) { try { inFlight.abort(); } catch (_) { /* gone */ } inFlight = null; }
     diag('presence: stopped');
     if (!wasStarted || !isSignedIn()) return Promise.resolve('signed-out');
+    hook(onAway, 'stop');
     return postAway();
   }
 

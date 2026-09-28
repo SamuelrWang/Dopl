@@ -189,7 +189,7 @@ const POOL = Symbol.for("undici.globalDispatcher.1");
 
 function loadApi() {
   return loadWithStubs("api.js", {
-    "./auth": {}, "./app-version": {}, "./api-repair": {}, "./config": { API_BASE },
+    "./auth": {}, "./app-version": {}, "./device-identity": {}, "./api-repair": {}, "./config": { API_BASE },
   });
 }
 
