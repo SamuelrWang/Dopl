@@ -28,6 +28,7 @@
 
 const { ipcMain, shell } = require('electron');
 const appVersion = require('./app-version');
+const deviceIdentity = require('./device-identity');
 const authTokens = require('./auth-tokens');
 // ⚠ THE BODY-RELEASE HELPER ONLY — NOT `fetchWithAuthRepair`, which repairs the COOKIE
 // JAR (a jar write from the bearer seam would be wrong; api-repair.js states the split).
@@ -173,6 +174,8 @@ async function sendApiRequest(href, opts, token) {
   const headers = {
     Accept: 'application/json',
     ...appVersion.versionHeaders(),
+    // This computer, so a message typed here is stamped `metadata.source` = it (device-identity.js).
+    ...deviceIdentity.deviceHeaders(),
     [RUNTIME_HEADER]: DESKTOP_UI_RUNTIME,
   };
 

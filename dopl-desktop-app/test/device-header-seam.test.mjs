@@ -30,6 +30,12 @@ test("both seams require device-identity and spread deviceHeaders onto the heade
   }
 });
 
+test("the SPA bridge (ui-bridge.js) sends it too, so a message typed in the app is stamped with this computer", () => {
+  const src = M("ui-bridge.js");
+  assert.match(src, /const deviceIdentity = require\('\.\/device-identity'\);/);
+  assert.match(asyncFnOf(src, "sendApiRequest"), /\.\.\.deviceIdentity\.deviceHeaders\(\)/);
+});
+
 test("api.js › sendOnce puts X-Dopl-Device on the wire (and nothing when unknown)", async () => {
   const run = async (deviceHeaders) => {
     const seen = [];

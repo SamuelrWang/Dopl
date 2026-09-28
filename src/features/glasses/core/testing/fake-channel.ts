@@ -1,3 +1,4 @@
+import type { MessageSourceStamp } from "@/features/channels/server/message-source-stamp";
 import type { ChannelGateway, ChannelReply, PostedUtterance } from "../voice/utterance";
 
 /** A message in no particular channel matches every channel (single-channel tests). */
@@ -10,13 +11,13 @@ const inChannel = (m: { channelId: string }, channelId: string) => m.channelId =
  * `agentSays(body, name, channelId?)` defaults to the single-channel `"chan"`.
  */
 export function createFakeChannel(opts: { liveAgents?: number } = {}) {
-  const messages: (ChannelReply & { author: "user" | "agent"; agentId?: string | null; channelId: string })[] = [];
+  const messages: (ChannelReply & { author: "user" | "agent"; agentId?: string | null; channelId: string; source?: MessageSourceStamp })[] = [];
   let seq = 100;
   const gateway: ChannelGateway = {
-    async postAsOperator(channel, _operatorUserId, text, agentId): Promise<PostedUtterance> {
+    async postAsOperator(channel, _operatorUserId, text, agentId, source): Promise<PostedUtterance> {
       seq += 1;
       const id = `msg-${seq}`;
-      messages.push({ id, seq, body: text, agentName: "", author: "user", agentId, channelId: channel.channelId });
+      messages.push({ id, seq, body: text, agentName: "", author: "user", agentId, channelId: channel.channelId, source });
       const live = opts.liveAgents ?? 1;
       return {
         id,

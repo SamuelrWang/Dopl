@@ -1,6 +1,7 @@
 import { nowOf, sleepOf, type Clock } from "../clock";
 import type { ChannelLink } from "../devices/service";
 import { utf8Bytes } from "../validation";
+import type { MessageSourceStamp } from "@/features/channels/server/message-source-stamp";
 
 /**
  * Voice → channel: what the wearer said is posted into the target channel as
@@ -38,7 +39,13 @@ export interface PostedUtterance {
 export interface ChannelGateway {
   /** Post as the operator; `agentId` @-addresses that live agent (else the post is unaddressed).
    *  Throws {@link UtteranceError} when the addressed agent is not running. */
-  postAsOperator(channel: ChannelLink, operatorUserId: string, text: string, agentId: string | null): Promise<PostedUtterance>;
+  postAsOperator(
+    channel: ChannelLink,
+    operatorUserId: string,
+    text: string,
+    agentId: string | null,
+    source: MessageSourceStamp,
+  ): Promise<PostedUtterance>;
   /** Agent-authored `message` rows after `seq`, oldest first. */
   agentMessagesAfter(channelId: string, seq: number, limit: number): Promise<ChannelReply[]>;
   /** The same across channels in ONE read: `cursors` = channel id → seq; at most
@@ -54,6 +61,8 @@ interface VoiceConfig {
   operatorUserId: string;
   /** Agent to @-address, or null for an unaddressed channel post. */
   agentId: string | null;
+  /** The glasses the utterance came from, stamped as the post's `metadata.source`. */
+  source: MessageSourceStamp;
 }
 
 export interface UtteranceDeps extends Clock {
@@ -109,7 +118,7 @@ export async function handleGlassesUtterance(deps: UtteranceDeps, text: string):
   const sleep = sleepOf(deps);
   // The budget covers the post too, so a slow write eats the hold, not the client's timeout.
   const deadline = nowOf(deps) + (deps.holdMs ?? replyHoldMsFromEnv());
-  const posted = await gateway.postAsOperator(config.channel, config.operatorUserId, clean, config.agentId);
+  const posted = await gateway.postAsOperator(config.channel, config.operatorUserId, clean, config.agentId, config.source);
   if (deps.onPosted) {
     // Never fail an utterance that already posted: at worst its replies miss the mirror.
     await deps.onPosted(posted.seq).catch((err) => console.error("[glasses] post activity write failed", err));

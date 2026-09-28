@@ -11,6 +11,7 @@ import {
   createTaskFanOut,
   listChannelTasks,
 } from "@/features/channels/server/service";
+import { withMessageSource } from "@/features/channels/server/message-source";
 import {
   isTaskFanOutInput,
   TaskCreatePayloadSchema,
@@ -45,7 +46,7 @@ async function handleGet(_request: NextRequest, auth: WorkspaceAuthContext) {
 async function handlePost(request: NextRequest, auth: WorkspaceAuthContext) {
   try {
     const input = await parseJson(request, TaskCreatePayloadSchema);
-    const ctx = buildChannelContext(auth);
+    const ctx = await withMessageSource(buildChannelContext(auth), request);
     if (isTaskFanOutInput(input)) {
       const { threads, groupId } = await createTaskFanOut(
         ctx,

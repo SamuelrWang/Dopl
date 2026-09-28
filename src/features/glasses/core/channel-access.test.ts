@@ -133,13 +133,14 @@ describe("voice channel gateway", () => {
   });
 
   const link = { channelId: LIVE, containerId: "ws-1", name: "room-22" };
+  const SOURCE = { kind: "glasses" as const, device_id: "dev-1", label: "Even G2", platform: "even_g2" };
 
   it("posts as the operator and @-addresses the one live agent", async () => {
     listChannelSessionStates.mockResolvedValue([{ name: "abcdefgh", display_name: "Orchestrator" }]);
     postMessage.mockResolvedValue({ id: "p1", seq: 13, recipientAgentIds: ["abcdefgh"] });
-    const posted = await glassesChannelGateway.postAsOperator(link, USER, "status?", "abcdefgh");
+    const posted = await glassesChannelGateway.postAsOperator(link, USER, "status?", "abcdefgh", SOURCE);
     expect(postMessage).toHaveBeenCalledWith(
-      expect.objectContaining({ userId: USER, workspaceId: "ws-1" }),
+      expect.objectContaining({ userId: USER, workspaceId: "ws-1", messageSource: SOURCE }),
       LIVE,
       expect.objectContaining({ body: "status?", to: "@agent-abcdefgh" }),
     );
@@ -149,10 +150,10 @@ describe("voice channel gateway", () => {
   it("posts a channel target unaddressed, and refuses an agent target that is not running", async () => {
     listChannelSessionStates.mockResolvedValue([{ name: "abcdefgh", display_name: null }]);
     postMessage.mockResolvedValue({ id: "p2", seq: 14, recipientAgentIds: [] });
-    const posted = await glassesChannelGateway.postAsOperator(link, USER, "hi", null);
+    const posted = await glassesChannelGateway.postAsOperator(link, USER, "hi", null, SOURCE);
     expect(postMessage.mock.calls[0][2]).not.toHaveProperty("to");
     expect(posted).toMatchObject({ id: "p2", addressedTo: null, channelName: "room-22" });
-    await expect(glassesChannelGateway.postAsOperator(link, USER, "hi", "zzzzzzzz")).rejects.toThrow("not running");
+    await expect(glassesChannelGateway.postAsOperator(link, USER, "hi", "zzzzzzzz", SOURCE)).rejects.toThrow("not running");
     expect(postMessage).toHaveBeenCalledTimes(1);
   });
 });

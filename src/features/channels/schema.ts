@@ -22,6 +22,7 @@ import {
   removedParam,
 } from "./schema-removed-params";
 import { ChannelInfoCardSchema } from "./info-card";
+import { DisplayInputSchema } from "@/features/glasses/core/screens/display";
 import {
   ChannelEscalationAnswerSchema,
   ChannelEscalationSchema,
@@ -229,6 +230,9 @@ export const ChannelMessageCreateSchema = z.object({
    */
   escalation: ChannelEscalationSchema.optional(),
   escalationAnswer: ChannelEscalationAnswerSchema.optional(),
+  /** An agent-built DISPLAY (glasses block vocabulary), stamped as reserved `metadata.display`
+   *  with a server screen id — docs/specs/device-aware-messages.md. `body` is its text fallback. */
+  display: DisplayInputSchema.optional(),
 });
 export type ChannelMessageCreateInput = z.infer<
   typeof ChannelMessageCreateSchema

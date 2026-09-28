@@ -1,4 +1,5 @@
 import { json } from "../http";
+import { glassesMessageSource } from "@/features/channels/server/message-source-stamp";
 import { UNAUTHORIZED, authedDevice, resolveDeviceDeps, type DeviceHandlerDeps } from "../messages/device-handlers";
 import type { GlassesDevice } from "../devices/types";
 import { PCM_MAX_BYTES, type SttProvider } from "./stt";
@@ -37,7 +38,12 @@ export async function utteranceDepsFor(
 ): Promise<UtteranceDeps | null> {
   const target = await resolveVoiceTarget(deps.linker, device, targetOverrideFrom(request));
   if (!target) return null;
-  const config = { channel: target.channel, operatorUserId: device.user_id, agentId: target.agentId };
+  const config = {
+    channel: target.channel,
+    operatorUserId: device.user_id,
+    agentId: target.agentId,
+    source: glassesMessageSource(device),
+  };
   // The post puts its channel in this device's reply-mirror scope for 24h.
   const onPosted = (seq: number) => recordDevicePost(deps, device.id, target.channel.channelId, seq);
   return { gateway: deps.gateway, config, now: deps.now, sleep: deps.sleep, holdMs: deps.holdMs, onPosted };

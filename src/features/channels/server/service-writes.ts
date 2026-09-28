@@ -27,6 +27,7 @@ import {
   isExternalSessionAuthor,
 } from "../lib/desktop-handle";
 import { resolveWakeVerdict } from "./service-wake-verdict";
+import { deviceStamps } from "./service-writes-device";
 import {
   requireMemberChannel,
   stripNulDeep,
@@ -285,7 +286,7 @@ export async function postMessage(
   //     an older server both carry, and writing an explicit `false` would make
   //     "we looked and it was a desktop agent" indistinguishable from "we never
   //     looked" for every reader downstream. One value, one meaning.
-  const stored: Record<string, unknown> = { ...metadata };
+  const stored: Record<string, unknown> = { ...metadata, ...deviceStamps(ctx, input, authorKind) };
   if (wake.reason) stored.wake_reason = wake.reason;
   if (toDesktopOperatorIds.length > 0) {
     // ⚠ THE FIRST, because `@desktop` always resolves to the caller's own

@@ -9,7 +9,8 @@ import { handleGlassesUtterance, replyHoldMsFromEnv } from "./utterance";
 
 const USER = "11111111-1111-4111-8111-111111111111";
 const CHANNEL = { channelId: "chan", containerId: "ws", name: "AI Glasses" };
-const CONFIG = { channel: CHANNEL, operatorUserId: USER, agentId: "abcdefgh" };
+const SOURCE = { kind: "glasses" as const, device_id: "dev-1", label: "Even G2", platform: "even_g2" };
+const CONFIG = { channel: CHANNEL, operatorUserId: USER, agentId: "abcdefgh", source: SOURCE };
 
 function tone(ms: number, amplitude: number): Uint8Array {
   const n = Math.round((16_000 * ms) / 1000);
@@ -32,7 +33,7 @@ describe("handleGlassesUtterance", () => {
       { gateway: ch.gateway, config: CONFIG, now: clock.now, sleep: clock.sleep },
       "  reply with pong ",
     );
-    expect(ch.messages[0]).toMatchObject({ body: "reply with pong", author: "user" });
+    expect(ch.messages[0]).toMatchObject({ body: "reply with pong", author: "user", source: SOURCE });
     expect(res).toEqual({
       status: "replied",
       channel_message_id: ch.messages[0].id,

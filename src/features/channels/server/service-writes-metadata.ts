@@ -28,6 +28,7 @@ import {
   resolveTypedEscalationAnswer,
 } from "./service-writes-metadata-escalation";
 import type { ChannelContext } from "./service-shared";
+import { SERVER_STAMPED_DEVICE_KEYS } from "./service-writes-device";
 
 /**
  * ONE place that decides what lands in `channel_messages.metadata`.
@@ -37,7 +38,7 @@ import type { ChannelContext } from "./service-shared";
  * `session_id`, `to_user_notify`, `taskMode`, `taskCreatedBy`, `taskTitle`,
  * `taskTarget`, `to_agent_id`, `to_agent_ids`, `author_agent_id`, `intent`,
  * `handoff`, `fanoutGroup`, `mentionedUserIds`, `escalation`,
- * `escalationAnswer`, and the six calm-terminal flags. ⚠ The two close-proposal keys and `threadReopened` LEFT this list with
+ * `escalationAnswer`, `source`, `display`, and the six calm-terminal flags. ⚠ The two close-proposal keys and `threadReopened` LEFT this list with
  * thread closing (wiring plan Phase 4, 2026-08-18) — no writer and, unlike the
  * dead agent keys below, no RENDERER either.
  * `service-writes-metadata-markers.ts` records why. `taskId` stays
@@ -326,6 +327,8 @@ export async function resolvePostMetadata(
   // the ANSWER key could aim a wake at an agent that never asked anything.
   delete metadata[ESCALATION_METADATA_KEY];
   delete metadata[ESCALATION_ANSWER_METADATA_KEY];
+  // ⚠ Device-aware keys: re-stamped in `service-writes.ts` (needs the settled author kind).
+  for (const key of SERVER_STAMPED_DEVICE_KEYS) delete metadata[key];
   const calmFlags = takeCalmFlags(metadata);
 
   // Only when supplied — absent stamps no key, and absence reads as `request`.

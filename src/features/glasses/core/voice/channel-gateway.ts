@@ -19,7 +19,7 @@ import { UtteranceError, type ChannelGateway, type ChannelReply, type PostedUtte
  */
 
 export const glassesChannelGateway: ChannelGateway = {
-  async postAsOperator(channel, operatorUserId, text, agentId): Promise<PostedUtterance> {
+  async postAsOperator(channel, operatorUserId, text, agentId, source): Promise<PostedUtterance> {
     const { channelId, containerId, name: channelName } = channel;
     const live = (await listChannelSessionStates(containerId, channelId)).filter((s) => s.name.length > 0);
     // An AGENT target is @-addressed and must be running; a CHANNEL target is
@@ -30,7 +30,7 @@ export const glassesChannelGateway: ChannelGateway = {
       throw new UtteranceError("That agent is not running. Start it again from the glasses menu.");
     }
     const addressedTo = agentId ? agentIdHandle(agentId) : null;
-    const ctx = await operatorChannelContext(operatorUserId, containerId);
+    const ctx = { ...(await operatorChannelContext(operatorUserId, containerId)), messageSource: source };
     const posted = await postMessage(ctx, channelId, {
       body: text,
       clientMsgId: `glasses-${randomUUID()}`,
