@@ -11,6 +11,7 @@ const h = vi.hoisted(() => ({
   opts: [] as unknown[],
   listComputers: vi.fn(),
   removeComputer: vi.fn(),
+  renameComputer: vi.fn(),
   heartbeat: vi.fn(),
   listAgentApps: vi.fn(),
   disconnectAgentApp: vi.fn(),
@@ -31,6 +32,7 @@ vi.mock("@/features/devices/server/agent-apps-repository", () => ({ agentAppRepo
 vi.mock("@/features/devices/server/devices-service", () => ({
   listComputers: h.listComputers,
   removeComputer: h.removeComputer,
+  renameComputer: h.renameComputer,
   heartbeat: h.heartbeat,
   resolveRequestDevice: vi.fn(),
 }));
@@ -40,7 +42,7 @@ vi.mock("@/features/devices/server/agent-apps", () => ({
 }));
 
 import { GET as listDevices } from "./route";
-import { DELETE as removeDevice } from "./[deviceId]/route";
+import { DELETE as removeDevice, PATCH as renameDevice } from "./[deviceId]/route";
 import { POST as beat } from "./heartbeat/route";
 import { GET as listApps } from "../oauth/apps/route";
 import { DELETE as disconnectApp } from "../oauth/apps/[key]/route";
@@ -56,14 +58,14 @@ const req = (url: string, init: { method?: string; body?: unknown; headers?: Rec
 const params = (p: Record<string, string>) => ({ params: Promise.resolve(p) });
 
 beforeEach(() => {
-  for (const fn of [h.listComputers, h.removeComputer, h.heartbeat, h.listAgentApps, h.disconnectAgentApp]) {
+  for (const fn of [h.listComputers, h.removeComputer, h.renameComputer, h.heartbeat, h.listAgentApps, h.disconnectAgentApp]) {
     fn.mockReset();
   }
 });
 
 describe("devices + agent-app routes", () => {
   it("every route is session-only", () => {
-    expect(h.opts).toHaveLength(5);
+    expect(h.opts).toHaveLength(6);
     for (const o of h.opts) expect(o).toEqual({ sessionOnly: true });
   });
 
@@ -82,6 +84,23 @@ describe("devices + agent-app routes", () => {
     h.removeComputer.mockRejectedValueOnce(new HttpError(404, "DEVICE_NOT_FOUND", "No such device."));
     const missing = await removeDevice(req("/api/devices/y", { method: "DELETE" }), params({ deviceId: "y" }));
     expect(missing.status).toBe(404);
+  });
+
+  it("PATCH /api/devices/:id renames (null clears) and 400s an over-long name", async () => {
+    h.renameComputer.mockResolvedValue({ device: { id: "x", name: "Studio" } });
+    const ok = await renameDevice(
+      req("/api/devices/x", { method: "PATCH", body: { name: "Studio" }, headers: { "X-Dopl-Device": INSTALL } }),
+      params({ deviceId: "x" })
+    );
+    expect(await ok.json()).toEqual({ device: { id: "x", name: "Studio" } });
+    expect(h.renameComputer.mock.calls[0].slice(1)).toEqual(["user-1", "x", "Studio", INSTALL]);
+    await renameDevice(req("/api/devices/x", { method: "PATCH", body: { name: null } }), params({ deviceId: "x" }));
+    expect(h.renameComputer.mock.calls[1][3]).toBeNull();
+    const bad = await renameDevice(
+      req("/api/devices/x", { method: "PATCH", body: { name: "x".repeat(65) } }),
+      params({ deviceId: "x" })
+    );
+    expect(bad.status).toBe(400);
   });
 
   it("POST /api/devices/heartbeat validates the body and answers the service's verdict", async () => {

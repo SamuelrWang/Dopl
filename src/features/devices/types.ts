@@ -26,6 +26,8 @@ export interface ConnectedDevice {
   appVersion?: string | null;
   /** A computer that minted a device token before it could register (an older desktop build). */
   legacy?: boolean;
+  /** The name the computer reported; `name` is the operator's rename over it, when there is one. */
+  detectedName?: string | null;
   /** The glasses source's own row, for that kind's controls (no re-search by id). */
   glasses?: GlassesDevice;
 }
@@ -34,6 +36,7 @@ export interface ConnectedDevice {
 export interface ComputerDeviceDto {
   id: string;
   kind: "computer";
+  /** The effective name: the user's rename, else the detected one. */
   name: string;
   platform: string;
   online: boolean;
@@ -44,6 +47,9 @@ export interface ComputerDeviceDto {
   os_version: string | null;
   current: boolean;
   legacy: boolean;
+  /** What the desktop reports; `name` is the rename over it. Optional: older payloads lack it. */
+  detected_name?: string;
+  renamed?: boolean;
 }
 
 export interface ComputerDeviceList {

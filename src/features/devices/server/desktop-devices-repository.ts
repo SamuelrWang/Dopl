@@ -18,7 +18,7 @@ import type {
 const DEVICES = "desktop_devices";
 const TOKENS = "mcp_tokens";
 const DEVICE_COLS =
-  "id, user_id, install_id, name, platform, os_version, app_version, arch, status, created_at, last_seen, revoked_at, auth_session_id";
+  "id, user_id, install_id, name, display_name, platform, os_version, app_version, arch, status, created_at, last_seen, revoked_at, auth_session_id";
 const UNIQUE_VIOLATION = "23505";
 
 /** The columns a beat writes. */
@@ -126,6 +126,19 @@ export const desktopDeviceRepository: DesktopDeviceStore = {
       .is("device_id", null)
       .is("revoked_at", null);
     if (error) fail("linkTokensByLabel", error);
+  },
+
+  async setDisplayName(userId, deviceId, displayName) {
+    const { data, error } = await db()
+      .from(DEVICES)
+      .update({ display_name: displayName })
+      .eq("user_id", userId)
+      .eq("id", deviceId)
+      .is("revoked_at", null)
+      .select(DEVICE_COLS)
+      .maybeSingle();
+    if (error) fail("setDisplayName", error);
+    return (data as DesktopDeviceRow | null) ?? null;
   },
 
   async revoke(userId, deviceId, now) {

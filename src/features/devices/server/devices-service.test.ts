@@ -6,6 +6,8 @@ import {
   legacyComputerName,
   listComputers,
   removeComputer,
+  renameComputer,
+  requestComputer,
   resolveRequestDevice,
   type DevicesDeps,
 } from "./devices-service";
@@ -66,6 +68,7 @@ function fakeStore(seed: { devices?: DesktopDeviceRow[]; tokens?: FakeToken[] } 
         created_at: now,
         revoked_at: null,
         auth_session_id: null,
+        display_name: null,
       } as DesktopDeviceRow;
       devices.push(row);
       return write(row, input, sessionId, now);
@@ -89,6 +92,12 @@ function fakeStore(seed: { devices?: DesktopDeviceRow[]; tokens?: FakeToken[] } 
           t.device_id = deviceId;
         }
       }
+    },
+    async setDisplayName(userId, deviceId, displayName) {
+      const row = devices.find((d) => d.user_id === userId && d.id === deviceId && !d.revoked_at);
+      if (!row) return null;
+      row.display_name = displayName;
+      return row;
     },
     async revoke(userId, deviceId, now) {
       const row = devices.find((d) => d.user_id === userId && d.id === deviceId && !d.revoked_at);
@@ -222,6 +231,43 @@ describe("listComputers", () => {
     ]);
     expect(devices[2].id).toBe("legacy-33333333-3333-4333-8333-333333333333");
     expect(devices[2].platform).toBe("macos");
+  });
+});
+
+describe("renameComputer", () => {
+  it("overrides the detected name, survives heartbeats, and a blank name restores it", async () => {
+    const { store, devices } = fakeStore();
+    await heartbeat(deps(store), USER, beat());
+    const id = devices[0].id;
+    const renamed = await renameComputer(deps(store), USER, id, "  Studio Mac ", INSTALL);
+    expect(renamed.device).toMatchObject({ name: "Studio Mac", detected_name: "Samuel's MacBook Pro", renamed: true, current: true });
+    await heartbeat(deps(store), USER, beat({ name: "Renamed In macOS" }));
+    const [listed] = (await listComputers(deps(store), USER, null)).devices;
+    expect([listed.name, listed.detected_name]).toEqual(["Studio Mac", "Renamed In macOS"]);
+    const cleared = await renameComputer(deps(store), USER, id, "   ");
+    expect(cleared.device).toMatchObject({ name: "Renamed In macOS", renamed: false });
+    expect(devices[0].display_name).toBeNull();
+  });
+
+  it("404s a legacy, removed or foreign computer", async () => {
+    const { store, devices } = fakeStore();
+    await heartbeat(deps(store), USER, beat());
+    await expect(renameComputer(deps(store), "user-2", devices[0].id, "x")).rejects.toMatchObject({ status: 404 });
+    await expect(renameComputer(deps(store), USER, "legacy-abc", "x")).rejects.toMatchObject({ status: 404 });
+    await removeComputer(deps(store), USER, devices[0].id);
+    await expect(renameComputer(deps(store), USER, devices[0].id, "x")).rejects.toMatchObject({ status: 404 });
+  });
+});
+
+describe("requestComputer", () => {
+  it("answers the active row for this install, else null", async () => {
+    const { store, devices } = fakeStore();
+    expect(await requestComputer(deps(store), USER, INSTALL)).toBeNull();
+    await heartbeat(deps(store), USER, beat());
+    expect((await requestComputer(deps(store), USER, INSTALL))?.id).toBe(devices[0].id);
+    expect(await requestComputer(deps(store), USER, "not-a-uuid")).toBeNull();
+    await removeComputer(deps(store), USER, devices[0].id);
+    expect(await requestComputer(deps(store), USER, INSTALL)).toBeNull();
   });
 });
 

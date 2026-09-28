@@ -11,3 +11,8 @@ export const HeartbeatSchema = z.object({
   tokenId: z.string().uuid().optional(),
   tokenLabel: z.string().trim().min(1).max(120).optional(),
 });
+
+/** `PATCH /api/devices/{id}` — null or "" clears the rename. */
+export const RenameComputerSchema = z.object({
+  name: z.string().trim().max(64).nullable(),
+});

@@ -8,7 +8,10 @@ export interface DesktopDeviceRow {
   id: string;
   user_id: string;
   install_id: string;
+  /** The detected name; every heartbeat overwrites it. */
   name: string;
+  /** The user's rename; null = show the detected {@link name}. */
+  display_name: string | null;
   platform: DesktopDevicePlatform;
   os_version: string | null;
   app_version: string | null;
@@ -58,6 +61,8 @@ export interface DesktopDeviceStore {
   linkTokenById(userId: string, deviceId: string, tokenId: string): Promise<void>;
   /** Legacy fallback: unlinked device tokens minted under `label`. */
   linkTokensByLabel(userId: string, deviceId: string, label: string): Promise<void>;
+  /** Set (or clear, with null) an ACTIVE row's rename; returns it, or null when none matched. */
+  setDisplayName(userId: string, deviceId: string, displayName: string | null): Promise<DesktopDeviceRow | null>;
   /** Stamp the row removed; returns it, or null when no active row matched. */
   revoke(userId: string, deviceId: string, now: string): Promise<DesktopDeviceRow | null>;
   /** Every unrevoked credential linked to the device (device token + container sessions). */

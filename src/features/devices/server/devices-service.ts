@@ -44,11 +44,17 @@ export function legacyComputerName(label: string | null): string {
   return (match[1] ?? "Computer").replace(/\.(local|lan)$/i, "") || "Computer";
 }
 
+/** What a computer is called: the user's rename, else the detected name. */
+export const computerName = (row: Pick<DesktopDeviceRow, "name" | "display_name">): string =>
+  row.display_name || row.name;
+
 function toDto(row: DesktopDeviceRow, now: number, installId: string | null): ComputerDeviceDto {
   return {
     id: row.id,
     kind: "computer",
-    name: row.name,
+    name: computerName(row),
+    detected_name: row.name,
+    renamed: !!row.display_name,
     platform: row.platform,
     online: isComputerOnline(row, now),
     status: row.status,
@@ -69,6 +75,8 @@ function legacyDtos(tokens: DeviceTokenRow[]): ComputerDeviceDto[] {
       id: `${LEGACY_PREFIX}${token.id}`,
       kind: "computer",
       name: legacyComputerName(token.client_name),
+      detected_name: legacyComputerName(token.client_name),
+      renamed: false,
       platform: LEGACY_LABEL.test(token.client_name ?? "") ? "macos" : "",
       online: false,
       status: null,
@@ -136,6 +144,24 @@ export async function heartbeat(
 const notFound = () => new HttpError(404, "DEVICE_NOT_FOUND", "No such device.");
 
 /**
+ * Rename a computer (Settings > Connect > Devices). The rename is an override column, so the
+ * heartbeat's detected name keeps updating underneath it; a blank or null name clears the
+ * override and the detected name shows again. A legacy computer (a token, no row) cannot be renamed.
+ */
+export async function renameComputer(
+  deps: DevicesDeps,
+  userId: string,
+  id: string,
+  name: string | null,
+  installId: string | null = null
+): Promise<{ device: ComputerDeviceDto }> {
+  if (!isUuid(id)) throw notFound();
+  const row = await deps.store.setDisplayName(userId, id, name?.trim() || null);
+  if (!row) throw notFound();
+  return { device: toDto(row, (deps.now ?? Date.now)(), installId) };
+}
+
+/**
  * Remove a computer: every credential it minted is revoked (container sessions included) and its
  * Supabase sign-in is ended server-side, so it cannot refresh. What survives is in docs/devices.md.
  */
@@ -163,6 +189,17 @@ export async function removeComputer(
 }
 
 export type RequestDevice = { deviceId: string } | { removed: true } | null;
+
+/** The ACTIVE registered computer behind a request (no header, unknown or removed = null). */
+export async function requestComputer(
+  deps: DevicesDeps,
+  userId: string,
+  installId: string | null
+): Promise<DesktopDeviceRow | null> {
+  if (!installId || !isUuid(installId)) return null;
+  const row = await deps.store.findByInstall(userId, installId);
+  return row && !row.revoked_at ? row : null;
+}
 
 /** The computer a request came from: active, removed, or unknown (no header / not registered). */
 export async function resolveRequestDevice(
