@@ -4,6 +4,9 @@ import { useState } from "react";
 import { userFacingMessage } from "@/shared/api/user-facing-message";
 import { SelectMenu } from "@/shared/ui/select-menu";
 import { toast } from "@/shared/ui/toast";
+import { cn } from "@/shared/lib/utils";
+import { PAGE_ACTION_BTN } from "@/shared/ui/page-action-button";
+import { RAISED_INPUT } from "@/shared/ui/wells";
 import {
   PAIRING_CODE_LENGTH,
   claimPairing,
@@ -15,7 +18,7 @@ import {
   useInvalidateGlassesDevices,
 } from "./use-glasses";
 
-/** Label, field and button recipes are the Account pane's (`account-section-core.tsx`). */
+/** Pair a pair of glasses by the code on its lens (Settings > Connect > Devices). */
 export function PairGlasses() {
   const [code, setCode] = useState("");
   const [channelId, setChannelId] = useState(NO_CHANNEL);
@@ -46,13 +49,7 @@ export function PairGlasses() {
   }
 
   return (
-    <div className="flex flex-col gap-1">
-      <label
-        htmlFor="glasses-pair-code"
-        className="text-label font-semibold uppercase tracking-wide text-text-muted"
-      >
-        Pair glasses
-      </label>
+    <div className="flex flex-col gap-1.5">
       <div className="flex flex-wrap items-center gap-2">
         <input
           id="glasses-pair-code"
@@ -71,7 +68,7 @@ export function PairGlasses() {
           spellCheck={false}
           aria-label="Pairing code"
           placeholder="Code"
-          className="concave-field w-28 rounded-lg px-2.5 py-1.5 font-mono text-body uppercase tracking-widest text-text-primary outline-none"
+          className={cn(RAISED_INPUT, "w-28 px-2.5 py-1.5 font-mono uppercase tracking-widest")}
         />
         <SelectMenu
           value={channelId}
@@ -86,7 +83,7 @@ export function PairGlasses() {
           type="button"
           disabled={!ready}
           onClick={() => void pair()}
-          className="flex h-7 cursor-pointer items-center rounded-md bg-surface-cta px-2.5 text-small font-medium text-text-on-cta transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+          className={cn(PAGE_ACTION_BTN, "disabled:cursor-not-allowed disabled:opacity-40")}
         >
           {busy ? "Pairing…" : "Pair"}
         </button>

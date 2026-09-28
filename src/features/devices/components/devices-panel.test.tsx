@@ -1,13 +1,15 @@
 // @vitest-environment jsdom
 /**
- * Settings → Glasses, over a mocked TRANSPORT (not mocked hooks): the real User API paths,
- * bodies and cache invalidation are what is under test.
+ * Settings → Connect → Devices, over a mocked TRANSPORT (not mocked hooks): the real API paths,
+ * bodies and cache invalidation are what is under test — computers (`/api/devices`) and paired
+ * glasses (`/api/glasses/devices`) in one list.
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import type { GlassesDevice } from "./glasses-api";
+import type { GlassesDevice } from "@/features/glasses/settings/glasses-api";
+import type { ComputerDeviceDto } from "../types";
 
 const { request, toasts } = vi.hoisted(() => ({
   request: vi.fn<(path: string, opts?: Record<string, unknown>) => Promise<unknown>>(),
@@ -23,8 +25,8 @@ vi.mock("@/shared/ui/toast", () => ({
 }));
 
 import { ApiError } from "@/shared/api/api-envelope";
-import { GlassesSettings } from "./glasses-settings";
-import { HEY_EVEN_WHERE } from "./hey-even-key-dialog";
+import { HEY_EVEN_WHERE } from "@/features/glasses/settings/hey-even-key-dialog";
+import { DevicesPanel } from "./devices-panel";
 
 const CHANNELS = [
   { id: "ch-1", name: "General", isMember: true, isDirect: false },
@@ -48,6 +50,25 @@ function device(over: Partial<GlassesDevice> = {}): GlassesDevice {
 }
 
 let devices: GlassesDevice[];
+let computers: ComputerDeviceDto[];
+
+function computer(over: Partial<ComputerDeviceDto> = {}): ComputerDeviceDto {
+  return {
+    id: "c0ffee00-0000-4000-8000-000000000001",
+    kind: "computer",
+    name: "Samuel's MacBook Pro",
+    platform: "macos",
+    online: true,
+    status: "active",
+    last_seen: new Date().toISOString(),
+    created_at: "2026-09-20T00:00:00Z",
+    app_version: "1.38.0",
+    os_version: "26.1",
+    current: true,
+    legacy: false,
+    ...over,
+  };
+}
 const HEY_EVEN = {
   key: "he_secret_key",
   url: "https://www.usedopl.com/api/glasses/hey-even/v1/chat/completions",
@@ -56,6 +77,8 @@ const HEY_EVEN = {
 function route(path: string, opts: Record<string, unknown> = {}): Promise<unknown> {
   const method = (opts.method as string | undefined) ?? "GET";
   if (path === "/api/glasses/devices" && method === "GET") return Promise.resolve({ devices });
+  if (path === "/api/devices" && method === "GET") return Promise.resolve({ devices: computers });
+  if (path.startsWith("/api/devices/") && method === "DELETE") return Promise.resolve({ ok: true });
   if (path === "/api/channels") return Promise.resolve({ channels: CHANNELS });
   if (path === "/api/glasses/pair/claim") return Promise.resolve({ device: device() });
   if (path.endsWith("/hey-even-key")) return Promise.resolve(HEY_EVEN);
@@ -71,17 +94,22 @@ const writes = () =>
 const deviceReads = () =>
   request.mock.calls.filter(([p, o]) => p === "/api/glasses/devices" && !o?.method).length;
 
+function openPairing() {
+  fireEvent.click(screen.getByRole("button", { name: "Pair glasses" }));
+}
+
 function renderPane() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={client}>
-      <GlassesSettings />
+      <DevicesPanel />
     </QueryClientProvider>
   );
 }
 
 beforeEach(() => {
   devices = [];
+  computers = [];
   toasts.length = 0;
   request.mockReset();
   request.mockImplementation(route);
@@ -89,15 +117,18 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe("pairing", () => {
-  it("shows only the pair control when nothing is paired", async () => {
+  it("hides the pair control until asked, and says when there are no devices", async () => {
     renderPane();
     await waitFor(() => expect(deviceReads()).toBe(1));
+    expect(await screen.findByText("No devices yet.")).toBeTruthy();
+    expect(screen.queryByLabelText("Pairing code")).toBeNull();
+    openPairing();
     expect(screen.getByLabelText("Pairing code")).toBeTruthy();
-    expect(screen.queryByRole("list", { name: "Paired glasses" })).toBeNull();
   });
 
   it("normalizes the code and claims it, then refetches the list", async () => {
     renderPane();
+    openPairing();
     const input = screen.getByLabelText("Pairing code") as HTMLInputElement;
     const pair = screen.getByRole("button", { name: "Pair" }) as HTMLButtonElement;
     fireEvent.change(input, { target: { value: "ab-c 2" } });
@@ -119,6 +150,7 @@ describe("pairing", () => {
 
   it("sends the picked channel, offering only the caller's non-direct channels", async () => {
     renderPane();
+    openPairing();
     fireEvent.change(screen.getByLabelText("Pairing code"), { target: { value: "ABC23D" } });
     fireEvent.click(await screen.findByRole("button", { name: "Channel for the new glasses" }));
     const menu = await screen.findByRole("menu");
@@ -142,17 +174,19 @@ describe("pairing", () => {
         : route(path, opts)
     );
     renderPane();
+    openPairing();
     fireEvent.change(screen.getByLabelText("Pairing code"), { target: { value: "ABC23D" } });
     fireEvent.keyDown(screen.getByLabelText("Pairing code"), { key: "Enter" });
     expect(await screen.findByText("Code expired")).toBeTruthy();
   });
 });
 
-describe("device list", () => {
+describe("glasses rows", () => {
   it("renders name, platform, presence and the linked channel", async () => {
     devices = [device(), device({ id: "dev-2", name: "Spare", online: false, linked_channel: null })];
     renderPane();
-    const list = await screen.findByRole("list", { name: "Paired glasses" });
+    const list = await screen.findByRole("list", { name: "Devices" });
+    await within(list).findByText("My G2");
     expect(within(list).getByText("My G2")).toBeTruthy();
     expect(within(list).getByText("Even G2 · Online")).toBeTruthy();
     expect(within(list).getByRole("button", { name: "Channel for My G2" }).textContent).toContain(
@@ -196,13 +230,13 @@ describe("device list", () => {
     );
   });
 
-  it("revokes only after the confirm", async () => {
+  it("removes only after the confirm", async () => {
     devices = [device()];
     renderPane();
-    fireEvent.click(await screen.findByRole("button", { name: "Revoke" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Remove" }));
     expect(writes()).toEqual([]);
-    const dialog = await screen.findByRole("dialog", { name: "Revoke My G2?" });
-    fireEvent.click(within(dialog).getByRole("button", { name: "Revoke" }));
+    const dialog = await screen.findByRole("dialog", { name: "Remove My G2?" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Remove" }));
     await waitFor(() =>
       expect(writes()).toEqual([
         { path: "/api/glasses/devices/dev-1", method: "DELETE", body: undefined },
@@ -244,5 +278,39 @@ describe("Hey Even", () => {
     expect(writes()).toEqual([]);
     fireEvent.click(within(confirm).getByRole("button", { name: "Replace" }));
     expect(await screen.findByText(HEY_EVEN.key)).toBeTruthy();
+  });
+});
+
+describe("computers", () => {
+  it("lists this computer first with its platform, presence and app version", async () => {
+    computers = [
+      computer({ id: "c0ffee00-0000-4000-8000-000000000002", name: "Air", current: false, online: false, last_seen: null }),
+      computer(),
+    ];
+    devices = [device({ online: false, last_seen: null })];
+    renderPane();
+    const list = await screen.findByRole("list", { name: "Devices" });
+    await within(list).findByText("Samuel's MacBook Pro");
+    const rows = within(list).getAllByRole("listitem");
+    expect(rows[0].textContent).toContain("Samuel's MacBook Pro");
+    expect(rows[0].textContent).toContain("This computer");
+    expect(within(rows[0]).getByText("macOS · Online · Dopl 1.38.0")).toBeTruthy();
+    expect(rows.map((r) => r.textContent ?? "").join("|")).toContain("Air");
+    expect(within(list).getByText("macOS · Offline · Dopl 1.38.0")).toBeTruthy();
+  });
+
+  it("removes a computer after the confirm, then refetches", async () => {
+    computers = [computer({ current: false })];
+    renderPane();
+    const list = await screen.findByRole("list", { name: "Devices" });
+    fireEvent.click(await within(list).findByRole("button", { name: "Remove" }));
+    const dialog = await screen.findByRole("dialog", { name: "Remove Samuel's MacBook Pro?" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Remove" }));
+    await waitFor(() =>
+      expect(writes()).toEqual([
+        { path: "/api/devices/c0ffee00-0000-4000-8000-000000000001", method: "DELETE", body: undefined },
+      ])
+    );
+    expect(toasts).toContain("Computer removed");
   });
 });

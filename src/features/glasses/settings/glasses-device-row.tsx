@@ -7,7 +7,9 @@ import { ConfirmDialog } from "@/shared/ui/confirm-dialog";
 import { InlineEditableRow } from "@/shared/ui/inline-editable-row";
 import { SelectMenu } from "@/shared/ui/select-menu";
 import { toast } from "@/shared/ui/toast";
-import { PresenceDot } from "@/features/members/components/members-v2/bits";
+import { RowAction } from "@/shared/layout/settings-modal/sections/settings-panel";
+import { DeviceGlyph } from "@/features/devices/components/device-glyph";
+import { deviceMeta, glassesToDevice } from "@/features/devices/merge";
 import {
   revokeDevice,
   rotateHeyEvenKey,
@@ -22,14 +24,8 @@ import {
   useInvalidateGlassesDevices,
 } from "./use-glasses";
 
-const PLATFORM_LABELS: Record<string, string> = { even_g2: "Even G2" };
-
 /** Mirrors `glasses/devices-service.ts › DEVICE_NAME_MAX` (a server module the SPA cannot import). */
 const DEVICE_NAME_MAX = 64;
-
-/** `connected-apps-section.tsx`'s text action. */
-const ROW_ACTION =
-  "shrink-0 text-caption text-text-secondary transition-colors disabled:opacity-50";
 
 export function GlassesDeviceRow({ device }: { device: GlassesDevice }) {
   const invalidate = useInvalidateGlassesDevices();
@@ -55,10 +51,10 @@ export function GlassesDeviceRow({ device }: { device: GlassesDevice }) {
   async function revoke() {
     try {
       await revokeDevice(device.id);
-      toast({ title: "Glasses revoked" });
+      toast({ title: "Glasses removed" });
       await invalidate();
     } catch (err) {
-      toast({ title: userFacingMessage(err, "Couldn't revoke") });
+      toast({ title: userFacingMessage(err, "Couldn't remove") });
       throw err;
     }
   }
@@ -73,16 +69,14 @@ export function GlassesDeviceRow({ device }: { device: GlassesDevice }) {
     }
   }
 
-  const lastSeen = device.online ? "Online" : formatRelativeTime(device.last_seen);
-  const platform = PLATFORM_LABELS[device.platform] ?? device.platform;
+  const meta = deviceMeta(glassesToDevice(device), formatRelativeTime(device.last_seen));
 
   return (
-    <li className="flex flex-col gap-1 rounded-lg border border-border-default bg-bg-elevated px-3 py-2">
-      <div className="flex min-w-0 items-center gap-2">
-        <PresenceDot dot={device.online ? "active" : "idle"} />
+    <li className="flex min-w-0 items-center gap-3 py-2.5">
+      <DeviceGlyph kind="glasses" />
+      <div className="min-w-0 flex-1">
         {renaming ? (
           <InlineEditableRow
-            className="flex-1"
             value={device.name}
             maxLength={DEVICE_NAME_MAX}
             ariaLabel="Glasses name"
@@ -97,34 +91,14 @@ export function GlassesDeviceRow({ device }: { device: GlassesDevice }) {
             type="button"
             onClick={() => setRenaming(true)}
             title="Rename"
-            className="min-w-0 flex-1 truncate text-left text-body text-text-primary"
+            className="block max-w-full truncate text-left text-body font-medium text-text-primary"
           >
             {device.name}
           </button>
         )}
-        <button
-          type="button"
-          disabled={busy}
-          onClick={() =>
-            device.has_hey_even_key ? setConfirm("rotate") : void rotate().catch(() => {})
-          }
-          className={`${ROW_ACTION} hover:text-text-primary`}
-        >
-          Hey Even
-        </button>
-        <button
-          type="button"
-          disabled={busy}
-          onClick={() => setConfirm("revoke")}
-          className={`${ROW_ACTION} hover:text-danger`}
-        >
-          Revoke
-        </button>
+        <p className="mt-0.5 truncate text-caption text-text-muted">{meta}</p>
       </div>
-      <div className="flex min-w-0 items-center gap-2">
-        <p className="min-w-0 flex-1 truncate text-micro font-mono text-text-muted">
-          {platform} · {lastSeen}
-        </p>
+      <div className="flex shrink-0 items-center gap-1">
         <SelectMenu
           variant="text"
           value={device.linked_channel?.id ?? NO_CHANNEL}
@@ -139,12 +113,23 @@ export function GlassesDeviceRow({ device }: { device: GlassesDevice }) {
           disabled={busy}
           menuClassName="max-h-[320px] overflow-y-auto"
         />
+        <RowAction
+          disabled={busy}
+          onClick={() =>
+            device.has_hey_even_key ? setConfirm("rotate") : void rotate().catch(() => {})
+          }
+        >
+          Hey Even
+        </RowAction>
+        <RowAction danger disabled={busy} onClick={() => setConfirm("revoke")}>
+          Remove
+        </RowAction>
       </div>
       <ConfirmDialog
         open={confirm === "revoke"}
         onOpenChange={(open) => !open && setConfirm(null)}
-        title={`Revoke ${device.name}?`}
-        confirmLabel="Revoke"
+        title={`Remove ${device.name}?`}
+        confirmLabel="Remove"
         destructive
         onConfirm={revoke}
       />

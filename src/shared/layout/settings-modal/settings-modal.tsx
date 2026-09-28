@@ -1,7 +1,6 @@
 "use client";
 
 import type { Role } from "@/features/workspaces/types";
-import { GlassesSettings } from "@/features/glasses/settings/glasses-settings";
 import { AccountSection } from "./sections/account-section";
 // ⚠ `WorkspaceSection` (the General pane) IS NO LONGER MOUNTED HERE — the popup
 // lists workspaces now and EDITS none (`./settings-modal-core.tsx ›
@@ -57,7 +56,6 @@ export function SettingsModal({
       workspacesPane={<WorkspacesSectionCore activeWorkspaceId={workspaceId} />}
       connectPane={<ConnectSectionCore />}
       accountPane={<AccountSection workspaceId={workspaceId} role={role} />}
-      glassesPane={<GlassesSettings />}
       billingPane={
         <PlansBilling
           billingReturn={billingReturn}
