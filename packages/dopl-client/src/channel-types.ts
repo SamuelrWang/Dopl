@@ -17,9 +17,9 @@
 // ⚠ THE ESCALATION FIELDS ARE AN EXTENDED INTERFACE, NOT TWO KEYS DECLARED HERE
 // (2026-08-31). `escalation-types.ts` is their own module for `launch-types.ts`'s
 // reason — this file is at the 500-line cap — and `extends` is what keeps the
-// rule, the caps and the docblock stated ONCE, over there. ⚠ THE SESSION HEALTH
-// half is a THIRD on the same grounds (2026-09-01); see its own header.
+// rule, the caps and the docblock stated ONCE, over there. ⚠ SESSION HEALTH is a THIRD (2026-09-01), `display-types.ts` a FOURTH (2026-09-28).
 import type { ChannelEscalationFields } from "./escalation-types.js";
+import type { ChannelDisplayFields } from "./display-types.js";
 import type { ChannelContainer } from "./types.js";
 
 /**
@@ -351,7 +351,7 @@ export interface ChannelThreadCreated {
  * look it up, never "one past the last seq you saw".
  */
 
-export interface ChannelMessageInput extends ChannelEscalationFields {
+export interface ChannelMessageInput extends ChannelEscalationFields, ChannelDisplayFields {
   body: string;
   kind?: ChannelMessageKind;
   metadata?: Record<string, unknown>;
@@ -393,15 +393,6 @@ export interface ChannelMessageInput extends ChannelEscalationFields {
    * fields rather than dropping them, so an old caller is told.
    */
   intent?: MessageIntent;
-  /**
-   * An agent-built DISPLAY in the glasses block vocabulary, stored as reserved `metadata.display`
-   * with a server screen id (docs/specs/device-aware-messages.md). `body` is its text fallback.
-   */
-  display?: {
-    blocks: Record<string, unknown>[];
-    layout?: "stack" | "absolute";
-    wait_for_input?: boolean;
-  };
 }
 
 export interface ReadMessagesOptions {

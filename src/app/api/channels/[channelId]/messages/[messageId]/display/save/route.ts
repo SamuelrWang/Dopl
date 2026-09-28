@@ -21,4 +21,4 @@ async function handlePost(request: NextRequest, auth: WorkspaceAuthContext) {
   }
 }
 
-export const POST = withWorkspaceAuth(handlePost, { sessionOnly: true });
+export const POST = withWorkspaceAuth(handlePost);

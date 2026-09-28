@@ -237,3 +237,5 @@ export type {
   ChannelEscalationInput,
   ChannelEscalationOption,
 } from "./escalation-types.js";
+
+export type { ChannelDisplayFields } from "./display-types.js";

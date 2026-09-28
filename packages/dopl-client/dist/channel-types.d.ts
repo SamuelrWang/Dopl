@@ -14,6 +14,7 @@
  * in `channel.ts`.
  */
 import type { ChannelEscalationFields } from "./escalation-types.js";
+import type { ChannelDisplayFields } from "./display-types.js";
 import type { ChannelContainer } from "./types.js";
 /**
  * ⚠ **THE TEN CLOSED SETS AND THE TELEMETRY SHAPE BELOW ARE DECLARED IN
@@ -268,7 +269,7 @@ export interface ChannelThreadCreated {
  * a peer reply already in the channel and the wait never returned. `null` means
  * look it up, never "one past the last seq you saw".
  */
-export interface ChannelMessageInput extends ChannelEscalationFields {
+export interface ChannelMessageInput extends ChannelEscalationFields, ChannelDisplayFields {
     body: string;
     kind?: ChannelMessageKind;
     metadata?: Record<string, unknown>;
@@ -310,15 +311,6 @@ export interface ChannelMessageInput extends ChannelEscalationFields {
      * fields rather than dropping them, so an old caller is told.
      */
     intent?: MessageIntent;
-    /**
-     * An agent-built DISPLAY in the glasses block vocabulary, stored as reserved `metadata.display`
-     * with a server screen id (docs/specs/device-aware-messages.md). `body` is its text fallback.
-     */
-    display?: {
-        blocks: Record<string, unknown>[];
-        layout?: "stack" | "absolute";
-        wait_for_input?: boolean;
-    };
 }
 export interface ReadMessagesOptions {
     /** Only messages with seq greater than this. */

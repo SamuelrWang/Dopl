@@ -249,6 +249,10 @@ describe("H-3 write-gate coverage", () => {
         // did NOT turn this into a field gate. GET and member add/remove on that
         // file stay ungated.
         "channels/[channelId]/members/route.ts",
+        // A display's choice is a PERSON's answer (2026-09-28, device-aware messages) — it releases
+        // a waiting glasses_ask / wakes the agent that asked, the `escalationAnswer` argument:
+        // an agent token answering would be the agent deciding what its operator was asked.
+        "channels/[channelId]/messages/[messageId]/display/answer/route.ts",
         // DELETE hard-deletes a thread and cascades its whole transcript
         // (2026-08-21). Permanent, SHARED with the other party, and an agent
         // token has no confirm dialog to gate it — the same argument the team

@@ -66,7 +66,7 @@ pick up the main-process change).
 | Route | Auth | Body | Returns |
 | --- | --- | --- | --- |
 | `POST /api/channels/:channelId/messages/:messageId/display/answer` | session only (not guests), channel member, message author's account | `{index: number, block_id?: string \| null, choice?: string}` (`choice` is ignored; `index` decides) | `{ok: true, answer}`; 404 `DISPLAY_NOT_FOUND`, 400 `DISPLAY_BAD_CHOICE`, 403 `DISPLAY_NOT_YOURS`, 409 `DISPLAY_ANSWERED` / `DISPLAY_ANSWER_REFUSED` |
-| `POST /api/channels/:channelId/messages/:messageId/display/save` | session only (not guests), channel member | `{name?: string}` (slugified to `a-z0-9_-`, ≤64; default from the first text line) | `{name, variables, updated_at}` (the caller's `glasses_templates` row); 400 `DISPLAY_NOT_A_TEMPLATE` when it exceeds the glasses limits |
+| `POST /api/channels/:channelId/messages/:messageId/display/save` | any member credential (not guests), channel member | `{name?: string}` (slugified to `a-z0-9_-`, ≤64; default from the first text line) | `{name, variables, updated_at}` (the caller's `glasses_templates` row); 400 `DISPLAY_NOT_A_TEMPLATE` when it exceeds the glasses limits |
 | `PATCH /api/devices/:id` | session | `{name: string \| null}` (≤64 chars; `null`/blank restores the detected name) | `{device: ComputerDeviceDto}`; 404 for a legacy/removed/foreign computer |
 
 - Code: `src/features/glasses/core/screens/display-actions.ts` (answer, save), `channel-mirror.ts`
