@@ -223,6 +223,51 @@ describe("menu routes", () => {
     expect((await t.menu.messages(get(`/channels/${OPS}/messages?agent=Bad!`), OPS)).status).toBe(400);
   });
 
+  it("keeps holding a filtered long-poll past rows the filter drops, advancing its cursor", async () => {
+    // Another conversation's rows (seq 10, 11) land first; this agent's reply (seq 12) later.
+    const rows = [
+      msg(10, { authorKind: "agent", authorAgentId: "zyxwvuts", body: "other" }),
+      msg(11, { kind: "task_progress", authorKind: "agent", authorAgentId: "abcdefgh" }),
+      msg(12, { authorKind: "agent", authorAgentId: "abcdefgh", body: "mine" }),
+    ];
+    let released = 2;
+    let releaseLater = true;
+    const awaitMessages = vi.fn(async (after: number) => rows.slice(0, released).filter((m) => m.seq > after));
+    const t = setup({ gateway: { awaitMessages } });
+    await device(t);
+    t.clock.onSleep(() => {
+      if (releaseLater && awaitMessages.mock.calls.length >= 2) released = 3;
+    });
+    const start = t.clock.now();
+    const res = await (await t.menu.messages(get(`/channels/${OPS}/messages?after=9&wait=20&agent=abcdefgh`), OPS)).json();
+    expect(res.messages.map((m: { seq: number }) => m.seq)).toEqual([12]);
+    expect(res.after).toBe(12);
+    expect(awaitMessages.mock.calls[0][0]).toBe(9);
+    expect(awaitMessages.mock.calls.at(-1)![0]).toBe(11);
+    expect(t.clock.now() - start).toBeLessThan(20_000);
+
+    // Only filtered rows until the deadline: an empty answer at the deadline, cursor advanced.
+    released = 2;
+    releaseLater = false;
+    const idle = await (await t.menu.messages(get(`/channels/${OPS}/messages?after=9&wait=4&agent=abcdefgh`), OPS)).json();
+    expect(idle).toMatchObject({ messages: [], after: 11 });
+  });
+
+  it("holds repeated empty long-poll answers for a minimum second", async () => {
+    const t = setup({ gateway: { awaitMessages: async () => [] } });
+    await device(t);
+    const q = `/channels/${OPS}/messages?after=4&wait=1&activity=0`;
+    const took: number[] = [];
+    for (let i = 0; i < 7; i++) {
+      const start = t.clock.now();
+      await t.menu.messages(get(q), OPS);
+      took.push(t.clock.now() - start);
+    }
+    // The activity version differs from "0", so each poll answers at once; after the burst, 1s minimum.
+    expect(took.slice(0, 5).every((ms) => ms < 1000)).toBe(true);
+    expect(took.slice(5).every((ms) => ms >= 1000)).toBe(true);
+  });
+
   it("launches through the gateway, holds until launched, and targets the new agent", async () => {
     const t = setup();
     const d = await device(t);

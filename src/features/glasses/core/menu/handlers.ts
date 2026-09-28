@@ -1,6 +1,8 @@
 import { z } from "zod";
 import { HttpError } from "@/shared/lib/http-error";
+import { nowOf, sleepOf } from "../clock";
 import { json, readJson } from "../http";
+import { TtlCache } from "../ttl-cache";
 import { authedDevice, resolveDeviceDeps, type DeviceHandlerDeps } from "../messages/device-handlers";
 import type { GlassesDevice } from "../devices/types";
 import { isUuid } from "../validation";
@@ -35,6 +37,10 @@ export interface MenuHandlerDeps extends DeviceHandlerDeps {
 }
 
 export const MENU_READ_RPM = 120;
+/** More empty long-poll answers than this within the window and each further one is held a minimum. */
+const EMPTY_POLL_BURST = 5;
+const EMPTY_POLL_WINDOW_MS = 5_000;
+export const EMPTY_POLL_MIN_HOLD_MS = 1_000;
 export const LAUNCH_RPM = 5;
 
 const err = (request: Request, status: number, code: string, message: string, extra: Record<string, string> = {}) =>
@@ -109,6 +115,14 @@ export function createMenuHandlers(input: MenuHandlerDeps) {
         return fail(request, e, label);
       }
     };
+  // A client that re-polls on every empty answer would spin; slow it to one answer per second.
+  const emptyPolls = new TtlCache<string, number>(EMPTY_POLL_WINDOW_MS, 10_000);
+  async function guardEmptyPoll(key: string, empty: boolean) {
+    if (!empty) return;
+    const count = (emptyPolls.get(key, nowOf(deps)) ?? 0) + 1;
+    emptyPolls.set(key, count, nowOf(deps));
+    if (count > EMPTY_POLL_BURST) await sleepOf(deps)(EMPTY_POLL_MIN_HOLD_MS);
+  }
   const channelIdParam = (request: Request) => channelParam(new URL(request.url).searchParams.get("channel_id") ?? "");
 
   return {
@@ -139,7 +153,9 @@ export function createMenuHandlers(input: MenuHandlerDeps) {
         throw new HttpError(400, "BAD_QUERY", "activity is the activity_version from a previous response.");
       }
       const waitSec = Math.min(wait ?? POLL_MAX_SEC, POLL_MAX_SEC);
-      return pollChannel(menuDeps, device, id, { after, waitSec, agent, activity }, request.signal);
+      const result = await pollChannel(menuDeps, device, id, { after, waitSec, agent, activity }, request.signal);
+      await guardEmptyPoll(`${device.id}:${id}`, waitSec > 0 && result.messages.length === 0);
+      return result;
     }),
 
     launchOptions: handle(deps.allowRead, "launch options", (request, device) =>

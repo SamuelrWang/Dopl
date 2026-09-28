@@ -196,23 +196,24 @@ export async function pollChannel(
   const channel = await openReadable(deps, device, channelId);
   const now = () => nowOf(deps);
   const deadline = now() + Math.min(Math.max(q.waitSec, 0), POLL_MAX_SEC) * 1000;
-  let raw: MenuMessage[] = [];
+  const agent = q.agent ?? null;
+  let after = q.after;
+  let messages: LensMessage[] = [];
   let live = await activityNow(deps, device, channelId);
   const changed = () => !!q.activity && live.activity_version !== q.activity;
   while (!changed() && !signal?.aborted) {
     const slice = Math.min(now() + POLL_SLICE_MS, deadline);
-    raw = await channel.awaitMessages(q.after, slice, signal);
+    const raw = await channel.awaitMessages(after, slice, signal);
+    // Rows the filters drop (other conversations, non-message kinds) still move the cursor,
+    // but they do not end the hold: answering empty would send the client straight back.
+    after = raw.reduce((max, m) => Math.max(max, m.seq), after);
+    messages = shape(raw, device, agent);
     live = await activityNow(deps, device, channelId);
-    if (raw.length > 0 || now() >= deadline) break;
+    if (messages.length > 0 || now() >= deadline) break;
     // A gateway that returned before its slice (tests, or an early wake) must not spin.
     if (now() < slice && deps.sleep) await deps.sleep(slice - now());
   }
-  return {
-    messages: shape(raw, device, q.agent ?? null),
-    has_more: false,
-    after: raw.reduce((max, m) => Math.max(max, m.seq), q.after),
-    ...live,
-  };
+  return { messages, has_more: false, after, ...live };
 }
 
 export async function launchOptions(deps: MenuDeps, device: Device, channelId: string) {
