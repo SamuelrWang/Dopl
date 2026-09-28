@@ -21,7 +21,7 @@ import { cn } from "@/shared/lib/utils";
 import { UsageMeter } from "@/shared/ui/usage-meter";
 import { NAKED_ICON, NAKED_ICON_BUTTON } from "@/shared/ui/naked-icon-button";
 import { OpenScaleButton } from "@/shared/ui/open-scale-button";
-import { SMALL_PRIMARY_BUTTON } from "@/shared/ui/small-action-button";
+import { SMALL_PRIMARY_PILL } from "@/shared/ui/small-action-button";
 import { CHIP } from "@/shared/ui/wells";
 import { isLegacySolo, PlanColumn, type CheckoutPlan, type PlanActions } from "./plan-cards";
 import { SettingsPane, SettingsPanel } from "./settings-panel";
@@ -370,7 +370,7 @@ function BillingSummary({
                   type="button"
                   disabled={switching}
                   onClick={onSwitchToTeam}
-                  className={cn(SMALL_PRIMARY_BUTTON, "disabled:cursor-default disabled:opacity-60")}
+                  className={cn(SMALL_PRIMARY_PILL, "disabled:cursor-default disabled:opacity-60")}
                 >
                   {switching
                     ? "Switching…"
@@ -388,7 +388,7 @@ function BillingSummary({
             <button
               type="button"
               onClick={() => onUpgrade("pro")}
-              className={SMALL_PRIMARY_BUTTON}
+              className={SMALL_PRIMARY_PILL}
             >
               Upgrade to Pro — {formatMoney(PRO_PRICE)}/month
             </button>
@@ -396,7 +396,7 @@ function BillingSummary({
             <button
               type="button"
               onClick={() => onUpgrade("team")}
-              className={SMALL_PRIMARY_BUTTON}
+              className={SMALL_PRIMARY_PILL}
             >
               Upgrade to Team — {formatMoney(TEAM_SEAT_PRICE)}/seat
             </button>

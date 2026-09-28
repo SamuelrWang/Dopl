@@ -5,7 +5,7 @@ import { useState } from "react";
 import { apiRequest } from "@/shared/api/api-client";
 import { cn } from "@/shared/lib/utils";
 import { UnderlineField } from "@/shared/ui/form-dialog";
-import { SMALL_PRIMARY_BUTTON } from "@/shared/ui/small-action-button";
+import { SMALL_PRIMARY_PILL } from "@/shared/ui/small-action-button";
 import { meetsMinRole, type Workspace, type Role } from "../types";
 import { workspaceSegment } from "../url";
 
@@ -104,7 +104,7 @@ export function WorkspaceSettingsFormCore({
           type="button"
           disabled={!canEdit || !dirty || saving}
           onClick={handleSave}
-          className={cn(SMALL_PRIMARY_BUTTON, "disabled:cursor-not-allowed disabled:opacity-40")}
+          className={cn(SMALL_PRIMARY_PILL, "disabled:cursor-not-allowed disabled:opacity-40")}
         >
           {saving ? "Saving..." : "Save changes"}
         </button>

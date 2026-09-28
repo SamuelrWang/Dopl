@@ -151,6 +151,7 @@ export function UnderlineField({
  */
 export function InlineUnderlineField({
   label,
+  placeholder = label,
   value,
   onChange,
   className,
@@ -163,6 +164,8 @@ export function InlineUnderlineField({
 }: {
   /** The hint inside the line, and the accessible name. */
   label: string;
+  /** The hint, when the row already SAYS the label beside the line (the pairing code). */
+  placeholder?: string;
   /** Extra class on the input itself (the kit's `.inputAction` for a 36px row). */
   inputClassName?: string;
   /**
@@ -209,7 +212,7 @@ export function InlineUnderlineField({
         autoFocus={autoFocus}
         readOnly={readOnly}
         aria-label={label}
-        placeholder={label}
+        placeholder={placeholder}
         spellCheck={false}
         className={cn(styles.input, quiet && styles.inputQuiet, inputClassName)}
       />

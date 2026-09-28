@@ -8,7 +8,7 @@ import { useApiQuery } from "@/shared/hooks/use-api-query";
 import type { Role } from "@/features/workspaces/types";
 import { Avatar } from "@/shared/ui/avatar";
 import { UnderlineField } from "@/shared/ui/form-dialog";
-import { SMALL_PRIMARY_BUTTON } from "@/shared/ui/small-action-button";
+import { SMALL_PRIMARY_PILL } from "@/shared/ui/small-action-button";
 import { cn } from "@/shared/lib/utils";
 import { SettingsCard, SettingsPane, SettingsPanel } from "./settings-panel";
 import { AccountSubscription } from "./account-subscription";
@@ -127,7 +127,7 @@ export function AccountSectionCore({
               type="button"
               disabled={!dirty || saving}
               onClick={handleSave}
-              className={cn(SMALL_PRIMARY_BUTTON, "disabled:cursor-not-allowed disabled:opacity-40")}
+              className={cn(SMALL_PRIMARY_PILL, "disabled:cursor-not-allowed disabled:opacity-40")}
             >
               {saving ? "Saving…" : "Save"}
             </button>

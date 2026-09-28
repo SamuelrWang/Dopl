@@ -1,3 +1,5 @@
+import { cn } from "@/shared/lib/utils";
+
 /**
  * THE 30px FLAT TEXT BUTTON — `--action-h-sm`, no face at rest, a raised-1 tint on hover.
  *
@@ -27,3 +29,11 @@ export const SMALL_TEXT_BUTTON =
 export const SMALL_PRIMARY_BUTTON =
   "auth-btn-3d flex h-[var(--action-h-sm)] items-center rounded-[8px] px-3.5 text-caption " +
   "font-semibold text-text-on-cta";
+
+/**
+ * THE SAME 30px BLACK VERB AS A FULL PILL — the profile popup's black buttons (Samuel, 2026-09-28:
+ * *"for those black buttons i want the pill"*): Pair, Save, Save changes, the plan buttons. By
+ * reference, so face and scale cannot drift; `cn` drops the 8px radius. The popup FORMS
+ * (`form-dialog.tsx`: New channel, Add person, New agent) keep {@link SMALL_PRIMARY_BUTTON}.
+ */
+export const SMALL_PRIMARY_PILL = cn(SMALL_PRIMARY_BUTTON, "rounded-full");
