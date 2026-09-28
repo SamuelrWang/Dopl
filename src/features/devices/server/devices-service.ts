@@ -61,29 +61,24 @@ function toDto(row: DesktopDeviceRow, now: number, installId: string | null): Co
   };
 }
 
-/** One legacy row per label: the desktop keeps one live device token per label. */
+/** One legacy row per unlinked device token (the desktop keeps one live token per label). */
 function legacyDtos(tokens: DeviceTokenRow[]): ComputerDeviceDto[] {
-  const byLabel = new Map<string, DeviceTokenRow>();
-  for (const token of tokens) {
-    if (token.device_id) continue;
-    const label = token.client_name ?? "";
-    const seen = byLabel.get(label);
-    if (!seen || (token.last_used_at ?? "") > (seen.last_used_at ?? "")) byLabel.set(label, token);
-  }
-  return [...byLabel.values()].map((token) => ({
-    id: `${LEGACY_PREFIX}${token.id}`,
-    kind: "computer",
-    name: legacyComputerName(token.client_name),
-    platform: LEGACY_LABEL.test(token.client_name ?? "") ? "macos" : "",
-    online: false,
-    status: null,
-    last_seen: token.last_used_at,
-    created_at: token.created_at,
-    app_version: null,
-    os_version: null,
-    current: false,
-    legacy: true,
-  }));
+  return tokens
+    .filter((token) => !token.device_id)
+    .map((token) => ({
+      id: `${LEGACY_PREFIX}${token.id}`,
+      kind: "computer",
+      name: legacyComputerName(token.client_name),
+      platform: LEGACY_LABEL.test(token.client_name ?? "") ? "macos" : "",
+      online: false,
+      status: null,
+      last_seen: token.last_used_at,
+      created_at: token.created_at,
+      app_version: null,
+      os_version: null,
+      current: false,
+      legacy: true,
+    }));
 }
 
 /** Registered computers (this one first, then most recently seen), then legacy ones. */
@@ -112,50 +107,71 @@ export type HeartbeatResult =
   | { device: { revoked: true } };
 
 /**
- * Register or refresh this computer. A REMOVED computer stays removed: its heartbeat answers
- * `revoked`, the desktop signs out and mints a fresh install id, so its next sign-in is a new row.
+ * Register or refresh this computer: ONE update in the common case (the row exists and is active).
+ * A REMOVED computer stays removed: its heartbeat answers `revoked`, the desktop signs out and mints
+ * a fresh install id, so its next sign-in is a new row. A token is linked only when the beat names
+ * one (the desktop sends it once after sign-in or a re-mint).
  */
 export async function heartbeat(
   deps: DevicesDeps,
   userId: string,
-  input: HeartbeatInput
+  input: HeartbeatInput,
+  sessionId: string | null = null
 ): Promise<HeartbeatResult> {
-  const existing = await deps.store.findByInstall(userId, input.installId);
-  if (existing?.revoked_at) return { device: { revoked: true } };
-  const row = await deps.store.upsert(userId, input, nowIso(deps));
-  if (input.tokenLabel) await deps.store.linkTokensByLabel(userId, row.id, input.tokenLabel);
+  const now = nowIso(deps);
+  let row = await deps.store.touch(userId, input, sessionId, now);
+  if (!row) {
+    const existing = await deps.store.findByInstall(userId, input.installId);
+    if (existing?.revoked_at) return { device: { revoked: true } };
+    row =
+      (await deps.store.insert(userId, input, sessionId, now)) ??
+      (await deps.store.touch(userId, input, sessionId, now));
+    if (!row) return { device: { revoked: true } };
+  }
+  if (input.tokenId) await deps.store.linkTokenById(userId, row.id, input.tokenId);
+  else if (input.tokenLabel) await deps.store.linkTokensByLabel(userId, row.id, input.tokenLabel);
   return { device: { id: row.id, revoked: false } };
 }
 
 const notFound = () => new HttpError(404, "DEVICE_NOT_FOUND", "No such device.");
 
-/** Remove a computer: every credential it minted dies with it, container sessions included. */
+/**
+ * Remove a computer: every credential it minted is revoked (container sessions included) and its
+ * Supabase sign-in is ended server-side, so it cannot refresh. What survives is in docs/devices.md.
+ */
 export async function removeComputer(
   deps: DevicesDeps,
   userId: string,
   id: string
-): Promise<{ ok: true; revokedTokens: number }> {
+): Promise<{ ok: true; revokedTokens: number; endedSession: boolean }> {
   const now = nowIso(deps);
   if (id.startsWith(LEGACY_PREFIX)) {
     const tokenId = id.slice(LEGACY_PREFIX.length);
     if (!isUuid(tokenId)) throw notFound();
     const revokedTokens = await deps.store.revokeLegacyToken(userId, tokenId, now);
     if (revokedTokens === 0) throw notFound();
-    return { ok: true, revokedTokens };
+    return { ok: true, revokedTokens, endedSession: false };
   }
   if (!isUuid(id)) throw notFound();
-  if (!(await deps.store.revoke(userId, id, now))) throw notFound();
+  const row = await deps.store.revoke(userId, id, now);
+  if (!row) throw notFound();
   const revokedTokens = await deps.store.revokeLinkedTokens(userId, id, now);
-  return { ok: true, revokedTokens };
+  const endedSession = row.auth_session_id
+    ? await deps.store.endAuthSession(userId, row.auth_session_id)
+    : false;
+  return { ok: true, revokedTokens, endedSession };
 }
 
-/** The active computer a request came from, for stamping the credential it is minting. */
+export type RequestDevice = { deviceId: string } | { removed: true } | null;
+
+/** The computer a request came from: active, removed, or unknown (no header / not registered). */
 export async function resolveRequestDevice(
   deps: DevicesDeps,
   userId: string,
   installId: string | null
-): Promise<string | null> {
+): Promise<RequestDevice> {
   if (!installId || !isUuid(installId)) return null;
   const row = await deps.store.findByInstall(userId, installId);
-  return row && !row.revoked_at ? row.id : null;
+  if (!row) return null;
+  return row.revoked_at ? { removed: true } : { deviceId: row.id };
 }

@@ -243,7 +243,7 @@ export async function issueDeviceToken(input: {
   scopes?: string[];
   /** The registered computer minting it (`desktop_devices.id`); absent = unlinked. */
   deviceId?: string | null;
-}): Promise<{ token: string; expiresAt: string }> {
+}): Promise<{ token: string; expiresAt: string; tokenId: string }> {
   await ensureDeviceClient();
   const db = supabaseAdmin();
   // ⚠ One active token per (user, label): revoke prior mints so a looping client
@@ -260,7 +260,10 @@ export async function issueDeviceToken(input: {
   const expiresAt = new Date(
     Date.now() + DEVICE_TOKEN_TTL_S * 1000,
   ).toISOString();
+  // The id is minted here so the desktop can name its own row later (device linking).
+  const tokenId = randomUUID();
   await insertTokenRow({
+    id: tokenId,
     user_id: input.userId,
     client_id: DEVICE_CLIENT_ID,
     access_token_hash: sha256(accessToken),
@@ -274,7 +277,7 @@ export async function issueDeviceToken(input: {
     ...homeSpaceUnfencedAxes(input.userId),
     ...(input.deviceId ? { device_id: input.deviceId } : {}),
   });
-  return { token: accessToken, expiresAt };
+  return { token: accessToken, expiresAt, tokenId };
 }
 
 /**
