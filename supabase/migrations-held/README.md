@@ -101,7 +101,7 @@ rests entirely on step 3's count. **Deploy state is a measurement, not a claim**
 revert to pre-Wave-B code finds the data it expects. Once dropped, the deploy is
 one-way.
 
-### The db-cleanup drops — `20261110120000` … `20261110160000`
+### The db-cleanup drops — `20261110120000` … `20261110150000`
 
 **Held by Samuel's ruling, not by an unmet precondition** (2026-09-28, overnight
 DB audit): *"List + draft drops, don't apply."* The evidence for every object —
@@ -115,7 +115,8 @@ against production on 2026-09-28. Each file's header lists what it drops and why
 | `20261110140000_drop_pooled_credit_counter.sql` | `workspace_credit_usage`, `consume_workspace_credits` (F-667) | Samuel's retention call on the 6 historical rows (export query in the header) |
 | `20261110150000_drop_profile_legacy_billing_columns.sql` | six dead billing/trial columns on `profiles` + two indexes | archive the old per-user tier rows if wanted (query in the header) |
 
-| `20261110160000_profiles_update_column_grants.sql` | **security, not a drop**: `authenticated` may UPDATE only `display_name`, `bio`, `website_url`, `twitter_handle`, `github_username` on `profiles`; INSERT/UPDATE/DELETE revoked otherwise | ship the verified legacy-Stripe reads (`billing/server/subscriptions.ts`) first — they protect prod until this applies |
+`20261110160000_profiles_update_column_grants.sql` (security) was released to
+`supabase/migrations/` and applied to production on 2026-09-28 on Samuel's word.
 
 They are independent of each other and of `20260923120000`; release any subset.
 All four are stamped after every applied file, so replay order is not an issue.

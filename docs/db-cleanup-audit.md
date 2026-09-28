@@ -41,7 +41,11 @@ retries) and account deletion now returns 500 instead of skipping the legacy can
 (`api/user/delete/route.ts`). Tests: `billing/server/subscriptions.test.ts`,
 `api/user/delete/route.test.ts`.
 
-**2. Held migration `20261110160000_profiles_update_column_grants.sql`.** Revokes INSERT/UPDATE/DELETE
+**2. Migration `20261110160000_profiles_update_column_grants.sql` — RELEASED and applied to production
+2026-09-28** (by name `profiles_update_column_grants`, prod version `20260928183849`, md5
+`515372011703a9e0ba054a434a4b91cd` matches the file; verified in a rolled-back probe: `authenticated`
+UPDATE of `stripe_customer_id`/`stripe_subscription_id`/`email` → 42501, `display_name` on own row → ok,
+INSERT/DELETE → 42501, every `anon` write → 42501). Revokes INSERT/UPDATE/DELETE
 on `profiles` from `anon` and `authenticated`, then grants `authenticated` UPDATE on exactly
 `display_name, bio, website_url, twitter_handle, github_username` (the profile route's allow-list).
 Header carries the rollback (`GRANT INSERT, UPDATE, DELETE ON public.profiles TO anon, authenticated;`)
@@ -204,7 +208,7 @@ or an `.rpc()` call. All 42 triggers sit on live tables except
 - `supabase/migrations-held/20261110130000_drop_dead_tables_and_rpcs.sql`
 - `supabase/migrations-held/20261110140000_drop_pooled_credit_counter.sql`
 - `supabase/migrations-held/20261110150000_drop_profile_legacy_billing_columns.sql`
-- `supabase/migrations-held/20261110160000_profiles_update_column_grants.sql` (security)
+- `supabase/migrations/20261110160000_profiles_update_column_grants.sql` (security) — released from the hold, applied to prod 2026-09-28
 - Code: the `deleteTaskParticipants` statement removed from `channels/server/repository-tasks.ts`,
   with its call in `channels/server/service-tasks-delete.ts › deleteTask` and its test expectations. The FK's `ON DELETE CASCADE`
   already did that delete, so behaviour is unchanged while the table still exists.

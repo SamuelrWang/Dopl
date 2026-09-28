@@ -140,7 +140,6 @@ describe("held migrations cannot be applied by accident", () => {
       "20261110130000_drop_dead_tables_and_rpcs.sql",
       "20261110140000_drop_pooled_credit_counter.sql",
       "20261110150000_drop_profile_legacy_billing_columns.sql",
-      "20261110160000_profiles_update_column_grants.sql",
     ]);
   });
 });

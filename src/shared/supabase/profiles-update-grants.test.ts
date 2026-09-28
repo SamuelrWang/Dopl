@@ -1,7 +1,7 @@
 /**
- * 🔒 The held `profiles` column-grant migration may only let users UPDATE the fields
+ * 🔒 The `profiles` column-grant migration (applied to prod 2026-09-28) may only let users UPDATE the fields
  * the profile route itself accepts — never a billing, entitlement or identity column.
- * (Security finding, db-cleanup audit 2026-09-28; the file is held, not applied.)
+ * (Security finding, db-cleanup audit 2026-09-28.)
  */
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
@@ -14,7 +14,7 @@ const FILE = join(
   "..",
   "..",
   "supabase",
-  "migrations-held",
+  "migrations",
   "20261110160000_profiles_update_column_grants.sql"
 );
 const sql = readFileSync(FILE, "utf8")
@@ -31,7 +31,7 @@ const USER_EDITABLE = [
   "website_url",
 ];
 
-describe("held profiles UPDATE grants", () => {
+describe("profiles UPDATE grants", () => {
   it("revokes the table-wide write privileges from both API roles first", () => {
     expect(sql).toMatch(
       /REVOKE\s+INSERT,\s*UPDATE,\s*DELETE\s+ON\s+public\.profiles\s+FROM\s+anon,\s*authenticated;/

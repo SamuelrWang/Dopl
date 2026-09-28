@@ -1,8 +1,12 @@
 -- PROFILES: USERS MAY UPDATE ONLY THE FIELDS THE APP LETS THEM EDIT
 -- (security finding, db-cleanup audit 2026-09-28).
 --
--- ⚠ HELD — WRITTEN, NOT APPLIED. Samuel was asleep; the audit's standing ruling is
--- "List + draft drops, don't apply". Release per supabase/migrations-held/README.md.
+-- RELEASED 2026-09-28 on Samuel's word ("fix the security hole"): applied to
+-- production by NAME (`profiles_update_column_grants`) ahead of the next deploy.
+-- Pre-apply check against origin/master e21c9991 (the live web + desktop 1.37.2)
+-- and the live database: no user-client write to `profiles` anywhere, no RLS
+-- INSERT/DELETE policy, no view over it, and the only functions that write it
+-- (handle_new_user, increment_ingestion_count) are SECURITY DEFINER owned by postgres.
 --
 -- WHY. `profiles_update_own` (USING id = auth.uid()) plus the Supabase default
 -- table-wide UPDATE grant to `authenticated` let any signed-in user PATCH EVERY
@@ -41,12 +45,10 @@
 -- ⚠ A column ADDED to `profiles` later gets NO user UPDATE grant by default.
 -- That is the point; grant it here-style if it is genuinely user-editable.
 --
--- RELEASE ORDER:
---   1. Ship the chore/db-cleanup code (verified legacy Stripe reads). Independent
---      of this file, but it is what protects production until this applies.
---   2. Apply this file. No app code depends on the revoked privileges, so no deploy
---      is needed between 1 and 2 beyond 1 itself.
---   3. Re-run the security advisor; spot-check with
+-- ORDER: this file closes the write in production on its own — no app code
+-- depends on the revoked privileges. The verified legacy-Stripe reads
+-- (billing/server/subscriptions.ts) ship with the next deploy as defense in depth.
+-- Spot-check with
 --        SELECT column_name FROM information_schema.column_privileges
 --         WHERE table_schema='public' AND table_name='profiles'
 --           AND grantee='authenticated' AND privilege_type='UPDATE';

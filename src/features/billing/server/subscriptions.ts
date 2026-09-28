@@ -25,9 +25,10 @@ export interface ProfileBillingRef {
  *
  * `profiles` has been user-UPDATABLE through PostgREST (policy `profiles_update_own`
  * + a table-wide UPDATE grant to `authenticated`), so `stripe_customer_id` and
- * `stripe_subscription_id` are whatever the row's owner last wrote. Until the held
- * migration `20261110160000_profiles_update_column_grants.sql` is released, reading
- * them as ownership lets a user (a) attach a Stripe customer they do not own to
+ * `stripe_subscription_id` are whatever the row's owner last wrote. Migration
+ * `20261110160000_profiles_update_column_grants.sql` (applied to prod 2026-09-28) closed
+ * that write, but values written before it still stand, and reading them as
+ * ownership lets a user (a) attach a Stripe customer they do not own to
  * themselves in the webhook's grandfather path, or (b) cancel someone else's
  * subscription by deleting their own account.
  *
