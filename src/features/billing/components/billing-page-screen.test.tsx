@@ -330,12 +330,12 @@ describe("the Billing tab", () => {
 
   it("passes the post-checkout signal straight through to the pane", () => {
     expect(screen({ billingReturn: "success" })).toContain(
-      "Finalizing your subscription"
+      "Finalizing your plan"
     );
   });
 
   it("passes the chosen plan straight through to checkout", () => {
-    expect(screen({ initialCheckoutPlan: "team" })).toContain("Subscribe to Team");
+    expect(screen({ initialCheckoutPlan: "team" })).toContain("Upgrade to Team");
   });
 });
 
@@ -398,7 +398,7 @@ describe("addressed at a home space", () => {
     const pro = screen({}, PERSONAL_PRO);
     expect(pro).toContain("Current plan");
     expect(pro).not.toContain("Upgrade to Pro");
-    expect(pro).toContain("Manage subscription");
+    expect(pro).toContain("Manage billing");
   });
 
   /**
@@ -421,7 +421,7 @@ describe("addressed at a home space", () => {
   it("opens Pro's checkout when the URL named it", () => {
     expect(
       screen({ initialCheckoutPlan: "pro" }, PERSONAL_FREE)
-    ).toContain("Subscribe to Pro");
+    ).toContain("Upgrade to Pro");
   });
 });
 
