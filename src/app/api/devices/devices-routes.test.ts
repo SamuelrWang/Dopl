@@ -86,7 +86,13 @@ describe("devices + agent-app routes", () => {
 
   it("POST /api/devices/heartbeat validates the body and answers the service's verdict", async () => {
     h.heartbeat.mockResolvedValue({ device: { revoked: true } });
-    const body = { installId: INSTALL, name: "Samuel's MacBook Pro", platform: "macos", status: "active" };
+    const body = {
+      installId: INSTALL,
+      name: "Samuel's MacBook Pro",
+      platform: "macos",
+      status: "active",
+      tokenId: "0b8f3c1e-2d4a-4f6b-9c8d-1a2b3c4d5e70",
+    };
     const res = await beat(req("/api/devices/heartbeat", { method: "POST", body }), params({}));
     expect(await res.json()).toEqual({ device: { revoked: true } });
     expect(h.heartbeat.mock.calls[0][2]).toMatchObject(body);

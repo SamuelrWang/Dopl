@@ -8,5 +8,6 @@ export const HeartbeatSchema = z.object({
   appVersion: z.string().trim().max(32).optional(),
   arch: z.string().trim().max(16).optional(),
   status: z.enum(["active", "away", "offline"]),
+  tokenId: z.string().uuid().optional(),
   tokenLabel: z.string().trim().min(1).max(120).optional(),
 });
