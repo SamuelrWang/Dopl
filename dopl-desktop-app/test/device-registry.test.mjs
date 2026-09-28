@@ -59,7 +59,7 @@ test("first beat posts the descriptor to the heartbeat path", async () => {
   assert.deepEqual(h.calls[0].body, { installId: "i", name: "Mac", platform: "macos", status: "active" });
 });
 
-test("THROTTLE: same status inside 60s is skipped; at 60s it sends again", async () => {
+test("THROTTLE: same status inside the interval is skipped; at the interval it sends again", async () => {
   const h = harness();
   await h.reg.beat("active");
   h.advance(30_000);
@@ -159,14 +159,110 @@ test("errors never throw: transport, bad JSON, descriptor", async () => {
   assert.equal(await reg.offline("quit"), "error");
 });
 
-test("a beat in flight is not stacked", async () => {
-  let release;
-  const h = harness(() => new Promise((r) => { release = () => r(res(200, {})); }));
+test("MIN_INTERVAL is ~50s so a 30s±3s cadence sends every other beat", async () => {
+  assert.equal(MIN_INTERVAL_MS, 50_000);
+  const h = harness();
+  await h.reg.beat("active");
+  // Worst-case short jitter: two beats at 27s each = 54s ≥ 50s.
+  h.advance(27_000);
+  assert.equal(await h.reg.beat("active"), "throttled");
+  h.advance(27_000);
+  assert.equal(await h.reg.beat("active"), "ok");
+});
+
+test("a beat in flight is not stacked; the LATEST requested status is sent after it settles", async () => {
+  const releases = [];
+  const h = harness(() => new Promise((r) => { releases.push(() => r(res(200, {}))); }));
   const first = h.reg.beat("active");
-  assert.equal(await h.reg.beat("away"), "busy");
-  release();
+  assert.equal(await h.reg.beat("active"), "queued");
+  assert.equal(await h.reg.beat("away"), "queued", "latest wins");
+  assert.equal(h.calls.length, 1, "no stacking");
+  releases[0]();
   assert.equal(await first, "ok");
+  assert.equal(h.calls.length, 2, "queued status drained");
+  assert.deepEqual(h.statuses(), ["active", "away"], "a lock-screen away is not lost");
+  releases[1]();
+});
+
+test("a queued status equal to the one just sent is throttled, not re-posted", async () => {
+  let release;
+  const h = harness((n) => (n === 1 ? new Promise((r) => { release = () => r(res(200, {})); }) : res(200, {})));
+  const first = h.reg.beat("active");
+  assert.equal(await h.reg.beat("active"), "queued");
+  release();
+  await first;
   assert.equal(h.calls.length, 1);
+});
+
+test("offline() drops a queued status so nothing lands after it", async () => {
+  let release;
+  const h = harness((n) => (n === 1 ? new Promise((r) => { release = () => r(res(200, {})); }) : res(200, {})));
+  const first = h.reg.beat("active");
+  assert.equal(await h.reg.beat("away"), "queued");
+  assert.equal(await h.reg.offline("quit"), "ok");
+  release();
+  await first;
+  assert.deepEqual(h.statuses(), ["active", "offline"]);
+});
+
+// ── token link: sent once, then never ─────────────────────────────────────
+
+const TID = "3f2c1a9e-8b7d-4c6e-9f1a-2b3c4d5e6f70";
+
+test("tokenId rides only the first landed send after setLink, then is dropped", async () => {
+  const h = harness();
+  h.reg.setLink({ tokenId: TID });
+  await h.reg.beat("active");
+  h.advance(MIN_INTERVAL_MS);
+  await h.reg.beat("active");
+  assert.equal(h.calls[0].body.tokenId, TID);
+  assert.equal("tokenLabel" in h.calls[0].body, false);
+  assert.equal("tokenId" in h.calls[1].body, false, "not re-sent");
+});
+
+test("a failed send keeps the link for the next beat", async () => {
+  const h = harness((n) => (n === 1 ? res(500) : res(200, {})));
+  h.reg.setLink({ tokenId: TID });
+  assert.equal(await h.reg.beat("active"), "error");
+  assert.equal(await h.reg.beat("active"), "ok");
+  assert.equal(h.calls[1].body.tokenId, TID);
+  assert.equal(h.reg._link(), null);
+});
+
+test("legacy record: tokenLabel is sent once instead (clamped to 120)", async () => {
+  const h = harness();
+  h.reg.setLink({ tokenLabel: "L".repeat(200) });
+  await h.reg.beat("active");
+  await h.reg.beat("away");
+  assert.equal(h.calls[0].body.tokenLabel.length, 120);
+  assert.equal("tokenId" in h.calls[0].body, false);
+  assert.equal("tokenLabel" in h.calls[1].body, false);
+});
+
+test("a re-mint mid-session re-arms the link; null/junk clears it", async () => {
+  const h = harness();
+  h.reg.setLink({ tokenId: TID });
+  await h.reg.beat("active");
+  const T2 = "11111111-2222-4333-8444-555555555555";
+  h.reg.setLink({ tokenId: T2 });
+  await h.reg.beat("away");
+  assert.equal(h.calls[1].body.tokenId, T2);
+  h.reg.setLink(null);
+  assert.equal(h.reg._link(), null);
+  h.reg.setLink({ nope: 1 });
+  assert.equal(h.reg._link(), null);
+});
+
+test("the token store is never read on the beat path", () => {
+  const W = M("device-registry.js");
+  const beatLine = W.slice(W.indexOf("module.exports"));
+  assert.equal(/mcp-config/.test(beatLine), false);
+  assert.equal(/mcp-config/.test(M("device-registry-core.js")), false);
+  assert.equal(/mcp-config/.test(M("device-identity.js")), false);
+  const arm = W.slice(W.indexOf("function arm()"), W.indexOf("module.exports"));
+  assert.match(arm, /identity\.refresh\(\)/, "name/OS read once at arm, async");
+  assert.match(arm, /loadLink\(\)/, "link read once at arm");
+  assert.match(arm, /onDeviceTokenMinted\(\(l\) => registry\.setLink\(l\)\)/, "re-mint notifier");
 });
 
 // ── the wiring ──────────────────────────────────────────────────────────────
@@ -192,5 +288,5 @@ test("a removal rotates the install id and runs the sign-out sequence", () => {
   ].map((s) => body.indexOf(s));
   assert.ok(order.every((i) => i >= 0), "every step present");
   assert.deepEqual([...order].sort((a, b) => a - b), order, "in ui-bridge's order");
-  assert.match(W, /status === 'signed-in'\) registry\.reset\(\)/, "a new sign-in clears the latch");
+  assert.match(W, /user = state\.userId;\s*registry\.reset\(\);\s*loadLink\(\);/, "a new sign-in clears the latch and re-reads the link");
 });

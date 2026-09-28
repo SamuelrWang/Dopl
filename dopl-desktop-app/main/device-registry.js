@@ -36,18 +36,42 @@ const registry = createDeviceRegistry({
   diag,
 });
 
+// Read the token link once (a store decrypt), never per beat. Lazy: mcp-config → api → us.
+function loadLink() {
+  try {
+    registry.setLink(require('./mcp-config').deviceTokenLink());
+  } catch (err) {
+    diag('device: token link read failed —', err && err.message);
+  }
+}
+
 // A new sign-in may be a re-added computer or another user: clear the revoked latch and throttle.
 let subscribed = false;
 function arm() {
   registry.reset();
+  identity.refresh(); // async; descriptor() uses the hostname until it lands
+  loadLink();
   if (subscribed) return;
   subscribed = true;
   try {
+    // Only a real sign-in (new user or after signed-out), not each token refresh's
+    // refreshing→signed-in, so the link is re-sent once per session.
+    let user;
     require('./auth-tokens').subscribe((state) => {
-      if (state && state.status === 'signed-in') registry.reset();
+      if (!state) return;
+      if (state.status === 'signed-out') { user = null; return; }
+      if (state.status !== 'signed-in' || state.userId === user) return;
+      user = state.userId;
+      registry.reset();
+      loadLink();
     });
   } catch (err) {
     diag('device: auth subscription failed —', err && err.message);
+  }
+  try {
+    require('./mcp-config').onDeviceTokenMinted((l) => registry.setLink(l));
+  } catch (err) {
+    diag('device: mint subscription failed —', err && err.message);
   }
 }
 

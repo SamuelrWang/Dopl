@@ -353,7 +353,7 @@ function stop() {
   if (refreshTimer) { clearInterval(refreshTimer); refreshTimer = null; }
   healer.stop(); // cancel any pending self-heal retry
   stopLoops();
-  const away = presence.stop(); // heartbeat off + a final `away` post (2026-09-08)
+  const away = presence.stop(); // heartbeat off + final `away` post + device `offline`, settled together
   realtime.stop(); // Push transport: close the Realtime WS
   setStatus();
   return away; // quit-guard races it inside its own flush deadline

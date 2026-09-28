@@ -4,10 +4,12 @@
 //
 // Requireable outside Electron: electron-store is loaded lazily and falls back to memory, and
 // nothing here shells out on require (api.js loads this module and only reads `installId`).
+// The name/OS reads are async (`refresh()`), so `descriptor()` on the beat path never shells out.
 
 const crypto = require('crypto');
 const os = require('os');
-const { execFileSync } = require('child_process');
+const { execFile } = require('child_process');
+const { promisify } = require('util');
 const { appVersion } = require('./app-version');
 const { isUuid } = require('./ipc-guards');
 
@@ -16,7 +18,6 @@ const STORE_KEY = 'deviceInstallId';
 const NAME_MAX = 64;
 const OS_VERSION_MAX = 32;
 const ARCH_MAX = 16;
-const TOKEN_LABEL_MAX = 120;
 const NAME_TTL_MS = 10 * 60 * 1000; // ComputerName can be renamed while the app runs
 const EXEC_TIMEOUT_MS = 1500;
 
@@ -24,7 +25,11 @@ let store; // undefined = not opened yet; null = unavailable (memory only)
 let memoryId = '';
 // electron-store re-reads its file on every get, and this is read on every request.
 let cachedId = '';
-let cachedName = null; // { value, at }
+let cachedName = ''; // from refresh(); '' until the async read lands
+let cachedOsVersion = '';
+let refreshedAt = 0;
+let refreshing = null;
+let execImpl = null; // tests inject; default is promisified execFile
 
 function openStore() {
   if (store !== undefined) return store;
@@ -42,7 +47,15 @@ function _setStore(s) {
   store = s;
   memoryId = '';
   cachedId = '';
-  cachedName = null;
+  cachedName = '';
+  cachedOsVersion = '';
+  refreshedAt = 0;
+  refreshing = null;
+}
+
+/** Tests only: inject `(cmd, args, opts) => Promise<string|{stdout}>`; null restores execFile. */
+function _setExec(fn) {
+  execImpl = fn;
 }
 
 function installId() {
@@ -90,48 +103,60 @@ function mapPlatform(p) {
   return 'linux';
 }
 
-function run(cmd, args) {
+async function run(cmd, args) {
   try {
-    return String(execFileSync(cmd, args, { timeout: EXEC_TIMEOUT_MS, encoding: 'utf8' }) || '').trim();
+    const exec = execImpl || promisify(execFile);
+    const out = await exec(cmd, args, { timeout: EXEC_TIMEOUT_MS, encoding: 'utf8' });
+    return String((out && typeof out === 'object' ? out.stdout : out) || '').trim();
   } catch (_) {
     return '';
   }
 }
 
-function friendlyName({ now = Date.now(), platform = process.platform, exec = run, hostname = os.hostname } = {}) {
-  if (cachedName && now - cachedName.at < NAME_TTL_MS) return cachedName.value;
-  let value = '';
-  if (platform === 'darwin') value = clampName(exec('/usr/sbin/scutil', ['--get', 'ComputerName']));
-  if (!value) {
-    try { value = cleanHostname(hostname()); } catch (_) { value = ''; }
-  }
-  if (!value) value = 'Computer';
-  cachedName = { value, at: now };
-  return value;
+function hostnameName(hostname = os.hostname) {
+  let v = '';
+  try { v = cleanHostname(hostname()); } catch (_) { v = ''; }
+  return v || 'Computer';
 }
 
-let cachedOsVersion = null;
+/**
+ * Re-read ComputerName + OS version off the beat path. Single-flight, never rejects. Called at
+ * arm time and kicked (not awaited) by `descriptor()` once the cache is older than NAME_TTL_MS.
+ */
+function refresh({ platform = process.platform, now = Date.now } = {}) {
+  if (refreshing) return refreshing;
+  refreshing = (async () => {
+    const mac = platform === 'darwin';
+    const [name, osv] = await Promise.all([
+      mac ? run('/usr/sbin/scutil', ['--get', 'ComputerName']) : '',
+      mac ? run('/usr/bin/sw_vers', ['-productVersion']) : '',
+    ]);
+    // A failed read keeps the last good value.
+    const n = clampName(name);
+    if (n) cachedName = n;
+    const v = String(osv || '').slice(0, OS_VERSION_MAX);
+    if (v) cachedOsVersion = v;
+    refreshedAt = now();
+  })().catch(() => {}).finally(() => { refreshing = null; });
+  return refreshing;
+}
+
+function kickIfStale(now) {
+  if (!refreshing && now - refreshedAt >= NAME_TTL_MS) refresh();
+}
+
+/** Sync: the cached ComputerName, else the cleaned hostname. Never shells out. */
+function friendlyName({ hostname = os.hostname } = {}) {
+  return cachedName || hostnameName(hostname);
+}
+
 function osVersion() {
-  if (cachedOsVersion !== null) return cachedOsVersion;
-  let v = process.platform === 'darwin' ? run('/usr/bin/sw_vers', ['-productVersion']) : '';
-  if (!v) {
-    try { v = os.release(); } catch (_) { v = ''; }
-  }
-  cachedOsVersion = String(v || '').slice(0, OS_VERSION_MAX);
-  return cachedOsVersion;
+  if (cachedOsVersion) return cachedOsVersion;
+  try { return String(os.release() || '').slice(0, OS_VERSION_MAX); } catch (_) { return ''; }
 }
 
-// The label this machine's CURRENT MCP device token was minted under, so the server can link a
-// token minted before this computer registered. Lazy: mcp-config requires api.js, which requires us.
-function tokenLabel() {
-  try {
-    return String(require('./mcp-config').currentDeviceTokenLabel() || '').slice(0, TOKEN_LABEL_MAX);
-  } catch (_) {
-    return '';
-  }
-}
-
-function descriptor(status) {
+function descriptor(status, { now = Date.now() } = {}) {
+  kickIfStale(now);
   const body = {
     installId: installId(),
     name: friendlyName(),
@@ -144,8 +169,6 @@ function descriptor(status) {
   if (av) body.appVersion = av.slice(0, 32);
   const arch = String(process.arch || '').slice(0, ARCH_MAX);
   if (arch) body.arch = arch;
-  const label = tokenLabel();
-  if (label) body.tokenLabel = label;
   return body;
 }
 
@@ -164,10 +187,12 @@ module.exports = {
   rotateInstallId,
   friendlyName,
   osVersion,
+  refresh,
   descriptor,
   deviceHeaders,
   clampName,
   cleanHostname,
   mapPlatform,
   _setStore,
+  _setExec,
 };

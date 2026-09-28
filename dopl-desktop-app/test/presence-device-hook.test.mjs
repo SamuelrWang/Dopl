@@ -1,5 +1,6 @@
 // presence-core's optional device hooks: `onBeat(status)` on each signed-in beat, `onAway(reason)`
-// on sleep()/stop(). Fire-and-forget — absent, throwing or hanging hooks change nothing.
+// on sleep()/stop(). Fire-and-forget on beat/sleep; stop() returns the away post joined with the
+// onAway('stop') hook (device offline) so quit-guard's one deadline bounds both.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -57,9 +58,54 @@ test("a throwing, rejecting or hanging hook never changes presence", async () =>
     const h = make({ onBeat: hook, onAway: hook });
     assert.equal(await h.presence._beat(), "ok");
     h.presence.start();
-    assert.equal(await h.presence.stop(), "ok");
-    assert.deepEqual(h.posts.map((p) => p.status).slice(-1), ["away"]);
+    assert.equal(await h.presence.sleep("suspend"), "ok", "sleep never waits on the hook");
+    await h.presence.wake();
+    const stopped = h.presence.stop();
+    assert.deepEqual(h.posts.map((p) => p.status).slice(-1), ["away"], "away still posted");
+    // A hanging hook holds stop() open — quit-guard's deadline is what bounds it.
+    const out = await Promise.race([stopped, new Promise((r) => setTimeout(() => r("held"), 20))]);
+    assert.ok(out === "ok" || out === "held");
   }
+});
+
+test("stop() settles only when BOTH the away post and the device offline hook settle", async () => {
+  let releaseAway, releaseDevice;
+  const order = [];
+  const h = make({
+    apiFetch: (path, o) => new Promise((r) => {
+      releaseAway = () => { order.push("away"); r({ status: 200, ok: true }); };
+    }),
+    onAway: () => new Promise((r) => { releaseDevice = () => { order.push("device"); r("ok"); }; }),
+  });
+  h.presence.start();
+  // start() fired a beat; release it so the stop path owns releaseAway.
+  releaseAway();
+  await new Promise((r) => setImmediate(r));
+  let settled = false;
+  const stopped = h.presence.stop().then((v) => { settled = true; return v; });
+  await new Promise((r) => setImmediate(r));
+  releaseAway();
+  await new Promise((r) => setImmediate(r));
+  assert.equal(settled, false, "device offline still pending");
+  releaseDevice();
+  assert.equal(await stopped, "ok", "resolves to the away outcome");
+  assert.deepEqual(order.slice(-2), ["away", "device"]);
+});
+
+test("sleep() never waits on the device hook (suspend stays fire-and-forget)", async () => {
+  const h = make({ onAway: () => new Promise(() => {}) });
+  h.presence.start();
+  assert.equal(await h.presence.sleep("suspend"), "ok");
+});
+
+test("quit-guard races listener.stop()'s promise inside FLUSH_DEADLINE_MS (unchanged 1500ms)", () => {
+  const { readFileSync } = require("node:fs");
+  const Q = readFileSync(new URL("../main/quit-guard.js", import.meta.url), "utf8");
+  const L = readFileSync(new URL("../main/channel-listener.js", import.meta.url), "utf8");
+  assert.match(Q, /const FLUSH_DEADLINE_MS = 1500;/);
+  assert.match(Q, /awayPost = deps\.listener\.stop\(\)/);
+  assert.match(Q, /awayPost \|\| Promise\.resolve\(\)/);
+  assert.match(L, /const away = presence\.stop\(\);[\s\S]*?return away;/);
 });
 
 test("onAway fires on sleep(reason) and on stop()", async () => {

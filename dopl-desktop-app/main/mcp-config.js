@@ -35,9 +35,10 @@ const { withDeadline, DEADLINE } = require('./deadline');
 // gate; a second runtime with a skills convention gets its own sibling, never a branch here.
 const { ensureDoplSkills } = require('./runtime/claude/skill-install');
 const { MCP_URL, MCP_DEVICE_TOKEN_PATH } = require('./config');
+const { isUuid } = require('./ipc-guards');
 
 const store = new Store();
-const DT_KEY = 'mcpDeviceToken'; // safeStorage-encrypted base64(JSON{token,expiresAt})
+const DT_KEY = 'mcpDeviceToken'; // safeStorage-encrypted base64(JSON{token,expiresAt,label,tokenId?})
 const DT_KEY_PLAIN = 'mcpDeviceTokenPlain';
 const REUSE_MARGIN_MS = 7 * 24 * 60 * 60 * 1000; // re-mint when <7d remain
 // ⚠ THE ONE DEFINITION of the per-server call abort every Dopl MCP entry this app builds must
@@ -166,12 +167,26 @@ function loadDeviceToken() {
   return null;
 }
 
-// The label the CURRENT device token was minted under, '' when none. The device heartbeat sends it
-// so the server can link a token minted before this computer registered (re-mints are ~90 days apart).
-function currentDeviceTokenLabel() {
+// How the device heartbeat links the CURRENT token to this computer: its row id, or (records
+// minted before the server returned one) the label. Read once per arm/sign-in, never per beat.
+function deviceTokenLink() {
   const rec = loadDeviceToken();
-  if (!rec || !rec.token) return '';
-  return String(rec.label || deviceLabel());
+  if (!rec || !rec.token) return null;
+  if (isUuid(rec.tokenId)) return { tokenId: rec.tokenId };
+  return { tokenLabel: String(rec.label || deviceLabel()) };
+}
+
+// In-memory mint notifier so the heartbeat learns a re-mint's id without re-reading the store.
+const mintListeners = new Set();
+function onDeviceTokenMinted(cb) {
+  if (typeof cb !== 'function') return () => {};
+  mintListeners.add(cb);
+  return () => mintListeners.delete(cb);
+}
+function notifyMinted(link) {
+  for (const cb of mintListeners) {
+    try { cb(link); } catch (_) { /* a listener never breaks minting */ }
+  }
 }
 
 // ⚠ THE SDK PATH'S BEARER, never a file read — AND THE ONLY PLACE THE BEARER IS SPELLED, now
@@ -350,8 +365,11 @@ async function obtainDeviceToken() {
     return cached ? cached.token : null;
   }
   const rec = { token: data.token, expiresAt: parseExpiry(data.expiresAt), label };
+  // Older servers omit tokenId; the heartbeat then links by label.
+  if (isUuid(data.tokenId)) rec.tokenId = data.tokenId;
   saveDeviceToken(rec);
   lastMintWasFresh = true;
+  notifyMinted(rec.tokenId ? { tokenId: rec.tokenId } : { tokenLabel: label });
   diag('mcp-config: minted device token, expires', new Date(rec.expiresAt).toISOString());
   return rec.token;
 }
@@ -466,7 +484,8 @@ module.exports = {
   ensureMcpConfig,
   spawnConfigPath,
   deviceTokenForSpawn, // the SDK path's bearer, from safeStorage — never off disk
-  currentDeviceTokenLabel, // device-identity.js › descriptor
+  deviceTokenLink, // device-registry.js › arm (once per sign-in)
+  onDeviceTokenMinted, // device-registry.js: re-mint → link on the next beat
   clearDeviceToken, // S2: sign-out teardown, LOCAL (auth-state.signOut)
   revokeDeviceToken, // F-085: sign-out teardown, SERVER-side (auth-state.signOut)
   MCP_CLIENT_TIMEOUT_MS, // Q9: ONE definition — runtime/claude/loader.js reads it from here

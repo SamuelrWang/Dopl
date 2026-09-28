@@ -45,7 +45,8 @@ const presence = createPresence({
   idleSeconds,
   diag,
   // The device heartbeat rides this loop. A locked screen is `away`; suspend/shutdown/quit is
-  // `offline`, fire-and-forget (quit-guard races only presence's own away post).
+  // `offline`. Sleep is fire-and-forget; stop() returns it with the away post so quit-guard's
+  // deadline covers both.
   onBeat: (status) => device.beat(status),
   onAway: (reason) => (reason === 'lock-screen' ? device.beat('away') : device.offline(reason)),
 });

@@ -2,11 +2,13 @@
 // Pure and injectable so `node --test` drives it; `device-registry.js` is the wiring.
 //
 // It has no timer of its own — presence's 30s loop calls `beat(posture)` (presence-core `onBeat`),
-// and this throttles to one write per 60s unless the status changed. A `revoked:true` answer means
+// and this throttles to one write per ~50s unless the status changed (50s, not 60s, so 30s±3s
+// jitter still lands a send every other beat). A `revoked:true` answer means
 // the user removed this computer: `onRevoked` runs once and beating stops until `reset()`.
 
 const PATH = '/api/devices/heartbeat';
-const MIN_INTERVAL_MS = 60 * 1000;
+const MIN_INTERVAL_MS = 50 * 1000;
+const TOKEN_LABEL_MAX = 120;
 const UNAVAILABLE_BACKOFF_MS = 5 * 60 * 1000; // 404 = endpoint not deployed on this server
 const HTTP_TIMEOUT_MS = 12000;
 const OFFLINE_TIMEOUT_MS = 3000; // runs during quit/suspend
@@ -31,6 +33,16 @@ function createDeviceRegistry(deps) {
   let unavailableUntil = 0;
   let revoked = false;
   let inFlight = false;
+  let queued = null; // latest status requested while a beat was in flight
+  let link = null; // { tokenId } | { tokenLabel }: sent until one send lands, then dropped
+
+  /** Link the current MCP token on the next landed send only. */
+  function setLink(next) {
+    if (next && typeof next.tokenId === 'string' && next.tokenId) link = { tokenId: next.tokenId };
+    else if (next && typeof next.tokenLabel === 'string' && next.tokenLabel) {
+      link = { tokenLabel: next.tokenLabel.slice(0, TOKEN_LABEL_MAX) };
+    } else link = null;
+  }
 
   function handleRevoked() {
     if (revoked) return;
@@ -49,6 +61,8 @@ function createDeviceRegistry(deps) {
       diag('device: descriptor failed', err && err.message);
       return 'error';
     }
+    const sentLink = link;
+    if (sentLink) body = { ...body, ...sentLink };
     let res;
     try {
       res = await apiFetch(PATH, { method: 'POST', body, noStore: true, timeoutMs });
@@ -72,6 +86,7 @@ function createDeviceRegistry(deps) {
     }
     lastSentAt = now();
     lastStatus = status;
+    if (sentLink && link === sentLink) link = null;
     return 'ok';
   }
 
@@ -81,18 +96,30 @@ function createDeviceRegistry(deps) {
     return null;
   }
 
+  // A status requested mid-flight is kept (latest wins) and sent once the flight settles, so a
+  // lock-screen `away` is never lost.
+  function drain() {
+    if (queued === null) return;
+    const s = queued;
+    queued = null;
+    beat(s).catch(() => {});
+  }
+
   async function beat(status) {
     try {
       const b = blocked();
       if (b) return b;
-      if (inFlight) return 'busy';
+      if (inFlight) { queued = status; return 'queued'; }
       if (status === lastStatus && now() - lastSentAt < MIN_INTERVAL_MS) return 'throttled';
       inFlight = true;
+      let out;
       try {
-        return await post(status, HTTP_TIMEOUT_MS);
+        out = await post(status, HTTP_TIMEOUT_MS);
       } finally {
         inFlight = false;
       }
+      drain();
+      return out;
     } catch (_) {
       return 'error';
     }
@@ -103,6 +130,7 @@ function createDeviceRegistry(deps) {
     try {
       const b = blocked();
       if (b) return Promise.resolve(b);
+      queued = null; // nothing may land after offline
       diag('device: offline —', reason);
       return post('offline', OFFLINE_TIMEOUT_MS).catch(() => 'error');
     } catch (_) {
@@ -118,7 +146,7 @@ function createDeviceRegistry(deps) {
     lastStatus = null;
   }
 
-  return { beat, offline, reset, _isRevoked: () => revoked };
+  return { beat, offline, reset, setLink, _isRevoked: () => revoked, _link: () => link };
 }
 
 module.exports = {
