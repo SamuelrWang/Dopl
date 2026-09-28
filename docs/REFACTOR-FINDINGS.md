@@ -10623,3 +10623,12 @@ already wrong — `channel-dispatch-agents.ts` does pass `waitMs` — so do not 
 - **The effect.** Both catch every `res.json()` throw as a non-JSON body, so a 2xx whose stream dies resolves as `undefined` data instead of a `NetworkError`. The packaged app no longer takes this path; the web app still does.
 - Proposed resolution: rethrow through `api-envelope.ts › transportFailure` when the read throws a network-class error (not a `SyntaxError`), in both readers.
 - Status: OPEN (low).
+
+### F-770 — Devices follow-ups: glasses outside `GET /api/devices`, cooperative sign-out on Remove, an unread grants route (2026-09-28)
+
+- Location: `src/features/devices/merge.ts › mergeDevices`, `src/features/devices/server/devices-service.ts › removeComputer`, `src/app/api/oauth/grants/route.ts`.
+- Found during: the Connect page rebuild (`feat/connect-devices`, `docs/devices.md`). The id skips two numbers to leave room for the parallel glasses-segmentation branch.
+- (a) Glasses are merged CLIENT-side. The glasses feature was being segmented per vendor at the same time, so the devices feature reads it over HTTP only. Once that lands, fold glasses into `GET /api/devices` server-side.
+- (b) Remove revokes every MCP credential the computer minted, but the desktop's Supabase session ends only when the app next heartbeats and signs itself out. A computer that is off, or on a build older than the device registry, keeps a Supabase refresh token until it signs out or the token expires. A server-side end needs the session id recorded at registration and a `SECURITY DEFINER` delete on `auth.sessions`; that is not additive, so it is documented, not built.
+- (c) `GET /api/oauth/grants` and `DELETE /api/oauth/grants/{id}` have no UI caller since the Agents panel moved to `/api/oauth/apps`. Keep them or delete them (Samuel).
+- Status: OPEN.
