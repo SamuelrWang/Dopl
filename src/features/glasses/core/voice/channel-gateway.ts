@@ -7,6 +7,7 @@ import { listChannelSessionStates } from "@/features/channels/server/repository-
 import { agentIdHandle } from "@/features/channels/lib/agent-mentions";
 import { authorAgentIdOf } from "@/features/channels/lib/agent-post-stamp";
 import { operatorChannelContext } from "../channel-context";
+import { isUuid } from "../validation";
 import { UtteranceError, type ChannelGateway, type ChannelReply, type PostedUtterance } from "./utterance";
 
 /**
@@ -47,37 +48,52 @@ export const glassesChannelGateway: ChannelGateway = {
   },
 
   async agentMessagesAfter(channelId, seq, limit): Promise<ChannelReply[]> {
+    return (await glassesChannelGateway.agentMessagesAfterMany(new Map([[channelId, seq]]), limit)).get(channelId) ?? [];
+  },
+
+  async agentMessagesAfterMany(cursors, limitPerChannel) {
+    const out = new Map<string, ChannelReply[]>();
+    const valid = [...cursors].filter(([id, seq]) => isUuid(id) && Number.isSafeInteger(seq));
+    if (valid.length === 0) return out;
+    // One read for every channel: `(channel_id = A AND seq > a) OR (channel_id = B AND seq > b) …`.
+    // Ordered (channel, seq) so a clip never skips a row below a kept one; the
+    // overall limit is per-channel × channels, and a clipped channel resumes next pass.
     const { data, error } = await supabaseAdmin()
       .from("channel_messages")
-      .select("id, seq, body, workspace_id, author_kind, client_msg_id, metadata")
-      .eq("channel_id", channelId)
+      .select("id, seq, channel_id, body, workspace_id, author_kind, client_msg_id, metadata")
+      .or(valid.map(([id, seq]) => `and(channel_id.eq.${id},seq.gt.${seq})`).join(","))
       .eq("author_kind", "agent")
       .eq("kind", "message")
-      .gt("seq", seq)
+      .order("channel_id", { ascending: true })
       .order("seq", { ascending: true })
-      .limit(limit);
+      .limit(limitPerChannel * valid.length);
     if (error) throw new Error(`glasses reply read failed: ${error.message}`);
     const rows = (data ?? []) as {
       id: string;
       seq: number;
+      channel_id: string;
       body: string;
       workspace_id: string;
       author_kind: string;
       client_msg_id: string | null;
       metadata: Record<string, unknown> | null;
     }[];
-    if (rows.length === 0) return [];
+    if (rows.length === 0) return out;
     const names = await agentNamesFor([...new Set(rows.map((r) => r.workspace_id))], rows);
-    return rows.map((r) => {
+    for (const r of rows) {
+      const list = out.get(r.channel_id) ?? [];
+      if (list.length >= limitPerChannel) continue;
       const agentId = authorAgentIdOf({ clientMsgId: r.client_msg_id, metadata: r.metadata });
-      return {
+      list.push({
         id: r.id,
         seq: Number(r.seq),
         body: r.body,
         agentName: (agentId && names.get(agentId)) || (agentId ? agentIdHandle(agentId) : "Agent"),
         agentId,
-      };
-    });
+      });
+      out.set(r.channel_id, list);
+    }
+    return out;
   },
 
   async headSeq(channelId) {

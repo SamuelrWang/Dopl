@@ -55,7 +55,6 @@ export const menuHandlers = createMenuHandlers({
 
 export const userHandlers = createUserHandlers({
   devices: deviceRepository,
-  linker: channelLinker,
   allowClaim: limiter("glasses-claim", CLAIM_RPM, "POST /api/glasses/pair/claim"),
 });
 

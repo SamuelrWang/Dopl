@@ -143,8 +143,8 @@ describe("glasses_get_answer / glasses_status", () => {
     const { deps, devices, clock } = setup();
     expect(await glassesStatus(deps, USER)).toEqual({ online: false, last_seen: null, active_count: 0, devices: [] });
     const now = new Date(clock.now()).toISOString();
-    const d = await devices.insertDevice({ userId: USER, name: "Lens", platform: "even_g2", linkedChannelId: null, linkedContainerId: null, now });
-    await devices.insertDevice({ userId: "someone-else", name: "Other", platform: "even_g2", linkedChannelId: null, linkedContainerId: null, now });
+    const d = await devices.insertDevice({ userId: USER, name: "Lens", platform: "even_g2", now });
+    await devices.insertDevice({ userId: "someone-else", name: "Other", platform: "even_g2", now });
     await devices.setTokenHash(d.id, "hash-of-token");
     await devices.touchDevice(d.id, now);
     await glassesNotify(deps, USER, { title: "t", body: "b" });

@@ -5,10 +5,7 @@ export interface GlassesDevice {
   name: string;
   /** Selects the platform implementation (`platforms/registry.ts`). */
   platform: string;
-  linked_channel_id: string | null;
-  linked_container_id: string | null;
-  reply_cursor_seq: number | null;
-  /** Where voice goes by default (the wearer's last menu pick); re-validated on every use. */
+  /** Where voice goes by default (set by opening a chat/read view on the glasses); re-validated on every use. */
   current_target_channel_id: string | null;
   current_target_agent: string | null;
   created_at: string;
@@ -33,9 +30,20 @@ interface NewDevice {
   userId: string;
   name: string;
   platform: string;
-  linkedChannelId: string | null;
-  linkedContainerId: string | null;
   now: string;
+}
+
+/**
+ * A `glasses_device_channel_activity` row: the reply mirror's state for one
+ * channel a device has targeted or posted to (`messages/reply-mirror.ts`).
+ */
+export interface DeviceChannelActivity {
+  channel_id: string;
+  /** The device's last voice / Hey Even post there; null when only ever targeted. */
+  last_posted_at: string | null;
+  reply_cursor_seq: number;
+  /** When the cursor was last confirmed; a stale one restarts at the channel head. */
+  cursor_at: string;
 }
 
 /**
@@ -67,11 +75,16 @@ export interface DeviceStore {
   updateDevice(
     userId: string,
     id: string,
-    patch: { name?: string; linkedChannelId?: string | null; linkedContainerId?: string | null },
+    patch: { name?: string },
   ): Promise<GlassesDevice | null>;
   revokeDevice(userId: string, id: string, now: string): Promise<boolean>;
   touchDevice(deviceId: string, now: string): Promise<void>;
-  setReplyCursor(deviceId: string, seq: number | null): Promise<void>;
+  /** Every mirror-state row of the device (one per channel it targeted or posted to). */
+  listChannelActivity(deviceId: string): Promise<DeviceChannelActivity[]>;
+  /** Stamp a post; with `cursor`, also (re)start that channel's mirror cursor (upsert). */
+  recordChannelPost(deviceId: string, channelId: string, now: string, cursor: { seq: number; at: string } | null): Promise<void>;
+  /** Upsert mirror cursors; leaves `last_posted_at` untouched. */
+  setChannelCursors(deviceId: string, cursors: { channelId: string; seq: number; at: string }[]): Promise<void>;
   setCurrentTarget(deviceId: string, channelId: string | null, agentId: string | null, now: string): Promise<void>;
   countActiveDevices(userId: string): Promise<number>;
 }

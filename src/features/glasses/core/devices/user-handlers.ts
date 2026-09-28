@@ -4,7 +4,7 @@ import { parseJson } from "@/shared/api/parse-json";
 import { toHttpErrorResponse } from "@/shared/api/http-error-response";
 import { HttpError } from "@/shared/lib/http-error";
 import type { Clock } from "../clock";
-import { DEVICE_NAME_MAX, listDevices, revokeDevice, updateDevice, type ChannelLinker } from "./service";
+import { DEVICE_NAME_MAX, listDevices, revokeDevice, updateDevice } from "./service";
 import type { DeviceStore } from "./types";
 import { claimPairing } from "./pairing";
 
@@ -13,12 +13,13 @@ import { claimPairing } from "./pairing";
  * `/api/glasses/devices*`). The routes wrap these in `withUserAuth`; every
  * credential-minting or -changing route is session-only
  * (`session-policy.ts › glassesSessionOnly`), so an agent token can list
- * devices but not pair, relink, revoke or mint a key.
+ * devices but not pair, rename, revoke or mint a key.
+ * `channel_id` is still accepted on claim and PATCH (older clients send it) and
+ * ignored: a device has no linked channel (docs/glasses-mcp.md).
  */
 
 export interface UserHandlerDeps extends Clock {
   devices: DeviceStore;
-  linker: ChannelLinker;
   /** Per-user limiter for claims (codes are guessable in principle); true = within. */
   allowClaim: (userId: string) => Promise<boolean>;
 }
@@ -29,11 +30,11 @@ const Name = z.string().trim().min(1).max(DEVICE_NAME_MAX);
 const ClaimSchema = z.object({
   code: z.string().min(1).max(16),
   name: Name.optional(),
-  channel_id: z.string().uuid().nullable().optional(),
+  channel_id: z.unknown().optional(),
 });
 const PatchSchema = z
-  .object({ name: Name.optional(), channel_id: z.string().uuid().nullable().optional() })
-  .refine((v) => v.name !== undefined || v.channel_id !== undefined, { message: "Send name and/or channel_id." });
+  .object({ name: Name.optional(), channel_id: z.unknown().optional() })
+  .refine((v) => v.name !== undefined || v.channel_id !== undefined, { message: "Send name." });
 
 const fail = (err: unknown) => toHttpErrorResponse("glasses", err);
 

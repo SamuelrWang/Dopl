@@ -74,25 +74,58 @@ describe("handleGlassesUtterance", () => {
     expect(sleep).not.toHaveBeenCalled();
   });
 
-  it("routes to the explicit override, then the current target, then the linked channel", async () => {
+  it("routes to the explicit override, then the current target, then the most recent channel", async () => {
     const A = "aaaaaaaa-0000-4000-8000-000000000000";
     const B = "bbbbbbbb-0000-4000-8000-000000000000";
     const C = "cccccccc-0000-4000-8000-000000000000";
     const gone = "dddddddd-0000-4000-8000-000000000000";
-    const linker = fakeLinker({ [A]: { name: "a", members: [USER] }, [B]: { name: "b", members: [USER] }, [C]: { name: "c", members: [USER] } });
-    const device = { user_id: USER, linked_channel_id: C, current_target_channel_id: B, current_target_agent: "abcdefgh" };
+    const linker = fakeLinker({
+      [A]: { name: "a", members: [USER], last: "2026-09-01" },
+      [B]: { name: "b", members: [USER], last: "2026-09-02" },
+      [C]: { name: "c", members: [USER], last: "2026-09-03" },
+    });
+    const device = { user_id: USER, current_target_channel_id: B, current_target_agent: "abcdefgh" };
     const link = (channelId: string, name: string) => ({ channelId, containerId: "11111111-0000-4000-8000-000000000000", name });
     expect(await resolveVoiceTarget(linker, device, { channelId: A, agentId: null })).toEqual({ channel: link(A, "a"), agentId: null, source: "override" });
     expect(await resolveVoiceTarget(linker, device, null)).toEqual({ channel: link(B, "b"), agentId: "abcdefgh", source: "current" });
+    // A stale / foreign override and target fall through to the most recently active channel, unaddressed.
     expect(await resolveVoiceTarget(linker, { ...device, current_target_channel_id: gone }, { channelId: gone })).toEqual({
       channel: link(C, "c"),
       agentId: null,
-      source: "linked",
+      source: "recent",
     });
-    expect(await resolveVoiceTarget(linker, { ...device, current_target_channel_id: null, linked_channel_id: null }, null)).toBeNull();
+    expect(await resolveVoiceTarget(linker, { ...device, current_target_channel_id: null }, null)).toMatchObject({ source: "recent" });
+    // No usable channel at all: no target (the handler answers "Open a channel on your glasses first").
+    expect(await resolveVoiceTarget(fakeLinker({ [A]: { name: "a", members: ["someone-else"] } }), device, null)).toBeNull();
     const req = new Request(`http://x/api/glasses/device/voice?channel_id=${A}&agent=bad-id`);
     expect(targetOverrideFrom(req)).toEqual({ channelId: A, agentId: "bad-id" });
     expect(await resolveVoiceTarget(linker, device, targetOverrideFrom(req))).toMatchObject({ channel: { channelId: A }, agentId: null });
+  });
+
+  it("does not consult the fallback when the current target is usable", async () => {
+    const B = "bbbbbbbb-0000-4000-8000-000000000000";
+    const linker = fakeLinker({ [B]: { name: "b", members: [USER] } });
+    const mostRecent = vi.spyOn(linker, "mostRecent");
+    await resolveVoiceTarget(linker, { user_id: USER, current_target_channel_id: B, current_target_agent: null }, null);
+    expect(mostRecent).not.toHaveBeenCalled();
+  });
+
+  it("reports the stored post to onPosted, and a failing hook never fails the utterance", async () => {
+    const ch = createFakeChannel({ liveAgents: 0 });
+    const seen: number[] = [];
+    const res = await handleGlassesUtterance(
+      { gateway: ch.gateway, config: CONFIG, onPosted: async (seq) => void seen.push(seq) },
+      "hi",
+    );
+    expect(seen).toEqual([ch.messages[0].seq]);
+    const err = vi.spyOn(console, "error").mockImplementation(() => {});
+    const again = await handleGlassesUtterance(
+      { gateway: ch.gateway, config: CONFIG, onPosted: async () => Promise.reject(new Error("db down")) },
+      "hi again",
+    );
+    err.mockRestore();
+    expect(res.status).toBe("offline");
+    expect(again.status).toBe("offline");
   });
 });
 

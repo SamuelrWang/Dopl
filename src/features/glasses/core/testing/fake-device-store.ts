@@ -1,11 +1,13 @@
 import type { ChannelLink, ChannelLinker } from "../devices/service";
-import type { DeviceStore, GlassesDevice, GlassesPairing } from "../devices/types";
+import type { DeviceChannelActivity, DeviceStore, GlassesDevice, GlassesPairing } from "../devices/types";
 
 /** In-memory {@link DeviceStore} for tests: mirrors `devices/repository.ts` semantics. */
 export function createFakeDeviceStore() {
   type Row = GlassesDevice & { token_hash: string | null; assistant_key_hash: string | null };
   const devices: Row[] = [];
   const pairings: GlassesPairing[] = [];
+  /** `glasses_device_channel_activity`, keyed `${device_id}|${channel_id}`. */
+  const activity = new Map<string, DeviceChannelActivity & { device_id: string }>();
   let seq = 0;
   const id = () => `00000000-0000-4000-a000-${String(++seq).padStart(12, "0")}`;
   const out = (r: Row): GlassesDevice => {
@@ -63,9 +65,6 @@ export function createFakeDeviceStore() {
         user_id: d.userId,
         name: d.name,
         platform: d.platform,
-        linked_channel_id: d.linkedChannelId,
-        linked_container_id: d.linkedContainerId,
-        reply_cursor_seq: null,
         current_target_channel_id: null,
         current_target_agent: null,
         created_at: d.now,
@@ -102,11 +101,6 @@ export function createFakeDeviceStore() {
       const r = devices.find((x) => x.user_id === userId && x.id === did && active(x));
       if (!r) return null;
       if (patch.name !== undefined) r.name = patch.name;
-      if (patch.linkedChannelId !== undefined) {
-        r.linked_channel_id = patch.linkedChannelId;
-        r.linked_container_id = patch.linkedContainerId ?? null;
-        r.reply_cursor_seq = null;
-      }
       return out(r);
     },
     async revokeDevice(userId, did, now) {
@@ -119,9 +113,24 @@ export function createFakeDeviceStore() {
       const r = devices.find((x) => x.id === did);
       if (r) r.last_seen = now;
     },
-    async setReplyCursor(did, seq) {
-      const r = devices.find((x) => x.id === did);
-      if (r) r.reply_cursor_seq = seq;
+    async listChannelActivity(did) {
+      return [...activity.values()].filter((a) => a.device_id === did).map((a) => ({ channel_id: a.channel_id, last_posted_at: a.last_posted_at, reply_cursor_seq: a.reply_cursor_seq, cursor_at: a.cursor_at }));
+    },
+    async recordChannelPost(did, channelId, now, cursor) {
+      const key = `${did}|${channelId}`;
+      const row = activity.get(key);
+      if (cursor) {
+        activity.set(key, { device_id: did, channel_id: channelId, last_posted_at: now, reply_cursor_seq: cursor.seq, cursor_at: cursor.at });
+      } else if (row) {
+        row.last_posted_at = now;
+      }
+    },
+    async setChannelCursors(did, cursors) {
+      for (const c of cursors) {
+        const key = `${did}|${c.channelId}`;
+        const row = activity.get(key);
+        activity.set(key, { device_id: did, channel_id: c.channelId, last_posted_at: row?.last_posted_at ?? null, reply_cursor_seq: c.seq, cursor_at: c.at });
+      }
     },
     async setCurrentTarget(did, channelId, agentId) {
       const r = devices.find((x) => x.id === did && active(x));
@@ -131,18 +140,28 @@ export function createFakeDeviceStore() {
       return devices.filter((x) => x.user_id === userId && active(x) && x.token_hash !== null).length;
     },
   };
-  return { devices: store, deviceRows: devices, pairings };
+  return { devices: store, deviceRows: devices, pairings, activity };
 }
 
-/** A {@link ChannelLinker} over a fixed membership table: `members[channelId]` = user ids. */
-export function fakeLinker(channels: Record<string, { name: string; members: string[] }>): ChannelLinker {
+/**
+ * A {@link ChannelLinker} over a fixed membership table: `members[channelId]` =
+ * user ids; `last` (ISO) ranks the most-recent fallback.
+ */
+export function fakeLinker(channels: Record<string, { name: string; members: string[]; last?: string }>): ChannelLinker {
+  const link = (id: string, name: string): ChannelLink => ({ channelId: id, containerId: "11111111-0000-4000-8000-000000000000", name });
   return {
+    async mostRecent(userId) {
+      const [best] = Object.entries(channels)
+        .filter(([, c]) => c.members.includes(userId))
+        .sort(([, a], [, b]) => (b.last ?? "").localeCompare(a.last ?? ""));
+      return best ? link(best[0], best[1].name) : null;
+    },
     async linkable(userId, ids) {
       const out = new Map<string, ChannelLink>();
       for (const id of ids) {
         const c = channels[id];
         if (c?.members.includes(userId)) {
-          out.set(id, { channelId: id, containerId: "11111111-0000-4000-8000-000000000000", name: c.name });
+          out.set(id, link(id, c.name));
         }
       }
       return out;

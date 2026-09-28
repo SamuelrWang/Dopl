@@ -5,10 +5,12 @@ import { isUuid } from "../validation";
 /**
  * Where a device's voice / assistant utterance goes, in order:
  *   1. an EXPLICIT override on the request (the screen the wearer is on),
- *   2. the device's stored CURRENT TARGET (last menu pick),
- *   3. the device's LINKED channel.
+ *   2. the device's stored CURRENT TARGET (set by opening a chat/read view),
+ *   3. FALLBACK: the owner's most recently active channel (member, live, not a DM).
  * Every candidate is re-validated (member of a live channel) before use: a
- * stale or foreign pick falls through to the next, never posts.
+ * stale or foreign pick falls through to the next, never posts. None usable →
+ * null (the caller answers "Open a channel on your glasses first").
+ * There is no per-device linked channel.
  * An agent target means "@-address that agent"; a channel target is unaddressed.
  */
 
@@ -18,7 +20,7 @@ interface VoiceTarget {
   channel: ChannelLink;
   /** Agent id to @-address, or null for the channel's normal wake rules. */
   agentId: string | null;
-  source: "override" | "current" | "linked";
+  source: "override" | "current" | "recent";
 }
 
 interface TargetOverride {
@@ -36,7 +38,7 @@ export function targetOverrideFrom(request: Request): TargetOverride | null {
 
 export async function resolveVoiceTarget(
   linker: ChannelLinker,
-  device: Pick<GlassesDevice, "user_id" | "linked_channel_id" | "current_target_channel_id" | "current_target_agent">,
+  device: Pick<GlassesDevice, "user_id" | "current_target_channel_id" | "current_target_agent">,
   override: TargetOverride | null,
 ): Promise<VoiceTarget | null> {
   const candidates: { channelId: string; agentId: string | null; source: VoiceTarget["source"] }[] = [];
@@ -46,13 +48,14 @@ export async function resolveVoiceTarget(
   };
   push(override?.channelId, override?.agentId, "override");
   push(device.current_target_channel_id, device.current_target_agent, "current");
-  push(device.linked_channel_id, null, "linked");
-  if (candidates.length === 0) return null;
-  // One membership read for every candidate, instead of one per fall-through.
-  const links = await linker.linkable(device.user_id, [...new Set(candidates.map((c) => c.channelId))]);
-  for (const { channelId, agentId, source } of candidates) {
-    const channel = links.get(channelId);
-    if (channel) return { channel, agentId, source };
+  if (candidates.length > 0) {
+    // One membership read for every candidate, instead of one per fall-through.
+    const links = await linker.linkable(device.user_id, [...new Set(candidates.map((c) => c.channelId))]);
+    for (const { channelId, agentId, source } of candidates) {
+      const channel = links.get(channelId);
+      if (channel) return { channel, agentId, source };
+    }
   }
-  return null;
+  const recent = await linker.mostRecent(device.user_id);
+  return recent ? { channel: recent, agentId: null, source: "recent" } : null;
 }

@@ -2,6 +2,7 @@ import { json } from "../http";
 import { UNAUTHORIZED, authedDevice, resolveDeviceDeps, type DeviceHandlerDeps } from "../messages/device-handlers";
 import type { GlassesDevice } from "../devices/types";
 import { PCM_MAX_BYTES, type SttProvider } from "./stt";
+import { recordDevicePost } from "../messages/reply-mirror";
 import { resolveVoiceTarget, targetOverrideFrom } from "./target";
 import { VoiceInputError, handleVoiceUpload, readCappedBody } from "./upload";
 import { UtteranceError, type UtteranceDeps } from "./utterance";
@@ -25,7 +26,7 @@ export interface VoiceHandlerDeps extends DeviceHandlerDeps {
 }
 
 export const UTTERANCE_RPM = 20;
-export const NO_TARGET = "No channel to talk to. Pick one in the glasses menu, or link one in Dopl settings → Glasses.";
+export const NO_TARGET = "Open a channel on your glasses first.";
 export const LIMITED = "Too many voice requests from this device; try again in a minute.";
 
 /** Where this device's utterance goes, as utterance deps; null when no target is usable. */
@@ -37,7 +38,9 @@ export async function utteranceDepsFor(
   const target = await resolveVoiceTarget(deps.linker, device, targetOverrideFrom(request));
   if (!target) return null;
   const config = { channel: target.channel, operatorUserId: device.user_id, agentId: target.agentId };
-  return { gateway: deps.gateway, config, now: deps.now, sleep: deps.sleep, holdMs: deps.holdMs };
+  // The post puts its channel in this device's reply-mirror scope for 24h.
+  const onPosted = (seq: number) => recordDevicePost(deps, device.id, target.channel.channelId, seq);
+  return { gateway: deps.gateway, config, now: deps.now, sleep: deps.sleep, holdMs: deps.holdMs, onPosted };
 }
 
 export function createVoiceHandlers(input: VoiceHandlerDeps) {

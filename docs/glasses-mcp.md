@@ -7,7 +7,7 @@ lens. Code: `src/features/glasses/` (layout below).
 
 ## Code layout (2026-09-28)
 
-- `core/`: platform-neutral. `devices/` (pairing, credentials, linking, the User API), `messages/`
+- `core/`: platform-neutral. `devices/` (pairing, credentials, channel access, the User API), `messages/`
   (the queue, inbox long-poll, answer/dismiss, reply mirror), `screens/` (the block vocabulary,
   validation, templates, render/update), `mcp/` (the one tool registration and its two
   exposures), `voice/` (push-to-talk, STT, target routing, the channel gateway), `menu/` (menu +
@@ -69,18 +69,23 @@ Each pair of glasses is a row in `glasses_device_links` (`20261028120000_glasses
 
 | Route | Body | Returns |
 |---|---|---|
-| `POST /api/glasses/pair/claim` | `{code, name?, channel_id?}` | 201 `{device}`. Limited to 10 per minute per user. |
-| `GET /api/glasses/devices` | none | `{devices:[{id, name, platform, created_at, last_seen, online, linked_channel:{id,name}\|null, has_hey_even_key}]}` |
-| `PATCH /api/glasses/devices/:id` | `{name?, channel_id? (uuid or null)}` | `{device}`. Changing the channel restarts the reply mirror at that channel's head. |
+| `POST /api/glasses/pair/claim` | `{code, name?}` | 201 `{device}`. Limited to 10 per minute per user. A legacy `channel_id` is accepted and ignored. |
+| `GET /api/glasses/devices` | none | `{devices:[{id, name, platform, created_at, last_seen, online, has_hey_even_key}]}` |
+| `PATCH /api/glasses/devices/:id` | `{name?}` | `{device}`. A legacy `channel_id` is accepted (any value) and ignored. |
 | `DELETE /api/glasses/devices/:id` | none | `{ok:true}` (revoke) |
 | `POST /api/glasses/devices/:id/hey-even-key` | none | `{key, url}`, returned once. Rotating replaces the old key. |
 
-- **Channel rule:** a device can be linked only to a live (not archived, not deleted) channel its
-  owner is a member of.
-  - Claim and PATCH check it and return 404 `CHANNEL_NOT_FOUND` otherwise.
-  - The device list shows only channels the owner can still see.
-  - **Every reply-mirror pass re-checks it.** If the owner left, or the channel was archived or
-    deleted, the device is **unlinked** and nothing more is read: leaving a channel removes access.
+- **No linked channel (2026-09-28).** A device is not scoped to a channel. Where it talks is
+  picked on the glasses (see "Current target and voice routing"). Replies come back from the
+  channels it is looking at or talked to (see "Reply mirror"). The old
+  `glasses_device_links.linked_channel_id` / `linked_container_id` / `reply_cursor_seq` columns
+  are left in place, unread (drop is a follow-up in `docs/db-cleanup-audit.md`).
+- **Channel rule:** a device only ever reads or posts in a live (not archived, not deleted)
+  channel its owner is a member of (`core/devices/channel-link.ts`).
+  - Setting a current target checks it (404 `CHANNEL_NOT_FOUND` otherwise).
+  - **Every reply-mirror pass re-checks it** for every in-scope channel, in one read. A channel
+    the owner left, or that was archived or deleted, is skipped and nothing is read from it:
+    leaving a channel removes access.
   - Posting re-checks membership through the channels service.
 - **The Hey Even `url`** is built from `GLASSES_API_BASE_URL`, then `NEXT_PUBLIC_APP_URL` in
   production, then the server's own origin in dev. It never uses a forwarded header. Set
@@ -135,21 +140,27 @@ Each pair of glasses is a row in `glasses_device_links` (`20261028120000_glasses
 ### Load (per device)
 
 - The inbox hold polls the DB every 2s.
-- The reply mirror runs at most every 5s.
+- The reply mirror runs at most every 5s: one activity-row read, one membership read, and one
+  message read for every in-scope channel together. A channel entering scope costs one head read.
+  Cursor writes are batched into one upsert, only when a cursor moved or is 5 minutes from stale.
 - `last_seen` is written at most once per 30s.
 - `glasses_ask` and screen waits poll every 1.5s.
 - A menu request checks membership once and resolves the channels-service context once
   (`core/menu/types.ts › MenuChannelHandle`); a read-mode long-poll or a launch hold reuses it
   every slice.
-- Voice and Hey Even resolve every target candidate with one membership read, and the post reuses
-  that channel row.
+- Voice and Hey Even resolve the override and current target with one membership read, and the
+  post reuses that channel row. Only when neither is usable does the most-recent fallback run
+  (the account channel list, one last-message RPC, and a membership re-check of the top 5).
+  A post adds one activity read and one upsert.
 
 ### Deferred (needs Samuel)
 
 - Drop the dead prototype `glasses_devices` table and review the extra owner RLS policies. This is
   non-additive.
 - Rule on the `glasses_device_links.linked_channel_id` `ON DELETE SET NULL` exemption in
-  `channels/schema-sql.test.ts`.
+  `channels/schema-sql.test.ts`. The column is retired (not read or written since 2026-09-28);
+  dropping it with `linked_container_id` and `reply_cursor_seq` is non-additive, listed in
+  `docs/db-cleanup-audit.md`.
 
 ## Endpoints
 
@@ -357,9 +368,15 @@ access.
 - Voice and Hey Even go to the first usable target, in this order:
   1. an explicit override: `?channel_id=&agent=` on the request, or the headers
      `X-Glasses-Channel` / `X-Glasses-Agent`;
-  2. the stored current target;
-  3. the linked channel.
-- Each candidate is re-validated, and an invalid one falls through to the next.
+  2. the stored current target, set when the wearer opens a chat/read view on the glasses
+     (`POST /device/target`, which checks membership);
+  3. **fallback:** the owner's most recently active channel (last message, else creation) that
+     they are a member of and that is live. Direct messages are excluded, so an untargeted
+     utterance never lands in a one-to-one conversation with another person.
+  - With none usable, the answer is 409 `Open a channel on your glasses first.`
+    (Hey Even: `invalid_request_error`).
+- Each candidate is re-validated, and an invalid one falls through to the next. There is no
+  linked-channel step.
 - An **agent** target is sent `to: @agent-<id>` and must be running; if it isn't, the answer is 400
   "That agent is not running".
 - A **channel** target is unaddressed, so the channel's normal wake rule applies.
@@ -388,9 +405,19 @@ What the wearer says is posted as the device owner's own message into the **reso
   `reply-<reply_message_id>`. The plugin should skip that card if it already showed the reply.
 
 **Reply mirror** (`core/messages/reply-mirror.ts`):
-- Each device inbox long-poll also reads agent `message` rows in the linked channel past a
-  per-device cursor (`glasses_device_links.reply_cursor_seq`). A fresh cursor starts at the
-  channel's head.
+- **Scope, per device:** (a) its current-target channel, and (b) every channel it posted to by
+  voice or Hey Even in the last 24h. State lives in `glasses_device_channel_activity`
+  (`device_id, channel_id, last_posted_at, reply_cursor_seq, cursor_at`), one row per channel.
+  A successful post stamps `last_posted_at` (`recordDevicePost`, called from the utterance's
+  `onPosted` hook; a failed stamp never fails the utterance).
+- Each device inbox long-poll (at most one pass per 5s) reads agent `message` rows past each
+  in-scope channel's cursor in **one** query (`ChannelGateway.agentMessagesAfterMany`, an `or` of
+  `channel_id = X AND seq > n` groups, ordered by channel then seq, 20 per channel per pass).
+- **No history replay.** A channel entering scope (no row, or a cursor not confirmed in the last
+  600s, e.g. it left scope or the glasses were off) starts at the channel's head. A post into a
+  channel without a fresh cursor starts it at the post's own seq, so the reply to that post is
+  mirrored and nothing older is. A fresh cursor is kept on a new post, so replies already pending
+  still arrive.
 - Each reply becomes a glasses message with `card_id = reply-<channel message id>`. The partial
   unique index `glasses_messages_reply_card_uidx` stops duplicates.
 - Every reply becomes a `show {title: agent display name, lines, channel_id, agent_session_id?}`
@@ -442,6 +469,8 @@ Migrations applied to the project (matched by NAME):
 - `20261028120000_glasses_device_links_pairings`
 - `20261029120000_glasses_review_hardening`
 - `20261030120000_glasses_device_current_target`
+- `20261111120000_glasses_device_channel_activity` (applied 2026-09-28 by name as
+  `glasses_device_channel_activity`, byte-exact, md5 `0342853c1c936bf425346c9986bcbabf`)
 
 The prototype's `glasses_devices` table is no longer read.
 

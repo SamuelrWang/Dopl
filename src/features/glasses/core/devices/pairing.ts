@@ -5,7 +5,7 @@ import { PAIRING_CODE_LENGTH, normalizePairingCode } from "./pairing-code";
 import { DEFAULT_PLATFORM } from "../../platforms/registry";
 import { iso, nowOf, type Clock } from "../clock";
 import { isUuid } from "../validation";
-import { requireLink, toDeviceDto, type ChannelLink, type ChannelLinker, type DeviceDto } from "./service";
+import { toDeviceDto, type DeviceDto } from "./service";
 import type { DeviceStore } from "./types";
 
 /**
@@ -25,7 +25,6 @@ const CODE_ATTEMPTS = 5;
 
 export interface PairingDeps extends Clock {
   devices: DeviceStore;
-  linker: ChannelLinker;
   code?: () => string;
 }
 
@@ -87,7 +86,8 @@ export async function pairingStatus(
 export interface ClaimInput {
   code: string;
   name?: string;
-  channel_id?: string | null;
+  /** Accepted from older clients and IGNORED: a device has no linked channel. */
+  channel_id?: unknown;
 }
 
 export async function claimPairing(deps: PairingDeps, userId: string, input: ClaimInput): Promise<DeviceDto> {
@@ -96,13 +96,10 @@ export async function claimPairing(deps: PairingDeps, userId: string, input: Cla
   const now = nowOf(deps);
   const pairing = await deps.devices.findPendingPairingByCode(code, iso(now));
   if (!pairing) throw new HttpError(404, "CODE_NOT_FOUND", "No pending pairing with that code; it may have expired.");
-  const link = input.channel_id ? await requireLink(deps.linker, userId, input.channel_id) : null;
   const device = await deps.devices.insertDevice({
     userId,
     name: input.name?.trim() || DEFAULT_PLATFORM.label,
     platform: DEFAULT_PLATFORM.id,
-    linkedChannelId: link?.channelId ?? null,
-    linkedContainerId: link?.containerId ?? null,
     now: iso(now),
   });
   if (!(await deps.devices.claimPairing(pairing.id, device.id, iso(now)))) {
@@ -110,5 +107,5 @@ export async function claimPairing(deps: PairingDeps, userId: string, input: Cla
     await deps.devices.revokeDevice(userId, device.id, iso(now));
     throw new HttpError(409, "CODE_ALREADY_CLAIMED", "That code was just claimed or expired.");
   }
-  return toDeviceDto(device, new Map<string, ChannelLink>(link ? [[link.channelId, link]] : []), now);
+  return toDeviceDto(device, now);
 }

@@ -41,6 +41,9 @@ export interface ChannelGateway {
   postAsOperator(channel: ChannelLink, operatorUserId: string, text: string, agentId: string | null): Promise<PostedUtterance>;
   /** Agent-authored `message` rows after `seq`, oldest first. */
   agentMessagesAfter(channelId: string, seq: number, limit: number): Promise<ChannelReply[]>;
+  /** The same across channels in ONE read: `cursors` = channel id → seq; at most
+   *  `limitPerChannel` rows per channel, each list oldest first. */
+  agentMessagesAfterMany(cursors: Map<string, number>, limitPerChannel: number): Promise<Map<string, ChannelReply[]>>;
   /** The channel's current highest seq (0 when empty). */
   headSeq(channelId: string): Promise<number>;
 }
@@ -58,6 +61,8 @@ export interface UtteranceDeps extends Clock {
   config: VoiceConfig;
   /** Overrides {@link replyHoldMsFromEnv}. */
   holdMs?: number;
+  /** Called once the post is stored, with its seq (the reply mirror's scope hook). Best effort. */
+  onPosted?: (seq: number) => Promise<void>;
 }
 
 const DEFAULT_REPLY_HOLD_MS = 6000;
@@ -105,6 +110,10 @@ export async function handleGlassesUtterance(deps: UtteranceDeps, text: string):
   // The budget covers the post too, so a slow write eats the hold, not the client's timeout.
   const deadline = nowOf(deps) + (deps.holdMs ?? replyHoldMsFromEnv());
   const posted = await gateway.postAsOperator(config.channel, config.operatorUserId, clean, config.agentId);
+  if (deps.onPosted) {
+    // Never fail an utterance that already posted: at worst its replies miss the mirror.
+    await deps.onPosted(posted.seq).catch((err) => console.error("[glasses] post activity write failed", err));
+  }
   const base = {
     channel_message_id: posted.id,
     addressed_to: posted.addressedTo,

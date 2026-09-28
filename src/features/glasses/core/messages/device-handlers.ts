@@ -108,14 +108,11 @@ export function createDeviceHandlers(input: DeviceHandlerDeps) {
     inbox: authed("inbox", async (req, device) => {
       const parsed = parseInboxQuery(new URL(req.url));
       if ("error" in parsed) return json(req, { error: parsed.error }, 400);
-      // The linked channel's agent replies ride this long-poll, at most one pass per MIRROR_INTERVAL_MS.
-      const current = { ...device };
+      // Agent replies from the device's scope (current target + channels it posted to
+      // in 24h) ride this long-poll, at most one pass per MIRROR_INTERVAL_MS.
       const beforeRead = async () => {
-        if (!current.linked_channel_id) return;
         if (!deps.mirrorThrottle.tryAcquire(device.id, nowOf(deps))) return;
-        const r = await mirrorReplies(deps, current);
-        current.reply_cursor_seq = r.cursor;
-        if (r.unlinked) current.linked_channel_id = null;
+        await mirrorReplies(deps, device);
       };
       const result = await readInbox(
         { store: deps.store, beforeRead, now: deps.now, sleep: deps.sleep },

@@ -112,7 +112,7 @@ function setup(opts: { gateway?: GatewayOverrides; allowLaunch?: boolean } = {})
 }
 
 async function device(t: ReturnType<typeof setup>) {
-  const d = await t.devices.insertDevice({ userId: OWNER, name: "Lens", platform: "even_g2", linkedChannelId: null, linkedContainerId: null, now: "t" });
+  const d = await t.devices.insertDevice({ userId: OWNER, name: "Lens", platform: "even_g2", now: "t" });
   await t.devices.setTokenHash(d.id, hashCredential(TOKEN));
   return d;
 }

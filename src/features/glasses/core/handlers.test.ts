@@ -16,12 +16,12 @@ const OWNER = "22222222-2222-4222-8222-222222222222";
 const CHANNEL = "33333333-3333-4333-8333-333333333333";
 const BASE = "http://127.0.0.1:3100";
 
-function setup(opts: { allowPairStart?: boolean; allowClaim?: boolean; allowUtterance?: boolean; refuse?: string } = {}) {
+function setup(opts: { allowPairStart?: boolean; allowClaim?: boolean; allowUtterance?: boolean; refuse?: string; noChannels?: boolean } = {}) {
   const msgs = createFakeGlassesStore();
   const dev = createFakeDeviceStore();
   const clock = fakeClock();
   const ch = createFakeChannel({ liveAgents: 1 });
-  const linker = fakeLinker({ [CHANNEL]: { name: "AI Glasses", members: [OWNER] } });
+  const linker = fakeLinker(opts.noChannels ? {} : { [CHANNEL]: { name: "AI Glasses", members: [OWNER] } });
   const deps = {
     store: msgs.store,
     devices: dev.devices,
@@ -48,7 +48,7 @@ function setup(opts: { allowPairStart?: boolean; allowClaim?: boolean; allowUtte
     device: createDeviceHandlers(deps),
     voice: createVoiceHandlers(voiceDeps),
     heyEven: createHeyEvenHandlers(voiceDeps),
-    user: createUserHandlers({ devices: dev.devices, linker, allowClaim: async () => opts.allowClaim ?? true, now: clock.now }),
+    user: createUserHandlers({ devices: dev.devices, allowClaim: async () => opts.allowClaim ?? true, now: clock.now }),
   };
 }
 
@@ -60,7 +60,8 @@ const req = (path: string, init: RequestInit & { token?: string } = {}) => {
 const post = (path: string, body: unknown, token?: string) =>
   req(path, { method: "POST", body: JSON.stringify(body), token, headers: { "content-type": "application/json" } });
 
-/** Pair a device through the real handlers; returns its token and id. */
+/** Pair a device through the real handlers; returns its token and id. `channel_id` is sent the
+ *  way older clients do, and must be accepted and ignored. */
 async function pair(t: ReturnType<typeof setup>, channel: string | null = CHANNEL) {
   const start = await (await t.device.pairStart(req("/api/glasses/device/pair/start", { method: "POST" }))).json();
   const claim = await t.user.claim(post("/api/glasses/pair/claim", { code: start.code, channel_id: channel }), OWNER);
@@ -117,7 +118,8 @@ describe("device API", () => {
 
   it("runs the reply mirror at most once per 5s per device, and mirrors agent replies", async () => {
     const t = setup();
-    const { token } = await pair(t);
+    const { token, id } = await pair(t);
+    await t.devices.setCurrentTarget(id, CHANNEL, null, "t");
     const linkable = vi.spyOn(t.linker, "linkable");
     await t.device.inbox(req("/api/glasses/device/inbox?wait=0", { token }));
     await t.device.inbox(req("/api/glasses/device/inbox?wait=0", { token }));
@@ -139,7 +141,7 @@ describe("device API", () => {
   it("validates pairing status input", async () => {
     const t = setup();
     expect((await t.device.pairStatus(req("/api/glasses/device/pair/status"))).status).toBe(400);
-    const s = await startPairing({ devices: t.devices, linker: fakeLinker({}) });
+    const s = await startPairing({ devices: t.devices });
     expect((await t.device.pairStatus(req(`/api/glasses/device/pair/status?pair_id=${s.pair_id}`, { token: "bad" }))).status).toBe(404);
     // The secret is read from the header only: the query form (logged by proxies) is refused.
     const viaQuery = await t.device.pairStatus(req(`/api/glasses/device/pair/status?pair_id=${s.pair_id}&poll_secret=${s.poll_secret}`));
@@ -166,13 +168,17 @@ describe("voice + Hey Even", () => {
     return buf;
   };
 
-  it("posts a voice utterance into the device's linked channel as its owner", async () => {
+  it("posts a target-less utterance into the owner's most recent channel, then mirrors its reply", async () => {
     const t = setup();
-    const { token } = await pair(t);
+    const { token } = await pair(t, null);
     const res = await t.voice.voice(req("/api/glasses/device/voice", { method: "POST", body: pcm(), token }));
     expect(res.status).toBe(200);
-    expect(await res.json()).toMatchObject({ transcript: "what is the status", status: "sent" });
-    expect(t.ch.messages[0].body).toBe("what is the status");
+    expect(await res.json()).toMatchObject({ transcript: "what is the status", status: "sent", channel_name: "AI Glasses" });
+    expect(t.ch.messages[0]).toMatchObject({ body: "what is the status", channelId: CHANNEL });
+    // The post put CHANNEL in this device's mirror scope: a later reply rides the inbox.
+    t.ch.agentSays("all green", "Orchestrator", CHANNEL);
+    const body = await (await t.device.inbox(req("/api/glasses/device/inbox?wait=0", { token }))).json();
+    expect(body.messages).toEqual([expect.objectContaining({ kind: "show", payload: expect.objectContaining({ lines: ["all green"], channel_id: CHANNEL }) })]);
   });
 
   it("rate-limits and meters utterances", async () => {
@@ -194,10 +200,12 @@ describe("voice + Hey Even", () => {
     expect((await t.voice.voice(big)).status).toBe(413);
   });
 
-  it("409s voice from an unlinked device", async () => {
-    const t = setup();
+  it("409s voice when the owner has no usable channel at all", async () => {
+    const t = setup({ noChannels: true });
     const { token } = await pair(t, null);
-    expect((await t.voice.voice(req("/api/glasses/device/voice", { method: "POST", body: pcm(), token }))).status).toBe(409);
+    const res = await t.voice.voice(req("/api/glasses/device/voice", { method: "POST", body: pcm(), token }));
+    expect(res.status).toBe(409);
+    expect((await res.json()).error).toBe("Open a channel on your glasses first.");
   });
 
   it("authenticates Hey Even by the rotated per-device key, never the device token", async () => {
@@ -227,29 +235,33 @@ describe("voice + Hey Even", () => {
 });
 
 describe("user API", () => {
-  it("lists, renames, relinks and revokes devices", async () => {
+  it("lists, renames and revokes devices; channel_id is accepted and ignored", async () => {
     const t = setup();
     const { id } = await pair(t);
     const list = await (await t.user.list(OWNER)).json();
     expect(list.devices).toEqual([
-      expect.objectContaining({ id, name: "Even G2", online: false, last_seen: null, linked_channel: { id: CHANNEL, name: "AI Glasses" }, has_hey_even_key: false }),
+      expect.objectContaining({ id, name: "Even G2", online: false, last_seen: null, has_hey_even_key: false }),
     ]);
+    expect(list.devices[0]).not.toHaveProperty("linked_channel");
     const renamed = await t.user.patch(req(`/api/glasses/devices/${id}`, { method: "PATCH", body: JSON.stringify({ name: "Lens", channel_id: null }) }), OWNER, id);
-    expect((await renamed.json()).device).toMatchObject({ name: "Lens", linked_channel: null });
-    expect(t.deviceRows[0].reply_cursor_seq).toBeNull();
+    expect((await renamed.json()).device).toMatchObject({ name: "Lens" });
+    const only = await t.user.patch(req(`/api/glasses/devices/${id}`, { method: "PATCH", body: JSON.stringify({ channel_id: CHANNEL }) }), OWNER, id);
+    expect(only.status).toBe(200);
+    expect((await only.json()).device).toMatchObject({ id, name: "Lens" });
     expect((await t.user.list("someone-else").then((r) => r.json())).devices).toEqual([]);
     expect((await t.user.revoke(OWNER, id)).status).toBe(200);
     expect((await t.user.revoke(OWNER, id)).status).toBe(404);
   });
 
-  it("validates bodies and channel membership", async () => {
+  it("validates bodies", async () => {
     const t = setup();
     const { id } = await pair(t);
     const patch = (body: unknown) => t.user.patch(req(`/api/glasses/devices/${id}`, { method: "PATCH", body: JSON.stringify(body) }), OWNER, id);
     expect((await patch({})).status).toBe(400);
     expect((await patch({ name: "" })).status).toBe(400);
-    expect((await patch({ channel_id: "not-a-uuid" })).status).toBe(400);
-    expect((await patch({ channel_id: "55555555-5555-4555-8555-555555555555" })).status).toBe(404);
+    // A retired field never errors, whatever it holds.
+    expect((await patch({ channel_id: "not-a-uuid" })).status).toBe(200);
+    expect((await patch({ channel_id: "55555555-5555-4555-8555-555555555555" })).status).toBe(200);
     expect((await t.user.claim(post("/api/glasses/pair/claim", { name: "x" }), OWNER)).status).toBe(400);
     expect((await t.user.patch(req("/api/glasses/devices/zzz", { method: "PATCH", body: '{"name":"a"}' }), OWNER, "zzz")).status).toBe(404);
   });

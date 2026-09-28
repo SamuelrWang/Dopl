@@ -22,13 +22,22 @@ vi.mock("@/features/channels/server/service-shared", () => ({
 vi.mock("@/features/channels/server/repository-sessions", () => ({
   listChannelSessionStates: (...a: unknown[]) => listChannelSessionStates(...a),
 }));
+const listAccountChannelRows = vi.fn();
+const lastMessages = vi.fn();
+vi.mock("@/features/channels/server/repository-account", () => ({ ACCOUNT_CHANNEL_LIMIT: 500 }));
+vi.mock("@/features/channels/server/repository-list-extras", () => ({
+  listAccountChannelRows: (...a: unknown[]) => listAccountChannelRows(...a),
+}));
+vi.mock("@/features/channels/server/repository-messages", () => ({
+  lastMessages: (...a: unknown[]) => lastMessages(...a),
+}));
 vi.mock("@/features/workspaces/server/service", () => ({
   resolveActiveWorkspace: async () => ({ workspace: { id: "ws-1", kind: "link" }, membership: { role: "owner" } }),
 }));
 
 const { channelLinker } = await import("./devices/channel-link");
 const { glassesChannelGateway } = await import("./voice/channel-gateway");
-const { linkOf, requireLink } = await import("./devices/service");
+const { linkOf } = await import("./devices/service");
 
 beforeEach(() => {
   const channel = (id: string, extra: Record<string, unknown> = {}) => ({
@@ -50,14 +59,14 @@ beforeEach(() => {
   });
   postMessage.mockReset();
   listChannelSessionStates.mockReset();
+  listAccountChannelRows.mockReset();
+  lastMessages.mockReset();
 });
 
 describe("channel-link: what a device may link, see and keep", () => {
   it("links only live channels the user is a member of", async () => {
-    expect(await requireLink(channelLinker, USER, LIVE)).toEqual({ channelId: LIVE, containerId: "ws-1", name: "room-22" });
-    for (const id of [ARCHIVED, DELETED, NOT_MEMBER, "nope"]) {
-      await expect(requireLink(channelLinker, USER, id)).rejects.toMatchObject({ status: 404 });
-    }
+    expect(await linkOf(channelLinker, USER, LIVE)).toEqual({ channelId: LIVE, containerId: "ws-1", name: "room-22" });
+    for (const id of [ARCHIVED, DELETED, NOT_MEMBER, "nope"]) expect(await linkOf(channelLinker, USER, id)).toBeNull();
   });
 
   it("never reveals names of channels the user cannot link", async () => {
@@ -68,12 +77,59 @@ describe("channel-link: what a device may link, see and keep", () => {
   });
 });
 
+describe("channel-link: most recent channel (voice fallback)", () => {
+  const OTHER = "66666666-6666-4666-8666-666666666666";
+  const row = (id: string, extra: Record<string, unknown> = {}) => ({
+    id,
+    workspace_id: "ws-1",
+    archived_at: null,
+    deleted_at: null,
+    is_direct: false,
+    created_at: "2026-09-01T00:00:00Z",
+    ...extra,
+  });
+
+  it("picks the most recently active live, non-direct channel, re-confirmed as linkable", async () => {
+    const DM = "77777777-7777-4777-8777-777777777777";
+    listAccountChannelRows.mockResolvedValue({
+      rows: [row(LIVE), row(ARCHIVED, { archived_at: "t" }), row(DM, { is_direct: true }), row(NOT_MEMBER)],
+      truncated: false,
+    });
+    // NOT_MEMBER ranks first but fails the membership re-check; the DM is never considered.
+    lastMessages.mockResolvedValue(
+      new Map([
+        [NOT_MEMBER, "2026-09-28T10:00:00Z"],
+        [DM, "2026-09-28T11:00:00Z"],
+        [LIVE, "2026-09-27T10:00:00Z"],
+      ]),
+    );
+    expect(await channelLinker.mostRecent(USER)).toEqual({ channelId: LIVE, containerId: "ws-1", name: "room-22" });
+    expect(lastMessages.mock.calls[0][0]).not.toContain(DM);
+  });
+
+  it("answers null when the user has no usable channel", async () => {
+    listAccountChannelRows.mockResolvedValue({ rows: [row(OTHER, { archived_at: "t" })], truncated: false });
+    expect(await channelLinker.mostRecent(USER)).toBeNull();
+    expect(lastMessages).not.toHaveBeenCalled();
+  });
+});
+
 describe("voice channel gateway", () => {
   it("reads only agent-authored messages past the cursor, named by display name", async () => {
     expect(await glassesChannelGateway.agentMessagesAfter(LIVE, 10, 5)).toEqual([
       { id: "m3", seq: 12, body: "pong", agentName: "Orchestrator", agentId: "abcdefgh" },
     ]);
     expect(await glassesChannelGateway.headSeq(LIVE)).toBe(12);
+  });
+
+  it("reads several channels past their own cursors in one query", async () => {
+    const from = vi.spyOn(db, "from");
+    const out = await glassesChannelGateway.agentMessagesAfterMany(new Map([[LIVE, 12], [ARCHIVED, 0]]), 5);
+    expect(out.size).toBe(0);
+    const again = await glassesChannelGateway.agentMessagesAfterMany(new Map([[LIVE, 11], [ARCHIVED, 0]]), 5);
+    expect([...again.keys()]).toEqual([LIVE]);
+    expect(again.get(LIVE)?.map((r) => r.id)).toEqual(["m3"]);
+    expect(from.mock.calls.filter(([t]) => t === "channel_messages")).toHaveLength(2);
   });
 
   const link = { channelId: LIVE, containerId: "ws-1", name: "room-22" };

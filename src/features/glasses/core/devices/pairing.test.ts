@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { generatePairingCode, hashCredential } from "./credentials";
 import { PAIRING_CODE_ALPHABET, PAIRING_CODE_LENGTH, normalizePairingCode, pairingCodeInput } from "./pairing-code";
 import { corsHeaders, pluginOrigins } from "../http";
-import { createFakeDeviceStore, fakeLinker } from "../testing/fake-device-store";
+import { createFakeDeviceStore } from "../testing/fake-device-store";
 import { fakeClock } from "../testing/fake-store";
 import { PAIRING_TTL_MS, claimPairing, pairingStatus, startPairing } from "./pairing";
 
@@ -12,9 +12,8 @@ const CHANNEL = "33333333-3333-4333-8333-333333333333";
 function setup(codes?: string[]) {
   const fake = createFakeDeviceStore();
   const clock = fakeClock();
-  const linker = fakeLinker({ [CHANNEL]: { name: "AI Glasses", members: [OWNER] } });
   const queue = codes ? [...codes] : null;
-  const deps = { devices: fake.devices, linker, now: clock.now, code: queue ? () => queue.shift()! : undefined };
+  const deps = { devices: fake.devices, now: clock.now, code: queue ? () => queue.shift()! : undefined };
   return { ...fake, clock, deps };
 }
 
@@ -65,7 +64,8 @@ describe("pairing", () => {
     expect(await pairingStatus(deps, start.pair_id, start.poll_secret)).toMatchObject({ status: "pending" });
 
     const device = await claimPairing(deps, OWNER, { code: start.code.toLowerCase(), name: " Lens ", channel_id: CHANNEL });
-    expect(device).toMatchObject({ name: "Lens", platform: "even_g2", linked_channel: { id: CHANNEL, name: "AI Glasses" } });
+    expect(device).toMatchObject({ name: "Lens", platform: "even_g2" });
+    expect(device).not.toHaveProperty("linked_channel");
     expect(deviceRows[0].token_hash).toBeNull();
 
     const first = await pairingStatus(deps, start.pair_id, start.poll_secret);
@@ -100,13 +100,12 @@ describe("pairing", () => {
     expect((await startPairing(deps)).code).toBe("BBBBBB");
   });
 
-  it("will not link a channel the claimant is not a member of", async () => {
+  it("accepts and ignores a legacy channel_id, even one the claimant is not a member of", async () => {
     const { deps, deviceRows } = setup();
     const start = await startPairing(deps);
-    await expect(
-      claimPairing(deps, "44444444-4444-4444-8444-444444444444", { code: start.code, channel_id: CHANNEL }),
-    ).rejects.toMatchObject({ status: 404, code: "CHANNEL_NOT_FOUND" });
-    expect(deviceRows).toHaveLength(0);
+    const device = await claimPairing(deps, "44444444-4444-4444-8444-444444444444", { code: start.code, channel_id: CHANNEL });
+    expect(device.id).toBe(deviceRows[0].id);
+    expect(deviceRows[0]).not.toHaveProperty("linked_channel_id");
   });
 
   it("rejects malformed codes and double claims", async () => {
