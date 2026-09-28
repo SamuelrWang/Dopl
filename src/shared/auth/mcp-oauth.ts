@@ -241,6 +241,8 @@ export async function issueDeviceToken(input: {
   userId: string;
   deviceLabel: string;
   scopes?: string[];
+  /** The registered computer minting it (`desktop_devices.id`); absent = unlinked. */
+  deviceId?: string | null;
 }): Promise<{ token: string; expiresAt: string }> {
   await ensureDeviceClient();
   const db = supabaseAdmin();
@@ -270,6 +272,7 @@ export async function issueDeviceToken(input: {
     client_name: input.deviceLabel,
     // 🔒 A person, unfenced — a device token is one operator's machine.
     ...homeSpaceUnfencedAxes(input.userId),
+    ...(input.deviceId ? { device_id: input.deviceId } : {}),
   });
   return { token: accessToken, expiresAt };
 }

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { withUserAuth } from "@/shared/auth/with-auth";
 import { issueDeviceToken, revokeDeviceTokens } from "@/shared/auth/mcp-oauth";
+import { mintingDeviceId } from "@/features/devices/server/runtime";
 
 export const dynamic = "force-dynamic";
 
@@ -35,6 +36,7 @@ export const POST = withUserAuth(
       userId,
       deviceLabel: label,
       scopes: ["dopl.read", "dopl.write"],
+      deviceId: await mintingDeviceId(request, userId),
     });
     return NextResponse.json(
       { token, expiresAt },

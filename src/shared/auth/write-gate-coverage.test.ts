@@ -279,6 +279,15 @@ describe("H-3 write-gate coverage", () => {
         "billing/portal/route.ts",
         "billing/upgrade-to-team/route.ts",
         "oauth/grants/[id]/route.ts",
+        // DEVICES + AGENT APPS (2026-09-28). The heartbeat registers the computer a credential is
+        // then linked to; removing a computer or disconnecting an app REVOKES credentials. An agent
+        // must operate none of them — the device-token argument above. The two GETs are gated too:
+        // the device list is the operator's own hardware inventory, and an agent needs neither.
+        "devices/route.ts",
+        "devices/[deviceId]/route.ts",
+        "devices/heartbeat/route.ts",
+        "oauth/apps/route.ts",
+        "oauth/apps/[key]/route.ts",
         "user/delete/route.ts",
         "workspaces/[workspaceSlug]/access-matrix/route.ts",
         "workspaces/[workspaceSlug]/invitations/[id]/route.ts",

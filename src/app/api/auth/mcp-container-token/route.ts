@@ -6,6 +6,7 @@ import {
   issueContainerToken,
   revokeContainerTokens,
 } from "@/shared/auth/mcp-container-token";
+import { mintingDeviceId } from "@/features/devices/server/runtime";
 
 export const dynamic = "force-dynamic";
 
@@ -77,6 +78,7 @@ export const POST = withWorkspaceAuth(
     const { token, tokenId, expiresAt } = await issueContainerToken({
       userId,
       workspaceId,
+      deviceId: await mintingDeviceId(request, userId),
     });
     return NextResponse.json(
       { token, tokenId, expiresAt, workspaceId },
