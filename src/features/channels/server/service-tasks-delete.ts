@@ -28,7 +28,7 @@ import type { ChannelContext } from "./service-shared";
  * confirm dialog.
  *
  * ⚠ SPLIT OUT OF `service-tasks.ts` rather than added to it: that file is CREATE
- * plus set-mode, and this is a cascade over five tables with an ordering
+ * plus set-mode, and this is a cascade over four tables with an ordering
  * argument. Two reasons to change, two files (INVARIANTS §1) — the same seam
  * `service-tasks-broadcast.ts` sits on.
  */
@@ -88,9 +88,10 @@ export function assertMayDeleteThread(
  *      expireConsentForMessageSeqs` carries the audit argument.
  *   3. `channel_sessions` targeting the thread, EVERY member's. They are
  *      projections of a live desktop registry, not owned state.
- *   4. `channel_task_participants` — dead code, but rows written before breakout
- *      rooms were removed still exist.
- *   5. `channel_tasks` — the row itself.
+ *   4. `channel_tasks` — the row itself. Legacy `channel_task_participants`
+ *      rows (breakout rooms, write-dead) go with it by their FK's `ON DELETE
+ *      CASCADE`; the table is slated for removal
+ *      (`supabase/migrations-held/20261110130000_drop_dead_tables_and_rpcs.sql`).
  *
  * ⚠ THE PEER'S RUNNING AGENT IS NOT REACHABLE FROM HERE AND THAT IS ACCEPTED
  * (Samuel, 2026-08-21). Step 3 removes the ROW that says a peer's agent is on this
@@ -142,6 +143,5 @@ export async function deleteTask(
     channel.id,
     task.id
   );
-  await repoTasks.deleteTaskParticipants(task.id);
   await repoTasks.deleteTask(channel.id, task.id);
 }

@@ -100,3 +100,23 @@ rests entirely on step 3's count. **Deploy state is a measurement, not a claim**
 ⚠ **The column is also the rollback path.** While `home_scoped` still exists, a
 revert to pre-Wave-B code finds the data it expects. Once dropped, the deploy is
 one-way.
+
+### The db-cleanup drops — `20261110120000` … `20261110160000`
+
+**Held by Samuel's ruling, not by an unmet precondition** (2026-09-28, overnight
+DB audit): *"List + draft drops, don't apply."* The evidence for every object —
+code references, row counts, last write — is `docs/db-cleanup-audit.md`, measured
+against production on 2026-09-28. Each file's header lists what it drops and why.
+
+| File | Drops | Extra gate before release |
+|---|---|---|
+| `20261110120000_drop_glasses_prototype.sql` | `glasses_devices`; policies `glasses_messages_owner_update`, `glasses_device_links_owner_select` | none |
+| `20261110130000_drop_dead_tables_and_rpcs.sql` | `channel_task_participants` (+ guard fn), `user_preferences`, `increment_ingestion_count` + `profiles.ingestion_count`, `chat_replace_messages`, `channel_agents.engaged_*`, duplicate `chats_owner_select` | the server that no longer deletes `channel_task_participants` rows is DEPLOYED; update the chats policy-pair tests in the same commit |
+| `20261110140000_drop_pooled_credit_counter.sql` | `workspace_credit_usage`, `consume_workspace_credits` (F-667) | Samuel's retention call on the 6 historical rows (export query in the header) |
+| `20261110150000_drop_profile_legacy_billing_columns.sql` | six dead billing/trial columns on `profiles` + two indexes | archive the old per-user tier rows if wanted (query in the header) |
+
+| `20261110160000_profiles_update_column_grants.sql` | **security, not a drop**: `authenticated` may UPDATE only `display_name`, `bio`, `website_url`, `twitter_handle`, `github_username` on `profiles`; INSERT/UPDATE/DELETE revoked otherwise | ship the verified legacy-Stripe reads (`billing/server/subscriptions.ts`) first — they protect prod until this applies |
+
+They are independent of each other and of `20260923120000`; release any subset.
+All four are stamped after every applied file, so replay order is not an issue.
+After releasing any of them, re-generate `src/shared/supabase/types.ts`.

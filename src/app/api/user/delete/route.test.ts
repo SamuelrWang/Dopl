@@ -86,6 +86,7 @@ vi.mock("@/shared/supabase/admin", () => ({
 }));
 
 import { DELETE } from "./route";
+import { getProfileBillingRef } from "@/features/billing/server/subscriptions";
 
 function ws(id: string, kind?: string) {
   return { id, name: `${id} workspace`, ...(kind ? { kind } : {}) };
@@ -156,5 +157,18 @@ describe("owned-workspace guard", () => {
 
     expect((await run()).status).toBe(200);
     expect(state.deleted).toBe(true);
+  });
+});
+
+describe("legacy per-user subscription", () => {
+  it("🔒 FAILS CLOSED when the verified legacy-billing check throws — nothing is deleted", async () => {
+    // `getProfileBillingRef` verifies the user-writable profile ids against Stripe; an
+    // outage there must abort like a failed cancel does, not skip the cancel and delete.
+    vi.mocked(getProfileBillingRef).mockRejectedValueOnce(new Error("stripe down"));
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+    const { status } = await run();
+    expect(status).toBe(500);
+    expect(state.deleted).toBe(false);
   });
 });
