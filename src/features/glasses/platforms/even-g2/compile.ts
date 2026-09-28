@@ -26,10 +26,10 @@ import {
  * numbers, never a silent clip.
  */
 
-const box = (border: boolean) => 2 * PAD + (border ? 2 * BORDER_W : 0);
+export const box = (border: boolean) => 2 * PAD + (border ? 2 * BORDER_W : 0);
 const MIN_LIST_ROWS = 2;
 
-interface Sized {
+export interface Sized {
   block: NormBlock;
   content?: string;
   /** Height the content needs. */
@@ -47,7 +47,7 @@ function progressText(b: NormBlock, inner: number, m: TextMeasurer): string | nu
   return label + PROGRESS_FILLED.repeat(filled) + PROGRESS_EMPTY.repeat(cells - filled) + pct;
 }
 
-function size(b: NormBlock, width: number, m: TextMeasurer, errors: ScreenError[]): Sized | null {
+export function size(b: NormBlock, width: number, m: TextMeasurer, errors: ScreenError[]): Sized | null {
   const inner = width - box(b.border);
   switch (b.type) {
     case "spacer":
@@ -80,7 +80,7 @@ function size(b: NormBlock, width: number, m: TextMeasurer, errors: ScreenError[
   }
 }
 
-function toContainer(s: Sized, x: number, y: number, w: number, h: number): ScreenContainer | null {
+export function toContainer(s: Sized, x: number, y: number, w: number, h: number): ScreenContainer | null {
   const b = s.block;
   if (b.type === "spacer") return null;
   if (b.type === "list") return { block_id: b.id, kind: "list", x, y, w, h, items: b.items, capture: false };
@@ -90,10 +90,19 @@ function toContainer(s: Sized, x: number, y: number, w: number, h: number): Scre
   return c;
 }
 
-function layoutStack(sized: Sized[], errors: ScreenError[]): ScreenContainer[] {
-  const w = SCREEN_W - 2 * MARGIN;
+/** Where a stack goes: the lens above the back-button band, inside the margins (the default). */
+export interface StackArea {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+const SCREEN_STACK: StackArea = { x: MARGIN, y: MARGIN, w: SCREEN_W - 2 * MARGIN, h: CONTENT_H - 2 * MARGIN };
+
+export function layoutStack(sized: Sized[], errors: ScreenError[], area: StackArea = SCREEN_STACK): ScreenContainer[] {
+  const w = area.w;
   const heights = sized.map((s) => s.natural);
-  const available = CONTENT_H - 2 * MARGIN;
+  const available = area.h;
   let total = heights.reduce((a, h) => a + h, 0);
   // A list scrolls natively, so it may give up rows (down to 2) before we call it overflow.
   const li = sized.findIndex((s) => s.block.type === "list");
@@ -116,9 +125,9 @@ function layoutStack(sized: Sized[], errors: ScreenError[]): ScreenContainer[] {
     return [];
   }
   const out: ScreenContainer[] = [];
-  let y = MARGIN;
+  let y = area.y;
   sized.forEach((s, i) => {
-    const c = toContainer(s, MARGIN, y, w, heights[i]);
+    const c = toContainer(s, area.x, y, w, heights[i]);
     if (c) out.push(c);
     y += heights[i];
   });

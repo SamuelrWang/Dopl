@@ -59,7 +59,12 @@ pick up the main-process change).
   2. An agent posts a display without glasses: `POST /api/channels/:id/messages` with
      `display: {blocks, layout?, wait_for_input?}` (MCP: `dopl_send_message` `display`). `screen_id`
      is server-generated (`d-xxxxxxxx`); `glasses_message_id` / `answer` are never accepted from a caller.
-- Answered on the glasses → the same message's `display.answer` is set (`via: "glasses"`).
+- Answered on the glasses → the same message's `display.answer` is set (`via: "glasses"`): a tap
+  on the lens screen (linked row), or `POST /api/glasses/device/channels/:id/messages/:messageId/display/answer`
+  from the glasses' Read / Conversation page (same `answerDisplay` path as the app route).
+- Glasses read mode (`GET /api/glasses/device/channels/:id/messages`) adds a per-device `display`
+  to such a message: blocks compiled for the platform's chat area, the selectable list as
+  `options`, and `answer` (docs/glasses-mcp.md › Menu and read mode › Display messages).
 
 ## Endpoints
 

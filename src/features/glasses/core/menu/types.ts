@@ -1,3 +1,4 @@
+import type { MessageSourceStamp } from "@/features/channels/server/message-source-stamp";
 import type { ChannelLink } from "../devices/service";
 
 /**
@@ -36,6 +37,8 @@ export interface MenuSession {
 
 /** One channel message as the menu needs it (already visibility-checked). */
 export interface MenuMessage {
+  /** The channel message id (what `…/messages/:messageId/display/answer` takes). */
+  id: string;
   seq: number;
   kind: string;
   authorKind: string;
@@ -47,6 +50,8 @@ export interface MenuMessage {
   recipientAgentIds: string[];
   body: string;
   createdAt: string;
+  /** Raw `metadata.display` (server-written; re-validated before use), else null. */
+  display: unknown;
 }
 
 type LaunchStatus = "launching" | "launched" | "refused" | "expired";
@@ -68,6 +73,14 @@ export interface MenuChannelHandle {
   /** File a launch through Dopl's own launch path; `null` = the user's Dopl desktop is offline. */
   createLaunch(input: { runtime: string; model: string | null; agentName: string; clientMsgId: string }): Promise<LaunchState | null>;
   getLaunch(directiveId: string): Promise<LaunchState>;
+  /** Answer a display on a message in this channel as the owner, via glasses (the app's own
+   *  answer path, `display-actions.ts › answerDisplay`). */
+  answerDisplay(messageId: string, input: DisplayAnswerInput, source: MessageSourceStamp): Promise<{ answer: unknown }>;
+}
+
+export interface DisplayAnswerInput {
+  index: number;
+  block_id?: string | null;
 }
 
 export interface MenuGateway {
@@ -76,6 +89,12 @@ export interface MenuGateway {
   /** Agent sessions in these channels (ids the caller already proved membership of),
    *  most recently active first. */
   listSessions(channelIds: string[], limit: number): Promise<MenuSession[]>;
+  /**
+   * Names for agents with no live `channel_sessions` row (ended, or the Mac restarted): the run's
+   * last reported name, else its launch name. Fenced on channel ids the caller proved membership
+   * of; ids with no persisted name are absent.
+   */
+  persistedAgentNames(channelIds: string[], agentIds: string[]): Promise<Map<string, string>>;
   /** The runtime each agent was launched with, when Dopl knows it. */
   runtimesFor(agentIds: string[]): Promise<Map<string, string>>;
   /** Agent names this user's recent launches asked for or were given (any channel). */

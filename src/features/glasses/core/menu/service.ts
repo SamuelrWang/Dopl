@@ -1,7 +1,9 @@
 import { randomUUID } from "node:crypto";
 import { HttpError } from "@/shared/lib/http-error";
 import { AGENT_MODELS, agentModelLabel } from "@/features/channels/lib/agent-models";
+import { glassesMessageSource } from "@/features/channels/server/message-source-stamp";
 import { glassesPlatform } from "../../platforms/registry";
+import type { GlassesPlatform } from "../../platforms/types";
 import { flattenChannelText } from "../channel-text";
 import { iso, nowOf, sleepOf, type Clock } from "../clock";
 import { linkOf, type ChannelLink, type ChannelLinker } from "../devices/service";
@@ -9,7 +11,16 @@ import type { DeviceStore, GlassesDevice } from "../devices/types";
 import { cleanName, type Sanitize } from "../validation";
 import { AGENT_ID_RE } from "../voice/target";
 import { activityVersion, channelActivity } from "./activity";
-import type { AgentStatus, LaunchState, MenuChannelHandle, MenuGateway, MenuMessage, MenuSession } from "./types";
+import { lensDisplay, type LensDisplay } from "./lens-display";
+import type {
+  AgentStatus,
+  DisplayAnswerInput,
+  LaunchState,
+  MenuChannelHandle,
+  MenuGateway,
+  MenuMessage,
+  MenuSession,
+} from "./types";
 
 /**
  * The glasses menu + read mode (docs/glasses-mcp.md › Menu), pure over a
@@ -25,7 +36,7 @@ export interface MenuDeps extends Clock {
   devices: DeviceStore;
 }
 
-type Device = Pick<GlassesDevice, "id" | "user_id" | "platform">;
+type Device = Pick<GlassesDevice, "id" | "user_id" | "platform"> & Partial<Pick<GlassesDevice, "name">>;
 
 const RECENT_AGENTS = 6;
 const PAGE_DEFAULT = 40;
@@ -39,7 +50,39 @@ const RUNTIME_RE = /^[a-z][a-z0-9_-]{0,31}$/;
 const RUNTIME_LABELS: Record<string, string> = { claude: "Claude", codex: "Codex", cursor: "Cursor" };
 
 const notFound = () => new HttpError(404, "CHANNEL_NOT_FOUND", "Channel not found.");
-const sanitizerOf = (device: Device): Sanitize => glassesPlatform(device.platform).sanitizeText;
+const platformOf = (device: Device): GlassesPlatform => glassesPlatform(device.platform);
+const sanitizerOf = (device: Device): Sanitize => platformOf(device).sanitizeText;
+
+/**
+ * Sessions whose row carries no name get the persisted one (the run's last label, else its launch
+ * name): one batched read for the whole list.
+ */
+async function namedSessions(deps: MenuDeps, sessions: MenuSession[]): Promise<MenuSession[]> {
+  const unnamed = sessions.filter((s) => !s.displayName?.trim());
+  if (unnamed.length === 0) return sessions;
+  const names = await deps.gateway.persistedAgentNames(
+    [...new Set(unnamed.map((s) => s.channelId))],
+    unnamed.map((s) => s.agentId),
+  );
+  return sessions.map((s) => (s.displayName?.trim() ? s : { ...s, displayName: names.get(s.agentId) ?? null }));
+}
+
+/**
+ * Agent-authored rows the page could not name (no live session row: the agent ended, or its Mac
+ * restarted) get the persisted name, in ONE read per page. `agent-<id>` stays the last resort.
+ */
+async function namedMessages(deps: MenuDeps, channelId: string, messages: MenuMessage[]): Promise<MenuMessage[]> {
+  const missing = messages.filter((m) => m.authorKind === "agent" && m.authorAgentId && !m.authorAgentName?.trim());
+  if (missing.length === 0) return messages;
+  const names = await deps.gateway.persistedAgentNames(
+    [channelId],
+    missing.map((m) => m.authorAgentId as string),
+  );
+  if (names.size === 0) return messages;
+  return messages.map((m) =>
+    m.authorAgentId && !m.authorAgentName?.trim() && names.has(m.authorAgentId) ? { ...m, authorAgentName: names.get(m.authorAgentId) ?? null } : m,
+  );
+}
 
 async function assertReadable(deps: MenuDeps, device: Device, channelId: string): Promise<ChannelLink> {
   const link = await linkOf(deps.linker, device.user_id, channelId);
@@ -67,10 +110,7 @@ export async function menuHome(deps: MenuDeps, device: Device) {
     (b.lastActivity ?? "").localeCompare(a.lastActivity ?? ""),
   );
   const names = new Map(channels.map((c) => [c.id, c.name]));
-  const sessions = await deps.gateway.listSessions(
-    channels.map((c) => c.id),
-    RECENT_AGENTS,
-  );
+  const sessions = await namedSessions(deps, await deps.gateway.listSessions(channels.map((c) => c.id), RECENT_AGENTS));
   return {
     recent_agents: sessions.map((s) => ({
       session_id: s.agentId,
@@ -91,7 +131,7 @@ export async function menuHome(deps: MenuDeps, device: Device) {
 
 export async function channelAgents(deps: MenuDeps, device: Device, channelId: string) {
   await assertReadable(deps, device, channelId);
-  const sessions = await deps.gateway.listSessions([channelId], 50);
+  const sessions = await namedSessions(deps, await deps.gateway.listSessions([channelId], 50));
   const runtimes = await deps.gateway.runtimesFor(sessions.map((s) => s.agentId));
   const sanitize = sanitizerOf(device);
   return {
@@ -107,11 +147,14 @@ export async function channelAgents(deps: MenuDeps, device: Device, channelId: s
 }
 
 interface LensMessage {
+  id: string;
   seq: number;
   author: { kind: "member" | "agent"; name: string };
   text: string;
   created_at: string;
   attachments_note?: string;
+  /** An agent-built display (`metadata.display`), compiled for this device (`lens-display.ts`). */
+  display?: LensDisplay;
 }
 
 /** The owner's own posts addressed to `agent`, and `agent`'s own posts. */
@@ -120,8 +163,10 @@ function inConversation(m: MenuMessage, ownerId: string, agent: string): boolean
   return m.authorUserId === ownerId && m.recipientAgentIds.includes(agent);
 }
 
-export function toLensMessage(m: MenuMessage, ownerId: string, sanitize: Sanitize): LensMessage {
-  const { text, notes } = flattenChannelText(m.body, sanitize);
+export function toLensMessage(m: MenuMessage, ownerId: string, platform: GlassesPlatform): LensMessage {
+  const sanitize = platform.sanitizeText;
+  const shown = m.display ? lensDisplay(m.display, platform) : null;
+  const { text, notes } = shown ? { text: shown.text, notes: [] as string[] } : flattenChannelText(m.body, sanitize);
   const author: LensMessage["author"] =
     m.authorKind === "agent"
       ? { kind: "agent", name: cleanName(sanitize, m.authorAgentName, m.authorAgentId ? `agent-${m.authorAgentId}` : "Agent") }
@@ -130,20 +175,22 @@ export function toLensMessage(m: MenuMessage, ownerId: string, sanitize: Sanitiz
           name: m.authorUserId === ownerId ? "You" : cleanName(sanitize, m.authorName, m.authorKind === "system" ? "Dopl" : "Member"),
         };
   return {
+    id: m.id,
     seq: m.seq,
     author,
     text,
     created_at: m.createdAt,
     ...(notes.length ? { attachments_note: notes.join(" ") } : {}),
+    ...(shown ? { display: shown.display } : {}),
   };
 }
 
-function shape(messages: MenuMessage[], device: Device, agent: string | null): LensMessage[] {
-  const sanitize = sanitizerOf(device);
-  return messages
+async function shape(deps: MenuDeps, channelId: string, messages: MenuMessage[], device: Device, agent: string | null): Promise<LensMessage[]> {
+  const platform = platformOf(device);
+  const kept = messages
     .filter((m) => m.kind === "message" && (!agent || inConversation(m, device.user_id, agent)))
-    .sort((a, b) => a.seq - b.seq)
-    .map((m) => toLensMessage(m, device.user_id, sanitize));
+    .sort((a, b) => a.seq - b.seq);
+  return (await namedMessages(deps, channelId, kept)).map((m) => toLensMessage(m, device.user_id, platform));
 }
 
 interface ReadQuery {
@@ -161,7 +208,7 @@ export async function readChannel(deps: MenuDeps, device: Device, channelId: str
     channel.readMessages({ before: q.before, limit: agent ? Math.min(limit * 4, 200) : limit }),
     activityNow(deps, device, channelId),
   ]);
-  const messages = shape(raw.messages, device, agent).slice(-limit);
+  const messages = (await shape(deps, channelId, raw.messages, device, agent)).slice(-limit);
   const oldest = raw.messages.reduce((min, m) => Math.min(min, m.seq), Number.POSITIVE_INFINITY);
   return {
     messages,
@@ -207,7 +254,7 @@ export async function pollChannel(
     // Rows the filters drop (other conversations, non-message kinds) still move the cursor,
     // but they do not end the hold: answering empty would send the client straight back.
     after = raw.reduce((max, m) => Math.max(max, m.seq), after);
-    messages = shape(raw, device, agent);
+    messages = await shape(deps, channelId, raw, device, agent);
     live = await activityNow(deps, device, channelId);
     if (messages.length > 0 || now() >= deadline) break;
     // A gateway that returned before its slice (tests, or an early wake) must not spin.
@@ -345,4 +392,29 @@ export async function setTarget(
   if (input.channel_id !== null) await assertReadable(deps, device, input.channel_id);
   await deps.devices.setCurrentTarget(device.id, input.channel_id, input.channel_id ? agent : null, iso(nowOf(deps)));
   return { ok: true as const };
+}
+
+/**
+ * `POST /channels/:id/messages/:messageId/display/answer` from the glasses: the app's own answer
+ * path (`display-actions.ts › answerDisplay`: membership, author check, glasses-linked or
+ * channel-only), as the device owner, with `via: "glasses"`.
+ */
+export async function answerChannelDisplay(
+  deps: MenuDeps,
+  device: Device,
+  channelId: string,
+  messageId: string,
+  input: DisplayAnswerInput,
+) {
+  const channel = await openReadable(deps, device, channelId);
+  const source = glassesMessageSource({ id: device.id, name: device.name ?? "", platform: device.platform });
+  const { answer } = await channel.answerDisplay(messageId, input, source);
+  return { ok: true as const, answer: displayAnswerOf(answer) };
+}
+
+/** A glasses row's answer (`{choice, index, at, block_id?}`) or a display stamp, as the stamp. */
+function displayAnswerOf(raw: unknown) {
+  if (!raw || typeof raw !== "object") return null;
+  const a = raw as { block_id?: string | null; choice: string; index: number; at: string; via?: string };
+  return { block_id: a.block_id ?? null, choice: a.choice, index: a.index, at: a.at, via: a.via ?? "glasses" };
 }

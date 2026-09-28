@@ -1,4 +1,5 @@
 import type { GlassesPlatform } from "../types";
+import { compileChatDisplay } from "./chat-display";
 import { compileScreen } from "./compile";
 import { RENDER_HINT, SCREEN_LIMITS, capabilities } from "./display";
 import { EVEN_G2_INFO } from "./info";
@@ -11,6 +12,7 @@ export const evenG2: GlassesPlatform = {
   renderHint: RENDER_HINT,
   screenLimits: SCREEN_LIMITS,
   compileScreen: (spec, screenId) => compileScreen(spec, screenId),
+  compileChatDisplay: (blocks) => compileChatDisplay(blocks),
   previewScreen: renderPreview,
   sanitizeText: sanitizeG2Text,
   wrapCardLines: (text, budget) => wrapCardLines(text, budget),

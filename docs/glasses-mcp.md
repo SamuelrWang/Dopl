@@ -13,7 +13,7 @@ lens. Code: `src/features/glasses/` (layout below).
   exposures), `voice/` (push-to-talk, STT, target routing, the channel gateway), `menu/` (menu +
   read mode, live activity). `glasses-runtime.ts` wires the real stores; route files import only it.
 - `platforms/`: one `GlassesPlatform` per device platform (`platforms/types.ts ›
-  GlassesPlatform`: capabilities, screen limits, `compileScreen`, `previewScreen`,
+  GlassesPlatform`: capabilities, screen limits, `compileScreen`, `compileChatDisplay`, `previewScreen`,
   `sanitizeText`, `wrapCardLines`). Core reaches an implementation only through
   `platforms/registry.ts › glassesPlatform`, keyed by `glasses_device_links.platform`; user-scoped
   work (MCP cards and screens, queued for every device of the user) uses `DEFAULT_PLATFORM`.
@@ -313,12 +313,13 @@ access.
 |---|---|
 | `GET /api/glasses/device/home` | `{recent_agents:[{session_id, agent_name, channel:{id,name}, status, last_activity}] (max 6), channels:[{id, name, container_name, last_activity, unread}]}`, channels newest activity first |
 | `GET /api/glasses/device/channels/:id/agents` | `{agents:[{session_id, name, runtime, model, status, last_activity}]}` |
-| `GET /api/glasses/device/channels/:id/messages?before=&limit=(1-100, default 40)&agent=` | `{messages:[{seq, author:{kind:'member'\|'agent', name}, text, created_at, attachments_note?}], has_more, before, after}`, oldest first |
+| `GET /api/glasses/device/channels/:id/messages?before=&limit=(1-100, default 40)&agent=` | `{messages:[{id, seq, author:{kind:'member'\|'agent', name}, text, created_at, attachments_note?, display?}], has_more, before, after}`, oldest first (`display`: see Display messages below) |
 | `GET /api/glasses/device/channels/:id/messages?after=<seq>&wait=(≤20)&agent=` | Long-poll, same shape. The DB is polled every 2s. The next `after` is returned even when the `agent` filter dropped every row. |
 | `GET /api/glasses/device/launch-options?channel_id=` | `{runtimes:[{id, label, models:[{id, label}]}]}` |
 | `POST /api/glasses/device/launch {channel_id, runtime, model?, name?}` | `{status, session_id, agent_name, directive_id}`. The agent's name rides the launch request's own `agentName` field (the one `dopl_launch_agent` sends), which the desktop applies. Without `name` it is the next free `New agent`, `New agent 1`, `New agent 2`…, unique case-insensitively among the owner's live agent sessions and their last 200 launches; the agent can rename itself later. The optional `name` is trimmed, sanitized and cut to 40 characters, and empty means none. |
 | `GET /api/glasses/device/launch/:directiveId?channel_id=` | The same shape, for a launch still `launching` after the POST |
 | `PUT /api/glasses/device/target {channel_id \| null, agent_session_id?}` | `{ok:true}` |
+| `POST /api/glasses/device/channels/:id/messages/:messageId/display/answer {index, block_id?}` | `{ok:true, answer:{block_id, choice, index, at, via:'glasses'}}`; errors as the app route (below) |
 
 **Live agent activity** (the channel page's "working · thinking" bar, `core/menu/activity.ts`):
 - Every messages response, paged or long-polled, carries
@@ -343,10 +344,50 @@ access.
 
 **Message rendering:**
 - Only `kind:'message'` rows are shown.
-- Text is markdown-flattened and sanitized. Images become `[image]`; links to files become
-  `[file: name]`, and these are also listed in `attachments_note`.
+- Text is markdown-flattened and sanitized. Line and paragraph breaks are kept (`\n`; three or
+  more blank lines fold to one). Images become `[image]`; links to files become `[file: name]`,
+  and these are also listed in `attachments_note` (`core/channel-text.ts › flattenChannelText`).
 - Authors are named `You` for the device owner, then the member's name, then the agent's display
-  name, then `agent-<id>`.
+  name, then `agent-<id>`. The agent's name comes from its live `channel_sessions` row; an agent
+  with no row (ended, or its Mac restarted) gets its **persisted** name in one batched read per
+  page (`gateway.ts › persistedAgentNames`, fenced on the channel): the run's last label in
+  `workspace_token_spend` (`session_key` ends `:<agentId>`), else its launch directive's
+  applied / requested / identity name. Home's recent agents and the agents list use the same
+  lookup for a session row with no name. `agent-<id>` only when neither knows it.
+
+**Display messages** (`metadata.display`, docs/specs/device-aware-messages.md):
+- A message carrying an agent-built display gets a `display` field, compiled for the device's
+  platform into the Read / Conversation page's **chat area** (`platforms/types.ts ›
+  ChatDisplay`, G2: `platforms/even-g2/chat-display.ts`):
+
+  ```ts
+  display: {
+    screen_id: string;
+    containers: {block_id, kind:'text'|'list', x, y, w, h, content?, items?, brightness?, border?}[];
+    options: {block_id, items: string[]} | null;   // the one selectable list
+    answer: {block_id, choice, index, at, via} | null;
+    fallback?: true;                                // present only when the text rendering is used
+  }
+  ```
+
+  - Coordinates are **lens px** (the same frame as screen containers). G2 chat area
+    (`even-g2/display.ts › CHAT_AREA`): the plugin's chat body rect `x 0, y 30, w 576, h 172`
+    (header above, footer list from y 204). Containers stack top-down at `x 8, w 560` from y 30,
+    never below y 202, with the G2 font and box model; none captures input.
+  - The **selectable list is not a container**: it is `options`, for the plugin's footer list.
+    Info-only lists (`selectable:false`) are list containers. Absolute layouts are stacked.
+  - More than 6 containers, a block over the G2 limits, or a stack taller than the area →
+    `fallback: true` and one text container over the whole area holding the text rendering.
+  - `text` on a display message is that text rendering, multi-line: text blocks, `label
+    ███▒▒▒▒▒▒▒ 32%`, a `─` divider, info items `─ item`, options `▶ item`. A stored display that
+    fails re-validation is shown as a plain message (no `display`).
+- **Answer from the glasses**: `POST …/messages/:messageId/display/answer {index, block_id?}`
+  (`id` from the message; device token, read rate limit). It runs the app route's own path
+  (`display-actions.ts › answerDisplay`) as the device owner with `metadata.source` = the glasses,
+  so the owner must be a channel member and the message's author account; a glasses-linked
+  display resolves the waiting `glasses_ask` / `wait_for_input`, a chat-only one posts the choice
+  to the agent. Errors: 404 `DISPLAY_NOT_FOUND` / `CHANNEL_NOT_FOUND`, 400 `DISPLAY_BAD_CHOICE`
+  / `VALIDATION_FAILED`, 403 `DISPLAY_NOT_YOURS`, 409 `DISPLAY_ANSWERED` / `DISPLAY_ANSWER_REFUSED`.
 - **Conversation filter** (`agent=`): that agent's own posts, plus the owner's posts addressed to
   it. It reads a raw page four times wider. Use `before` from the response to page further back,
   because the filter drops rows.

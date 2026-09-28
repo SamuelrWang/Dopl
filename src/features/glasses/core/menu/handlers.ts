@@ -11,6 +11,7 @@ import type { MenuGateway } from "./types";
 import {
   PAGE_MAX,
   POLL_MAX_SEC,
+  answerChannelDisplay,
   channelAgents,
   launchAgent,
   launchOptions,
@@ -52,6 +53,7 @@ function fail(request: Request, e: unknown, label: string): Response {
   if (e instanceof Error && e.name === "ChannelNotFoundError") {
     return err(request, 404, "CHANNEL_NOT_FOUND", "Channel not found.");
   }
+  if (e instanceof Error && e.name === "ChannelForbiddenError") return err(request, 403, "FORBIDDEN", e.message);
   console.error(`[glasses] ${label} failed`, e);
   return err(request, 500, "INTERNAL", `${label} failed`);
 }
@@ -61,6 +63,10 @@ const LaunchSchema = z.object({
   runtime: z.string().min(1).max(32),
   model: z.string().max(100).nullable().optional(),
   name: z.string().max(200).nullable().optional(),
+});
+const DisplayAnswerSchema = z.object({
+  index: z.number().int().min(0).max(1000),
+  block_id: z.string().max(32).nullable().optional(),
 });
 const TargetSchema = z.object({
   channel_id: z.string().uuid().nullable(),
@@ -175,5 +181,12 @@ export function createMenuHandlers(input: MenuHandlerDeps) {
     target: handle(deps.allowRead, "target", async (request, device) =>
       setTarget(menuDeps, device, await body(request, TargetSchema)),
     ),
+
+    /** `POST /channels/:id/messages/:messageId/display/answer {index, block_id?}`: a tap on a display's options. */
+    displayAnswer: handle(deps.allowRead, "display answer", async (request, device, channelId: string, messageId: string) => {
+      const id = channelParam(channelId);
+      if (!isUuid(messageId)) throw new HttpError(404, "DISPLAY_NOT_FOUND", "No display on that message.");
+      return answerChannelDisplay(menuDeps, device, id, messageId, await body(request, DisplayAnswerSchema));
+    }),
   };
 }

@@ -20,6 +20,15 @@ export const NAV_FOOTER_H = 40;
 export const NAV_FOOTER = { x: 0, y: SCREEN_H - NAV_FOOTER_H, w: SCREEN_W, h: NAV_FOOTER_H } as const;
 export const CONTENT_H = SCREEN_H - NAV_FOOTER_H;
 
+/**
+ * The plugin's Read / Conversation page (`plugin/src/platform/even-g2/containers.ts › CHAT`): a
+ * 30px header, the message body at y 30-202, then the footer list (y 204, 84px). A channel
+ * display is compiled into the body rect, full width; its selectable list goes to the footer.
+ */
+export const CHAT_AREA = { x: 0, y: 30, w: SCREEN_W, h: 172 } as const;
+/** Display containers in the chat area: the page's header and footer list take the other two. */
+export const CHAT_MAX_CONTAINERS = 6;
+
 export const SCREEN_LIMITS: ScreenLimits = {
   max_blocks: 12,
   max_text_blocks: 8,

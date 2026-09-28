@@ -2,7 +2,8 @@ import type { Sanitize } from "./validation";
 
 /**
  * Channel markdown as plain lens text: markdown flattened, embeds reduced to
- * short notes (`[image]`, `[file: name]`), then the display's sanitizer. One
+ * short notes (`[image]`, `[file: name]`), then the display's sanitizer. Line and paragraph
+ * breaks are kept (runs of blank lines fold to one); a card wraps on whitespace anyway. One
  * implementation for mirrored replies and the read / conversation screens.
  */
 
@@ -31,9 +32,11 @@ export function flattenChannelText(body: string, sanitize: Sanitize): ChannelTex
       .replace(/`([^`]*)`/g, "$1")
       .replace(/\*\*([^*]+)\*\*/g, "$1")
       .replace(/(^|\s)[*_]([^*_]+)[*_](?=\s|$)/g, "$1$2")
-      .replace(/^#{1,6}\s+/gm, "")
-      .replace(/^\s*[-*]\s+/gm, "- ")
-      .replace(/\s*\n\s*/g, " "),
+      .replace(/^#{1,6}[ \t]+/gm, "")
+      .replace(/^[ \t]*[-*][ \t]+/gm, "- ")
+      .replace(/[ \t]*\r?\n[ \t]*/g, "\n")
+      .replace(/\n{3,}/g, "\n\n")
+      .trim(),
   );
   return { text, notes };
 }

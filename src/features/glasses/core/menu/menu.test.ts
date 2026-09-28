@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { createHeyEvenHandlers } from "../../platforms/even-g2/hey-even";
+import { evenG2 } from "../../platforms/even-g2";
 import { sanitizeG2Text } from "../../platforms/even-g2/text";
 import { hashCredential } from "../devices/credentials";
 import { createFakeChannel } from "../testing/fake-channel";
@@ -20,6 +21,7 @@ const BASE = "http://127.0.0.1:3100/api/glasses/device";
 const FRESH = "2026-09-26T11:59:30.000Z";
 
 const msg = (seq: number, over: Partial<MenuMessage> = {}): MenuMessage => ({
+  id: `00000000-0000-4000-8000-${String(seq).padStart(12, "0")}`,
   seq,
   kind: "message",
   authorKind: "user",
@@ -30,6 +32,7 @@ const msg = (seq: number, over: Partial<MenuMessage> = {}): MenuMessage => ({
   recipientAgentIds: [],
   body: `m${seq}`,
   createdAt: `2026-09-27T00:00:${String(seq).padStart(2, "0")}Z`,
+  display: null,
   ...over,
 });
 
@@ -64,6 +67,7 @@ function buildGateway(over: GatewayOverrides, sessions: MenuSession[], launches:
       return l;
     },
     getLaunch: async () => ({ ...launches[0], status: "launched", agentId: "newagent", agentName: "Claude Opus" }),
+    answerDisplay: async () => ({ answer: null }),
   };
   const gw: MenuGateway = {
     listChannels: async () => [
@@ -78,7 +82,9 @@ function buildGateway(over: GatewayOverrides, sessions: MenuSession[], launches:
       awaitMessages: over.awaitMessages ?? channel.awaitMessages,
       createLaunch: over.createLaunch ?? channel.createLaunch,
       getLaunch: over.getLaunch ?? channel.getLaunch,
+      answerDisplay: over.answerDisplay ?? channel.answerDisplay,
     }),
+    persistedAgentNames: async () => new Map(),
     ...over,
   };
   return gw;
@@ -131,10 +137,10 @@ describe("menu service", () => {
   });
 
   it("renders authors as You / member name / agent name, flattened for G2", () => {
-    const agent = toLensMessage(msg(2, { authorKind: "agent", authorAgentId: "abcdefgh", authorAgentName: null, body: "# Hi **there** ![x](y.png)" }), OWNER, sanitizeG2Text);
+    const agent = toLensMessage(msg(2, { authorKind: "agent", authorAgentId: "abcdefgh", authorAgentName: null, body: "# Hi **there** ![x](y.png)" }), OWNER, evenG2);
     expect(agent).toMatchObject({ author: { kind: "agent", name: "agent-abcdefgh" }, text: "Hi there [image]", attachments_note: "[image]" });
-    expect(toLensMessage(msg(1), OWNER, sanitizeG2Text).author).toEqual({ kind: "member", name: "You" });
-    expect(toLensMessage(msg(3, { authorUserId: "x", authorName: "Kim" }), OWNER, sanitizeG2Text).author).toEqual({ kind: "member", name: "Kim" });
+    expect(toLensMessage(msg(1), OWNER, evenG2).author).toEqual({ kind: "member", name: "You" });
+    expect(toLensMessage(msg(3, { authorUserId: "x", authorName: "Kim" }), OWNER, evenG2).author).toEqual({ kind: "member", name: "Kim" });
   });
 
   it("filters a conversation to that agent and the owner's messages addressed to it", async () => {
@@ -346,5 +352,109 @@ describe("menu routes", () => {
 
     await t.menu.target(send("PUT", "/target", { channel_id: null }));
     expect(row.current_target_channel_id).toBeNull();
+  });
+});
+
+/** The real sample (channel 9e6a4b44…, seq 2288): a credits display from an agent whose session ended. */
+const CREDITS = {
+  spec_version: 1,
+  screen_id: "d-sample-credits",
+  wait_for_input: true,
+  blocks: [
+    { id: "b1", type: "text", border: false, content: "Credit usage - September", selectable: false },
+    { id: "b2", type: "progress", label: "Credits", value: 0.32, border: false, selectable: false },
+    { id: "b3", type: "divider", border: false, selectable: false },
+    { id: "b4", type: "list", items: ["Top up now", "Remind me tomorrow"], border: false, selectable: true },
+    { id: "b5", type: "list", items: ["1,609 of 5,000 used (Pro)", "Resets Oct 1"], border: false, selectable: false },
+  ],
+};
+const ENDED = msg(7, { authorKind: "agent", authorAgentId: "t0eh6cuh", authorAgentName: null, body: "flat", display: CREDITS });
+
+describe("read mode: ended agents, line breaks, displays", () => {
+  it("names an ended agent from its persisted name, in one batched lookup", async () => {
+    const lookups: string[][] = [];
+    const t = setup({
+      gateway: {
+        readMessages: async () => ({ messages: [ENDED, msg(8, { authorKind: "agent", authorAgentId: "t0eh6cuh", body: "a\n\n\n\nb" }), msg(9, { authorKind: "agent", authorAgentId: "qqqqqqqq" })], hasMore: false }),
+        persistedAgentNames: async (_channels, ids) => {
+          lookups.push(ids);
+          return new Map([["t0eh6cuh", "Orchestrator"]]);
+        },
+      },
+    });
+    await device(t);
+    const { messages } = await (await t.menu.messages(get(`/channels/${OPS}/messages`), OPS)).json();
+    expect(lookups).toEqual([["t0eh6cuh", "t0eh6cuh", "qqqqqqqq"]]);
+    expect(messages.map((m: { author: { name: string } }) => m.author.name)).toEqual(["Orchestrator", "Orchestrator", "agent-qqqqqqqq"]);
+    expect(messages[1].text).toBe("a\n\nb");
+  });
+
+  it("fills unnamed sessions on home from persisted names", async () => {
+    const t = setup({ gateway: { persistedAgentNames: async () => new Map([["zyxwvuts", "Scout"]]) } });
+    await device(t);
+    const body = await (await t.menu.home(get("/home"))).json();
+    expect(body.recent_agents[1].agent_name).toBe("Scout");
+  });
+
+  it("compiles a display into the chat area, options apart, text multi-line", () => {
+    const m = toLensMessage(ENDED, OWNER, evenG2);
+    expect(m.id).toBe(ENDED.id);
+    expect(m.text).toBe(
+      "Credit usage - September\nCredits ███▒▒▒▒▒▒▒ 32%\n──────────\n▶ Top up now\n▶ Remind me tomorrow\n─ 1,609 of 5,000 used (Pro)\n─ Resets Oct 1",
+    );
+    const d = m.display!;
+    expect(d).toMatchObject({ screen_id: "d-sample-credits", options: { block_id: "b4", items: ["Top up now", "Remind me tomorrow"] }, answer: null });
+    expect(d.fallback).toBeUndefined();
+    expect(d.containers.map((c) => [c.block_id, c.kind])).toEqual([["b1", "text"], ["b2", "text"], ["b3", "text"], ["b5", "list"]]);
+    for (const c of d.containers) {
+      expect(c).not.toHaveProperty("capture");
+      expect(c.x).toBeGreaterThanOrEqual(0);
+      expect(c.y).toBeGreaterThanOrEqual(30);
+      expect(c.x + c.w).toBeLessThanOrEqual(576);
+      expect(c.y + c.h).toBeLessThanOrEqual(202);
+    }
+    expect(d.containers[1].content).toMatch(/^Credits █+▒+ 32%$/);
+  });
+
+  it("falls back to one text container when the display does not fit, and carries the answer", () => {
+    const tall = {
+      screen_id: "d-tall",
+      answer: { block_id: "o", choice: "Yes", index: 0, at: "t", via: "web" },
+      blocks: [...Array.from({ length: 8 }, (_, i) => ({ id: `t${i}`, type: "text", content: `line ${i}` })), { id: "o", type: "list", items: ["Yes", "No"] }],
+    };
+    const d = toLensMessage(msg(1, { authorKind: "agent", display: tall }), OWNER, evenG2).display!;
+    expect(d.fallback).toBe(true);
+    expect(d.containers).toHaveLength(1);
+    expect(d.containers[0]).toMatchObject({ block_id: "fallback", kind: "text", y: 30, h: 172 });
+    expect(d.containers[0].content).toContain("line 7\n▶ Yes\n▶ No");
+    expect(d.answer).toEqual({ block_id: "o", choice: "Yes", index: 0, at: "t", via: "web" });
+  });
+
+  it("shows a malformed display as a plain message", () => {
+    const m = toLensMessage(msg(1, { body: "plain", display: { blocks: [{ type: "bogus" }] } }), OWNER, evenG2);
+    expect(m.display).toBeUndefined();
+    expect(m.text).toBe("plain");
+  });
+
+  it("answers a display from the glasses through the channel's answer path", async () => {
+    const calls: unknown[] = [];
+    const t = setup({
+      gateway: {
+        answerDisplay: async (messageId, input, source) => {
+          calls.push({ messageId, input, source });
+          return { answer: { choice: "Top up now", index: 0, at: "t", block_id: "b4" } };
+        },
+      },
+    });
+    const d = await device(t);
+    const path = `/channels/${OPS}/messages/${ENDED.id}/display/answer`;
+    const res = await t.menu.displayAnswer(send("POST", path, { index: 0, block_id: "b4" }), OPS, ENDED.id);
+    expect(await res.json()).toEqual({ ok: true, answer: { block_id: "b4", choice: "Top up now", index: 0, at: "t", via: "glasses" } });
+    expect(calls).toEqual([
+      { messageId: ENDED.id, input: { index: 0, block_id: "b4" }, source: { kind: "glasses", device_id: d.id, label: "Lens", platform: "even_g2" } },
+    ]);
+    expect((await t.menu.displayAnswer(send("POST", path, { index: 0 }), OPS, "nope")).status).toBe(404);
+    expect((await t.menu.displayAnswer(send("POST", path, { index: -1 }), OPS, ENDED.id)).status).toBe(400);
+    expect((await t.menu.displayAnswer(send("POST", path, { index: 0 }), SECRET, ENDED.id)).status).toBe(404);
   });
 });

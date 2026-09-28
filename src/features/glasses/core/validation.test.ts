@@ -46,7 +46,8 @@ describe("byte limits", () => {
 
 describe("channel text", () => {
   it("flattens markdown and reduces embeds to notes", () => {
-    expect(flattenChannelText("# Title\n- one\n- `two`\n[link](http://x)", S).text).toBe("Title - one - two link");
+    expect(flattenChannelText("# Title\n- one\n- `two`\n[link](http://x)", S).text).toBe("Title\n- one\n- two\nlink");
+    expect(flattenChannelText("a  \n\n\n\n  b\r\nc", S).text).toBe("a\n\nb\nc");
     expect(flattenChannelText("See ![chart](https://x/c.png) and [Q3 report](https://x/q3.pdf).", S)).toEqual({
       text: "See [image] and [file: Q3 report] .",
       notes: ["[image]", "[file: Q3 report]"],

@@ -7,6 +7,9 @@ import { authorAgentIdOf } from "@/features/channels/lib/agent-post-stamp";
 import type { ChannelMessage } from "@/features/channels/types";
 import type { LaunchDirective } from "@/features/channels/types-launch";
 import { operatorChannelContext } from "../channel-context";
+import { answerDisplay } from "../screens/display-actions";
+import { DISPLAY_METADATA_KEY } from "../screens/display";
+import { AGENT_ID_RE } from "../voice/target";
 import type { LaunchState, MenuChannelHandle, MenuGateway, MenuMessage, MenuSession } from "./types";
 
 /**
@@ -20,6 +23,7 @@ import type { LaunchState, MenuChannelHandle, MenuGateway, MenuMessage, MenuSess
 
 function toMenuMessage(m: ChannelMessage): MenuMessage {
   return {
+    id: m.id,
     seq: m.seq,
     kind: m.kind,
     authorKind: m.authorKind,
@@ -30,7 +34,27 @@ function toMenuMessage(m: ChannelMessage): MenuMessage {
     recipientAgentIds: m.recipientAgentIds ?? [],
     body: m.body,
     createdAt: m.createdAt,
+    display: m.metadata?.[DISPLAY_METADATA_KEY] ?? null,
   };
+}
+
+/** Newest first → first name per agent id wins. */
+function firstNames<T>(rows: T[], idOf: (r: T) => string | null, nameOf: (r: T) => string | null, into: Map<string, string>) {
+  for (const r of rows) {
+    const id = idOf(r);
+    const name = nameOf(r)?.trim();
+    if (id && name && !into.has(id)) into.set(id, name);
+  }
+}
+
+/** A best-effort name source: a failed read (or a missing table) only loses names, never the page. */
+async function quietRows<T>(label: string, query: PromiseLike<{ data: unknown; error: { message: string } | null }>): Promise<T[]> {
+  const { data, error } = await query;
+  if (error) {
+    console.error(`[glasses] ${label} read failed: ${error.message}`);
+    return [];
+  }
+  return (data ?? []) as T[];
 }
 
 function toLaunchState(d: LaunchDirective): LaunchState {
@@ -91,6 +115,43 @@ export const menuGateway: MenuGateway = {
         toolLabel: r.tool_label,
       }),
     );
+  },
+
+  async persistedAgentNames(channelIds, agentIds) {
+    const ids = [...new Set(agentIds)].filter((id) => AGENT_ID_RE.test(id));
+    const out = new Map<string, string>();
+    if (channelIds.length === 0 || ids.length === 0) return out;
+    const db = supabaseAdmin();
+    // Two durable records, both written by the operator's own desktop, read in one round:
+    //  1. the token ledger's per-run label (`session_key` = `<channel>:<thread>:<agent>`), which
+    //     follows renames up to the run's last push;
+    //  2. the launch directive's name (applied, else asked for, else the identity's).
+    const [spend, launches] = await Promise.all([
+      quietRows<{ session_key: string; agent_name: string | null }>(
+        "agent names (spend)",
+        db
+          .from("workspace_token_spend")
+          .select("session_key, agent_name")
+          .in("channel_id", channelIds)
+          .or(ids.map((id) => `session_key.like.*:${id}`).join(","))
+          .not("agent_name", "is", null)
+          .order("updated_at", { ascending: false })
+          .limit(500),
+      ),
+      quietRows<{ agent_id: string | null; applied_agent_name: string | null; agent_name: string | null; identity_name: string | null }>(
+        "agent names (launches)",
+        db
+          .from("channel_launch_directives")
+          .select("agent_id, applied_agent_name, agent_name, identity_name")
+          .in("channel_id", channelIds)
+          .in("agent_id", ids)
+          .order("created_at", { ascending: false })
+          .limit(500),
+      ),
+    ]);
+    firstNames(spend, (r) => r.session_key.slice(r.session_key.lastIndexOf(":") + 1), (r) => r.agent_name, out);
+    firstNames(launches, (r) => r.agent_id, (r) => r.applied_agent_name ?? r.agent_name ?? r.identity_name, out);
+    return out;
   },
 
   async runtimesFor(agentIds) {
@@ -162,6 +223,11 @@ export const menuGateway: MenuGateway = {
       },
       async getLaunch(directiveId) {
         return toLaunchState(await getLaunchDirective(ctx, directiveId));
+      },
+      async answerDisplay(messageId, input, source) {
+        // The app's own answer path, as the owner, stamped as coming from the glasses.
+        const { answer } = await answerDisplay({ ...ctx, messageSource: source }, channelId, messageId, input);
+        return { answer };
       },
     };
   },
