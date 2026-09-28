@@ -216,6 +216,8 @@ interface PostOptions {
    * card it renders carries buttons that write back and wake an agent.
    */
   escalation?: ChannelMessageInput["escalation"];
+  /** An agent-built display card (`metadata.display`, server-validated); `body` is its fallback. */
+  display?: ChannelMessageInput["display"];
   /**
    * The VERB the terse result opens with. Defaults to `posted`.
    *
@@ -286,6 +288,7 @@ export async function opPost(
       // ⚠ Omitted on every ordinary post, so no existing wire shape moved.
       intent: opts.intent,
       escalation: opts.escalation,
+      display: opts.display,
     });
   } catch (e) {
     // ⚠ Map 400s off the CODE, never off which params happened to be set —

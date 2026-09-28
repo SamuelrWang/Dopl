@@ -13,6 +13,9 @@ const sendKind = zod_1.z.enum(["message", "milestone", "record"], {
         ? 'Refused: kind="decision" is dopl_request_decision, which carries the options; nothing was sent.'
         : undefined,
 });
+/** `display` on dopl_send_message (granular only): the server validates the blocks
+ *  (`src/features/glasses/core/screens/display.ts`), so this stays a light shape. */
+const sendDisplay = zod_1.z.object({ blocks: zod_1.z.array(zod_1.z.record(zod_1.z.string(), zod_1.z.unknown())).min(1) });
 const AGENT_NAME = 'Display name in Title Case ("Picker Fix" → @picker-fix), one line, max 60.';
 exports.CHANNEL_TEXT = {
     dopl_list_channels: {
@@ -40,9 +43,10 @@ exports.CHANNEL_TEXT = {
             kind: '"message" (default), "milestone" (needs thread) or "record".',
             thread: 'Thread id, or "new" to open one titled by summary (needs to unless a record).',
             summary: "One-line intent: the notification recipients see.",
+            display: "Chat card: blocks text{content}|list{items,selectable?}|progress{value 0-1,label?}|divider; info-only lists selectable:false. body = fallback.",
         },
         required: ["channel", "body"],
-        types: { kind: sendKind },
+        types: { kind: sendKind, display: sendDisplay },
     },
     dopl_request_decision: {
         description: "Post a decision card a person answers in one press: `summary` is the question, `body` the context, `options` the choices. @-tag the person in the body; it starts nobody's agent.",

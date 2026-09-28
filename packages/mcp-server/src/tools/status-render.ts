@@ -30,6 +30,7 @@ import type { AccountChannelStatus, AccountStatus } from "@dopl/client";
 import { inlineOr, NO_NAME } from "./narration.js";
 import { formatSessionLine } from "./channel-session-render.js";
 import { isConcise, type ResponseFormat } from "./response-size.js";
+import { viaTag } from "./channel-source.js";
 
 /** Peer-influenced display text that neutralized to nothing. */
 const NO_ONE = "(unresolved author)";
@@ -88,7 +89,7 @@ function waitingLine(item: AccountChannelStatus["waiting"][number]): string {
   const thread = item.threadId
     ? ` · thread \`${inlineOr(item.threadId, NO_TEXT)}\``
     : "";
-  return `  ⚠ ${mark} #${item.seq} from ${who}${thread} — ${inlineOr(item.preview, NO_TEXT)}`;
+  return `  ⚠ ${mark} #${item.seq} from ${who}${viaTag(item.source)}${thread} — ${inlineOr(item.preview, NO_TEXT)}`;
 }
 
 /**

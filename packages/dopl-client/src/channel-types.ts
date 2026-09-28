@@ -393,6 +393,15 @@ export interface ChannelMessageInput extends ChannelEscalationFields {
    * fields rather than dropping them, so an old caller is told.
    */
   intent?: MessageIntent;
+  /**
+   * An agent-built DISPLAY in the glasses block vocabulary, stored as reserved `metadata.display`
+   * with a server screen id (docs/specs/device-aware-messages.md). `body` is its text fallback.
+   */
+  display?: {
+    blocks: Record<string, unknown>[];
+    layout?: "stack" | "absolute";
+    wait_for_input?: boolean;
+  };
 }
 
 export interface ReadMessagesOptions {

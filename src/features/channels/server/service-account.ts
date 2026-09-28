@@ -427,10 +427,17 @@ async function resolveWaiting(
       // person-lane item is byte-identical to what it was — the same discipline
       // the metadata fold applies to `intent`.
       ...(laneOf === "person" ? {} : { lane: laneOf }),
+      ...sourceField(metadata?.source),
     });
     out.set(row.channel_id, bucket);
   }
   return out;
+}
+
+/** `{source}` for a waiting item — only a well-formed stamp, and only its two rendered fields. */
+function sourceField(raw: unknown): { source?: { kind: string; label: string } } {
+  const s = raw as { kind?: unknown; label?: unknown } | null | undefined;
+  return typeof s?.kind === "string" && typeof s.label === "string" ? { source: { kind: s.kind, label: s.label } } : {};
 }
 
 /** Author profiles for one page of rows — ONE bounded read, keyed by user id. */

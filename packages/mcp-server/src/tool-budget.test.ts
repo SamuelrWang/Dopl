@@ -198,7 +198,7 @@ const SCHEMA_CEILINGS: Record<string, number> = {
 // The granular set's own served total, its briefing included (which states the body fence once and
 // must leave room for directory rows). Re-derive, never quote. The ceiling may never pass the target,
 // the legacy total when the split was planned.
-const GRANULAR_SERVED_CEILING = 44_121; // −126 (2026-09-25): permission levels, see dopl_channel. +6 (1.37.1): the `section` matching words. +94 (1.37.1, live test #5): `scope` said only "everywhere … max 6"; three agents missed hits because "here" was undefined. The definition is a param line and cannot be pulled.
+const GRANULAR_SERVED_CEILING = 44_470; // +349 (2026-09-28, device-aware messages): dopl_send_message `display` (one param, the chat card; its block vocabulary is the whole describe, validated server-side). −126 (2026-09-25): permission levels, see dopl_channel. +6 (1.37.1): the `section` matching words. +94 (1.37.1, live test #5): `scope` said only "everywhere … max 6"; three agents missed hits because "here" was undefined. The definition is a param line and cannot be pulled.
 const GRANULAR_SERVED_TARGET = 49_205;
 const SERVED_TOTAL_CEILING = 50_192; // −63 (2026-09-25): permission levels, see dopl_channel. −8 (1.37.1): the shelf is called the home shelf on dopl_agent. +7 (1.37.1): the `section` matching words. // re-derive, never quote: −2 the 2026-09-23 vocabulary removal merged onto DMP-002 (dopl_ontology: −3 schema, +1 history gloss), −5 DMP-004 (dopl_search names ten domains in the same 450), +964 DMP-002 history+restore on three tools, +119 DMP-009 field type enum, −6 DMP-001 net, −229 home-channel addressing pulled (P8-23), +15 caller's own tool loader (X-09), +9 P8-15/P8-18.
 /**

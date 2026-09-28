@@ -34,6 +34,8 @@ async function runTool(fn: () => Promise<unknown>): Promise<ToolResult> {
 
 const NEEDS_WRITE = errorResult("This credential lacks the dopl.write scope; reconnect with write access.");
 const TEXT_RULE = "Plain text only: no emoji; curly quotes/long dashes are converted.";
+/** Why an agent reaches for these tools, said once on the two that carry it (device-aware messages). */
+const FOR_WEARER = "How a glasses wearer sees choices/structure (also posted in chat from a channel).";
 
 export interface GlassesToolOptions {
   /** Fail closed: only an explicit `dopl.write` scope may queue anything. */
@@ -96,7 +98,7 @@ export function registerGlassesTools(server: McpServer, deps: GlassesDeps, userI
     "glasses_ask",
     {
       title: "glasses_ask",
-      description: `Ask the wearer a multiple-choice question and WAIT for the tap (holds up to 200s). question <=${L.question} bytes; ${L.options.min}-${L.options.max} options, each <=${L.option} bytes. Returns status answered|timeout|dismissed, or pending (then use glasses_get_answer). ${TEXT_RULE}`,
+      description: `${FOR_WEARER} Ask a multiple-choice question; WAITS <=200s for the tap. question <=${L.question} bytes; ${L.options.min}-${L.options.max} options, each <=${L.option} bytes. Returns answered|timeout|dismissed, or pending (then glasses_get_answer). No emoji.`,
       inputSchema: z.object({
         question: z.string(),
         options: z.array(z.string()),
@@ -142,8 +144,8 @@ export function registerGlassesTools(server: McpServer, deps: GlassesDeps, userI
     {
       title: "glasses_render",
       description:
-        `Draw a custom screen on the glasses from blocks (${platform.renderHint}). Same screen_id replaces it live. ` +
-        "validate_only:true returns the compiled layout + ASCII preview without sending. Errors are fixable JSON.",
+        `${FOR_WEARER} Draw a screen from blocks (${platform.renderHint}). Same screen_id replaces it live. ` +
+        "validate_only:true previews (layout + ASCII) without sending.",
       inputSchema: z.object({
         screen_id: z.string().optional(),
         blocks,

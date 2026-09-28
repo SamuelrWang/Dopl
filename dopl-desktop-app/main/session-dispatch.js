@@ -457,7 +457,7 @@ function feedLiveSession(entry, m, myUserId) {
       addressing: addressing, // ⚠ THE VERDICT, NOT THE INPUTS, below: `session-gate.js › feedInbound` is the entry point the
       // engine exports and is the BELT on this rule; handing it the answer is what stops it
       // becoming a second spelling of the wake rule.
-      wake: wake === true,
+      wake: wake === true, ...(m.authorKind !== 'agent' && m.metadata && m.metadata.source ? { source: m.metadata.source } : {}), // member's device (message-source.js)
       fromOperator: fromMe(m, myUserId), // the operator's account: their posts and their own agents' (ruling 2, 2026-09-25)
     });
     if (!ok) { ack(s, { refused: 1 }); continue; }

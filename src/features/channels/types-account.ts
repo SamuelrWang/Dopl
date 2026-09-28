@@ -58,6 +58,8 @@ export interface AccountWaitingItem {
    * their laptop (`lib/desktop-handle.ts › isOutsideSessionCaller`).
    */
   lane?: AccountWaitingLane;
+  /** The member's device (`metadata.source`, docs/specs/device-aware-messages.md); absent when unstamped. */
+  source?: { kind: string; label: string };
 }
 
 /** @see AccountWaitingItem.lane. ⚠ Absent means `person`, which is what every

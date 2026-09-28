@@ -45,7 +45,7 @@
  * are human decisions in the web UI).
  */
 
-import type { DoplClient } from "@dopl/client";
+import type { ChannelMessageInput, DoplClient } from "@dopl/client";
 import { err, missingParams, type RegisterTool, type ToolResponse } from "./respond";
 // The tool's two declared halves: PROSE (what a channel is, which ops exist)
 // and published input SHAPE. This file is mechanism only.
@@ -292,6 +292,8 @@ export function registerChannelTool(
             to: args.to,
             summary: args.summary,
             thread: args.thread,
+            // Carried past the legacy schema by `dopl_send_message` (tool-manifest.ts).
+            display: (args as { display?: ChannelMessageInput["display"] }).display,
             runtime,
           });
         }

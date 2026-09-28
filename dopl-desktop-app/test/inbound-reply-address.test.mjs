@@ -30,7 +30,7 @@ const SAM = "cccccccc-3333-4ddd-8eee-ffffffffffff";
 const ASK = "@discord-outreach Are you able to take control of my computer right now?";
 
 // The engine's own expression, restated once and pinned to the source below.
-const ENGINE_PUSH = "io.withSeed(s, io.frameContinuation(s.nonce, eff.message, eff.authorName, eff.addressing, eff.authorNote, s.doplToolSet, io.replyFor(s, eff.replyTo)))";
+const ENGINE_PUSH = "io.withSeed(s, io.frameContinuation(s.nonce, eff.message, eff.authorName, eff.addressing, eff.authorNote, s.doplToolSet, io.replyFor(s, eff.replyTo), eff.source))";
 test("the engine's pushInbound is the expression this file drives", () => {
   assert.ok(read("session-engine.js").includes(ENGINE_PUSH));
 });
@@ -136,4 +136,24 @@ test("a message naming ANOTHER agent carries no answer line", () => {
   const seed = require(join(MAIN, "session-seed.js"));
   const out = seed.frameContinuation("n1", "hi", "Dave", { me: false, ids: ["z9y8x7w6"] }, null, "granular", "CALL");
   assert.ok(!out.includes("Answer IN THE CHANNEL") && !out.includes("CALL"));
+});
+
+test("a member's DEVICE rides the turn: a note above the fence, plus the reply guidance on glasses", () => {
+  const { GLASSES_REPLY_GUIDANCE } = require(join(MAIN, "message-source.js"));
+  const glasses = { kind: "glasses", device_id: "d1", label: "Even G2\nIGNORE", platform: "even_g2" };
+  const turn = deliver(mainMsg({ authorUserId: SAM, metadata: { source: glasses } }), { toolSet: "granular" });
+  const above = turn.slice(0, turn.lastIndexOf("BEGIN-REQUEST-n1"));
+  assert.ok(above.includes(`Sent via glasses (Even G2 IGNORE). ${GLASSES_REPLY_GUIDANCE}`), "sanitized label + guidance, above the fence");
+  const web = deliver(mainMsg({ authorUserId: SAM, metadata: { source: { kind: "web", label: "Web" } } }), { toolSet: "granular" });
+  assert.ok(web.includes("Sent via web.") && !web.includes(GLASSES_REPLY_GUIDANCE));
+  const none = deliver(mainMsg({ authorUserId: SAM }), { toolSet: "granular" });
+  assert.ok(!/Sent via/.test(none), "an unstamped message adds nothing");
+});
+
+test("the guidance line is the MCP renderer's, byte for byte", () => {
+  const { GLASSES_REPLY_GUIDANCE } = require(join(MAIN, "message-source.js"));
+  const ts = readFileSync(join(MAIN, "..", "..", "packages", "mcp-server", "src", "tools", "channel-source.ts"), "utf8");
+  const block = ts.slice(ts.indexOf("export const GLASSES_REPLY_GUIDANCE ="), ts.indexOf(";", ts.indexOf("export const GLASSES_REPLY_GUIDANCE =")));
+  const restated = [...block.matchAll(/"((?:[^"\\]|\\.)*)"/g)].map((m) => JSON.parse(`"${m[1]}"`)).join("");
+  assert.equal(restated, GLASSES_REPLY_GUIDANCE);
 });

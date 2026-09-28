@@ -18,6 +18,10 @@ const sendKind = z.enum(["message", "milestone", "record"], {
       : undefined,
 });
 
+/** `display` on dopl_send_message (granular only): the server validates the blocks
+ *  (`src/features/glasses/core/screens/display.ts`), so this stays a light shape. */
+const sendDisplay = z.object({ blocks: z.array(z.record(z.string(), z.unknown())).min(1) });
+
 const AGENT_NAME = 'Display name in Title Case ("Picker Fix" → @picker-fix), one line, max 60.';
 
 export const CHANNEL_TEXT: Readonly<Record<string, ToolText>> = {
@@ -50,9 +54,11 @@ export const CHANNEL_TEXT: Readonly<Record<string, ToolText>> = {
       kind: '"message" (default), "milestone" (needs thread) or "record".',
       thread: 'Thread id, or "new" to open one titled by summary (needs to unless a record).',
       summary: "One-line intent: the notification recipients see.",
+      display:
+        "Chat card: blocks text{content}|list{items,selectable?}|progress{value 0-1,label?}|divider; info-only lists selectable:false. body = fallback.",
     },
     required: ["channel", "body"],
-    types: { kind: sendKind },
+    types: { kind: sendKind, display: sendDisplay },
   },
   dopl_request_decision: {
     description:

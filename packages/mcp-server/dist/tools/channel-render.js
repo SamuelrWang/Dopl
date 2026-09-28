@@ -41,6 +41,7 @@ Object.defineProperty(exports, "NO_MEMBER_VIEW", { enumerable: true, get: functi
 // why the one-place seam lives on `OutsideRelevance` rather than on the page.
 const channel_desktop_tag_1 = require("./channel-desktop-tag");
 const response_size_1 = require("./response-size");
+const channel_source_1 = require("./channel-source");
 // Which exchange a message belongs to, and whether it is a real THREAD or one
 // machine's ad-hoc grouping label. ⚠ import stays one-way.
 const channel_render_threads_1 = require("./channel-render-threads");
@@ -187,7 +188,8 @@ function formatMessage(m, anyThreaded, view, ref, clip, terse, relevance = null)
     const deliveryTag = ack ? ` · ${ack}` : "";
     // ⚠ THE MARK GOES LAST AMONG THE TAGS AND BEFORE THE TIMESTAMP, so it reads
     // as the line's verdict rather than as another attribute of the addressing.
-    const head = `**#${m.seq}** ${author}${sessionTag}${kindTag}${threadTag}${memberTag}${deliveryTag}${outsideMark(relevance)}${terse ? "" : ` · ${m.createdAt}`}`;
+    // `via glasses (Even G2)`: the member's device, so a reply can fit it (`channel-source.ts`).
+    const head = `**#${m.seq}** ${author}${(0, channel_source_1.sourceTag)(m)}${sessionTag}${kindTag}${threadTag}${memberTag}${deliveryTag}${outsideMark(relevance)}${terse ? "" : ` · ${m.createdAt}`}`;
     return `- ${head}${clipBody(m, ref, clip)}`;
 }
 /**
@@ -229,6 +231,10 @@ outside = false) {
     // ⚠ The LEGEND is standing teaching about the id shapes, identical on every
     // page — metadata by the definition `response-size.ts` sets, so `concise`
     // drops it. A body never does.
+    // ONE glasses guidance line per page, when the newest member line came from glasses.
+    const guidance = (0, channel_source_1.sourceGuidance)(messages);
+    if (guidance)
+        lines.push(`\n${guidance}`);
     const legend = terse ? null : (0, channel_render_threads_1.threadLegend)(messages, ref);
     if (legend)
         lines.push(`\n${legend}`);

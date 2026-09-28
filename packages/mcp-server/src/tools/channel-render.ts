@@ -55,6 +55,7 @@ import {
   type OutsideRelevance,
 } from "./channel-desktop-tag";
 import { isConcise, type ResponseFormat } from "./response-size";
+import { sourceGuidance, sourceTag } from "./channel-source";
 // Which exchange a message belongs to, and whether it is a real THREAD or one
 // machine's ad-hoc grouping label. ⚠ import stays one-way.
 import {
@@ -218,7 +219,8 @@ function formatMessage(
   const deliveryTag = ack ? ` · ${ack}` : "";
   // ⚠ THE MARK GOES LAST AMONG THE TAGS AND BEFORE THE TIMESTAMP, so it reads
   // as the line's verdict rather than as another attribute of the addressing.
-  const head = `**#${m.seq}** ${author}${sessionTag}${kindTag}${threadTag}${memberTag}${deliveryTag}${outsideMark(relevance)}${terse ? "" : ` · ${m.createdAt}`}`;
+  // `via glasses (Even G2)`: the member's device, so a reply can fit it (`channel-source.ts`).
+  const head = `**#${m.seq}** ${author}${sourceTag(m)}${sessionTag}${kindTag}${threadTag}${memberTag}${deliveryTag}${outsideMark(relevance)}${terse ? "" : ` · ${m.createdAt}`}`;
   return `- ${head}${clipBody(m, ref, clip)}`;
 }
 
@@ -276,6 +278,9 @@ export function formatMessages(
   // ⚠ The LEGEND is standing teaching about the id shapes, identical on every
   // page — metadata by the definition `response-size.ts` sets, so `concise`
   // drops it. A body never does.
+  // ONE glasses guidance line per page, when the newest member line came from glasses.
+  const guidance = sourceGuidance(messages);
+  if (guidance) lines.push(`\n${guidance}`);
   const legend = terse ? null : threadLegend(messages, ref);
   if (legend) lines.push(`\n${legend}`);
   return lines;

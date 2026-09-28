@@ -63,6 +63,6 @@ export interface ScreenLimits {
 }
 
 export const BLOCKS_DOC =
-  "Blocks: text{content, lines?, brightness?0-4, border?} | list{items[], selectable?=true (max ONE selectable list)} | " +
+  "Blocks: text{content, lines?, brightness?0-4, border?} | list{items[], selectable?=true (false for info-only; max ONE selectable)} | " +
   "progress{value 0-1, label?} | divider{} | spacer{lines?=1}. Every block may carry id (default b1, b2, ...). " +
   "layout 'absolute': blocks also take x,y (px, required) and w,h (optional).";

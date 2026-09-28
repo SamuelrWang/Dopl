@@ -93,6 +93,7 @@ exports.GRANULAR_TOOLS = [
         name: "dopl_send_message",
         bind: "dopl_channel:send",
         params: ["channel", "to", "body", "kind", "thread", "summary", "client_msg_id"],
+        carry: ["display"],
         alwaysLoad: true,
     },
     {

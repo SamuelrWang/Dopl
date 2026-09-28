@@ -32,7 +32,7 @@ function wakeEffects(state) {
 // `replyTo` and `fromOperator` are carried, never read, here.
 function feedInboundEffects(state, event) {
   const effects = wakeEffects(state);
-  effects.push({ type: 'pushInbound', message: event.message, authorName: event.authorName, authorNote: event.authorNote || null, addressing: event.addressing || null, replyTo: event.replyTo || '', ...(event.fromOperator === true ? { fromOperator: true } : {}) });
+  effects.push({ type: 'pushInbound', message: event.message, authorName: event.authorName, authorNote: event.authorNote || null, addressing: event.addressing || null, replyTo: event.replyTo || '', ...(event.fromOperator === true ? { fromOperator: true } : {}), ...(event.source ? { source: event.source } : {}) });
   effects.push({ type: 'scheduleIdle' });
   return effects;
 }

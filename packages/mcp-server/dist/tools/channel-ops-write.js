@@ -202,6 +202,7 @@ async function opPost(client, channelRef, body, opts = {}) {
             // ⚠ Omitted on every ordinary post, so no existing wire shape moved.
             intent: opts.intent,
             escalation: opts.escalation,
+            display: opts.display,
         });
     }
     catch (e) {

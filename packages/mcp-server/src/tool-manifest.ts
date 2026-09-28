@@ -120,6 +120,7 @@ export const GRANULAR_TOOLS: readonly GranularTool[] = [
     name: "dopl_send_message",
     bind: "dopl_channel:send",
     params: ["channel", "to", "body", "kind", "thread", "summary", "client_msg_id"],
+    carry: ["display"],
     alwaysLoad: true,
   },
   {

@@ -251,6 +251,8 @@ directory) {
                     to: args.to,
                     summary: args.summary,
                     thread: args.thread,
+                    // Carried past the legacy schema by `dopl_send_message` (tool-manifest.ts).
+                    display: args.display,
                     runtime,
                 });
             }

@@ -154,6 +154,8 @@ interface PostOptions {
      * card it renders carries buttons that write back and wake an agent.
      */
     escalation?: ChannelMessageInput["escalation"];
+    /** An agent-built display card (`metadata.display`, server-validated); `body` is its fallback. */
+    display?: ChannelMessageInput["display"];
     /**
      * The VERB the terse result opens with. Defaults to `posted`.
      *
