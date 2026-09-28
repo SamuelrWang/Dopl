@@ -10,7 +10,13 @@ import {
   type Role,
   type WorkspaceWithRole,
 } from "@/features/workspaces/types";
-import { SettingsPane, SettingsPanel, SettingsRows } from "./settings-panel";
+import {
+  SettingsPane,
+  SettingsPanel,
+  SettingsRows,
+  SettingsRowsEmpty,
+  SettingsRowsSkeleton,
+} from "./settings-panel";
 
 /**
  * WORKSPACES — every container this account belongs to, home space first
@@ -73,14 +79,8 @@ export function WorkspacesSectionCore({
               onOpen={onOpenWorkspace && (() => onOpenWorkspace(ws))}
             />
           ))}
-          {workspaces === null && !failed && (
-            <li className="py-2.5">
-              <div className="h-8 animate-pulse rounded-[10px] bg-surface-raised-1" />
-            </li>
-          )}
-          {failed && (
-            <li className="py-2.5 text-caption text-danger">Couldn&rsquo;t load your workspaces.</li>
-          )}
+          {workspaces === null && !failed && <SettingsRowsSkeleton />}
+          {failed && <SettingsRowsEmpty failed="Couldn’t load your workspaces.">{null}</SettingsRowsEmpty>}
         </SettingsRows>
       </SettingsPanel>
     </SettingsPane>

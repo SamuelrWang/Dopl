@@ -19,6 +19,9 @@ import {
 const COMPUTERS = apiResource(DEVICES_PATH);
 const APPS = apiResource(AGENT_APPS_PATH);
 
+/** Presence moves while the pane is open; one light re-read per half minute keeps "Online" true. */
+const PRESENCE_REFRESH_MS = 30_000;
+
 const EMPTY_COMPUTERS: readonly ComputerDeviceDto[] = [];
 const EMPTY_APPS: readonly AgentApp[] = [];
 
@@ -28,8 +31,11 @@ const selectApps = (body: AgentAppList) => body.apps ?? EMPTY_APPS;
 
 /** Every device connected to the caller's agents; `null` until the computer read lands. */
 export function useConnectedDevices(): { devices: ConnectedDevice[] | null; failed: boolean } {
-  const computers = useApiQuery(COMPUTERS.path, { select: selectComputers });
-  const glasses = useGlassesDevices();
+  const computers = useApiQuery(COMPUTERS.path, {
+    select: selectComputers,
+    refetchInterval: PRESENCE_REFRESH_MS,
+  });
+  const glasses = useGlassesDevices({ refetchInterval: PRESENCE_REFRESH_MS });
   const devices = useMemo(
     () =>
       computers.data || computers.isError

@@ -3,18 +3,18 @@
 import { useState } from "react";
 import { Plus } from "lucide-react";
 import { apiRequest } from "@/shared/api/api-client";
-import { userFacingMessage } from "@/shared/api/user-facing-message";
 import { formatRelativeTime } from "@/shared/lib/format-time";
 import { ConfirmDialog } from "@/shared/ui/confirm-dialog";
 import { OpenScaleButton, OPEN_SCALE_ICON } from "@/shared/ui/open-scale-button";
-import { toast } from "@/shared/ui/toast";
 import {
   RowAction,
   SettingsCard,
-  SettingsEmpty,
   SettingsPanel,
   SettingsRow,
+  SettingsRowsEmpty,
+  SettingsRowsSkeleton,
 } from "@/shared/layout/settings-modal/sections/settings-panel";
+import { useConfirmedAction } from "@/shared/layout/settings-modal/sections/use-confirmed-action";
 import { RemoteConnect } from "@/features/mcp-connect/components/remote-connect";
 import { RuntimeCredentialBars } from "@/features/channels/components/runtime-credential-bars";
 import { useRuntimeCredentials } from "@/features/channels/components/runtime-signin";
@@ -63,15 +63,11 @@ export function AgentsPanel() {
         <CardHeading>Connected</CardHeading>
         <ul aria-label="Connected agents" className="mt-1 divide-y divide-border-subtle">
           {apps === null ? (
-            <li className="py-2.5">
-              <div className="h-8 animate-pulse rounded-[10px] bg-surface-raised-1" />
-            </li>
+            <SettingsRowsSkeleton />
           ) : apps.length === 0 ? (
-            <li>
-              <SettingsEmpty>
-                {failed ? "Couldn’t load your agents." : "No agents connected yet."}
-              </SettingsEmpty>
-            </li>
+            <SettingsRowsEmpty failed={failed && "Couldn’t load your agents."}>
+            No agents connected yet.
+          </SettingsRowsEmpty>
           ) : (
             apps.map((app) => <AgentAppRow key={app.key} app={app} />)
           )}
@@ -90,36 +86,31 @@ export function AgentsPanel() {
 
 function AgentAppRow({ app }: { app: AgentApp }) {
   const invalidate = useInvalidateAgentApps();
-  const [confirming, setConfirming] = useState(false);
-
-  async function disconnect() {
-    try {
-      await apiRequest<unknown>(`${AGENT_APPS_PATH}/${encodeURIComponent(app.key)}`, {
-        method: "DELETE",
-      });
-      toast({ title: `${app.name} disconnected` });
-      await invalidate();
-    } catch (err) {
-      toast({ title: userFacingMessage(err, "Couldn't disconnect") });
-      throw err;
-    }
-  }
+  const disconnect = useConfirmedAction({
+    run: () =>
+      apiRequest<unknown>(`${AGENT_APPS_PATH}/${encodeURIComponent(app.key)}`, { method: "DELETE" }),
+    success: `${app.name} disconnected`,
+    failure: "Couldn't disconnect",
+    after: invalidate,
+  });
+  const meta = [
+    app.host,
+    app.connections > 1 ? `${app.connections} connections` : null,
+    app.last_used_at ? `Last used ${formatRelativeTime(app.last_used_at)}` : "Not used yet",
+  ]
+    .filter(Boolean)
+    .join(" · ");
 
   return (
-    <SettingsRow
-      title={app.name}
-      meta={app.last_used_at ? `Last used ${formatRelativeTime(app.last_used_at)}` : "Not used yet"}
-    >
-      <RowAction danger onClick={() => setConfirming(true)}>
+    <SettingsRow title={app.name} meta={meta}>
+      <RowAction danger onClick={disconnect.ask}>
         Disconnect
       </RowAction>
       <ConfirmDialog
-        open={confirming}
-        onOpenChange={setConfirming}
+        {...disconnect.dialog}
         title={`Disconnect ${app.name}?`}
         confirmLabel="Disconnect"
         destructive
-        onConfirm={disconnect}
       />
     </SettingsRow>
   );

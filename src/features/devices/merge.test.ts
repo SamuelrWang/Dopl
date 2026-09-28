@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { deviceMeta, mergeDevices, type GlassesSourceRow } from "./merge";
+import type { GlassesDevice } from "@/features/glasses/settings/glasses-api";
+import { deviceMeta, mergeDevices } from "./merge";
 import type { ComputerDeviceDto } from "./types";
 
 const computer = (over: Partial<ComputerDeviceDto>): ComputerDeviceDto => ({
@@ -18,7 +19,7 @@ const computer = (over: Partial<ComputerDeviceDto>): ComputerDeviceDto => ({
   ...over,
 });
 
-const glasses = (over: Partial<GlassesSourceRow>): GlassesSourceRow => ({
+const glasses = (over: Partial<GlassesDevice>): GlassesDevice => ({
   id: "g1",
   name: "G2",
   platform: "even_g2",
@@ -44,11 +45,12 @@ describe("mergeDevices", () => {
     ]);
   });
 
-  it("labels platforms and keeps glasses' own fields", () => {
-    const [g] = mergeDevices([], [glasses({ linked_channel: { id: "ch", name: "Ops" }, has_hey_even_key: true })]);
+  it("labels platforms from their registries and carries the glasses row", () => {
+    const row = glasses({ linked_channel: { id: "ch", name: "Ops" } });
+    const [g] = mergeDevices([], [row]);
     expect(g.platformLabel).toBe("Even G2");
-    expect(g.linkedChannel).toEqual({ id: "ch", name: "Ops" });
-    expect(g.hasHeyEvenKey).toBe(true);
+    expect(g.glasses).toBe(row);
+    expect(mergeDevices([], [glasses({ platform: "future_x" })])[0].platformLabel).toBe("future_x");
     const [c] = mergeDevices([computer({ platform: "" })], []);
     expect(c.platformLabel).toBe("Computer");
   });

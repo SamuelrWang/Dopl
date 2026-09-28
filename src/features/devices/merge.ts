@@ -1,17 +1,6 @@
-import type { ComputerDeviceDto, ConnectedDevice } from "./types";
-import { platformLabel } from "./types";
-
-/** The glasses source's wire row (`GET /api/glasses/devices`), the fields this list reads. */
-export interface GlassesSourceRow {
-  id: string;
-  name: string;
-  platform: string;
-  created_at: string;
-  last_seen: string | null;
-  online: boolean;
-  linked_channel: { id: string; name: string } | null;
-  has_hey_even_key: boolean;
-}
+import { platformInfo } from "@/features/glasses/platforms/info";
+import type { GlassesDevice } from "@/features/glasses/settings/glasses-api";
+import { computerPlatformLabel, type ComputerDeviceDto, type ConnectedDevice } from "./types";
 
 export function computerToDevice(row: ComputerDeviceDto): ConnectedDevice {
   return {
@@ -19,7 +8,7 @@ export function computerToDevice(row: ComputerDeviceDto): ConnectedDevice {
     kind: "computer",
     name: row.name,
     platform: row.platform,
-    platformLabel: row.platform ? platformLabel(row.platform) : "Computer",
+    platformLabel: computerPlatformLabel(row.platform),
     online: row.online,
     lastSeen: row.last_seen,
     createdAt: row.created_at,
@@ -29,18 +18,17 @@ export function computerToDevice(row: ComputerDeviceDto): ConnectedDevice {
   };
 }
 
-export function glassesToDevice(row: GlassesSourceRow): ConnectedDevice {
+export function glassesToDevice(row: GlassesDevice): ConnectedDevice {
   return {
     id: row.id,
     kind: "glasses",
     name: row.name,
     platform: row.platform,
-    platformLabel: platformLabel(row.platform),
+    platformLabel: platformInfo(row.platform)?.label ?? row.platform,
     online: row.online,
     lastSeen: row.last_seen,
     createdAt: row.created_at,
-    linkedChannel: row.linked_channel,
-    hasHeyEvenKey: row.has_hey_even_key,
+    glasses: row,
   };
 }
 
@@ -51,7 +39,7 @@ export function glassesToDevice(row: GlassesSourceRow): ConnectedDevice {
  */
 export function mergeDevices(
   computers: readonly ComputerDeviceDto[],
-  glasses: readonly GlassesSourceRow[]
+  glasses: readonly GlassesDevice[]
 ): ConnectedDevice[] {
   return [...computers.map(computerToDevice), ...glasses.map(glassesToDevice)].sort(
     (a, b) =>

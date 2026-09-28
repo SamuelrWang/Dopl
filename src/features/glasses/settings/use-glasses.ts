@@ -20,8 +20,10 @@ const selectDevices = (body: GlassesDeviceList): readonly GlassesDevice[] =>
   body.devices ?? EMPTY_DEVICES;
 
 /** The caller's active devices. A failed read degrades to none: the pane still offers pairing. */
-export function useGlassesDevices(): readonly GlassesDevice[] {
-  const query = useApiQuery(GLASSES_DEVICES.path, { select: selectDevices });
+export function useGlassesDevices({
+  refetchInterval,
+}: { refetchInterval?: number } = {}): readonly GlassesDevice[] {
+  const query = useApiQuery(GLASSES_DEVICES.path, { select: selectDevices, refetchInterval });
   return query.isError ? EMPTY_DEVICES : (query.data ?? EMPTY_DEVICES);
 }
 

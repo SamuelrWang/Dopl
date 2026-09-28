@@ -6,12 +6,9 @@
  * devices renders an unknown kind generically instead of dropping it (docs/devices.md).
  */
 
-export type DeviceKind = "computer" | "glasses" | (string & {});
+import type { GlassesDevice } from "@/features/glasses/settings/glasses-api";
 
-export interface DeviceChannelLink {
-  id: string;
-  name: string;
-}
+export type DeviceKind = "computer" | "glasses" | (string & {});
 
 /** One row of the unified list. Kind-specific fields are optional and read only by that kind's row. */
 export interface ConnectedDevice {
@@ -29,8 +26,8 @@ export interface ConnectedDevice {
   appVersion?: string | null;
   /** A computer that minted a device token before it could register (an older desktop build). */
   legacy?: boolean;
-  linkedChannel?: DeviceChannelLink | null;
-  hasHeyEvenKey?: boolean;
+  /** The glasses source's own row, for that kind's controls (no re-search by id). */
+  glasses?: GlassesDevice;
 }
 
 /** `GET /api/devices` — the computer source. */
@@ -61,6 +58,8 @@ export interface AgentApp {
   /** Stable group key (slug of the app name); the Disconnect address. */
   key: string;
   name: string;
+  /** The client's redirect host — shown so a look-alike name cannot pass for the real app. */
+  host: string | null;
   connections: number;
   last_used_at: string | null;
   created_at: string;
@@ -75,13 +74,13 @@ export const AGENT_APPS_PATH = "/api/oauth/apps";
 /** The desktop's per-install id, on every request it makes. */
 export const DEVICE_HEADER = "x-dopl-device";
 
-const PLATFORM_LABELS: Record<string, string> = {
+/** Computer platforms. A glasses platform's label comes from the glasses platform registry. */
+const COMPUTER_PLATFORM_LABELS: Record<string, string> = {
   macos: "macOS",
   windows: "Windows",
   linux: "Linux",
-  even_g2: "Even G2",
 };
 
-export function platformLabel(platform: string): string {
-  return PLATFORM_LABELS[platform] ?? platform;
+export function computerPlatformLabel(platform: string): string {
+  return COMPUTER_PLATFORM_LABELS[platform] ?? (platform || "Computer");
 }

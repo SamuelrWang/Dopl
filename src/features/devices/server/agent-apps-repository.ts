@@ -11,13 +11,19 @@ export const agentAppRepository: AgentAppStore = {
     const { data, error } = await supabaseAdmin()
       .from("mcp_tokens")
       .select(
-        "id, client_id, client_name, last_used_at, created_at, access_expires_at, refresh_expires_at"
+        "id, client_id, client_name, last_used_at, created_at, access_expires_at, refresh_expires_at, oauth_clients(redirect_uris)"
       )
       .eq("user_id", userId)
       .is("revoked_at", null)
       .not("client_id", "in", FIRST_PARTY);
     if (error) throw new Error(`agent apps list failed: ${error.message}`);
-    return (data ?? []) as GrantRow[];
+    type Row = Omit<GrantRow, "redirect_uris"> & {
+      oauth_clients: { redirect_uris: string[] | null } | null;
+    };
+    return ((data ?? []) as unknown as Row[]).map(({ oauth_clients, ...row }) => ({
+      ...row,
+      redirect_uris: oauth_clients?.redirect_uris ?? null,
+    }));
   },
 
   async revokeTokens(userId, ids, now) {

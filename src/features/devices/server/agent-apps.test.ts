@@ -20,6 +20,7 @@ const grant = (over: Partial<GrantRow>): GrantRow => ({
   created_at: "2026-09-20T00:00:00.000Z",
   access_expires_at: PAST,
   refresh_expires_at: FUTURE,
+  redirect_uris: null,
   ...over,
 });
 
@@ -49,6 +50,18 @@ describe("agent app grouping", () => {
     expect(apps).toEqual([
       expect.objectContaining({ key: "claude-code", name: "Claude Code", connections: 2, last_used_at: "2026-09-28T01:00:00.000Z" }),
       expect.objectContaining({ key: "codex", connections: 1 }),
+    ]);
+  });
+
+  it("keeps a look-alike name with another redirect host on its own row", async () => {
+    const { s } = store([
+      grant({ id: "a", client_id: "c1", client_name: "Claude", redirect_uris: ["https://claude.ai/api/mcp/auth_callback"] }),
+      grant({ id: "b", client_id: "c2", client_name: "Claude", redirect_uris: ["https://evil.example/cb"] }),
+    ]);
+    const { apps } = await listAgentApps(s, "u", NOW);
+    expect(apps.map((a) => [a.key, a.host])).toEqual([
+      ["claude--claude-ai", "claude.ai"],
+      ["claude--evil-example", "evil.example"],
     ]);
   });
 

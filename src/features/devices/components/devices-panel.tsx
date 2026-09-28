@@ -6,14 +6,14 @@ import { formatRelativeTime } from "@/shared/lib/format-time";
 import { OpenScaleButton, OPEN_SCALE_ICON } from "@/shared/ui/open-scale-button";
 import {
   SettingsCard,
-  SettingsEmpty,
   SettingsPanel,
   SettingsRow,
   SettingsRows,
+  SettingsRowsEmpty,
+  SettingsRowsSkeleton,
 } from "@/shared/layout/settings-modal/sections/settings-panel";
 import { GlassesDeviceRow } from "@/features/glasses/settings/glasses-device-row";
 import { PairGlasses } from "@/features/glasses/settings/pair-glasses";
-import { useGlassesDevices } from "@/features/glasses/settings/use-glasses";
 import { deviceMeta } from "../merge";
 import type { ConnectedDevice } from "../types";
 import { ComputerRow } from "./computer-row";
@@ -27,7 +27,6 @@ import { useConnectedDevices } from "./use-devices";
  */
 export function DevicesPanel() {
   const { devices, failed } = useConnectedDevices();
-  const glasses = useGlassesDevices();
   const [pairing, setPairing] = useState(false);
 
   return (
@@ -48,41 +47,22 @@ export function DevicesPanel() {
       )}
       <SettingsRows label="Devices">
         {devices === null ? (
-          <li className="py-2.5">
-            <div className="h-8 animate-pulse rounded-[10px] bg-surface-raised-1" />
-          </li>
+          <SettingsRowsSkeleton />
         ) : devices.length === 0 ? (
-          <li>
-            <SettingsEmpty>
-              {failed ? "Couldn’t load your devices." : "No devices yet."}
-            </SettingsEmpty>
-          </li>
+          <SettingsRowsEmpty failed={failed && "Couldn’t load your devices."}>
+            No devices yet.
+          </SettingsRowsEmpty>
         ) : (
-          devices.map((device) => (
-            <DeviceRow
-              key={`${device.kind}:${device.id}`}
-              device={device}
-              glasses={glasses}
-            />
-          ))
+          devices.map((device) => <DeviceRow key={`${device.kind}:${device.id}`} device={device} />)
         )}
       </SettingsRows>
     </SettingsPanel>
   );
 }
 
-function DeviceRow({
-  device,
-  glasses,
-}: {
-  device: ConnectedDevice;
-  glasses: ReturnType<typeof useGlassesDevices>;
-}) {
+function DeviceRow({ device }: { device: ConnectedDevice }) {
   if (device.kind === "computer") return <ComputerRow device={device} />;
-  if (device.kind === "glasses") {
-    const row = glasses.find((g) => g.id === device.id);
-    if (row) return <GlassesDeviceRow device={row} />;
-  }
+  if (device.glasses) return <GlassesDeviceRow device={device.glasses} />;
   return (
     <SettingsRow
       leading={<DeviceGlyph kind={device.kind} />}

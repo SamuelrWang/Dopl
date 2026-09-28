@@ -53,14 +53,14 @@ afterEach(cleanup);
 describe("agents panel", () => {
   it("lists one row per app with its last use", async () => {
     apps = [
-      { key: "claude-code", name: "Claude Code", connections: 3, last_used_at: new Date().toISOString(), created_at: "2026-09-01T00:00:00Z" },
-      { key: "codex", name: "Codex", connections: 1, last_used_at: null, created_at: "2026-09-01T00:00:00Z" },
+      { key: "claude-code", name: "Claude Code", host: "localhost", connections: 3, last_used_at: new Date().toISOString(), created_at: "2026-09-01T00:00:00Z" },
+      { key: "codex", name: "Codex", host: null, connections: 1, last_used_at: null, created_at: "2026-09-01T00:00:00Z" },
     ];
     renderPanel();
     const list = await screen.findByRole("list", { name: "Connected agents" });
     await within(list).findByText("Claude Code");
     expect(within(list).getAllByRole("listitem")).toHaveLength(2);
-    expect(within(list).getByText("Last used just now")).toBeTruthy();
+    expect(within(list).getByText("localhost · 3 connections · Last used just now")).toBeTruthy();
     expect(within(list).getByText("Not used yet")).toBeTruthy();
   });
 
@@ -70,7 +70,7 @@ describe("agents panel", () => {
   });
 
   it("disconnects an app only after the confirm", async () => {
-    apps = [{ key: "codex", name: "Codex", connections: 2, last_used_at: null, created_at: "2026-09-01T00:00:00Z" }];
+    apps = [{ key: "codex", name: "Codex", host: null, connections: 2, last_used_at: null, created_at: "2026-09-01T00:00:00Z" }];
     renderPanel();
     fireEvent.click(await screen.findByRole("button", { name: "Disconnect" }));
     const dialog = await screen.findByRole("dialog", { name: "Disconnect Codex?" });

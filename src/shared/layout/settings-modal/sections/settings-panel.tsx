@@ -75,11 +75,15 @@ export function SettingsRows({
 export function SettingsRow({
   leading,
   title,
+  badge,
   meta,
   children,
 }: {
   leading?: ReactNode;
+  /** The row's name — text, or a control that stands in for it (an inline rename). */
   title: ReactNode;
+  /** A small pill after the name ("This computer"). */
+  badge?: ReactNode;
   meta?: ReactNode;
   /** Trailing controls. */
   children?: ReactNode;
@@ -88,7 +92,14 @@ export function SettingsRow({
     <li className="flex min-w-0 items-center gap-3 py-2.5">
       {leading}
       <div className="min-w-0 flex-1">
-        <div className="truncate text-body font-medium text-text-primary">{title}</div>
+        <div className="flex min-w-0 items-center gap-2">
+          <div className="min-w-0 truncate text-body font-medium text-text-primary">{title}</div>
+          {badge && (
+            <span className="shrink-0 rounded-full border border-border-strong px-2 py-px text-micro font-medium text-text-secondary">
+              {badge}
+            </span>
+          )}
+        </div>
         {meta && <div className="mt-0.5 truncate text-caption text-text-muted">{meta}</div>}
       </div>
       {children && <div className="flex shrink-0 items-center gap-1">{children}</div>}
@@ -99,6 +110,28 @@ export function SettingsRow({
 /** Empty line inside a card. */
 export function SettingsEmpty({ children }: { children: ReactNode }) {
   return <p className="py-2.5 text-caption text-text-muted">{children}</p>;
+}
+
+/** A rows list's loading line — one ghost row, the list's own height. */
+export function SettingsRowsSkeleton() {
+  return (
+    <li className="py-2.5" aria-busy="true">
+      <div className="h-8 animate-pulse rounded-[10px] bg-surface-raised-1" />
+    </li>
+  );
+}
+
+/** A rows list with nothing in it: the empty line, or the failure line when the read failed. */
+export function SettingsRowsEmpty({ failed, children }: { failed?: ReactNode; children: ReactNode }) {
+  return (
+    <li>
+      {failed ? (
+        <p className="py-2.5 text-caption text-danger">{failed}</p>
+      ) : (
+        <SettingsEmpty>{children}</SettingsEmpty>
+      )}
+    </li>
+  );
 }
 
 /** A row's text action — the popup kit's flat button; `danger` reddens on hover only. */

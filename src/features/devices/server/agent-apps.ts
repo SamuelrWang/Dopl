@@ -8,6 +8,10 @@ import type { AgentApp } from "../types";
  * the app's name; Disconnect revokes every live credential in the group. First-party credentials
  * (the desktop's device and container-session tokens, the playground) are not agent apps: they
  * belong to a device and are never listed here.
+ *
+ * ⚠ THE GROUP IS NAME + REDIRECT HOST. `client_name` is self-declared at registration, so a client
+ * calling itself "Claude" with another callback host must not fold into (and hide behind) the real
+ * one; it gets its own row, and every row shows its host.
  */
 
 export interface GrantRow {
@@ -18,6 +22,8 @@ export interface GrantRow {
   created_at: string;
   access_expires_at: string | null;
   refresh_expires_at: string | null;
+  /** The registered client's redirect URIs (`oauth_clients.redirect_uris`). */
+  redirect_uris: string[] | null;
 }
 
 export interface AgentAppStore {
@@ -32,14 +38,31 @@ export function appName(clientName: string | null): string {
   return (clientName ?? "").trim() || FALLBACK_NAME;
 }
 
-export function appKey(name: string): string {
-  return (
-    name
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/^-+|-+$/g, "") || "mcp-client"
-  );
+const slug = (text: string) =>
+  text
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+
+/** The first redirect URI's host (`claude.ai`, `localhost`), or null when none parses. */
+export function redirectHost(uris: string[] | null): string | null {
+  for (const uri of uris ?? []) {
+    try {
+      const host = new URL(uri).hostname;
+      if (host) return host;
+    } catch {
+      // not a URL (a custom scheme without a host): try the next one
+    }
+  }
+  return null;
 }
+
+export function appKey(name: string, host: string | null = null): string {
+  const base = slug(name) || "mcp-client";
+  return host ? `${base}--${slug(host)}` : base;
+}
+
+const rowKey = (row: GrantRow) => appKey(appName(row.client_name), redirectHost(row.redirect_uris));
 
 function isLive(row: GrantRow, now: string): boolean {
   return (
@@ -52,7 +75,7 @@ function liveGroups(rows: GrantRow[], now: string): Map<string, GrantRow[]> {
   const groups = new Map<string, GrantRow[]>();
   for (const row of rows) {
     if (!isLive(row, now)) continue;
-    const key = appKey(appName(row.client_name));
+    const key = rowKey(row);
     groups.set(key, [...(groups.get(key) ?? []), row]);
   }
   return groups;
@@ -71,6 +94,7 @@ export async function listAgentApps(
   const apps = [...groups.entries()].map(([key, rows]) => ({
     key,
     name: appName(rows[0].client_name),
+    host: redirectHost(rows[0].redirect_uris),
     connections: rows.length,
     last_used_at: latest(rows.map((r) => r.last_used_at)),
     created_at: latest(rows.map((r) => r.created_at)) ?? rows[0].created_at,
@@ -91,7 +115,7 @@ export async function disconnectAgentApp(
   now: string
 ): Promise<number> {
   const rows = (await store.listGrants(userId)).filter(
-    (row) => appKey(appName(row.client_name)) === key
+    (row) => rowKey(row) === key
   );
   if (rows.length === 0) return 0;
   return store.revokeTokens(

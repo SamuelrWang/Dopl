@@ -7,7 +7,8 @@ import { ConfirmDialog } from "@/shared/ui/confirm-dialog";
 import { InlineEditableRow } from "@/shared/ui/inline-editable-row";
 import { SelectMenu } from "@/shared/ui/select-menu";
 import { toast } from "@/shared/ui/toast";
-import { RowAction } from "@/shared/layout/settings-modal/sections/settings-panel";
+import { RowAction, SettingsRow } from "@/shared/layout/settings-modal/sections/settings-panel";
+import { useConfirmedAction } from "@/shared/layout/settings-modal/sections/use-confirmed-action";
 import { DeviceGlyph } from "@/features/devices/components/device-glyph";
 import { deviceMeta, glassesToDevice } from "@/features/devices/merge";
 import {
@@ -33,8 +34,18 @@ export function GlassesDeviceRow({ device }: { device: GlassesDevice }) {
   const channelOptions = useGlassesChannelOptions(device.linked_channel);
   const [renaming, setRenaming] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [confirm, setConfirm] = useState<"revoke" | "rotate" | null>(null);
   const [secret, setSecret] = useState<AssistantKey | null>(null);
+  const remove = useConfirmedAction({
+    run: () => revokeDevice(device.id),
+    success: "Glasses removed",
+    failure: "Couldn't remove",
+    after: invalidate,
+  });
+  const rotate = useConfirmedAction({
+    run: async () => setSecret(await rotateAssistantKey(device.id)),
+    failure: "Couldn't create a key",
+    after: invalidate,
+  });
 
   async function patch(body: Parameters<typeof updateDevice>[1], failure: string) {
     setBusy(true);
@@ -49,39 +60,13 @@ export function GlassesDeviceRow({ device }: { device: GlassesDevice }) {
     }
   }
 
-  async function revoke() {
-    try {
-      await revokeDevice(device.id);
-      toast({ title: "Glasses removed" });
-      await invalidate();
-    } catch (err) {
-      toast({ title: userFacingMessage(err, "Couldn't remove") });
-      throw err;
-    }
-  }
-
-  async function rotate() {
-    try {
-      setSecret(await rotateAssistantKey(device.id));
-      await invalidate();
-    } catch (err) {
-      toast({ title: userFacingMessage(err, "Couldn't create a key") });
-      throw err;
-    }
-  }
-
-  const info = platformInfo(device.platform);
-  const assistant = info?.assistant;
-  const meta = deviceMeta(
-    { ...glassesToDevice(device), platformLabel: info?.label ?? device.platform },
-    formatRelativeTime(device.last_seen)
-  );
+  const assistant = platformInfo(device.platform)?.assistant;
 
   return (
-    <li className="flex min-w-0 items-center gap-3 py-2.5">
-      <DeviceGlyph kind="glasses" />
-      <div className="min-w-0 flex-1">
-        {renaming ? (
+    <SettingsRow
+      leading={<DeviceGlyph kind="glasses" />}
+      title={
+        renaming ? (
           <InlineEditableRow
             value={device.name}
             maxLength={DEVICE_NAME_MAX}
@@ -97,63 +82,58 @@ export function GlassesDeviceRow({ device }: { device: GlassesDevice }) {
             type="button"
             onClick={() => setRenaming(true)}
             title="Rename"
-            className="block max-w-full truncate text-left text-body font-medium text-text-primary"
+            className="block max-w-full truncate text-left"
           >
             {device.name}
           </button>
-        )}
-        <p className="mt-0.5 truncate text-caption text-text-muted">{meta}</p>
-      </div>
-      <div className="flex shrink-0 items-center gap-1">
-        <SelectMenu
-          variant="text"
-          value={device.linked_channel?.id ?? NO_CHANNEL}
-          options={channelOptions}
-          onChange={(next) =>
-            void patch(
-              { channel_id: next === NO_CHANNEL ? null : next },
-              "Couldn't change the channel"
-            ).catch(() => {})
-          }
-          ariaLabel={`Channel for ${device.name}`}
+        )
+      }
+      meta={deviceMeta(glassesToDevice(device), formatRelativeTime(device.last_seen))}
+    >
+      <SelectMenu
+        variant="text"
+        value={device.linked_channel?.id ?? NO_CHANNEL}
+        options={channelOptions}
+        onChange={(next) =>
+          void patch(
+            { channel_id: next === NO_CHANNEL ? null : next },
+            "Couldn't change the channel"
+          ).catch(() => {})
+        }
+        ariaLabel={`Channel for ${device.name}`}
+        disabled={busy}
+        menuClassName="max-h-[320px] overflow-y-auto"
+      />
+      {assistant && (
+        <RowAction
           disabled={busy}
-          menuClassName="max-h-[320px] overflow-y-auto"
-        />
-        {assistant && (
-          <RowAction
-            disabled={busy}
-            onClick={() =>
-              device.has_hey_even_key ? setConfirm("rotate") : void rotate().catch(() => {})
-            }
-          >
-            {assistant.name}
-          </RowAction>
-        )}
-        <RowAction danger disabled={busy} onClick={() => setConfirm("revoke")}>
-          Remove
+          onClick={() =>
+            device.has_hey_even_key ? rotate.ask() : void rotate.dialog.onConfirm().catch(() => {})
+          }
+        >
+          {assistant.name}
         </RowAction>
-      </div>
+      )}
+      <RowAction danger disabled={busy} onClick={remove.ask}>
+        Remove
+      </RowAction>
       <ConfirmDialog
-        open={confirm === "revoke"}
-        onOpenChange={(open) => !open && setConfirm(null)}
+        {...remove.dialog}
         title={`Remove ${device.name}?`}
         confirmLabel="Remove"
         destructive
-        onConfirm={revoke}
       />
       {assistant && (
         <>
           <ConfirmDialog
-            open={confirm === "rotate"}
-            onOpenChange={(open) => !open && setConfirm(null)}
+            {...rotate.dialog}
             title={`Replace the ${assistant.name} key?`}
             confirmLabel="Replace"
             destructive
-            onConfirm={rotate}
           />
           <AssistantKeyDialog assistant={assistant} secret={secret} onClose={() => setSecret(null)} />
         </>
       )}
-    </li>
+    </SettingsRow>
   );
 }
