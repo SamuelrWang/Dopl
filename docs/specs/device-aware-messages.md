@@ -21,6 +21,10 @@ stripped (`service-writes-metadata.ts › resolvePostMetadata`) and re-stamped f
 | Desktop SPA without a resolvable device (`X-Dopl-Runtime: desktop-ui`) | `{kind:"computer", label:"Computer"}` |
 | Anything else (browser session) | `{kind:"web", label:"Web"}` |
 
+The desktop SPA's API bridge (`main/ui-bridge.js › sendApiRequest`) sends `X-Dopl-Device` since this
+change, so a message typed in the desktop app resolves to its computer (Electron restart required to
+pick up the main-process change).
+
 - `label` is a snapshot at write time. The UI shows the live device name when `device_id` resolves
   in the viewer's own device list, else `label`.
 - Old rows have no key: render nothing.
@@ -61,10 +65,14 @@ stripped (`service-writes-metadata.ts › resolvePostMetadata`) and re-stamped f
 
 | Route | Auth | Body | Returns |
 | --- | --- | --- | --- |
-| `POST /api/channels/:channelId/messages/:messageId/display/answer` | session, channel member, message author's account | `{index: number, block_id?: string \| null, choice?: string}` | `{ok: true, answer}`; 404 no display/list, 403 not the author, 409 already answered/expired |
-| `POST /api/channels/:channelId/messages/:messageId/display/save` | session, channel member | `{name?: string}` (slugified to `a-z0-9_-`, ≤64; default from the first text line) | `{name, variables, updated_at}` (the caller's `glasses_templates` row) |
-| `PATCH /api/devices/:id` | session | `{name: string \| null}` (1-64 chars; `null`/`""` restores the detected name) | `{device: ComputerDeviceDto}` |
+| `POST /api/channels/:channelId/messages/:messageId/display/answer` | session only (not guests), channel member, message author's account | `{index: number, block_id?: string \| null, choice?: string}` (`choice` is ignored; `index` decides) | `{ok: true, answer}`; 404 `DISPLAY_NOT_FOUND`, 400 `DISPLAY_BAD_CHOICE`, 403 `DISPLAY_NOT_YOURS`, 409 `DISPLAY_ANSWERED` / `DISPLAY_ANSWER_REFUSED` |
+| `POST /api/channels/:channelId/messages/:messageId/display/save` | session only (not guests), channel member | `{name?: string}` (slugified to `a-z0-9_-`, ≤64; default from the first text line) | `{name, variables, updated_at}` (the caller's `glasses_templates` row); 400 `DISPLAY_NOT_A_TEMPLATE` when it exceeds the glasses limits |
+| `PATCH /api/devices/:id` | session | `{name: string \| null}` (≤64 chars; `null`/blank restores the detected name) | `{device: ComputerDeviceDto}`; 404 for a legacy/removed/foreign computer |
 
+- Code: `src/features/glasses/core/screens/display-actions.ts` (answer, save), `channel-mirror.ts`
+  (post/patch/answer mirror, best effort), `channel-displays.ts` (the real ports).
+- A list block is selectable unless `selectable: false` (the glasses default). Agents are told to pass
+  `selectable: false` on info-only lists; the UI renders every selectable list as answer buttons.
 - Answer with a linked glasses row runs the glasses answer path (`inbox.ts › answerAsk`), so a waiting
   `glasses_ask` / `wait_for_input` hold returns `answered` exactly as for a tap on the lens.
 - Answer on a channel-only display also posts the choice as the member's message addressed to the
@@ -77,8 +85,18 @@ stripped (`service-writes-metadata.ts › resolvePostMetadata`) and re-stamped f
 - `dopl_read_channel` / `await` lines: a member line gains ` · via glasses (Even G2)` /
   ` · via computer (Samuel's MacBook Pro)` / ` · via web`. When the newest member line on a page came
   from glasses, the page ends with ONE guidance line (`GLASSES_REPLY_GUIDANCE`).
-- `dopl_get_status` waiting items: ` · via …` on the item.
-- Desktop session inbound (Claude/Codex): one note line above the fence (`via glasses (Even G2)`) plus
-  the guidance line for glasses.
+- `dopl_get_status` waiting items: ` · via …` on the item (`AccountWaitingItem.source = {kind, label}`).
+- `dopl_send_message` carries an optional `display: {blocks}` (granular only, `carry` in `tool-manifest.ts`).
+- Desktop session inbound (Claude/Codex): one note line above the fence (`Sent via glasses (Even G2).`)
+  plus the guidance line for glasses (`main/session-seed.js › frameContinuation`, fed from
+  `session-dispatch.js` through the gate/reducer as `source`).
 - Guidance text: `packages/mcp-server/src/tools/channel-source.ts › GLASSES_REPLY_GUIDANCE`
   (desktop restates it in `dopl-desktop-app/main/message-source.js`, parity-tested).
+
+## Schema
+
+`supabase/migrations/20261112120000_device_aware_messages.sql` (additive; applied by name as
+`device_aware_messages`): `desktop_devices.display_name`, `glasses_messages.channel_message_id`
+(soft link, no FK), `public.merge_channel_message_display(message, author, patch)` (service_role only).
+Verify: `select md5(array_to_string(statements, '')) from supabase_migrations.schema_migrations where
+name = 'device_aware_messages'` against `md5 -q` of the file.

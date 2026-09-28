@@ -227,6 +227,13 @@ Code: `core/screens/` (vocabulary, validation, templates) and `platforms/even-g2
   - Any missing variable is an error that names it.
   - Names are lowercased, 1-64 characters of `a-z 0-9 _ -`.
 
+**Channel mirror (2026-09-28, docs/specs/device-aware-messages.md):** from a Dopl channel session
+(`X-Dopl-Session-Id` = `<channelId>:…`), `glasses_render` / `use_template` / `update` / `ask` also
+show in that channel as one agent message carrying `metadata.display` (`core/screens/channel-mirror.ts`,
+best effort: a failed mirror never fails the call). The new row stores `channel_message_id`; later
+calls patch that message, and a tap stamps its `answer`. The app answers the same row through
+`POST /api/channels/:id/messages/:messageId/display/answer`.
+
 **Back-button band (2026-09-27):**
 - Every compiled screen reserves its bottom 40px (`nav_footer: {x:0, y:248, w:576, h:40}` in the
   payload; `spec_version` stays 1). The plugin draws its context back button there: Back to
@@ -471,6 +478,10 @@ Migrations applied to the project (matched by NAME):
 - `20261030120000_glasses_device_current_target`
 - `20261111120000_glasses_device_channel_activity` (applied 2026-09-28 by name as
   `glasses_device_channel_activity`, byte-exact, md5 `0342853c1c936bf425346c9986bcbabf`)
+
+- `20261112120000_device_aware_messages` (applied 2026-09-28 by name as `device_aware_messages`,
+  md5 `5f460724dbe755f0260d73a7405e3426`): `glasses_messages.channel_message_id` and
+  `merge_channel_message_display` (plus `desktop_devices.display_name`).
 
 The prototype's `glasses_devices` table is no longer read.
 

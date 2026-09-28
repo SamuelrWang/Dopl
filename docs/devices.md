@@ -39,7 +39,7 @@ them through, so the model is built so that a new device kind is a new source, n
 
 | Kind | Source | Owner |
 | --- | --- | --- |
-| `computer` | `GET /api/devices`, `DELETE /api/devices/{id}` | `src/features/devices/server/*` |
+| `computer` | `GET /api/devices`, `PATCH /api/devices/{id}` (rename), `DELETE /api/devices/{id}` | `src/features/devices/server/*` |
 | `glasses` | `GET/PATCH/DELETE /api/glasses/devices[/{id}]`, `POST /api/glasses/pair/claim` | the glasses feature |
 
 - The client merges the sources into one `ConnectedDevice[]`
@@ -56,6 +56,14 @@ them through, so the model is built so that a new device kind is a new source, n
   over HTTP only. The glasses row itself (`glasses/settings/glasses-device-row.tsx`) takes its
   platform label and assistant from the glasses platform registry. Folding glasses into
   `GET /api/devices` server-side is the follow-up (F-770).
+
+- **Rename a computer** (`PATCH /api/devices/{id}` `{name}`, session-only;
+  `devices-service.ts › renameComputer`): writes the `desktop_devices.display_name` override. The
+  heartbeat keeps writing the detected `name` underneath; `null` or blank clears the override. The
+  list's `name` is the effective name (`computerName`), `detected_name` the detected one.
+- **Messages carry the device.** A member post stamps `metadata.source` with the computer it came
+  from (`X-Dopl-Device` → the active row, effective name) or the glasses it was spoken into
+  (docs/specs/device-aware-messages.md).
 
 ### Adding a kind (phone, robot, …)
 
@@ -130,5 +138,8 @@ them through, so the model is built so that a new device kind is a new source, n
   `desktop_devices.auth_session_id` and the function `end_auth_session(user, session)` (SECURITY
   DEFINER, pinned search_path, EXECUTE for `service_role` only). Applied by name as
   `desktop_devices_session`.
+- `supabase/migrations/20261112120000_device_aware_messages.sql` (additive): the column
+  `desktop_devices.display_name` (1-64 chars or NULL), plus the glasses/channel pieces of
+  docs/specs/device-aware-messages.md. Applied by name as `device_aware_messages`.
 - To verify it, run `list_migrations` and compare `md5(array_to_string(statements, ''))` in
   `supabase_migrations.schema_migrations` with `md5 -q` of the file.
