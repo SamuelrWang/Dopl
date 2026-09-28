@@ -14,7 +14,7 @@ export interface GlassesDevice {
   created_at: string;
   last_seen: string | null;
   revoked_at: string | null;
-  has_hey_even_key: boolean;
+  has_assistant_key: boolean;
 }
 
 type PairingStatus = "pending" | "claimed" | "expired";
@@ -60,10 +60,10 @@ export interface DeviceStore {
   /** Unrevoked AND holding a device token: a claim whose token was never collected is not a device yet. */
   listDevices(userId: string): Promise<GlassesDevice[]>;
   findDeviceByTokenHash(hash: string): Promise<GlassesDevice | null>;
-  findDeviceByHeyEvenKeyHash(hash: string): Promise<GlassesDevice | null>;
+  findDeviceByAssistantKeyHash(hash: string): Promise<GlassesDevice | null>;
   setTokenHash(deviceId: string, hash: string): Promise<void>;
   /** `false` when no active device matched. */
-  setHeyEvenKeyHash(userId: string, deviceId: string, hash: string): Promise<boolean>;
+  setAssistantKeyHash(userId: string, deviceId: string, hash: string): Promise<boolean>;
   updateDevice(
     userId: string,
     id: string,

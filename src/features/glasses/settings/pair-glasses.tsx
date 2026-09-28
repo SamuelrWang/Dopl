@@ -10,7 +10,7 @@ import { RAISED_INPUT } from "@/shared/ui/wells";
 import {
   PAIRING_CODE_LENGTH,
   claimPairing,
-  normalizePairingCode,
+  pairingCodeInput,
 } from "./glasses-api";
 import {
   NO_CHANNEL,
@@ -56,7 +56,7 @@ export function PairGlasses() {
           type="text"
           value={code}
           onChange={(e) => {
-            setCode(normalizePairingCode(e.target.value));
+            setCode(pairingCodeInput(e.target.value));
             setError(null);
           }}
           onKeyDown={(e) => {

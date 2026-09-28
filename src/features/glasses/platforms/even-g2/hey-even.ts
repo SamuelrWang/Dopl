@@ -101,7 +101,7 @@ export function heyEvenBaseUrl(request: Request, env: Record<string, string | un
 
 async function deviceFromHeyEvenKey(store: DeviceStore, request: Request): Promise<GlassesDevice | null> {
   const key = bearerOf(request);
-  return key ? store.findDeviceByHeyEvenKeyHash(hashCredential(key)) : null;
+  return key ? store.findDeviceByAssistantKeyHash(hashCredential(key)) : null;
 }
 
 const oaiError = (request: Request, message: string, type: string, status: number, extra: Record<string, string> = {}) =>
@@ -159,7 +159,7 @@ export function createHeyEvenHandlers(input: VoiceHandlerDeps & { debug?: boolea
       try {
         if (!isUuid(deviceId)) throw deviceNotFound();
         const key = mintHeyEvenKey();
-        if (!(await deps.devices.setHeyEvenKeyHash(userId, deviceId, hashCredential(key)))) throw deviceNotFound();
+        if (!(await deps.devices.setAssistantKeyHash(userId, deviceId, hashCredential(key)))) throw deviceNotFound();
         const url = `${heyEvenBaseUrl(request)}${COMPLETIONS_PATH}`;
         return NextResponse.json({ key, url }, { headers: { "Cache-Control": "no-store" } });
       } catch (err) {

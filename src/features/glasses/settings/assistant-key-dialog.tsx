@@ -4,7 +4,7 @@ import { CopyButton } from "@/shared/ui/copy-button";
 import { FormDialog, FormSection } from "@/shared/ui/form-dialog";
 import { useCopyToClipboard } from "@/shared/hooks/use-copy-to-clipboard";
 import type { PlatformInfo } from "../platforms/info";
-import type { HeyEvenKey } from "./glasses-api";
+import type { AssistantKey } from "./glasses-api";
 
 /**
  * The one showing of a freshly rotated assistant key. The key lives only in the caller's state;
@@ -16,7 +16,7 @@ export function AssistantKeyDialog({
   onClose,
 }: {
   assistant: NonNullable<PlatformInfo["assistant"]>;
-  secret: HeyEvenKey | null;
+  secret: AssistantKey | null;
   onClose: () => void;
 }) {
   const { copied, copy } = useCopyToClipboard();

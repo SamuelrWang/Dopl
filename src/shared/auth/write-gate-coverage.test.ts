@@ -81,23 +81,23 @@ const EXEMPT: Record<string, string> = {
   "playground/mcp/[token]/route.ts":
     "The /api/mcp transport under a URL-embedded bearer (desktop MCP clients cannot send headers). Delegates to mcp/route.ts, which authenticates via authenticateMcpRequest — same exemption rationale as mcp/route.ts.",
   "mcp/glasses/route.ts":
-    "Glasses MCP transport (authenticateMcpRequest). JSON-RPC over POST like mcp/route.ts; its write tools are scope-gated per call on an explicit dopl.write (features/glasses/tools.ts › registerGlassesTools).",
+    "Glasses MCP transport (authenticateMcpRequest). JSON-RPC over POST like mcp/route.ts; its write tools are scope-gated per call on an explicit dopl.write (features/glasses/core/mcp/tools.ts › registerGlassesTools).",
   "glasses/device/answer/route.ts":
-    "Glasses device API — authenticated by the per-device token (features/glasses/devices-service.ts › deviceFromBearer), not a user OAuth token; no scope to gate.",
+    "Glasses device API — authenticated by the per-device token (features/glasses/core/devices/service.ts › deviceFromBearer), not a user OAuth token; no scope to gate.",
   "glasses/device/dismiss/route.ts":
     "Glasses device API — per-device token, same as glasses/device/answer.",
   "glasses/device/voice/route.ts":
     "Glasses push-to-talk — per-device token; posts only into that device's linked channel, as its owner.",
   "glasses/device/unpair/route.ts":
-    "Glasses device sign-out — per-device token; revokes only the calling device (features/glasses/device-handlers.ts › createDeviceHandlers).",
+    "Glasses device sign-out — per-device token; revokes only the calling device (features/glasses/core/messages/device-handlers.ts › createDeviceHandlers).",
   "glasses/device/launch/route.ts":
     "Glasses menu launch — per-device token; files a launch through channels/server/service-launch.ts › createLaunchDirective as the device owner, in a channel the owner is a member of.",
   "glasses/device/target/route.ts":
     "Glasses menu current target — per-device token; writes only that device's own voice target after a membership check.",
   "glasses/device/pair/start/route.ts":
-    "Glasses pairing start — unauthenticated by design (the glasses have no credential yet); per-IP rate-limited, writes only a 10-minute pairing row (features/glasses/pairing-service.ts › startPairing).",
+    "Glasses pairing start — unauthenticated by design (the glasses have no credential yet); per-IP rate-limited, writes only a 10-minute pairing row (features/glasses/core/devices/pairing.ts › startPairing).",
   "glasses/hey-even/route.ts":
-    "Glasses Hey-Even chat-completions shim — per-device Hey Even key (features/glasses/devices-service.ts › deviceFromHeyEvenKey).",
+    "Glasses Hey-Even chat-completions shim — per-device Hey Even key (features/glasses/platforms/even-g2/hey-even.ts › deviceFromHeyEvenKey).",
   "glasses/hey-even/v1/chat/completions/route.ts":
     "Glasses Hey-Even chat-completions shim, OpenAI path — same handler and key as glasses/hey-even/route.ts.",
 };

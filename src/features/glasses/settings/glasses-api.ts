@@ -22,6 +22,7 @@ export interface GlassesDevice {
   last_seen: string | null;
   online: boolean;
   linked_channel: GlassesLinkedChannel | null;
+  /** Wire name for "has an assistant key", kept for existing clients. */
   has_hey_even_key: boolean;
 }
 
@@ -30,7 +31,7 @@ export interface GlassesDeviceList {
 }
 
 /** Returned ONCE by a rotation; the server keeps only the hash. */
-export interface HeyEvenKey {
+export interface AssistantKey {
   key: string;
   url: string;
 }
@@ -68,18 +69,11 @@ export function revokeDevice(id: string) {
   return apiRequest<unknown>(devicePath(id), { method: "DELETE" });
 }
 
-export function rotateHeyEvenKey(id: string) {
-  return apiRequest<HeyEvenKey>(`${devicePath(id)}/hey-even-key`, {
+export function rotateAssistantKey(id: string) {
+  return apiRequest<AssistantKey>(`${devicePath(id)}/hey-even-key`, {
     method: "POST",
   });
 }
 
-export const PAIRING_CODE_LENGTH = 6;
-
-/** What the lens shows is upper-case A-Z2-9; a typed code may carry case, spaces or a dash. */
-export function normalizePairingCode(raw: string): string {
-  return raw
-    .toUpperCase()
-    .replace(/[^A-Z0-9]/g, "")
-    .slice(0, PAIRING_CODE_LENGTH);
-}
+/** One definition with the server's (`core/devices/pairing-code.ts`, client-safe). */
+export { PAIRING_CODE_LENGTH, pairingCodeInput } from "../core/devices/pairing-code";

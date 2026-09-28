@@ -3,15 +3,15 @@ import type { DeviceStore, GlassesDevice, GlassesPairing } from "../devices/type
 
 /** In-memory {@link DeviceStore} for tests: mirrors `devices/repository.ts` semantics. */
 export function createFakeDeviceStore() {
-  type Row = GlassesDevice & { token_hash: string | null; hey_even_key_hash: string | null };
+  type Row = GlassesDevice & { token_hash: string | null; assistant_key_hash: string | null };
   const devices: Row[] = [];
   const pairings: GlassesPairing[] = [];
   let seq = 0;
   const id = () => `00000000-0000-4000-a000-${String(++seq).padStart(12, "0")}`;
   const out = (r: Row): GlassesDevice => {
-    const copy: Partial<Row> = { ...r, has_hey_even_key: r.hey_even_key_hash !== null };
+    const copy: Partial<Row> = { ...r, has_assistant_key: r.assistant_key_hash !== null };
     delete copy.token_hash;
-    delete copy.hey_even_key_hash;
+    delete copy.assistant_key_hash;
     return copy as GlassesDevice;
   };
   const active = (r: Row) => r.revoked_at === null;
@@ -71,9 +71,9 @@ export function createFakeDeviceStore() {
         created_at: d.now,
         last_seen: null,
         revoked_at: null,
-        has_hey_even_key: false,
+        has_assistant_key: false,
         token_hash: null,
-        hey_even_key_hash: null,
+        assistant_key_hash: null,
       };
       devices.push(r);
       return out(r);
@@ -85,17 +85,17 @@ export function createFakeDeviceStore() {
       const r = devices.find((x) => x.token_hash === hash && active(x));
       return r ? out(r) : null;
     },
-    async findDeviceByHeyEvenKeyHash(hash) {
-      const r = devices.find((x) => x.hey_even_key_hash === hash && active(x));
+    async findDeviceByAssistantKeyHash(hash) {
+      const r = devices.find((x) => x.assistant_key_hash === hash && active(x));
       return r ? out(r) : null;
     },
     async setTokenHash(did, hash) {
       const r = devices.find((x) => x.id === did && active(x));
       if (r) r.token_hash = hash;
     },
-    async setHeyEvenKeyHash(userId, did, hash) {
+    async setAssistantKeyHash(userId, did, hash) {
       const r = devices.find((x) => x.user_id === userId && x.id === did && active(x));
-      if (r) r.hey_even_key_hash = hash;
+      if (r) r.assistant_key_hash = hash;
       return !!r;
     },
     async updateDevice(userId, did, patch) {
@@ -112,7 +112,7 @@ export function createFakeDeviceStore() {
     async revokeDevice(userId, did, now) {
       const r = devices.find((x) => x.user_id === userId && x.id === did && active(x));
       if (!r) return false;
-      Object.assign(r, { revoked_at: now, token_hash: null, hey_even_key_hash: null });
+      Object.assign(r, { revoked_at: now, token_hash: null, assistant_key_hash: null });
       return true;
     },
     async touchDevice(did, now) {

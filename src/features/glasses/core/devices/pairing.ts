@@ -1,12 +1,7 @@
 import { timingSafeEqual } from "node:crypto";
 import { HttpError } from "@/shared/lib/http-error";
-import {
-  generatePairingCode,
-  hashCredential,
-  mintDeviceToken,
-  mintPollSecret,
-  normalizePairingCode,
-} from "./credentials";
+import { generatePairingCode, hashCredential, mintDeviceToken, mintPollSecret } from "./credentials";
+import { PAIRING_CODE_LENGTH, normalizePairingCode } from "./pairing-code";
 import { DEFAULT_PLATFORM } from "../../platforms/registry";
 import { iso, nowOf, type Clock } from "../clock";
 import { isUuid } from "../validation";
@@ -97,7 +92,7 @@ export interface ClaimInput {
 
 export async function claimPairing(deps: PairingDeps, userId: string, input: ClaimInput): Promise<DeviceDto> {
   const code = normalizePairingCode(input.code);
-  if (!code) throw new HttpError(400, "INVALID_CODE", "Pairing codes are 6 letters and digits.");
+  if (!code) throw new HttpError(400, "INVALID_CODE", `Pairing codes are ${PAIRING_CODE_LENGTH} letters and digits.`);
   const now = nowOf(deps);
   const pairing = await deps.devices.findPendingPairingByCode(code, iso(now));
   if (!pairing) throw new HttpError(404, "CODE_NOT_FOUND", "No pending pairing with that code; it may have expired.");

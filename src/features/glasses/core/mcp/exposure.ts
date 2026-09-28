@@ -16,7 +16,7 @@ import { registerGlassesTools } from "./tools";
  *     (`DoplClient.consumeCredits` → `/api/mcp/credits/consume`), so the
  *     container lock, rule B's session channel and the call tally apply exactly
  *     as for `dopl_*` tools.
- *   - Voice / Hey Even utterances carry a device credential, not an MCP one, so
+ *   - Voice / assistant utterances carry a device credential, not an MCP one, so
  *     they charge in-process on the owner's home container ({@link utteranceCharger}).
  * Both fail OPEN on a thrown charge, the registrar's rule
  * (`packages/mcp-server/src/registrar.ts › createCharger`).
@@ -43,7 +43,7 @@ export function mcpToolCharger(client: DoplClient, userId: string, lockedContain
   };
 }
 
-/** Charges one voice / Hey Even utterance to the device owner's home wallet. */
+/** Charges one voice / assistant utterance to the device owner's home wallet. */
 export async function utteranceCharger(userId: string): Promise<string | null> {
   try {
     const { workspace } = await resolveActiveWorkspace(userId, null);
@@ -80,7 +80,9 @@ export async function hasActiveGlasses(userId: string, now = Date.now()): Promis
  * The containment profile's verdict. Glasses tools are NOT in the `dopl_only`
  * allow list (they reach hardware outside Dopl) and `read_only` offers nothing,
  * so only an absent header, `channel_agent` or `full` gets them, asked of
- * `@dopl/mcp-server`'s own table rather than a second copy.
+ * `@dopl/mcp-server`'s own table rather than a second copy. The tool-set claim
+ * (`readToolSetClaim`) is not an input: on `/api/mcp` it only renames `dopl_*`
+ * tools and never narrows, and glasses tools carry one name in both sets.
  */
 export function profileOffersGlasses(toolProfile: string | null | undefined): boolean {
   return offeredToolsFor(toolProfile) === null;

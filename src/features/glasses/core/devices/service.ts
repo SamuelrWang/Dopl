@@ -46,6 +46,7 @@ export interface DeviceDto {
   last_seen: string | null;
   online: boolean;
   linked_channel: { id: string; name: string } | null;
+  /** Wire name kept for existing clients (docs/glasses-mcp.md); it means "has an assistant key". */
   has_hey_even_key: boolean;
 }
 
@@ -64,7 +65,7 @@ export function toDeviceDto(device: GlassesDevice, links: Map<string, ChannelLin
     last_seen: device.last_seen,
     online: isOnline(device, now),
     linked_channel: link ? { id: link.channelId, name: link.name } : null,
-    has_hey_even_key: device.has_hey_even_key,
+    has_hey_even_key: device.has_assistant_key,
   };
 }
 

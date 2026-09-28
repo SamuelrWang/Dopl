@@ -1,10 +1,6 @@
 import { describe, expect, it } from "vitest";
-import {
-  PAIRING_CODE_ALPHABET,
-  generatePairingCode,
-  hashCredential,
-  normalizePairingCode,
-} from "./credentials";
+import { generatePairingCode, hashCredential } from "./credentials";
+import { PAIRING_CODE_ALPHABET, PAIRING_CODE_LENGTH, normalizePairingCode, pairingCodeInput } from "./pairing-code";
 import { corsHeaders, pluginOrigins } from "../http";
 import { createFakeDeviceStore, fakeLinker } from "../testing/fake-device-store";
 import { fakeClock } from "../testing/fake-store";
@@ -34,6 +30,13 @@ describe("credentials", () => {
     expect(normalizePairingCode(" abc-23d ")).toBe("ABC23D");
     expect(normalizePairingCode("ABC1OD")).toBeNull();
     expect(normalizePairingCode("ABC")).toBeNull();
+  });
+
+  it("cleans live input to the code's length, and the result normalizes", () => {
+    expect(pairingCodeInput(" abc-23d9x ")).toBe("ABC23D");
+    expect(pairingCodeInput("ab")).toBe("AB");
+    expect(PAIRING_CODE_LENGTH).toBe(6);
+    expect(normalizePairingCode(pairingCodeInput(generatePairingCode().toLowerCase()))).not.toBeNull();
   });
 
   it("hashes with sha256 hex", () => {

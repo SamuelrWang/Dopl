@@ -133,8 +133,8 @@ export async function answerAsk(deps: InboxDeps, userId: string, body: unknown):
 /**
  * A tap on an agent-built screen. Unlike an ask, a screen may be tapped again
  * (the latest input wins) until it expires, because it stays on the glasses.
- * `index` resolves from `choice` against the list's items when missing: the
- * G2 delivers index 0 as undefined.
+ * `index` resolves from `choice` against the list's items when missing: a
+ * platform may deliver index 0 as undefined.
  */
 async function answerScreen(deps: InboxDeps, userId: string, row: GlassesMessage, b: AnswerBody): Promise<AnswerOutcome> {
   const containers = (row.payload as ScreenPayload).containers ?? [];

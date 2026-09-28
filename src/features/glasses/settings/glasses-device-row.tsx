@@ -12,10 +12,10 @@ import { DeviceGlyph } from "@/features/devices/components/device-glyph";
 import { deviceMeta, glassesToDevice } from "@/features/devices/merge";
 import {
   revokeDevice,
-  rotateHeyEvenKey,
+  rotateAssistantKey,
   updateDevice,
   type GlassesDevice,
-  type HeyEvenKey,
+  type AssistantKey,
 } from "./glasses-api";
 import { platformInfo } from "../platforms/info";
 import { AssistantKeyDialog } from "./assistant-key-dialog";
@@ -34,7 +34,7 @@ export function GlassesDeviceRow({ device }: { device: GlassesDevice }) {
   const [renaming, setRenaming] = useState(false);
   const [busy, setBusy] = useState(false);
   const [confirm, setConfirm] = useState<"revoke" | "rotate" | null>(null);
-  const [secret, setSecret] = useState<HeyEvenKey | null>(null);
+  const [secret, setSecret] = useState<AssistantKey | null>(null);
 
   async function patch(body: Parameters<typeof updateDevice>[1], failure: string) {
     setBusy(true);
@@ -62,7 +62,7 @@ export function GlassesDeviceRow({ device }: { device: GlassesDevice }) {
 
   async function rotate() {
     try {
-      setSecret(await rotateHeyEvenKey(device.id));
+      setSecret(await rotateAssistantKey(device.id));
       await invalidate();
     } catch (err) {
       toast({ title: userFacingMessage(err, "Couldn't create a key") });

@@ -206,7 +206,7 @@ describe("voice + Hey Even", () => {
     const rotated = await (await t.heyEven.rotateKey(post(`/api/glasses/devices/${id}/hey-even-key`, {}), OWNER, id)).json();
     expect(rotated.key).toMatch(/^glshe_/);
     expect(rotated.url).toBe(`${BASE}/api/glasses/hey-even/v1/chat/completions`);
-    expect(t.deviceRows[0].hey_even_key_hash).toBe(hashCredential(rotated.key));
+    expect(t.deviceRows[0].assistant_key_hash).toBe(hashCredential(rotated.key));
 
     const body = { messages: [{ role: "user", content: "reply with pong" }] };
     expect((await t.heyEven.completions(post("/api/glasses/hey-even/v1/chat/completions", body, token))).status).toBe(401);

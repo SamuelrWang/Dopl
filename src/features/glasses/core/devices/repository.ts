@@ -7,23 +7,25 @@ import type { DeviceStore, GlassesDevice, GlassesPairing } from "./types";
  * Service-role access to `glasses_device_links` and `glasses_pairings`.
  * ⚠ Bypasses RLS, so every user-facing read is filtered on `user_id` here.
  * Credential columns are never selected back out: a device row leaves this
- * module with a boolean `has_hey_even_key` in place of the hash.
+ * module with a boolean `has_assistant_key` in place of the hash.
  */
 
 const DEVICES = "glasses_device_links";
 const PAIRINGS = "glasses_pairings";
 const DEVICE_COLS =
   "id, user_id, name, platform, linked_channel_id, linked_container_id, reply_cursor_seq, current_target_channel_id, current_target_agent, created_at, last_seen, revoked_at, hey_even_key_hash";
+/** The assistant key's column keeps its first platform's name (Even G2's Hey Even). */
+const ASSISTANT_KEY_COL = "hey_even_key_hash";
 const PAIRING_COLS = "id, code, poll_secret_hash, status, device_id, token_issued_at, expires_at";
 
-type DeviceRow = Omit<GlassesDevice, "has_hey_even_key"> & { hey_even_key_hash: string | null };
+type DeviceRow = Omit<GlassesDevice, "has_assistant_key"> & { [ASSISTANT_KEY_COL]: string | null };
 
 function toDevice(row: DeviceRow): GlassesDevice {
-  const { hey_even_key_hash, ...rest } = row;
+  const { [ASSISTANT_KEY_COL]: assistantKeyHash, ...rest } = row;
   return {
     ...rest,
     reply_cursor_seq: rest.reply_cursor_seq === null ? null : Number(rest.reply_cursor_seq),
-    has_hey_even_key: hey_even_key_hash !== null,
+    has_assistant_key: assistantKeyHash !== null,
   };
 }
 
@@ -131,8 +133,8 @@ export const deviceRepository: DeviceStore = {
     return findActiveBy("token_hash", hash);
   },
 
-  async findDeviceByHeyEvenKeyHash(hash) {
-    return findActiveBy("hey_even_key_hash", hash);
+  async findDeviceByAssistantKeyHash(hash) {
+    return findActiveBy(ASSISTANT_KEY_COL, hash);
   },
 
   async setTokenHash(deviceId, hash) {
@@ -140,15 +142,15 @@ export const deviceRepository: DeviceStore = {
     if (error) fail("setTokenHash", error);
   },
 
-  async setHeyEvenKeyHash(userId, deviceId, hash) {
+  async setAssistantKeyHash(userId, deviceId, hash) {
     const { data, error } = await db()
       .from(DEVICES)
-      .update({ hey_even_key_hash: hash })
+      .update({ [ASSISTANT_KEY_COL]: hash })
       .eq("user_id", userId)
       .eq("id", deviceId)
       .is("revoked_at", null)
       .select("id");
-    if (error) fail("setHeyEvenKeyHash", error);
+    if (error) fail("setAssistantKeyHash", error);
     return (data ?? []).length === 1;
   },
 
@@ -177,7 +179,7 @@ export const deviceRepository: DeviceStore = {
     // Credentials are cleared with the stamp: a revoked row can never authenticate again.
     const { data, error } = await db()
       .from(DEVICES)
-      .update({ revoked_at: now, token_hash: null, hey_even_key_hash: null })
+      .update({ revoked_at: now, token_hash: null, [ASSISTANT_KEY_COL]: null })
       .eq("user_id", userId)
       .eq("id", id)
       .is("revoked_at", null)
@@ -217,7 +219,7 @@ export const deviceRepository: DeviceStore = {
   },
 };
 
-async function findActiveBy(column: "token_hash" | "hey_even_key_hash", hash: string) {
+async function findActiveBy(column: "token_hash" | typeof ASSISTANT_KEY_COL, hash: string) {
   const { data, error } = await db()
     .from(DEVICES)
     .select(DEVICE_COLS)

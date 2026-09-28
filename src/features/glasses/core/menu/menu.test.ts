@@ -288,7 +288,7 @@ describe("menu routes", () => {
     expect([row.current_target_channel_id, row.current_target_agent]).toEqual([OPS, "abcdefgh"]);
 
     const heyKey = "glshe_test";
-    await t.devices.setHeyEvenKeyHash(OWNER, d.id, hashCredential(heyKey));
+    await t.devices.setAssistantKeyHash(OWNER, d.id, hashCredential(heyKey));
     const res = await t.heyEven.completions(
       new Request("http://127.0.0.1:3100/api/glasses/hey-even", {
         method: "POST",

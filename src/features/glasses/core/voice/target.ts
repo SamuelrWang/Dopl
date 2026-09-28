@@ -3,7 +3,7 @@ import type { GlassesDevice } from "../devices/types";
 import { isUuid } from "../validation";
 
 /**
- * Where a device's voice / Hey Even utterance goes, in order:
+ * Where a device's voice / assistant utterance goes, in order:
  *   1. an EXPLICIT override on the request (the screen the wearer is on),
  *   2. the device's stored CURRENT TARGET (last menu pick),
  *   3. the device's LINKED channel.
