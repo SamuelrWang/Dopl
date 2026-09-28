@@ -94,7 +94,25 @@ export const DELETE = withUserAuth(async (_request, { userId }) => {
     // Two sources: legacy per-user subscription (profiles) + per-workspace subs on owned
     // workspaces (all solo, per the guard above).
     const subscriptionIds = new Set<string>();
-    const profileRef = await getProfileBillingRef(user.id).catch(() => null);
+    // ⚠ VERIFIED against Stripe (`subscriptions.ts › getProfileBillingRef`): the profile's ids are
+    // user-writable, so an unverified one is dropped rather than cancelled. A Stripe outage during
+    // that check aborts the delete, like a failed cancel below — never "skip and delete anyway".
+    let profileRef: Awaited<ReturnType<typeof getProfileBillingRef>>;
+    try {
+      profileRef = await getProfileBillingRef(user.id);
+    } catch (err) {
+      console.error(
+        `[delete-account] Legacy billing check failed for user ${user.id}:`,
+        err
+      );
+      return NextResponse.json(
+        {
+          error:
+            "We couldn't cancel your Stripe subscription. Please try again in a moment, or contact support if the problem persists.",
+        },
+        { status: 500 }
+      );
+    }
     if (profileRef?.stripeSubscriptionId) {
       subscriptionIds.add(profileRef.stripeSubscriptionId);
     }

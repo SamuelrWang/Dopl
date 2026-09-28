@@ -10,6 +10,47 @@ read-only catalog queries against the production project (Supabase MCP `execute_
 the performance/security advisors). The drops are drafted in `supabase/migrations-held/`, which
 `db push` / `db reset` never read (see that directory's README).
 
+## Security — needs Samuel
+
+Found during the audit; both halves are on `chore/db-cleanup`, nothing applied.
+
+**The hole (measured 2026-09-28).** `profiles_update_own` (`USING id = auth.uid()`) plus the
+Supabase default table-wide `UPDATE` grant to `authenticated` let any signed-in user PATCH **every**
+column of their own profile through PostgREST — including `stripe_customer_id`,
+`stripe_subscription_id`, the subscription/trial columns, `email` and `onboarded_at`. Two server
+paths read those as ownership:
+
+- the Stripe webhook's grandfather path mapped a customer to whichever profile carried its id, so a
+  user could attach someone else's legacy Stripe customer to themselves;
+- account deletion cancelled whatever `stripe_subscription_id` the profile carried, so a user could
+  **cancel someone else's subscription by deleting their own account** (given the `sub_…` id).
+
+No app code needs that write: every profile write goes through the service-role client
+(`api/user/profile`, `api/user/mcp-status`, `shared/auth/mcp-session.ts`,
+`onboarding/server/repository.ts`, `handle_new_user()`); the browser only SELECTs
+`display_name, avatar_url`.
+
+**1. Code hardening — safe to ship before the migration.**
+`billing/server/subscriptions.ts › getUserByStripeCustomer` and `› getProfileBillingRef` now treat the
+profile ids as claims and verify them against Stripe: the customer's `metadata.user_id` if Stripe
+carries one, otherwise the customer's email must equal the user's **auth** email (not
+`profiles.email`, which was writable too); two profiles claiming one customer resolve to nobody; a
+subscription whose Stripe customer is not the verified one is dropped. Every mismatch writes a
+`billing` / `error` system event. A Stripe or auth outage throws: the webhook fails (Stripe
+retries) and account deletion now returns 500 instead of skipping the legacy cancel
+(`api/user/delete/route.ts`). Tests: `billing/server/subscriptions.test.ts`,
+`api/user/delete/route.test.ts`.
+
+**2. Held migration `20261110160000_profiles_update_column_grants.sql`.** Revokes INSERT/UPDATE/DELETE
+on `profiles` from `anon` and `authenticated`, then grants `authenticated` UPDATE on exactly
+`display_name, bio, website_url, twitter_handle, github_username` (the profile route's allow-list).
+Header carries the rollback (`GRANT INSERT, UPDATE, DELETE ON public.profiles TO anon, authenticated;`)
+and release order (code first, then the file). Pinned by `shared/supabase/profiles-update-grants.test.ts`.
+
+Other security-advisor items, not acted on: 7 SECURITY DEFINER helpers executable by `anon` and 15
+by `authenticated` (they are RLS predicate helpers; revoking EXECUTE from `anon` is the easy win),
+4 functions with a mutable `search_path`, `vector` installed in `public`, leaked-password protection off.
+
 ## How it was measured
 
 - **Code references**: `grep -rlw <name>` over `src/ packages/ dopl-desktop-app/ apps/ scripts/`
@@ -132,15 +173,8 @@ or an `.rpc()` call. All 42 triggers sit on live tables except
   `glasses_device_links_owner_select`.
 - **Go with their tables**: `glasses_devices_owner_select`, `user_preferences_{select,insert,update,delete}_own`,
   `channel_task_participants_member_select`, `workspace_credit_usage_member_select`.
-- **Security, not dead code — needs Samuel.** `profiles_update_own` plus a table-wide `UPDATE`
-  grant to `authenticated` lets any signed-in user PATCH **any** column of their own profile row
-  through PostgREST, including `stripe_customer_id`. The webhook's grandfather path
-  (`getUserByStripeCustomer`) resolves a Stripe customer to whichever profile carries that id, so a
-  user could attach themselves to someone else's legacy customer id. The only user-client profile
-  write found is `api/user/mcp-status` (`mcp_connected_at`). Recommend column-scoped grants
-  (`REVOKE UPDATE … ; GRANT UPDATE (display_name, avatar_url, mcp_connected_at, …)`), or moving that
-  write to the admin client and dropping the policy. It is a hardening change, so it is not in the
-  held drops.
+- **Security, not dead code**: `profiles_update_own` + the table-wide UPDATE grant — see
+  [Security — needs Samuel](#security--needs-samuel) at the top.
 - Advisor noise that is by design: `*_admin_write` (`FOR ALL`) overlapping `*_member_select` on
   `teams`, `team_members`, `resource_grants`, `ontology_memberships`, `ontology_relationships`. Keep.
 
@@ -170,6 +204,7 @@ or an `.rpc()` call. All 42 triggers sit on live tables except
 - `supabase/migrations-held/20261110130000_drop_dead_tables_and_rpcs.sql`
 - `supabase/migrations-held/20261110140000_drop_pooled_credit_counter.sql`
 - `supabase/migrations-held/20261110150000_drop_profile_legacy_billing_columns.sql`
+- `supabase/migrations-held/20261110160000_profiles_update_column_grants.sql` (security)
 - Code: the `deleteTaskParticipants` statement removed from `channels/server/repository-tasks.ts`,
   with its call in `channels/server/service-tasks-delete.ts › deleteTask` and its test expectations. The FK's `ON DELETE CASCADE`
   already did that delete, so behaviour is unchanged while the table still exists.
