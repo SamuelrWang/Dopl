@@ -1,15 +1,10 @@
 import "server-only";
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { DoplClient } from "@dopl/client";
-import { clientIdentifier } from "@dopl/mcp-server/factory";
 import { authenticateMcpRequest } from "@/shared/auth/with-mcp-transport-auth";
 import { withSseKeepAlive } from "@/shared/api/sse-keep-alive";
-import { appBaseUrl } from "@/shared/api/loopback-base-url";
-import { readRuntimeHeader, readVendorHeader } from "@/shared/auth/runtime-header";
-import { readSessionIdHeader } from "@/shared/auth/session-header";
+import { loopbackClient } from "@/shared/api/loopback-client";
 import { readToolProfileHeader } from "@/shared/auth/tool-profile-header";
-import { resolveTransportWorkspaceId } from "@/shared/auth/mcp-transport-pin";
 import { exposeGlassesTools } from "@/features/glasses/core/mcp/exposure";
 
 /**
@@ -28,17 +23,17 @@ async function handle(request: Request): Promise<Response> {
   if (!authed.ok) return authed.response;
   const { userId, scopes, credential, apiKeyWorkspaceId } = authed.auth;
   const server = new McpServer({ name: "dopl-glasses", version: "0.2.0" });
-  const client = new DoplClient(appBaseUrl(request), credential, {
-    clientIdentifier,
-    workspaceId: resolveTransportWorkspaceId(apiKeyWorkspaceId, request.headers.get("x-workspace-id")),
-    runtime: readRuntimeHeader(request),
-    vendor: readVendorHeader(request),
-    sessionId: readSessionIdHeader(request),
-    signal: request.signal,
-  });
+  const { client } = loopbackClient(request, credential, apiKeyWorkspaceId);
   await exposeGlassesTools(
     server,
-    { userId, scopes, toolProfile: readToolProfileHeader(request), client, lockedContainerId: apiKeyWorkspaceId, signal: request.signal },
+    {
+      userId,
+      scopes,
+      toolProfile: readToolProfileHeader(request),
+      client,
+      lockedContainerId: apiKeyWorkspaceId,
+      signal: request.signal,
+    },
     { requireDevice: false },
   );
   const transport = new WebStandardStreamableHTTPServerTransport({ sessionIdGenerator: undefined });

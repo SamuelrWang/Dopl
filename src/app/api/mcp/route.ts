@@ -1,18 +1,11 @@
 import "server-only";
-import { DoplClient } from "@dopl/client";
-import { bootServer, clientIdentifier } from "@dopl/mcp-server/factory";
+import { bootServer } from "@dopl/mcp-server/factory";
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
 import { authenticateMcpRequest } from "@/shared/auth/with-mcp-transport-auth";
-import {
-  readRuntimeHeader,
-  readVendorHeader,
-} from "@/shared/auth/runtime-header";
-import { readSessionIdHeader } from "@/shared/auth/session-header";
 import { readToolProfileHeader } from "@/shared/auth/tool-profile-header";
 import { readToolSetClaim } from "@/shared/auth/tool-set-header";
-import { resolveTransportWorkspaceId } from "@/shared/auth/mcp-transport-pin";
 import { withSseKeepAlive } from "@/shared/api/sse-keep-alive";
-import { appBaseUrl } from "@/shared/api/loopback-base-url";
+import { loopbackClient } from "@/shared/api/loopback-client";
 import { exposeGlassesTools } from "@/features/glasses/core/mcp/exposure";
 
 // ⚠ Node runtime required (SDK uses node:crypto); never Edge. Per-request auth ⇒ no caching.
@@ -37,19 +30,24 @@ async function handle(request: Request): Promise<Response> {
   // 🔒 KEY LOCK FIRST, HEADER SECOND — and blank is not a pin on either. The
   // precedence, and why it was inverted on 2026-08-26, live in
   // `shared/auth/mcp-transport-pin.ts`, which is where the test drives it.
-  const workspaceId = resolveTransportWorkspaceId(
-    apiKeyWorkspaceId,
-    request.headers.get("x-workspace-id")
-  );
   // Runtime + session stamps forwarded onto the loopback. Only recognized values survive the
   // readers, so a caller-set header cannot be laundered through this hop.
-  const callerRuntime = readRuntimeHeader(request);
-  // CUSTODY above, VENDOR here — two dimensions, never one widened enum
+  // CUSTODY (runtime) and VENDOR are two dimensions, never one widened enum
   // (`shared/auth/runtime-header.ts`). Absent stays absent: an older desktop
   // build sends no vendor, and reading `desktop-session` as "therefore Claude"
   // is the conflation the second header exists to prevent.
-  const callerVendor = readVendorHeader(request);
-  const callerSessionId = readSessionIdHeader(request);
+  // `signal` hands the caller's disconnect to the loopback; without it nothing downstream learns
+  // the client hung up and an orphaned `op="await"` keeps re-polling for its whole ~215s budget.
+  // ⚠ Scope: the client refuses to START further requests but only interrupts in-flight IDEMPOTENT
+  // ones — aborting a loopback mid-write would tear a non-atomic thread-create. See
+  // `DoplTransport.request` in packages/dopl-client.
+  // All of it is built once in `shared/api/loopback-client.ts › loopbackClient`.
+  const {
+    client,
+    runtime: callerRuntime,
+    vendor: callerVendor,
+    sessionId: callerSessionId,
+  } = loopbackClient(request, credential, apiKeyWorkspaceId);
   // THE CONTAINMENT PROFILE this connection is running under, so `createServer`
   // can offer it a narrower tool set. ⚠ It may only NARROW and it GATES NOTHING
   // — the vocabulary lives in `@dopl/mcp-server › gating.ts › TOOL_PROFILES`,
@@ -57,19 +55,6 @@ async function handle(request: Request): Promise<Response> {
   // profile. Not forwarded onto the loopback: it is about what THIS MCP
   // connection is offered, not about what the app does with a request.
   const callerToolProfile = readToolProfileHeader(request);
-  // `signal` hands the caller's disconnect to the loopback; without it nothing downstream learns
-  // the client hung up and an orphaned `op="await"` keeps re-polling for its whole ~215s budget.
-  // ⚠ Scope: the client refuses to START further requests but only interrupts in-flight IDEMPOTENT
-  // ones — aborting a loopback mid-write would tear a non-atomic thread-create. See
-  // `DoplTransport.request` in packages/dopl-client.
-  const client = new DoplClient(appBaseUrl(request), credential, {
-    clientIdentifier,
-    workspaceId,
-    runtime: callerRuntime,
-    vendor: callerVendor,
-    sessionId: callerSessionId,
-    signal: request.signal,
-  });
 
   // pingRetries: 0 — one fast attempt per request. onDiag → console.error so a failed status
   // ping / directory load / dropped X-Workspace-Id pin is visible in server logs.
@@ -114,7 +99,14 @@ async function handle(request: Request): Promise<Response> {
   // this request's own loopback client, like every `dopl_*` tool.
   await exposeGlassesTools(
     server,
-    { userId, scopes, toolProfile: callerToolProfile, client, lockedContainerId: apiKeyWorkspaceId, signal: request.signal },
+    {
+      userId,
+      scopes,
+      toolProfile: callerToolProfile,
+      client,
+      lockedContainerId: apiKeyWorkspaceId,
+      signal: request.signal,
+    },
     { requireDevice: true },
   );
 
