@@ -14,6 +14,7 @@ import {
   type AnswerOutcome,
 } from "./inbox";
 import { mirrorReplies } from "./reply-mirror";
+import { answerMirror, type ChannelDisplays } from "../screens/channel-mirror";
 import type { GlassesStore } from "./types";
 
 /**
@@ -31,6 +32,8 @@ export interface DeviceHandlerDeps extends Clock {
   allowPairStart: (request: Request) => Promise<boolean>;
   touchThrottle?: Throttle<string>;
   mirrorThrottle?: Throttle<string>;
+  /** Where an answer reaches the channel card mirroring the screen/ask (patch only). */
+  displays?: ChannelDisplays;
 }
 
 export const PAIR_START_RPM = 10;
@@ -124,12 +127,11 @@ export function createDeviceHandlers(input: DeviceHandlerDeps) {
       return json(req, result);
     }),
 
-    answer: authed("answer", async (request, device) =>
-      outcomeResponse(
-        request,
-        await answerAsk(deps, device.user_id, await readJson(request)),
-      ),
-    ),
+    answer: authed("answer", async (request, device) => {
+      const outcome = await answerAsk(deps, device.user_id, await readJson(request));
+      if (outcome.ok && outcome.message) await answerMirror(deps, device.user_id, outcome.message, "glasses");
+      return outcomeResponse(request, outcome);
+    }),
 
     dismiss: authed("dismiss", async (request, device) =>
       outcomeResponse(

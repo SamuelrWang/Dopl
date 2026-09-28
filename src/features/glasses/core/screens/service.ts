@@ -10,6 +10,7 @@ import {
 import type { GlassesAnswer, GlassesMessage, GlassesStatus, ScreenPayload } from "../messages/types";
 import { GlassesValidationError, cleanSeconds } from "../validation";
 import type { ScreenError } from "./spec";
+import { linkMirror, postMirror, refreshMirror } from "./channel-mirror";
 import { checkTemplateSpec, cleanTemplateName, fillTemplate, templateVariables } from "./template";
 
 /**
@@ -74,16 +75,25 @@ export async function renderScreen(
   const timeout = cleanSeconds("timeout_sec", args.timeout_sec, 120, 5, 86_400);
   const now = nowOf(deps);
   const existing = await deps.store.findActiveCard(userId, screenId, iso(now), "screen", LIVE);
-  const row = existing
-    ? await deps.store.refreshCard(userId, existing.id, payload, iso(now + ttl * 1000), iso(now), spec)
-    : await deps.store.insert(userId, {
-        kind: "screen",
-        card_id: screenId,
-        payload,
-        spec,
-        expires_at: iso(now + ttl * 1000),
-        now: iso(now),
-      });
+  const wait = args.wait_for_input === true;
+  let row: GlassesMessage;
+  if (existing) {
+    row = await deps.store.refreshCard(userId, existing.id, payload, iso(now + ttl * 1000), iso(now), spec);
+    await refreshMirror(deps, userId, row, spec, wait);
+  } else {
+    // Posted to the calling channel FIRST, so the new row is born linked (no second glasses write).
+    const mirrored = await postMirror(deps, spec, screenId, wait);
+    row = await deps.store.insert(userId, {
+      kind: "screen",
+      card_id: screenId,
+      payload,
+      spec,
+      expires_at: iso(now + ttl * 1000),
+      now: iso(now),
+      channel_message_id: mirrored,
+    });
+    await linkMirror(deps, userId, mirrored, row);
+  }
   if (args.wait_for_input !== true) return { id: row.id, screen_id: screenId, status: row.status };
   return holdForInput(deps, userId, row, screenId, timeout, signal);
 }
@@ -154,6 +164,7 @@ export async function updateScreen(
   const next = { blocks, layout: spec.layout ?? "stack" };
   const payload = compileOrThrow(deps, next, args.screen_id);
   const updated = await deps.store.refreshCard(userId, row.id, payload, row.expires_at, iso(now), next);
+  await refreshMirror(deps, userId, updated, next);
   return { id: updated.id, screen_id: args.screen_id, status: updated.status };
 }
 

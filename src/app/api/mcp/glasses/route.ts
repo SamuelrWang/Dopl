@@ -23,7 +23,7 @@ async function handle(request: Request): Promise<Response> {
   if (!authed.ok) return authed.response;
   const { userId, scopes, credential, apiKeyWorkspaceId } = authed.auth;
   const server = new McpServer({ name: "dopl-glasses", version: "0.2.0" });
-  const { client } = loopbackClient(request, credential, apiKeyWorkspaceId);
+  const { client, sessionId } = loopbackClient(request, credential, apiKeyWorkspaceId);
   await exposeGlassesTools(
     server,
     {
@@ -32,6 +32,7 @@ async function handle(request: Request): Promise<Response> {
       toolProfile: readToolProfileHeader(request),
       client,
       lockedContainerId: apiKeyWorkspaceId,
+      sessionId: sessionId ?? null,
       signal: request.signal,
     },
     { requireDevice: false },

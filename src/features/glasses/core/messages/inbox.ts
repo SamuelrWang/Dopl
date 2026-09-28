@@ -88,7 +88,8 @@ export async function readInbox(
   }
 }
 
-export type AnswerOutcome = { ok: true } | { ok: false; status: 400 | 404 | 409; error: string };
+/** `message`: the answered row, for the channel mirror (`screens/channel-mirror.ts › answerMirror`). */
+export type AnswerOutcome = { ok: true; message?: GlassesMessage } | { ok: false; status: 400 | 404 | 409; error: string };
 
 type AnswerBody = { id?: unknown; choice?: unknown; index?: unknown; block_id?: unknown };
 
@@ -115,7 +116,7 @@ async function settleAnswer(
     return { ok: false, status: 409, error: `${row.kind} expired` };
   }
   const moved = await deps.store.transition(userId, row.id, from, "answered", at, { ...answer, at });
-  return moved ? { ok: true } : { ok: false, status: 409, error: `${row.kind} already ${row.status}` };
+  return moved ? { ok: true, message: moved } : { ok: false, status: 409, error: `${row.kind} already ${row.status}` };
 }
 
 export async function answerAsk(deps: InboxDeps, userId: string, body: unknown): Promise<AnswerOutcome> {

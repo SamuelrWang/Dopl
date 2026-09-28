@@ -134,7 +134,7 @@ describe("answer + dismiss", () => {
   it("answers once, then 409", async () => {
     const { deps, rows } = setup();
     const row = await seedAsk(deps);
-    expect(await answerAsk(deps, USER, { id: row.id, choice: "No", index: 1 })).toEqual({ ok: true });
+    expect(await answerAsk(deps, USER, { id: row.id, choice: "No", index: 1 })).toMatchObject({ ok: true });
     expect(rows[0]).toMatchObject({ status: "answered", answer: { choice: "No", index: 1 } });
     expect(await answerAsk(deps, USER, { id: row.id, choice: "Yes", index: 0 })).toMatchObject({
       ok: false,
@@ -145,7 +145,7 @@ describe("answer + dismiss", () => {
   it("recovers the index from the choice when index is missing", async () => {
     const { deps, rows } = setup();
     const row = await seedAsk(deps);
-    expect(await answerAsk(deps, USER, { id: row.id, choice: "Yes" })).toEqual({ ok: true });
+    expect(await answerAsk(deps, USER, { id: row.id, choice: "Yes" })).toMatchObject({ ok: true });
     expect(rows[0].answer).toMatchObject({ choice: "Yes", index: 0 });
   });
 
@@ -165,7 +165,7 @@ describe("answer + dismiss", () => {
     expect(await dismissMessage(deps, "22222222-2222-4222-8222-222222222222", { id: n.id })).toMatchObject({
       status: 404,
     });
-    expect(await dismissMessage(deps, USER, { id: n.id })).toEqual({ ok: true });
+    expect(await dismissMessage(deps, USER, { id: n.id })).toMatchObject({ ok: true });
     expect(rows[0].status).toBe("dismissed");
   });
 });

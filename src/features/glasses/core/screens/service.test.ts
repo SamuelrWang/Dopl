@@ -105,15 +105,15 @@ describe("device taps on screens", () => {
   it("records a click on a text-capture screen and lets a later tap win", async () => {
     const { deps, rows } = setup();
     const r = await renderScreen(deps, USER, { blocks: [{ type: "text", id: "t", content: "hi" }] });
-    expect(await answerAsk(deps, USER, { id: r.id, choice: "click" })).toEqual({ ok: true });
+    expect(await answerAsk(deps, USER, { id: r.id, choice: "click" })).toMatchObject({ ok: true });
     expect(rows[0].answer).toMatchObject({ choice: "click", index: 0, block_id: "t" });
-    expect(await answerAsk(deps, USER, { id: r.id, choice: "click", index: 0 })).toEqual({ ok: true });
+    expect(await answerAsk(deps, USER, { id: r.id, choice: "click", index: 0 })).toMatchObject({ ok: true });
   });
 
   it("resolves a list index from the choice and rejects unknown blocks", async () => {
     const { deps, rows } = setup();
     const r = await renderScreen(deps, USER, { blocks: BLOCKS });
-    expect(await answerAsk(deps, USER, { id: r.id, choice: "Approve" })).toEqual({ ok: true });
+    expect(await answerAsk(deps, USER, { id: r.id, choice: "Approve" })).toMatchObject({ ok: true });
     expect(rows[0].answer).toMatchObject({ choice: "Approve", index: 0, block_id: "act" });
     expect(await answerAsk(deps, USER, { id: r.id, choice: "x", block_id: "nope" })).toMatchObject({ status: 400 });
   });

@@ -68,6 +68,8 @@ export interface GlassesMessage {
   created_at: string;
   updated_at: string;
   expires_at: string;
+  /** The channel message mirroring this screen/ask as `metadata.display` (device-aware messages). */
+  channel_message_id?: string | null;
 }
 
 export interface NewGlassesMessage {
@@ -78,6 +80,8 @@ export interface NewGlassesMessage {
   now: string;
   /** Screens only: the agent's original spec, for `glasses_update`. */
   spec?: unknown;
+  /** Set at insert when the display was already posted to the calling channel. */
+  channel_message_id?: string | null;
 }
 
 /** Every DB operation the feature needs, scoped to one user. The real
@@ -128,4 +132,6 @@ export interface GlassesStore {
   /** pending -> delivered WITHOUT touching updated_at (the inbox cursor). */
   markDelivered(userId: string, ids: string[]): Promise<void>;
   countActive(userId: string, now: string): Promise<number>;
+  /** Remember the channel message that mirrors this row (`screens/channel-mirror.ts`). */
+  linkChannelMessage(userId: string, id: string, channelMessageId: string): Promise<void>;
 }

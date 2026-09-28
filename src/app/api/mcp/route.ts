@@ -105,6 +105,7 @@ async function handle(request: Request): Promise<Response> {
       toolProfile: callerToolProfile,
       client,
       lockedContainerId: apiKeyWorkspaceId,
+      sessionId: callerSessionId ?? null,
       signal: request.signal,
     },
     { requireDevice: true },

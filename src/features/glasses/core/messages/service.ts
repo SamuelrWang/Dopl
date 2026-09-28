@@ -12,6 +12,8 @@ import {
   isUuid,
 } from "../validation";
 import type { GlassesAnswer, GlassesMessage, GlassesStatus, GlassesStore } from "./types";
+import { linkMirror, postMirror, type ChannelDisplays } from "../screens/channel-mirror";
+import { askDisplaySpec } from "../screens/display";
 
 /**
  * The message tools (`glasses_notify|show|ask|get_answer|status`), pure over a
@@ -31,6 +33,8 @@ export interface GlassesDeps extends Clock {
   store: GlassesStore;
   devices: DeviceStore;
   platform?: GlassesPlatform;
+  /** The channel mirror of screens/asks (`screens/channel-mirror.ts`); absent = none. */
+  displays?: ChannelDisplays;
 }
 
 export const platformOf = (deps: GlassesDeps): GlassesPlatform => deps.platform ?? DEFAULT_PLATFORM;
@@ -131,13 +135,17 @@ export async function glassesAsk(
   const options = cleanList(sanitize, "options", args.options, L.options, L.option);
   const timeout = cleanSeconds("timeout_sec", args.timeout_sec, 120, 5, 86_400);
   const start = nowOf(deps);
+  // Mirrored into the calling channel as a selectable display (device-aware messages).
+  const mirrored = await postMirror(deps, askDisplaySpec(question, options), `ask-${start.toString(36)}`, true);
   const row = await deps.store.insert(userId, {
     kind: "ask",
     card_id: null,
     payload: { question, options },
     expires_at: iso(start + timeout * 1000),
     now: iso(start),
+    channel_message_id: mirrored,
   });
+  await linkMirror(deps, userId, mirrored, row);
   const settle = (r: GlassesMessage | null) => settleAsk(row.id, r);
   const settled = await holdFor(deps, userId, row.id, timeout, settle, signal);
   if (settled) return settled;

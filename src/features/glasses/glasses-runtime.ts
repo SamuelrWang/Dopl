@@ -10,6 +10,7 @@ import { menuGateway } from "./core/menu/gateway";
 import { LAUNCH_RPM, MENU_READ_RPM, createMenuHandlers } from "./core/menu/handlers";
 import { PAIR_START_RPM, createDeviceHandlers } from "./core/messages/device-handlers";
 import { glassesRepository } from "./core/messages/repository";
+import { patchChannelDisplay } from "./core/screens/channel-displays";
 import { glassesChannelGateway } from "./core/voice/channel-gateway";
 import { UTTERANCE_RPM, createVoiceHandlers } from "./core/voice/handlers";
 import { sttProviderFromEnv } from "./core/voice/stt";
@@ -30,6 +31,8 @@ const base = {
   devices: deviceRepository,
   gateway: glassesChannelGateway,
   linker: channelLinker,
+  // A tap on the lens shows as answered on the channel card mirroring it.
+  displays: { patch: patchChannelDisplay },
   allowPairStart: (request: Request) => allowPairStartFrom(clientIpFromRequest(request as NextRequest)),
 };
 

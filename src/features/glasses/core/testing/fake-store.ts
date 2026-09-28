@@ -35,6 +35,7 @@ export function createFakeGlassesStore() {
         updated_at: row.now,
         expires_at: row.expires_at,
         spec: row.spec ?? null,
+        channel_message_id: (row.channel_message_id ?? null) as string | null,
       };
       rows.push(r);
       return strip(r);
@@ -65,6 +66,10 @@ export function createFakeGlassesStore() {
     async insertIfAbsent(userId, row) {
       if (rows.some((r) => r.user_id === userId && r.card_id !== null && r.card_id === row.card_id)) return null;
       return store.insert(userId, row);
+    },
+    async linkChannelMessage(userId, id, channelMessageId) {
+      const r = find(userId, id);
+      if (r) r.channel_message_id = channelMessageId;
     },
     async getSpec(userId, id) {
       return find(userId, id)?.spec ?? null;

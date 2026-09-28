@@ -23,7 +23,7 @@ import { UNIQUE_VIOLATION, dbFail as fail } from "../db";
  */
 
 const COLS =
-  "id, kind, card_id, payload, status, answer, created_at, updated_at, expires_at";
+  "id, kind, card_id, payload, status, answer, created_at, updated_at, expires_at, channel_message_id";
 const MESSAGES = "glasses_messages";
 const ACTIVE: GlassesStatus[] = ["pending", "delivered"];
 const TEMPLATES = "glasses_templates";
@@ -37,6 +37,7 @@ const insertRow = (userId: string, row: NewGlassesMessage) => ({
   status: "pending",
   expires_at: row.expires_at,
   spec: row.spec ?? null,
+  channel_message_id: row.channel_message_id ?? null,
 });
 
 export const glassesRepository: GlassesStore = {
@@ -172,6 +173,15 @@ export const glassesRepository: GlassesStore = {
       .gt("expires_at", now);
     if (error) fail("countActive", error);
     return count ?? 0;
+  },
+
+  async linkChannelMessage(userId: string, id: string, channelMessageId: string) {
+    const { error } = await supabaseAdmin()
+      .from(MESSAGES)
+      .update({ channel_message_id: channelMessageId })
+      .eq("user_id", userId)
+      .eq("id", id);
+    if (error) fail("linkChannelMessage", error);
   },
 
   async getSpec(userId: string, id: string) {
