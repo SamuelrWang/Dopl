@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * glasses-dev-seed — pair a pair of glasses through the REAL flow against a
- * running Dopl (local dev by default). Replaces the prototype's env shortcuts.
+ * running Dopl (local dev by default).
  *
  *   # claim the code the plugin/simulator is showing:
  *   node scripts/glasses-dev-seed.mjs --user-token-file <file> --code ABC234 [--channel <uuid>] [--name "Lens"]

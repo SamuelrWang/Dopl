@@ -1,5 +1,4 @@
-import { preflight } from "@/features/glasses/cors";
-import { menuHandlers } from "@/features/glasses/glasses-runtime";
+import { menuHandlers, preflight } from "@/features/glasses/glasses-runtime";
 
 /** Glasses read mode: channel messages, paged or long-polled (wait <= 20s) (docs/glasses-mcp.md › Menu). */
 export const runtime = "nodejs";

@@ -1,5 +1,4 @@
-import { preflight } from "@/features/glasses/cors";
-import { voiceHandlers } from "@/features/glasses/glasses-runtime";
+import { voiceHandlers, preflight } from "@/features/glasses/glasses-runtime";
 
 /** Device push-to-talk: PCM in, transcript + channel outcome out (docs/glasses-mcp.md). */
 export const runtime = "nodejs";

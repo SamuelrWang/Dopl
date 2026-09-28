@@ -13,7 +13,7 @@ import { readToolSetClaim } from "@/shared/auth/tool-set-header";
 import { resolveTransportWorkspaceId } from "@/shared/auth/mcp-transport-pin";
 import { withSseKeepAlive } from "@/shared/api/sse-keep-alive";
 import { appBaseUrl } from "@/shared/api/loopback-base-url";
-import { maybeRegisterGlassesTools } from "@/features/glasses/mcp-exposure";
+import { exposeGlassesTools } from "@/features/glasses/core/mcp/exposure";
 
 // ⚠ Node runtime required (SDK uses node:crypto); never Edge. Per-request auth ⇒ no caching.
 //
@@ -109,17 +109,14 @@ async function handle(request: Request): Promise<Response> {
     onDiag: (message) => console.error(message),
   });
 
-  // GLASSES TOOLS ride this surface only for a caller with paired glasses, and only under a
-  // containment profile that offers them (`features/glasses/mcp-exposure.ts`): no device or a
-  // `read_only`/`dopl_only` session, no extra tools. Same fail-closed write rule as the server
-  // above; metered per call through this request's own loopback client, like every `dopl_*` tool.
-  await maybeRegisterGlassesTools(server, userId, {
-    canWrite: scopes?.includes("dopl.write") ?? false,
-    signal: request.signal,
-    toolProfile: callerToolProfile,
-    client,
-    lockedContainerId: apiKeyWorkspaceId,
-  });
+  // GLASSES TOOLS ride this surface only for a caller with paired glasses under a containment
+  // profile that offers them (`features/glasses/core/mcp/exposure.ts`); metered per call through
+  // this request's own loopback client, like every `dopl_*` tool.
+  await exposeGlassesTools(
+    server,
+    { userId, scopes, toolProfile: callerToolProfile, client, lockedContainerId: apiKeyWorkspaceId, signal: request.signal },
+    { requireDevice: true },
+  );
 
   // ⚠ NEVER set `enableJsonResponse: true` here. That mode makes the SDK resolve only once every
   // JSON-RPC response is ready, so no headers reach the client until the tool handler returns —
