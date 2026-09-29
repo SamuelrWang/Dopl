@@ -31,12 +31,18 @@ describe("highlightTerms", () => {
     expect(highlightTerms("shipping ship")).toEqual(["shipping ship", "shipping", "ship"]);
   });
 
-  it("drops the websearch operators rather than highlighting them", () => {
-    expect(highlightTerms('"alpha" or -beta')).toEqual([
-      "alpha beta",
-      "alpha",
-      "beta",
-    ]);
+  it("drops quotation marks and a leading dash rather than highlighting them", () => {
+    expect(highlightTerms('"alpha" -beta')).toEqual(["alpha beta", "alpha", "beta"]);
+  });
+
+  it("🔒 keeps an apostrophe INSIDE the word (2026-09-29)", () => {
+    // It used to split `can't` into `can` + `t`, and `t` marked every t.
+    expect(highlightTerms("can't")).toEqual(["can't"]);
+    expect(highlightTerms("can’t")).toEqual(["can't"]);
+  });
+
+  it("never makes a one-letter word its own term", () => {
+    expect(highlightTerms("plan b")).toEqual(["plan b", "plan"]);
   });
 
   it("is empty for a blank query, which yields no pattern at all", () => {
@@ -102,6 +108,20 @@ describe("🔒 buildSnippet — the only markup is <mark>", () => {
 
   it("still escapes when there is no pattern to mark with", () => {
     expect(buildSnippet("<b>", null)).toBe("&lt;b&gt;");
+  });
+
+  it("🔒 marks `can't` as one run, in either apostrophe, and no stray letters", () => {
+    const pattern = patternFor("can't");
+    expect(buildSnippet("And we estimate that we can’t go", pattern)).toBe(
+      "And we estimate that we <mark>can’t</mark> go"
+    );
+    expect(buildSnippet("I can't", pattern)).toBe("I <mark>can&#39;t</mark>");
+  });
+
+  it("marks only at a word's START", () => {
+    expect(buildSnippet("unpick the picker", patternFor("pick"))).toBe(
+      "unpick the <mark>pick</mark>er"
+    );
   });
 
   it("collapses whitespace so a snippet is one line", () => {

@@ -88,3 +88,38 @@ describe("🔒 the search pill's width lives on `[data-open]`, not on the box", 
     expect(focus).toContain("var(--raised-light-focus)");
   });
 });
+
+/**
+ * 🔒 THE POPUP SPANS PILL-LEFT TO PROFILE-RIGHT (Samuel, 2026-09-29: "have it
+ * start at the same place that the search bar starts … extend on the right, so
+ * that it is flush with the end of the profile button"). Anchored, not measured:
+ * the card is a SIBLING of `.search-expand` (whose `position: relative` would
+ * otherwise be its containing block) and fills the header's `relative` action
+ * group, whose first child is the pill and last is Profile. Source scan — jsdom
+ * lays nothing out.
+ */
+describe("🔒 the popup is anchored on the header's action group", () => {
+  it("home-search renders the popup OUTSIDE `.search-expand`, full-width", () => {
+    const src = read("apps/desktop-ui/src/pages/home/home-search.tsx");
+    const expandOpen = src.indexOf('<div className="search-expand"');
+    const popup = src.indexOf("<SearchPopup");
+    expect(expandOpen).toBeGreaterThan(-1);
+    expect(popup).toBeGreaterThan(expandOpen);
+    // Every div opened before the popup is closed before it.
+    const before = src.slice(expandOpen, popup);
+    const opened = before.match(/<div\b/g)?.length ?? 0;
+    const closed = before.match(/<\/div>/g)?.length ?? 0;
+    expect(closed).toBe(opened);
+    expect(src).toMatch(/className="left-0 w-auto"/);
+  });
+
+  it("home-header's group holding search + Profile is the positioned anchor", () => {
+    const src = read("apps/desktop-ui/src/pages/home/home-header.tsx");
+    const group = src.match(/<div className="relative flex items-center gap-2\.5">([\s\S]*?)\n {6}<\/div>/);
+    expect(group).not.toBeNull();
+    const body = group?.[1] ?? "";
+    // Pill first, Profile last, nothing else between the group's edges.
+    expect(body.indexOf("<HomeSearch")).toBeGreaterThan(-1);
+    expect(body.indexOf("<HomeSettingsControl")).toBeGreaterThan(body.indexOf("<HomeSearch"));
+  });
+});

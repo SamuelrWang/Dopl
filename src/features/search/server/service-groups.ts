@@ -8,7 +8,12 @@ import {
 } from "../contracts";
 import type { SearchChannelRef } from "./repository-reach";
 import type { SearchHit } from "./repository-channel-rows";
-import { buildSnippet, highlightPattern, highlightTerms } from "./snippet";
+import {
+  buildSnippet,
+  highlightPattern,
+  highlightTerms,
+  queryMatcher,
+} from "./snippet";
 
 /**
  * Hit to item to group: the projection half of the search service, split from
@@ -84,10 +89,13 @@ export function toGroup(
   kind: SearchGroupKind,
   hits: SearchHit[],
   labels: SearchLabels,
-  pattern: RegExp | null
+  pattern: RegExp | null,
+  matches: HitMatcher | null = null
 ): SearchGroup | null {
-  if (hits.length === 0) return null;
-  const ranked = rankHits(hits, pattern);
+  const kept =
+    matches === null ? hits : hits.filter((hit) => matchesHit(kind, hit, matches));
+  if (kept.length === 0) return null;
+  const ranked = rankHits(kept, pattern);
   return {
     kind,
     total: Math.min(ranked.length, SEARCH_GROUP_TOTAL_CAP),
@@ -95,6 +103,17 @@ export function toGroup(
       .slice(0, SEARCH_GROUP_ITEM_CAP)
       .map((hit) => toItem(kind, hit, labels, pattern)),
   };
+}
+
+type HitMatcher = NonNullable<ReturnType<typeof queryMatcher>>;
+
+/**
+ * (2026-09-29) The text a row is held to: its headline and its prose, plus a
+ * member's email (the column the email arm matched). Never a subtitle the
+ * SERVICE filled — a knowledge entry must not match on its base's name.
+ */
+function matchesHit(kind: SearchGroupKind, hit: SearchHit, matches: HitMatcher): boolean {
+  return matches([hit.title, hit.body, kind === "members" ? hit.subtitle : undefined]);
 }
 
 /**
@@ -171,11 +190,14 @@ export function assembleGroups(
   query: string
 ): SearchGroup[] {
   const pattern = highlightPattern(highlightTerms(query));
+  // (2026-09-29) Every group's rows are held to the words typed, whatever arm
+  // found them — see `snippet.ts › queryMatcher`.
+  const matches = queryMatcher(query);
   const groups: SearchGroup[] = [];
   for (const kind of order) {
     const hits = byKind.get(kind);
     if (hits === undefined) continue;
-    const group = toGroup(kind, hits, labels, pattern);
+    const group = toGroup(kind, hits, labels, pattern, matches);
     if (group !== null) groups.push(group);
   }
   return groups;

@@ -35,8 +35,9 @@ export interface SearchRequest {
 export type SearchFetcher = (req: SearchRequest) => Promise<SearchResponse>;
 
 export interface SearchState {
+  /** The answer to the CURRENT query, or `[]` while it is not in yet. */
   groups: SearchGroup[];
-  /** A request is in flight. `groups` is the previous answer while it is. */
+  /** The current query has no answer yet — debouncing or in flight. */
   loading: boolean;
   /** Plain message, or `null`. Rendered as one line (minimal copy). */
   error: string | null;
@@ -44,12 +45,27 @@ export interface SearchState {
 
 const IDLE: SearchState = { groups: [], loading: false, error: null };
 
+/** What the hook stores: an answer, and WHICH request it answers. */
+interface Answer {
+  key: string;
+  groups: SearchGroup[];
+  error: string | null;
+}
+
+/** One string per distinct request, so an answer is never shown for another. */
+function requestKey(q: string, scope: SearchScope, containerId?: string): string {
+  return `${scope}\u0000${containerId ?? ""}\u0000${q}`;
+}
+
 /**
  * Run `query` against `fetcher`, 250ms after the typing stops.
  *
- * The last answer stays on screen while the next loads — clearing `groups` per
- * keystroke blinks the card empty and moves rows under the cursor. `loading` is
- * the whole signal.
+ * ⚠ **(2026-09-29, Samuel: "when a search is happening, right now it shows
+ * nothing, show … something that says loading results")** — `loading` is true
+ * from the KEYSTROKE until this query's own answer lands (the debounce counts),
+ * and `groups` is only ever the answer to the query in the field. The previous
+ * answer is NOT held under the next load any more: rows for `ca` under a field
+ * reading `can't` are rows for a question nobody is asking.
  *
  * Every superseded request is aborted, and a settled-but-aborted response is
  * dropped: out-of-order answers show results for a prefix of what the field says.
@@ -65,8 +81,9 @@ export function useSearch({
   containerId?: string;
   fetcher: SearchFetcher;
 }): SearchState {
-  const [state, setState] = useState<SearchState>(IDLE);
+  const [answer, setAnswer] = useState<Answer | null>(null);
   const q = query.trim();
+  const key = requestKey(q, scope, containerId);
   // The server's own threshold (`contracts.ts`): shorter answers an empty 200 by
   // contract, so asking would be a request whose answer is already known.
   const searching = q.length >= SEARCH_MIN_QUERY_LENGTH;
@@ -75,39 +92,32 @@ export function useSearch({
     if (!searching) return;
     const controller = new AbortController();
     const timer = setTimeout(() => {
-      // Raised when the request is, not when the key is pressed: a synchronous
-      // `setState` in an effect body cascades, and through fast typing nothing is
-      // in flight during the pause, so an earlier flag would dim the card for a
-      // read nobody has asked for.
-      setState((prev) => ({ ...prev, loading: true, error: null }));
       fetcher({ q, scope, containerId, signal: controller.signal })
         .then((res) => {
           if (controller.signal.aborted) return;
-          setState({ groups: res.groups, loading: false, error: null });
+          setAnswer({ key, groups: res.groups, error: null });
         })
         .catch((err: unknown) => {
           if (controller.signal.aborted) return;
-          // Keep the rows: a failed refresh is not a reason to discard the answer
-          // the reader is looking at.
-          setState((prev) => ({
-            groups: prev.groups,
-            loading: false,
-            error: userFacingMessage(err),
-          }));
+          setAnswer({ key, groups: [], error: userFacingMessage(err) });
         });
     }, SEARCH_DEBOUNCE_MS);
     return () => {
       clearTimeout(timer);
       controller.abort();
     };
-  }, [q, searching, scope, containerId, fetcher]);
+  }, [key, q, searching, scope, containerId, fetcher]);
 
   /**
-   * Short queries read `IDLE` rather than clearing state: resetting in the effect
-   * would be a cascading `setState`, and derived here the held answer is still
-   * there to stand under the next query's load.
+   * DERIVED, never reset in the effect (a synchronous `setState` there
+   * cascades): an answer whose key is not the field's is simply not shown, and
+   * the gap reads as `loading`.
    */
-  return searching ? state : IDLE;
+  if (!searching) return IDLE;
+  if (answer === null || answer.key !== key) {
+    return { groups: [], loading: true, error: null };
+  }
+  return { groups: answer.groups, loading: false, error: answer.error };
 }
 
 /** Five, per user. Enough to be a shortcut, short enough to stay scannable. */

@@ -16,10 +16,17 @@ export function escapeLikeLiteral(value: string): string {
   return value.replace(/[\\%_]/g, "\\$&");
 }
 
-/** `…q…` — the popup's matcher. The leading `%` means no b-tree index can serve
- *  it, so every read using it is bounded by a fence plus a `limit`. */
+/** Every apostrophe spelling (`'`, `‘`, `’`, `ʼ`). */
+const APOSTROPHES = /['‘’ʼ]/g;
+
+/** `…q…` — the popup's CANDIDATE matcher. The leading `%` means no b-tree index
+ *  can serve it, so every read using it is bounded by a fence plus a `limit`.
+ *
+ *  (2026-09-29) An apostrophe becomes `_` (one character, any character) so
+ *  `can't` also reaches a title spelled `can’t`; `snippet.ts › queryMatcher`
+ *  then drops every candidate that does not actually say the word. */
 export function containsPattern(query: string): string {
-  return `%${escapeLikeLiteral(query)}%`;
+  return `%${escapeLikeLiteral(query).replace(APOSTROPHES, "_")}%`;
 }
 
 /** `q…` — a PREFIX match, used for `profiles.email` alone. An address is not
@@ -68,18 +75,45 @@ export const MAX_TSQUERY_TOKENS = 8;
  * The sanitiser is an ALLOW-LIST over `\p{L}\p{N}_`, not an escape pass: `&`,
  * `|`, `!`, `<->`, `(`, `)`, `'` and `:` are all operators, and a blocklist that
  * missed one turns the search box into a tsquery editor. `_` is safe — the parser
- * splits `a_b` into a phrase match, not a syntax error.
+ * splits `a_b` into a phrase match, not a syntax error. The only operators in
+ * the output are the ones written here: `&`, `<->` and `:*`.
+ *
+ * ⚠ **(2026-09-29) AN APOSTROPHE JOINS, IT DOES NOT SPLIT.** Postgres's parser
+ * reads `can't` (and `can’t`) as two ADJACENT lexemes, `can` then `t`. This used
+ * to emit `can & t:*` — "the word *can* anywhere, and ANY word starting with *t*
+ * anywhere" — which is nearly every message (Samuel, 2026-09-29). It now emits
+ * the phrase `can <-> t:*`: the same two lexemes side by side, which is what
+ * the text contains. `snippet.ts › queryMatcher` then holds every candidate to
+ * the literal word, so `can <-> t:*` reaching *can take* is dropped.
  *
  * @returns `null` when the query has no token at all, signalling the caller to run
  * NO full-text query rather than one matching everything.
  */
 export function buildPrefixTsQuery(query: string): string | null {
-  const tokens = query
-    .split(/[^\p{L}\p{N}_]+/u)
-    .filter((token) => token.length > 0)
-    .slice(0, MAX_TSQUERY_TOKENS);
-  if (tokens.length === 0) return null;
-  return tokens
-    .map((token, i) => (i === tokens.length - 1 ? `${token}:*` : token))
+  // Tokens joined by apostrophes inside one typed word form a phrase group
+  // (`<->`); groups are ANDed.
+  const groups: string[][] = [];
+  let count = 0;
+  const pieces = query.replace(APOSTROPHES, "'").split(/[^\p{L}\p{N}_']+/u);
+  for (const piece of pieces) {
+    if (count >= MAX_TSQUERY_TOKENS) break;
+    const tokens = piece
+      .split(/'+/)
+      .filter((token) => token.length > 0)
+      .slice(0, MAX_TSQUERY_TOKENS - count);
+    if (tokens.length === 0) continue;
+    groups.push(tokens);
+    count += tokens.length;
+  }
+  if (groups.length === 0) return null;
+  const last = groups.length - 1;
+  return groups
+    .map((tokens, g) =>
+      tokens
+        .map((token, i) =>
+          g === last && i === tokens.length - 1 ? `${token}:*` : token
+        )
+        .join(" <-> ")
+    )
     .join(" & ");
 }

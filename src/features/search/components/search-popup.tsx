@@ -84,6 +84,10 @@ function LabelledRule({ label }: { label: string }) {
  * (2026-09-17) The card is the pill's width plus its own padding, nothing wider.
  * The kit's open pill is 260px and the body carries `px-2.5` a side, so 280px
  * puts the rows on the pill's own edges.
+ *
+ * ⚠ (2026-09-29) The DEFAULT, not every host's: /home's header pill spans the
+ * card from the pill's left edge to the Profile button's right edge by passing
+ * `left-0 w-auto` and anchoring on the group both sit in (`home-search.tsx`).
  */
 export const SEARCH_CARD_W = "w-[280px]";
 
@@ -217,10 +221,7 @@ export function SearchPopup({
         className={cn(
           // The card's own ceiling stays under the per-section one: five rows
           // apiece still stacks past the screen once enough sections match.
-          "scrollbar-discreet max-h-[min(60vh,380px)] overflow-y-auto px-2.5 py-2",
-          // Loading is a dim, not a spinner or a clear: the previous answer stays
-          // readable underneath it (`use-search.ts`).
-          loading && "opacity-60"
+          "scrollbar-discreet max-h-[min(60vh,380px)] overflow-y-auto px-2.5 py-2"
         )}
       >
         {showRecents ? (
@@ -267,6 +268,18 @@ export function SearchPopup({
                 </div>
               </div>
             ))}
+            {/* (2026-09-29, Samuel: "show … something that says loading
+                results") — one label line from the keystroke until this
+                query's answer lands; `use-search.ts` never hands back another
+                query's rows in the meantime. */}
+            {loading && (
+              <p
+                className="text-caption px-1.5 py-2 text-text-muted"
+                data-search-loading=""
+              >
+                Loading results
+              </p>
+            )}
             {/* Only once the answer is in: "No results" mid-flight is a claim the
                 client cannot make yet. */}
             {sections.length === 0 && !loading && (
