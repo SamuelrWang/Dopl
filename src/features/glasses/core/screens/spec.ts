@@ -8,30 +8,6 @@ export type BlockType = "text" | "list" | "progress" | "divider" | "spacer";
 export const BLOCK_TYPES: readonly BlockType[] = ["text", "list", "progress", "divider", "spacer"];
 export type ScreenLayout = "stack" | "absolute";
 
-/** What the agent sends. Loose on purpose: the compiler validates every field. */
-interface AgentBlock {
-  type: BlockType;
-  id?: string;
-  content?: string;
-  lines?: number;
-  brightness?: number;
-  border?: boolean;
-  items?: string[];
-  selectable?: boolean;
-  value?: number;
-  label?: string;
-  x?: number;
-  y?: number;
-  w?: number;
-  h?: number;
-  [extra: string]: unknown;
-}
-
-export interface ScreenSpec {
-  blocks: AgentBlock[];
-  layout?: ScreenLayout;
-}
-
 type ScreenErrorCode =
   | "too_many_blocks"
   | "text_too_long"

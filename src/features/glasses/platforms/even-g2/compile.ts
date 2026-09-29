@@ -32,11 +32,11 @@ import {
 export const box = (border: boolean) => 2 * PAD + (border ? 2 * BORDER_W : 0);
 const MIN_LIST_ROWS = 2;
 /** The least height a selectable list may shrink to (it scrolls natively below that). */
-export const MIN_LIST_H = MIN_LIST_ROWS * LIST_ROW_H + 2 * PAD;
+const MIN_LIST_H = MIN_LIST_ROWS * LIST_ROW_H + 2 * PAD;
 export const INFO_MARK = `${DIVIDER_GLYPH} `;
 
 /** An info (non-selectable) list as the text block the lens draws: one `─ item` line per item. */
-export function infoListAsText(b: NormBlock): NormBlock {
+function infoListAsText(b: NormBlock): NormBlock {
   if (b.type !== "list" || b.selectable) return b;
   const { items, ...rest } = b;
   return { ...rest, type: "text", content: (items ?? []).map((i) => INFO_MARK + i).join("\n") };
@@ -108,16 +108,11 @@ export function toContainer(s: Sized, x: number, y: number, w: number, h: number
   return c;
 }
 
-/** Where a stack goes: the lens above the back-button band, inside the margins (the default). */
-export interface StackArea {
-  x: number;
-  y: number;
-  w: number;
-  h: number;
-}
-const SCREEN_STACK: StackArea = { x: MARGIN, y: MARGIN, w: SCREEN_W - 2 * MARGIN, h: CONTENT_H - 2 * MARGIN };
+/** Where a stack goes: the lens above the back-button band, inside the margins. */
+const SCREEN_STACK = { x: MARGIN, y: MARGIN, w: SCREEN_W - 2 * MARGIN, h: CONTENT_H - 2 * MARGIN };
 
-export function layoutStack(sized: Sized[], errors: ScreenError[], area: StackArea = SCREEN_STACK): ScreenContainer[] {
+function layoutStack(sized: Sized[], errors: ScreenError[]): ScreenContainer[] {
+  const area = SCREEN_STACK;
   const w = area.w;
   const heights = sized.map((s) => s.natural);
   const available = area.h;

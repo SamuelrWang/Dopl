@@ -36,7 +36,6 @@ function device(over: Partial<GlassesDevice> = {}): GlassesDevice {
     created_at: "2026-09-26T00:00:00Z",
     last_seen: "2026-09-26T00:00:00Z",
     online: true,
-    linked_channel: { id: "ch-1", name: "General" },
     has_hey_even_key: false,
     ...over,
   };
@@ -168,7 +167,7 @@ describe("pairing", () => {
 
 describe("glasses rows", () => {
   it("renders name, platform and presence, with no channel control", async () => {
-    devices = [device(), device({ id: "dev-2", name: "Spare", online: false, linked_channel: null })];
+    devices = [device(), device({ id: "dev-2", name: "Spare", online: false })];
     renderPane();
     const list = await screen.findByRole("list", { name: "Devices" });
     await within(list).findByText("My G2");

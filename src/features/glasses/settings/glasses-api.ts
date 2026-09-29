@@ -9,11 +9,6 @@
 import { apiRequest } from "@/shared/api/api-client";
 import { apiResource } from "@/shared/api/query-keys";
 
-export interface GlassesLinkedChannel {
-  id: string;
-  name: string;
-}
-
 export interface GlassesDevice {
   id: string;
   name: string;
@@ -21,8 +16,6 @@ export interface GlassesDevice {
   created_at: string;
   last_seen: string | null;
   online: boolean;
-  /** Still sent by older servers; the pane no longer reads or sets it (no channel picker). */
-  linked_channel?: GlassesLinkedChannel | null;
   /** Wire name for "has an assistant key", kept for existing clients. */
   has_hey_even_key: boolean;
 }

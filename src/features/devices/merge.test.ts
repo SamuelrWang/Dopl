@@ -26,7 +26,6 @@ const glasses = (over: Partial<GlassesDevice>): GlassesDevice => ({
   created_at: "2026-09-01T00:00:00Z",
   last_seen: "2026-09-28T00:00:00Z",
   online: false,
-  linked_channel: null,
   has_hey_even_key: false,
   ...over,
 });
@@ -46,7 +45,7 @@ describe("mergeDevices", () => {
   });
 
   it("labels platforms from their registries and carries the glasses row", () => {
-    const row = glasses({ linked_channel: { id: "ch", name: "Ops" } });
+    const row = glasses({});
     const [g] = mergeDevices([], [row]);
     expect(g.platformLabel).toBe("Even G2");
     expect(g.glasses).toBe(row);

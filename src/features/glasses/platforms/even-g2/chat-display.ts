@@ -50,7 +50,7 @@ const bar = (value: number) => {
 };
 
 /** The display as multi-line lens text: title/text, `label ███▒▒ 32%`, `─ info`, `▶ option`. */
-export function displayText(blocks: NormBlock[], options: string[] = []): string {
+function displayText(blocks: NormBlock[], options: string[] = []): string {
   const lines: string[] = [];
   for (const b of blocks) {
     if (b.type === "text" && b.content) lines.push(b.content);
@@ -68,7 +68,7 @@ export function displayText(blocks: NormBlock[], options: string[] = []): string
 const normalize = (p: LensPrimitives) => normalizeSpec({ blocks: p.blocks, layout: "stack" }, { limits: LIM, sanitize: sanitizeG2Text });
 
 /** The head of `content` that wraps to at most `maxLines` lines (cut by line, then word, then character) and the rest. */
-export function splitText(content: string, inner: number, maxLines: number, m: TextMeasurer): [string, string] {
+function splitText(content: string, inner: number, maxLines: number, m: TextMeasurer): [string, string] {
   const fits = (s: string) => m.lineCount(s, inner) <= maxLines;
   if (fits(content)) return [content, ""];
   const lines = content.split("\n");
@@ -97,7 +97,7 @@ export function splitText(content: string, inner: number, maxLines: number, m: T
  * Stack blocks into chat-area pages: top-down from y 30, full width, never below y 202, at most
  * {@link CHAT_MAX_CONTAINERS} per page. A spacer is dropped at a page break.
  */
-export function paginateChat(blocks: NormBlock[], m: TextMeasurer, errors: ScreenError[]): Page[] {
+function paginateChat(blocks: NormBlock[], m: TextMeasurer, errors: ScreenError[]): Page[] {
   const pages: Page[] = [[]];
   let used = 0;
   const current = () => pages[pages.length - 1];

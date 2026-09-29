@@ -1,7 +1,7 @@
 /**
  * A tiny in-memory stand-in for the supabase-js query builder, enough for the
  * glasses modules that read other features' tables (`channel-link.ts`,
- * `voice-channel.ts`) to be tested without a database. Supports select, eq, in,
+ * `voice/channel-gateway.ts`) to be tested without a database. Supports select, eq, in,
  * gt, `or` over `and(col.eq.v,col.gt.n)` groups, order, limit, maybeSingle, and
  * awaiting the builder for `{data, error}`.
  */

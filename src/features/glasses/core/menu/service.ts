@@ -267,8 +267,10 @@ export async function pollChannel(
 }
 
 export async function launchOptions(deps: MenuDeps, device: Device, channelId: string) {
-  await assertReadable(deps, device, channelId);
-  const history = await deps.gateway.launchHistory(device.user_id);
+  const [, history] = await Promise.all([
+    assertReadable(deps, device, channelId),
+    deps.gateway.launchHistory(device.user_id),
+  ]);
   const sanitize = sanitizerOf(device);
   const order = [...new Set([...history.map((h) => h.runtime), "claude"])].filter((r) => RUNTIME_RE.test(r));
   return {
@@ -321,9 +323,11 @@ export function nextFreeName(taken: Iterable<string>): string {
 
 /** Unique among the owner's agents the menu can see (live sessions) and their recent launches. */
 async function nextNewAgentName(deps: MenuDeps, device: Device): Promise<string> {
-  const channels = await deps.gateway.listChannels(device.user_id);
+  // The launch history does not wait on the channel list the session read needs.
   const [sessions, launched] = await Promise.all([
-    deps.gateway.listSessions(channels.map((c) => c.id), 200),
+    deps.gateway.listChannels(device.user_id).then((channels) =>
+      deps.gateway.listSessions(channels.map((c) => c.id), 200)
+    ),
     deps.gateway.recentLaunchNames(device.user_id),
   ]);
   return nextFreeName([...sessions.map((s) => s.displayName ?? ""), ...launched]);

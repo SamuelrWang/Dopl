@@ -41,7 +41,7 @@ export const MENU_READ_RPM = 120;
 /** More empty long-poll answers than this within the window and each further one is held a minimum. */
 const EMPTY_POLL_BURST = 5;
 const EMPTY_POLL_WINDOW_MS = 5_000;
-export const EMPTY_POLL_MIN_HOLD_MS = 1_000;
+const EMPTY_POLL_MIN_HOLD_MS = 1_000;
 export const LAUNCH_RPM = 5;
 
 const err = (request: Request, status: number, code: string, message: string, extra: Record<string, string> = {}) =>
