@@ -130,9 +130,6 @@ export function KnowledgeBaseSkeleton({
         {/* THE THIN RAIL — `.rail` is the width (its default; the drag bar's
             remembered width lands once the real view mounts) and the clip. */}
         <div className={kv.rail}>
-          <div className={kv.railHead}>
-            <SkeletonLine w={44} h={10} />
-          </div>
           <div className={cn(kv.railBody, "flex flex-col gap-2 px-3.5")}>
             {RAIL_ROW_WIDTHS.map((w, i) => (
               <SkeletonLine key={i} w={w} h={11} />

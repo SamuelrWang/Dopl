@@ -92,9 +92,8 @@ describe("knowledge folder rail", () => {
     renderRail();
     expect(screen.queryByRole("button", { name: /^(Hide|Show) files$/ })).toBeNull();
     expect(document.querySelector("[aria-expanded]")).toBeNull();
-    // "Files" is the rail's first child — nothing sits left of it any more.
-    const head = screen.getByRole("heading", { name: "Files" });
-    expect(head.previousElementSibling).toBeNull();
+    // …and no "Files" header above the tree (Samuel, 2026-09-29).
+    expect(screen.queryByRole("heading", { name: "Files" })).toBeNull();
   });
 
   // the fill itself (hover == selected, one rule) is pinned in `../layout-rules.test.ts`.

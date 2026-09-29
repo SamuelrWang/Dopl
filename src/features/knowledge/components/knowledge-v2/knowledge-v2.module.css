@@ -10,10 +10,9 @@
   --kv-text-3: var(--text-muted);
   --kv-accent: var(--text-primary);
   --kv-row-hover: var(--surface-raised-1);
-  /* The rail's ONE row fill — hover and selected alike (Samuel, 2026-09-29: "the same gray … for the
-     pinned recent and earlier panels"). Those wells are `panel-well.ts › PANEL_WELL_ON_PANEL`, whose fill
-     is `--seg-fill`; referenced by name, never copied. */
-  --kv-row-fill: var(--seg-fill);
+  /* The rail's ONE row fill — hover and selected alike. It is the lighter `--home-panel` background gray
+     (Samuel, 2026-09-29: the Pinned/Recent/Earlier `--seg-fill` was too dark); referenced by name, never copied. */
+  --kv-row-fill: var(--home-panel);
 
   /* Surface geometry comes from `.page-float` (composed in knowledge-v2.tsx), except on an embedded mount. */
   display: flex;
@@ -74,28 +73,13 @@
   min-height: 0;
   overflow: hidden;
 }
-/* Left pad = row inset (8) + row pad (6), so "FILES" starts where the rows' first glyph does. */
-.railHead {
-  display: flex;
-  align-items: center;
-  height: 40px;
-  flex: 0 0 40px;
-  padding: 0 10px 0 14px;
-  font-size: var(--text-label);
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--kv-text-2);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
+/* No header above the tree (Samuel, 2026-09-29: "remove the word files at the top"). The top pad
+   plus `.tree`'s 2px puts the first row 8px down — the same 8px the rows are inset from each side. */
 .railBody {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  padding: 0 0 16px;
+  padding: 6px 0 16px;
 }
 .railBody::-webkit-scrollbar {
   width: 0;

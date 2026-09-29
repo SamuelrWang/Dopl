@@ -42,8 +42,6 @@ export function ListPanel({
 }: Props) {
   return (
     <div className={styles.rail}>
-      <h2 className={styles.railHead}>Files</h2>
-
       <div className={styles.railBody}>
         {!tree || tree.status === "loading" ? (
           // skeleton, not a "Loading…" line (docs/DESIGN-SYSTEM.md). The

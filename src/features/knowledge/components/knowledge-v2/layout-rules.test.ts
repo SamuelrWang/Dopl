@@ -63,13 +63,13 @@ describe("🔒 the panel FILLS its host, floated or embedded", () => {
 });
 
 describe("🔒 the file rail's rows (Samuel, 2026-09-29)", () => {
-  it("hover and selected are ONE rule, filled with the channel wells' gray by name", () => {
+  it("hover and selected are ONE rule, filled with the lighter background gray (--home-panel) by name", () => {
     const css = readFileSync(MODULE, "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
     // one selector list, so the two states cannot drift apart.
     expect(css).toMatch(/\.treeRow:hover,\s*\.treeRowActive \{/);
     expect(rule(".treeRowActive")).toContain("background: var(--kv-row-fill)");
-    // `panel-well.ts › PANEL_WELL_ON_PANEL` — the Pinned/Recent/Earlier fill.
-    expect(rule(".shell")).toContain("--kv-row-fill: var(--seg-fill)");
+    // the lighter background gray (2026-09-29: `--seg-fill` was too dark).
+    expect(rule(".shell")).toContain("--kv-row-fill: var(--home-panel)");
   });
 
   it("insets the fill from both rail edges, with rounded corners", () => {
