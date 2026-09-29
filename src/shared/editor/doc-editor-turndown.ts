@@ -95,8 +95,8 @@ function alignRule(align: Align, width: number): string {
   return dashes;
 }
 
-/** `<s>`/`<del>` → GFM `~~…~~`. ⚠ CELLS ONLY for now: prose strike is still
- *  dropped to plain text by turndown's default (see the report of 2026-09-29). */
+/** `<s>`/`<del>` → GFM `~~…~~`, which `marked` reads back as `<del>`. ⚠ Turndown
+ *  has no strike rule of its own: without this every save flattened strike to text. */
 export function makeStrikeRule(): TurndownService.Rule {
   return {
     filter: ["del", "s", "strike"] as TurndownService.Filter,
@@ -113,14 +113,14 @@ function baseTurndown(): TurndownService {
     linkStyle: "inlined",
   });
   td.addRule("link", makeLinkRule()); // ⚠ overrides built-in inlineLink — see makeLinkRule
+  td.addRule("strike", makeStrikeRule());
   return td;
 }
 
 /** The KB editor's HTML → markdown converter: prose rules, plus GFM tables whose
- *  cells go through a sibling converter that also knows strike. */
+ *  cells go through a sibling converter with the same prose rules. */
 export function createDocTurndown(): TurndownService {
   const cells = baseTurndown();
-  cells.addRule("strike", makeStrikeRule());
   const td = baseTurndown();
   td.addRule("table", makeTableRule((html) => cells.turndown(html)));
   return td;

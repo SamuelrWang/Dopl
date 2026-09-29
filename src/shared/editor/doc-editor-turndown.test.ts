@@ -20,6 +20,7 @@ import TurndownService from "turndown";
 import {
   createDocTurndown,
   makeLinkRule,
+  makeStrikeRule,
   toCellMarkdown,
 } from "./doc-editor-turndown";
 
@@ -122,7 +123,8 @@ describe("table cells keep inline markdown on save", () => {
 
 describe("non-table output is unchanged", () => {
   it("prose, lists, code and links serialise exactly as the pre-fix converter did", () => {
-    // The pre-fix converter minus its table rule: same options, same link rule.
+    // The pre-fix converter minus its table rule: same options, same link rule —
+    // plus strike, the one deliberate non-table change (2026-09-29).
     const legacy = new TurndownService({
       headingStyle: "atx",
       codeBlockStyle: "fenced",
@@ -131,11 +133,12 @@ describe("non-table output is unchanged", () => {
       linkStyle: "inlined",
     });
     legacy.addRule("link", makeLinkRule());
+    legacy.addRule("strike", makeStrikeRule());
     const html = marked.parse(
       [
         "# Title",
         "",
-        "Para with [link](https://a.dev), `code`, **bold**, *em* and a | pipe.",
+        "Para with [link](https://a.dev), `code`, **bold**, *em*, ~~gone~~ and a | pipe.",
         "",
         "- one",
         "- two",
@@ -149,5 +152,27 @@ describe("non-table output is unchanged", () => {
       { async: false, gfm: true }
     ) as string;
     expect(turndown.turndown(html)).toBe(legacy.turndown(html));
+  });
+});
+
+describe("strikethrough in text survives save", () => {
+  it.each([
+    ["paragraph", "Keep ~~this~~ struck."],
+    ["list item", "-   ~~done~~ task\n-   open task"],
+    ["heading", "## ~~Old~~ New heading"],
+    // ProseMirror's mark order puts strike inside bold and link — the canonical form.
+    ["mixed with bold and link", "A **~~bold strike~~** and [~~link~~](https://a.dev) here."],
+  ])("%s round-trips and is idempotent", (name, md) => {
+    const once = roundTrip(md);
+    expect(once).toContain("~~");
+    expect(roundTrip(once)).toBe(once);
+    // A list is re-spaced once by the pre-existing list output; the rest is byte-equal.
+    if (name !== "list item") expect(once).toBe(md);
+  });
+
+  it("strike written outside bold/link is normalised once, then stable", () => {
+    const once = roundTrip("A ~~**b**~~ and ~~[l](https://a.dev)~~.");
+    expect(once).toBe("A **~~b~~** and [~~l~~](https://a.dev).");
+    expect(roundTrip(once)).toBe(once);
   });
 });
