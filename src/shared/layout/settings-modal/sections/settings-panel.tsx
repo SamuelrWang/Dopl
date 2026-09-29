@@ -123,7 +123,7 @@ export function SettingsRow({
 }
 
 /** Empty line inside a card. */
-export function SettingsEmpty({ children }: { children: ReactNode }) {
+function SettingsEmpty({ children }: { children: ReactNode }) {
   return <p className="py-2.5 text-caption text-text-muted">{children}</p>;
 }
 

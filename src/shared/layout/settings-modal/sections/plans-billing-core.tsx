@@ -219,10 +219,8 @@ export function PlansBillingCore({
               plan={plan}
               ent={ent}
               canManage={canManage}
-              portalLoading={portalLoading}
               switching={switching}
               onUpgrade={onUpgrade}
-              onManage={onManage}
               onSwitchToTeam={handleSwitchToTeam}
             />
           ))}

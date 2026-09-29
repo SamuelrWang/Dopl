@@ -73,18 +73,19 @@ function isCurrentPlan(plan: PlanDef, ent: WorkspaceEntitlements): boolean {
   return !ent.isPaid;
 }
 
+/** A plan card's actions: the portal ("Manage billing") is the summary card's alone. */
+type CardActions = Omit<PlanActions, "portalLoading" | "onManage">;
+
 /** One plan column: name, price, features, state-appropriate CTA. Split out of
  *  `plans-billing-core` to keep both files under the 500-line cap. */
 export function PlanColumn({
   plan,
   ent,
   canManage,
-  portalLoading,
   switching,
   onUpgrade,
-  onManage,
   onSwitchToTeam,
-}: PlanActions & { plan: PlanDef }) {
+}: CardActions & { plan: PlanDef }) {
   const isCurrent = isCurrentPlan(plan, ent);
   // The card being SOLD, whichever group this is — `team` on a standard
   // workspace, `pro` on a home space. Never both in one list.
@@ -139,10 +140,8 @@ export function PlanColumn({
           isCurrent={isCurrent}
           ent={ent}
           canManage={canManage}
-          portalLoading={portalLoading}
           switching={switching}
           onUpgrade={onUpgrade}
-          onManage={onManage}
           onSwitchToTeam={onSwitchToTeam}
         />
       </div>
@@ -158,7 +157,7 @@ function PlanCta({
   switching,
   onUpgrade,
   onSwitchToTeam,
-}: PlanActions & { plan: PlanDef; isCurrent: boolean }) {
+}: CardActions & { plan: PlanDef; isCurrent: boolean }) {
   // The popup's small black verb (`small-action-button.ts › SMALL_PRIMARY_PILL`), full width.
   // The current paid plan's "Manage billing" is the summary card's, once.
   const primary = cn(SMALL_PRIMARY_PILL, "w-full justify-center disabled:cursor-default disabled:opacity-60");

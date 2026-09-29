@@ -61,7 +61,7 @@ export type DesktopDeviceStatus = "active" | "away" | "offline";
 
 /** One connected agent app, every OAuth registration of it folded together. */
 export interface AgentApp {
-  /** Stable group key (slug of the app name); the Disconnect address. */
+  /** Stable group key (`agent-apps.ts › appKey`: name + redirect host); the Disconnect address. */
   key: string;
   name: string;
   /** The client's redirect host — shown so a look-alike name cannot pass for the real app. */

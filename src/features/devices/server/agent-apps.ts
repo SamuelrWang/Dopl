@@ -45,7 +45,7 @@ const slug = (text: string) =>
     .replace(/^-+|-+$/g, "");
 
 /** The first redirect URI's host (`claude.ai`, `localhost`), or null when none parses. */
-export function redirectHost(uris: string[] | null): string | null {
+function redirectHost(uris: string[] | null): string | null {
   for (const uri of uris ?? []) {
     try {
       const host = new URL(uri).hostname;
@@ -76,7 +76,9 @@ function liveGroups(rows: GrantRow[], now: string): Map<string, GrantRow[]> {
   for (const row of rows) {
     if (!isLive(row, now)) continue;
     const key = rowKey(row);
-    groups.set(key, [...(groups.get(key) ?? []), row]);
+    const group = groups.get(key);
+    if (group) group.push(row);
+    else groups.set(key, [row]);
   }
   return groups;
 }
