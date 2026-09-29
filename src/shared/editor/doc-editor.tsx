@@ -14,7 +14,7 @@ import TurndownService from "turndown";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { cn } from "@/shared/lib/utils";
 import { Toolbar } from "./doc-editor-toolbar";
-import { makeLinkRule, makeTableRule } from "./doc-editor-turndown";
+import { createDocTurndown } from "./doc-editor-turndown";
 import { DocTable } from "./doc-editor-table";
 
 export type SaveStatus = "idle" | "dirty" | "saving" | "saved" | "error";
@@ -59,18 +59,7 @@ export function DocEditor({
   }, [initialMarkdown]);
 
   // useState lazy-init so the Turndown constructor runs once, not per render.
-  const [turndown] = useState<TurndownService>(() => {
-    const td = new TurndownService({
-      headingStyle: "atx",
-      codeBlockStyle: "fenced",
-      bulletListMarker: "-",
-      emDelimiter: "*",
-      linkStyle: "inlined",
-    });
-    td.addRule("table", makeTableRule());
-    td.addRule("link", makeLinkRule()); // ⚠ overrides built-in inlineLink — see makeLinkRule
-    return td;
-  });
+  const [turndown] = useState<TurndownService>(createDocTurndown);
 
   // ⚠ Latest onChange in a ref: Tiptap's `onUpdate` closes over the first one
   // passed in, so parent closure updates would be missed.

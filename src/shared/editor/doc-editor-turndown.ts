@@ -25,8 +25,16 @@ export function makeLinkRule(): TurndownService.Rule {
 /**
  * Table rule → GFM pipe tables. Turndown's default leaves raw HTML; inline
  * here rather than pulling in `turndown-plugin-gfm` for one feature.
+ *
+ * ⚠ **EACH CELL IS CONVERTED AS INLINE MARKDOWN, NOT READ AS TEXT.** This read
+ * `textContent`, so every editor save stripped links, bold, italic, code and
+ * strike out of agent-written tables. `cellToMarkdown` is a turndown with the
+ * prose rules, so a cell serialises like prose does; {@link toCellMarkdown}
+ * then makes it legal on one table line.
  */
-export function makeTableRule(): TurndownService.Rule {
+export function makeTableRule(
+  cellToMarkdown: (html: string) => string
+): TurndownService.Rule {
   return {
     filter: "table",
     replacement(_content, node) {
@@ -35,19 +43,85 @@ export function makeTableRule(): TurndownService.Rule {
       for (const row of Array.from(table.rows)) {
         rows.push(
           Array.from(row.cells).map((c) =>
-            c.textContent?.trim().replace(/\|/g, "\\|") ?? ""
+            toCellMarkdown(cellToMarkdown(c.innerHTML))
           )
         );
       }
       if (rows.length === 0) return "";
+      const aligns = Array.from(table.rows[0].cells).map(cellAlign);
       const widths = rows[0].map(() => 3);
       const fmt = (cells: string[]) =>
         "| " +
         cells.map((c, i) => c.padEnd(widths[i] ?? 3, " ")).join(" | ") +
         " |";
-      const sep = "| " + widths.map((w) => "-".repeat(w)).join(" | ") + " |";
+      const sep =
+        "| " + widths.map((w, i) => alignRule(aligns[i] ?? null, w)).join(" | ") + " |";
       const out = [fmt(rows[0]), sep, ...rows.slice(1).map(fmt)];
       return "\n\n" + out.join("\n") + "\n\n";
     },
   };
+}
+
+/**
+ * One cell's markdown, made to fit on a table line — the inverse of what
+ * `marked` (GFM) reads back:
+ * - line and paragraph breaks → `<br>`: marked emits it, Tiptap reads it as a
+ *   hard break, turndown writes that as `"  \n"`, and this turns it back;
+ * - EVERY `|` → `\|`, inside code spans too: GFM unescapes `\|` in a cell
+ *   before inline parsing, and turndown already writes a literal `\` as `\\`.
+ */
+export function toCellMarkdown(md: string): string {
+  return md
+    .trim()
+    .replace(/ *\n+ */g, "<br>")
+    .replace(/\|/g, "\\|");
+}
+
+type Align = "left" | "center" | "right" | null;
+
+/** Tiptap renders a cell's alignment as `style="text-align: …"`; marked as `align`. */
+function cellAlign(cell: HTMLTableCellElement): Align {
+  const raw = (cell.style.textAlign || cell.getAttribute("align") || "")
+    .trim()
+    .toLowerCase();
+  return raw === "left" || raw === "center" || raw === "right" ? raw : null;
+}
+
+function alignRule(align: Align, width: number): string {
+  const dashes = "-".repeat(width);
+  if (align === "center") return `:${dashes}:`;
+  if (align === "left") return `:${dashes}`;
+  if (align === "right") return `${dashes}:`;
+  return dashes;
+}
+
+/** `<s>`/`<del>` → GFM `~~…~~`. ⚠ CELLS ONLY for now: prose strike is still
+ *  dropped to plain text by turndown's default (see the report of 2026-09-29). */
+export function makeStrikeRule(): TurndownService.Rule {
+  return {
+    filter: ["del", "s", "strike"] as TurndownService.Filter,
+    replacement: (content) => (content ? `~~${content}~~` : ""),
+  };
+}
+
+function baseTurndown(): TurndownService {
+  const td = new TurndownService({
+    headingStyle: "atx",
+    codeBlockStyle: "fenced",
+    bulletListMarker: "-",
+    emDelimiter: "*",
+    linkStyle: "inlined",
+  });
+  td.addRule("link", makeLinkRule()); // ⚠ overrides built-in inlineLink — see makeLinkRule
+  return td;
+}
+
+/** The KB editor's HTML → markdown converter: prose rules, plus GFM tables whose
+ *  cells go through a sibling converter that also knows strike. */
+export function createDocTurndown(): TurndownService {
+  const cells = baseTurndown();
+  cells.addRule("strike", makeStrikeRule());
+  const td = baseTurndown();
+  td.addRule("table", makeTableRule((html) => cells.turndown(html)));
+  return td;
 }
