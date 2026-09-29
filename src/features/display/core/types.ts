@@ -124,6 +124,9 @@ export interface DisplayEnvelopeV2 {
   glasses_message_id?: string;
   answer?: DisplayAnswerStamp | null;
   origin?: DisplayOrigin;
+  /** Set when a replace by `display_id` dropped this decision's choice: the message that replaced it.
+   *  A superseded display is closed — no answer, no decision index. */
+  superseded_by?: string;
 }
 
 /** What every reader gets from `adapt.ts › displayOf`. */
@@ -137,6 +140,8 @@ export interface Display {
   glasses_message_id: string | null;
   /** `metadata.escalation` is present: answers go through the decision lane (spec §5). */
   decision: boolean;
+  /** The message that superseded this display (closed: render read-only, no answer). */
+  superseded_by?: string | null;
 }
 
 export type DisplayErrorCode =

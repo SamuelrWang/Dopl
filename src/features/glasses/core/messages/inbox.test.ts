@@ -192,3 +192,13 @@ describe("a screen choice linked to a channel decision (unified display)", () =>
     expect((await answerAsk(deps, USER, { id: loose.id, index: 1 })).ok).toBe(true);
   });
 });
+
+describe("the lens (rec) mark is display text (verifier N4)", () => {
+  it("is stripped from a tapped screen answer", async () => {
+    const { store } = createFakeGlassesStore();
+    const payload = { screen_id: "d", spec_version: 1 as const, containers: [{ block_id: "c", kind: "list" as const, x: 8, y: 8, w: 560, h: 60, items: ["Go (rec)", "Hold"], capture: true }] };
+    const row = await store.insert(USER, { kind: "screen", card_id: "d", payload, expires_at: "2099-01-01T00:00:00Z", now: "2026-09-26T12:00:00Z" });
+    await answerAsk({ store }, USER, { id: row.id, index: 0, choice: "Go (rec)" });
+    expect((await store.get(USER, row.id))?.answer).toMatchObject({ index: 0, choice: "Go" });
+  });
+});

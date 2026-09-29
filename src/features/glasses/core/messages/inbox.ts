@@ -1,5 +1,6 @@
 import { iso, nowOf, sleepOf, type Clock } from "../clock";
 import { isUuid } from "../validation";
+import { REC_MARK } from "@/features/display/core/degrade";
 import type { GlassesMessage, GlassesStatus, GlassesStore, ScreenPayload } from "./types";
 
 /**
@@ -151,7 +152,8 @@ async function answerScreen(deps: InboxDeps, userId: string, row: GlassesMessage
     const items = container.items ?? [];
     if (index < 0 || index >= items.length) index = items.indexOf(choice);
     if (index < 0) return { ok: false, status: 400, error: `index must be 0-${items.length - 1}` };
-    choice = items[index];
+    // The lens's own marker is display text, never part of the answer (the label is authoritative).
+    choice = items[index].endsWith(REC_MARK) ? items[index].slice(0, -REC_MARK.length) : items[index];
   } else if (index < 0) {
     index = 0;
   }

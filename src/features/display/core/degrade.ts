@@ -37,7 +37,9 @@ export const MAX_DEGRADE_LEVEL = 9;
 const LEVEL_NAMES = ["", "choice notes", "spacers", "dividers"];
 export const degradeLabel = (level: number) => (level >= 4 ? "rows halved" : LEVEL_NAMES[level]);
 
-const REC = " (rec)";
+/** The lens marker on the recommended option — display text, never part of an answer. */
+export const REC_MARK = " (rec)";
+const REC = REC_MARK;
 const utf8 = (s: string) => new TextEncoder().encode(s).length;
 function clampBytes(s: string, max: number): string {
   let out = s;

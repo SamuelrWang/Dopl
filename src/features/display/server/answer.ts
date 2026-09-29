@@ -65,6 +65,9 @@ export async function answerDisplay(
   if (!choice || !option || (input.block_id && input.block_id !== choice.id)) {
     throw new HttpError(400, "DISPLAY_BAD_CHOICE", "No such choice on this display.");
   }
+  if (display.superseded_by) {
+    throw new HttpError(409, "DISPLAY_SUPERSEDED", "This decision was withdrawn: the agent replaced it.");
+  }
   if (!answersOf(metadata, row).includes(ctx.userId)) {
     throw new HttpError(403, "DISPLAY_NOT_YOURS", "Only the person this was shown to can answer it.");
   }

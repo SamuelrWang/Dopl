@@ -205,3 +205,35 @@ describe("a channel id from another container (P2-11)", () => {
     await expect(showDisplay(fenced, { blocks: STATUS, channel: CHAN }, undefined, setup().deps)).rejects.toBeInstanceOf(ChannelNotFoundError);
   });
 });
+
+describe("verifier round 2", () => {
+  it("N1: a same-id status replacing an open decision withdraws it (index dropped, superseded_by stamped)", async () => {
+    const decision = { spec_version: 2, display_id: "x", blocks: CHOICE };
+    vi.mocked(findByDisplayId).mockResolvedValue({ id: "old", body: "Ship?", metadata: { display: decision, escalation: { issue: "Ship?" } } } as never);
+    const r = await show({ blocks: STATUS, display_id: "x" });
+    expect(r).toMatchObject({ message_id: "m1", replaced: "new", replaced_reason: "choice changed" });
+    expect(replaceDisplay).toHaveBeenCalledWith("old", USER, "Ship?", { ...decision, superseded_by: "m1" }, null);
+  });
+
+  it("N2: a v1 one-item list is a plain list in the channel, still a tap on the lens", async () => {
+    online = true;
+    const t = setup();
+    const r = await show({ blocks: [{ type: "list", id: "go", items: ["Continue"] }], v1: true, target: "glasses", shortcut: "render" }, t.deps);
+    expect(r.decision).toBe(false);
+    const posted = vi.mocked(postMessage).mock.calls[0][2];
+    expect(posted.display?.blocks).toEqual([{ id: "go", type: "list", items: ["Continue"] }]);
+    expect(posted).toMatchObject({ intent: "chat" });
+    expect(t.rows[0].payload).toMatchObject({ containers: [expect.objectContaining({ kind: "list", items: ["Continue"], capture: true })] });
+  });
+
+  it("N4: a lens answer's label is the display's option, never the lens text", async () => {
+    online = true;
+    vi.mocked(findMessageById).mockResolvedValue({ metadata: {} } as never);
+    const t = setup();
+    t.clock.onSleep(async () => {
+      const [row] = t.rows;
+      if (row && row.status === "pending") await t.store.transition(USER, row.id, ["pending"], "answered", "t", { choice: "Ship (rec)", index: 0, at: "t" });
+    });
+    expect(await show({ blocks: CHOICE, wait: true }, t.deps)).toMatchObject({ answer: { index: 0, choice: "Ship", block_id: "b2" } });
+  });
+});

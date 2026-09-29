@@ -120,6 +120,7 @@ export function displayOf(
       wait_until: str(env.wait_until),
       glasses_message_id: str(env.glasses_message_id),
       decision,
+      superseded_by: str(env.superseded_by),
     };
   };
   if (isObj(raw) && Array.isArray(raw.blocks)) {

@@ -156,7 +156,12 @@ export function normalizeDisplay(input: unknown, opts: { version?: 1 | 2; tolera
 
   const choices = blocks.filter((b) => b.type === "choice");
   if (choices.length > 1) {
-    c.add(choices[1].id, "multiple_choice", `${choices.length} choice blocks (${choices.map((b) => b.id).join(", ")}); max 1 per display`);
+    const ids = choices.map((b) => b.id).join(", ");
+    c.add(
+      choices[1].id,
+      "multiple_choice",
+      opts.version === 1 ? `${choices.length} selectable lists (${ids}); max 1` : `${choices.length} choice blocks (${ids}); max 1 per display`
+    );
   }
   return c.errors.length ? { ok: false, errors: c.errors } : { ok: true, display: { blocks, layout } };
 }

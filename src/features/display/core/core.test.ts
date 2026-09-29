@@ -201,3 +201,10 @@ describe("v1 bounds and legacy ids (verifier fixes)", () => {
     expect(displayOf({ escalation }, { messageId: "m-1" })?.display_id).toBe("m-1");
   });
 });
+
+describe("v1 wording (verifier N3)", () => {
+  it("two selectable lists in v1 input are named as lists", () => {
+    const r = normalizeDisplay({ blocks: [{ type: "list", items: ["a"] }, { type: "list", items: ["b"] }] }, { version: 1 });
+    expect(r).toMatchObject({ ok: false, errors: [{ code: "multiple_choice", message: "2 selectable lists (b1, b2); max 1" }] });
+  });
+});

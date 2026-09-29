@@ -82,6 +82,14 @@ describe("answerDisplay — decision lane", () => {
   });
 });
 
+describe("a superseded decision (verifier N1)", () => {
+  it("is closed: 409 DISPLAY_SUPERSEDED, nothing posted", async () => {
+    vi.mocked(findMessageById).mockResolvedValue(row({ display: { ...V2, superseded_by: "m2" } }) as never);
+    await expect(answerDisplay(ctx(), "chan", MSG, { index: 0 })).rejects.toMatchObject({ status: 409, code: "DISPLAY_SUPERSEDED" });
+    expect(postMessage).not.toHaveBeenCalled();
+  });
+});
+
 describe("answerDisplay — legacy v1 lane", () => {
   const V1 = { spec_version: 1, screen_id: "s-1", blocks: [{ id: "o", type: "list", items: ["a", "b"], selectable: true }] };
 

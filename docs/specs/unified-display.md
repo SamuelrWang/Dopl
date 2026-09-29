@@ -791,3 +791,14 @@ posts `intent:"chat"` **and** `autoAddress:false` (RR3's escape), and fold 11 de
     client-side within the connection's container — pass `container` there (pre-existing, unchanged).
 12. `displayOf(metadata, {pageAnswer, messageId})`: a legacy decision's `display_id` falls back to
     `messageId` (additive to C1).
+
+**Verifier round 2 (2026-09-28).**
+13. A same-id replace that drops the choice from an OPEN decision posts the new message and
+    withdraws the old one in one statement: its decision index goes and its envelope gains
+    `superseded_by: <new message id>`. `Display.superseded_by` (optional, additive to C1) — the
+    answer route refuses it with 409 `DISPLAY_SUPERSEDED`; **renderer: draw a superseded display
+    read-only/closed.**
+14. The channel copy of a choice that cannot be a decision (a v1-born list of 1 or 13-19 options) is
+    a plain `list` (a record); the lens keeps it tappable. So no new channel row takes the legacy lane.
+15. v1 input names two selectable lists as lists. A lens answer's label is the display's option by
+    index (the " (rec)" mark is stripped at the lens and never reaches an answer).

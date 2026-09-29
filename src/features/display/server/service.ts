@@ -25,6 +25,7 @@ import {
   DISPLAY_ID_RE,
   choiceOf,
   newDisplayId,
+  type ChoiceBlock,
   type DisplayAnswerStamp,
   type DisplayBlock,
   type DisplayEnvelopeV2,
@@ -167,6 +168,20 @@ async function channelOf(ctx: ChannelContext, input: Input): Promise<{ channel: 
   }
 }
 
+/**
+ * The channel copy's blocks. A choice that cannot be a decision (a v1-born list of 1, or 13-19,
+ * options) is a plain list in chat — answerable on the lens only, never through a lane with no
+ * decision behind it (verifier N2).
+ */
+function channelBlocksOf(blocks: Positioned<DisplayBlock>[]): Positioned<DisplayBlock>[] {
+  if (decisionIndexOf(blocks) || !choiceOf(blocks)) return blocks;
+  return blocks.map((b) => {
+    if (b.type !== "choice") return b;
+    const { options, ...rest } = b;
+    return { ...rest, type: "list" as const, items: options.map((o) => o.label) };
+  });
+}
+
 const firstLine = (blocks: DisplayBlock[]) => {
   const b = blocks.find((x) => x.type === "heading" || x.type === "text");
   const line = b ? (b.type === "heading" ? b.text : b.type === "text" ? b.content : "").split("\n")[0] : "";
@@ -221,7 +236,7 @@ export async function showDisplay(ctx: ChannelContext, raw: ShowInput, signal?: 
   // ── THE CHANNEL COPY ──
   const waitUntil = input.wait ? iso(nowOf(deps) + Math.min(timeout, ASK_HOLD_CAP_SEC) * 1000) : undefined;
   const posted = channel
-    ? await postOrReplace(resolved!.ctx, channel, input, { blocks, layout, displayId, waitUntil, row, choice: !!choice })
+    ? await postOrReplace(resolved!.ctx, channel, input, { blocks: channelBlocksOf(blocks), layout, displayId, waitUntil, row, choice: !!decisionIndexOf(blocks) })
     : null;
   if (row && posted && row.channel_message_id !== posted.id) await deps.store.linkChannelMessage(ctx.userId, row.id, posted.id);
 
@@ -245,7 +260,7 @@ export async function showDisplay(ctx: ChannelContext, raw: ShowInput, signal?: 
     }),
   };
   if (!input.wait) return result;
-  const held = await hold(deps, ctx.userId, { row, messageId: posted?.id ?? null, channelId: channel?.id ?? null, timeout, signal });
+  const held = await hold(deps, ctx.userId, { row, messageId: posted?.id ?? null, channelId: channel?.id ?? null, timeout, choice, signal });
   return { ...result, ...held, ...(held.answer?.by && { by_handle: await handleOf(held.answer.by) }) };
 }
 
@@ -276,6 +291,7 @@ async function postOrReplace(ctx: ChannelContext, channel: ChannelRow, input: In
   const origin: DisplayOrigin = input.origin ?? "dopl_show";
   const stamp = { display_id: a.displayId, wait_until: a.waitUntil, glasses_message_id: a.row?.id, origin };
   let replaced: { replaced: "new"; replaced_reason: "answered" | "choice changed" } | undefined;
+  let withdraw: { id: string; body: string; envelope: DisplayEnvelopeV2 } | null = null;
   if (input.display_id) {
     const prior = await findByDisplayId(channel.id, a.displayId, ctx.userId);
     if (prior) {
@@ -283,7 +299,7 @@ async function postOrReplace(ctx: ChannelContext, channel: ChannelRow, input: In
       const answered = !!was?.answer || (await hasAnswerMessage(channel.id, prior.id));
       // In place only when the message keeps its lane: a status that gains a choice (or loses one)
       // is a different post — a decision is a request, a status a record (P2-1).
-      const sameLane = !!(was && choiceOf(was.blocks)) === a.choice;
+      const sameLane = !!was?.decision === a.choice;
       if (!answered && sameLane) {
         const envelope: DisplayEnvelopeV2 = {
           spec_version: 2,
@@ -299,6 +315,10 @@ async function postOrReplace(ctx: ChannelContext, channel: ChannelRow, input: In
         }
       }
       replaced = { replaced: "new", replaced_reason: answered ? "answered" : "choice changed" };
+      // An open decision replaced by a status is WITHDRAWN once the new message exists (N1).
+      if (!answered && was?.decision) {
+        withdraw = { id: prior.id, body: prior.body, envelope: (prior.metadata as { display: DisplayEnvelopeV2 }).display };
+      }
     }
   }
   const message = await postMessage(
@@ -318,6 +338,11 @@ async function postOrReplace(ctx: ChannelContext, channel: ChannelRow, input: In
     },
     { display: stamp }
   );
+  if (withdraw) {
+    // Same statement as a replace: the index goes (no longer "waiting on you"), and the envelope
+    // says what superseded it, so the answer route refuses it and every surface shows it closed.
+    await replaceDisplay(withdraw.id, ctx.userId, withdraw.body, { ...withdraw.envelope, superseded_by: message.id }, null);
+  }
   return { id: message.id, replaced, tags: tagsOf(message.metadata, handles) };
 }
 
@@ -332,7 +357,7 @@ function tagsOf(metadata: unknown, handles: string[]): string {
 async function hold(
   deps: GlassesDeps,
   userId: string,
-  h: { row: GlassesMessage | null; messageId: string | null; channelId: string | null; timeout: number; signal?: AbortSignal }
+  h: { row: GlassesMessage | null; messageId: string | null; channelId: string | null; timeout: number; choice: ChoiceBlock | null; signal?: AbortSignal }
 ): Promise<Pick<ShowResult, "status" | "answer">> {
   const sleep = sleepOf(deps);
   const start = nowOf(deps);
@@ -347,8 +372,11 @@ async function hold(
     if (h.row) {
       const cur = await deps.store.get(userId, h.row.id);
       if (cur?.status === "answered" && cur.answer) {
-        const { block_id, index, choice, at } = cur.answer;
-        return { status: "answered", answer: { block_id: block_id ?? "", index, choice, at, via: "glasses" } };
+        const { index, at } = cur.answer;
+        // The display's own option is the answer's label (the lens text may carry its "(rec)" mark).
+        const option = h.choice?.options[index];
+        const choice = option?.label ?? cur.answer.choice;
+        return { status: "answered", answer: { block_id: h.choice?.id ?? cur.answer.block_id ?? "", index, choice, at, via: "glasses" } };
       }
       if (cur?.status === "dismissed") return { status: "dismissed", answer: null };
       if (cur?.status === "expired" && !h.messageId) return { status: "timeout", answer: null };
