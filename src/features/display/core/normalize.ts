@@ -97,7 +97,12 @@ class Collector {
   }
 }
 
-export function normalizeDisplay(input: unknown, opts: { version?: 1 | 2 } = {}): NormalizeResult {
+/**
+ * `version: 1` reads v1 input (a selectable list is a choice) under v1's own bounds and words: a
+ * selectable list carries 1-19 items. `tolerant` applies those bounds to v2 input too — for readers
+ * of stored rows and for the glasses shortcuts, whose v1-born choices may hold 1 or up to 19.
+ */
+export function normalizeDisplay(input: unknown, opts: { version?: 1 | 2; tolerant?: boolean } = {}): NormalizeResult {
   const c = new Collector();
   const s = isObj(input) ? input : {};
   if (s.layout !== undefined && s.layout !== "stack" && s.layout !== "absolute") {
@@ -135,7 +140,7 @@ export function normalizeDisplay(input: unknown, opts: { version?: 1 | 2 } = {})
       const why = (GEOMETRY as readonly string[]).includes(k) ? ` (only with layout:"absolute")` : "";
       c.add(id, "unknown_key", `${type} has no '${k}'${why}; keys: ${KEYS[type].join(", ") || "none"}`);
     }
-    const block = normalizeBlock(c, id, type, b);
+    const block = normalizeBlock(c, id, type, b, opts.version === 1 ? "v1" : opts.tolerant ? "tolerant" : "v2");
     if (layout === "absolute") {
       for (const g of GEOMETRY) {
         if (b[g] === undefined) continue;
@@ -156,7 +161,9 @@ export function normalizeDisplay(input: unknown, opts: { version?: 1 | 2 } = {})
   return c.errors.length ? { ok: false, errors: c.errors } : { ok: true, display: { blocks, layout } };
 }
 
-function normalizeBlock(c: Collector, id: string, type: BlockType, b: Obj): Positioned<DisplayBlock> {
+type Bounds = "v2" | "v1" | "tolerant";
+
+function normalizeBlock(c: Collector, id: string, type: BlockType, b: Obj, bounds: Bounds): Positioned<DisplayBlock> {
   switch (type) {
     case "heading":
       return { id, type, text: c.str(id, "text", b.text, L.heading) as string };
@@ -212,7 +219,7 @@ function normalizeBlock(c: Collector, id: string, type: BlockType, b: Obj): Posi
       return out;
     }
     case "choice":
-      return { id, type, options: normalizeOptions(c, id, b.options) };
+      return { id, type, options: normalizeOptions(c, id, b.options, bounds) };
     case "progress": {
       const out: Extract<DisplayBlock, { type: "progress" }> = { id, type, value: 0 };
       if (typeof b.value === "number" && b.value >= 0 && b.value <= 1) out.value = b.value;
@@ -248,20 +255,22 @@ function normalizeBlock(c: Collector, id: string, type: BlockType, b: Obj): Posi
   }
 }
 
-function normalizeOptions(c: Collector, id: string, raw: unknown): ChoiceOption[] {
-  const { min, max } = L.options;
+function normalizeOptions(c: Collector, id: string, raw: unknown, bounds: Bounds): ChoiceOption[] {
+  const { min, max } = bounds === "v2" ? L.options : L.v1Options;
+  // v1 input is a selectable list: its errors speak of items, not options.
+  const field = bounds === "v1" ? "items" : "options";
   if (!Array.isArray(raw) || raw.length < min) {
-    c.add(id, "bad_value", `options needs ${min}-${max} entries`);
+    c.add(id, "bad_value", bounds === "v1" ? `a selectable list needs ${min}-${max} items` : `options needs ${min}-${max} entries`);
     return [];
   }
-  if (raw.length > max) c.add(id, "list_too_long", `options has ${raw.length} entries; max ${max}`);
+  if (raw.length > max) c.add(id, "list_too_long", `${field} has ${raw.length} entries; max ${max}${bounds === "v1" ? " in a selectable list" : ""}`);
   let recommended = 0;
   const options = raw.map((r, i) => {
     const o = isObj(r) ? r : typeof r === "string" ? { label: r } : {};
     for (const k of Object.keys(o)) {
       if (!OPTION_KEYS.includes(k)) c.add(id, "unknown_key", `options[${i}] has no '${k}'; keys: ${OPTION_KEYS.join(", ")}`);
     }
-    const out: ChoiceOption = { label: c.str(id, `options[${i}].label`, o.label, L.optionLabel) as string };
+    const out: ChoiceOption = { label: c.str(id, bounds === "v1" ? `items[${i}]` : `options[${i}].label`, o.label, L.optionLabel) as string };
     const description = c.str(id, `options[${i}].description`, o.description, L.optionDescription, { optional: true });
     if (description) out.description = description;
     if (o.recommended === true) {

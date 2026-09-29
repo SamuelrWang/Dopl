@@ -1,4 +1,3 @@
-import { fromV1 } from "./normalize";
 import { BLOCK_TYPES, DISPLAY_LIMITS, DISPLAY_SPEC_VERSION, type DisplayLayout } from "./types";
 
 /**
@@ -19,8 +18,9 @@ export class DisplayInputError extends Error {
   }
 }
 
+/** v2 carries `spec_version: 2`; a v1 template (glasses_save_template) has none and stays v1. */
 export interface StoredTemplateSpec {
-  spec_version: typeof DISPLAY_SPEC_VERSION;
+  spec_version?: typeof DISPLAY_SPEC_VERSION;
   blocks: Record<string, unknown>[];
   layout?: "absolute";
 }
@@ -44,29 +44,37 @@ export function templateNameFrom(raw: string | undefined, fallback: string): str
   return slug || "display";
 }
 
-/** Structural check at save time; `version: 1` input (glasses_save_template) is stored as v2. */
+/**
+ * Structural check at save time. `version: 1` input (glasses_save_template) is stored AS v1, so a
+ * one-item selectable list keeps v1's bounds when it is used (`templateSpecOf` → `fromV1`).
+ */
 export function checkTemplateSpec(spec: { blocks?: unknown; layout?: unknown }, version: 1 | 2 = 2): StoredTemplateSpec {
   if (!Array.isArray(spec.blocks) || spec.blocks.length === 0) throw new DisplayInputError("blocks must be a non-empty array");
   if (spec.blocks.length > DISPLAY_LIMITS.blocks) {
     throw new DisplayInputError(`${spec.blocks.length} blocks; max ${DISPLAY_LIMITS.blocks}`);
   }
-  const blocks = (version === 1 ? fromV1(spec.blocks) : spec.blocks) as Record<string, unknown>[];
-  blocks.forEach((b, i) => {
-    if (!isObj(b) || !BLOCK_TYPES.includes(b.type as never)) {
-      throw new DisplayInputError(`blocks[${i}].type must be one of ${BLOCK_TYPES.join(", ")}`);
-    }
+  const types = version === 1 ? ["text", "list", "progress", "divider", "spacer"] : BLOCK_TYPES;
+  spec.blocks.forEach((b, i) => {
+    if (!isObj(b) || !types.includes(b.type as never)) throw new DisplayInputError(`blocks[${i}].type must be one of ${types.join(", ")}`);
   });
   if (spec.layout !== undefined && spec.layout !== "stack" && spec.layout !== "absolute") {
     throw new DisplayInputError("layout must be 'stack' or 'absolute'");
   }
-  return { spec_version: DISPLAY_SPEC_VERSION, blocks, ...(spec.layout === "absolute" && { layout: "absolute" as const }) };
+  return {
+    ...(version === 2 && { spec_version: DISPLAY_SPEC_VERSION }),
+    blocks: spec.blocks as Record<string, unknown>[],
+    ...(spec.layout === "absolute" && { layout: "absolute" as const }),
+  };
 }
 
-/** A stored template (v2, or v1 without `spec_version`) as v2 blocks + layout, placeholders intact. */
-export function templateSpecOf(stored: unknown): { blocks: unknown[]; layout: DisplayLayout } {
+/** A stored template, placeholders intact, with the block version it is written in. */
+export function templateSpecOf(stored: unknown): { blocks: unknown[]; layout: DisplayLayout; version: 1 | 2 } {
   const s = isObj(stored) ? stored : {};
-  const blocks = Array.isArray(s.blocks) ? s.blocks : [];
-  return { blocks: s.spec_version === DISPLAY_SPEC_VERSION ? blocks : fromV1(blocks), layout: s.layout === "absolute" ? "absolute" : "stack" };
+  return {
+    blocks: Array.isArray(s.blocks) ? s.blocks : [],
+    layout: s.layout === "absolute" ? "absolute" : "stack",
+    version: s.spec_version === DISPLAY_SPEC_VERSION ? 2 : 1,
+  };
 }
 
 export function templateVariables(spec: unknown): string[] {

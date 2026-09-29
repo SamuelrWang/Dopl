@@ -73,11 +73,11 @@ describe("glasses MCP server", () => {
     ]);
   });
 
-  it("glasses_render reads v1 blocks (a selectable list is a choice)", async () => {
+  it("glasses_render sends v1 blocks flagged v1 (read under v1's bounds server-side)", async () => {
     const { client, shown } = await connect();
     const res = await client.callTool({ name: "glasses_render", arguments: { screen_id: "s-a", blocks: [{ type: "list", items: ["a", "b"] }] } });
     expect(JSON.parse((res.content as { text: string }[])[0].text)).toEqual({ id: "g-1", screen_id: "s-1", status: "pending" });
-    expect(shown[0]).toMatchObject({ display_id: "s-a", blocks: [{ type: "choice", options: [{ label: "a" }, { label: "b" }] }] });
+    expect(shown[0]).toMatchObject({ display_id: "s-a", v1: true, blocks: [{ type: "list", items: ["a", "b"] }] });
   });
 
   it("surfaces the door's 400 text as a fixable tool error", async () => {

@@ -57,17 +57,21 @@ describe("toLensPrimitives", () => {
 });
 
 describe("templates", () => {
-  it("stores v1 input as v2 and spreads arrays into options", () => {
+  it("keeps v1 input v1 (a one-item selectable list stays valid) and spreads arrays", () => {
     const stored = checkTemplateSpec({ blocks: [{ type: "list", items: ["{{opts}}"] }, { type: "progress", value: "{{pct}}" }] }, 1);
-    expect(stored.spec_version).toBe(2);
+    expect(stored).not.toHaveProperty("spec_version");
     expect(templateVariables(stored)).toEqual(["opts", "pct"]);
-    const filled = fillTemplate(templateSpecOf(stored), { opts: ["a", "b"], pct: 0.5 }) as { blocks: unknown[] };
-    expect(normalizeDisplay(filled).ok).toBe(true);
-    expect(filled.blocks[0]).toEqual({ type: "choice", options: [{ label: "a" }, { label: "b" }] });
+    const spec = templateSpecOf(stored);
+    expect(spec.version).toBe(1);
+    const one = fillTemplate(spec, { opts: ["Continue"], pct: 0.5 }) as { blocks: unknown[] };
+    expect(normalizeDisplay(one, { version: 1 }).ok).toBe(true);
     expect(() => fillTemplate(stored, {})).toThrow(/missing template data: opts, pct/);
   });
 
-  it("reads an old v1 template (no spec_version) through fromV1", () => {
-    expect(templateSpecOf({ blocks: [{ type: "list", items: ["x", "y"], selectable: false }] }).blocks).toEqual([{ type: "list", items: ["x", "y"] }]);
+  it("stores v2 with spec_version 2 and spreads an array into choice options", () => {
+    const stored = checkTemplateSpec({ blocks: [{ type: "choice", options: [{ label: "{{opts}}" }] }] });
+    expect(stored.spec_version).toBe(2);
+    const filled = fillTemplate(templateSpecOf(stored), { opts: ["a", "b"] }) as { blocks: unknown[] };
+    expect(filled.blocks[0]).toEqual({ type: "choice", options: [{ label: "a" }, { label: "b" }] });
   });
 });

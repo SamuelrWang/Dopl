@@ -29,7 +29,7 @@ A CHOICE MAKES IT A DECISION: the people it tags (mention=, else your operator) 
 LIVE UPDATE: the same display_id replaces your unanswered display in place (a status that moves).
 TARGET: auto (default) the channel, plus your own glasses for a choice when they are online; channel: chat only; glasses: your lens (and the channel if you are in one).
 
-ON GLASSES (576x288 lens) the display degrades in order until it fits: 1 the choice's descriptions and recommendation note, 2 spacers, 3 dividers, 4+ table/fields/list rows halved ("+N more"). Headings are bright, muted text dim; fields and tables become "label: value" / "a · b" lines; the recommended option is marked "(rec)". validate_only=true shows how it lands on each surface without sending.
+ON GLASSES (576x288 lens; at most 8 drawn blocks — every block but spacers and the choice counts) the display degrades in order until it fits: 1 the choice's descriptions and recommendation note, 2 spacers, 3 dividers, 4+ table/fields/list rows halved ("+N more"). Headings are bright, muted text dim; fields and tables become "label: value" / "a · b" lines; the recommended option is marked "(rec)". validate_only=true shows how it lands on each surface without sending; target="glasses" refuses a display that fits at no level and names the levels tried.
 
 EXAMPLES
 Decision: {"blocks":[{"type":"heading","text":"Ship the migration now?"},{"type":"text","content":"Additive and reversible. CI is green.","tone":"muted"},{"type":"fields","rows":[{"label":"Risk","value":"Low"},{"label":"ETA","value":"10 min"}]},{"type":"choice","options":[{"label":"Ship now","description":"Live in ~10 minutes","recommended":true,"why":"Reversible"},{"label":"Wait for review","description":"Blocked until tomorrow"}]}]}

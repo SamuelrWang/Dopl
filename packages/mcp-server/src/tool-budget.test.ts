@@ -250,8 +250,8 @@ const INSTRUCTIONS_CEILING = 1_804; // +15: an unstamped caller reads "your clie
 // where every evicted paragraph landed: 5,765 of refusals, 4,873 of own-agent
 // narrative, 3,914 on a hold that is now a knob on `read`.
 // DMP-013: the same doctrine spelled for a granular connection (longer tool names). Re-derive, never quote.
-const GRANULAR_DOCTRINE_CEILING = 17_212; // +2,654 pulled (2026-09-28, unified display): `dopl://doctrine/displays` — the block limits, ladder and examples `dopl_show` points at instead of pushing.  +58 pulled against −126 pushed (2026-09-25): permission levels.
-const DOCTRINE_CEILING = 16_942; // +2,636 pulled (2026-09-28, unified display): `dopl://doctrine/displays`.  +58 pulled against −63 pushed (2026-09-25): the runtime words behind the permission levels. +312 pulled against −229 pushed: home-channel addressing moved into `rooms` (P8-23); +16 P8-20. Re-derive, never quote.
+const GRANULAR_DOCTRINE_CEILING = 17_369; // +2,654 pulled (2026-09-28, unified display): `dopl://doctrine/displays` — the block limits, ladder and examples `dopl_show` points at instead of pushing; +157 the lens block cap and the named ladder levels (verifier P2-4).  +58 pulled against −126 pushed (2026-09-25): permission levels.
+const DOCTRINE_CEILING = 17_099; // +2,636 pulled (2026-09-28, unified display): `dopl://doctrine/displays`; +157 the lens block cap and the named ladder levels (verifier P2-4).  +58 pulled against −63 pushed (2026-09-25): the runtime words behind the permission levels. +312 pulled against −229 pushed: home-channel addressing moved into `rooms` (P8-23); +16 P8-20. Re-derive, never quote.
 
 const WS: WorkspaceListItem = {
   id: "11111111-1111-1111-1111-111111111111", ownerId: "owner", name: "Alpha", slug: "alpha",

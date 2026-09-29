@@ -770,3 +770,24 @@ posts `intent:"chat"` **and** `autoAddress:false` (RR3's escape), and fold 11 de
    `merge_channel_message_display` precedent), not definer.
 7. `ChannelEscalationAnswerSchema.optionIndex` max is the stored ceiling (11), since a display decision
    may carry 12 options.
+
+**Verifier round 1 (2026-09-28).** Additions and rulings, backend-only:
+8. v1 input keeps v1 bounds: `normalizeDisplay(…, {version: 1})` reads a selectable list as a
+   `choice` of 1-19 items with v1 words in its errors; stored rows are read `tolerant` (1-19) and the
+   glasses shortcuts re-show `tolerant`. A choice outside 2-12 options is NOT a decision (no index;
+   answered through the legacy lane). `glasses_save_template` stores v1 input AS v1 (no
+   `spec_version`), not converted — so a one-item list stays usable. `POST /api/displays` takes an
+   internal `v1: true` (the shortcuts send raw v1 blocks).
+9. A lens choice linked to a decision is answered once (a second tap is 409); a tap that loses to an
+   app answer re-syncs the lens row to the stamp and answers 409.
+10. Replace-by-id is in place only when the choice-ness is unchanged; otherwise a new message, with
+    `replaced_reason: "answered" | "choice changed"` in the result. `auto` without a choice reports
+    `glasses=skipped(no choice)` when glasses are online. Blocks holding `{{variables}}` are refused
+    unless `data` fills them (`save_as` keeps the placeholders). A glasses compile failure names the
+    levels tried (`"tried":"levels 0-N (…)"`). Results always carry `tags=` on a channel post and,
+    with `wait`, `by_handle` (`answered 1 \`Ship now\` by \`@handle\` via glasses`).
+11. A channel UUID from another of the caller's containers resolves server-side for `dopl_show`
+    (unfenced credentials only, membership re-proved). `dopl_send_message` still resolves `channel`
+    client-side within the connection's container — pass `container` there (pre-existing, unchanged).
+12. `displayOf(metadata, {pageAnswer, messageId})`: a legacy decision's `display_id` falls back to
+    `messageId` (additive to C1).

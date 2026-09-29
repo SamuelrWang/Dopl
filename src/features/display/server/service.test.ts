@@ -8,7 +8,13 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("@/features/channels/server/service", () => ({ postMessage: vi.fn() }));
 vi.mock("@/features/channels/server/service-shared", () => ({ requireMemberChannel: vi.fn() }));
 vi.mock("@/features/channels/server/repository-messages", () => ({ findMessageById: vi.fn() }));
-vi.mock("./repository", () => ({ findByDisplayId: vi.fn(), hasAnswerMessage: vi.fn(), replaceDisplay: vi.fn() }));
+vi.mock("@/features/channels/server/repository-workspace", () => ({
+  fetchProfiles: vi.fn(async () => [{ id: "u2", display_name: "Diana Taylor", email: "d@x.io", avatar_url: null }]),
+}));
+vi.mock("./repository", () => ({ findByDisplayId: vi.fn(), hasAnswerMessage: vi.fn(), replaceDisplay: vi.fn(), channelWorkspaceOf: vi.fn() }));
+vi.mock("@/features/workspaces/server/service", () => ({
+  resolveActiveWorkspace: vi.fn(async (_u: string, id: string) => ({ workspace: { id, kind: "home_channel" }, membership: { role: "owner" } })),
+}));
 
 import { postMessage } from "@/features/channels/server/service";
 import { requireMemberChannel } from "@/features/channels/server/service-shared";
@@ -16,7 +22,8 @@ import { findMessageById } from "@/features/channels/server/repository-messages"
 import type { ChannelContext } from "@/features/channels/server/service-shared";
 import type { DeviceStore } from "@/features/glasses/core/devices/types";
 import { createFakeGlassesStore, fakeClock } from "@/features/glasses/core/testing/fake-store";
-import { findByDisplayId, hasAnswerMessage, replaceDisplay } from "./repository";
+import { channelWorkspaceOf, findByDisplayId, hasAnswerMessage, replaceDisplay } from "./repository";
+import { ChannelNotFoundError } from "@/features/channels/server/errors";
 import { showDisplay, type ShowInput } from "./service";
 
 const USER = "11111111-1111-4111-8111-111111111111";
@@ -67,7 +74,7 @@ describe("routing (§4.2)", () => {
     expect(t.rows[0]).toMatchObject({ kind: "screen", card_id: r.display_id, channel_message_id: "m1" });
     expect(vi.mocked(postMessage).mock.calls[0][3]?.display?.glasses_message_id).toBe(t.rows[0].id);
     const s = await show({ blocks: STATUS }, t.deps);
-    expect(s.glasses).toBe("skipped:no online glasses");
+    expect(s.glasses).toBe("skipped:no choice");
     expect(t.rows).toHaveLength(1);
   });
 
@@ -125,7 +132,7 @@ describe("wait (§3.4)", () => {
       return { metadata: { display: { spec_version: 2, display_id: "d", blocks: CHOICE, answer } } } as never;
     });
     const r = await show({ blocks: CHOICE, wait: true, timeout_sec: 30 }, t.deps);
-    expect(r).toMatchObject({ status: "answered", answer: { index: 0, choice: "Ship", via: "computer" } });
+    expect(r).toMatchObject({ status: "answered", answer: { index: 0, choice: "Ship", via: "computer" }, by_handle: "@diana-taylor" });
     const waitUntil = vi.mocked(postMessage).mock.calls[0][3]?.display?.wait_until;
     expect(Date.parse(waitUntil!) - t.clock.now()).toBeLessThanOrEqual(30_000);
   });
@@ -152,5 +159,49 @@ describe("wait (§3.4)", () => {
       if (row && row.status === "pending") await t.store.transition(USER, row.id, ["pending"], "answered", "t", { choice: "Wait", index: 1, at: "t" });
     });
     expect(await show({ blocks: CHOICE, wait: true }, t.deps)).toMatchObject({ status: "answered", answer: { index: 1, via: "glasses" } });
+  });
+});
+
+describe("verifier fixes", () => {
+  it("a same-id display that gains a choice is a NEW message (a decision is not a record)", async () => {
+    vi.mocked(findByDisplayId).mockResolvedValue({ id: "old", metadata: { display: { spec_version: 2, display_id: "x", blocks: STATUS } } } as never);
+    const r = await show({ blocks: CHOICE, display_id: "x" });
+    expect(r).toMatchObject({ message_id: "m1", replaced: "new", replaced_reason: "choice changed" });
+    expect(replaceDisplay).not.toHaveBeenCalled();
+  });
+
+  it("refuses unfilled {{placeholders}}, fills them with data, and saves the raw template", async () => {
+    const t = setup();
+    const blocks = [{ type: "heading", text: "Build {{n}}" }];
+    await expect(show({ blocks }, t.deps)).rejects.toThrow(/blocks hold \{\{n\}\}: pass data/);
+    await show({ blocks, data: { n: 7 }, save_as: "build" }, t.deps);
+    expect(vi.mocked(postMessage).mock.calls[0][2].body).toBe("Build 7");
+    expect((await t.store.getTemplate(USER, "build"))?.spec).toMatchObject({ spec_version: 2, blocks });
+  });
+
+  it("v1 input keeps v1 bounds: one- and fifteen-item selectable lists; a one-option choice is not a decision", async () => {
+    online = true;
+    const one = await show({ blocks: [{ type: "list", items: ["Continue"] }], v1: true, target: "glasses", shortcut: "render" });
+    expect(one).toMatchObject({ glasses: "shown", decision: false });
+    const many = Array.from({ length: 15 }, (_, i) => `item ${i}`);
+    expect((await show({ blocks: [{ type: "list", items: many }], v1: true, target: "glasses" })).glasses).toBe("shown");
+    await expect(show({ blocks: [{ type: "list", items: [...many, ...many] }], v1: true })).rejects.toThrow(/items has 30 entries; max 19 in a selectable list/);
+  });
+
+  it("a lens that fits at no level names the levels it tried", async () => {
+    online = true;
+    await expect(show({ target: "glasses", blocks: [{ type: "text", content: "x".repeat(1500) }] })).rejects.toThrow(/"tried":"levels 0-9/);
+  });
+});
+
+describe("a channel id from another container (P2-11)", () => {
+  it("resolves in the channel's own container for an unfenced credential, and never for a fenced one", async () => {
+    vi.mocked(requireMemberChannel).mockRejectedValueOnce(new ChannelNotFoundError(CHAN));
+    vi.mocked(channelWorkspaceOf).mockResolvedValue("other-ws");
+    await show({ blocks: STATUS, channel: CHAN });
+    expect(vi.mocked(postMessage).mock.calls[0][0]).toMatchObject({ workspaceId: "other-ws", role: "owner", source: "agent" });
+    vi.mocked(requireMemberChannel).mockRejectedValueOnce(new ChannelNotFoundError(CHAN));
+    const fenced = { ...ctx, apiKeyWorkspaceId: "ws" } as unknown as ChannelContext;
+    await expect(showDisplay(fenced, { blocks: STATUS, channel: CHAN }, undefined, setup().deps)).rejects.toBeInstanceOf(ChannelNotFoundError);
   });
 });

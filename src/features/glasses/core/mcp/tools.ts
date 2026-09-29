@@ -1,7 +1,6 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { DoplApiError, type ShowDisplayInput, type ShowDisplayResult } from "@dopl/client";
 import { z } from "zod";
-import { fromV1 } from "@/features/display/core/normalize";
 import { checkTemplateSpec, cleanTemplateName, DisplayInputError, templateSpecOf, templateVariables } from "@/features/display/core/template";
 import { iso, nowOf } from "../clock";
 import { glassesGetAnswer, glassesNotify, glassesShow, glassesStatus, platformOf, type GlassesDeps } from "../messages/service";
@@ -94,7 +93,8 @@ export function registerGlassesTools(server: McpServer, deps: GlassesDeps, userI
       shortcut: "render",
       origin: "glasses_render",
       ...(args.screen_id && { display_id: args.screen_id }),
-      ...(args.blocks && { blocks: fromV1(args.blocks) as Record<string, unknown>[] }),
+      // v1 vocabulary, read server-side under v1's bounds (a selectable list of 1-19 items).
+      ...(args.blocks && { blocks: args.blocks as Record<string, unknown>[], v1: true }),
       ...(args.layout && { layout: args.layout }),
       ...(args.wait_for_input && { wait: true }),
       ...(args.timeout_sec !== undefined && { timeout_sec: args.timeout_sec }),
@@ -256,7 +256,15 @@ export function registerGlassesTools(server: McpServer, deps: GlassesDeps, userI
             target.options = p.items.map((label) => ({ label }));
           }
         }
-        const r = await show({ target: "glasses", shortcut: "render", origin: "glasses_update", display_id: args.screen_id, blocks: stored, layout: spec.layout });
+        const r = await show({
+          target: "glasses",
+          shortcut: "render",
+          origin: "glasses_update",
+          display_id: args.screen_id,
+          blocks: stored,
+          layout: spec.layout,
+          ...(spec.version === 1 && { v1: true }),
+        });
         return screenResult(r, false);
       }),
   );

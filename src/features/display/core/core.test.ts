@@ -187,3 +187,17 @@ describe("answerersOf", () => {
     expect(answerersOf(null, null)).toEqual([]);
   });
 });
+
+describe("v1 bounds and legacy ids (verifier fixes)", () => {
+  it("reads a stored one-item v1 selectable list; a one-option choice is no decision", () => {
+    const d = displayOf({ display: { spec_version: 1, screen_id: "s", blocks: [{ id: "o", type: "list", items: ["Continue"], selectable: true }] } });
+    expect(d?.blocks[0]).toEqual({ id: "o", type: "choice", options: [{ label: "Continue" }] });
+    expect(decisionIndexOf(d!.blocks)).toBeNull();
+    expect(normalizeDisplay({ blocks: [{ type: "choice", options: ["only"] }] }).ok).toBe(false);
+  });
+
+  it("a legacy decision is known by its message id", () => {
+    const escalation = { issue: "Q", context: "", options: [{ label: "a", consequence: "" }, { label: "b", consequence: "" }] };
+    expect(displayOf({ escalation }, { messageId: "m-1" })?.display_id).toBe("m-1");
+  });
+});

@@ -35,7 +35,7 @@ function toMenuMessage(m: ChannelMessage): MenuMessage {
     recipientAgentIds: m.recipientAgentIds ?? [],
     body: m.body,
     createdAt: m.createdAt,
-    display: displayOf(m.metadata),
+    display: displayOf(m.metadata, { messageId: m.id }),
     answerTo: answerToOf(m),
   };
 }

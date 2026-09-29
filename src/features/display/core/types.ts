@@ -168,6 +168,8 @@ export const DISPLAY_LIMITS = {
   listItems: 20,
   listItem: 200,
   options: { min: 2, max: 12 },
+  /** A v1 selectable list read as a choice keeps v1's bounds (glasses_render; stored v1 rows). */
+  v1Options: { min: 1, max: 19 },
   optionLabel: 80,
   optionDescription: 200,
   optionWhy: 200,

@@ -44,15 +44,18 @@ function showLine(r) {
     if (r.preview !== undefined)
         return r.preview;
     const where = r.channel_id ? ` in #${(0, narration_1.inlineOr)(r.channel_name ?? "", r.channel_id)} · msg=${r.message_id}` : "";
+    const decision = [r.decision && "decision", r.tags && `tags=${r.tags}`].filter(Boolean).join(" ");
     const facts = [
         `shown ${r.display_id}${where}`,
-        ...(r.decision ? [`decision${r.tags ? ` tags=${r.tags}` : ""}`] : r.tags ? [`tags=${r.tags}`] : []),
+        ...(decision ? [decision] : []),
         `glasses=${r.glasses.replace(/^skipped:(.*)$/, "skipped($1)")}`,
-        ...(r.replaced ? [`replaced=${r.replaced === "new" ? "new (was answered)" : r.replaced}`] : []),
+        ...(r.replaced ? [`replaced=${r.replaced}${r.replaced_reason ? ` (${r.replaced_reason === "answered" ? "was answered" : r.replaced_reason})` : ""}`] : []),
     ].join(" · ");
     const a = r.answer;
-    if (r.status === "answered" && a)
-        return `${facts}\nanswered ${a.index + 1} ${(0, narration_1.inlineOr)(a.choice, "(no label)")} via ${a.via}`;
+    if (r.status === "answered" && a) {
+        const by = r.by_handle ? ` by ${(0, narration_1.inlineOr)(r.by_handle, "")}` : "";
+        return `${facts}\nanswered ${a.index + 1} ${(0, narration_1.inlineOr)(a.choice, "(no label)")}${by} via ${a.via}`;
+    }
     if (r.status === "timeout" || r.status === "pending")
         return `${facts}\ntimeout: still open; the answer will arrive as their message`;
     if (r.status === "dismissed")

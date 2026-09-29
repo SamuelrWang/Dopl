@@ -5,8 +5,12 @@ import { sessionChannelId } from "@/shared/auth/session-header";
 import { postMessage } from "@/features/channels/server/service";
 import { requireMemberChannel, type ChannelContext } from "@/features/channels/server/service-shared";
 import { findMessageById } from "@/features/channels/server/repository-messages";
+import { ChannelNotFoundError } from "@/features/channels/server/errors";
+import { resolveActiveWorkspace } from "@/features/workspaces/server/service";
+import { isUuid } from "@/shared/lib/id/uuid";
 import type { ChannelRow } from "@/features/channels/server/dto";
-import { mentionedUserIdsOf } from "@/features/channels/lib/mentions";
+import { memberHandlesOf, mentionedUserIdsOf } from "@/features/channels/lib/mentions";
+import { fetchProfiles } from "@/features/channels/server/repository-workspace";
 import { iso, nowOf, sleepOf } from "@/features/glasses/core/clock";
 import { deviceRepository } from "@/features/glasses/core/devices/repository";
 import { glassesRepository } from "@/features/glasses/core/messages/repository";
@@ -16,7 +20,7 @@ import { decisionIndexOf, displayOf } from "../core/adapt";
 import { degradeLabel } from "../core/degrade";
 import { displayFallback } from "../core/fallback";
 import { normalizeDisplay } from "../core/normalize";
-import { checkTemplateSpec, cleanTemplateName, fillTemplate, templateSpecOf } from "../core/template";
+import { checkTemplateSpec, cleanTemplateName, fillTemplate, templateSpecOf, templateVariables } from "../core/template";
 import {
   DISPLAY_ID_RE,
   choiceOf,
@@ -29,7 +33,7 @@ import {
   type Positioned,
 } from "../core/types";
 import { compileForLens, isReservedLensId, lensState, pushAsk, pushScreen } from "./lens";
-import { findByDisplayId, hasAnswerMessage, replaceDisplay } from "./repository";
+import { channelWorkspaceOf, findByDisplayId, hasAnswerMessage, replaceDisplay } from "./repository";
 
 /**
  * **`showDisplay` — THE ONE DOOR** (`POST /api/displays`; spec §4). `dopl_show` and every glasses
@@ -61,6 +65,8 @@ export const ShowInputSchema = z
     origin: z.enum(["dopl_show", "glasses_render", "glasses_ask", "glasses_use_template", "glasses_update"]).optional(),
     ttl_sec: z.number().optional(),
     shortcut: z.enum(["render", "ask"]).optional(),
+    /** The blocks are the v1 glasses vocabulary (`glasses_render`), read under v1's bounds. */
+    v1: z.boolean().optional(),
   })
   .strict();
 export type ShowInput = z.input<typeof ShowInputSchema>;
@@ -75,18 +81,26 @@ export interface ShowResult {
   glasses: string;
   glasses_message_id?: string;
   replaced?: "in-place" | "new";
+  /** Why a same-id display became a new message: it was answered, or it gained/lost its choice. */
+  replaced_reason?: "answered" | "choice changed";
   decision?: boolean;
   /** `resolved/named` mention handles, when `mention` was given. */
   tags?: string;
   status?: string;
   answer?: DisplayAnswerStamp | null;
+  /** The answering member's @handle, when the answer names one (§4.3 `by @handle`). */
+  by_handle?: string;
   preview?: string;
   compiled?: unknown;
 }
 
 const deps0: GlassesDeps = { store: glassesRepository, devices: deviceRepository };
 const bad = (message: string) => new HttpError(400, "DISPLAY_INVALID", message);
-const invalid = (errors: unknown[]) => new HttpError(400, "DISPLAY_INVALID", JSON.stringify({ ok: false, errors }), { errors });
+const invalid = (errors: unknown[], extra: Record<string, unknown> = {}) =>
+  new HttpError(400, "DISPLAY_INVALID", JSON.stringify({ ok: false, errors, ...extra }), { errors, ...extra });
+/** A lens that does not fit at any ladder level (§2.5): the level-0 errors and how far it tried. */
+const lensInvalid = (lens: { errors: unknown[]; level: number }) =>
+  invalid(lens.errors, { tried: `levels 0-${lens.level} (choice notes, spacers, dividers, halved rows)` });
 
 function secondsIn(name: string, v: number | undefined, dflt: number, max: number): number {
   if (v === undefined) return dflt;
@@ -94,9 +108,13 @@ function secondsIn(name: string, v: number | undefined, dflt: number, max: numbe
   return Math.floor(v);
 }
 
-/** The blocks this call shows: its own, or a filled template (optionally saved first). */
+/**
+ * The blocks this call shows: its own, or a filled template (optionally saved first). Blocks that
+ * hold `{{variables}}` are a template: shown only once `data` fills them (P2-6), saved raw.
+ */
 async function blocksOf(deps: GlassesDeps, userId: string, input: Input) {
   let raw: { blocks: unknown; layout: DisplayLayout };
+  let version: 1 | 2 = input.v1 ? 1 : 2;
   if (input.template) {
     const name = cleanTemplateName(input.template);
     const t = await deps.store.getTemplate(userId, name);
@@ -104,26 +122,49 @@ async function blocksOf(deps: GlassesDeps, userId: string, input: Input) {
       const names = (await deps.store.listTemplates(userId)).map((x) => x.name);
       throw bad(`no template '${name}'; saved: ${names.join(", ") || "none"}`);
     }
-    raw = fillTemplate(templateSpecOf(t.spec), input.data) as typeof raw;
+    const spec = templateSpecOf(t.spec);
+    version = spec.version;
+    raw = fillTemplate(spec, input.data) as typeof raw;
   } else if (input.blocks) {
-    raw = { blocks: input.blocks, layout: input.layout ?? "stack" };
+    const own = { blocks: input.blocks, layout: input.layout ?? ("stack" as const) };
+    const vars = templateVariables(own.blocks);
+    if (vars.length && !input.data) {
+      throw bad(`blocks hold {{${vars.join("}}, {{")}}}: pass data to fill them (save_as keeps the placeholders).`);
+    }
+    if (input.save_as && !input.validate_only) {
+      const spec = checkTemplateSpec(own, version);
+      await deps.store.saveTemplate(userId, cleanTemplateName(input.save_as), spec, iso(nowOf(deps)));
+    }
+    raw = vars.length ? (fillTemplate(own, input.data) as typeof raw) : own;
   } else {
     throw bad("blocks (1-24) or template is required");
   }
-  const checked = normalizeDisplay(raw);
+  // The glasses shortcuts re-show v1-born choices (1-19 items) — tolerant bounds (P1-2).
+  const checked = normalizeDisplay(raw, { version, tolerant: input.shortcut === "render" });
   if (!checked.ok) throw invalid(checked.errors);
-  if (input.save_as && !input.validate_only) {
-    const spec = checkTemplateSpec({ blocks: raw.blocks, layout: raw.layout });
-    await deps.store.saveTemplate(userId, cleanTemplateName(input.save_as), spec, iso(nowOf(deps)));
-  }
   return checked.display;
 }
 
-async function channelOf(ctx: ChannelContext, input: Input): Promise<ChannelRow | null> {
+/**
+ * The channel this call shows in, and the context to post with. A channel id from ANOTHER of the
+ * caller's containers resolves there (P2-11: a session channel id arrives without its container)
+ * — only for an unfenced credential, and only through the same membership resolution a signed-in
+ * request gets (`resolveActiveWorkspace`), so it reaches nothing the caller could not open.
+ */
+async function channelOf(ctx: ChannelContext, input: Input): Promise<{ channel: ChannelRow; ctx: ChannelContext } | null> {
   const ref = input.channel ?? sessionChannelId(ctx.sessionId);
   if (!ref) return null;
-  const { channel } = await requireMemberChannel(ctx, ref, "show a display in this channel");
-  return channel;
+  const action = "show a display in this channel";
+  try {
+    return { channel: (await requireMemberChannel(ctx, ref, action)).channel, ctx };
+  } catch (err) {
+    if (!(err instanceof ChannelNotFoundError) || !isUuid(ref) || ctx.apiKeyWorkspaceId) throw err;
+    const home = await channelWorkspaceOf(ref);
+    if (!home || home === ctx.workspaceId) throw err;
+    const { workspace, membership } = await resolveActiveWorkspace(ctx.userId, home);
+    const there = { ...ctx, workspaceId: workspace.id, role: membership.role, workspaceKind: workspace.kind };
+    return { channel: (await requireMemberChannel(there, ref, action)).channel, ctx: there };
+  }
 }
 
 const firstLine = (blocks: DisplayBlock[]) => {
@@ -147,7 +188,7 @@ export async function showDisplay(ctx: ChannelContext, raw: ShowInput, signal?: 
   const lens = compileForLens(deps, blocks, layout, displayId);
   const lensNote = lens.ok ? (lens.level ? `degraded(level ${lens.level}: ${degradeLabel(lens.level)})` : "fits") : `errors:${JSON.stringify(lens.errors)}`;
   if (input.validate_only) {
-    if (input.target === "glasses" && !lens.ok) throw invalid(lens.errors);
+    if (input.target === "glasses" && !lens.ok) throw lensInvalid(lens);
     const ascii = lens.ok ? `\n${platformOf(deps).previewScreen(lens.payload)}` : "";
     return {
       display_id: displayId,
@@ -157,17 +198,18 @@ export async function showDisplay(ctx: ChannelContext, raw: ShowInput, signal?: 
     };
   }
 
-  const channel = await channelOf(ctx, input);
+  const resolved = await channelOf(ctx, input);
+  const channel = resolved?.channel ?? null;
   if (input.target === "channel" && !channel) throw bad("Nowhere to show it: name a channel (no session channel on this call).");
   const devices = input.target === "channel" ? { paired: false, online: false } : await lensState(deps, ctx.userId);
   if (input.target === "glasses" && !devices.paired) throw bad('No paired glasses; use target "channel".');
-  if (input.target === "glasses" && !lens.ok) throw invalid(lens.errors);
+  if (input.target === "glasses" && !lens.ok) throw lensInvalid(lens);
   const wantLens = input.target === "glasses" || (input.target === "auto" && devices.online && (!!choice || !channel));
   if (!channel && !wantLens) throw bad("Nowhere to show it: name a channel, or pair glasses.");
 
   // ── THE LENS COPY (the caller's own glasses) ──
   let row: GlassesMessage | null = null;
-  let glasses = input.target === "channel" ? "off" : wantLens ? "shown" : "skipped:no online glasses";
+  let glasses = input.target === "channel" ? "off" : wantLens ? "shown" : devices.online ? "skipped:no choice" : "skipped:no online glasses";
   if (wantLens && !lens.ok) glasses = `skipped:${(lens.errors[0] as { message?: string })?.message ?? "does not fit"}`;
   else if (wantLens && lens.ok) {
     row =
@@ -179,7 +221,7 @@ export async function showDisplay(ctx: ChannelContext, raw: ShowInput, signal?: 
   // ── THE CHANNEL COPY ──
   const waitUntil = input.wait ? iso(nowOf(deps) + Math.min(timeout, ASK_HOLD_CAP_SEC) * 1000) : undefined;
   const posted = channel
-    ? await postOrReplace(ctx, channel, input, { blocks, layout, displayId, waitUntil, row, choice: !!choice })
+    ? await postOrReplace(resolved!.ctx, channel, input, { blocks, layout, displayId, waitUntil, row, choice: !!choice })
     : null;
   if (row && posted && row.channel_message_id !== posted.id) await deps.store.linkChannelMessage(ctx.userId, row.id, posted.id);
 
@@ -193,11 +235,29 @@ export async function showDisplay(ctx: ChannelContext, raw: ShowInput, signal?: 
     // A lens row's own status is the glasses shortcuts' (`glasses_render`'s `status`); `dopl_show`
     // reads `status` only as a hold's outcome.
     ...(row && { glasses_message_id: row.id, ...(shortcut && { status: row.status }) }),
-    ...(posted && { message_id: posted.id, channel_id: channel!.id, channel_name: channel!.name, decision: !!choice, ...(posted.replaced && { replaced: posted.replaced }) }),
-    ...(posted?.tags && { tags: posted.tags }),
+    ...(posted && {
+      message_id: posted.id,
+      channel_id: channel!.id,
+      channel_name: channel!.name,
+      decision: !!decisionIndexOf(blocks),
+      tags: posted.tags,
+      ...posted.replaced,
+    }),
   };
   if (!input.wait) return result;
-  return { ...result, ...(await hold(deps, ctx.userId, { row, messageId: posted?.id ?? null, channelId: channel?.id ?? null, timeout, signal })) };
+  const held = await hold(deps, ctx.userId, { row, messageId: posted?.id ?? null, channelId: channel?.id ?? null, timeout, signal });
+  return { ...result, ...held, ...(held.answer?.by && { by_handle: await handleOf(held.answer.by) }) };
+}
+
+/** A member's first @handle (their display name or email slug), for the result line only. */
+async function handleOf(userId: string): Promise<string | undefined> {
+  try {
+    const [p] = await fetchProfiles([userId]);
+    const handle = p && memberHandlesOf([{ userId, displayName: p.display_name, email: p.email }])[0];
+    return handle ? `@${handle}` : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 interface PostArgs {
@@ -215,12 +275,16 @@ async function postOrReplace(ctx: ChannelContext, channel: ChannelRow, input: In
   const body = [handles.join(" "), displayFallback(a.blocks)].filter(Boolean).join("\n");
   const origin: DisplayOrigin = input.origin ?? "dopl_show";
   const stamp = { display_id: a.displayId, wait_until: a.waitUntil, glasses_message_id: a.row?.id, origin };
-  let replaced: "in-place" | "new" | undefined;
+  let replaced: { replaced: "new"; replaced_reason: "answered" | "choice changed" } | undefined;
   if (input.display_id) {
     const prior = await findByDisplayId(channel.id, a.displayId, ctx.userId);
     if (prior) {
-      const answered = !!displayOf(prior.metadata as Record<string, unknown>)?.answer || (await hasAnswerMessage(channel.id, prior.id));
-      if (!answered) {
+      const was = displayOf(prior.metadata as Record<string, unknown>);
+      const answered = !!was?.answer || (await hasAnswerMessage(channel.id, prior.id));
+      // In place only when the message keeps its lane: a status that gains a choice (or loses one)
+      // is a different post — a decision is a request, a status a record (P2-1).
+      const sameLane = !!(was && choiceOf(was.blocks)) === a.choice;
+      if (!answered && sameLane) {
         const envelope: DisplayEnvelopeV2 = {
           spec_version: 2,
           display_id: a.displayId,
@@ -231,10 +295,10 @@ async function postOrReplace(ctx: ChannelContext, channel: ChannelRow, input: In
           origin,
         };
         if (await replaceDisplay(prior.id, ctx.userId, body, envelope, decisionIndexOf(a.blocks))) {
-          return { id: prior.id, replaced: "in-place" as const, tags: tagsOf(prior.metadata, handles) };
+          return { id: prior.id, replaced: { replaced: "in-place" as const }, tags: tagsOf(prior.metadata, handles) };
         }
       }
-      replaced = "new";
+      replaced = { replaced: "new", replaced_reason: answered ? "answered" : "choice changed" };
     }
   }
   const message = await postMessage(
@@ -257,8 +321,7 @@ async function postOrReplace(ctx: ChannelContext, channel: ChannelRow, input: In
   return { id: message.id, replaced, tags: tagsOf(message.metadata, handles) };
 }
 
-function tagsOf(metadata: unknown, handles: string[]): string | undefined {
-  if (handles.length === 0) return undefined;
+function tagsOf(metadata: unknown, handles: string[]): string {
   return `${mentionedUserIdsOf(metadata as Record<string, unknown>).length}/${handles.length}`;
 }
 

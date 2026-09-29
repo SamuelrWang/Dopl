@@ -68,3 +68,10 @@ export async function hasAnswerMessage(channelId: string, messageId: string): Pr
   if (error) throw new Error(`display answer lookup failed: ${error.message}`);
   return (count ?? 0) > 0;
 }
+
+/** The container a live channel lives in (the caller's membership is checked by the caller). */
+export async function channelWorkspaceOf(channelId: string): Promise<string | null> {
+  const { data, error } = await db().from("channels").select("workspace_id").eq("id", channelId).is("deleted_at", null).maybeSingle();
+  if (error) throw new Error(`channel lookup failed: ${error.message}`);
+  return (data as { workspace_id: string } | null)?.workspace_id ?? null;
+}

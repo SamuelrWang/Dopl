@@ -22,6 +22,8 @@ export interface ShowDisplayInput {
   origin?: "dopl_show" | "glasses_render" | "glasses_ask" | "glasses_use_template" | "glasses_update";
   ttl_sec?: number;
   shortcut?: "render" | "ask";
+  /** The blocks are the v1 glasses vocabulary (glasses_render), read under v1's bounds. */
+  v1?: boolean;
 }
 
 export interface DisplayAnswerStamp {
@@ -43,12 +45,15 @@ export interface ShowDisplayResult {
   glasses: string;
   glasses_message_id?: string;
   replaced?: "in-place" | "new";
+  replaced_reason?: "answered" | "choice changed";
   decision?: boolean;
   /** `resolved/named` mention handles. */
   tags?: string;
   /** With `wait`: answered | timeout | dismissed | pending. Else the lens row's status. */
   status?: string;
   answer?: DisplayAnswerStamp | null;
+  /** The answering member's @handle (with `wait`, when answered). */
+  by_handle?: string;
   preview?: string;
   compiled?: unknown;
 }

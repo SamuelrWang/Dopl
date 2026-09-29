@@ -6,6 +6,7 @@ import {
 import { displayFallback } from "./fallback";
 import { normalizeDisplay } from "./normalize";
 import {
+  DISPLAY_LIMITS,
   DISPLAY_METADATA_KEY,
   choiceOf,
   type ChoiceOption,
@@ -76,7 +77,8 @@ const clip = (s: string, max: number) => (s.length > max ? `${s.slice(0, max - 1
  */
 export function decisionIndexOf(blocks: readonly DisplayBlock[]): ChannelEscalation | null {
   const choice = choiceOf(blocks);
-  if (!choice) return null;
+  // A v1-born choice outside 2-12 options is not a decision (the stored index could not parse).
+  if (!choice || choice.options.length < DISPLAY_LIMITS.options.min || choice.options.length > DISPLAY_LIMITS.options.max) return null;
   const rest = blocks.filter((b) => b !== choice);
   const heading = rest.find((b) => b.type === "heading");
   const firstText = rest.find((b) => b.type === "text");
@@ -102,7 +104,8 @@ export function decisionIndexOf(blocks: readonly DisplayBlock[]): ChannelEscalat
 
 export function displayOf(
   metadata: Json | null | undefined,
-  opts: { pageAnswer?: DisplayAnswerStamp | null } = {}
+  /** `messageId`: the id a legacy decision (no display id of its own) is known by. */
+  opts: { pageAnswer?: DisplayAnswerStamp | null; messageId?: string } = {}
 ): Display | null {
   const raw = metadata?.[DISPLAY_METADATA_KEY];
   const decision = isObj(metadata?.[ESCALATION_METADATA_KEY]);
@@ -110,7 +113,7 @@ export function displayOf(
     const choice = choiceOf(blocks);
     return {
       from,
-      display_id: str(env.display_id) ?? str(env.screen_id) ?? "",
+      display_id: str(env.display_id) ?? str(env.screen_id) ?? opts.messageId ?? "",
       blocks,
       layout,
       answer: (choice && answerStampOf(env.answer, choice.id)) ?? opts.pageAnswer ?? null,
@@ -121,7 +124,7 @@ export function displayOf(
   };
   if (isObj(raw) && Array.isArray(raw.blocks)) {
     const version = raw.spec_version === 2 ? 2 : raw.spec_version === undefined || raw.spec_version === 1 ? 1 : null;
-    const checked = version ? normalizeDisplay({ blocks: raw.blocks, layout: raw.layout }, { version }) : null;
+    const checked = version ? normalizeDisplay({ blocks: raw.blocks, layout: raw.layout }, { version, tolerant: true }) : null;
     if (checked?.ok) return build(version === 2 ? "v2" : "v1", checked.display.blocks, checked.display.layout, raw);
   }
   const escalation = decision ? parseStoredEscalation(metadata?.[ESCALATION_METADATA_KEY]) : null;

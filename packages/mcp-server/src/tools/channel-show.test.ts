@@ -80,11 +80,11 @@ describe("dopl_show", () => {
   });
 
   it("reports a wait's answer, a replace, and a skipped lens", async () => {
-    answer = { ...answer, glasses: "skipped:does not fit", replaced: "new", status: "answered", answer: { block_id: "b2", index: 0, choice: "Ship now", at: "t", via: "glasses" } };
+    answer = { ...answer, glasses: "skipped:does not fit", replaced: "new", replaced_reason: "answered", by_handle: "@samuel-wang", status: "answered", answer: { block_id: "b2", index: 0, choice: "Ship now", at: "t", via: "glasses" } };
     const res = await call("dopl_show", { blocks: DECISION, wait: true, display_id: "ship-1" });
     expect(res.text.split("\n").slice(0, 2)).toEqual([
       "shown d-1a2b3c4d in #`Demo` · msg=m1 · decision tags=1/1 · glasses=skipped(does not fit) · replaced=new (was answered)",
-      "answered 1 `Ship now` via glasses",
+      "answered 1 `Ship now` by `@samuel-wang` via glasses",
     ]);
   });
 
