@@ -44,6 +44,8 @@ export interface SearchState {
 }
 
 const IDLE: SearchState = { groups: [], loading: false, error: null };
+/** One object, so a pending query hands consumers' memos the same `groups`. */
+const PENDING: SearchState = { groups: [], loading: true, error: null };
 
 /** What the hook stores: an answer, and WHICH request it answers. */
 interface Answer {
@@ -64,8 +66,8 @@ function requestKey(q: string, scope: SearchScope, containerId?: string): string
  * nothing, show … something that says loading results")** — `loading` is true
  * from the KEYSTROKE until this query's own answer lands (the debounce counts),
  * and `groups` is only ever the answer to the query in the field. The previous
- * answer is NOT held under the next load any more: rows for `ca` under a field
- * reading `can't` are rows for a question nobody is asking.
+ * answer is not held under the next load: rows for `ca` under a field reading
+ * `can't` are rows for a question nobody is asking.
  *
  * Every superseded request is aborted, and a settled-but-aborted response is
  * dropped: out-of-order answers show results for a prefix of what the field says.
@@ -114,9 +116,7 @@ export function useSearch({
    * the gap reads as `loading`.
    */
   if (!searching) return IDLE;
-  if (answer === null || answer.key !== key) {
-    return { groups: [], loading: true, error: null };
-  }
+  if (answer === null || answer.key !== key) return PENDING;
   return { groups: answer.groups, loading: false, error: answer.error };
 }
 

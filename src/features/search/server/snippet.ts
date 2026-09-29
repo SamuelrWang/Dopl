@@ -1,4 +1,5 @@
 import "server-only";
+import { APOSTROPHE_CLASS, APOSTROPHES } from "./query-text";
 
 /**
  * The one place `SearchItem.snippet` is minted, and the one place a `<mark>` tag
@@ -40,14 +41,6 @@ const LEAD_CHARS = 40;
 /** The longest term we will scan for. Bounds the regex the query builds. */
 const MAX_TERM_LENGTH = 64;
 
-/**
- * Every apostrophe a person or a keyboard produces: ASCII, the two curly quotes
- * (macOS smart punctuation turns `can't` into `can’t`) and the modifier letter.
- * One class, used on BOTH sides, so `can't` finds `can’t` and the reverse.
- */
-const APOSTROPHE_CLASS = "['\u2018\u2019\u02BC]";
-const APOSTROPHES = /['\u2018\u2019\u02BC]/g;
-
 /** A word character, for the boundary checks below. */
 const WORD_CHAR = /[\p{L}\p{N}_]/u;
 
@@ -56,11 +49,10 @@ const WORD_CHAR = /[\p{L}\p{N}_]/u;
  * spelling, surrounding quotation marks and a leading `-` stripped, split on
  * whitespace only. `or` is a word like any other: the tsquery builder ANDs it.
  *
- * ⚠ **AN APOSTROPHE IS PART OF THE WORD, NEVER A SEPARATOR.** The old
- * `replace(/["']/g, " ")` turned `can't` into the words `can` and `t`, and a
- * one-letter `t` then marked every `t` in every snippet (Samuel, 2026-09-29).
+ * ⚠ **AN APOSTROPHE IS PART OF THE WORD, NEVER A SEPARATOR** — splitting `can't`
+ * into `can` and `t` marks every `t` in every snippet (Samuel, 2026-09-29).
  */
-export function queryWords(query: string): string[] {
+function queryWords(query: string): string[] {
   return query
     .replace(APOSTROPHES, "'")
     .replace(/["\u201C\u201D]/g, " ")
