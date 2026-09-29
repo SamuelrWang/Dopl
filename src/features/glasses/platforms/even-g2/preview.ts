@@ -22,11 +22,10 @@ export function renderPreview({ containers, nav_footer: navFooter }: ScreenPaylo
     const r1 = Math.max(r0, Math.min(PREVIEW_ROWS - 1, Math.round((c.y + c.h) / ch) - 1));
     const width = c1 - c0 + 1;
     const tag = `[${c.block_id}${c.capture ? "*" : ""}] `;
-    const lines =
-      c.kind === "list"
-        ? (c.items ?? []).map((item) => `> ${item}`)
-        : wrap(toAscii(c.content ?? "").replace(/\n/g, " "), width);
-    const rows = [tag + (lines[0] ?? ""), ...lines.slice(1)];
+    // The tag leads the first line and the text wraps AFTER it, line break by line break, so no
+    // line is cut by its own tag and a multi-line block previews as its lines.
+    const lines = c.kind === "list" ? (c.items ?? []).map((item) => `> ${item}`) : toAscii(c.content ?? "").split("\n");
+    const rows = lines.length ? [tag + lines[0], ...lines.slice(1)].flatMap((l) => wrap(l, width)) : [tag];
     for (let r = r0; r <= r1; r++) {
       const text = rows[r - r0] ?? "";
       for (let k = 0; k < width; k++) grid[r][c0 + k] = text[k] ?? " ";

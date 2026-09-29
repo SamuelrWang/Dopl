@@ -162,3 +162,13 @@ describe("preview", () => {
     expect(preview).toMatch(/^[\x20-\x7E\n]+$/);
   });
 });
+
+describe("preview of multi-line text", () => {
+  it("keeps each line and never cuts the first under its tag", () => {
+    const res = compileScreen({ blocks: [{ id: "t", type: "text", content: "Risk: Low\nETA: 10 min" }] }, "s");
+    if (!res.ok) throw new Error("compile failed");
+    const rows = renderPreview(res.payload).split("\n");
+    expect(rows.some((r) => r.includes("[t*] Risk: Low"))).toBe(true);
+    expect(rows.some((r) => r.includes("| ETA: 10 min"))).toBe(true);
+  });
+});
