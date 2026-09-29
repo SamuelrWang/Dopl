@@ -19,8 +19,16 @@ const sendKind = z.enum(["message", "milestone", "record"], {
 });
 
 /** `display` on dopl_send_message (granular only): the server validates the blocks
- *  (`src/features/glasses/core/screens/display.ts`), so this stays a light shape. */
-const sendDisplay = z.object({ blocks: z.array(z.record(z.string(), z.unknown())).min(1) });
+ *  (`src/features/glasses/core/screens/display.ts`), so this stays a light shape. ⚠ STRICT and
+ *  whole (`layout`, `wait_for_input`): a key this shape did not name was STRIPPED, so an
+ *  absolute layout posted as a stack and nothing said so (2026-09-28). Unknown keys refuse. */
+const sendDisplay = z
+  .object({
+    blocks: z.array(z.record(z.string(), z.unknown())).min(1),
+    layout: z.enum(["stack", "absolute"]).optional(),
+    wait_for_input: z.boolean().optional(),
+  })
+  .strict();
 
 const AGENT_NAME = 'Display name in Title Case ("Picker Fix" → @picker-fix), one line, max 60.';
 

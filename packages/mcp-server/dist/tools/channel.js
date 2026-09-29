@@ -140,6 +140,8 @@ directory) {
                     return miss;
                 const channel = args.channel;
                 const body = args.body;
+                // Carried past the legacy schema by `dopl_send_message` (tool-manifest.ts).
+                const display = args.display;
                 // ⚠ `thread="new"` OPENS THE EXCHANGE, and it is checked FIRST because
                 // it decides which ROUTE the send goes to. `summary` is the title —
                 // one field, one meaning, and the create route's own `.min(1)` is what
@@ -148,6 +150,9 @@ directory) {
                 // thread for nobody (the only way to open one in a one-member room).
                 // Any other kind without `to` is the address-or-record refusal.
                 if (args.thread === "new") {
+                    const noNewDisplay = (0, channel_ops_write_1.displayLaneRefusal)('thread="new"', display !== undefined);
+                    if (noNewDisplay)
+                        return noNewDisplay;
                     const missNew = (0, respond_1.missingParams)('send thread="new"', args, ["summary"]);
                     if (missNew)
                         return missNew;
@@ -163,6 +168,11 @@ directory) {
                 // an untagged milestone groups into nothing, the one shape of this
                 // call that is always a mistake. ⚠ `to` is NOT routed through: a
                 // milestone marks the thread and addresses nobody.
+                if (args.kind === "milestone" || args.kind === "decision") {
+                    const noDisplay = (0, channel_ops_write_1.displayLaneRefusal)(`kind="${args.kind}"`, display !== undefined);
+                    if (noDisplay)
+                        return noDisplay;
+                }
                 if (args.kind === "milestone") {
                     const missM = (0, respond_1.missingParams)('send kind="milestone"', args, [
                         "thread",
@@ -228,6 +238,7 @@ directory) {
                         intent: "chat",
                         summary: args.summary,
                         thread: args.thread,
+                        display,
                         runtime,
                         // ⚠ ITS OWN VERB, on `milestone`'s precedent: a result opening
                         // `posted` would report a delivery on the one lane whose contract
@@ -251,8 +262,7 @@ directory) {
                     to: args.to,
                     summary: args.summary,
                     thread: args.thread,
-                    // Carried past the legacy schema by `dopl_send_message` (tool-manifest.ts).
-                    display: args.display,
+                    display,
                     runtime,
                 });
             }

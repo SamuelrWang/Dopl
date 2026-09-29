@@ -100,6 +100,12 @@ export declare function unaddressedRefusal(hasTo: boolean, hasThread: boolean): 
  */
 export declare function recordAddressedRefusal(hasTo: boolean): ToolResponse | null;
 /**
+ * **A DISPLAY RIDES ONLY THE LANES THAT FORWARD IT** (plain send + `kind="record"`).
+ * ⚠ Refused, never dropped: a lane that ignored `display` stored a text-only row and
+ * reported success, and the caller saw no display anywhere (2026-09-28).
+ */
+export declare function displayLaneRefusal(lane: string, hasDisplay: boolean): ToolResponse | null;
+/**
  * **THE RECIPIENT-COUNT BOUND, CHECKED BEFORE THE WIRE.** ⚠ The server's own
  * refusal answers on `CHANNEL_RECIPIENT_UNRESOLVED`, whose narration is about a
  * NAME that matched nobody — right for a typo and wrong for a list that is

@@ -90,6 +90,17 @@ describe("metadata.display", () => {
     expect(display).not.toHaveProperty("glasses_message_id");
   });
 
+  it("survives a RECORD from an EXTERNAL session (intent chat, no desktop runtime) — 2026-09-28", async () => {
+    await post({ ...agent, runtime: undefined }, {
+      body: "[demo] portfolio",
+      intent: "chat",
+      display: { blocks: [{ type: "text", content: "AAPL", x: 8, y: 8, w: 270, h: 35 }], layout: "absolute" },
+    });
+    const meta = stored();
+    expect(meta).toMatchObject({ intent: "chat", external_session: true });
+    expect(meta.display).toMatchObject({ spec_version: 1, layout: "absolute" });
+  });
+
   it("strips a display smuggled through caller metadata", async () => {
     await post(agent, { body: "x", metadata: { display: { spec_version: 1, glasses_message_id: "g", blocks: [] } } });
     expect(stored()).not.toHaveProperty("display");

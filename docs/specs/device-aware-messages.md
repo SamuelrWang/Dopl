@@ -91,7 +91,9 @@ pick up the main-process change).
   ` · via computer (Samuel's MacBook Pro)` / ` · via web`. When the newest member line on a page came
   from glasses, the page ends with ONE guidance line (`GLASSES_REPLY_GUIDANCE`).
 - `dopl_get_status` waiting items: ` · via …` on the item (`AccountWaitingItem.source = {kind, label}`).
-- `dopl_send_message` carries an optional `display: {blocks}` (granular only, `carry` in `tool-manifest.ts`).
+- `dopl_send_message` carries an optional `display: {blocks, layout?, wait_for_input?}` (granular only, `carry` in
+  `tool-manifest.ts`; strict — an unknown key refuses) on a plain send AND on `kind="record"`. `kind="milestone"`
+  and `thread="new"` REFUSE a display rather than drop it (`channel-ops-write.ts › displayLaneRefusal`).
 - Desktop session inbound (Claude/Codex): one note line above the fence (`Sent via glasses (Even G2).`)
   plus the guidance line for glasses (`main/session-seed.js › frameContinuation`, fed from
   `session-dispatch.js` through the gate/reducer as `source`).
