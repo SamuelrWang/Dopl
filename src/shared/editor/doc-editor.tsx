@@ -97,7 +97,7 @@ export function DocEditor({
           rel: "noopener noreferrer",
         },
       }),
-      // Own scroller + session-only resize; see doc-editor-table.ts.
+      // Own horizontal scroller; see doc-editor-table.ts.
       DocTable,
       TableRow,
       TableHeader,
@@ -220,6 +220,27 @@ export function SaveStatusIndicator({ state }: { state: SaveStatus }) {
   );
 }
 
+/**
+ * TABLE AUTO-SIZING — THE ONE RULE (Samuel, 2026-09-29: *"a singular like rule
+ * for an auto sizing of cells … a way to optimize spacing"*; tables are written
+ * by agents, never sized by hand).
+ *
+ * `table-layout: auto` at `w-full` sizes each column to its content, and the
+ * rule bounds that on the CELL'S CONTENT (a `max-width` on a `<td>` itself is
+ * ignored by auto layout; on its block child it caps the column's contribution):
+ * - floor **6ch** — a column of short codes stays readable, never a sliver;
+ * - ceiling **40ch** — a sentence column wraps instead of ballooning;
+ * - `break-words` — an unbroken URL breaks at the ceiling instead of spilling;
+ * - `align-top` — wrapped rows read from the top line.
+ * A table that fits fills the column; one that doesn't scrolls in
+ * `table-view.ts › TABLE_SCROLL_CLASS`. Nothing is stored.
+ */
+export const TABLE_AUTOSIZE = [
+  "[&_table]:table-auto",
+  "[&_td]:align-top [&_th]:align-top [&_td]:break-words [&_th]:break-words",
+  "[&_td>*]:min-w-[6ch] [&_th>*]:min-w-[6ch] [&_td>*]:max-w-[40ch] [&_th>*]:max-w-[40ch]",
+].join(" ");
+
 const PROSE_CLASSES = [
   "prose max-w-none text-text-primary/90 focus:outline-none",
   "prose-p:my-3 prose-p:leading-[1.7] prose-p:text-[16px]",
@@ -249,8 +270,7 @@ const PROSE_CLASSES = [
   // ⚠ The table's vertical rhythm is its scroller's (`table-view.ts ›
   // TABLE_SCROLL_CLASS`), so the table itself takes no margin.
   "[&_table]:my-0 [&_table]:border-collapse [&_table]:w-full [&_table]:text-[13px]",
-  // A resized (fixed-layout) table wraps long words rather than spilling a cell.
-  "[&_table[data-sized]_td]:break-words [&_table[data-sized]_th]:break-words",
+  TABLE_AUTOSIZE,
   "[&_thead]:bg-surface-raised-1",
   "[&_th]:text-left [&_th]:font-semibold [&_th]:text-text-primary [&_th]:px-3 [&_th]:py-1.5",
   "[&_th]:border [&_th]:border-border-default",
