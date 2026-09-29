@@ -33,7 +33,21 @@ describe("displayNudge", () => {
     expect(displayNudge({ ...s, body: list }, 31 * 60_000)).toBe("structure");
     expect(displayNudge({ ...s, body: choice }, 60_000)).toBe("choice");
     expect(displayNudge({ ...s, body: choice }, 61_000)).toBe("choice");
-    expect(log.mock.calls.filter(([l]) => String(l).startsWith("[display-nudge] "))).toHaveLength(4);
+    const lines = log.mock.calls.map(([l]) => String(l)).filter((l) => l.startsWith("[display-nudge] "));
+    expect(lines).toHaveLength(5);
+    expect(lines.filter((l) => l.includes('"throttled":true'))).toHaveLength(1);
+    log.mockRestore();
+  });
+
+  it("rapid structure posts in one session tip once per window, and each session is its own window", () => {
+    const log = vi.spyOn(console, "info").mockImplementation(() => {});
+    const list = "Status of the deploy today:\n- web done\n- desktop running\n- notary pending";
+    const at = (sessionId: string, t: number) => displayNudge({ channelId: "c", sessionId, userId: "u", body: list }, t);
+    const base = 10 * 3_600_000;
+    const hits = [0, 1, 2, 500, 29 * 60_000, 30 * 60_000 - 1].map((t) => at("s-rapid", base + t));
+    expect(hits.filter(Boolean)).toHaveLength(1);
+    expect(at("s-rapid", base + 30 * 60_000)).toBe("structure");
+    expect(at("s-other", base + 1)).toBe("structure");
     log.mockRestore();
   });
 });

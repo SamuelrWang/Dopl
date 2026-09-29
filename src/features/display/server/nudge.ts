@@ -65,10 +65,11 @@ export interface NudgeSubject {
 export function displayNudge(s: NudgeSubject, now = Date.now()): DisplayHint | null {
   const { hint, signals } = structuredProseSignals(s.body);
   if (!hint) return null;
-  if (hint === "structure" && !structureThrottle.tryAcquire(s.sessionId ?? `user:${s.userId}`, now)) return null;
+  // The METRIC counts every structured post; the throttle only mutes the tip (§6.3).
+  const throttled = hint === "structure" && !structureThrottle.tryAcquire(s.sessionId ?? `user:${s.userId}`, now);
   console.info(
     "[display-nudge] " +
-      JSON.stringify({ evt: "structured_without_display", hint, signals, channel_id: s.channelId, session_id: s.sessionId, chars: s.body.length })
+      JSON.stringify({ evt: "structured_without_display", hint, signals, throttled, channel_id: s.channelId, session_id: s.sessionId, chars: s.body.length })
   );
-  return hint;
+  return throttled ? null : hint;
 }
