@@ -9,7 +9,6 @@ import {
   type ReactNode,
 } from "react";
 import {
-  ChevronRight,
   FilePlus,
   FileText,
   Folder,
@@ -83,7 +82,8 @@ function indexByFolder(entries: KnowledgeEntry[]) {
 }
 
 /** Row indent: 6px inside the row's inset fill (`.treeRow` margin) + 15px per level.
- *  Was 28 at the root — the space Samuel cut on 2026-09-29. */
+ *  No disclosure chevron (Samuel, 2026-09-29): folder and file icons share the root x;
+ *  a folder signals open/closed by Folder/FolderOpen alone. */
 const pad = (depth: number) => ({ paddingLeft: 6 + depth * 15 });
 
 /**
@@ -291,10 +291,6 @@ function FolderRow({
       onClick={isEditing ? undefined : () => toggle(folder.id)}
       onContextMenu={(e) => openMenu(e, item)}
     >
-      <ChevronRight
-        size={13}
-        className={cn(styles.treeChevron, isOpen && styles.treeChevronOpen)}
-      />
       {isOpen ? (
         <FolderOpen size={14} className="leaf" />
       ) : (
@@ -356,7 +352,6 @@ function EntryRow({
       onClick={isEditing ? undefined : onSelect}
       onContextMenu={(e) => openMenu(e, item)}
     >
-      <span className={styles.treeChevron} />
       <FileText size={14} className="leaf" />
       {isEditing ? (
         <RowEditor entry={entry} item={item} />

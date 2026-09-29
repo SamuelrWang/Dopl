@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 import type { KnowledgeBase } from "../../../types";
 import type { BaseTree } from "../types";
@@ -59,7 +59,7 @@ describe("knowledge folder rail", () => {
   it("shows the opened base's tree, with no base rows around it", () => {
     renderRail();
     expect(screen.getByText("Cold outreach")).toBeTruthy();
-    // a disclosure chevron is meaningless with exactly one base.
+    // no base-level disclosure: the rail holds exactly one base.
     expect(screen.queryByLabelText("Collapse")).toBeNull();
     expect(screen.queryByLabelText("Expand")).toBeNull();
   });
@@ -121,6 +121,44 @@ describe("knowledge folder rail", () => {
       expect(btn.className).toContain("btn-light");
       expect(btn.className).toContain("openScale");
     }
+  });
+
+  // Samuel, 2026-09-29: no folder chevron — folders and files sit flush left,
+  // and a click on the folder row still opens and closes it.
+  it("draws no folder chevron; folder and file share the root indent", () => {
+    const tree: BaseTree = {
+      status: "ready",
+      folders: [
+        { id: "f-1", name: "Playbooks", parentId: null, position: 0 },
+      ] as unknown as BaseTree["folders"],
+      entries: [
+        { id: "e-1", title: "Cold outreach", folderId: null, position: 0 },
+        { id: "e-2", title: "Nested note", folderId: "f-1", position: 0 },
+      ] as unknown as BaseTree["entries"],
+    };
+    renderRail(tree, false);
+    expect(document.querySelector(".lucide-chevron-right")).toBeNull();
+    expect(document.querySelector(".lucide-chevron-down")).toBeNull();
+    expect(document.querySelector('[class*="treeChevron"]')).toBeNull();
+
+    const folderRow = screen.getByText("Playbooks").closest<HTMLElement>('[role="button"]')!;
+    const fileRow = screen.getByText("Cold outreach").closest<HTMLElement>('[role="button"]')!;
+    expect(folderRow.style.paddingLeft).toBe(fileRow.style.paddingLeft);
+    // the icon is the row's first child: nothing reserved ahead of it.
+    expect(folderRow.firstElementChild?.getAttribute("class")).toContain("lucide-folder");
+    expect(fileRow.firstElementChild?.getAttribute("class")).toContain("lucide-file-text");
+
+    // toggle still works: closed → open (FolderOpen, child visible) → closed.
+    expect(screen.queryByText("Nested note")).toBeNull();
+    fireEvent.click(folderRow);
+    expect(screen.getByText("Nested note")).toBeTruthy();
+    expect(folderRow.firstElementChild?.getAttribute("class")).toContain("lucide-folder-open");
+    const nestedRow = screen.getByText("Nested note").closest<HTMLElement>('[role="button"]')!;
+    expect(parseFloat(nestedRow.style.paddingLeft)).toBeGreaterThan(
+      parseFloat(fileRow.style.paddingLeft)
+    );
+    fireEvent.click(folderRow);
+    expect(screen.queryByText("Nested note")).toBeNull();
   });
 
   it("offers no create actions to a viewer", () => {

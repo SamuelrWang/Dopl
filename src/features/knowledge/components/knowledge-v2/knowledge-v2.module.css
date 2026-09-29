@@ -114,19 +114,6 @@
   background: var(--kv-row-fill);
   color: var(--kv-text);
 }
-.treeChevron {
-  display: inline-flex;
-  width: 14px;
-  height: 14px;
-  align-items: center;
-  justify-content: center;
-  color: var(--kv-text-3);
-  flex: 0 0 14px;
-  transition: transform 0.14s ease;
-}
-.treeChevronOpen {
-  transform: rotate(90deg);
-}
 .treeRow svg:global(.leaf) {
   color: var(--kv-text-3);
   flex: 0 0 auto;
