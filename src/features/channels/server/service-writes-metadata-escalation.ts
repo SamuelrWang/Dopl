@@ -1,10 +1,10 @@
 import { authorAgentIdOf } from "../lib/agent-post-stamp";
-import { mentionedUserIdsOf } from "../lib/mentions";
+import { answerersOf } from "@/features/display/core/answerers";
 import {
   ESCALATION_ANSWER_METADATA_KEY,
   ESCALATION_METADATA_KEY,
   ESCALATION_OPTION_LABEL_MAX,
-  parseEscalation,
+  parseStoredEscalation,
   type ChannelEscalation,
   type ChannelEscalationAnswerInput,
 } from "../escalation";
@@ -71,11 +71,9 @@ export function resolveEscalation(
  * read-only without a second concept.
  */
 export function escalationAnswerers(row: ChannelMessageRow): string[] {
-  const tagged = mentionedUserIdsOf(
-    (row.metadata ?? {}) as Record<string, unknown>
-  );
-  if (tagged.length > 0) return tagged;
-  return row.author_user_id ? [row.author_user_id] : [];
+  // ⚠ The rule itself lives in `display/core/answerers.ts` (client-safe), so the server's 403
+  // and every renderer's buttons read ONE predicate (unified display, 2026-09-28).
+  return answerersOf(row.metadata as Record<string, unknown> | null, row.author_user_id);
 }
 
 /**
@@ -142,7 +140,7 @@ export async function resolveEscalationAnswer(
   );
   if (!row) throw new EscalationNotFoundError(answer.escalationMessageId);
 
-  const escalation = parseEscalation(
+  const escalation = parseStoredEscalation(
     ((row.metadata ?? {}) as Record<string, unknown>)[ESCALATION_METADATA_KEY]
   );
   if (!escalation) throw new EscalationNotFoundError(answer.escalationMessageId);
@@ -326,7 +324,7 @@ export async function resolveTypedEscalationAnswer(
   const open = answerable.find((row) => !answered.has(row.id));
   if (!open) return false;
 
-  const escalation = parseEscalation(
+  const escalation = parseStoredEscalation(
     ((open.metadata ?? {}) as Record<string, unknown>)[ESCALATION_METADATA_KEY]
   );
   if (!escalation) return false;
