@@ -259,7 +259,9 @@ answers the channel decision too (`display/server/answer.ts › answerFromLens`)
   container, otherwise the last container.
 - **Box model the compiler assumes (the plugin must render the same way):**
   - `paddingLength: 4` on every container, plus `borderWidth: 2` when `border` is true.
-  - 27px per line; a list row is 27px.
+  - 27px per text line; a selectable list row is 40px (the firmware's row pitch; a list may
+    shrink to 2 rows and scroll). An info list (`selectable:false`) is drawn as a TEXT container,
+    one `─ item` line per item, so it takes 27px lines and must fit (else `overflow`).
   - A text container's height is `lines*27 + 8`, plus `4` with a border.
 
 ### Device side: `/api/glasses/device/*` (the plugin contract)
@@ -369,7 +371,8 @@ access.
   ```ts
   display: {
     screen_id: string;
-    containers: {block_id, kind:'text'|'list', x, y, w, h, content?, items?, brightness?, border?}[];
+    containers: {block_id, kind:'text'|'list', x, y, w, h, content?, items?, brightness?, border?}[];  // page 1
+    pages?: {containers}[];                         // present only when it continues: every page, pages[0] = containers
     options: {block_id, items: string[], recommended: number | null} | null;   // the one choice
     answer: {block_id, choice, index, at, via, by?, message_id?} | null;
     fallback?: true;                                // present only when the text rendering is used
@@ -384,11 +387,17 @@ access.
     (header above, footer list from y 204). Containers stack top-down at `x 8, w 560` from y 30,
     never below y 202, with the G2 font and box model; none captures input.
   - The **choice is not a container**: it is `options`, for the plugin's footer list; the
-    recommended item carries ` (rec)` when it fits 63 bytes. Info lists are list containers.
-    Absolute layouts are stacked. The blocks go through the degradation ladder
-    (`display/core/degrade.ts`) before the fallback.
-  - More than 6 containers, a block over the G2 limits, or a stack taller than the area →
-    `fallback: true` and one text container over the whole area holding the text rendering.
+    recommended item carries ` (rec)` when it fits 63 bytes. Every container is text: info
+    lists, fields and tables are `─ item` / `label: value` lines (never a G2 list, which draws
+    40px rows and a selection border). Absolute layouts are stacked.
+  - **Never below y 202.** A display taller than the area (or over 6 containers) continues on
+    further pages: `pages` (max 6), each its own reader page; a text block fills the page and
+    continues (by line, then word, at least 2 lines each side), any other block moves whole.
+    The plugin shows `(k/n)` on the first line, and the options / answered line only on the
+    last page. An older plugin reads `containers` (page 1). Over 6 pages → the degradation
+    ladder (`display/core/degrade.ts`) shortens it.
+  - A block over the G2 limits at every ladder level → `fallback: true`: the text rendering,
+    paged the same way (cut with `+N more` past 6 pages).
   - `text` on a display message is that text rendering, multi-line: text blocks, `label
     ███▒▒▒▒▒▒▒ 32%`, a `─` divider, info items `─ item`, options `▶ item`. A stored display that
     fails re-validation is shown as a plain message (no `display`).

@@ -227,7 +227,7 @@ every block natively.
 | heading | semibold body-size line | `text{brightness:4}` | the text |
 | text | paragraph; `muted` → secondary ink, `strong` → semibold; `border` → boxed | `text`; brightness = `brightness` ?? (`strong`→4, `muted`→2, default unset=full) | content |
 | fields | two-column rows (label muted, value primary) | one `text`: `label: value` per line | `label: value` lines |
-| list | bullets, or `1.`… for `style:"number"` | `list{selectable:false}`; items prefixed `1. ` when numbered; clamped to 63 bytes | `- item` / `1. item` |
+| list | bullets, or `1.`… for `style:"number"` | `list{selectable:false}`; items prefixed `1. ` when numbered; clamped to 63 bytes; the G2 compiler draws it as a TEXT container of `─ item` lines (never a G2 list: no selection border) | `- item` / `1. item` |
 | choice | decision face (§4 of renderer, below) | **screen**: a selectable `list` of labels, the recommended one suffixed ` (rec)` when the item still fits 63 bytes; **chat**: not laid out — becomes `options{block_id, items, recommended}` for the footer list. Both: a `text` placed before it with one line per option that has a description (`Label: description`) and `Recommended: Label - why` | `1. Label — description (recommended)` per option, then `Recommended: 2. Label — why` when `why` |
 | progress | `UsageMeter` | `progress` (`label ███▒▒ 32%`) | `label 32%` |
 | table | small table (header row muted) | one `text`: `a · b · c` header line then one line per row | `a | b | c` lines |
@@ -246,7 +246,9 @@ every block natively.
 
 Still not fitting: **target `glasses`** → fixable errors returned to the agent (today's
 `glasses_render` contract, now listing which level was tried); **`auto`** → lens skipped, the result
-says `glasses=skipped(<first error>)`; **read-mode chat** → today's `fallback: true` text container.
+says `glasses=skipped(<first error>)`; **read-mode chat** → a display taller than the chat area
+continues on up to 6 pages (`pages`, C3) before the ladder applies; failing every level →
+`fallback: true`, the text rendering paged the same way.
 A generic future text-only device uses `displayFallback`.
 
 ---
@@ -598,7 +600,7 @@ their tests. No Dopl-repo files.
 | --- | --- | --- |
 | C1 | backend → renderer | `display/core/types.ts`, `adapt.ts › displayOf(metadata, {pageAnswer?})`, `answerers.ts › answerersOf(metadata, authorUserId)` exactly as §2.1/§5.1 |
 | C2 | backend → renderer | `POST /api/channels/:c/messages/:m/display/answer {index, block_id?}` → `{ok:true, answer: DisplayAnswerStamp}`; errors 400 `DISPLAY_BAD_CHOICE`, 403 `DISPLAY_NOT_YOURS`, 404 `DISPLAY_NOT_FOUND`, 409 `DISPLAY_ANSWERED`. `…/display/save {name?}` unchanged. Works for legacy decision rows too (renderer answers everything through this route). |
-| C3 | backend → plugin | Read mode message `display` (same keys as today): `{screen_id (= display_id), containers, options: {block_id, items, recommended: number \| null} \| null, answer, fallback?, decision?: true}`; items already carry ` (rec)` when it fits. NEW on an ANSWER message: `answer_to?: {message_id, index, choice}` (from `metadata.escalationAnswer`, or `client_msg_id` `display-answer-<id>` on legacy-lane answers). Device answer route unchanged. Lens `screen` payloads unchanged (`spec_version: 1` wire). |
+| C3 | backend → plugin | Read mode message `display` (same keys as today): `{screen_id (= display_id), containers, pages?: {containers}[] (additive, 2026-09-29: present only when the display continues; pages[0] = containers; options/answer on the last page), options: {block_id, items, recommended: number \| null} \| null, answer, fallback?, decision?: true}`; items already carry ` (rec)` when it fits. NEW on an ANSWER message: `answer_to?: {message_id, index, choice}` (from `metadata.escalationAnswer`, or `client_msg_id` `display-answer-<id>` on legacy-lane answers). Device answer route unchanged. Lens `screen` payloads unchanged (`spec_version: 1` wire). |
 | C4 | backend → reviewer | `dopl_show` schema/results §4; `POST /api/displays` body = the tool args (+ `origin`, `ttl_sec`, `layout`, `shortcut` internal-only for glasses shortcuts, refused from MCP) → `{display_id, message_id?, channel_id?, glasses: "shown"\|"skipped:<r>"\|"off", replaced?, status?, answer?, preview?}` |
 | C5 | backend → all | `metadata.display` v2 envelope §2.1; `metadata.escalation` = decision index §5.2 |
 
