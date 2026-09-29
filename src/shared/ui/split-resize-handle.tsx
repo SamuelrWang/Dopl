@@ -42,6 +42,13 @@ export const DIVIDER_WIDTH_VAR = "--channel-divider-w";
  */
 const STRIP_LEFT = "left-[calc(var(--channel-divider-w,1px)/2)]";
 
+/**
+ * THE PILL'S FACE — fully rounded, token black. Shared BY REFERENCE with the KB
+ * editor's table-edge handle (`shared/editor/table-view.ts`), which sizes it
+ * to one cell's edge instead of this divider's 4px × 40px.
+ */
+export const RESIZE_PILL_CLASS = "shrink-0 rounded-full bg-text-primary";
+
 /** 12px chevrons flanking a 4px pill. */
 const ARROW_ICON = 12;
 
@@ -97,7 +104,7 @@ export function SplitResizeHandle({
           {/* THE PILL — 4px × 40px, fully rounded, token black. */}
           <span
             data-resize-pill=""
-            className="h-10 w-1 shrink-0 rounded-full bg-text-primary"
+            className={cn("h-10 w-1", RESIZE_PILL_CLASS)}
           />
           {arrows && (
             <ChevronRight

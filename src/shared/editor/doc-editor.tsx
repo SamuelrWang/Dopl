@@ -5,7 +5,6 @@ import { StarterKit } from "@tiptap/starter-kit";
 import { Underline } from "@tiptap/extension-underline";
 import { Link } from "@tiptap/extension-link";
 import {
-  Table,
   TableCell,
   TableHeader,
   TableRow,
@@ -16,6 +15,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { cn } from "@/shared/lib/utils";
 import { Toolbar } from "./doc-editor-toolbar";
 import { makeLinkRule, makeTableRule } from "./doc-editor-turndown";
+import { DocTable } from "./doc-editor-table";
 
 export type SaveStatus = "idle" | "dirty" | "saving" | "saved" | "error";
 
@@ -97,7 +97,8 @@ export function DocEditor({
           rel: "noopener noreferrer",
         },
       }),
-      Table.configure({ resizable: false }),
+      // Own scroller + session-only resize; see doc-editor-table.ts.
+      DocTable,
       TableRow,
       TableHeader,
       TableCell,
@@ -245,7 +246,11 @@ const PROSE_CLASSES = [
   "prose-pre:rounded-lg prose-pre:my-3 prose-pre:text-[12.5px]",
   "prose-a:text-violet-300 prose-a:no-underline hover:prose-a:underline",
   "prose-hr:border-border-default prose-hr:my-6",
-  "[&_table]:my-3 [&_table]:border-collapse [&_table]:w-full [&_table]:text-[13px]",
+  // ⚠ The table's vertical rhythm is its scroller's (`table-view.ts ›
+  // TABLE_SCROLL_CLASS`), so the table itself takes no margin.
+  "[&_table]:my-0 [&_table]:border-collapse [&_table]:w-full [&_table]:text-[13px]",
+  // A resized (fixed-layout) table wraps long words rather than spilling a cell.
+  "[&_table[data-sized]_td]:break-words [&_table[data-sized]_th]:break-words",
   "[&_thead]:bg-surface-raised-1",
   "[&_th]:text-left [&_th]:font-semibold [&_th]:text-text-primary [&_th]:px-3 [&_th]:py-1.5",
   "[&_th]:border [&_th]:border-border-default",
