@@ -190,7 +190,9 @@ export async function showDisplay(ctx: ChannelContext, raw: ShowInput, signal?: 
   const result: ShowResult = {
     display_id: displayId,
     glasses,
-    ...(row && { glasses_message_id: row.id, status: row.status }),
+    // A lens row's own status is the glasses shortcuts' (`glasses_render`'s `status`); `dopl_show`
+    // reads `status` only as a hold's outcome.
+    ...(row && { glasses_message_id: row.id, ...(shortcut && { status: row.status }) }),
     ...(posted && { message_id: posted.id, channel_id: channel!.id, channel_name: channel!.name, decision: !!choice, ...(posted.replaced && { replaced: posted.replaced }) }),
     ...(posted?.tags && { tags: posted.tags }),
   };

@@ -3,6 +3,7 @@
 import { z } from "zod";
 
 import type { ToolText } from "./granular-text.js";
+import { BLOCKS_PARAM_DOC } from "./tools/display-doctrine.js";
 
 /** The channel PATCH/POST routes' `topic` cap (`src/features/channels/schema.ts › ChannelTopicSchema`). */
 export const CHANNEL_DESCRIPTION_MAX_CHARS = 2000;
@@ -17,18 +18,6 @@ const sendKind = z.enum(["message", "milestone", "record"], {
       ? 'Refused: kind="decision" is dopl_request_decision, which carries the options; nothing was sent.'
       : undefined,
 });
-
-/** `display` on dopl_send_message (granular only): the server validates the blocks
- *  (`src/features/glasses/core/screens/display.ts`), so this stays a light shape. ⚠ STRICT and
- *  whole (`layout`, `wait_for_input`): a key this shape did not name was STRIPPED, so an
- *  absolute layout posted as a stack and nothing said so (2026-09-28). Unknown keys refuse. */
-const sendDisplay = z
-  .object({
-    blocks: z.array(z.record(z.string(), z.unknown())).min(1),
-    layout: z.enum(["stack", "absolute"]).optional(),
-    wait_for_input: z.boolean().optional(),
-  })
-  .strict();
 
 const AGENT_NAME = 'Display name in Title Case ("Picker Fix" → @picker-fix), one line, max 60.';
 
@@ -55,22 +44,50 @@ export const CHANNEL_TEXT: Readonly<Record<string, ToolText>> = {
   },
   dopl_send_message: {
     description:
-      'Post to a channel for members or agents; kind="milestone" marks a step on a thread, "record" addresses nobody. A question a person must answer is dopl_request_decision.',
+      'Post to a channel for members or agents; kind="milestone" marks a step on a thread, "record" addresses nobody. A question a person must answer is dopl_request_decision; choices, lists, tables or status: dopl_show.',
     params: {
       to: "Recipients: member email or id, `@agent-<id>` or a handle, comma-separated. None on a record.",
       body: "Message text. Recipients render from `to`: never write a routing header.",
       kind: '"message" (default), "milestone" (needs thread) or "record".',
       thread: 'Thread id, or "new" to open one titled by summary (needs to unless a record).',
       summary: "One-line intent: the notification recipients see.",
-      display:
-        "Chat card: blocks text{content}|list{items,selectable?}|progress{value 0-1,label?}|divider; info-only lists selectable:false. body = fallback.",
     },
     required: ["channel", "body"],
-    types: { kind: sendKind, display: sendDisplay },
+    types: { kind: sendKind },
+  },
+  dopl_show: {
+    description:
+      'Show a display: blocks every surface draws its own way (a card in Dopl, the lens on glasses). Use it instead of formatting prose for any choice, status or structured info. A choice block makes it a decision answered in one press; the answer arrives as their message, or here with wait. The same display_id updates it live. Blocks, limits, examples: dopl_get_guide(topic="displays").',
+    params: {
+      channel: "Channel slug or id; omitted, this session's channel.",
+      thread: "Thread to post it on.",
+      target: "auto (default): the channel, plus your glasses for a choice when they are on. channel: chat only. glasses: your lens (and the channel if you are in one).",
+      blocks: BLOCKS_PARAM_DOC,
+      display_id: "Same id replaces that display live (an answered decision is re-asked as a new one).",
+      mention: "@handles it is for: their inbox, and who may answer. Omitted: your operator.",
+      wait: "Hold up to 200s for the answer to a choice.",
+      timeout_sec: "Seconds to wait (5-200, default 120).",
+      template: "Show a saved template instead of blocks.",
+      data: "Values for the template's {{variables}}.",
+      save_as: "Also save these blocks as a template under this name.",
+      validate_only: "Preview how it lands on each surface; sends nothing.",
+    },
+    types: {
+      target: z.enum(["auto", "channel", "glasses"]),
+      blocks: z.array(z.record(z.string(), z.unknown())).min(1).max(24),
+      display_id: z.string(),
+      mention: z.string(),
+      wait: z.boolean(),
+      timeout_sec: z.number(),
+      template: z.string(),
+      data: z.record(z.string(), z.unknown()),
+      save_as: z.string(),
+      validate_only: z.boolean(),
+    },
   },
   dopl_request_decision: {
     description:
-      "Post a decision card a person answers in one press: `summary` is the question, `body` the context, `options` the choices. @-tag the person in the body; it starts nobody's agent.",
+      "Post a decision card a person answers in one press: `summary` is the question, `body` the context, `options` the choices. @-tag the person in the body; it starts nobody's agent. Compose your own layout with dopl_show.",
     params: {
       body: "Context for the decision.",
       summary: "The question the card asks.",

@@ -45,7 +45,7 @@
  * are human decisions in the web UI).
  */
 
-import type { ChannelMessageInput, DoplClient } from "@dopl/client";
+import type { DoplClient } from "@dopl/client";
 import { err, missingParams, type RegisterTool, type ToolResponse } from "./respond";
 // The tool's two declared halves: PROSE (what a channel is, which ops exist)
 // and published input SHAPE. This file is mechanism only.
@@ -81,7 +81,6 @@ import {
   decisionRefusal,
   milestoneRefusal,
   opPost,
-  displayLaneRefusal,
   recordAddressedRefusal,
   tooManyRecipientsRefusal,
   unaddressedRefusal,
@@ -89,6 +88,8 @@ import {
 import { opCreateThread } from "./channel-ops-threads";
 // ⚠ A structured SEND, not a second delivery path — it delegates to `opPost`.
 import { opEscalate } from "./channel-ops-escalate";
+// ⚠ THE ONE DISPLAY DOOR (`dopl_show`), also a send kind — see that module.
+import { opShow, type ShowArgs } from "./channel-ops-show";
 // THE ACCOUNT-WIDE READ (2026-09-01, T22) — `read` with no `channel`. ⚠ A
 // SIBLING MODULE, not a branch inside the per-channel handler: its whole result
 // vocabulary splices one `ref`, and its scope is one room.
@@ -162,12 +163,13 @@ export function registerChannelTool(
         // human it asks is never notified. Both delegate to `opPost` rather than
         // growing a second delivery path.
         case "send": {
+          // ⚠ A DISPLAY IS `dopl_show` (granular), routed BEFORE the channel-required check: its
+          // channel is optional (the session's), and a legacy call carries no blocks to show.
+          if (args.kind === "display") return opShow(client, args as ShowArgs);
           const miss = missingParams("send", args, ["channel", "body"]);
           if (miss) return miss;
           const channel = args.channel as string;
           const body = args.body as string;
-          // Carried past the legacy schema by `dopl_send_message` (tool-manifest.ts).
-          const display = (args as { display?: ChannelMessageInput["display"] }).display;
 
           // ⚠ `thread="new"` OPENS THE EXCHANGE, and it is checked FIRST because
           // it decides which ROUTE the send goes to. `summary` is the title —
@@ -177,8 +179,6 @@ export function registerChannelTool(
           // thread for nobody (the only way to open one in a one-member room).
           // Any other kind without `to` is the address-or-record refusal.
           if (args.thread === "new") {
-            const noNewDisplay = displayLaneRefusal('thread="new"', display !== undefined);
-            if (noNewDisplay) return noNewDisplay;
             const missNew = missingParams('send thread="new"', args, ["summary"]);
             if (missNew) return missNew;
             const record = args.kind === "record";
@@ -204,10 +204,6 @@ export function registerChannelTool(
           // an untagged milestone groups into nothing, the one shape of this
           // call that is always a mistake. ⚠ `to` is NOT routed through: a
           // milestone marks the thread and addresses nobody.
-          if (args.kind === "milestone" || args.kind === "decision") {
-            const noDisplay = displayLaneRefusal(`kind="${args.kind}"`, display !== undefined);
-            if (noDisplay) return noDisplay;
-          }
           if (args.kind === "milestone") {
             const missM = missingParams('send kind="milestone"', args, [
               "thread",
@@ -278,7 +274,6 @@ export function registerChannelTool(
               intent: "chat",
               summary: args.summary,
               thread: args.thread,
-              display,
               runtime,
               // ⚠ ITS OWN VERB, on `milestone`'s precedent: a result opening
               // `posted` would report a delivery on the one lane whose contract
@@ -302,7 +297,6 @@ export function registerChannelTool(
             to: args.to,
             summary: args.summary,
             thread: args.thread,
-            display,
             runtime,
           });
         }

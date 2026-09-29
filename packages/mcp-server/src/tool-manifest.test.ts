@@ -50,13 +50,13 @@ const LEGACY_KEYS = [...LEGACY.values()].flatMap((t) => {
 
 const VERBS = new Set([
   "get", "list", "read", "search", "browse", "create", "update", "write", "edit", "send",
-  "request", "invite", "launch", "manage", "save", "restore",
+  "request", "invite", "launch", "manage", "save", "restore", "show",
 ]);
 
 describe("tool manifest", () => {
-  it("is 39 uniquely named verb_noun tools", () => {
+  it("is 40 uniquely named verb_noun tools", () => {
     const names = GRANULAR_TOOLS.map((t) => t.name);
-    expect(names).toHaveLength(39);
+    expect(names).toHaveLength(40);
     expect(new Set(names).size).toBe(names.length);
     const bad = names.filter((n) => !/^dopl_[a-z]+(_[a-z]+)*$/.test(n) || !VERBS.has(n.split("_")[1]));
     expect(bad).toEqual([]);
@@ -126,8 +126,8 @@ describe("tool manifest", () => {
     }
   });
 
-  it("keeps eight core tools loaded; the rest may defer", () => {
-    expect(GRANULAR_TOOLS.filter((t) => t.alwaysLoad)).toHaveLength(8);
+  it("keeps nine core tools loaded; the rest may defer", () => {
+    expect(GRANULAR_TOOLS.filter((t) => t.alwaysLoad)).toHaveLength(9);
   });
 
   it("classifies only product actions that exist", () => {

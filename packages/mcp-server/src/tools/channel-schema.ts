@@ -70,11 +70,12 @@ export const CHANNEL_INPUT_SHAPE = {
 
   // `decision` must store as a `message` row or `targeting.js › classify` drops the card; `record`
   // sends `intent:"chat"`, so a send naming nobody can be refused instead of guessed at.
+  // `display` is `dopl_show`'s preset (granular): a legacy call naming it is refused by name.
   kind: z
-    .enum(["message", "milestone", "decision", "record"])
+    .enum(["message", "milestone", "decision", "record", "display"])
     .optional()
     .describe(
-      'op="send" (optional, default "message"): "record" takes no `to`; "milestone" marks a step on a thread; "decision" is a card answered in one press.',
+      'op="send" (optional, default "message"): "record" takes no `to`; "milestone" marks a step on a thread; "decision" is a card answered in one press; "display" is dopl_show\'s.',
     ),
 
   thread: z

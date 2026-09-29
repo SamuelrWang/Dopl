@@ -29,7 +29,7 @@ function toolCallEvents(call, ctx) {
     const payload = io.withPostSurface({
       type: 'outbound_post',
       toolUseId: id,
-      text: input && input.body != null ? String(input.body) : '',
+      text: io.postTextOf(legacy.input),
     }, legacy.input, c.peerName, c.peerId);
     // `ownChannel` is a boolean, never another channel's id (§H-9).
     if (typeof c.willGatePost === 'function' && c.willGatePost(input, name) === true) {

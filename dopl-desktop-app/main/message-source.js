@@ -8,7 +8,7 @@ const { sanitizeName } = require('./prompt-sanitize');
 
 const GLASSES_REPLY_GUIDANCE =
   "They are on glasses: reply in at most ~5 short plain-text lines (no tables, code or long lists). " +
-  "Choices: glasses_ask. Structured info: glasses_render (selectable:false on info-only lists). " +
+  "Choices or structure: dopl_show (it reaches the lens). " +
   "Don't ask for what glasses can't do (approve permissions, open files, paste, type long text): do it later on their computer, or say so briefly.";
 
 const KINDS = ['glasses', 'computer', 'web', 'phone'];

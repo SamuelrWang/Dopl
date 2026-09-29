@@ -40,7 +40,8 @@
       },
       "select": "topic",
       "pulled": [
-        "knowledge"
+        "knowledge",
+        "displays"
       ],
       "read": true
     },
@@ -74,6 +75,14 @@
       "bind": "dopl_channel:send",
       "preset": {
         "kind": "decision"
+      },
+      "read": false
+    },
+    {
+      "name": "dopl_show",
+      "bind": "dopl_channel:send",
+      "preset": {
+        "kind": "display"
       },
       "read": false
     },

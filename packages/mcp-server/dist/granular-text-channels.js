@@ -3,6 +3,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.CHANNEL_TEXT = exports.CHANNEL_DESCRIPTION_MAX_CHARS = void 0;
 const zod_1 = require("zod");
+const display_doctrine_js_1 = require("./tools/display-doctrine.js");
 /** The channel PATCH/POST routes' `topic` cap (`src/features/channels/schema.ts › ChannelTopicSchema`). */
 exports.CHANNEL_DESCRIPTION_MAX_CHARS = 2000;
 /** Carried past the legacy schema, whose `summary` caps at a notification's 200. */
@@ -13,17 +14,6 @@ const sendKind = zod_1.z.enum(["message", "milestone", "record"], {
         ? 'Refused: kind="decision" is dopl_request_decision, which carries the options; nothing was sent.'
         : undefined,
 });
-/** `display` on dopl_send_message (granular only): the server validates the blocks
- *  (`src/features/glasses/core/screens/display.ts`), so this stays a light shape. ⚠ STRICT and
- *  whole (`layout`, `wait_for_input`): a key this shape did not name was STRIPPED, so an
- *  absolute layout posted as a stack and nothing said so (2026-09-28). Unknown keys refuse. */
-const sendDisplay = zod_1.z
-    .object({
-    blocks: zod_1.z.array(zod_1.z.record(zod_1.z.string(), zod_1.z.unknown())).min(1),
-    layout: zod_1.z.enum(["stack", "absolute"]).optional(),
-    wait_for_input: zod_1.z.boolean().optional(),
-})
-    .strict();
 const AGENT_NAME = 'Display name in Title Case ("Picker Fix" → @picker-fix), one line, max 60.';
 exports.CHANNEL_TEXT = {
     dopl_list_channels: {
@@ -44,20 +34,48 @@ exports.CHANNEL_TEXT = {
         fenced: true,
     },
     dopl_send_message: {
-        description: 'Post to a channel for members or agents; kind="milestone" marks a step on a thread, "record" addresses nobody. A question a person must answer is dopl_request_decision.',
+        description: 'Post to a channel for members or agents; kind="milestone" marks a step on a thread, "record" addresses nobody. A question a person must answer is dopl_request_decision; choices, lists, tables or status: dopl_show.',
         params: {
             to: "Recipients: member email or id, `@agent-<id>` or a handle, comma-separated. None on a record.",
             body: "Message text. Recipients render from `to`: never write a routing header.",
             kind: '"message" (default), "milestone" (needs thread) or "record".',
             thread: 'Thread id, or "new" to open one titled by summary (needs to unless a record).',
             summary: "One-line intent: the notification recipients see.",
-            display: "Chat card: blocks text{content}|list{items,selectable?}|progress{value 0-1,label?}|divider; info-only lists selectable:false. body = fallback.",
         },
         required: ["channel", "body"],
-        types: { kind: sendKind, display: sendDisplay },
+        types: { kind: sendKind },
+    },
+    dopl_show: {
+        description: 'Show a display: blocks every surface draws its own way (a card in Dopl, the lens on glasses). Use it instead of formatting prose for any choice, status or structured info. A choice block makes it a decision answered in one press; the answer arrives as their message, or here with wait. The same display_id updates it live. Blocks, limits, examples: dopl_get_guide(topic="displays").',
+        params: {
+            channel: "Channel slug or id; omitted, this session's channel.",
+            thread: "Thread to post it on.",
+            target: "auto (default): the channel, plus your glasses for a choice when they are on. channel: chat only. glasses: your lens (and the channel if you are in one).",
+            blocks: display_doctrine_js_1.BLOCKS_PARAM_DOC,
+            display_id: "Same id replaces that display live (an answered decision is re-asked as a new one).",
+            mention: "@handles it is for: their inbox, and who may answer. Omitted: your operator.",
+            wait: "Hold up to 200s for the answer to a choice.",
+            timeout_sec: "Seconds to wait (5-200, default 120).",
+            template: "Show a saved template instead of blocks.",
+            data: "Values for the template's {{variables}}.",
+            save_as: "Also save these blocks as a template under this name.",
+            validate_only: "Preview how it lands on each surface; sends nothing.",
+        },
+        types: {
+            target: zod_1.z.enum(["auto", "channel", "glasses"]),
+            blocks: zod_1.z.array(zod_1.z.record(zod_1.z.string(), zod_1.z.unknown())).min(1).max(24),
+            display_id: zod_1.z.string(),
+            mention: zod_1.z.string(),
+            wait: zod_1.z.boolean(),
+            timeout_sec: zod_1.z.number(),
+            template: zod_1.z.string(),
+            data: zod_1.z.record(zod_1.z.string(), zod_1.z.unknown()),
+            save_as: zod_1.z.string(),
+            validate_only: zod_1.z.boolean(),
+        },
     },
     dopl_request_decision: {
-        description: "Post a decision card a person answers in one press: `summary` is the question, `body` the context, `options` the choices. @-tag the person in the body; it starts nobody's agent.",
+        description: "Post a decision card a person answers in one press: `summary` is the question, `body` the context, `options` the choices. @-tag the person in the body; it starts nobody's agent. Compose your own layout with dopl_show.",
         params: {
             body: "Context for the decision.",
             summary: "The question the card asks.",

@@ -26,9 +26,9 @@ const RUNTIMES = require(M("runtime", "index.js"));
 
 const LEGACY = new Set([DOPL_CHANNEL_TOOL, ...DOPL_SAFE_TOOLS]);
 
-test("the table is the 39-tool manifest, and every name joins the Dopl vocabulary", () => {
-  assert.equal(TABLE.tools.length, 39);
-  assert.equal(GRANULAR_NAMES.length, 39);
+test("the table is the 40-tool manifest, and every name joins the Dopl vocabulary", () => {
+  assert.equal(TABLE.tools.length, 40);
+  assert.equal(GRANULAR_NAMES.length, 40);
   for (const name of GRANULAR_NAMES) {
     assert.ok(DOPL_SHORT_NAMES.includes(name), name);
     assert.equal(canonicalDoplName(`mcp__6a12c8bd-4187-40eb-9b21-eb230264f726__${name}`), `mcp__dopl__${name}`);

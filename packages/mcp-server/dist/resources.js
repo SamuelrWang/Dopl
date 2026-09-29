@@ -30,6 +30,7 @@ exports.registerResources = registerResources;
 const call_ref_js_1 = require("./call-ref.js");
 const channel_doctrine_js_1 = require("./tools/channel-doctrine.js");
 const knowledge_doctrine_js_1 = require("./tools/knowledge-doctrine.js");
+const display_doctrine_js_1 = require("./tools/display-doctrine.js");
 const RESOURCES = {
     [channel_doctrine_js_1.DOCTRINE_URI]: {
         name: "channels-doctrine",
@@ -47,6 +48,13 @@ const RESOURCES = {
         title: "Dopl knowledge — sections",
         description: () => "How to spend fewer characters on a knowledge entry: the read order (excerpt → outline → section → body) and the write duty that makes it possible (## headings, one topic each).",
         text: knowledge_doctrine_js_1.knowledgeDoctrine,
+    },
+    // Unified display (2026-09-28): the block vocabulary, limits and per-surface ladder, pulled.
+    [display_doctrine_js_1.DISPLAYS_DOCTRINE_URI]: {
+        name: "displays-doctrine",
+        title: "Dopl displays — blocks, limits, devices",
+        description: () => "The display blocks dopl_show takes, their limits, how each degrades on glasses, and two examples.",
+        text: display_doctrine_js_1.displaysDoctrine,
     },
 };
 /** A published resource's text in the active set — also what a pulled guide topic serves. */

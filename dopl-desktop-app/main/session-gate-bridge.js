@@ -18,7 +18,7 @@ const { canonicalDoplCall } = require('./mcp-tool-names');
 const outboundTag = require('./session-outbound-tag');
 const { isOutboundPost, outboundConsentShape } = outboundTag;
 const postSurface = require('./session-post-surface');
-const { withPostSurface, postKindOf } = postSurface;
+const { withPostSurface, postKindOf, postTextOf } = postSurface;
 const { denyMessageFor } = require('./session-permissions');
 // What a held call IS, recorded beside the opaque id the reducer keeps (2026-09-17). A LEDGER,
 // not a decision: nothing below may consult it to decide anything.
@@ -86,7 +86,7 @@ function gatePayload(s, name, input, call, opts, requestId, verdict) {
       // collapse made a thread open `send(thread="new")` and an escalation `send(kind="decision")`,
       // so both are `isOutboundPost` now and take the ordinary `outbound_post` frame — F-321's card
       // is minted by the ordinary path and the flag had no reachable arm left.
-      text: input && input.body != null ? String(input.body) : '',
+      text: postTextOf(call.input),
     }, call.input, s.counterpartyName, s.counterpartyId)
     : {
       type: 'permission_request',

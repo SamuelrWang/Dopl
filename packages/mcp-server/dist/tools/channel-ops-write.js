@@ -30,7 +30,6 @@ exports.SEND_MAX_RECIPIENTS = exports.DECISION_CONTEXT_MAX_CHARS = exports.MILES
 exports.milestoneRefusal = milestoneRefusal;
 exports.unaddressedRefusal = unaddressedRefusal;
 exports.recordAddressedRefusal = recordAddressedRefusal;
-exports.displayLaneRefusal = displayLaneRefusal;
 exports.tooManyRecipientsRefusal = tooManyRecipientsRefusal;
 exports.decisionRefusal = decisionRefusal;
 exports.opPost = opPost;
@@ -138,16 +137,6 @@ function recordAddressedRefusal(hasTo) {
     return (0, respond_1.err)('Nothing was posted: kind="record" is the post for NOBODY, so it cannot carry `to`. Drop `to` to file the record, or drop kind="record" to address the people and agents you named.');
 }
 /**
- * **A DISPLAY RIDES ONLY THE LANES THAT FORWARD IT** (plain send + `kind="record"`).
- * ⚠ Refused, never dropped: a lane that ignored `display` stored a text-only row and
- * reported success, and the caller saw no display anywhere (2026-09-28).
- */
-function displayLaneRefusal(lane, hasDisplay) {
-    if (!hasDisplay)
-        return null;
-    return (0, respond_1.err)(`Nothing was posted: \`display\` is not carried on ${lane}. Send the display as a plain send or kind="record" (with \`thread=<id>\` to place it in a thread).`);
-}
-/**
  * **THE RECIPIENT-COUNT BOUND, CHECKED BEFORE THE WIRE.** ⚠ The server's own
  * refusal answers on `CHANNEL_RECIPIENT_UNRESOLVED`, whose narration is about a
  * NAME that matched nobody — right for a typo and wrong for a list that is
@@ -213,7 +202,6 @@ async function opPost(client, channelRef, body, opts = {}) {
             // ⚠ Omitted on every ordinary post, so no existing wire shape moved.
             intent: opts.intent,
             escalation: opts.escalation,
-            display: opts.display,
         });
     }
     catch (e) {
@@ -342,5 +330,17 @@ async function opPost(client, channelRef, body, opts = {}) {
         delivery: (0, channel_facts_1.deliveryFact)(message.delivery, message.deliveryAt),
         hold: (0, channel_wake_guidance_1.holdFact)(opts.runtime ?? null, message.seq),
         ...(opts.resultFacts ?? {}),
-    }));
+    }) + displayTip(message.displayHint));
+}
+/**
+ * **THE DISPLAY NUDGE, READ BACK** (unified display §6.2): the server saw structure in a plain
+ * send. ONE line, never a refusal — the post already landed as written.
+ */
+function displayTip(hint) {
+    if (!hint)
+        return "";
+    const show = (0, call_ref_js_1.bySet)({ legacy: 'kind="decision"', granular: "dopl_show" });
+    return hint === "choice"
+        ? `\nTip: a question with options is a decision — send it with ${(0, call_ref_js_1.toolName)("channel.send", { kind: '"decision"' })} or ${show} (a choice block) so they answer in one press, on any device.`
+        : `\nTip: lists, tables and status read better as a display — ${show} draws them on desktop and glasses.`;
 }

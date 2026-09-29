@@ -1,6 +1,5 @@
-import { describe, expect, it, vi } from "vitest";
-import type { ChannelMessage, DoplClient } from "@dopl/client";
-import { opPost } from "./channel-ops-write";
+import { describe, expect, it } from "vitest";
+import type { ChannelMessage } from "@dopl/client";
 import { formatMessages } from "./channel-render";
 import { GLASSES_REPLY_GUIDANCE, sourceGuidance, sourceTag, viaTag } from "./channel-source";
 
@@ -47,18 +46,5 @@ describe("glasses guidance", () => {
     expect(lines[0]).toContain(" · via glasses (`Even G2`)");
     expect(sourceGuidance([msg(1, { metadata: GLASSES }), msg(2, { metadata: { source: { kind: "web", label: "Web" } } })])).toBeNull();
     expect(sourceGuidance([msg(1)])).toBeNull();
-  });
-});
-
-describe("display on a send", () => {
-  it("rides opPost to the route untouched (the server validates and stamps it)", async () => {
-    const post = vi.fn(async () => ({ id: "m1", seq: 3, kind: "message", metadata: {}, authorUserId: "u1" }));
-    const client = {
-      listChannels: vi.fn(async () => [{ id: "chan-1", slug: "general", name: "General", visibility: "private" }]),
-      postChannelMessage: post,
-    } as unknown as DoplClient;
-    const display = { blocks: [{ type: "progress", value: 0.5, label: "Usage" }] };
-    await opPost(client, "general", "Usage 50%", { to: "u2", display });
-    expect(post).toHaveBeenCalledWith("chan-1", expect.objectContaining({ body: "Usage 50%", display }));
   });
 });

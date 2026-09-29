@@ -96,7 +96,7 @@ export const GRANULAR_TOOLS: readonly GranularTool[] = [
       chats: "dopl_chats:guide",
     },
     select: "topic",
-    pulled: { knowledge: "dopl://doctrine/knowledge" },
+    pulled: { knowledge: "dopl://doctrine/knowledge", displays: "dopl://doctrine/displays" },
     params: ["section"],
   },
   // ── Channels ────────────────────────────────────────────────────────────
@@ -120,7 +120,6 @@ export const GRANULAR_TOOLS: readonly GranularTool[] = [
     name: "dopl_send_message",
     bind: "dopl_channel:send",
     params: ["channel", "to", "body", "kind", "thread", "summary", "client_msg_id"],
-    carry: ["display"],
     alwaysLoad: true,
   },
   {
@@ -128,6 +127,16 @@ export const GRANULAR_TOOLS: readonly GranularTool[] = [
     bind: "dopl_channel:send",
     preset: { kind: "decision" },
     params: ["channel", "body", "thread", "summary", "options", "recommendation", "client_msg_id"],
+    alwaysLoad: true,
+  },
+  {
+    // ONE display tool (docs/specs/unified-display.md §4): a send with `kind:"display"`, carried
+    // past the legacy schema, which refuses that kind by name.
+    name: "dopl_show",
+    bind: "dopl_channel:send",
+    preset: { kind: "display" },
+    params: ["channel", "thread", "client_msg_id"],
+    carry: ["target", "blocks", "display_id", "mention", "wait", "timeout_sec", "template", "data", "save_as", "validate_only"],
     alwaysLoad: true,
   },
   {
