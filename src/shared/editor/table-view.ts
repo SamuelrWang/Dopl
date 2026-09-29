@@ -3,10 +3,10 @@
  * *"make it so that just the table can be scrolled left to right. So the other
  * portions still stay fixed"*).
  *
- * ⚠ **THE WRAPPER IS THE SCROLLER, SO NOTHING ABOVE IT EVER IS.** A table wider
- * than the column used to push `.docBody` into a sideways scroll that carried
- * every paragraph with it. `overflow-x: auto` here keeps the overflow inside the
- * table's own box; the prose around it never moves.
+ * ⚠ **THE WRAPPER IS THE SCROLLER, SO NOTHING ABOVE IT EVER IS.** Without it a
+ * table wider than the column pushes `.docBody` into a sideways scroll that
+ * carries every paragraph with it; `overflow-x: auto` here keeps the overflow
+ * inside the table's own box.
  *
  * ⚠ **NO RESIZING, BY RULING** (Samuel, 2026-09-29: *"the user doesn't need to
  * size or resize … Everything is done by agents via mcp"*). Column widths come

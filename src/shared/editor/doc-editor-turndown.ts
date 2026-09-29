@@ -26,13 +26,12 @@ export function makeLinkRule(): TurndownService.Rule {
  * Table rule → GFM pipe tables. Turndown's default leaves raw HTML; inline
  * here rather than pulling in `turndown-plugin-gfm` for one feature.
  *
- * ⚠ **EACH CELL IS CONVERTED AS INLINE MARKDOWN, NOT READ AS TEXT.** This read
- * `textContent`, so every editor save stripped links, bold, italic, code and
- * strike out of agent-written tables. `cellToMarkdown` is a turndown with the
- * prose rules, so a cell serialises like prose does; {@link toCellMarkdown}
- * then makes it legal on one table line.
+ * ⚠ **EACH CELL IS CONVERTED AS INLINE MARKDOWN, NOT READ AS TEXT** — reading
+ * `textContent` would strip links, bold, italic, code and strike out of
+ * agent-written tables on every save. `cellToMarkdown` is a turndown with the
+ * prose rules; {@link toCellMarkdown} then makes it legal on one table line.
  */
-export function makeTableRule(
+function makeTableRule(
   cellToMarkdown: (html: string) => string
 ): TurndownService.Rule {
   return {
