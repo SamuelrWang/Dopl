@@ -26,5 +26,6 @@ async function handlePost(request: NextRequest, auth: WorkspaceAuthContext) {
   }
 }
 
-// Guests post in their channels (the messages route's floor); channel membership is the gate.
-export const POST = withWorkspaceAuth(handlePost, { minRole: "guest" });
+// The workspace floor stays the default (a guest's lane is the messages route, INVARIANTS §4A);
+// channel membership is the real gate, in `postMessage`.
+export const POST = withWorkspaceAuth(handlePost);

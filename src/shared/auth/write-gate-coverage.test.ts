@@ -92,6 +92,8 @@ const EXEMPT: Record<string, string> = {
     "Glasses device sign-out — per-device token; revokes only the calling device (features/glasses/core/messages/device-handlers.ts › createDeviceHandlers).",
   "glasses/device/launch/route.ts":
     "Glasses menu launch — per-device token; files a launch through channels/server/service-launch.ts › createLaunchDirective as the device owner, in a channel the owner is a member of.",
+  "glasses/device/channels/[channelId]/messages/[messageId]/display/answer/route.ts":
+    "Glasses device API — per-device token, same as glasses/device/answer (a tap on a channel display).",
   "glasses/device/target/route.ts":
     "Glasses menu current target — per-device token; writes only that device's own voice target after a membership check.",
   "glasses/device/pair/start/route.ts":
