@@ -31,6 +31,7 @@ import {
 } from "./escalation-card-face";
 
 export const DISPLAY_CARD_LABEL = "Display";
+export const DISPLAY_REPLACED_LABEL = "Replaced";
 
 /** What a host knows about a display beyond its blocks — built once in the view model. */
 export interface DisplayView {
@@ -64,8 +65,10 @@ export function DisplayCard({
   const face = AGENT_CARD_FACE[size];
   const [pendingIndex, setPendingIndex] = useState<number | null>(null);
   const choice = choiceOf(display.blocks);
+  // Withdrawn by a newer message (`superseded_by`): closed, read-only, never answerable.
+  const closed = !!display.superseded_by;
   const choose =
-    choice && view.answerable && onAnswer && !display.answer
+    choice && view.answerable && onAnswer && !display.answer && !closed
       ? async (index: number) => {
           setPendingIndex(index);
           if (!(await onAnswer({ channelId, messageId, index }))) setPendingIndex(null);
@@ -75,6 +78,7 @@ export function DisplayCard({
     <div
       data-display-id={display.display_id || undefined}
       data-escalation-id={display.decision ? messageId : undefined}
+      data-superseded={closed || undefined}
       className={face.shell}
       style={{ backgroundColor: paint }}
     >
@@ -102,6 +106,7 @@ export function DisplayCard({
             )
           }
         />
+        {closed && <p className="text-caption text-text-muted">{DISPLAY_REPLACED_LABEL}</p>}
       </div>
     </div>
   );

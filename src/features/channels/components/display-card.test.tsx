@@ -25,6 +25,7 @@ vi.mock("@/shared/ui/toast", () => ({
 }));
 
 import { formatChannelTimestamp } from "@/shared/lib/format-time";
+import { ApiError } from "@/shared/api/api-envelope";
 import type { Display, DisplayBlock } from "@/features/display/core/types";
 import { Transcript } from "./transcript";
 import { DisplayBlocks } from "./display-blocks";
@@ -194,6 +195,24 @@ describe("a composed decision", () => {
     const [chosen, rest] = Array.from(container.querySelectorAll("[data-option-index]")) as HTMLElement[];
     expect(chosen.className).toContain("auth-btn-3d");
     expect(rest.className).toContain("bg-[var(--seg-fill)]");
+  });
+
+  it("a SUPERSEDED display is closed: no buttons, a muted Replaced line", () => {
+    const { container } = draw([shown(DECISION_BLOCKS, { superseded_by: "m-newer" })]);
+    expect(screen.queryByRole("button", { name: /Option/ })).toBeNull();
+    expect(screen.getByText("Replaced").className).toContain("text-text-muted");
+    expect(container.querySelector("[data-superseded='true']")).toBeTruthy();
+  });
+
+  it("a 409 DISPLAY_SUPERSEDED is settled quietly — the re-read closes the card, no toast", async () => {
+    request.mockRejectedValueOnce(
+      new ApiError(409, "DISPLAY_SUPERSEDED", "That display was replaced.")
+    );
+    draw([shown(DECISION_BLOCKS)]);
+    fireEvent.click(screen.getByRole("button", { name: "Option A: Ship now" }));
+    await waitFor(() => expect(request).toHaveBeenCalled());
+    await screen.findByRole("button", { name: "Option A: Ship now" });
+    expect(toasts).toEqual([]);
   });
 
   it("a bare choice (no descriptions) is the inline face: the buttons carry the labels", () => {

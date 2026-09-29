@@ -18,6 +18,9 @@ export interface DisplayAnswerTarget {
   index: number;
 }
 
+/** 409s whose answer is the card's own next state (spec §7.2 C2). */
+const SETTLED_CODES = new Set(["DISPLAY_ANSWERED", "DISPLAY_SUPERSEDED"]);
+
 /** Resolves `true` once the server took the answer; `false` after a failure (already toasted). */
 export type AnswerDisplay = (target: DisplayAnswerTarget) => Promise<boolean>;
 
@@ -48,7 +51,12 @@ export function useDisplayAnswer(): AnswerDisplay {
         });
         return true;
       } catch (err) {
-        failed(err, "Couldn't send that answer");
+        // Already answered / replaced elsewhere: the re-read below redraws the card closed, which
+        // says so — no toast on top of it.
+        const code = (err as { code?: unknown } | null)?.code;
+        if (typeof code !== "string" || !SETTLED_CODES.has(code)) {
+          failed(err, "Couldn't send that answer");
+        }
         return false;
       } finally {
         void client.invalidateQueries({ queryKey: messagesKey(channelId) });
