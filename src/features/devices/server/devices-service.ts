@@ -67,6 +67,8 @@ function toDto(row: DesktopDeviceRow, now: number, installId: string | null): Co
   };
 }
 
+const sameName = (name: string) => ({ name, detected_name: name });
+
 /** One legacy row per unlinked device token (the desktop keeps one live token per label). */
 function legacyDtos(tokens: DeviceTokenRow[]): ComputerDeviceDto[] {
   return tokens
@@ -74,8 +76,7 @@ function legacyDtos(tokens: DeviceTokenRow[]): ComputerDeviceDto[] {
     .map((token) => ({
       id: `${LEGACY_PREFIX}${token.id}`,
       kind: "computer",
-      name: legacyComputerName(token.client_name),
-      detected_name: legacyComputerName(token.client_name),
+      ...sameName(legacyComputerName(token.client_name)),
       renamed: false,
       platform: LEGACY_LABEL.test(token.client_name ?? "") ? "macos" : "",
       online: false,
@@ -110,7 +111,7 @@ export async function listComputers(
   return { devices: [...registered, ...legacyDtos(tokens)] };
 }
 
-export type HeartbeatResult =
+type HeartbeatResult =
   | { device: { id: string; revoked: false } }
   | { device: { revoked: true } };
 
@@ -181,10 +182,10 @@ export async function removeComputer(
   if (!isUuid(id)) throw notFound();
   const row = await deps.store.revoke(userId, id, now);
   if (!row) throw notFound();
-  const revokedTokens = await deps.store.revokeLinkedTokens(userId, id, now);
-  const endedSession = row.auth_session_id
-    ? await deps.store.endAuthSession(userId, row.auth_session_id)
-    : false;
+  const [revokedTokens, endedSession] = await Promise.all([
+    deps.store.revokeLinkedTokens(userId, id, now),
+    row.auth_session_id ? deps.store.endAuthSession(userId, row.auth_session_id) : false,
+  ]);
   return { ok: true, revokedTokens, endedSession };
 }
 

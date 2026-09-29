@@ -79,5 +79,4 @@ module.exports = {
   arm,
   beat: (status) => registry.beat(status),
   offline: (reason) => registry.offline(reason),
-  reset: () => registry.reset(),
 };

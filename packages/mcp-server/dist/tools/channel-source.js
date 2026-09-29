@@ -25,7 +25,7 @@ function readStamp(raw) {
         return null;
     return { kind, label: typeof label === "string" ? label : null };
 }
-const sourceOf = (m) => m.authorKind === "agent" ? null : readStamp(m.metadata?.source);
+const rawSource = (m) => m.metadata?.source;
 /** ` · via glasses (`Even G2`)`, ` · via web`, or "" for a missing / unreadable stamp. */
 function viaTag(raw) {
     const source = readStamp(raw);
@@ -35,14 +35,14 @@ function viaTag(raw) {
     return ` · via ${source.kind}${label ? ` (${label})` : ""}`;
 }
 /** {@link viaTag} for one transcript line; "" on an agent line. */
-const sourceTag = (m) => m.authorKind === "agent" ? "" : viaTag(m.metadata?.source);
+const sourceTag = (m) => (m.authorKind === "agent" ? "" : viaTag(rawSource(m)));
 exports.sourceTag = sourceTag;
 /** The guidance line when the NEWEST member line on the page came from glasses, else null. */
 function sourceGuidance(messages) {
     for (let i = messages.length - 1; i >= 0; i -= 1) {
         if (messages[i].authorKind === "agent")
             continue;
-        return sourceOf(messages[i])?.kind === "glasses" ? `_${exports.GLASSES_REPLY_GUIDANCE}_` : null;
+        return readStamp(rawSource(messages[i]))?.kind === "glasses" ? `_${exports.GLASSES_REPLY_GUIDANCE}_` : null;
     }
     return null;
 }

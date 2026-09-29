@@ -77,7 +77,6 @@
   --kv-text-3: var(--text-muted);
   --kv-accent: var(--text-primary);
   --kv-row-hover: var(--surface-raised-1);
-  --kv-row-active: var(--surface-raised-3);
 
   /* 🔒 ⚠ **THE TITLE REBINDS ARE DELETED (Samuel, 2026-09-01) AND THAT IS THE
      FIX, NOT A REGRESSION.** They stood here as the two

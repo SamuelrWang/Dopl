@@ -30,8 +30,7 @@ function readStamp(raw: unknown): SourceStamp | null {
   return { kind, label: typeof label === "string" ? label : null };
 }
 
-const sourceOf = (m: ChannelMessage): SourceStamp | null =>
-  m.authorKind === "agent" ? null : readStamp((m.metadata as Record<string, unknown> | undefined)?.source);
+const rawSource = (m: ChannelMessage): unknown => (m.metadata as Record<string, unknown> | undefined)?.source;
 
 /** ` · via glasses (`Even G2`)`, ` · via web`, or "" for a missing / unreadable stamp. */
 export function viaTag(raw: unknown): string {
@@ -42,14 +41,13 @@ export function viaTag(raw: unknown): string {
 }
 
 /** {@link viaTag} for one transcript line; "" on an agent line. */
-export const sourceTag = (m: ChannelMessage): string =>
-  m.authorKind === "agent" ? "" : viaTag((m.metadata as Record<string, unknown> | undefined)?.source);
+export const sourceTag = (m: ChannelMessage): string => (m.authorKind === "agent" ? "" : viaTag(rawSource(m)));
 
 /** The guidance line when the NEWEST member line on the page came from glasses, else null. */
 export function sourceGuidance(messages: readonly ChannelMessage[]): string | null {
   for (let i = messages.length - 1; i >= 0; i -= 1) {
     if (messages[i].authorKind === "agent") continue;
-    return sourceOf(messages[i])?.kind === "glasses" ? `_${GLASSES_REPLY_GUIDANCE}_` : null;
+    return readStamp(rawSource(messages[i]))?.kind === "glasses" ? `_${GLASSES_REPLY_GUIDANCE}_` : null;
   }
   return null;
 }

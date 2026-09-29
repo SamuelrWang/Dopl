@@ -91,8 +91,9 @@ function textOf(row: FakeRow, column: string): string {
  * It models the RAW form, the only one the repositories send (F-717):
  * `query-text.ts › buildPrefixTsQuery` hands over a tsquery it built itself, so
  * there is no normalisation to imitate, and `|`, `!` cannot survive its
- * allow-list; `<->` is only ever the builder's own (apostrophe phrases). The real parser splits `a_b` into two lexemes and this keeps it
- * whole; no case turns on that.
+ * allow-list; `<->` is only ever the builder's own (apostrophe phrases). The
+ * real parser splits `a_b` into two lexemes and this keeps it whole; no case
+ * turns on that.
  */
 function matchesTsQuery(haystack: string, query: string): boolean {
   const words = [...(haystack.toLowerCase().match(/[\p{L}\p{N}_]+/gu) ?? [])];

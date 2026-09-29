@@ -10,7 +10,7 @@ import type { ChoiceBlock, DisplayBlock, DisplayLayout, Positioned } from "./typ
  */
 
 /** A primitive block as the platform compiler takes it (its own normalizer re-checks every field). */
-export type LensPrimitive = Record<string, unknown> & { id: string; type: "text" | "list" | "progress" | "divider" | "spacer" };
+type LensPrimitive = Record<string, unknown> & { id: string; type: "text" | "list" | "progress" | "divider" | "spacer" };
 
 export interface LensOptions {
   block_id: string;
@@ -33,14 +33,14 @@ export interface DegradeOpts {
 }
 
 /** Levels past 4 keep halving; 9 halvings take any neutral block (≤20 rows) to one row. */
-export const MAX_DEGRADE_LEVEL = 9;
+const MAX_DEGRADE_LEVEL = 9;
 const LEVEL_NAMES = ["", "choice notes", "spacers", "dividers"];
 export const degradeLabel = (level: number) => (level >= 4 ? "rows halved" : LEVEL_NAMES[level]);
 
 /** The lens marker on the recommended option — display text, never part of an answer. */
 export const REC_MARK = " (rec)";
-const REC = REC_MARK;
-const utf8 = (s: string) => new TextEncoder().encode(s).length;
+const ENCODER = new TextEncoder();
+const utf8 = (s: string) => ENCODER.encode(s).length;
 function clampBytes(s: string, max: number): string {
   let out = s;
   while (utf8(out) > max) out = out.slice(0, -1);
@@ -106,7 +106,7 @@ export function toLensPrimitives(blocks: readonly Positioned<DisplayBlock>[], op
         const rec = b.options.findIndex((o) => o.recommended);
         const items = b.options.map((o, i) => {
           const label = clampBytes(o.label, itemBytes);
-          return i === rec && utf8(label + REC) <= itemBytes ? label + REC : label;
+          return i === rec && utf8(label + REC_MARK) <= itemBytes ? label + REC_MARK : label;
         });
         if (mode === "chat") options = { block_id: b.id, items, recommended: rec >= 0 ? rec : null };
         else out.push({ id: b.id, type: "list", items, selectable: true, ...geo });

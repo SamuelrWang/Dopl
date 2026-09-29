@@ -68,7 +68,7 @@ export const ESCALATION_MAX_OPTIONS = 6;
  * decisionIndexOf`) carries up to 12 options with optional consequences. Readers parse with
  * {@link parseStoredEscalation}; the INPUT schema above stays 2–6 with consequences required.
  */
-export const ESCALATION_STORED_MAX_OPTIONS = 12;
+const ESCALATION_STORED_MAX_OPTIONS = 12;
 
 /** The reserved metadata key carrying the escalation payload. */
 export const ESCALATION_METADATA_KEY = "escalation";
@@ -184,21 +184,6 @@ export type ChannelEscalationAnswerInput = z.infer<
 >;
 
 /**
- * A stored `metadata.escalation` value → a payload, defensively.
- *
- * ⚠ IT NEVER THROWS AND IT ANSWERS `null` RATHER THAN A DEFAULT. `info-card.ts ›
- * parseInfoCard` degrades to the card as shipped because a channel with no card
- * is a normal channel; there is no such thing as an empty escalation, so the
- * honest degraded answer is "this row is not one" and the caller renders the
- * body it already has.
- */
-export function parseEscalation(raw: unknown): ChannelEscalation | null {
-  if (raw === null || typeof raw !== "object") return null;
-  const parsed = ChannelEscalationSchema.safeParse(raw);
-  return parsed.success ? frozen(parsed.data) : null;
-}
-
-/**
  * THE RELAXED STORED SCHEMA — what a decision INDEX may be (spec §5.2): options 2–12, a
  * consequence and a recommendation's reason may be empty. Every SERVER reader and the new renderer
  * read with it; old shipped desktops parse strictly and render the body for an index that does
@@ -236,7 +221,13 @@ function frozen(data: ChannelEscalationInput | z.infer<typeof StoredEscalationSc
   });
 }
 
-/** A stored `metadata.escalation` → a payload under the RELAXED schema; `null`, never a throw. */
+/**
+ * A stored `metadata.escalation` → a payload under the RELAXED schema.
+ *
+ * ⚠ IT NEVER THROWS AND IT ANSWERS `null` RATHER THAN A DEFAULT: there is no such
+ * thing as an empty escalation, so the honest degraded answer is "this row is not
+ * one" and the caller renders the body it already has.
+ */
 export function parseStoredEscalation(raw: unknown): ChannelEscalation | null {
   if (raw === null || typeof raw !== "object") return null;
   const parsed = StoredEscalationSchema.safeParse(raw);
@@ -244,7 +235,7 @@ export function parseStoredEscalation(raw: unknown): ChannelEscalation | null {
 }
 
 /** A stored `metadata.escalationAnswer` value → an answer, defensively. Same
- *  never-throws / `null`-not-default rule as {@link parseEscalation}. */
+ *  never-throws / `null`-not-default rule as {@link parseStoredEscalation}. */
 export function parseEscalationAnswer(
   raw: unknown
 ): ChannelEscalationAnswer | null {

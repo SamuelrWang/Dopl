@@ -5,10 +5,7 @@ import { PRESENCE_ONLINE_WINDOW_MS } from "../constants";
 import { isSpaRenderer } from "@/shared/lib/spa-bridge";
 import {
   ESCALATION_ANSWER_METADATA_KEY,
-  ESCALATION_METADATA_KEY,
-  parseEscalation,
   parseEscalationAnswer,
-  type ChannelEscalation,
   type ChannelEscalationAnswer,
 } from "../escalation";
 import { agentColorOrNull } from "../lib/agent-colors";
@@ -32,12 +29,6 @@ export function threadIdOf(message: ChannelMessage): string | null {
 export function fanoutGroupOf(message: ChannelMessage): string | null {
   const value = message.metadata.fanoutGroup;
   return typeof value === "string" && value.length > 0 ? value : null;
-}
-
-/** The structured escalation on a message, or null (the body carries it in prose). Reserved and
- *  server-stamped: a caller-set value would hang a working control, and a wake, off any words. */
-export function escalationOf(message: ChannelMessage): ChannelEscalation | null {
-  return parseEscalation(message.metadata[ESCALATION_METADATA_KEY]);
 }
 
 /** The escalation answer on a message, or null; its `agentId` is server-derived, never rendered. */

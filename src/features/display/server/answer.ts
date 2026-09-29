@@ -19,6 +19,7 @@ import type { GlassesMessage } from "@/features/glasses/core/messages/types";
 import { operatorChannelContext } from "@/features/glasses/core/channel-context";
 import { displayOf } from "../core/adapt";
 import { answerersOf } from "../core/answerers";
+import { firstTextLine } from "../core/fallback";
 import { checkTemplateSpec, templateNameFrom, templateVariables } from "../core/template";
 import { choiceOf, DISPLAY_METADATA_KEY, type Display, type DisplayAnswerStamp } from "../core/types";
 import { findMessageRow, stampAnswer } from "./repository";
@@ -68,11 +69,11 @@ export async function answerDisplay(
   if (display.superseded_by) {
     throw new HttpError(409, "DISPLAY_SUPERSEDED", "This decision was withdrawn: the agent replaced it.");
   }
-  if (!answersOf(metadata, row).includes(ctx.userId)) {
+  if (!answerersOf(metadata, row.author_user_id).includes(ctx.userId)) {
     throw new HttpError(403, "DISPLAY_NOT_YOURS", "Only the person this was shown to can answer it.");
   }
   const via = ctx.messageSource?.kind ?? "web";
-  if (!display.decision) return legacyLane(ctx, channelId, row, metadata, display, input.index, via);
+  if (!display.decision) return legacyLane(ctx, channelId, row, metadata, display, choice.id, input.index, option.label, via);
 
   const held = isHeld(metadata);
   let posted;
@@ -98,8 +99,6 @@ export async function answerDisplay(
   };
 }
 
-const answersOf = (metadata: Record<string, unknown>, row: ChannelMessageRow) => answerersOf(metadata, row.author_user_id);
-
 /** v1 dev rows (no decision index). Glasses-linked → the lens tap's path; else stamp + a reply. */
 async function legacyLane(
   ctx: ChannelContext,
@@ -107,18 +106,18 @@ async function legacyLane(
   row: ChannelMessageRow,
   metadata: Record<string, unknown>,
   display: Display,
+  blockId: string,
   index: number,
+  label: string,
   via: string
 ): Promise<{ ok: true; answer: DisplayAnswerStamp }> {
-  const choice = choiceOf(display.blocks)!;
-  const label = choice.options[index].label;
   if (display.glasses_message_id) {
-    const outcome = await answerAsk({ store: glassesRepository }, ctx.userId, { id: display.glasses_message_id, index, choice: label, block_id: choice.id });
+    const outcome = await answerAsk({ store: glassesRepository }, ctx.userId, { id: display.glasses_message_id, index, choice: label, block_id: blockId });
     if (!outcome.ok) throw new HttpError(outcome.status, "DISPLAY_ANSWER_REFUSED", outcome.error);
   } else if (display.answer) {
     throw answered();
   }
-  const answer: DisplayAnswerStamp = { block_id: choice.id, index, choice: label, at: iso(Date.now()), via, by: ctx.userId };
+  const answer: DisplayAnswerStamp = { block_id: blockId, index, choice: label, at: iso(Date.now()), via, by: ctx.userId };
   if (!(await stampAnswer(row.id, answer)) && !display.glasses_message_id) throw answered();
   if (display.glasses_message_id) return { ok: true, answer };
   const agentId = authorAgentIdOf({ clientMsgId: row.client_msg_id, metadata });
@@ -181,9 +180,7 @@ export async function saveDisplayTemplate(
 ) {
   const { metadata, display } = await loadDisplay(ctx, channelRef, messageId, "save this display");
   if (typeof metadata[DISPLAY_METADATA_KEY] !== "object") throw notFound();
-  const first = display.blocks.find((b) => b.type === "heading" || b.type === "text");
-  const firstLine = first ? (first.type === "heading" ? first.text : first.type === "text" ? first.content : "").split("\n")[0] : "";
-  const name = templateNameFrom(input.name, firstLine || "display");
+  const name = templateNameFrom(input.name, firstTextLine(display.blocks) || "display");
   const spec = checkTemplateSpec({ blocks: display.blocks, layout: display.layout === "absolute" ? "absolute" : undefined });
   const t = await glassesRepository.saveTemplate(ctx.userId, name, spec, iso(Date.now()));
   return { name: t.name, variables: templateVariables(spec), updated_at: t.updated_at };

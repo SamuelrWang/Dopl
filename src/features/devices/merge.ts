@@ -2,7 +2,7 @@ import { platformInfo } from "@/features/glasses/platforms/info";
 import type { GlassesDevice } from "@/features/glasses/settings/glasses-api";
 import { computerPlatformLabel, type ComputerDeviceDto, type ConnectedDevice } from "./types";
 
-export function computerToDevice(row: ComputerDeviceDto): ConnectedDevice {
+function computerToDevice(row: ComputerDeviceDto): ConnectedDevice {
   return {
     id: row.id,
     kind: "computer",

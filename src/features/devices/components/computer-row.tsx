@@ -13,14 +13,15 @@ import { DeviceGlyph } from "./device-glyph";
 import { DeviceNameTitle } from "./device-name-title";
 import { useInvalidateComputers } from "./use-devices";
 
-/** `PATCH /api/devices/{id}` takes 1-64 chars (docs/specs/device-aware-messages.md). */
+/** `schema.ts › RenameComputerSchema`: up to 64 chars; "" clears the rename. */
 const COMPUTER_NAME_MAX = 64;
 
 const devicePath = (id: string) => `${DEVICES_PATH}/${encodeURIComponent(id)}`;
 
 /**
- * One computer. Its name renames in place (clearing restores the name the computer reported). Remove signs that computer out of Dopl: every credential it minted is revoked, its
- * sign-in is ended server-side, and the app signs itself out on its next heartbeat.
+ * One computer. Its name renames in place (clearing restores the name the computer reported).
+ * Remove signs that computer out of Dopl: every credential it minted is revoked, its sign-in is
+ * ended server-side, and the app signs itself out on its next heartbeat.
  */
 export function ComputerRow({ device }: { device: ConnectedDevice }) {
   const invalidate = useInvalidateComputers();

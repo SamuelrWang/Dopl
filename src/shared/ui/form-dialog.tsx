@@ -18,10 +18,6 @@ import { cn } from "@/shared/lib/utils";
 import { SMALL_PRIMARY_BUTTON, SMALL_TEXT_BUTTON } from "./small-action-button";
 import styles from "./form-dialog.module.css";
 
-/** The verb — the composer's black CTA face, at `--action-h-sm` (one declaration, shared with
- *  the profile popup's panes). */
-const PRIMARY_BTN = SMALL_PRIMARY_BUTTON;
-
 /**
  * One section: the bold label, then the control under it. The weight lives in the module's
  * `.label`, never per caller (pinned by `launch-agent-dialog.test.tsx`). `htmlFor` makes it a
@@ -309,7 +305,7 @@ export function FormDialog({
         </button>
         <button
           type="button"
-          className={cn(PRIMARY_BTN, primary.disabled && "cursor-not-allowed opacity-60")}
+          className={cn(SMALL_PRIMARY_BUTTON, primary.disabled && "cursor-not-allowed opacity-60")}
           onClick={primary.onClick}
           disabled={primary.disabled || primary.busy}
           title={primary.hint}

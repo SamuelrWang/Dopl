@@ -12,7 +12,7 @@ const displayPath = (channelId: string, messageId: string, verb: "answer" | "sav
   `/api/channels/${encodeURIComponent(channelId)}/messages/${encodeURIComponent(messageId)}/display/${verb}`;
 
 /** One press on a display's `choice` — the index is THE answer (spec §3.2). */
-export interface DisplayAnswerTarget {
+interface DisplayAnswerTarget {
   channelId: string;
   messageId: string;
   index: number;

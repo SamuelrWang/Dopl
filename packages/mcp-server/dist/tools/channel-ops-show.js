@@ -10,7 +10,6 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.LEGACY_DISPLAY_REFUSAL = void 0;
 exports.opShow = opShow;
-exports.showLine = showLine;
 const client_1 = require("@dopl/client");
 const respond_1 = require("./respond");
 const narration_1 = require("./narration");
@@ -20,12 +19,10 @@ async function opShow(client, args) {
     if (args.blocks === undefined && args.template === undefined)
         return (0, respond_1.err)(exports.LEGACY_DISPLAY_REFUSAL);
     const input = { origin: "dopl_show" };
-    for (const key of ["channel", "thread", "target", "blocks", "display_id", "mention", "wait", "timeout_sec", "template", "data", "save_as", "validate_only"]) {
+    for (const key of ["channel", "thread", "target", "blocks", "display_id", "mention", "wait", "timeout_sec", "template", "data", "save_as", "validate_only", "client_msg_id"]) {
         if (args[key] !== undefined)
             input[key] = args[key];
     }
-    if (args.client_msg_id !== undefined)
-        input.client_msg_id = args.client_msg_id;
     let r;
     try {
         r = await client.showDisplay(input);

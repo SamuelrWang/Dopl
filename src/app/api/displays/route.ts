@@ -4,7 +4,6 @@ import { parseJson } from "@/shared/api/parse-json";
 import { toChannelErrorResponse } from "@/shared/api/channel-route";
 import { HttpError } from "@/shared/lib/http-error";
 import { buildChannelContext } from "@/features/channels/server/service";
-import { withMessageSource } from "@/features/channels/server/message-source";
 import { GlassesValidationError } from "@/features/glasses/core/validation";
 import { DisplayInputError } from "@/features/display/core/template";
 import { showDisplay, ShowInputSchema } from "@/features/display/server/service";
@@ -18,8 +17,8 @@ export const maxDuration = 300;
 async function handlePost(request: NextRequest, auth: WorkspaceAuthContext) {
   try {
     const input = await parseJson(request, ShowInputSchema);
-    const ctx = await withMessageSource(buildChannelContext(auth), request, true);
-    return NextResponse.json(await showDisplay(ctx, input, request.signal));
+    // An agent's display: no member device to stamp (`withMessageSource` would return ctx as is).
+    return NextResponse.json(await showDisplay(buildChannelContext(auth), input, request.signal));
   } catch (err) {
     const fixable = err instanceof DisplayInputError || err instanceof GlassesValidationError;
     return toChannelErrorResponse(fixable ? new HttpError(400, "DISPLAY_INVALID", err.message) : err);

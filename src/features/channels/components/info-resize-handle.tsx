@@ -3,9 +3,8 @@
 /**
  * THE GRAB HANDLE ON THE DIVIDER between the transcript and the info column
  * (Samuel, 2026-09-13). The view is the shared
- * `shared/ui/split-resize-handle.tsx › SplitResizeHandle` (extracted 2026-09-29
- * when the knowledge rail took the same bar); this file only names it and binds
- * the channel's config (`./use-info-resize.ts`).
+ * `shared/ui/split-resize-handle.tsx › SplitResizeHandle`; this file only names it
+ * and binds the channel's config (`./use-info-resize.ts`).
  *
  * ⚠ **ITS PARENT IS THE SURFACE ROOT** — `channel-surface.tsx` is a fragment, so
  * the wrapper is a direct child of whichever host mounted the surface.

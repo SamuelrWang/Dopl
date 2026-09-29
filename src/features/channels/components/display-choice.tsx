@@ -14,7 +14,7 @@
  *
  * ⚠ **AFTER A PRESS THE CHOSEN BUTTON STAYS BLACK AND THE REST GO GREY** (`--seg-fill`), and that
  * state is not local: the answer is the message's stamp or the page's answer message
- * (`view-model-escalation.ts › answersByEscalation`), so it survives a reload. The one local fact is
+ * (`view-model-display.ts › answersByEscalation`), so it survives a reload. The one local fact is
  * `pendingIndex` — the press in flight, shown chosen until the re-read lands.
  *
  * ⚠ **ABSENT, NEVER DISABLED.** No `onChoose` (the viewer is not an answerer, the host carries no
@@ -48,7 +48,7 @@ export function DisplayChoice({
 }: {
   choice: ChoiceBlock;
   decisionFace: boolean;
-  /** The stored stamp, else the page's answer message (`displayOf`'s `pageAnswer`). */
+  /** The stored stamp, else the page's answer message (`view-model-display.ts › displayViewFrom`). */
   answer: DisplayAnswerStamp | null;
   /** "You" / the answering member's name, when it can be said. */
   answeredBy: string | null;

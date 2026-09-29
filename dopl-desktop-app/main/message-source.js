@@ -2,7 +2,7 @@
 // device-aware-messages.md), as one line of OUR narration above a fed message's fence, plus the
 // glasses reply guidance. ⚠ THE GUIDANCE IS A RESTATEMENT: the one copy is
 // `packages/mcp-server/src/tools/channel-source.ts › GLASSES_REPLY_GUIDANCE`, held byte-equal by
-// test/message-source.test.mjs. The label is the member's own device name, so it is sanitized.
+// test/inbound-reply-address.test.mjs. The label is the member's own device name, so it is sanitized.
 
 const { sanitizeName } = require('./prompt-sanitize');
 
@@ -27,4 +27,4 @@ function withSourceNote(authorNote, source) {
   return notes.length ? notes.join('\n') : null;
 }
 
-module.exports = { GLASSES_REPLY_GUIDANCE, sourceNote, withSourceNote };
+module.exports = { GLASSES_REPLY_GUIDANCE, withSourceNote };

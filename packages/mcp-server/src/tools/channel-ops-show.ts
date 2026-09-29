@@ -24,10 +24,9 @@ export async function opShow(client: DoplClient, args: ShowArgs): Promise<ToolRe
   // A legacy `kind="display"` carries no blocks and no template (its strict schema has neither).
   if (args.blocks === undefined && args.template === undefined) return err(LEGACY_DISPLAY_REFUSAL);
   const input: ShowDisplayInput = { origin: "dopl_show" };
-  for (const key of ["channel", "thread", "target", "blocks", "display_id", "mention", "wait", "timeout_sec", "template", "data", "save_as", "validate_only"] as const) {
+  for (const key of ["channel", "thread", "target", "blocks", "display_id", "mention", "wait", "timeout_sec", "template", "data", "save_as", "validate_only", "client_msg_id"] as const) {
     if (args[key] !== undefined) (input as Record<string, unknown>)[key] = args[key];
   }
-  if (args.client_msg_id !== undefined) input.client_msg_id = args.client_msg_id;
   let r: ShowDisplayResult;
   try {
     r = await client.showDisplay(input);
@@ -42,7 +41,7 @@ export async function opShow(client: DoplClient, args: ShowArgs): Promise<ToolRe
 }
 
 /** The §4.3 result line(s). */
-export function showLine(r: ShowDisplayResult): string {
+function showLine(r: ShowDisplayResult): string {
   if (r.preview !== undefined) return r.preview;
   const where = r.channel_id ? ` in #${inlineOr(r.channel_name ?? "", r.channel_id)} · msg=${r.message_id}` : "";
   const decision = [r.decision && "decision", r.tags && `tags=${r.tags}`].filter(Boolean).join(" ");

@@ -2,13 +2,9 @@
 
 /**
  * THE DRAGGABLE-DIVIDER MECHANISM, ONCE — a column whose width the operator
- * drags, moved by ONE CSS variable written on the handle's PARENT.
- *
- * Extracted 2026-09-29 from `channels/components/use-info-resize.ts` (Samuel,
- * 2026-09-13) when the knowledge rail took the same bar (Samuel, 2026-09-29:
- * *"look at the channels page … that vertical black bar … Let's bring that
- * over"*). The channel info column and the knowledge file rail are two CONFIGS of
- * this hook, never two copies of it; the view is `./split-resize-handle.tsx`.
+ * drags, moved by ONE CSS variable written on the handle's PARENT. The channel
+ * info column and the knowledge file rail are two CONFIGS of this hook, never two
+ * copies of it; the view is `./split-resize-handle.tsx`.
  *
  * ⚠ **THE ROOT IS FOUND, NOT PASSED.** The handle's wrapper is a DIRECT CHILD of
  * the row holding both columns, so `parentElement` is that row on every host and
@@ -54,11 +50,11 @@ export interface SplitResizeConfig {
 
 /** The ceiling, never below the floor — a row too narrow for any range has
  *  none rather than an inverted one. */
-export function splitMax(config: SplitResizeConfig, rowWidth: number): number {
+function splitMax(config: SplitResizeConfig, rowWidth: number): number {
   return Math.max(config.min, Math.round(config.max(rowWidth)));
 }
 
-export function clampSplitWidth(
+function clampSplitWidth(
   config: SplitResizeConfig,
   width: number,
   rowWidth: number
@@ -71,7 +67,7 @@ export function clampSplitWidth(
 /** ⚠ `null` FOR "NOTHING STORED", never a silent default: the caller clamps
  *  against a row width this function cannot see. Storage throws in a private
  *  window and is absent under SSR — both are "no preference". */
-export function readStoredSplitWidth(storageKey: string): number | null {
+function readStoredSplitWidth(storageKey: string): number | null {
   try {
     const raw = window.localStorage.getItem(storageKey);
     if (raw == null) return null;
@@ -116,10 +112,13 @@ export function useSplitResize(config: SplitResizeConfig): SplitResize {
   const [dragging, setDragging] = useState(false);
 
   const write = useCallback(
-    (next: number, opts?: { persist?: boolean; remember?: boolean }) => {
+    (
+      next: number,
+      opts?: { persist?: boolean; remember?: boolean; rowWidth?: number }
+    ) => {
       const root = rootRef.current;
       if (!root) return;
-      const row = root.getBoundingClientRect().width;
+      const row = opts?.rowWidth ?? root.getBoundingClientRect().width;
       if (opts?.remember !== false) preferredRef.current = next;
       const clamped = clampSplitWidth(config, next, row);
       appliedRef.current = clamped;
@@ -157,14 +156,15 @@ export function useSplitResize(config: SplitResizeConfig): SplitResize {
       strip.setPointerCapture?.(event.pointerId);
       root.setAttribute(config.resizingAttr, "true");
       setDragging(true);
-      // ⚠ READ THE ANCHORED EDGE ONCE — it cannot move during the drag, and
-      // re-reading per move is a forced reflow.
+      // ⚠ MEASURE THE ROW ONCE — neither its edges nor its width move during the
+      // drag, and a read after each variable write is a forced reflow per move.
       const rect = root.getBoundingClientRect();
       const onMove = (moveEvent: PointerEvent) => {
         write(
           config.side === "right"
             ? rect.right - moveEvent.clientX
-            : moveEvent.clientX - rect.left
+            : moveEvent.clientX - rect.left,
+          { rowWidth: rect.width }
         );
       };
       const onUp = () => {

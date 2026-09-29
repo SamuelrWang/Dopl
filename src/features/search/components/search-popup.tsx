@@ -218,11 +218,9 @@ export function SearchPopup({
     >
       <div
         ref={bodyRef}
-        className={cn(
-          // The card's own ceiling stays under the per-section one: five rows
-          // apiece still stacks past the screen once enough sections match.
-          "scrollbar-discreet max-h-[min(60vh,380px)] overflow-y-auto px-2.5 py-2"
-        )}
+        // The card's own ceiling stays under the per-section one: five rows
+        // apiece still stacks past the screen once enough sections match.
+        className="scrollbar-discreet max-h-[min(60vh,380px)] overflow-y-auto px-2.5 py-2"
       >
         {showRecents ? (
           <>

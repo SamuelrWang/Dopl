@@ -30,8 +30,8 @@ import {
   type AgentCardSize,
 } from "./escalation-card-face";
 
-export const DISPLAY_CARD_LABEL = "Display";
-export const DISPLAY_REPLACED_LABEL = "Replaced";
+const DISPLAY_CARD_LABEL = "Display";
+const DISPLAY_REPLACED_LABEL = "Replaced";
 
 /** What a host knows about a display beyond its blocks — built once in the view model. */
 export interface DisplayView {

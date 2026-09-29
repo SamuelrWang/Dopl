@@ -3,7 +3,7 @@ import { platformInfo } from "@/features/glasses/platforms/info";
 /** The `metadata.source` shape and the pure half of `message-source.ts` (no server imports, so
  *  the glasses voice handlers can build one). docs/specs/device-aware-messages.md. */
 
-export type MessageSourceKind = "glasses" | "computer" | "web" | "phone";
+type MessageSourceKind = "glasses" | "computer" | "web" | "phone";
 
 export interface MessageSourceStamp {
   kind: MessageSourceKind;

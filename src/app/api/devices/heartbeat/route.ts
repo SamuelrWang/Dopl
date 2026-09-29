@@ -16,13 +16,11 @@ export const dynamic = "force-dynamic";
 export const POST = withUserAuth(
   async (request, { userId }) => {
     try {
-      const input = await parseJson(request, HeartbeatSchema);
-      const result = await heartbeat(
-        devicesDeps,
-        userId,
-        input,
-        await requestSessionId(request, userId)
-      );
+      const [input, sessionId] = await Promise.all([
+        parseJson(request, HeartbeatSchema),
+        requestSessionId(request, userId),
+      ]);
+      const result = await heartbeat(devicesDeps, userId, input, sessionId);
       return NextResponse.json(result, { headers: { "Cache-Control": "no-store" } });
     } catch (err) {
       return toHttpErrorResponse("devices.heartbeat", err);

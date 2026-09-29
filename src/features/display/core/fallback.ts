@@ -8,7 +8,7 @@ import { DISPLAY_LIMITS, type DisplayBlock } from "./types";
 
 const pct = (v: number) => `${Math.round(v * 100)}%`;
 
-export function blockFallbackLines(b: DisplayBlock): string[] {
+function blockFallbackLines(b: DisplayBlock): string[] {
   switch (b.type) {
     case "heading":
       return [b.text];
@@ -35,6 +35,13 @@ export function blockFallbackLines(b: DisplayBlock): string[] {
     case "spacer":
       return [""];
   }
+}
+
+/** The first line of the first heading or text block, `""` when there is none. */
+export function firstTextLine(blocks: readonly DisplayBlock[]): string {
+  const b = blocks.find((x) => x.type === "heading" || x.type === "text");
+  if (!b) return "";
+  return (b.type === "heading" ? b.text : b.type === "text" ? b.content : "").split("\n")[0];
 }
 
 export function displayFallback(blocks: readonly DisplayBlock[]): string {

@@ -16,8 +16,10 @@ export const GLASSES_LIMITS = {
 
 export type Sanitize = (input: string) => string;
 
+const ENCODER = new TextEncoder();
+
 export function utf8Bytes(s: string): number {
-  return new TextEncoder().encode(s).length;
+  return ENCODER.encode(s).length;
 }
 
 /** Longest prefix of `s` within `max` UTF-8 bytes. */

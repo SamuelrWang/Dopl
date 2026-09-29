@@ -18,7 +18,7 @@ import { ASK_HOLD_CAP_SEC, platformOf, type GlassesDeps } from "@/features/glass
 import type { GlassesMessage } from "@/features/glasses/core/messages/types";
 import { decisionIndexOf, displayOf } from "../core/adapt";
 import { degradeLabel } from "../core/degrade";
-import { displayFallback } from "../core/fallback";
+import { displayFallback, firstTextLine } from "../core/fallback";
 import { normalizeDisplay } from "../core/normalize";
 import { checkTemplateSpec, cleanTemplateName, fillTemplate, templateSpecOf, templateVariables } from "../core/template";
 import {
@@ -173,8 +173,8 @@ async function channelOf(ctx: ChannelContext, input: Input): Promise<{ channel: 
  * options) is a plain list in chat — answerable on the lens only, never through a lane with no
  * decision behind it (verifier N2).
  */
-function channelBlocksOf(blocks: Positioned<DisplayBlock>[]): Positioned<DisplayBlock>[] {
-  if (decisionIndexOf(blocks) || !choiceOf(blocks)) return blocks;
+function channelBlocksOf(blocks: Positioned<DisplayBlock>[], decision: Decision): Positioned<DisplayBlock>[] {
+  if (decision || !choiceOf(blocks)) return blocks;
   return blocks.map((b) => {
     if (b.type !== "choice") return b;
     const { options, ...rest } = b;
@@ -182,11 +182,9 @@ function channelBlocksOf(blocks: Positioned<DisplayBlock>[]): Positioned<Display
   });
 }
 
-const firstLine = (blocks: DisplayBlock[]) => {
-  const b = blocks.find((x) => x.type === "heading" || x.type === "text");
-  const line = b ? (b.type === "heading" ? b.text : b.type === "text" ? b.content : "").split("\n")[0] : "";
-  return line.slice(0, 200) || undefined;
-};
+const firstLine = (blocks: DisplayBlock[]) => firstTextLine(blocks).slice(0, 200) || undefined;
+
+type Decision = ReturnType<typeof decisionIndexOf>;
 
 export async function showDisplay(ctx: ChannelContext, raw: ShowInput, signal?: AbortSignal, deps: GlassesDeps = deps0): Promise<ShowResult> {
   const input = ShowInputSchema.parse(raw);
@@ -198,6 +196,7 @@ export async function showDisplay(ctx: ChannelContext, raw: ShowInput, signal?: 
   const ttl = secondsIn("ttl_sec", input.ttl_sec, 600, 86_400);
   const { blocks, layout } = await blocksOf(deps, ctx.userId, input);
   const choice = choiceOf(blocks);
+  const decision = decisionIndexOf(blocks);
   if (input.wait && !choice) throw invalid([{ code: "bad_value", message: "wait needs a choice block (something to answer)" }]);
 
   const lens = compileForLens(deps, blocks, layout, displayId);
@@ -235,8 +234,8 @@ export async function showDisplay(ctx: ChannelContext, raw: ShowInput, signal?: 
 
   // ── THE CHANNEL COPY ──
   const waitUntil = input.wait ? iso(nowOf(deps) + Math.min(timeout, ASK_HOLD_CAP_SEC) * 1000) : undefined;
-  const posted = channel
-    ? await postOrReplace(resolved!.ctx, channel, input, { blocks: channelBlocksOf(blocks), layout, displayId, waitUntil, row, choice: !!decisionIndexOf(blocks) })
+  const posted = resolved
+    ? await postOrReplace(resolved.ctx, resolved.channel, input, { blocks: channelBlocksOf(blocks, decision), layout, displayId, waitUntil, row, decision })
     : null;
   if (row && posted && row.channel_message_id !== posted.id) await deps.store.linkChannelMessage(ctx.userId, row.id, posted.id);
 
@@ -250,17 +249,17 @@ export async function showDisplay(ctx: ChannelContext, raw: ShowInput, signal?: 
     // A lens row's own status is the glasses shortcuts' (`glasses_render`'s `status`); `dopl_show`
     // reads `status` only as a hold's outcome.
     ...(row && { glasses_message_id: row.id, ...(shortcut && { status: row.status }) }),
-    ...(posted && {
+    ...(posted && resolved && {
       message_id: posted.id,
-      channel_id: channel!.id,
-      channel_name: channel!.name,
-      decision: !!decisionIndexOf(blocks),
+      channel_id: resolved.channel.id,
+      channel_name: resolved.channel.name,
+      decision: !!decision,
       tags: posted.tags,
       ...posted.replaced,
     }),
   };
   if (!input.wait) return result;
-  const held = await hold(deps, ctx.userId, { row, messageId: posted?.id ?? null, channelId: channel?.id ?? null, timeout, choice, signal });
+  const held = await hold(deps, ctx.userId, { row, messageId: posted?.id ?? null, channelId: resolved?.channel.id ?? null, timeout, choice, signal });
   return { ...result, ...held, ...(held.answer?.by && { by_handle: await handleOf(held.answer.by) }) };
 }
 
@@ -281,7 +280,8 @@ interface PostArgs {
   displayId: string;
   waitUntil?: string;
   row: GlassesMessage | null;
-  choice: boolean;
+  /** The decision index a choice display posts with, else `null` (a status). */
+  decision: Decision;
 }
 
 /** Replace-by-id when this author already showed `display_id` here and it is unanswered (§3.5); else post. */
@@ -299,7 +299,7 @@ async function postOrReplace(ctx: ChannelContext, channel: ChannelRow, input: In
       const answered = !!was?.answer || (await hasAnswerMessage(channel.id, prior.id));
       // In place only when the message keeps its lane: a status that gains a choice (or loses one)
       // is a different post — a decision is a request, a status a record (P2-1).
-      const sameLane = !!was?.decision === a.choice;
+      const sameLane = !!was?.decision === !!a.decision;
       if (!answered && sameLane) {
         const envelope: DisplayEnvelopeV2 = {
           spec_version: 2,
@@ -310,7 +310,7 @@ async function postOrReplace(ctx: ChannelContext, channel: ChannelRow, input: In
           ...(a.row && { glasses_message_id: a.row.id }),
           origin,
         };
-        if (await replaceDisplay(prior.id, ctx.userId, body, envelope, decisionIndexOf(a.blocks))) {
+        if (await replaceDisplay(prior.id, ctx.userId, body, envelope, a.decision)) {
           return { id: prior.id, replaced: { replaced: "in-place" as const }, tags: tagsOf(prior.metadata, handles) };
         }
       }
@@ -332,7 +332,7 @@ async function postOrReplace(ctx: ChannelContext, channel: ChannelRow, input: In
       display: { blocks: a.blocks, layout: a.layout },
       // A choice posts like a decision (a request for its answerers); anything else informs and
       // wakes nobody (the record lane).
-      ...(a.choice ? {} : { intent: "chat" as const }),
+      ...(a.decision ? {} : { intent: "chat" as const }),
       ...(input.thread && { metadata: { taskId: input.thread } }),
       ...(input.client_msg_id && { clientMsgId: input.client_msg_id }),
     },
@@ -364,13 +364,14 @@ async function hold(
   const holdMs = Math.min(h.timeout, ASK_HOLD_CAP_SEC) * 1000 + HOLD_GRACE_MS;
   while (nowOf(deps) - start < holdMs && !h.signal?.aborted) {
     await sleep(POLL_MS);
-    if (h.messageId && h.channelId) {
-      const msg = await findMessageById(h.channelId, h.messageId);
-      const answer = displayOf(msg?.metadata as Record<string, unknown>)?.answer;
-      if (answer) return { status: "answered", answer };
-    }
+    // Both sides at once: they are independent reads, and the channel stamp still wins.
+    const [msg, cur] = await Promise.all([
+      h.messageId && h.channelId ? findMessageById(h.channelId, h.messageId) : null,
+      h.row ? deps.store.get(userId, h.row.id) : null,
+    ]);
+    const answer = msg && displayOf(msg.metadata as Record<string, unknown>)?.answer;
+    if (answer) return { status: "answered", answer };
     if (h.row) {
-      const cur = await deps.store.get(userId, h.row.id);
       if (cur?.status === "answered" && cur.answer) {
         const { index, at } = cur.answer;
         // The display's own option is the answer's label (the lens text may carry its "(rec)" mark).
