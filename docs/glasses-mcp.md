@@ -227,12 +227,17 @@ Code: `core/screens/` (vocabulary, validation, templates) and `platforms/even-g2
   - Any missing variable is an error that names it.
   - Names are lowercased, 1-64 characters of `a-z 0-9 _ -`.
 
-**Channel mirror (2026-09-28, docs/specs/device-aware-messages.md):** from a Dopl channel session
-(`X-Dopl-Session-Id` = `<channelId>:…`), `glasses_render` / `use_template` / `update` / `ask` also
-show in that channel as one agent message carrying `metadata.display` (`core/screens/channel-mirror.ts`,
-best effort: a failed mirror never fails the call). The new row stores `channel_message_id`; later
-calls patch that message, and a tap stamps its `answer`. The app answers the same row through
-`POST /api/channels/:id/messages/:messageId/display/answer`.
+**One display door (2026-09-28, docs/specs/unified-display.md):** `glasses_render`,
+`glasses_ask`, `glasses_use_template` and `glasses_update` are shortcuts over `POST /api/displays`
+(`display/server/service.ts › showDisplay`) with `target:"glasses"`, called on the caller's own
+loopback client — names, args and return shapes unchanged. `glasses_render` blocks are the v1
+vocabulary above, read through `display/core/normalize.ts › fromV1` (a selectable list is a
+`choice`). From a Dopl channel session the display is also that channel's message (a `choice`
+makes it a decision; the lens row links to it by `channel_message_id`), and a tap on the lens
+answers the channel decision too (`display/server/answer.ts › answerFromLens`). On `/api/mcp`
+(beside `dopl_show`) their descriptions say they are its shortcuts. `glasses_show` /
+`glasses_notify` stay lens notices with no channel copy. Templates are stored as `spec_version: 2`
+(`display/core/template.ts`); older v1 templates are read through `fromV1`.
 
 **Back-button band (2026-09-27):**
 - Every compiled screen reserves its bottom 40px (`nav_footer: {x:0, y:248, w:576, h:40}` in the
@@ -355,8 +360,9 @@ access.
   applied / requested / identity name. Home's recent agents and the agents list use the same
   lookup for a session row with no name. `agent-<id>` only when neither knows it.
 
-**Display messages** (`metadata.display`, docs/specs/device-aware-messages.md):
-- A message carrying an agent-built display gets a `display` field, compiled for the device's
+**Display messages** (docs/specs/unified-display.md, contract C3):
+- A message whose `display/core/adapt.ts › displayOf` answers — a v2 display, a v1 display, or a
+  legacy decision (`metadata.escalation` only) — gets a `display` field, compiled for the device's
   platform into the Read / Conversation page's **chat area** (`platforms/types.ts ›
   ChatDisplay`, G2: `platforms/even-g2/chat-display.ts`):
 
@@ -364,18 +370,23 @@ access.
   display: {
     screen_id: string;
     containers: {block_id, kind:'text'|'list', x, y, w, h, content?, items?, brightness?, border?}[];
-    options: {block_id, items: string[]} | null;   // the one selectable list
-    answer: {block_id, choice, index, at, via} | null;
+    options: {block_id, items: string[], recommended: number | null} | null;   // the one choice
+    answer: {block_id, choice, index, at, via, by?, message_id?} | null;
     fallback?: true;                                // present only when the text rendering is used
+    decision?: true;                                // answering it posts a channel answer message
   }
+  // and on an ANSWER message (from `metadata.escalationAnswer`):
+  answer_to?: {message_id, index, choice}
   ```
 
   - Coordinates are **lens px** (the same frame as screen containers). G2 chat area
     (`even-g2/display.ts › CHAT_AREA`): the plugin's chat body rect `x 0, y 30, w 576, h 172`
     (header above, footer list from y 204). Containers stack top-down at `x 8, w 560` from y 30,
     never below y 202, with the G2 font and box model; none captures input.
-  - The **selectable list is not a container**: it is `options`, for the plugin's footer list.
-    Info-only lists (`selectable:false`) are list containers. Absolute layouts are stacked.
+  - The **choice is not a container**: it is `options`, for the plugin's footer list; the
+    recommended item carries ` (rec)` when it fits 63 bytes. Info lists are list containers.
+    Absolute layouts are stacked. The blocks go through the degradation ladder
+    (`display/core/degrade.ts`) before the fallback.
   - More than 6 containers, a block over the G2 limits, or a stack taller than the area →
     `fallback: true` and one text container over the whole area holding the text rendering.
   - `text` on a display message is that text rendering, multi-line: text blocks, `label
@@ -383,10 +394,10 @@ access.
     fails re-validation is shown as a plain message (no `display`).
 - **Answer from the glasses**: `POST …/messages/:messageId/display/answer {index, block_id?}`
   (`id` from the message; device token, read rate limit). It runs the app route's own path
-  (`display-actions.ts › answerDisplay`) as the device owner with `metadata.source` = the glasses,
-  so the owner must be a channel member and the message's author account; a glasses-linked
-  display resolves the waiting `glasses_ask` / `wait_for_input`, a chat-only one posts the choice
-  to the agent. Errors: 404 `DISPLAY_NOT_FOUND` / `CHANNEL_NOT_FOUND`, 400 `DISPLAY_BAD_CHOICE`
+  (`display/server/answer.ts › answerDisplay`) as the device owner with `metadata.source` = the
+  glasses, so the owner must be a channel member and one of the display's answerers (tagged, else
+  its author); a decision posts the answer message (a linked lens row is released by the
+  post-insert hook), a v1 dev row takes the legacy lane. Errors: 404 `DISPLAY_NOT_FOUND` / `CHANNEL_NOT_FOUND`, 400 `DISPLAY_BAD_CHOICE`
   / `VALIDATION_FAILED`, 403 `DISPLAY_NOT_YOURS`, 409 `DISPLAY_ANSWERED` / `DISPLAY_ANSWER_REFUSED`.
 - **Conversation filter** (`agent=`): that agent's own posts, plus the owner's posts addressed to
   it. It reads a raw page four times wider. Use `before` from the response to page further back,

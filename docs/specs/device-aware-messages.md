@@ -33,6 +33,11 @@ pick up the main-process change).
 
 ## `channel_messages.metadata.display` (reserved, server-written)
 
+> ⚠ **SUPERSEDED 2026-09-28 by docs/specs/unified-display.md** (v2 envelope, one block vocabulary,
+> `dopl_show`, decisions as displays, one answer route). What follows is the v1 shape, kept because
+> v1 rows still exist and are read at read time through `display/core/adapt.ts › displayOf`.
+> `dopl_send_message` no longer takes `display`; the glasses mirror modules named below are deleted.
+
 ```ts
 {
   spec_version: 1;

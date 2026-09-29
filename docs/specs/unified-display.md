@@ -732,3 +732,41 @@ None blocking. Decided here (Samuel may overrule later): tool name `dopl_show`; 
 (CSP); `display` removed from `dopl_send_message`; auto lens push = caller's own online glasses and
 choices only; `glasses_show`/`glasses_notify` stay lens notices without a channel copy; the
 held-answer record rule (§3.4) with its fallback if `intent:"chat"` still feeds live sessions.
+
+---
+
+## 9. Build status — backend/tools (2026-09-28)
+
+Commits on `feat/glasses-mcp`: `6394ee23` core · `f673c4c0` ladder + templates · `b32f5f77` migration ·
+`f388e0c2` display door + channels write path + glasses shortcuts + client · `bf67025d` MCP `dopl_show` +
+desktop · `9f1048d7` server tests · (this) docs. Migration `unified_display` applied by NAME; verify with
+the §7.4 query against `md5 -q supabase/migrations/20261113120000_unified_display.sql`.
+
+**Open check (§3.4) — outcome.** A member answer with `wake_verdict: none` is NOT fed to running
+desktop sessions: `main/session-dispatch.js › planFor` returns `{ids: [], context: false}` for any stored
+verdict that names nobody (only `escalationAnswerAgentIds`, `thread`, or a member verdict for this
+operator feed), and `feedLiveSession` skips every session that is neither named nor in context. But a
+PERSON's `intent:"chat"` is not a record server-side (`service-wake-verdict-record.ts › isRecordPost`
+is agent-only), so RR3 would still re-aim it at the room's most recent agent. The held answer therefore
+posts `intent:"chat"` **and** `autoAddress:false` (RR3's escape), and fold 11 derives `agentId: null`
+(`service-writes-metadata-escalation.ts › isHeld`) → verdict `none`, fed to nobody. The fallback sentence
+("The same answer also arrives…") is not needed.
+
+**Deviations from the text above (no cross-builder contract changed):**
+1. `display/core/doc.ts` does not exist: `BLOCKS_PARAM_DOC` and the pulled guide live in
+   `packages/mcp-server/src/tools/display-doctrine.ts` (the MCP package cannot import `src/`). Extra
+   backend modules: `display/core/input.ts` (the post route's `DisplayInputSchema`) and
+   `display/server/answer-stamp.ts` (the post-insert hook, apart from `answer.ts` to avoid a
+   `service-writes` ↔ `answer` import cycle).
+2. `glasses_render` keeps the v1 block input (§4.4) and `spec.ts › BLOCKS_DOC` still describes it; v2
+   blocks are `dopl_show`'s. `glasses_show` / `glasses_notify` stay direct lens notices (no hop through
+   `/api/displays`; same outcome: no channel copy).
+3. The post ack field is `displayHint` (camelCase, the `ChannelMessagePosted` DTO convention).
+4. C3 `answer_to` comes from `metadata.escalationAnswer` only; legacy-lane answers stamp the v1 row
+   itself, so the plugin reads the answer off the display.
+5. C4 result also carries `glasses_message_id`; `status` without `wait` is set only for the glasses
+   shortcuts (the lens row's status, `glasses_render`'s old field).
+6. The two RPCs are `SECURITY INVOKER` with EXECUTE granted to `service_role` only (the
+   `merge_channel_message_display` precedent), not definer.
+7. `ChannelEscalationAnswerSchema.optionIndex` max is the stored ceiling (11), since a display decision
+   may carry 12 options.
