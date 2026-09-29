@@ -6,12 +6,10 @@ import { devicesDeps, requestInstallId } from "@/features/devices/server/runtime
 import type { ChannelContext } from "./service-shared";
 import { UNREGISTERED_COMPUTER, WEB_SOURCE, type MessageSourceStamp } from "./message-source-stamp";
 
-export { glassesMessageSource, type MessageSourceStamp } from "./message-source-stamp";
-
 /**
  * **WHICH DEVICE A MEMBER POSTED FROM** — reserved `metadata.source`
  * (docs/specs/device-aware-messages.md). ONE place decides it:
- *   - glasses doors (push-to-talk, Hey Even) → {@link glassesMessageSource};
+ *   - glasses doors (push-to-talk, Hey Even) → `message-source-stamp.ts › glassesMessageSource`;
  *   - an HTTP post → {@link requestMessageSource} (a registered computer off `X-Dopl-Device`,
  *     the desktop UI without one, else the web).
  * It rides `ChannelContext.messageSource` and `service-writes.ts › postMessage` stamps it on a

@@ -28,8 +28,8 @@ import {
 } from "../lib/desktop-handle";
 import { resolveWakeVerdict } from "./service-wake-verdict";
 import { deviceStamps } from "./service-writes-device";
-// ⚠ UNIFIED DISPLAY (2026-09-28): the answer stamp + lens release after an answer insert, and
-// the nudge on an agent's structured-looking plain send. Both are notices/best effort.
+// Best effort: the answer stamp + lens release after an answer insert; the nudge on an agent's
+// structured-looking plain send.
 import { onAnswerInserted } from "@/features/display/server/answer-stamp";
 import { displayNudge } from "@/features/display/server/nudge";
 import {
@@ -400,8 +400,10 @@ export async function postMessage(
   }
 
   await repo.touchChannel(ctx.workspaceId, channel.id);
-  if (stored[ESCALATION_ANSWER_METADATA_KEY]) await onAnswerInserted(ctx, channel.id, row);
-  const posted = await hydrateOne(row);
+  const [, posted] = await Promise.all([
+    stored[ESCALATION_ANSWER_METADATA_KEY] ? onAnswerInserted(ctx, channel.id, row) : null,
+    hydrateOne(row),
+  ]);
   const hint =
     authorKind === "agent" &&
     (input.kind ?? "message") === "message" &&

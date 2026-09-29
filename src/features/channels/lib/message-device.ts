@@ -12,10 +12,10 @@
  */
 
 import { displayOf } from "@/features/display/core/adapt";
-import type { Display, DisplayAnswerStamp } from "@/features/display/core/types";
+import type { Display } from "@/features/display/core/types";
 
 /** Open on purpose, like `devices/types.ts › DeviceKind`: a new kind renders generically. */
-export type MessageSourceKind = "glasses" | "computer" | "web" | "phone" | (string & {});
+type MessageSourceKind = "glasses" | "computer" | "web" | "phone" | (string & {});
 
 export interface MessageSource {
   kind: MessageSourceKind;
@@ -41,10 +41,20 @@ export function messageSourceOf(metadata: Json | null | undefined): MessageSourc
   return { kind, deviceId: str(source.device_id), label };
 }
 
+/**
+ * Parsed displays by the metadata object they were read from. Both row pipelines re-derive every
+ * row whenever a message lands, and an unchanged message keeps its metadata object, so a display
+ * is normalized once per stored value instead of once per page recompute (and its card gets the
+ * same `Display` back). Stored metadata is never mutated in place.
+ */
+const PARSED = new WeakMap<Json, Display | null>();
+
 /** The display on a message (v2, v1 or a legacy decision), or `null` — the body renders. */
-export function messageDisplayOf(
-  metadata: Json | null | undefined,
-  pageAnswer?: DisplayAnswerStamp | null
-): Display | null {
-  return displayOf(metadata, { pageAnswer });
+export function messageDisplayOf(metadata: Json | null | undefined): Display | null {
+  if (!metadata) return displayOf(metadata);
+  const hit = PARSED.get(metadata);
+  if (hit !== undefined) return hit;
+  const display = displayOf(metadata);
+  PARSED.set(metadata, display);
+  return display;
 }

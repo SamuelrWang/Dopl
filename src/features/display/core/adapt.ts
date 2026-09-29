@@ -28,7 +28,7 @@ const isObj = (v: unknown): v is Json => typeof v === "object" && v !== null && 
 const str = (v: unknown): string | null => (typeof v === "string" && v ? v : null);
 
 /** A stored answer stamp (v1 or v2 shape) → the v2 stamp, or null. `choiceId` fills a v1 null block id. */
-export function answerStampOf(raw: unknown, choiceId: string): DisplayAnswerStamp | null {
+function answerStampOf(raw: unknown, choiceId: string): DisplayAnswerStamp | null {
   if (!isObj(raw) || typeof raw.index !== "number" || !Number.isInteger(raw.index) || raw.index < 0) return null;
   if (typeof raw.choice !== "string") return null;
   const stamp: DisplayAnswerStamp = {

@@ -21,4 +21,3 @@ export const DisplayInputSchema = z
     return result.display;
   });
 
-export type DisplayInput = z.output<typeof DisplayInputSchema>;

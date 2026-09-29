@@ -16,7 +16,7 @@ interface BlockBase {
   id: string;
 }
 
-export interface HeadingBlock extends BlockBase {
+interface HeadingBlock extends BlockBase {
   type: "heading";
   text: string;
 }
@@ -26,17 +26,17 @@ export interface TextBlock extends BlockBase {
   content: string;
   /** Omitted = default ink. */
   tone?: "muted" | "strong";
-  // Glasses hints (v1); chat renderers ignore all but `border`.
+  // Glasses hints (v1): the chat card maps `brightness` onto its ink and draws `border`; `lines` is lens-only.
   lines?: number;
   brightness?: 0 | 1 | 2 | 3 | 4;
   border?: boolean;
 }
-export interface FieldsBlock extends BlockBase {
+interface FieldsBlock extends BlockBase {
   type: "fields";
   rows: { label: string; value: string }[];
 }
 /** Information only (a choice is `choice`); omitted style = bullets. */
-export interface ListBlock extends BlockBase {
+interface ListBlock extends BlockBase {
   type: "list";
   items: string[];
   style?: "number";
@@ -51,20 +51,20 @@ export interface ChoiceBlock extends BlockBase {
   type: "choice";
   options: ChoiceOption[];
 }
-export interface ProgressBlock extends BlockBase {
+interface ProgressBlock extends BlockBase {
   type: "progress";
   value: number;
   label?: string;
 }
-export interface TableBlock extends BlockBase {
+interface TableBlock extends BlockBase {
   type: "table";
   columns: string[];
   rows: string[][];
 }
-export interface DividerBlock extends BlockBase {
+interface DividerBlock extends BlockBase {
   type: "divider";
 }
-export interface SpacerBlock extends BlockBase {
+interface SpacerBlock extends BlockBase {
   type: "spacer";
   lines?: number;
 }

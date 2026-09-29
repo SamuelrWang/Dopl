@@ -28,7 +28,7 @@ const intIn = (v: unknown, min: number, max: number): v is number =>
 
 // C0 controls (newline and tab kept) and DEL: nothing any renderer should draw.
 const CONTROL = /[\u0000-\u0008\u000B-\u001F\u007F]/g;
-export const cleanDisplayText = (s: string) => s.replace(CONTROL, "").trim();
+const cleanDisplayText = (s: string) => s.replace(CONTROL, "").trim();
 
 const GEOMETRY = ["x", "y", "w", "h"] as const;
 const KEYS: Record<BlockType, readonly string[]> = {

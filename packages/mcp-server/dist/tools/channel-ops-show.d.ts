@@ -6,7 +6,7 @@
  *
  * ⚠ `channel-` filename prefix required by the parity split-scan (`parity.test.ts`).
  */
-import { type DoplClient, type ShowDisplayInput, type ShowDisplayResult } from "@dopl/client";
+import { type DoplClient, type ShowDisplayInput } from "@dopl/client";
 import { type ToolResponse } from "./respond";
 /** What reaches this handler: the legacy send args plus the carried display params. */
 export type ShowArgs = Pick<ShowDisplayInput, "target" | "blocks" | "display_id" | "mention" | "wait" | "timeout_sec" | "template" | "data" | "save_as" | "validate_only"> & {
@@ -16,5 +16,3 @@ export type ShowArgs = Pick<ShowDisplayInput, "target" | "blocks" | "display_id"
 };
 export declare const LEGACY_DISPLAY_REFUSAL = "Refused: displays are dopl_show (granular); nothing was sent.";
 export declare function opShow(client: DoplClient, args: ShowArgs): Promise<ToolResponse>;
-/** The §4.3 result line(s). */
-export declare function showLine(r: ShowDisplayResult): string;

@@ -37,10 +37,14 @@ export async function stampAnswer(messageId: string, answer: DisplayAnswerStamp)
 }
 
 /** The newest message in `channelId` carrying `displayId`, authored by `authorUserId`. */
-export async function findByDisplayId(channelId: string, displayId: string, authorUserId: string): Promise<ChannelMessageRow | null> {
+export async function findByDisplayId(
+  channelId: string,
+  displayId: string,
+  authorUserId: string
+): Promise<Pick<ChannelMessageRow, "id" | "body" | "metadata"> | null> {
   const { data, error } = await db()
     .from("channel_messages")
-    .select("*")
+    .select("id, body, metadata")
     .eq("channel_id", channelId)
     .eq("author_user_id", authorUserId)
     .eq(`metadata->${DISPLAY_METADATA_KEY}->>display_id`, displayId)
@@ -48,14 +52,20 @@ export async function findByDisplayId(channelId: string, displayId: string, auth
     .limit(1)
     .maybeSingle();
   if (error) throw new Error(`display lookup failed: ${error.message}`);
-  return (data as ChannelMessageRow | null) ?? null;
+  return data ?? null;
 }
 
 /** A message by id alone, for the lens tap (the lens row knows the message, not its channel). */
-export async function findMessageRow(id: string): Promise<ChannelMessageRow | null> {
-  const { data, error } = await db().from("channel_messages").select("*").eq("id", id).maybeSingle();
+export async function findMessageRow(
+  id: string
+): Promise<Pick<ChannelMessageRow, "id" | "channel_id" | "workspace_id" | "metadata"> | null> {
+  const { data, error } = await db()
+    .from("channel_messages")
+    .select("id, channel_id, workspace_id, metadata")
+    .eq("id", id)
+    .maybeSingle();
   if (error) throw new Error(`display message read failed: ${error.message}`);
-  return (data as ChannelMessageRow | null) ?? null;
+  return data ?? null;
 }
 
 /** Whether an answer message references this decision (the stamp may lag the answer). */

@@ -18,13 +18,13 @@ import type { ChannelContext } from "./service-shared";
  * `escalation` (`dopl_request_decision`), whose display is BUILT from it — every decision is a display.
  */
 
-export const SOURCE_METADATA_KEY = "source";
+const SOURCE_METADATA_KEY = "source";
 export const SERVER_STAMPED_DEVICE_KEYS = [SOURCE_METADATA_KEY, DISPLAY_METADATA_KEY] as const;
 
 /** The server-owned half of a display envelope (never caller input): `PostMessageOptions.display`. */
 export type DisplayStampOptions = Partial<Pick<DisplayEnvelopeV2, "display_id" | "wait_until" | "glasses_message_id" | "origin">>;
 
-export function displayEnvelope(
+function displayEnvelope(
   input: Pick<ChannelMessageCreateInput, "display" | "escalation">,
   opts: DisplayStampOptions = {}
 ): DisplayEnvelopeV2 | null {

@@ -9,7 +9,8 @@ vi.mock("@/features/devices/server/devices-service", async (orig) => ({
   requestComputer: h.requestComputer,
 }));
 
-import { glassesMessageSource, requestMessageSource, withMessageSource } from "./message-source";
+import { requestMessageSource, withMessageSource } from "./message-source";
+import { glassesMessageSource } from "./message-source-stamp";
 import type { ChannelContext } from "./service-shared";
 
 const INSTALL = "0b8f3c1e-2d4a-4f6b-9c8d-1a2b3c4d5e6f";

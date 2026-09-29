@@ -3,7 +3,7 @@
  * envelope turned into rows a pane can draw (artifacts #1220 §4, A4 closing
  * slice 2026-09-06).
  *
- * ⚠ **ITS OWN MODULE, ON THE `view-model-escalation.ts` PRECEDENT** (INVARIANTS
+ * ⚠ **ITS OWN MODULE, ON THE `view-model-display.ts` PRECEDENT** (INVARIANTS
  * §1: one file per reason to change). This moves when the ARTIFACT product
  * moves; `view-model-rows.ts` moves when a MESSAGE row's shape does. It is also
  * the only way the derivation fits at all — that file is at 482 lines against a
