@@ -108,13 +108,20 @@ const DECLARED: Array<{ file: string; fence: Fence; why: string }> = [
 const KIND_TEST =
   /channel-scope|isStandardWorkspace|findWorkspaceKind|["']standard["']|["']link["']/;
 
+const GENERATED_DB_TYPES = join(ROOT, "src", "shared", "supabase", "types.ts");
+
 function walk(dir: string, out: string[] = []): string[] {
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
     const full = join(dir, entry.name);
     if (entry.isDirectory()) {
       if (entry.name === "node_modules" || entry.name === "dist") continue;
       walk(full, out);
-    } else if (/\.tsx?$/.test(entry.name) && !/\.test\.tsx?$/.test(entry.name)) {
+    } else if (
+      /\.tsx?$/.test(entry.name) &&
+      !/\.test\.tsx?$/.test(entry.name) &&
+      // Generated from the deployed schema: it names the RPCs, it holds no arm.
+      full !== GENERATED_DB_TYPES
+    ) {
       out.push(full);
     }
   }
