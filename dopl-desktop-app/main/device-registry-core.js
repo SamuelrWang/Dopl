@@ -146,7 +146,7 @@ function createDeviceRegistry(deps) {
     lastStatus = null;
   }
 
-  return { beat, offline, reset, setLink, _isRevoked: () => revoked, _link: () => link };
+  return { beat, offline, reset, setLink, _link: () => link };
 }
 
 module.exports = {
