@@ -5,7 +5,7 @@
  * combinations of (containers minted?) x (`TENANCY_HOME_SPACE` on?) and
  * the union read that made every one of them safe. **`home_scoped` was what made
  * the union possible AND what made it necessary** — every personal row carried
- * the boolean wherever it lived — and `20260923120000_drop_home_scoped.sql`
+ * the boolean wherever it lived — and `20261114140000_drop_home_scoped.sql`
  * removes it. There is one place a personal row can be now, so the flag, the
  * union and every fallback are gone, and what replaces the 2x2 is a MIGRATION
  * PRECONDITION stated in that file's header (P2) rather than a runtime branch.

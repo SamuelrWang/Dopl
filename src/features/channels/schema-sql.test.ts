@@ -192,14 +192,6 @@ describe("channel-scoped RLS hides tombstoned channels (C-15)", () => {
       for (const fn of calls) expect(KNOWN.has(fn), `${policy} calls ${fn}`).toBe(true);
     }
   });
-
-  it("channel_task_participants inherits the guard through channel_tasks", () => {
-    // ⚠ No own deleted_at conjunct on purpose — its EXISTS is on channel_tasks,
-    // itself RLS-filtered for the same caller. Lose that reference and the
-    // inheritance argument goes with it.
-    const sql = finalPolicy("channel_task_participants_member_select");
-    expect(sql).toMatch(/FROM\s+public\.channel_tasks/i);
-  });
 });
 
 // ───────────────────────────────────────────────────────────────────────────
@@ -406,12 +398,6 @@ describe("every FK into channels is ON DELETE CASCADE (what makes one DELETE com
         new RegExp(action.replace(/\s+/g, "\\s+"), "i")
       );
     }
-  });
-
-  it("channel_task_participants cascades from channel_tasks (the transitive hop)", () => {
-    expect(ALL_SQL).toMatch(
-      /REFERENCES\s+public\.channel_tasks\s*\(\s*id\s*\)\s+ON DELETE CASCADE/i
-    );
   });
 });
 

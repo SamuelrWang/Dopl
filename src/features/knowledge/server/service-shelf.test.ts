@@ -1,7 +1,7 @@
 /**
  * The two shelves — Samuel's ruling, 2026-08-26 ("home-only shelf"). The shelf
  * is a TENANCY since 2026-09-02 (slice B15, ruling B10): `home_scoped` is dropped
- * by `20260923120000_drop_home_scoped.sql` and the home shelf is the caller's
+ * by `20261114140000_drop_home_scoped.sql` and the home shelf is the caller's
  * own `kind='home'` container.
  *
  * THE READ HALF

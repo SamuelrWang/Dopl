@@ -20,10 +20,9 @@
  *   2. THE VISIBILITY GATE IS THE CHANNEL'S. The service goes through `loadVisibleChannel`,
  *      so a private channel the caller is not in reads as NOT FOUND rather than as an empty
  *      roster — an empty list would confirm the channel exists.
- *   3. THE MAPPER NARROWS. The row carries `workspace_id`, `status`, `engaged_at` and
- *      `engaged_by`; the DTO is three fields. `engaged_*` are historical values that nothing
- *      writes any more, and leaking them would put a dead engagement's timestamps on the wire
- *      where a reader could mistake them for live state.
+ *   3. THE MAPPER NARROWS. The row carries `workspace_id` and `status`; the DTO is three
+ *      fields. (The historical `engaged_at` / `engaged_by` columns were dropped in
+ *      20261114130000.)
  *
  * Repository mocked, `service-shared` real (the visibility gate runs), Supabase mocked with the
  * chainable-builder stub the sibling repository suites use.
@@ -98,8 +97,6 @@ function agentRow(over: Partial<ChannelAgentRow> = {}): ChannelAgentRow {
     owner_user_id: USER,
     name: "quartz",
     status: "active",
-    engaged_at: null,
-    engaged_by: null,
     created_at: "2026-07-31T00:00:00Z",
     updated_at: "2026-07-31T00:00:00Z",
     ...over,
@@ -197,24 +194,6 @@ describe("mapAgentRow — the DTO narrows, and that is a privacy property", () =
       "name",
       "ownerUserId",
     ]);
-  });
-
-  it("drops the HISTORICAL engagement columns rather than reporting dead state", () => {
-    // `engaged_at` / `engaged_by` still hold whatever they held when engagement was deleted
-    // (no destructive migration ran — the rows were left in place). Putting them on the wire
-    // would let a reader mistake a frozen timestamp for a live engagement.
-    const mapped = mapAgentRow(
-      agentRow({
-        engaged_at: "2026-07-31T12:00:00Z",
-        engaged_by: OTHER,
-        status: "active",
-      })
-    ) as Record<string, unknown>;
-
-    expect(mapped.engagedAt).toBeUndefined();
-    expect(mapped.engaged_at).toBeUndefined();
-    expect(mapped.engagedBy).toBeUndefined();
-    expect(mapped.engaged_by).toBeUndefined();
   });
 
   it("drops `status` and `workspace_id` too — attribution needs neither", () => {

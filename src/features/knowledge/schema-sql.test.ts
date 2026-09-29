@@ -137,10 +137,9 @@ describe("🔒 the TEAM scope read path", () => {
   });
 
   it("every surviving read policy reaches it, and none names the dropped table", () => {
-    // Both permissive `chats` policies: they are OR-ed, so a fence stated on
-    // one of a pair is not a fence.
+    // The one permissive `chats` SELECT policy (its byte-identical twin
+    // `chats_owner_select` was dropped in 20261114130000).
     for (const [table, policy, chain] of [
-      ["chats", "chats_owner_select", "dopl_chat_readable"],
       ["chats", "chats_member_select", "dopl_chat_readable"],
       ["chat_messages", "chat_messages_select", "dopl_chat_readable"],
       ["agent_identities", "agent_identities_member_select", IDENTITY_MATRIX],

@@ -46,8 +46,6 @@ function agentRow(over: Partial<ChannelAgentRow> = {}): ChannelAgentRow {
     owner_user_id: "user-1",
     name: "quartz",
     status: "active",
-    engaged_at: null,
-    engaged_by: null,
     created_at: "2026-07-31T00:00:00Z",
     updated_at: "2026-07-31T00:00:00Z",
     ...over,

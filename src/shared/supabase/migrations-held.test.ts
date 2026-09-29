@@ -37,7 +37,7 @@ const HELD = readdirSync(HELD_DIR)
   .filter((f) => f.endsWith(".sql"))
   .sort();
 
-/** `20260923120000_drop_home_scoped.sql` -> `20260923120000`. */
+/** `20261110140000_drop_pooled_credit_counter.sql` -> `20261110140000`. */
 const versionOf = (name: string) => name.split("_")[0];
 
 describe("held migrations cannot be applied by accident", () => {
@@ -69,17 +69,28 @@ describe("held migrations cannot be applied by accident", () => {
   });
 
   it("🔒 the hold is COMPLETE — no applied migration drops what a held one drops", () => {
-    // ⚠ THE POINT OF THE HOLD IS THE COLUMN SURVIVING. If some other applied
-    // file also dropped `home_scoped`, holding this one would achieve exactly
-    // nothing while reading as though it achieved everything.
-    for (const column of ["home_scoped"]) {
+    // ⚠ THE POINT OF THE HOLD IS THE OBJECT SURVIVING. If some applied file also
+    // dropped one of these, holding its file would achieve exactly nothing while
+    // reading as though it achieved everything.
+    const held: Array<[kind: "COLUMN" | "TABLE" | "FUNCTION", name: string, by: string]> = [
+      ["TABLE", "workspace_credit_usage", "20261110140000"],
+      ["FUNCTION", "consume_workspace_credits", "20261110140000"],
+      ...[
+        "reactivation_email_sent_at",
+        "trial_expires_at",
+        "trial_started_at",
+        "subscription_period_end",
+        "subscription_status",
+        "subscription_tier",
+      ].map((c) => ["COLUMN", c, "20261110150000"] as ["COLUMN", string, string]),
+    ];
+    for (const [kind, name, by] of held) {
       const dropper = APPLIED.find((f) =>
-        new RegExp(`DROP\\s+COLUMN\\s+(IF\\s+EXISTS\\s+)?${column}\\b`, "i").test(f.sql)
+        new RegExp(`DROP\\s+${kind}\\s+(IF\\s+EXISTS\\s+)?(public\\.)?${name}\\b`, "i").test(f.sql)
       );
       expect(
         dropper?.name,
-        `${dropper?.name} drops ${column} too, so holding ` +
-          `20260923120000 does not keep the column.`
+        `${dropper?.name} drops ${kind} ${name} too, so holding ${by} does not keep it.`
       ).toBeUndefined();
     }
   });
@@ -89,7 +100,7 @@ describe("held migrations cannot be applied by accident", () => {
     // constantly, and a citation is not a dependency. Executable SQL naming a
     // held version means the applied set assumes a drop that has not happened.
     // ⚠ STRING LITERALS ARE STRIPPED TOO, not just `--` lines. `COMMENT ON
-    // FUNCTION … IS '…dropped in 20260923120000'` is prose that happens to sit
+    // FUNCTION … IS '…dropped in 20261110140000'` is prose that happens to sit
     // inside an executable statement; it is a citation, not a dependency.
     const heldVersions = HELD.map(versionOf);
     const withoutLiterals = (sql: string) => sql.replace(/'(?:[^']|'')*'/g, "''");
@@ -135,9 +146,6 @@ describe("held migrations cannot be applied by accident", () => {
   it("🔒 the held set is exactly what the README documents", () => {
     // A held file nobody wrote down is a file nobody will remember to release.
     expect(HELD).toEqual([
-      "20260923120000_drop_home_scoped.sql",
-      "20261110120000_drop_glasses_prototype.sql",
-      "20261110130000_drop_dead_tables_and_rpcs.sql",
       "20261110140000_drop_pooled_credit_counter.sql",
       "20261110150000_drop_profile_legacy_billing_columns.sql",
     ]);

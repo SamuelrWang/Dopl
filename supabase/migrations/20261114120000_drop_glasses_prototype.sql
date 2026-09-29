@@ -1,7 +1,6 @@
 -- DROP THE GLASSES PROTOTYPE LEFTOVERS (db-cleanup audit, 2026-09-28).
 --
--- ⚠ HELD — WRITTEN, NOT APPLIED. Samuel's ruling for the audit: "List + draft
--- drops, don't apply". Release per supabase/migrations-held/README.md.
+-- Released 2026-09-29 (Samuel: apply the safe drops).
 --
 -- What and why (evidence measured 2026-09-28, docs/db-cleanup-audit.md):
 --
@@ -28,7 +27,7 @@
 -- glasses_templates_owner_select (unused by code, but harmless reads of the
 -- owner's own rows).
 --
--- Precondition to release: none beyond the audit sign-off. Rollback: re-run the
+-- Rollback: re-run the
 -- CREATE POLICY statements from 20261025120000 / 20261028120000; the table's
 -- one prototype row is not worth restoring.
 

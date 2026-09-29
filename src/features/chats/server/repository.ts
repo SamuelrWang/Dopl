@@ -15,10 +15,10 @@ import { CHAT_LIST_LIMIT } from "../constants";
  * exactly as it did.
  *
  *   * **A read that answers "what may this caller see" takes `readClient()`,**
- *     and the row filter becomes `chats_owner_select` + `chats_member_select` —
- *     BOTH restated onto `dopl_chat_readable()` in
- *     `20260921120000_rls_phase2_policies`, because permissive policies are
- *     OR-ed and repairing one of a pair changes nothing. That predicate equals
+ *     and the row filter becomes `chats_member_select`, restated onto
+ *     `dopl_chat_readable()` in `20260921120000_rls_phase2_policies` (its
+ *     identical twin `chats_owner_select` was dropped in
+ *     `20261114130000_drop_dead_tables_and_rpcs`). That predicate equals
  *     `service-shared.ts › canSeeChat`.
  *   * **A read that answers a SYSTEM question keeps `supabaseAdmin()`** and says
  *     so at the call site: re-export idempotency, transcript LENGTH after a

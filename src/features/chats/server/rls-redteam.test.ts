@@ -20,7 +20,7 @@
  *     membership floor, no credential axis. ⚠ REPAIRING ONE OF A PAIR CHANGES
  *     NOTHING: permissive policies are OR-ed, so both now call the one
  *     predicate, and the first assertion below is the one that keeps it that
- *     way.
+ *     way. (`chats_owner_select`, then identical, was dropped in 20261114130000.)
  *
  * ⚠ TWO HALVES; see `shared/supabase/rls-policy-scan.ts` (what a structural
  * assertion proves, F-523) and `shared/supabase/rls-redteam-fixture.ts` (why the
@@ -48,14 +48,18 @@ const READABLE = "dopl_chat_readable";
 /** The `public`/`teams` matrix `canSeeChat` and `canSeeSkill` share. */
 const MATRIX = "dopl_public_teams_admits";
 
-/** ⚠ EVERY permissive SELECT policy on `chats`, not just the one being edited. */
-const CHAT_POLICIES = ["chats.chats_owner_select", "chats.chats_member_select"];
+/**
+ * ⚠ EVERY permissive SELECT policy on `chats`, not just the one being edited.
+ * One since 20261114130000 dropped its byte-identical twin `chats_owner_select`.
+ */
+const CHAT_POLICIES = ["chats.chats_member_select"];
 
 describe("REDTEAM chats — the policies alone", () => {
-  it("🔒 BOTH policies defer to the one predicate — an OR-ed pair is one fence", () => {
+  it("🔒 every SELECT policy defers to the one predicate — an OR-ed set is one fence", () => {
     for (const key of CHAT_POLICIES) {
       expect(POLICIES.get(key)).toContain(`${READABLE}(id)`);
     }
+    expect(POLICIES.has("chats.chats_owner_select")).toBe(false);
   });
 
   it("refuses an ADMIN a member's PRIVATE transcript — the arm that was blanket", () => {

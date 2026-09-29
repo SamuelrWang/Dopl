@@ -1,43 +1,12 @@
 -- DROP `home_scoped` — THE HOME SHELF IS A TENANCY, NOT A COLUMN
 -- (2026-09-02, wave B slice B15, Samuel's rulings B10 + B11).
 --
--- ⚠ Since 2026-09-24 this file says kind 'home': promote it with a timestamp AFTER
--- 20261023120000_home_vocabulary_rename.sql, or its assertion reads a kind that does not exist yet.
+-- Released 2026-09-29 (Samuel: apply the safe drops).
 --
--- ⚠ **WRITTEN, NOT APPLIED. REPLAY HAS NEVER RUN** (Docker was down for all of
--- wave A and all of wave B). Deploy state is a MEASUREMENT: re-derive with
--- `supabase migration list` / the MCP `list_migrations`, and **JOIN ON THE
--- NAME** — `20260823150000` applied as `20260823205007`, so a filename prefix is
--- not an applied version (INVARIANTS §12, F-304). Every batch-1 and batch-2
--- migration is pending ahead of this one; apply them in filename order.
---
--- ═══ 🔒 TWO PRECONDITIONS, AND NEITHER IS OPTIONAL ══════════════════════════
---
--- **P1 — `20260920120000_workspace_kind_personal.sql` HAS RUN.** Its §5 is a
--- ONE-TIME move of every `home_scoped` row into its author's `kind='home'`
--- container. This file's §1 RAISEs rather than trusting that, and the assertion
--- is the whole reason the drop is safe: after the column goes there is no marker
--- left, so a row still sitting on a shared workspace's shelf would become an
--- ordinary workspace row — visible to every member of a workspace its author
--- filed as private, with nothing anywhere that could notice.
---
--- **P2 — `TENANCY_HOME_SPACE` HAS BEEN DEFAULT-ON FOR A FULL RELEASE,
--- AND THE CODE OF THIS SLICE IS DEPLOYED.** ⚠ **THIS IS THE ORDERING TRAP AND IT
--- IS NOT THE SAME AS P1.** §5's move ran ONCE; the flag is what decided where
--- personal writes LAND afterwards. There is therefore a window — containers
--- minted, flag still off — in which every new personal write went to the shared
--- workspace with `home_scoped = true`, and §1 below is exactly what refuses to
--- drop the column while any of those exist. **Turn the flag on, let it run one
--- release, then apply this file.** Once it is applied the flag has nothing left
--- to decide: `shared/tenancy/home-space.ts` no longer reads it, a
--- personal write lands in the container or REFUSES, and `homeSpaceWriteWorkspaceId`
--- has no fallback to strand a row in.
---
--- ⚠ **P1's OWN PRECONDITION (F-564) IS SEPARATE AND STILL APPLIES.** The gate is
--- `npx vitest run src/features/workspaces/home-channel-derivation.test.ts`;
--- `copy-target.ts` left that map in this slice, and `service-resolve-ref.ts ›
--- tenancyLabel` — never on it, because the boolean hid the defect — is fixed in
--- the same commit.
+-- Written as 20260923120000; re-stamped after 20261023120000_home_vocabulary_rename.sql
+-- because §1 asserts kind 'home'. §1 RAISEs while any home_scoped row sits outside
+-- a kind='home' container: dropping the column there would publish that row to
+-- its whole workspace, with no marker left to notice.
 --
 -- ═══ ROLLBACK ═══════════════════════════════════════════════════════════════
 --
@@ -49,7 +18,7 @@
 --     FROM public.workspaces p WHERE p.id = t.workspace_id AND p.kind = 'home';
 --
 -- ⚠ **THE ROLLBACK IS LOSSLESS ONLY BECAUSE THE CONTAINER CARRIES THE FACT.**
--- After P1 and P2 "home" IS "lives in a `kind='home'` container", so the
+-- "home" IS "lives in a `kind='home'` container" (20260920120000 §5), so the
 -- boolean can be recomputed exactly. That equivalence is what this file is
 -- deleting a redundant copy of — and it is why §1 must hold before the drop,
 -- not after.

@@ -107,8 +107,8 @@ export type ChannelThread = {
 /**
  * A named agent of a channel: an ATTRIBUTION RECORD, nothing more — no writes, no
  * lifecycle. Read on ONE path: a stored message stamped with
- * `metadata.author_agent_id` renders "quartz · Ada's agent". Lifecycle columns
- * (`status`, `engagedAt`, `engagedBy`) stay in the DB, dropped from the DTO.
+ * `metadata.author_agent_id` renders "quartz · Ada's agent". The lifecycle column
+ * `status` stays in the DB, dropped from the DTO.
  */
 export type ChannelAgent = {
   id: string;

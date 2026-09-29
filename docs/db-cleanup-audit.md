@@ -10,6 +10,11 @@ read-only catalog queries against the production project (Supabase MCP `execute_
 the performance/security advisors). The drops are drafted in `supabase/migrations-held/`, which
 `db push` / `db reset` never read (see that directory's README).
 
+**Released 2026-09-29** (Samuel: apply the safe drops): items 1, 2, 3, 4, 5, 8, 9, 10, 11 and
+`home_scoped`, as `supabase/migrations/20261114120000_drop_glasses_prototype.sql`,
+`20261114130000_drop_dead_tables_and_rpcs.sql` and `20261114140000_drop_home_scoped.sql`.
+Items 6 and 7 stay held (archive first).
+
 ## Security — needs Samuel
 
 Found during the audit; both halves are on `chore/db-cleanup`, nothing applied.
@@ -93,17 +98,17 @@ Ranked by confidence, then by how much dead surface it removes.
 
 | # | Object | Type | Evidence | Confidence | Risk | Dependencies | Action |
 |---|---|---|---|---|---|---|---|
-| 1 | `glasses_devices` | table | No code (docs/glasses-mcp.md: "no longer read"). 1 row; `last_seen` stopped 2026-09-26 when device links replaced it. | **certain** | none | policy `glasses_devices_owner_select` only; no FK/view/fn | DROP — held file `…120000` |
-| 2 | `increment_ingestion_count(uuid)` + `profiles.ingestion_count` | function + column | RPC: no code, no SQL caller. Column: 0 rows ≠ 0, only writer is that function. | **certain** | none | none | DROP — `…130000` |
-| 3 | `channel_task_participants` + trigger `…_workspace_guard` + fn `channel_task_child_workspace_guard()` | table + trigger + fn | Breakout rooms retired in the channels rollback. Last insert 2026-08-01, 8 rows. Only code was an explicit delete in `channels/server/repository-tasks.ts` — **removed on this branch** (the FK already cascades). Guard fn used by this trigger only. | likely | an older deployed server still issues the delete → release only after this branch's code ships | FK → `channel_tasks` (cascade); policy `…_member_select` | DROP — `…130000` |
-| 4 | `user_preferences` | table | No code (one comment in `api/user/delete`). 3 rows, keys `onboarding`/`theme`, last write 2026-06-09. | likely | none | 4 owner policies | DROP — `…130000` |
-| 5 | `chat_replace_messages(uuid,uuid,jsonb)` | function | No code, no SQL caller. | likely | none | none | DROP — `…130000` |
+| 1 | `glasses_devices` | table | No code (docs/glasses-mcp.md: "no longer read"). 1 row; `last_seen` stopped 2026-09-26 when device links replaced it. | **certain** | none | policy `glasses_devices_owner_select` only; no FK/view/fn | **Released 2026-09-29** — `20261114120000` |
+| 2 | `increment_ingestion_count(uuid)` + `profiles.ingestion_count` | function + column | RPC: no code, no SQL caller. Column: 0 rows ≠ 0, only writer is that function. | **certain** | none | none | **Released 2026-09-29** — `20261114130000` |
+| 3 | `channel_task_participants` + trigger `…_workspace_guard` + fn `channel_task_child_workspace_guard()` | table + trigger + fn | Breakout rooms retired in the channels rollback. Last insert 2026-08-01, 8 rows. Only code was an explicit delete in `channels/server/repository-tasks.ts` — **removed on this branch** (the FK already cascades). Guard fn used by this trigger only. | likely | an older deployed server still issues the delete → release only after this branch's code ships | FK → `channel_tasks` (cascade); policy `…_member_select` | **Released 2026-09-29** — `20261114130000` |
+| 4 | `user_preferences` | table | No code (one comment in `api/user/delete`). 3 rows, keys `onboarding`/`theme`, last write 2026-06-09. | likely | none | 4 owner policies | **Released 2026-09-29** — `20261114130000` |
+| 5 | `chat_replace_messages(uuid,uuid,jsonb)` | function | No code, no SQL caller. | likely | none | none | **Released 2026-09-29** — `20261114130000` |
 | 6 | `workspace_credit_usage` + `consume_workspace_credits(...)` | table + function | F-667. Retired from writes by `credit_wallets` (applied as `20260907213504`, matched by name). Last write 2026-09-07. No code (comments only). 6 rows of pre-wallet spend. | likely | the rows are history only; a rollback past 1.33 would need them | policy `workspace_credit_usage_member_select`; fn is the table's only writer | **Archive first**, then DROP — `…140000` |
 | 7 | `profiles.subscription_tier`, `subscription_status`, `subscription_period_end`, `trial_started_at`, `trial_expires_at`, `reactivation_email_sent_at` + indexes `profiles_trial_expires_at_idx`, `profiles_reactivation_pending_idx` | 6 columns + 2 indexes | No reader or writer anywhere; `handle_new_user()` sets none of them; billing lives in `workspace_billing` + wallets. Data: 2 rows `pro`, 15 `active`/`inactive`, 2 trial rows (newest 2026-04-16). Indexes never scanned. | likely | historical per-user tier lost | none | **Archive first** (query in file header), then DROP — `…150000` |
-| 8 | `channel_agents.engaged_at` / `engaged_by` + `idx_channel_agents_engaged_by` | 2 columns + index | Engagement deleted in the rollback; `agents-dto.ts › mapAgentRow` already drops them; the read is `select("*")`, so the drop needs no code change. 1 row non-null. | likely | none | none | DROP — `…130000` |
-| 9 | policy `chats_owner_select` | policy | Byte-identical to `chats_member_select` (both `dopl_chat_readable(id)`, SELECT, PUBLIC); advisor `multiple_permissive_policies`. | likely | none (same predicate) | pinned by name in `knowledge/schema-sql.test.ts` and `chats/server/rls-redteam.test.ts` — update those in the release commit | DROP — `…130000` |
-| 10 | policy `glasses_messages_owner_update` | policy | Lets a signed-in user UPDATE their own glasses messages (status/answer/payload) straight through PostgREST. All glasses access is service-role; nothing uses it. | likely | none | none | DROP — `…120000` |
-| 11 | policy `glasses_device_links_owner_select` | policy | Exposes `token_hash` / `hey_even_key_hash` to the owner's browser session; nothing reads the table with a user client. | likely | the Connect page "Devices" panel must read through a server route (named columns), not re-add this | none | DROP — `…120000` |
+| 8 | `channel_agents.engaged_at` / `engaged_by` + `idx_channel_agents_engaged_by` | 2 columns + index | Engagement deleted in the rollback; `agents-dto.ts › mapAgentRow` already drops them; the read is `select("*")`, so the drop needs no code change. 1 row non-null. | likely | none | none | **Released 2026-09-29** — `20261114130000` |
+| 9 | policy `chats_owner_select` | policy | Byte-identical to `chats_member_select` (both `dopl_chat_readable(id)`, SELECT, PUBLIC); advisor `multiple_permissive_policies`. | likely | none (same predicate) | pinned by name in `knowledge/schema-sql.test.ts` and `chats/server/rls-redteam.test.ts` — update those in the release commit | **Released 2026-09-29** — `20261114130000` |
+| 10 | policy `glasses_messages_owner_update` | policy | Lets a signed-in user UPDATE their own glasses messages (status/answer/payload) straight through PostgREST. All glasses access is service-role; nothing uses it. | likely | none | none | **Released 2026-09-29** — `20261114120000` |
+| 11 | policy `glasses_device_links_owner_select` | policy | Exposes `token_hash` / `hey_even_key_hash` to the owner's browser session; nothing reads the table with a user client. | likely | the Connect page "Devices" panel must read through a server route (named columns), not re-add this | none | **Released 2026-09-29** — `20261114120000` |
 | 12 | bucket `chat-attachments` | storage bucket | 0 objects, no code reference. | likely | none | `storage.protect_delete` trigger blocks SQL deletes | Delete via dashboard / Storage API (not in a migration) |
 
 ## Needs Samuel (listed, not drafted)
@@ -119,7 +124,7 @@ Ranked by confidence, then by how much dead surface it removes.
 | `glasses_device_links.linked_channel_id`, `.linked_container_id`, `.reply_cursor_seq` (+ the `linked_channel_id` FK and its `ON DELETE SET NULL` exemption in `channels/schema-sql.test.ts`) | Retired 2026-09-28: a device has no linked channel anymore (voice routes by current target, then the most recent channel; the reply mirror's per-channel cursors moved to `glasses_device_channel_activity`). No code reads or writes them. Dropping columns is non-additive, and the previous release still reads them. | Drop all three once no deployed server predates the retirement. Remove the schema-test exemption in the same change. |
 | `glasses_messages_owner_select`, `glasses_templates_owner_select` | Unused by code (service-role only), but read-only over the owner's own rows. | Drop with #10/#11 if the device UI will never read these with a user client. |
 | bucket `community-thumbnails` (1 object, public) | Only reference is the account-deletion cleanup; the community feature is gone. | Delete the object + bucket and the cleanup lines in `api/user/delete`. |
-| `knowledge_bases.home_scoped`, `agent_identities.home_scoped` | Already held as `20260923120000_drop_home_scoped.sql`. **Its release query now measures 0 stranded rows in both tables (2026-09-28).** | Release that held file (promote it after `20261023120000`, per its header). |
+| `knowledge_bases.home_scoped`, `agent_identities.home_scoped` | Was held as `20260923120000` (drop_home_scoped). **Its release query measured 0 stranded rows in both tables (2026-09-28).** | **Released 2026-09-29** as `20261114140000_drop_home_scoped.sql`. |
 
 ## Unused columns
 
@@ -131,7 +136,7 @@ Only columns with zero live references are listed. Everything else of the 716 wa
 | `profiles.subscription_tier / subscription_status / subscription_period_end / trial_started_at / trial_expires_at / reactivation_email_sent_at` | no code | archive + drop (#7) |
 | `channel_agents.engaged_at / engaged_by` | mapper drops them | drop (#8) |
 | `mcp_events.*` | table has no writer | with the table (needs Samuel) |
-| `*.home_scoped` (2) | already held | release held file |
+| `*.home_scoped` (2) | was held | **released 2026-09-29** (`20261114140000`) |
 
 Kept deliberately: `profiles.stripe_customer_id` / `stripe_subscription_id` — read by
 `billing/server/subscriptions.ts › getUserByStripeCustomer` (webhook grandfather mapping) and
@@ -205,8 +210,9 @@ or an `.rpc()` call. All 42 triggers sit on live tables except
 
 ## What is on this branch
 
-- `supabase/migrations-held/20261110120000_drop_glasses_prototype.sql`
-- `supabase/migrations-held/20261110130000_drop_dead_tables_and_rpcs.sql`
+- `supabase/migrations/20261114120000_drop_glasses_prototype.sql` (was held as `20261110120000`) — released 2026-09-29
+- `supabase/migrations/20261114130000_drop_dead_tables_and_rpcs.sql` (was held as `20261110130000`) — released 2026-09-29
+- `supabase/migrations/20261114140000_drop_home_scoped.sql` (was held as `20260923120000`) — released 2026-09-29
 - `supabase/migrations-held/20261110140000_drop_pooled_credit_counter.sql`
 - `supabase/migrations-held/20261110150000_drop_profile_legacy_billing_columns.sql`
 - `supabase/migrations/20261110160000_profiles_update_column_grants.sql` (security) — released from the hold, applied to prod 2026-09-28

@@ -51,10 +51,10 @@ const COVERED: Record<string, Covered> = {
   },
   chats: {
     predicates: ["canSeeChat"],
-    // Two permissive policies, OR-ed. `chats_member_select_public` was the leak
-    // `20260716150000` replaced; never re-add it.
+    // One permissive policy. `chats_member_select_public` was the leak
+    // `20260716150000` replaced; `chats_owner_select`, its identical twin, was
+    // dropped in `20261114130000`. Never re-add either.
     select: {
-      chats_owner_select: "dopl_chat_readable",
       chats_member_select: "dopl_chat_readable",
     },
   },

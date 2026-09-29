@@ -25,10 +25,6 @@ export type ChannelAgentRow = {
   owner_user_id: string;
   name: string;
   status: string;
-  /** Historical: when a HUMAN last addressed it. Never written any more. */
-  engaged_at: string | null;
-  /** Historical: the human who engaged it. Never written any more. */
-  engaged_by: string | null;
   created_at: string;
   updated_at: string;
 };

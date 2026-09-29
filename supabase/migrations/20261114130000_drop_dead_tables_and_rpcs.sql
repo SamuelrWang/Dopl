@@ -1,7 +1,6 @@
 -- DROP DEAD TABLES, RPCS, COLUMNS AND A DUPLICATE POLICY (db-cleanup audit, 2026-09-28).
 --
--- ⚠ HELD — WRITTEN, NOT APPLIED. Samuel's ruling for the audit: "List + draft
--- drops, don't apply". Release per supabase/migrations-held/README.md.
+-- Released 2026-09-29 (Samuel: apply the safe drops).
 --
 -- Evidence for every item (code refs, rows, last write) is in
 -- docs/db-cleanup-audit.md, measured 2026-09-28 against production. "No code"
@@ -19,18 +18,17 @@
 --      FUNCTION channel_task_child_workspace_guard() — breakout-room
 --      participants, write-dead since the channels rollback (2026-08-01 last
 --      insert, 8 rows). The only code reference, repository-tasks.ts ›
---      deleteTaskParticipants, is removed on this branch (the FK already
---      cascaded that delete). ⚠ RELEASE ONLY AFTER that code is deployed: an
---      older server still issues the delete and would 500 thread deletion.
+--      deleteTaskParticipants, was removed (the FK already cascaded that
+--      delete). ⚠ APPLY ONLY AFTER that code is deployed: an older server
+--      still issues the delete and would 500 thread deletion.
 --      The guard function is used by this table's trigger alone.
 --   5. COLUMNS channel_agents.engaged_at / engaged_by + idx_channel_agents_engaged_by
 --      — engagement was deleted in the rollback; the mapper already drops both
 --      fields. (The TABLE stays: its rows still attribute old agent messages.)
 --   6. POLICY chats_owner_select — byte-identical to chats_member_select
 --      (both `dopl_chat_readable(id)`, SELECT, PUBLIC), flagged by the
---      multiple_permissive_policies advisor. ⚠ On release, update the pair
---      assertions in src/features/knowledge/schema-sql.test.ts and
---      src/features/chats/server/rls-redteam.test.ts (they pin both names).
+--      multiple_permissive_policies advisor. The pair assertions now pin
+--      chats_member_select alone.
 --
 -- Order: policies → triggers → tables → functions, every statement IF EXISTS.
 -- Rollback: the definitions are in 20260415000000 (baseline), 20260707190000,

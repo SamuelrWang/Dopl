@@ -114,11 +114,10 @@ function checkShelfUnions(read: (rel: string) => string): boolean {
   }
 
   // The shelf is a tenancy (the home space); the `home_scoped` boolean must not come back.
-  // Both directories: `drop_home_scoped` may still be held in `supabase/migrations-held/`.
-  const migrationDirs = [
-    resolve(__dirname, "..", "supabase", "migrations"),
-    resolve(__dirname, "..", "supabase", "migrations-held"),
-  ].filter((d) => existsSync(d));
+  // `drop_home_scoped` was released from `supabase/migrations-held/` on 2026-09-29.
+  const migrationDirs = [resolve(__dirname, "..", "supabase", "migrations")].filter((d) =>
+    existsSync(d)
+  );
   const drop = migrationDirs.some((dir) =>
     readdirSync(dir).some(
       (f) =>
@@ -131,7 +130,7 @@ function checkShelfUnions(read: (rel: string) => string): boolean {
   if (!drop) {
     drift = true;
     console.error(
-      `[drift] no migration (applied or held) drops \`home_scoped\`. The shelf is a TENANCY (the caller's kind='home' container) and nothing may re-introduce the boolean beside it — a column and a container answering the same question is how a row comes to be on one shelf and listed on the other.`
+      `[drift] no applied migration drops \`home_scoped\`. The shelf is a TENANCY (the caller's kind='home' container) and nothing may re-introduce the boolean beside it — a column and a container answering the same question is how a row comes to be on one shelf and listed on the other.`
     );
   }
 

@@ -88,10 +88,9 @@ export function assertMayDeleteThread(
  *      expireConsentForMessageSeqs` carries the audit argument.
  *   3. `channel_sessions` targeting the thread, EVERY member's. They are
  *      projections of a live desktop registry, not owned state.
- *   4. `channel_tasks` — the row itself. Legacy `channel_task_participants`
- *      rows (breakout rooms, write-dead) go with it by their FK's `ON DELETE
- *      CASCADE`; the table is slated for removal
- *      (`supabase/migrations-held/20261110130000_drop_dead_tables_and_rpcs.sql`).
+ *   4. `channel_tasks` — the row itself. (The legacy breakout table
+ *      `channel_task_participants` is dropped by
+ *      `supabase/migrations/20261114130000_drop_dead_tables_and_rpcs.sql`.)
  *
  * ⚠ THE PEER'S RUNNING AGENT IS NOT REACHABLE FROM HERE AND THAT IS ACCEPTED
  * (Samuel, 2026-08-21). Step 3 removes the ROW that says a peer's agent is on this
