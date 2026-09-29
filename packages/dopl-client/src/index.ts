@@ -238,4 +238,4 @@ export type {
   ChannelEscalationOption,
 } from "./escalation-types.js";
 
-export type { ChannelDisplayFields } from "./display-types.js";
+export type { DisplayAnswerStamp, ShowDisplayInput, ShowDisplayResult } from "./display-types.js";

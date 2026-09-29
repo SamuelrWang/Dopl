@@ -2,6 +2,8 @@ import type { ChatDisplay } from "../types";
 import { normalizeSpec, type NormBlock } from "../../core/screens/normalize";
 import type { ScreenError } from "../../core/screens/spec";
 import { clampBytes } from "../../core/validation";
+import { fitLens, toLensPrimitives, type LensPrimitives } from "@/features/display/core/degrade";
+import type { DisplayBlock, Positioned } from "@/features/display/core/types";
 import { layoutStack, size, type Sized } from "./compile";
 import {
   CHAT_AREA,
@@ -16,12 +18,12 @@ import { g2Measurer, type TextMeasurer } from "./measure";
 import { sanitizeG2Text } from "./text";
 
 /**
- * **A CHANNEL DISPLAY ON THE READ / CONVERSATION PAGE** (docs/glasses-mcp.md › Menu). The stored
- * blocks were validated under chat limits (`screens/display.ts`); here they are re-checked under
- * the G2 limits and stacked into {@link CHAT_AREA} (x 8-568, y 30-202) with the lens font. The
- * one selectable list is NOT laid out: the plugin shows it as the page's footer list, the only
- * input container. Absolute layouts are stacked (the chat area is not the full lens). Anything
- * that does not fit falls back to one text container holding {@link displayText}.
+ * **A CHANNEL DISPLAY ON THE READ / CONVERSATION PAGE** (docs/glasses-mcp.md › Menu). The v2
+ * blocks go through the display degradation ladder (`display/core/degrade.ts`, chat mode), are
+ * re-checked under the G2 limits and stacked into {@link CHAT_AREA} (x 8-568, y 30-202) with the
+ * lens font. The one choice is NOT laid out: the plugin shows it as the page's footer list, the
+ * only input container. Absolute layouts are stacked (the chat area is not the full lens).
+ * Nothing that fits at any level falls back to one text container holding {@link displayText}.
  */
 
 const AREA = { x: CHAT_AREA.x + MARGIN, y: CHAT_AREA.y, w: CHAT_AREA.w - 2 * MARGIN, h: CHAT_AREA.h };
@@ -35,7 +37,7 @@ const bar = (value: number) => {
 };
 
 /** The display as multi-line lens text: title/text, `label ███▒▒ 32%`, `─ info`, `▶ option`. */
-export function displayText(blocks: NormBlock[]): string {
+export function displayText(blocks: NormBlock[], options: string[] = []): string {
   const lines: string[] = [];
   for (const b of blocks) {
     if (b.type === "text" && b.content) lines.push(b.content);
@@ -46,48 +48,43 @@ export function displayText(blocks: NormBlock[]): string {
     else if (b.type === "spacer") lines.push("");
     else if (b.type === "list") lines.push(...(b.items ?? []).map((item) => (b.selectable ? OPTION_MARK : INFO_MARK) + item));
   }
+  lines.push(...options.map((o) => OPTION_MARK + o));
   return sanitizeG2Text(lines.join("\n").replace(/\n{3,}/g, "\n\n"));
 }
 
-/** A stored block as a stack block: geometry dropped, everything else re-validated. */
-const asStackBlock = (b: NormBlock): NormBlock => {
-  const rest = { ...b };
-  delete rest.x;
-  delete rest.y;
-  delete rest.w;
-  delete rest.h;
-  return rest;
-};
+const normalize = (p: LensPrimitives) => normalizeSpec({ blocks: p.blocks, layout: "stack" }, { limits: LIM, sanitize: sanitizeG2Text });
 
-export function compileChatDisplay(blocks: NormBlock[], m: TextMeasurer = g2Measurer): ChatDisplay {
-  const selectable = blocks.find((b) => b.type === "list" && b.selectable) ?? null;
-  const options = selectable
-    ? { block_id: selectable.id, items: (selectable.items ?? []).map((i) => clampBytes(sanitizeG2Text(i), LIM.list_item_bytes)) }
-    : null;
-  const text = displayText(blocks);
-  const fallback = (): ChatDisplay => ({
+export function compileChatDisplay(blocks: Positioned<DisplayBlock>[], m: TextMeasurer = g2Measurer): ChatDisplay {
+  const fit = fitLens<ChatDisplay["containers"], ScreenError>(blocks, "stack", { mode: "chat", itemBytes: LIM.list_item_bytes }, (p) => {
+    const { blocks: norm, errors } = normalize(p);
+    if (errors.length || norm.filter((b) => b.type !== "spacer").length > CHAT_MAX_CONTAINERS) return { ok: false, errors };
+    if (norm.length === 0) return { ok: true, payload: [] };
+    const layoutErrors: ScreenError[] = [];
+    const sized = norm.map((b) => size(b, AREA.w, m, layoutErrors)).filter((s): s is Sized => s !== null);
+    const containers = layoutErrors.length ? [] : layoutStack(sized, layoutErrors, AREA);
+    if (layoutErrors.length) return { ok: false, errors: layoutErrors };
+    return {
+      ok: true,
+      payload: containers.map((c) => {
+        const out: ChatDisplay["containers"][number] & { capture?: boolean } = { ...c };
+        delete out.capture;
+        return out;
+      }),
+    };
+  });
+  // The level-0 rendering carries every word, for the text field and the fallback.
+  const whole = toLensPrimitives(blocks, { mode: "chat", level: 0, itemBytes: LIM.list_item_bytes });
+  const shown = fit.ok ? fit.primitives : whole;
+  const options = shown.options && {
+    ...shown.options,
+    items: shown.options.items.map((i) => clampBytes(sanitizeG2Text(i), LIM.list_item_bytes)),
+  };
+  const text = displayText(normalize(whole).blocks, options?.items ?? []);
+  if (fit.ok) return { containers: fit.payload, options, text, fallback: false };
+  return {
     containers: [{ block_id: "fallback", kind: "text", ...AREA, content: clampBytes(text, LIM.text_bytes) }],
     options,
     text,
     fallback: true,
-  });
-
-  const rest = blocks.filter((b) => b !== selectable).map(asStackBlock);
-  if (rest.length === 0) return { containers: [], options, text, fallback: false };
-  const { blocks: norm, errors } = normalizeSpec({ blocks: rest, layout: "stack" }, { limits: LIM, sanitize: sanitizeG2Text });
-  if (errors.length || norm.filter((b) => b.type !== "spacer").length > CHAT_MAX_CONTAINERS) return fallback();
-  const layoutErrors: ScreenError[] = [];
-  const sized = norm.map((b) => size(b, AREA.w, m, layoutErrors)).filter((s): s is Sized => s !== null);
-  const containers = layoutErrors.length ? [] : layoutStack(sized, layoutErrors, AREA);
-  if (layoutErrors.length || containers.length === 0) return fallback();
-  return {
-    containers: containers.map((c) => {
-      const out: ChatDisplay["containers"][number] & { capture?: boolean } = { ...c };
-      delete out.capture;
-      return out;
-    }),
-    options,
-    text,
-    fallback: false,
   };
 }

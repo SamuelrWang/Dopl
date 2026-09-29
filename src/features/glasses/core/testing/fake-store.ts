@@ -35,7 +35,7 @@ export function createFakeGlassesStore() {
         updated_at: row.now,
         expires_at: row.expires_at,
         spec: row.spec ?? null,
-        channel_message_id: (row.channel_message_id ?? null) as string | null,
+        channel_message_id: null as string | null,
       };
       rows.push(r);
       return strip(r);

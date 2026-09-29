@@ -375,14 +375,14 @@ export type ChannelMessagePosted = ChannelMessage & {
   /**
    * **THIS CALL WROTE NOTHING — THE `clientMsgId` HAD ALREADY LANDED** (2026-09-04).
    *
-   * ⚠ **THE ACK USED TO BE BYTE-IDENTICAL TO A FIRST POST**, which is why the Mobile
-   * Command Center transcript showed the 3:48 PM message posted twice over ONE row
-   * (seq 963): the idempotency short-circuit returned the stored message with a
-   * success shape, so two `posted` acks could not be told from two messages.
+   * ⚠ **THE ACK USED TO BE BYTE-IDENTICAL TO A FIRST POST**, so two `posted` acks over
+   * ONE row (seq 963) could not be told from two messages.
    * ⚠ **PRESENT ONLY ON A REPLAY, never `false`** — a NOTICE about this CALL, not a
    * property of the row.
    */
   replayed?: true;
+  /** Display nudge (unified-display §6.2): this plain send looked structured. A CALL notice. */
+  displayHint?: "choice" | "structure";
 };
 
 /**

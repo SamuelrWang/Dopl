@@ -153,8 +153,10 @@ interface LensMessage {
   text: string;
   created_at: string;
   attachments_note?: string;
-  /** An agent-built display (`metadata.display`), compiled for this device (`lens-display.ts`). */
+  /** The message's display (v2, v1 or a legacy decision), compiled for this device (`lens-display.ts`). */
   display?: LensDisplay;
+  /** An answer message: the decision it answers (C3), so a loaded display page can mark it. */
+  answer_to?: { message_id: string; index: number; choice: string };
 }
 
 /** The owner's own posts addressed to `agent`, and `agent`'s own posts. */
@@ -182,6 +184,7 @@ export function toLensMessage(m: MenuMessage, ownerId: string, platform: Glasses
     created_at: m.createdAt,
     ...(notes.length ? { attachments_note: notes.join(" ") } : {}),
     ...(shown ? { display: shown.display } : {}),
+    ...(m.answerTo ? { answer_to: { ...m.answerTo, choice: sanitize(m.answerTo.choice) } } : {}),
   };
 }
 
@@ -396,8 +399,8 @@ export async function setTarget(
 
 /**
  * `POST /channels/:id/messages/:messageId/display/answer` from the glasses: the app's own answer
- * path (`display-actions.ts › answerDisplay`: membership, author check, glasses-linked or
- * channel-only), as the device owner, with `via: "glasses"`.
+ * path (`display/server/answer.ts › answerDisplay`: membership, answerers, the decision lane), as
+ * the device owner, with `via: "glasses"`.
  */
 export async function answerChannelDisplay(
   deps: MenuDeps,
@@ -409,12 +412,5 @@ export async function answerChannelDisplay(
   const channel = await openReadable(deps, device, channelId);
   const source = glassesMessageSource({ id: device.id, name: device.name ?? "", platform: device.platform });
   const { answer } = await channel.answerDisplay(messageId, input, source);
-  return { ok: true as const, answer: displayAnswerOf(answer) };
-}
-
-/** A glasses row's answer (`{choice, index, at, block_id?}`) or a display stamp, as the stamp. */
-function displayAnswerOf(raw: unknown) {
-  if (!raw || typeof raw !== "object") return null;
-  const a = raw as { block_id?: string | null; choice: string; index: number; at: string; via?: string };
-  return { block_id: a.block_id ?? null, choice: a.choice, index: a.index, at: a.at, via: a.via ?? "glasses" };
+  return { ok: true as const, answer };
 }

@@ -1,5 +1,6 @@
 import type { MessageSourceStamp } from "@/features/channels/server/message-source-stamp";
 import type { ChannelLink } from "../devices/service";
+import type { Display, DisplayAnswerStamp } from "@/features/display/core/types";
 
 /**
  * Shapes for the glasses menu + read mode (docs/glasses-mcp.md › Menu). The
@@ -50,8 +51,10 @@ export interface MenuMessage {
   recipientAgentIds: string[];
   body: string;
   createdAt: string;
-  /** Raw `metadata.display` (server-written; re-validated before use), else null. */
-  display: unknown;
+  /** The message's display (`display/core/adapt.ts › displayOf`), else null. */
+  display: Display | null;
+  /** On an ANSWER message: the decision it answers (`metadata.escalationAnswer`), else null. */
+  answerTo: { message_id: string; index: number; choice: string } | null;
 }
 
 type LaunchStatus = "launching" | "launched" | "refused" | "expired";
@@ -74,8 +77,8 @@ export interface MenuChannelHandle {
   createLaunch(input: { runtime: string; model: string | null; agentName: string; clientMsgId: string }): Promise<LaunchState | null>;
   getLaunch(directiveId: string): Promise<LaunchState>;
   /** Answer a display on a message in this channel as the owner, via glasses (the app's own
-   *  answer path, `display-actions.ts › answerDisplay`). */
-  answerDisplay(messageId: string, input: DisplayAnswerInput, source: MessageSourceStamp): Promise<{ answer: unknown }>;
+   *  answer path, `display/server/answer.ts › answerDisplay`). */
+  answerDisplay(messageId: string, input: DisplayAnswerInput, source: MessageSourceStamp): Promise<{ answer: DisplayAnswerStamp }>;
 }
 
 export interface DisplayAnswerInput {

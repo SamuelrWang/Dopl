@@ -2,8 +2,6 @@ import { describe, expect, it } from "vitest";
 import { createFakeGlassesStore, fakeClock } from "../testing/fake-store";
 import { createFakeDeviceStore } from "../testing/fake-device-store";
 import {
-  ASK_HOLD_CAP_SEC,
-  glassesAsk,
   glassesGetAnswer,
   glassesNotify,
   glassesShow,
@@ -63,59 +61,6 @@ describe("glasses_show", () => {
     await expect(
       glassesShow(deps, USER, { title: "T", lines: ["1", "2", "3", "4", "5"] }),
     ).rejects.toThrow("lines has 5 items; need 1-4");
-  });
-});
-
-describe("glasses_ask hold", () => {
-  const ask = { question: "Ship it?", options: ["Yes", "No"] };
-
-  it("returns the answer once the device writes it", async () => {
-    const { deps, store, clock } = setup();
-    let ticks = 0;
-    clock.onSleep(async () => {
-      ticks += 1;
-      if (ticks === 3) {
-        const [row] = await store.listInbox(USER, new Date(clock.now()).toISOString(), null);
-        await store.transition(USER, row.id, ["pending", "delivered"], "answered", "t", {
-          choice: "No",
-          index: 1,
-          at: "t",
-        });
-      }
-    });
-    const res = await glassesAsk(deps, USER, ask);
-    expect(res).toMatchObject({ status: "answered", answer: { choice: "No", index: 1 } });
-  });
-
-  it("times out, marks the row expired", async () => {
-    const { deps, rows } = setup();
-    const res = await glassesAsk(deps, USER, { ...ask, timeout_sec: 10 });
-    expect(res).toMatchObject({ status: "timeout", answer: null });
-    expect(rows[0].status).toBe("expired");
-  });
-
-  it("returns pending after the hold cap when timeout_sec exceeds it", async () => {
-    const { deps, rows, clock } = setup();
-    const start = clock.now();
-    const res = await glassesAsk(deps, USER, { ...ask, timeout_sec: 600 });
-    expect(res.status).toBe("pending");
-    expect(clock.now() - start).toBeGreaterThanOrEqual(ASK_HOLD_CAP_SEC * 1000);
-    expect(rows[0].status).toBe("pending");
-  });
-
-  it("stops holding when the client disconnects", async () => {
-    const { deps } = setup();
-    const ctrl = new AbortController();
-    ctrl.abort();
-    const res = await glassesAsk(deps, USER, ask, ctrl.signal);
-    expect(res.status).toBe("pending");
-  });
-
-  it("validates options", async () => {
-    const { deps } = setup();
-    await expect(glassesAsk(deps, USER, { question: "q", options: ["only"] })).rejects.toThrow(
-      "options has 1 items; need 2-4",
-    );
   });
 });
 

@@ -21,4 +21,4 @@ export type { OntologyAttribute, OntologyAttributeValue, Ontology, OntologyCreat
 export type { AgentColorKey, AgentDirectiveCreateInput, AgentDirectiveCreated, LaunchDirective, LaunchDirectiveCreateInput, LaunchDirectiveCreated, LaunchDirectiveKind, LaunchDirectiveStatus, LaunchToolMode, LaunchMessageMode, LaunchRefusalReason, } from "./launch-types.js";
 export type { AgentDirection, AgentDirectionCreateInput, AgentDirectionCreated, DirectionRefusalReason, } from "./direction-types.js";
 export type { ChannelEscalationAnswerInput, ChannelEscalationFields, ChannelEscalationInput, ChannelEscalationOption, } from "./escalation-types.js";
-export type { ChannelDisplayFields } from "./display-types.js";
+export type { DisplayAnswerStamp, ShowDisplayInput, ShowDisplayResult } from "./display-types.js";

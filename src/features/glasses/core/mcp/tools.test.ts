@@ -4,6 +4,7 @@ import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { createFakeDeviceStore } from "../testing/fake-device-store";
 import { createFakeGlassesStore } from "../testing/fake-store";
+import { DoplApiError } from "@dopl/client";
 import { registerGlassesTools } from "./tools";
 
 const USER = "11111111-1111-4111-8111-111111111111";
@@ -11,11 +12,16 @@ const USER = "11111111-1111-4111-8111-111111111111";
 async function connect(canWrite = true, charge?: () => Promise<string | null>) {
   const fake = createFakeGlassesStore();
   const server = new McpServer({ name: "dopl-glasses", version: "0" });
-  registerGlassesTools(server, { store: fake.store, devices: createFakeDeviceStore().devices }, USER, { canWrite, charge });
+  const shown: unknown[] = [];
+  const show = async (input: unknown) => {
+    shown.push(input);
+    return { display_id: "s-1", glasses: "shown", glasses_message_id: "g-1", status: "pending" };
+  };
+  registerGlassesTools(server, { store: fake.store, devices: createFakeDeviceStore().devices }, USER, { canWrite, charge, show });
   const client = new Client({ name: "test", version: "0" });
   const [a, b] = InMemoryTransport.createLinkedPair();
   await Promise.all([server.connect(a), client.connect(b)]);
-  return { client, ...fake };
+  return { client, shown, ...fake };
 }
 
 describe("glasses MCP server", () => {
@@ -47,12 +53,47 @@ describe("glasses MCP server", () => {
     expect(rows[0].user_id).toBe(USER);
   });
 
-  it("surfaces validation errors as fixable tool errors", async () => {
-    const { client } = await connect();
-    const res = await client.callTool({
-      name: "glasses_ask",
-      arguments: { question: "q".repeat(121), options: ["a", "b"] },
+  it("glasses_ask is a shortcut over the display door, in its old return shape", async () => {
+    const { client, shown } = await connect();
+    const res = await client.callTool({ name: "glasses_ask", arguments: { question: "Ship?", options: ["Yes", "No"], timeout_sec: 30 } });
+    expect(res.isError).toBeFalsy();
+    expect(JSON.parse((res.content as { text: string }[])[0].text)).toEqual({ id: "g-1", status: "pending", answer: null, note: expect.any(String) });
+    expect(shown).toEqual([
+      {
+        target: "glasses",
+        shortcut: "ask",
+        origin: "glasses_ask",
+        blocks: [
+          { id: "question", type: "text", content: "Ship?" },
+          { id: "options", type: "choice", options: [{ label: "Yes" }, { label: "No" }] },
+        ],
+        wait: true,
+        timeout_sec: 30,
+      },
+    ]);
+  });
+
+  it("glasses_render reads v1 blocks (a selectable list is a choice)", async () => {
+    const { client, shown } = await connect();
+    const res = await client.callTool({ name: "glasses_render", arguments: { screen_id: "s-a", blocks: [{ type: "list", items: ["a", "b"] }] } });
+    expect(JSON.parse((res.content as { text: string }[])[0].text)).toEqual({ id: "g-1", screen_id: "s-1", status: "pending" });
+    expect(shown[0]).toMatchObject({ display_id: "s-a", blocks: [{ type: "choice", options: [{ label: "a" }, { label: "b" }] }] });
+  });
+
+  it("surfaces the door's 400 text as a fixable tool error", async () => {
+    const fake = createFakeGlassesStore();
+    const server = new McpServer({ name: "dopl-glasses", version: "0" });
+    const body = JSON.stringify({ error: { code: "DISPLAY_INVALID", message: "question is 121 bytes; max 120. Shorten it." } });
+    registerGlassesTools(server, { store: fake.store, devices: createFakeDeviceStore().devices }, USER, {
+      canWrite: true,
+      show: async () => {
+        throw new DoplApiError(400, body);
+      },
     });
+    const client = new Client({ name: "test", version: "0" });
+    const [a, b] = InMemoryTransport.createLinkedPair();
+    await Promise.all([server.connect(a), client.connect(b)]);
+    const res = await client.callTool({ name: "glasses_ask", arguments: { question: "q", options: ["a", "b"] } });
     expect(res.isError).toBe(true);
     expect((res.content as { text: string }[])[0].text).toBe("question is 121 bytes; max 120. Shorten it.");
   });
@@ -66,28 +107,11 @@ describe("glasses MCP server", () => {
     expect(status.isError).toBeFalsy();
   });
 
-  it("renders a validate_only preview over MCP without needing write", async () => {
-    const { client, rows } = await connect(false);
-    const res = await client.callTool({
-      name: "glasses_render",
-      arguments: { blocks: [{ type: "text", content: "Hi" }], validate_only: true },
-    });
+  it("runs validate_only without needing write", async () => {
+    const { client, shown } = await connect(false);
+    const res = await client.callTool({ name: "glasses_render", arguments: { blocks: [{ type: "text", content: "Hi" }], validate_only: true } });
     expect(res.isError).toBeFalsy();
-    const body = JSON.parse((res.content as { text: string }[])[0].text);
-    expect(body.ok).toBe(true);
-    expect(body.preview).toContain("[b1*] Hi");
-    expect(rows).toHaveLength(0);
-  });
-
-  it("returns compile errors as JSON tool errors", async () => {
-    const { client } = await connect();
-    const res = await client.callTool({
-      name: "glasses_render",
-      arguments: { blocks: [{ type: "list", items: ["a"] }, { type: "list", items: ["b"] }] },
-    });
-    expect(res.isError).toBe(true);
-    const body = JSON.parse((res.content as { text: string }[])[0].text);
-    expect(body.errors[0].code).toBe("multiple_selectable");
+    expect(shown[0]).toMatchObject({ validate_only: true });
   });
 
   it("charges each call once and refuses with the meter's message when the wallet is empty", async () => {

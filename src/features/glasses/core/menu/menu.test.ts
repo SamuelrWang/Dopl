@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { displayOf } from "@/features/display/core/adapt";
 import { createHeyEvenHandlers } from "../../platforms/even-g2/hey-even";
 import { evenG2 } from "../../platforms/even-g2";
 import { sanitizeG2Text } from "../../platforms/even-g2/text";
@@ -33,6 +34,7 @@ const msg = (seq: number, over: Partial<MenuMessage> = {}): MenuMessage => ({
   body: `m${seq}`,
   createdAt: `2026-09-27T00:00:${String(seq).padStart(2, "0")}Z`,
   display: null,
+  answerTo: null,
   ...over,
 });
 
@@ -67,7 +69,7 @@ function buildGateway(over: GatewayOverrides, sessions: MenuSession[], launches:
       return l;
     },
     getLaunch: async () => ({ ...launches[0], status: "launched", agentId: "newagent", agentName: "Claude Opus" }),
-    answerDisplay: async () => ({ answer: null }),
+    answerDisplay: async () => ({ answer: { block_id: "b4", choice: "x", index: 0, at: "t", via: "glasses" } }),
   };
   const gw: MenuGateway = {
     listChannels: async () => [
@@ -368,7 +370,7 @@ const CREDITS = {
     { id: "b5", type: "list", items: ["1,609 of 5,000 used (Pro)", "Resets Oct 1"], border: false, selectable: false },
   ],
 };
-const ENDED = msg(7, { authorKind: "agent", authorAgentId: "t0eh6cuh", authorAgentName: null, body: "flat", display: CREDITS });
+const ENDED = msg(7, { authorKind: "agent", authorAgentId: "t0eh6cuh", authorAgentName: null, body: "flat", display: displayOf({ display: CREDITS }) });
 
 describe("read mode: ended agents, line breaks, displays", () => {
   it("names an ended agent from its persisted name, in one batched lookup", async () => {
@@ -400,10 +402,10 @@ describe("read mode: ended agents, line breaks, displays", () => {
     const m = toLensMessage(ENDED, OWNER, evenG2);
     expect(m.id).toBe(ENDED.id);
     expect(m.text).toBe(
-      "Credit usage - September\nCredits ███▒▒▒▒▒▒▒ 32%\n──────────\n▶ Top up now\n▶ Remind me tomorrow\n─ 1,609 of 5,000 used (Pro)\n─ Resets Oct 1",
+      "Credit usage - September\nCredits ███▒▒▒▒▒▒▒ 32%\n──────────\n─ 1,609 of 5,000 used (Pro)\n─ Resets Oct 1\n▶ Top up now\n▶ Remind me tomorrow",
     );
     const d = m.display!;
-    expect(d).toMatchObject({ screen_id: "d-sample-credits", options: { block_id: "b4", items: ["Top up now", "Remind me tomorrow"] }, answer: null });
+    expect(d).toMatchObject({ screen_id: "d-sample-credits", options: { block_id: "b4", items: ["Top up now", "Remind me tomorrow"], recommended: null }, answer: null });
     expect(d.fallback).toBeUndefined();
     expect(d.containers.map((c) => [c.block_id, c.kind])).toEqual([["b1", "text"], ["b2", "text"], ["b3", "text"], ["b5", "list"]]);
     for (const c of d.containers) {
@@ -417,23 +419,40 @@ describe("read mode: ended agents, line breaks, displays", () => {
   });
 
   it("falls back to one text container when the display does not fit, and carries the answer", () => {
-    const tall = {
+    const tall = displayOf({ display: {
       screen_id: "d-tall",
       answer: { block_id: "o", choice: "Yes", index: 0, at: "t", via: "web" },
       blocks: [...Array.from({ length: 8 }, (_, i) => ({ id: `t${i}`, type: "text", content: `line ${i}` })), { id: "o", type: "list", items: ["Yes", "No"] }],
-    };
+    } });
     const d = toLensMessage(msg(1, { authorKind: "agent", display: tall }), OWNER, evenG2).display!;
     expect(d.fallback).toBe(true);
     expect(d.containers).toHaveLength(1);
     expect(d.containers[0]).toMatchObject({ block_id: "fallback", kind: "text", y: 30, h: 172 });
     expect(d.containers[0].content).toContain("line 7\n▶ Yes\n▶ No");
+    expect(d.decision).toBeUndefined();
     expect(d.answer).toEqual({ block_id: "o", choice: "Yes", index: 0, at: "t", via: "web" });
   });
 
   it("shows a malformed display as a plain message", () => {
-    const m = toLensMessage(msg(1, { body: "plain", display: { blocks: [{ type: "bogus" }] } }), OWNER, evenG2);
+    const m = toLensMessage(msg(1, { body: "plain", display: displayOf({ display: { blocks: [{ type: "bogus" }] } }) }), OWNER, evenG2);
     expect(m.display).toBeUndefined();
     expect(m.text).toBe("plain");
+  });
+
+  it("shows a legacy decision (escalation only) with its options and recommendation", () => {
+    const escalation = {
+      issue: "Ship now?",
+      context: "",
+      options: [{ label: "Ship", consequence: "Live in 10m" }, { label: "Wait", consequence: "Tomorrow" }],
+      recommendation: { index: 0, why: "Reversible" },
+    };
+    const d = toLensMessage(msg(1, { authorKind: "agent", display: displayOf({ escalation }) }), OWNER, evenG2).display!;
+    expect(d).toMatchObject({ decision: true, options: { block_id: "decision", items: ["Ship (rec)", "Wait"], recommended: 0 } });
+  });
+
+  it("carries answer_to on an answer message", () => {
+    const answerTo = { message_id: ENDED.id, index: 1, choice: "Remind me tomorrow" };
+    expect(toLensMessage(msg(2, { answerTo }), OWNER, evenG2).answer_to).toEqual(answerTo);
   });
 
   it("answers a display from the glasses through the channel's answer path", async () => {
@@ -442,7 +461,7 @@ describe("read mode: ended agents, line breaks, displays", () => {
       gateway: {
         answerDisplay: async (messageId, input, source) => {
           calls.push({ messageId, input, source });
-          return { answer: { choice: "Top up now", index: 0, at: "t", block_id: "b4" } };
+          return { answer: { choice: "Top up now", index: 0, at: "t", block_id: "b4", via: "glasses" } };
         },
       },
     });

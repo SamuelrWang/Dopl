@@ -10,7 +10,8 @@ import { menuGateway } from "./core/menu/gateway";
 import { LAUNCH_RPM, MENU_READ_RPM, createMenuHandlers } from "./core/menu/handlers";
 import { PAIR_START_RPM, createDeviceHandlers } from "./core/messages/device-handlers";
 import { glassesRepository } from "./core/messages/repository";
-import { patchChannelDisplay } from "./core/screens/channel-displays";
+import { glassesMessageSource } from "@/features/channels/server/message-source-stamp";
+import { answerFromLens } from "@/features/display/server/answer";
 import { glassesChannelGateway } from "./core/voice/channel-gateway";
 import { UTTERANCE_RPM, createVoiceHandlers } from "./core/voice/handlers";
 import { sttProviderFromEnv } from "./core/voice/stt";
@@ -31,8 +32,9 @@ const base = {
   devices: deviceRepository,
   gateway: glassesChannelGateway,
   linker: channelLinker,
-  // A tap on the lens shows as answered on the channel card mirroring it.
-  displays: { patch: patchChannelDisplay },
+  // A tap on a lens row linked to a channel decision answers it there too, from glasses.
+  answerLinked: (device: { user_id: string; id: string; name: string | null; platform: string }, row: Parameters<typeof answerFromLens>[1]) =>
+    answerFromLens(device.user_id, row, glassesMessageSource({ id: device.id, name: device.name ?? "", platform: device.platform })),
   allowPairStart: (request: Request) => allowPairStartFrom(clientIpFromRequest(request as NextRequest)),
 };
 

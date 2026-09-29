@@ -14,7 +14,6 @@
  * in `channel.ts`.
  */
 import type { ChannelEscalationFields } from "./escalation-types.js";
-import type { ChannelDisplayFields } from "./display-types.js";
 import type { ChannelContainer } from "./types.js";
 /**
  * ⚠ **THE TEN CLOSED SETS AND THE TELEMETRY SHAPE BELOW ARE DECLARED IN
@@ -150,12 +149,12 @@ export type { ChannelArtifact, ChannelFoldedArtifact, ChannelReadEntry, ChannelA
 export type ChannelMessagePosted = ChannelMessage & {
     /**
      * **THIS CALL WROTE NOTHING — the `clientMsgId` had already landed**
-     * (2026-09-04). ⚠ PRESENT ONLY ON A REPLAY, never `false`: it is a notice
-     * about this CALL, not a property of the row. The ack was byte-identical to a
-     * first post until then, which is how one row read as two messages in an
-     * agent's own transcript. The server's own note is on the twin.
+     * (2026-09-04). ⚠ PRESENT ONLY ON A REPLAY, never `false`: a notice about this
+     * CALL, not the row. The server's own note is on the twin.
      */
     replayed?: true;
+    /** Display nudge (unified-display §6.2): this plain send looked structured. A CALL notice. */
+    displayHint?: "choice" | "structure";
 };
 export interface ChannelMember {
     channelId: string;
@@ -269,7 +268,7 @@ export interface ChannelThreadCreated {
  * a peer reply already in the channel and the wait never returned. `null` means
  * look it up, never "one past the last seq you saw".
  */
-export interface ChannelMessageInput extends ChannelEscalationFields, ChannelDisplayFields {
+export interface ChannelMessageInput extends ChannelEscalationFields {
     body: string;
     kind?: ChannelMessageKind;
     metadata?: Record<string, unknown>;

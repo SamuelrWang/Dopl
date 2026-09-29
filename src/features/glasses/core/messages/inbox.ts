@@ -88,7 +88,7 @@ export async function readInbox(
   }
 }
 
-/** `message`: the answered row, for the channel mirror (`screens/channel-mirror.ts › answerMirror`). */
+/** `message`: the answered row, for its linked channel decision (`display/server/answer.ts › answerFromLens`). */
 export type AnswerOutcome = { ok: true; message?: GlassesMessage } | { ok: false; status: 400 | 404 | 409; error: string };
 
 type AnswerBody = { id?: unknown; choice?: unknown; index?: unknown; block_id?: unknown };

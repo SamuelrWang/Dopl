@@ -14,8 +14,7 @@ import {
   type AnswerOutcome,
 } from "./inbox";
 import { mirrorReplies } from "./reply-mirror";
-import { answerMirror, type ChannelDisplays } from "../screens/channel-mirror";
-import type { GlassesStore } from "./types";
+import type { GlassesMessage, GlassesStore } from "./types";
 
 /**
  * Handlers for the device-facing routes (`/api/glasses/device/*`), built over
@@ -32,8 +31,11 @@ export interface DeviceHandlerDeps extends Clock {
   allowPairStart: (request: Request) => Promise<boolean>;
   touchThrottle?: Throttle<string>;
   mirrorThrottle?: Throttle<string>;
-  /** Where an answer reaches the channel card mirroring the screen/ask (patch only). */
-  displays?: ChannelDisplays;
+  /**
+   * A tap on a lens row linked to a channel decision posts the same answer there, as the device
+   * owner from glasses (`display/server/answer.ts › answerFromLens`); absent = lens only (tests).
+   */
+  answerLinked?: (device: GlassesDevice, row: GlassesMessage) => Promise<void>;
 }
 
 export const PAIR_START_RPM = 10;
@@ -129,7 +131,7 @@ export function createDeviceHandlers(input: DeviceHandlerDeps) {
 
     answer: authed("answer", async (request, device) => {
       const outcome = await answerAsk(deps, device.user_id, await readJson(request));
-      if (outcome.ok && outcome.message) await answerMirror(deps, device.user_id, outcome.message, "glasses");
+      if (outcome.ok && outcome.message && deps.answerLinked) await deps.answerLinked(device, outcome.message);
       return outcomeResponse(request, outcome);
     }),
 

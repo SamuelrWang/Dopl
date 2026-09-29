@@ -66,52 +66,66 @@ describe("metadata.source", () => {
   });
 });
 
-describe("metadata.display", () => {
-  it("stamps a validated display with a server screen id", async () => {
+describe("metadata.display (unified display, v2)", () => {
+  const CHOICE = { type: "choice", options: [{ label: "Ship", description: "Live in 10m", recommended: true, why: "Reversible" }, { label: "Wait" }] };
+
+  it("stamps a validated v2 display with a server display id, and no decision index without a choice", async () => {
     await post(agent, {
       body: "Usage 62%",
-      display: {
-        blocks: [
-          { type: "text", content: "Usage" },
-          { type: "progress", value: 0.62, label: "Credits" },
-          { type: "list", items: ["Top up", "Later"] },
-        ],
-        wait_for_input: true,
-      },
-    });
-    const display = stored().display as Record<string, unknown>;
-    expect(display).toMatchObject({ spec_version: 1, wait_for_input: true });
-    expect(display.screen_id).toMatch(/^d-[0-9a-f]{8}$/);
-    expect((display.blocks as { id: string; type: string }[]).map((b) => [b.id, b.type])).toEqual([
-      ["b1", "text"],
-      ["b2", "progress"],
-      ["b3", "list"],
-    ]);
-    expect(display).not.toHaveProperty("glasses_message_id");
-  });
-
-  it("survives a RECORD from an EXTERNAL session (intent chat, no desktop runtime) — 2026-09-28", async () => {
-    await post({ ...agent, runtime: undefined }, {
-      body: "[demo] portfolio",
-      intent: "chat",
-      display: { blocks: [{ type: "text", content: "AAPL", x: 8, y: 8, w: 270, h: 35 }], layout: "absolute" },
+      display: { blocks: [{ type: "heading", text: "Usage" }, { type: "progress", value: 0.62, label: "Credits" }] },
     });
     const meta = stored();
-    expect(meta).toMatchObject({ intent: "chat", external_session: true });
-    expect(meta.display).toMatchObject({ spec_version: 1, layout: "absolute" });
+    const display = meta.display as Record<string, unknown>;
+    expect(display).toMatchObject({ spec_version: 2, origin: "dopl_show" });
+    expect(display.display_id).toMatch(/^d-[0-9a-f]{8}$/);
+    expect((display.blocks as { id: string; type: string }[]).map((b) => [b.id, b.type])).toEqual([["b1", "heading"], ["b2", "progress"]]);
+    expect(meta).not.toHaveProperty("escalation");
+  });
+
+  it("a display with a choice IS a decision: the server stamps the decision index", async () => {
+    await post(agent, { body: "x", display: { blocks: [{ type: "heading", text: "Ship it?" }, CHOICE] } });
+    expect(stored().escalation).toEqual({
+      issue: "Ship it?",
+      context: "",
+      options: [{ label: "Ship", consequence: "Live in 10m" }, { label: "Wait", consequence: "" }],
+      recommendation: { index: 0, why: "Reversible" },
+    });
+  });
+
+  it("dopl_request_decision's escalation gets a display built from it", async () => {
+    const escalation = { issue: "Q?", context: "", options: [{ label: "A", consequence: "a" }, { label: "B", consequence: "b" }] };
+    await post(agent, { body: "x", escalation });
+    expect(stored().display).toMatchObject({
+      spec_version: 2,
+      origin: "dopl_request_decision",
+      blocks: [{ id: "issue", type: "text", content: "Q?" }, { id: "decision", type: "choice", options: [{ label: "A", description: "a" }, { label: "B", description: "b" }] }],
+    });
+  });
+
+  it("refuses escalation and display together, and an invalid display", () => {
+    const both = ChannelMessageCreateSchema.safeParse({
+      body: "x",
+      escalation: { issue: "Q", context: "", options: [{ label: "A", consequence: "a" }, { label: "B", consequence: "b" }] },
+      display: { blocks: [CHOICE] },
+    });
+    expect(both.success).toBe(false);
+    const two = ChannelMessageCreateSchema.safeParse({ body: "x", display: { blocks: [CHOICE, CHOICE] } });
+    expect(JSON.stringify(two.error?.issues)).toContain("max 1 per display");
   });
 
   it("strips a display smuggled through caller metadata", async () => {
-    await post(agent, { body: "x", metadata: { display: { spec_version: 1, glasses_message_id: "g", blocks: [] } } });
+    await post(agent, { body: "x", metadata: { display: { spec_version: 2, glasses_message_id: "g", blocks: [] } } });
     expect(stored()).not.toHaveProperty("display");
   });
+});
 
-  it("refuses an invalid display at the schema (two selectable lists)", () => {
-    const res = ChannelMessageCreateSchema.safeParse({
-      body: "x",
-      display: { blocks: [{ type: "list", items: ["a"] }, { type: "list", items: ["b"] }] },
-    });
-    expect(res.success).toBe(false);
-    expect(JSON.stringify(res.error?.issues)).toContain("selectable");
+describe("display nudge", () => {
+  it("hints choice on an agent's plain send that lists options with a question, and never on a record", async () => {
+    const res = await post(agent, { body: "Which should I do?\n1. Ship now\n2. Wait for review" });
+    expect(res.displayHint).toBe("choice");
+    const record = await post(agent, { body: "Which should I do?\n1. Ship now\n2. Wait for review", intent: "chat" });
+    expect(record.displayHint).toBeUndefined();
+    const byMember = await post(member, { body: "Which should I do?\n1. Ship now\n2. Wait for review" });
+    expect(byMember.displayHint).toBeUndefined();
   });
 });

@@ -26,6 +26,7 @@ exports.createChannel = createChannel;
 exports.updateChannel = updateChannel;
 exports.inviteToChannel = inviteToChannel;
 exports.postMessage = postMessage;
+exports.showDisplay = showDisplay;
 exports.listChannelThreads = listChannelThreads;
 exports.listChannelSessions = listChannelSessions;
 exports.getChannelThread = getChannelThread;
@@ -212,6 +213,19 @@ async function postMessage(t, channelId, input) {
     const data = await t.request(`/api/channels/${enc(channelId)}/messages`, { method: "POST", body: input, toolName: "channel_post" });
     return data.message;
 }
+/**
+ * SHOW A DISPLAY (unified display, 2026-09-28) — one door for `dopl_show` and the glasses
+ * shortcuts. ⚠ The timeout is the `await` precedent's: a `wait` holds ≤205s server-side.
+ */
+async function showDisplay(t, input) {
+    return t.request("/api/displays", {
+        method: "POST",
+        body: input,
+        toolName: "display_show",
+        timeoutMs: SHOW_DISPLAY_TIMEOUT_MS,
+    });
+}
+const SHOW_DISPLAY_TIMEOUT_MS = 215_000;
 // ─── Threads ────────────────────────────────────────────────────────
 //
 // ⚠ BOUNDARY: wire/storage name `task` == domain name `thread`. Route segment

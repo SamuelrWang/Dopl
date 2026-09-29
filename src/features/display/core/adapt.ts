@@ -45,7 +45,9 @@ export function answerStampOf(raw: unknown, choiceId: string): DisplayAnswerStam
 }
 
 /** A decision's blocks: the issue as TEXT (not a heading), so legacy cards look exactly as today. */
-export function displayFromEscalation(e: ChannelEscalation): DisplayBlock[] {
+export function displayFromEscalation(
+  e: Pick<ChannelEscalation, "issue" | "context" | "options"> & { recommendation?: ChannelEscalation["recommendation"] }
+): DisplayBlock[] {
   const blocks: DisplayBlock[] = [{ id: "issue", type: "text", content: e.issue }];
   if (e.context) blocks.push({ id: "context", type: "text", content: e.context });
   blocks.push({

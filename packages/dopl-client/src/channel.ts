@@ -12,6 +12,7 @@
  */
 
 import type { DoplTransport } from "./transport.js";
+import type { ShowDisplayInput, ShowDisplayResult } from "./display-types.js";
 import type {
   AwaitMessagesOptions,
   AwaitResult,
@@ -313,6 +314,20 @@ export async function postMessage(
   );
   return data.message;
 }
+
+/**
+ * SHOW A DISPLAY (unified display, 2026-09-28) — one door for `dopl_show` and the glasses
+ * shortcuts. ⚠ The timeout is the `await` precedent's: a `wait` holds ≤205s server-side.
+ */
+export async function showDisplay(t: DoplTransport, input: ShowDisplayInput): Promise<ShowDisplayResult> {
+  return t.request<ShowDisplayResult>("/api/displays", {
+    method: "POST",
+    body: input,
+    toolName: "display_show",
+    timeoutMs: SHOW_DISPLAY_TIMEOUT_MS,
+  });
+}
+const SHOW_DISPLAY_TIMEOUT_MS = 215_000;
 
 // ─── Threads ────────────────────────────────────────────────────────
 //

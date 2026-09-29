@@ -37,7 +37,6 @@ const insertRow = (userId: string, row: NewGlassesMessage) => ({
   status: "pending",
   expires_at: row.expires_at,
   spec: row.spec ?? null,
-  channel_message_id: row.channel_message_id ?? null,
 });
 
 export const glassesRepository: GlassesStore = {

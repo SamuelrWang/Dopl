@@ -7,8 +7,9 @@ import { authorAgentIdOf } from "@/features/channels/lib/agent-post-stamp";
 import type { ChannelMessage } from "@/features/channels/types";
 import type { LaunchDirective } from "@/features/channels/types-launch";
 import { operatorChannelContext } from "../channel-context";
-import { answerDisplay } from "../screens/display-actions";
-import { DISPLAY_METADATA_KEY } from "../screens/display";
+import { answerDisplay } from "@/features/display/server/answer";
+import { displayOf } from "@/features/display/core/adapt";
+import { ESCALATION_ANSWER_METADATA_KEY, parseEscalationAnswer } from "@/features/channels/escalation";
 import { AGENT_ID_RE } from "../voice/target";
 import type { LaunchState, MenuChannelHandle, MenuGateway, MenuMessage, MenuSession } from "./types";
 
@@ -34,8 +35,15 @@ function toMenuMessage(m: ChannelMessage): MenuMessage {
     recipientAgentIds: m.recipientAgentIds ?? [],
     body: m.body,
     createdAt: m.createdAt,
-    display: m.metadata?.[DISPLAY_METADATA_KEY] ?? null,
+    display: displayOf(m.metadata),
+    answerTo: answerToOf(m),
   };
+}
+
+/** C3 `answer_to`: the decision an answer message answers (its body is the pressed label). */
+function answerToOf(m: ChannelMessage): MenuMessage["answerTo"] {
+  const a = parseEscalationAnswer(m.metadata?.[ESCALATION_ANSWER_METADATA_KEY]);
+  return a ? { message_id: a.escalationMessageId, index: a.optionIndex, choice: m.body.trim().slice(0, 200) } : null;
 }
 
 /** Newest first → first name per agent id wins. */

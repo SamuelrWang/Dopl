@@ -1,4 +1,5 @@
 import "server-only";
+import type { DisplayStampOptions } from "./service-writes-device";
 import type { ChannelMessageCreateInput } from "../schema";
 import { ChannelLifecycleKindForbiddenError } from "./errors";
 import type { ChannelContext } from "./service-shared";
@@ -72,6 +73,12 @@ export interface PostMessageOptions {
    * (`resolvePostMetadata`).
    */
   fanoutGroupId?: string;
+  /**
+   * THE SERVER-OWNED HALF OF A DISPLAY (unified display): its id (replace-by-id), the hold stamp
+   * (`wait_until`), the linked lens row and its origin. Only the display service
+   * (`display/server/service.ts`) sets it; no HTTP caller can.
+   */
+  display?: DisplayStampOptions;
 }
 
 /**

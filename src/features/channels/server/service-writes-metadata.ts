@@ -464,7 +464,7 @@ export async function resolvePostMetadata(
       input.escalationAnswer,
       metadata
     );
-  } else if (!input.escalation && ctx.source !== "agent") {
+  } else if (!input.escalation && !input.display && ctx.source !== "agent") {
     // 11b — THE TYPED ANSWER (task 13b). A member who TYPES an option's label
     // instead of pressing it has answered the card, and until now that message
     // tied to nothing and woke nobody.

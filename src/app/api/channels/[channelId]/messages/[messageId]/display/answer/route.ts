@@ -4,9 +4,9 @@ import { parseJson } from "@/shared/api/parse-json";
 import { requireChannelId, toChannelErrorResponse } from "@/shared/api/channel-route";
 import { buildChannelContext } from "@/features/channels/server/service";
 import { withMessageSource } from "@/features/channels/server/message-source";
-import { answerDisplay, DisplayAnswerSchema } from "@/features/glasses/core/screens/display-actions";
+import { answerDisplay, DisplayAnswerSchema } from "@/features/display/server/answer";
 
-/** POST — answer a display's selectable list from the app (docs/specs/device-aware-messages.md). */
+/** POST — answer any display (its choice) from the app — docs/specs/unified-display.md §3.3. */
 async function handlePost(request: NextRequest, auth: WorkspaceAuthContext) {
   try {
     const input = await parseJson(request, DisplayAnswerSchema);

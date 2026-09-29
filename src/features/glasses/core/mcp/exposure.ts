@@ -8,8 +8,6 @@ import { deviceRepository } from "../devices/repository";
 import { glassesRepository } from "../messages/repository";
 import { TtlCache } from "../ttl-cache";
 import { registerGlassesTools } from "./tools";
-import { channelDisplays } from "../screens/channel-displays";
-import { sessionChannelId } from "@/shared/auth/session-header";
 
 /**
  * How the glasses tools reach the MCP surfaces, and how glasses work is metered
@@ -97,9 +95,6 @@ export interface GlassesCaller {
   client: DoplClient;
   /** The credential's container lock, charged instead of the caller's home. */
   lockedContainerId: string | null;
-  /** `X-Dopl-Session-Id` (`<channelId>:…` for a Dopl channel session): screens are mirrored there. */
-  sessionId?: string | null;
-  signal?: AbortSignal;
 }
 
 /**
@@ -114,10 +109,11 @@ export async function exposeGlassesTools(
 ): Promise<void> {
   if (!profileOffersGlasses(caller.toolProfile)) return;
   if (requireDevice && !(await hasActiveGlasses(caller.userId))) return;
-  const displays = channelDisplays(caller.client, sessionChannelId(caller.sessionId));
-  registerGlassesTools(server, { ...glassesToolDeps, displays }, caller.userId, {
+  registerGlassesTools(server, glassesToolDeps, caller.userId, {
     canWrite: caller.scopes?.includes("dopl.write") ?? false,
-    signal: caller.signal,
+    // ONE door: the caller's own loopback client, so a screen posts and answers like `dopl_show`.
+    show: (input) => caller.client.showDisplay(input),
+    shortcutOf: requireDevice ? "dopl_show" : null,
     charge: mcpToolCharger(caller.client, caller.userId, caller.lockedContainerId),
   });
 }

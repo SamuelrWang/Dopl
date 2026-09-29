@@ -22,7 +22,7 @@ import {
   removedParam,
 } from "./schema-removed-params";
 import { ChannelInfoCardSchema } from "./info-card";
-import { DisplayInputSchema } from "@/features/glasses/core/screens/display";
+import { DisplayInputSchema } from "@/features/display/core/input";
 import {
   ChannelEscalationAnswerSchema,
   ChannelEscalationSchema,
@@ -230,9 +230,13 @@ export const ChannelMessageCreateSchema = z.object({
    */
   escalation: ChannelEscalationSchema.optional(),
   escalationAnswer: ChannelEscalationAnswerSchema.optional(),
-  /** An agent-built DISPLAY (glasses block vocabulary), stamped as reserved `metadata.display`
-   *  with a server screen id — docs/specs/device-aware-messages.md. `body` is its text fallback. */
+  /** An agent-built DISPLAY (`display/core` v2 blocks), stamped as reserved `metadata.display`
+   *  — docs/specs/unified-display.md. `body` is its text fallback. With a `choice` block the
+   *  server also stamps the decision index (`metadata.escalation`). */
   display: DisplayInputSchema.optional(),
+}).refine((input) => !(input.escalation && input.display), {
+  // ⚠ The server derives each from the other (spec §3.1); both at once is two answers to one question.
+  error: "Send `escalation` or `display`, not both: the server derives the other.",
 });
 export type ChannelMessageCreateInput = z.infer<
   typeof ChannelMessageCreateSchema
