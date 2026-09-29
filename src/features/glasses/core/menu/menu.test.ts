@@ -407,7 +407,10 @@ describe("read mode: ended agents, line breaks, displays", () => {
     const d = m.display!;
     expect(d).toMatchObject({ screen_id: "d-sample-credits", options: { block_id: "b4", items: ["Top up now", "Remind me tomorrow"], recommended: null }, answer: null });
     expect(d.fallback).toBeUndefined();
-    expect(d.containers.map((c) => [c.block_id, c.kind])).toEqual([["b1", "text"], ["b2", "text"], ["b3", "text"], ["b5", "list"]]);
+    // The info list is text lines on the lens (a G2 list would draw 40px rows and a selection border).
+    expect(d.containers.map((c) => [c.block_id, c.kind])).toEqual([["b1", "text"], ["b2", "text"], ["b3", "text"], ["b5", "text"]]);
+    expect(d.containers[3].content).toBe("─ 1,609 of 5,000 used (Pro)\n─ Resets Oct 1");
+    expect(d.pages).toBeUndefined();
     for (const c of d.containers) {
       expect(c).not.toHaveProperty("capture");
       expect(c.x).toBeGreaterThanOrEqual(0);
@@ -418,19 +421,28 @@ describe("read mode: ended agents, line breaks, displays", () => {
     expect(d.containers[1].content).toMatch(/^Credits █+▒+ 32%$/);
   });
 
-  it("falls back to one text container when the display does not fit, and carries the answer", () => {
+  it("continues a display taller than the chat area on further pages; the answer rides along", () => {
     const tall = displayOf({ display: {
       screen_id: "d-tall",
       answer: { block_id: "o", choice: "Yes", index: 0, at: "t", via: "web" },
       blocks: [...Array.from({ length: 8 }, (_, i) => ({ id: `t${i}`, type: "text", content: `line ${i}` })), { id: "o", type: "list", items: ["Yes", "No"] }],
     } });
     const d = toLensMessage(msg(1, { authorKind: "agent", display: tall }), OWNER, evenG2).display!;
-    expect(d.fallback).toBe(true);
-    expect(d.containers).toHaveLength(1);
-    expect(d.containers[0]).toMatchObject({ block_id: "fallback", kind: "text", y: 30, h: 172 });
-    expect(d.containers[0].content).toContain("line 7\n▶ Yes\n▶ No");
+    expect(d.fallback).toBeUndefined();
+    expect(d.pages!.length).toBe(2);
+    expect(d.containers).toEqual(d.pages![0].containers);
+    for (const p of d.pages!) for (const c of p.containers) expect(c.y + c.h).toBeLessThanOrEqual(202);
+    expect(d.pages!.flatMap((p) => p.containers.map((c) => c.content))).toContain("line 7");
     expect(d.decision).toBeUndefined();
     expect(d.answer).toEqual({ block_id: "o", choice: "Yes", index: 0, at: "t", via: "web" });
+  });
+
+  it("falls back to the text rendering (paged) when the blocks cannot be drawn", () => {
+    const bad = displayOf({ display: { screen_id: "d-bad", blocks: [{ id: "t", type: "text", content: "word ".repeat(60).trim(), lines: 1 }] } });
+    const d = toLensMessage(msg(1, { authorKind: "agent", display: bad }), OWNER, evenG2).display!;
+    expect(d.fallback).toBe(true);
+    expect(d.containers[0]).toMatchObject({ block_id: "fallback", kind: "text", y: 30 });
+    for (const c of [...d.containers, ...(d.pages ?? []).flatMap((p) => p.containers)]) expect(c.y + c.h).toBeLessThanOrEqual(202);
   });
 
   it("shows a malformed display as a plain message", () => {

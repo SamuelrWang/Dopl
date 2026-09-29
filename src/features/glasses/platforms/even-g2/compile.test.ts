@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { compileScreen } from "./compile";
-import { CONTENT_H, LINE_H, MARGIN, NAV_FOOTER, PAD, SCREEN_H, SCREEN_W, capabilities } from "./display";
+import { CONTENT_H, LINE_H, LIST_ROW_H, MARGIN, NAV_FOOTER, PAD, SCREEN_H, SCREEN_W, capabilities } from "./display";
 import { renderPreview } from "./preview";
 
 const ok = (spec: unknown) => {
@@ -32,7 +32,7 @@ describe("stack layout", () => {
     expect(title.content).toBe("Deploy - prod");
     expect(bar.y).toBe(title.y + title.h);
     expect(div.block_id).toBe("b3");
-    expect(list).toMatchObject({ kind: "list", items: ["Approve", "Hold"], h: 2 * LINE_H + 2 * PAD });
+    expect(list).toMatchObject({ kind: "list", items: ["Approve", "Hold"], h: 2 * LIST_ROW_H + 2 * PAD });
     for (const c of p.containers) expect(c.y + c.h).toBeLessThanOrEqual(SCREEN_H);
   });
 
@@ -76,7 +76,26 @@ describe("stack layout", () => {
       code: "list_too_long",
       message: "20 items; max 19 in a selectable list (the 20th row is the back button)",
     });
-    expect(ok({ blocks: [{ type: "text", content: "a" }, { type: "list", items, selectable: false }] }).containers[1].items).toHaveLength(20);
+    // A plain list validates at 20, but it is text on the lens: 20 lines do not fit, so it is overflow, not hidden rows.
+    expect(errs({ blocks: [{ type: "text", content: "a" }, { type: "list", items, selectable: false }] }).map((e) => e.code)).toEqual(["overflow"]);
+  });
+
+  it("draws an info list as text lines (no G2 list, no selection border) and keeps it above the back button", () => {
+    const p = ok({ blocks: [{ type: "text", content: "Agents" }, { type: "list", id: "info", items: ["Orchestrator - thinking", "Scout - idle"], selectable: false }] });
+    expect(p.containers[1]).toMatchObject({ block_id: "info", kind: "text", content: "─ Orchestrator - thinking\n─ Scout - idle", h: 2 * LINE_H + 2 * PAD });
+    expect(p.containers.every((c) => c.kind === "text")).toBe(true);
+  });
+
+  it("measures selectable list rows at the firmware's 40px, so a stack with a list never reaches the back button", () => {
+    const p = ok({
+      blocks: [
+        { type: "text", content: "word ".repeat(30) },
+        { type: "list", items: ["a", "b", "c", "d"] },
+      ],
+    });
+    for (const c of p.containers) expect(c.y + c.h).toBeLessThanOrEqual(NAV_FOOTER.y);
+    const list = p.containers[1];
+    expect(list.h).toBeGreaterThanOrEqual(2 * LIST_ROW_H + 2 * PAD);
   });
 
   it("rejects absolute blocks that reach into the back-button band", () => {
@@ -114,6 +133,7 @@ describe("the one-capture rule", () => {
 
   it("falls back to the last text container", () => {
     const p = ok({ blocks: [{ type: "text", content: "a" }, { type: "text", id: "z", content: "b" }, { type: "list", items: ["x"], selectable: false }] });
+    // The info list is drawn as text but is not the agent's text block.
     expect(p.containers.filter((c) => c.capture).map((c) => c.block_id)).toEqual(["z"]);
   });
 

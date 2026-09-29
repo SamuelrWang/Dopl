@@ -12,7 +12,13 @@ import type { Display, DisplayAnswerStamp } from "@/features/display/core/types"
 export interface LensDisplay {
   /** The display id (`screen_id` on the wire, kept for the plugin). */
   screen_id: string;
+  /** The first (often only) page of the display. */
   containers: ReturnType<GlassesPlatform["compileChatDisplay"]>["containers"];
+  /**
+   * Present only when the display continues past the chat area: every page in order (the first is
+   * `containers`, so an older plugin still draws page 1). The choice / answer belong to the last.
+   */
+  pages?: { containers: LensDisplay["containers"] }[];
   options: LensOptions | null;
   answer: DisplayAnswerStamp | null;
   /** Present (true) only when the blocks did not fit and `containers` is the text rendering. */
@@ -33,6 +39,7 @@ export function lensDisplay(
     display: {
       screen_id: display.display_id,
       containers: compiled.containers,
+      ...(compiled.pages.length > 1 ? { pages: compiled.pages.map((containers) => ({ containers })) } : {}),
       options: compiled.options,
       answer,
       ...(compiled.fallback ? { fallback: true as const } : {}),

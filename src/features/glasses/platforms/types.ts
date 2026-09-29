@@ -6,12 +6,16 @@ import type { PlatformInfo } from "./info";
 
 /**
  * A channel display (`metadata.display`) compiled for the plugin's Read / Conversation page:
- * positioned containers in the chat area (lens px, never input), the one choice apart (the plugin
- * shows it as the footer list, recommended index included), and a multi-line text rendering. `fallback` = the
- * blocks did not fit, so `containers` is that text in one container.
+ * positioned containers in the chat area (lens px, never input, never below it), the one choice
+ * apart (the plugin shows it as the footer list, recommended index included), and a multi-line
+ * text rendering. A display taller than the area continues on further `pages` (each its own
+ * reader page; `containers` = `pages[0]`). `fallback` = the blocks did not fit at any degradation
+ * level, so the pages hold that text rendering.
  */
 export interface ChatDisplay {
   containers: Omit<ScreenContainer, "capture">[];
+  /** Every page, in order (at least one; the first is `containers`). */
+  pages: Omit<ScreenContainer, "capture">[][];
   options: LensOptions | null;
   text: string;
   fallback: boolean;

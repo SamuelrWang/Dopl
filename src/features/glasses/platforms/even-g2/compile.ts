@@ -9,6 +9,7 @@ import {
   CONTENT_H,
   DIVIDER_GLYPH,
   LINE_H,
+  LIST_ROW_H,
   MARGIN,
   NAV_FOOTER,
   NAV_FOOTER_H,
@@ -22,12 +23,24 @@ import {
 
 /**
  * Blocks → positioned G2 containers. Every text height is measured with the G2
- * font; anything that does not fit is a FIXABLE error naming the block and the
- * numbers, never a silent clip.
+ * font, every list row at the firmware's {@link LIST_ROW_H}; anything that does not
+ * fit is a FIXABLE error naming the block and the numbers, never a silent clip.
+ * Only the one selectable list is a G2 list container (it takes input and scrolls);
+ * an info list is text, `─ item` per line, so it never shows a selection border.
  */
 
 export const box = (border: boolean) => 2 * PAD + (border ? 2 * BORDER_W : 0);
 const MIN_LIST_ROWS = 2;
+/** The least height a selectable list may shrink to (it scrolls natively below that). */
+export const MIN_LIST_H = MIN_LIST_ROWS * LIST_ROW_H + 2 * PAD;
+export const INFO_MARK = `${DIVIDER_GLYPH} `;
+
+/** An info (non-selectable) list as the text block the lens draws: one `─ item` line per item. */
+export function infoListAsText(b: NormBlock): NormBlock {
+  if (b.type !== "list" || b.selectable) return b;
+  const { items, ...rest } = b;
+  return { ...rest, type: "text", content: (items ?? []).map((i) => INFO_MARK + i).join("\n") };
+}
 
 export interface Sized {
   block: NormBlock;
@@ -47,13 +60,18 @@ function progressText(b: NormBlock, inner: number, m: TextMeasurer): string | nu
   return label + PROGRESS_FILLED.repeat(filled) + PROGRESS_EMPTY.repeat(cells - filled) + pct;
 }
 
-export function size(b: NormBlock, width: number, m: TextMeasurer, errors: ScreenError[]): Sized | null {
+/** Text height: wrapped lines at the G2 font plus the box. */
+export const textHeight = (content: string, width: number, border: boolean, m: TextMeasurer) =>
+  m.lineCount(content, width - box(border)) * LINE_H + box(border);
+
+export function size(block: NormBlock, width: number, m: TextMeasurer, errors: ScreenError[]): Sized | null {
+  const b = infoListAsText(block);
   const inner = width - box(b.border);
   switch (b.type) {
     case "spacer":
       return { block: b, natural: (b.lines ?? 1) * LINE_H };
     case "list":
-      return { block: b, natural: (b.items?.length ?? 0) * LINE_H + 2 * PAD };
+      return { block: b, natural: (b.items?.length ?? 0) * LIST_ROW_H + 2 * PAD };
     case "divider": {
       const n = Math.max(1, Math.floor(inner / m.width(DIVIDER_GLYPH)));
       return { block: b, content: DIVIDER_GLYPH.repeat(n), natural: LINE_H + box(false) };
@@ -104,11 +122,10 @@ export function layoutStack(sized: Sized[], errors: ScreenError[], area: StackAr
   const heights = sized.map((s) => s.natural);
   const available = area.h;
   let total = heights.reduce((a, h) => a + h, 0);
-  // A list scrolls natively, so it may give up rows (down to 2) before we call it overflow.
+  // The selectable list scrolls natively, so it may give up rows (down to 2) before we call it overflow.
   const li = sized.findIndex((s) => s.block.type === "list");
   if (total > available && li >= 0) {
-    const min = MIN_LIST_ROWS * LINE_H + 2 * PAD;
-    const give = Math.min(total - available, Math.max(0, heights[li] - min));
+    const give = Math.min(total - available, Math.max(0, heights[li] - MIN_LIST_H));
     heights[li] -= give;
     total -= give;
   }
@@ -163,7 +180,7 @@ function layoutAbsolute(sized: Sized[], errors: ScreenError[]): ScreenContainer[
       });
       continue;
     }
-    const need = b.type === "list" ? MIN_LIST_ROWS * LINE_H + 2 * PAD : s.natural;
+    const need = b.type === "list" ? MIN_LIST_H : s.natural;
     if (h < need) {
       errors.push({ block: b.id, code: "overflow", message: `${b.id} needs ${need}px of height; h is ${h}` });
       continue;
@@ -199,9 +216,11 @@ export function compileScreen(
   if (errors.length) return { ok: false, errors };
 
   const selectable = blocks.find((b) => b.selectable);
+  // Else the last text container that is not an info list (those are text on the lens, lists to the agent).
+  const lists = new Set(blocks.filter((b) => b.type === "list").map((b) => b.id));
   const capture = selectable
     ? containers.find((c) => c.block_id === selectable.id)
-    : ([...containers].reverse().find((c) => c.kind === "text") ?? containers.at(-1));
+    : ([...containers].reverse().find((c) => c.kind === "text" && !lists.has(c.block_id)) ?? containers.at(-1));
   if (capture) capture.capture = true;
   return { ok: true, payload: { screen_id: screenId, spec_version: 1, containers, nav_footer: { ...NAV_FOOTER } } };
 }

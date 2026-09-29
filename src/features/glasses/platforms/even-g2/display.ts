@@ -8,6 +8,11 @@ export const SCREEN_H = 288;
 export const MARGIN = 8;
 /** Firmware line height (@evenrealities/pretext `line_height`). */
 export const LINE_H = 27;
+/**
+ * A G2 list container row: the firmware draws list rows 40px apart (a text line plus the
+ * selection border's box), not {@link LINE_H}. Measured on the simulator framebuffer.
+ */
+export const LIST_ROW_H = 40;
 /** The plugin renders every text/list container with paddingLength 4 ... */
 export const PAD = 4;
 /** ... and borderWidth 2 when `border` is true. */
@@ -26,8 +31,13 @@ export const CONTENT_H = SCREEN_H - NAV_FOOTER_H;
  * display is compiled into the body rect, full width; its selectable list goes to the footer.
  */
 export const CHAT_AREA = { x: 0, y: 30, w: SCREEN_W, h: 172 } as const;
-/** Display containers in the chat area: the page's header and footer list take the other two. */
+/** Display containers per chat page: the page's header and footer list take the other two. */
 export const CHAT_MAX_CONTAINERS = 6;
+/**
+ * A display taller than the chat area continues on further reader pages (`pages`), at most this
+ * many; past it the degradation ladder shortens it, and the text fallback is cut with `+N more`.
+ */
+export const CHAT_MAX_PAGES = 6;
 
 export const SCREEN_LIMITS: ScreenLimits = {
   max_blocks: 12,
@@ -71,7 +81,7 @@ export function capabilities() {
     },
     block_types: [
       { type: "text", fields: "content (<=960 bytes), lines? (fixed height in lines; default = wrapped height), brightness? 0-4, border? bool" },
-      { type: "list", fields: "items[] (1-19 when selectable, 1-20 otherwise; each <=63 bytes), selectable? (default true; at most one selectable list per screen, it receives taps; the plugin adds a back item)" },
+      { type: "list", fields: `items[] (1-19 when selectable, 1-20 otherwise; each <=63 bytes), selectable? (default true; at most one selectable list per screen, it receives taps; the plugin adds a back item; ${LIST_ROW_H}px per row, scrolls natively). selectable:false is an info list: drawn as text lines '${DIVIDER_GLYPH} item' (${LINE_H}px each), so it must fit` },
       { type: "progress", fields: `value 0-1, label?; compiled to one text line like 'label ${PROGRESS_FILLED.repeat(5)}${PROGRESS_EMPTY.repeat(5)} 50%'` },
       { type: "divider", fields: `none; compiled to a line of '${DIVIDER_GLYPH}'` },
       { type: "spacer", fields: "lines? (default 1); empty vertical space, no container" },
@@ -80,9 +90,9 @@ export function capabilities() {
       stack: `default. Top-down, ${MARGIN}px margins, full width, above the ${NAV_FOOTER_H}px back-button band; heights measured with the G2 font (@evenrealities/pretext).`,
       absolute: `each block adds x, y (px) and optionally w, h; must stay inside ${SCREEN_W}x${CONTENT_H} (y >= ${CONTENT_H} is the back-button band).`,
     },
-    container_box: { padding: PAD, border_width: BORDER_W, line_height: LINE_H },
+    container_box: { padding: PAD, border_width: BORDER_W, line_height: LINE_H, list_row_height: LIST_ROW_H },
     notes:
-      `No font sizes or alignment. ~${LINE_H}px per line. Text is sanitized (no emoji; curly quotes/long dashes converted). ` +
+      `No font sizes or alignment. ~${LINE_H}px per text line, ${LIST_ROW_H}px per selectable list row. Text is sanitized (no emoji; curly quotes/long dashes converted). ` +
       "Only one container takes input: the selectable list, else the last text block (a tap sends choice 'click'). " +
       "The bottom band always shows the plugin's back button; the wearer may leave (dismiss) any screen with it. " +
       "Use validate_only:true to get the compiled layout and an ASCII preview without sending.",
