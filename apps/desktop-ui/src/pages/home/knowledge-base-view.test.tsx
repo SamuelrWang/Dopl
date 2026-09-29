@@ -86,7 +86,7 @@ describe("🔒 the opened base — ONE panel, info at rest", () => {
     expect(floats[0].tagName).toBe("MAIN");
   });
 
-  it("rests on the base's INFO face, with the tree in a collapsible rail", async () => {
+  it("rests on the base's INFO face, with the tree in a drag-resizable rail", async () => {
     await openFundraiseMemos();
 
     // The resting state is the base's own page — not a "pick a file" prompt.
@@ -100,13 +100,12 @@ describe("🔒 the opened base — ONE panel, info at rest", () => {
     expect(screen.getByText("Changelog")).toBeInTheDocument();
     expect(screen.getByDisplayValue("Fundraise memos")).toBeInTheDocument();
 
-    // …and the rail is a column of its own, with its own collapse control.
-    const toggle = screen.getByRole("button", { name: "Hide files" });
-    expect(toggle.getAttribute("aria-expanded")).toBe("true");
-    fireEvent.click(toggle);
+    // …and the rail is a column of its own, sized by the drag bar — the hide
+    // toggle is gone (Samuel, 2026-09-29), not merely hidden.
     expect(
-      screen.getByRole("button", { name: "Show files" })
+      screen.getByRole("separator", { name: "Resize files" })
     ).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^(Hide|Show) files$/ })).toBeNull();
   });
 
   it("carries ONE breadcrumb for the whole panel", async () => {

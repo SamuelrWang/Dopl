@@ -34,14 +34,20 @@
  * it already absorbs that (`message-pane.tsx › section` carries
  * `contain: inline-size`; §5).
  *
- * ⚠ **THE PREFERENCE AND THE APPLIED WIDTH ARE TWO NUMBERS.** A narrow window
- * clamps what is APPLIED without overwriting what was CHOSEN, or one resize down
- * to a small window would silently spend the operator's pick — widen again and the
- * column would stay where the clamp left it.
+ * ⚠ **THE MECHANISM IS SHARED SINCE 2026-09-29** —
+ * `shared/ui/use-split-resize.ts › useSplitResize` (the knowledge rail is its
+ * other config). This file is the channel's CONFIG: variable, key, limits, side.
+ * The two-numbers rule (preference vs applied) lives there.
  */
 
-import { useCallback, useEffect, useRef, useState } from "react";
-import type { KeyboardEvent as ReactKeyboardEvent, PointerEvent as ReactPointerEvent } from "react";
+import {
+  clampSplitWidth,
+  readStoredSplitWidth,
+  splitMax,
+  useSplitResize,
+  type SplitResize,
+  type SplitResizeConfig,
+} from "@/shared/ui/use-split-resize";
 
 /** The variable every consumer reads. Its FALLBACK is {@link INFO_WIDTH_DEFAULT}
  *  stated at each consumer, so the column is correct before this hook ever runs. */
@@ -64,168 +70,36 @@ export const INFO_NUDGE_PX = 16;
  *  `[data-info-resizing="true"] .channel-info-slide` in both kit copies. */
 export const INFO_RESIZING_ATTR = "data-info-resizing";
 
+const INFO_RESIZE_CONFIG: SplitResizeConfig = {
+  variable: INFO_WIDTH_VAR,
+  storageKey: INFO_WIDTH_STORAGE_KEY,
+  defaultWidth: INFO_WIDTH_DEFAULT,
+  min: INFO_WIDTH_DEFAULT,
+  // 50/50 with the transcript.
+  max: (surfaceWidth) => surfaceWidth / 2,
+  // The column is RIGHT of the handle and grows leftward.
+  side: "right",
+  resizingAttr: INFO_RESIZING_ATTR,
+  nudgePx: INFO_NUDGE_PX,
+};
+
 /** 50/50 with the transcript, never below the floor — a surface too narrow to
  *  halve has no range at all rather than an inverted one. */
 export function infoWidthMax(surfaceWidth: number): number {
-  return Math.max(INFO_WIDTH_DEFAULT, Math.round(surfaceWidth / 2));
+  return splitMax(INFO_RESIZE_CONFIG, surfaceWidth);
 }
 
 export function clampInfoWidth(width: number, surfaceWidth: number): number {
-  if (!Number.isFinite(width)) return INFO_WIDTH_DEFAULT;
-  const max = infoWidthMax(surfaceWidth);
-  return Math.min(Math.max(Math.round(width), INFO_WIDTH_DEFAULT), max);
+  return clampSplitWidth(INFO_RESIZE_CONFIG, width, surfaceWidth);
 }
 
-/** ⚠ `null` FOR "NOTHING STORED", never a silent {@link INFO_WIDTH_DEFAULT}: the
- *  caller clamps against a surface width this function cannot see. Storage throws
- *  in a private window and is absent under SSR — both are "no preference". */
+/** `null` for "nothing stored" — the caller clamps. */
 export function readStoredInfoWidth(): number | null {
-  try {
-    const raw = window.localStorage.getItem(INFO_WIDTH_STORAGE_KEY);
-    if (raw == null) return null;
-    const parsed = Number(raw);
-    return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
-  } catch {
-    return null;
-  }
+  return readStoredSplitWidth(INFO_WIDTH_STORAGE_KEY);
 }
 
-function storeInfoWidth(width: number): void {
-  try {
-    window.localStorage.setItem(INFO_WIDTH_STORAGE_KEY, String(width));
-  } catch {
-    // A device that cannot remember still resizes.
-  }
-}
-
-export interface InfoResize {
-  /** The APPLIED width — `aria-valuenow`. */
-  width: number;
-  /** `aria-valuemin` — {@link INFO_WIDTH_DEFAULT}. */
-  min: number;
-  /** `aria-valuemax` — half the surface, remeasured on every write. */
-  max: number;
-  dragging: boolean;
-  /** Ref for the handle's WRAPPER, whose parent is the surface root. */
-  attach: (el: HTMLElement | null) => void;
-  onPointerDown: (event: ReactPointerEvent<HTMLElement>) => void;
-  onKeyDown: (event: ReactKeyboardEvent<HTMLElement>) => void;
-}
+export type InfoResize = SplitResize;
 
 export function useInfoResize(): InfoResize {
-  const rootRef = useRef<HTMLElement | null>(null);
-  /** What the operator CHOSE — see the docblock's two-numbers note. */
-  const preferredRef = useRef(INFO_WIDTH_DEFAULT);
-  /** What is APPLIED right now, so a pointer move needs no render to read it. */
-  const appliedRef = useRef(INFO_WIDTH_DEFAULT);
-  const [width, setWidth] = useState(INFO_WIDTH_DEFAULT);
-  const [max, setMax] = useState(INFO_WIDTH_DEFAULT);
-  const [dragging, setDragging] = useState(false);
-
-  const write = useCallback(
-    (next: number, opts?: { persist?: boolean; remember?: boolean }) => {
-      const root = rootRef.current;
-      if (!root) return;
-      const surface = root.getBoundingClientRect().width;
-      if (opts?.remember !== false) preferredRef.current = next;
-      const clamped = clampInfoWidth(next, surface);
-      appliedRef.current = clamped;
-      root.style.setProperty(INFO_WIDTH_VAR, `${clamped}px`);
-      setWidth(clamped);
-      setMax(infoWidthMax(surface));
-      if (opts?.persist) storeInfoWidth(clamped);
-    },
-    []
-  );
-
-  // ⚠ A REF CALLBACK, NOT AN EFFECT, and the timing is the reason: it runs in the
-  // COMMIT, before paint, so a remembered 520px column never flashes at 380 and
-  // then slides — the shell carries a 200ms width transition that would animate
-  // exactly that. Stable identity (`write` is), so React does not re-attach.
-  const attach = useCallback(
-    (el: HTMLElement | null) => {
-      rootRef.current = el?.parentElement ?? null;
-      if (!rootRef.current) return;
-      write(readStoredInfoWidth() ?? INFO_WIDTH_DEFAULT, { persist: false });
-    },
-    [write]
-  );
-
-  const onPointerDown = useCallback(
-    (event: ReactPointerEvent<HTMLElement>) => {
-      if (event.button !== 0) return;
-      const root = rootRef.current;
-      const strip = event.currentTarget;
-      if (!root) return;
-      // Stops the text selection a drag across the transcript would otherwise make.
-      event.preventDefault();
-      // ⚠ CAPTURE, so the pointer may leave the 12px strip — which it does
-      // immediately — and still reach it. Optional-called: jsdom has no such method.
-      strip.setPointerCapture?.(event.pointerId);
-      root.setAttribute(INFO_RESIZING_ATTR, "true");
-      setDragging(true);
-      // ⚠ READ THE RIGHT EDGE ONCE. It cannot move during the drag (the column
-      // grows leftward off it), and re-reading per move is a forced reflow.
-      const right = root.getBoundingClientRect().right;
-      const onMove = (moveEvent: PointerEvent) => {
-        write(right - moveEvent.clientX);
-      };
-      const onUp = () => {
-        strip.removeEventListener("pointermove", onMove);
-        strip.removeEventListener("pointerup", onUp);
-        strip.removeEventListener("pointercancel", onUp);
-        try {
-          strip.releasePointerCapture?.(event.pointerId);
-        } catch {
-          // Already released, or never captured.
-        }
-        root.removeAttribute(INFO_RESIZING_ATTR);
-        setDragging(false);
-        // ⚠ PERSIST ON RELEASE, not per move: a drag is ONE decision, and a
-        // write per frame is a storage write per frame.
-        storeInfoWidth(appliedRef.current);
-      };
-      strip.addEventListener("pointermove", onMove);
-      strip.addEventListener("pointerup", onUp);
-      strip.addEventListener("pointercancel", onUp);
-    },
-    [write]
-  );
-
-  // ⚠ LEFT WIDENS, matching the drag: the column grows leftward, so the arrow
-  // that moves the divider left is the one that makes the info pane bigger.
-  const onKeyDown = useCallback(
-    (event: ReactKeyboardEvent<HTMLElement>) => {
-      const delta =
-        event.key === "ArrowLeft"
-          ? INFO_NUDGE_PX
-          : event.key === "ArrowRight"
-            ? -INFO_NUDGE_PX
-            : 0;
-      if (delta === 0) return;
-      event.preventDefault();
-      write(appliedRef.current + delta, { persist: true });
-    },
-    [write]
-  );
-
-  // ⚠ RE-CLAMP, AND DO NOT REMEMBER OR PERSIST IT. A window narrowed past twice
-  // the chosen width has to give the pane back, and widening again has to give it
-  // back — which is only possible while the CHOICE survives the clamp.
-  useEffect(() => {
-    const onResize = () =>
-      write(preferredRef.current, { persist: false, remember: false });
-    window.addEventListener("resize", onResize);
-    return () => window.removeEventListener("resize", onResize);
-  }, [write]);
-
-  return {
-    width,
-    min: INFO_WIDTH_DEFAULT,
-    max,
-    dragging,
-    attach,
-    onPointerDown,
-    onKeyDown,
-  };
+  return useSplitResize(INFO_RESIZE_CONFIG);
 }

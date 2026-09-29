@@ -155,9 +155,14 @@ describe("the ghost is the surface's two columns, not a bare transcript", () => 
   });
 
   /** ⚠ THE DIVIDER OCCUPIES NO WIDTH — a zero-width flex sibling, so the ghost's
-   *  box math is the real row's (`info-resize-handle.tsx`). */
+   *  box math is the real row's. The real wrapper is the shared
+   *  `shared/ui/split-resize-handle.tsx` since 2026-09-29, which
+   *  `info-resize-handle.tsx` mounts. */
   it("keeps the resize divider as the real zero-width sibling", () => {
-    expect(v2("info-resize-handle.tsx")).toContain('className="relative z-[2] w-0 shrink-0"');
+    expect(v2("info-resize-handle.tsx")).toContain("<SplitResizeHandle");
+    expect(
+      file("../../../../../src/shared/ui/split-resize-handle.tsx")
+    ).toContain('className="relative z-[2] w-0 shrink-0"');
     expect(GHOST).toContain('className="relative z-[2] w-0 shrink-0"');
     const { container } = render(<ChannelRecordSkeleton />);
     expect(container.querySelector(".w-0.shrink-0")).not.toBeNull();

@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 import type { KnowledgeBase } from "../../../types";
 import type { BaseTree } from "../types";
@@ -12,13 +12,8 @@ import { ListPanel } from "./list-panel";
  *   - An ABSENCE: the rail is scoped to one base, so base rows, the base-list
  *     search, the scope pills and (since 2026-08-28) its own breadcrumb must not
  *     come back — the panel has one header and one crumb.
- *   - The COLLAPSE: a STRIP, not a disappearance, so the control that reopens it
- *     stays in the column it belongs to.
- *
- * Class assertions are real: `test.css` is off, so a CSS-module lookup returns
- * its own key. The assertion is that the collapsed MODIFIER is applied; the
- * width, the 150ms and the reduced-motion opt-out live in
- * `../knowledge-v2.module.css › .rail` and are not jsdom's to answer.
+ *   - Another ABSENCE (Samuel, 2026-09-29): no hide/show toggle. The rail is
+ *     sized by the drag bar instead (`./rail-resize-handle.test.tsx`).
  */
 
 afterEach(cleanup);
@@ -60,12 +55,6 @@ function renderRail(tree: BaseTree | null = READY, canEdit = true) {
   );
 }
 
-/** The rail's own element — the collapse modifier's host. Reached through the
- *  toggle under EITHER name: the control survives the collapse, so the lookup
- *  must not assume one label. */
-const railEl = () =>
-  screen.getByRole("button", { name: /^(Hide|Show) files$/ }).parentElement!;
-
 describe("knowledge folder rail", () => {
   it("shows the opened base's tree, with no base rows around it", () => {
     renderRail();
@@ -99,23 +88,30 @@ describe("knowledge folder rail", () => {
     );
   });
 
-  it("collapses to a strip and back, keeping its own toggle both ways", () => {
+  it("has NO hide/show toggle — the drag bar replaced it", () => {
     renderRail();
-    const toggle = screen.getByRole("button", { name: "Hide files" });
-    expect(toggle.getAttribute("aria-expanded")).toBe("true");
-    expect(railEl().className).not.toContain("railCollapsed");
+    expect(screen.queryByRole("button", { name: /^(Hide|Show) files$/ })).toBeNull();
+    expect(document.querySelector("[aria-expanded]")).toBeNull();
+    // "Files" is the rail's first child — nothing sits left of it any more.
+    const head = screen.getByRole("heading", { name: "Files" });
+    expect(head.previousElementSibling).toBeNull();
+  });
 
-    fireEvent.click(toggle);
-
-    // the mechanic: the toggle is still there, under its other name — a rail
-    // that vanished whole would need a second control elsewhere.
-    const reopen = screen.getByRole("button", { name: "Show files" });
-    expect(reopen.getAttribute("aria-expanded")).toBe("false");
-    expect(railEl().className).toContain("railCollapsed");
-
-    fireEvent.click(reopen);
-    expect(screen.getByRole("button", { name: "Hide files" })).toBeTruthy();
-    expect(railEl().className).not.toContain("railCollapsed");
+  // the fill itself (hover == selected, one rule) is pinned in `../layout-rules.test.ts`.
+  it("marks the selected row active", () => {
+    render(
+      <ListPanel
+        base={base()}
+        tree={READY}
+        selectedEntryId="e-1"
+        canEdit={false}
+        editingNodeId={null}
+        treeHandlers={noopTreeHandlers}
+        onSelectEntry={() => {}}
+      />
+    );
+    const row = screen.getByText("Cold outreach").closest('[role="button"]')!;
+    expect(row.className).toContain("treeRowActive");
   });
 
   it("puts the create actions on the GLOBAL pill, not a local recipe", () => {

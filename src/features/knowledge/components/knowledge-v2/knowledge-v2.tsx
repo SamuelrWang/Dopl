@@ -7,6 +7,7 @@ import type { Role } from "@/features/workspaces/types";
 import { BaseSettingsModal } from "../base-settings-modal";
 import { MoveToDialog } from "../move-to-dialog";
 import { ListPanel } from "./list/list-panel";
+import { RailResizeHandle } from "./list/rail-resize-handle";
 import { BaseHeader } from "./detail/base-header";
 import { DetailPanel } from "./detail/detail-panel";
 import { KnowledgeHome } from "./home/knowledge-home";
@@ -65,7 +66,7 @@ interface Props {
  *
  *   - no selection → HOME (`/knowledge`): card grid, mounts no trees.
  *   - a selection → BASE DETAIL (`/knowledge/{base}`): ONE panel — a header
- *     across the top, a collapsible folder rail scoped to that base's tree, and
+ *     across the top, a drag-resizable folder rail scoped to that base's tree, and
  *     a detail column that crossfades between the base's INFO face (the resting
  *     state) and an open file.
  *
@@ -171,6 +172,8 @@ export function KnowledgeV2({
           treeHandlers={c.treeHandlers}
           onSelectEntry={c.handleSelectEntry}
         />
+        {/* zero-width, a direct child of `.baseBody`: the drag bar that sizes the rail. */}
+        <RailResizeHandle />
         <DetailPanel
           selection={selection}
           workspaceId={workspaceId}

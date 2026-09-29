@@ -10,7 +10,10 @@
   --kv-text-3: var(--text-muted);
   --kv-accent: var(--text-primary);
   --kv-row-hover: var(--surface-raised-1);
-  --kv-row-active: var(--surface-raised-3);
+  /* The rail's ONE row fill — hover and selected alike (Samuel, 2026-09-29: "the same gray … for the
+     pinned recent and earlier panels"). Those wells are `panel-well.ts › PANEL_WELL_ON_PANEL`, whose fill
+     is `--seg-fill`; referenced by name, never copied. */
+  --kv-row-fill: var(--seg-fill);
 
   /* Surface geometry comes from `.page-float` (composed in knowledge-v2.tsx), except on an embedded mount. */
   display: flex;
@@ -57,54 +60,27 @@
 }
 
 /* ───────────────────────── Folder rail (left) ─────────────────────────
-   Width, not transform: the rail is a flex sibling, so it must hand the space back. It collapses to a
-   34px strip that keeps the toggle; `.railInner` holds a fixed width so rows don't reflow mid-slide. */
+   The width is the operator's: the divider beside it (`shared/ui/split-resize-handle.tsx`, bound in
+   `list/rail-resize-handle.tsx`) writes `--kv-rail-w` on `.baseBody`, clamped 180–420px. The fallback
+   is the default, so the rail is right before the hook runs. No collapse (Samuel, 2026-09-29: the
+   drag bar replaces the toggle). */
 
 .rail {
-  --kv-rail-w: 232px;
-  position: relative;
-  display: flex;
-  width: var(--kv-rail-w);
-  flex: 0 0 auto;
-  min-height: 0;
-  overflow: hidden;
-  transition: width 0.15s ease;
-}
-.railCollapsed {
-  --kv-rail-w: 34px;
-}
-.railToggle {
-  position: absolute;
-  top: 7px;
-  left: 4px;
-  z-index: 1;
-}
-.railInner {
   display: flex;
   flex-direction: column;
-  width: 232px;
-  flex: 0 0 232px;
+  width: var(--kv-rail-w, 232px);
+  flex: 0 0 auto;
+  min-width: 0;
   min-height: 0;
-  transition: opacity 0.15s ease;
+  overflow: hidden;
 }
-/* `visibility`, not `display`: hidden rows must leave the tab order, and the fade must survive. */
-.railCollapsed .railInner {
-  opacity: 0;
-  visibility: hidden;
-}
-@media (prefers-reduced-motion: reduce) {
-  .rail,
-  .railInner {
-    transition: none;
-  }
-}
-/* Left pad clears the absolutely-positioned toggle. */
+/* Left pad = row inset (8) + row pad (6), so "FILES" starts where the rows' first glyph does. */
 .railHead {
   display: flex;
   align-items: center;
   height: 40px;
   flex: 0 0 40px;
-  padding: 0 10px 0 36px;
+  padding: 0 10px 0 14px;
   font-size: var(--text-label);
   font-weight: 600;
   text-transform: uppercase;
@@ -135,21 +111,23 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  width: 100%;
+  /* Inset from both rail edges, rounded: the fill never touches an edge (Samuel, 2026-09-29).
+     The depth indent is `tree-rows.tsx › pad`, inline. */
+  margin: 0 8px;
   text-align: left;
   border: none;
+  border-radius: 6px;
   background: none;
   cursor: pointer;
   font-size: var(--text-small);
   color: var(--kv-text);
-  padding: 6px 16px;
+  padding: 6px 8px 6px 6px;
   transition: background 0.1s ease;
 }
-.treeRow:hover {
-  background: var(--kv-row-hover);
-}
+/* ONE fill for both states — hover and selected are the same gray, by one rule. */
+.treeRow:hover,
 .treeRowActive {
-  background: var(--kv-row-active);
+  background: var(--kv-row-fill);
   color: var(--kv-text);
 }
 .treeChevron {
@@ -177,7 +155,7 @@
   text-overflow: ellipsis;
 }
 .treeEmpty {
-  padding: 6px 16px;
+  padding: 6px 14px;
   font-size: var(--text-caption);
   color: var(--kv-text-3);
 }
@@ -217,13 +195,13 @@
   cursor: default;
 }
 /* Layout only: the pills are `OpenScaleButton`; do not re-add a local button rule. */
-/* The row wraps so the pills never do: two labelled pills barely fit the 232px rail. */
+/* The row wraps so the pills never do: two labelled pills do not fit the 180px floor. */
 .addRow {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 6px;
-  padding: 6px 10px 4px 12px;
+  padding: 6px 8px 4px;
 }
 
 /* ───────────────────────── Detail column (right) ───────────────────────── */

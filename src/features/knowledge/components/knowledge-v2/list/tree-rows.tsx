@@ -82,7 +82,9 @@ function indexByFolder(entries: KnowledgeEntry[]) {
   return map;
 }
 
-const pad = (depth: number) => ({ paddingLeft: 28 + depth * 15 });
+/** Row indent: 6px inside the row's inset fill (`.treeRow` margin) + 15px per level.
+ *  Was 28 at the root — the space Samuel cut on 2026-09-29. */
+const pad = (depth: number) => ({ paddingLeft: 6 + depth * 15 });
 
 /**
  * Folder/entry tree for one knowledge base. Right-click (or hover "⋯") opens

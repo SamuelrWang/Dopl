@@ -62,6 +62,30 @@ describe("🔒 the panel FILLS its host, floated or embedded", () => {
   });
 });
 
+describe("🔒 the file rail's rows (Samuel, 2026-09-29)", () => {
+  it("hover and selected are ONE rule, filled with the channel wells' gray by name", () => {
+    const css = readFileSync(MODULE, "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
+    // one selector list, so the two states cannot drift apart.
+    expect(css).toMatch(/\.treeRow:hover,\s*\.treeRowActive \{/);
+    expect(rule(".treeRowActive")).toContain("background: var(--kv-row-fill)");
+    // `panel-well.ts › PANEL_WELL_ON_PANEL` — the Pinned/Recent/Earlier fill.
+    expect(rule(".shell")).toContain("--kv-row-fill: var(--seg-fill)");
+  });
+
+  it("insets the fill from both rail edges, with rounded corners", () => {
+    const row = rule(".treeRow");
+    expect(row).toContain("margin: 0 8px");
+    expect(row).toContain("border-radius: 6px");
+    expect(row).not.toContain("width: 100%");
+  });
+
+  it("has no collapse machinery left, and takes its width from the drag bar", () => {
+    const css = readFileSync(MODULE, "utf8");
+    expect(css).not.toMatch(/\.railCollapsed|\.railToggle|\.railInner/);
+    expect(rule(".rail")).toContain("width: var(--kv-rail-w, 232px)");
+  });
+});
+
 describe("🔒 the tree's create row wraps, so its pills do not", () => {
   it("wraps the ROW", () => {
     // two labelled 26px pills against a 232px rail is a near-exact fit, which
