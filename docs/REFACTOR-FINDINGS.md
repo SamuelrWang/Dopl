@@ -9655,7 +9655,7 @@ mount produces it:
 - `transcript.tsx › Message` always hands an `accent` for a stamped agent row (`agent-box-rule.ts ›
   agentBoxOf` accents on `agent && agentId !== null`, which is the same predicate the pill's own
   `agentId` test uses), so every framed case is the accented one;
-- `thread-card-row.tsx` and `escalation-card-row.tsx` mount `AuthoredRow` with `agent={false}` and
+- `thread-card-row.tsx` and the escalation card row (deleted 2026-09-28) mount `AuthoredRow` with `agent={false}` and
   no `agentId` at all.
 
 So the function is live only from `agent-attribution.test.tsx`'s determinism cases, which test the
