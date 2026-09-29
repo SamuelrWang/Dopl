@@ -35,7 +35,7 @@ export interface DeviceHandlerDeps extends Clock {
    * A tap on a lens row linked to a channel decision posts the same answer there, as the device
    * owner from glasses (`display/server/answer.ts › answerFromLens`); absent = lens only (tests).
    */
-  answerLinked?: (device: GlassesDevice, row: GlassesMessage) => Promise<void>;
+  answerLinked?: (device: GlassesDevice, row: GlassesMessage) => Promise<"ok" | "conflict">;
 }
 
 export const PAIR_START_RPM = 10;
@@ -131,7 +131,12 @@ export function createDeviceHandlers(input: DeviceHandlerDeps) {
 
     answer: authed("answer", async (request, device) => {
       const outcome = await answerAsk(deps, device.user_id, await readJson(request));
-      if (outcome.ok && outcome.message && deps.answerLinked) await deps.answerLinked(device, outcome.message);
+      if (outcome.ok && outcome.message && deps.answerLinked) {
+        // The channel decision was answered first: the lens now shows THAT answer; the tap lost.
+        if ((await deps.answerLinked(device, outcome.message)) === "conflict") {
+          return json(request, { ok: false, error: "already answered" }, 409);
+        }
+      }
       return outcomeResponse(request, outcome);
     }),
 

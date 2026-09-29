@@ -169,3 +169,26 @@ describe("answer + dismiss", () => {
     expect(rows[0].status).toBe("dismissed");
   });
 });
+
+describe("a screen choice linked to a channel decision (unified display)", () => {
+  const payload = {
+    screen_id: "d-1",
+    spec_version: 1 as const,
+    containers: [{ block_id: "c", kind: "list" as const, x: 8, y: 8, w: 560, h: 60, items: ["Go", "Hold"], capture: true }],
+  };
+
+  it("is answered once: a second tap is 409 and the first answer stands; unlinked screens still re-tap", async () => {
+    const { store } = createFakeGlassesStore();
+    const clock = fakeClock();
+    const deps = { store, now: clock.now };
+    const insert = () => store.insert(USER, { kind: "screen", card_id: "d-1", payload, expires_at: "2099-01-01T00:00:00Z", now: "2026-09-26T12:00:00Z" });
+    const linked = await insert();
+    await store.linkChannelMessage(USER, linked.id, "msg-1");
+    expect((await answerAsk(deps, USER, { id: linked.id, index: 0 })).ok).toBe(true);
+    expect(await answerAsk(deps, USER, { id: linked.id, index: 1 })).toMatchObject({ ok: false, status: 409 });
+    expect((await store.get(USER, linked.id))?.answer).toMatchObject({ index: 0, choice: "Go" });
+    const loose = await insert();
+    expect((await answerAsk(deps, USER, { id: loose.id, index: 0 })).ok).toBe(true);
+    expect((await answerAsk(deps, USER, { id: loose.id, index: 1 })).ok).toBe(true);
+  });
+});

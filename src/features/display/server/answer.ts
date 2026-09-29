@@ -132,20 +132,42 @@ async function legacyLane(
 
 /**
  * A LENS TAP on a row linked to a decision (spec §5.3): after `answerAsk` settled the lens row,
- * the same answer is posted through the decision lane as the device owner, from glasses. A
- * refusal (already answered in the app) is the ordinary race and only logs.
+ * the same answer is posted through the decision lane as the device owner, from glasses. When the
+ * decision was already answered (in the app, in the gap), the lens row is re-synced to THAT answer
+ * so the lens, `glasses_get_answer` and the stamp agree, and the tap reports the conflict.
  */
-export async function answerFromLens(userId: string, row: GlassesMessage, source: MessageSourceStamp): Promise<void> {
-  if (!row.channel_message_id || !row.answer) return;
+export async function answerFromLens(userId: string, row: GlassesMessage, source: MessageSourceStamp): Promise<"ok" | "conflict"> {
+  if (!row.channel_message_id || !row.answer) return "ok";
   try {
     const message = await findMessageRow(row.channel_message_id);
     const meta = (message?.metadata ?? {}) as Record<string, unknown>;
-    if (!message || !displayOf(meta)?.decision) return;
+    if (!message || !displayOf(meta)?.decision) return "ok";
     const ctx = { ...(await operatorChannelContext(userId, message.workspace_id)), messageSource: source };
-    await answerDisplay(ctx, message.channel_id, message.id, { index: row.answer.index });
+    try {
+      await answerDisplay(ctx, message.channel_id, message.id, { index: row.answer.index });
+      return "ok";
+    } catch (err) {
+      if (!(err instanceof HttpError && err.status === 409)) throw err;
+      await syncLensToStamp(userId, row, message.channel_id, message.id);
+      return "conflict";
+    }
   } catch (err) {
-    if (!(err instanceof HttpError && err.status === 409)) console.error("[display] lens answer post failed", err);
+    console.error("[display] lens answer post failed", err);
+    return "ok";
   }
+}
+
+/** The decision's stamp (or its answer message's index) onto the linked lens row. */
+async function syncLensToStamp(userId: string, row: GlassesMessage, channelId: string, messageId: string) {
+  const fresh = await findMessageById(channelId, messageId);
+  const stamp = displayOf((fresh?.metadata ?? {}) as Record<string, unknown>)?.answer;
+  if (!stamp || stamp.index === row.answer?.index) return;
+  await glassesRepository.transition(userId, row.id, ["answered"], "answered", iso(Date.now()), {
+    choice: stamp.choice,
+    index: stamp.index,
+    at: stamp.at,
+    block_id: stamp.block_id,
+  });
 }
 
 export async function saveDisplayTemplate(

@@ -11,7 +11,7 @@ vi.mock("@/features/channels/server/service", () => ({ postMessage: vi.fn() }));
 vi.mock("@/features/channels/server/service-shared", () => ({ requireMemberChannel: vi.fn() }));
 vi.mock("@/features/channels/server/repository-messages", () => ({ findMessageById: vi.fn() }));
 vi.mock("@/features/glasses/core/messages/inbox", () => ({ answerAsk: vi.fn() }));
-vi.mock("@/features/glasses/core/messages/repository", () => ({ glassesRepository: {} }));
+vi.mock("@/features/glasses/core/messages/repository", () => ({ glassesRepository: { transition: vi.fn() } }));
 vi.mock("@/features/glasses/core/channel-context", () => ({ operatorChannelContext: vi.fn() }));
 vi.mock("./repository", () => ({ stampAnswer: vi.fn(), findMessageRow: vi.fn() }));
 
@@ -20,8 +20,10 @@ import { requireMemberChannel, type ChannelContext } from "@/features/channels/s
 import { findMessageById } from "@/features/channels/server/repository-messages";
 import { EscalationAlreadyAnsweredError } from "@/features/channels/server/errors";
 import { answerAsk } from "@/features/glasses/core/messages/inbox";
-import { stampAnswer } from "./repository";
-import { answerDisplay } from "./answer";
+import { glassesRepository } from "@/features/glasses/core/messages/repository";
+import { operatorChannelContext } from "@/features/glasses/core/channel-context";
+import { findMessageRow, stampAnswer } from "./repository";
+import { answerDisplay, answerFromLens } from "./answer";
 import { onAnswerInserted } from "./answer-stamp";
 
 const OWNER = "11111111-1111-4111-8111-111111111111";
@@ -120,5 +122,34 @@ describe("onAnswerInserted (§5.3 step 3)", () => {
     await expect(onAnswerInserted(ctx(), "chan", answerRow as never)).resolves.toBeUndefined();
     expect(err).toHaveBeenCalledWith("[display] answer stamp failed", expect.any(Error));
     err.mockRestore();
+  });
+});
+
+describe("answerFromLens (§5.3 lens tap)", () => {
+  const lens = { id: "g1", channel_message_id: MSG, answer: { choice: "Ship", index: 0, at: "t" } } as never;
+  const source = { kind: "glasses" } as never;
+
+  beforeEach(() => {
+    vi.mocked(operatorChannelContext).mockResolvedValue(ctx());
+    vi.mocked(findMessageRow).mockResolvedValue({ ...row({ display: V2, escalation: ESCALATION }), workspace_id: "ws", channel_id: "chan" } as never);
+  });
+
+  it("posts the tap through the decision lane", async () => {
+    vi.mocked(findMessageById).mockResolvedValue(row({ display: V2, escalation: ESCALATION }) as never);
+    expect(await answerFromLens(OWNER, lens, source)).toBe("ok");
+    expect(vi.mocked(postMessage).mock.calls[0][2]).toMatchObject({ escalationAnswer: { escalationMessageId: MSG, optionIndex: 0 } });
+  });
+
+  it("answered in the app first: the lens row is re-synced to the stamp and the tap reports a conflict", async () => {
+    const stamped = { ...V2, answer: { block_id: "c", index: 1, choice: "Wait", at: "t2", via: "computer" } };
+    vi.mocked(findMessageById).mockResolvedValue(row({ display: stamped, escalation: ESCALATION }) as never);
+    vi.mocked(postMessage).mockRejectedValueOnce(new EscalationAlreadyAnsweredError(MSG));
+    expect(await answerFromLens(OWNER, lens, source)).toBe("conflict");
+    expect(glassesRepository.transition).toHaveBeenCalledWith(OWNER, "g1", ["answered"], "answered", expect.any(String), {
+      choice: "Wait",
+      index: 1,
+      at: "t2",
+      block_id: "c",
+    });
   });
 });

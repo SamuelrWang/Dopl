@@ -133,7 +133,8 @@ export async function answerAsk(deps: InboxDeps, userId: string, body: unknown):
 
 /**
  * A tap on an agent-built screen. Unlike an ask, a screen may be tapped again
- * (the latest input wins) until it expires, because it stays on the glasses.
+ * (the latest input wins) until it expires, because it stays on the glasses — except a choice
+ * linked to a channel decision, which is answered once.
  * `index` resolves from `choice` against the list's items when missing: a
  * platform may deliver index 0 as undefined.
  */
@@ -154,7 +155,10 @@ async function answerScreen(deps: InboxDeps, userId: string, row: GlassesMessage
   } else if (index < 0) {
     index = 0;
   }
-  const from: GlassesStatus[] = ["pending", "delivered", "answered"];
+  // ⚠ A CHOICE LINKED TO A CHANNEL DECISION IS ANSWERED ONCE (unified display): its answer is the
+  // decision's, so a second tap is a 409 like a second press — never a new answer on the lens only.
+  const once = !!row.channel_message_id && container?.kind === "list";
+  const from: GlassesStatus[] = once ? ["pending", "delivered"] : ["pending", "delivered", "answered"];
   return settleAnswer(deps, userId, row, from, { choice, index, block_id: container?.block_id ?? null });
 }
 
