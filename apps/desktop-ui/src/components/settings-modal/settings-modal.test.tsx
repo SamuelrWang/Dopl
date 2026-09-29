@@ -97,7 +97,9 @@ function defaultBridge(path: string): Promise<BridgeResponse> {
       ok({ display_name: "Ada", avatar_url: null, email: "ada@acme.test" })
     );
   }
-  if (path === "/api/oauth/grants") return Promise.resolve(ok({ grants: [] }));
+  if (path === "/api/oauth/apps") return Promise.resolve(ok({ apps: [] }));
+  if (path === "/api/devices") return Promise.resolve(ok({ devices: [] }));
+  if (path === "/api/glasses/devices") return Promise.resolve(ok({ devices: [] }));
   if (path === `/api/workspaces/${SEGMENT}/my-access`) {
     return Promise.resolve(ok({ defaultLevel: "edit", overrides: [] }));
   }
@@ -171,7 +173,7 @@ describe("settings modal", () => {
 
     expect(await screen.findByRole("dialog", { name: "Settings" })).toBeInTheDocument();
     expect(
-      await screen.findByRole("heading", { name: "Account" })
+      await screen.findByRole("heading", { name: "Profile" })
     ).toBeInTheDocument();
     // Overlay, not a route: the page underneath stays put.
     expect(screen.getByText("page body")).toBeInTheDocument();
@@ -237,18 +239,17 @@ describe("settings modal", () => {
     expect(screen.queryByRole("button", { name: "Save changes" })).not.toBeInTheDocument();
   });
 
-  /** Connect carries the MCP block and the account's grants — both MOVED here
-   *  from the workspace settings page in the same change. */
-  it("revokes a connected app from the Connect tab", async () => {
+  /** Connect = Agents (one row per app) + Devices, account-scoped, all over the bridge. */
+  it("disconnects an agent app from the Connect tab", async () => {
     apiRequest.mockImplementation((path: string) =>
-      path === "/api/oauth/grants"
+      path === "/api/oauth/apps"
         ? Promise.resolve(
             ok({
-              grants: [
+              apps: [
                 {
-                  id: "grant-1",
-                  client_name: "Claude Code",
-                  scopes: ["dopl.write"],
+                  key: "claude-code",
+                  name: "Claude Code",
+                  connections: 4,
                   last_used_at: null,
                   created_at: "2026-07-01T00:00:00Z",
                 },
@@ -263,16 +264,45 @@ describe("settings modal", () => {
     await screen.findByRole("dialog", { name: "Settings" });
     fireEvent.click(screen.getByRole("button", { name: "Connect" }));
 
-    expect(await screen.findByText("Connect & log in")).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Agents" })).toBeInTheDocument();
+    expect(await screen.findByText("Claude Code")).toBeInTheDocument();
     fireEvent.click(await screen.findByRole("button", { name: "Disconnect" }));
+    fireEvent.click(
+      within(await screen.findByRole("dialog", { name: "Disconnect Claude Code?" })).getByRole(
+        "button",
+        { name: "Disconnect" }
+      )
+    );
 
     await waitFor(() =>
       expect(
         calls().some(
-          (c) => c.path === "/api/oauth/grants/grant-1" && c.opts.method === "DELETE"
+          (c) => c.path === "/api/oauth/apps/claude-code" && c.opts.method === "DELETE"
         )
       ).toBe(true)
     );
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  /** Devices lists computers and glasses in one panel, both reads account-scoped (no workspace). */
+  it("lists devices on the Connect tab and pairs glasses there", async () => {
+    renderShell();
+    await screen.findByText("page body");
+    fireEvent.click(gear());
+    await screen.findByRole("dialog", { name: "Settings" });
+    fireEvent.click(screen.getByRole("button", { name: "Connect" }));
+
+    expect(await screen.findByRole("heading", { name: "Devices" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Pair glasses" }));
+    expect(screen.getByLabelText("Pairing code")).toBeInTheDocument();
+    await waitFor(() => {
+      expect(calls().some((c) => c.path === "/api/glasses/devices")).toBe(true);
+      expect(calls().some((c) => c.path === "/api/devices")).toBe(true);
+    });
+    for (const path of ["/api/glasses/devices", "/api/devices"]) {
+      expect(calls().find((c) => c.path === path)?.opts.workspaceId).toBeUndefined();
+    }
+    expect(screen.queryByRole("button", { name: "Glasses" })).not.toBeInTheDocument();
     expect(fetch).not.toHaveBeenCalled();
   });
 
@@ -362,11 +392,11 @@ describe("settings modal", () => {
     await screen.findByText("page body");
 
     fireEvent.click(gear());
-    await screen.findByRole("heading", { name: "Account" });
+    await screen.findByRole("heading", { name: "Profile" });
 
     expect(screen.queryByRole("button", { name: "Sign out" })).not.toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: /Delete account in browser/ })
+      screen.getByRole("button", { name: /Open in browser/ })
     ).toBeInTheDocument();
   });
 
@@ -377,9 +407,9 @@ describe("settings modal", () => {
     await screen.findByText("page body");
 
     fireEvent.click(gear());
-    await screen.findByRole("heading", { name: "Account" });
+    await screen.findByRole("heading", { name: "Profile" });
     fireEvent.click(
-      screen.getByRole("button", { name: /Delete account in browser/ })
+      screen.getByRole("button", { name: /Open in browser/ })
     );
 
     expect(openExternal).toHaveBeenCalledWith(

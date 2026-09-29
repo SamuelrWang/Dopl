@@ -181,7 +181,8 @@ function orphanRisk() {
 // the (synchronous) kill.
 async function teardown(reason) {
   diag('quit-guard: tearing down —', reason);
-  // ⚠ `listener.stop()` RETURNS THE FINAL `away` PRESENCE POST since 2026-09-08 (its own 3s
+  // ⚠ `listener.stop()` RETURNS THE FINAL `away` PRESENCE POST since 2026-09-08, joined with the
+  // device `offline` post (presence-core › stop) — one promise, both covered (its own 3s
   // leash). Captured here so the bounded moment below covers it too: without that, quitting left
   // the operator reading ONLINE for up to four beats on every peer's roster.
   let awayPost = null;

@@ -9,6 +9,7 @@
 import { MemberMethods } from "./client-members.js";
 import type { AccountMessagesOptions, AccountMessagesPage, AccountStatus, AccountStatusOptions } from "./account-types.js";
 import type { AwaitMessagesOptions, AwaitResult, Channel, ChannelArtifact, ChannelArtifactAction, ChannelArtifactResult, ChannelCreateInput, ChannelUpdateInput, ChannelMember, ChannelMessage, ChannelMessageInput, ChannelMessagePosted, ChannelReadEntry, ChannelSessionsPage, ChannelThread, ChannelThreadCreated, ChannelThreadCreateInput, ChannelThreadPage, ReadMessagesOptions, ThreadMode, WorkspaceAwaitResult } from "./channel-types.js";
+import type { ShowDisplayInput, ShowDisplayResult } from "./display-types.js";
 import type { AgentDirectiveCreateInput, AgentDirectiveCreated, LaunchDirective, LaunchDirectiveCreateInput, LaunchDirectiveCreated } from "./launch-types.js";
 import type { AgentDirection, AgentDirectionCreateInput, AgentDirectionCreated } from "./direction-types.js";
 export declare class ChannelMethods extends MemberMethods {
@@ -30,6 +31,8 @@ export declare class ChannelMethods extends MemberMethods {
     inviteToChannel(channelId: string, userId: string): Promise<ChannelMember>;
     readChannelMessages(channelId: string, opts?: ReadMessagesOptions): Promise<ChannelMessage[]>;
     postChannelMessage(channelId: string, input: ChannelMessageInput): Promise<ChannelMessagePosted>;
+    /** Show a display (`POST /api/displays`): `dopl_show` and the glasses shortcuts. */
+    showDisplay(input: ShowDisplayInput): Promise<ShowDisplayResult>;
     /**
      * THE FOLDED READ (#1220 §4, 2026-09-06). ⚠ `entries === null` means nothing
      * on the page is in an artifact — the same handling an older server gets.

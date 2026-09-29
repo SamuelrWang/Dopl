@@ -73,6 +73,8 @@ const channel_ops_write_1 = require("./channel-ops-write");
 const channel_ops_threads_1 = require("./channel-ops-threads");
 // ⚠ A structured SEND, not a second delivery path — it delegates to `opPost`.
 const channel_ops_escalate_1 = require("./channel-ops-escalate");
+// ⚠ THE ONE DISPLAY DOOR (`dopl_show`), also a send kind — see that module.
+const channel_ops_show_1 = require("./channel-ops-show");
 // THE ACCOUNT-WIDE READ (2026-09-01, T22) — `read` with no `channel`. ⚠ A
 // SIBLING MODULE, not a branch inside the per-channel handler: its whole result
 // vocabulary splices one `ref`, and its scope is one room.
@@ -135,6 +137,10 @@ directory) {
             // human it asks is never notified. Both delegate to `opPost` rather than
             // growing a second delivery path.
             case "send": {
+                // ⚠ A DISPLAY IS `dopl_show` (granular), routed BEFORE the channel-required check: its
+                // channel is optional (the session's), and a legacy call carries no blocks to show.
+                if (args.kind === "display")
+                    return (0, channel_ops_show_1.opShow)(client, args);
                 const miss = (0, respond_1.missingParams)("send", args, ["channel", "body"]);
                 if (miss)
                     return miss;

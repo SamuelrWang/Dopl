@@ -3,6 +3,9 @@
 import { userFacingMessage } from "@/shared/api/user-facing-message";
 import { useState } from "react";
 import { apiRequest } from "@/shared/api/api-client";
+import { cn } from "@/shared/lib/utils";
+import { UnderlineField } from "@/shared/ui/form-dialog";
+import { SMALL_PRIMARY_PILL } from "@/shared/ui/small-action-button";
 import { meetsMinRole, type Workspace, type Role } from "../types";
 import { workspaceSegment } from "../url";
 
@@ -70,31 +73,24 @@ export function WorkspaceSettingsFormCore({
 
   return (
     <div className="flex max-w-sm flex-col gap-3">
-      <label className="flex flex-col gap-1">
-        <span className="text-label font-semibold uppercase tracking-wide text-text-muted">
-          Name
-        </span>
-        <input
-          type="text"
+      {/* The popup form kit's underline fields (`shared/ui/form-dialog.tsx`), by reference. */}
+      <fieldset disabled={!canEdit} className="flex min-w-0 flex-col gap-3 disabled:opacity-50">
+        <UnderlineField
+          id="workspace-settings-name"
+          label="Name"
+          ariaLabel="Workspace name"
           value={name}
-          onChange={(e) => setName(e.target.value)}
-          disabled={!canEdit}
-          className="concave-field rounded-lg px-2.5 py-1.5 text-body text-text-primary outline-none disabled:opacity-50"
+          onChange={setName}
         />
-      </label>
-
-      <label className="flex flex-col gap-1">
-        <span className="text-label font-semibold uppercase tracking-wide text-text-muted">
-          Description
-        </span>
-        <textarea
+        <UnderlineField
+          id="workspace-settings-description"
+          label="Description"
+          ariaLabel="Workspace description"
           value={description}
-          onChange={(e) => setDescription(e.target.value)}
-          rows={3}
-          disabled={!canEdit}
-          className="concave-field resize-none rounded-lg px-2.5 py-1.5 text-body text-text-primary outline-none disabled:opacity-50"
+          onChange={setDescription}
+          multiline
         />
-      </label>
+      </fieldset>
 
       <p className="text-caption text-text-muted">
         Renaming a workspace regenerates its slug, so the URL changes.
@@ -108,7 +104,7 @@ export function WorkspaceSettingsFormCore({
           type="button"
           disabled={!canEdit || !dirty || saving}
           onClick={handleSave}
-          className="flex h-7 cursor-pointer items-center rounded-md bg-surface-cta px-2.5 text-small font-medium text-text-on-cta transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+          className={cn(SMALL_PRIMARY_PILL, "disabled:cursor-not-allowed disabled:opacity-40")}
         >
           {saving ? "Saving..." : "Save changes"}
         </button>

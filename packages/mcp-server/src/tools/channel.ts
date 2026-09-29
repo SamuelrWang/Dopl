@@ -88,6 +88,8 @@ import {
 import { opCreateThread } from "./channel-ops-threads";
 // ⚠ A structured SEND, not a second delivery path — it delegates to `opPost`.
 import { opEscalate } from "./channel-ops-escalate";
+// ⚠ THE ONE DISPLAY DOOR (`dopl_show`), also a send kind — see that module.
+import { opShow, type ShowArgs } from "./channel-ops-show";
 // THE ACCOUNT-WIDE READ (2026-09-01, T22) — `read` with no `channel`. ⚠ A
 // SIBLING MODULE, not a branch inside the per-channel handler: its whole result
 // vocabulary splices one `ref`, and its scope is one room.
@@ -161,6 +163,9 @@ export function registerChannelTool(
         // human it asks is never notified. Both delegate to `opPost` rather than
         // growing a second delivery path.
         case "send": {
+          // ⚠ A DISPLAY IS `dopl_show` (granular), routed BEFORE the channel-required check: its
+          // channel is optional (the session's), and a legacy call carries no blocks to show.
+          if (args.kind === "display") return opShow(client, args as ShowArgs);
           const miss = missingParams("send", args, ["channel", "body"]);
           if (miss) return miss;
           const channel = args.channel as string;

@@ -30,6 +30,7 @@ const call_ref_js_1 = require("../call-ref.js");
 const narration_js_1 = require("./narration.js");
 const channel_session_render_js_1 = require("./channel-session-render.js");
 const response_size_js_1 = require("./response-size.js");
+const channel_source_js_1 = require("./channel-source.js");
 /** Peer-influenced display text that neutralized to nothing. */
 const NO_ONE = "(unresolved author)";
 const NO_TEXT = "(empty)";
@@ -80,7 +81,7 @@ function waitingLine(item) {
     const thread = item.threadId
         ? ` · thread \`${(0, narration_js_1.inlineOr)(item.threadId, NO_TEXT)}\``
         : "";
-    return `  ⚠ ${mark} #${item.seq} from ${who}${thread} — ${(0, narration_js_1.inlineOr)(item.preview, NO_TEXT)}`;
+    return `  ⚠ ${mark} #${item.seq} from ${who}${(0, channel_source_js_1.viaTag)(item.source)}${thread} — ${(0, narration_js_1.inlineOr)(item.preview, NO_TEXT)}`;
 }
 /**
  * **WHICH LANE PUT THIS ITEM ON THE LIST** (2026-09-18, the `@desktop` tag).

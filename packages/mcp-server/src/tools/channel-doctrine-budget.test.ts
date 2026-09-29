@@ -16,7 +16,9 @@ import {
 // Whole document, a ratchet both ways: a rise must be paid for by a fall on a pushed surface, or
 // it is prose laundering. Re-derive, never quote.
 // +54 (2026-09-25): `posture.tools` names the permission levels and the runtime words behind them.
-const DOCTRINE_MAX_CHARS: Record<ToolSet, number> = { legacy: 13_562, granular: 13_741 };
+// +13/+31 (2026-09-28, unified display): CHOOSING names dopl_show for structure; paid by the pushed
+// `dopl_send_message.display` param (-469) leaving the granular schema.
+const DOCTRINE_MAX_CHARS: Record<ToolSet, number> = { legacy: 13_575, granular: 13_772 };
 // Per section as served (a typical pull is one section); a ceiling only. `send` is the largest, so
 // its next rule should split the section rather than raise this. Re-derive, never quote.
 const DOCTRINE_SECTION_MAX_CHARS: Record<ToolSet, number> = { legacy: 3_600, granular: 3_650 };

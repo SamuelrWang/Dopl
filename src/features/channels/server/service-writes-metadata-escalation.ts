@@ -1,10 +1,12 @@
 import { authorAgentIdOf } from "../lib/agent-post-stamp";
-import { mentionedUserIdsOf } from "../lib/mentions";
+import { answerersOf } from "@/features/display/core/answerers";
+import { decisionIndexOf } from "@/features/display/core/adapt";
+import type { DisplayBlock } from "@/features/display/core/types";
 import {
   ESCALATION_ANSWER_METADATA_KEY,
   ESCALATION_METADATA_KEY,
   ESCALATION_OPTION_LABEL_MAX,
-  parseEscalation,
+  parseStoredEscalation,
   type ChannelEscalation,
   type ChannelEscalationAnswerInput,
 } from "../escalation";
@@ -38,11 +40,18 @@ import type { ChannelMessageRow } from "./dto";
  * question in it. The card's POWER is the answer, and that is fold 11's problem.
  */
 export function resolveEscalation(
-  input: { escalation?: unknown },
+  input: { escalation?: unknown; display?: { blocks: DisplayBlock[] } },
   metadata: Record<string, unknown>
 ): void {
-  if (input.escalation === undefined) return;
-  metadata[ESCALATION_METADATA_KEY] = input.escalation;
+  if (input.escalation !== undefined) {
+    metadata[ESCALATION_METADATA_KEY] = input.escalation;
+    return;
+  }
+  // ⚠ A DISPLAY WITH A `choice` IS A DECISION (unified display, spec D5): its decision INDEX is
+  // stamped here, so answerers, the one-answer index, typed answers, the agent wake, waiting
+  // items and old desktops all keep working off `metadata.escalation` unchanged.
+  const index = input.display ? decisionIndexOf(input.display.blocks) : null;
+  if (index) metadata[ESCALATION_METADATA_KEY] = index;
 }
 
 /**
@@ -71,11 +80,9 @@ export function resolveEscalation(
  * read-only without a second concept.
  */
 export function escalationAnswerers(row: ChannelMessageRow): string[] {
-  const tagged = mentionedUserIdsOf(
-    (row.metadata ?? {}) as Record<string, unknown>
-  );
-  if (tagged.length > 0) return tagged;
-  return row.author_user_id ? [row.author_user_id] : [];
+  // ⚠ The rule itself lives in `display/core/answerers.ts` (client-safe), so the server's 403
+  // and every renderer's buttons read ONE predicate (unified display, 2026-09-28).
+  return answerersOf(row.metadata as Record<string, unknown> | null, row.author_user_id);
 }
 
 /**
@@ -142,7 +149,7 @@ export async function resolveEscalationAnswer(
   );
   if (!row) throw new EscalationNotFoundError(answer.escalationMessageId);
 
-  const escalation = parseEscalation(
+  const escalation = parseStoredEscalation(
     ((row.metadata ?? {}) as Record<string, unknown>)[ESCALATION_METADATA_KEY]
   );
   if (!escalation) throw new EscalationNotFoundError(answer.escalationMessageId);
@@ -155,6 +162,13 @@ export async function resolveEscalationAnswer(
   }
 
   stampEscalationAnswer(row, answer.optionIndex, metadata);
+}
+
+/** The display's hold stamp is still in the future (`display/core/types.ts › wait_until`). */
+export function isHeld(metadata: Record<string, unknown>, now = Date.now()): boolean {
+  const display = metadata.display as { wait_until?: unknown } | undefined;
+  const until = typeof display?.wait_until === "string" ? Date.parse(display.wait_until) : NaN;
+  return Number.isFinite(until) && now < until;
 }
 
 /**
@@ -171,13 +185,16 @@ function stampEscalationAnswer(
   optionIndex: number,
   metadata: Record<string, unknown>
 ): void {
+  const rowMeta = (row.metadata ?? {}) as Record<string, unknown>;
   metadata[ESCALATION_ANSWER_METADATA_KEY] = {
     escalationMessageId: row.id,
     optionIndex,
-    agentId: authorAgentIdOf({
-      clientMsgId: row.client_msg_id,
-      metadata: (row.metadata ?? {}) as Record<string, unknown>,
-    }),
+    // ⚠ HELD ANSWERS WAKE NOBODY TWICE (unified display §3.4). While the asking agent's own hold
+    // may still consume the answer (`display.wait_until` in the future), the answer names no
+    // agent: the hold returns it, and a wake would deliver the same answer a second time.
+    agentId: isHeld(rowMeta)
+      ? null
+      : authorAgentIdOf({ clientMsgId: row.client_msg_id, metadata: rowMeta }),
   };
 }
 
@@ -326,7 +343,7 @@ export async function resolveTypedEscalationAnswer(
   const open = answerable.find((row) => !answered.has(row.id));
   if (!open) return false;
 
-  const escalation = parseEscalation(
+  const escalation = parseStoredEscalation(
     ((open.metadata ?? {}) as Record<string, unknown>)[ESCALATION_METADATA_KEY]
   );
   if (!escalation) return false;

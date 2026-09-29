@@ -80,6 +80,28 @@ const EXEMPT: Record<string, string> = {
     "Anonymous playground provisioning — the audience has no account by definition. Per-IP rate-limited in the service; creates only its own throwaway guest user/workspace/token.",
   "playground/mcp/[token]/route.ts":
     "The /api/mcp transport under a URL-embedded bearer (desktop MCP clients cannot send headers). Delegates to mcp/route.ts, which authenticates via authenticateMcpRequest — same exemption rationale as mcp/route.ts.",
+  "mcp/glasses/route.ts":
+    "Glasses MCP transport (authenticateMcpRequest). JSON-RPC over POST like mcp/route.ts; its write tools are scope-gated per call on an explicit dopl.write (features/glasses/core/mcp/tools.ts › registerGlassesTools).",
+  "glasses/device/answer/route.ts":
+    "Glasses device API — authenticated by the per-device token (features/glasses/core/devices/service.ts › deviceFromBearer), not a user OAuth token; no scope to gate.",
+  "glasses/device/dismiss/route.ts":
+    "Glasses device API — per-device token, same as glasses/device/answer.",
+  "glasses/device/voice/route.ts":
+    "Glasses push-to-talk — per-device token; posts only into that device's linked channel, as its owner.",
+  "glasses/device/unpair/route.ts":
+    "Glasses device sign-out — per-device token; revokes only the calling device (features/glasses/core/messages/device-handlers.ts › createDeviceHandlers).",
+  "glasses/device/launch/route.ts":
+    "Glasses menu launch — per-device token; files a launch through channels/server/service-launch.ts › createLaunchDirective as the device owner, in a channel the owner is a member of.",
+  "glasses/device/channels/[channelId]/messages/[messageId]/display/answer/route.ts":
+    "Glasses device API — per-device token, same as glasses/device/answer (a tap on a channel display).",
+  "glasses/device/target/route.ts":
+    "Glasses menu current target — per-device token; writes only that device's own voice target after a membership check.",
+  "glasses/device/pair/start/route.ts":
+    "Glasses pairing start — unauthenticated by design (the glasses have no credential yet); per-IP rate-limited, writes only a 10-minute pairing row (features/glasses/core/devices/pairing.ts › startPairing).",
+  "glasses/hey-even/route.ts":
+    "Glasses Hey-Even chat-completions shim — per-device Hey Even key (features/glasses/platforms/even-g2/hey-even.ts › deviceFromHeyEvenKey).",
+  "glasses/hey-even/v1/chat/completions/route.ts":
+    "Glasses Hey-Even chat-completions shim, OpenAI path — same handler and key as glasses/hey-even/route.ts.",
 };
 
 const files = routeFiles(API_ROOT);
@@ -229,6 +251,10 @@ describe("H-3 write-gate coverage", () => {
         // did NOT turn this into a field gate. GET and member add/remove on that
         // file stay ungated.
         "channels/[channelId]/members/route.ts",
+        // A display's choice is a PERSON's answer (2026-09-28, device-aware messages) — it releases
+        // a waiting glasses_ask / wakes the agent that asked, the `escalationAnswer` argument:
+        // an agent token answering would be the agent deciding what its operator was asked.
+        "channels/[channelId]/messages/[messageId]/display/answer/route.ts",
         // DELETE hard-deletes a thread and cascades its whole transcript
         // (2026-08-21). Permanent, SHARED with the other party, and an agent
         // token has no confirm dialog to gate it — the same argument the team
@@ -259,6 +285,15 @@ describe("H-3 write-gate coverage", () => {
         "billing/portal/route.ts",
         "billing/upgrade-to-team/route.ts",
         "oauth/grants/[id]/route.ts",
+        // DEVICES + AGENT APPS (2026-09-28). The heartbeat registers the computer a credential is
+        // then linked to; removing a computer or disconnecting an app REVOKES credentials. An agent
+        // must operate none of them — the device-token argument above. The two GETs are gated too:
+        // the device list is the operator's own hardware inventory, and an agent needs neither.
+        "devices/route.ts",
+        "devices/[deviceId]/route.ts",
+        "devices/heartbeat/route.ts",
+        "oauth/apps/route.ts",
+        "oauth/apps/[key]/route.ts",
         "user/delete/route.ts",
         "workspaces/[workspaceSlug]/access-matrix/route.ts",
         "workspaces/[workspaceSlug]/invitations/[id]/route.ts",

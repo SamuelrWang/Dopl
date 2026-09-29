@@ -135,6 +135,8 @@ export interface ContainerToken {
 export async function issueContainerToken(input: {
   userId: string;
   workspaceId: string;
+  /** The registered computer minting it; removing that computer revokes this row. */
+  deviceId?: string | null;
 }): Promise<ContainerToken> {
   const db = supabaseAdmin();
   // `mcp_tokens.client_id` is a NOT NULL FK to `oauth_clients` — the reserved
@@ -183,6 +185,7 @@ export async function issueContainerToken(input: {
       // with the columns.
       workspace_id: input.workspaceId,
       workspace_lock_kind: CONTAINER_SESSION_LOCK,
+      ...(input.deviceId ? { device_id: input.deviceId } : {}),
     })
     .select("id")
     .single();

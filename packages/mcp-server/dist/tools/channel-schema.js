@@ -56,10 +56,11 @@ exports.CHANNEL_INPUT_SHAPE = {
     'op="send" (required): the message text. ⚠ The recipient is `to=` and is rendered from it — never write a routing header or a name into the body. op="manage" (required on "launch" and "direct"): the agent\'s opening instruction (launch: <=2000), or the private message.'),
     // `decision` must store as a `message` row or `targeting.js › classify` drops the card; `record`
     // sends `intent:"chat"`, so a send naming nobody can be refused instead of guessed at.
+    // `display` is `dopl_show`'s preset (granular): a legacy call naming it is refused by name.
     kind: zod_1.z
-        .enum(["message", "milestone", "decision", "record"])
+        .enum(["message", "milestone", "decision", "record", "display"])
         .optional()
-        .describe('op="send" (optional, default "message"): "record" takes no `to`; "milestone" marks a step on a thread; "decision" is a card answered in one press.'),
+        .describe('op="send" (optional, default "message"): "record" takes no `to`; "milestone" marks a step on a thread; "decision" is a card answered in one press; "display" is dopl_show\'s.'),
     thread: zod_1.z
         .string()
         .optional()

@@ -34,6 +34,7 @@ function boot() {
   const bridge = loadWithStubs("ui-bridge.js", {
     electron: { ipcMain: { handle: (name, fn) => { handlers[name] = fn; } }, shell: {} },
     "./app-version": { versionHeaders: () => ({}) },
+    "./device-identity": { deviceHeaders: () => ({}) },
     "./auth-tokens": new Proxy({}, { get: (_t, k) => tokens[k] }),
     "./api-repair": { discardBody() {} },
     "./config": { API_BASE, APP_ORIGIN: API_BASE },
@@ -189,7 +190,7 @@ const POOL = Symbol.for("undici.globalDispatcher.1");
 
 function loadApi() {
   return loadWithStubs("api.js", {
-    "./auth": {}, "./app-version": {}, "./api-repair": {}, "./config": { API_BASE },
+    "./auth": {}, "./app-version": {}, "./device-identity": {}, "./api-repair": {}, "./config": { API_BASE },
   });
 }
 

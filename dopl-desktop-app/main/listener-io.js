@@ -7,6 +7,7 @@ const Store = require('electron-store');
 const auth = require('./auth');
 const appVersion = require('./app-version');
 const sessionStamp = require('./session-id-header');
+const deviceIdentity = require('./device-identity');
 const heal = require('./listener-heal');
 const { fetchWithAuthRepair, discardBody } = require('./api-repair');
 const budget = require('./listener-budget');
@@ -126,7 +127,7 @@ async function sendOnce(pathname, opts) {
   // `X-Dopl-Runtime: desktop-session` marks these posts as written by Dopl about sessions it spawned; without it
   // the server badged every lifecycle row "outside session". A routing hint, not authorization. Spelled INLINE:
   // suites brace-extract this function, so a module-scope constant would be undefined there.
-  const headers = { Accept: 'application/json', ...appVersion.versionHeaders(), ...sessionStamp.sessionHeaders(sessionId), 'X-Dopl-Runtime': 'desktop-session' };
+  const headers = { Accept: 'application/json', ...appVersion.versionHeaders(), ...sessionStamp.sessionHeaders(sessionId), ...deviceIdentity.deviceHeaders(), 'X-Dopl-Runtime': 'desktop-session' };
   if (cookie) headers.Cookie = cookie;
   if (workspaceId) headers['X-Workspace-Id'] = workspaceId;
   if (body !== undefined) headers['Content-Type'] = 'application/json';

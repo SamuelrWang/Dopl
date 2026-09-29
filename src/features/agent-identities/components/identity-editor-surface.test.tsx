@@ -127,12 +127,9 @@ describe("no concave surfaces", () => {
     it("`SECTION_BOX_INSET` survives only where a ruling keeps it", () => {
       expect(wearers("SECTION_BOX_INSET")).toEqual([
         "src/shared/ui/section-box.tsx",
-        // Frozen settings surfaces (INVARIANTS §15).
+        // Frozen settings surface (INVARIANTS §15). The popup's own wearers left on 2026-09-28
+        // when its panes moved to the Home panel language (`sections/settings-panel.tsx`).
         "src/features/workspaces/components/workspace-danger-zone-core.tsx",
-        "src/features/mcp-connect/components/connected-apps-section.tsx",
-        "src/features/mcp-connect/components/remote-connect.tsx",
-        "src/shared/layout/settings-modal/sections/delete-account.tsx",
-        "apps/desktop-ui/src/components/settings-modal/account-actions.tsx",
       ].sort());
     });
   });

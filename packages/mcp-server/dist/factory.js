@@ -7,7 +7,7 @@
  * orphan-skill cleanup) in `index.ts`.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.packageVersion = exports.clientIdentifier = exports.buildInstructions = exports.createServer = void 0;
+exports.offeredToolsFor = exports.packageVersion = exports.clientIdentifier = exports.buildInstructions = exports.createServer = void 0;
 exports.bootServer = bootServer;
 const server_js_1 = require("./server.js");
 const identity_js_1 = require("./tools/identity.js");
@@ -20,6 +20,10 @@ Object.defineProperty(exports, "buildInstructions", { enumerable: true, get: fun
 var version_js_1 = require("./version.js");
 Object.defineProperty(exports, "clientIdentifier", { enumerable: true, get: function () { return version_js_1.clientIdentifier; } });
 Object.defineProperty(exports, "packageVersion", { enumerable: true, get: function () { return version_js_1.packageVersion; } });
+// The containment-profile table, for tools the app registers beside this server's
+// (the glasses tools on `/api/mcp`): one classification, never a second copy.
+var gating_js_1 = require("./gating.js");
+Object.defineProperty(exports, "offeredToolsFor", { enumerable: true, get: function () { return gating_js_1.offeredToolsFor; } });
 function errText(err) {
     return err instanceof Error ? err.message : String(err);
 }

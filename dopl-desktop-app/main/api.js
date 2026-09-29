@@ -12,6 +12,7 @@
 
 const auth = require('./auth');
 const appVersion = require('./app-version');
+const deviceIdentity = require('./device-identity');
 const { fetchWithAuthRepair } = require('./api-repair');
 const { API_BASE } = require('./config');
 
@@ -26,7 +27,8 @@ async function sendOnce(pathname, opts) {
   // Q10: this build's version rides on the TRANSPORT, not on each post site, so a
   // new caller cannot forget it. The server stamps it as the reserved
   // metadata.appVersion (header-only, never from the body) — see app-version.js.
-  const headers = { Accept: 'application/json', ...appVersion.versionHeaders() };
+  // `X-Dopl-Device` links the MCP tokens minted through here to this computer (device-identity.js).
+  const headers = { Accept: 'application/json', ...appVersion.versionHeaders(), ...deviceIdentity.deviceHeaders() };
   if (cookie) headers.Cookie = cookie;
   if (workspaceId) headers['X-Workspace-Id'] = workspaceId;
   if (body !== undefined) headers['Content-Type'] = 'application/json';

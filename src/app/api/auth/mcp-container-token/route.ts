@@ -6,6 +6,7 @@ import {
   issueContainerToken,
   revokeContainerTokens,
 } from "@/shared/auth/mcp-container-token";
+import { deviceRemovedError, mintingDevice } from "@/features/devices/server/runtime";
 
 export const dynamic = "force-dynamic";
 
@@ -74,9 +75,15 @@ export const POST = withWorkspaceAuth(
     } catch {
       // Empty / non-JSON body is the normal case.
     }
+    const device = await mintingDevice(request, userId);
+    if (device && "removed" in device) {
+      const err = deviceRemovedError();
+      return NextResponse.json(err.toResponseBody(), { status: err.status });
+    }
     const { token, tokenId, expiresAt } = await issueContainerToken({
       userId,
       workspaceId,
+      deviceId: device?.deviceId ?? null,
     });
     return NextResponse.json(
       { token, tokenId, expiresAt, workspaceId },

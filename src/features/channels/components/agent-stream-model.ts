@@ -27,10 +27,9 @@
  * rendered before this file existed.
  */
 
-import { escalationStreamPayload } from "./view-model-escalation";
+import { displayPayloadOf, type DisplayPayload } from "./view-model-display";
 import type { AgentNarrationEntry } from "./use-agent-narration";
 import type { PostDestination } from "./agents-model";
-import type { ChannelEscalation } from "../escalation";
 import type { ChannelConsentRequest, ChannelMessage } from "../types";
 
 /**
@@ -66,15 +65,13 @@ export interface StreamItem {
    */
   to?: PostDestination | null;
   /**
-   * `sent` rows only — THE STRUCTURED ESCALATION this post carries, when it is
-   * one (2026-08-31). Set from the TRANSCRIPT row's server-stamped metadata and
-   * never from a narration frame: the payload is reserved, so the only honest
-   * source is the message the server actually stored.
+   * `sent` rows only — THE DISPLAY this post carries (every decision too), set from the STORED
+   * row's server-written metadata and never from a narration frame (the key is reserved).
    *
-   * ⚠ ABSENT IS THE ORDINARY ANSWER and the row renders as the plain sent box,
-   * showing the same words in prose — what a build without the key shows.
+   * ⚠ ABSENT IS THE ORDINARY ANSWER and the row renders as the plain sent box, showing the same
+   * words in prose — what a build without displays shows.
    */
-  escalation?: { messageId: string; payload: ChannelEscalation };
+  display?: DisplayPayload;
   /**
    * `sent` rows only — **this post has not gone out yet.** The outbound consent
    * gate is holding it and the card is the review surface (Samuel, 2026-08-25).
@@ -385,8 +382,8 @@ export function buildAgentStream({
       at: epoch(message.createdAt),
       text: message.body,
       to: destination,
-      // ⚠ OFF THE STORED ROW, never off a frame — see `escalationPayload`.
-      escalation: escalationStreamPayload(message),
+      // ⚠ OFF THE STORED ROW, never off a frame — see `display`.
+      display: displayPayloadOf(message) ?? undefined,
     });
   }
 

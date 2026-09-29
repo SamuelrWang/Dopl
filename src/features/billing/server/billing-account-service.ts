@@ -119,7 +119,7 @@ export async function setWorkspaceCancelAtPeriodEnd(
     throw new HttpError(
       409,
       "NO_ACTIVE_SUBSCRIPTION",
-      "This workspace has no active subscription to cancel."
+      "This workspace has no active plan to cancel."
     );
   }
   if (!isStripeConfigured()) {

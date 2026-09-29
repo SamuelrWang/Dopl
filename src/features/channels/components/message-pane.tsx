@@ -12,6 +12,7 @@ import { PaneHeader } from "./message-pane-header";
 import { useStickToBottom } from "./use-stick-to-bottom";
 import { useLoadOlder } from "./use-load-older";
 import { Transcript } from "./transcript";
+import type { AnswerDisplay } from "../hooks/use-display-writes";
 import {
   TRANSCRIPT_FILTER_ALL,
   TranscriptFilterSelect,
@@ -90,8 +91,7 @@ export function ChannelsMessagePane({
   onToggleFavorite = NOOP,
   onExitThread = NOOP,
   onOpenAgent,
-  onAnswerEscalation,
-  answerBusy = false,
+  onAnswerDisplay,
   onOpenThread = NOOP,
   onJumpToSeq,
   hasOlder = false,
@@ -144,9 +144,8 @@ export function ChannelsMessagePane({
   onExitThread?: () => void;
   /** An agent sender pill's way into the agent pane; absent (pop-out) leaves pills inert. */
   onOpenAgent?: (agentId: string) => void;
-  /** Absent renders no option buttons on escalation cards (never disabled ones). */
-  onAnswerEscalation?: (escalationMessageId: string, optionIndex: number) => void;
-  answerBusy?: boolean;
+  /** Absent renders no option buttons on display/decision cards (never disabled ones). */
+  onAnswerDisplay?: AnswerDisplay;
   onOpenThread?: (id: string) => void;
   /** Jump to a cited message by seq; the host resolves it so there is one resolver. Absent renders
    *  citations as plain text. */
@@ -304,8 +303,7 @@ export function ChannelsMessagePane({
             launchBusy={newAgent?.launchBusy ?? false}
             onLaunchAgent={(id) => void newAgent?.launchAgent(id)}
             onOpenAgent={onOpenAgent}
-            onAnswerEscalation={onAnswerEscalation}
-            answerBusy={answerBusy}
+            onAnswerDisplay={onAnswerDisplay}
             onOpenThread={onOpenThread}
             newestSeq={newestSeq}
             onJumpToSeq={onJumpToSeq}

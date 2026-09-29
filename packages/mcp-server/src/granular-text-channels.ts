@@ -3,6 +3,7 @@
 import { z } from "zod";
 
 import type { ToolText } from "./granular-text.js";
+import { BLOCKS_PARAM_DOC } from "./tools/display-doctrine.js";
 
 /** The channel PATCH/POST routes' `topic` cap (`src/features/channels/schema.ts › ChannelTopicSchema`). */
 export const CHANNEL_DESCRIPTION_MAX_CHARS = 2000;
@@ -43,7 +44,7 @@ export const CHANNEL_TEXT: Readonly<Record<string, ToolText>> = {
   },
   dopl_send_message: {
     description:
-      'Post to a channel for members or agents; kind="milestone" marks a step on a thread, "record" addresses nobody. A question a person must answer is dopl_request_decision.',
+      'Post to a channel for members or agents; kind="milestone" marks a step on a thread, "record" addresses nobody. A question a person must answer is dopl_request_decision; choices, lists, tables or status: dopl_show.',
     params: {
       to: "Recipients: member email or id, `@agent-<id>` or a handle, comma-separated. None on a record.",
       body: "Message text. Recipients render from `to`: never write a routing header.",
@@ -54,9 +55,39 @@ export const CHANNEL_TEXT: Readonly<Record<string, ToolText>> = {
     required: ["channel", "body"],
     types: { kind: sendKind },
   },
+  dopl_show: {
+    description:
+      'Show a display: blocks every surface draws its own way (a card in Dopl, the lens on glasses). Use it instead of formatting prose for any choice, status or structured info. A choice block makes it a decision answered in one press; the answer arrives as their message, or here with wait. The same display_id updates it live. Blocks, limits, examples: dopl_get_guide(topic="displays").',
+    params: {
+      channel: "Channel slug or id; omitted, this session's channel.",
+      thread: "Thread to post it on.",
+      target: "auto (default): the channel, plus your glasses for a choice when they are on. channel: chat only. glasses: your lens (and the channel if you are in one).",
+      blocks: BLOCKS_PARAM_DOC,
+      display_id: "Same id replaces that display live (an answered decision is re-asked as a new one).",
+      mention: "@handles it is for: their inbox, and who may answer. Omitted: your operator.",
+      wait: "Hold up to 200s for the answer to a choice.",
+      timeout_sec: "Seconds to wait (5-200, default 120).",
+      template: "Show a saved template instead of blocks.",
+      data: "Values for the template's {{variables}}.",
+      save_as: "Also save these blocks as a template under this name.",
+      validate_only: "Preview how it lands on each surface; sends nothing.",
+    },
+    types: {
+      target: z.enum(["auto", "channel", "glasses"]),
+      blocks: z.array(z.record(z.string(), z.unknown())).min(1).max(24),
+      display_id: z.string(),
+      mention: z.string(),
+      wait: z.boolean(),
+      timeout_sec: z.number(),
+      template: z.string(),
+      data: z.record(z.string(), z.unknown()),
+      save_as: z.string(),
+      validate_only: z.boolean(),
+    },
+  },
   dopl_request_decision: {
     description:
-      "Post a decision card a person answers in one press: `summary` is the question, `body` the context, `options` the choices. @-tag the person in the body; it starts nobody's agent.",
+      "Post a decision card a person answers in one press: `summary` is the question, `body` the context, `options` the choices. @-tag the person in the body; it starts nobody's agent. Compose your own layout with dopl_show.",
     params: {
       body: "Context for the decision.",
       summary: "The question the card asks.",

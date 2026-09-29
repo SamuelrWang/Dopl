@@ -1,5 +1,6 @@
 "use client";
 
+import { cn } from "@/shared/lib/utils";
 import { useState } from "react";
 // ⚠ Deep import, NOT the `settings-modal` barrel — the barrel re-exports
 // SettingsModal, whose section tree reaches `next/navigation`, and any `next/*`
@@ -59,7 +60,7 @@ export function ConfirmDialog({
         <div className={styles.confirmActions}>
           <button
             type="button"
-            className={styles.btnCancel}
+            className={cn("btn-light", styles.btn)}
             disabled={busy}
             onClick={() => onOpenChange(false)}
           >
@@ -67,7 +68,7 @@ export function ConfirmDialog({
           </button>
           <button
             type="button"
-            className={destructive ? styles.btnDanger : styles.btnConfirm}
+            className={cn(styles.btn, destructive ? styles.btnDanger : cn("auth-btn-3d", styles.btnConfirm))}
             disabled={busy}
             onClick={handleConfirm}
           >

@@ -30,6 +30,7 @@ import { bySet, withToolSet } from "./call-ref.js";
 import type { ToolSet } from "./tool-manifest.js";
 import { channelDoctrine, DOCTRINE_URI } from "./tools/channel-doctrine.js";
 import { knowledgeDoctrine, KNOWLEDGE_DOCTRINE_URI } from "./tools/knowledge-doctrine.js";
+import { displaysDoctrine, DISPLAYS_DOCTRINE_URI } from "./tools/display-doctrine.js";
 
 interface Resource {
   name: string;
@@ -57,6 +58,13 @@ const RESOURCES: Readonly<Record<string, Resource>> = {
     description: () =>
       "How to spend fewer characters on a knowledge entry: the read order (excerpt → outline → section → body) and the write duty that makes it possible (## headings, one topic each).",
     text: knowledgeDoctrine,
+  },
+  // Unified display (2026-09-28): the block vocabulary, limits and per-surface ladder, pulled.
+  [DISPLAYS_DOCTRINE_URI]: {
+    name: "displays-doctrine",
+    title: "Dopl displays — blocks, limits, devices",
+    description: () => "The display blocks dopl_show takes, their limits, how each degrades on glasses, and two examples.",
+    text: displaysDoctrine,
   },
 };
 

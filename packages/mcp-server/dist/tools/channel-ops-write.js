@@ -330,5 +330,17 @@ async function opPost(client, channelRef, body, opts = {}) {
         delivery: (0, channel_facts_1.deliveryFact)(message.delivery, message.deliveryAt),
         hold: (0, channel_wake_guidance_1.holdFact)(opts.runtime ?? null, message.seq),
         ...(opts.resultFacts ?? {}),
-    }));
+    }) + displayTip(message.displayHint));
+}
+/**
+ * **THE DISPLAY NUDGE, READ BACK** (unified display §6.2): the server saw structure in a plain
+ * send. ONE line, never a refusal — the post already landed as written.
+ */
+function displayTip(hint) {
+    if (!hint)
+        return "";
+    const show = (0, call_ref_js_1.bySet)({ legacy: 'kind="decision"', granular: "dopl_show" });
+    return hint === "choice"
+        ? `\nTip: a question with options is a decision — send it with ${(0, call_ref_js_1.toolName)("channel.send", { kind: '"decision"' })} or ${show} (a choice block) so they answer in one press, on any device.`
+        : `\nTip: lists, tables and status read better as a display — ${show} draws them on desktop and glasses.`;
 }

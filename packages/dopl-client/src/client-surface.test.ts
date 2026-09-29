@@ -218,6 +218,8 @@ const PUBLIC_SURFACE = [
   "searchKb",
   "setChannelThreadMode",
   "setWorkspaceId",
+  // THE ONE DISPLAY DOOR (2026-09-28, unified display): `POST /api/displays`.
+  "showDisplay",
   "updateAgentIdentity",
   "updateChannel",
   "updateChat",

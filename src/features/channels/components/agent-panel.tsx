@@ -82,7 +82,8 @@ import { AgentStream } from "./agent-stream";
 import { useAgentNarration } from "./use-agent-narration";
 import { indexMembers, viewerPerson } from "./view-model";
 import type { AgentColorKey } from "../types";
-import { answersByEscalation } from "./view-model-escalation";
+import { answersByEscalation } from "./view-model-display";
+import type { AnswerDisplay } from "../hooks/use-display-writes";
 // ⚠ THE CONTROL STRIP IS ITS OWN FILE since 2026-08-22 (`agent-panel-controls.tsx`),
 // split at the 500-line cap when the composer landed — and on the COMMANDS seam,
 // not an arbitrary cut: it changes when the bridge does, this file when the layout
@@ -172,8 +173,7 @@ export function ChannelsAgentPanel({
   pendingPosts,
   onPostPending,
   postBusy,
-  onAnswerEscalation,
-  answerBusy,
+  onAnswerDisplay,
   currentUserId,
   workspaceSlug = "",
   full = false, color = null,
@@ -198,13 +198,11 @@ export function ChannelsAgentPanel({
   onPostPending?: (requestId: string) => void;
   postBusy?: boolean;
   /**
-   * ANSWER one of this agent's ESCALATION CARDS — the host's own message write
+   * ANSWER one of this agent's DISPLAY / DECISION CARDS — the host's one answer write
    * (2026-08-31). ⚠ Absent renders no option buttons, never disabled ones; the
    * card is then the record of a question the operator answers in the channel.
    */
-  onAnswerEscalation?: (escalationMessageId: string, optionIndex: number) => void;
-  /** An answer is in flight — the double-submit guard, not a capability. */
-  answerBusy?: boolean;
+  onAnswerDisplay?: AnswerDisplay;
   currentUserId: string;
   /** The workspace SEGMENT, for the agent window's router path (2026-08-20).
    *  ⚠ Main holds the workspace UUID and a route needs the slug, so it can only
@@ -254,21 +252,15 @@ export function ChannelsAgentPanel({
     () => viewerPerson(messages, currentUserId),
     [messages, currentUserId]
   );
-  // WHICH ESCALATION CARDS ALREADY HAVE AN ANSWER — off the SAME transcript, and
-  // through the SAME derivation the channel view uses, so one question cannot
-  // read as answered in one pane and open in the other.
-  // ⚠ `indexMembers` with NO ROSTER is deliberate: `answersByEscalation` needs
-  // the index only to LABEL who answered, and this panel renders an INDEX
-  // instead — the label is the transcript card's job, not this one's.
-  const answeredEscalations = useMemo(() => {
-    const answers = answersByEscalation(
-      messages as ChannelMessage[],
-      indexMembers([], currentUserId)
-    );
-    return new Map(
-      [...answers].map(([id, a]) => [id, a.optionIndex] as const)
-    );
-  }, [messages, currentUserId]);
+  // WHICH DECISIONS ALREADY HAVE AN ANSWER — off the SAME transcript, through the SAME derivation
+  // the channel view uses, so one question cannot read answered in one pane and open in the other.
+  // ⚠ `indexMembers` with NO ROSTER: the viewer is what gates the buttons; who chose is labelled
+  // off the answer message itself.
+  const displayIndex = useMemo(() => indexMembers([], currentUserId), [currentUserId]);
+  const displayAnswers = useMemo(
+    () => answersByEscalation(messages, displayIndex),
+    [messages, displayIndex]
+  );
 
   return (
     <aside
@@ -368,10 +360,10 @@ export function ChannelsAgentPanel({
             // ⚠ WHICH CARDS ARE ALREADY ANSWERED IS DERIVED HERE, off the
             // transcript this panel already holds — no new read, and the same
             // first-answer-wins rule the channel transcript applies
-            // (`view-model-escalation.ts › answersByEscalation`).
-            answeredEscalations={answeredEscalations}
-            onAnswerEscalation={onAnswerEscalation}
-            answerBusy={answerBusy}
+            // (`view-model-display.ts › answersByEscalation`).
+            displayIndex={displayIndex}
+            displayAnswers={displayAnswers}
+            onAnswerDisplay={onAnswerDisplay}
             destination={postDestination(agent)}
             // ⚠ THE VIEWER'S FACE for their own turns, resolved off the SAME
             // transcript the Sent lane reads (`view-model.ts › viewerPerson`) —

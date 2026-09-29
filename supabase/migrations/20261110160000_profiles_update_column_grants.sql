@@ -1,0 +1,64 @@
+-- PROFILES: USERS MAY UPDATE ONLY THE FIELDS THE APP LETS THEM EDIT
+-- (security finding, db-cleanup audit 2026-09-28).
+--
+-- RELEASED 2026-09-28 on Samuel's word ("fix the security hole"): applied to
+-- production by NAME (`profiles_update_column_grants`) ahead of the next deploy.
+-- Pre-apply check against origin/master e21c9991 (the live web + desktop 1.37.2)
+-- and the live database: no user-client write to `profiles` anywhere, no RLS
+-- INSERT/DELETE policy, no view over it, and the only functions that write it
+-- (handle_new_user, increment_ingestion_count) are SECURITY DEFINER owned by postgres.
+--
+-- WHY. `profiles_update_own` (USING id = auth.uid()) plus the Supabase default
+-- table-wide UPDATE grant to `authenticated` let any signed-in user PATCH EVERY
+-- column of their own row through PostgREST with the public anon key + their JWT:
+-- `stripe_customer_id`, `stripe_subscription_id`, the subscription/trial columns,
+-- `email`, `onboarded_at`, `mcp_connected_at`. Two of those were read as
+-- OWNERSHIP by the server:
+--   * the Stripe webhook's grandfather path mapped a customer to whichever profile
+--     carried its id (`billing/server/subscriptions.ts › getUserByStripeCustomer`);
+--   * account deletion cancelled whatever `stripe_subscription_id` the profile
+--     carried (`› getProfileBillingRef`) — i.e. a user could cancel someone else's
+--     subscription by deleting their own account.
+-- The chore/db-cleanup branch already makes both reads verify against Stripe, which
+-- is safe to ship first. This file closes the write itself.
+--
+-- WHAT THE APP ACTUALLY WRITES (measured 2026-09-28): every profile write in
+-- src/, apps/, packages/ and dopl-desktop-app/ goes through the SERVICE-ROLE client,
+-- which bypasses grants and RLS:
+--   PATCH /api/user/profile          display_name, bio, website_url, twitter_handle,
+--                                    github_username, updated_at   (supabaseAdmin)
+--   POST /api/user/mcp-status,
+--   shared/auth/mcp-session.ts       mcp_connected_at              (supabaseAdmin)
+--   onboarding/server/repository.ts  onboarded_at                  (supabaseAdmin)
+--   handle_new_user()                INSERT, SECURITY DEFINER
+-- No browser/SPA/desktop code writes `profiles` with a user client
+-- (`shared/auth/use-current-profile.ts` only SELECTs display_name, avatar_url).
+--
+-- So `authenticated` keeps UPDATE on exactly the user-editable set the profile
+-- route's allow-list (`ProfilePatchSchema`) accepts, and nothing else. Everything
+-- billing/entitlement/identity-related becomes server-only. INSERT and DELETE are
+-- revoked too: RLS already has no policy for either, so this removes nothing that
+-- worked — it just stops relying on a missing policy.
+-- (Tighter still would be no user UPDATE at all, since nothing uses it; the
+-- editable set is kept so a future client-side edit of those fields keeps working.)
+--
+-- ⚠ A column ADDED to `profiles` later gets NO user UPDATE grant by default.
+-- That is the point; grant it here-style if it is genuinely user-editable.
+--
+-- ORDER: this file closes the write in production on its own — no app code
+-- depends on the revoked privileges. The verified legacy-Stripe reads
+-- (billing/server/subscriptions.ts) ship with the next deploy as defense in depth.
+-- Spot-check with
+--        SELECT column_name FROM information_schema.column_privileges
+--         WHERE table_schema='public' AND table_name='profiles'
+--           AND grantee='authenticated' AND privilege_type='UPDATE';
+--      → exactly the five columns below.
+--
+-- ROLLBACK (restores the Supabase default):
+--   GRANT INSERT, UPDATE, DELETE ON public.profiles TO anon, authenticated;
+
+-- Table-level REVOKE also strips every column-level UPDATE privilege.
+REVOKE INSERT, UPDATE, DELETE ON public.profiles FROM anon, authenticated;
+
+GRANT UPDATE (display_name, bio, website_url, twitter_handle, github_username)
+  ON public.profiles TO authenticated;

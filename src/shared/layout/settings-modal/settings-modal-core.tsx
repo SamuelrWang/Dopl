@@ -70,7 +70,8 @@ export interface SettingsModalCoreProps {
   onSectionChange: (section: SettingsSection) => void;
   /** Every container this account belongs to, home space included. */
   workspacesPane: React.ReactNode;
-  /** The MCP "Connect & log in" block + the account's live grants. */
+  /** Agents (connected agent apps + how to connect one) and Devices (computers + glasses).
+   *  ⚠ The Glasses pane folded into Devices on 2026-09-28: one place for devices. */
   connectPane: React.ReactNode;
   /** From `AccountSectionCore` in both apps; danger zone differs (web deletes
    *  in place, desktop links out). */

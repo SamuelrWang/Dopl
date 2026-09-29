@@ -19,6 +19,11 @@ export interface AccountWaitingItem {
     isEscalation: boolean;
     /** Why it is listed (`types-account.ts › AccountWaitingLane`); absent means `person`. */
     lane?: "person" | "desktop" | "likely";
+    /** The member's device (`metadata.source`), when the server stamped one. */
+    source?: {
+        kind: string;
+        label: string;
+    };
 }
 /** One channel's line in an account-wide status answer. */
 export interface AccountChannelStatus {

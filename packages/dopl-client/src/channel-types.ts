@@ -17,8 +17,7 @@
 // ⚠ THE ESCALATION FIELDS ARE AN EXTENDED INTERFACE, NOT TWO KEYS DECLARED HERE
 // (2026-08-31). `escalation-types.ts` is their own module for `launch-types.ts`'s
 // reason — this file is at the 500-line cap — and `extends` is what keeps the
-// rule, the caps and the docblock stated ONCE, over there. ⚠ THE SESSION HEALTH
-// half is a THIRD on the same grounds (2026-09-01); see its own header.
+// rule, the caps and the docblock stated ONCE, over there. ⚠ SESSION HEALTH is a THIRD (2026-09-01).
 import type { ChannelEscalationFields } from "./escalation-types.js";
 import type { ChannelContainer } from "./types.js";
 
@@ -210,12 +209,12 @@ export type {
 export type ChannelMessagePosted = ChannelMessage & {
   /**
    * **THIS CALL WROTE NOTHING — the `clientMsgId` had already landed**
-   * (2026-09-04). ⚠ PRESENT ONLY ON A REPLAY, never `false`: it is a notice
-   * about this CALL, not a property of the row. The ack was byte-identical to a
-   * first post until then, which is how one row read as two messages in an
-   * agent's own transcript. The server's own note is on the twin.
+   * (2026-09-04). ⚠ PRESENT ONLY ON A REPLAY, never `false`: a notice about this
+   * CALL, not the row. The server's own note is on the twin.
    */
   replayed?: true;
+  /** Display nudge (unified-display §6.2): this plain send looked structured. A CALL notice. */
+  displayHint?: "choice" | "structure";
 };
 
 export interface ChannelMember {

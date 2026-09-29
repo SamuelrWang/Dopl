@@ -25,7 +25,7 @@
  * back as "not a member" instead of the 400 that lists the live handles.
  */
 
-import { callRef } from "../call-ref.js";
+import { bySet, callRef, toolName } from "../call-ref.js";
 import type { ChannelMessageInput, DoplClient } from "@dopl/client";
 import { ok, err, type ToolResponse } from "./respond";
 // ⚠ THE RESULT IS ONE LINE OF FACTS (T10/T12). Each import below contributes
@@ -436,7 +436,19 @@ export async function opPost(
       delivery: deliveryFact(message.delivery, message.deliveryAt),
       hold: holdFact(opts.runtime ?? null, message.seq),
       ...(opts.resultFacts ?? {}),
-    }),
+    }) + displayTip(message.displayHint),
   );
+}
+
+/**
+ * **THE DISPLAY NUDGE, READ BACK** (unified display §6.2): the server saw structure in a plain
+ * send. ONE line, never a refusal — the post already landed as written.
+ */
+function displayTip(hint: "choice" | "structure" | undefined): string {
+  if (!hint) return "";
+  const show = bySet({ legacy: 'kind="decision"', granular: "dopl_show" });
+  return hint === "choice"
+    ? `\nTip: a question with options is a decision — send it with ${toolName("channel.send", { kind: '"decision"' })} or ${show} (a choice block) so they answer in one press, on any device.`
+    : `\nTip: lists, tables and status read better as a display — ${show} draws them on desktop and glasses.`;
 }
 

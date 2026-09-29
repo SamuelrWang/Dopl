@@ -10,6 +10,7 @@ import {
   postMessage,
   readTranscript,
 } from "@/features/channels/server/service";
+import { withMessageSource } from "@/features/channels/server/message-source";
 import {
   ChannelMessageCreateSchema,
   MessageReadQuerySchema,
@@ -54,7 +55,8 @@ async function handleGet(request: NextRequest, auth: WorkspaceAuthContext) {
 async function handlePost(request: NextRequest, auth: WorkspaceAuthContext) {
   try {
     const input = await parseJson(request, ChannelMessageCreateSchema);
-    const ctx = buildChannelContext(auth);
+    // The member's device rides `metadata.source` (docs/specs/device-aware-messages.md).
+    const ctx = await withMessageSource(buildChannelContext(auth), request, input.authorKind === "agent");
     // ⚠ The envelope carried `threadClosed` until thread closing was removed
     // (2026-08-18). The rule worth keeping: a notice about THIS POST rides in the
     // ENVELOPE, never inside `message`, since a READ of the row cannot carry it.

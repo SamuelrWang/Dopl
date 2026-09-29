@@ -11,6 +11,7 @@
  * op, by re-issuing with the same cursor.
  */
 import type { DoplTransport } from "./transport.js";
+import type { ShowDisplayInput, ShowDisplayResult } from "./display-types.js";
 import type { AwaitMessagesOptions, AwaitResult, Channel, ChannelArtifact, ChannelArtifactAction, ChannelArtifactResult, ChannelCreateInput, ChannelUpdateInput, ChannelMember, ChannelMessage, ChannelReadEntry, ChannelMessageInput, ChannelMessagePosted, ChannelSessionsPage, ChannelThread, ChannelThreadCreated, ChannelThreadCreateInput, ChannelThreadPage, ReadMessagesOptions, WorkspaceAwaitResult, ThreadMode } from "./channel-types.js";
 /** Network read-timeout for the long-poll — above the server cap.
  *  ⚠ EXPORTED for the DEADLINE CHAIN's gate, not for the deleted `ping.ts`:
@@ -108,6 +109,11 @@ export declare function inviteToChannel(t: DoplTransport, channelId: string, use
  * every additive envelope field this client reads.
  */
 export declare function postMessage(t: DoplTransport, channelId: string, input: ChannelMessageInput): Promise<ChannelMessagePosted>;
+/**
+ * SHOW A DISPLAY (unified display, 2026-09-28) — one door for `dopl_show` and the glasses
+ * shortcuts. ⚠ The timeout is the `await` precedent's: a `wait` holds ≤205s server-side.
+ */
+export declare function showDisplay(t: DoplTransport, input: ShowDisplayInput): Promise<ShowDisplayResult>;
 /**
  * A channel's threads, MOST RECENTLY ACTIVE FIRST — the server's order, which
  * is the only order (`repository-tasks.ts › listTasksByChannel`). ⚠ Do not

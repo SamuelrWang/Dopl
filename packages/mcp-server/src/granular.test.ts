@@ -69,7 +69,7 @@ describe("tool-set selection", () => {
     expect(await listedNames(b)).toEqual(offered.map((t) => t.name).sort());
     const guide = (await b.client.listTools()).tools.find((t) => t.name === "dopl_get_guide")!;
     const props = (guide.inputSchema as JsonSchema).properties!;
-    expect(props.topic.enum).toEqual(["skill_authoring", "chats", "knowledge"]);
+    expect(props.topic.enum).toEqual(["skill_authoring", "chats", "knowledge", "displays"]);
     // The channel guide's own param goes with it.
     expect(Object.keys(props)).toEqual(["topic"]);
     expect(await call(b, "dopl_get_guide", { topic: "channels" })).toMatchObject({ isError: true });

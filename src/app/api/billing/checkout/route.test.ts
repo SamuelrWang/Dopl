@@ -297,7 +297,7 @@ describe("never a second subscription", () => {
     const res = await call({ plan: "team" });
     expect(res.status).toBe(409);
     expect(await res.json()).toEqual({
-      error: "Workspace already has an active subscription",
+      error: "Workspace already has an active plan",
       portalUrl: "https://billing.stripe.com/p/s_1",
     });
     expect(mockStripe.createWorkspaceCheckoutSession).not.toHaveBeenCalled();

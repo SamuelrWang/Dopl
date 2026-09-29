@@ -23,6 +23,7 @@ const { discardBody } = require('./api-repair');
 const auth = require('./auth');
 const { diag } = require('./diag');
 const { createPresence } = require('./presence-core');
+const device = require('./device-registry');
 
 // ⚠ LAZY AND GUARDED. `powerMonitor` is only valid after the app is ready, and it throws in a
 // headless/CI Electron — where an unmeasurable idle time must read `active`, not `away` (the
@@ -43,6 +44,11 @@ const presence = createPresence({
   isSignedIn: () => auth.isSignedIn(),
   idleSeconds,
   diag,
+  // The device heartbeat rides this loop. A locked screen is `away`; suspend/shutdown/quit is
+  // `offline`. Sleep is fire-and-forget; stop() returns it with the away post so quit-guard's
+  // deadline covers both.
+  onBeat: (status) => device.beat(status),
+  onAway: (reason) => (reason === 'lock-screen' ? device.beat('away') : device.offline(reason)),
 });
 
 /**
@@ -72,7 +78,7 @@ function armSleepEvents() {
 }
 
 module.exports = {
-  start: () => { armSleepEvents(); presence.start(); },
+  start: () => { armSleepEvents(); device.arm(); presence.start(); },
   stop: () => presence.stop(),
   wake: () => presence.wake(),
   sleep: (reason) => presence.sleep(reason),

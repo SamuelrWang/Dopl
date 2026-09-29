@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { safeLabel, safeOptionalProse } from "@/shared/lib/safe-label";
+import { safeLabel, safeOptionalLabel, safeOptionalProse } from "@/shared/lib/safe-label";
 
 /**
  * A STRUCTURED ESCALATION — an agent's question to a human, as STRUCTURE rather
@@ -62,6 +62,13 @@ export const ESCALATION_WHY_MAX = 200;
  */
 export const ESCALATION_MIN_OPTIONS = 2;
 export const ESCALATION_MAX_OPTIONS = 6;
+/**
+ * ⚠ THE STORED CEILING IS WIDER THAN THE INPUT ONE (unified display, 2026-09-28). A `dopl_show`
+ * display with a `choice` block is a decision too, and its decision INDEX (`display/core/adapt.ts ›
+ * decisionIndexOf`) carries up to 12 options with optional consequences. Readers parse with
+ * {@link parseStoredEscalation}; the INPUT schema above stays 2–6 with consequences required.
+ */
+export const ESCALATION_STORED_MAX_OPTIONS = 12;
 
 /** The reserved metadata key carrying the escalation payload. */
 export const ESCALATION_METADATA_KEY = "escalation";
@@ -167,7 +174,9 @@ export type ChannelEscalationInput = z.infer<typeof ChannelEscalationSchema>;
  */
 export const ChannelEscalationAnswerSchema = z.object({
   escalationMessageId: z.string().uuid(),
-  optionIndex: z.number().int().min(0).max(ESCALATION_MAX_OPTIONS - 1),
+  // ⚠ The STORED ceiling: a display decision may carry up to 12 options. The fold still 404s an
+  // index outside THAT escalation's own options.
+  optionIndex: z.number().int().min(0).max(ESCALATION_STORED_MAX_OPTIONS - 1),
 });
 
 export type ChannelEscalationAnswerInput = z.infer<
@@ -186,15 +195,52 @@ export type ChannelEscalationAnswerInput = z.infer<
 export function parseEscalation(raw: unknown): ChannelEscalation | null {
   if (raw === null || typeof raw !== "object") return null;
   const parsed = ChannelEscalationSchema.safeParse(raw);
-  if (!parsed.success) return null;
+  return parsed.success ? frozen(parsed.data) : null;
+}
+
+/**
+ * THE RELAXED STORED SCHEMA — what a decision INDEX may be (spec §5.2): options 2–12, a
+ * consequence and a recommendation's reason may be empty. Every SERVER reader and the new renderer
+ * read with it; old shipped desktops parse strictly and render the body for an index that does
+ * not fit the strict schema.
+ */
+const StoredEscalationSchema = z
+  .object({
+    issue: safeLabel("An escalation issue", ESCALATION_ISSUE_MAX),
+    context: safeOptionalProse("Escalation context", ESCALATION_CONTEXT_MAX),
+    options: z
+      .array(
+        z.object({
+          label: safeLabel("An escalation option", ESCALATION_OPTION_LABEL_MAX),
+          consequence: safeOptionalLabel("An escalation option consequence", ESCALATION_CONSEQUENCE_MAX),
+        })
+      )
+      .min(ESCALATION_MIN_OPTIONS)
+      .max(ESCALATION_STORED_MAX_OPTIONS),
+    recommendation: z
+      .object({
+        index: z.number().int().min(0),
+        why: safeOptionalLabel("An escalation recommendation", ESCALATION_WHY_MAX),
+      })
+      .nullable()
+      .optional(),
+  })
+  .refine((e) => e.recommendation == null || e.recommendation.index < e.options.length);
+
+function frozen(data: ChannelEscalationInput | z.infer<typeof StoredEscalationSchema>): ChannelEscalation {
   return Object.freeze({
-    issue: parsed.data.issue,
-    context: parsed.data.context,
-    options: Object.freeze(parsed.data.options.map((o) => Object.freeze({ ...o }))),
-    recommendation: parsed.data.recommendation
-      ? Object.freeze({ ...parsed.data.recommendation })
-      : null,
+    issue: data.issue,
+    context: data.context,
+    options: Object.freeze(data.options.map((o) => Object.freeze({ ...o }))),
+    recommendation: data.recommendation ? Object.freeze({ ...data.recommendation }) : null,
   });
+}
+
+/** A stored `metadata.escalation` → a payload under the RELAXED schema; `null`, never a throw. */
+export function parseStoredEscalation(raw: unknown): ChannelEscalation | null {
+  if (raw === null || typeof raw !== "object") return null;
+  const parsed = StoredEscalationSchema.safeParse(raw);
+  return parsed.success ? frozen(parsed.data) : null;
 }
 
 /** A stored `metadata.escalationAnswer` value → an answer, defensively. Same

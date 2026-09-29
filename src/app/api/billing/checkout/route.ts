@@ -73,7 +73,7 @@ async function readPlan(request: NextRequest): Promise<PlanRequest> {
 
 function checkoutConflict(portalUrl: string | null) {
   return NextResponse.json(
-    { error: "Workspace already has an active subscription", portalUrl },
+    { error: "Workspace already has an active plan", portalUrl },
     { status: 409 }
   );
 }

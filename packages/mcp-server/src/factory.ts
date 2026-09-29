@@ -21,6 +21,9 @@ export type { CallerIdentity } from "./tools/identity.js";
 
 export { createServer, buildInstructions } from "./server.js";
 export { clientIdentifier, packageVersion } from "./version.js";
+// The containment-profile table, for tools the app registers beside this server's
+// (the glasses tools on `/api/mcp`): one classification, never a second copy.
+export { offeredToolsFor } from "./gating.js";
 
 /** The concrete MCP server type, without importing the SDK type directly. */
 export type DoplMcpServer = ReturnType<typeof createServer>;

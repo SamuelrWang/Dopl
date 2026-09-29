@@ -143,14 +143,14 @@ export function MoveToDialog({
         <div className={modalStyles.confirmActions}>
           <button
             type="button"
-            className={modalStyles.btnCancel}
+            className={cn("btn-light", modalStyles.btn)}
             onClick={() => onOpenChange(false)}
           >
             Cancel
           </button>
           <button
             type="button"
-            className={modalStyles.btnConfirm}
+            className={cn("auth-btn-3d", modalStyles.btn, modalStyles.btnConfirm)}
             onClick={handleConfirm}
             disabled={submitting}
           >

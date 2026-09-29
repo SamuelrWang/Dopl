@@ -125,9 +125,9 @@ function transport(opts = {}) {
 
   // ⚠ `sessionStamp` IS THE REAL MODULE, NOT A STUB: a stub returning `{}` would prove only that the stub does (2026-09-15, AGENT-BADGE-TRACE.md).
   const apiFetch = new Function(
-    "auth", "appVersion", "sessionStamp", "API_BASE", "fetch", "fetchWithAuthRepair",
+    "auth", "appVersion", "sessionStamp", "deviceIdentity", "API_BASE", "fetch", "fetchWithAuthRepair",
     `${asyncFnOf(IO, "sendOnce")}\n${fnOf(IO, "apiFetch")}\n return apiFetch;`
-  )(auth, { versionHeaders: () => ({ "X-Dopl-App-Version": "1.8.4" }) }, sessionStamp, "https://app.test", fakeFetch, fetchWithAuthRepair);
+  )(auth, { versionHeaders: () => ({ "X-Dopl-App-Version": "1.8.4" }) }, sessionStamp, { deviceHeaders: () => ({ "X-Dopl-Device": "11111111-1111-4111-8111-111111111111" }) }, "https://app.test", fakeFetch, fetchWithAuthRepair);
 
   return { apiFetch, calls, jar: () => cookie };
 }

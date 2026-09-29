@@ -166,7 +166,7 @@ describe("visibility", () => {
     const view = mount({});
     await settle();
     expect(view.queryByRole("region", { name: "Subscription" })).toBeNull();
-    expect(view.queryByRole("button", { name: "Cancel subscription" })).toBeNull();
+    expect(view.queryByRole("button", { name: "Cancel plan" })).toBeNull();
   });
 
   it("renders nothing for a free user viewing a free workspace as owner", async () => {
@@ -178,14 +178,14 @@ describe("visibility", () => {
     };
     const view = mount({ workspaceId: "ws-1", role: "owner" });
     await settle();
-    expect(view.queryByRole("button", { name: "Cancel subscription" })).toBeNull();
+    expect(view.queryByRole("button", { name: "Cancel plan" })).toBeNull();
   });
 
   it("shows a personal Pro subscription with its renewal date", async () => {
     rows[PERSONAL] = { ...rows[PERSONAL], plan: "pro", status: "active" };
     const view = mount({});
     await waitFor(() =>
-      expect(view.getByRole("button", { name: "Cancel subscription" })).toBeTruthy()
+      expect(view.getByRole("button", { name: "Cancel plan" })).toBeTruthy()
     );
     expect(view.getByText("Pro")).toBeTruthy();
     expect(view.getByText(/^Renews /)).toBeTruthy();
@@ -195,7 +195,7 @@ describe("visibility", () => {
     rows[PERSONAL] = { ...rows[PERSONAL], plan: "pro", status: "past_due" };
     const view = mount({});
     await waitFor(() =>
-      expect(view.getByRole("button", { name: "Cancel subscription" })).toBeTruthy()
+      expect(view.getByRole("button", { name: "Cancel plan" })).toBeTruthy()
     );
   });
 
@@ -203,7 +203,7 @@ describe("visibility", () => {
     rows[PERSONAL] = { ...rows[PERSONAL], plan: "pro", status: "canceled" };
     const view = mount({});
     await settle();
-    expect(view.queryByRole("button", { name: "Cancel subscription" })).toBeNull();
+    expect(view.queryByRole("button", { name: "Cancel plan" })).toBeNull();
   });
 
   it("shows the open workspace's Team plan to an admin", async () => {
@@ -215,7 +215,7 @@ describe("visibility", () => {
     };
     const view = mount({ workspaceId: "ws-1", role: "admin" });
     await waitFor(() => expect(view.getByText("Team")).toBeTruthy());
-    expect(view.getAllByRole("button", { name: "Cancel subscription" })).toHaveLength(1);
+    expect(view.getAllByRole("button", { name: "Cancel plan" })).toHaveLength(1);
   });
 
   it("hides the Team plan from a member — the route's admin floor", async () => {
@@ -228,7 +228,7 @@ describe("visibility", () => {
     const view = mount({ workspaceId: "ws-1", role: "member" });
     await settle();
     expect(view.queryByText("Team")).toBeNull();
-    expect(view.queryByRole("button", { name: "Cancel subscription" })).toBeNull();
+    expect(view.queryByRole("button", { name: "Cancel plan" })).toBeNull();
   });
 
   it("draws the personal subscription ONCE when the open workspace IS the home space", async () => {
@@ -236,9 +236,9 @@ describe("visibility", () => {
     rows["personal-id"] = rows[PERSONAL];
     const view = mount({ workspaceId: "personal-id", role: "owner" });
     await waitFor(() =>
-      expect(view.getByRole("button", { name: "Cancel subscription" })).toBeTruthy()
+      expect(view.getByRole("button", { name: "Cancel plan" })).toBeTruthy()
     );
-    expect(view.getAllByRole("button", { name: "Cancel subscription" })).toHaveLength(1);
+    expect(view.getAllByRole("button", { name: "Cancel plan" })).toHaveLength(1);
   });
 });
 
@@ -249,7 +249,7 @@ describe("the cancel flow", () => {
 
   it("asks first — no POST until confirmed, none on Keep", async () => {
     const view = mount({});
-    const button = await view.findByRole("button", { name: "Cancel subscription" });
+    const button = await view.findByRole("button", { name: "Cancel plan" });
     fireEvent.click(button);
     expect(view.getByTestId("confirm-dialog")).toBeTruthy();
     expect(view.getByText("Cancel Pro?")).toBeTruthy();
@@ -263,27 +263,27 @@ describe("the cancel flow", () => {
 
   it("confirming POSTs ONE cancel to the home space, then shows 'Cancels <date>' + Resume without a reload", async () => {
     const view = mount({});
-    fireEvent.click(await view.findByRole("button", { name: "Cancel subscription" }));
+    fireEvent.click(await view.findByRole("button", { name: "Cancel plan" }));
     await act(async () => {
       fireEvent.click(
-        view.getByRole("button", { name: "Confirm: Cancel subscription" })
+        view.getByRole("button", { name: "Confirm: Cancel plan" })
       );
     });
 
     await waitFor(() =>
-      expect(view.getByRole("button", { name: "Resume subscription" })).toBeTruthy()
+      expect(view.getByRole("button", { name: "Resume plan" })).toBeTruthy()
     );
     expect(view.getByText(/^Cancels /)).toBeTruthy();
-    expect(view.queryByRole("button", { name: "Cancel subscription" })).toBeNull();
+    expect(view.queryByRole("button", { name: "Cancel plan" })).toBeNull();
     expect(posts).toEqual([{ workspace: PERSONAL, body: { resume: false } }]);
   });
 
   it("Resume clears the flag and puts Cancel back", async () => {
     rows[PERSONAL].cancelAtPeriodEnd = true;
     const view = mount({});
-    fireEvent.click(await view.findByRole("button", { name: "Resume subscription" }));
+    fireEvent.click(await view.findByRole("button", { name: "Resume plan" }));
     await waitFor(() =>
-      expect(view.getByRole("button", { name: "Cancel subscription" })).toBeTruthy()
+      expect(view.getByRole("button", { name: "Cancel plan" })).toBeTruthy()
     );
     expect(view.getByText(/^Renews /)).toBeTruthy();
     expect(posts).toEqual([{ workspace: PERSONAL, body: { resume: true } }]);
@@ -298,14 +298,14 @@ describe("the cancel flow", () => {
       cancelAtPeriodEnd: false,
     };
     const view = mount({ workspaceId: "ws-1", role: "owner" });
-    fireEvent.click(await view.findByRole("button", { name: "Cancel subscription" }));
+    fireEvent.click(await view.findByRole("button", { name: "Cancel plan" }));
     await act(async () => {
       fireEvent.click(
-        view.getByRole("button", { name: "Confirm: Cancel subscription" })
+        view.getByRole("button", { name: "Confirm: Cancel plan" })
       );
     });
     await waitFor(() =>
-      expect(view.getByRole("button", { name: "Resume subscription" })).toBeTruthy()
+      expect(view.getByRole("button", { name: "Resume plan" })).toBeTruthy()
     );
     expect(posts).toEqual([{ workspace: "ws-1", body: { resume: false } }]);
   });
@@ -320,22 +320,22 @@ describe("the cancel flow", () => {
             json: async () => ({
               error: {
                 code: "NO_ACTIVE_SUBSCRIPTION",
-                message: "This workspace has no active subscription to cancel.",
+                message: "This workspace has no active plan to cancel.",
               },
             }),
           } as unknown as Response)
         : realFetch(url as string, init)
     );
     const view = mount({});
-    fireEvent.click(await view.findByRole("button", { name: "Cancel subscription" }));
+    fireEvent.click(await view.findByRole("button", { name: "Cancel plan" }));
     await act(async () => {
       fireEvent.click(
-        view.getByRole("button", { name: "Confirm: Cancel subscription" })
+        view.getByRole("button", { name: "Confirm: Cancel plan" })
       );
     });
     await waitFor(() =>
       expect(view.getByRole("alert").textContent).toContain(
-        "no active subscription"
+        "no active plan"
       )
     );
     expect(view.queryByTestId("confirm-dialog")).toBeNull();

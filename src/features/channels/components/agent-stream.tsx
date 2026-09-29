@@ -12,7 +12,11 @@ import { cn } from "@/shared/lib/utils";
 import type { ChannelConsentRequest, ChannelMessage } from "../types";
 import type { AgentNarrationEntry } from "./use-agent-narration";
 import { LogLine, ToolRunGroup } from "./agent-stream-log";
-import { AgentStreamEscalation } from "./agent-stream-escalation";
+import { DisplayCard } from "./display-card";
+import { decisionCardPaint } from "./escalation-card-face";
+import { displayViewFrom, type PageAnswer } from "./view-model-display";
+import type { AuthorIndex } from "./view-model";
+import type { AnswerDisplay } from "../hooks/use-display-writes";
 import { DirectedBox } from "./agent-stream-directed";
 import { StreamProse, TruncatedNote } from "./agent-stream-prose";
 import { StreamWorkingRow } from "./agent-stream-working";
@@ -38,6 +42,10 @@ export const NARRATION_UNSUPPORTED =
 export const NARRATION_EMPTY =
   "Chat with your agent privately. Send a message to wake it up.";
 
+/** No viewer handed: nobody here may answer, so every card is read-only. */
+const NO_VIEWER: AuthorIndex = { currentUserId: "", byId: new Map(), agents: new Map() };
+const NO_ANSWERS: ReadonlyMap<string, PageAnswer> = new Map();
+
 export function AgentStream({
   entries,
   supported,
@@ -46,10 +54,9 @@ export function AgentStream({
   pending,
   onPost,
   postBusy = false,
-  onAnswerEscalation,
-  answerBusy = false,
-  answeredEscalations,
-  escalationAnswerable = true,
+  onAnswerDisplay,
+  displayIndex,
+  displayAnswers,
   destination,
   viewer,
   agentNameFor,
@@ -77,15 +84,14 @@ export function AgentStream({
   onPost?: (requestId: string) => void;
   /** A decision is in flight — the double-submit guard. */
   postBusy?: boolean;
-  /** Answer an escalation by its own message id (the server picks which agent to wake); absent ⇒ no buttons. */
-  onAnswerEscalation?: (escalationMessageId: string, optionIndex: number) => void;
-  /** An answer is in flight — the double-submit guard. */
-  answerBusy?: boolean;
-  /** Message id → chosen option index; absent = not looked up, not "unanswered". */
-  answeredEscalations?: ReadonlyMap<string, number>;
-  /** Defaults true: every card here was posted by one of the viewer's own agents; the server refuses
-   *  regardless. */
-  escalationAnswerable?: boolean;
+  /** Answer a display's choice (every decision too; the server picks which agent to wake); absent ⇒ no
+   *  buttons. */
+  onAnswerDisplay?: AnswerDisplay;
+  /** The viewer + roster the card's "who may answer / who chose" reads; absent ⇒ read-only cards. */
+  displayIndex?: AuthorIndex;
+  /** Answer messages already in the transcript (`view-model-display.ts › answersByEscalation`);
+   *  absent = not looked up, not "unanswered". */
+  displayAnswers?: ReadonlyMap<string, PageAnswer>;
   destination?: PostDestination | null; // → `agent-stream-model.ts › StreamItem.to`
   /** The viewer's face for their own turns (`view-model.ts › viewerPerson`); absent ⇒ no avatar, never a
    *  placeholder. */
@@ -132,10 +138,9 @@ export function AgentStream({
               viewer={viewer}
               onPost={onPost}
               postBusy={postBusy}
-              onAnswerEscalation={onAnswerEscalation}
-              answerBusy={answerBusy}
-              answeredEscalations={answeredEscalations}
-              escalationAnswerable={escalationAnswerable}
+              onAnswerDisplay={onAnswerDisplay}
+              displayIndex={displayIndex}
+              displayAnswers={displayAnswers}
               agentNameFor={agentNameFor}
             />
           ))}
@@ -159,10 +164,9 @@ function StreamRow({
   viewer,
   onPost,
   postBusy,
-  onAnswerEscalation,
-  answerBusy,
-  answeredEscalations,
-  escalationAnswerable,
+  onAnswerDisplay,
+  displayIndex,
+  displayAnswers,
   agentNameFor,
   color,
 }: {
@@ -170,33 +174,33 @@ function StreamRow({
   viewer?: AvatarPerson | null;
   onPost?: (requestId: string) => void;
   postBusy?: boolean;
-  onAnswerEscalation?: (escalationMessageId: string, optionIndex: number) => void;
-  answerBusy?: boolean;
-  answeredEscalations?: ReadonlyMap<string, number>;
-  escalationAnswerable?: boolean;
+  onAnswerDisplay?: AnswerDisplay;
+  displayIndex?: AuthorIndex;
+  displayAnswers?: ReadonlyMap<string, PageAnswer>;
   agentNameFor?: (agentId: string) => string | null;
-  /** Sent/escalation lanes only — a `directed` box is private and keeps its own weight. */
+  /** Sent/display lanes only — a `directed` box is private and keeps its own weight. */
   color?: AgentColorKey | null;
 }) {
   if (group.tools !== null) return <ToolRunGroup group={group} />;
   const item = group.items[0];
-  // An escalation is a sent post with a payload — checked before the plain sent box, not given its own lane,
-  // so one set of dedupe rules keeps an echo from doubling a transcript row.
-  if (item.lane === "sent" && item.escalation) {
+  // A display (every decision too) is a sent post with a payload — checked before the plain sent box,
+  // not given its own lane, so one set of dedupe rules keeps an echo from doubling a transcript row.
+  if (item.lane === "sent" && item.display) {
+    const payload = item.display;
     return (
-      <li>
-        <AgentStreamEscalation
-          escalation={item.escalation.payload}
-          color={color ?? null}
-          answerable={escalationAnswerable !== false}
-          answeredIndex={answeredEscalations?.get(item.escalation.messageId) ?? null}
-          busy={answerBusy === true}
-          onAnswer={
-            onAnswerEscalation
-              ? (optionIndex) =>
-                  onAnswerEscalation(item.escalation!.messageId, optionIndex)
-              : undefined
-          }
+      <li data-agent-display>
+        <DisplayCard
+          channelId={payload.channelId}
+          messageId={payload.messageId}
+          view={displayViewFrom(
+            payload,
+            displayIndex ?? NO_VIEWER,
+            displayAnswers ?? NO_ANSWERS,
+            false
+          )}
+          paint={decisionCardPaint(color)}
+          size="stream"
+          onAnswer={displayIndex ? onAnswerDisplay : undefined}
         />
       </li>
     );

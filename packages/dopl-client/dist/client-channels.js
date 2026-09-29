@@ -84,6 +84,10 @@ class ChannelMethods extends client_members_js_1.MemberMethods {
     postChannelMessage(channelId, input) {
         return channel.postMessage(this.transport, channelId, input);
     }
+    /** Show a display (`POST /api/displays`): `dopl_show` and the glasses shortcuts. */
+    showDisplay(input) {
+        return channel.showDisplay(this.transport, input);
+    }
     /**
      * THE FOLDED READ (#1220 §4, 2026-09-06). ⚠ `entries === null` means nothing
      * on the page is in an artifact — the same handling an older server gets.

@@ -27,6 +27,11 @@ import {
   isExternalSessionAuthor,
 } from "../lib/desktop-handle";
 import { resolveWakeVerdict } from "./service-wake-verdict";
+import { deviceStamps } from "./service-writes-device";
+// ⚠ UNIFIED DISPLAY (2026-09-28): the answer stamp + lens release after an answer insert, and
+// the nudge on an agent's structured-looking plain send. Both are notices/best effort.
+import { onAnswerInserted } from "@/features/display/server/answer-stamp";
+import { displayNudge } from "@/features/display/server/nudge";
 import {
   requireMemberChannel,
   stripNulDeep,
@@ -285,7 +290,7 @@ export async function postMessage(
   //     an older server both carry, and writing an explicit `false` would make
   //     "we looked and it was a desktop agent" indistinguishable from "we never
   //     looked" for every reader downstream. One value, one meaning.
-  const stored: Record<string, unknown> = { ...metadata };
+  const stored: Record<string, unknown> = { ...metadata, ...deviceStamps(ctx, input, authorKind, opts.display) };
   if (wake.reason) stored.wake_reason = wake.reason;
   if (toDesktopOperatorIds.length > 0) {
     // ⚠ THE FIRST, because `@desktop` always resolves to the caller's own
@@ -395,5 +400,15 @@ export async function postMessage(
   }
 
   await repo.touchChannel(ctx.workspaceId, channel.id);
-  return hydrateOne(row);
+  if (stored[ESCALATION_ANSWER_METADATA_KEY]) await onAnswerInserted(ctx, channel.id, row);
+  const posted = await hydrateOne(row);
+  const hint =
+    authorKind === "agent" &&
+    (input.kind ?? "message") === "message" &&
+    input.intent !== "chat" &&
+    !input.display &&
+    !input.escalation
+      ? displayNudge({ body: input.body, channelId: channel.id, sessionId: ctx.sessionId ?? null, userId: ctx.userId })
+      : null;
+  return hint ? { ...posted, displayHint: hint } : posted;
 }

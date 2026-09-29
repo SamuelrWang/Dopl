@@ -91,4 +91,11 @@ function withPostSurface(payload, input, fallbackTo, counterpartyId) {
 }
 // ─── END SESSION-IO-POST-SURFACE ──────────────────────────────────────────────
 
-module.exports = { TO_CAP, KIND_CAP, oneLineField, postAddress, postKindOf, withPostSurface };
+// The post's text as the stream shows it. A display (`dopl_show` → `send kind:"display"`) carries
+// blocks, not a body, so it narrates as the act (unified display, 2026-09-28).
+function postTextOf(input) {
+  if (input && input.kind === 'display') return 'showed a display';
+  return input && input.body != null ? String(input.body) : '';
+}
+
+module.exports = { TO_CAP, KIND_CAP, oneLineField, postAddress, postKindOf, postTextOf, withPostSurface };

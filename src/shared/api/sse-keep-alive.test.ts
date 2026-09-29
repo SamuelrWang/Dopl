@@ -177,7 +177,11 @@ describe("/api/mcp transport shape", () => {
     // ⚠ Without this the handler never learns the client hung up, so an
     // `op="await"` hold re-issues loopback polls for its whole budget. Checked
     // at source level: the wiring is one argument and losing it is silent.
-    expect(routeCode).toMatch(/signal: request\.signal/);
+    // The route builds its loopback through `loopbackClient(request, …)`, which is where the
+    // signal is handed over (the glasses tools stopped carrying their own copy, 2026-09-28).
+    expect(routeCode).toMatch(/loopbackClient\(request,/);
+    const loopbackSrc = readFileSync(path.resolve(process.cwd(), "src", "shared", "api", "loopback-client.ts"), "utf8");
+    expect(loopbackSrc).toMatch(/signal: request\.signal/);
   });
 });
 

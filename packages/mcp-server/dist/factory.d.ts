@@ -12,6 +12,7 @@ import { type ToolSet } from "./tool-manifest.js";
 export type { CallerIdentity } from "./tools/identity.js";
 export { createServer, buildInstructions } from "./server.js";
 export { clientIdentifier, packageVersion } from "./version.js";
+export { offeredToolsFor } from "./gating.js";
 /** The concrete MCP server type, without importing the SDK type directly. */
 export type DoplMcpServer = ReturnType<typeof createServer>;
 export interface BootOptions {

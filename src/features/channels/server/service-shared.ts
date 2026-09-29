@@ -16,6 +16,7 @@ import type { ChannelMessage } from "../types";
 import { authorAgentIdOf } from "../lib/agent-post-stamp";
 import * as repo from "./repository";
 import * as repoSessions from "./repository-sessions";
+import type { MessageSourceStamp } from "./message-source-stamp";
 
 /**
  * Shared internals for the channels service: `ChannelContext` construction plus the cross-cutting
@@ -42,6 +43,9 @@ export interface ChannelContext {
   appVersion?: string;
   /** The desktop's slot key from `X-Dopl-Session-Id`, stamped as `metadata.session_id` — a label, never a lock. */
   sessionId?: string;
+  /** Server-resolved device a MEMBER posts from (`message-source.ts`); stamped as `metadata.source`
+   *  on a member post only. Never a request field. */
+  messageSource?: MessageSourceStamp;
 }
 
 export interface AuthLike {

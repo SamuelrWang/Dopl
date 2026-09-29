@@ -156,6 +156,20 @@ describe("the derived agentId — BOTH doors, so a careful caller is not anonymo
   });
 });
 
+describe("a HELD display's answer names no agent (unified display §3.4)", () => {
+  it("wait_until in the future → agentId null (the hold returns it); past → the agent", async () => {
+    const held = (until: number) =>
+      storedEscalation({}, { display: { spec_version: 2, display_id: "d", blocks: [], wait_until: new Date(until).toISOString() } });
+    vi.mocked(repoMessages.findMessageById).mockResolvedValue(held(Date.now() + 60_000));
+    await postMessage(ctx, "room", { body: "Ship now", escalationAnswer: { escalationMessageId: ESC_ID, optionIndex: 0 } });
+    expect((capturedMetadata()[ESCALATION_ANSWER_METADATA_KEY] as { agentId: string | null }).agentId).toBeNull();
+    vi.mocked(repoMessages.insertMessage).mockClear();
+    vi.mocked(repoMessages.findMessageById).mockResolvedValue(held(Date.now() - 1_000));
+    await postMessage(ctx, "room", { body: "Ship now", escalationAnswer: { escalationMessageId: ESC_ID, optionIndex: 0 } });
+    expect((capturedMetadata()[ESCALATION_ANSWER_METADATA_KEY] as { agentId: string | null }).agentId).toBe("k3wpf7c5");
+  });
+});
+
 describe("who may ANSWER — the tagged member, else the author", () => {
   it("the TAGGED member may answer", async () => {
     vi.mocked(repoMessages.findMessageById).mockResolvedValue(

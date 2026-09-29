@@ -35,7 +35,7 @@
  *
  * ⚠ NO NEW COLOURS AND NO NEW RECIPES. Approve wears `.auth-btn-3d` (the raised black primary
  * CTA) and Deny `.btn-light` (the small raised light button) — the two kit faces
- * `agent-panel-controls.tsx › ControlButton` and `agent-stream-escalation.tsx` already compose,
+ * `agent-panel-controls.tsx › ControlButton` and `display-choice.tsx` already compose,
  * at this file's own geometry. Every colour is a token.
  */
 

@@ -9655,7 +9655,7 @@ mount produces it:
 - `transcript.tsx › Message` always hands an `accent` for a stamped agent row (`agent-box-rule.ts ›
   agentBoxOf` accents on `agent && agentId !== null`, which is the same predicate the pill's own
   `agentId` test uses), so every framed case is the accented one;
-- `thread-card-row.tsx` and `escalation-card-row.tsx` mount `AuthoredRow` with `agent={false}` and
+- `thread-card-row.tsx` and the escalation card row (deleted 2026-09-28) mount `AuthoredRow` with `agent={false}` and
   no `agentId` at all.
 
 So the function is live only from `agent-attribution.test.tsx`'s determinism cases, which test the
@@ -10623,3 +10623,13 @@ already wrong — `channel-dispatch-agents.ts` does pass `waitMs` — so do not 
 - **The effect.** Both catch every `res.json()` throw as a non-JSON body, so a 2xx whose stream dies resolves as `undefined` data instead of a `NetworkError`. The packaged app no longer takes this path; the web app still does.
 - Proposed resolution: rethrow through `api-envelope.ts › transportFailure` when the read throws a network-class error (not a `SyntaxError`), in both readers.
 - Status: OPEN (low).
+
+### F-770 — Devices follow-ups: glasses outside `GET /api/devices`, cooperative sign-out on Remove, an unread grants route (2026-09-28)
+
+- Location: `src/features/devices/merge.ts › mergeDevices`, `src/features/devices/server/devices-service.ts › removeComputer`, `src/app/api/oauth/grants/route.ts`.
+- Found during: the Connect page rebuild (`feat/connect-devices`, `docs/devices.md`). The id skips two numbers to leave room for the parallel glasses-segmentation branch.
+- (a) Glasses are merged CLIENT-side. The glasses feature was being segmented per vendor at the same time, so the devices feature reads it over HTTP only. Once that lands, fold glasses into `GET /api/devices` server-side.
+- (b) RESOLVED 2026-09-28 (review P1-1): Remove now ends the computer's Supabase sign-in server-side (`auth_session_id` + `end_auth_session`, `20261106120000_desktop_devices_session.sql`) and refuses its mints. The residual limits (an issued access token until expiry, a sign-in no beat ever reported, pre-registration container tokens) are in `docs/devices.md` › "What Remove does NOT reach".
+- (c) `GET /api/oauth/grants` and `DELETE /api/oauth/grants/{id}` have no UI caller since the Agents panel moved to `/api/oauth/apps`. Keep them or delete them (Samuel).
+- (d) The review asked `profileOffersGlasses` to honor `readToolSetClaim`. Not done: the tool-set claim only renames `dopl_*` tools and never removes one, and the glasses tools are the same in every set, so the argument could not change the answer (`core/mcp/exposure.ts` says so). Add it if a tool set ever drops the glasses tools.
+- Status: OPEN — (a), (c), (d); (b) resolved.

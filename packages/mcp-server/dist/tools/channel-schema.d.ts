@@ -119,6 +119,7 @@ export declare const CHANNEL_INPUT_SHAPE: {
     body: z.ZodOptional<z.ZodString>;
     kind: z.ZodOptional<z.ZodEnum<{
         decision: "decision";
+        display: "display";
         message: "message";
         record: "record";
         milestone: "milestone";

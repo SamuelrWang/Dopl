@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { withUserAuth } from "@/shared/auth/with-auth";
 import { issueDeviceToken, revokeDeviceTokens } from "@/shared/auth/mcp-oauth";
+import { deviceRemovedError, mintingDevice } from "@/features/devices/server/runtime";
 
 export const dynamic = "force-dynamic";
 
@@ -31,13 +32,19 @@ async function readLabel(request: NextRequest): Promise<string> {
 export const POST = withUserAuth(
   async (request, { userId }) => {
     const label = await readLabel(request);
-    const { token, expiresAt } = await issueDeviceToken({
+    const device = await mintingDevice(request, userId);
+    if (device && "removed" in device) {
+      const err = deviceRemovedError();
+      return NextResponse.json(err.toResponseBody(), { status: err.status });
+    }
+    const { token, expiresAt, tokenId } = await issueDeviceToken({
       userId,
       deviceLabel: label,
       scopes: ["dopl.read", "dopl.write"],
+      deviceId: device?.deviceId ?? null,
     });
     return NextResponse.json(
-      { token, expiresAt },
+      { token, expiresAt, tokenId },
       // ⚠ A bearer credential must never be cached by any intermediary.
       { headers: { "Cache-Control": "no-store" } },
     );

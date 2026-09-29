@@ -72,7 +72,7 @@ export function PlansBilling({
           ← Back to plans
         </button>
         <h2 className={styles.paneTitle}>
-          Subscribe to {checkoutPlan === "pro" ? "Pro" : "Team"}
+          Upgrade to {checkoutPlan === "pro" ? "Pro" : "Team"}
         </h2>
         <p className="mb-4 text-caption text-text-secondary">
           {checkoutPlan === "pro"

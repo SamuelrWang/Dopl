@@ -6,6 +6,7 @@ import { formatMoney, PRO_PRICE, TEAM_SEAT_PRICE } from "@/features/billing/pric
 import type { PlanDef } from "@/features/billing/plans";
 import type { CheckoutPlan } from "@/features/billing/url";
 import { cn } from "@/shared/lib/utils";
+import { SMALL_PRIMARY_PILL } from "@/shared/ui/small-action-button";
 
 /**
  * ⚠ THE PLAN UNION IS `features/billing/url.ts › CheckoutPlan`, RE-EXPORTED,
@@ -92,7 +93,7 @@ export function PlanColumn({
   return (
     <div
       className={cn(
-        "bento flex flex-col p-4",
+        "bento flex flex-col p-3.5",
         highlight && "border-border-highlight",
         isCurrent && "border-2 border-text-primary"
       )}
@@ -154,35 +155,20 @@ function PlanCta({
   isCurrent,
   ent,
   canManage,
-  portalLoading,
   switching,
   onUpgrade,
-  onManage,
   onSwitchToTeam,
 }: PlanActions & { plan: PlanDef; isCurrent: boolean }) {
-  const ghost =
-    "btn-light flex h-8 w-full cursor-pointer items-center justify-center rounded-lg text-small font-medium text-text-primary disabled:cursor-default disabled:opacity-50";
-  const primary =
-    "auth-btn-3d flex h-8 w-full cursor-pointer items-center justify-center rounded-lg text-small font-semibold text-white disabled:cursor-default disabled:opacity-60";
+  // The popup's small black verb (`small-action-button.ts › SMALL_PRIMARY_PILL`), full width.
+  // The current paid plan's "Manage billing" is the summary card's, once.
+  const primary = cn(SMALL_PRIMARY_PILL, "w-full justify-center disabled:cursor-default disabled:opacity-60");
   const current =
-    "flex h-8 w-full items-center justify-center text-small font-semibold text-text-secondary";
+    "flex h-[var(--action-h-sm)] w-full items-center justify-center text-small font-semibold text-text-secondary";
   const muted =
-    "flex h-8 w-full items-center justify-center text-small font-medium text-text-muted";
+    "flex h-[var(--action-h-sm)] w-full items-center justify-center text-small font-medium text-text-muted";
 
-  const isPaidCard = plan.id === "team" || plan.id === "pro";
-
-  if (isCurrent && isPaidCard) {
-    return canManage ? (
-      <button type="button" className={ghost} disabled={portalLoading} onClick={onManage}>
-        {portalLoading ? "Loading…" : "Manage subscription"}
-      </button>
-    ) : (
-      <div className={current}>Current plan</div>
-    );
-  }
-  if (isCurrent) {
-    return <div className={current}>Current plan</div>;
-  }
+  // The card's "Current plan" badge already says it; a paid plan is managed from the summary card.
+  if (isCurrent) return null;
 
   /**
    * ⚠ PRO HAS NO SWITCH-IN-PLACE ARM AND NEEDS NONE. `upgrade-to-team` exists

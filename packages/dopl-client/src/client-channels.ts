@@ -39,6 +39,7 @@ import type {
   ThreadMode,
   WorkspaceAwaitResult,
 } from "./channel-types.js";
+import type { ShowDisplayInput, ShowDisplayResult } from "./display-types.js";
 import type {
   AgentDirectiveCreateInput,
   AgentDirectiveCreated,
@@ -107,6 +108,11 @@ export class ChannelMethods extends MemberMethods {
     input: ChannelMessageInput
   ): Promise<ChannelMessagePosted> {
     return channel.postMessage(this.transport, channelId, input);
+  }
+
+  /** Show a display (`POST /api/displays`): `dopl_show` and the glasses shortcuts. */
+  showDisplay(input: ShowDisplayInput): Promise<ShowDisplayResult> {
+    return channel.showDisplay(this.transport, input);
   }
 
   /**

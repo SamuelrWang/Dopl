@@ -220,9 +220,9 @@ function addArtifacts(
  *
  * ⚠ **THE MESSAGE ARMS ARE SYNTHESIZED FROM `messages`, NEVER CARRIED FROM A
  * PAGE — THE DEVIATION FROM THE RULING WORTH RATIFYING.** The ruled rule had the
- * optimistic patch family maintain the arms; that family is five call sites (four
- * in `optimistic-cache.ts`, plus `use-escalation-writes.ts › reconcileAnswer`
- * outside this slice) that would each have to stay in step forever. Synthesizing
+ * optimistic patch family maintain the arms; that family was five call sites (four
+ * in `optimistic-cache.ts`, plus the escalation answer's reconcile, deleted
+ * 2026-09-28) that would each have to stay in step forever. Synthesizing
  * makes the invariant hold BY CONSTRUCTION, with the same output on a folded page.
  *
  * ⚠ **THE DEDUPE IS SAFE FOR A REASON THAT MUST BE RECORDED RATHER THAN

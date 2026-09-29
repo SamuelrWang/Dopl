@@ -1,22 +1,22 @@
+import { SettingsCard, SettingsPane, SettingsPanel } from "./settings-panel";
+
 interface Props {
   title: string;
+  /** The panel's one caption line. */
   subtitle?: string;
   children: React.ReactNode;
 }
 
-/** Consistent header + vertical stack for a settings pane. */
+/** A one-panel settings pane: the heading over one white card (`./settings-panel.tsx`). */
 export function SectionShell({ title, subtitle, children }: Props) {
+  const id = `settings-${title.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
   return (
-    <div className="flex flex-col gap-5">
-      <div>
-        <h2 className="text-title font-semibold tracking-tight text-text-primary">
-          {title}
-        </h2>
-        {subtitle && (
-          <p className="mt-0.5 text-caption text-text-secondary">{subtitle}</p>
-        )}
-      </div>
-      {children}
-    </div>
+    <SettingsPane>
+      <SettingsPanel id={id} label={title} caption={subtitle}>
+        <SettingsCard>
+          <div className="flex flex-col gap-3">{children}</div>
+        </SettingsCard>
+      </SettingsPanel>
+    </SettingsPane>
   );
 }

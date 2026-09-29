@@ -63,6 +63,7 @@ function enqueue(s, a) {
   deps.dispatch(s, {
     type: 'inbound_arrived', message: a.message, authorName: a.authorName,
     authorNote: a.authorNote || null, addressing: a.addressing || null, replyTo: a.replyTo || '', fromOperator: a.fromOperator === true,
+    ...(a.source ? { source: a.source } : {}), // the member's device (message-source.js)
   });
   return true;
 }

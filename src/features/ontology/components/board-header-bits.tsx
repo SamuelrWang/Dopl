@@ -9,91 +9,16 @@
 import {
   useRef,
   useState,
-  type KeyboardEvent as ReactKeyboardEvent,
   type ReactNode,
 } from "react";
 import { Pencil, Settings, Trash2 } from "lucide-react";
-import { cn } from "@/shared/lib/utils";
+import { InlineUnderlineField } from "@/shared/ui/form-dialog";
 import fieldStyles from "@/shared/ui/form-dialog.module.css";
 import { MenuDivider, MenuItem, Popover } from "@/shared/ui/popover-menu";
 
-/**
- * One underline recipe for both header fields (Samuel, 2026-09-10: gray rule that
- * turns black while editing). The face is `shared/ui/form-dialog.module.css`'s by
- * import — never re-cut per field, or two lines in one header drift by a pixel.
- * Not `UnderlineField` itself: that draws a bold label above the control, and
- * these fields' names are their hint, inside the line.
- *
- * The active class is React state, not `:focus-within`: jsdom loads no stylesheet,
- * so a pure-CSS focus rule would be untestable.
- */
-export function InlineUnderlineField({
-  label,
-  value,
-  onChange,
-  className,
-  inputClassName,
-  quiet,
-  autoFocus,
-  readOnly,
-  onKeyDown,
-  onBlur,
-}: {
-  /** The hint inside the line, and the accessible name. */
-  label: string;
-  /** Extra class on the input itself (the kit's `.inputAction` for a 36px row). */
-  inputClassName?: string;
-  /**
-   * No rule at rest, black line only while focused (Samuel, 2026-09-14, over the
-   * object panel's rows). The kit's `.inputQuiet` is a resting state of this same
-   * recipe, not a second field, so only the gray goes transparent. Panel row fields
-   * wear it; the two Description fields keep their gray→black line.
-   */
-  quiet?: boolean;
-  value: string;
-  onChange: (next: string) => void;
-  /** Width/flex only — the face is this component's. */
-  className?: string;
-  autoFocus?: boolean;
-  /**
-   * Viewer parity (2026-09-12): the line keeps its face and still takes focus —
-   * `disabled` would drop the row out of the tab order.
-   */
-  readOnly?: boolean;
-  onKeyDown?: (e: ReactKeyboardEvent<HTMLInputElement>) => void;
-  /** Fired AFTER the active class clears, so a commit may unmount the field. */
-  onBlur?: () => void;
-}) {
-  const [focused, setFocused] = useState(false);
-  return (
-    <span
-      className={cn(
-        fieldStyles.line,
-        focused && fieldStyles.lineActive,
-        "min-w-0",
-        className
-      )}
-    >
-      <input
-        type="text"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        onFocus={() => setFocused(true)}
-        onBlur={() => {
-          setFocused(false);
-          onBlur?.();
-        }}
-        onKeyDown={onKeyDown}
-        autoFocus={autoFocus}
-        readOnly={readOnly}
-        aria-label={label}
-        placeholder={label}
-        spellCheck={false}
-        className={cn(fieldStyles.input, quiet && fieldStyles.inputQuiet, inputClassName)}
-      />
-    </span>
-  );
-}
+/** The label-less underline field lives in the popup form kit now (2026-09-28); re-exported for
+ *  the ontology callers that import it from here. */
+export { InlineUnderlineField };
 
 /**
  * The ontology's description, hinted "Description". Saves through `ONTOLOGY_UPDATE`

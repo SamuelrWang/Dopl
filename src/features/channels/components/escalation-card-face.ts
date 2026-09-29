@@ -1,15 +1,11 @@
 /**
- * **THE DECISION CARD'S FACE — ONE SPELLING FOR BOTH RENDERERS** (Samuel,
- * 2026-09-20).
+ * **THE AGENT CARD'S FACE — the decision card's spelling, now every display's** (Samuel,
+ * 2026-09-20; unified 2026-09-28, docs/specs/unified-display.md §7.3).
  *
- * ⚠ **THERE ARE TWO CARDS AND THEY ARE NOT ONE COMPONENT.**
- * `escalation-card-row.tsx` draws the transcript's card inside
- * `authored-row.tsx › AuthoredRow`; `agent-stream-escalation.tsx` draws the same
- * question inside the agent stream, which has no sides, no pills and its own row
- * union. They cannot share a component without one of them growing a chrome prop
- * for the other's shell — so they share the FACE instead: the bar's words, the
- * option names, the paint rule and the three button skins live here, and the two
- * files differ only in size steps.
+ * ⚠ **ONE CARD, TWO HOSTS.** `display-card.tsx` draws every display (a decision is a display with a
+ * `choice` block) in the transcript, inside `authored-row.tsx › AuthoredRow`, and in the agent
+ * stream, which has no sides and no pills. The hosts differ only in {@link AGENT_CARD_FACE}'s size
+ * step; the bar's words, the option names, the paint rule and the three button skins live here.
  *
  * ⚠ **IT IS A `.ts`**, no JSX and no React import, for `agent-box-rule.ts`'s own
  * reason: a component cannot accidentally hang state off a constant table.
@@ -58,13 +54,9 @@ export function decisionCardPaint(color: AgentColorKey | null | undefined): stri
  *
  * ⚠ **THE LETTER IS THE BUTTON AND THE LABEL IS A LINE OF THE BODY**, which is
  * the whole shape of the restyle: the prose says what each option does, the
- * buttons stay short enough to sit in one row at any option count. The schema
- * caps options at SIX (`escalation.ts › ChannelEscalationSchema`), so six letters
- * is the whole domain and a seventh index can only come from a payload the parser
- * already refused.
- * ⚠ **IT NEVER FALLS BACK TO A NUMBER.** An out-of-range index would be a parser
- * bug wearing a rendered label; `A` + the index is arithmetic that cannot fail, and
- * the cap is asserted by the schema rather than restated here.
+ * buttons stay short enough to sit in one row at any option count. A `choice`
+ * caps options at TWELVE (docs/specs/unified-display.md §2.2), so `A`…`L` is the
+ * whole domain; the cap is asserted by the normalizer rather than restated here.
  */
 export function decisionOptionName(index: number): string {
   return `Option ${String.fromCharCode(65 + index)}`;
@@ -92,3 +84,48 @@ export const DECISION_BTN_BASE =
   "inline-flex shrink-0 items-center justify-center rounded-full font-medium transition-colors";
 export const DECISION_BTN_BLACK = "auth-btn-3d text-white";
 export const DECISION_BTN_GREY = "bg-[var(--seg-fill)] text-text-secondary";
+
+/**
+ * **THE AGENT CARD'S SHELL, IN TWO SIZE STEPS** — a painted bar over a white panel inset by
+ * `m-0.5 mt-0`, so the sliver around the panel IS the border and bar and border are one colour by
+ * construction. ONE card wears it (`display-card.tsx`, every display and every decision); `row` is
+ * the transcript's step, `stream` the agent stream's one notch under it (the only licensed
+ * difference between the two). The paint goes through `style` (`decisionCardPaint`), never a class
+ * the JIT cannot see. The bar's `row` type is the attribution pill's name type, to the class
+ * (pinned in `escalation-card-face.test.tsx`).
+ */
+export type AgentCardSize = "row" | "stream";
+
+export interface AgentCardFace {
+  shell: string;
+  bar: string;
+  barType: string;
+  panel: string;
+  /** Black ink at the step's message size, for every body line. */
+  body: string;
+  /** The button box of the control strip under the prose. */
+  btnBox: string;
+  /** The decision face's option list. */
+  options: string;
+}
+
+export const AGENT_CARD_FACE: Record<AgentCardSize, AgentCardFace> = {
+  row: {
+    shell: "mt-1 w-full max-w-[460px] overflow-hidden rounded-[14px] text-left",
+    bar: "flex items-center gap-2 px-3 py-2",
+    barType: "text-body font-semibold leading-tight text-text-on-cta",
+    panel: "m-0.5 mt-0 flex flex-col gap-2 rounded-[12px] bg-white p-3",
+    body: "wrap-anywhere text-body text-text-primary",
+    btnBox: "h-[27px] px-3 text-caption",
+    options: "flex flex-col gap-1",
+  },
+  stream: {
+    shell: "overflow-hidden rounded-[12px] text-left",
+    bar: "flex items-center gap-2 px-2.5 py-1.5",
+    barType: "text-caption font-semibold leading-tight text-text-on-cta",
+    panel: "m-0.5 mt-0 flex flex-col gap-1.5 rounded-[10px] bg-white p-2.5",
+    body: "wrap-anywhere text-caption text-text-primary",
+    btnBox: "h-[24px] px-2.5 text-micro",
+    options: "flex flex-col gap-0.5",
+  },
+};

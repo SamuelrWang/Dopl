@@ -93,11 +93,9 @@ vi.mock("../hooks/use-channel-preference-writes", () => ({
 // The escalation card's answer write (2026-08-31) — mocked for the same reason
 // the two above are: it says nothing about which channel is open, and unmocked
 // it pulls the real `useApiMutationWith` out of the stub below.
-vi.mock("../hooks/use-escalation-writes", () => ({
-  useEscalationWrites: () => ({
-    answer: { mutate: () => {}, pending: false },
-    pending: false,
-  }),
+vi.mock("../hooks/use-display-writes", () => ({
+  useDisplayAnswer: () => async () => true,
+  useDisplaySave: () => ({ save: async () => {}, saved: false, busy: false }),
 }));
 vi.mock("./use-agents-panel", () => ({
   useAgentsPanel: () => ({

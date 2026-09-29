@@ -20,18 +20,29 @@ const STATUS: Record<RuntimeCredentialStatus["state"], { text: string; tone: str
   "signing-in": null,
 };
 
-export function RuntimeCredentialBars({ className }: { className?: string }) {
+/** `rows`: hairline rows for a settings card (the profile popup); `bars`: framed bars (onboarding). */
+export function RuntimeCredentialBars({
+  className,
+  variant = "bars",
+}: {
+  className?: string;
+  variant?: "bars" | "rows";
+}) {
   const runtimes = useRuntimeCredentials();
   if (!runtimes.length) return null;
+  const rows = variant === "rows";
   return (
-    <ul className={cn("space-y-2", className)}>
+    <ul className={cn(rows ? "divide-y divide-border-subtle" : "space-y-2", className)}>
       {runtimes.map((r) => {
         const status = STATUS[r.state];
         const busy = r.state === "signing-in";
         return (
           <li
             key={r.runtimeId}
-            className="flex items-center justify-between gap-3 rounded-lg border border-border-default bg-bg-elevated px-3 py-2"
+            className={cn(
+              "flex items-center justify-between gap-3",
+              rows ? "py-2.5" : "rounded-lg border border-border-default bg-bg-elevated px-3 py-2"
+            )}
           >
             <span className="text-body font-medium text-text-primary">{r.label}</span>
             <span className="flex items-center gap-3">
